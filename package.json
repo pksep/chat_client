@@ -1,0 +1,52 @@
+{
+  "name": "chat_client",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start:dev": "vite",
+    "start": "vite preview",
+    "build": "pnpm run lint && vue-tsc && vite build",
+    "lint": "eslint --fix --ext .js,.ts,.vue src",
+    "prettier": "prettier -w src/**/*.ts -w src/**/*.vue",
+    "prepare": "echo 'Running preinstall script' && lefthook install"
+  },
+  "dependencies": {
+    "@babel/eslint-parser": "^7.28.0",
+    "@fontsource-variable/inter": "^5.2.6",
+    "@mastra/client-js": "^0.12.2",
+    "@openim/wasm-client-sdk": "3.8.3-patch.10",
+    "@rushstack/eslint-patch": "^1.12.0",
+    "@vue/eslint-config-airbnb": "^8.0.0",
+    "core-js": "^3.45.1",
+    "pinia": "^3.0.3",
+    "sep-yui": "^0.1.96",
+    "vue": "^3.5.18",
+    "vue-eslint-parser": "^9.4.3"
+  },
+  "devDependencies": {
+    "@babel/plugin-transform-private-methods": "^7.27.1",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "babel-eslint": "^10.1.0",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.2",
+    "eslint-plugin-prettier": "^5.5.4",
+    "eslint-plugin-vue": "^9.33.0",
+    "lefthook": "^1.12.3",
+    "prettier": "3.2.4",
+    "typescript": "~5.6.3",
+    "vite": "^5.4.19",
+    "vue-tsc": "^2.2.12",
+    "zod": "3"
+  },
+  "peerDependencies": {
+    "zod": "3"
+  },
+  "babel": {
+    "plugins": [
+      "@babel/plugin-transform-private-methods"
+    ]
+  }
+}
