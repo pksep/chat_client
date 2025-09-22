@@ -35,8 +35,19 @@
             <div class="user__contact-profile">O</div>
             <h5 class="user__contact-title">Общий</h5>
             <p class="user__contact-description">Ok, see you later</p>
-            <span class="user__contact-time">{{ useTime() }}</span>
-            <div v-if="notification" class="user__contact-notification">1</div>
+            <div class="user__contact-top__left">
+              <YIcon v-if="read" name="read" class="user__contact-read" />
+              <span class="user__contact-time">{{ useTime() }}</span>
+            </div>
+            <div
+              v-if="notification"
+              class="user__contact-bottom__left user__contact-notification"
+            >
+              1
+            </div>
+            <div class="user__contact-bottom__left" v-if="pin">
+              <YIcon class="user__contact-pin" name="pin" />
+            </div>
           </div>
         </li>
       </ul>
@@ -59,8 +70,9 @@ const useTime = (date: Date = new Date()): string => {
   return `${hours}:${minutes}`;
 };
 
-const notification = true;
+const notification = false;
 const pin = false;
+const read = false;
 </script>
 
 <style scoped>
@@ -74,6 +86,7 @@ const pin = false;
   border-right-color: var(--grey13);
   background-color: var(--white);
   overflow-y: auto;
+  gap: 10px;
   & h3 {
     margin: 0;
   }
@@ -128,7 +141,7 @@ const pin = false;
 }
 
 .menu__user-line {
-  margin-top: 15px;
+  margin-top: 5px;
   border-top-width: 1px;
   border-top-style: solid;
   border-top-color: var(--grey13);
@@ -152,6 +165,7 @@ const pin = false;
 }
 
 details.menu__user-details {
+  padding-inline: 10px;
   &:not([open]) summary.menu__user-details-summary h4::after {
     transform: rotate(180deg);
   }
@@ -161,12 +175,16 @@ summary.menu__user-details-summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-bottom: 10px;
   color: var(--text-grey);
   &::marker {
     display: none;
   }
   & svg {
     font-size: 12px;
+  }
+  & h4 {
+    margin: 0;
   }
   & h4::after {
     display: inline-block;
@@ -218,11 +236,6 @@ summary.menu__user-details-summary {
 }
 
 .user__contact-notification {
-  grid-area: f;
-  justify-self: end;
-  display: grid;
-  place-content: center;
-  text-align: center;
   color: var(--white);
   font-size: 12px;
   height: 18px;
@@ -231,13 +244,39 @@ summary.menu__user-details-summary {
   background-color: var(--blue4);
 }
 
-.user__contact-time {
+svg.icon-yui-kit.user__contact-pin {
+  color: var(--grey5);
+  font-size: 16px;
+}
+
+svg.icon-yui-kit.user__contact-read {
+  color: var(--blue1);
+  font-size: 16px;
+}
+
+.user__contact-top__left {
   grid-area: c;
-  color: var(--text-grey);
+  display: flex;
+  gap: 7px;
+  align-items: center;
   justify-self: end;
 }
 
+.user__contact-time {
+  color: var(--text-grey);
+}
+
+.user__contact-bottom__left {
+  grid-area: f;
+  justify-self: end;
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+
 .user__contact-list {
+  gap: 10px;
+  display: grid;
   list-style: none;
   padding: 0;
   margin: 0;

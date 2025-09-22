@@ -24,7 +24,7 @@
     "@vue/eslint-config-airbnb": "^8.0.0",
     "core-js": "^3.45.1",
     "pinia": "^3.0.3",
-    "sep-yui": "link:local-packages/sep-yui",
+    "sep-yui": "link:local-packages/sep_yui",
     "vue": "^3.5.18",
     "vue-eslint-parser": "^9.4.3"
   },
