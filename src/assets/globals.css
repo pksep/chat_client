@@ -1,0 +1,10 @@
+body {
+  font-family: 'Inter Variable', sans-serif;
+}
+button {
+  outline: 0;
+  border: 0;
+  padding: 0;
+  background-color: transparent;
+  margin: 0;
+}
