@@ -8,3 +8,11 @@ button {
   background-color: transparent;
   margin: 0;
 }
+
+h3 {
+  margin: 0;
+}
+
+svg.icon-yui-kit.small-icon {
+  font-size: 16px !important;
+}

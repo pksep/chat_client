@@ -1,13 +1,7 @@
 <template>
   <aside class="menu">
-    <div class="menu__user-profile">
-      <img
-        src="/avatar-user.png"
-        alt="avatar-user"
-        class="menu__user-profile-image"
-      />
-      <h3 class="menu__user-profile-title">Zakk Wylde</h3>
-      <span class="menu__user-profile-nickname">@wyldetheguy</span>
+    <div class="menu__profile">
+      <UserProfile class="menu__user-profile" />
       <button class="menu__user-profile-collapse">
         <YIcon
           name="sidebar"
@@ -32,7 +26,7 @@
       <ul class="user__contact-list">
         <li>
           <div class="menu__user-contact">
-            <div class="user__contact-profile">O</div>
+            <Avatar class="menu__user-contact-profile" />
             <h5 class="user__contact-title">Общий</h5>
             <p class="user__contact-description">Ok, see you later</p>
             <div class="user__contact-top__left">
@@ -57,6 +51,8 @@
 
 <script lang="ts" setup>
 import AiIcon from '../components/AiIcon.vue';
+import Avatar from './UserProfile/Avatar.vue';
+import UserProfile from './UserProfile/UserProfile.vue';
 
 const useTime = (date: Date = new Date()): string => {
   let hours: string | number = date.getHours();
@@ -79,7 +75,6 @@ const read = false;
 .menu {
   display: grid;
   align-content: start;
-  width: 30%;
   padding: 20px;
   border-right-width: 0.5px;
   border-right-style: solid;
@@ -87,37 +82,19 @@ const read = false;
   background-color: var(--white);
   overflow-y: auto;
   gap: 10px;
-  & h3 {
-    margin: 0;
-  }
 }
 
-.menu__user-profile {
+.menu__profile {
   display: grid;
   width: 100%;
   align-items: center;
-  grid-template-columns: 50px auto;
-  column-gap: 10px;
-  row-gap: 4px;
   grid-template-areas:
-    'a b c'
-    'a d c';
+    'profile c'
+    'profile c';
 }
 
-.menu__user-profile-image {
-  grid-area: a;
-}
-
-.menu__user-profile-title {
-  grid-area: b;
-  color: var(--text-black);
-  font-size: 16px;
-}
-
-.menu__user-profile-nickname {
-  font-size: 16px;
-  color: var(--text-grey);
-  grid-area: d;
+.menu__user-profile {
+  grid-area: profile;
 }
 
 .menu__user-profile-collapse {
@@ -205,20 +182,6 @@ summary.menu__user-details-summary {
     'a d f';
 }
 
-.user__contact-profile {
-  display: grid;
-  grid-area: a;
-  justify-self: start;
-  align-self: center;
-  place-content: center;
-  padding-inline: 9px;
-  font-size: 16px;
-  line-height: 30px;
-  border-radius: 50%;
-  color: var(--white);
-  background-color: var(--red4);
-}
-
 .user__contact-title {
   grid-area: b;
   margin: 0;
@@ -226,6 +189,10 @@ summary.menu__user-details-summary {
   color: var(--text-black);
   font-weight: 600;
   justify-self: start;
+}
+
+.menu__user-contact-profile {
+  grid-area: a;
 }
 
 .user__contact-description {

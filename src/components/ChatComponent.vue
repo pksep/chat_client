@@ -29,19 +29,6 @@
         Please select a contact to start chatting.
       </div>
     </div>
-
-    <!-- Input Area (Basic) -->
-    <div v-if="activeContact" class="input-area">
-      <input
-        type="text"
-        v-model="newMessage"
-        placeholder="Type a message..."
-        @keyup.enter="sendMessage"
-        class="message-input"
-      />
-      <button @click="sendMessage" class="send-button">Send</button>
-    </div>
-  </div>
 </template>
 
 <script setup lang="ts">
