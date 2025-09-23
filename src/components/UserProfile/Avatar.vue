@@ -13,6 +13,7 @@ const props = defineProps<IAvatar>();
 .user__avatar {
   --background-color: var(--red4);
   display: grid;
+  width: max-content;
   justify-self: start;
   align-self: center;
   place-content: center;
