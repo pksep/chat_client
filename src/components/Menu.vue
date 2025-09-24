@@ -1,5 +1,5 @@
 <template>
-  <aside class="menu">
+  <aside :class="['menu', { collapse: state.isCollapse }]">
     <div class="menu__profile">
       <UserProfile class="menu__user-profile" v-show="!state.isCollapse" />
       <Avatar
@@ -40,11 +40,11 @@
     </details>
     <template v-if="state.isCollapse">
       <ul class="menu__user">
-        <li>
+        <li class="menu__user-avatar">
           <Avatar />
-          <Line />
         </li>
       </ul>
+      <Line />
     </template>
   </aside>
 </template>
@@ -56,13 +56,17 @@ import Avatar from './UserProfile/Avatar.vue';
 import Line from './Line.vue';
 import UserProfile from './UserProfile/UserProfile.vue';
 import ContactList from './ContactList/ContactList.vue';
+import type { IMenuEmits } from './interfaces/interfaces';
 
 const state = reactive({
   isCollapse: false
 });
 
+const emits = defineEmits<IMenuEmits>();
+
 const handleCollapse = (): void => {
   state.isCollapse = !state.isCollapse;
+  emits('unmount-collapse', state.isCollapse);
 };
 </script>
 
@@ -79,27 +83,53 @@ const handleCollapse = (): void => {
   gap: 10px;
 }
 
+.menu.collapse {
+  justify-items: center;
+  gap: 0;
+  padding: 10px;
+
+  & .line {
+    margin-top: 0;
+  }
+}
+
+.menu.collapse > .menu__profile {
+  --size-avatar: 50px;
+  justify-items: center;
+  margin-bottom: 10px;
+  grid-template-areas:
+    'collapse collapse'
+    'profile profile';
+}
+
 .menu__profile {
   display: grid;
   width: 100%;
   align-items: center;
   grid-template-areas:
-    'profile c'
-    'profile c';
+    'profile collapse'
+    'profile collapse';
+}
+
+.menu__user-avatar {
+  padding: 10px;
 }
 
 .menu__user-profile {
   grid-area: profile;
 }
 
+.menu:not(.collapse) button.menu__user-profile-collapse {
+  justify-self: end;
+}
+
 button.menu__user-profile-collapse {
-  grid-area: c;
+  grid-area: collapse;
   display: grid;
   padding: 2px;
   align-items: center;
   color: var(--grey4);
   background-color: var(--white);
-  justify-self: end;
 }
 
 .menu__user-profile-collapse-icon {
