@@ -1,6 +1,6 @@
 <template>
   <div class="user-profile">
-    <Avatar
+    <YAvatar
       url="/avatar-user.png"
       alt="avatar of user"
       class="user-profile__avatar"
@@ -10,9 +10,7 @@
   </div>
 </template>
 
-<script lang="ts" setup>
-import Avatar from './Avatar.vue';
-</script>
+<script lang="ts" setup></script>
 
 <style scoped>
 .user-profile {

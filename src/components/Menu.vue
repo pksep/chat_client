@@ -2,10 +2,10 @@
   <aside :class="['menu', { collapse: state.isCollapse }]">
     <div class="menu__profile">
       <UserProfile class="menu__user-profile" v-show="!state.isCollapse" />
-      <Avatar
+      <YAvatar
         url="/avatar-user.png"
         alt="avatar-user"
-        v-show="state.isCollapse"
+        v-if="state.isCollapse"
       />
       <YButton
         size="small"
@@ -41,7 +41,7 @@
     <template v-if="state.isCollapse">
       <ul class="menu__user">
         <li class="menu__user-avatar">
-          <Avatar />
+          <YAvatar />
         </li>
       </ul>
       <Line />
@@ -52,7 +52,6 @@
 <script lang="ts" setup>
 import { reactive } from 'vue';
 import AiIcon from '../components/AiIcon.vue';
-import Avatar from './UserProfile/Avatar.vue';
 import Line from './Line.vue';
 import UserProfile from './UserProfile/UserProfile.vue';
 import ContactList from './ContactList/ContactList.vue';

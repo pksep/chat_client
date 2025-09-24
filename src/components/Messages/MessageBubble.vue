@@ -1,6 +1,6 @@
 <template>
   <div class="message">
-    <Avatar class="message__avatar" v-if="author" />
+    <YAvatar class="message__avatar" v-if="author" />
     <article
       :class="[
         'message__article',
@@ -19,7 +19,6 @@
 </template>
 
 <script setup lang="ts">
-import Avatar from '../UserProfile/Avatar.vue';
 import type { IMessageBubbleProps } from './interface/interface';
 
 defineProps<IMessageBubbleProps>();
