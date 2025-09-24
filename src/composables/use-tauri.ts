@@ -1,6 +1,6 @@
 import { ref, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { getCurrent } from '@tauri-apps/api/window';
+// import { getCurrent } from '@tauri-apps/api/window';
 
 export function useTauri() {
   const isTauri = ref(false);
