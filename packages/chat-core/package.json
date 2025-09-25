@@ -1,0 +1,27 @@
+{
+  "name": "chat-core",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start:dev": "vite",
+    "start": "vite preview",
+    "build": "vue-tsc && vite build"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.2.6",
+    "@mastra/client-js": "^0.12.2",
+    "@openim/wasm-client-sdk": "3.8.3-patch.10",
+    "pinia": "^3.0.3",
+    "sep-yui": "link:../../local-packages/sep_yui",
+    "zod": "3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.4",
+    "vite": "^5.4.19",
+    "vue-tsc": "^2.2.12"
+  },
+  "peerDependencies": {
+    "zod": "3"
+  }
+}
