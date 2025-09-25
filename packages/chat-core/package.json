@@ -16,11 +16,6 @@
     "sep-yui": "link:../../local-packages/sep_yui",
     "zod": "3"
   },
-  "devDependencies": {
-    "@vitejs/plugin-vue": "^5.2.4",
-    "vite": "^5.4.19",
-    "vue-tsc": "^2.2.12"
-  },
   "peerDependencies": {
     "zod": "3"
   }
