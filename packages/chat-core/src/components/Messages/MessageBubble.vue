@@ -1,6 +1,6 @@
 <template>
   <div class="message">
-    <Avatar class="message__avatar" v-if="author" />
+    <Avatar class="message__avatar" v-if="author" initials="Orange" />
     <article
       :class="[
         'message__article',
@@ -11,7 +11,7 @@
     >
       <div class="message-content">{{ message }}</div>
       <div class="message-time">
-        <Icon v-if="read" name="read" />
+        <Icon v-if="read" :name="IconNameEnum.read" />
         {{ time }}
       </div>
     </article>
@@ -19,7 +19,7 @@
 </template>
 
 <script setup lang="ts">
-import { Avatar, Icon } from 'sep-yui';
+import { Avatar, Icon, IconNameEnum } from 'sep-yui';
 import type { IMessageBubbleProps } from './interface/interface';
 
 defineProps<IMessageBubbleProps>();
@@ -34,10 +34,9 @@ const author = true;
   gap: 10px;
 }
 
-.user__avatar.message__avatar {
-  line-height: 35px;
-  padding-inline: 11.5px;
+.avatar-yui-kit.message__avatar {
   --background-color: var(--green2);
+  align-self: start;
 }
 
 .message__article {

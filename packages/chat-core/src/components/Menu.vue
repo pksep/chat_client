@@ -5,18 +5,17 @@
       <Avatar
         url="/avatar-user.png"
         alt="avatar-user"
+        initials="Orange"
         v-if="state.isCollapse"
       />
       <Button
-        size="small"
-        type="ghost"
+        :size="SizesEnum.small"
+        :type="ButtonTypeEnum.ghost"
         class="menu__user-profile-collapse"
         @click="handleCollapse"
       >
         <Icon
-          name="sidebar"
-          width="1em"
-          height="1em"
+          :name="IconNameEnum.sidebar"
           class="menu__user-profile-collapse-icon"
         />
       </Button>
@@ -34,14 +33,14 @@
     <details class="menu__user-details" v-if="!state.isCollapse">
       <summary class="menu__user-details-summary">
         <h4>Каналы</h4>
-        <Icon name="plus" />
+        <Icon :name="IconNameEnum.plus" />
       </summary>
       <ContactList />
     </details>
     <template v-if="state.isCollapse">
       <ul class="menu__user">
         <li class="menu__user-avatar">
-          <Avatar />
+          <Avatar initials="Orange" />
         </li>
       </ul>
       <Line />
@@ -57,6 +56,9 @@ import { Icon, Button, Avatar } from 'sep-yui';
 import UserProfile from './UserProfile/UserProfile.vue';
 import ContactList from './ContactList/ContactList.vue';
 import type { IMenuEmits } from './interfaces/interfaces';
+import { IconNameEnum } from 'sep-yui/dist/components/Icon/enum/enum';
+import { SizesEnum } from 'sep-yui/dist/common/sizes';
+import { ButtonTypeEnum } from 'sep-yui/dist/components/Button/enum/enum';
 
 const state = reactive({
   isCollapse: false

@@ -4,6 +4,7 @@
       url="/avatar-user.png"
       alt="avatar of user"
       class="user-profile__avatar"
+      initials="Zakk"
     />
     <h3 class="user-profile__title">Zakk Wylde</h3>
     <span class="user-profile__nickname">@wyldetheguy</span>

@@ -23,7 +23,7 @@
     "@mastra/client-js": "^0.12.2",
     "@openim/wasm-client-sdk": "3.8.3-patch.10",
     "pinia": "^3.0.3",
-    "sep-yui": "^0.1.100",
+    "sep-yui": "link:../../local-packages/sep_yui",
     "zod": "3"
   },
   "peerDependencies": {

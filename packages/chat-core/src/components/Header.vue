@@ -2,11 +2,11 @@
   <header class="chat__header">
     <UserProfile class="chat__header-profile" />
     <div class="chat__header-buttons">
-      <Button type="ghost" size="small">
-        <Icon class="small-icon" name="search" />
+      <Button :type="ButtonTypeEnum.ghost" :size="SizesEnum.small">
+        <Icon class="small-icon" :name="IconNameEnum.search" />
       </Button>
-      <Button type="ghost" size="small">
-        <Icon class="small-icon" name="moreVertical" />
+      <Button :type="ButtonTypeEnum.ghost" :size="SizesEnum.small">
+        <Icon class="small-icon" :name="IconNameEnum.moreVertical" />
       </Button>
     </div>
   </header>
@@ -14,7 +14,7 @@
 
 <script lang="ts" setup>
 import UserProfile from './UserProfile/UserProfile.vue';
-import { Button, Icon } from 'sep-yui';
+import { Button, Icon, IconNameEnum, ButtonTypeEnum, SizesEnum } from 'sep-yui';
 </script>
 
 <style scoped>
