@@ -2,18 +2,19 @@
   <header class="chat__header">
     <UserProfile class="chat__header-profile" />
     <div class="chat__header-buttons">
-      <YButton type="ghost" size="small">
-        <YIcon class="small-icon" name="search" />
-      </YButton>
-      <YButton type="ghost" size="small">
-        <YIcon class="small-icon" name="moreVertical" />
-      </YButton>
+      <Button type="ghost" size="small">
+        <Icon class="small-icon" name="search" />
+      </Button>
+      <Button type="ghost" size="small">
+        <Icon class="small-icon" name="moreVertical" />
+      </Button>
     </div>
   </header>
 </template>
 
 <script lang="ts" setup>
 import UserProfile from './UserProfile/UserProfile.vue';
+import { Button, Icon } from 'sep-yui';
 </script>
 
 <style scoped>

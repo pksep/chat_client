@@ -1,6 +1,6 @@
 <template>
   <div class="user-profile">
-    <YAvatar
+    <Avatar
       url="/avatar-user.png"
       alt="avatar of user"
       class="user-profile__avatar"
@@ -10,7 +10,9 @@
   </div>
 </template>
 
-<script lang="ts" setup></script>
+<script lang="ts" setup>
+import { Avatar } from 'sep-yui';
+</script>
 
 <style scoped>
 .user-profile {

@@ -1,2 +1,6 @@
 [tools]
+android-sdk = "17"
+java = "20"
 node = "22"
+rust = "1"
+yq = "latest"

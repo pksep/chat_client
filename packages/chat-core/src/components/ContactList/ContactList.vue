@@ -2,11 +2,11 @@
   <ul class="user__contact-list">
     <li>
       <div class="menu__user-contact">
-        <YAvatar class="menu__user-contact-profile" />
+        <Avatar class="menu__user-contact-profile" />
         <h5 class="user__contact-title">Общий</h5>
         <p class="user__contact-description">Ok, see you later</p>
         <div class="user__contact-top__left">
-          <YIcon v-if="read" name="read" class="user__contact-read" />
+          <Icon v-if="read" name="read" class="user__contact-read" />
           <span class="user__contact-time">{{ useTime() }}</span>
         </div>
         <div
@@ -24,6 +24,8 @@
 </template>
 
 <script setup lang="ts">
+import { Avatar, Icon } from 'sep-yui';
+
 const useTime = (date: Date = new Date()): string => {
   let hours: string | number = date.getHours();
   let minutes: string | number = date.getMinutes();

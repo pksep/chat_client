@@ -2,24 +2,24 @@
   <aside :class="['menu', { collapse: state.isCollapse }]">
     <div class="menu__profile">
       <UserProfile class="menu__user-profile" v-show="!state.isCollapse" />
-      <YAvatar
+      <Avatar
         url="/avatar-user.png"
         alt="avatar-user"
         v-if="state.isCollapse"
       />
-      <YButton
+      <Button
         size="small"
         type="ghost"
         class="menu__user-profile-collapse"
         @click="handleCollapse"
       >
-        <YIcon
+        <Icon
           name="sidebar"
           width="1em"
           height="1em"
           class="menu__user-profile-collapse-icon"
         />
-      </YButton>
+      </Button>
     </div>
     <Line />
     <div class="menu__user-assistant">
@@ -34,14 +34,14 @@
     <details class="menu__user-details" v-if="!state.isCollapse">
       <summary class="menu__user-details-summary">
         <h4>Каналы</h4>
-        <YIcon name="plus" />
+        <Icon name="plus" />
       </summary>
       <ContactList />
     </details>
     <template v-if="state.isCollapse">
       <ul class="menu__user">
         <li class="menu__user-avatar">
-          <YAvatar />
+          <Avatar />
         </li>
       </ul>
       <Line />
@@ -53,6 +53,7 @@
 import { reactive } from 'vue';
 import AiIcon from '../components/AiIcon.vue';
 import Line from './Line.vue';
+import { Icon, Button, Avatar } from 'sep-yui';
 import UserProfile from './UserProfile/UserProfile.vue';
 import ContactList from './ContactList/ContactList.vue';
 import type { IMenuEmits } from './interfaces/interfaces';

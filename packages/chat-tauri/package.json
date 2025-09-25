@@ -3,15 +3,18 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "main": "./src/index.ts",
   "scripts": {
-    "start:dev": "tauri",
-    "start": "vite",
+    "start:dev:desktop": "tauri dev",
+    "start:dev:android": "tauri android dev",
+    "start:dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "start:preview": "vite preview"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-opener": "^2"
+    "@tauri-apps/plugin-opener": "^2",
+    "@sep-chat-client/chat-core": "workspace:*"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"

@@ -1,6 +1,6 @@
 <template>
   <div class="message">
-    <YAvatar class="message__avatar" v-if="author" />
+    <Avatar class="message__avatar" v-if="author" />
     <article
       :class="[
         'message__article',
@@ -11,7 +11,7 @@
     >
       <div class="message-content">{{ message }}</div>
       <div class="message-time">
-        <YIcon v-if="read" name="read" />
+        <Icon v-if="read" name="read" />
         {{ time }}
       </div>
     </article>
@@ -19,6 +19,7 @@
 </template>
 
 <script setup lang="ts">
+import { Avatar, Icon } from 'sep-yui';
 import type { IMessageBubbleProps } from './interface/interface';
 
 defineProps<IMessageBubbleProps>();

@@ -1,5 +1,5 @@
 {
-  "name": "chat_client",
+  "name": "@sep-chat-client/root",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -8,13 +8,15 @@
     "start": "pnpm  --filter './packages/*' run start",
     "build": "pnpm run lint && pnpm --filter './packages/*' run build",
     "lint": "eslint --fix --ext .js,.ts,.vue packages",
-    "prettier": "prettier -w packages/**/*.ts -w packages/**/*.vue",
+    "format": "prettier -w packages/**/*.ts -w packages/**/*.vue",
     "prepare": "echo 'Running preinstall script' && lefthook install"
   },
   "dependencies": {
     "@babel/eslint-parser": "^7.28.0",
     "@rushstack/eslint-patch": "^1.12.0",
+    "@sep-chat-client/chat-core": "workspace:*",
     "@vue/eslint-config-airbnb": "^8.0.0",
+    "vite-plugin-dts": "^4.5.4",
     "vue": "^3.5.18",
     "vue-eslint-parser": "^9.4.3"
   },
