@@ -20,7 +20,7 @@
           1
         </div>
         <div class="user__contact-bottom__left" v-if="pin">
-          <YIcon class="user__contact-pin" name="pin" />
+          <Icon class="user__contact-pin" :name="IconNameEnum.pin" />
         </div>
       </div>
     </li>

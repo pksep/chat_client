@@ -46,4 +46,10 @@ const handleCollapse = (isCollapse: boolean): void => {
   grid-area: chat;
   align-self: start;
 }
+
+@media screen and (width <= 896px) {
+  .chat-container.collapse {
+    --size-left-menu: 75px;
+  }
+}
 </style>

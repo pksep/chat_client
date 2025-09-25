@@ -49,16 +49,20 @@
 </template>
 
 <script lang="ts" setup>
-import { reactive } from 'vue';
+import { onMounted, onUnmounted, reactive, watch } from 'vue';
 import AiIcon from '../components/AiIcon.vue';
 import Line from './Line.vue';
-import { Icon, Button, Avatar } from 'sep-yui';
+import {
+  Icon,
+  Button,
+  Avatar,
+  ButtonTypeEnum,
+  IconNameEnum,
+  SizesEnum
+} from 'sep-yui';
 import UserProfile from './UserProfile/UserProfile.vue';
 import ContactList from './ContactList/ContactList.vue';
 import type { IMenuEmits } from './interfaces/interfaces';
-import { IconNameEnum } from 'sep-yui/dist/components/Icon/enum/enum';
-import { SizesEnum } from 'sep-yui/dist/common/sizes';
-import { ButtonTypeEnum } from 'sep-yui/dist/components/Button/enum/enum';
 
 const state = reactive({
   isCollapse: false
@@ -70,6 +74,24 @@ const handleCollapse = (): void => {
   state.isCollapse = !state.isCollapse;
   emits('unmount-collapse', state.isCollapse);
 };
+
+onMounted(() => {
+  window.addEventListener('resize', () => {
+    const width = window.innerWidth;
+    if (width < 896) {
+      state.isCollapse = true;
+      emits('unmount-collapse', state.isCollapse);
+    }
+    if (width > 896) {
+      state.isCollapse = false;
+      emits('unmount-collapse', state.isCollapse);
+    }
+  });
+});
+
+onUnmounted(() => {
+  document.removeEventListener('resize', null);
+});
 </script>
 
 <style scoped>
