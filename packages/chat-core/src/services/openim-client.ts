@@ -1,3 +1,4 @@
+/*
 import { CbEvents, getSDK } from '@openim/wasm-client-sdk';
 const IMSDK = getSDK();
 
@@ -16,3 +17,4 @@ const setupOpenIM = (): void => {
 };
 
 export { IMSDK, setupOpenIM };
+*/

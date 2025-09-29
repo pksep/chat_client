@@ -30,7 +30,7 @@ const handleCollapse = (isCollapse: boolean): void => {
 }
 
 .chat-container.collapse {
-  --size-left-menu: 3.75%;
+  --size-left-menu: 70px;
 }
 
 .chat__header {

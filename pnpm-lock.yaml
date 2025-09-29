@@ -96,9 +96,6 @@ importers:
 
   packages/chat-tauri:
     dependencies:
-      '@sep-chat-client/chat-core':
-        specifier: workspace:*
-        version: link:../chat-core
       '@tauri-apps/api':
         specifier: ^2
         version: 2.8.0

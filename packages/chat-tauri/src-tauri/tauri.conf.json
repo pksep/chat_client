@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "chat-tauri",
   "version": "0.1.0",
-  "identifier": "ru.pksep.chat-tauri",
+  "identifier": "ru.pksep.chatTauri",
   "build": {
     "beforeDevCommand": "pnpm start:dev",
     "devUrl": "http://localhost:1420",
@@ -22,6 +22,9 @@
     }
   },
   "bundle": {
+    "android": {
+      "minSdkVersion": 24
+    },
     "active": true,
     "targets": "all",
     "icon": [
