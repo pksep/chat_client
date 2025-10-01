@@ -7,19 +7,19 @@
       </Button>
     </header>
     <Tabs :tabCount="2">
-      <template #header1>
+      <template #header2>
         <span class="menu__info-user">
           Участники
           <div class="menu__info-user-count">8</div>
         </span>
       </template>
-      <template #header2> Информация </template>
-      <template #tab1>
+      <template #header1> Информация </template>
+      <template #tab2>
         <section class="menu__info-users">
           <article>
             <Button
-              :type="ButtonTypeEnum.outline"
-              class="menu__info-add-user"
+              :type="ButtonTypeEnum.secondary"
+              class="button-menu__info menu__info-add-user"
               :size="SizesEnum.large"
             >
               <Icon
@@ -34,8 +34,45 @@
           </article>
         </section>
       </template>
-      <template #tab2>
-        <section class="menu__info-info"></section>
+      <template #tab1>
+        <section class="menu__info-info">
+          <p>
+            Канал создан:
+            <span>
+              {{ new Date().toLocaleDateString('ru-RU') }}
+            </span>
+          </p>
+          <Avatar />
+          <div class="buttons-menu__info">
+            <Button
+              :type="ButtonTypeEnum.secondary"
+              :size="SizesEnum.large"
+              class="button-menu__info"
+            >
+              Звук выкл.
+            </Button>
+            <Button
+              :type="ButtonTypeEnum.secondary"
+              :size="SizesEnum.large"
+              class="button-menu__info"
+            >
+              Выйти
+            </Button>
+          </div>
+          <form>
+            <label> Название </label>
+            <Input />
+            <label> Описание </label>
+            <Textarea />
+            <Button
+              :type="ButtonTypeEnum.primary"
+              :size="SizesEnum.little"
+              disabled
+            >
+              Сохранить
+            </Button>
+          </form>
+        </section>
       </template>
     </Tabs>
   </aside>
@@ -48,7 +85,10 @@ import {
   ButtonTypeEnum,
   IconNameEnum,
   SizesEnum,
-  Icon
+  Icon,
+  Input,
+  Textarea,
+  Avatar
 } from 'sep-yui';
 import UserProfile from './UserProfile/UserProfile.vue';
 </script>
@@ -77,7 +117,6 @@ section.menu__info-users {
   margin: 0;
   align-items: center;
   padding-bottom: 7px;
-  border-bottom: 1px solid black;
 }
 
 .menu__info-add-user {
@@ -99,20 +138,22 @@ section.menu__info-users {
   height: 20px;
 }
 
-button.button-yui-kit.menu__info-add-user.large {
+button.button-yui-kit.secondary-yui-kit.large.button-menu__info {
   display: grid;
   justify-items: center;
   min-height: 65px;
-  border-width: 0;
-  background-color: var(--blue15);
   font-size: 14px;
-  width: 100%;
+  color: var(--text-black);
   padding-block: 10px;
   line-height: 100%;
-  & svg.icon-yui-kit.menu__info-add-user-icon {
+  & svg.icon-yui-kit {
     color: var(--grey5);
     font-size: 24px;
   }
+}
+
+button.button-yui-kit.menu__info-add-user.large {
+  width: 100%;
 }
 
 .menu__info-users-list {
@@ -124,10 +165,10 @@ button.button-yui-kit.menu__info-add-user.large {
 :deep(button.tabs__navigation-button) {
   display: flex;
   align-items: center;
-  margin: 0 !important;
-  &:hover,
-  &.active {
-    text-decoration: none !important;
-  }
+}
+
+div.buttons-menu__info {
+  display: flex;
+  gap: 10px;
 }
 </style>

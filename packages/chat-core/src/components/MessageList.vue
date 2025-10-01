@@ -1,25 +1,27 @@
 <template>
   <section class="chat">
-    <MessageBubble
-      v-if="!nothing"
-      class="message__bubble"
-      message="How are you?"
-      time="12:10"
-    />
-    <MessageBubble
-      v-if="!nothing"
-      class="message__bubble message__other"
-      message="I'm doing great, thanks for asking!"
-      time="12:11"
-    />
+    <div class="chat__message-bubble" v-if="!nothing">
+      <MessageBubble
+        class="message__bubble"
+        message="How are you?"
+        time="12:10"
+      />
+      <MessageBubble
+        class="message__bubble message__other"
+        message="I'm doing great, thanks for asking!"
+        time="12:11"
+      />
+    </div>
     <div v-else class="chat__nothing">
       <p class="chat__nothing-paragraph">Здесь пока ничего нет...</p>
     </div>
+    <ContentEditor class="chat__input" />
   </section>
 </template>
 
 <script lang="ts" setup>
 import MessageBubble from './Messages/MessageBubble.vue';
+import { ContentEditor } from 'sep-yui';
 
 const nothing = false;
 </script>
@@ -37,10 +39,14 @@ p.chat__nothing-paragraph {
 
 .chat:not(.chat__nothing) {
   display: grid;
-  align-content: start;
   height: 100%;
-  gap: 25px;
   padding: 15px;
+}
+
+.chat__message-bubble {
+  display: grid;
+  align-content: start;
+  gap: 25px;
 }
 
 .message__other {
@@ -48,5 +54,9 @@ p.chat__nothing-paragraph {
   --background-color: var(--blue1);
   --message-text-color: var(--white);
   --message-time-color: var(--white);
+}
+
+.chat__input {
+  align-self: end;
 }
 </style>
