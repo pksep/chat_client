@@ -72,6 +72,14 @@ section.menu__info-users {
   padding: 10px;
 }
 
+.menu__info-user {
+  display: flex;
+  margin: 0;
+  align-items: center;
+  padding-bottom: 7px;
+  border-bottom: 1px solid black;
+}
+
 .menu__info-add-user {
   display: grid;
   place-content: center;
@@ -116,5 +124,10 @@ button.button-yui-kit.menu__info-add-user.large {
 :deep(button.tabs__navigation-button) {
   display: flex;
   align-items: center;
+  margin: 0 !important;
+  &:hover,
+  &.active {
+    text-decoration: none !important;
+  }
 }
 </style>
