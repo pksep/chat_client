@@ -49,7 +49,7 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted, onUnmounted, reactive, watch } from 'vue';
+import { onMounted, onUnmounted, reactive } from 'vue';
 import AiIcon from '../components/AiIcon.vue';
 import Line from './Line.vue';
 import {
