@@ -22,7 +22,6 @@ import { Avatar } from 'sep-yui';
   align-items: center;
   grid-template-columns: var(--size-avatar) auto;
   column-gap: 10px;
-  row-gap: 4px;
   grid-template-areas:
     'avatar title'
     'avatar description';
@@ -41,6 +40,7 @@ import { Avatar } from 'sep-yui';
 .user-profile__nickname {
   font-size: var(--font-size-nickname, 16px);
   color: var(--text-grey);
+  margin-top: -7px;
   grid-area: description;
 }
 </style>

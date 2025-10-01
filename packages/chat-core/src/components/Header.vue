@@ -1,20 +1,56 @@
 <template>
-  <header class="chat__header">
+  <header class="chat__header" @click="closeSearch">
     <UserProfile class="chat__header-profile" />
     <div class="chat__header-buttons">
-      <Button :type="ButtonTypeEnum.ghost" :size="SizesEnum.small">
+      <Search v-if="state.isSearchInputEnable" />
+      <Button
+        v-if="!state.isSearchInputEnable"
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="showSearch"
+      >
         <Icon class="small-icon" :name="IconNameEnum.search" />
       </Button>
-      <Button :type="ButtonTypeEnum.ghost" :size="SizesEnum.small">
-        <Icon class="small-icon" :name="IconNameEnum.moreVertical" />
-      </Button>
+      <Popover :options="getPopoverOptions" />
     </div>
   </header>
 </template>
 
 <script lang="ts" setup>
+import { computed, reactive } from 'vue';
 import UserProfile from './UserProfile/UserProfile.vue';
-import { Button, Icon, IconNameEnum, ButtonTypeEnum, SizesEnum } from 'sep-yui';
+import {
+  Button,
+  Icon,
+  IconNameEnum,
+  ButtonTypeEnum,
+  SizesEnum,
+  Search,
+  Popover
+} from 'sep-yui';
+
+const state = reactive({
+  isSearchInputEnable: false
+});
+
+const showSearch = (): void => {
+  state.isSearchInputEnable = true;
+};
+
+const closeSearch = (): void => {
+  state.isSearchInputEnable = false;
+};
+
+const getPopoverOptions = computed(() => [
+  {
+    value: 'Выкл. уведомление',
+    function: () => {}
+  },
+  {
+    value: 'Информация',
+    function: () => {}
+  }
+]);
 </script>
 
 <style scoped>
@@ -44,5 +80,9 @@ import { Button, Icon, IconNameEnum, ButtonTypeEnum, SizesEnum } from 'sep-yui';
 
 :deep(button.button-yui-kit) {
   padding-block: 10.5px;
+}
+
+:deep(.tooltip-yui-kit) {
+  align-content: center;
 }
 </style>

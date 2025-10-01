@@ -3,6 +3,7 @@
     <Header class="chat__header" />
     <Menu class="chat__menu" @unmount-collapse="handleCollapse" />
     <Chat class="chat__messages" />
+    <MenuInfo class="chat__info" />
   </main>
 </template>
 <script setup lang="ts">
@@ -10,6 +11,7 @@ import { reactive } from 'vue';
 import Header from './Header.vue';
 import Menu from './Menu.vue';
 import Chat from './MessageList.vue';
+import MenuInfo from './MenuInfo.vue';
 
 const state = reactive({
   isCollapse: false
@@ -24,7 +26,7 @@ const handleCollapse = (isCollapse: boolean): void => {
   display: grid;
   height: 100vh;
   background-color: var(--blue15);
-  grid-template-areas: 'menu header' 'menu chat';
+  grid-template-areas: 'menu header info' 'menu chat info';
   grid-template-columns: var(--size-left-menu, 30%) auto;
   grid-template-rows: 56px auto;
 }
@@ -45,6 +47,10 @@ const handleCollapse = (isCollapse: boolean): void => {
 .chat__messages {
   grid-area: chat;
   align-self: start;
+}
+
+.chat__info {
+  grid-area: info;
 }
 
 @media screen and (width <= 896px) {
