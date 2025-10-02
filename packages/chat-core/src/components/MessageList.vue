@@ -54,8 +54,8 @@ p.chat__nothing-paragraph {
   --background-color: var(--blue1);
   --message-text-color: var(--white);
   --message-time-color: var(--white);
-  --blockquoute-bg-color: #9abdff;
-  --blockquoute-border-color: var(--white);
+  --blockquote-bg-color: #9abdff;
+  --blockquote-border-color: var(--white);
 }
 
 .chat__input {

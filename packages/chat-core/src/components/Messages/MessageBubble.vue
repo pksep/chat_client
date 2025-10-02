@@ -1,6 +1,10 @@
 <template>
   <div class="message">
-    <Avatar class="message__avatar" v-if="author" initials="Orange" />
+    <Avatar
+      class="message__avatar"
+      v-if="author && !loader"
+      initials="Orange"
+    />
     <article
       :class="[
         'message__article',
@@ -16,10 +20,16 @@
             How are you?
           </div>
         </blockquote>
-        <div></div>
-        {{ message }}
+        <div class="message-content__loading" v-if="loader">
+          <template v-for="i in generateArray(3)" :key="i">
+            <div class="message-content__loading-circle"></div>
+          </template>
+        </div>
+        <template v-else-if="!loader">
+          {{ message }}
+        </template>
       </div>
-      <div class="message-time">
+      <div class="message-time" v-if="!loader">
         <Icon v-if="read" :name="IconNameEnum.read" />
         {{ time }}
       </div>
@@ -35,7 +45,12 @@ defineProps<IMessageBubbleProps>();
 
 const read = false;
 const author = true;
-const blockquote = true;
+const blockquote = false;
+const loader = false;
+
+const generateArray = (n: number): number[] => {
+  return Array.from({ length: n });
+};
 </script>
 
 <style scoped>
@@ -82,25 +97,38 @@ const blockquote = true;
 }
 
 blockquote.message-content__blockquote {
-  /*--bg-color: #9abdff;*/
-  /*--border-color: var(--white);*/
   padding: 0;
   margin: 0;
   padding-right: 10px;
-  background-color: var(--blockquote-bg-color);
-  border-left-color: var(--blockquote-border-color);
+  background-color: var(--blockquote-bg-color, var(--blue9));
+  border-left-color: var(--blockquote-border-color, var(--blue1));
   border-left-width: 4px;
   border-left-style: solid;
   border-top-left-radius: 4px;
   border-bottom-left-radius: 4px;
+  margin-bottom: 5px;
 }
 
 blockquote.message-content__blockquote
   div.message-content__blockquote-container {
   display: grid;
   margin-left: 4px;
+  padding-block: 2px;
   & h5 {
     margin: 0;
   }
+}
+div.message-content__loading {
+  display: flex;
+  gap: 4px;
+  align-content: center;
+}
+
+div.message-content__loading-circle {
+  background-color: var(--white);
+  border-radius: 50%;
+  font-size: 8px;
+  width: 1em;
+  height: 1em;
 }
 </style>
