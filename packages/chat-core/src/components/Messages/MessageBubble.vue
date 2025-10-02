@@ -10,9 +10,11 @@
       ]"
     >
       <div class="message-content">
-        <blockquote v-if="blockquote">
-          <h5>Ivan Ivanov</h5>
-          How are you?
+        <blockquote v-if="blockquote" class="message-content__blockquote">
+          <div class="message-content__blockquote-container">
+            <h5>Ivan Ivanov</h5>
+            How are you?
+          </div>
         </blockquote>
         <div></div>
         {{ message }}
@@ -77,5 +79,28 @@ const blockquote = true;
 .message__no-author {
   margin-left: 30px;
   margin-right: 30px;
+}
+
+blockquote.message-content__blockquote {
+  /*--bg-color: #9abdff;*/
+  /*--border-color: var(--white);*/
+  padding: 0;
+  margin: 0;
+  padding-right: 10px;
+  background-color: var(--blockquote-bg-color);
+  border-left-color: var(--blockquote-border-color);
+  border-left-width: 4px;
+  border-left-style: solid;
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+}
+
+blockquote.message-content__blockquote
+  div.message-content__blockquote-container {
+  display: grid;
+  margin-left: 4px;
+  & h5 {
+    margin: 0;
+  }
 }
 </style>
