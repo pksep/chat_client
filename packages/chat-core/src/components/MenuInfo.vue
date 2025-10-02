@@ -7,14 +7,14 @@
       </Button>
     </header>
     <Tabs :tabCount="2">
-      <template #header2>
+      <template #header1>
         <span class="menu__info-user">
           Участники
           <div class="menu__info-user-count">8</div>
         </span>
       </template>
-      <template #header1> Информация </template>
-      <template #tab2>
+      <template #header2> Информация </template>
+      <template #tab1>
         <section class="menu__info-users">
           <article>
             <Button
@@ -34,7 +34,7 @@
           </article>
         </section>
       </template>
-      <template #tab1>
+      <template #tab2>
         <section class="menu__info-info">
           <div class="menu__info-create-channel">
             <p class="menu__info-title-text">Канал создан:</p>

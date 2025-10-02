@@ -9,7 +9,14 @@
         }
       ]"
     >
-      <div class="message-content">{{ message }}</div>
+      <div class="message-content">
+        <blockquote v-if="blockquote">
+          <h5>Ivan Ivanov</h5>
+          How are you?
+        </blockquote>
+        <div></div>
+        {{ message }}
+      </div>
       <div class="message-time">
         <Icon v-if="read" :name="IconNameEnum.read" />
         {{ time }}
@@ -26,6 +33,7 @@ defineProps<IMessageBubbleProps>();
 
 const read = false;
 const author = true;
+const blockquote = true;
 </script>
 
 <style scoped>
