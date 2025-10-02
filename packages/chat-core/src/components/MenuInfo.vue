@@ -36,19 +36,22 @@
       </template>
       <template #tab1>
         <section class="menu__info-info">
-          <p>
-            Канал создан:
+          <div class="menu__info-create-channel">
+            <p class="menu__info-title-text">Канал создан:</p>
             <span>
               {{ new Date().toLocaleDateString('ru-RU') }}
             </span>
-          </p>
-          <Avatar />
+          </div>
+          <div class="menu__info-avatar">
+            <Avatar is-icon />
+          </div>
           <div class="buttons-menu__info">
             <Button
               :type="ButtonTypeEnum.secondary"
               :size="SizesEnum.large"
               class="button-menu__info"
             >
+              <Icon :name="IconNameEnum.noDistrub" />
               Звук выкл.
             </Button>
             <Button
@@ -56,15 +59,21 @@
               :size="SizesEnum.large"
               class="button-menu__info"
             >
+              <Icon :name="IconNameEnum.logout" />
               Выйти
             </Button>
           </div>
-          <form>
-            <label> Название </label>
-            <Input />
-            <label> Описание </label>
-            <Textarea />
+          <form class="menu__info-form">
+            <div class="menu__info-form-block">
+              <label class="menu__info-title-text"> Название: </label>
+              <Input class="initial" type="text" placeholder="Text" />
+            </div>
+            <div class="menu__info-form-block">
+              <label class="menu__info-title-text"> Описание: </label>
+              <Textarea :type="`initial`" placeholder="Text" />
+            </div>
             <Button
+              class="menu__info-save-button"
               :type="ButtonTypeEnum.primary"
               :size="SizesEnum.little"
               disabled
@@ -108,8 +117,15 @@ header.menu__info-header {
   justify-content: space-between;
 }
 
+section.menu__info-info,
 section.menu__info-users {
   padding: 10px;
+}
+
+section.menu__info-info {
+  padding-inline: 20px;
+  display: grid;
+  gap: 10px;
 }
 
 .menu__info-user {
@@ -152,6 +168,7 @@ button.button-yui-kit.secondary-yui-kit.large.button-menu__info {
   }
 }
 
+div.buttons-menu__info,
 button.button-yui-kit.menu__info-add-user.large {
   width: 100%;
 }
@@ -168,7 +185,48 @@ button.button-yui-kit.menu__info-add-user.large {
 }
 
 div.buttons-menu__info {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
+}
+
+.menu__info-form {
+  display: grid;
+  gap: 10px;
+  & button.menu__info-save-button {
+    justify-self: end;
+  }
+}
+
+.menu__info-title-text {
+  color: var(--text-grey);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.menu__info-create-channel {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  gap: 5px;
+  & p {
+    padding-block: 10px;
+    margin: 0;
+  }
+  & span {
+    font-weight: normal;
+    color: var(--text-black);
+  }
+}
+
+.menu__info-avatar {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+}
+
+.menu__info-form-block {
+  display: grid;
+  gap: 5px;
 }
 </style>
