@@ -1,7 +1,7 @@
 <template>
   <aside
-    :class="[`menu__info`, { collapse: state.isCollapse }]"
-    v-if="!state.isCollapse"
+    :class="[`menu__info`, { collapse: !state.isCollapse }]"
+    v-if="!props.open"
   >
     <header class="menu__info-header">
       <h4>Общий</h4>
@@ -63,7 +63,7 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted, onUnmounted, reactive } from 'vue';
+import { onMounted, onUnmounted, reactive, watch } from 'vue';
 import {
   Tabs,
   Button,
@@ -75,7 +75,13 @@ import {
 } from 'sep-yui';
 import ContactListInModal from './ContactList/ContactListInModal.vue';
 import NewChatInformationForm from './NewChat/NewChatInformationForm.vue';
-import { IMenuEmits } from './interfaces/interfaces';
+import type { IMenuProps, IMenuEmits } from './interfaces/interfaces';
+
+const props = withDefaults(defineProps<IMenuProps>(), {
+  open: false
+});
+
+const emits = defineEmits<IMenuEmits>();
 
 const state = reactive({
   isCollapse: false
@@ -86,7 +92,12 @@ const handleCloseMenu = (): void => {
   emits('unmount-collapse', state.isCollapse);
 };
 
-const emits = defineEmits<IMenuEmits>();
+watch(
+  () => props.open,
+  () => {
+    state.isCollapse = props.open;
+  }
+);
 
 onMounted(() => {
   window.addEventListener('resize', () => {

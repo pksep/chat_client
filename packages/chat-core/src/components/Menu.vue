@@ -196,7 +196,7 @@ button.menu__user-profile-collapse {
 details.menu__user-details {
   padding-inline: 10px;
   &:not([open]) summary.menu__user-details-summary h4::after {
-    transform: rotate(180deg);
+    transform: rotate(135deg);
   }
 }
 

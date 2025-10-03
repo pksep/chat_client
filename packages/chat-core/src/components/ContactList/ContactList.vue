@@ -1,7 +1,7 @@
 <template>
   <ul class="user__contact-list">
     <li>
-      <div class="menu__user-contact">
+      <div :class="['menu__user-contact', { active: state.isActive }]">
         <Avatar class="menu__user-contact-profile" initials="Orange" />
         <h5 class="user__contact-title">Общий</h5>
         <p class="user__contact-description">Ok, see you later</p>
@@ -29,6 +29,11 @@
 
 <script setup lang="ts">
 import { Avatar, Icon, IconNameEnum } from 'sep-yui';
+import { reactive } from 'vue';
+
+const state = reactive({
+  isActive: false
+});
 
 const useTime = (date: Date = new Date()): string => {
   let hours: string | number = date.getHours();
@@ -52,9 +57,14 @@ const read = false;
   display: grid;
   grid-template-columns: 30px auto;
   column-gap: 10px;
+  padding: 10px;
   grid-template-areas:
     'a b c'
     'a d f';
+  &:hover,
+  &.active {
+    background-color: var(--blue15);
+  }
 }
 
 .user__contact-title {

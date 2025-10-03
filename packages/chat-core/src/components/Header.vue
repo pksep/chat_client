@@ -1,5 +1,5 @@
 <template>
-  <header class="chat__header" @click="closeSearch">
+  <header class="chat__header" @click="handleClickHeader">
     <UserProfile class="chat__header-profile" />
     <div class="chat__header-buttons">
       <Search v-if="state.isSearchInputEnable" />
@@ -29,16 +29,21 @@ import {
   Popover
 } from 'sep-yui';
 
+import type { IHeaderEmits } from './interfaces/interfaces';
+
 const state = reactive({
   isSearchInputEnable: false
 });
+
+const emits = defineEmits<IHeaderEmits>();
 
 const showSearch = (): void => {
   state.isSearchInputEnable = true;
 };
 
-const closeSearch = (): void => {
+const handleClickHeader = (): void => {
   state.isSearchInputEnable = false;
+  emits('unmount-click');
 };
 
 const getPopoverOptions = computed(() => [

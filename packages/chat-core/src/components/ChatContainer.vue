@@ -5,7 +5,7 @@
       { collapse: state.isCollapse, 'menu-collapse': state.isCollapseMenu }
     ]"
   >
-    <Header class="chat__header" />
+    <Header class="chat__header" @unmount-click="handleHeaderClick" />
     <Menu
       class="chat__menu"
       @unmount-collapse="handleCollapse"
@@ -14,7 +14,7 @@
     <Chat class="chat__messages" />
     <MenuInfo
       class="chat__info"
-      v-if="!state.isCollapse"
+      :open="state.isCollapseMenu"
       @unmount-collapse="handleMenuCollapse"
     />
   </main>
@@ -32,7 +32,7 @@ import AddUser from './NewChat/AddUser.vue';
 
 const state = reactive({
   isCollapse: false,
-  isCollapseMenu: false,
+  isCollapseMenu: true,
   open: false
 });
 
@@ -42,6 +42,10 @@ const handleCollapse = (isCollapse: boolean): void => {
 
 const handleMenuCollapse = (isCollapse: boolean): void => {
   state.isCollapseMenu = isCollapse;
+};
+
+const handleHeaderClick = (): void => {
+  state.isCollapseMenu = false;
 };
 
 const handleNewContact = (isModalOpen: boolean): void => {
