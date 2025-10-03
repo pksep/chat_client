@@ -19,51 +19,36 @@
       </template>
       <template #tab2>
         <section class="menu__info-info">
-          <div class="menu__info-create-channel">
-            <p class="menu__info-title-text">Канал создан:</p>
-            <span>
-              {{ new Date().toLocaleDateString('ru-RU') }}
-            </span>
-          </div>
-          <div class="menu__info-avatar">
-            <Avatar is-icon />
-          </div>
-          <div class="buttons-menu__info">
-            <Button
-              :type="ButtonTypeEnum.secondary"
-              :size="SizesEnum.large"
-              class="button-menu__info"
-            >
-              <Icon :name="IconNameEnum.noDistrub" />
-              Звук выкл.
-            </Button>
-            <Button
-              :type="ButtonTypeEnum.secondary"
-              :size="SizesEnum.large"
-              class="button-menu__info"
-            >
-              <Icon :name="IconNameEnum.logout" />
-              Выйти
-            </Button>
-          </div>
-          <form class="menu__info-form">
-            <div class="menu__info-form-block">
-              <label class="menu__info-title-text"> Название: </label>
-              <Input class="initial" type="text" placeholder="Text" />
+          <slot name="information-menu">
+            <div class="menu__info-create-channel">
+              <p class="menu__info-title-text">Канал создан:</p>
+              <span>
+                {{ new Date().toLocaleDateString('ru-RU') }}
+              </span>
             </div>
-            <div class="menu__info-form-block">
-              <label class="menu__info-title-text"> Описание: </label>
-              <Textarea :type="`initial`" placeholder="Text" />
+            <div class="menu__info-avatar">
+              <Avatar is-icon />
             </div>
-            <Button
-              class="menu__info-save-button"
-              :type="ButtonTypeEnum.primary"
-              :size="SizesEnum.little"
-              disabled
-            >
-              Сохранить
-            </Button>
-          </form>
+            <div class="buttons-menu__info">
+              <Button
+                :type="ButtonTypeEnum.secondary"
+                :size="SizesEnum.large"
+                class="button-menu__info"
+              >
+                <Icon :name="IconNameEnum.noDistrub" />
+                Звук выкл.
+              </Button>
+              <Button
+                :type="ButtonTypeEnum.secondary"
+                :size="SizesEnum.large"
+                class="button-menu__info"
+              >
+                <Icon :name="IconNameEnum.logout" />
+                Выйти
+              </Button>
+            </div>
+            <NewChatInformationForm />
+          </slot>
         </section>
       </template>
     </Tabs>
@@ -78,11 +63,10 @@ import {
   IconNameEnum,
   SizesEnum,
   Icon,
-  Input,
-  Textarea,
   Avatar
 } from 'sep-yui';
 import ContactListInModal from './ContactList/ContactListInModal.vue';
+import NewChatInformationForm from './NewChat/NewChatInformationForm.vue';
 </script>
 
 <style scoped>
@@ -141,14 +125,6 @@ div.buttons-menu__info {
   gap: 10px;
 }
 
-.menu__info-form {
-  display: grid;
-  gap: 10px;
-  & button.menu__info-save-button {
-    justify-self: end;
-  }
-}
-
 .menu__info-title-text {
   color: var(--text-grey);
   font-weight: 600;
@@ -174,10 +150,5 @@ div.buttons-menu__info {
   display: flex;
   width: 100%;
   justify-content: center;
-}
-
-.menu__info-form-block {
-  display: grid;
-  gap: 5px;
 }
 </style>
