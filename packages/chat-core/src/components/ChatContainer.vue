@@ -1,10 +1,15 @@
 <template>
   <main :class="['chat-container', { collapse: state.isCollapse }]">
     <Header class="chat__header" />
-    <Menu class="chat__menu" @unmount-collapse="handleCollapse" />
+    <Menu
+      class="chat__menu"
+      @unmount-collapse="handleCollapse"
+      @unmount-new-contact="handleNewContact"
+    />
     <Chat class="chat__messages" />
     <MenuInfo class="chat__info" />
   </main>
+  <NewContactModal :open="state.open" />
 </template>
 <script setup lang="ts">
 import { reactive } from 'vue';
@@ -12,13 +17,19 @@ import Header from './Header.vue';
 import Menu from './Menu.vue';
 import Chat from './MessageList.vue';
 import MenuInfo from './MenuInfo.vue';
+import NewContactModal from './ContactList/NewContact.vue';
 
 const state = reactive({
-  isCollapse: false
+  isCollapse: false,
+  open: false
 });
 
 const handleCollapse = (isCollapse: boolean): void => {
   state.isCollapse = isCollapse;
+};
+
+const handleNewContact = (isModalOpen: boolean): void => {
+  state.open = isModalOpen;
 };
 </script>
 <style scoped>

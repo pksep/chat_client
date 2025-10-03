@@ -33,7 +33,13 @@
     <details class="menu__user-details" v-if="!state.isCollapse">
       <summary class="menu__user-details-summary">
         <h4>Каналы</h4>
-        <Icon :name="IconNameEnum.plus" />
+        <Button
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.little"
+          @click="handleNewContactModal"
+        >
+          <Icon :name="IconNameEnum.plus" />
+        </Button>
       </summary>
       <ContactList />
     </details>
@@ -73,6 +79,10 @@ const emits = defineEmits<IMenuEmits>();
 const handleCollapse = (): void => {
   state.isCollapse = !state.isCollapse;
   emits('unmount-collapse', state.isCollapse);
+};
+
+const handleNewContactModal = (): void => {
+  emits('unmount-new-contact', true);
 };
 
 onMounted(() => {
