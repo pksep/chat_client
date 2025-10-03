@@ -1,5 +1,10 @@
 <template>
-  <main :class="['chat-container', { collapse: state.isCollapse }]">
+  <main
+    :class="[
+      'chat-container',
+      { collapse: state.isCollapse, 'menu-collapse': state.isCollapseMenu }
+    ]"
+  >
     <Header class="chat__header" />
     <Menu
       class="chat__menu"
@@ -7,7 +12,11 @@
       @unmount-new-contact="handleNewContact"
     />
     <Chat class="chat__messages" />
-    <MenuInfo class="chat__info" v-if="!state.isCollapse" />
+    <MenuInfo
+      class="chat__info"
+      v-if="!state.isCollapse"
+      @unmount-collapse="handleMenuCollapse"
+    />
   </main>
   <NewContactModal :open="state.open" />
   <AddUser :open="false" />
@@ -23,11 +32,16 @@ import AddUser from './NewChat/AddUser.vue';
 
 const state = reactive({
   isCollapse: false,
+  isCollapseMenu: false,
   open: false
 });
 
 const handleCollapse = (isCollapse: boolean): void => {
   state.isCollapse = isCollapse;
+};
+
+const handleMenuCollapse = (isCollapse: boolean): void => {
+  state.isCollapseMenu = isCollapse;
 };
 
 const handleNewContact = (isModalOpen: boolean): void => {
@@ -46,6 +60,9 @@ const handleNewContact = (isModalOpen: boolean): void => {
 
 .chat-container.collapse {
   --size-left-menu: 70px;
+}
+
+.chat-container.menu-collapse {
   grid-template-areas:
     'menu header'
     'menu chat';
@@ -72,6 +89,9 @@ const handleNewContact = (isModalOpen: boolean): void => {
 @media screen and (width <= 896px) {
   .chat-container.collapse {
     --size-left-menu: 75px;
+    grid-template-areas:
+      'menu header'
+      'menu chat';
   }
 }
 </style>

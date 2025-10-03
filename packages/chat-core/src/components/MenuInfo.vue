@@ -1,8 +1,15 @@
 <template>
-  <aside :class="[`menu__info`, { collapse: state.isCollapse }]">
+  <aside
+    :class="[`menu__info`, { collapse: state.isCollapse }]"
+    v-if="!state.isCollapse"
+  >
     <header class="menu__info-header">
       <h4>Общий</h4>
-      <Button :type="ButtonTypeEnum.ghost" :size="SizesEnum.small">
+      <Button
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click="handleCloseMenu"
+      >
         <Icon :name="IconNameEnum.crossLarge" />
       </Button>
     </header>
@@ -73,6 +80,11 @@ import { IMenuEmits } from './interfaces/interfaces';
 const state = reactive({
   isCollapse: false
 });
+
+const handleCloseMenu = (): void => {
+  state.isCollapse = true;
+  emits('unmount-collapse', state.isCollapse);
+};
 
 const emits = defineEmits<IMenuEmits>();
 
