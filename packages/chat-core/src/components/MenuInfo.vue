@@ -1,5 +1,5 @@
 <template>
-  <aside class="menu__info">
+  <aside :class="[`menu__info`, { collapse: state.isCollapse }]">
     <header class="menu__info-header">
       <h4>Общий</h4>
       <Button :type="ButtonTypeEnum.ghost" :size="SizesEnum.small">
@@ -56,6 +56,7 @@
 </template>
 
 <script lang="ts" setup>
+import { onMounted, onUnmounted, reactive } from 'vue';
 import {
   Tabs,
   Button,
@@ -67,6 +68,31 @@ import {
 } from 'sep-yui';
 import ContactListInModal from './ContactList/ContactListInModal.vue';
 import NewChatInformationForm from './NewChat/NewChatInformationForm.vue';
+import { IMenuEmits } from './interfaces/interfaces';
+
+const state = reactive({
+  isCollapse: false
+});
+
+const emits = defineEmits<IMenuEmits>();
+
+onMounted(() => {
+  window.addEventListener('resize', () => {
+    const width = window.innerWidth;
+    if (width < 896) {
+      state.isCollapse = true;
+      emits('unmount-collapse', state.isCollapse);
+    }
+    if (width > 896) {
+      state.isCollapse = false;
+      emits('unmount-collapse', state.isCollapse);
+    }
+  });
+});
+
+onUnmounted(() => {
+  document.removeEventListener('resize', null);
+});
 </script>
 
 <style scoped>
@@ -77,6 +103,9 @@ aside.menu__info {
   border-left-color: var(--border-grey);
   border-left-width: 0.5px;
   border-left-style: solid;
+  & .collapse {
+    width: 100%;
+  }
 }
 
 header.menu__info-header {

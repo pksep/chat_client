@@ -7,7 +7,7 @@
       @unmount-new-contact="handleNewContact"
     />
     <Chat class="chat__messages" />
-    <MenuInfo class="chat__info" />
+    <MenuInfo class="chat__info" v-if="!state.isCollapse" />
   </main>
   <NewContactModal :open="state.open" />
   <AddUser :open="false" />
@@ -46,6 +46,9 @@ const handleNewContact = (isModalOpen: boolean): void => {
 
 .chat-container.collapse {
   --size-left-menu: 70px;
+  grid-template-areas:
+    'menu header'
+    'menu chat';
 }
 
 .chat__header {
