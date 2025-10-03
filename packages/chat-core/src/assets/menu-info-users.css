@@ -1,0 +1,13 @@
+button.button-yui-kit.secondary-yui-kit.large.button-menu__info {
+  display: grid;
+  justify-items: center;
+  min-height: 65px;
+  font-size: 14px;
+  color: var(--text-black);
+  padding-block: 10px;
+  line-height: 100%;
+  & svg.icon-yui-kit {
+    color: var(--grey5);
+    font-size: 24px;
+  }
+}

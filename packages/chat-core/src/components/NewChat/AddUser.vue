@@ -1,0 +1,3 @@
+<template>
+  <MenuInfo />
+</template>

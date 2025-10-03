@@ -17,7 +17,7 @@ import Header from './Header.vue';
 import Menu from './Menu.vue';
 import Chat from './MessageList.vue';
 import MenuInfo from './MenuInfo.vue';
-import NewContactModal from './ContactList/NewContact.vue';
+import NewContactModal from './NewChat/NewContact.vue';
 
 const state = reactive({
   isCollapse: false,

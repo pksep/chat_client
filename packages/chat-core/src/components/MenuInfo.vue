@@ -15,24 +15,7 @@
       </template>
       <template #header2> Информация </template>
       <template #tab1>
-        <section class="menu__info-users">
-          <article>
-            <Button
-              :type="ButtonTypeEnum.secondary"
-              class="button-menu__info menu__info-add-user"
-              :size="SizesEnum.large"
-            >
-              <Icon
-                :name="IconNameEnum.addUser"
-                class="menu__info-add-user-icon"
-              />
-              Добавить участника
-            </Button>
-            <ul class="menu__info-users-list">
-              <li><UserProfile /></li>
-            </ul>
-          </article>
-        </section>
+        <ContactListInModal />
       </template>
       <template #tab2>
         <section class="menu__info-info">
@@ -99,10 +82,12 @@ import {
   Textarea,
   Avatar
 } from 'sep-yui';
-import UserProfile from './UserProfile/UserProfile.vue';
+import ContactListInModal from './ContactList/ContactListInModal.vue';
 </script>
 
 <style scoped>
+@import url('../assets/menu-info-users.css');
+
 aside.menu__info {
   background-color: var(--white);
   border-left-color: var(--border-grey);
@@ -117,12 +102,8 @@ header.menu__info-header {
   justify-content: space-between;
 }
 
-section.menu__info-info,
-section.menu__info-users {
-  padding: 10px;
-}
-
 section.menu__info-info {
+  padding: 10px;
   padding-inline: 20px;
   display: grid;
   gap: 10px;
@@ -133,11 +114,6 @@ section.menu__info-info {
   margin: 0;
   align-items: center;
   padding-bottom: 7px;
-}
-
-.menu__info-add-user {
-  display: grid;
-  place-content: center;
 }
 
 .menu__info-user-count {
@@ -152,31 +128,6 @@ section.menu__info-info {
   line-height: 100%;
   width: 20px;
   height: 20px;
-}
-
-button.button-yui-kit.secondary-yui-kit.large.button-menu__info {
-  display: grid;
-  justify-items: center;
-  min-height: 65px;
-  font-size: 14px;
-  color: var(--text-black);
-  padding-block: 10px;
-  line-height: 100%;
-  & svg.icon-yui-kit {
-    color: var(--grey5);
-    font-size: 24px;
-  }
-}
-
-div.buttons-menu__info,
-button.button-yui-kit.menu__info-add-user.large {
-  width: 100%;
-}
-
-.menu__info-users-list {
-  display: grid;
-  margin-top: 10px;
-  gap: 8px;
 }
 
 :deep(button.tabs__navigation-button) {
