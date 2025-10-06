@@ -1,16 +1,14 @@
 <template>
-  <aside
-    :class="[`menu__info`, { collapse: !state.isCollapse }]"
-    v-if="!props.open"
-  >
+  <aside :class="[`menu__info`, { collapse: props.open }]" v-if="props.open">
     <header class="menu__info-header">
       <h4>Общий</h4>
       <Button
+        class="menu__info-button"
         :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
+        :size="SizesEnum.little"
         @click="handleCloseMenu"
       >
-        <Icon :name="IconNameEnum.crossLarge" />
+        <Icon :name="IconNameEnum.crossLarge" class="menu__button-close-icon" />
       </Button>
     </header>
     <Tabs :tabCount="2">
@@ -84,18 +82,18 @@ const props = withDefaults(defineProps<IMenuProps>(), {
 const emits = defineEmits<IMenuEmits>();
 
 const state = reactive({
-  isCollapse: false
+  isOpen: false
 });
 
 const handleCloseMenu = (): void => {
-  state.isCollapse = true;
-  emits('unmount-collapse', state.isCollapse);
+  state.isOpen = false;
+  emits('unmount-collapse', state.isOpen);
 };
 
 watch(
   () => props.open,
   () => {
-    state.isCollapse = props.open;
+    state.isOpen = props.open;
   }
 );
 
@@ -103,12 +101,12 @@ onMounted(() => {
   window.addEventListener('resize', () => {
     const width = window.innerWidth;
     if (width < 896) {
-      state.isCollapse = true;
-      emits('unmount-collapse', state.isCollapse);
+      state.isOpen = true;
+      emits('unmount-collapse', state.isOpen);
     }
     if (width > 896) {
-      state.isCollapse = false;
-      emits('unmount-collapse', state.isCollapse);
+      state.isOpen = false;
+      emits('unmount-collapse', state.isOpen);
     }
   });
 });
@@ -149,7 +147,6 @@ section.menu__info-info {
   display: flex;
   margin: 0;
   align-items: center;
-  padding-bottom: 7px;
 }
 
 .menu__info-user-count {
@@ -177,12 +174,6 @@ div.buttons-menu__info {
   gap: 10px;
 }
 
-.menu__info-title-text {
-  color: var(--text-grey);
-  font-weight: 600;
-  font-size: 14px;
-}
-
 .menu__info-create-channel {
   display: flex;
   align-items: center;
@@ -202,5 +193,13 @@ div.buttons-menu__info {
   display: flex;
   width: 100%;
   justify-content: center;
+}
+
+svg.icon-yui-kit.menu__button-close-icon {
+  font-size: 17px;
+}
+
+button.menu__info-button {
+  padding: 6px;
 }
 </style>

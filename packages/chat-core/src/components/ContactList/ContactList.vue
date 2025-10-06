@@ -57,7 +57,7 @@ const read = false;
   display: grid;
   grid-template-columns: 30px auto;
   column-gap: 10px;
-  padding: 10px;
+  padding-block: 10px;
   grid-template-areas:
     'a b c'
     'a d f';
@@ -117,6 +117,8 @@ svg.icon-yui-kit.user__contact-read {
 
 .user__contact-time {
   color: var(--text-grey);
+  font-size: 12px;
+  line-height: 16px;
 }
 
 .user__contact-bottom__left {

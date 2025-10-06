@@ -11,7 +11,7 @@
       >
         <Icon class="small-icon" :name="IconNameEnum.search" />
       </Button>
-      <Popover :options="getPopoverOptions" />
+      <Popover @click.stop :options="getPopoverOptions" />
     </div>
   </header>
 </template>

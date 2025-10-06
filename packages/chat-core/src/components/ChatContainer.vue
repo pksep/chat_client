@@ -2,7 +2,7 @@
   <main
     :class="[
       'chat-container',
-      { collapse: state.isCollapse, 'menu-collapse': state.isCollapseMenu }
+      { collapse: state.isCollapse, 'menu-collapse': !state.isMenuOpen }
     ]"
   >
     <Header class="chat__header" @unmount-click="handleHeaderClick" />
@@ -14,7 +14,7 @@
     <Chat class="chat__messages" />
     <MenuInfo
       class="chat__info"
-      :open="state.isCollapseMenu"
+      :open="state.isMenuOpen"
       @unmount-collapse="handleMenuCollapse"
     />
   </main>
@@ -32,7 +32,7 @@ import AddUser from './NewChat/AddUser.vue';
 
 const state = reactive({
   isCollapse: false,
-  isCollapseMenu: true,
+  isMenuOpen: false,
   open: false
 });
 
@@ -40,12 +40,12 @@ const handleCollapse = (isCollapse: boolean): void => {
   state.isCollapse = isCollapse;
 };
 
-const handleMenuCollapse = (isCollapse: boolean): void => {
-  state.isCollapseMenu = isCollapse;
+const handleMenuCollapse = (isOpen: boolean): void => {
+  state.isMenuOpen = isOpen;
 };
 
 const handleHeaderClick = (): void => {
-  state.isCollapseMenu = false;
+  state.isMenuOpen = true;
 };
 
 const handleNewContact = (isModalOpen: boolean): void => {
@@ -58,7 +58,10 @@ const handleNewContact = (isModalOpen: boolean): void => {
   height: 100vh;
   background-color: var(--blue15);
   grid-template-areas: 'menu header info' 'menu chat info';
-  grid-template-columns: var(--size-left-menu, 30%) auto;
+  grid-template-columns: var(--size-left-menu, 345px) auto var(
+      --size-right-menu,
+      404px
+    );
   grid-template-rows: 56px auto;
 }
 
@@ -67,6 +70,7 @@ const handleNewContact = (isModalOpen: boolean): void => {
 }
 
 .chat-container.menu-collapse {
+  --size-right-menu: 0;
   grid-template-areas:
     'menu header'
     'menu chat';

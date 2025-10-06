@@ -31,11 +31,15 @@ import UserProfile from '../UserProfile/UserProfile.vue';
 
 div.buttons-menu__info,
 button.button-yui-kit.menu__info-add-user.large {
+  --icon-color: var(--blue1);
   width: 100%;
 }
 
 section.menu__info-users {
   padding: 10px;
+  & article {
+    padding-inline: 10px;
+  }
 }
 
 .menu__info-users-list {

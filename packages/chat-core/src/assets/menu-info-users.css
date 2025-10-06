@@ -7,7 +7,13 @@ button.button-yui-kit.secondary-yui-kit.large.button-menu__info {
   padding-block: 10px;
   line-height: 100%;
   & svg.icon-yui-kit {
-    color: var(--grey5);
+    color: var(--icon-color, var(--grey5));
     font-size: 24px;
   }
+}
+
+.menu__info-title-text {
+  color: var(--text-grey);
+  font-weight: 600;
+  font-size: 14px;
 }

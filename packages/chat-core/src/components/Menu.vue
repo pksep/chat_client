@@ -194,7 +194,6 @@ button.menu__user-profile-collapse {
 }
 
 details.menu__user-details {
-  padding-inline: 10px;
   &:not([open]) summary.menu__user-details-summary h4::after {
     transform: rotate(135deg);
   }
@@ -204,7 +203,7 @@ summary.menu__user-details-summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 5px;
   color: var(--text-grey);
   &::marker {
     display: none;
@@ -218,6 +217,9 @@ summary.menu__user-details-summary {
   & h4::after {
     display: inline-block;
     content: '▾';
+    font-size: 12px;
+    vertical-align: top;
+    text-align: center;
     margin-left: 6px;
     transition: transform 0.3s ease;
   }
