@@ -1,6 +1,6 @@
 <template>
   <Modal :open position="center" class="add-user">
-    <MenuInfo :open @unmount-collsapse="closeModal">
+    <MenuInfo :open @unmount-collapse="closeModal">
       <template #information-menu>
         <NewChatInformationForm>
           <Avatar is-icon class="add-user__avatar" />
