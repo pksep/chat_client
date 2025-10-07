@@ -5,6 +5,7 @@
         :type="ButtonTypeEnum.secondary"
         class="button-menu__info menu__info-add-user"
         :size="SizesEnum.large"
+        @click="addUser"
       >
         <Icon :name="IconNameEnum.addUser" class="menu__info-add-user-icon" />
         Добавить участника
@@ -14,11 +15,26 @@
       </ul>
     </article>
   </section>
+  <Teleport to="body">
+    <NewContact :open="state.open" @unmount-close="closeModal" />
+  </Teleport>
 </template>
 
 <script setup lang="ts">
 import { Button, ButtonTypeEnum, Icon, IconNameEnum, SizesEnum } from 'sep-yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
+import { reactive } from 'vue';
+import NewContact from '../NewChat/NewContact.vue';
+
+const state = reactive({ open: false });
+
+const addUser = (): void => {
+  state.open = true;
+};
+
+const closeModal = (): void => {
+  state.open = false;
+};
 </script>
 
 <style lang="css" scoped>

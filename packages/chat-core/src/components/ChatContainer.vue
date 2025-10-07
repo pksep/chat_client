@@ -18,8 +18,9 @@
       @unmount-collapse="handleMenuCollapse"
     />
   </main>
-  <NewContactModal :open="state.open" />
-  <AddUser :open="false" />
+  <Teleport to="body">
+    <NewContactModal :open="state.open" />
+  </Teleport>
 </template>
 <script setup lang="ts">
 import { reactive } from 'vue';
@@ -28,7 +29,6 @@ import Menu from './Menu.vue';
 import Chat from './MessageList.vue';
 import MenuInfo from './MenuInfo.vue';
 import NewContactModal from './NewChat/NewContact.vue';
-import AddUser from './NewChat/AddUser.vue';
 
 const state = reactive({
   isCollapse: false,

@@ -6,6 +6,7 @@
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.little"
         @click="closeModal"
+        class="new-contact__button-close"
       >
         <Icon :name="IconNameEnum.crossLarge" />
       </Button>
@@ -15,11 +16,17 @@
       <ul class="new-contact__section-list">
         <li class="new-contact__section-list__li">
           <UserProfile />
-          <Checkbox :size="SizesEnum.small" />
+          <Checkbox :size="SizesEnum.small" v-model="state.openAddUser" />
         </li>
       </ul>
     </section>
   </Modal>
+  <Teleport to="body">
+    <AddUser
+      :open="state.openAddUser"
+      @unmount-close="() => (state.openAddUser = false)"
+    />
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -35,13 +42,19 @@ import {
   Button
 } from 'sep-yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
+import AddUser from './AddUser.vue';
 
 const props = withDefaults(defineProps<{ open: boolean }>(), {
   open: false
 });
 
+const emits = defineEmits<{
+  (e: 'unmount-close'): void;
+}>();
+
 const state = reactive({
-  open: false
+  open: false,
+  openAddUser: false
 });
 
 watch(
@@ -51,8 +64,16 @@ watch(
   }
 );
 
+watch(
+  () => state.openAddUser,
+  () => {
+    state.open = false;
+  }
+);
+
 const closeModal = (): void => {
   state.open = false;
+  emits('unmount-close');
 };
 </script>
 <style scoped>
@@ -62,7 +83,8 @@ const closeModal = (): void => {
 
 .new-contact__header {
   font-size: 16px;
-  padding: 10px;
+  padding-block: 10px;
+  padding-inline: 20px;
   display: flex;
   font-weight: bold;
   align-items: center;
@@ -93,5 +115,10 @@ const closeModal = (): void => {
   display: grid;
   gap: 8px;
   padding: 10px;
+}
+
+button.button-yui-kit.new-contact__button-close {
+  padding-block: 5px;
+  padding-inline: 0;
 }
 </style>
