@@ -31,9 +31,15 @@
                 {{ new Date().toLocaleDateString('ru-RU') }}
               </span>
             </div>
-            <div class="menu__info-avatar">
+            <button class="menu__info-avatar" @click="openEditProfileIcon">
               <Avatar is-icon />
-            </div>
+            </button>
+            <Teleport to="body">
+              <ModalCroppedAvatar
+                :open="state.isEditAvatar"
+                @unmount-close="closeEditProfileIcon"
+              />
+            </Teleport>
             <div class="buttons-menu__info">
               <Button
                 :type="ButtonTypeEnum.secondary"
@@ -64,6 +70,7 @@
 import { onMounted, onUnmounted, reactive, watch } from 'vue';
 import {
   Tabs,
+  ModalCroppedAvatar,
   Button,
   ButtonTypeEnum,
   IconNameEnum,
@@ -82,12 +89,21 @@ const props = withDefaults(defineProps<IMenuProps>(), {
 const emits = defineEmits<IMenuEmits>();
 
 const state = reactive({
-  isOpen: false
+  isOpen: false,
+  isEditAvatar: false
 });
 
 const handleCloseMenu = (): void => {
   state.isOpen = false;
   emits('unmount-collapse', state.isOpen);
+};
+
+const openEditProfileIcon = (): void => {
+  state.isEditAvatar = true;
+};
+
+const closeEditProfileIcon = (): void => {
+  state.isEditAvatar = false;
 };
 
 watch(
@@ -97,22 +113,24 @@ watch(
   }
 );
 
+const resizeHandler = () => {
+  const width = window.innerWidth;
+  if (width < 896) {
+    state.isOpen = true;
+    emits('unmount-collapse', state.isOpen);
+  }
+  if (width > 896) {
+    state.isOpen = false;
+    emits('unmount-collapse', state.isOpen);
+  }
+};
+
 onMounted(() => {
-  window.addEventListener('resize', () => {
-    const width = window.innerWidth;
-    if (width < 896) {
-      state.isOpen = true;
-      emits('unmount-collapse', state.isOpen);
-    }
-    if (width > 896) {
-      state.isOpen = false;
-      emits('unmount-collapse', state.isOpen);
-    }
-  });
+  window.addEventListener('resize', resizeHandler);
 });
 
 onUnmounted(() => {
-  document.removeEventListener('resize', null);
+  window.removeEventListener('resize', resizeHandler);
 });
 </script>
 
