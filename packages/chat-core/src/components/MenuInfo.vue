@@ -188,6 +188,10 @@ div.buttons-menu__info {
     color: var(--text-black);
   }
 }
+:deep(.tabs__navigation) {
+  justify-content: start !important;
+  gap: 70px;
+}
 
 .menu__info-avatar {
   display: flex;
@@ -201,5 +205,9 @@ svg.icon-yui-kit.menu__button-close-icon {
 
 button.menu__info-button {
   padding: 6px;
+}
+
+:deep(button.tabs__navigation-button) {
+  margin-inline: 20px !important;
 }
 </style>
