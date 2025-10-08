@@ -20,7 +20,7 @@
       </template>
       <template #header2> Информация </template>
       <template #tab1>
-        <ContactListInModal />
+        <ContactListInModal @unmount-user-add="unmountUserAdd" />
       </template>
       <template #tab2>
         <section class="menu__info-info">
@@ -36,6 +36,7 @@
             </button>
             <Teleport to="body">
               <ModalCroppedAvatar
+                :image="null"
                 :open="state.isEditAvatar"
                 @unmount-close="closeEditProfileIcon"
               />
@@ -96,6 +97,10 @@ const state = reactive({
 const handleCloseMenu = (): void => {
   state.isOpen = false;
   emits('unmount-collapse', state.isOpen);
+};
+
+const unmountUserAdd = (): void => {
+  emits('unmount-new-contact', true);
 };
 
 const openEditProfileIcon = (): void => {

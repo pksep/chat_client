@@ -1,5 +1,10 @@
 <template>
-  <Modal :open="state.open" class="new-contact" position="center">
+  <Modal
+    :open="state.open"
+    class="new-contact"
+    position="center"
+    @close="closeModal"
+  >
     <header class="new-contact__header">
       Добавить участника
       <Button
@@ -22,10 +27,7 @@
     </section>
   </Modal>
   <Teleport to="body">
-    <AddUser
-      :open="state.openAddUser"
-      @unmount-close="() => (state.openAddUser = false)"
-    />
+    <AddUser :open="state.openAddUser" @unmount-close="handleCloseAddUser" />
   </Teleport>
 </template>
 
@@ -67,13 +69,18 @@ watch(
 watch(
   () => state.openAddUser,
   () => {
-    state.open = false;
+    state.open = !state.openAddUser;
   }
 );
 
 const closeModal = (): void => {
   state.open = false;
+  state.openAddUser = false;
   emits('unmount-close');
+};
+
+const handleCloseAddUser = (): void => {
+  state.openAddUser = false;
 };
 </script>
 <style scoped>

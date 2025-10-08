@@ -1,6 +1,7 @@
 export interface IMenuEmits {
   (e: 'unmount-collapse', isCollapse: boolean): void;
   (e: 'unmount-new-contact', isNewContact: boolean): void;
+  (e: 'unmount-user-add'): void;
 }
 
 export interface IHeaderEmits {

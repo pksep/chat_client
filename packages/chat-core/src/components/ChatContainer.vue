@@ -16,10 +16,14 @@
       class="chat__info"
       :open="state.isMenuOpen"
       @unmount-collapse="handleMenuCollapse"
+      @unmount-new-contact="handleNewContact"
     />
   </main>
   <Teleport to="body">
-    <NewContactModal :open="state.open" />
+    <NewContactModal
+      :open="modalState.newContactOpen"
+      @unmount-close="closeContactModal"
+    />
   </Teleport>
 </template>
 <script setup lang="ts">
@@ -29,12 +33,19 @@ import Menu from './Menu.vue';
 import Chat from './MessageList.vue';
 import MenuInfo from './MenuInfo.vue';
 import NewContactModal from './NewChat/NewContact.vue';
+import { provide } from 'vue';
 
 const state = reactive({
   isCollapse: false,
-  isMenuOpen: false,
-  open: false
+  isMenuOpen: false
 });
+
+const modalState = reactive({
+  newContactOpen: false,
+  addUserOpen: false
+});
+
+provide('modalState', modalState);
 
 const handleCollapse = (isCollapse: boolean): void => {
   state.isCollapse = isCollapse;
@@ -49,7 +60,11 @@ const handleHeaderClick = (): void => {
 };
 
 const handleNewContact = (isModalOpen: boolean): void => {
-  state.open = isModalOpen;
+  modalState.newContactOpen = isModalOpen;
+};
+
+const closeContactModal = (): void => {
+  modalState.newContactOpen = false;
 };
 </script>
 <style scoped>

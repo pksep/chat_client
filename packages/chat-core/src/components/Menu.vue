@@ -30,7 +30,7 @@
       </h3>
     </div>
     <Line v-if="state.isCollapse" />
-    <details class="menu__user-details" v-if="!state.isCollapse">
+    <details class="menu__user-details" v-if="!state.isCollapse" open>
       <summary class="menu__user-details-summary">
         <h4>Каналы</h4>
         <Button

@@ -2,7 +2,11 @@
   <header class="chat__header" @click="handleClickHeader">
     <UserProfile class="chat__header-profile" />
     <div class="chat__header-buttons">
-      <Search v-if="state.isSearchInputEnable" />
+      <Search
+        v-if="state.isSearchInputEnable"
+        class="chat__header-search"
+        @click.stop
+      />
       <Button
         v-if="!state.isSearchInputEnable"
         :type="ButtonTypeEnum.ghost"
@@ -89,5 +93,9 @@ const getPopoverOptions = computed(() => [
 
 :deep(.tooltip-yui-kit) {
   align-content: center;
+}
+
+.chat__header-search {
+  min-width: 400px;
 }
 </style>

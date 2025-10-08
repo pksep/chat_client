@@ -1,6 +1,15 @@
 <template>
-  <Modal :open position="center" class="add-user">
-    <MenuInfo :open @unmount-collapse="closeModal">
+  <Modal
+    :open="props.open"
+    position="center"
+    class="add-user"
+    @close="closeModal"
+  >
+    <MenuInfo
+      :open="props.open"
+      @unmount-collapse="closeModal"
+      @unmount-new-contact="unmountNewContact"
+    >
       <template #information-menu>
         <NewChatInformationForm>
           <Avatar is-icon class="add-user__avatar" />
@@ -20,15 +29,38 @@
 import { Button, Avatar, ButtonTypeEnum, Modal, SizesEnum } from 'sep-yui';
 import MenuInfo from '../MenuInfo.vue';
 import NewChatInformationForm from './NewChatInformationForm.vue';
+import { reactive, watch } from 'vue';
 
-defineProps<{ open: boolean }>();
+const props = defineProps<{ open: boolean }>();
+
+const state = reactive({
+  modalOpened: []
+});
 
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
+  (e: 'unmount-new-contact'): void;
 }>();
 
+watch(
+  () => props.open,
+  () => {
+    if (props.open) {
+      state.modalOpened.push(props.open);
+      if (state.modalOpened.length > 1) {
+        closeModal();
+      }
+    }
+  }
+);
+
 const closeModal = (): void => {
+  state.modalOpened = [];
   emits('unmount-close');
+};
+
+const unmountNewContact = (): void => {
+  emits('unmount-new-contact');
 };
 </script>
 
