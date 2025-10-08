@@ -15,7 +15,9 @@
     <div v-else class="chat__nothing">
       <p class="chat__nothing-paragraph">Здесь пока ничего нет...</p>
     </div>
-    <ContentEditor class="chat__input" />
+    <div class="chat__input">
+      <ContentEditor />
+    </div>
   </section>
 </template>
 
@@ -39,8 +41,13 @@ p.chat__nothing-paragraph {
 
 .chat:not(.chat__nothing) {
   display: grid;
-  height: 100%;
   padding: 15px;
+}
+
+.chat {
+  --basic-height: calc(100vh - 56px);
+  height: var(--basic-height);
+  overflow: scroll;
 }
 
 .chat__message-bubble {
@@ -60,5 +67,12 @@ p.chat__nothing-paragraph {
 
 .chat__input {
   align-self: end;
+  max-width: calc(
+    100vw - var(--size-left-menu) - 36px - var(--size-right-menu)
+  );
+  :deep(.editor-content) {
+    max-height: calc(var(--basic-height) / 2);
+    overflow: scroll;
+  }
 }
 </style>

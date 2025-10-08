@@ -69,23 +69,22 @@ const closeContactModal = (): void => {
 </script>
 <style scoped>
 .chat-container {
+  --size-right-menu: 404px;
+  --size-left-menu: 345px;
   display: grid;
   height: 100vh;
   background-color: var(--blue15);
   grid-template-areas: 'menu header info' 'menu chat info';
-  grid-template-columns: var(--size-left-menu, 345px) auto var(
-      --size-right-menu,
-      404px
-    );
+  grid-template-columns: var(--size-left-menu) auto var(--size-right-menu);
   grid-template-rows: 56px auto;
 }
 
 .chat-container.collapse {
-  --size-left-menu: 70px;
+  --size-left-menu: 75px;
 }
 
 .chat-container.menu-collapse {
-  --size-right-menu: 0;
+  --size-right-menu: 0px;
   grid-template-areas:
     'menu header'
     'menu chat';
