@@ -38,16 +38,9 @@
 </template>
 
 <script setup lang="ts">
-import {
-  Avatar,
-  Icon,
-  IconNameEnum,
-  Button,
-  ButtonTypeEnum,
-  SizesEnum
-} from 'sep-yui';
+import { Avatar, Icon, IconNameEnum } from 'sep-yui';
 import ContextMenu from './ContextMenu.vue';
-import { useContextMenu } from './composables/useContextMenu';
+import { useContextMenu } from '../../composables/useContextMenu';
 
 const { isOpen, position, open, close: closePopover } = useContextMenu();
 
