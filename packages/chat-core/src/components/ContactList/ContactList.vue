@@ -27,31 +27,13 @@
         </div>
       </div>
     </li>
-    <div
-      v-if="state.isActive"
-      ref="menuRef"
-      :style="{
-        left: state.menuPosition.x + 'px',
-        top: state.menuPosition.y + 'px'
-      }"
-      class="context-menu"
-      @click.stop
-    >
-      <Button
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.little"
-        @click="handleEdit"
-      >
-        Edit
-      </Button>
-      <Button
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.little"
-        @click="handleDelete"
-      >
-        Delete
-      </Button>
-    </div>
+    <ContextMenu
+      :visible="isOpen"
+      :position="position"
+      @edit="handleEdit"
+      @delete="handleDelete"
+      @close="closePopover"
+    />
   </ul>
 </template>
 
@@ -62,16 +44,12 @@ import {
   IconNameEnum,
   Button,
   ButtonTypeEnum,
-  SizesEnum,
-  VueToolsCore
+  SizesEnum
 } from 'sep-yui';
-import { reactive, ref } from 'vue';
+import ContextMenu from './ContextMenu.vue';
+import { useContextMenu } from './composables/useContextMenu';
 
-const state = reactive({
-  isActive: false,
-  menuPosition: { x: 0, y: 0 },
-  ignoreNextClick: false
-});
+const { isOpen, position, open, close: closePopover } = useContextMenu();
 
 const useTime = (date: Date = new Date()): string => {
   let hours: string | number = date.getHours();
@@ -89,18 +67,9 @@ const notification = false;
 const pin = false;
 const read = false;
 
-const menuRef = ref(null);
-
 const openActivePopover = (event: MouseEvent): void => {
-  state.menuPosition = { x: event.pageX, y: event.pageY };
-  state.isActive = true;
+  open({ x: event.pageX, y: event.pageY });
 };
-
-const closePopover = (): void => {
-  state.isActive = false;
-};
-
-VueToolsCore.onClickOutside(menuRef, closePopover);
 
 const handleEdit = (): void => {
   console.log('Edit contact');
@@ -193,27 +162,5 @@ svg.icon-yui-kit.user__contact-read {
 .user__contact-list {
   gap: 10px;
   display: grid;
-}
-
-.context-menu {
-  position: absolute;
-  background: var(--white);
-  border: 1px solid var(--grey3);
-  border-radius: 4px;
-  padding: 4px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-  min-width: 120px;
-}
-
-.context-menu Button {
-  width: 100%;
-  justify-content: flex-start;
-  margin-bottom: 4px;
-  text-align: left;
-}
-
-.context-menu Button:last-child {
-  margin-bottom: 0;
 }
 </style>
