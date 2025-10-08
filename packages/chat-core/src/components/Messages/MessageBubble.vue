@@ -2,7 +2,7 @@
   <div class="message">
     <Avatar
       class="message__avatar"
-      v-if="author && !loader"
+      v-if="author && !props.loader"
       initials="Orange"
     />
     <article
@@ -20,18 +20,18 @@
             How are you?
           </div>
         </blockquote>
-        <div class="message-content__loading" v-if="loader">
+        <div class="message-content__loading" v-if="props.loader">
           <template v-for="i in generateArray(3)" :key="i">
             <div class="message-content__loading-circle"></div>
           </template>
         </div>
-        <template v-else-if="!loader">
-          {{ message }}
+        <template v-else-if="!props.loader">
+          {{ props.message }}
         </template>
       </div>
-      <div class="message-time" v-if="!loader">
+      <div class="message-time" v-if="!props.loader">
         <Icon v-if="read" :name="IconNameEnum.read" />
-        {{ time }}
+        {{ props.time }}
       </div>
     </article>
   </div>
@@ -41,12 +41,11 @@
 import { Avatar, Icon, IconNameEnum } from 'sep-yui';
 import type { IMessageBubbleProps } from './interface/interface';
 
-defineProps<IMessageBubbleProps>();
+const props = defineProps<IMessageBubbleProps>();
 
 const read = false;
 const author = true;
 const blockquote = false;
-const loader = false;
 
 const generateArray = (n: number): number[] => {
   return Array.from({ length: n });

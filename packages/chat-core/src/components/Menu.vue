@@ -21,7 +21,15 @@
       </Button>
     </div>
     <Line />
-    <div class="menu__user-assistant">
+    <div
+      :class="[
+        'menu__user-assistant',
+        {
+          active: state.chapter === 'ai'
+        }
+      ]"
+      @click="handleAiChapter"
+    >
       <div class="menu__user-assistant-icon">
         <AiIcon />
       </div>
@@ -32,7 +40,7 @@
     <Line v-if="state.isCollapse" />
     <details class="menu__user-details" v-if="!state.isCollapse" open>
       <summary class="menu__user-details-summary">
-        <h4>Каналы</h4>
+        <h4 @click="handleChannels">Каналы</h4>
         <Button
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.little"
@@ -71,10 +79,13 @@ import ContactList from './ContactList/ContactList.vue';
 import type { IMenuEmits } from './interfaces/interfaces';
 
 const state = reactive({
-  isCollapse: false
+  isCollapse: false,
+  chapter: ''
 });
 
 const emits = defineEmits<IMenuEmits>();
+
+let resizeHandler: (() => void) | undefined;
 
 const handleCollapse = (): void => {
   state.isCollapse = !state.isCollapse;
@@ -85,8 +96,24 @@ const handleNewContactModal = (): void => {
   emits('unmount-new-contact', true);
 };
 
+const handleAiChapter = (): void => {
+  if (state.chapter === 'ai') {
+    state.chapter = '';
+    emits('unmount-chapter', null);
+    return;
+  }
+  state.chapter = 'ai';
+  emits('unmount-chapter', {
+    name: 'ai'
+  });
+};
+
+const handleChannels = (): void => {
+  emits('unmount-chapter', { name: 'channels' });
+};
+
 onMounted(() => {
-  window.addEventListener('resize', () => {
+  resizeHandler = () => {
     const width = window.innerWidth;
     if (width < 896) {
       state.isCollapse = true;
@@ -96,11 +123,14 @@ onMounted(() => {
       state.isCollapse = false;
       emits('unmount-collapse', state.isCollapse);
     }
-  });
+  };
+  window.addEventListener('resize', resizeHandler);
 });
 
 onUnmounted(() => {
-  document.removeEventListener('resize', null);
+  if (resizeHandler) {
+    window.removeEventListener('resize', resizeHandler);
+  }
 });
 </script>
 
@@ -155,6 +185,13 @@ onUnmounted(() => {
 
 .menu:not(.collapse) button.menu__user-profile-collapse {
   justify-self: end;
+}
+
+.menu__user-assistant {
+  &:hover,
+  &.active {
+    background-color: var(--blue15);
+  }
 }
 
 button.menu__user-profile-collapse {

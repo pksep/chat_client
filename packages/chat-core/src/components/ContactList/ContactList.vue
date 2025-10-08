@@ -2,7 +2,7 @@
   <ul class="user__contact-list">
     <li>
       <div
-        :class="['menu__user-contact', { active: state.isActive }]"
+        :class="['menu__user-contact', { active: isOpen }]"
         @contextmenu.prevent="openActivePopover"
       >
         <Avatar class="menu__user-contact-profile" initials="Orange" />

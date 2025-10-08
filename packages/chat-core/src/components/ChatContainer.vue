@@ -10,8 +10,9 @@
       class="chat__menu"
       @unmount-collapse="handleCollapse"
       @unmount-new-contact="handleNewContact"
+      @unmount-chapter="unmountMenuChapter"
     />
-    <Chat class="chat__messages" />
+    <Chat class="chat__messages" :chapter="state.chapter" />
     <MenuInfo
       class="chat__info"
       :open="state.isMenuOpen"
@@ -33,19 +34,17 @@ import Menu from './Menu.vue';
 import Chat from './MessageList.vue';
 import MenuInfo from './MenuInfo.vue';
 import NewContactModal from './NewChat/NewContact.vue';
-import { provide } from 'vue';
 
 const state = reactive({
   isCollapse: false,
-  isMenuOpen: false
+  isMenuOpen: false,
+  chapter: ''
 });
 
 const modalState = reactive({
   newContactOpen: false,
   addUserOpen: false
 });
-
-provide('modalState', modalState);
 
 const handleCollapse = (isCollapse: boolean): void => {
   state.isCollapse = isCollapse;
@@ -57,6 +56,10 @@ const handleMenuCollapse = (isOpen: boolean): void => {
 
 const handleHeaderClick = (): void => {
   state.isMenuOpen = true;
+};
+
+const unmountMenuChapter = ({ name }: { name: string }): void => {
+  state.chapter = name;
 };
 
 const handleNewContact = (isModalOpen: boolean): void => {
