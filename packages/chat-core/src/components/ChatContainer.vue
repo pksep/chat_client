@@ -38,7 +38,7 @@ import NewContactModal from './NewChat/NewContact.vue';
 const state = reactive({
   isCollapse: false,
   isMenuOpen: false,
-  chapter: ''
+  chapter: null
 });
 
 const modalState = reactive({
@@ -58,8 +58,12 @@ const handleHeaderClick = (): void => {
   state.isMenuOpen = true;
 };
 
-const unmountMenuChapter = ({ name }: { name: string }): void => {
-  state.chapter = name;
+const unmountMenuChapter = (config: { name: string } | null): void => {
+  if (!config?.name) {
+    state.chapter = null;
+    return;
+  }
+  state.chapter = config.name;
 };
 
 const handleNewContact = (isModalOpen: boolean): void => {

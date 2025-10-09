@@ -27,7 +27,13 @@
     </section>
   </Modal>
   <Teleport to="body">
-    <AddUser :open="state.openAddUser" @unmount-close="handleCloseAddUser" />
+    <KeepAlive>
+      <component
+        :is="AddUser"
+        :open="state.openAddUser"
+        @unmount-close="handleCloseAddUser"
+      />
+    </KeepAlive>
   </Teleport>
 </template>
 

@@ -1,6 +1,9 @@
 <template>
   <section class="chat">
-    <div v-if="props.chapter === 'ai'" class="chat__message-bubble">
+    <div
+      v-if="props.chapter === 'ai' && aiMessages.length"
+      class="chat__message-bubble"
+    >
       <MessageBubble
         v-for="(message, index) in aiMessages"
         :key="index"
@@ -10,13 +13,13 @@
         ]"
         :message="message.content"
         :time="getTime(index)"
-        :loader="loading && index === aiMessages.length - 1"
+        :loader="message.loading"
       />
-      {{ aiMessages }}
     </div>
-    <div v-else-if="!props.chapter" class="chat__nothing">
+    <div v-else class="chat__nothing">
       <p class="chat__nothing-paragraph">Здесь пока ничего нет...</p>
     </div>
+    <!--
     <div v-else class="chat__message-bubble">
       <MessageBubble
         class="message__bubble"
@@ -29,6 +32,7 @@
         time="12:11"
       />
     </div>
+    -->
     <div class="chat__input">
       <ContentEditor v-model="inputText" @unmount-send="handleSend" />
     </div>
@@ -47,11 +51,7 @@ const props = withDefaults(defineProps<IMessageListProps>(), {
 });
 
 const inputText = ref('');
-const {
-  messages: aiMessagesRaw,
-  loading,
-  sendMessage
-} = useMastra('generalAgent');
+const { messages: aiMessagesRaw, sendMessage } = useMastra('generalAgent');
 
 const aiMessages = computed(() => aiMessagesRaw.value);
 
@@ -61,7 +61,7 @@ const getTime = (index: number) => {
 };
 
 const handleSend = async () => {
-  if (!inputText.value.trim() || loading.value) return;
+  if (!inputText.value.trim()) return;
   await sendMessage(inputText.value);
   inputText.value = '';
 };

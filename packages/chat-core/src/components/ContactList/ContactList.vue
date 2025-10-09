@@ -3,7 +3,7 @@
     <li>
       <div
         :class="['menu__user-contact', { active: isOpen }]"
-        @contextmenu.prevent="openActivePopover"
+        @contextmenu="openActivePopover"
       >
         <Avatar class="menu__user-contact-profile" initials="Orange" />
         <h5 class="user__contact-title">Общий</h5>
@@ -61,6 +61,8 @@ const pin = false;
 const read = false;
 
 const openActivePopover = (event: MouseEvent): void => {
+  if (event.altKey) return;
+  event.preventDefault();
   open({ x: event.pageX, y: event.pageY });
 };
 

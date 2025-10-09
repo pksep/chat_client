@@ -4,6 +4,7 @@ import { MastraClient } from '@mastra/client-js';
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  loading?: boolean;
 }
 
 export function useMastra(
@@ -12,16 +13,13 @@ export function useMastra(
 ) {
   const client = new MastraClient({ baseUrl });
   const messages: Ref<Message[]> = ref([]);
-  const loading = ref(false);
 
   const sendMessage = async (input: string, abortSignal?: AbortSignal) => {
     if (!input.trim()) return;
 
     messages.value.push({ role: 'user', content: input });
     const assistantIndex = messages.value.length;
-    messages.value.push({ role: 'assistant', content: '' });
-
-    loading.value = true;
+    messages.value.push({ role: 'assistant', content: '', loading: true });
 
     try {
       const agent = client.getAgent(agentId);
@@ -115,7 +113,9 @@ export function useMastra(
           'Sorry, there was an error generating the response. Please try again.';
       }
     } finally {
-      loading.value = false;
+      if (messages.value[assistantIndex]) {
+        messages.value[assistantIndex].loading = false;
+      }
     }
   };
 
@@ -125,7 +125,6 @@ export function useMastra(
 
   return {
     messages,
-    loading,
     sendMessage,
     clearMessages
   };

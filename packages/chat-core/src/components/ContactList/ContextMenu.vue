@@ -23,6 +23,9 @@
     >
       Delete
     </Button>
+    <p class="tip">
+      Зажмите <kbd>Alt</kbd> для того чтобы показать системное меню
+    </p>
   </div>
 </template>
 
@@ -77,14 +80,18 @@ const handleDelete = (): void => {
   min-width: 120px;
 }
 
-.context-menu Button {
+.context-menu button {
   width: 100%;
   justify-content: flex-start;
   margin-bottom: 4px;
   text-align: left;
 }
 
-.context-menu Button:last-child {
+.context-menu button:last-child {
   margin-bottom: 0;
+}
+
+.tip {
+  font-size: 10px;
 }
 </style>

@@ -29,33 +29,15 @@
 import { Button, Avatar, ButtonTypeEnum, Modal, SizesEnum } from 'sep-yui';
 import MenuInfo from '../MenuInfo.vue';
 import NewChatInformationForm from './NewChatInformationForm.vue';
-import { reactive, watch } from 'vue';
 
 const props = defineProps<{ open: boolean }>();
-
-const state = reactive({
-  modalOpened: []
-});
 
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
   (e: 'unmount-new-contact'): void;
 }>();
 
-watch(
-  () => props.open,
-  () => {
-    if (props.open) {
-      state.modalOpened.push(props.open);
-      if (state.modalOpened.length > 1) {
-        closeModal();
-      }
-    }
-  }
-);
-
 const closeModal = (): void => {
-  state.modalOpened = [];
   emits('unmount-close');
 };
 
