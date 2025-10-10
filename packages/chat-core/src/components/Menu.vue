@@ -30,9 +30,7 @@
       ]"
       @click="handleAiChapter"
     >
-      <div class="menu__user-assistant-icon">
-        <AiIcon />
-      </div>
+      <AiIconWrapper />
       <h3 class="menu__user-assistant-title" v-if="!state.isCollapse">
         AI Ассистент
       </h3>
@@ -64,8 +62,8 @@
 
 <script lang="ts" setup>
 import { onMounted, onUnmounted, reactive } from 'vue';
-import AiIcon from '../components/AiIcon.vue';
 import Line from './Line.vue';
+import AiIconWrapper from './AiIconWrapper.vue';
 import {
   Icon,
   Button,
@@ -217,17 +215,6 @@ button.menu__user-profile-collapse {
 .menu__user-assistant-title {
   color: var(--text-black);
   font-size: 14px;
-}
-
-.menu__user-assistant-icon {
-  display: grid;
-  background-color: var(--blue9);
-  color: var(--blue1);
-  border-radius: 50%;
-  padding: 7px;
-  & svg {
-    font-size: 16px;
-  }
 }
 
 details.menu__user-details {

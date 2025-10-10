@@ -10,19 +10,19 @@
         <p class="user__contact-description">Ok, see you later</p>
         <div class="user__contact-top__left">
           <Icon
-            v-if="read"
+            v-if="state.read"
             :name="IconNameEnum.read"
             class="user__contact-read"
           />
           <span class="user__contact-time">{{ useTime() }}</span>
         </div>
         <div
-          v-if="notification"
+          v-if="state.notification"
           class="user__contact-bottom__left user__contact-notification"
         >
           1
         </div>
-        <div class="user__contact-bottom__left" v-if="pin">
+        <div class="user__contact-bottom__left" v-if="state.pin">
           <Icon class="user__contact-pin" :name="IconNameEnum.pin" />
         </div>
       </div>
@@ -30,19 +30,49 @@
     <ContextMenu
       :visible="isOpen"
       :position="position"
-      @edit="handleEdit"
-      @delete="handleDelete"
-      @close="closePopover"
-    />
+      @unmount-close="closeActivePopover"
+    >
+      <Button
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="handlePin"
+      >
+        <template v-if="!state.pin"> Закрепить </template>
+        <template v-else> Открепить </template>
+      </Button>
+      <Button
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click="handleNotification"
+      >
+        <template v-if="!state.notification"> Выкл. уведомление </template>
+        <template v-else> Вкл. уведомление </template>
+      </Button>
+    </ContextMenu>
   </ul>
 </template>
 
 <script setup lang="ts">
-import { Avatar, Icon, IconNameEnum } from 'sep-yui';
+import { reactive } from 'vue';
+import {
+  Avatar,
+  Icon,
+  IconNameEnum,
+  Button,
+  ButtonTypeEnum,
+  SizesEnum
+} from 'sep-yui';
 import ContextMenu from './ContextMenu.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 
-const { isOpen, position, open, close: closePopover } = useContextMenu();
+const state = reactive({
+  pin: false,
+  read: false,
+  notification: false
+});
+
+const { isOpen, position, openActivePopover, closeActivePopover } =
+  useContextMenu();
 
 const useTime = (date: Date = new Date()): string => {
   let hours: string | number = date.getHours();
@@ -56,24 +86,14 @@ const useTime = (date: Date = new Date()): string => {
   return `${hours}:${minutes}`;
 };
 
-const notification = false;
-const pin = false;
-const read = false;
-
-const openActivePopover = (event: MouseEvent): void => {
-  if (event.altKey) return;
-  event.preventDefault();
-  open({ x: event.pageX, y: event.pageY });
+const handlePin = (): void => {
+  state.pin = !state.pin;
+  closeActivePopover();
 };
 
-const handleEdit = (): void => {
-  console.log('Edit contact');
-  closePopover();
-};
-
-const handleDelete = (): void => {
-  console.log('Delete contact');
-  closePopover();
+const handleNotification = (): void => {
+  state.notification = !state.notification;
+  closeActivePopover();
 };
 </script>
 

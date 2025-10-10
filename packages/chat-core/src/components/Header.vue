@@ -1,6 +1,13 @@
 <template>
   <header class="chat__header" @click="handleClickHeader">
-    <UserProfile class="chat__header-profile" />
+    <div
+      class="chat__header-profile chat__header-ai-assistant"
+      v-if="props.chapter === 'ai'"
+    >
+      <AiIconWrapper />
+      <h3>Ai Ассистент</h3>
+    </div>
+    <UserProfile class="chat__header-profile" v-else />
     <div class="chat__header-buttons">
       <Search
         v-if="state.isSearchInputEnable"
@@ -33,7 +40,11 @@ import {
   Popover
 } from 'sep-yui';
 
-import type { IHeaderEmits } from './interfaces/interfaces';
+import type { IHeaderProps, IHeaderEmits } from './interfaces/interfaces';
+import AiIcon from './AiIcon.vue';
+import AiIconWrapper from './AiIconWrapper.vue';
+
+const props = withDefaults(defineProps<IHeaderProps>(), {});
 
 const state = reactive({
   isSearchInputEnable: false
@@ -46,6 +57,7 @@ const showSearch = (): void => {
 };
 
 const handleClickHeader = (): void => {
+  if (props.chapter === 'ai') return;
   state.isSearchInputEnable = false;
   emits('unmount-click');
 };
@@ -97,5 +109,14 @@ const getPopoverOptions = computed(() => [
 
 .chat__header-search {
   min-width: 400px;
+}
+
+.chat__header-ai-assistant {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  & h3 {
+    font-size: 16px;
+  }
 }
 </style>

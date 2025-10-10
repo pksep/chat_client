@@ -5,7 +5,11 @@
       { collapse: state.isCollapse, 'menu-collapse': !state.isMenuOpen }
     ]"
   >
-    <Header class="chat__header" @unmount-click="handleHeaderClick" />
+    <Header
+      class="chat__header"
+      :chapter="state.chapter"
+      @unmount-click="handleHeaderClick"
+    />
     <Menu
       class="chat__menu"
       @unmount-collapse="handleCollapse"

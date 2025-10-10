@@ -21,9 +21,18 @@
       <ul class="new-contact__section-list">
         <li class="new-contact__section-list__li">
           <UserProfile />
-          <Checkbox :size="SizesEnum.small" v-model="state.openAddUser" />
+          <Checkbox :size="SizesEnum.small" />
         </li>
       </ul>
+      <Button
+        :type="ButtonTypeEnum.primary"
+        :size="SizesEnum.little"
+        class="new-contact__add"
+        disabled
+        @click="handleOpenUser"
+      >
+        Добавить
+      </Button>
     </section>
   </Modal>
   <Teleport to="body">
@@ -88,10 +97,17 @@ const closeModal = (): void => {
 const handleCloseAddUser = (): void => {
   state.openAddUser = false;
 };
+
+const handleOpenUser = (): void => {
+  state.openAddUser = true;
+};
 </script>
 <style scoped>
 .new-contact {
   width: 370px;
+}
+
+:deep(.modal-yui-kit__modal-content) {
 }
 
 .new-contact__header {
@@ -130,8 +146,18 @@ const handleCloseAddUser = (): void => {
   padding: 10px;
 }
 
+.new-contact__section {
+  display: grid;
+}
+
 button.button-yui-kit.new-contact__button-close {
   padding-block: 5px;
   padding-inline: 0;
+}
+
+button.new-contact__add {
+  margin-right: 10px;
+  margin-bottom: 10px;
+  justify-self: end;
 }
 </style>

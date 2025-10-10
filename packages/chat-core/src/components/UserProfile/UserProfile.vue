@@ -1,5 +1,5 @@
 <template>
-  <div class="user-profile">
+  <div class="user-profile" @contextmenu="handleClick">
     <Avatar
       url="/avatar-user.png"
       alt="avatar of user"
@@ -13,6 +13,14 @@
 
 <script lang="ts" setup>
 import { Avatar } from 'sep-yui';
+
+const emits = defineEmits<{
+  (e: 'unmount-click', event: MouseEvent): void;
+}>();
+
+const handleClick = (event: MouseEvent): void => {
+  emits('unmount-click', event);
+};
 </script>
 
 <style scoped>

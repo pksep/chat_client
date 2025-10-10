@@ -11,8 +11,23 @@
         Добавить участника
       </Button>
       <ul class="menu__info-users-list">
-        <li><UserProfile /></li>
+        <li><UserProfile @unmount-click="openActivePopover" /></li>
       </ul>
+      <ContextMenu
+        :visible="isOpen"
+        :position="position"
+        @unmount-close="closeActivePopover"
+      >
+        <template #default>
+          <Button
+            :type="ButtonTypeEnum.ghost"
+            :size="SizesEnum.little"
+            @click="closeActivePopover"
+          >
+            Удалить из канала
+          </Button>
+        </template>
+      </ContextMenu>
     </article>
   </section>
   <Teleport to="body">
@@ -28,6 +43,11 @@ import { Button, ButtonTypeEnum, Icon, IconNameEnum, SizesEnum } from 'sep-yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import { ref } from 'vue';
 import NewContactModal from '../NewChat/NewContact.vue';
+import ContextMenu from '../ContactList/ContextMenu.vue';
+import { useContextMenu } from '../../composables/useContextMenu';
+
+const { isOpen, position, openActivePopover, closeActivePopover } =
+  useContextMenu();
 
 const newContactOpen = ref(false);
 const addUser = () => {

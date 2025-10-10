@@ -12,7 +12,7 @@
           { message__other: message.role === 'assistant' }
         ]"
         :message="message.content"
-        :time="getTime(index)"
+        :time="getTime()"
         :loader="message.loading"
       />
     </div>
@@ -55,7 +55,7 @@ const { messages: aiMessagesRaw, sendMessage } = useMastra('generalAgent');
 
 const aiMessages = computed(() => aiMessagesRaw.value);
 
-const getTime = (index: number) => {
+const getTime = () => {
   const now = new Date();
   return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
@@ -113,5 +113,9 @@ p.chat__nothing-paragraph {
     max-height: calc(var(--basic-height) / 2);
     overflow: scroll;
   }
+}
+
+:deep(.primary-yui-kit.toolbar-button) {
+  color: var(--white);
 }
 </style>

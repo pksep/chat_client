@@ -1,20 +1,28 @@
 import { ref } from 'vue';
 
-const isOpen = ref(false);
-const position = ref({ x: 0, y: 0 });
+export const useContextMenu = () => {
+  const isOpen = ref(false);
+  const position = ref({ x: 0, y: 0 });
 
-const open = (pos: { x: number; y: number }): void => {
-  position.value = pos;
-  isOpen.value = true;
+  const openActivePopover = (event: MouseEvent): void => {
+    if (event.altKey) return;
+    event.preventDefault();
+    position.value = { x: event.pageX, y: event.pageY };
+    isOpen.value = true;
+  };
+
+  const closeActivePopover = (): void => {
+    isOpen.value = false;
+    position.value = {
+      x: 0,
+      y: 0
+    };
+  };
+
+  return {
+    isOpen,
+    position,
+    openActivePopover,
+    closeActivePopover
+  };
 };
-
-const close = (): void => {
-  isOpen.value = false;
-};
-
-export const useContextMenu = () => ({
-  isOpen,
-  position,
-  open,
-  close
-});
