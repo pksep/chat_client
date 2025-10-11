@@ -17,6 +17,7 @@ export function useMastra(
   const sendMessage = async (input: string, abortSignal?: AbortSignal) => {
     if (!input.trim()) return;
 
+    console.log(input);
     messages.value.push({ role: 'user', content: input });
     const assistantIndex = messages.value.length;
     messages.value.push({ role: 'assistant', content: '', loading: true });
@@ -24,13 +25,12 @@ export function useMastra(
     try {
       const agent = client.getAgent(agentId);
 
-      // Use streamVNext for V2 model compatibility (replaces legacy .stream())
       const stream = await agent.streamVNext({
         messages: messages.value.map(m => ({
           role: m.role,
           content: m.content
         })),
-        abortSignal // Optional: for canceling the stream
+        abortSignal
       });
 
       await Promise.race([

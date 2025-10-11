@@ -2,14 +2,20 @@
   <div class="message">
     <Avatar
       class="message__avatar"
-      v-if="author && !props.loader"
-      initials="Orange"
+      url="/avatar-user.png"
+      alt="avatar of user"
+      initials="Zakk"
+      v-if="!props.loader && props.author === 'user'"
+    />
+    <AiIconWrapper
+      class="message__assistant"
+      v-else-if="props.author === 'assistant'"
     />
     <article
       :class="[
         'message__article',
         {
-          'message__no-author': !author
+          'message__no-author': !state.isAuthor
         }
       ]"
     >
@@ -25,9 +31,11 @@
             <div class="message-content__loading-circle"></div>
           </template>
         </div>
-        <template v-else-if="!props.loader">
-          {{ props.message }}
-        </template>
+        <div
+          class="message-content__html"
+          v-else-if="!props.loader"
+          v-html="props.message"
+        ></div>
       </div>
       <div class="message-time" v-if="!props.loader">
         <Icon v-if="read" :name="IconNameEnum.read" />
@@ -38,13 +46,18 @@
 </template>
 
 <script setup lang="ts">
+import { reactive } from 'vue';
 import { Avatar, Icon, IconNameEnum } from 'sep-yui';
+import AiIconWrapper from '../AiIconWrapper.vue';
 import type { IMessageBubbleProps } from './interface/interface';
 
 const props = defineProps<IMessageBubbleProps>();
 
+const state = reactive({
+  isAuthor: true
+});
+
 const read = false;
-const author = true;
 const blockquote = false;
 
 const generateArray = (n: number): number[] => {
@@ -59,6 +72,7 @@ const generateArray = (n: number): number[] => {
 }
 
 .avatar-yui-kit.message__avatar {
+  --size-avatar: 35px;
   --background-color: var(--green2);
   align-self: start;
 }
@@ -129,5 +143,15 @@ div.message-content__loading-circle {
   font-size: 8px;
   width: 1em;
   height: 1em;
+}
+
+:global(div.message-content__html > p) {
+  margin: 0;
+}
+
+.message__assistant.menu__user-assistant-icon {
+  & :deep(svg) {
+    font-size: 24px;
+  }
 }
 </style>

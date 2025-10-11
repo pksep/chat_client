@@ -41,7 +41,6 @@ import {
 } from 'sep-yui';
 
 import type { IHeaderProps, IHeaderEmits } from './interfaces/interfaces';
-import AiIcon from './AiIcon.vue';
 import AiIconWrapper from './AiIconWrapper.vue';
 
 const props = withDefaults(defineProps<IHeaderProps>(), {});

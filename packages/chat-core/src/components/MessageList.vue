@@ -1,8 +1,8 @@
 <template>
   <section class="chat">
     <div
-      v-if="props.chapter === 'ai' && aiMessages.length"
       class="chat__message-bubble"
+      v-if="props.chapter === 'ai' && aiMessages.length"
     >
       <MessageBubble
         v-for="(message, index) in aiMessages"
@@ -12,6 +12,7 @@
           { message__other: message.role === 'assistant' }
         ]"
         :message="message.content"
+        :author="message.role"
         :time="getTime()"
         :loader="message.loading"
       />
@@ -19,20 +20,6 @@
     <div v-else class="chat__nothing">
       <p class="chat__nothing-paragraph">Здесь пока ничего нет...</p>
     </div>
-    <!--
-    <div v-else class="chat__message-bubble">
-      <MessageBubble
-        class="message__bubble"
-        message="How are you?"
-        time="12:10"
-      />
-      <MessageBubble
-        class="message__bubble message__other"
-        message="I'm doing great, thanks for asking!"
-        time="12:11"
-      />
-    </div>
-    -->
     <div class="chat__input">
       <ContentEditor v-model="inputText" @unmount-send="handleSend" />
     </div>
@@ -51,6 +38,7 @@ const props = withDefaults(defineProps<IMessageListProps>(), {
 });
 
 const inputText = ref('');
+
 const { messages: aiMessagesRaw, sendMessage } = useMastra('generalAgent');
 
 const aiMessages = computed(() => aiMessagesRaw.value);
@@ -95,7 +83,15 @@ p.chat__nothing-paragraph {
   gap: 25px;
 }
 
+.message__bubble {
+  overflow-wrap: anywhere;
+  justify-self: start;
+  hyphens: auto;
+  max-width: 100ch;
+}
+
 .message__other {
+  justify-self: end;
   flex-direction: row-reverse;
   --background-color: var(--blue1);
   --message-text-color: var(--white);
@@ -107,8 +103,9 @@ p.chat__nothing-paragraph {
 .chat__input {
   align-self: end;
   max-width: calc(
-    100vw - var(--size-left-menu) - 36px - var(--size-right-menu)
+    100vw - var(--size-left-menu) - var(--size-right-menu) - 36px
   );
+
   :deep(.editor-content) {
     max-height: calc(var(--basic-height) / 2);
     overflow: scroll;
