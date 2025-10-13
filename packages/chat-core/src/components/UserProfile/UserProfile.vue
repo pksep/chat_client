@@ -1,18 +1,25 @@
 <template>
   <div class="user-profile" @contextmenu="handleClick">
     <Avatar
-      url="/avatar-user.png"
-      alt="avatar of user"
+      :url="props.avatarUrl"
+      :alt="props.avatarAlt"
       class="user-profile__avatar"
-      initials="Zakk"
+      :initials="props.nickname"
     />
-    <h3 class="user-profile__title">Zakk Wylde</h3>
-    <span class="user-profile__nickname">@wyldetheguy</span>
+    <h3 class="user-profile__title">{{ props.name }}</h3>
+    <span class="user-profile__nickname">{{ props.nickname }}</span>
   </div>
 </template>
 
 <script lang="ts" setup>
 import { Avatar } from 'sep-yui';
+
+const props = defineProps<{
+  avatarUrl: string;
+  avatarAlt: string;
+  name: string;
+  nickname: string;
+}>();
 
 const emits = defineEmits<{
   (e: 'unmount-click', event: MouseEvent): void;

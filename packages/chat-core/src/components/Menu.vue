@@ -1,7 +1,14 @@
 <template>
   <aside :class="['menu', { collapse: state.isCollapse }]">
     <div class="menu__profile">
-      <UserProfile class="menu__user-profile" v-show="!state.isCollapse" />
+      <UserProfile
+        avatar-url="/avatar-user.png"
+        avatar-alt="avatar of user"
+        name="Zakk Wylde"
+        class="menu__user-profile"
+        nickname="@wyldetheguy"
+        v-show="!state.isCollapse"
+      />
       <Avatar
         url="/avatar-user.png"
         alt="avatar-user"

@@ -11,7 +11,16 @@
         Добавить участника
       </Button>
       <ul class="menu__info-users-list">
-        <li><UserProfile @unmount-click="openActivePopover" /></li>
+        <li>
+          <UserProfile
+            avatar-url="/avatar-user.png"
+            avatar-alt="avatar of user"
+            name="Zakk Wylde"
+            class="menu__user-profile"
+            nickname="@wyldetheguy"
+            @unmount-click="openActivePopover"
+          />
+        </li>
       </ul>
       <ContextMenu
         :visible="isOpen"
@@ -20,6 +29,7 @@
       >
         <template #default>
           <Button
+            class="menu__info-button-little"
             :type="ButtonTypeEnum.ghost"
             :size="SizesEnum.little"
             @click="closeActivePopover"
@@ -83,5 +93,9 @@ section.menu__info-users {
   display: grid;
   margin-top: 10px;
   gap: 8px;
+}
+
+button.ghost-yui-kit.menu__info-button-little {
+  color: var(--red6);
 }
 </style>

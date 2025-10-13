@@ -16,14 +16,13 @@
           />
           <span class="user__contact-time">{{ useTime() }}</span>
         </div>
-        <div
-          v-if="state.notification"
-          class="user__contact-bottom__left user__contact-notification"
-        >
-          1
-        </div>
-        <div class="user__contact-bottom__left" v-if="state.pin">
-          <Icon class="user__contact-pin" :name="IconNameEnum.pin" />
+        <div class="user__contact-bottom__left">
+          <div v-if="state.notification" class="user__contact-notification">
+            1
+          </div>
+          <div v-if="state.pin">
+            <Icon class="user__contact-pin" :name="IconNameEnum.pin" />
+          </div>
         </div>
       </div>
     </li>
@@ -169,7 +168,8 @@ svg.icon-yui-kit.user__contact-read {
 .user__contact-bottom__left {
   grid-area: f;
   justify-self: end;
-  display: grid;
+  display: flex;
+  gap: 2px;
   place-content: center;
   text-align: center;
 }

@@ -20,7 +20,12 @@
       <Search class="new-contact__section-search" />
       <ul class="new-contact__section-list">
         <li class="new-contact__section-list__li">
-          <UserProfile />
+          <UserProfile
+            name="John Doe"
+            nickname="@johndoe"
+            avatar-url="/avatar-user.png"
+            avatar-alt="avatar user"
+          />
           <Checkbox :size="SizesEnum.small" />
         </li>
       </ul>

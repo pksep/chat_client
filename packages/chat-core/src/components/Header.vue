@@ -7,7 +7,13 @@
       <AiIconWrapper />
       <h3>Ai Ассистент</h3>
     </div>
-    <UserProfile class="chat__header-profile" v-else />
+    <UserProfile
+      class="chat__header-profile"
+      avatar-alt="user-profile-alt"
+      name="John Doe"
+      nickname="@johndoe"
+      v-else
+    />
     <div class="chat__header-buttons">
       <Search
         v-if="state.isSearchInputEnable"

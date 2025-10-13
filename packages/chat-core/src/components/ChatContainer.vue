@@ -120,7 +120,11 @@ const closeContactModal = (): void => {
 }
 
 @media screen and (width <= 896px) {
-  .chat-container.collapse {
+  .chat__info {
+    display: none;
+  }
+  .chat-container {
+    --size-right-menu: 0px;
     --size-left-menu: 75px;
     grid-template-areas:
       'menu header'
