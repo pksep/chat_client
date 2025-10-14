@@ -107,6 +107,7 @@ const handleNotification = (): void => {
     'a d f';
   &:hover,
   &.active {
+    cursor: pointer;
     background-color: var(--blue15);
   }
 }

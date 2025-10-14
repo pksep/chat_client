@@ -9,6 +9,7 @@
     </div>
     <UserProfile
       class="chat__header-profile"
+      avatar-url="/"
       avatar-alt="user-profile-alt"
       name="John Doe"
       nickname="@johndoe"
@@ -52,7 +53,8 @@ import AiIconWrapper from './AiIconWrapper.vue';
 const props = withDefaults(defineProps<IHeaderProps>(), {});
 
 const state = reactive({
-  isSearchInputEnable: false
+  isSearchInputEnable: false,
+  statusNotification: 'Выкл. уведомление'
 });
 
 const emits = defineEmits<IHeaderEmits>();
@@ -69,12 +71,17 @@ const handleClickHeader = (): void => {
 
 const getPopoverOptions = computed(() => [
   {
-    value: 'Выкл. уведомление',
-    function: () => {}
+    value: state.statusNotification,
+    function: () => {
+      state.statusNotification = 'Вкл. уведомления';
+      emits('unmount-notification', state.statusNotification);
+    }
   },
   {
     value: 'Информация',
-    function: () => {}
+    function: () => {
+      emits('unmount-information');
+    }
   }
 ]);
 </script>

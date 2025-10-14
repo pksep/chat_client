@@ -13,7 +13,21 @@
         ]"
         :message="message.content"
         :author="message.role"
-        :time="getTime()"
+        :time="message.timestamp"
+        :loader="message.loading"
+      />
+    </div>
+    <div v-else-if="state.messages.length">
+      <MessageBubble
+        v-for="(message, index) in state.messages"
+        :key="index"
+        :class="[
+          'message__bubble',
+          { message__other: message.role === 'assistant' }
+        ]"
+        :message="message.content"
+        :author="message.role"
+        :time="time"
         :loader="message.loading"
       />
     </div>
@@ -27,11 +41,16 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed } from 'vue';
+import { ref, computed, reactive, watch } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import { ContentEditor } from 'sep-yui';
 import { useMastra } from '../services/useMastra';
 import type { IMessageListProps } from './interfaces/message-list';
+import { useTime } from '../composables/useTime';
+
+const state = reactive({
+  messages: []
+});
 
 const props = withDefaults(defineProps<IMessageListProps>(), {
   chapter: null
@@ -40,17 +59,26 @@ const props = withDefaults(defineProps<IMessageListProps>(), {
 const inputText = ref('');
 
 const { messages: aiMessagesRaw, sendMessage } = useMastra('generalAgent');
+const { time } = useTime();
 
 const aiMessages = computed(() => aiMessagesRaw.value);
 
-const getTime = () => {
-  const now = new Date();
-  return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-};
+watch(
+  () => props.chapter,
+  (newValue, oldValue) => {
+    if (newValue !== oldValue) {
+      state.messages = [];
+    }
+  }
+);
 
 const handleSend = async () => {
   if (!inputText.value.trim()) return;
-  await sendMessage(inputText.value);
+  if (props.chapter === 'ai') {
+    await sendMessage(inputText.value);
+  } else {
+    state.messages.push({ role: 'user', content: inputText.value });
+  }
   inputText.value = '';
 };
 </script>

@@ -1,10 +1,12 @@
 import { ref, Ref } from 'vue';
 import { MastraClient } from '@mastra/client-js';
+import { formatTime } from '../composables/useTime';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   loading?: boolean;
+  timestamp?: string;
 }
 
 export function useMastra(
@@ -17,9 +19,18 @@ export function useMastra(
   const sendMessage = async (input: string, abortSignal?: AbortSignal) => {
     if (!input.trim()) return;
 
-    messages.value.push({ role: 'user', content: input });
+    messages.value.push({
+      role: 'user',
+      content: input,
+      timestamp: formatTime()
+    });
     const assistantIndex = messages.value.length;
-    messages.value.push({ role: 'assistant', content: '', loading: true });
+    messages.value.push({
+      role: 'assistant',
+      content: '',
+      loading: true,
+      timestamp: formatTime()
+    });
 
     try {
       const agent = client.getAgent(agentId);
