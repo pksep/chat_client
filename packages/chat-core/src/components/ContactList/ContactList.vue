@@ -102,6 +102,7 @@ const handleNotification = (): void => {
   grid-template-columns: 30px auto;
   column-gap: 10px;
   padding-block: 10px;
+  min-height: 58px;
   grid-template-areas:
     'a b c'
     'a d f';
@@ -130,6 +131,7 @@ const handleNotification = (): void => {
   grid-area: d;
   margin: 0;
   justify-self: start;
+  height: 19px;
   color: var(--text-grey);
 }
 
@@ -170,7 +172,6 @@ svg.icon-yui-kit.user__contact-read {
   grid-area: f;
   justify-self: end;
   display: flex;
-  gap: 2px;
   place-content: center;
   text-align: center;
 }

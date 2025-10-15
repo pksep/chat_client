@@ -17,7 +17,7 @@
         :loader="message.loading"
       />
     </div>
-    <div v-else-if="state.messages.length">
+    <div class="chat__message-bubble" v-else-if="state.messages.length">
       <MessageBubble
         v-for="(message, index) in state.messages"
         :key="index"
@@ -87,6 +87,7 @@ const handleSend = async () => {
 .chat__nothing {
   display: grid;
   place-items: center;
+  height: calc(var(--basic-height) - 140px);
 }
 
 p.chat__nothing-paragraph {
@@ -103,12 +104,16 @@ p.chat__nothing-paragraph {
   --basic-height: calc(100vh - 56px);
   height: var(--basic-height);
   overflow: scroll;
+  overflow-y: hidden;
 }
 
 .chat__message-bubble {
   display: grid;
+  height: calc(var(--basic-height) - 185px);
+  overflow-y: scroll;
   align-content: start;
   gap: 25px;
+  margin-bottom: 25px;
 }
 
 .message__bubble {

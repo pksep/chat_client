@@ -9,6 +9,7 @@
       class="chat__header"
       :chapter="state.chapter"
       @unmount-click="handleHeaderClick"
+      @unmount-information="handleHeaderClick"
     />
     <Menu
       class="chat__menu"
@@ -81,7 +82,7 @@ const closeContactModal = (): void => {
 <style scoped>
 .chat-container {
   --size-right-menu: 404px;
-  --size-left-menu: 345px;
+  --size-left-menu: 325px;
   display: grid;
   height: 100vh;
   background-color: var(--blue15);

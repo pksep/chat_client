@@ -54,7 +54,10 @@ const props = withDefaults(defineProps<IHeaderProps>(), {});
 
 const state = reactive({
   isSearchInputEnable: false,
-  statusNotification: 'Выкл. уведомление'
+  statusNotification: {
+    label: 'Выкл. уведомление',
+    enabled: false
+  }
 });
 
 const emits = defineEmits<IHeaderEmits>();
@@ -71,10 +74,19 @@ const handleClickHeader = (): void => {
 
 const getPopoverOptions = computed(() => [
   {
-    value: state.statusNotification,
+    value: state.statusNotification.label,
     function: () => {
-      state.statusNotification = 'Вкл. уведомления';
-      emits('unmount-notification', state.statusNotification);
+      if (state.statusNotification.enabled) {
+        state.statusNotification = {
+          label: 'Выкл. уведомление',
+          enabled: false
+        };
+        emits('unmount-notification', state.statusNotification.label);
+        return;
+      }
+      state.statusNotification.label = 'Вкл. уведомления';
+      state.statusNotification.enabled = true;
+      emits('unmount-notification', state.statusNotification.label);
     }
   },
   {
