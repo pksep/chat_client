@@ -82,13 +82,15 @@ export function useMastra(
                   messages.value[assistantIndex].content += event.payload.text;
                 } else if (event.type === 'finish') {
                   resolve(null);
-                } else {
-                  reject();
-                  messages.value[assistantIndex].content = 'Произошла ошибка';
                 }
               } catch (parseError) {
-                reject();
-                console.warn('Failed to parse chunk:', parseError, chunk);
+                console.error(
+                  'Chunk parsing failed:',
+                  parseError,
+                  'Chunk:',
+                  chunk
+                );
+                reject(new Error('Ошибка обработки сообщения'));
               }
             }
           });
@@ -96,11 +98,13 @@ export function useMastra(
         new Promise(resolve => setTimeout(resolve, 10000)) // 10s timeout fallback
       ]);
     } catch (error: any) {
-      if (!error) {
-        messages.value[assistantIndex].content = 'Произошла ошибка';
-        return;
+      if (!error?.message) {
+        messages.value[assistantIndex].content = `Произошла ошибка ${error}`;
       }
-      if (error.message?.includes('V2 models')) {
+      if (
+        error?.message?.includes('V2 models') ||
+        error?.message?.includes('Timeout exceeded')
+      ) {
         messages.value[assistantIndex].content =
           'Данная версия модели не поддерживается, попробуйте с другой';
       } else if (error.status === 500) {
