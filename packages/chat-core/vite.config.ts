@@ -6,24 +6,29 @@ import dts from 'vite-plugin-dts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+const isLibBuild = false;
 // https://vite.dev/config/
 export default defineConfig({
   build: {
     outDir: 'build',
-    lib: {
-      entry: [resolve(__dirname, 'src/index.ts')],
-      name: 'ChatContainer',
-      formats: ['es'],
-      fileName: 'chat-container'
-    },
-    rollupOptions: {
-      external: ['vue'],
-      output: {
-        globals: {
-          vue: 'Vue'
+    ...(isLibBuild
+      ? {
+          lib: {
+            entry: [resolve(__dirname, 'src/index.ts')],
+            name: 'ChatContainer',
+            formats: ['es'],
+            fileName: 'chat-container'
+          },
+          rollupOptions: {
+            external: ['vue'],
+            output: {
+              globals: {
+                vue: 'Vue'
+              }
+            }
+          }
         }
-      }
-    }
+      : {})
   },
   plugins: [
     vue(),
