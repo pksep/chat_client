@@ -102,18 +102,16 @@ p.chat__nothing-paragraph {
 
 .chat {
   --basic-height: calc(100vh - 56px);
-  height: var(--basic-height);
   overflow: scroll;
   overflow-y: hidden;
 }
 
 .chat__message-bubble {
   display: grid;
-  height: calc(var(--basic-height) - 185px);
+  height: calc(var(--basic-height) - 135px);
   overflow-y: scroll;
   align-content: start;
   gap: 25px;
-  margin-bottom: 25px;
 }
 
 .message__bubble {
@@ -121,6 +119,9 @@ p.chat__nothing-paragraph {
   justify-self: start;
   hyphens: auto;
   max-width: 100ch;
+  &:last-child {
+    margin-bottom: 25px;
+  }
 }
 
 .message__other {

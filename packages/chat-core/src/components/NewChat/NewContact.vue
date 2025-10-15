@@ -26,14 +26,17 @@
             avatar-url="/avatar-user.png"
             avatar-alt="avatar user"
           />
-          <Checkbox :size="SizesEnum.small" />
+          <Checkbox
+            :size="SizesEnum.small"
+            @update:model-value="handleCheckbox"
+          />
         </li>
       </ul>
       <Button
         :type="ButtonTypeEnum.primary"
         :size="SizesEnum.little"
         class="new-contact__add"
-        disabled
+        :disabled="state.checkUsers.size === 0"
         @click="handleOpenUser"
       >
         Добавить
@@ -76,6 +79,7 @@ const emits = defineEmits<{
 
 const state = reactive({
   open: false,
+  checkUsers: new Set(),
   openAddUser: false
 });
 
@@ -97,6 +101,10 @@ const closeModal = (): void => {
   state.open = false;
   state.openAddUser = false;
   emits('unmount-close');
+};
+
+const handleCheckbox = (isCheck: boolean): void => {
+  state.checkUsers.add(isCheck);
 };
 
 const handleCloseAddUser = (): void => {
