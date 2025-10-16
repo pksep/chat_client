@@ -42,27 +42,29 @@
         AI Ассистент
       </h3>
     </div>
-    <Line v-if="state.isCollapse" />
-    <details class="menu__user-details" v-if="!state.isCollapse" open>
-      <summary class="menu__user-details-summary">
-        <h4 @click="handleChannels">Каналы</h4>
-        <Button
-          :type="ButtonTypeEnum.ghost"
-          :size="SizesEnum.little"
-          @click="handleNewContactModal"
-        >
-          <Icon :name="IconNameEnum.plus" />
-        </Button>
-      </summary>
-      <ContactList />
-    </details>
-    <template v-if="state.isCollapse">
-      <ul class="menu__user">
-        <li class="menu__user-avatar">
-          <Avatar initials="Orange" />
-        </li>
-      </ul>
-      <Line />
+    <template v-if="false">
+      <Line v-if="state.isCollapse" />
+      <details class="menu__user-details" v-if="!state.isCollapse" open>
+        <summary class="menu__user-details-summary">
+          <h4 @click="handleChannels">Каналы</h4>
+          <Button
+            :type="ButtonTypeEnum.ghost"
+            :size="SizesEnum.little"
+            @click="handleNewContactModal"
+          >
+            <Icon :name="IconNameEnum.plus" />
+          </Button>
+        </summary>
+        <ContactList />
+      </details>
+      <template v-if="state.isCollapse">
+        <ul class="menu__user">
+          <li class="menu__user-avatar">
+            <Avatar initials="Orange" />
+          </li>
+        </ul>
+        <Line />
+      </template>
     </template>
   </aside>
 </template>

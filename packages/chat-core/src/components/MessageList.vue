@@ -9,7 +9,7 @@
         :key="index"
         :class="[
           'message__bubble',
-          { message__other: message.role === 'assistant' }
+          { message__other: message.role === 'user' }
         ]"
         :message="message.content"
         :author="message.role"
@@ -23,7 +23,7 @@
         :key="index"
         :class="[
           'message__bubble',
-          { message__other: message.role === 'assistant' }
+          { message__other: message.role === 'user' }
         ]"
         :message="message.content"
         :author="message.role"

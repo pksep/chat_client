@@ -72,30 +72,36 @@ const handleClickHeader = (): void => {
   emits('unmount-click');
 };
 
-const getPopoverOptions = computed(() => [
-  {
-    value: state.statusNotification.label,
-    function: () => {
-      if (state.statusNotification.enabled) {
-        state.statusNotification = {
-          label: 'Выкл. уведомление',
-          enabled: false
-        };
-        emits('unmount-notification', state.statusNotification.label);
-        return;
+const getPopoverOptions = computed(() => {
+  const popoverArray = [];
+  if (props.chapter !== 'ai') {
+    popoverArray.push(
+      {
+        value: state.statusNotification.label,
+        function: () => {
+          if (state.statusNotification.enabled) {
+            state.statusNotification = {
+              label: 'Выкл. уведомление',
+              enabled: false
+            };
+            emits('unmount-notification', state.statusNotification.label);
+            return;
+          }
+          state.statusNotification.label = 'Вкл. уведомления';
+          state.statusNotification.enabled = true;
+          emits('unmount-notification', state.statusNotification.label);
+        }
+      },
+      {
+        value: 'Информация',
+        function: () => {
+          emits('unmount-information');
+        }
       }
-      state.statusNotification.label = 'Вкл. уведомления';
-      state.statusNotification.enabled = true;
-      emits('unmount-notification', state.statusNotification.label);
-    }
-  },
-  {
-    value: 'Информация',
-    function: () => {
-      emits('unmount-information');
-    }
+    );
   }
-]);
+  return popoverArray;
+});
 </script>
 
 <style scoped>
