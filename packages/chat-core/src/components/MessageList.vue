@@ -41,7 +41,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, watch } from 'vue';
+import { ref, reactive, watch, onMounted } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import { ContentEditor } from 'sep-yui';
 import { useMastra } from '../services/useMastra';
@@ -49,7 +49,8 @@ import type { IMessageListProps } from './interfaces/message-list';
 import { useTime } from '../composables/useTime';
 
 const state = reactive({
-  messages: []
+  messages: [],
+  chatId: null
 });
 
 const props = withDefaults(defineProps<IMessageListProps>(), {
@@ -61,8 +62,9 @@ const inputText = ref('');
 const {
   messages: aiMessages,
   sendMessage,
-  clearMessages: clearAiMessages
-} = useMastra('generalAgent');
+  clearMessages: clearAiMessages,
+  generateChatId
+} = useMastra('generalAgent', state.chatId);
 
 const { time } = useTime();
 
@@ -91,6 +93,12 @@ const handleSend = async () => {
   }
 };
 
+onMounted(() => {
+  if (state.chatId === null) {
+    state.chatId = generateChatId();
+  }
+});
+
 defineExpose({
   handleClear
 });
@@ -115,7 +123,7 @@ p.chat__nothing-paragraph {
 
 .chat {
   --basic-height: calc(100vh - 56px);
-  overflow: scroll;
+  overflow-x: scroll;
   overflow-y: hidden;
   min-height: var(--basic-height);
 }
@@ -124,15 +132,15 @@ p.chat__nothing-paragraph {
   display: grid;
   max-height: calc(var(--basic-height) - 135px);
   overflow-y: scroll;
+  overflow-x: hidden;
   align-content: start;
   gap: 25px;
 }
 
 .message__bubble {
-  overflow-wrap: anywhere;
+  text-wrap: balance;
+  width: clamp(400px, 100%, 400px);
   justify-self: start;
-  hyphens: auto;
-  max-width: 100ch;
   &:last-child {
     margin-bottom: 25px;
   }

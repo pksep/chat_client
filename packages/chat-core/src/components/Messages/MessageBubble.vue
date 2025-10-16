@@ -150,6 +150,7 @@ div.message-content__loading-circle {
 }
 
 .message__assistant.menu__user-assistant-icon {
+  align-self: start;
   & :deep(svg) {
     font-size: 24px;
   }

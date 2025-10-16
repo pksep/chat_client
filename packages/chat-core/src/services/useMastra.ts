@@ -43,6 +43,31 @@ async function loadMessages(chatId: string): Promise<Message[]> {
   });
 }
 
+/** Get all stored chats from IndexedDB */
+async function getAllChats(): Promise<{ chatId: string; timestamp: Date }[]> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const getAllRequest = store.getAll();
+
+    getAllRequest.onsuccess = () => {
+      const results = getAllRequest.result || [];
+      // Convert to array with timestamps for sorting
+      const chatsWithTimestamps = results.map((item: any) => ({
+        chatId: item.chatId,
+        timestamp: item.timestamp ? new Date(item.timestamp) : new Date(0)
+      }));
+      // Sort by timestamp descending (most recent first)
+      chatsWithTimestamps.sort(
+        (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+      );
+      resolve(chatsWithTimestamps);
+    };
+    getAllRequest.onerror = () => reject(getAllRequest.error);
+  });
+}
+
 /** Deep clone and sanitize messages for storage */
 function sanitizeMessages(messages: Message[]): Message[] {
   return messages.map(msg => {
@@ -67,7 +92,11 @@ async function saveMessages(
     const store = tx.objectStore(STORE_NAME);
     // Sanitize messages before storing
     const sanitizedMessages = sanitizeMessages(messages);
-    const putRequest = store.put({ chatId, messages: sanitizedMessages });
+    const putRequest = store.put({
+      chatId,
+      messages: sanitizedMessages,
+      timestamp: new Date().toISOString()
+    });
     putRequest.onsuccess = () => resolve();
     putRequest.onerror = () => reject(putRequest.error);
   });
@@ -87,32 +116,80 @@ function generateChatId(): string {
 }
 
 /**
+ * Get the last session ID from IndexedDB
+ */
+async function getLastSessionId(): Promise<string | null> {
+  try {
+    const chats = await getAllChats();
+    return chats.length > 0 ? chats[0].chatId : null;
+  } catch (error) {
+    console.error('Error getting last session:', error);
+    return null;
+  }
+}
+
+/**
  * Hook for interacting with Mastra and caching messages per chat.
  *
- * @param chatId   Unique identifier for the chat (UUID).
  * @param agentId  Mastra agent ID (default: 'chat').
+ * @param chatId   Unique identifier for the chat (UUID).
  * @param baseUrl  Base URL for Mastra client.
  */
 export function useMastra(
   agentId: string = 'chat',
+  chatId: string | undefined,
   baseUrl: string = import.meta.env.VITE_MASTRA_URL || 'http://localhost:4111'
 ) {
   const client = new MastraClient({ baseUrl });
   const messages: Ref<Message[]> = ref([]);
 
-  const chatId = generateChatId();
+  // State to track if we're waiting for session initialization
+  const isInitializing = ref(true);
+  let resolvedChatId: string | null = null;
 
-  /* Load cached messages on initialization */
-  loadMessages(chatId)
-    .then(cached => {
-      messages.value = cached;
-    })
-    .catch(() => {
-      messages.value = [];
-    });
+  // Function to initialize the chat session
+  const initializeSession = async () => {
+    let finalChatId: string;
+
+    if (chatId) {
+      // Use provided chat ID
+      finalChatId = chatId;
+    } else {
+      // Try to get last session from IndexedDB
+      const lastSessionId = await getLastSessionId();
+      if (lastSessionId) {
+        finalChatId = lastSessionId;
+      } else {
+        // Generate new UUID if no session exists
+        finalChatId = generateChatId();
+      }
+    }
+
+    resolvedChatId = finalChatId;
+
+    // Load messages for the determined chat ID
+    loadMessages(finalChatId)
+      .then(cached => {
+        messages.value = cached;
+        isInitializing.value = false;
+      })
+      .catch(() => {
+        messages.value = [];
+        isInitializing.value = false;
+      });
+  };
+
+  // Initialize the session
+  initializeSession();
 
   const sendMessage = async (input: string, abortSignal?: AbortSignal) => {
     if (!input.trim()) return;
+
+    // Wait for initialization to complete
+    if (isInitializing.value || !resolvedChatId) {
+      // Queue the message or return early
+      return;
+    }
 
     // Check if last message is an assistant message that is still loading
     const lastMessage = messages.value[messages.value.length - 1];
@@ -122,23 +199,27 @@ export function useMastra(
     }
 
     /* Push user message */
-    messages.value.push({
+    const userMessage: Message = {
       role: 'user',
       content: input,
       timestamp: formatTime()
-    });
+    };
+    messages.value.push(userMessage);
+
+    // Store the index of the assistant message we're about to add
     const assistantIndex = messages.value.length;
 
     /* Push placeholder for assistant */
-    messages.value.push({
+    const assistantMessage: Message = {
       role: 'assistant',
       content: '',
       loading: true,
       timestamp: formatTime()
-    });
+    };
+    messages.value.push(assistantMessage);
 
     /* Persist after adding messages */
-    await saveMessages(chatId, messages.value);
+    await saveMessages(resolvedChatId, messages.value);
 
     try {
       const agent = client.getAgent(agentId);
@@ -178,7 +259,11 @@ export function useMastra(
                 }
 
                 if (event.type === 'text-delta' && event.payload?.text) {
-                  messages.value[assistantIndex].content += event.payload.text;
+                  // Ensure we're updating the correct assistant message
+                  if (assistantIndex < messages.value.length) {
+                    messages.value[assistantIndex].content +=
+                      event.payload.text;
+                  }
                 } else if (event.type === 'finish') {
                   resolve(null);
                 }
@@ -198,37 +283,51 @@ export function useMastra(
       ]);
     } catch (error: any) {
       if (!error?.message) {
-        messages.value[assistantIndex].content = `Произошла ошибка ${error}`;
+        if (assistantIndex < messages.value.length) {
+          messages.value[assistantIndex].content = `Произошла ошибка ${error}`;
+        }
       } else if (
         error?.message?.includes('V2 models') ||
         error?.message?.includes('Timeout exceeded')
       ) {
-        messages.value[assistantIndex].content =
-          'Данная версия модели не поддерживается, попробуйте с другой';
+        if (assistantIndex < messages.value.length) {
+          messages.value[assistantIndex].content =
+            'Данная версия модели не поддерживается, попробуйте с другой';
+        }
       } else if (error.status === 500) {
-        messages.value[assistantIndex].content =
-          'Наша ошибка, уже чиним - скоро будет готово';
+        if (assistantIndex < messages.value.length) {
+          messages.value[assistantIndex].content =
+            'Наша ошибка, уже чиним - скоро будет готово';
+        }
       } else {
-        messages.value[assistantIndex].content =
-          'Извините, сервис временно не доступен';
+        if (assistantIndex < messages.value.length) {
+          messages.value[assistantIndex].content =
+            'Извините, сервис временно не доступен';
+        }
       }
     } finally {
-      if (messages.value[assistantIndex]) {
+      if (
+        assistantIndex < messages.value.length &&
+        messages.value[assistantIndex]
+      ) {
         messages.value[assistantIndex].loading = false;
       }
       /* Persist after each update */
-      await saveMessages(chatId, messages.value);
+      await saveMessages(resolvedChatId, messages.value);
     }
   };
 
   const clearMessages = () => {
+    if (!resolvedChatId) return;
     messages.value = [];
-    saveMessages(chatId, messages.value);
+    saveMessages(resolvedChatId, messages.value);
   };
 
   return {
+    generateChatId,
     messages,
     sendMessage,
-    clearMessages
+    clearMessages,
+    isInitializing
   };
 }
