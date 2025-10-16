@@ -74,12 +74,13 @@ watch(
 
 const handleSend = async () => {
   if (!inputText.value.trim()) return;
-  if (props.chapter === 'ai') {
-    await sendMessage(inputText.value);
-  } else {
-    state.messages.push({ role: 'user', content: inputText.value });
-  }
+  const text = inputText.value;
   inputText.value = '';
+  if (props.chapter === 'ai') {
+    await sendMessage(text);
+  } else {
+    state.messages.push({ role: 'user', content: text });
+  }
 };
 </script>
 
