@@ -108,7 +108,7 @@ defineExpose({
 .chat__nothing {
   display: grid;
   place-items: center;
-  height: calc(var(--basic-height) - 140px);
+  height: calc(var(--basic-height) - 155px);
 }
 
 p.chat__nothing-paragraph {
