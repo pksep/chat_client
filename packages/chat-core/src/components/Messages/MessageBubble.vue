@@ -138,7 +138,7 @@ div.message-content__loading {
 }
 
 div.message-content__loading-circle {
-  background-color: var(--white);
+  background-color: #b8b8b8;
   border-radius: 50%;
   font-size: 8px;
   width: 1em;

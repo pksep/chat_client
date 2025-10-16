@@ -74,6 +74,19 @@ async function saveMessages(
 }
 
 /**
+ * Generate a unique chat ID (UUID)
+ */
+function generateChatId(): string {
+  return crypto.randomUUID
+    ? crypto.randomUUID()
+    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      });
+}
+
+/**
  * Hook for interacting with Mastra and caching messages per chat.
  *
  * @param chatId   Unique identifier for the chat (UUID).
@@ -81,12 +94,13 @@ async function saveMessages(
  * @param baseUrl  Base URL for Mastra client.
  */
 export function useMastra(
-  chatId: string,
   agentId: string = 'chat',
   baseUrl: string = import.meta.env.VITE_MASTRA_URL || 'http://localhost:4111'
 ) {
   const client = new MastraClient({ baseUrl });
   const messages: Ref<Message[]> = ref([]);
+
+  const chatId = generateChatId();
 
   /* Load cached messages on initialization */
   loadMessages(chatId)
@@ -99,6 +113,13 @@ export function useMastra(
 
   const sendMessage = async (input: string, abortSignal?: AbortSignal) => {
     if (!input.trim()) return;
+
+    // Check if last message is an assistant message that is still loading
+    const lastMessage = messages.value[messages.value.length - 1];
+    if (lastMessage?.role === 'assistant' && lastMessage?.loading) {
+      // If assistant is still responding, don't create a new message
+      return;
+    }
 
     /* Push user message */
     messages.value.push({

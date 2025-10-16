@@ -10,6 +10,7 @@
       :chapter="state.chapter"
       @unmount-click="handleHeaderClick"
       @unmount-information="handleHeaderClick"
+      @unmount-clear="handleClearClick"
     />
     <Menu
       class="chat__menu"
@@ -17,7 +18,7 @@
       @unmount-new-contact="handleNewContact"
       @unmount-chapter="unmountMenuChapter"
     />
-    <Chat class="chat__messages" :chapter="state.chapter" />
+    <Chat class="chat__messages" :chapter="state.chapter" ref="chatRef" />
     <MenuInfo
       class="chat__info"
       :open="state.isMenuOpen"
@@ -32,8 +33,9 @@
     />
   </Teleport>
 </template>
+
 <script setup lang="ts">
-import { reactive } from 'vue';
+import { reactive, ref } from 'vue';
 import Header from './Header.vue';
 import Menu from './Menu.vue';
 import Chat from './MessageList.vue';
@@ -50,6 +52,8 @@ const modalState = reactive({
   newContactOpen: false,
   addUserOpen: false
 });
+
+const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 
 const handleCollapse = (isCollapse: boolean): void => {
   state.isCollapse = isCollapse;
@@ -78,7 +82,14 @@ const handleNewContact = (isModalOpen: boolean): void => {
 const closeContactModal = (): void => {
   modalState.newContactOpen = false;
 };
+
+const handleClearClick = (): void => {
+  if (state.chapter === 'ai' && chatRef.value) {
+    chatRef.value.handleClear();
+  }
+};
 </script>
+
 <style scoped>
 .chat-container {
   --size-right-menu: 404px;

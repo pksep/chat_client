@@ -99,6 +99,13 @@ const getPopoverOptions = computed(() => {
         }
       }
     );
+  } else {
+    popoverArray.push({
+      value: 'Очистить историю',
+      function: () => {
+        emits('unmount-clear');
+      }
+    });
   }
   return popoverArray;
 });
