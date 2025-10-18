@@ -93,7 +93,7 @@ const handleClearClick = (): void => {
 <style scoped>
 .chat-container {
   --size-right-menu: 404px;
-  --size-left-menu: 325px;
+  --size-left-menu: 345px;
   display: grid;
   height: 100vh;
   background-color: var(--blue15);

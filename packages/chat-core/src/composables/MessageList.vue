@@ -1,21 +1,23 @@
 <template>
   <section class="chat">
     <div
-      class="chat__message-bubble"
+      class="chat__message-wrapper"
       v-if="props.chapter === 'ai' && aiMessages.length"
     >
-      <MessageBubble
-        v-for="(message, index) in aiMessages"
-        :key="index"
-        :class="[
-          'message__bubble',
-          { message__other: message.role === 'user' }
-        ]"
-        :message="message.content"
-        :author="message.role"
-        :time="message.timestamp"
-        :loader="message.loading"
-      />
+      <div class="chat__message-bubble">
+        <MessageBubble
+          v-for="(message, index) in aiMessages"
+          :key="index"
+          :class="[
+            'message__bubble',
+            { message__other: message.role === 'user' }
+          ]"
+          :message="message.content"
+          :author="message.role"
+          :time="message.timestamp"
+          :loader="message.loading"
+        />
+      </div>
     </div>
     <div class="chat__message-bubble" v-else-if="state.messages.length">
       <MessageBubble
@@ -108,7 +110,7 @@ defineExpose({
 .chat__nothing {
   display: grid;
   place-items: center;
-  height: calc(var(--basic-height) - 155px);
+  margin-top: auto;
 }
 
 p.chat__nothing-paragraph {
@@ -116,30 +118,31 @@ p.chat__nothing-paragraph {
   color: var(--text-grey);
 }
 
-.chat:not(.chat__nothing) {
+.chat {
+  --basic-height: calc(100vh - 65px);
   display: grid;
-  padding: 15px;
+  overflow-y: hidden;
+  padding-right: 4px;
+  height: var(--basic-height);
 }
 
-.chat {
-  --basic-height: calc(100vh - 56px);
-  overflow-x: scroll;
-  overflow-y: hidden;
-  min-height: var(--basic-height);
+.chat__message-wrapper {
+  padding: 15px;
+  padding-right: 5px;
+  max-height: calc(var(--basic-height) - 135px);
+  overflow-x: hidden;
+  overflow-y: scroll;
 }
 
 .chat__message-bubble {
   display: grid;
-  max-height: calc(var(--basic-height) - 135px);
-  overflow-y: scroll;
-  overflow-x: hidden;
   align-content: start;
   gap: 25px;
 }
 
 .message__bubble {
   text-wrap: balance;
-  width: clamp(400px, 100%, 400px);
+  max-width: 650px;
   justify-self: start;
   &:last-child {
     margin-bottom: 25px;
@@ -158,9 +161,8 @@ p.chat__nothing-paragraph {
 
 .chat__input {
   align-self: end;
-  max-width: calc(
-    100vw - var(--size-left-menu) - var(--size-right-menu) - 36px
-  );
+  padding: 15px;
+  max-width: calc(100vw - var(--size-left-menu) - var(--size-right-menu));
 
   :deep(.editor-content) {
     max-height: calc(var(--basic-height) / 2);

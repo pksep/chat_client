@@ -18,6 +18,7 @@
           'message__no-author': !state.isAuthor
         }
       ]"
+      @contextmenu="openActivePopover"
     >
       <div class="message-content">
         <blockquote v-if="blockquote" class="message-content__blockquote">
@@ -42,14 +43,33 @@
         {{ props.time }}
       </div>
     </article>
+    <ContextMenu
+      v-if="false"
+      :visible="isOpen"
+      :position="position"
+      @unmount-close="closeActivePopover"
+    >
+      <Button
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop=""
+      >
+        Ответить
+      </Button>
+    </ContextMenu>
   </div>
 </template>
 
 <script setup lang="ts">
 import { reactive } from 'vue';
-import { Avatar, Icon, IconNameEnum } from 'sep-yui';
+import { Avatar, ButtonTypeEnum, Icon, IconNameEnum, SizesEnum } from 'sep-yui';
 import AiIconWrapper from '../AiIconWrapper.vue';
 import type { IMessageBubbleProps } from './interface/interface';
+import { useContextMenu } from '../../composables/useContextMenu';
+import ContextMenu from '../ContactList/ContextMenu.vue';
+
+const { isOpen, position, openActivePopover, closeActivePopover } =
+  useContextMenu();
 
 const props = defineProps<IMessageBubbleProps>();
 

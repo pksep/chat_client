@@ -122,16 +122,17 @@ const handleChannels = (): void => {
 onMounted(() => {
   resizeHandler = () => {
     const width = window.innerWidth;
-    if (width < 896) {
+    if (width < 1280) {
       state.isCollapse = true;
       emits('unmount-collapse', state.isCollapse);
     }
-    if (width > 896) {
+    if (width > 1280) {
       state.isCollapse = false;
       emits('unmount-collapse', state.isCollapse);
     }
   };
   window.addEventListener('resize', resizeHandler);
+  resizeHandler();
 });
 
 onUnmounted(() => {
@@ -258,5 +259,12 @@ summary.menu__user-details-summary {
   }
 
   font-weight: bold;
+}
+
+@media (width <= 1280px) {
+  .menu:not(.collapse) {
+    width: 100dvw;
+    z-index: 2;
+  }
 }
 </style>
