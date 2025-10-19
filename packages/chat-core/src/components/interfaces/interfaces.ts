@@ -16,6 +16,21 @@ export interface IHeaderEmits {
   (e: 'unmount-clear'): void;
 }
 
+export interface IUserProps {
+  avatarUrl: string;
+  avatarAlt: string;
+  name: string;
+  nickname: string;
+}
+
 export interface IMenuProps {
   open?: boolean;
+}
+
+export interface IMenuRightProps extends IMenuProps {
+  user?: IUserProps;
+}
+
+export interface IChatContainerProps {
+  user?: IUserProps;
 }

@@ -1,3 +1,6 @@
+import { IUserProps } from './interfaces';
+
 export interface IMessageListProps {
-  chapter?: string | null;
+    user: IUserProps;
+    chapter?: string | null;
 }

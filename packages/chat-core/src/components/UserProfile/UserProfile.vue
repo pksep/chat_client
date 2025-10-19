@@ -13,13 +13,9 @@
 
 <script lang="ts" setup>
 import { Avatar } from 'sep-yui';
+import { IUserProps } from '../interfaces/interfaces';
 
-const props = defineProps<{
-  avatarUrl: string;
-  avatarAlt: string;
-  name: string;
-  nickname: string;
-}>();
+const props = defineProps<IUserProps>();
 
 const emits = defineEmits<{
   (e: 'unmount-click', event: MouseEvent): void;

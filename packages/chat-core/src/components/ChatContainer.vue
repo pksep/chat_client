@@ -13,12 +13,18 @@
       @unmount-clear="handleClearClick"
     />
     <Menu
+      :user="props.user"
       class="chat__menu"
       @unmount-collapse="handleCollapse"
       @unmount-new-contact="handleNewContact"
       @unmount-chapter="unmountMenuChapter"
     />
-    <Chat class="chat__messages" :chapter="state.chapter" ref="chatRef" />
+    <Chat
+      :user="props.user"
+      :chapter="state.chapter"
+      class="chat__messages"
+      ref="chatRef"
+    />
     <MenuInfo
       class="chat__info"
       :open="state.isMenuOpen"
@@ -28,7 +34,7 @@
   </main>
   <Teleport to="body">
     <NewContactModal
-      :open="modalState.newContactOpen"
+      :open="state.isNewContactOpen"
       @unmount-close="closeContactModal"
     />
   </Teleport>
@@ -41,17 +47,17 @@ import Menu from './Menu.vue';
 import Chat from './MessageList.vue';
 import MenuInfo from './MenuInfo.vue';
 import NewContactModal from './NewChat/NewContact.vue';
+import type { IChatContainerProps } from './interfaces/interfaces';
 
 const state = reactive({
   isCollapse: false,
   isMenuOpen: false,
-  chapter: null
+  chapter: null,
+  isNewContactOpen: false,
+  isAddUserOpen: false
 });
 
-const modalState = reactive({
-  newContactOpen: false,
-  addUserOpen: false
-});
+const props = defineProps<IChatContainerProps>();
 
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 
@@ -76,11 +82,11 @@ const unmountMenuChapter = (config: { name: string } | null): void => {
 };
 
 const handleNewContact = (isModalOpen: boolean): void => {
-  modalState.newContactOpen = isModalOpen;
+  state.isNewContactOpen = isModalOpen;
 };
 
 const closeContactModal = (): void => {
-  modalState.newContactOpen = false;
+  state.isNewContactOpen = false;
 };
 
 const handleClearClick = (): void => {
@@ -131,10 +137,11 @@ const handleClearClick = (): void => {
   grid-area: info;
 }
 
-@media screen and (width <= 896px) {
+@media screen and (width <=896px) {
   .chat__info {
     display: none;
   }
+
   .chat-container {
     --size-right-menu: 0px;
     --size-left-menu: 75px;
