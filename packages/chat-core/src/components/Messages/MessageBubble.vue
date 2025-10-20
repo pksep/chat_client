@@ -5,7 +5,7 @@
       url="/avatar-user.png"
       alt="avatar of user"
       initials="Zakk"
-      v-if="!props.loader && props.author !== 'user'"
+      v-if="false"
     />
     <AiIconWrapper
       class="message__assistant"
