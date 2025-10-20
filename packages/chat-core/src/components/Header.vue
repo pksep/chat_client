@@ -156,4 +156,17 @@ const getPopoverOptions = computed(() => {
     font-size: 16px;
   }
 }
+
+@media (width <= 400px) {
+  .chat__header:has(.search-yui-kit__input) {
+    .chat__header-profile {
+      & h3 {
+        display: none;
+      }
+    }
+  }
+  .chat__header-search {
+    min-width: 100px;
+  }
+}
 </style>

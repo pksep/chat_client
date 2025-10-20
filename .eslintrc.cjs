@@ -10,7 +10,7 @@ module.exports = {
     'plugin:@typescript-eslint/recommended',
     'plugin:prettier/recommended'
   ],
-  ignorePatterns: ['**/target', '**/gen', '**/dist', '**/build'],
+  ignorePatterns: ['**/target', '**/gen', '**/dist', '**/build', '**/dev-dist'],
   overrides: [
     {
       env: {
