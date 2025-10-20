@@ -2,6 +2,7 @@
   <section class="chat">
     <div
       class="chat__message-wrapper"
+      ref="chatWrapperRef"
       v-if="props.chapter === 'ai' && aiMessages.length"
     >
       <div class="chat__message-bubble">
@@ -19,19 +20,25 @@
         />
       </div>
     </div>
-    <div class="chat__message-bubble" v-else-if="state.messages.length">
-      <MessageBubble
-        v-for="(message, index) in state.messages"
-        :key="index"
-        :class="[
-          'message__bubble',
-          { message__other: message.role === 'user' }
-        ]"
-        :message="message.content"
-        :author="message.role"
-        :time="time"
-        :loader="message.loading"
-      />
+    <div
+      class="chat__message-wrapper"
+      ref="chatWrapperRef"
+      v-else-if="state.messages.length"
+    >
+      <div class="chat__message-bubble">
+        <MessageBubble
+          v-for="(message, index) in state.messages"
+          :key="index"
+          :class="[
+            'message__bubble',
+            { message__other: message.role === 'user' }
+          ]"
+          :message="message.content"
+          :author="message.role"
+          :time="time"
+          :loader="message.loading"
+        />
+      </div>
     </div>
     <div v-else class="chat__nothing">
       <p class="chat__nothing-paragraph">Здесь пока ничего нет...</p>
@@ -43,7 +50,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, watch, onMounted } from 'vue';
+import { ref, reactive, watch, onMounted, useTemplateRef } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import { ContentEditor } from 'sep-yui';
 import { useMastra } from '../services/useMastra';
@@ -59,6 +66,9 @@ const props = withDefaults(defineProps<IMessageListProps>(), {
   chapter: null
 });
 
+const chatWrapperRef = useTemplateRef('chatWrapperRef');
+// const messageWrapperRef = useTemplateRef('messageWrapperRef');
+
 const inputText = ref('');
 
 const {
@@ -69,6 +79,12 @@ const {
 } = useMastra('generalAgent', state.chatId);
 
 const { time } = useTime();
+
+const scrollToBottom = () => {
+  if (chatWrapperRef?.value) {
+    chatWrapperRef.value.scrollTop = chatWrapperRef.value.scrollHeight;
+  }
+};
 
 watch(
   () => props.chapter,
@@ -89,10 +105,11 @@ const handleSend = async () => {
   const text = inputText.value;
   inputText.value = '';
   if (props.chapter === 'ai') {
-    await sendMessage(text);
+    await sendMessage(text, scrollToBottom);
   } else {
     state.messages.push({ role: 'user', content: text });
   }
+  scrollToBottom();
 };
 
 onMounted(() => {

@@ -182,7 +182,11 @@ export function useMastra(
   // Initialize the session
   initializeSession();
 
-  const sendMessage = async (input: string, abortSignal?: AbortSignal) => {
+  const sendMessage = async (
+    input: string,
+    onFinish?: () => void,
+    abortSignal?: AbortSignal
+  ) => {
     if (!input.trim()) return;
 
     // Wait for initialization to complete
@@ -234,6 +238,7 @@ export function useMastra(
       });
 
       if (!stream) throw new Error('Ошибка на стороне сервера, извините');
+      onFinish?.();
 
       await Promise.race([
         new Promise((resolve, reject) => {
