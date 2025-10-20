@@ -142,7 +142,9 @@ p.chat__nothing-paragraph {
 
 .message__bubble {
   text-wrap: balance;
-  max-width: 650px;
+  max-width: calc(
+    100dvw - var(--size-left-menu) - var(--size-right-menu) - 70px
+  );
   justify-self: start;
   &:last-child {
     margin-bottom: 25px;
