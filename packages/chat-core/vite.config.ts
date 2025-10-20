@@ -2,6 +2,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
+import { VitePWA } from 'vite-plugin-pwa';
 import dts from 'vite-plugin-dts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -11,6 +12,7 @@ const isLibBuild = false;
 export default defineConfig({
   build: {
     outDir: 'build',
+    sourcemap: true,
     ...(isLibBuild
       ? {
           lib: {
@@ -34,6 +36,43 @@ export default defineConfig({
     vue(),
     dts({
       insertTypesEntry: true
+    }),
+    VitePWA({
+      registerType: 'autoUpdate',
+      mode: 'development',
+      manifest: {
+        name: 'sep-chat',
+        short_name: 'SepChat',
+        description: 'Chatting application',
+        icons: [
+          {
+            src: 'pwa-64x64.png',
+            sizes: '64x64',
+            type: 'image/png'
+          },
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png'
+          },
+          {
+            src: 'maskable-icon-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
+          }
+        ]
+      },
+      devOptions: {
+        enabled: true,
+        type: 'module',
+        navigateFallback: 'index.html'
+      }
     })
   ]
 });
