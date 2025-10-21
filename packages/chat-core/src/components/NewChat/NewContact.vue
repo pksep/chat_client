@@ -27,7 +27,7 @@
             avatar-alt="avatar user"
           />
           <Checkbox
-            :size="SizesEnum.small"
+            :size="CheckboxSizeEnum.small"
             @update:model-value="handleCheckbox"
           />
         </li>
@@ -64,7 +64,8 @@ import {
   SizesEnum,
   Search,
   ButtonTypeEnum,
-  Button
+  Button,
+  CheckboxSizeEnum
 } from 'sep-yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import AddUser from './AddUser.vue';

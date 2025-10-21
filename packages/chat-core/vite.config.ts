@@ -66,6 +66,14 @@ export default defineConfig({
             type: 'image/png',
             purpose: 'maskable'
           }
+        ],
+        screenshots: [
+          {
+            src: 'desktop-test.png',
+            sizes: '1920x1080',
+            form_factor: 'wide',
+            label: 'Desktop view showing chat'
+          }
         ]
       },
       devOptions: {

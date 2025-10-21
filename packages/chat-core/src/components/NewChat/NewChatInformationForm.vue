@@ -3,11 +3,11 @@
     <slot> </slot>
     <div class="menu__info-form-block form__name">
       <label for="name" class="menu__info-title-text"> Название: </label>
-      <Input id="name" class="initial" type="text" placeholder="Text" />
+      <Input id="name" class="initial" placeholder="Text" />
     </div>
     <div class="menu__info-form-block form__textarea">
       <label class="menu__info-title-text"> Описание: </label>
-      <Textarea :type="`initial`" placeholder="Text" />
+      <Textarea class="initial" placeholder="Text" />
     </div>
     <slot name="button">
       <Button
@@ -37,6 +37,7 @@ import { Button, ButtonTypeEnum, Input, SizesEnum, Textarea } from 'sep-yui';
 .menu__info-form {
   display: grid;
   gap: 10px;
+
   & button.menu__info-save-button {
     justify-self: end;
   }
