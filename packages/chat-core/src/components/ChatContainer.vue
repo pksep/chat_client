@@ -6,6 +6,7 @@
     ]"
   >
     <Header
+      v-if="state.chapter"
       class="chat__header"
       :chapter="state.chapter"
       @unmount-click="handleHeaderClick"

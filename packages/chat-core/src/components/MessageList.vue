@@ -22,8 +22,8 @@
     </div>
     <div
       class="chat__message-wrapper"
-      ref="chatWrapperRef"
       v-else-if="state.messages.length"
+      ref="chatWrapperRef"
     >
       <div class="chat__message-bubble">
         <MessageBubble
@@ -43,14 +43,14 @@
     <div v-else class="chat__nothing">
       <p class="chat__nothing-paragraph">Здесь пока ничего нет...</p>
     </div>
-    <div class="chat__input">
+    <div class="chat__input" v-if="props.chapter">
       <ContentEditor v-model="inputText" @unmount-send="handleSend" />
     </div>
   </section>
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, watch, onMounted, useTemplateRef } from 'vue';
+import { ref, reactive, watch, onMounted, useTemplateRef, nextTick } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import { ContentEditor } from 'sep-yui';
 import { useMastra } from '../services/useMastra';
@@ -67,7 +67,6 @@ const props = withDefaults(defineProps<IMessageListProps>(), {
 });
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
-// const messageWrapperRef = useTemplateRef('messageWrapperRef');
 
 const inputText = ref('');
 
@@ -91,6 +90,9 @@ watch(
   (newValue, oldValue) => {
     if (newValue !== oldValue) {
       state.messages = [];
+    }
+    if (aiMessages.value.length || state.messages.length) {
+      nextTick(() => scrollToBottom());
     }
   }
 );
@@ -116,6 +118,9 @@ onMounted(() => {
   if (state.chatId === null) {
     state.chatId = generateChatId();
   }
+  if (aiMessages.value.length || state.messages.length) {
+    scrollToBottom();
+  }
 });
 
 defineExpose({
@@ -135,12 +140,17 @@ p.chat__nothing-paragraph {
   color: var(--text-grey);
 }
 
-.chat {
+.chat:has(.chat__input) {
   --basic-height: calc(100vh - 65px);
   display: grid;
   overflow-y: hidden;
   padding-right: 4px;
   height: var(--basic-height);
+}
+
+.chat {
+  display: grid;
+  height: 50dvh;
 }
 
 .chat__message-wrapper {

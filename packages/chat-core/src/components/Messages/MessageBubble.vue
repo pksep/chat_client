@@ -86,6 +86,15 @@ const generateArray = (n: number): number[] => {
 </script>
 
 <style scoped>
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
 .message {
   display: flex;
   gap: 10px;
@@ -163,6 +172,14 @@ div.message-content__loading-circle {
   font-size: 8px;
   width: 1em;
   height: 1em;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+div.message-content__loading-circle:nth-child(2) {
+  animation-delay: 0.2s;
+}
+div.message-content__loading-circle:nth-child(3) {
+  animation-delay: 0.3s;
 }
 
 :global(div.message-content__html > p) {
