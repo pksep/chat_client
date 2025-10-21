@@ -1,71 +1,82 @@
 <template>
   <aside :class="['menu', { collapse: state.isCollapse }]">
-    <div class="menu__profile">
-      <UserProfile
-        avatar-url="/avatar-user.png"
-        avatar-alt="avatar of user"
-        name="Zakk Wylde"
-        class="menu__user-profile"
-        nickname="@wyldetheguy"
-        v-show="!state.isCollapse"
-      />
-      <Avatar
-        url="/avatar-user.png"
-        alt="avatar-user"
-        initials="Orange"
-        v-if="state.isCollapse"
-      />
-      <Button
-        :size="SizesEnum.small"
-        :type="ButtonTypeEnum.ghost"
-        class="menu__user-profile-collapse"
-        @click="handleCollapse"
-      >
-        <Icon
-          :name="IconNameEnum.sidebar"
-          class="menu__user-profile-collapse-icon"
+    <div class="menu__start">
+      <div class="menu__profile">
+        <UserProfile
+          avatar-url="/avatar-user.png"
+          avatar-alt="avatar of user"
+          name="Zakk Wylde"
+          class="menu__user-profile"
+          nickname="@wyldetheguy"
+          v-show="!state.isCollapse"
         />
-      </Button>
-    </div>
-    <Line />
-    <div
-      :class="[
-        'menu__user-assistant',
-        {
-          active: state.chapter === 'ai'
-        }
-      ]"
-      @click="handleAiChapter"
-    >
-      <AiIconWrapper />
-      <h3 class="menu__user-assistant-title" v-if="!state.isCollapse">
-        AI Ассистент
-      </h3>
-    </div>
-    <template v-if="false">
-      <Line v-if="state.isCollapse" />
-      <details class="menu__user-details" v-if="!state.isCollapse" open>
-        <summary class="menu__user-details-summary">
-          <h4 @click="handleChannels">Каналы</h4>
-          <Button
-            :type="ButtonTypeEnum.ghost"
-            :size="SizesEnum.little"
-            @click="handleNewContactModal"
-          >
-            <Icon :name="IconNameEnum.plus" />
-          </Button>
-        </summary>
-        <ContactList />
-      </details>
-      <template v-if="state.isCollapse">
-        <ul class="menu__user">
-          <li class="menu__user-avatar">
-            <Avatar initials="Orange" />
-          </li>
-        </ul>
-        <Line />
+        <Avatar
+          url="/avatar-user.png"
+          alt="avatar-user"
+          initials="Orange"
+          v-if="state.isCollapse"
+        />
+        <Button
+          :size="SizesEnum.small"
+          :type="ButtonTypeEnum.ghost"
+          class="menu__user-profile-collapse"
+          @click="handleCollapse"
+        >
+          <Icon
+            :name="IconNameEnum.sidebar"
+            class="menu__user-profile-collapse-icon"
+          />
+        </Button>
+      </div>
+      <Line />
+      <div
+        :class="[
+          'menu__user-assistant',
+          {
+            active: state.chapter === 'ai'
+          }
+        ]"
+        @click="handleAiChapter"
+      >
+        <AiIconWrapper />
+        <h3 class="menu__user-assistant-title" v-if="!state.isCollapse">
+          AI Ассистент
+        </h3>
+      </div>
+      <template v-if="false">
+        <Line v-if="state.isCollapse" />
+        <details class="menu__user-details" v-if="!state.isCollapse" open>
+          <summary class="menu__user-details-summary">
+            <h4 @click="handleChannels">Каналы</h4>
+            <Button
+              :type="ButtonTypeEnum.ghost"
+              :size="SizesEnum.little"
+              @click="handleNewContactModal"
+            >
+              <Icon :name="IconNameEnum.plus" />
+            </Button>
+          </summary>
+          <ContactList />
+        </details>
+        <template v-if="state.isCollapse">
+          <ul class="menu__user">
+            <li class="menu__user-avatar">
+              <Avatar initials="Orange" />
+            </li>
+          </ul>
+          <Line />
+        </template>
       </template>
-    </template>
+    </div>
+    <Button
+      class="menu__button-install-prompt"
+      :type="ButtonTypeEnum.ghost"
+      :size="SizesEnum.small"
+      @click="pwaInstall"
+    >
+      <Icon :name="IconNameEnum.uploadCloud" />
+      Загрузить на устройство
+    </Button>
   </aside>
 </template>
 
@@ -87,7 +98,8 @@ import type { IMenuEmits } from './interfaces/interfaces';
 
 const state = reactive({
   isCollapse: false,
-  chapter: ''
+  chapter: '',
+  installPrompt: null
 });
 
 const emits = defineEmits<IMenuEmits>();
@@ -119,6 +131,12 @@ const handleChannels = (): void => {
   emits('unmount-chapter', { name: 'channels' });
 };
 
+const pwaInstall = async (): Promise<void> => {
+  if (state.installPrompt) {
+    await state.installPrompt.prompt();
+  }
+};
+
 onMounted(() => {
   resizeHandler = () => {
     const width = window.innerWidth;
@@ -132,6 +150,10 @@ onMounted(() => {
     }
   };
   window.addEventListener('resize', resizeHandler);
+  window.addEventListener('beforeinstallprompt', event => {
+    event.preventDefault();
+    state.installPrompt = event;
+  });
   resizeHandler();
 });
 
@@ -145,14 +167,18 @@ onUnmounted(() => {
 <style scoped>
 .menu {
   display: grid;
-  align-content: start;
   padding: 20px;
   border-right-width: 0.5px;
   border-right-style: solid;
   border-right-color: var(--grey13);
   background-color: var(--white);
   overflow-y: auto;
+}
+
+.menu__start {
+  display: grid;
   gap: 10px;
+  align-content: start;
 }
 
 .menu.collapse {
@@ -176,6 +202,7 @@ onUnmounted(() => {
 
 .menu__profile {
   display: grid;
+  align-self: start;
   width: 100%;
   align-items: center;
   grid-template-areas:
@@ -218,6 +245,7 @@ button.menu__user-profile-collapse {
 .menu__user-assistant {
   padding: 10px;
   display: flex;
+  align-self: start;
   align-items: center;
   gap: 10px;
 }
@@ -259,6 +287,18 @@ summary.menu__user-details-summary {
   }
 
   font-weight: bold;
+}
+
+.menu__button-install-prompt {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  align-self: end;
+}
+
+.menu__button-install-prompt.ghost-yui-kit {
+  color: var(--text-grey);
+  padding-block: 8px;
 }
 
 @media (width <= 1280px) {

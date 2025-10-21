@@ -86,15 +86,6 @@ const generateArray = (n: number): number[] => {
 </script>
 
 <style scoped>
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.2;
-  }
-}
 .message {
   display: flex;
   gap: 10px;
@@ -190,6 +181,16 @@ div.message-content__loading-circle:nth-child(3) {
   align-self: start;
   & :deep(svg) {
     font-size: 24px;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
   }
 }
 </style>
