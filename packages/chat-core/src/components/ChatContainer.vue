@@ -99,10 +99,12 @@ const handleClearClick = (): void => {
 
 <style scoped>
 .chat-container {
+  --default-width: 100dvw;
+  --default-height: 100dvh;
   --size-right-menu: 404px;
   --size-left-menu: 345px;
   display: grid;
-  height: 100vh;
+  height: var(--default-height);
   background-color: var(--blue15);
   grid-template-areas: 'menu header info' 'menu chat info';
   grid-template-columns: var(--size-left-menu) auto var(--size-right-menu);

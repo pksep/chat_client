@@ -3,17 +3,13 @@
     <div class="menu__start">
       <div class="menu__profile">
         <UserProfile
-          avatar-url="/avatar-user.png"
-          avatar-alt="avatar of user"
-          name="Zakk Wylde"
+          v-bind="props.user"
           class="menu__user-profile"
-          nickname="@wyldetheguy"
           v-show="!state.isCollapse"
         />
         <Avatar
-          url="/avatar-user.png"
-          alt="avatar-user"
-          initials="Orange"
+          v-bind="props.user"
+          :initials="props.user?.nickname"
           v-if="state.isCollapse"
         />
         <Button
@@ -69,6 +65,7 @@
       </template>
     </div>
     <Button
+      v-if="state.installPrompt"
       class="menu__button-install-prompt"
       :type="ButtonTypeEnum.ghost"
       :size="SizesEnum.small"
@@ -94,7 +91,9 @@ import {
 } from 'sep-yui';
 import UserProfile from './UserProfile/UserProfile.vue';
 import ContactList from './ContactList/ContactList.vue';
-import type { IMenuEmits } from './interfaces/interfaces';
+import type { IMenuEmits, IUserProps } from './interfaces/interfaces';
+
+const props = withDefaults(defineProps<{ user: IUserProps }>(), {});
 
 const state = reactive({
   isCollapse: false,
@@ -303,7 +302,7 @@ summary.menu__user-details-summary {
 
 @media (width <= 1280px) {
   .menu:not(.collapse) {
-    width: 100dvw;
+    width: var(--default-width);
     z-index: 2;
   }
 }

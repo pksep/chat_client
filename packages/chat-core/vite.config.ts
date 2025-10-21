@@ -7,7 +7,8 @@ import dts from 'vite-plugin-dts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const isLibBuild = false;
+const isLibBuild = true;
+
 // https://vite.dev/config/
 export default defineConfig({
   build: {
@@ -22,7 +23,7 @@ export default defineConfig({
             fileName: 'chat-container'
           },
           rollupOptions: {
-            external: ['vue'],
+            external: ['vue', 'sep-yui'],
             output: {
               globals: {
                 vue: 'Vue'
@@ -37,50 +38,54 @@ export default defineConfig({
     dts({
       insertTypesEntry: true
     }),
-    VitePWA({
-      registerType: 'autoUpdate',
-      mode: 'development',
-      manifest: {
-        name: 'sep-chat',
-        short_name: 'SepChat',
-        description: 'Chatting application',
-        icons: [
-          {
-            src: 'pwa-64x64.png',
-            sizes: '64x64',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
-          },
-          {
-            src: 'maskable-icon-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable'
-          }
-        ],
-        screenshots: [
-          {
-            src: 'desktop-test.png',
-            sizes: '1920x1080',
-            form_factor: 'wide',
-            label: 'Desktop view showing chat'
-          }
+    ...(!isLibBuild
+      ? [
+          VitePWA({
+            registerType: 'autoUpdate',
+            mode: 'development',
+            manifest: {
+              name: 'sep-chat',
+              short_name: 'SepChat',
+              description: 'Chatting application',
+              icons: [
+                {
+                  src: 'pwa-64x64.png',
+                  sizes: '64x64',
+                  type: 'image/png'
+                },
+                {
+                  src: 'pwa-192x192.png',
+                  sizes: '192x192',
+                  type: 'image/png'
+                },
+                {
+                  src: 'pwa-512x512.png',
+                  sizes: '512x512',
+                  type: 'image/png'
+                },
+                {
+                  src: 'maskable-icon-512x512.png',
+                  sizes: '512x512',
+                  type: 'image/png',
+                  purpose: 'maskable'
+                }
+              ],
+              screenshots: [
+                {
+                  src: 'desktop-test.png',
+                  sizes: '1920x1080',
+                  form_factor: 'wide',
+                  label: 'Desktop view showing chat'
+                }
+              ]
+            },
+            devOptions: {
+              enabled: true,
+              type: 'module',
+              navigateFallback: 'index.html'
+            }
+          })
         ]
-      },
-      devOptions: {
-        enabled: true,
-        type: 'module',
-        navigateFallback: 'index.html'
-      }
-    })
+      : [])
   ]
 });

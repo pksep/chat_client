@@ -141,7 +141,7 @@ p.chat__nothing-paragraph {
 }
 
 .chat:has(.chat__input) {
-  --basic-height: calc(100vh - 65px);
+  --basic-height: calc(var(--default-height) - 65px);
   display: grid;
   overflow-y: hidden;
   padding-right: 4px;
@@ -150,7 +150,7 @@ p.chat__nothing-paragraph {
 
 .chat {
   display: grid;
-  height: 50dvh;
+  height: calc(var(--default-height) / 2);
 }
 
 .chat__message-wrapper {
@@ -170,7 +170,7 @@ p.chat__nothing-paragraph {
 .message__bubble {
   text-wrap: balance;
   max-width: calc(
-    100dvw - var(--size-left-menu) - var(--size-right-menu) - 70px
+    var(--default-width) - var(--size-left-menu) - var(--size-right-menu) - 70px
   );
   justify-self: start;
   &:last-child {
@@ -191,7 +191,9 @@ p.chat__nothing-paragraph {
 .chat__input {
   align-self: end;
   padding: 15px;
-  max-width: calc(100vw - var(--size-left-menu) - var(--size-right-menu));
+  max-width: calc(
+    var(--default-width) - var(--size-left-menu) - var(--size-right-menu)
+  );
 
   :deep(.editor-content) {
     max-height: calc(var(--basic-height) / 2);
