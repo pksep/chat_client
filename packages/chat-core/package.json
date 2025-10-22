@@ -1,7 +1,6 @@
 {
   "name": "@pksep/chat-core",
-  "private": true,
-  "version": "25.0.1",
+  "version": "25.10.0",
   "type": "module",
   "main": "./build/chat-container.js",
   "types": "./build/chat-container.d.ts",
@@ -19,13 +18,15 @@
       "import": "./build/chat-container.css"
     }
   },
+  "files": [
+    "build",
+    ".env.example"
+  ],
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.6",
     "@mastra/client-js": "^0.12.3",
     "@openim/wasm-client-sdk": "3.8.3-patch.10",
-    "pinia": "^3.0.3",
     "sep-yui": "0.1.116",
-    "vue-router": "^4.5.1",
     "zod": "3"
   },
   "peerDependencies": {
