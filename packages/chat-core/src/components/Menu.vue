@@ -175,7 +175,7 @@ onUnmounted(() => {
 <style scoped>
 .menu {
   display: grid;
-  padding: 20px;
+  padding: 10px;
   border-right-width: 0.5px;
   border-right-style: solid;
   border-right-color: var(--grey13);
@@ -186,6 +186,7 @@ onUnmounted(() => {
 .menu__start {
   display: grid;
   gap: 10px;
+  padding: 10px;
   align-content: start;
 }
 

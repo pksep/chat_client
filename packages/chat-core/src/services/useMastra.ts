@@ -138,7 +138,8 @@ async function getLastSessionId(): Promise<string | null> {
 export function useMastra(
   agentId: string = 'chat',
   chatId: string | undefined,
-  baseUrl: string = import.meta.env.VITE_MASTRA_URL || 'http://localhost:4111'
+  baseUrl: string = import.meta.env.VITE_CHAT_MASTRA_URL ||
+    'http://localhost:4111'
 ) {
   const client = new MastraClient({ baseUrl });
   const messages: Ref<Message[]> = ref([]);
