@@ -29,3 +29,4 @@ local-packages/
 .env
 
 dev-dist/
+.npmrc
