@@ -8,9 +8,10 @@
           v-show="!state.isCollapse"
         />
         <Avatar
-          v-bind="props.user"
-          :initials="props.user?.nickname"
           v-if="state.isCollapse"
+          :initials="props.user?.nickname"
+          :url="props.user?.avatarUrl"
+          :alt="props.user?.avatarAlt"
         />
         <Button
           :size="SizesEnum.small"
@@ -197,7 +198,7 @@ onUnmounted(() => {
   }
 }
 
-.menu.collapse > .menu__profile {
+.menu.collapse .menu__profile {
   --size-avatar: 50px;
   justify-items: center;
   margin-bottom: 10px;
