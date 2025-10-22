@@ -40,6 +40,7 @@ export default defineConfig(({ mode }) => {
       ...(baseMode === 'lib'
         ? [
             dts({
+              include: ['src/index.ts'],
               insertTypesEntry: true
             })
           ]

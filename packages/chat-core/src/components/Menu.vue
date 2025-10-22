@@ -73,7 +73,7 @@
       @click="pwaInstall"
     >
       <Icon :name="IconNameEnum.uploadCloud" />
-      Загрузить на устройство
+      <template v-if="!state.isCollapse"> Загрузить на устройство </template>
     </Button>
   </aside>
 </template>
@@ -141,6 +141,7 @@ const handleChannels = (): void => {
 const pwaInstall = async (): Promise<void> => {
   if (state.installPrompt) {
     await state.installPrompt.prompt();
+    state.installPrompt = null;
   }
 };
 
