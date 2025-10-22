@@ -17,8 +17,6 @@ import { IUserProps } from '../interfaces/interfaces';
 
 const props = defineProps<IUserProps>();
 
-console.log(props);
-
 const emits = defineEmits<{
   (e: 'unmount-click', event: MouseEvent): void;
 }>();
