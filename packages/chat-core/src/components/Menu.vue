@@ -93,7 +93,14 @@ import UserProfile from './UserProfile/UserProfile.vue';
 import ContactList from './ContactList/ContactList.vue';
 import type { IMenuEmits, IUserProps } from './interfaces/interfaces';
 
-const props = withDefaults(defineProps<{ user: IUserProps }>(), {});
+const props = withDefaults(defineProps<{ user: IUserProps }>(), {
+  user: () => ({
+    avatarUrl: '/avatar-user.png',
+    avatarAlt: 'User with a circle face',
+    name: 'Jonn Doe',
+    nickname: '@jonnDoe'
+  })
+});
 
 const state = reactive({
   isCollapse: false,
