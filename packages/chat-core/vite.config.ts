@@ -49,7 +49,7 @@ export default defineConfig(({ mode }) => {
         ? [
             VitePWA({
               registerType: 'autoUpdate',
-              mode: 'development',
+              mode: env.MODE === 'dev' ? 'development' : 'production',
               manifest: {
                 name: 'sep-chat',
                 short_name: 'SepChat',
