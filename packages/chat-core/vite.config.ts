@@ -96,7 +96,7 @@ export default defineConfig(({ mode }) => {
         : [])
     ],
     define: {
-      CHAT_MASTRA_URL: JSON.stringify(env.CHAT_MASTRA_URL)
+      VITE_CHAT_MASTRA_URL: JSON.stringify(env.VITE_CHAT_MASTRA_URL)
     }
   };
 });
