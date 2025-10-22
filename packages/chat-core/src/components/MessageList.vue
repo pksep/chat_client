@@ -41,7 +41,10 @@
       </div>
     </div>
     <div v-else class="chat__nothing">
-      <p class="chat__nothing-paragraph">Здесь пока ничего нет...</p>
+      <p v-if="!props.chapter" class="chat__nothing-paragraph">
+        Выберите, кому хотели бы написать
+      </p>
+      <p v-else class="chat__nothing-paragraph">Здесь пока ничего нет...</p>
     </div>
     <div class="chat__input" v-if="props.chapter">
       <ContentEditor v-model="inputText" @unmount-send="handleSend" />

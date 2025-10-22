@@ -79,7 +79,7 @@ export default defineConfig(({ mode }) => {
                 screenshots: [
                   {
                     src: 'desktop-test.png',
-                    sizes: '1920x1080',
+                    sizes: '889x900',
                     form_factor: 'wide',
                     label: 'Desktop view showing chat'
                   }
