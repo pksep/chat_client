@@ -195,6 +195,10 @@ onUnmounted(() => {
   gap: 0;
   padding: 10px;
 
+  & .menu__start {
+    padding: 0;
+  }
+
   & .line {
     margin-top: 0;
   }
@@ -307,7 +311,10 @@ summary.menu__user-details-summary {
 
 .menu__button-install-prompt.ghost-yui-kit {
   color: var(--text-grey);
-  padding-block: 8px;
+  padding-block: 10px;
+  & svg.icon-yui-kit {
+    font-size: 16px;
+  }
 }
 
 @media (width <= 1280px) {
