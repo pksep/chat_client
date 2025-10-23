@@ -96,10 +96,10 @@ import type { IMenuEmits, IUserProps } from './interfaces/interfaces';
 
 const props = withDefaults(defineProps<{ user: IUserProps }>(), {
   user: () => ({
-    avatarUrl: '/avatar-user.png',
+    // avatarUrl: '/avatar-user.png',
     avatarAlt: 'User with a circle face',
     name: 'Jonn Doe',
-    nickname: '@jonnDoe'
+    nickname: 'JonnDoe'
   })
 });
 
@@ -207,6 +207,7 @@ onUnmounted(() => {
 .menu.collapse .menu__profile {
   --size-avatar: 50px;
   justify-items: center;
+  justify-content: center;
   margin-bottom: 10px;
   grid-template-areas:
     'collapse collapse'
@@ -315,6 +316,12 @@ summary.menu__user-details-summary {
   & svg.icon-yui-kit {
     font-size: 16px;
   }
+}
+
+:deep(.avatar-yui-kit:has(.avatar-yui-kit__text)) {
+  min-width: 40px;
+  width: 40px;
+  min-height: 40px;
 }
 
 @media (width <= 1280px) {

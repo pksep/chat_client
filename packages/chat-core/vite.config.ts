@@ -40,7 +40,7 @@ export default defineConfig(({ mode }) => {
       ...(baseMode === 'lib'
         ? [
             dts({
-              include: ['src/index.ts'],
+              include: ['src/index.ts', 'src/vite-env.d.ts'],
               insertTypesEntry: true
             })
           ]
@@ -94,9 +94,6 @@ export default defineConfig(({ mode }) => {
             })
           ]
         : [])
-    ],
-    define: {
-      VITE_CHAT_MASTRA_URL: JSON.stringify(env.VITE_CHAT_MASTRA_URL)
-    }
+    ]
   };
 });

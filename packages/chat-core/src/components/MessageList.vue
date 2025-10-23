@@ -78,7 +78,7 @@ const {
   sendMessage,
   clearMessages: clearAiMessages,
   generateChatId
-} = useMastra('generalAgent', state.chatId);
+} = useMastra('generalAgent', state.chatId, props.baseUrl);
 
 const { time } = useTime();
 

@@ -32,5 +32,6 @@ export interface IMenuRightProps extends IMenuProps {
 }
 
 export interface IChatContainerProps {
+  baseUrl?: string;
   user?: IUserProps;
 }

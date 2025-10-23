@@ -142,6 +142,7 @@ export function useMastra(
     'http://localhost:4111'
 ) {
   const client = new MastraClient({ baseUrl });
+
   const messages: Ref<Message[]> = ref([]);
 
   // State to track if we're waiting for session initialization

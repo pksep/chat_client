@@ -1,6 +1,6 @@
 {
   "name": "@pksep/chat-core",
-  "version": "25.10.0",
+  "version": "25.10.1",
   "type": "module",
   "main": "./build/chat-container.js",
   "types": "./build/chat-container.d.ts",
@@ -8,7 +8,8 @@
     "start:dev": "vite",
     "start": "vite preview",
     "build": "vue-tsc && vite build",
-    "build:lib": "VITE_BASE_MODE=lib pnpm run build"
+    "build:lib": "VITE_BASE_MODE=lib pnpm run build",
+    "publish:lib": "pnpm run build:lib && pnpm publish --access public --no-git-checks"
   },
   "exports": {
     ".": {

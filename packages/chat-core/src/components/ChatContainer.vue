@@ -21,6 +21,7 @@
       @unmount-chapter="unmountMenuChapter"
     />
     <Chat
+      :base-url="props.baseUrl"
       :user="props.user"
       :chapter="state.chapter"
       class="chat__messages"
