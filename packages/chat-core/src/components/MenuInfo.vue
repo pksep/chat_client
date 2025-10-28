@@ -1,21 +1,21 @@
 <template>
-  <aside :class="[`menu__info`, { collapse: props.open }]" v-if="props.open">
-    <header class="menu__info-header">
+  <aside :class="menuInfoClasses" v-if="props.open">
+    <header class="menu-info__header">
       <h4>Общий</h4>
       <Button
-        class="menu__info-button"
+        class="menu-info__close-button"
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.little"
         @click="handleCloseMenu"
       >
-        <Icon :name="IconNameEnum.crossLarge" class="menu__button-close-icon" />
+        <Icon :name="IconNameEnum.crossLarge" class="menu-info__close-icon" />
       </Button>
     </header>
     <Tabs :tabCount="2">
       <template #header1>
-        <span class="menu__info-user">
+        <span class="menu-info__user-header">
           Участники
-          <div class="menu__info-user-count">8</div>
+          <div class="menu-info__user-count">8</div>
         </span>
       </template>
       <template #header2> Информация </template>
@@ -23,15 +23,18 @@
         <ContactListInModal @unmount-user-add="unmountUserAdd" />
       </template>
       <template #tab2>
-        <section class="menu__info-info">
+        <section class="menu-info__info-section">
           <slot name="information-menu">
-            <div class="menu__info-create-channel">
-              <p class="menu__info-title-text">Канал создан:</p>
+            <div class="menu-info__create-channel">
+              <p class="menu-info__title-text">Канал создан:</p>
               <span>
                 {{ new Date().toLocaleDateString('ru-RU') }}
               </span>
             </div>
-            <button class="menu__info-avatar" @click="openEditProfileIcon">
+            <button
+              class="menu-info__avatar-button"
+              @click="openEditProfileIcon"
+            >
               <Avatar is-icon />
             </button>
             <Teleport to="body">
@@ -41,11 +44,11 @@
                 @unmount-close="closeEditProfileIcon"
               />
             </Teleport>
-            <div class="buttons-menu__info">
+            <div class="menu-info__buttons">
               <Button
                 :type="ButtonTypeEnum.secondary"
                 :size="SizesEnum.large"
-                class="button-menu__info"
+                class="menu-info__secondary-button"
               >
                 <Icon :name="IconNameEnum.noDistrub" />
                 Звук выкл.
@@ -53,7 +56,7 @@
               <Button
                 :type="ButtonTypeEnum.secondary"
                 :size="SizesEnum.large"
-                class="button-menu__info"
+                class="menu-info__secondary-button"
               >
                 <Icon :name="IconNameEnum.logout" />
                 Выйти
@@ -68,7 +71,7 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted, onUnmounted, reactive, watch } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, watch } from 'vue';
 import {
   Tabs,
   ModalCroppedAvatar,
@@ -88,6 +91,11 @@ const props = withDefaults(defineProps<IMenuProps>(), {
 });
 
 const emits = defineEmits<IMenuEmits>();
+
+const menuInfoClasses = computed(() => [
+  'menu-info',
+  { 'menu-info--open': props.open }
+]);
 
 const state = reactive({
   isOpen: false,
@@ -142,37 +150,37 @@ onUnmounted(() => {
 <style scoped>
 @import url('../assets/menu-info-users.css');
 
-aside.menu__info {
+aside.menu-info {
   background-color: var(--white);
   border-left-color: var(--border-grey);
   border-left-width: 0.5px;
   border-left-style: solid;
-  & .collapse {
+  &.menu-info--open .collapse {
     width: 100%;
   }
 }
 
-header.menu__info-header {
+header.menu-info__header {
   display: flex;
   padding: 10px;
   align-items: center;
   justify-content: space-between;
 }
 
-section.menu__info-info {
+section.menu-info__info-section {
   padding: 10px;
   padding-inline: 20px;
   display: grid;
   gap: 10px;
 }
 
-.menu__info-user {
+.menu-info__user-header {
   display: flex;
   margin: 0;
   align-items: center;
 }
 
-.menu__info-user-count {
+.menu-info__user-count {
   display: grid;
   margin-left: 4px;
   place-content: center;
@@ -191,13 +199,13 @@ section.menu__info-info {
   align-items: center;
 }
 
-div.buttons-menu__info {
+div.menu-info__buttons {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;
 }
 
-.menu__info-create-channel {
+.menu-info__create-channel {
   display: flex;
   align-items: center;
   font-size: 14px;
@@ -216,17 +224,17 @@ div.buttons-menu__info {
   gap: 70px;
 }
 
-.menu__info-avatar {
+.menu-info__avatar-button {
   display: flex;
   width: 100%;
   justify-content: center;
 }
 
-svg.icon-yui-kit.menu__button-close-icon {
+svg.icon-yui-kit.menu-info__close-icon {
   font-size: 17px;
 }
 
-button.menu__info-button {
+button.menu-info__close-button {
   padding: 6px;
 }
 

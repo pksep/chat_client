@@ -1,27 +1,24 @@
 <template>
-  <ul class="user__contact-list">
+  <ul class="contact-list">
     <li>
-      <div
-        :class="['menu__user-contact', { active: isOpen }]"
-        @contextmenu="openActivePopover"
-      >
-        <Avatar class="menu__user-contact-profile" initials="Orange" />
-        <h5 class="user__contact-title">Общий</h5>
-        <p class="user__contact-description">Ok, see you later</p>
-        <div class="user__contact-top__left">
+      <div :class="activeContactStyles" @contextmenu="openActivePopover">
+        <Avatar class="contact-list__avatar" initials="Orange" />
+        <h5 class="contact-list__title">Общий</h5>
+        <p class="contact-list__description">Ok, see you later</p>
+        <div class="contact-list__top">
           <Icon
             v-if="state.read"
             :name="IconNameEnum.read"
-            class="user__contact-read"
+            class="contact-list__read-icon"
           />
-          <span class="user__contact-time">{{ useTime() }}</span>
+          <span class="contact-list__time">{{ useTime() }}</span>
         </div>
-        <div class="user__contact-bottom__left">
-          <div v-if="state.notification" class="user__contact-notification">
+        <div class="contact-list__bottom">
+          <div v-if="state.notification" class="contact-list__notification">
             1
           </div>
           <div v-if="state.pin">
-            <Icon class="user__contact-pin" :name="IconNameEnum.pin" />
+            <Icon class="contact-list__pin-icon" :name="IconNameEnum.pin" />
           </div>
         </div>
       </div>
@@ -52,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue';
+import { computed, reactive } from 'vue';
 import {
   Avatar,
   Icon,
@@ -72,6 +69,11 @@ const state = reactive({
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
+
+const activeContactStyles = computed(() => [
+  'contact-list__item',
+  { 'contact-list__item--active': isOpen }
+]);
 
 const useTime = (date: Date = new Date()): string => {
   let hours: string | number = date.getHours();
@@ -97,7 +99,7 @@ const handleNotification = (): void => {
 </script>
 
 <style lang="css" scoped>
-.menu__user-contact {
+.contact-list__item {
   display: grid;
   grid-template-columns: 30px auto;
   column-gap: 10px;
@@ -107,13 +109,13 @@ const handleNotification = (): void => {
     'a b c'
     'a d f';
   &:hover,
-  &.active {
+  &.contact-list__item--active {
     cursor: pointer;
     background-color: var(--blue15);
   }
 }
 
-.user__contact-title {
+.contact-list__title {
   grid-area: b;
   margin: 0;
   font-size: 16px;
@@ -122,12 +124,12 @@ const handleNotification = (): void => {
   justify-self: start;
 }
 
-.menu__user-contact-profile {
+.contact-list__avatar {
   grid-area: a;
   align-self: center;
 }
 
-.user__contact-description {
+.contact-list__description {
   grid-area: d;
   margin: 0;
   justify-self: start;
@@ -135,7 +137,7 @@ const handleNotification = (): void => {
   color: var(--text-grey);
 }
 
-.user__contact-notification {
+.contact-list__notification {
   color: var(--white);
   font-size: 12px;
   height: 18px;
@@ -144,17 +146,17 @@ const handleNotification = (): void => {
   background-color: var(--blue4);
 }
 
-svg.icon-yui-kit.user__contact-pin {
+svg.icon-yui-kit.contact-list__pin-icon {
   color: var(--grey5);
   font-size: 16px;
 }
 
-svg.icon-yui-kit.user__contact-read {
+svg.icon-yui-kit.contact-list__read-icon {
   color: var(--blue1);
   font-size: 16px;
 }
 
-.user__contact-top__left {
+.contact-list__top {
   grid-area: c;
   display: flex;
   gap: 7px;
@@ -162,13 +164,13 @@ svg.icon-yui-kit.user__contact-read {
   justify-self: end;
 }
 
-.user__contact-time {
+.contact-list__time {
   color: var(--text-grey);
   font-size: 12px;
   line-height: 16px;
 }
 
-.user__contact-bottom__left {
+.contact-list__bottom {
   grid-area: f;
   justify-self: end;
   display: flex;
@@ -176,7 +178,7 @@ svg.icon-yui-kit.user__contact-read {
   text-align: center;
 }
 
-.user__contact-list {
+.contact-list {
   gap: 10px;
   display: grid;
 }

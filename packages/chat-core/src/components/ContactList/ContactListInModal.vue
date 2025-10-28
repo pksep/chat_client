@@ -60,10 +60,12 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
 const newContactOpen = ref(false);
-const addUser = () => {
+
+const addUser = (): void => {
   newContactOpen.value = true;
 };
-const closeContactModal = () => {
+
+const closeContactModal = (): void => {
   newContactOpen.value = false;
 };
 </script>

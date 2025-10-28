@@ -17,9 +17,9 @@
       </Button>
     </header>
     <section class="new-contact__section">
-      <Search class="new-contact__section-search" />
-      <ul class="new-contact__section-list">
-        <li class="new-contact__section-list__li">
+      <Search class="new-contact__search" />
+      <ul class="new-contact__list">
+        <li class="new-contact__item">
           <UserProfile
             name="John Doe"
             nickname="@johndoe"
@@ -36,7 +36,7 @@
         :type="ButtonTypeEnum.primary"
         :size="SizesEnum.little"
         class="new-contact__add"
-        :disabled="state.checkUsers.size === 0"
+        :disabled="isButtonDisabled"
         @click="handleOpenUser"
       >
         Добавить
@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, watch } from 'vue';
+import { computed, reactive, watch } from 'vue';
 import {
   Checkbox,
   Icon,
@@ -83,6 +83,8 @@ const state = reactive({
   checkUsers: new Set(),
   openAddUser: false
 });
+
+const isButtonDisabled = computed(() => state.checkUsers.size === 0);
 
 watch(
   () => props.open,
@@ -113,15 +115,13 @@ const handleCloseAddUser = (): void => {
 };
 
 const handleOpenUser = (): void => {
+  if (isButtonDisabled.value) return;
   state.openAddUser = true;
 };
 </script>
 <style scoped>
 .new-contact {
   width: 370px;
-}
-
-:deep(.modal-yui-kit__modal-content) {
 }
 
 .new-contact__header {
@@ -137,7 +137,7 @@ const handleOpenUser = (): void => {
   border-bottom-color: var(--border-grey);
 }
 
-.new-contact__section-list__li {
+.new-contact__item {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -149,12 +149,12 @@ const handleOpenUser = (): void => {
   }
 }
 
-.new-contact__section-search {
+.new-contact__search {
   padding: 10px;
   margin-bottom: 5px;
 }
 
-.new-contact__section-list {
+.new-contact__list {
   display: grid;
   gap: 8px;
   padding: 10px;
@@ -164,12 +164,12 @@ const handleOpenUser = (): void => {
   display: grid;
 }
 
-button.button-yui-kit.new-contact__button-close {
+.new-contact__button-close {
   padding-block: 5px;
   padding-inline: 0;
 }
 
-button.new-contact__add {
+.new-contact__add {
   margin-right: 10px;
   margin-bottom: 10px;
   justify-self: end;

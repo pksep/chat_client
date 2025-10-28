@@ -1,5 +1,5 @@
 <template>
-  <aside :class="['menu', { collapse: state.isCollapse }]">
+  <aside :class="menuClasses">
     <div class="menu__start">
       <div class="menu__profile">
         <UserProfile
@@ -25,16 +25,8 @@
           />
         </Button>
       </div>
-      <Line />
-      <div
-        :class="[
-          'menu__user-assistant',
-          {
-            active: state.chapter === 'ai'
-          }
-        ]"
-        @click="handleAiChapter"
-      >
+      <Line class="menu__user-line" />
+      <div :class="aiChapterClasses" @click="handleAiChapter">
         <AiIconWrapper />
         <h3 class="menu__user-assistant-title" v-if="!state.isCollapse">
           AI Ассистент
@@ -79,7 +71,7 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted, onUnmounted, reactive } from 'vue';
+import { computed, onMounted, onUnmounted, reactive } from 'vue';
 import Line from './Line.vue';
 import AiIconWrapper from './AiIconWrapper.vue';
 import {
@@ -133,6 +125,18 @@ const handleAiChapter = (): void => {
     name: 'ai'
   });
 };
+
+const menuClasses = computed(() => [
+  'menu',
+  { 'menu--collapse': state.isCollapse }
+]);
+
+const aiChapterClasses = computed(() => [
+  'menu__user-assistant',
+  {
+    'menu__user-assistant--active': state.chapter === 'ai'
+  }
+]);
 
 const handleChannels = (): void => {
   emits('unmount-chapter', { name: 'channels' });
@@ -190,7 +194,7 @@ onUnmounted(() => {
   align-content: start;
 }
 
-.menu.collapse {
+.menu.menu--collapse {
   justify-items: center;
   gap: 0;
   padding: 10px;
@@ -198,13 +202,12 @@ onUnmounted(() => {
   & .menu__start {
     padding: 0;
   }
-
-  & .line {
+  & .menu__user-line {
     margin-top: 0;
   }
 }
 
-.menu.collapse .menu__profile {
+.menu.menu--collapse .menu__profile {
   --size-avatar: 50px;
   justify-items: center;
   justify-content: center;
@@ -232,13 +235,13 @@ onUnmounted(() => {
   grid-area: profile;
 }
 
-.menu:not(.collapse) button.menu__user-profile-collapse {
+.menu:not(.menu--collapse) button.menu__user-profile-collapse {
   justify-self: end;
 }
 
 .menu__user-assistant {
   &:hover,
-  &.active {
+  &.menu__user-assistant--active {
     background-color: var(--blue15);
   }
 }
@@ -325,7 +328,7 @@ summary.menu__user-details-summary {
 }
 
 @media (width <= 1280px) {
-  .menu:not(.collapse) {
+  .menu:not(.menu--collapse) {
     width: var(--default-width);
     z-index: 2;
   }
