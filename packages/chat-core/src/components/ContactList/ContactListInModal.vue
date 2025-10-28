@@ -67,35 +67,3 @@ const closeContactModal = () => {
   newContactOpen.value = false;
 };
 </script>
-
-<style lang="css" scoped>
-@import url('../../assets/menu-info-users.css');
-
-.menu__info-add-user {
-  display: grid;
-  place-content: center;
-}
-
-div.buttons-menu__info,
-button.button-yui-kit.menu__info-add-user.large {
-  --icon-color: var(--blue1);
-  width: 100%;
-}
-
-section.menu__info-users {
-  padding: 10px;
-  & article {
-    padding-inline: 10px;
-  }
-}
-
-.menu__info-users-list {
-  display: grid;
-  margin-top: 10px;
-  gap: 8px;
-}
-
-button.ghost-yui-kit.menu__info-button-little {
-  color: var(--red6);
-}
-</style>

@@ -33,21 +33,3 @@ const closePopover = (event: Event): void => {
   emits('unmount-close', event);
 };
 </script>
-
-<style lang="css" scoped>
-.context-menu {
-  display: grid;
-  position: absolute;
-  background: var(--white);
-  border-radius: 5px;
-  padding: 5px;
-  box-shadow: 0px 0px 22px 0px #00000012;
-  z-index: 100;
-  min-width: 120px;
-}
-
-.tip {
-  display: none;
-  font-size: 10px;
-}
-</style>

@@ -36,7 +36,13 @@ export default defineConfig(({ mode }) => {
         : {})
     },
     plugins: [
-      vue(),
+      vue({
+        template: {
+          compilerOptions: {
+            isCustomElement: tag => tag.includes('-')
+          }
+        }
+      }),
       ...(baseMode === 'lib'
         ? [
             dts({

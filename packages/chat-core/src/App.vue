@@ -1,6 +1,6 @@
 <template>
-  <ChatContainer />
+  <chat-container> </chat-container>
 </template>
 <script lang="ts" setup>
-import ChatContainer from './components/ChatContainer.vue';
+import './index';
 </script>

@@ -17,10 +17,10 @@ export interface IHeaderEmits {
 }
 
 export interface IUserProps {
-  avatarUrl: string;
-  avatarAlt: string;
-  name: string;
-  nickname: string;
+  avatarUrl?: string;
+  avatarAlt?: string;
+  name?: string;
+  nickname?: string;
 }
 
 export interface IMenuProps {
