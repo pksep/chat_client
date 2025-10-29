@@ -88,6 +88,6 @@ button.menu-info__close-button {
   padding: 6px;
 }
 
-:deep(button.tabs__navigation-button) {
+button.tabs__navigation-button {
   margin-inline: 20px !important;
 }

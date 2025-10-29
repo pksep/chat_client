@@ -142,7 +142,7 @@ summary.menu__user-details-summary {
   }
 }
 
-:deep(.avatar-yui-kit:has(.avatar-yui-kit__text)) {
+.avatar-yui-kit:has(.avatar-yui-kit__text) {
   min-width: 40px;
   width: 40px;
   min-height: 40px;
