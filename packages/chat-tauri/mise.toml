@@ -1,0 +1,12 @@
+[tools]
+android-sdk = "19"
+java = "20"
+rust = "1"
+yq = "latest"
+
+[env]
+_.file = '.env'
+
+[tasks."build:apk"]
+description="build apk of mise"
+run = "pnpm build:apk"

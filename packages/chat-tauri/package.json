@@ -1,0 +1,22 @@
+{
+  "name": "chat-tauri",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "start:dev:desktop": "tauri dev",
+    "start:dev:android": "tauri android dev",
+    "start:dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "build:apk": "pnpm tauri android -v build -d --apk",
+    "start:preview": "vite preview"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
