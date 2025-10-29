@@ -6,6 +6,7 @@
   "scripts": {
     "start:dev": "pnpm --filter './packages/*' run start:dev",
     "start": "pnpm  --filter './packages/*' run start",
+    "build:lib": "pnpm  --filter './packages/chat-core' run build:lib",
     "build": "pnpm run lint && pnpm --filter './packages/*' run build",
     "lint": "eslint --fix --ext .js,.ts,.vue packages",
     "format": "prettier -w packages/**/*.ts -w packages/**/*.vue",
