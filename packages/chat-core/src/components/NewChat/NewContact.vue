@@ -17,9 +17,9 @@
       </Button>
     </header>
     <section class="new-contact__section">
-      <Search class="new-contact__section-search" />
-      <ul class="new-contact__section-list">
-        <li class="new-contact__section-list__li">
+      <Search class="new-contact__search" />
+      <ul class="new-contact__list">
+        <li class="new-contact__item">
           <UserProfile
             name="John Doe"
             nickname="@johndoe"
@@ -36,7 +36,7 @@
         :type="ButtonTypeEnum.primary"
         :size="SizesEnum.little"
         class="new-contact__add"
-        :disabled="state.checkUsers.size === 0"
+        :disabled="isButtonDisabled"
         @click="handleOpenUser"
       >
         Добавить
@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, watch } from 'vue';
+import { computed, reactive, watch } from 'vue';
 import {
   Checkbox,
   Icon,
@@ -83,6 +83,8 @@ const state = reactive({
   checkUsers: new Set(),
   openAddUser: false
 });
+
+const isButtonDisabled = computed(() => state.checkUsers.size === 0);
 
 watch(
   () => props.open,
@@ -113,8 +115,7 @@ const handleCloseAddUser = (): void => {
 };
 
 const handleOpenUser = (): void => {
+  if (isButtonDisabled.value) return;
   state.openAddUser = true;
 };
 </script>
-
-<style scoped></style>

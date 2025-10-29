@@ -11,15 +11,7 @@
       class="message__assistant"
       v-else-if="props.author === 'assistant'"
     />
-    <article
-      :class="[
-        'message__article',
-        {
-          'message__no-author': !state.isAuthor
-        }
-      ]"
-      @contextmenu="openActivePopover"
-    >
+    <article :class="messageArticle" @contextmenu="openActivePopover">
       <div class="message-content">
         <blockquote v-if="blockquote" class="message-content__blockquote">
           <div class="message-content__blockquote-container">
@@ -61,7 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue';
+import { reactive, computed } from 'vue';
 import { Avatar, ButtonTypeEnum, Icon, IconNameEnum, SizesEnum } from 'sep-yui';
 import AiIconWrapper from '../AiIconWrapper.vue';
 import type { IMessageBubbleProps } from './interface/interface';
@@ -76,6 +68,13 @@ const props = defineProps<IMessageBubbleProps>();
 const state = reactive({
   isAuthor: true
 });
+
+const messageArticle = computed(() => [
+  'message__article',
+  {
+    'message__no-author': !state.isAuthor
+  }
+]);
 
 const read = false;
 const blockquote = false;

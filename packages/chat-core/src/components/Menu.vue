@@ -1,5 +1,5 @@
 <template>
-  <aside :class="['menu', { collapse: state.isCollapse }]">
+  <aside :class="menuClasses">
     <div class="menu__start">
       <div class="menu__profile">
         <UserProfile
@@ -25,16 +25,8 @@
           />
         </Button>
       </div>
-      <Line />
-      <div
-        :class="[
-          'menu__user-assistant',
-          {
-            active: state.chapter === 'ai'
-          }
-        ]"
-        @click="handleAiChapter"
-      >
+      <Line class="menu__user-line" />
+      <div :class="aiChapterClasses" @click="handleAiChapter">
         <AiIconWrapper />
         <h3 class="menu__user-assistant-title" v-if="!state.isCollapse">
           AI Ассистент
@@ -79,7 +71,7 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted, onUnmounted, reactive } from 'vue';
+import { computed, onMounted, onUnmounted, reactive } from 'vue';
 import Line from './Line.vue';
 import AiIconWrapper from './AiIconWrapper.vue';
 import {
@@ -134,6 +126,18 @@ const handleAiChapter = (): void => {
   });
 };
 
+const menuClasses = computed(() => [
+  'menu',
+  { 'menu--collapse': state.isCollapse }
+]);
+
+const aiChapterClasses = computed(() => [
+  'menu__user-assistant',
+  {
+    'menu__user-assistant--active': state.chapter === 'ai'
+  }
+]);
+
 const handleChannels = (): void => {
   emits('unmount-chapter', { name: 'channels' });
 };
@@ -171,5 +175,3 @@ onUnmounted(() => {
   }
 });
 </script>
-
-<style scoped></style>

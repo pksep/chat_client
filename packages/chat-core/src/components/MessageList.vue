@@ -9,10 +9,7 @@
         <MessageBubble
           v-for="(message, index) in aiMessages"
           :key="index"
-          :class="[
-            'message__bubble',
-            { message__other: message.role === 'user' }
-          ]"
+          :class="messageChat(message.role)"
           :message="message.content"
           :author="message.role"
           :time="message.timestamp"
@@ -29,10 +26,7 @@
         <MessageBubble
           v-for="(message, index) in state.messages"
           :key="index"
-          :class="[
-            'message__bubble',
-            { message__other: message.role === 'user' }
-          ]"
+          :class="messageChat(message.role)"
           :message="message.content"
           :author="message.role"
           :time="time"
@@ -82,7 +76,12 @@ const {
 
 const { time } = useTime();
 
-const scrollToBottom = () => {
+const messageChat = (role: string) => [
+  'message__bubble',
+  { message__other: role === 'user' }
+];
+
+const scrollToBottom = (): void => {
   if (chatWrapperRef?.value) {
     chatWrapperRef.value.scrollTop = chatWrapperRef.value.scrollHeight;
   }
@@ -100,12 +99,12 @@ watch(
   }
 );
 
-const handleClear = () => {
+const handleClear = (): void => {
   state.messages = [];
   clearAiMessages();
 };
 
-const handleSend = async () => {
+const handleSend = async (): Promise<void> => {
   if (!inputText.value.trim()) return;
   const text = inputText.value;
   inputText.value = '';

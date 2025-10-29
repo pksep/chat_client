@@ -2,10 +2,7 @@
   <div
     v-if="props.visible"
     v-on-click-outside="closePopover"
-    :style="{
-      left: `${props.position.x}px`,
-      top: `${props.position.y}px`
-    }"
+    :style="position"
     class="context-menu"
   >
     <div class="template">
@@ -19,6 +16,7 @@
 
 <script setup lang="ts">
 import { vOnClickOutside } from 'sep-yui';
+import { computed } from 'vue';
 
 const props = defineProps<{
   visible: boolean;
@@ -28,6 +26,11 @@ const props = defineProps<{
 const emits = defineEmits<{
   (e: 'unmount-close', event: Event): void;
 }>();
+
+const position = computed(() => ({
+  left: `${props.position.x}px`,
+  top: `${props.position.y}px`
+}));
 
 const closePopover = (event: Event): void => {
   emits('unmount-close', event);

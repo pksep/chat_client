@@ -1,21 +1,21 @@
 <template>
-  <aside :class="[`menu__info`, { collapse: props.open }]" v-if="props.open">
-    <header class="menu__info-header">
+  <aside :class="menuInfoClasses" v-if="props.open">
+    <header class="menu-info__header">
       <h4>Общий</h4>
       <Button
-        class="menu__info-button"
+        class="menu-info__close-button"
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.little"
         @click="handleCloseMenu"
       >
-        <Icon :name="IconNameEnum.crossLarge" class="menu__button-close-icon" />
+        <Icon :name="IconNameEnum.crossLarge" class="menu-info__close-icon" />
       </Button>
     </header>
     <Tabs :tabCount="2">
       <template #header1>
-        <span class="menu__info-user">
+        <span class="menu-info__user-header">
           Участники
-          <div class="menu__info-user-count">8</div>
+          <div class="menu-info__user-count">8</div>
         </span>
       </template>
       <template #header2> Информация </template>
@@ -23,15 +23,18 @@
         <ContactListInModal @unmount-user-add="unmountUserAdd" />
       </template>
       <template #tab2>
-        <section class="menu__info-info">
+        <section class="menu-info__info-section">
           <slot name="information-menu">
-            <div class="menu__info-create-channel">
-              <p class="menu__info-title-text">Канал создан:</p>
+            <div class="menu-info__create-channel">
+              <p class="menu-info__title-text">Канал создан:</p>
               <span>
                 {{ new Date().toLocaleDateString('ru-RU') }}
               </span>
             </div>
-            <button class="menu__info-avatar" @click="openEditProfileIcon">
+            <button
+              class="menu-info__avatar-button"
+              @click="openEditProfileIcon"
+            >
               <Avatar is-icon />
             </button>
             <Teleport to="body">
@@ -41,11 +44,11 @@
                 @unmount-close="closeEditProfileIcon"
               />
             </Teleport>
-            <div class="buttons-menu__info">
+            <div class="menu-info__buttons">
               <Button
                 :type="ButtonTypeEnum.secondary"
                 :size="SizesEnum.large"
-                class="button-menu__info"
+                class="menu-info__secondary-button"
               >
                 <Icon :name="IconNameEnum.noDistrub" />
                 Звук выкл.
@@ -53,7 +56,7 @@
               <Button
                 :type="ButtonTypeEnum.secondary"
                 :size="SizesEnum.large"
-                class="button-menu__info"
+                class="menu-info__secondary-button"
               >
                 <Icon :name="IconNameEnum.logout" />
                 Выйти
@@ -68,7 +71,7 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted, onUnmounted, reactive, watch } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, watch } from 'vue';
 import {
   Tabs,
   ModalCroppedAvatar,
@@ -88,6 +91,11 @@ const props = withDefaults(defineProps<IMenuProps>(), {
 });
 
 const emits = defineEmits<IMenuEmits>();
+
+const menuInfoClasses = computed(() => [
+  'menu-info',
+  { 'menu-info--open': props.open }
+]);
 
 const state = reactive({
   isOpen: false,

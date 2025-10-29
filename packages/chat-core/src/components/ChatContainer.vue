@@ -1,10 +1,5 @@
 <template>
-  <main
-    :class="[
-      'chat-container',
-      { collapse: state.isCollapse, 'menu-collapse': !state.isMenuOpen }
-    ]"
-  >
+  <main :class="chatContainerClasses">
     <Header
       v-if="state.chapter"
       class="chat__header"
@@ -43,7 +38,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import Header from './Header.vue';
 import Menu from './Menu.vue';
 import Chat from './MessageList.vue';
@@ -62,6 +57,11 @@ const state = reactive({
 const props = defineProps<IChatContainerProps>();
 
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
+
+const chatContainerClasses = computed(() => [
+  'chat-container',
+  { collapse: state.isCollapse, 'menu-collapse': !state.isMenuOpen }
+]);
 
 const handleCollapse = (isCollapse: boolean): void => {
   state.isCollapse = isCollapse;
@@ -97,5 +97,3 @@ const handleClearClick = (): void => {
   }
 };
 </script>
-
-<style scoped></style>
