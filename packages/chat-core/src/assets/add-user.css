@@ -16,22 +16,22 @@
   grid-area: avatar;
 }
 
-:deep(.form__textarea) {
+.form__textarea {
   grid-area: description;
 }
 
-:deep(.menu__info-form) {
+.menu__info-form {
   align-items: start;
   grid-template-areas:
     'avatar name'
     'description description';
 }
 
-:deep(.form__name) {
+.form__name {
   grid-area: name;
 }
 
-:deep(.tabs__navigation-content) {
+.tabs__navigation-content {
   height: 437px;
 }
 

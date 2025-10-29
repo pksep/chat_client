@@ -91,7 +91,7 @@ div.message-content__html > p {
 
 .message__assistant.menu__user-assistant-icon {
   align-self: start;
-  & :deep(svg) {
+  & svg {
     font-size: 24px;
   }
 }

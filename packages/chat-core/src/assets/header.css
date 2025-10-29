@@ -22,11 +22,11 @@
   row-gap: 2px;
 }
 
-:deep(button.button-yui-kit) {
+button.button-yui-kit {
   padding-block: 10.5px;
 }
 
-:deep(.tooltip-yui-kit) {
+.tooltip-yui-kit {
   align-content: center;
 }
 

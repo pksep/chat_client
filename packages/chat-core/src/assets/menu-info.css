@@ -44,7 +44,7 @@ section.menu-info__info-section {
   height: 20px;
 }
 
-:deep(button.tabs__navigation-button) {
+button.tabs__navigation-button {
   display: flex;
   align-items: center;
 }
@@ -69,7 +69,7 @@ div.menu-info__buttons {
     color: var(--text-black);
   }
 }
-:deep(.tabs__navigation) {
+.tabs__navigation {
   justify-content: start !important;
   gap: 70px;
 }
