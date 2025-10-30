@@ -29,7 +29,7 @@
       >
         <Icon class="small-icon" :name="IconNameEnum.search" />
       </Button>
-      <Popover @click.stop :options="getPopoverOptions" />
+      <Popover @click.stop :options="getPopoverOptions" isWCUse />
     </div>
   </header>
 </template>
