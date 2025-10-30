@@ -28,7 +28,8 @@ export default defineConfig(({ mode }) => {
               external: ['vue', 'sep-yui'],
               output: {
                 globals: {
-                  vue: 'Vue'
+                  vue: 'Vue',
+                  'sep-yui': 'sep-yui'
                 }
               }
             }
