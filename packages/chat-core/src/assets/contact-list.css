@@ -2,7 +2,7 @@
   display: grid;
   grid-template-columns: 30px auto;
   column-gap: 10px;
-  padding-block: 10px;
+  padding: 10px;
   min-height: 58px;
   grid-template-areas:
     'a b c'
@@ -24,6 +24,9 @@
 }
 
 .contact-list__avatar {
+  min-width: 30px !important;
+  min-height: 30px !important;
+  width: 30px !important;
   grid-area: a;
   align-self: center;
 }

@@ -32,11 +32,11 @@
           AI Ассистент
         </h3>
       </div>
-      <template v-if="false">
+      <template v-for="(item, index) in listChannels" :key="index">
         <Line v-if="state.isCollapse" />
         <details class="menu__user-details" v-if="!state.isCollapse" open>
           <summary class="menu__user-details-summary">
-            <h4 @click="handleChannels">Каналы</h4>
+            <h4 @click="handleChannels">{{ item.title }}</h4>
             <Button
               :type="ButtonTypeEnum.ghost"
               :size="SizesEnum.little"
@@ -45,15 +45,17 @@
               <Icon :name="IconNameEnum.plus" />
             </Button>
           </summary>
-          <ContactList />
+          <ContactList :contacts="item.contacts" />
         </details>
         <template v-if="state.isCollapse">
-          <ul class="menu__user">
-            <li class="menu__user-avatar">
-              <Avatar initials="Orange" />
-            </li>
-          </ul>
-          <Line />
+          <template v-for="(user, index) in item.contacts" :key="index">
+            <ul class="menu__user">
+              <li class="menu__user-avatar">
+                <Avatar :url="user.imageURL" :initials="user.title" />
+              </li>
+            </ul>
+            <Line />
+          </template>
         </template>
       </template>
     </div>
@@ -97,6 +99,33 @@ const state = reactive({
 const emits = defineEmits<IMenuEmits>();
 
 let resizeHandler: (() => void) | undefined;
+
+const listChannels = [
+  {
+    title: 'Каналы'
+  },
+  {
+    title: 'Личные сообщения',
+    contacts: [
+      {
+        id: 't1',
+        title: 'Jare Milkovich',
+        imageURL: 'https://example.com/avatar1.jpg',
+        isPin: true,
+        latestMessage: 'Hello!',
+        notificationCount: 2
+      },
+      {
+        id: 't2',
+        title: 'Jane Smith',
+        imageURL: 'https://example.com/avatar2.jpg',
+        isPin: false,
+        latestMessage: 'Hi!',
+        notificationCount: 1
+      }
+    ]
+  }
+];
 
 const handleCollapse = (): void => {
   state.isCollapse = !state.isCollapse;

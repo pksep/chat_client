@@ -29,12 +29,10 @@
       @unmount-new-contact="handleNewContact"
     />
   </main>
-  <Teleport to="body">
-    <NewContactModal
-      :open="state.isNewContactOpen"
-      @unmount-close="closeContactModal"
-    />
-  </Teleport>
+  <NewContactModal
+    :open="state.isNewContactOpen"
+    @unmount-close="closeContactModal"
+  />
 </template>
 
 <script setup lang="ts">

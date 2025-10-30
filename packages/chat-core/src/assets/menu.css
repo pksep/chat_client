@@ -108,7 +108,7 @@ summary.menu__user-details-summary {
   &::marker {
     display: none;
   }
-  & svg {
+  & svg.icon-yui-kit {
     font-size: 12px;
   }
   & h4 {

@@ -43,15 +43,13 @@
       </Button>
     </section>
   </Modal>
-  <Teleport to="body">
-    <KeepAlive>
-      <component
-        :is="AddUser"
-        :open="state.openAddUser"
-        @unmount-close="handleCloseAddUser"
-      />
-    </KeepAlive>
-  </Teleport>
+  <KeepAlive>
+    <component
+      :is="AddUser"
+      :open="state.openAddUser"
+      @unmount-close="handleCloseAddUser"
+    />
+  </KeepAlive>
 </template>
 
 <script setup lang="ts">
@@ -119,3 +117,5 @@ const handleOpenUser = (): void => {
   state.openAddUser = true;
 };
 </script>
+
+<style></style>

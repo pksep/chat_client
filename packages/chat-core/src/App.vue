@@ -8,6 +8,7 @@ import './index';
 const mastraUrl = import.meta.env.VITE_MASTRA_BASE_URL;
 const user = {
   // avatarUrl: '/avatar-user.png',
+  id: 't0',
   avatarAlt: 'User with a circle face',
   name: 'Jonn Doe',
   nickname: 'JonnDoe'

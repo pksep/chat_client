@@ -1,10 +1,15 @@
 <template>
   <ul class="contact-list">
-    <li>
+    <li v-for="(contact, inx) in props.contacts" :key="inx">
       <div :class="activeContactStyles" @contextmenu="openActivePopover">
-        <Avatar class="contact-list__avatar" initials="Orange" />
-        <h5 class="contact-list__title">Общий</h5>
-        <p class="contact-list__description">Ok, see you later</p>
+        <Avatar
+          class="contact-list__avatar"
+          :initials="contact.title"
+          :url="contact.imageURL"
+          alt="avatar of contanct image"
+        />
+        <h5 class="contact-list__title">{{ contact.title }}</h5>
+        <p class="contact-list__description">{{ contact.latestMessage }}</p>
         <div class="contact-list__top">
           <Icon
             v-if="state.read"
@@ -14,10 +19,13 @@
           <span class="contact-list__time">{{ useTime() }}</span>
         </div>
         <div class="contact-list__bottom">
-          <div v-if="state.notification" class="contact-list__notification">
-            1
+          <div
+            v-if="contact.notificationCount > 0 && state.notification"
+            class="contact-list__notification"
+          >
+            {{ contact.notificationCount }}
           </div>
-          <div v-if="state.pin">
+          <div v-if="contact.isPin">
             <Icon class="contact-list__pin-icon" :name="IconNameEnum.pin" />
           </div>
         </div>
@@ -60,12 +68,15 @@ import {
 } from 'sep-yui';
 import ContextMenu from './ContextMenu.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
+import type { IContactListProps } from './interfaces/contact-list';
 
 const state = reactive({
   pin: false,
   read: false,
   notification: false
 });
+
+const props = withDefaults(defineProps<IContactListProps>(), {});
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();

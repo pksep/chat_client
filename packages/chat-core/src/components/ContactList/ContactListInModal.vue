@@ -40,12 +40,7 @@
       </ContextMenu>
     </article>
   </section>
-  <Teleport to="body">
-    <NewContactModal
-      :open="newContactOpen"
-      @unmount-close="closeContactModal"
-    />
-  </Teleport>
+  <NewContactModal :open="newContactOpen" @unmount-close="closeContactModal" />
 </template>
 
 <script setup lang="ts">
