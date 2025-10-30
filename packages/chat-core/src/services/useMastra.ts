@@ -129,13 +129,31 @@ async function getLastSessionId(): Promise<string | null> {
 }
 
 /**
+ * Clear all data from the IndexedDB messages store
+ */
+async function clearAllData(): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const clearRequest = store.clear();
+    clearRequest.onsuccess = () => {
+      resolve();
+    };
+    clearRequest.onerror = () => {
+      reject(clearRequest.error);
+    };
+  });
+}
+
+/**
  * Hook for interacting with Mastra and caching messages per chat.
  *
  * @param agentId  Mastra agent ID (default: 'chat').
  * @param chatId   Unique identifier for the chat (UUID).
  * @param baseUrl  Base URL for Mastra client.
  */
-export function useMastra(
+function useMastra(
   agentId: string = 'chat',
   chatId: string | undefined,
   baseUrl: string = import.meta.env.VITE_CHAT_MASTRA_URL ||
@@ -338,3 +356,20 @@ export function useMastra(
     isInitializing
   };
 }
+
+/**
+ * Save userId to sessionStorage
+ */
+function saveUserIdToSession(userId: string): void {
+  sessionStorage.setItem('userId', userId);
+}
+
+/**
+ * Check if userId exists in sessionStorage
+ */
+function hasUserIdInSession(id: string): boolean {
+  const userId = sessionStorage.getItem('userId');
+  return userId === id;
+}
+
+export { useMastra, clearAllData, saveUserIdToSession, hasUserIdInSession };

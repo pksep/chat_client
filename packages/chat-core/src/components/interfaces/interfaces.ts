@@ -17,6 +17,7 @@ export interface IHeaderEmits {
 }
 
 export interface IUserProps {
+  id?: string;
   avatarUrl?: string;
   avatarAlt?: string;
   name?: string;
