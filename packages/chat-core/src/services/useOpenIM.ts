@@ -1,5 +1,4 @@
 import { CbEvents, getSDK } from '@openim/wasm-client-sdk';
-import { v4 as uuidv4 } from 'uuid';
 
 const IMSDK = getSDK();
 
@@ -26,7 +25,7 @@ export const sendMessageIM = async (
     throw new Error('OpenIM SDK not initialized');
   }
 
-  const clientMsgID = uuidv4();
+  const clientMsgID = crypto.randomUUID.toString();
 
   try {
     // Create text message (await the Promise to get MessageItem)
@@ -47,4 +46,16 @@ export const sendMessageIM = async (
   }
 };
 
-export { IMSDK, setupOpenIM };
+const getOrGeneratePlatformId = (): number => {
+  const key = 'platformId';
+  const storedId = sessionStorage.getItem(key);
+  if (storedId === null) {
+    const newId = Math.floor(Math.random() * 999999) + 1;
+    sessionStorage.setItem(key, newId.toString());
+    return newId;
+  } else {
+    return parseInt(storedId, 10);
+  }
+};
+
+export { IMSDK, setupOpenIM, getOrGeneratePlatformId };
