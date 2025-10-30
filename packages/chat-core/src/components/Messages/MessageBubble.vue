@@ -54,7 +54,14 @@
 
 <script setup lang="ts">
 import { reactive, computed } from 'vue';
-import { Avatar, ButtonTypeEnum, Icon, IconNameEnum, SizesEnum } from 'sep-yui';
+import {
+  Avatar,
+  Button,
+  ButtonTypeEnum,
+  Icon,
+  IconNameEnum,
+  SizesEnum
+} from 'sep-yui';
 import AiIconWrapper from '../AiIconWrapper.vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import { useContextMenu } from '../../composables/useContextMenu';
