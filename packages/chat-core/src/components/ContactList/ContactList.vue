@@ -1,18 +1,24 @@
 <template>
   <ul class="contact-list">
-    <li v-for="(contact, inx) in props.contacts" :key="inx">
-      <div :class="activeContactStyles" @contextmenu="openActivePopover">
+    <li v-for="contact in props.contacts" :key="contact.id">
+      <div
+        :class="[
+          'contact-list__item',
+          { 'contact-list__item--active': isOpen[contact.id] }
+        ]"
+        @contextmenu="openActivePopover(contact.id, $event)"
+      >
         <Avatar
           class="contact-list__avatar"
           :initials="contact.title"
           :url="contact.imageURL"
-          alt="avatar of contanct image"
+          alt="avatar of contact image"
         />
         <h5 class="contact-list__title">{{ contact.title }}</h5>
         <p class="contact-list__description">{{ contact.latestMessage }}</p>
         <div class="contact-list__top">
           <Icon
-            v-if="state.read"
+            v-if="contact.notificationCount === 0"
             :name="IconNameEnum.read"
             class="contact-list__read-icon"
           />
@@ -20,7 +26,10 @@
         </div>
         <div class="contact-list__bottom">
           <div
-            v-if="contact.notificationCount > 0 && state.notification"
+            v-if="
+              contact.notificationCount > 0 &&
+              (isNotificationEnabled[contact.id] ?? true)
+            "
             class="contact-list__notification"
           >
             {{ contact.notificationCount }}
@@ -30,34 +39,36 @@
           </div>
         </div>
       </div>
+      <ContextMenu
+        :visible="isOpen[contact.id]"
+        :position="position"
+        @unmount-close="() => closeActivePopover(contact.id)"
+      >
+        <Button
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          @click.stop="() => handlePin(contact.id)"
+        >
+          <template v-if="!contact.isPin"> Закрепить </template>
+          <template v-else> Открепить </template>
+        </Button>
+        <Button
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          @click="() => handleNotification(contact.id)"
+        >
+          <template v-if="isNotificationEnabled[contact.id] ?? true">
+            Выкл. уведомление
+          </template>
+          <template v-else> Вкл. уведомление </template>
+        </Button>
+      </ContextMenu>
     </li>
-    <ContextMenu
-      :visible="isOpen"
-      :position="position"
-      @unmount-close="closeActivePopover"
-    >
-      <Button
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        @click.stop="handlePin"
-      >
-        <template v-if="!state.pin"> Закрепить </template>
-        <template v-else> Открепить </template>
-      </Button>
-      <Button
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        @click="handleNotification"
-      >
-        <template v-if="!state.notification"> Выкл. уведомление </template>
-        <template v-else> Вкл. уведомление </template>
-      </Button>
-    </ContextMenu>
   </ul>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from 'vue';
+import { ref } from 'vue';
 import {
   Avatar,
   Icon,
@@ -68,23 +79,32 @@ import {
 } from 'sep-yui';
 import ContextMenu from './ContextMenu.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
+
 import type { IContactListProps } from './interfaces/contact-list';
 
-const state = reactive({
-  pin: false,
-  read: false,
-  notification: false
-});
-
 const props = withDefaults(defineProps<IContactListProps>(), {});
+
+const emits = defineEmits<{
+  (e: 'unmount-pin', id: string): void;
+  (e: 'unmount-notification', id: string): void;
+}>();
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
-const activeContactStyles = computed(() => [
-  'contact-list__item',
-  { 'contact-list__item--active': isOpen }
-]);
+const isNotificationEnabled = ref<Record<string, boolean>>({});
+
+const handlePin = (contactId: string): void => {
+  emits('unmount-pin', contactId);
+  closeActivePopover(contactId);
+};
+
+const handleNotification = (contactId: string): void => {
+  const currentEnabled = isNotificationEnabled.value[contactId] ?? true;
+  isNotificationEnabled.value[contactId] = !currentEnabled;
+  emits('unmount-notification', contactId);
+  closeActivePopover(contactId);
+};
 
 const useTime = (date: Date = new Date()): string => {
   let hours: string | number = date.getHours();
@@ -96,15 +116,5 @@ const useTime = (date: Date = new Date()): string => {
     minutes = `0${minutes}`;
   }
   return `${hours}:${minutes}`;
-};
-
-const handlePin = (): void => {
-  state.pin = !state.pin;
-  closeActivePopover();
-};
-
-const handleNotification = (): void => {
-  state.notification = !state.notification;
-  closeActivePopover();
 };
 </script>
