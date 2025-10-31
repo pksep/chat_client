@@ -1,6 +1,6 @@
 {
   "name": "@pksep/chat-core",
-  "version": "25.10.4",
+  "version": "25.10.5",
   "type": "module",
   "main": "./build/chat-container.js",
   "types": "./build/chat-container.d.ts",

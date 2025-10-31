@@ -372,4 +372,28 @@ function hasUserIdInSession(id: string): boolean {
   return userId === id;
 }
 
-export { useMastra, clearAllData, saveUserIdToSession, hasUserIdInSession };
+/**
+ * Remove loading state from a specific message in the chat history
+ */
+async function removeMessageLoading(
+  chatId: string,
+  messageIndex: number
+): Promise<void> {
+  const messages = await loadMessages(chatId);
+  if (
+    messageIndex >= 0 &&
+    messageIndex < messages.length &&
+    messages[messageIndex].loading
+  ) {
+    messages[messageIndex].loading = false;
+    await saveMessages(chatId, messages);
+  }
+}
+
+export {
+  useMastra,
+  clearAllData,
+  saveUserIdToSession,
+  hasUserIdInSession,
+  removeMessageLoading
+};
