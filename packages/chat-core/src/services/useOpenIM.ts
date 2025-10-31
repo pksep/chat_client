@@ -16,16 +16,16 @@ const setupOpenIM = (): void => {
   });
 };
 
-export const sendMessageIM = async (
-  to: string,
-  message: string,
-  groupId: string
-): Promise<void> => {
-  if (!IMSDK) {
-    throw new Error('OpenIM SDK not initialized');
-  }
-
-  const clientMsgID = crypto.randomUUID.toString();
+export const sendMessageIM = async ({
+  to,
+  message,
+  groupId
+}: {
+  to: string;
+  message: string;
+  groupId: string;
+}): Promise<void> => {
+  const clientMsgID = crypto.randomUUID().toString();
 
   try {
     // Create text message (await the Promise to get MessageItem)

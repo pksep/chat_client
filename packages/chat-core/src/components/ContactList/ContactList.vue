@@ -6,6 +6,7 @@
           'contact-list__item',
           { 'contact-list__item--active': isOpen[contact.id] }
         ]"
+        @click.stop="handleClick(contact.id)"
         @contextmenu="openActivePopover(contact.id, $event)"
       >
         <Avatar
@@ -28,13 +29,13 @@
           <div
             v-if="
               contact.notificationCount > 0 &&
-              (isNotificationEnabled[contact.id] ?? true)
+              (state.isNotificationEnabled[contact.id] ?? true)
             "
             class="contact-list__notification"
           >
             {{ contact.notificationCount }}
           </div>
-          <div v-if="contact.isPin">
+          <div v-if="state.isPin[contact.id]">
             <Icon class="contact-list__pin-icon" :name="IconNameEnum.pin" />
           </div>
         </div>
@@ -49,7 +50,7 @@
           :size="SizesEnum.small"
           @click.stop="() => handlePin(contact.id)"
         >
-          <template v-if="!contact.isPin"> Закрепить </template>
+          <template v-if="!state.isPin[contact.id]"> Закрепить </template>
           <template v-else> Открепить </template>
         </Button>
         <Button
@@ -57,7 +58,7 @@
           :size="SizesEnum.small"
           @click="() => handleNotification(contact.id)"
         >
-          <template v-if="isNotificationEnabled[contact.id] ?? true">
+          <template v-if="state.isNotificationEnabled[contact.id] ?? true">
             Выкл. уведомление
           </template>
           <template v-else> Вкл. уведомление </template>
@@ -68,7 +69,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { reactive, watch } from 'vue';
 import {
   Avatar,
   Icon,
@@ -85,23 +86,43 @@ import type { IContactListProps } from './interfaces/contact-list';
 const props = withDefaults(defineProps<IContactListProps>(), {});
 
 const emits = defineEmits<{
-  (e: 'unmount-pin', id: string): void;
   (e: 'unmount-notification', id: string): void;
+  (e: 'unmount-click', id: string): void;
 }>();
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
-const isNotificationEnabled = ref<Record<string, boolean>>({});
+const state = reactive({
+  isPin: {} as Record<string, boolean>,
+  isNotificationEnabled: {} as Record<string, boolean>
+});
+
+watch(
+  () => props.contacts,
+  contacts => {
+    if (contacts) {
+      contacts.forEach(contact => {
+        state.isPin[contact.id] = contact.isPin;
+      });
+    }
+  },
+  { immediate: true }
+);
 
 const handlePin = (contactId: string): void => {
-  emits('unmount-pin', contactId);
+  const currentPin = state.isPin[contactId] ?? false;
+  state.isPin[contactId] = !currentPin;
   closeActivePopover(contactId);
 };
 
+const handleClick = (contactId: string): void => {
+  emits('unmount-click', contactId);
+};
+
 const handleNotification = (contactId: string): void => {
-  const currentEnabled = isNotificationEnabled.value[contactId] ?? true;
-  isNotificationEnabled.value[contactId] = !currentEnabled;
+  const currentEnabled = state.isNotificationEnabled[contactId] ?? true;
+  state.isNotificationEnabled[contactId] = !currentEnabled;
   emits('unmount-notification', contactId);
   closeActivePopover(contactId);
 };

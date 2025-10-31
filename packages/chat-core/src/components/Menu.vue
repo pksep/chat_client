@@ -26,7 +26,7 @@
         </Button>
       </div>
       <Line class="menu__user-line" />
-      <div :class="aiChapterClasses" @click="handleAiChapter">
+      <div :class="aiChapterClasses" @click="unmountContactClick('ai')">
         <AiIconWrapper />
         <h3 class="menu__user-assistant-title" v-if="!state.isCollapse">
           AI Ассистент
@@ -36,7 +36,7 @@
         <Line v-if="state.isCollapse" />
         <details class="menu__user-details" v-if="!state.isCollapse" open>
           <summary class="menu__user-details-summary">
-            <h4 @click="handleChannels">{{ item.title }}</h4>
+            <h4>{{ item.title }}</h4>
             <Button
               :type="ButtonTypeEnum.ghost"
               :size="SizesEnum.little"
@@ -45,7 +45,10 @@
               <Icon :name="IconNameEnum.plus" />
             </Button>
           </summary>
-          <ContactList :contacts="item.contacts" />
+          <ContactList
+            :contacts="item.contacts"
+            @unmount-click="unmountContactClick"
+          />
         </details>
         <template v-if="state.isCollapse">
           <template v-for="(user, index) in item.contacts" :key="index">
@@ -100,6 +103,28 @@ const emits = defineEmits<IMenuEmits>();
 
 let resizeHandler: (() => void) | undefined;
 
+const unmountContactClick = (contactId: string): void => {
+  if (state.chapter === contactId) {
+    state.chapter = '';
+    emits('unmount-chapter', null);
+    return;
+  }
+  state.chapter = contactId;
+  emits('unmount-chapter', { name: contactId });
+};
+
+const menuClasses = computed(() => [
+  'menu',
+  { 'menu--collapse': state.isCollapse }
+]);
+
+const aiChapterClasses = computed(() => [
+  'menu__user-assistant',
+  {
+    'menu__user-assistant--active': state.chapter === 'ai'
+  }
+]);
+
 const listChannels = [
   {
     title: 'Каналы'
@@ -134,34 +159,6 @@ const handleCollapse = (): void => {
 
 const handleNewContactModal = (): void => {
   emits('unmount-new-contact', true);
-};
-
-const handleAiChapter = (): void => {
-  if (state.chapter === 'ai') {
-    state.chapter = '';
-    emits('unmount-chapter', null);
-    return;
-  }
-  state.chapter = 'ai';
-  emits('unmount-chapter', {
-    name: 'ai'
-  });
-};
-
-const menuClasses = computed(() => [
-  'menu',
-  { 'menu--collapse': state.isCollapse }
-]);
-
-const aiChapterClasses = computed(() => [
-  'menu__user-assistant',
-  {
-    'menu__user-assistant--active': state.chapter === 'ai'
-  }
-]);
-
-const handleChannels = (): void => {
-  emits('unmount-chapter', { name: 'channels' });
 };
 
 const pwaInstall = async (): Promise<void> => {

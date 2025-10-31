@@ -18,21 +18,21 @@
             name="Zakk Wylde"
             class="menu__user-profile"
             nickname="@wyldetheguy"
-            @unmount-click="openActivePopover"
+            @unmount-click="openActivePopover('0', $event)"
           />
         </li>
       </ul>
       <ContextMenu
-        :visible="isOpen"
+        :visible="isOpen['0']"
         :position="position"
-        @unmount-close="closeActivePopover"
+        @unmount-close="closeActivePopover('0')"
       >
         <template #default>
           <Button
             class="menu__info-button-little"
             :type="ButtonTypeEnum.ghost"
             :size="SizesEnum.little"
-            @click="closeActivePopover"
+            @click="closeActivePopover('0')"
           >
             Удалить из канала
           </Button>

@@ -51,8 +51,9 @@ import { ref, reactive, watch, onMounted, useTemplateRef, nextTick } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import { ContentEditor } from 'sep-yui';
 import { useMastra } from '../services/useMastra';
-import type { IMessageListProps } from './interfaces/message-list';
 import { useTime } from '../composables/useTime';
+import { sendMessageIM } from '../services/useOpenIM';
+import type { IMessageListProps } from './interfaces/message-list';
 
 const state = reactive({
   messages: [],
@@ -111,7 +112,11 @@ const handleSend = async (): Promise<void> => {
   if (props.chapter === 'ai') {
     await sendMessage(text, scrollToBottom);
   } else {
-    state.messages.push({ role: 'user', content: text });
+    sendMessageIM({
+      message: text,
+      to: state.chatId,
+      groupId: state.chatId
+    });
   }
   scrollToBottom();
 };

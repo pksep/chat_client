@@ -9,10 +9,10 @@
     </div>
     <UserProfile
       class="chat__header-profile"
-      avatar-url="/"
       avatar-alt="user-profile-alt"
-      name="John Doe"
-      nickname="@johndoe"
+      avatar-url="/"
+      name=""
+      nickname=""
       v-else
     />
     <div class="chat__header-buttons">
