@@ -8,6 +8,7 @@
       @unmount-information="handleHeaderClick"
       @unmount-clear="handleClearClick"
     />
+    <HeaderMenu class="chat__header-menu" v-else />
     <Menu
       :user="props.user"
       class="chat__menu"
@@ -39,7 +40,8 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
-import Header from './Header.vue';
+import Header from './Header/Header.vue';
+import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
 import Chat from './MessageList.vue';
 import MenuInfo from './MenuInfo.vue';

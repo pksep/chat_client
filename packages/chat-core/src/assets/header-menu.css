@@ -1,0 +1,29 @@
+.chat__header-menu {
+  display: none;
+}
+
+@media screen and (width <= 1024px) {
+  .chat__header-menu {
+    display: flex;
+  }
+  .header-menu__list {
+    display: flex;
+    justify-content: center;
+    gap: 36px;
+    border-bottom-style: solid;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--border-grey);
+    width: var(--default-width);
+  }
+  button.header-menu__button {
+    font-size: 16px;
+    padding: 8px 14px;
+    font-weight: bold;
+    &.header-menu__button--active {
+      color: var(--blue1);
+      border-bottom-style: solid;
+      border-bottom-width: 4px;
+      border-bottom-color: var(--blue1);
+    }
+  }
+}

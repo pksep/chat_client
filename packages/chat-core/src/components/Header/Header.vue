@@ -36,7 +36,7 @@
 
 <script lang="ts" setup>
 import { computed, reactive } from 'vue';
-import UserProfile from './UserProfile/UserProfile.vue';
+import UserProfile from '../UserProfile/UserProfile.vue';
 import {
   Button,
   Icon,
@@ -47,8 +47,8 @@ import {
   Popover
 } from 'sep-yui';
 
-import type { IHeaderProps, IHeaderEmits } from './interfaces/interfaces';
-import AiIconWrapper from './AiIconWrapper.vue';
+import type { IHeaderProps, IHeaderEmits } from '../interfaces/interfaces';
+import AiIconWrapper from '../AiIconWrapper.vue';
 
 const props = withDefaults(defineProps<IHeaderProps>(), {});
 
