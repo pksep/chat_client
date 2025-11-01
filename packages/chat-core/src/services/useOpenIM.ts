@@ -28,12 +28,10 @@ export const sendMessageIM = async ({
   const clientMsgID = crypto.randomUUID().toString();
 
   try {
-    // Create text message (await the Promise to get MessageItem)
     const createResponse = await IMSDK.createTextMessage(message);
     const textMessage = createResponse.data;
     textMessage.clientMsgID = clientMsgID;
 
-    // Send message with SendMsgParams
     await IMSDK.sendMessage({
       message: textMessage,
       recvID: to,
@@ -50,7 +48,7 @@ const getOrGeneratePlatformId = (): number => {
   const key = 'platformId';
   const storedId = sessionStorage.getItem(key);
   if (storedId === null) {
-    const newId = Math.floor(Math.random() * 999999) + 1;
+    const newId = Math.floor(Math.random() * 9) + 1;
     sessionStorage.setItem(key, newId.toString());
     return newId;
   } else {

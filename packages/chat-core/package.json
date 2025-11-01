@@ -25,6 +25,7 @@
     "@fontsource-variable/inter": "^5.2.6",
     "@mastra/client-js": "^0.12.3",
     "@openim/wasm-client-sdk": "3.8.3-patch.10",
+    "@pksep/reqi": "^0.0.21",
     "sep-yui": "0.1.122",
     "zod": "3"
   },
