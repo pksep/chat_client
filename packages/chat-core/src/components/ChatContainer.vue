@@ -8,7 +8,11 @@
       @unmount-information="handleHeaderClick"
       @unmount-clear="handleClearClick"
     />
-    <HeaderMenu class="chat__header-menu" v-else />
+    <HeaderMenu
+      class="chat__header-menu"
+      v-else
+      @unmount-chapter="unmountHeaderMenuChapter"
+    />
     <Menu
       :user="props.user"
       class="chat__menu"
@@ -18,7 +22,6 @@
     />
     <Chat
       :base-url="props.baseUrl"
-      :user="props.user"
       :chapter="state.chapter"
       class="chat__messages"
       ref="chatRef"
@@ -43,7 +46,7 @@ import { computed, reactive, ref } from 'vue';
 import Header from './Header/Header.vue';
 import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
-import Chat from './MessageList.vue';
+import Chat from './Chat.vue';
 import MenuInfo from './MenuInfo.vue';
 import NewContactModal from './NewChat/NewContact.vue';
 import type { IChatContainerProps } from './interfaces/interfaces';
@@ -52,8 +55,7 @@ const state = reactive({
   isCollapse: false,
   isMenuOpen: false,
   chapter: null,
-  isNewContactOpen: false,
-  isAddUserOpen: false
+  isNewContactOpen: false
 });
 
 const props = defineProps<IChatContainerProps>();
@@ -75,6 +77,10 @@ const handleMenuCollapse = (isOpen: boolean): void => {
 
 const handleHeaderClick = (): void => {
   state.isMenuOpen = true;
+};
+
+const unmountHeaderMenuChapter = (name: string): void => {
+  state.chapter = name;
 };
 
 const unmountMenuChapter = (config: { name: string } | null): void => {

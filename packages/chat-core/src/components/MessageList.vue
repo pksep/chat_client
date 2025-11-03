@@ -1,54 +1,48 @@
 <template>
-  <section class="chat">
-    <div
-      class="chat__message-wrapper"
-      ref="chatWrapperRef"
-      v-if="props.chapter === 'ai' && aiMessages.length"
-    >
-      <div class="chat__message-bubble">
-        <MessageBubble
-          v-for="(message, index) in aiMessages"
-          :key="index"
-          :class="messageChat(message.role)"
-          :message="message.content"
-          :author="message.role"
-          :time="message.timestamp"
-          :loader="message.loading"
-        />
-      </div>
+  <div
+    class="chat__message-wrapper"
+    ref="chatWrapperRef"
+    v-if="props.chapter === 'ai' && aiMessages.length"
+  >
+    <div class="chat__message-bubble">
+      <MessageBubble
+        v-for="(message, index) in aiMessages"
+        :key="index"
+        :class="messageChat(message.role)"
+        :message="message.content"
+        :author="message.role"
+        :time="message.timestamp"
+        :loader="message.loading"
+      />
     </div>
-    <div
-      class="chat__message-wrapper"
-      v-else-if="state.messages.length"
-      ref="chatWrapperRef"
-    >
-      <div class="chat__message-bubble">
-        <MessageBubble
-          v-for="(message, index) in state.messages"
-          :key="index"
-          :class="messageChat(message.role)"
-          :message="message.content"
-          :author="message.role"
-          :time="time"
-          :loader="message.loading"
-        />
-      </div>
+  </div>
+  <div
+    class="chat__message-wrapper"
+    v-else-if="state.messages.length"
+    ref="chatWrapperRef"
+  >
+    <div class="chat__message-bubble">
+      <MessageBubble
+        v-for="(message, index) in state.messages"
+        :key="index"
+        :class="messageChat(message.role)"
+        :message="message.content"
+        :author="message.role"
+        :time="time"
+        :loader="message.loading"
+      />
     </div>
-    <div v-else class="chat__nothing">
-      <p v-if="!props.chapter" class="chat__nothing-paragraph">
-        Выберите, кому хотели бы написать
-      </p>
-      <p v-else class="chat__nothing-paragraph">Здесь пока ничего нет...</p>
-    </div>
-    <div class="chat__input" v-if="props.chapter">
-      <ContentEditor v-model="inputText" @unmount-send="handleSend" />
-    </div>
-  </section>
+  </div>
+  <EmptyChat v-else :chapter="props.chapter" />
+  <div class="chat__input" v-if="props.chapter">
+    <ContentEditor v-model="inputText" @unmount-send="handleSend" />
+  </div>
 </template>
 
 <script lang="ts" setup>
 import { ref, reactive, watch, onMounted, useTemplateRef, nextTick } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
+import EmptyChat from './EmptyChat.vue';
 import { ContentEditor } from 'sep-yui';
 import { removeMessageLoading, useMastra } from '../services/useMastra';
 import type { IMessageListProps } from './interfaces/message-list';

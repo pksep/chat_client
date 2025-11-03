@@ -71,7 +71,8 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, reactive, watch } from 'vue';
+import { computed, reactive, watch } from 'vue';
+import { useResizeState } from '../composables/useResizeState';
 import {
   Tabs,
   ModalCroppedAvatar,
@@ -98,13 +99,18 @@ const menuInfoClasses = computed(() => [
 ]);
 
 const state = reactive({
-  isOpen: false,
   isEditAvatar: false
 });
 
+const { state: isOpen, setState } = useResizeState({
+  breakpoint: 896,
+  onStateChange: (val: boolean) => emits('unmount-collapse', val)
+});
+
+const close = () => setState(false);
+
 const handleCloseMenu = (): void => {
-  state.isOpen = false;
-  emits('unmount-collapse', state.isOpen);
+  close();
 };
 
 const unmountUserAdd = (): void => {
@@ -121,28 +127,9 @@ const closeEditProfileIcon = (): void => {
 
 watch(
   () => props.open,
-  () => {
-    state.isOpen = props.open;
-  }
+  newVal => {
+    isOpen.value = newVal;
+  },
+  { immediate: true }
 );
-
-const resizeHandler = () => {
-  const width = window.innerWidth;
-  if (width < 896) {
-    state.isOpen = true;
-    emits('unmount-collapse', state.isOpen);
-  }
-  if (width > 896) {
-    state.isOpen = false;
-    emits('unmount-collapse', state.isOpen);
-  }
-};
-
-onMounted(() => {
-  window.addEventListener('resize', resizeHandler);
-});
-
-onUnmounted(() => {
-  window.removeEventListener('resize', resizeHandler);
-});
 </script>
