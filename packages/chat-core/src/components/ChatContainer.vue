@@ -5,6 +5,7 @@
       class="chat__header"
       :chapter="state.chapter"
       @unmount-click="handleHeaderClick"
+      @unmount-exit="handleExit"
       @unmount-information="handleHeaderClick"
       @unmount-clear="handleClearClick"
     />
@@ -25,6 +26,7 @@
       :chapter="state.chapter"
       class="chat__messages"
       ref="chatRef"
+      @unmount-chapter="unmountHeaderMenuChapter"
     />
     <MenuInfo
       class="chat__info"
@@ -103,5 +105,9 @@ const handleClearClick = (): void => {
   if (state.chapter === 'ai' && chatRef.value) {
     chatRef.value.handleClear();
   }
+};
+
+const handleExit = (): void => {
+  state.chapter = null;
 };
 </script>

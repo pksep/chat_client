@@ -106,44 +106,6 @@ div.message-content__html > p {
   }
 }
 
-.chat__nothing {
-  display: grid;
-  place-items: center;
-  margin-top: auto;
-}
-
-p.chat__nothing-paragraph {
-  font-size: 14px;
-  color: var(--text-grey);
-}
-
-.chat:has(.chat__input) {
-  --basic-height: calc(var(--default-height) - 65px);
-  display: grid;
-  overflow-y: hidden;
-  padding-right: 4px;
-  height: var(--basic-height);
-}
-
-.chat {
-  display: grid;
-  height: calc(var(--default-height) / 2);
-}
-
-.chat__message-wrapper {
-  padding: 15px;
-  padding-right: 5px;
-  max-height: calc(var(--basic-height) - 135px);
-  overflow-x: hidden;
-  overflow-y: scroll;
-}
-
-.chat__message-bubble {
-  display: grid;
-  align-content: start;
-  gap: 25px;
-}
-
 .message__bubble {
   text-wrap: balance;
   max-width: calc(
@@ -180,4 +142,15 @@ p.chat__nothing-paragraph {
 
 .primary-yui-kit.toolbar-button {
   color: var(--white) !important;
+}
+
+@media screen and (width <= 1024px) {
+  .chat:has(.chat__input) {
+    padding-right: 0;
+  }
+  .chat__input {
+    padding: 0;
+    --size-left-menu: 0;
+    --size-right-menu: 0;
+  }
 }

@@ -1,8 +1,8 @@
 <template>
-  <div class="menu__user-assistant" @click="handleAiChapter">
+  <button class="menu__user-assistant" @click="handleAiChapter">
     <AiIconWrapper />
     <h3 class="menu__user-assistant-title">AI Ассистент</h3>
-  </div>
+  </button>
   <Line class="menu__user-line" />
 </template>
 
@@ -17,6 +17,6 @@ interface AIListMobileEmits {
 const emit = defineEmits<AIListMobileEmits>();
 
 const handleAiChapter = () => {
-  emit('unmount-chapter', 'ai-assistant');
+  emit('unmount-chapter', 'ai');
 };
 </script>

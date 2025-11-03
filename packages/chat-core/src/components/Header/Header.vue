@@ -1,5 +1,13 @@
 <template>
   <header class="chat__header" @click="handleClickHeader">
+    <Button
+      v-if="isMobile"
+      :type="ButtonTypeEnum.ghost"
+      :size="SizesEnum.small"
+      @click.stop="handleExit"
+    >
+      <Icon class="medium-icon" :name="IconNameEnum.arrowLeft" />
+    </Button>
     <div
       class="chat__header-profile chat__header-ai-assistant"
       v-if="props.chapter === 'ai'"
@@ -12,10 +20,10 @@
       avatar-url="/"
       avatar-alt="user-profile-alt"
       name="John Doe"
-      nickname="@johndoe"
+      nickname="johndoe"
       v-else
     />
-    <div class="chat__header-buttons">
+    <div class="chat__header-buttons" v-if="!isMobile">
       <Search
         v-if="state.isSearchInputEnable"
         class="chat__header-search"
@@ -36,6 +44,7 @@
 
 <script lang="ts" setup>
 import { computed, reactive } from 'vue';
+import { useResizeState } from '../../composables/useResizeState';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import {
   Button,
@@ -59,6 +68,8 @@ const state = reactive({
     enabled: false
   }
 });
+
+const { state: isMobile } = useResizeState(1024);
 
 const emits = defineEmits<IHeaderEmits>();
 
@@ -109,6 +120,8 @@ const getPopoverOptions = computed(() => {
   }
   return popoverArray;
 });
-</script>
 
-<style scoped></style>
+const handleExit = (): void => {
+  emits('unmount-exit');
+};
+</script>

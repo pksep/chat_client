@@ -2,6 +2,7 @@
 @import url('@fontsource-variable/inter');
 @import url('./globals.css');
 @import url('./menu-info-users.css');
+@import url('./chat.css');
 @import url('./add-user.css');
 @import url('./contact-list.css');
 @import url('./contex-menu.css');

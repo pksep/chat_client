@@ -60,13 +60,6 @@
   justify-self: end;
 }
 
-.menu__user-assistant {
-  &:hover,
-  &.menu__user-assistant--active {
-    background-color: var(--blue15);
-  }
-}
-
 button.menu__user-profile-collapse {
   grid-area: collapse;
   display: grid;
