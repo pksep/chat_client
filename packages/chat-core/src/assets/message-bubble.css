@@ -135,8 +135,8 @@ div.message-content__html > p {
   );
 
   .editor-content {
-    max-height: calc(var(--basic-height) / 2) !important;
-    overflow: scroll !important;
+    max-height: calc(var(--basic-height) / 2);
+    overflow: scroll;
   }
 }
 
@@ -152,5 +152,13 @@ div.message-content__html > p {
     padding: 0;
     --size-left-menu: 0;
     --size-right-menu: 0;
+    & .editor-component {
+      border-radius: 0;
+    }
+    & .editor-content {
+      & .tiptap {
+        padding: 10px;
+      }
+    }
   }
 }

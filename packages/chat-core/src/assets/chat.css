@@ -45,3 +45,13 @@ p.chat__nothing-paragraph {
     background-color: var(--blue15);
   }
 }
+
+@media screen and (width<= 28rem) {
+  .chat:has(.chat__input) {
+    --basic-height: calc(var(--default-height) - 57px);
+  }
+
+  .chat__input {
+    max-width: 100%;
+  }
+}
