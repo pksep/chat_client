@@ -58,7 +58,7 @@ svg.ai-icon {
   font-size: 20px;
 }
 
-@media screen and (width <= 896px) {
+@media screen and (width <= 28rem) {
   .chat__info {
     display: none;
   }
@@ -66,7 +66,7 @@ svg.ai-icon {
   .chat-container,
   .chat-container.menu-collapse {
     --size-right-menu: 0px;
-    --size-left-menu: 75px;
+    --size-left-menu: 0;
     grid-template-areas:
       'header header'
       'chat chat';

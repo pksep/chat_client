@@ -73,6 +73,7 @@
 <script lang="ts" setup>
 import { computed, onMounted, reactive } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
+import { MAX_W_XL } from '../utils/constants';
 import Line from './Line.vue';
 import AiIconWrapper from './AiIconWrapper.vue';
 import {
@@ -96,8 +97,9 @@ const state = reactive({
 
 const emits = defineEmits<IMenuEmits>();
 
-const { state: isCollapse, toggle } = useResizeState(1280, {
-  onChange: val => {
+const { state: isCollapse, toggle } = useResizeState({
+  breakpoint: MAX_W_XL,
+  onStateChange: val => {
     emits('unmount-collapse', val);
   }
 });

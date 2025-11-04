@@ -49,6 +49,7 @@ import type { IMessageListProps } from './interfaces/message-list';
 import { useTime } from '../composables/useTime';
 import { onUnmounted } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
+import { MAX_W_MD } from '../utils/constants';
 
 const state = reactive({
   messages: [],
@@ -63,7 +64,7 @@ const chatWrapperRef = useTemplateRef('chatWrapperRef');
 
 const inputText = ref('');
 
-const { state: isMobile } = useResizeState(1024);
+const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const {
   messages: aiMessages,

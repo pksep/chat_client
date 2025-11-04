@@ -144,7 +144,7 @@ div.message-content__html > p {
   color: var(--white) !important;
 }
 
-@media screen and (width <= 1024px) {
+@media screen and (width <= 28rem) {
   .chat:has(.chat__input) {
     padding-right: 0;
   }

@@ -1,16 +1,17 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 
 interface UseResizeStateOptions {
-  breakpoint: number;
+  breakpoint: string | number;
   onStateChange?: (isActive: boolean) => void;
   initialState?: boolean;
 }
 
 export function useResizeState(
-  breakpointOrOptions: number | UseResizeStateOptions,
+  breakpointOrOptions: string | number | UseResizeStateOptions,
   options?: UseResizeStateOptions
 ) {
   const config =
+    typeof breakpointOrOptions === 'string' ||
     typeof breakpointOrOptions === 'number'
       ? { breakpoint: breakpointOrOptions, ...options }
       : breakpointOrOptions;
@@ -19,8 +20,10 @@ export function useResizeState(
 
   let resizeHandler: (() => void) | undefined;
 
+  let breakpointPx: number;
+
   const updateState = (width: number): void => {
-    const newActive = width < config.breakpoint;
+    const newActive = width < breakpointPx;
     if (isActive.value !== newActive) {
       isActive.value = newActive;
       config.onStateChange?.(newActive);
@@ -40,6 +43,13 @@ export function useResizeState(
   };
 
   onMounted(() => {
+    const fontSize = parseFloat(
+      getComputedStyle(document.documentElement).fontSize
+    );
+    breakpointPx =
+      typeof config.breakpoint === 'string'
+        ? parseFloat(config.breakpoint) * fontSize
+        : config.breakpoint;
     resizeHandler = () => updateState(window.innerWidth);
     window.addEventListener('resize', resizeHandler);
     updateState(window.innerWidth);

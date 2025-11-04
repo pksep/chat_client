@@ -86,6 +86,7 @@ import {
 import ContactListInModal from './ContactList/ContactListInModal.vue';
 import NewChatInformationForm from './NewChat/NewChatInformationForm.vue';
 import type { IMenuProps, IMenuEmits } from './interfaces/interfaces';
+import { MAX_W_XL } from '../utils/constants';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   open: false
@@ -103,7 +104,7 @@ const state = reactive({
 });
 
 const { state: isOpen, setState } = useResizeState({
-  breakpoint: 896,
+  breakpoint: MAX_W_XL,
   onStateChange: (val: boolean) => emits('unmount-collapse', val)
 });
 

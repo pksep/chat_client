@@ -141,7 +141,7 @@ summary.menu__user-details-summary {
   min-height: 40px;
 }
 
-@media (width <= 1280px) {
+@media screen and (width <= 36rem) {
   .menu:not(.menu--collapse) {
     width: var(--default-width);
     z-index: 2;
