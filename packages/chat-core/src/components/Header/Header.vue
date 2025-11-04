@@ -58,6 +58,7 @@ import {
 
 import type { IHeaderProps, IHeaderEmits } from '../interfaces/interfaces';
 import AiIconWrapper from '../AiIconWrapper.vue';
+import { MAX_W_MD } from '../../utils/constants';
 
 const props = withDefaults(defineProps<IHeaderProps>(), {});
 
@@ -69,7 +70,7 @@ const state = reactive({
   }
 });
 
-const { state: isMobile } = useResizeState(1024);
+const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const emits = defineEmits<IHeaderEmits>();
 

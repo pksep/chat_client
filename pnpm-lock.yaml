@@ -20,6 +20,9 @@ importers:
       '@vue/eslint-config-airbnb':
         specifier: ^8.0.0
         version: 8.0.0(@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.6.3))(eslint-plugin-vue@9.33.0(eslint@8.57.1))(eslint@8.57.1)
+      sep-yui:
+        specifier: link:local-packages/sep-yui
+        version: link:local-packages/sep-yui
       vite-plugin-dts:
         specifier: ^4.5.4
         version: 4.5.4(@types/node@24.3.1)(rollup@4.52.5)(typescript@5.6.3)(vite@7.1.7(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.0))

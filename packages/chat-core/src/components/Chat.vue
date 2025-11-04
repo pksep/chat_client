@@ -19,7 +19,7 @@ import MessageList from './MessageList.vue';
 import AIListMobile from './ContactList/AIListMobile.vue';
 import type { IMessageListProps } from './interfaces/message-list';
 import { useTemplateRef, reactive, watch } from 'vue';
-import { MAX_W_MD } from '@/utils/constants';
+import { MAX_W_MD } from '../utils/constants';
 
 const props = withDefaults(defineProps<IMessageListProps>(), {
   chapter: null
