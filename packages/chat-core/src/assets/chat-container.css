@@ -64,9 +64,12 @@ svg.ai-icon {
   }
 
   .chat-container,
+  .chat-container.collapse,
   .chat-container.menu-collapse {
     --size-right-menu: 0px;
     --size-left-menu: 0;
+    /*align-content: start;*/
+    grid-template-rows: 40px auto;
     grid-template-areas:
       'header header'
       'chat chat';

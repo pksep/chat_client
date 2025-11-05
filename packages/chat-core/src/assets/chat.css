@@ -1,7 +1,7 @@
 .chat__nothing {
   display: grid;
+  height: calc(var(--basic-height) - 135px);
   place-items: center;
-  margin-top: auto;
 }
 
 p.chat__nothing-paragraph {
@@ -9,16 +9,12 @@ p.chat__nothing-paragraph {
   color: var(--text-grey);
 }
 
-.chat:has(.chat__input) {
+.chat {
   --basic-height: calc(var(--default-height) - 65px);
   display: grid;
   overflow-y: hidden;
   padding-right: 4px;
   height: var(--basic-height);
-}
-
-.chat {
-  display: grid;
 }
 
 .chat.chat__message:not(.menu__user-assistant) {
@@ -46,9 +42,20 @@ p.chat__nothing-paragraph {
   }
 }
 
-@media screen and (width<= 28rem) {
+@media screen and (width <= 28rem) {
   .chat:has(.chat__input) {
-    --basic-height: calc(var(--default-height) - 57px);
+    --basic-height: calc(var(--default-height) - 40px);
+  }
+
+  .chat__nothing {
+    height: auto;
+    margin-top: auto;
+  }
+  .chat {
+    --basic-height: auto;
+    --size-left-menu: 0;
+    --size-right-menu: 0;
+    padding-right: 0;
   }
 
   .chat__input {

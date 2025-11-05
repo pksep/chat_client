@@ -6,6 +6,7 @@
       @unmount-chapter="handleUnmountChapter"
     />
     <MessageList
+      v-if="state.chapter || !isMobile"
       ref="messageListRef"
       :chapter="state.chapter"
       :baseUrl="props.baseUrl"

@@ -136,7 +136,7 @@ div.message-content__html > p {
 
   .editor-content {
     max-height: calc(var(--basic-height) / 2);
-    overflow: scroll;
+    overflow: auto;
   }
 }
 
@@ -145,19 +145,24 @@ div.message-content__html > p {
 }
 
 @media screen and (width <= 28rem) {
+  .message__bubble {
+    max-width: calc(var(--default-width) - 16px);
+    hyphens: auto;
+    overflow-wrap: anywhere;
+  }
   .chat:has(.chat__input) {
     padding-right: 0;
   }
   .chat__input {
     padding: 0;
-    --size-left-menu: 0;
-    --size-right-menu: 0;
     & .editor-component {
+      min-height: 17px;
+      padding: 8px;
       border-radius: 0;
     }
     & .editor-content {
       & .tiptap {
-        padding: 10px;
+        padding: 5px;
       }
     }
   }

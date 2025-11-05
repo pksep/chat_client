@@ -53,3 +53,12 @@
   border-top-color: var(--grey13);
   width: 100%;
 }
+
+@media screen and (width <= 28rem) {
+  .line {
+    margin-top: 0;
+  }
+  .menu__user-assistant-icon {
+    padding: 20px;
+  }
+}

@@ -33,7 +33,7 @@
       />
     </div>
   </div>
-  <EmptyChat v-else-if="!isMobile" :chapter="props.chapter" />
+  <EmptyChat :chapter="props.chapter" />
   <div class="chat__input" v-if="props.chapter">
     <ContentEditor v-model="inputText" @unmount-send="handleSend" />
   </div>
@@ -48,8 +48,6 @@ import { removeMessageLoading, useMastra } from '../services/useMastra';
 import type { IMessageListProps } from './interfaces/message-list';
 import { useTime } from '../composables/useTime';
 import { onUnmounted } from 'vue';
-import { useResizeState } from '../composables/useResizeState';
-import { MAX_W_MD } from '../utils/constants';
 
 const state = reactive({
   messages: [],
@@ -63,8 +61,6 @@ const props = withDefaults(defineProps<IMessageListProps>(), {
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
 
 const inputText = ref('');
-
-const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const {
   messages: aiMessages,
