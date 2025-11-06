@@ -108,8 +108,10 @@ div.message-content__html > p {
 
 .message__bubble {
   text-wrap: balance;
+  hyphens: auto;
+  overflow-wrap: anywhere;
   max-width: calc(
-    var(--default-width) - var(--size-left-menu) - var(--size-right-menu) - 70px
+    var(--default-width) - var(--size-left-menu) - var(--size-right-menu) - 60px
   );
   justify-self: start;
   &:last-child {
@@ -131,7 +133,7 @@ div.message-content__html > p {
   align-self: end;
   padding: 15px;
   max-width: calc(
-    var(--default-width) - var(--size-left-menu) - var(--size-right-menu)
+    var(--default-width) - var(--size-left-menu) - var(--size-right-menu) - 4px
   );
 
   .editor-content {
@@ -146,9 +148,7 @@ div.message-content__html > p {
 
 @media screen and (width <= 28rem) {
   .message__bubble {
-    max-width: calc(var(--default-width) - 16px);
-    hyphens: auto;
-    overflow-wrap: anywhere;
+    max-width: calc(var(--default-width) - 32px);
   }
   .chat__message-wrapper {
     padding-right: 15px;
