@@ -150,8 +150,8 @@ div.message-content__html > p {
     hyphens: auto;
     overflow-wrap: anywhere;
   }
-  .chat:has(.chat__input) {
-    padding-right: 0;
+  .chat__message-wrapper {
+    padding-right: 15px;
   }
   .chat__input {
     padding: 0;

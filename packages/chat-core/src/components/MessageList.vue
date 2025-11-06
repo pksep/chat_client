@@ -33,7 +33,10 @@
       />
     </div>
   </div>
-  <EmptyChat :chapter="props.chapter" />
+  <EmptyChat
+    :chapter="props.chapter"
+    v-if="!state.messages.length && !aiMessages.length"
+  />
   <div class="chat__input" v-if="props.chapter">
     <ContentEditor v-model="inputText" @unmount-send="handleSend" />
   </div>

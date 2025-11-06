@@ -16,7 +16,11 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { computed, ref } from 'vue';
+import { useResizeState } from '../../composables/useResizeState';
+import { MAX_W_MD } from '../../utils/constants';
+
+const { state: isMobile } = useResizeState(MAX_W_MD);
 
 interface HeaderMenuEmits {
   (e: 'unmount-chapter', chapter: string): void;
@@ -24,31 +28,15 @@ interface HeaderMenuEmits {
 
 const emit = defineEmits<HeaderMenuEmits>();
 
-const activeChapter = ref('ai-assistant');
+const activeChapter = ref('ai');
 
 const buttonClass = (key: string) => ({
   'header-menu__button': true,
   'header-menu__button--active': activeChapter.value === key
 });
 
-const windowWidth = ref(window.innerWidth);
-
-const isMobile = computed(() => windowWidth.value <= 896);
-
-const updateWidth = () => {
-  windowWidth.value = window.innerWidth;
-};
-
-onMounted(() => {
-  window.addEventListener('resize', updateWidth);
-});
-
-onUnmounted(() => {
-  window.removeEventListener('resize', updateWidth);
-});
-
 const menuItems = computed(() => [
-  { key: 'ai-assistant', label: 'AI Ассистент' }
+  { key: 'ai', label: 'AI Ассистент' }
   /*
   { key: 'channels', label: 'Каналы' },
   { key: 'dialogs', label: 'Диалоги' }
@@ -57,6 +45,9 @@ const menuItems = computed(() => [
 
 const handleUnmountChapter = (chapter: string) => {
   activeChapter.value = chapter;
-  emit('unmount-chapter', chapter);
+  if (!chapter) {
+    activeChapter.value = 'ai';
+  }
+  emit('unmount-chapter', activeChapter.value);
 };
 </script>
