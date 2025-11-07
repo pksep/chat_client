@@ -2,7 +2,6 @@
 
 * **Status:** Proposed
 * **Date:** 2025-11-07
-* **Members:** 
 * **Tags:** #auth #jwt #jwk #erp #openid-connect
 
 ## Контекст
@@ -15,123 +14,92 @@ JWK (JSON Web Key) используется для верификации пуб
 
 Текущий стек: OpenIM как IM-сервер для обработки чат-сессий, Mastra для ai-логики. Проект не имеет встроенной интеграции с внешними провайдерами аутентификации.
 
-```mermaid
-graph TB
-    subgraph "Client Applications"
-        A[Desktop App]
-        B[Mobile App]
-        C[Web App]
-    end
-
-    subgraph "ERP System"
-        E[ERP Auth Server]
-        F[JWKS Endpoint<br/>/.well-known/jwks.json]
-        G[JWT Token Generator]
-    end
-
-    subgraph "Chat Service"
-        H[Chat Backend]
-        I[JWK Verifier]
-        J[OpenIM Integration]
-        K[Mastra AI Logic]
-    end
-
-    subgraph "Authorization Flows"
-        M[OAuth2 Flow<br/>Redirect to ERP]
-        N[QR Code Flow<br/>Mobile Scan]
-    end
-
-    %% Desktop Flow
-    A --> M
-    M --> E
-    E --> G
-    G --> A
-    A --> H
-
-    %% Mobile Flow
-    B --> N
-    N --> E
-    E --> QR[QR Code with Token]
-    QR --> B
-    B --> H
-
-    %% Web Flow
-    C --> E
-    E --> C
-    C --> H
-
-    %% JWK Integration
-    F --> I
-    I --> H
-    H --> J
-    H --> K
-
-    %% Styling
-    classDef authClass fill:#e1f5fe,stroke:#01579b,stroke-width:2px
-    classDef chatClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
-    classDef erpClass fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
-
-    class E,F,G,QR authClass
-    class H,I,J,K,M,N chatClass
-    class A,B,C erpClass
-```
-
 ## Варианты решения
 
-### Вариант 1: Интеграция с JWT и JWK через OAuth2/OpenID Connect
+### Вариант 1: Модификация OpenIM для прямой проверки JWT от ERP
 
-Реализовать авторизацию на основе OpenID Connect / OAuth2 с использованием JWT от ERP:
-1. **JWK-интеграция**: Чат-сервис будет запрашивать JWKS с эндпоинта ERP (например, `/.well-known/jwks.json`) и кэшировать его для верификации JWT. Библиотека: `jose` (для Node/Go) или аналогичная.
+Реализовать авторизацию путём модификации аутентификационного слоя OpenIM для прямой верификации JWT от ERP:
+1. **JWK-интеграция в OpenIM**: OpenIM будет запрашивать JWKS с эндпоинта ERP (например, `/.well-known/jwks.json`) и кэшировать его для верификации JWT. Библиотека: `jose` (для Go) или аналогичная.
 2. **Десктопный flow**:
-   - Redirect на ERP с `client_id`, `redirect_uri`, `response_type=code`.
+   - Клиент делает redirect на ERP с `client_id`, `redirect_uri`, `response_type=code`.
    - Обмен code на JWT через `/token` эндпоинт ERP.
-   - Верификация JWT в чат-backend с JWK; хранение сессии в cookies/localStorage.
+   - Клиент отправляет JWT напрямую в OpenIM для аутентификации.
 3. **Мобильный flow**:
    - ERP генерирует QR с short-lived токеном (или deep link: `chat://auth?token=...`).
-   - Мобильное app сканирует QR, отправляет токен на чат-backend.
-   - Backend обменивает на полный JWT, верифицирует с JWK, выдаёт сессию.
-4. **Интеграция с OpenIM/Mastra**:
-   - Middleware в OpenIM для проверки JWT на входе в чат (WebSocket/API).
-   - Mastra-клиент: обработка redirect/QR в UI (библиотека qrcode для генерации/сканирования).
+   - Мобильное app сканирует QR, получает JWT и отправляет напрямую в OpenIM.
+4. **Интеграция с Mastra**:
+   - Использование существующих токенов OpenIM для аутентификации вызовов к Mastra.
 5. **Безопасность**: Все запросы по HTTPS; ротация ключей через `kid` в JWK; аудитория (`aud`) в JWT только для чата; TTL токенов < 1h.
 
 * **Плюсы:**
-  - Безопасная децентрализованная верификация без хранения секретов в чате.
+  - Безопасная децентрализованная верификация без хранения секретов в чат-сервисе.
   - Поддержка SSO: пользователи авторизуются один раз в ERP.
   - Легко расширяемо на другие клиенты (web/mobile/desktop).
-  - OpenIM интегрируется seamlessly через JWT-validation hooks.
+  - Отсутствие дополнительных сущностей: используем только OpenIM и Mastra.
   - Решение масштабируемо и соответствует стандартам (RFC 7519, RFC 7517).
 * **Минусы:**
   - Зависимость от доступности JWKS-эндпоинта ERP (нужен fallback с кэшем).
-  - Дополнительная сложность в мобильном app (QR-сканирование: ~100-200 строк кода).
+  - Необходимость модификации исходного кода OpenIM.
   - Потенциальные задержки при первом fetch JWKS (решается prefetch).
 
-### Вариант 2: Статический публичный ключ
+### Вариант 2: Использование middleware в существующих компонентах
 
-Использовать статический публичный ключ для верификации JWT от ERP без использования JWKS.
+Расширение существующих компонентов (OpenIM/Mastra) с использованием middleware для проверки JWT перед основной обработкой.
 
 * **Плюсы:**
-  - Проще в реализации.
-  - Не зависит от доступности JWKS-эндпоинта ERP.
+  - Минимальное вмешательство в существующую архитектуру.
+  - Возможность повторного использования кода между OpenIM и Mastra.
 * **Минусы:**
-  - Сложности с ротацией ключей.
-  - Менее гибкое решение.
-  - Требует ручного обновления ключа при его изменении в ERP.
+  - Требует модификации существующих компонентов.
+  - Сложнее в поддержке и отладке.
 
 ## Решение
 
-Выбранный вариант: **Интеграция с JWT и JWK через OAuth2/OpenID Connect**
+Выбранный вариант: **Модификация OpenIM для прямой проверки JWT от ERP**
 
 * **Причины выбора:**
   - Соответствует современным стандартам безопасности (RFC 7519, RFC 7517).
   - Обеспечивает децентрализованную верификацию без хранения секретов в чат-сервисе.
   - Поддерживает ротацию ключей через JWKS endpoint.
-  - Масштабируемое решение, подходящее для десктопных, мобильных и веб-приложений.
+  - Не требует добавления новых сущностей: используем только существующие компоненты (OpenIM и Mastra).
+  - Относительно простое расширение аутентификационного слоя OpenIM.
 * **Последствия:**
-  - Требуется реализация middleware для проверки JWT в OpenIM.
-  - Необходимо интегрировать библиотеку `jose` или аналогичную для работы с JWT/JWK.
-  - Потребуется реализация OAuth2 и QR-код flows для различных платформ.
-  - Потребуется обработка и кэширование JWKS для производительности.
+  - Требуется модификация исходного кода OpenIM для добавления JWT-валидации.
+  - Необходимо интегрировать библиотеку `jose` или аналогичную для работы с JWT/JWK в OpenIM.
+  - Потребуется реализация OAuth2 и QR-код flows в клиентских приложениях.
+  - Потребуется обработка и кэширование JWKS для производительности в OpenIM.
+
+```mermaid
+sequenceDiagram
+    participant MB as Mobile App
+    participant WB as Web Browser
+    participant ERP as ERP Server
+    participant OI as OpenIM
+    participant MA as Mastra AI
+
+    Note over MB, MA: Mobile QR Code Flow
+    MB->>ERP: Scan QR code / Receive token
+    ERP->>MB: JWT Token
+    MB->>OI: Send JWT token for authentication
+    OI->>JWKS: Fetch public keys
+    JWKS->>OI: JWKS
+    OI->>OI: Verify JWT with JWK
+    OI->>OI: Authenticate user session
+    OI->>MA: Process AI logic with existing session
+    OI->>MB: Chat session established
+
+    Note over WB, MA: Web OAuth2 Flow
+    WB->>ERP: Redirect to ERP (client_id, redirect_uri)
+    ERP->>WB: Authorization code
+    WB->>ERP: Exchange code for JWT
+    WB->>OI: Send JWT token for authentication
+    OI->>JWKS: Fetch public keys (cached)
+    JWKS->>OI: JWKS
+    OI->>OI: Verify JWT with JWK
+    OI->>OI: Authenticate user session
+    OI->>MA: Process AI logic with existing session
+    OI->>WB: Chat session established
+```
 
 ## Дополнительные материалы
 
