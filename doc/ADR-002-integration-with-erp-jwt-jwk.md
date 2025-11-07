@@ -12,6 +12,67 @@ JWK (JSON Web Key) используется для верификации пуб
 
 Текущий стек: OpenIM как IM-сервер для обработки чат-сессий, Mastra для ai-логики. Проект не имеет встроенной интеграции с внешними провайдерами аутентификации.
 
+```mermaid
+graph TB
+    subgraph "Client Applications"
+        A[Desktop App]
+        B[Mobile App]
+        C[Web App]
+    end
+
+    subgraph "ERP System"
+        E[ERP Auth Server]
+        F[JWKS Endpoint<br/>/.well-known/jwks.json]
+        G[JWT Token Generator]
+    end
+
+    subgraph "Chat Service"
+        H[Chat Backend]
+        I[JWK Verifier]
+        J[OpenIM Integration]
+        K[Mastra AI Logic]
+    end
+
+    subgraph "Authorization Flows"
+        M[OAuth2 Flow<br/>Redirect to ERP]
+        N[QR Code Flow<br/>Mobile Scan]
+    end
+
+    %% Desktop Flow
+    A --> M
+    M --> E
+    E --> G
+    G --> A
+    A --> H
+
+    %% Mobile Flow
+    B --> N
+    N --> E
+    E --> QR[QR Code with Token]
+    QR --> B
+    B --> H
+
+    %% Web Flow
+    C --> E
+    E --> C
+    C --> H
+
+    %% JWK Integration
+    F --> I
+    I --> H
+    H --> J
+    H --> K
+
+    %% Styling
+    classDef authClass fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef chatClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef erpClass fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+
+    class E,F,G,QR authClass
+    class H,I,J,K,M,N chatClass
+    class A,B,C erpClass
+```
+
 ## Decision
 Реализовать авторизацию на основе OpenID Connect / OAuth2 с использованием JWT от ERP:
 1. **JWK-интеграция**: Чат-сервис будет запрашивать JWKS с эндпоинта ERP (например, `/.well-known/jwks.json`) и кэшировать его для верификации JWT. Библиотека: `jose` (для Node/Go) или аналогичная.
