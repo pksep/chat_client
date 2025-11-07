@@ -2,7 +2,6 @@
 
 * **Status:** Proposed
 * **Date:** 2025-11-07
-* **Members:** 
 * **Tags:** #auth #jwt #jwk #erp #openid-connect
 
 ## Контекст
@@ -16,64 +15,36 @@ JWK (JSON Web Key) используется для верификации пуб
 Текущий стек: OpenIM как IM-сервер для обработки чат-сессий, Mastra для ai-логики. Проект не имеет встроенной интеграции с внешними провайдерами аутентификации.
 
 ```mermaid
-graph TB
-    subgraph "Client Applications"
-        A[Desktop App]
-        B[Mobile App]
-        C[Web App]
-    end
+sequenceDiagram
+    participant MB as Mobile App
+    participant WB as Web Browser
+    participant ERP as ERP Auth Server
+    participant JWKS as JWKS Endpoint
+    participant CS as Chat Backend
+    participant OI as OpenIM
+    participant MA as Mastra AI
 
-    subgraph "ERP System"
-        E[ERP Auth Server]
-        F[JWKS Endpoint<br/>/.well-known/jwks.json]
-        G[JWT Token Generator]
-    end
+    Note over MB, MA: Mobile QR Code Flow
+    MB->>ERP: Scan QR code / Receive token
+    ERP->>MB: JWT Token
+    MB->>CS: Send JWT token
+    CS->>JWKS: Fetch public keys
+    JWKS->>CS: JWKS
+    CS->>CS: Verify JWT with JWK
+    CS->>OI: Authenticate user session
+    CS->>MA: Process AI logic
+    OI->>MB: Chat session established
 
-    subgraph "Chat Service"
-        H[Chat Backend]
-        I[JWK Verifier]
-        J[OpenIM Integration]
-        K[Mastra AI Logic]
-    end
-
-    subgraph "Authorization Flows"
-        M[OAuth2 Flow<br/>Redirect to ERP]
-        N[QR Code Flow<br/>Mobile Scan]
-    end
-
-    %% Desktop Flow
-    A --> M
-    M --> E
-    E --> G
-    G --> A
-    A --> H
-
-    %% Mobile Flow
-    B --> N
-    N --> E
-    E --> QR[QR Code with Token]
-    QR --> B
-    B --> H
-
-    %% Web Flow
-    C --> E
-    E --> C
-    C --> H
-
-    %% JWK Integration
-    F --> I
-    I --> H
-    H --> J
-    H --> K
-
-    %% Styling
-    classDef authClass fill:#e1f5fe,stroke:#01579b,stroke-width:2px
-    classDef chatClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
-    classDef erpClass fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
-
-    class E,F,G,QR authClass
-    class H,I,J,K,M,N chatClass
-    class A,B,C erpClass
+    Note over WB, MA: Web OAuth2 Flow
+    WB->>ERP: Redirect to ERP (client_id, redirect_uri)
+    ERP->>WB: Authorization code
+    WB->>CS: Exchange code for JWT
+    CS->>JWKS: Fetch public keys (cached)
+    JWKS->>CS: JWKS
+    CS->>CS: Verify JWT with JWK
+    CS->>OI: Authenticate user session
+    CS->>MA: Process AI logic
+    OI->>WB: Chat session established
 ```
 
 ## Варианты решения
