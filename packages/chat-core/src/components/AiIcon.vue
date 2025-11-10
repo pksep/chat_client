@@ -1,5 +1,6 @@
 <template>
   <svg
+    class="ai-icon"
     xmlns="http://www.w3.org/2000/svg"
     fill="currentColor"
     viewBox="0 0 20 19"
@@ -45,10 +46,4 @@
 
 <script lang="ts" setup></script>
 
-<style scoped>
-svg {
-  width: 1em;
-  height: 1em;
-  font-size: 20px;
-}
-</style>
+<style scoped></style>

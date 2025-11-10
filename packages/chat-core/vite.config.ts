@@ -28,7 +28,8 @@ export default defineConfig(({ mode }) => {
               external: ['vue', 'sep-yui'],
               output: {
                 globals: {
-                  vue: 'Vue'
+                  vue: 'Vue',
+                  'sep-yui': 'sep-yui'
                 }
               }
             }
@@ -36,7 +37,13 @@ export default defineConfig(({ mode }) => {
         : {})
     },
     plugins: [
-      vue(),
+      vue({
+        template: {
+          compilerOptions: {
+            isCustomElement: tag => tag.includes('-')
+          }
+        }
+      }),
       ...(baseMode === 'lib'
         ? [
             dts({

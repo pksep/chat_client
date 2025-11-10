@@ -50,9 +50,10 @@
 import { ref, reactive, watch, onMounted, useTemplateRef, nextTick } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import { ContentEditor } from 'sep-yui';
-import { useMastra } from '../services/useMastra';
+import { removeMessageLoading, useMastra } from '../services/useMastra';
 import type { IMessageListProps } from './interfaces/message-list';
 import { useTime } from '../composables/useTime';
+import { onUnmounted } from 'vue';
 
 const state = reactive({
   messages: [],
@@ -125,85 +126,11 @@ onMounted(() => {
   }
 });
 
+onUnmounted(() => {
+  removeMessageLoading(state.chatId, state.messages.length);
+});
+
 defineExpose({
   handleClear
 });
 </script>
-
-<style scoped>
-.chat__nothing {
-  display: grid;
-  place-items: center;
-  margin-top: auto;
-}
-
-p.chat__nothing-paragraph {
-  font-size: 14px;
-  color: var(--text-grey);
-}
-
-.chat:has(.chat__input) {
-  --basic-height: calc(var(--default-height) - 65px);
-  display: grid;
-  overflow-y: hidden;
-  padding-right: 4px;
-  height: var(--basic-height);
-}
-
-.chat {
-  display: grid;
-  height: calc(var(--default-height) / 2);
-}
-
-.chat__message-wrapper {
-  padding: 15px;
-  padding-right: 5px;
-  max-height: calc(var(--basic-height) - 135px);
-  overflow-x: hidden;
-  overflow-y: scroll;
-}
-
-.chat__message-bubble {
-  display: grid;
-  align-content: start;
-  gap: 25px;
-}
-
-.message__bubble {
-  text-wrap: balance;
-  max-width: calc(
-    var(--default-width) - var(--size-left-menu) - var(--size-right-menu) - 70px
-  );
-  justify-self: start;
-  &:last-child {
-    margin-bottom: 25px;
-  }
-}
-
-.message__other {
-  justify-self: end;
-  flex-direction: row-reverse;
-  --background-color: var(--blue1);
-  --message-text-color: var(--white);
-  --message-time-color: var(--white);
-  --blockquote-bg-color: #9abdff;
-  --blockquote-border-color: var(--white);
-}
-
-.chat__input {
-  align-self: end;
-  padding: 15px;
-  max-width: calc(
-    var(--default-width) - var(--size-left-menu) - var(--size-right-menu)
-  );
-
-  :deep(.editor-content) {
-    max-height: calc(var(--basic-height) / 2);
-    overflow: scroll;
-  }
-}
-
-:deep(.primary-yui-kit.toolbar-button) {
-  color: var(--white);
-}
-</style>
