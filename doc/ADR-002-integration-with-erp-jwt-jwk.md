@@ -14,6 +14,39 @@ JWK (JSON Web Key) используется для верификации пуб
 
 Текущий стек: OpenIM как IM-сервер для обработки чат-сессий, Mastra для ai-логики. Проект не имеет встроенной интеграции с внешними провайдерами аутентификации.
 
+```mermaid
+sequenceDiagram
+    participant MB as Mobile App
+    participant WB as Web Browser
+    participant ERP as ERP Auth Server
+    participant JWKS as JWKS Endpoint
+    participant CS as Chat Backend
+    participant OI as OpenIM
+    participant MA as Mastra AI
+
+    Note over MB, MA: Mobile QR Code Flow
+    MB->>ERP: Scan QR code / Receive token
+    ERP->>MB: JWT Token
+    MB->>CS: Send JWT token
+    CS->>JWKS: Fetch public keys
+    JWKS->>CS: JWKS
+    CS->>CS: Verify JWT with JWK
+    CS->>OI: Authenticate user session
+    CS->>MA: Process AI logic
+    OI->>MB: Chat session established
+
+    Note over WB, MA: Web OAuth2 Flow
+    WB->>ERP: Redirect to ERP (client_id, redirect_uri)
+    ERP->>WB: Authorization code
+    WB->>CS: Exchange code for JWT
+    CS->>JWKS: Fetch public keys (cached)
+    JWKS->>CS: JWKS
+    CS->>CS: Verify JWT with JWK
+    CS->>OI: Authenticate user session
+    CS->>MA: Process AI logic
+    OI->>WB: Chat session established
+```
+
 ## Варианты решения
 
 ### Вариант 1: Модификация OpenIM для прямой проверки JWT от ERP
@@ -68,38 +101,6 @@ JWK (JSON Web Key) используется для верификации пуб
   - Необходимо интегрировать библиотеку `jose` или аналогичную для работы с JWT/JWK в OpenIM.
   - Потребуется реализация OAuth2 и QR-код flows в клиентских приложениях.
   - Потребуется обработка и кэширование JWKS для производительности в OpenIM.
-
-```mermaid
-sequenceDiagram
-    participant MB as Mobile App
-    participant WB as Web Browser
-    participant ERP as ERP Server
-    participant OI as OpenIM
-    participant MA as Mastra AI
-
-    Note over MB, MA: Mobile QR Code Flow
-    MB->>ERP: Scan QR code / Receive token
-    ERP->>MB: JWT Token
-    MB->>OI: Send JWT token for authentication
-    OI->>JWKS: Fetch public keys
-    JWKS->>OI: JWKS
-    OI->>OI: Verify JWT with JWK
-    OI->>OI: Authenticate user session
-    OI->>MA: Process AI logic with existing session
-    OI->>MB: Chat session established
-
-    Note over WB, MA: Web OAuth2 Flow
-    WB->>ERP: Redirect to ERP (client_id, redirect_uri)
-    ERP->>WB: Authorization code
-    WB->>ERP: Exchange code for JWT
-    WB->>OI: Send JWT token for authentication
-    OI->>JWKS: Fetch public keys (cached)
-    JWKS->>OI: JWKS
-    OI->>OI: Verify JWT with JWK
-    OI->>OI: Authenticate user session
-    OI->>MA: Process AI logic with existing session
-    OI->>WB: Chat session established
-```
 
 ## Дополнительные материалы
 
