@@ -5,10 +5,10 @@
         <UserProfile
           v-bind="props.user"
           class="menu__user-profile"
-          v-show="!state.isCollapse"
+          v-show="!isCollapse"
         />
         <Avatar
-          v-if="state.isCollapse"
+          v-if="isCollapse"
           :initials="props.user?.nickname"
           :url="props.user?.avatarUrl"
           :alt="props.user?.avatarAlt"
@@ -28,13 +28,13 @@
       <Line class="menu__user-line" />
       <div :class="aiChapterClasses" @click="handleAiChapter">
         <AiIconWrapper />
-        <h3 class="menu__user-assistant-title" v-if="!state.isCollapse">
+        <h3 class="menu__user-assistant-title" v-if="!isCollapse">
           AI Ассистент
         </h3>
       </div>
       <template v-if="false">
-        <Line v-if="state.isCollapse" />
-        <details class="menu__user-details" v-if="!state.isCollapse" open>
+        <Line v-if="isCollapse" />
+        <details class="menu__user-details" v-if="!isCollapse" open>
           <summary class="menu__user-details-summary">
             <h4 @click="handleChannels">Каналы</h4>
             <Button
@@ -47,7 +47,7 @@
           </summary>
           <ContactList />
         </details>
-        <template v-if="state.isCollapse">
+        <template v-if="isCollapse">
           <ul class="menu__user">
             <li class="menu__user-avatar">
               <Avatar initials="Orange" />
@@ -65,13 +65,15 @@
       @click="pwaInstall"
     >
       <Icon :name="IconNameEnum.uploadCloud" />
-      <template v-if="!state.isCollapse"> Загрузить на устройство </template>
+      <template v-if="!isCollapse"> Загрузить на устройство </template>
     </Button>
   </aside>
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, reactive } from 'vue';
+import { computed, onMounted, reactive } from 'vue';
+import { useResizeState } from '../composables/useResizeState';
+import { MAX_W_XL } from '../utils/constants';
 import Line from './Line.vue';
 import AiIconWrapper from './AiIconWrapper.vue';
 import {
@@ -89,18 +91,21 @@ import type { IMenuEmits, IUserProps } from './interfaces/interfaces';
 const props = withDefaults(defineProps<{ user: IUserProps }>(), {});
 
 const state = reactive({
-  isCollapse: false,
   chapter: '',
   installPrompt: null
 });
 
 const emits = defineEmits<IMenuEmits>();
 
-let resizeHandler: (() => void) | undefined;
+const { state: isCollapse, toggle } = useResizeState({
+  breakpoint: MAX_W_XL,
+  onStateChange: val => {
+    emits('unmount-collapse', val);
+  }
+});
 
 const handleCollapse = (): void => {
-  state.isCollapse = !state.isCollapse;
-  emits('unmount-collapse', state.isCollapse);
+  toggle();
 };
 
 const handleNewContactModal = (): void => {
@@ -121,7 +126,7 @@ const handleAiChapter = (): void => {
 
 const menuClasses = computed(() => [
   'menu',
-  { 'menu--collapse': state.isCollapse }
+  { 'menu--collapse': isCollapse.value }
 ]);
 
 const aiChapterClasses = computed(() => [
@@ -143,28 +148,9 @@ const pwaInstall = async (): Promise<void> => {
 };
 
 onMounted(() => {
-  resizeHandler = () => {
-    const width = window.innerWidth;
-    if (width < 1280) {
-      state.isCollapse = true;
-      emits('unmount-collapse', state.isCollapse);
-    }
-    if (width > 1280) {
-      state.isCollapse = false;
-      emits('unmount-collapse', state.isCollapse);
-    }
-  };
-  window.addEventListener('resize', resizeHandler);
   window.addEventListener('beforeinstallprompt', event => {
     event.preventDefault();
     state.installPrompt = event;
   });
-  resizeHandler();
-});
-
-onUnmounted(() => {
-  if (resizeHandler) {
-    window.removeEventListener('resize', resizeHandler);
-  }
 });
 </script>

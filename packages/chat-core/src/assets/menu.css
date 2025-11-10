@@ -60,13 +60,6 @@
   justify-self: end;
 }
 
-.menu__user-assistant {
-  &:hover,
-  &.menu__user-assistant--active {
-    background-color: var(--blue15);
-  }
-}
-
 button.menu__user-profile-collapse {
   grid-area: collapse;
   display: grid;
@@ -148,7 +141,7 @@ summary.menu__user-details-summary {
   min-height: 40px;
 }
 
-@media (width <= 1280px) {
+@media screen and (width <= 36rem) {
   .menu:not(.menu--collapse) {
     width: var(--default-width);
     z-index: 2;
