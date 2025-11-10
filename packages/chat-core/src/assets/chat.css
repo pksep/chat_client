@@ -1,7 +1,13 @@
 .chat__nothing {
   display: grid;
-  height: calc(var(--basic-height) - 135px);
+  margin-top: 0;
   place-items: center;
+}
+
+.chat:has(.chat__input) {
+  & .chat__nothing {
+    margin-top: calc(var(--basic-height) / 4);
+  }
 }
 
 p.chat__nothing-paragraph {
