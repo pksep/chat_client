@@ -8,15 +8,4 @@
 import AiIcon from './AiIcon.vue';
 </script>
 
-<style scoped>
-.menu__user-assistant-icon {
-  display: grid;
-  background-color: var(--blue9);
-  color: var(--blue1);
-  border-radius: 50%;
-  padding: 7px;
-  & svg {
-    font-size: 16px;
-  }
-}
-</style>
+<style scoped></style>

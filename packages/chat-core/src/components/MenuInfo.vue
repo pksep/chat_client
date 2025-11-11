@@ -71,7 +71,8 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, reactive, watch } from 'vue';
+import { computed, reactive, watch } from 'vue';
+import { useResizeState } from '../composables/useResizeState';
 import {
   Tabs,
   ModalCroppedAvatar,
@@ -85,6 +86,7 @@ import {
 import ContactListInModal from './ContactList/ContactListInModal.vue';
 import NewChatInformationForm from './NewChat/NewChatInformationForm.vue';
 import type { IMenuProps, IMenuEmits } from './interfaces/interfaces';
+import { MAX_W_XL } from '../utils/constants';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   open: false
@@ -98,13 +100,18 @@ const menuInfoClasses = computed(() => [
 ]);
 
 const state = reactive({
-  isOpen: false,
   isEditAvatar: false
 });
 
+const { state: isOpen, setState } = useResizeState({
+  breakpoint: MAX_W_XL,
+  onStateChange: (val: boolean) => emits('unmount-collapse', val)
+});
+
+const close = () => setState(false);
+
 const handleCloseMenu = (): void => {
-  state.isOpen = false;
-  emits('unmount-collapse', state.isOpen);
+  close();
 };
 
 const unmountUserAdd = (): void => {
@@ -121,124 +128,9 @@ const closeEditProfileIcon = (): void => {
 
 watch(
   () => props.open,
-  () => {
-    state.isOpen = props.open;
-  }
+  newVal => {
+    isOpen.value = newVal;
+  },
+  { immediate: true }
 );
-
-const resizeHandler = () => {
-  const width = window.innerWidth;
-  if (width < 896) {
-    state.isOpen = true;
-    emits('unmount-collapse', state.isOpen);
-  }
-  if (width > 896) {
-    state.isOpen = false;
-    emits('unmount-collapse', state.isOpen);
-  }
-};
-
-onMounted(() => {
-  window.addEventListener('resize', resizeHandler);
-});
-
-onUnmounted(() => {
-  window.removeEventListener('resize', resizeHandler);
-});
 </script>
-
-<style scoped>
-@import url('../assets/menu-info-users.css');
-
-aside.menu-info {
-  background-color: var(--white);
-  border-left-color: var(--border-grey);
-  border-left-width: 0.5px;
-  border-left-style: solid;
-  &.menu-info--open .collapse {
-    width: 100%;
-  }
-}
-
-header.menu-info__header {
-  display: flex;
-  padding: 10px;
-  align-items: center;
-  justify-content: space-between;
-}
-
-section.menu-info__info-section {
-  padding: 10px;
-  padding-inline: 20px;
-  display: grid;
-  gap: 10px;
-}
-
-.menu-info__user-header {
-  display: flex;
-  margin: 0;
-  align-items: center;
-}
-
-.menu-info__user-count {
-  display: grid;
-  margin-left: 4px;
-  place-content: center;
-  border-radius: 50%;
-  background-color: var(--blue12);
-  color: var(--text-black);
-  font-size: 12px;
-  font-weight: semi-bold;
-  line-height: 100%;
-  width: 20px;
-  height: 20px;
-}
-
-:deep(button.tabs__navigation-button) {
-  display: flex;
-  align-items: center;
-}
-
-div.menu-info__buttons {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
-.menu-info__create-channel {
-  display: flex;
-  align-items: center;
-  font-size: 14px;
-  gap: 5px;
-  & p {
-    padding-block: 10px;
-    margin: 0;
-  }
-  & span {
-    font-weight: normal;
-    color: var(--text-black);
-  }
-}
-:deep(.tabs__navigation) {
-  justify-content: start !important;
-  gap: 70px;
-}
-
-.menu-info__avatar-button {
-  display: flex;
-  width: 100%;
-  justify-content: center;
-}
-
-svg.icon-yui-kit.menu-info__close-icon {
-  font-size: 17px;
-}
-
-button.menu-info__close-button {
-  padding: 6px;
-}
-
-:deep(button.tabs__navigation-button) {
-  margin-inline: 20px !important;
-}
-</style>

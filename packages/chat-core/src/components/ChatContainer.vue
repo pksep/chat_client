@@ -5,8 +5,14 @@
       class="chat__header"
       :chapter="state.chapter"
       @unmount-click="handleHeaderClick"
+      @unmount-exit="handleExit"
       @unmount-information="handleHeaderClick"
       @unmount-clear="handleClearClick"
+    />
+    <HeaderMenu
+      class="chat__header-menu"
+      v-else
+      @unmount-chapter="unmountHeaderMenuChapter"
     />
     <Menu
       :user="props.user"
@@ -17,10 +23,10 @@
     />
     <Chat
       :base-url="props.baseUrl"
-      :user="props.user"
       :chapter="state.chapter"
       class="chat__messages"
       ref="chatRef"
+      @unmount-chapter="unmountHeaderMenuChapter"
     />
     <MenuInfo
       class="chat__info"
@@ -39,9 +45,10 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
-import Header from './Header.vue';
+import Header from './Header/Header.vue';
+import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
-import Chat from './MessageList.vue';
+import Chat from './Chat.vue';
 import MenuInfo from './MenuInfo.vue';
 import NewContactModal from './NewChat/NewContact.vue';
 import type { IChatContainerProps } from './interfaces/interfaces';
@@ -50,8 +57,7 @@ const state = reactive({
   isCollapse: false,
   isMenuOpen: false,
   chapter: null,
-  isNewContactOpen: false,
-  isAddUserOpen: false
+  isNewContactOpen: false
 });
 
 const props = defineProps<IChatContainerProps>();
@@ -75,6 +81,10 @@ const handleHeaderClick = (): void => {
   state.isMenuOpen = true;
 };
 
+const unmountHeaderMenuChapter = (name: string): void => {
+  state.chapter = name;
+};
+
 const unmountMenuChapter = (config: { name: string } | null): void => {
   if (!config?.name) {
     state.chapter = null;
@@ -96,58 +106,8 @@ const handleClearClick = (): void => {
     chatRef.value.handleClear();
   }
 };
+
+const handleExit = (): void => {
+  state.chapter = null;
+};
 </script>
-
-<style scoped>
-.chat-container {
-  display: grid;
-  height: var(--default-height);
-  background-color: var(--blue15);
-  grid-template-areas: 'menu header info' 'menu chat info';
-  grid-template-columns: var(--size-left-menu) auto var(--size-right-menu);
-  grid-template-rows: 56px auto;
-}
-
-.chat-container.collapse {
-  --size-left-menu: 75px;
-}
-
-.chat-container.menu-collapse {
-  --size-right-menu: 0px;
-  grid-template-areas:
-    'menu header'
-    'menu chat';
-}
-
-.chat__header {
-  grid-area: header;
-  align-self: start;
-}
-
-.chat__menu {
-  grid-area: menu;
-}
-
-.chat__messages {
-  grid-area: chat;
-  align-self: start;
-}
-
-.chat__info {
-  grid-area: info;
-}
-
-@media screen and (width <=896px) {
-  .chat__info {
-    display: none;
-  }
-
-  .chat-container {
-    --size-right-menu: 0px;
-    --size-left-menu: 75px;
-    grid-template-areas:
-      'menu header'
-      'menu chat';
-  }
-}
-</style>

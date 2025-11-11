@@ -1,0 +1,149 @@
+.menu {
+  display: grid;
+  padding: 10px;
+  border-right-width: 0.5px;
+  border-right-style: solid;
+  border-right-color: var(--grey13);
+  background-color: var(--white);
+  overflow-y: auto;
+}
+
+.menu__start {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  align-content: start;
+}
+
+.menu.menu--collapse {
+  justify-items: center;
+  gap: 0;
+  padding: 10px;
+
+  & .menu__start {
+    padding: 0;
+  }
+  & .menu__user-line {
+    margin-top: 0;
+  }
+}
+
+.menu.menu--collapse .menu__profile {
+  --size-avatar: 50px;
+  justify-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+  grid-template-areas:
+    'collapse collapse'
+    'profile profile';
+}
+
+.menu__profile {
+  display: grid;
+  align-self: start;
+  width: 100%;
+  align-items: center;
+  grid-template-areas:
+    'profile collapse'
+    'profile collapse';
+}
+
+.menu__user-avatar {
+  padding: 10px;
+}
+
+.menu__user-profile {
+  grid-area: profile;
+}
+
+.menu:not(.menu--collapse) button.menu__user-profile-collapse {
+  justify-self: end;
+}
+
+button.menu__user-profile-collapse {
+  grid-area: collapse;
+  display: grid;
+  padding: 2px;
+  align-items: center;
+  color: var(--grey4);
+  background-color: var(--white);
+}
+
+.menu__user-profile-collapse-icon {
+  background-color: var(--white);
+}
+
+.menu__user-assistant {
+  padding: 10px;
+  display: flex;
+  align-self: start;
+  align-items: center;
+  gap: 10px;
+}
+
+.menu__user-assistant-title {
+  color: var(--text-black);
+  font-size: 14px;
+}
+
+details.menu__user-details {
+  &:not([open]) summary.menu__user-details-summary h4::after {
+    transform: rotate(135deg);
+  }
+}
+
+summary.menu__user-details-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  color: var(--text-grey);
+  &::marker {
+    display: none;
+  }
+  & svg {
+    font-size: 12px;
+  }
+  & h4 {
+    margin: 0;
+  }
+  & h4::after {
+    display: inline-block;
+    content: '▾';
+    font-size: 12px;
+    vertical-align: top;
+    text-align: center;
+    margin-left: 6px;
+    transition: transform 0.3s ease;
+  }
+
+  font-weight: bold;
+}
+
+.menu__button-install-prompt {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  align-self: end;
+}
+
+.menu__button-install-prompt.ghost-yui-kit {
+  color: var(--text-grey);
+  padding-block: 10px;
+  & svg.icon-yui-kit {
+    font-size: 16px;
+  }
+}
+
+.avatar-yui-kit:has(.avatar-yui-kit__text) {
+  min-width: 40px;
+  width: 40px;
+  min-height: 40px;
+}
+
+@media screen and (width <= 36rem) {
+  .menu:not(.menu--collapse) {
+    width: var(--default-width);
+    z-index: 2;
+  }
+}

@@ -25,21 +25,3 @@
 <script setup lang="ts">
 import { Button, ButtonTypeEnum, Input, SizesEnum, Textarea } from 'sep-yui';
 </script>
-
-<style scoped>
-@import url('../../assets/menu-info-users.css');
-
-.menu__info-form-block {
-  display: grid;
-  gap: 5px;
-}
-
-.menu__info-form {
-  display: grid;
-  gap: 10px;
-
-  & button.menu__info-save-button {
-    justify-self: end;
-  }
-}
-</style>

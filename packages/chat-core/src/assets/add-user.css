@@ -1,0 +1,64 @@
+.add-user {
+  width: 370px;
+  height: 555px;
+}
+
+.add-user__button {
+  display: flex;
+  justify-content: flex-end;
+  padding-right: 20px;
+  padding-bottom: 10px;
+  width: 100%;
+  margin-right: 0;
+}
+
+.add-user__avatar {
+  grid-area: avatar;
+}
+
+.form__textarea {
+  grid-area: description;
+}
+
+.menu__info-form {
+  align-items: start;
+  grid-template-areas:
+    'avatar name'
+    'description description';
+}
+
+.form__name {
+  grid-area: name;
+}
+
+.tabs__navigation-content {
+  height: 437px;
+}
+
+.menu__user-assistant-icon {
+  display: grid;
+  background-color: var(--blue9);
+  color: var(--blue1);
+  border-radius: 50%;
+  padding: 7px;
+  & svg {
+    font-size: 16px;
+  }
+}
+
+.line {
+  margin-top: 5px;
+  border-top-width: 1px;
+  border-top-style: solid;
+  border-top-color: var(--grey13);
+  width: 100%;
+}
+
+@media screen and (width <= 28rem) {
+  .line {
+    margin-top: 0;
+  }
+  .menu__user-assistant-icon {
+    padding: 10px;
+  }
+}

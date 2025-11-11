@@ -22,7 +22,7 @@
         <li class="new-contact__item">
           <UserProfile
             name="John Doe"
-            nickname="@johndoe"
+            nickname="johndoe"
             avatar-url="/avatar-user.png"
             avatar-alt="avatar user"
           />
@@ -119,59 +119,3 @@ const handleOpenUser = (): void => {
   state.openAddUser = true;
 };
 </script>
-<style scoped>
-.new-contact {
-  width: 370px;
-}
-
-.new-contact__header {
-  font-size: 16px;
-  padding-block: 10px;
-  padding-inline: 20px;
-  display: flex;
-  font-weight: bold;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom-style: solid;
-  border-bottom-width: 1px;
-  border-bottom-color: var(--border-grey);
-}
-
-.new-contact__item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 15px;
-  padding-inline: 10px;
-  margin-top: 5px;
-  & .checkbox-yui-kit {
-    justify-self: flex-end;
-  }
-}
-
-.new-contact__search {
-  padding: 10px;
-  margin-bottom: 5px;
-}
-
-.new-contact__list {
-  display: grid;
-  gap: 8px;
-  padding: 10px;
-}
-
-.new-contact__section {
-  display: grid;
-}
-
-.new-contact__button-close {
-  padding-block: 5px;
-  padding-inline: 0;
-}
-
-.new-contact__add {
-  margin-right: 10px;
-  margin-bottom: 10px;
-  justify-self: end;
-}
-</style>

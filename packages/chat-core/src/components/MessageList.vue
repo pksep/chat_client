@@ -1,58 +1,56 @@
 <template>
-  <section class="chat">
-    <div
-      class="chat__message-wrapper"
-      ref="chatWrapperRef"
-      v-if="props.chapter === 'ai' && aiMessages.length"
-    >
-      <div class="chat__message-bubble">
-        <MessageBubble
-          v-for="(message, index) in aiMessages"
-          :key="index"
-          :class="messageChat(message.role)"
-          :message="message.content"
-          :author="message.role"
-          :time="message.timestamp"
-          :loader="message.loading"
-        />
-      </div>
+  <div
+    class="chat__message-wrapper"
+    ref="chatWrapperRef"
+    v-if="props.chapter === 'ai' && aiMessages.length"
+  >
+    <div class="chat__message-bubble">
+      <MessageBubble
+        v-for="(message, index) in aiMessages"
+        :key="index"
+        :class="messageChat(message.role)"
+        :message="message.content"
+        :author="message.role"
+        :time="message.timestamp"
+        :loader="message.loading"
+      />
     </div>
-    <div
-      class="chat__message-wrapper"
-      v-else-if="state.messages.length"
-      ref="chatWrapperRef"
-    >
-      <div class="chat__message-bubble">
-        <MessageBubble
-          v-for="(message, index) in state.messages"
-          :key="index"
-          :class="messageChat(message.role)"
-          :message="message.content"
-          :author="message.role"
-          :time="time"
-          :loader="message.loading"
-        />
-      </div>
+  </div>
+  <div
+    class="chat__message-wrapper"
+    v-else-if="state.messages.length"
+    ref="chatWrapperRef"
+  >
+    <div class="chat__message-bubble">
+      <MessageBubble
+        v-for="(message, index) in state.messages"
+        :key="index"
+        :class="messageChat(message.role)"
+        :message="message.content"
+        :author="message.role"
+        :time="time"
+        :loader="message.loading"
+      />
     </div>
-    <div v-else class="chat__nothing">
-      <p v-if="!props.chapter" class="chat__nothing-paragraph">
-        Выберите, кому хотели бы написать
-      </p>
-      <p v-else class="chat__nothing-paragraph">Здесь пока ничего нет...</p>
-    </div>
-    <div class="chat__input" v-if="props.chapter">
-      <ContentEditor v-model="inputText" @unmount-send="handleSend" />
-    </div>
-  </section>
+  </div>
+  <EmptyChat
+    :chapter="props.chapter"
+    v-if="!state.messages.length && !aiMessages.length"
+  />
+  <div class="chat__input" v-if="props.chapter">
+    <ContentEditor v-model="inputText" @unmount-send="handleSend" />
+  </div>
 </template>
 
 <script lang="ts" setup>
 import { ref, reactive, watch, onMounted, useTemplateRef, nextTick } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
+import EmptyChat from './EmptyChat.vue';
 import { ContentEditor } from 'sep-yui';
-import { useMastra } from '../services/useMastra';
+import { removeMessageLoading, useMastra } from '../services/useMastra';
 import type { IMessageListProps } from './interfaces/message-list';
 import { useTime } from '../composables/useTime';
+import { onUnmounted } from 'vue';
 
 const state = reactive({
   messages: [],
@@ -125,85 +123,11 @@ onMounted(() => {
   }
 });
 
+onUnmounted(() => {
+  removeMessageLoading(state.chatId, state.messages.length);
+});
+
 defineExpose({
   handleClear
 });
 </script>
-
-<style scoped>
-.chat__nothing {
-  display: grid;
-  place-items: center;
-  margin-top: auto;
-}
-
-p.chat__nothing-paragraph {
-  font-size: 14px;
-  color: var(--text-grey);
-}
-
-.chat:has(.chat__input) {
-  --basic-height: calc(var(--default-height) - 65px);
-  display: grid;
-  overflow-y: hidden;
-  padding-right: 4px;
-  height: var(--basic-height);
-}
-
-.chat {
-  display: grid;
-  height: calc(var(--default-height) / 2);
-}
-
-.chat__message-wrapper {
-  padding: 15px;
-  padding-right: 5px;
-  max-height: calc(var(--basic-height) - 135px);
-  overflow-x: hidden;
-  overflow-y: scroll;
-}
-
-.chat__message-bubble {
-  display: grid;
-  align-content: start;
-  gap: 25px;
-}
-
-.message__bubble {
-  text-wrap: balance;
-  max-width: calc(
-    var(--default-width) - var(--size-left-menu) - var(--size-right-menu) - 70px
-  );
-  justify-self: start;
-  &:last-child {
-    margin-bottom: 25px;
-  }
-}
-
-.message__other {
-  justify-self: end;
-  flex-direction: row-reverse;
-  --background-color: var(--blue1);
-  --message-text-color: var(--white);
-  --message-time-color: var(--white);
-  --blockquote-bg-color: #9abdff;
-  --blockquote-border-color: var(--white);
-}
-
-.chat__input {
-  align-self: end;
-  padding: 15px;
-  max-width: calc(
-    var(--default-width) - var(--size-left-menu) - var(--size-right-menu)
-  );
-
-  :deep(.editor-content) {
-    max-height: calc(var(--basic-height) / 2);
-    overflow: scroll;
-  }
-}
-
-:deep(.primary-yui-kit.toolbar-button) {
-  color: var(--white);
-}
-</style>
