@@ -43,7 +43,15 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, watch, onMounted, useTemplateRef, nextTick, onUnmounted } from 'vue';
+import {
+  ref,
+  reactive,
+  watch,
+  onMounted,
+  useTemplateRef,
+  nextTick,
+  onUnmounted
+} from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
 import { ContentEditor } from 'sep-yui';

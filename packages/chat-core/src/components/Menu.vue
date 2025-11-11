@@ -32,7 +32,7 @@
           AI Ассистент
         </h3>
       </div>
-       <template v-for="(item, index) in listChannels" :key="index">
+      <template v-for="(item, index) in listChannels" :key="index">
         <Line v-if="isCollapse" />
         <details class="menu__user-details" v-if="!isCollapse" open>
           <summary class="menu__user-details-summary">
@@ -51,14 +51,14 @@
           />
         </details>
         <template v-if="isCollapse">
-        <template v-for="(user, index) in item.contacts" :key="index">
-          <ul class="menu__user">
-            <li class="menu__user-avatar">
-              <Avatar :url="user.imageURL" :initials="user.title" />
-            </li>
-          </ul>
-          <Line />
-        </template>
+          <template v-for="(user, index) in item.contacts" :key="index">
+            <ul class="menu__user">
+              <li class="menu__user-avatar">
+                <Avatar :url="user.imageURL" :initials="user.title" />
+              </li>
+            </ul>
+            <Line />
+          </template>
         </template>
       </template>
     </div>
