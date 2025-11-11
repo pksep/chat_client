@@ -13,11 +13,11 @@
       <ul class="menu__info-users-list">
         <li>
           <UserProfile
-            avatar-url="/avatar-user.png"
             avatar-alt="avatar of user"
-            name="Zakk Wylde"
             class="menu__user-profile"
-            nickname="@wyldetheguy"
+            :avatar-url="props.contact.avatarUrl"
+            :name="props.contact.name"
+            :nickname="props.contact.nickname"
             @unmount-click="openActivePopover('0', $event)"
           />
         </li>
@@ -50,6 +50,14 @@ import { ref } from 'vue';
 import NewContactModal from '../NewChat/NewContact.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
+
+const props = defineProps<{
+  contact: {
+    avatarUrl: string;
+    name: string;
+    nickname: string;
+  };
+}>();
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();

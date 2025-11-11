@@ -6,7 +6,7 @@
           'contact-list__item',
           { 'contact-list__item--active': isOpen[contact.id] }
         ]"
-        @click.stop="handleClick(contact.id)"
+        @click.stop="handleClick(contact)"
         @contextmenu="openActivePopover(contact.id, $event)"
       >
         <Avatar
@@ -116,8 +116,9 @@ const handlePin = (contactId: string): void => {
   closeActivePopover(contactId);
 };
 
-const handleClick = (contactId: string): void => {
-  emits('unmount-click', contactId);
+const handleClick = (contact): void => {
+  console.log(contact);
+  emits('unmount-click', contact);
 };
 
 const handleNotification = (contactId: string): void => {

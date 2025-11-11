@@ -4,6 +4,7 @@
       v-if="state.chapter"
       class="chat__header"
       :chapter="state.chapter"
+      :contact="state.contact"
       @unmount-click="handleHeaderClick"
       @unmount-exit="handleExit"
       @unmount-information="handleHeaderClick"
@@ -55,6 +56,7 @@ const state = reactive({
   isCollapse: false,
   isMenuOpen: false,
   chapter: null,
+  contact: null,
   isNewContactOpen: false
 });
 
@@ -83,16 +85,17 @@ const unmountHeaderMenuChapter = (name: string): void => {
   state.chapter = name;
 };
 
-const unmountMenuChapter = (config: { name: string } | null): void => {
+const unmountMenuChapter = (config): void => {
   if (!config?.name) {
     state.chapter = null;
     return;
   }
   state.chapter = config.name;
+  state.contact = config.contact;
 };
 
-const handleNewContact = (isModalOpen: boolean): void => {
-  state.isNewContactOpen = isModalOpen;
+const handleNewContact = (config): void => {
+  state.isNewContactOpen = config.isChapterOpen;
 };
 
 const closeContactModal = (): void => {

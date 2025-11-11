@@ -1,11 +1,15 @@
 export interface IHeaderProps {
   chapter?: string | null;
+  contact?: IUserProps;
 }
 
 export interface IMenuEmits {
   (e: 'unmount-collapse', isCollapse: boolean): void;
-  (e: 'unmount-new-contact', isNewContact: boolean): void;
-  (e: 'unmount-chapter', config: { name: string } | null): void;
+  (e: 'unmount-new-contact', config: { isChapterOpen?: boolean }): void;
+  (
+    e: 'unmount-chapter',
+    config: { name: string; contact: IUserProps } | null
+  ): void;
   (e: 'unmount-user-add'): void;
 }
 

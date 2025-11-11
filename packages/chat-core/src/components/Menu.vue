@@ -40,7 +40,7 @@
             <Button
               :type="ButtonTypeEnum.ghost"
               :size="SizesEnum.little"
-              @click="handleNewContactModal"
+              @click="handleNewContactModal(item)"
             >
               <Icon :name="IconNameEnum.plus" />
             </Button>
@@ -113,18 +113,23 @@ const handleCollapse = (): void => {
   toggle();
 };
 
-const handleNewContactModal = (): void => {
-  emits('unmount-new-contact', true);
-};
+const handleNewContactModal = (item): void => {};
 
-const unmountContactClick = (contactId: string): void => {
+const unmountContactClick = (contact): void => {
   if (state.chapter === 'ai') {
     state.chapter = '';
     emits('unmount-chapter', null);
     return;
   }
-  state.chapter = contactId;
-  emits('unmount-chapter', { name: contactId });
+  state.chapter = contact.title;
+  emits('unmount-chapter', {
+    name: contact.title,
+    contact: {
+      name: contact.title,
+      avatarUrl: contact.imageURL,
+      nickname: contact.nickname || ''
+    }
+  });
 };
 
 const menuClasses = computed(() => [
@@ -151,6 +156,7 @@ const listChannels = [
         title: 'Jare Milkovich',
         imageURL: 'https://example.com/avatar1.jpg',
         isPin: true,
+        nickname: 'jare',
         latestMessage: 'Hello!',
         notificationCount: 2
       },
@@ -158,6 +164,7 @@ const listChannels = [
         id: 't2',
         title: 'Jane Smith',
         imageURL: 'https://example.com/avatar2.jpg',
+        nickname: 'jane',
         isPin: false,
         latestMessage: 'Hi!',
         notificationCount: 1
