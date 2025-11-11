@@ -3,19 +3,20 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 function findProjectRoot(startDir: string): string {
-  let currentDir: string = path.resolve(startDir);
-  while (true) {
-    const packageJsonPath = path.join(currentDir, 'package.json');
-    if (fs.existsSync(packageJsonPath)) {
-      return currentDir;
-    }
-    const parentDir = path.dirname(currentDir);
-    if (parentDir === currentDir) break;
-    currentDir = parentDir;
+  const packageJsonPath = path.join(startDir, 'package.json');
+
+  if (fs.existsSync(packageJsonPath)) {
+    return startDir;
   }
-  throw new Error(
-    'Could not find project root (package.json) from script location.'
-  );
+
+  const parentDir = path.dirname(startDir);
+  if (parentDir === startDir) {
+    throw new Error(
+      'Could not find project root (package.json) from script location.'
+    );
+  }
+
+  return findProjectRoot(parentDir);
 }
 
 const scriptDir: string = path.dirname(fileURLToPath(import.meta.url));
