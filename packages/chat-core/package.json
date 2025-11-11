@@ -10,7 +10,8 @@
     "build": "vue-tsc && vite build",
     "build:lib": "VITE_BASE_MODE=lib pnpm run build",
     "publish:lib": "pnpm run build:lib && pnpm publish --access public --no-git-checks",
-    "copy:openim": "node --experimental-strip-types ./scripts/copyOpenIM.ts"
+    "copy:openim": "node --experimental-strip-types ./scripts/copyOpenIM.ts",
+    "generate:token": "node ./scripts/generate-token.ts"
   },
   "exports": {
     ".": {
