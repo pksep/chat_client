@@ -16,36 +16,48 @@ JWK (JSON Web Key) используется для верификации пуб
 
 ```mermaid
 sequenceDiagram
-    participant MB as Mobile App
-    participant WB as Web Browser
-    participant ERP as ERP Auth Server
+    autonumber
+    participant C as Chat Client
+    participant ERP as ERP System
+    participant O as OpenIM Server
+    participant M as Mastra AI Service
     participant JWKS as JWKS Endpoint
-    participant CS as Chat Backend
-    participant OI as OpenIM
-    participant MA as Mastra AI
 
-    Note over MB, MA: Mobile QR Code Flow
-    MB->>ERP: Scan QR code / Receive token
-    ERP->>MB: JWT Token
-    MB->>CS: Send JWT token
-    CS->>JWKS: Fetch public keys
-    JWKS->>CS: JWKS
-    CS->>CS: Verify JWT with JWK
-    CS->>OI: Authenticate user session
-    CS->>MA: Process AI logic
-    OI->>MB: Chat session established
+    Note over C, JWKS: ADR-0002: Integration with ERP via JWT/JWK
 
-    Note over WB, MA: Web OAuth2 Flow
-    WB->>ERP: Redirect to ERP (client_id, redirect_uri)
-    ERP->>WB: Authorization code
-    WB->>CS: Exchange code for JWT
-    CS->>JWKS: Fetch public keys (cached)
-    JWKS->>CS: JWKS
-    CS->>CS: Verify JWT with JWK
-    CS->>OI: Authenticate user session
-    CS->>MA: Process AI logic
-    OI->>WB: Chat session established
+    %% Desktop Authentication Flow
+    rect rgb(70, 70, 130)
+        Note over C, ERP: Desktop OAuth2-like Flow
+        C->>ERP: Redirect with client_id, redirect_uri, response_type=code
+        ERP->>C: Authorization code
+        C->>ERP: Exchange code for JWT (POST /token)
+        C->>O: Send JWT for authentication
+    end
+
+    %% Mobile Authentication Flow
+    rect rgb(70, 130, 70)
+        Note over C, ERP: Mobile QR Code Flow
+        ERP->>ERP: Generate QR with short-lived token/deep link
+        C->>ERP: Scan QR, receive JWT
+        C->>O: Send JWT for authentication
+    end
+
+    %% OpenIM JWT Verification Process
+    rect rgb(130, 70, 70)
+        Note over O, JWKS: OpenIM JWT Verification with JWK
+        O->>JWKS: Fetch JWKS (GET /.well-known/jwks.json)
+        JWKS->>O: Return JWK set
+        O->>O: Cache JWK for verification
+        O->>O: Verify JWT using JWK (kid, aud, exp validation)
+    end
+
+    %% Authentication Response
+    O->>C: Authentication successful, return session
+    C->>M: Request with OpenIM session for AI services
+    M->>C: Return AI response
+    Note over C, M: Chat session established with ERP authentication
 ```
+
 
 ## Варианты решения
 
