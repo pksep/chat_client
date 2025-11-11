@@ -3,6 +3,7 @@
   --default-height: 100dvh;
   --size-right-menu: 404px;
   --size-left-menu: 345px;
+  --header-height: 56px;
 }
 
 body {

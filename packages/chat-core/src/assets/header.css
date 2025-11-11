@@ -43,7 +43,11 @@ button.button-yui-kit {
   }
 }
 
-@media (width <= 400px) {
+@media screen and (width <= 28rem) {
+  .chat__header {
+    justify-content: start;
+    gap: 10px;
+  }
   .chat__header:has(.search-yui-kit__input) {
     .chat__header-profile {
       & h3 {

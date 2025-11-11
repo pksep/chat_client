@@ -14,6 +14,7 @@ export interface IHeaderEmits {
   (e: 'unmount-notification', statusNotification?: string): void;
   (e: 'unmount-information', info?: boolean): void;
   (e: 'unmount-clear'): void;
+  (e: 'unmount-exit'): void;
 }
 
 export interface IUserProps {

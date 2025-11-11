@@ -22,7 +22,7 @@
         <li class="new-contact__item">
           <UserProfile
             name="John Doe"
-            nickname="@johndoe"
+            nickname="johndoe"
             avatar-url="/avatar-user.png"
             avatar-alt="avatar user"
           />

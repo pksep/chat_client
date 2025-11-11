@@ -1,5 +1,13 @@
 <template>
   <header class="chat__header" @click="handleClickHeader">
+    <Button
+      v-if="isMobile"
+      :type="ButtonTypeEnum.ghost"
+      :size="SizesEnum.small"
+      @click.stop="handleExit"
+    >
+      <Icon class="medium-icon" :name="IconNameEnum.arrowLeft" />
+    </Button>
     <div
       class="chat__header-profile chat__header-ai-assistant"
       v-if="props.chapter === 'ai'"
@@ -15,7 +23,7 @@
       nickname=""
       v-else
     />
-    <div class="chat__header-buttons">
+    <div class="chat__header-buttons" v-if="!isMobile">
       <Search
         v-if="state.isSearchInputEnable"
         class="chat__header-search"
@@ -36,7 +44,8 @@
 
 <script lang="ts" setup>
 import { computed, reactive } from 'vue';
-import UserProfile from './UserProfile/UserProfile.vue';
+import { useResizeState } from '../../composables/useResizeState';
+import UserProfile from '../UserProfile/UserProfile.vue';
 import {
   Button,
   Icon,
@@ -47,8 +56,9 @@ import {
   Popover
 } from 'sep-yui';
 
-import type { IHeaderProps, IHeaderEmits } from './interfaces/interfaces';
-import AiIconWrapper from './AiIconWrapper.vue';
+import type { IHeaderProps, IHeaderEmits } from '../interfaces/interfaces';
+import AiIconWrapper from '../AiIconWrapper.vue';
+import { MAX_W_MD } from '../../utils/constants';
 
 const props = withDefaults(defineProps<IHeaderProps>(), {});
 
@@ -59,6 +69,8 @@ const state = reactive({
     enabled: false
   }
 });
+
+const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const emits = defineEmits<IHeaderEmits>();
 
@@ -109,6 +121,8 @@ const getPopoverOptions = computed(() => {
   }
   return popoverArray;
 });
-</script>
 
-<style scoped></style>
+const handleExit = (): void => {
+  emits('unmount-exit');
+};
+</script>
