@@ -1,4 +1,4 @@
-import { Reqi } from '@pksep/reqi';
+import { useOpenIMRestApi } from './useApi';
 
 interface RegisterParams {
   user: {
@@ -8,17 +8,10 @@ interface RegisterParams {
   };
 }
 
-const api = new Reqi(`https://${import.meta.env.VITE_OPENIM_API_DOMAIN}`);
-
-api.request.use((request: Request): Request => {
-  request.headers.set('operationID', crypto.randomUUID());
-  request.headers.set('token', import.meta.env.VITE_OPENIM_TOKEN);
-  return request;
-});
-
 export const useRegister = async (
   params: RegisterParams
 ): Promise<{ chatToken: string; imToken: string; userID: string }> => {
+  const api = useOpenIMRestApi();
   const response = await api.post('/user/user_register', {
     users: [{ ...params }]
   });
