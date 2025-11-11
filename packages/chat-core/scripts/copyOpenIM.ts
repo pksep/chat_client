@@ -1,26 +1,32 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 function findProjectRoot(startDir: string): string {
-  let currentDir: string = startDir;
-  while (currentDir !== path.parse(currentDir).root) {
+  let currentDir: string = path.resolve(startDir);
+  while (true) {
     const packageJsonPath = path.join(currentDir, 'package.json');
     if (fs.existsSync(packageJsonPath)) {
       return currentDir;
     }
-    currentDir = path.dirname(currentDir);
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) break;
+    currentDir = parentDir;
   }
   throw new Error(
     'Could not find project root (package.json) from script location.'
   );
 }
 
-const scriptDir: string = path.dirname(new URL(import.meta.url).pathname);
+const scriptDir: string = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot: string = findProjectRoot(scriptDir);
 
 const sourceDir: string = path.join(
   projectRoot,
-  'node_modules/@openim/wasm-client-sdk/assets'
+  'node_modules',
+  '@openim',
+  'wasm-client-sdk',
+  'assets'
 );
 const targetDir: string = path.join(projectRoot, 'public');
 
