@@ -113,7 +113,7 @@ const handleCollapse = (): void => {
   toggle();
 };
 
-const handleNewContactModal = (item): void => {};
+const handleNewContactModal = (): void => {};
 
 const unmountContactClick = (contact): void => {
   if (state.chapter === 'ai') {
