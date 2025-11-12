@@ -46,7 +46,7 @@
         </div>
       </div>
       <ContextMenu
-        :visible="isOpen[contact.id]"
+        :visible="!!isOpen[contact.id]"
         :position="position"
         @unmount-close="() => closeActivePopover(contact.id)"
       >
@@ -123,7 +123,6 @@ const handlePin = (contactId: string): void => {
 
 const handleClick = (contact): void => {
   emits('unmount-click', contact);
-  console.log(contact.latestMessageTime);
 };
 
 const handleNotification = (contactId: string): void => {

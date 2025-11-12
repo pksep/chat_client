@@ -74,8 +74,6 @@ const getConversationList = async (): Promise<IConversation[]> => {
     const result = response.data || [];
 
     const conversations = result.map(c => {
-      console.log(JSON.parse(c.latestMsg), 'resultresult');
-
       return {
         id: c.conversationID,
         userId: c.userID,
