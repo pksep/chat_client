@@ -40,11 +40,12 @@
   <NewContactModal
     :open="state.isNewContactOpen"
     @unmount-close="closeContactModal"
+    :contacts="users"
   />
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import Header from './Header/Header.vue';
 import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
@@ -52,6 +53,7 @@ import Chat from './Chat.vue';
 import MenuInfo from './MenuInfo.vue';
 import NewContactModal from './NewChat/NewContact.vue';
 import type { IChatContainerProps } from './interfaces/interfaces';
+import { useUsers } from '../composables/useUsers';
 
 const state = reactive({
   isCollapse: false,
@@ -62,6 +64,8 @@ const state = reactive({
 });
 
 const props = defineProps<IChatContainerProps>();
+
+const { fetchAllUsers, users } = useUsers();
 
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 
@@ -112,4 +116,8 @@ const handleClearClick = (): void => {
 const handleExit = (): void => {
   state.chapter = null;
 };
+
+onMounted(async () => {
+  await fetchAllUsers();
+});
 </script>
