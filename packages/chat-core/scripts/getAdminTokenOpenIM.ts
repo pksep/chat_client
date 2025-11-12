@@ -39,7 +39,7 @@ const getAdminToken = async (): Promise<string> => {
 
   const response = await adminApi.post('/auth/get_admin_token', {
     secret: process.env.VITE_OPENIM_SECRET || 'openIM123',
-    userID: process.env.VITE_OPENIM_ADMIN_USER || 'imAdmin'
+    userID: process.env.VITE_OPENIM_ADMIN_NAME || 'imAdmin'
   });
 
   const { data, errMsg } = await response.json();
