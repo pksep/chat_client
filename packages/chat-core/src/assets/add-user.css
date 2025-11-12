@@ -20,6 +20,7 @@
   grid-area: description;
 }
 
+/*
 .menu__info-form {
   align-items: start;
   grid-template-areas:
@@ -29,6 +30,19 @@
 
 .form__name {
   grid-area: name;
+}
+*/
+
+.menu__info-form {
+  display: grid;
+  gap: 10px;
+  fieldset.input-yui-kit {
+    background-color: var(--blue15);
+  }
+}
+
+.menu__info-save-button {
+  justify-self: end;
 }
 
 .tabs__navigation-content {

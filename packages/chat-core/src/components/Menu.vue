@@ -127,6 +127,7 @@ const unmountContactClick = (contact): void => {
   emits('unmount-chapter', {
     name: contact.title,
     contact: {
+      id: contact.id,
       name: contact.title,
       avatarUrl: contact.imageURL || '',
       nickname: contact.nickname || ''

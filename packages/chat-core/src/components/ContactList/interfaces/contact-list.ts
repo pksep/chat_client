@@ -1,12 +1,5 @@
-interface IContact {
-  id: string;
-  title: string;
-  imageURL: string;
-  isPin?: boolean;
-  latestMessage: string;
-  notificationCount: number;
-}
+import type { IUserProps } from '../../interfaces/interfaces';
 
 export interface IContactListProps {
-  contacts: IContact[];
+  contacts: IUserProps[];
 }

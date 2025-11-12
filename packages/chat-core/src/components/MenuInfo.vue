@@ -15,13 +15,13 @@
       <template #header1>
         <span class="menu-info__user-header">
           Участники
-          <div class="menu-info__user-count">8</div>
+          <div class="menu-info__user-count">{{ [props.contact].length }}</div>
         </span>
       </template>
       <template #header2> Информация </template>
       <template #tab1>
         <ContactListInModal
-          :contact="props.contact"
+          :contacts="[props.contact]"
           @unmount-user-add="unmountUserAdd"
         />
       </template>
@@ -118,7 +118,7 @@ const handleCloseMenu = (): void => {
 };
 
 const unmountUserAdd = (): void => {
-  emits('unmount-new-contact');
+  emits('unmount-new-contact', { isChapterOpen: true });
 };
 
 const openEditProfileIcon = (): void => {

@@ -5,7 +5,7 @@
       <label for="name" class="menu__info-title-text"> Название: </label>
       <Input id="name" class="initial" placeholder="Text" />
     </div>
-    <div class="menu__info-form-block form__textarea">
+    <div class="menu__info-form-block form__textarea" v-if="false">
       <label class="menu__info-title-text"> Описание: </label>
       <Textarea class="initial" placeholder="Text" />
     </div>
