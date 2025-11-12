@@ -93,7 +93,7 @@ import {
 import UserProfile from './UserProfile/UserProfile.vue';
 import ContactList from './ContactList/ContactList.vue';
 import type { IMenuEmits, IUserProps } from './interfaces/interfaces';
-import { getConversationList, IConversation } from '../services/useOpenIM';
+import { getConversationList } from '../services/useOpenIM';
 
 const props = withDefaults(defineProps<{ user: IUserProps }>(), {});
 
