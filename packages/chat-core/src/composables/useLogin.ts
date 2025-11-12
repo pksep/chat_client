@@ -1,4 +1,4 @@
-import { useOpenIMRestApi } from './useApi';
+import { useOpenIMRestApi } from '../services/useApi';
 
 interface RegisterParams {
   user: {
