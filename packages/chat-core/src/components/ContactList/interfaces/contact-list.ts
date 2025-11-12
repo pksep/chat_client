@@ -4,6 +4,7 @@ interface IContact {
   imageURL: string;
   isPin?: boolean;
   latestMessage: string;
+  latestMessageTime: Date;
   notificationCount: number;
 }
 

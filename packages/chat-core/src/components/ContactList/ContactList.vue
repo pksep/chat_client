@@ -16,14 +16,19 @@
           alt="avatar of contact image"
         />
         <h5 class="contact-list__title">{{ contact.title }}</h5>
-        <p class="contact-list__description">{{ contact.latestMessage }}</p>
+        <div
+          class="contact-list__description"
+          v-html="contact.latestMessage"
+        ></div>
         <div class="contact-list__top">
           <Icon
             v-if="contact.notificationCount === 0"
             :name="IconNameEnum.read"
             class="contact-list__read-icon"
           />
-          <span class="contact-list__time">{{ useTime() }}</span>
+          <span v-if="contact.latestMessageTime" class="contact-list__time">{{
+            useTime(new Date(contact.latestMessageTime))
+          }}</span>
         </div>
         <div class="contact-list__bottom">
           <div
@@ -117,8 +122,8 @@ const handlePin = (contactId: string): void => {
 };
 
 const handleClick = (contact): void => {
-  console.log(contact);
   emits('unmount-click', contact);
+  console.log(contact.latestMessageTime);
 };
 
 const handleNotification = (contactId: string): void => {

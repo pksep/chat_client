@@ -10,6 +10,7 @@
       ref="messageListRef"
       :chapter="state.chapter"
       :baseUrl="props.baseUrl"
+      :contactId
     />
   </section>
 </template>

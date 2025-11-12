@@ -119,8 +119,8 @@ const handleSend = async (): Promise<void> => {
   } else {
     sendMessageIM({
       message: text,
-      to: state.chatId,
-      groupId: state.chatId
+      to: props.contactId || '',
+      groupId: props.contactId || ''
     });
   }
   scrollToBottom();

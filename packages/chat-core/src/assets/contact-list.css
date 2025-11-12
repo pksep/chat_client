@@ -39,6 +39,10 @@
   color: var(--text-grey);
 }
 
+.contact-list__description * {
+  margin: 0;
+}
+
 .contact-list__notification {
   color: var(--white);
   font-size: 12px;

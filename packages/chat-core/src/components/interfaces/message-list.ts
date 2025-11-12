@@ -4,4 +4,5 @@ export interface IMessageListProps {
   user?: IUserProps;
   baseUrl?: string;
   chapter?: string | null;
+  contactId?: string;
 }

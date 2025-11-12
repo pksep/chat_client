@@ -1,5 +1,16 @@
 import { CbEvents, getSDK } from '@openim/wasm-client-sdk';
 
+export interface IConversation {
+  id: string;
+  userId: string;
+  title: string;
+  imageURL: string;
+  isPin: boolean;
+  nickname: string;
+  latestMessage: string;
+  notificationCount: boolean;
+}
+
 const IMSDK = getSDK();
 
 const setupOpenIM = (): void => {
@@ -56,4 +67,33 @@ const getOrGeneratePlatformId = (): number => {
   }
 };
 
-export { IMSDK, setupOpenIM, getOrGeneratePlatformId };
+const getConversationList = async (): Promise<IConversation[]> => {
+  try {
+    const response = await IMSDK.getAllConversationList();
+
+    const result = response.data || [];
+
+    const conversations = result.map(c => {
+      console.log(JSON.parse(c.latestMsg), 'resultresult');
+
+      return {
+        id: c.conversationID,
+        userId: c.userID,
+        title: c.showName,
+        imageURL: c.faceURL,
+        isPin: c.isPinned,
+        nickname: c.showName,
+        latestMessage: JSON.parse(c.latestMsg)?.textElem?.content || '',
+        latestMessageTime: JSON.parse(c.latestMsg)?.sendTime || '',
+        notificationCount: c.unreadCount > 0
+      };
+    });
+
+    return conversations;
+  } catch (err) {
+    console.error('Failed to get users with messages:', err);
+    return [];
+  }
+};
+
+export { IMSDK, setupOpenIM, getOrGeneratePlatformId, getConversationList };

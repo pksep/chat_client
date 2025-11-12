@@ -46,12 +46,13 @@
             </Button>
           </summary>
           <ContactList
-            :contacts="item.contacts"
+            v-if="index === 1"
+            :contacts="state.contactList"
             @unmount-click="unmountContactClick"
           />
         </details>
         <template v-if="isCollapse">
-          <template v-for="(user, index) in item.contacts" :key="index">
+          <template v-for="(user, index) in state.contactList" :key="index">
             <ul class="menu__user">
               <li class="menu__user-avatar">
                 <Avatar :url="user.imageURL" :initials="user.title" />
@@ -92,12 +93,14 @@ import {
 import UserProfile from './UserProfile/UserProfile.vue';
 import ContactList from './ContactList/ContactList.vue';
 import type { IMenuEmits, IUserProps } from './interfaces/interfaces';
+import { getConversationList, IConversation } from '../services/useOpenIM';
 
 const props = withDefaults(defineProps<{ user: IUserProps }>(), {});
 
 const state = reactive({
   chapter: '',
-  installPrompt: null
+  installPrompt: null,
+  contactList: []
 });
 
 const emits = defineEmits<IMenuEmits>();
@@ -127,6 +130,7 @@ const unmountContactClick = (contact): void => {
   emits('unmount-chapter', {
     name: contact.title,
     contact: {
+      id: contact.userId,
       name: contact.title,
       avatarUrl: contact.imageURL || '',
       nickname: contact.nickname || ''
@@ -151,27 +155,7 @@ const listChannels = [
     title: 'Каналы'
   },
   {
-    title: 'Личные сообщения',
-    contacts: [
-      {
-        id: 't1',
-        title: 'Jare Milkovich',
-        imageURL: 'https://example.com/avatar1.jpg',
-        isPin: true,
-        nickname: 'jare',
-        latestMessage: 'Hello!',
-        notificationCount: 2
-      },
-      {
-        id: 't2',
-        title: 'Jane Smith',
-        imageURL: 'https://example.com/avatar2.jpg',
-        nickname: 'jane',
-        isPin: false,
-        latestMessage: 'Hi!',
-        notificationCount: 1
-      }
-    ]
+    title: 'Личные сообщения'
   }
 ];
 
@@ -187,5 +171,9 @@ onMounted(() => {
     event.preventDefault();
     state.installPrompt = event;
   });
+
+  setTimeout(async () => {
+    state.contactList = await getConversationList();
+  }, 2000);
 });
 </script>
