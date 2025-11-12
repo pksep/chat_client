@@ -39,9 +39,8 @@
   </main>
   <NewContactModal
     :open="state.isNewContactOpen"
-    :contacts="[state.contact]"
-    @unmount-close="closeContactModal"
     :contacts="users"
+    @unmount-close="closeContactModal"
   />
 </template>
 
