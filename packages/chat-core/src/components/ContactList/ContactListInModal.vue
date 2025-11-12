@@ -11,33 +11,33 @@
         Добавить участника
       </Button>
       <ul class="menu__info-users-list">
-        <li>
+        <li v-for="(user, index) in props.users" :key="index">
           <UserProfile
             avatar-alt="avatar of user"
             class="menu__user-profile"
-            :avatar-url="props.contact?.avatarUrl"
-            :name="props.contact?.name"
-            :nickname="props.contact?.nickname"
-            @unmount-click="openActivePopover('0', $event)"
+            :avatar-url="user.avatarUrl"
+            :name="user.name"
+            :nickname="user.nickname"
+            @unmount-click="openActivePopover(user.id.toString(), $event)"
           />
+          <ContextMenu
+            :visible="isOpen[user.id.toString()]"
+            :position="position"
+            @unmount-close="closeActivePopover(user.id.toString())"
+          >
+            <template #default>
+              <Button
+                class="menu__info-button-little"
+                :type="ButtonTypeEnum.ghost"
+                :size="SizesEnum.little"
+                @click="closeActivePopover(user.id.toString())"
+              >
+                Удалить из канала
+              </Button>
+            </template>
+          </ContextMenu>
         </li>
       </ul>
-      <ContextMenu
-        :visible="isOpen['0']"
-        :position="position"
-        @unmount-close="closeActivePopover('0')"
-      >
-        <template #default>
-          <Button
-            class="menu__info-button-little"
-            :type="ButtonTypeEnum.ghost"
-            :size="SizesEnum.little"
-            @click="closeActivePopover('0')"
-          >
-            Удалить из канала
-          </Button>
-        </template>
-      </ContextMenu>
     </article>
   </section>
   <NewContactModal :open="newContactOpen" @unmount-close="closeContactModal" />
@@ -51,13 +51,21 @@ import NewContactModal from '../NewChat/NewContact.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 
-const props = defineProps<{
-  contact: {
-    avatarUrl: string;
-    name: string;
-    nickname: string;
-  };
-}>();
+interface User {
+  id?: string | number;
+  avatarUrl: string;
+  name: string;
+  nickname: string;
+}
+
+const props = withDefaults(
+  defineProps<{
+    users?: User[];
+  }>(),
+  {
+    users: () => []
+  }
+);
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();

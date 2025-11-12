@@ -71,25 +71,11 @@ import {
 } from 'sep-yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import AddUser from './AddUser.vue';
+import type { INewContactProps } from './interfaces/new-contact';
 
-interface Contact {
-  id: string | number;
-  name: string;
-  nickname: string;
-  avatarUrl: string;
-  avatarAlt: string;
-}
-
-const props = withDefaults(
-  defineProps<{
-    open: boolean;
-    contacts?: Contact[];
-  }>(),
-  {
-    open: false,
-    contacts: () => []
-  }
-);
+const props = withDefaults(defineProps<INewContactProps>(), {
+  open: false
+});
 
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
