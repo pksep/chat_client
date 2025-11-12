@@ -13,6 +13,7 @@ import {
   saveUserIdToSession,
   hasUserIdInSession
 } from './services/useMastra';
+import { mockUsers } from './test/mock/users';
 
 const props = defineProps<IChatContainerProps>();
 
@@ -23,12 +24,18 @@ onMounted(async () => {
   }
 
   const account = await useRegister({
-    user: {
-      userID: props.user.id,
-      nickname: props.user.nickname,
-      faceURL: props.user.avatarUrl ?? 'https://example.org/avatar.png'
-    }
+    users: [
+      {
+        userID: props.user.id,
+        nickname: props.user.nickname,
+        faceURL: props.user.avatarUrl ?? 'https://example.org/avatar.png'
+      }
+    ]
   });
+
+  if (import.meta.env.VITE_USE_MOCK_DATA === 'true') {
+    await useRegister({ users: mockUsers });
+  }
 
   await IMSDK.login({
     platformID: getOrGeneratePlatformId(),
