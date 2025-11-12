@@ -18,9 +18,7 @@
     <UserProfile
       class="chat__header-profile"
       avatar-alt="user-profile-alt"
-      :avatar-url="props.contact?.avatarUrl"
-      :name="props.contact?.name"
-      :nickname="props.contact?.nickname"
+      v-bind="props.contact"
       v-else
     />
     <div class="chat__header-buttons" v-if="!isMobile">
