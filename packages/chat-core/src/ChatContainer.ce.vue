@@ -34,8 +34,12 @@ onMounted(async () => {
     platformID: getOrGeneratePlatformId(),
     userID: account.userID,
     token: account.chatToken,
-    apiAddr: `https://${import.meta.env.VITE_OPENIM_API_DOMAIN}`,
-    wsAddr: `wss://${import.meta.env.VITE_OPENIM_API_DOMAIN}`
+    apiAddr: import.meta.env.VITE_OPENIM_API_DOMAIN
+      ? `https://${import.meta.env.VITE_OPENIM_API_DOMAIN}`
+      : 'http://localhost:10002',
+    wsAddr: import.meta.env.VITE_OPENIM_API_DOMAIN
+      ? `wss://${import.meta.env.VITE_OPENIM_API_DOMAIN}`
+      : 'ws://localhost:10023'
   });
 });
 </script>

@@ -3,7 +3,9 @@ import { getOrGeneratePlatformId } from './useOpenIM';
 
 export const createOpenIMRestApi = (): Reqi => {
   const instance = new Reqi(
-    `https://${import.meta.env.VITE_OPENIM_API_DOMAIN}`
+    import.meta.env.VITE_OPENIM_API_DOMAIN
+      ? `https://${import.meta.env.VITE_OPENIM_API_DOMAIN}`
+      : 'http://localhost:10002'
   );
 
   instance.request.use((request: Request): Request => {
