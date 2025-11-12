@@ -40,7 +40,7 @@
             <Button
               :type="ButtonTypeEnum.ghost"
               :size="SizesEnum.little"
-              @click="handleNewContactModal(item)"
+              @click="handleNewContactModal"
             >
               <Icon :name="IconNameEnum.plus" />
             </Button>
@@ -113,7 +113,9 @@ const handleCollapse = (): void => {
   toggle();
 };
 
-const handleNewContactModal = (): void => {};
+const handleNewContactModal = (): void => {
+  emits('unmount-new-contact', { isChapterOpen: true });
+};
 
 const unmountContactClick = (contact): void => {
   if (state.chapter === 'ai') {
@@ -126,7 +128,7 @@ const unmountContactClick = (contact): void => {
     name: contact.title,
     contact: {
       name: contact.title,
-      avatarUrl: contact.imageURL,
+      avatarUrl: contact.imageURL || '',
       nickname: contact.nickname || ''
     }
   });
