@@ -32,6 +32,7 @@
     <MenuInfo
       class="chat__info"
       :open="state.isMenuOpen"
+      :contact="state.contact"
       @unmount-collapse="handleMenuCollapse"
       @unmount-new-contact="handleNewContact"
     />

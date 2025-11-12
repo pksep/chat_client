@@ -19,16 +19,20 @@
     <section class="new-contact__section">
       <Search class="new-contact__search" />
       <ul class="new-contact__list">
-        <li class="new-contact__item">
+        <li
+          v-for="contact in contacts"
+          :key="contact.id"
+          class="new-contact__item"
+        >
           <UserProfile
-            name="John Doe"
-            nickname="johndoe"
-            avatar-url="/avatar-user.png"
-            avatar-alt="avatar user"
+            :name="contact.name"
+            :nickname="contact.nickname"
+            :avatar-url="contact.avatarUrl"
+            :avatar-alt="contact.avatarAlt"
           />
           <Checkbox
             :size="CheckboxSizeEnum.small"
-            @update:model-value="handleCheckbox"
+            @update:model-value="value => handleCheckbox(value, contact.id)"
           />
         </li>
       </ul>
@@ -68,9 +72,24 @@ import {
 import UserProfile from '../UserProfile/UserProfile.vue';
 import AddUser from './AddUser.vue';
 
-const props = withDefaults(defineProps<{ open: boolean }>(), {
-  open: false
-});
+interface Contact {
+  id: string | number;
+  name: string;
+  nickname: string;
+  avatarUrl: string;
+  avatarAlt: string;
+}
+
+const props = withDefaults(
+  defineProps<{
+    open: boolean;
+    contacts?: Contact[];
+  }>(),
+  {
+    open: false,
+    contacts: () => []
+  }
+);
 
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
@@ -104,8 +123,12 @@ const closeModal = (): void => {
   emits('unmount-close');
 };
 
-const handleCheckbox = (isCheck: boolean): void => {
-  state.checkUsers.add(isCheck);
+const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
+  if (isCheck) {
+    state.checkUsers.add(contactId);
+  } else {
+    state.checkUsers.delete(contactId);
+  }
 };
 
 const handleCloseAddUser = (): void => {

@@ -31,6 +31,7 @@ export interface IUserProps {
 
 export interface IMenuProps {
   open?: boolean;
+  contact?: IUserProps;
 }
 
 export interface IMenuRightProps extends IMenuProps {
