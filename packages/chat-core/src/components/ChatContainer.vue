@@ -25,6 +25,8 @@
     <Chat
       :base-url="props.baseUrl"
       :chapter="state.chapter"
+      :contact-id="state.contact?.id"
+      :conversion-id="state.contact?.conversionId"
       class="chat__messages"
       ref="chatRef"
       @unmount-chapter="unmountHeaderMenuChapter"
@@ -39,6 +41,8 @@
   </main>
   <NewContactModal
     :open="state.isNewContactOpen"
+    @unmount-close="closeContactModal"
+    @unmount-new-contact="handleNewContactMessage"
     :contacts="users"
     @unmount-close="closeContactModal"
   />
@@ -54,6 +58,7 @@ import MenuInfo from './MenuInfo.vue';
 import NewContactModal from './NewChat/NewContact.vue';
 import type { IChatContainerProps } from './interfaces/interfaces';
 import { useUsers } from '../composables/useUsers';
+import { sendMessageIM } from '../services/useOpenIM';
 
 const state = reactive({
   isCollapse: false,
@@ -111,6 +116,19 @@ const handleClearClick = (): void => {
   if (state.chapter === 'ai' && chatRef.value) {
     chatRef.value.handleClear();
   }
+};
+
+const handleNewContactMessage = async (contact): void => {
+  state.chapter = contact.name;
+  state.contact = contact;
+
+  console.log(contact);
+
+  await sendMessageIM({
+    message: '',
+    to: contact.userID || '',
+    groupId: ''
+  });
 };
 
 const handleExit = (): void => {

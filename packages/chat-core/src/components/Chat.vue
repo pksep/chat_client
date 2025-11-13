@@ -17,6 +17,8 @@
       ref="messageListRef"
       :chapter="state.chapter"
       :baseUrl="props.baseUrl"
+      :contactId
+      :conversionId
     />
   </section>
 </template>

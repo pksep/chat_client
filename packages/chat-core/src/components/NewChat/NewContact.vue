@@ -23,6 +23,7 @@
           v-for="contact in contacts"
           :key="contact.id"
           class="new-contact__item"
+          @click="handleNewContact(contact)"
         >
           <UserProfile
             :name="contact.name"
@@ -79,6 +80,7 @@ const props = withDefaults(defineProps<INewContactProps>(), {
 
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
+  (e: 'unmount-new-contact', contact: Contact);
 }>();
 
 const state = reactive({
@@ -115,6 +117,11 @@ const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
   } else {
     state.checkUsers.delete(contactId);
   }
+};
+
+const handleNewContact = (contact: Contact): void => {
+  emits('unmount-new-contact', contact);
+  closeModal();
 };
 
 const handleCloseAddUser = (): void => {

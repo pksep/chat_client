@@ -20,16 +20,18 @@
     class="chat__message-wrapper"
     v-else-if="state.messages.length"
     ref="chatWrapperRef"
+    @scroll="handleScroll"
   >
     <div class="chat__message-bubble">
-      <MessageBubble
+      <PersonalMessageBubble
         v-for="(message, index) in state.messages"
         :key="index"
-        :class="messageChat(message.role)"
-        :message="message.content"
-        :author="message.role"
-        :time="time"
-        :loader="message.loading"
+        :class="
+          messageChat(props.contactId === message.recvID ? 'user' : 'assistant')
+        "
+        :message="message.textElem.content"
+        :is-me-sender="props.contactId === message.recvID"
+        :time="message.sendTime"
       />
     </div>
   </div>
@@ -50,28 +52,33 @@ import {
   onMounted,
   useTemplateRef,
   nextTick,
-  onUnmounted
+  onUnmounted,
+  computed
 } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
 import { ContentEditor } from 'sep-yui';
 import { removeMessageLoading, useMastra } from '../services/useMastra';
-import { useTime } from '../composables/useTime';
-import { sendMessageIM } from '../services/useOpenIM';
+import {
+  getMessagesByConversationId,
+  getSavedMessages,
+  markAsRead,
+  sendMessageIM
+} from '../services/useOpenIM';
 import type { IMessageListProps } from './interfaces/message-list';
-
-const state = reactive({
-  messages: [],
-  chatId: null
-});
+import PersonalMessageBubble from './Messages/PersonalMessageBubble.vue';
 
 const props = withDefaults(defineProps<IMessageListProps>(), {
   chapter: null
 });
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
-
 const inputText = ref('');
+
+const state = reactive({
+  messages: computed(() => getSavedMessages(props.conversionId || '')),
+  chatId: null
+});
 
 const {
   messages: aiMessages,
@@ -79,8 +86,6 @@ const {
   clearMessages: clearAiMessages,
   generateChatId
 } = useMastra('generalAgent', state.chatId, props.baseUrl);
-
-const { time } = useTime();
 
 const messageChat = (role: string) => [
   'message__bubble',
@@ -93,11 +98,27 @@ const scrollToBottom = (): void => {
   }
 };
 
+const handleScroll = async (): Promise<void> => {
+  if (chatWrapperRef?.value) {
+    const scrollHeight = chatWrapperRef.value.scrollHeight;
+    if (chatWrapperRef.value?.scrollTop < 20) {
+      await getMessagesByConversationId(
+        props.conversionId,
+        state.messages[0]?.clientMsgID
+      );
+      nextTick(() => {
+        chatWrapperRef.value!.scrollTop =
+          chatWrapperRef.value!.scrollHeight - scrollHeight;
+      });
+    }
+  }
+};
+
 watch(
   () => props.chapter,
   (newValue, oldValue) => {
     if (newValue !== oldValue) {
-      state.messages = [];
+      getMessagesByConversationId(props.conversionId);
     }
     if (aiMessages.value.length || state.messages.length) {
       nextTick(() => scrollToBottom());
@@ -105,8 +126,24 @@ watch(
   }
 );
 
+watch(
+  () => state.messages.length,
+  () => {
+    if (!state.messages.length || chatWrapperRef.value?.scrollTop > 200) {
+      return;
+    }
+
+    nextTick(() => scrollToBottom());
+
+    const newMessage = state.messages[state.messages.length - 1];
+
+    if (newMessage.sendID === props.contactId) {
+      markAsRead(props.conversionId);
+    }
+  }
+);
+
 const handleClear = (): void => {
-  state.messages = [];
   clearAiMessages();
 };
 
@@ -114,16 +151,17 @@ const handleSend = async (): Promise<void> => {
   if (!inputText.value.trim()) return;
   const text = inputText.value;
   inputText.value = '';
+
   if (props.chapter === 'ai') {
     await sendMessage(text, scrollToBottom);
   } else {
-    sendMessageIM({
+    await sendMessageIM({
       message: text,
-      to: state.chatId,
-      groupId: state.chatId
+      to: props.contactId || '',
+      groupId: props.contactId || ''
     });
   }
-  scrollToBottom();
+  nextTick(() => scrollToBottom());
 };
 
 onMounted(() => {

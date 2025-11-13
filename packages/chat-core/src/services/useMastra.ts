@@ -30,17 +30,39 @@ function openDB(): Promise<IDBDatabase> {
 
 /** Load cached messages for a chat */
 async function loadMessages(chatId: string): Promise<Message[]> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const store = tx.objectStore(STORE_NAME);
-    const getRequest = store.get(chatId);
-    getRequest.onsuccess = () => {
-      const result = getRequest.result;
-      resolve(result ? result.messages : []);
-    };
-    getRequest.onerror = () => reject(getRequest.error);
-  });
+  if (!chatId || typeof chatId !== 'string') {
+    console.warn('Invalid chatId provided:', chatId);
+    return [];
+  }
+
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const getRequest = store.get(chatId);
+
+      getRequest.onsuccess = () => {
+        const result = getRequest.result;
+        console.log('Loaded messages for chatId:', chatId, result);
+
+        if (result && result.messages && Array.isArray(result.messages)) {
+          resolve(result.messages);
+        } else {
+          console.warn('No messages found for chatId:', chatId);
+          resolve([]);
+        }
+      };
+
+      getRequest.onerror = () => {
+        console.error('Error loading messages:', getRequest.error);
+        reject(getRequest.error);
+      };
+    });
+  } catch (error) {
+    console.error('Error in loadMessages:', error);
+    return [];
+  }
 }
 
 /** Get all stored chats from IndexedDB */
