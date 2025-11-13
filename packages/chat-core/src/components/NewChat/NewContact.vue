@@ -23,6 +23,7 @@
           v-for="contact in contacts"
           :key="contact.id"
           class="new-contact__item"
+          @click="handleNewContact(contact)"
         >
           <UserProfile
             :name="contact.name"
@@ -73,11 +74,9 @@ import UserProfile from '../UserProfile/UserProfile.vue';
 import AddUser from './AddUser.vue';
 
 interface Contact {
-  id: string | number;
-  name: string;
+  userID: string;
   nickname: string;
-  avatarUrl: string;
-  avatarAlt: string;
+  faceURL?: string;
 }
 
 const props = withDefaults(
@@ -93,6 +92,7 @@ const props = withDefaults(
 
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
+  (e: 'unmount-new-contact', contact: Contact);
 }>();
 
 const state = reactive({
@@ -129,6 +129,11 @@ const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
   } else {
     state.checkUsers.delete(contactId);
   }
+};
+
+const handleNewContact = (contact: Contact): void => {
+  emits('unmount-new-contact', contact);
+  closeModal();
 };
 
 const handleCloseAddUser = (): void => {

@@ -22,7 +22,7 @@
         ></div>
         <div class="contact-list__top">
           <Icon
-            v-if="contact.notificationCount === 0"
+            v-if="contact.isRead"
             :name="IconNameEnum.read"
             class="contact-list__read-icon"
           />

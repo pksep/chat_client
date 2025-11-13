@@ -42,6 +42,7 @@
   <NewContactModal
     :open="state.isNewContactOpen"
     @unmount-close="closeContactModal"
+    @unmount-new-contact="handleNewContactMessage"
     :contacts="users"
   />
 </template>
@@ -56,6 +57,7 @@ import MenuInfo from './MenuInfo.vue';
 import NewContactModal from './NewChat/NewContact.vue';
 import type { IChatContainerProps } from './interfaces/interfaces';
 import { useUsers } from '../composables/useUsers';
+import { sendMessageIM } from '../services/useOpenIM';
 
 const state = reactive({
   isCollapse: false,
@@ -113,6 +115,19 @@ const handleClearClick = (): void => {
   if (state.chapter === 'ai' && chatRef.value) {
     chatRef.value.handleClear();
   }
+};
+
+const handleNewContactMessage = async (contact): void => {
+  state.chapter = contact.name;
+  state.contact = contact;
+
+  console.log(contact);
+
+  await sendMessageIM({
+    message: '',
+    to: contact.userID || '',
+    groupId: ''
+  });
 };
 
 const handleExit = (): void => {

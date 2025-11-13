@@ -6,6 +6,7 @@ interface IContact {
   latestMessage: string;
   latestMessageTime: Date;
   notificationCount: number;
+  isRead?: boolean;
 }
 
 export interface IContactListProps {

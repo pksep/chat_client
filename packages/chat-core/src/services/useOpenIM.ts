@@ -1,5 +1,6 @@
 import { CbEvents, getSDK } from '@openim/wasm-client-sdk';
 import { ref } from 'vue';
+import { updateConversationList } from './useConversions';
 
 const IMSDK = getSDK({ debug: false });
 
@@ -16,7 +17,18 @@ const setupOpenIM = (): void => {
     console.error('[OpenIM] Connection failed:', err);
   });
 
-  IMSDK.on(CbEvents.OnRecvNewMessage, evt => {
+  IMSDK.on(CbEvents.OnConversationChanged, err => {
+    updateConversationList(err.data || []);
+  });
+
+  // check all events for debugging
+  // Object.values(CbEvents).forEach(eventName => {
+  //   IMSDK.on(eventName, (data: any) => {
+  //     console.debug(`[OpenIM Event] ${eventName}:`, data);
+  //   });
+  // });
+
+  IMSDK.on(CbEvents.OnRecvNewMessages, evt => {
     try {
       const payload = evt?.data as any;
 
@@ -112,24 +124,36 @@ const getOrGeneratePlatformId = (): number => {
 };
 
 const getMessagesByConversationId = async (
-  conversationId: string
+  conversationId: string,
+  lastClientMsgID: string = ''
 ): Promise<any[]> => {
   try {
     const response = await IMSDK.getAdvancedHistoryMessageList({
       conversationID: conversationId,
-      startClientMsgID: '',
-      count: 50,
+      startClientMsgID: lastClientMsgID,
+      count: 10,
       viewType: 0
     });
 
     const messages = response.data.messageList || [];
-    saveMessagesToLocal(conversationId, messages);
+    if (lastClientMsgID) {
+      appendOldMessagesToLocal(conversationId, messages);
+    } else {
+      saveMessagesToLocal(conversationId, messages);
+    }
 
     return messages;
   } catch (err) {
     console.error('Failed to get messages for conversation:', err);
     return [];
   }
+};
+
+// When current user reads a chat
+const markAsRead = async (conversationID: string) => {
+  const res = await IMSDK.markConversationMessageAsRead(conversationID);
+
+  console.log(res);
 };
 
 // In-module reactive "store" — no extra files
@@ -149,6 +173,12 @@ const appendMessageToLocal = (conversationId: string, message: any): void => {
   messagesStore.value[conversationId] = arr;
 };
 
+const appendOldMessagesToLocal = (conversationId: string, messages): void => {
+  const arr = messagesStore.value[conversationId] || [];
+  arr.unshift(...messages);
+  messagesStore.value[conversationId] = arr;
+};
+
 export {
   IMSDK,
   setupOpenIM,
@@ -156,5 +186,6 @@ export {
   getMessagesByConversationId,
   saveMessagesToLocal,
   getSavedMessages,
-  appendMessageToLocal
+  appendMessageToLocal,
+  markAsRead
 };

@@ -40,7 +40,7 @@
             <Button
               :type="ButtonTypeEnum.ghost"
               :size="SizesEnum.little"
-              @click="handleNewContactModal"
+              @click="item.onClickPlusButton"
             >
               <Icon :name="IconNameEnum.plus" />
             </Button>
@@ -156,10 +156,14 @@ const aiChapterClasses = computed(() => [
 
 const listChannels = [
   {
-    title: 'Каналы'
+    title: 'Каналы',
+    onClickPlusButton: () => {
+      console.log('click');
+    }
   },
   {
-    title: 'Личные сообщения'
+    title: 'Личные сообщения',
+    onClickPlusButton: handleNewContactModal
   }
 ];
 

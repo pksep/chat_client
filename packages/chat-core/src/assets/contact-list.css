@@ -39,8 +39,13 @@
   color: var(--text-grey);
 }
 
-.contact-list__description * {
+.contact-list__description p {
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 170px;
+  height: 22px;
 }
 
 .contact-list__notification {

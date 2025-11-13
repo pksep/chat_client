@@ -20,6 +20,7 @@
     class="chat__message-wrapper"
     v-else-if="state.messages.length"
     ref="chatWrapperRef"
+    @scroll="handleScroll"
   >
     <div class="chat__message-bubble">
       <PersonalMessageBubble
@@ -61,23 +62,23 @@ import { removeMessageLoading, useMastra } from '../services/useMastra';
 import {
   getMessagesByConversationId,
   getSavedMessages,
+  markAsRead,
   sendMessageIM
 } from '../services/useOpenIM';
 import type { IMessageListProps } from './interfaces/message-list';
 import PersonalMessageBubble from './Messages/PersonalMessageBubble.vue';
-
-const state = reactive({
-  messages: computed(() => getSavedMessages(props.conversionId || '')),
-  chatId: null
-});
 
 const props = withDefaults(defineProps<IMessageListProps>(), {
   chapter: null
 });
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
-
 const inputText = ref('');
+
+const state = reactive({
+  messages: computed(() => getSavedMessages(props.conversionId || '')),
+  chatId: null
+});
 
 const {
   messages: aiMessages,
@@ -97,6 +98,37 @@ const scrollToBottom = (): void => {
   }
 };
 
+const inBottom = (): boolean => {
+  if (chatWrapperRef?.value) {
+    const { scrollTop, scrollHeight, clientHeight } = chatWrapperRef.value;
+    return scrollTop + clientHeight >= scrollHeight - 20;
+  }
+  return false;
+};
+
+const inTop = (): boolean => {
+  if (chatWrapperRef?.value) {
+    return chatWrapperRef.value.scrollTop < 20;
+  }
+  return false;
+};
+
+const handleScroll = async (): Promise<void> => {
+  if (chatWrapperRef?.value) {
+    const scrollHeight = chatWrapperRef.value.scrollHeight;
+    if (inTop()) {
+      await getMessagesByConversationId(
+        props.conversionId,
+        state.messages[0]?.clientMsgID
+      );
+      nextTick(() => {
+        chatWrapperRef.value!.scrollTop =
+          chatWrapperRef.value!.scrollHeight - scrollHeight;
+      });
+    }
+  }
+};
+
 watch(
   () => props.chapter,
   (newValue, oldValue) => {
@@ -105,6 +137,24 @@ watch(
     }
     if (aiMessages.value.length || state.messages.length) {
       nextTick(() => scrollToBottom());
+    }
+  }
+);
+
+watch(
+  () => state.messages.length,
+  () => {
+    if (!state.messages.length) {
+      return;
+    }
+
+    if (!inTop()) {
+      nextTick(() => scrollToBottom());
+    }
+    const lastMessage = state.messages[state.messages.length - 1];
+
+    if (lastMessage.sendID === props.contactId && inBottom()) {
+      markAsRead(props.conversionId);
     }
   }
 );
@@ -121,13 +171,13 @@ const handleSend = async (): Promise<void> => {
   if (props.chapter === 'ai') {
     await sendMessage(text, scrollToBottom);
   } else {
-    sendMessageIM({
+    await sendMessageIM({
       message: text,
       to: props.contactId || '',
       groupId: props.contactId || ''
     });
   }
-  scrollToBottom();
+  nextTick(() => scrollToBottom());
 };
 
 onMounted(() => {
