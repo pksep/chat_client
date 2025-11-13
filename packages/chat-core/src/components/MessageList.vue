@@ -58,7 +58,6 @@ import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
 import { ContentEditor } from 'sep-yui';
 import { removeMessageLoading, useMastra } from '../services/useMastra';
-import { useTime } from '../composables/useTime';
 import {
   getMessagesByConversationId,
   getSavedMessages,

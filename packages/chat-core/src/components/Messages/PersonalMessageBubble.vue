@@ -53,7 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue';
+import { computed } from 'vue';
 import {
   Avatar,
   Button,
