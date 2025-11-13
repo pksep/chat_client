@@ -73,6 +73,7 @@ import {
 import UserProfile from '../UserProfile/UserProfile.vue';
 import AddUser from './AddUser.vue';
 import type { INewContactProps } from './interfaces/new-contact';
+import { IUserProps } from '../interfaces/interfaces';
 
 const props = withDefaults(defineProps<INewContactProps>(), {
   open: false
@@ -80,7 +81,7 @@ const props = withDefaults(defineProps<INewContactProps>(), {
 
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
-  (e: 'unmount-new-contact', contact: Contact);
+  (e: 'unmount-new-contact', contact: IUserProps);
 }>();
 
 const state = reactive({
@@ -119,7 +120,7 @@ const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
   }
 };
 
-const handleNewContact = (contact: Contact): void => {
+const handleNewContact = (contact: IUserProps): void => {
   emits('unmount-new-contact', contact);
   closeModal();
 };
@@ -133,5 +134,3 @@ const handleOpenUser = (): void => {
   state.openAddUser = true;
 };
 </script>
-
-<style></style>

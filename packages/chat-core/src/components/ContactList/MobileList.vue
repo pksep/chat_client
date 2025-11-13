@@ -2,167 +2,90 @@
   <div
     class="mobile-list-container"
     role="main"
-    :data-testid="`${dataTestid}-MobileList-Container`"
+    :data-testid="`${props.dataTestid}-MobileList-Container`"
   >
     <div v-if="props.chapter === 'ai'">
       <button
         class="menu__user-assistant"
         @click="handleAiChapter"
-        :data-testid="`${dataTestid}-AIAssistant-Button`"
+        :data-testid="`${props.dataTestid}-AIAssistant-Button`"
       >
-        <AiIconWrapper :data-testid="`${dataTestid}-AIAssistant-Icon`" />
+        <AiIconWrapper :data-testid="`${props.dataTestid}-AIAssistant-Icon`" />
         <h3
           class="menu__user-assistant-title"
-          :data-testid="`${dataTestid}-AIAssistant-Title`"
+          :data-testid="`${props.dataTestid}-AIAssistant-Title`"
         >
           AI Ассистент
         </h3>
       </button>
       <Line
         class="menu__user-line"
-        :data-testid="`${dataTestid}-AIAssistant-Line`"
+        :data-testid="`${props.dataTestid}-AIAssistant-Line`"
       />
     </div>
 
-    <!-- Chat list -->
     <section
       v-else
       class="chat-list"
       role="region"
       aria-label="Contact list"
-      :data-testid="`${dataTestid}-ChatList-Section`"
+      :data-testid="`${props.dataTestid}-ChatList-Section`"
     >
       <ul
         class="chat-items-list"
         role="list"
-        :data-testid="`${dataTestid}-ChatItems-List`"
+        :data-testid="`${props.dataTestid}-ChatItems-List`"
       >
         <li
+          v-for="(contact, index) in props.contacts"
+          :key="index"
           class="chat-item"
           role="listitem"
           tabindex="0"
-          @click="
-            handleContactClick({
-              name: 'Общий',
-              lastMessage: 'Текст',
-              time: '19:48'
-            })
-          "
-          @keydown="
-            event =>
-              handleKeyDown(
-                {
-                  name: 'Общий',
-                  lastMessage: 'Текст',
-                  time: '19:48'
-                },
-                event
-              )
-          "
-          aria-label="Contact Общий, last message: Текст, time: 19:48"
-          :data-testid="`${dataTestid}-ChatItem-Item1`"
+          @click="handleContactClick(contact)"
+          @keydown="event => handleKeyDown(contact, event)"
+          :aria-label="`Contact ${contact.name}, last message: ${contact.lastMessage}, time: ${contact.time}`"
+          :data-testid="`${props.dataTestid}-ChatItem-Item${index + 1}`"
         >
           <div
             class="avatar"
             aria-label="Contact avatar"
-            :data-testid="`${dataTestid}-ChatItem-Avatar1`"
+            :data-testid="`${props.dataTestid}-ChatItem-Avatar${index + 1}`"
           >
-            О
+            {{ contact.avatar || contact.name.charAt(0) }}
           </div>
           <div
             class="chat-content"
-            :data-testid="`${dataTestid}-ChatItem-Content1`"
+            :data-testid="`${props.dataTestid}-ChatItem-Content${index + 1}`"
           >
             <h3
               class="title"
               role="heading"
               aria-level="2"
-              :data-testid="`${dataTestid}-ChatItem-Title1`"
+              :data-testid="`${props.dataTestid}-ChatItem-Title${index + 1}`"
             >
-              Общий
+              {{ contact.name }}
             </h3>
             <p
               class="message"
               aria-label="Last message"
-              :data-testid="`${dataTestid}-ChatItem-Message1`"
+              :data-testid="`${props.dataTestid}-ChatItem-Message${index + 1}`"
             >
-              Текст
+              {{ contact.lastMessage }}
             </p>
           </div>
           <div
             class="chat-service"
-            :data-testid="`${dataTestid}-ChatItem-Service1`"
+            :data-testid="`${props.dataTestid}-ChatItem-Service${index + 1}`"
           >
             <time
               class="time"
-              datetime="19:48"
+              :datetime="contact.time"
               aria-label="Message time"
-              :data-testid="`${dataTestid}-ChatItem-Time1`"
-              >19:48</time
+              :data-testid="`${props.dataTestid}-ChatItem-Time${index + 1}`"
             >
-          </div>
-        </li>
-
-        <li
-          class="chat-item"
-          role="listitem"
-          tabindex="0"
-          @click="
-            handleContactClick({
-              name: 'Общий',
-              lastMessage: 'Текст',
-              time: '19:48'
-            })
-          "
-          @keydown="
-            event => {
-              handleKeyDown(
-                { name: 'Общий', lastMessage: 'Текст', time: '19:48' },
-                event
-              );
-            }
-          "
-          aria-label="Contact Общий, last message: Текст, time: 19:48"
-          :data-testid="`${dataTestid}-ChatItem-Item2`"
-        >
-          <div
-            class="avatar"
-            aria-label="Contact avatar"
-            :data-testid="`${dataTestid}-ChatItem-Avatar2`"
-          >
-            О
-          </div>
-          <div
-            class="chat-content"
-            :data-testid="`${dataTestid}-ChatItem-Content2`"
-          >
-            <h3
-              class="title"
-              role="heading"
-              aria-level="2"
-              :data-testid="`${dataTestid}-ChatItem-Title2`"
-            >
-              Общий
-            </h3>
-            <p
-              class="message"
-              aria-label="Last message"
-              :data-testid="`${dataTestid}-ChatItem-Message2`"
-            >
-              Текст
-            </p>
-          </div>
-          <div
-            class="chat-service"
-            :data-testid="`${dataTestid}-ChatItem-Service2`"
-          >
-            <time
-              class="time"
-              datetime="19:48"
-              aria-label="Message time"
-              :data-testid="`${dataTestid}-ChatItem-Time2`"
-              >19:48</time
-            >
+              {{ contact.time }}
+            </time>
           </div>
         </li>
       </ul>
@@ -174,29 +97,36 @@
 import AiIconWrapper from '../AiIconWrapper.vue';
 import Line from '../Line.vue';
 
+interface Contact {
+  name: string;
+  lastMessage: string;
+  time: string;
+  avatar?: string;
+}
+
 interface Props {
   chapter?: string | null;
-  contacts?: Array<any>;
+  contacts?: Contact[];
   dataTestid?: string;
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   contacts: () => [],
   dataTestid: () => 'MobileList'
 });
 
 interface Emits {
-  (e: 'contactClick', contact: any): void;
+  (e: 'contactClick', contact: Contact): void;
   (e: 'unmount-chapter', chapter: string): void;
 }
 
 const emit = defineEmits<Emits>();
 
-const handleContactClick = (contact: any) => {
+const handleContactClick = (contact: Contact) => {
   emit('contactClick', contact);
 };
 
-const handleKeyDown = (contact: any, event: KeyboardEvent) => {
+const handleKeyDown = (contact: Contact, event: KeyboardEvent) => {
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault();
     emit('contactClick', contact);

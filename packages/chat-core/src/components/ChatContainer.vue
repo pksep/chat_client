@@ -44,7 +44,6 @@
     @unmount-close="closeContactModal"
     @unmount-new-contact="handleNewContactMessage"
     :contacts="users"
-    @unmount-close="closeContactModal"
   />
 </template>
 
@@ -118,7 +117,7 @@ const handleClearClick = (): void => {
   }
 };
 
-const handleNewContactMessage = async (contact): void => {
+const handleNewContactMessage = async (contact): Promise<void> => {
   state.chapter = contact.name;
   state.contact = contact;
 
