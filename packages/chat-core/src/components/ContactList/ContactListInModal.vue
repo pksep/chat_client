@@ -11,30 +11,32 @@
     </Button>
     <ul class="menu__info-users-list">
       <li v-for="(user, index) in props.contacts" :key="index">
-        <UserProfile
-          avatar-alt="avatar of user"
-          class="menu__user-profile"
-          :avatar-url="user.avatarUrl"
-          :name="user.name"
-          :nickname="user.nickname"
-          @unmount-click="openActivePopover(user.id.toString(), $event)"
-        />
-        <ContextMenu
-          :visible="isOpen[user.id.toString()]"
-          :position="position"
-          @unmount-close="closeActivePopover(user.id.toString())"
-        >
-          <template #default>
-            <Button
-              class="menu__info-button-little"
-              :type="ButtonTypeEnum.ghost"
-              :size="SizesEnum.little"
-              @click="closeActivePopover(user.id.toString())"
-            >
-              Удалить из канала
-            </Button>
-          </template>
-        </ContextMenu>
+        <template v-if="user">
+          <UserProfile
+            avatar-alt="avatar of user"
+            class="menu__user-profile"
+            :avatar-url="user.avatarUrl"
+            :name="user.name"
+            :nickname="user.nickname"
+            @unmount-click="openActivePopover(user.id.toString(), $event)"
+          />
+          <ContextMenu
+            :visible="isOpen[user.id.toString()]"
+            :position="position"
+            @unmount-close="closeActivePopover(user.id.toString())"
+          >
+            <template #default>
+              <Button
+                class="menu__info-button-little"
+                :type="ButtonTypeEnum.ghost"
+                :size="SizesEnum.little"
+                @click="closeActivePopover(user.id.toString())"
+              >
+                Удалить из канала
+              </Button>
+            </template>
+          </ContextMenu>
+        </template>
       </li>
     </ul>
   </section>
@@ -55,7 +57,14 @@ import { useContextMenu } from '../../composables/useContextMenu';
 import { IContactListProps } from './interfaces/contact-list';
 
 const props = withDefaults(defineProps<IContactListProps>(), {
-  contacts: () => []
+  contacts: () => [
+    {
+      id: '1',
+      name: 'John Doe',
+      nickname: 'jd',
+      avatarUrl: '/avatar.jpg'
+    }
+  ]
 });
 
 const { isOpen, position, openActivePopover, closeActivePopover } =

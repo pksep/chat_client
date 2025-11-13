@@ -1,12 +1,19 @@
 <template>
   <section class="chat">
-    <AIListMobile
-      class="chat__mobile"
-      v-if="isMobile && !state.chapter"
-      @unmount-chapter="handleUnmountChapter"
-    />
+    <template v-if="isMobile">
+      <AIListMobile
+        class="chat__mobile"
+        v-if="!state.chapter"
+        @unmount-chapter="handleUnmountChapter"
+      />
+      <ContactListMobile
+        class="chat__mobile"
+        v-else-if="isShowContactList"
+        @unmount-chapter="handleUnmountChapter"
+      />
+    </template>
     <MessageList
-      v-if="state.chapter || !isMobile"
+      v-else-if="!isShowContactList"
       ref="messageListRef"
       :chapter="state.chapter"
       :baseUrl="props.baseUrl"
@@ -18,8 +25,9 @@
 import { useResizeState } from '../composables/useResizeState';
 import MessageList from './MessageList.vue';
 import AIListMobile from './ContactList/AIListMobile.vue';
+import ContactListMobile from './ContactList/MobileList.vue';
 import type { IMessageListProps } from './interfaces/message-list';
-import { useTemplateRef, reactive, watch } from 'vue';
+import { useTemplateRef, reactive, watch, computed } from 'vue';
 import { MAX_W_MD } from '../utils/constants';
 
 const props = withDefaults(defineProps<IMessageListProps>(), {
@@ -40,6 +48,10 @@ watch(
 );
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
+
+const isShowContactList = computed(
+  () => state.chapter === 'channels' || state.chapter === 'dialogs'
+);
 
 const messageListRef = useTemplateRef<any>(null);
 

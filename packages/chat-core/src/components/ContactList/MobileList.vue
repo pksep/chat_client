@@ -4,7 +4,29 @@
     role="main"
     :data-testid="`${dataTestid}-MobileList-Container`"
   >
+    <div v-if="props.chapter === 'ai'">
+      <button
+        class="menu__user-assistant"
+        @click="handleAiChapter"
+        :data-testid="`${dataTestid}-AIAssistant-Button`"
+      >
+        <AiIconWrapper :data-testid="`${dataTestid}-AIAssistant-Icon`" />
+        <h3
+          class="menu__user-assistant-title"
+          :data-testid="`${dataTestid}-AIAssistant-Title`"
+        >
+          AI Ассистент
+        </h3>
+      </button>
+      <Line
+        class="menu__user-line"
+        :data-testid="`${dataTestid}-AIAssistant-Line`"
+      />
+    </div>
+
+    <!-- Chat list -->
     <section
+      v-else
       class="chat-list"
       role="region"
       aria-label="Contact list"
@@ -100,7 +122,7 @@
               );
             }
           "
-          aria-label="contact"
+          aria-label="Contact Общий, last message: Текст, time: 19:48"
           :data-testid="`${dataTestid}-ChatItem-Item2`"
         >
           <div
@@ -149,8 +171,11 @@
 </template>
 
 <script setup lang="ts">
-// Props
+import AiIconWrapper from '../AiIconWrapper.vue';
+import Line from '../Line.vue';
+
 interface Props {
+  chapter?: string | null;
   contacts?: Array<any>;
   dataTestid?: string;
 }
@@ -160,25 +185,26 @@ withDefaults(defineProps<Props>(), {
   dataTestid: () => 'MobileList'
 });
 
-// Emits
 interface Emits {
   (e: 'contactClick', contact: any): void;
+  (e: 'unmount-chapter', chapter: string): void;
 }
 
 const emit = defineEmits<Emits>();
 
-// Methods
 const handleContactClick = (contact: any) => {
   emit('contactClick', contact);
 };
 
-// Keyboard navigation for accessibility
 const handleKeyDown = (contact: any, event: KeyboardEvent) => {
-  // Handle Enter or Space key to trigger click
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault();
     emit('contactClick', contact);
   }
+};
+
+const handleAiChapter = () => {
+  emit('unmount-chapter', 'ai');
 };
 </script>
 
@@ -189,10 +215,9 @@ const handleKeyDown = (contact: any, event: KeyboardEvent) => {
   height: 892px;
   background-color: #ffffff;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto auto 1fr auto;
   border-radius: 18px;
   overflow: hidden;
-  font-family: 'Inter', sans-serif;
 }
 
 .status-bar {
@@ -325,6 +350,39 @@ const handleKeyDown = (contact: any, event: KeyboardEvent) => {
   text-align: right;
   padding: 2px 0;
   margin: 0;
+}
+
+/* AI Assistant styles */
+.menu__user-assistant {
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+.menu__user-assistant-title {
+  margin: 0 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #181818;
+}
+
+.menu__user-line {
+  margin: 0 20px;
+}
+
+/* Bottom app bar styling */
+.bottom-app-bar {
+  display: grid;
+  justify-content: end;
+  align-items: center;
+  padding: 10px;
+  background-color: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(40px);
 }
 
 @media (max-width: 768px) {
