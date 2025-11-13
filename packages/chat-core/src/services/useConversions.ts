@@ -1,5 +1,6 @@
-import { CbEvents, getSDK } from '@openim/wasm-client-sdk';
+import { CbEvents } from '@openim/wasm-client-sdk';
 import { ref } from 'vue';
+import { IMSDK } from './useOpenIM';
 
 export interface IConversation {
   id: string;
@@ -13,8 +14,6 @@ export interface IConversation {
   notificationCount: number;
   isRead: boolean;
 }
-
-const IMSDK = getSDK({ debug: false });
 
 const conversionStore = ref<IConversation[]>([]);
 

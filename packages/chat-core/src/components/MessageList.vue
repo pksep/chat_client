@@ -98,25 +98,10 @@ const scrollToBottom = (): void => {
   }
 };
 
-const inBottom = (): boolean => {
-  if (chatWrapperRef?.value) {
-    const { scrollTop, scrollHeight, clientHeight } = chatWrapperRef.value;
-    return scrollTop + clientHeight >= scrollHeight - 20;
-  }
-  return false;
-};
-
-const inTop = (): boolean => {
-  if (chatWrapperRef?.value) {
-    return chatWrapperRef.value.scrollTop < 20;
-  }
-  return false;
-};
-
 const handleScroll = async (): Promise<void> => {
   if (chatWrapperRef?.value) {
     const scrollHeight = chatWrapperRef.value.scrollHeight;
-    if (inTop()) {
+    if (chatWrapperRef.value?.scrollTop < 20) {
       await getMessagesByConversationId(
         props.conversionId,
         state.messages[0]?.clientMsgID
@@ -144,16 +129,15 @@ watch(
 watch(
   () => state.messages.length,
   () => {
-    if (!state.messages.length) {
+    if (!state.messages.length || chatWrapperRef.value?.scrollTop > 200) {
       return;
     }
 
-    if (!inTop()) {
-      nextTick(() => scrollToBottom());
-    }
-    const lastMessage = state.messages[state.messages.length - 1];
+    nextTick(() => scrollToBottom());
 
-    if (lastMessage.sendID === props.contactId && inBottom()) {
+    const newMessage = state.messages[state.messages.length - 1];
+
+    if (newMessage.sendID === props.contactId) {
       markAsRead(props.conversionId);
     }
   }
