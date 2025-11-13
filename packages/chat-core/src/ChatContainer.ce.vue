@@ -6,7 +6,11 @@
 import { onMounted } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
 import type { IChatContainerProps } from './components/interfaces/interfaces';
-import { IMSDK, getOrGeneratePlatformId, setupOpenIM } from './services/useOpenIM';
+import {
+  IMSDK,
+  getOrGeneratePlatformId,
+  setupOpenIM
+} from './services/useOpenIM';
 import { useLogin, useRegister, getAuthToken } from './composables/useLogin';
 import {
   clearAllData,
