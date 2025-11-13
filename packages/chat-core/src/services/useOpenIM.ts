@@ -1,17 +1,7 @@
 import { CbEvents, getSDK } from '@openim/wasm-client-sdk';
+import { ref } from 'vue';
 
-export interface IConversation {
-  id: string;
-  userId: string;
-  title: string;
-  imageURL: string;
-  isPin: boolean;
-  nickname: string;
-  latestMessage: string;
-  notificationCount: boolean;
-}
-
-const IMSDK = getSDK();
+const IMSDK = getSDK({ debug: false });
 
 const setupOpenIM = (): void => {
   IMSDK.on(CbEvents.OnConnecting, () => {
@@ -24,6 +14,51 @@ const setupOpenIM = (): void => {
 
   IMSDK.on(CbEvents.OnConnectFailed, err => {
     console.error('[OpenIM] Connection failed:', err);
+  });
+
+  IMSDK.on(CbEvents.OnRecvNewMessage, evt => {
+    try {
+      const payload = evt?.data as any;
+
+      if (!payload) return;
+
+      let list: any[] = [];
+
+      if (Array.isArray(payload)) {
+        list = payload;
+      } else if (Array.isArray(payload.messageList)) {
+        list = payload.messageList;
+      } else {
+        list = [payload];
+      }
+
+      list.forEach((m: any) => {
+        const [smallerUserID, largerUserID] = [m.sendID, m.recvID].sort();
+
+        const convId = m.groupID || `si_${smallerUserID}_${largerUserID}`;
+        if (!convId) return;
+        appendMessageToLocal(convId, m);
+      });
+    } catch (e) {
+      console.error('[OpenIM] Failed to process incoming message event:', e);
+    }
+  });
+
+  IMSDK.on(CbEvents.OnRecvC2CReadReceipt, evt => {
+    const receipts = evt.data as any as Array<{
+      conversationID: string;
+      clientMsgID: string;
+      readTime: number;
+    }>;
+    receipts.forEach(r => {
+      // mark the message with clientMsgID in conversationID as “read by other”
+      const msgs = getSavedMessages(r.conversationID);
+      const idx = msgs.findIndex(m => m.clientMsgID === r.clientMsgID);
+      if (idx >= 0) {
+        msgs[idx].isReadByPeer = true;
+        saveMessagesToLocal(r.conversationID, msgs);
+      }
+    });
   });
 };
 
@@ -43,11 +78,20 @@ export const sendMessageIM = async ({
     const textMessage = createResponse.data;
     textMessage.clientMsgID = clientMsgID;
 
-    await IMSDK.sendMessage({
+    const res = await IMSDK.sendMessage({
       message: textMessage,
       recvID: to,
       groupID: groupId
     });
+
+    const [smallerUserID, largerUserID] = [
+      res.data.sendID,
+      res.data.recvID
+    ].sort();
+
+    const convId = res.data.groupID || `si_${smallerUserID}_${largerUserID}`;
+    appendMessageToLocal(convId, res.data);
+
     console.debug('[OpenIM] Message sent successfully to:', to);
   } catch (error) {
     console.error('[OpenIM] Failed to send message:', error);
@@ -67,31 +111,50 @@ const getOrGeneratePlatformId = (): number => {
   }
 };
 
-const getConversationList = async (): Promise<IConversation[]> => {
+const getMessagesByConversationId = async (
+  conversationId: string
+): Promise<any[]> => {
   try {
-    const response = await IMSDK.getAllConversationList();
-
-    const result = response.data || [];
-
-    const conversations = result.map(c => {
-      return {
-        id: c.conversationID,
-        userId: c.userID,
-        title: c.showName,
-        imageURL: c.faceURL,
-        isPin: c.isPinned,
-        nickname: c.showName,
-        latestMessage: JSON.parse(c.latestMsg)?.textElem?.content || '',
-        latestMessageTime: JSON.parse(c.latestMsg)?.sendTime || '',
-        notificationCount: c.unreadCount > 0
-      };
+    const response = await IMSDK.getAdvancedHistoryMessageList({
+      conversationID: conversationId,
+      startClientMsgID: '',
+      count: 50,
+      viewType: 0
     });
 
-    return conversations;
+    const messages = response.data.messageList || [];
+    saveMessagesToLocal(conversationId, messages);
+
+    return messages;
   } catch (err) {
-    console.error('Failed to get users with messages:', err);
+    console.error('Failed to get messages for conversation:', err);
     return [];
   }
 };
 
-export { IMSDK, setupOpenIM, getOrGeneratePlatformId, getConversationList };
+// In-module reactive "store" — no extra files
+const messagesStore = ref<Record<string, any[]>>({});
+
+const saveMessagesToLocal = (conversationId: string, messages: any[]): void => {
+  messagesStore.value[conversationId] = messages;
+};
+
+const getSavedMessages = (conversationId: string): any[] => {
+  return messagesStore.value[conversationId] || [];
+};
+
+const appendMessageToLocal = (conversationId: string, message: any): void => {
+  const arr = messagesStore.value[conversationId] || [];
+  arr.push(message);
+  messagesStore.value[conversationId] = arr;
+};
+
+export {
+  IMSDK,
+  setupOpenIM,
+  getOrGeneratePlatformId,
+  getMessagesByConversationId,
+  saveMessagesToLocal,
+  getSavedMessages,
+  appendMessageToLocal
+};

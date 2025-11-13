@@ -4,3 +4,9 @@ export interface IMessageBubbleProps {
   loader?: boolean;
   author?: 'assistant' | 'user';
 }
+
+export interface IPersonalMessageBubbleProps {
+  message: string;
+  time: number;
+  isMeSender: boolean;
+}

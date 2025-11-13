@@ -26,6 +26,7 @@
       :base-url="props.baseUrl"
       :chapter="state.chapter"
       :contact-id="state.contact?.id"
+      :conversion-id="state.contact?.conversionId"
       class="chat__messages"
       ref="chatRef"
       @unmount-chapter="unmountHeaderMenuChapter"

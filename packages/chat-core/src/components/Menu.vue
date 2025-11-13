@@ -93,14 +93,17 @@ import {
 import UserProfile from './UserProfile/UserProfile.vue';
 import ContactList from './ContactList/ContactList.vue';
 import type { IMenuEmits, IUserProps } from './interfaces/interfaces';
-import { getConversationList } from '../services/useOpenIM';
+import {
+  fetchConversationList,
+  getConversationList
+} from '../services/useConversions';
 
 const props = withDefaults(defineProps<{ user: IUserProps }>(), {});
 
 const state = reactive({
   chapter: '',
   installPrompt: null,
-  contactList: []
+  contactList: computed(() => getConversationList())
 });
 
 const emits = defineEmits<IMenuEmits>();
@@ -133,7 +136,8 @@ const unmountContactClick = (contact): void => {
       id: contact.userId,
       name: contact.title,
       avatarUrl: contact.imageURL || '',
-      nickname: contact.nickname || ''
+      nickname: contact.nickname || '',
+      conversionId: contact.id || ''
     }
   });
 };
@@ -172,8 +176,6 @@ onMounted(() => {
     state.installPrompt = event;
   });
 
-  setTimeout(async () => {
-    state.contactList = await getConversationList();
-  }, 2000);
+  fetchConversationList();
 });
 </script>

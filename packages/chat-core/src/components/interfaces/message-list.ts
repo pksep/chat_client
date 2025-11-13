@@ -5,4 +5,5 @@ export interface IMessageListProps {
   baseUrl?: string;
   chapter?: string | null;
   contactId?: string;
+  conversionId?: string;
 }

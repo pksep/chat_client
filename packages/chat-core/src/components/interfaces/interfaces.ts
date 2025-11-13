@@ -27,6 +27,7 @@ export interface IUserProps {
   avatarAlt?: string;
   name?: string;
   nickname?: string;
+  conversionId?: string;
 }
 
 export interface IMenuProps {

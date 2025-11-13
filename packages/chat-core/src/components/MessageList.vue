@@ -22,14 +22,15 @@
     ref="chatWrapperRef"
   >
     <div class="chat__message-bubble">
-      <MessageBubble
+      <PersonalMessageBubble
         v-for="(message, index) in state.messages"
         :key="index"
-        :class="messageChat(message.role)"
-        :message="message.content"
-        :author="message.role"
-        :time="time"
-        :loader="message.loading"
+        :class="
+          messageChat(props.contactId === message.recvID ? 'user' : 'assistant')
+        "
+        :message="message.textElem.content"
+        :is-me-sender="props.contactId === message.recvID"
+        :time="message.sendTime"
       />
     </div>
   </div>
@@ -50,18 +51,24 @@ import {
   onMounted,
   useTemplateRef,
   nextTick,
-  onUnmounted
+  onUnmounted,
+  computed
 } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
 import { ContentEditor } from 'sep-yui';
 import { removeMessageLoading, useMastra } from '../services/useMastra';
 import { useTime } from '../composables/useTime';
-import { sendMessageIM } from '../services/useOpenIM';
+import {
+  getMessagesByConversationId,
+  getSavedMessages,
+  sendMessageIM
+} from '../services/useOpenIM';
 import type { IMessageListProps } from './interfaces/message-list';
+import PersonalMessageBubble from './Messages/PersonalMessageBubble.vue';
 
 const state = reactive({
-  messages: [],
+  messages: computed(() => getSavedMessages(props.conversionId || '')),
   chatId: null
 });
 
@@ -80,8 +87,6 @@ const {
   generateChatId
 } = useMastra('generalAgent', state.chatId, props.baseUrl);
 
-const { time } = useTime();
-
 const messageChat = (role: string) => [
   'message__bubble',
   { message__other: role === 'user' }
@@ -97,7 +102,7 @@ watch(
   () => props.chapter,
   (newValue, oldValue) => {
     if (newValue !== oldValue) {
-      state.messages = [];
+      getMessagesByConversationId(props.conversionId);
     }
     if (aiMessages.value.length || state.messages.length) {
       nextTick(() => scrollToBottom());
@@ -106,7 +111,6 @@ watch(
 );
 
 const handleClear = (): void => {
-  state.messages = [];
   clearAiMessages();
 };
 
@@ -114,6 +118,7 @@ const handleSend = async (): Promise<void> => {
   if (!inputText.value.trim()) return;
   const text = inputText.value;
   inputText.value = '';
+
   if (props.chapter === 'ai') {
     await sendMessage(text, scrollToBottom);
   } else {
