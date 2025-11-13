@@ -1,7 +1,7 @@
 <template>
   <main :class="chatContainerClasses">
     <Header
-      v-if="state.chapter"
+      v-if="!isShowContactList(state.chapter)"
       class="chat__header"
       :chapter="state.chapter"
       :contact="state.contact"
@@ -12,7 +12,7 @@
     />
     <HeaderMenu
       class="chat__header-menu"
-      v-else
+      v-else-if="isMobile"
       @unmount-chapter="unmountHeaderMenuChapter"
     />
     <Menu
@@ -25,6 +25,7 @@
     <Chat
       :base-url="props.baseUrl"
       :chapter="state.chapter"
+      :contacts="users"
       :contact-id="state.contact?.id"
       :conversion-id="state.contact?.conversionId"
       class="chat__messages"
@@ -57,12 +58,17 @@ import MenuInfo from './MenuInfo.vue';
 import NewContactModal from './NewChat/NewContact.vue';
 import type { IChatContainerProps } from './interfaces/interfaces';
 import { useUsers } from '../composables/useUsers';
+import { isShowContactList } from '../composables/useShowContactList';
 import { sendMessageIM } from '../services/useOpenIM';
+import { useResizeState } from '../composables/useResizeState';
+import { MAX_W_MD } from '../utils/constants';
+
+const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const state = reactive({
   isCollapse: false,
   isMenuOpen: false,
-  chapter: null,
+  chapter: isMobile ? 'assistant' : null,
   contact: null,
   isNewContactOpen: false
 });
@@ -131,7 +137,7 @@ const handleNewContactMessage = async (contact): Promise<void> => {
 };
 
 const handleExit = (): void => {
-  state.chapter = null;
+  state.chapter = 'assistant';
 };
 
 onMounted(async () => {

@@ -4,10 +4,10 @@
     role="main"
     :data-testid="`${props.dataTestid}-MobileList-Container`"
   >
-    <div v-if="props.chapter === 'ai'">
+    <div v-if="props.chapter === 'assistant'">
       <button
         class="menu__user-assistant"
-        @click="handleAiChapter"
+        @click="handleChapter('ai')"
         :data-testid="`${props.dataTestid}-AIAssistant-Button`"
       >
         <AiIconWrapper :data-testid="`${props.dataTestid}-AIAssistant-Icon`" />
@@ -37,56 +37,29 @@
         :data-testid="`${props.dataTestid}-ChatItems-List`"
       >
         <li
-          v-for="(contact, index) in props.contacts"
+          v-for="(contact, index) in contacts"
           :key="index"
           class="chat-item"
           role="listitem"
           tabindex="0"
           @click="handleContactClick(contact)"
           @keydown="event => handleKeyDown(contact, event)"
-          :aria-label="`Contact ${contact.name}, last message: ${contact.lastMessage}, time: ${contact.time}`"
           :data-testid="`${props.dataTestid}-ChatItem-Item${index + 1}`"
         >
-          <div
-            class="avatar"
+          <Avatar
+            :avatar-url="contact.avatarUrl"
+            class="menu__user-assistant"
             aria-label="Contact avatar"
             :data-testid="`${props.dataTestid}-ChatItem-Avatar${index + 1}`"
+          />
+          <h3
+            class="menu__user-assistant__title"
+            role="heading"
+            aria-level="2"
+            :data-testid="`${props.dataTestid}-ChatItem-Title${index + 1}`"
           >
-            {{ contact.avatar || contact.name.charAt(0) }}
-          </div>
-          <div
-            class="chat-content"
-            :data-testid="`${props.dataTestid}-ChatItem-Content${index + 1}`"
-          >
-            <h3
-              class="title"
-              role="heading"
-              aria-level="2"
-              :data-testid="`${props.dataTestid}-ChatItem-Title${index + 1}`"
-            >
-              {{ contact.name }}
-            </h3>
-            <p
-              class="message"
-              aria-label="Last message"
-              :data-testid="`${props.dataTestid}-ChatItem-Message${index + 1}`"
-            >
-              {{ contact.lastMessage }}
-            </p>
-          </div>
-          <div
-            class="chat-service"
-            :data-testid="`${props.dataTestid}-ChatItem-Service${index + 1}`"
-          >
-            <time
-              class="time"
-              :datetime="contact.time"
-              aria-label="Message time"
-              :data-testid="`${props.dataTestid}-ChatItem-Time${index + 1}`"
-            >
-              {{ contact.time }}
-            </time>
-          </div>
+            {{ contact.name }}
+          </h3>
         </li>
       </ul>
     </section>
@@ -96,45 +69,41 @@
 <script setup lang="ts">
 import AiIconWrapper from '../AiIconWrapper.vue';
 import Line from '../Line.vue';
+import type {
+  IMobileListProps,
+  IMobileListEmits
+} from './interfaces/mobile-list';
+import type { IUserProps } from '../interfaces/interfaces';
+import { Avatar } from 'sep-yui';
+import { computed } from 'vue';
 
-interface Contact {
-  name: string;
-  lastMessage: string;
-  time: string;
-  avatar?: string;
-}
-
-interface Props {
-  chapter?: string | null;
-  contacts?: Contact[];
-  dataTestid?: string;
-}
-
-const props = withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<IMobileListProps>(), {
   contacts: () => [],
   dataTestid: () => 'MobileList'
 });
 
-interface Emits {
-  (e: 'contactClick', contact: Contact): void;
-  (e: 'unmount-chapter', chapter: string): void;
-}
+const contacts = computed(() => [
+  {
+    name: 'John Doe',
+    avatarUrl: 'https://example.com/avatar.jpg'
+  }
+]);
 
-const emit = defineEmits<Emits>();
+const emit = defineEmits<IMobileListEmits>();
 
-const handleContactClick = (contact: Contact) => {
-  emit('contactClick', contact);
+const handleContactClick = (contact: IUserProps) => {
+  emit('unmount-contact', contact);
 };
 
-const handleKeyDown = (contact: Contact, event: KeyboardEvent) => {
+const handleKeyDown = (contact: IUserProps, event: KeyboardEvent) => {
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault();
-    emit('contactClick', contact);
+    emit('unmount-contact', contact);
   }
 };
 
-const handleAiChapter = () => {
-  emit('unmount-chapter', 'ai');
+const handleChapter = (chapter: string) => {
+  emit('unmount-chapter', chapter);
 };
 </script>
 
@@ -164,7 +133,7 @@ const handleAiChapter = () => {
   font-weight: 500;
   font-size: 14px;
   letter-spacing: 1%;
-  color: #181818;
+  color: var(--text-black);
   justify-self: start;
 }
 

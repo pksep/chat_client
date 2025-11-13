@@ -28,7 +28,7 @@ interface HeaderMenuEmits {
 
 const emit = defineEmits<HeaderMenuEmits>();
 
-const activeChapter = ref('ai');
+const activeChapter = ref('assistant');
 
 const buttonClass = (key: string) => ({
   'header-menu__button': true,
@@ -36,15 +36,15 @@ const buttonClass = (key: string) => ({
 });
 
 const menuItems = computed(() => [
-  { key: 'ai', label: 'AI Ассистент' },
-  { key: 'channels', label: 'Каналы' },
+  { key: 'assistant', label: 'AI Ассистент' },
+  // { key: 'channels', label: 'Каналы' },
   { key: 'dialogs', label: 'Диалоги' }
 ]);
 
 const handleUnmountChapter = (chapter: string) => {
   activeChapter.value = chapter;
   if (!chapter) {
-    activeChapter.value = 'ai';
+    activeChapter.value = 'assistant';
   }
   emit('unmount-chapter', activeChapter.value);
 };
