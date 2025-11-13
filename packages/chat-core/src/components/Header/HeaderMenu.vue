@@ -36,11 +36,9 @@ const buttonClass = (key: string) => ({
 });
 
 const menuItems = computed(() => [
-  { key: 'ai', label: 'AI Ассистент' }
-  /*
+  { key: 'ai', label: 'AI Ассистент' },
   { key: 'channels', label: 'Каналы' },
   { key: 'dialogs', label: 'Диалоги' }
-   */
 ]);
 
 const handleUnmountChapter = (chapter: string) => {
