@@ -48,7 +48,7 @@
           <ContactList
             v-if="index === 1"
             :contacts="state.contactList"
-            @unmount-chapter="unmountContactClick"
+            @unmount-click="unmountContactClick"
           />
         </details>
         <template v-if="isCollapse">
@@ -128,6 +128,7 @@ const unmountContactClick = (
     | {
         title: string;
         id?: string;
+        userId?: string;
         imageURL?: string;
         nickname?: string;
         conversionId?: string;
@@ -162,11 +163,11 @@ const unmountContactClick = (
     emits('unmount-chapter', {
       name: contact.title,
       contact: {
-        id: contact.id,
+        id: contact.userId,
         name: contact.title,
         avatarUrl: contact.imageURL || '',
         nickname: contact.nickname || '',
-        conversionId: contact.conversionId || ''
+        conversionId: contact.id || ''
       }
     });
   }

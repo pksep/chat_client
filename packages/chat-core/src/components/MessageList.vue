@@ -123,7 +123,8 @@ watch(
     if (aiMessages.value.length || state.messages.length) {
       nextTick(() => scrollToBottom());
     }
-  }
+  },
+  { immediate: true }
 );
 
 watch(

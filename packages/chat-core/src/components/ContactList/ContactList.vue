@@ -23,10 +23,10 @@
         :aria-label="`Contact ${contact.name}, ${contact.latestMessage ? contact.latestMessage : 'no recent message'}`"
         :aria-expanded="isOpen[contact.id] ? 'true' : 'false'"
         :aria-haspopup="true"
-        @click.stop="handleClick(contact.id)"
+        @click.stop="handleClick(contact)"
         @contextmenu="openActivePopover(contact.id, $event)"
-        @keydown.enter="handleClick(contact.id)"
-        @keydown.space="handleClick(contact.id)"
+        @keydown.enter="handleClick(contact)"
+        @keydown.space="handleClick(contact)"
       >
         <Avatar
           class="contact-list__avatar"
@@ -186,7 +186,7 @@ const handlePin = (contactId: string): void => {
 };
 
 const handleClick = (contact): void => {
-  emits('unmount-click', contact.id);
+  emits('unmount-click', contact);
 };
 
 const handleNotification = (contactId: string): void => {
