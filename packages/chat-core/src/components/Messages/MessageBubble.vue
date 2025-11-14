@@ -11,7 +11,10 @@
       class="message__assistant"
       v-else-if="props.author === 'assistant'"
     />
-    <article :class="messageArticle" @contextmenu="openActivePopover">
+    <article
+      :class="messageArticle"
+      @contextmenu="evt => openActivePopover('', evt)"
+    >
       <div class="message-content">
         <blockquote v-if="blockquote" class="message-content__blockquote">
           <div class="message-content__blockquote-container">
@@ -37,9 +40,9 @@
     </article>
     <ContextMenu
       v-if="false"
-      :visible="isOpen"
+      :visible="!!isOpen"
       :position="position"
-      @unmount-close="closeActivePopover"
+      @unmount-close="closeActivePopover('')"
     >
       <Button
         :type="ButtonTypeEnum.ghost"
@@ -53,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue';
+import { computed } from 'vue';
 import {
   Avatar,
   Button,
@@ -66,20 +69,17 @@ import AiIconWrapper from '../AiIconWrapper.vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import { useContextMenu } from '../../composables/useContextMenu';
 import ContextMenu from '../ContactList/ContextMenu.vue';
+import { formatTime } from '../../composables/useTime';
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
 const props = defineProps<IMessageBubbleProps>();
 
-const state = reactive({
-  isAuthor: true
-});
-
 const messageArticle = computed(() => [
   'message__article',
   {
-    'message__no-author': !state.isAuthor
+    'message__no-author': props.isMeSender
   }
 ]);
 

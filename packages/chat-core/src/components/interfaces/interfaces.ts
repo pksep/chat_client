@@ -31,11 +31,11 @@ export interface IUserProps {
 }
 
 export interface IContactProps extends IUserProps {
-  title: string;
+  title?: string;
   imageURL?: string;
   latestMessage?: string;
   isRead?: boolean;
-  latestMessageTime?: string;
+  latestMessageTime?: number;
   notificationCount?: number;
   isPin?: boolean;
 }

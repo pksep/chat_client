@@ -1,3 +1,3 @@
 import type { IMenuEmits } from '../../interfaces/interfaces';
 
-export interface HeaderMenuEmits extends Pick<IMenuEmits, 'unmount-chapter'> {}
+export interface HeaderMenuEmits extends Partial<IMenuEmits> {}

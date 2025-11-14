@@ -13,6 +13,7 @@
         :author="message.role"
         :time="message.timestamp"
         :loader="message.loading"
+        :is-me-sender="message.role === 'user'"
       />
     </div>
   </div>
@@ -23,7 +24,7 @@
     @scroll="handleScroll"
   >
     <div class="chat__message-bubble">
-      <PersonalMessageBubble
+      <MessageBubble
         v-for="(message, index) in state.messages"
         :key="index"
         :class="
@@ -31,7 +32,7 @@
         "
         :message="message.textElem.content"
         :is-me-sender="props.contactId === message.recvID"
-        :time="message.sendTime"
+        :time="formatTime(new Date(message.sendTime))"
       />
     </div>
   </div>
@@ -66,7 +67,7 @@ import {
   sendMessageIM
 } from '../services/useOpenIM';
 import type { IMessageListProps } from './interfaces/message-list';
-import PersonalMessageBubble from './Messages/PersonalMessageBubble.vue';
+import { formatTime } from '../composables/useTime';
 
 const props = withDefaults(defineProps<IMessageListProps>(), {
   chapter: null
