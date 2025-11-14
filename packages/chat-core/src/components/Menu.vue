@@ -135,13 +135,12 @@ const unmountContactClick = (
     | string
 ): void => {
   if (contact === 'ai') {
-    state.chapter = '';
-    emits('unmount-chapter', null);
+    state.chapter = 'ai';
+    emits('unmount-chapter', 'ai');
     return;
   }
 
   if (typeof contact === 'string') {
-    // Handle case where ContactList sends just an ID
     const foundContact = state.contactList.find(c => c.id === contact);
     if (foundContact) {
       state.chapter = foundContact.title;
@@ -157,7 +156,6 @@ const unmountContactClick = (
       });
     }
   } else {
-    // Handle case where full contact object is passed
     state.chapter = contact.title;
     emits('unmount-chapter', {
       name: contact.title,
