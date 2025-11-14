@@ -69,7 +69,6 @@ import AiIconWrapper from '../AiIconWrapper.vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import { useContextMenu } from '../../composables/useContextMenu';
 import ContextMenu from '../ContactList/ContextMenu.vue';
-import { formatTime } from '../../composables/useTime';
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
