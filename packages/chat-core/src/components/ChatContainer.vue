@@ -159,19 +159,6 @@ const handleNewContactMessage = async (contact): Promise<void> => {
   });
 };
 
-const convertToUser = (contact: any): IUserProps | null => {
-  if (!contact) return null;
-
-  return {
-    id: contact.id,
-    avatarUrl: contact.imageURL,
-    avatarAlt: contact.avatarAlt,
-    name: contact.title,
-    nickname: contact.nickname,
-    conversionId: contact.conversionId
-  };
-};
-
 const handleExit = (): void => {
   state.chapter = 'assistant';
 };
