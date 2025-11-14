@@ -1,23 +1,52 @@
 <template>
-  <ul class="contact-list">
-    <li v-for="contact in props.contacts" :key="contact.id">
+  <ul
+    class="contact-list"
+    role="list"
+    :data-testid="`${props.dataTestid}-ContactList-List`"
+    :aria-label="`${props.dataTestid} Contact List`"
+  >
+    <li
+      v-for="(contact, index) in props.contacts"
+      :key="contact.id"
+      role="listitem"
+      tabindex="0"
+      @keydown="event => handleKeyDown(contact, event)"
+      :data-testid="`${props.dataTestid}-ContactList-Item${index + 1}`"
+    >
       <div
         :class="[
           'contact-list__item',
           { 'contact-list__item--active': isOpen[contact.id] }
         ]"
-        @click.stop="handleClick(contact)"
+        role="button"
+        tabindex="0"
+        :aria-label="`Contact ${contact.name}, ${contact.latestMessage ? contact.latestMessage : 'no recent message'}`"
+        :aria-expanded="isOpen[contact.id] ? 'true' : 'false'"
+        :aria-haspopup="true"
+        @click.stop="handleClick(contact.id)"
         @contextmenu="openActivePopover(contact.id, $event)"
+        @keydown.enter="handleClick(contact.id)"
+        @keydown.space="handleClick(contact.id)"
       >
         <Avatar
           class="contact-list__avatar"
           :initials="contact.title"
           :url="contact.imageURL"
-          alt="avatar of contact image"
+          :alt="`Avatar of ${contact.name}`"
+          :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
         />
-        <h5 class="contact-list__title">{{ contact.title }}</h5>
+        <h5
+          role="heading"
+          aria-level="5"
+          class="contact-list__title"
+          :data-testid="`${props.dataTestid}-ContactList-Title${index + 1}`"
+        >
+          {{ contact.title }}
+        </h5>
         <div
           class="contact-list__description"
+          :data-testid="`${props.dataTestid}-ContactList-Description${index + 1}`"
+          :aria-label="`Latest message: ${contact.latestMessage || 'No message'}`"
           v-html="contact.latestMessage"
         ></div>
         <div class="contact-list__top">
@@ -25,10 +54,17 @@
             v-if="contact.isRead"
             :name="IconNameEnum.read"
             class="contact-list__read-icon"
+            :aria-label="contact.isRead ? 'Message read' : 'Message unread'"
+            :data-testid="`${props.dataTestid}-ContactList-ReadIcon${index + 1}`"
           />
-          <span v-if="contact.latestMessageTime" class="contact-list__time">{{
-            useTime(new Date(contact.latestMessageTime))
-          }}</span>
+          <span
+            v-if="contact.latestMessageTime"
+            class="contact-list__time"
+            :data-testid="`${props.dataTestid}-ContactList-Time${index + 1}`"
+            :aria-label="`Last message at ${useTime(new Date(contact.latestMessageTime))}`"
+          >
+            {{ useTime(new Date(contact.latestMessageTime)) }}
+          </span>
         </div>
         <div class="contact-list__bottom">
           <div
@@ -37,23 +73,41 @@
               (state.isNotificationEnabled[contact.id] ?? true)
             "
             class="contact-list__notification"
+            :data-testid="`${props.dataTestid}-ContactList-Notification${index + 1}`"
+            :aria-label="`${contact.notificationCount} new messages`"
           >
             {{ contact.notificationCount }}
           </div>
-          <div v-if="state.isPin[contact.id]">
+          <div
+            v-if="state.isPin[contact.id]"
+            :data-testid="`${props.dataTestid}-ContactList-Pin${index + 1}`"
+            :aria-label="`Pinned contact`"
+          >
             <Icon class="contact-list__pin-icon" :name="IconNameEnum.pin" />
           </div>
         </div>
       </div>
+      <Line
+        v-if="isMobile"
+        class="menu__user-line"
+        :data-testid="`${props.dataTestid}-AIAssistant-Line`"
+      />
       <ContextMenu
         :visible="!!isOpen[contact.id]"
         :position="position"
+        :data-testid="`${props.dataTestid}-ContactList-ContextMenu${index + 1}`"
         @unmount-close="() => closeActivePopover(contact.id)"
       >
         <Button
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.small"
           @click.stop="() => handlePin(contact.id)"
+          :data-testid="`${props.dataTestid}-ContactList-PinButton${index + 1}`"
+          :aria-label="
+            state.isPin[contact.id]
+              ? `Unpin ${contact.name}`
+              : `Pin ${contact.name}`
+          "
         >
           <template v-if="!state.isPin[contact.id]"> Закрепить </template>
           <template v-else> Открепить </template>
@@ -62,6 +116,12 @@
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.small"
           @click="() => handleNotification(contact.id)"
+          :data-testid="`${props.dataTestid}-ContactList-NotificationButton${index + 1}`"
+          :aria-label="
+            state.isNotificationEnabled[contact.id]
+              ? `Disable notifications for ${contact.name}`
+              : `Enable notifications for ${contact.name}`
+          "
         >
           <template v-if="state.isNotificationEnabled[contact.id] ?? true">
             Выкл. уведомление
@@ -75,6 +135,8 @@
 
 <script setup lang="ts">
 import { reactive, watch } from 'vue';
+import { useContextMenu } from '../../composables/useContextMenu';
+import { useResizeState } from '../../composables/useResizeState';
 import {
   Avatar,
   Icon,
@@ -84,9 +146,9 @@ import {
   SizesEnum
 } from 'sep-yui';
 import ContextMenu from './ContextMenu.vue';
-import { useContextMenu } from '../../composables/useContextMenu';
-
+import Line from '../../components/Line.vue';
 import type { IContactListProps } from './interfaces/contact-list';
+import { MAX_W_MD } from '../../utils/constants';
 
 const props = withDefaults(defineProps<IContactListProps>(), {});
 
@@ -97,6 +159,8 @@ const emits = defineEmits<{
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
+
+const isMobile = useResizeState(MAX_W_MD);
 
 const state = reactive({
   isPin: {} as Record<string, boolean>,
@@ -121,8 +185,8 @@ const handlePin = (contactId: string): void => {
   closeActivePopover(contactId);
 };
 
-const handleClick = (contact): void => {
-  emits('unmount-click', contact);
+const handleClick = (contactId: string): void => {
+  emits('unmount-click', contactId);
 };
 
 const handleNotification = (contactId: string): void => {
@@ -130,6 +194,12 @@ const handleNotification = (contactId: string): void => {
   state.isNotificationEnabled[contactId] = !currentEnabled;
   emits('unmount-notification', contactId);
   closeActivePopover(contactId);
+};
+
+const handleKeyDown = (contact: any, event: KeyboardEvent): void => {
+  if (event.key === 'Enter' || event.key === ' ') {
+    handleClick(contact);
+  }
 };
 
 const useTime = (date: Date = new Date()): string => {

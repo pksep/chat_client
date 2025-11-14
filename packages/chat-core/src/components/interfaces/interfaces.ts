@@ -30,6 +30,16 @@ export interface IUserProps {
   conversionId?: string;
 }
 
+export interface IContactProps extends IUserProps {
+  title: string;
+  imageURL?: string;
+  latestMessage?: string;
+  isRead?: boolean;
+  latestMessageTime?: string;
+  notificationCount?: number;
+  isPin?: boolean;
+}
+
 export interface IMenuProps {
   open?: boolean;
   contact?: IUserProps;

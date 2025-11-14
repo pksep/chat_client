@@ -25,7 +25,6 @@
     <Chat
       :base-url="props.baseUrl"
       :chapter="state.chapter"
-      :contacts="users"
       :contact-id="state.contact?.id"
       :conversion-id="state.contact?.conversionId"
       class="chat__messages"

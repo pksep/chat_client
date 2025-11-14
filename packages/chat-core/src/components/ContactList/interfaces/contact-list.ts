@@ -1,5 +1,6 @@
-import type { IUserProps } from '../../interfaces/interfaces';
+import type { IContactProps } from '../../interfaces/interfaces';
 
 export interface IContactListProps {
-  contacts: IUserProps[];
+  contacts: IContactProps[];
+  dataTestid?: string;
 }

@@ -31,37 +31,11 @@
       aria-label="Contact list"
       :data-testid="`${props.dataTestid}-ChatList-Section`"
     >
-      <ul
-        class="chat-items-list"
-        role="list"
-        :data-testid="`${props.dataTestid}-ChatItems-List`"
-      >
-        <li
-          v-for="(contact, index) in contacts"
-          :key="index"
-          class="chat-item"
-          role="listitem"
-          tabindex="0"
-          @click="handleContactClick(contact)"
-          @keydown="event => handleKeyDown(contact, event)"
-          :data-testid="`${props.dataTestid}-ChatItem-Item${index + 1}`"
-        >
-          <Avatar
-            :avatar-url="contact.avatarUrl"
-            class="menu__user-assistant"
-            aria-label="Contact avatar"
-            :data-testid="`${props.dataTestid}-ChatItem-Avatar${index + 1}`"
-          />
-          <h3
-            class="menu__user-assistant__title"
-            role="heading"
-            aria-level="2"
-            :data-testid="`${props.dataTestid}-ChatItem-Title${index + 1}`"
-          >
-            {{ contact.name }}
-          </h3>
-        </li>
-      </ul>
+      <ContactList
+        :contacts="props.contacts"
+        :data-testid="`${props.dataTestid}-ContactList`"
+        @unmount-click="handleChapter"
+      />
     </section>
   </div>
 </template>
@@ -69,41 +43,21 @@
 <script setup lang="ts">
 import AiIconWrapper from '../AiIconWrapper.vue';
 import Line from '../Line.vue';
+import ContactList from './ContactList.vue';
 import type {
   IMobileListProps,
   IMobileListEmits
 } from './interfaces/mobile-list';
-import type { IUserProps } from '../interfaces/interfaces';
-import { Avatar } from 'sep-yui';
-import { computed } from 'vue';
 
 const props = withDefaults(defineProps<IMobileListProps>(), {
   contacts: () => [],
   dataTestid: () => 'MobileList'
 });
 
-const contacts = computed(() => [
-  {
-    name: 'John Doe',
-    avatarUrl: 'https://example.com/avatar.jpg'
-  }
-]);
+const emits = defineEmits<IMobileListEmits>();
 
-const emit = defineEmits<IMobileListEmits>();
-
-const handleContactClick = (contact: IUserProps) => {
-  emit('unmount-contact', contact);
-};
-
-const handleKeyDown = (contact: IUserProps, event: KeyboardEvent) => {
-  if (event.key === 'Enter' || event.key === ' ') {
-    event.preventDefault();
-    emit('unmount-contact', contact);
-  }
-};
-
-const handleChapter = (chapter: string) => {
-  emit('unmount-chapter', chapter);
+const handleChapter = (chapter: string): void => {
+  emits('unmount-chapter', chapter);
 };
 </script>
 

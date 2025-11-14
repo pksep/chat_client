@@ -1,21 +1,9 @@
 import { CbEvents } from '@openim/wasm-client-sdk';
 import { ref } from 'vue';
 import { IMSDK } from './useOpenIM';
+import { IContactProps } from '../components/interfaces/interfaces';
 
-export interface IConversation {
-  id: string;
-  userId: string;
-  title: string;
-  imageURL: string;
-  isPin: boolean;
-  nickname: string;
-  latestMessage: string;
-  latestMessageTime: number;
-  notificationCount: number;
-  isRead: boolean;
-}
-
-const conversionStore = ref<IConversation[]>([]);
+const conversionStore = ref<IContactProps[]>([]);
 
 const fetchConversationList = async () => {
   try {
@@ -50,7 +38,7 @@ const manipulateConversationList = conversations => {
   });
 };
 
-const getConversationList = (): IConversation[] => {
+const getConversationList = (): IContactProps[] => {
   return conversionStore.value || [];
 };
 

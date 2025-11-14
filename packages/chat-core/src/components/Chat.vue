@@ -2,7 +2,7 @@
   <section class="chat">
     <ContactListMobile
       class="chat__mobile"
-      :contacts="props.contacts"
+      :contacts="state.conversationList"
       :chapter="state.chapter"
       v-if="isMobile && isShowContactList(state.chapter)"
       @unmount-chapter="handleUnmountChapter"
@@ -27,6 +27,12 @@ import type { IMessageListProps } from './interfaces/message-list';
 import { useTemplateRef, reactive, watch } from 'vue';
 import { isShowContactList } from '../composables/useShowContactList';
 import { MAX_W_MD } from '../utils/constants';
+import {
+  fetchConversationList,
+  getConversationList
+} from '../services/useConversions';
+import { computed } from 'vue';
+import { onMounted } from 'vue';
 
 const props = withDefaults(defineProps<IMessageListProps>(), {
   chapter: null
@@ -35,7 +41,8 @@ const props = withDefaults(defineProps<IMessageListProps>(), {
 const emits = defineEmits(['unmount-chapter']);
 
 const state = reactive({
-  chapter: props.chapter
+  chapter: props.chapter,
+  conversationList: computed(() => getConversationList())
 });
 
 watch(
@@ -57,6 +64,10 @@ const handleUnmountChapter = (chapter: string): void => {
 const handleUnmountContact = (): void => {
   // emits('unmount-contact', contactId);
 };
+
+onMounted(() => {
+  fetchConversationList();
+});
 
 defineExpose({
   handleClear: () => messageListRef.value?.handleClear()
