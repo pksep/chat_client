@@ -16,37 +16,13 @@
         <Icon :name="IconNameEnum.crossLarge" />
       </Button>
     </header>
-    <section class="new-contact__section">
-      <Search class="new-contact__search" />
-      <ul class="new-contact__list">
-        <li
-          v-for="contact in contacts"
-          :key="contact.id"
-          class="new-contact__item"
-          @click="handleNewContact(contact)"
-        >
-          <UserProfile
-            :name="contact.name"
-            :nickname="contact.nickname"
-            :avatar-url="contact.avatarUrl"
-            :avatar-alt="contact.avatarAlt"
-          />
-          <Checkbox
-            :size="CheckboxSizeEnum.small"
-            @update:model-value="value => handleCheckbox(value, contact.id)"
-          />
-        </li>
-      </ul>
-      <Button
-        :type="ButtonTypeEnum.primary"
-        :size="SizesEnum.little"
-        class="new-contact__add"
-        :disabled="isButtonDisabled"
-        @click="handleOpenUser"
-      >
-        Добавить
-      </Button>
-    </section>
+    <ContactSelector
+      :contacts="contacts"
+      :selected-contact-ids="state.checkUsers"
+      @contact-select="handleNewContact"
+      @checkbox-change="handleCheckbox"
+      @add-click="handleOpenUser"
+    />
   </Modal>
   <KeepAlive>
     <component
@@ -60,23 +36,21 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue';
 import {
-  Checkbox,
   Icon,
   IconNameEnum,
   Modal,
   SizesEnum,
-  Search,
   ButtonTypeEnum,
-  Button,
-  CheckboxSizeEnum
+  Button
 } from 'sep-yui';
-import UserProfile from '../UserProfile/UserProfile.vue';
+import ContactSelector from './ContactSelector.vue';
 import AddUser from './AddUser.vue';
 import type { INewContactProps } from './interfaces/new-contact';
 import { IUserProps } from '../interfaces/interfaces';
 
 const props = withDefaults(defineProps<INewContactProps>(), {
-  open: false
+  open: false,
+  contacts: () => []
 });
 
 const emits = defineEmits<{
@@ -86,7 +60,7 @@ const emits = defineEmits<{
 
 const state = reactive({
   open: false,
-  checkUsers: new Set(),
+  checkUsers: new Set<string | number>(),
   openAddUser: false
 });
 
