@@ -26,6 +26,8 @@ export interface IUserProps {
   avatarUrl?: string;
   avatarAlt?: string;
   name?: string;
+  title?: string;
+  imageURL?: string;
   nickname?: string;
   conversionId?: string;
 }

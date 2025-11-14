@@ -15,8 +15,8 @@
           <UserProfile
             avatar-alt="avatar of user"
             class="menu__user-profile"
-            :avatar-url="user.avatarUrl"
-            :name="user.name"
+            :avatar-url="user.avatarUrl || user.imageURL"
+            :name="user.name || user.title"
             :nickname="user.nickname"
             @unmount-click="openActivePopover(user.id.toString(), $event)"
           />

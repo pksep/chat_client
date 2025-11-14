@@ -3,15 +3,15 @@
     <Search class="contact-selector__search" />
     <ul class="contact-selector__list">
       <li
-        v-for="contact in contacts"
+        v-for="contact in props.contacts"
         :key="contact.id"
         class="contact-selector__item"
         @click="handleNewContact(contact)"
       >
         <UserProfile
-          :name="contact.name"
+          :name="contact.title"
           :nickname="contact.nickname"
-          :avatar-url="contact.avatarUrl"
+          :avatar-url="contact.imageURL"
           :avatar-alt="contact.avatarAlt"
         />
         <Checkbox
