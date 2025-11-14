@@ -34,7 +34,7 @@ const buttonClass = (key: string) => ({
 
 const menuItems = computed(() => [
   { key: 'assistant', label: 'AI Ассистент' },
-  // { key: 'channels', label: 'Каналы' },
+  { key: 'channels', label: 'Каналы' },
   { key: 'dialogs', label: 'Диалоги' }
 ]);
 

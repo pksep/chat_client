@@ -84,7 +84,6 @@ import type { IMobileListProps } from './interfaces/mobile-list';
 import type { IMenuEmits } from '../interfaces/interfaces';
 import { Modal, Button, ButtonTypeEnum, Icon, IconNameEnum } from 'sep-yui';
 import ContactSelector from '../NewChat/ContactSelector.vue';
-import { IUserProps } from '../interfaces/interfaces';
 
 const props = withDefaults(defineProps<IMobileListProps>(), {
   contacts: () => [],
@@ -129,8 +128,8 @@ const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
   }
 };
 
-const handleNewContact = (contact: IUserProps): void => {
-  emits('unmount-contact', contact);
+const handleNewContact = (): void => {
+  emits('unmount-user-add');
   handleCloseModal();
 };
 

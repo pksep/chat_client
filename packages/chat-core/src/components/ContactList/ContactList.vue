@@ -30,8 +30,8 @@
       >
         <Avatar
           class="contact-list__avatar"
-          :initials="contact.title"
-          :url="contact.imageURL"
+          :initials="contact.name"
+          :url="contact.avatarUrl"
           :alt="`Avatar of ${contact.name}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
         />
@@ -41,7 +41,7 @@
           class="contact-list__title"
           :data-testid="`${props.dataTestid}-ContactList-Title${index + 1}`"
         >
-          {{ contact.title }}
+          {{ contact.name }}
         </h5>
         <div
           class="contact-list__description"

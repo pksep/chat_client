@@ -21,6 +21,7 @@
       v-bind="props.contact"
       v-else
     />
+    {{ props.contact }}
     <div class="chat__header-buttons" v-if="!isMobile">
       <Search
         v-if="state.isSearchInputEnable"

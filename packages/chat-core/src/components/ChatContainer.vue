@@ -115,18 +115,16 @@ const unmountHeaderMenuChapter = (
 const unmountMenuChapter = (
   config: { name: string; contact: IUserProps } | string | null
 ): void => {
+  console.log(config);
   if (typeof config === 'string') {
-    // Handle string format from other components
     state.chapter = config;
     if (config === 'ai') {
       state.contact = null;
     }
   } else if (config && config.name) {
-    // Handle object format from Menu component
     state.chapter = config.name;
     state.contact = config.contact;
   } else {
-    // Handle null case
     state.chapter = null;
     state.contact = null;
   }

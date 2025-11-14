@@ -24,8 +24,8 @@ const manipulateConversationList = conversations => {
     return {
       id: c.conversationID,
       userId: c.userID,
-      title: c.showName,
-      imageURL: c.faceURL,
+      name: c.showName,
+      avatarUrl: c.faceURL,
       isPin: c.isPinned,
       nickname: c.showName,
       latestMessage: JSON.parse(c.latestMsg)?.textElem?.content || '',

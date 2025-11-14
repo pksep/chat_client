@@ -26,15 +26,11 @@ export interface IUserProps {
   avatarUrl?: string;
   avatarAlt?: string;
   name?: string;
-  title?: string;
-  imageURL?: string;
   nickname?: string;
   conversionId?: string;
 }
 
 export interface IContactProps extends IUserProps {
-  title?: string;
-  imageURL?: string;
   latestMessage?: string;
   isRead?: boolean;
   latestMessageTime?: number;

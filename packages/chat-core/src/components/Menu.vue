@@ -54,7 +54,7 @@
           <template v-for="(user, index) in state.contactList" :key="index">
             <ul class="menu__user">
               <li class="menu__user-avatar">
-                <Avatar :url="user.imageURL" :initials="user.title" />
+                <Avatar :url="user.avatarUrl" :initials="user.name" />
               </li>
             </ul>
             <Line />
@@ -143,13 +143,13 @@ const unmountContactClick = (
   if (typeof contact === 'string') {
     const foundContact = state.contactList.find(c => c.id === contact);
     if (foundContact) {
-      state.chapter = foundContact.title;
+      state.chapter = foundContact.name;
       emits('unmount-chapter', {
-        name: foundContact.title,
+        name: foundContact.name,
         contact: {
           id: foundContact.id,
-          name: foundContact.title,
-          avatarUrl: foundContact.imageURL || '',
+          name: foundContact.name,
+          avatarUrl: foundContact.avatarUrl || '',
           nickname: foundContact.nickname || '',
           conversionId: foundContact.conversionId || ''
         }
@@ -182,7 +182,15 @@ const aiChapterClasses = computed(() => [
   }
 ]);
 
+const handleNewChannelModal = () => {
+  emits('unmount-new-contact', { isChapterOpen: true });
+};
+
 const listChannels = [
+  {
+    title: 'Каналы',
+    onClickPlusButton: handleNewChannelModal
+  },
   {
     title: 'Личные сообщения',
     onClickPlusButton: handleNewContactModal

@@ -9,9 +9,9 @@
         @click="handleNewContact(contact)"
       >
         <UserProfile
-          :name="contact.title"
+          :name="contact.name"
           :nickname="contact.nickname"
-          :avatar-url="contact.imageURL"
+          :avatar-url="contact.avatarUrl"
           :avatar-alt="contact.avatarAlt"
         />
         <Checkbox
