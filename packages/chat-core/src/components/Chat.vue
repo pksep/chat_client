@@ -33,12 +33,13 @@ import {
 } from '../services/useConversions';
 import { computed } from 'vue';
 import { onMounted } from 'vue';
+import type { IMenuEmits } from './interfaces/interfaces';
 
 const props = withDefaults(defineProps<IMessageListProps>(), {
   chapter: null
 });
 
-const emits = defineEmits(['unmount-chapter']);
+const emits = defineEmits<IMenuEmits>();
 
 const state = reactive({
   chapter: props.chapter,
@@ -56,9 +57,19 @@ const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const messageListRef = useTemplateRef<any>(null);
 
-const handleUnmountChapter = (chapter: string): void => {
-  state.chapter = chapter;
-  emits('unmount-chapter', chapter);
+const handleUnmountChapter = (
+  chapter: { name: string; contact: any } | string | null
+): void => {
+  if (typeof chapter === 'string') {
+    state.chapter = chapter;
+    emits('unmount-chapter', chapter);
+  } else if (chapter && chapter.name) {
+    state.chapter = chapter.name;
+    emits('unmount-chapter', chapter);
+  } else {
+    state.chapter = null;
+    emits('unmount-chapter', null);
+  }
 };
 
 const handleUnmountContact = (): void => {

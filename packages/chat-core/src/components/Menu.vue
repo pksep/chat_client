@@ -48,7 +48,7 @@
           <ContactList
             v-if="index === 1"
             :contacts="state.contactList"
-            @unmount-click="unmountContactClick"
+            @unmount-chapter="unmountContactClick"
           />
         </details>
         <template v-if="isCollapse">
@@ -123,23 +123,53 @@ const handleNewContactModal = (): void => {
   emits('unmount-new-contact', { isChapterOpen: true });
 };
 
-const unmountContactClick = (contact): void => {
-  if (state.chapter === 'ai') {
+const unmountContactClick = (
+  contact:
+    | {
+        title: string;
+        id?: string;
+        imageURL?: string;
+        nickname?: string;
+        conversionId?: string;
+      }
+    | string
+): void => {
+  if (contact === 'ai') {
     state.chapter = '';
     emits('unmount-chapter', null);
     return;
   }
-  state.chapter = contact.title;
-  emits('unmount-chapter', {
-    name: contact.title,
-    contact: {
-      id: contact.userId,
-      name: contact.title,
-      avatarUrl: contact.imageURL || '',
-      nickname: contact.nickname || '',
-      conversionId: contact.id || ''
+
+  if (typeof contact === 'string') {
+    // Handle case where ContactList sends just an ID
+    const foundContact = state.contactList.find(c => c.id === contact);
+    if (foundContact) {
+      state.chapter = foundContact.title;
+      emits('unmount-chapter', {
+        name: foundContact.title,
+        contact: {
+          id: foundContact.id,
+          name: foundContact.title,
+          avatarUrl: foundContact.imageURL || '',
+          nickname: foundContact.nickname || '',
+          conversionId: foundContact.conversionId || ''
+        }
+      });
     }
-  });
+  } else {
+    // Handle case where full contact object is passed
+    state.chapter = contact.title;
+    emits('unmount-chapter', {
+      name: contact.title,
+      contact: {
+        id: contact.id,
+        name: contact.title,
+        avatarUrl: contact.imageURL || '',
+        nickname: contact.nickname || '',
+        conversionId: contact.conversionId || ''
+      }
+    });
+  }
 };
 
 const menuClasses = computed(() => [

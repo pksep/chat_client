@@ -44,20 +44,26 @@
 import AiIconWrapper from '../AiIconWrapper.vue';
 import Line from '../Line.vue';
 import ContactList from './ContactList.vue';
-import type {
-  IMobileListProps,
-  IMobileListEmits
-} from './interfaces/mobile-list';
+import type { IMobileListProps } from './interfaces/mobile-list';
+import type { IMenuEmits } from '../interfaces/interfaces';
 
 const props = withDefaults(defineProps<IMobileListProps>(), {
   contacts: () => [],
   dataTestid: () => 'MobileList'
 });
 
-const emits = defineEmits<IMobileListEmits>();
+const emits = defineEmits<IMenuEmits>();
 
-const handleChapter = (chapter: string): void => {
-  emits('unmount-chapter', chapter);
+const handleChapter = (
+  chapter: { name: string; contact: any } | string | null
+): void => {
+  if (typeof chapter === 'string') {
+    emits('unmount-chapter', chapter);
+  } else if (chapter && chapter.name) {
+    emits('unmount-chapter', chapter);
+  } else {
+    emits('unmount-chapter', null);
+  }
 };
 </script>
 

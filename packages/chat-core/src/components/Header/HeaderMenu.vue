@@ -19,14 +19,11 @@
 import { computed, ref } from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
+import type { IMenuEmits } from '../interfaces/interfaces';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
-interface HeaderMenuEmits {
-  (e: 'unmount-chapter', chapter: string): void;
-}
-
-const emit = defineEmits<HeaderMenuEmits>();
+const emit = defineEmits<IMenuEmits>();
 
 const activeChapter = ref('assistant');
 

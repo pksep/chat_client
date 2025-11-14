@@ -160,7 +160,7 @@ const emits = defineEmits<{
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
-const isMobile = useResizeState(MAX_W_MD);
+const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const state = reactive({
   isPin: {} as Record<string, boolean>,
@@ -185,8 +185,8 @@ const handlePin = (contactId: string): void => {
   closeActivePopover(contactId);
 };
 
-const handleClick = (contactId: string): void => {
-  emits('unmount-click', contactId);
+const handleClick = (contact): void => {
+  emits('unmount-click', contact.id);
 };
 
 const handleNotification = (contactId: string): void => {

@@ -55,7 +55,7 @@ import Menu from './Menu.vue';
 import Chat from './Chat.vue';
 import MenuInfo from './MenuInfo.vue';
 import NewContactModal from './NewChat/NewContact.vue';
-import type { IChatContainerProps } from './interfaces/interfaces';
+import type { IChatContainerProps, IUserProps } from './interfaces/interfaces';
 import { useUsers } from '../composables/useUsers';
 import { isShowContactList } from '../composables/useShowContactList';
 import { sendMessageIM } from '../services/useOpenIM';
@@ -95,17 +95,41 @@ const handleHeaderClick = (): void => {
   state.isMenuOpen = true;
 };
 
-const unmountHeaderMenuChapter = (name: string): void => {
-  state.chapter = name;
+const unmountHeaderMenuChapter = (
+  config: { name: string; contact: IUserProps } | string | null
+): void => {
+  if (typeof config === 'string') {
+    state.chapter = config;
+    if (config === 'ai') {
+      state.contact = null;
+    }
+  } else if (config && config.name) {
+    state.chapter = config.name;
+    state.contact = config.contact;
+  } else {
+    state.chapter = null;
+    state.contact = null;
+  }
 };
 
-const unmountMenuChapter = (config): void => {
-  if (!config?.name) {
+const unmountMenuChapter = (
+  config: { name: string; contact: IUserProps } | string | null
+): void => {
+  if (typeof config === 'string') {
+    // Handle string format from other components
+    state.chapter = config;
+    if (config === 'ai') {
+      state.contact = null;
+    }
+  } else if (config && config.name) {
+    // Handle object format from Menu component
+    state.chapter = config.name;
+    state.contact = config.contact;
+  } else {
+    // Handle null case
     state.chapter = null;
-    return;
+    state.contact = null;
   }
-  state.chapter = config.name;
-  state.contact = config.contact;
 };
 
 const handleNewContact = (config): void => {

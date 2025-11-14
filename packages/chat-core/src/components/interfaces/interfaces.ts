@@ -8,7 +8,7 @@ export interface IMenuEmits {
   (e: 'unmount-new-contact', config: { isChapterOpen?: boolean }): void;
   (
     e: 'unmount-chapter',
-    config: { name: string; contact: IUserProps } | null
+    config: { name: string; contact: IUserProps } | string | null
   ): void;
   (e: 'unmount-user-add'): void;
 }

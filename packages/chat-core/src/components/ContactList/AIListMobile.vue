@@ -9,12 +9,9 @@
 <script lang="ts" setup>
 import AiIconWrapper from '../AiIconWrapper.vue';
 import Line from '../Line.vue';
+import type { IMenuEmits } from '../interfaces/interfaces';
 
-interface AIListMobileEmits {
-  (e: 'unmount-chapter', chapter: string): void;
-}
-
-const emit = defineEmits<AIListMobileEmits>();
+const emit = defineEmits<IMenuEmits>();
 
 const handleAiChapter = () => {
   emit('unmount-chapter', 'ai');

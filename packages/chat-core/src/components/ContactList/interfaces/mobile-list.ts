@@ -7,6 +7,9 @@ export interface IMobileListProps {
 }
 
 export interface IMobileListEmits {
+  (
+    e: 'unmount-chapter',
+    config: { name: string; contact: IContactProps } | string | null
+  ): void;
   (e: 'unmount-contact', contact: IContactProps): void;
-  (e: 'unmount-chapter', chapter: string): void;
 }
