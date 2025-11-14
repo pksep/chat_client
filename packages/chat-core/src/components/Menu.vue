@@ -185,12 +185,6 @@ const aiChapterClasses = computed(() => [
 
 const listChannels = [
   {
-    title: 'Каналы',
-    onClickPlusButton: () => {
-      console.log('click');
-    }
-  },
-  {
     title: 'Личные сообщения',
     onClickPlusButton: handleNewContactModal
   }

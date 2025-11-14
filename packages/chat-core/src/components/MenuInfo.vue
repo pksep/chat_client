@@ -21,7 +21,7 @@
       <template #header2> Информация </template>
       <template #tab1>
         <ContactListInModal
-          :contacts="[props.contact]"
+          :contacts="props.contact"
           @unmount-user-add="unmountUserAdd"
         />
       </template>

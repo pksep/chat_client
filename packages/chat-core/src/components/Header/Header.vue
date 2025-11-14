@@ -123,4 +123,6 @@ const getPopoverOptions = computed(() => {
 const handleExit = (): void => {
   emits('unmount-exit');
 };
+
+console.log(props.chapter);
 </script>
