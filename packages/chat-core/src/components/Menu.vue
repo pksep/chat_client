@@ -46,7 +46,6 @@
             </Button>
           </summary>
           <ContactList
-            v-if="index === 1"
             :contacts="state.contactList"
             @unmount-click="unmountContactClick"
           />
