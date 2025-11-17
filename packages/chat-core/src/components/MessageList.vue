@@ -46,7 +46,7 @@
 import { ref, reactive, watch, onMounted, useTemplateRef, nextTick } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
-import { ContentEditor } from 'sep-yui';
+import { ContentEditor } from '@pksep/yui';
 import { removeMessageLoading, useMastra } from '../services/useMastra';
 import type { IMessageListProps } from './interfaces/message-list';
 import { useTime } from '../composables/useTime';

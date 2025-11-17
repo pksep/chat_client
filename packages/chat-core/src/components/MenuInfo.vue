@@ -82,7 +82,7 @@ import {
   SizesEnum,
   Icon,
   Avatar
-} from 'sep-yui';
+} from '@pksep/yui';
 import ContactListInModal from './ContactList/ContactListInModal.vue';
 import NewChatInformationForm from './NewChat/NewChatInformationForm.vue';
 import type { IMenuProps, IMenuEmits } from './interfaces/interfaces';

@@ -25,11 +25,11 @@ export default defineConfig(({ mode }) => {
               fileName: 'chat-container'
             },
             rollupOptions: {
-              external: ['vue', 'sep-yui'],
+              external: ['vue', '@pksep/yui'],
               output: {
                 globals: {
                   vue: 'Vue',
-                  'sep-yui': 'sep-yui'
+                  '@pksep/yui': '@pksep/yui'
                 }
               }
             }
