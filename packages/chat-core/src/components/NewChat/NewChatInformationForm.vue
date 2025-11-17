@@ -23,5 +23,5 @@
 </template>
 
 <script setup lang="ts">
-import { Button, ButtonTypeEnum, Input, SizesEnum, Textarea } from 'sep-yui';
+import { Button, ButtonTypeEnum, Input, SizesEnum, Textarea } from '@pksep/yui';
 </script>

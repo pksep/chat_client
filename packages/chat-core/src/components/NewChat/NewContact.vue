@@ -36,7 +36,7 @@ import {
   SizesEnum,
   ButtonTypeEnum,
   Button
-} from 'sep-yui';
+} from '@pksep/yui';
 import ContactSelector from './ContactSelector.vue';
 import AddUser from './AddUser.vue';
 import type { INewContactProps } from './interfaces/new-contact';

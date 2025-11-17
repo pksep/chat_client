@@ -52,7 +52,7 @@ import {
   SizesEnum,
   Search,
   Popover
-} from 'sep-yui';
+} from '@pksep/yui';
 
 import type { IHeaderProps, IHeaderEmits } from '../interfaces/interfaces';
 import AiIconWrapper from '../AiIconWrapper.vue';
