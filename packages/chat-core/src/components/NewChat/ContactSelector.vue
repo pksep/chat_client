@@ -1,7 +1,6 @@
 <template>
   <section class="contact-selector">
-    <Search class="contact-selector__search" />
-    <Input v-model="name" />
+    <Search class="contact-selector__search" v-model="name" />
     <ul class="contact-selector__list">
       <li
         v-for="contact in props.contacts"
@@ -10,7 +9,7 @@
         @click="handleNewContact(contact)"
       >
         <UserProfile
-          :name="contact.nickname"
+          :name="contact.name"
           :nickname="contact.nickname"
           :avatar-alt="contact.nickname"
         />
@@ -44,8 +43,7 @@ import {
   ButtonTypeEnum,
   Button,
   CheckboxSizeEnum,
-  SizesEnum,
-  Input
+  SizesEnum
 } from '@pksep/yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import { IUserProps } from '../interfaces/interfaces';
@@ -57,9 +55,9 @@ interface IContactSelectorProps {
 }
 
 interface IContactSelectorEmits {
-  (e: 'contact-select', contact: IUserProps): void;
-  (e: 'checkbox-change', isCheck: boolean, contactId: string | number): void;
-  (e: 'add-click', name?: string): void;
+  (e: 'unmount-contact', contact: IUserProps): void;
+  (e: 'unmount-checkbox', isCheck: boolean, contactId: string | number): void;
+  (e: 'unmount-click', name?: string): void;
 }
 
 const props = defineProps<IContactSelectorProps>();
@@ -75,12 +73,12 @@ const isButtonDisabled = computed(() => {
 });
 
 const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
-  emits('checkbox-change', isCheck, contactId);
+  emits('unmount-checkbox', isCheck, contactId);
 };
 
 const handleNewContact = (contact: IUserProps): void => {
   if (props.isAddOne) {
-    emits('contact-select', contact);
+    emits('unmount-contact', contact);
   } else {
     const isCurrentlySelected = props.selectedContactIds.has(contact.id);
     handleCheckbox(!isCurrentlySelected, contact.id);
@@ -88,6 +86,6 @@ const handleNewContact = (contact: IUserProps): void => {
 };
 
 const onAddClick = (): void => {
-  emits('add-click', name.value);
+  emits('unmount-click', name.value);
 };
 </script>

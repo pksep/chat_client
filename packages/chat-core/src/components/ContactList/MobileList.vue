@@ -66,9 +66,9 @@
           is-add-one
           :contacts="props.contacts"
           :selected-contact-ids="state.checkUsers"
-          @contact-select="handleNewContact"
-          @checkbox-change="handleCheckbox"
-          @add-click="handleOpenUser"
+          @unmount-contact="handleNewContact"
+          @unmount-checkbox="handleCheckbox"
+          @unmount-click="handleOpenUser"
         />
       </Modal>
     </template>
