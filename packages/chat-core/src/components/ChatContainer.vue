@@ -31,6 +31,7 @@
       class="chat__messages"
       ref="chatRef"
       @unmount-chapter="unmountHeaderMenuChapter"
+      @unmount-contact="handleNewContactMessage"
     />
     <MenuInfo
       class="chat__info"

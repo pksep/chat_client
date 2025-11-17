@@ -80,8 +80,11 @@ import { reactive, computed } from 'vue';
 import AiIconWrapper from '../AiIconWrapper.vue';
 import Line from '../Line.vue';
 import ContactList from './ContactList.vue';
-import type { IMobileListProps } from './interfaces/mobile-list';
-import type { IMenuEmits, IUserProps } from '../interfaces/interfaces';
+import type {
+  IMobileListProps,
+  IMobileListEmits
+} from './interfaces/mobile-list';
+import type { IUserProps } from '../interfaces/interfaces';
 import { Modal, Button, ButtonTypeEnum, Icon, IconNameEnum } from '@pksep/yui';
 import ContactSelector from '../NewChat/ContactSelector.vue';
 
@@ -95,7 +98,7 @@ const state = reactive({
   checkUsers: new Set<string | number>()
 });
 
-const emits = defineEmits<IMenuEmits>();
+const emits = defineEmits<IMobileListEmits>();
 
 const isButtonDisabled = computed(() => state.checkUsers.size === 0);
 
@@ -128,8 +131,8 @@ const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
   }
 };
 
-const handleNewContact = (): void => {
-  emits('unmount-user-add');
+const handleNewContact = (contact: IUserProps): void => {
+  emits('unmount-contact', contact);
   handleCloseModal();
 };
 
