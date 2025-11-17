@@ -2,6 +2,7 @@ import { CbEvents } from '@openim/wasm-client-sdk';
 import { ref } from 'vue';
 import { IMSDK } from './useOpenIM';
 import { IContactProps } from '../components/interfaces/interfaces';
+import { setGroupList } from './useGroup';
 
 const conversionStore = ref<IContactProps[]>([]);
 
@@ -12,14 +13,15 @@ const fetchConversationList = async () => {
 
       const result = response.data || [];
 
-      setConversationList(result);
+      setConversationList(result.filter(item => !item.groupID));
+      setGroupList(result.filter(item => !!item.groupID));
     });
   } catch (err) {
     console.error('Failed to get users with messages:', err);
   }
 };
 
-const manipulateConversationList = conversations => {
+export const manipulateConversationList = conversations => {
   return conversations.map(c => {
     return {
       id: c.conversationID,
@@ -31,6 +33,7 @@ const manipulateConversationList = conversations => {
       latestMessage: JSON.parse(c.latestMsg)?.textElem?.content || '',
       latestMessageTime: JSON.parse(c.latestMsg)?.sendTime || '',
       notificationCount: c.unreadCount,
+      groupId: c.groupID,
       isRead:
         JSON.parse(c.latestMsg)?.isRead &&
         c.userID !== JSON.parse(c.latestMsg)?.sendID
@@ -63,7 +66,6 @@ const updateConversationList = (value: any[]): void => {
 };
 
 export {
-  IMSDK,
   fetchConversationList,
   getConversationList,
   setConversationList,

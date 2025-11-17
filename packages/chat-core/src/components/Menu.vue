@@ -46,7 +46,7 @@
             </Button>
           </summary>
           <ContactList
-            :contacts="state.contactList"
+            :contacts="item.items"
             @unmount-click="unmountContactClick"
           />
         </details>
@@ -96,13 +96,15 @@ import {
   fetchConversationList,
   getConversationList
 } from '../services/useConversions';
+import { getGroupList } from '../services/useGroup';
 
 const props = withDefaults(defineProps<{ user: IUserProps }>(), {});
 
 const state = reactive({
   chapter: '',
   installPrompt: null,
-  contactList: computed(() => getConversationList())
+  contactList: computed(() => getConversationList()),
+  groupList: computed(() => getGroupList())
 });
 
 const emits = defineEmits<IMenuEmits>();
@@ -156,6 +158,8 @@ const unmountContactClick = (
       });
     }
   } else {
+    console.log(contact);
+
     state.chapter = contact.title;
     emits('unmount-chapter', {
       name: contact.title,
@@ -186,16 +190,18 @@ const handleNewChannelModal = () => {
   emits('unmount-new-contact', { isChapterOpen: true });
 };
 
-const listChannels = [
+const listChannels = computed(() => [
   {
     title: 'Каналы',
-    onClickPlusButton: handleNewChannelModal
+    onClickPlusButton: handleNewChannelModal,
+    items: state.groupList
   },
   {
     title: 'Личные сообщения',
-    onClickPlusButton: handleNewContactModal
+    onClickPlusButton: handleNewContactModal,
+    items: state.contactList
   }
-];
+]);
 
 const pwaInstall = async (): Promise<void> => {
   if (state.installPrompt) {

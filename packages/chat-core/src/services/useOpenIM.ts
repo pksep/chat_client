@@ -2,6 +2,7 @@ import { CbEvents, getSDK } from '@openim/wasm-client-sdk';
 
 import { ref } from 'vue';
 import { updateConversationList } from './useConversions';
+import { updateGroupList } from './useGroup';
 
 type IMSDKType = ReturnType<typeof getSDK>;
 
@@ -21,7 +22,8 @@ const setupOpenIM = (): void => {
   });
 
   IMSDK.on(CbEvents.OnConversationChanged, err => {
-    updateConversationList(err.data || []);
+    updateConversationList(err.data.filter(item => !item.groupID) || []);
+    updateGroupList(err.data.filter(item => !!item.groupID) || []);
   });
 
   // check all events for debugging
@@ -104,7 +106,10 @@ export const sendMessageIM = async ({
       res.data.recvID
     ].sort();
 
-    const convId = res.data.groupID || `si_${smallerUserID}_${largerUserID}`;
+    const convId = groupId
+      ? `sg_${groupId}`
+      : `si_${smallerUserID}_${largerUserID}`;
+
     appendMessageToLocal(convId, res.data);
 
     console.debug('[OpenIM] Message sent successfully to:', to);
@@ -154,9 +159,7 @@ const getMessagesByConversationId = async (
 
 // When current user reads a chat
 const markAsRead = async (conversationID: string) => {
-  const res = await IMSDK.markConversationMessageAsRead(conversationID);
-
-  console.log(res);
+  await IMSDK.markConversationMessageAsRead(conversationID);
 };
 
 // In-module reactive "store" — no extra files

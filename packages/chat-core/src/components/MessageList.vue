@@ -170,11 +170,21 @@ const handleSend = async (): Promise<void> => {
   if (props.chapter === 'ai') {
     await sendMessage(text, scrollToBottom);
   } else {
-    await sendMessageIM({
-      message: text,
-      to: props.contactId || '',
-      groupId: props.contactId || ''
-    });
+    console.log(props);
+
+    if (props.contactId) {
+      await sendMessageIM({
+        message: text,
+        to: props.contactId || '',
+        groupId: props.contactId || ''
+      });
+    } else {
+      await sendMessageIM({
+        message: text,
+        to: '',
+        groupId: props.conversionId.slice(3)
+      });
+    }
   }
   nextTick(() => scrollToBottom());
 };
@@ -182,12 +192,16 @@ const handleSend = async (): Promise<void> => {
 const isNewDate = (index: number, isMastra: boolean = false) => {
   if (index === 0) return true;
 
-  const current = isMastra
-    ? aiMessages.value[index].timestamp
-    : state.messages[index].sendTime;
-  const prev = isMastra
-    ? aiMessages.value[index - 1].timestamp
-    : state.messages[index - 1].sendTime;
+  const current = formatDay(
+    isMastra
+      ? aiMessages.value[index].timestamp
+      : state.messages[index].sendTime
+  );
+  const prev = formatDay(
+    isMastra
+      ? aiMessages.value[index - 1].timestamp
+      : state.messages[index - 1].sendTime
+  );
 
   return current !== prev;
 };

@@ -36,6 +36,7 @@ export interface IContactProps extends IUserProps {
   latestMessageTime?: number;
   notificationCount?: number;
   isPin?: boolean;
+  groupId?: string;
 }
 
 export interface IMenuProps {

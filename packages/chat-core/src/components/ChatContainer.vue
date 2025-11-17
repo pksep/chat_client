@@ -120,14 +120,13 @@ const unmountHeaderMenuChapter = (
 const unmountMenuChapter = (
   config: { name: string; contact: IUserProps } | string | null
 ): void => {
-  console.log(config);
   if (typeof config === 'string') {
     state.chapter = config;
     if (config === 'ai') {
       state.contact = null;
     }
-  } else if (config && config.name) {
-    state.chapter = config.name;
+  } else if (config && config.contact) {
+    state.chapter = config.contact.nickname;
     state.contact = config.contact;
   } else {
     state.chapter = null;
