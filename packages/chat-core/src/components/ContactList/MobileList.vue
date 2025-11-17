@@ -81,7 +81,7 @@ import AiIconWrapper from '../AiIconWrapper.vue';
 import Line from '../Line.vue';
 import ContactList from './ContactList.vue';
 import type { IMobileListProps } from './interfaces/mobile-list';
-import type { IMenuEmits } from '../interfaces/interfaces';
+import type { IMenuEmits, IUserProps } from '../interfaces/interfaces';
 import { Modal, Button, ButtonTypeEnum, Icon, IconNameEnum } from 'sep-yui';
 import ContactSelector from '../NewChat/ContactSelector.vue';
 
@@ -100,7 +100,7 @@ const emits = defineEmits<IMenuEmits>();
 const isButtonDisabled = computed(() => state.checkUsers.size === 0);
 
 const handleChapter = (
-  chapter: { name: string; contact: any } | string | null
+  chapter: { name: string; contact: IUserProps } | string | null
 ): void => {
   if (typeof chapter === 'string') {
     emits('unmount-chapter', chapter);

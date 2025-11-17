@@ -33,9 +33,9 @@
     />
     <MenuInfo
       class="chat__info"
-      :open="state.isMenuOpen"
+      :open="state.isMenuDesktopOpen"
       :contact="state.contact"
-      @unmount-collapse="handleMenuCollapse"
+      @unmount-collapse="handleMenuToggle"
       @unmount-new-contact="handleNewContact"
     />
   </main>
@@ -66,7 +66,8 @@ const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const state = reactive({
   isCollapse: false,
-  isMenuOpen: false,
+  isMenuDesktopOpen: false,
+  isMenuMobileOpen: false,
   chapter: isMobile ? 'assistant' : null,
   contact: null,
   isNewContactOpen: false
@@ -80,19 +81,23 @@ const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 
 const chatContainerClasses = computed(() => [
   'chat-container',
-  { collapse: state.isCollapse, 'menu-collapse': !state.isMenuOpen }
+  { collapse: state.isCollapse, 'menu-collapse': !state.isMenuDesktopOpen }
 ]);
 
 const handleCollapse = (isCollapse: boolean): void => {
   state.isCollapse = isCollapse;
 };
 
-const handleMenuCollapse = (isOpen: boolean): void => {
-  state.isMenuOpen = isOpen;
+const handleMenuToggle = (isOpen: boolean): void => {
+  state.isMenuDesktopOpen = isOpen;
 };
 
 const handleHeaderClick = (): void => {
-  state.isMenuOpen = true;
+  if (!isMobile.value) {
+    state.isMenuDesktopOpen = true;
+    return;
+  }
+  state.isMenuMobileOpen = true;
 };
 
 const unmountHeaderMenuChapter = (
@@ -144,7 +149,7 @@ const handleClearClick = (): void => {
   }
 };
 
-const handleNewContactMessage = async (contact): Promise<void> => {
+const handleNewContactMessage = async (contact: IUserProps): Promise<void> => {
   state.chapter = contact.name;
   state.contact = contact;
 
@@ -152,7 +157,7 @@ const handleNewContactMessage = async (contact): Promise<void> => {
 
   await sendMessageIM({
     message: '',
-    to: contact.userID || '',
+    to: contact.id || '',
     groupId: ''
   });
 };

@@ -125,5 +125,5 @@ const handleExit = (): void => {
   emits('unmount-exit');
 };
 
-console.log(props.chapter);
+console.log(props.contact);
 </script>

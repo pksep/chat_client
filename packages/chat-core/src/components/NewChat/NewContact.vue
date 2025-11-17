@@ -24,13 +24,7 @@
       @add-click="handleOpenUser"
     />
   </Modal>
-  <KeepAlive>
-    <component
-      :is="AddUser"
-      :open="state.openAddUser"
-      @unmount-close="handleCloseAddUser"
-    />
-  </KeepAlive>
+  <AddUser :open="state.openAddUser" @unmount-close="handleCloseAddUser" />
 </template>
 
 <script setup lang="ts">
