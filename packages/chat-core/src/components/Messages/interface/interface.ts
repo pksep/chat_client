@@ -4,4 +4,6 @@ export interface IMessageBubbleProps {
   author?: 'assistant' | 'user';
   time: string;
   isMeSender: boolean;
+  sender: string;
+  avatar: string;
 }

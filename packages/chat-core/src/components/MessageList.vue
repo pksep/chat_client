@@ -38,13 +38,13 @@
 
         <MessageBubble
           :class="
-            messageChat(
-              props.contactId === message.recvID ? 'user' : 'assistant'
-            )
+            messageChat(props.user.id === message.sendID ? 'user' : 'assistant')
           "
           :message="message.textElem?.content"
-          :is-me-sender="props.contactId === message.recvID"
+          :is-me-sender="props.user.id === message.sendID"
           :time="formatTime(new Date(message.sendTime))"
+          :sender="message.senderNickname"
+          :avatar="message.senderFaceUrl"
         />
       </template>
     </div>
@@ -144,6 +144,8 @@ watch(
 watch(
   () => state.messages.length,
   () => {
+    console.log(state.messages);
+
     if (!state.messages.length || chatWrapperRef.value?.scrollTop > 200) {
       return;
     }
@@ -152,7 +154,7 @@ watch(
 
     const newMessage = state.messages[state.messages.length - 1];
 
-    if (newMessage.sendID === props.contactId) {
+    if (newMessage.sendID !== props.user.id) {
       markAsRead(props.conversionId);
     }
   }

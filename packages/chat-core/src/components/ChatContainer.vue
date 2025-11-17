@@ -23,6 +23,7 @@
       @unmount-chapter="unmountMenuChapter"
     />
     <Chat
+      :user="props.user"
       :base-url="props.baseUrl"
       :chapter="state.chapter"
       :contact-id="state.contact?.id"

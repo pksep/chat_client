@@ -15,6 +15,7 @@
       :baseUrl="props.baseUrl"
       :contactId
       :conversionId
+      :user
     />
   </section>
 </template>

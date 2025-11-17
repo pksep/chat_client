@@ -2,10 +2,10 @@
   <div class="message">
     <Avatar
       class="message__avatar"
-      url="/avatar-user.png"
-      alt="avatar of user"
-      initials="Zakk"
-      v-if="false"
+      :url="props.sender"
+      :alt="props.sender"
+      :initials="props.sender"
+      v-if="!props.isMeSender && !props.author"
     />
     <AiIconWrapper
       class="message__assistant"
