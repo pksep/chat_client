@@ -38,7 +38,7 @@ const menuItems = computed(() => [
   { key: 'dialogs', label: 'Диалоги' }
 ]);
 
-const handleUnmountChapter = (chapter: string) => {
+const handleUnmountChapter = chapter => {
   activeChapter.value = chapter;
   if (!chapter) {
     activeChapter.value = 'assistant';

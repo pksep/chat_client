@@ -158,8 +158,6 @@ const unmountContactClick = (
       });
     }
   } else {
-    console.log(contact);
-
     state.chapter = contact.title;
     emits('unmount-chapter', {
       name: contact.title,

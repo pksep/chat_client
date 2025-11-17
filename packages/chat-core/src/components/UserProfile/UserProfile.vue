@@ -6,7 +6,7 @@
       class="user-profile__avatar"
       :initials="props.nickname"
     />
-    <h3 class="user-profile__title">{{ props.name }}</h3>
+    <h3 class="user-profile__title">{{ props.name || props.nickname }}</h3>
     <span class="user-profile__nickname">@{{ props.nickname }}</span>
   </div>
 </template>

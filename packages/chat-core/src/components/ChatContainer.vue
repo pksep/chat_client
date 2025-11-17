@@ -111,7 +111,7 @@ const unmountHeaderMenuChapter = (
     }
   } else if (config && config.name) {
     state.chapter = config.name;
-    state.contact = config.contact;
+    state.contact = config;
   } else {
     state.chapter = null;
     state.contact = null;
