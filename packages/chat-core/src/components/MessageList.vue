@@ -5,16 +5,20 @@
     v-if="props.chapter === 'ai' && aiMessages.length"
   >
     <div class="chat__message-bubble">
-      <MessageBubble
-        v-for="(message, index) in aiMessages"
-        :key="index"
-        :class="messageChat(message.role)"
-        :message="message.content"
-        :author="message.role"
-        :time="message.timestamp"
-        :loader="message.loading"
-        :is-me-sender="message.role === 'user'"
-      />
+      <template v-for="(message, index) in aiMessages" :key="index">
+        <div v-if="isNewDate(index, true)" class="date-divider">
+          <span>{{ formatDay(message.timestamp) }}</span>
+        </div>
+
+        <MessageBubble
+          :class="messageChat(message.role)"
+          :message="message.content"
+          :author="message.role"
+          :time="formatTime(new Date(message.timestamp))"
+          :loader="message.loading"
+          :is-me-sender="message.role === 'user'"
+        />
+      </template>
     </div>
   </div>
   <div
@@ -24,16 +28,25 @@
     @scroll="handleScroll"
   >
     <div class="chat__message-bubble">
-      <MessageBubble
+      <template
         v-for="(message, index) in state.messages"
-        :key="index"
-        :class="
-          messageChat(props.contactId === message.recvID ? 'user' : 'assistant')
-        "
-        :message="message.textElem.content"
-        :is-me-sender="props.contactId === message.recvID"
-        :time="formatTime(new Date(message.sendTime))"
-      />
+        :key="message.clientMsgID"
+      >
+        <div v-if="isNewDate(index)" class="date-divider">
+          <span>{{ formatDay(message.sendTime) }}</span>
+        </div>
+
+        <MessageBubble
+          :class="
+            messageChat(
+              props.contactId === message.recvID ? 'user' : 'assistant'
+            )
+          "
+          :message="message.textElem?.content"
+          :is-me-sender="props.contactId === message.recvID"
+          :time="formatTime(new Date(message.sendTime))"
+        />
+      </template>
     </div>
   </div>
   <EmptyChat
@@ -67,7 +80,7 @@ import {
   sendMessageIM
 } from '../services/useOpenIM';
 import type { IMessageListProps } from './interfaces/message-list';
-import { formatTime } from '../composables/useTime';
+import { formatDay, formatTime } from '../composables/useTime';
 
 const props = withDefaults(defineProps<IMessageListProps>(), {
   chapter: null
@@ -164,6 +177,19 @@ const handleSend = async (): Promise<void> => {
     });
   }
   nextTick(() => scrollToBottom());
+};
+
+const isNewDate = (index: number, isMastra: boolean = false) => {
+  if (index === 0) return true;
+
+  const current = isMastra
+    ? aiMessages.value[index].timestamp
+    : state.messages[index].sendTime;
+  const prev = isMastra
+    ? aiMessages.value[index - 1].timestamp
+    : state.messages[index - 1].sendTime;
+
+  return current !== prev;
 };
 
 onMounted(() => {

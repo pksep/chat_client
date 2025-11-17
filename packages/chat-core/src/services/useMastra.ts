@@ -1,12 +1,11 @@
 import { ref, Ref } from 'vue';
 import { MastraClient } from '@mastra/client-js';
-import { formatTime } from '../composables/useTime';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   loading?: boolean;
-  timestamp?: string;
+  timestamp?: number;
 }
 
 /** IndexedDB constants */
@@ -248,7 +247,7 @@ function useMastra(
     const userMessage: Message = {
       role: 'user',
       content: input,
-      timestamp: formatTime()
+      timestamp: Date.now()
     };
     messages.value.push(userMessage);
 
@@ -260,7 +259,7 @@ function useMastra(
       role: 'assistant',
       content: '',
       loading: true,
-      timestamp: formatTime()
+      timestamp: Date.now()
     };
     messages.value.push(assistantMessage);
 

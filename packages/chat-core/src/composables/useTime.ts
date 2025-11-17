@@ -21,6 +21,13 @@ export const formatTime = (date: Date = new Date()) => {
   });
 };
 
+export const formatDay = (timestamp: number): string => {
+  return new Date(timestamp).toLocaleDateString("ru-RU", {
+    day: "numeric",
+    month: "long",
+  });
+};
+
 export function isTimeAfter(time1: Date, time2: Date): boolean {
   return time1.getTime() > time2.getTime();
 }
