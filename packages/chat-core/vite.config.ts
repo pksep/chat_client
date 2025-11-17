@@ -56,6 +56,9 @@ export default defineConfig(({ mode }) => {
         ? [
             VitePWA({
               registerType: 'autoUpdate',
+              workbox: {
+                maximumFileSizeToCacheInBytes: 50 * 1024 * 1024 // 50MB
+              },
               mode: env.MODE === 'dev' ? 'development' : 'production',
               manifest: {
                 name: 'sep-chat',

@@ -47,7 +47,7 @@
       </Button>
       <Modal
         :open="state.showAddAccount"
-        position="center"
+        position="bottom"
         @close="handleCloseModal"
         class="mobile__list-modal"
       >

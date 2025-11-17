@@ -10,6 +10,7 @@ button.mobile__list-button {
   max-height: 56px;
 }
 
+/*
 .mobile__list-modal.modal-yui-kit.modal-yui-kit_center.mobile__list-modal {
   border-top-left-radius: 20px;
   border-top-right-radius: 20px;
@@ -21,6 +22,7 @@ button.mobile__list-button {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
 }
+*/
 
 .mobile__list-modal__header {
   display: flex;
@@ -43,9 +45,6 @@ button.mobile__list-modal__header--button {
   letter-spacing: 0;
   font-size: 16px;
   color: var(--text-black);
-}
-
-.modal-yui-kit_bottom {
 }
 
 .modal-yui-kit__modal-content {
