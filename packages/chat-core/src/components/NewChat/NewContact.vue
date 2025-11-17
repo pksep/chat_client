@@ -41,6 +41,7 @@ import ContactSelector from './ContactSelector.vue';
 import AddUser from './AddUser.vue';
 import type { INewContactProps } from './interfaces/new-contact';
 import { IUserProps } from '../interfaces/interfaces';
+import { createGroup } from '../../services/useGroup';
 
 const props = withDefaults(defineProps<INewContactProps>(), {
   open: false,
@@ -54,7 +55,7 @@ const emits = defineEmits<{
 
 const state = reactive({
   open: false,
-  checkUsers: new Set<string | number>(),
+  checkUsers: new Set<string>(),
   openAddUser: false
 });
 
@@ -80,7 +81,7 @@ const closeModal = (): void => {
   emits('unmount-close');
 };
 
-const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
+const handleCheckbox = (isCheck: boolean, contactId: string): void => {
   if (isCheck) {
     state.checkUsers.add(contactId);
   } else {
@@ -97,8 +98,7 @@ const handleCloseAddUser = (): void => {
   state.openAddUser = false;
 };
 
-const handleOpenUser = (): void => {
-  if (isButtonDisabled.value) return;
-  state.openAddUser = true;
+const handleOpenUser = (name: string): void => {
+  createGroup(Array.from(state.checkUsers), name);
 };
 </script>

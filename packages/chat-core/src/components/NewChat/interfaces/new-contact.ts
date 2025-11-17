@@ -1,6 +1,6 @@
-import type { IUserProps } from '../../interfaces/interfaces';
+import { User } from "@/composables/useUsers";
 
 export interface INewContactProps {
   open: boolean;
-  contacts: IUserProps[];
+  contacts: User[];
 }
