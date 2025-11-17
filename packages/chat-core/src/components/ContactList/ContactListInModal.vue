@@ -49,7 +49,13 @@
 </template>
 
 <script setup lang="ts">
-import { Button, ButtonTypeEnum, Icon, IconNameEnum, SizesEnum } from 'sep-yui';
+import {
+  Button,
+  ButtonTypeEnum,
+  Icon,
+  IconNameEnum,
+  SizesEnum
+} from '@pksep/yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import { ref } from 'vue';
 import NewContactModal from '../NewChat/NewContact.vue';

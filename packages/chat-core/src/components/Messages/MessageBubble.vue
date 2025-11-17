@@ -61,7 +61,7 @@ import {
   Icon,
   IconNameEnum,
   SizesEnum
-} from 'sep-yui';
+} from '@pksep/yui';
 import AiIconWrapper from '../AiIconWrapper.vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import { useContextMenu } from '../../composables/useContextMenu';

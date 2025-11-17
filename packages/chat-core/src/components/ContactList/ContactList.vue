@@ -57,7 +57,7 @@ import {
   Button,
   ButtonTypeEnum,
   SizesEnum
-} from 'sep-yui';
+} from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 

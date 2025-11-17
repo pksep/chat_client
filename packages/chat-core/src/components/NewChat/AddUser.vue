@@ -26,7 +26,7 @@
 </template>
 
 <script lang="ts" setup>
-import { Button, Avatar, ButtonTypeEnum, Modal, SizesEnum } from 'sep-yui';
+import { Button, Avatar, ButtonTypeEnum, Modal, SizesEnum } from '@pksep/yui';
 import MenuInfo from '../MenuInfo.vue';
 import NewChatInformationForm from './NewChatInformationForm.vue';
 

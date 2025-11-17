@@ -66,7 +66,7 @@ import {
   ButtonTypeEnum,
   Button,
   CheckboxSizeEnum
-} from 'sep-yui';
+} from '@pksep/yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import AddUser from './AddUser.vue';
 
