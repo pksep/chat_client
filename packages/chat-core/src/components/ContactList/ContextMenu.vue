@@ -15,7 +15,7 @@
 </template>
 
 <script setup lang="ts">
-import { vOnClickOutside } from 'sep-yui';
+import { vOnClickOutside } from '@pksep/yui';
 import { computed } from 'vue';
 
 const props = defineProps<{

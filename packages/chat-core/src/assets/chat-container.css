@@ -1,4 +1,4 @@
-@import url('sep-yui/styles');
+@import url('@pksep/yui/styles');
 @import url('@fontsource-variable/inter');
 @import url('./globals.css');
 @import url('./menu-info-users.css');

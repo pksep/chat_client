@@ -25,11 +25,11 @@ export default defineConfig(({ mode }) => {
               fileName: 'chat-container'
             },
             rollupOptions: {
-              external: ['vue', 'sep-yui'],
+              external: ['vue', '@pksep/yui'],
               output: {
                 globals: {
                   vue: 'Vue',
-                  'sep-yui': 'sep-yui'
+                  '@pksep/yui': '@pksep/yui'
                 }
               }
             }
@@ -56,6 +56,9 @@ export default defineConfig(({ mode }) => {
         ? [
             VitePWA({
               registerType: 'autoUpdate',
+              workbox: {
+                maximumFileSizeToCacheInBytes: 50 * 1024 * 1024 // 50MB
+              },
               mode: env.MODE === 'dev' ? 'development' : 'production',
               manifest: {
                 name: 'sep-chat',

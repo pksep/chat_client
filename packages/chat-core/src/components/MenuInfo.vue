@@ -21,7 +21,7 @@
       <template #header2> Информация </template>
       <template #tab1>
         <ContactListInModal
-          :contacts="props.contact"
+          :contacts="[props.contact]"
           @unmount-user-add="unmountUserAdd"
         />
       </template>
@@ -85,7 +85,7 @@ import {
   SizesEnum,
   Icon,
   Avatar
-} from 'sep-yui';
+} from '@pksep/yui';
 import ContactListInModal from './ContactList/ContactListInModal.vue';
 import NewChatInformationForm from './NewChat/NewChatInformationForm.vue';
 import type { IMenuProps, IMenuEmits } from './interfaces/interfaces';

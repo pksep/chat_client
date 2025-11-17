@@ -88,7 +88,7 @@ import {
   ButtonTypeEnum,
   IconNameEnum,
   SizesEnum
-} from 'sep-yui';
+} from '@pksep/yui';
 import UserProfile from './UserProfile/UserProfile.vue';
 import ContactList from './ContactList/ContactList.vue';
 import type { IMenuEmits, IUserProps } from './interfaces/interfaces';
