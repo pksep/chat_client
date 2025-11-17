@@ -20,10 +20,7 @@
       </template>
       <template #header2> Информация </template>
       <template #tab1>
-        <ContactListInModal
-          :contacts="[props.contact]"
-          @unmount-user-add="unmountUserAdd"
-        />
+        <ContactListInModal :contacts="[props.contact]" />
       </template>
       <template #tab2>
         <section class="menu-info__info-section">
@@ -117,9 +114,11 @@ const handleCloseMenu = (): void => {
   close();
 };
 
+/*
 const unmountUserAdd = (): void => {
   emits('unmount-new-contact', { isChapterOpen: true });
 };
+ */
 
 const openEditProfileIcon = (): void => {
   state.isEditAvatar = true;

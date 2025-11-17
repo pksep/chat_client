@@ -5,7 +5,7 @@
     <ul class="contact-selector__list">
       <li
         v-for="contact in props.contacts"
-        :key="contact.userID"
+        :key="contact.id"
         class="contact-selector__item"
         @click="handleNewContact(contact)"
       >
@@ -18,8 +18,8 @@
           v-if="!props.isAddOne"
           @click.stop
           :size="CheckboxSizeEnum.small"
-          @update:model-value="value => handleCheckbox(value, contact.userID)"
-          :model-value="props.selectedContactIds.has(contact.userID)"
+          @update:model-value="value => handleCheckbox(value, contact.id)"
+          :model-value="props.selectedContactIds.has(contact.id)"
         />
       </li>
     </ul>
@@ -48,16 +48,16 @@ import {
   Input
 } from '@pksep/yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
-import { User } from '../../composables/useUsers';
+import { IUserProps } from '../interfaces/interfaces';
 
 interface IContactSelectorProps {
-  contacts: User[];
+  contacts: IUserProps[];
   selectedContactIds: Set<string | number>;
   isAddOne?: boolean;
 }
 
 interface IContactSelectorEmits {
-  (e: 'contact-select', contact: User): void;
+  (e: 'contact-select', contact: IUserProps): void;
   (e: 'checkbox-change', isCheck: boolean, contactId: string | number): void;
   (e: 'add-click', name?: string): void;
 }
@@ -78,12 +78,12 @@ const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
   emits('checkbox-change', isCheck, contactId);
 };
 
-const handleNewContact = (contact: User): void => {
+const handleNewContact = (contact: IUserProps): void => {
   if (props.isAddOne) {
     emits('contact-select', contact);
   } else {
-    const isCurrentlySelected = props.selectedContactIds.has(contact.userID);
-    handleCheckbox(!isCurrentlySelected, contact.userID);
+    const isCurrentlySelected = props.selectedContactIds.has(contact.id);
+    handleCheckbox(!isCurrentlySelected, contact.id);
   }
 };
 

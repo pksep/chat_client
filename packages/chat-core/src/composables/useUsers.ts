@@ -2,23 +2,19 @@ import { ref } from 'vue';
 import { getAuthToken } from './useLogin';
 import { useOpenIMRestApi } from '../services/useApi';
 
-export interface User {
-  userID: string;
-  nickname: string;
-  faceURL?: string;
-}
+import type { IUserProps } from '../components/interfaces/interfaces';
 
 export const useUsers = () => {
-  const users = ref<User[]>([]);
+  const users = ref<IUserProps[]>([]);
   const loading = ref(false);
-  const error = ref('');
+  const error = ref<string | null>(null);
 
   const fetchAllUsers = async (opts?: {
     pageNumber?: number;
     showNumber?: number;
-  }): Promise<User[]> => {
+  }): Promise<IUserProps[]> => {
     loading.value = true;
-    error.value = '';
+    error.value = null;
 
     try {
       const token = getAuthToken();
@@ -41,7 +37,27 @@ export const useUsers = () => {
       }
 
       const result = await response.json();
-      users.value = result.data?.users ?? [];
+      const resultUsers = result.data?.users ?? [];
+
+      if (resultUsers.length === 0) {
+        users.value = [];
+        error.value = 'No users found';
+        return users.value;
+      }
+
+      users.value = resultUsers.map(
+        (user: {
+          userID: string;
+          nickname: string;
+          ex: string;
+          faceURL: string;
+        }) => ({
+          id: user.userID,
+          name: user.nickname,
+          nickname: user.ex,
+          avatarUrl: user.faceURL
+        })
+      );
 
       return users.value;
     } catch (err) {

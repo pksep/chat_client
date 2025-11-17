@@ -66,9 +66,9 @@ import {
   SizesEnum
 } from '@pksep/yui';
 import AiIconWrapper from '../AiIconWrapper.vue';
-import type { IMessageBubbleProps } from './interface/interface';
 import { useContextMenu } from '../../composables/useContextMenu';
 import ContextMenu from '../ContactList/ContextMenu.vue';
+import type { IMessageBubbleProps } from './interface/interface';
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
