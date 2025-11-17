@@ -46,7 +46,7 @@ import {
   CheckboxSizeEnum,
   SizesEnum,
   Input
-} from 'sep-yui';
+} from '@pksep/yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import { User } from '../../composables/useUsers';
 

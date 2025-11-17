@@ -82,7 +82,7 @@ import Line from '../Line.vue';
 import ContactList from './ContactList.vue';
 import type { IMobileListProps } from './interfaces/mobile-list';
 import type { IMenuEmits, IUserProps } from '../interfaces/interfaces';
-import { Modal, Button, ButtonTypeEnum, Icon, IconNameEnum } from 'sep-yui';
+import { Modal, Button, ButtonTypeEnum, Icon, IconNameEnum } from '@pksep/yui';
 import ContactSelector from '../NewChat/ContactSelector.vue';
 
 const props = withDefaults(defineProps<IMobileListProps>(), {
