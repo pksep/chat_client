@@ -59,8 +59,6 @@ const state = reactive({
   openAddUser: false
 });
 
-const isButtonDisabled = computed(() => state.checkUsers.size === 0);
-
 watch(
   () => props.open,
   () => {

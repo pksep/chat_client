@@ -159,7 +159,7 @@ const getMessagesByConversationId = async (
 
 // When current user reads a chat
 const markAsRead = async (conversationID: string) => {
-  const res = await IMSDK.markConversationMessageAsRead(conversationID);
+  await IMSDK.markConversationMessageAsRead(conversationID);
 };
 
 // In-module reactive "store" — no extra files
