@@ -87,9 +87,9 @@ importers:
       '@openim/wasm-client-sdk':
         specifier: 3.8.3-patch.10
         version: 3.8.3-patch.10
-      sep-yui:
-        specifier: 0.1.127
-        version: 0.1.127(@floating-ui/dom@1.7.4)(@floating-ui/utils@0.2.10)(@tiptap/extensions@3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5)(@types/react@19.2.2)(typescript@5.8.2)(vue@3.5.24(typescript@5.8.2))
+      '@pksep/yui':
+        specifier: 0.1.129
+        version: 0.1.129(@floating-ui/dom@1.7.4)(@floating-ui/utils@0.2.10)(@tiptap/extensions@3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5)(@types/react@19.2.2)(typescript@5.8.2)(vue@3.5.24(typescript@5.8.2))
       zod:
         specifier: '3'
         version: 3.25.76
@@ -1789,6 +1789,11 @@ packages:
   '@pkgr/core@0.2.9':
     resolution: {integrity: sha512-QNqXyfVS2wm9hweSYD2O7F0G06uurj9kZ96TRQE5Y9hU7+tgdZwIkbAKc5Ocy1HxEY2kuDQa6cQ1WRs/O5LFKA==}
     engines: {node: ^12.20.0 || ^14.18.0 || >=16.0.0}
+
+  '@pksep/yui@0.1.129':
+    resolution: {integrity: sha512-Dqyk4PRv8gqOxBTK/P/uiU4PALeMiktwOc1f7ju5jEX7R2KXT/jl+DJhKufWo2PaLOyC4hnl2WIM2TOmwK44sg==}
+    peerDependencies:
+      vue: '>=3'
 
   '@popperjs/core@2.11.8':
     resolution: {integrity: sha512-P1st0aksCrn9sGZhp8GMYwBnQsbvAWsZAX44oXNNvLHGqAOcoVxmjZiohstwQ7SqKnbR47akdNi+uleWD8+g6A==}
@@ -4667,11 +4672,6 @@ packages:
     resolution: {integrity: sha512-dW41u5VfLXu8SJh5bwRmyYUbAoSB3c9uQh6L8h/KtsFREPWpbX1lrljJo186Jc4nmci/sGUZ9a0a0J2zgfq2hw==}
     engines: {node: '>= 0.8.0'}
 
-  sep-yui@0.1.127:
-    resolution: {integrity: sha512-oDKnH3ujj/IABzWUTw1PWDSrHaTQONc/Q058HWjVHJ3cbIb7h04w4Ine27EnUaLqVxERgj1DWh7aTqPyNbiqcA==}
-    peerDependencies:
-      vue: '>=3'
-
   serialize-javascript@6.0.2:
     resolution: {integrity: sha512-Saa1xPByTTq2gdeFZYLLo+RFE35NHZkAbqZeWNd3BpzppeVisAqpDjcp8dyf6uIvEqJRd46jemmyA4iFIeVk8g==}
 
@@ -7351,6 +7351,32 @@ snapshots:
       '@opentelemetry/core': 2.1.0(@opentelemetry/api@1.9.0)
 
   '@pkgr/core@0.2.9': {}
+
+  '@pksep/yui@0.1.129(@floating-ui/dom@1.7.4)(@floating-ui/utils@0.2.10)(@tiptap/extensions@3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5)(@types/react@19.2.2)(typescript@5.8.2)(vue@3.5.24(typescript@5.8.2))':
+    dependencies:
+      '@floating-ui/vue': 1.1.9(vue@3.5.24(typescript@5.8.2))
+      '@fontsource-variable/inter': 5.2.8
+      '@fontsource/source-sans-pro': 5.2.5
+      '@tiptap/core': 3.10.5(@tiptap/pm@3.10.5)
+      '@tiptap/extension-image': 3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))
+      '@tiptap/extension-link': 3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5)
+      '@tiptap/extension-placeholder': 3.10.5(@tiptap/extensions@3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5))
+      '@tiptap/starter-kit': 3.10.5
+      '@tiptap/vue-3': 3.10.5(@floating-ui/dom@1.7.4)(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5)(vue@3.5.24(typescript@5.8.2))
+      '@vueuse/components': 11.3.0(vue@3.5.24(typescript@5.8.2))
+      '@vueuse/core': 11.3.0(vue@3.5.24(typescript@5.8.2))
+      col-cal: 2.0.0-alpha.1(@floating-ui/utils@0.2.10)(@types/react@19.2.2)
+      vue: 3.5.24(typescript@5.8.2)
+      vue3-emoji-picker: 1.1.8(typescript@5.8.2)
+      vue3-perfect-scrollbar: 2.0.0(vue@3.5.24(typescript@5.8.2))
+    transitivePeerDependencies:
+      - '@floating-ui/dom'
+      - '@floating-ui/utils'
+      - '@tiptap/extensions'
+      - '@tiptap/pm'
+      - '@types/react'
+      - '@vue/composition-api'
+      - typescript
 
   '@popperjs/core@2.11.8': {}
 
@@ -10561,32 +10587,6 @@ snapshots:
       statuses: 2.0.1
     transitivePeerDependencies:
       - supports-color
-
-  sep-yui@0.1.127(@floating-ui/dom@1.7.4)(@floating-ui/utils@0.2.10)(@tiptap/extensions@3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5)(@types/react@19.2.2)(typescript@5.8.2)(vue@3.5.24(typescript@5.8.2)):
-    dependencies:
-      '@floating-ui/vue': 1.1.9(vue@3.5.24(typescript@5.8.2))
-      '@fontsource-variable/inter': 5.2.8
-      '@fontsource/source-sans-pro': 5.2.5
-      '@tiptap/core': 3.10.5(@tiptap/pm@3.10.5)
-      '@tiptap/extension-image': 3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))
-      '@tiptap/extension-link': 3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5)
-      '@tiptap/extension-placeholder': 3.10.5(@tiptap/extensions@3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5))
-      '@tiptap/starter-kit': 3.10.5
-      '@tiptap/vue-3': 3.10.5(@floating-ui/dom@1.7.4)(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5)(vue@3.5.24(typescript@5.8.2))
-      '@vueuse/components': 11.3.0(vue@3.5.24(typescript@5.8.2))
-      '@vueuse/core': 11.3.0(vue@3.5.24(typescript@5.8.2))
-      col-cal: 2.0.0-alpha.1(@floating-ui/utils@0.2.10)(@types/react@19.2.2)
-      vue: 3.5.24(typescript@5.8.2)
-      vue3-emoji-picker: 1.1.8(typescript@5.8.2)
-      vue3-perfect-scrollbar: 2.0.0(vue@3.5.24(typescript@5.8.2))
-    transitivePeerDependencies:
-      - '@floating-ui/dom'
-      - '@floating-ui/utils'
-      - '@tiptap/extensions'
-      - '@tiptap/pm'
-      - '@types/react'
-      - '@vue/composition-api'
-      - typescript
 
   serialize-javascript@6.0.2:
     dependencies:
