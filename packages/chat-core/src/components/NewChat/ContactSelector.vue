@@ -59,7 +59,7 @@ interface IContactSelectorProps {
 interface IContactSelectorEmits {
   (e: 'contact-select', contact: User): void;
   (e: 'checkbox-change', isCheck: boolean, contactId: string | number): void;
-  (e: 'add-click', name?: String): void;
+  (e: 'add-click', name?: string): void;
 }
 
 const props = defineProps<IContactSelectorProps>();

@@ -1,4 +1,4 @@
-import { User } from "@/composables/useUsers";
+import { User } from '@/composables/useUsers';
 
 export interface INewContactProps {
   open: boolean;
