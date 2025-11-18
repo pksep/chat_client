@@ -53,6 +53,9 @@ const updateGroupList = (value: any[]): void => {
   });
 
   groups.value = Array.from(conversationMap.values()).sort((a, b) => {
+    if (a.isPin && !b.isPin) return -1;
+    if (!a.isPin && b.isPin) return 1;
+
     return b.latestMessageTime - a.latestMessageTime;
   });
 };

@@ -21,6 +21,20 @@ const fetchConversationList = async () => {
   }
 };
 
+const setPinConversation = async (
+  conversationID: string,
+  isPinned: boolean
+) => {
+  try {
+    await IMSDK.setConversation({
+      conversationID,
+      isPinned
+    });
+  } catch (err) {
+    console.error('Failed to get users with messages:', err);
+  }
+};
+
 export const manipulateConversationList = conversations => {
   return conversations.map(c => {
     return {
@@ -66,6 +80,9 @@ const updateConversationList = (value: any[]): void => {
   });
 
   conversionStore.value = Array.from(conversationMap.values()).sort((a, b) => {
+    if (a.isPin && !b.isPin) return -1;
+    if (!a.isPin && b.isPin) return 1;
+
     return b.latestMessageTime - a.latestMessageTime;
   });
 };
@@ -74,5 +91,6 @@ export {
   fetchConversationList,
   getConversationList,
   setConversationList,
-  updateConversationList
+  updateConversationList,
+  setPinConversation
 };

@@ -27,11 +27,11 @@ const setupOpenIM = (): void => {
   });
 
   // check all events for debugging
-  // Object.values(CbEvents).forEach(eventName => {
-  //   IMSDK.on(eventName, (data: any) => {
-  //     console.debug(`[OpenIM Event] ${eventName}:`, data);
-  //   });
-  // });
+  Object.values(CbEvents).forEach(eventName => {
+    IMSDK.on(eventName, (data: any) => {
+      console.debug(`[OpenIM Event] ${eventName}:`, data);
+    });
+  });
 
   IMSDK.on(CbEvents.OnRecvNewMessages, evt => {
     try {
