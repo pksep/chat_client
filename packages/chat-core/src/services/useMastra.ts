@@ -8,11 +8,16 @@ interface Message {
   timestamp?: number;
 }
 
+interface UseMastraOptions {
+  agentId?: string;
+  chatId?: string;
+  baseUrl?: string;
+}
+
 // IndexedDB constants
 const DB_NAME = 'chat-messages-db';
 const STORE_NAME = 'messages';
 
-// Simple IndexedDB wrapper
 class ChatDB {
   static async openDB(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
@@ -40,7 +45,31 @@ class ChatDB {
       const request = store.get(chatId);
 
       request.onsuccess = () => {
-        resolve(request.result || null);
+        let result = request.result;
+        if (result && result.messages && Array.isArray(result.messages)) {
+          // Create new result object with properly formatted timestamps
+          result = {
+            ...result,
+            messages: result.messages.map(msg => {
+              let timestamp: number | undefined;
+              if (typeof msg.timestamp === 'string') {
+                // Convert stored string timestamp back to number
+                timestamp = new Date(msg.timestamp).getTime();
+              } else if (typeof msg.timestamp === 'number') {
+                // Timestamp is already a number
+                timestamp = msg.timestamp;
+              } else {
+                // Default to current time if no timestamp
+                timestamp = Date.now();
+              }
+              return {
+                ...msg,
+                timestamp
+              };
+            })
+          };
+        }
+        resolve(result || null);
       };
       request.onerror = () => reject(request.error);
     });
@@ -51,9 +80,16 @@ class ChatDB {
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
+      // Ensure all data is serializable by converting any Date objects to ISO strings
+      const serializableMessages = messages.map(msg => ({
+        ...msg,
+        timestamp: msg.timestamp
+          ? new Date(msg.timestamp).toISOString()
+          : undefined
+      }));
       const data = {
         chatId,
-        messages,
+        messages: serializableMessages,
         timestamp: new Date().toISOString()
       };
       const request = store.put(data);
@@ -74,10 +110,21 @@ class ChatDB {
 
       request.onsuccess = () => {
         const results = request.result || [];
-        const chats = results.map((item: any) => ({
-          chatId: item.chatId,
-          timestamp: item.timestamp ? new Date(item.timestamp) : new Date(0)
-        }));
+        const chats = results.map((item: any) => {
+          // Handle both string and Date object timestamps
+          let timestamp: Date;
+          if (typeof item.timestamp === 'string') {
+            timestamp = new Date(item.timestamp);
+          } else if (item.timestamp instanceof Date) {
+            timestamp = item.timestamp;
+          } else {
+            timestamp = new Date(0);
+          }
+          return {
+            chatId: item.chatId,
+            timestamp
+          };
+        });
         // Sort by timestamp (newest first)
         chats.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
         resolve(chats);
@@ -99,7 +146,6 @@ class ChatDB {
   }
 }
 
-// Utility functions
 const generateChatId = (): string => {
   return crypto.randomUUID
     ? crypto.randomUUID()
@@ -138,7 +184,6 @@ const getOrCreateChatHistory = async (chatId: string): Promise<Message[]> => {
     if (result && result.messages && Array.isArray(result.messages)) {
       return result.messages;
     }
-    // Create empty chat if it doesn't exist
     await ChatDB.put(chatId, []);
     return [];
   } catch (error) {
@@ -177,7 +222,6 @@ const clearAllData = async (): Promise<void> => {
   }
 };
 
-// Session storage utilities
 const saveUserIdToSession = (userId: string): void => {
   sessionStorage.setItem('userId', userId);
 };
@@ -202,12 +246,6 @@ const removeMessageLoading = async (
   }
 };
 
-interface UseMastraOptions {
-  agentId?: string;
-  chatId?: string;
-  baseUrl?: string;
-}
-
 const useMastra = (options?: UseMastraOptions | false) => {
   if (!options) {
     return {
@@ -222,18 +260,18 @@ const useMastra = (options?: UseMastraOptions | false) => {
   const defaultBaseUrl =
     import.meta.env.VITE_CHAT_MASTRA_URL || 'http://localhost:4111';
   const agentId = options.agentId ?? 'chat';
-  const chatId = options.chatId;
+  let chatId = options.chatId; // Use 'let' to allow reassignment
   const baseUrl = options.baseUrl ?? defaultBaseUrl;
 
   const client = new MastraClient({ baseUrl });
   const messages: Ref<Message[]> = ref([]);
-  const isInitializing = ref(true);
+  const isInitializing = ref(!!chatId); // Only true if chatId exists initially
 
-  // Initialize session if chatId is provided
+  // Initialize if chatId is available
   if (chatId) {
-    loadMessages(chatId)
-      .then(cached => {
-        messages.value = cached;
+    getOrCreateChatHistory(chatId)
+      .then(initialMessages => {
+        messages.value = [...initialMessages];
         isInitializing.value = false;
       })
       .catch(() => {
@@ -241,7 +279,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
         isInitializing.value = false;
       });
   } else {
-    isInitializing.value = false;
+    isInitializing.value = false; // If no chatId, skip initialization but allow later
   }
 
   const sendMessage = async (
@@ -249,23 +287,32 @@ const useMastra = (options?: UseMastraOptions | false) => {
     onFinish?: () => void,
     abortSignal?: AbortSignal
   ) => {
-    if (!input.trim() || isInitializing.value || !chatId) return;
+    if (!input.trim()) return;
 
-    // Check if last message is still loading
+    // If no chatId, generate one now (first message case)
+    if (!chatId) {
+      chatId = generateChatId();
+      // Initialize with empty messages for new chat
+      messages.value = [];
+      isInitializing.value = false;
+    }
+
+    if (isInitializing.value) return;
+
     const lastMessage = messages.value[messages.value.length - 1];
     if (lastMessage?.role === 'assistant' && lastMessage?.loading) {
       return;
     }
 
-    // Add user message
+    // Add user message and ensure reactivity
     const userMessage: Message = {
       role: 'user',
       content: input,
       timestamp: Date.now()
     };
-    messages.value.push(userMessage);
+    messages.value = [...messages.value, userMessage];
 
-    // Add loading assistant message
+    // Add loading assistant message and ensure reactivity
     const assistantIndex = messages.value.length;
     const assistantMessage: Message = {
       role: 'assistant',
@@ -273,9 +320,9 @@ const useMastra = (options?: UseMastraOptions | false) => {
       loading: true,
       timestamp: Date.now()
     };
-    messages.value.push(assistantMessage);
+    messages.value = [...messages.value, assistantMessage];
 
-    // Save immediately
+    // Save messages after adding both user and assistant messages
     await saveMessages(chatId, messages.value);
 
     try {
@@ -293,10 +340,9 @@ const useMastra = (options?: UseMastraOptions | false) => {
       if (!stream) throw new Error('Server error, sorry');
       onFinish?.();
 
-      // Process the stream
       await new Promise((resolve, reject) => {
         stream.processDataStream({
-          onChunk: (chunk: string | object) => {
+          onChunk: (chunk: string | object): Promise<void> => {
             try {
               let event: any;
               if (typeof chunk === 'object' && chunk !== null) {
@@ -308,12 +354,19 @@ const useMastra = (options?: UseMastraOptions | false) => {
                 }
                 event = JSON.parse(jsonStr);
               } else {
-                return; // Skip unsupported chunk types
+                return;
               }
 
               if (event.type === 'text-delta' && event.payload?.text) {
                 if (assistantIndex < messages.value.length) {
-                  messages.value[assistantIndex].content += event.payload.text;
+                  // Create a new array with updated message to ensure reactivity
+                  const newMessages = [...messages.value];
+                  newMessages[assistantIndex] = {
+                    ...newMessages[assistantIndex],
+                    content:
+                      newMessages[assistantIndex].content + event.payload.text
+                  };
+                  messages.value = newMessages;
                 }
               } else if (event.type === 'finish') {
                 resolve(null);
@@ -331,7 +384,6 @@ const useMastra = (options?: UseMastraOptions | false) => {
         });
       });
     } catch (error: any) {
-      // Handle different error types
       let errorMessage = 'Service temporarily unavailable';
       if (!error?.message) {
         errorMessage = `An error occurred ${error}`;
@@ -346,15 +398,25 @@ const useMastra = (options?: UseMastraOptions | false) => {
       }
 
       if (assistantIndex < messages.value.length) {
-        messages.value[assistantIndex].content = errorMessage;
+        const newMessages = [...messages.value];
+        newMessages[assistantIndex] = {
+          ...newMessages[assistantIndex],
+          content: errorMessage
+        };
+        messages.value = newMessages;
       }
     } finally {
-      // Remove loading state and save
       if (
         assistantIndex < messages.value.length &&
         messages.value[assistantIndex]
       ) {
-        messages.value[assistantIndex].loading = false;
+        // Remove loading state with new array to ensure reactivity
+        const newMessages = [...messages.value];
+        newMessages[assistantIndex] = {
+          ...newMessages[assistantIndex],
+          loading: false
+        };
+        messages.value = newMessages;
       }
       if (chatId) {
         await saveMessages(chatId, messages.value);

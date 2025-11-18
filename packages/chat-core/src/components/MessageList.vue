@@ -74,7 +74,11 @@ import {
 import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
 import { ContentEditor } from '@pksep/yui';
-import { removeMessageLoading, useMastra } from '../services/useMastra';
+import {
+  removeMessageLoading,
+  useMastra,
+  generateChatId
+} from '../services/useMastra';
 import {
   getMessagesByConversationId,
   getSavedMessages,
@@ -99,8 +103,7 @@ const state = reactive({
 const {
   messages: aiMessages,
   sendMessage,
-  clearMessages: clearAiMessages,
-  generateChatId
+  clearMessages: clearAiMessages
 } = useMastra(
   props.chapter === 'ai' && {
     agentId: 'generalAgent',
@@ -108,6 +111,8 @@ const {
     baseUrl: props.baseUrl
   }
 );
+
+console.log(aiMessages.value);
 
 const messageChat = (role: string) => [
   'message__bubble',
