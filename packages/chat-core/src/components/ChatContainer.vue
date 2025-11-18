@@ -50,6 +50,7 @@
   />
 
   <NewGroupModal
+    :user="props.user"
     :contacts="users.filter(user => user.id !== props.user.id)"
     :open="state.isNewGroupOpen"
     @unmount-close="closeModals"

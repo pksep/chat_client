@@ -29,7 +29,9 @@
         <template #header2>
           <span class="menu-info__user-header">
             Участники
-            <div class="menu-info__user-count">{{ state.checkUsers.size }}</div>
+            <div class="menu-info__user-count">
+              {{ state.selectedContacts.length }}
+            </div>
           </span>
         </template>
         <template #header1> Информация </template>
@@ -123,9 +125,10 @@ const avatarInputRef = ref(null);
 const state = reactive({
   open: false,
   checkUsers: new Set<string>(),
-  selectedContacts: computed(() =>
-    props.contacts.filter(c => state.checkUsers.has(c.id))
-  ),
+  selectedContacts: computed(() => [
+    props.user,
+    ...props.contacts.filter(c => state.checkUsers.has(c.id))
+  ]),
   openAddUser: false,
   groupName: '',
   isSelectedMembers: false,
