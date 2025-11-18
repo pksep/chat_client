@@ -13,7 +13,7 @@
 
           <MessageBubble
             :class="messageChat(message.role)"
-            :message="message.content"
+            :message="message.content || ''"
             :author="message.role"
             :time="formatTime(new Date(message.timestamp))"
             :loader="message.loading"
@@ -42,7 +42,7 @@
           :class="
             messageChat(props.user.id === message.sendID ? 'user' : 'assistant')
           "
-          :message="message.textElem?.content"
+          :message="message.textElem?.content || ''"
           :is-me-sender="props.user.id === message.sendID"
           :time="formatTime(new Date(message.sendTime))"
           :sender="message.senderNickname"

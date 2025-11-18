@@ -48,6 +48,7 @@
           <ContactList
             :contacts="item.items"
             @unmount-click="unmountContactClick"
+            :selected-contact-id="state.selectedContactId"
           />
         </details>
         <template v-if="isCollapse">
@@ -104,7 +105,8 @@ const state = reactive({
   chapter: '',
   installPrompt: null,
   contactList: computed(() => getConversationList()),
-  groupList: computed(() => getGroupList())
+  groupList: computed(() => getGroupList()),
+  selectedContactId: null
 });
 
 const emits = defineEmits<IMenuEmits>();
@@ -132,6 +134,7 @@ const unmountContactClick = (
       }
     | string
 ): void => {
+  state.selectedContactId = typeof contact === 'string' ? contact : contact.id;
   if (contact === 'ai') {
     state.chapter = 'ai';
     emits('unmount-chapter', 'ai');

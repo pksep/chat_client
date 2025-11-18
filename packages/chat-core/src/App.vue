@@ -6,11 +6,19 @@
 import './index';
 
 const mastraUrl = import.meta.env.VITE_MASTRA_BASE_URL;
+// const user = {
+//   // avatarUrl: '/avatar-user.png',
+//   id: 'EdgarID',
+//   avatarAlt: 'User with a circle face',
+//   name: 'Edgar',
+//   nickname: 'Edgar'
+// };
+
 const user = {
   // avatarUrl: '/avatar-user.png',
-  id: 't0',
+  id: 't1',
   avatarAlt: 'User with a circle face',
-  name: 'Jonn Doe',
-  nickname: 'JonnDoe'
+  name: 'Jane',
+  nickname: 'Jane'
 };
 </script>

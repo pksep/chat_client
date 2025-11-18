@@ -1,13 +1,9 @@
 <template>
   <section class="contact-selector">
-    <Input
-      class="contact-selector__search"
-      placeholder="Название:"
-      v-model="name"
-    />
+    <Search v-model="q" />
     <ul class="contact-selector__list">
       <li
-        v-for="contact in props.contacts"
+        v-for="contact in contacts"
         :key="contact.id"
         class="contact-selector__item"
         @click="handleNewContact(contact)"
@@ -43,11 +39,11 @@
 import { computed, ref } from 'vue';
 import {
   Checkbox,
-  Input,
   ButtonTypeEnum,
   Button,
   CheckboxSizeEnum,
-  SizesEnum
+  SizesEnum,
+  Search
 } from '@pksep/yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import { IUserProps } from '../interfaces/interfaces';
@@ -67,13 +63,20 @@ interface IContactSelectorEmits {
 const props = defineProps<IContactSelectorProps>();
 const emits = defineEmits<IContactSelectorEmits>();
 
-const name = ref('');
+const q = ref('');
+const contacts = computed(() =>
+  props.contacts.filter(
+    contact =>
+      contact.name.toLowerCase().includes(q.value.toLowerCase()) ||
+      contact.nickname.toLowerCase().includes(q.value.toLowerCase())
+  )
+);
 
 const isButtonDisabled = computed(() => {
   if (props.isAddOne) {
     return false;
   }
-  return props.selectedContactIds.size < 2 || !name.value;
+  return props.selectedContactIds.size < 1;
 });
 
 const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
@@ -90,6 +93,6 @@ const handleNewContact = (contact: IUserProps): void => {
 };
 
 const onAddClick = (): void => {
-  emits('unmount-click', name.value);
+  emits('unmount-click');
 };
 </script>

@@ -9,7 +9,8 @@ export const useContextMenu = () => {
   const { state: isMobile } = useResizeState(MAX_W_MD);
 
   const openActivePopover = (id: string, event: MouseEvent): void => {
-    if (isMobile) return;
+    console.log(isMobile);
+    // if (isMobile) return;
     if (event.altKey) return;
     event.preventDefault();
     position.value = { x: event.pageX, y: event.pageY };

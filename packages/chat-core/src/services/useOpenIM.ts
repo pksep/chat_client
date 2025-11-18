@@ -3,6 +3,7 @@ import { CbEvents, getSDK } from '@openim/wasm-client-sdk';
 import { ref } from 'vue';
 import { updateConversationList } from './useConversions';
 import { updateGroupList } from './useGroup';
+import { useOpenIMRestApi } from './useApi';
 
 type IMSDKType = ReturnType<typeof getSDK>;
 
@@ -79,6 +80,21 @@ const setupOpenIM = (): void => {
       }
     });
   });
+};
+
+export const uploadFile = async (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const clientUUID = crypto.randomUUID().toString();
+
+  const res = await IMSDK.uploadFile({
+    name: clientUUID + '_' + file.name,
+    contentType: file.type,
+    uuid: clientUUID,
+    file: file
+  });
+
+  return res.data.url;
 };
 
 export const sendMessageIM = async ({

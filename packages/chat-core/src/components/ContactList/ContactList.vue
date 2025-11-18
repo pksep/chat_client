@@ -16,7 +16,9 @@
       <div
         :class="[
           'contact-list__item',
-          { 'contact-list__item--active': isOpen[contact.id] }
+          {
+            'contact-list__item--active': contact.id === props.selectedContactId
+          }
         ]"
         role="button"
         tabindex="0"
@@ -34,6 +36,7 @@
           :url="contact.avatarUrl"
           :alt="`Avatar of ${contact.name}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
+          :style="{ '--size-avatar': '30px' }"
         />
         <h5
           role="heading"

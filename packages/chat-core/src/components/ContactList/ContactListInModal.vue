@@ -73,13 +73,18 @@ const props = withDefaults(defineProps<IContactListProps>(), {
   ]
 });
 
+const emits = defineEmits<{
+  (e: 'unmount-click-add-button'): void;
+}>();
+
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
 const newContactOpen = ref(false);
 
 const addUser = (): void => {
-  newContactOpen.value = true;
+  emits('unmount-click-add-button');
+  // newContactOpen.value = true;
 };
 
 const closeContactModal = (): void => {

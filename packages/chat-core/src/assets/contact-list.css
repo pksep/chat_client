@@ -101,7 +101,7 @@ svg.icon-yui-kit.contact-list__read-icon {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  cursor: pointer;
 }
 
 .contact-selector__search {
@@ -117,4 +117,8 @@ svg.icon-yui-kit.contact-list__read-icon {
 
 .contact-selector__item:hover {
   background-color: #f5f5f5;
+}
+
+.menu__info-users-list > li {
+  margin-top: 10px;
 }

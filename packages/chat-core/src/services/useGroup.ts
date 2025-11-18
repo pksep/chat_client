@@ -5,12 +5,17 @@ import { manipulateConversationList } from './useConversions';
 
 const groups = ref<IContactProps[]>([]);
 
-const createGroup = async (memberUserIDs: string[], name: string) => {
+const createGroup = async (
+  memberUserIDs: string[],
+  name: string,
+  imageUrl: string
+) => {
   try {
     const res = await IMSDK.createGroup({
       groupInfo: {
         groupType: 2,
-        groupName: name
+        groupName: name,
+        faceURL: imageUrl || null
       },
       memberUserIDs
     });
