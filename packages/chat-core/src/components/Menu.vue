@@ -120,10 +120,6 @@ const handleCollapse = (): void => {
   toggle();
 };
 
-const handleNewContactModal = (): void => {
-  emits('unmount-new-contact', { isChapterOpen: true });
-};
-
 const unmountContactClick = (
   contact:
     | {
@@ -184,14 +180,18 @@ const aiChapterClasses = computed(() => [
   }
 ]);
 
-const handleNewChannelModal = () => {
+const handleNewGroupModal = () => {
+  emits('unmount-new-group', { isChapterOpen: true });
+};
+
+const handleNewContactModal = () => {
   emits('unmount-new-contact', { isChapterOpen: true });
 };
 
 const listChannels = computed(() => [
   {
     title: 'Каналы',
-    onClickPlusButton: handleNewChannelModal,
+    onClickPlusButton: handleNewGroupModal,
     items: state.groupList
   },
   {

@@ -7,7 +7,7 @@ const groups = ref<IContactProps[]>([]);
 
 const createGroup = async (memberUserIDs: string[], name: string) => {
   try {
-    const response = await IMSDK.createGroup({
+    const res = await IMSDK.createGroup({
       groupInfo: {
         groupType: 2,
         groupName: name
@@ -15,9 +15,16 @@ const createGroup = async (memberUserIDs: string[], name: string) => {
       memberUserIDs
     });
 
-    const result = response.data || [];
-
-    setGroupList(result);
+    groups.value.unshift(
+      ...manipulateConversationList([
+        {
+          ...res.data,
+          showName: name,
+          createdTime: Date.now(),
+          conversationID: 'sg_' + res.data.groupID
+        }
+      ])
+    );
   } catch (err) {
     console.error('Failed to get users with messages:', err);
   }

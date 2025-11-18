@@ -60,7 +60,7 @@ import {
 } from '@pksep/yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import { ref } from 'vue';
-import NewContactModal from '../NewChat/NewContact.vue';
+import NewContactModal from '../NewChat/NewContactModal.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import { IContactListProps } from './interfaces/contact-list';

@@ -30,13 +30,18 @@ export const manipulateConversationList = conversations => {
       avatarUrl: c.faceURL,
       isPin: c.isPinned,
       nickname: c.showName,
-      latestMessage: JSON.parse(c.latestMsg)?.textElem?.content || '',
-      latestMessageTime: JSON.parse(c.latestMsg)?.sendTime || '',
+      latestMessage: c.latestMsg
+        ? JSON.parse(c.latestMsg)?.textElem?.content || ''
+        : '',
+      latestMessageTime:
+        c.createdTime ||
+        (c.latestMsg ? JSON.parse(c.latestMsg)?.sendTime || '' : ''),
       notificationCount: c.unreadCount,
       groupId: c.groupID,
-      isRead:
-        JSON.parse(c.latestMsg)?.isRead &&
-        c.userID !== JSON.parse(c.latestMsg)?.sendID
+      isRead: c.latestMsg
+        ? JSON.parse(c.latestMsg)?.isRead &&
+          c.userID !== JSON.parse(c.latestMsg)?.sendID
+        : false
     };
   });
 };

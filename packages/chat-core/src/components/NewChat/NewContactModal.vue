@@ -6,7 +6,7 @@
     @close="closeModal"
   >
     <header class="new-contact__header">
-      Добавить участника
+      Создать диалог
       <Button
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.little"
@@ -17,11 +17,11 @@
       </Button>
     </header>
     <ContactSelector
+      is-add-one
       :contacts="contacts"
       :selected-contact-ids="state.checkUsers"
       @unmount-contact="handleNewContact"
       @unmount-checkbox="handleCheckbox"
-      @unmount-click="handleOpenUser"
     />
   </Modal>
   <AddUser :open="state.openAddUser" @unmount-close="handleCloseAddUser" />
@@ -41,7 +41,6 @@ import ContactSelector from './ContactSelector.vue';
 import AddUser from './AddUser.vue';
 import type { INewContactProps } from './interfaces/new-contact';
 import { IUserProps } from '../interfaces/interfaces';
-import { createGroup } from '../../services/useGroup';
 
 const props = withDefaults(defineProps<INewContactProps>(), {
   open: false,
@@ -94,9 +93,5 @@ const handleNewContact = (contact: IUserProps): void => {
 
 const handleCloseAddUser = (): void => {
   state.openAddUser = false;
-};
-
-const handleOpenUser = (name: string): void => {
-  createGroup(Array.from(state.checkUsers), name);
 };
 </script>

@@ -52,8 +52,10 @@ const setupOpenIM = (): void => {
       list.forEach((m: any) => {
         const [smallerUserID, largerUserID] = [m.sendID, m.recvID].sort();
 
-        const convId = m.groupID || `si_${smallerUserID}_${largerUserID}`;
-        if (!convId) return;
+        const convId = m.groupID
+          ? `sg_${m.groupID}`
+          : `si_${smallerUserID}_${largerUserID}`;
+
         appendMessageToLocal(convId, m);
       });
     } catch (e) {
@@ -106,7 +108,7 @@ export const sendMessageIM = async ({
       res.data.recvID
     ].sort();
 
-    const convId = groupId
+    const convId = !to
       ? `sg_${groupId}`
       : `si_${smallerUserID}_${largerUserID}`;
 
