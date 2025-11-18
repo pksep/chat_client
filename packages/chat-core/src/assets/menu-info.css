@@ -54,7 +54,7 @@ button.tabs__navigation-button {
 
 div.menu-info__buttons {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
 }
 
@@ -105,4 +105,7 @@ button.button-yui-kit.large.menu-info__secondary-button {
   font-size: 14px;
   padding-block: 10px;
   color: var(--text-black);
+  & svg.icon-yui-kit {
+    color: var(--icon-color, var(--grey5));
+  }
 }

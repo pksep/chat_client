@@ -16,6 +16,7 @@
 @import url('./mobile-list.css');
 @import url('./mobile-modal.css');
 @import url('./new-group.css');
+@import url('./mobile-info-modal.css');
 
 .chat-container {
   display: grid;
