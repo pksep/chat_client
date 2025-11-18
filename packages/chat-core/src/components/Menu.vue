@@ -131,6 +131,7 @@ const unmountContactClick = (
         imageURL?: string;
         nickname?: string;
         conversionId?: string;
+        avatarUrl?: string;
       }
     | string
 ): void => {
@@ -145,6 +146,7 @@ const unmountContactClick = (
     const foundContact = state.contactList.find(c => c.id === contact);
     if (foundContact) {
       state.chapter = foundContact.name;
+
       emits('unmount-chapter', {
         name: foundContact.name,
         contact: {
@@ -163,7 +165,7 @@ const unmountContactClick = (
       contact: {
         id: contact.userId,
         name: contact.title,
-        avatarUrl: contact.imageURL || '',
+        avatarUrl: contact.avatarUrl || contact.imageURL || '',
         nickname: contact.nickname || '',
         conversionId: contact.id || ''
       }
