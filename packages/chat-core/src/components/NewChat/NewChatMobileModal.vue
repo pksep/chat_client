@@ -1,22 +1,10 @@
 <template>
-  <GeneralizedModal
+  <MobileModal
     :open="props.open"
-    position="bottom"
     @close="handleCloseModal"
-    modal-class="mobile__list-modal"
-    header-class="mobile__list-modal__header"
-    close-button-class="mobile__list-modal__header--button"
+    title="Написать сообщение"
+    back-button-text="Отмена"
   >
-    <template #header>
-      <button
-        class="mobile__list-modal__header--button"
-        @click="handleCloseModal"
-      >
-        Отмена
-      </button>
-      <h3 class="mobile__list-modal__header--title">Написать сообщение</h3>
-    </template>
-
     <template #default>
       <ContactSelector
         class="mobile__list-modal__contact-selector"
@@ -30,12 +18,12 @@
         @unmount-click="handleOpenUser"
       />
     </template>
-  </GeneralizedModal>
+  </MobileModal>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import GeneralizedModal from '../GeneralizedModal.vue';
+import MobileModal from '../UI/MobileModal.vue';
 import ContactSelector from './ContactSelector.vue';
 import type { IUserProps } from '../interfaces/interfaces';
 
@@ -46,7 +34,7 @@ interface IProps {
 }
 
 interface IEmits {
-  'close-modal': [];
+  'unmount-close': [];
   'unmount-contact': [contact: IUserProps];
   'unmount-checkbox': [isCheck: boolean, contactId: string | number];
   'unmount-click': [];
@@ -62,12 +50,12 @@ const emits = defineEmits<IEmits>();
 
 const isButtonDisabled = computed(() => props.selectedContactIds.size === 0);
 
-const handleCloseModal = () => {
-  emits('close-modal');
-};
-
 const handleOpenUser = () => {
   if (isButtonDisabled.value) return;
   emits('unmount-click');
+};
+
+const handleCloseModal = () => {
+  emits('unmount-close');
 };
 </script>

@@ -55,7 +55,7 @@ import {
 } from '@pksep/yui';
 
 import type { IHeaderProps, IHeaderEmits } from '../interfaces/interfaces';
-import AiIconWrapper from '../AiIconWrapper.vue';
+import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import { MAX_W_MD } from '../../utils/constants';
 
 const props = withDefaults(defineProps<IHeaderProps>(), {});

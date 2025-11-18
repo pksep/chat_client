@@ -10,53 +10,9 @@ button.mobile__list-button {
   max-height: 56px;
 }
 
-.mobile__list-modal__header {
-  display: flex;
-  align-items: center;
-  align-content: center;
-  padding: 10px 5px;
-}
-
-button.mobile__list-modal__header--button {
-  font-size: 16px;
-  color: var(--text-blue);
-  line-height: 100%;
-  letter-spacing: 0;
-}
-
-.modal-yui-kit__modal-content {
-  display: grid;
-  align-content: start;
-  gap: 10px;
-  padding: 10px;
-}
-
 .mobile__list-modal__contact-selector {
   display: grid;
   gap: 10px;
-}
-
-.contact-selector-modal__header {
-  display: flex;
-  align-items: center;
-  align-content: center;
-  padding: 10px 5px;
-}
-
-button.contact-selector-modal__header--button {
-  font-size: 16px;
-  color: var(--text-blue);
-  line-height: 100%;
-  letter-spacing: 0;
-}
-
-.contact-selector-modal__header--title {
-  margin-left: auto;
-  margin-right: auto;
-  line-height: 100%;
-  letter-spacing: 0;
-  font-size: 16px;
-  color: var(--text-black);
 }
 
 .contact-selector-modal__content {
@@ -66,13 +22,4 @@ button.contact-selector-modal__header--button {
 .contact-selector-modal__contact-selector {
   display: grid;
   gap: 10px;
-}
-
-.mobile__list-modal__header--title {
-  margin-left: auto;
-  margin-right: auto;
-  line-height: 100%;
-  letter-spacing: 0;
-  font-size: 16px;
-  color: var(--text-black);
 }

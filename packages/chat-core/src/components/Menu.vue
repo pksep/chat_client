@@ -79,8 +79,8 @@
 import { computed, onMounted, reactive } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_XL } from '../utils/constants';
-import Line from './Line.vue';
-import AiIconWrapper from './AiIconWrapper.vue';
+import Line from './UI/Line.vue';
+import AiIconWrapper from './UI/AiIconWrapper.vue';
 import {
   Icon,
   Button,

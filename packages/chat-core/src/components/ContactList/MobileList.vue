@@ -60,8 +60,8 @@
 
 <script setup lang="ts">
 import { reactive, computed } from 'vue';
-import AiIconWrapper from '../AiIconWrapper.vue';
-import Line from '../Line.vue';
+import AiIconWrapper from '../UI/AiIconWrapper.vue';
+import Line from '../UI/Line.vue';
 import ContactList from './ContactList.vue';
 import type {
   IMobileListProps,

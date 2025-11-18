@@ -14,6 +14,7 @@
 @import url('./header.css');
 @import url('./header-menu.css');
 @import url('./mobile-list.css');
+@import url('./mobile-modal.css');
 
 .chat-container {
   display: grid;
