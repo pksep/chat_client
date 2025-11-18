@@ -39,7 +39,6 @@ import {
 import ContactSelector from './ContactSelector.vue';
 import AddUser from './AddUser.vue';
 import type { INewContactProps } from './interfaces/new-contact';
-import { IUserProps } from '../interfaces/interfaces';
 import { createGroup } from '../../services/useGroup';
 
 const props = withDefaults(defineProps<INewContactProps>(), {
