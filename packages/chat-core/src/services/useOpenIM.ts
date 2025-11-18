@@ -3,7 +3,6 @@ import { CbEvents, getSDK } from '@openim/wasm-client-sdk';
 import { ref } from 'vue';
 import { updateConversationList } from './useConversions';
 import { updateGroupList } from './useGroup';
-import { useOpenIMRestApi } from './useApi';
 
 type IMSDKType = ReturnType<typeof getSDK>;
 
