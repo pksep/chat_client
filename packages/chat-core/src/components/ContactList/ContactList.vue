@@ -104,7 +104,7 @@
         <Button
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.small"
-          @click.stop="() => handlePin(contact.id)"
+          @click.stop="() => handlePin(contact)"
           :data-testid="`${props.dataTestid}-ContactList-PinButton${index + 1}`"
           :aria-label="
             state.isPin[contact.id]
@@ -152,6 +152,8 @@ import ContextMenu from './ContextMenu.vue';
 import Line from '../UI/Line.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { MAX_W_MD } from '../../utils/constants';
+import { setPinConversation } from '../../services/useConversions';
+import { IContactProps } from '../interfaces/interfaces';
 
 const props = withDefaults(defineProps<IContactListProps>(), {});
 
@@ -182,10 +184,9 @@ watch(
   { immediate: true }
 );
 
-const handlePin = (contactId: string): void => {
-  const currentPin = state.isPin[contactId] ?? false;
-  state.isPin[contactId] = !currentPin;
-  closeActivePopover(contactId);
+const handlePin = (contact: IContactProps): void => {
+  setPinConversation(contact.id, !contact.isPin);
+  closeActivePopover(contact.id);
 };
 
 const handleClick = (contact): void => {
