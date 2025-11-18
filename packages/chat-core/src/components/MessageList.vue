@@ -1,26 +1,28 @@
 <template>
-  <div
-    class="chat__message-wrapper"
-    ref="chatWrapperRef"
-    v-if="props.chapter === 'ai' && aiMessages.length"
-  >
-    <div class="chat__message-bubble">
-      <template v-for="(message, index) in aiMessages" :key="index">
-        <div v-if="isNewDate(index, true)" class="date-divider">
-          <span>{{ formatDay(message.timestamp) }}</span>
-        </div>
+  <template v-if="props.chapter === 'ai'">
+    <div
+      class="chat__message-wrapper"
+      ref="chatWrapperRef"
+      v-if="aiMessages.length"
+    >
+      <div class="chat__message-bubble">
+        <template v-for="(message, index) in aiMessages" :key="index">
+          <div v-if="isNewDate(index, true)" class="date-divider">
+            <span>{{ formatDay(message.timestamp) }}</span>
+          </div>
 
-        <MessageBubble
-          :class="messageChat(message.role)"
-          :message="message.content"
-          :author="message.role"
-          :time="formatTime(new Date(message.timestamp))"
-          :loader="message.loading"
-          :is-me-sender="message.role === 'user'"
-        />
-      </template>
+          <MessageBubble
+            :class="messageChat(message.role)"
+            :message="message.content"
+            :author="message.role"
+            :time="formatTime(new Date(message.timestamp))"
+            :loader="message.loading"
+            :is-me-sender="message.role === 'user'"
+          />
+        </template>
+      </div>
     </div>
-  </div>
+  </template>
   <div
     class="chat__message-wrapper"
     v-else-if="state.messages.length"
@@ -134,7 +136,10 @@ watch(
     if (newValue !== oldValue) {
       getMessagesByConversationId(props.conversionId);
     }
-    if (aiMessages.value.length || state.messages.length) {
+    if (
+      (aiMessages?.value && aiMessages?.value.length) ||
+      state.messages.length
+    ) {
       nextTick(() => scrollToBottom());
     }
   },
@@ -209,10 +214,10 @@ const isNewDate = (index: number, isMastra: boolean = false) => {
 };
 
 onMounted(() => {
-  if (state.chatId === null) {
+  if (state.chatId === null && props.chapter === 'ai') {
     state.chatId = generateChatId();
   }
-  if (aiMessages.value.length || state.messages.length) {
+  if ((aiMessages?.value && aiMessages.value.length) || state.messages.length) {
     scrollToBottom();
   }
 });

@@ -175,11 +175,16 @@ async function clearAllData(): Promise<void> {
  * @param baseUrl  Base URL for Mastra client.
  */
 function useMastra(
-  agentId: string = 'chat',
+  agentId: string,
   chatId: string | undefined,
   baseUrl: string = import.meta.env.VITE_CHAT_MASTRA_URL ||
     'http://localhost:4111'
 ) {
+  if (!chatId)
+    return {
+      messages: [],
+      clearMessages: () => {}
+    };
   const client = new MastraClient({ baseUrl });
 
   const messages: Ref<Message[]> = ref([]);
