@@ -9,6 +9,7 @@
       Звук выкл.
     </Button>
     <Button
+      v-if="isMobile"
       :type="ButtonTypeEnum.secondary"
       :size="SizesEnum.large"
       class="menu-info__secondary-button"
@@ -35,4 +36,9 @@ import {
   IconNameEnum,
   SizesEnum
 } from '@pksep/yui';
+
+import { MAX_W_MD } from '../utils/constants';
+import { useResizeState } from '../composables/useResizeState';
+
+const { state: isMobile } = useResizeState(MAX_W_MD);
 </script>
