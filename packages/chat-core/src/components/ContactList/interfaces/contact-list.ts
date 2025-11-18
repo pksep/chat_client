@@ -1,7 +1,7 @@
 import type { IContactProps } from '../../interfaces/interfaces';
 
 export interface IContactListProps {
-  wrapperClass?: string;
+  class?: string;
   addButtonClass?: string;
   listClass?: string;
   userClass?: string;

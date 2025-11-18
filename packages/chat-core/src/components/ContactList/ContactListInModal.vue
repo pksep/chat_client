@@ -1,5 +1,5 @@
 <template>
-  <section :class="['menu__info-users', props.wrapperClass ?? '']">
+  <section :class="['menu__info-users', props.class]">
     <Button
       :type="ButtonTypeEnum.secondary"
       :class="[

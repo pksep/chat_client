@@ -50,9 +50,9 @@
         <template #button> {{}} </template>
       </NewChatInformationForm>
     </div>
-    <div>
+    <div class="modal-info-mobile__end">
       <MenuInfoButtons />
-      <p>Участники:</p>
+      <p class="modal-info-mobile__end--paragraph">Участники:</p>
       <ContactListInModal
         :contacts="[props.contact]"
         class="modal-info-mobile__contact-list"

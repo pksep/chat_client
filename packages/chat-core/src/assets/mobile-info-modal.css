@@ -16,11 +16,28 @@
 }
 
 .modal-info-mobile__start > .modal-info-mobile__avatar {
-  width: 86px !important;
+  --size-avatar: 86px;
+  width: var(--size-avatar) !important;
   height: 85px;
 }
 
-.modal-info-mobile__contact-list {
+section.menu__info-users.modal-info-mobile__contact-list {
   padding: 0;
   padding-inline: 0;
+  & .menu__info-users-list {
+    margin-top: 10px;
+    margin-inline: 10px;
+  }
+}
+
+p.modal-info-mobile__end--paragraph {
+  margin-top: 10px;
+  margin-bottom: 5px;
+  color: var(--text-grey);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.avatar-yui-kit:has(.avatar-yui-kit__text) {
+  width: var(--size-avatar) !important;
 }

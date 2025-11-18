@@ -11,6 +11,8 @@
 
 .user-profile__avatar {
   grid-area: avatar;
+  width: var(--size-avatar);
+  height: var(--size-avatar);
 }
 
 .user-profile__title {

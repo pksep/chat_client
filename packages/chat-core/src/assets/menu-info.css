@@ -107,4 +107,7 @@ button.button-yui-kit.large.menu-info__secondary-button {
   font-size: 14px;
   padding-block: 10px;
   color: var(--text-black);
+  & svg.icon-yui-kit {
+    color: var(--icon-color, var(--grey5));
+  }
 }
