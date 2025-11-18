@@ -109,3 +109,7 @@ button.button-yui-kit.large.menu-info__secondary-button {
     color: var(--icon-color, var(--grey5));
   }
 }
+aside.menu-info .tabs__navigation-content > section.menu__info-users {
+  padding-block: 10px;
+  padding-inline: 20px;
+}

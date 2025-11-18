@@ -1,7 +1,7 @@
 <template>
   <aside :class="menuInfoClasses" v-if="props.open">
     <header class="menu-info__header">
-      <h4>Общий</h4>
+      <h4>{{ props.contact?.name || 'Общий' }}</h4>
       <Button
         class="menu-info__close-button"
         :type="ButtonTypeEnum.ghost"
@@ -11,16 +11,16 @@
         <Icon :name="IconNameEnum.crossLarge" class="menu-info__close-icon" />
       </Button>
     </header>
-    <Tabs :tabCount="2">
+    <Tabs :tabCount="2" class="menu-info__tabs">
       <template #header1>
         <span class="menu-info__user-header">
           Участники
-          <div class="menu-info__user-count">{{ [props.contact].length }}</div>
+          <div class="menu-info__user-count">{{ state.contacts.length }}</div>
         </span>
       </template>
       <template #header2> Информация </template>
       <template #tab1>
-        <ContactListInModal :contacts="[props.contact]" />
+        <ContactListInModal :contacts="state.contacts" />
       </template>
       <template #tab2>
         <section class="menu-info__info-section">
@@ -34,7 +34,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, watch } from 'vue';
+import { reactive, computed, watch } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import {
   Tabs,
@@ -46,14 +46,20 @@ import {
 } from '@pksep/yui';
 import ContactListInModal from './ContactList/ContactListInModal.vue';
 import InformationMenu from './InformationMenu.vue';
-import type { IMenuProps, IMenuEmits } from './interfaces/interfaces';
+import type { IMenuRightProps, IMenuEmits } from './interfaces/interfaces';
 import { MAX_W_XL } from '../utils/constants';
 
-const props = withDefaults(defineProps<IMenuProps>(), {
+import { useUsers } from '../composables/useUsers';
+
+const props = withDefaults(defineProps<IMenuRightProps>(), {
   open: false
 });
 
 const emits = defineEmits<IMenuEmits>();
+
+const state = reactive({
+  contacts: []
+});
 
 const menuInfoClasses = computed(() => [
   'menu-info',
@@ -71,16 +77,17 @@ const handleCloseMenu = (): void => {
   close();
 };
 
-/*
-const unmountUserAdd = (): void => {
-  emits('unmount-new-contact', { isChapterOpen: true });
-};
- */
+const { fetchGroupMembers } = useUsers();
 
 watch(
   () => props.open,
-  newVal => {
+  async newVal => {
     isOpen.value = newVal;
+    if (props.contact?.id && props.groupId === undefined) {
+      state.contacts = [props.contact];
+    } else {
+      await fetchGroupMembers(props.groupId);
+    }
   },
   { immediate: true }
 );

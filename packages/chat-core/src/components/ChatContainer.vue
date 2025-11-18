@@ -36,7 +36,7 @@
     <MenuInfo
       class="chat__info"
       :open="state.isMenuDesktopOpen"
-      :contacts="[state.contact]"
+      :contact="state.contact"
       @unmount-collapse="handleMenuToggle"
       @unmount-new-contact="handleNewContact"
       @unmount-new-group="handleNewGroup"

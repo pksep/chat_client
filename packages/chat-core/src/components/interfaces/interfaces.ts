@@ -47,7 +47,7 @@ export interface IMenuProps {
 }
 
 export interface IMenuRightProps extends IMenuProps {
-  user?: IUserProps;
+  groupId?: string;
 }
 
 export interface IChatContainerProps {

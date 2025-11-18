@@ -101,7 +101,13 @@ const {
   sendMessage,
   clearMessages: clearAiMessages,
   generateChatId
-} = useMastra('generalAgent', state.chatId, props.baseUrl);
+} = useMastra(
+  props.chapter === 'ai' && {
+    agentId: 'generalAgent',
+    chatId: state.chatId,
+    baseUrl: props.baseUrl
+  }
+);
 
 const messageChat = (role: string) => [
   'message__bubble',
