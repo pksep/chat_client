@@ -144,8 +144,6 @@ watch(
 watch(
   () => state.messages.length,
   () => {
-    console.log(state.messages);
-
     if (!state.messages.length || chatWrapperRef.value?.scrollTop > 200) {
       return;
     }
@@ -172,8 +170,6 @@ const handleSend = async (): Promise<void> => {
   if (props.chapter === 'ai') {
     await sendMessage(text, scrollToBottom);
   } else {
-    console.log(props);
-
     if (props.contactId) {
       await sendMessageIM({
         message: text,

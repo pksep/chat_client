@@ -20,6 +20,7 @@
       class="chat__menu"
       @unmount-collapse="handleCollapse"
       @unmount-new-contact="handleNewContact"
+      @unmount-new-group="handleNewGroup"
       @unmount-chapter="unmountMenuChapter"
     />
     <Chat
@@ -38,13 +39,21 @@
       :contacts="[state.contact]"
       @unmount-collapse="handleMenuToggle"
       @unmount-new-contact="handleNewContact"
+      @unmount-new-group="handleNewGroup"
     />
   </main>
   <NewContactModal
+    :contacts="users.filter(user => user.id !== props.user.id)"
     :open="state.isNewContactOpen"
-    @unmount-close="closeContactModal"
+    @unmount-close="closeModals"
     @unmount-new-contact="handleNewContactMessage"
-    :contacts="users"
+  />
+
+  <NewGroupModal
+    :contacts="users.filter(user => user.id !== props.user.id)"
+    :open="state.isNewGroupOpen"
+    @unmount-close="closeModals"
+    @unmount-new-group="handleNewGroupMessage"
   />
 </template>
 
@@ -55,13 +64,14 @@ import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
 import Chat from './Chat.vue';
 import MenuInfo from './MenuInfo.vue';
-import NewContactModal from './NewChat/NewContact.vue';
+import NewContactModal from './NewChat/NewContactModal.vue';
 import type { IChatContainerProps, IUserProps } from './interfaces/interfaces';
 import { useUsers } from '../composables/useUsers';
 import { isShowContactList } from '../composables/useShowContactList';
-import { sendMessageIM } from '../services/useOpenIM';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
+import NewGroupModal from './NewChat/NewGroupModal.vue';
+import { getGroupList } from '../services/useGroup';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
@@ -71,7 +81,8 @@ const state = reactive({
   isMenuMobileOpen: false,
   chapter: isMobile ? 'assistant' : null,
   contact: null,
-  isNewContactOpen: false
+  isNewContactOpen: false,
+  isNewGroupOpen: false
 });
 
 const props = defineProps<IChatContainerProps>();
@@ -139,8 +150,13 @@ const handleNewContact = (config): void => {
   state.isNewContactOpen = config.isChapterOpen;
 };
 
-const closeContactModal = (): void => {
+const handleNewGroup = (config): void => {
+  state.isNewGroupOpen = config.isChapterOpen;
+};
+
+const closeModals = (): void => {
   state.isNewContactOpen = false;
+  state.isNewGroupOpen = false;
 };
 
 const handleClearClick = (): void => {
@@ -151,15 +167,23 @@ const handleClearClick = (): void => {
 
 const handleNewContactMessage = async (contact: IUserProps): Promise<void> => {
   state.chapter = contact.name;
-  state.contact = contact;
+  const [smallerUserID, largerUserID] = [props.user.id, contact.id].sort();
 
-  console.log(contact);
+  state.contact = {
+    ...contact,
+    conversionId: `si_${smallerUserID}_${largerUserID}`
+  };
+};
 
-  await sendMessageIM({
-    message: '',
-    to: contact.id || '',
-    groupId: ''
-  });
+const handleNewGroupMessage = async () => {
+  const group = getGroupList()[0];
+
+  state.contact = {
+    conversionId: group.id,
+    nickname: group.name || group.nickname
+  };
+
+  state.chapter = state.contact.nickname;
 };
 
 const handleExit = (): void => {

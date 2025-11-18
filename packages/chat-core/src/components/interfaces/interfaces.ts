@@ -6,6 +6,7 @@ export interface IHeaderProps {
 export interface IMenuEmits {
   (e: 'unmount-collapse', isCollapse: boolean): void;
   (e: 'unmount-new-contact', config: { isChapterOpen?: boolean }): void;
+  (e: 'unmount-new-group', config: { isChapterOpen?: boolean }): void;
   (
     e: 'unmount-chapter',
     config: { name: string; contact: IUserProps } | string | null

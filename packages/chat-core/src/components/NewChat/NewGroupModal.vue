@@ -19,7 +19,6 @@
     <ContactSelector
       :contacts="contacts"
       :selected-contact-ids="state.checkUsers"
-      @unmount-contact="handleNewContact"
       @unmount-checkbox="handleCheckbox"
       @unmount-click="handleOpenUser"
     />
@@ -50,7 +49,7 @@ const props = withDefaults(defineProps<INewContactProps>(), {
 
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
-  (e: 'unmount-new-contact', contact: IUserProps);
+  (e: 'unmount-new-group');
 }>();
 
 const state = reactive({
@@ -87,16 +86,13 @@ const handleCheckbox = (isCheck: boolean, contactId: string): void => {
   }
 };
 
-const handleNewContact = (contact: IUserProps): void => {
-  emits('unmount-new-contact', contact);
-  closeModal();
-};
-
 const handleCloseAddUser = (): void => {
   state.openAddUser = false;
 };
 
-const handleOpenUser = (name: string): void => {
-  createGroup(Array.from(state.checkUsers), name);
+const handleOpenUser = async (name: string): Promise<void> => {
+  await createGroup(Array.from(state.checkUsers), name);
+  emits('unmount-new-group');
+  closeModal();
 };
 </script>

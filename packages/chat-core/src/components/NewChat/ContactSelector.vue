@@ -1,6 +1,6 @@
 <template>
   <section class="contact-selector">
-    <Search class="contact-selector__search" v-model="name" />
+    <Input class="contact-selector__search" placeholder="Название:" v-model="name" />
     <ul class="contact-selector__list">
       <li
         v-for="contact in props.contacts"
@@ -39,7 +39,7 @@
 import { computed, ref } from 'vue';
 import {
   Checkbox,
-  Search,
+  Input,
   ButtonTypeEnum,
   Button,
   CheckboxSizeEnum,

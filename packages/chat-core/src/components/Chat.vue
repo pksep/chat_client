@@ -50,8 +50,6 @@ const state = reactive({
 watch(
   () => props.chapter,
   newChapter => {
-    console.log(newChapter);
-
     state.chapter = newChapter;
   }
 );
@@ -63,8 +61,6 @@ const messageListRef = useTemplateRef<any>(null);
 const handleUnmountChapter = (
   chapter: { name: string; contact: any } | string | null
 ): void => {
-  console.log(chapter);
-
   if (typeof chapter === 'string') {
     state.chapter = chapter;
     emits('unmount-chapter', chapter);
