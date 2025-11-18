@@ -65,7 +65,7 @@ import {
   IconNameEnum,
   SizesEnum
 } from '@pksep/yui';
-import AiIconWrapper from '../AiIconWrapper.vue';
+import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import type { IMessageBubbleProps } from './interface/interface';

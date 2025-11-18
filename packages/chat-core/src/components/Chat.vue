@@ -35,6 +35,7 @@ import {
 import { computed } from 'vue';
 import { onMounted } from 'vue';
 import type { IMenuEmits } from './interfaces/interfaces';
+import { IUserProps } from './interfaces/interfaces';
 
 const props = withDefaults(defineProps<IMessageListProps>(), {
   chapter: null
@@ -73,8 +74,8 @@ const handleUnmountChapter = (
   }
 };
 
-const handleUnmountContact = (): void => {
-  // emits('unmount-contact', contactId);
+const handleUnmountContact = (contact: IUserProps): void => {
+  emits('unmount-contact', contact);
 };
 
 onMounted(() => {

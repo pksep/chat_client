@@ -146,7 +146,7 @@ import {
   SizesEnum
 } from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
-import Line from '../../components/Line.vue';
+import Line from '../UI/Line.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { MAX_W_MD } from '../../utils/constants';
 

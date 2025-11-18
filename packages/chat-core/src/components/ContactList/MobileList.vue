@@ -45,45 +45,31 @@
       >
         <Icon :name="IconNameEnum.plus" />
       </Button>
-      <Modal
+      <NewChatMobileModal
         :open="state.showAddAccount"
-        position="bottom"
-        @close="handleCloseModal"
-        class="mobile__list-modal"
-      >
-        <header class="mobile__list-modal__header">
-          <button
-            class="mobile__list-modal__header--button"
-            @click="handleCloseModal"
-          >
-            Отмена
-          </button>
-          <h3 class="mobile__list-modal__header--title">Написать сообщение</h3>
-        </header>
-        <Line />
-        <ContactSelector
-          class="mobile__list-modal__contact-selector"
-          is-add-one
-          :contacts="props.contacts"
-          :selected-contact-ids="state.checkUsers"
-          @unmount-contact="handleNewContact"
-          @unmount-checkbox="handleCheckbox"
-          @unmount-click="handleOpenUser"
-        />
-      </Modal>
+        :contacts="props.contacts"
+        :selected-contact-ids="state.checkUsers"
+        @close-modal="handleCloseModal"
+        @unmount-contact="handleNewContact"
+        @unmount-checkbox="handleCheckbox"
+        @unmount-click="handleOpenUser"
+      />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { reactive, computed } from 'vue';
-import AiIconWrapper from '../AiIconWrapper.vue';
-import Line from '../Line.vue';
+import AiIconWrapper from '../UI/AiIconWrapper.vue';
+import Line from '../UI/Line.vue';
 import ContactList from './ContactList.vue';
-import type { IMobileListProps } from './interfaces/mobile-list';
-import type { IMenuEmits, IUserProps } from '../interfaces/interfaces';
-import { Modal, Button, ButtonTypeEnum, Icon, IconNameEnum } from '@pksep/yui';
-import ContactSelector from '../NewChat/ContactSelector.vue';
+import type {
+  IMobileListProps,
+  IMobileListEmits
+} from './interfaces/mobile-list';
+import type { IUserProps } from '../interfaces/interfaces';
+import { Button, ButtonTypeEnum, Icon, IconNameEnum } from '@pksep/yui';
+import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
 
 const props = withDefaults(defineProps<IMobileListProps>(), {
   contacts: () => [],
@@ -95,7 +81,7 @@ const state = reactive({
   checkUsers: new Set<string | number>()
 });
 
-const emits = defineEmits<IMenuEmits>();
+const emits = defineEmits<IMobileListEmits>();
 
 const isButtonDisabled = computed(() => state.checkUsers.size === 0);
 
@@ -128,8 +114,8 @@ const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
   }
 };
 
-const handleNewContact = (): void => {
-  emits('unmount-user-add');
+const handleNewContact = (contact: IUserProps): void => {
+  emits('unmount-contact', contact);
   handleCloseModal();
 };
 
