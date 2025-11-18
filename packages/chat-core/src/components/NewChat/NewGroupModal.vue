@@ -56,7 +56,11 @@
 
             <div>
               <h4>Название:</h4>
-              <Input placeholder="Название:" class="minor" v-model="state.groupName" />
+              <Input
+                placeholder="Название:"
+                class="minor"
+                v-model="state.groupName"
+              />
             </div>
           </div>
 
