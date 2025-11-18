@@ -49,7 +49,7 @@
         :open="state.showAddAccount"
         :contacts="props.contacts"
         :selected-contact-ids="state.checkUsers"
-        @close-modal="handleCloseModal"
+        @unmount-close="handleCloseModal"
         @unmount-contact="handleNewContact"
         @unmount-checkbox="handleCheckbox"
         @unmount-click="handleOpenUser"

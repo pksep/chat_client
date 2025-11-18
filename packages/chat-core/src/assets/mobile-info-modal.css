@@ -1,0 +1,26 @@
+.modal-info-mobile__end > div.menu-info__buttons {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.modal-info-mobile__start {
+  display: flex;
+  align-items: start;
+  align-content: center;
+  gap: 10px;
+}
+
+.modal-info-mobile__start > .menu__info-form {
+  & fieldset.input-yui-kit {
+    width: 100%;
+  }
+}
+
+.modal-info-mobile__start > .modal-info-mobile__avatar {
+  width: 86px !important;
+  height: 85px;
+}
+
+.modal-info-mobile__contact-list {
+  padding: 0;
+  padding-inline: 0;
+}

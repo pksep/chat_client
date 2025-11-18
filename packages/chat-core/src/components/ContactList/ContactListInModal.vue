@@ -1,20 +1,23 @@
 <template>
-  <section class="menu__info-users">
+  <section :class="['menu__info-users', props.wrapperClass ?? '']">
     <Button
       :type="ButtonTypeEnum.secondary"
-      class="button-menu__info menu__info-add-user"
+      :class="[
+        'button-menu__info menu__info-add-user',
+        props.addButtonClass ?? ''
+      ]"
       :size="SizesEnum.large"
       @click="addUser"
     >
       <Icon :name="IconNameEnum.addUser" class="menu__info-add-user-icon" />
       Добавить участника
     </Button>
-    <ul class="menu__info-users-list">
+    <ul :class="['menu__info-users-list', props.listClass ?? '']">
       <li v-for="(user, index) in props.contacts" :key="index">
         <template v-if="user">
           <UserProfile
             avatar-alt="avatar of user"
-            class="menu__user-profile"
+            :class="['menu__user-profile', props.userClass ?? '']"
             :avatar-url="user.avatarUrl"
             :name="user.name"
             :nickname="user.nickname"

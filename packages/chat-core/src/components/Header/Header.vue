@@ -38,13 +38,37 @@
       <Popover @click.stop :options="getPopoverOptions" isWCUse />
     </div>
   </header>
+  <MobileModal
+    :open="state.openMobileInfoModal"
+    title="Канал"
+    close-button-text="Назад"
+    @close="handleCloseMobileInfoModal"
+  >
+    <div class="modal-info-mobile__start">
+      <Avatar is-icon class="modal-info-mobile__avatar" />
+      <NewChatInformationForm>
+        <template #button> {{}} </template>
+      </NewChatInformationForm>
+    </div>
+    <div>
+      <MenuInfoButtons />
+      <p>Участники:</p>
+      <ContactListInModal
+        :contacts="[props.contact]"
+        class="modal-info-mobile__contact-list"
+      />
+    </div>
+  </MobileModal>
 </template>
 
 <script lang="ts" setup>
 import { computed, reactive } from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
+import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';
+import MobileModal from '../UI/MobileModal.vue';
 import {
+  Avatar,
   Button,
   Icon,
   IconNameEnum,
@@ -56,11 +80,14 @@ import {
 
 import type { IHeaderProps, IHeaderEmits } from '../interfaces/interfaces';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
-import { MAX_W_MD } from '../../utils/constants';
+import NewChatInformationForm from '../NewChat/NewChatInformationForm.vue';
+import MenuInfoButtons from '../MenuInfoButtons.vue';
+import ContactListInModal from '../ContactList/ContactListInModal.vue';
 
 const props = withDefaults(defineProps<IHeaderProps>(), {});
 
 const state = reactive({
+  openMobileInfoModal: false,
   isSearchInputEnable: false,
   statusNotification: {
     label: 'Выкл. уведомление',
@@ -76,8 +103,17 @@ const showSearch = (): void => {
   state.isSearchInputEnable = true;
 };
 
+const handleCloseMobileInfoModal = (): void => {
+  state.openMobileInfoModal = false;
+};
+
 const handleClickHeader = (): void => {
   if (props.chapter === 'ai') return;
+  if (isMobile.value) {
+    state.openMobileInfoModal = true;
+    emits('unmount-click');
+    return;
+  }
   state.isSearchInputEnable = false;
   emits('unmount-click');
 };
