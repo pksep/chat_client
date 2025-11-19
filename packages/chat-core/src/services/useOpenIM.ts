@@ -1,12 +1,9 @@
-import { CbEvents, getSDK } from '@openim/wasm-client-sdk';
+import { CbEvents } from '@openim/wasm-client-sdk';
 
 import { ref } from 'vue';
 import { updateConversationList } from './useConversions';
 import { updateGroupList } from './useGroup';
-
-type IMSDKType = ReturnType<typeof getSDK>;
-
-const IMSDK: IMSDKType = getSDK({ debug: false });
+import { IMSDK } from '../index';
 
 const setupOpenIM = (): void => {
   IMSDK.on(CbEvents.OnConnecting, () => {
