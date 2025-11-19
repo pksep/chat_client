@@ -1,6 +1,6 @@
 <template>
   <header class="chat__header" @click="handleClickHeader">
-    {{ props.contact?.groupId }}
+    {{ props.contact?.groupId + 'test2' }}
     <Button
       v-if="isMobile"
       :type="ButtonTypeEnum.ghost"

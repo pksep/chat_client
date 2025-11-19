@@ -88,8 +88,6 @@ export const useUsers = () => {
         return users.value;
       }
 
-      console.log(memberIDs);
-
       const usersResponse = await IMSDK.getUsersInfo(memberIDs);
 
       const resultUsers = usersResponse.data ?? [];

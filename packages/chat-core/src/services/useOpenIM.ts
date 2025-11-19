@@ -1,9 +1,39 @@
-import { CbEvents } from '@openim/wasm-client-sdk';
+import { CbEvents, getSDK } from '@openim/wasm-client-sdk';
 
 import { ref } from 'vue';
 import { updateConversationList } from './useConversions';
 import { updateGroupList } from './useGroup';
-import { IMSDK } from '../index';
+
+export type IMSDKType = ReturnType<typeof getSDK>;
+
+// Храним единственный экземпляр
+// Экспортируем singleton IMSDK
+
+let instance: IMSDKType | null = null;
+
+const IMSDK: IMSDKType = (() => {
+  if (!instance) {
+    instance = getSDK({
+      debug: false,
+      coreWasmPath: '/openIM.wasm',
+      sqlWasmPath: '/sql-wasm.wasm'
+    });
+  }
+  return instance;
+})();
+
+// Защита от дубликатов при Hot Module Reload (Vite)
+// Не уничтожаем wasm при dispose — иначе SDK ломается
+
+if (import.meta.hot) {
+  import.meta.hot.accept(() => {
+    console.log('[IMSDK] HMR: module hot reloaded (singleton preserved)');
+  });
+
+  import.meta.hot.dispose(() => {
+    console.log('[IMSDK] HMR: dispose — SKIPPED (do not reset instance)');
+  });
+}
 
 const setupOpenIM = (): void => {
   IMSDK.on(CbEvents.OnConnecting, () => {
@@ -134,15 +164,16 @@ export const sendMessageIM = async ({
 };
 
 const getOrGeneratePlatformId = (): number => {
-  const key = 'platformId';
-  const storedId = sessionStorage.getItem(key);
-  if (storedId === null) {
-    const newId = Math.floor(Math.random() * 9) + 1;
-    sessionStorage.setItem(key, newId.toString());
-    return newId;
-  } else {
-    return parseInt(storedId, 10);
-  }
+  return 5;
+  // const key = 'platformId';
+  // const storedId = sessionStorage.getItem(key);
+  // if (storedId === null) {
+  //   const newId = Math.floor(Math.random() * 9) + 1;
+  //   sessionStorage.setItem(key, newId.toString());
+  //   return newId;
+  // } else {
+  //   return parseInt(storedId, 10);
+  // }
 };
 
 const getMessagesByConversationId = async (

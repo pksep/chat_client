@@ -91,7 +91,6 @@ watch(
     } else {
       state.contacts = await fetchGroupMembers(props.groupId);
     }
-  },
-  { immediate: true }
+  }
 );
 </script>
