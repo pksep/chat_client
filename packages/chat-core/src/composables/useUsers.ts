@@ -118,6 +118,7 @@ export const useUsers = () => {
     error.value = null;
 
     try {
+      console.log('fetchGroupMembers', groupID);
       const response = await IMSDK.getGroupMemberList({
         groupID,
         filter: 0,
@@ -126,6 +127,8 @@ export const useUsers = () => {
       });
 
       const memberIDs = response.data?.map((m: any) => m.userID) ?? [];
+
+      console.log(memberIDs);
 
       if (memberIDs.length === 0) {
         users.value = [];
