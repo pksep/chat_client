@@ -87,10 +87,28 @@ const updateConversationList = (value: any[]): void => {
   });
 };
 
+const getOneConversation = async (
+  sourceID: string,
+  sessionType: number
+): Promise<any> => {
+  try {
+    const response = await IMSDK.getOneConversation({
+      sourceID,
+      sessionType
+    });
+
+    return response.data;
+  } catch (err) {
+    console.error('Failed to get conversation:', err);
+    throw err;
+  }
+};
+
 export {
   fetchConversationList,
   getConversationList,
   setConversationList,
   updateConversationList,
-  setPinConversation
+  setPinConversation,
+  getOneConversation
 };

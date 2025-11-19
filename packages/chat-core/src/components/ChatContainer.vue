@@ -37,6 +37,7 @@
       class="chat__info"
       :open="state.isMenuDesktopOpen"
       :contact="state.contact"
+      :group-id="state.groupId"
       @unmount-collapse="handleMenuToggle"
       @unmount-new-contact="handleNewContact"
       @unmount-new-group="handleNewGroup"
@@ -81,6 +82,7 @@ const state = reactive({
   isMenuDesktopOpen: false,
   isMenuMobileOpen: false,
   chapter: isMobile ? 'assistant' : null,
+  groupId: null,
   contact: null,
   isNewContactOpen: false,
   isNewGroupOpen: false
@@ -131,7 +133,7 @@ const unmountHeaderMenuChapter = (
 };
 
 const unmountMenuChapter = (
-  config: { name: string; contact: IUserProps } | string | null
+  config: { name: string; contact: IUserProps; groupId: string } | string | null
 ): void => {
   if (typeof config === 'string') {
     state.chapter = config;
@@ -183,6 +185,8 @@ const handleNewGroupMessage = async () => {
     conversionId: group.id,
     nickname: group.name || group.nickname
   };
+
+  state.groupId = group.id;
 
   state.chapter = state.contact.nickname;
 };

@@ -70,8 +70,14 @@
           </span>
         </div>
         <div class="contact-list__bottom">
+          <Checkbox
+            v-if="props.showCheckbox"
+            :size="CheckboxSizeEnum.small"
+            @update:model-value="value => handleCheckbox(value, contact.id)"
+            :model-value="props.selectedContactIds?.has(contact.id) || false"
+          />
           <div
-            v-if="
+            v-else-if="
               contact.notificationCount > 0 &&
               (state.isNotificationEnabled[contact.id] ?? true)
             "
@@ -146,7 +152,9 @@ import {
   IconNameEnum,
   Button,
   ButtonTypeEnum,
-  SizesEnum
+  SizesEnum,
+  Checkbox,
+  CheckboxSizeEnum
 } from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
 import Line from '../UI/Line.vue';
@@ -155,11 +163,21 @@ import { MAX_W_MD } from '../../utils/constants';
 import { setPinConversation } from '../../services/useConversions';
 import { IContactProps } from '../interfaces/interfaces';
 
-const props = withDefaults(defineProps<IContactListProps>(), {});
+interface IExtendedContactListProps extends IContactListProps {
+  showCheckbox?: boolean;
+  selectedContactIds?: Set<string | number>;
+}
+
+const props = withDefaults(defineProps<IExtendedContactListProps>(), {
+  showCheckbox: false,
+  selectedContactIds: () => new Set<string | number>()
+});
 
 const emits = defineEmits<{
   (e: 'unmount-notification', id: string): void;
   (e: 'unmount-click', id: string): void;
+  (e: 'unmount-contact', contact: IContactProps): void;
+  (e: 'unmount-checkbox', isCheck: boolean, contactId: string | number): void;
 }>();
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
@@ -189,8 +207,13 @@ const handlePin = (contact: IContactProps): void => {
   closeActivePopover(contact.id);
 };
 
-const handleClick = (contact): void => {
-  emits('unmount-click', contact);
+const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
+  emits('unmount-checkbox', isCheck, contactId);
+};
+
+const handleClick = (contact: IContactProps): void => {
+  emits('unmount-click', contact.id);
+  emits('unmount-contact', contact);
 };
 
 const handleNotification = (contactId: string): void => {
@@ -200,7 +223,7 @@ const handleNotification = (contactId: string): void => {
   closeActivePopover(contactId);
 };
 
-const handleKeyDown = (contact: any, event: KeyboardEvent): void => {
+const handleKeyDown = (contact: IContactProps, event: KeyboardEvent): void => {
   if (event.key === 'Enter' || event.key === ' ') {
     handleClick(contact);
   }

@@ -83,10 +83,13 @@ watch(
   () => props.open,
   async newVal => {
     isOpen.value = newVal;
-    if (props.contact?.id && props.groupId === undefined) {
+    if (
+      props.contact?.id &&
+      (props.groupId === undefined || props.groupId === null)
+    ) {
       state.contacts = [props.contact];
     } else {
-      await fetchGroupMembers(props.groupId);
+      state.contacts = await fetchGroupMembers(props.groupId);
     }
   },
   { immediate: true }
