@@ -27,7 +27,7 @@
     "@mastra/client-js": "^0.12.3",
     "@openim/wasm-client-sdk": "3.8.3-patch.10",
     "@pksep/reqi": "^0.0.21",
-    "@pksep/yui": "0.1.134",
+    "@pksep/yui": "link:../../local-packages/sep_yui",
     "zod": "3"
   },
   "peerDependencies": {
@@ -37,5 +37,8 @@
     "@vite-pwa/assets-generator": "^1.0.2",
     "tsx": "^4.20.6",
     "vite-plugin-pwa": "^1.1.0"
+  },
+  "overrides": {
+    "@pksep/yui": "$@pksep/yui"
   }
 }

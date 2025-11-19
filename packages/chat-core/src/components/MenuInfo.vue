@@ -11,7 +11,11 @@
         <Icon :name="IconNameEnum.crossLarge" class="menu-info__close-icon" />
       </Button>
     </header>
-    <Tabs :tabCount="2" class="menu-info__tabs">
+    <Tabs
+      :tab-count="2"
+      :default-active-tab-id="props.activeTabId"
+      class="menu-info__tabs"
+    >
       <template #header1>
         <span class="menu-info__user-header">
           Участники
@@ -20,12 +24,15 @@
       </template>
       <template #header2> Информация </template>
       <template #tab1>
-        <ContactListInModal :contacts="state.contacts" />
+        <ContactListInModal
+          :contacts="state.contacts"
+          @unmount-click-add-button="handleContactClick"
+        />
       </template>
       <template #tab2>
         <section class="menu-info__info-section">
           <slot name="information-menu">
-            <InformationMenu />
+            <InformationMenu v-bind="state.information" />
           </slot>
         </section>
       </template>
@@ -58,7 +65,8 @@ const props = withDefaults(defineProps<IMenuRightProps>(), {
 const emits = defineEmits<IMenuEmits>();
 
 const state = reactive({
-  contacts: []
+  contacts: [],
+  information: null
 });
 
 const menuInfoClasses = computed(() => [
@@ -79,18 +87,28 @@ const handleCloseMenu = (): void => {
 
 const { fetchGroupMembers } = useUsers();
 
+const handleContactClick = (): void => {
+  emits('unmount-new-contact', { isChapterOpen: true });
+};
+
 watch(
   () => props.open,
   async newVal => {
     isOpen.value = newVal;
     if (
       props.contact?.id &&
-      (props.groupId === undefined || props.groupId === null)
+      (props.contact?.groupId === undefined || props.contact?.groupId === null)
     ) {
       state.contacts = [props.contact];
     } else {
-      state.contacts = await fetchGroupMembers(props.groupId);
+      state.contacts = await fetchGroupMembers(props.contact?.groupId);
     }
+
+    state.information = {
+      name: props.contact.name,
+      avatarUrl: props.contact.avatarUrl,
+      date: new Date().toLocaleDateString()
+    };
   }
 );
 </script>

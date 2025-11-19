@@ -1,7 +1,7 @@
 <template>
   <MobileModal
     :open="props.open"
-    @close="handleCloseModal"
+    @unmount-close="handleCloseModal"
     title="Написать сообщение"
     back-button-text="Отмена"
   >

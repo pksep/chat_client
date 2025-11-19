@@ -25,7 +25,7 @@
     />
 
     <div v-else>
-      <Tabs :tabCount="2">
+      <Tabs :tabCount="2" :defaultActiveTabId="2">
         <template #header2>
           <span class="menu-info__user-header">
             Участники

@@ -1,6 +1,7 @@
 export interface IHeaderProps {
   chapter?: string | null;
   contact?: IUserProps;
+  members?: IUserProps[];
 }
 
 export interface IMenuEmits {
@@ -49,6 +50,7 @@ export interface IMenuProps {
 }
 
 export interface IMenuRightProps extends IMenuProps {
+  activeTabId?: number;
   groupId?: string;
 }
 
