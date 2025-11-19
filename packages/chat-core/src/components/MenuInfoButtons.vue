@@ -21,6 +21,7 @@
       :type="ButtonTypeEnum.secondary"
       :size="SizesEnum.large"
       class="menu-info__secondary-button"
+      @click="handleUnmountLeave"
     >
       <Icon :name="IconNameEnum.logout" />
       Выйти
@@ -41,4 +42,10 @@ import { MAX_W_MD } from '../utils/constants';
 import { useResizeState } from '../composables/useResizeState';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
+
+const emits = defineEmits(['unmount-leave']);
+
+const handleUnmountLeave = () => {
+  emits('unmount-leave');
+};
 </script>

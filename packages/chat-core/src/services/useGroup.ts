@@ -60,4 +60,55 @@ const updateGroupList = (value: any[]): void => {
   });
 };
 
-export { createGroup, getGroupList, setGroupList, updateGroupList };
+const setGroupInfo = async (
+  groupID: string,
+  groupInfo: Partial<{
+    groupName?: string;
+    faceURL?: string;
+    introduction?: string;
+    notification?: string;
+    ex?: string;
+  }>
+) => {
+  try {
+    await IMSDK.setGroupInfo({ groupID, ...groupInfo });
+
+    const index = groups.value.findIndex(g => g.id === groupID);
+    if (index !== -1) {
+      const existing = groups.value[index];
+      groups.value[index] = {
+        ...existing,
+        ...groupInfo,
+        nickname: groupInfo.groupName || existing.nickname
+      };
+
+      groups.value.sort((a, b) => {
+        if (a.isPin && !b.isPin) return -1;
+        if (!a.isPin && b.isPin) return 1;
+        return b.latestMessageTime - a.latestMessageTime;
+      });
+    }
+  } catch (err) {
+    console.error('Failed to set group info:', err);
+  }
+};
+
+const quitGroup = async (groupID: string) => {
+  try {
+    await IMSDK.quitGroup(groupID);
+
+    groups.value = groups.value.filter(group => group.id !== groupID);
+  } catch (err) {
+    console.error('Failed to quit group:', err);
+    throw err;
+  }
+};
+
+export {
+  createGroup,
+  getGroupList,
+  setGroupList,
+  updateGroupList,
+  setGroupInfo,
+  quitGroup
+};

@@ -32,7 +32,7 @@
       <template #tab2>
         <section class="menu-info__info-section">
           <slot name="information-menu">
-            <InformationMenu v-bind="state.information" />
+            <InformationMenu v-model="state.information" />
           </slot>
         </section>
       </template>
@@ -57,6 +57,7 @@ import type { IMenuRightProps, IMenuEmits } from './interfaces/interfaces';
 import { MAX_W_XL } from '../utils/constants';
 
 import { useUsers } from '../composables/useUsers';
+import { setGroupInfo } from '../services/useGroup';
 
 const props = withDefaults(defineProps<IMenuRightProps>(), {
   open: false
@@ -92,6 +93,18 @@ const handleContactClick = (): void => {
 };
 
 watch(
+  () => state.information,
+  () => {
+    if (props.contact?.groupId) {
+      setGroupInfo(props.contact?.groupId, {
+        groupName: props.contact.name,
+        faceURL: props.contact.avatarUrl
+      });
+    }
+  }
+);
+
+watch(
   () => props.open,
   async newVal => {
     isOpen.value = newVal;
@@ -100,12 +113,19 @@ watch(
       (props.contact?.groupId === undefined || props.contact?.groupId === null)
     ) {
       state.contacts = [props.contact];
+      state.information = {
+        id: props.contact?.id
+      };
     } else {
       state.contacts = await fetchGroupMembers(props.contact?.groupId);
+      state.information = {
+        id: props.contact?.groupId
+      };
     }
 
     state.information = {
-      name: props.contact.nickname,
+      name: props.contact.name,
+      nickname: props.contact.nickname,
       avatarUrl: props.contact.avatarUrl,
       date: new Date().toLocaleDateString()
     };

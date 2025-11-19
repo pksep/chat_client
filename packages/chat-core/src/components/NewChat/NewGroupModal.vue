@@ -26,7 +26,7 @@
 
     <div v-else>
       <Tabs :tabCount="2" :defaultActiveTabId="2">
-        <template #header2>
+        <template #header1>
           <span class="menu-info__user-header">
             Участники
             <div class="menu-info__user-count">
@@ -34,14 +34,14 @@
             </div>
           </span>
         </template>
-        <template #header1> Информация </template>
-        <template #tab2>
+        <template #header2> Информация </template>
+        <template #tab1>
           <ContactListInModal
             :contacts="state.selectedContacts"
             @unmount-click-add-button="handleCloseGroupInfo"
           />
         </template>
-        <template #tab1>
+        <template #tab2>
           <div class="menu-info__group-info">
             <Avatar
               :url="state.avatarPreview"

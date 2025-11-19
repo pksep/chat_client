@@ -119,15 +119,15 @@ const handleHeaderClick = (): void => {
 };
 
 const unmountHeaderMenuChapter = (
-  config: { nickname: string } | string | null
+  config: { name: string } | string | null
 ): void => {
   if (typeof config === 'string') {
     state.chapter = config;
     if (config === 'ai') {
       state.contact = null;
     }
-  } else if (config && config.nickname) {
-    state.chapter = config.nickname;
+  } else if (config && config.name) {
+    state.chapter = config.name;
     state.contact = config;
   } else {
     state.chapter = null;
@@ -136,7 +136,7 @@ const unmountHeaderMenuChapter = (
 };
 
 const unmountMenuChapter = (
-  config: { contact: IUserProps; groupId: string } | string | null
+  config: { contact: IUserProps; groupId?: string } | string | null
 ): void => {
   if (typeof config === 'string') {
     state.chapter = config;

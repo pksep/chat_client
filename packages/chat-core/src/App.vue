@@ -9,9 +9,9 @@ const mastraUrl = import.meta.env.VITE_MASTRA_BASE_URL;
 const user = {
   // avatarUrl: '/avatar-user.png',
   id: '46',
-  ex: '045',
+  nickname: '045',
   avatarAlt: 'User with a circle face',
-  nickname: 'Князев Эдгар Арсенович'
+  name: 'Князев Эдгар Арсенович'
 };
 
 // const user = {

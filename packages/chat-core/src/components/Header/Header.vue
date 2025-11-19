@@ -46,7 +46,7 @@
   >
     <div class="modal-info-mobile__start">
       <Avatar is-icon class="modal-info-mobile__avatar" />
-      <NewChatInformationForm>
+      <NewChatInformationForm :name="state.group.name">
         <template #button> {{}} </template>
       </NewChatInformationForm>
     </div>
@@ -54,7 +54,7 @@
       <MenuInfoButtons />
       <p class="modal-info-mobile__end--paragraph">Участники:</p>
       <ContactListInModal
-        :contacts="props.members"
+        :contacts="state.group.members"
         class="modal-info-mobile__contact-list"
       />
     </div>
@@ -89,6 +89,10 @@ const props = withDefaults(defineProps<IHeaderProps>(), {});
 const state = reactive({
   openMobileInfoModal: false,
   isSearchInputEnable: false,
+  group: {
+    name: '',
+    members: []
+  },
   statusNotification: {
     label: 'Выкл. уведомление',
     enabled: false

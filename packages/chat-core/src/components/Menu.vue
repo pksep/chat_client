@@ -9,7 +9,7 @@
         />
         <Avatar
           v-if="isCollapse"
-          :initials="props.user?.nickname"
+          :initials="props.user?.name"
           :url="props.user?.avatarUrl"
           :alt="props.user?.avatarAlt"
           is-icon
@@ -144,9 +144,9 @@ const unmountContactClick = (contact: IContactProps | string): void => {
         name: foundContact.nickname,
         contact: {
           id: foundContact.id,
-          ex: foundContact.ex,
+          nickname: foundContact.nickname,
           avatarUrl: foundContact.avatarUrl || '',
-          nickname: foundContact.nickname || '',
+          name: foundContact.name || '',
           conversionId: foundContact.conversionId || ''
         }
       });
@@ -157,9 +157,9 @@ const unmountContactClick = (contact: IContactProps | string): void => {
       name: contact.nickname,
       contact: {
         id: contact.userId,
-        ex: contact.ex,
+        nickname: contact.nickname,
         avatarUrl: contact.avatarUrl || '',
-        nickname: contact.nickname || '',
+        name: contact.name || '',
         conversionId: contact.id || '',
         groupId: contact.groupId || ''
       }

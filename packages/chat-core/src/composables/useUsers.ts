@@ -54,8 +54,8 @@ export const useUsers = () => {
           faceURL: string;
         }) => ({
           id: user.userID,
-          ex: user.ex,
-          nickname: user.nickname,
+          nickname: user.ex,
+          name: user.nickname,
           avatarUrl: user.faceURL
         })
       );
@@ -149,8 +149,8 @@ export const useUsers = () => {
           faceURL: string;
         }) => ({
           id: user.userID,
-          ex: user.ex,
-          nickname: user.nickname,
+          name: user.nickname,
+          nickname: user.ex,
           avatarUrl: user.faceURL
         })
       );

@@ -37,13 +37,14 @@ const setPinConversation = async (
 
 export const manipulateConversationList = conversations => {
   return conversations.map(c => {
+    console.log(c);
     return {
       id: c.conversationID,
       userId: c.userID,
       name: c.showName,
       avatarUrl: c.faceURL,
       isPin: c.isPinned,
-      nickname: c.showName,
+      nickname: c.ex,
       latestMessage: c.latestMsg
         ? JSON.parse(c.latestMsg)?.textElem?.content || ''
         : '',

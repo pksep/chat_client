@@ -9,8 +9,8 @@
         @click="handleNewContact(contact)"
       >
         <UserProfile
-          :ex="contact.ex"
           :nickname="contact.nickname"
+          :name="contact.name"
           :avatar-alt="contact.nickname"
         />
         <Checkbox
@@ -67,8 +67,8 @@ const q = ref('');
 const contacts = computed(() =>
   props.contacts.filter(
     contact =>
-      contact.ex.toLowerCase().includes(q.value.toLowerCase()) ||
-      contact.nickname.toLowerCase().includes(q.value.toLowerCase())
+      contact.nickname.toLowerCase().includes(q.value.toLowerCase()) ||
+      contact.name.toLowerCase().includes(q.value.toLowerCase())
   )
 );
 

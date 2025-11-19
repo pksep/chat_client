@@ -28,10 +28,10 @@ export interface IUserProps {
   id?: string;
   avatarUrl?: string;
   avatarAlt?: string;
+  name?: string;
   nickname?: string;
   conversionId?: string;
   groupId?: string;
-  ex?: string;
 }
 
 export interface IContactProps extends IUserProps {

@@ -5,9 +5,6 @@
   font-weight: bold;
   align-items: center;
   justify-content: space-between;
-  border-bottom-style: solid;
-  border-bottom-width: 1px;
-  border-bottom-color: var(--border-grey);
 }
 
 button.button-yui-kit.new-contact__button-close {

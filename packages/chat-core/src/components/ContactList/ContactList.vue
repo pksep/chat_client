@@ -22,7 +22,6 @@
         ]"
         role="button"
         tabindex="0"
-        :aria-label="`Contact ${contact.nickname}, ${contact.latestMessage ? contact.latestMessage : 'no recent message'}`"
         :aria-expanded="isOpen[contact.id] ? 'true' : 'false'"
         :aria-haspopup="true"
         @click.stop="handleClick(contact)"
@@ -32,9 +31,9 @@
       >
         <Avatar
           class="contact-list__avatar"
-          :initials="contact.nickname"
+          :initials="contact.name"
           :url="contact.avatarUrl"
-          :alt="`Avatar of ${contact.nickname}`"
+          :alt="`Avatar of ${contact.name}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           :style="{ '--size-avatar': '30px' }"
           is-icon
@@ -45,7 +44,7 @@
           class="contact-list__title"
           :data-testid="`${props.dataTestid}-ContactList-Title${index + 1}`"
         >
-          {{ contact.nickname }}
+          {{ contact.name }}
         </h5>
         <div
           class="contact-list__description"
