@@ -42,7 +42,7 @@
     :open="state.openMobileInfoModal"
     title="Канал"
     close-button-text="Назад"
-    @close="handleCloseMobileInfoModal"
+    @unmount-close="handleCloseMobileInfoModal"
   >
     <div class="modal-info-mobile__start">
       <Avatar is-icon class="modal-info-mobile__avatar" />

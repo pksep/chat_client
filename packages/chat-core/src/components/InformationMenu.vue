@@ -2,11 +2,11 @@
   <div class="menu-info__create-channel">
     <p class="menu-info__title-text">Канал создан:</p>
     <span>
-      {{ new Date().toLocaleDateString('ru-RU') }}
+      {{ props.date }}
     </span>
   </div>
   <button class="menu-info__avatar-button" @click="openEditProfileIcon">
-    <Avatar is-icon />
+    <Avatar is-icon :url="props.avatarUrl" alt="use-avatar-circle" />
   </button>
   <ModalCroppedAvatar
     :image="null"
@@ -14,7 +14,7 @@
     @unmount-close="closeEditProfileIcon"
   />
   <MenuInfoButtons />
-  <NewChatInformationForm />
+  <NewChatInformationForm :name="props.name" />
 </template>
 
 <script lang="ts" setup>
@@ -22,6 +22,14 @@ import { reactive } from 'vue';
 import { ModalCroppedAvatar, Avatar } from '@pksep/yui';
 import NewChatInformationForm from './NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from './MenuInfoButtons.vue';
+
+type Props = {
+  name: string | null;
+  avatarUrl: string | null;
+  date: string | null;
+};
+
+const props = withDefaults(defineProps<Props>(), {});
 
 const state = reactive({
   isEditAvatar: false

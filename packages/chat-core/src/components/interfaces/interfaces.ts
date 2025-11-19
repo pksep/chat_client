@@ -50,6 +50,7 @@ export interface IMenuProps {
 }
 
 export interface IMenuRightProps extends IMenuProps {
+  activeTabId?: number;
   groupId?: string;
 }
 

@@ -8,7 +8,7 @@
       :members="users.filter(user => user.id !== props.user.id)"
       @unmount-click="handleHeaderClick"
       @unmount-exit="handleExit"
-      @unmount-information="handleHeaderClick"
+      @unmount-information="handleInformationClick"
       @unmount-clear="handleClearClick"
     />
     <HeaderMenu
@@ -38,7 +38,7 @@
       class="chat__info"
       :open="state.isMenuDesktopOpen"
       :contact="state.contact"
-      :group-id="state.contact?.groupId"
+      :active-tab-id="state.activeTabId"
       @unmount-collapse="handleMenuToggle"
       @unmount-new-contact="handleNewContact"
       @unmount-new-group="handleNewGroup"
@@ -82,6 +82,7 @@ const state = reactive({
   isCollapse: false,
   isMenuDesktopOpen: false,
   isMenuMobileOpen: false,
+  activeTabId: null,
   chapter: isMobile ? 'assistant' : null,
   groupId: null,
   contact: null,
@@ -110,6 +111,7 @@ const handleMenuToggle = (isOpen: boolean): void => {
 
 const handleHeaderClick = (): void => {
   if (!isMobile.value) {
+    state.activeTabId = 1;
     state.isMenuDesktopOpen = true;
     return;
   }
@@ -161,6 +163,11 @@ const handleNewGroup = (config): void => {
 const closeModals = (): void => {
   state.isNewContactOpen = false;
   state.isNewGroupOpen = false;
+};
+
+const handleInformationClick = (): void => {
+  state.isMenuDesktopOpen = true;
+  state.activeTabId = 2;
 };
 
 const handleClearClick = (): void => {
