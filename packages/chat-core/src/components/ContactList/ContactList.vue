@@ -37,6 +37,7 @@
           :alt="`Avatar of ${contact.name}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           :style="{ '--size-avatar': '30px' }"
+          is-icon
         />
         <h5
           role="heading"

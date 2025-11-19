@@ -12,6 +12,7 @@
           :initials="props.user?.nickname"
           :url="props.user?.avatarUrl"
           :alt="props.user?.avatarAlt"
+          is-icon
         />
         <Button
           :size="SizesEnum.small"
@@ -132,6 +133,7 @@ const unmountContactClick = (
         nickname?: string;
         conversionId?: string;
         avatarUrl?: string;
+        groupId?: string;
       }
     | string
 ): void => {
@@ -167,7 +169,8 @@ const unmountContactClick = (
         name: contact.title,
         avatarUrl: contact.avatarUrl || contact.imageURL || '',
         nickname: contact.nickname || '',
-        conversionId: contact.id || ''
+        conversionId: contact.id || '',
+        groupId: contact.groupId || ''
       }
     });
   }

@@ -30,6 +30,7 @@ export interface IUserProps {
   name?: string;
   nickname?: string;
   conversionId?: string;
+  groupId?: string;
 }
 
 export interface IContactProps extends IUserProps {

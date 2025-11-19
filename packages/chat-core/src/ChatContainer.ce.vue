@@ -37,7 +37,7 @@ onMounted(async () => {
         {
           userID: props.user.id,
           nickname: props.user.nickname,
-          faceURL: props.user.avatarUrl ?? 'https://example.org/avatar.png'
+          faceURL: props.user.avatarUrl ?? '/avatar.png'
         }
       ]
     });
