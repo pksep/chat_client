@@ -48,7 +48,7 @@
           </summary>
           <ContactList
             :contacts="item.items"
-            @unmount-click="unmountContactClick"
+            @unmount-contact="unmountContactClick"
             :selected-contact-id="state.selectedContactId"
           />
         </details>
@@ -93,7 +93,11 @@ import {
 } from '@pksep/yui';
 import UserProfile from './UserProfile/UserProfile.vue';
 import ContactList from './ContactList/ContactList.vue';
-import type { IMenuEmits, IUserProps } from './interfaces/interfaces';
+import type {
+  IContactProps,
+  IMenuEmits,
+  IUserProps
+} from './interfaces/interfaces';
 import {
   fetchConversationList,
   getConversationList
@@ -123,20 +127,7 @@ const handleCollapse = (): void => {
   toggle();
 };
 
-const unmountContactClick = (
-  contact:
-    | {
-        title: string;
-        id?: string;
-        userId?: string;
-        imageURL?: string;
-        nickname?: string;
-        conversionId?: string;
-        avatarUrl?: string;
-        groupId?: string;
-      }
-    | string
-): void => {
+const unmountContactClick = (contact: IContactProps | string): void => {
   state.selectedContactId = typeof contact === 'string' ? contact : contact.id;
   if (contact === 'ai') {
     state.chapter = 'ai';
@@ -161,13 +152,13 @@ const unmountContactClick = (
       });
     }
   } else {
-    state.chapter = contact.title;
+    state.chapter = contact.name;
     emits('unmount-chapter', {
-      name: contact.title,
+      name: contact.name,
       contact: {
         id: contact.userId,
-        name: contact.title,
-        avatarUrl: contact.avatarUrl || contact.imageURL || '',
+        name: contact.name,
+        avatarUrl: contact.avatarUrl || '',
         nickname: contact.nickname || '',
         conversionId: contact.id || '',
         groupId: contact.groupId || ''

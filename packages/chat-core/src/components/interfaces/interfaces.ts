@@ -40,6 +40,7 @@ export interface IContactProps extends IUserProps {
   notificationCount?: number;
   isPin?: boolean;
   groupId?: string;
+  userId?: string;
 }
 
 export interface IMenuProps {
