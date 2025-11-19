@@ -31,9 +31,9 @@
       >
         <Avatar
           class="contact-list__avatar"
-          :initials="contact.name"
+          :initials="contact.nickname"
           :url="contact.avatarUrl"
-          :alt="`Avatar of ${contact.name}`"
+          :alt="`Avatar of ${contact.nickname}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           :style="{ '--size-avatar': '30px' }"
           is-icon
@@ -44,7 +44,7 @@
           class="contact-list__title"
           :data-testid="`${props.dataTestid}-ContactList-Title${index + 1}`"
         >
-          {{ contact.name }}
+          {{ contact.nickname }}
         </h5>
         <div
           class="contact-list__description"

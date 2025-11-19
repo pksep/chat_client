@@ -119,15 +119,15 @@ const handleHeaderClick = (): void => {
 };
 
 const unmountHeaderMenuChapter = (
-  config: { name: string } | string | null
+  config: { nickname: string } | string | null
 ): void => {
   if (typeof config === 'string') {
     state.chapter = config;
     if (config === 'ai') {
       state.contact = null;
     }
-  } else if (config && config.name) {
-    state.chapter = config.name;
+  } else if (config && config.nickname) {
+    state.chapter = config.nickname;
     state.contact = config;
   } else {
     state.chapter = null;

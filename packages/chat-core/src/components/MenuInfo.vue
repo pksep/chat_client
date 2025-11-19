@@ -124,8 +124,7 @@ watch(
     }
 
     state.information = {
-      name: props.contact.name,
-      nickname: props.contact.nickname,
+      name: props.contact.nickname,
       avatarUrl: props.contact.avatarUrl,
       date: new Date().toLocaleDateString()
     };

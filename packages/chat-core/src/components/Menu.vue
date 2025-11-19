@@ -144,7 +144,7 @@ const unmountContactClick = (contact: IContactProps | string): void => {
         name: foundContact.nickname,
         contact: {
           id: foundContact.id,
-          nickname: foundContact.nickname,
+          ex: foundContact.ex,
           avatarUrl: foundContact.avatarUrl || '',
           name: foundContact.name || '',
           conversionId: foundContact.conversionId || ''
@@ -154,10 +154,10 @@ const unmountContactClick = (contact: IContactProps | string): void => {
   } else {
     state.chapter = contact.nickname;
     emits('unmount-chapter', {
-      name: contact.name,
+      name: contact.nickname,
       contact: {
         id: contact.userId,
-        nickname: contact.nickname,
+        ex: contact.ex,
         avatarUrl: contact.avatarUrl || '',
         name: contact.name || '',
         conversionId: contact.id || '',
