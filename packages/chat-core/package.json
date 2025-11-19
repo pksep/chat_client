@@ -37,5 +37,8 @@
     "@vite-pwa/assets-generator": "^1.0.2",
     "tsx": "^4.20.6",
     "vite-plugin-pwa": "^1.1.0"
+  },
+  "overrides": {
+    "@pksep/yui": "$@pksep/yui"
   }
 }

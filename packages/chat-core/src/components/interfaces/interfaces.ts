@@ -1,6 +1,7 @@
 export interface IHeaderProps {
   chapter?: string | null;
   contact?: IUserProps;
+  members?: IUserProps[];
 }
 
 export interface IMenuEmits {

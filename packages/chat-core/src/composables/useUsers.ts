@@ -70,6 +70,7 @@ export const useUsers = () => {
     }
   };
 
+  /*
   const fetchUsersOfGroup = async (
     groupID: string,
     userIDList: string[]
@@ -90,9 +91,9 @@ export const useUsers = () => {
 
       console.log(memberIDs);
 
-      const usersResponse = await IMSDK.getUsersInfo({ userIDList: memberIDs });
+      // const usersResponse = await IMSDK.getUsersInfo({ userIDList });
 
-      const resultUsers = usersResponse.data ?? [];
+      // const resultUsers = usersResponse.data ?? [];
 
       users.value = resultUsers.map(
         (user: { userID: string; nickname: string; faceURL: string }) => ({
@@ -112,6 +113,7 @@ export const useUsers = () => {
       loading.value = false;
     }
   };
+  */
 
   const fetchGroupMembers = async (groupID: string): Promise<IUserProps[]> => {
     loading.value = true;
@@ -136,7 +138,7 @@ export const useUsers = () => {
         return users.value;
       }
 
-      const usersResponse = await IMSDK.getUsersInfo({ userIDList: memberIDs });
+      const usersResponse = await IMSDK.getUsersInfo(memberIDs);
 
       const resultUsers = usersResponse.data ?? [];
 
@@ -169,7 +171,6 @@ export const useUsers = () => {
     loading,
     error,
     fetchAllUsers,
-    fetchUsersOfGroup,
     fetchGroupMembers
   };
 };

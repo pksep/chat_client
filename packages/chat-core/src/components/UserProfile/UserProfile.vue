@@ -7,7 +7,9 @@
       :initials="props.nickname"
     />
     <h3 class="user-profile__title">{{ props.name || props.nickname }}</h3>
-    <span class="user-profile__nickname">@{{ props.nickname }}</span>
+    <span class="user-profile__nickname"
+      >@{{ props.groupId || props.nickname }}</span
+    >
   </div>
 </template>
 

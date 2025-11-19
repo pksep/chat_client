@@ -1,6 +1,5 @@
 <template>
   <header class="chat__header" @click="handleClickHeader">
-    {{ props.contact?.groupId }}
     <Button
       v-if="isMobile"
       :type="ButtonTypeEnum.ghost"
@@ -55,7 +54,7 @@
       <MenuInfoButtons />
       <p class="modal-info-mobile__end--paragraph">Участники:</p>
       <ContactListInModal
-        :contacts="[props.contact]"
+        :contacts="props.members"
         class="modal-info-mobile__contact-list"
       />
     </div>
