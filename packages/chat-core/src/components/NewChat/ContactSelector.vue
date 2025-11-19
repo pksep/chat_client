@@ -9,7 +9,7 @@
         @click="handleNewContact(contact)"
       >
         <UserProfile
-          :name="contact.name"
+          :ex="contact.ex"
           :nickname="contact.nickname"
           :avatar-alt="contact.nickname"
         />
@@ -67,7 +67,7 @@ const q = ref('');
 const contacts = computed(() =>
   props.contacts.filter(
     contact =>
-      contact.name.toLowerCase().includes(q.value.toLowerCase()) ||
+      contact.ex.toLowerCase().includes(q.value.toLowerCase()) ||
       contact.nickname.toLowerCase().includes(q.value.toLowerCase())
   )
 );

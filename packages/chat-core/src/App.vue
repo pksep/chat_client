@@ -6,43 +6,19 @@
 import './index';
 
 const mastraUrl = import.meta.env.VITE_MASTRA_BASE_URL;
-// const user = {
-//   // avatarUrl: '/avatar-user.png',
-//   id: 'EdgarID',
-//   avatarAlt: 'User with a circle face',
-//   name: 'Edgar',
-//   nickname: 'Edgar'
-// };
-
-// const user = {
-//   // avatarUrl: '/avatar-user.png',
-//   id: 't1',
-//   avatarAlt: 'User with a circle face',
-//   name: 'Jane',
-//   nickname: 'Jane'
-// };
-
-// const user = {
-//   // avatarUrl: '/avatar-user.png',
-//   id: 'NarekID',
-//   avatarAlt: 'User with a circle face',
-//   name: 'Narek',
-//   nickname: 'Narek'
-// };
-
 const user = {
   // avatarUrl: '/avatar-user.png',
-  id: 'GarikID',
+  id: '46',
+  ex: '045',
   avatarAlt: 'User with a circle face',
-  name: 'Garik',
-  nickname: 'Garik'
+  nickname: 'Князев Эдгар Арсенович'
 };
 
 // const user = {
 //   // avatarUrl: '/avatar-user.png',
-//   id: 'KarenID',
+//   id: '51',
 //   avatarAlt: 'User with a circle face',
-//   name: 'Karen',
-//   nickname: 'Karen'
+//   ex: '050',
+//   nickname: 'Румянцев Тимофей Дмитриевич'
 // };
 </script>

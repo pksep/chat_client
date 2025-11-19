@@ -56,7 +56,7 @@
           <template v-for="(user, index) in state.contactList" :key="index">
             <ul class="menu__user">
               <li class="menu__user-avatar">
-                <Avatar :url="user.avatarUrl" :initials="user.name" />
+                <Avatar :url="user.avatarUrl" :initials="user.nickname" />
               </li>
             </ul>
             <Line />
@@ -138,13 +138,13 @@ const unmountContactClick = (contact: IContactProps | string): void => {
   if (typeof contact === 'string') {
     const foundContact = state.contactList.find(c => c.id === contact);
     if (foundContact) {
-      state.chapter = foundContact.name;
+      state.chapter = foundContact.nickname;
 
       emits('unmount-chapter', {
-        name: foundContact.name,
+        name: foundContact.nickname,
         contact: {
           id: foundContact.id,
-          name: foundContact.name,
+          ex: foundContact.ex,
           avatarUrl: foundContact.avatarUrl || '',
           nickname: foundContact.nickname || '',
           conversionId: foundContact.conversionId || ''
@@ -152,12 +152,12 @@ const unmountContactClick = (contact: IContactProps | string): void => {
       });
     }
   } else {
-    state.chapter = contact.name;
+    state.chapter = contact.nickname;
     emits('unmount-chapter', {
-      name: contact.name,
+      name: contact.nickname,
       contact: {
         id: contact.userId,
-        name: contact.name,
+        ex: contact.ex,
         avatarUrl: contact.avatarUrl || '',
         nickname: contact.nickname || '',
         conversionId: contact.id || '',

@@ -1,7 +1,7 @@
 <template>
   <aside :class="menuInfoClasses" v-if="props.open">
     <header class="menu-info__header">
-      <h4>{{ props.contact?.name || 'Общий' }}</h4>
+      <h4>{{ props.contact?.nickname || 'Общий' }}</h4>
       <Button
         class="menu-info__close-button"
         :type="ButtonTypeEnum.ghost"
@@ -105,7 +105,7 @@ watch(
     }
 
     state.information = {
-      name: props.contact.name,
+      name: props.contact.nickname,
       avatarUrl: props.contact.avatarUrl,
       date: new Date().toLocaleDateString()
     };

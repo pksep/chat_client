@@ -119,15 +119,15 @@ const handleHeaderClick = (): void => {
 };
 
 const unmountHeaderMenuChapter = (
-  config: { name: string; contact: IUserProps } | string | null
+  config: { nickname: string } | string | null
 ): void => {
   if (typeof config === 'string') {
     state.chapter = config;
     if (config === 'ai') {
       state.contact = null;
     }
-  } else if (config && config.name) {
-    state.chapter = config.name;
+  } else if (config && config.nickname) {
+    state.chapter = config.nickname;
     state.contact = config;
   } else {
     state.chapter = null;
@@ -136,7 +136,7 @@ const unmountHeaderMenuChapter = (
 };
 
 const unmountMenuChapter = (
-  config: { name: string; contact: IUserProps; groupId: string } | string | null
+  config: { contact: IUserProps; groupId: string } | string | null
 ): void => {
   if (typeof config === 'string') {
     state.chapter = config;
@@ -177,7 +177,7 @@ const handleClearClick = (): void => {
 };
 
 const handleNewContactMessage = async (contact: IUserProps): Promise<void> => {
-  state.chapter = contact.name;
+  state.chapter = contact.nickname;
   const [smallerUserID, largerUserID] = [props.user.id, contact.id].sort();
 
   state.contact = {

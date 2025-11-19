@@ -3,7 +3,8 @@ import { useOpenIMRestApi } from '../services/useApi';
 export type RegisterUser = {
   userID: string;
   nickname: string;
-  faceURL: string;
+  faceURL?: string;
+  ex?: string;
 };
 
 interface RegisterParams {

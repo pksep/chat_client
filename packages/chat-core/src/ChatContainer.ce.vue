@@ -29,7 +29,11 @@ onMounted(async () => {
     }
 
     if (import.meta.env.VITE_USE_MOCK_DATA === 'true') {
-      await useRegister({ users: mockUsers });
+      await Promise.all(
+        mockUsers.map(user => {
+          return useRegister({ users: [user] });
+        })
+      );
     }
 
     const registerResponse = await useRegister({
@@ -37,7 +41,8 @@ onMounted(async () => {
         {
           userID: props.user.id,
           nickname: props.user.nickname,
-          faceURL: props.user.avatarUrl ?? '/avatar.png'
+          faceURL: props.user.avatarUrl ?? '/avatar.png',
+          ex: props.user.ex
         }
       ]
     });

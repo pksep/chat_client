@@ -21,7 +21,7 @@
   font-size: var(--font-size-title, 16px);
 }
 
-.user-profile__nickname {
+.user-profile__ex {
   font-size: var(--font-size-nickname, 16px);
   color: var(--text-grey);
   margin-top: -7px;

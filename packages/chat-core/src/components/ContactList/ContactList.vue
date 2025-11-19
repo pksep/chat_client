@@ -22,7 +22,7 @@
         ]"
         role="button"
         tabindex="0"
-        :aria-label="`Contact ${contact.name}, ${contact.latestMessage ? contact.latestMessage : 'no recent message'}`"
+        :aria-label="`Contact ${contact.nickname}, ${contact.latestMessage ? contact.latestMessage : 'no recent message'}`"
         :aria-expanded="isOpen[contact.id] ? 'true' : 'false'"
         :aria-haspopup="true"
         @click.stop="handleClick(contact)"
@@ -32,9 +32,9 @@
       >
         <Avatar
           class="contact-list__avatar"
-          :initials="contact.name"
+          :initials="contact.nickname"
           :url="contact.avatarUrl"
-          :alt="`Avatar of ${contact.name}`"
+          :alt="`Avatar of ${contact.nickname}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           :style="{ '--size-avatar': '30px' }"
           is-icon
@@ -45,7 +45,7 @@
           class="contact-list__title"
           :data-testid="`${props.dataTestid}-ContactList-Title${index + 1}`"
         >
-          {{ contact.name }}
+          {{ contact.nickname }}
         </h5>
         <div
           class="contact-list__description"
@@ -115,8 +115,8 @@
           :data-testid="`${props.dataTestid}-ContactList-PinButton${index + 1}`"
           :aria-label="
             state.isPin[contact.id]
-              ? `Unpin ${contact.name}`
-              : `Pin ${contact.name}`
+              ? `Unpin ${contact.nickname}`
+              : `Pin ${contact.nickname}`
           "
         >
           <template v-if="!state.isPin[contact.id]"> Закрепить </template>
@@ -129,8 +129,8 @@
           :data-testid="`${props.dataTestid}-ContactList-NotificationButton${index + 1}`"
           :aria-label="
             state.isNotificationEnabled[contact.id]
-              ? `Disable notifications for ${contact.name}`
-              : `Enable notifications for ${contact.name}`
+              ? `Disable notifications for ${contact.nickname}`
+              : `Enable notifications for ${contact.nickname}`
           "
         >
           <template v-if="state.isNotificationEnabled[contact.id] ?? true">
