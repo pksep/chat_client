@@ -90,7 +90,7 @@ export const useUsers = () => {
 
       console.log(memberIDs);
 
-      const usersResponse = await IMSDK.getUsersInfo({ userIDList: memberIDs });
+      const usersResponse = await IMSDK.getUsersInfo(memberIDs);
 
       const resultUsers = usersResponse.data ?? [];
 
@@ -136,7 +136,7 @@ export const useUsers = () => {
         return users.value;
       }
 
-      const usersResponse = await IMSDK.getUsersInfo({ userIDList: memberIDs });
+      const usersResponse = await IMSDK.getUsersInfo(memberIDs);
 
       const resultUsers = usersResponse.data ?? [];
 
