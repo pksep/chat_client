@@ -154,7 +154,7 @@ const unmountContactClick = (contact: IContactProps | string): void => {
   } else {
     state.chapter = contact.nickname;
     emits('unmount-chapter', {
-      name: contact.nickname,
+      name: contact.name,
       contact: {
         id: contact.userId,
         nickname: contact.nickname,
