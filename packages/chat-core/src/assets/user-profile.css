@@ -18,6 +18,7 @@
 .user-profile__title {
   grid-area: title;
   color: var(--text-black);
+  margin-bottom: 5px;
   font-size: var(--font-size-title, 16px);
 }
 

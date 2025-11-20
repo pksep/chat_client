@@ -65,7 +65,6 @@ export const useLogin = async (params: LoginParams): Promise<LoginResponse> => {
 
   if (data?.data?.token) {
     setCookie('authToken', data.data.token, data.data.expireTimeSeconds);
-    console.log('Token saved to cookie');
   }
 
   return data;
@@ -73,7 +72,6 @@ export const useLogin = async (params: LoginParams): Promise<LoginResponse> => {
 
 export const useLogout = (): void => {
   removeCookie('authToken');
-  console.log('Token removed from cookie');
 };
 
 export const getAuthToken = (): string | null => {

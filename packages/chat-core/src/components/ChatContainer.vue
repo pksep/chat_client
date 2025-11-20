@@ -80,6 +80,7 @@ import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
 import NewGroupModal from './NewChat/NewGroupModal.vue';
 import { getGroupList } from '../services/useGroup';
+import { getConversationList } from '../services/useConversions';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
@@ -93,7 +94,9 @@ const state = reactive({
   contact: null,
   isNewContactOpen: false,
   isNewGroupOpen: false,
-  users: computed(() => getUsersList())
+  users: computed(() => getUsersList()),
+  groups: computed(() => getGroupList()),
+  conversations: computed(() => getConversationList())
 });
 
 const props = defineProps<IChatContainerProps>();
@@ -141,13 +144,32 @@ const unmountHeaderMenuChapter = (
   }
 };
 
+const findContactOrGroupById = (id: string) => {
+  const conversation = state.conversations.find(conv => conv.id === id);
+  if (!conversation) {
+    return state.groups.find(group => group.id === id);
+  }
+  return conversation;
+};
+
 const unmountMenuChapter = (
   config: { contact: IUserProps; groupId?: string } | string | null
 ): void => {
   if (typeof config === 'string') {
     state.chapter = config;
+    // Find the contact or group by id if needed
     if (config === 'ai') {
       state.contact = null;
+    } else {
+      // Try to find a user by the string ID
+      const foundContact = findContactOrGroupById(config);
+      if (foundContact) {
+        state.contact = foundContact;
+        state.chapter = config;
+      } else {
+        // If no contact is found, reset the contact
+        state.contact = null;
+      }
     }
   } else if (config && config.contact) {
     state.chapter = config.contact.nickname;

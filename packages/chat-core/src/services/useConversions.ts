@@ -41,7 +41,6 @@ export const manipulateConversationList = (conversations): IContactProps[] => {
 
   return conversations.map(c => {
     const user = users.find(user => user.id === c.userID);
-    console.log(user);
 
     return {
       id: c.conversationID,
@@ -68,8 +67,6 @@ export const manipulateConversationList = (conversations): IContactProps[] => {
 };
 
 const getConversationList = (): IContactProps[] => {
-  console.log(conversionStore.value);
-
   return conversionStore.value || [];
 };
 

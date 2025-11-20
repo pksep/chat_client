@@ -106,7 +106,9 @@ watch(
     isOpen.value = newVal;
     if (
       props.contact?.id &&
-      (props.contact?.groupId === undefined || props.contact?.groupId === null)
+      (props.contact?.groupId === undefined ||
+        props.contact?.groupId === null ||
+        props.contact?.groupId === '')
     ) {
       state.contacts = [props.contact];
       state.information = {
@@ -121,7 +123,7 @@ watch(
 
     if (props.contact) {
       state.information = {
-        name: props.contact.nickname,
+        name: props.contact.nickname || '',
         avatarUrl: props.contact.avatarUrl,
         date: new Date().toLocaleDateString()
       };
