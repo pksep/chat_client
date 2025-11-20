@@ -101,6 +101,13 @@ const handleContactClick = (): void => {
 // );
 
 watch(
+  () => props.contact,
+  async () => {
+    handleCloseMenu();
+  }
+);
+
+watch(
   () => props.open,
   async newVal => {
     isOpen.value = newVal;
