@@ -33,7 +33,7 @@
       class="chat__messages"
       ref="chatRef"
       @unmount-chapter="unmountMenuChapter"
-      @unmount-contact="unmountMenuChapter"
+      @unmount-contact="handleNewContact"
     />
     <MenuInfo
       class="chat__info"
@@ -157,7 +157,6 @@ const unmountMenuChapter = (
 ): void => {
   if (typeof config === 'string') {
     state.chapter = config;
-    // Find the contact or group by id if needed
     if (config === 'ai') {
       state.contact = null;
     } else {
