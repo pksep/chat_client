@@ -33,7 +33,7 @@
       class="chat__messages"
       ref="chatRef"
       @unmount-chapter="unmountMenuChapter"
-      @unmount-contact="unmountMenuChapter"
+      @unmount-contact="handleNewContactMessage"
     />
     <MenuInfo
       class="chat__info"
@@ -157,19 +157,12 @@ const unmountMenuChapter = (
 ): void => {
   if (typeof config === 'string') {
     state.chapter = config;
-    // Find the contact or group by id if needed
     if (config === 'ai') {
       state.contact = null;
     } else {
-      // Try to find a user by the string ID
       const foundContact = findContactOrGroupById(config);
-      if (foundContact) {
-        state.contact = foundContact;
-        state.chapter = config;
-      } else {
-        // If no contact is found, reset the contact
-        state.contact = null;
-      }
+      state.contact = { ...foundContact, conversionId: foundContact.id };
+      state.chapter = config;
     }
   } else if (config && config.contact) {
     state.chapter = config.contact.nickname;
@@ -211,6 +204,7 @@ const handleNewContactMessage = async (contact: IUserProps): Promise<void> => {
     ...contact,
     conversionId: `si_${smallerUserID}_${largerUserID}`
   };
+  console.log('contact:', state.contact);
 };
 
 const handleNewGroupMessage = async () => {
