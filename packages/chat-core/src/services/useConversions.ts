@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { IMSDK } from './useOpenIM';
 import { IContactProps } from '../components/interfaces/interfaces';
 import { setGroupList } from './useGroup';
+import { getUsersList } from '../composables/useUsers';
 
 const conversionStore = ref<IContactProps[]>([]);
 
@@ -35,15 +36,21 @@ const setPinConversation = async (
   }
 };
 
-export const manipulateConversationList = conversations => {
+export const manipulateConversationList = (conversations): IContactProps[] => {
+  const users = getUsersList();
+
   return conversations.map(c => {
+    const user = users.find(user => user.id === c.userID);
+    console.log(user);
+
     return {
       id: c.conversationID,
       userId: c.userID,
       nickname: c.showName,
       avatarUrl: c.faceURL,
       isPin: c.isPinned,
-      ex: c.ex,
+      tabel: user?.tabel || '',
+      initial: user?.initial || '',
       latestMessage: c.latestMsg
         ? JSON.parse(c.latestMsg)?.textElem?.content || ''
         : '',
@@ -61,6 +68,8 @@ export const manipulateConversationList = conversations => {
 };
 
 const getConversationList = (): IContactProps[] => {
+  console.log(conversionStore.value);
+
   return conversionStore.value || [];
 };
 

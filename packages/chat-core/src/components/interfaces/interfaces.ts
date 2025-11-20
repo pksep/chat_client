@@ -32,6 +32,8 @@ export interface IUserProps {
   conversionId?: string;
   groupId?: string;
   ex?: string;
+  tabel?: string;
+  initial?: string;
 }
 
 export interface IContactProps extends IUserProps {

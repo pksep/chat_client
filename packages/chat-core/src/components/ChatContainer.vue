@@ -16,7 +16,7 @@
       @unmount-chapter="unmountHeaderMenuChapter"
     />
     <Menu
-      :user="props.user"
+      :user="authUser"
       class="chat__menu"
       @unmount-collapse="handleCollapse"
       @unmount-new-contact="handleNewContact"
@@ -24,15 +24,16 @@
       @unmount-chapter="unmountMenuChapter"
     />
     <Chat
-      :user="props.user"
+      :user="authUser"
       :base-url="props.baseUrl"
-      :contacts="users.filter(user => user.id !== props.user.id)"
+      :contacts="state.users.filter(user => user.id !== authUser.id)"
       :chapter="state.chapter"
       :contact-id="state.contact?.id"
       :conversion-id="state.contact?.conversionId"
       class="chat__messages"
       ref="chatRef"
-      @unmount-chapter="unmountHeaderMenuChapter"
+      @unmount-chapter="unmountMenuChapter"
+      @unmount-contact="unmountMenuChapter"
     />
     <MenuInfo
       class="chat__info"
@@ -45,15 +46,15 @@
     />
   </main>
   <NewContactModal
-    :contacts="users.filter(user => user.id !== props.user.id)"
+    :contacts="state.users.filter(user => user.id !== authUser.id)"
     :open="state.isNewContactOpen"
     @unmount-close="closeModals"
     @unmount-new-contact="handleNewContactMessage"
   />
 
   <NewGroupModal
-    :user="props.user"
-    :contacts="users.filter(user => user.id !== props.user.id)"
+    :user="authUser"
+    :contacts="state.users.filter(user => user.id !== authUser.id)"
     :open="state.isNewGroupOpen"
     @unmount-close="closeModals"
     @unmount-new-group="handleNewGroupMessage"
@@ -69,7 +70,11 @@ import Chat from './Chat.vue';
 import MenuInfo from './MenuInfo.vue';
 import NewContactModal from './NewChat/NewContactModal.vue';
 import type { IChatContainerProps, IUserProps } from './interfaces/interfaces';
-import { useUsers } from '../composables/useUsers';
+import {
+  appendUserAttributes,
+  fetchAllUsers,
+  getUsersList
+} from '../composables/useUsers';
 import { isShowContactList } from '../composables/useShowContactList';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
@@ -87,12 +92,13 @@ const state = reactive({
   groupId: null,
   contact: null,
   isNewContactOpen: false,
-  isNewGroupOpen: false
+  isNewGroupOpen: false,
+  users: computed(() => getUsersList())
 });
 
 const props = defineProps<IChatContainerProps>();
 
-const { fetchAllUsers, users } = useUsers();
+const authUser = computed(() => appendUserAttributes(props.user));
 
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 
@@ -177,7 +183,7 @@ const handleClearClick = (): void => {
 
 const handleNewContactMessage = async (contact: IUserProps): Promise<void> => {
   state.chapter = contact.nickname;
-  const [smallerUserID, largerUserID] = [props.user.id, contact.id].sort();
+  const [smallerUserID, largerUserID] = [authUser.value.id, contact.id].sort();
 
   state.contact = {
     ...contact,

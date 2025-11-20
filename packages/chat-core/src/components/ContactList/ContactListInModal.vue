@@ -19,7 +19,7 @@
             avatar-alt="avatar of user"
             :class="['menu__user-profile', props.userClass ?? '']"
             :avatar-url="user.avatarUrl"
-            :ex="user.ex"
+            :tabel="user.tabel"
             :nickname="user.nickname"
             @unmount-click="openActivePopover(user.id.toString(), $event)"
           />

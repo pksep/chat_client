@@ -56,7 +56,7 @@ import InformationMenu from './InformationMenu.vue';
 import type { IMenuRightProps, IMenuEmits } from './interfaces/interfaces';
 import { MAX_W_XL } from '../utils/constants';
 
-import { useUsers } from '../composables/useUsers';
+import { fetchGroupMembers } from '../composables/useUsers';
 import { setGroupInfo } from '../services/useGroup';
 
 const props = withDefaults(defineProps<IMenuRightProps>(), {
@@ -85,8 +85,6 @@ const close = () => setState(false);
 const handleCloseMenu = (): void => {
   close();
 };
-
-const { fetchGroupMembers } = useUsers();
 
 const handleContactClick = (): void => {
   emits('unmount-new-contact', { isChapterOpen: true });
@@ -123,11 +121,13 @@ watch(
       };
     }
 
-    state.information = {
-      name: props.contact.nickname,
-      avatarUrl: props.contact.avatarUrl,
-      date: new Date().toLocaleDateString()
-    };
+    if (props.contact) {
+      state.information = {
+        name: props.contact.nickname,
+        avatarUrl: props.contact.avatarUrl,
+        date: new Date().toLocaleDateString()
+      };
+    }
   }
 );
 </script>

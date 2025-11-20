@@ -142,13 +142,7 @@ const unmountContactClick = (contact: IContactProps | string): void => {
 
       emits('unmount-chapter', {
         nickname: foundContact.nickname,
-        contact: {
-          id: foundContact.id,
-          ex: foundContact.ex,
-          avatarUrl: foundContact.avatarUrl || '',
-          nickname: foundContact.nickname || '',
-          conversionId: foundContact.conversionId || ''
-        }
+        contact: foundContact
       });
     }
   } else {
@@ -156,12 +150,9 @@ const unmountContactClick = (contact: IContactProps | string): void => {
     emits('unmount-chapter', {
       nickname: contact.nickname,
       contact: {
+        ...contact,
         id: contact.userId,
-        ex: contact.ex,
-        avatarUrl: contact.avatarUrl || '',
-        nickname: contact.nickname || '',
-        conversionId: contact.id || '',
-        groupId: contact.groupId || ''
+        conversionId: contact.id || ''
       }
     });
   }

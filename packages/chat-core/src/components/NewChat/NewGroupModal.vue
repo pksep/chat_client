@@ -188,7 +188,7 @@ const handleCreateGroup = async (): Promise<void> => {
 const handleOpenGroupInfo = async (): Promise<void> => {
   state.isSelectedMembers = true;
   if (!state.groupName) {
-    state.groupName = state.selectedContacts.map(c => c.name).join(', ');
+    state.groupName = state.selectedContacts.map(c => c.nickname).join(', ');
   }
 };
 

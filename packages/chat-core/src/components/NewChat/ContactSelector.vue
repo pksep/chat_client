@@ -9,7 +9,7 @@
         @click="handleNewContact(contact)"
       >
         <UserProfile
-          :ex="contact.ex"
+          :tabel="contact.tabel"
           :nickname="contact.nickname"
           :avatar-alt="contact.nickname"
         />
