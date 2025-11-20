@@ -27,11 +27,11 @@ const IMSDK: IMSDKType = (() => {
 
 if (import.meta.hot) {
   import.meta.hot.accept(() => {
-    console.log('[IMSDK] HMR: module hot reloaded (singleton preserved)');
+    // console.log('[IMSDK] HMR: module hot reloaded (singleton preserved)');
   });
 
   import.meta.hot.dispose(() => {
-    console.log('[IMSDK] HMR: dispose — SKIPPED (do not reset instance)');
+    // console.log('[IMSDK] HMR: dispose — SKIPPED (do not reset instance)');
   });
 }
 

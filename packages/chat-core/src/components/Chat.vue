@@ -75,8 +75,6 @@ const handleUnmountChapter = (
 };
 
 const handleUnmountContact = (contact: IUserProps): void => {
-  console.log(contact);
-
   emits('unmount-contact', contact);
 };
 

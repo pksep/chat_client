@@ -96,7 +96,7 @@ const handleChapter = (
 ): void => {
   if (typeof chapter === 'string') {
     emits('unmount-chapter', chapter);
-  } else if (chapter && chapter.nickname) {
+  } else if (chapter && chapter.contact.id) {
     emits('unmount-chapter', chapter);
   } else {
     emits('unmount-chapter', null);
