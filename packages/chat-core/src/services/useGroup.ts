@@ -1,9 +1,55 @@
 import { ref } from 'vue';
 import { IMSDK } from './useOpenIM';
-import { IContactProps } from '../components/interfaces/interfaces';
+import { IContactProps, IUserProps } from '../components/interfaces/interfaces';
 import { manipulateConversationList } from './useConversions';
+import { appendUserAttributes } from '../composables/useUsers';
 
 const groups = ref<IContactProps[]>([]);
+const groupMembers = ref<IUserProps[]>([]);
+
+export const fetchGroupMembers = async (
+  groupID: string
+): Promise<IUserProps[]> => {
+  try {
+    const response = await IMSDK.getGroupMemberList({
+      groupID,
+      filter: 0,
+      offset: 0,
+      count: 1000
+    });
+
+    const memberIDs = response.data?.map((m: any) => m.userID) ?? [];
+
+    if (memberIDs.length === 0) {
+      groupMembers.value = [];
+      return groupMembers.value;
+    }
+
+    const usersResponse = await IMSDK.getUsersInfo(memberIDs);
+
+    const resultUsers = usersResponse.data ?? [];
+
+    groupMembers.value = resultUsers.map(
+      (user: {
+        userID: string;
+        nickname: string;
+        ex: string;
+        faceURL: string;
+      }) =>
+        appendUserAttributes({
+          id: user.userID,
+          ex: user.ex,
+          nickname: user.nickname,
+          avatarUrl: user.faceURL
+        })
+    );
+
+    return groupMembers.value;
+  } catch (err) {
+    console.error('Failed to fetch group members:', err);
+    return [];
+  }
+};
 
 const createGroup = async (
   memberUserIDs: string[],

@@ -63,7 +63,6 @@ const setupOpenIM = (): void => {
   IMSDK.on(CbEvents.OnRecvNewMessages, evt => {
     try {
       const payload = evt?.data as any;
-
       if (!payload) return;
 
       let list: any[] = [];
@@ -77,8 +76,31 @@ const setupOpenIM = (): void => {
       }
 
       list.forEach((m: any) => {
-        const [smallerUserID, largerUserID] = [m.sendID, m.recvID].sort();
+        
+        // --- check for group creation/update ---
+        if (m.contentType === 1501 && m.notificationElem?.detail) {
+          const detail = JSON.parse(m.notificationElem.detail);
 
+          const members = detail.memberList || [];
+          const opUser = detail.opUser;
+
+          // если только один участник и operationTime ≈ createTime => создание
+          if (
+            members.length === 1 &&
+            detail.group?.createTime === detail.operationTime
+          ) {
+            console.log(
+              `Group created: ${detail.group.groupName} by ${opUser.nickname}`
+            );
+            return; // пропускаем appendMessageToLocal
+          } else {
+            console.log(`Group updated: ${detail.group.groupName}`);
+            return; // пропускаем appendMessageToLocal
+          }
+        }
+
+        // --- обычные сообщения ---
+        const [smallerUserID, largerUserID] = [m.sendID, m.recvID].sort();
         const convId = m.groupID
           ? `sg_${m.groupID}`
           : `si_${smallerUserID}_${largerUserID}`;

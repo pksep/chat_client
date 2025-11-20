@@ -55,9 +55,7 @@ import ContactListInModal from './ContactList/ContactListInModal.vue';
 import InformationMenu from './InformationMenu.vue';
 import type { IMenuRightProps, IMenuEmits } from './interfaces/interfaces';
 import { MAX_W_XL } from '../utils/constants';
-
-import { fetchGroupMembers } from '../composables/useUsers';
-import { setGroupInfo } from '../services/useGroup';
+import { fetchGroupMembers } from '../services/useGroup';
 
 const props = withDefaults(defineProps<IMenuRightProps>(), {
   open: false
@@ -90,17 +88,17 @@ const handleContactClick = (): void => {
   emits('unmount-new-contact', { isChapterOpen: true });
 };
 
-watch(
-  () => state.information,
-  () => {
-    if (props.contact?.groupId) {
-      setGroupInfo(props.contact?.groupId, {
-        groupName: props.contact.nickname,
-        faceURL: props.contact.avatarUrl
-      });
-    }
-  }
-);
+// watch(
+//   () => state.information,
+//   () => {
+//     if (props.contact?.groupId) {
+//       setGroupInfo(props.contact?.groupId, {
+//         groupName: props.contact.nickname,
+//         faceURL: props.contact.avatarUrl
+//       });
+//     }
+//   }
+// );
 
 watch(
   () => props.open,
