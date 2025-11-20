@@ -161,15 +161,9 @@ const unmountMenuChapter = (
     if (config === 'ai') {
       state.contact = null;
     } else {
-      // Try to find a user by the string ID
       const foundContact = findContactOrGroupById(config);
-      if (foundContact) {
-        state.contact = foundContact;
-        state.chapter = config;
-      } else {
-        // If no contact is found, reset the contact
-        state.contact = null;
-      }
+      state.contact = { ...foundContact, conversionId: foundContact.id };
+      state.chapter = config;
     }
   } else if (config && config.contact) {
     state.chapter = config.contact.nickname;
