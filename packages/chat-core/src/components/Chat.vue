@@ -60,14 +60,14 @@ const { state: isMobile } = useResizeState(MAX_W_MD);
 const messageListRef = useTemplateRef<any>(null);
 
 const handleUnmountChapter = (
-  chapter: { name: string; contact: any } | string | null
+  chapter: { nickname: string; contact: any } | string | null
 ): void => {
   if (typeof chapter === 'string') {
     state.chapter = chapter;
     emits('unmount-chapter', chapter);
-  } else if (chapter && chapter.name) {
-    state.chapter = chapter.name;
-    emits('unmount-chapter', chapter);
+  } else if (chapter && chapter.nickname) {
+    state.chapter = chapter.nickname;
+    emits('unmount-chapter', chapter.nickname);
   } else {
     state.chapter = null;
     emits('unmount-chapter', null);

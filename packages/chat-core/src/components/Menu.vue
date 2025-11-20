@@ -9,7 +9,7 @@
         />
         <Avatar
           v-if="isCollapse"
-          :initials="props.user?.name"
+          :initials="props.user?.nickname"
           :url="props.user?.avatarUrl"
           :alt="props.user?.avatarAlt"
           is-icon
@@ -141,12 +141,12 @@ const unmountContactClick = (contact: IContactProps | string): void => {
       state.chapter = foundContact.nickname;
 
       emits('unmount-chapter', {
-        name: foundContact.nickname,
+        nickname: foundContact.nickname,
         contact: {
           id: foundContact.id,
           ex: foundContact.ex,
           avatarUrl: foundContact.avatarUrl || '',
-          name: foundContact.name || '',
+          nickname: foundContact.nickname || '',
           conversionId: foundContact.conversionId || ''
         }
       });
@@ -154,12 +154,12 @@ const unmountContactClick = (contact: IContactProps | string): void => {
   } else {
     state.chapter = contact.nickname;
     emits('unmount-chapter', {
-      name: contact.nickname,
+      nickname: contact.nickname,
       contact: {
         id: contact.userId,
         ex: contact.ex,
         avatarUrl: contact.avatarUrl || '',
-        name: contact.name || '',
+        nickname: contact.nickname || '',
         conversionId: contact.id || '',
         groupId: contact.groupId || ''
       }

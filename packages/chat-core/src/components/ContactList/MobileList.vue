@@ -92,11 +92,11 @@ const emits = defineEmits<IMobileListEmits>();
 const isButtonDisabled = computed(() => state.checkUsers.size === 0);
 
 const handleChapter = (
-  chapter: { name: string; contact: IUserProps } | string | null
+  chapter: { nickname: string; contact: IUserProps } | string | null
 ): void => {
   if (typeof chapter === 'string') {
     emits('unmount-chapter', chapter);
-  } else if (chapter && chapter.name) {
+  } else if (chapter && chapter.nickname) {
     emits('unmount-chapter', chapter);
   } else {
     emits('unmount-chapter', null);
