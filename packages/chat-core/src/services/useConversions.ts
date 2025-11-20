@@ -40,10 +40,10 @@ export const manipulateConversationList = conversations => {
     return {
       id: c.conversationID,
       userId: c.userID,
-      name: c.showName,
+      nickname: c.showName,
       avatarUrl: c.faceURL,
       isPin: c.isPinned,
-      nickname: c.ex,
+      ex: c.ex,
       latestMessage: c.latestMsg
         ? JSON.parse(c.latestMsg)?.textElem?.content || ''
         : '',

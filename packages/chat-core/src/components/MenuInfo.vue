@@ -97,7 +97,7 @@ watch(
   () => {
     if (props.contact?.groupId) {
       setGroupInfo(props.contact?.groupId, {
-        groupName: props.contact.name,
+        groupName: props.contact.nickname,
         faceURL: props.contact.avatarUrl
       });
     }

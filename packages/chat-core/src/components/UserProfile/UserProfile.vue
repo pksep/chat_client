@@ -4,7 +4,7 @@
       :url="props.avatarUrl"
       :alt="props.avatarAlt"
       class="user-profile__avatar"
-      :initials="props.name"
+      :initials="props.nickname"
     />
     <h3 class="user-profile__title">{{ props.nickname }}</h3>
     <span class="user-profile__ex">@{{ props.groupId || props.ex }}</span>

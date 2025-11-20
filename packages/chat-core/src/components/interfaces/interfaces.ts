@@ -11,7 +11,7 @@ export interface IMenuEmits {
   (e: 'unmount-new-group', config: { isChapterOpen?: boolean }): void;
   (
     e: 'unmount-chapter',
-    config: { name: string; contact: IUserProps } | string | null
+    config: { nickname: string; contact: IUserProps } | string | null
   ): void;
   (e: 'unmount-user-add'): void;
 }

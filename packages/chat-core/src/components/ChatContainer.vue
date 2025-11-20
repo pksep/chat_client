@@ -190,7 +190,7 @@ const handleNewGroupMessage = async () => {
 
   state.contact = {
     conversionId: group.id,
-    name: group.name || group.nickname
+    name: group.nickname || group.nickname
   };
 
   state.groupId = group.id;
