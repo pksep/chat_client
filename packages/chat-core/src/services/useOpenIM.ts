@@ -76,7 +76,6 @@ const setupOpenIM = (): void => {
       }
 
       list.forEach((m: any) => {
-        
         // --- check for group creation/update ---
         if (m.contentType === 1501 && m.notificationElem?.detail) {
           const detail = JSON.parse(m.notificationElem.detail);
