@@ -22,9 +22,14 @@ h3.mobile__modal-header--title {
 }
 
 .modal-yui-kit__modal-content {
-  width: 370px;
   display: grid;
   align-content: start;
   gap: 10px;
   padding: 10px;
+}
+
+@media (width >= 28rem) {
+  .modal-yui-kit__modal-content {
+    width: 300px;
+  }
 }

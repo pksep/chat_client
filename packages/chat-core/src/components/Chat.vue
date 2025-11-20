@@ -2,7 +2,7 @@
   <section class="chat">
     <ContactListMobile
       class="chat__mobile"
-      :contacts="state.conversationList"
+      :contacts="props.contacts"
       :chapter="state.chapter"
       v-if="isMobile && isShowContactList(state.chapter)"
       @unmount-chapter="handleUnmountChapter"

@@ -37,7 +37,6 @@ const setPinConversation = async (
 
 export const manipulateConversationList = conversations => {
   return conversations.map(c => {
-    console.log(c);
     return {
       id: c.conversationID,
       userId: c.userID,

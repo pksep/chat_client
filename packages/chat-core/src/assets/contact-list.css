@@ -122,3 +122,9 @@ svg.icon-yui-kit.contact-list__read-icon {
 .menu__info-users-list > li {
   margin-top: 10px;
 }
+
+@media (width <= 28rem) {
+  .contact-selector__list {
+    max-height: 100%;
+  }
+}

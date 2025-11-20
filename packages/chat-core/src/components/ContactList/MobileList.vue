@@ -32,7 +32,9 @@
       :data-testid="`${props.dataTestid}-ChatList-Section`"
     >
       <ContactList
-        :contacts="props.contacts"
+        :contacts="
+          props.chapter === 'dialogs' ? state.contactList : state.groupList
+        "
         :data-testid="`${props.dataTestid}-ContactList`"
         @unmount-click="handleChapter"
       />
@@ -70,6 +72,8 @@ import type {
 import type { IUserProps } from '../interfaces/interfaces';
 import { Button, ButtonTypeEnum, Icon, IconNameEnum } from '@pksep/yui';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
+import { getConversationList } from '../../services/useConversions';
+import { getGroupList } from '../../services/useGroup';
 
 const props = withDefaults(defineProps<IMobileListProps>(), {
   contacts: () => [],
@@ -78,7 +82,9 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
 
 const state = reactive({
   showAddAccount: false,
-  checkUsers: new Set<string | number>()
+  checkUsers: new Set<string | number>(),
+  contactList: computed(() => getConversationList()),
+  groupList: computed(() => getGroupList())
 });
 
 const emits = defineEmits<IMobileListEmits>();

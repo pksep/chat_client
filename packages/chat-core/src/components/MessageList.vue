@@ -112,8 +112,6 @@ const {
   }
 );
 
-console.log(aiMessages.value);
-
 const messageChat = (role: string) => [
   'message__bubble',
   { message__other: role === 'user' }

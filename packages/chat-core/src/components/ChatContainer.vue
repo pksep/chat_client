@@ -5,7 +5,6 @@
       class="chat__header"
       :chapter="state.chapter"
       :contact="state.contact"
-      :members="users.filter(user => user.id !== props.user.id)"
       @unmount-click="handleHeaderClick"
       @unmount-exit="handleExit"
       @unmount-information="handleInformationClick"
@@ -27,6 +26,7 @@
     <Chat
       :user="props.user"
       :base-url="props.baseUrl"
+      :contacts="users.filter(user => user.id !== props.user.id)"
       :chapter="state.chapter"
       :contact-id="state.contact?.id"
       :conversion-id="state.contact?.conversionId"
@@ -36,7 +36,7 @@
     />
     <MenuInfo
       class="chat__info"
-      :open="state.isMenuDesktopOpen"
+      :open="state.isMenuDesktopOpen && !isMobile"
       :contact="state.contact"
       :active-tab-id="state.activeTabId"
       @unmount-collapse="handleMenuToggle"
@@ -166,7 +166,6 @@ const closeModals = (): void => {
 };
 
 const handleInformationClick = (): void => {
-  state.isMenuDesktopOpen = true;
   state.activeTabId = 2;
 };
 
@@ -191,7 +190,7 @@ const handleNewGroupMessage = async () => {
 
   state.contact = {
     conversionId: group.id,
-    nickname: group.name || group.nickname
+    name: group.name || group.nickname
   };
 
   state.groupId = group.id;

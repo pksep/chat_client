@@ -1,6 +1,7 @@
 <template>
   <!-- eslint-disable-next-line vue/html-self-closing-->
-  <chat-container :base-url="mastraUrl" :user.prop="user"> </chat-container>
+  <chat-container :base-url.prop="mastraUrl" :user.prop="user">
+  </chat-container>
 </template>
 <script lang="ts" setup>
 import './index';
