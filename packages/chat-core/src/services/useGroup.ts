@@ -67,16 +67,15 @@ const createGroup = async (
       memberUserIDs
     });
 
-    groups.value.unshift(
-      ...manipulateConversationList([
-        {
-          ...res.data,
-          showName: name,
-          createdTime: Date.now(),
-          conversationID: 'sg_' + res.data.groupID
-        }
-      ])
-    );
+    const group = {
+      ...res.data,
+      showName: name,
+      createdTime: Date.now(),
+      conversationID: 'sg_' + res.data.groupID
+    };
+
+    groups.value.unshift(...manipulateConversationList([group]));
+    return group;
   } catch (err) {
     console.error('Failed to get users with messages:', err);
   }
@@ -159,9 +158,20 @@ export const getGroupInfo = async (groupIDs: string[]) => {
       groupIDs
     });
 
-    const data = await response.json();
+    const apiResponse: {
+      errCode: number;
+      errMsg: string;
+      errDlt: string;
+      data: {
+        groupInfos: any;
+      };
+    } = await response.json();
 
-    return data.data.groupInfos;
+    if (apiResponse.errCode !== 0) {
+      throw new Error(`${apiResponse.errMsg} (${apiResponse.errDlt})`);
+    }
+
+    return apiResponse.data.groupInfos;
   } catch (err) {
     console.error('Failed to get group info:', err);
     throw err;

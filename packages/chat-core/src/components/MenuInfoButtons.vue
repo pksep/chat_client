@@ -11,7 +11,7 @@
         Звук выкл.
       </template>
       <template v-else>
-        <!-- <Icon :name="IconNameEnum.distrub" /> -->
+        <Icon :name="IconNameEnum.distrub" />
         Звук вкл.
       </template>
     </Button>
@@ -52,7 +52,7 @@ import { reactive } from 'vue';
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const state = reactive({
-  isMuted: false
+  isMuted: true
 });
 
 const emits = defineEmits(['unmount-leave', 'unmount-mute']);

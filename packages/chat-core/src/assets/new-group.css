@@ -53,3 +53,7 @@ button.button-yui-kit.new-contact__button-close {
     margin-bottom: 5px;
   }
 }
+
+.contact-selector {
+  display: grid;
+}

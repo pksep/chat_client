@@ -114,7 +114,7 @@ const props = withDefaults(defineProps<INewContactProps>(), {
 
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
-  (e: 'unmount-new-group');
+  (e: 'unmount-new-group', group: any): void;
 }>();
 
 const avatarInputRef = ref(null);
@@ -148,13 +148,16 @@ const onAvatarSelected = async (e: Event) => {
 
 const closeModal = (): void => {
   state.open = false;
-  state.openAddUser = false;
   emits('unmount-close');
 };
 
 const handleCreateGroup = async (): Promise<void> => {
-  await createGroup(state.checkUsers, state.groupName, state.avatarPreview);
-  emits('unmount-new-group');
+  const group = await createGroup(
+    state.checkUsers,
+    state.groupName,
+    state.avatarPreview
+  );
+  emits('unmount-new-group', group);
   closeModal();
 };
 

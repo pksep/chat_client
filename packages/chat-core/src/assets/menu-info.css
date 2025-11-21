@@ -109,6 +109,9 @@ button.button-yui-kit.large.menu-info__secondary-button {
   & svg.icon-yui-kit {
     color: var(--icon-color, var(--grey5));
   }
+  &:hover {
+    --icon-color: var(--blue1);
+  }
 }
 
 .tabs__navigation-content > section.menu__info-users {

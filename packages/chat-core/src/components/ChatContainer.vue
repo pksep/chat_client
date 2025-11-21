@@ -218,17 +218,17 @@ const handleNewContactMessage = async (contact: IUserProps): Promise<void> => {
   };
 };
 
-const handleNewGroupMessage = async () => {
-  const group = getGroupList()[0];
-
+const handleNewGroupMessage = async (group: any): Promise<void> => {
   state.contact = {
-    conversionId: group.id,
-    nickname: group.nickname
+    conversionId: group.conversationID,
+    nickname: group.showName,
+    groupId: group.groupID,
+    avatar: group.faceURL
   };
 
-  state.groupId = group.id;
+  state.groupId = group.groupID;
 
-  state.chapter = state.contact.nickname;
+  state.chapter = group.showName;
 };
 
 const handleChangeContact = (contact: IUserProps): void => {

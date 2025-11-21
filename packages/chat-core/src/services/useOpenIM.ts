@@ -81,20 +81,16 @@ const setupOpenIM = (): void => {
           const detail = JSON.parse(m.notificationElem.detail);
 
           const members = detail.memberList || [];
-          const opUser = detail.opUser;
+          // const opUser = detail.opUser;
 
           // если только один участник и operationTime ≈ createTime => создание
           if (
             members.length === 1 &&
             detail.group?.createTime === detail.operationTime
           ) {
-            console.log(
-              `Group created: ${detail.group.groupName} by ${opUser.nickname}`
-            );
-            return; // пропускаем appendMessageToLocal
+            return;
           } else {
-            console.log(`Group updated: ${detail.group.groupName}`);
-            return; // пропускаем appendMessageToLocal
+            return;
           }
         }
 
