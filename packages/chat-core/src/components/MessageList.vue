@@ -278,7 +278,8 @@ interface MessageWithNotification {
 const parseNotification = (message: MessageWithNotification) => {
   if (message.notificationElem?.detail) {
     const parsed = JSON.parse(message.notificationElem.detail);
-    return message.textElem?.content || parsed.group?.notification || '';
+    const notification = parsed.group?.notification || '';
+    return notification;
   }
   return message.textElem?.content || null;
 };

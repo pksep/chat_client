@@ -46,6 +46,7 @@
       class="chat__info"
       :open="state.isMenuDesktopOpen && !isMobile"
       :contact="state.contact"
+      :members="state.users.filter(user => user.id !== authUser.id)"
       :active-tab-id="state.activeTabId"
       :dataTestid="`${props.dataTestid}-ChatContainer-MenuInfo`"
       @unmount-collapse="handleMenuToggle"

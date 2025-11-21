@@ -54,6 +54,7 @@ export interface IMenuProps {
 }
 
 export interface IMenuRightProps extends IMenuProps {
+  members?: IUserProps[];
   activeTabId?: number;
   groupId?: string;
 }

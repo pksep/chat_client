@@ -6,7 +6,7 @@
     @close="closeModal"
   >
     <header class="new-contact__header">
-      Создать диалог
+      {{ props.title }}
       <Button
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.little"
@@ -24,7 +24,6 @@
       @unmount-checkbox="handleCheckbox"
     />
   </Modal>
-  <AddUser :open="state.openAddUser" @unmount-close="handleCloseAddUser" />
 </template>
 
 <script setup lang="ts">
@@ -38,12 +37,12 @@ import {
   Button
 } from '@pksep/yui';
 import ContactSelector from './ContactSelector.vue';
-import AddUser from './AddUser.vue';
 import type { INewContactProps } from './interfaces/new-contact';
 import { IUserProps } from '../interfaces/interfaces';
 
 const props = withDefaults(defineProps<INewContactProps>(), {
   open: false,
+  title: 'Создать диалог',
   contacts: () => []
 });
 
@@ -54,8 +53,7 @@ const emits = defineEmits<{
 
 const state = reactive({
   open: false,
-  checkUsers: new Set<string>(),
-  openAddUser: false
+  checkUsers: new Set<string>()
 });
 
 watch(
@@ -65,16 +63,8 @@ watch(
   }
 );
 
-watch(
-  () => state.openAddUser,
-  () => {
-    state.open = !state.openAddUser;
-  }
-);
-
 const closeModal = (): void => {
   state.open = false;
-  state.openAddUser = false;
   emits('unmount-close');
 };
 
@@ -89,9 +79,5 @@ const handleCheckbox = (isCheck: boolean, contactId: string): void => {
 const handleNewContact = (contact: IUserProps): void => {
   emits('unmount-new-contact', contact);
   closeModal();
-};
-
-const handleCloseAddUser = (): void => {
-  state.openAddUser = false;
 };
 </script>

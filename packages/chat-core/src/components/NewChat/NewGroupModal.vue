@@ -87,7 +87,6 @@
       </Button>
     </div>
   </Modal>
-  <AddUser :open="state.openAddUser" @unmount-close="handleCloseAddUser" />
 </template>
 
 <script setup lang="ts">
@@ -104,7 +103,6 @@ import {
   Tabs
 } from '@pksep/yui';
 import ContactSelector from './ContactSelector.vue';
-import AddUser from './AddUser.vue';
 import type { INewContactProps } from './interfaces/new-contact';
 import { createGroup } from '../../services/useGroup';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';
@@ -169,10 +167,6 @@ const handleCheckbox = (isCheck: boolean, contactId: string): void => {
   } else {
     state.checkUsers.delete(contactId);
   }
-};
-
-const handleCloseAddUser = (): void => {
-  state.openAddUser = false;
 };
 
 const handleCreateGroup = async (): Promise<void> => {

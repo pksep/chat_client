@@ -69,6 +69,12 @@
       </template>
     </Tabs>
   </aside>
+  <NewContactModal
+    :open="state.openAddUser"
+    :contacts="props.members"
+    @unnmount-close="handleCloseAddUserModal"
+    title="Добавить контакт"
+  />
 </template>
 
 <script lang="ts" setup>
@@ -88,6 +94,7 @@ import type { IMenuRightProps, IMenuEmits } from './interfaces/interfaces';
 import { MAX_W_XL } from '../utils/constants';
 import { fetchGroupMembers } from '../services/useGroup';
 import { IMSDK } from '../services/useOpenIM';
+import NewContactModal from './NewChat/NewContactModal.vue';
 
 const props = withDefaults(defineProps<IMenuRightProps>(), {
   open: false,
@@ -97,6 +104,7 @@ const props = withDefaults(defineProps<IMenuRightProps>(), {
 const emits = defineEmits<IMenuEmits>();
 
 const state = reactive({
+  openAddUser: false,
   contacts: [],
   information: null
 });
@@ -126,8 +134,9 @@ const handleUpdateInformation = (value: any) => {
   IMSDK.setGroupInfo({
     groupID: props.contact?.groupId,
     groupName: state.information?.name,
-    faceURL: props.contact.avatarUrl,
-    notification: `Поменяли название группы на ${props.contact?.groupId}`
+    faceURL: state.information?.avatarUrl,
+    //`Поменяли название группы на ${state.information?.name}`
+    notification: null
   });
 };
 
@@ -168,4 +177,8 @@ watch(
     }
   }
 );
+
+const handleCloseAddUserModal = () => {
+  state.openAddUser = false;
+};
 </script>
