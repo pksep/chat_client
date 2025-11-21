@@ -1,9 +1,10 @@
 <template>
-  <section class="chat">
+  <section class="chat" :data-testid="`${props.dataTestid}-Chat-Container`">
     <ContactListMobile
       class="chat__mobile"
       :contacts="props.contacts"
       :chapter="state.chapter"
+      :data-testid="`${props.dataTestid}-Chat-ContactListMobile`"
       v-if="isMobile && isShowContactList(state.chapter)"
       @unmount-chapter="handleUnmountChapter"
       @unmount-contact="handleUnmountContact"
@@ -16,6 +17,7 @@
       :contactId
       :conversionId
       :user
+      :data-testid="`${props.dataTestid}-Chat-MessageList`"
     />
   </section>
 </template>
@@ -37,8 +39,13 @@ import { onMounted } from 'vue';
 import type { IMenuEmits } from './interfaces/interfaces';
 import { IUserProps } from './interfaces/interfaces';
 
-const props = withDefaults(defineProps<IMessageListProps>(), {
-  chapter: null
+interface IChatProps extends IMessageListProps {
+  dataTestid?: string;
+}
+
+const props = withDefaults(defineProps<IChatProps>(), {
+  chapter: null,
+  dataTestid: () => 'Chat'
 });
 
 const emits = defineEmits<IMenuEmits>();

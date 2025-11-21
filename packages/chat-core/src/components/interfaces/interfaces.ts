@@ -2,6 +2,7 @@ export interface IHeaderProps {
   chapter?: string | null;
   contact?: IUserProps;
   members?: IUserProps[];
+  dataTestid?: string;
 }
 
 export interface IMenuEmits {
@@ -49,6 +50,7 @@ export interface IContactProps extends IUserProps {
 export interface IMenuProps {
   open?: boolean;
   contact?: IUserProps;
+  dataTestid?: string;
 }
 
 export interface IMenuRightProps extends IMenuProps {
@@ -60,4 +62,5 @@ export interface IChatContainerProps {
   token?: string;
   baseUrl?: string;
   user?: IUserProps;
+  dataTestid?: string;
 }

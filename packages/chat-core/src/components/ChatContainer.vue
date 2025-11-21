@@ -1,10 +1,14 @@
 <template>
-  <main :class="chatContainerClasses">
+  <main
+    :class="chatContainerClasses"
+    :data-testid="`${props.dataTestid}-ChatContainer-Container`"
+  >
     <Header
       v-if="!isShowContactList(state.chapter)"
       class="chat__header"
       :chapter="state.chapter"
       :contact="state.contact"
+      :dataTestid="`${props.dataTestid}-ChatContainer-Header`"
       @unmount-click="handleHeaderClick"
       @unmount-exit="handleExit"
       @unmount-information="handleInformationClick"
@@ -13,11 +17,13 @@
     <HeaderMenu
       class="chat__header-menu"
       v-else-if="isMobile"
+      :dataTestid="`${props.dataTestid}-ChatContainer-HeaderMenu`"
       @unmount-chapter="unmountHeaderMenuChapter"
     />
     <Menu
       :user="authUser"
       class="chat__menu"
+      :dataTestid="`${props.dataTestid}-ChatContainer-Menu`"
       @unmount-collapse="handleCollapse"
       @unmount-new-contact="handleNewContact"
       @unmount-new-group="handleNewGroup"
@@ -32,6 +38,7 @@
       :conversion-id="state.contact?.conversionId"
       class="chat__messages"
       ref="chatRef"
+      :dataTestid="`${props.dataTestid}-ChatContainer-Chat`"
       @unmount-chapter="unmountMenuChapter"
       @unmount-contact="handleNewContact"
     />
@@ -40,6 +47,7 @@
       :open="state.isMenuDesktopOpen && !isMobile"
       :contact="state.contact"
       :active-tab-id="state.activeTabId"
+      :dataTestid="`${props.dataTestid}-ChatContainer-MenuInfo`"
       @unmount-collapse="handleMenuToggle"
       @unmount-new-contact="handleNewContact"
       @unmount-new-group="handleNewGroup"
@@ -48,6 +56,7 @@
   <NewContactModal
     :contacts="state.users.filter(user => user.id !== authUser.id)"
     :open="state.isNewContactOpen"
+    :dataTestid="`${props.dataTestid}-ChatContainer-NewContactModal`"
     @unmount-close="closeModals"
     @unmount-new-contact="handleNewContactMessage"
   />
@@ -56,6 +65,7 @@
     :user="authUser"
     :contacts="state.users.filter(user => user.id !== authUser.id)"
     :open="state.isNewGroupOpen"
+    :dataTestid="`${props.dataTestid}-ChatContainer-NewGroupModal`"
     @unmount-close="closeModals"
     @unmount-new-group="handleNewGroupMessage"
   />
@@ -99,7 +109,9 @@ const state = reactive({
   conversations: computed(() => getConversationList())
 });
 
-const props = defineProps<IChatContainerProps>();
+const props = withDefaults(defineProps<IChatContainerProps>(), {
+  dataTestid: () => 'ChatContainer'
+});
 
 const authUser = computed(() => appendUserAttributes(props.user));
 

@@ -1,10 +1,20 @@
 <template>
-  <aside :class="menuClasses">
-    <div class="menu__start">
-      <div class="menu__profile">
+  <aside
+    :class="menuClasses"
+    :data-testid="`${props.dataTestid}-Menu-Container`"
+  >
+    <div
+      class="menu__start"
+      :data-testid="`${props.dataTestid}-Menu-StartContainer`"
+    >
+      <div
+        class="menu__profile"
+        :data-testid="`${props.dataTestid}-Menu-ProfileContainer`"
+      >
         <UserProfile
           v-bind="props.user"
           class="menu__user-profile"
+          :data-testid="`${props.dataTestid}-Menu-UserProfile`"
           v-show="!isCollapse"
         />
         <Avatar
@@ -13,53 +23,101 @@
           :url="props.user?.avatarUrl"
           :alt="props.user?.avatarAlt"
           is-icon
+          :data-testid="`${props.dataTestid}-Menu-ProfileAvatar`"
         />
         <Button
           :size="SizesEnum.small"
           :type="ButtonTypeEnum.ghost"
           class="menu__user-profile-collapse"
           @click="handleCollapse"
+          :data-testid="`${props.dataTestid}-Menu-CollapseButton`"
         >
           <Icon
             :name="IconNameEnum.sidebar"
             class="menu__user-profile-collapse-icon"
+            :data-testid="`${props.dataTestid}-Menu-CollapseIcon`"
           />
         </Button>
       </div>
-      <Line class="menu__user-line" />
-      <div :class="aiChapterClasses" @click="unmountContactClick('ai')">
-        <AiIconWrapper />
-        <h3 class="menu__user-assistant-title" v-if="!isCollapse">
+      <Line
+        class="menu__user-line"
+        :data-testid="`${props.dataTestid}-Menu-SeparatorLine`"
+      />
+      <div
+        :class="aiChapterClasses"
+        @click="unmountContactClick('ai')"
+        :data-testid="`${props.dataTestid}-Menu-AIAssistantContainer`"
+      >
+        <AiIconWrapper
+          :data-testid="`${props.dataTestid}-Menu-AIAssistantIcon`"
+        />
+        <h3
+          class="menu__user-assistant-title"
+          v-if="!isCollapse"
+          :data-testid="`${props.dataTestid}-Menu-AIAssistantTitle`"
+        >
           AI Ассистент
         </h3>
       </div>
       <template v-for="(item, index) in listChannels" :key="index">
-        <Line v-if="isCollapse" />
-        <details class="menu__user-details" v-if="!isCollapse" open>
-          <summary class="menu__user-details-summary">
-            <h4>{{ item.title }}</h4>
+        <Line
+          v-if="isCollapse"
+          :data-testid="`${props.dataTestid}-Menu-Line${index + 1}`"
+        />
+        <details
+          class="menu__user-details"
+          v-if="!isCollapse"
+          open
+          :data-testid="`${props.dataTestid}-Menu-Details${index + 1}`"
+        >
+          <summary
+            class="menu__user-details-summary"
+            :data-testid="`${props.dataTestid}-Menu-DetailsSummary${index + 1}`"
+          >
+            <h4
+              :data-testid="`${props.dataTestid}-Menu-DetailsTitle${index + 1}`"
+            >
+              {{ item.title }}
+            </h4>
             <Button
               :type="ButtonTypeEnum.ghost"
               :size="SizesEnum.little"
               @click="item.onClickPlusButton"
+              :data-testid="`${props.dataTestid}-Menu-PlusButton${index + 1}`"
             >
-              <Icon :name="IconNameEnum.plus" />
+              <Icon
+                :name="IconNameEnum.plus"
+                :data-testid="`${props.dataTestid}-Menu-PlusIcon${index + 1}`"
+              />
             </Button>
           </summary>
           <ContactList
             :contacts="item.items"
             @unmount-contact="unmountContactClick"
             :selected-contact-id="state.selectedContactId"
+            :data-testid="`${props.dataTestid}-Menu-ContactList${index + 1}`"
           />
         </details>
         <template v-if="isCollapse">
           <template v-for="(user, index) in state.contactList" :key="index">
-            <ul class="menu__user">
-              <li class="menu__user-avatar">
-                <Avatar :url="user.avatarUrl" :initials="user.nickname" />
+            <ul
+              class="menu__user"
+              :data-testid="`${props.dataTestid}-Menu-CollapsedUser${index + 1}`"
+            >
+              <li
+                class="menu__user-avatar"
+                :data-testid="`${props.dataTestid}-Menu-CollapsedAvatar${index + 1}`"
+              >
+                <Avatar
+                  :url="user.avatarUrl"
+                  :initials="user.nickname"
+                  :data-testid="`${props.dataTestid}-Menu-UserAvatar${index + 1}`"
+                />
               </li>
             </ul>
-            <Line />
+            <Line
+              :data-testid="`${props.dataTestid}-Menu-CollapsedLine${index + 1}`"
+            />
           </template>
         </template>
       </template>
@@ -70,8 +128,12 @@
       :type="ButtonTypeEnum.ghost"
       :size="SizesEnum.small"
       @click="pwaInstall"
+      :data-testid="`${props.dataTestid}-Menu-InstallButton`"
     >
-      <Icon :name="IconNameEnum.uploadCloud" />
+      <Icon
+        :name="IconNameEnum.uploadCloud"
+        :data-testid="`${props.dataTestid}-Menu-InstallIcon`"
+      />
       <template v-if="!isCollapse"> Загрузить на устройство </template>
     </Button>
   </aside>
@@ -104,7 +166,14 @@ import {
 } from '../services/useConversions';
 import { getGroupList } from '../services/useGroup';
 
-const props = withDefaults(defineProps<{ user: IUserProps }>(), {});
+interface IMenuProps {
+  user: IUserProps;
+  dataTestid?: string;
+}
+
+const props = withDefaults(defineProps<IMenuProps>(), {
+  dataTestid: () => 'Menu'
+});
 
 const state = reactive({
   chapter: '',

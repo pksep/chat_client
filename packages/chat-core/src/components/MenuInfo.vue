@@ -1,25 +1,48 @@
 <template>
-  <aside :class="menuInfoClasses" v-if="props.open">
-    <header class="menu-info__header">
-      <h4>{{ props.contact?.nickname || 'Общий' }}</h4>
+  <aside
+    :class="menuInfoClasses"
+    v-if="props.open"
+    :data-testid="`${props.dataTestid}-MenuInfo-Container`"
+  >
+    <header
+      class="menu-info__header"
+      :data-testid="`${props.dataTestid}-MenuInfo-Header`"
+    >
+      <h4 :data-testid="`${props.dataTestid}-MenuInfo-Title`">
+        {{ props.contact?.nickname || 'Общий' }}
+      </h4>
       <Button
         class="menu-info__close-button"
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.little"
         @click="handleCloseMenu"
+        :data-testid="`${props.dataTestid}-MenuInfo-CloseButton`"
       >
-        <Icon :name="IconNameEnum.crossLarge" class="menu-info__close-icon" />
+        <Icon
+          :name="IconNameEnum.crossLarge"
+          class="menu-info__close-icon"
+          :data-testid="`${props.dataTestid}-MenuInfo-CloseIcon`"
+        />
       </Button>
     </header>
     <Tabs
       :tab-count="2"
       :default-active-tab-id="props.activeTabId"
       class="menu-info__tabs"
+      :data-testid="`${props.dataTestid}-MenuInfo-Tabs`"
     >
       <template #header1>
-        <span class="menu-info__user-header">
+        <span
+          class="menu-info__user-header"
+          :data-testid="`${props.dataTestid}-MenuInfo-Tab1Header`"
+        >
           Участники
-          <div class="menu-info__user-count">{{ state.contacts.length }}</div>
+          <div
+            class="menu-info__user-count"
+            :data-testid="`${props.dataTestid}-MenuInfo-UserCount`"
+          >
+            {{ state.contacts.length }}
+          </div>
         </span>
       </template>
       <template #header2> Информация </template>
@@ -27,14 +50,19 @@
         <ContactListInModal
           :contacts="state.contacts"
           @unmount-click-add-button="handleContactClick"
+          :data-testid="`${props.dataTestid}-MenuInfo-ContactListInModal`"
         />
       </template>
       <template #tab2>
-        <section class="menu-info__info-section">
+        <section
+          class="menu-info__info-section"
+          :data-testid="`${props.dataTestid}-MenuInfo-InfoSection`"
+        >
           <slot name="information-menu">
             <InformationMenu
               :model-value="state.information"
               @update:model-value="handleUpdateInformation"
+              :data-testid="`${props.dataTestid}-MenuInfo-InformationMenu`"
             />
           </slot>
         </section>
@@ -62,7 +90,8 @@ import { fetchGroupMembers } from '../services/useGroup';
 import { IMSDK } from '../services/useOpenIM';
 
 const props = withDefaults(defineProps<IMenuRightProps>(), {
-  open: false
+  open: false,
+  dataTestid: () => 'MenuInfo'
 });
 
 const emits = defineEmits<IMenuEmits>();

@@ -1,41 +1,71 @@
 <template>
-  <header class="chat__header" @click="handleClickHeader">
+  <header
+    class="chat__header"
+    @click="handleClickHeader"
+    :data-testid="`${props.dataTestid}-Header-Container`"
+  >
     <Button
       v-if="isMobile"
       :type="ButtonTypeEnum.ghost"
       :size="SizesEnum.small"
       @click.stop="handleExit"
+      :data-testid="`${props.dataTestid}-Header-BackButton`"
     >
-      <Icon class="medium-icon" :name="IconNameEnum.arrowLeft" />
+      <Icon
+        class="medium-icon"
+        :name="IconNameEnum.arrowLeft"
+        :data-testid="`${props.dataTestid}-Header-BackIcon`"
+      />
     </Button>
     <div
       class="chat__header-profile chat__header-ai-assistant"
       v-if="props.chapter === 'ai'"
+      :data-testid="`${props.dataTestid}-Header-AIAssistant`"
     >
-      <AiIconWrapper />
-      <h3>Ai Ассистент</h3>
+      <AiIconWrapper
+        :data-testid="`${props.dataTestid}-Header-AIAssistantIcon`"
+      />
+      <h3 :data-testid="`${props.dataTestid}-Header-AIAssistantTitle`">
+        Ai Ассистент
+      </h3>
     </div>
     <UserProfile
       class="chat__header-profile"
       avatar-alt="user-profile-alt"
       v-bind="props.contact"
+      :data-testid="`${props.dataTestid}-Header-UserProfile`"
       v-else
     />
-    <div class="chat__header-buttons" v-if="!isMobile">
+    <div
+      class="chat__header-buttons"
+      v-if="!isMobile"
+      :data-testid="`${props.dataTestid}-Header-ButtonsContainer`"
+    >
       <Search
         v-if="state.isSearchInputEnable"
         class="chat__header-search"
         @click.stop
+        :data-testid="`${props.dataTestid}-Header-SearchInput`"
       />
       <Button
         v-if="!state.isSearchInputEnable"
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.small"
         @click.stop="showSearch"
+        :data-testid="`${props.dataTestid}-Header-SearchButton`"
       >
-        <Icon class="small-icon" :name="IconNameEnum.search" />
+        <Icon
+          class="small-icon"
+          :name="IconNameEnum.search"
+          :data-testid="`${props.dataTestid}-Header-SearchIcon`"
+        />
       </Button>
-      <Popover @click.stop :options="getPopoverOptions" isWCUse />
+      <Popover
+        @click.stop
+        :options="getPopoverOptions"
+        isWCUse
+        :data-testid="`${props.dataTestid}-Header-Popover`"
+      />
     </div>
   </header>
   <MobileModal
@@ -43,19 +73,41 @@
     title="Канал"
     close-button-text="Назад"
     @unmount-close="handleCloseMobileInfoModal"
+    :data-testid="`${props.dataTestid}-Header-MobileModal`"
   >
-    <div class="modal-info-mobile__start">
-      <Avatar is-icon class="modal-info-mobile__avatar" />
-      <NewChatInformationForm :name="state.group.name">
+    <div
+      class="modal-info-mobile__start"
+      :data-testid="`${props.dataTestid}-Header-ModalStartContainer`"
+    >
+      <Avatar
+        is-icon
+        class="modal-info-mobile__avatar"
+        :data-testid="`${props.dataTestid}-Header-ModalAvatar`"
+      />
+      <NewChatInformationForm
+        :name="state.group.name"
+        :data-testid="`${props.dataTestid}-Header-InformationForm`"
+      >
         <template #button> {{}} </template>
       </NewChatInformationForm>
     </div>
-    <div class="modal-info-mobile__end">
-      <MenuInfoButtons />
-      <p class="modal-info-mobile__end--paragraph">Участники:</p>
+    <div
+      class="modal-info-mobile__end"
+      :data-testid="`${props.dataTestid}-Header-ModalEndContainer`"
+    >
+      <MenuInfoButtons
+        :data-testid="`${props.dataTestid}-Header-MenuInfoButtons`"
+      />
+      <p
+        class="modal-info-mobile__end--paragraph"
+        :data-testid="`${props.dataTestid}-Header-ParticipantsLabel`"
+      >
+        Участники:
+      </p>
       <ContactListInModal
         :contacts="state.group.members"
         class="modal-info-mobile__contact-list"
+        :data-testid="`${props.dataTestid}-Header-ContactListInModal`"
       />
     </div>
   </MobileModal>
@@ -84,7 +136,9 @@ import NewChatInformationForm from '../NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from '../MenuInfoButtons.vue';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';
 
-const props = withDefaults(defineProps<IHeaderProps>(), {});
+const props = withDefaults(defineProps<IHeaderProps>(), {
+  dataTestid: () => 'Header'
+});
 
 const state = reactive({
   openMobileInfoModal: false,

@@ -4,11 +4,22 @@
       class="chat__message-wrapper"
       ref="chatWrapperRef"
       v-if="aiMessages.length"
+      :data-testid="`${props.dataTestid}-MessageList-AIMessagesWrapper`"
     >
-      <div class="chat__message-bubble">
+      <div
+        class="chat__message-bubble"
+        :data-testid="`${props.dataTestid}-MessageList-AIMessagesContainer`"
+      >
         <template v-for="(message, index) in aiMessages" :key="index">
-          <div v-if="isNewDate(index, true)" class="date-divider">
-            <span>{{ formatDay(message.timestamp) }}</span>
+          <div
+            v-if="isNewDate(index, true)"
+            class="date-divider"
+            :data-testid="`${props.dataTestid}-MessageList-DateDividerAI${index + 1}`"
+          >
+            <span
+              :data-testid="`${props.dataTestid}-MessageList-DateLabelAI${index + 1}`"
+              >{{ formatDay(message.timestamp) }}</span
+            >
           </div>
 
           <MessageBubble
@@ -18,6 +29,7 @@
             :time="formatTime(new Date(message.timestamp))"
             :loader="message.loading"
             :is-me-sender="message.role === 'user'"
+            :data-testid="`${props.dataTestid}-MessageList-MessageBubbleAI${index + 1}`"
           />
         </template>
       </div>
@@ -28,14 +40,25 @@
     v-else-if="state.messages.length"
     ref="chatWrapperRef"
     @scroll="handleScroll"
+    :data-testid="`${props.dataTestid}-MessageList-UserMessagesWrapper`"
   >
-    <div class="chat__message-bubble">
+    <div
+      class="chat__message-bubble"
+      :data-testid="`${props.dataTestid}-MessageList-UserMessagesContainer`"
+    >
       <template
         v-for="(message, index) in state.messages"
         :key="message.clientMsgID"
       >
-        <div v-if="isNewDate(index)" class="date-divider">
-          <span>{{ formatDay(message.sendTime) }}</span>
+        <div
+          v-if="isNewDate(index)"
+          class="date-divider"
+          :data-testid="`${props.dataTestid}-MessageList-DateDividerUser${index + 1}`"
+        >
+          <span
+            :data-testid="`${props.dataTestid}-MessageList-DateLabelUser${index + 1}`"
+            >{{ formatDay(message.sendTime) }}</span
+          >
         </div>
 
         {{ message }}
@@ -49,16 +72,26 @@
           :time="formatTime(new Date(message.sendTime))"
           :sender="message.senderNickname"
           :avatar="message.senderFaceUrl"
+          :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
         />
       </template>
     </div>
   </div>
   <EmptyChat
     :chapter="props.chapter"
+    :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
     v-if="!state.messages.length && !aiMessages.length"
   />
-  <div class="chat__input" v-if="props.chapter">
-    <ContentEditor v-model="inputText" @unmount-send="handleSend" />
+  <div
+    class="chat__input"
+    v-if="props.chapter"
+    :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
+  >
+    <ContentEditor
+      v-model="inputText"
+      @unmount-send="handleSend"
+      :data-testid="`${props.dataTestid}-MessageList-ContentEditor`"
+    />
   </div>
 </template>
 
@@ -90,8 +123,13 @@ import {
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
 
-const props = withDefaults(defineProps<IMessageListProps>(), {
-  chapter: null
+interface IMessageListExtendedProps extends IMessageListProps {
+  dataTestid?: string;
+}
+
+const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
+  chapter: null,
+  dataTestid: () => 'MessageList'
 });
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
