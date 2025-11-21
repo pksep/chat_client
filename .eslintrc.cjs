@@ -10,7 +10,14 @@ module.exports = {
     'plugin:@typescript-eslint/recommended',
     'plugin:prettier/recommended'
   ],
-  ignorePatterns: ['**/target', '**/gen', '**/dist', '**/build', '**/dev-dist'],
+  ignorePatterns: [
+    '**/target',
+    '**/gen',
+    '**/dist',
+    '**/build',
+    '**/dev-dist',
+    '**/wasm_exec.js'
+  ],
   overrides: [
     {
       env: {

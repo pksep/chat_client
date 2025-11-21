@@ -41,6 +41,21 @@ p.chat__nothing-paragraph {
   gap: 25px;
 }
 
+.date-divider {
+  text-align: center;
+  position: sticky;
+  top: 0;
+
+  & > span {
+    color: var(--grey6);
+    background-color: var(--grey11);
+    padding: 5px 10px;
+    font-weight: 700;
+    font-size: 14px;
+    border-radius: 10px;
+  }
+}
+
 .menu__user-assistant {
   &:hover,
   &.menu__user-assistant--active {

@@ -25,11 +25,12 @@ export default defineConfig(({ mode }) => {
               fileName: 'chat-container'
             },
             rollupOptions: {
-              external: ['vue', '@pksep/yui'],
+              external: ['vue', '@pksep/yui', '@openim/wasm-client-sdk'],
               output: {
                 globals: {
                   vue: 'Vue',
-                  '@pksep/yui': '@pksep/yui'
+                  '@pksep/yui': '@pksep/yui',
+                  '@openim/wasm-client-sdk': '@openim/wasm-client-sdk'
                 }
               }
             }
@@ -56,6 +57,9 @@ export default defineConfig(({ mode }) => {
         ? [
             VitePWA({
               registerType: 'autoUpdate',
+              workbox: {
+                maximumFileSizeToCacheInBytes: 50 * 1024 * 1024 // 50MB
+              },
               mode: env.MODE === 'dev' ? 'development' : 'production',
               manifest: {
                 name: 'sep-chat',

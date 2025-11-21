@@ -8,6 +8,11 @@ aside.menu-info {
   }
 }
 
+section.menu__info-users {
+  display: grid;
+  gap: 10px;
+}
+
 header.menu-info__header {
   display: flex;
   padding: 10px;
@@ -76,6 +81,10 @@ div.menu-info__buttons {
   display: flex;
   width: 100%;
   justify-content: center;
+  & .avatar-yui-kit {
+    min-width: 85px !important;
+    min-height: 85px !important;
+  }
 }
 
 svg.icon-yui-kit.menu-info__close-icon {
@@ -88,4 +97,23 @@ button.menu-info__close-button {
 
 button.tabs__navigation-button {
   margin-inline: 20px !important;
+}
+
+button.button-yui-kit.large.menu-info__secondary-button {
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  padding-block: 10px;
+  color: var(--text-black);
+  & svg.icon-yui-kit {
+    color: var(--icon-color, var(--grey5));
+  }
+}
+
+.tabs__navigation-content > section.menu__info-users {
+  padding-block: 10px;
+}
+
+aside.menu-info .tabs__navigation-content > section.menu__info-users {
+  padding-inline: 20px;
 }

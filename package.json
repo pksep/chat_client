@@ -17,7 +17,6 @@
     "@pksep/chat-core": "workspace:*",
     "@rushstack/eslint-patch": "^1.12.0",
     "@vue/eslint-config-airbnb": "^8.0.0",
-    "sep-yui": "link:local-packages/sep-yui",
     "vite-plugin-dts": "^4.5.4",
     "vue": "^3.5.18",
     "vue-eslint-parser": "^9.4.3"
@@ -28,6 +27,7 @@
     "@typescript-eslint/parser": "^7.18.0",
     "@vitejs/plugin-vue": "^6.0.1",
     "babel-eslint": "^10.1.0",
+    "cross-env": "^10.1.0",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.2",
     "eslint-plugin-prettier": "^5.5.4",

@@ -11,39 +11,37 @@
   border-bottom-color: var(--border-grey);
 }
 
-.new-contact__item {
+button.button-yui-kit.new-contact__button-close {
+  padding-block: 5px;
+  padding-inline: 0;
+}
+
+.contact-selector__item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 15px;
-  padding-inline: 10px;
-  margin-top: 5px;
+  padding: 10px;
   & .checkbox-yui-kit {
     justify-self: flex-end;
   }
 }
 
-.new-contact__search {
+.contact-selector__search {
   padding: 10px;
   margin-bottom: 5px;
 }
 
-.new-contact__list {
+.contact-selector__list {
   display: grid;
   gap: 8px;
-  padding: 10px;
 }
 
-.new-contact__section {
+.contact-selector__section {
   display: grid;
 }
 
-.new-contact__button-close {
-  padding-block: 5px;
-  padding-inline: 0;
-}
-
-.new-contact__add {
+.contact-selector__add {
   margin-right: 10px;
   margin-bottom: 10px;
   justify-self: end;

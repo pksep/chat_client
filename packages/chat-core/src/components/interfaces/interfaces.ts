@@ -1,11 +1,19 @@
 export interface IHeaderProps {
   chapter?: string | null;
+  contact?: IUserProps;
+  members?: IUserProps[];
+  dataTestid?: string;
 }
 
 export interface IMenuEmits {
+  (e: 'unmount-contact', contact: IUserProps): void;
   (e: 'unmount-collapse', isCollapse: boolean): void;
-  (e: 'unmount-new-contact', isNewContact: boolean): void;
-  (e: 'unmount-chapter', config: { name: string } | null): void;
+  (e: 'unmount-new-contact', config: { isChapterOpen?: boolean }): void;
+  (e: 'unmount-new-group', config: { isChapterOpen?: boolean }): void;
+  (
+    e: 'unmount-chapter',
+    config: { nickname: string; contact: IUserProps } | string | null
+  ): void;
   (e: 'unmount-user-add'): void;
 }
 
@@ -21,19 +29,38 @@ export interface IUserProps {
   id?: string;
   avatarUrl?: string;
   avatarAlt?: string;
-  name?: string;
   nickname?: string;
+  conversionId?: string;
+  groupId?: string;
+  ex?: string;
+  tabel?: string;
+  initial?: string;
+}
+
+export interface IContactProps extends IUserProps {
+  latestMessage?: string;
+  isRead?: boolean;
+  latestMessageTime?: number;
+  notificationCount?: number;
+  isPin?: boolean;
+  groupId?: string;
+  userId?: string;
 }
 
 export interface IMenuProps {
   open?: boolean;
+  contact?: IUserProps;
+  dataTestid?: string;
 }
 
 export interface IMenuRightProps extends IMenuProps {
-  user?: IUserProps;
+  activeTabId?: number;
+  groupId?: string;
 }
 
 export interface IChatContainerProps {
+  token?: string;
   baseUrl?: string;
   user?: IUserProps;
+  dataTestid?: string;
 }

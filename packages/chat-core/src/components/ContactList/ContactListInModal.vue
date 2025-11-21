@@ -1,51 +1,53 @@
 <template>
-  <section class="menu__info-users">
-    <article>
-      <Button
-        :type="ButtonTypeEnum.secondary"
-        class="button-menu__info menu__info-add-user"
-        :size="SizesEnum.large"
-        @click="addUser"
-      >
-        <Icon :name="IconNameEnum.addUser" class="menu__info-add-user-icon" />
-        Добавить участника
-      </Button>
-      <ul class="menu__info-users-list">
-        <li>
+  <section :class="['menu__info-users', props.class]">
+    <Button
+      :type="ButtonTypeEnum.secondary"
+      :class="[
+        'button-menu__info menu__info-add-user',
+        props.addButtonClass ?? ''
+      ]"
+      :size="SizesEnum.large"
+      @click="addUser"
+    >
+      <Icon :name="IconNameEnum.addUser" class="menu__info-add-user-icon" />
+      Добавить участника
+    </Button>
+    <ul :class="['menu__info-users-list', props.listClass ?? '']">
+      <li v-for="(user, index) in props.contacts" :key="index">
+        <template v-if="user">
           <UserProfile
-            avatar-url="/avatar-user.png"
             avatar-alt="avatar of user"
-            name="Zakk Wylde"
-            class="menu__user-profile"
-            nickname="@wyldetheguy"
-            @unmount-click="openActivePopover"
+            :class="['menu__user-profile', props.userClass ?? '']"
+            :avatar-url="user.avatarUrl"
+            :tabel="user.tabel"
+            :nickname="user.nickname"
+            @unmount-click="openActivePopover(user.id.toString(), $event)"
           />
-        </li>
-      </ul>
-      <ContextMenu
-        :visible="isOpen"
-        :position="position"
-        @unmount-close="closeActivePopover"
-      >
-        <template #default>
-          <Button
-            class="menu__info-button-little"
-            :type="ButtonTypeEnum.ghost"
-            :size="SizesEnum.little"
-            @click="closeActivePopover"
+          <ContextMenu
+            :visible="isOpen[user.id.toString()]"
+            :position="position"
+            @unmount-close="closeActivePopover(user.id.toString())"
           >
-            Удалить из канала
-          </Button>
+            <template #default>
+              <Button
+                class="menu__info-button-little"
+                :type="ButtonTypeEnum.ghost"
+                :size="SizesEnum.little"
+                @click="closeActivePopover(user.id.toString())"
+              >
+                Удалить из канала
+              </Button>
+            </template>
+          </ContextMenu>
         </template>
-      </ContextMenu>
-    </article>
+      </li>
+    </ul>
   </section>
-  <Teleport to="body">
-    <NewContactModal
-      :open="newContactOpen"
-      @unmount-close="closeContactModal"
-    />
-  </Teleport>
+  <NewContactModal
+    :contacts="props.contacts"
+    :open="newContactOpen"
+    @unmount-close="closeContactModal"
+  />
 </template>
 
 <script setup lang="ts">
@@ -58,9 +60,25 @@ import {
 } from '@pksep/yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import { ref } from 'vue';
-import NewContactModal from '../NewChat/NewContact.vue';
+import NewContactModal from '../NewChat/NewContactModal.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
+import { IContactListProps } from './interfaces/contact-list';
+
+const props = withDefaults(defineProps<IContactListProps>(), {
+  contacts: () => [
+    {
+      id: '1',
+      name: 'John Doe',
+      nickname: 'jd',
+      avatarUrl: '/avatar.jpg'
+    }
+  ]
+});
+
+const emits = defineEmits<{
+  (e: 'unmount-click-add-button'): void;
+}>();
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
@@ -68,7 +86,8 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
 const newContactOpen = ref(false);
 
 const addUser = (): void => {
-  newContactOpen.value = true;
+  emits('unmount-click-add-button');
+  // newContactOpen.value = true;
 };
 
 const closeContactModal = (): void => {

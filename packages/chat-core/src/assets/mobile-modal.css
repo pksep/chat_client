@@ -1,0 +1,35 @@
+.mobile__modal-header {
+  display: flex;
+  align-items: center;
+  align-content: center;
+  padding: 10px 5px;
+}
+
+button.mobile__modal-header--button {
+  font-size: 16px;
+  color: var(--text-blue);
+  line-height: 100%;
+  letter-spacing: 0;
+}
+
+h3.mobile__modal-header--title {
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 100%;
+  letter-spacing: 0;
+  font-size: 16px;
+  color: var(--text-black);
+}
+
+.modal-yui-kit__modal-content {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 10px;
+}
+
+@media (width >= 28rem) {
+  .modal-yui-kit__modal-content {
+    width: 387px;
+  }
+}

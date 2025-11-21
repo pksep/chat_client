@@ -1,0 +1,25 @@
+.mobile-list-container {
+  display: grid;
+  min-height: calc(var(--default-height) - 42px);
+}
+
+button.mobile__list-button {
+  align-self: end;
+  justify-self: end;
+  margin: 12px 10px;
+  max-height: 56px;
+}
+
+.mobile__list-modal__contact-selector {
+  display: grid;
+  gap: 10px;
+}
+
+.contact-selector-modal__content {
+  padding: 10px;
+}
+
+.contact-selector-modal__contact-selector {
+  display: grid;
+  gap: 10px;
+}

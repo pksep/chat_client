@@ -1,68 +1,69 @@
 <template>
-  <aside :class="menuInfoClasses" v-if="props.open">
-    <header class="menu-info__header">
-      <h4>Общий</h4>
+  <aside
+    :class="menuInfoClasses"
+    v-if="props.open"
+    :data-testid="`${props.dataTestid}-MenuInfo-Container`"
+  >
+    <header
+      class="menu-info__header"
+      :data-testid="`${props.dataTestid}-MenuInfo-Header`"
+    >
+      <h4 :data-testid="`${props.dataTestid}-MenuInfo-Title`">
+        {{ props.contact?.nickname || 'Общий' }}
+      </h4>
       <Button
         class="menu-info__close-button"
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.little"
         @click="handleCloseMenu"
+        :data-testid="`${props.dataTestid}-MenuInfo-CloseButton`"
       >
-        <Icon :name="IconNameEnum.crossLarge" class="menu-info__close-icon" />
+        <Icon
+          :name="IconNameEnum.crossLarge"
+          class="menu-info__close-icon"
+          :data-testid="`${props.dataTestid}-MenuInfo-CloseIcon`"
+        />
       </Button>
     </header>
-    <Tabs :tabCount="2">
+    <Tabs
+      :tab-count="2"
+      :default-active-tab-id="props.activeTabId"
+      class="menu-info__tabs"
+      :data-testid="`${props.dataTestid}-MenuInfo-Tabs`"
+    >
       <template #header1>
-        <span class="menu-info__user-header">
+        <span
+          class="menu-info__user-header"
+          :data-testid="`${props.dataTestid}-MenuInfo-Tab1Header`"
+        >
           Участники
-          <div class="menu-info__user-count">8</div>
+          <div
+            class="menu-info__user-count"
+            :data-testid="`${props.dataTestid}-MenuInfo-UserCount`"
+          >
+            {{ state.contacts.length }}
+          </div>
         </span>
       </template>
       <template #header2> Информация </template>
       <template #tab1>
-        <ContactListInModal @unmount-user-add="unmountUserAdd" />
+        <ContactListInModal
+          :contacts="state.contacts"
+          @unmount-click-add-button="handleContactClick"
+          :data-testid="`${props.dataTestid}-MenuInfo-ContactListInModal`"
+        />
       </template>
       <template #tab2>
-        <section class="menu-info__info-section">
+        <section
+          class="menu-info__info-section"
+          :data-testid="`${props.dataTestid}-MenuInfo-InfoSection`"
+        >
           <slot name="information-menu">
-            <div class="menu-info__create-channel">
-              <p class="menu-info__title-text">Канал создан:</p>
-              <span>
-                {{ new Date().toLocaleDateString('ru-RU') }}
-              </span>
-            </div>
-            <button
-              class="menu-info__avatar-button"
-              @click="openEditProfileIcon"
-            >
-              <Avatar is-icon />
-            </button>
-            <Teleport to="body">
-              <ModalCroppedAvatar
-                :image="null"
-                :open="state.isEditAvatar"
-                @unmount-close="closeEditProfileIcon"
-              />
-            </Teleport>
-            <div class="menu-info__buttons">
-              <Button
-                :type="ButtonTypeEnum.secondary"
-                :size="SizesEnum.large"
-                class="menu-info__secondary-button"
-              >
-                <Icon :name="IconNameEnum.noDistrub" />
-                Звук выкл.
-              </Button>
-              <Button
-                :type="ButtonTypeEnum.secondary"
-                :size="SizesEnum.large"
-                class="menu-info__secondary-button"
-              >
-                <Icon :name="IconNameEnum.logout" />
-                Выйти
-              </Button>
-            </div>
-            <NewChatInformationForm />
+            <InformationMenu
+              :model-value="state.information"
+              @update:model-value="handleUpdateInformation"
+              :data-testid="`${props.dataTestid}-MenuInfo-InformationMenu`"
+            />
           </slot>
         </section>
       </template>
@@ -71,37 +72,39 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive, watch } from 'vue';
+import { reactive, computed, watch } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import {
   Tabs,
-  ModalCroppedAvatar,
   Button,
   ButtonTypeEnum,
   IconNameEnum,
   SizesEnum,
-  Icon,
-  Avatar
+  Icon
 } from '@pksep/yui';
 import ContactListInModal from './ContactList/ContactListInModal.vue';
-import NewChatInformationForm from './NewChat/NewChatInformationForm.vue';
-import type { IMenuProps, IMenuEmits } from './interfaces/interfaces';
+import InformationMenu from './InformationMenu.vue';
+import type { IMenuRightProps, IMenuEmits } from './interfaces/interfaces';
 import { MAX_W_XL } from '../utils/constants';
+import { fetchGroupMembers } from '../services/useGroup';
+import { IMSDK } from '../services/useOpenIM';
 
-const props = withDefaults(defineProps<IMenuProps>(), {
-  open: false
+const props = withDefaults(defineProps<IMenuRightProps>(), {
+  open: false,
+  dataTestid: () => 'MenuInfo'
 });
 
 const emits = defineEmits<IMenuEmits>();
+
+const state = reactive({
+  contacts: [],
+  information: null
+});
 
 const menuInfoClasses = computed(() => [
   'menu-info',
   { 'menu-info--open': props.open }
 ]);
-
-const state = reactive({
-  isEditAvatar: false
-});
 
 const { state: isOpen, setState } = useResizeState({
   breakpoint: MAX_W_XL,
@@ -114,23 +117,55 @@ const handleCloseMenu = (): void => {
   close();
 };
 
-const unmountUserAdd = (): void => {
-  emits('unmount-new-contact', true);
+const handleContactClick = (): void => {
+  emits('unmount-new-contact', { isChapterOpen: true });
 };
 
-const openEditProfileIcon = (): void => {
-  state.isEditAvatar = true;
-};
-
-const closeEditProfileIcon = (): void => {
-  state.isEditAvatar = false;
+const handleUpdateInformation = (value: any) => {
+  state.information = value;
+  IMSDK.setGroupInfo({
+    groupID: props.contact?.groupId,
+    groupName: state.information?.name,
+    faceURL: props.contact.avatarUrl,
+    notification: `Поменяли название группы на ${props.contact?.groupId}`
+  });
 };
 
 watch(
+  () => props.contact,
+  async () => {
+    handleCloseMenu();
+  }
+);
+
+watch(
   () => props.open,
-  newVal => {
+  async newVal => {
     isOpen.value = newVal;
-  },
-  { immediate: true }
+    if (
+      props.contact?.id &&
+      (props.contact?.groupId === undefined ||
+        props.contact?.groupId === null ||
+        props.contact?.groupId === '')
+    ) {
+      state.contacts = [props.contact];
+      state.information = {
+        id: props.contact?.id
+      };
+    } else {
+      state.contacts = await fetchGroupMembers(props.contact?.groupId);
+      state.information = {
+        id: props.contact?.groupId
+      };
+    }
+
+    if (props.contact) {
+      state.information = {
+        name: props.contact.nickname || '',
+        avatarUrl: props.contact.avatarUrl,
+        date: new Date().toLocaleDateString()
+      };
+    }
+  }
 );
 </script>

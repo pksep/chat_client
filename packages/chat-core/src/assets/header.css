@@ -20,6 +20,7 @@
   --font-size-nickname: 12px;
   margin-left: 8px;
   row-gap: 2px;
+  cursor: pointer;
 }
 
 button.button-yui-kit {
