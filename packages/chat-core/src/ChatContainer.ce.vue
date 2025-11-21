@@ -22,7 +22,6 @@ import {
 } from './services/useMastra';
 import { mockUsers } from './test/mock/users';
 import { getAllNotificationCount } from './services/useConversions';
-import newMessageSound from './new-message.mp3';
 
 const props = defineProps<IChatContainerProps>();
 const emits = defineEmits<IChatContainerEmits>();
