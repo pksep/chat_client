@@ -65,7 +65,7 @@
           :class="
             messageChat(props.user.id === message.sendID ? 'user' : 'assistant')
           "
-          :message="message.textElem?.content || ''"
+          :message="parseNotification(message)"
           :is-me-sender="props.user.id === message.sendID"
           :time="formatTime(new Date(message.sendTime))"
           :sender="message.senderNickname"
@@ -264,6 +264,24 @@ onMounted(() => {
     scrollToBottom();
   }
 });
+
+interface MessageWithNotification {
+  textElem?: {
+    content?: string;
+  };
+  notification?: string;
+  notificationElem?: {
+    detail?: string;
+  };
+}
+
+const parseNotification = (message: MessageWithNotification) => {
+  if (message.notificationElem?.detail) {
+    const parsed = JSON.parse(message.notificationElem.detail);
+    return message.textElem?.content || parsed.group?.notification || '';
+  }
+  return message.textElem?.content || null;
+};
 
 onUnmounted(() => {
   removeMessageLoading(state.chatId, state.messages.length);
