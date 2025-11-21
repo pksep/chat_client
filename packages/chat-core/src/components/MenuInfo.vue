@@ -71,7 +71,9 @@
   </aside>
   <NewContactModal
     :open="state.openAddUser"
+    :isAddOne="false"
     :contacts="props.members"
+    @unmount-new-contact="handleNewContact"
     @unnmount-close="handleCloseAddUserModal"
     title="Добавить контакт"
   />
@@ -90,11 +92,16 @@ import {
 } from '@pksep/yui';
 import ContactListInModal from './ContactList/ContactListInModal.vue';
 import InformationMenu from './InformationMenu.vue';
-import type { IMenuRightProps, IMenuEmits } from './interfaces/interfaces';
+import type {
+  IMenuRightProps,
+  IMenuEmits,
+  IUserProps
+} from './interfaces/interfaces';
 import { MAX_W_XL } from '../utils/constants';
 import { fetchGroupMembers } from '../services/useGroup';
 import { IMSDK } from '../services/useOpenIM';
 import NewContactModal from './NewChat/NewContactModal.vue';
+import { generateChatId } from '../services/useMastra';
 
 const props = withDefaults(defineProps<IMenuRightProps>(), {
   open: false,
@@ -126,18 +133,34 @@ const handleCloseMenu = (): void => {
 };
 
 const handleContactClick = (): void => {
-  emits('unmount-new-contact', { isChapterOpen: true });
+  state.openAddUser = true;
+};
+
+const handleNewContact = (contacts: IUserProps[]): void => {
+  if (props.contact?.groupId) {
+    IMSDK.inviteUserToGroup(
+      {
+        groupID: props.contact?.groupId,
+        reason: 'Отправили приглашение',
+        userIDList: contacts.map(contact => contact.id)
+      },
+      generateChatId()
+    );
+  }
 };
 
 const handleUpdateInformation = (value: any) => {
   state.information = value;
-  IMSDK.setGroupInfo({
-    groupID: props.contact?.groupId,
-    groupName: state.information?.name,
-    faceURL: state.information?.avatarUrl,
-    //`Поменяли название группы на ${state.information?.name}`
-    notification: null
-  });
+  IMSDK.setGroupInfo(
+    {
+      groupID: props.contact?.groupId,
+      groupName: state.information?.name,
+      faceURL: state.information?.avatarUrl,
+      //`Поменяли название группы на ${state.information?.name}`
+      notification: null
+    },
+    generateChatId()
+  );
 };
 
 watch(

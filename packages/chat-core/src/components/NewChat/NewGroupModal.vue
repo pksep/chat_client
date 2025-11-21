@@ -19,9 +19,7 @@
     <ContactSelector
       v-if="!state.isSelectedMembers"
       :contacts="contacts"
-      :selected-contact-ids="state.checkUsers"
-      @unmount-checkbox="handleCheckbox"
-      @unmount-click="handleOpenGroupInfo"
+      @unmount-contact="handleOpenGroupInfo"
     />
 
     <div v-else>
@@ -107,6 +105,7 @@ import type { INewContactProps } from './interfaces/new-contact';
 import { createGroup } from '../../services/useGroup';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';
 import { uploadFile } from '../../services/useOpenIM';
+import { IUserProps } from '../interfaces/interfaces';
 
 const props = withDefaults(defineProps<INewContactProps>(), {
   open: false,
@@ -122,12 +121,11 @@ const avatarInputRef = ref(null);
 
 const state = reactive({
   open: false,
-  checkUsers: new Set<string>(),
+  checkUsers: [],
   selectedContacts: computed(() => [
     props.user,
-    ...props.contacts.filter(c => state.checkUsers.has(c.id))
+    ...props.contacts.filter(c => new Set(state.checkUsers).has(c.id))
   ]),
-  openAddUser: false,
   groupName: '',
   isSelectedMembers: false,
   avatarPreview: ''
@@ -137,13 +135,6 @@ watch(
   () => props.open,
   () => {
     state.open = props.open;
-  }
-);
-
-watch(
-  () => state.openAddUser,
-  () => {
-    state.open = !state.openAddUser;
   }
 );
 
@@ -161,26 +152,15 @@ const closeModal = (): void => {
   emits('unmount-close');
 };
 
-const handleCheckbox = (isCheck: boolean, contactId: string): void => {
-  if (isCheck) {
-    state.checkUsers.add(contactId);
-  } else {
-    state.checkUsers.delete(contactId);
-  }
-};
-
 const handleCreateGroup = async (): Promise<void> => {
-  await createGroup(
-    Array.from(state.checkUsers),
-    state.groupName,
-    state.avatarPreview
-  );
+  await createGroup(state.checkUsers, state.groupName, state.avatarPreview);
   emits('unmount-new-group');
   closeModal();
 };
 
-const handleOpenGroupInfo = async (): Promise<void> => {
+const handleOpenGroupInfo = async (contacts: IUserProps[]): Promise<void> => {
   state.isSelectedMembers = true;
+  state.checkUsers = contacts.map(contact => contact.id);
   if (!state.groupName) {
     state.groupName = state.selectedContacts.map(c => c.nickname).join(', ');
   }

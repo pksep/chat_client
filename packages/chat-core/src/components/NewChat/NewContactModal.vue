@@ -1,6 +1,6 @@
 <template>
   <Modal
-    :open="state.open"
+    :open="props.open"
     class="new-contact"
     position="center"
     @close="closeModal"
@@ -17,17 +17,14 @@
       </Button>
     </header>
     <ContactSelector
-      is-add-one
+      :is-add-one="props.isAddOne"
       :contacts="contacts"
-      :selected-contact-ids="state.checkUsers"
       @unmount-contact="handleNewContact"
-      @unmount-checkbox="handleCheckbox"
     />
   </Modal>
 </template>
 
 <script setup lang="ts">
-import { reactive, watch } from 'vue';
 import {
   Icon,
   IconNameEnum,
@@ -42,42 +39,26 @@ import { IUserProps } from '../interfaces/interfaces';
 
 const props = withDefaults(defineProps<INewContactProps>(), {
   open: false,
+  isAddOne: true,
   title: 'Создать диалог',
   contacts: () => []
 });
 
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
-  (e: 'unmount-new-contact', contact: IUserProps);
+  (e: 'unmount-new-contact', contact: IUserProps[] | IUserProps);
 }>();
 
-const state = reactive({
-  open: false,
-  checkUsers: new Set<string>()
-});
-
-watch(
-  () => props.open,
-  () => {
-    state.open = props.open;
-  }
-);
-
 const closeModal = (): void => {
-  state.open = false;
   emits('unmount-close');
 };
 
-const handleCheckbox = (isCheck: boolean, contactId: string): void => {
-  if (isCheck) {
-    state.checkUsers.add(contactId);
+const handleNewContact = (contacts: IUserProps[] | IUserProps): void => {
+  if (props.isAddOne) {
+    emits('unmount-new-contact', contacts);
   } else {
-    state.checkUsers.delete(contactId);
+    emits('unmount-new-contact', contacts);
   }
-};
-
-const handleNewContact = (contact: IUserProps): void => {
-  emits('unmount-new-contact', contact);
   closeModal();
 };
 </script>

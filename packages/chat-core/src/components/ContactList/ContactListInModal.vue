@@ -87,7 +87,6 @@ const newContactOpen = ref(false);
 
 const addUser = (): void => {
   emits('unmount-click-add-button');
-  // newContactOpen.value = true;
 };
 
 const closeContactModal = (): void => {

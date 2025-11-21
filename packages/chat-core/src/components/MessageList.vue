@@ -50,28 +50,32 @@
         v-for="(message, index) in state.messages"
         :key="message.clientMsgID"
       >
-        <div
-          v-if="isNewDate(index)"
-          class="date-divider"
-          :data-testid="`${props.dataTestid}-MessageList-DateDividerUser${index + 1}`"
-        >
-          <span
-            :data-testid="`${props.dataTestid}-MessageList-DateLabelUser${index + 1}`"
-            >{{ formatDay(message.sendTime) }}</span
+        <template v-if="message.textElem?.content">
+          <div
+            v-if="isNewDate(index)"
+            class="date-divider"
+            :data-testid="`${props.dataTestid}-MessageList-DateDividerUser${index + 1}`"
           >
-        </div>
+            <span
+              :data-testid="`${props.dataTestid}-MessageList-DateLabelUser${index + 1}`"
+              >{{ formatDay(message.sendTime) }}</span
+            >
+          </div>
 
-        <MessageBubble
-          :class="
-            messageChat(props.user.id === message.sendID ? 'user' : 'assistant')
-          "
-          :message="parseNotification(message)"
-          :is-me-sender="props.user.id === message.sendID"
-          :time="formatTime(new Date(message.sendTime))"
-          :sender="message.senderNickname"
-          :avatar="message.senderFaceUrl"
-          :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
-        />
+          <MessageBubble
+            :class="
+              messageChat(
+                props.user.id === message.sendID ? 'user' : 'assistant'
+              )
+            "
+            :message="parseNotification(message)"
+            :is-me-sender="props.user.id === message.sendID"
+            :time="formatTime(new Date(message.sendTime))"
+            :sender="message.senderNickname"
+            :avatar="message.senderFaceUrl"
+            :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
+          />
+        </template>
       </template>
     </div>
   </div>

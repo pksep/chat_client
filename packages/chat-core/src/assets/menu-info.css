@@ -3,6 +3,7 @@ aside.menu-info {
   border-left-color: var(--border-grey);
   border-left-width: 0.5px;
   border-left-style: solid;
+  height: var(--default-height);
   &.menu-info--open .collapse {
     width: 100%;
   }

@@ -18,7 +18,7 @@
           @click.stop
           :size="CheckboxSizeEnum.small"
           @update:model-value="value => handleCheckbox(value, contact.id)"
-          :model-value="props.selectedContactIds.has(contact.id)"
+          :model-value="localSelectedIds.has(contact.id)"
         />
       </li>
     </ul>
@@ -36,7 +36,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, reactive } from 'vue';
 import {
   Checkbox,
   ButtonTypeEnum,
@@ -50,49 +50,61 @@ import { IUserProps } from '../interfaces/interfaces';
 
 interface IContactSelectorProps {
   contacts: IUserProps[];
-  selectedContactIds: Set<string | number>;
+  selectedContactIds?: Set<string | number>;
   isAddOne?: boolean;
 }
 
 interface IContactSelectorEmits {
-  (e: 'unmount-contact', contact: IUserProps): void;
-  (e: 'unmount-checkbox', isCheck: boolean, contactId: string | number): void;
-  (e: 'unmount-click', name?: string): void;
+  (e: 'unmount-contact', contact: IUserProps[] | IUserProps): void;
 }
 
 const props = defineProps<IContactSelectorProps>();
 const emits = defineEmits<IContactSelectorEmits>();
 
-const q = ref('');
+const q = defineModel<string>('');
+
+const localSelectedIds = reactive(
+  new Set<string | number>(props.selectedContactIds)
+);
+
 const contacts = computed(() =>
   props.contacts.filter(
     contact =>
-      contact.ex.toLowerCase().includes(q.value.toLowerCase()) ||
-      contact.nickname.toLowerCase().includes(q.value.toLowerCase())
+      (contact.ex?.toLowerCase() ?? '').includes(
+        (q.value ?? '').toLowerCase()
+      ) ||
+      (contact.nickname?.toLowerCase() ?? '').includes(
+        (q.value ?? '').toLowerCase()
+      )
   )
+);
+
+const selectedContacts = computed(() =>
+  props.contacts.filter(contact => localSelectedIds.has(contact.id))
 );
 
 const isButtonDisabled = computed(() => {
   if (props.isAddOne) {
     return false;
   }
-  return props.selectedContactIds.size < 1;
+  return localSelectedIds.size === 0;
 });
 
 const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
-  emits('unmount-checkbox', isCheck, contactId);
+  if (isCheck) {
+    localSelectedIds.add(contactId);
+  } else {
+    localSelectedIds.delete(contactId);
+  }
 };
 
 const handleNewContact = (contact: IUserProps): void => {
   if (props.isAddOne) {
     emits('unmount-contact', contact);
-  } else {
-    const isCurrentlySelected = props.selectedContactIds.has(contact.id);
-    handleCheckbox(!isCurrentlySelected, contact.id);
   }
 };
 
 const onAddClick = (): void => {
-  emits('unmount-click');
+  emits('unmount-contact', selectedContacts.value);
 };
 </script>
