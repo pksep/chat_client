@@ -1,6 +1,7 @@
 <template>
   <section :class="['menu__info-users', props.class]">
     <Button
+      v-if="props.showAddButton"
       :type="ButtonTypeEnum.secondary"
       :class="[
         'button-menu__info menu__info-add-user',
@@ -66,6 +67,7 @@ import { useContextMenu } from '../../composables/useContextMenu';
 import { IContactListProps } from './interfaces/contact-list';
 
 const props = withDefaults(defineProps<IContactListProps>(), {
+  showAddButton: true,
   contacts: () => [
     {
       id: '1',

@@ -35,7 +35,7 @@ interface IProps {
 
 interface IEmits {
   'unmount-close': [];
-  'unmount-contact': [contact: IUserProps];
+  'unmount-contact': [contact: IUserProps | IUserProps[]];
   'unmount-checkbox': [isCheck: boolean, contactId: string | number];
   'unmount-click': [];
 }

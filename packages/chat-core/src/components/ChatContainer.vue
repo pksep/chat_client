@@ -50,8 +50,7 @@
       :active-tab-id="state.activeTabId"
       :dataTestid="`${props.dataTestid}-ChatContainer-MenuInfo`"
       @unmount-collapse="handleMenuToggle"
-      @unmount-new-contact="handleNewContact"
-      @unmount-new-group="handleNewGroup"
+      @unmount-contact="handleChangeContact"
     />
   </main>
   <NewContactModal
@@ -230,6 +229,10 @@ const handleNewGroupMessage = async () => {
   state.groupId = group.id;
 
   state.chapter = state.contact.nickname;
+};
+
+const handleChangeContact = (contact: IUserProps): void => {
+  state.contact = contact;
 };
 
 const handleExit = (): void => {

@@ -11,5 +11,5 @@ export interface IMobileListEmits {
     e: 'unmount-chapter',
     config: { nickname: string; contact: IContactProps } | string | null
   ): void;
-  (e: 'unmount-contact', contact: IUserProps): void;
+  (e: 'unmount-contact', contact: IUserProps | IUserProps[]): void;
 }

@@ -48,6 +48,7 @@
       <template #header2> Информация </template>
       <template #tab1>
         <ContactListInModal
+          :show-add-button="!checkGroupId"
           :contacts="state.contacts"
           @unmount-click-add-button="handleContactClick"
           :data-testid="`${props.dataTestid}-MenuInfo-ContactListInModal`"
@@ -163,6 +164,11 @@ const handleUpdateInformation = (value: any) => {
     },
     generateChatId()
   );
+  emits('unmount-contact', {
+    ...props.contact,
+    nickname: state.information?.name,
+    avatarUrl: state.information?.avatarUrl
+  });
 };
 
 watch(
@@ -172,16 +178,18 @@ watch(
   }
 );
 
+const checkGroupId = computed(
+  () =>
+    props.contact?.groupId === undefined ||
+    props.contact?.groupId === null ||
+    props.contact?.groupId === ''
+);
+
 watch(
   () => props.open,
   async newVal => {
     isOpen.value = newVal;
-    if (
-      props.contact?.id &&
-      (props.contact?.groupId === undefined ||
-        props.contact?.groupId === null ||
-        props.contact?.groupId === '')
-    ) {
+    if (props.contact?.id && checkGroupId.value) {
       state.contacts = [props.contact];
       state.information = {
         id: props.contact?.id

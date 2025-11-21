@@ -11,7 +11,7 @@
         Звук выкл.
       </template>
       <template v-else>
-        <Icon :name="IconNameEnum.noDistrub" />
+        <!-- <Icon :name="IconNameEnum.distrub" /> -->
         Звук вкл.
       </template>
     </Button>
