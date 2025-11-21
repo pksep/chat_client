@@ -61,8 +61,6 @@
           >
         </div>
 
-        {{ message }}
-
         <MessageBubble
           :class="
             messageChat(props.user.id === message.sendID ? 'user' : 'assistant')
