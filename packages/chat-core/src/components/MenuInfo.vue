@@ -197,7 +197,7 @@ watch(
       state.information = {
         name: props.contact.nickname || '',
         avatarUrl: props.contact.avatarUrl,
-        date: new Date().toLocaleDateString()
+        date: new Date()
       };
     }
   }

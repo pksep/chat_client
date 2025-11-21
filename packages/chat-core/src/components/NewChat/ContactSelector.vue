@@ -1,6 +1,6 @@
 <template>
   <section class="contact-selector">
-    <Search v-model="q" />
+    <Search v-model="state.q" />
     <ul class="contact-selector__list">
       <li
         v-for="contact in contacts"
@@ -18,7 +18,7 @@
           @click.stop
           :size="CheckboxSizeEnum.small"
           @update:model-value="value => handleCheckbox(value, contact.id)"
-          :model-value="localSelectedIds.has(contact.id)"
+          :model-value="state.selectedIds.has(contact.id)"
         />
       </li>
     </ul>
@@ -48,7 +48,7 @@ import {
 import UserProfile from '../UserProfile/UserProfile.vue';
 import { IUserProps } from '../interfaces/interfaces';
 
-interface IContactSelectorProps {
+export interface IContactSelectorProps {
   contacts: IUserProps[];
   selectedContactIds?: Set<string | number>;
   isAddOne?: boolean;
@@ -58,43 +58,47 @@ interface IContactSelectorEmits {
   (e: 'unmount-contact', contact: IUserProps[] | IUserProps): void;
 }
 
+export interface IContactSelectorState {
+  selectedIds: Set<string | number>;
+  q: string;
+}
+
 const props = defineProps<IContactSelectorProps>();
 const emits = defineEmits<IContactSelectorEmits>();
 
-const q = defineModel<string>('');
-
-const localSelectedIds = reactive(
-  new Set<string | number>(props.selectedContactIds)
-);
+const state = reactive<IContactSelectorState>({
+  q: '',
+  selectedIds: props.selectedContactIds ?? new Set()
+});
 
 const contacts = computed(() =>
   props.contacts.filter(
     contact =>
       (contact.ex?.toLowerCase() ?? '').includes(
-        (q.value ?? '').toLowerCase()
+        (state.q ?? '').toLowerCase()
       ) ||
       (contact.nickname?.toLowerCase() ?? '').includes(
-        (q.value ?? '').toLowerCase()
+        (state.q ?? '').toLowerCase()
       )
   )
 );
 
 const selectedContacts = computed(() =>
-  props.contacts.filter(contact => localSelectedIds.has(contact.id))
+  props.contacts.filter(contact => state.selectedIds.has(contact.id))
 );
 
 const isButtonDisabled = computed(() => {
   if (props.isAddOne) {
     return false;
   }
-  return localSelectedIds.size === 0;
+  return state.selectedIds.size === 0;
 });
 
 const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
   if (isCheck) {
-    localSelectedIds.add(contactId);
+    state.selectedIds.add(contactId);
   } else {
-    localSelectedIds.delete(contactId);
+    state.selectedIds.delete(contactId);
   }
 };
 

@@ -1,8 +1,8 @@
 <template>
-  <div class="menu-info__create-channel">
+  <div class="menu-info__create-channel" :data-testid="dataTestid">
     <p class="menu-info__title-text">Канал создан:</p>
     <span>
-      {{ model.date }}
+      {{ model.date?.toLocaleDateString('ru-RU') }}
     </span>
   </div>
   <button class="menu-info__avatar-button" @click="openEditProfileIcon">
@@ -39,10 +39,15 @@ type Props = {
   id: string;
   name: string | null;
   avatarUrl: string | null;
-  date: string | null;
+  date: Date | null;
 };
 
-// const props = withDefaults(defineProps<Props>(), {});
+withDefaults(
+  defineProps<{
+    dataTestid?: string;
+  }>(),
+  {}
+);
 
 const model = defineModel<Props>();
 
