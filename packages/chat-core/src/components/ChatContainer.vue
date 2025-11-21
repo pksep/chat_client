@@ -223,7 +223,7 @@ const handleNewGroupMessage = async (group: any): Promise<void> => {
     conversionId: group.conversationID,
     nickname: group.showName,
     groupId: group.groupID,
-    avatar: group.faceURL
+    avatarUrl: group.faceURL
   };
 
   state.groupId = group.groupID;

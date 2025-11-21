@@ -4,6 +4,7 @@ aside.menu-info {
   border-left-width: 0.5px;
   border-left-style: solid;
   height: var(--default-height);
+  --size-avatar: 85px;
   &.menu-info--open .collapse {
     width: 100%;
   }

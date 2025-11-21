@@ -71,6 +71,12 @@
             accept="image/*"
             @change="onAvatarSelected"
           />
+          <ModalCroppedAvatar
+            :image="state.file"
+            :open="state.isEditAvatar"
+            @unmount-close="closeEditAvatar"
+            @unmount-save="onSaveAvatar"
+          />
         </template>
       </Tabs>
 
@@ -90,6 +96,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
 import {
+  ModalCroppedAvatar,
   Icon,
   IconNameEnum,
   Modal,
@@ -127,6 +134,8 @@ const state = reactive({
     ...props.contacts.filter(c => new Set(state.checkUsers).has(c.id))
   ]),
   groupName: '',
+  isEditAvatar: false,
+  file: null,
   isSelectedMembers: false,
   avatarPreview: ''
 });
@@ -142,13 +151,24 @@ const onAvatarSelected = async (e: Event) => {
   const file = (e.target as HTMLInputElement).files?.[0];
   if (!file) return;
 
-  const url = await uploadFile(file);
+  state.file = file;
+  state.isEditAvatar = true;
+};
+
+const onSaveAvatar = async (): Promise<void> => {
+  const url = await uploadFile(state.file);
   state.avatarPreview = url;
+  state.isEditAvatar = false;
+};
+
+const closeEditAvatar = (): void => {
+  state.isEditAvatar = false;
 };
 
 const clearState = () => {
   state.checkUsers = [];
   state.groupName = '';
+  state.file = null;
   state.isSelectedMembers = false;
   state.avatarPreview = '';
 };
@@ -165,6 +185,7 @@ const handleCreateGroup = async (): Promise<void> => {
     state.groupName,
     state.avatarPreview
   );
+  console.log('Group created:', group);
   emits('unmount-new-group', group);
   closeModal();
 };
