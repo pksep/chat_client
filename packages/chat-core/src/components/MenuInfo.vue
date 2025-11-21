@@ -74,7 +74,7 @@
     :isAddOne="false"
     :contacts="props.members"
     @unmount-new-contact="handleNewContact"
-    @unnmount-close="handleCloseAddUserModal"
+    @unmount-close="handleCloseAddUserModal"
     title="Добавить контакт"
   />
 </template>
@@ -138,6 +138,7 @@ const handleContactClick = (): void => {
 
 const handleNewContact = (contacts: IUserProps[]): void => {
   if (props.contact?.groupId) {
+    state.contacts = [...state.contacts, ...contacts];
     IMSDK.inviteUserToGroup(
       {
         groupID: props.contact?.groupId,
