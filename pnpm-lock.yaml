@@ -33,12 +33,6 @@ importers:
       '@babel/plugin-transform-private-methods':
         specifier: ^7.27.1
         version: 7.27.1(@babel/core@7.28.5)
-      '@playwright/experimental-ct-vue':
-        specifier: ^1.56.1
-        version: 1.56.1(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(vite@7.1.7(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6))(vue@3.5.21(typescript@5.6.3))
-      '@playwright/test':
-        specifier: ^1.56.1
-        version: 1.56.1
       '@typescript-eslint/eslint-plugin':
         specifier: ^7.18.0
         version: 7.18.0(@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.6.3))(eslint@8.57.1)(typescript@5.6.3)
@@ -103,6 +97,12 @@ importers:
         specifier: '3'
         version: 3.25.76
     devDependencies:
+      '@playwright/experimental-ct-vue':
+        specifier: ^1.56.1
+        version: 1.56.1(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(vite@7.2.4(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6))(vue@3.5.24(typescript@5.8.2))
+      '@playwright/test':
+        specifier: ^1.56.1
+        version: 1.56.1
       '@vite-pwa/assets-generator':
         specifier: ^1.0.2
         version: 1.0.2
@@ -7527,10 +7527,10 @@ snapshots:
       - tsx
       - yaml
 
-  '@playwright/experimental-ct-vue@1.56.1(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(vite@7.1.7(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6))(vue@3.5.21(typescript@5.6.3))':
+  '@playwright/experimental-ct-vue@1.56.1(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(vite@7.2.4(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6))(vue@3.5.24(typescript@5.8.2))':
     dependencies:
       '@playwright/experimental-ct-core': 1.56.1(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)
-      '@vitejs/plugin-vue': 5.2.4(vite@7.1.7(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6))(vue@3.5.21(typescript@5.6.3))
+      '@vitejs/plugin-vue': 5.2.4(vite@7.2.4(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6))(vue@3.5.24(typescript@5.8.2))
     transitivePeerDependencies:
       - '@types/node'
       - jiti
@@ -8276,10 +8276,10 @@ snapshots:
       sharp-ico: 0.1.5
       unconfig: 7.3.3
 
-  '@vitejs/plugin-vue@5.2.4(vite@7.1.7(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6))(vue@3.5.21(typescript@5.6.3))':
+  '@vitejs/plugin-vue@5.2.4(vite@7.2.4(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6))(vue@3.5.24(typescript@5.8.2))':
     dependencies:
-      vite: 7.1.7(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)
-      vue: 3.5.21(typescript@5.6.3)
+      vite: 7.2.4(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)
+      vue: 3.5.24(typescript@5.8.2)
 
   '@vitejs/plugin-vue@6.0.1(vite@7.1.7(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6))(vue@3.5.21(typescript@5.6.3))':
     dependencies:
