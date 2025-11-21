@@ -154,16 +154,18 @@ const handleNewContact = (contacts: IUserProps[]): void => {
 
 const handleUpdateInformation = (value: any) => {
   state.information = value;
-  IMSDK.setGroupInfo(
-    {
-      groupID: props.contact?.groupId,
-      groupName: state.information?.name,
-      faceURL: state.information?.avatarUrl,
-      //`Поменяли название группы на ${state.information?.name}`
-      notification: null
-    },
-    generateChatId()
-  );
+  if (props.contact.groupId) {
+    IMSDK.setGroupInfo(
+      {
+        groupID: props.contact?.groupId,
+        groupName: state.information?.name,
+        faceURL: state.information?.avatarUrl,
+        //`Поменяли название группы на ${state.information?.name}`
+        notification: null
+      },
+      generateChatId()
+    );
+  }
   emits('unmount-contact', {
     ...props.contact,
     nickname: state.information?.name,
@@ -192,7 +194,7 @@ watch(
     if (props.contact?.id && checkGroupId.value) {
       state.contacts = [props.contact];
       state.information = {
-        id: props.contact?.id
+        userId: props.contact?.id
       };
     } else {
       state.contacts = await fetchGroupMembers(props.contact?.groupId);
@@ -200,14 +202,15 @@ watch(
       let date = new Date(groups[0].createTime);
       if (!date) date = new Date();
       state.information = {
-        id: props.contact?.groupId,
+        groupId: props.contact?.groupId,
         date
       };
     }
 
     if (props.contact) {
       state.information = {
-        id: state.information.id,
+        userId: state.information.userId,
+        groupId: state.information.groupId || null,
         date: state.information.date,
         name: props.contact.nickname || '',
         avatarUrl: props.contact.avatarUrl

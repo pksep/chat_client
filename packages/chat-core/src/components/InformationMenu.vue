@@ -6,7 +6,11 @@
     </span>
   </div>
   <button class="menu-info__avatar-button" @click="openEditProfileIcon">
-    <Avatar is-icon :url="model.avatarUrl" alt="use-avatar-circle" />
+    <Avatar
+      :initials="model.name"
+      :url="model.avatarUrl"
+      alt="use-avatar-circle"
+    />
   </button>
   <input
     v-show="false"
@@ -39,7 +43,8 @@ import { onMounted } from 'vue';
 import { useTemplateRef } from 'vue';
 
 type Props = {
-  id: string;
+  groupId: string;
+  userId: string;
   name: string | null;
   avatarUrl: string | null;
   date: Date | null;
@@ -66,11 +71,17 @@ const handleSave = async (config: { name: string }): Promise<void> => {
 };
 
 const muteGroupInfo = async (isMute: boolean): Promise<void> => {
-  await IMSDK.changeGroupMute({ groupID: model.value?.id, isMute });
+  if (model.value?.groupId) {
+    await IMSDK.changeGroupMute({ groupID: model.value?.groupId, isMute });
+  }
 };
 
 const leaveGroupInfo = async (): Promise<void> => {
-  await quitGroup(model.value?.id);
+  if (!model.value?.groupId) {
+    await quitGroup(model.value?.groupId);
+  } else {
+    await IMSDK.deleteFriend(model.value?.userId);
+  }
   window.location.reload();
 };
 
