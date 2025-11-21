@@ -57,7 +57,7 @@
   <NewContactModal
     :contacts="state.users.filter(user => user.id !== authUser.id)"
     :open="state.isNewContactOpen"
-    :dataTestid="`${props.dataTestid}-ChatContainer-NewContactModal`"
+    :data-testid="`${props.dataTestid}-ChatContainer-NewContactModal`"
     @unmount-close="closeModals"
     @unmount-new-contact="handleNewContactMessage"
   />
@@ -66,7 +66,7 @@
     :user="authUser"
     :contacts="state.users.filter(user => user.id !== authUser.id)"
     :open="state.isNewGroupOpen"
-    :dataTestid="`${props.dataTestid}-ChatContainer-NewGroupModal`"
+    :data-testid="`${props.dataTestid}-ChatContainer-NewGroupModal`"
     @unmount-close="closeModals"
     @unmount-new-group="handleNewGroupMessage"
   />
