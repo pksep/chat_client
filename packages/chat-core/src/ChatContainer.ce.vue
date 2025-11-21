@@ -19,7 +19,9 @@ import {
 } from './services/useMastra';
 import { mockUsers } from './test/mock/users';
 
-const props = defineProps<IChatContainerProps>();
+const props = withDefaults(defineProps<IChatContainerProps>(), {
+  token: null
+});
 
 onMounted(async () => {
   try {

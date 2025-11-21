@@ -118,7 +118,8 @@ const state = reactive({
 
 const menuInfoClasses = computed(() => [
   'menu-info',
-  { 'menu-info--open': props.open }
+  { 'menu-info--open': props.open },
+  props.class
 ]);
 
 const { state: isOpen, setState } = useResizeState({

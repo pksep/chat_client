@@ -1,4 +1,5 @@
 export interface IHeaderProps {
+  class?: string;
   chapter?: string | null;
   contact?: IUserProps;
   members?: IUserProps[];
@@ -49,12 +50,13 @@ export interface IContactProps extends IUserProps {
 
 export interface IMenuProps {
   open?: boolean;
-  contact?: IUserProps;
+  contact?: IUserProps | null;
   dataTestid?: string;
 }
 
 export interface IMenuRightProps extends IMenuProps {
   members?: IUserProps[];
+  class?: string;
   activeTabId?: number;
   groupId?: string;
 }

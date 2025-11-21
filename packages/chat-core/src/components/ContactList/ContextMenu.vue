@@ -19,8 +19,8 @@ import { vOnClickOutside } from '@pksep/yui';
 import { computed } from 'vue';
 
 const props = defineProps<{
-  visible: boolean;
-  position: { x: number; y: number };
+  visible?: boolean;
+  position?: { x: number; y: number };
 }>();
 
 const emits = defineEmits<{
