@@ -32,6 +32,7 @@
           v-else-if="!props.loader"
           v-html="props.message"
         ></div>
+        {{ props.message }}
       </div>
       <div class="message-time" v-if="!props.loader">
         <Icon v-if="read" :name="IconNameEnum.read" />

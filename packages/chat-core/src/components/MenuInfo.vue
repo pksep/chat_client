@@ -32,7 +32,10 @@
       <template #tab2>
         <section class="menu-info__info-section">
           <slot name="information-menu">
-            <InformationMenu v-model="state.information" />
+            <InformationMenu
+              :model-value="state.information"
+              @update:model-value="handleUpdateInformation"
+            />
           </slot>
         </section>
       </template>
@@ -56,6 +59,7 @@ import InformationMenu from './InformationMenu.vue';
 import type { IMenuRightProps, IMenuEmits } from './interfaces/interfaces';
 import { MAX_W_XL } from '../utils/constants';
 import { fetchGroupMembers } from '../services/useGroup';
+import { IMSDK } from '../services/useOpenIM';
 
 const props = withDefaults(defineProps<IMenuRightProps>(), {
   open: false
@@ -88,17 +92,15 @@ const handleContactClick = (): void => {
   emits('unmount-new-contact', { isChapterOpen: true });
 };
 
-// watch(
-//   () => state.information,
-//   () => {
-//     if (props.contact?.groupId) {
-//       setGroupInfo(props.contact?.groupId, {
-//         groupName: props.contact.nickname,
-//         faceURL: props.contact.avatarUrl
-//       });
-//     }
-//   }
-// );
+const handleUpdateInformation = (value: any) => {
+  state.information = value;
+  IMSDK.setGroupInfo({
+    groupID: props.contact?.groupId,
+    groupName: state.information?.name,
+    faceURL: props.contact.avatarUrl,
+    notification: `Поменяли название группы на ${props.contact?.groupId}`
+  });
+};
 
 watch(
   () => props.contact,

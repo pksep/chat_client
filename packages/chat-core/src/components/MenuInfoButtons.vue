@@ -4,6 +4,7 @@
       :type="ButtonTypeEnum.secondary"
       :size="SizesEnum.large"
       class="menu-info__secondary-button"
+      @click="handleMute"
     >
       <Icon :name="IconNameEnum.noDistrub" />
       Звук выкл.
@@ -43,9 +44,13 @@ import { useResizeState } from '../composables/useResizeState';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
-const emits = defineEmits(['unmount-leave']);
+const emits = defineEmits(['unmount-leave', 'unmount-notify']);
 
 const handleUnmountLeave = () => {
   emits('unmount-leave');
+};
+
+const handleMute = () => {
+  emits('unmount-notify');
 };
 </script>

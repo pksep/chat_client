@@ -30,7 +30,7 @@
 
 <script setup lang="ts">
 import { Button, ButtonTypeEnum, Input, SizesEnum, Textarea } from '@pksep/yui';
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 const model = defineModel<{ name: string }>();
 
@@ -39,15 +39,6 @@ const emits = defineEmits<{
 }>();
 
 const initialName = ref(model.value?.name || '');
-
-watch(
-  () => model.value?.name,
-  newName => {
-    if (newName) {
-      initialName.value = newName;
-    }
-  }
-);
 
 const isFormValid = computed(() => {
   return (

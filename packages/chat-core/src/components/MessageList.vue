@@ -38,6 +38,8 @@
           <span>{{ formatDay(message.sendTime) }}</span>
         </div>
 
+        {{ message }}
+
         <MessageBubble
           :class="
             messageChat(props.user.id === message.sendID ? 'user' : 'assistant')

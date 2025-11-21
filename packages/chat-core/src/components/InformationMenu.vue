@@ -14,7 +14,7 @@
     @unmount-close="closeEditProfileIcon"
   />
   <MenuInfoButtons @unmount-leave="leaveGroupInfo" />
-  <NewChatInformationForm v-model="model" />
+  <NewChatInformationForm :model-value="model" @unmount-save="handleSave" />
 </template>
 
 <script lang="ts" setup>
@@ -38,6 +38,10 @@ const model = defineModel<Props>();
 const state = reactive({
   isEditAvatar: false
 });
+
+const handleSave = async (config: { name: string }): Promise<void> => {
+  model.value = { ...model.value, ...config };
+};
 
 const leaveGroupInfo = async (): Promise<void> => {
   await quitGroup(model.value?.id);
