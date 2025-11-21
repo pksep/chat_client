@@ -1,7 +1,10 @@
 import { CbEvents, getSDK } from '@openim/wasm-client-sdk';
 
 import { ref } from 'vue';
-import { updateConversationList } from './useConversions';
+import {
+  setAllNotificationCount,
+  updateConversationList
+} from './useConversions';
 import { updateGroupList } from './useGroup';
 
 export type IMSDKType = ReturnType<typeof getSDK>;
@@ -48,9 +51,14 @@ const setupOpenIM = (): void => {
     console.error('[OpenIM] Connection failed:', err);
   });
 
-  IMSDK.on(CbEvents.OnConversationChanged, err => {
-    updateConversationList(err.data.filter(item => !item.groupID) || []);
-    updateGroupList(err.data.filter(item => !!item.groupID) || []);
+  IMSDK.on(CbEvents.OnTotalUnreadMessageCountChanged, ev => {
+    const count = ev.data;
+    setAllNotificationCount(count);
+  });
+
+  IMSDK.on(CbEvents.OnConversationChanged, ev => {
+    updateConversationList(ev.data.filter(item => !item.groupID) || []);
+    updateGroupList(ev.data.filter(item => !!item.groupID) || []);
   });
 
   // check all events for debugging

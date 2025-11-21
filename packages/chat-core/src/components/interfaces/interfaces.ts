@@ -68,3 +68,7 @@ export interface IChatContainerProps {
   user?: IUserProps;
   dataTestid?: string;
 }
+
+export interface IChatContainerEmits {
+  (e: 'unmount-notification-count', count: number): number;
+}
