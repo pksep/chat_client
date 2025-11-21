@@ -6,6 +6,7 @@ import { setGroupList } from './useGroup';
 import { getUsersList } from '../composables/useUsers';
 
 const conversionStore = ref<IContactProps[]>([]);
+const allNotificationCount = ref<number>(0);
 
 const fetchConversationList = async () => {
   try {
@@ -14,6 +15,12 @@ const fetchConversationList = async () => {
 
       const result = response.data || [];
 
+      const totalUnread = result.reduce(
+        (sum, conv) => sum + (conv.unreadCount || 0),
+        0
+      );
+
+      setAllNotificationCount(totalUnread);
       setConversationList(result.filter(item => !item.groupID));
       setGroupList(result.filter(item => !!item.groupID));
     });
@@ -93,6 +100,14 @@ const updateConversationList = (value: any[]): void => {
   });
 };
 
+const getAllNotificationCount = (): number => {
+  return allNotificationCount.value || 0;
+};
+
+const setAllNotificationCount = (value: number): void => {
+  allNotificationCount.value = value;
+};
+
 const getOneConversation = async (
   sourceID: string,
   sessionType: number
@@ -116,5 +131,7 @@ export {
   setConversationList,
   updateConversationList,
   setPinConversation,
-  getOneConversation
+  getOneConversation,
+  getAllNotificationCount,
+  setAllNotificationCount
 };

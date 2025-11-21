@@ -39,7 +39,7 @@ import { onMounted } from 'vue';
 import type { IMenuEmits } from './interfaces/interfaces';
 import { IUserProps } from './interfaces/interfaces';
 
-interface IChatProps extends IMessageListProps {
+export interface IChatProps extends IMessageListProps {
   dataTestid?: string;
 }
 

@@ -3,9 +3,12 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { computed, onMounted, watch } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
-import type { IChatContainerProps } from './components/interfaces/interfaces';
+import type {
+  IChatContainerEmits,
+  IChatContainerProps
+} from './components/interfaces/interfaces';
 import {
   IMSDK,
   getOrGeneratePlatformId,
@@ -18,8 +21,13 @@ import {
   hasUserIdInSession
 } from './services/useMastra';
 import { mockUsers } from './test/mock/users';
+import { getAllNotificationCount } from './services/useConversions';
+import newMessageSound from './new-message.mp3';
 
 const props = defineProps<IChatContainerProps>();
+const emits = defineEmits<IChatContainerEmits>();
+
+const allNotificationCount = computed(() => getAllNotificationCount());
 
 onMounted(async () => {
   try {
@@ -86,6 +94,13 @@ onMounted(async () => {
     throw error;
   }
 });
+
+watch(
+  () => allNotificationCount.value,
+  () => {
+    emits('unmount-notification-count', allNotificationCount.value);
+  }
+);
 </script>
 
 <style>

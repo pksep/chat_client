@@ -121,7 +121,7 @@ import {
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
 
-interface IMessageListExtendedProps extends IMessageListProps {
+export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
 }
 
