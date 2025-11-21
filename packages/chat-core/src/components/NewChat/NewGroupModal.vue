@@ -146,8 +146,16 @@ const onAvatarSelected = async (e: Event) => {
   state.avatarPreview = url;
 };
 
+const clearState = () => {
+  state.checkUsers = [];
+  state.groupName = '';
+  state.isSelectedMembers = false;
+  state.avatarPreview = '';
+};
+
 const closeModal = (): void => {
   state.open = false;
+  clearState();
   emits('unmount-close');
 };
 
