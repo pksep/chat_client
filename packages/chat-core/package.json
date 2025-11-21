@@ -8,6 +8,8 @@
     "start:dev": "vite",
     "start": "vite preview",
     "build": "vue-tsc && vite build",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "build:lib": "cross-env VITE_BASE_MODE=lib pnpm run build",
     "publish:lib": "pnpm run build:lib && pnpm publish --access public --no-git-checks",
     "init:openim": "node --experimental-strip-types ./scripts/copyOpenIM.ts",
@@ -34,6 +36,8 @@
     "zod": "3"
   },
   "devDependencies": {
+    "@playwright/experimental-ct-vue": "^1.56.1",
+    "@playwright/test": "^1.56.1",
     "@vite-pwa/assets-generator": "^1.0.2",
     "tsx": "^4.20.6",
     "vite-plugin-pwa": "^1.1.0"

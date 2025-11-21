@@ -33,6 +33,12 @@ importers:
       '@babel/plugin-transform-private-methods':
         specifier: ^7.27.1
         version: 7.27.1(@babel/core@7.28.5)
+      '@playwright/experimental-ct-vue':
+        specifier: ^1.56.1
+        version: 1.56.1(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(vite@7.1.7(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6))(vue@3.5.21(typescript@5.6.3))
+      '@playwright/test':
+        specifier: ^1.56.1
+        version: 1.56.1
       '@typescript-eslint/eslint-plugin':
         specifier: ^7.18.0
         version: 7.18.0(@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.6.3))(eslint@8.57.1)(typescript@5.6.3)
@@ -1807,6 +1813,20 @@ packages:
     peerDependencies:
       vue: '>=3'
 
+  '@playwright/experimental-ct-core@1.56.1':
+    resolution: {integrity: sha512-xonl51bJxQpX4O5awQZlUJ4eMdu6WE6xdALz8VeJmWL04A6xZICXAOHu03msFqYRydbW0vvTfp5zaeHLsXoiSA==}
+    engines: {node: '>=18'}
+
+  '@playwright/experimental-ct-vue@1.56.1':
+    resolution: {integrity: sha512-jFz9BeJhPjxhHQw+ccTpikU6HTAa3ZbLgSWO4xeE9sSZQohUEH54Sb3IOlCjue2GJyWiuAAIvVNsR0YJyefO2A==}
+    engines: {node: '>=18'}
+    hasBin: true
+
+  '@playwright/test@1.56.1':
+    resolution: {integrity: sha512-vSMYtL/zOcFpvJCW71Q/OEGQb7KYBPAdKh35WNSkaZA75JlAO8ED8UN6GUNTm3drWomcbcqRPFqQbLae8yBTdg==}
+    engines: {node: '>=18'}
+    hasBin: true
+
   '@popperjs/core@2.11.8':
     resolution: {integrity: sha512-P1st0aksCrn9sGZhp8GMYwBnQsbvAWsZAX44oXNNvLHGqAOcoVxmjZiohstwQ7SqKnbR47akdNi+uleWD8+g6A==}
 
@@ -2571,6 +2591,13 @@ packages:
     resolution: {integrity: sha512-MCbrb508JZHqe7bUibmZj/lyojdhLRnfkmyXnkrCM2zVrjTgL89U8UEfInpKTvPeTnxsw2hmyZxnhsdNR6yhwg==}
     engines: {node: '>=16.14.0'}
     hasBin: true
+
+  '@vitejs/plugin-vue@5.2.4':
+    resolution: {integrity: sha512-7Yx/SXSOcQq5HiiV3orevHUFn+pmMB4cgbEkDYgnkUWb0WfeQ/wa2yFv6D5ICiCQOVpjA7vYDXrC7AGO8yjDHA==}
+    engines: {node: ^18.0.0 || >=20.0.0}
+    peerDependencies:
+      vite: ^5.0.0 || ^6.0.0
+      vue: ^3.2.25
 
   '@vitejs/plugin-vue@6.0.1':
     resolution: {integrity: sha512-+MaE752hU0wfPFJEUAIxqw18+20euHHdxVtMvbFcOEpjEyfqXH/5DCoTHiVJ0J29EhTJdoTkjEv5YBKU9dnoTw==}
@@ -3531,6 +3558,11 @@ packages:
   fs.realpath@1.0.0:
     resolution: {integrity: sha512-OO0pH2lK6a0hZnAdau5ItzHPI6pUlvI7jMVnxUQRtw4owF2wk8lOSabtGDCTP4Ggrg2MbGnWO9X8K1t4+fGMDw==}
 
+  fsevents@2.3.2:
+    resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
+    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
+    os: [darwin]
+
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
@@ -4389,6 +4421,16 @@ packages:
   pkg-types@2.3.0:
     resolution: {integrity: sha512-SIqCzDRg0s9npO5XQ3tNZioRY1uK06lA41ynBC1YmFTmnY6FjUjVt6s4LoADmwoig1qqD0oK8h1p/8mlMx8Oig==}
 
+  playwright-core@1.56.1:
+    resolution: {integrity: sha512-hutraynyn31F+Bifme+Ps9Vq59hKuUCz7H1kDOcBs+2oGguKkWTU50bBWrtz34OUWmIwpBTWDxaRPXrIXkgvmQ==}
+    engines: {node: '>=18'}
+    hasBin: true
+
+  playwright@1.56.1:
+    resolution: {integrity: sha512-aFi5B0WovBHTEvpM3DzXTUaeN6eN0qWnTkKx4NQaH4Wvcmc153PdaY2UBdSYKaGYw+UyWXSVyxDUg5DoPEttjw==}
+    engines: {node: '>=18'}
+    hasBin: true
+
   possible-typed-array-names@1.1.0:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
     engines: {node: '>= 0.4'}
@@ -5096,6 +5138,46 @@ packages:
       workbox-window: ^7.3.0
     peerDependenciesMeta:
       '@vite-pwa/assets-generator':
+        optional: true
+
+  vite@6.4.1:
+    resolution: {integrity: sha512-+Oxm7q9hDoLMyJOYfUYBuHQo+dkAloi33apOPP56pzj+vsdJDzr+j1NISE5pyaAuKL4A3UD34qd0lx5+kfKp2g==}
+    engines: {node: ^18.0.0 || ^20.0.0 || >=22.0.0}
+    hasBin: true
+    peerDependencies:
+      '@types/node': ^18.0.0 || ^20.0.0 || >=22.0.0
+      jiti: '>=1.21.0'
+      less: '*'
+      lightningcss: ^1.21.0
+      sass: '*'
+      sass-embedded: '*'
+      stylus: '*'
+      sugarss: '*'
+      terser: ^5.16.0
+      tsx: ^4.8.1
+      yaml: ^2.4.2
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+      jiti:
+        optional: true
+      less:
+        optional: true
+      lightningcss:
+        optional: true
+      sass:
+        optional: true
+      sass-embedded:
+        optional: true
+      stylus:
+        optional: true
+      sugarss:
+        optional: true
+      terser:
+        optional: true
+      tsx:
+        optional: true
+      yaml:
         optional: true
 
   vite@7.1.7:
@@ -7427,6 +7509,47 @@ snapshots:
       - '@vue/composition-api'
       - typescript
 
+  '@playwright/experimental-ct-core@1.56.1(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)':
+    dependencies:
+      playwright: 1.56.1
+      playwright-core: 1.56.1
+      vite: 6.4.1(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)
+    transitivePeerDependencies:
+      - '@types/node'
+      - jiti
+      - less
+      - lightningcss
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - terser
+      - tsx
+      - yaml
+
+  '@playwright/experimental-ct-vue@1.56.1(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(vite@7.1.7(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6))(vue@3.5.21(typescript@5.6.3))':
+    dependencies:
+      '@playwright/experimental-ct-core': 1.56.1(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)
+      '@vitejs/plugin-vue': 5.2.4(vite@7.1.7(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6))(vue@3.5.21(typescript@5.6.3))
+    transitivePeerDependencies:
+      - '@types/node'
+      - jiti
+      - less
+      - lightningcss
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - terser
+      - tsx
+      - vite
+      - vue
+      - yaml
+
+  '@playwright/test@1.56.1':
+    dependencies:
+      playwright: 1.56.1
+
   '@popperjs/core@2.11.8': {}
 
   '@protobufjs/aspromise@1.1.2': {}
@@ -8152,6 +8275,11 @@ snapshots:
       sharp: 0.33.5
       sharp-ico: 0.1.5
       unconfig: 7.3.3
+
+  '@vitejs/plugin-vue@5.2.4(vite@7.1.7(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6))(vue@3.5.21(typescript@5.6.3))':
+    dependencies:
+      vite: 7.1.7(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)
+      vue: 3.5.21(typescript@5.6.3)
 
   '@vitejs/plugin-vue@6.0.1(vite@7.1.7(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6))(vue@3.5.21(typescript@5.6.3))':
     dependencies:
@@ -9421,6 +9549,9 @@ snapshots:
 
   fs.realpath@1.0.0: {}
 
+  fsevents@2.3.2:
+    optional: true
+
   fsevents@2.3.3:
     optional: true
 
@@ -10235,6 +10366,14 @@ snapshots:
       confbox: 0.2.2
       exsolve: 1.0.7
       pathe: 2.0.3
+
+  playwright-core@1.56.1: {}
+
+  playwright@1.56.1:
+    dependencies:
+      playwright-core: 1.56.1
+    optionalDependencies:
+      fsevents: 2.3.2
 
   possible-typed-array-names@1.1.0: {}
 
@@ -11115,6 +11254,21 @@ snapshots:
       '@vite-pwa/assets-generator': 1.0.2
     transitivePeerDependencies:
       - supports-color
+
+  vite@6.4.1(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6):
+    dependencies:
+      esbuild: 0.25.12
+      fdir: 6.5.0(picomatch@4.0.3)
+      picomatch: 4.0.3
+      postcss: 8.5.6
+      rollup: 4.53.3
+      tinyglobby: 0.2.15
+    optionalDependencies:
+      '@types/node': 24.3.1
+      fsevents: 2.3.3
+      jiti: 2.6.1
+      terser: 5.44.1
+      tsx: 4.20.6
 
   vite@7.1.7(@types/node@24.3.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6):
     dependencies:
