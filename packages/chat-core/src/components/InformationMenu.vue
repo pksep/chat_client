@@ -21,7 +21,10 @@
     @unmount-close="closeEditProfileIcon"
     @unmount-save="onSaveAvatar"
   />
-  <MenuInfoButtons @unmount-leave="leaveGroupInfo" />
+  <MenuInfoButtons
+    @unmount-mute="muteGroupInfo"
+    @unmount-leave="leaveGroupInfo"
+  />
   <NewChatInformationForm :model-value="model" @unmount-save="handleSave" />
 </template>
 
@@ -31,7 +34,7 @@ import { quitGroup } from '../services/useGroup';
 import { ModalCroppedAvatar, Avatar } from '@pksep/yui';
 import NewChatInformationForm from './NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from './MenuInfoButtons.vue';
-import { uploadFile } from '../services/useOpenIM';
+import { IMSDK, uploadFile } from '../services/useOpenIM';
 import { onMounted } from 'vue';
 import { useTemplateRef } from 'vue';
 
@@ -60,6 +63,10 @@ const state = reactive({
 
 const handleSave = async (config: { name: string }): Promise<void> => {
   model.value = { ...model.value, ...config };
+};
+
+const muteGroupInfo = async (isMute: boolean): Promise<void> => {
+  await IMSDK.changeGroupMute({ groupID: model.value?.id, isMute });
 };
 
 const leaveGroupInfo = async (): Promise<void> => {

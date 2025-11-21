@@ -4,10 +4,16 @@
       :type="ButtonTypeEnum.secondary"
       :size="SizesEnum.large"
       class="menu-info__secondary-button"
-      @click="handleMute"
+      @click="handleMute(!state.isMuted)"
     >
-      <Icon :name="IconNameEnum.noDistrub" />
-      Звук выкл.
+      <template v-if="state.isMuted">
+        <Icon :name="IconNameEnum.noDistrub" />
+        Звук выкл.
+      </template>
+      <template v-else>
+        <Icon :name="IconNameEnum.noDistrub" />
+        Звук вкл.
+      </template>
     </Button>
     <Button
       v-if="isMobile"
@@ -41,16 +47,22 @@ import {
 
 import { MAX_W_MD } from '../utils/constants';
 import { useResizeState } from '../composables/useResizeState';
+import { reactive } from 'vue';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
-const emits = defineEmits(['unmount-leave', 'unmount-notify']);
+const state = reactive({
+  isMuted: false
+});
+
+const emits = defineEmits(['unmount-leave', 'unmount-mute']);
 
 const handleUnmountLeave = () => {
   emits('unmount-leave');
 };
 
-const handleMute = () => {
-  emits('unmount-notify');
+const handleMute = (mute: boolean) => {
+  state.isMuted = mute;
+  emits('unmount-mute', mute);
 };
 </script>

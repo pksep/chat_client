@@ -3,6 +3,7 @@ import { IMSDK } from './useOpenIM';
 import { IContactProps, IUserProps } from '../components/interfaces/interfaces';
 import { manipulateConversationList } from './useConversions';
 import { appendUserAttributes } from '../composables/useUsers';
+import { useOpenIMRestApi } from './useApi';
 
 const groups = ref<IContactProps[]>([]);
 const groupMembers = ref<IUserProps[]>([]);
@@ -146,6 +147,23 @@ const quitGroup = async (groupID: string) => {
     groups.value = groups.value.filter(group => group.id !== groupID);
   } catch (err) {
     console.error('Failed to quit group:', err);
+    throw err;
+  }
+};
+
+export const getGroupInfo = async (groupIDs: string[]) => {
+  try {
+    const api = useOpenIMRestApi();
+
+    const response = await api.post('/group/get_groups_info', {
+      groupIDs
+    });
+
+    const data = await response.json();
+
+    return data.data.groupInfos;
+  } catch (err) {
+    console.error('Failed to get group info:', err);
     throw err;
   }
 };

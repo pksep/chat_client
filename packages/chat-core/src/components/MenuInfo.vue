@@ -98,7 +98,7 @@ import type {
   IUserProps
 } from './interfaces/interfaces';
 import { MAX_W_XL } from '../utils/constants';
-import { fetchGroupMembers } from '../services/useGroup';
+import { fetchGroupMembers, getGroupInfo } from '../services/useGroup';
 import { IMSDK } from '../services/useOpenIM';
 import NewContactModal from './NewChat/NewContactModal.vue';
 import { generateChatId } from '../services/useMastra';
@@ -188,16 +188,21 @@ watch(
       };
     } else {
       state.contacts = await fetchGroupMembers(props.contact?.groupId);
+      const groups = await getGroupInfo([props.contact?.groupId]);
+      let date = new Date(groups[0].createTime);
+      if (!date) date = new Date();
       state.information = {
-        id: props.contact?.groupId
+        id: props.contact?.groupId,
+        date
       };
     }
 
     if (props.contact) {
       state.information = {
+        id: state.information.id,
+        date: state.information.date,
         name: props.contact.nickname || '',
-        avatarUrl: props.contact.avatarUrl,
-        date: new Date()
+        avatarUrl: props.contact.avatarUrl
       };
     }
   }

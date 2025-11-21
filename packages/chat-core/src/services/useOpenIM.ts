@@ -37,11 +37,11 @@ if (import.meta.hot) {
 
 const setupOpenIM = (): void => {
   IMSDK.on(CbEvents.OnConnecting, () => {
-    console.debug('[OpenIM] Connecting...');
+    // console.debug('[OpenIM] Connecting...');
   });
 
   IMSDK.on(CbEvents.OnConnectSuccess, () => {
-    console.debug('[OpenIM] Connected successfully!');
+    // console.debug('[OpenIM] Connected successfully!');
   });
 
   IMSDK.on(CbEvents.OnConnectFailed, err => {
@@ -55,8 +55,8 @@ const setupOpenIM = (): void => {
 
   // check all events for debugging
   Object.values(CbEvents).forEach(eventName => {
-    IMSDK.on(eventName, (data: any) => {
-      console.debug(`[OpenIM Event] ${eventName}:`, data);
+    IMSDK.on(eventName, () => {
+      // console.debug(`[OpenIM Event] ${eventName}:`, data);
     });
   });
 

@@ -36,6 +36,7 @@ export interface IUserProps {
   ex?: string;
   tabel?: string;
   initial?: string;
+  createdAt?: Date;
 }
 
 export interface IContactProps extends IUserProps {
