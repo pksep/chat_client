@@ -12,7 +12,7 @@
     "test:e2e:ui": "playwright test --ui",
     "build:lib": "cross-env VITE_BASE_MODE=lib pnpm run build",
     "publish:lib": "pnpm run build:lib && pnpm publish --access public --no-git-checks",
-    "init:openim": "node --experimental-strip-types ./scripts/copyOpenIM.ts",
+    "init:openim": "node ./scripts/copyOpenIM.ts",
     "init:openim-admin": "tsx ./scripts/getAdminTokenOpenIM.ts"
   },
   "exports": {
