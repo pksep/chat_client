@@ -9,7 +9,7 @@
       :data-testid="`${props.dataTestid}-Header-ModalAvatar`"
     />
     <NewChatInformationForm
-      :model-value="{ name: props.groupName }"
+      v-model="information"
       :data-testid="`${props.dataTestid}-Header-InformationForm`"
     >
       <template #button></template>
@@ -46,14 +46,27 @@ import MenuInfoButtons from '../MenuInfoButtons.vue';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';
 
 interface IMobileChatInfoProps {
-  groupName: string;
+  contact: IUserProps;
   members: IUserProps[];
   dataTestid: string;
 }
 
 const props = defineProps<IMobileChatInfoProps>();
 
-const handleUnmountLeave = () => {};
+const emits = defineEmits<{
+  (e: 'unmount-mute'): void;
+  (e: 'unmount-leave'): void;
+}>();
 
-const handleMute = () => {};
+const information = defineModel<any>({
+  default: { name: '' }
+});
+
+const handleUnmountLeave = () => {
+  emits('unmount-leave');
+};
+
+const handleMute = () => {
+  emits('unmount-mute');
+};
 </script>

@@ -14,8 +14,8 @@
       ref="messageListRef"
       :chapter="state.chapter"
       :baseUrl="props.baseUrl"
-      :contactId
-      :conversionId
+      :contactId="props.contact?.id"
+      :conversionId="props.contact?.conversionId"
       :user
       :data-testid="`${props.dataTestid}-Chat-MessageList`"
     />
@@ -88,6 +88,8 @@ const handleUnmountContact = (contact: IUserProps): void => {
 onMounted(() => {
   fetchConversationList();
 });
+
+console.log('MobileList mounted', props.contact);
 
 defineExpose({
   handleClear: () => messageListRef.value?.handleClear()

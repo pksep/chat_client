@@ -3,7 +3,7 @@
     :open="props.open"
     @unmount-close="handleCloseModal"
     @unmount-next="handleStartStep"
-    :title="props.isAddOne ? 'Написать сообщение' : 'Канал'"
+    title="Написать сообщение"
     start-button-text="Далее"
     back-button-text="Отмена"
   >
@@ -11,22 +11,27 @@
       <ContactSelector
         class="mobile__list-modal__contact-selector"
         :is-add-one="props.isAddOne"
+        is-button-disabled
         :contacts="props.contacts"
         :selected-contact-ids="props.selectedContactIds"
-        @unmount-contact="handleUnmountContact"
+        @unmount-contact="handleUpdateInformation"
         @unmount-close="handleCloseModal"
       />
     </template>
   </MobileModal>
   <MobileModal
-    :open="state.openEdit"
-    @close="state.openEdit = false"
+    :open="additionalState.openEdit"
+    @close="handleCloseAddUserModal"
     title="Канал"
     @unmount-next="handleMessage"
     start-button-text="Создать"
     back-button-text="Отмена"
   >
-    <MobileChatInfo :data-testid="props.dataTestid" />
+    <MobileChatInfo
+      v-model="state.information"
+      :members="props.contacts"
+      :data-testid="props.dataTestid"
+    />
   </MobileModal>
 </template>
 
@@ -40,6 +45,7 @@ import {
   INewChatMobileProps,
   INewChatMobileEmits
 } from './interfaces/contact-selector';
+import { useMenuInfo } from '../../composables/useMenuInfo';
 
 const props = withDefaults(defineProps<INewChatMobileProps>(), {
   open: false,
@@ -48,17 +54,12 @@ const props = withDefaults(defineProps<INewChatMobileProps>(), {
 
 const emits = defineEmits<INewChatMobileEmits>();
 
-const {
-  state,
-  checkGroupId,
-  handleCloseMenu,
-  handleContactClick,
-  handleNewContact,
-  handleUpdateInformation,
-  handleCloseAddUserModal
-} = useMenuInfo(props, emits);
+const { state, handleUpdateInformation } = useMenuInfo(
+  { ...props, members: props.contacts },
+  emits
+);
 
-const state = reactive({
+const additionalState = reactive({
   selectedContacts: [] as IContactProps[],
   openEdit: false
 });
@@ -67,17 +68,15 @@ const handleCloseModal = () => {
   emits('unmount-close');
 };
 
-const handleUnmountContact = (contact: IContactProps[]) => {
-  state.selectedContacts = contact;
-  emits('unmount-contact', contact);
+const handleStartStep = () => {
+  additionalState.openEdit = true;
 };
 
-const handleStartStep = () => {
-  state.openEdit = true;
+const handleCloseAddUserModal = () => {
+  additionalState.openEdit = false;
 };
 
 const handleMessage = () => {
-  state.openEdit = false;
   emits('unmount-chapter');
 };
 </script>

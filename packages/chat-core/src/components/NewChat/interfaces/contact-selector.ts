@@ -14,12 +14,15 @@ export interface IContactSelectorProps {
   isButtonDisabled?: boolean;
   selectedContactIds?: Set<string | number>;
   isAddOne?: boolean;
+  dataTestid?: string;
 }
 
 export interface INewChatMobileProps extends IContactSelectorProps {
   open: boolean;
+  contact?: IUserProps;
 }
 
 export interface INewChatMobileEmits extends IContactSelectorEmits {
   (e: 'unmount-close');
+  (e: 'unmount-chapter');
 }

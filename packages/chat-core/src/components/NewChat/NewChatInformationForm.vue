@@ -3,12 +3,7 @@
     <slot> </slot>
     <div class="menu__info-form-block form__name">
       <label for="name" class="menu__info-title-text"> Название: </label>
-      <Input
-        id="name"
-        class="initial"
-        placeholder="Text"
-        v-model="model.name"
-      />
+      <Input id="name" class="initial" placeholder="Text" v-model="form.name" />
     </div>
     <div class="menu__info-form-block form__textarea" v-if="false">
       <label class="menu__info-title-text"> Описание: </label>
@@ -30,27 +25,28 @@
 
 <script setup lang="ts">
 import { Button, ButtonTypeEnum, Input, SizesEnum, Textarea } from '@pksep/yui';
-import { computed, ref } from 'vue';
+import { computed, reactive } from 'vue';
 
-const model = defineModel<{ name: string }>();
+const model = defineModel<{ name: string }>({
+  default: { name: '' }
+});
 
 const emits = defineEmits<{
   (e: 'unmount-save', value: { name: string }): void;
 }>();
 
-const initialName = ref(model.value?.name || '');
+const form = reactive({ name: model.value?.name || '' });
 
 const isFormValid = computed(() => {
   return (
-    model.value?.name &&
-    model.value.name.trim() !== '' &&
-    model.value.name !== initialName.value
+    form.name && form.name.trim() !== '' && form.name !== model.value?.name
   );
 });
 
 const onSave = () => {
   if (isFormValid.value) {
-    emits('unmount-save', { name: model.value.name });
+    model.value.name = form.name;
+    emits('unmount-save', { name: form.name });
   }
 };
 

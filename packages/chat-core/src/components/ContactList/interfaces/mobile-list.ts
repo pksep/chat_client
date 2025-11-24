@@ -1,6 +1,7 @@
 import type { IContactProps, IUserProps } from '../../interfaces/interfaces';
 
 export interface IMobileListProps {
+  contact?: IUserProps;
   chapter?: string | null;
   dataTestid?: string;
   contacts: IContactProps[];
