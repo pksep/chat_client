@@ -11,6 +11,13 @@
           {{ props.closeButtonText }}
         </button>
         <h3 class="mobile__modal-header--title">{{ props.title }}</h3>
+        <button
+          class="mobile__modal-header--button"
+          @click="handleStartStep"
+          v-if="props.startButtonText"
+        >
+          {{ props.startButtonText }}
+        </button>
       </slot>
     </header>
     <Line v-if="showDivider" class="mobile__modal-divider" />
@@ -37,6 +44,10 @@ const props = withDefaults(defineProps<IMobileModalProps>(), {
 
 const handleCloseModal = () => {
   emits('unmount-close');
+};
+
+const handleStartStep = () => {
+  emits('unmount-next');
 };
 </script>
 

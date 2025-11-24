@@ -49,7 +49,8 @@
       </Button>
       <NewChatMobileModal
         :open="state.showAddAccount"
-        :contacts="props.contacts"
+        :contacts="[]"
+        :is-add-one="props.chapter !== 'channels'"
         :selected-contact-ids="state.checkUsers"
         @unmount-close="handleCloseModal"
         @unmount-contact="handleNewContact"
@@ -61,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue';
+import { reactive, computed, onMounted } from 'vue';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import Line from '../UI/Line.vue';
 import ContactList from './ContactList.vue';
@@ -129,4 +130,6 @@ const handleOpenUser = (): void => {
   if (isButtonDisabled.value) return;
   handleCloseModal();
 };
+
+onMounted(() => {});
 </script>

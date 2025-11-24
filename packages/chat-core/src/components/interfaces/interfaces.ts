@@ -53,11 +53,11 @@ export interface IMenuProps {
   open?: boolean;
   contact?: IUserProps | null;
   dataTestid?: string;
+  class?: string;
 }
 
 export interface IMenuRightProps extends IMenuProps {
   members?: IUserProps[];
-  class?: string;
   activeTabId?: number;
   groupId?: string;
 }

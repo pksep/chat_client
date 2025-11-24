@@ -2,60 +2,82 @@
   <MobileModal
     :open="props.open"
     @unmount-close="handleCloseModal"
-    title="Написать сообщение"
+    @unmount-next="handleStartStep"
+    :title="props.isAddOne ? 'Написать сообщение' : 'Канал'"
+    start-button-text="Далее"
     back-button-text="Отмена"
   >
     <template #default>
       <ContactSelector
         class="mobile__list-modal__contact-selector"
-        is-add-one
+        :is-add-one="props.isAddOne"
         :contacts="props.contacts"
         :selected-contact-ids="props.selectedContactIds"
-        @unmount-contact="contact => emits('unmount-contact', contact)"
-        @unmount-checkbox="
-          (isCheck, contactId) => emits('unmount-checkbox', isCheck, contactId)
-        "
-        @unmount-click="handleOpenUser"
+        @unmount-contact="handleUnmountContact"
+        @unmount-close="handleCloseModal"
       />
     </template>
+  </MobileModal>
+  <MobileModal
+    :open="state.openEdit"
+    @close="state.openEdit = false"
+    title="Канал"
+    @unmount-next="handleMessage"
+    start-button-text="Создать"
+    back-button-text="Отмена"
+  >
+    <MobileChatInfo :data-testid="props.dataTestid" />
   </MobileModal>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { reactive } from 'vue';
+import { IContactProps } from '../interfaces/interfaces';
 import MobileModal from '../UI/MobileModal.vue';
 import ContactSelector from './ContactSelector.vue';
-import type { IUserProps } from '../interfaces/interfaces';
+import MobileChatInfo from '../Header/MobileChatInfo.vue';
+import {
+  INewChatMobileProps,
+  INewChatMobileEmits
+} from './interfaces/contact-selector';
 
-interface IProps {
-  open: boolean;
-  contacts: IUserProps[];
-  selectedContactIds: Set<string | number>;
-}
-
-interface IEmits {
-  'unmount-close': [];
-  'unmount-contact': [contact: IUserProps | IUserProps[]];
-  'unmount-checkbox': [isCheck: boolean, contactId: string | number];
-  'unmount-click': [];
-}
-
-const props = withDefaults(defineProps<IProps>(), {
+const props = withDefaults(defineProps<INewChatMobileProps>(), {
   open: false,
-  contacts: () => [],
-  selectedContactIds: () => new Set<string | number>()
+  contacts: () => []
 });
 
-const emits = defineEmits<IEmits>();
+const emits = defineEmits<INewChatMobileEmits>();
 
-const isButtonDisabled = computed(() => props.selectedContactIds.size === 0);
+const {
+  state,
+  checkGroupId,
+  handleCloseMenu,
+  handleContactClick,
+  handleNewContact,
+  handleUpdateInformation,
+  handleCloseAddUserModal
+} = useMenuInfo(props, emits);
 
-const handleOpenUser = () => {
-  if (isButtonDisabled.value) return;
-  emits('unmount-click');
-};
+const state = reactive({
+  selectedContacts: [] as IContactProps[],
+  openEdit: false
+});
 
 const handleCloseModal = () => {
   emits('unmount-close');
+};
+
+const handleUnmountContact = (contact: IContactProps[]) => {
+  state.selectedContacts = contact;
+  emits('unmount-contact', contact);
+};
+
+const handleStartStep = () => {
+  state.openEdit = true;
+};
+
+const handleMessage = () => {
+  state.openEdit = false;
+  emits('unmount-chapter');
 };
 </script>

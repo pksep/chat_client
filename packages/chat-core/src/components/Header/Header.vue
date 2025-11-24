@@ -75,41 +75,11 @@
     @unmount-close="handleCloseMobileInfoModal"
     :data-testid="`${props.dataTestid}-Header-MobileModal`"
   >
-    <div
-      class="modal-info-mobile__start"
-      :data-testid="`${props.dataTestid}-Header-ModalStartContainer`"
-    >
-      <Avatar
-        is-icon
-        class="modal-info-mobile__avatar"
-        :data-testid="`${props.dataTestid}-Header-ModalAvatar`"
-      />
-      <NewChatInformationForm
-        :name="state.group.name"
-        :data-testid="`${props.dataTestid}-Header-InformationForm`"
-      >
-        <template #button> {{}} </template>
-      </NewChatInformationForm>
-    </div>
-    <div
-      class="modal-info-mobile__end"
-      :data-testid="`${props.dataTestid}-Header-ModalEndContainer`"
-    >
-      <MenuInfoButtons
-        :data-testid="`${props.dataTestid}-Header-MenuInfoButtons`"
-      />
-      <p
-        class="modal-info-mobile__end--paragraph"
-        :data-testid="`${props.dataTestid}-Header-ParticipantsLabel`"
-      >
-        Участники:
-      </p>
-      <ContactListInModal
-        :contacts="state.group.members"
-        class="modal-info-mobile__contact-list"
-        :data-testid="`${props.dataTestid}-Header-ContactListInModal`"
-      />
-    </div>
+    <MobileChatInfo
+      :group-name="state.group.name"
+      :members="state.group.members"
+      :data-testid="props.dataTestid"
+    />
   </MobileModal>
 </template>
 
@@ -120,7 +90,6 @@ import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import MobileModal from '../UI/MobileModal.vue';
 import {
-  Avatar,
   Button,
   Icon,
   IconNameEnum,
@@ -132,9 +101,7 @@ import {
 
 import type { IHeaderProps, IHeaderEmits } from '../interfaces/interfaces';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
-import NewChatInformationForm from '../NewChat/NewChatInformationForm.vue';
-import MenuInfoButtons from '../MenuInfoButtons.vue';
-import ContactListInModal from '../ContactList/ContactListInModal.vue';
+import MobileChatInfo from './MobileChatInfo.vue';
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
   dataTestid: () => 'Header'

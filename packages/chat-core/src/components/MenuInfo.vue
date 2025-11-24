@@ -81,8 +81,7 @@
 </template>
 
 <script lang="ts" setup>
-import { reactive, computed, watch } from 'vue';
-import { useResizeState } from '../composables/useResizeState';
+import { computed } from 'vue';
 import {
   Tabs,
   Button,
@@ -93,29 +92,16 @@ import {
 } from '@pksep/yui';
 import ContactListInModal from './ContactList/ContactListInModal.vue';
 import InformationMenu from './InformationMenu.vue';
-import type {
-  IMenuRightProps,
-  IMenuEmits,
-  IUserProps
-} from './interfaces/interfaces';
-import { MAX_W_XL } from '../utils/constants';
-import { fetchGroupMembers, getGroupInfo } from '../services/useGroup';
-import { IMSDK } from '../services/useOpenIM';
+import type { IMenuRightProps, IMenuEmits } from './interfaces/interfaces';
+import { useMenuInfo } from '../composables/useMenuInfo';
 import NewContactModal from './NewChat/NewContactModal.vue';
-import { generateChatId } from '../services/useMastra';
+import { useResizeState } from '../composables/useResizeState';
+import { MAX_W_XL } from '../utils/constants';
+import { watch } from 'vue';
 
 const props = withDefaults(defineProps<IMenuRightProps>(), {
   open: false,
   dataTestid: () => 'MenuInfo'
-});
-
-const emits = defineEmits<IMenuEmits>();
-
-const state = reactive({
-  openAddUser: false,
-  contacts: [],
-  filteredMembers: [],
-  information: null
 });
 
 const menuInfoClasses = computed(() => [
@@ -124,106 +110,37 @@ const menuInfoClasses = computed(() => [
   props.class
 ]);
 
+const emits = defineEmits<IMenuEmits>();
+
 const { state: isOpen, setState } = useResizeState({
   breakpoint: MAX_W_XL,
   onStateChange: (val: boolean) => emits('unmount-collapse', val)
 });
 
-const close = () => setState(false);
-
 const handleCloseMenu = (): void => {
-  close();
+  setState(false);
 };
-
-const handleContactClick = (): void => {
-  state.openAddUser = true;
-};
-
-const handleNewContact = (contacts: IUserProps[]): void => {
-  if (props.contact?.groupId) {
-    state.contacts = [...state.contacts, ...contacts];
-    IMSDK.inviteUserToGroup(
-      {
-        groupID: props.contact?.groupId,
-        reason: 'Отправили приглашение',
-        userIDList: contacts.map(contact => contact.id)
-      },
-      generateChatId()
-    );
-  }
-};
-
-const handleUpdateInformation = (value: any) => {
-  state.information = value;
-  if (props.contact.groupId) {
-    IMSDK.setGroupInfo(
-      {
-        groupID: props.contact?.groupId,
-        groupName: state.information?.name,
-        faceURL: state.information?.avatarUrl,
-        //`Поменяли название группы на ${state.information?.name}`
-        notification: null
-      },
-      generateChatId()
-    );
-  }
-  emits('unmount-contact', {
-    ...props.contact,
-    nickname: state.information?.name,
-    avatarUrl: state.information?.avatarUrl
-  });
-};
-
-watch(
-  () => props.contact,
-  async () => {
-    handleCloseMenu();
-  }
-);
-
-const checkGroupId = computed(
-  () =>
-    props.contact?.groupId === undefined ||
-    props.contact?.groupId === null ||
-    props.contact?.groupId === ''
-);
 
 watch(
   () => props.open,
   async newVal => {
     isOpen.value = newVal;
-    if (props.contact?.id && checkGroupId.value) {
-      state.contacts = [props.contact];
-      state.information = {
-        userId: props.contact?.id
-      };
-    } else {
-      state.contacts = await fetchGroupMembers(props.contact?.groupId);
-      const groups = await getGroupInfo([props.contact?.groupId]);
-      state.filteredMembers = props.members.filter(
-        item => !state.contacts.some(contact => contact.id === item.id)
-      );
-      let date = new Date(groups[0].createTime);
-      if (!date) date = new Date();
-      state.information = {
-        groupId: props.contact?.groupId,
-        date
-      };
-    }
-
-    if (props.contact) {
-      state.information = {
-        userId: state.information.userId,
-        groupId: state.information.groupId || null,
-        date: state.information.date,
-        name: props.contact.nickname || '',
-        avatarUrl: props.contact.avatarUrl
-      };
-    }
   }
 );
 
-const handleCloseAddUserModal = () => {
-  state.openAddUser = false;
-};
+watch(
+  () => props.contact,
+  () => {
+    handleCloseMenu();
+  }
+);
+
+const {
+  state,
+  checkGroupId,
+  handleContactClick,
+  handleNewContact,
+  handleUpdateInformation,
+  handleCloseAddUserModal
+} = useMenuInfo(props, emits);
 </script>

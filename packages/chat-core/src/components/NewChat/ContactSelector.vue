@@ -23,7 +23,7 @@
       </li>
     </ul>
     <Button
-      v-if="!props.isAddOne"
+      v-if="!props.isAddOne || !props.isButtonDisabled"
       :type="ButtonTypeEnum.primary"
       :size="SizesEnum.little"
       class="contact-selector__add"
@@ -47,21 +47,11 @@ import {
 } from '@pksep/yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import { IUserProps } from '../interfaces/interfaces';
-
-export interface IContactSelectorProps {
-  contacts: IUserProps[];
-  selectedContactIds?: Set<string | number>;
-  isAddOne?: boolean;
-}
-
-interface IContactSelectorEmits {
-  (e: 'unmount-contact', contact: IUserProps[] | IUserProps): void;
-}
-
-export interface IContactSelectorState {
-  selectedIds: Set<string | number>;
-  q: string;
-}
+import {
+  IContactSelectorProps,
+  IContactSelectorEmits,
+  IContactSelectorState
+} from './interfaces/contact-selector';
 
 const props = defineProps<IContactSelectorProps>();
 const emits = defineEmits<IContactSelectorEmits>();
@@ -88,9 +78,6 @@ const selectedContacts = computed(() =>
 );
 
 const isButtonDisabled = computed(() => {
-  if (props.isAddOne) {
-    return false;
-  }
   return state.selectedIds.size === 0;
 });
 
@@ -105,6 +92,10 @@ const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
 const handleNewContact = (contact: IUserProps): void => {
   if (props.isAddOne) {
     emits('unmount-contact', contact);
+    return;
+  }
+  if (props.isButtonDisabled) {
+    emits('unmount-contact', selectedContacts.value);
   }
 };
 

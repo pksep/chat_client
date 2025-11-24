@@ -7,6 +7,7 @@ export interface IMobileModalProps {
   open: boolean;
   showCloseButton?: boolean;
   closeButtonText?: string;
+  startButtonText?: string;
   title?: string;
   showDivider?: boolean;
   class?: CSSClass;
@@ -15,4 +16,5 @@ export interface IMobileModalProps {
 
 export interface IMobileModalEmits {
   (e: 'unmount-close'): void;
+  (e: 'unmount-next'): void;
 }
