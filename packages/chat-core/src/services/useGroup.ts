@@ -71,7 +71,7 @@ const createGroup = async (
         {
           ...res.data,
           showName: name,
-          createdTime: Date.now(),
+          latestMsgSendTime: Date.now(),
           conversationID: 'sg_' + res.data.groupID
         }
       ])

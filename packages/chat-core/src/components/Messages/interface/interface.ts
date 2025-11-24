@@ -1,3 +1,5 @@
+import { FileElem } from '@openim/wasm-client-sdk';
+
 export interface IMessageBubbleProps {
   message: string;
   author?: string;
@@ -6,4 +8,6 @@ export interface IMessageBubbleProps {
   isMeSender?: boolean;
   sender?: string;
   avatar?: string;
+  media?: string;
+  file?: FileElem;
 }
