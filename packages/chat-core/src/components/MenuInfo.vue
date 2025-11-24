@@ -73,7 +73,7 @@
   <NewContactModal
     :open="state.openAddUser"
     :isAddOne="false"
-    :contacts="props.members"
+    :contacts="state.filteredMembers"
     @unmount-new-contact="handleNewContact"
     @unmount-close="handleCloseAddUserModal"
     title="Добавить контакт"
@@ -114,6 +114,7 @@ const emits = defineEmits<IMenuEmits>();
 const state = reactive({
   openAddUser: false,
   contacts: [],
+  filteredMembers: [],
   information: null
 });
 
@@ -199,6 +200,9 @@ watch(
     } else {
       state.contacts = await fetchGroupMembers(props.contact?.groupId);
       const groups = await getGroupInfo([props.contact?.groupId]);
+      state.filteredMembers = props.members.filter(
+        item => !state.contacts.some(contact => contact.id === item.id)
+      );
       let date = new Date(groups[0].createTime);
       if (!date) date = new Date();
       state.information = {
