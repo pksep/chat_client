@@ -2,6 +2,7 @@
   <section class="chat" :data-testid="`${props.dataTestid}-Chat-Container`">
     <ContactListMobile
       class="chat__mobile"
+      :user="props.user"
       :contacts="props.contacts"
       :chapter="state.chapter"
       :data-testid="`${props.dataTestid}-Chat-ContactListMobile`"

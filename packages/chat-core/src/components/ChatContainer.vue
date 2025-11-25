@@ -32,8 +32,8 @@
     <Chat
       :user="authUser"
       :base-url="props.baseUrl"
-      :contacts="state.users.filter(user => user.id !== authUser.id)"
       :chapter="state.chapter"
+      :contacts="state.users.filter(user => user.id !== authUser.id)"
       :contact="state.contact"
       class="chat__messages"
       ref="chatRef"

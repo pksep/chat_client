@@ -23,7 +23,7 @@
       </li>
     </ul>
     <Button
-      v-if="!props.isAddOne || !props.isButtonDisabled"
+      v-if="isButtonEnabled"
       :type="ButtonTypeEnum.primary"
       :size="SizesEnum.little"
       class="contact-selector__add"
@@ -77,9 +77,13 @@ const selectedContacts = computed(() =>
   props.contacts.filter(contact => state.selectedIds.has(contact.id))
 );
 
-const isButtonDisabled = computed(() => {
-  return state.selectedIds.size === 0;
-});
+const isButtonEnabled = computed(() =>
+  props.isButtonDisabled !== undefined
+    ? !props.isButtonDisabled && !props.isAddOne
+    : !props.isAddOne
+);
+
+const isButtonDisabled = computed(() => state.selectedIds.size === 0);
 
 const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
   if (isCheck) {

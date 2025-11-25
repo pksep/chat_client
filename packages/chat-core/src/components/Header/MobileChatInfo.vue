@@ -44,6 +44,7 @@ import { Avatar } from '@pksep/yui';
 import NewChatInformationForm from '../NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from '../MenuInfoButtons.vue';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';
+import { IMenuInfoInformation } from '../../composables/useMenuInfo';
 
 interface IMobileChatInfoProps {
   contact: IUserProps;
@@ -58,7 +59,7 @@ const emits = defineEmits<{
   (e: 'unmount-leave'): void;
 }>();
 
-const information = defineModel<any>({
+const information = defineModel<IMenuInfoInformation>({
   default: { name: '' }
 });
 

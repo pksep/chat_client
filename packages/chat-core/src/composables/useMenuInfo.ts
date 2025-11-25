@@ -14,13 +14,15 @@ type IMenuInfoState = {
   openAddUser: boolean;
   contacts: IUserProps[];
   filteredMembers: IUserProps[];
-  information: {
-    name?: string;
-    date?: Date;
-    groupId?: string | null;
-    userId?: string;
-    avatarUrl?: string;
-  };
+  information: IMenuInfoInformation | null;
+};
+
+export type IMenuInfoInformation = {
+  name?: string;
+  date?: Date;
+  groupId?: string | null;
+  userId?: string;
+  avatarUrl?: string;
 };
 
 type IMenuInfoEmits = {

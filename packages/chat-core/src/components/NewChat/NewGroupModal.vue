@@ -1,12 +1,12 @@
 <template>
   <Modal
-    :open="state.open"
+    :open="props.open"
     class="new-group"
     position="center"
     @close="closeModal"
   >
     <header class="new-group__header">
-      {{ !state.isSelectedMembers ? 'Добавить участника' : 'Общий' }}
+      {{ !isSelectedMembers ? 'Добавить участника' : 'Общий' }}
       <Button
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.little"
@@ -17,7 +17,7 @@
       </Button>
     </header>
     <ContactSelector
-      v-if="!state.isSelectedMembers"
+      v-if="!isSelectedMembers"
       :contacts="contacts"
       @unmount-contact="handleOpenGroupInfo"
     />
@@ -28,24 +28,24 @@
           <span class="menu-info__user-header">
             Участники
             <div class="menu-info__user-count">
-              {{ state.selectedContacts.length }}
+              {{ selectedContacts.length }}
             </div>
           </span>
         </template>
         <template #header2> Информация </template>
         <template #tab1>
           <ContactListInModal
-            :contacts="state.selectedContacts"
+            :contacts="selectedContacts"
             @unmount-click-add-button="handleCloseGroupInfo"
           />
         </template>
         <template #tab2>
           <div class="menu-info__group-info">
             <Avatar
-              :url="state.avatarPreview"
-              :alt="state.groupName"
+              :url="avatarPreview"
+              :alt="groupName"
               class="user-profile__avatar"
-              :initials="state.groupName"
+              :initials="groupName"
               :style="{
                 '--size-avatar': '86px',
                 'min-width': '86px',
@@ -59,7 +59,7 @@
               <Input
                 placeholder="Название:"
                 class="minor"
-                v-model="state.groupName"
+                v-model="groupName"
               />
             </div>
           </div>
@@ -72,8 +72,8 @@
             @change="onAvatarSelected"
           />
           <ModalCroppedAvatar
-            :image="state.file"
-            :open="state.isEditAvatar"
+            :image="file"
+            :open="isEditAvatar"
             @unmount-close="closeEditAvatar"
             @unmount-save="onSaveAvatar"
           />
@@ -84,7 +84,7 @@
         :type="ButtonTypeEnum.primary"
         :size="SizesEnum.little"
         class="contact-selector__add"
-        :disabled="!state.groupName"
+        :disabled="!groupName"
         @click="handleCreateGroup"
       >
         Создать
@@ -94,7 +94,6 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue';
 import {
   ModalCroppedAvatar,
   Icon,
@@ -109,96 +108,37 @@ import {
 } from '@pksep/yui';
 import ContactSelector from './ContactSelector.vue';
 import type { INewContactProps } from './interfaces/new-contact';
-import { createGroup } from '../../services/useGroup';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';
-import { uploadFile } from '../../services/useOpenIM';
 import { IUserProps } from '../interfaces/interfaces';
+import { useNewGroupModal } from './composables/useNewGroupModal';
 
-const props = withDefaults(defineProps<INewContactProps>(), {
-  open: false,
-  contacts: () => []
-});
+const props = withDefaults(
+  defineProps<INewContactProps & { user?: IUserProps }>(),
+  {
+    open: false,
+    contacts: () => []
+  }
+);
 
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
   (e: 'unmount-new-group', group: any): void;
 }>();
 
-const avatarInputRef = ref(null);
-
-const state = reactive({
-  open: false,
-  checkUsers: [],
-  selectedContacts: computed(() => [
-    props.user,
-    ...props.contacts.filter(c => new Set(state.checkUsers).has(c.id))
-  ]),
-  groupName: '',
-  isEditAvatar: false,
-  file: null,
-  isSelectedMembers: false,
-  avatarPreview: ''
-});
-
-watch(
-  () => props.open,
-  () => {
-    state.open = props.open;
-  }
-);
-
-const onAvatarSelected = async (e: Event) => {
-  const file = (e.target as HTMLInputElement).files?.[0];
-  if (!file) return;
-
-  state.file = file;
-  state.isEditAvatar = true;
-};
-
-const onSaveAvatar = async (): Promise<void> => {
-  const url = await uploadFile(state.file);
-  state.avatarPreview = url;
-  state.isEditAvatar = false;
-};
-
-const closeEditAvatar = (): void => {
-  state.isEditAvatar = false;
-};
-
-const clearState = () => {
-  state.checkUsers = [];
-  state.groupName = '';
-  state.file = null;
-  state.isSelectedMembers = false;
-  state.avatarPreview = '';
-};
-
-const closeModal = (): void => {
-  state.open = false;
-  clearState();
-  emits('unmount-close');
-};
-
-const handleCreateGroup = async (): Promise<void> => {
-  const group = await createGroup(
-    state.checkUsers,
-    state.groupName,
-    state.avatarPreview
-  );
-  console.log('Group created:', group);
-  emits('unmount-new-group', group);
-  closeModal();
-};
-
-const handleOpenGroupInfo = async (contacts: IUserProps[]): Promise<void> => {
-  state.isSelectedMembers = true;
-  state.checkUsers = contacts.map(contact => contact.id);
-  if (!state.groupName) {
-    state.groupName = state.selectedContacts.map(c => c.nickname).join(', ');
-  }
-};
-
-const handleCloseGroupInfo = async (): Promise<void> => {
-  state.isSelectedMembers = false;
-};
+const {
+  avatarInputRef,
+  groupName,
+  isSelectedMembers,
+  selectedContacts,
+  avatarPreview,
+  isEditAvatar,
+  file,
+  onAvatarSelected,
+  onSaveAvatar,
+  closeEditAvatar,
+  closeModal,
+  handleCreateGroup,
+  handleOpenGroupInfo,
+  handleCloseGroupInfo
+} = useNewGroupModal(props, emits);
 </script>

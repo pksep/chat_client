@@ -2,7 +2,7 @@
   <MobileModal
     :open="props.open"
     @unmount-close="handleCloseModal"
-    @unmount-next="handleStartStep"
+    @unmount-next="handleOpenGroupInfo(selectedContacts)"
     title="Написать сообщение"
     start-button-text="Далее"
     back-button-text="Отмена"
@@ -14,22 +14,22 @@
         is-button-disabled
         :contacts="props.contacts"
         :selected-contact-ids="props.selectedContactIds"
-        @unmount-contact="handleUpdateInformation"
+        @unmount-contact="handleCheckUsers"
         @unmount-close="handleCloseModal"
       />
     </template>
   </MobileModal>
   <MobileModal
-    :open="additionalState.openEdit"
-    @close="handleCloseAddUserModal"
+    :open="isSelectedMembers"
+    @close="handleCloseGroupInfo"
     title="Канал"
-    @unmount-next="handleMessage"
+    @unmount-next="handleCreateGroup"
     start-button-text="Создать"
     back-button-text="Отмена"
   >
     <MobileChatInfo
-      v-model="state.information"
-      :members="props.contacts"
+      v-model="additionalState.information"
+      :members="selectedContacts"
       :data-testid="props.dataTestid"
     />
   </MobileModal>
@@ -37,7 +37,6 @@
 
 <script setup lang="ts">
 import { reactive } from 'vue';
-import { IContactProps } from '../interfaces/interfaces';
 import MobileModal from '../UI/MobileModal.vue';
 import ContactSelector from './ContactSelector.vue';
 import MobileChatInfo from '../Header/MobileChatInfo.vue';
@@ -45,7 +44,7 @@ import {
   INewChatMobileProps,
   INewChatMobileEmits
 } from './interfaces/contact-selector';
-import { useMenuInfo } from '../../composables/useMenuInfo';
+import { useNewGroupModal } from './composables/useNewGroupModal';
 
 const props = withDefaults(defineProps<INewChatMobileProps>(), {
   open: false,
@@ -54,29 +53,35 @@ const props = withDefaults(defineProps<INewChatMobileProps>(), {
 
 const emits = defineEmits<INewChatMobileEmits>();
 
-const { state, handleUpdateInformation } = useMenuInfo(
-  { ...props, members: props.contacts },
-  emits
-);
+const {
+  groupName,
+  checkUsers,
+  selectedContacts,
+  isSelectedMembers,
+  avatarPreview,
+  handleCreateGroup,
+  handleOpenGroupInfo,
+  handleCloseGroupInfo
+} = useNewGroupModal(props, emits);
 
 const additionalState = reactive({
-  selectedContacts: [] as IContactProps[],
-  openEdit: false
+  information: {
+    name: groupName.value,
+    avatarUrl: avatarPreview.value,
+    groupId: null,
+    userId: props.user?.id,
+    date: new Date()
+  }
 });
 
 const handleCloseModal = () => {
   emits('unmount-close');
 };
 
-const handleStartStep = () => {
-  additionalState.openEdit = true;
-};
-
-const handleCloseAddUserModal = () => {
-  additionalState.openEdit = false;
-};
-
-const handleMessage = () => {
-  emits('unmount-chapter');
+const handleCheckUsers = (contacts: IUser[]) => {
+  checkUsers(selectedContacts.value);
+  // const group = await handleCreateGroup();
+  // additionalState.information.groupId = group.groupID;
+  // additionalState.information.name = group.showName;
 };
 </script>

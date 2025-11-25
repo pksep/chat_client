@@ -24,10 +24,11 @@
 </template>
 
 <script setup lang="ts">
+import { IMenuInfoInformation } from '../../composables/useMenuInfo';
 import { Button, ButtonTypeEnum, Input, SizesEnum, Textarea } from '@pksep/yui';
 import { computed, reactive } from 'vue';
 
-const model = defineModel<{ name: string }>({
+const model = defineModel<IMenuInfoInformation>({
   default: { name: '' }
 });
 

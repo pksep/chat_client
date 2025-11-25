@@ -19,10 +19,11 @@ export interface IContactSelectorProps {
 
 export interface INewChatMobileProps extends IContactSelectorProps {
   open: boolean;
-  contact?: IUserProps;
+  user?: IUserProps;
 }
 
 export interface INewChatMobileEmits extends IContactSelectorEmits {
   (e: 'unmount-close');
+  (e: 'unmount-new-group');
   (e: 'unmount-chapter');
 }
