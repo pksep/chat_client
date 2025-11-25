@@ -22,6 +22,7 @@
 }
 
 section.menu__info-users.modal-info-mobile__contact-list {
+  --size-avatar: max-content;
   padding: 0;
   padding-inline: 0;
   & .menu__info-users-list {

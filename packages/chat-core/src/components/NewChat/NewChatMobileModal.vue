@@ -2,7 +2,7 @@
   <MobileModal
     :open="props.open"
     @unmount-close="handleCloseModal"
-    @unmount-next="handleOpenGroupInfo(selectedContacts)"
+    @unmount-next="handleOpenGroupInfo(state.checkMembers)"
     title="Написать сообщение"
     start-button-text="Далее"
     back-button-text="Отмена"
@@ -28,7 +28,7 @@
     back-button-text="Отмена"
   >
     <MobileChatInfo
-      v-model="additionalState.information"
+      v-model="state.information"
       :members="selectedContacts"
       :data-testid="props.dataTestid"
     />
@@ -45,6 +45,8 @@ import {
   INewChatMobileEmits
 } from './interfaces/contact-selector';
 import { useNewGroupModal } from './composables/useNewGroupModal';
+import { IUserProps } from '../interfaces/interfaces';
+import { watch } from 'vue';
 
 const props = withDefaults(defineProps<INewChatMobileProps>(), {
   open: false,
@@ -63,7 +65,8 @@ const {
   handleCloseGroupInfo
 } = useNewGroupModal(props, emits);
 
-const additionalState = reactive({
+const state = reactive({
+  checkMembers: [],
   information: {
     name: groupName.value,
     avatarUrl: avatarPreview.value,
@@ -77,10 +80,14 @@ const handleCloseModal = () => {
   emits('unmount-close');
 };
 
-const handleCheckUsers = () => {
-  // checkUsers(selectedContacts.value);
-  // const group = await handleCreateGroup();
-  // additionalState.information.groupId = group.groupID;
-  // additionalState.information.name = group.showName;
+const handleCheckUsers = (contacts: IUserProps[]): void => {
+  state.checkMembers = contacts;
 };
+
+watch(
+  () => groupName.value,
+  () => {
+    state.information.name = groupName.value;
+  }
+);
 </script>

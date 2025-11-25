@@ -91,15 +91,15 @@ const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
   } else {
     state.selectedIds.delete(contactId);
   }
+  if (props.isButtonDisabled) {
+    emits('unmount-contact', selectedContacts.value);
+  }
 };
 
 const handleNewContact = (contact: IUserProps): void => {
   if (props.isAddOne) {
     emits('unmount-contact', contact);
     return;
-  }
-  if (props.isButtonDisabled) {
-    emits('unmount-contact', selectedContacts.value);
   }
 };
 

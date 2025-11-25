@@ -13,8 +13,7 @@ interface NewGroupState {
   avatarPreview: string;
 }
 
-interface ExtendedProps extends INewContactProps {
-}
+interface ExtendedProps extends INewContactProps {}
 
 type NewGroupModalEmits = {
   (e: 'unmount-close'): void;
@@ -92,11 +91,16 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
     return group;
   };
 
+  const createNiceName = (arr: IUserProps[]) => {
+    const names = arr.map(user => user.nickname).join(', ');
+    return names;
+  };
+
   const handleOpenGroupInfo = async (contacts: IUserProps[]): Promise<void> => {
     state.isSelectedMembers = true;
     state.checkUsers = contacts.map(contact => contact.id);
     if (!state.groupName) {
-      state.groupName = selectedContacts.value.map(c => c.nickname).join(', ');
+      state.groupName = createNiceName(contacts);
     }
   };
 
