@@ -75,8 +75,8 @@ onMounted(async () => {
       ? `https://${import.meta.env.VITE_OPENIM_API_DOMAIN}`
       : 'http://localhost:10002';
 
-    const wsAddr = import.meta.env.VITE_OPENIM_API_DOMAIN
-      ? `wss://${import.meta.env.VITE_OPENIM_API_DOMAIN}`
+    const wsAddr = import.meta.env.VITE_OPENIM_WS_DOMAIN
+      ? `wss://${import.meta.env.VITE_OPENIM_WS_DOMAIN}`
       : 'ws://localhost:10023';
 
     await IMSDK.login({
