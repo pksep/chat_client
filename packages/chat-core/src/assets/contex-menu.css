@@ -7,6 +7,9 @@
   box-shadow: 0px 0px 22px 0px #00000012;
   z-index: 100;
   min-width: 120px;
+  & button.button-yui-kit {
+    width: 100%;
+  }
 }
 
 .tip {

@@ -39,5 +39,7 @@ p.modal-info-mobile__end--paragraph {
 }
 
 .avatar-yui-kit:has(.avatar-yui-kit__text) {
+  min-width: var(--size-avatar);
   width: var(--size-avatar) !important;
+  min-height: var(--size-avatar);
 }

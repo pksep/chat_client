@@ -60,35 +60,28 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
               description: 'Chatting application',
               icons: [
                 {
-                  src: 'pwa-64x64.png',
+                  src: 'images/pwa-64x64.png',
                   sizes: '64x64',
                   type: 'image/png'
                 },
                 {
-                  src: 'pwa-192x192.png',
+                  src: 'images/pwa-192x192.png',
                   sizes: '192x192',
                   type: 'image/png'
                 },
                 {
-                  src: 'pwa-512x512.png',
+                  src: 'images/pwa-512x512.png',
                   sizes: '512x512',
                   type: 'image/png'
                 },
                 {
-                  src: 'maskable-icon-512x512.png',
+                  src: 'images/maskable-icon-512x512.png',
                   sizes: '512x512',
                   type: 'image/png',
                   purpose: 'maskable'
                 }
               ],
-              screenshots: [
-                {
-                  src: 'desktop-test.png',
-                  sizes: '889x900',
-                  form_factor: 'wide',
-                  label: 'Desktop view showing chat'
-                }
-              ]
+              screenshots: []
             },
             devOptions: {
               enabled: true,

@@ -1,6 +1,6 @@
 <template>
   <main
-    :class="chatContainerClasses"
+    :class="state.chatContainerClasses"
     :data-testid="`${props.dataTestid}-ChatContainer-Container`"
   >
     <Header
@@ -71,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watchEffect } from 'vue';
 import Header from './Header/Header.vue';
 import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
@@ -86,7 +86,7 @@ import {
 } from '../composables/useUsers';
 import { isShowContactList } from '../composables/useShowContactList';
 import { useResizeState } from '../composables/useResizeState';
-import { MAX_W_MD } from '../utils/constants';
+import { MAX_W_MD, MAX_W_XL } from '../utils/constants';
 import NewGroupModal from './NewChat/NewGroupModal.vue';
 import { getGroupList } from '../services/useGroup';
 import { getConversationList } from '../services/useConversions';
@@ -94,7 +94,6 @@ import { getConversationList } from '../services/useConversions';
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const state = reactive({
-  isCollapse: false,
   isMenuDesktopOpen: false,
   isMenuMobileOpen: false,
   activeTabId: null,
@@ -103,6 +102,10 @@ const state = reactive({
   contact: null,
   isNewContactOpen: false,
   isNewGroupOpen: false,
+  chatContainerClasses: [
+    'chat-container',
+    { collapse: false, 'menu-collapse': true }
+  ],
   users: computed(() => getUsersList()),
   groups: computed(() => getGroupList()),
   conversations: computed(() => getConversationList())
@@ -116,13 +119,20 @@ const authUser = computed(() => appendUserAttributes(props.user));
 
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 
-const chatContainerClasses = computed(() => [
-  'chat-container',
-  { collapse: state.isCollapse, 'menu-collapse': !state.isMenuDesktopOpen }
-]);
+const { state: isCollapse, toggle } = useResizeState({
+  breakpoint: MAX_W_XL,
+  storageKey: 'menu-collapse'
+});
 
-const handleCollapse = (isCollapse: boolean): void => {
-  state.isCollapse = isCollapse;
+watchEffect(() => {
+  state.chatContainerClasses = [
+    'chat-container',
+    { collapse: isCollapse.value, 'menu-collapse': !state.isMenuDesktopOpen }
+  ];
+});
+
+const handleCollapse = (): void => {
+  toggle();
 };
 
 const handleMenuToggle = (isOpen: boolean): void => {

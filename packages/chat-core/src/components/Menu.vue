@@ -99,11 +99,11 @@
           />
         </details>
         <template v-if="isCollapse">
-          <template v-for="(user, index) in state.contactList" :key="index">
-            <ul
-              class="menu__user"
-              :data-testid="`${props.dataTestid}-Menu-CollapsedUser${index + 1}`"
-            >
+          <ul
+            class="menu__user"
+            :data-testid="`${props.dataTestid}-Menu-CollapsedUser${index + 1}`"
+          >
+            <template v-for="(user, index) in item.items" :key="index">
               <li
                 class="menu__user-avatar"
                 :data-testid="`${props.dataTestid}-Menu-CollapsedAvatar${index + 1}`"
@@ -114,11 +114,8 @@
                   :data-testid="`${props.dataTestid}-Menu-UserAvatar${index + 1}`"
                 />
               </li>
-            </ul>
-            <Line
-              :data-testid="`${props.dataTestid}-Menu-CollapsedLine${index + 1}`"
-            />
-          </template>
+            </template>
+          </ul>
         </template>
       </template>
     </div>
@@ -187,6 +184,7 @@ const emits = defineEmits<IMenuEmits>();
 
 const { state: isCollapse, toggle } = useResizeState({
   breakpoint: MAX_W_XL,
+  storageKey: 'menu-collapse',
   onStateChange: val => {
     emits('unmount-collapse', val);
   }
