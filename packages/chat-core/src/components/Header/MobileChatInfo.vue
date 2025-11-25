@@ -31,6 +31,7 @@
       Участники:
     </p>
     <ContactListInModal
+      :show-add-button="false"
       :contacts="props.members"
       class="modal-info-mobile__contact-list"
       :data-testid="`${props.dataTestid}-Header-ContactListInModal`"
