@@ -47,7 +47,6 @@ import ContactListInModal from '../ContactList/ContactListInModal.vue';
 import { IMenuInfoInformation } from '../../composables/useMenuInfo';
 
 interface IMobileChatInfoProps {
-  contact: IUserProps;
   members: IUserProps[];
   dataTestid: string;
 }

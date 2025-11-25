@@ -55,7 +55,6 @@ const emits = defineEmits<INewChatMobileEmits>();
 
 const {
   groupName,
-  checkUsers,
   selectedContacts,
   isSelectedMembers,
   avatarPreview,
@@ -78,8 +77,8 @@ const handleCloseModal = () => {
   emits('unmount-close');
 };
 
-const handleCheckUsers = (contacts: IUser[]) => {
-  checkUsers(selectedContacts.value);
+const handleCheckUsers = () => {
+  // checkUsers(selectedContacts.value);
   // const group = await handleCreateGroup();
   // additionalState.information.groupId = group.groupID;
   // additionalState.information.name = group.showName;
