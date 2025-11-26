@@ -90,8 +90,6 @@ onMounted(() => {
   fetchConversationList();
 });
 
-console.log('MobileList mounted', props.contact);
-
 defineExpose({
   handleClear: () => messageListRef.value?.handleClear()
 });

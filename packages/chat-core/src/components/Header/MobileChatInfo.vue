@@ -23,7 +23,8 @@
       @change="handleImagePublish"
     />
     <NewChatInformationForm
-      v-model="information"
+      :model-value="information"
+      @unmount-save="handleImageSave"
       :data-testid="`${props.dataTestid}-Header-InformationForm`"
     >
       <template #button></template>
@@ -76,6 +77,7 @@ const information = defineModel<IMenuInfoInformation>();
 const avatarInputRef = useTemplateRef('avatarInputRef');
 
 const {
+  state: stateInfo,
   init,
   muteGroupInfo,
   leaveGroupInfo,
@@ -99,7 +101,13 @@ const handleEditProfileIcon = () => {
 const handleImagePublish = (event: Event) => {
   const file = onOpenEditAvatar(event);
   if (!file) return;
-  onSaveAvatar(file);
+};
+
+const handleImageSave = async (config: { name: string }) => {
+  information.value = { ...information.value, ...config };
+  if (stateInfo.fileImage) {
+    await onSaveAvatar(stateInfo.fileImage);
+  }
 };
 
 onMounted(async () => {

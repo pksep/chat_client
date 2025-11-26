@@ -66,6 +66,7 @@ export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
   };
 
   return {
+    model,
     state,
     init,
     openEditProfileIcon,

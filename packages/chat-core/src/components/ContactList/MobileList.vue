@@ -95,7 +95,6 @@ const isButtonDisabled = computed(() => state.checkUsers.size === 0);
 const handleChapter = (
   chapter: { nickname: string; contact: IUserProps } | string | null
 ): void => {
-  console.log('Unmounting chapter:', chapter);
   if (typeof chapter === 'string') {
     emits('unmount-chapter', chapter);
   } else if (chapter && chapter.contact.id) {

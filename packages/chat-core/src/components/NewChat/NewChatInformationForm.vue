@@ -34,9 +34,15 @@ const emits = defineEmits<{
   (e: 'unmount-save', value: { name: string }): void;
 }>();
 
-const form = reactive({ name: model.value?.name || '' });
+const form = reactive({
+  name: model.value?.name || '',
+  avatarUrl: model.value?.avatarUrl || ''
+});
 
 const isFormValid = computed(() => {
+  if (model.value?.avatarUrl && model.value.avatarUrl !== form.avatarUrl) {
+    return true;
+  }
   return (
     form.name && form.name.trim() !== '' && form.name !== model.value?.name
   );
