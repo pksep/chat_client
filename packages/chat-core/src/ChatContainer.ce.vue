@@ -18,6 +18,7 @@ import {
 import { mockUsers } from './test/mock/users';
 import { getAllNotificationCount } from './services/useConversions';
 import { fetchAuthUser, getAuthUser, useAuth } from './composables/useAuth';
+import { useRegister } from './composables/useLogin';
 
 const props = defineProps<IChatContainerProps>();
 const emits = defineEmits<IChatContainerEmits>();
@@ -26,13 +27,13 @@ const allNotificationCount = computed(() => getAllNotificationCount());
 
 onMounted(async () => {
   try {
-    // if (import.meta.env.VITE_USE_MOCK_DATA === 'true') {
-    //   await Promise.all(
-    //     mockUsers.map(user => {
-    //       return useRegister({ users: [user] });
-    //     })
-    //   );
-    // }
+    if (import.meta.env.VITE_USE_MOCK_DATA === 'true') {
+      await Promise.all(
+        mockUsers.map(user => {
+          return useRegister({ users: [user] });
+        })
+      );
+    }
 
     // const registerResponse = await useRegister({
     //   users: [

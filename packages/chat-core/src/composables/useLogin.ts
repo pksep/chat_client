@@ -11,17 +11,6 @@ interface RegisterParams {
   users: RegisterUser[];
 }
 
-interface LoginParams {
-  platformID: number;
-  userID: string;
-}
-
-interface LoginResponse {
-  data: {
-    token: string;
-    expireTimeSeconds: number;
-  };
-}
 
 const setCookie = (name: string, value: string, expiresIn: number): void => {
   const date = new Date();
