@@ -196,6 +196,11 @@ const unmountMenuChapter = (
 };
 
 const handleNewContact = (config): void => {
+  if (isMobile.value) {
+    state.contact = config;
+    state.chapter = config.nickname;
+    return;
+  }
   state.isNewContactOpen = config.isChapterOpen;
 };
 

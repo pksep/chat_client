@@ -4,6 +4,8 @@
 }
 
 button.mobile__list-button {
+  position: fixed;
+  bottom: 0;
   align-self: end;
   justify-self: end;
   margin: 12px 10px;

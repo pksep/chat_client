@@ -2,9 +2,9 @@
   <MobileModal
     :open="props.open"
     @unmount-close="handleCloseModal"
-    @unmount-next="handleOpenGroupInfo(state.checkMembers)"
+    @unmount-next="handleNext(state.checkMembers)"
     title="Написать сообщение"
-    start-button-text="Далее"
+    :start-button-text="props.isAddOne ? null : 'Далее'"
     back-button-text="Отмена"
   >
     <template #default>
@@ -80,8 +80,18 @@ const handleCloseModal = () => {
   emits('unmount-close');
 };
 
-const handleCheckUsers = (contacts: IUserProps[]): void => {
-  state.checkMembers = contacts;
+const handleCheckUsers = (contacts: IUserProps[] | IUserProps): void => {
+  if (props.isAddOne) {
+    emits('unmount-contact', contacts);
+  }
+  if (Array.isArray(contacts) && contacts.length > 0) {
+    state.checkMembers = contacts;
+  }
+};
+
+const handleNext = (contacts: IUserProps[]): void => {
+  if (props.isAddOne) return;
+  handleOpenGroupInfo(contacts);
 };
 
 watch(

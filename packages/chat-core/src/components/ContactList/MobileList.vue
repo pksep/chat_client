@@ -62,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, onMounted } from 'vue';
+import { reactive, computed } from 'vue';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import Line from '../UI/Line.vue';
 import ContactList from './ContactList.vue';
@@ -131,6 +131,4 @@ const handleOpenUser = (): void => {
   if (isButtonDisabled.value) return;
   handleCloseModal();
 };
-
-onMounted(() => {});
 </script>
