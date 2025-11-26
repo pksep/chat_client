@@ -32,7 +32,7 @@
     <Chat
       :user="authUser"
       :base-url="props.baseUrl"
-      :contacts="state.users.filter(user => user.id !== authUser.id)"
+      :contacts="state.users.filter(user => user.id !== authUser?.id)"
       :chapter="state.chapter"
       :contact-id="state.contact?.id"
       :conversion-id="state.contact?.conversionId"
@@ -54,7 +54,7 @@
     />
   </main>
   <NewContactModal
-    :contacts="state.users.filter(user => user.id !== authUser.id)"
+    :contacts="state.users.filter(user => user.id !== authUser?.id)"
     :open="state.isNewContactOpen"
     :dataTestid="`${props.dataTestid}-ChatContainer-NewContactModal`"
     @unmount-close="closeModals"
@@ -63,7 +63,7 @@
 
   <NewGroupModal
     :user="authUser"
-    :contacts="state.users.filter(user => user.id !== authUser.id)"
+    :contacts="state.users.filter(user => user.id !== authUser?.id)"
     :open="state.isNewGroupOpen"
     :dataTestid="`${props.dataTestid}-ChatContainer-NewGroupModal`"
     @unmount-close="closeModals"
@@ -91,6 +91,7 @@ import { MAX_W_MD } from '../utils/constants';
 import NewGroupModal from './NewChat/NewGroupModal.vue';
 import { getGroupList } from '../services/useGroup';
 import { getConversationList } from '../services/useConversions';
+import { getAuthUser } from '../composables/useAuth';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
@@ -113,7 +114,7 @@ const props = withDefaults(defineProps<IChatContainerProps>(), {
   dataTestid: () => 'ChatContainer'
 });
 
-const authUser = computed(() => appendUserAttributes(props.user));
+const authUser = computed(() => appendUserAttributes(getAuthUser()));
 
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 

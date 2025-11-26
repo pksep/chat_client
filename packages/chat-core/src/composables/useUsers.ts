@@ -70,6 +70,7 @@ export const fetchAllUsers = async (opts?: {
 };
 
 export const appendUserAttributes = (user: IUserProps) => {
+  if (!user) return null;
   const ex = JSON.parse(user?.ex || null);
   user.tabel = ex?.tabel || '';
   user.initial = ex?.initial || '';

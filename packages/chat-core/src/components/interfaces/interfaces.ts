@@ -61,7 +61,6 @@ export interface IMenuRightProps extends IMenuProps {
 export interface IChatContainerProps {
   token?: string;
   baseUrl?: string;
-  user?: IUserProps;
   dataTestid?: string;
 }
 
