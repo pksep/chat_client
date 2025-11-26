@@ -51,8 +51,6 @@ export const manipulateConversationList = (
   return conversations.map(c => {
     const user = users.find(user => user.id === c.userID);
 
-    console.log(JSON.parse(c.latestMsg), 11111);
-
     return {
       id: c.conversationID,
       userId: c.userID,
