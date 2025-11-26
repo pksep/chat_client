@@ -66,6 +66,8 @@
             messageChat(props.user.id === message.sendID ? 'user' : 'assistant')
           "
           :message="message.textElem?.content || ''"
+          :media="message.pictureElem?.sourcePicture?.url"
+          :file="message.fileElem"
           :is-me-sender="props.user.id === message.sendID"
           :time="formatTime(new Date(message.sendTime))"
           :sender="message.senderNickname"
@@ -87,7 +89,9 @@
   >
     <ContentEditor
       v-model="inputText"
+      active-attach-file
       @unmount-send="handleSend"
+      @unmount-attach-file="handleAttachFile"
       :data-testid="`${props.dataTestid}-MessageList-ContentEditor`"
     />
   </div>
@@ -237,6 +241,21 @@ const handleSend = async (): Promise<void> => {
     }
   }
   nextTick(() => scrollToBottom());
+};
+
+const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
+  if (!files.length) return;
+
+  Array.from(files).forEach(async file => {
+    await sendMessageIM({
+      type: onlyMedia ? 'image' : 'file',
+      to: props.contactId || '',
+      groupId: props.contactId || props.conversionId.slice(3),
+      file
+    });
+
+    nextTick(() => scrollToBottom());
+  });
 };
 
 const isNewDate = (index: number, isMastra: boolean = false) => {

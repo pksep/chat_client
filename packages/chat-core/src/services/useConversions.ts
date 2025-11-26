@@ -1,4 +1,4 @@
-import { CbEvents } from '@openim/wasm-client-sdk';
+import { CbEvents, ConversationItem } from '@openim/wasm-client-sdk';
 import { ref } from 'vue';
 import { IMSDK } from './useOpenIM';
 import { IContactProps } from '../components/interfaces/interfaces';
@@ -43,7 +43,9 @@ const setPinConversation = async (
   }
 };
 
-export const manipulateConversationList = (conversations): IContactProps[] => {
+export const manipulateConversationList = (
+  conversations: Partial<ConversationItem>[]
+): IContactProps[] => {
   const users = getUsersList();
 
   return conversations.map(c => {
@@ -58,10 +60,13 @@ export const manipulateConversationList = (conversations): IContactProps[] => {
       tabel: user?.tabel || '',
       initial: user?.initial || '',
       latestMessage: c.latestMsg
-        ? JSON.parse(c.latestMsg)?.textElem?.content || ''
+        ? JSON.parse(c.latestMsg)?.textElem?.content ||
+          JSON.parse(c.latestMsg)?.fileElem?.fileName ||
+          JSON.parse(c.latestMsg)?.pictureElem?.sourcePath ||
+          ''
         : '',
       latestMessageTime:
-        c.createdTime ||
+        c.latestMsgSendTime ||
         (c.latestMsg ? JSON.parse(c.latestMsg)?.sendTime || '' : ''),
       notificationCount: c.unreadCount,
       groupId: c.groupID,
@@ -77,7 +82,7 @@ const getConversationList = (): IContactProps[] => {
   return conversionStore.value || [];
 };
 
-const setConversationList = (value): void => {
+const setConversationList = (value: ConversationItem[]): void => {
   conversionStore.value = manipulateConversationList(value);
 };
 
