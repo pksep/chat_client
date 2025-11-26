@@ -15,10 +15,8 @@
   }
 }
 
-.modal-info-mobile__start > .modal-info-mobile__avatar {
+.modal-info-mobile__start > .modal-info-mobile__avatar-button {
   --size-avatar: 86px;
-  width: var(--size-avatar) !important;
-  height: 85px;
 }
 
 section.menu__info-users.modal-info-mobile__contact-list {

@@ -138,7 +138,7 @@ const chatWrapperRef = useTemplateRef('chatWrapperRef');
 const inputText = ref('');
 
 const state = reactive({
-  messages: computed(() => getSavedMessages(props.conversionId || '')),
+  messages: computed(() => getSavedMessages(props.contact.conversionId || '')),
   chatId: null
 });
 
@@ -170,7 +170,7 @@ const handleScroll = async (): Promise<void> => {
     const scrollHeight = chatWrapperRef.value.scrollHeight;
     if (chatWrapperRef.value?.scrollTop < 20) {
       await getMessagesByConversationId(
-        props.conversionId,
+        props.contact.conversionId,
         state.messages[0]?.clientMsgID
       );
       nextTick(() => {
@@ -185,7 +185,7 @@ watch(
   () => props.chapter,
   (newValue, oldValue) => {
     if (newValue !== oldValue) {
-      getMessagesByConversationId(props.conversionId);
+      getMessagesByConversationId(props.contact.conversionId);
     }
     if (
       (aiMessages?.value && aiMessages?.value.length) ||
@@ -209,7 +209,7 @@ watch(
     const newMessage = state.messages[state.messages.length - 1];
 
     if (newMessage.sendID !== props.user.id) {
-      markAsRead(props.conversionId);
+      markAsRead(props.contact.conversionId);
     }
   }
 );
@@ -226,17 +226,17 @@ const handleSend = async (): Promise<void> => {
   if (props.chapter === 'ai') {
     await sendMessage(text, scrollToBottom);
   } else {
-    if (props.contactId) {
+    if (props.contact.id) {
       await sendMessageIM({
         message: text,
-        to: props.contactId || '',
-        groupId: props.contactId || ''
+        to: props.contact.id || '',
+        groupId: props.contact.id || ''
       });
     } else {
       await sendMessageIM({
         message: text,
         to: '',
-        groupId: props.conversionId.slice(3)
+        groupId: props.contact.conversionId.slice(3)
       });
     }
   }

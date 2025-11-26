@@ -26,11 +26,9 @@
 <script setup lang="ts">
 import { IMenuInfoInformation } from '../../composables/useMenuInfo';
 import { Button, ButtonTypeEnum, Input, SizesEnum, Textarea } from '@pksep/yui';
-import { computed, reactive } from 'vue';
+import { watch, computed, reactive } from 'vue';
 
-const model = defineModel<IMenuInfoInformation>({
-  default: { name: '' }
-});
+const model = defineModel<IMenuInfoInformation>();
 
 const emits = defineEmits<{
   (e: 'unmount-save', value: { name: string }): void;
@@ -43,6 +41,15 @@ const isFormValid = computed(() => {
     form.name && form.name.trim() !== '' && form.name !== model.value?.name
   );
 });
+
+watch(
+  () => model.value,
+  () => {
+    if (model.value) {
+      form.name = model.value.name;
+    }
+  }
+);
 
 const onSave = () => {
   if (isFormValid.value) {

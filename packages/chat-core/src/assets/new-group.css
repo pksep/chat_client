@@ -57,3 +57,11 @@ button.button-yui-kit.new-contact__button-close {
 .contact-selector {
   display: grid;
 }
+
+.new-group__tab2-profile {
+  --size-avatar: 50px;
+}
+
+.new-group-info {
+  --size-avatar: 86px;
+}

@@ -33,91 +33,42 @@
 </template>
 
 <script lang="ts" setup>
-import { reactive } from 'vue';
-import { quitGroup } from '../services/useGroup';
+import { onMounted } from 'vue';
+import { useTemplateRef } from 'vue';
+import { useInformationMenu } from '../composables/useInformationMenu';
 import { ModalCroppedAvatar, Avatar } from '@pksep/yui';
 import NewChatInformationForm from './NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from './MenuInfoButtons.vue';
-import { IMSDK, uploadFile } from '../services/useOpenIM';
-import { onMounted } from 'vue';
-import { useTemplateRef } from 'vue';
-
-type Props = {
-  groupId: string;
-  userId: string;
-  name: string | null;
-  avatarUrl: string | null;
-  date: Date | null;
-};
+import type { IMenuInfoInformation } from '../composables/useMenuInfo';
 
 withDefaults(
   defineProps<{
+    modelValue?: IMenuInfoInformation;
     dataTestid?: string;
   }>(),
   {}
 );
 
-const model = defineModel<Props>();
+const model = defineModel<IMenuInfoInformation>();
 
 const avatarInputRef = useTemplateRef('avatarInputRef');
 
-const state = reactive({
-  fileImage: null as File | null,
-  isEditAvatar: false
-});
+const {
+  state,
+  init,
+  openEditProfileIcon: composableOpenEditProfileIcon,
+  onOpenEditAvatar,
+  closeEditProfileIcon,
+  onSaveAvatar,
+  handleSave,
+  muteGroupInfo,
+  leaveGroupInfo
+} = useInformationMenu(model);
 
-const handleSave = async (config: { name: string }): Promise<void> => {
-  model.value = { ...model.value, ...config };
-};
-
-const muteGroupInfo = async (isMute: boolean): Promise<void> => {
-  if (model.value?.groupId) {
-    await IMSDK.changeGroupMute({ groupID: model.value?.groupId, isMute });
-  }
-};
-
-const leaveGroupInfo = async (): Promise<void> => {
-  if (!model.value?.groupId) {
-    await quitGroup(model.value?.groupId);
-  } else {
-    await IMSDK.deleteFriend(model.value?.userId);
-  }
-  window.location.reload();
-};
-
-const openEditProfileIcon = (): void => {
-  avatarInputRef.value?.click();
-};
-
-const closeEditProfileIcon = (): void => {
-  state.isEditAvatar = false;
-};
-
-const pathToFile = async (path: string): Promise<File | null> => {
-  if (!path) return null;
-  const response = await fetch(path);
-  if (!response.ok) {
-    return null;
-  }
-  const blob = await response.blob();
-  const url = new URL(path);
-  const filename = url.pathname.split('/').pop() || 'file';
-  return new File([blob], filename, { type: blob.type }) || null;
-};
-
-const onOpenEditAvatar = (e: Event): void => {
-  const file = (e.target as HTMLInputElement).files?.[0];
-  if (!file) return;
-  state.fileImage = file;
-  state.isEditAvatar = true;
-};
-
-const onSaveAvatar = async (file: File): Promise<void> => {
-  const url = await uploadFile(file);
-  model.value = { ...model.value, avatarUrl: url };
-};
+const openEditProfileIcon = () =>
+  composableOpenEditProfileIcon(avatarInputRef.value);
 
 onMounted(async () => {
-  state.fileImage = await pathToFile(model.value?.avatarUrl);
+  await init();
 });
 </script>

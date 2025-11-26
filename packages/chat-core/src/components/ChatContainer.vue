@@ -7,6 +7,7 @@
       v-if="!isShowContactList(state.chapter)"
       class="chat__header"
       :chapter="state.chapter"
+      :members="state.users.filter(user => user.id !== authUser.id)"
       :contact="state.contact"
       :dataTestid="`${props.dataTestid}-ChatContainer-Header`"
       @unmount-click="handleHeaderClick"
@@ -214,6 +215,7 @@ const handleInformationClick = (): void => {
 const handleClearClick = (): void => {
   if (state.chapter === 'ai' && chatRef.value) {
     chatRef.value.handleClear();
+    window.location.reload();
   }
 };
 

@@ -76,8 +76,8 @@
     :data-testid="`${props.dataTestid}-Header-MobileModal`"
   >
     <MobileChatInfo
-      :group-name="state.group.name"
-      :members="state.group.members"
+      v-model="menuInfoState.information"
+      :members="menuInfoState.contacts"
       :data-testid="props.dataTestid"
     />
   </MobileModal>
@@ -102,27 +102,29 @@ import {
 import type { IHeaderProps, IHeaderEmits } from '../interfaces/interfaces';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import MobileChatInfo from './MobileChatInfo.vue';
+import { useMenuInfo } from '../../composables/useMenuInfo';
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
   dataTestid: () => 'Header'
 });
 
+const emits = defineEmits<IHeaderEmits>();
+
 const state = reactive({
   openMobileInfoModal: false,
   isSearchInputEnable: false,
-  group: {
-    name: '',
-    members: []
-  },
   statusNotification: {
     label: 'Выкл. уведомление',
     enabled: false
   }
 });
 
-const { state: isMobile } = useResizeState(MAX_W_MD);
+const { state: menuInfoState, initializeMenuInfo } = useMenuInfo(
+  { ...props, open: state.openMobileInfoModal },
+  emits
+);
 
-const emits = defineEmits<IHeaderEmits>();
+const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const showSearch = (): void => {
   state.isSearchInputEnable = true;
@@ -136,6 +138,7 @@ const handleClickHeader = (): void => {
   if (props.chapter === 'ai') return;
   if (isMobile.value) {
     state.openMobileInfoModal = true;
+    initializeMenuInfo();
     emits('unmount-click');
     return;
   }

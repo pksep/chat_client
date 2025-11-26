@@ -3,10 +3,24 @@
     class="modal-info-mobile__start"
     :data-testid="`${props.dataTestid}-Header-ModalStartContainer`"
   >
-    <Avatar
-      is-icon
-      class="modal-info-mobile__avatar"
-      :data-testid="`${props.dataTestid}-Header-ModalAvatar`"
+    <button
+      class="modal-info-mobile__avatar-button"
+      @click="handleEditProfileIcon"
+    >
+      <Avatar
+        is-icon
+        :url="information?.avatarUrl"
+        :caption="`image with a channel ${information?.name}`"
+        class="modal-info-mobile__avatar"
+        :data-testid="`${props.dataTestid}-Header-ModalAvatar`"
+      />
+    </button>
+    <input
+      v-show="false"
+      ref="avatarInputRef"
+      type="file"
+      accept="image/*"
+      @change="handleImagePublish"
     />
     <NewChatInformationForm
       v-model="information"
@@ -40,12 +54,15 @@
 </template>
 
 <script lang="ts" setup>
+import { useTemplateRef } from 'vue';
 import type { IUserProps } from '../interfaces/interfaces';
 import { Avatar } from '@pksep/yui';
 import NewChatInformationForm from '../NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from '../MenuInfoButtons.vue';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';
 import { IMenuInfoInformation } from '../../composables/useMenuInfo';
+import { useInformationMenu } from '../../composables/useInformationMenu';
+import { onMounted } from 'vue';
 
 interface IMobileChatInfoProps {
   members: IUserProps[];
@@ -54,20 +71,38 @@ interface IMobileChatInfoProps {
 
 const props = defineProps<IMobileChatInfoProps>();
 
-const emits = defineEmits<{
-  (e: 'unmount-mute'): void;
-  (e: 'unmount-leave'): void;
-}>();
+const information = defineModel<IMenuInfoInformation>();
 
-const information = defineModel<IMenuInfoInformation>({
-  default: { name: '' }
-});
+const avatarInputRef = useTemplateRef('avatarInputRef');
+
+const {
+  init,
+  muteGroupInfo,
+  leaveGroupInfo,
+  onSaveAvatar,
+  onOpenEditAvatar,
+  openEditProfileIcon
+} = useInformationMenu(information);
 
 const handleUnmountLeave = () => {
-  emits('unmount-leave');
+  leaveGroupInfo();
 };
 
-const handleMute = () => {
-  emits('unmount-mute');
+const handleMute = (isMute: boolean) => {
+  muteGroupInfo(isMute);
 };
+
+const handleEditProfileIcon = () => {
+  openEditProfileIcon(avatarInputRef.value);
+};
+
+const handleImagePublish = (event: Event) => {
+  const file = onOpenEditAvatar(event);
+  if (!file) return;
+  onSaveAvatar(file);
+};
+
+onMounted(async () => {
+  await init();
+});
 </script>

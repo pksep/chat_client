@@ -85,37 +85,41 @@ export function useMenuInfo<
       props.contact?.groupId === ''
   );
 
+  const initializeMenuInfo = async () => {
+    if (props.contact?.id && checkGroupId.value) {
+      state.contacts = [props.contact];
+      state.information = {
+        userId: props.contact?.id
+      };
+    } else {
+      state.contacts = await fetchGroupMembers(props.contact?.groupId);
+      const groups = await getGroupInfo([props.contact?.groupId]);
+      state.filteredMembers = props.members.filter(
+        item => !state.contacts.some(contact => contact.id === item.id)
+      );
+      let date = new Date(groups[0]?.createTime || '');
+      if (!date) date = new Date();
+      state.information = {
+        groupId: props.contact?.groupId,
+        date
+      };
+    }
+
+    if (props.contact) {
+      state.information = {
+        userId: state.information.userId,
+        groupId: state.information.groupId || null,
+        date: state.information.date,
+        name: props.contact.nickname || '',
+        avatarUrl: props.contact.avatarUrl
+      };
+    }
+  };
+
   watch(
     () => props.open,
     async () => {
-      if (props.contact?.id && checkGroupId.value) {
-        state.contacts = [props.contact];
-        state.information = {
-          userId: props.contact?.id
-        };
-      } else {
-        state.contacts = await fetchGroupMembers(props.contact?.groupId);
-        const groups = await getGroupInfo([props.contact?.groupId]);
-        state.filteredMembers = props.members.filter(
-          item => !state.contacts.some(contact => contact.id === item.id)
-        );
-        let date = new Date(groups[0].createTime);
-        if (!date) date = new Date();
-        state.information = {
-          groupId: props.contact?.groupId,
-          date
-        };
-      }
-
-      if (props.contact) {
-        state.information = {
-          userId: state.information.userId,
-          groupId: state.information.groupId || null,
-          date: state.information.date,
-          name: props.contact.nickname || '',
-          avatarUrl: props.contact.avatarUrl
-        };
-      }
+      await initializeMenuInfo();
     }
   );
 
@@ -129,6 +133,7 @@ export function useMenuInfo<
     handleContactClick,
     handleNewContact,
     handleUpdateInformation,
+    initializeMenuInfo,
     handleCloseAddUserModal
   };
 }

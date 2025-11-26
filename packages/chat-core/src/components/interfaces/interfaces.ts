@@ -20,6 +20,7 @@ export interface IMenuEmits {
 
 export interface IHeaderEmits {
   (e: 'unmount-click', isCollapse?: boolean): void;
+  (e: 'unmount-contact', contact: IUserProps): void;
   (e: 'unmount-notification', statusNotification?: string): void;
   (e: 'unmount-information', info?: boolean): void;
   (e: 'unmount-clear'): void;

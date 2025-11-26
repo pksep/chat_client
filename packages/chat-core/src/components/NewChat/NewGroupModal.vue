@@ -36,21 +36,17 @@
         <template #tab1>
           <ContactListInModal
             :contacts="selectedContacts"
+            class="new-group__tab2-profile"
             @unmount-click-add-button="handleCloseGroupInfo"
           />
         </template>
         <template #tab2>
-          <div class="menu-info__group-info">
+          <div class="menu-info__group-info new-group-info">
             <Avatar
               :url="avatarPreview"
               :alt="groupName"
               class="user-profile__avatar"
               :initials="groupName"
-              :style="{
-                '--size-avatar': '86px',
-                'min-width': '86px',
-                'min-height': '86px'
-              }"
               @click="() => avatarInputRef.click()"
             />
 
