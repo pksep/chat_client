@@ -138,7 +138,7 @@ const chatWrapperRef = useTemplateRef('chatWrapperRef');
 const inputText = ref('');
 
 const state = reactive({
-  messages: computed(() => getSavedMessages(props.contact.conversionId || '')),
+  messages: computed(() => getSavedMessages(props.contact?.conversionId || '')),
   chatId: null
 });
 
@@ -185,7 +185,7 @@ watch(
   () => props.chapter,
   (newValue, oldValue) => {
     if (newValue !== oldValue) {
-      getMessagesByConversationId(props.contact.conversionId);
+      getMessagesByConversationId(props.contact?.conversionId);
     }
     if (
       (aiMessages?.value && aiMessages?.value.length) ||
@@ -209,7 +209,7 @@ watch(
     const newMessage = state.messages[state.messages.length - 1];
 
     if (newMessage.sendID !== props.user.id) {
-      markAsRead(props.contact.conversionId);
+      markAsRead(props.contact?.conversionId);
     }
   }
 );
@@ -236,7 +236,7 @@ const handleSend = async (): Promise<void> => {
       await sendMessageIM({
         message: text,
         to: '',
-        groupId: props.contact.conversionId.slice(3)
+        groupId: props.contact?.conversionId.slice(3)
       });
     }
   }
