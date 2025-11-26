@@ -8,7 +8,8 @@ import './index';
 
 const mastraUrl = import.meta.env.VITE_MASTRA_BASE_URL;
 const user = {
-  avatarUrl: 'http://localhost:9000/sep-local/61f0f2d6-82b1-422a-b426-47a2e921e4c9.jpg',
+  avatarUrl:
+    'http://localhost:9000/sep-local/61f0f2d6-82b1-422a-b426-47a2e921e4c9.jpg',
   id: '46',
   ex: JSON.stringify({ tabel: '045', initial: 'Князян Эдгар Арсенович' }),
   avatarAlt: 'User with a circle face',
