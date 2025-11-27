@@ -174,7 +174,7 @@ const handleScroll = async (): Promise<void> => {
     const scrollHeight = chatWrapperRef.value.scrollHeight;
     if (chatWrapperRef.value?.scrollTop < 20) {
       await getMessagesByConversationId(
-        props.contact.conversionId,
+        props.contact?.conversionId,
         state.messages[0]?.clientMsgID
       );
       nextTick(() => {

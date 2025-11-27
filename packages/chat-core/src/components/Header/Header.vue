@@ -103,6 +103,7 @@ import type { IHeaderProps, IHeaderEmits } from '../interfaces/interfaces';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import MobileChatInfo from './MobileChatInfo.vue';
 import { useMenuInfo } from '../../composables/useMenuInfo';
+import { useInformationMenu } from '../../composables/useInformationMenu';
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
   dataTestid: () => 'Header'
@@ -123,6 +124,10 @@ const { state: menuInfoState, initializeMenuInfo } = useMenuInfo(
   { ...props, open: state.openMobileInfoModal },
   emits
 );
+
+const modelInfo = computed(() => menuInfoState.information);
+
+const { muteGroupInfo } = useInformationMenu(modelInfo);
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
@@ -158,11 +163,13 @@ const getPopoverOptions = computed(() => {
               label: 'Выкл. уведомление',
               enabled: false
             };
+            muteGroupInfo(state.statusNotification.enabled);
             emits('unmount-notification', state.statusNotification.label);
             return;
           }
           state.statusNotification.label = 'Вкл. уведомления';
           state.statusNotification.enabled = true;
+          muteGroupInfo(state.statusNotification.enabled);
           emits('unmount-notification', state.statusNotification.label);
         }
       },

@@ -214,6 +214,7 @@ const closeModals = (): void => {
 };
 
 const handleInformationClick = (): void => {
+  state.isMenuDesktopOpen = true;
   state.activeTabId = 2;
 };
 
