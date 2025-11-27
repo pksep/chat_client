@@ -15,8 +15,7 @@
       ref="messageListRef"
       :chapter="state.chapter"
       :baseUrl="props.baseUrl"
-      :contactId="props.contact?.id"
-      :conversionId="props.contact?.conversionId"
+      :contact="props.contact"
       :user
       :data-testid="`${props.dataTestid}-Chat-MessageList`"
     />
