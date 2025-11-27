@@ -11,7 +11,6 @@ interface RegisterParams {
   users: RegisterUser[];
 }
 
-
 const setCookie = (name: string, value: string, expiresIn: number): void => {
   const date = new Date();
   date.setTime(date.getTime() + expiresIn * 1000);
