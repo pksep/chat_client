@@ -2,13 +2,13 @@
   <div class="menu-info__create-channel" :data-testid="dataTestid">
     <p class="menu-info__title-text">Канал создан:</p>
     <span>
-      {{ model.date?.toLocaleDateString('ru-RU') }}
+      {{ model?.date?.toLocaleDateString('ru-RU') }}
     </span>
   </div>
   <button class="menu-info__avatar-button" @click="openEditProfileIcon">
     <Avatar
-      :initials="model.name"
-      :url="model.avatarUrl"
+      :initials="model?.name"
+      :url="model?.avatarUrl"
       alt="use-avatar-circle"
     />
   </button>

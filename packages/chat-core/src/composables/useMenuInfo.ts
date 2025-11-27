@@ -97,8 +97,10 @@ export function useMenuInfo<
       state.filteredMembers = props.members.filter(
         item => !state.contacts.some(contact => contact.id === item.id)
       );
-      let date = new Date(groups[0]?.createTime || '');
-      if (!date) date = new Date();
+      let date = new Date();
+      if (groups[0]?.createTime) {
+        date = new Date(groups[0]?.createTime);
+      }
       state.information = {
         groupId: props.contact?.groupId,
         date
