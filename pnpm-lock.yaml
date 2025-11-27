@@ -94,8 +94,8 @@ importers:
         specifier: ^0.0.21
         version: 0.0.21
       '@pksep/yui':
-        specifier: 0.1.138
-        version: 0.1.138(@floating-ui/dom@1.7.4)(@floating-ui/utils@0.2.10)(@tiptap/extensions@3.11.0(@tiptap/core@3.11.0(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0)(@types/react@19.2.6)(typescript@5.8.2)(vue@3.5.24(typescript@5.8.2))
+        specifier: 0.1.142
+        version: 0.1.142(@floating-ui/dom@1.7.4)(@floating-ui/utils@0.2.10)(@tiptap/extensions@3.11.0(@tiptap/core@3.11.0(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0)(@types/react@19.2.7)(typescript@5.8.2)(vue@3.5.24(typescript@5.8.2))
       zod:
         specifier: '3'
         version: 3.25.76
@@ -1814,8 +1814,8 @@ packages:
   '@pksep/reqi@0.0.21':
     resolution: {integrity: sha512-SBvS7SshBF23GmDp6ZmLYCo/Gb1cMGod78VRSFflmar4VxnbgWcM1Q/re+HOehib4wyWVeN40OTwupWN4w4qZw==}
 
-  '@pksep/yui@0.1.138':
-    resolution: {integrity: sha512-rhVvNGcZmfMl7HMgSeG2nWED5xXup80zjPftX1/BxPu5hfYvmGNjuU4jrn3kOuWqYOK8tMb0UVvzLjQO55VaFw==}
+  '@pksep/yui@0.1.142':
+    resolution: {integrity: sha512-7WKqKF0Xt/mj8j3oSdWSA1GGd2HHMBP7nf5UUPrMHRjB4I4wo4YN4Ps2Uoh8ijCUCK7qtMwGr3SIM/qe8FLCaw==}
     peerDependencies:
       vue: '>=3'
 
@@ -2511,8 +2511,8 @@ packages:
   '@types/range-parser@1.2.7':
     resolution: {integrity: sha512-hKormJbkJqzQGhziax5PItDUTMAM9uE2XXQmM37dyd4hVM+5aVl7oVxMVUiVQn2oCQFN/LKCZdvSM0pFRqbSmQ==}
 
-  '@types/react@19.2.6':
-    resolution: {integrity: sha512-p/jUvulfgU7oKtj6Xpk8cA2Y1xKTtICGpJYeJXz2YVO2UcvjQgeRMLDGfDeqeRW2Ta+0QNFwcc8X3GH8SxZz6w==}
+  '@types/react@19.2.7':
+    resolution: {integrity: sha512-MWtvHrGZLFttgeEj28VXHxpmwYbor/ATPYbBfSFZEIRK0ecCFLl2Qo55z52Hss+UV9CRN7trSeq1zbgx7YDWWg==}
 
   '@types/resolve@1.20.2':
     resolution: {integrity: sha512-60BCwRFOZCQhDncwQdxxeOEEkbc5dIMccYLwbxsS4TUNeVECQ/pBJ0j09mrHOl/JJvpRPGwO9SvE4nR2Nb/a4Q==}
@@ -5572,11 +5572,11 @@ snapshots:
       '@types/json-schema': 7.0.15
       js-yaml: 4.1.0
 
-  '@awesome.me/webawesome@3.0.0(@floating-ui/utils@0.2.10)(@types/react@19.2.6)':
+  '@awesome.me/webawesome@3.0.0(@floating-ui/utils@0.2.10)(@types/react@19.2.7)':
     dependencies:
       '@ctrl/tinycolor': 4.1.0
       '@floating-ui/dom': 1.7.4
-      '@lit/react': 1.0.8(@types/react@19.2.6)
+      '@lit/react': 1.0.8(@types/react@19.2.7)
       '@shoelace-style/animations': 1.2.0
       '@shoelace-style/localize': 3.2.1
       composed-offset-position: 0.0.6(@floating-ui/utils@0.2.10)
@@ -6649,9 +6649,9 @@ snapshots:
 
   '@lit-labs/ssr-dom-shim@1.4.0': {}
 
-  '@lit/react@1.0.8(@types/react@19.2.6)':
+  '@lit/react@1.0.8(@types/react@19.2.7)':
     dependencies:
-      '@types/react': 19.2.6
+      '@types/react': 19.2.7
 
   '@lit/reactive-element@2.1.1':
     dependencies:
@@ -7519,7 +7519,7 @@ snapshots:
       '@sep-erp-server/zod-shared': 0.0.462
       content-type: 1.0.5
 
-  '@pksep/yui@0.1.138(@floating-ui/dom@1.7.4)(@floating-ui/utils@0.2.10)(@tiptap/extensions@3.11.0(@tiptap/core@3.11.0(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0)(@types/react@19.2.6)(typescript@5.8.2)(vue@3.5.24(typescript@5.8.2))':
+  '@pksep/yui@0.1.142(@floating-ui/dom@1.7.4)(@floating-ui/utils@0.2.10)(@tiptap/extensions@3.11.0(@tiptap/core@3.11.0(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0)(@types/react@19.2.7)(typescript@5.8.2)(vue@3.5.24(typescript@5.8.2))':
     dependencies:
       '@floating-ui/vue': 1.1.9(vue@3.5.24(typescript@5.8.2))
       '@fontsource-variable/inter': 5.2.8
@@ -7532,7 +7532,7 @@ snapshots:
       '@tiptap/vue-3': 3.11.0(@floating-ui/dom@1.7.4)(@tiptap/core@3.11.0(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0)(vue@3.5.24(typescript@5.8.2))
       '@vueuse/components': 11.3.0(vue@3.5.24(typescript@5.8.2))
       '@vueuse/core': 11.3.0(vue@3.5.24(typescript@5.8.2))
-      col-cal: 2.0.0-alpha.1(@floating-ui/utils@0.2.10)(@types/react@19.2.6)
+      col-cal: 2.0.0-alpha.1(@floating-ui/utils@0.2.10)(@types/react@19.2.7)
       vue: 3.5.24(typescript@5.8.2)
       vue3-emoji-picker: 1.1.8(typescript@5.8.2)
       vue3-perfect-scrollbar: 2.0.0(vue@3.5.24(typescript@5.8.2))
@@ -8195,7 +8195,7 @@ snapshots:
 
   '@types/range-parser@1.2.7': {}
 
-  '@types/react@19.2.6':
+  '@types/react@19.2.7':
     dependencies:
       csstype: 3.2.3
 
@@ -8861,9 +8861,9 @@ snapshots:
 
   clone@2.1.2: {}
 
-  col-cal@2.0.0-alpha.1(@floating-ui/utils@0.2.10)(@types/react@19.2.6):
+  col-cal@2.0.0-alpha.1(@floating-ui/utils@0.2.10)(@types/react@19.2.7):
     dependencies:
-      '@awesome.me/webawesome': 3.0.0(@floating-ui/utils@0.2.10)(@types/react@19.2.6)
+      '@awesome.me/webawesome': 3.0.0(@floating-ui/utils@0.2.10)(@types/react@19.2.7)
       date-fns: 4.1.0
       lit: 3.3.1
     transitivePeerDependencies:

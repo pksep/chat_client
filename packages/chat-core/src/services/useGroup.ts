@@ -67,15 +67,16 @@ const createGroup = async (
       memberUserIDs
     });
 
-    const group = {
-      ...res.data,
-      showName: name,
-      createdTime: Date.now(),
-      conversationID: 'sg_' + res.data.groupID
-    };
-
-    groups.value.unshift(...manipulateConversationList([group]));
-    return group;
+    groups.value.unshift(
+      ...manipulateConversationList([
+        {
+          ...res.data,
+          showName: name,
+          latestMsgSendTime: Date.now(),
+          conversationID: 'sg_' + res.data.groupID
+        }
+      ])
+    );
   } catch (err) {
     console.error('Failed to get users with messages:', err);
   }

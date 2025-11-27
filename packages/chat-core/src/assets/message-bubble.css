@@ -19,6 +19,15 @@
   align-self: start;
 }
 
+.message__article__media {
+  padding: 4px 4px 6px;
+  cursor: pointer;
+}
+
+.message__article__file {
+  padding: 8px;
+}
+
 .message-content {
   font-size: 14px;
   color: var(--message-text-color, var(--text-black));
@@ -33,6 +42,19 @@
   justify-self: end;
   & svg.icon-yui-kit {
     font-size: 16px;
+  }
+}
+
+.full-image {
+
+  & .modal-yui-kit__modal-content{
+    width: 100%;
+  }
+
+  & img {
+    width: 90vw;
+    height: 90vh;
+    object-fit: contain;
   }
 }
 
@@ -87,6 +109,55 @@ div.message-content__loading-circle:nth-child(3) {
 
 div.message-content__html > p {
   margin: 0;
+}
+
+div.message-content__media {
+  height: 215px;
+  max-height: fit-content;
+  & > img, & > video {
+    object-fit: contain;
+    width: 100%;
+    height: 100%;
+    border-radius: 8px;
+  }
+}
+
+div.message-content__file {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  & > div {
+    width: calc(fit-content + 10px);
+  }
+
+  & > svg {
+    cursor: pointer;
+  }
+
+  & p {
+    margin: 0;
+  }
+
+  & .message-content__file__name {
+    margin-right: 10px;
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 100%;
+    letter-spacing: 0%;
+  }
+
+  & .message-content__file__size {
+    font-weight: 400;
+    font-size: 12px;
+    line-height: 100%;
+    letter-spacing: 0%;
+    margin-top: 4px;
+  }
+
+  & .message-time {
+    margin-left: 10px;
+  }
 }
 
 .message__assistant.menu__user-assistant-icon {

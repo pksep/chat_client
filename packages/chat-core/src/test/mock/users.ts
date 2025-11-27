@@ -346,8 +346,8 @@ export const mockUsers: RegisterUser[] = [
   },
   {
     userID: '46',
-    nickname: 'Князев Э.А.',
-    ex: JSON.stringify({ tabel: '045', initial: 'Князев Эдгар Арсенович' }),
+    nickname: 'Князян Э.А.',
+    ex: JSON.stringify({ tabel: '045', initial: 'Князян Эдгар Арсенович' }),
     faceURL: ''
   },
   {

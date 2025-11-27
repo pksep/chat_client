@@ -145,27 +145,73 @@ export const uploadFile = async (file: File) => {
     file: file
   });
 
-  return res.data.url;
+  return encodeURI(res.data.url);
 };
 
 export const sendMessageIM = async ({
   to,
+  groupId,
   message,
-  groupId
+  type = 'text',
+  file
 }: {
   to: string;
-  message: string;
   groupId: string;
+  message?: string;
+  type?: 'text' | 'file' | 'image';
+  file?: File;
 }): Promise<void> => {
-  const clientMsgID = crypto.randomUUID().toString();
+  const clientMsgID = crypto.randomUUID();
 
   try {
-    const createResponse = await IMSDK.createTextMessage(message);
-    const textMessage = createResponse.data;
-    textMessage.clientMsgID = clientMsgID;
+    let createResp: any;
+
+    if (type === 'text') {
+      createResp = await IMSDK.createTextMessage(message || '');
+    } else if (type === 'file') {
+      if (!file) throw new Error('File is required for file message');
+
+      // Используем createFileMessageByFile
+      createResp = await IMSDK.createFileMessageByFile({
+        filePath: file.name, // можно использовать имя файла
+        fileName: file.name,
+        uuid: crypto.randomUUID(),
+        sourceUrl: '', // можно пустой, если нет заранее загруженного URL
+        fileSize: file.size,
+        fileType: file.type,
+        file: file
+      });
+    } else if (type === 'image') {
+      if (!file) throw new Error('File is required for image message');
+
+      // Подготавливаем данные PicBaseInfo
+      const picBaseInfo = {
+        uuid: crypto.randomUUID(),
+        type: file.type,
+        size: file.size,
+        width: 300, // можно определить, если нужно
+        height: 215,
+        url: '' // при отправке файла URL может быть пустой
+      };
+
+      createResp = await IMSDK.createImageMessageByFile({
+        sourcePicture: picBaseInfo,
+        bigPicture: picBaseInfo,
+        snapshotPicture: picBaseInfo,
+        sourcePath: file.name, // или другой путь, если есть
+        file: file
+      });
+    } else {
+      throw new Error('Unsupported message type');
+    }
+
+    const msg = createResp.data;
+    if (!msg) throw new Error('Failed to create message');
+
+    msg.clientMsgID = clientMsgID;
 
     const res = await IMSDK.sendMessage({
-      message: textMessage,
+      message: msg,
       recvID: to,
       groupID: groupId
     });
