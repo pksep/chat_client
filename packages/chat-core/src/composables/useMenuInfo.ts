@@ -1,4 +1,4 @@
-import { reactive, computed, watch } from 'vue';
+import { reactive, computed } from 'vue';
 import { fetchGroupMembers, getGroupInfo } from '../services/useGroup';
 import { IMSDK } from '../services/useOpenIM';
 import { generateChatId } from '../services/useMastra';
@@ -32,7 +32,7 @@ type IMenuInfoEmits = {
 export function useMenuInfo<
   Props extends IMenuInfoProps,
   Emits extends IMenuInfoEmits
->(props: Props, emits: Emits) {
+>(props: Props & { isEnabled: boolean }, emits: Emits) {
   const state = reactive<IMenuInfoState>({
     openAddUser: false,
     contacts: [],
@@ -60,7 +60,7 @@ export function useMenuInfo<
 
   const handleUpdateInformation = (value: any) => {
     state.information = value;
-    if (props.contact.groupId) {
+    if (props.contact?.groupId) {
       IMSDK.setGroupInfo(
         {
           groupID: props.contact?.groupId,
@@ -85,29 +85,28 @@ export function useMenuInfo<
       props.contact?.groupId === ''
   );
 
-  const initializeMenuInfo = async () => {
+  const initializeMenuInfo = async (props: Props & { isEnabled: boolean }) => {
+    if (!props.isEnabled) return;
     if (props.contact?.id && checkGroupId.value) {
       state.contacts = [props.contact];
       state.information = {
         userId: props.contact?.id
       };
-    } else {
+    } else if (props.contact) {
       state.contacts = await fetchGroupMembers(props.contact?.groupId);
       const groups = await getGroupInfo([props.contact?.groupId]);
       state.filteredMembers = props.members.filter(
         item => !state.contacts.some(contact => contact.id === item.id)
       );
       let date = new Date();
-      if (groups[0]?.createTime) {
+      if (groups?.length > 0 && groups[0]?.createTime) {
         date = new Date(groups[0]?.createTime);
       }
       state.information = {
         groupId: props.contact?.groupId,
         date
       };
-    }
 
-    if (props.contact) {
       state.information = {
         userId: state.information.userId,
         groupId: state.information.groupId || null,
@@ -117,13 +116,6 @@ export function useMenuInfo<
       };
     }
   };
-
-  watch(
-    () => props.open,
-    async () => {
-      await initializeMenuInfo();
-    }
-  );
 
   const handleCloseAddUserModal = () => {
     state.openAddUser = false;

@@ -1,7 +1,7 @@
 <template>
   <aside
     :class="menuInfoClasses"
-    v-if="props.open"
+    v-if="isOpen"
     :data-testid="`${props.dataTestid}-MenuInfo-Container`"
   >
     <header
@@ -125,6 +125,9 @@ watch(
   () => props.open,
   async newVal => {
     isOpen.value = newVal;
+    if (newVal) {
+      await initializeMenuInfo({ ...props, isEnabled: true });
+    }
   }
 );
 
@@ -138,9 +141,10 @@ watch(
 const {
   state,
   checkGroupId,
+  initializeMenuInfo,
   handleContactClick,
   handleNewContact,
   handleUpdateInformation,
   handleCloseAddUserModal
-} = useMenuInfo(props, emits);
+} = useMenuInfo({ ...props, isEnabled: true }, emits);
 </script>

@@ -21,7 +21,7 @@
   </MobileModal>
   <MobileModal
     :open="isSelectedMembers"
-    @close="handleCloseGroupInfo"
+    @unmount-close="handleCloseGroupInfo"
     title="Канал"
     @unmount-next="handleCreateGroup"
     start-button-text="Создать"

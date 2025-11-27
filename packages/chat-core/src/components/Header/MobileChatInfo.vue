@@ -67,7 +67,7 @@ import { onMounted } from 'vue';
 
 interface IMobileChatInfoProps {
   members: IUserProps[];
-  dataTestid: string;
+  dataTestid?: string;
 }
 
 const props = defineProps<IMobileChatInfoProps>();

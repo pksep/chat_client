@@ -121,7 +121,11 @@ const state = reactive({
 });
 
 const { state: menuInfoState, initializeMenuInfo } = useMenuInfo(
-  { ...props, open: state.openMobileInfoModal },
+  {
+    ...props,
+    open: state.openMobileInfoModal,
+    isEnabled: props.chapter !== 'ai'
+  },
   emits
 );
 
@@ -143,7 +147,11 @@ const handleClickHeader = (): void => {
   if (props.chapter === 'ai') return;
   if (isMobile.value) {
     state.openMobileInfoModal = true;
-    initializeMenuInfo();
+    initializeMenuInfo({
+      ...props,
+      isEnabled: true,
+      open: state.openMobileInfoModal
+    });
     emits('unmount-click');
     return;
   }

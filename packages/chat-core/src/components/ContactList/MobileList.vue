@@ -54,8 +54,6 @@
         :selected-contact-ids="state.checkUsers"
         @unmount-close="handleCloseModal"
         @unmount-contact="handleNewContact"
-        @unmount-checkbox="handleCheckbox"
-        @unmount-click="handleOpenUser"
       />
     </template>
   </div>
@@ -90,7 +88,7 @@ const state = reactive({
 
 const emits = defineEmits<IMobileListEmits>();
 
-const isButtonDisabled = computed(() => state.checkUsers.size === 0);
+// const isButtonDisabled = computed(() => state.checkUsers.size === 0);
 
 const handleChapter = (
   chapter: { nickname: string; contact: IUserProps } | string | null
@@ -113,6 +111,7 @@ const handleCloseModal = () => {
   state.checkUsers.clear();
 };
 
+/*
 const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
   if (isCheck) {
     state.checkUsers.add(contactId);
@@ -120,14 +119,17 @@ const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
     state.checkUsers.delete(contactId);
   }
 };
+ */
 
 const handleNewContact = (contact: IUserProps): void => {
   emits('unmount-contact', contact);
   handleCloseModal();
 };
 
+/*
 const handleOpenUser = (): void => {
   if (isButtonDisabled.value) return;
   handleCloseModal();
 };
+ */
 </script>

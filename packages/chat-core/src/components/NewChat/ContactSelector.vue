@@ -101,6 +101,11 @@ const handleNewContact = (contact: IUserProps): void => {
     emits('unmount-contact', contact);
     return;
   }
+  if (!state.selectedIds.has(contact.id)) {
+    state.selectedIds.add(contact.id);
+  } else {
+    state.selectedIds.delete(contact?.id);
+  }
 };
 
 const onAddClick = (): void => {
