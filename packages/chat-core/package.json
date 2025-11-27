@@ -13,6 +13,7 @@
     "build:lib": "cross-env VITE_BASE_MODE=lib pnpm run build",
     "publish:lib": "pnpm run build:lib && pnpm publish --access public --no-git-checks",
     "init:openim": "node --experimental-strip-types ./scripts/copyOpenIM.ts",
+    "postinstall": "pnpm run init:openim",
     "init:openim-admin": "tsx ./scripts/getAdminTokenOpenIM.ts"
   },
   "exports": {
