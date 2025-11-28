@@ -39,29 +39,31 @@
     />
     <div
       class="chat__header-buttons"
-      v-if="!isMobile"
       :data-testid="`${props.dataTestid}-Header-ButtonsContainer`"
     >
-      <Search
-        v-if="state.isSearchInputEnable"
-        class="chat__header-search"
-        @click.stop
-        :data-testid="`${props.dataTestid}-Header-SearchInput`"
-      />
-      <Button
-        v-if="!state.isSearchInputEnable"
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        @click.stop="showSearch"
-        :data-testid="`${props.dataTestid}-Header-SearchButton`"
-      >
-        <Icon
-          class="small-icon"
-          :name="IconNameEnum.search"
-          :data-testid="`${props.dataTestid}-Header-SearchIcon`"
+      <template v-if="!isMobile">
+        <Search
+          v-if="state.isSearchInputEnable"
+          class="chat__header-search"
+          @click.stop
+          :data-testid="`${props.dataTestid}-Header-SearchInput`"
         />
-      </Button>
+        <Button
+          v-if="!state.isSearchInputEnable"
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          @click.stop="showSearch"
+          :data-testid="`${props.dataTestid}-Header-SearchButton`"
+        >
+          <Icon
+            class="small-icon"
+            :name="IconNameEnum.search"
+            :data-testid="`${props.dataTestid}-Header-SearchIcon`"
+          />
+        </Button>
+      </template>
       <Popover
+        class="chat__header-popover"
         @click.stop
         :options="getPopoverOptions"
         isWCUse
@@ -164,32 +166,21 @@ const handleClickHeader = async (): Promise<void> => {
 const getPopoverOptions = computed(() => {
   const popoverArray = [];
   if (props.chapter !== 'ai') {
-    popoverArray.push(
-      {
-        value: state.statusNotification.label,
-        function: () => {
-          if (state.statusNotification.enabled) {
-            state.statusNotification = {
-              label: 'Выкл. уведомление',
-              enabled: false
-            };
-            muteGroupInfo(state.statusNotification.enabled);
-            emits('unmount-notification', state.statusNotification.label);
-            return;
-          }
-          state.statusNotification.label = 'Вкл. уведомления';
-          state.statusNotification.enabled = true;
-          muteGroupInfo(state.statusNotification.enabled);
-          emits('unmount-notification', state.statusNotification.label);
-        }
-      },
-      {
+    const notificationLabels = {
+      value: state.statusNotification.label,
+      function: handleNotificationToggle
+    };
+    if (isMobile.value && !props.contact?.groupId) {
+      popoverArray.push(notificationLabels);
+    }
+    if (!isMobile.value) {
+      popoverArray.push({
         value: 'Информация',
         function: () => {
           emits('unmount-information');
         }
-      }
-    );
+      });
+    }
   } else {
     popoverArray.push({
       value: 'Очистить историю',
@@ -212,6 +203,22 @@ watch(
 
 const handleExit = (): void => {
   emits('unmount-exit');
+};
+
+const handleNotificationToggle = (): void => {
+  if (state.statusNotification.enabled) {
+    state.statusNotification = {
+      label: 'Выкл. уведомление',
+      enabled: false
+    };
+    muteGroupInfo(state.statusNotification.enabled);
+    emits('unmount-notification', state.statusNotification.label);
+    return;
+  }
+  state.statusNotification.label = 'Вкл. уведомления';
+  state.statusNotification.enabled = true;
+  muteGroupInfo(state.statusNotification.enabled);
+  emits('unmount-notification', state.statusNotification.label);
 };
 
 onMounted(async () => {
