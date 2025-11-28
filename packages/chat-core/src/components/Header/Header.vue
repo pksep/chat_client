@@ -33,6 +33,7 @@
       class="chat__header-profile"
       avatar-alt="user-profile-alt"
       v-bind="props.contact"
+      :members-length="menuInfoState.contacts.length"
       :data-testid="`${props.dataTestid}-Header-UserProfile`"
       v-else
     />
@@ -84,7 +85,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive } from 'vue';
+import { computed, onMounted, reactive, watch } from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';
@@ -104,6 +105,7 @@ import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import MobileChatInfo from './MobileChatInfo.vue';
 import { useMenuInfo } from '../../composables/useMenuInfo';
 import { useInformationMenu } from '../../composables/useInformationMenu';
+import { fetchGroupMembers } from '../../services/useGroup';
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
   dataTestid: () => 'Header'
@@ -143,11 +145,11 @@ const handleCloseMobileInfoModal = (): void => {
   state.openMobileInfoModal = false;
 };
 
-const handleClickHeader = (): void => {
+const handleClickHeader = async (): Promise<void> => {
   if (props.chapter === 'ai') return;
   if (isMobile.value) {
     state.openMobileInfoModal = true;
-    initializeMenuInfo({
+    await initializeMenuInfo({
       ...props,
       isEnabled: true,
       open: state.openMobileInfoModal
@@ -199,7 +201,22 @@ const getPopoverOptions = computed(() => {
   return popoverArray;
 });
 
+watch(
+  () => props.chapter,
+  async () => {
+    if (props.contact?.groupId) {
+      menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
+    }
+  }
+);
+
 const handleExit = (): void => {
   emits('unmount-exit');
 };
+
+onMounted(async () => {
+  if (props.contact?.groupId) {
+    menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
+  }
+});
 </script>

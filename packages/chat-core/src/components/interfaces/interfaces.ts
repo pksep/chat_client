@@ -38,6 +38,7 @@ export interface IUserProps {
   tabel?: string;
   initial?: string;
   createdAt?: Date;
+  membersLength?: number;
 }
 
 export interface IContactProps extends IUserProps {

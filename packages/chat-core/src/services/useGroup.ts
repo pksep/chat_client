@@ -179,6 +179,21 @@ export const getGroupInfo = async (groupIDs: string[]) => {
   }
 };
 
+export const fetchGroupMemberCount = async (
+  groupID: string
+): Promise<number> => {
+  try {
+    const groupInfos = await getGroupInfo([groupID]);
+    if (groupInfos && groupInfos.length > 0) {
+      return groupInfos[0].memberCount || 0;
+    }
+    return 0;
+  } catch (err) {
+    console.error('Failed to fetch group member count:', err);
+    return 0;
+  }
+};
+
 export {
   createGroup,
   getGroupList,
