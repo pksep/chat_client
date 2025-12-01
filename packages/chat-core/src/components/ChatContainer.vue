@@ -235,8 +235,4 @@ const handleNewGroupMessage = async () => {
 const handleExit = (): void => {
   state.chapter = 'assistant';
 };
-
-onMounted(async () => {
-  await fetchAllUsers();
-});
 </script>

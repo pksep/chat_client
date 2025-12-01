@@ -1,5 +1,6 @@
 import { Reqi } from '@pksep/reqi';
 import { getOrGeneratePlatformId } from './useOpenIM';
+import { getAuthToken } from '../composables/useLogin';
 
 export const createOpenIMRestApi = (): Reqi => {
   const instance = new Reqi(
@@ -27,7 +28,7 @@ export const useOpenIMRestApi = (): Reqi => {
 
     apiInstance.request.use(async (request: Request): Promise<Request> => {
       try {
-        request.headers.set('token', import.meta.env.VITE_OPENIM_TOKEN);
+        request.headers.set('token', getAuthToken());
         return request;
       } catch (error) {
         console.error('Failed to fetch token:', error);

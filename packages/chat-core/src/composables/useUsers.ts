@@ -74,6 +74,7 @@ export const appendUserAttributes = (user: IUserProps) => {
   const ex = JSON.parse(user?.ex || null);
   user.tabel = ex?.tabel || '';
   user.initial = ex?.initial || '';
+  user.avatarUrl = user.faceURL;
   return user;
 };
 

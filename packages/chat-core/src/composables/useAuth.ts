@@ -6,8 +6,8 @@ import { setAuthToken } from './useLogin';
 export const authedUser: Ref<SelfUserInfo | null> = ref(null);
 
 interface AuthResponse {
-  platformID: number;
-  userID: string;
+  PlatformID: number;
+  UserID: string;
   token: string;
   expireTimeSeconds: number;
 }

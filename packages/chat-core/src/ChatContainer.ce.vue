@@ -15,10 +15,9 @@ import {
   saveUserIdToSession,
   hasUserIdInSession
 } from './services/useMastra';
-import { mockUsers } from './test/mock/users';
 import { getAllNotificationCount } from './services/useConversions';
-import { fetchAuthUser, getAuthUser, useAuth } from './composables/useAuth';
-import { useRegister } from './composables/useLogin';
+import { fetchAuthUser, useAuth } from './composables/useAuth';
+import { fetchAllUsers } from './composables/useUsers';
 
 const props = defineProps<IChatContainerProps>();
 const emits = defineEmits<IChatContainerEmits>();
@@ -27,37 +26,6 @@ const allNotificationCount = computed(() => getAllNotificationCount());
 
 onMounted(async () => {
   try {
-    if (import.meta.env.VITE_USE_MOCK_DATA === 'true') {
-      await Promise.all(
-        mockUsers.map(user => {
-          return useRegister({ users: [user] });
-        })
-      );
-    }
-
-    // const registerResponse = await useRegister({
-    //   users: [
-    //     {
-    //       userID: props.user.id,
-    //       nickname: props.user.nickname,
-    //       faceURL: props.user.avatarUrl ?? '/avatar.png',
-    //       ex: props.user.ex
-    //     }
-    //   ]
-    // });
-
-    // if (registerResponse.errMsg === 'RegisteredAlreadyError') {
-    //   const platformID = getOrGeneratePlatformId();
-    //   const loginResponse = await useLogin({
-    //     platformID,
-    //     userID: props.user.id
-    //   });
-
-    //   if (!loginResponse?.data?.token) {
-    //     throw new Error('Failed to obtain login token');
-    //   }
-    // }
-
     if (!props.token) {
       throw new Error('No auth token found');
     }
@@ -85,9 +53,7 @@ onMounted(async () => {
       wsAddr
     });
 
-    await fetchAuthUser();
-
-    console.log(getAuthUser());
+    await Promise.all([fetchAuthUser(), fetchAllUsers()]);
 
     setupOpenIM();
   } catch (error) {
