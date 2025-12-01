@@ -155,6 +155,7 @@ const handleCloseMobileInfoModal = (): void => {
 
 const handleClickHeader = async (): Promise<void> => {
   if (props.chapter === 'ai') return;
+  if (!props.contact?.groupId) return;
   if (isMobile.value) {
     state.openMobileInfoModal = true;
     await initializeMenuInfo({
@@ -176,10 +177,9 @@ const getPopoverOptions = computed(() => {
       value: state.statusNotification.label,
       function: handleNotificationToggle
     };
-    if (isMobile.value && !props.contact?.groupId) {
+    if (!props.contact?.groupId) {
       popoverArray.push(notificationLabels);
-    }
-    if (!isMobile.value) {
+    } else {
       popoverArray.push({
         value: 'Информация',
         function: () => {
