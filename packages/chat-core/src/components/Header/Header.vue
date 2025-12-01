@@ -63,6 +63,7 @@
         </Button>
       </template>
       <Popover
+        v-if="props.chapter === 'dialogs'"
         class="chat__header-popover"
         @click.stop
         :options="getPopoverOptions"
