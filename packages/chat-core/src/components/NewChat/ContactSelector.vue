@@ -85,15 +85,22 @@ const isButtonEnabled = computed(() =>
 
 const isButtonDisabled = computed(() => state.selectedIds.size === 0);
 
-const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
-  if (isCheck) {
+const updateSelection = (
+  contactId: string | number,
+  shouldAdd: boolean
+): void => {
+  if (shouldAdd) {
     state.selectedIds.add(contactId);
   } else {
     state.selectedIds.delete(contactId);
   }
   if (props.isButtonDisabled) {
-    emits('unmount-contact', selectedContacts.value);
+    onAddClick();
   }
+};
+
+const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
+  updateSelection(contactId, isCheck);
 };
 
 const handleNewContact = (contact: IUserProps): void => {
@@ -101,11 +108,8 @@ const handleNewContact = (contact: IUserProps): void => {
     emits('unmount-contact', contact);
     return;
   }
-  if (!state.selectedIds.has(contact.id)) {
-    state.selectedIds.add(contact.id);
-  } else {
-    state.selectedIds.delete(contact?.id);
-  }
+  const shouldAdd = !state.selectedIds.has(contact.id);
+  updateSelection(contact.id, shouldAdd);
 };
 
 const onAddClick = (): void => {

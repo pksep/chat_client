@@ -114,6 +114,7 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
     ...toRefs(state),
     onAvatarSelected,
     onSaveAvatar,
+    createNiceName,
     closeEditAvatar,
     clearState,
     closeModal,

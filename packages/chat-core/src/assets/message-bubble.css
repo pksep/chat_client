@@ -46,8 +46,7 @@
 }
 
 .full-image {
-
-  & .modal-yui-kit__modal-content{
+  & .modal-yui-kit__modal-content {
     width: 100%;
   }
 
@@ -114,7 +113,8 @@ div.message-content__html > p {
 div.message-content__media {
   height: 215px;
   max-height: fit-content;
-  & > img, & > video {
+  & > img,
+  & > video {
     object-fit: contain;
     width: 100%;
     height: 100%;
@@ -186,7 +186,7 @@ div.message-content__file {
   );
   justify-self: start;
   &:last-child {
-    margin-bottom: 25px;
+    margin-bottom: 5px;
   }
 }
 

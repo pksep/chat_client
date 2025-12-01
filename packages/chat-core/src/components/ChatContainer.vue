@@ -11,6 +11,7 @@
       :contact="state.contact"
       :dataTestid="`${props.dataTestid}-ChatContainer-Header`"
       @unmount-click="handleHeaderClick"
+      @unmount-contact="handleChangeContact"
       @unmount-exit="handleExit"
       @unmount-information="handleInformationClick"
       @unmount-clear="handleClearClick"

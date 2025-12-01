@@ -79,8 +79,9 @@
     :data-testid="`${props.dataTestid}-Header-MobileModal`"
   >
     <MobileChatInfo
-      v-model="menuInfoState.information"
+      :model-value="menuInfoState.information"
       :members="menuInfoState.contacts"
+      @update:model-value="handleUpdateInformation"
       :data-testid="props.dataTestid"
     />
   </MobileModal>
@@ -124,7 +125,11 @@ const state = reactive({
   }
 });
 
-const { state: menuInfoState, initializeMenuInfo } = useMenuInfo(
+const {
+  state: menuInfoState,
+  initializeMenuInfo,
+  handleUpdateInformation
+} = useMenuInfo(
   {
     ...props,
     open: state.openMobileInfoModal,

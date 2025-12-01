@@ -28,7 +28,8 @@
     back-button-text="Отмена"
   >
     <MobileChatInfo
-      v-model="state.information"
+      :model-value="state.information"
+      @update:model-value="handleCreateInformation"
       :members="selectedContacts"
       :data-testid="props.dataTestid"
     />
@@ -46,7 +47,6 @@ import {
 } from './interfaces/contact-selector';
 import { useNewGroupModal } from './composables/useNewGroupModal';
 import { IUserProps } from '../interfaces/interfaces';
-import { watch } from 'vue';
 
 const props = withDefaults(defineProps<INewChatMobileProps>(), {
   open: false,
@@ -61,6 +61,7 @@ const {
   isSelectedMembers,
   avatarPreview,
   handleCreateGroup,
+  createNiceName,
   handleOpenGroupInfo,
   handleCloseGroupInfo
 } = useNewGroupModal(props, emits);
@@ -91,13 +92,12 @@ const handleCheckUsers = (contacts: IUserProps[] | IUserProps): void => {
 
 const handleNext = (contacts: IUserProps[]): void => {
   if (props.isAddOne) return;
+  state.information.name = createNiceName(contacts);
   handleOpenGroupInfo(contacts);
 };
 
-watch(
-  () => groupName.value,
-  () => {
-    state.information.name = groupName.value;
-  }
-);
+const handleCreateInformation = ({ avatarUrl, name }) => {
+  avatarPreview.value = avatarUrl;
+  groupName.value = name;
+};
 </script>
