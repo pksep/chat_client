@@ -31,7 +31,7 @@ import { watch, computed, reactive } from 'vue';
 const model = defineModel<IMenuInfoInformation>();
 
 const emits = defineEmits<{
-  (e: 'unmount-save', value: { name: string }): void;
+  (e: 'unmount-save', value: { name: string; avatarUrl?: string }): void;
 }>();
 
 const form = reactive({

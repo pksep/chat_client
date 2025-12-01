@@ -100,6 +100,7 @@ const handleEditProfileIcon = () => {
 
 const handleImagePublish = async (event: Event) => {
   const file = onOpenEditAvatar(event);
+  if (!file) return;
   stateInfo.fileImage = file;
   if (stateInfo.fileImage) {
     await onSaveAvatar(stateInfo.fileImage);
