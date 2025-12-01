@@ -224,6 +224,9 @@ div.message-content__file {
   .chat__message-wrapper {
     padding-right: 15px;
   }
+  .message__no-author {
+    margin-right: 0;
+  }
   .chat__input {
     padding: 0;
     & .editor-component {

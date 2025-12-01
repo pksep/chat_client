@@ -24,7 +24,6 @@
     />
     <NewChatInformationForm
       :model-value="information"
-      :avatar-url="stateInfo.avatarPreview"
       @unmount-save="handleImageSave"
       :data-testid="`${props.dataTestid}-Header-InformationForm`"
     >

@@ -23,7 +23,7 @@
     :open="isSelectedMembers"
     @unmount-close="handleCloseGroupInfo"
     title="Канал"
-    @unmount-next="handleCreateGroup"
+    @unmount-next="handleCreateMobileGroup"
     start-button-text="Создать"
     back-button-text="Отмена"
   >
@@ -98,6 +98,18 @@ const handleNext = (contacts: IUserProps[]): void => {
 
 const handleCreateInformation = ({ avatarUrl, name }) => {
   avatarPreview.value = avatarUrl;
+  state.information.avatarUrl = avatarUrl;
   groupName.value = name;
+};
+
+const handleCreateMobileGroup = () => {
+  handleCreateGroup();
+  state.information = {
+    name: groupName.value,
+    avatarUrl: null,
+    groupId: null,
+    userId: props.user?.id,
+    date: new Date()
+  };
 };
 </script>
