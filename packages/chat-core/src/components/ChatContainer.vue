@@ -72,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import Header from './Header/Header.vue';
 import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
@@ -80,11 +80,7 @@ import Chat from './Chat.vue';
 import MenuInfo from './MenuInfo.vue';
 import NewContactModal from './NewChat/NewContactModal.vue';
 import type { IChatContainerProps, IUserProps } from './interfaces/interfaces';
-import {
-  appendUserAttributes,
-  fetchAllUsers,
-  getUsersList
-} from '../composables/useUsers';
+import { appendUserAttributes, getUsersList } from '../composables/useUsers';
 import { isShowContactList } from '../composables/useShowContactList';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
