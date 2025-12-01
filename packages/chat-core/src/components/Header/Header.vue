@@ -63,7 +63,7 @@
         </Button>
       </template>
       <Popover
-        v-if="props.chapter === 'dialogs'"
+        v-if="!popoverRule"
         class="chat__header-popover"
         @click.stop
         :options="getPopoverOptions"
@@ -170,6 +170,10 @@ const handleClickHeader = async (): Promise<void> => {
   emits('unmount-click');
 };
 
+const popoverRule = computed(
+  () => isMobile.value && (props.contact?.groupId || props.chapter === 'ai')
+);
+
 const getPopoverOptions = computed(() => {
   const popoverArray = [];
   if (props.chapter !== 'ai') {
@@ -180,6 +184,7 @@ const getPopoverOptions = computed(() => {
     if (!props.contact?.groupId) {
       popoverArray.push(notificationLabels);
     } else {
+      popoverArray.push(notificationLabels);
       popoverArray.push({
         value: 'Информация',
         function: () => {
