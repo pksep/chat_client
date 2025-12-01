@@ -40,27 +40,27 @@ const form = reactive({
 });
 
 const isFormValid = computed(() => {
-  if (model.value?.avatarUrl && model.value.avatarUrl !== form.avatarUrl) {
+  if ((model.value?.avatarUrl ?? '') !== form.avatarUrl) {
     return true;
   }
   return (
-    form.name && form.name.trim() !== '' && form.name !== model.value?.name
+    form.name &&
+    form.name.trim() !== '' &&
+    form.name !== (model.value?.name ?? '')
   );
 });
 
-watch(
-  () => model.value,
-  () => {
-    if (model.value) {
-      form.name = model.value.name;
-    }
+watch([() => model.value?.name, () => model.value?.avatarUrl], () => {
+  if (model.value) {
+    form.name = model.value.name;
+    form.avatarUrl = model.value.avatarUrl;
   }
-);
+});
 
 const onSave = () => {
   if (isFormValid.value) {
     model.value.name = form.name;
-    emits('unmount-save', { name: form.name });
+    emits('unmount-save', { name: form.name, avatarUrl: form.avatarUrl });
   }
 };
 

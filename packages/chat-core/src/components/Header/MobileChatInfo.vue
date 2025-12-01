@@ -24,6 +24,7 @@
     />
     <NewChatInformationForm
       :model-value="information"
+      :avatar-url="stateInfo.avatarPreview"
       @unmount-save="handleImageSave"
       :data-testid="`${props.dataTestid}-Header-InformationForm`"
     >
@@ -98,16 +99,22 @@ const handleEditProfileIcon = () => {
   openEditProfileIcon(avatarInputRef.value);
 };
 
-const handleImagePublish = (event: Event) => {
+const handleImagePublish = async (event: Event) => {
   const file = onOpenEditAvatar(event);
-  if (!file) return;
-};
-
-const handleImageSave = async (config: { name: string }) => {
-  information.value = { ...information.value, ...config };
+  stateInfo.fileImage = file;
   if (stateInfo.fileImage) {
     await onSaveAvatar(stateInfo.fileImage);
   }
+};
+
+const handleImageSave = async (config: {
+  name: string;
+  avatarUrl?: string;
+}) => {
+  information.value = {
+    ...information.value,
+    ...config
+  };
 };
 
 onMounted(async () => {
