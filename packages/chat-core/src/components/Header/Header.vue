@@ -150,6 +150,7 @@ const showSearch = (): void => {
 };
 
 const handleCloseMobileInfoModal = (): void => {
+  menuInfoState.information = null;
   state.openMobileInfoModal = false;
 };
 

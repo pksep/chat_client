@@ -5,6 +5,7 @@ export type CSSClass =
 
 export interface IMobileModalProps {
   open: boolean;
+  isDisabledStartButton?: boolean;
   showCloseButton?: boolean;
   closeButtonText?: string;
   startButtonText?: string;

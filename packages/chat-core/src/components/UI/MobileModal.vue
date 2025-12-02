@@ -14,6 +14,7 @@
         <button
           class="mobile__modal-header--button"
           @click="handleStartStep"
+          :disabled="props.isDisabledStartButton"
           v-if="props.startButtonText"
         >
           {{ props.startButtonText }}
@@ -39,7 +40,8 @@ const props = withDefaults(defineProps<IMobileModalProps>(), {
   open: false,
   showCloseButton: true,
   closeButtonText: 'Отмена',
-  showDivider: true
+  showDivider: true,
+  isDisabledStartButton: false
 });
 
 const handleCloseModal = () => {
@@ -50,5 +52,3 @@ const handleStartStep = () => {
   emits('unmount-next');
 };
 </script>
-
-<style scoped></style>

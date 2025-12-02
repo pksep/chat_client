@@ -6,6 +6,7 @@
     title="Написать сообщение"
     :start-button-text="props.isAddOne ? null : 'Далее'"
     back-button-text="Отмена"
+    :is-disabled-start-button="state.checkMembers.length === 0"
   >
     <template #default>
       <ContactSelector
@@ -62,6 +63,7 @@ const {
   avatarPreview,
   handleCreateGroup,
   createNiceName,
+  closeModal,
   handleOpenGroupInfo,
   handleCloseGroupInfo
 } = useNewGroupModal(props, emits);
@@ -78,6 +80,8 @@ const state = reactive({
 });
 
 const handleCloseModal = () => {
+  state.checkMembers = [];
+  closeModal();
   emits('unmount-close');
 };
 
@@ -99,6 +103,7 @@ const handleNext = (contacts: IUserProps[]): void => {
 const handleCreateInformation = ({ avatarUrl, name }) => {
   avatarPreview.value = avatarUrl;
   state.information.avatarUrl = avatarUrl;
+  state.information.name = name;
   groupName.value = name;
 };
 
