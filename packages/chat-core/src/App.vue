@@ -9,5 +9,5 @@ import './index';
 const mastraUrl = import.meta.env.VITE_MASTRA_BASE_URL;
 
 const token =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVc2VySUQiOiI0NiIsIlBsYXRmb3JtSUQiOjUsImV4cCI6MTc3MjAxMTE1NCwiaWF0IjoxNzY0MjM1MTQ5fQ.xFQZqcEoZv7jUWh04z8_cPLq9rcAr-NMXWcd0fZTvWI';
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDYsInJvbGVzIjoxOCwibG9naW4iOiLQmtC90Y_Qt9GP0L0g0K0uINCQLiIsInRhYmVsIjoiMDQ1IiwicmVtb3RlX3dvcmsiOnRydWUsImlhdCI6MTc2NDYwMDQyNSwiZXhwIjoxNzY0Njg2ODI1fQ.HRUFPFKlrxth2iH-mpjZ94gEZ1Xr_65_pe2u-jiwn8E';
 </script>

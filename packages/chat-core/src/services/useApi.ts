@@ -1,6 +1,6 @@
 import { Reqi } from '@pksep/reqi';
-import { getOrGeneratePlatformId } from './useOpenIM';
 import { getAuthToken } from '../composables/useLogin';
+import { getPlatformId } from '../composables/useAuth';
 
 export const createOpenIMRestApi = (): Reqi => {
   const instance = new Reqi(
@@ -10,10 +10,7 @@ export const createOpenIMRestApi = (): Reqi => {
   );
 
   instance.request.use((request: Request): Request => {
-    request.headers.set(
-      'operationID',
-      `${getOrGeneratePlatformId()}_${Date.now()}`
-    );
+    request.headers.set('operationID', `${getPlatformId()}_${Date.now()}`);
     return request;
   });
 

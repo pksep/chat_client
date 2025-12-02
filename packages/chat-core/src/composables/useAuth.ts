@@ -6,11 +6,19 @@ import { setAuthToken } from './useLogin';
 export const authedUser: Ref<SelfUserInfo | null> = ref(null);
 
 interface AuthResponse {
-  PlatformID: number;
   UserID: string;
   token: string;
   expireTimeSeconds: number;
+  PlatformID: number;
 }
+
+const setPlatformId = (platformId: number): void => {
+  sessionStorage.setItem('platformId', platformId.toString());
+};
+
+export const getPlatformId = (): number => {
+  return +sessionStorage.getItem('platformId');
+};
 
 export const useAuth = async (erpToken: string): Promise<AuthResponse> => {
   const response = await fetch(
@@ -26,6 +34,7 @@ export const useAuth = async (erpToken: string): Promise<AuthResponse> => {
   const data = await response.json();
 
   setAuthToken(data.token, data.expireTimeSeconds);
+  setPlatformId(data.PlatformID);
 
   return data;
 };
