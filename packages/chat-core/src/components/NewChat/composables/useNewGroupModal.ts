@@ -11,6 +11,7 @@ interface NewGroupState {
   file: File | null;
   isSelectedMembers: boolean;
   avatarPreview: string;
+  isCreating: boolean;
 }
 
 interface ExtendedProps extends INewContactProps {}
@@ -32,7 +33,8 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
     isEditAvatar: false,
     file: null,
     isSelectedMembers: false,
-    avatarPreview: ''
+    avatarPreview: '',
+    isCreating: false
   });
 
   const selectedContacts = computed(() => [

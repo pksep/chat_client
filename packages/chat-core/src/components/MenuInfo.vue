@@ -125,6 +125,7 @@ watch(
   () => props.open,
   async newVal => {
     isOpen.value = newVal;
+    console.log(props);
     if (newVal) {
       await initializeMenuInfo({ ...props, isEnabled: true });
     }
@@ -132,9 +133,11 @@ watch(
 );
 
 watch(
-  () => props.contact,
-  () => {
-    handleCloseMenu();
+  () => props.contact?.id,
+  (newId, oldId) => {
+    if (newId !== oldId) {
+      handleCloseMenu();
+    }
   }
 );
 

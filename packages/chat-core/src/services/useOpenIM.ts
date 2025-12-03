@@ -96,10 +96,9 @@ const setupOpenIM = (): void => {
             members.length === 1 &&
             detail.group?.createTime === detail.operationTime
           ) {
-            return;
-          } else {
-            return;
+            return; // Skip processing for group creation notifications (returns from callback)
           }
+          // Process other group notifications (updates, etc.)
         }
 
         // --- обычные сообщения ---
@@ -235,16 +234,15 @@ export const sendMessageIM = async ({
 };
 
 const getOrGeneratePlatformId = (): number => {
-  return 5;
-  // const key = 'platformId';
-  // const storedId = sessionStorage.getItem(key);
-  // if (storedId === null) {
-  //   const newId = Math.floor(Math.random() * 9) + 1;
-  //   sessionStorage.setItem(key, newId.toString());
-  //   return newId;
-  // } else {
-  //   return parseInt(storedId, 10);
-  // }
+  const key = 'platformId';
+  const storedId = sessionStorage.getItem(key);
+  if (storedId === null) {
+    const newId = Math.floor(Math.random() * 9) + 1;
+    sessionStorage.setItem(key, newId.toString());
+    return newId;
+  } else {
+    return parseInt(storedId, 10);
+  }
 };
 
 const getMessagesByConversationId = async (

@@ -59,7 +59,12 @@ watch([() => model.value?.name, () => model.value?.avatarUrl], () => {
 
 const onSave = () => {
   if (isFormValid.value) {
-    model.value.name = form.name;
+    // Update the model value to trigger the v-model update
+    model.value = {
+      ...model.value,
+      name: form.name,
+      avatarUrl: form.avatarUrl
+    };
     emits('unmount-save', { name: form.name, avatarUrl: form.avatarUrl });
   }
 };

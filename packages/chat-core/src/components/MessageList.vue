@@ -50,34 +50,42 @@
         v-for="(message, index) in state.messages"
         :key="message.clientMsgID"
       >
-        <template v-if="message.textElem?.content">
-          <div
-            v-if="isNewDate(index)"
-            class="date-divider"
-            :data-testid="`${props.dataTestid}-MessageList-DateDividerUser${index + 1}`"
+        <div
+          v-if="isNewDate(index)"
+          class="date-divider"
+          :data-testid="`${props.dataTestid}-MessageList-DateDividerUser${index + 1}`"
+        >
+          <span
+            :data-testid="`${props.dataTestid}-MessageList-DateLabelUser${index + 1}`"
+            >{{ formatDay(message.sendTime) }}</span
           >
-            <span
-              :data-testid="`${props.dataTestid}-MessageList-DateLabelUser${index + 1}`"
-              >{{ formatDay(message.sendTime) }}</span
-            >
-          </div>
+        </div>
 
-          <MessageBubble
-            :class="
-              messageChat(
-                props.user.id === message.sendID ? 'user' : 'assistant'
-              )
-            "
-            :message="parseNotification(message)"
-            :media="message.pictureElem?.sourcePicture?.url"
-            :file="message.fileElem"
-            :is-me-sender="props.user.id === message.sendID"
-            :time="formatTime(new Date(message.sendTime))"
-            :sender="message.senderNickname"
-            :avatar="message.senderFaceUrl"
-            :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
-          />
-        </template>
+        <div
+          v-if="message.notificationElem"
+          class="date-divider"
+          :data-testid="`${props.dataTestid}-MessageList-SystemMessageUser${index + 1}`"
+        >
+          <span
+            :data-testid="`${props.dataTestid}-MessageList-SystemLabelUser${index + 1}`"
+            >{{ parseNotification(message) }}</span
+          >
+        </div>
+
+        <MessageBubble
+          v-else
+          :class="
+            messageChat(props.user.id === message.sendID ? 'user' : 'assistant')
+          "
+          :message="message.textElem?.content || ''"
+          :media="message.pictureElem?.sourcePicture?.url"
+          :file="message.fileElem"
+          :is-me-sender="props.user.id === message.sendID"
+          :time="formatTime(new Date(message.sendTime))"
+          :sender="message.senderNickname"
+          :avatar="message.senderFaceUrl"
+          :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
+        />
       </template>
     </div>
   </div>
@@ -303,9 +311,14 @@ interface MessageWithNotification {
 
 const parseNotification = (message: MessageWithNotification) => {
   if (message.notificationElem?.detail) {
-    const parsed = JSON.parse(message.notificationElem.detail);
-    const notification = parsed.group?.notification || '';
-    return notification;
+    try {
+      const parsed = JSON.parse(message.notificationElem.detail);
+      const notification = parsed.group?.notification || '';
+      return notification;
+    } catch (error) {
+      console.error('Failed to parse notification detail:', error);
+      return '';
+    }
   }
   return message.textElem?.content || null;
 };

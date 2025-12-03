@@ -44,17 +44,28 @@ export function useMenuInfo<
     state.openAddUser = true;
   };
 
-  const handleNewContact = (contacts: IUserProps[]): void => {
+  const handleNewContact = async (contacts: IUserProps[]): Promise<void> => {
     if (props.contact?.groupId) {
+      // Optimistically update the UI
       state.contacts = [...state.contacts, ...contacts];
-      IMSDK.inviteUserToGroup(
-        {
-          groupID: props.contact?.groupId,
-          reason: 'Отправили приглашение',
-          userIDList: contacts.map(contact => contact.id)
-        },
-        generateChatId()
-      );
+
+      try {
+        await IMSDK.inviteUserToGroup(
+          {
+            groupID: props.contact?.groupId,
+            reason: 'Отправили приглашение',
+            userIDList: contacts.map(contact => contact.id)
+          },
+          generateChatId()
+        );
+
+        // Re-fetch group members after successful invitation to ensure UI is up-to-date
+        state.contacts = await fetchGroupMembers(props.contact?.groupId);
+      } catch (error) {
+        console.error('Failed to invite users to group:', error);
+        // Revert to previous state if failed
+        state.contacts = await fetchGroupMembers(props.contact?.groupId);
+      }
     }
   };
 
@@ -102,17 +113,20 @@ export function useMenuInfo<
       if (groups?.length > 0 && groups[0]?.createTime) {
         date = new Date(groups[0]?.createTime);
       }
+      const freshGroupInfo = groups?.[0];
       state.information = {
+        userId: state.information?.userId || props.contact?.id,
         groupId: props.contact?.groupId,
-        date
-      };
-
-      state.information = {
-        userId: state.information.userId,
-        groupId: state.information.groupId || null,
-        date: state.information.date,
-        name: props.contact.nickname || '',
-        avatarUrl: props.contact.avatarUrl
+        date,
+        name:
+          state.information?.name ||
+          freshGroupInfo?.groupName ||
+          props.contact.nickname ||
+          '',
+        avatarUrl:
+          state.information?.avatarUrl ||
+          freshGroupInfo?.faceURL ||
+          props.contact.avatarUrl
       };
     }
   };

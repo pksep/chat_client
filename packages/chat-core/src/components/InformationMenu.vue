@@ -29,7 +29,7 @@
     @unmount-mute="muteGroupInfo"
     @unmount-leave="leaveGroupInfo"
   />
-  <NewChatInformationForm :model-value="model" @unmount-save="handleSave" />
+  <NewChatInformationForm :model-value="model" @unmount-save="handleSaveFromForm" />
 </template>
 
 <script lang="ts" setup>
@@ -64,6 +64,15 @@ const {
   muteGroupInfo,
   leaveGroupInfo
 } = useInformationMenu(model);
+
+const handleSaveFromForm = (value: { name: string; avatarUrl?: string }) => {
+  // Update the local model and emit the update to parent
+  model.value = {
+    ...model.value,
+    name: value.name,
+    avatarUrl: value.avatarUrl
+  };
+};
 
 const openEditProfileIcon = () =>
   composableOpenEditProfileIcon(avatarInputRef.value);
