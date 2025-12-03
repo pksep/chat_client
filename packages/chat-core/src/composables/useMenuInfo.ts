@@ -129,9 +129,10 @@ export function useMenuInfo<
       if (groupId) {
         state.contacts = await fetchGroupMembers(groupId);
         const groups = await getGroupInfo([groupId]);
-        state.filteredMembers = props.members?.filter(
-          item => !state.contacts.some(contact => contact.id === item.id)
-        ) || [];
+        state.filteredMembers =
+          props.members?.filter(
+            item => !state.contacts.some(contact => contact.id === item.id)
+          ) || [];
         let date = new Date();
         if (groups?.length > 0 && groups[0]?.createTime) {
           date = new Date(groups[0].createTime);
