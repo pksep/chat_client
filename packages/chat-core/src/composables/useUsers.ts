@@ -18,7 +18,9 @@ export const fetchAllUsers = async (opts?: {
   try {
     const token = getAuthToken();
     if (!token) {
-      throw new Error('No authentication token found in cookies');
+      console.warn('No authentication token found, using empty user list');
+      users.value = [];
+      return users.value;
     }
 
     const api = useOpenIMRestApi();
@@ -63,14 +65,26 @@ export const fetchAllUsers = async (opts?: {
   } catch (err) {
     error.value = (err as Error).message;
     console.error('Failed to fetch users:', error.value);
-    return [];
+    // Return cached users or empty array instead of breaking
+    return users.value || [];
   } finally {
     loading.value = false;
   }
 };
 
 export const appendUserAttributes = (user: IUserProps) => {
-  const ex = JSON.parse(user?.ex || null);
+  let ex;
+  if (user?.ex) {
+    try {
+      ex = JSON.parse(user.ex);
+    } catch (e) {
+      console.error('Failed to parse user ex field:', e);
+      ex = {};
+    }
+  } else {
+    ex = {};
+  }
+
   user.tabel = ex?.tabel || '';
   user.initial = ex?.initial || '';
   return user;

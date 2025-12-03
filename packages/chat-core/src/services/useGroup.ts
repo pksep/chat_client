@@ -7,6 +7,7 @@ import {
 } from './useConversions';
 import { appendUserAttributes } from '../composables/useUsers';
 import { useOpenIMRestApi } from './useApi';
+import { updateItemList } from '../utils/listUtils';
 
 const groups = ref<IContactProps[]>([]);
 const groupMembers = ref<IUserProps[]>([]);
@@ -131,19 +132,7 @@ const setGroupList = (value): void => {
 
 const updateGroupList = (value: any[]): void => {
   const newItems = manipulateConversationList(value);
-
-  const conversationMap = new Map(groups.value.map(item => [item.id, item]));
-
-  newItems.forEach(item => {
-    conversationMap.set(item.id, { ...conversationMap.get(item.id), ...item });
-  });
-
-  groups.value = Array.from(conversationMap.values()).sort((a, b) => {
-    if (a.isPin && !b.isPin) return -1;
-    if (!a.isPin && b.isPin) return 1;
-
-    return b.latestMessageTime - a.latestMessageTime;
-  });
+  groups.value = updateItemList(groups.value, newItems);
 };
 
 const setGroupInfo = async (

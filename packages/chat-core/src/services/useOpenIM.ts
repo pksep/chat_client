@@ -6,6 +6,7 @@ import {
   updateConversationList
 } from './useConversions';
 import { updateGroupList } from './useGroup';
+import { generateConversationId, processIncomingMessage, Message } from '../utils/messageProcessor';
 
 export type IMSDKType = ReturnType<typeof getSDK>;
 
@@ -57,57 +58,43 @@ const setupOpenIM = (): void => {
   });
 
   IMSDK.on(CbEvents.OnConversationChanged, ev => {
-    updateConversationList(ev.data.filter(item => !item.groupID) || []);
-    updateGroupList(ev.data.filter(item => !!item.groupID) || []);
-  });
-
-  // check all events for debugging
-  Object.values(CbEvents).forEach(eventName => {
-    IMSDK.on(eventName, () => {
-      // console.debug(`[OpenIM Event] ${eventName}:`, data);
-    });
+    const data = ev.data || [];
+    updateConversationList(data.filter(item => !item.groupID));
+    updateGroupList(data.filter(item => !!item.groupID));
   });
 
   IMSDK.on(CbEvents.OnRecvNewMessages, evt => {
     try {
-      const payload = evt?.data as any;
+      const payload = evt?.data;
       if (!payload) return;
 
-      let list: any[] = [];
+      let list: Message[] = [];
 
       if (Array.isArray(payload)) {
-        list = payload;
-      } else if (Array.isArray(payload.messageList)) {
-        list = payload.messageList;
+        list = payload as Message[];
+      } else if ((payload as any)?.messageList && Array.isArray((payload as any).messageList)) {
+        list = (payload as any).messageList;
       } else {
-        list = [payload];
+        list = [payload as Message];
       }
 
-      list.forEach((m: any) => {
-        // --- check for group creation/update ---
-        if (m.contentType === 1501 && m.notificationElem?.detail) {
-          const detail = JSON.parse(m.notificationElem.detail);
+      if (!Array.isArray(list)) {
+        console.warn('[OpenIM] Unexpected message format:', payload);
+        return;
+      }
 
-          const members = detail.memberList || [];
-          // const opUser = detail.opUser;
+      list.forEach((message: Message) => {
+        // Process the message and check if we should skip it
+        if (!message) return;
 
-          // если только один участник и operationTime ≈ createTime => создание
-          if (
-            members.length === 1 &&
-            detail.group?.createTime === detail.operationTime
-          ) {
-            return; // Skip processing for group creation notifications (returns from callback)
-          }
-          // Process other group notifications (updates, etc.)
+        const processedMessage = processIncomingMessage(message);
+        if (!processedMessage) {
+          return; // Skip this message
         }
 
-        // --- обычные сообщения ---
-        const [smallerUserID, largerUserID] = [m.sendID, m.recvID].sort();
-        const convId = m.groupID
-          ? `sg_${m.groupID}`
-          : `si_${smallerUserID}_${largerUserID}`;
-
-        appendMessageToLocal(convId, m);
+        // Generate conversation ID and store the message
+        const convId = generateConversationId(processedMessage);
+        appendMessageToLocal(convId, processedMessage);
       });
     } catch (e) {
       console.error('[OpenIM] Failed to process incoming message event:', e);

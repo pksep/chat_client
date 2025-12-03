@@ -4,28 +4,33 @@ import { IMSDK } from './useOpenIM';
 import { IContactProps } from '../components/interfaces/interfaces';
 import { setGroupList } from './useGroup';
 import { getUsersList } from '../composables/useUsers';
+import { updateItemList } from '../utils/listUtils';
 
 const conversionStore = ref<IContactProps[]>([]);
 const allNotificationCount = ref<number>(0);
 
 const fetchConversationList = async () => {
   try {
-    IMSDK.on(CbEvents.OnConnecting, async () => {
-      const response = await IMSDK.getAllConversationList();
+    const response = await IMSDK.getAllConversationList();
 
-      const result = response.data || [];
+    const result = response.data || [];
 
-      const totalUnread = result.reduce(
-        (sum, conv) => sum + (conv.unreadCount || 0),
-        0
-      );
+    if (!Array.isArray(result)) {
+      console.warn('Conversation list response is not an array:', result);
+      return;
+    }
 
-      setAllNotificationCount(totalUnread);
-      setConversationList(result.filter(item => !item.groupID));
-      setGroupList(result.filter(item => !!item.groupID));
-    });
+    const totalUnread = result.reduce(
+      (sum, conv) => sum + (conv.unreadCount || 0),
+      0
+    );
+
+    setAllNotificationCount(totalUnread);
+    setConversationList(result.filter(item => !item.groupID));
+    setGroupList(result.filter(item => !!item.groupID));
   } catch (err) {
     console.error('Failed to get users with messages:', err);
+    // Don't throw error to prevent breaking the UI
   }
 };
 
@@ -43,6 +48,17 @@ const setPinConversation = async (
   }
 };
 
+// Helper function to safely parse message JSON
+const parseMessage = (messageStr: string | undefined) => {
+  if (!messageStr) return null;
+  try {
+    return JSON.parse(messageStr);
+  } catch (error) {
+    console.error('Failed to parse message JSON:', error);
+    return null;
+  }
+};
+
 export const manipulateConversationList = (
   conversations: Partial<ConversationItem>[]
 ): IContactProps[] => {
@@ -50,6 +66,7 @@ export const manipulateConversationList = (
 
   return conversations.map(c => {
     const user = users.find(user => user.id === c.userID);
+    const parsedMsg = c.latestMsg ? parseMessage(c.latestMsg) : null;
 
     return {
       id: c.conversationID,
@@ -59,20 +76,19 @@ export const manipulateConversationList = (
       isPin: c.isPinned,
       tabel: user?.tabel || '',
       initial: user?.initial || '',
-      latestMessage: c.latestMsg
-        ? JSON.parse(c.latestMsg)?.textElem?.content ||
-          JSON.parse(c.latestMsg)?.fileElem?.fileName ||
-          JSON.parse(c.latestMsg)?.pictureElem?.sourcePath ||
+      latestMessage: parsedMsg
+        ? parsedMsg.textElem?.content ||
+          parsedMsg.fileElem?.fileName ||
+          parsedMsg.pictureElem?.sourcePath ||
           ''
         : '',
       latestMessageTime:
         c.latestMsgSendTime ||
-        (c.latestMsg ? JSON.parse(c.latestMsg)?.sendTime || '' : ''),
+        (parsedMsg ? parsedMsg.sendTime || '' : ''),
       notificationCount: c.unreadCount,
       groupId: c.groupID,
-      isRead: c.latestMsg
-        ? JSON.parse(c.latestMsg)?.isRead &&
-          c.userID !== JSON.parse(c.latestMsg)?.sendID
+      isRead: parsedMsg
+        ? parsedMsg.isRead && c.userID !== parsedMsg.sendID
         : false
     };
   });
@@ -88,21 +104,7 @@ const setConversationList = (value: ConversationItem[]): void => {
 
 const updateConversationList = (value: any[]): void => {
   const newItems = manipulateConversationList(value);
-
-  const conversationMap = new Map(
-    conversionStore.value.map(item => [item.id, item])
-  );
-
-  newItems.forEach(item => {
-    conversationMap.set(item.id, { ...conversationMap.get(item.id), ...item });
-  });
-
-  conversionStore.value = Array.from(conversationMap.values()).sort((a, b) => {
-    if (a.isPin && !b.isPin) return -1;
-    if (!a.isPin && b.isPin) return 1;
-
-    return b.latestMessageTime - a.latestMessageTime;
-  });
+  conversionStore.value = updateItemList(conversionStore.value, newItems);
 };
 
 const getAllNotificationCount = (): number => {

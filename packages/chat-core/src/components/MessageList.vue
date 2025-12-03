@@ -299,7 +299,9 @@ onMounted(() => {
   }
 });
 
-interface MessageWithNotification {
+import { Message } from '../utils/messageProcessor';
+
+interface MessageWithNotification extends Message {
   textElem?: {
     content?: string;
   };
