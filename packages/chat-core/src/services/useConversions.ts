@@ -1,4 +1,4 @@
-import { CbEvents, ConversationItem } from '@openim/wasm-client-sdk';
+import { ConversationItem } from '@openim/wasm-client-sdk';
 import { ref } from 'vue';
 import { IMSDK } from './useOpenIM';
 import { IContactProps } from '../components/interfaces/interfaces';
@@ -83,8 +83,7 @@ export const manipulateConversationList = (
           ''
         : '',
       latestMessageTime:
-        c.latestMsgSendTime ||
-        (parsedMsg ? parsedMsg.sendTime || '' : ''),
+        c.latestMsgSendTime || (parsedMsg ? parsedMsg.sendTime || '' : ''),
       notificationCount: c.unreadCount,
       groupId: c.groupID,
       isRead: parsedMsg

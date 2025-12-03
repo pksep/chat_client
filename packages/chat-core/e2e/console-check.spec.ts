@@ -1,9 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { test } from '@playwright/test';
 
 test.describe('Console Error Check', () => {
   test.beforeEach(async ({ page }) => {
     // Listen for console errors
-    page.on('console', (msg) => {
+    page.on('console', msg => {
       if (msg.type() === 'error') {
         console.log(`Console Error: ${msg.text()}`);
       }
@@ -13,7 +13,7 @@ test.describe('Console Error Check', () => {
     });
 
     // Listen for page errors
-    page.on('pageerror', (error) => {
+    page.on('pageerror', error => {
       console.log(`Page Error: ${error.message}`);
     });
 
@@ -42,7 +42,7 @@ test.describe('Console Error Check', () => {
     const dialogsButton = page.locator('button:has-text("Диалоги")');
 
     // Try clicking the AI assistant button if it's available
-    if (await aiButton.count() > 0) {
+    if ((await aiButton.count()) > 0) {
       try {
         await aiButton.waitFor({ state: 'visible', timeout: 5000 });
         await aiButton.click({ timeout: 5000 });
@@ -54,7 +54,7 @@ test.describe('Console Error Check', () => {
     }
 
     // Try clicking the Channels button if it's available
-    if (await channelsButton.count() > 0) {
+    if ((await channelsButton.count()) > 0) {
       try {
         await channelsButton.waitFor({ state: 'visible', timeout: 5000 });
         await channelsButton.click({ timeout: 5000 });
@@ -66,7 +66,7 @@ test.describe('Console Error Check', () => {
     }
 
     // Try clicking the Dialogs button if it's available
-    if (await dialogsButton.count() > 0) {
+    if ((await dialogsButton.count()) > 0) {
       try {
         await dialogsButton.waitFor({ state: 'visible', timeout: 5000 });
         await dialogsButton.click({ timeout: 5000 });

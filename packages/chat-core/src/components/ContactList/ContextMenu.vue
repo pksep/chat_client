@@ -4,6 +4,7 @@
     v-on-click-outside="closePopover"
     :style="position"
     class="context-menu"
+    :data-testid="`${props.dataTestid}-ContextMenu-Container`"
   >
     <div class="template">
       <slot />
@@ -18,10 +19,16 @@
 import { vOnClickOutside } from '@pksep/yui';
 import { computed } from 'vue';
 
-const props = defineProps<{
-  visible?: boolean;
-  position?: { x: number; y: number };
-}>();
+const props = withDefaults(
+  defineProps<{
+    visible?: boolean;
+    position?: { x: number; y: number };
+    dataTestid?: string;
+  }>(),
+  {
+    dataTestid: () => 'ContextMenu'
+  }
+);
 
 const emits = defineEmits<{
   (e: 'unmount-close', event: Event): void;

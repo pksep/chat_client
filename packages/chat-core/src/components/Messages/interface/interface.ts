@@ -10,4 +10,5 @@ export interface IMessageBubbleProps {
   avatar?: string;
   media?: string;
   file?: FileElem;
+  dataTestid?: string;
 }

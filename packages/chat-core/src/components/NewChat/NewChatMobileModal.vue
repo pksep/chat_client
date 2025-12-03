@@ -7,6 +7,7 @@
     :start-button-text="props.isAddOne ? null : 'Далее'"
     back-button-text="Отмена"
     :is-disabled-start-button="state.checkMembers.length === 0"
+    :data-testid="`${props.dataTestid}-NewChatMobileModal-Container`"
   >
     <template #default>
       <ContactSelector
@@ -27,12 +28,13 @@
     @unmount-next="handleCreateMobileGroup"
     start-button-text="Создать"
     back-button-text="Отмена"
+    :data-testid="`${props.dataTestid}-NewChatMobileModal-GroupModal`"
   >
     <MobileChatInfo
       :model-value="state.information"
       @update:model-value="handleCreateInformation"
       :members="selectedContacts"
-      :data-testid="props.dataTestid"
+      :data-testid="`${props.dataTestid}-NewChatMobileModal-MobileChatInfo`"
     />
   </MobileModal>
 </template>
@@ -51,7 +53,8 @@ import { IUserProps } from '../interfaces/interfaces';
 
 const props = withDefaults(defineProps<INewChatMobileProps>(), {
   open: false,
-  contacts: () => []
+  contacts: () => [],
+  dataTestid: () => 'NewChatMobileModal'
 });
 
 const emits = defineEmits<INewChatMobileEmits>();

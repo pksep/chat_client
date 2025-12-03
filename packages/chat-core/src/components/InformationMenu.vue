@@ -1,5 +1,8 @@
 <template>
-  <div class="menu-info__create-channel" :data-testid="dataTestid">
+  <div
+    class="menu-info__create-channel"
+    :data-testid="`${dataTestid}-InformationMenu-Container`"
+  >
     <p class="menu-info__title-text">Канал создан:</p>
     <span>
       {{ model?.date?.toLocaleDateString('ru-RU') }}
@@ -29,7 +32,10 @@
     @unmount-mute="muteGroupInfo"
     @unmount-leave="leaveGroupInfo"
   />
-  <NewChatInformationForm :model-value="model" @unmount-save="handleSaveFromForm" />
+  <NewChatInformationForm
+    :model-value="model"
+    @unmount-save="handleSaveFromForm"
+  />
 </template>
 
 <script lang="ts" setup>
@@ -46,7 +52,9 @@ withDefaults(
     modelValue?: IMenuInfoInformation;
     dataTestid?: string;
   }>(),
-  {}
+  {
+    dataTestid: () => 'InformationMenu'
+  }
 );
 
 const model = defineModel<IMenuInfoInformation>();
@@ -60,7 +68,6 @@ const {
   onOpenEditAvatar,
   closeEditProfileIcon,
   onSaveAvatar,
-  handleSave,
   muteGroupInfo,
   leaveGroupInfo
 } = useInformationMenu(model);

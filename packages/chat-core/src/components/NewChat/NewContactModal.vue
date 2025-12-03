@@ -4,6 +4,7 @@
     class="new-contact"
     position="center"
     @close="closeModal"
+    :data-testid="`${props.dataTestid}-NewContactModal-Container`"
   >
     <header class="new-contact__header">
       {{ props.title }}
@@ -41,7 +42,8 @@ const props = withDefaults(defineProps<INewContactProps>(), {
   open: false,
   isAddOne: true,
   title: 'Создать диалог',
-  contacts: () => []
+  contacts: () => [],
+  dataTestid: () => 'NewContactModal'
 });
 
 const emits = defineEmits<{

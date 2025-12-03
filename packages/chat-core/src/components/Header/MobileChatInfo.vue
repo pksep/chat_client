@@ -70,7 +70,9 @@ interface IMobileChatInfoProps {
   dataTestid?: string;
 }
 
-const props = defineProps<IMobileChatInfoProps>();
+const props = withDefaults(defineProps<IMobileChatInfoProps>(), {
+  dataTestid: () => 'MobileChatInfo'
+});
 
 const information = defineModel<IMenuInfoInformation>();
 

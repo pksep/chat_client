@@ -73,7 +73,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, reactive, ref, watchEffect } from 'vue';
+import {
+  computed,
+  defineAsyncComponent,
+  onMounted,
+  reactive,
+  ref,
+  watchEffect
+} from 'vue';
 import Header from './Header/Header.vue';
 import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
@@ -92,8 +99,12 @@ import { getGroupList } from '../services/useGroup';
 import { getConversationList } from '../services/useConversions';
 
 // Dynamically import modal components to implement code splitting
-const NewContactModal = defineAsyncComponent(() => import('./NewChat/NewContactModal.vue'));
-const NewGroupModal = defineAsyncComponent(() => import('./NewChat/NewGroupModal.vue'));
+const NewContactModal = defineAsyncComponent(
+  () => import('./NewChat/NewContactModal.vue')
+);
+const NewGroupModal = defineAsyncComponent(
+  () => import('./NewChat/NewGroupModal.vue')
+);
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 

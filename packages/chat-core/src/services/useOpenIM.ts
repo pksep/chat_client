@@ -6,7 +6,11 @@ import {
   updateConversationList
 } from './useConversions';
 import { updateGroupList } from './useGroup';
-import { generateConversationId, processIncomingMessage, Message } from '../utils/messageProcessor';
+import {
+  generateConversationId,
+  processIncomingMessage,
+  Message
+} from '../utils/messageProcessor';
 
 export type IMSDKType = ReturnType<typeof getSDK>;
 
@@ -72,7 +76,10 @@ const setupOpenIM = (): void => {
 
       if (Array.isArray(payload)) {
         list = payload as Message[];
-      } else if ((payload as any)?.messageList && Array.isArray((payload as any).messageList)) {
+      } else if (
+        (payload as any)?.messageList &&
+        Array.isArray((payload as any).messageList)
+      ) {
         list = (payload as any).messageList;
       } else {
         list = [payload as Message];

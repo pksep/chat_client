@@ -4,6 +4,7 @@
     class="new-group"
     position="center"
     @close="closeModal"
+    :data-testid="`${props.dataTestid}-NewGroupModal-Container`"
   >
     <header class="new-group__header">
       {{ !isSelectedMembers ? 'Добавить участника' : 'Общий' }}
@@ -113,7 +114,8 @@ const props = withDefaults(
   defineProps<INewContactProps & { user?: IUserProps }>(),
   {
     open: false,
-    contacts: () => []
+    contacts: () => [],
+    dataTestid: () => 'NewGroupModal'
   }
 );
 

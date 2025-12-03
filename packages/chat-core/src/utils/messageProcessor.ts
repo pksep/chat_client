@@ -59,7 +59,10 @@ export interface ProcessedMessage {
  * @param fallback - Fallback value if parsing fails
  * @returns Parsed object or fallback value
  */
-export const safeJsonParse = <T>(jsonString: string | undefined, fallback: T): T => {
+export const safeJsonParse = <T>(
+  jsonString: string | undefined,
+  fallback: T
+): T => {
   if (!jsonString) return fallback;
   try {
     return JSON.parse(jsonString) as T;
@@ -77,11 +80,14 @@ export const safeJsonParse = <T>(jsonString: string | undefined, fallback: T): T
 export const processIncomingMessage = (message: Message): Message | null => {
   // Check for group creation/notification messages
   if (message.contentType === 1501 && message.notificationElem?.detail) {
-    const detail = safeJsonParse<GroupNotificationDetail>(message.notificationElem.detail, {
-      memberList: [],
-      group: {},
-      operationTime: 0
-    });
+    const detail = safeJsonParse<GroupNotificationDetail>(
+      message.notificationElem.detail,
+      {
+        memberList: [],
+        group: {},
+        operationTime: 0
+      }
+    );
 
     const members = detail.memberList || [];
 
@@ -107,7 +113,7 @@ export const generateConversationId = (message: Message): string => {
   if (message.groupID) {
     return `sg_${message.groupID}`;
   }
-  
+
   const [smallerUserID, largerUserID] = [message.sendID, message.recvID].sort();
   return `si_${smallerUserID}_${largerUserID}`;
 };

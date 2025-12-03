@@ -39,6 +39,7 @@ export interface IUserProps {
   initial?: string;
   createdAt?: Date;
   membersLength?: number;
+  dataTestid?: string;
 }
 
 export interface IContactProps extends IUserProps {

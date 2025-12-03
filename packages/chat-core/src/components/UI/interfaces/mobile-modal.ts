@@ -13,6 +13,7 @@ export interface IMobileModalProps {
   showDivider?: boolean;
   class?: CSSClass;
   headerClass?: CSSClass;
+  dataTestid?: string;
 }
 
 export interface IMobileModalEmits {

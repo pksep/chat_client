@@ -1,17 +1,28 @@
 <template>
-  <section class="contact-selector">
-    <Search v-model="state.q" />
-    <ul class="contact-selector__list">
+  <section
+    class="contact-selector"
+    :data-testid="`${props.dataTestid}-ContactSelector-Container`"
+  >
+    <Search
+      v-model="state.q"
+      :data-testid="`${props.dataTestid}-ContactSelector-Search`"
+    />
+    <ul
+      class="contact-selector__list"
+      :data-testid="`${props.dataTestid}-ContactSelector-List`"
+    >
       <li
-        v-for="contact in contacts"
+        v-for="(contact, index) in contacts"
         :key="contact.id"
         class="contact-selector__item"
         @click="handleNewContact(contact)"
+        :data-testid="`${props.dataTestid}-ContactSelector-Item${index + 1}`"
       >
         <UserProfile
           :tabel="contact.tabel"
           :nickname="contact.nickname"
           :avatar-alt="contact.nickname"
+          :dataTestid="`${props.dataTestid}-ContactSelector-UserProfile${index + 1}`"
         />
         <Checkbox
           v-if="!props.isAddOne"
@@ -19,6 +30,7 @@
           :size="CheckboxSizeEnum.small"
           @update:model-value="value => handleCheckbox(value, contact.id)"
           :model-value="state.selectedIds.has(contact.id)"
+          :data-testid="`${props.dataTestid}-ContactSelector-Checkbox${index + 1}`"
         />
       </li>
     </ul>
@@ -29,6 +41,7 @@
       class="contact-selector__add"
       :disabled="isButtonDisabled"
       @click="onAddClick"
+      :data-testid="`${props.dataTestid}-ContactSelector-AddButton`"
     >
       Добавить
     </Button>
@@ -53,7 +66,9 @@ import {
   IContactSelectorState
 } from './interfaces/contact-selector';
 
-const props = defineProps<IContactSelectorProps>();
+const props = withDefaults(defineProps<IContactSelectorProps>(), {
+  dataTestid: () => 'ContactSelector'
+});
 const emits = defineEmits<IContactSelectorEmits>();
 
 const state = reactive<IContactSelectorState>({
