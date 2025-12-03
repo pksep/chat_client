@@ -230,17 +230,19 @@ const handleSend = async (): Promise<void> => {
   if (props.chapter === 'ai') {
     await sendMessage(text, scrollToBottom);
   } else {
-    if (props.contact.id) {
-      await sendMessageIM({
-        message: text,
-        to: props.contact.id || '',
-        groupId: props.contact.id || ''
-      });
-    } else {
+    if (props.contact?.groupId) {
+      // group chat
       await sendMessageIM({
         message: text,
         to: '',
-        groupId: props.contact?.conversionId.slice(3)
+        groupId: props.contact.groupId
+      });
+    } else {
+      // private chat
+      await sendMessageIM({
+        message: text,
+        to: props.contact?.userId || '',
+        groupId: ''
       });
     }
   }
@@ -251,10 +253,11 @@ const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
   if (!files.length) return;
 
   Array.from(files).forEach(async file => {
+    const isGroup = !!props.contact?.groupId;
     await sendMessageIM({
       type: onlyMedia ? 'image' : 'file',
-      to: props.contact?.id || '',
-      groupId: props.contact?.id || props.contact?.conversionId.slice(3),
+      to: isGroup ? '' : props.contact?.userId || '',
+      groupId: isGroup ? props.contact.groupId : '',
       file
     });
 

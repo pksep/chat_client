@@ -79,8 +79,9 @@
       <Button
         :type="ButtonTypeEnum.primary"
         :size="SizesEnum.little"
+        :loading="isCreating"
         class="contact-selector__add"
-        :disabled="!groupName"
+        :disabled="isCreating || !groupName"
         @click="handleCreateGroup"
       >
         Создать
@@ -129,6 +130,7 @@ const {
   avatarPreview,
   isEditAvatar,
   file,
+  isCreating,
   onAvatarSelected,
   onSaveAvatar,
   closeEditAvatar,

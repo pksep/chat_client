@@ -81,14 +81,29 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
   };
 
   const handleCreateGroup = async (): Promise<any> => {
-    const group = await createGroup(
-      state.checkUsers,
-      state.groupName,
-      state.avatarPreview
-    );
-    emit('unmount-new-group', group);
-    closeModal();
-    return group;
+    state.isCreating = true;
+    try {
+      const group = await createGroup(
+        state.checkUsers,
+        state.groupName,
+        state.avatarPreview
+      );
+      if (group && group.conversationID) {
+        emit('unmount-new-group', group);
+        closeModal();
+        return group;
+      } else {
+        console.error('[NewGroupModal] Invalid group returned, not emitting');
+        // Optionally: Show error toast or keep modal open
+        return undefined;
+      }
+    } catch (error) {
+      console.error('Failed to create group:', error);
+      // Don't close modal on error; let user retry
+      throw error; // Let parent handle UI (e.g., toast)
+    } finally {
+      state.isCreating = false;
+    }
   };
 
   const createNiceName = (arr: IUserProps[]) => {

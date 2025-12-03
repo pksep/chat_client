@@ -1,7 +1,10 @@
 import { ref } from 'vue';
 import { IMSDK } from './useOpenIM';
 import { IContactProps, IUserProps } from '../components/interfaces/interfaces';
-import { manipulateConversationList } from './useConversions';
+import {
+  manipulateConversationList,
+  updateConversationList
+} from './useConversions';
 import { appendUserAttributes } from '../composables/useUsers';
 import { useOpenIMRestApi } from './useApi';
 
@@ -67,18 +70,54 @@ const createGroup = async (
       memberUserIDs
     });
 
-    groups.value.unshift(
-      ...manipulateConversationList([
-        {
-          ...res.data,
-          showName: name,
-          latestMsgSendTime: Date.now(),
-          conversationID: 'sg_' + res.data.groupID
-        }
-      ])
+    // Explicitly get/create the conversation for the new group
+    let conv: any = null;
+    try {
+      const convRes = await IMSDK.getOneConversation({
+        sourceID: res.data.groupID,
+        sessionType: 2 // Group chat
+      });
+      conv = convRes.data;
+      console.debug(
+        '[OpenIM] New group conversation fetched:',
+        conv.conversationID
+      );
+    } catch (convErr) {
+      console.warn(
+        '[OpenIM] Failed to fetch new conv, using optimistic:',
+        convErr
+      );
+      // Fallback: Create optimistic conv
+      conv = {
+        conversationID: `sg_${res.data.groupID}`,
+        groupID: res.data.groupID,
+        showName: name,
+        faceURL: imageUrl || '',
+        latestMsgSendTime: Date.now(),
+        unreadCount: 0,
+        isPinned: false
+      };
+    }
+
+    // Update local stores
+    const groupItem = manipulateConversationList([conv])[0];
+    groups.value.unshift(groupItem);
+    updateConversationList([conv]); // Sync to conversations store
+
+    // Return merged group + conv for downstream use (includes conversationID)
+    const fullGroup = {
+      ...res.data,
+      ...conv,
+      conversationID: conv.conversationID // Ensure it's set
+    };
+    console.debug(
+      '[OpenIM] Returning full group with conv ID:',
+      fullGroup.conversationID
     );
+    return fullGroup;
   } catch (err) {
-    console.error('Failed to get users with messages:', err);
+    console.error('Failed to create group:', err);
+    throw err;
   }
 };
 

@@ -237,6 +237,12 @@ const handleNewContactMessage = async (contact: IUserProps): Promise<void> => {
 };
 
 const handleNewGroupMessage = async (group: any): Promise<void> => {
+  if (!group || !group.conversationID) {
+    console.error('Invalid group data');
+    closeModals();
+    return;
+  }
+
   state.contact = {
     conversionId: group.conversationID,
     nickname: group.showName,

@@ -88,8 +88,6 @@ const state = reactive({
 
 const emits = defineEmits<IMobileListEmits>();
 
-// const isButtonDisabled = computed(() => state.checkUsers.size === 0);
-
 const handleChapter = (
   chapter: { nickname: string; contact: IUserProps } | string | null
 ): void => {
@@ -111,25 +109,9 @@ const handleCloseModal = () => {
   state.checkUsers.clear();
 };
 
-/*
-const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
-  if (isCheck) {
-    state.checkUsers.add(contactId);
-  } else {
-    state.checkUsers.delete(contactId);
-  }
-};
- */
-
 const handleNewContact = (contact: IUserProps): void => {
   emits('unmount-contact', contact);
+  handleChapter({ nickname: contact.conversionId, contact });
   handleCloseModal();
 };
-
-/*
-const handleOpenUser = (): void => {
-  if (isButtonDisabled.value) return;
-  handleCloseModal();
-};
- */
 </script>

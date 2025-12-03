@@ -118,6 +118,7 @@ const props = withDefaults(defineProps<IHeaderProps>(), {
 const emits = defineEmits<IHeaderEmits>();
 
 const state = reactive({
+  menuInfo: null,
   openMobileInfoModal: false,
   isSearchInputEnable: false,
   statusNotification: {
@@ -150,7 +151,6 @@ const showSearch = (): void => {
 };
 
 const handleCloseMobileInfoModal = (): void => {
-  menuInfoState.information = null;
   state.openMobileInfoModal = false;
 };
 
@@ -236,6 +236,7 @@ const handleNotificationToggle = (): void => {
 onMounted(async () => {
   if (props.contact?.groupId) {
     menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
+    // const information = await getGroupInfo([props.contact.groupId]);
   }
 });
 </script>
