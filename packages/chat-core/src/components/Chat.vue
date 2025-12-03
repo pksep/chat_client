@@ -32,7 +32,8 @@ import { isShowContactList } from '../composables/useShowContactList';
 import { MAX_W_MD } from '../utils/constants';
 import {
   fetchConversationList,
-  getConversationList
+  getConversationList,
+  onSDKReady
 } from '../services/useConversions';
 import { computed } from 'vue';
 import { onMounted } from 'vue';
@@ -86,7 +87,7 @@ const handleUnmountContact = (contact: IUserProps): void => {
 };
 
 onMounted(() => {
-  fetchConversationList();
+  onSDKReady(fetchConversationList);
 });
 
 defineExpose({

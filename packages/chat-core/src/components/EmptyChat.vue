@@ -1,8 +1,5 @@
 <template>
-  <div
-    class="chat__nothing"
-    :data-testid="`${dataTestid}-EmptyChat-Container`"
-  >
+  <div class="chat__nothing" :data-testid="`${dataTestid}-EmptyChat-Container`">
     <p
       v-if="!chapter && !isMobile"
       class="chat__nothing-paragraph"
@@ -26,7 +23,7 @@ import { MAX_W_MD } from '../utils/constants';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
     chapter: string | null;
     dataTestid?: string;

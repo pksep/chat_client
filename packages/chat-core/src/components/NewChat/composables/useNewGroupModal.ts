@@ -96,12 +96,10 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
         return group;
       } else {
         console.error('[NewGroupModal] Invalid group returned, not emitting');
-        // Optionally: Show error toast or keep modal open
         return undefined;
       }
     } catch (error) {
       console.error('Failed to create group:', error);
-      // Don't close modal on error; let user retry
       throw error; // Let parent handle UI (e.g., toast)
     } finally {
       state.isCreating = false;

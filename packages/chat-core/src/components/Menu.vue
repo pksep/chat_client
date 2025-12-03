@@ -159,7 +159,8 @@ import type {
 } from './interfaces/interfaces';
 import {
   fetchConversationList,
-  getConversationList
+  getConversationList,
+  onSDKReady
 } from '../services/useConversions';
 import { getGroupList } from '../services/useGroup';
 
@@ -271,6 +272,6 @@ onMounted(() => {
     state.installPrompt = event;
   });
 
-  fetchConversationList();
+  onSDKReady(fetchConversationList);
 });
 </script>

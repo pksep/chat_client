@@ -62,13 +62,14 @@
         </div>
 
         <div
-          v-if="message.notificationElem"
-          class="date-divider"
+          v-if="message.isSystemMessage || message.notificationElem"
+          class="system-message"
           :data-testid="`${props.dataTestid}-MessageList-SystemMessageUser${index + 1}`"
         >
           <span
             :data-testid="`${props.dataTestid}-MessageList-SystemLabelUser${index + 1}`"
-            >{{ parseNotification(message) }}</span
+            class="system-message-text"
+            >{{ getSystemMessageContent(message) }}</span
           >
         </div>
 
@@ -239,14 +240,12 @@ const handleSend = async (): Promise<void> => {
     await sendMessage(text, scrollToBottom);
   } else {
     if (props.contact?.groupId) {
-      // group chat
       await sendMessageIM({
         message: text,
         to: '',
         groupId: props.contact.groupId
       });
     } else {
-      // private chat
       await sendMessageIM({
         message: text,
         to: props.contact?.userId || '',
@@ -325,6 +324,18 @@ const parseNotification = (message: MessageWithNotification) => {
   return message.textElem?.content || null;
 };
 
+const getSystemMessageContent = (message: MessageWithNotification) => {
+  if (message.isSystemMessage && message.systemMessageContent) {
+    return message.systemMessageContent;
+  }
+
+  if (message.notificationElem) {
+    return parseNotification(message);
+  }
+
+  return message.textElem?.content || '';
+};
+
 onUnmounted(() => {
   removeMessageLoading(state.chatId, state.messages.length);
 });
@@ -333,3 +344,22 @@ defineExpose({
   handleClear
 });
 </script>
+
+<style scoped>
+.system-message {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0;
+  text-align: center;
+}
+
+.system-message-text {
+  font-size: 0.85em;
+  color: #666;
+  font-style: italic;
+  padding: 4px 12px;
+  background-color: #f0f0f0;
+  border-radius: 12px;
+  display: inline-block;
+}
+</style>

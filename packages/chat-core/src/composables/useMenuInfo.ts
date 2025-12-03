@@ -46,24 +46,21 @@ export function useMenuInfo<
 
   const handleNewContact = async (contacts: IUserProps[]): Promise<void> => {
     if (props.contact?.groupId) {
-      // Optimistically update the UI
       state.contacts = [...state.contacts, ...contacts];
 
       try {
         await IMSDK.inviteUserToGroup(
           {
             groupID: props.contact?.groupId,
-            reason: 'Отправили приглашение',
+            reason: 'Sent invitation',
             userIDList: contacts.map(contact => contact.id)
           },
           generateChatId()
         );
 
-        // Re-fetch group members after successful invitation to ensure UI is up-to-date
         state.contacts = await fetchGroupMembers(props.contact?.groupId);
       } catch (error) {
         console.error('Failed to invite users to group:', error);
-        // Revert to previous state if failed
         state.contacts = await fetchGroupMembers(props.contact?.groupId);
       }
     }
@@ -80,7 +77,26 @@ export function useMenuInfo<
           notification: null
         },
         generateChatId()
-      );
+      ).catch(error => {
+        const errorDetails = {
+          error: error,
+          operation: 'setGroupInfo',
+          groupID: props.contact?.groupId,
+          timestamp: new Date().toISOString(),
+          operationID: error?.operationID || error?.data?.operationID || null,
+          event: error?.event || error?.data?.event || null,
+          errorMessage: error?.errorMessage || error?.message || 'Unknown error'
+        };
+
+        console.error('Failed to update group info:', errorDetails);
+
+        if (error?.operationID) {
+          console.info(`Operation ID: ${error.operationID}`);
+        }
+        if (error?.event) {
+          console.info(`Event: ${error.event}`);
+        }
+      });
     }
     emits('unmount-contact', {
       ...props.contact,

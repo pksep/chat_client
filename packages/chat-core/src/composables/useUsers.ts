@@ -65,7 +65,6 @@ export const fetchAllUsers = async (opts?: {
   } catch (err) {
     error.value = (err as Error).message;
     console.error('Failed to fetch users:', error.value);
-    // Return cached users or empty array instead of breaking
     return users.value || [];
   } finally {
     loading.value = false;

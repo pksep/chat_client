@@ -9,7 +9,38 @@ import { updateItemList } from '../utils/listUtils';
 const conversionStore = ref<IContactProps[]>([]);
 const allNotificationCount = ref<number>(0);
 
+let isSDKReady = false;
+
+const sdkReadyCallbacks: Array<() => void> = [];
+
+export const markSDKReady = () => {
+  isSDKReady = true;
+
+  sdkReadyCallbacks.forEach(callback => {
+    try {
+      callback();
+    } catch (error) {
+      console.error('Error in SDK ready callback:', error);
+    }
+  });
+
+  sdkReadyCallbacks.length = 0;
+};
+
+export const onSDKReady = (callback: () => void) => {
+  if (isSDKReady) {
+    callback();
+  } else {
+    sdkReadyCallbacks.push(callback);
+  }
+};
+
 const fetchConversationList = async () => {
+  if (!isSDKReady) {
+    console.debug('SDK not ready yet, skipping conversation list fetch');
+    return;
+  }
+
   try {
     const response = await IMSDK.getAllConversationList();
 
@@ -29,8 +60,24 @@ const fetchConversationList = async () => {
     setConversationList(result.filter(item => !item.groupID));
     setGroupList(result.filter(item => !!item.groupID));
   } catch (err) {
-    console.error('Failed to get users with messages:', err);
-    // Don't throw error to prevent breaking the UI
+    const errorDetails = {
+      error: err,
+      operation: 'getAllConversationList',
+      timestamp: new Date().toISOString(),
+      operationID: err?.operationID || err?.data?.operationID || null,
+      event: err?.event || err?.data?.event || null,
+      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
+    };
+
+    console.error('Failed to get conversation list:', errorDetails);
+
+    if (err?.operationID) {
+      console.info(`Operation ID: ${err.operationID}`);
+    }
+    if (err?.event) {
+      console.info(`Event: ${err.event}`);
+    }
+
   }
 };
 
@@ -44,11 +91,28 @@ const setPinConversation = async (
       isPinned
     });
   } catch (err) {
-    console.error('Failed to get users with messages:', err);
+    const errorDetails = {
+      error: err,
+      operation: 'setConversation',
+      conversationID,
+      isPinned,
+      timestamp: new Date().toISOString(),
+      operationID: err?.operationID || err?.data?.operationID || null,
+      event: err?.event || err?.data?.event || null,
+      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
+    };
+
+    console.error('Failed to pin/unpin conversation:', errorDetails);
+
+    if (err?.operationID) {
+      console.info(`Operation ID: ${err.operationID}`);
+    }
+    if (err?.event) {
+      console.info(`Event: ${err.event}`);
+    }
   }
 };
 
-// Helper function to safely parse message JSON
 const parseMessage = (messageStr: string | undefined) => {
   if (!messageStr) return null;
   try {
@@ -126,7 +190,26 @@ const getOneConversation = async (
 
     return response.data;
   } catch (err) {
-    console.error('Failed to get conversation:', err);
+    const errorDetails = {
+      error: err,
+      operation: 'getOneConversation',
+      sourceID,
+      sessionType,
+      timestamp: new Date().toISOString(),
+      operationID: err?.operationID || err?.data?.operationID || null,
+      event: err?.event || err?.data?.event || null,
+      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
+    };
+
+    console.error('Failed to get one conversation:', errorDetails);
+
+    if (err?.operationID) {
+      console.info(`Operation ID: ${err.operationID}`);
+    }
+    if (err?.event) {
+      console.info(`Event: ${err.event}`);
+    }
+
     throw err;
   }
 };

@@ -14,8 +14,6 @@ import {
 
 export type IMSDKType = ReturnType<typeof getSDK>;
 
-// Храним единственный экземпляр
-// Экспортируем singleton IMSDK
 
 let instance: IMSDKType | null = null;
 
@@ -30,26 +28,20 @@ const IMSDK: IMSDKType = (() => {
   return instance;
 })();
 
-// Защита от дубликатов при Hot Module Reload (Vite)
-// Не уничтожаем wasm при dispose — иначе SDK ломается
 
 if (import.meta.hot) {
   import.meta.hot.accept(() => {
-    // console.log('[IMSDK] HMR: module hot reloaded (singleton preserved)');
   });
 
   import.meta.hot.dispose(() => {
-    // console.log('[IMSDK] HMR: dispose — SKIPPED (do not reset instance)');
   });
 }
 
 const setupOpenIM = (): void => {
   IMSDK.on(CbEvents.OnConnecting, () => {
-    // console.debug('[OpenIM] Connecting...');
   });
 
   IMSDK.on(CbEvents.OnConnectSuccess, () => {
-    // console.debug('[OpenIM] Connected successfully!');
   });
 
   IMSDK.on(CbEvents.OnConnectFailed, err => {
@@ -91,7 +83,6 @@ const setupOpenIM = (): void => {
       }
 
       list.forEach((message: Message) => {
-        // Process the message and check if we should skip it
         if (!message) return;
 
         const processedMessage = processIncomingMessage(message);
@@ -99,7 +90,6 @@ const setupOpenIM = (): void => {
           return; // Skip this message
         }
 
-        // Generate conversation ID and store the message
         const convId = generateConversationId(processedMessage);
         appendMessageToLocal(convId, processedMessage);
       });
@@ -115,7 +105,6 @@ const setupOpenIM = (): void => {
       readTime: number;
     }>;
     receipts.forEach(r => {
-      // mark the message with clientMsgID in conversationID as “read by other”
       const msgs = getSavedMessages(r.conversationID);
       const idx = msgs.findIndex(m => m.clientMsgID === r.clientMsgID);
       if (idx >= 0) {
@@ -131,14 +120,38 @@ export const uploadFile = async (file: File) => {
   formData.append('file', file);
   const clientUUID = crypto.randomUUID().toString();
 
-  const res = await IMSDK.uploadFile({
-    name: clientUUID + '_' + file.name,
-    contentType: file.type,
-    uuid: clientUUID,
-    file: file
-  });
+  try {
+    const res = await IMSDK.uploadFile({
+      name: clientUUID + '_' + file.name,
+      contentType: file.type,
+      uuid: clientUUID,
+      file: file
+    });
 
-  return encodeURI(res.data.url);
+    return encodeURI(res.data.url);
+  } catch (error) {
+    const errorDetails = {
+      error: error,
+      operation: 'uploadFile',
+      fileName: file.name,
+      fileSize: file.size,
+      timestamp: new Date().toISOString(),
+      operationID: error?.operationID || error?.data?.operationID || null,
+      event: error?.event || error?.data?.event || null,
+      errorMessage: error?.errorMessage || error?.message || 'Unknown error'
+    };
+
+    console.error('[OpenIM] Failed to upload file:', errorDetails);
+
+    if (error?.operationID) {
+      console.info(`Operation ID: ${error.operationID}`);
+    }
+    if (error?.event) {
+      console.info(`Event: ${error.event}`);
+    }
+
+    throw error;
+  }
 };
 
 export const sendMessageIM = async ({
@@ -160,40 +173,109 @@ export const sendMessageIM = async ({
     let createResp: any;
 
     if (type === 'text') {
-      createResp = await IMSDK.createTextMessage(message || '');
+      try {
+        createResp = await IMSDK.createTextMessage(message || '');
+      } catch (error) {
+        const errorDetails = {
+          error: error,
+          operation: 'createTextMessage',
+          message: message || '',
+          timestamp: new Date().toISOString(),
+          operationID: error?.operationID || error?.data?.operationID || null,
+          event: error?.event || error?.data?.event || null,
+          errorMessage: error?.errorMessage || error?.message || 'Unknown error'
+        };
+
+        console.error('[OpenIM] Failed to create text message:', errorDetails);
+
+        if (error?.operationID) {
+          console.info(`Operation ID: ${error.operationID}`);
+        }
+        if (error?.event) {
+          console.info(`Event: ${error.event}`);
+        }
+
+        throw error;
+      }
     } else if (type === 'file') {
       if (!file) throw new Error('File is required for file message');
 
-      // Используем createFileMessageByFile
-      createResp = await IMSDK.createFileMessageByFile({
-        filePath: file.name, // можно использовать имя файла
-        fileName: file.name,
-        uuid: crypto.randomUUID(),
-        sourceUrl: '', // можно пустой, если нет заранее загруженного URL
-        fileSize: file.size,
-        fileType: file.type,
-        file: file
-      });
+      try {
+        createResp = await IMSDK.createFileMessageByFile({
+          filePath: file.name, // can use filename
+          fileName: file.name,
+          uuid: crypto.randomUUID(),
+          sourceUrl: '', // can be empty if there's no pre-uploaded URL
+          fileSize: file.size,
+          fileType: file.type,
+          file: file
+        });
+      } catch (error) {
+        const errorDetails = {
+          error: error,
+          operation: 'createFileMessageByFile',
+          fileName: file.name,
+          fileSize: file.size,
+          timestamp: new Date().toISOString(),
+          operationID: error?.operationID || error?.data?.operationID || null,
+          event: error?.event || error?.data?.event || null,
+          errorMessage: error?.errorMessage || error?.message || 'Unknown error'
+        };
+
+        console.error('[OpenIM] Failed to create file message:', errorDetails);
+
+        if (error?.operationID) {
+          console.info(`Operation ID: ${error.operationID}`);
+        }
+        if (error?.event) {
+          console.info(`Event: ${error.event}`);
+        }
+
+        throw error;
+      }
     } else if (type === 'image') {
       if (!file) throw new Error('File is required for image message');
 
-      // Подготавливаем данные PicBaseInfo
       const picBaseInfo = {
         uuid: crypto.randomUUID(),
         type: file.type,
         size: file.size,
-        width: 300, // можно определить, если нужно
+        width: 300, // can be determined if needed
         height: 215,
-        url: '' // при отправке файла URL может быть пустой
+        url: '' // URL can be empty when sending file
       };
 
-      createResp = await IMSDK.createImageMessageByFile({
-        sourcePicture: picBaseInfo,
-        bigPicture: picBaseInfo,
-        snapshotPicture: picBaseInfo,
-        sourcePath: file.name, // или другой путь, если есть
-        file: file
-      });
+      try {
+        createResp = await IMSDK.createImageMessageByFile({
+          sourcePicture: picBaseInfo,
+          bigPicture: picBaseInfo,
+          snapshotPicture: picBaseInfo,
+          sourcePath: file.name, // or another path if available
+          file: file
+        });
+      } catch (error) {
+        const errorDetails = {
+          error: error,
+          operation: 'createImageMessageByFile',
+          fileName: file.name,
+          fileSize: file.size,
+          timestamp: new Date().toISOString(),
+          operationID: error?.operationID || error?.data?.operationID || null,
+          event: error?.event || error?.data?.event || null,
+          errorMessage: error?.errorMessage || error?.message || 'Unknown error'
+        };
+
+        console.error('[OpenIM] Failed to create image message:', errorDetails);
+
+        if (error?.operationID) {
+          console.info(`Operation ID: ${error.operationID}`);
+        }
+        if (error?.event) {
+          console.info(`Event: ${error.event}`);
+        }
+
+        throw error;
+      }
     } else {
       throw new Error('Unsupported message type');
     }
@@ -222,7 +304,26 @@ export const sendMessageIM = async ({
 
     console.debug('[OpenIM] Message sent successfully to:', to);
   } catch (error) {
-    console.error('[OpenIM] Failed to send message:', error);
+    const errorDetails = {
+      error: error,
+      operation: 'sendMessage',
+      to,
+      groupId,
+      timestamp: new Date().toISOString(),
+      operationID: error?.operationID || error?.data?.operationID || null,
+      event: error?.event || error?.data?.event || null,
+      errorMessage: error?.errorMessage || error?.message || 'Unknown error'
+    };
+
+    console.error('[OpenIM] Failed to send message:', errorDetails);
+
+    if (error?.operationID) {
+      console.info(`Operation ID: ${error.operationID}`);
+    }
+    if (error?.event) {
+      console.info(`Event: ${error.event}`);
+    }
+
     throw error;
   }
 };
@@ -260,17 +361,34 @@ const getMessagesByConversationId = async (
 
     return messages;
   } catch (err) {
-    console.error('Failed to get messages for conversation:', err);
+    const errorDetails = {
+      error: err,
+      operation: 'getAdvancedHistoryMessageList',
+      conversationID: conversationId,
+      startClientMsgID: lastClientMsgID,
+      timestamp: new Date().toISOString(),
+      operationID: err?.operationID || err?.data?.operationID || null,
+      event: err?.event || err?.data?.event || null,
+      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
+    };
+
+    console.error('Failed to get messages for conversation:', errorDetails);
+
+    if (err?.operationID) {
+      console.info(`Operation ID: ${err.operationID}`);
+    }
+    if (err?.event) {
+      console.info(`Event: ${err.event}`);
+    }
+
     return [];
   }
 };
 
-// When current user reads a chat
 const markAsRead = async (conversationID: string) => {
   await IMSDK.markConversationMessageAsRead(conversationID);
 };
 
-// In-module reactive "store" — no extra files
 const messagesStore = ref<Record<string, any[]>>({});
 
 const saveMessagesToLocal = (conversationId: string, messages: any[]): void => {

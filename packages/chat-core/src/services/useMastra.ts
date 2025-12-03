@@ -14,7 +14,6 @@ interface UseMastraOptions {
   baseUrl?: string;
 }
 
-// IndexedDB constants
 const DB_NAME = 'chat-messages-db';
 const STORE_NAME = 'messages';
 
@@ -47,19 +46,15 @@ class ChatDB {
       request.onsuccess = () => {
         let result = request.result;
         if (result && result.messages && Array.isArray(result.messages)) {
-          // Create new result object with properly formatted timestamps
           result = {
             ...result,
             messages: result.messages.map(msg => {
               let timestamp: number | undefined;
               if (typeof msg.timestamp === 'string') {
-                // Convert stored string timestamp back to number
                 timestamp = new Date(msg.timestamp).getTime();
               } else if (typeof msg.timestamp === 'number') {
-                // Timestamp is already a number
                 timestamp = msg.timestamp;
               } else {
-                // Default to current time if no timestamp
                 timestamp = Date.now();
               }
               return {
@@ -80,7 +75,6 @@ class ChatDB {
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
-      // Ensure all data is serializable by converting any Date objects to ISO strings
       const serializableMessages = messages.map(msg => ({
         ...msg,
         timestamp: msg.timestamp
@@ -111,7 +105,6 @@ class ChatDB {
       request.onsuccess = () => {
         const results = request.result || [];
         const chats = results.map((item: any) => {
-          // Handle both string and Date object timestamps
           let timestamp: Date;
           if (typeof item.timestamp === 'string') {
             timestamp = new Date(item.timestamp);
@@ -125,7 +118,6 @@ class ChatDB {
             timestamp
           };
         });
-        // Sort by timestamp (newest first)
         chats.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
         resolve(chats);
       };
@@ -267,7 +259,6 @@ const useMastra = (options?: UseMastraOptions | false) => {
   const messages: Ref<Message[]> = ref([]);
   const isInitializing = ref(!!chatId); // Only true if chatId exists initially
 
-  // Initialize if chatId is available
   if (chatId) {
     getOrCreateChatHistory(chatId)
       .then(initialMessages => {
@@ -289,10 +280,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
   ) => {
     if (!input.trim()) return;
 
-    // If no chatId, generate one now (first message case)
     if (!chatId) {
       chatId = generateChatId();
-      // Initialize with empty messages for new chat
       messages.value = [];
       isInitializing.value = false;
     }
@@ -304,7 +293,6 @@ const useMastra = (options?: UseMastraOptions | false) => {
       return;
     }
 
-    // Add user message and ensure reactivity
     const userMessage: Message = {
       role: 'user',
       content: input,
@@ -312,7 +300,6 @@ const useMastra = (options?: UseMastraOptions | false) => {
     };
     messages.value = [...messages.value, userMessage];
 
-    // Add loading assistant message and ensure reactivity
     const assistantIndex = messages.value.length;
     const assistantMessage: Message = {
       role: 'assistant',
@@ -322,7 +309,6 @@ const useMastra = (options?: UseMastraOptions | false) => {
     };
     messages.value = [...messages.value, assistantMessage];
 
-    // Save messages after adding both user and assistant messages
     await saveMessages(chatId, messages.value);
 
     try {
@@ -359,7 +345,6 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
               if (event.type === 'text-delta' && event.payload?.text) {
                 if (assistantIndex < messages.value.length) {
-                  // Create a new array with updated message to ensure reactivity
                   const newMessages = [...messages.value];
                   newMessages[assistantIndex] = {
                     ...newMessages[assistantIndex],
@@ -410,7 +395,6 @@ const useMastra = (options?: UseMastraOptions | false) => {
         assistantIndex < messages.value.length &&
         messages.value[assistantIndex]
       ) {
-        // Remove loading state with new array to ensure reactivity
         const newMessages = [...messages.value];
         newMessages[assistantIndex] = {
           ...newMessages[assistantIndex],

@@ -236,7 +236,6 @@ const handleNotificationToggle = (): void => {
 onMounted(async () => {
   if (props.contact?.groupId) {
     menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
-    // const information = await getGroupInfo([props.contact.groupId]);
   }
 });
 </script>

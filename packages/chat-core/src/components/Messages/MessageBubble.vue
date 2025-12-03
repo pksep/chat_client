@@ -1,8 +1,5 @@
 <template>
-  <div
-    class="message"
-    :data-testid="`${dataTestid}-MessageBubble-Container`"
-  >
+  <div class="message" :data-testid="`${dataTestid}-MessageBubble-Container`">
     <Avatar
       class="message__avatar"
       :url="props.sender"
@@ -34,14 +31,10 @@
             class="message-content__blockquote-container"
             :data-testid="`${dataTestid}-MessageBubble-BlockquoteContainer`"
           >
-            <h5
-              :data-testid="`${dataTestid}-MessageBubble-BlockquoteAuthor`"
-            >
+            <h5 :data-testid="`${dataTestid}-MessageBubble-BlockquoteAuthor`">
               Ivan Ivanov
             </h5>
-            <div
-              :data-testid="`${dataTestid}-MessageBubble-BlockquoteText`"
-            >
+            <div :data-testid="`${dataTestid}-MessageBubble-BlockquoteText`">
               How are you?
             </div>
           </div>
@@ -95,9 +88,7 @@
               :dataTestid="`${dataTestid}-MessageBubble-FileIcon`"
             />
             <div :data-testid="`${dataTestid}-MessageBubble-FileInfo`">
-              <div
-                :data-testid="`${dataTestid}-MessageBubble-FileDetails`"
-              >
+              <div :data-testid="`${dataTestid}-MessageBubble-FileDetails`">
                 <p
                   class="message-content__file__name"
                   :data-testid="`${dataTestid}-MessageBubble-FileName`"

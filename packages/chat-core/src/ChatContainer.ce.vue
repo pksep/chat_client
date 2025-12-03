@@ -21,7 +21,10 @@ import {
   hasUserIdInSession
 } from './services/useMastra';
 import { mockUsers } from './test/mock/users';
-import { getAllNotificationCount } from './services/useConversions';
+import {
+  getAllNotificationCount,
+  markSDKReady
+} from './services/useConversions';
 
 const props = withDefaults(defineProps<IChatContainerProps>(), {
   token: null
@@ -91,6 +94,8 @@ onMounted(async () => {
     });
 
     setupOpenIM();
+
+    markSDKReady();
   } catch (error) {
     console.error('Failed to initialize chat:', error);
     throw error;

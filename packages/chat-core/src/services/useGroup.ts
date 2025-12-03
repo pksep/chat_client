@@ -51,7 +51,24 @@ export const fetchGroupMembers = async (
 
     return groupMembers.value;
   } catch (err) {
-    console.error('Failed to fetch group members:', err);
+    const errorDetails = {
+      error: err,
+      operation: 'getGroupMemberList',
+      timestamp: new Date().toISOString(),
+      operationID: err?.operationID || err?.data?.operationID || null,
+      event: err?.event || err?.data?.event || null,
+      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
+    };
+
+    console.error('Failed to fetch group members:', errorDetails);
+
+    if (err?.operationID) {
+      console.info(`Operation ID: ${err.operationID}`);
+    }
+    if (err?.event) {
+      console.info(`Event: ${err.event}`);
+    }
+
     return [];
   }
 };
@@ -71,7 +88,6 @@ const createGroup = async (
       memberUserIDs
     });
 
-    // Explicitly get/create the conversation for the new group
     let conv: any = null;
     try {
       const convRes = await IMSDK.getOneConversation({
@@ -88,7 +104,6 @@ const createGroup = async (
         '[OpenIM] Failed to fetch new conv, using optimistic:',
         convErr
       );
-      // Fallback: Create optimistic conv
       conv = {
         conversationID: `sg_${res.data.groupID}`,
         groupID: res.data.groupID,
@@ -100,12 +115,10 @@ const createGroup = async (
       };
     }
 
-    // Update local stores
     const groupItem = manipulateConversationList([conv])[0];
     groups.value.unshift(groupItem);
     updateConversationList([conv]); // Sync to conversations store
 
-    // Return merged group + conv for downstream use (includes conversationID)
     const fullGroup = {
       ...res.data,
       ...conv,
@@ -117,7 +130,24 @@ const createGroup = async (
     );
     return fullGroup;
   } catch (err) {
-    console.error('Failed to create group:', err);
+    const errorDetails = {
+      error: err,
+      operation: 'createGroup',
+      timestamp: new Date().toISOString(),
+      operationID: err?.operationID || err?.data?.operationID || null,
+      event: err?.event || err?.data?.event || null,
+      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
+    };
+
+    console.error('Failed to create group:', errorDetails);
+
+    if (err?.operationID) {
+      console.info(`Operation ID: ${err.operationID}`);
+    }
+    if (err?.event) {
+      console.info(`Event: ${err.event}`);
+    }
+
     throw err;
   }
 };
@@ -164,7 +194,24 @@ const setGroupInfo = async (
       });
     }
   } catch (err) {
-    console.error('Failed to set group info:', err);
+    const errorDetails = {
+      error: err,
+      operation: 'setGroupInfo',
+      groupID,
+      timestamp: new Date().toISOString(),
+      operationID: err?.operationID || err?.data?.operationID || null,
+      event: err?.event || err?.data?.event || null,
+      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
+    };
+
+    console.error('Failed to set group info:', errorDetails);
+
+    if (err?.operationID) {
+      console.info(`Operation ID: ${err.operationID}`);
+    }
+    if (err?.event) {
+      console.info(`Event: ${err.event}`);
+    }
   }
 };
 
@@ -174,7 +221,25 @@ const quitGroup = async (groupID: string) => {
 
     groups.value = groups.value.filter(group => group.id !== groupID);
   } catch (err) {
-    console.error('Failed to quit group:', err);
+    const errorDetails = {
+      error: err,
+      operation: 'quitGroup',
+      groupID,
+      timestamp: new Date().toISOString(),
+      operationID: err?.operationID || err?.data?.operationID || null,
+      event: err?.event || err?.data?.event || null,
+      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
+    };
+
+    console.error('Failed to quit group:', errorDetails);
+
+    if (err?.operationID) {
+      console.info(`Operation ID: ${err.operationID}`);
+    }
+    if (err?.event) {
+      console.info(`Event: ${err.event}`);
+    }
+
     throw err;
   }
 };
@@ -202,7 +267,24 @@ export const getGroupInfo = async (groupIDs: string[]) => {
 
     return apiResponse.data.groupInfos;
   } catch (err) {
-    console.error('Failed to get group info:', err);
+    const errorDetails = {
+      error: err,
+      operation: 'get_groups_info',
+      timestamp: new Date().toISOString(),
+      operationID: err?.operationID || err?.data?.operationID || null,
+      event: err?.event || err?.data?.event || null,
+      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
+    };
+
+    console.error('Failed to get group info:', errorDetails);
+
+    if (err?.operationID) {
+      console.info(`Operation ID: ${err.operationID}`);
+    }
+    if (err?.event) {
+      console.info(`Event: ${err.event}`);
+    }
+
     throw err;
   }
 };
@@ -217,7 +299,24 @@ export const fetchGroupMemberCount = async (
     }
     return 0;
   } catch (err) {
-    console.error('Failed to fetch group member count:', err);
+    const errorDetails = {
+      error: err,
+      operation: 'fetchGroupMemberCount',
+      timestamp: new Date().toISOString(),
+      operationID: err?.operationID || err?.data?.operationID || null,
+      event: err?.event || err?.data?.event || null,
+      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
+    };
+
+    console.error('Failed to fetch group member count:', errorDetails);
+
+    if (err?.operationID) {
+      console.info(`Operation ID: ${err.operationID}`);
+    }
+    if (err?.event) {
+      console.info(`Event: ${err.event}`);
+    }
+
     return 0;
   }
 };

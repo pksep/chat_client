@@ -16,9 +16,11 @@
     "@babel/eslint-parser": "^7.28.0",
     "@pksep/chat-core": "workspace:*",
     "@rushstack/eslint-patch": "^1.12.0",
+    "@vue/compiler-sfc": "^3.5.25",
     "@vue/eslint-config-airbnb": "^8.0.0",
+    "@vue/runtime-dom": "^3.5.25",
     "vite-plugin-dts": "^4.5.4",
-    "vue": "^3.5.18",
+    "vue": "^3.5.21",
     "vue-eslint-parser": "^9.4.3"
   },
   "devDependencies": {

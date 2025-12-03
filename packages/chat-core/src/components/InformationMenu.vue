@@ -73,7 +73,6 @@ const {
 } = useInformationMenu(model);
 
 const handleSaveFromForm = (value: { name: string; avatarUrl?: string }) => {
-  // Update the local model and emit the update to parent
   model.value = {
     ...model.value,
     name: value.name,

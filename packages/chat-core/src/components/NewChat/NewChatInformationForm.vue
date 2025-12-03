@@ -59,7 +59,6 @@ watch([() => model.value?.name, () => model.value?.avatarUrl], () => {
 
 const onSave = () => {
   if (isFormValid.value) {
-    // Update the model value to trigger the v-model update
     model.value = {
       ...model.value,
       name: form.name,

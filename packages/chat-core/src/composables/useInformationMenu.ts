@@ -57,12 +57,34 @@ export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
   };
 
   const leaveGroupInfo = async (): Promise<void> => {
-    if (!model.value?.groupId) {
-      await quitGroup(model.value?.groupId);
-    } else {
-      await IMSDK.deleteFriend(model.value?.userId);
+    try {
+      if (model.value?.groupId) {
+        await quitGroup(model.value?.groupId);
+      } else {
+        await IMSDK.deleteFriend(model.value?.userId);
+      }
+      window.location.reload();
+    } catch (error) {
+      const errorDetails = {
+        error: error,
+        operation: model.value?.groupId ? 'quitGroup' : 'deleteFriend',
+        groupID: model.value?.groupId || null,
+        userID: model.value?.userId || null,
+        timestamp: new Date().toISOString(),
+        operationID: error?.operationID || error?.data?.operationID || null,
+        event: error?.event || error?.data?.event || null,
+        errorMessage: error?.errorMessage || error?.message || 'Unknown error'
+      };
+
+      console.error('Failed to leave group or delete friend:', errorDetails);
+
+      if (error?.operationID) {
+        console.info(`Operation ID: ${error.operationID}`);
+      }
+      if (error?.event) {
+        console.info(`Event: ${error.event}`);
+      }
     }
-    window.location.reload();
   };
 
   return {

@@ -1,4 +1,3 @@
-// Type definitions for message processing
 export interface Message {
   clientMsgID?: string;
   sendID: string;
@@ -29,12 +28,16 @@ export interface Message {
   isPinned?: boolean;
   group?: {
     createTime?: number;
+    groupName?: string;
   };
   operationTime?: number;
   memberList?: any[];
+  senderNickname?: string; // Add this property
+  isSystemMessage?: boolean;
+  systemMessageType?: string;
+  systemMessageContent?: string;
 }
 
-// Define specific types for notification details
 export interface GroupNotificationDetail {
   memberList?: any[];
   group?: {
@@ -52,6 +55,8 @@ export interface ProcessedMessage {
   sendTime?: number;
   isRead?: boolean;
 }
+
+import { parseGroupNotification } from './systemMessages';
 
 /**
  * Safely parse JSON content
@@ -78,26 +83,32 @@ export const safeJsonParse = <T>(
  * @returns Processed message or null if it should be skipped
  */
 export const processIncomingMessage = (message: Message): Message | null => {
-  // Check for group creation/notification messages
   if (message.contentType === 1501 && message.notificationElem?.detail) {
-    const detail = safeJsonParse<GroupNotificationDetail>(
-      message.notificationElem.detail,
-      {
-        memberList: [],
-        group: {},
-        operationTime: 0
+    const detail = safeJsonParse<any>(message.notificationElem.detail, {}); // Changed to 'any' to handle full OpenIM notification structure
+
+    const senderName = message.showName || message.senderNickname || 'Someone';
+    const groupName =
+      (message.group && message.group.groupName) || message.showName || 'Group';
+
+    const systemMessage = parseGroupNotification(detail, senderName, groupName);
+
+    if (systemMessage) {
+      message.isSystemMessage = true;
+      message.systemMessageType = systemMessage.type;
+      message.systemMessageContent = systemMessage.content;
+      message.textElem = { content: systemMessage.content };
+
+      message.showName = systemMessage.content;
+    } else {
+      if (
+        detail.memberList &&
+        Array.isArray(detail.memberList) &&
+        detail.memberList.length === 0 &&
+        detail.group &&
+        detail.group.createTime === detail.operationTime
+      ) {
+        return null; // Skip empty group creation notifications
       }
-    );
-
-    const members = detail.memberList || [];
-
-    // Skip if this is a group creation with only one member
-    if (
-      members.length === 1 &&
-      detail.group &&
-      detail.group.createTime === detail.operationTime
-    ) {
-      return null; // Skip processing for group creation notifications
     }
   }
 

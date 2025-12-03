@@ -98,7 +98,6 @@ import { MAX_W_MD, MAX_W_XL } from '../utils/constants';
 import { getGroupList } from '../services/useGroup';
 import { getConversationList } from '../services/useConversions';
 
-// Dynamically import modal components to implement code splitting
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
 );
