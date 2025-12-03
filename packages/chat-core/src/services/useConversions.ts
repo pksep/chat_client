@@ -77,7 +77,6 @@ const fetchConversationList = async () => {
     if (err?.event) {
       console.info(`Event: ${err.event}`);
     }
-
   }
 };
 

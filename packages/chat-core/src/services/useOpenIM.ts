@@ -14,7 +14,6 @@ import {
 
 export type IMSDKType = ReturnType<typeof getSDK>;
 
-
 let instance: IMSDKType | null = null;
 
 const IMSDK: IMSDKType = (() => {
@@ -28,21 +27,16 @@ const IMSDK: IMSDKType = (() => {
   return instance;
 })();
 
-
 if (import.meta.hot) {
-  import.meta.hot.accept(() => {
-  });
+  import.meta.hot.accept(() => {});
 
-  import.meta.hot.dispose(() => {
-  });
+  import.meta.hot.dispose(() => {});
 }
 
 const setupOpenIM = (): void => {
-  IMSDK.on(CbEvents.OnConnecting, () => {
-  });
+  IMSDK.on(CbEvents.OnConnecting, () => {});
 
-  IMSDK.on(CbEvents.OnConnectSuccess, () => {
-  });
+  IMSDK.on(CbEvents.OnConnectSuccess, () => {});
 
   IMSDK.on(CbEvents.OnConnectFailed, err => {
     console.error('[OpenIM] Connection failed:', err);

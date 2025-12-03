@@ -1,5 +1,9 @@
 import { reactive, computed } from 'vue';
-import { fetchGroupMembers, getGroupInfo } from '../services/useGroup';
+import {
+  fetchGroupMembers,
+  getGroupInfo,
+  setGroupInfo
+} from '../services/useGroup';
 import { IMSDK } from '../services/useOpenIM';
 import { generateChatId } from '../services/useMastra';
 import type { IUserProps } from '../components/interfaces/interfaces';
@@ -51,17 +55,17 @@ export function useMenuInfo<
       try {
         await IMSDK.inviteUserToGroup(
           {
-            groupID: props.contact?.groupId,
+            groupID: props.contact.groupId,
             reason: 'Sent invitation',
             userIDList: contacts.map(contact => contact.id)
           },
           generateChatId()
         );
 
-        state.contacts = await fetchGroupMembers(props.contact?.groupId);
+        state.contacts = await fetchGroupMembers(props.contact.groupId);
       } catch (error) {
         console.error('Failed to invite users to group:', error);
-        state.contacts = await fetchGroupMembers(props.contact?.groupId);
+        state.contacts = await fetchGroupMembers(props.contact.groupId);
       }
     }
   };
@@ -69,15 +73,11 @@ export function useMenuInfo<
   const handleUpdateInformation = (value: any) => {
     state.information = value;
     if (props.contact?.groupId) {
-      IMSDK.setGroupInfo(
-        {
-          groupID: props.contact?.groupId,
-          groupName: state.information?.name,
-          faceURL: state.information?.avatarUrl,
-          notification: null
-        },
-        generateChatId()
-      ).catch(error => {
+      setGroupInfo(props.contact.groupId, {
+        groupName: state.information?.name,
+        faceURL: state.information?.avatarUrl,
+        notification: null
+      }).catch(error => {
         const errorDetails = {
           error: error,
           operation: 'setGroupInfo',
@@ -98,11 +98,14 @@ export function useMenuInfo<
         }
       });
     }
-    emits('unmount-contact', {
-      ...props.contact,
-      nickname: state.information?.name,
-      avatarUrl: state.information?.avatarUrl
-    });
+
+    if (props.contact) {
+      emits('unmount-contact', {
+        ...props.contact,
+        nickname: state.information?.name,
+        avatarUrl: state.information?.avatarUrl
+      });
+    }
   };
 
   const checkGroupId = computed(
@@ -115,35 +118,40 @@ export function useMenuInfo<
   const initializeMenuInfo = async (props: Props & { isEnabled: boolean }) => {
     if (!props.isEnabled) return;
     if (props.contact?.id && checkGroupId.value) {
-      state.contacts = [props.contact];
-      state.information = {
-        userId: props.contact?.id
-      };
-    } else if (props.contact) {
-      state.contacts = await fetchGroupMembers(props.contact?.groupId);
-      const groups = await getGroupInfo([props.contact?.groupId]);
-      state.filteredMembers = props.members.filter(
-        item => !state.contacts.some(contact => contact.id === item.id)
-      );
-      let date = new Date();
-      if (groups?.length > 0 && groups[0]?.createTime) {
-        date = new Date(groups[0]?.createTime);
+      if (props.contact) {
+        state.contacts = [props.contact];
+        state.information = {
+          userId: props.contact.id
+        };
       }
-      const freshGroupInfo = groups?.[0];
-      state.information = {
-        userId: state.information?.userId || props.contact?.id,
-        groupId: props.contact?.groupId,
-        date,
-        name:
-          state.information?.name ||
-          freshGroupInfo?.groupName ||
-          props.contact.nickname ||
-          '',
-        avatarUrl:
-          state.information?.avatarUrl ||
-          freshGroupInfo?.faceURL ||
-          props.contact.avatarUrl
-      };
+    } else if (props.contact) {
+      const groupId = props.contact.groupId;
+      if (groupId) {
+        state.contacts = await fetchGroupMembers(groupId);
+        const groups = await getGroupInfo([groupId]);
+        state.filteredMembers = props.members?.filter(
+          item => !state.contacts.some(contact => contact.id === item.id)
+        ) || [];
+        let date = new Date();
+        if (groups?.length > 0 && groups[0]?.createTime) {
+          date = new Date(groups[0].createTime);
+        }
+        const freshGroupInfo = groups?.[0];
+        state.information = {
+          userId: state.information?.userId || props.contact.id,
+          groupId: groupId,
+          date,
+          name:
+            state.information?.name ||
+            freshGroupInfo?.groupName ||
+            props.contact.nickname ||
+            '',
+          avatarUrl:
+            state.information?.avatarUrl ||
+            freshGroupInfo?.faceURL ||
+            props.contact.avatarUrl
+        };
+      }
     }
   };
 

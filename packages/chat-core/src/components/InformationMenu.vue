@@ -58,6 +58,7 @@ withDefaults(
 );
 
 const model = defineModel<IMenuInfoInformation>();
+const emit = defineEmits(['update:modelValue']);
 
 const avatarInputRef = useTemplateRef('avatarInputRef');
 
@@ -67,17 +68,25 @@ const {
   openEditProfileIcon: composableOpenEditProfileIcon,
   onOpenEditAvatar,
   closeEditProfileIcon,
-  onSaveAvatar,
+  onSaveAvatar: originalOnSaveAvatar,
   muteGroupInfo,
   leaveGroupInfo
 } = useInformationMenu(model);
 
+const onSaveAvatar = async (file: File): Promise<void> => {
+  await originalOnSaveAvatar(file);
+  // The original function updates the model, now we emit the update event
+  emit('update:modelValue', model.value);
+};
+
 const handleSaveFromForm = (value: { name: string; avatarUrl?: string }) => {
-  model.value = {
+  const updatedValue = {
     ...model.value,
     name: value.name,
     avatarUrl: value.avatarUrl
   };
+  model.value = updatedValue;
+  emit('update:modelValue', updatedValue);
 };
 
 const openEditProfileIcon = () =>

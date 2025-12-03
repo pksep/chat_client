@@ -156,7 +156,9 @@ const handleMenuToggle = (isOpen: boolean): void => {
 const handleHeaderClick = (): void => {
   if (!isMobile.value) {
     state.activeTabId = 1;
-    state.isMenuDesktopOpen = true;
+    if (state.contact) {
+      state.isMenuDesktopOpen = true;
+    }
     return;
   }
   state.isMenuMobileOpen = true;
@@ -227,8 +229,10 @@ const closeModals = (): void => {
 };
 
 const handleInformationClick = (): void => {
-  state.isMenuDesktopOpen = true;
-  state.activeTabId = 2;
+  if (state.contact) {
+    state.isMenuDesktopOpen = true;
+    state.activeTabId = 2;
+  }
 };
 
 const handleClearClick = (): void => {

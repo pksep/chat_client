@@ -15,5 +15,4 @@ const user = {
   avatarAlt: 'User with a circle face',
   nickname: 'User N.A.'
 };
-
 </script>
