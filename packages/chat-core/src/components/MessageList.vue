@@ -153,7 +153,9 @@ const chatWrapperRef = useTemplateRef('chatWrapperRef');
 const inputText = ref('');
 
 const state = reactive({
-  messages: computed(() => getSavedMessages(props.contact?.conversationId || '')),
+  messages: computed(() =>
+    getSavedMessages(props.contact?.conversationId || '')
+  ),
   chatId: null
 });
 

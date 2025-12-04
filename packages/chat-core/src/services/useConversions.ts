@@ -174,10 +174,18 @@ const updateConversationList = (value: any[]): void => {
  * @param conversationID The ID of the conversation to update
  * @param updates Object containing the properties to update
  */
-const updateColumnsConversation = (conversationID: string, updates: Partial<IContactProps>): void => {
-  const index = conversionStore.value.findIndex(conv => conv.id === conversationID);
+const updateColumnsConversation = (
+  conversationID: string,
+  updates: Partial<IContactProps>
+): void => {
+  const index = conversionStore.value.findIndex(
+    conv => conv.id === conversationID
+  );
   if (index !== -1) {
-    conversionStore.value[index] = { ...conversionStore.value[index], ...updates };
+    conversionStore.value[index] = {
+      ...conversionStore.value[index],
+      ...updates
+    };
   } else {
     console.warn(`Conversation with ID ${conversationID} not found for update`);
   }

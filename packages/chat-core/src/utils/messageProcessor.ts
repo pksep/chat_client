@@ -86,10 +86,6 @@ export const processIncomingMessage = (message: Message): Message | null => {
   if (message.contentType === 1501 && message.notificationElem?.detail) {
     const detail = safeJsonParse<any>(message.notificationElem.detail, {}); // Changed to 'any' to handle full OpenIM notification structure
 
-    const senderName = message.showName || message.senderNickname || 'Someone';
-    const groupName =
-      (message.group && message.group.groupName) || message.showName || 'Group';
-
     const systemMessageContent = parseGroupNotification(message);
 
     if (systemMessageContent) {
