@@ -138,6 +138,7 @@ import {
 } from '../services/useOpenIM';
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
+import { parseGroupNotification } from '../utils/systemMessages';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -299,41 +300,9 @@ onMounted(() => {
   }
 });
 
-import { Message } from '../utils/messageProcessor';
-
-interface MessageWithNotification extends Message {
-  textElem?: {
-    content?: string;
-  };
-  notification?: string;
-  notificationElem?: {
-    detail?: string;
-  };
-}
-
-const getSystemMessageContent = (message: MessageWithNotification) => {
-  if (message.isSystemMessage && message.systemMessageContent) {
-    return message.systemMessageContent;
-  }
-
-  if (message.notificationElem?.detail) {
-    try {
-      const parsed = JSON.parse(message.notificationElem.detail);
-
-      return parsed.content ||
-        parsed.notification ||
-        parsed.message ||
-        parsed.group?.notification ||
-        parsed.group?.groupName
-        ? `${parsed.opUser?.nickname || parsed.opUser?.userID || 'Someone'} сделал изменение`
-        : 'Group notification';
-    } catch (error) {
-      console.error('Failed to parse notification detail:', error);
-      return 'Group notification';
-    }
-  }
-
-  return message.textElem?.content || message.showName || '';
+const getSystemMessageContent = message => {
+  const notification = parseGroupNotification(message);
+  return notification || message.textElem?.content || message.showName || '';
 };
 
 onUnmounted(() => {
@@ -344,15 +313,3 @@ defineExpose({
   handleClear
 });
 </script>
-
-<style scoped>
-.system-message-text {
-  font-size: 0.85em;
-  color: #666;
-  font-style: italic;
-  padding: 4px 12px;
-  background-color: #f0f0f0;
-  border-radius: 12px;
-  display: inline-block;
-}
-</style>

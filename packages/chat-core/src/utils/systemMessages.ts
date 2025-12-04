@@ -1,256 +1,176 @@
-export enum SystemMessageType {
-  GROUP_CREATED = 'group_created',
-  GROUP_NAME_CHANGED = 'group_name_changed',
-  GROUP_MEMBER_ADDED = 'group_member_added',
-  GROUP_MEMBER_REMOVED = 'group_member_removed',
-  GROUP_MEMBER_QUIT = 'group_member_quit',
-  GROUP_OWNER_CHANGED = 'group_owner_changed',
-  GROUP_DISMISSED = 'group_dismissed',
-  GROUP_MUTE_CHANGED = 'group_mute_changed',
-  GROUP_ADMIN_CHANGED = 'group_admin_changed'
+export class SystemMessageType {
+  static readonly GROUP_CREATED = 'group_created';
+  static readonly GROUP_NAME_CHANGED = 'group_name_changed';
+  static readonly GROUP_MEMBER_ADDED = 'group_member_added';
+  static readonly GROUP_MEMBER_REMOVED = 'group_member_removed';
+  static readonly GROUP_MEMBER_QUIT = 'group_member_quit';
+  static readonly GROUP_OWNER_CHANGED = 'group_owner_changed';
+  static readonly GROUP_DISMISSED = 'group_dismissed';
+  static readonly GROUP_MUTE_CHANGED = 'group_mute_changed';
+  static readonly GROUP_ADMIN_CHANGED = 'group_admin_changed';
 }
 
 export interface SystemMessage {
-  type: SystemMessageType;
+  type: string;
   content: string;
   senderID: string;
   senderName?: string;
   targetName?: string;
   groupName?: string;
   timestamp: number;
-  rawMessage: any; // Keep reference to original message
-  notificationType?: number; // The original notification type from OpenIM
+  rawMessage: any;
+  notificationType?: number;
 }
 
-export enum OpenIMNotificationType {
-  GroupCreated = 101,
-  MemberAdded = 102,
-  MemberKicked = 103,
-  GroupNameChanged = 104,
-  GroupOwnerChanged = 105,
-  GroupDismissed = 106,
-  MemberQuit = 107,
-  GroupMuted = 108,
-  GroupMemberMuted = 109,
-  GroupMemberUnmuted = 110,
-  GroupAdminChanged = 111,
-  GroupAdminRevoked = 112,
-  GroupOwnerTransferred = 113,
-  GroupMemberSetToAdmin = 114,
-  GroupMemberRemovedFromAdmin = 115
+export class OpenIMNotificationType {
+  static readonly GroupCreated = 1501;
+  static readonly MemberAdded = 102;
+  static readonly MemberKicked = 103;
+  static readonly GroupNameChanged = 1520;
+  static readonly GroupOwnerChanged = 105;
+  static readonly GroupDismissed = 1515;
+  static readonly MemberQuit = 107;
+  static readonly GroupMuted = 1514;
+  static readonly GroupMemberMuted = 109;
+  static readonly GroupMemberUnmuted = 110;
+  static readonly GroupAdminChanged = 111;
+  static readonly GroupAdminRevoked = 112;
+  static readonly GroupOwnerTransferred = 113;
+  static readonly GroupMemberSetToAdmin = 114;
+  static readonly GroupMemberRemovedFromAdmin = 115;
+  static readonly MemberInvited = 1509;
 }
 
-export const parseGroupNotification = (
-  notificationDetail: any,
-  senderName: string,
-  groupName: string
-): SystemMessage | null => {
-  if (!notificationDetail) return null;
+export const parseGroupNotification = (message: any): string | null => {
+  if (!message?.contentType || !message.notificationElem?.detail) return null;
 
-  const {
-    opUser, // User who performed the operation
-    memberList, // Affected members
-    notificationType // Notification type
-  } = notificationDetail;
+  let detail: any;
+  try {
+    detail = JSON.parse(message.notificationElem.detail);
+  } catch (e) {
+    return null;
+  }
 
-  const opUserName =
-    (opUser && opUser.nickname) ||
-    (opUser && opUser.userID) ||
-    senderName ||
-    'Someone';
+  const contentType = message.contentType;
+  const opUserName = detail.opUser?.nickname || 'Someone';
+  const groupName = detail.group?.groupName || '';
 
-  if (notificationType) {
-    switch (notificationType) {
-      case OpenIMNotificationType.GroupCreated:
-        return {
-          type: SystemMessageType.GROUP_CREATED,
-          content: `${opUserName} created the group "${groupName}"`,
-          senderID: opUser?.userID || '',
-          senderName: opUserName,
-          groupName: groupName,
-          timestamp: Date.now(),
-          rawMessage: notificationDetail,
-          notificationType
-        };
+  let memberList: any[] = [];
+  let targetName: string = '';
+  let newOwnerName: string = '';
+  let adminNames: string = '';
+  let groupMuteTime: number = 0;
+  let muteEndTime: number = 0;
 
-      case OpenIMNotificationType.GroupNameChanged:
-        return {
-          type: SystemMessageType.GROUP_NAME_CHANGED,
-          content: `${opUserName} changed the group name to "${notificationDetail.group?.groupName || groupName}"`,
-          senderID: opUser?.userID || '',
-          senderName: opUserName,
-          groupName: notificationDetail.group?.groupName || groupName,
-          timestamp: Date.now(),
-          rawMessage: notificationDetail,
-          notificationType
-        };
+  switch (contentType) {
+    case OpenIMNotificationType.GroupCreated:
+      return `${opUserName} создал группу "${groupName}"`;
 
-      case OpenIMNotificationType.MemberAdded:
-        if (memberList && memberList.length > 0) {
-          const memberNames = memberList
-            .map(m => m.nickname || m.userID)
-            .join(', ');
-          return {
-            type: SystemMessageType.GROUP_MEMBER_ADDED,
-            content: `${opUserName} added ${memberNames} to the group`,
-            senderID: opUser?.userID || '',
-            senderName: opUserName,
-            groupName: groupName,
-            timestamp: Date.now(),
-            rawMessage: notificationDetail,
-            notificationType
-          };
-        }
-        break;
+    case OpenIMNotificationType.GroupNameChanged:
+      return `${opUserName} изменил название группы на "${groupName}"`;
 
-      case OpenIMNotificationType.MemberKicked:
-        if (memberList && memberList.length > 0) {
-          const memberNames = memberList
-            .map(m => m.nickname || m.userID)
-            .join(', ');
-          return {
-            type: SystemMessageType.GROUP_MEMBER_REMOVED,
-            content: `${opUserName} removed ${memberNames} from the group`,
-            senderID: opUser?.userID || '',
-            senderName: opUserName,
-            groupName: groupName,
-            timestamp: Date.now(),
-            rawMessage: notificationDetail,
-            notificationType
-          };
-        }
-        break;
+    case OpenIMNotificationType.MemberAdded:
+    case OpenIMNotificationType.MemberInvited:
+      memberList = detail?.invitedUserList || [];
+      if (memberList.length > 0) {
+        const memberNames = memberList
+          .map((m: any) => m.nickname || m.userID)
+          .join(', ');
+        return `${opUserName} добавил ${memberNames} в группу`;
+      }
+      return null;
 
-      case OpenIMNotificationType.GroupOwnerChanged:
-      case OpenIMNotificationType.GroupOwnerTransferred: {
-        const newOwner =
-          notificationDetail.newGroupOwnerInfo ||
-          notificationDetail.newOwnerInfo;
-        return {
-          type: SystemMessageType.GROUP_OWNER_CHANGED,
-          content: `${opUserName} transferred group ownership to ${newOwner?.nickname || newOwner?.userID || 'unknown'}`,
-          senderID: opUser?.userID || '',
-          senderName: opUserName,
-          groupName: groupName,
-          timestamp: Date.now(),
-          rawMessage: notificationDetail,
-          notificationType
-        };
+    case OpenIMNotificationType.MemberKicked:
+      memberList = detail?.kickedUserList || detail?.invitedUserList || []; // Assume kickedUserList, fallback to invited if schema varies
+      if (memberList.length > 0) {
+        const memberNames = memberList
+          .map((m: any) => m.nickname || m.userID)
+          .join(', ');
+        return `${opUserName} удалил ${memberNames} из группы`;
+      }
+      return null;
+
+    case OpenIMNotificationType.GroupOwnerChanged:
+    case OpenIMNotificationType.GroupOwnerTransferred:
+      const newOwner =
+        detail?.newGroupOwnerInfo ||
+        detail?.newOwnerInfo ||
+        detail?.inviterUser;
+      newOwnerName = newOwner?.nickname || newOwner?.userID || 'неизвестному';
+      return `${opUserName} передал права владельца ${newOwnerName}`;
+
+    case OpenIMNotificationType.GroupDismissed:
+      return `${opUserName} запретил сообщения в группе "${groupName}"`;
+
+    case OpenIMNotificationType.MemberQuit:
+      return `${opUserName} покинул группу "${groupName}"`;
+
+    case OpenIMNotificationType.GroupMuted:
+      groupMuteTime = detail?.groupMutedTime || 0;
+      if (groupMuteTime === 0) {
+        return `${opUserName} снял запрет сообщений в группе "${groupName}"`;
+      } else {
+        return `${opUserName} запретил сообщения в группе "${groupName}"`;
       }
 
-      case OpenIMNotificationType.GroupDismissed:
-        return {
-          type: SystemMessageType.GROUP_DISMISSED,
-          content: `${opUserName} dismissed the group`,
-          senderID: opUser?.userID || '',
-          senderName: opUserName,
-          groupName: groupName,
-          timestamp: Date.now(),
-          rawMessage: notificationDetail,
-          notificationType
-        };
+    case OpenIMNotificationType.GroupMemberMuted:
+      memberList = detail?.invitedUserList || [];
+      targetName =
+        memberList[0]?.nickname || memberList[0]?.userID || 'кого-то';
+      muteEndTime = detail?.muteEndTime || 0;
+      if (muteEndTime === 0) {
+        return `${opUserName} заглушил ${targetName} навсегда`;
+      } else {
+        return `${opUserName} заглушил ${targetName}`;
+      }
 
-      case OpenIMNotificationType.MemberQuit:
-        return {
-          type: SystemMessageType.GROUP_MEMBER_QUIT,
-          content: `${opUserName} left the group`,
-          senderID: opUser?.userID || '', // User who left
-          senderName: opUserName,
-          groupName: groupName,
-          timestamp: Date.now(),
-          rawMessage: notificationDetail,
-          notificationType
-        };
+    case OpenIMNotificationType.GroupMemberUnmuted:
+      memberList = detail?.invitedUserList || [];
+      targetName =
+        memberList[0]?.nickname || memberList[0]?.userID || 'кого-то';
+      return `${opUserName} снял заглушение с ${targetName}`;
 
-      case OpenIMNotificationType.GroupMuted:
-        return {
-          type: SystemMessageType.GROUP_MUTE_CHANGED,
-          content: `${notificationDetail.groupMutedTime === 0 ? `${opUserName} unmuted the group` : `${opUserName} muted the group indefinitely`}`,
-          senderID: opUser?.userID || '',
-          senderName: opUserName,
-          groupName: groupName,
-          timestamp: Date.now(),
-          rawMessage: notificationDetail,
-          notificationType
-        };
+    case OpenIMNotificationType.GroupAdminChanged:
+      memberList = detail?.invitedUserList || [];
+      if (memberList.length > 0) {
+        adminNames = memberList
+          .map((m: any) => m.nickname || m.userID)
+          .join(', ');
+        return `${opUserName} изменил роль администратора для ${adminNames}`;
+      }
+      return null;
 
-      case OpenIMNotificationType.GroupMemberMuted:
-      case OpenIMNotificationType.GroupMemberUnmuted:
-        if (memberList && memberList.length > 0) {
-          const targetName =
-            memberList[0]?.nickname || memberList[0]?.userID || 'someone';
-          const action =
-            notificationType === OpenIMNotificationType.GroupMemberMuted
-              ? 'muted'
-              : 'unmuted';
-          return {
-            type: SystemMessageType.GROUP_MUTE_CHANGED,
-            content: `${opUserName} ${action} ${targetName}`,
-            senderID: opUser?.userID || '',
-            senderName: opUserName,
-            groupName: groupName,
-            timestamp: Date.now(),
-            rawMessage: notificationDetail,
-            notificationType
-          };
-        }
-        break;
+    case OpenIMNotificationType.GroupAdminRevoked:
+      memberList = detail?.invitedUserList || [];
+      if (memberList.length > 0) {
+        adminNames = memberList
+          .map((m: any) => m.nickname || m.userID)
+          .join(', ');
+        return `${opUserName} отозвал права администратора у ${adminNames}`;
+      }
+      return null;
 
-      case OpenIMNotificationType.GroupAdminChanged:
-      case OpenIMNotificationType.GroupMemberSetToAdmin:
-        if (memberList && memberList.length > 0) {
-          const adminNames = memberList
-            .map(m => m.nickname || m.userID)
-            .join(', ');
-          return {
-            type: SystemMessageType.GROUP_ADMIN_CHANGED,
-            content: `${opUserName} made ${adminNames} an admin`,
-            senderID: opUser?.userID || '',
-            senderName: opUserName,
-            groupName: groupName,
-            timestamp: Date.now(),
-            rawMessage: notificationDetail,
-            notificationType
-          };
-        }
-        break;
+    case OpenIMNotificationType.GroupMemberSetToAdmin:
+      memberList = detail?.invitedUserList || [];
+      if (memberList.length > 0) {
+        adminNames = memberList
+          .map((m: any) => m.nickname || m.userID)
+          .join(', ');
+        return `${opUserName} назначил ${adminNames} администратором`;
+      }
+      return null;
 
-      case OpenIMNotificationType.GroupAdminRevoked:
-      case OpenIMNotificationType.GroupMemberRemovedFromAdmin:
-        if (memberList && memberList.length > 0) {
-          const adminNames = memberList
-            .map(m => m.nickname || m.userID)
-            .join(', ');
-          return {
-            type: SystemMessageType.GROUP_ADMIN_CHANGED,
-            content: `${opUserName} revoked admin status from ${adminNames}`,
-            senderID: opUser?.userID || '',
-            senderName: opUserName,
-            groupName: groupName,
-            timestamp: Date.now(),
-            rawMessage: notificationDetail,
-            notificationType
-          };
-        }
-        break;
-    }
+    case OpenIMNotificationType.GroupMemberRemovedFromAdmin:
+      memberList = detail?.invitedUserList || [];
+      if (memberList.length > 0) {
+        adminNames = memberList
+          .map((m: any) => m.nickname || m.userID)
+          .join(', ');
+        return `${opUserName} снял права администратора с ${adminNames}`;
+      }
+      return null;
+
+    default:
+      return null;
   }
-
-  if (
-    notificationDetail.group &&
-    notificationDetail.group.createTime === notificationDetail.operationTime
-  ) {
-    return {
-      type: SystemMessageType.GROUP_CREATED,
-      content: `${opUserName} created the group "${groupName}"`,
-      senderID: opUser?.userID || '',
-      senderName: opUserName,
-      groupName: groupName,
-      timestamp: Date.now(),
-      rawMessage: notificationDetail,
-      notificationType: notificationType
-    };
-  }
-
-  return null;
 };
