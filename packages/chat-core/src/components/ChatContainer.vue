@@ -198,8 +198,13 @@ const unmountMenuChapter = (
       state.contact = null;
     } else {
       const foundContact = findContactOrGroupById(config);
-      state.contact = { ...foundContact, conversionId: foundContact.id };
-      state.chapter = config;
+      if (foundContact) {
+        state.contact = { ...foundContact, conversionId: foundContact.id };
+        state.chapter = config;
+      } else {
+        state.contact = null;
+        state.chapter = null;
+      }
     }
   } else if (config && config.contact) {
     state.chapter = config.contact.nickname;

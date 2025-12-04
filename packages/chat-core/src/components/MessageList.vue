@@ -63,14 +63,15 @@
 
         <div
           v-if="message.isSystemMessage || message.notificationElem"
-          class="system-message"
+          class="date-divider"
           :data-testid="`${props.dataTestid}-MessageList-SystemMessageUser${index + 1}`"
         >
           <span
             :data-testid="`${props.dataTestid}-MessageList-SystemLabelUser${index + 1}`"
             class="system-message-text"
-            >{{ getSystemMessageContent(message) }}</span
           >
+            {{ getSystemMessageContent(message) }}
+          </span>
         </div>
 
         <MessageBubble
@@ -310,30 +311,29 @@ interface MessageWithNotification extends Message {
   };
 }
 
-const parseNotification = (message: MessageWithNotification) => {
-  if (message.notificationElem?.detail) {
-    try {
-      const parsed = JSON.parse(message.notificationElem.detail);
-      const notification = parsed.group?.notification || '';
-      return notification;
-    } catch (error) {
-      console.error('Failed to parse notification detail:', error);
-      return '';
-    }
-  }
-  return message.textElem?.content || null;
-};
-
 const getSystemMessageContent = (message: MessageWithNotification) => {
   if (message.isSystemMessage && message.systemMessageContent) {
     return message.systemMessageContent;
   }
 
-  if (message.notificationElem) {
-    return parseNotification(message);
+  if (message.notificationElem?.detail) {
+    try {
+      const parsed = JSON.parse(message.notificationElem.detail);
+
+      return parsed.content ||
+        parsed.notification ||
+        parsed.message ||
+        parsed.group?.notification ||
+        parsed.group?.groupName
+        ? `${parsed.opUser?.nickname || parsed.opUser?.userID || 'Someone'} сделал изменение`
+        : 'Group notification';
+    } catch (error) {
+      console.error('Failed to parse notification detail:', error);
+      return 'Group notification';
+    }
   }
 
-  return message.textElem?.content || '';
+  return message.textElem?.content || message.showName || '';
 };
 
 onUnmounted(() => {
@@ -346,13 +346,6 @@ defineExpose({
 </script>
 
 <style scoped>
-.system-message {
-  display: flex;
-  justify-content: center;
-  margin: 10px 0;
-  text-align: center;
-}
-
 .system-message-text {
   font-size: 0.85em;
   color: #666;

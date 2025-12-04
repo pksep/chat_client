@@ -49,31 +49,29 @@ export function useMenuInfo<
   };
 
   const handleNewContact = async (contacts: IUserProps[]): Promise<void> => {
-    if (props.contact?.groupId) {
-      state.contacts = [...state.contacts, ...contacts];
+    state.contacts = [...state.contacts, ...contacts];
 
-      try {
-        await IMSDK.inviteUserToGroup(
-          {
-            groupID: props.contact.groupId,
-            reason: 'Sent invitation',
-            userIDList: contacts.map(contact => contact.id)
-          },
-          generateChatId()
-        );
+    try {
+      await IMSDK.inviteUserToGroup(
+        {
+          groupID: state.information.groupId,
+          reason: 'Sent invitation',
+          userIDList: contacts.map(contact => contact.id)
+        },
+        generateChatId()
+      );
 
-        state.contacts = await fetchGroupMembers(props.contact.groupId);
-      } catch (error) {
-        console.error('Failed to invite users to group:', error);
-        state.contacts = await fetchGroupMembers(props.contact.groupId);
-      }
+      state.contacts = await fetchGroupMembers(state.information.groupId);
+    } catch (error) {
+      console.error('Failed to invite users to group:', error);
+      state.contacts = await fetchGroupMembers(state.information.groupId);
     }
   };
 
   const handleUpdateInformation = (value: any) => {
     state.information = value;
-    if (props.contact?.groupId) {
-      setGroupInfo(props.contact.groupId, {
+    if (state.information?.groupId) {
+      setGroupInfo(state.information?.groupId, {
         groupName: state.information?.name,
         faceURL: state.information?.avatarUrl,
         notification: null
@@ -99,20 +97,18 @@ export function useMenuInfo<
       });
     }
 
-    if (props.contact) {
-      emits('unmount-contact', {
-        ...props.contact,
-        nickname: state.information?.name,
-        avatarUrl: state.information?.avatarUrl
-      });
-    }
+    emits('unmount-contact', {
+      ...state.information,
+      nickname: state.information?.name,
+      avatarUrl: state.information?.avatarUrl
+    });
   };
 
   const checkGroupId = computed(
     () =>
-      props.contact?.groupId === undefined ||
-      props.contact?.groupId === null ||
-      props.contact?.groupId === ''
+      state.information?.groupId === undefined ||
+      state.information?.groupId === null ||
+      state.information?.groupId === ''
   );
 
   const initializeMenuInfo = async (props: Props & { isEnabled: boolean }) => {
@@ -124,7 +120,8 @@ export function useMenuInfo<
           userId: props.contact.id
         };
       }
-    } else if (props.contact) {
+    }
+    if (props.contact?.groupId) {
       const groupId = props.contact.groupId;
       if (groupId) {
         state.contacts = await fetchGroupMembers(groupId);
@@ -137,20 +134,13 @@ export function useMenuInfo<
         if (groups?.length > 0 && groups[0]?.createTime) {
           date = new Date(groups[0].createTime);
         }
-        const freshGroupInfo = groups?.[0];
         state.information = {
+          ...props.contact,
           userId: state.information?.userId || props.contact.id,
           groupId: groupId,
           date,
-          name:
-            state.information?.name ||
-            freshGroupInfo?.groupName ||
-            props.contact.nickname ||
-            '',
-          avatarUrl:
-            state.information?.avatarUrl ||
-            freshGroupInfo?.faceURL ||
-            props.contact.avatarUrl
+          name: state.information?.name || props.contact.nickname || '',
+          avatarUrl: state.information?.avatarUrl || props.contact.avatarUrl
         };
       }
     }
