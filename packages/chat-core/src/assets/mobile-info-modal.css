@@ -7,9 +7,10 @@
   align-items: start;
   align-content: center;
   gap: 10px;
+  margin-bottom: 10px;
 }
 
-.modal-info-mobile__start > .menu__info-form {
+.modal-info-mobile__start > .menu__info-form-block > .menu__info-form {
   & fieldset.input-yui-kit {
     width: 100%;
   }
