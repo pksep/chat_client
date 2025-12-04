@@ -90,15 +90,15 @@ export const processIncomingMessage = (message: Message): Message | null => {
     const groupName =
       (message.group && message.group.groupName) || message.showName || 'Group';
 
-    const systemMessage = parseGroupNotification(detail, senderName, groupName);
+    const systemMessageContent = parseGroupNotification(message);
 
-    if (systemMessage) {
+    if (systemMessageContent) {
       message.isSystemMessage = true;
-      message.systemMessageType = systemMessage.type;
-      message.systemMessageContent = systemMessage.content;
-      message.textElem = { content: systemMessage.content };
+      message.systemMessageType = 'group_notification'; // Default type for group notifications
+      message.systemMessageContent = systemMessageContent;
+      message.textElem = { content: systemMessageContent };
 
-      message.showName = systemMessage.content;
+      message.showName = systemMessageContent;
     } else {
       if (
         detail.memberList &&

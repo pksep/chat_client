@@ -137,7 +137,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, reactive } from 'vue';
+import { computed, onMounted, reactive, watch } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_XL } from '../utils/constants';
 import Line from './UI/Line.vue';
@@ -195,6 +195,15 @@ const handleCollapse = (): void => {
   toggle();
 };
 
+watch(
+  () => props.chapter,
+  () => {
+    if (props.chapter !== state.chapter) {
+      state.chapter = props.chapter;
+    }
+  }
+);
+
 const unmountContactClick = (contact: IContactProps | string): void => {
   state.selectedContactId = typeof contact === 'string' ? contact : contact.id;
   if (contact === 'ai') {
@@ -220,7 +229,7 @@ const unmountContactClick = (contact: IContactProps | string): void => {
       contact: {
         ...contact,
         id: contact.userId,
-        conversionId: contact.id || ''
+        conversationId: contact.id || ''
       }
     });
   }

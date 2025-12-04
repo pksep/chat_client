@@ -91,7 +91,10 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
         state.avatarPreview
       );
       if (group && group.conversationID) {
+        // The SDK handles conversation updates automatically via OnConversationChanged event,
+        // but we ensure UI gets updated by emitting the new group
         emit('unmount-new-group', group);
+        console.debug('[NewGroupModal] Group created successfully, conversation ID:', group.conversationID);
         closeModal();
         return group;
       } else {

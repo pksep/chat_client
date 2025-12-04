@@ -199,7 +199,7 @@ const unmountMenuChapter = (
     } else {
       const foundContact = findContactOrGroupById(config);
       if (foundContact) {
-        state.contact = { ...foundContact, conversionId: foundContact.id };
+        state.contact = { ...foundContact, conversationId: foundContact.id };
         state.chapter = config;
       } else {
         state.contact = null;
@@ -207,7 +207,7 @@ const unmountMenuChapter = (
       }
     }
   } else if (config && config.contact) {
-    state.chapter = config.contact.nickname;
+    state.chapter = config.contact.conversationId;
     state.contact = config.contact;
   } else {
     state.chapter = null;
@@ -218,7 +218,7 @@ const unmountMenuChapter = (
 const handleNewContact = (config): void => {
   if (isMobile.value) {
     state.contact = config;
-    state.chapter = config.nickname;
+    state.chapter = config.conversationId;
     return;
   }
   state.isNewContactOpen = config.isChapterOpen;
@@ -253,7 +253,7 @@ const handleNewContactMessage = async (contact: IUserProps): Promise<void> => {
 
   state.contact = {
     ...contact,
-    conversionId: `si_${smallerUserID}_${largerUserID}`
+    conversationId: `si_${smallerUserID}_${largerUserID}`
   };
 };
 
@@ -265,7 +265,7 @@ const handleNewGroupMessage = async (group: any): Promise<void> => {
   }
 
   state.contact = {
-    conversionId: group.conversationID,
+    conversationId: group.conversationID,
     nickname: group.showName,
     groupId: group.groupID,
     avatarUrl: group.faceURL
@@ -273,7 +273,7 @@ const handleNewGroupMessage = async (group: any): Promise<void> => {
 
   state.groupId = group.groupID;
 
-  state.chapter = group.showName;
+  state.chapter = state.contact.conversationId;
 };
 
 const handleChangeContact = (contact: IUserProps): void => {

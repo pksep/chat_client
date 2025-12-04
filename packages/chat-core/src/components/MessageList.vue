@@ -153,7 +153,7 @@ const chatWrapperRef = useTemplateRef('chatWrapperRef');
 const inputText = ref('');
 
 const state = reactive({
-  messages: computed(() => getSavedMessages(props.contact?.conversionId || '')),
+  messages: computed(() => getSavedMessages(props.contact?.conversationId || '')),
   chatId: null
 });
 
@@ -185,7 +185,7 @@ const handleScroll = async (): Promise<void> => {
     const scrollHeight = chatWrapperRef.value.scrollHeight;
     if (chatWrapperRef.value?.scrollTop < 20) {
       await getMessagesByConversationId(
-        props.contact?.conversionId,
+        props.contact?.conversationId,
         state.messages[0]?.clientMsgID
       );
       nextTick(() => {
@@ -200,7 +200,7 @@ watch(
   () => props.chapter,
   (newValue, oldValue) => {
     if (newValue !== oldValue) {
-      getMessagesByConversationId(props.contact?.conversionId);
+      getMessagesByConversationId(props.contact?.conversationId);
     }
     if (
       (aiMessages?.value && aiMessages?.value.length) ||
@@ -224,7 +224,7 @@ watch(
     const newMessage = state.messages[state.messages.length - 1];
 
     if (newMessage.sendID !== props.user.id) {
-      markAsRead(props.contact?.conversionId);
+      markAsRead(props.contact?.conversationId);
     }
   }
 );

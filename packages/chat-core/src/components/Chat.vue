@@ -59,6 +59,7 @@ const state = reactive({
 watch(
   () => props.chapter,
   newChapter => {
+    console.log(newChapter);
     state.chapter = newChapter;
   }
 );
@@ -74,8 +75,8 @@ const handleUnmountChapter = (
     state.chapter = chapter;
     emits('unmount-chapter', chapter);
   } else if (chapter && chapter.nickname) {
-    state.chapter = chapter.nickname;
-    emits('unmount-chapter', chapter.nickname);
+    state.chapter = chapter.conversationId;
+    emits('unmount-chapter', state.chapter);
   } else {
     state.chapter = null;
     emits('unmount-chapter', null);

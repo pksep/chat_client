@@ -136,10 +136,10 @@ export function useMenuInfo<
         }
         state.information = {
           ...props.contact,
-          userId: state.information?.userId || props.contact.id,
+          userId: props.contact.id,
           groupId: groupId,
           date,
-          name: state.information?.name || props.contact.nickname || '',
+          name: props.contact.nickname || '',
           avatarUrl: state.information?.avatarUrl || props.contact.avatarUrl
         };
       }

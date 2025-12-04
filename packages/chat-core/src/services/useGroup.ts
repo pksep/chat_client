@@ -1,10 +1,7 @@
 import { ref } from 'vue';
 import { IMSDK } from './useOpenIM';
 import { IContactProps, IUserProps } from '../components/interfaces/interfaces';
-import {
-  manipulateConversationList,
-  updateConversationList
-} from './useConversions';
+import { manipulateConversationList } from './useConversions';
 import { appendUserAttributes } from '../composables/useUsers';
 import { useOpenIMRestApi } from './useApi';
 import { updateItemList } from '../utils/listUtils';
@@ -81,9 +78,9 @@ const createGroup = async (
   try {
     const res = await IMSDK.createGroup({
       groupInfo: {
-        groupType: 2,
         groupName: name,
-        faceURL: imageUrl || null
+        faceURL: imageUrl || null,
+        groupType: 2
       },
       memberUserIDs
     });
@@ -92,18 +89,18 @@ const createGroup = async (
     try {
       const convRes = await IMSDK.getOneConversation({
         sourceID: res.data.groupID,
-        sessionType: 2 // Group chat
+        sessionType: 2
       });
-      conv = convRes.data;
-      console.debug(
-        '[OpenIM] New group conversation fetched:',
-        conv.conversationID
-      );
+      conv = {
+        ...convRes.data,
+        conversationID: `sg_${res.data.groupID}`
+      };
     } catch (convErr) {
       console.warn(
         '[OpenIM] Failed to fetch new conv, using optimistic:',
         convErr
       );
+
       conv = {
         conversationID: `sg_${res.data.groupID}`,
         groupID: res.data.groupID,
@@ -117,12 +114,12 @@ const createGroup = async (
 
     const groupItem = manipulateConversationList([conv])[0];
     groups.value.unshift(groupItem);
-    updateConversationList([conv]); // Sync to conversations store
+    updateGroupList([conv]); // Sync to groups store
 
     const fullGroup = {
       ...res.data,
       ...conv,
-      conversationID: conv.conversationID // Ensure it's set
+      conversationID: conv.conversationID
     };
     console.debug(
       '[OpenIM] Returning full group with conv ID:',

@@ -57,7 +57,7 @@ export const parseGroupNotification = (message: any): string | null => {
 
   let memberList: any[] = [];
   let targetName: string = '';
-  let newOwnerName: string = '';
+  // const newOwnerName: string = '';
   let adminNames: string = '';
   let groupMuteTime: number = 0;
   let muteEndTime: number = 0;

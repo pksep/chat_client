@@ -32,7 +32,7 @@ export interface IUserProps {
   avatarUrl?: string;
   avatarAlt?: string;
   nickname?: string;
-  conversionId?: string;
+  conversationId?: string;
   groupId?: string;
   ex?: string;
   tabel?: string;
