@@ -90,7 +90,7 @@ export const parseGroupNotification = (message: any): string | null => {
       }
       return null;
 
-    case OpenIMNotificationType.GroupOwnerChanged:
+    /*
     case OpenIMNotificationType.GroupOwnerTransferred:
       const newOwner =
         detail?.newGroupOwnerInfo ||
@@ -98,6 +98,7 @@ export const parseGroupNotification = (message: any): string | null => {
         detail?.inviterUser;
       newOwnerName = newOwner?.nickname || newOwner?.userID || 'неизвестному';
       return `${opUserName} передал права владельца ${newOwnerName}`;
+       */
 
     case OpenIMNotificationType.GroupDismissed:
       return `${opUserName} запретил сообщения в группе "${groupName}"`;
