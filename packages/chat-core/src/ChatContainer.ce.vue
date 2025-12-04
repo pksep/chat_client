@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue';
+import { computed, onMounted, onUnmounted, watch } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
 import type {
   IChatContainerEmits,
@@ -60,6 +60,10 @@ onMounted(async () => {
     console.error('Failed to initialize chat:', error);
     throw error;
   }
+});
+
+onUnmounted(async () => {
+  window.location.reload(); // НЕ УДАЛИТЬ!!! это для отключении сокета в опеним
 });
 
 watch(
