@@ -59,7 +59,6 @@ const state = reactive({
 watch(
   () => props.chapter,
   newChapter => {
-    console.log(newChapter);
     state.chapter = newChapter;
   }
 );
