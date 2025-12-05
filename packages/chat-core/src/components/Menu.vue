@@ -232,7 +232,8 @@ const unmountContactClick = (contact: IContactProps | string): void => {
 
 const menuClasses = computed(() => [
   'menu',
-  { 'menu--collapse': isCollapse.value }
+  { 'menu--collapse': isCollapse.value },
+  props.class
 ]);
 
 const aiChapterClasses = computed(() => [
