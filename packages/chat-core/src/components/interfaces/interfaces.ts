@@ -54,6 +54,8 @@ export interface IContactProps extends IUserProps {
 
 export interface IMenuProps {
   open?: boolean;
+  chapter?: string;
+  user?: IUserProps | null;
   contact?: IUserProps | null;
   dataTestid?: string;
   class?: string;

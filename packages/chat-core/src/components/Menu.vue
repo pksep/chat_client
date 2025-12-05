@@ -155,7 +155,7 @@ import ContactList from './ContactList/ContactList.vue';
 import type {
   IContactProps,
   IMenuEmits,
-  IUserProps
+  IMenuProps
 } from './interfaces/interfaces';
 import {
   fetchConversationList,
@@ -163,11 +163,6 @@ import {
   onSDKReady
 } from '../services/useConversions';
 import { getGroupList } from '../services/useGroup';
-
-interface IMenuProps {
-  user: IUserProps;
-  dataTestid?: string;
-}
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: () => 'Menu'

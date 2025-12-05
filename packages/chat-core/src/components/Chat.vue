@@ -74,7 +74,7 @@ const handleUnmountChapter = (
     state.chapter = chapter;
     emits('unmount-chapter', chapter);
   } else if (chapter && chapter.nickname) {
-    state.chapter = chapter.conversationId;
+    state.chapter = chapter.contact.conversationId;
     emits('unmount-chapter', state.chapter);
   } else {
     state.chapter = null;

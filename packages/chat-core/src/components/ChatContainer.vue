@@ -24,6 +24,7 @@
     />
     <Menu
       :user="authUser"
+      :chapter="state.chapter"
       class="chat__menu"
       :dataTestid="`${props.dataTestid}-ChatContainer-Menu`"
       @unmount-collapse="handleCollapse"
