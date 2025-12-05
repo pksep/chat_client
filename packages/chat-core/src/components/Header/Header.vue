@@ -122,7 +122,7 @@ const state = reactive({
   openMobileInfoModal: false,
   isSearchInputEnable: false,
   statusNotification: {
-    label: 'Выкл. уведомление',
+    label: 'Выкл. уведомления',
     enabled: false
   }
 });
@@ -142,7 +142,7 @@ const {
 
 const modelInfo = computed(() => menuInfoState.information);
 
-const { muteGroupInfo } = useInformationMenu(modelInfo);
+const { muteGroupInfo, getMuteStatus } = useInformationMenu(modelInfo);
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
@@ -178,6 +178,7 @@ const popoverRule = computed(
 const getPopoverOptions = computed(() => {
   const popoverArray = [];
   if (props.chapter !== 'ai') {
+    console.log('notification', state.statusNotification.label);
     const notificationLabels = {
       value: state.statusNotification.label,
       function: handleNotificationToggle
@@ -206,30 +207,49 @@ const getPopoverOptions = computed(() => {
 
 watch(
   () => props.chapter,
-  async () => {
+  async newChapter => {
     if (props.contact?.groupId) {
       menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
     }
+
+    if (newChapter !== 'ai') {
+      await updateNotificationStatus();
+    }
   }
 );
+
+const updateNotificationStatus = async (): Promise<void> => {
+  try {
+    const isMuted = await getMuteStatus(props.contact);
+    if (isMuted) {
+      state.statusNotification = {
+        label: 'Вкл. уведомления',
+        enabled: false
+      };
+    } else {
+      state.statusNotification = {
+        label: 'Выкл. уведомления',
+        enabled: true
+      };
+    }
+  } catch (error) {
+    console.error('Failed to update notification status:', error);
+    state.statusNotification = {
+      label: 'Выкл. уведомления',
+      enabled: true
+    };
+  }
+};
 
 const handleExit = (): void => {
   emits('unmount-exit');
 };
 
-const handleNotificationToggle = (): void => {
-  if (state.statusNotification.enabled) {
-    state.statusNotification = {
-      label: 'Выкл. уведомление',
-      enabled: false
-    };
-    muteGroupInfo(state.statusNotification.enabled);
-    emits('unmount-notification', state.statusNotification.label);
-    return;
-  }
-  state.statusNotification.label = 'Вкл. уведомления';
-  state.statusNotification.enabled = true;
-  muteGroupInfo(state.statusNotification.enabled);
+const handleNotificationToggle = async (): Promise<void> => {
+  const shouldMute = !state.statusNotification.enabled;
+  await muteGroupInfo(shouldMute, props.contact);
+
+  await updateNotificationStatus();
   emits('unmount-notification', state.statusNotification.label);
 };
 

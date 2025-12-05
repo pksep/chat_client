@@ -22,7 +22,7 @@
 - Use `pnpm lint` to lint the code
 - Git hooks enforced via lefthook
 
-## Code Style & Formatting
+## Code Style & Formatting for Non-Comment Code
 - Use Prettier for formatting with the following settings:
   - Single quotes for strings
   - No trailing commas
@@ -37,7 +37,7 @@
 - Use PascalCase for Vue component names
 - Use camelCase for JavaScript/TypeScript variables and functions
 
-## TypeScript Guidelines
+## TypeScript Guidelines for Non-Comment Code
 - Target ESNext
 - Use strict mode (though currently disabled in tsconfig)
 - Enable allowJs for migration purposes
@@ -45,7 +45,7 @@
 - Use jsx: preserve for Vue projects
 - Skip library checks for faster compilation
 
-## Vue.js Guidelines
+## Vue.js Guidelines for Non-Comment Code
 - Use Vue 3 Composition API
 - Use PascalCase for component definitions
 - Avoid duplicate keys in Vue components
@@ -67,7 +67,7 @@
 - Only changed files should be committed (not all files)
 - Commit messages should explain why changes were made and what's new
 
-## Naming Conventions
+## Naming Conventions for Non-Comment Code
 - Variables and functions: camelCase
 - Components: PascalCase
 - Data-testid attributes: `${props.dataTestid}-Element-Modifier` format
@@ -92,3 +92,13 @@
 - Build system: Vite
 - Type checker: TypeScript
 - Linting: ESLint + Prettier
+
+## Focus on Non-Comment Code
+When working on non-comment code, ensure to:
+- Follow all the coding standards, TypeScript guidelines, Vue.js guidelines and naming conventions mentioned above
+- Maintain consistency with existing codebase patterns
+- Apply proper type annotations to function parameters and return values
+- Use proper interfaces and types for complex data structures
+- Follow Vue 3 Composition API best practices with `setup` syntax
+- Apply proper error handling and validation in business logic
+- Maintain clean architecture separating concerns between components, services and utilities
