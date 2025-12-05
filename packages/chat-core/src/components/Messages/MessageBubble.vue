@@ -59,26 +59,33 @@
             :data-testid="`${dataTestid}-MessageBubble-MessageText`"
           ></div>
           <div
-            v-if="!!props.media"
+            v-else-if="isImage"
             class="message-content__media"
             :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
           >
             <img
-              @click="() => (fullImagePath = props.media)"
-              v-if="/\.(jpg|jpeg|png|gif|webp|svg)$/i.test(props.media)"
-              :src="props.media"
+              @click="() => (fullImagePath = mediaSrc)"
+              :src="mediaSrc"
+              :alt="props.sender ? props.sender + ' image' : 'Shared image'"
               :data-testid="`${dataTestid}-MessageBubble-Image`"
             />
-
+          </div>
+          <div
+            v-else-if="isVideo"
+            class="message-content__media"
+            :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
+          >
             <video
-              v-else-if="/\.(mp4|webm|mov|ogg)$/i.test(props.media)"
-              :src="props.media"
+              :src="mediaSrc"
               controls
               :data-testid="`${dataTestid}-MessageBubble-Video`"
+              :aria-label="
+                props.sender ? props.sender + ' video' : 'Shared video'
+              "
             ></video>
           </div>
           <div
-            v-if="!!props.file"
+            v-else-if="!!props.file"
             class="message-content__file"
             :data-testid="`${dataTestid}-MessageBubble-FileContainer`"
           >
@@ -204,6 +211,44 @@ const messageArticle = computed(() => [
 
 const read = computed(() => false);
 const blockquote = computed(() => false);
+
+const imageRegex = /\.(jpg|jpeg|png|gif|webp|svg)$/i;
+const videoRegex = /\.(mp4|webm|mov|ogg)$/i;
+
+const isImage = computed(() => {
+  if (
+    props.media &&
+    typeof props.media === 'object' &&
+    props.media.sourcePicture.type?.startsWith('image/')
+  ) {
+    return true;
+  }
+  if (typeof props.media === 'string' && imageRegex.test(props.media)) {
+    return true;
+  }
+  return false;
+});
+
+const isVideo = computed(() => {
+  if (
+    props.media &&
+    typeof props.media === 'object' &&
+    props.media.sourcePicture.type?.startsWith('video/')
+  ) {
+    return true;
+  }
+  if (typeof props.media === 'string' && videoRegex.test(props.media)) {
+    return true;
+  }
+  return false;
+});
+
+const mediaSrc = computed(() => {
+  if (props.media) {
+    return props.media.sourcePicture?.url;
+  }
+  return '';
+});
 
 const fullImagePath = ref<string>(null);
 

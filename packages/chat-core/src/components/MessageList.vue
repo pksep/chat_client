@@ -80,7 +80,7 @@
             messageChat(props.user.id === message.sendID ? 'user' : 'assistant')
           "
           :message="message.textElem?.content || ''"
-          :media="message.pictureElem?.sourcePicture?.url"
+          :media="message.pictureElem"
           :file="message.fileElem"
           :is-me-sender="props.user.id === message.sendID"
           :time="formatTime(new Date(message.sendTime))"

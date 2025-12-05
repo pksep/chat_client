@@ -166,7 +166,7 @@ export const sendMessageIM = async ({
   try {
     let createResp: any;
 
-    if (type === 'text') {
+    if (type === 'text' && message) {
       try {
         createResp = await IMSDK.createTextMessage(message || '');
       } catch (error) {
@@ -191,7 +191,8 @@ export const sendMessageIM = async ({
 
         throw error;
       }
-    } else if (type === 'file') {
+    }
+    if (type === 'file') {
       if (!file) throw new Error('File is required for file message');
 
       try {

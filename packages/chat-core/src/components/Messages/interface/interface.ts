@@ -8,7 +8,15 @@ export interface IMessageBubbleProps {
   isMeSender?: boolean;
   sender?: string;
   avatar?: string;
-  media?: string;
+  media?: {
+    sourcePicture: {
+      uuid: string;
+      name: string;
+      size: number;
+      type: string;
+      url: string;
+    };
+  };
   file?: FileElem;
   dataTestid?: string;
 }
