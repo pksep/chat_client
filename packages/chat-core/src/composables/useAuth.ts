@@ -21,16 +21,13 @@ export const getPlatformId = (): number => {
 };
 
 export const useAuth = async (erpToken: string): Promise<AuthResponse> => {
-  const response = await fetch(
-    `${process.env.CHAT_AUTH_API}/chat/token`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ erpToken })
-    }
-  );
+  const response = await fetch(`${process.env.CHAT_AUTH_API}/chat/token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ erpToken })
+  });
   const data = await response.json();
 
   setAuthToken(data.token, data.expireTimeSeconds);
