@@ -165,6 +165,29 @@ export const sendMessageIM = async ({
 }): Promise<void> => {
   const clientMsgID = crypto.randomUUID();
 
+  // Validate that either to (for individual chat) or groupId (for group chat) is provided
+  if (!to && !groupId) {
+    const error = new Error(
+      'Either "to" (for individual chat) or "groupId" (for group chat) must be provided'
+    );
+    const errorDetails = {
+      error: error,
+      operation: 'sendMessage',
+      to,
+      groupId,
+      message: message || '',
+      type,
+      timestamp: new Date().toISOString(),
+      errorMessage: error.message
+    };
+
+    console.error(
+      '[OpenIM] Cannot send message: invalid parameters:',
+      errorDetails
+    );
+    throw error;
+  }
+
   try {
     let createResp: any;
 
