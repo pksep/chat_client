@@ -6,7 +6,7 @@ import { getConfig } from './useConfig';
 export const createOpenIMRestApi = (): Reqi => {
   const config = getConfig();
 
-  const instance = new Reqi(config.VITE_OPENIM_API_DOMAIN);
+  const instance = new Reqi(config.CHAT_OPENIM_API_DOMAIN);
 
   instance.request.use((request: Request): Request => {
     request.headers.set('operationID', `${getPlatformId()}_${Date.now()}`);

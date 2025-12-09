@@ -42,8 +42,8 @@ onMounted(async () => {
 
     const config = getConfig();
 
-    const apiAddr = config.VITE_OPENIM_API_DOMAIN;
-    const wsAddr = config.VITE_OPENIM_WS_DOMAIN;
+    const apiAddr = config.CHAT_OPENIM_API_DOMAIN;
+    const wsAddr = config.CHAT_OPENIM_WS_DOMAIN;
 
     await IMSDK.login({
       platformID: authData.PlatformID,

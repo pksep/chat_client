@@ -61,13 +61,13 @@ export interface IMenuRightProps extends IMenuProps {
 
 export interface IChatContainerConfig {
   CHAT_MASTRA_URL?: string;
-  OPENIM_API_URL?: string;
-  OPENIM_SECRET?: string;
-  OPENIM_ADMIN_NAME?: string;
-  VITE_BASE_MODE?: string;
+  CHAT_OPENIM_API_URL?: string;
+  CHAT_OPENIM_SECRET?: string;
+  CHAT_OPENIM_ADMIN_NAME?: string;
+  CHAT_BASE_MODE?: string;
   CHAT_AUTH_API?: string;
-  VITE_OPENIM_API_DOMAIN?: string;
-  VITE_OPENIM_WS_DOMAIN?: string;
+  CHAT_OPENIM_API_DOMAIN?: string;
+  CHAT_OPENIM_WS_DOMAIN?: string;
 }
 
 export interface IChatContainerProps {

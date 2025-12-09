@@ -7,11 +7,11 @@ import { IChatContainerConfig } from './components/interfaces/interfaces';
 import './index';
 
 const config: IChatContainerConfig = {
-  VITE_BASE_MODE: 'app',
+  CHAT_BASE_MODE: 'app',
   CHAT_AUTH_API: 'http://localhost:3000',
   CHAT_MASTRA_URL: 'http://localhost:4111',
-  VITE_OPENIM_API_DOMAIN: 'http://localhost:10002',
-  VITE_OPENIM_WS_DOMAIN: 'ws://localhost:10023'
+  CHAT_OPENIM_API_DOMAIN: 'http://localhost:10002',
+  CHAT_OPENIM_WS_DOMAIN: 'ws://localhost:10023'
 };
 
 const token =
