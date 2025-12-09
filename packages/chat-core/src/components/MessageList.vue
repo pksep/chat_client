@@ -156,12 +156,10 @@ const state = reactive({
   chatId: null as string | null
 });
 
-// Set chatId when component is initialized if chapter is 'ai'
 if (props.chapter === 'ai' && !state.chatId) {
   state.chatId = generateChatId();
 }
 
-// Watch for changes to chapter to handle AI mode properly
 watch(
   () => props.chapter,
   newChapter => {
@@ -181,7 +179,6 @@ const mastraResult = useMastra(
     : false
 );
 
-// Create a reactive reference to the messages
 const aiMessages = computed<AIMessage[]>(() => {
   if (mastraResult.messages) {
     return mastraResult.messages.value;
@@ -235,11 +232,9 @@ watch(
   { immediate: true }
 );
 
-// Only watch OpenIM messages (not AI messages) to avoid interference
 watch(
   () => state.messages.length,
   () => {
-    // Skip this logic when in AI mode to avoid interference
     if (props.chapter === 'ai') {
       return;
     }
@@ -272,40 +267,30 @@ const handleSend = async (): Promise<void> => {
     return;
   }
 
-  // Validate that we have a valid contact for chat
   if (!props.contact) {
     console.error('[OpenIM] Cannot send message: no contact provided');
     return;
   }
 
-  // If no userId or groupId is directly available in the contact,
-  // try to extract recipient information from conversationId
   let resolvedUserId = props.contact.userId;
   let resolvedGroupId = props.contact.groupId;
 
   if (!resolvedUserId && !resolvedGroupId && props.contact.conversationId) {
-    // Try to extract user ID from conversation ID
-    // Individual chat format: si_{smallerUserID}_{largerUserID}
     if (props.contact.conversationId.startsWith('si_')) {
-      const parts = props.contact.conversationId.substring(3).split('_'); // Remove 'si_' prefix and split
+      const parts = props.contact.conversationId.substring(3).split('_');
       if (parts.length === 2) {
-        // Determine which user ID is the recipient (not the current user)
         const [smallerId, largerId] = parts;
-        // Assuming props.user.id contains current user's ID to determine the other participant
         if (props.user?.id) {
           resolvedUserId = smallerId === props.user.id ? largerId : smallerId;
         } else {
-          // If we don't have current user ID, use one of the IDs (prefer larger one)
           resolvedUserId = largerId;
         }
       }
     } else if (props.contact.conversationId.startsWith('sg_')) {
-      // Group chat format: sg_{groupID}
-      resolvedGroupId = props.contact.conversationId.substring(3); // Remove 'sg_' prefix
+      resolvedGroupId = props.contact.conversationId.substring(3);
     }
   }
 
-  // Final validation after attempting to resolve IDs
   if (!resolvedUserId && !resolvedGroupId) {
     console.error(
       '[OpenIM] Cannot send message: no valid recipient (userId or groupId) available'
@@ -340,40 +325,30 @@ const handleSend = async (): Promise<void> => {
 const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
   if (!files.length) return;
 
-  // Validate that we have a valid contact for chat
   if (!props.contact) {
     console.error('[OpenIM] Cannot send message: no contact provided');
     return;
   }
 
-  // If no userId or groupId is directly available in the contact,
-  // try to extract recipient information from conversationId
   let resolvedUserId = props.contact.userId;
   let resolvedGroupId = props.contact.groupId;
 
   if (!resolvedUserId && !resolvedGroupId && props.contact.conversationId) {
-    // Try to extract user ID from conversation ID
-    // Individual chat format: si_{smallerUserID}_{largerUserID}
     if (props.contact.conversationId.startsWith('si_')) {
-      const parts = props.contact.conversationId.substring(3).split('_'); // Remove 'si_' prefix and split
+      const parts = props.contact.conversationId.substring(3).split('_');
       if (parts.length === 2) {
-        // Determine which user ID is the recipient (not the current user)
         const [smallerId, largerId] = parts;
-        // Assuming props.user.id contains current user's ID to determine the other participant
         if (props.user?.id) {
           resolvedUserId = smallerId === props.user.id ? largerId : smallerId;
         } else {
-          // If we don't have current user ID, use one of the IDs (prefer larger one)
           resolvedUserId = largerId;
         }
       }
     } else if (props.contact.conversationId.startsWith('sg_')) {
-      // Group chat format: sg_{groupID}
-      resolvedGroupId = props.contact.conversationId.substring(3); // Remove 'sg_' prefix
+      resolvedGroupId = props.contact.conversationId.substring(3);
     }
   }
 
-  // Final validation after attempting to resolve IDs
   if (!resolvedUserId && !resolvedGroupId) {
     console.error(
       '[OpenIM] Cannot send message: no valid recipient (userId or groupId) available'

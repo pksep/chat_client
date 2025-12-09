@@ -82,11 +82,10 @@ const setupOpenIM = (): void => {
 
         const processedMessage = processIncomingMessage(message);
         if (!processedMessage) {
-          return; // Skip this message
+          return;
         }
 
         const convId = generateConversationId(processedMessage);
-        // Cast to OpenIMMessage to fix type compatibility
         appendMessageToLocal(convId, processedMessage as OpenIMMessage);
       });
     } catch (e) {
@@ -165,7 +164,6 @@ export const sendMessageIM = async ({
 }): Promise<void> => {
   const clientMsgID = crypto.randomUUID();
 
-  // Validate that either to (for individual chat) or groupId (for group chat) is provided
   if (!to && !groupId) {
     const error = new Error(
       'Either "to" (for individual chat) or "groupId" (for group chat) must be provided'
@@ -221,10 +219,10 @@ export const sendMessageIM = async ({
 
       try {
         createResp = await IMSDK.createFileMessageByFile({
-          filePath: file.name, // can use filename
+          filePath: file.name,
           fileName: file.name,
           uuid: crypto.randomUUID(),
-          sourceUrl: '', // can be empty if there's no pre-uploaded URL
+          sourceUrl: '',
           fileSize: file.size,
           fileType: file.type,
           file: file
@@ -259,9 +257,9 @@ export const sendMessageIM = async ({
         uuid: crypto.randomUUID(),
         type: file.type,
         size: file.size,
-        width: 300, // can be determined if needed
+        width: 300,
         height: 215,
-        url: '' // URL can be empty when sending file
+        url: ''
       };
 
       try {
@@ -269,7 +267,7 @@ export const sendMessageIM = async ({
           sourcePicture: picBaseInfo,
           bigPicture: picBaseInfo,
           snapshotPicture: picBaseInfo,
-          sourcePath: file.name, // or another path if available
+          sourcePath: file.name,
           file: file
         });
       } catch (error) {

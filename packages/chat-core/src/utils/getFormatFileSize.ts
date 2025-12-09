@@ -1,7 +1,7 @@
 export const getFormatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 B';
 
-  const k = 1024; // or 1000 for decimal
+  const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
 
@@ -15,7 +15,7 @@ export const getShortName = (name: string): string => {
   if (lastDot === -1) return name;
 
   const base = name.slice(0, lastDot);
-  const ext = name.slice(lastDot); // with dot
+  const ext = name.slice(lastDot);
 
   if (base.length <= 25) return name;
 
