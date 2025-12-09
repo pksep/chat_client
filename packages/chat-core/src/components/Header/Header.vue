@@ -210,6 +210,8 @@ watch(
   async newChapter => {
     if (props.contact?.groupId) {
       menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
+    } else {
+      menuInfoState.contacts = [];
     }
 
     if (newChapter !== 'ai') {
