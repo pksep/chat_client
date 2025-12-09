@@ -10,18 +10,19 @@ import type {
   IChatContainerProps
 } from './components/interfaces/interfaces';
 import { IMSDK, setupOpenIM } from './services/useOpenIM';
+import { saveUserIdToSession, hasUserIdInSession } from './services/useMastra';
+import { clearAllData } from './services/useChatDb';
 import {
-  clearAllData,
-  saveUserIdToSession,
-  hasUserIdInSession
-} from './services/useMastra';
-import { getAllNotificationCount } from './services/useConversions';
+  getAllNotificationCount,
+  markSDKReady
+} from './services/useConversions';
 import { fetchAuthUser, useAuth } from './composables/useAuth';
 import { fetchAllUsers } from './composables/useUsers';
 import { getConfig, setConfig } from './services/useConfig';
 
-const props = defineProps<IChatContainerProps>();
 const emits = defineEmits<IChatContainerEmits>();
+
+const props = defineProps<IChatContainerProps>();
 
 const allNotificationCount = computed(() => getAllNotificationCount());
 
@@ -56,6 +57,8 @@ onMounted(async () => {
     await Promise.all([fetchAuthUser(), fetchAllUsers()]);
 
     setupOpenIM();
+
+    markSDKReady();
   } catch (error) {
     console.error('Failed to initialize chat:', error);
     throw error;

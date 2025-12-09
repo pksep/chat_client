@@ -84,3 +84,9 @@ svg.ai-icon {
     display: none;
   }
 }
+
+@media screen and (width <= 27rem) {
+  .chat-container:has(.chat__header-menu) {
+    --header-height: auto;
+  }
+}

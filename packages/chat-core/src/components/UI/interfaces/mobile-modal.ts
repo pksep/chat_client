@@ -5,14 +5,18 @@ export type CSSClass =
 
 export interface IMobileModalProps {
   open: boolean;
+  isDisabledStartButton?: boolean;
   showCloseButton?: boolean;
   closeButtonText?: string;
+  startButtonText?: string;
   title?: string;
   showDivider?: boolean;
   class?: CSSClass;
   headerClass?: CSSClass;
+  dataTestid?: string;
 }
 
 export interface IMobileModalEmits {
   (e: 'unmount-close'): void;
+  (e: 'unmount-next'): void;
 }

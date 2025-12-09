@@ -3,12 +3,7 @@
     <slot> </slot>
     <div class="menu__info-form-block form__name">
       <label for="name" class="menu__info-title-text"> Название: </label>
-      <Input
-        id="name"
-        class="initial"
-        placeholder="Text"
-        v-model="model.name"
-      />
+      <Input id="name" class="initial" placeholder="Text" v-model="form.name" />
     </div>
     <div class="menu__info-form-block form__textarea" v-if="false">
       <label class="menu__info-title-text"> Описание: </label>
@@ -29,28 +24,47 @@
 </template>
 
 <script setup lang="ts">
+import { IMenuInfoInformation } from '../../composables/useMenuInfo';
 import { Button, ButtonTypeEnum, Input, SizesEnum, Textarea } from '@pksep/yui';
-import { computed, ref } from 'vue';
+import { watch, computed, reactive } from 'vue';
 
-const model = defineModel<{ name: string }>();
+const model = defineModel<IMenuInfoInformation>();
 
 const emits = defineEmits<{
-  (e: 'unmount-save', value: { name: string }): void;
+  (e: 'unmount-save', value: { name: string; avatarUrl?: string }): void;
 }>();
 
-const initialName = ref(model.value?.name || '');
+const form = reactive({
+  name: model.value?.name || '',
+  avatarUrl: model.value?.avatarUrl || ''
+});
 
 const isFormValid = computed(() => {
+  if ((model.value?.avatarUrl ?? '') !== form.avatarUrl) {
+    return true;
+  }
   return (
-    model.value?.name &&
-    model.value.name.trim() !== '' &&
-    model.value.name !== initialName.value
+    form.name &&
+    form.name.trim() !== '' &&
+    form.name !== (model.value?.name ?? '')
   );
+});
+
+watch([() => model.value?.name, () => model.value?.avatarUrl], () => {
+  if (model.value) {
+    form.name = model.value.name;
+    form.avatarUrl = model.value.avatarUrl;
+  }
 });
 
 const onSave = () => {
   if (isFormValid.value) {
-    emits('unmount-save', { name: model.value.name });
+    model.value = {
+      ...model.value,
+      name: form.name,
+      avatarUrl: form.avatarUrl
+    };
+    emits('unmount-save', { name: form.name, avatarUrl: form.avatarUrl });
   }
 };
 

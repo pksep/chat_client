@@ -4,17 +4,45 @@
     position="bottom"
     :class="['mobile__modal', props.class]"
     @close="handleCloseModal"
+    :data-testid="`${dataTestid}-MobileModal-Container`"
   >
-    <header :class="[headerClass, 'mobile__modal-header']">
+    <header
+      :class="[headerClass, 'mobile__modal-header']"
+      :data-testid="`${dataTestid}-MobileModal-Header`"
+    >
       <slot name="header">
-        <button class="mobile__modal-header--button" @click="handleCloseModal">
+        <button
+          class="mobile__modal-header--button"
+          @click="handleCloseModal"
+          :data-testid="`${dataTestid}-MobileModal-CloseButton`"
+        >
           {{ props.closeButtonText }}
         </button>
-        <h3 class="mobile__modal-header--title">{{ props.title }}</h3>
+        <h3
+          class="mobile__modal-header--title"
+          :data-testid="`${dataTestid}-MobileModal-Title`"
+        >
+          {{ props.title }}
+        </h3>
+        <button
+          class="mobile__modal-header--button"
+          @click="handleStartStep"
+          :disabled="props.isDisabledStartButton"
+          v-if="props.startButtonText"
+          :data-testid="`${dataTestid}-MobileModal-StartButton`"
+        >
+          {{ props.startButtonText }}
+        </button>
       </slot>
     </header>
-    <Line v-if="showDivider" class="mobile__modal-divider" />
-    <slot></slot>
+    <Line
+      v-if="showDivider"
+      class="mobile__modal-divider"
+      :data-testid="`${dataTestid}-MobileModal-Divider`"
+    />
+    <div :data-testid="`${dataTestid}-MobileModal-Content`">
+      <slot></slot>
+    </div>
   </Modal>
 </template>
 
@@ -32,12 +60,16 @@ const props = withDefaults(defineProps<IMobileModalProps>(), {
   open: false,
   showCloseButton: true,
   closeButtonText: 'Отмена',
-  showDivider: true
+  showDivider: true,
+  isDisabledStartButton: false,
+  dataTestid: () => 'MobileModal'
 });
 
 const handleCloseModal = () => {
   emits('unmount-close');
 };
-</script>
 
-<style scoped></style>
+const handleStartStep = () => {
+  emits('unmount-next');
+};
+</script>

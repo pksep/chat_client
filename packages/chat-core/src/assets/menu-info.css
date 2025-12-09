@@ -3,12 +3,15 @@ aside.menu-info {
   border-left-color: var(--border-grey);
   border-left-width: 0.5px;
   border-left-style: solid;
+  height: var(--default-height);
+  --size-avatar: 85px;
   &.menu-info--open .collapse {
     width: 100%;
   }
 }
 
 section.menu__info-users {
+  --size-avatar: 50px;
   display: grid;
   gap: 10px;
 }
@@ -107,6 +110,9 @@ button.button-yui-kit.large.menu-info__secondary-button {
   color: var(--text-black);
   & svg.icon-yui-kit {
     color: var(--icon-color, var(--grey5));
+  }
+  &:hover {
+    --icon-color: var(--blue1);
   }
 }
 

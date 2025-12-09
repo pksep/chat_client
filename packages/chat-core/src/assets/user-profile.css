@@ -1,5 +1,4 @@
 .user-profile {
-  --size-avatar: 50px;
   display: grid;
   align-items: center;
   grid-template-columns: var(--size-avatar) auto;

@@ -1,4 +1,5 @@
 export interface IHeaderProps {
+  class?: string;
   chapter?: string | null;
   contact?: IUserProps;
   members?: IUserProps[];
@@ -19,6 +20,7 @@ export interface IMenuEmits {
 
 export interface IHeaderEmits {
   (e: 'unmount-click', isCollapse?: boolean): void;
+  (e: 'unmount-contact', contact: IUserProps): void;
   (e: 'unmount-notification', statusNotification?: string): void;
   (e: 'unmount-information', info?: boolean): void;
   (e: 'unmount-clear'): void;
@@ -31,11 +33,14 @@ export interface IUserProps {
   faceURL?: string;
   avatarAlt?: string;
   nickname?: string;
-  conversionId?: string;
+  conversationId?: string;
   groupId?: string;
   ex?: string;
   tabel?: string;
   initial?: string;
+  createdAt?: Date;
+  membersLength?: number;
+  dataTestid?: string;
 }
 
 export interface IContactProps extends IUserProps {
@@ -50,11 +55,15 @@ export interface IContactProps extends IUserProps {
 
 export interface IMenuProps {
   open?: boolean;
-  contact?: IUserProps;
+  chapter?: string;
+  user?: IUserProps | null;
+  contact?: IUserProps | null;
   dataTestid?: string;
+  class?: string;
 }
 
 export interface IMenuRightProps extends IMenuProps {
+  members?: IUserProps[];
   activeTabId?: number;
   groupId?: string;
 }

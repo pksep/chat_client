@@ -1,34 +1,47 @@
 <template>
-  <section class="contact-selector">
-    <Search v-model="q" />
-    <ul class="contact-selector__list">
+  <section
+    class="contact-selector"
+    :data-testid="`${props.dataTestid}-ContactSelector-Container`"
+  >
+    <Search
+      v-model="state.q"
+      :data-testid="`${props.dataTestid}-ContactSelector-Search`"
+    />
+    <ul
+      class="contact-selector__list"
+      :data-testid="`${props.dataTestid}-ContactSelector-List`"
+    >
       <li
-        v-for="contact in contacts"
+        v-for="(contact, index) in contacts"
         :key="contact.id"
         class="contact-selector__item"
         @click="handleNewContact(contact)"
+        :data-testid="`${props.dataTestid}-ContactSelector-Item${index + 1}`"
       >
         <UserProfile
           :tabel="contact.tabel"
           :nickname="contact.nickname"
           :avatar-alt="contact.nickname"
+          :dataTestid="`${props.dataTestid}-ContactSelector-UserProfile${index + 1}`"
         />
         <Checkbox
           v-if="!props.isAddOne"
           @click.stop
           :size="CheckboxSizeEnum.small"
           @update:model-value="value => handleCheckbox(value, contact.id)"
-          :model-value="props.selectedContactIds.has(contact.id)"
+          :model-value="state.selectedIds.has(contact.id)"
+          :data-testid="`${props.dataTestid}-ContactSelector-Checkbox${index + 1}`"
         />
       </li>
     </ul>
     <Button
-      v-if="!props.isAddOne"
+      v-if="isButtonEnabled"
       :type="ButtonTypeEnum.primary"
       :size="SizesEnum.little"
       class="contact-selector__add"
       :disabled="isButtonDisabled"
       @click="onAddClick"
+      :data-testid="`${props.dataTestid}-ContactSelector-AddButton`"
     >
       Добавить
     </Button>
@@ -36,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, reactive } from 'vue';
 import {
   Checkbox,
   ButtonTypeEnum,
@@ -47,52 +60,74 @@ import {
 } from '@pksep/yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import { IUserProps } from '../interfaces/interfaces';
+import {
+  IContactSelectorProps,
+  IContactSelectorEmits,
+  IContactSelectorState
+} from './interfaces/contact-selector';
 
-interface IContactSelectorProps {
-  contacts: IUserProps[];
-  selectedContactIds: Set<string | number>;
-  isAddOne?: boolean;
-}
-
-interface IContactSelectorEmits {
-  (e: 'unmount-contact', contact: IUserProps): void;
-  (e: 'unmount-checkbox', isCheck: boolean, contactId: string | number): void;
-  (e: 'unmount-click', name?: string): void;
-}
-
-const props = defineProps<IContactSelectorProps>();
+const props = withDefaults(defineProps<IContactSelectorProps>(), {
+  dataTestid: () => 'ContactSelector'
+});
 const emits = defineEmits<IContactSelectorEmits>();
 
-const q = ref('');
+const state = reactive<IContactSelectorState>({
+  q: '',
+  selectedIds: props.selectedContactIds ?? new Set()
+});
+
 const contacts = computed(() =>
   props.contacts.filter(
     contact =>
-      contact.ex.toLowerCase().includes(q.value.toLowerCase()) ||
-      contact.nickname.toLowerCase().includes(q.value.toLowerCase())
+      (contact.ex?.toLowerCase() ?? '').includes(
+        (state.q ?? '').toLowerCase()
+      ) ||
+      (contact.nickname?.toLowerCase() ?? '').includes(
+        (state.q ?? '').toLowerCase()
+      )
   )
 );
 
-const isButtonDisabled = computed(() => {
-  if (props.isAddOne) {
-    return false;
+const selectedContacts = computed(() =>
+  props.contacts.filter(contact => state.selectedIds.has(contact.id))
+);
+
+const isButtonEnabled = computed(() =>
+  props.isButtonDisabled !== undefined
+    ? !props.isButtonDisabled && !props.isAddOne
+    : !props.isAddOne
+);
+
+const isButtonDisabled = computed(() => state.selectedIds.size === 0);
+
+const updateSelection = (
+  contactId: string | number,
+  shouldAdd: boolean
+): void => {
+  if (shouldAdd) {
+    state.selectedIds.add(contactId);
+  } else {
+    state.selectedIds.delete(contactId);
   }
-  return props.selectedContactIds.size < 1;
-});
+  if (props.isButtonDisabled) {
+    onAddClick();
+  }
+};
 
 const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
-  emits('unmount-checkbox', isCheck, contactId);
+  updateSelection(contactId, isCheck);
 };
 
 const handleNewContact = (contact: IUserProps): void => {
   if (props.isAddOne) {
     emits('unmount-contact', contact);
-  } else {
-    const isCurrentlySelected = props.selectedContactIds.has(contact.id);
-    handleCheckbox(!isCurrentlySelected, contact.id);
+    return;
   }
+  const shouldAdd = !state.selectedIds.has(contact.id);
+  updateSelection(contact.id, shouldAdd);
 };
 
 const onAddClick = (): void => {
-  emits('unmount-click');
+  emits('unmount-contact', selectedContacts.value);
 };
 </script>

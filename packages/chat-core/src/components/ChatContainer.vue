@@ -1,15 +1,17 @@
 <template>
   <main
-    :class="chatContainerClasses"
+    :class="state.chatContainerClasses"
     :data-testid="`${props.dataTestid}-ChatContainer-Container`"
   >
     <Header
       v-if="!isShowContactList(state.chapter)"
       class="chat__header"
       :chapter="state.chapter"
+      :members="state.users.filter(user => user.id !== authUser.id)"
       :contact="state.contact"
       :dataTestid="`${props.dataTestid}-ChatContainer-Header`"
       @unmount-click="handleHeaderClick"
+      @unmount-contact="handleChangeContact"
       @unmount-exit="handleExit"
       @unmount-information="handleInformationClick"
       @unmount-clear="handleClearClick"
@@ -22,6 +24,7 @@
     />
     <Menu
       :user="authUser"
+      :chapter="state.chapter"
       class="chat__menu"
       :dataTestid="`${props.dataTestid}-ChatContainer-Menu`"
       @unmount-collapse="handleCollapse"
@@ -32,10 +35,9 @@
     <Chat
       :user="authUser"
       :base-url="props.baseUrl"
-      :contacts="state.users.filter(user => user.id !== authUser?.id)"
       :chapter="state.chapter"
-      :contact-id="state.contact?.id"
-      :conversion-id="state.contact?.conversionId"
+      :contacts="state.users.filter(user => user.id !== authUser.id)"
+      :contact="state.contact"
       class="chat__messages"
       ref="chatRef"
       :dataTestid="`${props.dataTestid}-ChatContainer-Chat`"
@@ -46,17 +48,17 @@
       class="chat__info"
       :open="state.isMenuDesktopOpen && !isMobile"
       :contact="state.contact"
+      :members="state.users.filter(user => user.id !== authUser.id)"
       :active-tab-id="state.activeTabId"
       :dataTestid="`${props.dataTestid}-ChatContainer-MenuInfo`"
       @unmount-collapse="handleMenuToggle"
-      @unmount-new-contact="handleNewContact"
-      @unmount-new-group="handleNewGroup"
+      @unmount-contact="handleChangeContact"
     />
   </main>
   <NewContactModal
     :contacts="state.users.filter(user => user.id !== authUser?.id)"
     :open="state.isNewContactOpen"
-    :dataTestid="`${props.dataTestid}-ChatContainer-NewContactModal`"
+    :data-testid="`${props.dataTestid}-ChatContainer-NewContactModal`"
     @unmount-close="closeModals"
     @unmount-new-contact="handleNewContactMessage"
   />
@@ -65,34 +67,44 @@
     :user="authUser"
     :contacts="state.users.filter(user => user.id !== authUser?.id)"
     :open="state.isNewGroupOpen"
-    :dataTestid="`${props.dataTestid}-ChatContainer-NewGroupModal`"
+    :data-testid="`${props.dataTestid}-ChatContainer-NewGroupModal`"
     @unmount-close="closeModals"
     @unmount-new-group="handleNewGroupMessage"
   />
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import {
+  computed,
+  defineAsyncComponent,
+  reactive,
+  ref,
+  watchEffect
+} from 'vue';
 import Header from './Header/Header.vue';
 import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
 import Chat from './Chat.vue';
 import MenuInfo from './MenuInfo.vue';
-import NewContactModal from './NewChat/NewContactModal.vue';
 import type { IChatContainerProps, IUserProps } from './interfaces/interfaces';
 import { appendUserAttributes, getUsersList } from '../composables/useUsers';
 import { isShowContactList } from '../composables/useShowContactList';
 import { useResizeState } from '../composables/useResizeState';
-import { MAX_W_MD } from '../utils/constants';
-import NewGroupModal from './NewChat/NewGroupModal.vue';
+import { MAX_W_MD, MAX_W_XL } from '../utils/constants';
 import { getGroupList } from '../services/useGroup';
 import { getConversationList } from '../services/useConversions';
 import { getAuthUser } from '../composables/useAuth';
 
+const NewContactModal = defineAsyncComponent(
+  () => import('./NewChat/NewContactModal.vue')
+);
+const NewGroupModal = defineAsyncComponent(
+  () => import('./NewChat/NewGroupModal.vue')
+);
+
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const state = reactive({
-  isCollapse: false,
   isMenuDesktopOpen: false,
   isMenuMobileOpen: false,
   activeTabId: null,
@@ -101,6 +113,10 @@ const state = reactive({
   contact: null,
   isNewContactOpen: false,
   isNewGroupOpen: false,
+  chatContainerClasses: [
+    'chat-container',
+    { collapse: false, 'menu-collapse': true }
+  ],
   users: computed(() => getUsersList()),
   groups: computed(() => getGroupList()),
   conversations: computed(() => getConversationList())
@@ -114,13 +130,20 @@ const authUser = computed(() => appendUserAttributes(getAuthUser()));
 
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 
-const chatContainerClasses = computed(() => [
-  'chat-container',
-  { collapse: state.isCollapse, 'menu-collapse': !state.isMenuDesktopOpen }
-]);
+const { state: isCollapse, toggle } = useResizeState({
+  breakpoint: MAX_W_XL,
+  storageKey: 'menu-collapse'
+});
 
-const handleCollapse = (isCollapse: boolean): void => {
-  state.isCollapse = isCollapse;
+watchEffect(() => {
+  state.chatContainerClasses = [
+    'chat-container',
+    { collapse: isCollapse.value, 'menu-collapse': !state.isMenuDesktopOpen }
+  ];
+});
+
+const handleCollapse = (): void => {
+  toggle();
 };
 
 const handleMenuToggle = (isOpen: boolean): void => {
@@ -130,7 +153,9 @@ const handleMenuToggle = (isOpen: boolean): void => {
 const handleHeaderClick = (): void => {
   if (!isMobile.value) {
     state.activeTabId = 1;
-    state.isMenuDesktopOpen = true;
+    if (state.contact) {
+      state.isMenuDesktopOpen = true;
+    }
     return;
   }
   state.isMenuMobileOpen = true;
@@ -173,8 +198,13 @@ const unmountMenuChapter = (
       state.contact = null;
     } else {
       const foundContact = findContactOrGroupById(config);
-      state.contact = { ...foundContact, conversionId: foundContact.id };
-      state.chapter = config;
+      if (foundContact) {
+        state.contact = { ...foundContact, conversationId: foundContact.id };
+        state.chapter = config;
+      } else {
+        state.contact = null;
+        state.chapter = null;
+      }
     }
   } else if (config && config.contact) {
     state.chapter = config.contact.nickname;
@@ -189,6 +219,11 @@ const unmountMenuChapter = (
 };
 
 const handleNewContact = (config): void => {
+  if (isMobile.value) {
+    state.contact = config;
+    state.chapter = config.conversationId;
+    return;
+  }
   state.isNewContactOpen = config.isChapterOpen;
 };
 
@@ -202,12 +237,16 @@ const closeModals = (): void => {
 };
 
 const handleInformationClick = (): void => {
-  state.activeTabId = 2;
+  if (state.contact) {
+    state.isMenuDesktopOpen = true;
+    state.activeTabId = 2;
+  }
 };
 
 const handleClearClick = (): void => {
   if (state.chapter === 'ai' && chatRef.value) {
     chatRef.value.handleClear();
+    window.location.reload();
   }
 };
 
@@ -217,21 +256,31 @@ const handleNewContactMessage = async (contact: IUserProps): Promise<void> => {
 
   state.contact = {
     ...contact,
-    conversionId: `si_${smallerUserID}_${largerUserID}`
+    conversationId: `si_${smallerUserID}_${largerUserID}`
   };
 };
 
-const handleNewGroupMessage = async () => {
-  const group = getGroupList()[0];
+const handleNewGroupMessage = async (group: any): Promise<void> => {
+  if (!group || !group.conversationID) {
+    console.error('Invalid group data');
+    closeModals();
+    return;
+  }
 
   state.contact = {
-    conversionId: group.id,
-    nickname: group.nickname
+    conversationId: group.conversationID,
+    nickname: group.showName,
+    groupId: group.groupID,
+    avatarUrl: group.faceURL
   };
 
-  state.groupId = group.id;
+  state.groupId = group.groupID;
 
-  state.chapter = state.contact.nickname;
+  state.chapter = state.contact.conversationId;
+};
+
+const handleChangeContact = (contact: IUserProps): void => {
+  state.contact = contact;
 };
 
 const handleExit = (): void => {
