@@ -28,6 +28,7 @@ export interface IHeaderEmits {
 export interface IUserProps {
   id?: string;
   avatarUrl?: string;
+  faceURL?: string;
   avatarAlt?: string;
   nickname?: string;
   conversionId?: string;
@@ -61,7 +62,6 @@ export interface IMenuRightProps extends IMenuProps {
 export interface IChatContainerProps {
   token?: string;
   baseUrl?: string;
-  user?: IUserProps;
   dataTestid?: string;
 }
 

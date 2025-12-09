@@ -6,7 +6,7 @@
     </span>
   </div>
   <button class="menu-info__avatar-button" @click="openEditProfileIcon">
-    <Avatar is-icon :url="model.avatarUrl" alt="use-avatar-circle" />
+    <Avatar :url="model.avatarUrl" alt="use-avatar-circle" />
   </button>
   <ModalCroppedAvatar
     :image="null"

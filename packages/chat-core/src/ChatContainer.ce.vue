@@ -3,25 +3,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue';
+import { computed, onMounted, onUnmounted, watch } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
 import type {
   IChatContainerEmits,
   IChatContainerProps
 } from './components/interfaces/interfaces';
-import {
-  IMSDK,
-  getOrGeneratePlatformId,
-  setupOpenIM
-} from './services/useOpenIM';
-import { useLogin, useRegister, getAuthToken } from './composables/useLogin';
+import { IMSDK, setupOpenIM } from './services/useOpenIM';
 import {
   clearAllData,
   saveUserIdToSession,
   hasUserIdInSession
 } from './services/useMastra';
-import { mockUsers } from './test/mock/users';
 import { getAllNotificationCount } from './services/useConversions';
+import { fetchAuthUser, useAuth } from './composables/useAuth';
+import { fetchAllUsers } from './composables/useUsers';
 
 const props = defineProps<IChatContainerProps>();
 const emits = defineEmits<IChatContainerEmits>();
@@ -30,45 +26,15 @@ const allNotificationCount = computed(() => getAllNotificationCount());
 
 onMounted(async () => {
   try {
-    if (!hasUserIdInSession(props.user.id)) {
-      clearAllData();
-      saveUserIdToSession(props.user.id);
-    }
-
-    if (import.meta.env.VITE_USE_MOCK_DATA === 'true') {
-      await Promise.all(
-        mockUsers.map(user => {
-          return useRegister({ users: [user] });
-        })
-      );
-    }
-
-    const registerResponse = await useRegister({
-      users: [
-        {
-          userID: props.user.id,
-          nickname: props.user.nickname,
-          faceURL: props.user.avatarUrl ?? '/avatar.png',
-          ex: props.user.ex
-        }
-      ]
-    });
-
-    if (registerResponse.errMsg === 'RegisteredAlreadyError') {
-      const platformID = getOrGeneratePlatformId();
-      const loginResponse = await useLogin({
-        platformID,
-        userID: props.user.id
-      });
-
-      if (!loginResponse?.data?.token) {
-        throw new Error('Failed to obtain login token');
-      }
-    }
-
-    const authToken = getAuthToken();
-    if (!authToken) {
+    if (!props.token) {
       throw new Error('No auth token found');
+    }
+
+    const authData = await useAuth(props.token);
+
+    if (!hasUserIdInSession(authData.UserID)) {
+      clearAllData();
+      saveUserIdToSession(authData.UserID);
     }
 
     const apiAddr = import.meta.env.VITE_OPENIM_API_DOMAIN
@@ -80,18 +46,24 @@ onMounted(async () => {
       : 'ws://localhost:10023';
 
     await IMSDK.login({
-      platformID: getOrGeneratePlatformId(),
-      userID: props.user.id,
-      token: authToken,
+      platformID: authData.PlatformID,
+      userID: authData.UserID,
+      token: authData.token,
       apiAddr,
       wsAddr
     });
+
+    await Promise.all([fetchAuthUser(), fetchAllUsers()]);
 
     setupOpenIM();
   } catch (error) {
     console.error('Failed to initialize chat:', error);
     throw error;
   }
+});
+
+onUnmounted(async () => {
+  window.location.reload(); // НЕ УДАЛИТЬ!!! это для отключении сокета в опеним
 });
 
 watch(

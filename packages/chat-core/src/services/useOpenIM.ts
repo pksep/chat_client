@@ -238,19 +238,6 @@ export const sendMessageIM = async ({
   }
 };
 
-const getOrGeneratePlatformId = (): number => {
-  return 5;
-  // const key = 'platformId';
-  // const storedId = sessionStorage.getItem(key);
-  // if (storedId === null) {
-  //   const newId = Math.floor(Math.random() * 9) + 1;
-  //   sessionStorage.setItem(key, newId.toString());
-  //   return newId;
-  // } else {
-  //   return parseInt(storedId, 10);
-  // }
-};
-
 const getMessagesByConversationId = async (
   conversationId: string,
   lastClientMsgID: string = ''
@@ -308,7 +295,6 @@ const appendOldMessagesToLocal = (conversationId: string, messages): void => {
 export {
   IMSDK,
   setupOpenIM,
-  getOrGeneratePlatformId,
   getMessagesByConversationId,
   saveMessagesToLocal,
   getSavedMessages,

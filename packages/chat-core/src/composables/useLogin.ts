@@ -11,18 +11,6 @@ interface RegisterParams {
   users: RegisterUser[];
 }
 
-interface LoginParams {
-  platformID: number;
-  userID: string;
-}
-
-interface LoginResponse {
-  data: {
-    token: string;
-    expireTimeSeconds: number;
-  };
-}
-
 const setCookie = (name: string, value: string, expiresIn: number): void => {
   const date = new Date();
   date.setTime(date.getTime() + expiresIn * 1000);
@@ -57,21 +45,15 @@ export const useRegister = async (
   return data;
 };
 
-export const useLogin = async (params: LoginParams): Promise<LoginResponse> => {
-  const api = useOpenIMRestApi();
-  const response = await api.post('/auth/get_user_token', params);
-
-  const data: LoginResponse = await response.json();
-
-  if (data?.data?.token) {
-    setCookie('authToken', data.data.token, data.data.expireTimeSeconds);
-  }
-
-  return data;
-};
-
 export const useLogout = (): void => {
   removeCookie('authToken');
+};
+
+export const setAuthToken = (
+  token: string,
+  expireTimeSeconds: number
+): void => {
+  setCookie('authToken', token, expireTimeSeconds);
 };
 
 export const getAuthToken = (): string | null => {

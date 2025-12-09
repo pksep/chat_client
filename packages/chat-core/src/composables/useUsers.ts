@@ -3,6 +3,7 @@ import { getAuthToken } from './useLogin';
 import { useOpenIMRestApi } from '../services/useApi';
 
 import type { IUserProps } from '../components/interfaces/interfaces';
+import { SelfUserInfo } from '@openim/wasm-client-sdk';
 
 const users = ref<IUserProps[]>([]);
 const loading = ref(false);
@@ -69,11 +70,19 @@ export const fetchAllUsers = async (opts?: {
   }
 };
 
-export const appendUserAttributes = (user: IUserProps) => {
+export const appendUserAttributes = (
+  user: Partial<IUserProps & SelfUserInfo>
+) => {
+  if (!user) return null;
   const ex = JSON.parse(user?.ex || null);
-  user.tabel = ex?.tabel || '';
-  user.initial = ex?.initial || '';
-  return user;
+
+  return {
+    ...user,
+    tabel: ex?.tabel || '',
+    initial: ex?.initial || '',
+    avatarUrl: user.faceURL,
+    id: `${user.id || user.userID}`
+  };
 };
 
 export const getUsersList = (): IUserProps[] => {

@@ -32,7 +32,7 @@
     <Chat
       :user="authUser"
       :base-url="props.baseUrl"
-      :contacts="state.users.filter(user => user.id !== authUser.id)"
+      :contacts="state.users.filter(user => user.id !== authUser?.id)"
       :chapter="state.chapter"
       :contact-id="state.contact?.id"
       :conversion-id="state.contact?.conversionId"
@@ -54,7 +54,7 @@
     />
   </main>
   <NewContactModal
-    :contacts="state.users.filter(user => user.id !== authUser.id)"
+    :contacts="state.users.filter(user => user.id !== authUser?.id)"
     :open="state.isNewContactOpen"
     :dataTestid="`${props.dataTestid}-ChatContainer-NewContactModal`"
     @unmount-close="closeModals"
@@ -63,7 +63,7 @@
 
   <NewGroupModal
     :user="authUser"
-    :contacts="state.users.filter(user => user.id !== authUser.id)"
+    :contacts="state.users.filter(user => user.id !== authUser?.id)"
     :open="state.isNewGroupOpen"
     :dataTestid="`${props.dataTestid}-ChatContainer-NewGroupModal`"
     @unmount-close="closeModals"
@@ -72,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import Header from './Header/Header.vue';
 import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
@@ -80,17 +80,14 @@ import Chat from './Chat.vue';
 import MenuInfo from './MenuInfo.vue';
 import NewContactModal from './NewChat/NewContactModal.vue';
 import type { IChatContainerProps, IUserProps } from './interfaces/interfaces';
-import {
-  appendUserAttributes,
-  fetchAllUsers,
-  getUsersList
-} from '../composables/useUsers';
+import { appendUserAttributes, getUsersList } from '../composables/useUsers';
 import { isShowContactList } from '../composables/useShowContactList';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
 import NewGroupModal from './NewChat/NewGroupModal.vue';
 import { getGroupList } from '../services/useGroup';
 import { getConversationList } from '../services/useConversions';
+import { getAuthUser } from '../composables/useAuth';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
@@ -113,7 +110,7 @@ const props = withDefaults(defineProps<IChatContainerProps>(), {
   dataTestid: () => 'ChatContainer'
 });
 
-const authUser = computed(() => appendUserAttributes(props.user));
+const authUser = computed(() => appendUserAttributes(getAuthUser()));
 
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 
@@ -157,7 +154,10 @@ const unmountHeaderMenuChapter = (
 };
 
 const findContactOrGroupById = (id: string) => {
-  const conversation = state.conversations.find(conv => conv.id === id);
+  const conversation = {
+    ...state.users.find(item => item.id === id),
+    ...state.conversations.find(item => item.id === id)
+  };
   if (!conversation) {
     return state.groups.find(group => group.id === id);
   }
@@ -178,7 +178,10 @@ const unmountMenuChapter = (
     }
   } else if (config && config.contact) {
     state.chapter = config.contact.nickname;
-    state.contact = config.contact;
+    state.contact = {
+      ...config.contact,
+      ...findContactOrGroupById(config.contact.id)
+    };
   } else {
     state.chapter = null;
     state.contact = null;
@@ -234,8 +237,4 @@ const handleNewGroupMessage = async () => {
 const handleExit = (): void => {
   state.chapter = 'assistant';
 };
-
-onMounted(async () => {
-  await fetchAllUsers();
-});
 </script>
