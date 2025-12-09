@@ -2,6 +2,7 @@ import { SelfUserInfo } from '@openim/wasm-client-sdk';
 import { IMSDK } from '../services/useOpenIM';
 import { ref, Ref } from 'vue';
 import { setAuthToken } from './useLogin';
+import { getConfig } from '../services/useConfig';
 
 export const authedUser: Ref<SelfUserInfo | null> = ref(null);
 
@@ -21,16 +22,14 @@ export const getPlatformId = (): number => {
 };
 
 export const useAuth = async (erpToken: string): Promise<AuthResponse> => {
-  const response = await fetch(
-    `${import.meta.env.VITE_CHAT_AUTH_API}/chat/token`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ erpToken })
-    }
-  );
+  const config = getConfig();
+  const response = await fetch(`${config.CHAT_AUTH_API}/chat/token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ erpToken })
+  });
   const data = await response.json();
 
   setAuthToken(data.token, data.expireTimeSeconds);
