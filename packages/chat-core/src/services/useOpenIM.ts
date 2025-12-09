@@ -439,8 +439,8 @@ const appendOldMessagesToLocal = (
 
 export {
   IMSDK,
-  setupOpenIM,
   getOrGeneratePlatformId,
+  setupOpenIM,
   getMessagesByConversationId,
   saveMessagesToLocal,
   getSavedMessages,

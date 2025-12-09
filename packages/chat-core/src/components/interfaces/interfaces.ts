@@ -30,6 +30,7 @@ export interface IHeaderEmits {
 export interface IUserProps {
   id?: string;
   avatarUrl?: string;
+  faceURL?: string;
   avatarAlt?: string;
   nickname?: string;
   conversationId?: string;
@@ -67,11 +68,22 @@ export interface IMenuRightProps extends IMenuProps {
   groupId?: string;
 }
 
+export interface IChatContainerConfig {
+  CHAT_MASTRA_URL?: string;
+  CHAT_OPENIM_API_URL?: string;
+  CHAT_OPENIM_SECRET?: string;
+  CHAT_OPENIM_ADMIN_NAME?: string;
+  CHAT_BASE_MODE?: string;
+  CHAT_AUTH_API?: string;
+  CHAT_OPENIM_API_DOMAIN?: string;
+  CHAT_OPENIM_WS_DOMAIN?: string;
+}
+
 export interface IChatContainerProps {
   token?: string;
   baseUrl?: string;
-  user?: IUserProps;
   dataTestid?: string;
+  config: IChatContainerConfig;
 }
 
 export interface IChatContainerEmits {

@@ -1,18 +1,19 @@
 <template>
   <!-- eslint-disable-next-line vue/html-self-closing-->
-  <chat-container :base-url.prop="mastraUrl" :user.prop="user">
-  </chat-container>
+  <chat-container :config.prop="config" :token.prop="token"> </chat-container>
 </template>
 <script lang="ts" setup>
+import { IChatContainerConfig } from './components/interfaces/interfaces';
 import './index';
 
-const mastraUrl = import.meta.env.VITE_MASTRA_BASE_URL;
-const user = {
-  avatarUrl:
-    'http://localhost:9000/sep-local/61f0f2d6-82b1-422a-b426-47a2e921e4c9.jpg',
-  id: '46',
-  ex: JSON.stringify({ tabel: '045', initial: 'User Full Name' }),
-  avatarAlt: 'User with a circle face',
-  nickname: 'User N.A.'
+const config: IChatContainerConfig = {
+  CHAT_BASE_MODE: 'app',
+  CHAT_AUTH_API: 'http://localhost:3000',
+  CHAT_MASTRA_URL: 'http://localhost:4111',
+  CHAT_OPENIM_API_DOMAIN: 'http://localhost:10002',
+  CHAT_OPENIM_WS_DOMAIN: 'ws://localhost:10023'
 };
+
+const token =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDYsInJvbGVzIjoxOCwibG9naW4iOiLQmtC90Y_Qt9GP0L0g0K0uINCQLiIsInRhYmVsIjoiMDQ1IiwicmVtb3RlX3dvcmsiOnRydWUsImlhdCI6MTc2NDYwMDQyNSwiZXhwIjoxNzY0Njg2ODI1fQ.HRUFPFKlrxth2iH-mpjZ94gEZ1Xr_65_pe2u-jiwn8E';
 </script>

@@ -1,0 +1,30 @@
+flowchart TD
+
+    subgraph ChatFlow["Chat → Auth → OpenIM"]
+        Chat["Chat Client"]
+        ERP["ERP"]
+        Auth["Auth Service"]
+        OpenIM["OpenIM"]
+
+        Chat -->|1. Запрос ERP_TOKEN| ERP
+        ERP -->|2. Выдаёт ERP_TOKEN| Chat
+
+        Chat -->|3. ERP_TOKEN| Auth
+        Auth -->|4. Проверка токена| ERP
+        ERP -->|5. OK| Auth
+
+        Auth -->|6. Запрос im_token| OpenIM
+        OpenIM -->|7. im_token| Auth
+        Auth -->|8. im_token| Chat
+    end
+
+    subgraph SyncFlow["ERP → Kafka → Auth → OpenIM"]
+        ERPS["ERP"]
+        Kafka["Kafka"]
+        AuthS["Auth Service"]
+        OpenIMS["OpenIM"]
+
+        ERPS -->|9. user.change event| Kafka
+        Kafka -->|10. Событие| AuthS
+        AuthS -->|11. Sync user| OpenIMS
+    end

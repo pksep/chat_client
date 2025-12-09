@@ -56,7 +56,7 @@
     />
   </main>
   <NewContactModal
-    :contacts="state.users.filter(user => user.id !== authUser.id)"
+    :contacts="state.users.filter(user => user.id !== authUser?.id)"
     :open="state.isNewContactOpen"
     :data-testid="`${props.dataTestid}-ChatContainer-NewContactModal`"
     @unmount-close="closeModals"
@@ -65,7 +65,7 @@
 
   <NewGroupModal
     :user="authUser"
-    :contacts="state.users.filter(user => user.id !== authUser.id)"
+    :contacts="state.users.filter(user => user.id !== authUser?.id)"
     :open="state.isNewGroupOpen"
     :data-testid="`${props.dataTestid}-ChatContainer-NewGroupModal`"
     @unmount-close="closeModals"
@@ -77,7 +77,6 @@
 import {
   computed,
   defineAsyncComponent,
-  onMounted,
   reactive,
   ref,
   watchEffect
@@ -88,16 +87,13 @@ import Menu from './Menu.vue';
 import Chat from './Chat.vue';
 import MenuInfo from './MenuInfo.vue';
 import type { IChatContainerProps, IUserProps } from './interfaces/interfaces';
-import {
-  appendUserAttributes,
-  fetchAllUsers,
-  getUsersList
-} from '../composables/useUsers';
+import { appendUserAttributes, getUsersList } from '../composables/useUsers';
 import { isShowContactList } from '../composables/useShowContactList';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD, MAX_W_XL } from '../utils/constants';
 import { getGroupList } from '../services/useGroup';
 import { getConversationList } from '../services/useConversions';
+import { getAuthUser } from '../composables/useAuth';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -130,7 +126,7 @@ const props = withDefaults(defineProps<IChatContainerProps>(), {
   dataTestid: () => 'ChatContainer'
 });
 
-const authUser = computed(() => appendUserAttributes(props.user));
+const authUser = computed(() => appendUserAttributes(getAuthUser()));
 
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 
@@ -183,7 +179,10 @@ const unmountHeaderMenuChapter = (
 };
 
 const findContactOrGroupById = (id: string) => {
-  const conversation = state.conversations.find(conv => conv.id === id);
+  const conversation = {
+    ...state.users.find(item => item.id === id),
+    ...state.conversations.find(item => item.id === id)
+  };
   if (!conversation) {
     return state.groups.find(group => group.id === id);
   }
@@ -208,8 +207,11 @@ const unmountMenuChapter = (
       }
     }
   } else if (config && config.contact) {
-    state.chapter = config.contact.conversationId;
-    state.contact = config.contact;
+    state.chapter = config.contact.nickname;
+    state.contact = {
+      ...config.contact,
+      ...findContactOrGroupById(config.contact.id)
+    };
   } else {
     state.chapter = null;
     state.contact = null;
@@ -284,8 +286,4 @@ const handleChangeContact = (contact: IUserProps): void => {
 const handleExit = (): void => {
   state.chapter = 'assistant';
 };
-
-onMounted(async () => {
-  await fetchAllUsers();
-});
 </script>

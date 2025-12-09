@@ -75,7 +75,6 @@ const {
 
 const onSaveAvatar = async (file: File): Promise<void> => {
   await originalOnSaveAvatar(file);
-  // The original function updates the model, now we emit the update event
   emit('update:modelValue', model.value);
 };
 

@@ -1,18 +1,15 @@
 import { Reqi } from '@pksep/reqi';
-import { getOrGeneratePlatformId } from './useOpenIM';
+import { getAuthToken } from '../composables/useLogin';
+import { getPlatformId } from '../composables/useAuth';
+import { getConfig } from './useConfig';
 
 export const createOpenIMRestApi = (): Reqi => {
-  const instance = new Reqi(
-    import.meta.env.VITE_OPENIM_API_DOMAIN
-      ? `https://${import.meta.env.VITE_OPENIM_API_DOMAIN}`
-      : 'http://localhost:10002'
-  );
+  const config = getConfig();
+
+  const instance = new Reqi(config.CHAT_OPENIM_API_DOMAIN);
 
   instance.request.use((request: Request): Request => {
-    request.headers.set(
-      'operationID',
-      `${getOrGeneratePlatformId()}_${Date.now()}`
-    );
+    request.headers.set('operationID', `${getPlatformId()}_${Date.now()}`);
     return request;
   });
 
@@ -27,7 +24,7 @@ export const useOpenIMRestApi = (): Reqi => {
 
     apiInstance.request.use(async (request: Request): Promise<Request> => {
       try {
-        request.headers.set('token', import.meta.env.VITE_OPENIM_TOKEN);
+        request.headers.set('token', getAuthToken());
         return request;
       } catch (error) {
         console.error('Failed to fetch token:', error);
