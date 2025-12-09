@@ -18,6 +18,7 @@ import {
 import { getAllNotificationCount } from './services/useConversions';
 import { fetchAuthUser, useAuth } from './composables/useAuth';
 import { fetchAllUsers } from './composables/useUsers';
+import { getConfig, setConfig } from './services/useConfig';
 
 const props = defineProps<IChatContainerProps>();
 const emits = defineEmits<IChatContainerEmits>();
@@ -25,6 +26,8 @@ const emits = defineEmits<IChatContainerEmits>();
 const allNotificationCount = computed(() => getAllNotificationCount());
 
 onMounted(async () => {
+  setConfig(props.config);
+
   try {
     if (!props.token) {
       throw new Error('No auth token found');
@@ -37,13 +40,10 @@ onMounted(async () => {
       saveUserIdToSession(authData.UserID);
     }
 
-    const apiAddr = import.meta.env.VITE_OPENIM_API_DOMAIN
-      ? `https://${import.meta.env.VITE_OPENIM_API_DOMAIN}`
-      : 'http://localhost:10002';
+    const config = getConfig();
 
-    const wsAddr = import.meta.env.VITE_OPENIM_WS_DOMAIN
-      ? `wss://${import.meta.env.VITE_OPENIM_WS_DOMAIN}`
-      : 'ws://localhost:10023';
+    const apiAddr = config.VITE_OPENIM_API_DOMAIN;
+    const wsAddr = config.VITE_OPENIM_WS_DOMAIN;
 
     await IMSDK.login({
       platformID: authData.PlatformID,

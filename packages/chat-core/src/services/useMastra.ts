@@ -1,5 +1,6 @@
 import { ref, Ref } from 'vue';
 import { MastraClient } from '@mastra/client-js';
+import { getConfig } from './useConfig';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -257,8 +258,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
     };
   }
 
-  const defaultBaseUrl =
-    import.meta.env.VITE_CHAT_MASTRA_URL || 'http://localhost:4111';
+  const config = getConfig();
+  const defaultBaseUrl = config.CHAT_MASTRA_URL;
   const agentId = options.agentId ?? 'chat';
   let chatId = options.chatId; // Use 'let' to allow reassignment
   const baseUrl = options.baseUrl ?? defaultBaseUrl;

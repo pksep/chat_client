@@ -1,13 +1,12 @@
 import { Reqi } from '@pksep/reqi';
 import { getAuthToken } from '../composables/useLogin';
 import { getPlatformId } from '../composables/useAuth';
+import { getConfig } from './useConfig';
 
 export const createOpenIMRestApi = (): Reqi => {
-  const instance = new Reqi(
-    import.meta.env.VITE_OPENIM_API_DOMAIN
-      ? `https://${import.meta.env.VITE_OPENIM_API_DOMAIN}`
-      : 'http://localhost:10002'
-  );
+  const config = getConfig();
+
+  const instance = new Reqi(config.VITE_OPENIM_API_DOMAIN);
 
   instance.request.use((request: Request): Request => {
     request.headers.set('operationID', `${getPlatformId()}_${Date.now()}`);
