@@ -21,7 +21,6 @@
               >{{ formatDay(message.timestamp) }}</span
             >
           </div>
-          {{ message.loading }}
           <MessageBubble
             :class="messageChat(message.role)"
             :message="message.content || ''"

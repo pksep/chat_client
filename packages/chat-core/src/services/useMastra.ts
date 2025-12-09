@@ -150,6 +150,11 @@ const generateChatId = (): string => {
 
 const loadMessages = async (chatId: string): Promise<Message[]> => {
   try {
+    if (!chatId) {
+      console.error('Invalid chatId provided to loadMessages:', chatId);
+      return [];
+    }
+
     const result = await ChatDB.get(chatId);
     return result?.messages || [];
   } catch (error) {
@@ -163,6 +168,10 @@ const saveMessages = async (
   messages: Message[]
 ): Promise<void> => {
   try {
+    if (!chatId) {
+      throw new Error('Invalid chatId provided to saveMessages: ' + chatId);
+    }
+
     await ChatDB.put(chatId, messages);
   } catch (error) {
     console.error('Error saving messages:', error);
@@ -172,6 +181,14 @@ const saveMessages = async (
 
 const getOrCreateChatHistory = async (chatId: string): Promise<Message[]> => {
   try {
+    if (!chatId) {
+      console.error(
+        'Invalid chatId provided to getOrCreateChatHistory:',
+        chatId
+      );
+      return [];
+    }
+
     const result = await ChatDB.get(chatId);
     if (result && result.messages && Array.isArray(result.messages)) {
       return result.messages;
@@ -227,6 +244,11 @@ const removeMessageLoading = async (
   chatId: string,
   messageIndex: number
 ): Promise<void> => {
+  if (!chatId) {
+    console.error('Invalid chatId provided to removeMessageLoading:', chatId);
+    return;
+  }
+
   const messages = await loadMessages(chatId);
   if (
     messageIndex >= 0 &&
@@ -265,7 +287,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
         messages.value = [...initialMessages];
         isInitializing.value = false;
       })
-      .catch(() => {
+      .catch(error => {
+        console.error('Failed to get messages for conversation:', error);
         messages.value = [];
         isInitializing.value = false;
       });
@@ -371,8 +394,6 @@ const useMastra = (options?: UseMastraOptions | false) => {
                   }
 
                   if (event.type === 'step-finish') {
-                    console.log('Step finished:', event);
-                    // Set loading to false when a step finishes, as requested
                     if (assistantMessageIndex < messages.value.length) {
                       const newMessages = [...messages.value];
                       newMessages[assistantMessageIndex] = {
