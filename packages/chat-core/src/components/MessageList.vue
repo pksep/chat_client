@@ -21,7 +21,7 @@
               >{{ formatDay(message.timestamp) }}</span
             >
           </div>
-
+          {{ message.loading }}
           <MessageBubble
             :class="messageChat(message.role)"
             :message="message.content || ''"
@@ -116,7 +116,6 @@ import {
   ref,
   reactive,
   watch,
-  onMounted,
   useTemplateRef,
   nextTick,
   onUnmounted,
@@ -156,20 +155,44 @@ const state = reactive({
   messages: computed(() =>
     getSavedMessages(props.contact?.conversationId || '')
   ),
-  chatId: null
+  chatId: null as string | null
 });
 
-const {
-  messages: aiMessages,
-  sendMessage,
-  clearMessages: clearAiMessages
-} = useMastra(
-  props.chapter === 'ai' && {
-    agentId: 'generalAgent',
-    chatId: state.chatId,
-    baseUrl: props.baseUrl
+// Set chatId when component is initialized if chapter is 'ai'
+if (props.chapter === 'ai' && !state.chatId) {
+  state.chatId = generateChatId();
+}
+
+// Watch for changes to chapter to handle AI mode properly
+watch(
+  () => props.chapter,
+  newChapter => {
+    if (newChapter === 'ai' && !state.chatId) {
+      state.chatId = generateChatId();
+    }
   }
 );
+
+const mastraResult = useMastra(
+  props.chapter === 'ai' && state.chatId
+    ? {
+        agentId: 'generalAgent',
+        chatId: state.chatId,
+        baseUrl: props.baseUrl
+      }
+    : false
+);
+
+// Create a reactive reference to the messages
+const aiMessages = computed(() => {
+  if (mastraResult.messages) {
+    return mastraResult.messages.value;
+  }
+  return [];
+});
+
+const sendMessage = mastraResult.sendMessage;
+const clearAiMessages = mastraResult.clearMessages;
 
 const messageChat = (role: string) => [
   'message__bubble',
@@ -214,9 +237,15 @@ watch(
   { immediate: true }
 );
 
+// Only watch OpenIM messages (not AI messages) to avoid interference
 watch(
   () => state.messages.length,
   () => {
+    // Skip this logic when in AI mode to avoid interference
+    if (props.chapter === 'ai') {
+      return;
+    }
+
     if (!state.messages.length || chatWrapperRef.value?.scrollTop > 200) {
       return;
     }
@@ -293,22 +322,15 @@ const isNewDate = (index: number, isMastra: boolean = false) => {
   return current !== prev;
 };
 
-onMounted(() => {
-  if (state.chatId === null && props.chapter === 'ai') {
-    state.chatId = generateChatId();
-  }
-  if ((aiMessages?.value && aiMessages.value.length) || state.messages.length) {
-    scrollToBottom();
-  }
-});
-
 const getSystemMessageContent = message => {
   const notification = parseGroupNotification(message);
   return notification || message.textElem?.content || message.showName || '';
 };
 
 onUnmounted(() => {
-  removeMessageLoading(state.chatId, state.messages.length);
+  if (state.chatId) {
+    removeMessageLoading(state.chatId, state.messages.length);
+  }
 });
 
 defineExpose({

@@ -1,5 +1,11 @@
 <template>
-  <div class="message" :data-testid="`${dataTestid}-MessageBubble-Container`">
+  <div
+    class="message"
+    :data-testid="`${dataTestid}-MessageBubble-Container`"
+    :data-role="props.author"
+    :data-is-loading="!!props.loader"
+    :data-is-me-sender="props.isMeSender"
+  >
     <Avatar
       class="message__avatar"
       :url="props.sender"
@@ -57,6 +63,7 @@
             class="message-content__html"
             v-html="props.message"
             :data-testid="`${dataTestid}-MessageBubble-MessageText`"
+            :data-message-content="props.message"
           ></div>
           <div
             v-else-if="isImage"
