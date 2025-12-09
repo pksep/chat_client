@@ -5,7 +5,7 @@ import {
   setGroupInfo
 } from '../services/useGroup';
 import { IMSDK } from '../services/useOpenIM';
-import { generateChatId } from '../services/useMastra';
+import { generateChatId } from '../services/useChatDb';
 import type { IUserProps } from '../components/interfaces/interfaces';
 
 type IMenuInfoProps = {

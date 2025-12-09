@@ -11,7 +11,7 @@ export interface IMessageBubbleProps {
   media?: {
     sourcePicture: {
       uuid: string;
-      name: string;
+      name?: string;
       size: number;
       type: string;
       url: string;

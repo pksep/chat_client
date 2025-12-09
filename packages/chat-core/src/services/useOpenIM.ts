@@ -9,8 +9,9 @@ import { updateGroupList } from './useGroup';
 import {
   generateConversationId,
   processIncomingMessage,
-  Message
+  Message as ProcessedMessage
 } from '../utils/messageProcessor';
+import type { OpenIMMessage } from '../types/messages';
 
 export type IMSDKType = ReturnType<typeof getSDK>;
 
@@ -58,17 +59,17 @@ const setupOpenIM = (): void => {
       const payload = evt?.data;
       if (!payload) return;
 
-      let list: Message[] = [];
+      let list: ProcessedMessage[] = [];
 
       if (Array.isArray(payload)) {
-        list = payload as Message[];
+        list = payload as ProcessedMessage[];
       } else if (
         (payload as any)?.messageList &&
         Array.isArray((payload as any).messageList)
       ) {
         list = (payload as any).messageList;
       } else {
-        list = [payload as Message];
+        list = [payload as ProcessedMessage];
       }
 
       if (!Array.isArray(list)) {
@@ -76,7 +77,7 @@ const setupOpenIM = (): void => {
         return;
       }
 
-      list.forEach((message: Message) => {
+      list.forEach((message: ProcessedMessage) => {
         if (!message) return;
 
         const processedMessage = processIncomingMessage(message);
@@ -85,7 +86,8 @@ const setupOpenIM = (): void => {
         }
 
         const convId = generateConversationId(processedMessage);
-        appendMessageToLocal(convId, processedMessage);
+        // Cast to OpenIMMessage to fix type compatibility
+        appendMessageToLocal(convId, processedMessage as OpenIMMessage);
       });
     } catch (e) {
       console.error('[OpenIM] Failed to process incoming message event:', e);
@@ -166,7 +168,7 @@ export const sendMessageIM = async ({
   try {
     let createResp: any;
 
-    if (type === 'text' && message) {
+    if (type === 'text') {
       try {
         createResp = await IMSDK.createTextMessage(message || '');
       } catch (error) {
@@ -191,8 +193,7 @@ export const sendMessageIM = async ({
 
         throw error;
       }
-    }
-    if (type === 'file') {
+    } else if (type === 'file') {
       if (!file) throw new Error('File is required for file message');
 
       try {
@@ -384,23 +385,32 @@ const markAsRead = async (conversationID: string) => {
   await IMSDK.markConversationMessageAsRead(conversationID);
 };
 
-const messagesStore = ref<Record<string, any[]>>({});
+const messagesStore = ref<Record<string, OpenIMMessage[]>>({});
 
-const saveMessagesToLocal = (conversationId: string, messages: any[]): void => {
+const saveMessagesToLocal = (
+  conversationId: string,
+  messages: OpenIMMessage[]
+): void => {
   messagesStore.value[conversationId] = messages;
 };
 
-const getSavedMessages = (conversationId: string): any[] => {
+const getSavedMessages = (conversationId: string): OpenIMMessage[] => {
   return messagesStore.value[conversationId] || [];
 };
 
-const appendMessageToLocal = (conversationId: string, message: any): void => {
+const appendMessageToLocal = (
+  conversationId: string,
+  message: OpenIMMessage
+): void => {
   const arr = messagesStore.value[conversationId] || [];
   arr.push(message);
   messagesStore.value[conversationId] = arr;
 };
 
-const appendOldMessagesToLocal = (conversationId: string, messages): void => {
+const appendOldMessagesToLocal = (
+  conversationId: string,
+  messages: OpenIMMessage[]
+): void => {
   const arr = messagesStore.value[conversationId] || [];
   arr.unshift(...messages);
   messagesStore.value[conversationId] = arr;

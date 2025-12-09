@@ -15,11 +15,8 @@ import {
   setupOpenIM
 } from './services/useOpenIM';
 import { useLogin, useRegister, getAuthToken } from './composables/useLogin';
-import {
-  clearAllData,
-  saveUserIdToSession,
-  hasUserIdInSession
-} from './services/useMastra';
+import { saveUserIdToSession, hasUserIdInSession } from './services/useMastra';
+import { clearAllData } from './services/useChatDb';
 import { mockUsers } from './test/mock/users';
 import {
   getAllNotificationCount,

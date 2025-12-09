@@ -84,7 +84,7 @@
           :is-me-sender="props.user.id === message.sendID"
           :time="formatTime(new Date(message.sendTime))"
           :sender="message.senderNickname"
-          :avatar="message.senderFaceUrl"
+          :avatar="message.faceURL"
           :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
         />
       </template>
@@ -118,16 +118,14 @@ import {
   useTemplateRef,
   nextTick,
   onUnmounted,
-  computed
+  computed,
+  type ComputedRef
 } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
 import { ContentEditor } from '@pksep/yui';
-import {
-  removeMessageLoading,
-  useMastra,
-  generateChatId
-} from '../services/useMastra';
+import { useMastra, generateChatId } from '../services/useMastra';
+import { removeMessageLoading } from '../services/useChatDb';
 import {
   getMessagesByConversationId,
   getSavedMessages,
@@ -137,6 +135,7 @@ import {
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
 import { parseGroupNotification } from '../utils/systemMessages';
+import type { OpenIMMessage, AIMessage } from '../types/messages';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -153,7 +152,7 @@ const inputText = ref('');
 const state = reactive({
   messages: computed(() =>
     getSavedMessages(props.contact?.conversationId || '')
-  ),
+  ) as ComputedRef<OpenIMMessage[]>,
   chatId: null as string | null
 });
 
@@ -183,7 +182,7 @@ const mastraResult = useMastra(
 );
 
 // Create a reactive reference to the messages
-const aiMessages = computed(() => {
+const aiMessages = computed<AIMessage[]>(() => {
   if (mastraResult.messages) {
     return mastraResult.messages.value;
   }
@@ -307,16 +306,19 @@ const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
 const isNewDate = (index: number, isMastra: boolean = false) => {
   if (index === 0) return true;
 
-  const current = formatDay(
-    isMastra
-      ? aiMessages.value[index].timestamp
-      : state.messages[index].sendTime
-  );
-  const prev = formatDay(
-    isMastra
-      ? aiMessages.value[index - 1].timestamp
-      : state.messages[index - 1].sendTime
-  );
+  let current: string, prev: string;
+
+  if (isMastra) {
+    const currentMsg = aiMessages.value[index];
+    const prevMsg = aiMessages.value[index - 1];
+    current = formatDay(currentMsg.timestamp);
+    prev = formatDay(prevMsg.timestamp);
+  } else {
+    const currentMsg = state.messages[index];
+    const prevMsg = state.messages[index - 1];
+    current = formatDay(currentMsg.sendTime);
+    prev = formatDay(prevMsg.sendTime);
+  }
 
   return current !== prev;
 };
@@ -328,7 +330,7 @@ const getSystemMessageContent = message => {
 
 onUnmounted(() => {
   if (state.chatId) {
-    removeMessageLoading(state.chatId, state.messages.length);
+    removeMessageLoading(state.chatId, aiMessages.value.length);
   }
 });
 
