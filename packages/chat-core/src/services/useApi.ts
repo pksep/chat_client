@@ -4,8 +4,8 @@ import { getPlatformId } from '../composables/useAuth';
 
 export const createOpenIMRestApi = (): Reqi => {
   const instance = new Reqi(
-    import.meta.env.VITE_OPENIM_API_DOMAIN
-      ? `https://${import.meta.env.VITE_OPENIM_API_DOMAIN}`
+    process.env.VITE_OPENIM_API_DOMAIN
+      ? `https://${process.env.OPENIM_API_DOMAIN}`
       : 'http://localhost:10002'
   );
 

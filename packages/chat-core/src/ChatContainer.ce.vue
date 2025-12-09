@@ -37,12 +37,12 @@ onMounted(async () => {
       saveUserIdToSession(authData.UserID);
     }
 
-    const apiAddr = import.meta.env.VITE_OPENIM_API_DOMAIN
-      ? `https://${import.meta.env.VITE_OPENIM_API_DOMAIN}`
+    const apiAddr = process.env.VITE_OPENIM_API_DOMAIN
+      ? `https://${process.env.VITE_OPENIM_API_DOMAIN}`
       : 'http://localhost:10002';
 
-    const wsAddr = import.meta.env.VITE_OPENIM_WS_DOMAIN
-      ? `wss://${import.meta.env.VITE_OPENIM_WS_DOMAIN}`
+    const wsAddr = process.env.VITE_OPENIM_WS_DOMAIN
+      ? `wss://${process.env.VITE_OPENIM_WS_DOMAIN}`
       : 'ws://localhost:10023';
 
     await IMSDK.login({

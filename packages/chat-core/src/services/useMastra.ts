@@ -257,8 +257,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
     };
   }
 
-  const defaultBaseUrl =
-    import.meta.env.VITE_CHAT_MASTRA_URL || 'http://localhost:4111';
+  const defaultBaseUrl = process.env.CHAT_MASTRA_URL || 'http://localhost:4111';
   const agentId = options.agentId ?? 'chat';
   let chatId = options.chatId; // Use 'let' to allow reassignment
   const baseUrl = options.baseUrl ?? defaultBaseUrl;

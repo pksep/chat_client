@@ -22,7 +22,7 @@ export const getPlatformId = (): number => {
 
 export const useAuth = async (erpToken: string): Promise<AuthResponse> => {
   const response = await fetch(
-    `${import.meta.env.VITE_CHAT_AUTH_API}/chat/token`,
+    `${process.env.CHAT_AUTH_API}/chat/token`,
     {
       method: 'POST',
       headers: {
