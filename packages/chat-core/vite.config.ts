@@ -96,7 +96,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
 
   return {
     build: {
-      outDir: 'build',
+      outDir: baseMode === 'lib' ? 'build/lib' : 'build',
       sourcemap: baseMode !== 'lib' && mode === 'production',
       ...(baseMode === 'lib'
         ? {
