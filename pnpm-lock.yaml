@@ -88,8 +88,8 @@ importers:
         specifier: 3.8.3-patch.10
         version: 3.8.3-patch.10
       '@pksep/reqi':
-        specifier: ^0.0.21
-        version: 0.0.21
+        specifier: ^0.0.25
+        version: 0.0.25
       '@pksep/yui':
         specifier: 0.1.146
         version: 0.1.146(@floating-ui/dom@1.7.4)(@floating-ui/utils@0.2.10)(@tiptap/extensions@3.12.1(@tiptap/core@3.12.1(@tiptap/pm@3.12.1))(@tiptap/pm@3.12.1))(@tiptap/pm@3.12.1)(@types/react@19.2.7)(typescript@5.8.2)(vue@3.5.24(typescript@5.8.2))
@@ -1805,8 +1805,8 @@ packages:
     resolution: {integrity: sha512-QNqXyfVS2wm9hweSYD2O7F0G06uurj9kZ96TRQE5Y9hU7+tgdZwIkbAKc5Ocy1HxEY2kuDQa6cQ1WRs/O5LFKA==}
     engines: {node: ^12.20.0 || ^14.18.0 || >=16.0.0}
 
-  '@pksep/reqi@0.0.21':
-    resolution: {integrity: sha512-SBvS7SshBF23GmDp6ZmLYCo/Gb1cMGod78VRSFflmar4VxnbgWcM1Q/re+HOehib4wyWVeN40OTwupWN4w4qZw==}
+  '@pksep/reqi@0.0.25':
+    resolution: {integrity: sha512-sSed6Susoh0CZfBFcNRit5SruksP+S+uEZKLz2qkY97hsSbOVc8GvWoGY3O1X6b/APWNFwFq4e2jJyVP6zEGlw==}
 
   '@pksep/yui@0.1.146':
     resolution: {integrity: sha512-ps/1AqRBsAvQKhVllJ3ZP3CwbQwatGv0sXasKCx62NZB1uTvqGW++pWSGFx3hivAhLYJCyZEX2klS23Mu0oYFw==}
@@ -2166,10 +2166,6 @@ packages:
   '@rushstack/ts-command-line@5.0.3':
     resolution: {integrity: sha512-bgPhQEqLVv/2hwKLYv/XvsTWNZ9B/+X1zJ7WgQE9rO5oiLzrOZvkIW4pk13yOQBhHyjcND5qMOa6p83t+Z66iQ==}
 
-  '@sep-erp-server/zod-shared@0.0.462':
-    resolution: {integrity: sha512-J/w0FxyGvl3s3BVGlCREmEJu22a9skM9i9bQ4U6heGlZ8SNz97hWQyc25MeJQmqivWqf/hWtrcyIHz6zxkBhEg==}
-    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
-
   '@shoelace-style/animations@1.2.0':
     resolution: {integrity: sha512-avvo1xxkLbv2dgtabdewBbqcJfV0e0zCwFqkPMnHFGbJbBHorRFfMAHh1NG9ymmXn0jW95ibUVH03E1NYXD6Gw==}
 
@@ -2468,9 +2464,6 @@ packages:
 
   '@types/linkify-it@5.0.0':
     resolution: {integrity: sha512-sVDA58zAw4eWAffKOaQH5/5j3XeayukzDk+ewSsnv3p4yJEZHCCzMDiZM8e0OUrRvmpGZ85jf4yDHkHsgBNr9Q==}
-
-  '@types/lodash@4.17.20':
-    resolution: {integrity: sha512-H3MHACvFUEiujabxhaI/ImO6gUrd8oOurg7LQtS7mbwIXA/cUqWrvBsaeJ23aZEPk1TAYkurjfMbSELfoCXlGA==}
 
   '@types/markdown-it@14.1.2':
     resolution: {integrity: sha512-promo4eFwuiW+TfGxhi+0x3czqTYJkG8qB17ZUJiVF10Xm7NLVRSLUsfRTU/6h1e24VvRnXCx+hG7li58lkzog==}
@@ -7478,10 +7471,10 @@ snapshots:
 
   '@pkgr/core@0.2.9': {}
 
-  '@pksep/reqi@0.0.21':
+  '@pksep/reqi@0.0.25':
     dependencies:
-      '@sep-erp-server/zod-shared': 0.0.462
       content-type: 1.0.5
+      lz-string: 1.5.0
 
   '@pksep/yui@0.1.146(@floating-ui/dom@1.7.4)(@floating-ui/utils@0.2.10)(@tiptap/extensions@3.12.1(@tiptap/core@3.12.1(@tiptap/pm@3.12.1))(@tiptap/pm@3.12.1))(@tiptap/pm@3.12.1)(@types/react@19.2.7)(typescript@5.8.2)(vue@3.5.24(typescript@5.8.2))':
     dependencies:
@@ -7809,13 +7802,6 @@ snapshots:
     transitivePeerDependencies:
       - '@types/node'
 
-  '@sep-erp-server/zod-shared@0.0.462':
-    dependencies:
-      '@types/lodash': 4.17.20
-      lodash: 4.17.21
-      lz-string: 1.5.0
-      zod: 3.25.76
-
   '@shoelace-style/animations@1.2.0': {}
 
   '@shoelace-style/localize@3.2.1': {}
@@ -8117,8 +8103,6 @@ snapshots:
   '@types/json5@0.0.29': {}
 
   '@types/linkify-it@5.0.0': {}
-
-  '@types/lodash@4.17.20': {}
 
   '@types/markdown-it@14.1.2':
     dependencies:
