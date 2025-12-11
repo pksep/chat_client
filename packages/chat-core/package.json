@@ -1,6 +1,6 @@
 {
   "name": "@pksep/chat-core",
-  "version": "25.11.2",
+  "version": "25.11.8",
   "type": "module",
   "main": "./build/chat-container.js",
   "types": "./build/chat-container.d.ts",
@@ -29,7 +29,7 @@
     "@mastra/client-js": "^0.12.3",
     "@openim/wasm-client-sdk": "3.8.3-patch.10",
     "@pksep/reqi": "^0.0.21",
-    "@pksep/yui": "0.1.145",
+    "@pksep/yui": "0.1.146",
     "zod": "3"
   },
   "peerDependencies": {

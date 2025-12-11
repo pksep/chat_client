@@ -1,7 +1,7 @@
 import { ref, Ref } from 'vue';
 import { MastraClient } from '@mastra/client-js';
 import { getConfig } from './useConfig';
-import crypto from 'crypto';
+import { generateUUID } from '../utils/generateUUID';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -148,16 +148,6 @@ class ChatDB {
   }
 }
 
-const generateChatId = (): string => {
-  return crypto.randomUUID
-    ? crypto.randomUUID()
-    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-        const r = (Math.random() * 16) | 0;
-        const v = c === 'x' ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-      });
-};
-
 const loadMessages = async (chatId: string): Promise<Message[]> => {
   try {
     const result = await ChatDB.get(chatId);
@@ -251,7 +241,6 @@ const removeMessageLoading = async (
 const useMastra = (options?: UseMastraOptions | false) => {
   if (!options) {
     return {
-      generateChatId,
       messages: ref<Message[]>([]),
       sendMessage: async () => {},
       clearMessages: () => {},
@@ -293,7 +282,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
     // If no chatId, generate one now (first message case)
     if (!chatId) {
-      chatId = generateChatId();
+      chatId = generateUUID();
       // Initialize with empty messages for new chat
       messages.value = [];
       isInitializing.value = false;
@@ -433,7 +422,6 @@ const useMastra = (options?: UseMastraOptions | false) => {
   };
 
   return {
-    generateChatId,
     messages,
     sendMessage,
     clearMessages,
@@ -444,7 +432,6 @@ const useMastra = (options?: UseMastraOptions | false) => {
 export {
   useMastra,
   clearAllData,
-  generateChatId,
   getLastSessionId,
   getOrCreateChatHistory,
   saveUserIdToSession,

@@ -91,8 +91,8 @@ importers:
         specifier: ^0.0.21
         version: 0.0.21
       '@pksep/yui':
-        specifier: 0.1.145
-        version: 0.1.145(@floating-ui/dom@1.7.4)(@floating-ui/utils@0.2.10)(@tiptap/extensions@3.12.1(@tiptap/core@3.12.1(@tiptap/pm@3.12.1))(@tiptap/pm@3.12.1))(@tiptap/pm@3.12.1)(@types/react@19.2.7)(typescript@5.8.2)(vue@3.5.24(typescript@5.8.2))
+        specifier: 0.1.146
+        version: 0.1.146(@floating-ui/dom@1.7.4)(@floating-ui/utils@0.2.10)(@tiptap/extensions@3.12.1(@tiptap/core@3.12.1(@tiptap/pm@3.12.1))(@tiptap/pm@3.12.1))(@tiptap/pm@3.12.1)(@types/react@19.2.7)(typescript@5.8.2)(vue@3.5.24(typescript@5.8.2))
       zod:
         specifier: '3'
         version: 3.25.76
@@ -1808,8 +1808,8 @@ packages:
   '@pksep/reqi@0.0.21':
     resolution: {integrity: sha512-SBvS7SshBF23GmDp6ZmLYCo/Gb1cMGod78VRSFflmar4VxnbgWcM1Q/re+HOehib4wyWVeN40OTwupWN4w4qZw==}
 
-  '@pksep/yui@0.1.145':
-    resolution: {integrity: sha512-w7E1g8A9GikQVlYAfMh3ikhuTJXNY9o3SkHm3e8kcY6HTjNUFntzVb4lp6oc4Soz8R8j+4ZvwTBJnJ+IGp1Tzw==}
+  '@pksep/yui@0.1.146':
+    resolution: {integrity: sha512-ps/1AqRBsAvQKhVllJ3ZP3CwbQwatGv0sXasKCx62NZB1uTvqGW++pWSGFx3hivAhLYJCyZEX2klS23Mu0oYFw==}
     peerDependencies:
       vue: '>=3'
 
@@ -7483,7 +7483,7 @@ snapshots:
       '@sep-erp-server/zod-shared': 0.0.462
       content-type: 1.0.5
 
-  '@pksep/yui@0.1.145(@floating-ui/dom@1.7.4)(@floating-ui/utils@0.2.10)(@tiptap/extensions@3.12.1(@tiptap/core@3.12.1(@tiptap/pm@3.12.1))(@tiptap/pm@3.12.1))(@tiptap/pm@3.12.1)(@types/react@19.2.7)(typescript@5.8.2)(vue@3.5.24(typescript@5.8.2))':
+  '@pksep/yui@0.1.146(@floating-ui/dom@1.7.4)(@floating-ui/utils@0.2.10)(@tiptap/extensions@3.12.1(@tiptap/core@3.12.1(@tiptap/pm@3.12.1))(@tiptap/pm@3.12.1))(@tiptap/pm@3.12.1)(@types/react@19.2.7)(typescript@5.8.2)(vue@3.5.24(typescript@5.8.2))':
     dependencies:
       '@floating-ui/vue': 1.1.9(vue@3.5.24(typescript@5.8.2))
       '@fontsource-variable/inter': 5.2.8

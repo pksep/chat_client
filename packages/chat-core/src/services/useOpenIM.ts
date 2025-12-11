@@ -6,7 +6,7 @@ import {
   updateConversationList
 } from './useConversions';
 import { updateGroupList } from './useGroup';
-import crypto from 'crypto';
+import { generateUUID } from '../utils/generateUUID';
 
 export type IMSDKType = ReturnType<typeof getSDK>;
 
@@ -141,7 +141,7 @@ const setupOpenIM = (): void => {
 export const uploadFile = async (file: File) => {
   const formData = new FormData();
   formData.append('file', file);
-  const clientUUID = crypto.randomUUID().toString();
+  const clientUUID = generateUUID();
 
   const res = await IMSDK.uploadFile({
     name: clientUUID + '_' + file.name,
@@ -166,7 +166,7 @@ export const sendMessageIM = async ({
   type?: 'text' | 'file' | 'image';
   file?: File;
 }): Promise<void> => {
-  const clientMsgID = crypto.randomUUID();
+  const clientMsgID = generateUUID();
 
   try {
     let createResp: any;
@@ -180,7 +180,7 @@ export const sendMessageIM = async ({
       createResp = await IMSDK.createFileMessageByFile({
         filePath: file.name, // можно использовать имя файла
         fileName: file.name,
-        uuid: crypto.randomUUID(),
+        uuid: generateUUID(),
         sourceUrl: '', // можно пустой, если нет заранее загруженного URL
         fileSize: file.size,
         fileType: file.type,
@@ -191,7 +191,7 @@ export const sendMessageIM = async ({
 
       // Подготавливаем данные PicBaseInfo
       const picBaseInfo = {
-        uuid: crypto.randomUUID(),
+        uuid: generateUUID(),
         type: file.type,
         size: file.size,
         width: 300, // можно определить, если нужно

@@ -114,7 +114,6 @@ import { ContentEditor } from '@pksep/yui';
 import {
   removeMessageLoading,
   useMastra,
-  generateChatId
 } from '../services/useMastra';
 import {
   getMessagesByConversationId,
@@ -124,6 +123,7 @@ import {
 } from '../services/useOpenIM';
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
+import { generateUUID } from '../utils/generateUUID';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -277,7 +277,7 @@ const isNewDate = (index: number, isMastra: boolean = false) => {
 
 onMounted(() => {
   if (state.chatId === null && props.chapter === 'ai') {
-    state.chatId = generateChatId();
+    state.chatId = generateUUID();
   }
   if ((aiMessages?.value && aiMessages.value.length) || state.messages.length) {
     scrollToBottom();
