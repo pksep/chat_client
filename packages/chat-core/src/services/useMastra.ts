@@ -1,6 +1,7 @@
 import { ref, Ref } from 'vue';
 import { MastraClient } from '@mastra/client-js';
 import { getConfig } from './useConfig';
+import crypto from "crypto";
 
 interface Message {
   role: 'user' | 'assistant';

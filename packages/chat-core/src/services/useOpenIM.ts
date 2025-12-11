@@ -6,6 +6,7 @@ import {
   updateConversationList
 } from './useConversions';
 import { updateGroupList } from './useGroup';
+import crypto from 'crypto';
 
 export type IMSDKType = ReturnType<typeof getSDK>;
 
