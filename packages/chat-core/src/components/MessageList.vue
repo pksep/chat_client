@@ -125,7 +125,7 @@ import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
 import { ContentEditor } from '@pksep/yui';
 import { useMastra } from '../services/useMastra';
-import { removeMessageLoading } from '../services/useChatDb';
+import { generateChatId, removeMessageLoading } from '../services/useChatDb';
 import {
   getMessagesByConversationId,
   getSavedMessages,

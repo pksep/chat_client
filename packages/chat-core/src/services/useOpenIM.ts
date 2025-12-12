@@ -12,6 +12,7 @@ import {
   Message as ProcessedMessage
 } from '../utils/messageProcessor';
 import type { OpenIMMessage } from '../types/messages';
+import { generateUUID } from '../utils/generateUUID';
 
 export type IMSDKType = ReturnType<typeof getSDK>;
 
@@ -217,23 +218,11 @@ export const sendMessageIM = async ({
     } else if (type === 'file') {
       if (!file) throw new Error('File is required for file message');
 
-<<<<<<< HEAD
-      // Используем createFileMessageByFile
-      createResp = await IMSDK.createFileMessageByFile({
-        filePath: file.name, // можно использовать имя файла
-        fileName: file.name,
-        uuid: generateUUID(),
-        sourceUrl: '', // можно пустой, если нет заранее загруженного URL
-        fileSize: file.size,
-        fileType: file.type,
-        file: file
-      });
-=======
       try {
         createResp = await IMSDK.createFileMessageByFile({
           filePath: file.name,
           fileName: file.name,
-          uuid: crypto.randomUUID(),
+          uuid: generateUUID(),
           sourceUrl: '',
           fileSize: file.size,
           fileType: file.type,
@@ -262,7 +251,6 @@ export const sendMessageIM = async ({
 
         throw error;
       }
->>>>>>> main
     } else if (type === 'image') {
       if (!file) throw new Error('File is required for image message');
 

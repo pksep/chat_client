@@ -3,10 +3,10 @@ import { MastraClient } from '@mastra/client-js';
 import {
   saveMessages,
   getOrCreateChatHistory,
+  generateChatId
 } from './useChatDb';
 import { AIMessage } from '../types/messages';
 import { getConfig } from './useConfig';
-import { generateUUID } from '../utils/generateUUID';
 
 type Message = AIMessage;
 
@@ -68,12 +68,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
     if (!input.trim()) return;
 
     if (!chatId) {
-<<<<<<< HEAD
-      chatId = generateUUID();
-      // Initialize with empty messages for new chat
-=======
       chatId = generateChatId();
->>>>>>> main
       messages.value = [];
       isInitializing.value = false;
     }
@@ -330,18 +325,4 @@ const useMastra = (options?: UseMastraOptions | false) => {
   };
 };
 
-<<<<<<< HEAD
-export {
-  useMastra,
-  clearAllData,
-  getLastSessionId,
-  getOrCreateChatHistory,
-  saveUserIdToSession,
-  hasUserIdInSession,
-  removeMessageLoading,
-  loadMessages,
-  saveMessages
-};
-=======
 export { useMastra, generateChatId, saveUserIdToSession, hasUserIdInSession };
->>>>>>> main
