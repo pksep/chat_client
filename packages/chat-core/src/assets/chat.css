@@ -16,6 +16,7 @@ p.chat__nothing-paragraph {
 }
 
 .chat {
+  font-family: 'Inter Variable', sans-serif;
   --basic-height: calc(var(--default-height) - 65px);
   display: grid;
   overflow-y: hidden;
@@ -38,7 +39,7 @@ p.chat__nothing-paragraph {
 .chat__message-bubble {
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 5px;
 }
 
 .date-divider {
@@ -61,6 +62,14 @@ p.chat__nothing-paragraph {
 .menu__user-assistant {
   &:hover,
   &.menu__user-assistant--active {
+    background-color: var(--blue15);
+  }
+}
+
+.menu-user__item {
+  &:hover,
+  &.menu-user__item--active {
+    cursor: pointer;
     background-color: var(--blue15);
   }
 }

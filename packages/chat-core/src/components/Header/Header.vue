@@ -178,7 +178,6 @@ const popoverRule = computed(
 const getPopoverOptions = computed(() => {
   const popoverArray = [];
   if (props.chapter !== 'ai') {
-    console.log('notification', state.statusNotification.label);
     const notificationLabels = {
       value: state.statusNotification.label,
       function: handleNotificationToggle

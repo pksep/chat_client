@@ -105,8 +105,15 @@
           >
             <template v-for="(user, index) in item.items" :key="index">
               <li
-                class="menu__user-avatar"
+                :class="[
+                  'menu-user__item',
+                  {
+                    'menu-user__item--active':
+                      user.id === state.selectedContactId
+                  }
+                ]"
                 :data-testid="`${props.dataTestid}-Menu-CollapsedAvatar${index + 1}`"
+                @click.stop="unmountContactClick(user)"
               >
                 <Avatar
                   :url="user.avatarUrl"

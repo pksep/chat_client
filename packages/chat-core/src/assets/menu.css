@@ -49,7 +49,7 @@
     'profile collapse';
 }
 
-.menu__user-avatar {
+.menu-user__item {
   --size-avatar: 30px;
   padding: 10px;
 }
@@ -72,6 +72,7 @@ button.menu__user-profile-collapse {
 }
 
 .menu__user-profile-collapse-icon {
+  color: #b8b8b8;
   background-color: var(--white);
 }
 
@@ -81,6 +82,9 @@ button.menu__user-profile-collapse {
   align-self: start;
   align-items: center;
   gap: 10px;
+  &:hover {
+    cursor: pointer;
+  }
 }
 
 .menu__user-assistant-title {
