@@ -7,12 +7,11 @@ import { IChatContainerConfig } from './components/interfaces/interfaces';
 import './index';
 
 const config: IChatContainerConfig = {
-  CHAT_BASE_MODE: import.meta.env.VITE_CHAT_BASE_MODE,
-  CHAT_AUTH_API: import.meta.env.VITE_CHAT_AUTH_API,
-  CHAT_MASTRA_URL: import.meta.env.VITE_CHAT_MASTRA_URL,
-  CHAT_OPENIM_API_DOMAIN: import.meta.env.VITE_CHAT_OPENIM_API_DOMAIN,
-  CHAT_OPENIM_WS_DOMAIN: import.meta.env.VITE_CHAT_OPENIM_WS_DOMAIN
+  CHAT_AUTH_API: import.meta.env.VITE_AUTH_API,
+  CHAT_MASTRA_URL: import.meta.env.VITE_MASTRA_URL,
+  CHAT_OPENIM_API_DOMAIN: import.meta.env.VITE_OPENIM_API_DOMAIN,
+  CHAT_OPENIM_WS_DOMAIN: import.meta.env.VITE_OPENIM_WS_DOMAIN
 };
 
-const token = import.meta.env.VITE_CHAT_ERP_TOKEN;
+const token = import.meta.env.VITE_ERP_TOKEN;
 </script>
