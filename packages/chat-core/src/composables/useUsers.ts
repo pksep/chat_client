@@ -19,7 +19,9 @@ export const fetchAllUsers = async (opts?: {
   try {
     const token = getAuthToken();
     if (!token) {
-      throw new Error('No authentication token found in cookies');
+      console.warn('No authentication token found, using empty user list');
+      users.value = [];
+      return users.value;
     }
 
     const api = useOpenIMRestApi();
@@ -64,7 +66,7 @@ export const fetchAllUsers = async (opts?: {
   } catch (err) {
     error.value = (err as Error).message;
     console.error('Failed to fetch users:', error.value);
-    return [];
+    return users.value || [];
   } finally {
     loading.value = false;
   }

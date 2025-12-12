@@ -99,11 +99,11 @@
           />
         </details>
         <template v-if="isCollapse">
-          <template v-for="(user, index) in state.contactList" :key="index">
-            <ul
-              class="menu__user"
-              :data-testid="`${props.dataTestid}-Menu-CollapsedUser${index + 1}`"
-            >
+          <ul
+            class="menu__user"
+            :data-testid="`${props.dataTestid}-Menu-CollapsedUser${index + 1}`"
+          >
+            <template v-for="(user, index) in item.items" :key="index">
               <li
                 class="menu__user-avatar"
                 :data-testid="`${props.dataTestid}-Menu-CollapsedAvatar${index + 1}`"
@@ -114,11 +114,8 @@
                   :data-testid="`${props.dataTestid}-Menu-UserAvatar${index + 1}`"
                 />
               </li>
-            </ul>
-            <Line
-              :data-testid="`${props.dataTestid}-Menu-CollapsedLine${index + 1}`"
-            />
-          </template>
+            </template>
+          </ul>
         </template>
       </template>
     </div>
@@ -140,7 +137,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, reactive } from 'vue';
+import { computed, onMounted, reactive, watch } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_XL } from '../utils/constants';
 import Line from './UI/Line.vue';
@@ -158,18 +155,14 @@ import ContactList from './ContactList/ContactList.vue';
 import type {
   IContactProps,
   IMenuEmits,
-  IUserProps
+  IMenuProps
 } from './interfaces/interfaces';
 import {
   fetchConversationList,
-  getConversationList
+  getConversationList,
+  onSDKReady
 } from '../services/useConversions';
 import { getGroupList } from '../services/useGroup';
-
-interface IMenuProps {
-  user: IUserProps;
-  dataTestid?: string;
-}
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: () => 'Menu'
@@ -187,6 +180,7 @@ const emits = defineEmits<IMenuEmits>();
 
 const { state: isCollapse, toggle } = useResizeState({
   breakpoint: MAX_W_XL,
+  storageKey: 'menu-collapse',
   onStateChange: val => {
     emits('unmount-collapse', val);
   }
@@ -195,6 +189,15 @@ const { state: isCollapse, toggle } = useResizeState({
 const handleCollapse = (): void => {
   toggle();
 };
+
+watch(
+  () => props.chapter,
+  () => {
+    if (props.chapter !== state.chapter) {
+      state.chapter = props.chapter;
+    }
+  }
+);
 
 const unmountContactClick = (contact: IContactProps | string): void => {
   state.selectedContactId = typeof contact === 'string' ? contact : contact.id;
@@ -221,7 +224,7 @@ const unmountContactClick = (contact: IContactProps | string): void => {
       contact: {
         ...contact,
         id: contact.userId,
-        conversionId: contact.id || ''
+        conversationId: contact.id || ''
       }
     });
   }
@@ -229,7 +232,8 @@ const unmountContactClick = (contact: IContactProps | string): void => {
 
 const menuClasses = computed(() => [
   'menu',
-  { 'menu--collapse': isCollapse.value }
+  { 'menu--collapse': isCollapse.value },
+  props.class
 ]);
 
 const aiChapterClasses = computed(() => [
@@ -273,6 +277,6 @@ onMounted(() => {
     state.installPrompt = event;
   });
 
-  fetchConversationList();
+  onSDKReady(fetchConversationList);
 });
 </script>

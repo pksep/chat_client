@@ -5,6 +5,7 @@
     viewBox="0 0 48 48"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
+    :data-testid="`${props.dataTestid}-FileIcon-Svg`"
   >
     <rect
       x="4"
@@ -21,7 +22,12 @@
   </svg>
 </template>
 <script setup lang="ts">
-const props = defineProps<{ isMeSender: boolean }>();
+const props = withDefaults(
+  defineProps<{ isMeSender: boolean; dataTestid?: string }>(),
+  {
+    dataTestid: () => 'FileIcon'
+  }
+);
 </script>
 
 <style scoped></style>

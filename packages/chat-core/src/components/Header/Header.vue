@@ -33,34 +33,38 @@
       class="chat__header-profile"
       avatar-alt="user-profile-alt"
       v-bind="props.contact"
+      :members-length="menuInfoState.contacts.length"
       :data-testid="`${props.dataTestid}-Header-UserProfile`"
       v-else
     />
     <div
       class="chat__header-buttons"
-      v-if="!isMobile"
       :data-testid="`${props.dataTestid}-Header-ButtonsContainer`"
     >
-      <Search
-        v-if="state.isSearchInputEnable"
-        class="chat__header-search"
-        @click.stop
-        :data-testid="`${props.dataTestid}-Header-SearchInput`"
-      />
-      <Button
-        v-if="!state.isSearchInputEnable"
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        @click.stop="showSearch"
-        :data-testid="`${props.dataTestid}-Header-SearchButton`"
-      >
-        <Icon
-          class="small-icon"
-          :name="IconNameEnum.search"
-          :data-testid="`${props.dataTestid}-Header-SearchIcon`"
+      <template v-if="!isMobile">
+        <Search
+          v-if="state.isSearchInputEnable"
+          class="chat__header-search"
+          @click.stop
+          :data-testid="`${props.dataTestid}-Header-SearchInput`"
         />
-      </Button>
+        <Button
+          v-if="!state.isSearchInputEnable"
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          @click.stop="showSearch"
+          :data-testid="`${props.dataTestid}-Header-SearchButton`"
+        >
+          <Icon
+            class="small-icon"
+            :name="IconNameEnum.search"
+            :data-testid="`${props.dataTestid}-Header-SearchIcon`"
+          />
+        </Button>
+      </template>
       <Popover
+        v-if="!popoverRule"
+        class="chat__header-popover"
         @click.stop
         :options="getPopoverOptions"
         isWCUse
@@ -75,52 +79,22 @@
     @unmount-close="handleCloseMobileInfoModal"
     :data-testid="`${props.dataTestid}-Header-MobileModal`"
   >
-    <div
-      class="modal-info-mobile__start"
-      :data-testid="`${props.dataTestid}-Header-ModalStartContainer`"
-    >
-      <Avatar
-        is-icon
-        class="modal-info-mobile__avatar"
-        :data-testid="`${props.dataTestid}-Header-ModalAvatar`"
-      />
-      <NewChatInformationForm
-        :name="state.group.name"
-        :data-testid="`${props.dataTestid}-Header-InformationForm`"
-      >
-        <template #button> {{}} </template>
-      </NewChatInformationForm>
-    </div>
-    <div
-      class="modal-info-mobile__end"
-      :data-testid="`${props.dataTestid}-Header-ModalEndContainer`"
-    >
-      <MenuInfoButtons
-        :data-testid="`${props.dataTestid}-Header-MenuInfoButtons`"
-      />
-      <p
-        class="modal-info-mobile__end--paragraph"
-        :data-testid="`${props.dataTestid}-Header-ParticipantsLabel`"
-      >
-        Участники:
-      </p>
-      <ContactListInModal
-        :contacts="state.group.members"
-        class="modal-info-mobile__contact-list"
-        :data-testid="`${props.dataTestid}-Header-ContactListInModal`"
-      />
-    </div>
+    <MobileChatInfo
+      :model-value="menuInfoState.information"
+      :members="menuInfoState.contacts"
+      @update:model-value="handleUpdateInformation"
+      :data-testid="props.dataTestid"
+    />
   </MobileModal>
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive } from 'vue';
+import { computed, onMounted, reactive, watch } from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import MobileModal from '../UI/MobileModal.vue';
 import {
-  Avatar,
   Button,
   Icon,
   IconNameEnum,
@@ -132,30 +106,45 @@ import {
 
 import type { IHeaderProps, IHeaderEmits } from '../interfaces/interfaces';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
-import NewChatInformationForm from '../NewChat/NewChatInformationForm.vue';
-import MenuInfoButtons from '../MenuInfoButtons.vue';
-import ContactListInModal from '../ContactList/ContactListInModal.vue';
+import MobileChatInfo from './MobileChatInfo.vue';
+import { useMenuInfo } from '../../composables/useMenuInfo';
+import { useInformationMenu } from '../../composables/useInformationMenu';
+import { fetchGroupMembers } from '../../services/useGroup';
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
   dataTestid: () => 'Header'
 });
 
+const emits = defineEmits<IHeaderEmits>();
+
 const state = reactive({
+  menuInfo: null,
   openMobileInfoModal: false,
   isSearchInputEnable: false,
-  group: {
-    name: '',
-    members: []
-  },
   statusNotification: {
-    label: 'Выкл. уведомление',
+    label: 'Выкл. уведомления',
     enabled: false
   }
 });
 
-const { state: isMobile } = useResizeState(MAX_W_MD);
+const {
+  state: menuInfoState,
+  initializeMenuInfo,
+  handleUpdateInformation
+} = useMenuInfo(
+  {
+    ...props,
+    open: state.openMobileInfoModal,
+    isEnabled: props.chapter !== 'ai'
+  },
+  emits
+);
 
-const emits = defineEmits<IHeaderEmits>();
+const modelInfo = computed(() => menuInfoState.information);
+
+const { muteGroupInfo, getMuteStatus } = useInformationMenu(modelInfo);
+
+const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const showSearch = (): void => {
   state.isSearchInputEnable = true;
@@ -165,10 +154,16 @@ const handleCloseMobileInfoModal = (): void => {
   state.openMobileInfoModal = false;
 };
 
-const handleClickHeader = (): void => {
+const handleClickHeader = async (): Promise<void> => {
   if (props.chapter === 'ai') return;
+  if (!props.contact?.groupId) return;
   if (isMobile.value) {
     state.openMobileInfoModal = true;
+    await initializeMenuInfo({
+      ...props,
+      isEnabled: true,
+      open: state.openMobileInfoModal
+    });
     emits('unmount-click');
     return;
   }
@@ -176,33 +171,29 @@ const handleClickHeader = (): void => {
   emits('unmount-click');
 };
 
+const popoverRule = computed(
+  () => isMobile.value && (props.contact?.groupId || props.chapter === 'ai')
+);
+
 const getPopoverOptions = computed(() => {
   const popoverArray = [];
   if (props.chapter !== 'ai') {
-    popoverArray.push(
-      {
-        value: state.statusNotification.label,
-        function: () => {
-          if (state.statusNotification.enabled) {
-            state.statusNotification = {
-              label: 'Выкл. уведомление',
-              enabled: false
-            };
-            emits('unmount-notification', state.statusNotification.label);
-            return;
-          }
-          state.statusNotification.label = 'Вкл. уведомления';
-          state.statusNotification.enabled = true;
-          emits('unmount-notification', state.statusNotification.label);
-        }
-      },
-      {
+    console.log('notification', state.statusNotification.label);
+    const notificationLabels = {
+      value: state.statusNotification.label,
+      function: handleNotificationToggle
+    };
+    if (!props.contact?.groupId) {
+      popoverArray.push(notificationLabels);
+    } else {
+      popoverArray.push(notificationLabels);
+      popoverArray.push({
         value: 'Информация',
         function: () => {
           emits('unmount-information');
         }
-      }
-    );
+      });
+    }
   } else {
     popoverArray.push({
       value: 'Очистить историю',
@@ -214,7 +205,59 @@ const getPopoverOptions = computed(() => {
   return popoverArray;
 });
 
+watch(
+  () => props.chapter,
+  async newChapter => {
+    if (props.contact?.groupId) {
+      menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
+    } else {
+      menuInfoState.contacts = [];
+    }
+
+    if (newChapter !== 'ai') {
+      await updateNotificationStatus();
+    }
+  }
+);
+
+const updateNotificationStatus = async (): Promise<void> => {
+  try {
+    const isMuted = await getMuteStatus(props.contact);
+    if (isMuted) {
+      state.statusNotification = {
+        label: 'Вкл. уведомления',
+        enabled: false
+      };
+    } else {
+      state.statusNotification = {
+        label: 'Выкл. уведомления',
+        enabled: true
+      };
+    }
+  } catch (error) {
+    console.error('Failed to update notification status:', error);
+    state.statusNotification = {
+      label: 'Выкл. уведомления',
+      enabled: true
+    };
+  }
+};
+
 const handleExit = (): void => {
   emits('unmount-exit');
 };
+
+const handleNotificationToggle = async (): Promise<void> => {
+  const shouldMute = !state.statusNotification.enabled;
+  await muteGroupInfo(shouldMute, props.contact);
+
+  await updateNotificationStatus();
+  emits('unmount-notification', state.statusNotification.label);
+};
+
+onMounted(async () => {
+  if (props.contact?.groupId) {
+    menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
+  }
+});
 </script>

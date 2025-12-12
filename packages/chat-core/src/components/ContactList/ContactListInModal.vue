@@ -1,6 +1,10 @@
 <template>
-  <section :class="['menu__info-users', props.class]">
+  <section
+    :class="['menu__info-users', props.class]"
+    :data-testid="`${props.dataTestid}-ContactListInModal-Container`"
+  >
     <Button
+      v-if="props.showAddButton"
       :type="ButtonTypeEnum.secondary"
       :class="[
         'button-menu__info menu__info-add-user',
@@ -8,12 +12,20 @@
       ]"
       :size="SizesEnum.large"
       @click="addUser"
+      :data-testid="`${props.dataTestid}-ContactListInModal-AddButton`"
     >
       <Icon :name="IconNameEnum.addUser" class="menu__info-add-user-icon" />
       Добавить участника
     </Button>
-    <ul :class="['menu__info-users-list', props.listClass ?? '']">
-      <li v-for="(user, index) in props.contacts" :key="index">
+    <ul
+      :class="['menu__info-users-list', props.listClass ?? '']"
+      :data-testid="`${props.dataTestid}-ContactListInModal-List`"
+    >
+      <li
+        v-for="(user, index) in props.contacts"
+        :key="index"
+        :data-testid="`${props.dataTestid}-ContactListInModal-Item${index + 1}`"
+      >
         <template v-if="user">
           <UserProfile
             avatar-alt="avatar of user"
@@ -21,12 +33,14 @@
             :avatar-url="user.avatarUrl"
             :tabel="user.tabel"
             :nickname="user.nickname"
+            :dataTestid="`${props.dataTestid}-ContactListInModal-UserProfile${index + 1}`"
             @unmount-click="openActivePopover(user.id.toString(), $event)"
           />
           <ContextMenu
             :visible="isOpen[user.id.toString()]"
             :position="position"
             @unmount-close="closeActivePopover(user.id.toString())"
+            :data-testid="`${props.dataTestid}-ContactListInModal-ContextMenu${index + 1}`"
           >
             <template #default>
               <Button
@@ -34,6 +48,7 @@
                 :type="ButtonTypeEnum.ghost"
                 :size="SizesEnum.little"
                 @click="closeActivePopover(user.id.toString())"
+                :data-testid="`${props.dataTestid}-ContactListInModal-RemoveButton${index + 1}`"
               >
                 Удалить из канала
               </Button>
@@ -46,6 +61,7 @@
   <NewContactModal
     :contacts="props.contacts"
     :open="newContactOpen"
+    :dataTestid="`${props.dataTestid}-ContactListInModal-NewContactModal`"
     @unmount-close="closeContactModal"
   />
 </template>
@@ -66,6 +82,7 @@ import { useContextMenu } from '../../composables/useContextMenu';
 import { IContactListProps } from './interfaces/contact-list';
 
 const props = withDefaults(defineProps<IContactListProps>(), {
+  showAddButton: true,
   contacts: () => [
     {
       id: '1',
@@ -73,7 +90,8 @@ const props = withDefaults(defineProps<IContactListProps>(), {
       nickname: 'jd',
       avatarUrl: '/avatar.jpg'
     }
-  ]
+  ],
+  dataTestid: () => 'ContactListInModal'
 });
 
 const emits = defineEmits<{
@@ -87,7 +105,6 @@ const newContactOpen = ref(false);
 
 const addUser = (): void => {
   emits('unmount-click-add-button');
-  // newContactOpen.value = true;
 };
 
 const closeContactModal = (): void => {

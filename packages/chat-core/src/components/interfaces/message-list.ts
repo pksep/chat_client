@@ -5,6 +5,5 @@ export interface IMessageListProps {
   contacts?: IContactProps[];
   baseUrl?: string;
   chapter?: string | null;
-  contactId?: string;
-  conversionId?: string;
+  contact?: IContactProps | null;
 }

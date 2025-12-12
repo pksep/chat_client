@@ -15,15 +15,20 @@
     border-bottom-color: var(--border-grey);
     width: var(--default-width);
   }
-  button.header-menu__button {
-    font-size: 16px;
+  li.header-menu__item {
     padding: 8px 14px;
-    font-weight: bold;
-    &.header-menu__button--active {
-      color: var(--blue1);
+
+    &.header-menu__item--active {
+      & button {
+        color: var(--blue1);
+      }
       border-bottom-style: solid;
       border-bottom-width: 4px;
       border-bottom-color: var(--blue1);
     }
+  }
+  button.header-menu__button {
+    font-size: 16px;
+    font-weight: bold;
   }
 }

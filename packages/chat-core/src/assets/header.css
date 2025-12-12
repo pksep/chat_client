@@ -56,6 +56,9 @@ button.button-yui-kit {
       }
     }
   }
+  .chat__header-buttons {
+    margin-left: auto;
+  }
   .chat__header-search {
     min-width: 100px;
   }

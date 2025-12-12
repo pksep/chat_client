@@ -6,12 +6,14 @@ import {
   updateConversationList
 } from './useConversions';
 import { updateGroupList } from './useGroup';
-import { generateUUID } from '../utils/generateUUID';
+import {
+  generateConversationId,
+  processIncomingMessage,
+  Message as ProcessedMessage
+} from '../utils/messageProcessor';
+import type { OpenIMMessage } from '../types/messages';
 
 export type IMSDKType = ReturnType<typeof getSDK>;
-
-// Храним единственный экземпляр
-// Экспортируем singleton IMSDK
 
 let instance: IMSDKType | null = null;
 
@@ -26,27 +28,16 @@ const IMSDK: IMSDKType = (() => {
   return instance;
 })();
 
-// Защита от дубликатов при Hot Module Reload (Vite)
-// Не уничтожаем wasm при dispose — иначе SDK ломается
-
 if (import.meta.hot) {
-  import.meta.hot.accept(() => {
-    // console.log('[IMSDK] HMR: module hot reloaded (singleton preserved)');
-  });
+  import.meta.hot.accept(() => {});
 
-  import.meta.hot.dispose(() => {
-    // console.log('[IMSDK] HMR: dispose — SKIPPED (do not reset instance)');
-  });
+  import.meta.hot.dispose(() => {});
 }
 
 const setupOpenIM = (): void => {
-  IMSDK.on(CbEvents.OnConnecting, () => {
-    console.debug('[OpenIM] Connecting...');
-  });
+  IMSDK.on(CbEvents.OnConnecting, () => {});
 
-  IMSDK.on(CbEvents.OnConnectSuccess, () => {
-    console.debug('[OpenIM] Connected successfully!');
-  });
+  IMSDK.on(CbEvents.OnConnectSuccess, () => {});
 
   IMSDK.on(CbEvents.OnConnectFailed, err => {
     console.error('[OpenIM] Connection failed:', err);
@@ -58,62 +49,44 @@ const setupOpenIM = (): void => {
   });
 
   IMSDK.on(CbEvents.OnConversationChanged, ev => {
-    updateConversationList(ev.data.filter(item => !item.groupID) || []);
-    updateGroupList(ev.data.filter(item => !!item.groupID) || []);
-  });
-
-  // check all events for debugging
-  Object.values(CbEvents).forEach(eventName => {
-    IMSDK.on(eventName, (data: any) => {
-      console.debug(`[OpenIM Event] ${eventName}:`, data);
-    });
+    const data = ev.data || [];
+    updateConversationList(data.filter(item => !item.groupID));
+    updateGroupList(data.filter(item => !!item.groupID));
   });
 
   IMSDK.on(CbEvents.OnRecvNewMessages, evt => {
     try {
-      const payload = evt?.data as any;
+      const payload = evt?.data;
       if (!payload) return;
 
-      let list: any[] = [];
+      let list: ProcessedMessage[] = [];
 
       if (Array.isArray(payload)) {
-        list = payload;
-      } else if (Array.isArray(payload.messageList)) {
-        list = payload.messageList;
+        list = payload as ProcessedMessage[];
+      } else if (
+        (payload as any)?.messageList &&
+        Array.isArray((payload as any).messageList)
+      ) {
+        list = (payload as any).messageList;
       } else {
-        list = [payload];
+        list = [payload as ProcessedMessage];
       }
 
-      list.forEach((m: any) => {
-        // --- check for group creation/update ---
-        if (m.contentType === 1501 && m.notificationElem?.detail) {
-          const detail = JSON.parse(m.notificationElem.detail);
+      if (!Array.isArray(list)) {
+        console.warn('[OpenIM] Unexpected message format:', payload);
+        return;
+      }
 
-          const members = detail.memberList || [];
-          const opUser = detail.opUser;
+      list.forEach((message: ProcessedMessage) => {
+        if (!message) return;
 
-          // если только один участник и operationTime ≈ createTime => создание
-          if (
-            members.length === 1 &&
-            detail.group?.createTime === detail.operationTime
-          ) {
-            console.log(
-              `Group created: ${detail.group.groupName} by ${opUser.nickname}`
-            );
-            return; // пропускаем appendMessageToLocal
-          } else {
-            console.log(`Group updated: ${detail.group.groupName}`);
-            return; // пропускаем appendMessageToLocal
-          }
+        const processedMessage = processIncomingMessage(message);
+        if (!processedMessage) {
+          return;
         }
 
-        // --- обычные сообщения ---
-        const [smallerUserID, largerUserID] = [m.sendID, m.recvID].sort();
-        const convId = m.groupID
-          ? `sg_${m.groupID}`
-          : `si_${smallerUserID}_${largerUserID}`;
-
-        appendMessageToLocal(convId, m);
+        const convId = generateConversationId(processedMessage);
+        appendMessageToLocal(convId, processedMessage as OpenIMMessage);
       });
     } catch (e) {
       console.error('[OpenIM] Failed to process incoming message event:', e);
@@ -127,7 +100,6 @@ const setupOpenIM = (): void => {
       readTime: number;
     }>;
     receipts.forEach(r => {
-      // mark the message with clientMsgID in conversationID as “read by other”
       const msgs = getSavedMessages(r.conversationID);
       const idx = msgs.findIndex(m => m.clientMsgID === r.clientMsgID);
       if (idx >= 0) {
@@ -143,14 +115,38 @@ export const uploadFile = async (file: File) => {
   formData.append('file', file);
   const clientUUID = generateUUID();
 
-  const res = await IMSDK.uploadFile({
-    name: clientUUID + '_' + file.name,
-    contentType: file.type,
-    uuid: clientUUID,
-    file: file
-  });
+  try {
+    const res = await IMSDK.uploadFile({
+      name: clientUUID + '_' + file.name,
+      contentType: file.type,
+      uuid: clientUUID,
+      file: file
+    });
 
-  return encodeURI(res.data.url);
+    return encodeURI(res.data.url);
+  } catch (error) {
+    const errorDetails = {
+      error: error,
+      operation: 'uploadFile',
+      fileName: file.name,
+      fileSize: file.size,
+      timestamp: new Date().toISOString(),
+      operationID: error?.operationID || error?.data?.operationID || null,
+      event: error?.event || error?.data?.event || null,
+      errorMessage: error?.errorMessage || error?.message || 'Unknown error'
+    };
+
+    console.error('[OpenIM] Failed to upload file:', errorDetails);
+
+    if (error?.operationID) {
+      console.info(`Operation ID: ${error.operationID}`);
+    }
+    if (error?.event) {
+      console.info(`Event: ${error.event}`);
+    }
+
+    throw error;
+  }
 };
 
 export const sendMessageIM = async ({
@@ -168,14 +164,60 @@ export const sendMessageIM = async ({
 }): Promise<void> => {
   const clientMsgID = generateUUID();
 
+  if (!to && !groupId) {
+    const error = new Error(
+      'Either "to" (for individual chat) or "groupId" (for group chat) must be provided'
+    );
+    const errorDetails = {
+      error: error,
+      operation: 'sendMessage',
+      to,
+      groupId,
+      message: message || '',
+      type,
+      timestamp: new Date().toISOString(),
+      errorMessage: error.message
+    };
+
+    console.error(
+      '[OpenIM] Cannot send message: invalid parameters:',
+      errorDetails
+    );
+    throw error;
+  }
+
   try {
     let createResp: any;
 
     if (type === 'text') {
-      createResp = await IMSDK.createTextMessage(message || '');
+      try {
+        createResp = await IMSDK.createTextMessage(message || '');
+      } catch (error) {
+        const errorDetails = {
+          error: error,
+          operation: 'createTextMessage',
+          message: message || '',
+          timestamp: new Date().toISOString(),
+          operationID: error?.operationID || error?.data?.operationID || null,
+          event: error?.event || error?.data?.event || null,
+          errorMessage: error?.errorMessage || error?.message || 'Unknown error'
+        };
+
+        console.error('[OpenIM] Failed to create text message:', errorDetails);
+
+        if (error?.operationID) {
+          console.info(`Operation ID: ${error.operationID}`);
+        }
+        if (error?.event) {
+          console.info(`Event: ${error.event}`);
+        }
+
+        throw error;
+      }
     } else if (type === 'file') {
       if (!file) throw new Error('File is required for file message');
 
+<<<<<<< HEAD
       // Используем createFileMessageByFile
       createResp = await IMSDK.createFileMessageByFile({
         filePath: file.name, // можно использовать имя файла
@@ -186,26 +228,84 @@ export const sendMessageIM = async ({
         fileType: file.type,
         file: file
       });
+=======
+      try {
+        createResp = await IMSDK.createFileMessageByFile({
+          filePath: file.name,
+          fileName: file.name,
+          uuid: crypto.randomUUID(),
+          sourceUrl: '',
+          fileSize: file.size,
+          fileType: file.type,
+          file: file
+        });
+      } catch (error) {
+        const errorDetails = {
+          error: error,
+          operation: 'createFileMessageByFile',
+          fileName: file.name,
+          fileSize: file.size,
+          timestamp: new Date().toISOString(),
+          operationID: error?.operationID || error?.data?.operationID || null,
+          event: error?.event || error?.data?.event || null,
+          errorMessage: error?.errorMessage || error?.message || 'Unknown error'
+        };
+
+        console.error('[OpenIM] Failed to create file message:', errorDetails);
+
+        if (error?.operationID) {
+          console.info(`Operation ID: ${error.operationID}`);
+        }
+        if (error?.event) {
+          console.info(`Event: ${error.event}`);
+        }
+
+        throw error;
+      }
+>>>>>>> main
     } else if (type === 'image') {
       if (!file) throw new Error('File is required for image message');
 
-      // Подготавливаем данные PicBaseInfo
       const picBaseInfo = {
         uuid: generateUUID(),
         type: file.type,
         size: file.size,
-        width: 300, // можно определить, если нужно
+        width: 300,
         height: 215,
-        url: '' // при отправке файла URL может быть пустой
+        url: ''
       };
 
-      createResp = await IMSDK.createImageMessageByFile({
-        sourcePicture: picBaseInfo,
-        bigPicture: picBaseInfo,
-        snapshotPicture: picBaseInfo,
-        sourcePath: file.name, // или другой путь, если есть
-        file: file
-      });
+      try {
+        createResp = await IMSDK.createImageMessageByFile({
+          sourcePicture: picBaseInfo,
+          bigPicture: picBaseInfo,
+          snapshotPicture: picBaseInfo,
+          sourcePath: file.name,
+          file: file
+        });
+      } catch (error) {
+        const errorDetails = {
+          error: error,
+          operation: 'createImageMessageByFile',
+          fileName: file.name,
+          fileSize: file.size,
+          timestamp: new Date().toISOString(),
+          operationID: error?.operationID || error?.data?.operationID || null,
+          event: error?.event || error?.data?.event || null,
+          errorMessage: error?.errorMessage || error?.message || 'Unknown error'
+        };
+
+        console.error('[OpenIM] Failed to create image message:', errorDetails);
+
+        if (error?.operationID) {
+          console.info(`Operation ID: ${error.operationID}`);
+        }
+        if (error?.event) {
+          console.info(`Event: ${error.event}`);
+        }
+
+        throw error;
+      }
     } else {
       throw new Error('Unsupported message type');
     }
@@ -234,8 +334,39 @@ export const sendMessageIM = async ({
 
     console.debug('[OpenIM] Message sent successfully to:', to);
   } catch (error) {
-    console.error('[OpenIM] Failed to send message:', error);
+    const errorDetails = {
+      error: error,
+      operation: 'sendMessage',
+      to,
+      groupId,
+      timestamp: new Date().toISOString(),
+      operationID: error?.operationID || error?.data?.operationID || null,
+      event: error?.event || error?.data?.event || null,
+      errorMessage: error?.errorMessage || error?.message || 'Unknown error'
+    };
+
+    console.error('[OpenIM] Failed to send message:', errorDetails);
+
+    if (error?.operationID) {
+      console.info(`Operation ID: ${error.operationID}`);
+    }
+    if (error?.event) {
+      console.info(`Event: ${error.event}`);
+    }
+
     throw error;
+  }
+};
+
+const getOrGeneratePlatformId = (): number => {
+  const key = 'platformId';
+  const storedId = sessionStorage.getItem(key);
+  if (storedId === null) {
+    const newId = Math.floor(Math.random() * 9) + 1;
+    sessionStorage.setItem(key, newId.toString());
+    return newId;
+  } else {
+    return parseInt(storedId, 10);
   }
 };
 
@@ -260,34 +391,60 @@ const getMessagesByConversationId = async (
 
     return messages;
   } catch (err) {
-    console.error('Failed to get messages for conversation:', err);
+    const errorDetails = {
+      error: err,
+      operation: 'getAdvancedHistoryMessageList',
+      conversationID: conversationId,
+      startClientMsgID: lastClientMsgID,
+      timestamp: new Date().toISOString(),
+      operationID: err?.operationID || err?.data?.operationID || null,
+      event: err?.event || err?.data?.event || null,
+      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
+    };
+
+    console.error('Failed to get messages for conversation:', errorDetails);
+
+    if (err?.operationID) {
+      console.info(`Operation ID: ${err.operationID}`);
+    }
+    if (err?.event) {
+      console.info(`Event: ${err.event}`);
+    }
+
     return [];
   }
 };
 
-// When current user reads a chat
 const markAsRead = async (conversationID: string) => {
   await IMSDK.markConversationMessageAsRead(conversationID);
 };
 
-// In-module reactive "store" — no extra files
-const messagesStore = ref<Record<string, any[]>>({});
+const messagesStore = ref<Record<string, OpenIMMessage[]>>({});
 
-const saveMessagesToLocal = (conversationId: string, messages: any[]): void => {
+const saveMessagesToLocal = (
+  conversationId: string,
+  messages: OpenIMMessage[]
+): void => {
   messagesStore.value[conversationId] = messages;
 };
 
-const getSavedMessages = (conversationId: string): any[] => {
+const getSavedMessages = (conversationId: string): OpenIMMessage[] => {
   return messagesStore.value[conversationId] || [];
 };
 
-const appendMessageToLocal = (conversationId: string, message: any): void => {
+const appendMessageToLocal = (
+  conversationId: string,
+  message: OpenIMMessage
+): void => {
   const arr = messagesStore.value[conversationId] || [];
   arr.push(message);
   messagesStore.value[conversationId] = arr;
 };
 
-const appendOldMessagesToLocal = (conversationId: string, messages): void => {
+const appendOldMessagesToLocal = (
+  conversationId: string,
+  messages: OpenIMMessage[]
+): void => {
   const arr = messagesStore.value[conversationId] || [];
   arr.unshift(...messages);
   messagesStore.value[conversationId] = arr;
@@ -295,6 +452,7 @@ const appendOldMessagesToLocal = (conversationId: string, messages): void => {
 
 export {
   IMSDK,
+  getOrGeneratePlatformId,
   setupOpenIM,
   getMessagesByConversationId,
   saveMessagesToLocal,

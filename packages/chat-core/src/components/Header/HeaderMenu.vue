@@ -15,11 +15,11 @@
         <li
           v-for="(item, index) in menuItems"
           :key="item.key"
-          class="header-menu__item"
+          :class="listClass(item.key)"
           :data-testid="`${props.dataTestid}-HeaderMenu-Item${index + 1}`"
         >
           <button
-            :class="buttonClass(item.key)"
+            class="header-menu__button"
             @click="handleUnmountChapter(item.key)"
             :data-testid="`${props.dataTestid}-HeaderMenu-Button${index + 1}`"
           >
@@ -51,9 +51,9 @@ const emit = defineEmits<IMenuEmits>();
 
 const activeChapter = ref('assistant');
 
-const buttonClass = (key: string) => ({
-  'header-menu__button': true,
-  'header-menu__button--active': activeChapter.value === key
+const listClass = (key: string) => ({
+  'header-menu__item': true,
+  'header-menu__item--active': activeChapter.value === key
 });
 
 const menuItems = computed(() => [

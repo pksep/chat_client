@@ -2,6 +2,7 @@
   <section class="chat" :data-testid="`${props.dataTestid}-Chat-Container`">
     <ContactListMobile
       class="chat__mobile"
+      :user="props.user"
       :contacts="props.contacts"
       :chapter="state.chapter"
       :data-testid="`${props.dataTestid}-Chat-ContactListMobile`"
@@ -14,8 +15,7 @@
       ref="messageListRef"
       :chapter="state.chapter"
       :baseUrl="props.baseUrl"
-      :contactId
-      :conversionId
+      :contact="props.contact"
       :user
       :data-testid="`${props.dataTestid}-Chat-MessageList`"
     />
@@ -32,7 +32,8 @@ import { isShowContactList } from '../composables/useShowContactList';
 import { MAX_W_MD } from '../utils/constants';
 import {
   fetchConversationList,
-  getConversationList
+  getConversationList,
+  onSDKReady
 } from '../services/useConversions';
 import { computed } from 'vue';
 import { onMounted } from 'vue';
@@ -73,8 +74,8 @@ const handleUnmountChapter = (
     state.chapter = chapter;
     emits('unmount-chapter', chapter);
   } else if (chapter && chapter.nickname) {
-    state.chapter = chapter.nickname;
-    emits('unmount-chapter', chapter.nickname);
+    state.chapter = chapter.contact.conversationId;
+    emits('unmount-chapter', state.chapter);
   } else {
     state.chapter = null;
     emits('unmount-chapter', null);
@@ -86,7 +87,7 @@ const handleUnmountContact = (contact: IUserProps): void => {
 };
 
 onMounted(() => {
-  fetchConversationList();
+  onSDKReady(fetchConversationList);
 });
 
 defineExpose({

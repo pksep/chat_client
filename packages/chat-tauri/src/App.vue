@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { ChatContainer } from '@sep-chat-client/chat-core';
+import { ChatContainer } from '@pksep/chat-core';
 </script>
 
 <style scoped></style>

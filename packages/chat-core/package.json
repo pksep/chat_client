@@ -1,9 +1,9 @@
 {
   "name": "@pksep/chat-core",
-  "version": "25.11.10",
+  "version": "25.12.5",
   "type": "module",
-  "main": "./build/chat-container.js",
-  "types": "./build/chat-container.d.ts",
+  "main": "./build/lib/chat-container.js",
+  "types": "./build/lib/chat-container.d.ts",
   "scripts": {
     "start:dev": "vite",
     "start": "vite preview",
@@ -12,17 +12,20 @@
     "test:e2e:ui": "playwright test --ui",
     "build:lib": "cross-env VITE_BASE_MODE=lib pnpm run build",
     "publish:lib": "pnpm run build:lib && pnpm publish --access public --no-git-checks",
-    "init:openim": "node --experimental-strip-types ./scripts/copyOpenIM.ts",
+    "generate:assets": "pwa-assets-generator",
+    "init:openim": "node ./scripts/copyOpenIM.ts",
     "init:openim-admin": "tsx ./scripts/getAdminTokenOpenIM.ts"
   },
   "exports": {
     ".": {
-      "import": "./build/chat-container.js",
-      "types": "./build/chat-container.d.ts"
+      "import": "./build/lib/chat-container.js",
+      "types": "./build/lib/chat-container.d.ts"
     }
   },
   "files": [
-    "build"
+    "build/lib/*.js",
+    "build/lib/*.ts",
+    "build/lib/*.wasm"
   ],
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.6",
@@ -33,16 +36,16 @@
     "zod": "3"
   },
   "peerDependencies": {
+    "@pksep/yui": "0.1.x",
     "zod": "3"
   },
   "devDependencies": {
     "@playwright/experimental-ct-vue": "^1.56.1",
     "@playwright/test": "^1.56.1",
     "@vite-pwa/assets-generator": "^1.0.2",
+    "cross-env": "^10.1.0",
     "tsx": "^4.20.6",
-    "vite-plugin-pwa": "^1.1.0"
-  },
-  "overrides": {
-    "@pksep/yui": "$@pksep/yui"
+    "vite-plugin-pwa": "^1.1.0",
+    "vite-plugin-static-copy": "^3.1.4"
   }
 }
