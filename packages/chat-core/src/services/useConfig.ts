@@ -1,4 +1,4 @@
-import { IChatContainerConfig } from '@/components/interfaces/interfaces';
+import { IChatContainerConfig } from '../components/interfaces/interfaces';
 import { ref } from 'vue';
 
 const configStore = ref<IChatContainerConfig>({});
