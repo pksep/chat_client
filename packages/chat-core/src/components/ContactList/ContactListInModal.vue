@@ -1,7 +1,7 @@
 <template>
   <section
     :class="['menu__info-users', props.class]"
-    :data-testid="`${props.dataTestid}-ContactListInModal-Container`"
+    :data-testid="`${props.dataTestid}-Container`"
   >
     <Button
       v-if="props.showAddButton"
@@ -12,7 +12,7 @@
       ]"
       :size="SizesEnum.large"
       @click="addUser"
-      :data-testid="`${props.dataTestid}-ContactListInModal-AddButton`"
+      :data-testid="`${props.dataTestid}-AddButton`"
     >
       <Icon :name="IconNameEnum.addUser" class="menu__info-add-user-icon" />
       Добавить участника
@@ -24,6 +24,7 @@
       <li
         v-for="(user, index) in props.contacts"
         :key="index"
+        class="menu__info-user-list--item"
         :data-testid="`${props.dataTestid}-ContactListInModal-Item${index + 1}`"
       >
         <template v-if="user">

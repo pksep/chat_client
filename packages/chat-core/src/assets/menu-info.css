@@ -4,7 +4,7 @@ aside.menu-info {
   border-left-width: 0.5px;
   border-left-style: solid;
   height: var(--default-height);
-  --size-avatar: 85px;
+  --size-avatar: 42.5px;
   &.menu-info--open .collapse {
     width: 100%;
   }
@@ -44,7 +44,7 @@ section.menu-info__info-section {
   background-color: var(--blue12);
   color: var(--text-black);
   font-size: 12px;
-  font-weight: semi-bold;
+  font-weight: 600;
   line-height: 100%;
   width: 20px;
   height: 20px;
@@ -81,13 +81,10 @@ div.menu-info__buttons {
 }
 
 .menu-info__avatar-button {
+  --size-avatar: 42.5px;
   display: flex;
   width: 100%;
   justify-content: center;
-  & .avatar-yui-kit {
-    min-width: 85px !important;
-    min-height: 85px !important;
-  }
 }
 
 svg.icon-yui-kit.menu-info__close-icon {

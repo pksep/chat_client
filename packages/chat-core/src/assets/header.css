@@ -22,7 +22,7 @@
 }
 
 .user-profile.chat__header-profile {
-  --size-avatar: 40px;
+  --size-avatar: 20px;
   --font-size-nickname: 12px;
   margin-left: 8px;
   row-gap: 2px;

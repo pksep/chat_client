@@ -4,7 +4,7 @@
 }
 
 .avatar-yui-kit.message__avatar {
-  --size-avatar: 35px;
+  --size-avatar: 17.5px;
   align-self: start;
 }
 
@@ -111,6 +111,7 @@ div.message-content__html > p {
 
 div.message-content__media {
   max-height: fit-content;
+  max-width: 265px;
   & > img,
   & > video {
     object-fit: contain;

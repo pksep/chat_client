@@ -35,7 +35,7 @@
           :url="contact.avatarUrl"
           :alt="`Avatar of ${contact.nickname}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
-          :style="{ '--size-avatar': '30px' }"
+          :style="{ '--size-avatar': '15px' }"
           is-icon
         />
         <h5
