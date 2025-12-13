@@ -110,7 +110,6 @@ div.message-content__html > p {
 }
 
 div.message-content__media {
-  height: 215px;
   max-height: fit-content;
   & > img,
   & > video {

@@ -113,6 +113,7 @@ button.button-yui-kit.large.menu-info__secondary-button {
   }
   &:hover {
     --icon-color: var(--blue1);
+    background-color: var(--primary-pressed-light);
   }
 }
 
@@ -122,4 +123,10 @@ button.button-yui-kit.large.menu-info__secondary-button {
 
 aside.menu-info .tabs__navigation-content > section.menu__info-users {
   padding-inline: 20px;
+}
+
+.menu-info__title-text {
+  color: var(--neutral-text);
+  text-align: center;
+  font-weight: 600;
 }

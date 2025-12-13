@@ -19,6 +19,11 @@
 @import url('./mobile-info-modal.css');
 
 .chat-container {
+  --neutral-text-light: #b8b8b8;
+  --primary-pressed-light: #ecf3ff;
+  --primary-base: var(--blue1);
+  --neutral-button: var(--grey1);
+  --neutral-text: var(--grey6);
   display: grid;
   height: var(--default-height);
   background-color: var(--blue15);
@@ -60,6 +65,11 @@ svg.ai-icon {
   width: 1em;
   height: 1em;
   font-size: 20px;
+}
+
+button.primary-yui-kit.disabled-yui-kit {
+  color: var(--neutral-text-light);
+  background-color: var(--neutral-button);
 }
 
 @media screen and (width <= 28rem) {

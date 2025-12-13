@@ -42,7 +42,7 @@ button.button-yui-kit.new-contact__button-close {
   display: grid;
 }
 
-.contact-selector__add {
+.primary-yui-kit.disabled-yui-kit.contact-selector__add {
   margin-right: 10px;
   margin-bottom: 10px;
   justify-self: end;
