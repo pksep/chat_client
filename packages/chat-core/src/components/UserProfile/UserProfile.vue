@@ -37,6 +37,8 @@ const props = withDefaults(defineProps<IUserProps>(), {
   dataTestid: () => 'UserProfile'
 });
 
+console.log(props.avatarUrl);
+
 const getParticipantForm = (num: number): string => {
   const absNum = Math.abs(num);
   const lastTwoDigits = absNum % 100;

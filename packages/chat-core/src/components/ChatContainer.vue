@@ -179,14 +179,11 @@ const unmountHeaderMenuChapter = (
 };
 
 const findContactOrGroupById = (id: string) => {
-  const conversation = {
-    ...state.users.find(item => item.id === id),
-    ...state.conversations.find(item => item.id === id)
-  };
-  if (!conversation) {
-    return state.groups.find(group => group.id === id);
+  const conversation = state.conversations.find(item => item.id === id);
+  if (conversation) {
+    return conversation;
   }
-  return conversation;
+  return state.groups.find(group => group.id === id);
 };
 
 const unmountMenuChapter = (
@@ -208,10 +205,8 @@ const unmountMenuChapter = (
     }
   } else if (config && config.contact) {
     state.chapter = config.contact.nickname;
-    state.contact = {
-      ...config.contact,
-      ...findContactOrGroupById(config.contact.id)
-    };
+    state.contact = config.contact;
+    console.log(state.contact, config.contact);
   } else {
     state.chapter = null;
     state.contact = null;
