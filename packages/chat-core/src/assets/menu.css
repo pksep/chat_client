@@ -93,7 +93,9 @@ button.menu__user-profile-collapse {
 }
 
 details.menu__user-details {
-  &:not([open]) summary.menu__user-details-summary h4::after {
+  &:not([open])
+    summary.menu__user-details-summary
+    .menu__user-details-summary-triangle {
     transform: rotate(135deg);
   }
 }
@@ -101,7 +103,7 @@ details.menu__user-details {
 summary.menu__user-details-summary {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   margin-bottom: 5px;
   color: var(--text-grey);
   &::marker {
@@ -114,17 +116,21 @@ summary.menu__user-details-summary {
     cursor: pointer;
     margin: 0;
   }
-  & h4::after {
-    display: inline-block;
-    content: '▾';
-    font-size: 12px;
-    vertical-align: top;
-    text-align: center;
-    margin-left: 6px;
-    transition: transform 0.3s ease;
+  & button.button-yui-kit {
+    margin-left: auto;
+    margin-right: 0;
   }
-
   font-weight: bold;
+}
+
+.menu__user-details-summary-triangle {
+  font-size: 12px;
+  margin-left: 0;
+  display: inline-block;
+  vertical-align: top;
+  text-align: center;
+  margin-left: 6px;
+  transition: transform 0.3s ease;
 }
 
 .menu__button-install-prompt {

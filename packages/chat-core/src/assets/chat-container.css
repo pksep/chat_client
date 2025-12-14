@@ -24,6 +24,7 @@
   --primary-base: var(--blue1);
   --neutral-button: var(--grey1);
   --neutral-text: var(--grey6);
+  --neutral-border: var(--grey3);
   display: grid;
   height: var(--default-height);
   background-color: var(--blue15);

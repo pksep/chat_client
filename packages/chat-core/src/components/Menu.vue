@@ -60,10 +60,10 @@
         </h3>
       </div>
       <template v-for="(item, index) in listChannels" :key="index">
-        <Line
-          v-if="isCollapse"
-          :data-testid="`${props.dataTestid}-Menu-Line${index + 1}`"
-        />
+        <template v-if="isCollapse && item.items.length !== 0">
+          <Line :data-testid="`${props.dataTestid}-Menu-Line${index + 1}`" />
+          <!-- v-if="item.items.length > index - 1" -->
+        </template>
         <details
           class="menu__user-details"
           v-if="!isCollapse"
@@ -79,6 +79,7 @@
             >
               {{ item.title }}
             </h4>
+            <Triangle class="menu__user-details-summary-triangle" />
             <Button
               :type="ButtonTypeEnum.ghost"
               :size="SizesEnum.little"
@@ -170,6 +171,7 @@ import {
   onSDKReady
 } from '../services/useConversions';
 import { getGroupList } from '../services/useGroup';
+import Triangle from './Triangle.vue';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: () => 'Menu'
