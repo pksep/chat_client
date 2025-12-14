@@ -39,14 +39,15 @@
         @unmount-click="handleChapter"
       />
     </section>
+    <Button
+      :type="ButtonTypeEnum.primary"
+      @click="handleShowAccount"
+      :disabled="props.chapter === 'assistant'"
+      class="mobile__list-button"
+    >
+      <Icon :name="IconNameEnum.plus" />
+    </Button>
     <template v-if="props.chapter !== 'assistant'">
-      <Button
-        :type="ButtonTypeEnum.primary"
-        @click="handleShowAccount"
-        class="mobile__list-button"
-      >
-        <Icon :name="IconNameEnum.plus" />
-      </Button>
       <NewChatMobileModal
         :open="state.showAddAccount"
         :contacts="props.contacts"

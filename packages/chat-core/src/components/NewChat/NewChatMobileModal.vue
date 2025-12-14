@@ -3,7 +3,7 @@
     :open="props.open"
     @unmount-close="handleCloseModal"
     @unmount-next="handleNext(state.checkMembers)"
-    title="Написать сообщение"
+    :title="props.isAddOne ? 'Написать сообщение' : 'Канал'"
     :start-button-text="props.isAddOne ? null : 'Далее'"
     back-button-text="Отмена"
     :is-disabled-start-button="state.checkMembers.length === 0"
