@@ -75,11 +75,12 @@
             :data-testid="`${props.dataTestid}-Menu-DetailsSummary${index + 1}`"
           >
             <h4
+              class="menu__user-details-summary--title"
               :data-testid="`${props.dataTestid}-Menu-DetailsTitle${index + 1}`"
             >
               {{ item.title }}
+              <Triangle class="menu__user-details-summary-triangle" />
             </h4>
-            <Triangle class="menu__user-details-summary-triangle" />
             <Button
               :type="ButtonTypeEnum.ghost"
               :size="SizesEnum.little"

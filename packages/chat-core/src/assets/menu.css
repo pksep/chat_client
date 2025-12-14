@@ -112,8 +112,12 @@ summary.menu__user-details-summary {
   & svg.icon-yui-kit {
     font-size: 12px;
   }
-  & h4 {
+  & h4.menu__user-details-summary--title {
     cursor: pointer;
+    text-align: center;
+    display: flex;
+    gap: 6px;
+    align-items: center;
     margin: 0;
   }
   & button.button-yui-kit {
@@ -129,7 +133,6 @@ summary.menu__user-details-summary {
   display: inline-block;
   vertical-align: top;
   text-align: center;
-  margin-left: 6px;
   transition: transform 0.3s ease;
 }
 
