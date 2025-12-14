@@ -81,7 +81,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import {
   Tabs,
   Button,
@@ -97,7 +97,6 @@ import { useMenuInfo } from '../composables/useMenuInfo';
 import NewContactModal from './NewChat/NewContactModal.vue';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_XL } from '../utils/constants';
-import { watch } from 'vue';
 
 const props = withDefaults(defineProps<IMenuRightProps>(), {
   open: false,

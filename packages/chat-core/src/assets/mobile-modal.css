@@ -1,8 +1,6 @@
 .mobile__modal-header {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  align-content: center;
   padding: 10px 5px;
 }
 

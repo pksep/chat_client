@@ -74,13 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import {
-  computed,
-  defineAsyncComponent,
-  reactive,
-  ref,
-  watchEffect
-} from 'vue';
+import { computed, defineAsyncComponent, reactive, ref, watch } from 'vue';
 import Header from './Header/Header.vue';
 import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
@@ -135,7 +129,7 @@ const { state: isCollapse, toggle } = useResizeState({
   storageKey: 'menu-collapse'
 });
 
-watchEffect(() => {
+watch([() => isCollapse.value, () => state.isMenuDesktopOpen], () => {
   state.chatContainerClasses = [
     'chat-container',
     { collapse: isCollapse.value, 'menu-collapse': !state.isMenuDesktopOpen }
@@ -147,6 +141,10 @@ const handleCollapse = (): void => {
 };
 
 const handleMenuToggle = (isOpen: boolean): void => {
+  if (state.chapter === 'assistant' || state.chapter === 'ai') {
+    state.isMenuDesktopOpen = !isOpen;
+    return;
+  }
   state.isMenuDesktopOpen = isOpen;
 };
 

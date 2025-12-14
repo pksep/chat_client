@@ -18,6 +18,10 @@
   align-self: start;
 }
 
+.message__no-author {
+  margin-left: 28px;
+}
+
 .message__article__media {
   padding: 4px 4px 6px;
   cursor: pointer;
@@ -85,7 +89,7 @@ div.message-content__loading {
 }
 
 div.message-content__loading-circle {
-  background-color: #b8b8b8;
+  background-color: var(--neutral-text-light);
   border-radius: 50%;
   font-size: 8px;
   width: 1em;
@@ -175,7 +179,6 @@ div.message-content__file {
   text-wrap: balance;
   hyphens: auto;
   overflow-wrap: anywhere;
-  max-width: calc(var(--default-width) / 2);
   justify-self: start;
   &:last-child {
     margin-bottom: 5px;
@@ -184,6 +187,7 @@ div.message-content__file {
 
 .message__other {
   justify-self: end;
+  margin-right: 28px;
   flex-direction: row-reverse;
   --background-color: var(--blue1);
   --message-text-color: var(--white);

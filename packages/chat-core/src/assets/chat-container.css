@@ -97,6 +97,9 @@ button.primary-yui-kit.disabled-yui-kit {
 }
 
 @media screen and (width <= 27rem) {
+  .chat-container {
+    background-color: var(--white);
+  }
   .chat-container:has(.chat__header-menu) {
     --header-height: auto;
   }
