@@ -39,19 +39,16 @@ p.chat__nothing-paragraph {
 .chat__message-bubble {
   display: grid;
   align-content: start;
+  width: 100%;
   gap: 5px;
 }
 
 .date-divider {
   text-align: center;
-  position: sticky;
-  top: 0;
   margin-top: 5px;
-  z-index: 9;
 
   & > span {
-    color: var(--grey6);
-    background-color: var(--grey11);
+    color: var(--neutral-text);
     padding: 5px 10px;
     font-weight: 700;
     font-size: 14px;

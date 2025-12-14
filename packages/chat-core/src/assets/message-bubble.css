@@ -11,8 +11,8 @@
 .message__article {
   display: grid;
   gap: 4px;
-  width: max-content;
   padding: 8px 16px;
+  width: 100%;
   background-color: var(--background-color, var(--white));
   border-radius: 12px;
   align-self: start;
@@ -180,9 +180,11 @@ div.message-content__file {
   text-wrap: balance;
   hyphens: auto;
   overflow-wrap: anywhere;
+  /*
   max-width: calc(
     var(--default-width) - var(--size-left-menu) - var(--size-right-menu) - 60px
   );
+  */
   justify-self: start;
   &:last-child {
     margin-bottom: 5px;
@@ -202,9 +204,12 @@ div.message-content__file {
 .chat__input {
   align-self: end;
   padding: 15px;
+  max-width: 100%;
+  /*
   max-width: calc(
     var(--default-width) - var(--size-left-menu) - var(--size-right-menu) - 4px
   );
+  */
 
   .editor-content {
     max-height: calc(var(--basic-height) / 2);
@@ -218,9 +223,10 @@ div.message-content__file {
 
 @media screen and (width <= 28rem) {
   .message__bubble {
-    max-width: calc(var(--default-width) - 32px);
+    /*max-width: calc(var(--default-width) - 32px);*/
   }
   .chat__message-wrapper {
+    width: 100%;
     padding-right: 15px;
   }
   .message__no-author {

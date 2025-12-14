@@ -28,7 +28,7 @@
   height: var(--default-height);
   background-color: var(--blue15);
   grid-template-areas: 'menu header info' 'menu chat info';
-  grid-template-columns: var(--size-left-menu) auto var(--size-right-menu);
+  grid-template-columns: var(--size-left-menu) 1fr var(--size-right-menu);
   grid-template-rows: var(--header-height) auto;
 }
 
