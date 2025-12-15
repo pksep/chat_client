@@ -64,6 +64,26 @@ p.chat__nothing-paragraph {
   }
 }
 
+.date-divider {
+  position: sticky;
+  container-type: scroll-state;
+  container-name: sticky-heading;
+  z-index: 9;
+  top: 0;
+}
+
+@container sticky-heading scroll-state(stuck: top) {
+  .date-divider > span {
+    background-color: var(--grey11);
+  }
+}
+
+@supports not (container-type: scroll-state) {
+  .date-divider > span {
+    background-color: var(--grey11);
+  }
+}
+
 .menu__user-assistant {
   &:hover,
   &.menu__user-assistant--active {
