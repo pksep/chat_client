@@ -44,15 +44,18 @@
       @unmount-chapter="unmountMenuChapter"
       @unmount-contact="handleNewContact"
     />
-    <MenuInfo
-      class="chat__info"
-      :contact="state.contact"
-      :members="state.users.filter(user => user.id !== authUser.id)"
-      :active-tab-id="state.activeTabId"
-      :dataTestid="`${props.dataTestid}-ChatContainer-MenuInfo`"
-      @unmount-collapse="handleMenuToggle"
-      @unmount-contact="handleChangeContact"
-    />
+    <template v-if="!isMobile">
+      <MenuInfo
+        class="chat__info"
+        :open="state.isMenuDesktopOpen"
+        :contact="state.contact"
+        :members="state.users.filter(user => user.id !== authUser.id)"
+        :active-tab-id="state.activeTabId"
+        :dataTestid="`${props.dataTestid}-ChatContainer-MenuInfo`"
+        @unmount-collapse="handleMenuToggle"
+        @unmount-contact="handleChangeContact"
+      />
+    </template>
   </main>
   <NewContactModal
     :contacts="state.users.filter(user => user.id !== authUser?.id)"
@@ -73,7 +76,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, reactive, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, reactive, ref } from 'vue';
 import Header from './Header/Header.vue';
 import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
@@ -97,6 +100,11 @@ const NewGroupModal = defineAsyncComponent(
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
+const { state: isCollapse, toggle } = useResizeState({
+  breakpoint: MAX_W_XL,
+  storageKey: 'menu-collapse'
+});
+
 const state = reactive({
   isMenuDesktopOpen: false,
   isMenuMobileOpen: false,
@@ -106,10 +114,16 @@ const state = reactive({
   contact: null,
   isNewContactOpen: false,
   isNewGroupOpen: false,
-  chatContainerClasses: [
+  chatContainerClasses: computed(() => [
     'chat-container',
-    { collapse: false, 'menu-collapse': true }
-  ],
+    { collapse: isCollapse.value },
+    {
+      'menu-collapse':
+        state.chapter === 'ai' || state.chapter === 'assistant'
+          ? true
+          : !state.isMenuDesktopOpen
+    }
+  ]),
   users: computed(() => getUsersList()),
   groups: computed(() => getGroupList()),
   conversations: computed(() => getConversationList())
@@ -122,26 +136,6 @@ const props = withDefaults(defineProps<IChatContainerProps>(), {
 const authUser = computed(() => appendUserAttributes(getAuthUser()));
 
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
-
-const { state: isCollapse, toggle } = useResizeState({
-  breakpoint: MAX_W_XL,
-  storageKey: 'menu-collapse'
-});
-
-watch([() => isCollapse.value, () => state.isMenuDesktopOpen], () => {
-  state.chatContainerClasses = [
-    'chat-container',
-    { collapse: isCollapse.value },
-    {
-      'menu-collapse': () => {
-        if (state.chapter === 'ai' || state.chapte === 'assistant') {
-          return true;
-        }
-        return !state.isMenuDesktopOpen;
-      }
-    }
-  ];
-});
 
 const handleCollapse = (): void => {
   toggle();

@@ -45,8 +45,12 @@ p.chat__nothing-paragraph {
 
 .date-divider {
   text-align: center;
-  margin-top: 15px;
-  margin-bottom: 15px;
+  &:first-child {
+    margin-top: 15px;
+  }
+  &:last-child {
+    margin-bottom: 15px;
+  }
 
   & > span {
     color: var(--neutral-text);
