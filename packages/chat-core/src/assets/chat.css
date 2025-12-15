@@ -64,17 +64,21 @@ p.chat__nothing-paragraph {
   }
 }
 
-.date-divider {
+.data-divider,
+.top-element {
+  z-index: 2;
+  top: 0;
   position: sticky;
   container-type: scroll-state;
   container-name: sticky-heading;
-  z-index: 9;
-  top: 0;
 }
 
 @container sticky-heading scroll-state(stuck: top) {
   .date-divider > span {
     background-color: var(--grey11);
+  }
+  .system-message > span {
+    display: none;
   }
 }
 

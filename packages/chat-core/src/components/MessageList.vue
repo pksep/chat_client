@@ -50,6 +50,7 @@
         :key="message.clientMsgID"
       >
         <div
+          class="top-element"
           v-if="
             isNewDate(index) ||
             message.isSystemMessage ||
