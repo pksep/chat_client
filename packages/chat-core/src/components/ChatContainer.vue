@@ -46,7 +46,6 @@
     />
     <MenuInfo
       class="chat__info"
-      :open="state.isMenuDesktopOpen && !isMobile"
       :contact="state.contact"
       :members="state.users.filter(user => user.id !== authUser.id)"
       :active-tab-id="state.activeTabId"
@@ -132,7 +131,15 @@ const { state: isCollapse, toggle } = useResizeState({
 watch([() => isCollapse.value, () => state.isMenuDesktopOpen], () => {
   state.chatContainerClasses = [
     'chat-container',
-    { collapse: isCollapse.value, 'menu-collapse': !state.isMenuDesktopOpen }
+    { collapse: isCollapse.value },
+    {
+      'menu-collapse': () => {
+        if (state.chapter === 'ai' || state.chapte === 'assistant') {
+          return true;
+        }
+        return !state.isMenuDesktopOpen;
+      }
+    }
   ];
 });
 
@@ -141,10 +148,6 @@ const handleCollapse = (): void => {
 };
 
 const handleMenuToggle = (isOpen: boolean): void => {
-  if (state.chapter === 'assistant' || state.chapter === 'ai') {
-    state.isMenuDesktopOpen = !isOpen;
-    return;
-  }
   state.isMenuDesktopOpen = isOpen;
 };
 
@@ -204,7 +207,6 @@ const unmountMenuChapter = (
   } else if (config && config.contact) {
     state.chapter = config.contact.nickname;
     state.contact = config.contact;
-    console.log(state.contact, config.contact);
   } else {
     state.chapter = null;
     state.contact = null;

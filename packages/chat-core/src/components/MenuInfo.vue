@@ -81,7 +81,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import {
   Tabs,
   Button,
@@ -124,6 +124,8 @@ watch(
   () => props.open,
   async newVal => {
     isOpen.value = newVal;
+    console.log('isOpen', isOpen.value);
+    console.log('props.open', isOpen.value);
     if (newVal && props.contact) {
       await initializeMenuInfo({ ...props, isEnabled: true });
     }
@@ -133,7 +135,7 @@ watch(
 watch(
   () => props.contact,
   async newContact => {
-    if (newContact && isOpen.value) {
+    if (newContact && props.open) {
       await initializeMenuInfo({ ...props, isEnabled: true });
     }
   },
