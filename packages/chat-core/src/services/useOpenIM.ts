@@ -366,7 +366,7 @@ const getMessagesByConversationId = async (
     const response = await IMSDK.getAdvancedHistoryMessageList({
       conversationID: conversationId,
       startClientMsgID: lastClientMsgID,
-      count: 10,
+      count: 50,
       viewType: 0
     });
 
