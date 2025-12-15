@@ -43,13 +43,16 @@ p.chat__nothing-paragraph {
   gap: 5px;
 }
 
+.system-message,
 .date-divider {
+  margin-top: 10px;
   text-align: center;
-  &:first-child {
-    margin-top: 15px;
-  }
   &:last-child {
-    margin-bottom: 15px;
+    margin-bottom: 10px;
+  }
+
+  & > span.system-message-text {
+    font-weight: 400;
   }
 
   & > span {

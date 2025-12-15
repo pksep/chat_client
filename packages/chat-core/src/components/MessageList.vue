@@ -50,27 +50,35 @@
         :key="message.clientMsgID"
       >
         <div
-          v-if="isNewDate(index)"
-          class="date-divider"
-          :data-testid="`${props.dataTestid}-MessageList-DateDividerUser${index + 1}`"
+          v-if="
+            isNewDate(index) ||
+            message.isSystemMessage ||
+            message.notificationElem
+          "
         >
-          <span
-            :data-testid="`${props.dataTestid}-MessageList-DateLabelUser${index + 1}`"
-            >{{ formatDay(message.sendTime) }}</span
+          <div
+            v-if="isNewDate(index)"
+            class="date-divider"
+            :data-testid="`${props.dataTestid}-MessageList-DateDividerUser${index + 1}`"
           >
-        </div>
+            <span
+              :data-testid="`${props.dataTestid}-MessageList-DateLabelUser${index + 1}`"
+              >{{ formatDay(message.sendTime) }}</span
+            >
+          </div>
 
-        <div
-          v-if="message.isSystemMessage || message.notificationElem"
-          class="date-divider"
-          :data-testid="`${props.dataTestid}-MessageList-SystemMessageUser${index + 1}`"
-        >
-          <span
-            :data-testid="`${props.dataTestid}-MessageList-SystemLabelUser${index + 1}`"
-            class="system-message-text"
+          <div
+            v-if="message.isSystemMessage || message.notificationElem"
+            class="system-message"
+            :data-testid="`${props.dataTestid}-MessageList-SystemMessageUser${index + 1}`"
           >
-            {{ getSystemMessageContent(message) }}
-          </span>
+            <span
+              :data-testid="`${props.dataTestid}-MessageList-SystemLabelUser${index + 1}`"
+              class="system-message-text"
+            >
+              {{ getSystemMessageContent(message) }}
+            </span>
+          </div>
         </div>
 
         <MessageBubble
