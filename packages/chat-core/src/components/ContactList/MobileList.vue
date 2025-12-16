@@ -111,7 +111,6 @@ const handleCloseModal = () => {
 };
 
 const handleNewContact = (contact: IUserProps): void => {
-  console.log(contact);
   emits('unmount-contact', contact);
   handleChapter({ nickname: contact.conversationId, contact });
   handleCloseModal();
