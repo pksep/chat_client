@@ -82,7 +82,11 @@ import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
 import Chat from './Chat.vue';
 import MenuInfo from './MenuInfo.vue';
-import type { IChatContainerProps, IUserProps } from './interfaces/interfaces';
+import type {
+  IChatContainerProps,
+  IContactProps,
+  IUserProps
+} from './interfaces/interfaces';
 import { appendUserAttributes, getUsersList } from '../composables/useUsers';
 import { isShowContactList } from '../composables/useShowContactList';
 import { useResizeState } from '../composables/useResizeState';
@@ -207,10 +211,11 @@ const unmountMenuChapter = (
   }
 };
 
-const handleNewContact = (config): void => {
+const handleNewContact = async (config): Promise<void> => {
   if (isMobile.value) {
-    state.contact = config;
-    state.chapter = config.conversationId;
+    const contact = await handleNewContactMessage(config);
+    state.contact = contact;
+    state.chapter = contact.conversationId;
     return;
   }
   state.isNewContactOpen = config.isChapterOpen;
@@ -239,7 +244,9 @@ const handleClearClick = (): void => {
   }
 };
 
-const handleNewContactMessage = async (contact: IUserProps): Promise<void> => {
+const handleNewContactMessage = async (
+  contact: IUserProps
+): Promise<IContactProps> => {
   state.chapter = contact.nickname;
   const [smallerUserID, largerUserID] = [authUser.value.id, contact.id].sort();
 
@@ -247,6 +254,7 @@ const handleNewContactMessage = async (contact: IUserProps): Promise<void> => {
     ...contact,
     conversationId: `si_${smallerUserID}_${largerUserID}`
   };
+  return state.contact;
 };
 
 const handleNewGroupMessage = async (group: any): Promise<void> => {

@@ -91,6 +91,7 @@ const handleCloseModal = () => {
 const handleCheckUsers = (contacts: IUserProps[] | IUserProps): void => {
   if (props.isAddOne) {
     emits('unmount-contact', contacts);
+    return;
   }
   if (Array.isArray(contacts) && contacts.length > 0) {
     state.checkMembers = contacts;
