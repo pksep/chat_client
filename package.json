@@ -11,10 +11,10 @@
     "build": "vue-tsc && vite build",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "build:lib": "cross-env VITE_BASE_MODE=lib pnpm run build",
-    "publish:lib": "pnpm version patch && pnpm run build:lib && pnpm publish --access public --no-git-checks",
+    "build:lib": "cross-env VITE_BASE_MODE=lib bun run build",
+    "publish:lib": "bun version patch && bun run build:lib && bun publish --access public --no-git-checks",
     "generate:assets": "pwa-assets-generator",
-    "init:openim": "node ./scripts/copyOpenIM.ts",
+    "init:openim": "bun ./scripts/copyOpenIM.ts",
     "format": "prettier -w {src,scripts}/**/*.ts -w {src,scripts}/**/*.vue",
     "prepare": "echo 'Running preinstall script' && lefthook install"
   },

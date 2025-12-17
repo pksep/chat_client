@@ -1,0 +1,21 @@
+:8080
+root * /usr/share/caddy
+file_server
+encode gzip
+
+@javascript {
+    path *.js
+}
+header @javascript Content-Type application/javascript
+
+@wasm {
+    path *.wasm
+}
+header @wasm Content-Type application/wasm
+
+@html {
+    path *.html
+}
+header @html Content-Type text/html
+
+try_files {path} {path}/ /index.html
