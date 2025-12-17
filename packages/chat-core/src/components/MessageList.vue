@@ -94,6 +94,7 @@
           :time="formatTime(new Date(message.sendTime))"
           :sender="message.senderNickname"
           :avatar="message.faceURL"
+          :is-read="message.isRead"
           :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
         />
       </template>

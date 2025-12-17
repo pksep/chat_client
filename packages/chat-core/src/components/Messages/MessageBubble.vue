@@ -63,7 +63,6 @@
             class="message-content__html"
             v-html="props.message"
             :data-testid="`${dataTestid}-MessageBubble-MessageText`"
-            :data-message-content="props.message"
           ></div>
           <div
             v-else-if="isImage"
@@ -87,7 +86,7 @@
               controls
               :data-testid="`${dataTestid}-MessageBubble-Video`"
               :aria-label="
-                props.sender ? props.sender + ' video' : 'Shared video'
+                props.sender ? `${props.sender} video` : 'Shared video'
               "
             ></video>
           </div>
@@ -120,15 +119,15 @@
                 class="message-time"
                 :data-testid="`${dataTestid}-MessageBubble-FileTime`"
               >
-                <Icon
-                  v-if="read"
-                  :name="IconNameEnum.read"
-                  :data-testid="`${dataTestid}-MessageBubble-FileReadIcon`"
-                />
                 <span
                   :data-testid="`${dataTestid}-MessageBubble-FileTimeText`"
                   >{{ props.time }}</span
                 >
+                <Icon
+                  v-if="props.isMeSender"
+                  :name="IconNameEnum.read"
+                  :data-testid="`${dataTestid}-MessageBubble-FileReadIcon`"
+                />
               </div>
             </div>
           </div>
@@ -139,14 +138,21 @@
         v-if="!props.loader && !props.file"
         :data-testid="`${dataTestid}-MessageBubble-Time`"
       >
-        <Icon
-          v-if="read"
-          :name="IconNameEnum.read"
-          :data-testid="`${dataTestid}-MessageBubble-ReadIcon`"
-        />
         <span :data-testid="`${dataTestid}-MessageBubble-TimeText`">{{
           props.time
         }}</span>
+        <template v-if="props.isMeSender">
+          <Icon
+            v-if="props.isRead"
+            :name="IconNameEnum.read"
+            :data-testid="`${dataTestid}-MessageBubble-ReadIcon`"
+          />
+          <Icon
+            v-else
+            :name="IconNameEnum.partlyRead"
+            :data-testid="`${dataTestid}-MessageBubble-PartlyReadIcon`"
+          />
+        </template>
       </div>
     </article>
 
@@ -216,7 +222,7 @@ const messageArticle = computed(() => [
   }
 ]);
 
-const read = computed(() => false);
+// const read = computed(() => false);
 const blockquote = computed(() => false);
 
 const imageRegex = /\.(jpg|jpeg|png|gif|webp|svg)$/i;

@@ -126,6 +126,11 @@ svg.icon-yui-kit.contact-list__read-icon {
   --size-avatar: 25px;
 }
 
+.contact-list__me {
+  color: var(--neutral-text);
+  font-weight: bold;
+}
+
 @media (width <= 28rem) {
   .contact-selector__list {
     max-height: 100%;

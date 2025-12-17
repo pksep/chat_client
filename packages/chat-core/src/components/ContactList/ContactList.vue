@@ -45,6 +45,9 @@
           :data-testid="`${props.dataTestid}-ContactList-Title${index + 1}`"
         >
           {{ contact.nickname }}
+          <span class="contact-list__me" v-if="contact.id === user.id">
+            (Вы)
+          </span>
         </h5>
         <div
           class="contact-list__description"
@@ -143,7 +146,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, watch } from 'vue';
+import { reactive, watch, computed } from 'vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import { useResizeState } from '../../composables/useResizeState';
 import {
@@ -161,6 +164,8 @@ import Line from '../UI/Line.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { MAX_W_MD } from '../../utils/constants';
 import { setPinConversation } from '../../services/useConversions';
+import { appendUserAttributes } from '../../composables/useUsers';
+import { getAuthUser } from '../../composables/useAuth';
 import { IContactProps } from '../interfaces/interfaces';
 
 interface IExtendedContactListProps extends IContactListProps {
@@ -184,6 +189,8 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
+
+const user = computed(() => appendUserAttributes(getAuthUser()));
 
 const state = reactive({
   isPin: {} as Record<string, boolean>,
