@@ -1,0 +1,8 @@
+node_modules/
+local-packages/
+build/
+dev-dist/
+doc/
+e2e/
+Containerfile
+log
