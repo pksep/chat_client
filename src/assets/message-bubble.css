@@ -1,0 +1,239 @@
+.message {
+  display: flex;
+  gap: 10px;
+}
+
+.avatar-yui-kit.message__avatar {
+  --size-avatar: 17.5px;
+  align-self: start;
+}
+
+.message__article {
+  display: grid;
+  gap: 4px;
+  padding: 8px 16px;
+  width: 100%;
+  background-color: var(--background-color, var(--white));
+  border-radius: 12px;
+  align-self: start;
+}
+
+.message__no-author {
+  margin-left: 28px;
+}
+
+.message__article__media {
+  padding: 4px 4px 6px;
+  cursor: pointer;
+}
+
+.message__article__file {
+  padding: 8px;
+}
+
+.message-content {
+  font-size: 14px;
+  color: var(--message-text-color, var(--text-black));
+}
+
+.message-time {
+  display: flex;
+  gap: 2px;
+  font-size: 10px;
+  color: var(--message-time-color, var(--text-grey));
+  align-items: center;
+  justify-self: end;
+  & svg.icon-yui-kit {
+    font-size: 16px;
+  }
+}
+
+.full-image {
+  & .modal-yui-kit__modal-content {
+    width: 100%;
+  }
+
+  & img {
+    width: 90vw;
+    height: 90vh;
+    object-fit: contain;
+  }
+}
+
+blockquote.message-content__blockquote {
+  padding: 0;
+  margin: 0;
+  padding-right: 10px;
+  background-color: var(--blockquote-bg-color, var(--blue9));
+  border-left-color: var(--blockquote-border-color, var(--blue1));
+  border-left-width: 4px;
+  border-left-style: solid;
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+  margin-bottom: 5px;
+}
+
+blockquote.message-content__blockquote
+  div.message-content__blockquote-container {
+  display: grid;
+  margin-left: 4px;
+  padding-block: 2px;
+  & h5 {
+    margin: 0;
+  }
+}
+div.message-content__loading {
+  display: flex;
+  gap: 4px;
+  align-content: center;
+}
+
+div.message-content__loading-circle {
+  background-color: var(--neutral-text-light);
+  border-radius: 50%;
+  font-size: 8px;
+  width: 1em;
+  height: 1em;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+div.message-content__loading-circle:nth-child(2) {
+  animation-delay: 0.2s;
+}
+div.message-content__loading-circle:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+div.message-content__html > p {
+  margin: 0;
+}
+
+div.message-content__media {
+  max-height: fit-content;
+  max-width: 265px;
+  & > img,
+  & > video {
+    object-fit: contain;
+    width: 100%;
+    height: 100%;
+    border-radius: 8px;
+  }
+}
+
+div.message-content__file {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  & > div {
+    width: calc(fit-content + 10px);
+  }
+
+  & > svg {
+    cursor: pointer;
+  }
+
+  & p {
+    margin: 0;
+  }
+
+  & .message-content__file__name {
+    margin-right: 10px;
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 100%;
+    letter-spacing: 0%;
+  }
+
+  & .message-content__file__size {
+    font-weight: 400;
+    font-size: 12px;
+    line-height: 100%;
+    letter-spacing: 0%;
+    margin-top: 4px;
+  }
+
+  & .message-time {
+    margin-left: 10px;
+  }
+}
+
+.message__assistant.menu__user-assistant-icon {
+  align-self: start;
+  & svg {
+    font-size: 24px;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
+
+.message__bubble {
+  text-wrap: balance;
+  hyphens: auto;
+  overflow-wrap: anywhere;
+  justify-self: start;
+  &:last-child {
+    margin-bottom: 5px;
+  }
+}
+
+.message:not(.message__no-author) > .message__other {
+  margin-left: 28px;
+}
+
+.message__other {
+  justify-self: end;
+  flex-direction: row-reverse;
+  --background-color: var(--blue1);
+  --message-text-color: var(--white);
+  --message-time-color: var(--white);
+  --blockquote-bg-color: #9abdff;
+  --blockquote-border-color: var(--white);
+}
+
+.chat__input {
+  align-self: end;
+  padding: 15px;
+
+  .editor-content {
+    max-height: calc(var(--basic-height) / 2);
+    overflow: auto;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+}
+
+.primary-yui-kit.toolbar-button {
+  color: var(--white) !important;
+}
+
+@media screen and (width <= 28rem) {
+  .chat__message-wrapper {
+    width: 100%;
+    padding-right: 15px;
+  }
+  .message__no-author {
+    margin-right: 0;
+  }
+  .chat__input {
+    padding: 0;
+    & .editor-component {
+      min-height: 17px;
+      padding: 8px;
+      border-radius: 0;
+    }
+    & .editor-content {
+      & .tiptap {
+        padding: 5px;
+      }
+    }
+  }
+}

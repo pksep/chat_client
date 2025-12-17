@@ -13,8 +13,26 @@
     "useDefineForClassFields": true,
     "skipLibCheck": true,
     "sourceMap": true,
+    "noEmit": true,
+    "types": [
+      "vite/client",
+      "vite-plugin-pwa/client",
+      "vite-plugin-pwa/pwa-assets"
+    ],
+    "rootDir": ".",
+    "baseUrl": ".",
     "lib": ["esnext", "dom", "dom.iterable", "scripthost"],
-    "typeRoots": ["./types", "./node_modules/@types"]
+    "typeRoots": ["./types", "./node_modules/@types"],
+    "include": [
+      "./src/*.ts",
+      "./src/*.js",
+      "./src/**/*.ts",
+      "./src/**/*.js",
+      "./src/**/*.d.ts",
+      "./src/**/*.vue",
+      "./tests/**/*.ts",
+      "./src/**/*.json"
+    ]
   },
   "exclude": ["node_modules"]
 }

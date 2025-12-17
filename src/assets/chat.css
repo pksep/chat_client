@@ -1,0 +1,129 @@
+.chat__nothing {
+  display: grid;
+  margin-top: 0;
+  place-items: center;
+}
+
+.chat:has(.chat__input) {
+  & .chat__nothing {
+    margin-top: calc(var(--basic-height) / 4);
+  }
+}
+
+p.chat__nothing-paragraph {
+  font-size: 14px;
+  color: var(--text-grey);
+}
+
+.chat {
+  font-family: 'Inter Variable', sans-serif;
+  --basic-height: calc(var(--default-height) - 65px);
+  display: grid;
+  overflow-y: hidden;
+  padding-right: 4px;
+  height: var(--basic-height);
+}
+
+.chat.chat__message:not(.menu__user-assistant) {
+  height: calc(var(--default-height) / 2);
+}
+
+.chat__message-wrapper {
+  padding: 15px;
+  padding-right: 5px;
+  max-height: calc(var(--basic-height) - 135px);
+  overflow-x: hidden;
+  overflow-y: scroll;
+}
+
+.chat__message-bubble {
+  display: grid;
+  align-content: start;
+  width: 100%;
+  gap: 5px;
+}
+
+.system-message,
+.date-divider {
+  margin-top: 10px;
+  text-align: center;
+  &:last-child {
+    margin-bottom: 10px;
+  }
+
+  & > span.system-message-text {
+    font-weight: 400;
+  }
+
+  & > span {
+    color: var(--neutral-text);
+    padding: 5px 10px;
+    font-weight: 700;
+    font-size: 14px;
+    border-radius: 10px;
+  }
+}
+
+.data-divider,
+.top-element {
+  z-index: 2;
+  top: 0;
+  position: sticky;
+  container-type: scroll-state;
+  container-name: sticky-heading;
+}
+
+@container sticky-heading scroll-state(stuck: top) {
+  .date-divider > span {
+    background-color: var(--grey11);
+  }
+  .system-message > span {
+    display: none;
+  }
+}
+
+@supports not (container-type: scroll-state) {
+  .date-divider > span {
+    background-color: var(--grey11);
+  }
+}
+
+.menu__user-assistant {
+  &:hover,
+  &.menu__user-assistant--active {
+    background-color: var(--blue15);
+  }
+}
+
+.menu-user__item {
+  &:hover,
+  &.menu-user__item--active {
+    cursor: pointer;
+    background-color: var(--blue15);
+  }
+}
+
+@media screen and (width <= 28rem) {
+  .chat:has(.chat__input) {
+    --basic-height: calc(var(--default-height) - var(--header-height));
+  }
+
+  .chat.chat__messages:not(.chat__input) > .menu__user-assistant {
+    padding: 20px;
+  }
+
+  .chat__nothing {
+    height: auto;
+    margin-top: auto;
+  }
+  .chat {
+    --basic-height: auto;
+    --size-left-menu: 0;
+    --size-right-menu: 0;
+    padding-right: 0;
+  }
+
+  .chat__input {
+    max-width: 100%;
+  }
+}

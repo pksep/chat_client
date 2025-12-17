@@ -1,0 +1,129 @@
+aside.menu-info {
+  background-color: var(--white);
+  border-left-color: var(--border-grey);
+  border-left-width: 0.5px;
+  border-left-style: solid;
+  height: var(--default-height);
+  --size-avatar: 42.5px;
+  &.menu-info--open .collapse {
+    width: 100%;
+  }
+}
+
+section.menu__info-users {
+  --size-avatar: 50px;
+  display: grid;
+  gap: 10px;
+}
+
+header.menu-info__header {
+  display: flex;
+  padding: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+section.menu-info__info-section {
+  padding: 10px;
+  padding-inline: 20px;
+  display: grid;
+  gap: 10px;
+}
+
+.menu-info__user-header {
+  display: flex;
+  margin: 0;
+  align-items: center;
+}
+
+.menu-info__user-count {
+  display: grid;
+  margin-left: 4px;
+  place-content: center;
+  border-radius: 50%;
+  background-color: var(--blue12);
+  color: var(--text-black);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 100%;
+  width: 20px;
+  height: 20px;
+}
+
+button.tabs__navigation-button {
+  display: flex;
+  align-items: center;
+}
+
+div.menu-info__buttons {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.menu-info__create-channel {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  gap: 5px;
+  & p {
+    padding-block: 10px;
+    margin: 0;
+  }
+  & span {
+    font-weight: normal;
+    color: var(--text-black);
+  }
+}
+.tabs__navigation {
+  justify-content: start !important;
+  gap: 70px;
+}
+
+.menu-info__avatar-button {
+  --size-avatar: 42.5px;
+  display: flex;
+  width: 100%;
+  justify-content: center;
+}
+
+svg.icon-yui-kit.menu-info__close-icon {
+  font-size: 17px;
+}
+
+button.menu-info__close-button {
+  padding: 6px;
+}
+
+button.tabs__navigation-button {
+  margin-inline: 20px !important;
+}
+
+button.button-yui-kit.large.menu-info__secondary-button {
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  padding-block: 10px;
+  color: var(--text-black);
+  & svg.icon-yui-kit {
+    color: var(--icon-color, var(--grey5));
+  }
+  &:hover {
+    --icon-color: var(--blue1);
+    background-color: var(--primary-pressed-light);
+  }
+}
+
+.tabs__navigation-content > section.menu__info-users {
+  padding-block: 10px;
+}
+
+aside.menu-info .tabs__navigation-content > section.menu__info-users {
+  padding-inline: 20px;
+}
+
+.menu-info__title-text {
+  color: var(--neutral-text);
+  text-align: center;
+  font-weight: 600;
+}
