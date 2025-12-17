@@ -1,12 +1,14 @@
-FROM oven/bun:latest AS builder
+FROM oven/bun:1-alpine AS builder
 
 WORKDIR /app
 
 COPY . .
 
-RUN SKIP_PREPARE=1 bun install
+RUN bun install --ignore-scripts
 
 RUN bun run init:openim
+
+COPY ./tsconfig.json .
 
 RUN VITE_BASE_MODE=app bun run build
 
