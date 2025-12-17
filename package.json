@@ -1,29 +1,57 @@
 {
-  "name": "@sep-chat-client/root",
-  "private": true,
-  "version": "0.1.0",
+  "name": "@pksep/chat-core",
+  "version": "25.12.6",
   "type": "module",
+  "main": "./build/lib/chat-container.js",
+  "types": "./build/lib/chat-container.d.ts",
   "scripts": {
-    "start:dev": "pnpm --filter './packages/chat-core' run start:dev",
-    "start": "pnpm  --filter './packages/*' run start",
-    "build:lib": "pnpm  --filter './packages/chat-core' run build:lib",
-    "build": "pnpm run lint && pnpm --filter './packages/*' run build",
-    "lint": "eslint --fix --ext .js,.ts,.vue packages",
+    "start:dev": "vite",
+    "start": "vite preview",
+    "build": "vue-tsc && vite build",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "build:lib": "cross-env VITE_BASE_MODE=lib pnpm run build",
+    "publish:lib": "pnpm version patch && pnpm run build:lib && pnpm publish --access public --no-git-checks",
+    "generate:assets": "pwa-assets-generator",
+    "init:openim": "node ./scripts/copyOpenIM.ts",
     "format": "prettier -w packages/**/*.ts -w packages/**/*.vue",
     "prepare": "echo 'Running preinstall script' && lefthook install"
   },
+  "exports": {
+    ".": {
+      "import": "./build/lib/chat-container.js",
+      "types": "./build/lib/chat-container.d.ts"
+    }
+  },
+  "files": [
+    "build/lib/*.js",
+    "build/lib/*.ts",
+    "build/lib/*.wasm"
+  ],
   "dependencies": {
+    "@fontsource-variable/inter": "^5.2.6",
+    "@mastra/client-js": "^0.12.3",
+    "@openim/wasm-client-sdk": "3.8.3-patch.10",
+    "@pksep/reqi": "^0.0.25",
+    "zod": "3"
+  },
+  "peerDependencies": {
+    "@pksep/yui": "0.1.x",
+    "zod": "3"
+  },
+  "devDependencies": {
+    "@playwright/experimental-ct-vue": "^1.56.1",
+    "@playwright/test": "^1.56.1",
+    "vue": "^3.5.21",
+    "vite-plugin-pwa": "^1.1.0",
+    "vite-plugin-static-copy": "^3.1.4",
+    "vue-eslint-parser": "^9.4.3",
     "@babel/eslint-parser": "^7.28.0",
-    "@pksep/chat-core": "workspace:*",
     "@rushstack/eslint-patch": "^1.12.0",
     "@vue/compiler-sfc": "^3.5.25",
     "@vue/eslint-config-airbnb": "^8.0.0",
     "@vue/runtime-dom": "^3.5.25",
     "vite-plugin-dts": "^4.5.4",
-    "vue": "^3.5.21",
-    "vue-eslint-parser": "^9.4.3"
-  },
-  "devDependencies": {
     "@babel/plugin-transform-private-methods": "^7.27.1",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
@@ -45,6 +73,5 @@
     "plugins": [
       "@babel/plugin-transform-private-methods"
     ]
-  },
-  "packageManager": "pnpm@10.23.0+sha512.21c4e5698002ade97e4efe8b8b4a89a8de3c85a37919f957e7a0f30f38fbc5bbdd05980ffe29179b2fb6e6e691242e098d945d1601772cad0fef5fb6411e2a4b"
+  }
 }

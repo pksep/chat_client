@@ -30,3 +30,7 @@ local-packages/
 
 dev-dist/
 .npmrc
+
+public/openIM.wasm
+public/sql-wasm.wasm
+public/wasm_exec.js
