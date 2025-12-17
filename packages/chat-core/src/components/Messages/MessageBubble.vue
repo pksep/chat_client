@@ -149,7 +149,7 @@
           />
           <Icon
             v-else
-            :name="IconNameEnum.partlyRead"
+            :name="IconNameEnum.read"
             :data-testid="`${dataTestid}-MessageBubble-PartlyReadIcon`"
           />
         </template>

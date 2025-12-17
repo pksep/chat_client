@@ -5,6 +5,7 @@ export interface IMessageBubbleProps {
   author?: string;
   time: string;
   loader?: boolean;
+  isRead?: boolean;
   isMeSender?: boolean;
   sender?: string;
   avatar?: string;
