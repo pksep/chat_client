@@ -4,7 +4,9 @@ WORKDIR /app
 
 COPY . .
 
-RUN bun install
+RUN SKIP_PREPARE=1 bun install
+
+RUN bun run init:openim
 
 RUN VITE_BASE_MODE=app bun run build
 
