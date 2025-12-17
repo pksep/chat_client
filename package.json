@@ -7,6 +7,7 @@
   "scripts": {
     "start:dev": "vite",
     "start": "vite preview",
+    "lint": "eslint --ext .ts,.vue src scripts",
     "build": "vue-tsc && vite build",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
@@ -14,7 +15,7 @@
     "publish:lib": "pnpm version patch && pnpm run build:lib && pnpm publish --access public --no-git-checks",
     "generate:assets": "pwa-assets-generator",
     "init:openim": "node ./scripts/copyOpenIM.ts",
-    "format": "prettier -w packages/**/*.ts -w packages/**/*.vue",
+    "format": "prettier -w {src,scripts}/**/*.ts -w {src,scripts}/**/*.vue",
     "prepare": "echo 'Running preinstall script' && lefthook install"
   },
   "exports": {
