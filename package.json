@@ -34,10 +34,10 @@
     "@mastra/client-js": "^0.12.3",
     "@openim/wasm-client-sdk": "3.8.3-patch.10",
     "@pksep/reqi": "^0.0.25",
+    "@pksep/yui": "^0.1.151",
     "zod": "3"
   },
   "peerDependencies": {
-    "@pksep/yui": "0.1.x",
     "zod": "3"
   },
   "devDependencies": {
