@@ -1,6 +1,6 @@
 {
   "name": "@pksep/chat-core",
-  "version": "25.12.5",
+  "version": "25.12.6",
   "type": "module",
   "main": "./build/lib/chat-container.js",
   "types": "./build/lib/chat-container.d.ts",
@@ -11,7 +11,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "build:lib": "cross-env VITE_BASE_MODE=lib pnpm run build",
-    "publish:lib": "pnpm run build:lib && pnpm publish --access public --no-git-checks",
+    "publish:lib": "pnpm version patch && pnpm run build:lib && pnpm publish --access public --no-git-checks",
     "generate:assets": "pwa-assets-generator",
     "init:openim": "node ./scripts/copyOpenIM.ts",
     "init:openim-admin": "tsx ./scripts/getAdminTokenOpenIM.ts"
