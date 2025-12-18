@@ -83,7 +83,7 @@
         </div>
 
         <MessageBubble
-          v-else
+          v-if="!(message.isSystemMessage || message.notificationElem)"
           :class="
             messageChat(props.user.id === message.sendID ? 'user' : 'assistant')
           "
@@ -113,6 +113,7 @@
     <ContentEditor
       v-model="inputText"
       active-attach-file
+      send-on-enter
       @unmount-send="handleSend"
       @unmount-attach-file="handleAttachFile"
       :data-testid="`${props.dataTestid}-MessageList-ContentEditor`"
@@ -204,23 +205,58 @@ const messageChat = (role: string) => [
   { message__other: role === 'user' }
 ];
 
-const scrollToBottom = (): void => {
+const scrollState = reactive({
+  isUserScrolling: false,
+  previousScrollTop: 0,
+  shouldAutoScroll: true
+});
+
+const scrollToBottom = (smooth: boolean = false): void => {
   if (chatWrapperRef?.value) {
-    chatWrapperRef.value.scrollTop = chatWrapperRef.value.scrollHeight;
+    if (smooth) {
+      chatWrapperRef.value.scrollTo({
+        top: chatWrapperRef.value.scrollHeight,
+        behavior: 'smooth'
+      });
+    } else {
+      const threshold = 30;
+      const nearBottom =
+        chatWrapperRef.value.scrollHeight - chatWrapperRef.value.clientHeight - chatWrapperRef.value.scrollTop < threshold;
+
+      if (!nearBottom || scrollState.shouldAutoScroll) {
+        chatWrapperRef.value.scrollTop = chatWrapperRef.value.scrollHeight;
+        scrollState.shouldAutoScroll = false;
+      }
+    }
   }
 };
 
 const handleScroll = async (): Promise<void> => {
   if (chatWrapperRef?.value) {
-    const scrollHeight = chatWrapperRef.value.scrollHeight;
-    if (chatWrapperRef.value?.scrollTop < 20) {
+    const { scrollTop, scrollHeight, clientHeight } = chatWrapperRef.value;
+
+    scrollState.isUserScrolling = true;
+    scrollState.previousScrollTop = scrollTop;
+
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    scrollState.shouldAutoScroll = distanceFromBottom < 100;
+
+    if (scrollTop < 20) {
+      const currentScrollTop = chatWrapperRef.value.scrollTop;
+      const currentScrollHeight = chatWrapperRef.value.scrollHeight;
+
       await getMessagesByConversationId(
         props.contact?.conversationId,
         state.messages[0]?.clientMsgID
       );
+
       nextTick(() => {
-        chatWrapperRef.value!.scrollTop =
-          chatWrapperRef.value!.scrollHeight - scrollHeight;
+        const newScrollHeight = chatWrapperRef.value!.scrollHeight;
+        const heightAdded = newScrollHeight - currentScrollHeight;
+
+        chatWrapperRef.value!.scrollTop = currentScrollTop + heightAdded;
+
+        scrollState.shouldAutoScroll = false;
       });
     }
   }
@@ -236,7 +272,8 @@ watch(
       (aiMessages?.value && aiMessages?.value.length) ||
       state.messages.length
     ) {
-      nextTick(() => scrollToBottom());
+      scrollState.shouldAutoScroll = true;
+      nextTick(() => scrollToBottom(false));
     }
   },
   { immediate: true }
@@ -249,16 +286,45 @@ watch(
       return;
     }
 
-    if (!state.messages.length || chatWrapperRef.value?.scrollTop > 200) {
+    if (!state.messages.length) {
       return;
     }
 
-    nextTick(() => scrollToBottom());
+    // Only auto-scroll if user is at/near the bottom of the chat
+    if (scrollState.shouldAutoScroll) {
+      nextTick(() => scrollToBottom(false));
 
-    const newMessage = state.messages[state.messages.length - 1];
+      const newMessage = state.messages[state.messages.length - 1];
 
-    if (newMessage.sendID !== props.user.id) {
-      markAsRead(props.contact?.conversationId);
+      if (newMessage.sendID !== props.user.id) {
+        markAsRead(props.contact?.conversationId);
+      }
+    }
+  }
+);
+
+// Watch for user scroll activity to update scroll state
+watch(
+  () => chatWrapperRef?.value?.scrollTop,
+  (newScrollTop, oldScrollTop) => {
+    if (chatWrapperRef?.value && scrollState.isUserScrolling) {
+      const distanceFromBottom =
+        chatWrapperRef.value.scrollHeight -
+        chatWrapperRef.value.clientHeight -
+        chatWrapperRef.value.scrollTop;
+
+      // Enable auto-scroll if user scrolls back to bottom
+      if (distanceFromBottom < 100) {
+        scrollState.shouldAutoScroll = true;
+      } else {
+        // Disable auto-scroll if user scrolls away from bottom
+        scrollState.shouldAutoScroll = false;
+      }
+
+      // Reset the user scrolling flag after a brief delay
+      setTimeout(() => {
+        scrollState.isUserScrolling = false;
+      }, 150);
     }
   }
 );
@@ -273,7 +339,7 @@ const handleSend = async (): Promise<void> => {
   if (props.chapter === 'ai') {
     const text = inputText.value;
     inputText.value = '';
-    await sendMessage(text, scrollToBottom);
+    await sendMessage(text, () => scrollToBottom(false));
     return;
   }
 
@@ -329,7 +395,7 @@ const handleSend = async (): Promise<void> => {
     console.error('[OpenIM] Failed to send message:', error);
   }
 
-  nextTick(() => scrollToBottom());
+  nextTick(() => scrollToBottom(false));
 };
 
 const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
@@ -384,7 +450,7 @@ const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
         });
       }
 
-      nextTick(() => scrollToBottom());
+      nextTick(() => scrollToBottom(false));
     } catch (error) {
       console.error('[OpenIM] Failed to send file:', error);
     }
