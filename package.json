@@ -1,6 +1,6 @@
 {
   "name": "@pksep/chat-core",
-  "version": "25.12.6",
+  "version": "25.12.8",
   "type": "module",
   "main": "./build/lib/chat-container.js",
   "types": "./build/lib/chat-container.d.ts",
@@ -8,12 +8,12 @@
     "start:dev": "vite",
     "start": "vite preview",
     "lint": "vue-tsc && eslint --ext .ts,.vue src scripts",
-    "build": "cross-env VITE_BASE_MODE=app vue-tsc && vite build",
+    "build": "vue-tsc && vite build",
     "build:prod": "cross-env VITE_BASE_MODE=app vite build ",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "build:lib": "cross-env VITE_BASE_MODE=lib bun run build",
-    "publish:lib": "bun version patch && bun run build:lib && bun publish --access public --no-git-checks",
+    "publish:lib": "npm version patch && bun run build:lib && bun publish --access public --no-git-checks",
     "generate:assets": "pwa-assets-generator",
     "init:openim": "bun ./scripts/copyOpenIM.ts",
     "format": "prettier -w {src,scripts}/**/*.ts -w {src,scripts}/**/*.vue",
@@ -35,7 +35,7 @@
     "@mastra/client-js": "^0.12.3",
     "@openim/wasm-client-sdk": "3.8.3-patch.10",
     "@pksep/reqi": "^0.0.25",
-    "@pksep/yui": "^0.1.151",
+    "@pksep/yui": "0.1.151",
     "zod": "3"
   },
   "peerDependencies": {
