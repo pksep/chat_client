@@ -221,7 +221,10 @@ const scrollToBottom = (smooth: boolean = false): void => {
     } else {
       const threshold = 30;
       const nearBottom =
-        chatWrapperRef.value.scrollHeight - chatWrapperRef.value.clientHeight - chatWrapperRef.value.scrollTop < threshold;
+        chatWrapperRef.value.scrollHeight -
+          chatWrapperRef.value.clientHeight -
+          chatWrapperRef.value.scrollTop <
+        threshold;
 
       if (!nearBottom || scrollState.shouldAutoScroll) {
         chatWrapperRef.value.scrollTop = chatWrapperRef.value.scrollHeight;
@@ -306,7 +309,7 @@ watch(
 // Watch for user scroll activity to update scroll state
 watch(
   () => chatWrapperRef?.value?.scrollTop,
-  (newScrollTop, oldScrollTop) => {
+  () => {
     if (chatWrapperRef?.value && scrollState.isUserScrolling) {
       const distanceFromBottom =
         chatWrapperRef.value.scrollHeight -

@@ -39,7 +39,7 @@ if (import.meta.hot) {
 let connectionRetries = 0;
 const MAX_RETRIES = 5;
 const RETRY_DELAY = 3000; // 3 seconds
-let reconnectTimeout: number | null = null; // Use number for browser environment (setTimeout returns number)
+let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const setupOpenIM = (): void => {
   IMSDK.on(CbEvents.OnConnecting, () => {
@@ -64,7 +64,9 @@ const setupOpenIM = (): void => {
     if (connectionRetries < MAX_RETRIES) {
       connectionRetries++;
       const delay = RETRY_DELAY * connectionRetries; // Exponential backoff
-      console.log(`[OpenIM] Attempting to reconnect in ${delay}ms (attempt ${connectionRetries}/${MAX_RETRIES})`);
+      console.log(
+        `[OpenIM] Attempting to reconnect in ${delay}ms (attempt ${connectionRetries}/${MAX_RETRIES})`
+      );
 
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout);
@@ -87,10 +89,15 @@ const setupOpenIM = (): void => {
               console.error('[OpenIM] Reconnection failed:', error);
             });
           } catch (e) {
-            console.error('[OpenIM] Failed to parse stored user data for reconnection:', e);
+            console.error(
+              '[OpenIM] Failed to parse stored user data for reconnection:',
+              e
+            );
           }
         } else {
-          console.warn('[OpenIM] No stored user data available for reconnection');
+          console.warn(
+            '[OpenIM] No stored user data available for reconnection'
+          );
         }
       }, delay);
     } else {
@@ -149,10 +156,7 @@ const setupOpenIM = (): void => {
   });
 
   // Handle connection disconnection
-  IMSDK.on(CbEvents.OnUserSigExpired, () => {
-    console.warn('[OpenIM] User signature expired, need to refresh token');
-    // In a real app, you would refresh the token here and re-login
-  });
+  // Note: OnUserSigExpired not available in current SDK version
 
   IMSDK.on(CbEvents.OnKickedOffline, () => {
     console.warn('[OpenIM] User was kicked offline');
@@ -189,12 +193,16 @@ export const uploadFile = async (file: File) => {
   const clientUUID = generateUUID();
 
   try {
-    const res = await withTimeout(IMSDK.uploadFile({
-      name: clientUUID + '_' + file.name,
-      contentType: file.type,
-      uuid: clientUUID,
-      file: file
-    }), TIMEOUT_DURATION, 'uploadFile');
+    const res = await withTimeout(
+      IMSDK.uploadFile({
+        name: clientUUID + '_' + file.name,
+        contentType: file.type,
+        uuid: clientUUID,
+        file: file
+      }),
+      TIMEOUT_DURATION,
+      'uploadFile'
+    );
 
     return encodeURI(res.data.url);
   } catch (error) {
@@ -223,7 +231,11 @@ export const uploadFile = async (file: File) => {
 };
 
 // Utility function to wrap OpenIM operations with timeout
-const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, operationName: string): Promise<T> => {
+const withTimeout = <T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  operationName: string
+): Promise<T> => {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
       reject(new Error(`${operationName} timed out after ${timeoutMs}ms`));
@@ -284,7 +296,11 @@ export const sendMessageIM = async ({
 
     if (type === 'text') {
       try {
-        createResp = await withTimeout(IMSDK.createTextMessage(message || ''), TIMEOUT_DURATION, 'createTextMessage');
+        createResp = await withTimeout(
+          IMSDK.createTextMessage(message || ''),
+          TIMEOUT_DURATION,
+          'createTextMessage'
+        );
       } catch (error) {
         const errorDetails = {
           error: error,
@@ -311,15 +327,19 @@ export const sendMessageIM = async ({
       if (!file) throw new Error('File is required for file message');
 
       try {
-        createResp = await withTimeout(IMSDK.createFileMessageByFile({
-          filePath: file.name,
-          fileName: file.name,
-          uuid: generateUUID(),
-          sourceUrl: '',
-          fileSize: file.size,
-          fileType: file.type,
-          file: file
-        }), TIMEOUT_DURATION, 'createFileMessageByFile');
+        createResp = await withTimeout(
+          IMSDK.createFileMessageByFile({
+            filePath: file.name,
+            fileName: file.name,
+            uuid: generateUUID(),
+            sourceUrl: '',
+            fileSize: file.size,
+            fileType: file.type,
+            file: file
+          }),
+          TIMEOUT_DURATION,
+          'createFileMessageByFile'
+        );
       } catch (error) {
         const errorDetails = {
           error: error,
@@ -356,13 +376,17 @@ export const sendMessageIM = async ({
       };
 
       try {
-        createResp = await withTimeout(IMSDK.createImageMessageByFile({
-          sourcePicture: picBaseInfo,
-          bigPicture: picBaseInfo,
-          snapshotPicture: picBaseInfo,
-          sourcePath: file.name,
-          file: file
-        }), TIMEOUT_DURATION, 'createImageMessageByFile');
+        createResp = await withTimeout(
+          IMSDK.createImageMessageByFile({
+            sourcePicture: picBaseInfo,
+            bigPicture: picBaseInfo,
+            snapshotPicture: picBaseInfo,
+            sourcePath: file.name,
+            file: file
+          }),
+          TIMEOUT_DURATION,
+          'createImageMessageByFile'
+        );
       } catch (error) {
         const errorDetails = {
           error: error,
@@ -395,11 +419,15 @@ export const sendMessageIM = async ({
 
     msg.clientMsgID = clientMsgID;
 
-    const res = await withTimeout(IMSDK.sendMessage({
-      message: msg,
-      recvID: to,
-      groupID: groupId
-    }), TIMEOUT_DURATION, 'sendMessage');
+    const res = await withTimeout(
+      IMSDK.sendMessage({
+        message: msg,
+        recvID: to,
+        groupID: groupId
+      }),
+      TIMEOUT_DURATION,
+      'sendMessage'
+    );
 
     const [smallerUserID, largerUserID] = [
       res.data.sendID,
@@ -457,12 +485,16 @@ const getMessagesByConversationId = async (
   const TIMEOUT_DURATION = 15000; // 15 seconds timeout
 
   try {
-    const response = await withTimeout(IMSDK.getAdvancedHistoryMessageList({
-      conversationID: conversationId,
-      startClientMsgID: lastClientMsgID,
-      count: 50,
-      viewType: 0
-    }), TIMEOUT_DURATION, 'getAdvancedHistoryMessageList');
+    const response = await withTimeout(
+      IMSDK.getAdvancedHistoryMessageList({
+        conversationID: conversationId,
+        startClientMsgID: lastClientMsgID,
+        count: 50,
+        viewType: 0
+      }),
+      TIMEOUT_DURATION,
+      'getAdvancedHistoryMessageList'
+    );
 
     const messages = response.data.messageList || [];
     if (lastClientMsgID) {
@@ -501,7 +533,11 @@ const markAsRead = async (conversationID: string) => {
   const TIMEOUT_DURATION = 10000; // 10 seconds timeout
 
   try {
-    await withTimeout(IMSDK.markConversationMessageAsRead(conversationID), TIMEOUT_DURATION, 'markConversationMessageAsRead');
+    await withTimeout(
+      IMSDK.markConversationMessageAsRead(conversationID),
+      TIMEOUT_DURATION,
+      'markConversationMessageAsRead'
+    );
   } catch (error) {
     console.error('[OpenIM] Failed to mark messages as read:', error);
     // Don't throw here as it's not critical for the UI flow
