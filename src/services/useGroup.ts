@@ -114,7 +114,7 @@ const createGroup = async (
 
     const groupItem = manipulateConversationList([conv])[0];
     groups.value.unshift(groupItem);
-    updateGroupList([conv]); // Sync to groups store
+    updateGroupList([conv]);
 
     const fullGroup = {
       ...res.data,
