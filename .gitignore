@@ -34,3 +34,5 @@ dev-dist/
 public/openIM.wasm
 public/sql-wasm.wasm
 public/wasm_exec.js
+
+.meta/local-services/chat_sync/
