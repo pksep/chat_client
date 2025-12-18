@@ -208,127 +208,131 @@ const messageChat = (role: string) => [
 const scrollState = reactive({
   isUserScrolling: false,
   previousScrollTop: 0,
-  shouldAutoScroll: true
+  shouldAutoScroll: true,
+  isInitialLoad: true  // Track if it's the first load
 });
 
 const scrollToBottom = (smooth: boolean = false): void => {
-  if (chatWrapperRef?.value) {
+  if (!chatWrapperRef?.value || !scrollState.shouldAutoScroll) return;
+
+  setTimeout(() => {
+    if (!chatWrapperRef.value) return;
+
     if (smooth) {
       chatWrapperRef.value.scrollTo({
         top: chatWrapperRef.value.scrollHeight,
         behavior: 'smooth'
       });
     } else {
-      const threshold = 30;
-      const nearBottom =
-        chatWrapperRef.value.scrollHeight -
-          chatWrapperRef.value.clientHeight -
-          chatWrapperRef.value.scrollTop <
-        threshold;
-
-      if (!nearBottom || scrollState.shouldAutoScroll) {
-        chatWrapperRef.value.scrollTop = chatWrapperRef.value.scrollHeight;
-        scrollState.shouldAutoScroll = false;
-      }
+      chatWrapperRef.value.scrollTop = chatWrapperRef.value.scrollHeight;
     }
-  }
+  }, 10);
 };
 
 const handleScroll = async (): Promise<void> => {
-  if (chatWrapperRef?.value) {
-    const { scrollTop, scrollHeight, clientHeight } = chatWrapperRef.value;
+  if (!chatWrapperRef?.value) return;
 
-    scrollState.isUserScrolling = true;
-    scrollState.previousScrollTop = scrollTop;
+  const { scrollTop, scrollHeight, clientHeight } = chatWrapperRef.value;
+  const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+  scrollState.shouldAutoScroll = distanceFromBottom < 100;
+  scrollState.isUserScrolling = distanceFromBottom >= 100;
+  scrollState.previousScrollTop = scrollTop;
+
+  if (scrollState.isInitialLoad) {
+    scrollState.isInitialLoad = false;
     scrollState.shouldAutoScroll = distanceFromBottom < 100;
+  }
 
-    if (scrollTop < 20) {
-      const currentScrollTop = chatWrapperRef.value.scrollTop;
-      const currentScrollHeight = chatWrapperRef.value.scrollHeight;
+  if (scrollTop < 20) {
+    const currentScrollTop = scrollTop;
+    const currentScrollHeight = scrollHeight;
 
-      await getMessagesByConversationId(
-        props.contact?.conversationId,
-        state.messages[0]?.clientMsgID
-      );
+    await getMessagesByConversationId(
+      props.contact?.conversationId,
+      state.messages[0]?.clientMsgID
+    );
 
-      nextTick(() => {
-        const newScrollHeight = chatWrapperRef.value!.scrollHeight;
-        const heightAdded = newScrollHeight - currentScrollHeight;
+    nextTick(() => {
+      if (!chatWrapperRef.value) return;
 
-        chatWrapperRef.value!.scrollTop = currentScrollTop + heightAdded;
+      const newScrollHeight = chatWrapperRef.value!.scrollHeight;
+      const heightAdded = newScrollHeight - currentScrollHeight;
 
-        scrollState.shouldAutoScroll = false;
-      });
-    }
+      chatWrapperRef.value!.scrollTop = currentScrollTop + heightAdded;
+      scrollState.shouldAutoScroll = false;
+    });
   }
 };
 
 watch(
   () => props.chapter,
-  (newValue, oldValue) => {
-    if (newValue !== oldValue) {
-      getMessagesByConversationId(props.contact?.conversationId);
+  async (newValue, oldValue) => {
+    if (newValue === oldValue) return;
+
+    if (chatWrapperRef?.value) {
+      scrollState.previousScrollTop = chatWrapperRef.value.scrollTop;
     }
-    if (
-      (aiMessages?.value && aiMessages?.value.length) ||
-      state.messages.length
-    ) {
-      scrollState.shouldAutoScroll = true;
-      nextTick(() => scrollToBottom(false));
-    }
+
+    await getMessagesByConversationId(props.contact?.conversationId);
+    await nextTick();
+
+    scrollState.isInitialLoad = true;
+    scrollState.shouldAutoScroll = true;
+    scrollState.isUserScrolling = false;
+
+    setTimeout(() => {
+      if (!chatWrapperRef?.value) return;
+
+      if (scrollState.shouldAutoScroll) {
+        chatWrapperRef.value.scrollTop = chatWrapperRef.value.scrollHeight;
+      }
+      scrollState.isInitialLoad = false;
+    }, 100);
   },
   { immediate: true }
 );
 
 watch(
   () => state.messages.length,
-  () => {
-    if (props.chapter === 'ai') {
-      return;
-    }
+  async (newLength, oldLength) => {
+    if (props.chapter === 'ai' || !state.messages.length) return;
 
-    if (!state.messages.length) {
-      return;
-    }
+    await nextTick();
 
-    // Only auto-scroll if user is at/near the bottom of the chat
-    if (scrollState.shouldAutoScroll) {
-      nextTick(() => scrollToBottom(false));
+    // If this is the initial load of messages, always scroll to bottom
+    if (oldLength === 0 && newLength > 0) {
+      setTimeout(() => {
+        scrollState.shouldAutoScroll = true;
+        scrollToBottom(false);
+      }, 30);
+    } else if (scrollState.shouldAutoScroll) {
+      setTimeout(() => {
+        scrollToBottom(false);
+      }, 10);
 
       const newMessage = state.messages[state.messages.length - 1];
 
-      if (newMessage.sendID !== props.user.id) {
+      if (newMessage && newMessage.sendID !== props.user.id) {
         markAsRead(props.contact?.conversationId);
       }
     }
-  }
+  },
+  { immediate: true }
 );
 
-// Watch for user scroll activity to update scroll state
 watch(
   () => chatWrapperRef?.value?.scrollTop,
-  () => {
-    if (chatWrapperRef?.value && scrollState.isUserScrolling) {
-      const distanceFromBottom =
-        chatWrapperRef.value.scrollHeight -
-        chatWrapperRef.value.clientHeight -
-        chatWrapperRef.value.scrollTop;
+  (newScrollTop) => {
+    if (!chatWrapperRef?.value || scrollState.isInitialLoad) return;
 
-      // Enable auto-scroll if user scrolls back to bottom
-      if (distanceFromBottom < 100) {
-        scrollState.shouldAutoScroll = true;
-      } else {
-        // Disable auto-scroll if user scrolls away from bottom
-        scrollState.shouldAutoScroll = false;
-      }
+    const distanceFromBottom =
+      chatWrapperRef.value.scrollHeight -
+      chatWrapperRef.value.clientHeight -
+      newScrollTop;
 
-      // Reset the user scrolling flag after a brief delay
-      setTimeout(() => {
-        scrollState.isUserScrolling = false;
-      }, 150);
-    }
+    scrollState.shouldAutoScroll = distanceFromBottom < 100;
+    scrollState.isUserScrolling = distanceFromBottom >= 100;
   }
 );
 
@@ -398,7 +402,10 @@ const handleSend = async (): Promise<void> => {
     console.error('[OpenIM] Failed to send message:', error);
   }
 
-  nextTick(() => scrollToBottom(false));
+  // Use a slight delay to ensure message is added to the list before scrolling
+  setTimeout(() => {
+    scrollToBottom(false);
+  }, 10);
 };
 
 const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
@@ -453,7 +460,10 @@ const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
         });
       }
 
-      nextTick(() => scrollToBottom(false));
+      // Use a slight delay to ensure message is added to the list before scrolling
+      setTimeout(() => {
+        scrollToBottom(false);
+      }, 10);
     } catch (error) {
       console.error('[OpenIM] Failed to send file:', error);
     }
