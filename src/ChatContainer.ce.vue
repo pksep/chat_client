@@ -72,10 +72,6 @@ onMounted(async () => {
   }
 });
 
-onUnmounted(async () => {
-  window.location.reload(); // НЕ УДАЛИТЬ!!! это для отключении сокета в опеним
-});
-
 watch(
   () => allNotificationCount.value,
   () => {
