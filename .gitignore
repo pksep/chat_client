@@ -36,3 +36,4 @@ public/sql-wasm.wasm
 public/wasm_exec.js
 
 .meta/local-services/chat_sync/
+!.dockerignore

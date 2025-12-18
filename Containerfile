@@ -1,12 +1,14 @@
-FROM oven/bun:latest AS builder
+FROM oven/bun:1-alpine AS builder
 
 WORKDIR /app
 
 COPY . .
 
-RUN bun install
+RUN bun install --ignore-scripts
 
-RUN VITE_BASE_MODE=app bun run build
+RUN bun run init:openim
+
+RUN bun run build:prod
 
 FROM caddy:2-alpine
 

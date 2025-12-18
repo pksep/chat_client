@@ -21,18 +21,21 @@
     ],
     "rootDir": ".",
     "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "lib": ["esnext", "dom", "dom.iterable", "scripthost"],
-    "typeRoots": ["./types", "./node_modules/@types"],
-    "include": [
-      "./src/*.ts",
-      "./src/*.js",
-      "./src/**/*.ts",
-      "./src/**/*.js",
-      "./src/**/*.d.ts",
-      "./src/**/*.vue",
-      "./tests/**/*.ts",
-      "./src/**/*.json"
-    ]
+    "typeRoots": ["./types", "./node_modules/@types"]
   },
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules"],
+  "include": [
+    "./src/*.ts",
+    "./src/*.js",
+    "./src/**/*.ts",
+    "./src/**/*.js",
+    "./src/**/*.d.ts",
+    "./src/**/*.vue",
+    "./tests/**/*.ts",
+    "./src/**/*.json"
+  ]
 }
