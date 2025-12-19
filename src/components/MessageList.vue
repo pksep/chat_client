@@ -249,7 +249,7 @@ watch(
       return;
     }
 
-    if (!state.messages.length || chatWrapperRef.value?.scrollTop > 200) {
+    if (!state.messages.length) {
       return;
     }
 
