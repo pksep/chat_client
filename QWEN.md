@@ -24,3 +24,13 @@ This project uses bun as the package manager instead of npm. Use bun commands (e
 The following additional rules are defined in the `.meta/rules/` directory:
 
 - [code-comments.md](.meta/rules/code-comments.md) - Guidelines for code comments policy
+
+## Code Comments Policy
+
+This project follows a minimal comments policy as outlined in [code-comments.md](.meta/rules/code-comments.md). When working on this codebase:
+
+- Minimize comments and focus on self-explanatory code through good naming
+- Only add comments to explain the "why" not the "what"
+- Focus comments on complex business logic that isn't immediately obvious
+- Avoid redundant comments that just repeat what the code does
+- Prioritize clean, readable code over commented code

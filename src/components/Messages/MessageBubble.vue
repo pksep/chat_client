@@ -106,13 +106,13 @@
                   class="message-content__file__name"
                   :data-testid="`${dataTestid}-MessageBubble-FileName`"
                 >
-                  {{ getShortName(file.fileName) }}
+                  {{ getShortName(props.file.fileName) }}
                 </p>
                 <p
                   class="message-content__file__size"
                   :data-testid="`${dataTestid}-MessageBubble-FileSize`"
                 >
-                  {{ getFormatFileSize(file.fileSize) }}
+                  {{ getFormatFileSize(props.file.fileSize) }}
                 </p>
               </div>
               <div
@@ -123,10 +123,11 @@
                   :data-testid="`${dataTestid}-MessageBubble-FileTimeText`"
                   >{{ props.time }}</span
                 >
-                <Icon
-                  v-if="props.isMeSender && props.isRead"
-                  :name="IconNameEnum.read"
-                  :data-testid="`${dataTestid}-MessageBubble-FileReadIcon`"
+                <MessageStatusIcons
+                  v-if="props.isMeSender"
+                  :is-read="props.isRead"
+                  :message-status="props.messageStatus"
+                  :data-testid="`${dataTestid}-MessageBubble`"
                 />
               </div>
             </div>
@@ -141,13 +142,12 @@
         <span :data-testid="`${dataTestid}-MessageBubble-TimeText`">{{
           props.time
         }}</span>
-        <template v-if="props.isMeSender">
-          <Icon
-            v-if="props.isRead"
-            :name="IconNameEnum.read"
-            :data-testid="`${dataTestid}-MessageBubble-ReadIcon`"
-          />
-        </template>
+        <MessageStatusIcons
+          v-if="props.isMeSender"
+          :is-read="props.isRead"
+          :message-status="props.messageStatus"
+          :data-testid="`${dataTestid}-MessageBubble`"
+        />
       </div>
     </article>
 
@@ -184,20 +184,13 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import {
-  Avatar,
-  Button,
-  ButtonTypeEnum,
-  Icon,
-  IconNameEnum,
-  Modal,
-  SizesEnum
-} from '@pksep/yui';
+import { Avatar, Button, ButtonTypeEnum, Modal, SizesEnum } from '@pksep/yui';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import FileIcon from '../UI/FileIcon.vue';
+import MessageStatusIcons from './MessageStatusIcons.vue';
 import { getFormatFileSize, getShortName } from '../../utils/getFormatFileSize';
 import { FileElem } from '@openim/wasm-client-sdk';
 

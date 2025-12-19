@@ -20,4 +20,5 @@ export interface IMessageBubbleProps {
   };
   file?: FileElem;
   dataTestid?: string;
+  messageStatus?: number;
 }
