@@ -107,7 +107,7 @@
   />
   <div
     class="chat__input"
-    v-if="props.chapter"
+    v-if="props.chapter && isEnableSend"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
   >
     <ContentEditor
@@ -129,7 +129,8 @@ import {
   nextTick,
   onUnmounted,
   computed,
-  type ComputedRef
+  type ComputedRef,
+  watchEffect
 } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
@@ -144,8 +145,12 @@ import {
 } from '../services/useOpenIM';
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
-import { parseGroupNotification } from '../utils/systemMessages';
+import {
+  OpenIMNotificationType,
+  parseGroupNotification
+} from '../utils/systemMessages';
 import type { OpenIMMessage, AIMessage } from '../types/messages';
+import { authedUser } from '../composables/useAuth';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -169,6 +174,19 @@ const state = reactive({
 if (props.chapter === 'ai' && !state.chatId) {
   state.chatId = generateChatId();
 }
+
+const isEnableSend = computed(() => {
+  try {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.contentType === OpenIMNotificationType.GroupDeleted) {
+      return false;
+    }
+    const detail = JSON.parse(lastMessage.notificationElem.detail);
+    return detail.quitUser.userID !== authedUser.value.userID;
+  } catch (e) {
+    return true;
+  }
+});
 
 watch(
   () => props.chapter,

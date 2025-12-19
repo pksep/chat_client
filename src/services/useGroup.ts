@@ -5,6 +5,7 @@ import { manipulateConversationList } from './useConversions';
 import { appendUserAttributes } from '../composables/useUsers';
 import { useOpenIMRestApi } from './useApi';
 import { updateItemList } from '../utils/listUtils';
+import { authedUser } from '../composables/useAuth';
 
 const groups = ref<IContactProps[]>([]);
 const groupMembers = ref<IUserProps[]>([]);
@@ -214,9 +215,26 @@ const setGroupInfo = async (
 
 const quitGroup = async (groupID: string) => {
   try {
-    await IMSDK.quitGroup(groupID);
+    const groupInfoRes = await getGroupInfo([groupID]);
+    const groupInfo = groupInfoRes[0];
+    const members = await fetchGroupMembers(groupID);
 
-    groups.value = groups.value.filter(group => group.id !== groupID);
+    if (groupInfo.ownerUserID === authedUser.value.userID) {
+      const newOwner = members.find(
+        (member: IUserProps) => member.id !== authedUser.value.userID
+      );
+
+      if (!newOwner) {
+        await IMSDK.dismissGroup(groupID);
+      }
+
+      await IMSDK.transferGroupOwner({
+        groupID,
+        newOwnerUserID: newOwner.id
+      });
+    }
+
+    await IMSDK.quitGroup(groupID);
   } catch (err) {
     const errorDetails = {
       error: err,

@@ -31,7 +31,7 @@ p.chat__nothing-paragraph {
 .chat__message-wrapper {
   padding: 15px;
   padding-right: 5px;
-  max-height: calc(var(--basic-height) - 135px);
+  max-height: var(--basic-height);
   overflow-x: hidden;
   overflow-y: scroll;
 }
