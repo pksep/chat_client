@@ -130,18 +130,6 @@ const setupOpenIM = (): void => {
     }
   });
 
-  // Add cleanup function to properly dispose of resources
-  const cleanup = () => {
-    if (reconnectTimeout) {
-      clearTimeout(reconnectTimeout);
-      reconnectTimeout = null;
-    }
-    if (connectionSuccessTimer) {
-      clearTimeout(connectionSuccessTimer);
-      connectionSuccessTimer = null;
-    }
-  };
-
   IMSDK.on(CbEvents.OnTotalUnreadMessageCountChanged, ev => {
     const count = ev.data;
     setAllNotificationCount(count);
