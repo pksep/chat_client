@@ -620,6 +620,5 @@ export {
   saveMessagesToLocal,
   getSavedMessages,
   appendMessageToLocal,
-  markAsRead,
-  cleanup
+  markAsRead
 };
