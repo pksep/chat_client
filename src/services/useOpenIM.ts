@@ -87,8 +87,6 @@ const setupOpenIM = (): void => {
           return;
         }
 
-        console.log(processedMessage);
-
         if (!enableAudio) {
           enableAudio = !processedMessage.notificationElem;
         }

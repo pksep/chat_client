@@ -58,7 +58,6 @@ withDefaults(
 );
 
 const model = defineModel<IMenuInfoInformation>();
-const emit = defineEmits(['update:modelValue']);
 
 const avatarInputRef = useTemplateRef('avatarInputRef');
 
@@ -75,7 +74,6 @@ const {
 
 const onSaveAvatar = async (file: File): Promise<void> => {
   await originalOnSaveAvatar(file);
-  emit('update:modelValue', model.value);
 };
 
 const handleSaveFromForm = (value: { name: string; avatarUrl?: string }) => {
@@ -85,7 +83,6 @@ const handleSaveFromForm = (value: { name: string; avatarUrl?: string }) => {
     avatarUrl: value.avatarUrl
   };
   model.value = updatedValue;
-  emit('update:modelValue', updatedValue);
 };
 
 const openEditProfileIcon = () =>
