@@ -1,6 +1,6 @@
 import { CbEvents, getSDK } from '@openim/wasm-client-sdk';
 
-import { ref } from 'vue';
+import { ref, shallowRef } from 'vue';
 import {
   setAllNotificationCount,
   updateConversationList
@@ -42,12 +42,28 @@ if (import.meta.hot) {
 let connectionRetries = 0;
 const MAX_RETRIES = 5;
 const RETRY_DELAY = 3000;
-let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+let reconnectTimeout: number | null = null;
 
 const setupOpenIM = (): void => {
+  const debounce = (func: Function, wait: number) => {
+    let timeout: number;
+    return function executedFunction(...args: any[]) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait) as unknown as number;
+    };
+  };
+
+  const debouncedSetConnecting = debounce((val: boolean) => {
+    isWebsocketConnecting.value = val;
+  }, 300);
+
   IMSDK.on(CbEvents.OnConnecting, () => {
     console.log('[OpenIM] Connecting...');
-    isWebsocketConnecting.value = true;
+    debouncedSetConnecting(true);
   });
 
   let connectionSuccessTimer: number | null = null;
@@ -90,7 +106,7 @@ const setupOpenIM = (): void => {
         if (storedUser) {
           try {
             const userData = JSON.parse(storedUser);
-            isWebsocketConnecting.value = true;
+            debouncedSetConnecting(true);
             IMSDK.login({
               platformID: userData.platformID,
               userID: userData.userID,
@@ -99,22 +115,22 @@ const setupOpenIM = (): void => {
               wsAddr: userData.wsAddr
             }).catch(error => {
               console.error('[OpenIM] Reconnection failed:', error);
-              isWebsocketConnecting.value = false;
+              debouncedSetConnecting(false);
             });
           } catch (e) {
             console.error(
               '[OpenIM] Failed to parse stored user data for reconnection:',
               e
             );
-            isWebsocketConnecting.value = false;
+            debouncedSetConnecting(false);
           }
         } else {
           console.warn(
             '[OpenIM] No stored user data available for reconnection'
           );
-          isWebsocketConnecting.value = false;
+          debouncedSetConnecting(false);
         }
-      }, delay);
+      }, delay) as unknown as number;
     } else {
       console.error('[OpenIM] Maximum reconnection attempts reached');
       isWebsocketConnecting.value = false;
@@ -126,13 +142,15 @@ const setupOpenIM = (): void => {
     setAllNotificationCount(count);
   });
 
-  IMSDK.on(CbEvents.OnConversationChanged, ev => {
+  const batchUpdateConversations = debounce((ev) => {
     const data = ev.data || [];
     updateConversationList(data.filter(item => !item.groupID));
     updateGroupList(data.filter(item => !!item.groupID));
-  });
+  }, 100);
 
-  IMSDK.on(CbEvents.OnRecvNewMessages, evt => {
+  IMSDK.on(CbEvents.OnConversationChanged, batchUpdateConversations);
+
+  const batchProcessMessages = debounce((evt) => {
     try {
       const payload = evt?.data;
       if (!payload) return;
@@ -155,42 +173,64 @@ const setupOpenIM = (): void => {
         return;
       }
 
-      list.forEach((message: ProcessedMessage) => {
-        if (!message) return;
+      const batchSize = 10;
+      for (let i = 0; i < list.length; i += batchSize) {
+        const batch = list.slice(i, i + batchSize);
+        
+        for (const message of batch) {
+          if (!message) continue;
 
-        const processedMessage = processIncomingMessage(message);
-        if (!processedMessage) {
-          return;
+          const processedMessage = processIncomingMessage(message);
+          if (!processedMessage) {
+            continue;
+          }
+
+          const convId = generateConversationId(processedMessage);
+          appendMessageToLocal(convId, processedMessage as OpenIMMessage);
         }
-
-        const convId = generateConversationId(processedMessage);
-        appendMessageToLocal(convId, processedMessage as OpenIMMessage);
-      });
+      }
     } catch (e) {
       console.error('[OpenIM] Failed to process incoming message event:', e);
     }
-  });
+  }, 16);
+
+  IMSDK.on(CbEvents.OnRecvNewMessages, batchProcessMessages);
 
   IMSDK.on(CbEvents.OnKickedOffline, () => {
     console.warn('[OpenIM] User was kicked offline');
     sessionStorage.removeItem('openim_user');
   });
 
-  IMSDK.on(CbEvents.OnRecvC2CReadReceipt, evt => {
+  const batchProcessReadReceipts = debounce((evt) => {
     const receipts = evt.data as any as Array<{
       conversationID: string;
       clientMsgID: string;
       readTime: number;
     }>;
+    
+    const groupedReceipts: Record<string, string[]> = {};
     receipts.forEach(r => {
-      const msgs = getSavedMessages(r.conversationID);
-      const idx = msgs.findIndex(m => m.clientMsgID === r.clientMsgID);
-      if (idx >= 0) {
-        msgs[idx].isReadByPeer = true;
-        saveMessagesToLocal(r.conversationID, msgs);
+      if (!groupedReceipts[r.conversationID]) {
+        groupedReceipts[r.conversationID] = [];
       }
+      groupedReceipts[r.conversationID].push(r.clientMsgID);
     });
-  });
+    
+    Object.entries(groupedReceipts).forEach(([conversationID, msgIds]) => {
+      const msgs = getSavedMessages(conversationID);
+      const msgIdSet = new Set(msgIds);
+      
+      msgs.forEach((msg, idx) => {
+        if (msgIdSet.has(msg.clientMsgID)) {
+          msgs[idx].isReadByPeer = true;
+        }
+      });
+      
+      saveMessagesToLocal(conversationID, msgs);
+    });
+  }, 100);
+
+  IMSDK.on(CbEvents.OnRecvC2CReadReceipt, batchProcessReadReceipts);
 
   IMSDK.on(CbEvents.OnConnecting, () => {
     console.log('[OpenIM] Attempting to connect...');
@@ -199,8 +239,6 @@ const setupOpenIM = (): void => {
 
 export const uploadFile = async (file: File) => {
   const TIMEOUT_DURATION = 60000;
-  const formData = new FormData();
-  formData.append('file', file);
   const clientUUID = generateUUID();
 
   try {
@@ -246,21 +284,18 @@ const withTimeout = <T>(
   timeoutMs: number,
   operationName: string
 ): Promise<T> => {
-  return new Promise((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
+  let timeoutId: number;
+  
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
       reject(new Error(`${operationName} timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
-
-    promise
-      .then(result => {
-        clearTimeout(timeoutId);
-        resolve(result);
-      })
-      .catch(error => {
-        clearTimeout(timeoutId);
-        reject(error);
-      });
+    }, timeoutMs) as unknown as number;
   });
+
+  return Promise.race([
+    promise.finally(() => clearTimeout(timeoutId)),
+    timeoutPromise
+  ]);
 };
 
 export const sendMessageIM = async ({
@@ -553,13 +588,13 @@ const markAsRead = async (conversationID: string) => {
   }
 };
 
-const messagesStore = ref<Record<string, OpenIMMessage[]>>({});
+const messagesStore = shallowRef<Record<string, OpenIMMessage[]>>({});
 
 const saveMessagesToLocal = (
   conversationId: string,
   messages: OpenIMMessage[]
 ): void => {
-  messagesStore.value[conversationId] = messages;
+  messagesStore.value[conversationId] = [...messages];
 };
 
 const getSavedMessages = (conversationId: string): OpenIMMessage[] => {
@@ -571,8 +606,8 @@ const appendMessageToLocal = (
   message: OpenIMMessage
 ): void => {
   const arr = messagesStore.value[conversationId] || [];
-  arr.push(message);
-  messagesStore.value[conversationId] = arr;
+  const newArr = [...arr, message];
+  messagesStore.value[conversationId] = newArr;
 };
 
 const appendOldMessagesToLocal = (
@@ -580,8 +615,8 @@ const appendOldMessagesToLocal = (
   messages: OpenIMMessage[]
 ): void => {
   const arr = messagesStore.value[conversationId] || [];
-  arr.unshift(...messages);
-  messagesStore.value[conversationId] = arr;
+  const newArr = [...messages, ...arr];
+  messagesStore.value[conversationId] = newArr;
 };
 
 export {

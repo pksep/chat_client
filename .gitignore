@@ -27,6 +27,7 @@ build
 local-packages/
 
 .env
+.prod.env
 
 dev-dist/
 .npmrc

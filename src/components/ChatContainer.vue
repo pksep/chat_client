@@ -4,10 +4,10 @@
     :data-testid="`${props.dataTestid}-ChatContainer-Container`"
   >
     <Header
-      v-if="!isShowContactList(state.chapter)"
+      v-if="shouldShowHeader"
       class="chat__header"
       :chapter="state.chapter"
-      :members="state.users.filter(user => user.id !== authUser.id)"
+      :members="filteredMembers"
       :contact="state.contact"
       :dataTestid="`${props.dataTestid}-ChatContainer-Header`"
       @unmount-click="handleHeaderClick"
@@ -36,7 +36,7 @@
       :user="authUser"
       :base-url="props.baseUrl"
       :chapter="state.chapter"
-      :contacts="state.users.filter(user => user.id !== authUser.id)"
+      :contacts="filteredContacts"
       :contact="state.contact"
       class="chat__messages"
       ref="chatRef"
@@ -49,7 +49,7 @@
         class="chat__info"
         :open="state.isMenuDesktopOpen"
         :contact="state.contact"
-        :members="state.users.filter(user => user.id !== authUser.id)"
+        :members="filteredMembers"
         :active-tab-id="state.activeTabId"
         :dataTestid="`${props.dataTestid}-ChatContainer-MenuInfo`"
         @unmount-collapse="handleMenuToggle"
@@ -58,7 +58,7 @@
     </template>
   </main>
   <NewContactModal
-    :contacts="state.users.filter(user => user.id !== authUser?.id)"
+    :contacts="filteredContacts"
     :open="state.isNewContactOpen"
     :data-testid="`${props.dataTestid}-ChatContainer-NewContactModal`"
     @unmount-close="closeModals"
@@ -67,7 +67,7 @@
 
   <NewGroupModal
     :user="authUser"
-    :contacts="state.users.filter(user => user.id !== authUser?.id)"
+    :contacts="filteredContacts"
     :open="state.isNewGroupOpen"
     :data-testid="`${props.dataTestid}-ChatContainer-NewGroupModal`"
     @unmount-close="closeModals"
@@ -76,7 +76,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, reactive, ref } from 'vue';
+import { computed, defineAsyncComponent, reactive, ref, watch } from 'vue';
 import Header from './Header/Header.vue';
 import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
@@ -113,7 +113,7 @@ const state = reactive({
   isMenuDesktopOpen: false,
   isMenuMobileOpen: false,
   activeTabId: null,
-  chapter: isMobile ? 'assistant' : null,
+  chapter: isMobile.value ? 'assistant' : null,
   groupId: null,
   contact: null,
   isNewContactOpen: false,
@@ -128,9 +128,9 @@ const state = reactive({
           : !state.isMenuDesktopOpen
     }
   ]),
-  users: computed(() => getUsersList()),
-  groups: computed(() => getGroupList()),
-  conversations: computed(() => getConversationList())
+  users: getUsersList(),
+  groups: getGroupList(),
+  conversations: getConversationList()
 });
 
 const props = withDefaults(defineProps<IChatContainerProps>(), {
@@ -138,6 +138,44 @@ const props = withDefaults(defineProps<IChatContainerProps>(), {
 });
 
 const authUser = computed(() => appendUserAttributes(getAuthUser()));
+
+const filteredContacts = computed(() => {
+  const authId = authUser.value?.id;
+  if (!authId) return [];
+  return state.users.filter(user => user.id !== authId);
+});
+
+const filteredMembers = computed(() => {
+  const authId = authUser.value?.id;
+  if (!authId) return [];
+  return state.users.filter(user => user.id !== authId);
+});
+
+const shouldShowHeader = computed(() => {
+  return state.chapter === 'ai' || state.contact !== null;
+});
+
+// Watch for changes in user data and update state accordingly
+watch(
+  () => getUsersList(),
+  (newUsers) => {
+    state.users = newUsers;
+  }
+);
+
+watch(
+  () => getGroupList(),
+  (newGroups) => {
+    state.groups = newGroups;
+  }
+);
+
+watch(
+  () => getConversationList(),
+  (newConversations) => {
+    state.conversations = newConversations;
+  }
+);
 
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 
