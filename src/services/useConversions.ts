@@ -158,8 +158,8 @@ export const manipulateConversationList = (
       isRead: parsedMsg
         ? parsedMsg.isRead && c.userID !== parsedMsg.sendID
         : false,
-      latestMessageStatus: parsedMsg?.status,  // Add message status
-      isLatestMessageFromMe: parsedMsg?.sendID === currentUserId  // Check if message was sent by current user
+      latestMessageStatus: parsedMsg?.status, // Add message status
+      isLatestMessageFromMe: parsedMsg?.sendID === currentUserId // Check if message was sent by current user
     };
   });
 };
