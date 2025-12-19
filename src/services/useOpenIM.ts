@@ -78,10 +78,7 @@ const setupOpenIM = (): void => {
         return;
       }
 
-      new Audio('/audio/new-message.mp3').play().catch(e => {
-        console.error('Failed to play notification sound:', e);
-      });
-
+      let enableAudio = false;
       list.forEach((message: ProcessedMessage) => {
         if (!message) return;
 
@@ -90,9 +87,21 @@ const setupOpenIM = (): void => {
           return;
         }
 
+        console.log(processedMessage);
+
+        if (!enableAudio) {
+          enableAudio = !processedMessage.notificationElem;
+        }
+
         const convId = generateConversationId(processedMessage);
         appendMessageToLocal(convId, processedMessage as OpenIMMessage);
       });
+
+      if (enableAudio) {
+        new Audio('/audio/new-message.mp3').play().catch(e => {
+          console.error('Failed to play notification sound:', e);
+        });
+      }
     } catch (e) {
       console.error('[OpenIM] Failed to process incoming message event:', e);
     }
