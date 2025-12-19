@@ -124,7 +124,7 @@
                   >{{ props.time }}</span
                 >
                 <Icon
-                  v-if="props.isMeSender"
+                  v-if="props.isMeSender && props.isRead"
                   :name="IconNameEnum.read"
                   :data-testid="`${dataTestid}-MessageBubble-FileReadIcon`"
                 />
@@ -146,11 +146,6 @@
             v-if="props.isRead"
             :name="IconNameEnum.read"
             :data-testid="`${dataTestid}-MessageBubble-ReadIcon`"
-          />
-          <Icon
-            v-else
-            :name="IconNameEnum.read"
-            :data-testid="`${dataTestid}-MessageBubble-PartlyReadIcon`"
           />
         </template>
       </div>
@@ -222,7 +217,6 @@ const messageArticle = computed(() => [
   }
 ]);
 
-// const read = computed(() => false);
 const blockquote = computed(() => false);
 
 const imageRegex = /\.(jpg|jpeg|png|gif|webp|svg)$/i;

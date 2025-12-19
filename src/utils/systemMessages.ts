@@ -57,7 +57,6 @@ export const parseGroupNotification = (message: any): string | null => {
 
   let memberList: any[] = [];
   let targetName: string = '';
-  // const newOwnerName: string = '';
   let adminNames: string = '';
   let groupMuteTime: number = 0;
   let muteEndTime: number = 0;
@@ -81,7 +80,7 @@ export const parseGroupNotification = (message: any): string | null => {
       return null;
 
     case OpenIMNotificationType.MemberKicked:
-      memberList = detail?.kickedUserList || detail?.invitedUserList || []; // Assume kickedUserList, fallback to invited if schema varies
+      memberList = detail?.kickedUserList || detail?.invitedUserList || [];
       if (memberList.length > 0) {
         const memberNames = memberList
           .map((m: any) => m.nickname || m.userID)

@@ -14,7 +14,6 @@ import {
 import type { OpenIMMessage } from '../types/messages';
 import { generateUUID } from '../utils/generateUUID';
 
-// Global state to track WebSocket connection status
 const isWebsocketConnecting = ref(false);
 
 export const getIsWebsocketConnecting = () => isWebsocketConnecting.value;
@@ -40,10 +39,9 @@ if (import.meta.hot) {
   import.meta.hot.dispose(() => {});
 }
 
-// Connection state and reconnection settings
 let connectionRetries = 0;
 const MAX_RETRIES = 5;
-const RETRY_DELAY = 3000; // 3 seconds
+const RETRY_DELAY = 3000;
 let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const setupOpenIM = (): void => {
@@ -56,33 +54,29 @@ const setupOpenIM = (): void => {
 
   IMSDK.on(CbEvents.OnConnectSuccess, () => {
     console.log('[OpenIM] Connection successful');
-    connectionRetries = 0; // Reset retries on success
+    connectionRetries = 0;
 
-    // Clear any pending reconnection attempt
     if (reconnectTimeout) {
       clearTimeout(reconnectTimeout);
       reconnectTimeout = null;
     }
 
-    // Clear any previous timer
     if (connectionSuccessTimer) {
       window.clearTimeout(connectionSuccessTimer);
     }
 
-    // Use requestAnimationFrame and setTimeout combination for better performance
     connectionSuccessTimer = window.setTimeout(() => {
       isWebsocketConnecting.value = false;
       connectionSuccessTimer = null;
-    }, 300); // Reduced delay to improve responsiveness while still avoiding scroll jumps
+    }, 300);
   });
 
   IMSDK.on(CbEvents.OnConnectFailed, err => {
     console.error('[OpenIM] Connection failed:', err);
 
-    // Implement reconnection logic with exponential backoff
     if (connectionRetries < MAX_RETRIES) {
       connectionRetries++;
-      const delay = RETRY_DELAY * connectionRetries; // Exponential backoff
+      const delay = RETRY_DELAY * connectionRetries;
       console.log(
         `[OpenIM] Attempting to reconnect in ${delay}ms (attempt ${connectionRetries}/${MAX_RETRIES})`
       );
@@ -92,13 +86,10 @@ const setupOpenIM = (): void => {
       }
 
       reconnectTimeout = setTimeout(() => {
-        // Attempt to reconnect
-        // Get stored connection parameters from sessionStorage or similar
         const storedUser = sessionStorage.getItem('openim_user');
         if (storedUser) {
           try {
             const userData = JSON.parse(storedUser);
-            // Mark as connecting again for reconnection attempts
             isWebsocketConnecting.value = true;
             IMSDK.login({
               platformID: userData.platformID,
@@ -180,12 +171,8 @@ const setupOpenIM = (): void => {
     }
   });
 
-  // Handle connection disconnection
-  // Note: OnUserSigExpired not available in current SDK version
-
   IMSDK.on(CbEvents.OnKickedOffline, () => {
     console.warn('[OpenIM] User was kicked offline');
-    // Clear stored user data to prevent auto-reconnection with invalid credentials
     sessionStorage.removeItem('openim_user');
   });
 
@@ -205,14 +192,13 @@ const setupOpenIM = (): void => {
     });
   });
 
-  // Handle network errors and disconnections
   IMSDK.on(CbEvents.OnConnecting, () => {
     console.log('[OpenIM] Attempting to connect...');
   });
 };
 
 export const uploadFile = async (file: File) => {
-  const TIMEOUT_DURATION = 60000; // 60 seconds timeout for file uploads
+  const TIMEOUT_DURATION = 60000;
   const formData = new FormData();
   formData.append('file', file);
   const clientUUID = generateUUID();
@@ -255,7 +241,6 @@ export const uploadFile = async (file: File) => {
   }
 };
 
-// Utility function to wrap OpenIM operations with timeout
 const withTimeout = <T>(
   promise: Promise<T>,
   timeoutMs: number,
@@ -292,7 +277,7 @@ export const sendMessageIM = async ({
   file?: File;
 }): Promise<void> => {
   const clientMsgID = generateUUID();
-  const TIMEOUT_DURATION = 15000; // 15 seconds timeout
+  const TIMEOUT_DURATION = 15000;
 
   if (!to && !groupId) {
     const error = new Error(
@@ -507,7 +492,7 @@ const getMessagesByConversationId = async (
   conversationId: string,
   lastClientMsgID: string = ''
 ): Promise<any[]> => {
-  const TIMEOUT_DURATION = 15000; // 15 seconds timeout
+  const TIMEOUT_DURATION = 15000;
 
   try {
     const response = await withTimeout(
@@ -555,7 +540,7 @@ const getMessagesByConversationId = async (
 };
 
 const markAsRead = async (conversationID: string) => {
-  const TIMEOUT_DURATION = 10000; // 10 seconds timeout
+  const TIMEOUT_DURATION = 10000;
 
   try {
     await withTimeout(
@@ -565,7 +550,6 @@ const markAsRead = async (conversationID: string) => {
     );
   } catch (error) {
     console.error('[OpenIM] Failed to mark messages as read:', error);
-    // Don't throw here as it's not critical for the UI flow
   }
 };
 

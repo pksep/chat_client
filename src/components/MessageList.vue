@@ -210,13 +210,12 @@ const scrollState = reactive({
   isUserScrolling: false,
   previousScrollTop: 0,
   shouldAutoScroll: true,
-  isInitialLoad: true // Track if it's the first load
+  isInitialLoad: true
 });
 
 const scrollToBottom = (smooth: boolean = false): void => {
   if (!chatWrapperRef?.value || !scrollState.shouldAutoScroll) return;
 
-  // Use requestAnimationFrame for better performance
   requestAnimationFrame(() => {
     if (!chatWrapperRef.value) return;
 
@@ -357,7 +356,7 @@ const handleNewMessages = debounce(
     }
   },
   50
-); // Debounce new messages to prevent excessive handling
+);
 
 watch(
   () => state.messages.length,
@@ -448,7 +447,6 @@ const handleSend = async (): Promise<void> => {
     console.error('[OpenIM] Failed to send message:', error);
   }
 
-  // Use a slight delay to ensure message is added to the list before scrolling
   setTimeout(() => {
     scrollToBottom(false);
   }, 10);
@@ -506,7 +504,6 @@ const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
         });
       }
 
-      // Use a slight delay to ensure message is added to the list before scrolling
       setTimeout(() => {
         scrollToBottom(false);
       }, 10);
