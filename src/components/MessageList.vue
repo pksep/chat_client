@@ -141,7 +141,8 @@ import {
   getMessagesByConversationId,
   getSavedMessages,
   markAsRead,
-  sendMessageIM
+  sendMessageIM,
+  getIsWebsocketConnecting
 } from '../services/useOpenIM';
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
@@ -215,7 +216,8 @@ const scrollState = reactive({
 const scrollToBottom = (smooth: boolean = false): void => {
   if (!chatWrapperRef?.value || !scrollState.shouldAutoScroll) return;
 
-  setTimeout(() => {
+  // Use requestAnimationFrame for better performance
+  requestAnimationFrame(() => {
     if (!chatWrapperRef.value) return;
 
     if (smooth) {
@@ -226,10 +228,35 @@ const scrollToBottom = (smooth: boolean = false): void => {
     } else {
       chatWrapperRef.value.scrollTop = chatWrapperRef.value.scrollHeight;
     }
-  }, 10);
+  });
 };
 
-const handleScroll = async (): Promise<void> => {
+const throttle = (func: Function, limit: number) => {
+  let inThrottle: boolean;
+  return function (this: any) {
+    const args = arguments;
+    const context = this;
+    if (!inThrottle) {
+      func.apply(context, args);
+      inThrottle = true;
+      setTimeout(() => inThrottle = false, limit);
+    }
+  };
+};
+
+const debounce = <T extends (...args: any[]) => any>(func: T, delay: number): ((...args: Parameters<T>) => void) => {
+  let timeoutId: number | null = null;
+  return (...args: Parameters<T>) => {
+    if (timeoutId) {
+      window.clearTimeout(timeoutId);
+    }
+    timeoutId = window.setTimeout(() => func.apply(null, args), delay);
+  };
+};
+
+let isScrollLoading = false;
+
+const handleScroll = throttle(async (): Promise<void> => {
   if (!chatWrapperRef?.value) return;
 
   const { scrollTop, scrollHeight, clientHeight } = chatWrapperRef.value;
@@ -244,26 +271,33 @@ const handleScroll = async (): Promise<void> => {
     scrollState.shouldAutoScroll = distanceFromBottom < 100;
   }
 
-  if (scrollTop < 20) {
+  if (scrollTop < 20 && !isScrollLoading && !getIsWebsocketConnecting()) {
+    isScrollLoading = true;
     const currentScrollTop = scrollTop;
     const currentScrollHeight = scrollHeight;
 
-    await getMessagesByConversationId(
-      props.contact?.conversationId,
-      state.messages[0]?.clientMsgID
-    );
+    try {
+      await getMessagesByConversationId(
+        props.contact?.conversationId,
+        state.messages[0]?.clientMsgID
+      );
 
-    nextTick(() => {
-      if (!chatWrapperRef.value) return;
+      nextTick(() => {
+        if (!chatWrapperRef.value) return;
 
-      const newScrollHeight = chatWrapperRef.value!.scrollHeight;
-      const heightAdded = newScrollHeight - currentScrollHeight;
+        const newScrollHeight = chatWrapperRef.value!.scrollHeight;
+        const heightAdded = newScrollHeight - currentScrollHeight;
 
-      chatWrapperRef.value!.scrollTop = currentScrollTop + heightAdded;
-      scrollState.shouldAutoScroll = false;
-    });
+        chatWrapperRef.value!.scrollTop = currentScrollTop + heightAdded;
+        scrollState.shouldAutoScroll = false;
+      });
+    } catch (error) {
+      console.error('Error loading more messages:', error);
+    } finally {
+      isScrollLoading = false;
+    }
   }
-};
+}, 100);
 
 watch(
   () => props.chapter,
@@ -293,30 +327,34 @@ watch(
   { immediate: true }
 );
 
-watch(
-  () => state.messages.length,
-  async (newLength, oldLength) => {
-    if (props.chapter === 'ai' || !state.messages.length) return;
+const handleNewMessages = debounce(async (newLength: number, oldLength: number) => {
+  if (props.chapter === 'ai' || !state.messages.length) return;
 
-    await nextTick();
+  await nextTick();
 
-    // If this is the initial load of messages, always scroll to bottom
-    if (oldLength === 0 && newLength > 0) {
+  if (oldLength === 0 && newLength > 0) {
+    if (!getIsWebsocketConnecting()) {
       setTimeout(() => {
         scrollState.shouldAutoScroll = true;
         scrollToBottom(false);
       }, 30);
-    } else if (scrollState.shouldAutoScroll) {
-      setTimeout(() => {
-        scrollToBottom(false);
-      }, 10);
-
-      const newMessage = state.messages[state.messages.length - 1];
-
-      if (newMessage && newMessage.sendID !== props.user.id) {
-        markAsRead(props.contact?.conversationId);
-      }
     }
+  } else if (scrollState.shouldAutoScroll && !getIsWebsocketConnecting()) {
+    setTimeout(() => {
+      scrollToBottom(false);
+    }, 10);
+
+    const newMessage = state.messages[state.messages.length - 1];
+    if (newMessage && newMessage.sendID !== props.user.id) {
+      markAsRead(props.contact?.conversationId);
+    }
+  }
+}, 50); // Debounce new messages to prevent excessive handling
+
+watch(
+  () => state.messages.length,
+  (newLength, oldLength) => {
+    handleNewMessages(newLength, oldLength);
   },
   { immediate: true }
 );

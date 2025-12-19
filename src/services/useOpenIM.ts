@@ -14,6 +14,11 @@ import {
 import type { OpenIMMessage } from '../types/messages';
 import { generateUUID } from '../utils/generateUUID';
 
+// Global state to track WebSocket connection status
+const isWebsocketConnecting = ref(false);
+
+export const getIsWebsocketConnecting = () => isWebsocketConnecting.value;
+
 export type IMSDKType = ReturnType<typeof getSDK>;
 
 let instance: IMSDKType | null = null;
@@ -44,7 +49,10 @@ let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 const setupOpenIM = (): void => {
   IMSDK.on(CbEvents.OnConnecting, () => {
     console.log('[OpenIM] Connecting...');
+    isWebsocketConnecting.value = true;
   });
+
+  let connectionSuccessTimer: number | null = null;
 
   IMSDK.on(CbEvents.OnConnectSuccess, () => {
     console.log('[OpenIM] Connection successful');
@@ -55,6 +63,17 @@ const setupOpenIM = (): void => {
       clearTimeout(reconnectTimeout);
       reconnectTimeout = null;
     }
+
+    // Clear any previous timer
+    if (connectionSuccessTimer) {
+      window.clearTimeout(connectionSuccessTimer);
+    }
+
+    // Use requestAnimationFrame and setTimeout combination for better performance
+    connectionSuccessTimer = window.setTimeout(() => {
+      isWebsocketConnecting.value = false;
+      connectionSuccessTimer = null;
+    }, 300); // Reduced delay to improve responsiveness while still avoiding scroll jumps
   });
 
   IMSDK.on(CbEvents.OnConnectFailed, err => {
@@ -79,6 +98,8 @@ const setupOpenIM = (): void => {
         if (storedUser) {
           try {
             const userData = JSON.parse(storedUser);
+            // Mark as connecting again for reconnection attempts
+            isWebsocketConnecting.value = true;
             IMSDK.login({
               platformID: userData.platformID,
               userID: userData.userID,
@@ -87,23 +108,39 @@ const setupOpenIM = (): void => {
               wsAddr: userData.wsAddr
             }).catch(error => {
               console.error('[OpenIM] Reconnection failed:', error);
+              isWebsocketConnecting.value = false;
             });
           } catch (e) {
             console.error(
               '[OpenIM] Failed to parse stored user data for reconnection:',
               e
             );
+            isWebsocketConnecting.value = false;
           }
         } else {
           console.warn(
             '[OpenIM] No stored user data available for reconnection'
           );
+          isWebsocketConnecting.value = false;
         }
       }, delay);
     } else {
       console.error('[OpenIM] Maximum reconnection attempts reached');
+      isWebsocketConnecting.value = false;
     }
   });
+
+  // Add cleanup function to properly dispose of resources
+  const cleanup = () => {
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = null;
+    }
+    if (connectionSuccessTimer) {
+      clearTimeout(connectionSuccessTimer);
+      connectionSuccessTimer = null;
+    }
+  };
 
   IMSDK.on(CbEvents.OnTotalUnreadMessageCountChanged, ev => {
     const count = ev.data;
@@ -583,5 +620,6 @@ export {
   saveMessagesToLocal,
   getSavedMessages,
   appendMessageToLocal,
-  markAsRead
+  markAsRead,
+  cleanup
 };
