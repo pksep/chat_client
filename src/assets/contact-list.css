@@ -131,6 +131,11 @@ svg.icon-yui-kit.contact-list__read-icon {
   font-weight: bold;
 }
 
+.contact-list__message-status-icons > svg.icon-yui-kit {
+  color: var(--primary-base);
+  font-size: 16px;
+}
+
 @media (width <= 28rem) {
   .contact-selector__list {
     max-height: 100%;

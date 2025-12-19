@@ -63,6 +63,14 @@
             :aria-label="contact.isRead ? 'Message read' : 'Message unread'"
             :data-testid="`${props.dataTestid}-ContactList-ReadIcon${index + 1}`"
           />
+          <MessageStatusIcons
+            v-if="contact.isLatestMessageFromMe"
+            class="contact-list__message-status-icons"
+            :message-status="contact.latestMessageStatus"
+            :is-read="contact.latestMessageStatus === 2"
+            :is-me-sender="true"
+            :data-testid="`${props.dataTestid}-ContactList-MessageStatusIcons${index + 1}`"
+          />
           <span
             v-if="contact.latestMessageTime"
             class="contact-list__time"
@@ -161,6 +169,7 @@ import {
 } from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
 import Line from '../UI/Line.vue';
+import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { MAX_W_MD } from '../../utils/constants';
 import { setPinConversation } from '../../services/useConversions';

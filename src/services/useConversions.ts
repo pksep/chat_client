@@ -129,6 +129,9 @@ export const manipulateConversationList = (
 
   // Use Map for faster user lookup
   const userMap = new Map(users.map(user => [user.id, user]));
+  // Get current user to determine if latest message was sent by them
+  const currentUser = JSON.parse(sessionStorage.getItem('openim_user') || '{}');
+  const currentUserId = currentUser?.userID;
 
   return conversations.map(c => {
     const user = userMap.get(c.userID);
@@ -154,7 +157,9 @@ export const manipulateConversationList = (
       groupId: c.groupID,
       isRead: parsedMsg
         ? parsedMsg.isRead && c.userID !== parsedMsg.sendID
-        : false
+        : false,
+      latestMessageStatus: parsedMsg?.status,  // Add message status
+      isLatestMessageFromMe: parsedMsg?.sendID === currentUserId  // Check if message was sent by current user
     };
   });
 };
