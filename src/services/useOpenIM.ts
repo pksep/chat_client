@@ -45,7 +45,7 @@ const RETRY_DELAY = 3000;
 let reconnectTimeout: number | null = null;
 
 const setupOpenIM = (): void => {
-  const debounce = (func: Function, wait: number) => {
+  const debounce = (func: (...args: any[]) => any, wait: number) => {
     let timeout: number;
     return function executedFunction(...args: any[]) {
       const later = () => {
@@ -142,7 +142,7 @@ const setupOpenIM = (): void => {
     setAllNotificationCount(count);
   });
 
-  const batchUpdateConversations = debounce((ev) => {
+  const batchUpdateConversations = debounce(ev => {
     const data = ev.data || [];
     updateConversationList(data.filter(item => !item.groupID));
     updateGroupList(data.filter(item => !!item.groupID));
@@ -150,7 +150,7 @@ const setupOpenIM = (): void => {
 
   IMSDK.on(CbEvents.OnConversationChanged, batchUpdateConversations);
 
-  const batchProcessMessages = debounce((evt) => {
+  const batchProcessMessages = debounce(evt => {
     try {
       const payload = evt?.data;
       if (!payload) return;
@@ -176,7 +176,7 @@ const setupOpenIM = (): void => {
       const batchSize = 10;
       for (let i = 0; i < list.length; i += batchSize) {
         const batch = list.slice(i, i + batchSize);
-        
+
         for (const message of batch) {
           if (!message) continue;
 
@@ -201,13 +201,13 @@ const setupOpenIM = (): void => {
     sessionStorage.removeItem('openim_user');
   });
 
-  const batchProcessReadReceipts = debounce((evt) => {
+  const batchProcessReadReceipts = debounce(evt => {
     const receipts = evt.data as any as Array<{
       conversationID: string;
       clientMsgID: string;
       readTime: number;
     }>;
-    
+
     const groupedReceipts: Record<string, string[]> = {};
     receipts.forEach(r => {
       if (!groupedReceipts[r.conversationID]) {
@@ -215,17 +215,17 @@ const setupOpenIM = (): void => {
       }
       groupedReceipts[r.conversationID].push(r.clientMsgID);
     });
-    
+
     Object.entries(groupedReceipts).forEach(([conversationID, msgIds]) => {
       const msgs = getSavedMessages(conversationID);
       const msgIdSet = new Set(msgIds);
-      
+
       msgs.forEach((msg, idx) => {
         if (msgIdSet.has(msg.clientMsgID)) {
           msgs[idx].isReadByPeer = true;
         }
       });
-      
+
       saveMessagesToLocal(conversationID, msgs);
     });
   }, 100);
@@ -285,7 +285,7 @@ const withTimeout = <T>(
   operationName: string
 ): Promise<T> => {
   let timeoutId: number;
-  
+
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => {
       reject(new Error(`${operationName} timed out after ${timeoutMs}ms`));

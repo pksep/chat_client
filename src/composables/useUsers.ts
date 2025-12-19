@@ -54,7 +54,7 @@ export const fetchAllUsers = async (opts?: {
 
     const batchSize = 50;
     const processedUsers: IUserProps[] = [];
-    
+
     for (let i = 0; i < resultUsers.length; i += batchSize) {
       const batch = resultUsers.slice(i, i + batchSize);
       const batchResults = batch.map(
@@ -71,9 +71,9 @@ export const fetchAllUsers = async (opts?: {
             avatarUrl: user.faceURL
           })
       );
-      
+
       processedUsers.push(...batchResults);
-      
+
       await new Promise(resolve => setTimeout(resolve, 0));
     }
 
@@ -96,7 +96,7 @@ export const appendUserAttributes = (
 ) => {
   if (!user) return null;
   let ex: any = null;
-  
+
   try {
     ex = user?.ex ? JSON.parse(user.ex) : null;
   } catch (e) {
@@ -120,7 +120,7 @@ export const getUserById = (userId: string): IUserProps | undefined => {
   if (userMapCache && Date.now() - lastUsersUpdate < 30000) {
     return userMapCache.get(userId);
   }
-  
+
   userMapCache = new Map(users.value.map(user => [user.id, user]));
   return userMapCache.get(userId);
 };

@@ -88,7 +88,6 @@ import type {
   IUserProps
 } from './interfaces/interfaces';
 import { appendUserAttributes, getUsersList } from '../composables/useUsers';
-import { isShowContactList } from '../composables/useShowContactList';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD, MAX_W_XL } from '../utils/constants';
 import { getGroupList } from '../services/useGroup';
@@ -158,21 +157,21 @@ const shouldShowHeader = computed(() => {
 // Watch for changes in user data and update state accordingly
 watch(
   () => getUsersList(),
-  (newUsers) => {
+  newUsers => {
     state.users = newUsers;
   }
 );
 
 watch(
   () => getGroupList(),
-  (newGroups) => {
+  newGroups => {
     state.groups = newGroups;
   }
 );
 
 watch(
   () => getConversationList(),
-  (newConversations) => {
+  newConversations => {
     state.conversations = newConversations;
   }
 );

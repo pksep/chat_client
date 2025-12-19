@@ -130,14 +130,13 @@ import {
   nextTick,
   onUnmounted,
   onMounted,
-  computed,
-  type ComputedRef
+  computed
 } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
 import { ContentEditor } from '@pksep/yui';
 import { useMastra } from '../services/useMastra';
-import { generateChatId, removeMessageLoading } from '../services/useChatDb';
+import { removeMessageLoading } from '../services/useChatDb';
 import {
   getMessagesByConversationId,
   getSavedMessages,
@@ -254,19 +253,21 @@ const handleScroll = throttle((): void => {
     getMessagesByConversationId(
       props.contact?.conversationId,
       state.messages[0]?.clientMsgID
-    ).then(() => {
-      nextTick(() => {
-        if (!chatWrapperRef.value) return;
+    )
+      .then(() => {
+        nextTick(() => {
+          if (!chatWrapperRef.value) return;
 
-        const newScrollHeight = chatWrapperRef.value!.scrollHeight;
-        const heightAdded = newScrollHeight - currentScrollHeight;
+          const newScrollHeight = chatWrapperRef.value!.scrollHeight;
+          const heightAdded = newScrollHeight - currentScrollHeight;
 
-        chatWrapperRef.value!.scrollTop = currentScrollTop + heightAdded;
-        scrollState.shouldAutoScroll = false;
+          chatWrapperRef.value!.scrollTop = currentScrollTop + heightAdded;
+          scrollState.shouldAutoScroll = false;
+        });
+      })
+      .finally(() => {
+        isScrollLoading = false;
       });
-    }).finally(() => {
-      isScrollLoading = false;
-    });
   }
 }, 100);
 
