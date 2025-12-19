@@ -36,7 +36,7 @@
   </template>
   <div
     class="chat__message-wrapper"
-    v-else-if="state.messages.length"
+    v-if="state.messages.length"
     ref="chatWrapperRef"
     @scroll="handleScroll"
     :data-testid="`${props.dataTestid}-MessageList-UserMessagesWrapper`"
@@ -95,6 +95,8 @@
           :sender="message.senderNickname"
           :avatar="message.faceURL"
           :is-read="message.isRead"
+          :message-status="message.status"
+          :loader="message.loading"
           :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
         />
       </template>
@@ -103,7 +105,7 @@
   <EmptyChat
     :chapter="props.chapter"
     :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
-    v-if="!state.messages.length && !aiMessages.length"
+    v-if="!state.messages.length && !aiMessages.length && !getIsWebsocketConnecting()"
   />
   <div
     class="chat__input"
@@ -140,6 +142,7 @@ import { removeMessageLoading } from '../services/useChatDb';
 import {
   getMessagesByConversationId,
   getSavedMessages,
+  getMessagesWithLoadingStatus,
   markAsRead,
   sendMessageIM,
   getIsWebsocketConnecting
@@ -148,6 +151,10 @@ import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
 import { parseGroupNotification } from '../utils/systemMessages';
 import type { OpenIMMessage, AIMessage } from '../types/messages';
+
+interface OpenIMMessageWithLoading extends OpenIMMessage {
+  loading?: boolean;
+}
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -162,13 +169,13 @@ const chatWrapperRef = useTemplateRef('chatWrapperRef');
 const inputText = ref('');
 
 const state = reactive({
-  messages: [] as OpenIMMessage[],
+  messages: [] as OpenIMMessageWithLoading[],
   chatId: null as string | null
 });
 
 const updateMessages = () => {
   if (props.contact?.conversationId) {
-    state.messages = [...getSavedMessages(props.contact.conversationId)];
+    state.messages = [...getMessagesWithLoadingStatus(props.contact.conversationId)];
   } else {
     state.messages = [];
   }
@@ -245,29 +252,28 @@ const handleScroll = throttle((): void => {
     scrollState.isInitialLoad = false;
   }
 
-  if (scrollTop < 20 && !isScrollLoading && !getIsWebsocketConnecting()) {
+  if (scrollTop < 20 && !isScrollLoading && props.contact?.conversationId) {
     isScrollLoading = true;
     const currentScrollTop = scrollTop;
     const currentScrollHeight = scrollHeight;
 
-    getMessagesByConversationId(
-      props.contact?.conversationId,
-      state.messages[0]?.clientMsgID
-    )
-      .then(() => {
-        nextTick(() => {
-          if (!chatWrapperRef.value) return;
-
-          const newScrollHeight = chatWrapperRef.value!.scrollHeight;
-          const heightAdded = newScrollHeight - currentScrollHeight;
-
-          chatWrapperRef.value!.scrollTop = currentScrollTop + heightAdded;
-          scrollState.shouldAutoScroll = false;
+    // Try to load more messages from the service if connected
+    if (!getIsWebsocketConnecting()) {
+      getMessagesByConversationId(
+        props.contact.conversationId,
+        state.messages[0]?.clientMsgID
+      )
+        .then(() => {
+          updateMessages(); // Update to reflect any changes
+        })
+        .finally(() => {
+          isScrollLoading = false;
         });
-      })
-      .finally(() => {
-        isScrollLoading = false;
-      });
+    } else {
+      // Service is disconnected, but still update to show cached messages with loading status
+      updateMessages();
+      isScrollLoading = false;
+    }
   }
 }, 100);
 
@@ -275,8 +281,12 @@ watch(
   () => props.contact?.conversationId,
   async (newConversationId, oldConversationId) => {
     if (newConversationId && newConversationId !== oldConversationId) {
+      // Reset messages when changing conversations
       state.messages = [];
-      await getMessagesByConversationId(newConversationId, '');
+      // Load messages for the new conversation
+      if (!getIsWebsocketConnecting()) {
+        await getMessagesByConversationId(newConversationId, '');
+      }
       updateMessages();
 
       await nextTick();
@@ -290,6 +300,15 @@ watch(
     }
   },
   { immediate: true }
+);
+
+// Watch for changes in connection status to update message loading status
+watch(
+  () => getIsWebsocketConnecting(),
+  () => {
+    // Update messages when connection status changes, to show/hide loading indicators
+    updateMessages();
+  }
 );
 
 const mastraResult = useMastra(
@@ -376,8 +395,12 @@ watch(
       scrollState.previousScrollTop = chatWrapperRef.value.scrollTop;
     }
 
-    if (props.contact?.conversationId) {
-      await getMessagesByConversationId(props.contact.conversationId, '');
+    // Only load messages if we're not in AI chat mode and have a contact
+    if (props.chapter !== 'ai' && props.contact?.conversationId) {
+      state.messages = [];
+      if (!getIsWebsocketConnecting()) {
+        await getMessagesByConversationId(props.contact.conversationId, '');
+      }
       updateMessages();
     } else {
       state.messages = [];
@@ -467,6 +490,9 @@ const handleSend = async (): Promise<void> => {
     console.error('[OpenIM] Failed to send message:', error);
   }
 
+  // Update messages to show the sent message in UI
+  updateMessages();
+
   setTimeout(() => {
     scrollToBottom(true);
   }, 10);
@@ -524,6 +550,9 @@ const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
         });
       }
 
+      // Update messages to show the sent file in UI
+      updateMessages();
+
       setTimeout(() => {
         scrollToBottom(true);
       }, 10);
@@ -558,9 +587,45 @@ const getSystemMessageContent = message => {
   return notification || message.textElem?.content || message.showName || '';
 };
 
+let loadingAllMessages = false;
+
+// Загружает все сообщения для данной конверсации
+const loadAllMessages = async (conversationId: string) => {
+  if (loadingAllMessages) return; // Избегаем дублирующихся загрузок
+  loadingAllMessages = true;
+
+  let lastMsgId = '';
+  let hasMoreMessages = true;
+  const maxIterations = 10; // Prevent infinite loops
+  let iterations = 0;
+
+  while (hasMoreMessages && iterations < maxIterations) {
+    const messages = await getMessagesByConversationId(conversationId, lastMsgId);
+    if (!messages || messages.length === 0) {
+      hasMoreMessages = false;
+    } else {
+      // Only continue if we received the full batch (50 messages)
+      // If we received fewer, we've likely reached the end
+      if (messages.length < 50) {
+        hasMoreMessages = false;
+      } else {
+        // Otherwise, continue with the last message ID to get more
+        lastMsgId = messages[messages.length - 1]?.clientMsgID || '';
+      }
+    }
+    iterations++;
+  }
+
+  loadingAllMessages = false;
+  updateMessages(); // Обновляем UI после загрузки всех сообщений
+};
+
 onMounted(async () => {
   if (props.contact?.conversationId) {
-    await getMessagesByConversationId(props.contact.conversationId, '');
+    state.messages = [];
+    if (!getIsWebsocketConnecting()) {
+      await getMessagesByConversationId(props.contact.conversationId, '');
+    }
     updateMessages();
 
     await nextTick();
@@ -568,6 +633,7 @@ onMounted(async () => {
       if (chatWrapperRef?.value) {
         scrollToBottom(false); // Direct scroll to bottom
         scrollState.shouldAutoScroll = true;
+        scrollState.isInitialLoad = true;
       }
     });
   }

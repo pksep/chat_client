@@ -83,6 +83,10 @@ const setupOpenIM = (): void => {
 
     connectionSuccessTimer = window.setTimeout(() => {
       isWebsocketConnecting.value = false;
+
+      // Retry sending queued messages when connection is restored
+      retryQueuedMessages();
+
       connectionSuccessTimer = null;
     }, 300);
   });
@@ -336,6 +340,70 @@ export const sendMessageIM = async ({
     throw error;
   }
 
+  // Check if websocket is connecting/disconnected
+  if (getIsWebsocketConnecting()) {
+    // Create a temporary message object to add to the queue
+    const tempMsg: OpenIMMessage = {
+      clientMsgID,
+      sendID: '', // Will be filled when actually sent
+      recvID: to,
+      groupID: groupId,
+      sendTime: Date.now(),
+      textElem: { content: message || '' },
+      status: 1, // Mark as loading
+      loading: true,
+      isRead: false,
+      // Add any other required properties
+      msgFrom: 0,
+      contentType: type === 'text' ? 100 : type === 'image' ? 3 : 4, // 100:text, 3:image, 4:file
+      seq: 0,
+      isReact: false,
+      isExternalExtensions: false,
+      offlinePushInfo: null,
+      attachedInfoElem: null,
+      recvID: to,
+      senderFaceURL: '',
+      senderNickname: '',
+      sessionType: to ? 1 : 2, // 1: single chat, 2: group chat
+      platformID: 0,
+      ackStatus: 0,
+      isHistory: true,
+      isUnreadCount: true,
+      isPersistent: true,
+      isSenderSync: true,
+      isConversationUpdate: true,
+      isSenderConversationUpdate: true,
+      isGroupCallback: true,
+      isOfflinePush: true,
+      attachedInfo: '',
+      ex: '',
+      msgFirstModifyTime: 0
+    };
+
+    // Determine conversation ID
+    let convId = '';
+    if (groupId) {
+      convId = `sg_${groupId}`;
+    } else if (to) {
+      // In a real scenario, we would have the sender's ID, but at this point
+      // we might not have it. We'll use a placeholder or get it from session storage
+      const senderId = sessionStorage.getItem('openim_user')
+        ? JSON.parse(sessionStorage.getItem('openim_user')!).userID
+        : 'temp_sender';
+      const [smallerUserID, largerUserID] = [senderId, to].sort();
+      convId = `si_${smallerUserID}_${largerUserID}`;
+    }
+
+    // Add to outgoing queue for when connection is restored
+    addToOutgoingMessageQueue(convId, tempMsg);
+
+    // Update UI to show the queued message with loading status
+    appendMessageToLocal(convId, tempMsg);
+
+    // Don't throw an error, as this is expected behavior when offline
+    return;
+  }
+
   try {
     let createResp: any;
 
@@ -474,14 +542,21 @@ export const sendMessageIM = async ({
       'sendMessage'
     );
 
-    const [smallerUserID, largerUserID] = [
-      res.data.sendID,
-      res.data.recvID
-    ].sort();
-
-    const convId = !to
-      ? `sg_${groupId}`
-      : `si_${smallerUserID}_${largerUserID}`;
+    // Determine the conversation ID based on message type
+    let convId = '';
+    if (groupId) {
+      // For group messages
+      convId = `sg_${groupId}`;
+    } else if (to) {
+      // For single chat messages
+      // Use the sender and receiver IDs to construct the conversation ID
+      const senderId = res.data.sendID;
+      const receiverId = res.data.recvID || to;
+      const [smallerUserID, largerUserID] = [senderId, receiverId].sort();
+      convId = `si_${smallerUserID}_${largerUserID}`;
+    } else {
+      throw new Error('Could not determine conversation ID for message');
+    }
 
     appendMessageToLocal(convId, res.data);
 
@@ -500,15 +575,137 @@ export const sendMessageIM = async ({
 
     console.error('[OpenIM] Failed to send message:', errorDetails);
 
-    if (error?.operationID) {
-      console.info(`Operation ID: ${error.operationID}`);
-    }
-    if (error?.event) {
-      console.info(`Event: ${error.event}`);
+    // If sending failed, queue the message for later
+    const tempMsg: OpenIMMessage = {
+      clientMsgID,
+      sendID: '', // Will be filled when actually sent
+      recvID: to,
+      groupID: groupId,
+      sendTime: Date.now(),
+      textElem: { content: message || '' },
+      status: 1, // Mark as loading
+      loading: true,
+      isRead: false,
+      // Add any other required properties
+      msgFrom: 0,
+      contentType: type === 'text' ? 100 : type === 'image' ? 3 : 4, // 100:text, 3:image, 4:file
+      seq: 0,
+      isReact: false,
+      isExternalExtensions: false,
+      offlinePushInfo: null,
+      attachedInfoElem: null,
+      recvID: to,
+      senderFaceURL: '',
+      senderNickname: '',
+      sessionType: to ? 1 : 2, // 1: single chat, 2: group chat
+      platformID: 0,
+      ackStatus: 0,
+      isHistory: true,
+      isUnreadCount: true,
+      isPersistent: true,
+      isSenderSync: true,
+      isConversationUpdate: true,
+      isSenderConversationUpdate: true,
+      isGroupCallback: true,
+      isOfflinePush: true,
+      attachedInfo: '',
+      ex: '',
+      msgFirstModifyTime: 0
+    };
+
+    // Determine conversation ID
+    let convId = '';
+    if (groupId) {
+      convId = `sg_${groupId}`;
+    } else if (to) {
+      // In a real scenario, we would have the sender's ID, but at this point
+      // we might not have it. We'll use a placeholder or get it from session storage
+      const senderId = sessionStorage.getItem('openim_user')
+        ? JSON.parse(sessionStorage.getItem('openim_user')!).userID
+        : 'temp_sender';
+      const [smallerUserID, largerUserID] = [senderId, to].sort();
+      convId = `si_${smallerUserID}_${largerUserID}`;
     }
 
-    throw error;
+    // Add to outgoing queue for when connection is restored
+    addToOutgoingMessageQueue(convId, tempMsg);
+
+    // Update UI to show the queued message with loading status
+    appendMessageToLocal(convId, tempMsg);
+
+    // Don't throw an error, as we've queued the message for later
+    return;
   }
+};
+
+const retryQueuedMessages = async (): Promise<void> => {
+  // Create a copy of the queue to avoid modifying during iteration
+  const queueCopy = { ...outgoingMessageQueue.value };
+
+  for (const [conversationId, queuedMessages] of Object.entries(queueCopy)) {
+    if (queuedMessages && queuedMessages.length > 0) {
+      // Process each message in the queue for this conversation
+      for (const message of [...queuedMessages]) { // Create a copy to avoid reference issues
+        try {
+          // Determine if this is a group or single chat
+          const isGroupChat = conversationId.startsWith('sg_');
+          const groupId = isGroupChat ? conversationId.substring(3) : '';
+          // For single chat, we need to extract the receiver ID from the conversation ID
+          let to = '';
+          if (!isGroupChat && conversationId.startsWith('si_')) {
+            const parts = conversationId.substring(3).split('_');
+            if (parts.length === 2) {
+              const [userId1, userId2] = parts;
+              // Use the session storage to get current user ID to determine the recipient
+              const currentUserId = sessionStorage.getItem('openim_user')
+                ? JSON.parse(sessionStorage.getItem('openim_user')!).userID
+                : '';
+              to = currentUserId === userId1 ? userId2 : userId1;
+            }
+          }
+
+          // Determine the message type and content
+          if (message.textElem?.content) {
+            await sendMessageIM({
+              to,
+              groupId,
+              message: message.textElem.content,
+              type: 'text'
+            });
+            // Remove the successfully sent message from the queue
+            removeFromOutgoingQueue(conversationId, message.clientMsgID);
+          } else if (message.pictureElem) {
+            // For image messages, we would need to handle file re-uploads
+            console.warn('Image message retry not implemented yet');
+          } else if (message.fileElem) {
+            // For file messages, we would need to handle file re-uploads
+            console.warn('File message retry not implemented yet');
+          }
+        } catch (error) {
+          console.error(`Failed to retry sending message ${message.clientMsgID}:`, error);
+          // Keep the message in the queue if retry fails
+        }
+      }
+    }
+  }
+};
+
+const extractUserIdFromConversationId = (conversationId: string, senderId: string): string => {
+  if (conversationId.startsWith('si_')) {
+    const parts = conversationId.substring(3).split('_');
+    if (parts.length === 2) {
+      const [smallerId, largerId] = parts;
+      // Return the other user's ID (not the sender)
+      return senderId === smallerId ? largerId : smallerId;
+    }
+  }
+  return '';
+};
+
+const removeFromOutgoingQueue = (conversationId: string, clientMsgID: string): void => {
+  const queue = outgoingMessageQueue.value[conversationId] || [];
+  const updatedQueue = queue.filter(msg => msg.clientMsgID !== clientMsgID);
+  outgoingMessageQueue.value[conversationId] = updatedQueue;
 };
 
 const getOrGeneratePlatformId = (): number => {
@@ -590,6 +787,12 @@ const markAsRead = async (conversationID: string) => {
 
 const messagesStore = shallowRef<Record<string, OpenIMMessage[]>>({});
 
+// Store for messages that are currently in loading state
+const loadingMessages = shallowRef<Record<string, OpenIMMessage[]>>({});
+
+// Store for outgoing messages that couldn't be sent due to disconnection
+const outgoingMessageQueue = shallowRef<Record<string, OpenIMMessage[]>>({});
+
 const saveMessagesToLocal = (
   conversationId: string,
   messages: OpenIMMessage[]
@@ -599,6 +802,64 @@ const saveMessagesToLocal = (
 
 const getSavedMessages = (conversationId: string): OpenIMMessage[] => {
   return messagesStore.value[conversationId] || [];
+};
+
+const getLoadingMessages = (conversationId: string): OpenIMMessage[] => {
+  return loadingMessages.value[conversationId] || [];
+};
+
+const getOutgoingMessageQueue = (conversationId: string): OpenIMMessage[] => {
+  return outgoingMessageQueue.value[conversationId] || [];
+};
+
+const setMessagesLoadingStatus = (
+  conversationId: string,
+  messages: OpenIMMessage[]
+): void => {
+  const updatedMessages = messages.map(msg => ({
+    ...msg,
+    status: 1, // Set status to 1 (loading/sending) for messages when service is down
+    loading: true
+  }));
+
+  loadingMessages.value[conversationId] = [...updatedMessages];
+};
+
+const addToOutgoingMessageQueue = (
+  conversationId: string,
+  message: OpenIMMessage
+): void => {
+  const queue = outgoingMessageQueue.value[conversationId] || [];
+  const newQueue = [...queue, message];
+  outgoingMessageQueue.value[conversationId] = newQueue;
+};
+
+interface OpenIMMessageWithLoading extends OpenIMMessage {
+  loading?: boolean;
+}
+
+const getMessagesWithLoadingStatus = (conversationId: string): OpenIMMessageWithLoading[] => {
+  // Return cached messages from the store, and if service is disconnected,
+  // add loading status to messages
+  const cachedMessages = getSavedMessages(conversationId);
+  const hasConnection = !getIsWebsocketConnecting();
+
+  let finalMessages = [...cachedMessages];
+
+  if (!hasConnection) {
+    // When service is disconnected, mark existing messages as loading
+    finalMessages = finalMessages.map(msg => ({
+      ...msg,
+      status: 1, // Mark as loading/sending
+      loading: true
+    }));
+
+    // Include any messages that were queued for sending but couldn't be sent
+    const queuedMessages = getOutgoingMessageQueue(conversationId);
+    finalMessages = [...finalMessages, ...queuedMessages];
+  }
+
+  return finalMessages;
 };
 
 const appendMessageToLocal = (
@@ -626,6 +887,8 @@ export {
   getMessagesByConversationId,
   saveMessagesToLocal,
   getSavedMessages,
+  getMessagesWithLoadingStatus,
+  addToOutgoingMessageQueue,
   appendMessageToLocal,
   markAsRead
 };
