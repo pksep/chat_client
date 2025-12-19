@@ -351,33 +351,11 @@ export const sendMessageIM = async ({
       sendTime: Date.now(),
       textElem: { content: message || '' },
       status: 1, // Mark as loading
-      loading: true,
       isRead: false,
-      // Add any other required properties
       msgFrom: 0,
-      contentType: type === 'text' ? 100 : type === 'image' ? 3 : 4, // 100:text, 3:image, 4:file
+      contentType: type === 'text' ? 101 : type === 'image' ? 102 : 105, // 101:text, 102:image, 105:file
       seq: 0,
-      isReact: false,
-      isExternalExtensions: false,
-      offlinePushInfo: null,
-      attachedInfoElem: null,
-      recvID: to,
-      senderFaceURL: '',
-      senderNickname: '',
-      sessionType: to ? 1 : 2, // 1: single chat, 2: group chat
-      platformID: 0,
-      ackStatus: 0,
-      isHistory: true,
-      isUnreadCount: true,
-      isPersistent: true,
-      isSenderSync: true,
-      isConversationUpdate: true,
-      isSenderConversationUpdate: true,
-      isGroupCallback: true,
-      isOfflinePush: true,
-      attachedInfo: '',
-      ex: '',
-      msgFirstModifyTime: 0
+      sessionType: to ? 1 : 3 // 1: single chat, 3: group chat
     };
 
     // Determine conversation ID
@@ -584,33 +562,11 @@ export const sendMessageIM = async ({
       sendTime: Date.now(),
       textElem: { content: message || '' },
       status: 1, // Mark as loading
-      loading: true,
       isRead: false,
-      // Add any other required properties
       msgFrom: 0,
-      contentType: type === 'text' ? 100 : type === 'image' ? 3 : 4, // 100:text, 3:image, 4:file
+      contentType: type === 'text' ? 101 : type === 'image' ? 102 : 105, // 101:text, 102:image, 105:file
       seq: 0,
-      isReact: false,
-      isExternalExtensions: false,
-      offlinePushInfo: null,
-      attachedInfoElem: null,
-      recvID: to,
-      senderFaceURL: '',
-      senderNickname: '',
-      sessionType: to ? 1 : 2, // 1: single chat, 2: group chat
-      platformID: 0,
-      ackStatus: 0,
-      isHistory: true,
-      isUnreadCount: true,
-      isPersistent: true,
-      isSenderSync: true,
-      isConversationUpdate: true,
-      isSenderConversationUpdate: true,
-      isGroupCallback: true,
-      isOfflinePush: true,
-      attachedInfo: '',
-      ex: '',
-      msgFirstModifyTime: 0
+      sessionType: to ? 1 : 3 // 1: single chat, 3: group chat
     };
 
     // Determine conversation ID
@@ -645,7 +601,8 @@ const retryQueuedMessages = async (): Promise<void> => {
   for (const [conversationId, queuedMessages] of Object.entries(queueCopy)) {
     if (queuedMessages && queuedMessages.length > 0) {
       // Process each message in the queue for this conversation
-      for (const message of [...queuedMessages]) { // Create a copy to avoid reference issues
+      for (const message of [...queuedMessages]) {
+        // Create a copy to avoid reference issues
         try {
           // Determine if this is a group or single chat
           const isGroupChat = conversationId.startsWith('sg_');
@@ -682,7 +639,10 @@ const retryQueuedMessages = async (): Promise<void> => {
             console.warn('File message retry not implemented yet');
           }
         } catch (error) {
-          console.error(`Failed to retry sending message ${message.clientMsgID}:`, error);
+          console.error(
+            `Failed to retry sending message ${message.clientMsgID}:`,
+            error
+          );
           // Keep the message in the queue if retry fails
         }
       }
@@ -690,19 +650,10 @@ const retryQueuedMessages = async (): Promise<void> => {
   }
 };
 
-const extractUserIdFromConversationId = (conversationId: string, senderId: string): string => {
-  if (conversationId.startsWith('si_')) {
-    const parts = conversationId.substring(3).split('_');
-    if (parts.length === 2) {
-      const [smallerId, largerId] = parts;
-      // Return the other user's ID (not the sender)
-      return senderId === smallerId ? largerId : smallerId;
-    }
-  }
-  return '';
-};
-
-const removeFromOutgoingQueue = (conversationId: string, clientMsgID: string): void => {
+const removeFromOutgoingQueue = (
+  conversationId: string,
+  clientMsgID: string
+): void => {
   const queue = outgoingMessageQueue.value[conversationId] || [];
   const updatedQueue = queue.filter(msg => msg.clientMsgID !== clientMsgID);
   outgoingMessageQueue.value[conversationId] = updatedQueue;
@@ -787,9 +738,6 @@ const markAsRead = async (conversationID: string) => {
 
 const messagesStore = shallowRef<Record<string, OpenIMMessage[]>>({});
 
-// Store for messages that are currently in loading state
-const loadingMessages = shallowRef<Record<string, OpenIMMessage[]>>({});
-
 // Store for outgoing messages that couldn't be sent due to disconnection
 const outgoingMessageQueue = shallowRef<Record<string, OpenIMMessage[]>>({});
 
@@ -804,25 +752,8 @@ const getSavedMessages = (conversationId: string): OpenIMMessage[] => {
   return messagesStore.value[conversationId] || [];
 };
 
-const getLoadingMessages = (conversationId: string): OpenIMMessage[] => {
-  return loadingMessages.value[conversationId] || [];
-};
-
 const getOutgoingMessageQueue = (conversationId: string): OpenIMMessage[] => {
   return outgoingMessageQueue.value[conversationId] || [];
-};
-
-const setMessagesLoadingStatus = (
-  conversationId: string,
-  messages: OpenIMMessage[]
-): void => {
-  const updatedMessages = messages.map(msg => ({
-    ...msg,
-    status: 1, // Set status to 1 (loading/sending) for messages when service is down
-    loading: true
-  }));
-
-  loadingMessages.value[conversationId] = [...updatedMessages];
 };
 
 const addToOutgoingMessageQueue = (
@@ -838,7 +769,9 @@ interface OpenIMMessageWithLoading extends OpenIMMessage {
   loading?: boolean;
 }
 
-const getMessagesWithLoadingStatus = (conversationId: string): OpenIMMessageWithLoading[] => {
+const getMessagesWithLoadingStatus = (
+  conversationId: string
+): OpenIMMessageWithLoading[] => {
   // Return cached messages from the store, and if service is disconnected,
   // add loading status to messages
   const cachedMessages = getSavedMessages(conversationId);

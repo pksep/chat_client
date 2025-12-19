@@ -105,7 +105,11 @@
   <EmptyChat
     :chapter="props.chapter"
     :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
-    v-if="!state.messages.length && !aiMessages.length && !getIsWebsocketConnecting()"
+    v-if="
+      !state.messages.length &&
+      !aiMessages.length &&
+      !getIsWebsocketConnecting()
+    "
   />
   <div
     class="chat__input"
@@ -141,7 +145,6 @@ import { useMastra } from '../services/useMastra';
 import { removeMessageLoading } from '../services/useChatDb';
 import {
   getMessagesByConversationId,
-  getSavedMessages,
   getMessagesWithLoadingStatus,
   markAsRead,
   sendMessageIM,
@@ -175,7 +178,9 @@ const state = reactive({
 
 const updateMessages = () => {
   if (props.contact?.conversationId) {
-    state.messages = [...getMessagesWithLoadingStatus(props.contact.conversationId)];
+    state.messages = [
+      ...getMessagesWithLoadingStatus(props.contact.conversationId)
+    ];
   } else {
     state.messages = [];
   }
@@ -254,8 +259,6 @@ const handleScroll = throttle((): void => {
 
   if (scrollTop < 20 && !isScrollLoading && props.contact?.conversationId) {
     isScrollLoading = true;
-    const currentScrollTop = scrollTop;
-    const currentScrollHeight = scrollHeight;
 
     // Try to load more messages from the service if connected
     if (!getIsWebsocketConnecting()) {
@@ -585,39 +588,6 @@ const isNewDate = (index: number, isMastra: boolean = false) => {
 const getSystemMessageContent = message => {
   const notification = parseGroupNotification(message);
   return notification || message.textElem?.content || message.showName || '';
-};
-
-let loadingAllMessages = false;
-
-// Загружает все сообщения для данной конверсации
-const loadAllMessages = async (conversationId: string) => {
-  if (loadingAllMessages) return; // Избегаем дублирующихся загрузок
-  loadingAllMessages = true;
-
-  let lastMsgId = '';
-  let hasMoreMessages = true;
-  const maxIterations = 10; // Prevent infinite loops
-  let iterations = 0;
-
-  while (hasMoreMessages && iterations < maxIterations) {
-    const messages = await getMessagesByConversationId(conversationId, lastMsgId);
-    if (!messages || messages.length === 0) {
-      hasMoreMessages = false;
-    } else {
-      // Only continue if we received the full batch (50 messages)
-      // If we received fewer, we've likely reached the end
-      if (messages.length < 50) {
-        hasMoreMessages = false;
-      } else {
-        // Otherwise, continue with the last message ID to get more
-        lastMsgId = messages[messages.length - 1]?.clientMsgID || '';
-      }
-    }
-    iterations++;
-  }
-
-  loadingAllMessages = false;
-  updateMessages(); // Обновляем UI после загрузки всех сообщений
 };
 
 onMounted(async () => {
