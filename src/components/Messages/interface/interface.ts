@@ -22,3 +22,10 @@ export interface IMessageBubbleProps {
   dataTestid?: string;
   messageStatus?: number;
 }
+
+export interface IMessageStatusIconsProps {
+  isRead?: boolean;
+  messageStatus?: number;
+  isMeSender?: boolean;
+  dataTestid?: string;
+}

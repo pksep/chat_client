@@ -1,18 +1,18 @@
 <template>
   <div class="message-status-icons">
     <Icon
-      v-if="isRead"
+      v-if="props.isRead"
       :name="IconNameEnum.read"
       :data-testid="`${dataTestid}-ReadIcon`"
     />
-    <template v-else-if="messageStatus !== undefined">
+    <template v-else-if="props.messageStatus !== undefined">
       <Icon
-        v-if="messageStatus === 2"
+        v-if="props.messageStatus === 2"
         :name="IconNameEnum.delivered"
         :data-testid="`${dataTestid}-DeliveredIcon`"
       />
       <Icon
-        v-else-if="messageStatus === 1"
+        v-else-if="props.messageStatus === 1"
         :name="IconNameEnum.notDelivered"
         :data-testid="`${dataTestid}-SendingIcon`"
       />
@@ -29,16 +29,11 @@
 
 <script setup lang="ts">
 import { Icon, IconNameEnum } from '@pksep/yui';
+import type { IMessageStatusIconsProps } from './interface/interface';
 
-interface Props {
-  isRead?: boolean;
-  messageStatus?: number;
-  dataTestid?: string;
-}
-
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<IMessageStatusIconsProps>(), {
   isRead: false,
-  messageStatus: undefined,
+  isMeSender: false,
   dataTestid: () => 'MessageStatusIcons'
 });
 </script>
