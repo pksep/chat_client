@@ -129,8 +129,7 @@ import {
   nextTick,
   onUnmounted,
   computed,
-  type ComputedRef,
-  watchEffect
+  type ComputedRef
 } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
