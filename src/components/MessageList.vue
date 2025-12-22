@@ -94,7 +94,11 @@
           :time="formatTime(new Date(message.sendTime))"
           :sender="message.senderNickname"
           :avatar="message.faceURL"
-          :is-read="message.isRead"
+          :is-read="
+            props.user.id === message.sendID
+              ? message.isReadByPeer
+              : message.isRead
+          "
           :message-status="message.status"
           :loader="message.loading"
           :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"

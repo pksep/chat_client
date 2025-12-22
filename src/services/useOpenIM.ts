@@ -235,15 +235,19 @@ const setupOpenIM = (): void => {
       const msgs = getSavedMessages(conversationID);
       const msgIdSet = new Set(msgIds);
 
-      msgs.forEach((msg, idx) => {
+      const updatedMsgs = msgs.map((msg, idx) => {
         if (msgIdSet.has(msg.clientMsgID)) {
-          // Update the isRead property that the UI expects for sent messages
+          // Update the isReadByPeer property that the UI expects for sent messages
           // When a read receipt is received, it means the peer has read the message
-          msgs[idx].isRead = true;
+          return {
+            ...msg,
+            isReadByPeer: true
+          };
         }
+        return msg;
       });
 
-      saveMessagesToLocal(conversationID, msgs);
+      saveMessagesToLocal(conversationID, updatedMsgs);
     });
   }, 100);
 
@@ -361,6 +365,7 @@ export const sendMessageIM = async ({
       textElem: { content: message || '' },
       status: 1, // Mark as loading
       isRead: false,
+      isReadByPeer: false,
       msgFrom: 0,
       contentType: type === 'text' ? 101 : type === 'image' ? 102 : 105, // 101:text, 102:image, 105:file
       seq: 0,
@@ -572,6 +577,7 @@ export const sendMessageIM = async ({
       textElem: { content: message || '' },
       status: 1, // Mark as loading
       isRead: false,
+      isReadByPeer: false,
       msgFrom: 0,
       contentType: type === 'text' ? 101 : type === 'image' ? 102 : 105, // 101:text, 102:image, 105:file
       seq: 0,
@@ -746,6 +752,24 @@ const markAsRead = async (conversationID: string) => {
       TIMEOUT_DURATION,
       'markConversationMessageAsRead'
     );
+
+    // Update local messages to mark them as read
+    // Get all messages in this conversation and update their isRead status
+    const messages = getSavedMessages(conversationID);
+    const currentUserID = sessionStorage.getItem('openim_user') ? JSON.parse(sessionStorage.getItem('openim_user')!).userID : '';
+    const updatedMessages = messages.map(msg => {
+      // Only mark as read if it's a message from someone else (received message)
+      // Don't mark our own messages as read
+      if (msg.sendID !== currentUserID) {
+        return {
+          ...msg,
+          isRead: true
+        };
+      }
+      return msg;
+    });
+
+    saveMessagesToLocal(conversationID, updatedMessages);
   } catch (error: any) {
     // Check if it's the specific RecordNotFoundError (errCode 1004)
     if (error?.errCode === 1004) {
@@ -769,7 +793,13 @@ const saveMessagesToLocal = (
   conversationId: string,
   messages: OpenIMMessage[]
 ): void => {
-  messagesStore.value[conversationId] = [...messages];
+  // Ensure all messages have the isReadByPeer property properly initialized
+  const messagesWithDefaults = messages.map(msg => ({
+    ...msg,
+    isReadByPeer: msg.isReadByPeer ?? false
+  }));
+
+  messagesStore.value[conversationId] = [...messagesWithDefaults];
 };
 
 const getSavedMessages = (conversationId: string): OpenIMMessage[] => {
@@ -807,6 +837,7 @@ const getMessagesWithLoadingStatus = (
     // When service is disconnected, mark existing messages as loading
     finalMessages = finalMessages.map(msg => ({
       ...msg,
+      isReadByPeer: msg.isReadByPeer ?? false, // Ensure isReadByPeer is preserved
       status: 1, // Mark as loading/sending
       loading: true
     }));
@@ -823,8 +854,14 @@ const appendMessageToLocal = (
   conversationId: string,
   message: OpenIMMessage
 ): void => {
+  // Ensure the isReadByPeer property is initialized for sent messages
+  const messageWithDefaults = {
+    ...message,
+    isReadByPeer: message.isReadByPeer ?? false
+  };
+
   const arr = messagesStore.value[conversationId] || [];
-  const newArr = [...arr, message];
+  const newArr = [...arr, messageWithDefaults];
   messagesStore.value[conversationId] = newArr;
 };
 
@@ -832,8 +869,14 @@ const appendOldMessagesToLocal = (
   conversationId: string,
   messages: OpenIMMessage[]
 ): void => {
+  // Ensure the isReadByPeer property is initialized for sent messages
+  const messagesWithDefaults = messages.map(msg => ({
+    ...msg,
+    isReadByPeer: msg.isReadByPeer ?? false
+  }));
+
   const arr = messagesStore.value[conversationId] || [];
-  const newArr = [...messages, ...arr];
+  const newArr = [...messagesWithDefaults, ...arr];
   messagesStore.value[conversationId] = newArr;
 };
 

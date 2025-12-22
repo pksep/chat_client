@@ -56,18 +56,11 @@
           v-html="contact.latestMessage"
         ></div>
         <div class="contact-list__top">
-          <Icon
-            v-if="contact.isRead"
-            :name="IconNameEnum.read"
-            class="contact-list__read-icon"
-            :aria-label="contact.isRead ? 'Message read' : 'Message unread'"
-            :data-testid="`${props.dataTestid}-ContactList-ReadIcon${index + 1}`"
-          />
           <MessageStatusIcons
             v-if="contact.isLatestMessageFromMe"
-            class="contact-list__message-status-icons"
+            class="contact-list__read-icon contact-list__message-status-icons"
             :message-status="contact.latestMessageStatus"
-            :is-read="contact.latestMessageStatus === 2"
+            :is-read="contact.isRead"
             :is-me-sender="true"
             :data-testid="`${props.dataTestid}-ContactList-MessageStatusIcons${index + 1}`"
           />

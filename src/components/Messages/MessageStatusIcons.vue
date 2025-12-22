@@ -18,9 +18,9 @@
       />
       <!--
       <Icon
-        v-else-if="messageStatus === 3"
-        :name="IconNameEnum.failed"
-        :data-testid="`${dataTestid}-FailedIcon`"
+        v-else-if="props.messageStatus === 3"
+        :name="IconNameEnum.read"
+        :data-testid="`${dataTestid}-ReadByStatusIcon`"
       />
       -->
     </template>
