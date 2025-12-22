@@ -341,7 +341,7 @@ export const removeUserFromGroup = async (
   userID: string
 ): Promise<boolean> => {
   try {
-    const response = await IMSDK.kickGroupMember({
+    await IMSDK.kickGroupMember({
       groupID,
       userIDList: [userID],
       reason: ''
