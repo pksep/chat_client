@@ -2,7 +2,7 @@
   display: none;
 }
 
-@media screen and (width <= 28rem) {
+@media screen and (width <= 412px) {
   .chat__header-menu {
     display: flex;
   }
@@ -15,7 +15,19 @@
     border-bottom-color: var(--border-grey);
     width: var(--default-width);
   }
+  .header-menu-item__selected {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 0;
+    border-top-left-radius: 6.67px;
+    border-top-right-radius: 6.67px;
+    border-width: 2px;
+    border-style: solid;
+    border-color: var(--blue1);
+  }
   li.header-menu__item {
+    position: relative;
     padding: 8px 14px;
     &:first-child {
       margin-left: 10px;
@@ -25,14 +37,10 @@
       & button {
         color: var(--blue1);
       }
-      border-top-left-radius: 6.67px;
-      border-top-right-radius: 6.67px;
-      border-bottom-style: solid;
-      border-bottom-width: 4px;
-      border-bottom-color: var(--blue1);
     }
   }
   button.header-menu__button {
+    align-self: center;
     color: var(--neutral-text);
     font-size: 16px;
     font-weight: bold;

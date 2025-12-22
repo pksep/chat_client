@@ -9,7 +9,7 @@
       :chapter="state.chapter"
       :members="filteredMembers"
       :contact="state.contact"
-      :dataTestid="`${props.dataTestid}-ChatContainer-Header`"
+      :data-testid="`${props.dataTestid}-ChatContainer-Header`"
       @unmount-click="handleHeaderClick"
       @unmount-contact="handleChangeContact"
       @unmount-exit="handleExit"
@@ -141,7 +141,7 @@ const state = reactive({
 });
 
 const props = withDefaults(defineProps<IChatContainerProps>(), {
-  dataTestid: () => 'ChatContainer'
+  dataTestid: 'ChatContainer'
 });
 
 const authUser = computed(() => appendUserAttributes(getAuthUser()));
@@ -237,9 +237,7 @@ const findContactOrGroupById = (id: string) => {
 const unmountMenuChapter = (
   config: { contact: IUserProps; groupId?: string } | string | null
 ): void => {
-  if (isMobile.value) {
-    state.isChapter = true;
-  }
+  state.isChapter = true;
   if (typeof config === 'string') {
     state.chapter = config;
     if (config === 'ai') {

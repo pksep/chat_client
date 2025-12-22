@@ -25,6 +25,10 @@
           >
             {{ item.label }}
           </button>
+          <div
+            v-if="activeChapter === item.key"
+            class="header-menu-item__selected"
+          ></div>
         </li>
       </ul>
     </nav>

@@ -8,6 +8,7 @@
     <li
       v-for="(contact, index) in props.contacts"
       :key="contact.id"
+      class="contact-list__li"
       role="listitem"
       tabindex="0"
       @keydown="event => handleKeyDown(contact, event)"
