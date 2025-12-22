@@ -81,13 +81,8 @@
     :show-divider="false"
     :open="state.mobileModal && canInstall && !isInstalled"
   >
-    <Button style="width: 100%" @click="handleInstall"
-      >Загрузить на устройство</Button
-    >
-    <Button
-      style="width: 100%"
-      :type="ButtonTypeEnum.secondary"
-      @click="state.mobileModal = false"
+    <Button @click="handleInstall">Загрузить на устройство</Button>
+    <Button :type="ButtonTypeEnum.secondary" @click="state.mobileModal = false"
       >Закрыть</Button
     >
   </MobileModal>
