@@ -75,10 +75,10 @@ export interface IChatContainerConfig {
   CHAT_AUTH_API?: string;
   CHAT_OPENIM_API_DOMAIN?: string;
   CHAT_OPENIM_WS_DOMAIN?: string;
+  CHAT_ERP_URL?: string;
 }
 
 export interface IChatContainerProps {
-  token?: string;
   baseUrl?: string;
   dataTestid?: string;
   config: IChatContainerConfig;

@@ -178,6 +178,7 @@ const setupOpenIM = (): void => {
       }
 
       const batchSize = 10;
+      let enableAudio = false;
       for (let i = 0; i < list.length; i += batchSize) {
         const batch = list.slice(i, i + batchSize);
 
@@ -189,9 +190,19 @@ const setupOpenIM = (): void => {
             continue;
           }
 
+          if (!enableAudio) {
+            enableAudio = !processedMessage.notificationElem;
+          }
+
           const convId = generateConversationId(processedMessage);
           appendMessageToLocal(convId, processedMessage as OpenIMMessage);
         }
+      }
+
+      if (enableAudio) {
+        new Audio('/audio/new-message.mp3').play().catch(e => {
+          console.error('Failed to play notification sound:', e);
+        });
       }
     } catch (e) {
       console.error('[OpenIM] Failed to process incoming message event:', e);

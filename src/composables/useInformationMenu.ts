@@ -115,7 +115,6 @@ export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
       } else {
         await IMSDK.deleteFriend(model.value?.userId);
       }
-      window.location.reload();
     } catch (error) {
       const errorDetails = {
         error: error,

@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, watch } from 'vue';
+import { computed, onMounted, watch } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
 import type {
   IChatContainerEmits,
@@ -19,7 +19,7 @@ import {
 } from './services/useConversions';
 import { fetchAuthUser, useAuth } from './composables/useAuth';
 import { fetchAllUsers } from './composables/useUsers';
-import { getConfig, setConfig } from './services/useConfig';
+import { getConfig } from './services/useConfig';
 
 const emits = defineEmits<IChatContainerEmits>();
 
@@ -28,21 +28,25 @@ const props = defineProps<IChatContainerProps>();
 const allNotificationCount = computed(() => getAllNotificationCount());
 
 onMounted(async () => {
-  setConfig(props.config);
+  const url = new URL(window.location.href);
+  const token = url.searchParams.get('token');
 
   try {
-    if (!props.token) {
-      throw new Error('No auth token found');
+    const config = getConfig();
+
+    if (!token) {
+      window.location.href =
+        config.CHAT_ERP_URL +
+        '?redirect=' +
+        encodeURIComponent(window.location.href);
     }
 
-    const authData = await useAuth(props.token);
+    const authData = await useAuth(token);
 
     if (!hasUserIdInSession(authData.UserID)) {
       clearAllData();
       saveUserIdToSession(authData.UserID);
     }
-
-    const config = getConfig();
 
     const apiAddr = config.CHAT_OPENIM_API_DOMAIN;
     const wsAddr = config.CHAT_OPENIM_WS_DOMAIN;
@@ -77,11 +81,10 @@ onMounted(async () => {
   } catch (error) {
     console.error('Failed to initialize chat:', error);
     throw error;
+  } finally {
+    url.searchParams.delete('token');
+    window.history.replaceState({}, document.title, url.toString());
   }
-});
-
-onUnmounted(async () => {
-  window.location.reload(); // НЕ УДАЛИТЬ!!! это для отключении сокета в опеним
 });
 
 watch(

@@ -113,7 +113,7 @@
   />
   <div
     class="chat__input"
-    v-if="props.chapter"
+    v-if="props.chapter && isEnableSend"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
   >
     <ContentEditor
@@ -152,8 +152,12 @@ import {
 } from '../services/useOpenIM';
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
-import { parseGroupNotification } from '../utils/systemMessages';
+import {
+  OpenIMNotificationType,
+  parseGroupNotification
+} from '../utils/systemMessages';
 import type { OpenIMMessage, AIMessage } from '../types/messages';
+import { authedUser } from '../composables/useAuth';
 
 interface OpenIMMessageWithLoading extends OpenIMMessage {
   loading?: boolean;
@@ -279,6 +283,19 @@ const handleScroll = throttle((): void => {
     }
   }
 }, 100);
+
+const isEnableSend = computed(() => {
+  try {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.contentType === OpenIMNotificationType.GroupDeleted) {
+      return false;
+    }
+    const detail = JSON.parse(lastMessage.notificationElem.detail);
+    return detail.quitUser.userID !== authedUser.value.userID;
+  } catch (e) {
+    return true;
+  }
+});
 
 watch(
   () => props.contact?.conversationId,
