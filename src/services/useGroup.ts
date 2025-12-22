@@ -336,6 +336,31 @@ export const fetchGroupMemberCount = async (
   }
 };
 
+export const removeUserFromGroup = async (
+  groupID: string,
+  userID: string
+): Promise<boolean> => {
+  try {
+    const response = await IMSDK.kickGroupMember({
+      groupID,
+      userIDList: [userID],
+      reason: ''
+    });
+  } catch (err) {
+    const errorDetails = {
+      error: err,
+      operation: 'removeGroupMember',
+      timestamp: new Date().toISOString(),
+      operationID: err?.operationID || err?.data?.operationID || null,
+      event: err?.event || err?.data?.event || null,
+      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
+    };
+
+    console.error('Failed to remove user from group:', errorDetails);
+    return false;
+  }
+};
+
 export {
   createGroup,
   getGroupList,
