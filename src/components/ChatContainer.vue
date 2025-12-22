@@ -79,10 +79,11 @@
     class="mobile-modal"
     headerClass="hidden"
     :show-divider="false"
-    :open="state.mobileModal && canInstall && !isInstalled"
+    :open="state.isPwaModalOpen && canInstall && !isInstalled"
+    @unmount-close="closeModals"
   >
     <Button @click="handleInstall">Загрузить на устройство</Button>
-    <Button :type="ButtonTypeEnum.secondary" @click="state.mobileModal = false"
+    <Button :type="ButtonTypeEnum.secondary" @click="closeModals"
       >Закрыть</Button
     >
   </MobileModal>
@@ -128,7 +129,7 @@ const { state: isCollapse, toggle } = useResizeState({
 });
 
 const state = reactive({
-  mobileModal: true,
+  isPwaModalOpen: true,
   isMenuDesktopOpen: false,
   isMenuMobileOpen: false,
   activeTabId: null,
@@ -247,6 +248,7 @@ const handleNewGroup = (config): void => {
 const closeModals = (): void => {
   state.isNewContactOpen = false;
   state.isNewGroupOpen = false;
+  state.isPwaModalOpen = false;
 };
 
 const handleInformationClick = (): void => {
