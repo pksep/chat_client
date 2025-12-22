@@ -62,7 +62,6 @@
       <template v-for="(item, index) in listChannels" :key="index">
         <template v-if="isCollapse && item.items.length !== 0">
           <Line :data-testid="`${props.dataTestid}-Menu-Line${index + 1}`" />
-          <!-- v-if="item.items.length > index - 1" -->
         </template>
         <details
           class="menu__user-details"

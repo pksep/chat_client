@@ -9,10 +9,14 @@ interface UseResizeStateOptions {
 
 const parseBreakpoint = (breakpoint: string | number): number => {
   if (typeof breakpoint === 'string') {
+    const value = parseFloat(breakpoint);
+    if (breakpoint.endsWith('px')) {
+      return value;
+    }
     const fontSize = parseFloat(
       getComputedStyle(document.documentElement).fontSize
     );
-    return parseFloat(breakpoint) * fontSize;
+    return value * fontSize;
   }
   return breakpoint;
 };

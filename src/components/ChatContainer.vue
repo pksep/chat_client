@@ -56,23 +56,23 @@
         @unmount-contact="handleChangeContact"
       />
     </template>
-  </main>
-  <NewContactModal
-    :contacts="filteredContacts"
-    :open="state.isNewContactOpen"
-    :data-testid="`${props.dataTestid}-ChatContainer-NewContactModal`"
-    @unmount-close="closeModals"
-    @unmount-new-contact="handleNewContactMessage"
-  />
+    <NewContactModal
+      :contacts="filteredContacts"
+      :open="state.isNewContactOpen"
+      :data-testid="`${props.dataTestid}-ChatContainer-NewContactModal`"
+      @unmount-close="closeModals"
+      @unmount-new-contact="handleNewContactMessage"
+    />
 
-  <NewGroupModal
-    :user="authUser"
-    :contacts="filteredContacts"
-    :open="state.isNewGroupOpen"
-    :data-testid="`${props.dataTestid}-ChatContainer-NewGroupModal`"
-    @unmount-close="closeModals"
-    @unmount-new-group="handleNewGroupMessage"
-  />
+    <NewGroupModal
+      :user="authUser"
+      :contacts="filteredContacts"
+      :open="state.isNewGroupOpen"
+      :data-testid="`${props.dataTestid}-ChatContainer-NewGroupModal`"
+      @unmount-close="closeModals"
+      @unmount-new-group="handleNewGroupMessage"
+    />
+  </main>
 </template>
 
 <script setup lang="ts">
