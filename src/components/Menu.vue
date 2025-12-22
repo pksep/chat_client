@@ -94,6 +94,7 @@
             </Button>
           </summary>
           <ContactList
+            class="menu__contact-list"
             :contacts="item.items"
             @unmount-contact="unmountContactClick"
             :selected-contact-id="state.selectedContactId"

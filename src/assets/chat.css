@@ -91,6 +91,7 @@ p.chat__nothing-paragraph {
 .menu__user-assistant {
   &:hover,
   &.menu__user-assistant--active {
+    cursor: pointer;
     background-color: var(--blue15);
   }
 }

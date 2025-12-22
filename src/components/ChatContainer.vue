@@ -4,7 +4,7 @@
     :data-testid="`${props.dataTestid}-ChatContainer-Container`"
   >
     <Header
-      v-if="shouldShowHeader"
+      v-if="state.isChapter"
       class="chat__header"
       :chapter="state.chapter"
       :members="filteredMembers"
@@ -76,7 +76,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, reactive, ref, watch } from 'vue';
+import {
+  computed,
+  defineAsyncComponent,
+  onMounted,
+  reactive,
+  ref,
+  watch
+} from 'vue';
 import Header from './Header/Header.vue';
 import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
@@ -127,6 +134,7 @@ const state = reactive({
           : !state.isMenuDesktopOpen
     }
   ]),
+  isChapter: false,
   users: getUsersList(),
   groups: getGroupList(),
   conversations: getConversationList()
@@ -150,11 +158,6 @@ const filteredMembers = computed(() => {
   return state.users.filter(user => user.id !== authId);
 });
 
-const shouldShowHeader = computed(() => {
-  return state.chapter === 'ai' || state.contact !== null;
-});
-
-// Watch for changes in user data and update state accordingly
 watch(
   () => getUsersList(),
   newUsers => {
@@ -202,12 +205,21 @@ const unmountHeaderMenuChapter = (
 ): void => {
   if (typeof config === 'string') {
     state.chapter = config;
-    if (config === 'ai') {
+    if (
+      config === 'channels' ||
+      config === 'dialogs' ||
+      config === 'assistant' ||
+      config === 'ai'
+    ) {
       state.contact = null;
+      state.isChapter = false;
+      return;
     }
+    state.isChapter = true;
   } else if (config && config.nickname) {
     state.chapter = config.nickname;
     state.contact = config;
+    state.isChapter = false;
   } else {
     state.chapter = null;
     state.contact = null;
@@ -225,6 +237,9 @@ const findContactOrGroupById = (id: string) => {
 const unmountMenuChapter = (
   config: { contact: IUserProps; groupId?: string } | string | null
 ): void => {
+  if (isMobile.value) {
+    state.isChapter = true;
+  }
   if (typeof config === 'string') {
     state.chapter = config;
     if (config === 'ai') {
@@ -319,5 +334,14 @@ const handleChangeContact = (contact: IUserProps): void => {
 
 const handleExit = (): void => {
   state.chapter = 'assistant';
+  state.isChapter = false;
 };
+
+onMounted(() => {
+  if (isMobile.value) {
+    state.isChapter = false;
+    return;
+  }
+  state.isChapter = state.chapter === 'ai' || state.contact !== null;
+});
 </script>

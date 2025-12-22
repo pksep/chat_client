@@ -1,7 +1,7 @@
 .contact-list__item {
   --size-avatar: 25px;
   display: grid;
-  grid-template-columns: 30px auto;
+  grid-template-columns: calc(var(--size-avatar) * 2) auto;
   column-gap: 10px;
   padding: 10px;
   min-height: 58px;
@@ -137,6 +137,9 @@ svg.icon-yui-kit.contact-list__read-icon {
 }
 
 @media (width <= 28rem) {
+  .contact-list__item {
+    --size-avatar: 30px;
+  }
   .contact-selector__list {
     max-height: 100%;
   }

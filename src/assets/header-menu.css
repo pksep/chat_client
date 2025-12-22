@@ -8,7 +8,7 @@
   }
   .header-menu__list {
     display: flex;
-    justify-content: center;
+    justify-content: start;
     gap: 36px;
     border-bottom-style: solid;
     border-bottom-width: 1px;
@@ -17,17 +17,23 @@
   }
   li.header-menu__item {
     padding: 8px 14px;
+    &:first-child {
+      margin-left: 10px;
+    }
 
     &.header-menu__item--active {
       & button {
         color: var(--blue1);
       }
+      border-top-left-radius: 6.67px;
+      border-top-right-radius: 6.67px;
       border-bottom-style: solid;
       border-bottom-width: 4px;
       border-bottom-color: var(--blue1);
     }
   }
   button.header-menu__button {
+    color: var(--neutral-text);
     font-size: 16px;
     font-weight: bold;
   }
