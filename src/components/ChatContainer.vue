@@ -73,6 +73,24 @@
     @unmount-close="closeModals"
     @unmount-new-group="handleNewGroupMessage"
   />
+
+  <MobileModal
+    v-if="isMobile"
+    class="mobile-modal"
+    headerClass="hidden"
+    :show-divider="false"
+    :open="state.mobileModal && canInstall && !isInstalled"
+  >
+    <Button style="width: 100%" @click="handleInstall"
+      >Загрузить на устройство</Button
+    >
+    <Button
+      style="width: 100%"
+      :type="ButtonTypeEnum.secondary"
+      @click="state.mobileModal = false"
+      >Закрыть</Button
+    >
+  </MobileModal>
 </template>
 
 <script setup lang="ts">
@@ -94,6 +112,9 @@ import { MAX_W_MD, MAX_W_XL } from '../utils/constants';
 import { getGroupList } from '../services/useGroup';
 import { getConversationList } from '../services/useConversions';
 import { getAuthUser } from '../composables/useAuth';
+import MobileModal from './UI/MobileModal.vue';
+import { Button, ButtonTypeEnum } from '@pksep/yui';
+import { usePwaInstall } from '../composables/usePwaInstall';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -101,6 +122,8 @@ const NewContactModal = defineAsyncComponent(
 const NewGroupModal = defineAsyncComponent(
   () => import('./NewChat/NewGroupModal.vue')
 );
+
+const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
@@ -110,6 +133,7 @@ const { state: isCollapse, toggle } = useResizeState({
 });
 
 const state = reactive({
+  mobileModal: true,
   isMenuDesktopOpen: false,
   isMenuMobileOpen: false,
   activeTabId: null,

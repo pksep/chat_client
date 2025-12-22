@@ -129,11 +129,11 @@
       </template>
     </div>
     <Button
-      v-if="state.installPrompt"
+      v-if="canInstall && !isInstalled"
       class="menu__button-install-prompt"
       :type="ButtonTypeEnum.ghost"
       :size="SizesEnum.small"
-      @click="pwaInstall"
+      @click="handleInstall"
       :data-testid="`${props.dataTestid}-Menu-InstallButton`"
     >
       <Icon
@@ -173,14 +173,16 @@ import {
 } from '../services/useConversions';
 import { getGroupList } from '../services/useGroup';
 import Triangle from './Triangle.vue';
+import { usePwaInstall } from '../composables/usePwaInstall';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: () => 'Menu'
 });
 
+const { canInstall, handleInstall, isInstalled } = usePwaInstall();
+
 const state = reactive({
   chapter: '',
-  installPrompt: null,
   contactList: computed(() => getConversationList()),
   groupList: computed(() => getGroupList()),
   selectedContactId: null
@@ -274,19 +276,7 @@ const listChannels = computed(() => [
   }
 ]);
 
-const pwaInstall = async (): Promise<void> => {
-  if (state.installPrompt) {
-    await state.installPrompt.prompt();
-    state.installPrompt = null;
-  }
-};
-
 onMounted(() => {
-  window.addEventListener('beforeinstallprompt', event => {
-    event.preventDefault();
-    state.installPrompt = event;
-  });
-
   onSDKReady(fetchConversationList);
 });
 </script>
