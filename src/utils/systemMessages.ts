@@ -70,7 +70,7 @@ export const parseGroupNotification = (message: any): string | null => {
       return `${opUserName} создал группу "${groupName}"`;
 
     case OpenIMNotificationType.GroupNameChanged:
-      return `${opUserName} изменил название группы на "${groupName}"`;
+      return `${opUserName} изменил группу`;
 
     case OpenIMNotificationType.MemberAdded:
     case OpenIMNotificationType.MemberInvited:
