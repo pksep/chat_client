@@ -39,6 +39,7 @@ import { computed } from 'vue';
 import { onMounted } from 'vue';
 import type { IMenuEmits } from './interfaces/interfaces';
 import { IUserProps } from './interfaces/interfaces';
+import { markAsRead } from '../services/useOpenIM';
 
 export interface IChatProps extends IMessageListProps {
   dataTestid?: string;
@@ -60,6 +61,19 @@ watch(
   () => props.chapter,
   newChapter => {
     state.chapter = newChapter;
+  }
+);
+
+// Watch for contact changes to mark messages as read
+watch(
+  () => props.contact?.id,
+  (newContactId, oldContactId) => {
+    if (newContactId && newContactId !== oldContactId) {
+      // Mark messages as read when switching to a new conversation
+      markAsRead(newContactId).catch(error => {
+        console.warn('Failed to mark messages as read:', error);
+      });
+    }
   }
 );
 

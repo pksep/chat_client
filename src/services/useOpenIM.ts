@@ -237,7 +237,9 @@ const setupOpenIM = (): void => {
 
       msgs.forEach((msg, idx) => {
         if (msgIdSet.has(msg.clientMsgID)) {
-          msgs[idx].isReadByPeer = true;
+          // Update the isRead property that the UI expects for sent messages
+          // When a read receipt is received, it means the peer has read the message
+          msgs[idx].isRead = true;
         }
       });
 
@@ -246,10 +248,6 @@ const setupOpenIM = (): void => {
   }, 100);
 
   IMSDK.on(CbEvents.OnRecvC2CReadReceipt, batchProcessReadReceipts);
-
-  IMSDK.on(CbEvents.OnConnecting, () => {
-    console.log('[OpenIM] Attempting to connect...');
-  });
 };
 
 export const uploadFile = async (file: File) => {
@@ -737,13 +735,28 @@ const markAsRead = async (conversationID: string) => {
   const TIMEOUT_DURATION = 10000;
 
   try {
+    // Check if conversationID is valid before attempting to mark as read
+    if (!conversationID) {
+      console.warn('[OpenIM] Cannot mark messages as read: conversationID is empty or null');
+      return;
+    }
+
     await withTimeout(
       IMSDK.markConversationMessageAsRead(conversationID),
       TIMEOUT_DURATION,
       'markConversationMessageAsRead'
     );
-  } catch (error) {
-    console.error('[OpenIM] Failed to mark messages as read:', error);
+  } catch (error: any) {
+    // Check if it's the specific RecordNotFoundError (errCode 1004)
+    if (error?.errCode === 1004) {
+      console.warn(`[OpenIM] Conversation not found when trying to mark messages as read (conversationID: ${conversationID}):`, error);
+      // Don't throw the error, just log it as a warning since it's an expected scenario
+      return;
+    } else {
+      console.error('[OpenIM] Failed to mark messages as read:', error);
+      // Re-throw other errors as they might be actual issues
+      throw error;
+    }
   }
 };
 

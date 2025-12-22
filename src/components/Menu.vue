@@ -172,6 +172,7 @@ import {
   onSDKReady
 } from '../services/useConversions';
 import { getGroupList } from '../services/useGroup';
+import { markAsRead } from '../services/useOpenIM';
 import Triangle from './Triangle.vue';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
@@ -222,6 +223,14 @@ const unmountContactClick = (contact: IContactProps | string): void => {
     if (foundContact) {
       state.chapter = foundContact.nickname;
 
+      // Mark messages as read when switching to this conversation
+      // Only call markAsRead if we have a valid contact ID
+      if (foundContact.id) {
+        markAsRead(foundContact.id).catch(error => {
+          console.warn('Failed to mark messages as read:', error);
+        });
+      }
+
       emits('unmount-chapter', {
         nickname: foundContact.nickname,
         contact: foundContact
@@ -229,6 +238,15 @@ const unmountContactClick = (contact: IContactProps | string): void => {
     }
   } else {
     state.chapter = contact.nickname;
+
+    // Mark messages as read when switching to this conversation
+    // Only call markAsRead if we have a valid contact ID
+    if (contact.id) {
+      markAsRead(contact.id).catch(error => {
+        console.warn('Failed to mark messages as read:', error);
+      });
+    }
+
     emits('unmount-chapter', {
       nickname: contact.nickname,
       contact: {

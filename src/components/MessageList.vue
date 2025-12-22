@@ -373,11 +373,6 @@ const handleNewMessages = debounce(
       requestAnimationFrame(() => {
         scrollToBottom(true);
       });
-
-      const newMessage = state.messages[state.messages.length - 1];
-      if (newMessage && newMessage.sendID !== props.user.id) {
-        markAsRead(props.contact?.conversationId);
-      }
     }
   },
   50

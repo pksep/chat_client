@@ -100,6 +100,7 @@ import { MAX_W_MD, MAX_W_XL } from '../utils/constants';
 import { getGroupList } from '../services/useGroup';
 import { getConversationList } from '../services/useConversions';
 import { getAuthUser } from '../composables/useAuth';
+import { markAsRead } from '../services/useOpenIM';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -220,6 +221,13 @@ const unmountHeaderMenuChapter = (
     state.chapter = config.nickname;
     state.contact = config;
     state.isChapter = false;
+
+    // Mark messages as read when switching to this conversation
+    if (config.contact?.id) {
+      markAsRead(config.contact.id).catch(error => {
+        console.warn('Failed to mark messages as read:', error);
+      });
+    }
   } else {
     state.chapter = null;
     state.contact = null;
@@ -245,6 +253,14 @@ const unmountMenuChapter = (
     } else {
       const foundContact = findContactOrGroupById(config);
       if (foundContact) {
+        // Mark messages as read when switching to this conversation
+        // Only call markAsRead if we have a valid contact ID
+        if (foundContact.id) {
+          markAsRead(foundContact.id).catch(error => {
+            console.warn('Failed to mark messages as read:', error);
+          });
+        }
+
         state.contact = { ...foundContact, conversationId: foundContact.id };
         state.chapter = config;
       } else {
@@ -253,6 +269,14 @@ const unmountMenuChapter = (
       }
     }
   } else if (config && config.contact) {
+    // Mark messages as read when switching to this conversation
+    // Only call markAsRead if we have a valid contact ID
+    if (config.contact.id) {
+      markAsRead(config.contact.id).catch(error => {
+        console.warn('Failed to mark messages as read:', error);
+      });
+    }
+
     state.chapter = config.contact.nickname;
     state.contact = config.contact;
   } else {
