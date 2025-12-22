@@ -21,10 +21,10 @@
       class="user-profile__ex"
       :data-testid="`${dataTestid}-UserProfile-Ex`"
     >
-      <template v-if="props.membersLength">
+      <template v-if="!!props.membersLength">
         {{ props.membersLength }} {{ getParticipantForm(props.membersLength) }}
       </template>
-      <template v-else> @{{ props.tabel }} </template>
+      <template v-else-if="!!props.tabel"> @{{ props.tabel }} </template>
     </span>
   </div>
 </template>

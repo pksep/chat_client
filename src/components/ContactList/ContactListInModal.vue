@@ -48,7 +48,7 @@
                 class="menu__info-button-little"
                 :type="ButtonTypeEnum.ghost"
                 :size="SizesEnum.little"
-                @click="closeActivePopover(user.id.toString())"
+                @click="deleteUserFromChat(user.id.toString())"
                 :data-testid="`${props.dataTestid}-ContactListInModal-RemoveButton${index + 1}`"
               >
                 Удалить из канала
@@ -81,6 +81,7 @@ import NewContactModal from '../NewChat/NewContactModal.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import { IContactListProps } from './interfaces/contact-list';
+import { removeUserFromGroup } from '../../services/useGroup';
 
 const props = withDefaults(defineProps<IContactListProps>(), {
   showAddButton: true,
@@ -106,6 +107,13 @@ const newContactOpen = ref(false);
 
 const addUser = (): void => {
   emits('unmount-click-add-button');
+};
+
+const deleteUserFromChat = (userId: string) => {
+  console.log(props.groupId);
+
+  removeUserFromGroup(props.groupId, userId);
+  closeActivePopover(userId);
 };
 
 const closeContactModal = (): void => {

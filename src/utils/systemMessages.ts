@@ -27,9 +27,9 @@ export class OpenIMNotificationType {
   static readonly MemberAdded = 102;
   static readonly MemberKicked = 103;
   static readonly GroupNameChanged = 1520;
-  static readonly GroupOwnerChanged = 105;
+  static readonly GroupOwnerChanged = 1507;
   static readonly GroupDismissed = 1515;
-  static readonly MemberQuit = 107;
+  static readonly MemberQuit = 1504;
   static readonly GroupMuted = 1514;
   static readonly GroupMemberMuted = 109;
   static readonly GroupMemberUnmuted = 110;
@@ -39,6 +39,7 @@ export class OpenIMNotificationType {
   static readonly GroupMemberSetToAdmin = 114;
   static readonly GroupMemberRemovedFromAdmin = 115;
   static readonly MemberInvited = 1509;
+  static readonly GroupDeleted = 1511;
 }
 
 export const parseGroupNotification = (message: any): string | null => {
@@ -53,6 +54,8 @@ export const parseGroupNotification = (message: any): string | null => {
 
   const contentType = message.contentType;
   const opUserName = detail.opUser?.nickname || 'Someone';
+  const quitUserName = detail.quitUser?.nickname || 'Someone';
+  const newGroupOwnerName = detail.newGroupOwner?.nickname || 'Someone';
   const groupName = detail.group?.groupName || '';
 
   let memberList: any[] = [];
@@ -67,7 +70,7 @@ export const parseGroupNotification = (message: any): string | null => {
       return `${opUserName} создал группу "${groupName}"`;
 
     case OpenIMNotificationType.GroupNameChanged:
-      return `${opUserName} изменил название группы на "${groupName}"`;
+      return `${opUserName} изменил группу`;
 
     case OpenIMNotificationType.MemberAdded:
     case OpenIMNotificationType.MemberInvited:
@@ -104,7 +107,13 @@ export const parseGroupNotification = (message: any): string | null => {
       return `${opUserName} запретил сообщения в группе "${groupName}"`;
 
     case OpenIMNotificationType.MemberQuit:
-      return `${opUserName} покинул группу "${groupName}"`;
+      return `${quitUserName} покинул группу "${groupName}"`;
+
+    case OpenIMNotificationType.GroupOwnerChanged:
+      return `${newGroupOwnerName} теперь администратор группы.`;
+
+    case OpenIMNotificationType.GroupDeleted:
+      return `${opUserName} удалил группу "${groupName}"`;
 
     case OpenIMNotificationType.GroupMuted:
       groupMuteTime = detail?.groupMutedTime || 0;

@@ -9,4 +9,5 @@ export interface IContactListProps {
   contacts: IContactProps[];
   dataTestid?: string;
   selectedContactId?: string;
+  groupId?: string;
 }
