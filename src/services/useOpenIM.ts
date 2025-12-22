@@ -13,6 +13,7 @@ import {
 } from '../utils/messageProcessor';
 import type { OpenIMMessage } from '../types/messages';
 import { generateUUID } from '../utils/generateUUID';
+import { getAuthUser } from '../composables/useAuth';
 
 export type IMSDKType = ReturnType<typeof getSDK>;
 
@@ -88,7 +89,11 @@ const setupOpenIM = (): void => {
         }
 
         if (!enableAudio) {
-          enableAudio = !processedMessage.notificationElem;
+          const user = getAuthUser();
+
+          enableAudio =
+            !processedMessage.notificationElem &&
+            processedMessage.sendID !== user.userID;
         }
 
         const convId = generateConversationId(processedMessage);
