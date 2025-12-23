@@ -19,6 +19,11 @@ const isWebsocketConnecting = ref(false);
 
 export const getIsWebsocketConnecting = () => isWebsocketConnecting.value;
 
+// Function to check if there was a recent reconnection (within last 2 seconds)
+const isRecentlyReconnected = () => {
+  return Date.now() - connectionState.lastReconnectTime < 2000;
+};
+
 export type IMSDKType = ReturnType<typeof getSDK>;
 
 // Singleton instance with proper error handling
@@ -45,12 +50,14 @@ interface ConnectionState {
   retries: number;
   reconnectTimeout: number | null;
   connectionSuccessTimer: number | null;
+  lastReconnectTime: number; // Track the last reconnection time
 }
 
 const connectionState: ConnectionState = {
   retries: 0,
   reconnectTimeout: null,
-  connectionSuccessTimer: null
+  connectionSuccessTimer: null,
+  lastReconnectTime: 0
 };
 
 // Debounce utility type
@@ -104,9 +111,17 @@ const setupOpenIM = (): void => {
       connectionState.connectionSuccessTimer = null;
     }
 
-    // Simply set connecting state to false and retry queued messages
-    isWebsocketConnecting.value = false;
-    retryQueuedMessages();
+    // Update the last reconnection time
+    connectionState.lastReconnectTime = Date.now();
+
+    // Delay the state update slightly to prevent race conditions after reconnection
+    requestAnimationFrame(() => {
+      isWebsocketConnecting.value = false;
+      // Only retry queued messages after a small delay to avoid conflicts
+      setTimeout(() => {
+        retryQueuedMessages();
+      }, 300);
+    });
   };
 
   const handleConnectFailed = async (err: any) => {
@@ -658,18 +673,14 @@ export const sendMessageIM = async ({
 
     const convId = determineConversationId(to, groupId);
 
-    // Add to outgoing queue for when connection is restored
     addToOutgoingMessageQueue(convId, tempMsg);
 
-    // Update UI to show the queued message with loading status
     appendMessageToLocal(convId, tempMsg);
 
-    // Don't throw an error, as we've queued the message for later
     return;
   }
 };
 
-// Helper function to extract recipient ID from conversation ID
 const extractRecipientId = (conversationId: string): string => {
   if (!conversationId.startsWith('si_')) return '';
 
@@ -677,7 +688,6 @@ const extractRecipientId = (conversationId: string): string => {
   if (parts.length !== 2) return '';
 
   const [userId1, userId2] = parts;
-  // Use the session storage to get current user ID to determine the recipient
   const currentUserId = sessionStorage.getItem('openim_user')
     ? JSON.parse(sessionStorage.getItem('openim_user')!).userID
     : '';
@@ -686,11 +696,12 @@ const extractRecipientId = (conversationId: string): string => {
 };
 
 const retryQueuedMessages = async (): Promise<void> => {
-  // Create a copy of the queue to avoid modifying during iteration
   const queueCopy = { ...outgoingMessageQueue.value };
 
   for (const [conversationId, queuedMessages] of Object.entries(queueCopy)) {
     if (queuedMessages && queuedMessages.length > 0) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       // Process each message in the queue for this conversation
       for (const message of [...queuedMessages]) {
         try {
@@ -777,10 +788,14 @@ const getMessagesByConversationId = async (
     );
 
     const messages: OpenIMMessage[] = response.data.messageList || [];
-    if (lastClientMsgID) {
-      appendOldMessagesToLocal(conversationId, messages);
-    } else {
-      saveMessagesToLocal(conversationId, messages);
+
+    // Only update local storage if we have messages to append
+    if (messages.length > 0) {
+      if (lastClientMsgID) {
+        appendOldMessagesToLocal(conversationId, messages);
+      } else {
+        saveMessagesToLocal(conversationId, messages);
+      }
     }
 
     return messages;
@@ -968,5 +983,6 @@ export {
   getMessagesWithLoadingStatus,
   addToOutgoingMessageQueue,
   appendMessageToLocal,
-  markAsRead
+  markAsRead,
+  isRecentlyReconnected
 };

@@ -168,7 +168,6 @@ import {
 } from '../utils/systemMessages';
 import type { OpenIMMessage, AIMessage } from '../types/messages';
 import { authedUser } from '../composables/useAuth';
-import { useStickyHeading } from '../composables/useStickyHeading';
 
 interface OpenIMMessageWithLoading extends OpenIMMessage {
   loading?: boolean;
@@ -188,14 +187,31 @@ const inputText = ref('');
 
 const state = reactive({
   messages: [] as OpenIMMessageWithLoading[],
-  chatId: null as string | null
+  chatId: null as string | null,
+  hasMoreMessages: true, // Flag to track if there are more messages to load
+  isLoadingMore: false // Flag to prevent multiple simultaneous requests
 });
+
+// Flag to prevent multiple simultaneous message loads
+let isLoadingInitialMessages = false;
 
 const updateMessages = () => {
   if (props.contact?.conversationId) {
-    state.messages = [
-      ...getMessagesWithLoadingStatus(props.contact.conversationId)
-    ];
+    // Use direct assignment instead of spread operator for better performance
+    const newMessages = getMessagesWithLoadingStatus(
+      props.contact.conversationId
+    );
+    // Only update if the messages actually changed to avoid unnecessary re-renders
+    if (
+      newMessages.length !== state.messages.length ||
+      newMessages.some(
+        (msg, index) =>
+          index < state.messages.length &&
+          msg.clientMsgID !== state.messages[index].clientMsgID
+      )
+    ) {
+      state.messages = newMessages;
+    }
   } else {
     state.messages = [];
   }
@@ -255,8 +271,6 @@ const debounce = <T extends (...args: any[]) => any>(
   };
 };
 
-let isScrollLoading = false;
-
 const handleScroll = throttle((): void => {
   if (!chatWrapperRef?.value) return;
 
@@ -271,26 +285,14 @@ const handleScroll = throttle((): void => {
     scrollState.isInitialLoad = false;
   }
 
-  if (scrollTop < 20 && !isScrollLoading && props.contact?.conversationId) {
-    isScrollLoading = true;
-
-    // Try to load more messages from the service if connected
-    if (!getIsWebsocketConnecting()) {
-      getMessagesByConversationId(
-        props.contact.conversationId,
-        state.messages[0]?.clientMsgID
-      )
-        .then(() => {
-          updateMessages(); // Update to reflect any changes
-        })
-        .finally(() => {
-          isScrollLoading = false;
-        });
-    } else {
-      // Service is disconnected, but still update to show cached messages with loading status
-      updateMessages();
-      isScrollLoading = false;
-    }
+  // Only load more messages if we haven't reached the end and we're not already loading
+  if (
+    scrollTop < 20 &&
+    !state.isLoadingMore &&
+    state.hasMoreMessages &&
+    props.contact?.conversationId
+  ) {
+    state.isLoadingMore = true;
   }
 }, 100);
 
@@ -310,12 +312,27 @@ const isEnableSend = computed(() => {
 watch(
   () => props.contact?.conversationId,
   async (newConversationId, oldConversationId) => {
-    if (newConversationId && newConversationId !== oldConversationId) {
+    if (
+      newConversationId &&
+      newConversationId !== oldConversationId &&
+      !isLoadingInitialMessages
+    ) {
+      // Reset state for new conversation
       state.messages = [];
-      if (!getIsWebsocketConnecting()) {
-        await getMessagesByConversationId(newConversationId, '');
+      state.hasMoreMessages = true;
+      state.isLoadingMore = false;
+      isLoadingInitialMessages = true;
+
+      try {
+        if (!getIsWebsocketConnecting()) {
+          await getMessagesByConversationId(newConversationId, '');
+        }
+      } catch (error) {
+        console.error('Failed to load messages for new conversation:', error);
+      } finally {
+        updateMessages();
+        isLoadingInitialMessages = false;
       }
-      updateMessages();
 
       await nextTick();
       requestAnimationFrame(() => {
@@ -416,12 +433,27 @@ watch(
       scrollState.previousScrollTop = chatWrapperRef.value.scrollTop;
     }
 
-    if (props.chapter !== 'ai' && props.contact?.conversationId) {
+    if (
+      props.chapter !== 'ai' &&
+      props.contact?.conversationId &&
+      !isLoadingInitialMessages
+    ) {
+      // Reset state for new conversation
       state.messages = [];
-      if (!getIsWebsocketConnecting()) {
-        await getMessagesByConversationId(props.contact.conversationId, '');
+      state.hasMoreMessages = true;
+      state.isLoadingMore = false;
+      isLoadingInitialMessages = true;
+
+      try {
+        if (!getIsWebsocketConnecting()) {
+          await getMessagesByConversationId(props.contact.conversationId, '');
+        }
+      } catch (error) {
+        console.error('Failed to load messages when changing chapter:', error);
+      } finally {
+        updateMessages();
+        isLoadingInitialMessages = false;
       }
-      updateMessages();
     } else {
       state.messages = [];
     }
@@ -510,7 +542,6 @@ const handleSend = async (): Promise<void> => {
     console.error('[OpenIM] Failed to send message:', error);
   }
 
-  // Update messages to show the sent message in UI
   updateMessages();
 
   setTimeout(() => {
@@ -585,21 +616,18 @@ const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
 const isNewDate = (index: number, isMastra: boolean = false) => {
   if (index === 0) return true;
 
-  let current: string, prev: string;
-
+  // Use direct access to avoid repeated property lookups
   if (isMastra) {
     const currentMsg = aiMessages.value[index];
     const prevMsg = aiMessages.value[index - 1];
-    current = formatDay(currentMsg.timestamp);
-    prev = formatDay(prevMsg.timestamp);
+    // Direct comparison to avoid variable assignments
+    return formatDay(currentMsg.timestamp) !== formatDay(prevMsg.timestamp);
   } else {
     const currentMsg = state.messages[index];
     const prevMsg = state.messages[index - 1];
-    current = formatDay(currentMsg.sendTime);
-    prev = formatDay(prevMsg.sendTime);
+    // Direct comparison to avoid variable assignments
+    return formatDay(currentMsg.sendTime) !== formatDay(prevMsg.sendTime);
   }
-
-  return current !== prev;
 };
 
 const getSystemMessageContent = message => {
@@ -607,16 +635,24 @@ const getSystemMessageContent = message => {
   return notification || message.textElem?.content || message.showName || '';
 };
 
-// Initialize sticky heading composable
-const stickyHeading = useStickyHeading();
-
 onMounted(async () => {
   if (props.contact?.conversationId) {
+    // Reset state for new conversation
     state.messages = [];
-    if (!getIsWebsocketConnecting()) {
-      await getMessagesByConversationId(props.contact.conversationId, '');
+    state.hasMoreMessages = true;
+    state.isLoadingMore = false;
+    isLoadingInitialMessages = true;
+
+    try {
+      if (!getIsWebsocketConnecting()) {
+        await getMessagesByConversationId(props.contact.conversationId, '');
+      }
+    } catch (error) {
+      console.error('Failed to load initial messages:', error);
+    } finally {
+      updateMessages();
+      isLoadingInitialMessages = false;
     }
-    updateMessages();
 
     await nextTick();
     requestAnimationFrame(() => {
@@ -624,9 +660,6 @@ onMounted(async () => {
         scrollToBottom(false); // Direct scroll to bottom
         scrollState.shouldAutoScroll = true;
         scrollState.isInitialLoad = true;
-
-        // Initialize sticky headings after content is rendered
-        stickyHeading.init('.top-element[data-divider]:not(.system-message)');
       }
     });
   }
@@ -636,9 +669,6 @@ onUnmounted(() => {
   if (state.chatId) {
     removeMessageLoading(state.chatId, aiMessages.value.length);
   }
-
-  // Clean up sticky heading observer
-  stickyHeading.destroy();
 });
 
 defineExpose({

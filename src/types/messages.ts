@@ -14,6 +14,7 @@ interface ExtendedOpenIMMessage {
   senderFaceUrl?: string;
   faceURL?: string;
   isReadByPeer?: boolean;
+  loading?: boolean;
 }
 
 export type OpenIMMessage = Partial<MessageItem> & ExtendedOpenIMMessage;
