@@ -27,16 +27,10 @@ import { useResizeState } from '../composables/useResizeState';
 import MessageList from './MessageList.vue';
 import ContactListMobile from './ContactList/MobileList.vue';
 import type { IMessageListProps } from './interfaces/message-list';
-import type { IContactProps } from './interfaces/interfaces';
 import { useTemplateRef, reactive, watch } from 'vue';
 import { isShowContactList } from '../composables/useShowContactList';
 import { MAX_W_MD } from '../utils/constants';
-import {
-  fetchConversationList,
-  getConversationList,
-  onSDKReady
-} from '../services/useConversions';
-import { computed } from 'vue';
+import { fetchConversationList, onSDKReady } from '../services/useConversions';
 import { onMounted } from 'vue';
 import type { IMenuEmits, IUserProps } from './interfaces/interfaces';
 import { markAsRead } from '../services/useOpenIM';
@@ -56,8 +50,6 @@ interface ChatState {
   chapter: string | null;
 }
 
-const conversationList = computed(() => getConversationList());
-
 const state = reactive<ChatState>({
   chapter: props.chapter
 });
@@ -69,12 +61,10 @@ watch<string | null>(
   }
 );
 
-// Watch for contact changes to mark messages as read
-watch<string | undefined>(
+watch(
   () => props.contact?.id,
   (newContactId, oldContactId) => {
     if (newContactId && newContactId !== oldContactId) {
-      // Mark messages as read when switching to a new conversation
       markAsRead(newContactId).catch(error => {
         console.warn('Failed to mark messages as read:', error);
       });

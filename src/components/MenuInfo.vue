@@ -92,7 +92,11 @@ import {
 } from '@pksep/yui';
 import ContactListInModal from './ContactList/ContactListInModal.vue';
 import InformationMenu from './InformationMenu.vue';
-import type { IMenuRightProps, IMenuEmits, IUserProps } from './interfaces/interfaces';
+import type {
+  IMenuRightProps,
+  IMenuEmits,
+  IUserProps
+} from './interfaces/interfaces';
 import { useMenuInfo } from '../composables/useMenuInfo';
 import NewContactModal from './NewChat/NewContactModal.vue';
 import { useResizeState } from '../composables/useResizeState';

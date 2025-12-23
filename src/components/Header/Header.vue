@@ -151,7 +151,9 @@ const {
   emits
 );
 
-const modelInfo = computed<IMenuInfoInformation | null>(() => menuInfoState.information);
+const modelInfo = computed<IMenuInfoInformation | null>(
+  () => menuInfoState.information
+);
 
 const { muteGroupInfo, getMuteStatus } = useInformationMenu(modelInfo);
 

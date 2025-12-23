@@ -327,9 +327,7 @@ watch(
   () => props.contact?.conversationId,
   async (newConversationId, oldConversationId) => {
     if (newConversationId && newConversationId !== oldConversationId) {
-      // Reset messages when changing conversations
       state.messages = [];
-      // Load messages for the new conversation
       if (!getIsWebsocketConnecting()) {
         await getMessagesByConversationId(newConversationId, '');
       }
@@ -338,7 +336,7 @@ watch(
       await nextTick();
       requestAnimationFrame(() => {
         if (chatWrapperRef?.value) {
-          scrollToBottom(false); // Direct scroll when changing conversations
+          scrollToBottom(false);
           scrollState.shouldAutoScroll = true;
           scrollState.isInitialLoad = true;
         }

@@ -32,9 +32,7 @@
       :data-testid="`${props.dataTestid}-ChatList-Section`"
     >
       <ContactList
-        :contacts="
-          props.chapter === 'dialogs' ? contactList : groupList
-        "
+        :contacts="props.chapter === 'dialogs' ? contactList : groupList"
         :data-testid="`${props.dataTestid}-ContactList`"
         @unmount-click="handleChapter"
       />
