@@ -11,7 +11,6 @@ import type {
 } from './components/interfaces/interfaces';
 import { IMSDK, setupOpenIM } from './services/useOpenIM';
 import { saveUserIdToSession, hasUserIdInSession } from './services/useMastra';
-import { clearAllData } from './services/useChatDb';
 import {
   getAllNotificationCount,
   markSDKReady,
@@ -42,7 +41,6 @@ onMounted(async () => {
     const authData = await useAuth(token || localToken);
 
     if (!hasUserIdInSession(authData.UserID)) {
-      clearAllData();
       saveUserIdToSession(authData.UserID);
     }
 

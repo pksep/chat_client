@@ -28,6 +28,7 @@
 }
 
 .message__article__file {
+  cursor: pointer;
   padding: 8px;
 }
 
@@ -236,4 +237,9 @@ div.message-content__file {
       }
     }
   }
+}
+
+.slider-modal .modal-yui-kit__modal-content {
+  width: auto;
+  padding: 0;
 }
