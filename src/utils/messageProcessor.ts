@@ -32,7 +32,7 @@ export interface Message {
   };
   operationTime?: number;
   memberList?: any[];
-  senderNickname?: string; // Add this property
+  senderNickname?: string;
   isSystemMessage?: boolean;
   systemMessageType?: string;
   systemMessageContent?: string;
@@ -84,13 +84,13 @@ export const safeJsonParse = <T>(
  */
 export const processIncomingMessage = (message: Message): Message | null => {
   if (message.contentType === 1501 && message.notificationElem?.detail) {
-    const detail = safeJsonParse<any>(message.notificationElem.detail, {}); // Changed to 'any' to handle full OpenIM notification structure
+    const detail = safeJsonParse<any>(message.notificationElem.detail, {});
 
     const systemMessageContent = parseGroupNotification(message);
 
     if (systemMessageContent) {
       message.isSystemMessage = true;
-      message.systemMessageType = 'group_notification'; // Default type for group notifications
+      message.systemMessageType = 'group_notification';
       message.systemMessageContent = systemMessageContent;
       message.textElem = { content: systemMessageContent };
 
@@ -103,7 +103,7 @@ export const processIncomingMessage = (message: Message): Message | null => {
         detail.group &&
         detail.group.createTime === detail.operationTime
       ) {
-        return null; // Skip empty group creation notifications
+        return null;
       }
     }
   }

@@ -1,0 +1,4 @@
+[[repo]]
+dir = '.meta/local-services/chat_sync'
+remote = 'git@github.com:pksep/chat_sync.git'
+branch = 'main'

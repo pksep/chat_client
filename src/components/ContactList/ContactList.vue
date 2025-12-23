@@ -1,6 +1,6 @@
 <template>
   <ul
-    class="contact-list"
+    :class="['contact-list', props.class]"
     role="list"
     :data-testid="`${props.dataTestid}-ContactList-List`"
     :aria-label="`${props.dataTestid} Contact List`"
@@ -8,6 +8,7 @@
     <li
       v-for="(contact, index) in props.contacts"
       :key="contact.id"
+      class="contact-list__li"
       role="listitem"
       tabindex="0"
       @keydown="event => handleKeyDown(contact, event)"
@@ -35,7 +36,6 @@
           :url="contact.avatarUrl"
           :alt="`Avatar of ${contact.nickname}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
-          :style="{ '--size-avatar': '15px' }"
           is-icon
         />
         <h5
@@ -56,12 +56,13 @@
           v-html="contact.latestMessage"
         ></div>
         <div class="contact-list__top">
-          <Icon
-            v-if="contact.isRead"
-            :name="IconNameEnum.read"
-            class="contact-list__read-icon"
-            :aria-label="contact.isRead ? 'Message read' : 'Message unread'"
-            :data-testid="`${props.dataTestid}-ContactList-ReadIcon${index + 1}`"
+          <MessageStatusIcons
+            v-if="contact.isLatestMessageFromMe"
+            class="contact-list__read-icon contact-list__message-status-icons"
+            :message-status="contact.latestMessageStatus"
+            :is-read="contact.isRead"
+            :is-me-sender="true"
+            :data-testid="`${props.dataTestid}-ContactList-MessageStatusIcons${index + 1}`"
           />
           <span
             v-if="contact.latestMessageTime"
@@ -161,6 +162,7 @@ import {
 } from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
 import Line from '../UI/Line.vue';
+import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { MAX_W_MD } from '../../utils/constants';
 import { setPinConversation } from '../../services/useConversions';

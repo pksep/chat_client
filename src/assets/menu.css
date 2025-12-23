@@ -62,6 +62,10 @@
   justify-self: end;
 }
 
+.menu__contact-list > li > .contact-list__item {
+  --size-avatar: 15px;
+}
+
 button.menu__user-profile-collapse {
   grid-area: collapse;
   display: grid;
@@ -77,6 +81,7 @@ button.menu__user-profile-collapse {
 }
 
 .menu__user-assistant {
+  width: 100%;
   padding: 10px;
   display: flex;
   align-self: start;
@@ -149,9 +154,6 @@ summary.menu__user-details-summary {
   & svg.icon-yui-kit {
     font-size: 16px;
   }
-}
-
-.avatar-yui-kit:has(.avatar-yui-kit__text) {
 }
 
 @media screen and (width <= 36rem) {
