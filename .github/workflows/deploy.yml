@@ -23,4 +23,5 @@ jobs:
           script: |
             BRANCH_NAME="${{ github.ref_name }}"
             echo "Target branch is: $BRANCH_NAME"
+            export KUBECONFIG=$HOME/.kube/config
             cd ~/erp_k8s/erp_k8s/ && make switch-branch APP=ai-client BRANCH=$BRANCH_NAME
