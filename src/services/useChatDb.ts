@@ -213,6 +213,9 @@ const getLastSessionId = async (): Promise<string | null> => {
 const clearAllData = async (): Promise<void> => {
   try {
     await ChatDB.clear();
+    indexedDB
+      .databases()
+      .then(dbs => dbs.forEach(db => indexedDB.deleteDatabase(db.name)));
   } catch (error) {
     console.error('Error clearing data:', error);
     throw error;
