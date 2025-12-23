@@ -49,7 +49,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
     baseMode === 'app'
       ? [
           VitePWA({
-            registerType: 'autoUpdate',
+            registerType: 'prompt',
             workbox: {
               maximumFileSizeToCacheInBytes: 50 * 1024 * 1024 // 50MB
             },
@@ -57,6 +57,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
             manifest: {
               name: 'sep-chat',
               short_name: 'SepChat',
+              display: 'standalone',
               description: 'Chatting application',
               icons: [
                 {

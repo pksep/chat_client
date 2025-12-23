@@ -73,6 +73,36 @@
       @unmount-new-group="handleNewGroupMessage"
     />
   </main>
+  <NewContactModal
+    :contacts="state.users.filter(user => user.id !== authUser?.id)"
+    :open="state.isNewContactOpen"
+    :data-testid="`${props.dataTestid}-ChatContainer-NewContactModal`"
+    @unmount-close="closeModals"
+    @unmount-new-contact="handleNewContactMessage"
+  />
+
+  <NewGroupModal
+    :user="authUser"
+    :contacts="state.users.filter(user => user.id !== authUser?.id)"
+    :open="state.isNewGroupOpen"
+    :data-testid="`${props.dataTestid}-ChatContainer-NewGroupModal`"
+    @unmount-close="closeModals"
+    @unmount-new-group="handleNewGroupMessage"
+  />
+
+  <MobileModal
+    v-if="isMobile"
+    class="mobile-modal"
+    headerClass="hidden"
+    :show-divider="false"
+    :open="state.isPwaModalOpen && canInstall && !isInstalled"
+    @unmount-close="closeModals"
+  >
+    <Button @click="handleInstall">Загрузить на устройство</Button>
+    <Button :type="ButtonTypeEnum.secondary" @click="closeModals"
+      >Закрыть</Button
+    >
+  </MobileModal>
 </template>
 
 <script setup lang="ts">
@@ -100,6 +130,9 @@ import { MAX_W_MD, MAX_W_XL } from '../utils/constants';
 import { getGroupList } from '../services/useGroup';
 import { getConversationList } from '../services/useConversions';
 import { getAuthUser } from '../composables/useAuth';
+import MobileModal from './UI/MobileModal.vue';
+import { Button, ButtonTypeEnum } from '@pksep/yui';
+import { usePwaInstall } from '../composables/usePwaInstall';
 import { markAsRead } from '../services/useOpenIM';
 
 const NewContactModal = defineAsyncComponent(
@@ -109,6 +142,8 @@ const NewGroupModal = defineAsyncComponent(
   () => import('./NewChat/NewGroupModal.vue')
 );
 
+const { canInstall, handleInstall, isInstalled } = usePwaInstall();
+
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const { state: isCollapse, toggle } = useResizeState({
@@ -117,6 +152,7 @@ const { state: isCollapse, toggle } = useResizeState({
 });
 
 const state = reactive({
+  isPwaModalOpen: true,
   isMenuDesktopOpen: false,
   isMenuMobileOpen: false,
   activeTabId: null,
@@ -291,6 +327,7 @@ const handleNewGroup = (config): void => {
 const closeModals = (): void => {
   state.isNewContactOpen = false;
   state.isNewGroupOpen = false;
+  state.isPwaModalOpen = false;
 };
 
 const handleInformationClick = (): void => {
