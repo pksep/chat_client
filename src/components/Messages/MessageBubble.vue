@@ -82,6 +82,7 @@
             :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
           >
             <video
+              @click="() => (fullImagePath = mediaSrc)"
               :src="mediaSrc"
               controls
               :data-testid="`${dataTestid}-MessageBubble-Video`"
@@ -92,11 +93,11 @@
           </div>
           <div
             v-else-if="!!props.file"
+            @click="() => (fullImagePath = props.file.sourceUrl)"
             class="message-content__file"
             :data-testid="`${dataTestid}-MessageBubble-FileContainer`"
           >
             <FileIcon
-              @click="downloadFile(props.file)"
               :is-me-sender="props.isMeSender"
               :dataTestid="`${dataTestid}-MessageBubble-FileIcon`"
             />
@@ -151,18 +152,12 @@
       </div>
     </article>
 
-    <Modal
+    <SliderModal
       :open="!!fullImagePath"
-      class="full-image"
-      position="center"
       @close="() => (fullImagePath = null)"
-      :data-testid="`${dataTestid}-MessageBubble-FullImageModal`"
-    >
-      <img
-        :src="fullImagePath"
-        :data-testid="`${dataTestid}-MessageBubble-FullImageView`"
-      />
-    </Modal>
+      :items="[{ path: fullImagePath }]"
+    />
+
     <ContextMenu
       v-if="false"
       :visible="!!isOpen"
@@ -193,6 +188,7 @@ import FileIcon from '../UI/FileIcon.vue';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import { getFormatFileSize, getShortName } from '../../utils/getFormatFileSize';
 import { FileElem } from '@openim/wasm-client-sdk';
+import { SliderModal } from '@pksep/yui';
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
@@ -254,16 +250,5 @@ const fullImagePath = ref<string>(null);
 
 const generateArray = (n: number): number[] => {
   return Array.from({ length: n });
-};
-
-const downloadFile = (file: FileElem) => {
-  if (!file?.sourceUrl) return;
-
-  const link = document.createElement('a');
-  link.href = file.sourceUrl;
-  link.download = file.fileName || 'file';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
 };
 </script>
