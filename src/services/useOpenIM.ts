@@ -13,6 +13,7 @@ import {
 } from '../utils/messageProcessor';
 import type { OpenIMMessage } from '../types/messages';
 import { generateUUID } from '../utils/generateUUID';
+import { getAuthUser } from '../composables/useAuth';
 
 const isWebsocketConnecting = ref(false);
 
@@ -197,7 +198,18 @@ const setupOpenIM = (): void => {
           const convId = generateConversationId(processedMessage);
           appendMessageToLocal(convId, processedMessage as OpenIMMessage);
         }
-      }
+
+        if (!enableAudio) {
+          const user = getAuthUser();
+
+          enableAudio =
+            !processedMessage.notificationElem &&
+            processedMessage.sendID !== user.userID;
+        }
+
+        const convId = generateConversationId(processedMessage);
+        appendMessageToLocal(convId, processedMessage as OpenIMMessage);
+      });
 
       if (enableAudio) {
         new Audio('/audio/new-message.mp3').play().catch(e => {

@@ -31,17 +31,15 @@ onMounted(async () => {
   const url = new URL(window.location.href);
   const token = url.searchParams.get('token');
 
+  if (token) {
+    localStorage.setItem('erp_token', token);
+  }
+
+  const localToken = localStorage.getItem('erp_token');
+  const config = getConfig();
+
   try {
-    const config = getConfig();
-
-    if (!token) {
-      window.location.href =
-        config.CHAT_ERP_URL +
-        '?redirect=' +
-        encodeURIComponent(window.location.href);
-    }
-
-    const authData = await useAuth(token);
+    const authData = await useAuth(token || localToken);
 
     if (!hasUserIdInSession(authData.UserID)) {
       clearAllData();
@@ -80,7 +78,10 @@ onMounted(async () => {
     markSDKReady();
   } catch (error) {
     console.error('Failed to initialize chat:', error);
-    throw error;
+    window.location.href =
+      config.CHAT_ERP_URL +
+      '?redirect=' +
+      encodeURIComponent(window.location.href);
   } finally {
     url.searchParams.delete('token');
     window.history.replaceState({}, document.title, url.toString());
