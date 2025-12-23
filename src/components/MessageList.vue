@@ -14,7 +14,9 @@
           <div
             v-if="isNewDate(index, true)"
             class="top-element"
-            :data-divider="isNewDate(index, true) ? formatDay(message.timestamp) : undefined"
+            :data-divider="
+              isNewDate(index, true) ? formatDay(message.timestamp) : undefined
+            "
           >
             <div
               class="date-divider"
@@ -56,7 +58,9 @@
       >
         <div
           class="top-element"
-          :data-divider="isNewDate(index) ? formatDay(message.sendTime) : undefined"
+          :data-divider="
+            isNewDate(index) ? formatDay(message.sendTime) : undefined
+          "
           v-if="
             isNewDate(index) ||
             message.isSystemMessage ||

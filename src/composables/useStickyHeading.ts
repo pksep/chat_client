@@ -26,7 +26,10 @@ export function useStickyHeading(options: StickyHeadingOptions = {}) {
    */
   const createSpacer = (element: Element): HTMLDivElement => {
     const spacer = document.createElement('div');
-    const elementHeight = element.offsetHeight || element.getBoundingClientRect().height;
+    // Cast to HTMLElement to access offsetHeight
+    const elementHeight =
+      (element as HTMLElement).offsetHeight ||
+      element.getBoundingClientRect().height;
     spacer.style.height = `${elementHeight}px`;
     spacer.style.display = 'none';
     spacer.classList.add('sticky-heading-spacer');
@@ -49,7 +52,9 @@ export function useStickyHeading(options: StickyHeadingOptions = {}) {
     elements = Array.from(document.querySelectorAll(targetSelector));
 
     if (elements.length === 0) {
-      console.info('No elements matching selector found (excluding system messages)');
+      console.info(
+        'No elements matching selector found (excluding system messages)'
+      );
       return;
     }
 
@@ -68,7 +73,7 @@ export function useStickyHeading(options: StickyHeadingOptions = {}) {
 
     // Setup Intersection Observer
     observer = new IntersectionObserver(
-      (entries) => {
+      entries => {
         entries.forEach(entry => {
           const element = entry.target;
           const spacer = element.previousElementSibling as HTMLElement;
@@ -80,7 +85,8 @@ export function useStickyHeading(options: StickyHeadingOptions = {}) {
           }
 
           // Determine if the element should be sticky based on its position
-          const shouldStick = !entry.isIntersecting && entry.boundingClientRect.top <= 0;
+          const shouldStick =
+            !entry.isIntersecting && entry.boundingClientRect.top <= 0;
 
           // Toggle sticky class and spacer visibility
           element.classList.toggle('sticky', shouldStick);
