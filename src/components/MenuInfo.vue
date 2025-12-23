@@ -92,7 +92,7 @@ import {
 } from '@pksep/yui';
 import ContactListInModal from './ContactList/ContactListInModal.vue';
 import InformationMenu from './InformationMenu.vue';
-import type { IMenuRightProps, IMenuEmits } from './interfaces/interfaces';
+import type { IMenuRightProps, IMenuEmits, IUserProps } from './interfaces/interfaces';
 import { useMenuInfo } from '../composables/useMenuInfo';
 import NewContactModal from './NewChat/NewContactModal.vue';
 import { useResizeState } from '../composables/useResizeState';
@@ -103,7 +103,7 @@ const props = withDefaults(defineProps<IMenuRightProps>(), {
   dataTestid: () => 'MenuInfo'
 });
 
-const menuInfoClasses = computed(() => [
+const menuInfoClasses = computed<(string | Record<string, boolean>)[]>(() => [
   'menu-info',
   { 'menu-info--open': props.open },
   props.class
@@ -120,7 +120,7 @@ const handleCloseMenu = (): void => {
   setState(false);
 };
 
-watch(
+watch<boolean>(
   () => props.open,
   async newVal => {
     isOpen.value = newVal;
@@ -130,7 +130,7 @@ watch(
   }
 );
 
-watch(
+watch<IUserProps | null | undefined>(
   () => props.contact,
   async newContact => {
     if (newContact && props.open) {
@@ -140,7 +140,7 @@ watch(
   { deep: true }
 );
 
-watch(
+watch<string | undefined>(
   () => props.contact?.id,
   (newId, oldId) => {
     if (newId && newId !== oldId) {

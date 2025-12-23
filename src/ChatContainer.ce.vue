@@ -88,7 +88,7 @@ onMounted(async () => {
   }
 });
 
-watch(
+watch<number>(
   () => allNotificationCount.value,
   () => {
     emits('unmount-notification-count', allNotificationCount.value);

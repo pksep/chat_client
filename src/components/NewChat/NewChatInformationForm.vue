@@ -34,7 +34,12 @@ const emits = defineEmits<{
   (e: 'unmount-save', value: { name: string; avatarUrl?: string }): void;
 }>();
 
-const form = reactive({
+interface NewChatInformationFormState {
+  name: string;
+  avatarUrl: string;
+}
+
+const form = reactive<NewChatInformationFormState>({
   name: model.value?.name || '',
   avatarUrl: model.value?.avatarUrl || ''
 });

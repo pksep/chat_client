@@ -51,7 +51,11 @@ import { reactive } from 'vue';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
-const state = reactive({
+interface MenuInfoButtonsState {
+  isMuted: boolean;
+}
+
+const state = reactive<MenuInfoButtonsState>({
   isMuted: true
 });
 

@@ -189,7 +189,12 @@ const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
 const inputText = ref('');
 
-const state = reactive({
+interface MessageListState {
+  messages: OpenIMMessageWithLoading[];
+  chatId: string | null;
+}
+
+const state = reactive<MessageListState>({
   messages: [] as OpenIMMessageWithLoading[],
   chatId: null as string | null
 });
@@ -204,7 +209,14 @@ const updateMessages = () => {
   }
 };
 
-const scrollState = reactive({
+interface ScrollState {
+  isUserScrolling: boolean;
+  previousScrollTop: number;
+  shouldAutoScroll: boolean;
+  isInitialLoad: boolean;
+}
+
+const scrollState = reactive<ScrollState>({
   isUserScrolling: false,
   previousScrollTop: 0,
   shouldAutoScroll: true,
@@ -298,7 +310,7 @@ const handleScroll = throttle((): void => {
   }
 }, 100);
 
-const isEnableSend = computed(() => {
+const isEnableSend = computed<boolean>(() => {
   try {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.contentType === OpenIMNotificationType.GroupDeleted) {
@@ -311,7 +323,7 @@ const isEnableSend = computed(() => {
   }
 });
 
-watch(
+watch<string | null | undefined>(
   () => props.contact?.conversationId,
   async (newConversationId, oldConversationId) => {
     if (newConversationId && newConversationId !== oldConversationId) {
@@ -394,7 +406,7 @@ const handleNewMessages = debounce(
 
 watch(
   () => state.messages.length,
-  (newLength, oldLength) => {
+  (newLength: number, oldLength: number) => {
     handleNewMessages(newLength, oldLength);
   },
   { immediate: true }
@@ -402,13 +414,13 @@ watch(
 
 watch(
   () => chatWrapperRef?.value?.scrollTop,
-  newScrollTop => {
+  (newScrollTop: number | undefined) => {
     if (!chatWrapperRef?.value || scrollState.isInitialLoad) return;
 
     const distanceFromBottom =
       chatWrapperRef.value.scrollHeight -
       chatWrapperRef.value.clientHeight -
-      newScrollTop;
+      (newScrollTop || 0);
 
     scrollState.shouldAutoScroll = distanceFromBottom < 100;
     scrollState.isUserScrolling = distanceFromBottom >= 100;
@@ -417,7 +429,7 @@ watch(
 
 watch(
   () => props.chapter,
-  async (newValue, oldValue) => {
+  async (newValue: string | null, oldValue: string | null) => {
     if (newValue === oldValue) return;
 
     if (chatWrapperRef?.value) {

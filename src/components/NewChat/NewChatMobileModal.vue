@@ -71,7 +71,18 @@ const {
   handleCloseGroupInfo
 } = useNewGroupModal(props, emits);
 
-const state = reactive({
+interface NewChatMobileModalState {
+  checkMembers: IUserProps[];
+  information: {
+    name: string;
+    avatarUrl: string | null;
+    groupId: string | null;
+    userId: string | undefined;
+    date: Date;
+  };
+}
+
+const state = reactive<NewChatMobileModalState>({
   checkMembers: [],
   information: {
     name: groupName.value,

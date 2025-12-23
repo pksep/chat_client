@@ -194,14 +194,19 @@ const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const user = computed(() => appendUserAttributes(getAuthUser()));
 
-const state = reactive({
+interface ContactListState {
+  isPin: Record<string, boolean>;
+  isNotificationEnabled: Record<string, boolean>;
+}
+
+const state = reactive<ContactListState>({
   isPin: {} as Record<string, boolean>,
   isNotificationEnabled: {} as Record<string, boolean>
 });
 
 watch(
   () => props.contacts,
-  contacts => {
+  (contacts: IContactProps[]) => {
     if (contacts) {
       contacts.forEach(contact => {
         state.isPin[contact.id] = contact.isPin;

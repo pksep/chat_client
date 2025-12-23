@@ -182,10 +182,16 @@ const props = withDefaults(defineProps<IMenuProps>(), {
 
 const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 
-const state = reactive({
+interface MenuState {
+  chapter: string;
+  selectedContactId: string | null;
+}
+
+const contactList = computed(() => getConversationList());
+const groupList = computed(() => getGroupList());
+
+const state = reactive<MenuState>({
   chapter: '',
-  contactList: computed(() => getConversationList()),
-  groupList: computed(() => getGroupList()),
   selectedContactId: null
 });
 
@@ -203,7 +209,7 @@ const handleCollapse = (): void => {
   toggle();
 };
 
-watch(
+watch<string | null>(
   () => props.chapter,
   () => {
     if (props.chapter !== state.chapter) {
@@ -221,7 +227,7 @@ const unmountContactClick = (contact: IContactProps | string): void => {
   }
 
   if (typeof contact === 'string') {
-    const foundContact = state.contactList.find(c => c.id === contact);
+    const foundContact = contactList.value.find(c => c.id === contact);
     if (foundContact) {
       state.chapter = foundContact.nickname;
 
@@ -285,12 +291,12 @@ const listChannels = computed(() => [
   {
     title: 'Каналы',
     onClickPlusButton: handleNewGroupModal,
-    items: state.groupList
+    items: groupList.value
   },
   {
     title: 'Личные сообщения',
     onClickPlusButton: handleNewContactModal,
-    items: state.contactList
+    items: contactList.value
   }
 ]);
 

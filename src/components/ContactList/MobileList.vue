@@ -33,7 +33,7 @@
     >
       <ContactList
         :contacts="
-          props.chapter === 'dialogs' ? state.contactList : state.groupList
+          props.chapter === 'dialogs' ? contactList : groupList
         "
         :data-testid="`${props.dataTestid}-ContactList`"
         @unmount-click="handleChapter"
@@ -80,11 +80,17 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
   dataTestid: () => 'MobileList'
 });
 
-const state = reactive({
+interface MobileListState {
+  showAddAccount: boolean;
+  checkUsers: Set<string | number>;
+}
+
+const contactList = computed(() => getConversationList());
+const groupList = computed(() => getGroupList());
+
+const state = reactive<MobileListState>({
   showAddAccount: false,
-  checkUsers: new Set<string | number>(),
-  contactList: computed(() => getConversationList()),
-  groupList: computed(() => getGroupList())
+  checkUsers: new Set<string | number>()
 });
 
 const emits = defineEmits<IMobileListEmits>();

@@ -27,6 +27,7 @@ import { useResizeState } from '../composables/useResizeState';
 import MessageList from './MessageList.vue';
 import ContactListMobile from './ContactList/MobileList.vue';
 import type { IMessageListProps } from './interfaces/message-list';
+import type { IContactProps } from './interfaces/interfaces';
 import { useTemplateRef, reactive, watch } from 'vue';
 import { isShowContactList } from '../composables/useShowContactList';
 import { MAX_W_MD } from '../utils/constants';
@@ -37,8 +38,7 @@ import {
 } from '../services/useConversions';
 import { computed } from 'vue';
 import { onMounted } from 'vue';
-import type { IMenuEmits } from './interfaces/interfaces';
-import { IUserProps } from './interfaces/interfaces';
+import type { IMenuEmits, IUserProps } from './interfaces/interfaces';
 import { markAsRead } from '../services/useOpenIM';
 
 export interface IChatProps extends IMessageListProps {
@@ -52,12 +52,17 @@ const props = withDefaults(defineProps<IChatProps>(), {
 
 const emits = defineEmits<IMenuEmits>();
 
-const state = reactive({
-  chapter: props.chapter,
-  conversationList: computed(() => getConversationList())
+interface ChatState {
+  chapter: string | null;
+}
+
+const conversationList = computed(() => getConversationList());
+
+const state = reactive<ChatState>({
+  chapter: props.chapter
 });
 
-watch(
+watch<string | null>(
   () => props.chapter,
   newChapter => {
     state.chapter = newChapter;
@@ -65,7 +70,7 @@ watch(
 );
 
 // Watch for contact changes to mark messages as read
-watch(
+watch<string | undefined>(
   () => props.contact?.id,
   (newContactId, oldContactId) => {
     if (newContactId && newContactId !== oldContactId) {

@@ -112,7 +112,8 @@ import {
   onMounted,
   reactive,
   ref,
-  watch
+  watch,
+  type ComputedRef
 } from 'vue';
 import Header from './Header/Header.vue';
 import HeaderMenu from './Header/HeaderMenu.vue';
@@ -135,6 +136,24 @@ import { Button, ButtonTypeEnum } from '@pksep/yui';
 import { usePwaInstall } from '../composables/usePwaInstall';
 import { markAsRead } from '../services/useOpenIM';
 
+// Define the state interface for the ChatContainer component
+interface ChatContainerState {
+  isPwaModalOpen: boolean;
+  isMenuDesktopOpen: boolean;
+  isMenuMobileOpen: boolean;
+  activeTabId: number | null;
+  chapter: string | null;
+  groupId: string | null;
+  contact: IContactProps | null;
+  isNewContactOpen: boolean;
+  isNewGroupOpen: boolean;
+  chatContainerClasses: ComputedRef<string[]>;
+  isChapter: boolean;
+  users: IUserProps[];
+  groups: IContactProps[];
+  conversations: IContactProps[];
+}
+
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
 );
@@ -151,7 +170,7 @@ const { state: isCollapse, toggle } = useResizeState({
   storageKey: 'menu-collapse'
 });
 
-const state = reactive({
+const state = reactive<ChatContainerState>({
   isPwaModalOpen: true,
   isMenuDesktopOpen: false,
   isMenuMobileOpen: false,
@@ -183,33 +202,33 @@ const props = withDefaults(defineProps<IChatContainerProps>(), {
 
 const authUser = computed(() => appendUserAttributes(getAuthUser()));
 
-const filteredContacts = computed(() => {
+const filteredContacts = computed<IUserProps[]>(() => {
   const authId = authUser.value?.id;
   if (!authId) return [];
   return state.users.filter(user => user.id !== authId);
 });
 
-const filteredMembers = computed(() => {
+const filteredMembers = computed<IUserProps[]>(() => {
   const authId = authUser.value?.id;
   if (!authId) return [];
   return state.users.filter(user => user.id !== authId);
 });
 
-watch(
+watch<IUserProps[]>(
   () => getUsersList(),
   newUsers => {
     state.users = newUsers;
   }
 );
 
-watch(
+watch<IContactProps[]>(
   () => getGroupList(),
   newGroups => {
     state.groups = newGroups;
   }
 );
 
-watch(
+watch<IContactProps[]>(
   () => getConversationList(),
   newConversations => {
     state.conversations = newConversations;
@@ -255,7 +274,7 @@ const unmountHeaderMenuChapter = (
     state.isChapter = true;
   } else if (config && config.nickname) {
     state.chapter = config.nickname;
-    state.contact = config;
+    state.contact = config as IContactProps;
     state.isChapter = false;
   } else {
     state.chapter = null;
@@ -302,7 +321,7 @@ const unmountMenuChapter = (
       });
     }
 
-    state.chapter = config.contact.nickname;
+    state.chapter = config.contact.nickname || null;
     state.contact = config.contact;
   } else {
     state.chapter = null;
@@ -310,18 +329,22 @@ const unmountMenuChapter = (
   }
 };
 
-const handleNewContact = async (config): Promise<void> => {
-  if (isMobile.value) {
-    const contact = await handleNewContactMessage(config);
+const handleNewContact = async (
+  config: { isChapterOpen?: boolean } | IUserProps
+): Promise<void> => {
+  if (isMobile.value && 'isChapterOpen' in config) {
+    const contact = await handleNewContactMessage(config as IUserProps);
     state.contact = contact;
     state.chapter = contact.conversationId;
     return;
   }
-  state.isNewContactOpen = config.isChapterOpen;
+  if ('isChapterOpen' in config) {
+    state.isNewContactOpen = !!config.isChapterOpen;
+  }
 };
 
-const handleNewGroup = (config): void => {
-  state.isNewGroupOpen = config.isChapterOpen;
+const handleNewGroup = (config: { isChapterOpen?: boolean }): void => {
+  state.isNewGroupOpen = !!config.isChapterOpen;
 };
 
 const closeModals = (): void => {
@@ -347,7 +370,7 @@ const handleClearClick = (): void => {
 const handleNewContactMessage = async (
   contact: IUserProps
 ): Promise<IContactProps> => {
-  state.chapter = contact.nickname;
+  state.chapter = contact.nickname || null;
   const [smallerUserID, largerUserID] = [authUser.value.id, contact.id].sort();
 
   state.contact = {
@@ -357,7 +380,14 @@ const handleNewContactMessage = async (
   return state.contact;
 };
 
-const handleNewGroupMessage = async (group: any): Promise<void> => {
+interface GroupData {
+  conversationID?: string;
+  showName?: string;
+  groupID?: string;
+  faceURL?: string;
+}
+
+const handleNewGroupMessage = async (group: GroupData): Promise<void> => {
   if (!group || !group.conversationID) {
     console.error('Invalid group data');
     closeModals();
@@ -366,12 +396,12 @@ const handleNewGroupMessage = async (group: any): Promise<void> => {
 
   state.contact = {
     conversationId: group.conversationID,
-    nickname: group.showName,
+    nickname: group.showName || undefined,
     groupId: group.groupID,
     avatarUrl: group.faceURL
   };
 
-  state.groupId = group.groupID;
+  state.groupId = group.groupID || null;
 
   state.chapter = state.contact.conversationId;
 };

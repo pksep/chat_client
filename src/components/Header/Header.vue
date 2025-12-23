@@ -105,6 +105,7 @@ import {
 } from '@pksep/yui';
 
 import type { IHeaderProps, IHeaderEmits } from '../interfaces/interfaces';
+import type { IMenuInfoInformation } from '../../composables/useMenuInfo';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import MobileChatInfo from './MobileChatInfo.vue';
 import { useMenuInfo } from '../../composables/useMenuInfo';
@@ -117,7 +118,17 @@ const props = withDefaults(defineProps<IHeaderProps>(), {
 
 const emits = defineEmits<IHeaderEmits>();
 
-const state = reactive({
+interface HeaderState {
+  menuInfo: any; // Using any for now since we don't have the exact type
+  openMobileInfoModal: boolean;
+  isSearchInputEnable: boolean;
+  statusNotification: {
+    label: string;
+    enabled: boolean;
+  };
+}
+
+const state = reactive<HeaderState>({
   menuInfo: null,
   openMobileInfoModal: false,
   isSearchInputEnable: false,
@@ -140,7 +151,7 @@ const {
   emits
 );
 
-const modelInfo = computed(() => menuInfoState.information);
+const modelInfo = computed<IMenuInfoInformation | null>(() => menuInfoState.information);
 
 const { muteGroupInfo, getMuteStatus } = useInformationMenu(modelInfo);
 
@@ -175,10 +186,15 @@ const popoverRule = computed(
   () => isMobile.value && (props.contact?.groupId || props.chapter === 'ai')
 );
 
-const getPopoverOptions = computed(() => {
-  const popoverArray = [];
+interface PopoverOption {
+  value: string;
+  function: () => void;
+}
+
+const getPopoverOptions = computed<PopoverOption[]>(() => {
+  const popoverArray: PopoverOption[] = [];
   if (props.chapter !== 'ai') {
-    const notificationLabels = {
+    const notificationLabels: PopoverOption = {
       value: state.statusNotification.label,
       function: handleNotificationToggle
     };
@@ -204,7 +220,7 @@ const getPopoverOptions = computed(() => {
   return popoverArray;
 });
 
-watch(
+watch<string | null>(
   () => props.chapter,
   async newChapter => {
     if (props.contact?.groupId) {
