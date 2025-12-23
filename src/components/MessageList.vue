@@ -323,7 +323,7 @@ const isEnableSend = computed<boolean>(() => {
   }
 });
 
-watch<string | null | undefined>(
+watch(
   () => props.contact?.conversationId,
   async (newConversationId, oldConversationId) => {
     if (newConversationId && newConversationId !== oldConversationId) {
