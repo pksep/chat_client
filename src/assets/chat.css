@@ -64,11 +64,11 @@ p.chat__nothing-paragraph {
   }
 }
 
+/*
 .data-divider,
 .top-element {
   z-index: 2;
   top: 2px;
-  position: sticky;
   container-type: scroll-state;
   container-name: sticky-heading;
 }
@@ -87,6 +87,7 @@ p.chat__nothing-paragraph {
     background-color: var(--grey11);
   }
 }
+*/
 
 .menu__user-assistant {
   &:hover,

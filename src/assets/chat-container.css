@@ -50,6 +50,7 @@
 .chat__header {
   grid-area: header;
   align-self: start;
+  z-index: 2;
 }
 
 .chat__menu {

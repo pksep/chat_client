@@ -330,11 +330,9 @@ watch(
   { immediate: true }
 );
 
-// Watch for changes in connection status to update message loading status
 watch(
   () => getIsWebsocketConnecting(),
   () => {
-    // Update messages when connection status changes, to show/hide loading indicators
     updateMessages();
   }
 );
@@ -418,7 +416,6 @@ watch(
       scrollState.previousScrollTop = chatWrapperRef.value.scrollTop;
     }
 
-    // Only load messages if we're not in AI chat mode and have a contact
     if (props.chapter !== 'ai' && props.contact?.conversationId) {
       state.messages = [];
       if (!getIsWebsocketConnecting()) {

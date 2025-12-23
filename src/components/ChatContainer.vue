@@ -134,6 +134,7 @@ import MobileModal from './UI/MobileModal.vue';
 import { Button, ButtonTypeEnum } from '@pksep/yui';
 import { usePwaInstall } from '../composables/usePwaInstall';
 import { markAsRead } from '../services/useOpenIM';
+import { useAndroidBackButton } from '../composables/useAndroidBackButton';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -394,6 +395,22 @@ const handleExit = (): void => {
   state.chapter = 'assistant';
   state.isChapter = false;
 };
+
+// Handle Android back button
+useAndroidBackButton({
+  onBack: () => {
+    // If on mobile and in a specific chapter, go back to main screen
+    if (isMobile.value) {
+      // Reset to main screen state
+      state.chapter = 'assistant';
+      state.contact = null;
+      state.isChapter = false;
+      state.isMenuMobileOpen = false;
+      state.isNewContactOpen = false;
+      state.isNewGroupOpen = false;
+    }
+  }
+});
 
 onMounted(() => {
   if (isMobile.value) {
