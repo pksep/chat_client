@@ -126,7 +126,6 @@ const useMastra = (options?: UseMastraOptions | false) => {
                     chunk !== null &&
                     !Array.isArray(chunk)
                   ) {
-                    // Direct object processing
                     event = chunk;
                   } else if (typeof chunk === 'string') {
                     let jsonStr = chunk;
@@ -166,10 +165,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
                       };
                       messages.value = newMessages;
 
-                      // Save the updated messages
                       await saveMessages(chatId, messages.value);
                     }
-                    // Don't set isResolved here as it will prevent further processing
                     return;
                   }
 

@@ -1,12 +1,12 @@
 import { ConversationItem } from '@openim/wasm-client-sdk';
-import { ref } from 'vue';
+import { ref, shallowRef } from 'vue';
 import { IMSDK } from './useOpenIM';
 import { IContactProps } from '../components/interfaces/interfaces';
 import { setGroupList } from './useGroup';
 import { getUsersList } from '../composables/useUsers';
 import { updateItemList } from '../utils/listUtils';
 
-const conversionStore = ref<IContactProps[]>([]);
+const conversionStore = shallowRef<IContactProps[]>([]);
 const allNotificationCount = ref<number>(0);
 
 let isSDKReady = false;
@@ -127,8 +127,14 @@ export const manipulateConversationList = (
 ): IContactProps[] => {
   const users = getUsersList();
 
+  // Use Map for faster user lookup
+  const userMap = new Map(users.map(user => [user.id, user]));
+  // Get current user to determine if latest message was sent by them
+  const currentUser = JSON.parse(sessionStorage.getItem('openim_user') || '{}');
+  const currentUserId = currentUser?.userID;
+
   return conversations.map(c => {
-    const user = users.find(user => user.id === c.userID);
+    const user = userMap.get(c.userID);
     const parsedMsg = c.latestMsg ? parseMessage(c.latestMsg) : null;
 
     return {
@@ -151,7 +157,9 @@ export const manipulateConversationList = (
       groupId: c.groupID,
       isRead: parsedMsg
         ? parsedMsg.isRead && c.userID !== parsedMsg.sendID
-        : false
+        : false,
+      latestMessageStatus: parsedMsg?.status, // Add message status
+      isLatestMessageFromMe: parsedMsg?.sendID === currentUserId // Check if message was sent by current user
     };
   });
 };

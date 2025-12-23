@@ -91,8 +91,6 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
         state.avatarPreview
       );
       if (group && group.conversationID) {
-        // The SDK handles conversation updates automatically via OnConversationChanged event,
-        // but we ensure UI gets updated by emitting the new group
         emit('unmount-new-group', group);
 
         closeModal();
@@ -103,7 +101,7 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
       }
     } catch (error) {
       console.error('Failed to create group:', error);
-      throw error; // Let parent handle UI (e.g., toast)
+      throw error;
     } finally {
       state.isCreating = false;
     }

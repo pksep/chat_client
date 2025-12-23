@@ -4,12 +4,12 @@
     :data-testid="`${props.dataTestid}-ChatContainer-Container`"
   >
     <Header
-      v-if="!isShowContactList(state.chapter)"
+      v-if="state.isChapter"
       class="chat__header"
       :chapter="state.chapter"
-      :members="state.users.filter(user => user.id !== authUser.id)"
+      :members="filteredMembers"
       :contact="state.contact"
-      :dataTestid="`${props.dataTestid}-ChatContainer-Header`"
+      :data-testid="`${props.dataTestid}-ChatContainer-Header`"
       @unmount-click="handleHeaderClick"
       @unmount-contact="handleChangeContact"
       @unmount-exit="handleExit"
@@ -36,7 +36,7 @@
       :user="authUser"
       :base-url="props.baseUrl"
       :chapter="state.chapter"
-      :contacts="state.users.filter(user => user.id !== authUser.id)"
+      :contacts="filteredContacts"
       :contact="state.contact"
       class="chat__messages"
       ref="chatRef"
@@ -49,34 +49,41 @@
         class="chat__info"
         :open="state.isMenuDesktopOpen"
         :contact="state.contact"
-        :members="state.users.filter(user => user.id !== authUser.id)"
+        :members="filteredMembers"
         :active-tab-id="state.activeTabId"
         :dataTestid="`${props.dataTestid}-ChatContainer-MenuInfo`"
         @unmount-collapse="handleMenuToggle"
         @unmount-contact="handleChangeContact"
       />
     </template>
-  </main>
-  <NewContactModal
-    :contacts="state.users.filter(user => user.id !== authUser?.id)"
-    :open="state.isNewContactOpen"
-    :data-testid="`${props.dataTestid}-ChatContainer-NewContactModal`"
-    @unmount-close="closeModals"
-    @unmount-new-contact="handleNewContactMessage"
-  />
+    <NewContactModal
+      :contacts="filteredContacts"
+      :open="state.isNewContactOpen"
+      :data-testid="`${props.dataTestid}-ChatContainer-NewContactModal`"
+      @unmount-close="closeModals"
+      @unmount-new-contact="handleNewContactMessage"
+    />
 
-  <NewGroupModal
-    :user="authUser"
-    :contacts="state.users.filter(user => user.id !== authUser?.id)"
-    :open="state.isNewGroupOpen"
-    :data-testid="`${props.dataTestid}-ChatContainer-NewGroupModal`"
-    @unmount-close="closeModals"
-    @unmount-new-group="handleNewGroupMessage"
-  />
+    <NewGroupModal
+      :user="authUser"
+      :contacts="filteredContacts"
+      :open="state.isNewGroupOpen"
+      :data-testid="`${props.dataTestid}-ChatContainer-NewGroupModal`"
+      @unmount-close="closeModals"
+      @unmount-new-group="handleNewGroupMessage"
+    />
+  </main>
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, reactive, ref } from 'vue';
+import {
+  computed,
+  defineAsyncComponent,
+  onMounted,
+  reactive,
+  ref,
+  watch
+} from 'vue';
 import Header from './Header/Header.vue';
 import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
@@ -88,12 +95,12 @@ import type {
   IUserProps
 } from './interfaces/interfaces';
 import { appendUserAttributes, getUsersList } from '../composables/useUsers';
-import { isShowContactList } from '../composables/useShowContactList';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD, MAX_W_XL } from '../utils/constants';
 import { getGroupList } from '../services/useGroup';
 import { getConversationList } from '../services/useConversions';
 import { getAuthUser } from '../composables/useAuth';
+import { markAsRead } from '../services/useOpenIM';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -113,7 +120,7 @@ const state = reactive({
   isMenuDesktopOpen: false,
   isMenuMobileOpen: false,
   activeTabId: null,
-  chapter: isMobile ? 'assistant' : null,
+  chapter: isMobile.value ? 'assistant' : null,
   groupId: null,
   contact: null,
   isNewContactOpen: false,
@@ -128,16 +135,50 @@ const state = reactive({
           : !state.isMenuDesktopOpen
     }
   ]),
-  users: computed(() => getUsersList()),
-  groups: computed(() => getGroupList()),
-  conversations: computed(() => getConversationList())
+  isChapter: false,
+  users: getUsersList(),
+  groups: getGroupList(),
+  conversations: getConversationList()
 });
 
 const props = withDefaults(defineProps<IChatContainerProps>(), {
-  dataTestid: () => 'ChatContainer'
+  dataTestid: 'ChatContainer'
 });
 
 const authUser = computed(() => appendUserAttributes(getAuthUser()));
+
+const filteredContacts = computed(() => {
+  const authId = authUser.value?.id;
+  if (!authId) return [];
+  return state.users.filter(user => user.id !== authId);
+});
+
+const filteredMembers = computed(() => {
+  const authId = authUser.value?.id;
+  if (!authId) return [];
+  return state.users.filter(user => user.id !== authId);
+});
+
+watch(
+  () => getUsersList(),
+  newUsers => {
+    state.users = newUsers;
+  }
+);
+
+watch(
+  () => getGroupList(),
+  newGroups => {
+    state.groups = newGroups;
+  }
+);
+
+watch(
+  () => getConversationList(),
+  newConversations => {
+    state.conversations = newConversations;
+  }
+);
 
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 
@@ -165,12 +206,21 @@ const unmountHeaderMenuChapter = (
 ): void => {
   if (typeof config === 'string') {
     state.chapter = config;
-    if (config === 'ai') {
+    if (
+      config === 'channels' ||
+      config === 'dialogs' ||
+      config === 'assistant' ||
+      config === 'ai'
+    ) {
       state.contact = null;
+      state.isChapter = false;
+      return;
     }
+    state.isChapter = true;
   } else if (config && config.nickname) {
     state.chapter = config.nickname;
     state.contact = config;
+    state.isChapter = false;
   } else {
     state.chapter = null;
     state.contact = null;
@@ -188,6 +238,7 @@ const findContactOrGroupById = (id: string) => {
 const unmountMenuChapter = (
   config: { contact: IUserProps; groupId?: string } | string | null
 ): void => {
+  state.isChapter = true;
   if (typeof config === 'string') {
     state.chapter = config;
     if (config === 'ai') {
@@ -195,6 +246,12 @@ const unmountMenuChapter = (
     } else {
       const foundContact = findContactOrGroupById(config);
       if (foundContact) {
+        if (foundContact.id) {
+          markAsRead(foundContact.id).catch(error => {
+            console.warn('Failed to mark messages as read:', error);
+          });
+        }
+
         state.contact = { ...foundContact, conversationId: foundContact.id };
         state.chapter = config;
       } else {
@@ -203,6 +260,12 @@ const unmountMenuChapter = (
       }
     }
   } else if (config && config.contact) {
+    if (config.contact.id) {
+      markAsRead(config.contact.id).catch(error => {
+        console.warn('Failed to mark messages as read:', error);
+      });
+    }
+
     state.chapter = config.contact.nickname;
     state.contact = config.contact;
   } else {
@@ -282,5 +345,14 @@ const handleChangeContact = (contact: IUserProps): void => {
 
 const handleExit = (): void => {
   state.chapter = 'assistant';
+  state.isChapter = false;
 };
+
+onMounted(() => {
+  if (isMobile.value) {
+    state.isChapter = false;
+    return;
+  }
+  state.isChapter = state.chapter === 'ai' || state.contact !== null;
+});
 </script>

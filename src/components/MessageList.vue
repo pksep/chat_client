@@ -36,7 +36,7 @@
   </template>
   <div
     class="chat__message-wrapper"
-    v-else-if="state.messages.length"
+    v-if="state.messages.length"
     ref="chatWrapperRef"
     @scroll="handleScroll"
     :data-testid="`${props.dataTestid}-MessageList-UserMessagesWrapper`"
@@ -83,7 +83,7 @@
         </div>
 
         <MessageBubble
-          v-else
+          v-if="!(message.isSystemMessage || message.notificationElem)"
           :class="
             messageChat(props.user.id === message.sendID ? 'user' : 'assistant')
           "
@@ -94,7 +94,13 @@
           :time="formatTime(new Date(message.sendTime))"
           :sender="message.senderNickname"
           :avatar="message.faceURL"
-          :is-read="message.isRead"
+          :is-read="
+            props.user.id === message.sendID
+              ? message.isReadByPeer
+              : message.isRead
+          "
+          :message-status="message.status"
+          :loader="message.loading"
           :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
         />
       </template>
@@ -103,7 +109,11 @@
   <EmptyChat
     :chapter="props.chapter"
     :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
-    v-if="!state.messages.length && !aiMessages.length"
+    v-if="
+      !state.messages.length &&
+      !aiMessages.length &&
+      !getIsWebsocketConnecting()
+    "
   />
   <div
     class="chat__input"
@@ -113,6 +123,7 @@
     <ContentEditor
       v-model="inputText"
       active-attach-file
+      send-on-enter
       @unmount-send="handleSend"
       @unmount-attach-file="handleAttachFile"
       :data-testid="`${props.dataTestid}-MessageList-ContentEditor`"
@@ -128,19 +139,19 @@ import {
   useTemplateRef,
   nextTick,
   onUnmounted,
-  computed,
-  type ComputedRef
+  onMounted,
+  computed
 } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
 import { ContentEditor } from '@pksep/yui';
 import { useMastra } from '../services/useMastra';
-import { generateChatId, removeMessageLoading } from '../services/useChatDb';
+import { removeMessageLoading } from '../services/useChatDb';
 import {
   getMessagesByConversationId,
-  getSavedMessages,
-  markAsRead,
-  sendMessageIM
+  getMessagesWithLoadingStatus,
+  sendMessageIM,
+  getIsWebsocketConnecting
 } from '../services/useOpenIM';
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
@@ -150,6 +161,10 @@ import {
 } from '../utils/systemMessages';
 import type { OpenIMMessage, AIMessage } from '../types/messages';
 import { authedUser } from '../composables/useAuth';
+
+interface OpenIMMessageWithLoading extends OpenIMMessage {
+  loading?: boolean;
+}
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -164,15 +179,113 @@ const chatWrapperRef = useTemplateRef('chatWrapperRef');
 const inputText = ref('');
 
 const state = reactive({
-  messages: computed(() =>
-    getSavedMessages(props.contact?.conversationId || '')
-  ) as ComputedRef<OpenIMMessage[]>,
+  messages: [] as OpenIMMessageWithLoading[],
   chatId: null as string | null
 });
 
-if (props.chapter === 'ai' && !state.chatId) {
-  state.chatId = generateChatId();
-}
+const updateMessages = () => {
+  if (props.contact?.conversationId) {
+    state.messages = [
+      ...getMessagesWithLoadingStatus(props.contact.conversationId)
+    ];
+  } else {
+    state.messages = [];
+  }
+};
+
+const scrollState = reactive({
+  isUserScrolling: false,
+  previousScrollTop: 0,
+  shouldAutoScroll: true,
+  isInitialLoad: true
+});
+
+const scrollToBottom = (smooth: boolean = false): void => {
+  if (!chatWrapperRef?.value || !scrollState.shouldAutoScroll) return;
+
+  // Ensure DOM is updated before scrolling
+  nextTick().then(() => {
+    requestAnimationFrame(() => {
+      if (chatWrapperRef.value) {
+        if (smooth) {
+          chatWrapperRef.value.scrollTo({
+            top: chatWrapperRef.value.scrollHeight,
+            behavior: 'smooth'
+          });
+        } else {
+          chatWrapperRef.value.scrollTop = chatWrapperRef.value.scrollHeight;
+        }
+      }
+    });
+  });
+};
+
+const throttle = <T extends (...args: any[]) => any>(
+  func: T,
+  limit: number
+) => {
+  let inThrottle: boolean;
+  return function (this: any) {
+    const args = arguments;
+    if (!inThrottle) {
+      func.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => (inThrottle = false), limit);
+    }
+  };
+};
+
+const debounce = <T extends (...args: any[]) => any>(
+  func: T,
+  delay: number
+): ((...args: Parameters<T>) => void) => {
+  let timeoutId: number | null = null;
+  return (...args: Parameters<T>) => {
+    if (timeoutId) {
+      window.clearTimeout(timeoutId);
+    }
+    timeoutId = window.setTimeout(() => func.apply(null, args), delay);
+  };
+};
+
+let isScrollLoading = false;
+
+const handleScroll = throttle((): void => {
+  if (!chatWrapperRef?.value) return;
+
+  const { scrollTop, scrollHeight, clientHeight } = chatWrapperRef.value;
+  const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+  scrollState.shouldAutoScroll = distanceFromBottom < 100;
+  scrollState.isUserScrolling = distanceFromBottom >= 100;
+  scrollState.previousScrollTop = scrollTop;
+
+  if (scrollState.isInitialLoad) {
+    scrollState.isInitialLoad = false;
+  }
+
+  if (scrollTop < 20 && !isScrollLoading && props.contact?.conversationId) {
+    isScrollLoading = true;
+
+    // Try to load more messages from the service if connected
+    if (!getIsWebsocketConnecting()) {
+      getMessagesByConversationId(
+        props.contact.conversationId,
+        state.messages[0]?.clientMsgID
+      )
+        .then(() => {
+          updateMessages(); // Update to reflect any changes
+        })
+        .finally(() => {
+          isScrollLoading = false;
+        });
+    } else {
+      // Service is disconnected, but still update to show cached messages with loading status
+      updateMessages();
+      isScrollLoading = false;
+    }
+  }
+}, 100);
 
 const isEnableSend = computed(() => {
   try {
@@ -188,11 +301,36 @@ const isEnableSend = computed(() => {
 });
 
 watch(
-  () => props.chapter,
-  newChapter => {
-    if (newChapter === 'ai' && !state.chatId) {
-      state.chatId = generateChatId();
+  () => props.contact?.conversationId,
+  async (newConversationId, oldConversationId) => {
+    if (newConversationId && newConversationId !== oldConversationId) {
+      // Reset messages when changing conversations
+      state.messages = [];
+      // Load messages for the new conversation
+      if (!getIsWebsocketConnecting()) {
+        await getMessagesByConversationId(newConversationId, '');
+      }
+      updateMessages();
+
+      await nextTick();
+      requestAnimationFrame(() => {
+        if (chatWrapperRef?.value) {
+          scrollToBottom(false); // Direct scroll when changing conversations
+          scrollState.shouldAutoScroll = true;
+          scrollState.isInitialLoad = true;
+        }
+      });
     }
+  },
+  { immediate: true }
+);
+
+// Watch for changes in connection status to update message loading status
+watch(
+  () => getIsWebsocketConnecting(),
+  () => {
+    // Update messages when connection status changes, to show/hide loading indicators
+    updateMessages();
   }
 );
 
@@ -221,63 +359,85 @@ const messageChat = (role: string) => [
   { message__other: role === 'user' }
 ];
 
-const scrollToBottom = (): void => {
-  if (chatWrapperRef?.value) {
-    chatWrapperRef.value.scrollTop = chatWrapperRef.value.scrollHeight;
-  }
-};
+const handleNewMessages = debounce(
+  async (newLength: number, oldLength: number) => {
+    if (props.chapter === 'ai' || !state.messages.length) return;
 
-const handleScroll = async (): Promise<void> => {
-  if (chatWrapperRef?.value) {
-    const scrollHeight = chatWrapperRef.value.scrollHeight;
-    if (chatWrapperRef.value?.scrollTop < 20) {
-      await getMessagesByConversationId(
-        props.contact?.conversationId,
-        state.messages[0]?.clientMsgID
-      );
-      nextTick(() => {
-        chatWrapperRef.value!.scrollTop =
-          chatWrapperRef.value!.scrollHeight - scrollHeight;
+    await nextTick();
+
+    if (oldLength === 0 && newLength > 0) {
+      if (!getIsWebsocketConnecting()) {
+        requestAnimationFrame(() => {
+          scrollState.shouldAutoScroll = true;
+          scrollToBottom(true);
+        });
+      }
+    } else if (scrollState.shouldAutoScroll && !getIsWebsocketConnecting()) {
+      requestAnimationFrame(() => {
+        scrollToBottom(true);
       });
     }
-  }
-};
+  },
+  50
+);
 
 watch(
-  () => props.chapter,
-  (newValue, oldValue) => {
-    if (newValue !== oldValue) {
-      getMessagesByConversationId(props.contact?.conversationId);
-    }
-    if (
-      (aiMessages?.value && aiMessages?.value.length) ||
-      state.messages.length
-    ) {
-      nextTick(() => scrollToBottom());
-    }
+  () => state.messages.length,
+  (newLength, oldLength) => {
+    handleNewMessages(newLength, oldLength);
   },
   { immediate: true }
 );
 
 watch(
-  () => state.messages.length,
-  () => {
-    if (props.chapter === 'ai') {
-      return;
-    }
+  () => chatWrapperRef?.value?.scrollTop,
+  newScrollTop => {
+    if (!chatWrapperRef?.value || scrollState.isInitialLoad) return;
 
-    if (!state.messages.length) {
-      return;
-    }
+    const distanceFromBottom =
+      chatWrapperRef.value.scrollHeight -
+      chatWrapperRef.value.clientHeight -
+      newScrollTop;
 
-    nextTick(() => scrollToBottom());
-
-    const newMessage = state.messages[state.messages.length - 1];
-
-    if (newMessage.sendID !== props.user.id) {
-      markAsRead(props.contact?.conversationId);
-    }
+    scrollState.shouldAutoScroll = distanceFromBottom < 100;
+    scrollState.isUserScrolling = distanceFromBottom >= 100;
   }
+);
+
+watch(
+  () => props.chapter,
+  async (newValue, oldValue) => {
+    if (newValue === oldValue) return;
+
+    if (chatWrapperRef?.value) {
+      scrollState.previousScrollTop = chatWrapperRef.value.scrollTop;
+    }
+
+    // Only load messages if we're not in AI chat mode and have a contact
+    if (props.chapter !== 'ai' && props.contact?.conversationId) {
+      state.messages = [];
+      if (!getIsWebsocketConnecting()) {
+        await getMessagesByConversationId(props.contact.conversationId, '');
+      }
+      updateMessages();
+    } else {
+      state.messages = [];
+    }
+
+    await nextTick();
+
+    scrollState.isInitialLoad = true;
+    scrollState.shouldAutoScroll = true;
+    scrollState.isUserScrolling = false;
+
+    requestAnimationFrame(() => {
+      if (chatWrapperRef?.value) {
+        scrollToBottom(false);
+        scrollState.isInitialLoad = false;
+      }
+    });
+  },
+  { immediate: true }
 );
 
 const handleClear = (): void => {
@@ -290,7 +450,9 @@ const handleSend = async (): Promise<void> => {
   if (props.chapter === 'ai') {
     const text = inputText.value;
     inputText.value = '';
-    await sendMessage(text, scrollToBottom);
+    await sendMessage(text, () => {
+      requestAnimationFrame(() => scrollToBottom(true));
+    });
     return;
   }
 
@@ -346,7 +508,12 @@ const handleSend = async (): Promise<void> => {
     console.error('[OpenIM] Failed to send message:', error);
   }
 
-  nextTick(() => scrollToBottom());
+  // Update messages to show the sent message in UI
+  updateMessages();
+
+  setTimeout(() => {
+    scrollToBottom(true);
+  }, 10);
 };
 
 const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
@@ -401,7 +568,12 @@ const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
         });
       }
 
-      nextTick(() => scrollToBottom());
+      // Update messages to show the sent file in UI
+      updateMessages();
+
+      setTimeout(() => {
+        scrollToBottom(true);
+      }, 10);
     } catch (error) {
       console.error('[OpenIM] Failed to send file:', error);
     }
@@ -432,6 +604,25 @@ const getSystemMessageContent = message => {
   const notification = parseGroupNotification(message);
   return notification || message.textElem?.content || message.showName || '';
 };
+
+onMounted(async () => {
+  if (props.contact?.conversationId) {
+    state.messages = [];
+    if (!getIsWebsocketConnecting()) {
+      await getMessagesByConversationId(props.contact.conversationId, '');
+    }
+    updateMessages();
+
+    await nextTick();
+    requestAnimationFrame(() => {
+      if (chatWrapperRef?.value) {
+        scrollToBottom(false); // Direct scroll to bottom
+        scrollState.shouldAutoScroll = true;
+        scrollState.isInitialLoad = true;
+      }
+    });
+  }
+});
 
 onUnmounted(() => {
   if (state.chatId) {

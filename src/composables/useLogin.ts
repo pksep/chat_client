@@ -47,6 +47,8 @@ export const useRegister = async (
 
 export const useLogout = (): void => {
   removeCookie('authToken');
+
+  sessionStorage.removeItem('openim_user');
 };
 
 export const setAuthToken = (

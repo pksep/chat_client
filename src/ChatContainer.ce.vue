@@ -14,7 +14,8 @@ import { saveUserIdToSession, hasUserIdInSession } from './services/useMastra';
 import { clearAllData } from './services/useChatDb';
 import {
   getAllNotificationCount,
-  markSDKReady
+  markSDKReady,
+  fetchConversationList
 } from './services/useConversions';
 import { fetchAuthUser, useAuth } from './composables/useAuth';
 import { fetchAllUsers } from './composables/useUsers';
@@ -56,9 +57,23 @@ onMounted(async () => {
       wsAddr
     });
 
+    sessionStorage.setItem(
+      'openim_user',
+      JSON.stringify({
+        platformID: authData.PlatformID,
+        userID: authData.UserID,
+        token: authData.token,
+        apiAddr,
+        wsAddr
+      })
+    );
+
     await Promise.all([fetchAuthUser(), fetchAllUsers()]);
 
     setupOpenIM();
+
+    // Initialize conversation list after SDK is ready
+    await fetchConversationList();
 
     markSDKReady();
   } catch (error) {

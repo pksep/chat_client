@@ -50,7 +50,7 @@ button.button-yui-kit {
   }
 }
 
-@media screen and (width <= 28rem) {
+@media screen and (width <= 412px) {
   .chat__header {
     justify-content: start;
     gap: 10px;

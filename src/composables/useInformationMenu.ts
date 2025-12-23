@@ -56,7 +56,6 @@ export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
   ): Promise<void> => {
     let conversationID: string;
 
-    // Use provided contact data or fallback to model value
     const targetContact = contact || model.value;
 
     if (targetContact?.groupId) {
