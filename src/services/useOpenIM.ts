@@ -183,23 +183,30 @@ const setupOpenIM = (): void => {
       for (let i = 0; i < list.length; i += batchSize) {
         const batch = list.slice(i, i + batchSize);
 
+        let processedMessage: ProcessedMessage | null = null;
         for (const message of batch) {
           if (!message) continue;
 
-          const processedMessage = processIncomingMessage(message);
-          if (!processedMessage) {
+          const currentProcessedMessage = processIncomingMessage(message);
+          if (!currentProcessedMessage) {
             continue;
           }
 
           if (!enableAudio) {
-            enableAudio = !processedMessage.notificationElem;
+            enableAudio = !currentProcessedMessage.notificationElem;
           }
 
-          const convId = generateConversationId(processedMessage);
-          appendMessageToLocal(convId, processedMessage as OpenIMMessage);
+          const convId = generateConversationId(currentProcessedMessage);
+          appendMessageToLocal(
+            convId,
+            currentProcessedMessage as OpenIMMessage
+          );
+
+          // Keep track of the last processed message for the enableAudio logic
+          processedMessage = currentProcessedMessage;
         }
 
-        if (!enableAudio) {
+        if (!enableAudio && processedMessage) {
           const user = getAuthUser();
 
           enableAudio =
@@ -207,9 +214,11 @@ const setupOpenIM = (): void => {
             processedMessage.sendID !== user.userID;
         }
 
-        const convId = generateConversationId(processedMessage);
-        appendMessageToLocal(convId, processedMessage as OpenIMMessage);
-      });
+        if (processedMessage) {
+          const convId = generateConversationId(processedMessage);
+          appendMessageToLocal(convId, processedMessage as OpenIMMessage);
+        }
+      }
 
       if (enableAudio) {
         new Audio('/audio/new-message.mp3').play().catch(e => {
@@ -247,7 +256,7 @@ const setupOpenIM = (): void => {
       const msgs = getSavedMessages(conversationID);
       const msgIdSet = new Set(msgIds);
 
-      const updatedMsgs = msgs.map((msg, idx) => {
+      const updatedMsgs = msgs.map(msg => {
         if (msgIdSet.has(msg.clientMsgID)) {
           // Update the isReadByPeer property that the UI expects for sent messages
           // When a read receipt is received, it means the peer has read the message
@@ -755,7 +764,9 @@ const markAsRead = async (conversationID: string) => {
   try {
     // Check if conversationID is valid before attempting to mark as read
     if (!conversationID) {
-      console.warn('[OpenIM] Cannot mark messages as read: conversationID is empty or null');
+      console.warn(
+        '[OpenIM] Cannot mark messages as read: conversationID is empty or null'
+      );
       return;
     }
 
@@ -768,7 +779,9 @@ const markAsRead = async (conversationID: string) => {
     // Update local messages to mark them as read
     // Get all messages in this conversation and update their isRead status
     const messages = getSavedMessages(conversationID);
-    const currentUserID = sessionStorage.getItem('openim_user') ? JSON.parse(sessionStorage.getItem('openim_user')!).userID : '';
+    const currentUserID = sessionStorage.getItem('openim_user')
+      ? JSON.parse(sessionStorage.getItem('openim_user')!).userID
+      : '';
     const updatedMessages = messages.map(msg => {
       // Only mark as read if it's a message from someone else (received message)
       // Don't mark our own messages as read
@@ -785,7 +798,10 @@ const markAsRead = async (conversationID: string) => {
   } catch (error: any) {
     // Check if it's the specific RecordNotFoundError (errCode 1004)
     if (error?.errCode === 1004) {
-      console.warn(`[OpenIM] Conversation not found when trying to mark messages as read (conversationID: ${conversationID}):`, error);
+      console.warn(
+        `[OpenIM] Conversation not found when trying to mark messages as read (conversationID: ${conversationID}):`,
+        error
+      );
       // Don't throw the error, just log it as a warning since it's an expected scenario
       return;
     } else {

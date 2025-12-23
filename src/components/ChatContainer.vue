@@ -221,13 +221,6 @@ const unmountHeaderMenuChapter = (
     state.chapter = config.nickname;
     state.contact = config;
     state.isChapter = false;
-
-    // Mark messages as read when switching to this conversation
-    if (config.contact?.id) {
-      markAsRead(config.contact.id).catch(error => {
-        console.warn('Failed to mark messages as read:', error);
-      });
-    }
   } else {
     state.chapter = null;
     state.contact = null;
@@ -253,8 +246,6 @@ const unmountMenuChapter = (
     } else {
       const foundContact = findContactOrGroupById(config);
       if (foundContact) {
-        // Mark messages as read when switching to this conversation
-        // Only call markAsRead if we have a valid contact ID
         if (foundContact.id) {
           markAsRead(foundContact.id).catch(error => {
             console.warn('Failed to mark messages as read:', error);
@@ -269,8 +260,6 @@ const unmountMenuChapter = (
       }
     }
   } else if (config && config.contact) {
-    // Mark messages as read when switching to this conversation
-    // Only call markAsRead if we have a valid contact ID
     if (config.contact.id) {
       markAsRead(config.contact.id).catch(error => {
         console.warn('Failed to mark messages as read:', error);

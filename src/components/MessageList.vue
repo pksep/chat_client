@@ -150,7 +150,6 @@ import { removeMessageLoading } from '../services/useChatDb';
 import {
   getMessagesByConversationId,
   getMessagesWithLoadingStatus,
-  markAsRead,
   sendMessageIM,
   getIsWebsocketConnecting
 } from '../services/useOpenIM';
