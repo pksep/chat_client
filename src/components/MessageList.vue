@@ -13,13 +13,18 @@
         <template v-for="(message, index) in aiMessages" :key="index">
           <div
             v-if="isNewDate(index, true)"
-            class="date-divider"
-            :data-testid="`${props.dataTestid}-MessageList-DateDividerAI${index + 1}`"
+            class="top-element"
+            :data-divider="isNewDate(index, true) ? formatDay(message.timestamp) : undefined"
           >
-            <span
-              :data-testid="`${props.dataTestid}-MessageList-DateLabelAI${index + 1}`"
-              >{{ formatDay(message.timestamp) }}</span
+            <div
+              class="date-divider"
+              :data-testid="`${props.dataTestid}-MessageList-DateDividerAI${index + 1}`"
             >
+              <span
+                :data-testid="`${props.dataTestid}-MessageList-DateLabelAI${index + 1}`"
+                >{{ formatDay(message.timestamp) }}</span
+              >
+            </div>
           </div>
           <MessageBubble
             :class="messageChat(message.role)"
@@ -51,6 +56,7 @@
       >
         <div
           class="top-element"
+          :data-divider="isNewDate(index) ? formatDay(message.sendTime) : undefined"
           v-if="
             isNewDate(index) ||
             message.isSystemMessage ||
@@ -161,6 +167,7 @@ import {
 } from '../utils/systemMessages';
 import type { OpenIMMessage, AIMessage } from '../types/messages';
 import { authedUser } from '../composables/useAuth';
+import { useStickyHeading } from '../composables/useStickyHeading';
 
 interface OpenIMMessageWithLoading extends OpenIMMessage {
   loading?: boolean;
@@ -605,6 +612,9 @@ const getSystemMessageContent = message => {
   return notification || message.textElem?.content || message.showName || '';
 };
 
+// Initialize sticky heading composable
+const stickyHeading = useStickyHeading();
+
 onMounted(async () => {
   if (props.contact?.conversationId) {
     state.messages = [];
@@ -619,6 +629,9 @@ onMounted(async () => {
         scrollToBottom(false); // Direct scroll to bottom
         scrollState.shouldAutoScroll = true;
         scrollState.isInitialLoad = true;
+
+        // Initialize sticky headings after content is rendered
+        stickyHeading.init('.top-element[data-divider]:not(.system-message)');
       }
     });
   }
@@ -628,6 +641,9 @@ onUnmounted(() => {
   if (state.chatId) {
     removeMessageLoading(state.chatId, aiMessages.value.length);
   }
+
+  // Clean up sticky heading observer
+  stickyHeading.destroy();
 });
 
 defineExpose({
