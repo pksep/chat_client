@@ -1,7 +1,7 @@
 <template>
   <aside
     :class="menuInfoClasses"
-    v-if="isOpen"
+    v-if="props.open"
     :data-testid="`${props.dataTestid}-MenuInfo-Container`"
   >
     <header
@@ -95,8 +95,6 @@ import InformationMenu from './InformationMenu.vue';
 import type { IMenuRightProps, IMenuEmits } from './interfaces/interfaces';
 import { useMenuInfo } from '../composables/useMenuInfo';
 import NewContactModal from './NewChat/NewContactModal.vue';
-import { useResizeState } from '../composables/useResizeState';
-import { MAX_W_XL } from '../utils/constants';
 
 const props = withDefaults(defineProps<IMenuRightProps>(), {
   open: false,
@@ -111,19 +109,13 @@ const menuInfoClasses = computed(() => [
 
 const emits = defineEmits<IMenuEmits>();
 
-const { state: isOpen, setState } = useResizeState({
-  breakpoint: MAX_W_XL,
-  onStateChange: (val: boolean) => emits('unmount-collapse', val)
-});
-
 const handleCloseMenu = (): void => {
-  setState(false);
+  emits('unmount-collapse', false);
 };
 
 watch(
   () => props.open,
   async newVal => {
-    isOpen.value = newVal;
     if (newVal && props.contact) {
       await initializeMenuInfo({ ...props, isEnabled: true });
     }

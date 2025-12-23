@@ -218,6 +218,16 @@ watch(
 
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 
+// Close MenuInfo when switching to mobile view
+watch(
+  () => isMobile.value,
+  newIsMobile => {
+    if (newIsMobile) {
+      state.isMenuDesktopOpen = false;
+    }
+  }
+);
+
 const handleCollapse = (): void => {
   toggle();
 };

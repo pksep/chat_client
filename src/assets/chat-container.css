@@ -116,7 +116,7 @@ button.primary-yui-kit.disabled-yui-kit {
   }
 }
 
-@media screen and (width <= 40rem) {
+@media screen and (width <= 670px) {
   .chat-container.menu-collapse {
     & .chat__info {
       display: none;
