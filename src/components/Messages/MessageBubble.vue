@@ -179,7 +179,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Avatar, Button, ButtonTypeEnum, Modal, SizesEnum } from '@pksep/yui';
+import { Avatar, Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import ContextMenu from '../ContactList/ContextMenu.vue';
@@ -187,7 +187,6 @@ import type { IMessageBubbleProps } from './interface/interface';
 import FileIcon from '../UI/FileIcon.vue';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import { getFormatFileSize, getShortName } from '../../utils/getFormatFileSize';
-import { FileElem } from '@openim/wasm-client-sdk';
 import { SliderModal } from '@pksep/yui';
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
