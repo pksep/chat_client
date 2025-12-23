@@ -21,141 +21,185 @@ export const getIsWebsocketConnecting = () => isWebsocketConnecting.value;
 
 export type IMSDKType = ReturnType<typeof getSDK>;
 
-let instance: IMSDKType | null = null;
-
+// Singleton instance with proper error handling
 const IMSDK: IMSDKType = (() => {
-  if (!instance) {
-    instance = getSDK({
+  try {
+    return getSDK({
       debug: false,
       coreWasmPath: '/openIM.wasm',
       sqlWasmPath: '/sql-wasm.wasm'
     });
+  } catch (error) {
+    console.error('[OpenIM] Failed to initialize SDK:', error);
+    throw new Error('Failed to initialize OpenIM SDK');
   }
-  return instance;
 })();
 
 if (import.meta.hot) {
   import.meta.hot.accept(() => {});
-
   import.meta.hot.dispose(() => {});
 }
 
-let connectionRetries = 0;
-const MAX_RETRIES = 5;
-const RETRY_DELAY = 3000;
-let reconnectTimeout: number | null = null;
+// Connection management
+interface ConnectionState {
+  retries: number;
+  reconnectTimeout: number | null;
+  connectionSuccessTimer: number | null;
+}
+
+const connectionState: ConnectionState = {
+  retries: 0,
+  reconnectTimeout: null,
+  connectionSuccessTimer: null
+};
+
+// Debounce utility type
+type DebouncedFunction<T extends (...args: any[]) => any> = (
+  ...args: Parameters<T>
+) => void;
+
+// Debounce utility with proper cleanup
+function createDebouncedFunction<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): DebouncedFunction<T> {
+  let timeout: number | null = null;
+
+  return ((...args: Parameters<T>): void => {
+    const later = () => {
+      timeout = null;
+      func(...args);
+    };
+
+    if (timeout !== null) {
+      clearTimeout(timeout);
+    }
+
+    timeout = setTimeout(later, wait) as unknown as number;
+  }) as DebouncedFunction<T>;
+}
 
 const setupOpenIM = (): void => {
-  const debounce = (func: (...args: any[]) => any, wait: number) => {
-    let timeout: number;
-    return function executedFunction(...args: any[]) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait) as unknown as number;
-    };
-  };
-
-  const debouncedSetConnecting = debounce((val: boolean) => {
+  const debouncedSetConnecting = createDebouncedFunction((val: boolean) => {
     isWebsocketConnecting.value = val;
   }, 300);
 
-  IMSDK.on(CbEvents.OnConnecting, () => {
+  // Connection event handlers
+  const handleConnecting = () => {
     console.log('[OpenIM] Connecting...');
     debouncedSetConnecting(true);
-  });
+  };
 
-  let connectionSuccessTimer: number | null = null;
-
-  IMSDK.on(CbEvents.OnConnectSuccess, () => {
+  const handleConnectSuccess = () => {
     console.log('[OpenIM] Connection successful');
-    connectionRetries = 0;
+    connectionState.retries = 0;
 
-    if (reconnectTimeout) {
-      clearTimeout(reconnectTimeout);
-      reconnectTimeout = null;
+    if (connectionState.reconnectTimeout) {
+      clearTimeout(connectionState.reconnectTimeout);
+      connectionState.reconnectTimeout = null;
     }
 
-    if (connectionSuccessTimer) {
-      window.clearTimeout(connectionSuccessTimer);
+    if (connectionState.connectionSuccessTimer) {
+      clearTimeout(connectionState.connectionSuccessTimer);
+      connectionState.connectionSuccessTimer = null;
     }
 
-    connectionSuccessTimer = window.setTimeout(() => {
-      isWebsocketConnecting.value = false;
+    // Simply set connecting state to false and retry queued messages
+    isWebsocketConnecting.value = false;
+    retryQueuedMessages();
+  };
 
-      // Retry sending queued messages when connection is restored
-      retryQueuedMessages();
-
-      connectionSuccessTimer = null;
-    }, 300);
-  });
-
-  IMSDK.on(CbEvents.OnConnectFailed, err => {
+  const handleConnectFailed = async (err: any) => {
     console.error('[OpenIM] Connection failed:', err);
 
-    if (connectionRetries < MAX_RETRIES) {
-      connectionRetries++;
-      const delay = RETRY_DELAY * connectionRetries;
-      console.log(
-        `[OpenIM] Attempting to reconnect in ${delay}ms (attempt ${connectionRetries}/${MAX_RETRIES})`
-      );
+    // Simply set connecting state to false without retrying
+    isWebsocketConnecting.value = false;
 
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
+    // Check if it's a token expiration error and attempt to refresh
+    if (err?.errCode === 403 || err?.message?.includes('token')) {
+      console.log('[OpenIM] Token may have expired, attempting to refresh...');
+      await attemptTokenRefresh();
+    }
+  };
+
+  const attemptTokenRefresh = async () => {
+    try {
+      // Dynamically import to avoid circular dependencies
+      const { useAuth } = await import('../composables/useAuth');
+      const { getConfig } = await import('./useConfig');
+
+      const config = getConfig();
+      const localToken = localStorage.getItem('erp_token');
+
+      if (!localToken) {
+        console.error('[OpenIM] No stored token available for refresh');
+        return;
       }
 
-      reconnectTimeout = setTimeout(() => {
-        const storedUser = sessionStorage.getItem('openim_user');
-        if (storedUser) {
-          try {
-            const userData = JSON.parse(storedUser);
-            debouncedSetConnecting(true);
-            IMSDK.login({
-              platformID: userData.platformID,
-              userID: userData.userID,
-              token: userData.token,
-              apiAddr: userData.apiAddr,
-              wsAddr: userData.wsAddr
-            }).catch(error => {
-              console.error('[OpenIM] Reconnection failed:', error);
-              debouncedSetConnecting(false);
-            });
-          } catch (e) {
-            console.error(
-              '[OpenIM] Failed to parse stored user data for reconnection:',
-              e
-            );
-            debouncedSetConnecting(false);
-          }
-        } else {
-          console.warn(
-            '[OpenIM] No stored user data available for reconnection'
-          );
-          debouncedSetConnecting(false);
-        }
-      }, delay) as unknown as number;
-    } else {
-      console.error('[OpenIM] Maximum reconnection attempts reached');
-      isWebsocketConnecting.value = false;
+      const authData = await useAuth(localToken);
+      const storedUser = sessionStorage.getItem('openim_user');
+      const userData = storedUser ? JSON.parse(storedUser) : {};
+
+      // Update stored user data with new token
+      const newUserData = {
+        ...userData,
+        token: authData.token,
+        userID: authData.UserID,
+        platformID: authData.PlatformID
+      };
+
+      sessionStorage.setItem('openim_user', JSON.stringify(newUserData));
+
+      // Attempt to login with new token
+      await IMSDK.login({
+        platformID: authData.PlatformID,
+        userID: authData.UserID,
+        token: authData.token,
+        apiAddr: config.CHAT_OPENIM_API_DOMAIN,
+        wsAddr: config.CHAT_OPENIM_WS_DOMAIN
+      });
+
+      connectionState.retries = 0;
+      console.log('[OpenIM] Successfully reconnected with refreshed token');
+    } catch (refreshError) {
+      console.error('[OpenIM] Token refresh failed:', refreshError);
     }
-  });
+  };
+
+  const handleKickedOffline = async () => {
+    console.warn('[OpenIM] User was kicked offline');
+
+    // Clear the user data
+    sessionStorage.removeItem('openim_user');
+
+    // Attempt to re-authenticate and reconnect
+    console.log(
+      '[OpenIM] Attempting to re-authenticate after being kicked offline...'
+    );
+    await attemptTokenRefresh();
+  };
+
+  // Register event handlers
+  IMSDK.on(CbEvents.OnConnecting, handleConnecting);
+  IMSDK.on(CbEvents.OnConnectSuccess, handleConnectSuccess);
+  IMSDK.on(CbEvents.OnConnectFailed, handleConnectFailed);
+  IMSDK.on(CbEvents.OnKickedOffline, handleKickedOffline);
+
+  // Notification and conversation updates
+  const batchUpdateConversations = createDebouncedFunction((ev: any) => {
+    const data = ev.data || [];
+    updateConversationList(data.filter((item: any) => !item.groupID));
+    updateGroupList(data.filter((item: any) => !!item.groupID));
+  }, 100);
 
   IMSDK.on(CbEvents.OnTotalUnreadMessageCountChanged, ev => {
     const count = ev.data;
     setAllNotificationCount(count);
   });
 
-  const batchUpdateConversations = debounce(ev => {
-    const data = ev.data || [];
-    updateConversationList(data.filter(item => !item.groupID));
-    updateGroupList(data.filter(item => !!item.groupID));
-  }, 100);
-
   IMSDK.on(CbEvents.OnConversationChanged, batchUpdateConversations);
 
-  const batchProcessMessages = debounce(evt => {
+  const batchProcessMessages = createDebouncedFunction((evt: any) => {
     try {
       const payload = evt?.data;
       if (!payload) return;
@@ -164,11 +208,8 @@ const setupOpenIM = (): void => {
 
       if (Array.isArray(payload)) {
         list = payload as ProcessedMessage[];
-      } else if (
-        (payload as any)?.messageList &&
-        Array.isArray((payload as any).messageList)
-      ) {
-        list = (payload as any).messageList;
+      } else if (payload?.messageList && Array.isArray(payload.messageList)) {
+        list = payload.messageList;
       } else {
         list = [payload as ProcessedMessage];
       }
@@ -180,6 +221,7 @@ const setupOpenIM = (): void => {
 
       const batchSize = 10;
       let enableAudio = false;
+
       for (let i = 0; i < list.length; i += batchSize) {
         const batch = list.slice(i, i + batchSize);
 
@@ -202,13 +244,11 @@ const setupOpenIM = (): void => {
             currentProcessedMessage as OpenIMMessage
           );
 
-          // Keep track of the last processed message for the enableAudio logic
           processedMessage = currentProcessedMessage;
         }
 
         if (!enableAudio && processedMessage) {
           const user = getAuthUser();
-
           enableAudio =
             !processedMessage.notificationElem &&
             processedMessage.sendID !== user.userID;
@@ -232,13 +272,9 @@ const setupOpenIM = (): void => {
 
   IMSDK.on(CbEvents.OnRecvNewMessages, batchProcessMessages);
 
-  IMSDK.on(CbEvents.OnKickedOffline, () => {
-    console.warn('[OpenIM] User was kicked offline');
-    sessionStorage.removeItem('openim_user');
-  });
-
-  const batchProcessReadReceipts = debounce(evt => {
-    const receipts = evt.data as any as Array<{
+  // Read receipts processing
+  const batchProcessReadReceipts = createDebouncedFunction((evt: any) => {
+    const receipts = evt.data as Array<{
       conversationID: string;
       clientMsgID: string;
       readTime: number;
@@ -258,8 +294,6 @@ const setupOpenIM = (): void => {
 
       const updatedMsgs = msgs.map(msg => {
         if (msgIdSet.has(msg.clientMsgID)) {
-          // Update the isReadByPeer property that the UI expects for sent messages
-          // When a read receipt is received, it means the peer has read the message
           return {
             ...msg,
             isReadByPeer: true
@@ -336,21 +370,63 @@ const withTimeout = <T>(
   ]);
 };
 
+// Message sending type definitions
+type MessageSendingParams = {
+  to: string;
+  groupId: string;
+  message?: string;
+  type?: 'text' | 'file' | 'image';
+  file?: File;
+};
+
+type MessageContentType = 101 | 102 | 105; // 101:text, 102:image, 105:file
+type SessionType = 1 | 3; // 1: single chat, 3: group chat
+
+// Helper function to determine content type based on message type
+const getContentType = (type: string): MessageContentType => {
+  switch (type) {
+    case 'text':
+      return 101;
+    case 'image':
+      return 102;
+    case 'file':
+      return 105;
+    default:
+      throw new Error('Unsupported message type');
+  }
+};
+
+// Helper function to determine session type based on to and groupId
+const getSessionType = (to: string, groupId: string): SessionType => {
+  // 1: single chat (when 'to' is provided), 3: group chat (when 'groupId' is provided)
+  return groupId ? 3 : 1;
+};
+
+// Helper function to determine conversation ID
+const determineConversationId = (to: string, groupId: string): string => {
+  if (groupId) {
+    return `sg_${groupId}`;
+  } else if (to) {
+    const senderId = sessionStorage.getItem('openim_user')
+      ? JSON.parse(sessionStorage.getItem('openim_user')!).userID
+      : 'temp_sender';
+    const [smallerUserID, largerUserID] = [senderId, to].sort();
+    return `si_${smallerUserID}_${largerUserID}`;
+  }
+  throw new Error('Could not determine conversation ID for message');
+};
+
 export const sendMessageIM = async ({
   to,
   groupId,
   message,
   type = 'text',
   file
-}: {
-  to: string;
-  groupId: string;
-  message?: string;
-  type?: 'text' | 'file' | 'image';
-  file?: File;
-}): Promise<void> => {
+}: MessageSendingParams): Promise<void> => {
   const clientMsgID = generateUUID();
   const TIMEOUT_DURATION = 15000;
+  const contentType = getContentType(type);
+  const sessionType = getSessionType(to, groupId);
 
   if (!to && !groupId) {
     const error = new Error(
@@ -388,24 +464,12 @@ export const sendMessageIM = async ({
       isRead: false,
       isReadByPeer: false,
       msgFrom: 0,
-      contentType: type === 'text' ? 101 : type === 'image' ? 102 : 105, // 101:text, 102:image, 105:file
+      contentType,
       seq: 0,
-      sessionType: to ? 1 : 3 // 1: single chat, 3: group chat
+      sessionType
     };
 
-    // Determine conversation ID
-    let convId = '';
-    if (groupId) {
-      convId = `sg_${groupId}`;
-    } else if (to) {
-      // In a real scenario, we would have the sender's ID, but at this point
-      // we might not have it. We'll use a placeholder or get it from session storage
-      const senderId = sessionStorage.getItem('openim_user')
-        ? JSON.parse(sessionStorage.getItem('openim_user')!).userID
-        : 'temp_sender';
-      const [smallerUserID, largerUserID] = [senderId, to].sort();
-      convId = `si_${smallerUserID}_${largerUserID}`;
-    }
+    const convId = determineConversationId(to, groupId);
 
     // Add to outgoing queue for when connection is restored
     addToOutgoingMessageQueue(convId, tempMsg);
@@ -556,20 +620,7 @@ export const sendMessageIM = async ({
     );
 
     // Determine the conversation ID based on message type
-    let convId = '';
-    if (groupId) {
-      // For group messages
-      convId = `sg_${groupId}`;
-    } else if (to) {
-      // For single chat messages
-      // Use the sender and receiver IDs to construct the conversation ID
-      const senderId = res.data.sendID;
-      const receiverId = res.data.recvID || to;
-      const [smallerUserID, largerUserID] = [senderId, receiverId].sort();
-      convId = `si_${smallerUserID}_${largerUserID}`;
-    } else {
-      throw new Error('Could not determine conversation ID for message');
-    }
+    const convId = determineConversationId(to, groupId);
 
     appendMessageToLocal(convId, res.data);
 
@@ -600,24 +651,12 @@ export const sendMessageIM = async ({
       isRead: false,
       isReadByPeer: false,
       msgFrom: 0,
-      contentType: type === 'text' ? 101 : type === 'image' ? 102 : 105, // 101:text, 102:image, 105:file
+      contentType,
       seq: 0,
-      sessionType: to ? 1 : 3 // 1: single chat, 3: group chat
+      sessionType
     };
 
-    // Determine conversation ID
-    let convId = '';
-    if (groupId) {
-      convId = `sg_${groupId}`;
-    } else if (to) {
-      // In a real scenario, we would have the sender's ID, but at this point
-      // we might not have it. We'll use a placeholder or get it from session storage
-      const senderId = sessionStorage.getItem('openim_user')
-        ? JSON.parse(sessionStorage.getItem('openim_user')!).userID
-        : 'temp_sender';
-      const [smallerUserID, largerUserID] = [senderId, to].sort();
-      convId = `si_${smallerUserID}_${largerUserID}`;
-    }
+    const convId = determineConversationId(to, groupId);
 
     // Add to outgoing queue for when connection is restored
     addToOutgoingMessageQueue(convId, tempMsg);
@@ -630,6 +669,22 @@ export const sendMessageIM = async ({
   }
 };
 
+// Helper function to extract recipient ID from conversation ID
+const extractRecipientId = (conversationId: string): string => {
+  if (!conversationId.startsWith('si_')) return '';
+
+  const parts = conversationId.substring(3).split('_');
+  if (parts.length !== 2) return '';
+
+  const [userId1, userId2] = parts;
+  // Use the session storage to get current user ID to determine the recipient
+  const currentUserId = sessionStorage.getItem('openim_user')
+    ? JSON.parse(sessionStorage.getItem('openim_user')!).userID
+    : '';
+
+  return currentUserId === userId1 ? userId2 : userId1;
+};
+
 const retryQueuedMessages = async (): Promise<void> => {
   // Create a copy of the queue to avoid modifying during iteration
   const queueCopy = { ...outgoingMessageQueue.value };
@@ -638,30 +693,17 @@ const retryQueuedMessages = async (): Promise<void> => {
     if (queuedMessages && queuedMessages.length > 0) {
       // Process each message in the queue for this conversation
       for (const message of [...queuedMessages]) {
-        // Create a copy to avoid reference issues
         try {
           // Determine if this is a group or single chat
           const isGroupChat = conversationId.startsWith('sg_');
-          const groupId = isGroupChat ? conversationId.substring(3) : '';
-          // For single chat, we need to extract the receiver ID from the conversation ID
-          let to = '';
-          if (!isGroupChat && conversationId.startsWith('si_')) {
-            const parts = conversationId.substring(3).split('_');
-            if (parts.length === 2) {
-              const [userId1, userId2] = parts;
-              // Use the session storage to get current user ID to determine the recipient
-              const currentUserId = sessionStorage.getItem('openim_user')
-                ? JSON.parse(sessionStorage.getItem('openim_user')!).userID
-                : '';
-              to = currentUserId === userId1 ? userId2 : userId1;
-            }
-          }
+          const actualGroupId = isGroupChat ? conversationId.substring(3) : '';
+          const to = isGroupChat ? '' : extractRecipientId(conversationId);
 
           // Determine the message type and content
           if (message.textElem?.content) {
             await sendMessageIM({
               to,
-              groupId,
+              groupId: actualGroupId,
               message: message.textElem.content,
               type: 'text'
             });
@@ -707,25 +749,34 @@ const getOrGeneratePlatformId = (): number => {
   }
 };
 
+interface GetMessageListParams {
+  conversationID: string;
+  startClientMsgID: string;
+  count: number;
+  viewType: number;
+}
+
 const getMessagesByConversationId = async (
   conversationId: string,
   lastClientMsgID: string = ''
-): Promise<any[]> => {
+): Promise<OpenIMMessage[]> => {
   const TIMEOUT_DURATION = 15000;
 
   try {
+    const params: GetMessageListParams = {
+      conversationID: conversationId,
+      startClientMsgID: lastClientMsgID,
+      count: 50,
+      viewType: 0
+    };
+
     const response = await withTimeout(
-      IMSDK.getAdvancedHistoryMessageList({
-        conversationID: conversationId,
-        startClientMsgID: lastClientMsgID,
-        count: 50,
-        viewType: 0
-      }),
+      IMSDK.getAdvancedHistoryMessageList(params),
       TIMEOUT_DURATION,
       'getAdvancedHistoryMessageList'
     );
 
-    const messages = response.data.messageList || [];
+    const messages: OpenIMMessage[] = response.data.messageList || [];
     if (lastClientMsgID) {
       appendOldMessagesToLocal(conversationId, messages);
     } else {
@@ -757,6 +808,10 @@ const getMessagesByConversationId = async (
     return [];
   }
 };
+
+interface MarkAsReadError extends Error {
+  errCode?: number;
+}
 
 const markAsRead = async (conversationID: string) => {
   const TIMEOUT_DURATION = 10000;
@@ -796,18 +851,20 @@ const markAsRead = async (conversationID: string) => {
 
     saveMessagesToLocal(conversationID, updatedMessages);
   } catch (error: any) {
+    const typedError = error as MarkAsReadError;
+
     // Check if it's the specific RecordNotFoundError (errCode 1004)
-    if (error?.errCode === 1004) {
+    if (typedError?.errCode === 1004) {
       console.warn(
         `[OpenIM] Conversation not found when trying to mark messages as read (conversationID: ${conversationID}):`,
-        error
+        typedError
       );
       // Don't throw the error, just log it as a warning since it's an expected scenario
       return;
     } else {
-      console.error('[OpenIM] Failed to mark messages as read:', error);
+      console.error('[OpenIM] Failed to mark messages as read:', typedError);
       // Re-throw other errors as they might be actual issues
-      throw error;
+      throw typedError;
     }
   }
 };
@@ -821,7 +878,6 @@ const saveMessagesToLocal = (
   conversationId: string,
   messages: OpenIMMessage[]
 ): void => {
-  // Ensure all messages have the isReadByPeer property properly initialized
   const messagesWithDefaults = messages.map(msg => ({
     ...msg,
     isReadByPeer: msg.isReadByPeer ?? false
@@ -854,23 +910,19 @@ interface OpenIMMessageWithLoading extends OpenIMMessage {
 const getMessagesWithLoadingStatus = (
   conversationId: string
 ): OpenIMMessageWithLoading[] => {
-  // Return cached messages from the store, and if service is disconnected,
-  // add loading status to messages
   const cachedMessages = getSavedMessages(conversationId);
   const hasConnection = !getIsWebsocketConnecting();
 
   let finalMessages = [...cachedMessages];
 
   if (!hasConnection) {
-    // When service is disconnected, mark existing messages as loading
     finalMessages = finalMessages.map(msg => ({
       ...msg,
-      isReadByPeer: msg.isReadByPeer ?? false, // Ensure isReadByPeer is preserved
-      status: 1, // Mark as loading/sending
+      isReadByPeer: msg.isReadByPeer ?? false,
+      status: 1,
       loading: true
     }));
 
-    // Include any messages that were queued for sending but couldn't be sent
     const queuedMessages = getOutgoingMessageQueue(conversationId);
     finalMessages = [...finalMessages, ...queuedMessages];
   }
@@ -882,7 +934,6 @@ const appendMessageToLocal = (
   conversationId: string,
   message: OpenIMMessage
 ): void => {
-  // Ensure the isReadByPeer property is initialized for sent messages
   const messageWithDefaults = {
     ...message,
     isReadByPeer: message.isReadByPeer ?? false
@@ -897,7 +948,6 @@ const appendOldMessagesToLocal = (
   conversationId: string,
   messages: OpenIMMessage[]
 ): void => {
-  // Ensure the isReadByPeer property is initialized for sent messages
   const messagesWithDefaults = messages.map(msg => ({
     ...msg,
     isReadByPeer: msg.isReadByPeer ?? false
