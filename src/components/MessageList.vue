@@ -58,9 +58,6 @@
       >
         <div
           class="top-element"
-          :data-divider="
-            isNewDate(index) ? formatDay(message.sendTime) : undefined
-          "
           v-if="
             isNewDate(index) ||
             message.isSystemMessage ||
@@ -214,7 +211,6 @@ const scrollState = reactive({
 const scrollToBottom = (smooth: boolean = false): void => {
   if (!chatWrapperRef?.value || !scrollState.shouldAutoScroll) return;
 
-  // Ensure DOM is updated before scrolling
   nextTick().then(() => {
     requestAnimationFrame(() => {
       if (chatWrapperRef.value) {
@@ -315,9 +311,7 @@ watch(
   () => props.contact?.conversationId,
   async (newConversationId, oldConversationId) => {
     if (newConversationId && newConversationId !== oldConversationId) {
-      // Reset messages when changing conversations
       state.messages = [];
-      // Load messages for the new conversation
       if (!getIsWebsocketConnecting()) {
         await getMessagesByConversationId(newConversationId, '');
       }
@@ -326,7 +320,7 @@ watch(
       await nextTick();
       requestAnimationFrame(() => {
         if (chatWrapperRef?.value) {
-          scrollToBottom(false); // Direct scroll when changing conversations
+          scrollToBottom(false);
           scrollState.shouldAutoScroll = true;
           scrollState.isInitialLoad = true;
         }

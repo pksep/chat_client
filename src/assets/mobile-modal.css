@@ -34,7 +34,7 @@ h3.mobile__modal-header--title {
   padding: 10px;
 }
 
-@media (width >= 412px) {
+@media (width >= 450px) {
   .modal-yui-kit__modal-content {
     width: 387px;
   }

@@ -115,6 +115,7 @@ summary.menu__user-details-summary {
     display: none;
   }
   & svg.icon-yui-kit {
+    color: var(--text-grey);
     font-size: 12px;
   }
   & h4.menu__user-details-summary--title {

@@ -93,7 +93,7 @@ button.primary-yui-kit.disabled-yui-kit {
   background-color: var(--neutral-button);
 }
 
-@media screen and (width <= 412px) {
+@media screen and (width <= 450px) {
   .chat__info {
     display: none;
   }
@@ -124,7 +124,7 @@ button.primary-yui-kit.disabled-yui-kit {
   }
 }
 
-@media screen and (width <= 412px) {
+@media screen and (width <= 450px) {
   .chat-container {
     background-color: var(--white);
   }

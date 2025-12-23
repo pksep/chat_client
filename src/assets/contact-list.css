@@ -33,6 +33,7 @@
   grid-area: d;
   justify-self: start;
   height: 19px;
+  font-size: 14px;
   color: var(--text-grey);
 }
 
@@ -136,7 +137,7 @@ svg.icon-yui-kit.contact-list__read-icon {
   font-size: 16px;
 }
 
-@media (width <= 412px) {
+@media (width <= 450px) {
   .contact-list__item {
     --size-avatar: 30px;
   }
