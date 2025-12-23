@@ -21,5 +21,5 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
           script: |
-            BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/})
-            cd ~/erp_k8s/erp_k8s/ && make switch-branch APP=ai-client BRANCH=$BRANCH_NAME
+            echo "Target branch is: $GITHUB_REF_NAME"
+            cd ~/erp_k8s/erp_k8s/ && make switch-branch APP=ai-client BRANCH=$GITHUB_REF_NAME
