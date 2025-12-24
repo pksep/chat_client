@@ -18,7 +18,7 @@ export function useAndroidBackButton(
   } = options;
 
   const handlePopState = (event: PopStateEvent) => {
-    // Prevent default browser back behavior
+    // Prevent default browser back/forward behavior
     event.preventDefault();
 
     // Call the custom back handler if provided
@@ -36,7 +36,7 @@ export function useAndroidBackButton(
       window.history.pushState(state, title, window.location.href);
     }
 
-    // Listen for popstate events (triggered by back button)
+    // Listen for popstate events (triggered by back/forward button)
     window.addEventListener('popstate', handlePopState);
   });
 
@@ -45,6 +45,24 @@ export function useAndroidBackButton(
     window.removeEventListener('popstate', handlePopState);
   });
 
+  // Function to add new state to history
+  const addToHistoryState = (
+    newState: any = null,
+    newTitle: string = document.title,
+    url: string = window.location.href
+  ) => {
+    window.history.pushState(newState, newTitle, url);
+  };
+
+  // Function to replace current state
+  const replaceCurrentState = (
+    newState: any = null,
+    newTitle: string = document.title,
+    url: string = window.location.href
+  ) => {
+    window.history.replaceState(newState, newTitle, url);
+  };
+
   // Function to navigate to main screen
   const navigateToMainScreen = () => {
     // Replace current state with main screen
@@ -52,6 +70,8 @@ export function useAndroidBackButton(
   };
 
   return {
-    navigateToMainScreen
+    navigateToMainScreen,
+    addToHistoryState,
+    replaceCurrentState
   };
 }

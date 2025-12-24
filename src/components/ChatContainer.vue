@@ -178,6 +178,16 @@ const state = reactive({
   conversations: getConversationList()
 });
 
+// Store the reference to the back button composable
+let backButtonHandler: {
+  navigateToMainScreen: () => void;
+  addToHistoryState: (newState: any, newTitle: string, url: string) => void;
+  replaceCurrentState: (newState: any, newTitle: string, url: string) => void;
+} | null = null;
+
+// Track the previous state for back button functionality
+let previousChapter: string | null = null;
+
 const props = withDefaults(defineProps<IChatContainerProps>(), {
   dataTestid: 'ChatContainer'
 });
@@ -261,9 +271,9 @@ const unmountHeaderMenuChapter = (
     ) {
       state.contact = null;
       state.isChapter = false;
-      return;
+    } else {
+      state.isChapter = true;
     }
-    state.isChapter = true;
   } else if (config && config.nickname) {
     state.chapter = config.nickname;
     state.contact = config;
@@ -285,11 +295,11 @@ const findContactOrGroupById = (id: string) => {
 const unmountMenuChapter = (
   config: { contact: IUserProps; groupId?: string } | string | null
 ): void => {
-  state.isChapter = true;
   if (typeof config === 'string') {
     state.chapter = config;
     if (config === 'ai') {
       state.contact = null;
+      state.isChapter = false;
     } else {
       const foundContact = findContactOrGroupById(config);
       if (foundContact) {
@@ -300,10 +310,11 @@ const unmountMenuChapter = (
         }
 
         state.contact = { ...foundContact, conversationId: foundContact.id };
-        state.chapter = config;
+        state.isChapter = true;
       } else {
         state.contact = null;
         state.chapter = null;
+        state.isChapter = false;
       }
     }
   } else if (config && config.contact) {
@@ -315,9 +326,11 @@ const unmountMenuChapter = (
 
     state.chapter = config.contact.nickname;
     state.contact = config.contact;
+    state.isChapter = true;
   } else {
     state.chapter = null;
     state.contact = null;
+    state.isChapter = false;
   }
 };
 
@@ -391,20 +404,70 @@ const handleChangeContact = (contact: IUserProps): void => {
   state.contact = contact;
 };
 
+// Update navigation history when chapter changes
+watch(
+  () => state.chapter,
+  (newChapter, oldChapter) => {
+    if (isMobile.value && newChapter !== oldChapter) {
+      previousChapter = oldChapter;
+
+      // Add to browser history stack so back/forward buttons work
+      if (backButtonHandler) {
+        backButtonHandler.addToHistoryState(
+          { chapter: newChapter },
+          `Chat - ${newChapter}`,
+          window.location.href
+        );
+      }
+    }
+  }
+);
+
 const handleExit = (): void => {
   state.chapter = 'assistant';
   state.isChapter = false;
 };
 
-useAndroidBackButton({
+const navigateToChapter = (chapter: string): void => {
+  // Set the chapter and update isChapter based on the chapter type
+  state.chapter = chapter;
+  if (
+    chapter === 'channels' ||
+    chapter === 'dialogs' ||
+    chapter === 'assistant' ||
+    chapter === 'ai'
+  ) {
+    state.contact = null;
+    state.isChapter = false;
+  } else {
+    // If it's a specific contact/conversation, set isChapter to true
+    state.isChapter = true;
+  }
+
+  // Close any open modals
+  state.isMenuMobileOpen = false;
+  state.isNewContactOpen = false;
+  state.isNewGroupOpen = false;
+};
+
+// Initialize the back button handler with a reference so we can use its methods
+backButtonHandler = useAndroidBackButton({
   onBack: () => {
     if (isMobile.value) {
-      state.chapter = 'assistant';
-      state.contact = null;
-      state.isChapter = false;
-      state.isMenuMobileOpen = false;
-      state.isNewContactOpen = false;
-      state.isNewGroupOpen = false;
+      // If we have a previous chapter, navigate back to it
+      if (previousChapter) {
+        navigateToChapter(previousChapter);
+        // Reset previous chapter after navigation
+        previousChapter = null;
+      } else {
+        // If no previous chapter, go to assistant or exit the app
+        state.chapter = 'assistant';
+        state.contact = null;
+        state.isChapter = false;
+        state.isMenuMobileOpen = false;
+        state.isNewContactOpen = false;
+        state.isNewGroupOpen = false;
+      }
     }
   }
 });
@@ -413,6 +476,8 @@ onMounted(() => {
   if (isMobile.value) {
     state.isChapter = false;
     state.chapter = 'assistant';
+    // Initialize previous chapter tracking
+    previousChapter = null;
     return;
   }
   state.isChapter = state.chapter === 'ai' || state.contact !== null;
