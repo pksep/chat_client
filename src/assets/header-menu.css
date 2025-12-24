@@ -9,6 +9,8 @@
   .header-menu__list {
     display: flex;
     justify-content: center;
+    align-items: center;
+    align-content: center;
     gap: 36px;
     border-bottom-style: solid;
     border-bottom-width: 1px;
@@ -28,7 +30,7 @@
   }
   li.header-menu__item {
     position: relative;
-    padding: 8px 14px;
+    padding: 5px 14px;
     &:first-child {
       margin-left: 10px;
     }
