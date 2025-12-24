@@ -1,49 +1,48 @@
 <template>
-  <template v-if="props.chapter === 'ai'">
-    <div
-      class="chat__message-wrapper"
-      ref="chatWrapperRef"
-      v-if="aiMessages.length"
-      :data-testid="`${props.dataTestid}-MessageList-AIMessagesWrapper`"
-    >
-      <div
-        class="chat__message-bubble"
-        :data-testid="`${props.dataTestid}-MessageList-AIMessagesContainer`"
-      >
-        <template v-for="(message, index) in aiMessages" :key="index">
-          <div
-            v-if="isNewDate(index, true)"
-            class="top-element"
-            :data-divider="
-              isNewDate(index, true) ? formatDay(message.timestamp) : undefined
-            "
-          >
-            <div
-              class="date-divider"
-              :data-testid="`${props.dataTestid}-MessageList-DateDividerAI${index + 1}`"
-            >
-              <span
-                :data-testid="`${props.dataTestid}-MessageList-DateLabelAI${index + 1}`"
-                >{{ formatDay(message.timestamp) }}</span
-              >
-            </div>
-          </div>
-          <MessageBubble
-            :class="messageChat(message.role)"
-            :message="message.content || ''"
-            :author="message.role"
-            :time="formatTime(new Date(message.timestamp))"
-            :loader="message.loading"
-            :is-me-sender="message.role === 'user'"
-            :data-testid="`${props.dataTestid}-MessageList-MessageBubbleAI${index + 1}`"
-          />
-        </template>
-      </div>
-    </div>
-  </template>
   <div
     class="chat__message-wrapper"
-    v-if="state.messages.length"
+    ref="chatWrapperRef"
+    v-if="props.chapter === 'ai'"
+    :data-testid="`${props.dataTestid}-MessageList-AIMessagesWrapper`"
+  >
+    <div
+      class="chat__message-bubble"
+      :data-testid="`${props.dataTestid}-MessageList-AIMessagesContainer`"
+    >
+      <template v-for="(message, index) in state.aiMessages" :key="index">
+        <div
+          v-if="isNewDate(index, true)"
+          class="top-element"
+          :data-divider="
+            isNewDate(index, true) ? formatDay(message.timestamp) : undefined
+          "
+        >
+          <div
+            class="date-divider"
+            :data-testid="`${props.dataTestid}-MessageList-DateDividerAI${index + 1}`"
+          >
+            <span
+              :data-testid="`${props.dataTestid}-MessageList-DateLabelAI${index + 1}`"
+              >{{ formatDay(message.timestamp) }}</span
+            >
+          </div>
+        </div>
+        <MessageBubble
+          :class="messageChat(message.role)"
+          :message="message.content || ''"
+          :author="message.role"
+          :time="formatTime(new Date(message.timestamp))"
+          :loader="message.loading"
+          :is-me-sender="message.role === 'user'"
+          :data-testid="`${props.dataTestid}-MessageList-MessageBubbleAI${index + 1}`"
+        />
+      </template>
+    </div>
+  </div>
+
+  <div
+    class="chat__message-wrapper"
+    v-if="state.messages.length && props.chapter !== 'ai'"
     ref="chatWrapperRef"
     @scroll="handleScroll"
     :data-testid="`${props.dataTestid}-MessageList-UserMessagesWrapper`"
@@ -118,7 +117,7 @@
     :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
     v-if="
       !state.messages.length &&
-      !aiMessages.length &&
+      !state.aiMessages.length &&
       !getIsWebsocketConnecting()
     "
   />
@@ -152,7 +151,7 @@ import {
 import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
 import { ContentEditor } from '@pksep/yui';
-import { useMastra } from '../services/useMastra';
+import { useMastra, generateChatId } from '../services/useMastra';
 import { removeMessageLoading } from '../services/useChatDb';
 import {
   getMessagesByConversationId,
@@ -187,9 +186,10 @@ const inputText = ref('');
 
 const state = reactive({
   messages: [] as OpenIMMessageWithLoading[],
-  chatId: null as string | null,
+  chatId: null as string | null, // Initialize as null, will be set when needed
   hasMoreMessages: true, // Flag to track if there are more messages to load
-  isLoadingMore: false // Flag to prevent multiple simultaneous requests
+  isLoadingMore: false, // Flag to prevent multiple simultaneous requests
+  aiMessages: [] as AIMessage[]
 });
 
 // Flag to prevent multiple simultaneous message loads
@@ -354,25 +354,97 @@ watch(
   }
 );
 
-const mastraResult = useMastra(
-  props.chapter === 'ai' && state.chatId
-    ? {
-        agentId: 'generalAgent',
-        chatId: state.chatId,
-        baseUrl: props.baseUrl
-      }
-    : false
-);
+// Reactive references for Mastra service
+const mastraResult = ref(null as any);
 
-const aiMessages = computed<AIMessage[]>(() => {
-  if (mastraResult.messages) {
-    return mastraResult.messages.value;
+// Initialize Mastra when chatId and baseUrl are available
+const initializeMastra = () => {
+  if (state.chatId && props.baseUrl) {
+    const result = useMastra({
+      agentId: 'generalAgent',
+      chatId: state.chatId,
+      baseUrl: props.baseUrl
+    });
+    mastraResult.value = result;
+    state.aiMessages = result.messages.value;
+  } else {
+    const result = useMastra(false);
+    mastraResult.value = result;
+    state.aiMessages = result.messages.value;
   }
-  return [];
+};
+
+// Initialize Mastra service
+initializeMastra();
+
+// Watch for changes in chatId and baseUrl to re-initialize Mastra
+watch([() => state.chatId, () => props.baseUrl], () => {
+  initializeMastra();
 });
 
-const sendMessage = mastraResult.sendMessage;
-const clearAiMessages = mastraResult.clearMessages;
+// Watch for changes in Mastra messages to update our local state
+watch(
+  () => mastraResult.value?.messages?.value,
+  newMessages => {
+    if (newMessages) {
+      state.aiMessages = newMessages;
+    }
+  },
+  { deep: true }
+);
+
+const sendMessage = async (
+  input: string,
+  onFinish?: () => void,
+  abortSignal?: AbortSignal
+) => {
+  if (mastraResult.value && mastraResult.value.sendMessage && !mastraResult.value.isInitializing?.value) {
+    try {
+      // Try sending via Mastra and handle errors
+      await mastraResult.value.sendMessage(input, onFinish, abortSignal);
+    } catch (error) {
+      console.warn('Mastra failed, adding message locally:', error);
+      addLocalAIMessage(input);
+      onFinish?.();
+    }
+  } else {
+    // If Mastra is not available or initializing, just add the message locally to the UI
+    console.warn('Mastra is not available, adding message locally');
+    addLocalAIMessage(input);
+    onFinish?.();
+  }
+};
+
+// Function to add a local AI message when Mastra is not available
+const addLocalAIMessage = (text: string) => {
+  if (!text.trim()) return;
+
+  // Add user message to local state
+  const userMessage = {
+    role: 'user',
+    content: text,
+    timestamp: Date.now()
+  };
+
+  state.aiMessages = [...state.aiMessages, userMessage];
+
+  // Add a placeholder assistant message to show loading state
+  const assistantMessage = {
+    role: 'assistant',
+    content: 'Mastra is currently unavailable. Please try again later.',
+    timestamp: Date.now()
+  };
+
+  state.aiMessages = [...state.aiMessages, assistantMessage];
+};
+
+const clearAiMessages = () => {
+  if (mastraResult.value) {
+    return mastraResult.value.clearMessages();
+  }
+};
+
+// aiMessages is now available as state.aiMessages
 
 const messageChat = (role: string) => [
   'message__bubble',
@@ -381,7 +453,7 @@ const messageChat = (role: string) => [
 
 const handleNewMessages = debounce(
   async (newLength: number, oldLength: number) => {
-    if (props.chapter === 'ai' || !state.messages.length) return;
+    if (props.chapter === 'ai') return;
 
     await nextTick();
 
@@ -433,6 +505,8 @@ watch(
       scrollState.previousScrollTop = chatWrapperRef.value.scrollTop;
     }
 
+    // Only reset regular messages when switching from/to non-AI chapters
+    // Keep AI messages available across all chapters
     if (
       props.chapter !== 'ai' &&
       props.contact?.conversationId &&
@@ -454,7 +528,7 @@ watch(
         updateMessages();
         isLoadingInitialMessages = false;
       }
-    } else {
+    } else if (props.chapter !== 'ai') {
       state.messages = [];
     }
 
@@ -481,12 +555,28 @@ const handleClear = (): void => {
 const handleSend = async (): Promise<void> => {
   if (!inputText.value.trim()) return;
 
+  // Send to AI if we're in AI chapter
   if (props.chapter === 'ai') {
     const text = inputText.value;
     inputText.value = '';
-    await sendMessage(text, () => {
+
+    // Add message locally first
+    addLocalAIMessage(text);
+
+    // Try to send via Mastra as well
+    if (mastraResult.value && mastraResult.value.sendMessage) {
+      try {
+        await mastraResult.value.sendMessage(text, () => {
+          requestAnimationFrame(() => scrollToBottom(true));
+        });
+      } catch (error) {
+        console.warn('Mastra failed to send message:', error);
+        // Message is already added locally, so we're good
+      }
+    } else {
+      console.warn('Mastra is not available, message added locally only');
       requestAnimationFrame(() => scrollToBottom(true));
-    });
+    }
     return;
   }
 
@@ -618,8 +708,8 @@ const isNewDate = (index: number, isMastra: boolean = false) => {
 
   // Use direct access to avoid repeated property lookups
   if (isMastra) {
-    const currentMsg = aiMessages.value[index];
-    const prevMsg = aiMessages.value[index - 1];
+    const currentMsg = state.aiMessages[index];
+    const prevMsg = state.aiMessages[index - 1];
     // Direct comparison to avoid variable assignments
     return formatDay(currentMsg.timestamp) !== formatDay(prevMsg.timestamp);
   } else {
@@ -636,6 +726,11 @@ const getSystemMessageContent = message => {
 };
 
 onMounted(async () => {
+  // Initialize chatId for AI functionality if not already set
+  if (!state.chatId) {
+    state.chatId = generateChatId();
+  }
+
   if (props.contact?.conversationId) {
     // Reset state for new conversation
     state.messages = [];
@@ -667,7 +762,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (state.chatId) {
-    removeMessageLoading(state.chatId, aiMessages.value.length);
+    removeMessageLoading(state.chatId, state.aiMessages.length);
   }
 });
 

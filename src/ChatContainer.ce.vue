@@ -55,22 +55,10 @@ onMounted(async () => {
       wsAddr
     });
 
-    sessionStorage.setItem(
-      'openim_user',
-      JSON.stringify({
-        platformID: authData.PlatformID,
-        userID: authData.UserID,
-        token: authData.token,
-        apiAddr,
-        wsAddr
-      })
-    );
-
     await Promise.all([fetchAuthUser(), fetchAllUsers()]);
 
     setupOpenIM();
 
-    // Initialize conversation list after SDK is ready
     await fetchConversationList();
 
     markSDKReady();

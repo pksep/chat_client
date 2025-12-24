@@ -34,7 +34,7 @@
     />
     <Chat
       :user="authUser"
-      :base-url="props.baseUrl"
+      :base-url="props.config.CHAT_MASTRA_URL"
       :chapter="state.chapter"
       :contacts="filteredContacts"
       :contact="state.contact"
@@ -396,12 +396,9 @@ const handleExit = (): void => {
   state.isChapter = false;
 };
 
-// Handle Android back button
 useAndroidBackButton({
   onBack: () => {
-    // If on mobile and in a specific chapter, go back to main screen
     if (isMobile.value) {
-      // Reset to main screen state
       state.chapter = 'assistant';
       state.contact = null;
       state.isChapter = false;

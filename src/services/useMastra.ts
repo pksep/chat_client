@@ -29,8 +29,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
   if (!options) {
     return {
       messages: ref<Message[]>([]),
-      sendMessage: async () => { },
-      clearMessages: () => { },
+      sendMessage: async () => {},
+      clearMessages: () => {},
       isInitializing: ref(false)
     };
   }
@@ -288,7 +288,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
         const newMessages = [...messages.value];
         newMessages[assistantMessageIndex - 1] = {
           ...newMessages[assistantMessageIndex - 1],
-          content: errorMessage
+          content: errorMessage,
+          role: 'assistant' // Keep as assistant but with error content
         };
         messages.value = newMessages;
       }
