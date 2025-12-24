@@ -101,6 +101,7 @@ details.menu__user-details {
   &:not([open])
     summary.menu__user-details-summary
     .menu__user-details-summary-triangle {
+    margin-top: 0px;
     transform: rotate(135deg);
   }
 }
@@ -137,7 +138,8 @@ summary.menu__user-details-summary {
   font-size: 12px;
   margin-left: 0;
   display: inline-block;
-  vertical-align: top;
+  vertical-align: middle;
+  margin-top: 4px;
   text-align: center;
   transition: transform 0.3s ease;
 }
