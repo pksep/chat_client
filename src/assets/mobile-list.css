@@ -27,6 +27,15 @@ button.button-yui-kit.mobile__list-button {
   gap: 10px;
 }
 
+.modal-info-mobile__start
+  > form.menu__info-form
+  > .menu__info-form-block.form__name
+  > fieldset.input-yui-kit:disabled
+  > input.input-yui-kit__input {
+  color: inherit !important;
+  background-color: transparent !important;
+}
+
 @media screen and (width <= 412px) {
   .mobile-list-container {
     --mobile-list-height: 53px;

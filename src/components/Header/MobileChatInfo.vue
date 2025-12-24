@@ -24,10 +24,11 @@
     />
     <NewChatInformationForm
       :model-value="information"
+      disabled-form
       @unmount-save="handleImageSave"
       :data-testid="`${props.dataTestid}-Header-InformationForm`"
     >
-      <template #button></template>
+      <template #button>{{}}</template>
     </NewChatInformationForm>
   </div>
   <div
