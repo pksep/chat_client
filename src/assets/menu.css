@@ -52,6 +52,11 @@
 .menu-user__item {
   --size-avatar: 15px;
   padding: 10px;
+  width: 50px;
+  & .avatar-yui-kit:has(img.avatar-yui-kit__image) {
+    width: 2em !important;
+    height: 2em !important;
+  }
 }
 
 .menu__user-profile {
