@@ -182,10 +182,10 @@ const props = withDefaults(defineProps<IMenuProps>(), {
 
 const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 
+
 const state = reactive({
   chapter: '',
   contactList: computed(() => getConversationList()),
-  groupList: computed(() => getGroupList()),
   selectedContactId: null
 });
 
@@ -285,7 +285,7 @@ const listChannels = computed(() => [
   {
     title: 'Каналы',
     onClickPlusButton: handleNewGroupModal,
-    items: state.groupList
+    items: getGroupList()
   },
   {
     title: 'Личные сообщения',
@@ -298,3 +298,4 @@ onMounted(() => {
   onSDKReady(fetchConversationList);
 });
 </script>
+

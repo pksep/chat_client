@@ -140,7 +140,7 @@ export function useMenuInfo<
           groupId: groupId,
           date,
           name: props.contact.nickname || '',
-          avatarUrl: state.information?.avatarUrl || props.contact.avatarUrl
+          avatarUrl: props.contact.avatarUrl
         };
       }
     }
