@@ -27,7 +27,7 @@ button.button-yui-kit.mobile__list-button {
   gap: 10px;
 }
 
-.modal-info-mobile__start
+.modal-info-mobile__start.modal-info-mobile__start--disabled
   > form.menu__info-form
   > .menu__info-form-block.form__name
   > fieldset.input-yui-kit:disabled

@@ -34,7 +34,7 @@ import { IMenuInfoInformation } from '../../composables/useMenuInfo';
 import { Button, ButtonTypeEnum, Input, SizesEnum, Textarea } from '@pksep/yui';
 import { watch, computed, reactive } from 'vue';
 
-const props = defineProps<{ disabledForm: boolean }>();
+const props = defineProps<{ disabledForm?: boolean }>();
 const model = defineModel<IMenuInfoInformation>();
 
 const emits = defineEmits<{

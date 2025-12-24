@@ -80,6 +80,7 @@
     :data-testid="`${props.dataTestid}-Header-MobileModal`"
   >
     <MobileChatInfo
+      is-menu-info
       :model-value="menuInfoState.information"
       :members="menuInfoState.contacts"
       @update:model-value="handleUpdateInformation"
