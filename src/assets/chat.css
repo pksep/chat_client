@@ -111,7 +111,7 @@ p.chat__nothing-paragraph {
     --basic-height: calc(var(--default-height) - var(--header-height));
   }
 
-  .chat.chat__messages {
+  .chat.chat__messages:not(:has(.chat__input)) {
     margin-top: -22px;
   }
 
@@ -133,5 +133,33 @@ p.chat__nothing-paragraph {
 
   .chat__input {
     max-width: 100%;
+  }
+
+  .chat__input
+    > .editor-component
+    > .mobile-item
+    > .popover-yui-kit
+    > .popover-yui-kit__content {
+    min-width: 230px;
+  }
+  .chat__input
+    > .editor-component
+    > .mobile-item
+    > .popover-yui-kit
+    > .popover-yui-kit__content
+    > .popover-yui-kit__options {
+    padding: 10px;
+    font-size: 18px;
+    line-height: 100%;
+  }
+  .chat__input
+    > .editor-component
+    > .mobile-item
+    > .popover-yui-kit
+    > .popover-yui-kit__content
+    > .popover-yui-kit__options
+    > .popover-yui-kit__options__item {
+    padding-block: 8.5px !important;
+    font-size: 18px;
   }
 }
