@@ -29,18 +29,19 @@ p.chat__nothing-paragraph {
 }
 
 .chat__message-wrapper {
-  padding: 15px;
-  padding-right: 5px;
+  padding: 15px 5px 15px 15px;
   max-height: var(--basic-height);
-  overflow-x: hidden;
   overflow-y: scroll;
+  display: flex;
+  flex-direction: column-reverse;
 }
 
 .chat__message-bubble {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;     
   width: 100%;
   gap: 5px;
+  margin-bottom: auto;
 }
 
 .system-message,

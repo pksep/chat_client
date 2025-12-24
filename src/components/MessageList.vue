@@ -106,7 +106,6 @@
               : message.isRead
           "
           :message-status="message.status"
-          :loader="message.loading"
           :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
         />
       </template>
@@ -272,28 +271,46 @@ const debounce = <T extends (...args: any[]) => any>(
   };
 };
 
+let isScrollLoading = false;
 const handleScroll = throttle((): void => {
-  if (!chatWrapperRef?.value) return;
+  const el = chatWrapperRef.value;
+  if (!el) return;
 
-  const { scrollTop, scrollHeight, clientHeight } = chatWrapperRef.value;
-  const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+  const { scrollTop, scrollHeight, clientHeight } = el;
 
+  const maxScroll = scrollHeight - clientHeight;
+
+  const distanceFromBottom = scrollTop;
+  const distanceFromTop = maxScroll + scrollTop;
   scrollState.shouldAutoScroll = distanceFromBottom < 100;
   scrollState.isUserScrolling = distanceFromBottom >= 100;
-  scrollState.previousScrollTop = scrollTop;
 
   if (scrollState.isInitialLoad) {
     scrollState.isInitialLoad = false;
   }
 
-  // Only load more messages if we haven't reached the end and we're not already loading
   if (
-    scrollTop < 20 &&
-    !state.isLoadingMore &&
-    state.hasMoreMessages &&
+    distanceFromTop < 200 &&
+    !isScrollLoading &&
     props.contact?.conversationId
   ) {
-    state.isLoadingMore = true;
+    isScrollLoading = true;
+
+    if (!getIsWebsocketConnecting()) {
+      getMessagesByConversationId(
+        props.contact.conversationId,
+        state.messages[0]?.clientMsgID
+      )
+        .then(() => {
+          updateMessages();
+        })
+        .finally(() => {
+          isScrollLoading = false;
+        });
+    } else {
+      updateMessages();
+      isScrollLoading = false;
+    }
   }
 }, 100);
 
@@ -318,7 +335,6 @@ watch(
       newConversationId !== oldConversationId &&
       !isLoadingInitialMessages
     ) {
-      // Reset state for new conversation
       state.messages = [];
       state.hasMoreMessages = true;
       state.isLoadingMore = false;
@@ -348,13 +364,11 @@ watch(
   { immediate: true }
 );
 
-// Track the previous connection state to detect when we transition from connecting to connected
 const previousConnectingState = ref(getIsWebsocketConnecting());
 
 watch(
   () => getIsWebsocketConnecting(),
   currentConnectingState => {
-    // When we transition from connecting (true) to connected (false), reload messages
     if (previousConnectingState.value && !currentConnectingState) {
       setTimeout(async () => {
         if (props.contact?.conversationId) {
@@ -368,14 +382,13 @@ watch(
             );
           }
         }
-      }, 300); // Small delay to ensure connection is fully established
+      }, 300);
     }
     previousConnectingState.value = currentConnectingState;
     updateMessages();
   }
 );
 
-// Watch for reconnection events and refresh messages if recently reconnected
 const lastReconnectedState = ref(false);
 
 const handleReconnection = async () => {
@@ -393,10 +406,9 @@ watch(
   () => isRecentlyReconnected(),
   isReconnected => {
     if (isReconnected && !lastReconnectedState.value) {
-      // Only reload messages if we weren't already in a reconnected state
       setTimeout(() => {
         handleReconnection();
-      }, 500); // Small delay to ensure connection is fully established
+      }, 500);
     }
     lastReconnectedState.value = isReconnected;
   }
@@ -422,15 +434,12 @@ const initializeMastra = () => {
   }
 };
 
-// Initialize Mastra service
 initializeMastra();
 
-// Watch for changes in chatId and baseUrl to re-initialize Mastra
 watch([() => state.chatId, () => props.baseUrl], () => {
   initializeMastra();
 });
 
-// Watch for changes in Mastra messages to update our local state
 watch(
   () => mastraResult.value?.messages?.value,
   newMessages => {
@@ -441,11 +450,9 @@ watch(
   { deep: true }
 );
 
-// Function to add a local AI message when Mastra is not available
 const addLocalAIMessage = (text: string) => {
   if (!text.trim()) return;
 
-  // Add user message to local state
   const userMessage = {
     role: 'user' as 'user' | 'assistant',
     content: text,
@@ -469,8 +476,6 @@ const clearAiMessages = () => {
     return mastraResult.value.clearMessages();
   }
 };
-
-// aiMessages is now available as state.aiMessages
 
 const messageChat = (role: string) => [
   'message__bubble',
@@ -531,14 +536,11 @@ watch(
       scrollState.previousScrollTop = chatWrapperRef.value.scrollTop;
     }
 
-    // Only reset regular messages when switching from/to non-AI chapters
-    // Keep AI messages available across all chapters
     if (
       props.chapter !== 'ai' &&
       props.contact?.conversationId &&
       !isLoadingInitialMessages
     ) {
-      // Reset state for new conversation
       state.messages = [];
       state.hasMoreMessages = true;
       state.isLoadingMore = false;
@@ -581,15 +583,12 @@ const handleClear = (): void => {
 const handleSend = async (): Promise<void> => {
   if (!inputText.value.trim()) return;
 
-  // Send to AI if we're in AI chapter
   if (props.chapter === 'ai') {
     const text = inputText.value;
     inputText.value = '';
 
-    // Add message locally first
     addLocalAIMessage(text);
 
-    // Try to send via Mastra as well
     if (mastraResult.value && mastraResult.value.sendMessage) {
       try {
         await mastraResult.value.sendMessage(text, () => {
@@ -597,7 +596,6 @@ const handleSend = async (): Promise<void> => {
         });
       } catch (error) {
         console.warn('Mastra failed to send message:', error);
-        // Message is already added locally, so we're good
       }
     } else {
       console.warn('Mastra is not available, message added locally only');
@@ -717,7 +715,6 @@ const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
         });
       }
 
-      // Update messages to show the sent file in UI
       updateMessages();
 
       setTimeout(() => {
@@ -732,16 +729,13 @@ const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
 const isNewDate = (index: number, isMastra: boolean = false) => {
   if (index === 0) return true;
 
-  // Use direct access to avoid repeated property lookups
   if (isMastra) {
     const currentMsg = state.aiMessages[index];
     const prevMsg = state.aiMessages[index - 1];
-    // Direct comparison to avoid variable assignments
     return formatDay(currentMsg.timestamp) !== formatDay(prevMsg.timestamp);
   } else {
     const currentMsg = state.messages[index];
     const prevMsg = state.messages[index - 1];
-    // Direct comparison to avoid variable assignments
     return formatDay(currentMsg.sendTime) !== formatDay(prevMsg.sendTime);
   }
 };
@@ -752,13 +746,11 @@ const getSystemMessageContent = message => {
 };
 
 onMounted(async () => {
-  // Initialize chatId for AI functionality if not already set
   if (!state.chatId) {
     state.chatId = generateChatId();
   }
 
   if (props.contact?.conversationId) {
-    // Reset state for new conversation
     state.messages = [];
     state.hasMoreMessages = true;
     state.isLoadingMore = false;
@@ -778,7 +770,6 @@ onMounted(async () => {
     await nextTick();
     requestAnimationFrame(() => {
       if (chatWrapperRef?.value) {
-        scrollToBottom(false); // Direct scroll to bottom
         scrollState.shouldAutoScroll = true;
         scrollState.isInitialLoad = true;
       }

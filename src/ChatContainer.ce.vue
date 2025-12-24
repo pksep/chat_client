@@ -64,6 +64,7 @@ onMounted(async () => {
     markSDKReady();
   } catch (error) {
     console.error('Failed to initialize chat:', error);
+
     window.location.href =
       config.CHAT_ERP_URL +
       '?redirect=' +

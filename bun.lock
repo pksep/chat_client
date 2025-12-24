@@ -9,8 +9,8 @@
         "@mastra/client-js": "^0.12.3",
         "@openim/wasm-client-sdk": "3.8.3-patch.10",
         "@pksep/reqi": "^0.0.25",
-        "@pksep/yui": "^0.1.163",
-        "zod": "3",
+        "@pksep/yui": "^0.1.164",
+        "zod": "3"
       },
       "devDependencies": {
         "@babel/eslint-parser": "^7.28.0",
@@ -646,7 +646,7 @@
 
     "@pksep/reqi": ["@pksep/reqi@0.0.25", "", { "dependencies": { "content-type": "^1.0.5", "lz-string": "^1.5.0" } }, "sha512-sSed6Susoh0CZfBFcNRit5SruksP+S+uEZKLz2qkY97hsSbOVc8GvWoGY3O1X6b/APWNFwFq4e2jJyVP6zEGlw=="],
 
-    "@pksep/yui": ["@pksep/yui@0.1.163", "", { "dependencies": { "@floating-ui/vue": "^1.1.8", "@fontsource-variable/inter": "^5.1.0", "@fontsource/source-sans-pro": "^5.1.0", "@tiptap/core": "^3.6.2", "@tiptap/extension-image": "^3.6.2", "@tiptap/extension-link": "^3.6.2", "@tiptap/extension-placeholder": "^3.6.2", "@tiptap/starter-kit": "^3.6.2", "@tiptap/vue-3": "^3.6.2", "@vueuse/components": "^11.1.0", "@vueuse/core": "^11.0.3", "col-cal": "2.0.0-alpha.1", "pdfjs-dist": "^5.4.449", "print-js": "^1.6.0", "vue": "^3.5.22", "vue3-emoji-picker": "^1.1.8", "vue3-perfect-scrollbar": "^2.0.0" } }, "sha512-bGqljhj9s5XDlCRGhKGN/RJvh8ysqi3ZjTS+h7bV5gz1xX1J+RVhK37nT/qRpDT9LGOP9BrBoCeFE9yRrRIKiw=="],
+    "@pksep/yui": ["@pksep/yui@0.1.164", "", { "dependencies": { "@floating-ui/vue": "^1.1.8", "@fontsource-variable/inter": "^5.1.0", "@fontsource/source-sans-pro": "^5.1.0", "@tiptap/core": "^3.6.2", "@tiptap/extension-image": "^3.6.2", "@tiptap/extension-link": "^3.6.2", "@tiptap/extension-placeholder": "^3.6.2", "@tiptap/starter-kit": "^3.6.2", "@tiptap/vue-3": "^3.6.2", "@vueuse/components": "^11.1.0", "@vueuse/core": "^11.0.3", "col-cal": "2.0.0-alpha.1", "pdfjs-dist": "^5.4.449", "print-js": "^1.6.0", "vue": "^3.5.22", "vue3-emoji-picker": "^1.1.8", "vue3-perfect-scrollbar": "^2.0.0" } }, "sha512-D/r7gbzUELnJXn0yfVlOAj6u5k1S/kE895e6v+Reml+SfKJL9TlqrkqCabAaXccK85QZwqqsbWlaadbFC/eOvw=="],
 
     "@playwright/experimental-ct-core": ["@playwright/experimental-ct-core@1.57.0", "", { "dependencies": { "playwright": "1.57.0", "playwright-core": "1.57.0", "vite": "^6.4.1" } }, "sha512-Z5Uh+61vR5FDRE+YJIMrnD8m6i2wJmYK525AHCJNcAcGcEC+i7xuMnZmZkg+booi3YHIwql/ApAlm03+jsCIzQ=="],
 
