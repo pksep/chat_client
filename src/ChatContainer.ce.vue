@@ -38,6 +38,8 @@ onMounted(async () => {
   const config = getConfig();
 
   try {
+    console.log(token);
+    
     const authData = await useAuth(token || localToken);
 
     if (!hasUserIdInSession(authData.UserID)) {
@@ -76,10 +78,13 @@ onMounted(async () => {
     markSDKReady();
   } catch (error) {
     console.error('Failed to initialize chat:', error);
-    window.location.href =
-      config.CHAT_ERP_URL +
-      '?redirect=' +
-      encodeURIComponent(window.location.href);
+
+    setTimeout(() => {
+      window.location.href =
+        config.CHAT_ERP_URL +
+        '?redirect=' +
+        encodeURIComponent(window.location.href);
+    }, 3000);
   } finally {
     url.searchParams.delete('token');
     window.history.replaceState({}, document.title, url.toString());

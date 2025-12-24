@@ -110,7 +110,6 @@
               : message.isRead
           "
           :message-status="message.status"
-          :loader="message.loading"
           :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
         />
       </template>
@@ -260,22 +259,28 @@ const debounce = <T extends (...args: any[]) => any>(
 };
 
 let isScrollLoading = false;
-
 const handleScroll = throttle((): void => {
-  if (!chatWrapperRef?.value) return;
+  const el = chatWrapperRef.value;
+  if (!el) return;
 
-  const { scrollTop, scrollHeight, clientHeight } = chatWrapperRef.value;
-  const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+  const { scrollTop, scrollHeight, clientHeight } = el;
 
+  const maxScroll = scrollHeight - clientHeight;
+
+  const distanceFromBottom = scrollTop;
+  const distanceFromTop = maxScroll + scrollTop;
   scrollState.shouldAutoScroll = distanceFromBottom < 100;
   scrollState.isUserScrolling = distanceFromBottom >= 100;
-  scrollState.previousScrollTop = scrollTop;
 
   if (scrollState.isInitialLoad) {
     scrollState.isInitialLoad = false;
   }
 
-  if (scrollTop < 20 && !isScrollLoading && props.contact?.conversationId) {
+  if (
+    distanceFromTop < 200 &&
+    !isScrollLoading &&
+    props.contact?.conversationId
+  ) {
     isScrollLoading = true;
 
     // Try to load more messages from the service if connected
@@ -630,7 +635,6 @@ onMounted(async () => {
     await nextTick();
     requestAnimationFrame(() => {
       if (chatWrapperRef?.value) {
-        scrollToBottom(false); // Direct scroll to bottom
         scrollState.shouldAutoScroll = true;
         scrollState.isInitialLoad = true;
 
