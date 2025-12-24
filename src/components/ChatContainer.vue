@@ -415,7 +415,7 @@ useAndroidBackButton({
 onMounted(() => {
   if (isMobile.value) {
     state.isChapter = false;
-    state.chapter = 'assistant'
+    state.chapter = 'assistant';
     return;
   }
   state.isChapter = state.chapter === 'ai' || state.contact !== null;
