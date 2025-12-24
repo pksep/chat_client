@@ -80,11 +80,18 @@ div.menu-info__buttons {
   gap: 70px;
 }
 
+.tabs__navigation .tabs__navigation-button:hover {
+  cursor: pointer;
+}
+
 .menu-info__avatar-button {
   --size-avatar: 42.5px;
   display: flex;
   width: 100%;
   justify-content: center;
+  &:hover {
+    cursor: pointer;
+  }
 }
 
 svg.icon-yui-kit.menu-info__close-icon {
