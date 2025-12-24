@@ -393,35 +393,13 @@ watch(
   { deep: true }
 );
 
-const sendMessage = async (
-  input: string,
-  onFinish?: () => void,
-  abortSignal?: AbortSignal
-) => {
-  if (mastraResult.value && mastraResult.value.sendMessage && !mastraResult.value.isInitializing?.value) {
-    try {
-      // Try sending via Mastra and handle errors
-      await mastraResult.value.sendMessage(input, onFinish, abortSignal);
-    } catch (error) {
-      console.warn('Mastra failed, adding message locally:', error);
-      addLocalAIMessage(input);
-      onFinish?.();
-    }
-  } else {
-    // If Mastra is not available or initializing, just add the message locally to the UI
-    console.warn('Mastra is not available, adding message locally');
-    addLocalAIMessage(input);
-    onFinish?.();
-  }
-};
-
 // Function to add a local AI message when Mastra is not available
 const addLocalAIMessage = (text: string) => {
   if (!text.trim()) return;
 
   // Add user message to local state
   const userMessage = {
-    role: 'user',
+    role: 'user' as 'user' | 'assistant',
     content: text,
     timestamp: Date.now()
   };
@@ -430,7 +408,7 @@ const addLocalAIMessage = (text: string) => {
 
   // Add a placeholder assistant message to show loading state
   const assistantMessage = {
-    role: 'assistant',
+    role: 'assistant' as 'user' | 'assistant',
     content: 'Mastra is currently unavailable. Please try again later.',
     timestamp: Date.now()
   };
