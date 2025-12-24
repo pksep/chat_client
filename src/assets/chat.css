@@ -105,7 +105,7 @@ p.chat__nothing-paragraph {
   }
 }
 
-@media screen and (width <= 450px) {
+@media screen and (width <= 480px) {
   .chat:has(.chat__input) {
     --basic-height: calc(var(--default-height) - var(--header-height));
   }
@@ -123,6 +123,7 @@ p.chat__nothing-paragraph {
     --size-left-menu: 0;
     --size-right-menu: 0;
     padding-right: 0;
+    overflow-y: auto;
   }
 
   .chat__input {

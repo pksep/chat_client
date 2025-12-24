@@ -2,7 +2,7 @@
   display: none;
 }
 
-@media screen and (width <= 450px) {
+@media screen and (width <= 480px) {
   .chat__header-menu {
     display: flex;
   }

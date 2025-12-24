@@ -94,7 +94,7 @@ button.primary-yui-kit.disabled-yui-kit {
   background-color: var(--neutral-button);
 }
 
-@media screen and (width <= 450px) {
+@media screen and (width <= 480px) {
   .chat__info {
     display: none;
   }
@@ -117,7 +117,7 @@ button.primary-yui-kit.disabled-yui-kit {
   }
 }
 
-@media screen and (width <= 670px) {
+@media screen and (width <= 768px) {
   .chat-container.menu-collapse {
     & .chat__info {
       display: none;
@@ -125,9 +125,11 @@ button.primary-yui-kit.disabled-yui-kit {
   }
 }
 
-@media screen and (width <= 450px) {
+@media screen and (width <= 480px) {
   .chat-container {
     background-color: var(--white);
+    overflow: auto;
+    overflow-x: hidden;
   }
   .chat-container:has(.chat .chat__message-wrapper) {
     background-color: var(--background-light-color);

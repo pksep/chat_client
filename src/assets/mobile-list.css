@@ -1,6 +1,6 @@
 .mobile-list-container {
   display: grid;
-  min-height: calc(var(--default-height) - 42px);
+  min-height: calc(var(--default-height) - var(--mobile-list-height, 42px));
 }
 
 button.button-yui-kit.mobile__list-button {
@@ -25,4 +25,10 @@ button.button-yui-kit.mobile__list-button {
 .contact-selector-modal__contact-selector {
   display: grid;
   gap: 10px;
+}
+
+@media screen and (width <= 412px) {
+  .mobile-list-container {
+    --mobile-list-height: 53px;
+  }
 }
