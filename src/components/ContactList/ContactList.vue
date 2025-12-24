@@ -58,7 +58,7 @@
         <div class="contact-list__top">
           <MessageStatusIcons
             v-if="contact.isLatestMessageFromMe"
-            class="contact-list__read-icon contact-list__message-status-icons"
+            class="contact-list__message-status-icons"
             :message-status="contact.latestMessageStatus"
             :is-read="contact.isRead"
             :is-me-sender="true"

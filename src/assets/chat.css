@@ -38,7 +38,7 @@ p.chat__nothing-paragraph {
 
 .chat__message-bubble {
   display: flex;
-  flex-direction: column;     
+  flex-direction: column;
   width: 100%;
   gap: 5px;
   margin-bottom: auto;
@@ -109,6 +109,10 @@ p.chat__nothing-paragraph {
 @media screen and (width <= 480px) {
   .chat:has(.chat__input) {
     --basic-height: calc(var(--default-height) - var(--header-height));
+  }
+
+  .chat.chat__messages {
+    margin-top: -22px;
   }
 
   .chat.chat__messages:not(.chat__input) > .menu__user-assistant {
