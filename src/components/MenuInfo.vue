@@ -74,7 +74,7 @@
     :open="state.openAddUser"
     :isAddOne="false"
     :contacts="state.filteredMembers"
-    @unmount-new-contact="handleNewContact"
+    @unmount-new-contact="contacts => handleUpdateGroupMembers(contacts)"
     @unmount-close="handleCloseAddUserModal"
     title="Добавить контакт"
   />
@@ -92,9 +92,14 @@ import {
 } from '@pksep/yui';
 import ContactListInModal from './ContactList/ContactListInModal.vue';
 import InformationMenu from './InformationMenu.vue';
-import type { IMenuRightProps, IMenuEmits } from './interfaces/interfaces';
+import type {
+  IMenuRightProps,
+  IMenuEmits,
+  IUserProps
+} from './interfaces/interfaces';
 import { useMenuInfo } from '../composables/useMenuInfo';
 import NewContactModal from './NewChat/NewContactModal.vue';
+import { fetchGroupMembers } from '../services/useGroup';
 
 const props = withDefaults(defineProps<IMenuRightProps>(), {
   open: false,
@@ -106,6 +111,25 @@ const menuInfoClasses = computed(() => [
   { 'menu-info--open': props.open },
   props.class
 ]);
+
+const handleUpdateGroupMembers = async (
+  contacts: IUserProps | IUserProps[]
+): Promise<void> => {
+  if (Array.isArray(contacts)) {
+    await handleNewContact(contacts);
+    if (props.contact?.groupId) {
+      const updatedContacts = await fetchGroupMembers(props.contact.groupId);
+      state.contacts = updatedContacts;
+      emits('unmount-contacts-update', updatedContacts);
+
+      const updatedContact = {
+        ...props.contact,
+        membersLength: updatedContacts.length
+      };
+      emits('unmount-contact', updatedContact);
+    }
+  }
+};
 
 const emits = defineEmits<IMenuEmits>();
 

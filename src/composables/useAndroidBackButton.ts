@@ -1,10 +1,10 @@
 import { onMounted, onUnmounted } from 'vue';
 
 interface UseAndroidBackButtonOptions {
-  onBack?: () => void; // Function to call when back button is pressed
-  addToHistory?: boolean; // Whether to add current state to history
-  state?: any; // State to store in history
-  title?: string; // Title for the history entry
+  onBack?: () => void;
+  addToHistory?: boolean;
+  state?: any;
+  title?: string;
 }
 
 export function useAndroidBackButton(
@@ -18,36 +18,28 @@ export function useAndroidBackButton(
   } = options;
 
   const handlePopState = (event: PopStateEvent) => {
-    // Prevent default browser back behavior
     event.preventDefault();
 
-    // Call the custom back handler if provided
     if (onBack) {
       onBack();
     } else {
-      // Default behavior: go back to main screen
       window.history.pushState({}, document.title, window.location.pathname);
     }
   };
 
   onMounted(() => {
-    // Add current state to history if requested
     if (addToHistory) {
       window.history.pushState(state, title, window.location.href);
     }
 
-    // Listen for popstate events (triggered by back button)
     window.addEventListener('popstate', handlePopState);
   });
 
   onUnmounted(() => {
-    // Remove the event listener when component is unmounted
     window.removeEventListener('popstate', handlePopState);
   });
 
-  // Function to navigate to main screen
   const navigateToMainScreen = () => {
-    // Replace current state with main screen
     window.history.pushState({}, document.title, window.location.pathname);
   };
 

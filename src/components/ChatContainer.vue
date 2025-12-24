@@ -53,7 +53,7 @@
         :active-tab-id="state.activeTabId"
         :dataTestid="`${props.dataTestid}-ChatContainer-MenuInfo`"
         @unmount-collapse="handleMenuToggle"
-        @unmount-contact="handleChangeContact"
+        @unmount-contact="handleChangeContactFromMenuInfo"
       />
     </template>
     <NewContactModal
@@ -219,7 +219,6 @@ watch(
 
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 
-// Close MenuInfo when switching to mobile view
 watch(
   () => isMobile.value,
   newIsMobile => {
@@ -389,6 +388,11 @@ const handleNewGroupMessage = async (group: any): Promise<void> => {
 
 const handleChangeContact = (contact: IUserProps): void => {
   state.contact = contact;
+};
+
+const handleChangeContactFromMenuInfo = (contact: IUserProps): void => {
+  // Update the contact in the state to trigger reactivity
+  state.contact = { ...contact };
 };
 
 const handleExit = (): void => {
