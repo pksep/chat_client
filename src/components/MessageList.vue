@@ -157,7 +157,8 @@ import {
   getMessagesByConversationId,
   getMessagesWithLoadingStatus,
   sendMessageIM,
-  getIsWebsocketConnecting
+  getIsWebsocketConnecting,
+  isRecentlyReconnected
 } from '../services/useOpenIM';
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
@@ -347,10 +348,57 @@ watch(
   { immediate: true }
 );
 
+// Track the previous connection state to detect when we transition from connecting to connected
+const previousConnectingState = ref(getIsWebsocketConnecting());
+
 watch(
   () => getIsWebsocketConnecting(),
-  () => {
+  currentConnectingState => {
+    // When we transition from connecting (true) to connected (false), reload messages
+    if (previousConnectingState.value && !currentConnectingState) {
+      setTimeout(async () => {
+        if (props.contact?.conversationId) {
+          try {
+            await getMessagesByConversationId(props.contact.conversationId, '');
+            updateMessages();
+          } catch (error) {
+            console.error(
+              'Failed to reload messages after connection restored:',
+              error
+            );
+          }
+        }
+      }, 300); // Small delay to ensure connection is fully established
+    }
+    previousConnectingState.value = currentConnectingState;
     updateMessages();
+  }
+);
+
+// Watch for reconnection events and refresh messages if recently reconnected
+const lastReconnectedState = ref(false);
+
+const handleReconnection = async () => {
+  if (props.contact?.conversationId) {
+    try {
+      await getMessagesByConversationId(props.contact.conversationId, '');
+      updateMessages();
+    } catch (error) {
+      console.error('Failed to reload messages after reconnection:', error);
+    }
+  }
+};
+
+watch(
+  () => isRecentlyReconnected(),
+  isReconnected => {
+    if (isReconnected && !lastReconnectedState.value) {
+      // Only reload messages if we weren't already in a reconnected state
+      setTimeout(() => {
+        handleReconnection();
+      }, 500); // Small delay to ensure connection is fully established
+    }
+    lastReconnectedState.value = isReconnected;
   }
 );
 
