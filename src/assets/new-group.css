@@ -22,6 +22,7 @@ button.button-yui-kit.new-group__button-close {
   justify-content: space-between;
   gap: 15px;
   padding: 10px;
+
   & .checkbox-yui-kit {
     justify-self: flex-end;
   }
@@ -68,4 +69,9 @@ button.button-yui-kit.new-group__button-close {
 
 .new-group-info {
   --size-avatar: 43px;
+}
+
+.menu-info__modal-wrapper {
+  display: grid;
+  padding-inline: 10px;
 }

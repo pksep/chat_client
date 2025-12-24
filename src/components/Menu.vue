@@ -182,7 +182,6 @@ const props = withDefaults(defineProps<IMenuProps>(), {
 
 const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 
-
 const state = reactive({
   chapter: '',
   contactList: computed(() => getConversationList()),
@@ -298,4 +297,3 @@ onMounted(() => {
   onSDKReady(fetchConversationList);
 });
 </script>
-

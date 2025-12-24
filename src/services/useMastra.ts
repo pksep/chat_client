@@ -29,8 +29,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
   if (!options) {
     return {
       messages: ref<Message[]>([]),
-      sendMessage: async () => {},
-      clearMessages: () => {},
+      sendMessage: async () => { },
+      clearMessages: () => { },
       isInitializing: ref(false)
     };
   }
@@ -91,11 +91,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
       loading: true,
       timestamp: Date.now()
     };
+    const assistantMessageIndex = messages.value.length;
     messages.value = [...messages.value, assistantMessage];
 
     await saveMessages(chatId, messages.value);
-
-    const assistantMessageIndex = messages.value.length - 1;
 
     try {
       const agent = client.getAgent(agentId);
@@ -157,10 +156,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
                   }
 
                   if (event.type === 'step-finish') {
-                    if (assistantMessageIndex < messages.value.length) {
+                    if (assistantMessageIndex <= messages.value.length) {
                       const newMessages = [...messages.value];
-                      newMessages[assistantMessageIndex] = {
-                        ...newMessages[assistantMessageIndex],
+                      newMessages[assistantMessageIndex - 1] = {
+                        ...newMessages[assistantMessageIndex - 1],
                         loading: false
                       };
                       messages.value = newMessages;
@@ -171,12 +170,12 @@ const useMastra = (options?: UseMastraOptions | false) => {
                   }
 
                   if (event.type === 'text-delta' && event.payload?.text) {
-                    if (assistantMessageIndex < messages.value.length) {
+                    if (assistantMessageIndex <= messages.value.length) {
                       const newMessages = [...messages.value];
-                      newMessages[assistantMessageIndex] = {
-                        ...newMessages[assistantMessageIndex],
+                      newMessages[assistantMessageIndex - 1] = {
+                        ...newMessages[assistantMessageIndex - 1],
                         content:
-                          newMessages[assistantMessageIndex].content +
+                          newMessages[assistantMessageIndex - 1].content +
                           event.payload.text
                       };
                       messages.value = newMessages;
@@ -285,10 +284,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
         errorMessage = error.message;
       }
 
-      if (assistantMessageIndex < messages.value.length) {
+      if (assistantMessageIndex <= messages.value.length) {
         const newMessages = [...messages.value];
-        newMessages[assistantMessageIndex] = {
-          ...newMessages[assistantMessageIndex],
+        newMessages[assistantMessageIndex - 1] = {
+          ...newMessages[assistantMessageIndex - 1],
           content: errorMessage
         };
         messages.value = newMessages;
