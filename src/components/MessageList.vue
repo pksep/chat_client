@@ -193,7 +193,7 @@ const state = reactive({
 });
 
 // Flag to prevent multiple simultaneous message loads
-let isLoadingInitialMessages = false;
+const isLoadingInitialMessages = ref(false);
 
 const updateMessages = () => {
   if (props.contact?.conversationId) {
@@ -330,15 +330,11 @@ const isEnableSend = computed(() => {
 watch(
   () => props.contact?.conversationId,
   async (newConversationId, oldConversationId) => {
-    if (
-      newConversationId &&
-      newConversationId !== oldConversationId &&
-      !isLoadingInitialMessages
-    ) {
+    if (newConversationId && newConversationId !== oldConversationId) {
       state.messages = [];
       state.hasMoreMessages = true;
       state.isLoadingMore = false;
-      isLoadingInitialMessages = true;
+      isLoadingInitialMessages.value = true;
 
       try {
         if (!getIsWebsocketConnecting()) {
@@ -348,7 +344,7 @@ watch(
         console.error('Failed to load messages for new conversation:', error);
       } finally {
         updateMessages();
-        isLoadingInitialMessages = false;
+        isLoadingInitialMessages.value = false;
       }
 
       await nextTick();
@@ -536,15 +532,12 @@ watch(
       scrollState.previousScrollTop = chatWrapperRef.value.scrollTop;
     }
 
-    if (
-      props.chapter !== 'ai' &&
-      props.contact?.conversationId &&
-      !isLoadingInitialMessages
-    ) {
+    // Only reload messages if we're switching to a non-AI chapter with a valid conversation
+    if (newValue !== 'ai' && props.contact?.conversationId) {
       state.messages = [];
       state.hasMoreMessages = true;
       state.isLoadingMore = false;
-      isLoadingInitialMessages = true;
+      isLoadingInitialMessages.value = true;
 
       try {
         if (!getIsWebsocketConnecting()) {
@@ -554,9 +547,9 @@ watch(
         console.error('Failed to load messages when changing chapter:', error);
       } finally {
         updateMessages();
-        isLoadingInitialMessages = false;
+        isLoadingInitialMessages.value = false;
       }
-    } else if (props.chapter !== 'ai') {
+    } else if (newValue !== 'ai') {
       state.messages = [];
     }
 
@@ -750,11 +743,13 @@ onMounted(async () => {
     state.chatId = generateChatId();
   }
 
+  // Load initial messages if we have a conversation ID on mount
+  // Only do this if the conversation ID is already available at mount time
   if (props.contact?.conversationId) {
     state.messages = [];
     state.hasMoreMessages = true;
     state.isLoadingMore = false;
-    isLoadingInitialMessages = true;
+    isLoadingInitialMessages.value = true;
 
     try {
       if (!getIsWebsocketConnecting()) {
@@ -764,7 +759,7 @@ onMounted(async () => {
       console.error('Failed to load initial messages:', error);
     } finally {
       updateMessages();
-      isLoadingInitialMessages = false;
+      isLoadingInitialMessages.value = false;
     }
 
     await nextTick();
