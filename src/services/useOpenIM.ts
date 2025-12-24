@@ -234,45 +234,29 @@ const setupOpenIM = (): void => {
         return;
       }
 
-      const batchSize = 10;
       let enableAudio = false;
+      const user = getAuthUser();
 
-      for (let i = 0; i < list.length; i += batchSize) {
-        const batch = list.slice(i, i + batchSize);
+      // Process each message individually to ensure all messages are handled
+      for (const message of list) {
+        if (!message) continue;
 
-        let processedMessage: ProcessedMessage | null = null;
-        for (const message of batch) {
-          if (!message) continue;
-
-          const currentProcessedMessage = processIncomingMessage(message);
-          if (!currentProcessedMessage) {
-            continue;
-          }
-
-          if (!enableAudio) {
-            enableAudio = !currentProcessedMessage.notificationElem;
-          }
-
-          const convId = generateConversationId(currentProcessedMessage);
-          appendMessageToLocal(
-            convId,
-            currentProcessedMessage as OpenIMMessage
-          );
-
-          processedMessage = currentProcessedMessage;
+        const currentProcessedMessage = processIncomingMessage(message);
+        if (!currentProcessedMessage) {
+          continue;
         }
 
-        if (!enableAudio && processedMessage) {
-          const user = getAuthUser();
-          enableAudio =
-            !processedMessage.notificationElem &&
-            processedMessage.sendID !== user.userID;
+        // Check if we should play audio notification (for non-notification messages from others)
+        if (
+          !enableAudio &&
+          !currentProcessedMessage.notificationElem &&
+          currentProcessedMessage.sendID !== user?.userID
+        ) {
+          enableAudio = true;
         }
 
-        if (processedMessage) {
-          const convId = generateConversationId(processedMessage);
-          appendMessageToLocal(convId, processedMessage as OpenIMMessage);
-        }
+        const convId = generateConversationId(currentProcessedMessage);
+        appendMessageToLocal(convId, currentProcessedMessage as OpenIMMessage);
       }
 
       if (enableAudio) {
