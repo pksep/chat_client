@@ -4,6 +4,7 @@
     :data-testid="`${props.dataTestid}-ContactSelector-Container`"
   >
     <Search
+      class="contact-selector__search"
       v-model="state.q"
       :data-testid="`${props.dataTestid}-ContactSelector-Search`"
     />

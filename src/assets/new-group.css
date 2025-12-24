@@ -1,14 +1,18 @@
 .new-group__header {
   font-size: 16px;
-  padding: 5px 10px;
   display: flex;
+  padding-block-end: 10px;
+  padding-inline: 20px;
   font-weight: bold;
   align-items: center;
   justify-content: space-between;
+  border-bottom-style: solid;
+  border-bottom-width: 1px;
+  border-bottom-color: var(--border-grey);
 }
 
-button.button-yui-kit.new-contact__button-close {
-  padding-block: 5px;
+button.button-yui-kit.new-group__button-close {
+  padding-block: 0;
   padding-inline: 0;
 }
 
@@ -24,7 +28,7 @@ button.button-yui-kit.new-contact__button-close {
 }
 
 .group-selector__search {
-  padding: 10px;
+  padding-inline: 10px;
   margin-bottom: 5px;
 }
 

@@ -14,7 +14,7 @@
         @click="closeModal"
         class="new-group__button-close"
       >
-        <Icon :name="IconNameEnum.crossLarge" />
+        <Icon :name="IconNameEnum.crossSmall" />
       </Button>
     </header>
     <ContactSelector
