@@ -492,12 +492,14 @@ export const sendMessageIM = async ({
     } else if (type === 'image') {
       if (!file) throw new Error('File is required for image message');
 
+      const { width, height } = await getImageSize(file);
+
       const picBaseInfo = {
         uuid: generateUUID(),
         type: file.type,
         size: file.size,
-        width: 300,
-        height: 215,
+        width,
+        height,
         url: ''
       };
 
@@ -906,6 +908,60 @@ const appendOldMessagesToLocal = (
   const arr = messagesStore.value[conversationId] || [];
   const newArr = [...messagesWithDefaults, ...arr];
   messagesStore.value[conversationId] = newArr;
+};
+
+export const getImageSize = (
+  file: File
+): Promise<{ width: number; height: number }> => {
+  return new Promise((resolve, reject) => {
+    // IMAGE
+    if (file.type.startsWith('image/')) {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+
+      img.onload = () => {
+        resolve({
+          width: img.naturalWidth,
+          height: img.naturalHeight
+        });
+        URL.revokeObjectURL(url);
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Failed to load image'));
+      };
+
+      img.src = url;
+      return;
+    }
+
+    // VIDEO
+    if (file.type.startsWith('video/')) {
+      const video = document.createElement('video');
+      const url = URL.createObjectURL(file);
+
+      video.preload = 'metadata';
+
+      video.onloadedmetadata = () => {
+        resolve({
+          width: video.videoWidth,
+          height: video.videoHeight
+        });
+        URL.revokeObjectURL(url);
+      };
+
+      video.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Failed to load video'));
+      };
+
+      video.src = url;
+      return;
+    }
+
+    reject(new Error('Unsupported file type'));
+  });
 };
 
 export {
