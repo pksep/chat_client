@@ -19,9 +19,8 @@ const isWebsocketConnecting = ref(false);
 
 export const getIsWebsocketConnecting = () => isWebsocketConnecting.value;
 
-// Connection management
 interface ConnectionState {
-  lastReconnectTime: number; // Track the last reconnection time
+  lastReconnectTime: number;
 }
 
 const connectionState: ConnectionState = {
@@ -521,12 +520,14 @@ export const sendMessageIM = async ({
     } else if (type === 'image') {
       if (!file) throw new Error('File is required for image message');
 
+      const { width, height } = await getImageSize(file);
+
       const picBaseInfo = {
         uuid: generateUUID(),
         type: file.type,
         size: file.size,
-        width: 300,
-        height: 215,
+        width,
+        height,
         url: ''
       };
 
@@ -827,14 +828,10 @@ const markAsRead = async (conversationID: string) => {
       'markConversationMessageAsRead'
     );
 
-    // Update local messages to mark them as read
-    // Get all messages in this conversation and update their isRead status
     const messages = getSavedMessages(conversationID);
     const currentUser = getAuthUser();
     const currentUserID = currentUser?.userID || '';
     const updatedMessages = messages.map(msg => {
-      // Only mark as read if it's a message from someone else (received message)
-      // Don't mark our own messages as read
       if (msg.sendID !== currentUserID) {
         return {
           ...msg,
@@ -854,11 +851,9 @@ const markAsRead = async (conversationID: string) => {
         `[OpenIM] Conversation not found when trying to mark messages as read (conversationID: ${conversationID}):`,
         typedError
       );
-      // Don't throw the error, just log it as a warning since it's an expected scenario
       return;
     } else {
       console.error('[OpenIM] Failed to mark messages as read:', typedError);
-      // Re-throw other errors as they might be actual issues
       throw typedError;
     }
   }
@@ -866,7 +861,6 @@ const markAsRead = async (conversationID: string) => {
 
 const messagesStore = shallowRef<Record<string, OpenIMMessage[]>>({});
 
-// Store for outgoing messages that couldn't be sent due to disconnection
 const outgoingMessageQueue = shallowRef<Record<string, OpenIMMessage[]>>({});
 
 const saveMessagesToLocal = (
@@ -953,7 +947,6 @@ const appendOldMessagesToLocal = (
   messagesStore.value[conversationId] = newArr;
 };
 
-// Singleton instance with proper error handling
 const IMSDK = (() => {
   try {
     return getSDK({
@@ -972,10 +965,60 @@ if (import.meta.hot) {
   import.meta.hot.dispose(() => {});
 }
 
-// Function to check if there was a recent reconnection (within last 3 seconds)
-// This extended window helps ensure the connection is fully stable before sending new messages
 const isRecentlyReconnected = () => {
   return Date.now() - connectionState.lastReconnectTime < 3000;
+};
+
+export const getImageSize = (
+  file: File
+): Promise<{ width: number; height: number }> => {
+  return new Promise((resolve, reject) => {
+    if (file.type.startsWith('image/')) {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+
+      img.onload = () => {
+        resolve({
+          width: img.naturalWidth,
+          height: img.naturalHeight
+        });
+        URL.revokeObjectURL(url);
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Failed to load image'));
+      };
+
+      img.src = url;
+      return;
+    }
+
+    if (file.type.startsWith('video/')) {
+      const video = document.createElement('video');
+      const url = URL.createObjectURL(file);
+
+      video.preload = 'metadata';
+
+      video.onloadedmetadata = () => {
+        resolve({
+          width: video.videoWidth,
+          height: video.videoHeight
+        });
+        URL.revokeObjectURL(url);
+      };
+
+      video.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Failed to load video'));
+      };
+
+      video.src = url;
+      return;
+    }
+
+    reject(new Error('Unsupported file type'));
+  });
 };
 
 export {

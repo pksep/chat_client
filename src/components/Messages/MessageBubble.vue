@@ -74,6 +74,7 @@
               :src="mediaSrc"
               :alt="props.sender ? props.sender + ' image' : 'Shared image'"
               :data-testid="`${dataTestid}-MessageBubble-Image`"
+              :style="{ height: props.media.sourcePicture.height + 'px' }"
             />
           </div>
           <div

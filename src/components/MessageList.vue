@@ -491,10 +491,6 @@ const handleNewMessages = debounce(
           scrollToBottom(true);
         });
       }
-    } else if (scrollState.shouldAutoScroll && !getIsWebsocketConnecting()) {
-      requestAnimationFrame(() => {
-        scrollToBottom(true);
-      });
     }
   },
   50
@@ -709,10 +705,6 @@ const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
       }
 
       updateMessages();
-
-      setTimeout(() => {
-        scrollToBottom(true);
-      }, 10);
     } catch (error) {
       console.error('[OpenIM] Failed to send file:', error);
     }

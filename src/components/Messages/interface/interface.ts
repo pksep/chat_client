@@ -16,6 +16,7 @@ export interface IMessageBubbleProps {
       size: number;
       type: string;
       url: string;
+      height: number;
     };
   };
   file?: FileElem;

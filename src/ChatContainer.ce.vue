@@ -30,6 +30,8 @@ const allNotificationCount = computed(() => getAllNotificationCount());
 onMounted(async () => {
   const url = new URL(window.location.href);
   const token = url.searchParams.get('token');
+  const REDIRECT_KEY = 'chat_redirect_attempts';
+  const MAX_REDIRECTS = 3;
 
   if (token) {
     localStorage.setItem('erp_token', token);
@@ -64,10 +66,18 @@ onMounted(async () => {
 
     markSDKReady();
 
-    // Start polling for unread messages to ensure updates even if WebSocket events fail
-    useUnreadMessagePolling(30000); // Poll every 30 seconds
+    useUnreadMessagePolling(30000);
   } catch (error) {
     console.error('Failed to initialize chat:', error);
+
+    const attempts = Number(localStorage.getItem(REDIRECT_KEY) || 0) + 1;
+    localStorage.setItem(REDIRECT_KEY, String(attempts));
+
+    if (attempts >= MAX_REDIRECTS) {
+      localStorage.removeItem(REDIRECT_KEY);
+      console.error('Redirect blocked: too many attempts');
+      return;
+    }
 
     window.location.href =
       config.CHAT_ERP_URL +
