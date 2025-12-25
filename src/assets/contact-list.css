@@ -16,12 +16,18 @@
 }
 
 .contact-list__title {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
   grid-area: title;
   margin: 0;
+  max-width: 50ch;
   font-size: 16px;
   color: var(--text-black);
   font-weight: 600;
-
+  hyphens: auto;
+  text-overflow: ellipsis;
+  overflow: hidden;
   justify-self: start;
 }
 
@@ -147,6 +153,7 @@ svg.icon-yui-kit.contact-list__read-icon {
 
 @media (width <= 480px) {
   .contact-list__description {
+    margin-top: 5px;
     font-size: 16px;
     justify-self: start;
   }

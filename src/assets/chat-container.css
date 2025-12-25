@@ -110,7 +110,7 @@ button.primary-yui-kit.disabled-yui-kit {
       'chat chat';
   }
   .chat-container:has(.chat__header-menu) {
-    --header-height: 42px;
+    --header-height: 43px;
   }
   .chat__menu {
     display: none;
@@ -131,10 +131,10 @@ button.primary-yui-kit.disabled-yui-kit {
     overflow: auto;
     overflow-x: hidden;
   }
+  svg.ai-icon {
+    font-size: 40px;
+  }
   .chat-container:has(.chat .chat__message-wrapper) {
     background-color: var(--background-light-color);
-  }
-  .chat-container:has(.chat__header-menu) {
-    --header-height: auto;
   }
 }

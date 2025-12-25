@@ -107,7 +107,7 @@ details.menu__user-details {
     summary.menu__user-details-summary
     .menu__user-details-summary-triangle {
     margin-top: 0px;
-    transform: rotate(135deg);
+    transform: rotate(270deg);
   }
 }
 
@@ -164,7 +164,14 @@ summary.menu__user-details-summary {
   }
 }
 
-@media screen and (width <= 36rem) {
+@media screen and (width <= 480px) {
+  .menu__user-assistant-title {
+    font-weight: bold;
+    font-size: 16px;
+  }
+}
+
+@media screen and (width <= 768px) {
   .menu:not(.menu--collapse) {
     width: var(--default-width);
     z-index: 2;

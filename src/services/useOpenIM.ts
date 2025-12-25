@@ -19,60 +19,43 @@ const isWebsocketConnecting = ref(false);
 
 export const getIsWebsocketConnecting = () => isWebsocketConnecting.value;
 
-// Function to check if there was a recent reconnection (within last 2 seconds)
-const isRecentlyReconnected = () => {
-  return Date.now() - connectionState.lastReconnectTime < 2000;
-};
-
-export type IMSDKType = ReturnType<typeof getSDK>;
-
-// Singleton instance with proper error handling
-const IMSDK: IMSDKType = (() => {
-  try {
-    return getSDK({
-      debug: false,
-      coreWasmPath: '/openIM.wasm',
-      sqlWasmPath: '/sql-wasm.wasm'
-    });
-  } catch (error) {
-    console.error('[OpenIM] Failed to initialize SDK:', error);
-    throw new Error('Failed to initialize OpenIM SDK');
-  }
-})();
-
-if (import.meta.hot) {
-  import.meta.hot.accept(() => {});
-  import.meta.hot.dispose(() => {});
-}
-
 // Connection management
 interface ConnectionState {
-  retries: number;
-  reconnectTimeout: number | null;
-  connectionSuccessTimer: number | null;
   lastReconnectTime: number; // Track the last reconnection time
 }
 
 const connectionState: ConnectionState = {
-  retries: 0,
-  reconnectTimeout: null,
-  connectionSuccessTimer: null,
   lastReconnectTime: 0
 };
 
-// Debounce utility type
-type DebouncedFunction<T extends (...args: any[]) => any> = (
-  ...args: Parameters<T>
-) => void;
+// Simple timeout wrapper
+const withTimeout = <T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  operationName: string
+): Promise<T> => {
+  let timeoutId: number;
 
-// Debounce utility with proper cleanup
-function createDebouncedFunction<T extends (...args: any[]) => any>(
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${operationName} timed out after ${timeoutMs}ms`));
+    }, timeoutMs) as unknown as number;
+  });
+
+  return Promise.race([
+    promise.finally(() => clearTimeout(timeoutId)),
+    timeoutPromise
+  ]);
+};
+
+// Simple debounce utility
+function debounce<T extends (...args: any[]) => any>(
   func: T,
   wait: number
-): DebouncedFunction<T> {
+): (...args: Parameters<T>) => void {
   let timeout: number | null = null;
 
-  return ((...args: Parameters<T>): void => {
+  return function executedFunction(...args: Parameters<T>): void {
     const later = () => {
       timeout = null;
       func(...args);
@@ -83,14 +66,14 @@ function createDebouncedFunction<T extends (...args: any[]) => any>(
     }
 
     timeout = setTimeout(later, wait) as unknown as number;
-  }) as DebouncedFunction<T>;
+  };
 }
 
-const setupOpenIM = (): void => {
-  const debouncedSetConnecting = createDebouncedFunction((val: boolean) => {
-    isWebsocketConnecting.value = val;
-  }, 300);
+const debouncedSetConnecting = debounce((val: boolean) => {
+  isWebsocketConnecting.value = val;
+}, 100);
 
+const setupOpenIM = (): void => {
   // Connection event handlers
   const handleConnecting = () => {
     console.log('[OpenIM] Connecting...');
@@ -99,35 +82,23 @@ const setupOpenIM = (): void => {
 
   const handleConnectSuccess = () => {
     console.log('[OpenIM] Connection successful');
-    connectionState.retries = 0;
-
-    if (connectionState.reconnectTimeout) {
-      clearTimeout(connectionState.reconnectTimeout);
-      connectionState.reconnectTimeout = null;
-    }
-
-    if (connectionState.connectionSuccessTimer) {
-      clearTimeout(connectionState.connectionSuccessTimer);
-      connectionState.connectionSuccessTimer = null;
-    }
-
+    
     // Update the last reconnection time
     connectionState.lastReconnectTime = Date.now();
 
-    // Delay the state update slightly to prevent race conditions after reconnection
-    requestAnimationFrame(() => {
+    // Set connecting state to false after a small delay to ensure stability
+    setTimeout(() => {
       isWebsocketConnecting.value = false;
-      // Only retry queued messages after a small delay to avoid conflicts
+      
+      // Retry queued messages after connection is stable
       setTimeout(() => {
         retryQueuedMessages();
-      }, 300);
-    });
+      }, 200);
+    }, 100);
   };
 
   const handleConnectFailed = async (err: any) => {
     console.error('[OpenIM] Connection failed:', err);
-
-    // Simply set connecting state to false without retrying
     isWebsocketConnecting.value = false;
 
     // Check if it's a token expiration error and attempt to refresh
@@ -174,7 +145,10 @@ const setupOpenIM = (): void => {
         wsAddr: config.CHAT_OPENIM_WS_DOMAIN
       });
 
-      connectionState.retries = 0;
+      // Fetch the user information to update the authedUser ref after successful reconnection
+      const { fetchAuthUser } = await import('../composables/useAuth');
+      await fetchAuthUser();
+
       console.log('[OpenIM] Successfully reconnected with refreshed token');
     } catch (refreshError) {
       console.error('[OpenIM] Token refresh failed:', refreshError);
@@ -201,20 +175,20 @@ const setupOpenIM = (): void => {
   IMSDK.on(CbEvents.OnKickedOffline, handleKickedOffline);
 
   // Notification and conversation updates
-  const batchUpdateConversations = createDebouncedFunction((ev: any) => {
+  const updateConversations = (ev: any) => {
     const data = ev.data || [];
     updateConversationList(data.filter((item: any) => !item.groupID));
     updateGroupList(data.filter((item: any) => !!item.groupID));
-  }, 100);
+  };
 
   IMSDK.on(CbEvents.OnTotalUnreadMessageCountChanged, ev => {
     const count = ev.data;
     setAllNotificationCount(count);
   });
 
-  IMSDK.on(CbEvents.OnConversationChanged, batchUpdateConversations);
+  IMSDK.on(CbEvents.OnConversationChanged, updateConversations);
 
-  const batchProcessMessages = createDebouncedFunction((evt: any) => {
+  const processMessages = (evt: any) => {
     try {
       const payload = evt?.data;
       if (!payload) return;
@@ -267,12 +241,13 @@ const setupOpenIM = (): void => {
     } catch (e) {
       console.error('[OpenIM] Failed to process incoming message event:', e);
     }
-  }, 16);
+  };
 
-  IMSDK.on(CbEvents.OnRecvNewMessages, batchProcessMessages);
+  // Register the event handler directly without debouncing to reduce message processing delay
+  IMSDK.on(CbEvents.OnRecvNewMessages, processMessages);
 
   // Read receipts processing
-  const batchProcessReadReceipts = createDebouncedFunction((evt: any) => {
+  const batchProcessReadReceipts = debounce((evt: any) => {
     const receipts = evt.data as Array<{
       conversationID: string;
       clientMsgID: string;
@@ -350,25 +325,6 @@ export const uploadFile = async (file: File) => {
   }
 };
 
-const withTimeout = <T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  operationName: string
-): Promise<T> => {
-  let timeoutId: number;
-
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => {
-      reject(new Error(`${operationName} timed out after ${timeoutMs}ms`));
-    }, timeoutMs) as unknown as number;
-  });
-
-  return Promise.race([
-    promise.finally(() => clearTimeout(timeoutId)),
-    timeoutPromise
-  ]);
-};
-
 // Message sending type definitions
 type MessageSendingParams = {
   to: string;
@@ -406,9 +362,8 @@ const determineConversationId = (to: string, groupId: string): string => {
   if (groupId) {
     return `sg_${groupId}`;
   } else if (to) {
-    const senderId = sessionStorage.getItem('openim_user')
-      ? JSON.parse(sessionStorage.getItem('openim_user')!).userID
-      : 'temp_sender';
+    const currentUser = getAuthUser();
+    const senderId = currentUser?.userID || 'temp_sender';
     const [smallerUserID, largerUserID] = [senderId, to].sort();
     return `si_${smallerUserID}_${largerUserID}`;
   }
@@ -451,10 +406,14 @@ export const sendMessageIM = async ({
 
   // Check if websocket is connecting/disconnected
   if (getIsWebsocketConnecting()) {
+    // Get the current user ID to ensure sendID is properly set
+    const currentUser = getAuthUser();
+    const currentUserID = currentUser?.userID || '';
+
     // Create a temporary message object to add to the queue
     const tempMsg: OpenIMMessage = {
       clientMsgID,
-      sendID: '', // Will be filled when actually sent
+      sendID: currentUserID, // Set the current user ID
       recvID: to,
       groupID: groupId,
       sendTime: Date.now(),
@@ -478,6 +437,12 @@ export const sendMessageIM = async ({
 
     // Don't throw an error, as this is expected behavior when offline
     return;
+  }
+
+  // If we just reconnected, wait a bit for the connection to stabilize
+  const timeSinceReconnect = Date.now() - connectionState.lastReconnectTime;
+  if (timeSinceReconnect < 1000) { // If less than 1 second since reconnect
+    await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms more
   }
 
   try {
@@ -621,7 +586,30 @@ export const sendMessageIM = async ({
     // Determine the conversation ID based on message type
     const convId = determineConversationId(to, groupId);
 
-    appendMessageToLocal(convId, res.data);
+    // Update the message in local storage - replace the temporary message with the one from the server
+    const allMessages = getSavedMessages(convId);
+    const messageExists = allMessages.some(msg => msg.clientMsgID === clientMsgID);
+
+    // Add isReadByPeer property to the response data if it doesn't exist
+    const serverMessage = {
+      ...res.data,
+      isReadByPeer: (res.data as any).isReadByPeer ?? false
+    };
+
+    if (messageExists) {
+      // Replace the temporary message with the one from the server
+      const updatedMessages = allMessages.map(msg => {
+        if (msg.clientMsgID === clientMsgID) {
+          return serverMessage;
+        }
+        return msg;
+      });
+
+      saveMessagesToLocal(convId, updatedMessages);
+    } else {
+      // If the temporary message doesn't exist, append the new one
+      appendMessageToLocal(convId, serverMessage);
+    }
 
     console.debug('[OpenIM] Message sent successfully to:', to);
   } catch (error) {
@@ -638,10 +626,14 @@ export const sendMessageIM = async ({
 
     console.error('[OpenIM] Failed to send message:', errorDetails);
 
+    // Get the current user ID to ensure sendID is properly set
+    const currentUser = getAuthUser();
+    const currentUserID = currentUser?.userID || '';
+
     // If sending failed, queue the message for later
     const tempMsg: OpenIMMessage = {
       clientMsgID,
-      sendID: '', // Will be filled when actually sent
+      sendID: currentUserID, // Set the current user ID
       recvID: to,
       groupID: groupId,
       sendTime: Date.now(),
@@ -672,9 +664,8 @@ const extractRecipientId = (conversationId: string): string => {
   if (parts.length !== 2) return '';
 
   const [userId1, userId2] = parts;
-  const currentUserId = sessionStorage.getItem('openim_user')
-    ? JSON.parse(sessionStorage.getItem('openim_user')!).userID
-    : '';
+  const currentUser = getAuthUser();
+  const currentUserId = currentUser?.userID || '';
 
   return currentUserId === userId1 ? userId2 : userId1;
 };
@@ -684,8 +675,6 @@ const retryQueuedMessages = async (): Promise<void> => {
 
   for (const [conversationId, queuedMessages] of Object.entries(queueCopy)) {
     if (queuedMessages && queuedMessages.length > 0) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-
       // Process each message in the queue for this conversation
       for (const message of [...queuedMessages]) {
         try {
@@ -696,20 +685,25 @@ const retryQueuedMessages = async (): Promise<void> => {
 
           // Determine the message type and content
           if (message.textElem?.content) {
+            // Remove from queue first to prevent duplicate processing
+            removeFromOutgoingQueue(conversationId, message.clientMsgID);
+            
             await sendMessageIM({
               to,
               groupId: actualGroupId,
               message: message.textElem.content,
               type: 'text'
             });
-            // Remove the successfully sent message from the queue
-            removeFromOutgoingQueue(conversationId, message.clientMsgID);
           } else if (message.pictureElem) {
             // For image messages, we would need to handle file re-uploads
             console.warn('Image message retry not implemented yet');
+            // Add back to queue if needed
+            addToOutgoingMessageQueue(conversationId, message);
           } else if (message.fileElem) {
             // For file messages, we would need to handle file re-uploads
             console.warn('File message retry not implemented yet');
+            // Add back to queue if needed
+            addToOutgoingMessageQueue(conversationId, message);
           }
         } catch (error) {
           console.error(
@@ -833,9 +827,8 @@ const markAsRead = async (conversationID: string) => {
     // Update local messages to mark them as read
     // Get all messages in this conversation and update their isRead status
     const messages = getSavedMessages(conversationID);
-    const currentUserID = sessionStorage.getItem('openim_user')
-      ? JSON.parse(sessionStorage.getItem('openim_user')!).userID
-      : '';
+    const currentUser = getAuthUser();
+    const currentUserID = currentUser?.userID || '';
     const updatedMessages = messages.map(msg => {
       // Only mark as read if it's a message from someone else (received message)
       // Don't mark our own messages as read
@@ -955,6 +948,31 @@ const appendOldMessagesToLocal = (
   const arr = messagesStore.value[conversationId] || [];
   const newArr = [...messagesWithDefaults, ...arr];
   messagesStore.value[conversationId] = newArr;
+};
+
+// Singleton instance with proper error handling
+const IMSDK = (() => {
+  try {
+    return getSDK({
+      debug: false,
+      coreWasmPath: '/openIM.wasm',
+      sqlWasmPath: '/sql-wasm.wasm'
+    });
+  } catch (error) {
+    console.error('[OpenIM] Failed to initialize SDK:', error);
+    throw new Error('Failed to initialize OpenIM SDK');
+  }
+})();
+
+if (import.meta.hot) {
+  import.meta.hot.accept(() => {});
+  import.meta.hot.dispose(() => {});
+}
+
+// Function to check if there was a recent reconnection (within last 3 seconds)
+// This extended window helps ensure the connection is fully stable before sending new messages
+const isRecentlyReconnected = () => {
+  return Date.now() - connectionState.lastReconnectTime < 3000;
 };
 
 export {

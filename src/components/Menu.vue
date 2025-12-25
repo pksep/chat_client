@@ -184,7 +184,6 @@ const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 
 const state = reactive({
   chapter: '',
-  contactList: computed(() => getConversationList()),
   selectedContactId: null
 });
 
@@ -224,9 +223,7 @@ const unmountContactClick = (contact: IContactProps | string): void => {
     if (foundContact) {
       state.chapter = foundContact.nickname;
 
-      // Mark messages as read when switching to this conversation
-      // Only call markAsRead if we have a valid contact ID
-      if (foundContact.id) {
+      if (foundContact.groupId) {
         markAsRead(foundContact.id).catch(error => {
           console.warn('Failed to mark messages as read:', error);
         });
@@ -239,9 +236,6 @@ const unmountContactClick = (contact: IContactProps | string): void => {
     }
   } else {
     state.chapter = contact.nickname;
-
-    // Mark messages as read when switching to this conversation
-    // Only call markAsRead if we have a valid contact ID
     if (contact.id) {
       markAsRead(contact.id).catch(error => {
         console.warn('Failed to mark messages as read:', error);
@@ -289,7 +283,7 @@ const listChannels = computed(() => [
   {
     title: 'Личные сообщения',
     onClickPlusButton: handleNewContactModal,
-    items: state.contactList
+    items: getConversationList()
   }
 ]);
 

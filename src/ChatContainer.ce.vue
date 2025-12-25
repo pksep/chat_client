@@ -19,6 +19,7 @@ import {
 import { fetchAuthUser, useAuth } from './composables/useAuth';
 import { fetchAllUsers } from './composables/useUsers';
 import { getConfig } from './services/useConfig';
+import { useUnreadMessagePolling } from './composables/useUnreadMessagePolling';
 
 const emits = defineEmits<IChatContainerEmits>();
 
@@ -62,6 +63,9 @@ onMounted(async () => {
     await fetchConversationList();
 
     markSDKReady();
+
+    // Start polling for unread messages to ensure updates even if WebSocket events fail
+    useUnreadMessagePolling(30000); // Poll every 30 seconds
   } catch (error) {
     console.error('Failed to initialize chat:', error);
 

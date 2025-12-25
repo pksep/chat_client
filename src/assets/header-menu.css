@@ -10,8 +10,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    align-content: center;
-    gap: 36px;
+    gap: 40px;
     border-bottom-style: solid;
     border-bottom-width: 1px;
     border-bottom-color: var(--border-grey);
@@ -30,10 +29,9 @@
   }
   li.header-menu__item {
     position: relative;
-    padding: 5px 14px;
-    &:first-child {
-      margin-left: 10px;
-    }
+    padding-inline: 14px;
+    padding-bottom: 7px;
+    padding-top: 5px;
 
     &.header-menu__item--active {
       & button {

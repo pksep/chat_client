@@ -111,14 +111,6 @@ p.chat__nothing-paragraph {
     --basic-height: calc(var(--default-height) - var(--header-height));
   }
 
-  .chat.chat__messages:not(:has(.chat__input)) {
-    margin-top: -22px;
-  }
-
-  .chat.chat__messages:not(.chat__input) > .menu__user-assistant {
-    padding: 20px;
-  }
-
   .chat__nothing {
     height: auto;
     margin-top: auto;
