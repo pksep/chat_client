@@ -1,16 +1,14 @@
 .mobile__modal-header {
   display: flex;
   align-items: center;
-  padding-top: 10px;
-  padding-bottom: 5px;
-  padding-inline: 10px;
-}
-
-.mobile__modal-content {
-  padding-inline: 10px;
+  align-content: center;
+  padding-top: 5px;
+  padding-bottom: 10px;
 }
 
 button.mobile__modal-header--button {
+  display: grid;
+  align-items: center;
   font-size: 16px;
   color: var(--text-blue);
   padding-block: 5px;
@@ -36,8 +34,14 @@ h3.mobile__modal-header--title {
 .modal-yui-kit__modal-content {
   display: grid;
   align-content: start;
-  gap: 10px;
-  padding-block: 10px;
+  gap: 5px;
+  padding: 10px;
+}
+
+@media (width <= 480px) {
+  .contact-selector__search {
+    margin-bottom: 0;
+  }
 }
 
 @media (width >= 480px) {

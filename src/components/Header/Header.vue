@@ -79,6 +79,9 @@
     title="Канал"
     close-button-text="Назад"
     @unmount-close="handleCloseMobileInfoModal"
+    :class="{
+      'chat__header-modal-info--active': true
+    }"
     :data-testid="`${props.dataTestid}-Header-MobileModal`"
   >
     <MobileChatInfo
