@@ -66,7 +66,7 @@ onMounted(async () => {
 
     markSDKReady();
 
-    useUnreadMessagePolling(30000);
+    useUnreadMessagePolling(30000); // Возвращаем исходный интервал опроса 30 секунд
   } catch (error) {
     console.error('Failed to initialize chat:', error);
 

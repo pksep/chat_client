@@ -68,15 +68,14 @@ function debounce<T extends (...args: any[]) => any>(
   };
 }
 
-const debouncedSetConnecting = debounce((val: boolean) => {
+const immediateSetConnecting = (val: boolean) => {
   isWebsocketConnecting.value = val;
-}, 100);
+};
 
 const setupOpenIM = (): void => {
-  // Connection event handlers
   const handleConnecting = () => {
     console.log('[OpenIM] Connecting...');
-    debouncedSetConnecting(true);
+    immediateSetConnecting(true);
   };
 
   const handleConnectSuccess = () => {
@@ -92,8 +91,8 @@ const setupOpenIM = (): void => {
       // Retry queued messages after connection is stable
       setTimeout(() => {
         retryQueuedMessages();
-      }, 200);
-    }, 100);
+      }, 100);
+    }, 50);
   };
 
   const handleConnectFailed = async (err: any) => {
@@ -245,8 +244,8 @@ const setupOpenIM = (): void => {
   // Register the event handler directly without debouncing to reduce message processing delay
   IMSDK.on(CbEvents.OnRecvNewMessages, processMessages);
 
-  // Read receipts processing
-  const batchProcessReadReceipts = debounce((evt: any) => {
+  // Read receipts processing without delay
+  const processReadReceipts = (evt: any) => {
     const receipts = evt.data as Array<{
       conversationID: string;
       clientMsgID: string;
@@ -275,11 +274,11 @@ const setupOpenIM = (): void => {
         return msg;
       });
 
-      saveMessagesToLocal(conversationID, updatedMsgs);
+      saveMessagesToLocal(conversationId, updatedMsgs);
     });
-  }, 100);
+  };
 
-  IMSDK.on(CbEvents.OnRecvC2CReadReceipt, batchProcessReadReceipts);
+  IMSDK.on(CbEvents.OnRecvC2CReadReceipt, processReadReceipts);
 };
 
 export const uploadFile = async (file: File) => {
@@ -438,11 +437,9 @@ export const sendMessageIM = async ({
     return;
   }
 
-  // If we just reconnected, wait a bit for the connection to stabilize
   const timeSinceReconnect = Date.now() - connectionState.lastReconnectTime;
-  if (timeSinceReconnect < 1000) {
-    // If less than 1 second since reconnect
-    await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms more
+  if (timeSinceReconnect < 500) {
+    await new Promise(resolve => setTimeout(resolve, 100)); // Уменьшаем задержку до 100мс
   }
 
   try {
@@ -867,16 +864,29 @@ const saveMessagesToLocal = (
   conversationId: string,
   messages: OpenIMMessage[]
 ): void => {
-  const messagesWithDefaults = messages.map(msg => ({
-    ...msg,
-    isReadByPeer: msg.isReadByPeer ?? false
-  }));
+  const messagesWithDefaults = new Array(messages.length);
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    messagesWithDefaults[i] = {
+      ...msg,
+      isReadByPeer: msg.isReadByPeer ?? false
+    };
+  }
 
-  messagesStore.value[conversationId] = [...messagesWithDefaults];
+  messagesStore.value[conversationId] = messagesWithDefaults;
+
+  messageChangeCallbacks.forEach(callback => {
+    try {
+      callback();
+    } catch (error) {
+      console.error('Error in message change callback:', error);
+    }
+  });
 };
 
 const getSavedMessages = (conversationId: string): OpenIMMessage[] => {
-  return messagesStore.value[conversationId] || [];
+  const messages = messagesStore.value[conversationId];
+  return messages ? messages : [];
 };
 
 const getOutgoingMessageQueue = (conversationId: string): OpenIMMessage[] => {
@@ -902,49 +912,106 @@ const getMessagesWithLoadingStatus = (
   const cachedMessages = getSavedMessages(conversationId);
   const hasConnection = !getIsWebsocketConnecting();
 
-  let finalMessages = [...cachedMessages];
+  if (hasConnection) {
+    return cachedMessages as OpenIMMessageWithLoading[];
+  }
 
-  if (!hasConnection) {
-    finalMessages = finalMessages.map(msg => ({
+  const messagesWithStatus = new Array(cachedMessages.length);
+  for (let i = 0; i < cachedMessages.length; i++) {
+    const msg = cachedMessages[i];
+    messagesWithStatus[i] = {
       ...msg,
       isReadByPeer: msg.isReadByPeer ?? false,
       status: 1,
       loading: true
-    }));
+    };
+  }
 
-    const queuedMessages = getOutgoingMessageQueue(conversationId);
-    finalMessages = [...finalMessages, ...queuedMessages];
+  const queuedMessages = getOutgoingMessageQueue(conversationId);
+  const totalLength = messagesWithStatus.length + queuedMessages.length;
+  const finalMessages = new Array(totalLength);
+
+  for (let i = 0; i < messagesWithStatus.length; i++) {
+    finalMessages[i] = messagesWithStatus[i];
+  }
+
+  for (let i = 0; i < queuedMessages.length; i++) {
+    finalMessages[messagesWithStatus.length + i] = queuedMessages[i];
   }
 
   return finalMessages;
+};
+
+const messageChangeCallbacks: Array<() => void> = [];
+
+export const subscribeToMessageChanges = (
+  callback: () => void
+): (() => void) => {
+  messageChangeCallbacks.push(callback);
+
+  return () => {
+    const index = messageChangeCallbacks.indexOf(callback);
+    if (index > -1) {
+      messageChangeCallbacks.splice(index, 1);
+    }
+  };
 };
 
 const appendMessageToLocal = (
   conversationId: string,
   message: OpenIMMessage
 ): void => {
-  const messageWithDefaults = {
+  const existingMessages = messagesStore.value[conversationId] || [];
+  const newLength = existingMessages.length + 1;
+  const newArr = new Array(newLength);
+
+  for (let i = 0; i < existingMessages.length; i++) {
+    newArr[i] = existingMessages[i];
+  }
+
+  newArr[newLength - 1] = {
     ...message,
     isReadByPeer: message.isReadByPeer ?? false
   };
 
-  const arr = messagesStore.value[conversationId] || [];
-  const newArr = [...arr, messageWithDefaults];
   messagesStore.value[conversationId] = newArr;
+
+  messageChangeCallbacks.forEach(callback => {
+    try {
+      callback();
+    } catch (error) {
+      console.error('Error in message change callback:', error);
+    }
+  });
 };
 
 const appendOldMessagesToLocal = (
   conversationId: string,
   messages: OpenIMMessage[]
 ): void => {
-  const messagesWithDefaults = messages.map(msg => ({
-    ...msg,
-    isReadByPeer: msg.isReadByPeer ?? false
-  }));
+  const existingMessages = messagesStore.value[conversationId] || [];
 
-  const arr = messagesStore.value[conversationId] || [];
-  const newArr = [...messagesWithDefaults, ...arr];
-  messagesStore.value[conversationId] = newArr;
+  const messagesWithDefaults = new Array(messages.length);
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    messagesWithDefaults[i] = {
+      ...msg,
+      isReadByPeer: msg.isReadByPeer ?? false
+    };
+  }
+
+  messagesStore.value[conversationId] = [
+    ...messagesWithDefaults,
+    ...existingMessages
+  ];
+
+  messageChangeCallbacks.forEach(callback => {
+    try {
+      callback();
+    } catch (error) {
+      console.error('Error in message change callback:', error);
+    }
+  });
 };
 
 const IMSDK = (() => {
