@@ -1,18 +1,26 @@
 .contact-list__item {
   --size-avatar: 25px;
-  display: grid;
-  grid-template-columns: calc(var(--size-avatar) * 2) auto;
-  column-gap: 10px;
-  padding: 10px;
+  display: flex;
+  align-content: center;
+  gap: 10px;
+  padding-inline: 10px;
   min-height: 58px;
-  grid-template-areas:
-    'avatar title block'
-    'avatar description block2';
   &:hover,
   &.contact-list__item--active {
     cursor: pointer;
     background-color: var(--blue15);
   }
+}
+
+.contact-list__block--wrapper {
+  display: grid;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  column-gap: 10px;
+  width: 100%;
+  grid-template-areas:
+    'title block'
+    'description block2';
 }
 
 .contact-list__title {
@@ -40,7 +48,6 @@
 .contact-list__description {
   grid-area: description;
   justify-self: start;
-  height: 19px;
   font-size: 14px;
 
   color: var(--text-grey);
@@ -53,7 +60,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   width: 170px;
-  height: 22px;
 }
 
 .contact-list__description br {
@@ -153,6 +159,10 @@ svg.icon-yui-kit.contact-list__read-icon {
 }
 
 @media (width <= 480px) {
+  .contact-list__block--wrapper {
+    border-bottom: 1px solid var(--grey1);
+    padding-bottom: 26px;
+  }
   .contact-list__description {
     margin-top: 5px;
     font-size: 16px;
