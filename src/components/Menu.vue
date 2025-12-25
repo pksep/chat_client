@@ -219,7 +219,7 @@ const unmountContactClick = (contact: IContactProps | string): void => {
   }
 
   if (typeof contact === 'string') {
-    const foundContact = state.contactList.find(c => c.id === contact);
+    const foundContact = getConversationList().find(c => c.id === contact);
     if (foundContact) {
       state.chapter = foundContact.nickname;
 

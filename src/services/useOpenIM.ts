@@ -82,14 +82,14 @@ const setupOpenIM = (): void => {
 
   const handleConnectSuccess = () => {
     console.log('[OpenIM] Connection successful');
-    
+
     // Update the last reconnection time
     connectionState.lastReconnectTime = Date.now();
 
     // Set connecting state to false after a small delay to ensure stability
     setTimeout(() => {
       isWebsocketConnecting.value = false;
-      
+
       // Retry queued messages after connection is stable
       setTimeout(() => {
         retryQueuedMessages();
@@ -441,7 +441,8 @@ export const sendMessageIM = async ({
 
   // If we just reconnected, wait a bit for the connection to stabilize
   const timeSinceReconnect = Date.now() - connectionState.lastReconnectTime;
-  if (timeSinceReconnect < 1000) { // If less than 1 second since reconnect
+  if (timeSinceReconnect < 1000) {
+    // If less than 1 second since reconnect
     await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms more
   }
 
@@ -588,7 +589,9 @@ export const sendMessageIM = async ({
 
     // Update the message in local storage - replace the temporary message with the one from the server
     const allMessages = getSavedMessages(convId);
-    const messageExists = allMessages.some(msg => msg.clientMsgID === clientMsgID);
+    const messageExists = allMessages.some(
+      msg => msg.clientMsgID === clientMsgID
+    );
 
     // Add isReadByPeer property to the response data if it doesn't exist
     const serverMessage = {
@@ -687,7 +690,7 @@ const retryQueuedMessages = async (): Promise<void> => {
           if (message.textElem?.content) {
             // Remove from queue first to prevent duplicate processing
             removeFromOutgoingQueue(conversationId, message.clientMsgID);
-            
+
             await sendMessageIM({
               to,
               groupId: actualGroupId,

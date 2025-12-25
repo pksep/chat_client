@@ -19,19 +19,27 @@ export const useUnreadMessagePolling = (pollingInterval: number = 30000) => {
 
     // Initial fetch
     fetchConversationList().catch(error => {
-      console.error('Failed to fetch conversation list on polling start:', error);
+      console.error(
+        'Failed to fetch conversation list on polling start:',
+        error
+      );
     });
 
     // Set up the polling interval
     pollingIntervalId = window.setInterval(() => {
       if (isPollingActive.value) {
         fetchConversationList().catch(error => {
-          console.error('Failed to fetch conversation list during polling:', error);
+          console.error(
+            'Failed to fetch conversation list during polling:',
+            error
+          );
         });
       }
     }, pollingInterval);
 
-    console.log(`Started unread message polling with interval: ${pollingInterval}ms`);
+    console.log(
+      `Started unread message polling with interval: ${pollingInterval}ms`
+    );
   };
 
   const stopPolling = () => {
