@@ -27,7 +27,6 @@ const connectionState: ConnectionState = {
   lastReconnectTime: 0
 };
 
-// Simple timeout wrapper
 const withTimeout = <T>(
   promise: Promise<T>,
   timeoutMs: number,
@@ -47,27 +46,6 @@ const withTimeout = <T>(
   ]);
 };
 
-// Simple debounce utility
-function debounce<T extends (...args: any[]) => any>(
-  func: T,
-  wait: number
-): (...args: Parameters<T>) => void {
-  let timeout: number | null = null;
-
-  return function executedFunction(...args: Parameters<T>): void {
-    const later = () => {
-      timeout = null;
-      func(...args);
-    };
-
-    if (timeout !== null) {
-      clearTimeout(timeout);
-    }
-
-    timeout = setTimeout(later, wait) as unknown as number;
-  };
-}
-
 const immediateSetConnecting = (val: boolean) => {
   isWebsocketConnecting.value = val;
 };
@@ -81,14 +59,11 @@ const setupOpenIM = (): void => {
   const handleConnectSuccess = () => {
     console.log('[OpenIM] Connection successful');
 
-    // Update the last reconnection time
     connectionState.lastReconnectTime = Date.now();
 
-    // Set connecting state to false after a small delay to ensure stability
     setTimeout(() => {
       isWebsocketConnecting.value = false;
 
-      // Retry queued messages after connection is stable
       setTimeout(() => {
         retryQueuedMessages();
       }, 100);
@@ -99,7 +74,6 @@ const setupOpenIM = (): void => {
     console.error('[OpenIM] Connection failed:', err);
     isWebsocketConnecting.value = false;
 
-    // Check if it's a token expiration error and attempt to refresh
     if (err?.errCode === 403 || err?.message?.includes('token')) {
       console.log('[OpenIM] Token may have expired, attempting to refresh...');
       await attemptTokenRefresh();
@@ -108,7 +82,6 @@ const setupOpenIM = (): void => {
 
   const attemptTokenRefresh = async () => {
     try {
-      // Dynamically import to avoid circular dependencies
       const { useAuth } = await import('../composables/useAuth');
       const { getConfig } = await import('./useConfig');
 
@@ -124,7 +97,6 @@ const setupOpenIM = (): void => {
       const storedUser = sessionStorage.getItem('openim_user');
       const userData = storedUser ? JSON.parse(storedUser) : {};
 
-      // Update stored user data with new token
       const newUserData = {
         ...userData,
         token: authData.token,
@@ -134,7 +106,6 @@ const setupOpenIM = (): void => {
 
       sessionStorage.setItem('openim_user', JSON.stringify(newUserData));
 
-      // Attempt to login with new token
       await IMSDK.login({
         platformID: authData.PlatformID,
         userID: authData.UserID,
@@ -143,7 +114,6 @@ const setupOpenIM = (): void => {
         wsAddr: config.CHAT_OPENIM_WS_DOMAIN
       });
 
-      // Fetch the user information to update the authedUser ref after successful reconnection
       const { fetchAuthUser } = await import('../composables/useAuth');
       await fetchAuthUser();
 
@@ -156,23 +126,19 @@ const setupOpenIM = (): void => {
   const handleKickedOffline = async () => {
     console.warn('[OpenIM] User was kicked offline');
 
-    // Clear the user data
     sessionStorage.removeItem('openim_user');
 
-    // Attempt to re-authenticate and reconnect
     console.log(
       '[OpenIM] Attempting to re-authenticate after being kicked offline...'
     );
     await attemptTokenRefresh();
   };
 
-  // Register event handlers
   IMSDK.on(CbEvents.OnConnecting, handleConnecting);
   IMSDK.on(CbEvents.OnConnectSuccess, handleConnectSuccess);
   IMSDK.on(CbEvents.OnConnectFailed, handleConnectFailed);
   IMSDK.on(CbEvents.OnKickedOffline, handleKickedOffline);
 
-  // Notification and conversation updates
   const updateConversations = (ev: any) => {
     const data = ev.data || [];
     updateConversationList(data.filter((item: any) => !item.groupID));
@@ -209,7 +175,6 @@ const setupOpenIM = (): void => {
       let enableAudio = false;
       const user = getAuthUser();
 
-      // Process each message individually to ensure all messages are handled
       for (const message of list) {
         if (!message) continue;
 
@@ -218,7 +183,6 @@ const setupOpenIM = (): void => {
           continue;
         }
 
-        // Check if we should play audio notification (for non-notification messages from others)
         if (
           !enableAudio &&
           !currentProcessedMessage.notificationElem &&
@@ -241,10 +205,8 @@ const setupOpenIM = (): void => {
     }
   };
 
-  // Register the event handler directly without debouncing to reduce message processing delay
   IMSDK.on(CbEvents.OnRecvNewMessages, processMessages);
 
-  // Read receipts processing without delay
   const processReadReceipts = (evt: any) => {
     const receipts = evt.data as Array<{
       conversationID: string;
@@ -274,7 +236,7 @@ const setupOpenIM = (): void => {
         return msg;
       });
 
-      saveMessagesToLocal(conversationId, updatedMsgs);
+      saveMessagesToLocal(conversationID, updatedMsgs);
     });
   };
 
@@ -323,7 +285,6 @@ export const uploadFile = async (file: File) => {
   }
 };
 
-// Message sending type definitions
 type MessageSendingParams = {
   to: string;
   groupId: string;
@@ -332,10 +293,9 @@ type MessageSendingParams = {
   file?: File;
 };
 
-type MessageContentType = 101 | 102 | 105; // 101:text, 102:image, 105:file
-type SessionType = 1 | 3; // 1: single chat, 3: group chat
+type MessageContentType = 101 | 102 | 105;
+type SessionType = 1 | 3;
 
-// Helper function to determine content type based on message type
 const getContentType = (type: string): MessageContentType => {
   switch (type) {
     case 'text':
@@ -349,13 +309,11 @@ const getContentType = (type: string): MessageContentType => {
   }
 };
 
-// Helper function to determine session type based on to and groupId
 const getSessionType = (to: string, groupId: string): SessionType => {
   // 1: single chat (when 'to' is provided), 3: group chat (when 'groupId' is provided)
   return groupId ? 3 : 1;
 };
 
-// Helper function to determine conversation ID
 const determineConversationId = (to: string, groupId: string): string => {
   if (groupId) {
     return `sg_${groupId}`;
@@ -402,21 +360,18 @@ export const sendMessageIM = async ({
     throw error;
   }
 
-  // Check if websocket is connecting/disconnected
   if (getIsWebsocketConnecting()) {
-    // Get the current user ID to ensure sendID is properly set
     const currentUser = getAuthUser();
     const currentUserID = currentUser?.userID || '';
 
-    // Create a temporary message object to add to the queue
     const tempMsg: OpenIMMessage = {
       clientMsgID,
-      sendID: currentUserID, // Set the current user ID
+      sendID: currentUserID,
       recvID: to,
       groupID: groupId,
       sendTime: Date.now(),
       textElem: { content: message || '' },
-      status: 1, // Mark as loading
+      status: 1,
       isRead: false,
       isReadByPeer: false,
       msgFrom: 0,
@@ -427,19 +382,15 @@ export const sendMessageIM = async ({
 
     const convId = determineConversationId(to, groupId);
 
-    // Add to outgoing queue for when connection is restored
     addToOutgoingMessageQueue(convId, tempMsg);
 
-    // Update UI to show the queued message with loading status
     appendMessageToLocal(convId, tempMsg);
-
-    // Don't throw an error, as this is expected behavior when offline
     return;
   }
 
   const timeSinceReconnect = Date.now() - connectionState.lastReconnectTime;
   if (timeSinceReconnect < 500) {
-    await new Promise(resolve => setTimeout(resolve, 100)); // Уменьшаем задержку до 100мс
+    await new Promise(resolve => setTimeout(resolve, 100));
   }
 
   try {
@@ -582,23 +533,19 @@ export const sendMessageIM = async ({
       'sendMessage'
     );
 
-    // Determine the conversation ID based on message type
     const convId = determineConversationId(to, groupId);
 
-    // Update the message in local storage - replace the temporary message with the one from the server
     const allMessages = getSavedMessages(convId);
     const messageExists = allMessages.some(
       msg => msg.clientMsgID === clientMsgID
     );
 
-    // Add isReadByPeer property to the response data if it doesn't exist
     const serverMessage = {
       ...res.data,
       isReadByPeer: (res.data as any).isReadByPeer ?? false
     };
 
     if (messageExists) {
-      // Replace the temporary message with the one from the server
       const updatedMessages = allMessages.map(msg => {
         if (msg.clientMsgID === clientMsgID) {
           return serverMessage;
@@ -608,7 +555,6 @@ export const sendMessageIM = async ({
 
       saveMessagesToLocal(convId, updatedMessages);
     } else {
-      // If the temporary message doesn't exist, append the new one
       appendMessageToLocal(convId, serverMessage);
     }
 
@@ -627,19 +573,17 @@ export const sendMessageIM = async ({
 
     console.error('[OpenIM] Failed to send message:', errorDetails);
 
-    // Get the current user ID to ensure sendID is properly set
     const currentUser = getAuthUser();
     const currentUserID = currentUser?.userID || '';
 
-    // If sending failed, queue the message for later
     const tempMsg: OpenIMMessage = {
       clientMsgID,
-      sendID: currentUserID, // Set the current user ID
+      sendID: currentUserID,
       recvID: to,
       groupID: groupId,
       sendTime: Date.now(),
       textElem: { content: message || '' },
-      status: 1, // Mark as loading
+      status: 1,
       isRead: false,
       isReadByPeer: false,
       msgFrom: 0,
@@ -676,17 +620,13 @@ const retryQueuedMessages = async (): Promise<void> => {
 
   for (const [conversationId, queuedMessages] of Object.entries(queueCopy)) {
     if (queuedMessages && queuedMessages.length > 0) {
-      // Process each message in the queue for this conversation
       for (const message of [...queuedMessages]) {
         try {
-          // Determine if this is a group or single chat
           const isGroupChat = conversationId.startsWith('sg_');
           const actualGroupId = isGroupChat ? conversationId.substring(3) : '';
           const to = isGroupChat ? '' : extractRecipientId(conversationId);
 
-          // Determine the message type and content
           if (message.textElem?.content) {
-            // Remove from queue first to prevent duplicate processing
             removeFromOutgoingQueue(conversationId, message.clientMsgID);
 
             await sendMessageIM({
@@ -696,14 +636,10 @@ const retryQueuedMessages = async (): Promise<void> => {
               type: 'text'
             });
           } else if (message.pictureElem) {
-            // For image messages, we would need to handle file re-uploads
             console.warn('Image message retry not implemented yet');
-            // Add back to queue if needed
             addToOutgoingMessageQueue(conversationId, message);
           } else if (message.fileElem) {
-            // For file messages, we would need to handle file re-uploads
             console.warn('File message retry not implemented yet');
-            // Add back to queue if needed
             addToOutgoingMessageQueue(conversationId, message);
           }
         } catch (error) {
@@ -711,7 +647,6 @@ const retryQueuedMessages = async (): Promise<void> => {
             `Failed to retry sending message ${message.clientMsgID}:`,
             error
           );
-          // Keep the message in the queue if retry fails
         }
       }
     }
@@ -768,7 +703,6 @@ const getMessagesByConversationId = async (
 
     const messages: OpenIMMessage[] = response.data.messageList || [];
 
-    // Only update local storage if we have messages to append
     if (messages.length > 0) {
       if (lastClientMsgID) {
         appendOldMessagesToLocal(conversationId, messages);
@@ -811,11 +745,7 @@ const markAsRead = async (conversationID: string) => {
   const TIMEOUT_DURATION = 10000;
 
   try {
-    // Check if conversationID is valid before attempting to mark as read
     if (!conversationID) {
-      console.warn(
-        '[OpenIM] Cannot mark messages as read: conversationID is empty or null'
-      );
       return;
     }
 
@@ -842,12 +772,7 @@ const markAsRead = async (conversationID: string) => {
   } catch (error: any) {
     const typedError = error as MarkAsReadError;
 
-    // Check if it's the specific RecordNotFoundError (errCode 1004)
     if (typedError?.errCode === 1004) {
-      console.warn(
-        `[OpenIM] Conversation not found when trying to mark messages as read (conversationID: ${conversationID}):`,
-        typedError
-      );
       return;
     } else {
       console.error('[OpenIM] Failed to mark messages as read:', typedError);

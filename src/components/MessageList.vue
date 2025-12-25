@@ -187,13 +187,12 @@ const inputText = ref('');
 
 const state = reactive({
   messages: [] as OpenIMMessageWithLoading[],
-  chatId: null as string | null, // Initialize as null, will be set when needed
-  hasMoreMessages: true, // Flag to track if there are more messages to load
-  isLoadingMore: false, // Flag to prevent multiple simultaneous requests
+  chatId: null as string | null,
+  hasMoreMessages: true,
+  isLoadingMore: false,
   aiMessages: [] as AIMessage[]
 });
 
-// Flag to prevent multiple simultaneous message loads
 const isLoadingInitialMessages = ref(false);
 
 const updateMessages = () => {
@@ -245,19 +244,6 @@ const throttle = <T extends (...args: any[]) => any>(
   };
 };
 
-const debounce = <T extends (...args: any[]) => any>(
-  func: T,
-  delay: number
-): ((...args: Parameters<T>) => void) => {
-  let timeoutId: number | null = null;
-  return (...args: Parameters<T>) => {
-    if (timeoutId) {
-      window.clearTimeout(timeoutId);
-    }
-    timeoutId = window.setTimeout(() => func.apply(null, args), delay);
-  };
-};
-
 let isScrollLoading = false;
 const handleScroll = throttle((): void => {
   const el = chatWrapperRef.value;
@@ -269,15 +255,15 @@ const handleScroll = throttle((): void => {
 
   const distanceFromBottom = scrollTop;
   const distanceFromTop = maxScroll + scrollTop;
-  scrollState.shouldAutoScroll = distanceFromBottom < 50; // Уменьшено до 50
-  scrollState.isUserScrolling = distanceFromBottom >= 50; // Уменьшено до 50
+  scrollState.shouldAutoScroll = distanceFromBottom < 50;
+  scrollState.isUserScrolling = distanceFromBottom >= 50;
 
   if (scrollState.isInitialLoad) {
     scrollState.isInitialLoad = false;
   }
 
   if (
-    distanceFromTop < 100 && // Уменьшено до 100
+    distanceFromTop < 100 &&
     !isScrollLoading &&
     props.contact?.conversationId
   ) {
@@ -299,7 +285,7 @@ const handleScroll = throttle((): void => {
       isScrollLoading = false;
     }
   }
-};
+}, 100);
 
 const isEnableSend = computed(() => {
   try {
@@ -397,10 +383,8 @@ watch(
   }
 );
 
-// Reactive references for Mastra service
 const mastraResult = ref(null as any);
 
-// Initialize Mastra when chatId and baseUrl are available
 const initializeMastra = () => {
   if (state.chatId && props.baseUrl) {
     const result = useMastra({
@@ -466,7 +450,6 @@ const addLocalAIMessage = (text: string) => {
 
   state.aiMessages = [...state.aiMessages, userMessage];
 
-  // Add a placeholder assistant message to show loading state
   const assistantMessage = {
     role: 'assistant' as 'user' | 'assistant',
     content: 'Mastra is currently unavailable. Please try again later.',
@@ -530,7 +513,6 @@ watch(
       scrollState.previousScrollTop = chatWrapperRef.value.scrollTop;
     }
 
-    // Only reload messages if we're switching to a non-AI chapter with a valid conversation
     if (newValue !== 'ai' && props.contact?.conversationId) {
       state.messages = [];
       state.hasMoreMessages = true;
@@ -738,8 +720,6 @@ onMounted(async () => {
     state.chatId = generateChatId();
   }
 
-  // Load initial messages if we have a conversation ID on mount
-  // Only do this if the conversation ID is already available at mount time
   if (props.contact?.conversationId) {
     state.messages = [];
     state.hasMoreMessages = true;
