@@ -1,9 +1,15 @@
 <template>
-  <ChatContainer v-bind="props" />
+  <ChatContainer v-if="openChatContainerShow" v-bind="props" />
+  <img
+    v-else
+    style="position: fixed; width: 100dvw; height: 100dvh; object-fit: contain"
+    src="/images/deploy-bg.svg"
+    alt="deploy-bg"
+  />
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
 import type {
   IChatContainerEmits,
@@ -26,11 +32,13 @@ const props = defineProps<IChatContainerProps>();
 
 const allNotificationCount = computed(() => getAllNotificationCount());
 
+const openChatContainerShow = ref(true);
+
 onMounted(async () => {
   const url = new URL(window.location.href);
-  const token = url.searchParams.get('token');
+  const token = url.searchParams.get('token')?.split('?token')[0];
   const REDIRECT_KEY = 'chat_redirect_attempts';
-  const MAX_REDIRECTS = 3;
+  const MAX_REDIRECTS = 2;
 
   if (token) {
     localStorage.setItem('erp_token', token);
@@ -88,6 +96,7 @@ onMounted(async () => {
     if (attempts >= MAX_REDIRECTS) {
       localStorage.removeItem(REDIRECT_KEY);
       console.error('Redirect blocked: too many attempts');
+      openChatContainerShow.value = false;
       return;
     }
 
