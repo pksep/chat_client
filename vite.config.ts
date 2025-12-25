@@ -55,10 +55,11 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
             },
             mode: mode === 'development' ? 'development' : 'production',
             manifest: {
-              name: 'sep-chat',
-              short_name: 'SepChat',
+              name: 'SEP:Chat',
               display: 'standalone',
               description: 'Chatting application',
+              theme_color: '#ffffff',
+              background_color: '#ffffff',
               icons: [
                 {
                   src: 'images/pwa-64x64.png',
