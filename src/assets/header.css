@@ -68,4 +68,7 @@ button.button-yui-kit {
   .chat__header-search {
     min-width: 100px;
   }
+  .chat__header-ai-assistant > .menu__user-assistant-icon > svg.ai-icon {
+    font-size: 20px;
+  }
 }
