@@ -201,6 +201,7 @@ const updateMessages = () => {
       props.contact.conversationId
     );
 
+    // Create a new array reference to ensure Vue reactivity
     state.messages = [...newMessages];
   } else {
     state.messages = [];
@@ -229,32 +230,17 @@ const scrollToBottom = (smooth: boolean = false): void => {
   }
 };
 
-const throttle = <T extends (...args: any[]) => any>(
-  func: T,
-  limit: number
-) => {
-  let inThrottle: boolean;
-  return function (this: any) {
-    const args = arguments;
-    if (!inThrottle) {
-      func.apply(this, args);
-      inThrottle = true;
-      setTimeout(() => (inThrottle = false), limit);
-    }
-  };
-};
-
 let isScrollLoading = false;
-const handleScroll = throttle((): void => {
+const handleScroll = (): void => {
   const el = chatWrapperRef.value;
   if (!el) return;
 
   const { scrollTop, scrollHeight, clientHeight } = el;
 
   const maxScroll = scrollHeight - clientHeight;
-
   const distanceFromBottom = scrollTop;
   const distanceFromTop = maxScroll + scrollTop;
+
   scrollState.shouldAutoScroll = distanceFromBottom < 50;
   scrollState.isUserScrolling = distanceFromBottom >= 50;
 
@@ -285,7 +271,7 @@ const handleScroll = throttle((): void => {
       isScrollLoading = false;
     }
   }
-}, 100);
+};
 
 const isEnableSend = computed(() => {
   try {
@@ -338,6 +324,12 @@ const previousConnectingState = ref(getIsWebsocketConnecting());
 watch(
   () => getIsWebsocketConnecting(),
   currentConnectingState => {
+    previousConnectingState.value = currentConnectingState;
+
+    // Update messages whenever connection state changes
+    updateMessages();
+
+    // When connection is restored, fetch fresh messages
     if (previousConnectingState.value && !currentConnectingState) {
       setTimeout(async () => {
         if (props.contact?.conversationId) {
@@ -353,8 +345,6 @@ watch(
         }
       }, 300);
     }
-    previousConnectingState.value = currentConnectingState;
-    updateMessages();
   }
 );
 
@@ -417,25 +407,73 @@ watch(
   { deep: true }
 );
 
-watch(
-  () => getIsWebsocketConnecting(),
-  () => {
-    updateMessages();
-  }
-);
-
 let unsubscribeFromMessageChanges: (() => void) | null = null;
 
-onMounted(() => {
-  unsubscribeFromMessageChanges = subscribeToMessageChanges(() => {
-    updateMessages();
-  });
+onMounted(async () => {
+  if (!state.chatId) {
+    state.chatId = generateChatId();
+  }
+
+  // Set up message subscription first to catch any messages that arrive during initialization
+  unsubscribeFromMessageChanges = subscribeToMessageChanges(
+    async (newMessageConversationId?: string) => {
+      // Add a small delay to ensure the database has been updated with new messages
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // If the new message is for the current conversation, fetch fresh messages and update the UI
+      if (newMessageConversationId === props.contact?.conversationId) {
+        // Only fetch fresh messages if not currently loading
+        if (!getIsWebsocketConnecting()) {
+          await getMessagesByConversationId(newMessageConversationId, '');
+        }
+        updateMessages();
+
+        // Scroll to bottom to show new messages
+        await nextTick();
+        requestAnimationFrame(() => {
+          if (chatWrapperRef?.value && scrollState.shouldAutoScroll) {
+            scrollToBottom(true);
+          }
+        });
+      }
+    }
+  );
+
+  if (props.contact?.conversationId) {
+    state.messages = [];
+    state.hasMoreMessages = true;
+    state.isLoadingMore = false;
+    isLoadingInitialMessages.value = true;
+
+    try {
+      if (!getIsWebsocketConnecting()) {
+        await getMessagesByConversationId(props.contact.conversationId, '');
+      }
+    } catch (error) {
+      console.error('Failed to load initial messages:', error);
+    } finally {
+      updateMessages();
+      isLoadingInitialMessages.value = false;
+    }
+
+    await nextTick();
+    requestAnimationFrame(() => {
+      if (chatWrapperRef?.value) {
+        scrollState.shouldAutoScroll = true;
+        scrollState.isInitialLoad = true;
+      }
+    });
+  }
 });
 
 onUnmounted(() => {
   if (unsubscribeFromMessageChanges) {
     unsubscribeFromMessageChanges();
     unsubscribeFromMessageChanges = null;
+  }
+
+  if (state.chatId) {
+    removeMessageLoading(state.chatId, state.aiMessages.length);
   }
 });
 
@@ -470,21 +508,17 @@ const messageChat = (role: string) => [
   { message__other: role === 'user' }
 ];
 
-const handleNewMessages = (newLength: number, oldLength: number) => {
-  if (props.chapter === 'ai') return;
-
-  if (oldLength === 0 && newLength > 0) {
-    if (!getIsWebsocketConnecting()) {
-      scrollState.shouldAutoScroll = true;
-      scrollToBottom(true);
-    }
-  }
-};
-
 watch(
   () => state.messages.length,
   (newLength, oldLength) => {
-    handleNewMessages(newLength, oldLength);
+    if (props.chapter === 'ai') return;
+
+    if (oldLength === 0 && newLength > 0) {
+      if (!getIsWebsocketConnecting()) {
+        scrollState.shouldAutoScroll = true;
+        scrollToBottom(true);
+      }
+    }
   },
   { immediate: true }
 );
@@ -548,10 +582,6 @@ watch(
   },
   { immediate: true }
 );
-
-const handleClear = (): void => {
-  clearAiMessages();
-};
 
 const handleSend = async (): Promise<void> => {
   if (!inputText.value.trim()) return;
@@ -715,45 +745,7 @@ const getSystemMessageContent = message => {
   return notification || message.textElem?.content || message.showName || '';
 };
 
-onMounted(async () => {
-  if (!state.chatId) {
-    state.chatId = generateChatId();
-  }
-
-  if (props.contact?.conversationId) {
-    state.messages = [];
-    state.hasMoreMessages = true;
-    state.isLoadingMore = false;
-    isLoadingInitialMessages.value = true;
-
-    try {
-      if (!getIsWebsocketConnecting()) {
-        await getMessagesByConversationId(props.contact.conversationId, '');
-      }
-    } catch (error) {
-      console.error('Failed to load initial messages:', error);
-    } finally {
-      updateMessages();
-      isLoadingInitialMessages.value = false;
-    }
-
-    await nextTick();
-    requestAnimationFrame(() => {
-      if (chatWrapperRef?.value) {
-        scrollState.shouldAutoScroll = true;
-        scrollState.isInitialLoad = true;
-      }
-    });
-  }
-});
-
-onUnmounted(() => {
-  if (state.chatId) {
-    removeMessageLoading(state.chatId, state.aiMessages.length);
-  }
-});
-
 defineExpose({
-  handleClear
+  handleClear: clearAiMessages
 });
 </script>

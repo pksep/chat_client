@@ -802,7 +802,7 @@ const saveMessagesToLocal = (
 
   messageChangeCallbacks.forEach(callback => {
     try {
-      callback();
+      callback(conversationId);
     } catch (error) {
       console.error('Error in message change callback:', error);
     }
@@ -867,10 +867,10 @@ const getMessagesWithLoadingStatus = (
   return finalMessages;
 };
 
-const messageChangeCallbacks: Array<() => void> = [];
+const messageChangeCallbacks: Array<(conversationId?: string) => void> = [];
 
 export const subscribeToMessageChanges = (
-  callback: () => void
+  callback: (conversationId?: string) => void
 ): (() => void) => {
   messageChangeCallbacks.push(callback);
 
@@ -903,7 +903,7 @@ const appendMessageToLocal = (
 
   messageChangeCallbacks.forEach(callback => {
     try {
-      callback();
+      callback(conversationId);
     } catch (error) {
       console.error('Error in message change callback:', error);
     }
@@ -932,7 +932,7 @@ const appendOldMessagesToLocal = (
 
   messageChangeCallbacks.forEach(callback => {
     try {
-      callback();
+      callback(conversationId);
     } catch (error) {
       console.error('Error in message change callback:', error);
     }
