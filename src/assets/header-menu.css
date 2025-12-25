@@ -5,11 +5,14 @@
 @media screen and (width <= 480px) {
   .chat__header-menu {
     display: flex;
+    position: sticky;
+    top: 0;
   }
   .header-menu__list {
     display: flex;
     justify-content: center;
     align-items: center;
+    background-color: var(--white);
     gap: 40px;
     border-bottom-style: solid;
     border-bottom-width: 1px;
