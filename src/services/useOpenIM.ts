@@ -27,8 +27,8 @@ const IMSDK: IMSDKType = (() => {
   if (!instance) {
     instance = getSDK({
       debug: false,
-      coreWasmPath: '/opeaaanIM.wasm',
-      sqlWasmPath: '/sql-wasaaam.wasm'
+      coreWasmPath: '/openIM.wasm',
+      sqlWasmPath: '/sql-wasm.wasm'
     });
   }
   return instance;
