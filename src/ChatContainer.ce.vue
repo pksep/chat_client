@@ -25,6 +25,7 @@ import {
 import { fetchAuthUser, useAuth } from './composables/useAuth';
 import { fetchAllUsers } from './composables/useUsers';
 import { getConfig } from './services/useConfig';
+import { useUnreadMessagePolling } from './composables/useUnreadMessagePolling';
 
 const emits = defineEmits<IChatContainerEmits>();
 
@@ -65,28 +66,15 @@ onMounted(async () => {
       wsAddr
     });
 
-    // If code is here, then the problem is not in the token, remove the redirect counter
-    localStorage.removeItem(REDIRECT_KEY);
-
-    sessionStorage.setItem(
-      'openim_user',
-      JSON.stringify({
-        platformID: authData.PlatformID,
-        userID: authData.UserID,
-        token: authData.token,
-        apiAddr,
-        wsAddr
-      })
-    );
-
     await Promise.all([fetchAuthUser(), fetchAllUsers()]);
 
     setupOpenIM();
 
-    // Initialize conversation list after SDK is ready
     await fetchConversationList();
 
     markSDKReady();
+
+    useUnreadMessagePolling(30000); // Возвращаем исходный интервал опроса 30 секунд
   } catch (error) {
     console.error('Failed to initialize chat:', error);
 

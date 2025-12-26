@@ -40,7 +40,10 @@
       class="mobile__modal-divider"
       :data-testid="`${dataTestid}-MobileModal-Divider`"
     />
-    <div :data-testid="`${dataTestid}-MobileModal-Content`">
+    <div
+      :data-testid="`${dataTestid}-MobileModal-Content`"
+      class="mobile__modal-content"
+    >
       <slot></slot>
     </div>
   </Modal>

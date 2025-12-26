@@ -179,17 +179,28 @@ const setGroupInfo = async (
     const index = groups.value.findIndex(g => g.id === groupID);
     if (index !== -1) {
       const existing = groups.value[index];
-      groups.value[index] = {
+      const updatedGroup = {
         ...existing,
         ...groupInfo,
+        avatarUrl: groupInfo.faceURL || existing.avatarUrl, // Map faceURL to avatarUrl
         nickname: groupInfo.groupName || existing.nickname
       };
 
-      groups.value.sort((a, b) => {
+      // Create a new array to ensure Vue's reactivity detects the change
+      const newGroups = [
+        ...groups.value.slice(0, index),
+        updatedGroup,
+        ...groups.value.slice(index + 1)
+      ];
+
+      // Create a sorted array to ensure Vue's reactivity detects the change
+      const sortedGroups = [...newGroups].sort((a, b) => {
         if (a.isPin && !b.isPin) return -1;
         if (!a.isPin && b.isPin) return 1;
         return b.latestMessageTime - a.latestMessageTime;
       });
+
+      groups.value = sortedGroups;
     }
   } catch (err) {
     const errorDetails = {

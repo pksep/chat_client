@@ -14,7 +14,7 @@
         @click="closeModal"
         class="new-group__button-close"
       >
-        <Icon :name="IconNameEnum.crossLarge" />
+        <Icon :name="IconNameEnum.crossSmall" />
       </Button>
     </header>
     <ContactSelector
@@ -23,7 +23,7 @@
       @unmount-contact="handleOpenGroupInfo"
     />
 
-    <div v-else>
+    <div v-else class="menu-info__modal-wrapper">
       <Tabs :tabCount="2" :defaultActiveTabId="2">
         <template #header1>
           <span class="menu-info__user-header">

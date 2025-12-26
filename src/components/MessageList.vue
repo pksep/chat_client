@@ -1,49 +1,48 @@
 <template>
-  <template v-if="props.chapter === 'ai'">
-    <div
-      class="chat__message-wrapper"
-      ref="chatWrapperRef"
-      v-if="aiMessages.length"
-      :data-testid="`${props.dataTestid}-MessageList-AIMessagesWrapper`"
-    >
-      <div
-        class="chat__message-bubble"
-        :data-testid="`${props.dataTestid}-MessageList-AIMessagesContainer`"
-      >
-        <template v-for="(message, index) in aiMessages" :key="index">
-          <div
-            v-if="isNewDate(index, true)"
-            class="top-element"
-            :data-divider="
-              isNewDate(index, true) ? formatDay(message.timestamp) : undefined
-            "
-          >
-            <div
-              class="date-divider"
-              :data-testid="`${props.dataTestid}-MessageList-DateDividerAI${index + 1}`"
-            >
-              <span
-                :data-testid="`${props.dataTestid}-MessageList-DateLabelAI${index + 1}`"
-                >{{ formatDay(message.timestamp) }}</span
-              >
-            </div>
-          </div>
-          <MessageBubble
-            :class="messageChat(message.role)"
-            :message="message.content || ''"
-            :author="message.role"
-            :time="formatTime(new Date(message.timestamp))"
-            :loader="message.loading"
-            :is-me-sender="message.role === 'user'"
-            :data-testid="`${props.dataTestid}-MessageList-MessageBubbleAI${index + 1}`"
-          />
-        </template>
-      </div>
-    </div>
-  </template>
   <div
     class="chat__message-wrapper"
-    v-if="state.messages.length"
+    ref="chatWrapperRef"
+    v-if="props.chapter === 'ai'"
+    :data-testid="`${props.dataTestid}-MessageList-AIMessagesWrapper`"
+  >
+    <div
+      class="chat__message-bubble"
+      :data-testid="`${props.dataTestid}-MessageList-AIMessagesContainer`"
+    >
+      <template v-for="(message, index) in state.aiMessages" :key="index">
+        <div
+          v-if="isNewDate(index, true)"
+          class="top-element"
+          :data-divider="
+            isNewDate(index, true) ? formatDay(message.timestamp) : undefined
+          "
+        >
+          <div
+            class="date-divider"
+            :data-testid="`${props.dataTestid}-MessageList-DateDividerAI${index + 1}`"
+          >
+            <span
+              :data-testid="`${props.dataTestid}-MessageList-DateLabelAI${index + 1}`"
+              >{{ formatDay(message.timestamp) }}</span
+            >
+          </div>
+        </div>
+        <MessageBubble
+          :class="messageChat(message.role)"
+          :message="message.content || ''"
+          :author="message.role"
+          :time="formatTime(new Date(message.timestamp))"
+          :loader="message.loading"
+          :is-me-sender="message.role === 'user'"
+          :data-testid="`${props.dataTestid}-MessageList-MessageBubbleAI${index + 1}`"
+        />
+      </template>
+    </div>
+  </div>
+
+  <div
+    class="chat__message-wrapper"
+    v-if="state.messages.length && props.chapter !== 'ai'"
     ref="chatWrapperRef"
     @scroll="handleScroll"
     :data-testid="`${props.dataTestid}-MessageList-UserMessagesWrapper`"
@@ -58,9 +57,6 @@
       >
         <div
           class="top-element"
-          :data-divider="
-            isNewDate(index) ? formatDay(message.sendTime) : undefined
-          "
           v-if="
             isNewDate(index) ||
             message.isSystemMessage ||
@@ -120,9 +116,15 @@
     :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
     v-if="
       !state.messages.length &&
-      !aiMessages.length &&
-      !getIsWebsocketConnecting()
+      !state.aiMessages.length &&
+      !getIsWebsocketConnecting() &&
+      !isLoadingInitialMessages
     "
+  />
+  <Loading
+    v-if="isLoadingInitialMessages"
+    message="Загрузка сообщений..."
+    :dataTestid="`${props.dataTestid}-MessageList-Loading`"
   />
   <div
     class="chat__input"
@@ -153,14 +155,17 @@ import {
 } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
+import Loading from './Loading.vue';
 import { ContentEditor } from '@pksep/yui';
-import { useMastra } from '../services/useMastra';
+import { useMastra, generateChatId } from '../services/useMastra';
 import { removeMessageLoading } from '../services/useChatDb';
+import { subscribeToMessageChanges } from '../services/useOpenIM';
 import {
   getMessagesByConversationId,
   getMessagesWithLoadingStatus,
   sendMessageIM,
-  getIsWebsocketConnecting
+  getIsWebsocketConnecting,
+  isRecentlyReconnected
 } from '../services/useOpenIM';
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
@@ -170,7 +175,6 @@ import {
 } from '../utils/systemMessages';
 import type { OpenIMMessage, AIMessage } from '../types/messages';
 import { authedUser } from '../composables/useAuth';
-import { useStickyHeading } from '../composables/useStickyHeading';
 
 interface OpenIMMessageWithLoading extends OpenIMMessage {
   loading?: boolean;
@@ -190,14 +194,20 @@ const inputText = ref('');
 
 const state = reactive({
   messages: [] as OpenIMMessageWithLoading[],
-  chatId: null as string | null
+  chatId: null as string | null,
+  hasMoreMessages: true,
+  isLoadingMore: false,
+  aiMessages: [] as AIMessage[]
 });
+
+const isLoadingInitialMessages = ref(false);
 
 const updateMessages = () => {
   if (props.contact?.conversationId) {
-    state.messages = [
-      ...getMessagesWithLoadingStatus(props.contact.conversationId)
-    ];
+    const newMessages = getMessagesWithLoadingStatus(
+      props.contact.conversationId
+    );
+    state.messages = JSON.parse(JSON.stringify([...newMessages]));
   } else {
     state.messages = [];
   }
@@ -213,95 +223,60 @@ const scrollState = reactive({
 const scrollToBottom = (smooth: boolean = false): void => {
   if (!chatWrapperRef?.value || !scrollState.shouldAutoScroll) return;
 
-  // Ensure DOM is updated before scrolling
-  nextTick().then(() => {
-    requestAnimationFrame(() => {
-      if (chatWrapperRef.value) {
-        if (smooth) {
-          chatWrapperRef.value.scrollTo({
-            top: chatWrapperRef.value.scrollHeight,
-            behavior: 'smooth'
-          });
-        } else {
-          chatWrapperRef.value.scrollTop = chatWrapperRef.value.scrollHeight;
-        }
-      }
-    });
-  });
-};
-
-const throttle = <T extends (...args: any[]) => any>(
-  func: T,
-  limit: number
-) => {
-  let inThrottle: boolean;
-  return function (this: any) {
-    const args = arguments;
-    if (!inThrottle) {
-      func.apply(this, args);
-      inThrottle = true;
-      setTimeout(() => (inThrottle = false), limit);
+  if (chatWrapperRef.value) {
+    if (smooth) {
+      chatWrapperRef.value.scrollTo({
+        top: chatWrapperRef.value.scrollHeight,
+        behavior: 'smooth'
+      });
+    } else {
+      chatWrapperRef.value.scrollTop = chatWrapperRef.value.scrollHeight;
     }
-  };
-};
-
-const debounce = <T extends (...args: any[]) => any>(
-  func: T,
-  delay: number
-): ((...args: Parameters<T>) => void) => {
-  let timeoutId: number | null = null;
-  return (...args: Parameters<T>) => {
-    if (timeoutId) {
-      window.clearTimeout(timeoutId);
-    }
-    timeoutId = window.setTimeout(() => func.apply(null, args), delay);
-  };
+  }
 };
 
 let isScrollLoading = false;
-const handleScroll = throttle((): void => {
+const handleScroll = (): void => {
   const el = chatWrapperRef.value;
   if (!el) return;
 
   const { scrollTop, scrollHeight, clientHeight } = el;
 
   const maxScroll = scrollHeight - clientHeight;
-
   const distanceFromBottom = scrollTop;
   const distanceFromTop = maxScroll + scrollTop;
-  scrollState.shouldAutoScroll = distanceFromBottom < 100;
-  scrollState.isUserScrolling = distanceFromBottom >= 100;
+
+  scrollState.shouldAutoScroll = distanceFromBottom < 50;
+  scrollState.isUserScrolling = distanceFromBottom >= 50;
 
   if (scrollState.isInitialLoad) {
     scrollState.isInitialLoad = false;
   }
 
   if (
-    distanceFromTop < 200 &&
+    distanceFromTop < 100 &&
     !isScrollLoading &&
     props.contact?.conversationId
   ) {
     isScrollLoading = true;
 
-    // Try to load more messages from the service if connected
     if (!getIsWebsocketConnecting()) {
       getMessagesByConversationId(
         props.contact.conversationId,
         state.messages[0]?.clientMsgID
       )
         .then(() => {
-          updateMessages(); // Update to reflect any changes
+          updateMessages();
         })
         .finally(() => {
           isScrollLoading = false;
         });
     } else {
-      // Service is disconnected, but still update to show cached messages with loading status
       updateMessages();
       isScrollLoading = false;
     }
   }
-}, 100);
+};
 
 const isEnableSend = computed(() => {
   try {
@@ -320,18 +295,26 @@ watch(
   () => props.contact?.conversationId,
   async (newConversationId, oldConversationId) => {
     if (newConversationId && newConversationId !== oldConversationId) {
-      // Reset messages when changing conversations
       state.messages = [];
-      // Load messages for the new conversation
-      if (!getIsWebsocketConnecting()) {
-        await getMessagesByConversationId(newConversationId, '');
+      state.hasMoreMessages = true;
+      state.isLoadingMore = false;
+      isLoadingInitialMessages.value = true;
+
+      try {
+        if (!getIsWebsocketConnecting()) {
+          await getMessagesByConversationId(newConversationId, '');
+        }
+      } catch (error) {
+        console.error('Failed to load messages for new conversation:', error);
+      } finally {
+        updateMessages();
+        isLoadingInitialMessages.value = false;
       }
-      updateMessages();
 
       await nextTick();
       requestAnimationFrame(() => {
         if (chatWrapperRef?.value) {
-          scrollToBottom(false); // Direct scroll when changing conversations
+          scrollToBottom(false);
           scrollState.shouldAutoScroll = true;
           scrollState.isInitialLoad = true;
         }
@@ -341,62 +324,192 @@ watch(
   { immediate: true }
 );
 
-// Watch for changes in connection status to update message loading status
+const previousConnectingState = ref(getIsWebsocketConnecting());
+
 watch(
   () => getIsWebsocketConnecting(),
-  () => {
-    // Update messages when connection status changes, to show/hide loading indicators
+  currentConnectingState => {
+    previousConnectingState.value = currentConnectingState;
+
     updateMessages();
+
+    if (previousConnectingState.value && !currentConnectingState) {
+      setTimeout(async () => {
+        if (props.contact?.conversationId) {
+          try {
+            await getMessagesByConversationId(props.contact.conversationId, '');
+            updateMessages();
+          } catch (error) {
+            console.error(
+              'Failed to reload messages after connection restored:',
+              error
+            );
+          }
+        }
+      }, 300);
+    }
   }
 );
 
-const mastraResult = useMastra(
-  props.chapter === 'ai' && state.chatId
-    ? {
-        agentId: 'generalAgent',
-        chatId: state.chatId,
-        baseUrl: props.baseUrl
-      }
-    : false
+const lastReconnectedState = ref(false);
+
+const handleReconnection = async () => {
+  if (props.contact?.conversationId) {
+    try {
+      await getMessagesByConversationId(props.contact.conversationId, '');
+      updateMessages();
+    } catch (error) {
+      console.error('Failed to reload messages after reconnection:', error);
+    }
+  }
+};
+
+watch(
+  () => isRecentlyReconnected(),
+  isReconnected => {
+    if (isReconnected && !lastReconnectedState.value) {
+      setTimeout(() => {
+        handleReconnection();
+      }, 500);
+    }
+    lastReconnectedState.value = isReconnected;
+  }
 );
 
-const aiMessages = computed<AIMessage[]>(() => {
-  if (mastraResult.messages) {
-    return mastraResult.messages.value;
+const mastraResult = ref(null as any);
+
+const initializeMastra = () => {
+  if (state.chatId && props.baseUrl) {
+    const result = useMastra({
+      agentId: 'generalAgent',
+      chatId: state.chatId,
+      baseUrl: props.baseUrl
+    });
+    mastraResult.value = result;
+    state.aiMessages = result.messages.value;
+  } else {
+    const result = useMastra(false);
+    mastraResult.value = result;
+    state.aiMessages = result.messages.value;
   }
-  return [];
+};
+
+initializeMastra();
+
+watch([() => state.chatId, () => props.baseUrl], () => {
+  initializeMastra();
 });
 
-const sendMessage = mastraResult.sendMessage;
-const clearAiMessages = mastraResult.clearMessages;
+watch(
+  () => mastraResult.value?.messages?.value,
+  newMessages => {
+    if (newMessages) {
+      state.aiMessages = newMessages;
+    }
+  },
+  { deep: true }
+);
+
+let unsubscribeFromMessageChanges: (() => void) | null = null;
+
+onMounted(async () => {
+  if (!state.chatId) {
+    state.chatId = generateChatId();
+  }
+
+  unsubscribeFromMessageChanges = subscribeToMessageChanges(
+    async (newMessageConversationId?: string) => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      if (newMessageConversationId === props.contact?.conversationId) {
+        if (!getIsWebsocketConnecting()) {
+          await getMessagesByConversationId(newMessageConversationId, '');
+        }
+        updateMessages();
+      }
+    }
+  );
+
+  if (props.contact?.conversationId) {
+    state.messages = [];
+    state.hasMoreMessages = true;
+    state.isLoadingMore = false;
+    isLoadingInitialMessages.value = true;
+
+    try {
+      if (!getIsWebsocketConnecting()) {
+        await getMessagesByConversationId(props.contact.conversationId, '');
+      }
+    } catch (error) {
+      console.error('Failed to load initial messages:', error);
+    } finally {
+      updateMessages();
+      isLoadingInitialMessages.value = false;
+    }
+
+    await nextTick();
+    requestAnimationFrame(() => {
+      if (chatWrapperRef?.value) {
+        scrollState.shouldAutoScroll = true;
+        scrollState.isInitialLoad = true;
+      }
+    });
+  }
+});
+
+onUnmounted(() => {
+  if (unsubscribeFromMessageChanges) {
+    unsubscribeFromMessageChanges();
+    unsubscribeFromMessageChanges = null;
+  }
+
+  if (state.chatId) {
+    removeMessageLoading(state.chatId, state.aiMessages.length);
+  }
+});
+
+const addLocalAIMessage = (text: string) => {
+  if (!text.trim()) return;
+
+  const userMessage = {
+    role: 'user' as 'user' | 'assistant',
+    content: text,
+    timestamp: Date.now()
+  };
+
+  state.aiMessages = [...state.aiMessages, userMessage];
+
+  const assistantMessage = {
+    role: 'assistant' as 'user' | 'assistant',
+    content: 'Mastra is currently unavailable. Please try again later.',
+    timestamp: Date.now()
+  };
+
+  state.aiMessages = [...state.aiMessages, assistantMessage];
+};
+
+const clearAiMessages = () => {
+  if (mastraResult.value) {
+    return mastraResult.value.clearMessages();
+  }
+};
 
 const messageChat = (role: string) => [
   'message__bubble',
   { message__other: role === 'user' }
 ];
 
-const handleNewMessages = debounce(
-  async (newLength: number, oldLength: number) => {
-    if (props.chapter === 'ai' || !state.messages.length) return;
-
-    await nextTick();
-
-    if (oldLength === 0 && newLength > 0) {
-      if (!getIsWebsocketConnecting()) {
-        requestAnimationFrame(() => {
-          scrollState.shouldAutoScroll = true;
-          scrollToBottom(true);
-        });
-      }
-    }
-  },
-  50
-);
-
 watch(
   () => state.messages.length,
   (newLength, oldLength) => {
-    handleNewMessages(newLength, oldLength);
+    if (props.chapter === 'ai') return;
+
+    if (oldLength === 0 && newLength > 0) {
+      if (!getIsWebsocketConnecting()) {
+        scrollState.shouldAutoScroll = true;
+        scrollToBottom(true);
+      }
+    }
   },
   { immediate: true }
 );
@@ -425,14 +538,23 @@ watch(
       scrollState.previousScrollTop = chatWrapperRef.value.scrollTop;
     }
 
-    // Only load messages if we're not in AI chat mode and have a contact
-    if (props.chapter !== 'ai' && props.contact?.conversationId) {
+    if (newValue !== 'ai' && props.contact?.conversationId) {
       state.messages = [];
-      if (!getIsWebsocketConnecting()) {
-        await getMessagesByConversationId(props.contact.conversationId, '');
+      state.hasMoreMessages = true;
+      state.isLoadingMore = false;
+      isLoadingInitialMessages.value = true;
+
+      try {
+        if (!getIsWebsocketConnecting()) {
+          await getMessagesByConversationId(props.contact.conversationId, '');
+        }
+      } catch (error) {
+        console.error('Failed to load messages when changing chapter:', error);
+      } finally {
+        updateMessages();
+        isLoadingInitialMessages.value = false;
       }
-      updateMessages();
-    } else {
+    } else if (newValue !== 'ai') {
       state.messages = [];
     }
 
@@ -452,19 +574,27 @@ watch(
   { immediate: true }
 );
 
-const handleClear = (): void => {
-  clearAiMessages();
-};
-
 const handleSend = async (): Promise<void> => {
   if (!inputText.value.trim()) return;
 
   if (props.chapter === 'ai') {
     const text = inputText.value;
     inputText.value = '';
-    await sendMessage(text, () => {
+
+    addLocalAIMessage(text);
+
+    if (mastraResult.value && mastraResult.value.sendMessage) {
+      try {
+        await mastraResult.value.sendMessage(text, () => {
+          requestAnimationFrame(() => scrollToBottom(true));
+        });
+      } catch (error) {
+        console.warn('Mastra failed to send message:', error);
+      }
+    } else {
+      console.warn('Mastra is not available, message added locally only');
       requestAnimationFrame(() => scrollToBottom(true));
-    });
+    }
     return;
   }
 
@@ -520,12 +650,8 @@ const handleSend = async (): Promise<void> => {
     console.error('[OpenIM] Failed to send message:', error);
   }
 
-  // Update messages to show the sent message in UI
   updateMessages();
-
-  setTimeout(() => {
-    scrollToBottom(true);
-  }, 10);
+  scrollToBottom(true);
 };
 
 const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
@@ -590,21 +716,19 @@ const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
 const isNewDate = (index: number, isMastra: boolean = false) => {
   if (index === 0) return true;
 
-  let current: string, prev: string;
-
   if (isMastra) {
-    const currentMsg = aiMessages.value[index];
-    const prevMsg = aiMessages.value[index - 1];
-    current = formatDay(currentMsg.timestamp);
-    prev = formatDay(prevMsg.timestamp);
+    const currentMsg = state.aiMessages[index];
+    const prevMsg = state.aiMessages[index - 1];
+    const currentDay = formatDay(currentMsg.timestamp);
+    const prevDay = formatDay(prevMsg.timestamp);
+    return currentDay !== prevDay;
   } else {
     const currentMsg = state.messages[index];
     const prevMsg = state.messages[index - 1];
-    current = formatDay(currentMsg.sendTime);
-    prev = formatDay(prevMsg.sendTime);
+    const currentDay = formatDay(currentMsg.sendTime);
+    const prevDay = formatDay(prevMsg.sendTime);
+    return currentDay !== prevDay;
   }
-
-  return current !== prev;
 };
 
 const getSystemMessageContent = message => {
@@ -612,40 +736,7 @@ const getSystemMessageContent = message => {
   return notification || message.textElem?.content || message.showName || '';
 };
 
-// Initialize sticky heading composable
-const stickyHeading = useStickyHeading();
-
-onMounted(async () => {
-  if (props.contact?.conversationId) {
-    state.messages = [];
-    if (!getIsWebsocketConnecting()) {
-      await getMessagesByConversationId(props.contact.conversationId, '');
-    }
-    updateMessages();
-
-    await nextTick();
-    requestAnimationFrame(() => {
-      if (chatWrapperRef?.value) {
-        scrollState.shouldAutoScroll = true;
-        scrollState.isInitialLoad = true;
-
-        // Initialize sticky headings after content is rendered
-        stickyHeading.init('.top-element[data-divider]:not(.system-message)');
-      }
-    });
-  }
-});
-
-onUnmounted(() => {
-  if (state.chatId) {
-    removeMessageLoading(state.chatId, aiMessages.value.length);
-  }
-
-  // Clean up sticky heading observer
-  stickyHeading.destroy();
-});
-
 defineExpose({
-  handleClear
+  handleClear: clearAiMessages
 });
 </script>

@@ -4,6 +4,10 @@
   place-items: center;
 }
 
+.contact-list__loading {
+  padding: 20px;
+}
+
 .chat:has(.chat__input) {
   & .chat__nothing {
     margin-top: calc(var(--basic-height) / 4);
@@ -38,7 +42,7 @@ p.chat__nothing-paragraph {
 
 .chat__message-bubble {
   display: flex;
-  flex-direction: column;     
+  flex-direction: column;
   width: 100%;
   gap: 5px;
   margin-bottom: auto;
@@ -65,11 +69,11 @@ p.chat__nothing-paragraph {
   }
 }
 
+/*
 .data-divider,
 .top-element {
   z-index: 2;
   top: 2px;
-  position: sticky;
   container-type: scroll-state;
   container-name: sticky-heading;
 }
@@ -88,6 +92,7 @@ p.chat__nothing-paragraph {
     background-color: var(--grey11);
   }
 }
+*/
 
 .menu__user-assistant {
   &:hover,
@@ -105,13 +110,9 @@ p.chat__nothing-paragraph {
   }
 }
 
-@media screen and (width <= 412px) {
+@media screen and (width <= 480px) {
   .chat:has(.chat__input) {
     --basic-height: calc(var(--default-height) - var(--header-height));
-  }
-
-  .chat.chat__messages:not(.chat__input) > .menu__user-assistant {
-    padding: 20px;
   }
 
   .chat__nothing {
@@ -123,9 +124,38 @@ p.chat__nothing-paragraph {
     --size-left-menu: 0;
     --size-right-menu: 0;
     padding-right: 0;
+    overflow-y: auto;
   }
 
   .chat__input {
     max-width: 100%;
+  }
+
+  .chat__input
+    > .editor-component
+    > .mobile-item
+    > .popover-yui-kit
+    > .popover-yui-kit__content {
+    min-width: 230px;
+  }
+  .chat__input
+    > .editor-component
+    > .mobile-item
+    > .popover-yui-kit
+    > .popover-yui-kit__content
+    > .popover-yui-kit__options {
+    padding: 10px;
+    font-size: 18px;
+    line-height: 100%;
+  }
+  .chat__input
+    > .editor-component
+    > .mobile-item
+    > .popover-yui-kit
+    > .popover-yui-kit__content
+    > .popover-yui-kit__options
+    > .popover-yui-kit__options__item {
+    padding-block: 8.5px !important;
+    font-size: 18px;
   }
 }

@@ -3,7 +3,13 @@
     :class="menuClasses"
     :data-testid="`${props.dataTestid}-Menu-Container`"
   >
+    <Loading
+      v-if="state.isLoading"
+      message="Загрузка меню..."
+      :dataTestid="`${props.dataTestid}-Menu-Loading`"
+    />
     <div
+      v-else
       class="menu__start"
       :data-testid="`${props.dataTestid}-Menu-StartContainer`"
     >
@@ -129,7 +135,7 @@
       </template>
     </div>
     <Button
-      v-if="canInstall && !isInstalled"
+      v-if="canInstall && !isInstalled && !state.isLoading"
       class="menu__button-install-prompt"
       :type="ButtonTypeEnum.ghost"
       :size="SizesEnum.small"
@@ -161,6 +167,7 @@ import {
 } from '@pksep/yui';
 import UserProfile from './UserProfile/UserProfile.vue';
 import ContactList from './ContactList/ContactList.vue';
+import Loading from './Loading.vue';
 import type {
   IContactProps,
   IMenuEmits,
@@ -184,9 +191,8 @@ const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 
 const state = reactive({
   chapter: '',
-  contactList: computed(() => getConversationList()),
-  groupList: computed(() => getGroupList()),
-  selectedContactId: null
+  selectedContactId: null,
+  isLoading: true
 });
 
 const emits = defineEmits<IMenuEmits>();
@@ -221,13 +227,11 @@ const unmountContactClick = (contact: IContactProps | string): void => {
   }
 
   if (typeof contact === 'string') {
-    const foundContact = state.contactList.find(c => c.id === contact);
+    const foundContact = getConversationList().find(c => c.id === contact);
     if (foundContact) {
       state.chapter = foundContact.nickname;
 
-      // Mark messages as read when switching to this conversation
-      // Only call markAsRead if we have a valid contact ID
-      if (foundContact.id) {
+      if (foundContact.groupId) {
         markAsRead(foundContact.id).catch(error => {
           console.warn('Failed to mark messages as read:', error);
         });
@@ -240,9 +244,6 @@ const unmountContactClick = (contact: IContactProps | string): void => {
     }
   } else {
     state.chapter = contact.nickname;
-
-    // Mark messages as read when switching to this conversation
-    // Only call markAsRead if we have a valid contact ID
     if (contact.id) {
       markAsRead(contact.id).catch(error => {
         console.warn('Failed to mark messages as read:', error);
@@ -285,16 +286,20 @@ const listChannels = computed(() => [
   {
     title: 'Каналы',
     onClickPlusButton: handleNewGroupModal,
-    items: state.groupList
+    items: getGroupList()
   },
   {
     title: 'Личные сообщения',
     onClickPlusButton: handleNewContactModal,
-    items: state.contactList
+    items: getConversationList()
   }
 ]);
 
 onMounted(() => {
-  onSDKReady(fetchConversationList);
+  onSDKReady(() => {
+    fetchConversationList().finally(() => {
+      state.isLoading = false;
+    });
+  });
 });
 </script>

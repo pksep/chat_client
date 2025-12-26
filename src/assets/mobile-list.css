@@ -1,6 +1,6 @@
 .mobile-list-container {
   display: grid;
-  min-height: calc(var(--default-height) - 42px);
+  min-height: calc(var(--default-height) - var(--mobile-list-height, 42px));
 }
 
 button.button-yui-kit.mobile__list-button {
@@ -8,6 +8,7 @@ button.button-yui-kit.mobile__list-button {
   bottom: 0;
   border-radius: 16px;
   align-self: end;
+  height: 50px;
   justify-self: end;
   margin: 12px 10px;
   max-height: 56px;
@@ -25,4 +26,19 @@ button.button-yui-kit.mobile__list-button {
 .contact-selector-modal__contact-selector {
   display: grid;
   gap: 10px;
+}
+
+.modal-info-mobile__start.modal-info-mobile__start--disabled
+  > form.menu__info-form
+  > .menu__info-form-block.form__name
+  > fieldset.input-yui-kit:disabled
+  > input.input-yui-kit__input {
+  color: inherit !important;
+  background-color: transparent !important;
+}
+
+@media screen and (width <= 480px) {
+  .mobile-list-container {
+    --mobile-list-height: 53px;
+  }
 }

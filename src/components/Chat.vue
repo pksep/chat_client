@@ -1,12 +1,17 @@
 <template>
   <section class="chat" :data-testid="`${props.dataTestid}-Chat-Container`">
+    <Loading
+      v-if="state.isLoading"
+      message="Загрузка чата..."
+      :dataTestid="`${props.dataTestid}-Chat-Loading`"
+    />
     <ContactListMobile
       class="chat__mobile"
       :user="props.user"
       :contacts="props.contacts"
       :chapter="state.chapter"
       :data-testid="`${props.dataTestid}-Chat-ContactListMobile`"
-      v-if="isMobile && isShowContactList(state.chapter)"
+      v-else-if="isMobile && isShowContactList(state.chapter)"
       @unmount-chapter="handleUnmountChapter"
       @unmount-contact="handleUnmountContact"
     />
@@ -26,6 +31,7 @@
 import { useResizeState } from '../composables/useResizeState';
 import MessageList from './MessageList.vue';
 import ContactListMobile from './ContactList/MobileList.vue';
+import Loading from './Loading.vue';
 import type { IMessageListProps } from './interfaces/message-list';
 import { useTemplateRef, reactive, watch } from 'vue';
 import { isShowContactList } from '../composables/useShowContactList';
@@ -54,6 +60,7 @@ const emits = defineEmits<IMenuEmits>();
 
 const state = reactive({
   chapter: props.chapter,
+  isLoading: true,
   conversationList: computed(() => getConversationList())
 });
 
@@ -66,11 +73,11 @@ watch(
 
 // Watch for contact changes to mark messages as read
 watch(
-  () => props.contact?.id,
-  (newContactId, oldContactId) => {
-    if (newContactId && newContactId !== oldContactId) {
+  () => props.contact?.conversationId,
+  (newConversationId, oldConversationId) => {
+    if (newConversationId && newConversationId !== oldConversationId) {
       // Mark messages as read when switching to a new conversation
-      markAsRead(newContactId).catch(error => {
+      markAsRead(newConversationId).catch(error => {
         console.warn('Failed to mark messages as read:', error);
       });
     }
@@ -101,7 +108,11 @@ const handleUnmountContact = (contact: IUserProps): void => {
 };
 
 onMounted(() => {
-  onSDKReady(fetchConversationList);
+  onSDKReady(() => {
+    fetchConversationList().finally(() => {
+      state.isLoading = false;
+    });
+  });
 });
 
 defineExpose({

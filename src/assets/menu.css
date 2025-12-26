@@ -52,6 +52,11 @@
 .menu-user__item {
   --size-avatar: 15px;
   padding: 10px;
+  width: 50px;
+  & .avatar-yui-kit:has(img.avatar-yui-kit__image) {
+    width: 2em !important;
+    height: 2em !important;
+  }
 }
 
 .menu__user-profile {
@@ -101,7 +106,8 @@ details.menu__user-details {
   &:not([open])
     summary.menu__user-details-summary
     .menu__user-details-summary-triangle {
-    transform: rotate(135deg);
+    margin-top: 0px;
+    transform: rotate(270deg);
   }
 }
 
@@ -115,6 +121,7 @@ summary.menu__user-details-summary {
     display: none;
   }
   & svg.icon-yui-kit {
+    color: var(--text-grey);
     font-size: 12px;
   }
   & h4.menu__user-details-summary--title {
@@ -136,7 +143,8 @@ summary.menu__user-details-summary {
   font-size: 12px;
   margin-left: 0;
   display: inline-block;
-  vertical-align: top;
+  vertical-align: middle;
+  margin-top: 4px;
   text-align: center;
   transition: transform 0.3s ease;
 }
@@ -156,7 +164,14 @@ summary.menu__user-details-summary {
   }
 }
 
-@media screen and (width <= 36rem) {
+@media screen and (width <= 480px) {
+  .menu__user-assistant-title {
+    font-weight: bold;
+    font-size: 16px;
+  }
+}
+
+@media screen and (width <= 768px) {
   .menu:not(.menu--collapse) {
     width: var(--default-width);
     z-index: 2;
