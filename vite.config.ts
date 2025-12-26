@@ -56,6 +56,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
             mode: mode === 'development' ? 'development' : 'production',
             manifest: {
               name: 'SEP:Chat',
+              short_name: 'SEP:Chat',
               display: 'standalone',
               description: 'Chatting application',
               theme_color: '#ffffff',
