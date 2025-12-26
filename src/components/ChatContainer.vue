@@ -1,5 +1,11 @@
 <template>
+  <Loading
+    v-if="state.isLoading"
+    message="Загрузка приложения..."
+    :dataTestid="`${props.dataTestid}-ChatContainer-Loading`"
+  />
   <main
+    v-else
     :class="state.chatContainerClasses"
     :data-testid="`${props.dataTestid}-ChatContainer-Container`"
   >
@@ -119,6 +125,7 @@ import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
 import Chat from './Chat.vue';
 import MenuInfo from './MenuInfo.vue';
+import Loading from './Loading.vue';
 import type {
   IChatContainerProps,
   IContactProps,
@@ -162,6 +169,7 @@ const state = reactive({
   contact: null,
   isNewContactOpen: false,
   isNewGroupOpen: false,
+  isLoading: true,
   chatContainerClasses: computed(() => [
     'chat-container',
     { collapse: isCollapse.value },
@@ -471,19 +479,24 @@ useAndroidBackButton({
 });
 
 onMounted(async () => {
-  if (isMobile.value) {
-    state.isChapter = false;
-    state.chapter = 'assistant';
-    return;
+  try {
+    if (isMobile.value) {
+      state.isChapter = false;
+      state.chapter = 'assistant';
+    } else {
+      // If there's a group contact, make sure to update the member count
+      if (state.contact?.groupId) {
+        const memberCount = await fetchGroupMemberCount(state.contact.groupId);
+        state.contact = {
+          ...state.contact,
+          membersLength: memberCount
+        };
+      }
+      state.isChapter = state.chapter === 'ai' || state.contact !== null;
+    }
+  } finally {
+    // Set loading to false after initial setup is complete
+    state.isLoading = false;
   }
-  // If there's a group contact, make sure to update the member count
-  if (state.contact?.groupId) {
-    const memberCount = await fetchGroupMemberCount(state.contact.groupId);
-    state.contact = {
-      ...state.contact,
-      membersLength: memberCount
-    };
-  }
-  state.isChapter = state.chapter === 'ai' || state.contact !== null;
 });
 </script>

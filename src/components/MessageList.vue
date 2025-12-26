@@ -117,8 +117,14 @@
     v-if="
       !state.messages.length &&
       !state.aiMessages.length &&
-      !getIsWebsocketConnecting()
+      !getIsWebsocketConnecting() &&
+      !isLoadingInitialMessages
     "
+  />
+  <Loading
+    v-if="isLoadingInitialMessages"
+    message="Загрузка сообщений..."
+    :dataTestid="`${props.dataTestid}-MessageList-Loading`"
   />
   <div
     class="chat__input"
@@ -149,6 +155,7 @@ import {
 } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
+import Loading from './Loading.vue';
 import { ContentEditor } from '@pksep/yui';
 import { useMastra, generateChatId } from '../services/useMastra';
 import { removeMessageLoading } from '../services/useChatDb';

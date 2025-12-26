@@ -4,6 +4,10 @@
   place-items: center;
 }
 
+.contact-list__loading {
+  padding: 20px;
+}
+
 .chat:has(.chat__input) {
   & .chat__nothing {
     margin-top: calc(var(--basic-height) / 4);

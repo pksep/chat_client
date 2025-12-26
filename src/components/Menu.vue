@@ -3,7 +3,13 @@
     :class="menuClasses"
     :data-testid="`${props.dataTestid}-Menu-Container`"
   >
+    <Loading
+      v-if="state.isLoading"
+      message="Загрузка меню..."
+      :dataTestid="`${props.dataTestid}-Menu-Loading`"
+    />
     <div
+      v-else
       class="menu__start"
       :data-testid="`${props.dataTestid}-Menu-StartContainer`"
     >
@@ -129,7 +135,7 @@
       </template>
     </div>
     <Button
-      v-if="canInstall && !isInstalled"
+      v-if="canInstall && !isInstalled && !state.isLoading"
       class="menu__button-install-prompt"
       :type="ButtonTypeEnum.ghost"
       :size="SizesEnum.small"
@@ -161,6 +167,7 @@ import {
 } from '@pksep/yui';
 import UserProfile from './UserProfile/UserProfile.vue';
 import ContactList from './ContactList/ContactList.vue';
+import Loading from './Loading.vue';
 import type {
   IContactProps,
   IMenuEmits,
@@ -184,7 +191,8 @@ const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 
 const state = reactive({
   chapter: '',
-  selectedContactId: null
+  selectedContactId: null,
+  isLoading: true
 });
 
 const emits = defineEmits<IMenuEmits>();
@@ -288,6 +296,10 @@ const listChannels = computed(() => [
 ]);
 
 onMounted(() => {
-  onSDKReady(fetchConversationList);
+  onSDKReady(() => {
+    fetchConversationList().finally(() => {
+      state.isLoading = false;
+    });
+  });
 });
 </script>

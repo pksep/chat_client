@@ -1,5 +1,12 @@
 <template>
+  <div v-if="props.isLoading" class="contact-list__loading">
+    <Loading
+      message="Загрузка контактов..."
+      :dataTestid="`${props.dataTestid}-ContactList-Loading`"
+    />
+  </div>
   <ul
+    v-else
     :class="['contact-list', props.class]"
     role="list"
     :data-testid="`${props.dataTestid}-ContactList-List`"
@@ -158,6 +165,7 @@ import {
 } from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
 import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
+import Loading from '../Loading.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { setPinConversation } from '../../services/useConversions';
 import { appendUserAttributes } from '../../composables/useUsers';
@@ -167,11 +175,13 @@ import { IContactProps } from '../interfaces/interfaces';
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
   selectedContactIds?: Set<string | number>;
+  isLoading?: boolean;
 }
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   showCheckbox: false,
-  selectedContactIds: () => new Set<string | number>()
+  selectedContactIds: () => new Set<string | number>(),
+  isLoading: false
 });
 
 const emits = defineEmits<{
