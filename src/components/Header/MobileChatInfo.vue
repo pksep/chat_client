@@ -13,6 +13,7 @@
       <Avatar
         is-icon
         :url="information?.avatarUrl"
+        :initials="information?.name"
         :caption="`image with a channel ${information?.name}`"
         class="modal-info-mobile__avatar"
         :data-testid="`${props.dataTestid}-Header-ModalAvatar`"

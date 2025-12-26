@@ -200,9 +200,7 @@ const updateMessages = () => {
     const newMessages = getMessagesWithLoadingStatus(
       props.contact.conversationId
     );
-
-    // Create a new array reference to ensure Vue reactivity
-    state.messages = [...newMessages];
+    state.messages = JSON.parse(JSON.stringify([...newMessages]));
   } else {
     state.messages = [];
   }
@@ -326,10 +324,8 @@ watch(
   currentConnectingState => {
     previousConnectingState.value = currentConnectingState;
 
-    // Update messages whenever connection state changes
     updateMessages();
 
-    // When connection is restored, fetch fresh messages
     if (previousConnectingState.value && !currentConnectingState) {
       setTimeout(async () => {
         if (props.contact?.conversationId) {
@@ -414,27 +410,15 @@ onMounted(async () => {
     state.chatId = generateChatId();
   }
 
-  // Set up message subscription first to catch any messages that arrive during initialization
   unsubscribeFromMessageChanges = subscribeToMessageChanges(
     async (newMessageConversationId?: string) => {
-      // Add a small delay to ensure the database has been updated with new messages
       await new Promise(resolve => setTimeout(resolve, 50));
 
-      // If the new message is for the current conversation, fetch fresh messages and update the UI
       if (newMessageConversationId === props.contact?.conversationId) {
-        // Only fetch fresh messages if not currently loading
         if (!getIsWebsocketConnecting()) {
           await getMessagesByConversationId(newMessageConversationId, '');
         }
         updateMessages();
-
-        // Scroll to bottom to show new messages
-        await nextTick();
-        requestAnimationFrame(() => {
-          if (chatWrapperRef?.value && scrollState.shouldAutoScroll) {
-            scrollToBottom(true);
-          }
-        });
       }
     }
   );
