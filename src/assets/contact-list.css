@@ -80,7 +80,7 @@
 
 svg.icon-yui-kit.contact-list__pin-icon {
   color: var(--grey5);
-  font-size: 16px;
+  font-size: 16px !important;
 }
 
 svg.icon-yui-kit.contact-list__read-icon {
