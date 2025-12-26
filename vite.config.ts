@@ -56,6 +56,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
             mode: mode === 'development' ? 'development' : 'production',
             manifest: {
               name: 'SEP:Chat',
+              short_name: 'SEP:Chat',
               display: 'standalone',
               description: 'Chatting application',
               theme_color: '#ffffff',
@@ -97,6 +98,11 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
   const plugins: PluginOption[] = [vuePlugin, ...libPlugins, ...appPlugins];
 
   return {
+    // // for local development in smartphone
+    // server: {
+    //   host: '0.0.0.0',
+    //   port: 5173
+    // },
     build: {
       outDir: baseMode === 'lib' ? 'build/lib' : 'build',
       sourcemap: baseMode !== 'lib' && mode === 'production',
