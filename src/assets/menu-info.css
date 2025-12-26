@@ -23,6 +23,16 @@ header.menu-info__header {
   justify-content: space-between;
 }
 
+header.menu-info__header h4 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  line-clamp: 1;
+  max-width: 140ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 section.menu-info__info-section {
   padding: 10px;
   padding-inline: 20px;
@@ -80,11 +90,18 @@ div.menu-info__buttons {
   gap: 70px;
 }
 
+.tabs__navigation .tabs__navigation-button:hover {
+  cursor: pointer;
+}
+
 .menu-info__avatar-button {
   --size-avatar: 42.5px;
   display: flex;
   width: 100%;
   justify-content: center;
+  &:hover {
+    cursor: pointer;
+  }
 }
 
 svg.icon-yui-kit.menu-info__close-icon {

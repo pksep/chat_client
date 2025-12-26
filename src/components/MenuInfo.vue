@@ -1,7 +1,7 @@
 <template>
   <aside
     :class="menuInfoClasses"
-    v-if="isOpen"
+    v-if="props.open"
     :data-testid="`${props.dataTestid}-MenuInfo-Container`"
   >
     <header
@@ -74,7 +74,7 @@
     :open="state.openAddUser"
     :isAddOne="false"
     :contacts="state.filteredMembers"
-    @unmount-new-contact="handleNewContact"
+    @unmount-new-contact="contacts => handleUpdateGroupMembers(contacts)"
     @unmount-close="handleCloseAddUserModal"
     title="Добавить контакт"
   />
@@ -92,11 +92,14 @@ import {
 } from '@pksep/yui';
 import ContactListInModal from './ContactList/ContactListInModal.vue';
 import InformationMenu from './InformationMenu.vue';
-import type { IMenuRightProps, IMenuEmits } from './interfaces/interfaces';
+import type {
+  IMenuRightProps,
+  IMenuEmits,
+  IUserProps
+} from './interfaces/interfaces';
 import { useMenuInfo } from '../composables/useMenuInfo';
 import NewContactModal from './NewChat/NewContactModal.vue';
-import { useResizeState } from '../composables/useResizeState';
-import { MAX_W_XL } from '../utils/constants';
+import { fetchGroupMembers } from '../services/useGroup';
 
 const props = withDefaults(defineProps<IMenuRightProps>(), {
   open: false,
@@ -109,21 +112,34 @@ const menuInfoClasses = computed(() => [
   props.class
 ]);
 
+const handleUpdateGroupMembers = async (
+  contacts: IUserProps | IUserProps[]
+): Promise<void> => {
+  if (Array.isArray(contacts)) {
+    await handleNewContact(contacts);
+    if (props.contact?.groupId) {
+      const updatedContacts = await fetchGroupMembers(props.contact.groupId);
+      state.contacts = updatedContacts;
+      emits('unmount-contacts-update', updatedContacts);
+
+      const updatedContact = {
+        ...props.contact,
+        membersLength: updatedContacts.length
+      };
+      emits('unmount-contact', updatedContact);
+    }
+  }
+};
+
 const emits = defineEmits<IMenuEmits>();
 
-const { state: isOpen, setState } = useResizeState({
-  breakpoint: MAX_W_XL,
-  onStateChange: (val: boolean) => emits('unmount-collapse', val)
-});
-
 const handleCloseMenu = (): void => {
-  setState(false);
+  emits('unmount-collapse', false);
 };
 
 watch(
   () => props.open,
   async newVal => {
-    isOpen.value = newVal;
     if (newVal && props.contact) {
       await initializeMenuInfo({ ...props, isEnabled: true });
     }
@@ -132,21 +148,24 @@ watch(
 
 watch(
   () => props.contact,
-  async newContact => {
+  async (newContact, oldContact) => {
     if (newContact && props.open) {
-      await initializeMenuInfo({ ...props, isEnabled: true });
+      const wasGroup = !!oldContact?.groupId;
+      const isGroup = !!newContact.groupId;
+
+      if (wasGroup !== isGroup) {
+        handleCloseMenu();
+        return;
+      }
+
+      if (isGroup && newContact.groupId !== oldContact?.groupId) {
+        await initializeMenuInfo({ ...props, isEnabled: true });
+      } else if (!isGroup && newContact.id !== oldContact?.id) {
+        await initializeMenuInfo({ ...props, isEnabled: true });
+      }
     }
   },
   { deep: true }
-);
-
-watch(
-  () => props.contact?.id,
-  (newId, oldId) => {
-    if (newId && newId !== oldId) {
-      handleCloseMenu();
-    }
-  }
 );
 
 const {

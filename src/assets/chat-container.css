@@ -50,6 +50,7 @@
 .chat__header {
   grid-area: header;
   align-self: start;
+  z-index: 2;
 }
 
 .chat__menu {
@@ -93,7 +94,7 @@ button.primary-yui-kit.disabled-yui-kit {
   background-color: var(--neutral-button);
 }
 
-@media screen and (width <= 412px) {
+@media screen and (width <= 480px) {
   .chat__info {
     display: none;
   }
@@ -109,14 +110,14 @@ button.primary-yui-kit.disabled-yui-kit {
       'chat chat';
   }
   .chat-container:has(.chat__header-menu) {
-    --header-height: 42px;
+    --header-height: 43px;
   }
   .chat__menu {
     display: none;
   }
 }
 
-@media screen and (width <= 40rem) {
+@media screen and (width <= 768px) {
   .chat-container.menu-collapse {
     & .chat__info {
       display: none;
@@ -124,11 +125,25 @@ button.primary-yui-kit.disabled-yui-kit {
   }
 }
 
-@media screen and (width <= 412px) {
+@media screen and (width <= 480px) {
+  .chat__header {
+    padding-block: 9.5px;
+    padding-inline: 16px;
+    gap: 0;
+  }
+  .chat__header button.button-yui-kit.small.ghost-yui-kit {
+    padding: 8px;
+  }
+
   .chat-container {
     background-color: var(--white);
+    overflow: auto;
+    overflow-x: hidden;
   }
-  .chat-container:has(.chat__header-menu) {
-    --header-height: auto;
+  svg.ai-icon {
+    font-size: 40px;
+  }
+  .chat-container:has(.chat .chat__message-wrapper) {
+    background-color: var(--background-light-color);
   }
 }

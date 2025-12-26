@@ -33,7 +33,9 @@
       class="chat__header-profile"
       avatar-alt="user-profile-alt"
       v-bind="props.contact"
-      :members-length="menuInfoState.contacts.length"
+      :members-length="
+        props.contact?.membersLength || menuInfoState.contacts.length
+      "
       :data-testid="`${props.dataTestid}-Header-UserProfile`"
       v-else
     />
@@ -77,9 +79,13 @@
     title="Канал"
     close-button-text="Назад"
     @unmount-close="handleCloseMobileInfoModal"
+    :class="{
+      'chat__header-modal-info--active': true
+    }"
     :data-testid="`${props.dataTestid}-Header-MobileModal`"
   >
     <MobileChatInfo
+      is-menu-info
       :model-value="menuInfoState.information"
       :members="menuInfoState.contacts"
       @update:model-value="handleUpdateInformation"
@@ -170,6 +176,41 @@ const handleClickHeader = async (): Promise<void> => {
   state.isSearchInputEnable = false;
   emits('unmount-click');
 };
+
+// Watch for changes in contact ID to update member count when switching between groups
+watch(
+  () => props.contact?.id,
+  async (newId, oldId) => {
+    if (newId && newId !== oldId && props.contact?.groupId) {
+      menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
+    }
+  }
+);
+
+// Also watch for changes in group members count
+watch(
+  () => props.contact?.groupId,
+  async (newGroupId, oldGroupId) => {
+    if (newGroupId && newGroupId !== oldGroupId) {
+      menuInfoState.contacts = await fetchGroupMembers(newGroupId);
+    }
+  }
+);
+
+// Watch for changes in members length to update header
+watch(
+  () => props.contact?.membersLength,
+  async (newLength, oldLength) => {
+    if (
+      newLength !== undefined &&
+      newLength !== oldLength &&
+      props.contact?.groupId
+    ) {
+      // Update the contacts to reflect the new member count
+      menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
+    }
+  }
+);
 
 const popoverRule = computed(
   () => isMobile.value && (props.contact?.groupId || props.chapter === 'ai')

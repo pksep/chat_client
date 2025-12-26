@@ -4,7 +4,12 @@
     role="main"
     :data-testid="`${props.dataTestid}-MobileList-Container`"
   >
-    <section v-if="props.chapter === 'assistant'">
+    <Loading
+      v-if="state.isLoading"
+      message="Загрузка списка..."
+      :dataTestid="`${props.dataTestid}-MobileList-Loading`"
+    />
+    <section v-else-if="props.chapter === 'assistant'">
       <button
         class="menu__user-assistant"
         @click="handleChapter('ai')"
@@ -42,7 +47,7 @@
     <Button
       :type="ButtonTypeEnum.primary"
       @click="handleShowAccount"
-      :disabled="props.chapter === 'assistant'"
+      :disabled="props.chapter === 'assistant' || state.isLoading"
       class="mobile__list-button"
     >
       <Icon :name="IconNameEnum.plus" />
@@ -65,6 +70,7 @@ import { reactive, computed } from 'vue';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import Line from '../UI/Line.vue';
 import ContactList from './ContactList.vue';
+import Loading from '../Loading.vue';
 import type {
   IMobileListProps,
   IMobileListEmits
@@ -83,9 +89,24 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
 const state = reactive({
   showAddAccount: false,
   checkUsers: new Set<string | number>(),
+  isLoading: true,
   contactList: computed(() => getConversationList()),
   groupList: computed(() => getGroupList())
 });
+
+// Watch for changes in contact and group lists to update loading state
+import { watch } from 'vue';
+
+// Update loading state when data is loaded
+watch(
+  [() => getConversationList(), () => getGroupList()],
+  ([convList, groupList]) => {
+    if (state.isLoading && (convList.length > 0 || groupList.length > 0)) {
+      state.isLoading = false;
+    }
+  },
+  { immediate: true }
+);
 
 const emits = defineEmits<IMobileListEmits>();
 

@@ -1,6 +1,9 @@
 <template>
   <div
-    class="modal-info-mobile__start"
+    :class="[
+      'modal-info-mobile__start',
+      { 'modal-info-mobile__start--disabled': props.isMenuInfo }
+    ]"
     :data-testid="`${props.dataTestid}-Header-ModalStartContainer`"
   >
     <button
@@ -10,6 +13,7 @@
       <Avatar
         is-icon
         :url="information?.avatarUrl"
+        :initials="information?.name"
         :caption="`image with a channel ${information?.name}`"
         class="modal-info-mobile__avatar"
         :data-testid="`${props.dataTestid}-Header-ModalAvatar`"
@@ -24,10 +28,13 @@
     />
     <NewChatInformationForm
       :model-value="information"
+      :disabled-form="props.isMenuInfo"
       @unmount-save="handleImageSave"
       :data-testid="`${props.dataTestid}-Header-InformationForm`"
     >
-      <template #button></template>
+      <template #button>
+        <template v-if="props.isMenuInfo">{{}}</template>
+      </template>
     </NewChatInformationForm>
   </div>
   <div
@@ -68,6 +75,7 @@ import { onMounted } from 'vue';
 interface IMobileChatInfoProps {
   members: IUserProps[];
   dataTestid?: string;
+  isMenuInfo?: boolean;
 }
 
 const props = withDefaults(defineProps<IMobileChatInfoProps>(), {

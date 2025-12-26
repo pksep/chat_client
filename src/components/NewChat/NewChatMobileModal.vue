@@ -5,7 +5,7 @@
     @unmount-next="handleNext(state.checkMembers)"
     :title="props.isAddOne ? 'Написать сообщение' : 'Канал'"
     :start-button-text="props.isAddOne ? null : 'Далее'"
-    back-button-text="Отмена"
+    :close-button-text="props.isAddOne ? 'Отмена' : 'Назад'"
     :is-disabled-start-button="state.checkMembers.length === 0"
     :data-testid="`${props.dataTestid}-NewChatMobileModal-Container`"
   >
@@ -27,7 +27,7 @@
     title="Канал"
     @unmount-next="handleCreateMobileGroup"
     start-button-text="Создать"
-    back-button-text="Отмена"
+    close-button-text="Назад"
     :data-testid="`${props.dataTestid}-NewChatMobileModal-GroupModal`"
   >
     <MobileChatInfo

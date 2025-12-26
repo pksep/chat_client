@@ -61,7 +61,7 @@ const listClass = (key: string) => ({
 });
 
 const menuItems = computed(() => [
-  { key: 'assistant', label: 'AI Ассистент' },
+  { key: 'assistant', label: 'ИИ' },
   { key: 'channels', label: 'Каналы' },
   { key: 'dialogs', label: 'Диалоги' }
 ]);

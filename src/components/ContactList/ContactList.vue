@@ -1,5 +1,12 @@
 <template>
+  <div v-if="props.isLoading" class="contact-list__loading">
+    <Loading
+      message="Загрузка контактов..."
+      :dataTestid="`${props.dataTestid}-ContactList-Loading`"
+    />
+  </div>
   <ul
+    v-else
     :class="['contact-list', props.class]"
     role="list"
     :data-testid="`${props.dataTestid}-ContactList-List`"
@@ -38,73 +45,70 @@
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           is-icon
         />
-        <h5
-          role="heading"
-          aria-level="5"
-          class="contact-list__title"
-          :data-testid="`${props.dataTestid}-ContactList-Title${index + 1}`"
-        >
-          {{ contact.nickname }}
-          <span class="contact-list__me" v-if="contact.id === user.id">
-            (Вы)
-          </span>
-        </h5>
-        <div
-          class="contact-list__description"
-          :data-testid="`${props.dataTestid}-ContactList-Description${index + 1}`"
-          :aria-label="`Latest message: ${contact.latestMessage || 'No message'}`"
-          v-html="contact.latestMessage"
-        ></div>
-        <div class="contact-list__top">
-          <MessageStatusIcons
-            v-if="contact.isLatestMessageFromMe"
-            class="contact-list__read-icon contact-list__message-status-icons"
-            :message-status="contact.latestMessageStatus"
-            :is-read="contact.isRead"
-            :is-me-sender="true"
-            :data-testid="`${props.dataTestid}-ContactList-MessageStatusIcons${index + 1}`"
-          />
-          <span
-            v-if="contact.latestMessageTime"
-            class="contact-list__time"
-            :data-testid="`${props.dataTestid}-ContactList-Time${index + 1}`"
-            :aria-label="`Last message at ${useTime(new Date(contact.latestMessageTime))}`"
+        <div class="contact-list__block--wrapper">
+          <h5
+            role="heading"
+            aria-level="5"
+            class="contact-list__title"
+            :data-testid="`${props.dataTestid}-ContactList-Title${index + 1}`"
           >
-            {{ useTime(new Date(contact.latestMessageTime)) }}
-          </span>
-        </div>
-        <div class="contact-list__bottom">
-          <Checkbox
-            v-if="props.showCheckbox"
-            :size="CheckboxSizeEnum.small"
-            @update:model-value="value => handleCheckbox(value, contact.id)"
-            :model-value="props.selectedContactIds?.has(contact.id) || false"
-          />
+            {{ contact.nickname }}
+            <span class="contact-list__me" v-if="contact.id === user.id">
+              (Вы)
+            </span>
+          </h5>
           <div
-            v-else-if="
-              contact.notificationCount > 0 &&
-              (state.isNotificationEnabled[contact.id] ?? true)
-            "
-            class="contact-list__notification"
-            :data-testid="`${props.dataTestid}-ContactList-Notification${index + 1}`"
-            :aria-label="`${contact.notificationCount} new messages`"
-          >
-            {{ contact.notificationCount }}
+            class="contact-list__description"
+            :data-testid="`${props.dataTestid}-ContactList-Description${index + 1}`"
+            :aria-label="`Latest message: ${contact.latestMessage || 'No message'}`"
+            v-html="contact.latestMessage"
+          ></div>
+          <div class="contact-list__top">
+            <MessageStatusIcons
+              v-if="contact.isLatestMessageFromMe"
+              class="contact-list__message-status-icons"
+              :message-status="contact.latestMessageStatus"
+              :is-read="contact.isRead"
+              :is-me-sender="true"
+              :data-testid="`${props.dataTestid}-ContactList-MessageStatusIcons${index + 1}`"
+            />
+            <span
+              v-if="contact.latestMessageTime"
+              class="contact-list__time"
+              :data-testid="`${props.dataTestid}-ContactList-Time${index + 1}`"
+              :aria-label="`Last message at ${useTime(new Date(contact.latestMessageTime))}`"
+            >
+              {{ useTime(new Date(contact.latestMessageTime)) }}
+            </span>
           </div>
-          <div
-            v-if="state.isPin[contact.id]"
-            :data-testid="`${props.dataTestid}-ContactList-Pin${index + 1}`"
-            :aria-label="`Pinned contact`"
-          >
-            <Icon class="contact-list__pin-icon" :name="IconNameEnum.pin" />
+          <div class="contact-list__bottom">
+            <Checkbox
+              v-if="props.showCheckbox"
+              :size="CheckboxSizeEnum.small"
+              @update:model-value="value => handleCheckbox(value, contact.id)"
+              :model-value="props.selectedContactIds?.has(contact.id) || false"
+            />
+            <div
+              v-else-if="
+                contact.notificationCount > 0 &&
+                (state.isNotificationEnabled[contact.id] ?? true)
+              "
+              class="contact-list__notification"
+              :data-testid="`${props.dataTestid}-ContactList-Notification${index + 1}`"
+              :aria-label="`${contact.notificationCount} new messages`"
+            >
+              {{ contact.notificationCount }}
+            </div>
+            <div
+              v-if="state.isPin[contact.id]"
+              :data-testid="`${props.dataTestid}-ContactList-Pin${index + 1}`"
+              :aria-label="`Pinned contact`"
+            >
+              <Icon class="contact-list__pin-icon" :name="IconNameEnum.pin" />
+            </div>
           </div>
         </div>
       </div>
-      <Line
-        v-if="isMobile"
-        class="menu__user-line"
-        :data-testid="`${props.dataTestid}-AIAssistant-Line`"
-      />
       <ContextMenu
         :visible="!!isOpen[contact.id]"
         :position="position"
@@ -149,7 +153,6 @@
 <script setup lang="ts">
 import { reactive, watch, computed } from 'vue';
 import { useContextMenu } from '../../composables/useContextMenu';
-import { useResizeState } from '../../composables/useResizeState';
 import {
   Avatar,
   Icon,
@@ -161,10 +164,9 @@ import {
   CheckboxSizeEnum
 } from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
-import Line from '../UI/Line.vue';
 import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
+import Loading from '../Loading.vue';
 import type { IContactListProps } from './interfaces/contact-list';
-import { MAX_W_MD } from '../../utils/constants';
 import { setPinConversation } from '../../services/useConversions';
 import { appendUserAttributes } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
@@ -173,11 +175,13 @@ import { IContactProps } from '../interfaces/interfaces';
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
   selectedContactIds?: Set<string | number>;
+  isLoading?: boolean;
 }
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   showCheckbox: false,
-  selectedContactIds: () => new Set<string | number>()
+  selectedContactIds: () => new Set<string | number>(),
+  isLoading: false
 });
 
 const emits = defineEmits<{
@@ -189,8 +193,6 @@ const emits = defineEmits<{
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
-
-const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const user = computed(() => appendUserAttributes(getAuthUser()));
 

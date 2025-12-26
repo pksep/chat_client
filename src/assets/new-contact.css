@@ -1,8 +1,16 @@
+dialog.new-contact > .modal-yui-kit__modal-content,
+dialog.new-group > .modal-yui-kit__modal-content {
+  padding-inline: 0 !important;
+}
+
+dialog.new-contact > .modal-yui-kit__modal-content {
+  padding-bottom: 6px !important;
+}
+
 .new-contact__header {
   font-size: 16px;
-  padding-block-start: 5px;
   padding-block-end: 10px;
-  padding-inline: 10px;
+  padding-inline: 20px;
   display: flex;
   font-weight: bold;
   align-items: center;
@@ -13,7 +21,7 @@
 }
 
 button.button-yui-kit.new-contact__button-close {
-  padding-block: 5px;
+  padding-block: 0;
   padding-inline: 0;
 }
 
@@ -28,9 +36,20 @@ button.button-yui-kit.new-contact__button-close {
   }
 }
 
-.contact-selector__search {
-  padding: 10px;
+.modal-yui-kit__modal-content > .contact-selector {
+  padding-inline: 10px;
+}
+
+.modal-yui-kit__modal-content > .contact-selector > .contact-selector__search {
+  padding-inline: 10px;
   margin-bottom: 5px;
+}
+
+dialog.new-contact
+  > .modal-yui-kit__modal-content
+  > .contact-selector
+  > ul.contact-selector__list {
+  margin-bottom: 0;
 }
 
 .contact-selector__list {

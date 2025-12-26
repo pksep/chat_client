@@ -3,7 +3,13 @@
     <slot> </slot>
     <div class="menu__info-form-block form__name">
       <label for="name" class="menu__info-title-text"> Название: </label>
-      <Input id="name" class="initial" placeholder="Text" v-model="form.name" />
+      <Input
+        id="name"
+        class="initial"
+        placeholder="Text"
+        v-model="form.name"
+        :disabled="props.disabledForm"
+      />
     </div>
     <div class="menu__info-form-block form__textarea" v-if="false">
       <label class="menu__info-title-text"> Описание: </label>
@@ -28,6 +34,7 @@ import { IMenuInfoInformation } from '../../composables/useMenuInfo';
 import { Button, ButtonTypeEnum, Input, SizesEnum, Textarea } from '@pksep/yui';
 import { watch, computed, reactive } from 'vue';
 
+const props = defineProps<{ disabledForm?: boolean }>();
 const model = defineModel<IMenuInfoInformation>();
 
 const emits = defineEmits<{
@@ -40,6 +47,7 @@ const form = reactive({
 });
 
 const isFormValid = computed(() => {
+  if (props.disabledForm) return true;
   if ((model.value?.avatarUrl ?? '') !== form.avatarUrl) {
     return true;
   }

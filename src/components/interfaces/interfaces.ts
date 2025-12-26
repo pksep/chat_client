@@ -1,3 +1,5 @@
+import { IMenuInfoEmits } from '@/composables/useMenuInfo';
+
 export interface IHeaderProps {
   class?: string;
   chapter?: string | null;
@@ -16,9 +18,10 @@ export interface IMenuEmits {
     config: { nickname: string; contact: IUserProps } | string | null
   ): void;
   (e: 'unmount-user-add'): void;
+  (e: 'unmount-contacts-update', contacts: IUserProps[]): void;
 }
 
-export interface IHeaderEmits {
+export interface IHeaderEmits extends IMenuInfoEmits {
   (e: 'unmount-click', isCollapse?: boolean): void;
   (e: 'unmount-contact', contact: IUserProps): void;
   (e: 'unmount-notification', statusNotification?: string): void;

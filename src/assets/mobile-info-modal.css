@@ -37,3 +37,22 @@ p.modal-info-mobile__end--paragraph {
   font-weight: 600;
   font-size: 14px;
 }
+
+@media screen and (width <= 480px) {
+  dialog.modal-yui-kit.modal-yui-kit_bottom.chat__header-modal-info--active {
+    border-radius: 0;
+    & .mobile__modal-header {
+      padding-block: 5px;
+    }
+    & .mobile__modal-content {
+      padding-inline: 0;
+    }
+    & .modal-yui-kit__modal-content {
+      padding-top: 5px;
+      padding-inline: 10px;
+    }
+    & button.mobile__modal-header--button {
+      padding-block: 6.5px;
+    }
+  }
+}
