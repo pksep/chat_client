@@ -97,6 +97,10 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
   const plugins: PluginOption[] = [vuePlugin, ...libPlugins, ...appPlugins];
 
   return {
+    // server: {
+    //   host: '0.0.0.0',
+    //   port: 5173 // for check local smartphone
+    // },
     build: {
       outDir: baseMode === 'lib' ? 'build/lib' : 'build',
       sourcemap: baseMode !== 'lib' && mode === 'production',

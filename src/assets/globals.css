@@ -1,6 +1,5 @@
 :root {
   --default-width: 100dvw;
-  --default-height: 100dvh;
   --size-right-menu: 404px;
   --size-left-menu: 345px;
   --header-height: 56px;
@@ -10,6 +9,7 @@
 
 body {
   font-family: 'Inter Variable', sans-serif;
+  overflow: hidden;
 }
 
 h1,
