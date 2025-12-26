@@ -412,6 +412,9 @@ watch(
 
 let unsubscribeFromMessageChanges: (() => void) | null = null;
 
+// Track the time when the last message was sent to avoid unnecessary server fetches
+const lastMessageSentTime = ref(0);
+
 onMounted(async () => {
   if (!state.chatId) {
     state.chatId = generateChatId();
@@ -422,7 +425,10 @@ onMounted(async () => {
       await new Promise(resolve => setTimeout(resolve, 50));
 
       if (newMessageConversationId === props.contact?.conversationId) {
-        if (!getIsWebsocketConnecting()) {
+        // Avoid fetching from server if a message was just sent (within 2 seconds)
+        // to prevent race condition where server doesn't have the message yet
+        const timeSinceLastSend = Date.now() - lastMessageSentTime.value;
+        if (!getIsWebsocketConnecting() && timeSinceLastSend > 2000) {
           await getMessagesByConversationId(newMessageConversationId, '');
         }
         updateMessages();

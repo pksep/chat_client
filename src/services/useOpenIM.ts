@@ -384,6 +384,9 @@ export const sendMessageIM = async ({
 
     const convId = determineConversationId(to, groupId);
 
+    // Remove any existing message with this clientMsgID from the queue first
+    removeFromOutgoingQueue(convId, clientMsgID);
+
     addToOutgoingMessageQueue(convId, tempMsg);
 
     appendMessageToLocal(convId, tempMsg);
@@ -556,6 +559,9 @@ export const sendMessageIM = async ({
       isReadByPeer: (res.data as any).isReadByPeer ?? false
     };
 
+    // Remove the message from the outgoing queue since it was sent successfully
+    removeFromOutgoingQueue(convId, clientMsgID);
+
     // Use appendMessageToLocal which handles duplicates properly
     appendMessageToLocal(convId, serverMessage);
 
@@ -607,6 +613,9 @@ export const sendMessageIM = async ({
     };
 
     const convId = determineConversationId(to, groupId);
+
+    // Remove any existing message with this clientMsgID from the queue first
+    removeFromOutgoingQueue(convId, clientMsgID);
 
     addToOutgoingMessageQueue(convId, tempMsg);
 
