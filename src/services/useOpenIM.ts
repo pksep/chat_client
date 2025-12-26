@@ -3,7 +3,8 @@ import { CbEvents, getSDK } from '@openim/wasm-client-sdk';
 import { ref, shallowRef } from 'vue';
 import {
   setAllNotificationCount,
-  updateConversationList
+  updateConversationList,
+  updateColumnsConversation
 } from './useConversions';
 import { updateGroupList } from './useGroup';
 import {
@@ -535,28 +536,13 @@ export const sendMessageIM = async ({
 
     const convId = determineConversationId(to, groupId);
 
-    const allMessages = getSavedMessages(convId);
-    const messageExists = allMessages.some(
-      msg => msg.clientMsgID === clientMsgID
-    );
-
     const serverMessage = {
       ...res.data,
       isReadByPeer: (res.data as any).isReadByPeer ?? false
     };
 
-    if (messageExists) {
-      const updatedMessages = allMessages.map(msg => {
-        if (msg.clientMsgID === clientMsgID) {
-          return serverMessage;
-        }
-        return msg;
-      });
-
-      saveMessagesToLocal(convId, updatedMessages);
-    } else {
-      appendMessageToLocal(convId, serverMessage);
-    }
+    // Use appendMessageToLocal which handles duplicates properly
+    appendMessageToLocal(convId, serverMessage);
 
     console.debug('[OpenIM] Message sent successfully to:', to);
   } catch (error) {
@@ -769,6 +755,11 @@ const markAsRead = async (conversationID: string) => {
     });
 
     saveMessagesToLocal(conversationID, updatedMessages);
+
+    // Update the conversation's notification count to 0 since we've read all messages
+    updateColumnsConversation(conversationID, {
+      notificationCount: 0
+    });
   } catch (error: any) {
     const typedError = error as MarkAsReadError;
 
@@ -887,19 +878,33 @@ const appendMessageToLocal = (
   message: OpenIMMessage
 ): void => {
   const existingMessages = messagesStore.value[conversationId] || [];
-  const newLength = existingMessages.length + 1;
-  const newArr = new Array(newLength);
 
-  for (let i = 0; i < existingMessages.length; i++) {
-    newArr[i] = existingMessages[i];
+  const existingIndex = existingMessages.findIndex(
+    msg => msg.clientMsgID === message.clientMsgID
+  );
+
+  if (existingIndex !== -1) {
+    const updatedMessages = [...existingMessages];
+    updatedMessages[existingIndex] = {
+      ...message,
+      isReadByPeer: message.isReadByPeer ?? false
+    };
+    messagesStore.value[conversationId] = updatedMessages;
+  } else {
+    const newLength = existingMessages.length + 1;
+    const newArr = new Array(newLength);
+
+    for (let i = 0; i < existingMessages.length; i++) {
+      newArr[i] = existingMessages[i];
+    }
+
+    newArr[newLength - 1] = {
+      ...message,
+      isReadByPeer: message.isReadByPeer ?? false
+    };
+
+    messagesStore.value[conversationId] = newArr;
   }
-
-  newArr[newLength - 1] = {
-    ...message,
-    isReadByPeer: message.isReadByPeer ?? false
-  };
-
-  messagesStore.value[conversationId] = newArr;
 
   messageChangeCallbacks.forEach(callback => {
     try {
