@@ -4,7 +4,8 @@ import { ref, shallowRef } from 'vue';
 import {
   setAllNotificationCount,
   updateConversationList,
-  updateColumnsConversation
+  updateColumnsConversation,
+  fetchConversationList
 } from './useConversions';
 import { updateGroupList } from './useGroup';
 import {
@@ -386,6 +387,20 @@ export const sendMessageIM = async ({
     addToOutgoingMessageQueue(convId, tempMsg);
 
     appendMessageToLocal(convId, tempMsg);
+
+    // When user sends a message to a conversation, reset the notification count directly
+    updateColumnsConversation(convId, {
+      notificationCount: 0
+    });
+
+    // Refresh the conversation list to ensure UI updates properly (non-blocking)
+    fetchConversationList().catch(error => {
+      console.warn(
+        'Failed to refresh conversation list after sending message:',
+        error
+      );
+    });
+
     return;
   }
 
@@ -544,6 +559,19 @@ export const sendMessageIM = async ({
     // Use appendMessageToLocal which handles duplicates properly
     appendMessageToLocal(convId, serverMessage);
 
+    // When user sends a message to a conversation, reset the notification count directly
+    updateColumnsConversation(convId, {
+      notificationCount: 0
+    });
+
+    // Refresh the conversation list to ensure UI updates properly (non-blocking)
+    fetchConversationList().catch(error => {
+      console.warn(
+        'Failed to refresh conversation list after sending message:',
+        error
+      );
+    });
+
     console.debug('[OpenIM] Message sent successfully to:', to);
   } catch (error) {
     const errorDetails = {
@@ -583,6 +611,19 @@ export const sendMessageIM = async ({
     addToOutgoingMessageQueue(convId, tempMsg);
 
     appendMessageToLocal(convId, tempMsg);
+
+    // When user sends a message to a conversation, reset the notification count directly
+    updateColumnsConversation(convId, {
+      notificationCount: 0
+    });
+
+    // Refresh the conversation list to ensure UI updates properly (non-blocking)
+    fetchConversationList().catch(error => {
+      console.warn(
+        'Failed to refresh conversation list after sending message:',
+        error
+      );
+    });
 
     return;
   }
@@ -759,6 +800,14 @@ const markAsRead = async (conversationID: string) => {
     // Update the conversation's notification count to 0 since we've read all messages
     updateColumnsConversation(conversationID, {
       notificationCount: 0
+    });
+
+    // Immediately fetch the updated conversation list to ensure UI updates properly
+    await fetchConversationList().catch(error => {
+      console.warn(
+        'Failed to refresh conversation list after marking as read:',
+        error
+      );
     });
   } catch (error: any) {
     const typedError = error as MarkAsReadError;

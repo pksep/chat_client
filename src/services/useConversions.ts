@@ -190,10 +190,13 @@ const updateColumnsConversation = (
     conv => conv.id === conversationID
   );
   if (index !== -1) {
-    conversionStore.value[index] = {
-      ...conversionStore.value[index],
+    // Create a new array to ensure reactivity
+    const updatedConversations = [...conversionStore.value];
+    updatedConversations[index] = {
+      ...updatedConversations[index],
       ...updates
     };
+    conversionStore.value = updatedConversations;
   } else {
     console.warn(`Conversation with ID ${conversationID} not found for update`);
   }

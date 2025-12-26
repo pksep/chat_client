@@ -177,7 +177,7 @@ const handleClickHeader = async (): Promise<void> => {
   emits('unmount-click');
 };
 
-// Watch for changes in contact properties to update member count
+// Watch for changes in contact ID to update member count when switching between groups
 watch(
   () => props.contact?.id,
   async (newId, oldId) => {

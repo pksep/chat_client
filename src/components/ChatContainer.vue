@@ -127,7 +127,7 @@ import type {
 import { appendUserAttributes, getUsersList } from '../composables/useUsers';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD, MAX_W_XL } from '../utils/constants';
-import { getGroupList } from '../services/useGroup';
+import { getGroupList, fetchGroupMemberCount } from '../services/useGroup';
 import { getConversationList } from '../services/useConversions';
 import { getAuthUser } from '../composables/useAuth';
 import MobileModal from './UI/MobileModal.vue';
@@ -281,9 +281,9 @@ const findContactOrGroupById = (id: string) => {
   return state.groups.find(group => group.id === id);
 };
 
-const unmountMenuChapter = (
+const unmountMenuChapter = async (
   config: { contact: IUserProps; groupId?: string } | string | null
-): void => {
+): Promise<void> => {
   state.isChapter = true;
   if (typeof config === 'string') {
     state.chapter = config;
@@ -298,7 +298,21 @@ const unmountMenuChapter = (
           });
         }
 
-        state.contact = { ...foundContact, conversationId: foundContact.id };
+        let updatedContact = {
+          ...foundContact,
+          conversationId: foundContact.id
+        };
+
+        // If this is a group, fetch and update the member count
+        if (foundContact.groupId) {
+          const memberCount = await fetchGroupMemberCount(foundContact.groupId);
+          updatedContact = {
+            ...updatedContact,
+            membersLength: memberCount
+          };
+        }
+
+        state.contact = updatedContact;
         state.chapter = config;
       } else {
         state.contact = null;
@@ -312,8 +326,18 @@ const unmountMenuChapter = (
       });
     }
 
-    state.chapter = config.contact.nickname;
-    state.contact = config.contact;
+    // If this is a group, fetch and update the member count
+    let updatedContact = config.contact;
+    if (config.contact.groupId) {
+      const memberCount = await fetchGroupMemberCount(config.contact.groupId);
+      updatedContact = {
+        ...config.contact,
+        membersLength: memberCount
+      };
+    }
+
+    state.chapter = updatedContact.nickname;
+    state.contact = updatedContact;
   } else {
     state.chapter = null;
     state.contact = null;
@@ -360,10 +384,20 @@ const handleNewContactMessage = async (
   state.chapter = contact.nickname;
   const [smallerUserID, largerUserID] = [authUser.value.id, contact.id].sort();
 
-  state.contact = {
-    ...contact,
-    conversationId: `si_${smallerUserID}_${largerUserID}`
-  };
+  // If this is a group, fetch and update the member count
+  if (contact.groupId) {
+    const memberCount = await fetchGroupMemberCount(contact.groupId);
+    state.contact = {
+      ...contact,
+      membersLength: memberCount,
+      conversationId: `si_${smallerUserID}_${largerUserID}`
+    };
+  } else {
+    state.contact = {
+      ...contact,
+      conversationId: `si_${smallerUserID}_${largerUserID}`
+    };
+  }
   return state.contact;
 };
 
@@ -374,11 +408,14 @@ const handleNewGroupMessage = async (group: any): Promise<void> => {
     return;
   }
 
+  const memberCount = await fetchGroupMemberCount(group.groupID);
+
   state.contact = {
     conversationId: group.conversationID,
     nickname: group.showName,
     groupId: group.groupID,
-    avatarUrl: group.faceURL
+    avatarUrl: group.faceURL,
+    membersLength: memberCount
   };
 
   state.groupId = group.groupID;
@@ -386,13 +423,33 @@ const handleNewGroupMessage = async (group: any): Promise<void> => {
   state.chapter = state.contact.conversationId;
 };
 
-const handleChangeContact = (contact: IUserProps): void => {
-  state.contact = contact;
+const handleChangeContact = async (contact: IUserProps): Promise<void> => {
+  // If this is a group, fetch and update the member count
+  if (contact.groupId) {
+    const memberCount = await fetchGroupMemberCount(contact.groupId);
+    state.contact = {
+      ...contact,
+      membersLength: memberCount
+    };
+  } else {
+    state.contact = contact;
+  }
 };
 
-const handleChangeContactFromMenuInfo = (contact: IUserProps): void => {
-  // Update the contact in the state to trigger reactivity
-  state.contact = { ...contact };
+const handleChangeContactFromMenuInfo = async (
+  contact: IUserProps
+): Promise<void> => {
+  // If this is a group, fetch and update the member count
+  if (contact.groupId) {
+    const memberCount = await fetchGroupMemberCount(contact.groupId);
+    state.contact = {
+      ...contact,
+      membersLength: memberCount
+    };
+  } else {
+    // Update the contact in the state to trigger reactivity
+    state.contact = { ...contact };
+  }
 };
 
 const handleExit = (): void => {
@@ -413,11 +470,19 @@ useAndroidBackButton({
   }
 });
 
-onMounted(() => {
+onMounted(async () => {
   if (isMobile.value) {
     state.isChapter = false;
     state.chapter = 'assistant';
     return;
+  }
+  // If there's a group contact, make sure to update the member count
+  if (state.contact?.groupId) {
+    const memberCount = await fetchGroupMemberCount(state.contact.groupId);
+    state.contact = {
+      ...state.contact,
+      membersLength: memberCount
+    };
   }
   state.isChapter = state.chapter === 'ai' || state.contact !== null;
 });

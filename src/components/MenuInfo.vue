@@ -148,21 +148,28 @@ watch(
 
 watch(
   () => props.contact,
-  async newContact => {
+  async (newContact, oldContact) => {
     if (newContact && props.open) {
-      await initializeMenuInfo({ ...props, isEnabled: true });
+      // If switching from a group to non-group (or vice versa), close the menu
+      const wasGroup = !!oldContact?.groupId;
+      const isGroup = !!newContact.groupId;
+
+      if (wasGroup !== isGroup) {
+        handleCloseMenu();
+        return;
+      }
+
+      // If switching between different groups, update the information without closing
+      if (isGroup && newContact.groupId !== oldContact?.groupId) {
+        await initializeMenuInfo({ ...props, isEnabled: true });
+      }
+      // If switching between non-groups, just update
+      else if (!isGroup && newContact.id !== oldContact?.id) {
+        await initializeMenuInfo({ ...props, isEnabled: true });
+      }
     }
   },
   { deep: true }
-);
-
-watch(
-  () => props.contact?.id,
-  (newId, oldId) => {
-    if (newId && newId !== oldId) {
-      handleCloseMenu();
-    }
-  }
 );
 
 const {
