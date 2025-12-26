@@ -110,7 +110,7 @@ button.primary-yui-kit.disabled-yui-kit {
       'chat chat';
   }
   .chat-container:has(.chat__header-menu) {
-    --header-height: 43px;
+    --header-height: 60px;
   }
   .chat__menu {
     display: none;
