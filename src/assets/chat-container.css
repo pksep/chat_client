@@ -31,6 +31,7 @@
   grid-template-areas: 'menu header info' 'menu chat info';
   grid-template-columns: var(--size-left-menu) auto var(--size-right-menu);
   grid-template-rows: var(--header-height) auto;
+  scroll-behavior: smooth;
 }
 
 .chat-container.collapse {
