@@ -42,7 +42,9 @@ p.modal-info-mobile__end--paragraph {
   dialog.modal-yui-kit.modal-yui-kit_bottom.chat__header-modal-info--active {
     border-radius: 0;
     & .mobile__modal-header {
-      padding-block: 5px;
+      align-items: center;
+      padding-top: 10.5px;
+      padding-bottom: 10.5px;
     }
     & .mobile__modal-content {
       padding-inline: 0;
