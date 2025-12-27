@@ -216,12 +216,6 @@ div.message-content__file {
   color: var(--white) !important;
 }
 
-@media screen and (width >= 480px) {
-  .message-content__media {
-    max-width: 517px;
-  }
-}
-
 @media screen and (width <= 480px) {
   .chat__message-wrapper {
     width: 100%;
