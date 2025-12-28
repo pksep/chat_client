@@ -248,12 +248,27 @@ watch(
 // Watch for route changes and update the UI accordingly
 watch(
   () => currentRoute.value,
-  (newRoute) => {
+  newRoute => {
     if (newRoute.type === 'direct' && newRoute.id) {
       // Find the direct chat by ID and set it as the current contact
-      const conversation = state.conversations.find(item => item.id === newRoute.id);
+      const conversation = state.conversations.find(
+        item => item.id === newRoute.id
+      );
       if (conversation) {
-        state.contact = conversation;
+        // Construct the conversationId for direct chats
+        const authUserId = authUser.value?.id;
+        let conversationId;
+        if (authUserId && conversation.id) {
+          const [smallerUserID, largerUserID] = [authUserId, conversation.id].sort();
+          conversationId = `si_${smallerUserID}_${largerUserID}`;
+        } else {
+          conversationId = conversation.id; // fallback
+        }
+
+        state.contact = {
+          ...conversation,
+          conversationId
+        };
         state.chapter = conversation.id; // Use conversation ID as chapter
         state.isChapter = true;
       }
@@ -261,7 +276,13 @@ watch(
       // Find the group by ID and set it as the current contact
       const group = state.groups.find(g => g.id === newRoute.id);
       if (group) {
-        state.contact = group;
+        // Construct the conversationId for group chats
+        const conversationId = `sg_${group.groupId}`;
+
+        state.contact = {
+          ...group,
+          conversationId
+        };
         state.chapter = group.id; // Use group ID as chapter
         state.isChapter = true;
       }
@@ -340,9 +361,25 @@ const unmountMenuChapter = async (
           });
         }
 
+        // Construct the conversationId based on whether it's a group or direct chat
+        let conversationId;
+        if (foundContact.groupId) {
+          // For group chats, conversationId is sg_<groupID>
+          conversationId = `sg_${foundContact.groupId}`;
+        } else {
+          // For direct chats, conversationId is si_<smallerUserID>_<largerUserID>
+          const authUserId = authUser.value?.id;
+          if (authUserId && foundContact.id) {
+            const [smallerUserID, largerUserID] = [authUserId, foundContact.id].sort();
+            conversationId = `si_${smallerUserID}_${largerUserID}`;
+          } else {
+            conversationId = foundContact.id; // fallback
+          }
+        }
+
         let updatedContact = {
           ...foundContact,
-          conversationId: foundContact.id
+          conversationId
         };
 
         // If this is a group, fetch and update the member count
@@ -375,13 +412,35 @@ const unmountMenuChapter = async (
       });
     }
 
+    // Construct the conversationId based on whether it's a group or direct chat
+    let conversationId;
+    if (config.contact.groupId) {
+      // For group chats, conversationId is sg_<groupID>
+      conversationId = `sg_${config.contact.groupId}`;
+    } else {
+      // For direct chats, conversationId is si_<smallerUserID>_<largerUserID>
+      const authUserId = authUser.value?.id;
+      if (authUserId && config.contact.id) {
+        const [smallerUserID, largerUserID] = [authUserId, config.contact.id].sort();
+        conversationId = `si_${smallerUserID}_${largerUserID}`;
+      } else {
+        conversationId = config.contact.id; // fallback
+      }
+    }
+
     // If this is a group, fetch and update the member count
-    let updatedContact = config.contact;
+    let updatedContact;
     if (config.contact.groupId) {
       const memberCount = await fetchGroupMemberCount(config.contact.groupId);
       updatedContact = {
         ...config.contact,
-        membersLength: memberCount
+        membersLength: memberCount,
+        conversationId
+      };
+    } else {
+      updatedContact = {
+        ...config.contact,
+        conversationId
       };
     }
 
@@ -438,7 +497,6 @@ const handleNewContactMessage = async (
   contact: IUserProps
 ): Promise<IContactProps> => {
   state.chapter = contact.nickname;
-  const [smallerUserID, largerUserID] = [authUser.value.id, contact.id].sort();
 
   // If this is a group, fetch and update the member count
   if (contact.groupId) {
@@ -446,12 +504,13 @@ const handleNewContactMessage = async (
     state.contact = {
       ...contact,
       membersLength: memberCount,
-      conversationId: `si_${smallerUserID}_${largerUserID}`
+      conversationId: `sg_${contact.groupId}`
     };
 
     // Update URL for group
     navigateToGroup(contact.id);
   } else {
+    const [smallerUserID, largerUserID] = [authUser.value.id, contact.id].sort();
     state.contact = {
       ...contact,
       conversationId: `si_${smallerUserID}_${largerUserID}`
@@ -489,18 +548,34 @@ const handleNewGroupMessage = async (group: any): Promise<void> => {
 };
 
 const handleChangeContact = async (contact: IUserProps): Promise<void> => {
-  // If this is a group, fetch and update the member count
+  // Construct the conversationId based on whether it's a group or direct chat
+  let conversationId;
   if (contact.groupId) {
+    // For group chats, conversationId is sg_<groupID>
+    conversationId = `sg_${contact.groupId}`;
     const memberCount = await fetchGroupMemberCount(contact.groupId);
     state.contact = {
       ...contact,
-      membersLength: memberCount
+      membersLength: memberCount,
+      conversationId
     };
 
     // Update URL for group
     navigateToGroup(contact.id);
   } else {
-    state.contact = contact;
+    // For direct chats, conversationId is si_<smallerUserID>_<largerUserID>
+    const authUserId = authUser.value?.id;
+    if (authUserId && contact.id) {
+      const [smallerUserID, largerUserID] = [authUserId, contact.id].sort();
+      conversationId = `si_${smallerUserID}_${largerUserID}`;
+    } else {
+      conversationId = contact.id; // fallback
+    }
+
+    state.contact = {
+      ...contact,
+      conversationId
+    };
 
     // Update URL for direct chat
     navigateToDirect(contact.id);
@@ -510,19 +585,35 @@ const handleChangeContact = async (contact: IUserProps): Promise<void> => {
 const handleChangeContactFromMenuInfo = async (
   contact: IUserProps
 ): Promise<void> => {
-  // If this is a group, fetch and update the member count
+  // Construct the conversationId based on whether it's a group or direct chat
+  let conversationId;
   if (contact.groupId) {
+    // For group chats, conversationId is sg_<groupID>
+    conversationId = `sg_${contact.groupId}`;
     const memberCount = await fetchGroupMemberCount(contact.groupId);
     state.contact = {
       ...contact,
-      membersLength: memberCount
+      membersLength: memberCount,
+      conversationId
     };
 
     // Update URL for group
     navigateToGroup(contact.id);
   } else {
+    // For direct chats, conversationId is si_<smallerUserID>_<largerUserID>
+    const authUserId = authUser.value?.id;
+    if (authUserId && contact.id) {
+      const [smallerUserID, largerUserID] = [authUserId, contact.id].sort();
+      conversationId = `si_${smallerUserID}_${largerUserID}`;
+    } else {
+      conversationId = contact.id; // fallback
+    }
+
     // Update the contact in the state to trigger reactivity
-    state.contact = { ...contact };
+    state.contact = {
+      ...contact,
+      conversationId
+    };
 
     // Update URL for direct chat
     navigateToDirect(contact.id);
