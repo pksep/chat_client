@@ -19,6 +19,14 @@ export interface IMenuEmits {
   ): void;
   (e: 'unmount-user-add'): void;
   (e: 'unmount-contacts-update', contacts: IUserProps[]): void;
+  // New standardized navigation event
+  (
+    e: 'unmount-navigate',
+    target:
+      | { type: 'view'; view: 'ai' | 'assistant' | 'channels' | 'dialogs' }
+      | { type: 'contact'; contact: IUserProps }
+      | { type: 'reset' }
+  ): void;
 }
 
 export interface IHeaderEmits extends IMenuInfoEmits {

@@ -10,7 +10,13 @@
     :data-testid="`${props.dataTestid}-ChatContainer-Container`"
   >
     <Header
-      v-if="state.isChapter && (!isMobile || (state.chapter !== 'assistant' && state.chapter !== 'channels' && state.chapter !== 'dialogs'))"
+      v-if="
+        state.isChapter &&
+        (!isMobile ||
+          (state.chapter !== 'assistant' &&
+            state.chapter !== 'channels' &&
+            state.chapter !== 'dialogs'))
+      "
       class="chat__header"
       :chapter="state.chapter"
       :members="filteredMembers"
@@ -24,7 +30,12 @@
     />
     <HeaderMenu
       class="chat__header-menu"
-      v-if="isMobile && (state.chapter === 'assistant' || state.chapter === 'channels' || state.chapter === 'dialogs')"
+      v-if="
+        isMobile &&
+        (state.chapter === 'assistant' ||
+          state.chapter === 'channels' ||
+          state.chapter === 'dialogs')
+      "
       :dataTestid="`${props.dataTestid}-ChatContainer-HeaderMenu`"
       :active-chapter="state.chapter || 'assistant'"
       @unmount-chapter="unmountHeaderMenuChapter"
@@ -567,16 +578,6 @@ useAndroidBackButton({
 });
 
 watch(
-  () => state.chapter,
-  newChapter => {
-    if (newChapter !== undefined && newChapter !== null) {
-      // The navigation history is automatically saved when addToHistory is called
-    }
-  }
-);
-
-// Watch for changes in navigation state and update local state accordingly
-watch(
   () => navigationState.currentChapter,
   newChapter => {
     if (newChapter !== state.chapter) {
@@ -594,7 +595,6 @@ watch(
   }
 );
 
-// Watch for changes in isChapter state
 watch(
   () => navigationState.isChapter,
   newIsChapter => {
@@ -606,7 +606,6 @@ watch(
 
 onMounted(async () => {
   try {
-    // Set the default chapter based on device type if no chapter was restored
     if (state.chapter === null || state.chapter === undefined) {
       if (isMobile.value) {
         state.chapter = 'assistant';
@@ -618,7 +617,6 @@ onMounted(async () => {
     if (isMobile.value) {
       state.isChapter = false;
     } else {
-      // If there's a group contact, make sure to update the member count
       if (state.contact?.groupId) {
         const memberCount = await fetchGroupMemberCount(state.contact.groupId);
         state.contact = {
@@ -626,11 +624,9 @@ onMounted(async () => {
           membersLength: memberCount
         };
       }
-      // Update local state to match navigation service state
       state.isChapter = navigationState.isChapter;
     }
   } finally {
-    // Set loading to false after initial setup is complete
     state.isLoading = false;
   }
 });

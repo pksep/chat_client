@@ -1,5 +1,6 @@
 <template>
   <header
+    :key="`header-${props.chapter}-${props.contact?.id || 'null'}`"
     class="chat__header"
     @click="handleClickHeader"
     :data-testid="`${props.dataTestid}-Header-Container`"

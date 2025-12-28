@@ -6,6 +6,7 @@
       :dataTestid="`${props.dataTestid}-Chat-Loading`"
     />
     <ContactListMobile
+      :key="`contact-list-${state.chapter}`"
       class="chat__mobile"
       :user="props.user"
       :contacts="props.contacts"
@@ -17,6 +18,7 @@
     />
     <MessageList
       v-else-if="!isShowContactList(state.chapter)"
+      :key="`message-list-${state.chapter}-${props.contact?.id || 'null'}`"
       ref="messageListRef"
       :chapter="state.chapter"
       :baseUrl="props.baseUrl"
@@ -46,6 +48,7 @@ import { onMounted } from 'vue';
 import type { IMenuEmits } from './interfaces/interfaces';
 import { IUserProps } from './interfaces/interfaces';
 import { markAsRead } from '../services/useOpenIM';
+import { useNavigationService } from '../services/useNavigationService';
 
 export interface IChatProps extends IMessageListProps {
   dataTestid?: string;
@@ -57,6 +60,8 @@ const props = withDefaults(defineProps<IChatProps>(), {
 });
 
 const emits = defineEmits<IMenuEmits>();
+
+const { navigateToTarget } = useNavigationService();
 
 const state = reactive({
   chapter: props.chapter,
@@ -71,12 +76,10 @@ watch(
   }
 );
 
-// Watch for contact changes to mark messages as read
 watch(
   () => props.contact?.conversationId,
   (newConversationId, oldConversationId) => {
     if (newConversationId && newConversationId !== oldConversationId) {
-      // Mark messages as read when switching to a new conversation
       markAsRead(newConversationId).catch(error => {
         console.warn('Failed to mark messages as read:', error);
       });
@@ -88,20 +91,55 @@ const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const messageListRef = useTemplateRef<any>(null);
 
-const handleUnmountChapter = (
+const handleUnmountChapter = async (
   chapter: { nickname: string; contact: any } | string | null
-): void => {
+): Promise<void> => {
   if (typeof chapter === 'string') {
-    state.chapter = chapter;
+    if (
+      chapter === 'ai' ||
+      chapter === 'assistant' ||
+      chapter === 'channels' ||
+      chapter === 'dialogs'
+    ) {
+      await navigateToTarget({
+        type: 'view',
+        view: chapter as 'ai' | 'assistant' | 'channels' | 'dialogs'
+      });
+    } else {
+      if (props.contact) {
+        await navigateToTarget(
+          { type: 'contact', contact: props.contact },
+          { markAsRead: false, updateMemberCount: false }
+        );
+      } else {
+        await navigateToTarget({ type: 'reset' });
+      }
+    }
     emits('unmount-chapter', chapter);
   } else if (chapter && chapter.nickname) {
-    state.chapter = chapter.contact.conversationId;
-    emits('unmount-chapter', state.chapter);
+    if (props.contact) {
+      await navigateToTarget(
+        { type: 'contact', contact: props.contact },
+        { markAsRead: false, updateMemberCount: false }
+      );
+    } else {
+      await navigateToTarget({ type: 'reset' });
+    }
+    emits('unmount-chapter', chapter.contact.conversationId);
   } else {
-    state.chapter = null;
+    await navigateToTarget({ type: 'reset' });
     emits('unmount-chapter', null);
   }
 };
+
+watch(
+  () => props.chapter,
+  newChapter => {
+    if (newChapter !== state.chapter) {
+      state.chapter = newChapter;
+    }
+  }
+);
 
 const handleUnmountContact = (contact: IUserProps): void => {
   emits('unmount-contact', contact);

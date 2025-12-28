@@ -80,11 +80,14 @@ import { Button, ButtonTypeEnum, Icon, IconNameEnum } from '@pksep/yui';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
 import { getConversationList } from '../../services/useConversions';
 import { getGroupList } from '../../services/useGroup';
+import { useNavigationService } from '../../services/useNavigationService';
 
 const props = withDefaults(defineProps<IMobileListProps>(), {
   contacts: () => [],
   dataTestid: () => 'MobileList'
 });
+
+const { navigateToTarget } = useNavigationService();
 
 const state = reactive({
   showAddAccount: false,
@@ -110,14 +113,32 @@ watch(
 
 const emits = defineEmits<IMobileListEmits>();
 
-const handleChapter = (
+const handleChapter = async (
   chapter: { nickname: string; contact: IUserProps } | string | null
-): void => {
+): Promise<void> => {
   if (typeof chapter === 'string') {
+    if (
+      chapter === 'ai' ||
+      chapter === 'assistant' ||
+      chapter === 'channels' ||
+      chapter === 'dialogs'
+    ) {
+      await navigateToTarget({
+        type: 'view',
+        view: chapter as 'ai' | 'assistant' | 'channels' | 'dialogs'
+      });
+    } else {
+      await navigateToTarget({ type: 'reset' });
+    }
     emits('unmount-chapter', chapter);
-  } else if (chapter && chapter.contact.id) {
+  } else if (chapter && chapter.contact) {
+    await navigateToTarget(
+      { type: 'contact', contact: chapter.contact },
+      { markAsRead: true, updateMemberCount: true }
+    );
     emits('unmount-chapter', chapter);
   } else {
+    await navigateToTarget({ type: 'reset' });
     emits('unmount-chapter', null);
   }
 };
@@ -131,9 +152,13 @@ const handleCloseModal = () => {
   state.checkUsers.clear();
 };
 
-const handleNewContact = (contact: IUserProps): void => {
+const handleNewContact = async (contact: IUserProps): Promise<void> => {
   emits('unmount-contact', contact);
-  handleChapter({ nickname: contact.conversationId, contact });
+  await navigateToTarget(
+    { type: 'contact', contact },
+    { markAsRead: true, updateMemberCount: true }
+  );
+  emits('unmount-chapter', { nickname: contact.conversationId, contact });
   handleCloseModal();
 };
 </script>

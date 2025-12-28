@@ -70,8 +70,19 @@ const menuItems = computed(() => [
 ]);
 
 const handleUnmountChapter = async (chapter: string) => {
-  if (chapter === 'ai' || chapter === 'assistant' || chapter === 'channels' || chapter === 'dialogs') {
-    await navigateToTarget({ type: 'view', view: chapter as 'ai' | 'assistant' | 'channels' | 'dialogs' }, { markAsRead: false, updateMemberCount: false });
+  if (
+    chapter === 'ai' ||
+    chapter === 'assistant' ||
+    chapter === 'channels' ||
+    chapter === 'dialogs'
+  ) {
+    await navigateToTarget(
+      {
+        type: 'view',
+        view: chapter as 'ai' | 'assistant' | 'channels' | 'dialogs'
+      },
+      { markAsRead: false, updateMemberCount: false }
+    );
   } else {
     await navigateToTarget({ type: 'reset' });
   }

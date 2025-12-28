@@ -544,24 +544,35 @@ watch(
       scrollState.previousScrollTop = chatWrapperRef.value.scrollTop;
     }
 
-    if (newValue !== 'ai' && props.contact?.conversationId) {
-      state.messages = [];
-      state.hasMoreMessages = true;
-      state.isLoadingMore = false;
-      isLoadingInitialMessages.value = true;
+    state.messages = [];
+    state.aiMessages = [];
+    state.hasMoreMessages = true;
+    state.isLoadingMore = false;
 
-      try {
-        if (!getIsWebsocketConnecting()) {
-          await getMessagesByConversationId(props.contact.conversationId, '');
-        }
-      } catch (error) {
-        console.error('Failed to load messages when changing chapter:', error);
-      } finally {
-        updateMessages();
-        isLoadingInitialMessages.value = false;
+    if (newValue === 'ai') {
+      if (!state.chatId) {
+        state.chatId = generateChatId();
       }
-    } else if (newValue !== 'ai') {
-      state.messages = [];
+      initializeMastra();
+    } else {
+      state.chatId = null;
+      if (props.contact?.conversationId) {
+        isLoadingInitialMessages.value = true;
+
+        try {
+          if (!getIsWebsocketConnecting()) {
+            await getMessagesByConversationId(props.contact.conversationId, '');
+          }
+        } catch (error) {
+          console.error(
+            'Failed to load messages when changing chapter:',
+            error
+          );
+        } finally {
+          updateMessages();
+          isLoadingInitialMessages.value = false;
+        }
+      }
     }
 
     await nextTick();

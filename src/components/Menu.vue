@@ -1,5 +1,6 @@
 <template>
   <aside
+    :key="`menu-${props.chapter}`"
     :class="menuClasses"
     :data-testid="`${props.dataTestid}-Menu-Container`"
   >
@@ -179,15 +180,17 @@ import {
   onSDKReady
 } from '../services/useConversions';
 import { getGroupList } from '../services/useGroup';
-import { markAsRead } from '../services/useOpenIM';
 import Triangle from './Triangle.vue';
 import { usePwaInstall } from '../composables/usePwaInstall';
+import { useNavigationService } from '../services/useNavigationService';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: () => 'Menu'
 });
 
 const { canInstall, handleInstall, isInstalled } = usePwaInstall();
+
+const { navigateToTarget } = useNavigationService();
 
 const state = reactive({
   chapter: '',
@@ -218,10 +221,12 @@ watch(
   }
 );
 
-const unmountContactClick = (contact: IContactProps | string): void => {
+const unmountContactClick = async (
+  contact: IContactProps | string
+): Promise<void> => {
   state.selectedContactId = typeof contact === 'string' ? contact : contact.id;
   if (contact === 'ai') {
-    state.chapter = 'ai';
+    await navigateToTarget({ type: 'view', view: 'ai' });
     emits('unmount-chapter', 'ai');
     return;
   }
@@ -229,34 +234,29 @@ const unmountContactClick = (contact: IContactProps | string): void => {
   if (typeof contact === 'string') {
     const foundContact = getConversationList().find(c => c.id === contact);
     if (foundContact) {
-      state.chapter = foundContact.nickname;
-
-      if (foundContact.groupId) {
-        markAsRead(foundContact.id).catch(error => {
-          console.warn('Failed to mark messages as read:', error);
-        });
-      }
-
+      await navigateToTarget(
+        { type: 'contact', contact: foundContact },
+        { markAsRead: true, updateMemberCount: true }
+      );
       emits('unmount-chapter', {
         nickname: foundContact.nickname,
         contact: foundContact
       });
     }
   } else {
-    state.chapter = contact.nickname;
-    if (contact.id) {
-      markAsRead(contact.id).catch(error => {
-        console.warn('Failed to mark messages as read:', error);
-      });
-    }
+    const contactForEmit = {
+      ...contact,
+      id: contact.userId,
+      conversationId: contact.id || ''
+    };
 
+    await navigateToTarget(
+      { type: 'contact', contact: contactForEmit },
+      { markAsRead: true, updateMemberCount: true }
+    );
     emits('unmount-chapter', {
       nickname: contact.nickname,
-      contact: {
-        ...contact,
-        id: contact.userId,
-        conversationId: contact.id || ''
-      }
+      contact: contactForEmit
     });
   }
 };
