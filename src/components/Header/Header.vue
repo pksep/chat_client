@@ -177,7 +177,6 @@ const handleClickHeader = async (): Promise<void> => {
   emits('unmount-click');
 };
 
-// Watch for changes in contact ID to update member count when switching between groups
 watch(
   () => props.contact?.id,
   async (newId, oldId) => {
@@ -187,7 +186,6 @@ watch(
   }
 );
 
-// Also watch for changes in group members count
 watch(
   () => props.contact?.groupId,
   async (newGroupId, oldGroupId) => {
@@ -197,7 +195,6 @@ watch(
   }
 );
 
-// Watch for changes in members length to update header
 watch(
   () => props.contact?.membersLength,
   async (newLength, oldLength) => {
@@ -206,7 +203,6 @@ watch(
       newLength !== oldLength &&
       props.contact?.groupId
     ) {
-      // Update the contacts to reflect the new member count
       menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
     }
   }

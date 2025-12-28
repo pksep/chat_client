@@ -146,8 +146,12 @@ import { useAndroidBackButton } from '../composables/useAndroidBackButton';
 import {
   currentRoute,
   initRoute,
-  navigateToDirect,
+  navigateToDialogs,
+  navigateToDialogsList,
   navigateToGroup,
+  navigateToGroupsList,
+  navigateToAssistant,
+  navigateToAI,
   navigateToDefault,
   setupUrlWatcher
 } from '../composables/useUrlRouting';
@@ -245,47 +249,99 @@ watch(
   }
 );
 
+// Track if the initial route has been processed
+const initialRouteProcessed = ref(false);
+
+// Process route based on current data
+const processRoute = (route, conversations, groups) => {
+  if (route.type === 'dialogs' && route.id) {
+    // Find the dialogs chat by ID and set it as the current contact
+    const conversation = conversations.find(item => item.id === route.id);
+    if (conversation) {
+      // Construct the conversationId for dialogs chats
+      const authUserId = authUser.value?.id;
+      let conversationId;
+      if (authUserId && conversation.id) {
+        const [smallerUserID, largerUserID] = [
+          authUserId,
+          conversation.id
+        ].sort();
+        conversationId = `si_${smallerUserID}_${largerUserID}`;
+      } else {
+        conversationId = conversation.id; // fallback
+      }
+
+      state.contact = {
+        ...conversation,
+        conversationId
+      };
+      state.chapter =
+        conversation.showName || conversation.nickname || conversation.id;
+      state.isChapter = true;
+      initialRouteProcessed.value = true;
+      return true;
+    }
+  } else if (route.type === 'dialogs' && !route.id) {
+    // Handle dialogs list view (no specific ID)
+    state.chapter = 'dialogs';
+    state.contact = null;
+    state.isChapter = false;
+    initialRouteProcessed.value = true;
+    return true;
+  } else if (route.type === 'group' && route.id) {
+    // Find the group by ID and set it as the current contact
+    const group = groups.find(g => g.id === route.id);
+    if (group) {
+      // Construct the conversationId for group chats
+      const conversationId = `sg_${group.groupId}`;
+
+      state.contact = {
+        ...group,
+        conversationId
+      };
+      state.chapter = group.showName || group.nickname || group.id;
+      state.isChapter = true;
+      initialRouteProcessed.value = true;
+      return true;
+    }
+  } else if (route.type === 'group' && !route.id) {
+    state.chapter = 'channels';
+    state.contact = null;
+    state.isChapter = false;
+    initialRouteProcessed.value = true;
+    return true;
+  } else if (route.type === 'assistant' && !route.id) {
+    state.chapter = 'assistant';
+    state.contact = null;
+    state.isChapter = false;
+    initialRouteProcessed.value = true;
+    return true;
+  } else if (route.type === 'ai' && !route.id) {
+    state.chapter = 'ai';
+    state.contact = null;
+    state.isChapter = true;
+    initialRouteProcessed.value = true;
+    return true;
+  }
+  return false;
+};
+
 // Watch for route changes and update the UI accordingly
 watch(
-  () => currentRoute.value,
-  newRoute => {
-    if (newRoute.type === 'direct' && newRoute.id) {
-      // Find the direct chat by ID and set it as the current contact
-      const conversation = state.conversations.find(
-        item => item.id === newRoute.id
-      );
-      if (conversation) {
-        // Construct the conversationId for direct chats
-        const authUserId = authUser.value?.id;
-        let conversationId;
-        if (authUserId && conversation.id) {
-          const [smallerUserID, largerUserID] = [authUserId, conversation.id].sort();
-          conversationId = `si_${smallerUserID}_${largerUserID}`;
-        } else {
-          conversationId = conversation.id; // fallback
-        }
+  () => [currentRoute.value, state.conversations, state.groups],
+  ([newRoute, conversations, groups]) => {
+    // Process the route with current data
+    const routeMatched = processRoute(newRoute, conversations, groups);
 
-        state.contact = {
-          ...conversation,
-          conversationId
-        };
-        state.chapter = conversation.id; // Use conversation ID as chapter
-        state.isChapter = true;
-      }
-    } else if (newRoute.type === 'group' && newRoute.id) {
-      // Find the group by ID and set it as the current contact
-      const group = state.groups.find(g => g.id === newRoute.id);
-      if (group) {
-        // Construct the conversationId for group chats
-        const conversationId = `sg_${group.groupId}`;
-
-        state.contact = {
-          ...group,
-          conversationId
-        };
-        state.chapter = group.id; // Use group ID as chapter
-        state.isChapter = true;
-      }
+    // If route wasn't matched but we have a route that requires matching,
+    // and we haven't processed the initial route yet, keep trying
+    if (
+      !routeMatched &&
+      !initialRouteProcessed.value &&
+      newRoute.type !== 'default'
+    ) {
+      // This means we're still waiting for the conversation/group data to arrive
+      // The watch will trigger again when conversations/groups are updated
     }
   },
   { immediate: true }
@@ -310,29 +366,63 @@ const handleHeaderClick = (): void => {
   state.isMenuMobileOpen = true;
 };
 
-const unmountHeaderMenuChapter = (
-  config: { nickname: string } | string | null
-): void => {
-  if (typeof config === 'string') {
-    state.chapter = config;
-    if (
-      config === 'channels' ||
-      config === 'dialogs' ||
-      config === 'assistant' ||
-      config === 'ai'
-    ) {
-      state.contact = null;
-      state.isChapter = false;
-      return;
-    }
-    state.isChapter = true;
-  } else if (config && config.nickname) {
-    state.chapter = config.nickname;
-    state.contact = config;
-    state.isChapter = false;
-  } else {
+const unmountHeaderMenuChapter = async (
+  config: { nickname: string; contact?: any } | string | null
+): Promise<void> => {
+  if (!config) {
     state.chapter = null;
     state.contact = null;
+    state.isChapter = false;
+    return;
+  }
+
+  if (typeof config === 'string') {
+    switch (config) {
+      case 'ai':
+        state.chapter = 'ai';
+        state.contact = null;
+        state.isChapter = true;
+        navigateToAI();
+        return;
+      case 'assistant':
+        state.chapter = 'assistant';
+        state.contact = null;
+        state.isChapter = true;
+        navigateToAssistant();
+        return;
+      case 'channels':
+        state.chapter = 'channels';
+        state.contact = null;
+        state.isChapter = false;
+        navigateToGroupsList();
+        return;
+      case 'dialogs':
+        state.chapter = 'dialogs';
+        state.contact = null;
+        state.isChapter = false;
+        navigateToDialogsList();
+        return;
+    }
+
+    // Treat as ID for non-special strings
+    const foundContact = findContactOrGroupById(config);
+    if (foundContact) {
+      await openContact(foundContact);
+      return;
+    }
+
+    // Not found
+    state.chapter = null;
+    state.contact = null;
+    state.isChapter = false;
+    return;
+  } else if (config.contact) {
+    await openContact(config.contact);
+    return;
+  } else if (config.nickname) {
+    state.chapter = config.nickname;
+    state.contact = null;
+    state.isChapter = false;
   }
 };
 
@@ -344,126 +434,110 @@ const findContactOrGroupById = (id: string) => {
   return state.groups.find(group => group.id === id);
 };
 
+const computeConversationId = contact => {
+  const authId = authUser.value?.id;
+  if (contact.groupId) {
+    return `sg_${contact.groupId}`;
+  }
+  if (!authId || !contact.id) {
+    return contact.id || '';
+  }
+  const [smaller, larger] = [authId, contact.id].sort();
+  return `si_${smaller}_${larger}`;
+};
+
+const openContact = async contact => {
+  if (contact.id) {
+    markAsRead(contact.id).catch(error => {
+      console.warn('Failed to mark messages as read:', error);
+    });
+  }
+
+  const conversationId = computeConversationId(contact);
+
+  let updatedContact = {
+    ...contact,
+    conversationId
+  };
+
+  if (contact.groupId) {
+    const memberCount = await fetchGroupMemberCount(contact.groupId);
+    updatedContact = {
+      ...updatedContact,
+      membersLength: memberCount
+    };
+  }
+
+  state.contact = updatedContact;
+  state.chapter = updatedContact.nickname || contact.id;
+  state.isChapter = true;
+
+  if (contact.groupId) {
+    navigateToGroup(contact.id);
+  } else {
+    navigateToDialogs(contact.id);
+  }
+};
+
 const unmountMenuChapter = async (
   config: { contact: IUserProps; groupId?: string } | string | null
 ): Promise<void> => {
-  state.isChapter = true;
-  if (typeof config === 'string') {
-    state.chapter = config;
-    if (config === 'ai') {
-      state.contact = null;
-    } else {
-      const foundContact = findContactOrGroupById(config);
-      if (foundContact) {
-        if (foundContact.id) {
-          markAsRead(foundContact.id).catch(error => {
-            console.warn('Failed to mark messages as read:', error);
-          });
-        }
-
-        // Construct the conversationId based on whether it's a group or direct chat
-        let conversationId;
-        if (foundContact.groupId) {
-          // For group chats, conversationId is sg_<groupID>
-          conversationId = `sg_${foundContact.groupId}`;
-        } else {
-          // For direct chats, conversationId is si_<smallerUserID>_<largerUserID>
-          const authUserId = authUser.value?.id;
-          if (authUserId && foundContact.id) {
-            const [smallerUserID, largerUserID] = [authUserId, foundContact.id].sort();
-            conversationId = `si_${smallerUserID}_${largerUserID}`;
-          } else {
-            conversationId = foundContact.id; // fallback
-          }
-        }
-
-        let updatedContact = {
-          ...foundContact,
-          conversationId
-        };
-
-        // If this is a group, fetch and update the member count
-        if (foundContact.groupId) {
-          const memberCount = await fetchGroupMemberCount(foundContact.groupId);
-          updatedContact = {
-            ...updatedContact,
-            membersLength: memberCount
-          };
-        }
-
-        state.contact = updatedContact;
-        state.chapter = config;
-
-        // Update URL based on whether it's a direct chat or group
-        if (foundContact.groupId) {
-          navigateToGroup(foundContact.id);
-        } else {
-          navigateToDirect(foundContact.id);
-        }
-      } else {
-        state.contact = null;
-        state.chapter = null;
-      }
-    }
-  } else if (config && config.contact) {
-    if (config.contact.id) {
-      markAsRead(config.contact.id).catch(error => {
-        console.warn('Failed to mark messages as read:', error);
-      });
-    }
-
-    // Construct the conversationId based on whether it's a group or direct chat
-    let conversationId;
-    if (config.contact.groupId) {
-      // For group chats, conversationId is sg_<groupID>
-      conversationId = `sg_${config.contact.groupId}`;
-    } else {
-      // For direct chats, conversationId is si_<smallerUserID>_<largerUserID>
-      const authUserId = authUser.value?.id;
-      if (authUserId && config.contact.id) {
-        const [smallerUserID, largerUserID] = [authUserId, config.contact.id].sort();
-        conversationId = `si_${smallerUserID}_${largerUserID}`;
-      } else {
-        conversationId = config.contact.id; // fallback
-      }
-    }
-
-    // If this is a group, fetch and update the member count
-    let updatedContact;
-    if (config.contact.groupId) {
-      const memberCount = await fetchGroupMemberCount(config.contact.groupId);
-      updatedContact = {
-        ...config.contact,
-        membersLength: memberCount,
-        conversationId
-      };
-    } else {
-      updatedContact = {
-        ...config.contact,
-        conversationId
-      };
-    }
-
-    state.chapter = updatedContact.nickname;
-    state.contact = updatedContact;
-
-    // Update URL based on whether it's a direct chat or group
-    if (config.contact.groupId) {
-      navigateToGroup(config.contact.id);
-    } else {
-      navigateToDirect(config.contact.id);
-    }
-  } else {
+  if (!config) {
     state.chapter = null;
     state.contact = null;
+    state.isChapter = false;
+    return;
   }
+
+  if (typeof config === 'string') {
+    switch (config) {
+      case 'ai':
+        state.chapter = 'ai';
+        state.contact = null;
+        state.isChapter = true;
+        navigateToAI();
+        return;
+      case 'channels':
+        state.chapter = 'channels';
+        state.contact = null;
+        state.isChapter = false;
+        navigateToGroupsList();
+        return;
+      case 'dialogs':
+        state.chapter = 'dialogs';
+        state.contact = null;
+        state.isChapter = false;
+        navigateToDialogsList();
+        return;
+    }
+
+    const foundContact = findContactOrGroupById(config);
+    if (foundContact) {
+      await openContact(foundContact);
+      return;
+    }
+
+    state.chapter = null;
+    state.contact = null;
+    state.isChapter = false;
+    return;
+  }
+
+  if (config && config.contact) {
+    await openContact(config.contact);
+    return;
+  }
+
+  state.chapter = null;
+  state.contact = null;
+  state.isChapter = false;
 };
 
 const handleNewContact = async (config): Promise<void> => {
   if (isMobile.value) {
     const contact = await handleNewContactMessage(config);
     state.contact = contact;
-    state.chapter = contact.conversationId;
+    state.chapter = contact.nickname || contact.conversationId;
     return;
   }
   state.isNewContactOpen = config.isChapterOpen;
@@ -498,7 +572,6 @@ const handleNewContactMessage = async (
 ): Promise<IContactProps> => {
   state.chapter = contact.nickname;
 
-  // If this is a group, fetch and update the member count
   if (contact.groupId) {
     const memberCount = await fetchGroupMemberCount(contact.groupId);
     state.contact = {
@@ -507,17 +580,18 @@ const handleNewContactMessage = async (
       conversationId: `sg_${contact.groupId}`
     };
 
-    // Update URL for group
     navigateToGroup(contact.id);
   } else {
-    const [smallerUserID, largerUserID] = [authUser.value.id, contact.id].sort();
+    const [smallerUserID, largerUserID] = [
+      authUser.value.id,
+      contact.id
+    ].sort();
     state.contact = {
       ...contact,
       conversationId: `si_${smallerUserID}_${largerUserID}`
     };
 
-    // Update URL for direct chat
-    navigateToDirect(contact.id);
+    navigateToDialogs(contact.id);
   }
   return state.contact;
 };
@@ -541,17 +615,14 @@ const handleNewGroupMessage = async (group: any): Promise<void> => {
 
   state.groupId = group.groupID;
 
-  state.chapter = state.contact.conversationId;
+  state.chapter = state.contact.nickname || state.contact.conversationId;
 
-  // Update URL for the new group
   navigateToGroup(group.groupID);
 };
 
 const handleChangeContact = async (contact: IUserProps): Promise<void> => {
-  // Construct the conversationId based on whether it's a group or direct chat
   let conversationId;
   if (contact.groupId) {
-    // For group chats, conversationId is sg_<groupID>
     conversationId = `sg_${contact.groupId}`;
     const memberCount = await fetchGroupMemberCount(contact.groupId);
     state.contact = {
@@ -560,16 +631,14 @@ const handleChangeContact = async (contact: IUserProps): Promise<void> => {
       conversationId
     };
 
-    // Update URL for group
     navigateToGroup(contact.id);
   } else {
-    // For direct chats, conversationId is si_<smallerUserID>_<largerUserID>
     const authUserId = authUser.value?.id;
     if (authUserId && contact.id) {
       const [smallerUserID, largerUserID] = [authUserId, contact.id].sort();
       conversationId = `si_${smallerUserID}_${largerUserID}`;
     } else {
-      conversationId = contact.id; // fallback
+      conversationId = contact.id;
     }
 
     state.contact = {
@@ -577,18 +646,15 @@ const handleChangeContact = async (contact: IUserProps): Promise<void> => {
       conversationId
     };
 
-    // Update URL for direct chat
-    navigateToDirect(contact.id);
+    navigateToDialogs(contact.id);
   }
 };
 
 const handleChangeContactFromMenuInfo = async (
   contact: IUserProps
 ): Promise<void> => {
-  // Construct the conversationId based on whether it's a group or direct chat
   let conversationId;
   if (contact.groupId) {
-    // For group chats, conversationId is sg_<groupID>
     conversationId = `sg_${contact.groupId}`;
     const memberCount = await fetchGroupMemberCount(contact.groupId);
     state.contact = {
@@ -597,76 +663,81 @@ const handleChangeContactFromMenuInfo = async (
       conversationId
     };
 
-    // Update URL for group
     navigateToGroup(contact.id);
   } else {
-    // For direct chats, conversationId is si_<smallerUserID>_<largerUserID>
     const authUserId = authUser.value?.id;
     if (authUserId && contact.id) {
       const [smallerUserID, largerUserID] = [authUserId, contact.id].sort();
       conversationId = `si_${smallerUserID}_${largerUserID}`;
     } else {
-      conversationId = contact.id; // fallback
+      conversationId = contact.id;
     }
 
-    // Update the contact in the state to trigger reactivity
     state.contact = {
       ...contact,
       conversationId
     };
 
-    // Update URL for direct chat
-    navigateToDirect(contact.id);
+    navigateToDialogs(contact.id);
   }
 };
 
 const handleExit = (): void => {
-  // Determine the appropriate category to navigate back to based on the current contact
   if (state.contact?.groupId) {
-    // If it's a group chat, go back to 'channels'
     state.chapter = 'channels';
   } else if (state.contact && !state.contact.groupId) {
-    // If it's a direct chat, go back to 'dialogs'
     state.chapter = 'dialogs';
   } else {
-    // If it's AI assistant or no specific contact, go back to 'assistant'
     state.chapter = 'assistant';
   }
   state.contact = null;
   state.isChapter = false;
-  navigateToDefault(); // Navigate to default view
+  if (state.chapter === 'dialogs') {
+    navigateToDialogsList();
+  } else if (state.chapter === 'channels') {
+    navigateToGroupsList();
+  } else if (state.chapter === 'assistant') {
+    navigateToAssistant();
+  } else if (state.chapter === 'ai') {
+    navigateToAI();
+  } else {
+    navigateToDefault();
+  }
 };
 
 useAndroidBackButton({
   onBack: () => {
     if (isMobile.value) {
-      // When back button is pressed on mobile, navigate to the appropriate category
-      // Determine the appropriate category to navigate back to based on the current contact
       if (state.contact?.groupId) {
-        // If it's a group chat, go back to 'channels'
         state.chapter = 'channels';
       } else if (state.contact && !state.contact.groupId) {
-        // If it's a direct chat, go back to 'dialogs'
         state.chapter = 'dialogs';
       } else {
-        // If it's AI assistant or no specific contact, go back to 'assistant'
         state.chapter = 'assistant';
       }
       state.contact = null;
       state.isChapter = false;
 
-      // Close any open modals
       state.isMenuMobileOpen = false;
       state.isNewContactOpen = false;
       state.isNewGroupOpen = false;
 
-      navigateToDefault(); // Navigate to default view
+      if (state.chapter === 'dialogs') {
+        navigateToDialogsList();
+      } else if (state.chapter === 'channels') {
+        navigateToGroupsList();
+      } else if (state.chapter === 'assistant') {
+        navigateToAssistant();
+      } else if (state.chapter === 'ai') {
+        navigateToAI();
+      } else {
+        navigateToDefault();
+      }
     }
   }
 });
 
 onMounted(async () => {
-  // Initialize URL routing
   initRoute();
   setupUrlWatcher();
 
@@ -675,7 +746,6 @@ onMounted(async () => {
       state.isChapter = false;
       state.chapter = 'assistant';
     } else {
-      // If there's a group contact, make sure to update the member count
       if (state.contact?.groupId) {
         const memberCount = await fetchGroupMemberCount(state.contact.groupId);
         state.contact = {
@@ -686,7 +756,6 @@ onMounted(async () => {
       state.isChapter = state.chapter === 'ai' || state.contact !== null;
     }
   } finally {
-    // Set loading to false after initial setup is complete
     state.isLoading = false;
   }
 });

@@ -42,6 +42,7 @@
         "
         :data-testid="`${props.dataTestid}-ContactList`"
         @unmount-click="handleChapter"
+        @unmount-contact="handleContactSelect"
       />
     </section>
     <Button
@@ -94,10 +95,8 @@ const state = reactive({
   groupList: computed(() => getGroupList())
 });
 
-// Watch for changes in contact and group lists to update loading state
 import { watch } from 'vue';
 
-// Update loading state when data is loaded
 watch(
   [() => getConversationList(), () => getGroupList()],
   ([convList, groupList]) => {
@@ -122,6 +121,14 @@ const handleChapter = (
   }
 };
 
+const handleContactSelect = (contact: IUserProps): void => {
+  console.log('handleContactSelect', contact);
+  emits('unmount-chapter', {
+    nickname: contact.nickname || contact.conversationId,
+    contact
+  });
+};
+
 const handleShowAccount = () => {
   state.showAddAccount = true;
 };
@@ -133,7 +140,10 @@ const handleCloseModal = () => {
 
 const handleNewContact = (contact: IUserProps): void => {
   emits('unmount-contact', contact);
-  handleChapter({ nickname: contact.conversationId, contact });
+  handleChapter({
+    nickname: contact.nickname || contact.conversationId,
+    contact
+  });
   handleCloseModal();
 };
 </script>

@@ -1,7 +1,7 @@
 import { ref, watch } from 'vue';
 
 // Define the possible URL route types
-type RouteType = 'direct' | 'group' | 'default';
+type RouteType = 'dialogs' | 'group' | 'assistant' | 'ai' | 'default';
 
 // Define the route structure
 interface Route {
@@ -17,24 +17,37 @@ const parseUrl = (): Route => {
   const url = new URL(window.location.href);
   const pathParts = url.pathname.split('/').filter(part => part !== '');
 
-  // Check if we have a path like /direct/:id or /group/:id
+  // Check if we have a path like /dialogs/:id, /dialogs, /group/:id, /group, /assistant, or /ai
   if (pathParts.length >= 2) {
     const type = pathParts[0];
     const id = pathParts[1];
 
-    if (type === 'direct' && id) {
-      return { type: 'direct', id };
+    if (type === 'dialogs' && id) {
+      return { type: 'dialogs', id };
     } else if (type === 'group' && id) {
       return { type: 'group', id };
+    }
+  } else if (pathParts.length === 1) {
+    // Check for paths like /dialogs, /group, /assistant, /ai (list views)
+    const type = pathParts[0];
+
+    if (type === 'dialogs') {
+      return { type: 'dialogs', id: null };
+    } else if (type === 'group') {
+      return { type: 'group', id: null };
+    } else if (type === 'assistant') {
+      return { type: 'assistant', id: null };
+    } else if (type === 'ai') {
+      return { type: 'ai', id: null };
     }
   }
 
   // Check for query parameters as fallback
-  const directId = url.searchParams.get('direct');
+  const dialogsId = url.searchParams.get('dialogs');
   const groupId = url.searchParams.get('group');
 
-  if (directId) {
-    return { type: 'direct', id: directId };
+  if (dialogsId) {
+    return { type: 'dialogs', id: dialogsId };
   } else if (groupId) {
     return { type: 'group', id: groupId };
   }
@@ -46,10 +59,22 @@ const parseUrl = (): Route => {
 const updateUrl = (route: Route): void => {
   let newUrl: string;
 
-  if (route.type === 'direct' && route.id) {
-    newUrl = `${window.location.origin}/direct/${route.id}`;
+  if (route.type === 'dialogs' && route.id) {
+    newUrl = `${window.location.origin}/dialogs/${route.id}`;
+  } else if (route.type === 'dialogs' && !route.id) {
+    // For dialogs list view (no specific ID)
+    newUrl = `${window.location.origin}/dialogs`;
   } else if (route.type === 'group' && route.id) {
     newUrl = `${window.location.origin}/group/${route.id}`;
+  } else if (route.type === 'group' && !route.id) {
+    // For group list view (no specific ID)
+    newUrl = `${window.location.origin}/group`;
+  } else if (route.type === 'assistant' && !route.id) {
+    // For assistant view
+    newUrl = `${window.location.origin}/assistant`;
+  } else if (route.type === 'ai' && !route.id) {
+    // For AI view
+    newUrl = `${window.location.origin}/ai`;
   } else {
     // For default view, just keep the base URL
     newUrl = window.location.origin + window.location.pathname;
@@ -59,9 +84,11 @@ const updateUrl = (route: Route): void => {
   const currentUrl = new URL(window.location.href);
   const searchParams = new URLSearchParams(currentUrl.search);
 
-  // Remove direct and group params since we're using path-based routing now
-  searchParams.delete('direct');
+  // Remove dialogs, group, assistant, and ai params since we're using path-based routing now
+  searchParams.delete('dialogs');
   searchParams.delete('group');
+  searchParams.delete('assistant');
+  searchParams.delete('ai');
 
   // Add back any remaining parameters
   if (searchParams.toString()) {
@@ -73,14 +100,35 @@ const updateUrl = (route: Route): void => {
   currentRoute.value = route;
 };
 
-// Function to navigate to a specific direct chat
-const navigateToDirect = (directId: string): void => {
-  updateUrl({ type: 'direct', id: directId });
+// Function to navigate to a specific dialogs chat
+const navigateToDialogs = (dialogsId: string): void => {
+  console.log('navigateToDialogs', dialogsId);
+  updateUrl({ type: 'dialogs', id: dialogsId });
+};
+
+// Function to navigate to the dialogs list view
+const navigateToDialogsList = (): void => {
+  updateUrl({ type: 'dialogs', id: null });
 };
 
 // Function to navigate to a specific group
 const navigateToGroup = (groupId: string): void => {
   updateUrl({ type: 'group', id: groupId });
+};
+
+// Function to navigate to the groups list view
+const navigateToGroupsList = (): void => {
+  updateUrl({ type: 'group', id: null });
+};
+
+// Function to navigate to the assistant view
+const navigateToAssistant = (): void => {
+  updateUrl({ type: 'assistant', id: null });
+};
+
+// Function to navigate to the AI view
+const navigateToAI = (): void => {
+  updateUrl({ type: 'ai', id: null });
 };
 
 // Function to navigate to the default view
@@ -103,8 +151,12 @@ const setupUrlWatcher = (): void => {
 export {
   currentRoute,
   initRoute,
-  navigateToDirect,
+  navigateToDialogs,
+  navigateToDialogsList,
   navigateToGroup,
+  navigateToGroupsList,
+  navigateToAssistant,
+  navigateToAI,
   navigateToDefault,
   setupUrlWatcher
 };
