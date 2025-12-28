@@ -71,12 +71,10 @@ watch(
   }
 );
 
-// Watch for contact changes to mark messages as read
 watch(
   () => props.contact?.conversationId,
   (newConversationId, oldConversationId) => {
     if (newConversationId && newConversationId !== oldConversationId) {
-      // Mark messages as read when switching to a new conversation
       markAsRead(newConversationId).catch(error => {
         console.warn('Failed to mark messages as read:', error);
       });

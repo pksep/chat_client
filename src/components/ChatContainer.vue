@@ -26,6 +26,7 @@
       class="chat__header-menu"
       v-else-if="isMobile"
       :dataTestid="`${props.dataTestid}-ChatContainer-HeaderMenu`"
+      :active-chapter="state.chapter"
       @unmount-chapter="unmountHeaderMenuChapter"
     />
     <Menu
@@ -142,6 +143,14 @@ import { Button, ButtonTypeEnum } from '@pksep/yui';
 import { usePwaInstall } from '../composables/usePwaInstall';
 import { markAsRead } from '../services/useOpenIM';
 import { useAndroidBackButton } from '../composables/useAndroidBackButton';
+import {
+  currentRoute,
+  initRoute,
+  navigateToDirect,
+  navigateToGroup,
+  navigateToDefault,
+  setupUrlWatcher
+} from '../composables/useUrlRouting';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -236,6 +245,31 @@ watch(
   }
 );
 
+// Watch for route changes and update the UI accordingly
+watch(
+  () => currentRoute.value,
+  (newRoute) => {
+    if (newRoute.type === 'direct' && newRoute.id) {
+      // Find the direct chat by ID and set it as the current contact
+      const conversation = state.conversations.find(item => item.id === newRoute.id);
+      if (conversation) {
+        state.contact = conversation;
+        state.chapter = conversation.id; // Use conversation ID as chapter
+        state.isChapter = true;
+      }
+    } else if (newRoute.type === 'group' && newRoute.id) {
+      // Find the group by ID and set it as the current contact
+      const group = state.groups.find(g => g.id === newRoute.id);
+      if (group) {
+        state.contact = group;
+        state.chapter = group.id; // Use group ID as chapter
+        state.isChapter = true;
+      }
+    }
+  },
+  { immediate: true }
+);
+
 const handleCollapse = (): void => {
   toggle();
 };
@@ -322,6 +356,13 @@ const unmountMenuChapter = async (
 
         state.contact = updatedContact;
         state.chapter = config;
+
+        // Update URL based on whether it's a direct chat or group
+        if (foundContact.groupId) {
+          navigateToGroup(foundContact.id);
+        } else {
+          navigateToDirect(foundContact.id);
+        }
       } else {
         state.contact = null;
         state.chapter = null;
@@ -346,6 +387,13 @@ const unmountMenuChapter = async (
 
     state.chapter = updatedContact.nickname;
     state.contact = updatedContact;
+
+    // Update URL based on whether it's a direct chat or group
+    if (config.contact.groupId) {
+      navigateToGroup(config.contact.id);
+    } else {
+      navigateToDirect(config.contact.id);
+    }
   } else {
     state.chapter = null;
     state.contact = null;
@@ -400,11 +448,17 @@ const handleNewContactMessage = async (
       membersLength: memberCount,
       conversationId: `si_${smallerUserID}_${largerUserID}`
     };
+
+    // Update URL for group
+    navigateToGroup(contact.id);
   } else {
     state.contact = {
       ...contact,
       conversationId: `si_${smallerUserID}_${largerUserID}`
     };
+
+    // Update URL for direct chat
+    navigateToDirect(contact.id);
   }
   return state.contact;
 };
@@ -429,6 +483,9 @@ const handleNewGroupMessage = async (group: any): Promise<void> => {
   state.groupId = group.groupID;
 
   state.chapter = state.contact.conversationId;
+
+  // Update URL for the new group
+  navigateToGroup(group.groupID);
 };
 
 const handleChangeContact = async (contact: IUserProps): Promise<void> => {
@@ -439,8 +496,14 @@ const handleChangeContact = async (contact: IUserProps): Promise<void> => {
       ...contact,
       membersLength: memberCount
     };
+
+    // Update URL for group
+    navigateToGroup(contact.id);
   } else {
     state.contact = contact;
+
+    // Update URL for direct chat
+    navigateToDirect(contact.id);
   }
 };
 
@@ -454,31 +517,68 @@ const handleChangeContactFromMenuInfo = async (
       ...contact,
       membersLength: memberCount
     };
+
+    // Update URL for group
+    navigateToGroup(contact.id);
   } else {
     // Update the contact in the state to trigger reactivity
     state.contact = { ...contact };
+
+    // Update URL for direct chat
+    navigateToDirect(contact.id);
   }
 };
 
 const handleExit = (): void => {
-  state.chapter = 'assistant';
+  // Determine the appropriate category to navigate back to based on the current contact
+  if (state.contact?.groupId) {
+    // If it's a group chat, go back to 'channels'
+    state.chapter = 'channels';
+  } else if (state.contact && !state.contact.groupId) {
+    // If it's a direct chat, go back to 'dialogs'
+    state.chapter = 'dialogs';
+  } else {
+    // If it's AI assistant or no specific contact, go back to 'assistant'
+    state.chapter = 'assistant';
+  }
+  state.contact = null;
   state.isChapter = false;
+  navigateToDefault(); // Navigate to default view
 };
 
 useAndroidBackButton({
   onBack: () => {
     if (isMobile.value) {
-      state.chapter = 'assistant';
+      // When back button is pressed on mobile, navigate to the appropriate category
+      // Determine the appropriate category to navigate back to based on the current contact
+      if (state.contact?.groupId) {
+        // If it's a group chat, go back to 'channels'
+        state.chapter = 'channels';
+      } else if (state.contact && !state.contact.groupId) {
+        // If it's a direct chat, go back to 'dialogs'
+        state.chapter = 'dialogs';
+      } else {
+        // If it's AI assistant or no specific contact, go back to 'assistant'
+        state.chapter = 'assistant';
+      }
       state.contact = null;
       state.isChapter = false;
+
+      // Close any open modals
       state.isMenuMobileOpen = false;
       state.isNewContactOpen = false;
       state.isNewGroupOpen = false;
+
+      navigateToDefault(); // Navigate to default view
     }
   }
 });
 
 onMounted(async () => {
+  // Initialize URL routing
+  initRoute();
+  setupUrlWatcher();
+
   try {
     if (isMobile.value) {
       state.isChapter = false;
