@@ -80,14 +80,34 @@ import { Button, ButtonTypeEnum, Icon, IconNameEnum } from '@pksep/yui';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
 import { getConversationList } from '../../services/useConversions';
 import { getGroupList } from '../../services/useGroup';
-import { useNavigationService } from '../../services/useNavigationService';
+import { customRouter } from '../../router/CustomRouter';
 
 const props = withDefaults(defineProps<IMobileListProps>(), {
   contacts: () => [],
   dataTestid: () => 'MobileList'
 });
 
-const { navigateToTarget } = useNavigationService();
+// Implement navigateToUnmountTarget functionality directly in this component
+const navigateToUnmountTarget = async (target: any, options?: any) => {
+  if (target.type === 'view') {
+    const view = target.view;
+    customRouter.navigate(`/${view}`);
+  } else if (target.type === 'contact') {
+    const contact = target.contact;
+    if (contact.groupId) {
+      customRouter.navigate(`/group/${contact.groupId}`);
+    } else {
+      customRouter.navigate(`/contact/${contact.id}`);
+    }
+  } else if (target.type === 'reset') {
+    customRouter.navigate('/');
+  }
+
+  // Apply options if provided
+  if (options && options.markAsRead && target.contact?.conversationId) {
+    // Mark as read logic would go here
+  }
+};
 
 const state = reactive({
   showAddAccount: false,
@@ -123,22 +143,22 @@ const handleChapter = async (
       chapter === 'channels' ||
       chapter === 'dialogs'
     ) {
-      await navigateToTarget({
+      await navigateToUnmountTarget({
         type: 'view',
         view: chapter as 'ai' | 'assistant' | 'channels' | 'dialogs'
       });
     } else {
-      await navigateToTarget({ type: 'reset' });
+      await navigateToUnmountTarget({ type: 'reset' });
     }
     emits('unmount-chapter', chapter);
   } else if (chapter && chapter.contact) {
-    await navigateToTarget(
+    await navigateToUnmountTarget(
       { type: 'contact', contact: chapter.contact },
       { markAsRead: true, updateMemberCount: true }
     );
     emits('unmount-chapter', chapter);
   } else {
-    await navigateToTarget({ type: 'reset' });
+    await navigateToUnmountTarget({ type: 'reset' });
     emits('unmount-chapter', null);
   }
 };
@@ -154,7 +174,7 @@ const handleCloseModal = () => {
 
 const handleNewContact = async (contact: IUserProps): Promise<void> => {
   emits('unmount-contact', contact);
-  await navigateToTarget(
+  await navigateToUnmountTarget(
     { type: 'contact', contact },
     { markAsRead: true, updateMemberCount: true }
   );

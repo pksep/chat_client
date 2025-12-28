@@ -37,7 +37,7 @@ const openChatContainerShow = ref(true);
 
 onMounted(async () => {
   const url = new URL(window.location.href);
-  const token = url.searchParams.get('token')?.split('?token')[0];
+  const token = url.searchParams.get('token');
   const REDIRECT_KEY = 'chat_redirect_attempts';
   const MAX_REDIRECTS = 2;
 
@@ -48,11 +48,39 @@ onMounted(async () => {
   const localToken = localStorage.getItem('erp_token');
   const config = getConfig();
 
+  if (!token && !localToken) {
+    const attempts = Number(localStorage.getItem(REDIRECT_KEY) || 0) + 1;
+    localStorage.setItem(REDIRECT_KEY, String(attempts));
+
+    if (attempts >= MAX_REDIRECTS) {
+      localStorage.removeItem(REDIRECT_KEY);
+      openChatContainerShow.value = true;
+      return;
+    }
+
+    try {
+      localStorage.removeItem(REDIRECT_KEY);
+      window.location.href =
+        config.CHAT_ERP_URL +
+        '?redirect=' +
+        encodeURIComponent(window.location.href);
+    } catch (redirectError) {
+      openChatContainerShow.value = false;
+      localStorage.removeItem(REDIRECT_KEY);
+    }
+
+    return;
+  }
+
   try {
     const authData = await useAuth(token || localToken);
 
     if (!hasUserIdInSession(authData.UserID)) {
       saveUserIdToSession(authData.UserID);
+    }
+
+    if (token) {
+      localStorage.setItem('erp_token', token);
     }
 
     const apiAddr = config.CHAT_OPENIM_API_DOMAIN;
@@ -74,27 +102,30 @@ onMounted(async () => {
 
     markSDKReady();
 
-    useUnreadMessagePolling(30000); // Возвращаем исходный интервал опроса 30 секунд
+    useUnreadMessagePolling(30000);
   } catch (error) {
-    console.error('Failed to initialize chat:', error);
-
     const attempts = Number(localStorage.getItem(REDIRECT_KEY) || 0) + 1;
     localStorage.setItem(REDIRECT_KEY, String(attempts));
 
     if (attempts >= MAX_REDIRECTS) {
       localStorage.removeItem(REDIRECT_KEY);
-      console.error('Redirect blocked: too many attempts');
-      openChatContainerShow.value = false;
-      return;
+      openChatContainerShow.value = true;
+    } else {
+      try {
+        window.location.href =
+          config.CHAT_ERP_URL +
+          '?redirect=' +
+          encodeURIComponent(window.location.href);
+      } catch (redirectError) {
+        openChatContainerShow.value = true;
+      }
     }
-
-    window.location.href =
-      config.CHAT_ERP_URL +
-      '?redirect=' +
-      encodeURIComponent(window.location.href);
   } finally {
-    url.searchParams.delete('token');
-    window.history.replaceState({}, document.title, url.toString());
+    // Only remove token from URL if it was present
+    if (token) {
+      url.searchParams.delete('token');
+      window.history.replaceState({}, document.title, url.toString());
+    }
   }
 });
 

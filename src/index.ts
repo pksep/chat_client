@@ -1,6 +1,7 @@
 import { defineCustomElement } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
 import ChatContainerNativeCE from './ChatContainer.ce.vue';
+import './router'; // Initialize router
 
 const ChatContainerCE = defineCustomElement(ChatContainerNativeCE);
 

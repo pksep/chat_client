@@ -139,6 +139,7 @@ export const manipulateConversationList = (
 
     return {
       id: c.conversationID,
+      conversationId: c.conversationID, // Add the conversationId field
       userId: c.userID,
       nickname: c.showName,
       avatarUrl: c.faceURL,

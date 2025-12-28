@@ -40,7 +40,7 @@ import { computed } from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import type { IMenuEmits } from '../interfaces/interfaces';
-import { useNavigationService } from '../../services/useNavigationService';
+import { customRouter } from '../../router/CustomRouter';
 
 interface IHeaderMenuProps {
   dataTestid?: string;
@@ -53,8 +53,6 @@ const props = withDefaults(defineProps<IHeaderMenuProps>(), {
 });
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
-
-const { navigateToTarget } = useNavigationService();
 
 const emit = defineEmits<IMenuEmits>();
 
@@ -69,22 +67,16 @@ const menuItems = computed(() => [
   { key: 'dialogs', label: 'Диалоги' }
 ]);
 
-const handleUnmountChapter = async (chapter: string) => {
+const handleUnmountChapter = (chapter: string) => {
   if (
     chapter === 'ai' ||
     chapter === 'assistant' ||
     chapter === 'channels' ||
     chapter === 'dialogs'
   ) {
-    await navigateToTarget(
-      {
-        type: 'view',
-        view: chapter as 'ai' | 'assistant' | 'channels' | 'dialogs'
-      },
-      { markAsRead: false, updateMemberCount: false }
-    );
+    customRouter.navigate(`/${chapter}`);
   } else {
-    await navigateToTarget({ type: 'reset' });
+    customRouter.navigate('/');
   }
   emit('unmount-chapter', chapter);
 };

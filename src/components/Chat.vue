@@ -48,7 +48,7 @@ import { onMounted } from 'vue';
 import type { IMenuEmits } from './interfaces/interfaces';
 import { IUserProps } from './interfaces/interfaces';
 import { markAsRead } from '../services/useOpenIM';
-import { useNavigationService } from '../services/useNavigationService';
+import { customRouter } from '../router/CustomRouter';
 
 export interface IChatProps extends IMessageListProps {
   dataTestid?: string;
@@ -60,8 +60,6 @@ const props = withDefaults(defineProps<IChatProps>(), {
 });
 
 const emits = defineEmits<IMenuEmits>();
-
-const { navigateToTarget } = useNavigationService();
 
 const state = reactive({
   chapter: props.chapter,
@@ -91,9 +89,9 @@ const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const messageListRef = useTemplateRef<any>(null);
 
-const handleUnmountChapter = async (
+const handleUnmountChapter = (
   chapter: { nickname: string; contact: any } | string | null
-): Promise<void> => {
+): void => {
   if (typeof chapter === 'string') {
     if (
       chapter === 'ai' ||
@@ -101,33 +99,32 @@ const handleUnmountChapter = async (
       chapter === 'channels' ||
       chapter === 'dialogs'
     ) {
-      await navigateToTarget({
-        type: 'view',
-        view: chapter as 'ai' | 'assistant' | 'channels' | 'dialogs'
-      });
+      customRouter.navigate(`/${chapter}`);
     } else {
       if (props.contact) {
-        await navigateToTarget(
-          { type: 'contact', contact: props.contact },
-          { markAsRead: false, updateMemberCount: false }
-        );
+        if (props.contact.groupId) {
+          customRouter.navigate(`/group/${props.contact.groupId}`);
+        } else {
+          customRouter.navigate(`/contact/${props.contact.id}`);
+        }
       } else {
-        await navigateToTarget({ type: 'reset' });
+        customRouter.navigate('/');
       }
     }
     emits('unmount-chapter', chapter);
   } else if (chapter && chapter.nickname) {
     if (props.contact) {
-      await navigateToTarget(
-        { type: 'contact', contact: props.contact },
-        { markAsRead: false, updateMemberCount: false }
-      );
+      if (props.contact.groupId) {
+        customRouter.navigate(`/group/${props.contact.groupId}`);
+      } else {
+        customRouter.navigate(`/contact/${props.contact.id}`);
+      }
     } else {
-      await navigateToTarget({ type: 'reset' });
+      customRouter.navigate('/');
     }
     emits('unmount-chapter', chapter.contact.conversationId);
   } else {
-    await navigateToTarget({ type: 'reset' });
+    customRouter.navigate('/');
     emits('unmount-chapter', null);
   }
 };

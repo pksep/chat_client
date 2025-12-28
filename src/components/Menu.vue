@@ -182,15 +182,13 @@ import {
 import { getGroupList } from '../services/useGroup';
 import Triangle from './Triangle.vue';
 import { usePwaInstall } from '../composables/usePwaInstall';
-import { useNavigationService } from '../services/useNavigationService';
+import { customRouter } from '../router/CustomRouter';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: () => 'Menu'
 });
 
 const { canInstall, handleInstall, isInstalled } = usePwaInstall();
-
-const { navigateToTarget } = useNavigationService();
 
 const state = reactive({
   chapter: '',
@@ -226,7 +224,7 @@ const unmountContactClick = async (
 ): Promise<void> => {
   state.selectedContactId = typeof contact === 'string' ? contact : contact.id;
   if (contact === 'ai') {
-    await navigateToTarget({ type: 'view', view: 'ai' });
+    customRouter.navigate('/ai');
     emits('unmount-chapter', 'ai');
     return;
   }
@@ -234,10 +232,11 @@ const unmountContactClick = async (
   if (typeof contact === 'string') {
     const foundContact = getConversationList().find(c => c.id === contact);
     if (foundContact) {
-      await navigateToTarget(
-        { type: 'contact', contact: foundContact },
-        { markAsRead: true, updateMemberCount: true }
-      );
+      if (foundContact.groupId) {
+        customRouter.navigate(`/group/${foundContact.groupId}`);
+      } else {
+        customRouter.navigate(`/contact/${foundContact.id}`);
+      }
       emits('unmount-chapter', {
         nickname: foundContact.nickname,
         contact: foundContact
@@ -250,10 +249,11 @@ const unmountContactClick = async (
       conversationId: contact.id || ''
     };
 
-    await navigateToTarget(
-      { type: 'contact', contact: contactForEmit },
-      { markAsRead: true, updateMemberCount: true }
-    );
+    if (contactForEmit.groupId) {
+      customRouter.navigate(`/group/${contactForEmit.groupId}`);
+    } else {
+      customRouter.navigate(`/contact/${contactForEmit.id}`);
+    }
     emits('unmount-chapter', {
       nickname: contact.nickname,
       contact: contactForEmit

@@ -10,13 +10,7 @@
     :data-testid="`${props.dataTestid}-ChatContainer-Container`"
   >
     <Header
-      v-if="
-        state.isChapter &&
-        (!isMobile ||
-          (state.chapter !== 'assistant' &&
-            state.chapter !== 'channels' &&
-            state.chapter !== 'dialogs'))
-      "
+      v-if="state.isChapter"
       class="chat__header"
       :chapter="state.chapter"
       :members="filteredMembers"
@@ -30,12 +24,7 @@
     />
     <HeaderMenu
       class="chat__header-menu"
-      v-if="
-        isMobile &&
-        (state.chapter === 'assistant' ||
-          state.chapter === 'channels' ||
-          state.chapter === 'dialogs')
-      "
+      v-if="isMobile"
       :dataTestid="`${props.dataTestid}-ChatContainer-HeaderMenu`"
       :active-chapter="state.chapter || 'assistant'"
       @unmount-chapter="unmountHeaderMenuChapter"
@@ -51,7 +40,6 @@
       @unmount-chapter="unmountMenuChapter"
     />
     <Chat
-      :key="`chat-${state.chapter}-${state.contact?.id || 'null'}`"
       :user="authUser"
       :base-url="props.config.CHAT_MASTRA_URL"
       :chapter="state.chapter"
@@ -129,6 +117,7 @@ import {
   computed,
   defineAsyncComponent,
   onMounted,
+  onUnmounted,
   reactive,
   ref,
   watch
@@ -148,13 +137,14 @@ import { appendUserAttributes, getUsersList } from '../composables/useUsers';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD, MAX_W_XL } from '../utils/constants';
 import { getGroupList, fetchGroupMemberCount } from '../services/useGroup';
-import { getConversationList } from '../services/useConversions';
+import { getConversationList, onSDKReady } from '../services/useConversions';
 import { getAuthUser } from '../composables/useAuth';
 import MobileModal from './UI/MobileModal.vue';
 import { Button, ButtonTypeEnum } from '@pksep/yui';
 import { usePwaInstall } from '../composables/usePwaInstall';
 import { useAndroidBackButton } from '../composables/useAndroidBackButton';
-import { useNavigationService } from '../services/useNavigationService';
+import { customRouter } from '../router/CustomRouter';
+import { useUrlRouter } from '../composables/useUrlRouter';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -172,20 +162,40 @@ const { state: isCollapse, toggle } = useResizeState({
   storageKey: 'menu-collapse'
 });
 
-const {
-  state: navigationState,
-  navigateToTarget,
-  navigateBackToPrevious
-} = useNavigationService();
+// Chapter navigation state implemented directly in this component
+const chapterState = reactive({
+  currentChapter: null as string | null,
+  currentContact: null as any | null,
+  isChapterActive: false,
+  history: [] as Array<{
+    chapter: string | null;
+    contact: any | null;
+    isChapterActive: boolean;
+  }>
+});
+
+const navigateBack = (): boolean => {
+  if (chapterState.history.length > 0) {
+    const previousState = chapterState.history.pop();
+    if (previousState) {
+      chapterState.currentChapter = previousState.chapter;
+      chapterState.currentContact = previousState.contact;
+      chapterState.isChapterActive = previousState.isChapterActive;
+      return true;
+    }
+  }
+  return false;
+};
 
 const state = reactive({
   isPwaModalOpen: true,
   isMenuDesktopOpen: false,
   isMenuMobileOpen: false,
   activeTabId: null,
-  chapter: null, // Will be set after checking session storage
+  chapter: null,
   groupId: null,
   contact: null,
+  pendingContactId: null,
   isNewContactOpen: false,
   isNewGroupOpen: false,
   isLoading: true,
@@ -241,8 +251,80 @@ watch(
   () => getConversationList(),
   newConversations => {
     state.conversations = newConversations;
+
+    if (state.contact?.id) {
+      const updatedContact = findContactOrGroupById(state.contact.id);
+      if (updatedContact) {
+        state.contact = updatedContact;
+      }
+    }
+
+    if (state.pendingContactId) {
+      const foundContact = findContactOrGroupById(state.pendingContactId);
+      if (foundContact) {
+        state.contact = foundContact;
+        state.pendingContactId = null;
+
+        if (foundContact.groupId) {
+          customRouter.navigate(`/group/${foundContact.groupId}`);
+        } else {
+          customRouter.navigate(`/contact/${foundContact.id}`);
+        }
+
+        // Update state based on the current route
+        const currentRoute = customRouter.getCurrentRoute();
+        const pathParts = currentRoute.path.split('/').filter(part => part);
+        const currentChapter = pathParts.length > 0 ? pathParts[0] : null;
+
+        state.chapter = currentChapter;
+        if (
+          currentChapter &&
+          ['channels', 'dialogs'].includes(currentChapter)
+        ) {
+          state.isChapter = false;
+        } else {
+          state.isChapter =
+            currentChapter !== null &&
+            currentChapter !== 'assistant' &&
+            currentChapter !== 'ai';
+        }
+      }
+    }
   }
 );
+
+const unwatchRoute = customRouter.watchRoute(to => {
+  const pathParts = to.path.split('/').filter(part => part);
+  const newChapter = pathParts.length > 0 ? pathParts[0] : null;
+  const contactId = pathParts.length > 1 ? pathParts[1] : null;
+
+  if (newChapter) {
+    state.chapter = newChapter;
+    if (['channels', 'dialogs'].includes(newChapter)) {
+      state.isChapter = false;
+    } else {
+      state.isChapter = newChapter !== 'assistant' && newChapter !== 'ai';
+    }
+
+    // If we have a contactId, try to find and set the contact
+    if (contactId) {
+      const foundContact = findContactOrGroupById(contactId);
+      if (foundContact) {
+        state.contact = foundContact;
+      } else {
+        // If contact is not found immediately, store the ID and wait for conversations to load
+        state.pendingContactId = contactId;
+      }
+    } else {
+      state.contact = null;
+    }
+  } else {
+    state.chapter = null;
+    state.isChapter = false;
+    state.contact = null;
+    state.pendingContactId = null;
+  }
+});
 
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 
@@ -251,13 +333,11 @@ watch(
   newIsMobile => {
     if (newIsMobile) {
       state.isMenuDesktopOpen = false;
-      // On mobile, set chapter to assistant if it's null
       if (state.chapter === null) {
         state.chapter = 'assistant';
         state.isChapter = false;
       }
     } else {
-      // On desktop, set chapter to null if it was assistant on mobile
       if (state.chapter === 'assistant') {
         state.chapter = null;
         state.isChapter = false;
@@ -289,87 +369,170 @@ const unmountHeaderMenuChapter = async (
   config: { nickname: string } | string | null
 ): Promise<void> => {
   if (typeof config === 'string') {
-    if (
-      config === 'channels' ||
-      config === 'dialogs' ||
-      config === 'assistant' ||
-      config === 'ai'
-    ) {
-      await navigateToTarget({
-        type: 'view',
-        view: config as 'ai' | 'assistant' | 'channels' | 'dialogs'
-      });
-    } else {
-      // For contact navigation, we need to find the contact by ID
-      const foundContact = findContactOrGroupById(config);
-      if (foundContact) {
-        await navigateToTarget(
-          { type: 'contact', contact: foundContact },
-          { markAsRead: true, updateMemberCount: true }
-        );
-      } else {
-        await navigateToTarget({ type: 'reset' });
-      }
-    }
+    await handleNavigation(config);
   } else if (config && config.nickname) {
-    await navigateToTarget(
-      { type: 'contact', contact: config },
-      { markAsRead: true, updateMemberCount: true }
-    );
-  } else {
-    await navigateToTarget({ type: 'reset' });
-  }
+    customRouter.navigate(`/contact/${config.nickname}`);
 
-  // Update local state to match navigation state
-  state.chapter = navigationState.currentChapter;
-  state.contact = navigationState.currentContact;
-  state.isChapter = navigationState.isChapter;
+    const currentRoute = customRouter.getCurrentRoute();
+    const pathParts = currentRoute.path.split('/').filter(part => part);
+    const currentChapter = pathParts.length > 0 ? pathParts[0] : null;
+
+    state.chapter = currentChapter;
+    if (currentChapter && ['channels', 'dialogs'].includes(currentChapter)) {
+      state.isChapter = false;
+    } else {
+      state.isChapter =
+        currentChapter !== null &&
+        currentChapter !== 'assistant' &&
+        currentChapter !== 'ai';
+    }
+  } else {
+    customRouter.navigate('/');
+
+    const currentRoute = customRouter.getCurrentRoute();
+    const pathParts = currentRoute.path.split('/').filter(part => part);
+    const currentChapter = pathParts.length > 0 ? pathParts[0] : null;
+
+    state.chapter = currentChapter;
+    if (currentChapter && ['channels', 'dialogs'].includes(currentChapter)) {
+      state.isChapter = false;
+    } else {
+      state.isChapter =
+        currentChapter !== null &&
+        currentChapter !== 'assistant' &&
+        currentChapter !== 'ai';
+    }
+  }
 };
 
 const findContactOrGroupById = (id: string) => {
-  const conversation = state.conversations.find(item => item.id === id);
+  let conversation = state.conversations.find(
+    item => item.id === id || item.conversationId === id
+  );
   if (conversation) {
     return conversation;
   }
-  return state.groups.find(group => group.id === id);
+
+  if (id.startsWith('sg_')) {
+    const groupId = id.substring(3);
+
+    conversation = state.conversations.find(
+      item => item.id === groupId || item.conversationId === groupId
+    );
+    if (conversation) {
+      return conversation;
+    }
+
+    conversation = state.conversations.find(
+      item =>
+        item.id === `g_${groupId}` || item.conversationId === `g_${groupId}`
+    );
+    if (conversation) {
+      return conversation;
+    }
+
+    const group = state.groups.find(
+      g =>
+        g.id === groupId ||
+        g.id === `g_${groupId}` ||
+        g.conversationId === groupId ||
+        g.conversationId === `g_${groupId}`
+    );
+    if (group) {
+      return group;
+    }
+  } else if (id.startsWith('si_')) {
+    const usersPart = id.substring(3);
+
+    conversation = state.conversations.find(
+      item =>
+        item.id.includes(usersPart) || item.conversationId?.includes(usersPart)
+    );
+    if (conversation) {
+      return conversation;
+    }
+  } else {
+    let searchId;
+    if (id.startsWith('g_')) {
+      searchId = id.substring(2);
+    } else {
+      searchId = id;
+    }
+
+    conversation = state.conversations.find(
+      item =>
+        item.id === `sg_${searchId}` || item.conversationId === `sg_${searchId}`
+    );
+    if (conversation) {
+      return conversation;
+    }
+
+    const group = state.groups.find(
+      g => g.id === `sg_${searchId}` || g.conversationId === `sg_${searchId}`
+    );
+    if (group) {
+      return group;
+    }
+  }
+
+  return undefined;
+};
+
+const handleNavigation = async (
+  config: { contact: IUserProps; groupId?: string } | string | null
+): Promise<void> => {
+  if (typeof config === 'string') {
+    if (['ai', 'assistant', 'channels', 'dialogs'].includes(config)) {
+      customRouter.navigate(`/${config}`);
+    } else {
+      const foundContact = findContactOrGroupById(config);
+      if (foundContact) {
+        if (foundContact.groupId) {
+          customRouter.navigate(`/group/${foundContact.groupId}`);
+        } else {
+          customRouter.navigate(`/contact/${foundContact.id}`);
+        }
+      } else {
+        customRouter.navigate('/');
+      }
+    }
+  } else if (config && (config as any).contact) {
+    const contact = (config as any).contact;
+    if (contact.groupId) {
+      customRouter.navigate(`/group/${contact.groupId}`);
+    } else {
+      customRouter.navigate(`/contact/${contact.id}`);
+    }
+  } else if (config && (config as IUserProps).id) {
+    const contact = config as IUserProps;
+    if (contact.groupId) {
+      customRouter.navigate(`/group/${contact.groupId}`);
+    } else {
+      customRouter.navigate(`/contact/${contact.id}`);
+    }
+  } else {
+    customRouter.navigate('/');
+  }
+
+  const currentRoute = customRouter.getCurrentRoute();
+  const pathParts = currentRoute.path.split('/').filter(part => part);
+  const currentChapter = pathParts.length > 0 ? pathParts[0] : null;
+
+  state.chapter = currentChapter;
+  if (currentChapter && ['channels', 'dialogs'].includes(currentChapter)) {
+    state.isChapter = false;
+  } else {
+    state.isChapter =
+      currentChapter !== null &&
+      currentChapter !== 'assistant' &&
+      currentChapter !== 'ai';
+  }
 };
 
 const unmountMenuChapter = async (
   config: { contact: IUserProps; groupId?: string } | string | null
 ): Promise<void> => {
-  if (typeof config === 'string') {
-    if (config === 'ai') {
-      await navigateToTarget({ type: 'view', view: 'ai' });
-    } else {
-      const foundContact = findContactOrGroupById(config);
-      if (foundContact) {
-        // Update conversationId in the contact
-        const updatedContact = {
-          ...foundContact,
-          conversationId: foundContact.id
-        };
-
-        await navigateToTarget(
-          { type: 'contact', contact: updatedContact },
-          { markAsRead: true, updateMemberCount: true }
-        );
-      } else {
-        await navigateToTarget({ type: 'reset' });
-      }
-    }
-  } else if (config && config.contact) {
-    await navigateToTarget(
-      { type: 'contact', contact: config.contact },
-      { markAsRead: true, updateMemberCount: true }
-    );
-  } else {
-    await navigateToTarget({ type: 'reset' });
-  }
-
-  // Update local state to match navigation state
-  state.chapter = navigationState.currentChapter;
-  state.contact = navigationState.currentContact;
-  state.isChapter = navigationState.isChapter;
+  await handleNavigation(config);
 };
 
 const handleNewContact = async (config): Promise<void> => {
@@ -402,8 +565,7 @@ const handleInformationClick = (): void => {
 const handleClearClick = (): void => {
   if (state.chapter === 'ai' && chatRef.value) {
     chatRef.value.handleClear();
-    // Instead of reloading the page, just clear the chat state
-    // The chat component should handle clearing its internal state
+    window.location.reload();
   }
 };
 
@@ -412,30 +574,42 @@ const handleNewContactMessage = async (
 ): Promise<IContactProps> => {
   const [smallerUserID, largerUserID] = [authUser.value.id, contact.id].sort();
 
-  // If this is a group, fetch and update the member count
   let updatedContact;
   if (contact.groupId) {
     const memberCount = await fetchGroupMemberCount(contact.groupId);
     updatedContact = {
       ...contact,
       membersLength: memberCount,
-      conversationId: `si_${smallerUserID}_${largerUserID}`
+      conversationId: contact.id || `g_${contact.groupId}`
     };
   } else {
     updatedContact = {
       ...contact,
-      conversationId: `si_${smallerUserID}_${largerUserID}`
+      conversationId: contact.id || `si_${smallerUserID}_${largerUserID}`
     };
   }
 
-  await navigateToTarget(
-    { type: 'contact', contact: updatedContact },
-    { markAsRead: true, updateMemberCount: true }
-  );
+  if (updatedContact.groupId) {
+    customRouter.navigate(`/group/${updatedContact.groupId}`);
+  } else if (updatedContact.id) {
+    customRouter.navigate(`/contact/${updatedContact.id}`);
+  } else {
+    customRouter.navigate('/');
+  }
 
-  // Update local state to match navigation state
-  state.chapter = navigationState.currentChapter;
-  state.contact = navigationState.currentContact;
+  const currentRoute = customRouter.getCurrentRoute();
+  const pathParts = currentRoute.path.split('/').filter(part => part);
+  const currentChapter = pathParts.length > 0 ? pathParts[0] : null;
+
+  state.chapter = currentChapter;
+  if (currentChapter && ['channels', 'dialogs'].includes(currentChapter)) {
+    state.isChapter = false;
+  } else {
+    state.isChapter =
+      currentChapter !== null &&
+      currentChapter !== 'assistant' &&
+      currentChapter !== 'ai';
+  }
 
   return updatedContact;
 };
@@ -459,19 +633,32 @@ const handleNewGroupMessage = async (group: any): Promise<void> => {
 
   state.groupId = group.groupID;
 
-  await navigateToTarget(
-    { type: 'contact', contact: updatedContact },
-    { markAsRead: true, updateMemberCount: true }
-  );
+  if (updatedContact.groupId) {
+    customRouter.navigate(`/group/${updatedContact.groupId}`);
+  } else if (updatedContact.conversationId) {
+    customRouter.navigate(`/contact/${updatedContact.conversationId}`);
+  } else {
+    customRouter.navigate('/');
+  }
 
-  // Update local state to match navigation state
-  state.chapter = navigationState.currentChapter;
-  state.contact = navigationState.currentContact;
+  // Update state based on the current route
+  const currentRoute = customRouter.getCurrentRoute();
+  const pathParts = currentRoute.path.split('/').filter(part => part);
+  const currentChapter = pathParts.length > 0 ? pathParts[0] : null;
+
+  state.chapter = currentChapter;
+  if (currentChapter && ['channels', 'dialogs'].includes(currentChapter)) {
+    state.isChapter = false;
+  } else {
+    state.isChapter =
+      currentChapter !== null &&
+      currentChapter !== 'assistant' &&
+      currentChapter !== 'ai';
+  }
 };
 
 const handleChangeContact = async (contact: IUserProps): Promise<void> => {
   let updatedContact;
-  // If this is a group, fetch and update the member count
   if (contact.groupId) {
     const memberCount = await fetchGroupMemberCount(contact.groupId);
     updatedContact = {
@@ -482,22 +669,33 @@ const handleChangeContact = async (contact: IUserProps): Promise<void> => {
     updatedContact = contact;
   }
 
-  // Navigate to the new contact
-  await navigateToTarget(
-    { type: 'contact', contact: updatedContact },
-    { markAsRead: true, updateMemberCount: true }
-  );
+  if (updatedContact.groupId) {
+    customRouter.navigate(`/group/${updatedContact.groupId}`);
+  } else if (updatedContact.id) {
+    customRouter.navigate(`/contact/${updatedContact.id}`);
+  } else {
+    customRouter.navigate('/');
+  }
 
-  // Update local state to match navigation state
-  state.chapter = navigationState.currentChapter;
-  state.contact = navigationState.currentContact;
+  const currentRoute = customRouter.getCurrentRoute();
+  const pathParts = currentRoute.path.split('/').filter(part => part);
+  const currentChapter = pathParts.length > 0 ? pathParts[0] : null;
+
+  state.chapter = currentChapter;
+  if (currentChapter && ['channels', 'dialogs'].includes(currentChapter)) {
+    state.isChapter = false;
+  } else {
+    state.isChapter =
+      currentChapter !== null &&
+      currentChapter !== 'assistant' &&
+      currentChapter !== 'ai';
+  }
 };
 
 const handleChangeContactFromMenuInfo = async (
   contact: IUserProps
 ): Promise<void> => {
   let updatedContact;
-  // If this is a group, fetch and update the member count
   if (contact.groupId) {
     const memberCount = await fetchGroupMemberCount(contact.groupId);
     updatedContact = {
@@ -508,67 +706,86 @@ const handleChangeContactFromMenuInfo = async (
     updatedContact = { ...contact };
   }
 
-  // Navigate to the new contact
-  await navigateToTarget(
-    { type: 'contact', contact: updatedContact },
-    { markAsRead: true, updateMemberCount: true }
-  );
+  if (updatedContact.groupId) {
+    customRouter.navigate(`/group/${updatedContact.groupId}`);
+  } else if (updatedContact.id) {
+    customRouter.navigate(`/contact/${updatedContact.id}`);
+  } else {
+    customRouter.navigate('/');
+  }
 
-  // Update local state to match navigation state
-  state.chapter = navigationState.currentChapter;
-  state.contact = navigationState.currentContact;
+  const currentRoute = customRouter.getCurrentRoute();
+  const pathParts = currentRoute.path.split('/').filter(part => part);
+  const currentChapter = pathParts.length > 0 ? pathParts[0] : null;
+
+  state.chapter = currentChapter;
+  if (currentChapter && ['channels', 'dialogs'].includes(currentChapter)) {
+    state.isChapter = false;
+  } else {
+    state.isChapter =
+      currentChapter !== null &&
+      currentChapter !== 'assistant' &&
+      currentChapter !== 'ai';
+  }
 };
 
 const handleBack = (): void => {
-  // Navigate back to the previous state in history
-  const hasPreviousState = navigateBackToPrevious();
+  const hasPreviousState = navigateBack();
   if (hasPreviousState) {
-    // Update local state to match navigation state
-    state.chapter = navigationState.currentChapter;
-    state.contact = navigationState.currentContact;
-    state.isChapter = navigationState.isChapter;
+    state.chapter = chapterState.currentChapter;
+    state.contact = chapterState.currentContact;
+    if (
+      chapterState.currentChapter &&
+      (chapterState.currentChapter === 'channels' ||
+        chapterState.currentChapter === 'dialogs')
+    ) {
+      state.isChapter = false;
+    } else {
+      state.isChapter = chapterState.isChapterActive;
+    }
   } else {
-    // If no history, go to default assistant view
-    navigateToTarget(
-      { type: 'view', view: 'assistant' },
-      { markAsRead: false, updateMemberCount: false }
-    ).catch(error => {
-      console.error('Failed to navigate to assistant view:', error);
-    });
+    customRouter.navigate('/assistant');
+
+    const currentRoute = customRouter.getCurrentRoute();
+    const pathParts = currentRoute.path.split('/').filter(part => part);
+    const currentChapter = pathParts.length > 0 ? pathParts[0] : null;
+
     state.isChapter = false;
-    // Update local state to match navigation state
-    state.chapter = navigationState.currentChapter;
-    state.contact = navigationState.currentContact;
+    state.chapter = currentChapter;
+    state.contact = null;
   }
 };
 
 const handleExit = (): void => {
-  // Navigate back to the previous state in history
-  const hasPreviousState = navigateBackToPrevious();
+  const hasPreviousState = navigateBack();
   if (hasPreviousState) {
-    // Update local state to match navigation state
-    state.chapter = navigationState.currentChapter;
-    state.contact = navigationState.currentContact;
-    state.isChapter = navigationState.isChapter;
+    state.chapter = chapterState.currentChapter;
+    state.contact = chapterState.currentContact;
+    if (
+      chapterState.currentChapter &&
+      (chapterState.currentChapter === 'channels' ||
+        chapterState.currentChapter === 'dialogs')
+    ) {
+      state.isChapter = false;
+    } else {
+      state.isChapter = chapterState.isChapterActive;
+    }
   } else {
-    // If no history, go to default assistant view
-    navigateToTarget(
-      { type: 'view', view: 'assistant' },
-      { markAsRead: false, updateMemberCount: false }
-    ).catch(error => {
-      console.error('Failed to navigate to assistant view:', error);
-    });
+    customRouter.navigate('/assistant');
+
+    const currentRoute = customRouter.getCurrentRoute();
+    const pathParts = currentRoute.path.split('/').filter(part => part);
+    const currentChapter = pathParts.length > 0 ? pathParts[0] : null;
+
     state.isChapter = false;
-    // Update local state to match navigation state
-    state.chapter = navigationState.currentChapter;
-    state.contact = navigationState.currentContact;
+    state.chapter = currentChapter;
+    state.contact = null;
   }
 };
 
 useAndroidBackButton({
   onBack: () => {
     if (isMobile.value) {
-      // Use the back navigation functionality instead of hardcoding to assistant
       handleBack();
       state.isMenuMobileOpen = false;
       state.isNewContactOpen = false;
@@ -578,56 +795,69 @@ useAndroidBackButton({
 });
 
 watch(
-  () => navigationState.currentChapter,
+  () => chapterState.currentChapter,
   newChapter => {
-    if (newChapter !== state.chapter) {
-      state.chapter = newChapter;
+    state.chapter = newChapter;
+    if (newChapter && (newChapter === 'channels' || newChapter === 'dialogs')) {
+      state.isChapter = false;
+    } else {
+      state.isChapter = chapterState.isChapterActive;
     }
   }
 );
 
 watch(
-  () => navigationState.currentContact,
+  () => chapterState.currentContact,
   newContact => {
-    if (newContact !== state.contact) {
-      state.contact = newContact;
-    }
+    state.contact = newContact;
   }
 );
 
 watch(
-  () => navigationState.isChapter,
+  () => chapterState.isChapterActive,
   newIsChapter => {
-    if (newIsChapter !== state.isChapter) {
+    if (
+      chapterState.currentChapter &&
+      (chapterState.currentChapter === 'channels' ||
+        chapterState.currentChapter === 'dialogs')
+    ) {
+      state.isChapter = false;
+    } else {
       state.isChapter = newIsChapter;
     }
   }
 );
 
 onMounted(async () => {
-  try {
-    if (state.chapter === null || state.chapter === undefined) {
-      if (isMobile.value) {
-        state.chapter = 'assistant';
-      } else {
-        state.chapter = null;
-      }
-    }
+  const { parseRouteFromUrl } = useUrlRouter();
+  const route = parseRouteFromUrl();
 
+  // Set initial chapter based on route
+  if (route.chapter) {
+    state.chapter = route.chapter;
+    state.isChapter =
+      route.chapter !== 'assistant' &&
+      route.chapter !== 'channels' &&
+      route.chapter !== 'dialogs';
+  } else {
     if (isMobile.value) {
+      state.chapter = 'assistant';
       state.isChapter = false;
     } else {
-      if (state.contact?.groupId) {
-        const memberCount = await fetchGroupMemberCount(state.contact.groupId);
-        state.contact = {
-          ...state.contact,
-          membersLength: memberCount
-        };
-      }
-      state.isChapter = navigationState.isChapter;
+      state.chapter = null;
+      state.isChapter = false;
     }
-  } finally {
+  }
+
+  onSDKReady(async () => {
     state.isLoading = false;
+  });
+});
+
+// Cleanup function to be called when component is unmounted
+onUnmounted(() => {
+  if (unwatchRoute) {
+    unwatchRoute();
   }
 });
 </script>
