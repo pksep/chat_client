@@ -255,21 +255,11 @@ const initialRouteProcessed = ref(false);
 // Process route based on current data
 const processRoute = (route, conversations, groups) => {
   if (route.type === 'dialogs' && route.id) {
-    // Find the dialogs chat by ID and set it as the current contact
+    // Find the dialogs chat by conversation ID and set it as the current contact
     const conversation = conversations.find(item => item.id === route.id);
     if (conversation) {
-      // Construct the conversationId for dialogs chats
-      const authUserId = authUser.value?.id;
-      let conversationId;
-      if (authUserId && conversation.id) {
-        const [smallerUserID, largerUserID] = [
-          authUserId,
-          conversation.id
-        ].sort();
-        conversationId = `si_${smallerUserID}_${largerUserID}`;
-      } else {
-        conversationId = conversation.id; // fallback
-      }
+      // Use the conversation ID from the conversation object directly
+      const conversationId = conversation.id;
 
       state.contact = {
         ...conversation,
@@ -447,13 +437,14 @@ const computeConversationId = contact => {
 };
 
 const openContact = async contact => {
+  const conversationId =
+    contact.conversationId || computeConversationId(contact);
+
   if (contact.id) {
-    markAsRead(contact.id).catch(error => {
+    markAsRead(conversationId).catch(error => {
       console.warn('Failed to mark messages as read:', error);
     });
   }
-
-  const conversationId = computeConversationId(contact);
 
   let updatedContact = {
     ...contact,
@@ -537,7 +528,7 @@ const handleNewContact = async (config): Promise<void> => {
   if (isMobile.value) {
     const contact = await handleNewContactMessage(config);
     state.contact = contact;
-    state.chapter = contact.nickname || contact.conversationId;
+    state.chapter = contact.id || contact.conversationId;
     return;
   }
   state.isNewContactOpen = config.isChapterOpen;
@@ -570,7 +561,7 @@ const handleClearClick = (): void => {
 const handleNewContactMessage = async (
   contact: IUserProps
 ): Promise<IContactProps> => {
-  state.chapter = contact.nickname;
+  state.chapter = contact.id;
 
   if (contact.groupId) {
     const memberCount = await fetchGroupMemberCount(contact.groupId);
@@ -586,12 +577,13 @@ const handleNewContactMessage = async (
       authUser.value.id,
       contact.id
     ].sort();
+    const conversationId = `si_${smallerUserID}_${largerUserID}`;
     state.contact = {
       ...contact,
-      conversationId: `si_${smallerUserID}_${largerUserID}`
+      conversationId
     };
 
-    navigateToDialogs(contact.id);
+    navigateToDialogs(conversationId);
   }
   return state.contact;
 };
@@ -621,7 +613,21 @@ const handleNewGroupMessage = async (group: any): Promise<void> => {
 };
 
 const handleChangeContact = async (contact: IUserProps): Promise<void> => {
-  let conversationId;
+  let conversationId = contact.conversationId;
+  if (!conversationId) {
+    if (contact.groupId) {
+      conversationId = `sg_${contact.groupId}`;
+    } else {
+      const authUserId = authUser.value?.id;
+      if (authUserId && contact.id) {
+        const [smallerUserID, largerUserID] = [authUserId, contact.id].sort();
+        conversationId = `si_${smallerUserID}_${largerUserID}`;
+      } else {
+        conversationId = contact.id;
+      }
+    }
+  }
+
   if (contact.groupId) {
     conversationId = `sg_${contact.groupId}`;
     const memberCount = await fetchGroupMemberCount(contact.groupId);
@@ -646,14 +652,28 @@ const handleChangeContact = async (contact: IUserProps): Promise<void> => {
       conversationId
     };
 
-    navigateToDialogs(contact.id);
+    navigateToDialogs(conversationId);
   }
 };
 
 const handleChangeContactFromMenuInfo = async (
   contact: IUserProps
 ): Promise<void> => {
-  let conversationId;
+  let conversationId = contact.conversationId;
+  if (!conversationId) {
+    if (contact.groupId) {
+      conversationId = `sg_${contact.groupId}`;
+    } else {
+      const authUserId = authUser.value?.id;
+      if (authUserId && contact.id) {
+        const [smallerUserID, largerUserID] = [authUserId, contact.id].sort();
+        conversationId = `si_${smallerUserID}_${largerUserID}`;
+      } else {
+        conversationId = contact.id;
+      }
+    }
+  }
+
   if (contact.groupId) {
     conversationId = `sg_${contact.groupId}`;
     const memberCount = await fetchGroupMemberCount(contact.groupId);
@@ -678,7 +698,7 @@ const handleChangeContactFromMenuInfo = async (
       conversationId
     };
 
-    navigateToDialogs(contact.id);
+    navigateToDialogs(conversationId);
   }
 };
 

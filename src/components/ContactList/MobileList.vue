@@ -122,7 +122,6 @@ const handleChapter = (
 };
 
 const handleContactSelect = (contact: IUserProps): void => {
-  console.log('handleContactSelect', contact);
   emits('unmount-chapter', {
     nickname: contact.nickname || contact.conversationId,
     contact

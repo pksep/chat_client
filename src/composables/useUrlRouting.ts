@@ -102,7 +102,6 @@ const updateUrl = (route: Route): void => {
 
 // Function to navigate to a specific dialogs chat
 const navigateToDialogs = (dialogsId: string): void => {
-  console.log('navigateToDialogs', dialogsId);
   updateUrl({ type: 'dialogs', id: dialogsId });
 };
 
