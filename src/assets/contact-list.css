@@ -168,6 +168,10 @@ svg.icon-yui-kit.contact-list__read-icon {
     font-size: 16px;
     justify-self: start;
   }
+  .contact-list__title {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
   .contact-list__item {
     --size-avatar: 30px;
     grid-template-rows: auto 1fr;

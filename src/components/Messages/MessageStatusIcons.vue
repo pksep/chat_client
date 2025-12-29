@@ -16,13 +16,6 @@
         :name="IconNameEnum.notDelivered"
         :data-testid="`${dataTestid}-SendingIcon`"
       />
-      <!--
-      <Icon
-        v-else-if="props.messageStatus === 3"
-        :name="IconNameEnum.read"
-        :data-testid="`${dataTestid}-ReadByStatusIcon`"
-      />
-      -->
     </template>
   </div>
 </template>

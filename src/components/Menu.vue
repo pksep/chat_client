@@ -182,6 +182,7 @@ import { getGroupList } from '../services/useGroup';
 import { markAsRead } from '../services/useOpenIM';
 import Triangle from './Triangle.vue';
 import { usePwaInstall } from '../composables/usePwaInstall';
+import { navigateToAI } from '../composables/useUrlRouting';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: () => 'Menu'
@@ -222,6 +223,7 @@ const unmountContactClick = (contact: IContactProps | string): void => {
   state.selectedContactId = typeof contact === 'string' ? contact : contact.id;
   if (contact === 'ai') {
     state.chapter = 'ai';
+    navigateToAI();
     emits('unmount-chapter', 'ai');
     return;
   }
@@ -235,12 +237,12 @@ const unmountContactClick = (contact: IContactProps | string): void => {
         markAsRead(foundContact.id).catch(error => {
           console.warn('Failed to mark messages as read:', error);
         });
-      }
 
-      emits('unmount-chapter', {
-        nickname: foundContact.nickname,
-        contact: foundContact
-      });
+        emits('unmount-chapter', {
+          nickname: foundContact.nickname,
+          contact: foundContact
+        });
+      }
     }
   } else {
     state.chapter = contact.nickname;
@@ -252,11 +254,7 @@ const unmountContactClick = (contact: IContactProps | string): void => {
 
     emits('unmount-chapter', {
       nickname: contact.nickname,
-      contact: {
-        ...contact,
-        id: contact.userId,
-        conversationId: contact.id || ''
-      }
+      contact
     });
   }
 };

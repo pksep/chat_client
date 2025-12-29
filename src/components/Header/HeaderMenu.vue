@@ -36,28 +36,28 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import type { IMenuEmits } from '../interfaces/interfaces';
 
 interface IHeaderMenuProps {
   dataTestid?: string;
+  activeChapter?: string;
 }
 
 const props = withDefaults(defineProps<IHeaderMenuProps>(), {
-  dataTestid: () => 'HeaderMenu'
+  dataTestid: () => 'HeaderMenu',
+  activeChapter: () => 'assistant'
 });
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const emit = defineEmits<IMenuEmits>();
 
-const activeChapter = ref('assistant');
-
 const listClass = (key: string) => ({
   'header-menu__item': true,
-  'header-menu__item--active': activeChapter.value === key
+  'header-menu__item--active': props.activeChapter === key
 });
 
 const menuItems = computed(() => [
@@ -67,10 +67,14 @@ const menuItems = computed(() => [
 ]);
 
 const handleUnmountChapter = chapter => {
-  activeChapter.value = chapter;
   if (!chapter) {
-    activeChapter.value = 'assistant';
+    chapter = 'assistant';
   }
-  emit('unmount-chapter', activeChapter.value);
+
+  if (chapter === 'dialogs') {
+    emit('unmount-chapter', chapter);
+  } else {
+    emit('unmount-chapter', chapter);
+  }
 };
 </script>

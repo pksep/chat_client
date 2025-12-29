@@ -20,22 +20,10 @@
   grid-area: description;
 }
 
-/*
-.menu__info-form {
-  align-items: start;
-  grid-template-areas:
-    'avatar name'
-    'description description';
-}
-
-.form__name {
-  grid-area: name;
-}
-*/
-
 .menu__info-form {
   display: grid;
   gap: 10px;
+  width: 100%;
   fieldset.input-yui-kit {
     background-color: var(--blue15);
   }

@@ -71,12 +71,10 @@ watch(
   }
 );
 
-// Watch for contact changes to mark messages as read
 watch(
   () => props.contact?.conversationId,
   (newConversationId, oldConversationId) => {
     if (newConversationId && newConversationId !== oldConversationId) {
-      // Mark messages as read when switching to a new conversation
       markAsRead(newConversationId).catch(error => {
         console.warn('Failed to mark messages as read:', error);
       });
@@ -95,8 +93,8 @@ const handleUnmountChapter = (
     state.chapter = chapter;
     emits('unmount-chapter', chapter);
   } else if (chapter && chapter.nickname) {
-    state.chapter = chapter.contact.conversationId;
-    emits('unmount-chapter', state.chapter);
+    state.chapter = chapter.nickname;
+    emits('unmount-chapter', chapter);
   } else {
     state.chapter = null;
     emits('unmount-chapter', null);

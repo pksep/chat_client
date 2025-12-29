@@ -37,6 +37,7 @@ button.button-yui-kit.new-contact__button-close {
 }
 
 .modal-yui-kit__modal-content > .contact-selector {
+  padding-top: 5px;
   padding-inline: 10px;
 }
 
@@ -63,6 +64,5 @@ dialog.new-contact
 
 button.primary-yui-kit.contact-selector__add {
   margin-right: 10px;
-  margin-bottom: 10px;
   justify-self: end;
 }

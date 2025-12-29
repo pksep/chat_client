@@ -26,6 +26,7 @@
       class="chat__header-menu"
       v-else-if="isMobile"
       :dataTestid="`${props.dataTestid}-ChatContainer-HeaderMenu`"
+      :active-chapter="state.chapter"
       @unmount-chapter="unmountHeaderMenuChapter"
     />
     <Menu
@@ -142,6 +143,18 @@ import { Button, ButtonTypeEnum } from '@pksep/yui';
 import { usePwaInstall } from '../composables/usePwaInstall';
 import { markAsRead } from '../services/useOpenIM';
 import { useAndroidBackButton } from '../composables/useAndroidBackButton';
+import {
+  currentRoute,
+  initRoute,
+  navigateToDialogs,
+  navigateToDialogsList,
+  navigateToGroup,
+  navigateToGroupsList,
+  navigateToAssistant,
+  navigateToAI,
+  navigateToDefault,
+  setupUrlWatcher
+} from '../composables/useUrlRouting';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -236,6 +249,74 @@ watch(
   }
 );
 
+const initialRouteProcessed = ref(false);
+
+const processRoute = (route, conversations, groups) => {
+  if (route.type === 'dialogs' && route.id) {
+    const conversation = conversations.find(item => item.id === route.id);
+    if (conversation) {
+      const conversationId = conversation.id;
+
+      state.contact = {
+        ...conversation,
+        conversationId
+      };
+      state.chapter =
+        conversation.showName || conversation.nickname || conversation.id;
+      state.isChapter = true;
+      initialRouteProcessed.value = true;
+      return true;
+    }
+  } else if (route.type === 'dialogs' && !route.id) {
+    state.chapter = 'dialogs';
+    state.contact = null;
+    state.isChapter = false;
+    initialRouteProcessed.value = true;
+    return true;
+  } else if (route.type === 'group' && route.id) {
+    const group = groups.find(g => g.id === route.id);
+    if (group) {
+      const conversationId = `sg_${group.groupId}`;
+
+      state.contact = {
+        ...group,
+        conversationId
+      };
+      state.chapter = group.showName || group.nickname || group.id;
+      state.isChapter = true;
+      initialRouteProcessed.value = true;
+      return true;
+    }
+  } else if (route.type === 'group' && !route.id) {
+    state.chapter = 'channels';
+    state.contact = null;
+    state.isChapter = false;
+    initialRouteProcessed.value = true;
+    return true;
+  } else if (route.type === 'assistant' && !route.id) {
+    state.chapter = 'assistant';
+    state.contact = null;
+    state.isChapter = false;
+    initialRouteProcessed.value = true;
+    return true;
+  } else if (route.type === 'ai' && !route.id) {
+    state.chapter = 'ai';
+    state.contact = null;
+    state.isChapter = true;
+    initialRouteProcessed.value = true;
+    return true;
+  }
+  return false;
+};
+
+watch(
+  () => [currentRoute.value, state.conversations, state.groups],
+  ([newRoute, conversations, groups]) => {
+    processRoute(newRoute, conversations, groups);
+  },
+  { immediate: true }
+);
+
 const handleCollapse = (): void => {
   toggle();
 };
@@ -255,29 +336,61 @@ const handleHeaderClick = (): void => {
   state.isMenuMobileOpen = true;
 };
 
-const unmountHeaderMenuChapter = (
-  config: { nickname: string } | string | null
-): void => {
-  if (typeof config === 'string') {
-    state.chapter = config;
-    if (
-      config === 'channels' ||
-      config === 'dialogs' ||
-      config === 'assistant' ||
-      config === 'ai'
-    ) {
-      state.contact = null;
-      state.isChapter = false;
-      return;
-    }
-    state.isChapter = true;
-  } else if (config && config.nickname) {
-    state.chapter = config.nickname;
-    state.contact = config;
-    state.isChapter = false;
-  } else {
+const unmountHeaderMenuChapter = async (
+  config: { nickname: string; contact?: any } | string | null
+): Promise<void> => {
+  if (!config) {
     state.chapter = null;
     state.contact = null;
+    state.isChapter = false;
+    return;
+  }
+
+  if (typeof config === 'string') {
+    switch (config) {
+      case 'ai':
+        state.chapter = 'ai';
+        state.contact = null;
+        state.isChapter = true;
+        navigateToAI();
+        return;
+      case 'assistant':
+        state.chapter = 'assistant';
+        state.contact = null;
+        state.isChapter = true;
+        navigateToAssistant();
+        return;
+      case 'channels':
+        state.chapter = 'channels';
+        state.contact = null;
+        state.isChapter = false;
+        navigateToGroupsList();
+        return;
+      case 'dialogs':
+        state.chapter = 'dialogs';
+        state.contact = null;
+        state.isChapter = false;
+        navigateToDialogsList();
+        return;
+    }
+
+    const foundContact = findContactOrGroupById(config);
+    if (foundContact) {
+      await openContact(foundContact);
+      return;
+    }
+
+    state.chapter = null;
+    state.contact = null;
+    state.isChapter = false;
+    return;
+  } else if (config.contact) {
+    await openContact(config.contact);
+    return;
+  } else if (config.nickname) {
+    state.chapter = config.nickname;
+    state.contact = null;
+    state.isChapter = false;
   }
 };
 
@@ -289,74 +402,111 @@ const findContactOrGroupById = (id: string) => {
   return state.groups.find(group => group.id === id);
 };
 
+const computeConversationId = contact => {
+  const authId = authUser.value?.id;
+  if (contact.groupId) {
+    return `sg_${contact.groupId}`;
+  }
+  if (!authId || !contact.id) {
+    return contact.id || '';
+  }
+  const [smaller, larger] = [authId, contact.id].sort();
+  return `si_${smaller}_${larger}`;
+};
+
+const openContact = async contact => {
+  const conversationId =
+    contact.conversationId || computeConversationId(contact);
+
+  if (contact.id) {
+    markAsRead(conversationId).catch(error => {
+      console.warn('Failed to mark messages as read:', error);
+    });
+  }
+
+  let updatedContact = {
+    ...contact,
+    conversationId
+  };
+
+  if (contact.groupId) {
+    const memberCount = await fetchGroupMemberCount(contact.groupId);
+    updatedContact = {
+      ...updatedContact,
+      membersLength: memberCount
+    };
+  }
+
+  state.contact = updatedContact;
+  state.chapter = updatedContact.nickname || contact.id;
+  state.isChapter = true;
+
+  if (contact.groupId) {
+    navigateToGroup(contact.id);
+  } else {
+    navigateToDialogs(contact.id);
+  }
+};
+
 const unmountMenuChapter = async (
   config: { contact: IUserProps; groupId?: string } | string | null
 ): Promise<void> => {
-  state.isChapter = true;
-  if (typeof config === 'string') {
-    state.chapter = config;
-    if (config === 'ai') {
-      state.contact = null;
-    } else {
-      const foundContact = findContactOrGroupById(config);
-      if (foundContact) {
-        if (foundContact.id) {
-          markAsRead(foundContact.id).catch(error => {
-            console.warn('Failed to mark messages as read:', error);
-          });
-        }
-
-        let updatedContact = {
-          ...foundContact,
-          conversationId: foundContact.id
-        };
-
-        // If this is a group, fetch and update the member count
-        if (foundContact.groupId) {
-          const memberCount = await fetchGroupMemberCount(foundContact.groupId);
-          updatedContact = {
-            ...updatedContact,
-            membersLength: memberCount
-          };
-        }
-
-        state.contact = updatedContact;
-        state.chapter = config;
-      } else {
-        state.contact = null;
-        state.chapter = null;
-      }
-    }
-  } else if (config && config.contact) {
-    if (config.contact.id) {
-      markAsRead(config.contact.id).catch(error => {
-        console.warn('Failed to mark messages as read:', error);
-      });
-    }
-
-    // If this is a group, fetch and update the member count
-    let updatedContact = config.contact;
-    if (config.contact.groupId) {
-      const memberCount = await fetchGroupMemberCount(config.contact.groupId);
-      updatedContact = {
-        ...config.contact,
-        membersLength: memberCount
-      };
-    }
-
-    state.chapter = updatedContact.nickname;
-    state.contact = updatedContact;
-  } else {
+  if (!config) {
     state.chapter = null;
     state.contact = null;
+    state.isChapter = false;
+    return;
   }
+
+  if (typeof config === 'string') {
+    switch (config) {
+      case 'ai':
+        state.chapter = 'ai';
+        state.contact = null;
+        state.isChapter = true;
+        navigateToAI();
+        return;
+      case 'channels':
+        state.chapter = 'channels';
+        state.contact = null;
+        state.isChapter = false;
+        navigateToGroupsList();
+        return;
+      case 'dialogs':
+        state.chapter = 'dialogs';
+        state.contact = null;
+        state.isChapter = false;
+        navigateToDialogsList();
+        return;
+    }
+
+    const foundContact = findContactOrGroupById(config);
+    if (foundContact) {
+      await openContact(foundContact);
+      return;
+    }
+
+    state.chapter = null;
+    state.contact = null;
+    state.isChapter = false;
+    return;
+  }
+
+  if (config && config.contact) {
+    await openContact(config.contact);
+    return;
+  }
+
+  state.chapter = null;
+  state.contact = null;
+  state.isChapter = false;
 };
 
 const handleNewContact = async (config): Promise<void> => {
   if (isMobile.value) {
     const contact = await handleNewContactMessage(config);
     state.contact = contact;
-    state.chapter = contact.conversationId;
+    state.chapter = contact.id || contact.conversationId;
     return;
   }
   state.isNewContactOpen = config.isChapterOpen;
@@ -389,22 +539,29 @@ const handleClearClick = (): void => {
 const handleNewContactMessage = async (
   contact: IUserProps
 ): Promise<IContactProps> => {
-  state.chapter = contact.nickname;
-  const [smallerUserID, largerUserID] = [authUser.value.id, contact.id].sort();
+  state.chapter = contact.id;
 
-  // If this is a group, fetch and update the member count
   if (contact.groupId) {
     const memberCount = await fetchGroupMemberCount(contact.groupId);
     state.contact = {
       ...contact,
       membersLength: memberCount,
-      conversationId: `si_${smallerUserID}_${largerUserID}`
+      conversationId: `sg_${contact.groupId}`
     };
+
+    navigateToGroup(contact.id);
   } else {
+    const [smallerUserID, largerUserID] = [
+      authUser.value.id,
+      contact.id
+    ].sort();
+    const conversationId = `si_${smallerUserID}_${largerUserID}`;
     state.contact = {
       ...contact,
-      conversationId: `si_${smallerUserID}_${largerUserID}`
+      conversationId
     };
+
+    navigateToDialogs(conversationId);
   }
   return state.contact;
 };
@@ -428,63 +585,165 @@ const handleNewGroupMessage = async (group: any): Promise<void> => {
 
   state.groupId = group.groupID;
 
-  state.chapter = state.contact.conversationId;
+  state.chapter = state.contact.nickname || state.contact.conversationId;
+
+  navigateToGroup(group.groupID);
 };
 
 const handleChangeContact = async (contact: IUserProps): Promise<void> => {
-  // If this is a group, fetch and update the member count
+  let conversationId = contact.conversationId;
+  if (!conversationId) {
+    if (contact.groupId) {
+      conversationId = `sg_${contact.groupId}`;
+    } else {
+      const authUserId = authUser.value?.id;
+      if (authUserId && contact.id) {
+        const [smallerUserID, largerUserID] = [authUserId, contact.id].sort();
+        conversationId = `si_${smallerUserID}_${largerUserID}`;
+      } else {
+        conversationId = contact.id;
+      }
+    }
+  }
+
   if (contact.groupId) {
+    conversationId = `sg_${contact.groupId}`;
     const memberCount = await fetchGroupMemberCount(contact.groupId);
     state.contact = {
       ...contact,
-      membersLength: memberCount
+      membersLength: memberCount,
+      conversationId
     };
+
+    navigateToGroup(contact.id);
   } else {
-    state.contact = contact;
+    const authUserId = authUser.value?.id;
+    if (authUserId && contact.id) {
+      const [smallerUserID, largerUserID] = [authUserId, contact.id].sort();
+      conversationId = `si_${smallerUserID}_${largerUserID}`;
+    } else {
+      conversationId = contact.id;
+    }
+
+    state.contact = {
+      ...contact,
+      conversationId
+    };
+
+    navigateToDialogs(conversationId);
   }
 };
 
 const handleChangeContactFromMenuInfo = async (
   contact: IUserProps
 ): Promise<void> => {
-  // If this is a group, fetch and update the member count
+  let conversationId = contact.conversationId;
+  if (!conversationId) {
+    if (contact.groupId) {
+      conversationId = `sg_${contact.groupId}`;
+    } else {
+      const authUserId = authUser.value?.id;
+      if (authUserId && contact.id) {
+        const [smallerUserID, largerUserID] = [authUserId, contact.id].sort();
+        conversationId = `si_${smallerUserID}_${largerUserID}`;
+      } else {
+        conversationId = contact.id;
+      }
+    }
+  }
+
   if (contact.groupId) {
+    conversationId = `sg_${contact.groupId}`;
     const memberCount = await fetchGroupMemberCount(contact.groupId);
     state.contact = {
       ...contact,
-      membersLength: memberCount
+      membersLength: memberCount,
+      conversationId
     };
+
+    navigateToGroup(contact.id);
   } else {
-    // Update the contact in the state to trigger reactivity
-    state.contact = { ...contact };
+    const authUserId = authUser.value?.id;
+    if (authUserId && contact.id) {
+      const [smallerUserID, largerUserID] = [authUserId, contact.id].sort();
+      conversationId = `si_${smallerUserID}_${largerUserID}`;
+    } else {
+      conversationId = contact.id;
+    }
+
+    state.contact = {
+      ...contact,
+      conversationId
+    };
+
+    navigateToDialogs(conversationId);
   }
 };
 
 const handleExit = (): void => {
-  state.chapter = 'assistant';
+  if (state.contact?.groupId) {
+    state.chapter = 'channels';
+  } else if (state.contact && !state.contact.groupId) {
+    state.chapter = 'dialogs';
+  } else {
+    state.chapter = 'assistant';
+  }
+  state.contact = null;
   state.isChapter = false;
+  if (state.chapter === 'dialogs') {
+    navigateToDialogsList();
+  } else if (state.chapter === 'channels') {
+    navigateToGroupsList();
+  } else if (state.chapter === 'assistant') {
+    navigateToAssistant();
+  } else if (state.chapter === 'ai') {
+    navigateToAI();
+  } else {
+    navigateToDefault();
+  }
 };
 
 useAndroidBackButton({
   onBack: () => {
     if (isMobile.value) {
-      state.chapter = 'assistant';
+      if (state.contact?.groupId) {
+        state.chapter = 'channels';
+      } else if (state.contact && !state.contact.groupId) {
+        state.chapter = 'dialogs';
+      } else {
+        state.chapter = 'assistant';
+      }
       state.contact = null;
       state.isChapter = false;
+
       state.isMenuMobileOpen = false;
       state.isNewContactOpen = false;
       state.isNewGroupOpen = false;
+
+      if (state.chapter === 'dialogs') {
+        navigateToDialogsList();
+      } else if (state.chapter === 'channels') {
+        navigateToGroupsList();
+      } else if (state.chapter === 'assistant') {
+        navigateToAssistant();
+      } else if (state.chapter === 'ai') {
+        navigateToAI();
+      } else {
+        navigateToDefault();
+      }
     }
   }
 });
 
 onMounted(async () => {
+  initRoute();
+  setupUrlWatcher();
+
   try {
     if (isMobile.value) {
       state.isChapter = false;
       state.chapter = 'assistant';
     } else {
-      // If there's a group contact, make sure to update the member count
       if (state.contact?.groupId) {
         const memberCount = await fetchGroupMemberCount(state.contact.groupId);
         state.contact = {
@@ -495,7 +754,6 @@ onMounted(async () => {
       state.isChapter = state.chapter === 'ai' || state.contact !== null;
     }
   } finally {
-    // Set loading to false after initial setup is complete
     state.isLoading = false;
   }
 });

@@ -91,7 +91,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
       loading: true,
       timestamp: Date.now()
     };
-    const assistantMessageIndex = messages.value.length;
+    const assistantMessageIndex = messages.value.length; // This will be the index of the assistant message
     messages.value = [...messages.value, assistantMessage];
 
     await saveMessages(chatId, messages.value);
@@ -156,10 +156,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
                   }
 
                   if (event.type === 'step-finish') {
-                    if (assistantMessageIndex <= messages.value.length) {
+                    if (assistantMessageIndex < messages.value.length) {
                       const newMessages = [...messages.value];
-                      newMessages[assistantMessageIndex - 1] = {
-                        ...newMessages[assistantMessageIndex - 1],
+                      newMessages[assistantMessageIndex] = {
+                        ...newMessages[assistantMessageIndex],
                         loading: false
                       };
                       messages.value = newMessages;
@@ -170,12 +170,12 @@ const useMastra = (options?: UseMastraOptions | false) => {
                   }
 
                   if (event.type === 'text-delta' && event.payload?.text) {
-                    if (assistantMessageIndex <= messages.value.length) {
+                    if (assistantMessageIndex < messages.value.length) {
                       const newMessages = [...messages.value];
-                      newMessages[assistantMessageIndex - 1] = {
-                        ...newMessages[assistantMessageIndex - 1],
+                      newMessages[assistantMessageIndex] = {
+                        ...newMessages[assistantMessageIndex],
                         content:
-                          newMessages[assistantMessageIndex - 1].content +
+                          newMessages[assistantMessageIndex].content +
                           event.payload.text
                       };
                       messages.value = newMessages;
@@ -284,12 +284,13 @@ const useMastra = (options?: UseMastraOptions | false) => {
         errorMessage = error.message;
       }
 
-      if (assistantMessageIndex <= messages.value.length) {
+      if (assistantMessageIndex < messages.value.length) {
         const newMessages = [...messages.value];
-        newMessages[assistantMessageIndex - 1] = {
-          ...newMessages[assistantMessageIndex - 1],
+        newMessages[assistantMessageIndex] = {
+          ...newMessages[assistantMessageIndex],
           content: errorMessage,
-          role: 'assistant' // Keep as assistant but with error content
+          role: 'assistant',
+          loading: false
         };
         messages.value = newMessages;
       }

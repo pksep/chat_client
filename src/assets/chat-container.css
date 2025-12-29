@@ -30,7 +30,7 @@
   background-color: var(--blue15);
   grid-template-areas: 'menu header info' 'menu chat info';
   grid-template-columns: var(--size-left-menu) auto var(--size-right-menu);
-  grid-template-rows: var(--header-height) auto;
+  grid-template-rows: var(--header-height) 1fr;
   scroll-behavior: smooth;
 }
 
@@ -103,7 +103,7 @@ button.primary-yui-kit.disabled-yui-kit {
   .chat-container,
   .chat-container.collapse,
   .chat-container.menu-collapse {
-    --header-height: 76px;
+    --header-height: 60px;
     --size-right-menu: 0px;
     --size-left-menu: 0;
     grid-template-areas:
@@ -138,8 +138,7 @@ button.primary-yui-kit.disabled-yui-kit {
 
   .chat-container {
     background-color: var(--white);
-    overflow: auto;
-    overflow-x: hidden;
+    overflow: hidden;
   }
   svg.ai-icon {
     font-size: 40px;

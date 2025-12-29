@@ -54,8 +54,8 @@ export interface IContactProps extends IUserProps {
   isPin?: boolean;
   groupId?: string;
   userId?: string;
-  latestMessageStatus?: number; // Status of the latest message (1: sending, 2: delivered, 3: failed)
-  isLatestMessageFromMe?: boolean; // Indicates if the latest message was sent by the current user
+  latestMessageStatus?: number;
+  isLatestMessageFromMe?: boolean;
 }
 
 export interface IMenuProps {
