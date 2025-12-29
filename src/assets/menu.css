@@ -107,7 +107,7 @@ details.menu__user-details {
     summary.menu__user-details-summary
     .menu__user-details-summary-triangle {
     margin-top: 0px;
-    transform: rotate(270deg);
+    transform: rotate(-90deg);
   }
 }
 
