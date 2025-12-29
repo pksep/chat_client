@@ -4,7 +4,6 @@
 </template>
 <script lang="ts" setup>
 import { IChatContainerConfig } from './components/interfaces/interfaces';
-import { useViewportHeight } from './composables/useViewportHeight';
 import './index';
 import { setConfig } from './services/useConfig';
 
@@ -15,8 +14,6 @@ const config: IChatContainerConfig = {
   CHAT_OPENIM_WS_DOMAIN: import.meta.env.VITE_OPENIM_WS_DOMAIN,
   CHAT_ERP_URL: import.meta.env.VITE_ERP_URL
 };
-
-useViewportHeight();
 
 setConfig(config);
 </script>
