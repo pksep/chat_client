@@ -386,11 +386,27 @@ const initializeMastra = () => {
       baseUrl: props.baseUrl
     });
     mastraResult.value = result;
-    state.aiMessages = result.messages.value;
+
+    // Set up a watcher for the messages to update state when they change
+    watch(
+      () => result.messages.value,
+      newMessages => {
+        state.aiMessages = [...newMessages];
+      },
+      { deep: true }
+    );
   } else {
     const result = useMastra(false);
     mastraResult.value = result;
-    state.aiMessages = result.messages.value;
+
+    // Set up a watcher for the messages to update state when they change
+    watch(
+      () => result.messages.value,
+      newMessages => {
+        state.aiMessages = [...newMessages];
+      },
+      { deep: true }
+    );
   }
 };
 
@@ -400,22 +416,12 @@ watch([() => state.chatId, () => props.baseUrl], () => {
   initializeMastra();
 });
 
-watch(
-  () => mastraResult.value?.messages?.value,
-  newMessages => {
-    if (newMessages) {
-      state.aiMessages = newMessages;
-    }
-  },
-  { deep: true }
-);
-
 let unsubscribeFromMessageChanges: (() => void) | null = null;
 
 const lastMessageSentTime = ref(0);
 
 onMounted(async () => {
-  if (!state.chatId) {
+  if (props.chapter === 'ai' && !state.chatId) {
     state.chatId = generateChatId();
   }
 
@@ -481,14 +487,6 @@ const addLocalAIMessage = (text: string) => {
   };
 
   state.aiMessages = [...state.aiMessages, userMessage];
-
-  const assistantMessage = {
-    role: 'assistant' as 'user' | 'assistant',
-    content: 'Mastra is currently unavailable. Please try again later.',
-    timestamp: Date.now()
-  };
-
-  state.aiMessages = [...state.aiMessages, assistantMessage];
 };
 
 const clearAiMessages = () => {
@@ -584,10 +582,24 @@ const handleSend = async (): Promise<void> => {
     const text = inputText.value;
     inputText.value = '';
 
-    addLocalAIMessage(text);
-
     if (mastraResult.value && mastraResult.value.sendMessage) {
+      // Add user's message immediately for UI feedback
+      const userMessage = {
+        role: 'user' as 'user' | 'assistant',
+        content: text,
+        timestamp: Date.now()
+      };
+
+      // Add to current state for immediate UI feedback
+      state.aiMessages = [...state.aiMessages, userMessage];
+
+      // Scroll to bottom to show the user's message
+      await nextTick();
+      requestAnimationFrame(() => scrollToBottom(true));
+
       try {
+        // The sendMessage function in useMastra will process the request
+        // It will add an assistant message with loading state, which will be updated via the watch
         await mastraResult.value.sendMessage(text, () => {
           requestAnimationFrame(() => scrollToBottom(true));
         });
@@ -595,6 +607,21 @@ const handleSend = async (): Promise<void> => {
         console.warn('Mastra failed to send message:', error);
       }
     } else {
+      // If Mastra is not available, add both user and error messages
+      const userMessage = {
+        role: 'user' as 'user' | 'assistant',
+        content: text,
+        timestamp: Date.now()
+      };
+      state.aiMessages = [...state.aiMessages, userMessage];
+
+      const assistantMessage = {
+        role: 'assistant' as 'user' | 'assistant',
+        content: 'Mastra is currently unavailable. Please try again later.',
+        timestamp: Date.now()
+      };
+      state.aiMessages = [...state.aiMessages, assistantMessage];
+
       console.warn('Mastra is not available, message added locally only');
       requestAnimationFrame(() => scrollToBottom(true));
     }
