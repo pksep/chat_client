@@ -21,8 +21,7 @@ button.mobile__modal-header--button {
 h3.mobile__modal-header--title {
   flex: 1;
   margin: 0;
-  padding-top: 6.5px;
-  padding-bottom: 6.5px;
+  padding-bottom: 3.5px;
   line-height: 100%;
   text-align: center;
   letter-spacing: 0;
