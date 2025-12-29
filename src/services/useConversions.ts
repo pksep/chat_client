@@ -127,9 +127,7 @@ export const manipulateConversationList = (
 ): IContactProps[] => {
   const users = getUsersList();
 
-  // Use Map for faster user lookup
   const userMap = new Map(users.map(user => [user.id, user]));
-  // Get current user to determine if latest message was sent by them
   const currentUser = JSON.parse(sessionStorage.getItem('openim_user') || '{}');
   const currentUserId = currentUser?.userID;
 
@@ -158,8 +156,8 @@ export const manipulateConversationList = (
       isRead: parsedMsg
         ? parsedMsg.isRead && c.userID !== parsedMsg.sendID
         : false,
-      latestMessageStatus: parsedMsg?.status, // Add message status
-      isLatestMessageFromMe: parsedMsg?.sendID === currentUserId // Check if message was sent by current user
+      latestMessageStatus: parsedMsg?.status,
+      isLatestMessageFromMe: parsedMsg?.sendID === currentUserId
     };
   });
 };
@@ -190,7 +188,6 @@ const updateColumnsConversation = (
     conv => conv.id === conversationID
   );
   if (index !== -1) {
-    // Create a new array to ensure reactivity
     const updatedConversations = [...conversionStore.value];
     updatedConversations[index] = {
       ...updatedConversations[index],

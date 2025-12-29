@@ -249,16 +249,12 @@ watch(
   }
 );
 
-// Track if the initial route has been processed
 const initialRouteProcessed = ref(false);
 
-// Process route based on current data
 const processRoute = (route, conversations, groups) => {
   if (route.type === 'dialogs' && route.id) {
-    // Find the dialogs chat by conversation ID and set it as the current contact
     const conversation = conversations.find(item => item.id === route.id);
     if (conversation) {
-      // Use the conversation ID from the conversation object directly
       const conversationId = conversation.id;
 
       state.contact = {
@@ -272,17 +268,14 @@ const processRoute = (route, conversations, groups) => {
       return true;
     }
   } else if (route.type === 'dialogs' && !route.id) {
-    // Handle dialogs list view (no specific ID)
     state.chapter = 'dialogs';
     state.contact = null;
     state.isChapter = false;
     initialRouteProcessed.value = true;
     return true;
   } else if (route.type === 'group' && route.id) {
-    // Find the group by ID and set it as the current contact
     const group = groups.find(g => g.id === route.id);
     if (group) {
-      // Construct the conversationId for group chats
       const conversationId = `sg_${group.groupId}`;
 
       state.contact = {
@@ -316,23 +309,10 @@ const processRoute = (route, conversations, groups) => {
   return false;
 };
 
-// Watch for route changes and update the UI accordingly
 watch(
   () => [currentRoute.value, state.conversations, state.groups],
   ([newRoute, conversations, groups]) => {
-    // Process the route with current data
-    const routeMatched = processRoute(newRoute, conversations, groups);
-
-    // If route wasn't matched but we have a route that requires matching,
-    // and we haven't processed the initial route yet, keep trying
-    if (
-      !routeMatched &&
-      !initialRouteProcessed.value &&
-      newRoute.type !== 'default'
-    ) {
-      // This means we're still waiting for the conversation/group data to arrive
-      // The watch will trigger again when conversations/groups are updated
-    }
+    processRoute(newRoute, conversations, groups);
   },
   { immediate: true }
 );
@@ -394,14 +374,12 @@ const unmountHeaderMenuChapter = async (
         return;
     }
 
-    // Treat as ID for non-special strings
     const foundContact = findContactOrGroupById(config);
     if (foundContact) {
       await openContact(foundContact);
       return;
     }
 
-    // Not found
     state.chapter = null;
     state.contact = null;
     state.isChapter = false;

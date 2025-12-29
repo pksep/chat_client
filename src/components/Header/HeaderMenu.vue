@@ -71,7 +71,6 @@ const handleUnmountChapter = chapter => {
     chapter = 'assistant';
   }
 
-  // For 'dialogs' chapter, we want to show the list of personal chats
   if (chapter === 'dialogs') {
     emit('unmount-chapter', chapter);
   } else {

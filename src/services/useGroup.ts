@@ -182,18 +182,16 @@ const setGroupInfo = async (
       const updatedGroup = {
         ...existing,
         ...groupInfo,
-        avatarUrl: groupInfo.faceURL || existing.avatarUrl, // Map faceURL to avatarUrl
+        avatarUrl: groupInfo.faceURL || existing.avatarUrl,
         nickname: groupInfo.groupName || existing.nickname
       };
 
-      // Create a new array to ensure Vue's reactivity detects the change
       const newGroups = [
         ...groups.value.slice(0, index),
         updatedGroup,
         ...groups.value.slice(index + 1)
       ];
 
-      // Create a sorted array to ensure Vue's reactivity detects the change
       const sortedGroups = [...newGroups].sort((a, b) => {
         if (a.isPin && !b.isPin) return -1;
         if (!a.isPin && b.isPin) return 1;

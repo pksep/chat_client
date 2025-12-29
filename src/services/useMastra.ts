@@ -289,7 +289,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
         newMessages[assistantMessageIndex - 1] = {
           ...newMessages[assistantMessageIndex - 1],
           content: errorMessage,
-          role: 'assistant' // Keep as assistant but with error content
+          role: 'assistant'
         };
         messages.value = newMessages;
       }

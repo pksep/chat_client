@@ -312,7 +312,6 @@ const getContentType = (type: string): MessageContentType => {
 };
 
 const getSessionType = (to: string, groupId: string): SessionType => {
-  // 1: single chat (when 'to' is provided), 3: group chat (when 'groupId' is provided)
   return groupId ? 3 : 1;
 };
 
@@ -384,19 +383,16 @@ export const sendMessageIM = async ({
 
     const convId = determineConversationId(to, groupId);
 
-    // Remove any existing message with this clientMsgID from the queue first
     removeFromOutgoingQueue(convId, clientMsgID);
 
     addToOutgoingMessageQueue(convId, tempMsg);
 
     appendMessageToLocal(convId, tempMsg);
 
-    // When user sends a message to a conversation, reset the notification count directly
     updateColumnsConversation(convId, {
       notificationCount: 0
     });
 
-    // Refresh the conversation list to ensure UI updates properly (non-blocking)
     fetchConversationList().catch(error => {
       console.warn(
         'Failed to refresh conversation list after sending message:',
@@ -559,18 +555,14 @@ export const sendMessageIM = async ({
       isReadByPeer: (res.data as any).isReadByPeer ?? false
     };
 
-    // Remove the message from the outgoing queue since it was sent successfully
     removeFromOutgoingQueue(convId, clientMsgID);
 
-    // Use appendMessageToLocal which handles duplicates properly
     appendMessageToLocal(convId, serverMessage);
 
-    // When user sends a message to a conversation, reset the notification count directly
     updateColumnsConversation(convId, {
       notificationCount: 0
     });
 
-    // Refresh the conversation list to ensure UI updates properly (non-blocking)
     fetchConversationList().catch(error => {
       console.warn(
         'Failed to refresh conversation list after sending message:',
@@ -614,19 +606,16 @@ export const sendMessageIM = async ({
 
     const convId = determineConversationId(to, groupId);
 
-    // Remove any existing message with this clientMsgID from the queue first
     removeFromOutgoingQueue(convId, clientMsgID);
 
     addToOutgoingMessageQueue(convId, tempMsg);
 
     appendMessageToLocal(convId, tempMsg);
 
-    // When user sends a message to a conversation, reset the notification count directly
     updateColumnsConversation(convId, {
       notificationCount: 0
     });
 
-    // Refresh the conversation list to ensure UI updates properly (non-blocking)
     fetchConversationList().catch(error => {
       console.warn(
         'Failed to refresh conversation list after sending message:',
@@ -806,12 +795,10 @@ const markAsRead = async (conversationID: string) => {
 
     saveMessagesToLocal(conversationID, updatedMessages);
 
-    // Update the conversation's notification count to 0 since we've read all messages
     updateColumnsConversation(conversationID, {
       notificationCount: 0
     });
 
-    // Immediately fetch the updated conversation list to ensure UI updates properly
     await fetchConversationList().catch(error => {
       console.warn(
         'Failed to refresh conversation list after marking as read:',
