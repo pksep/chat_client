@@ -30,7 +30,7 @@
   background-color: var(--blue15);
   grid-template-areas: 'menu header info' 'menu chat info';
   grid-template-columns: var(--size-left-menu) auto var(--size-right-menu);
-  grid-template-rows: var(--header-height) auto;
+  grid-template-rows: var(--header-height) 1fr;
   scroll-behavior: smooth;
 }
 

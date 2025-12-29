@@ -2,16 +2,11 @@
   display: grid;
   margin-top: 0;
   place-items: center;
+  place-self: center;
 }
 
 .contact-list__loading {
   padding: 20px;
-}
-
-.chat:has(.chat__input) {
-  & .chat__nothing {
-    margin-top: calc(var(--basic-height) / 4);
-  }
 }
 
 p.chat__nothing-paragraph {
@@ -115,10 +110,10 @@ p.chat__nothing-paragraph {
     --basic-height: calc(var(--default-height) - var(--header-height));
   }
 
-  .chat__nothing {
-    height: auto;
-    margin-top: auto;
+  .chat:has(.chat__nothing) {
+    height: calc(var(--default-height) - var(--header-height));
   }
+
   .chat {
     --basic-height: auto;
     --size-left-menu: 0;
