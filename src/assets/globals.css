@@ -4,6 +4,7 @@
   --size-left-menu: 345px;
   --neutral-text-light: #b8b8b8;
   --primary-pressed-light: #ecf3ff;
+  --default-height: 100dvh;
 }
 
 body {
