@@ -477,18 +477,6 @@ onUnmounted(() => {
   }
 });
 
-const addLocalAIMessage = (text: string) => {
-  if (!text.trim()) return;
-
-  const userMessage = {
-    role: 'user' as 'user' | 'assistant',
-    content: text,
-    timestamp: Date.now()
-  };
-
-  state.aiMessages = [...state.aiMessages, userMessage];
-};
-
 const clearAiMessages = () => {
   if (mastraResult.value) {
     return mastraResult.value.clearMessages();
