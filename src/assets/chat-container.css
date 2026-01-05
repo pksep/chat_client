@@ -43,9 +43,9 @@
   grid-template-areas:
     'menu header'
     'menu chat';
-  & .chat__info {
-    display: none;
-  }
+}
+.chat-container.menu-collapse .chat__info {
+  display: none;
 }
 
 .chat__header {
@@ -119,10 +119,8 @@ button.primary-yui-kit.disabled-yui-kit {
 }
 
 @media screen and (width <= 768px) {
-  .chat-container.menu-collapse {
-    & .chat__info {
-      display: none;
-    }
+  .chat-container.menu-collapse .chat__info {
+    display: none;
   }
 }
 

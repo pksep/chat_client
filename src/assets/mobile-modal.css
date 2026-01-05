@@ -12,10 +12,11 @@ button.mobile__modal-header--button {
   text-align: center;
   line-height: 100%;
   letter-spacing: 0;
-  &:disabled {
-    color: var(--text-grey);
-    cursor: not-allowed;
-  }
+}
+
+button.mobile__modal-header--button:disabled {
+  color: var(--text-grey);
+  cursor: not-allowed;
 }
 
 h3.mobile__modal-header--title {

@@ -7,15 +7,18 @@ button.button-yui-kit.secondary-yui-kit.large.button-menu__info {
   color: var(--text-black);
   padding-block: 10px;
   line-height: 100%;
-  & svg.icon-yui-kit {
-    color: var(--icon-color, var(--grey5));
-    font-size: 24px;
-  }
-  &:hover {
-    cursor: pointer;
-    --icon-color: var(--blue1);
-    background-color: var(--primary-pressed-light);
-  }
+}
+
+button.button-yui-kit.secondary-yui-kit.large.button-menu__info
+  svg.icon-yui-kit {
+  color: var(--icon-color, var(--grey5));
+  font-size: 24px;
+}
+
+button.button-yui-kit.secondary-yui-kit.large.button-menu__info:hover
+  svg.icon-yui-kit {
+  cursor: pointer;
+  --icon-color: var(--blue1);
 }
 
 .menu__info-title-text {

@@ -24,9 +24,10 @@
   display: grid;
   gap: 10px;
   width: 100%;
-  fieldset.input-yui-kit {
-    background-color: var(--blue15);
-  }
+}
+
+.menu__info-form fieldset.input-yui-kit {
+  background-color: var(--blue15);
 }
 
 .menu__info-save-button {
@@ -43,9 +44,10 @@
   color: var(--blue1);
   border-radius: 50%;
   padding: 7px;
-  & svg {
-    font-size: 16px;
-  }
+}
+
+.menu__user-assistant-icon svg.icon-yui-kit {
+  font-size: 16px;
 }
 
 .line {

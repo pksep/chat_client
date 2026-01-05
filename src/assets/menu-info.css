@@ -5,9 +5,10 @@ aside.menu-info {
   border-left-style: solid;
   height: var(--default-height);
   --size-avatar: 42.5px;
-  &.menu-info--open .collapse {
-    width: 100%;
-  }
+}
+
+aside.menu-info.menu-info--open .collapse {
+  width: 100%;
 }
 
 section.menu__info-users {
@@ -76,15 +77,18 @@ div.menu-info__buttons {
   align-items: center;
   font-size: 14px;
   gap: 5px;
-  & p {
-    padding-block: 10px;
-    margin: 0;
-  }
-  & span {
-    font-weight: normal;
-    color: var(--text-black);
-  }
 }
+
+.menu-info__create-channel p {
+  padding-block: 10px;
+  margin: 0;
+}
+
+.menu-info__create-channel span {
+  font-weight: normal;
+  color: var(--text-black);
+}
+
 .tabs__navigation {
   justify-content: start !important;
   gap: 70px;
@@ -99,9 +103,10 @@ div.menu-info__buttons {
   display: flex;
   width: 100%;
   justify-content: center;
-  &:hover {
-    cursor: pointer;
-  }
+}
+
+.menu-info__avatar-button:hover {
+  cursor: pointer;
 }
 
 svg.icon-yui-kit.menu-info__close-icon {
@@ -122,13 +127,14 @@ button.button-yui-kit.large.menu-info__secondary-button {
   font-size: 14px;
   padding-block: 10px;
   color: var(--text-black);
-  & svg.icon-yui-kit {
-    color: var(--icon-color, var(--grey5));
-  }
-  &:hover {
-    --icon-color: var(--blue1);
-    background-color: var(--primary-pressed-light);
-  }
+}
+button.button-yui-kit.large.menu-info__secondary-button svg.icon-yui-kit {
+  color: var(--icon-color, var(--grey5));
+}
+
+button.button-yui-kit.large.menu-info__secondary-button:hover svg.icon-yui-kit {
+  --icon-color: var(--blue1);
+  background-color: var(--primary-pressed-light);
 }
 
 .tabs__navigation-content > section.menu__info-users {

@@ -35,12 +35,10 @@
     position: relative;
     padding-inline: 14px;
     padding-bottom: 10px;
+  }
 
-    &.header-menu__item--active {
-      & button {
-        color: var(--blue1);
-      }
-    }
+  li.header-menu__item.header-menu__item--active button {
+    color: var(--blue1);
   }
   button.header-menu__button {
     align-self: center;

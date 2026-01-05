@@ -44,21 +44,20 @@
   color: var(--message-time-color, var(--text-grey));
   align-items: center;
   justify-self: end;
-  & svg.icon-yui-kit {
-    font-size: 16px;
-  }
 }
 
-.full-image {
-  & .modal-yui-kit__modal-content {
-    width: 100%;
-  }
+.message-time svg.icon-yui-kit {
+  font-size: 16px;
+}
 
-  & img {
-    width: 90vw;
-    height: 90vh;
-    object-fit: contain;
-  }
+.full-image .modal-yui-kit__modal-content {
+  width: 100%;
+}
+
+.full-image img {
+  width: 90vw;
+  height: 90vh;
+  object-fit: contain;
 }
 
 blockquote.message-content__blockquote {
@@ -79,10 +78,14 @@ blockquote.message-content__blockquote
   display: grid;
   margin-left: 4px;
   padding-block: 2px;
-  & h5 {
-    margin: 0;
-  }
 }
+
+blockquote.message-content__blockquote
+  div.message-content__blockquote-container
+  h5 {
+  margin: 0;
+}
+
 div.message-content__loading {
   display: flex;
   gap: 4px;
@@ -112,58 +115,60 @@ div.message-content__html > p {
 div.message-content__media {
   max-height: fit-content;
   max-width: 265px;
-  & > img,
-  & > video {
-    object-fit: contain;
-    width: 100%;
-    height: 100%;
-    border-radius: 8px;
-  }
+}
+
+div.message-content__media > img,
+div.message-content__media > video {
+  object-fit: contain;
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+}
+
+div.message-content__file > div {
+  width: calc(fit-content + 10px);
+}
+
+div.message-content__file > svg {
+  cursor: pointer;
+}
+
+div.message-content__file > p {
+  margin: 0;
+}
+
+div.message-content__file > .message-content__file__name {
+  margin-right: 10px;
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 100%;
+  letter-spacing: 0%;
+}
+
+div.message-content__file > .message-content__file__size {
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 100%;
+  letter-spacing: 0%;
+  margin-top: 4px;
+}
+
+div.message-content__file > .message-time {
+  margin-left: 10px;
 }
 
 div.message-content__file {
   display: flex;
   align-items: center;
   gap: 4px;
-
-  & > div {
-    width: calc(fit-content + 10px);
-  }
-
-  & > svg {
-    cursor: pointer;
-  }
-
-  & p {
-    margin: 0;
-  }
-
-  & .message-content__file__name {
-    margin-right: 10px;
-    font-weight: 400;
-    font-size: 16px;
-    line-height: 100%;
-    letter-spacing: 0%;
-  }
-
-  & .message-content__file__size {
-    font-weight: 400;
-    font-size: 12px;
-    line-height: 100%;
-    letter-spacing: 0%;
-    margin-top: 4px;
-  }
-
-  & .message-time {
-    margin-left: 10px;
-  }
 }
 
 .message__assistant.menu__user-assistant-icon {
   align-self: start;
-  & svg {
-    font-size: 24px;
-  }
+}
+
+.message__assistant.menu__user-assistant-icon svg {
+  font-size: 24px;
 }
 
 @keyframes pulse {
@@ -181,9 +186,10 @@ div.message-content__file {
   hyphens: auto;
   overflow-wrap: anywhere;
   justify-self: start;
-  &:last-child {
-    margin-bottom: 5px;
-  }
+}
+
+.message__bubble:last-child {
+  margin-bottom: 5px;
 }
 
 .message:not(.message__no-author) > .message__other {
@@ -203,17 +209,22 @@ div.message-content__file {
 .chat__input {
   align-self: end;
   padding: 15px;
+}
 
-  .editor-content {
-    max-height: calc(var(--basic-height) / 2);
-    overflow: auto;
-    overflow-wrap: break-word;
-    word-break: break-word;
-  }
+.chat__input .editor-content {
+  max-height: calc(var(--basic-height) / 2);
+  overflow: auto;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .primary-yui-kit.toolbar-button {
   color: var(--white) !important;
+}
+
+.slider-modal .modal-yui-kit__modal-content {
+  width: auto;
+  padding: 0;
 }
 
 @media screen and (width >= 480px) {
@@ -230,22 +241,15 @@ div.message-content__file {
   .message__no-author {
     margin-right: 0;
   }
+  .chat__input .editor-component {
+    min-height: 17px;
+    padding: 8px;
+    border-radius: 0;
+  }
+  .chat__input .editor-content .tiptap {
+    padding: 5px;
+  }
   .chat__input {
     padding: 0;
-    & .editor-component {
-      min-height: 17px;
-      padding: 8px;
-      border-radius: 0;
-    }
-    & .editor-content {
-      & .tiptap {
-        padding: 5px;
-      }
-    }
   }
-}
-
-.slider-modal .modal-yui-kit__modal-content {
-  width: auto;
-  padding: 0;
 }

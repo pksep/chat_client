@@ -5,11 +5,12 @@
   gap: 10px;
   padding-inline: 10px;
   min-height: 58px;
-  &:hover,
-  &.contact-list__item--active {
-    cursor: pointer;
-    background-color: var(--blue15);
-  }
+}
+
+.contact-list__item:hover,
+.contact-list__item.contact-list__item--active {
+  cursor: pointer;
+  background-color: var(--blue15);
 }
 
 .contact-list__block--wrapper {

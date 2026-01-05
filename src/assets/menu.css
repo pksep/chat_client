@@ -20,13 +20,14 @@
   justify-items: center;
   gap: 0;
   padding: 0;
+}
 
-  & .menu__start {
-    padding: 0;
-  }
-  & .menu__user-line {
-    margin-top: 0;
-  }
+.menu.menu--collapse .menu__start {
+  padding: 0;
+}
+
+.menu.menu--collapse .menu__user-line {
+  margin-top: 0;
 }
 
 .menu.menu--collapse .menu__profile {
@@ -53,10 +54,11 @@
   --size-avatar: 15px;
   padding: 10px;
   width: 50px;
-  & .avatar-yui-kit:has(img.avatar-yui-kit__image) {
-    width: 2em !important;
-    height: 2em !important;
-  }
+}
+
+.menu-user__item .avatar-yui-kit:has(img.avatar-yui-kit__image) {
+  width: 2em !important;
+  height: 2em !important;
 }
 
 .menu__user-profile {
@@ -92,9 +94,10 @@ button.menu__user-profile-collapse {
   align-self: start;
   align-items: center;
   gap: 10px;
-  &:hover {
-    cursor: pointer;
-  }
+}
+
+.menu__user-assistant:hover {
+  cursor: pointer;
 }
 
 .menu__user-assistant-title {
@@ -102,13 +105,11 @@ button.menu__user-profile-collapse {
   font-size: 14px;
 }
 
-details.menu__user-details {
-  &:not([open])
-    summary.menu__user-details-summary
-    .menu__user-details-summary-triangle {
-    margin-top: 0px;
-    transform: rotate(-90deg);
-  }
+details.menu__user-details:not([open])
+  summary.menu__user-details-summary
+  .menu__user-details-summary-triangle {
+  margin-top: 0px;
+  transform: rotate(-90deg);
 }
 
 summary.menu__user-details-summary {
@@ -117,26 +118,30 @@ summary.menu__user-details-summary {
   justify-content: flex-start;
   margin-bottom: 5px;
   color: var(--text-grey);
-  &::marker {
-    display: none;
-  }
-  & svg.icon-yui-kit {
-    color: var(--text-grey);
-    font-size: 12px;
-  }
-  & h4.menu__user-details-summary--title {
-    cursor: pointer;
-    text-align: center;
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    margin: 0;
-  }
-  & button.button-yui-kit {
-    margin-left: auto;
-    margin-right: 0;
-  }
   font-weight: bold;
+}
+
+summary.menu__user-details-summary::marker {
+  display: none;
+}
+
+summary.menu__user-details-summary svg.icon-yui-kit {
+  color: var(--text-grey);
+  font-size: 12px;
+}
+
+summary.menu__user-details-summary h4.menu__user-details-summary--title {
+  cursor: pointer;
+  text-align: center;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 0;
+}
+
+summary.menu__user-details-summary button.button-yui-kit {
+  margin-left: auto;
+  margin-right: 0;
 }
 
 .menu__user-details-summary-triangle {
@@ -159,9 +164,10 @@ summary.menu__user-details-summary {
 .menu__button-install-prompt.ghost-yui-kit {
   color: var(--text-grey);
   padding-block: 10px;
-  & svg.icon-yui-kit {
-    font-size: 16px;
-  }
+}
+
+.menu__button-install-prompt.ghost-yui-kit svg.icon-yui-kit {
+  font-size: 16px;
 }
 
 @media screen and (width <= 480px) {
