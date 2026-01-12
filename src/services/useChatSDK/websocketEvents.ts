@@ -26,7 +26,7 @@ export enum WebSocketEventType {
   CONNECTED = 'CONNECTED',
   DISCONNECTED = 'DISCONNECTED',
   AUTHENTICATED = 'AUTHENTICATED',
-  AUTHENTICATION_FAILED = 'AUTHENTICATION_FAILED',
+  AUTHENTICATION_FAILED = 'AUTHENTICATION_FAILED'
 }
 
 export interface WebSocketEventPayloads {
@@ -58,11 +58,14 @@ export interface WebSocketEventPayloads {
   [WebSocketEventType.AUTHENTICATION_FAILED]: { error: string };
 }
 
-export interface WebSocketEvent<T extends WebSocketEventType = WebSocketEventType> {
+export interface WebSocketEvent<
+  T extends WebSocketEventType = WebSocketEventType
+> {
   type: T;
   payload: WebSocketEventPayloads[T];
   timestamp: Date;
 }
 
-export type WebSocketEventHandler<T extends WebSocketEventType = WebSocketEventType> =
-  (event: WebSocketEvent<T>) => void;
+export type WebSocketEventHandler<
+  T extends WebSocketEventType = WebSocketEventType
+> = (event: WebSocketEvent<T>) => void;

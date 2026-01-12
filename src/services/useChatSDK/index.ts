@@ -29,6 +29,7 @@ export interface ChatSDKOptions {
 export interface WebSocketEvent {
   type: string;
   payload: any;
+  timestamp?: Date;
 }
 
 export class ChatSDK {
@@ -36,7 +37,8 @@ export class ChatSDK {
   private wsUrl: string;
   private token?: string;
   private wsConnection: WebSocket | null = null;
-  private eventHandlers: Map<string, Array<(event: WebSocketEvent) => void>> = new Map();
+  private eventHandlers: Map<string, Array<(event: WebSocketEvent) => void>> =
+    new Map();
   private s3Service?: S3Service;
   private reqi: Reqi;
 
@@ -48,8 +50,8 @@ export class ChatSDK {
     this.reqi = new Reqi(this.apiUrl, {
       headers: {
         'Content-Type': 'application/json',
-        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
-      },
+        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
+      }
     });
 
     if (s3Config) {
@@ -72,7 +74,7 @@ export class ChatSDK {
           resolve();
         };
 
-        this.wsConnection.onerror = (error) => {
+        this.wsConnection.onerror = error => {
           console.error('WebSocket error:', error);
           reject(error);
         };
@@ -81,7 +83,7 @@ export class ChatSDK {
           console.log('Disconnected from chat server');
         };
 
-        this.wsConnection.onmessage = (event) => {
+        this.wsConnection.onmessage = event => {
           const message: WebSocketEvent = JSON.parse(event.data as string);
           this.handleWebSocketEvent(message);
         };
@@ -100,21 +102,28 @@ export class ChatSDK {
 
   private authenticate(token: string): void {
     if (this.wsConnection && this.wsConnection.readyState === WebSocket.OPEN) {
-      this.wsConnection.send(JSON.stringify({
-        type: 'AUTHENTICATE',
-        payload: { token }
-      }));
+      this.wsConnection.send(
+        JSON.stringify({
+          type: 'AUTHENTICATE',
+          payload: { token }
+        })
+      );
     }
   }
 
   private handleWebSocketEvent(rawEvent: any): void {
+    const eventType = rawEvent.type as WebSocketEventType;
     const event: WebSocketEvent = {
-      type: rawEvent.type,
+      type: eventType,
       payload: rawEvent.payload,
-      timestamp: new Date(rawEvent.timestamp || Date.now()),
+      timestamp: new Date(rawEvent.timestamp || Date.now())
     };
 
-    if (Object.values(WebSocketEventType).includes(event.type)) {
+    if (
+      Object.values(WebSocketEventType).includes(
+        event.type as WebSocketEventType
+      )
+    ) {
       const handlers = this.eventHandlers.get(event.type) || [];
       handlers.forEach(handler => handler(event));
     } else {
@@ -139,7 +148,9 @@ export class ChatSDK {
     handler: WebSocketEventHandler<T>
   ): void {
     if (this.eventHandlers.has(type)) {
-      const handlers = this.eventHandlers.get(type) as WebSocketEventHandler<T>[];
+      const handlers = this.eventHandlers.get(
+        type
+      ) as WebSocketEventHandler<T>[];
       const index = handlers.indexOf(handler as WebSocketEventHandler<any>);
       if (index !== -1) {
         handlers.splice(index, 1);
@@ -152,11 +163,13 @@ export class ChatSDK {
     payload: WebSocketEventPayloads[T]
   ): void {
     if (this.wsConnection && this.wsConnection.readyState === WebSocket.OPEN) {
-      this.wsConnection.send(JSON.stringify({
-        type,
-        payload,
-        timestamp: new Date().toISOString()
-      }));
+      this.wsConnection.send(
+        JSON.stringify({
+          type,
+          payload,
+          timestamp: new Date().toISOString()
+        })
+      );
     } else {
       console.warn('WebSocket is not connected. Cannot send event:', type);
     }
@@ -172,17 +185,26 @@ export class ChatSDK {
     const queryString = queryParams.toString();
     const endpoint = `/users${queryString ? `?${queryString}` : ''}`;
 
-    const response = await this.reqi.get<PaginatedResponse<User>>(endpoint, { parsed: true });
+    const response = (await this.reqi.get<PaginatedResponse<User>>(endpoint, {
+      parsed: true
+    })) as any;
     return response.data;
   }
 
   async createUser(userData: Partial<User>): Promise<User> {
-    const response = await this.reqi.post<User>('/users', userData, { parsed: true });
+    const response = (await this.reqi.post<User>('/users', userData, {
+      parsed: true
+    })) as any;
     return response.data;
   }
 
-  async authenticateUser(credentials: { email: string; password: string }): Promise<{ user: User; token: string }> {
-    const response = await this.reqi.post('/auth/login', credentials, { parsed: true });
+  async authenticateUser(credentials: {
+    email: string;
+    password: string;
+  }): Promise<{ user: User; token: string }> {
+    const response = (await this.reqi.post('/auth/login', credentials, {
+      parsed: true
+    })) as any;
     const result = response.data;
 
     this.token = result.token;
@@ -190,8 +212,8 @@ export class ChatSDK {
     this.reqi = new Reqi(this.apiUrl, {
       headers: {
         'Content-Type': 'application/json',
-        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
-      },
+        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
+      }
     });
 
     return result;
@@ -210,12 +232,19 @@ export class ChatSDK {
     const queryString = queryParams.toString();
     const endpoint = `/topics${queryString ? `?${queryString}` : ''}`;
 
-    const response = await this.reqi.get<PaginatedResponse<Topic & { lastMessage?: Message }>>(endpoint, { parsed: true });
+    const response = (await this.reqi.get<
+      PaginatedResponse<Topic & { lastMessage?: Message }>
+    >(endpoint, { parsed: true })) as any;
     return response.data;
   }
 
-  async createTopic(topicData: { type: TopicType; title?: string }): Promise<Topic> {
-    const response = await this.reqi.post<Topic>('/topics', topicData, { parsed: true });
+  async createTopic(topicData: {
+    type: TopicType;
+    title?: string;
+  }): Promise<Topic> {
+    const response = (await this.reqi.post<Topic>('/topics', topicData, {
+      parsed: true
+    })) as any;
     return response.data;
   }
 
@@ -224,31 +253,37 @@ export class ChatSDK {
   }
 
   async pinTopic(topicId: string, userId: string): Promise<TopicSetting> {
-    const response = await this.reqi.post<TopicSetting>(`/topics/${topicId}/pin`, { userId }, { parsed: true });
+    const response = (await this.reqi.post<TopicSetting>(
+      `/topics/${topicId}/pin`,
+      { userId },
+      { parsed: true }
+    )) as any;
     return response.data;
   }
 
   async unpinTopic(topicId: string, userId: string): Promise<void> {
-    await this.reqi.delete(`/topics/${topicId}/pin`, {
-      parsed: true,
-      request: {
-        body: { userId }
-      }
-    });
+    await this.reqi.post(
+      `/topics/${topicId}/unpin`,
+      { userId },
+      { parsed: true }
+    );
   }
 
   async muteTopic(topicId: string, userId: string): Promise<TopicSetting> {
-    const response = await this.reqi.post<TopicSetting>(`/topics/${topicId}/mute`, { userId }, { parsed: true });
+    const response = (await this.reqi.post<TopicSetting>(
+      `/topics/${topicId}/mute`,
+      { userId },
+      { parsed: true }
+    )) as any;
     return response.data;
   }
 
   async unmuteTopic(topicId: string, userId: string): Promise<void> {
-    await this.reqi.delete(`/topics/${topicId}/mute`, {
-      parsed: true,
-      request: {
-        body: { userId }
-      }
-    });
+    await this.reqi.post(
+      `/topics/${topicId}/unmute`,
+      { userId },
+      { parsed: true }
+    );
   }
 
   async createGroup(groupData: {
@@ -258,7 +293,9 @@ export class ChatSDK {
     members: string[];
     admins: string[];
   }): Promise<Group> {
-    const response = await this.reqi.post<Group>('/groups', groupData, { parsed: true });
+    const response = (await this.reqi.post<Group>('/groups', groupData, {
+      parsed: true
+    })) as any;
     return response.data;
   }
 
@@ -276,7 +313,9 @@ export class ChatSDK {
     const queryString = queryParams.toString();
     const endpoint = `/groups/${groupId}${queryString ? `?${queryString}` : ''}`;
 
-    const response = await this.reqi.get<Group>(endpoint, { parsed: true });
+    const response = (await this.reqi.get<Group>(endpoint, {
+      parsed: true
+    })) as any;
     return response.data;
   }
 
@@ -285,30 +324,44 @@ export class ChatSDK {
     updateData: {
       title?: string;
       description?: string;
-      avatarUrl?: string
+      avatarUrl?: string;
     }
   ): Promise<Group> {
-    const response = await this.reqi.patch<Group>(`/groups/${groupId}`, updateData, { parsed: true });
+    const response = (await this.reqi.patch<Group>(
+      `/groups/${groupId}`,
+      updateData,
+      { parsed: true }
+    )) as any;
     return response.data;
   }
 
   async addUsersToGroup(groupId: string, userIds: string[]): Promise<Group> {
-    const response = await this.reqi.post<Group>(`/groups/${groupId}/members`, { userIds }, { parsed: true });
+    const response = (await this.reqi.post<Group>(
+      `/groups/${groupId}/members`,
+      { userIds },
+      { parsed: true }
+    )) as any;
     return response.data;
   }
 
-  async removeUsersFromGroup(groupId: string, userIds: string[]): Promise<Group> {
-    const response = await this.reqi.delete<Group>(`/groups/${groupId}/members`, {
-      parsed: true,
-      request: {
-        body: { userIds }
-      }
-    });
+  async removeUsersFromGroup(
+    groupId: string,
+    userIds: string[]
+  ): Promise<Group> {
+    const response = (await this.reqi.post<Group>(
+      `/groups/${groupId}/remove-members`,
+      { userIds },
+      { parsed: true }
+    )) as any;
     return response.data;
   }
 
   async leaveGroup(userId: string, groupId: string): Promise<void> {
-    await this.reqi.post(`/groups/${groupId}/leave`, { userId }, { parsed: true });
+    await this.reqi.post(
+      `/groups/${groupId}/leave`,
+      { userId },
+      { parsed: true }
+    );
   }
 
   async sendMessage(messageData: {
@@ -322,10 +375,14 @@ export class ChatSDK {
       text: messageData.text,
       media: messageData.media || [],
       replayMessageId: messageData.replayMessageId,
-      status: MessageStatus.Wait,
+      status: MessageStatus.Wait
     };
 
-    const response = await this.reqi.post<Message>('/messages', messageToSend, { parsed: true });
+    const response = (await this.reqi.post<Message>(
+      '/messages',
+      messageToSend,
+      { parsed: true }
+    )) as any;
     return response.data;
   }
 
@@ -342,25 +399,31 @@ export class ChatSDK {
     const queryString = queryParams.toString();
     const endpoint = `/topics/${topicId}/messages${queryString ? `?${queryString}` : ''}`;
 
-    const response = await this.reqi.get<PaginatedResponse<Message>>(endpoint, { parsed: true });
+    const response = (await this.reqi.get<PaginatedResponse<Message>>(
+      endpoint,
+      { parsed: true }
+    )) as any;
     return response.data;
   }
 
-  async editMessage(
-    messageId: string,
-    newText: string
-  ): Promise<Message> {
-    const response = await this.reqi.patch<Message>(`/messages/${messageId}`, {
-      text: newText,
-      isEdit: true
-    }, { parsed: true });
+  async editMessage(messageId: string, newText: string): Promise<Message> {
+    const response = (await this.reqi.patch<Message>(
+      `/messages/${messageId}`,
+      {
+        text: newText,
+        isEdit: true
+      },
+      { parsed: true }
+    )) as any;
     const updatedMessage = response.data;
 
     if (this.wsConnection && this.wsConnection.readyState === WebSocket.OPEN) {
-      this.wsConnection.send(JSON.stringify({
-        type: 'MESSAGE_EDITED',
-        payload: updatedMessage
-      }));
+      this.wsConnection.send(
+        JSON.stringify({
+          type: 'MESSAGE_EDITED',
+          payload: updatedMessage
+        })
+      );
     }
 
     return updatedMessage;
@@ -370,10 +433,12 @@ export class ChatSDK {
     await this.reqi.delete(`/messages/${messageId}`, { parsed: true });
 
     if (this.wsConnection && this.wsConnection.readyState === WebSocket.OPEN) {
-      this.wsConnection.send(JSON.stringify({
-        type: 'MESSAGE_DELETED',
-        payload: { messageId }
-      }));
+      this.wsConnection.send(
+        JSON.stringify({
+          type: 'MESSAGE_DELETED',
+          payload: { messageId }
+        })
+      );
     }
   }
 
@@ -382,14 +447,20 @@ export class ChatSDK {
     text: string;
     senderUser: string;
   }): Promise<Reaction> {
-    const response = await this.reqi.post<Reaction>('/reactions', reactionData, { parsed: true });
+    const response = (await this.reqi.post<Reaction>(
+      '/reactions',
+      reactionData,
+      { parsed: true }
+    )) as any;
     const reaction = response.data;
 
     if (this.wsConnection && this.wsConnection.readyState === WebSocket.OPEN) {
-      this.wsConnection.send(JSON.stringify({
-        type: 'REACTION_ADDED',
-        payload: reaction
-      }));
+      this.wsConnection.send(
+        JSON.stringify({
+          type: 'REACTION_ADDED',
+          payload: reaction
+        })
+      );
     }
 
     return reaction;
@@ -399,36 +470,49 @@ export class ChatSDK {
     await this.reqi.delete(`/reactions/${reactionId}`, { parsed: true });
 
     if (this.wsConnection && this.wsConnection.readyState === WebSocket.OPEN) {
-      this.wsConnection.send(JSON.stringify({
-        type: 'REACTION_REMOVED',
-        payload: { reactionId }
-      }));
+      this.wsConnection.send(
+        JSON.stringify({
+          type: 'REACTION_REMOVED',
+          payload: { reactionId }
+        })
+      );
     }
   }
 
   async pinMessage(messageId: string): Promise<Message> {
-    const response = await this.reqi.post<Message>(`/messages/${messageId}/pin`, {}, { parsed: true });
+    const response = (await this.reqi.post<Message>(
+      `/messages/${messageId}/pin`,
+      {},
+      { parsed: true }
+    )) as any;
     const pinnedMessage = response.data;
 
     if (this.wsConnection && this.wsConnection.readyState === WebSocket.OPEN) {
-      this.wsConnection.send(JSON.stringify({
-        type: 'MESSAGE_PINNED',
-        payload: pinnedMessage
-      }));
+      this.wsConnection.send(
+        JSON.stringify({
+          type: 'MESSAGE_PINNED',
+          payload: pinnedMessage
+        })
+      );
     }
 
     return pinnedMessage;
   }
 
   async unpinMessage(messageId: string): Promise<Message> {
-    const response = await this.reqi.delete<Message>(`/messages/${messageId}/pin`, { parsed: true });
+    const response = (await this.reqi.delete<Message>(
+      `/messages/${messageId}/pin`,
+      { parsed: true }
+    )) as any;
     const unpinnedMessage = response.data;
 
     if (this.wsConnection && this.wsConnection.readyState === WebSocket.OPEN) {
-      this.wsConnection.send(JSON.stringify({
-        type: 'MESSAGE_UNPINNED',
-        payload: unpinnedMessage
-      }));
+      this.wsConnection.send(
+        JSON.stringify({
+          type: 'MESSAGE_UNPINNED',
+          payload: unpinnedMessage
+        })
+      );
     }
 
     return unpinnedMessage;
@@ -438,13 +522,23 @@ export class ChatSDK {
     messageId: string,
     status: MessageStatus
   ): Promise<Message> {
-    const response = await this.reqi.patch<Message>(`/messages/${messageId}/status`, { status }, { parsed: true });
+    const response = (await this.reqi.patch<Message>(
+      `/messages/${messageId}/status`,
+      { status },
+      { parsed: true }
+    )) as any;
     return response.data;
   }
 
-  async uploadMedia(file: File | Blob, topicId: string, messageId?: string): Promise<Media> {
+  async uploadMedia(
+    file: File | Blob,
+    topicId: string,
+    messageId?: string
+  ): Promise<Media> {
     if (!this.s3Service) {
-      throw new Error('S3 service not configured. Please provide S3 configuration when initializing ChatSDK.');
+      throw new Error(
+        'S3 service not configured. Please provide S3 configuration when initializing ChatSDK.'
+      );
     }
 
     const uploadResult = await this.s3Service.uploadFile(file);
@@ -453,10 +547,12 @@ export class ChatSDK {
       id: uploadResult.id,
       path: uploadResult.path,
       messageId: messageId || '',
-      type: this.getMediaType(file),
+      type: this.getMediaType(file)
     };
 
-    const response = await this.reqi.post<Media>('/media', mediaData, { parsed: true });
+    const response = (await this.reqi.post<Media>('/media', mediaData, {
+      parsed: true
+    })) as any;
     const media = response.data;
 
     if (messageId) {
@@ -468,7 +564,9 @@ export class ChatSDK {
 
   async deleteMedia(mediaId: string, mediaPath: string): Promise<void> {
     if (!this.s3Service) {
-      throw new Error('S3 service not configured. Please provide S3 configuration when initializing ChatSDK.');
+      throw new Error(
+        'S3 service not configured. Please provide S3 configuration when initializing ChatSDK.'
+      );
     }
 
     await this.s3Service.deleteFile(mediaId, mediaPath);
@@ -476,15 +574,24 @@ export class ChatSDK {
     await this.reqi.delete(`/media/${mediaId}`, { parsed: true });
   }
 
-  private async updateMessageWithMedia(messageId: string, media: Media): Promise<Message> {
-    const response = await this.reqi.get<Message>(`/messages/${messageId}`, { parsed: true });
+  private async updateMessageWithMedia(
+    messageId: string,
+    media: Media
+  ): Promise<Message> {
+    const response = (await this.reqi.get<Message>(`/messages/${messageId}`, {
+      parsed: true
+    })) as any;
     const message = response.data;
 
     const updatedMediaList = [...message.media, media];
 
-    const patchResponse = await this.reqi.patch<Message>(`/messages/${messageId}`, {
-      media: updatedMediaList
-    }, { parsed: true });
+    const patchResponse = (await this.reqi.patch<Message>(
+      `/messages/${messageId}`,
+      {
+        media: updatedMediaList
+      },
+      { parsed: true }
+    )) as any;
     return patchResponse.data;
   }
 

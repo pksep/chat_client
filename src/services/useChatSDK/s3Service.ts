@@ -22,25 +22,34 @@ export class S3Service {
     this.config = config;
   }
 
-  async uploadFile(file: File | Blob, fileName?: string): Promise<UploadResult> {
+  async uploadFile(
+    file: File | Blob,
+    fileName?: string
+  ): Promise<UploadResult> {
     const fileId = this.generateId();
-    const finalFileName = fileName || `${fileId}.${this.getFileExtension(file)}`;
+    const finalFileName =
+      fileName || `${fileId}.${this.getFileExtension(file)}`;
 
     return {
       id: fileId,
       path: `https://${this.config.bucketName}.s3.${this.config.region}.amazonaws.com/${finalFileName}`,
       fileName: finalFileName,
       fileSize: file.size,
-      mimeType: file.type,
+      mimeType: file.type
     };
   }
 
   async deleteFile(fileId: string, filePath: string): Promise<void> {
+    // In a real implementation, this would delete the file from S3
+    // For now, we'll just log the deletion
+    console.log(`Deleting file with ID: ${fileId} at path: ${filePath}`);
   }
 
   private generateId(): string {
-    return Math.random().toString(36).substring(2, 15) +
-           Math.random().toString(36).substring(2, 15);
+    return (
+      Math.random().toString(36).substring(2, 15) +
+      Math.random().toString(36).substring(2, 15)
+    );
   }
 
   private getFileExtension(file: File | Blob): string {

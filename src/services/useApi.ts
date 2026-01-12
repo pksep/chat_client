@@ -6,7 +6,7 @@ let apiInstance: Reqi | null = null;
 
 export const useOpenIMRestApi = (): Reqi => {
   if (!apiInstance) {
-    const config = getConfig()
+    const config = getConfig();
     apiInstance = new Reqi(config.CHAT_API_DOMAIN);
 
     apiInstance.request.use(async (request: Request): Promise<Request> => {

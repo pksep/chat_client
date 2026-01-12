@@ -79,6 +79,8 @@ export interface IChatContainerConfig {
   CHAT_API_DOMAIN?: string;
   CHAT_WS_DOMAIN?: string;
   CHAT_ERP_URL?: string;
+  CHAT_OPENIM_API_DOMAIN?: string;
+  CHAT_OPENIM_WS_DOMAIN?: string;
 }
 
 export interface IChatContainerProps {
