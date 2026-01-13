@@ -148,9 +148,9 @@ const setPinConversation = async (topicId: string, isPinned: boolean) => {
     if (!userId) return;
 
     if (isPinned) {
-      await sdk.pinTopic(topicId, userId);
+      await sdk.togglePinTopic(topicId, userId);
     } else {
-      await sdk.unpinTopic(topicId, userId);
+      await sdk.togglePinTopic(topicId, userId);
     }
   } catch (err) {
     console.error('Failed to pin/unpin topic:', err);

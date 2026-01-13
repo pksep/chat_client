@@ -1,4 +1,4 @@
-import { Message, Reaction, Topic, User, Group } from './types';
+import { Message, Topic, User, Group } from './types';
 
 export enum WebSocketEventType {
   JOIN_TOPIC = 'joinTopic',
@@ -39,13 +39,22 @@ export enum WebSocketEventType {
 export interface WebSocketEventPayloads {
   [WebSocketEventType.JOIN_TOPIC]: { topicId: string };
   [WebSocketEventType.LEAVE_TOPIC]: { topicId: string };
-  [WebSocketEventType.SEND_MESSAGE]: { topicId: string; text?: string; media?: any[]; replayMessageId?: string };
+  [WebSocketEventType.SEND_MESSAGE]: {
+    topicId: string;
+    text?: string;
+    media?: any[];
+    replayMessageId?: string;
+  };
   [WebSocketEventType.NEW_MESSAGE]: Message;
   [WebSocketEventType.EDIT_MESSAGE]: { messageId: string; text: string };
   [WebSocketEventType.MESSAGE_UPDATED]: Message;
   [WebSocketEventType.DELETE_MESSAGE]: { messageId: string; topicId: string };
   [WebSocketEventType.MESSAGE_DELETED]: { messageId: string };
-  [WebSocketEventType.TOGGLE_REACTION]: { messageId: string; emoji: string; topicId: string };
+  [WebSocketEventType.TOGGLE_REACTION]: {
+    messageId: string;
+    emoji: string;
+    topicId: string;
+  };
   [WebSocketEventType.REACTION_UPDATED]: any; // Server sends reaction toggle result
   [WebSocketEventType.TOGGLE_PIN]: { messageId: string };
   [WebSocketEventType.MESSAGE_PINNED]: { messageId: string; isPin: boolean };

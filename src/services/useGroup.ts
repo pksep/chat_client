@@ -145,7 +145,7 @@ export const removeUserFromGroup = async (
 ): Promise<boolean> => {
   try {
     const sdk = getChatSDK();
-    await sdk.removeUsersFromGroup(groupId, [userId]);
+    await sdk.removeUserFromGroup(groupId, userId);
     return true;
   } catch (err) {
     console.error('Failed to remove user from group:', err);

@@ -3,7 +3,6 @@ import {
   Topic,
   Group,
   Message,
-  Reaction,
   TopicSetting,
   Media,
   TopicType,
@@ -422,7 +421,9 @@ export class ChatSDK {
       )) as any;
       return response.data;
     } catch (error) {
-      throw new Error(`Failed to toggle pin topic: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to toggle pin topic: ${(error as Error).message}`
+      );
     }
   }
 
@@ -438,8 +439,18 @@ export class ChatSDK {
       )) as any;
       return response.data;
     } catch (error) {
-      throw new Error(`Failed to toggle mute topic: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to toggle mute topic: ${(error as Error).message}`
+      );
     }
+  }
+
+  async muteTopic(topicId: string, userId: string): Promise<TopicSetting> {
+    return this.toggleMuteTopic(topicId, userId);
+  }
+
+  async unmuteTopic(topicId: string, userId: string): Promise<TopicSetting> {
+    return this.toggleMuteTopic(topicId, userId);
   }
 
   async createGroup(groupData: {
@@ -516,7 +527,9 @@ export class ChatSDK {
       )) as any;
       return response.data;
     } catch (error) {
-      throw new Error(`Failed to add users to group: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to add users to group: ${(error as Error).message}`
+      );
     }
   }
 
@@ -526,7 +539,9 @@ export class ChatSDK {
         parsed: true
       });
     } catch (error) {
-      throw new Error(`Failed to remove user from group: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to remove user from group: ${(error as Error).message}`
+      );
     }
   }
 
@@ -547,7 +562,7 @@ export class ChatSDK {
     text?: string;
     media?: Media[];
     replayMessageId?: string;
-  }): Promise<void> {
+  }): Promise<Message> {
     if (this.socket && this.socket.connected) {
       this.sendWebSocketEvent(WebSocketEventType.SEND_MESSAGE, {
         topicId: messageData.topicId,
@@ -555,6 +570,22 @@ export class ChatSDK {
         media: messageData.media || [],
         replayMessageId: messageData.replayMessageId
       });
+
+      // Return a temporary message object that will be updated when the server confirms receipt
+      return {
+        id: `temp-${Date.now()}`,
+        senderUser: '', // Will be filled by server
+        topicId: messageData.topicId,
+        reactions: [],
+        text: messageData.text,
+        replayMessageId: messageData.replayMessageId,
+        media: messageData.media || [],
+        isEdit: false,
+        status: MessageStatus.Wait,
+        isPin: false,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
     } else {
       throw new Error('Socket is not connected');
     }
@@ -676,7 +707,7 @@ export class ChatSDK {
     file: File | Blob,
     topicId: string,
     messageId?: string
-  ): Promise<{ id: string; path: string; type: MediaType }> {
+  ): Promise<Media> {
     if (!this.s3Service) {
       throw new Error(
         'S3 service not configured. Please provide S3 configuration when initializing ChatSDK.'
@@ -685,10 +716,13 @@ export class ChatSDK {
 
     const uploadResult = await this.s3Service.uploadFile(file);
 
-    const mediaData = {
+    const mediaData: Media = {
       id: uploadResult.id,
       path: uploadResult.path,
-      type: this.getMediaType(file)
+      type: this.getMediaType(file),
+      messageId: messageId || '',
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
 
     // Media is typically sent as part of a message
@@ -722,6 +756,23 @@ export class ChatSDK {
       });
     } else {
       throw new Error('Socket is not connected');
+    }
+  }
+
+  async updateMessageStatus(
+    messageId: string,
+    status: MessageStatus
+  ): Promise<void> {
+    try {
+      await this.reqi.patch(
+        `/messages/${messageId}/status`,
+        { status },
+        { parsed: true }
+      );
+    } catch (error) {
+      throw new Error(
+        `Failed to update message status: ${(error as Error).message}`
+      );
     }
   }
 

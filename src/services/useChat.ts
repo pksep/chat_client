@@ -55,12 +55,12 @@ const notifyMessageChange = (topicId?: string): void => {
 const setupChatListeners = (): void => {
   if (!chatSDK) return;
 
-  chatSDK.subscribeToEvent(WebSocketEventType.MESSAGE_RECEIVED, event => {
+  chatSDK.subscribeToEvent(WebSocketEventType.NEW_MESSAGE, event => {
     const msg = mapMessage(event.payload);
     appendMessageToLocal(msg.topicId, msg);
   });
 
-  chatSDK.subscribeToEvent(WebSocketEventType.MESSAGE_EDITED, event => {
+  chatSDK.subscribeToEvent(WebSocketEventType.MESSAGE_UPDATED, event => {
     const msg = mapMessage(event.payload);
     appendMessageToLocal(msg.topicId, msg);
   });
@@ -274,7 +274,9 @@ export const sendMessageChat = async (params: {
             ? MediaType.Image
             : params.file.type.startsWith('video/')
               ? MediaType.Video
-              : MediaType.File
+              : MediaType.File,
+          createdAt: new Date(),
+          updatedAt: new Date()
         }
       ] as Media[])
     : undefined;
