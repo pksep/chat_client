@@ -6,7 +6,7 @@ export interface IContactListProps {
   addButtonClass?: string;
   listClass?: string;
   userClass?: string;
-  contacts: IContactProps[];
+  contacts: any[];
   dataTestid?: string;
   selectedContactId?: string;
   groupId?: string;
