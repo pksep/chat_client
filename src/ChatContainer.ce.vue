@@ -51,7 +51,7 @@ onMounted(async () => {
   try {
     const authData = await useAuth(token || localToken);
 
-    const authUserId = authData.userId || authData.user?.id || '';
+    const authUserId = authData.user?.id || '';
     if (authUserId && !hasUserIdInSession(authUserId)) {
       saveUserIdToSession(authUserId);
     }

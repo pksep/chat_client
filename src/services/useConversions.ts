@@ -61,7 +61,7 @@ const parseLastMessagePreview = (lastMessage: any): string => {
   return firstMedia?.fileName || firstMedia?.path || '';
 };
 
-export const manipulateConversationList = (topics: any[]): IContactProps[] => {
+export const manipulateConversationList = (topics: any[]): any[] => {
   const users = getUsersList();
   const userMap = new Map(users.map(user => [user.id, user]));
   const currentUserId = getCurrentUserId();

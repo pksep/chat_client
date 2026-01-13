@@ -30,7 +30,7 @@ export type IMenuInfoInformation = {
 };
 
 export type IMenuInfoEmits = {
-  (e: 'unmount-contact', contact: IUserProps): void;
+  (e: 'unmount-contact', contact: any): void;
   (e: 'unmount-collapse', isCollapse: boolean): void;
   (e: 'unmount-new-contact', config: { isChapterOpen?: boolean }): void;
   (e: 'unmount-new-group', config: { isChapterOpen?: boolean }): void;

@@ -39,7 +39,7 @@ const createGroup = async (
     admins
   });
 
-  const groupItem: IContactProps = {
+  const groupItem: any = {
     id: group.id,
     groupId: group.id,
     conversationId: group.topicId,
