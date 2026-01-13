@@ -77,10 +77,9 @@ import { ref } from 'vue';
 import NewContactModal from '../NewChat/NewContactModal.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
-import { IContactListProps } from './interfaces/contact-list';
 import { removeUserFromGroup } from '../../services/useGroup';
 
-const props = withDefaults(defineProps<IContactListProps>(), {
+const props = withDefaults(defineProps<any>(), {
   showAddButton: true,
   contacts: () => [
     {
