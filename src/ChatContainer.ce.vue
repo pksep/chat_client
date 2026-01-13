@@ -19,13 +19,13 @@ import { initializeChat, setCurrentUserId } from './services/useChat';
 import { saveUserIdToSession, hasUserIdInSession } from './services/useMastra';
 import {
   getAllNotificationCount,
-  markSDKReady,
-  fetchConversationList
+  markSDKReady
 } from './services/useConversions';
 import { fetchAuthUser, setAuthUser, useAuth } from './composables/useAuth';
 import { fetchAllUsers, getUserById } from './composables/useUsers';
 import { getConfig } from './services/useConfig';
 import { useUnreadMessagePolling } from './composables/useUnreadMessagePolling';
+import { fetchAllTopics } from './composables/useTopics';
 
 const emits = defineEmits<IChatContainerEmits>();
 
@@ -96,10 +96,7 @@ onMounted(async () => {
       const fallbackUser = getUserById(authUserId);
       if (fallbackUser) {
         setAuthUser({
-          id: fallbackUser.id,
-          nickname: fallbackUser.nickname || '',
-          avatarUrl: fallbackUser.avatarUrl || '',
-          initials: fallbackUser.initial || '',
+          ...fallbackUser,
           createdAt: new Date(),
           updatedAt: new Date(),
           lastOnline: new Date()
@@ -107,7 +104,7 @@ onMounted(async () => {
       }
     }
 
-    await fetchConversationList();
+    await fetchAllTopics();
 
     markSDKReady();
 

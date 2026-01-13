@@ -6,16 +6,16 @@
   >
     <Avatar
       :url="props.avatarUrl"
-      :alt="props.avatarAlt"
+      :alt="props.avatarUrl"
       class="user-profile__avatar"
-      :initials="props.nickname"
+      :initials="props.initials"
       :data-testid="`${dataTestid}-UserProfile-Avatar`"
     />
     <h3
       class="user-profile__title"
       :data-testid="`${dataTestid}-UserProfile-Title`"
     >
-      {{ props.nickname }}
+      {{ props.initials }}
     </h3>
     <span
       class="user-profile__ex"
@@ -24,13 +24,13 @@
       <template v-if="!!props.membersLength">
         {{ props.membersLength }} {{ getParticipantForm(props.membersLength) }}
       </template>
-      <template v-else-if="!!props.tabel"> @{{ props.tabel }} </template>
+      <template v-else-if="!!props.nickname"> @{{ props.nickname }} </template>
     </span>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { Avatar } from '@pksep/yui';
+import { Avatar, IDataTestIdProp } from '@pksep/yui';
 import { IUserProps } from '../interfaces/interfaces';
 
 const props = withDefaults(defineProps<IUserProps>(), {

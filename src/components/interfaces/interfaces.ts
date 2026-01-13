@@ -1,4 +1,5 @@
 import { IMenuInfoEmits } from '@/composables/useMenuInfo';
+import { User } from '@/services/useChatSDK/types';
 
 export interface IHeaderProps {
   class?: string;
@@ -6,6 +7,7 @@ export interface IHeaderProps {
   contact?: IUserProps;
   members?: IUserProps[];
   dataTestid?: string;
+  [key: string]: any; // need delete
 }
 
 export interface IMenuEmits {
@@ -30,19 +32,14 @@ export interface IHeaderEmits extends IMenuInfoEmits {
   (e: 'unmount-exit'): void;
 }
 
-export interface IUserProps {
-  id?: string;
-  avatarUrl?: string;
+export interface IUserProps extends User {
   faceURL?: string;
   avatarAlt?: string;
-  nickname?: string;
   conversationId?: string;
   groupId?: string;
   ex?: string | Record<string, any>;
   tabel?: string;
   initial?: string;
-  createdAt?: Date | string;
-  updatedAt?: Date | string;
   membersLength?: number;
   dataTestid?: string;
 }

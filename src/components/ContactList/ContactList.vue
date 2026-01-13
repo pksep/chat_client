@@ -168,7 +168,6 @@ import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
 import Loading from '../Loading.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { setPinConversation } from '../../services/useConversions';
-import { appendUserAttributes } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
 import { IContactProps } from '../interfaces/interfaces';
 
@@ -194,7 +193,7 @@ const emits = defineEmits<{
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
-const user = computed(() => appendUserAttributes(getAuthUser()));
+const user = computed(() => getAuthUser());
 
 const state = reactive({
   isPin: {} as Record<string, boolean>,

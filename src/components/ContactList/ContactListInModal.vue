@@ -29,11 +29,8 @@
       >
         <template v-if="user">
           <UserProfile
-            avatar-alt="avatar of user"
             :class="['menu__user-profile', props.userClass ?? '']"
-            :avatar-url="user.avatarUrl"
-            :tabel="user.tabel"
-            :nickname="user.nickname"
+            v-bind="user"
             :dataTestid="`${props.dataTestid}-ContactListInModal-UserProfile${index + 1}`"
             @unmount-click="openActivePopover(user.id.toString(), $event)"
           />

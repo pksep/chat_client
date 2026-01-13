@@ -1,6 +1,5 @@
 import { ref } from 'vue';
 import { IContactProps, IUserProps } from '../components/interfaces/interfaces';
-import { appendUserAttributes } from '../composables/useUsers';
 import { getChatSDK, getCurrentUserId } from './useChat';
 
 const groups = ref<IContactProps[]>([]);
@@ -15,15 +14,6 @@ export const fetchGroupMembers = async (
 
     const members = group.members || [];
     groupMembers.value = members
-      .map(member =>
-        appendUserAttributes({
-          id: member.id,
-          nickname: member.nickname,
-          avatarUrl: member.avatarUrl,
-          initial: member.initials
-        })
-      )
-      .filter(Boolean) as IUserProps[];
 
     return groupMembers.value;
   } catch (err) {

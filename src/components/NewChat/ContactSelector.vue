@@ -20,9 +20,7 @@
         :data-testid="`${props.dataTestid}-ContactSelector-Item${index + 1}`"
       >
         <UserProfile
-          :tabel="contact.tabel"
-          :nickname="contact.nickname"
-          :avatar-alt="contact.nickname"
+          v-bind="contact"
           :dataTestid="`${props.dataTestid}-ContactSelector-UserProfile${index + 1}`"
         />
         <Checkbox

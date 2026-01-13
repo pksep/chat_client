@@ -133,7 +133,7 @@ import type {
   IContactProps,
   IUserProps
 } from './interfaces/interfaces';
-import { appendUserAttributes, getUsersList } from '../composables/useUsers';
+import { getUsersList } from '../composables/useUsers';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD, MAX_W_XL } from '../utils/constants';
 import { getGroupList, fetchGroupMemberCount } from '../services/useGroup';
@@ -204,7 +204,7 @@ const props = withDefaults(defineProps<IChatContainerProps>(), {
   dataTestid: 'ChatContainer'
 });
 
-const authUser = computed(() => appendUserAttributes(getAuthUser()));
+const authUser = computed(() => getAuthUser());
 
 const filteredContacts = computed(() => {
   const authId = authUser.value?.id;
@@ -533,6 +533,8 @@ const handleClearClick = (): void => {
 const handleNewContactMessage = async (
   contact: IUserProps
 ): Promise<IContactProps> => {
+  console.log(contact);
+
   state.chapter = contact.id;
 
   if (contact.groupId) {

@@ -83,9 +83,12 @@ export interface Group extends BaseEntity {
 
 export interface PaginatedResponse<T> {
   data: T[];
-  total: number;
-  page: number;
-  limit: number;
+  meta: {
+    totalItems: number;
+    totalPages: number;
+    itemsPerPage: number;
+    currentPage: number;
+  };
 }
 
 export interface SearchParams {

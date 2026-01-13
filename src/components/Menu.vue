@@ -27,7 +27,7 @@
           v-if="isCollapse"
           :initials="props.user?.nickname"
           :url="props.user?.avatarUrl"
-          :alt="props.user?.avatarAlt"
+          :alt="props.user?.avatarUrl"
           is-icon
           :data-testid="`${props.dataTestid}-Menu-ProfileAvatar`"
         />

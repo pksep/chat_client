@@ -33,9 +33,7 @@
       class="chat__header-profile"
       avatar-alt="user-profile-alt"
       v-bind="props.contact"
-      :members-length="
-        props.contact?.membersLength || menuInfoState.contacts.length
-      "
+      :members-length="menuInfoState.contacts.length"
       :data-testid="`${props.dataTestid}-Header-UserProfile`"
       v-else
     />

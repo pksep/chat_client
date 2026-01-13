@@ -7,9 +7,7 @@ export const authedUser: Ref<User | null> = ref(null);
 
 interface AuthResponse {
   token: string;
-  userId?: string;
   user?: User;
-  expireTimeSeconds?: number;
 }
 
 export const useAuth = async (erpToken: string): Promise<AuthResponse> => {
@@ -23,9 +21,8 @@ export const useAuth = async (erpToken: string): Promise<AuthResponse> => {
   });
   const data = await response.json();
 
-  const token = data.token || data.accessToken;
-  const user = data.user || data.userInfo;
-  const userId = data.userId || data.UserID || user?.id;
+  const token = data.token;
+  const user = data.user;
 
   if (token) {
     setAuthToken(token, data.expireTimeSeconds || 0);
@@ -33,9 +30,7 @@ export const useAuth = async (erpToken: string): Promise<AuthResponse> => {
 
   return {
     token,
-    userId,
-    user,
-    expireTimeSeconds: data.expireTimeSeconds
+    user
   };
 };
 

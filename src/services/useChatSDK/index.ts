@@ -329,7 +329,7 @@ export class ChatSDK {
       const response = (await this.reqi.get<PaginatedResponse<User>>(endpoint, {
         parsed: true
       })) as any;
-      return response.data;
+      return response;
     } catch (error) {
       throw new Error(`Failed to fetch users: ${(error as Error).message}`);
     }
