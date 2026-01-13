@@ -1,72 +1,33 @@
 import { ref } from 'vue';
-import { IMSDK } from './useOpenIM';
 import { IContactProps, IUserProps } from '../components/interfaces/interfaces';
-import { manipulateConversationList } from './useConversions';
 import { appendUserAttributes } from '../composables/useUsers';
-import { useOpenIMRestApi } from './useApi';
-import { updateItemList } from '../utils/listUtils';
-import { authedUser } from '../composables/useAuth';
+import { getChatSDK, getCurrentUserId } from './useChat';
 
 const groups = ref<IContactProps[]>([]);
 const groupMembers = ref<IUserProps[]>([]);
 
 export const fetchGroupMembers = async (
-  groupID: string
+  groupId: string
 ): Promise<IUserProps[]> => {
   try {
-    const response = await IMSDK.getGroupMemberList({
-      groupID,
-      filter: 0,
-      offset: 0,
-      count: 1000
-    });
+    const sdk = getChatSDK();
+    const group = await sdk.getGroup(groupId, { page: 1, limit: 1000 });
 
-    const memberIDs = response.data?.map((m: any) => m.userID) ?? [];
-
-    if (memberIDs.length === 0) {
-      groupMembers.value = [];
-      return groupMembers.value;
-    }
-
-    const usersResponse = await IMSDK.getUsersInfo(memberIDs);
-
-    const resultUsers = usersResponse.data ?? [];
-
-    groupMembers.value = resultUsers.map(
-      (user: {
-        userID: string;
-        nickname: string;
-        ex: string;
-        faceURL: string;
-      }) =>
+    const members = group.members || [];
+    groupMembers.value = members
+      .map(member =>
         appendUserAttributes({
-          id: user.userID,
-          ex: user.ex,
-          nickname: user.nickname,
-          avatarUrl: user.faceURL
+          id: member.id,
+          nickname: member.nickname,
+          avatarUrl: member.avatarUrl,
+          initial: member.initials
         })
-    );
+      )
+      .filter(Boolean) as IUserProps[];
 
     return groupMembers.value;
   } catch (err) {
-    const errorDetails = {
-      error: err,
-      operation: 'getGroupMemberList',
-      timestamp: new Date().toISOString(),
-      operationID: err?.operationID || err?.data?.operationID || null,
-      event: err?.event || err?.data?.event || null,
-      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
-    };
-
-    console.error('Failed to fetch group members:', errorDetails);
-
-    if (err?.operationID) {
-      console.info(`Operation ID: ${err.operationID}`);
-    }
-    if (err?.event) {
-      console.info(`Event: ${err.event}`);
-    }
-
+    console.error('Failed to fetch group members:', err);
     return [];
   }
 };
@@ -76,95 +37,51 @@ const createGroup = async (
   name: string,
   imageUrl: string
 ) => {
-  try {
-    const res = await IMSDK.createGroup({
-      groupInfo: {
-        groupName: name,
-        faceURL: imageUrl || null,
-        groupType: 2
-      },
-      memberUserIDs
-    });
+  const sdk = getChatSDK();
+  const currentUserId = getCurrentUserId();
+  const admins = currentUserId ? [currentUserId] : [];
 
-    let conv: any = null;
-    try {
-      const convRes = await IMSDK.getOneConversation({
-        sourceID: res.data.groupID,
-        sessionType: 2
-      });
-      conv = {
-        ...convRes.data,
-        conversationID: `sg_${res.data.groupID}`
-      };
-    } catch (convErr) {
-      console.warn(
-        '[OpenIM] Failed to fetch new conv, using optimistic:',
-        convErr
-      );
+  const group = await sdk.createGroup({
+    title: name,
+    description: '',
+    avatarUrl: imageUrl || '',
+    members: memberUserIDs,
+    admins
+  });
 
-      conv = {
-        conversationID: `sg_${res.data.groupID}`,
-        groupID: res.data.groupID,
-        showName: name,
-        faceURL: imageUrl || '',
-        latestMsgSendTime: Date.now(),
-        unreadCount: 0,
-        isPinned: false
-      };
-    }
+  const groupItem: IContactProps = {
+    id: group.id,
+    groupId: group.id,
+    conversationId: group.topicId,
+    nickname: group.title,
+    avatarUrl: group.avatarUrl,
+    latestMessage: '',
+    latestMessageTime: Date.now(),
+    notificationCount: 0,
+    isPin: false,
+    membersLength: group.members?.length || 0
+  };
 
-    const groupItem = manipulateConversationList([conv])[0];
-    groups.value.unshift(groupItem);
-    updateGroupList([conv]);
-
-    const fullGroup = {
-      ...res.data,
-      ...conv,
-      conversationID: conv.conversationID
-    };
-    console.debug(
-      '[OpenIM] Returning full group with conv ID:',
-      fullGroup.conversationID
-    );
-    return fullGroup;
-  } catch (err) {
-    const errorDetails = {
-      error: err,
-      operation: 'createGroup',
-      timestamp: new Date().toISOString(),
-      operationID: err?.operationID || err?.data?.operationID || null,
-      event: err?.event || err?.data?.event || null,
-      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
-    };
-
-    console.error('Failed to create group:', errorDetails);
-
-    if (err?.operationID) {
-      console.info(`Operation ID: ${err.operationID}`);
-    }
-    if (err?.event) {
-      console.info(`Event: ${err.event}`);
-    }
-
-    throw err;
-  }
+  groups.value = [groupItem, ...groups.value];
+  return { ...group, conversationId: group.topicId, groupId: group.id };
 };
 
 const getGroupList = (): IContactProps[] => {
   return groups.value || [];
 };
 
-const setGroupList = (value): void => {
-  groups.value = manipulateConversationList(value);
+const setGroupList = (value: IContactProps[]): void => {
+  groups.value = value || [];
 };
 
-const updateGroupList = (value: any[]): void => {
-  const newItems = manipulateConversationList(value);
-  groups.value = updateItemList(groups.value, newItems);
+const updateGroupList = (value: IContactProps[]): void => {
+  const map = new Map(groups.value.map(group => [group.id, group]));
+  value.forEach(item => map.set(item.id, item));
+  groups.value = Array.from(map.values());
 };
 
 const setGroupInfo = async (
-  groupID: string,
+  groupId: string,
   groupInfo: Partial<{
     groupName?: string;
     faceURL?: string;
@@ -173,199 +90,65 @@ const setGroupInfo = async (
     ex?: string;
   }>
 ) => {
-  try {
-    await IMSDK.setGroupInfo({ groupID, ...groupInfo });
+  const sdk = getChatSDK();
+  await sdk.editGroup(groupId, {
+    title: groupInfo.groupName,
+    description: groupInfo.introduction,
+    avatarUrl: groupInfo.faceURL
+  });
 
-    const index = groups.value.findIndex(g => g.id === groupID);
-    if (index !== -1) {
-      const existing = groups.value[index];
-      const updatedGroup = {
-        ...existing,
-        ...groupInfo,
-        avatarUrl: groupInfo.faceURL || existing.avatarUrl,
-        nickname: groupInfo.groupName || existing.nickname
-      };
-
-      const newGroups = [
-        ...groups.value.slice(0, index),
-        updatedGroup,
-        ...groups.value.slice(index + 1)
-      ];
-
-      const sortedGroups = [...newGroups].sort((a, b) => {
-        if (a.isPin && !b.isPin) return -1;
-        if (!a.isPin && b.isPin) return 1;
-        return b.latestMessageTime - a.latestMessageTime;
-      });
-
-      groups.value = sortedGroups;
-    }
-  } catch (err) {
-    const errorDetails = {
-      error: err,
-      operation: 'setGroupInfo',
-      groupID,
-      timestamp: new Date().toISOString(),
-      operationID: err?.operationID || err?.data?.operationID || null,
-      event: err?.event || err?.data?.event || null,
-      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
+  const index = groups.value.findIndex(group => group.groupId === groupId);
+  if (index !== -1) {
+    const existing = groups.value[index];
+    const updatedGroup = {
+      ...existing,
+      nickname: groupInfo.groupName || existing.nickname,
+      avatarUrl: groupInfo.faceURL || existing.avatarUrl
     };
-
-    console.error('Failed to set group info:', errorDetails);
-
-    if (err?.operationID) {
-      console.info(`Operation ID: ${err.operationID}`);
-    }
-    if (err?.event) {
-      console.info(`Event: ${err.event}`);
-    }
+    const next = [...groups.value];
+    next[index] = updatedGroup;
+    groups.value = next;
   }
 };
 
-const quitGroup = async (groupID: string) => {
-  try {
-    const groupInfoRes = await getGroupInfo([groupID]);
-    const groupInfo = groupInfoRes[0];
-    const members = await fetchGroupMembers(groupID);
+const quitGroup = async (groupId: string) => {
+  const sdk = getChatSDK();
+  const currentUserId = getCurrentUserId();
+  if (!currentUserId) return;
 
-    if (groupInfo.ownerUserID === authedUser.value.userID) {
-      const newOwner = members.find(
-        (member: IUserProps) => member.id !== authedUser.value.userID
-      );
-
-      if (!newOwner) {
-        await IMSDK.dismissGroup(groupID);
-      }
-
-      await IMSDK.transferGroupOwner({
-        groupID,
-        newOwnerUserID: newOwner.id
-      });
-    }
-
-    await IMSDK.quitGroup(groupID);
-  } catch (err) {
-    const errorDetails = {
-      error: err,
-      operation: 'quitGroup',
-      groupID,
-      timestamp: new Date().toISOString(),
-      operationID: err?.operationID || err?.data?.operationID || null,
-      event: err?.event || err?.data?.event || null,
-      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
-    };
-
-    console.error('Failed to quit group:', errorDetails);
-
-    if (err?.operationID) {
-      console.info(`Operation ID: ${err.operationID}`);
-    }
-    if (err?.event) {
-      console.info(`Event: ${err.event}`);
-    }
-
-    throw err;
-  }
+  await sdk.leaveGroup(currentUserId, groupId);
 };
 
-export const getGroupInfo = async (groupIDs: string[]) => {
-  try {
-    const api = useOpenIMRestApi();
-
-    const response = await api.post('/group/get_groups_info', {
-      groupIDs
-    });
-
-    const apiResponse: {
-      errCode: number;
-      errMsg: string;
-      errDlt: string;
-      data: {
-        groupInfos: any;
-      };
-    } = await response.json();
-
-    if (apiResponse.errCode !== 0) {
-      throw new Error(`${apiResponse.errMsg} (${apiResponse.errDlt})`);
-    }
-
-    return apiResponse.data.groupInfos;
-  } catch (err) {
-    const errorDetails = {
-      error: err,
-      operation: 'get_groups_info',
-      timestamp: new Date().toISOString(),
-      operationID: err?.operationID || err?.data?.operationID || null,
-      event: err?.event || err?.data?.event || null,
-      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
-    };
-
-    console.error('Failed to get group info:', errorDetails);
-
-    if (err?.operationID) {
-      console.info(`Operation ID: ${err.operationID}`);
-    }
-    if (err?.event) {
-      console.info(`Event: ${err.event}`);
-    }
-
-    throw err;
-  }
+export const getGroupInfo = async (groupIds: string[]) => {
+  const sdk = getChatSDK();
+  const groupResponses = await Promise.all(
+    groupIds.map(groupId => sdk.getGroup(groupId))
+  );
+  return groupResponses;
 };
 
 export const fetchGroupMemberCount = async (
-  groupID: string
+  groupId: string
 ): Promise<number> => {
   try {
-    const groupInfos = await getGroupInfo([groupID]);
-    if (groupInfos && groupInfos.length > 0) {
-      return groupInfos[0].memberCount || 0;
-    }
-    return 0;
+    const groupInfo = await getGroupInfo([groupId]);
+    return groupInfo?.[0]?.members?.length || 0;
   } catch (err) {
-    const errorDetails = {
-      error: err,
-      operation: 'fetchGroupMemberCount',
-      timestamp: new Date().toISOString(),
-      operationID: err?.operationID || err?.data?.operationID || null,
-      event: err?.event || err?.data?.event || null,
-      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
-    };
-
-    console.error('Failed to fetch group member count:', errorDetails);
-
-    if (err?.operationID) {
-      console.info(`Operation ID: ${err.operationID}`);
-    }
-    if (err?.event) {
-      console.info(`Event: ${err.event}`);
-    }
-
+    console.error('Failed to fetch group member count:', err);
     return 0;
   }
 };
 
 export const removeUserFromGroup = async (
-  groupID: string,
-  userID: string
+  groupId: string,
+  userId: string
 ): Promise<boolean> => {
   try {
-    await IMSDK.kickGroupMember({
-      groupID,
-      userIDList: [userID],
-      reason: ''
-    });
+    const sdk = getChatSDK();
+    await sdk.removeUsersFromGroup(groupId, [userId]);
+    return true;
   } catch (err) {
-    const errorDetails = {
-      error: err,
-      operation: 'removeGroupMember',
-      timestamp: new Date().toISOString(),
-      operationID: err?.operationID || err?.data?.operationID || null,
-      event: err?.event || err?.data?.event || null,
-      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
-    };
-
-    console.error('Failed to remove user from group:', errorDetails);
+    console.error('Failed to remove user from group:', err);
     return false;
   }
 };

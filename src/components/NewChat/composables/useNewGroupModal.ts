@@ -1,7 +1,7 @@
 import { computed, reactive, ref, watch, toRefs } from 'vue';
 import type { INewContactProps } from '../interfaces/new-contact';
 import { createGroup } from '../../../services/useGroup';
-import { uploadFile } from '../../../services/useOpenIM';
+import { uploadFile } from '../../../services/useChat';
 import { IUserProps } from '../../interfaces/interfaces';
 
 interface NewGroupState {
@@ -93,7 +93,7 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
       if (state.groupName.length > 140) {
         return state.groupName.substring(0, 140);
       }
-      if (group && group.conversationID) {
+      if (group && (group.conversationId || group.topicId)) {
         emit('unmount-new-group', group);
 
         closeModal();

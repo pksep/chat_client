@@ -1,9 +1,9 @@
 import { ref, shallowRef } from 'vue';
 import { getAuthToken } from './useLogin';
-import { useOpenIMRestApi } from '../services/useApi';
+import { getChatSDK } from '../services/useChat';
 
 import type { IUserProps } from '../components/interfaces/interfaces';
-import { SelfUserInfo } from '@openim/wasm-client-sdk';
+import type { User } from '../services/useChatSDK/types';
 
 const users = shallowRef<IUserProps[]>([]);
 const loading = ref(false);
@@ -28,22 +28,12 @@ export const fetchAllUsers = async (opts?: {
       return users.value;
     }
 
-    const api = useOpenIMRestApi();
-    const body = {
-      pagination: {
-        pageNumber: opts?.pageNumber ?? 1,
-        showNumber: opts?.showNumber ?? 100
-      }
-    };
-
-    const response = await api.post(`/user/get_users`, body);
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    const resultUsers = result.data?.users ?? [];
+    const sdk = getChatSDK();
+    const response = await sdk.getUsers({
+      page: opts?.pageNumber ?? 1,
+      limit: opts?.showNumber ?? 100
+    });
+    const resultUsers = response.data ?? [];
 
     if (resultUsers.length === 0) {
       users.value = [];
@@ -57,19 +47,12 @@ export const fetchAllUsers = async (opts?: {
 
     for (let i = 0; i < resultUsers.length; i += batchSize) {
       const batch = resultUsers.slice(i, i + batchSize);
-      const batchResults = batch.map(
-        (user: {
-          userID: string;
-          nickname: string;
-          ex: string;
-          faceURL: string;
-        }) =>
-          appendUserAttributes({
-            id: user.userID,
-            ex: user.ex,
-            nickname: user.nickname,
-            avatarUrl: user.faceURL
-          })
+      const batchResults = batch.map((user: User) =>
+        appendUserAttributes({
+          id: user.id,
+          nickname: user.nickname,
+          avatarUrl: user.avatarUrl
+        })
       );
 
       processedUsers.push(...batchResults);
@@ -89,24 +72,15 @@ export const fetchAllUsers = async (opts?: {
   }
 };
 
-export const appendUserAttributes = (
-  user: Partial<IUserProps & SelfUserInfo>
-) => {
+export const appendUserAttributes = (user: Partial<IUserProps & User>) => {
   if (!user) return null;
-  let ex: any = null;
-
-  try {
-    ex = user?.ex ? JSON.parse(user.ex) : null;
-  } catch (e) {
-    console.warn('Failed to parse user ex field:', e);
-  }
 
   return {
     ...user,
-    tabel: ex?.tabel || '',
-    initial: ex?.initial || '',
-    avatarUrl: user.faceURL,
-    id: `${user.id || user.userID}`
+    tabel: user.tabel || '',
+    initial: user.initial || (user as User).initials || '',
+    avatarUrl: user.avatarUrl || '',
+    id: `${user.id || ''}`
   };
 };
 

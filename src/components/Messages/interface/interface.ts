@@ -1,4 +1,12 @@
-import { FileElem } from '@openim/wasm-client-sdk';
+import type { MediaType } from '../../../services/useChatSDK/types';
+
+export interface MessageMediaItem {
+  type: MediaType;
+  path: string;
+  fileName?: string;
+  fileSize?: number;
+  mimeType?: string;
+}
 
 export interface IMessageBubbleProps {
   message: string;
@@ -9,24 +17,15 @@ export interface IMessageBubbleProps {
   isMeSender?: boolean;
   sender?: string;
   avatar?: string;
-  media?: {
-    sourcePicture: {
-      uuid: string;
-      name?: string;
-      size: number;
-      type: string;
-      url: string;
-      height: number;
-    };
-  };
-  file?: FileElem;
+  media?: MessageMediaItem;
+  file?: MessageMediaItem;
   dataTestid?: string;
-  messageStatus?: number;
+  messageStatus?: string;
 }
 
 export interface IMessageStatusIconsProps {
   isRead?: boolean;
-  messageStatus?: number;
+  messageStatus?: string;
   isMeSender?: boolean;
   dataTestid?: string;
 }

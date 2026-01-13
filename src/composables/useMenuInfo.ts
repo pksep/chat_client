@@ -4,8 +4,7 @@ import {
   getGroupInfo,
   setGroupInfo
 } from '../services/useGroup';
-import { IMSDK } from '../services/useOpenIM';
-import { generateChatId } from '../services/useChatDb';
+import { getChatSDK } from '../services/useChat';
 import type { IUserProps } from '../components/interfaces/interfaces';
 
 type IMenuInfoProps = {
@@ -27,6 +26,7 @@ export type IMenuInfoInformation = {
   groupId?: string | null;
   userId?: string;
   avatarUrl?: string;
+  conversationId?: string;
 };
 
 export type IMenuInfoEmits = {
@@ -60,13 +60,10 @@ export function useMenuInfo<
     state.contacts = [...state.contacts, ...contacts];
 
     try {
-      await IMSDK.inviteUserToGroup(
-        {
-          groupID: state.information.groupId,
-          reason: 'Sent invitation',
-          userIDList: contacts.map(contact => contact.id)
-        },
-        generateChatId()
+      const sdk = getChatSDK();
+      await sdk.addUsersToGroup(
+        state.information.groupId,
+        contacts.map(contact => contact.id)
       );
 
       state.contacts = await fetchGroupMembers(state.information.groupId);
@@ -125,7 +122,8 @@ export function useMenuInfo<
       if (props.contact) {
         state.contacts = [props.contact];
         state.information = {
-          userId: props.contact.id
+          userId: props.contact.id,
+          conversationId: props.contact.conversationId
         };
       }
     }
@@ -139,13 +137,14 @@ export function useMenuInfo<
             item => !state.contacts.some(contact => contact.id === item.id)
           ) || [];
         let date = new Date();
-        if (groups?.length > 0 && groups[0]?.createTime) {
-          date = new Date(groups[0].createTime);
+        if (groups?.length > 0 && groups[0]?.createdAt) {
+          date = new Date(groups[0].createdAt);
         }
         state.information = {
           ...props.contact,
           userId: props.contact.id,
           groupId: groupId,
+          conversationId: props.contact.conversationId,
           date,
           name: props.contact.nickname || '',
           avatarUrl: props.contact.avatarUrl

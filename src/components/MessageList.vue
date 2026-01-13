@@ -51,17 +51,10 @@
       class="chat__message-bubble"
       :data-testid="`${props.dataTestid}-MessageList-UserMessagesContainer`"
     >
-      <template
-        v-for="(message, index) in state.messages"
-        :key="message.clientMsgID"
-      >
+      <template v-for="(message, index) in state.messages" :key="message.id">
         <div
           class="top-element"
-          v-if="
-            isNewDate(index) ||
-            message.isSystemMessage ||
-            message.notificationElem
-          "
+          v-if="isNewDate(index) || message.isSystemMessage"
         >
           <div
             v-if="isNewDate(index)"
@@ -75,7 +68,7 @@
           </div>
 
           <div
-            v-if="message.isSystemMessage || message.notificationElem"
+            v-if="message.isSystemMessage"
             class="system-message"
             :data-testid="`${props.dataTestid}-MessageList-SystemMessageUser${index + 1}`"
           >
@@ -89,21 +82,23 @@
         </div>
 
         <MessageBubble
-          v-if="!(message.isSystemMessage || message.notificationElem)"
+          v-if="!message.isSystemMessage"
           :class="
-            messageChat(props.user.id === message.sendID ? 'user' : 'assistant')
+            messageChat(
+              props.user.id === message.senderUser ? 'user' : 'assistant'
+            )
           "
-          :message="message.textElem?.content || ''"
-          :media="message.pictureElem"
-          :file="message.fileElem"
-          :is-me-sender="props.user.id === message.sendID"
+          :message="message.text || ''"
+          :media="getMessageMedia(message)"
+          :file="getMessageFile(message)"
+          :is-me-sender="props.user.id === message.senderUser"
           :time="formatTime(new Date(message.sendTime))"
-          :sender="message.senderNickname"
+          :sender="message.senderNickname || ''"
           :avatar="message.faceURL"
           :is-read="
-            props.user.id === message.sendID
-              ? message.isReadByPeer
-              : message.isRead
+            props.user.id === message.senderUser
+              ? message.status === MessageStatus.Read
+              : message.status === MessageStatus.Read
           "
           :message-status="message.status"
           :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
@@ -159,24 +154,20 @@ import Loading from './Loading.vue';
 import { ContentEditor } from '@pksep/yui';
 import { useMastra, generateChatId } from '../services/useMastra';
 import { removeMessageLoading } from '../services/useChatDb';
-import { subscribeToMessageChanges } from '../services/useOpenIM';
+import { subscribeToMessageChanges } from '../services/useChat';
 import {
-  getMessagesByConversationId,
+  fetchMessagesForTopic,
   getMessagesWithLoadingStatus,
-  sendMessageIM,
+  sendMessageChat,
   getIsWebsocketConnecting,
-  isRecentlyReconnected
-} from '../services/useOpenIM';
+  getIsRecentlyReconnected
+} from '../services/useChat';
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
-import {
-  OpenIMNotificationType,
-  parseGroupNotification
-} from '../utils/systemMessages';
-import type { OpenIMMessage, AIMessage } from '../types/messages';
-import { authedUser } from '../composables/useAuth';
+import type { ChatMessage, AIMessage } from '../types/messages';
+import { MediaType, MessageStatus } from '../services/useChatSDK/types';
 
-interface OpenIMMessageWithLoading extends OpenIMMessage {
+interface ChatMessageWithLoading extends ChatMessage {
   loading?: boolean;
 }
 
@@ -193,10 +184,12 @@ const chatWrapperRef = useTemplateRef('chatWrapperRef');
 const inputText = ref('');
 
 const state = reactive({
-  messages: [] as OpenIMMessageWithLoading[],
+  messages: [] as ChatMessageWithLoading[],
   chatId: null as string | null,
   hasMoreMessages: true,
   isLoadingMore: false,
+  page: 1,
+  limit: 50,
   aiMessages: [] as AIMessage[]
 });
 
@@ -256,16 +249,22 @@ const handleScroll = (): void => {
   if (
     distanceFromTop < 100 &&
     !isScrollLoading &&
-    props.contact?.conversationId
+    props.contact?.conversationId &&
+    state.hasMoreMessages
   ) {
     isScrollLoading = true;
 
     if (!getIsWebsocketConnecting()) {
-      getMessagesByConversationId(
-        props.contact.conversationId,
-        state.messages[0]?.clientMsgID
-      )
-        .then(() => {
+      state.page += 1;
+      fetchMessagesForTopic(props.contact.conversationId, {
+        page: state.page,
+        limit: state.limit,
+        append: true
+      })
+        .then(messages => {
+          if (messages.length < state.limit) {
+            state.hasMoreMessages = false;
+          }
           updateMessages();
         })
         .finally(() => {
@@ -278,18 +277,7 @@ const handleScroll = (): void => {
   }
 };
 
-const isEnableSend = computed(() => {
-  try {
-    const lastMessage = state.messages[state.messages.length - 1];
-    if (lastMessage.contentType === OpenIMNotificationType.GroupDeleted) {
-      return false;
-    }
-    const detail = JSON.parse(lastMessage.notificationElem.detail);
-    return detail.quitUser.userID !== authedUser.value.userID;
-  } catch (e) {
-    return true;
-  }
-});
+const isEnableSend = computed(() => !!props.contact?.conversationId);
 
 watch(
   () => props.contact?.conversationId,
@@ -298,11 +286,18 @@ watch(
       state.messages = [];
       state.hasMoreMessages = true;
       state.isLoadingMore = false;
+      state.page = 1;
       isLoadingInitialMessages.value = true;
 
       try {
         if (!getIsWebsocketConnecting()) {
-          await getMessagesByConversationId(newConversationId, '');
+          const messages = await fetchMessagesForTopic(newConversationId, {
+            page: state.page,
+            limit: state.limit
+          });
+          if (messages.length < state.limit) {
+            state.hasMoreMessages = false;
+          }
         }
       } catch (error) {
         console.error('Failed to load messages for new conversation:', error);
@@ -337,7 +332,10 @@ watch(
       setTimeout(async () => {
         if (props.contact?.conversationId) {
           try {
-            await getMessagesByConversationId(props.contact.conversationId, '');
+            await fetchMessagesForTopic(props.contact.conversationId, {
+              page: 1,
+              limit: state.limit
+            });
             updateMessages();
           } catch (error) {
             console.error(
@@ -356,7 +354,10 @@ const lastReconnectedState = ref(false);
 const handleReconnection = async () => {
   if (props.contact?.conversationId) {
     try {
-      await getMessagesByConversationId(props.contact.conversationId, '');
+      await fetchMessagesForTopic(props.contact.conversationId, {
+        page: 1,
+        limit: state.limit
+      });
       updateMessages();
     } catch (error) {
       console.error('Failed to reload messages after reconnection:', error);
@@ -365,7 +366,7 @@ const handleReconnection = async () => {
 };
 
 watch(
-  () => isRecentlyReconnected(),
+  () => getIsRecentlyReconnected(),
   isReconnected => {
     if (isReconnected && !lastReconnectedState.value) {
       setTimeout(() => {
@@ -432,7 +433,10 @@ onMounted(async () => {
       if (newMessageConversationId === props.contact?.conversationId) {
         const timeSinceLastSend = Date.now() - lastMessageSentTime.value;
         if (!getIsWebsocketConnecting() && timeSinceLastSend > 2000) {
-          await getMessagesByConversationId(newMessageConversationId, '');
+          await fetchMessagesForTopic(newMessageConversationId, {
+            page: 1,
+            limit: state.limit
+          });
         }
         updateMessages();
       }
@@ -443,11 +447,21 @@ onMounted(async () => {
     state.messages = [];
     state.hasMoreMessages = true;
     state.isLoadingMore = false;
+    state.page = 1;
     isLoadingInitialMessages.value = true;
 
     try {
       if (!getIsWebsocketConnecting()) {
-        await getMessagesByConversationId(props.contact.conversationId, '');
+        const messages = await fetchMessagesForTopic(
+          props.contact.conversationId,
+          {
+            page: state.page,
+            limit: state.limit
+          }
+        );
+        if (messages.length < state.limit) {
+          state.hasMoreMessages = false;
+        }
       }
     } catch (error) {
       console.error('Failed to load initial messages:', error);
@@ -487,6 +501,18 @@ const messageChat = (role: string) => [
   'message__bubble',
   { message__other: role === 'user' }
 ];
+
+const getMessageMedia = (message: ChatMessage) => {
+  return (
+    message.media?.find(
+      item => item.type === MediaType.Image || item.type === MediaType.Video
+    ) || null
+  );
+};
+
+const getMessageFile = (message: ChatMessage) => {
+  return message.media?.find(item => item.type === MediaType.File) || null;
+};
 
 watch(
   () => state.messages.length,
@@ -531,11 +557,21 @@ watch(
       state.messages = [];
       state.hasMoreMessages = true;
       state.isLoadingMore = false;
+      state.page = 1;
       isLoadingInitialMessages.value = true;
 
       try {
         if (!getIsWebsocketConnecting()) {
-          await getMessagesByConversationId(props.contact.conversationId, '');
+          const messages = await fetchMessagesForTopic(
+            props.contact.conversationId,
+            {
+              page: state.page,
+              limit: state.limit
+            }
+          );
+          if (messages.length < state.limit) {
+            state.hasMoreMessages = false;
+          }
         }
       } catch (error) {
         console.error('Failed to load messages when changing chapter:', error);
@@ -616,34 +652,8 @@ const handleSend = async (): Promise<void> => {
     return;
   }
 
-  if (!props.contact) {
-    console.error('[OpenIM] Cannot send message: no contact provided');
-    return;
-  }
-
-  let resolvedUserId = props.contact.userId;
-  let resolvedGroupId = props.contact.groupId;
-
-  if (!resolvedUserId && !resolvedGroupId && props.contact.conversationId) {
-    if (props.contact.conversationId.startsWith('si_')) {
-      const parts = props.contact.conversationId.substring(3).split('_');
-      if (parts.length === 2) {
-        const [smallerId, largerId] = parts;
-        if (props.user?.id) {
-          resolvedUserId = smallerId === props.user.id ? largerId : smallerId;
-        } else {
-          resolvedUserId = largerId;
-        }
-      }
-    } else if (props.contact.conversationId.startsWith('sg_')) {
-      resolvedGroupId = props.contact.conversationId.substring(3);
-    }
-  }
-
-  if (!resolvedUserId && !resolvedGroupId) {
-    console.error(
-      '[OpenIM] Cannot send message: no valid recipient (userId or groupId) available'
-    );
+  if (!props.contact?.conversationId) {
+    console.error('[ChatSDK] Cannot send message: no topic provided');
     return;
   }
 
@@ -651,21 +661,13 @@ const handleSend = async (): Promise<void> => {
   inputText.value = '';
 
   try {
-    if (resolvedGroupId) {
-      await sendMessageIM({
-        message: text,
-        to: '',
-        groupId: resolvedGroupId
-      });
-    } else if (resolvedUserId) {
-      await sendMessageIM({
-        message: text,
-        to: resolvedUserId,
-        groupId: ''
-      });
-    }
+    lastMessageSentTime.value = Date.now();
+    await sendMessageChat({
+      topicId: props.contact.conversationId,
+      text
+    });
   } catch (error) {
-    console.error('[OpenIM] Failed to send message:', error);
+    console.error('[ChatSDK] Failed to send message:', error);
   }
 
   updateMessages();
@@ -675,58 +677,22 @@ const handleSend = async (): Promise<void> => {
 const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
   if (!files.length) return;
 
-  if (!props.contact) {
-    console.error('[OpenIM] Cannot send message: no contact provided');
-    return;
-  }
-
-  let resolvedUserId = props.contact.userId;
-  let resolvedGroupId = props.contact.groupId;
-
-  if (!resolvedUserId && !resolvedGroupId && props.contact.conversationId) {
-    if (props.contact.conversationId.startsWith('si_')) {
-      const parts = props.contact.conversationId.substring(3).split('_');
-      if (parts.length === 2) {
-        const [smallerId, largerId] = parts;
-        if (props.user?.id) {
-          resolvedUserId = smallerId === props.user.id ? largerId : smallerId;
-        } else {
-          resolvedUserId = largerId;
-        }
-      }
-    } else if (props.contact.conversationId.startsWith('sg_')) {
-      resolvedGroupId = props.contact.conversationId.substring(3);
-    }
-  }
-
-  if (!resolvedUserId && !resolvedGroupId) {
-    console.error(
-      '[OpenIM] Cannot send message: no valid recipient (userId or groupId) available'
-    );
+  if (!props.contact?.conversationId) {
+    console.error('[ChatSDK] Cannot send message: no topic provided');
     return;
   }
 
   Array.from(files).forEach(async file => {
     try {
-      if (resolvedGroupId) {
-        await sendMessageIM({
-          type: onlyMedia ? 'image' : 'file',
-          to: '',
-          groupId: resolvedGroupId,
-          file
-        });
-      } else if (resolvedUserId) {
-        await sendMessageIM({
-          type: onlyMedia ? 'image' : 'file',
-          to: resolvedUserId,
-          groupId: '',
-          file
-        });
-      }
-
+      lastMessageSentTime.value = Date.now();
+      await sendMessageChat({
+        topicId: props.contact.conversationId,
+        file,
+        onlyMedia
+      });
       updateMessages();
     } catch (error) {
-      console.error('[OpenIM] Failed to send file:', error);
+      console.error('[ChatSDK] Failed to send file:', error);
     }
   });
 };
@@ -749,9 +715,8 @@ const isNewDate = (index: number, isMastra: boolean = false) => {
   }
 };
 
-const getSystemMessageContent = message => {
-  const notification = parseGroupNotification(message);
-  return notification || message.textElem?.content || message.showName || '';
+const getSystemMessageContent = (message: ChatMessage) => {
+  return message.systemMessageContent || message.text || '';
 };
 
 defineExpose({

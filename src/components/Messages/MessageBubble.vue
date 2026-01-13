@@ -93,7 +93,7 @@
           </div>
           <div
             v-else-if="!!props.file"
-            @click="() => (fullImagePath = props.file.sourceUrl)"
+            @click="() => (fullImagePath = props.file.path)"
             class="message-content__file"
             :data-testid="`${dataTestid}-MessageBubble-FileContainer`"
           >
@@ -107,7 +107,7 @@
                   class="message-content__file__name"
                   :data-testid="`${dataTestid}-MessageBubble-FileName`"
                 >
-                  {{ getShortName(props.file.fileName) }}
+                  {{ getShortName(props.file.fileName || props.file.path) }}
                 </p>
                 <p
                   class="message-content__file__size"
@@ -188,6 +188,7 @@ import FileIcon from '../UI/FileIcon.vue';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import { getFormatFileSize, getShortName } from '../../utils/getFormatFileSize';
 import { SliderModal } from '@pksep/yui';
+import { MediaType } from '../../services/useChatSDK/types';
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
@@ -211,41 +212,22 @@ const imageRegex = /\.(jpg|jpeg|png|gif|webp|svg)$/i;
 const videoRegex = /\.(mp4|webm|mov|ogg)$/i;
 
 const isImage = computed(() => {
-  if (
-    props.media &&
-    typeof props.media === 'object' &&
-    props.media.sourcePicture.type?.startsWith('image/')
-  ) {
-    return true;
-  }
-  if (typeof props.media === 'string' && imageRegex.test(props.media)) {
-    return true;
-  }
-  return false;
+  if (!props.media) return false;
+  if (props.media.type === MediaType.Image) return true;
+  if (props.media.mimeType?.startsWith('image/')) return true;
+  return imageRegex.test(props.media.path || '');
 });
 
 const isVideo = computed(() => {
-  if (
-    props.media &&
-    typeof props.media === 'object' &&
-    props.media.sourcePicture.type?.startsWith('video/')
-  ) {
-    return true;
-  }
-  if (typeof props.media === 'string' && videoRegex.test(props.media)) {
-    return true;
-  }
-  return false;
+  if (!props.media) return false;
+  if (props.media.type === MediaType.Video) return true;
+  if (props.media.mimeType?.startsWith('video/')) return true;
+  return videoRegex.test(props.media.path || '');
 });
 
-const mediaSrc = computed(() => {
-  if (props.media) {
-    return props.media.sourcePicture?.url;
-  }
-  return '';
-});
+const mediaSrc = computed(() => props.media?.path || '');
 
-const fullImagePath = ref<string>(null);
+const fullImagePath = ref<string | null>(null);
 
 const generateArray = (n: number): number[] => {
   return Array.from({ length: n });

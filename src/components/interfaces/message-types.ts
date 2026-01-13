@@ -1,4 +1,4 @@
-import { MessageItem } from '@openim/wasm-client-sdk';
+import type { Message as ChatSDKMessage } from '../../services/useChatSDK/types';
 
 // Interface for AI messages
 export interface AIMessage {
@@ -8,25 +8,26 @@ export interface AIMessage {
   timestamp?: number;
 }
 
-// Extended OpenIM message interface
-interface ExtendedOpenIMMessage {
+// Extended chat message interface
+interface ExtendedChatMessage {
   isSystemMessage?: boolean;
   systemMessageType?: string;
   systemMessageContent?: string;
   senderFaceUrl?: string;
   faceURL?: string;
-  isReadByPeer?: boolean;
+  senderNickname?: string;
+  sendTime?: number;
   loading?: boolean;
 }
 
-// OpenIM message type
-export type OpenIMMessage = Partial<MessageItem> & ExtendedOpenIMMessage;
+// Chat message type
+export type ChatMessage = ChatSDKMessage & ExtendedChatMessage;
 
 // Combined message type
-export type Message = AIMessage | OpenIMMessage;
+export type Message = AIMessage | ChatMessage;
 
-// OpenIM message with loading status
-export interface OpenIMMessageWithLoading extends OpenIMMessage {
+// Chat message with loading status
+export interface ChatMessageWithLoading extends ChatMessage {
   loading?: boolean;
 }
 
@@ -35,7 +36,7 @@ export function isAIMessage(message: Message): message is AIMessage {
   return 'role' in message && 'content' in message;
 }
 
-// Type guard for OpenIM messages
-export function isOpenIMMessage(message: Message): message is OpenIMMessage {
-  return 'sendID' in message && 'sendTime' in message;
+// Type guard for chat messages
+export function isChatMessage(message: Message): message is ChatMessage {
+  return 'topicId' in message && 'senderUser' in message;
 }

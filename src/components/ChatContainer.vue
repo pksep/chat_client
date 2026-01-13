@@ -141,7 +141,7 @@ import { getAuthUser } from '../composables/useAuth';
 import MobileModal from './UI/MobileModal.vue';
 import { Button, ButtonTypeEnum } from '@pksep/yui';
 import { usePwaInstall } from '../composables/usePwaInstall';
-import { markAsRead } from '../services/useOpenIM';
+import { markAsRead } from '../services/useChat';
 import { useAndroidBackButton } from '../composables/useAndroidBackButton';
 import {
   currentRoute,
@@ -255,14 +255,13 @@ const processRoute = (route, conversations, groups) => {
   if (route.type === 'dialogs' && route.id) {
     const conversation = conversations.find(item => item.id === route.id);
     if (conversation) {
-      const conversationId = conversation.id;
+      const conversationId = conversation.conversationId || conversation.id;
 
       state.contact = {
         ...conversation,
         conversationId
       };
-      state.chapter =
-        conversation.showName || conversation.nickname || conversation.id;
+      state.chapter = conversation.nickname || conversation.id;
       state.isChapter = true;
       initialRouteProcessed.value = true;
       return true;
@@ -276,13 +275,13 @@ const processRoute = (route, conversations, groups) => {
   } else if (route.type === 'group' && route.id) {
     const group = groups.find(g => g.id === route.id);
     if (group) {
-      const conversationId = `sg_${group.groupId}`;
+      const conversationId = group.conversationId || group.groupId || group.id;
 
       state.contact = {
         ...group,
         conversationId
       };
-      state.chapter = group.showName || group.nickname || group.id;
+      state.chapter = group.nickname || group.id;
       state.isChapter = true;
       initialRouteProcessed.value = true;
       return true;
@@ -403,15 +402,9 @@ const findContactOrGroupById = (id: string) => {
 };
 
 const computeConversationId = contact => {
-  const authId = authUser.value?.id;
-  if (contact.groupId) {
-    return `sg_${contact.groupId}`;
-  }
-  if (!authId || !contact.id) {
-    return contact.id || '';
-  }
-  const [smaller, larger] = [authId, contact.id].sort();
-  return `si_${smaller}_${larger}`;
+  if (contact.conversationId) return contact.conversationId;
+  if (contact.groupId) return contact.groupId;
+  return contact.id || '';
 };
 
 const openContact = async contact => {
@@ -546,114 +539,72 @@ const handleNewContactMessage = async (
     state.contact = {
       ...contact,
       membersLength: memberCount,
-      conversationId: `sg_${contact.groupId}`
+      conversationId: contact.conversationId || contact.groupId
     };
 
     navigateToGroup(contact.id);
   } else {
-    const [smallerUserID, largerUserID] = [
-      authUser.value.id,
-      contact.id
-    ].sort();
-    const conversationId = `si_${smallerUserID}_${largerUserID}`;
     state.contact = {
       ...contact,
-      conversationId
+      conversationId: contact.conversationId || contact.id
     };
 
-    navigateToDialogs(conversationId);
+    navigateToDialogs(state.contact.id);
   }
   return state.contact;
 };
 
 const handleNewGroupMessage = async (group: any): Promise<void> => {
-  if (!group || !group.conversationID) {
+  if (!group || !(group.conversationId || group.topicId)) {
     console.error('Invalid group data');
     closeModals();
     return;
   }
 
-  const memberCount = await fetchGroupMemberCount(group.groupID);
+  const memberCount = await fetchGroupMemberCount(group.groupId || group.id);
 
   state.contact = {
-    conversationId: group.conversationID,
-    nickname: group.showName,
-    groupId: group.groupID,
-    avatarUrl: group.faceURL,
+    conversationId: group.conversationId || group.topicId,
+    nickname: group.title || group.showName,
+    groupId: group.groupId || group.id,
+    avatarUrl: group.avatarUrl || group.faceURL,
     membersLength: memberCount
   };
 
-  state.groupId = group.groupID;
+  state.groupId = group.groupId || group.id;
 
   state.chapter = state.contact.nickname || state.contact.conversationId;
 
-  navigateToGroup(group.groupID);
+  navigateToGroup(state.groupId);
 };
 
 const handleChangeContact = async (contact: IUserProps): Promise<void> => {
-  let conversationId = contact.conversationId;
-  if (!conversationId) {
-    if (contact.groupId) {
-      conversationId = `sg_${contact.groupId}`;
-    } else {
-      const authUserId = authUser.value?.id;
-      if (authUserId && contact.id) {
-        const [smallerUserID, largerUserID] = [authUserId, contact.id].sort();
-        conversationId = `si_${smallerUserID}_${largerUserID}`;
-      } else {
-        conversationId = contact.id;
-      }
-    }
-  }
-
   if (contact.groupId) {
-    conversationId = `sg_${contact.groupId}`;
     const memberCount = await fetchGroupMemberCount(contact.groupId);
     state.contact = {
       ...contact,
       membersLength: memberCount,
-      conversationId
+      conversationId: contact.conversationId || contact.groupId
     };
 
     navigateToGroup(contact.id);
   } else {
-    const authUserId = authUser.value?.id;
-    if (authUserId && contact.id) {
-      const [smallerUserID, largerUserID] = [authUserId, contact.id].sort();
-      conversationId = `si_${smallerUserID}_${largerUserID}`;
-    } else {
-      conversationId = contact.id;
-    }
-
     state.contact = {
       ...contact,
-      conversationId
+      conversationId: contact.conversationId || contact.id
     };
 
-    navigateToDialogs(conversationId);
+    navigateToDialogs(state.contact.id);
   }
 };
 
 const handleChangeContactFromMenuInfo = async (
   contact: IUserProps
 ): Promise<void> => {
-  let conversationId = contact.conversationId;
-  if (!conversationId) {
-    if (contact.groupId) {
-      conversationId = `sg_${contact.groupId}`;
-    } else {
-      const authUserId = authUser.value?.id;
-      if (authUserId && contact.id) {
-        const [smallerUserID, largerUserID] = [authUserId, contact.id].sort();
-        conversationId = `si_${smallerUserID}_${largerUserID}`;
-      } else {
-        conversationId = contact.id;
-      }
-    }
-  }
+  const conversationId =
+    contact.conversationId || contact.groupId || contact.id;
 
   if (contact.groupId) {
-    conversationId = `sg_${contact.groupId}`;
     const memberCount = await fetchGroupMemberCount(contact.groupId);
     state.contact = {
       ...contact,
@@ -663,20 +614,12 @@ const handleChangeContactFromMenuInfo = async (
 
     navigateToGroup(contact.id);
   } else {
-    const authUserId = authUser.value?.id;
-    if (authUserId && contact.id) {
-      const [smallerUserID, largerUserID] = [authUserId, contact.id].sort();
-      conversationId = `si_${smallerUserID}_${largerUserID}`;
-    } else {
-      conversationId = contact.id;
-    }
-
     state.contact = {
       ...contact,
       conversationId
     };
 
-    navigateToDialogs(conversationId);
+    navigateToDialogs(contact.id);
   }
 };
 

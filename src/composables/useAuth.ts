@@ -1,25 +1,16 @@
-import { SelfUserInfo } from '@openim/wasm-client-sdk';
-import { IMSDK } from '../services/useOpenIM';
+import type { User } from '../services/useChatSDK/types';
 import { ref, Ref } from 'vue';
 import { setAuthToken } from './useLogin';
 import { getConfig } from '../services/useConfig';
 
-export const authedUser: Ref<SelfUserInfo | null> = ref(null);
+export const authedUser: Ref<User | null> = ref(null);
 
 interface AuthResponse {
-  UserID: string;
   token: string;
-  expireTimeSeconds: number;
-  PlatformID: number;
+  userId?: string;
+  user?: User;
+  expireTimeSeconds?: number;
 }
-
-const setPlatformId = (platformId: number): void => {
-  sessionStorage.setItem('platformId', platformId.toString());
-};
-
-export const getPlatformId = (): number => {
-  return +sessionStorage.getItem('platformId');
-};
 
 export const useAuth = async (erpToken: string): Promise<AuthResponse> => {
   const config = getConfig();
@@ -32,26 +23,27 @@ export const useAuth = async (erpToken: string): Promise<AuthResponse> => {
   });
   const data = await response.json();
 
-  setAuthToken(data.token, data.expireTimeSeconds);
-  setPlatformId(data.PlatformID);
+  const token = data.token || data.accessToken;
+  const user = data.user || data.userInfo;
+  const userId = data.userId || data.UserID || user?.id;
 
-  return data;
-};
-
-export const fetchAuthUser = async (): Promise<SelfUserInfo> => {
-  try {
-    const userInfo = await IMSDK.getSelfUserInfo();
-
-    setAuthUser(userInfo.data);
-    return userInfo.data;
-  } catch (err: any) {
-    console.error('Failed to fetch IMSDK user:', err);
-    setAuthUser(null);
-    throw err;
+  if (token) {
+    setAuthToken(token, data.expireTimeSeconds || 0);
   }
+
+  return {
+    token,
+    userId,
+    user,
+    expireTimeSeconds: data.expireTimeSeconds
+  };
 };
 
-export const setAuthUser = (user: SelfUserInfo) => {
+export const fetchAuthUser = async (): Promise<User | null> => {
+  return authedUser.value;
+};
+
+export const setAuthUser = (user: User | null) => {
   authedUser.value = user;
 };
 

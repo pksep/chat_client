@@ -115,12 +115,11 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
               fileName: 'chat-container'
             },
             rollupOptions: {
-              external: ['vue', '@pksep/yui', '@openim/wasm-client-sdk'],
+              external: ['vue', '@pksep/yui'],
               output: {
                 globals: {
                   vue: 'Vue',
-                  '@pksep/yui': '@pksep/yui',
-                  '@openim/wasm-client-sdk': '@openim/wasm-client-sdk'
+                  '@pksep/yui': '@pksep/yui'
                 }
               }
             }

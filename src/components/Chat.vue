@@ -45,7 +45,7 @@ import { computed } from 'vue';
 import { onMounted } from 'vue';
 import type { IMenuEmits } from './interfaces/interfaces';
 import { IUserProps } from './interfaces/interfaces';
-import { markAsRead } from '../services/useOpenIM';
+import { markAsRead } from '../services/useChat';
 
 export interface IChatProps extends IMessageListProps {
   dataTestid?: string;

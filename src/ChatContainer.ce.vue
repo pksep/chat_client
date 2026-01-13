@@ -15,15 +15,15 @@ import type {
   IChatContainerEmits,
   IChatContainerProps
 } from './components/interfaces/interfaces';
-import { IMSDK, setupOpenIM } from './services/useOpenIM';
+import { initializeChat, setCurrentUserId } from './services/useChat';
 import { saveUserIdToSession, hasUserIdInSession } from './services/useMastra';
 import {
   getAllNotificationCount,
   markSDKReady,
   fetchConversationList
 } from './services/useConversions';
-import { fetchAuthUser, useAuth } from './composables/useAuth';
-import { fetchAllUsers } from './composables/useUsers';
+import { fetchAuthUser, setAuthUser, useAuth } from './composables/useAuth';
+import { fetchAllUsers, getUserById } from './composables/useUsers';
 import { getConfig } from './services/useConfig';
 import { useUnreadMessagePolling } from './composables/useUnreadMessagePolling';
 
@@ -51,24 +51,61 @@ onMounted(async () => {
   try {
     const authData = await useAuth(token || localToken);
 
-    if (!hasUserIdInSession(authData.UserID)) {
-      saveUserIdToSession(authData.UserID);
+    const authUserId = authData.userId || authData.user?.id || '';
+    if (authUserId && !hasUserIdInSession(authUserId)) {
+      saveUserIdToSession(authUserId);
     }
 
-    const apiAddr = config.CHAT_OPENIM_API_DOMAIN;
-    const wsAddr = config.CHAT_OPENIM_WS_DOMAIN;
+    if (!authData.token) {
+      throw new Error('Chat token is missing from auth response');
+    }
 
-    await IMSDK.login({
-      platformID: authData.PlatformID,
-      userID: authData.UserID,
+    const apiAddr = config.CHAT_API_DOMAIN;
+    const wsAddr = config.CHAT_WS_DOMAIN;
+
+    if (!apiAddr || !wsAddr) {
+      throw new Error('Chat API/WS URLs are not configured');
+    }
+
+    const s3Config = config.CHAT_S3_BUCKET_NAME
+      ? {
+          bucketName: config.CHAT_S3_BUCKET_NAME,
+          region: config.CHAT_S3_REGION || '',
+          accessKeyId: config.CHAT_S3_ACCESS_KEY_ID || '',
+          secretAccessKey: config.CHAT_S3_SECRET_ACCESS_KEY || '',
+          endpoint: config.CHAT_S3_ENDPOINT
+        }
+      : undefined;
+
+    await initializeChat({
       token: authData.token,
-      apiAddr,
-      wsAddr
+      apiUrl: apiAddr,
+      wsUrl: wsAddr,
+      userId: authUserId || undefined,
+      s3Config
     });
+
+    setCurrentUserId(authUserId || undefined);
+    if (authData.user) {
+      setAuthUser(authData.user);
+    }
 
     await Promise.all([fetchAuthUser(), fetchAllUsers()]);
 
-    setupOpenIM();
+    if (!authData.user && authUserId) {
+      const fallbackUser = getUserById(authUserId);
+      if (fallbackUser) {
+        setAuthUser({
+          id: fallbackUser.id,
+          nickname: fallbackUser.nickname || '',
+          avatarUrl: fallbackUser.avatarUrl || '',
+          initials: fallbackUser.initial || '',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          lastOnline: new Date()
+        });
+      }
+    }
 
     await fetchConversationList();
 

@@ -179,7 +179,7 @@ import {
   onSDKReady
 } from '../services/useConversions';
 import { getGroupList } from '../services/useGroup';
-import { markAsRead } from '../services/useOpenIM';
+import { markAsRead } from '../services/useChat';
 import Triangle from './Triangle.vue';
 import { usePwaInstall } from '../composables/usePwaInstall';
 import { navigateToAI } from '../composables/useUrlRouting';
@@ -234,9 +234,11 @@ const unmountContactClick = (contact: IContactProps | string): void => {
       state.chapter = foundContact.nickname;
 
       if (foundContact.groupId) {
-        markAsRead(foundContact.id).catch(error => {
-          console.warn('Failed to mark messages as read:', error);
-        });
+        markAsRead(foundContact.conversationId || foundContact.id).catch(
+          error => {
+            console.warn('Failed to mark messages as read:', error);
+          }
+        );
 
         emits('unmount-chapter', {
           nickname: foundContact.nickname,
@@ -247,7 +249,7 @@ const unmountContactClick = (contact: IContactProps | string): void => {
   } else {
     state.chapter = contact.nickname;
     if (contact.id) {
-      markAsRead(contact.id).catch(error => {
+      markAsRead(contact.conversationId || contact.id).catch(error => {
         console.warn('Failed to mark messages as read:', error);
       });
     }
