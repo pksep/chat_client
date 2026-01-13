@@ -78,15 +78,30 @@ import NewContactModal from '../NewChat/NewContactModal.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import { removeUserFromGroup } from '../../services/useGroup';
+import type { IUserProps } from '../interfaces/interfaces';
 
-const props = withDefaults(defineProps(), {
+interface ContactListInModalProps {
+  showAddButton?: boolean;
+  contacts?: IUserProps[];
+  dataTestid?: string;
+  class?: string;
+  addButtonClass?: string;
+  listClass?: string;
+  userClass?: string;
+  groupId?: string;
+}
+
+const props = withDefaults(defineProps<ContactListInModalProps>(), {
   showAddButton: true,
   contacts: () => [
     {
       id: '1',
-      name: 'John Doe',
+      initials: 'JD',
       nickname: 'jd',
-      avatarUrl: '/avatar.jpg'
+      avatarUrl: '/avatar.jpg',
+      lastOnline: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date()
     }
   ],
   dataTestid: () => 'ContactListInModal'
