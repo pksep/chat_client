@@ -88,7 +88,6 @@
     @unmount-new-contact="handleNewContactMessage"
   />
 
-  {{ state.users }}
   <NewGroupModal
     :user="authUser"
     :contacts="state.users"

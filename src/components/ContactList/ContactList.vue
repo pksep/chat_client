@@ -39,8 +39,8 @@
       >
         <Avatar
           class="contact-list__avatar"
-          :initials="contact.user.initials"
-          :url="contact.user.avatarUrl"
+          :initials="contact.user?.initials || 'Unknown'"
+          :url="contact.user?.avatarUrl || ''"
           :alt="`Avatar of ${contact.nickname}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           is-icon
@@ -52,7 +52,7 @@
             class="contact-list__title"
             :data-testid="`${props.dataTestid}-ContactList-Title${index + 1}`"
           >
-            {{ contact.user.initials }}
+            {{ contact.user?.initials }}
             <span class="contact-list__me" v-if="contact.id === user.id">
               (Вы)
             </span>

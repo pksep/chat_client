@@ -327,9 +327,10 @@ export class ChatSDK {
 
     try {
       const response = (await this.reqi.get<PaginatedResponse<User>>(endpoint, {
-        parsed: true
+        parsed: false
       })) as any;
-      return response;
+      const data = await response.json();
+      return data;
     } catch (error) {
       throw new Error(`Failed to fetch users: ${(error as Error).message}`);
     }
@@ -338,9 +339,10 @@ export class ChatSDK {
   async createUser(userData: Partial<User>): Promise<User> {
     try {
       const response = (await this.reqi.post<User>('/users', userData, {
-        parsed: true
+        parsed: false
       })) as any;
-      return response.data;
+      const data = await response.json();
+      return data;
     } catch (error) {
       throw new Error(`Failed to create user: ${(error as Error).message}`);
     }
@@ -352,9 +354,9 @@ export class ChatSDK {
   }): Promise<{ user: User; token: string }> {
     try {
       const response = (await this.reqi.post('/auth/login', credentials, {
-        parsed: true
+        parsed: false
       })) as any;
-      const result = response.data;
+      const result = await response.json();
 
       this.token = result.token;
 
@@ -383,8 +385,9 @@ export class ChatSDK {
     try {
       const response = (await this.reqi.get<
         PaginatedResponse<Topic & { lastMessage?: Message }>
-      >(endpoint, { parsed: true })) as any;
-      return response;
+      >(endpoint, { parsed: false })) as any;
+      const data = await response.json();
+      return data;
     } catch (error) {
       throw new Error(`Failed to fetch topics: ${(error as Error).message}`);
     }
@@ -393,9 +396,10 @@ export class ChatSDK {
   async createTopic(topicData: { peerId: string }): Promise<Topic> {
     try {
       const response = (await this.reqi.post<Topic>('/topics', topicData, {
-        parsed: true
+        parsed: false
       })) as any;
-      return response.data;
+      const data = await response.json();
+      return data;
     } catch (error) {
       throw new Error(`Failed to create topic: ${(error as Error).message}`);
     }
@@ -403,7 +407,8 @@ export class ChatSDK {
 
   async deleteTopic(topicId: string): Promise<void> {
     try {
-      await this.reqi.delete(`/topics/${topicId}`, { parsed: true });
+      const response = await this.reqi.delete(`/topics/${topicId}`, { parsed: false });
+      await response.json();
     } catch (error) {
       throw new Error(`Failed to delete topic: ${(error as Error).message}`);
     }
@@ -414,9 +419,10 @@ export class ChatSDK {
       const response = (await this.reqi.patch<TopicSetting>(
         `/topics/${topicId}/pin`,
         { userId },
-        { parsed: true }
+        { parsed: false }
       )) as any;
-      return response.data;
+      const data = await response.json();
+      return data;
     } catch (error) {
       throw new Error(
         `Failed to toggle pin topic: ${(error as Error).message}`
@@ -432,9 +438,10 @@ export class ChatSDK {
       const response = (await this.reqi.patch<TopicSetting>(
         `/topics/${topicId}/mute`,
         { userId },
-        { parsed: true }
+        { parsed: false }
       )) as any;
-      return response.data;
+      const data = await response.json();
+      return data;
     } catch (error) {
       throw new Error(
         `Failed to toggle mute topic: ${(error as Error).message}`
@@ -459,9 +466,10 @@ export class ChatSDK {
   }): Promise<Group> {
     try {
       const response = (await this.reqi.post<Group>('/groups', groupData, {
-        parsed: true
+        parsed: false
       })) as any;
-      return response.data;
+      const data = await response.json();
+      return data;
     } catch (error) {
       throw new Error(`Failed to create group: ${(error as Error).message}`);
     }
@@ -469,7 +477,8 @@ export class ChatSDK {
 
   async deleteGroup(groupId: string): Promise<void> {
     try {
-      await this.reqi.delete(`/groups/${groupId}`, { parsed: true });
+      const response = await this.reqi.delete(`/groups/${groupId}`, { parsed: false });
+      await response.json();
     } catch (error) {
       throw new Error(`Failed to delete group: ${(error as Error).message}`);
     }
@@ -487,9 +496,10 @@ export class ChatSDK {
 
     try {
       const response = (await this.reqi.get<Group>(endpoint, {
-        parsed: true
+        parsed: false
       })) as any;
-      return response.data;
+      const data = await response.json();
+      return data;
     } catch (error) {
       throw new Error(`Failed to fetch group: ${(error as Error).message}`);
     }
@@ -507,9 +517,10 @@ export class ChatSDK {
       const response = (await this.reqi.patch<Group>(
         `/groups/${groupId}`,
         updateData,
-        { parsed: true }
+        { parsed: false }
       )) as any;
-      return response.data;
+      const data = await response.json();
+      return data;
     } catch (error) {
       throw new Error(`Failed to edit group: ${(error as Error).message}`);
     }
@@ -520,9 +531,10 @@ export class ChatSDK {
       const response = (await this.reqi.post<Group>(
         `/groups/${groupId}/members`,
         { userIds },
-        { parsed: true }
+        { parsed: false }
       )) as any;
-      return response.data;
+      const data = await response.json();
+      return data;
     } catch (error) {
       throw new Error(
         `Failed to add users to group: ${(error as Error).message}`
@@ -532,9 +544,10 @@ export class ChatSDK {
 
   async removeUserFromGroup(groupId: string, userId: string): Promise<void> {
     try {
-      await this.reqi.delete(`/groups/${groupId}/members/${userId}`, {
-        parsed: true
+      const response = await this.reqi.delete(`/groups/${groupId}/members/${userId}`, {
+        parsed: false
       });
+      await response.json();
     } catch (error) {
       throw new Error(
         `Failed to remove user from group: ${(error as Error).message}`
@@ -544,11 +557,12 @@ export class ChatSDK {
 
   async leaveGroup(userId: string, groupId: string): Promise<void> {
     try {
-      await this.reqi.post(
+      const response = await this.reqi.post(
         `/groups/${groupId}/leave`,
         { userId },
-        { parsed: true }
+        { parsed: false }
       );
+      await response.json();
     } catch (error) {
       throw new Error(`Failed to leave group: ${(error as Error).message}`);
     }
@@ -604,9 +618,10 @@ export class ChatSDK {
     try {
       const response = (await this.reqi.get<PaginatedResponse<Message>>(
         endpoint,
-        { parsed: true }
+        { parsed: false }
       )) as any;
-      return response.data;
+      const data = await response.json();
+      return data;
     } catch (error) {
       throw new Error(`Failed to fetch messages: ${(error as Error).message}`);
     }
@@ -761,11 +776,12 @@ export class ChatSDK {
     status: MessageStatus
   ): Promise<void> {
     try {
-      await this.reqi.patch(
+      const response = await this.reqi.patch(
         `/messages/${messageId}/status`,
         { status },
-        { parsed: true }
+        { parsed: false }
       );
+      await response.json();
     } catch (error) {
       throw new Error(
         `Failed to update message status: ${(error as Error).message}`

@@ -44,7 +44,6 @@ export interface IUserProps extends User {
   dataTestid?: string;
 }
 
-/** Embedded user info for display in ContactList */
 export interface IContactUser {
   id: string;
   initials: string;
@@ -62,7 +61,6 @@ export interface IContactProps extends IUserProps {
   userId?: string;
   latestMessageStatus?: string;
   isLatestMessageFromMe?: boolean;
-  /** User info for ContactList display compatibility */
   user?: IContactUser;
 }
 

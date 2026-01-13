@@ -41,6 +41,8 @@ export const createTopic = async (peerId: string): Promise<IContactProps[]> => {
     const sdk = getChatSDK();
     await sdk.createTopic({ peerId });
 
+    console.log('Topic created successfully', topics.value);
+
     return topics.value;
   } catch (err) {
     error.value = (err as Error).message;
@@ -51,9 +53,6 @@ export const createTopic = async (peerId: string): Promise<IContactProps[]> => {
   }
 };
 
-/**
- * Transform Topic to IContactProps for unified display in ContactList/Menu
- */
 const manipulateTopic = (topic: Topic): IContactProps => {
   const topicUser = topic?.settings?.[0]?.user;
   const nickname = topicUser?.nickname || topicUser?.initials || '';
@@ -82,5 +81,6 @@ const manipulateTopic = (topic: Topic): IContactProps => {
 };
 
 export const getTopicList = (): IContactProps[] => {
+  console.log('getTopicList', topics.value);
   return topics.value || [];
 };
