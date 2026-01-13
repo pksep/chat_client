@@ -183,6 +183,7 @@ import { markAsRead } from '../services/useChat';
 import Triangle from './Triangle.vue';
 import { usePwaInstall } from '../composables/usePwaInstall';
 import { navigateToAI } from '../composables/useUrlRouting';
+import { getTopicList } from '../composables/useTopics';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: () => 'Menu'
@@ -291,7 +292,7 @@ const listChannels = computed(() => [
   {
     title: 'Личные сообщения',
     onClickPlusButton: handleNewContactModal,
-    items: getConversationList()
+    items: getTopicList()
   }
 ]);
 

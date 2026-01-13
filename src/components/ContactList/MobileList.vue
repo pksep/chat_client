@@ -79,7 +79,6 @@ import type {
 import type { IUserProps } from '../interfaces/interfaces';
 import { Button, ButtonTypeEnum, Icon, IconNameEnum } from '@pksep/yui';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
-import { getConversationList } from '../../services/useConversions';
 import { getGroupList } from '../../services/useGroup';
 
 const props = withDefaults(defineProps<IMobileListProps>(), {
@@ -91,14 +90,15 @@ const state = reactive({
   showAddAccount: false,
   checkUsers: new Set<string | number>(),
   isLoading: true,
-  contactList: computed(() => getConversationList()),
+  contactList: computed(() => getTopicList()),
   groupList: computed(() => getGroupList())
 });
 
 import { watch } from 'vue';
+import { getTopicList } from '../../composables/useTopics';
 
 watch(
-  [() => getConversationList(), () => getGroupList()],
+  [() => getTopicList(), () => getGroupList()],
   ([convList, groupList]) => {
     if (state.isLoading && (convList.length > 0 || groupList.length > 0)) {
       state.isLoading = false;

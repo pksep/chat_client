@@ -156,6 +156,7 @@ import {
   navigateToDefault,
   setupUrlWatcher
 } from '../composables/useUrlRouting';
+import { createTopic, getTopicList } from '../composables/useTopics';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -197,7 +198,7 @@ const state = reactive({
   isChapter: false,
   users: getUsersList(),
   groups: getGroupList(),
-  conversations: getConversationList()
+  conversations: getTopicList()
 });
 
 const props = withDefaults(defineProps<IChatContainerProps>(), {
@@ -533,8 +534,6 @@ const handleClearClick = (): void => {
 const handleNewContactMessage = async (
   contact: IUserProps
 ): Promise<IContactProps> => {
-  console.log(contact);
-
   state.chapter = contact.id;
 
   if (contact.groupId) {
@@ -547,6 +546,7 @@ const handleNewContactMessage = async (
 
     navigateToGroup(contact.id);
   } else {
+    createTopic(contact.id);
     state.contact = {
       ...contact,
       conversationId: contact.conversationId || contact.id

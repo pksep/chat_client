@@ -384,16 +384,13 @@ export class ChatSDK {
       const response = (await this.reqi.get<
         PaginatedResponse<Topic & { lastMessage?: Message }>
       >(endpoint, { parsed: true })) as any;
-      return response.data;
+      return response;
     } catch (error) {
       throw new Error(`Failed to fetch topics: ${(error as Error).message}`);
     }
   }
 
-  async createTopic(topicData: {
-    type: TopicType;
-    title?: string;
-  }): Promise<Topic> {
+  async createTopic(topicData: { peerId: string }): Promise<Topic> {
     try {
       const response = (await this.reqi.post<Topic>('/topics', topicData, {
         parsed: true

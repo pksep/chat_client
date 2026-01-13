@@ -79,7 +79,7 @@ import ContextMenu from '../ContactList/ContextMenu.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import { removeUserFromGroup } from '../../services/useGroup';
 
-const props = withDefaults(defineProps<any>(), {
+const props = withDefaults(defineProps(), {
   showAddButton: true,
   contacts: () => [
     {

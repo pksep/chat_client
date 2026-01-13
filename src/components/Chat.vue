@@ -36,16 +36,13 @@ import type { IMessageListProps } from './interfaces/message-list';
 import { useTemplateRef, reactive, watch } from 'vue';
 import { isShowContactList } from '../composables/useShowContactList';
 import { MAX_W_MD } from '../utils/constants';
-import {
-  fetchConversationList,
-  getConversationList,
-  onSDKReady
-} from '../services/useConversions';
+import { fetchConversationList, onSDKReady } from '../services/useConversions';
 import { computed } from 'vue';
 import { onMounted } from 'vue';
 import type { IMenuEmits } from './interfaces/interfaces';
 import { IUserProps } from './interfaces/interfaces';
 import { markAsRead } from '../services/useChat';
+import { getTopicList } from '../composables/useTopics';
 
 export interface IChatProps extends IMessageListProps {
   dataTestid?: string;
@@ -61,7 +58,7 @@ const emits = defineEmits<IMenuEmits>();
 const state = reactive({
   chapter: props.chapter,
   isLoading: true,
-  conversationList: computed(() => getConversationList())
+  conversationList: computed(() => getTopicList())
 });
 
 watch(

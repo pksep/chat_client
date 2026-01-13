@@ -20,7 +20,7 @@ export const fetchAllTopics = async (
       limit
     });
 
-    topics.value = response.data;
+    topics.value = response.data.map(item => manipulateTopic(item));
 
     return topics.value;
   } catch (err) {
@@ -30,6 +30,32 @@ export const fetchAllTopics = async (
   } finally {
     loading.value = false;
   }
+};
+
+export const createTopic = async (peerId: string): Promise<Topic[]> => {
+  loading.value = true;
+  error.value = null;
+
+  try {
+    const sdk = getChatSDK();
+    await sdk.createTopic({ peerId });
+
+    return topics.value;
+  } catch (err) {
+    error.value = (err as Error).message;
+    console.error('Failed to fetch topics:', error.value);
+    return topics.value || [];
+  } finally {
+    loading.value = false;
+  }
+};
+
+const manipulateTopic = (topic: Topic) => {
+  return {
+    ...topic,
+    user: topic?.settings?.[0]?.user,
+    latestMessage: '---'
+  };
 };
 
 export const getTopicList = (): Topic[] => {
