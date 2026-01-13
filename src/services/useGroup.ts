@@ -13,7 +13,7 @@ export const fetchGroupMembers = async (
     const group = await sdk.getGroup(groupId, { page: 1, limit: 1000 });
 
     const members = group.members || [];
-    groupMembers.value = members
+    groupMembers.value = members;
 
     return groupMembers.value;
   } catch (err) {

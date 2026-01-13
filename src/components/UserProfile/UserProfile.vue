@@ -30,7 +30,7 @@
 </template>
 
 <script lang="ts" setup>
-import { Avatar, IDataTestIdProp } from '@pksep/yui';
+import { Avatar } from '@pksep/yui';
 import { IUserProps } from '../interfaces/interfaces';
 
 const props = withDefaults(defineProps<IUserProps>(), {
