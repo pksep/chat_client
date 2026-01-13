@@ -19,6 +19,7 @@ import {
   WebSocketEventPayloads
 } from './websocketEvents';
 import { Reqi } from '@pksep/reqi';
+import io, { Socket } from 'socket.io-client';
 
 export interface ChatSDKOptions {
   apiUrl: string;
@@ -36,7 +37,7 @@ export class ChatSDK {
   private apiUrl: string;
   private wsUrl: string;
   private token?: string;
-  private wsConnection: WebSocket | null = null;
+  private socket: Socket | null = null;
   private eventHandlers: Map<string, Array<(event: WebSocketEvent) => void>> =
     new Map();
   private s3Service?: S3Service;
@@ -59,34 +60,151 @@ export class ChatSDK {
     }
   }
 
+  private createReqiInstance(): Reqi {
+    return new Reqi(this.apiUrl, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
+      }
+    });
+  }
+
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.wsConnection = new WebSocket(this.wsUrl);
+        this.socket = io(this.wsUrl, {
+          transports: ['websocket'],
+          auth: {
+            token: this.token
+          }
+        });
 
-        this.wsConnection.onopen = () => {
+        this.socket.on('connect', () => {
           console.log('Connected to chat server');
+          resolve();
+        });
 
-          if (this.token) {
-            this.authenticate(this.token);
+        this.socket.on('connect_error', error => {
+          console.error('Socket.IO connection error:', error);
+          reject(error);
+        });
+
+        this.socket.on('disconnect', reason => {
+          console.log('Disconnected from chat server:', reason);
+        });
+
+        // Listen to server WebSocket events and map them to our event types
+        this.socket?.on('newMessage', data => {
+          const message: WebSocketEvent = {
+            type: WebSocketEventType.NEW_MESSAGE,
+            payload: data,
+            timestamp: new Date()
+          };
+          this.handleWebSocketEvent(message);
+        });
+
+        this.socket?.on('messageUpdated', data => {
+          const message: WebSocketEvent = {
+            type: WebSocketEventType.MESSAGE_UPDATED,
+            payload: data,
+            timestamp: new Date()
+          };
+          this.handleWebSocketEvent(message);
+        });
+
+        this.socket?.on('messageDeleted', data => {
+          const message: WebSocketEvent = {
+            type: WebSocketEventType.MESSAGE_DELETED,
+            payload: data,
+            timestamp: new Date()
+          };
+          this.handleWebSocketEvent(message);
+        });
+
+        this.socket?.on('reactionUpdated', data => {
+          const message: WebSocketEvent = {
+            type: WebSocketEventType.REACTION_UPDATED,
+            payload: data,
+            timestamp: new Date()
+          };
+          this.handleWebSocketEvent(message);
+        });
+
+        this.socket?.on('messagePinned', data => {
+          const message: WebSocketEvent = {
+            type: WebSocketEventType.MESSAGE_PINNED,
+            payload: data,
+            timestamp: new Date()
+          };
+          this.handleWebSocketEvent(message);
+        });
+
+        this.socket?.on('messagesRead', data => {
+          const message: WebSocketEvent = {
+            type: WebSocketEventType.MESSAGES_READ,
+            payload: data,
+            timestamp: new Date()
+          };
+          this.handleWebSocketEvent(message);
+        });
+
+        this.socket?.on('joined', data => {
+          const message: WebSocketEvent = {
+            type: WebSocketEventType.JOIN_TOPIC,
+            payload: data,
+            timestamp: new Date()
+          };
+          this.handleWebSocketEvent(message);
+        });
+
+        // Also listen for generic events if needed
+        this.socket.onAny((event, ...args) => {
+          // Handle any other events that might come from the server
+          // Map server events to our internal event types if needed
+          let mappedEventType: WebSocketEventType | null = null;
+
+          switch (event) {
+            case 'newMessage':
+              mappedEventType = WebSocketEventType.NEW_MESSAGE;
+              break;
+            case 'messageUpdated':
+              mappedEventType = WebSocketEventType.MESSAGE_UPDATED;
+              break;
+            case 'messageDeleted':
+              mappedEventType = WebSocketEventType.MESSAGE_DELETED;
+              break;
+            case 'reactionUpdated':
+              mappedEventType = WebSocketEventType.REACTION_UPDATED;
+              break;
+            case 'messagePinned':
+              mappedEventType = WebSocketEventType.MESSAGE_PINNED;
+              break;
+            case 'messagesRead':
+              mappedEventType = WebSocketEventType.MESSAGES_READ;
+              break;
+            case 'joined':
+              mappedEventType = WebSocketEventType.JOIN_TOPIC;
+              break;
+            case 'left':
+              mappedEventType = WebSocketEventType.LEAVE_TOPIC;
+              break;
+            default:
+              // Check if the event type exists in our enum
+              if (Object.values(WebSocketEventType).includes(event)) {
+                mappedEventType = event as WebSocketEventType;
+              }
+              break;
           }
 
-          resolve();
-        };
-
-        this.wsConnection.onerror = error => {
-          console.error('WebSocket error:', error);
-          reject(error);
-        };
-
-        this.wsConnection.onclose = () => {
-          console.log('Disconnected from chat server');
-        };
-
-        this.wsConnection.onmessage = event => {
-          const message: WebSocketEvent = JSON.parse(event.data as string);
-          this.handleWebSocketEvent(message);
-        };
+          if (mappedEventType) {
+            const message: WebSocketEvent = {
+              type: mappedEventType,
+              payload: args[0],
+              timestamp: new Date()
+            };
+            this.handleWebSocketEvent(message);
+          }
+        });
       } catch (error) {
         reject(error);
       }
@@ -94,20 +212,15 @@ export class ChatSDK {
   }
 
   disconnect(): void {
-    if (this.wsConnection) {
-      this.wsConnection.close();
-      this.wsConnection = null;
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
     }
   }
 
   private authenticate(token: string): void {
-    if (this.wsConnection && this.wsConnection.readyState === WebSocket.OPEN) {
-      this.wsConnection.send(
-        JSON.stringify({
-          type: 'AUTHENTICATE',
-          payload: { token }
-        })
-      );
+    if (this.socket && this.socket.connected) {
+      this.socket.emit('authenticate', { token });
     }
   }
 
@@ -162,16 +275,44 @@ export class ChatSDK {
     type: T,
     payload: WebSocketEventPayloads[T]
   ): void {
-    if (this.wsConnection && this.wsConnection.readyState === WebSocket.OPEN) {
-      this.wsConnection.send(
-        JSON.stringify({
-          type,
-          payload,
-          timestamp: new Date().toISOString()
-        })
-      );
+    if (this.socket && this.socket.connected) {
+      // Map our internal event types to server's expected event types
+      let serverEventType: string = type;
+
+      switch (type) {
+        case WebSocketEventType.SEND_MESSAGE:
+          serverEventType = 'sendMessage';
+          break;
+        case WebSocketEventType.EDIT_MESSAGE:
+          serverEventType = 'editMessage';
+          break;
+        case WebSocketEventType.DELETE_MESSAGE:
+          serverEventType = 'deleteMessage';
+          break;
+        case WebSocketEventType.TOGGLE_REACTION:
+          serverEventType = 'toggleReaction';
+          break;
+        case WebSocketEventType.TOGGLE_PIN:
+          serverEventType = 'togglePin';
+          break;
+        case WebSocketEventType.READ_MESSAGES:
+          serverEventType = 'readMessages';
+          break;
+        case WebSocketEventType.JOIN_TOPIC:
+          serverEventType = 'joinTopic';
+          break;
+        case WebSocketEventType.LEAVE_TOPIC:
+          serverEventType = 'leaveTopic';
+          break;
+        default:
+          serverEventType = type;
+          break;
+      }
+
+      // Emit the event to the server using Socket.IO
+      this.socket.emit(serverEventType, payload);
     } else {
-      console.warn('WebSocket is not connected. Cannot send event:', type);
+      console.warn('Socket.IO is not connected. Cannot send event:', type);
     }
   }
 
@@ -185,38 +326,46 @@ export class ChatSDK {
     const queryString = queryParams.toString();
     const endpoint = `/users${queryString ? `?${queryString}` : ''}`;
 
-    const response = (await this.reqi.get<PaginatedResponse<User>>(endpoint, {
-      parsed: true
-    })) as any;
-    return response.data;
+    try {
+      const response = (await this.reqi.get<PaginatedResponse<User>>(endpoint, {
+        parsed: true
+      })) as any;
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to fetch users: ${(error as Error).message}`);
+    }
   }
 
   async createUser(userData: Partial<User>): Promise<User> {
-    const response = (await this.reqi.post<User>('/users', userData, {
-      parsed: true
-    })) as any;
-    return response.data;
+    try {
+      const response = (await this.reqi.post<User>('/users', userData, {
+        parsed: true
+      })) as any;
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to create user: ${(error as Error).message}`);
+    }
   }
 
   async authenticateUser(credentials: {
     email: string;
     password: string;
   }): Promise<{ user: User; token: string }> {
-    const response = (await this.reqi.post('/auth/login', credentials, {
-      parsed: true
-    })) as any;
-    const result = response.data;
+    try {
+      const response = (await this.reqi.post('/auth/login', credentials, {
+        parsed: true
+      })) as any;
+      const result = response.data;
 
-    this.token = result.token;
+      this.token = result.token;
 
-    this.reqi = new Reqi(this.apiUrl, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
-      }
-    });
+      // Recreate the Reqi instance with the new token
+      this.reqi = this.createReqiInstance();
 
-    return result;
+      return result;
+    } catch (error) {
+      throw new Error(`Authentication failed: ${(error as Error).message}`);
+    }
   }
 
   async getTopics(
@@ -232,58 +381,65 @@ export class ChatSDK {
     const queryString = queryParams.toString();
     const endpoint = `/topics${queryString ? `?${queryString}` : ''}`;
 
-    const response = (await this.reqi.get<
-      PaginatedResponse<Topic & { lastMessage?: Message }>
-    >(endpoint, { parsed: true })) as any;
-    return response.data;
+    try {
+      const response = (await this.reqi.get<
+        PaginatedResponse<Topic & { lastMessage?: Message }>
+      >(endpoint, { parsed: true })) as any;
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to fetch topics: ${(error as Error).message}`);
+    }
   }
 
   async createTopic(topicData: {
     type: TopicType;
     title?: string;
   }): Promise<Topic> {
-    const response = (await this.reqi.post<Topic>('/topics', topicData, {
-      parsed: true
-    })) as any;
-    return response.data;
+    try {
+      const response = (await this.reqi.post<Topic>('/topics', topicData, {
+        parsed: true
+      })) as any;
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to create topic: ${(error as Error).message}`);
+    }
   }
 
   async deleteTopic(topicId: string): Promise<void> {
-    await this.reqi.delete(`/topics/${topicId}`, { parsed: true });
+    try {
+      await this.reqi.delete(`/topics/${topicId}`, { parsed: true });
+    } catch (error) {
+      throw new Error(`Failed to delete topic: ${(error as Error).message}`);
+    }
   }
 
-  async pinTopic(topicId: string, userId: string): Promise<TopicSetting> {
-    const response = (await this.reqi.post<TopicSetting>(
-      `/topics/${topicId}/pin`,
-      { userId },
-      { parsed: true }
-    )) as any;
-    return response.data;
+  async togglePinTopic(topicId: string, userId: string): Promise<TopicSetting> {
+    try {
+      const response = (await this.reqi.patch<TopicSetting>(
+        `/topics/${topicId}/pin`,
+        { userId },
+        { parsed: true }
+      )) as any;
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to toggle pin topic: ${(error as Error).message}`);
+    }
   }
 
-  async unpinTopic(topicId: string, userId: string): Promise<void> {
-    await this.reqi.post(
-      `/topics/${topicId}/unpin`,
-      { userId },
-      { parsed: true }
-    );
-  }
-
-  async muteTopic(topicId: string, userId: string): Promise<TopicSetting> {
-    const response = (await this.reqi.post<TopicSetting>(
-      `/topics/${topicId}/mute`,
-      { userId },
-      { parsed: true }
-    )) as any;
-    return response.data;
-  }
-
-  async unmuteTopic(topicId: string, userId: string): Promise<void> {
-    await this.reqi.post(
-      `/topics/${topicId}/unmute`,
-      { userId },
-      { parsed: true }
-    );
+  async toggleMuteTopic(
+    topicId: string,
+    userId: string
+  ): Promise<TopicSetting> {
+    try {
+      const response = (await this.reqi.patch<TopicSetting>(
+        `/topics/${topicId}/mute`,
+        { userId },
+        { parsed: true }
+      )) as any;
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to toggle mute topic: ${(error as Error).message}`);
+    }
   }
 
   async createGroup(groupData: {
@@ -293,14 +449,22 @@ export class ChatSDK {
     members: string[];
     admins: string[];
   }): Promise<Group> {
-    const response = (await this.reqi.post<Group>('/groups', groupData, {
-      parsed: true
-    })) as any;
-    return response.data;
+    try {
+      const response = (await this.reqi.post<Group>('/groups', groupData, {
+        parsed: true
+      })) as any;
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to create group: ${(error as Error).message}`);
+    }
   }
 
   async deleteGroup(groupId: string): Promise<void> {
-    await this.reqi.delete(`/groups/${groupId}`, { parsed: true });
+    try {
+      await this.reqi.delete(`/groups/${groupId}`, { parsed: true });
+    } catch (error) {
+      throw new Error(`Failed to delete group: ${(error as Error).message}`);
+    }
   }
 
   async getGroup(groupId: string, params?: SearchParams): Promise<Group> {
@@ -313,10 +477,14 @@ export class ChatSDK {
     const queryString = queryParams.toString();
     const endpoint = `/groups/${groupId}${queryString ? `?${queryString}` : ''}`;
 
-    const response = (await this.reqi.get<Group>(endpoint, {
-      parsed: true
-    })) as any;
-    return response.data;
+    try {
+      const response = (await this.reqi.get<Group>(endpoint, {
+        parsed: true
+      })) as any;
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to fetch group: ${(error as Error).message}`);
+    }
   }
 
   async editGroup(
@@ -327,41 +495,51 @@ export class ChatSDK {
       avatarUrl?: string;
     }
   ): Promise<Group> {
-    const response = (await this.reqi.patch<Group>(
-      `/groups/${groupId}`,
-      updateData,
-      { parsed: true }
-    )) as any;
-    return response.data;
+    try {
+      const response = (await this.reqi.patch<Group>(
+        `/groups/${groupId}`,
+        updateData,
+        { parsed: true }
+      )) as any;
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to edit group: ${(error as Error).message}`);
+    }
   }
 
   async addUsersToGroup(groupId: string, userIds: string[]): Promise<Group> {
-    const response = (await this.reqi.post<Group>(
-      `/groups/${groupId}/members`,
-      { userIds },
-      { parsed: true }
-    )) as any;
-    return response.data;
+    try {
+      const response = (await this.reqi.post<Group>(
+        `/groups/${groupId}/members`,
+        { userIds },
+        { parsed: true }
+      )) as any;
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to add users to group: ${(error as Error).message}`);
+    }
   }
 
-  async removeUsersFromGroup(
-    groupId: string,
-    userIds: string[]
-  ): Promise<Group> {
-    const response = (await this.reqi.post<Group>(
-      `/groups/${groupId}/remove-members`,
-      { userIds },
-      { parsed: true }
-    )) as any;
-    return response.data;
+  async removeUserFromGroup(groupId: string, userId: string): Promise<void> {
+    try {
+      await this.reqi.delete(`/groups/${groupId}/members/${userId}`, {
+        parsed: true
+      });
+    } catch (error) {
+      throw new Error(`Failed to remove user from group: ${(error as Error).message}`);
+    }
   }
 
   async leaveGroup(userId: string, groupId: string): Promise<void> {
-    await this.reqi.post(
-      `/groups/${groupId}/leave`,
-      { userId },
-      { parsed: true }
-    );
+    try {
+      await this.reqi.post(
+        `/groups/${groupId}/leave`,
+        { userId },
+        { parsed: true }
+      );
+    } catch (error) {
+      throw new Error(`Failed to leave group: ${(error as Error).message}`);
+    }
   }
 
   async sendMessage(messageData: {
@@ -369,21 +547,17 @@ export class ChatSDK {
     text?: string;
     media?: Media[];
     replayMessageId?: string;
-  }): Promise<Message> {
-    const messageToSend: Partial<Message> = {
-      topicId: messageData.topicId,
-      text: messageData.text,
-      media: messageData.media || [],
-      replayMessageId: messageData.replayMessageId,
-      status: MessageStatus.Wait
-    };
-
-    const response = (await this.reqi.post<Message>(
-      '/messages',
-      messageToSend,
-      { parsed: true }
-    )) as any;
-    return response.data;
+  }): Promise<void> {
+    if (this.socket && this.socket.connected) {
+      this.sendWebSocketEvent(WebSocketEventType.SEND_MESSAGE, {
+        topicId: messageData.topicId,
+        text: messageData.text,
+        media: messageData.media || [],
+        replayMessageId: messageData.replayMessageId
+      });
+    } else {
+      throw new Error('Socket is not connected');
+    }
   }
 
   async getMessages(
@@ -399,142 +573,110 @@ export class ChatSDK {
     const queryString = queryParams.toString();
     const endpoint = `/topics/${topicId}/messages${queryString ? `?${queryString}` : ''}`;
 
-    const response = (await this.reqi.get<PaginatedResponse<Message>>(
-      endpoint,
-      { parsed: true }
-    )) as any;
-    return response.data;
-  }
-
-  async editMessage(messageId: string, newText: string): Promise<Message> {
-    const response = (await this.reqi.patch<Message>(
-      `/messages/${messageId}`,
-      {
-        text: newText,
-        isEdit: true
-      },
-      { parsed: true }
-    )) as any;
-    const updatedMessage = response.data;
-
-    if (this.wsConnection && this.wsConnection.readyState === WebSocket.OPEN) {
-      this.wsConnection.send(
-        JSON.stringify({
-          type: 'MESSAGE_EDITED',
-          payload: updatedMessage
-        })
-      );
+    try {
+      const response = (await this.reqi.get<PaginatedResponse<Message>>(
+        endpoint,
+        { parsed: true }
+      )) as any;
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to fetch messages: ${(error as Error).message}`);
     }
-
-    return updatedMessage;
   }
 
-  async deleteMessage(messageId: string): Promise<void> {
-    await this.reqi.delete(`/messages/${messageId}`, { parsed: true });
+  async editMessage(messageId: string, newText: string): Promise<void> {
+    if (this.socket && this.socket.connected) {
+      this.sendWebSocketEvent(WebSocketEventType.EDIT_MESSAGE, {
+        messageId,
+        text: newText
+      });
+    } else {
+      throw new Error('Socket is not connected');
+    }
+  }
 
-    if (this.wsConnection && this.wsConnection.readyState === WebSocket.OPEN) {
-      this.wsConnection.send(
-        JSON.stringify({
-          type: 'MESSAGE_DELETED',
-          payload: { messageId }
-        })
-      );
+  async deleteMessage(messageId: string, topicId: string): Promise<void> {
+    if (this.socket && this.socket.connected) {
+      this.sendWebSocketEvent(WebSocketEventType.DELETE_MESSAGE, {
+        messageId,
+        topicId
+      });
+    } else {
+      throw new Error('Socket is not connected');
     }
   }
 
   async addReaction(reactionData: {
     messageId: string;
-    text: string;
-    senderUser: string;
-  }): Promise<Reaction> {
-    const response = (await this.reqi.post<Reaction>(
-      '/reactions',
-      reactionData,
-      { parsed: true }
-    )) as any;
-    const reaction = response.data;
-
-    if (this.wsConnection && this.wsConnection.readyState === WebSocket.OPEN) {
-      this.wsConnection.send(
-        JSON.stringify({
-          type: 'REACTION_ADDED',
-          payload: reaction
-        })
-      );
-    }
-
-    return reaction;
-  }
-
-  async removeReaction(reactionId: string): Promise<void> {
-    await this.reqi.delete(`/reactions/${reactionId}`, { parsed: true });
-
-    if (this.wsConnection && this.wsConnection.readyState === WebSocket.OPEN) {
-      this.wsConnection.send(
-        JSON.stringify({
-          type: 'REACTION_REMOVED',
-          payload: { reactionId }
-        })
-      );
+    emoji: string;
+    topicId: string;
+  }): Promise<void> {
+    if (this.socket && this.socket.connected) {
+      this.sendWebSocketEvent(WebSocketEventType.TOGGLE_REACTION, {
+        messageId: reactionData.messageId,
+        emoji: reactionData.emoji,
+        topicId: reactionData.topicId
+      });
+    } else {
+      throw new Error('Socket is not connected');
     }
   }
 
-  async pinMessage(messageId: string): Promise<Message> {
-    const response = (await this.reqi.post<Message>(
-      `/messages/${messageId}/pin`,
-      {},
-      { parsed: true }
-    )) as any;
-    const pinnedMessage = response.data;
-
-    if (this.wsConnection && this.wsConnection.readyState === WebSocket.OPEN) {
-      this.wsConnection.send(
-        JSON.stringify({
-          type: 'MESSAGE_PINNED',
-          payload: pinnedMessage
-        })
-      );
-    }
-
-    return pinnedMessage;
-  }
-
-  async unpinMessage(messageId: string): Promise<Message> {
-    const response = (await this.reqi.delete<Message>(
-      `/messages/${messageId}/pin`,
-      { parsed: true }
-    )) as any;
-    const unpinnedMessage = response.data;
-
-    if (this.wsConnection && this.wsConnection.readyState === WebSocket.OPEN) {
-      this.wsConnection.send(
-        JSON.stringify({
-          type: 'MESSAGE_UNPINNED',
-          payload: unpinnedMessage
-        })
-      );
-    }
-
-    return unpinnedMessage;
-  }
-
-  async updateMessageStatus(
+  async removeReaction(
     messageId: string,
-    status: MessageStatus
-  ): Promise<Message> {
-    const response = (await this.reqi.patch<Message>(
-      `/messages/${messageId}/status`,
-      { status },
-      { parsed: true }
-    )) as any;
-    return response.data;
+    emoji: string,
+    topicId: string
+  ): Promise<void> {
+    if (this.socket && this.socket.connected) {
+      this.sendWebSocketEvent(WebSocketEventType.TOGGLE_REACTION, {
+        messageId,
+        emoji,
+        topicId
+      });
+    } else {
+      throw new Error('Socket is not connected');
+    }
+  }
+
+  async togglePinMessage(messageId: string): Promise<void> {
+    if (this.socket && this.socket.connected) {
+      this.sendWebSocketEvent(WebSocketEventType.TOGGLE_PIN, {
+        messageId
+      });
+    } else {
+      throw new Error('Socket is not connected');
+    }
+  }
+
+  async unpinMessage(messageId: string): Promise<void> {
+    if (this.socket && this.socket.connected) {
+      this.sendWebSocketEvent(WebSocketEventType.TOGGLE_PIN, {
+        messageId
+      });
+    } else {
+      throw new Error('Socket is not connected');
+    }
+  }
+
+  async markMessagesAsRead(
+    messageIds: string[],
+    topicId: string
+  ): Promise<void> {
+    if (this.socket && this.socket.connected) {
+      this.sendWebSocketEvent(WebSocketEventType.READ_MESSAGES, {
+        messageIds,
+        topicId
+      });
+    } else {
+      throw new Error('Socket is not connected');
+    }
   }
 
   async uploadMedia(
     file: File | Blob,
     topicId: string,
     messageId?: string
-  ): Promise<Media> {
+  ): Promise<{ id: string; path: string; type: MediaType }> {
     if (!this.s3Service) {
       throw new Error(
         'S3 service not configured. Please provide S3 configuration when initializing ChatSDK.'
@@ -543,23 +685,14 @@ export class ChatSDK {
 
     const uploadResult = await this.s3Service.uploadFile(file);
 
-    const mediaData: Omit<Media, 'createdAt' | 'updatedAt'> = {
+    const mediaData = {
       id: uploadResult.id,
       path: uploadResult.path,
-      messageId: messageId || '',
       type: this.getMediaType(file)
     };
 
-    const response = (await this.reqi.post<Media>('/media', mediaData, {
-      parsed: true
-    })) as any;
-    const media = response.data;
-
-    if (messageId) {
-      await this.updateMessageWithMedia(messageId, media);
-    }
-
-    return media;
+    // Media is typically sent as part of a message
+    return mediaData;
   }
 
   async deleteMedia(mediaId: string, mediaPath: string): Promise<void> {
@@ -570,29 +703,26 @@ export class ChatSDK {
     }
 
     await this.s3Service.deleteFile(mediaId, mediaPath);
-
-    await this.reqi.delete(`/media/${mediaId}`, { parsed: true });
   }
 
-  private async updateMessageWithMedia(
-    messageId: string,
-    media: Media
-  ): Promise<Message> {
-    const response = (await this.reqi.get<Message>(`/messages/${messageId}`, {
-      parsed: true
-    })) as any;
-    const message = response.data;
+  async joinTopic(topicId: string): Promise<void> {
+    if (this.socket && this.socket.connected) {
+      this.sendWebSocketEvent(WebSocketEventType.JOIN_TOPIC, {
+        topicId
+      });
+    } else {
+      throw new Error('Socket is not connected');
+    }
+  }
 
-    const updatedMediaList = [...message.media, media];
-
-    const patchResponse = (await this.reqi.patch<Message>(
-      `/messages/${messageId}`,
-      {
-        media: updatedMediaList
-      },
-      { parsed: true }
-    )) as any;
-    return patchResponse.data;
+  async leaveTopic(topicId: string): Promise<void> {
+    if (this.socket && this.socket.connected) {
+      this.sendWebSocketEvent(WebSocketEventType.LEAVE_TOPIC, {
+        topicId
+      });
+    } else {
+      throw new Error('Socket is not connected');
+    }
   }
 
   private getMediaType(file: File | Blob): MediaType {

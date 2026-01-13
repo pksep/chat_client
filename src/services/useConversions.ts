@@ -69,6 +69,7 @@ export const manipulateConversationList = (topics: any[]): IContactProps[] => {
   return topics.map(topic => {
     const { title, avatarUrl, groupId } = resolveTopicMeta(topic);
     const participants = resolveParticipants(topic);
+    // For self-chat, we allow the current user to be the other user too
     const otherUser =
       participants.find((user: any) => user.id !== currentUserId) ||
       participants[0];

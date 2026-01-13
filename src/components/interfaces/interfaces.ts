@@ -38,10 +38,11 @@ export interface IUserProps {
   nickname?: string;
   conversationId?: string;
   groupId?: string;
-  ex?: string;
+  ex?: string | Record<string, any>;
   tabel?: string;
   initial?: string;
-  createdAt?: Date;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
   membersLength?: number;
   dataTestid?: string;
 }

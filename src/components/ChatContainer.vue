@@ -81,16 +81,17 @@
     />
   </main>
   <NewContactModal
-    :contacts="state.users.filter(user => user.id !== authUser?.id)"
+    :contacts="state.users"
     :open="state.isNewContactOpen"
     :data-testid="`${props.dataTestid}-ChatContainer-NewContactModal`"
     @unmount-close="closeModals"
     @unmount-new-contact="handleNewContactMessage"
   />
 
+  {{ state.users }}
   <NewGroupModal
     :user="authUser"
-    :contacts="state.users.filter(user => user.id !== authUser?.id)"
+    :contacts="state.users"
     :open="state.isNewGroupOpen"
     :data-testid="`${props.dataTestid}-ChatContainer-NewGroupModal`"
     @unmount-close="closeModals"
@@ -208,7 +209,7 @@ const authUser = computed(() => appendUserAttributes(getAuthUser()));
 const filteredContacts = computed(() => {
   const authId = authUser.value?.id;
   if (!authId) return [];
-  return state.users.filter(user => user.id !== authId);
+  return state.users;
 });
 
 const filteredMembers = computed(() => {

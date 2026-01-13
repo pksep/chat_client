@@ -12,8 +12,6 @@
     "build:prod": "cross-env VITE_BASE_MODE=app vite build ",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "build:lib": "cross-env VITE_BASE_MODE=lib bun run build",
-    "publish:lib": "npm version patch && bun run build:lib && bun publish --access public --no-git-checks",
     "generate:assets": "pwa-assets-generator",
     "format": "prettier -w {src,scripts}/**/*.ts -w {src,scripts}/**/*.vue",
     "prepare": "echo 'Running preinstall script' && lefthook install"
@@ -33,6 +31,7 @@
     "@mastra/client-js": "^0.12.3",
     "@pksep/reqi": "^0.0.25",
     "@pksep/yui": "0.1.167",
+    "socket.io-client": "^4.8.3",
     "zod": "3"
   },
   "peerDependencies": {

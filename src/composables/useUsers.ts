@@ -33,6 +33,7 @@ export const fetchAllUsers = async (opts?: {
       page: opts?.pageNumber ?? 1,
       limit: opts?.showNumber ?? 100
     });
+    console.log(response.data);
     const resultUsers = response.data ?? [];
 
     if (resultUsers.length === 0) {
