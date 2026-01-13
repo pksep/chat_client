@@ -39,6 +39,12 @@ const createGroup = async (
     admins
   });
 
+  // Guard against undefined/null group response from SDK
+  if (!group || !group.id) {
+    console.error('[createGroup] SDK returned invalid group:', group);
+    throw new Error('Failed to create group: invalid response from server');
+  }
+
   const groupItem: any = {
     id: group.id,
     groupId: group.id,

@@ -80,17 +80,28 @@ export const manipulateConversationList = (topics: any[]): any[] => {
         ? groupId || topic.id
         : otherUser?.id || topic.id;
 
+    const nickname =
+      topic.type === TopicType.DM
+        ? user?.nickname || otherUser?.nickname || title
+        : title;
+    const contactAvatarUrl =
+      topic.type === TopicType.DM
+        ? user?.avatarUrl || otherUser?.avatarUrl || ''
+        : avatarUrl;
+    const initials = user?.initials || otherUser?.initials || nickname;
+
     return {
       id: contactId,
       userId: topic.type === TopicType.DM ? otherUser?.id : undefined,
-      nickname:
-        topic.type === TopicType.DM
-          ? user?.nickname || otherUser?.nickname || title
-          : title,
-      avatarUrl:
-        topic.type === TopicType.DM
-          ? user?.avatarUrl || otherUser?.avatarUrl || ''
-          : avatarUrl,
+      nickname,
+      avatarUrl: contactAvatarUrl,
+      // Add user object for ContactList component compatibility
+      user: {
+        id: otherUser?.id || contactId,
+        initials,
+        nickname,
+        avatarUrl: contactAvatarUrl
+      },
       isPin:
         topic.isPin || topic.isPinned || topic.topicSetting?.isPin || false,
       tabel: user?.tabel || '',

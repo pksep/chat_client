@@ -1,7 +1,7 @@
 export interface BaseEntity {
-  createdAt: Date;
-  updatedAt: Date;
-  deletedAt?: Date;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  deletedAt?: Date | string;
 }
 
 export enum MediaType {
@@ -50,9 +50,19 @@ export enum TopicType {
   DM = 'DM'
 }
 
+export interface TopicSettingWithUser extends BaseEntity {
+  userId: string;
+  topicId: string;
+  isMute: boolean;
+  isPin: boolean;
+  user?: User;
+}
+
 export interface Topic extends BaseEntity {
   id: string;
   type: TopicType;
+  /** Settings with user info, populated when fetching DM topics */
+  settings?: TopicSettingWithUser[];
 }
 
 export interface TopicSetting extends BaseEntity {
@@ -66,8 +76,8 @@ export interface User extends BaseEntity {
   id: string;
   initials: string;
   nickname: string;
-  avatarUrl: string;
-  lastOnline: Date;
+  avatarUrl: string | null;
+  lastOnline: Date | string | null;
   topics?: Topic[];
 }
 
@@ -76,7 +86,7 @@ export interface Group extends BaseEntity {
   topicId: string;
   title: string;
   description: string;
-  avatarUrl: string;
+  avatarUrl: string | null;
   members: User[];
   admins: User[];
 }

@@ -111,21 +111,21 @@
             class="menu__user"
             :data-testid="`${props.dataTestid}-Menu-CollapsedUser${index + 1}`"
           >
-            <template v-for="(user, index) in item.items" :key="index">
+            <template v-for="(contact, index) in item.items" :key="index">
               <li
                 :class="[
                   'menu-user__item',
                   {
                     'menu-user__item--active':
-                      user.id === state.selectedContactId
+                      contact.id === state.selectedContactId
                   }
                 ]"
                 :data-testid="`${props.dataTestid}-Menu-CollapsedAvatar${index + 1}`"
-                @click.stop="unmountContactClick(user)"
+                @click.stop="unmountContactClick(contact)"
               >
                 <Avatar
-                  :url="user.avatarUrl"
-                  :initials="user.nickname"
+                  :url="contact.user?.avatarUrl || contact.avatarUrl"
+                  :initials="contact.user?.nickname || contact.nickname"
                   :data-testid="`${props.dataTestid}-Menu-UserAvatar${index + 1}`"
                 />
               </li>

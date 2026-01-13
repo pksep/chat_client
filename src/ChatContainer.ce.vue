@@ -35,6 +35,10 @@ const allNotificationCount = computed(() => getAllNotificationCount());
 
 const openChatContainerShow = ref(true);
 
+// Initialize polling composable synchronously in setup to properly register lifecycle hooks.
+// Polling will be started manually after chat initialization is complete.
+const { startPolling } = useUnreadMessagePolling(30000, false);
+
 onMounted(async () => {
   const url = new URL(window.location.href);
   const token = url.searchParams.get('token')?.split('?token')[0];
@@ -108,7 +112,8 @@ onMounted(async () => {
 
     markSDKReady();
 
-    useUnreadMessagePolling(30000);
+    // Start polling after initialization is complete
+    startPolling();
   } catch (error) {
     console.error('Failed to initialize chat:', error);
 

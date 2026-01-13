@@ -1,15 +1,16 @@
 import { ref, shallowRef } from 'vue';
 import { getChatSDK } from '../services/useChat';
 import { Topic, TopicType } from '../services/useChatSDK/types';
+import { IContactProps } from '../components/interfaces/interfaces';
 
-const topics = shallowRef<Topic[]>([]);
+const topics = shallowRef<IContactProps[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
 export const fetchAllTopics = async (
   page = 1,
   limit = 200
-): Promise<Topic[]> => {
+): Promise<IContactProps[]> => {
   loading.value = true;
   error.value = null;
 
@@ -32,7 +33,7 @@ export const fetchAllTopics = async (
   }
 };
 
-export const createTopic = async (peerId: string): Promise<Topic[]> => {
+export const createTopic = async (peerId: string): Promise<IContactProps[]> => {
   loading.value = true;
   error.value = null;
 
@@ -50,14 +51,36 @@ export const createTopic = async (peerId: string): Promise<Topic[]> => {
   }
 };
 
-const manipulateTopic = (topic: Topic) => {
+/**
+ * Transform Topic to IContactProps for unified display in ContactList/Menu
+ */
+const manipulateTopic = (topic: Topic): IContactProps => {
+  const topicUser = topic?.settings?.[0]?.user;
+  const nickname = topicUser?.nickname || topicUser?.initials || '';
+  const avatarUrl = topicUser?.avatarUrl || null;
+  const initials = topicUser?.initials || nickname;
+
   return {
-    ...topic,
-    user: topic?.settings?.[0]?.user,
-    latestMessage: '---'
+    id: topic.id,
+    initials,
+    nickname,
+    avatarUrl,
+    lastOnline: topicUser?.lastOnline || null,
+    createdAt: topic.createdAt,
+    updatedAt: topic.updatedAt,
+    conversationId: topic.id,
+    latestMessage: '',
+    user: topicUser
+      ? {
+          id: topicUser.id,
+          initials: topicUser.initials,
+          nickname: topicUser.nickname,
+          avatarUrl: topicUser.avatarUrl
+        }
+      : undefined
   };
 };
 
-export const getTopicList = (): Topic[] => {
+export const getTopicList = (): IContactProps[] => {
   return topics.value || [];
 };
