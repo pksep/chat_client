@@ -40,3 +40,5 @@ public/wasm_exec.js
 !.dockerignore
 
 .meta/**/data
+
+chat_server/
