@@ -4,7 +4,9 @@ import {
   Group,
   Message,
   TopicSetting,
-  Media
+  MediaType,
+  Media,
+  MediaTypeType
 } from '@pksep/zod-shared-chat';
 
 import { S3Service, S3Config } from './s3Service';
@@ -19,9 +21,17 @@ import {
   SearchParams,
   PaginatedResponse,
   TopicType,
-  MediaTypeType,
   MessageStatus
 } from './types';
+
+import { ChatAuth, ChatAuthInterface } from './auth';
+import { ChatUser, ChatUserInterface } from './user';
+import { ChatTopic, ChatTopicInterface } from './topic';
+import { ChatMessage, ChatMessageInterface } from './message';
+import { ChatGroup, ChatGroupInterface } from './group';
+import { ChatMedia, ChatMediaInterface } from './media';
+import { ChatWS, ChatWSInterface } from './ws';
+import { ChatUtils, ChatUtilsInterface } from './utils';
 
 export interface ChatSDKOptions {
   apiUrl: string;
@@ -40,8 +50,16 @@ export class ChatSDK {
   private wsUrl: string;
   private token?: string;
   private socket: Socket | null = null;
-  private eventHandlers: Map<string, Array<(event: WebSocketEvent) => void>> =
-    new Map();
+
+  private auth: ChatAuthInterface;
+  private user: ChatUserInterface;
+  private topic: ChatTopicInterface;
+  private message: ChatMessageInterface;
+  private group: ChatGroupInterface;
+  private media: ChatMediaInterface;
+  private ws: ChatWSInterface;
+  private utils: ChatUtilsInterface;
+
   private s3Service?: S3Service;
   private reqi: Reqi;
 
@@ -60,6 +78,15 @@ export class ChatSDK {
     if (s3Config) {
       this.s3Service = new S3Service(s3Config);
     }
+
+    this.auth = new ChatAuth(this.apiUrl, this.token);
+    this.user = new ChatUser(this.reqi);
+    this.topic = new ChatTopic(this.reqi);
+    this.message = new ChatMessage(this.reqi, this.s3Service);
+    this.group = new ChatGroup(this.reqi);
+    this.media = new ChatMedia(this.reqi);
+    this.ws = new ChatWS(null);
+    this.utils = new ChatUtils(this.reqi);
   }
 
   private createReqiInstance(): Reqi {
@@ -81,6 +108,8 @@ export class ChatSDK {
           }
         });
 
+        this.ws.setSocket(this.socket);
+
         this.socket.on('connect', () => {
           console.log('Connected to chat server');
           resolve();
@@ -95,7 +124,6 @@ export class ChatSDK {
           console.log('Disconnected from chat server:', reason);
         });
 
-        // Listen to server WebSocket events and map them to our event types
         this.socket?.on('newMessage', data => {
           const message: WebSocketEvent = {
             type: WebSocketEventType.NEW_MESSAGE,
@@ -159,10 +187,7 @@ export class ChatSDK {
           this.handleWebSocketEvent(message);
         });
 
-        // Also listen for generic events if needed
         this.socket.onAny((event, ...args) => {
-          // Handle any other events that might come from the server
-          // Map server events to our internal event types if needed
           let mappedEventType: WebSocketEventType | null = null;
 
           switch (event) {
@@ -191,7 +216,6 @@ export class ChatSDK {
               mappedEventType = WebSocketEventType.LEAVE_TOPIC;
               break;
             default:
-              // Check if the event type exists in our enum
               if (Object.values(WebSocketEventType).includes(event)) {
                 mappedEventType = event as WebSocketEventType;
               }
@@ -227,243 +251,145 @@ export class ChatSDK {
   }
 
   private handleWebSocketEvent(rawEvent: any): void {
-    const eventType = rawEvent.type as WebSocketEventType;
-    const event: WebSocketEvent = {
-      type: eventType,
-      payload: rawEvent.payload,
-      timestamp: new Date(rawEvent.timestamp || Date.now())
-    };
-
-    if (
-      Object.values(WebSocketEventType).includes(
-        event.type as WebSocketEventType
-      )
-    ) {
-      const handlers = this.eventHandlers.get(event.type) || [];
-      handlers.forEach(handler => handler(event));
-    } else {
-      console.warn(`Unknown WebSocket event type: ${event.type}`);
-    }
+    this.ws.handleWebSocketEvent(rawEvent);
   }
 
   subscribeToEvent<T extends WebSocketEventType>(
     type: T,
     handler: WebSocketEventHandler<T>
   ): void {
-    if (!this.eventHandlers.has(type)) {
-      this.eventHandlers.set(type, []);
-    }
-
-    const handlers = this.eventHandlers.get(type) as WebSocketEventHandler<T>[];
-    handlers.push(handler as WebSocketEventHandler<any>);
+    this.ws.subscribeToEvent(type, handler);
   }
 
   unsubscribeFromEvent<T extends WebSocketEventType>(
     type: T,
     handler: WebSocketEventHandler<T>
   ): void {
-    if (this.eventHandlers.has(type)) {
-      const handlers = this.eventHandlers.get(
-        type
-      ) as WebSocketEventHandler<T>[];
-      const index = handlers.indexOf(handler as WebSocketEventHandler<any>);
-      if (index !== -1) {
-        handlers.splice(index, 1);
-      }
-    }
+    this.ws.unsubscribeFromEvent(type, handler);
   }
 
   sendWebSocketEvent<T extends WebSocketEventType>(
     type: T,
     payload: WebSocketEventPayloads[T]
   ): void {
-    if (this.socket && this.socket.connected) {
-      // Map our internal event types to server's expected event types
-      let serverEventType: string = type;
-
-      switch (type) {
-        case WebSocketEventType.SEND_MESSAGE:
-          serverEventType = 'sendMessage';
-          break;
-        case WebSocketEventType.EDIT_MESSAGE:
-          serverEventType = 'editMessage';
-          break;
-        case WebSocketEventType.DELETE_MESSAGE:
-          serverEventType = 'deleteMessage';
-          break;
-        case WebSocketEventType.TOGGLE_REACTION:
-          serverEventType = 'toggleReaction';
-          break;
-        case WebSocketEventType.TOGGLE_PIN:
-          serverEventType = 'togglePin';
-          break;
-        case WebSocketEventType.READ_MESSAGES:
-          serverEventType = 'readMessages';
-          break;
-        case WebSocketEventType.JOIN_TOPIC:
-          serverEventType = 'joinTopic';
-          break;
-        case WebSocketEventType.LEAVE_TOPIC:
-          serverEventType = 'leaveTopic';
-          break;
-        default:
-          serverEventType = type;
-          break;
-      }
-
-      // Emit the event to the server using Socket.IO
-      this.socket.emit(serverEventType, payload);
-    } else {
-      console.warn('Socket.IO is not connected. Cannot send event:', type);
-    }
+    this.ws.sendWebSocketEvent(type, payload);
   }
 
   async getUsers(params?: SearchParams): Promise<PaginatedResponse<User>> {
-    const queryParams = new URLSearchParams();
-
-    if (params?.search) queryParams.append('search', params.search);
-    if (params?.page !== undefined && params?.page !== null)
-      queryParams.append('page', params.page.toString());
-    if (params?.limit !== undefined && params?.limit !== null)
-      queryParams.append('limit', params.limit.toString());
-
-    const queryString = queryParams.toString();
-    const endpoint = `/users${queryString ? `?${queryString}` : ''}`;
-
-    try {
-      const response = (await this.reqi.get<PaginatedResponse<User>>(endpoint, {
-        parsed: false
-      })) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to fetch users: ${(error as Error).message}`);
-    }
+    return this.user.getUsers(params);
   }
 
   async createUser(userData: Partial<User>): Promise<User> {
-    try {
-      const response = (await this.reqi.post<User>('/users', userData, {
-        parsed: false
-      })) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to create user: ${(error as Error).message}`);
-    }
+    return this.user.createUser(userData);
+  }
+
+  async getUserProfile(userId: string): Promise<User> {
+    return this.user.getUserProfile(userId);
+  }
+
+  async updateUserProfile(
+    userId: string,
+    profileData: Partial<User>
+  ): Promise<User> {
+    return this.user.updateUserProfile(userId, profileData);
+  }
+
+  async getRecentTopics(userId: string): Promise<Topic[]> {
+    return this.user.getRecentTopics(userId);
   }
 
   async authenticateUser(credentials: {
     email: string;
     password: string;
   }): Promise<{ user: User; token: string }> {
-    try {
-      const response = (await this.reqi.post('/auth/login', credentials, {
-        parsed: false
-      })) as any;
-      const result = await response.json();
+    const result = await this.auth.authenticateUser(credentials);
 
-      this.token = result.token;
+    this.token = result.token;
+    this.reqi = this.createReqiInstance();
 
-      // Recreate the Reqi instance with the new token
-      this.reqi = this.createReqiInstance();
+    this.auth = new ChatAuth(this.apiUrl, this.token);
 
-      return result;
-    } catch (error) {
-      throw new Error(`Authentication failed: ${(error as Error).message}`);
-    }
+    return result;
   }
 
   async getTopics(
     type?: TopicType,
     params?: SearchParams
   ): Promise<PaginatedResponse<Topic & { lastMessage?: Message }>> {
-    const queryParams = new URLSearchParams();
-
-    if (type) queryParams.append('type', type);
-    if (params?.page !== undefined && params?.page !== null)
-      queryParams.append('page', params.page.toString());
-    if (params?.limit !== undefined && params?.limit !== null)
-      queryParams.append('limit', params.limit.toString());
-
-    const queryString = queryParams.toString();
-    const endpoint = `/topics${queryString ? `?${queryString}` : ''}`;
-
-    try {
-      const response = (await this.reqi.get<
-        PaginatedResponse<Topic & { lastMessage?: Message }>
-      >(endpoint, { parsed: false })) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to fetch topics: ${(error as Error).message}`);
-    }
+    return this.topic.getTopics(type, params);
   }
 
   async createTopic(topicData: { peerId: string }): Promise<Topic> {
-    try {
-      const response = (await this.reqi.post<Topic>('/topics', topicData, {
-        parsed: false
-      })) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to create topic: ${(error as Error).message}`);
-    }
+    return this.topic.createTopic(topicData);
   }
 
   async deleteTopic(topicId: string): Promise<void> {
-    try {
-      const response = await this.reqi.delete(`/topics/${topicId}`, {
-        parsed: false
-      });
-      await response.json();
-    } catch (error) {
-      throw new Error(`Failed to delete topic: ${(error as Error).message}`);
-    }
+    return this.topic.deleteTopic(topicId);
   }
 
   async togglePinTopic(topicId: string, userId: string): Promise<TopicSetting> {
-    try {
-      const response = (await this.reqi.patch<TopicSetting>(
-        `/topics/${topicId}/pin`,
-        { userId },
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to toggle pin topic: ${(error as Error).message}`
-      );
-    }
+    return this.topic.togglePinTopic(topicId, userId);
   }
 
   async toggleMuteTopic(
     topicId: string,
     userId: string
   ): Promise<TopicSetting> {
-    try {
-      const response = (await this.reqi.patch<TopicSetting>(
-        `/topics/${topicId}/mute`,
-        { userId },
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to toggle mute topic: ${(error as Error).message}`
-      );
-    }
+    return this.topic.toggleMuteTopic(topicId, userId);
   }
 
   async muteTopic(topicId: string, userId: string): Promise<TopicSetting> {
-    return this.toggleMuteTopic(topicId, userId);
+    return this.topic.muteTopic(topicId, userId);
   }
 
   async unmuteTopic(topicId: string, userId: string): Promise<TopicSetting> {
-    return this.toggleMuteTopic(topicId, userId);
+    return this.topic.unmuteTopic(topicId, userId);
+  }
+
+  async getTopicSettings(
+    topicId: string,
+    userId: string
+  ): Promise<TopicSetting> {
+    return this.topic.getTopicSettings(topicId, userId);
+  }
+
+  async updateTopicSettings(
+    topicId: string,
+    userId: string,
+    settings: Partial<TopicSetting>
+  ): Promise<TopicSetting> {
+    return this.topic.updateTopicSettings(topicId, userId, settings);
+  }
+
+  async joinTopic(topicId: string): Promise<{ success: boolean }> {
+    return this.topic.joinTopic(topicId);
+  }
+
+  async leaveTopic(topicId: string): Promise<void> {
+    return this.topic.leaveTopic(topicId);
+  }
+
+  async getTopicById(topicId: string): Promise<Topic> {
+    return this.topic.getTopicById(topicId);
+  }
+
+  async getTopicParticipants(topicId: string): Promise<User[]> {
+    return this.topic.getTopicParticipants(topicId);
+  }
+
+  async createDMWithUser(peerId: string): Promise<Topic> {
+    return this.topic.createDMWithUser(peerId);
+  }
+
+  async updateTopic(
+    topicId: string,
+    topicData: Partial<{
+      title?: string;
+      description?: string;
+      avatarUrl?: string;
+    }>
+  ): Promise<Topic> {
+    return this.topic.updateTopic(topicId, topicData);
   }
 
   async createGroup(groupData: {
@@ -473,49 +399,15 @@ export class ChatSDK {
     memberIds: string[];
     admins: string[];
   }): Promise<Group> {
-    try {
-      const response = (await this.reqi.post<Group>('/groups', groupData, {
-        parsed: false
-      })) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to create group: ${(error as Error).message}`);
-    }
+    return this.group.createGroup(groupData);
   }
 
   async deleteGroup(groupId: string): Promise<void> {
-    try {
-      const response = await this.reqi.delete(`/groups/${groupId}`, {
-        parsed: false
-      });
-      await response.json();
-    } catch (error) {
-      throw new Error(`Failed to delete group: ${(error as Error).message}`);
-    }
+    return this.group.deleteGroup(groupId);
   }
 
   async getGroup(groupId: string, params?: SearchParams): Promise<Group> {
-    const queryParams = new URLSearchParams();
-
-    if (params?.search) queryParams.append('search', params.search);
-    if (params?.page !== undefined && params?.page !== null)
-      queryParams.append('page', params.page.toString());
-    if (params?.limit !== undefined && params?.limit !== null)
-      queryParams.append('limit', params.limit.toString());
-
-    const queryString = queryParams.toString();
-    const endpoint = `/groups/${groupId}${queryString ? `?${queryString}` : ''}`;
-
-    try {
-      const response = (await this.reqi.get<Group>(endpoint, {
-        parsed: false
-      })) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to fetch group: ${(error as Error).message}`);
-    }
+    return this.group.getGroup(groupId, params);
   }
 
   async updateGroup(
@@ -528,609 +420,60 @@ export class ChatSDK {
       admins: string[];
     }>
   ): Promise<Group> {
-    try {
-      const response = (await this.reqi.patch<Group>(
-        `/groups/${groupId}`,
-        groupData,
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to update group: ${(error as Error).message}`);
-    }
+    return this.group.updateGroup(groupId, groupData);
   }
 
   async leaveGroup(groupId: string): Promise<void> {
-    try {
-      const response = await this.reqi.delete(`/groups/${groupId}/leave`, {
-        parsed: false
-      });
-      await response.json();
-    } catch (error) {
-      throw new Error(`Failed to leave group: ${(error as Error).message}`);
-    }
+    return this.group.leaveGroup(groupId);
   }
 
   async getGroupMembers(
     groupId: string,
     params?: SearchParams
   ): Promise<PaginatedResponse<User>> {
-    const queryParams = new URLSearchParams();
-
-    if (params?.search) queryParams.append('search', params.search);
-    if (params?.page !== undefined && params?.page !== null)
-      queryParams.append('page', params.page.toString());
-    if (params?.limit !== undefined && params?.limit !== null)
-      queryParams.append('limit', params.limit.toString());
-
-    const queryString = queryParams.toString();
-    const endpoint = `/groups/${groupId}/members${
-      queryString ? `?${queryString}` : ''
-    }`;
-
-    try {
-      const response = (await this.reqi.get<PaginatedResponse<User>>(endpoint, {
-        parsed: false
-      })) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to fetch group members: ${(error as Error).message}`
-      );
-    }
+    return this.group.getGroupMembers(groupId, params);
   }
 
   async addGroupMembers(
     groupId: string,
     userIds: string[]
   ): Promise<{ success: boolean; addedMembers: User[] }> {
-    try {
-      const response = (await this.reqi.post(
-        `/groups/${groupId}/members`,
-        { userIds },
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to add members to group: ${(error as Error).message}`
-      );
-    }
+    return this.group.addGroupMembers(groupId, userIds);
   }
 
   async removeGroupMember(
     groupId: string,
     userId: string
   ): Promise<{ success: boolean }> {
-    try {
-      const response = (await this.reqi.delete(
-        `/groups/${groupId}/members/${userId}`,
-        {
-          parsed: false
-        }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to remove member from group: ${(error as Error).message}`
-      );
-    }
+    return this.group.removeGroupMember(groupId, userId);
   }
 
   async promoteToAdmin(
     groupId: string,
     userId: string
   ): Promise<{ success: boolean }> {
-    try {
-      const response = (await this.reqi.patch(
-        `/groups/${groupId}/admins/${userId}`,
-        {},
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to promote user to admin: ${(error as Error).message}`
-      );
-    }
+    return this.group.promoteToAdmin(groupId, userId);
   }
 
   async demoteFromAdmin(
     groupId: string,
     userId: string
   ): Promise<{ success: boolean }> {
-    try {
-      const response = (await this.reqi.delete(
-        `/groups/${groupId}/admins/${userId}`,
-        {
-          parsed: false
-        }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to demote user from admin: ${(error as Error).message}`
-      );
-    }
-  }
-
-  async getMessages(
-    topicId: string,
-    params?: SearchParams
-  ): Promise<PaginatedResponse<Message>> {
-    const queryParams = new URLSearchParams();
-
-    if (params?.search) queryParams.append('search', params.search);
-    if (params?.page !== undefined && params?.page !== null)
-      queryParams.append('page', params.page.toString());
-    if (params?.limit !== undefined && params?.limit !== null)
-      queryParams.append('limit', params.limit.toString());
-
-    const queryString = queryParams.toString();
-    const endpoint = `/topics/${topicId}/messages${
-      queryString ? `?${queryString}` : ''
-    }`;
-
-    try {
-      const response = (await this.reqi.get<PaginatedResponse<Message>>(
-        endpoint,
-        {
-          parsed: false
-        }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to fetch messages: ${(error as Error).message}`);
-    }
-  }
-
-  async sendMessage(
-    topicId: string,
-    messageData: {
-      content: string;
-      replyTo?: string;
-      attachments?: Media[];
-    }
-  ): Promise<Message> {
-    try {
-      const response = (await this.reqi.post<Message>(
-        `/topics/${topicId}/messages`,
-        messageData,
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to send message: ${(error as Error).message}`);
-    }
-  }
-
-  async editMessage(
-    topicId: string,
-    messageId: string,
-    content: string
-  ): Promise<Message> {
-    try {
-      const response = (await this.reqi.patch<Message>(
-        `/topics/${topicId}/messages/${messageId}`,
-        { content },
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to edit message: ${(error as Error).message}`);
-    }
-  }
-
-  async deleteMessage(topicId: string, messageId: string): Promise<void> {
-    try {
-      const response = await this.reqi.delete(
-        `/topics/${topicId}/messages/${messageId}`,
-        {
-          parsed: false
-        }
-      );
-      await response.json();
-    } catch (error) {
-      throw new Error(`Failed to delete message: ${(error as Error).message}`);
-    }
-  }
-
-  async toggleMessageReaction(
-    topicId: string,
-    messageId: string,
-    emoji: string
-  ): Promise<{ success: boolean }> {
-    try {
-      const response = (await this.reqi.post(
-        `/topics/${topicId}/messages/${messageId}/reactions`,
-        { emoji },
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to toggle reaction: ${(error as Error).message}`);
-    }
-  }
-
-  async toggleMessagePin(
-    topicId: string,
-    messageId: string
-  ): Promise<{ success: boolean }> {
-    try {
-      const response = (await this.reqi.post(
-        `/topics/${topicId}/messages/${messageId}/pin`,
-        {},
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to toggle pin: ${(error as Error).message}`);
-    }
-  }
-
-  async markMessagesAsRead(
-    topicId: string,
-    messageIds: string[]
-  ): Promise<{ success: boolean }> {
-    try {
-      const response = (await this.reqi.post(
-        `/topics/${topicId}/messages/read`,
-        { messageIds },
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to mark messages as read: ${(error as Error).message}`
-      );
-    }
-  }
-
-  async uploadMedia(
-    file: File,
-    topicId: string,
-    messageId?: string
-  ): Promise<Media> {
-    if (!this.s3Service) {
-      throw new Error('S3 service not initialized');
-    }
-
-    try {
-      // Upload to S3 first
-      const uploadResult = await this.s3Service.uploadFile(file);
-
-      // Then create media record in the database
-      const mediaData: Media = {
-        id: '',
-        path: uploadResult.path,
-        type: file.type,
-        messageId: messageId || '',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        deletedAt: null
-      };
-
-      const response = (await this.reqi.post<Media>('/media', mediaData, {
-        parsed: false
-      })) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to upload media: ${(error as Error).message}`);
-    }
-  }
-
-  private getMediaType(mimeType: string): MediaTypeType {
-    if (mimeType.startsWith('image/')) {
-      return MediaTypeType.Image;
-    } else if (mimeType.startsWith('video/')) {
-      return MediaTypeType.Video;
-    } else if (mimeType.startsWith('audio/')) {
-      return MediaTypeType.Audio;
-    } else {
-      return MediaTypeType.Document;
-    }
-  }
-
-  async searchMessages(
-    query: string,
-    params?: SearchParams
-  ): Promise<PaginatedResponse<Message & { topic: Topic }>> {
-    const queryParams = new URLSearchParams();
-
-    queryParams.append('query', query);
-    if (params?.page !== undefined && params?.page !== null)
-      queryParams.append('page', params.page.toString());
-    if (params?.limit !== undefined && params?.limit !== null)
-      queryParams.append('limit', params.limit.toString());
-
-    const queryString = queryParams.toString();
-    const endpoint = `/search/messages${queryString ? `?${queryString}` : ''}`;
-
-    try {
-      const response = (await this.reqi.get<
-        PaginatedResponse<Message & { topic: Topic }>
-      >(endpoint, { parsed: false })) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to search messages: ${(error as Error).message}`);
-    }
-  }
-
-  async searchTopics(
-    query: string,
-    params?: SearchParams
-  ): Promise<PaginatedResponse<Topic>> {
-    const queryParams = new URLSearchParams();
-
-    queryParams.append('query', query);
-    if (params?.page !== undefined && params?.page !== null)
-      queryParams.append('page', params.page.toString());
-    if (params?.limit !== undefined && params?.limit !== null)
-      queryParams.append('limit', params.limit.toString());
-
-    const queryString = queryParams.toString();
-    const endpoint = `/search/topics${queryString ? `?${queryString}` : ''}`;
-
-    try {
-      const response = (await this.reqi.get<PaginatedResponse<Topic>>(
-        endpoint,
-        {
-          parsed: false
-        }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to search topics: ${(error as Error).message}`);
-    }
-  }
-
-  async getUnreadCounts(): Promise<{
-    totalUnread: number;
-    topicsUnread: { [topicId: string]: number };
-  }> {
-    try {
-      const response = (await this.reqi.get('/unread-counts', {
-        parsed: false
-      })) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to fetch unread counts: ${(error as Error).message}`
-      );
-    }
-  }
-
-  async getTopicSettings(
-    topicId: string,
-    userId: string
-  ): Promise<TopicSetting> {
-    try {
-      const response = (await this.reqi.get<TopicSetting>(
-        `/topics/${topicId}/settings/${userId}`,
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to fetch topic settings: ${(error as Error).message}`
-      );
-    }
-  }
-
-  async updateTopicSettings(
-    topicId: string,
-    userId: string,
-    settings: Partial<TopicSetting>
-  ): Promise<TopicSetting> {
-    try {
-      const response = (await this.reqi.patch<TopicSetting>(
-        `/topics/${topicId}/settings/${userId}`,
-        settings,
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to update topic settings: ${(error as Error).message}`
-      );
-    }
-  }
-
-  async joinTopic(topicId: string): Promise<{ success: boolean }> {
-    try {
-      const response = (await this.reqi.post(
-        `/topics/${topicId}/join`,
-        {},
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to join topic: ${(error as Error).message}`);
-    }
-  }
-
-  async leaveTopic(topicId: string): Promise<void> {
-    try {
-      const response = await this.reqi.delete(`/topics/${topicId}/leave`, {
-        parsed: false
-      });
-      await response.json();
-    } catch (error) {
-      throw new Error(`Failed to leave topic: ${(error as Error).message}`);
-    }
-  }
-
-  async getUserProfile(userId: string): Promise<User> {
-    try {
-      const response = (await this.reqi.get<User>(`/users/${userId}`, {
-        parsed: false
-      })) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to fetch user profile: ${(error as Error).message}`
-      );
-    }
-  }
-
-  async updateUserProfile(
-    userId: string,
-    profileData: Partial<User>
-  ): Promise<User> {
-    try {
-      const response = (await this.reqi.patch<User>(
-        `/users/${userId}`,
-        profileData,
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to update user profile: ${(error as Error).message}`
-      );
-    }
-  }
-
-  async getRecentTopics(userId: string): Promise<Topic[]> {
-    try {
-      const response = (await this.reqi.get<Topic[]>(
-        `/users/${userId}/recent-topics`,
-        {
-          parsed: false
-        }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to fetch recent topics: ${(error as Error).message}`
-      );
-    }
-  }
-
-  async getTopicById(topicId: string): Promise<Topic> {
-    try {
-      const response = (await this.reqi.get<Topic>(`/topics/${topicId}`, {
-        parsed: false
-      })) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to fetch topic: ${(error as Error).message}`);
-    }
-  }
-
-  async getTopicParticipants(topicId: string): Promise<User[]> {
-    try {
-      const response = (await this.reqi.get<User[]>(
-        `/topics/${topicId}/participants`,
-        {
-          parsed: false
-        }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to fetch topic participants: ${(error as Error).message}`
-      );
-    }
-  }
-
-  async createDMWithUser(peerId: string): Promise<Topic> {
-    try {
-      const response = (await this.reqi.post<Topic>(
-        '/topics/dm',
-        { peerId },
-        {
-          parsed: false
-        }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to create DM: ${(error as Error).message}`);
-    }
-  }
-
-  async updateTopic(
-    topicId: string,
-    topicData: Partial<{
-      title?: string;
-      description?: string;
-      avatarUrl?: string;
-    }>
-  ): Promise<Topic> {
-    try {
-      const response = (await this.reqi.patch<Topic>(
-        `/topics/${topicId}`,
-        topicData,
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to update topic: ${(error as Error).message}`);
-    }
-  }
-
-  async updateMessageStatus(
-    messageId: string,
-    status: MessageStatus
-  ): Promise<{ success: boolean }> {
-    try {
-      const response = (await this.reqi.patch(
-        `/messages/${messageId}/status`,
-        { status },
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to update message status: ${(error as Error).message}`
-      );
-    }
+    return this.group.demoteFromAdmin(groupId, userId);
   }
 
   async addUsersToGroup(
     groupId: string,
     userIds: string[]
   ): Promise<{ success: boolean; addedMembers: User[] }> {
-    try {
-      const response = (await this.reqi.post(
-        `/groups/${groupId}/members`,
-        { userIds },
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to add users to group: ${(error as Error).message}`
-      );
-    }
+    return this.group.addUsersToGroup(groupId, userIds);
+  }
+
+  async removeUserFromGroup(
+    groupId: string,
+    userId: string
+  ): Promise<{ success: boolean }> {
+    return this.group.removeUserFromGroup(groupId, userId);
   }
 
   async editGroup(
@@ -1143,36 +486,107 @@ export class ChatSDK {
       admins: string[];
     }>
   ): Promise<Group> {
-    try {
-      const response = (await this.reqi.patch<Group>(
-        `/groups/${groupId}`,
-        groupData,
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to edit group: ${(error as Error).message}`);
+    return this.group.editGroup(groupId, groupData);
+  }
+
+  async getMessages(
+    topicId: string,
+    params?: SearchParams
+  ): Promise<PaginatedResponse<Message>> {
+    return this.message.getMessages(topicId, params);
+  }
+
+  async sendMessage(
+    topicId: string,
+    messageData: {
+      content: string;
+      replyTo?: string;
+      attachments?: Media[];
+    }
+  ): Promise<Message> {
+    return this.message.sendMessage(topicId, messageData);
+  }
+
+  async editMessage(
+    topicId: string,
+    messageId: string,
+    content: string
+  ): Promise<Message> {
+    return this.message.editMessage(topicId, messageId, content);
+  }
+
+  async deleteMessage(topicId: string, messageId: string): Promise<void> {
+    return this.message.deleteMessage(topicId, messageId);
+  }
+
+  async toggleMessageReaction(
+    topicId: string,
+    messageId: string,
+    emoji: string
+  ): Promise<{ success: boolean }> {
+    return this.message.toggleMessageReaction(topicId, messageId, emoji);
+  }
+
+  async toggleMessagePin(
+    topicId: string,
+    messageId: string
+  ): Promise<{ success: boolean }> {
+    return this.message.toggleMessagePin(topicId, messageId);
+  }
+
+  async markMessagesAsRead(
+    topicId: string,
+    messageIds: string[]
+  ): Promise<{ success: boolean }> {
+    return this.message.markMessagesAsRead(topicId, messageIds);
+  }
+
+  async uploadMedia(
+    file: File,
+    topicId: string,
+    messageId?: string
+  ): Promise<Media> {
+    return this.message.uploadMedia(file, topicId, messageId);
+  }
+
+  async updateMessageStatus(
+    messageId: string,
+    status: MessageStatus
+  ): Promise<{ success: boolean }> {
+    return this.message.updateMessageStatus(messageId, status);
+  }
+
+  private getMediaType(mimeType: string): MediaTypeType | null {
+    if (mimeType.startsWith('image/')) {
+      return MediaType.Image;
+    } else if (mimeType.startsWith('video/')) {
+      return MediaType.Video;
+    } else if (mimeType.startsWith('audio/')) {
+      return null;
+      // return MediaType;
+    } else {
+      return MediaType.File;
     }
   }
 
-  async removeUserFromGroup(
-    groupId: string,
-    userId: string
-  ): Promise<{ success: boolean }> {
-    try {
-      const response = (await this.reqi.delete(
-        `/groups/${groupId}/members/${userId}`,
-        {
-          parsed: false
-        }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to remove user from group: ${(error as Error).message}`
-      );
-    }
+  async searchMessages(
+    query: string,
+    params?: SearchParams
+  ): Promise<PaginatedResponse<Message & { topic: Topic }>> {
+    return this.utils.searchMessages(query, params);
+  }
+
+  async searchTopics(
+    query: string,
+    params?: SearchParams
+  ): Promise<PaginatedResponse<Topic>> {
+    return this.utils.searchTopics(query, params);
+  }
+
+  async getUnreadCounts(): Promise<{
+    totalUnread: number;
+    topicsUnread: { [topicId: string]: number };
+  }> {
+    return this.utils.getUnreadCounts();
   }
 }

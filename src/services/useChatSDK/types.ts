@@ -8,23 +8,6 @@ import {
   Group
 } from '@pksep/zod-shared-chat';
 
-// Define MediaTypeType enum locally since it's not exported from the shared package
-export enum MediaTypeType {
-  Image = 'IMAGE',
-  Video = 'VIDEO',
-  Audio = 'AUDIO',
-  Document = 'DOCUMENT'
-}
-
-// Define BaseEntity locally since it's not exported from the shared package
-export interface BaseEntity {
-  id: string;
-  createdAt: Date;
-  updatedAt: Date;
-  deletedAt?: Date | null;
-}
-
-// Define PaginatedResponse and SearchParams locally since they're not exported from the shared package
 export interface PaginatedResponse<T = any> {
   data: T[];
   page: number;
@@ -40,18 +23,15 @@ export interface SearchParams {
   type?: string | null;
 }
 
-// Define TopicType enum locally since it's not exported from the shared package
 export enum TopicType {
   Group = 'GROUP',
   DM = 'DM'
 }
 
-// Define TopicSettingWithUser locally since it's not exported from the shared package
 export interface TopicSettingWithUser extends TopicSetting {
   user?: User;
 }
 
-// Define MessageStatus enum locally since it's not exported from the shared package
 export enum MessageStatus {
   Delivery = 'DELIVERED',
   Wait = 'WAIT',
@@ -59,5 +39,4 @@ export enum MessageStatus {
   Read = 'READ'
 }
 
-// Export the types to maintain the same interface for other modules
 export type { Media, Reaction, Message, Topic, TopicSetting, User, Group };

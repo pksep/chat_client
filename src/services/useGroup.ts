@@ -2,14 +2,13 @@ import { ref } from 'vue';
 import { IUserProps } from '../components/interfaces/interfaces';
 import { getChatSDK, getCurrentUserId } from './useChat';
 import { Group } from '@pksep/zod-shared-chat';
+import type { IContactProps } from '../components/interfaces/interfaces';
 
-// Define TopicType enum locally since it's not exported from the shared package
 enum TopicType {
   Group = 'GROUP',
   DM = 'DM'
 }
 
-// Extend Group type to include members property
 interface GroupWithMembers extends Group {
   members?: any[];
 }
@@ -28,12 +27,10 @@ export const fetchAllGroups = async (
       limit
     });
 
-    // Convert Topic objects to Group-like objects for now
-    // In a real scenario, we'd want to fetch actual Group objects
     const groupObjects = response.data.map(topic => ({
       id: topic.id,
-      topicId: topic.id, // Assuming topic.id is the topicId for groups
-      title: 'Group ' + topic.id.substring(0, 8), // Placeholder title
+      topicId: topic.id,
+      title: 'Group ' + topic.id.substring(0, 8),
       description: null,
       avatarUrl: null,
       createdAt: topic.createdAt,
@@ -86,7 +83,6 @@ const createGroup = async (
     admins
   });
 
-  // Guard against undefined/null group response from SDK
   if (!group || !group.id) {
     console.error('[createGroup] SDK returned invalid group:', group);
     throw new Error('Failed to create group: invalid response from server');
@@ -114,12 +110,11 @@ const createGroup = async (
   return { ...group, conversationId: group.topicId, groupId: group.id };
 };
 
-import type { IContactProps } from '../components/interfaces/interfaces';
-
 const getGroupList = (): IContactProps[] => {
+  console.log('getGroupList', groups.value);
   return groups.value.map(group => ({
     id: group.id,
-    initials: group.title.substring(0, 2) || 'G',
+    initials: group.title,
     nickname: group.title,
     avatarUrl: group.avatarUrl,
     lastOnline: null,
@@ -128,8 +123,8 @@ const getGroupList = (): IContactProps[] => {
     deletedAt: group.deletedAt,
     conversationId: group.topicId,
     latestMessage: '',
-    membersLength: 0, // This would come from group members if available
-    members: [] // This would come from group members if available
+    membersLength: 0,
+    members: []
   }));
 };
 
@@ -188,7 +183,6 @@ export const getGroupInfo = async (groupIds: string[]) => {
     groupIds.map(groupId => sdk.getGroup(groupId))
   );
 
-  // Ensure each group response has a members property
   return groupResponses.map((response: any) => ({
     ...response,
     members: response.members || []
