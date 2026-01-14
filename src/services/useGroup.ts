@@ -1,9 +1,30 @@
 import { ref } from 'vue';
-import { IContactProps, IUserProps } from '../components/interfaces/interfaces';
+import { IUserProps } from '../components/interfaces/interfaces';
 import { getChatSDK, getCurrentUserId } from './useChat';
+import { Topic, TopicType } from './useChatSDK/types';
 
-const groups = ref<IContactProps[]>([]);
+const groups = ref<Topic[]>([]);
 const groupMembers = ref<IUserProps[]>([]);
+
+export const fetchAllGroups = async (
+  page = 1,
+  limit = 200
+): Promise<Topic[]> => {
+  try {
+    const sdk = getChatSDK();
+    const response = await sdk.getTopics(TopicType.Group, {
+      page,
+      limit
+    });
+
+    groups.value = response.data;
+
+    return groups.value;
+  } catch (err) {
+    console.error('Failed to fetch topics');
+    return groups.value || [];
+  }
+};
 
 export const fetchGroupMembers = async (
   groupId: string
@@ -35,7 +56,7 @@ const createGroup = async (
     title: name,
     description: '',
     avatarUrl: imageUrl || '',
-    members: memberUserIDs,
+    memberIds: memberUserIDs,
     admins
   });
 
@@ -62,15 +83,15 @@ const createGroup = async (
   return { ...group, conversationId: group.topicId, groupId: group.id };
 };
 
-const getGroupList = (): IContactProps[] => {
+const getGroupList = (): Topic[] => {
   return groups.value || [];
 };
 
-const setGroupList = (value: IContactProps[]): void => {
+const setGroupList = (value: Topic[]): void => {
   groups.value = value || [];
 };
 
-const updateGroupList = (value: IContactProps[]): void => {
+const updateGroupList = (value: Topic[]): void => {
   const map = new Map(groups.value.map(group => [group.id, group]));
   value.forEach(item => map.set(item.id, item));
   groups.value = Array.from(map.values());
@@ -93,13 +114,13 @@ const setGroupInfo = async (
     avatarUrl: groupInfo.faceURL
   });
 
-  const index = groups.value.findIndex(group => group.groupId === groupId);
+  const index = groups.value.findIndex(group => group.id === groupId);
   if (index !== -1) {
     const existing = groups.value[index];
     const updatedGroup = {
       ...existing,
-      nickname: groupInfo.groupName || existing.nickname,
-      avatarUrl: groupInfo.faceURL || existing.avatarUrl
+      nickname: groupInfo.groupName,
+      avatarUrl: groupInfo.faceURL
     };
     const next = [...groups.value];
     next[index] = updatedGroup;

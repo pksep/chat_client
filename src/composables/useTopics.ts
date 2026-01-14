@@ -41,8 +41,6 @@ export const createTopic = async (peerId: string): Promise<IContactProps[]> => {
     const sdk = getChatSDK();
     await sdk.createTopic({ peerId });
 
-    console.log('Topic created successfully', topics.value);
-
     return topics.value;
   } catch (err) {
     error.value = (err as Error).message;
@@ -69,18 +67,11 @@ const manipulateTopic = (topic: Topic): IContactProps => {
     updatedAt: topic.updatedAt,
     conversationId: topic.id,
     latestMessage: '',
-    user: topicUser
-      ? {
-          id: topicUser.id,
-          initials: topicUser.initials,
-          nickname: topicUser.nickname,
-          avatarUrl: topicUser.avatarUrl
-        }
-      : undefined
+    user: topic.user,
+    info: topic.info
   };
 };
 
 export const getTopicList = (): IContactProps[] => {
-  console.log('getTopicList', topics.value);
   return topics.value || [];
 };

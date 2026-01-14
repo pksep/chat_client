@@ -26,6 +26,7 @@ import { fetchAllUsers, getUserById } from './composables/useUsers';
 import { getConfig } from './services/useConfig';
 import { useUnreadMessagePolling } from './composables/useUnreadMessagePolling';
 import { fetchAllTopics } from './composables/useTopics';
+import { fetchAllGroups } from './services/useGroup';
 
 const emits = defineEmits<IChatContainerEmits>();
 
@@ -109,6 +110,7 @@ onMounted(async () => {
     }
 
     await fetchAllTopics();
+    await fetchAllGroups();
 
     markSDKReady();
 

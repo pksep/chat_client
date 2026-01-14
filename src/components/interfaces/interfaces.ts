@@ -1,5 +1,5 @@
 import { IMenuInfoEmits } from '@/composables/useMenuInfo';
-import { User } from '@/services/useChatSDK/types';
+import { TopicSettingWithUser, User } from '@/services/useChatSDK/types';
 
 export interface IHeaderProps {
   class?: string;
@@ -62,6 +62,7 @@ export interface IContactProps extends IUserProps {
   latestMessageStatus?: string;
   isLatestMessageFromMe?: boolean;
   user?: IContactUser;
+  info?: TopicSettingWithUser;
 }
 
 export interface IMenuProps {

@@ -3,13 +3,7 @@
     :class="menuClasses"
     :data-testid="`${props.dataTestid}-Menu-Container`"
   >
-    <Loading
-      v-if="state.isLoading"
-      message="Загрузка меню..."
-      :dataTestid="`${props.dataTestid}-Menu-Loading`"
-    />
     <div
-      v-else
       class="menu__start"
       :data-testid="`${props.dataTestid}-Menu-StartContainer`"
     >
@@ -167,17 +161,12 @@ import {
 } from '@pksep/yui';
 import UserProfile from './UserProfile/UserProfile.vue';
 import ContactList from './ContactList/ContactList.vue';
-import Loading from './Loading.vue';
 import type {
   IContactProps,
   IMenuEmits,
   IMenuProps
 } from './interfaces/interfaces';
-import {
-  fetchConversationList,
-  getConversationList,
-  onSDKReady
-} from '../services/useConversions';
+import { getConversationList } from '../services/useConversions';
 import { getGroupList } from '../services/useGroup';
 import { markAsRead } from '../services/useChat';
 import Triangle from './Triangle.vue';
@@ -295,12 +284,4 @@ const listChannels = computed(() => [
     items: getTopicList()
   }
 ]);
-
-onMounted(() => {
-  onSDKReady(() => {
-    fetchConversationList().finally(() => {
-      state.isLoading = false;
-    });
-  });
-});
 </script>

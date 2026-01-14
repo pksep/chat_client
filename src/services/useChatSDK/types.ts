@@ -46,7 +46,7 @@ export interface Message extends BaseEntity {
 }
 
 export enum TopicType {
-  Group = 'Group',
+  Group = 'GROUP',
   DM = 'DM'
 }
 
@@ -63,6 +63,8 @@ export interface Topic extends BaseEntity {
   type: TopicType;
   /** Settings with user info, populated when fetching DM topics */
   settings?: TopicSettingWithUser[];
+  user?: User;
+  info?: TopicSettingWithUser;
 }
 
 export interface TopicSetting extends BaseEntity {

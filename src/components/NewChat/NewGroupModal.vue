@@ -66,7 +66,7 @@
             ref="avatarInputRef"
             type="file"
             accept="image/*"
-            @change="onAvatarSelected"
+            @wwwange="onAvatarSelected"
           />
           <ModalCroppedAvatar
             :image="file"
