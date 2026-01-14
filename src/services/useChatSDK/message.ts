@@ -4,16 +4,42 @@ import { SearchParams, PaginatedResponse, MessageStatus } from './types';
 import { S3Service } from './s3Service';
 
 export interface ChatMessageInterface {
-  getMessages(topicId: string, params?: SearchParams): Promise<PaginatedResponse<Message>>;
-  sendMessage(topicId: string, messageData: { content: string; replyTo?: string; attachments?: Media[]; }): Promise<Message>;
-  editMessage(topicId: string, messageId: string, content: string): Promise<Message>;
+  getMessages(
+    topicId: string,
+    params?: SearchParams
+  ): Promise<PaginatedResponse<Message>>;
+  sendMessage(
+    topicId: string,
+    messageData: { content: string; replyTo?: string; attachments?: Media[] }
+  ): Promise<Message>;
+  editMessage(
+    topicId: string,
+    messageId: string,
+    content: string
+  ): Promise<Message>;
   deleteMessage(topicId: string, messageId: string): Promise<void>;
-  toggleMessageReaction(topicId: string, messageId: string, emoji: string): Promise<{ success: boolean }>;
-  toggleMessagePin(topicId: string, messageId: string): Promise<{ success: boolean }>;
-  markMessagesAsRead(topicId: string, messageIds: string[]): Promise<{ success: boolean }>;
+  toggleMessageReaction(
+    topicId: string,
+    messageId: string,
+    emoji: string
+  ): Promise<{ success: boolean }>;
+  toggleMessagePin(
+    topicId: string,
+    messageId: string
+  ): Promise<{ success: boolean }>;
+  markMessagesAsRead(
+    topicId: string,
+    messageIds: string[]
+  ): Promise<{ success: boolean }>;
   uploadMedia(file: File, topicId: string, messageId?: string): Promise<Media>;
-  searchMessages(query: string, params?: SearchParams): Promise<PaginatedResponse<Message & { topic: Topic }>>;
-  updateMessageStatus(messageId: string, status: MessageStatus): Promise<{ success: boolean }>;
+  searchMessages(
+    query: string,
+    params?: SearchParams
+  ): Promise<PaginatedResponse<Message & { topic: Topic }>>;
+  updateMessageStatus(
+    messageId: string,
+    status: MessageStatus
+  ): Promise<{ success: boolean }>;
 }
 
 export class ChatMessage implements ChatMessageInterface {

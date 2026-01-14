@@ -3,7 +3,10 @@ import { Reqi } from '@pksep/reqi';
 import { SearchParams, PaginatedResponse, TopicType } from './types';
 
 export interface ChatTopicInterface {
-  getTopics(type?: TopicType, params?: SearchParams): Promise<PaginatedResponse<Topic & { lastMessage?: Message }>>;
+  getTopics(
+    type?: TopicType,
+    params?: SearchParams
+  ): Promise<PaginatedResponse<Topic & { lastMessage?: Message }>>;
   createTopic(topicData: { peerId: string }): Promise<Topic>;
   deleteTopic(topicId: string): Promise<void>;
   togglePinTopic(topicId: string, userId: string): Promise<TopicSetting>;
@@ -11,13 +14,24 @@ export interface ChatTopicInterface {
   muteTopic(topicId: string, userId: string): Promise<TopicSetting>;
   unmuteTopic(topicId: string, userId: string): Promise<TopicSetting>;
   getTopicSettings(topicId: string, userId: string): Promise<TopicSetting>;
-  updateTopicSettings(topicId: string, userId: string, settings: Partial<TopicSetting>): Promise<TopicSetting>;
+  updateTopicSettings(
+    topicId: string,
+    userId: string,
+    settings: Partial<TopicSetting>
+  ): Promise<TopicSetting>;
   joinTopic(topicId: string): Promise<{ success: boolean }>;
   leaveTopic(topicId: string): Promise<void>;
   getTopicById(topicId: string): Promise<Topic>;
   getTopicParticipants(topicId: string): Promise<User[]>;
   createDMWithUser(peerId: string): Promise<Topic>;
-  updateTopic(topicId: string, topicData: Partial<{ title?: string; description?: string; avatarUrl?: string; }>): Promise<Topic>;
+  updateTopic(
+    topicId: string,
+    topicData: Partial<{
+      title?: string;
+      description?: string;
+      avatarUrl?: string;
+    }>
+  ): Promise<Topic>;
 }
 
 export class ChatTopic implements ChatTopicInterface {

@@ -3,9 +3,18 @@ import { Reqi } from '@pksep/reqi';
 import { SearchParams, PaginatedResponse } from './types';
 
 export interface ChatUtilsInterface {
-  searchMessages(query: string, params?: SearchParams): Promise<PaginatedResponse<Message & { topic: Topic }>>;
-  searchTopics(query: string, params?: SearchParams): Promise<PaginatedResponse<Topic>>;
-  getUnreadCounts(): Promise<{ totalUnread: number; topicsUnread: { [topicId: string]: number } }>;
+  searchMessages(
+    query: string,
+    params?: SearchParams
+  ): Promise<PaginatedResponse<Message & { topic: Topic }>>;
+  searchTopics(
+    query: string,
+    params?: SearchParams
+  ): Promise<PaginatedResponse<Topic>>;
+  getUnreadCounts(): Promise<{
+    totalUnread: number;
+    topicsUnread: { [topicId: string]: number };
+  }>;
 }
 
 export class ChatUtils implements ChatUtilsInterface {
@@ -33,7 +42,7 @@ export class ChatUtils implements ChatUtilsInterface {
     try {
       const response = (await this.reqi.get<
         PaginatedResponse<Message & { topic: Topic }>
-      >(endpoint, { parsed: false }) as any);
+      >(endpoint, { parsed: false })) as any;
       const data = await response.json();
       return data;
     } catch (error) {
@@ -62,7 +71,7 @@ export class ChatUtils implements ChatUtilsInterface {
         {
           parsed: false
         }
-      ) as any);
+      )) as any;
       const data = await response.json();
       return data;
     } catch (error) {
@@ -77,7 +86,7 @@ export class ChatUtils implements ChatUtilsInterface {
     try {
       const response = (await this.reqi.get('/unread-counts', {
         parsed: false
-      }) as any);
+      })) as any;
       const data = await response.json();
       return data;
     } catch (error) {

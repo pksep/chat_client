@@ -3,19 +3,64 @@ import { Reqi } from '@pksep/reqi';
 import { SearchParams, PaginatedResponse } from './types';
 
 export interface ChatGroupInterface {
-  createGroup(groupData: { title: string; description?: string; avatarUrl?: string; memberIds: string[]; admins: string[]; }): Promise<Group>;
+  createGroup(groupData: {
+    title: string;
+    description?: string;
+    avatarUrl?: string;
+    memberIds: string[];
+    admins: string[];
+  }): Promise<Group>;
   deleteGroup(groupId: string): Promise<void>;
   getGroup(groupId: string, params?: SearchParams): Promise<Group>;
-  updateGroup(groupId: string, groupData: Partial<{ title: string; description?: string; avatarUrl?: string; memberIds: string[]; admins: string[]; }>): Promise<Group>;
+  updateGroup(
+    groupId: string,
+    groupData: Partial<{
+      title: string;
+      description?: string;
+      avatarUrl?: string;
+      memberIds: string[];
+      admins: string[];
+    }>
+  ): Promise<Group>;
   leaveGroup(groupId: string): Promise<void>;
-  getGroupMembers(groupId: string, params?: SearchParams): Promise<PaginatedResponse<User>>;
-  addGroupMembers(groupId: string, userIds: string[]): Promise<{ success: boolean; addedMembers: User[] }>;
-  removeGroupMember(groupId: string, userId: string): Promise<{ success: boolean }>;
-  promoteToAdmin(groupId: string, userId: string): Promise<{ success: boolean }>;
-  demoteFromAdmin(groupId: string, userId: string): Promise<{ success: boolean }>;
-  addUsersToGroup(groupId: string, userIds: string[]): Promise<{ success: boolean; addedMembers: User[] }>;
-  removeUserFromGroup(groupId: string, userId: string): Promise<{ success: boolean }>;
-  editGroup(groupId: string, groupData: Partial<{ title: string; description?: string; avatarUrl?: string; memberIds: string[]; admins: string[]; }>): Promise<Group>;
+  getGroupMembers(
+    groupId: string,
+    params?: SearchParams
+  ): Promise<PaginatedResponse<User>>;
+  addGroupMembers(
+    groupId: string,
+    userIds: string[]
+  ): Promise<{ success: boolean; addedMembers: User[] }>;
+  removeGroupMember(
+    groupId: string,
+    userId: string
+  ): Promise<{ success: boolean }>;
+  promoteToAdmin(
+    groupId: string,
+    userId: string
+  ): Promise<{ success: boolean }>;
+  demoteFromAdmin(
+    groupId: string,
+    userId: string
+  ): Promise<{ success: boolean }>;
+  addUsersToGroup(
+    groupId: string,
+    userIds: string[]
+  ): Promise<{ success: boolean; addedMembers: User[] }>;
+  removeUserFromGroup(
+    groupId: string,
+    userId: string
+  ): Promise<{ success: boolean }>;
+  editGroup(
+    groupId: string,
+    groupData: Partial<{
+      title: string;
+      description?: string;
+      avatarUrl?: string;
+      memberIds: string[];
+      admins: string[];
+    }>
+  ): Promise<Group>;
 }
 
 export class ChatGroup implements ChatGroupInterface {
