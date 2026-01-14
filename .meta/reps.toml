@@ -7,3 +7,8 @@ branch = 'main'
 dir = '.meta/local-services/chat_server'
 remote = 'git@github.com:pksep/chat_server.git'
 branch = 'main'
+
+[[repo]]
+dir = '.meta/local-services/chat_ai'
+remote = 'git@github.com:pksep/chat_ai.git'
+branch = 'main'

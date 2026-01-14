@@ -407,7 +407,9 @@ export class ChatSDK {
 
   async deleteTopic(topicId: string): Promise<void> {
     try {
-      const response = await this.reqi.delete(`/topics/${topicId}`, { parsed: false });
+      const response = await this.reqi.delete(`/topics/${topicId}`, {
+        parsed: false
+      });
       await response.json();
     } catch (error) {
       throw new Error(`Failed to delete topic: ${(error as Error).message}`);
@@ -477,7 +479,9 @@ export class ChatSDK {
 
   async deleteGroup(groupId: string): Promise<void> {
     try {
-      const response = await this.reqi.delete(`/groups/${groupId}`, { parsed: false });
+      const response = await this.reqi.delete(`/groups/${groupId}`, {
+        parsed: false
+      });
       await response.json();
     } catch (error) {
       throw new Error(`Failed to delete group: ${(error as Error).message}`);
@@ -544,9 +548,12 @@ export class ChatSDK {
 
   async removeUserFromGroup(groupId: string, userId: string): Promise<void> {
     try {
-      const response = await this.reqi.delete(`/groups/${groupId}/members/${userId}`, {
-        parsed: false
-      });
+      const response = await this.reqi.delete(
+        `/groups/${groupId}/members/${userId}`,
+        {
+          parsed: false
+        }
+      );
       await response.json();
     } catch (error) {
       throw new Error(

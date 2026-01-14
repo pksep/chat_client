@@ -24,7 +24,6 @@ build
 *.sln
 *.sw?
 
-local-packages/
 
 .env
 .prod.env
@@ -32,13 +31,9 @@ local-packages/
 dev-dist/
 .npmrc
 
-public/openIM.wasm
-public/sql-wasm.wasm
-public/wasm_exec.js
-
-.meta/local-services/chat_sync/
 !.dockerignore
 
 .meta/**/data
 
-chat_server/
+.meta/local-services
+.meta/local-packages
