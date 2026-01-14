@@ -33,7 +33,9 @@ export enum WebSocketEventType {
   CONNECTED = 'CONNECTED',
   DISCONNECTED = 'DISCONNECTED',
   AUTHENTICATED = 'AUTHENTICATED',
-  AUTHENTICATION_FAILED = 'AUTHENTICATION_FAILED'
+  AUTHENTICATION_FAILED = 'AUTHENTICATION_FAILED',
+  REQUEST_MESSAGE_HISTORY = 'REQUEST_MESSAGE_HISTORY',
+  MESSAGE_HISTORY_RESPONSE = 'MESSAGE_HISTORY_RESPONSE'
 }
 
 export interface WebSocketEventPayloads {
@@ -79,6 +81,17 @@ export interface WebSocketEventPayloads {
   [WebSocketEventType.DISCONNECTED]: null;
   [WebSocketEventType.AUTHENTICATED]: { userId: string };
   [WebSocketEventType.AUTHENTICATION_FAILED]: { error: string };
+  [WebSocketEventType.REQUEST_MESSAGE_HISTORY]: {
+    topicId: string;
+    requestId: string;
+    limit?: number;
+    page?: number;
+  };
+  [WebSocketEventType.MESSAGE_HISTORY_RESPONSE]: {
+    requestId: string;
+    messages: Message[];
+    error?: string;
+  };
 }
 
 export interface WebSocketEvent<

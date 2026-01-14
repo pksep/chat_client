@@ -61,6 +61,7 @@ export interface IContactUser {
 }
 
 export interface IContactProps extends IUserProps {
+  title?: string;
   latestMessage?: string;
   isRead?: boolean;
   latestMessageTime?: number;
@@ -70,7 +71,7 @@ export interface IContactProps extends IUserProps {
   userId?: string;
   latestMessageStatus?: string;
   isLatestMessageFromMe?: boolean;
-  user?: IContactUser;
+  user?: IContactUser | User;
   info?: TopicSettingWithUser;
 }
 

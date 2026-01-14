@@ -55,31 +55,9 @@ export class ChatMessage implements ChatMessageInterface {
     topicId: string,
     params?: SearchParams
   ): Promise<PaginatedResponse<Message>> {
-    const queryParams = new URLSearchParams();
-
-    if (params?.search) queryParams.append('search', params.search);
-    if (params?.page !== undefined && params?.page !== null)
-      queryParams.append('page', params.page.toString());
-    if (params?.limit !== undefined && params?.limit !== null)
-      queryParams.append('limit', params.limit.toString());
-
-    const queryString = queryParams.toString();
-    const endpoint = `/topics/${topicId}/messages${
-      queryString ? `?${queryString}` : ''
-    }`;
-
-    try {
-      const response = (await this.reqi.get<PaginatedResponse<Message>>(
-        endpoint,
-        {
-          parsed: false
-        }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to fetch messages: ${(error as Error).message}`);
-    }
+    // For WebSocket-only approach, we throw an error indicating that
+    // messages should be retrieved via WebSocket events instead
+    throw new Error('Direct HTTP API calls for messages are disabled. Use WebSocket events instead.');
   }
 
   async sendMessage(
@@ -90,17 +68,9 @@ export class ChatMessage implements ChatMessageInterface {
       attachments?: Media[];
     }
   ): Promise<Message> {
-    try {
-      const response = (await this.reqi.post<Message>(
-        `/topics/${topicId}/messages`,
-        messageData,
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to send message: ${(error as Error).message}`);
-    }
+    // For WebSocket-only approach, we throw an error indicating that
+    // messages should be sent via WebSocket events instead
+    throw new Error('Direct HTTP API calls for sending messages are disabled. Use WebSocket events instead.');
   }
 
   async editMessage(

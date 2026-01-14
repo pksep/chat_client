@@ -96,18 +96,28 @@ export const manipulateConversationList = (topics: any[]): any[] => {
         : avatarUrl;
     const initials = user?.initials || otherUser?.initials || nickname;
 
+    // Create user object for both DM and Group chats to ensure consistent interface
+    const contactUser = topic.type === TopicType.Group
+      ? {
+          id: topic.id, // Use topic.id as the identifier for group
+          initials: title || `Group ${topic.id.substring(0, 8)}`,
+          nickname: title || `Group ${topic.id.substring(0, 8)}`,
+          avatarUrl: avatarUrl || ''
+        }
+      : {
+          id: otherUser?.id || contactId,
+          initials,
+          nickname,
+          avatarUrl: contactAvatarUrl
+        };
+
     return {
       id: contactId,
       userId: topic.type === TopicType.DM ? otherUser?.id : undefined,
       nickname,
       avatarUrl: contactAvatarUrl,
       // Add user object for ContactList component compatibility
-      user: {
-        id: otherUser?.id || contactId,
-        initials,
-        nickname,
-        avatarUrl: contactAvatarUrl
-      },
+      user: contactUser,
       isPin:
         topic.isPin || topic.isPinned || topic.topicSetting?.isPin || false,
       initial: user?.initial || '',
@@ -120,7 +130,7 @@ export const manipulateConversationList = (topics: any[]): any[] => {
       isRead: lastMessage?.status === MessageStatus.Read,
       latestMessageStatus: lastMessage?.status,
       isLatestMessageFromMe: lastMessage?.senderUserId === currentUserId,
-      conversationId: topic.id
+      conversationId: topic.type === TopicType.Group ? groupId || topic.id : topic.id
     };
   });
 };
