@@ -4,14 +4,6 @@ import { SearchParams, PaginatedResponse, MessageStatus } from './types';
 import { S3Service } from './s3Service';
 
 export interface ChatMessageInterface {
-  getMessages(
-    topicId: string,
-    params?: SearchParams
-  ): Promise<PaginatedResponse<Message>>;
-  sendMessage(
-    topicId: string,
-    messageData: { content: string; replyTo?: string; attachments?: Media[] }
-  ): Promise<Message>;
   editMessage(
     topicId: string,
     messageId: string,
@@ -49,28 +41,6 @@ export class ChatMessage implements ChatMessageInterface {
   constructor(reqi: Reqi, s3Service?: S3Service) {
     this.reqi = reqi;
     this.s3Service = s3Service;
-  }
-
-  async getMessages(
-    topicId: string,
-    params?: SearchParams
-  ): Promise<PaginatedResponse<Message>> {
-    // For WebSocket-only approach, we throw an error indicating that
-    // messages should be retrieved via WebSocket events instead
-    throw new Error('Direct HTTP API calls for messages are disabled. Use WebSocket events instead.');
-  }
-
-  async sendMessage(
-    topicId: string,
-    messageData: {
-      content: string;
-      replyTo?: string;
-      attachments?: Media[];
-    }
-  ): Promise<Message> {
-    // For WebSocket-only approach, we throw an error indicating that
-    // messages should be sent via WebSocket events instead
-    throw new Error('Direct HTTP API calls for sending messages are disabled. Use WebSocket events instead.');
   }
 
   async editMessage(

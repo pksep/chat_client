@@ -156,6 +156,7 @@ import {
   setupUrlWatcher
 } from '../composables/useUrlRouting';
 import { createTopic, getTopicList } from '../composables/useTopics';
+import { getChatSDK } from '../services/useChat';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -545,14 +546,38 @@ const handleNewContactMessage = async (
 
     navigateToGroup(contact.id);
   } else {
-    createTopic(contact.id);
+    const createdTopic = await createTopic(contact.id);
     state.contact = {
       ...contact,
-      conversationId: contact.conversationId || contact.id
+      conversationId: createdTopic?.id || contact.conversationId || contact.id
     };
 
     navigateToDialogs(state.contact.id);
   }
+
+  // Join the topic when entering the chat (handleNewContactMessage)
+  try {
+    const sdk = getChatSDK();
+    if (!sdk) {
+      console.error(
+        'ChatSDK instance is not available in handleNewContactMessage'
+      );
+      return;
+    }
+    console.log(
+      'ChatSDK instance found in handleNewContactMessage, calling joinTopic'
+    );
+    const conversationId =
+      contact.conversationId || contact.groupId || contact.id;
+    await sdk.joinTopic(conversationId);
+    console.log(
+      'Successfully joined topic in handleNewContactMessage:',
+      conversationId
+    );
+  } catch (error) {
+    console.error('Failed to join topic in handleNewContactMessage:', error);
+  }
+
   return state.contact;
 };
 
@@ -578,6 +603,32 @@ const handleNewGroupMessage = async (group: any): Promise<void> => {
   state.chapter = state.contact.nickname || state.contact.conversationId;
 
   navigateToGroup(state.groupId);
+
+  // Join the topic when entering the chat (handleNewGroupMessage)
+  console.log(
+    'handleNewGroupMessage - Attempting to join topic:',
+    group.conversationId || group.topicId
+  );
+  try {
+    const sdk = getChatSDK();
+    if (!sdk) {
+      console.error(
+        'ChatSDK instance is not available in handleNewGroupMessage'
+      );
+      return;
+    }
+    console.log(
+      'ChatSDK instance found in handleNewGroupMessage, calling joinTopic'
+    );
+    const conversationId = group.conversationId || group.topicId;
+    await sdk.joinTopic(conversationId);
+    console.log(
+      'Successfully joined topic in handleNewGroupMessage:',
+      conversationId
+    );
+  } catch (error) {
+    console.error('Failed to join topic in handleNewGroupMessage:', error);
+  }
 };
 
 const handleChangeContact = async (contact: IUserProps): Promise<void> => {

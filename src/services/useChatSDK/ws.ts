@@ -1,4 +1,5 @@
 import { Socket } from 'socket.io-client';
+import { WsEmit, WsSubscribeMessage } from '@pksep/zod-shared-chat';
 import {
   WebSocketEventType,
   WebSocketEvent,
@@ -72,7 +73,7 @@ export class ChatWS implements ChatWSInterface {
 
       switch (type) {
         case WebSocketEventType.SEND_MESSAGE:
-          serverEventType = 'sendMessage';
+          serverEventType = WsSubscribeMessage.SendMessage;
           break;
         case WebSocketEventType.EDIT_MESSAGE:
           serverEventType = 'editMessage';
@@ -90,7 +91,7 @@ export class ChatWS implements ChatWSInterface {
           serverEventType = 'readMessages';
           break;
         case WebSocketEventType.JOIN_TOPIC:
-          serverEventType = 'joinTopic';
+          serverEventType = WsSubscribeMessage.JoinTopic;
           break;
         case WebSocketEventType.LEAVE_TOPIC:
           serverEventType = 'leaveTopic';
@@ -100,7 +101,7 @@ export class ChatWS implements ChatWSInterface {
           break;
       }
 
-      this.socket.emit(serverEventType, payload);
+      this.socket.emit(serverEventType, JSON.stringify(payload));
     } else {
       console.warn('Socket.IO is not connected. Cannot send event:', type);
     }

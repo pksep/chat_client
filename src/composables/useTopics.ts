@@ -22,6 +22,8 @@ export const fetchAllTopics = async (
       limit
     });
 
+    // Сохраняем полученные данные в реактивное состояние
+    topics.value = response.data;
     return response.data;
   } catch (err) {
     error.value = (err as Error).message;
@@ -50,24 +52,6 @@ export const createTopic = async (peerId: string): Promise<IContactProps[]> => {
   }
 };
 
-const manipulateTopic = (
-  topic: Topic & {
-    user: User;
-    messages: Message[];
-    info: TopicSetting;
-  }
-): IContactProps => {
-  return {
-    id: topic.id,
-    title: topic.user.nickname,
-    user: topic.user,
-    createdAt: topic.createdAt,
-    updatedAt: topic.updatedAt,
-    deletedAt: topic.deletedAt || null,
-    // latestMessage: topic.latestMessage,
-    info: topic.info
-  };
-};
 
 export const getTopicList = (): IContactProps[] => {
   return topics.value || [];
