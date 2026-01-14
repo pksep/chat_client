@@ -27,7 +27,9 @@ const normalizeDate = (value?: Date | string | number): Date => {
 };
 
 const mapMessage = (message: Message): ChatMessage => {
-  const sender = message.senderUserId ? getUserById(message.senderUserId) : null;
+  const sender = message.senderUserId
+    ? getUserById(message.senderUserId)
+    : null;
   const createdAt = normalizeDate(message.createdAt);
 
   return {
@@ -297,10 +299,9 @@ export const sendMessageChat = async (params: {
       media = [uploaded];
     }
 
-    const sentMessage = await sdk.sendMessage({
-      topicId: params.topicId,
-      text: params.text,
-      media
+    const sentMessage = await sdk.sendMessage(params.topicId, {
+      content: params.text,
+      attachments: media
     });
 
     removeFromOutgoingMessageQueue(params.topicId, tempMessage.id);

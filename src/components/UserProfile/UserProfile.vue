@@ -8,14 +8,14 @@
       :url="props.avatarUrl"
       :alt="props.avatarUrl"
       class="user-profile__avatar"
-      :initials="props.initials"
+      :initials="props.initial || props.initials || ''"
       :data-testid="`${dataTestid}-UserProfile-Avatar`"
     />
     <h3
       class="user-profile__title"
       :data-testid="`${dataTestid}-UserProfile-Title`"
     >
-      {{ props.initials }}
+      {{ props.initial || props.initials || '' }}
     </h3>
     <span
       class="user-profile__ex"

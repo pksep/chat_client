@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { IUserProps } from '../components/interfaces/interfaces';
 import { getChatSDK, getCurrentUserId } from './useChat';
-import { Group, Topic } from '@pksep/zod-shared-chat';
+import { Group } from '@pksep/zod-shared-chat';
 
 // Define TopicType enum locally since it's not exported from the shared package
 enum TopicType {
@@ -58,7 +58,8 @@ export const fetchGroupMembers = async (
     const group = await sdk.getGroup(groupId, { page: 1, limit: 1000 });
 
     const groupWithMembers = group as any;
-    const members: any[] = (groupWithMembers.members || groupWithMembers.users || []);
+    const members: any[] =
+      groupWithMembers.members || groupWithMembers.users || [];
     groupMembers.value = members;
 
     return groupMembers.value;
@@ -103,7 +104,9 @@ const createGroup = async (
     isPin: false,
     membersLength: (() => {
       const groupWithMembers = group as any;
-      return (groupWithMembers.members || groupWithMembers.users || []).length || 0;
+      return (
+        (groupWithMembers.members || groupWithMembers.users || []).length || 0
+      );
     })()
   };
 
@@ -176,7 +179,7 @@ const quitGroup = async (groupId: string) => {
   const currentUserId = getCurrentUserId();
   if (!currentUserId) return;
 
-  await sdk.leaveGroup(currentUserId, groupId);
+  await sdk.leaveGroup(groupId);
 };
 
 export const getGroupInfo = async (groupIds: string[]) => {
@@ -198,7 +201,9 @@ export const fetchGroupMemberCount = async (
   try {
     const groupInfo = await getGroupInfo([groupId]);
     const firstGroup = groupInfo?.[0] as any;
-    return (firstGroup && (firstGroup.members || firstGroup.users || [])).length || 0;
+    return (
+      (firstGroup && (firstGroup.members || firstGroup.users || [])).length || 0
+    );
   } catch (err) {
     console.error('Failed to fetch group member count:', err);
     return 0;

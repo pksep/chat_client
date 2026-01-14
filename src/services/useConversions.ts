@@ -110,7 +110,6 @@ export const manipulateConversationList = (topics: any[]): any[] => {
       },
       isPin:
         topic.isPin || topic.isPinned || topic.topicSetting?.isPin || false,
-      tabel: user?.tabel || '',
       initial: user?.initial || '',
       latestMessage: parseLastMessagePreview(lastMessage),
       latestMessageTime: lastMessage?.createdAt

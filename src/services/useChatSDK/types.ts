@@ -1,5 +1,4 @@
 import {
-  MediaType,
   Media,
   Reaction,
   Message,
@@ -9,8 +8,13 @@ import {
   Group
 } from '@pksep/zod-shared-chat';
 
-// Define MediaTypeType locally since it's not exported from the shared package
-export type MediaTypeType = 'IMAGE' | 'VIDEO' | 'FILE';
+// Define MediaTypeType enum locally since it's not exported from the shared package
+export enum MediaTypeType {
+  Image = 'IMAGE',
+  Video = 'VIDEO',
+  Audio = 'AUDIO',
+  Document = 'DOCUMENT'
+}
 
 // Define BaseEntity locally since it's not exported from the shared package
 export interface BaseEntity {
@@ -56,12 +60,4 @@ export enum MessageStatus {
 }
 
 // Export the types to maintain the same interface for other modules
-export type {
-  Media,
-  Reaction,
-  Message,
-  Topic,
-  TopicSetting,
-  User,
-  Group
-};
+export type { Media, Reaction, Message, Topic, TopicSetting, User, Group };

@@ -111,7 +111,9 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
   };
 
   const createNiceName = (arr: IUserProps[]) => {
-    const names = arr.map(user => user.initials).join(', ');
+    const names = arr
+      .map(user => user.initial || user.initials || '')
+      .join(', ');
     return names;
   };
 

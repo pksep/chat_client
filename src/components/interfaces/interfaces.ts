@@ -42,6 +42,14 @@ export type IUserProps = {
   id?: string;
   ex?: string | Record<string, any>;
   initial?: string;
+  initials?: string;
+  nickname?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+  deletedAt?: Date | null;
+  conversationId?: string;
+  groupId?: string;
+  membersLength?: number;
   dataTestid?: string;
 };
 

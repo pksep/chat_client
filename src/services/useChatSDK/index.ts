@@ -15,6 +15,13 @@ import {
 } from './websocketEvents';
 import { Reqi } from '@pksep/reqi';
 import io, { Socket } from 'socket.io-client';
+import {
+  SearchParams,
+  PaginatedResponse,
+  TopicType,
+  MediaTypeType,
+  MessageStatus
+} from './types';
 
 export interface ChatSDKOptions {
   apiUrl: string;
@@ -791,7 +798,11 @@ export class ChatSDK {
     }
   }
 
-  async uploadMedia(file: File, topicId: string): Promise<Media> {
+  async uploadMedia(
+    file: File,
+    topicId: string,
+    messageId?: string
+  ): Promise<Media> {
     if (!this.s3Service) {
       throw new Error('S3 service not initialized');
     }
@@ -803,14 +814,12 @@ export class ChatSDK {
       // Then create media record in the database
       const mediaData: Media = {
         id: '',
-        url: uploadResult.url,
-        fileName: file.name,
-        fileSize: file.size,
-        mimeType: file.type,
-        mediaType: this.getMediaType(file.type),
-        topicId,
-        uploadedAt: new Date().toISOString(),
-        uploadedBy: ''
+        path: uploadResult.path,
+        type: file.type,
+        messageId: messageId || '',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null
       };
 
       const response = (await this.reqi.post<Media>('/media', mediaData, {
@@ -1083,6 +1092,87 @@ export class ChatSDK {
       return data;
     } catch (error) {
       throw new Error(`Failed to update topic: ${(error as Error).message}`);
+    }
+  }
+
+  async updateMessageStatus(
+    messageId: string,
+    status: MessageStatus
+  ): Promise<{ success: boolean }> {
+    try {
+      const response = (await this.reqi.patch(
+        `/messages/${messageId}/status`,
+        { status },
+        { parsed: false }
+      )) as any;
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      throw new Error(
+        `Failed to update message status: ${(error as Error).message}`
+      );
+    }
+  }
+
+  async addUsersToGroup(
+    groupId: string,
+    userIds: string[]
+  ): Promise<{ success: boolean; addedMembers: User[] }> {
+    try {
+      const response = (await this.reqi.post(
+        `/groups/${groupId}/members`,
+        { userIds },
+        { parsed: false }
+      )) as any;
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      throw new Error(
+        `Failed to add users to group: ${(error as Error).message}`
+      );
+    }
+  }
+
+  async editGroup(
+    groupId: string,
+    groupData: Partial<{
+      title: string;
+      description?: string;
+      avatarUrl?: string;
+      memberIds: string[];
+      admins: string[];
+    }>
+  ): Promise<Group> {
+    try {
+      const response = (await this.reqi.patch<Group>(
+        `/groups/${groupId}`,
+        groupData,
+        { parsed: false }
+      )) as any;
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      throw new Error(`Failed to edit group: ${(error as Error).message}`);
+    }
+  }
+
+  async removeUserFromGroup(
+    groupId: string,
+    userId: string
+  ): Promise<{ success: boolean }> {
+    try {
+      const response = (await this.reqi.delete(
+        `/groups/${groupId}/members/${userId}`,
+        {
+          parsed: false
+        }
+      )) as any;
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      throw new Error(
+        `Failed to remove user from group: ${(error as Error).message}`
+      );
     }
   }
 }

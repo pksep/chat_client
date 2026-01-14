@@ -62,10 +62,9 @@ const manipulateTopic = (topic: Topic): IContactProps => {
 
   return {
     id: topic.id,
-    initials,
+    initial: initials,
     nickname,
     avatarUrl,
-    lastOnline: null, // Placeholder - would fetch actual lastOnline
     createdAt: topic.createdAt,
     updatedAt: topic.updatedAt,
     deletedAt: topic.deletedAt || null,

@@ -102,9 +102,14 @@ onMounted(async () => {
       if (fallbackUser) {
         setAuthUser({
           ...fallbackUser,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          lastOnline: new Date()
+          id: fallbackUser.id || '',
+          initials: fallbackUser.initials || fallbackUser.initial || '',
+          nickname: fallbackUser.nickname || fallbackUser.id || '',
+          avatarUrl: fallbackUser.avatarUrl || '',
+          lastOnline: new Date(),
+          createdAt: fallbackUser.createdAt || new Date(),
+          updatedAt: fallbackUser.updatedAt || new Date(),
+          deletedAt: fallbackUser.deletedAt || null
         });
       }
     }

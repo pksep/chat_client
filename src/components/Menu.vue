@@ -146,7 +146,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, reactive, watch } from 'vue';
+import { computed, reactive, watch } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_XL } from '../utils/constants';
 import Line from './UI/Line.vue';
