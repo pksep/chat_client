@@ -5,12 +5,15 @@ import {
   Message,
   TopicSetting,
   Media,
-  TopicType,
+  MediaType
+} from '@pksep/zod-shared-chat';
+import {
   MessageStatus,
   PaginatedResponse,
   SearchParams,
-  MediaType
+  MediaTypeType
 } from './types';
+
 import { S3Service, S3Config } from './s3Service';
 import {
   WebSocketEventType,
@@ -19,6 +22,11 @@ import {
 } from './websocketEvents';
 import { Reqi } from '@pksep/reqi';
 import io, { Socket } from 'socket.io-client';
+
+enum TopicType {
+  Group = 'GROUP',
+  DM = 'DM'
+}
 
 export interface ChatSDKOptions {
   apiUrl: string;
@@ -319,8 +327,10 @@ export class ChatSDK {
     const queryParams = new URLSearchParams();
 
     if (params?.search) queryParams.append('search', params.search);
-    if (params?.page) queryParams.append('page', params.page.toString());
-    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.page !== undefined && params?.page !== null)
+      queryParams.append('page', params.page.toString());
+    if (params?.limit !== undefined && params?.limit !== null)
+      queryParams.append('limit', params.limit.toString());
 
     const queryString = queryParams.toString();
     const endpoint = `/users${queryString ? `?${queryString}` : ''}`;
@@ -374,8 +384,10 @@ export class ChatSDK {
     const queryParams = new URLSearchParams();
 
     if (type) queryParams.append('type', type);
-    if (params?.page) queryParams.append('page', params.page.toString());
-    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.page !== undefined && params?.page !== null)
+      queryParams.append('page', params.page.toString());
+    if (params?.limit !== undefined && params?.limit !== null)
+      queryParams.append('limit', params.limit.toString());
 
     const queryString = queryParams.toString();
     const endpoint = `/topics${queryString ? `?${queryString}` : ''}`;
@@ -479,8 +491,10 @@ export class ChatSDK {
     const queryParams = new URLSearchParams();
 
     if (params?.search) queryParams.append('search', params.search);
-    if (params?.page) queryParams.append('page', params.page.toString());
-    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.page !== undefined && params?.page !== null)
+      queryParams.append('page', params.page.toString());
+    if (params?.limit !== undefined && params?.limit !== null)
+      queryParams.append('limit', params.limit.toString());
 
     const queryString = queryParams.toString();
     const endpoint = `/groups/${groupId}${queryString ? `?${queryString}` : ''}`;
@@ -571,18 +585,20 @@ export class ChatSDK {
       // Return a temporary message object that will be updated when the server confirms receipt
       return {
         id: `temp-${Date.now()}`,
-        senderUser: '', // Will be filled by server
+        senderUserId: '', // Will be filled by server
         topicId: messageData.topicId,
         reactions: [],
         text: messageData.text,
-        replayMessageId: messageData.replayMessageId,
+        replyMessageId: messageData.replayMessageId,
         media: messageData.media || [],
         isEdit: false,
         status: MessageStatus.Wait,
         isPin: false,
+        isSystem: false, // Add the missing isSystem property
         createdAt: new Date(),
-        updatedAt: new Date()
-      };
+        updatedAt: new Date(),
+        deletedAt: null
+      } as Message;
     } else {
       throw new Error('Socket is not connected');
     }
@@ -594,8 +610,10 @@ export class ChatSDK {
   ): Promise<PaginatedResponse<Message>> {
     const queryParams = new URLSearchParams();
 
-    if (params?.page) queryParams.append('page', params.page.toString());
-    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.page !== undefined && params?.page !== null)
+      queryParams.append('page', params.page.toString());
+    if (params?.limit !== undefined && params?.limit !== null)
+      queryParams.append('limit', params.limit.toString());
     if (params?.since) queryParams.append('since', params.since.toISOString());
 
     const queryString = queryParams.toString();
@@ -719,7 +737,8 @@ export class ChatSDK {
       type: this.getMediaType(file),
       messageId: messageId || '',
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      deletedAt: null
     };
 
     // Media is typically sent as part of a message
@@ -773,7 +792,7 @@ export class ChatSDK {
     }
   }
 
-  private getMediaType(file: File | Blob): MediaType {
+  private getMediaType(file: File | Blob): MediaTypeType {
     const mimeType = file.type;
 
     if (mimeType.startsWith('image/')) {

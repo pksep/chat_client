@@ -101,7 +101,8 @@ const props = withDefaults(defineProps<ContactListInModalProps>(), {
       avatarUrl: '/avatar.jpg',
       lastOnline: new Date(),
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      deletedAt: null
     }
   ],
   dataTestid: () => 'ContactListInModal'

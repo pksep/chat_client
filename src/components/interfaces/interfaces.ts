@@ -1,5 +1,9 @@
 import { IMenuInfoEmits } from '@/composables/useMenuInfo';
-import { TopicSettingWithUser, User } from '@/services/useChatSDK/types';
+import { User, TopicSetting } from '@pksep/zod-shared-chat';
+
+interface TopicSettingWithUser extends TopicSetting {
+  user?: User;
+}
 
 export interface IHeaderProps {
   class?: string;
@@ -32,17 +36,14 @@ export interface IHeaderEmits extends IMenuInfoEmits {
   (e: 'unmount-exit'): void;
 }
 
-export interface IUserProps extends User {
-  faceURL?: string;
+export type IUserProps = {
   avatarAlt?: string;
-  conversationId?: string;
-  groupId?: string;
+  avatarUrl?: string;
+  id?: string;
   ex?: string | Record<string, any>;
-  tabel?: string;
   initial?: string;
-  membersLength?: number;
   dataTestid?: string;
-}
+};
 
 export interface IContactUser {
   id: string;

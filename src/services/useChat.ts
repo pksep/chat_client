@@ -1,8 +1,8 @@
 import { ref, shallowRef } from 'vue';
 import { ChatSDK } from './useChatSDK';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
-import { MessageStatus, MediaType } from './useChatSDK/types';
-import type { Message, Media } from './useChatSDK/types';
+import { MediaType, Message, Media } from '@pksep/zod-shared-chat';
+import { MessageStatus } from './useChatSDK/types';
 import type { S3Config } from './useChatSDK/s3Service';
 import { S3Service } from './useChatSDK/s3Service';
 import type { ChatMessage } from '../types/messages';
@@ -27,7 +27,7 @@ const normalizeDate = (value?: Date | string | number): Date => {
 };
 
 const mapMessage = (message: Message): ChatMessage => {
-  const sender = message.senderUser ? getUserById(message.senderUser) : null;
+  const sender = message.senderUserId ? getUserById(message.senderUserId) : null;
   const createdAt = normalizeDate(message.createdAt);
 
   return {
@@ -239,11 +239,11 @@ const buildTempMessage = (params: {
   return {
     id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     topicId: params.topicId,
-    senderUser: currentUserId.value || '',
+    senderUserId: currentUserId.value || '',
     reactions: [],
     text: params.text,
     media: params.media || [],
-    replayMessageId: undefined,
+    replyMessageId: undefined,
     isEdit: false,
     status: MessageStatus.Wait,
     isPin: false,
@@ -253,6 +253,7 @@ const buildTempMessage = (params: {
     sendTime: createdAt.getTime(),
     senderNickname: sender?.nickname || '',
     faceURL: sender?.avatarUrl || '',
+    deletedAt: null,
     loading: true
   };
 };
@@ -324,7 +325,7 @@ export const markAsRead = async (topicId: string): Promise<void> => {
   const sdk = getChatSDK();
   const messages = getMessagesByConversationId(topicId);
   const updatedMessages = messages.map(message => {
-    if (message.senderUser !== currentUserId.value) {
+    if (message.senderUserId !== currentUserId.value) {
       return {
         ...message,
         status: MessageStatus.Read
@@ -337,7 +338,7 @@ export const markAsRead = async (topicId: string): Promise<void> => {
   notifyMessageChange(topicId);
 
   const unreadMessages = messages.filter(
-    message => message.senderUser !== currentUserId.value
+    message => message.senderUserId !== currentUserId.value
   );
   await Promise.all(
     unreadMessages.map(message =>

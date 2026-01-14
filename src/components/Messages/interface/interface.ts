@@ -1,7 +1,8 @@
-import type { MediaType } from '../../../services/useChatSDK/types';
+import { MediaType } from '@pksep/zod-shared-chat';
+import { type MediaTypeType } from '../../../services/useChatSDK/types';
 
 export interface MessageMediaItem {
-  type: MediaType;
+  type: MediaTypeType;
   path: string;
   fileName?: string;
   fileSize?: number;

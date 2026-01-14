@@ -4,7 +4,13 @@ import { IContactProps } from '../components/interfaces/interfaces';
 import { setGroupList } from './useGroup';
 import { getUsersList } from '../composables/useUsers';
 import { updateItemList } from '../utils/listUtils';
-import { MessageStatus, TopicType } from './useChatSDK/types';
+import { MessageStatus } from './useChatSDK/types';
+
+// Define TopicType enum locally since it's not exported from the shared package
+enum TopicType {
+  Group = 'GROUP',
+  DM = 'DM'
+}
 
 const conversionStore = shallowRef<IContactProps[]>([]);
 const allNotificationCount = ref<number>(0);
@@ -114,7 +120,7 @@ export const manipulateConversationList = (topics: any[]): any[] => {
       groupId,
       isRead: lastMessage?.status === MessageStatus.Read,
       latestMessageStatus: lastMessage?.status,
-      isLatestMessageFromMe: lastMessage?.senderUser === currentUserId,
+      isLatestMessageFromMe: lastMessage?.senderUserId === currentUserId,
       conversationId: topic.id
     };
   });

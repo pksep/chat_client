@@ -188,7 +188,7 @@ import FileIcon from '../UI/FileIcon.vue';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import { getFormatFileSize, getShortName } from '../../utils/getFormatFileSize';
 import { SliderModal } from '@pksep/yui';
-import { MediaType } from '../../services/useChatSDK/types';
+import { MediaType } from '@pksep/zod-shared-chat';
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();

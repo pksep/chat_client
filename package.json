@@ -31,6 +31,7 @@
     "@mastra/client-js": "^0.12.3",
     "@pksep/reqi": "^0.0.25",
     "@pksep/yui": "0.1.167",
+    "@pksep/zod-shared-chat": "0.0.4",
     "socket.io-client": "^4.8.3",
     "zod": "3"
   },
@@ -47,9 +48,7 @@
     "@typescript-eslint/parser": "^7.18.0",
     "@vite-pwa/assets-generator": "^1.0.2",
     "@vitejs/plugin-vue": "^6.0.3",
-    "@vue/compiler-sfc": "^3.5.25",
     "@vue/eslint-config-airbnb": "^8.0.0",
-    "@vue/runtime-dom": "^3.5.25",
     "babel-eslint": "^10.1.0",
     "cross-env": "^10.1.0",
     "eslint": "^8.57.1",

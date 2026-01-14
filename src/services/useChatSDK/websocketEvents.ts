@@ -1,4 +1,4 @@
-import { Message, Topic, User, Group } from './types';
+import { Message, Topic, User, Group } from '@pksep/zod-shared-chat';
 
 export enum WebSocketEventType {
   JOIN_TOPIC = 'joinTopic',

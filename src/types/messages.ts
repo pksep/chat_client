@@ -1,4 +1,4 @@
-import type { Message as ChatSDKMessage } from '../services/useChatSDK/types';
+import type { Message as ChatSDKMessage } from '@pksep/zod-shared-chat';
 
 export interface AIMessage {
   role: 'user' | 'assistant';
@@ -16,6 +16,8 @@ export interface ChatMessage extends ChatSDKMessage {
   senderNickname?: string;
   sendTime?: number;
   loading?: boolean;
+  media?: any[]; // Add media property to ChatMessage type
+  reactions?: any[]; // Add reactions property to ChatMessage type
 }
 
 export type Message = AIMessage | ChatMessage;
@@ -25,5 +27,5 @@ export function isAIMessage(message: Message): message is AIMessage {
 }
 
 export function isChatMessage(message: Message): message is ChatMessage {
-  return 'topicId' in message && 'senderUser' in message;
+  return 'topicId' in message && 'senderUserId' in message;
 }

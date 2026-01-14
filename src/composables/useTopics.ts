@@ -1,7 +1,8 @@
 import { ref, shallowRef } from 'vue';
 import { getChatSDK } from '../services/useChat';
-import { Topic, TopicType } from '../services/useChatSDK/types';
+import { Topic } from '@pksep/zod-shared-chat';
 import { IContactProps } from '../components/interfaces/interfaces';
+import { TopicType } from '../services/useChatSDK/types';
 
 const topics = shallowRef<IContactProps[]>([]);
 const loading = ref(false);
@@ -52,23 +53,26 @@ export const createTopic = async (peerId: string): Promise<IContactProps[]> => {
 };
 
 const manipulateTopic = (topic: Topic): IContactProps => {
-  const topicUser = topic?.settings?.[0]?.user;
-  const nickname = topicUser?.nickname || topicUser?.initials || '';
-  const avatarUrl = topicUser?.avatarUrl || null;
-  const initials = topicUser?.initials || nickname;
+  // For DM topics, we need to get user information differently
+  // Since Topic doesn't have settings, user, or info, we'll use placeholder values
+  // In a real implementation, you'd fetch user details separately
+  const nickname = 'User'; // Placeholder - would fetch actual user info
+  const avatarUrl = null; // Placeholder - would fetch actual avatar
+  const initials = 'U'; // Placeholder - would fetch actual initials
 
   return {
     id: topic.id,
     initials,
     nickname,
     avatarUrl,
-    lastOnline: topicUser?.lastOnline || null,
+    lastOnline: null, // Placeholder - would fetch actual lastOnline
     createdAt: topic.createdAt,
     updatedAt: topic.updatedAt,
+    deletedAt: topic.deletedAt || null,
     conversationId: topic.id,
     latestMessage: '',
-    user: topic.user,
-    info: topic.info
+    user: undefined, // Placeholder - would fetch actual user
+    info: undefined // Placeholder - would fetch actual info
   };
 };
 

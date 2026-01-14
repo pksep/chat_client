@@ -85,18 +85,18 @@
           v-if="!message.isSystemMessage"
           :class="
             messageChat(
-              props.user.id === message.senderUser ? 'user' : 'assistant'
+              props.user.id === message.senderUserId ? 'user' : 'assistant'
             )
           "
           :message="message.text || ''"
           :media="getMessageMedia(message)"
           :file="getMessageFile(message)"
-          :is-me-sender="props.user.id === message.senderUser"
+          :is-me-sender="props.user.id === message.senderUserId"
           :time="formatTime(new Date(message.sendTime))"
           :sender="message.senderNickname || ''"
           :avatar="message.faceURL"
           :is-read="
-            props.user.id === message.senderUser
+            props.user.id === message.senderUserId
               ? message.status === MessageStatus.Read
               : message.status === MessageStatus.Read
           "
@@ -165,7 +165,8 @@ import {
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
 import type { ChatMessage, AIMessage } from '../types/messages';
-import { MediaType, MessageStatus } from '../services/useChatSDK/types';
+import { MediaType } from '@pksep/zod-shared-chat';
+import { MessageStatus } from '../services/useChatSDK/types';
 
 interface ChatMessageWithLoading extends ChatMessage {
   loading?: boolean;

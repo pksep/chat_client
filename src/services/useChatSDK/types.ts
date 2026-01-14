@@ -1,110 +1,67 @@
+import {
+  MediaType,
+  Media,
+  Reaction,
+  Message,
+  Topic,
+  TopicSetting,
+  User,
+  Group
+} from '@pksep/zod-shared-chat';
+
+// Define MediaTypeType locally since it's not exported from the shared package
+export type MediaTypeType = 'IMAGE' | 'VIDEO' | 'FILE';
+
+// Define BaseEntity locally since it's not exported from the shared package
 export interface BaseEntity {
-  createdAt: Date | string;
-  updatedAt: Date | string;
-  deletedAt?: Date | string;
-}
-
-export enum MediaType {
-  Image = 'Image',
-  Video = 'Video',
-  File = 'File'
-}
-
-export interface Media extends BaseEntity {
   id: string;
-  path: string;
-  messageId: string;
-  type: MediaType;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt?: Date | null;
 }
 
-export interface Reaction extends BaseEntity {
-  id: string;
-  text: string;
-  senderUser: string;
-  messageId: string;
+// Define PaginatedResponse and SearchParams locally since they're not exported from the shared package
+export interface PaginatedResponse<T = any> {
+  data: T[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
 }
 
-export enum MessageStatus {
-  Read = 'read',
-  Delivery = 'delivery',
-  Wait = 'wait',
-  NotDelivered = 'notDelivered'
+export interface SearchParams {
+  page?: number | null;
+  limit?: number | null;
+  search?: string | null;
+  type?: string | null;
 }
 
-export interface Message extends BaseEntity {
-  id: string;
-  senderUser: string;
-  topicId: string;
-  reactions: Reaction[];
-  text?: string;
-  replayMessageId?: string;
-  media: Media[];
-  isEdit: boolean;
-  status: MessageStatus;
-  isPin: boolean;
-  isSystem?: boolean;
-}
-
+// Define TopicType enum locally since it's not exported from the shared package
 export enum TopicType {
   Group = 'GROUP',
   DM = 'DM'
 }
 
-export interface TopicSettingWithUser extends BaseEntity {
-  userId: string;
-  topicId: string;
-  isMute: boolean;
-  isPin: boolean;
+// Define TopicSettingWithUser locally since it's not exported from the shared package
+export interface TopicSettingWithUser extends TopicSetting {
   user?: User;
 }
 
-export interface Topic extends BaseEntity {
-  id: string;
-  type: TopicType;
-  /** Settings with user info, populated when fetching DM topics */
-  settings?: TopicSettingWithUser[];
-  user?: User;
-  info?: TopicSettingWithUser;
+// Define MessageStatus enum locally since it's not exported from the shared package
+export enum MessageStatus {
+  Delivery = 'DELIVERED',
+  Wait = 'WAIT',
+  NotDelivered = 'NOT_DELIVERED',
+  Read = 'READ'
 }
 
-export interface TopicSetting extends BaseEntity {
-  userId: string;
-  topicId: string;
-  isMute: boolean;
-  isPin: boolean;
-}
-
-export interface User extends BaseEntity {
-  id: string;
-  initials: string;
-  nickname: string;
-  avatarUrl: string | null;
-  lastOnline: Date | string | null;
-  topics?: Topic[];
-}
-
-export interface Group extends BaseEntity {
-  id: string;
-  topicId: string;
-  title: string;
-  description: string;
-  avatarUrl: string | null;
-  members: User[];
-  admins: User[];
-}
-
-export interface PaginatedResponse<T> {
-  data: T[];
-  meta: {
-    totalItems: number;
-    totalPages: number;
-    itemsPerPage: number;
-    currentPage: number;
-  };
-}
-
-export interface SearchParams {
-  search?: string;
-  page?: number;
-  limit?: number;
-}
+// Export the types to maintain the same interface for other modules
+export type {
+  Media,
+  Reaction,
+  Message,
+  Topic,
+  TopicSetting,
+  User,
+  Group
+};

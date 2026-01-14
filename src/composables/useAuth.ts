@@ -1,4 +1,4 @@
-import type { User } from '../services/useChatSDK/types';
+import type { User } from '@pksep/zod-shared-chat';
 import { ref, Ref } from 'vue';
 import { setAuthToken } from './useLogin';
 import { getConfig } from '../services/useConfig';

@@ -1,4 +1,4 @@
-import type { Message as ChatSDKMessage } from '../../services/useChatSDK/types';
+import type { Message as ChatSDKMessage } from '@pksep/zod-shared-chat';
 
 // Interface for AI messages
 export interface AIMessage {
@@ -18,6 +18,7 @@ interface ExtendedChatMessage {
   senderNickname?: string;
   sendTime?: number;
   loading?: boolean;
+  media?: any[];
 }
 
 // Chat message type
@@ -38,5 +39,5 @@ export function isAIMessage(message: Message): message is AIMessage {
 
 // Type guard for chat messages
 export function isChatMessage(message: Message): message is ChatMessage {
-  return 'topicId' in message && 'senderUser' in message;
+  return 'topicId' in message && 'senderUserId' in message;
 }
