@@ -143,16 +143,9 @@ const state = reactive({
 
 const {
   state: menuInfoState,
-  initializeMenuInfo,
+  // initializeMenuInfo,
   handleUpdateInformation
-} = useMenuInfo(
-  {
-    ...props,
-    open: state.openMobileInfoModal,
-    isEnabled: topic.value.type !== 'ai'
-  },
-  emits
-);
+} = useMenuInfo();
 
 // const modelInfo = computed(() => menuInfoState.information);
 // const { muteGroupInfo, getMuteStatus } = useInformationMenu(modelInfo);
@@ -170,11 +163,13 @@ const handleCloseMobileInfoModal = (): void => {
 const handleClickHeader = async (): Promise<void> => {
   if (isMobile.value) {
     state.openMobileInfoModal = true;
+    /*
     await initializeMenuInfo({
       ...props,
       isEnabled: true,
       open: state.openMobileInfoModal
     });
+     */
     emits('unmount-click');
     return;
   }

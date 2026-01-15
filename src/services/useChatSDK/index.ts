@@ -32,7 +32,7 @@ import { ChatGroup, ChatGroupInterface } from './group';
 import { ChatMedia, ChatMediaInterface } from './media';
 import { ChatWS, ChatWSInterface } from './ws';
 import { ChatUtils, ChatUtilsInterface } from './utils';
-import { IGroup, ITopic } from '../../components/interfaces/interfaces';
+import { ITopic } from '../../components/interfaces/interfaces';
 
 export interface ChatSDKOptions {
   apiUrl: string;
@@ -518,8 +518,8 @@ export class ChatSDK {
     return this.group.editGroup(groupId, groupData);
   }
 
-  async getMessages(): null {
-    return null;
+  async getMessages(): Promise<Message[]> {
+    return [];
   }
 
   async editMessage(

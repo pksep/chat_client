@@ -57,9 +57,9 @@ const closeModal = (): void => {
 
 const handleNewContact = (contacts: IUser[] | IUser): void => {
   if (props.isAddOne) {
-    emits('unmount-new-contact', contacts);
+    emits('unmount-new-contact', contacts as IUser);
   } else {
-    emits('unmount-new-contact', contacts);
+    emits('unmount-new-contact', contacts as IUser);
   }
   closeModal();
 };

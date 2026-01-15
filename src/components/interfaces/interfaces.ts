@@ -46,6 +46,7 @@ export interface IGroup extends Group {
 
 export interface ITopic extends Topic {
   info?: Partial<TopicSetting>;
+  isPin?: boolean;
   lastMessage?: Message;
   members?: IUser[];
   group?: Group;

@@ -1,7 +1,7 @@
 import { ref, shallowRef } from 'vue';
 import { ChatSDK } from './useChatSDK';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
-import { MediaType, Message, Media } from '@pksep/zod-shared-chat';
+import { Message, Media } from '@pksep/zod-shared-chat';
 import { MessageStatus } from './useChatSDK/types';
 import type { S3Config } from './useChatSDK/s3Service';
 import { S3Service } from './useChatSDK/s3Service';
@@ -206,6 +206,7 @@ export const sendMessageChat = async (params: {
 }): Promise<void> => {
   const sdk = getChatSDK();
 
+  /*
   const tempMedia = params.file
     ? [
         {
@@ -222,11 +223,12 @@ export const sendMessageChat = async (params: {
         }
       ]
     : undefined;
+    */
 
   const tempMessage = buildTempMessage({
     topicId: params.topicId,
     text: params.text,
-    media: tempMedia
+    media: []
   });
 
   appendMessageToLocal(params.topicId, tempMessage);
@@ -248,14 +250,14 @@ export const sendMessageChat = async (params: {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);
     const existingMessages = messagesStore.value[params.topicId] || [];
     const updatedMessages = existingMessages.map(msg =>
-      msg.id === tempMessage.id ? { ...msg, status: MessageStatus.Error } : msg
+      msg.id === tempMessage.id ? { ...msg, status: MessageStatus.Wait } : msg
     );
     messagesStore.value[params.topicId] = updatedMessages;
     notifyMessageChange(params.topicId);
   }
 };
 
-export const  uploadFile = async (file: File): Promise<string> => {
+export const uploadFile = async (file: File): Promise<string> => {
   if (!s3Service) {
     console.warn('[ChatSDK] S3 config missing, cannot upload file.');
     return '';

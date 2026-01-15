@@ -4,11 +4,8 @@
       class="chat__mobile"
       :user="props.user"
       :contacts="props.contacts"
-      :chapter="state.chapter"
       :data-testid="`${props.dataTestid}-Chat-ContactListMobile`"
       v-if="isMobile && isShowContactList(state.chapter)"
-      @unmount-chapter="handleUnmountChapter"
-      @unmount-contact="handleUnmountContact"
     />
     <MessageList
       v-else-if="!isShowContactList(state.chapter)"
@@ -31,10 +28,8 @@ import { useTemplateRef, reactive, watch } from 'vue';
 import { isShowContactList } from '../composables/useShowContactList';
 import { MAX_W_MD } from '../utils/constants';
 import { computed } from 'vue';
-import type { IMenuEmits } from './interfaces/interfaces';
-import { IUser } from './interfaces/interfaces';
-import { markAsRead } from '../services/useChat';
 import { getTopicList } from '../composables/useTopics';
+import { markAsRead } from '../services/useChat';
 
 export interface IChatProps extends IMessageListProps {
   dataTestid?: string;
@@ -44,8 +39,6 @@ const props = withDefaults(defineProps<IChatProps>(), {
   chapter: null,
   dataTestid: () => 'Chat'
 });
-
-const emits = defineEmits<IMenuEmits>();
 
 const state = reactive({
   chapter: props.chapter,
@@ -61,7 +54,7 @@ watch(
 );
 
 watch(
-  () => props.contact?.topicId,
+  () => props.contact?.id,
   (newConversationId, oldConversationId) => {
     if (newConversationId && newConversationId !== oldConversationId) {
       markAsRead(newConversationId).catch(error => {
@@ -74,25 +67,6 @@ watch(
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const messageListRef = useTemplateRef<any>(null);
-
-const handleUnmountChapter = (
-  chapter: { nickname: string; contact: any } | string | null
-): void => {
-  if (typeof chapter === 'string') {
-    state.chapter = chapter;
-    emits('unmount-chapter', chapter);
-  } else if (chapter && chapter.nickname) {
-    state.chapter = chapter.nickname;
-    emits('unmount-chapter', chapter);
-  } else {
-    state.chapter = null;
-    emits('unmount-chapter', null);
-  }
-};
-
-const handleUnmountContact = (contact: IUser): void => {
-  emits('unmount-contact', contact);
-};
 
 defineExpose({
   handleClear: () => messageListRef.value?.handleClear()

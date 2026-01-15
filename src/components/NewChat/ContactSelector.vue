@@ -58,7 +58,7 @@ import {
   Search
 } from '@pksep/yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
-import { ITopic } from '../interfaces/interfaces';
+import { IUser } from '../interfaces/interfaces';
 import {
   IContactSelectorProps,
   IContactSelectorEmits,
@@ -113,13 +113,13 @@ const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
   updateSelection(contactId, isCheck);
 };
 
-const handleNewContact = (contact: ITopic): void => {
+const handleNewContact = (contact: IUser[] | IUser): void => {
   if (props.isAddOne) {
     emits('unmount-contact', contact);
     return;
   }
-  const shouldAdd = !state.selectedIds.has(contact.id);
-  updateSelection(contact.id, shouldAdd);
+  // const shouldAdd = !state.selectedIds.has(contact.id);
+  // updateSelection(contact.id, shouldAdd);
 };
 
 const onAddClick = (): void => {

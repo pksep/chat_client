@@ -1,7 +1,6 @@
 import { ref, shallowRef } from 'vue';
 import { getChatSDK, getCurrentUserId } from './useChat';
 import { ITopic } from '../components/interfaces/interfaces';
-import { setGroupList } from './useGroup';
 import { getUsersList } from '../composables/useUsers';
 import { updateItemList } from '../utils/listUtils';
 import { MessageStatus } from './useChatSDK/types';
@@ -119,7 +118,7 @@ export const manipulateConversationList = (topics: any[]): any[] => {
       user: contactUser,
       isPin:
         topic.isPin || topic.isPinned || topic.topicSetting?.isPin || false,
-      initial: user?.initial || '',
+      initial: '',
       latestMessage: parseLastMessagePreview(lastMessage),
       latestMessageTime: lastMessage?.createdAt
         ? new Date(lastMessage.createdAt).getTime()

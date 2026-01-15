@@ -140,7 +140,7 @@ import {
   navigateToDefault,
   setupUrlWatcher
 } from '../composables/navigation';
-import { createTopic, getTopicList } from '../composables/useTopics';
+import { getTopicList } from '../composables/useTopics';
 import { getChatSDK } from '../services/useChat';
 
 const NewContactModal = defineAsyncComponent(
@@ -460,26 +460,23 @@ const handleClearClick = (): void => {
   }
 };
 
-const handleNewContactMessage = async (
-  contact: IUser
-): Promise<IContactProps> => {
+const handleNewContactMessage = async (contact: IUser): Promise<any> => {
   state.chapter = contact.id;
 
-  if (contact.groupId) {
-    const memberCount = await fetchGroupMemberCount(contact.groupId);
+  if (contact.id) {
+    const memberCount = await fetchGroupMemberCount(contact.id);
     state.contact = {
       ...contact,
-      membersLength: memberCount,
-      conversationId: contact.conversationId || contact.groupId
+      membersLength: memberCount
     };
 
     navigateToGroup(contact.id);
   } else {
-    const createdTopic = await createTopic(contact.id);
+    // const createdTopic = await createTopic(contact.id);
     state.contact = {
-      ...contact,
-      conversationId: createdTopic?.id || contact.conversationId || contact.id
+      ...contact
     };
+    // conversationId: createdTopic?.id || contact.conversationId || contact.id
 
     navigateToDialogs(state.contact.id);
   }
@@ -496,8 +493,7 @@ const handleNewContactMessage = async (
     console.log(
       'ChatSDK instance found in handleNewContactMessage, calling joinTopic'
     );
-    const conversationId =
-      contact.conversationId || contact.groupId || contact.id;
+    const conversationId = contact.id;
     await sdk.joinTopic(conversationId);
     console.log(
       'Successfully joined topic in handleNewContactMessage:',
@@ -560,6 +556,7 @@ const handleNewGroupMessage = async (group: any): Promise<void> => {
   }
 };
 
+/*
 const handleChangeContact = async (contact: IUser): Promise<void> => {
   if (contact.groupId) {
     const memberCount = await fetchGroupMemberCount(contact.groupId);
@@ -604,6 +601,7 @@ const handleChangeContactFromMenuInfo = async (
     navigateToDialogs(contact.id);
   }
 };
+*/
 
 const handleExit = (): void => {
   if (state.contact?.groupId) {

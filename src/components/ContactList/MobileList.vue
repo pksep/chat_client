@@ -37,9 +37,7 @@
       :data-testid="`${props.dataTestid}-ChatList-Section`"
     >
       <TopicList
-        :topics="
-          props.chapter === 'dialogs' ? state.contactList : state.groupList
-        "
+        :topics="props.chapter === 'dialogs' ? contactList : groupList"
         :data-testid="`${props.dataTestid}-ContactList`"
         @unmount-click="handleChapter"
         @unmount-contact="handleContactSelect"
@@ -56,7 +54,7 @@
     <template v-if="props.chapter !== 'assistant'">
       <NewChatMobileModal
         :open="state.showAddAccount"
-        :contacts="props.contacts"
+        :contacts="[]"
         :is-add-one="props.chapter !== 'channels'"
         :selected-contact-ids="state.checkUsers"
         @unmount-close="handleCloseModal"
@@ -67,10 +65,9 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue';
+import { reactive, computed, watch } from 'vue';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import Line from '../UI/Line.vue';
-import ContactList from './TopicList.vue';
 import Loading from '../Loading.vue';
 import type {
   IMobileListProps,
@@ -79,7 +76,10 @@ import type {
 import type { IUser } from '../interfaces/interfaces';
 import { Button, ButtonTypeEnum, Icon, IconNameEnum } from '@pksep/yui';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
+import TopicList from './TopicList.vue';
 import { getGroupList } from '../../services/useGroup';
+import { getTopicList } from '../../composables/useTopics';
+import { navigateToAI } from '@/composables/navigation';
 
 const props = withDefaults(defineProps<IMobileListProps>(), {
   contacts: () => [],
@@ -89,17 +89,14 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
 const state = reactive({
   showAddAccount: false,
   checkUsers: new Set<string | number>(),
-  isLoading: true,
-  contactList: computed(() => getTopicList()),
-  groupList: computed(() => getGroupList())
+  isLoading: true
 });
 
-import { watch } from 'vue';
-import { getTopicList } from '../../composables/useTopics';
-import TopicList from './TopicList.vue';
+const contactList = computed(() => getTopicList());
+const groupList = computed(() => getGroupList());
 
 watch(
-  [() => getTopicList(), () => getGroupList()],
+  [() => contactList.value, () => groupList.value],
   ([convList, groupList]) => {
     if (state.isLoading && (convList.length > 0 || groupList.length > 0)) {
       state.isLoading = false;
@@ -108,26 +105,15 @@ watch(
   { immediate: true }
 );
 
-const emits = defineEmits<IMobileListEmits>();
-
-const handleChapter = (
-  chapter: { nickname: string; contact: IUser } | string | null
-): void => {
-  if (typeof chapter === 'string') {
-    emits('unmount-chapter', chapter);
-  } else if (chapter && chapter.contact.id) {
-    emits('unmount-chapter', chapter);
-  } else {
-    emits('unmount-chapter', null);
+const handleChapter = (route: 'ai' | 'dialog') => {
+  if (route === 'ai') {
+    navigateToAI();
   }
 };
 
-const handleContactSelect = (contact: IUser): void => {
-  emits('unmount-chapter', {
-    nickname: contact.nickname || contact.topicId,
-    contact
-  });
-};
+const emits = defineEmits<IMobileListEmits>();
+
+const handleContactSelect = (): void => {};
 
 const handleShowAccount = () => {
   state.showAddAccount = true;
@@ -140,10 +126,6 @@ const handleCloseModal = () => {
 
 const handleNewContact = (contact: IUser): void => {
   emits('unmount-contact', contact);
-  handleChapter({
-    nickname: contact.nickname || contact.topicId,
-    contact
-  });
   handleCloseModal();
 };
 </script>
