@@ -56,7 +56,6 @@ export interface ITopic extends Topic {
 
 export interface IMenuProps {
   open?: boolean;
-  contact?: IUser | null;
   dataTestid?: string;
   class?: string;
 }

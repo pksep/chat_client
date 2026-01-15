@@ -22,8 +22,6 @@
       class="chat__header-menu"
       v-else-if="isMobile"
       :dataTestid="`${props.dataTestid}-ChatContainer-HeaderMenu`"
-      :active-chapter="state.chapter"
-      @unmount-chapter="unmountHeaderMenuChapter"
     />
     <Menu
       class="chat__menu"
@@ -49,11 +47,9 @@
         class="chat__info"
         :open="state.isMenuDesktopOpen"
         :contact="state.contact"
-        :members="filteredMembers"
         :active-tab-id="state.activeTabId"
         :dataTestid="`${props.dataTestid}-ChatContainer-MenuInfo`"
         @unmount-collapse="handleMenuToggle"
-        @unmount-contact="handleChangeContactFromMenuInfo"
       />
     </template>
     <NewContactModal
@@ -202,11 +198,13 @@ const filteredContacts = computed(() => {
   return state.users;
 });
 
+/*
 const filteredMembers = computed(() => {
   const authId = authUser.value?.id;
   if (!authId) return [];
   return state.users.filter(user => user.id !== authId);
 });
+ */
 
 watch(
   () => getUsersList(),
@@ -324,64 +322,6 @@ const handleHeaderClick = (): void => {
     return;
   }
   state.isMenuMobileOpen = true;
-};
-
-const unmountHeaderMenuChapter = async (
-  config: { nickname: string; contact?: any } | string | null
-): Promise<void> => {
-  if (!config) {
-    state.chapter = null;
-    state.contact = null;
-    state.isChapter = false;
-    return;
-  }
-
-  if (typeof config === 'string') {
-    switch (config) {
-      case 'ai':
-        state.chapter = 'ai';
-        state.contact = null;
-        state.isChapter = true;
-        navigateToAI();
-        return;
-      case 'assistant':
-        state.chapter = 'assistant';
-        state.contact = null;
-        state.isChapter = true;
-        navigateToAssistant();
-        return;
-      case 'channels':
-        state.chapter = 'channels';
-        state.contact = null;
-        state.isChapter = false;
-        navigateToGroupsList();
-        return;
-      case 'dialogs':
-        state.chapter = 'dialogs';
-        state.contact = null;
-        state.isChapter = false;
-        navigateToDialogsList();
-        return;
-    }
-
-    const foundContact = findContactOrGroupById(config);
-    if (foundContact) {
-      await openContact(foundContact);
-      return;
-    }
-
-    state.chapter = null;
-    state.contact = null;
-    state.isChapter = false;
-    return;
-  } else if (config.contact) {
-    await openContact(config.contact);
-    return;
-  } else if (config.nickname) {
-    state.chapter = config.nickname;
-    state.contact = null;
-    state.isChapter = false;
-  }
 };
 
 const findContactOrGroupById = (id: string) => {

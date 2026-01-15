@@ -103,7 +103,7 @@ onMounted(async () => {
         setAuthUser({
           ...fallbackUser,
           id: fallbackUser.id || '',
-          initials: fallbackUser.initials || fallbackUser.initial || '',
+          initials: fallbackUser.initials || '',
           nickname: fallbackUser.nickname || fallbackUser.id || '',
           avatarUrl: fallbackUser.avatarUrl || '',
           lastOnline: new Date(),
