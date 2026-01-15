@@ -19,7 +19,6 @@ export interface ChatTopicInterface {
     userId: string,
     settings: Partial<TopicSetting>
   ): Promise<TopicSetting>;
-  joinTopic(topicId: string): Promise<{ success: boolean }>;
   leaveTopic(topicId: string): Promise<void>;
   getTopicById(topicId: string): Promise<Topic>;
   getTopicParticipants(topicId: string): Promise<User[]>;
@@ -171,19 +170,6 @@ export class ChatTopic implements ChatTopicInterface {
     }
   }
 
-  async joinTopic(topicId: string): Promise<{ success: boolean }> {
-    try {
-      const response = (await this.reqi.post(
-        `/topics/${topicId}/join`,
-        {},
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to join topic: ${(error as Error).message}`);
-    }
-  }
 
   async leaveTopic(topicId: string): Promise<void> {
     try {
@@ -261,4 +247,5 @@ export class ChatTopic implements ChatTopicInterface {
       throw new Error(`Failed to update topic: ${(error as Error).message}`);
     }
   }
+
 }

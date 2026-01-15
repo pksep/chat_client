@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { IUserProps } from '../components/interfaces/interfaces';
 import { getChatSDK, getCurrentUserId } from './useChat';
-import { Group } from '@pksep/zod-shared-chat';
+import { Group, User } from '@pksep/zod-shared-chat';
 import type { IContactProps } from '../components/interfaces/interfaces';
 
 enum TopicType {
@@ -27,16 +27,22 @@ export const fetchAllGroups = async (
       limit
     });
 
-    const groupObjects = response.data.map(topic => ({
-      id: topic.id,
-      topicId: topic.id,
-      title: 'Group ' + topic.id.substring(0, 8),
-      description: null,
-      avatarUrl: null,
-      createdAt: topic.createdAt,
-      updatedAt: topic.updatedAt,
-      deletedAt: topic.deletedAt || null
-    }));
+    const groupObjects = response.data.map(topic => {
+      // Extract group info from the topic if available
+      const groupInfo = topic.group || topic.groupInfo || {};
+
+      return {
+        id: topic.id,
+        topicId: topic.id,
+        title:
+          groupInfo.title || topic.title || 'Group ' + topic.id.substring(0, 8),
+        description: groupInfo.description || topic.description || null,
+        avatarUrl: groupInfo.avatarUrl || topic.avatarUrl || null,
+        createdAt: topic.createdAt,
+        updatedAt: topic.updatedAt,
+        deletedAt: topic.deletedAt || null
+      };
+    });
 
     groups.value = groupObjects;
 
@@ -111,17 +117,14 @@ const createGroup = async (
 };
 
 const getGroupList = (): IContactProps[] => {
-  console.log('getGroupList', groups.value);
   return groups.value.map(group => ({
     id: group.id,
-    initials: group.title,
-    nickname: group.title,
-    avatarUrl: group.avatarUrl,
+    user: group.user,
     lastOnline: null,
     createdAt: group.createdAt,
     updatedAt: group.updatedAt,
     deletedAt: group.deletedAt,
-    conversationId: group.topicId,
+    conversationId: group.conversationId,
     latestMessage: '',
     membersLength: 0,
     members: []

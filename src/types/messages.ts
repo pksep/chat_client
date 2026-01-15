@@ -18,6 +18,7 @@ export interface ChatMessage extends ChatSDKMessage {
   loading?: boolean;
   media?: any[]; // Add media property to ChatMessage type
   reactions?: any[]; // Add reactions property to ChatMessage type
+  tempId?: string;
 }
 
 export type Message = AIMessage | ChatMessage;

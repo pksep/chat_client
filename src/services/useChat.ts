@@ -16,7 +16,6 @@ const isRecentlyReconnected = ref(false);
 const currentUserId = ref<string | null>(null);
 
 const messagesStore = shallowRef<Record<string, ChatMessage[]>>({});
-const outgoingMessageQueue = shallowRef<Record<string, ChatMessage[]>>({});
 
 const messageChangeCallbacks: Array<(topicId?: string) => void> = [];
 
@@ -59,6 +58,7 @@ const setupChatListeners = (): void => {
 
   chatSDK.subscribeToEvent(WebSocketEventType.NEW_MESSAGE, event => {
     const msg = mapMessage(event.payload);
+
     appendMessageToLocal(msg.topicId, msg);
   });
 
@@ -105,6 +105,7 @@ export const initializeChat = async (options: {
   await chatSDK.connect();
   isWebsocketConnecting.value = false;
   setupChatListeners();
+  addMessageHistoryHandler();
 };
 
 export const getChatSDK = (): ChatSDK => {
@@ -120,34 +121,6 @@ export const setCurrentUserId = (userId?: string | null): void => {
 
 export const getCurrentUserId = (): string | null => {
   return currentUserId.value;
-};
-
-export const getIsWebsocketConnecting = () => isWebsocketConnecting.value;
-
-export const getIsRecentlyReconnected = () => isRecentlyReconnected.value;
-
-export const fetchMessagesForTopic = async (
-  topicId: string,
-  opts?: { page?: number; limit?: number; since?: Date; append?: boolean }
-): Promise<ChatMessage[]> => {
-  const sdk = getChatSDK();
-  const response = await sdk.getMessages(topicId, opts);
-  const messages = response.data.map(mapMessage);
-
-  if (opts?.append) {
-    const existing = getMessagesByConversationId(topicId);
-    const existingIds = new Set(existing.map(item => item.id));
-    const merged = [
-      ...messages.filter(item => !existingIds.has(item.id)),
-      ...existing
-    ];
-    saveMessagesToLocal(topicId, merged);
-  } else {
-    saveMessagesToLocal(topicId, messages);
-  }
-
-  notifyMessageChange(topicId);
-  return messages;
 };
 
 export const getMessagesByConversationId = (topicId: string): ChatMessage[] => {
@@ -179,44 +152,6 @@ export const appendMessageToLocal = (
   notifyMessageChange(topicId);
 };
 
-const addToOutgoingMessageQueue = (
-  topicId: string,
-  message: ChatMessage
-): void => {
-  const queue = outgoingMessageQueue.value[topicId] || [];
-  outgoingMessageQueue.value[topicId] = [...queue, message];
-};
-
-const removeFromOutgoingMessageQueue = (
-  topicId: string,
-  messageId: string
-): void => {
-  const queue = outgoingMessageQueue.value[topicId] || [];
-  outgoingMessageQueue.value[topicId] = queue.filter(
-    message => message.id !== messageId
-  );
-};
-
-export const getMessagesWithLoadingStatus = (
-  topicId: string
-): ChatMessage[] => {
-  const cachedMessages = getMessagesByConversationId(topicId);
-  const hasConnection = !getIsWebsocketConnecting();
-
-  if (hasConnection) {
-    return cachedMessages;
-  }
-
-  const messagesWithStatus = cachedMessages.map(message => ({
-    ...message,
-    status: message.status || MessageStatus.Wait,
-    loading: true
-  }));
-
-  const queuedMessages = outgoingMessageQueue.value[topicId] || [];
-  return [...messagesWithStatus, ...queuedMessages];
-};
-
 export const subscribeToMessageChanges = (
   callback: (topicId?: string) => void
 ): (() => void) => {
@@ -237,9 +172,11 @@ const buildTempMessage = (params: {
 }): ChatMessage => {
   const createdAt = new Date();
   const sender = currentUserId.value ? getUserById(currentUserId.value) : null;
+  const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  console.log('buildTempMessage', params.topicId);
 
   return {
-    id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    id: tempId,
     topicId: params.topicId,
     senderUserId: currentUserId.value || '',
     reactions: [],
@@ -256,7 +193,8 @@ const buildTempMessage = (params: {
     senderNickname: sender?.nickname || '',
     faceURL: sender?.avatarUrl || '',
     deletedAt: null,
-    loading: true
+    loading: true,
+    tempId
   };
 };
 
@@ -267,8 +205,9 @@ export const sendMessageChat = async (params: {
   onlyMedia?: boolean;
 }): Promise<void> => {
   const sdk = getChatSDK();
+
   const tempMedia = params.file
-    ? ([
+    ? [
         {
           id: `temp-media-${Date.now()}`,
           path: URL.createObjectURL(params.file),
@@ -281,15 +220,15 @@ export const sendMessageChat = async (params: {
           createdAt: new Date(),
           updatedAt: new Date()
         }
-      ] as Media[])
+      ]
     : undefined;
+
   const tempMessage = buildTempMessage({
     topicId: params.topicId,
     text: params.text,
     media: tempMedia
   });
 
-  addToOutgoingMessageQueue(params.topicId, tempMessage);
   appendMessageToLocal(params.topicId, tempMessage);
 
   try {
@@ -298,17 +237,21 @@ export const sendMessageChat = async (params: {
       const uploaded = await sdk.uploadMedia(params.file, params.topicId);
       media = [uploaded];
     }
+    console.log('sendWebSocketEvent', params.topicId);
 
-    const sentMessage = await sdk.sendMessage(params.topicId, {
-      content: params.text,
-      attachments: media
+    sdk.sendWebSocketEvent(WebSocketEventType.SEND_MESSAGE, {
+      topicId: params.topicId,
+      text: params.text,
+      media
     });
-
-    removeFromOutgoingMessageQueue(params.topicId, tempMessage.id);
-    appendMessageToLocal(params.topicId, mapMessage(sentMessage));
   } catch (error) {
-    console.error('[ChatSDK] Failed to send message:', error);
-    removeFromOutgoingMessageQueue(params.topicId, tempMessage.id);
+    console.error('[ChatSDK] Failed to send message via WebSocket:', error);
+    const existingMessages = messagesStore.value[params.topicId] || [];
+    const updatedMessages = existingMessages.map(msg =>
+      msg.id === tempMessage.id ? { ...msg, status: MessageStatus.Error } : msg
+    );
+    messagesStore.value[params.topicId] = updatedMessages;
+    notifyMessageChange(params.topicId);
   }
 };
 
@@ -321,6 +264,118 @@ export const uploadFile = async (file: File): Promise<string> => {
   const uploadResult = await s3Service.uploadFile(file);
   return uploadResult.path;
 };
+
+// Store for tracking message history requests
+const messageHistoryRequests: Map<
+  string,
+  {
+    resolve: (value: ChatMessage[]) => void;
+    reject: (reason: any) => void;
+    timeoutId: number;
+  }
+> = new Map();
+
+export const fetchMessagesForTopic = async (
+  topicId: string,
+  opts?: { page?: number; limit?: number; since?: Date; append?: boolean }
+): Promise<ChatMessage[]> => {
+  try {
+    return await new Promise((resolve, reject) => {
+      const cachedMessages = getMessagesByConversationId(topicId);
+
+      if (cachedMessages.length > 0) {
+        resolve(cachedMessages);
+        return;
+      }
+
+      const requestId = `${topicId}_${Date.now()}`;
+
+      const timeoutId = window.setTimeout(() => {
+        messageHistoryRequests.delete(requestId);
+        console.warn(
+          `WebSocket request for message history timed out for topic ${topicId}, falling back to HTTP`
+        );
+        resolve(cachedMessages);
+      }, 5000);
+
+      messageHistoryRequests.set(requestId, { resolve, reject, timeoutId });
+
+      try {
+        const sdk = getChatSDK();
+
+        sdk.sendWebSocketEvent(WebSocketEventType.REQUEST_MESSAGE_HISTORY, {
+          topicId,
+          requestId,
+          limit: opts?.limit || 50,
+          page: opts?.page || 1
+        });
+      } catch (error) {
+        clearTimeout(timeoutId);
+        messageHistoryRequests.delete(requestId);
+        reject(error);
+      }
+    });
+  } catch (error) {
+    console.warn(
+      'WebSocket failed for message history, falling back to HTTP:',
+      error
+    );
+    return [];
+  }
+};
+
+const addMessageHistoryHandler = (): void => {
+  if (!chatSDK) return;
+  chatSDK.subscribeToEvent(
+    WebSocketEventType.MESSAGE_HISTORY_RESPONSE,
+    event => {
+      const { requestId, messages, error } = event.payload;
+      const request = messageHistoryRequests.get(requestId);
+
+      if (request) {
+        clearTimeout(request.timeoutId);
+        messageHistoryRequests.delete(requestId);
+
+        if (error) {
+          request.reject(new Error(error));
+        } else {
+          const processedMessages = messages.map(mapMessage);
+          const topicId = processedMessages[0]?.topicId;
+
+          if (topicId) {
+            saveMessagesToLocal(topicId, processedMessages);
+            notifyMessageChange(topicId);
+          }
+
+          request.resolve(processedMessages);
+        }
+      }
+    }
+  );
+};
+
+export const getMessagesWithLoadingStatus = (
+  topicId: string
+): ChatMessage[] => {
+  const cachedMessages = getMessagesByConversationId(topicId);
+  const hasConnection = !getIsWebsocketConnecting();
+
+  if (hasConnection) {
+    return cachedMessages;
+  }
+
+  const messagesWithStatus = cachedMessages.map(message => ({
+    ...message,
+    status: message.status || MessageStatus.Wait,
+    loading: true
+  }));
+
+  return messagesWithStatus;
+};
+
+export const getIsWebsocketConnecting = () => isWebsocketConnecting.value;
+
+export const getIsRecentlyReconnected = () => isRecentlyReconnected.value;
 
 export const markAsRead = async (topicId: string): Promise<void> => {
   const sdk = getChatSDK();

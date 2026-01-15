@@ -4,14 +4,6 @@ import { SearchParams, PaginatedResponse, MessageStatus } from './types';
 import { S3Service } from './s3Service';
 
 export interface ChatMessageInterface {
-  getMessages(
-    topicId: string,
-    params?: SearchParams
-  ): Promise<PaginatedResponse<Message>>;
-  sendMessage(
-    topicId: string,
-    messageData: { content: string; replyTo?: string; attachments?: Media[] }
-  ): Promise<Message>;
   editMessage(
     topicId: string,
     messageId: string,
@@ -49,58 +41,6 @@ export class ChatMessage implements ChatMessageInterface {
   constructor(reqi: Reqi, s3Service?: S3Service) {
     this.reqi = reqi;
     this.s3Service = s3Service;
-  }
-
-  async getMessages(
-    topicId: string,
-    params?: SearchParams
-  ): Promise<PaginatedResponse<Message>> {
-    const queryParams = new URLSearchParams();
-
-    if (params?.search) queryParams.append('search', params.search);
-    if (params?.page !== undefined && params?.page !== null)
-      queryParams.append('page', params.page.toString());
-    if (params?.limit !== undefined && params?.limit !== null)
-      queryParams.append('limit', params.limit.toString());
-
-    const queryString = queryParams.toString();
-    const endpoint = `/topics/${topicId}/messages${
-      queryString ? `?${queryString}` : ''
-    }`;
-
-    try {
-      const response = (await this.reqi.get<PaginatedResponse<Message>>(
-        endpoint,
-        {
-          parsed: false
-        }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to fetch messages: ${(error as Error).message}`);
-    }
-  }
-
-  async sendMessage(
-    topicId: string,
-    messageData: {
-      content: string;
-      replyTo?: string;
-      attachments?: Media[];
-    }
-  ): Promise<Message> {
-    try {
-      const response = (await this.reqi.post<Message>(
-        `/topics/${topicId}/messages`,
-        messageData,
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to send message: ${(error as Error).message}`);
-    }
   }
 
   async editMessage(

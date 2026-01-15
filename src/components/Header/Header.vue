@@ -32,7 +32,7 @@
     <UserProfile
       class="chat__header-profile"
       avatar-alt="user-profile-alt"
-      v-bind="props.contact"
+      v-bind="props.contact.user"
       :members-length="menuInfoState.contacts.length"
       :data-testid="`${props.dataTestid}-Header-UserProfile`"
       v-else

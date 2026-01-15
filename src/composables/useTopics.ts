@@ -1,6 +1,6 @@
 import { ref, shallowRef } from 'vue';
 import { getChatSDK } from '../services/useChat';
-import { Topic } from '@pksep/zod-shared-chat';
+import { Message, Topic, TopicSetting, User } from '@pksep/zod-shared-chat';
 import { IContactProps } from '../components/interfaces/interfaces';
 import { TopicType } from '../services/useChatSDK/types';
 
@@ -22,9 +22,9 @@ export const fetchAllTopics = async (
       limit
     });
 
-    topics.value = response.data.map(item => manipulateTopic(item));
-
-    return topics.value;
+    // Сохраняем полученные данные в реактивное состояние
+    topics.value = response.data;
+    return response.data;
   } catch (err) {
     error.value = (err as Error).message;
     console.error('Failed to fetch topics:', error.value);
@@ -52,28 +52,6 @@ export const createTopic = async (peerId: string): Promise<IContactProps[]> => {
   }
 };
 
-const manipulateTopic = (topic: Topic): IContactProps => {
-  // For DM topics, we need to get user information differently
-  // Since Topic doesn't have settings, user, or info, we'll use placeholder values
-  // In a real implementation, you'd fetch user details separately
-  const nickname = 'User'; // Placeholder - would fetch actual user info
-  const avatarUrl = null; // Placeholder - would fetch actual avatar
-  const initials = 'U'; // Placeholder - would fetch actual initials
-
-  return {
-    id: topic.id,
-    initial: initials,
-    nickname,
-    avatarUrl,
-    createdAt: topic.createdAt,
-    updatedAt: topic.updatedAt,
-    deletedAt: topic.deletedAt || null,
-    conversationId: topic.id,
-    latestMessage: '',
-    user: undefined, // Placeholder - would fetch actual user
-    info: undefined // Placeholder - would fetch actual info
-  };
-};
 
 export const getTopicList = (): IContactProps[] => {
   return topics.value || [];

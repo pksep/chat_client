@@ -105,7 +105,13 @@ export class ChatSDK {
           transports: ['websocket'],
           auth: {
             token: this.token
-          }
+          },
+          // Enable automatic reconnection with exponential backoff
+          reconnection: true,
+          reconnectionAttempts: Infinity,
+          reconnectionDelay: 1000,
+          reconnectionDelayMax: 5000,
+          timeout: 20000
         });
 
         this.ws.setSocket(this.socket);
@@ -122,6 +128,22 @@ export class ChatSDK {
 
         this.socket.on('disconnect', reason => {
           console.log('Disconnected from chat server:', reason);
+        });
+
+        this.socket.on('reconnect_attempt', attemptNumber => {
+          console.log(`Attempting to reconnect (${attemptNumber})...`);
+        });
+
+        this.socket.on('reconnect', attemptNumber => {
+          console.log(`Reconnected to chat server after ${attemptNumber} attempts`);
+        });
+
+        this.socket.on('reconnect_error', error => {
+          console.error('Reconnection error:', error);
+        });
+
+        this.socket.on('reconnect_failed', () => {
+          console.error('Reconnection failed after maximum attempts');
         });
 
         this.socket?.on('newMessage', data => {
@@ -361,10 +383,6 @@ export class ChatSDK {
     return this.topic.updateTopicSettings(topicId, userId, settings);
   }
 
-  async joinTopic(topicId: string): Promise<{ success: boolean }> {
-    return this.topic.joinTopic(topicId);
-  }
-
   async leaveTopic(topicId: string): Promise<void> {
     return this.topic.leaveTopic(topicId);
   }
@@ -390,6 +408,11 @@ export class ChatSDK {
     }>
   ): Promise<Topic> {
     return this.topic.updateTopic(topicId, topicData);
+  }
+
+  async joinTopic(topicId: string): Promise<void> {
+    // Send JOIN_TOPIC event via WebSocket
+    this.ws.sendWebSocketEvent(WebSocketEventType.JOIN_TOPIC, { topicId });
   }
 
   async createGroup(groupData: {
@@ -494,17 +517,6 @@ export class ChatSDK {
     params?: SearchParams
   ): Promise<PaginatedResponse<Message>> {
     return this.message.getMessages(topicId, params);
-  }
-
-  async sendMessage(
-    topicId: string,
-    messageData: {
-      content: string;
-      replyTo?: string;
-      attachments?: Media[];
-    }
-  ): Promise<Message> {
-    return this.message.sendMessage(topicId, messageData);
   }
 
   async editMessage(
