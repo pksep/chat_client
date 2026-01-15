@@ -32,8 +32,7 @@
     <UserProfile
       class="chat__header-profile"
       avatar-alt="user-profile-alt"
-      v-bind="props.contact.user"
-      :members-length="menuInfoState.contacts.length"
+      v-bind="props.contact"
       :data-testid="`${props.dataTestid}-Header-UserProfile`"
       v-else
     />
@@ -113,11 +112,14 @@ import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import MobileChatInfo from './MobileChatInfo.vue';
 import { useMenuInfo } from '../../composables/useMenuInfo';
 import { useInformationMenu } from '../../composables/useInformationMenu';
-import { fetchGroupMembers } from '../../services/useGroup';
+import { currentRoute, setupUrlWatcher } from '../../composables/useUrlRouting';
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
   dataTestid: () => 'Header'
 });
+
+setupUrlWatcher();
+const { id: topicId } = currentRoute.value;
 
 const emits = defineEmits<IHeaderEmits>();
 
@@ -159,8 +161,6 @@ const handleCloseMobileInfoModal = (): void => {
 };
 
 const handleClickHeader = async (): Promise<void> => {
-  if (props.chapter === 'ai') return;
-  if (!props.contact?.groupId) return;
   if (isMobile.value) {
     state.openMobileInfoModal = true;
     await initializeMenuInfo({
@@ -174,41 +174,6 @@ const handleClickHeader = async (): Promise<void> => {
   state.isSearchInputEnable = false;
   emits('unmount-click');
 };
-
-watch(
-  () => props.contact?.id,
-  async (newId, oldId) => {
-    if (newId && newId !== oldId && props.contact?.groupId) {
-      menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
-    }
-  }
-);
-
-watch(
-  () => props.contact?.groupId,
-  async (newGroupId, oldGroupId) => {
-    if (newGroupId && newGroupId !== oldGroupId) {
-      menuInfoState.contacts = await fetchGroupMembers(newGroupId);
-    }
-  }
-);
-
-watch(
-  () => props.contact?.membersLength,
-  async (newLength, oldLength) => {
-    if (
-      newLength !== undefined &&
-      newLength !== oldLength &&
-      props.contact?.groupId
-    ) {
-      menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
-    }
-  }
-);
-
-const popoverRule = computed(
-  () => isMobile.value && (props.contact?.groupId || props.chapter === 'ai')
-);
 
 const getPopoverOptions = computed(() => {
   const popoverArray = [];
@@ -239,6 +204,17 @@ const getPopoverOptions = computed(() => {
   return popoverArray;
 });
 
+console.log('Topic ID changed:', topicId);
+// make a watch to change of topic id from url parse
+watch(
+  () => topicId,
+  newTopicId => {
+    if (newTopicId !== topicId) {
+    }
+  }
+);
+
+/*
 watch(
   () => props.chapter,
   async newChapter => {
@@ -253,6 +229,7 @@ watch(
     }
   }
 );
+*/
 
 const updateNotificationStatus = async (): Promise<void> => {
   try {
@@ -289,9 +266,5 @@ const handleNotificationToggle = async (): Promise<void> => {
   emits('unmount-notification', state.statusNotification.label);
 };
 
-onMounted(async () => {
-  if (props.contact?.groupId) {
-    menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
-  }
-});
+onMounted(async () => {});
 </script>

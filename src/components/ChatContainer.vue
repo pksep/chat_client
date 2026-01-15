@@ -12,12 +12,8 @@
     <Header
       v-if="state.isChapter"
       class="chat__header"
-      :chapter="state.chapter"
-      :members="filteredMembers"
-      :contact="state.contact"
       :data-testid="`${props.dataTestid}-ChatContainer-Header`"
       @unmount-click="handleHeaderClick"
-      @unmount-contact="handleChangeContact"
       @unmount-exit="handleExit"
       @unmount-information="handleInformationClick"
       @unmount-clear="handleClearClick"
@@ -30,14 +26,11 @@
       @unmount-chapter="unmountHeaderMenuChapter"
     />
     <Menu
-      :user="authUser"
-      :chapter="state.chapter"
       class="chat__menu"
       :dataTestid="`${props.dataTestid}-ChatContainer-Menu`"
       @unmount-collapse="handleCollapse"
       @unmount-new-contact="handleNewContact"
       @unmount-new-group="handleNewGroup"
-      @unmount-chapter="unmountMenuChapter"
     />
     <Chat
       :user="authUser"
@@ -127,11 +120,7 @@ import Menu from './Menu.vue';
 import Chat from './Chat.vue';
 import MenuInfo from './MenuInfo.vue';
 import Loading from './Loading.vue';
-import type {
-  IChatContainerProps,
-  IContactProps,
-  IUser
-} from './interfaces/interfaces';
+import type { IChatContainerProps, IUser } from './interfaces/interfaces';
 import { getUsersList } from '../composables/useUsers';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD, MAX_W_XL } from '../utils/constants';

@@ -7,9 +7,11 @@ import {
   Group
 } from '@pksep/zod-shared-chat';
 
+/*
 interface TopicSettingWithUser extends TopicSetting {
   user?: User;
 }
+ */
 
 export interface IHeaderProps {
   class?: string;
@@ -21,17 +23,9 @@ export interface IHeaderProps {
 }
 
 export interface IMenuEmits {
-  (e: 'unmount-select-ai'): void;
-  (e: 'unmount-select-topic', topic: ITopic): void;
   (e: 'unmount-collapse', isCollapse: boolean): void;
   (e: 'unmount-new-contact', config: { isChapterOpen?: boolean }): void;
   (e: 'unmount-new-group', config: { isChapterOpen?: boolean }): void;
-  (
-    e: 'unmount-chapter',
-    config: { nickname: string; contact: IUser } | string | null
-  ): void;
-  (e: 'unmount-user-add'): void;
-  (e: 'unmount-contacts-update', contacts: IUser[]): void;
 }
 
 export interface IHeaderEmits extends IMenuInfoEmits {
@@ -102,13 +96,11 @@ export interface IChatContainerEmits {
   (e: 'unmount-notification-count', count: number): number;
 }
 
-// components
 export interface IUserProfileProps {
   user: IUser;
   dataTestid?: string;
 }
 
-// components
 export interface IGroupProfileProps {
   group: IGroup;
   dataTestid?: string;

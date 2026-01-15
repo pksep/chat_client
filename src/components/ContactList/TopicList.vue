@@ -145,18 +145,16 @@ import {
   IconNameEnum,
   Button,
   ButtonTypeEnum,
-  SizesEnum,
-  Checkbox,
-  CheckboxSizeEnum
+  SizesEnum
 } from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
 import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
 import Loading from '../Loading.vue';
 import type { IContactListProps } from './interfaces/contact-list';
-import { authedUser, getAuthUser } from '../../composables/useAuth';
+import { getAuthUser } from '../../composables/useAuth';
 import { ITopic, MessageStatusEnum } from '../interfaces/interfaces';
 import { togglePinTopic } from '../../composables/useTopics';
-import { t } from '@vite-pwa/assets-generator/shared/assets-generator.DnoqiTld';
+import { useTime } from '../../composables/useTime';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
@@ -202,8 +200,8 @@ const handlePin = (contact: ITopic): void => {
   closeActivePopover(contact.id);
 };
 
-const handleClick = (contact: ITopic): void => {
-  emits('unmount-topic', contact);
+const handleClick = (topic: ITopic): void => {
+  emits('unmount-topic', topic);
 };
 
 const handleNotification = (contactId: string): void => {
@@ -217,17 +215,5 @@ const handleKeyDown = (contact: ITopic, event: KeyboardEvent): void => {
   if (event.key === 'Enter' || event.key === ' ') {
     handleClick(contact);
   }
-};
-
-const useTime = (date: Date = new Date()): string => {
-  let hours: string | number = date.getHours();
-  let minutes: string | number = date.getMinutes();
-  if (hours < 10) {
-    hours = `0${hours}`;
-  }
-  if (minutes < 10) {
-    minutes = `0${minutes}`;
-  }
-  return `${hours}:${minutes}`;
 };
 </script>

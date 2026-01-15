@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 
 type RouteType = 'dialogs' | 'group' | 'assistant' | 'ai' | 'default';
 
@@ -121,6 +121,11 @@ const setupUrlWatcher = (): void => {
   });
 };
 
+const getIdForRouteType = (): { type: RouteType; id: string | null } => {
+  const route = parseUrl();
+  return { type: route.type, id: route.id };
+};
+
 export {
   currentRoute,
   initRoute,
@@ -131,5 +136,6 @@ export {
   navigateToAssistant,
   navigateToAI,
   navigateToDefault,
+  getIdForRouteType,
   setupUrlWatcher
 };
