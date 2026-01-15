@@ -36,8 +36,8 @@
       aria-label="Contact list"
       :data-testid="`${props.dataTestid}-ChatList-Section`"
     >
-      <ContactList
-        :contacts="
+      <TopicList
+        :topics="
           props.chapter === 'dialogs' ? state.contactList : state.groupList
         "
         :data-testid="`${props.dataTestid}-ContactList`"
@@ -70,13 +70,13 @@
 import { reactive, computed } from 'vue';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import Line from '../UI/Line.vue';
-import ContactList from './ContactList.vue';
+import ContactList from './TopicList.vue';
 import Loading from '../Loading.vue';
 import type {
   IMobileListProps,
   IMobileListEmits
 } from './interfaces/mobile-list';
-import type { IUserProps } from '../interfaces/interfaces';
+import type { IUser } from '../interfaces/interfaces';
 import { Button, ButtonTypeEnum, Icon, IconNameEnum } from '@pksep/yui';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
 import { getGroupList } from '../../services/useGroup';
@@ -96,6 +96,7 @@ const state = reactive({
 
 import { watch } from 'vue';
 import { getTopicList } from '../../composables/useTopics';
+import TopicList from './TopicList.vue';
 
 watch(
   [() => getTopicList(), () => getGroupList()],
@@ -110,7 +111,7 @@ watch(
 const emits = defineEmits<IMobileListEmits>();
 
 const handleChapter = (
-  chapter: { nickname: string; contact: IUserProps } | string | null
+  chapter: { nickname: string; contact: IUser } | string | null
 ): void => {
   if (typeof chapter === 'string') {
     emits('unmount-chapter', chapter);
@@ -121,9 +122,9 @@ const handleChapter = (
   }
 };
 
-const handleContactSelect = (contact: IUserProps): void => {
+const handleContactSelect = (contact: IUser): void => {
   emits('unmount-chapter', {
-    nickname: contact.nickname || contact.conversationId,
+    nickname: contact.nickname || contact.topicId,
     contact
   });
 };
@@ -137,10 +138,10 @@ const handleCloseModal = () => {
   state.checkUsers.clear();
 };
 
-const handleNewContact = (contact: IUserProps): void => {
+const handleNewContact = (contact: IUser): void => {
   emits('unmount-contact', contact);
   handleChapter({
-    nickname: contact.nickname || contact.conversationId,
+    nickname: contact.nickname || contact.topicId,
     contact
   });
   handleCloseModal();

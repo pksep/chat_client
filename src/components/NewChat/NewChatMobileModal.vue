@@ -49,7 +49,7 @@ import {
   INewChatMobileEmits
 } from './interfaces/contact-selector';
 import { useNewGroupModal } from './composables/useNewGroupModal';
-import { IUserProps } from '../interfaces/interfaces';
+import { IUser } from '../interfaces/interfaces';
 
 const props = withDefaults(defineProps<INewChatMobileProps>(), {
   open: false,
@@ -88,7 +88,7 @@ const handleCloseModal = () => {
   emits('unmount-close');
 };
 
-const handleCheckUsers = (contacts: IUserProps[] | IUserProps): void => {
+const handleCheckUsers = (contacts: IUser[] | IUser): void => {
   if (props.isAddOne) {
     emits('unmount-contact', contacts);
     return;
@@ -98,7 +98,7 @@ const handleCheckUsers = (contacts: IUserProps[] | IUserProps): void => {
   }
 };
 
-const handleNext = (contacts: IUserProps[]): void => {
+const handleNext = (contacts: IUser[]): void => {
   if (props.isAddOne) return;
   state.information.name = createNiceName(contacts);
   handleOpenGroupInfo(contacts);

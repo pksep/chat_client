@@ -63,7 +63,7 @@
 
 <script lang="ts" setup>
 import { useTemplateRef } from 'vue';
-import type { IUserProps } from '../interfaces/interfaces';
+import type { IUser } from '../interfaces/interfaces';
 import { Avatar } from '@pksep/yui';
 import NewChatInformationForm from '../NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from '../MenuInfoButtons.vue';
@@ -73,7 +73,7 @@ import { useInformationMenu } from '../../composables/useInformationMenu';
 import { onMounted } from 'vue';
 
 interface IMobileChatInfoProps {
-  members: IUserProps[];
+  members: IUser[];
   dataTestid?: string;
   isMenuInfo?: boolean;
 }

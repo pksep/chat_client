@@ -95,7 +95,7 @@ import InformationMenu from './InformationMenu.vue';
 import type {
   IMenuRightProps,
   IMenuEmits,
-  IUserProps
+  IUser
 } from './interfaces/interfaces';
 import { useMenuInfo } from '../composables/useMenuInfo';
 import NewContactModal from './NewChat/NewContactModal.vue';
@@ -113,7 +113,7 @@ const menuInfoClasses = computed(() => [
 ]);
 
 const handleUpdateGroupMembers = async (
-  contacts: IUserProps | IUserProps[]
+  contacts: IUser | IUser[]
 ): Promise<void> => {
   if (Array.isArray(contacts)) {
     await handleNewContact(contacts);

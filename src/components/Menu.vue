@@ -12,16 +12,16 @@
         :data-testid="`${props.dataTestid}-Menu-ProfileContainer`"
       >
         <UserProfile
-          v-bind="props.user"
+          :user="state.authUser"
           class="menu__user-profile"
           :data-testid="`${props.dataTestid}-Menu-UserProfile`"
           v-show="!isCollapse"
         />
         <Avatar
           v-if="isCollapse"
-          :initials="props.user?.nickname"
-          :url="props.user?.avatarUrl"
-          :alt="props.user?.avatarUrl"
+          :initials="state.authUser?.initials"
+          :url="state.authUser?.avatarUrl"
+          :alt="state.authUser?.avatarUrl"
           is-icon
           :data-testid="`${props.dataTestid}-Menu-ProfileAvatar`"
         />
@@ -45,7 +45,7 @@
       />
       <div
         :class="aiChapterClasses"
-        @click="unmountContactClick('ai')"
+        @click="unmountClickAI"
         :data-testid="`${props.dataTestid}-Menu-AIAssistantContainer`"
       >
         <AiIconWrapper
@@ -59,7 +59,7 @@
           AI Ассистент
         </h3>
       </div>
-      <template v-for="(item, index) in listChannels" :key="index">
+      <template v-for="(item, index) in topicGroups" :key="index">
         <template v-if="isCollapse && item.items.length !== 0">
           <Line :data-testid="`${props.dataTestid}-Menu-Line${index + 1}`" />
         </template>
@@ -77,7 +77,7 @@
               class="menu__user-details-summary--title"
               :data-testid="`${props.dataTestid}-Menu-DetailsTitle${index + 1}`"
             >
-              {{ item.title }}
+              {{ item.type === 'GROUP' ? 'Каналы' : 'Личные сообщения' }}
               <Triangle class="menu__user-details-summary-triangle" />
             </h4>
             <Button
@@ -92,11 +92,11 @@
               />
             </Button>
           </summary>
-          <ContactList
+          <TopicList
             class="menu__contact-list"
-            :contacts="item.items"
-            @unmount-contact="unmountContactClick"
-            :selected-contact-id="state.selectedContactId"
+            :topics="item.items"
+            @unmount-topic="unmountTopicClick"
+            :selected-topic-id="state.selectedContactId"
             :data-testid="`${props.dataTestid}-Menu-ContactList${index + 1}`"
           />
         </details>
@@ -115,11 +115,11 @@
                   }
                 ]"
                 :data-testid="`${props.dataTestid}-Menu-CollapsedAvatar${index + 1}`"
-                @click.stop="unmountContactClick(contact)"
+                @click.stop="unmountTopicClick(contact)"
               >
                 <Avatar
-                  :url="contact.user?.avatarUrl || contact.avatarUrl"
-                  :initials="contact.user?.nickname || contact.nickname"
+                  :url="contact.avatarUrl"
+                  :initials="contact.name"
                   :data-testid="`${props.dataTestid}-Menu-UserAvatar${index + 1}`"
                 />
               </li>
@@ -160,19 +160,15 @@ import {
   SizesEnum
 } from '@pksep/yui';
 import UserProfile from './UserProfile/UserProfile.vue';
-import ContactList from './ContactList/ContactList.vue';
-import type {
-  IContactProps,
-  IMenuEmits,
-  IMenuProps
-} from './interfaces/interfaces';
-import { getConversationList } from '../services/useConversions';
+import type { ITopic, IMenuEmits, IMenuProps } from './interfaces/interfaces';
 import { getGroupList } from '../services/useGroup';
 import { markAsRead } from '../services/useChat';
 import Triangle from './Triangle.vue';
 import { usePwaInstall } from '../composables/usePwaInstall';
 import { navigateToAI } from '../composables/useUrlRouting';
 import { getTopicList } from '../composables/useTopics';
+import { getAuthUser } from '../composables/useAuth';
+import TopicList from './ContactList/TopicList.vue';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: () => 'Menu'
@@ -183,7 +179,8 @@ const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 const state = reactive({
   chapter: '',
   selectedContactId: null,
-  isLoading: true
+  isLoading: true,
+  authUser: computed(() => getAuthUser())
 });
 
 const emits = defineEmits<IMenuEmits>();
@@ -209,46 +206,21 @@ watch(
   }
 );
 
-const unmountContactClick = (contact: IContactProps | string): void => {
-  state.selectedContactId = typeof contact === 'string' ? contact : contact.id;
-  if (contact === 'ai') {
-    state.chapter = 'ai';
-    navigateToAI();
-    emits('unmount-chapter', 'ai');
-    return;
-  }
+const unmountClickAI = (): void => {
+  state.selectedContactId = 'ai';
+  state.chapter = 'ai';
+  navigateToAI();
+  emits('unmount-select-ai');
+};
 
-  if (typeof contact === 'string') {
-    const foundContact = getConversationList().find(c => c.id === contact);
-    if (foundContact) {
-      state.chapter = foundContact.nickname;
+const unmountTopicClick = (topic: ITopic): void => {
+  state.selectedContactId = typeof topic === 'string' ? topic : topic.id;
+  state.chapter = topic.name;
+  markAsRead(topic.id).catch(error => {
+    console.warn('Failed to mark messages as read:', error);
+  });
 
-      if (foundContact.groupId) {
-        markAsRead(foundContact.conversationId || foundContact.id).catch(
-          error => {
-            console.warn('Failed to mark messages as read:', error);
-          }
-        );
-
-        emits('unmount-chapter', {
-          nickname: foundContact.nickname,
-          contact: foundContact
-        });
-      }
-    }
-  } else {
-    state.chapter = contact.nickname;
-    if (contact.id) {
-      markAsRead(contact.conversationId || contact.id).catch(error => {
-        console.warn('Failed to mark messages as read:', error);
-      });
-    }
-
-    emits('unmount-chapter', {
-      nickname: contact.nickname,
-      contact
-    });
-  }
+  emits('unmount-select-topic', topic);
 };
 
 const menuClasses = computed(() => [
@@ -272,14 +244,14 @@ const handleNewContactModal = () => {
   emits('unmount-new-contact', { isChapterOpen: true });
 };
 
-const listChannels = computed(() => [
+const topicGroups = computed(() => [
   {
-    title: 'Каналы',
+    type: 'GROUP',
     onClickPlusButton: handleNewGroupModal,
     items: getGroupList()
   },
   {
-    title: 'Личные сообщения',
+    title: 'DM',
     onClickPlusButton: handleNewContactModal,
     items: getTopicList()
   }

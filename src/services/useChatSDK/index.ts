@@ -32,6 +32,7 @@ import { ChatGroup, ChatGroupInterface } from './group';
 import { ChatMedia, ChatMediaInterface } from './media';
 import { ChatWS, ChatWSInterface } from './ws';
 import { ChatUtils, ChatUtilsInterface } from './utils';
+import { IGroup, ITopic } from '../../components/interfaces/interfaces';
 
 export interface ChatSDKOptions {
   apiUrl: string;
@@ -135,7 +136,9 @@ export class ChatSDK {
         });
 
         this.socket.on('reconnect', attemptNumber => {
-          console.log(`Reconnected to chat server after ${attemptNumber} attempts`);
+          console.log(
+            `Reconnected to chat server after ${attemptNumber} attempts`
+          );
         });
 
         this.socket.on('reconnect_error', error => {
@@ -337,7 +340,7 @@ export class ChatSDK {
   async getTopics(
     type?: TopicType,
     params?: SearchParams
-  ): Promise<PaginatedResponse<Topic & { lastMessage?: Message }>> {
+  ): Promise<PaginatedResponse<ITopic>> {
     return this.topic.getTopics(type, params);
   }
 
@@ -349,8 +352,8 @@ export class ChatSDK {
     return this.topic.deleteTopic(topicId);
   }
 
-  async togglePinTopic(topicId: string, userId: string): Promise<TopicSetting> {
-    return this.topic.togglePinTopic(topicId, userId);
+  async togglePinTopic(topicId: string): Promise<TopicSetting> {
+    return this.topic.togglePinTopic(topicId);
   }
 
   async toggleMuteTopic(
@@ -429,7 +432,7 @@ export class ChatSDK {
     return this.group.deleteGroup(groupId);
   }
 
-  async getGroup(groupId: string, params?: SearchParams): Promise<Group> {
+  async getGroup(groupId: string, params?: SearchParams): Promise<IGroup> {
     return this.group.getGroup(groupId, params);
   }
 

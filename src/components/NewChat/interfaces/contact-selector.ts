@@ -1,7 +1,7 @@
-import { IUserProps } from '../../interfaces/interfaces';
+import { IUser } from '../../interfaces/interfaces';
 
 export interface IContactSelectorEmits {
-  (e: 'unmount-contact', contact: IUserProps[] | IUserProps): void;
+  (e: 'unmount-contact', contact: IUser[] | IUser): void;
 }
 
 export interface IContactSelectorState {
@@ -10,7 +10,7 @@ export interface IContactSelectorState {
 }
 
 export interface IContactSelectorProps {
-  contacts: IUserProps[];
+  contacts: IUser[];
   isButtonDisabled?: boolean;
   selectedContactIds?: Set<string | number>;
   isAddOne?: boolean;
@@ -19,7 +19,7 @@ export interface IContactSelectorProps {
 
 export interface INewChatMobileProps extends IContactSelectorProps {
   open: boolean;
-  user?: IUserProps;
+  user?: IUser;
 }
 
 export interface INewChatMobileEmits extends IContactSelectorEmits {

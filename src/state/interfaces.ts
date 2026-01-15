@@ -33,9 +33,9 @@ export interface UseResizeStateOptions {
 
 export interface IMenuInfoState {
   open?: boolean;
-  contact?: any; // Should be replaced with proper IUserProps if available
-  members?: any[]; // Should be replaced with proper IUserProps[] if available
-  contacts?: any[]; // Should be replaced with proper IUserProps[] if available
+  contact?: any; // Should be replaced with proper IUser if available
+  members?: any[]; // Should be replaced with proper IUser[] if available
+  contacts?: any[]; // Should be replaced with proper IUser[] if available
   information?: IMenuInfoInformation;
   openAddUser?: boolean;
   filteredMembers?: any[];

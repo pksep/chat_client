@@ -2,7 +2,7 @@ import { computed, reactive, ref, watch, toRefs } from 'vue';
 import type { INewContactProps } from '../interfaces/new-contact';
 import { createGroup } from '../../../services/useGroup';
 import { uploadFile } from '../../../services/useChat';
-import { IUserProps } from '../../interfaces/interfaces';
+import { IUser } from '../../interfaces/interfaces';
 
 interface NewGroupState {
   checkUsers: string[];
@@ -57,9 +57,12 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
 
     state.file = file;
     state.isEditAvatar = true;
+    console.log('onAvatarSelected');
   };
 
   const onSaveAvatar = async (): Promise<void> => {
+    console.log('onSaveAvatar', state.file);
+
     const url = await uploadFile(state.file!);
     state.avatarPreview = url;
     state.isEditAvatar = false;
@@ -93,7 +96,7 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
       if (state.groupName.length > 140) {
         return state.groupName.substring(0, 140);
       }
-      if (group && (group.conversationId || group.topicId)) {
+      if (group && (group.topicId || group.topicId)) {
         emit('unmount-new-group', group);
 
         closeModal();
@@ -110,14 +113,14 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
     }
   };
 
-  const createNiceName = (arr: IUserProps[]) => {
+  const createNiceName = (arr: IUser[]) => {
     const names = arr
       .map(user => user.initial || user.initials || '')
       .join(', ');
     return names;
   };
 
-  const handleOpenGroupInfo = async (contacts: IUserProps[]): Promise<void> => {
+  const handleOpenGroupInfo = async (contacts: IUser[]): Promise<void> => {
     state.isSelectedMembers = true;
     state.checkUsers = contacts.map(contact => contact.id);
     if (!state.groupName) {

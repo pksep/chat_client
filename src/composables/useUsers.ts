@@ -1,19 +1,19 @@
 import { ref, shallowRef } from 'vue';
 import { getChatSDK } from '../services/useChat';
 
-import type { IUserProps } from '../components/interfaces/interfaces';
+import type { IUser } from '../components/interfaces/interfaces';
 
-const users = shallowRef<IUserProps[]>([]);
+const users = shallowRef<IUser[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
-let userMapCache: Map<string, IUserProps> | null = null;
+let userMapCache: Map<string, IUser> | null = null;
 let lastUsersUpdate = 0;
 
 export const fetchAllUsers = async (
   page = 1,
   limit = 200
-): Promise<IUserProps[]> => {
+): Promise<IUser[]> => {
   loading.value = true;
   error.value = null;
 
@@ -38,11 +38,11 @@ export const fetchAllUsers = async (
   }
 };
 
-export const getUsersList = (): IUserProps[] => {
+export const getUsersList = (): IUser[] => {
   return users.value || [];
 };
 
-export const getUserById = (userId: string): IUserProps | undefined => {
+export const getUserById = (userId: string): IUser | undefined => {
   if (userMapCache && Date.now() - lastUsersUpdate < 30000) {
     return userMapCache.get(userId);
   }

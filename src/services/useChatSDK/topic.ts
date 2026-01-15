@@ -9,7 +9,7 @@ export interface ChatTopicInterface {
   ): Promise<PaginatedResponse<Topic & { lastMessage?: Message }>>;
   createTopic(topicData: { peerId: string }): Promise<Topic>;
   deleteTopic(topicId: string): Promise<void>;
-  togglePinTopic(topicId: string, userId: string): Promise<TopicSetting>;
+  togglePinTopic(topicId: string): Promise<TopicSetting>;
   toggleMuteTopic(topicId: string, userId: string): Promise<TopicSetting>;
   muteTopic(topicId: string, userId: string): Promise<TopicSetting>;
   unmuteTopic(topicId: string, userId: string): Promise<TopicSetting>;
@@ -89,12 +89,11 @@ export class ChatTopic implements ChatTopicInterface {
     }
   }
 
-  async togglePinTopic(topicId: string, userId: string): Promise<TopicSetting> {
+  async togglePinTopic(topicId: string): Promise<TopicSetting> {
     try {
       const response = (await this.reqi.patch<TopicSetting>(
         `/topics/${topicId}/pin`,
-        { userId },
-        { parsed: false }
+        {}
       )) as any;
       const data = await response.json();
       return data;
@@ -169,7 +168,6 @@ export class ChatTopic implements ChatTopicInterface {
       );
     }
   }
-
 
   async leaveTopic(topicId: string): Promise<void> {
     try {
@@ -247,5 +245,4 @@ export class ChatTopic implements ChatTopicInterface {
       throw new Error(`Failed to update topic: ${(error as Error).message}`);
     }
   }
-
 }

@@ -197,10 +197,8 @@ const state = reactive({
 const isLoadingInitialMessages = ref(false);
 
 const updateMessages = () => {
-  if (props.contact?.conversationId) {
-    const newMessages = getMessagesWithLoadingStatus(
-      props.contact.conversationId
-    );
+  if (props.contact?.topicId) {
+    const newMessages = getMessagesWithLoadingStatus(props.contact.topicId);
     state.messages = JSON.parse(JSON.stringify([...newMessages]));
   } else {
     state.messages = [];
@@ -250,14 +248,14 @@ const handleScroll = (): void => {
   if (
     distanceFromTop < 100 &&
     !isScrollLoading &&
-    props.contact?.conversationId &&
+    props.contact?.topicId &&
     state.hasMoreMessages
   ) {
     isScrollLoading = true;
 
     if (!getIsWebsocketConnecting()) {
       state.page += 1;
-      fetchMessagesForTopic(props.contact.conversationId, {
+      fetchMessagesForTopic(props.contact.topicId, {
         page: state.page,
         limit: state.limit,
         append: true
@@ -278,10 +276,10 @@ const handleScroll = (): void => {
   }
 };
 
-const isEnableSend = computed(() => !!props.contact?.conversationId);
+const isEnableSend = computed(() => !!props.contact?.topicId);
 
 watch(
-  () => props.contact?.conversationId,
+  () => props.contact?.topicId,
   async (newConversationId, oldConversationId) => {
     if (newConversationId && newConversationId !== oldConversationId) {
       state.messages = [];
@@ -331,9 +329,9 @@ watch(
 
     if (previousConnectingState.value && !currentConnectingState) {
       setTimeout(async () => {
-        if (props.contact?.conversationId) {
+        if (props.contact?.topicId) {
           try {
-            await fetchMessagesForTopic(props.contact.conversationId, {
+            await fetchMessagesForTopic(props.contact.topicId, {
               page: 1,
               limit: state.limit
             });
@@ -353,9 +351,9 @@ watch(
 const lastReconnectedState = ref(false);
 
 const handleReconnection = async () => {
-  if (props.contact?.conversationId) {
+  if (props.contact?.topicId) {
     try {
-      await fetchMessagesForTopic(props.contact.conversationId, {
+      await fetchMessagesForTopic(props.contact.topicId, {
         page: 1,
         limit: state.limit
       });
@@ -431,7 +429,7 @@ onMounted(async () => {
     async (newMessageConversationId?: string) => {
       await new Promise(resolve => setTimeout(resolve, 50));
 
-      if (newMessageConversationId === props.contact?.conversationId) {
+      if (newMessageConversationId === props.contact?.topicId) {
         const timeSinceLastSend = Date.now() - lastMessageSentTime.value;
         if (!getIsWebsocketConnecting() && timeSinceLastSend > 2000) {
           await fetchMessagesForTopic(newMessageConversationId, {
@@ -444,7 +442,7 @@ onMounted(async () => {
     }
   );
 
-  if (props.contact?.conversationId) {
+  if (props.contact?.topicId) {
     state.messages = [];
     state.hasMoreMessages = true;
     state.isLoadingMore = false;
@@ -453,13 +451,10 @@ onMounted(async () => {
 
     try {
       if (!getIsWebsocketConnecting()) {
-        const messages = await fetchMessagesForTopic(
-          props.contact.conversationId,
-          {
-            page: state.page,
-            limit: state.limit
-          }
-        );
+        const messages = await fetchMessagesForTopic(props.contact.topicId, {
+          page: state.page,
+          limit: state.limit
+        });
         if (messages.length < state.limit) {
           state.hasMoreMessages = false;
         }
@@ -554,7 +549,7 @@ watch(
       scrollState.previousScrollTop = chatWrapperRef.value.scrollTop;
     }
 
-    if (newValue !== 'ai' && props.contact?.conversationId) {
+    if (newValue !== 'ai' && props.contact?.topicId) {
       state.messages = [];
       state.hasMoreMessages = true;
       state.isLoadingMore = false;
@@ -563,13 +558,10 @@ watch(
 
       try {
         if (!getIsWebsocketConnecting()) {
-          const messages = await fetchMessagesForTopic(
-            props.contact.conversationId,
-            {
-              page: state.page,
-              limit: state.limit
-            }
-          );
+          const messages = await fetchMessagesForTopic(props.contact.topicId, {
+            page: state.page,
+            limit: state.limit
+          });
           if (messages.length < state.limit) {
             state.hasMoreMessages = false;
           }
@@ -653,7 +645,7 @@ const handleSend = async (): Promise<void> => {
     return;
   }
 
-  if (!props.contact?.conversationId) {
+  if (!props.contact?.topicId) {
     console.error('[ChatSDK] Cannot send message: no topic provided');
     return;
   }
@@ -664,7 +656,7 @@ const handleSend = async (): Promise<void> => {
   try {
     lastMessageSentTime.value = Date.now();
     await sendMessageChat({
-      topicId: props.contact.conversationId,
+      topicId: props.contact.topicId,
       text
     });
   } catch (error) {
@@ -678,7 +670,7 @@ const handleSend = async (): Promise<void> => {
 const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
   if (!files.length) return;
 
-  if (!props.contact?.conversationId) {
+  if (!props.contact?.topicId) {
     console.error('[ChatSDK] Cannot send message: no topic provided');
     return;
   }
@@ -687,7 +679,7 @@ const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
     try {
       lastMessageSentTime.value = Date.now();
       await sendMessageChat({
-        topicId: props.contact.conversationId,
+        topicId: props.contact.topicId,
         file,
         onlyMedia
       });

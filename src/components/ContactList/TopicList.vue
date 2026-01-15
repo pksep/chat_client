@@ -13,35 +13,35 @@
     :aria-label="`${props.dataTestid} Contact List`"
   >
     <li
-      v-for="(contact, index) in props.contacts"
-      :key="contact.id"
+      v-for="(topic, index) in props.topics"
+      :key="topic.id"
       class="contact-list__li"
       role="listitem"
       tabindex="0"
-      @keydown="event => handleKeyDown(contact, event)"
+      @keydown="event => handleKeyDown(topic, event)"
       :data-testid="`${props.dataTestid}-ContactList-Item${index + 1}`"
     >
       <div
         :class="[
           'contact-list__item',
           {
-            'contact-list__item--active': contact.id === props.selectedContactId
+            'contact-list__item--active': topic.id === props.selectedTopicId
           }
         ]"
         role="button"
         tabindex="0"
-        :aria-expanded="isOpen[contact.id] ? 'true' : 'false'"
+        :aria-expanded="isOpen[topic.id] ? 'true' : 'false'"
         :aria-haspopup="true"
-        @click.stop="handleClick(contact)"
-        @contextmenu="openActivePopover(contact.id, $event)"
-        @keydown.enter="handleClick(contact)"
-        @keydown.space="handleClick(contact)"
+        @click.stop="handleClick(topic)"
+        @contextmenu="openActivePopover(topic.id, $event)"
+        @keydown.enter="handleClick(topic)"
+        @keydown.space="handleClick(topic)"
       >
         <Avatar
           class="contact-list__avatar"
-          :initials="contact.user?.initials || 'Unknown'"
-          :url="contact.user?.avatarUrl || ''"
-          :alt="`Avatar of ${contact.nickname}`"
+          :initials="topic.name"
+          :url="topic.avatarUrl"
+          :alt="`Avatar of ${topic.name}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           is-icon
         />
@@ -52,55 +52,43 @@
             class="contact-list__title"
             :data-testid="`${props.dataTestid}-ContactList-Title${index + 1}`"
           >
-            {{ contact.user?.initials }}
-            <span class="contact-list__me" v-if="contact.id === user.id">
-              (Вы)
-            </span>
+            {{ topic.name }}
           </h5>
           <div
             class="contact-list__description"
             :data-testid="`${props.dataTestid}-ContactList-Description${index + 1}`"
-            :aria-label="`Latest message: ${contact.latestMessage || 'No message'}`"
-            v-html="contact.latestMessage"
+            :aria-label="`Latest message: ${topic.lastMessage || 'No message'}`"
+            v-html="topic.lastMessage || '--'"
           ></div>
           <div class="contact-list__top">
             <MessageStatusIcons
-              v-if="contact.isLatestMessageFromMe"
+              v-if="topic.lastMessage?.senderUserId === state.authedUser.id"
               class="contact-list__message-status-icons"
-              :message-status="contact.latestMessageStatus"
-              :is-read="contact.isRead"
+              :message-status="topic.lastMessage?.status"
+              :is-read="topic.lastMessage?.status === MessageStatusEnum.READ"
               :is-me-sender="true"
               :data-testid="`${props.dataTestid}-ContactList-MessageStatusIcons${index + 1}`"
             />
             <span
-              v-if="contact.latestMessageTime"
+              v-if="topic.lastMessage?.createdAt"
               class="contact-list__time"
               :data-testid="`${props.dataTestid}-ContactList-Time${index + 1}`"
-              :aria-label="`Last message at ${useTime(new Date(contact.latestMessageTime))}`"
+              :aria-label="`Last message at ${useTime(new Date(topic.lastMessage?.createdAt))}`"
             >
-              {{ useTime(new Date(contact.latestMessageTime)) }}
+              {{ useTime(new Date(topic.lastMessage?.createdAt)) }}
             </span>
           </div>
           <div class="contact-list__bottom">
-            <Checkbox
-              v-if="props.showCheckbox"
-              :size="CheckboxSizeEnum.small"
-              @update:model-value="value => handleCheckbox(value, contact.id)"
-              :model-value="props.selectedContactIds?.has(contact.id) || false"
-            />
             <div
-              v-else-if="
-                contact.notificationCount > 0 &&
-                (state.isNotificationEnabled[contact.id] ?? true)
-              "
+              v-if="topic.lastMessage?.status !== MessageStatusEnum.READ"
               class="contact-list__notification"
               :data-testid="`${props.dataTestid}-ContactList-Notification${index + 1}`"
-              :aria-label="`${contact.notificationCount} new messages`"
+              :aria-label="`${1} new messages`"
             >
-              {{ contact.notificationCount }}
+              {{ 1 }}
             </div>
             <div
-              v-if="state.isPin[contact.id]"
+              v-if="state.isPin[topic.id]"
               :data-testid="`${props.dataTestid}-ContactList-Pin${index + 1}`"
               :aria-label="`Pinned contact`"
             >
@@ -110,37 +98,35 @@
         </div>
       </div>
       <ContextMenu
-        :visible="!!isOpen[contact.id]"
+        :visible="!!isOpen[topic.id]"
         :position="position"
         :data-testid="`${props.dataTestid}-ContactList-ContextMenu${index + 1}`"
-        @unmount-close="() => closeActivePopover(contact.id)"
+        @unmount-close="() => closeActivePopover(topic.id)"
       >
         <Button
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.small"
-          @click.stop="() => handlePin(contact)"
+          @click.stop="() => handlePin(topic)"
           :data-testid="`${props.dataTestid}-ContactList-PinButton${index + 1}`"
           :aria-label="
-            state.isPin[contact.id]
-              ? `Unpin ${contact.nickname}`
-              : `Pin ${contact.nickname}`
+            state.isPin[topic.id] ? `Unpin ${topic.name}` : `Pin ${topic.name}`
           "
         >
-          <template v-if="!state.isPin[contact.id]"> Закрепить </template>
+          <template v-if="!state.isPin[topic.id]"> Закрепить </template>
           <template v-else> Открепить </template>
         </Button>
         <Button
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.small"
-          @click="() => handleNotification(contact.id)"
+          @click="() => handleNotification(topic.id)"
           :data-testid="`${props.dataTestid}-ContactList-NotificationButton${index + 1}`"
           :aria-label="
-            state.isNotificationEnabled[contact.id]
-              ? `Disable notifications for ${contact.nickname}`
-              : `Enable notifications for ${contact.nickname}`
+            state.isNotificationEnabled[topic.id]
+              ? `Disable notifications for ${topic.name}`
+              : `Enable notifications for ${topic.name}`
           "
         >
-          <template v-if="state.isNotificationEnabled[contact.id] ?? true">
+          <template v-if="state.isNotificationEnabled[topic.id] ?? true">
             Выкл. уведомление
           </template>
           <template v-else> Вкл. уведомление </template>
@@ -167,63 +153,57 @@ import ContextMenu from './ContextMenu.vue';
 import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
 import Loading from '../Loading.vue';
 import type { IContactListProps } from './interfaces/contact-list';
-import { setPinConversation } from '../../services/useConversions';
-import { getAuthUser } from '../../composables/useAuth';
-import { IContactProps } from '../interfaces/interfaces';
+import { authedUser, getAuthUser } from '../../composables/useAuth';
+import { ITopic, MessageStatusEnum } from '../interfaces/interfaces';
+import { togglePinTopic } from '../../composables/useTopics';
+import { t } from '@vite-pwa/assets-generator/shared/assets-generator.DnoqiTld';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
-  selectedContactIds?: Set<string | number>;
+  selectedTopicIds?: Set<string | number>;
   isLoading?: boolean;
 }
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   showCheckbox: false,
-  selectedContactIds: () => new Set<string | number>(),
+  selectedTopicIds: () => new Set<string | number>(),
   isLoading: false
 });
 
 const emits = defineEmits<{
   (e: 'unmount-notification', id: string): void;
   (e: 'unmount-click', id: string): void;
-  (e: 'unmount-contact', contact: IContactProps): void;
-  (e: 'unmount-checkbox', isCheck: boolean, contactId: string | number): void;
+  (e: 'unmount-topic', contact: ITopic): void;
 }>();
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
-const user = computed(() => getAuthUser());
-
 const state = reactive({
   isPin: {} as Record<string, boolean>,
-  isNotificationEnabled: {} as Record<string, boolean>
+  isNotificationEnabled: {} as Record<string, boolean>,
+  authedUser: computed(() => getAuthUser())
 });
 
 watch(
-  () => props.contacts,
-  contacts => {
-    if (contacts) {
-      contacts.forEach(contact => {
-        state.isPin[contact.id] = contact.isPin;
+  () => props.topics,
+  topics => {
+    if (topics) {
+      topics.forEach(topic => {
+        state.isPin[topic.id] = topic.info?.isPin;
       });
     }
   },
   { immediate: true }
 );
 
-const handlePin = (contact: IContactProps): void => {
-  setPinConversation(contact.id, !contact.isPin);
+const handlePin = (contact: ITopic): void => {
+  togglePinTopic(contact.id);
   closeActivePopover(contact.id);
 };
 
-const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
-  emits('unmount-checkbox', isCheck, contactId);
-};
-
-const handleClick = (contact: IContactProps): void => {
-  emits('unmount-click', contact.id);
-  emits('unmount-contact', contact);
+const handleClick = (contact: ITopic): void => {
+  emits('unmount-topic', contact);
 };
 
 const handleNotification = (contactId: string): void => {
@@ -233,7 +213,7 @@ const handleNotification = (contactId: string): void => {
   closeActivePopover(contactId);
 };
 
-const handleKeyDown = (contact: IContactProps, event: KeyboardEvent): void => {
+const handleKeyDown = (contact: ITopic, event: KeyboardEvent): void => {
   if (event.key === 'Enter' || event.key === ' ') {
     handleClick(contact);
   }

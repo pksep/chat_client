@@ -130,7 +130,7 @@ import Loading from './Loading.vue';
 import type {
   IChatContainerProps,
   IContactProps,
-  IUserProps
+  IUser
 } from './interfaces/interfaces';
 import { getUsersList } from '../composables/useUsers';
 import { useResizeState } from '../composables/useResizeState';
@@ -444,7 +444,7 @@ const openContact = async contact => {
 };
 
 const unmountMenuChapter = async (
-  config: { contact: IUserProps; groupId?: string } | string | null
+  config: { contact: IUser; groupId?: string } | string | null
 ): Promise<void> => {
   if (!config) {
     state.chapter = null;
@@ -532,7 +532,7 @@ const handleClearClick = (): void => {
 };
 
 const handleNewContactMessage = async (
-  contact: IUserProps
+  contact: IUser
 ): Promise<IContactProps> => {
   state.chapter = contact.id;
 
@@ -631,7 +631,7 @@ const handleNewGroupMessage = async (group: any): Promise<void> => {
   }
 };
 
-const handleChangeContact = async (contact: IUserProps): Promise<void> => {
+const handleChangeContact = async (contact: IUser): Promise<void> => {
   if (contact.groupId) {
     const memberCount = await fetchGroupMemberCount(contact.groupId);
     state.contact = {
@@ -652,7 +652,7 @@ const handleChangeContact = async (contact: IUserProps): Promise<void> => {
 };
 
 const handleChangeContactFromMenuInfo = async (
-  contact: IUserProps
+  contact: IUser
 ): Promise<void> => {
   const conversationId =
     contact.conversationId || contact.groupId || contact.id;

@@ -1,17 +1,16 @@
 import { ref, shallowRef } from 'vue';
 import { getChatSDK } from '../services/useChat';
-import { Message, Topic, TopicSetting, User } from '@pksep/zod-shared-chat';
-import { IContactProps } from '../components/interfaces/interfaces';
+import { ITopic } from '../components/interfaces/interfaces';
 import { TopicType } from '../services/useChatSDK/types';
 
-const topics = shallowRef<IContactProps[]>([]);
+const topics = shallowRef<ITopic[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
 export const fetchAllTopics = async (
   page = 1,
   limit = 200
-): Promise<IContactProps[]> => {
+): Promise<ITopic[]> => {
   loading.value = true;
   error.value = null;
 
@@ -34,15 +33,15 @@ export const fetchAllTopics = async (
   }
 };
 
-export const createTopic = async (peerId: string): Promise<IContactProps[]> => {
+export const createTopic = async (peerId: string): Promise<ITopic[]> => {
   loading.value = true;
   error.value = null;
 
   try {
     const sdk = getChatSDK();
-    await sdk.createTopic({ peerId });
+    const newTopic = await sdk.createTopic({ peerId });
 
-    return topics.value;
+    topics.value = [newTopic, ...topics.value];
   } catch (err) {
     error.value = (err as Error).message;
     console.error('Failed to fetch topics:', error.value);
@@ -52,7 +51,15 @@ export const createTopic = async (peerId: string): Promise<IContactProps[]> => {
   }
 };
 
+export const togglePinTopic = async (topicId: string) => {
+  try {
+    const sdk = getChatSDK();
+    await sdk.togglePinTopic(topicId);
+  } catch (err) {
+    console.error('Failed to pin/unpin topic:', err);
+  }
+};
 
-export const getTopicList = (): IContactProps[] => {
+export const getTopicList = (): ITopic[] => {
   return topics.value || [];
 };
