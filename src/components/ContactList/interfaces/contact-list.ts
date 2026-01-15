@@ -1,4 +1,4 @@
-import type { IContactProps } from '../../interfaces/interfaces';
+import type { ITopic } from '../../interfaces/interfaces';
 
 export interface IContactListProps {
   class?: string;
@@ -6,8 +6,8 @@ export interface IContactListProps {
   addButtonClass?: string;
   listClass?: string;
   userClass?: string;
-  contacts: IContactProps[];
+  topics: ITopic[];
   dataTestid?: string;
-  selectedContactId?: string;
+  selectedTopicId?: string;
   groupId?: string;
 }

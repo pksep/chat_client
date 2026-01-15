@@ -52,10 +52,10 @@ export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
 
   const muteGroupInfo = async (
     isMute: boolean,
-    contact?: { groupId?: string; userId?: string; conversationId?: string }
+    contact?: { groupId?: string; userId?: string; topicId?: string }
   ): Promise<void> => {
     const targetContact = contact || model.value;
-    const topicId = targetContact?.conversationId;
+    const topicId = targetContact?.topicId;
 
     if (!topicId) {
       console.warn('No topic ID provided for muting conversation');
@@ -109,10 +109,10 @@ export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
   const getMuteStatus = async (contact?: {
     groupId?: string;
     userId?: string;
-    conversationId?: string;
+    topicId?: string;
   }): Promise<boolean> => {
     const targetContact = contact || model.value;
-    if (!targetContact?.conversationId) return false;
+    if (!targetContact?.topicId) return false;
     return false;
   };
 

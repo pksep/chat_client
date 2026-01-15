@@ -20,7 +20,7 @@
         :data-testid="`${props.dataTestid}-ContactSelector-Item${index + 1}`"
       >
         <UserProfile
-          v-bind="contact"
+          :user="contact"
           :dataTestid="`${props.dataTestid}-ContactSelector-UserProfile${index + 1}`"
         />
         <Checkbox
@@ -58,7 +58,7 @@ import {
   Search
 } from '@pksep/yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
-import { IUserProps } from '../interfaces/interfaces';
+import { ITopic } from '../interfaces/interfaces';
 import {
   IContactSelectorProps,
   IContactSelectorEmits,
@@ -78,12 +78,8 @@ const state = reactive<IContactSelectorState>({
 const contacts = computed(() =>
   props.contacts.filter(
     contact =>
-      (contact.ex?.toLowerCase() ?? '').includes(
-        (state.q ?? '').toLowerCase()
-      ) ||
-      (contact.nickname?.toLowerCase() ?? '').includes(
-        (state.q ?? '').toLowerCase()
-      )
+      contact.initials.toLowerCase().includes(state.q.toLowerCase()) ||
+      contact.nickname.toLowerCase().includes(state.q.toLowerCase())
   )
 );
 
@@ -117,7 +113,7 @@ const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
   updateSelection(contactId, isCheck);
 };
 
-const handleNewContact = (contact: IUserProps): void => {
+const handleNewContact = (contact: ITopic): void => {
   if (props.isAddOne) {
     emits('unmount-contact', contact);
     return;

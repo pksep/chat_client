@@ -1,25 +1,22 @@
 import { ref } from 'vue';
-import { IUserProps } from '../components/interfaces/interfaces';
 import { getChatSDK, getCurrentUserId } from './useChat';
-import { Group, User } from '@pksep/zod-shared-chat';
-import type { IContactProps } from '../components/interfaces/interfaces';
+import type {
+  ITopic,
+  IUser
+} from '../components/interfaces/interfaces';
 
 enum TopicType {
   Group = 'GROUP',
   DM = 'DM'
 }
 
-interface GroupWithMembers extends Group {
-  members?: any[];
-}
-
-const groups = ref<GroupWithMembers[]>([]);
-const groupMembers = ref<IUserProps[]>([]);
+const groups = ref<ITopic[]>([]);
+const groupMembers = ref<IUser[]>([]);
 
 export const fetchAllGroups = async (
   page = 1,
   limit = 200
-): Promise<GroupWithMembers[]> => {
+): Promise<ITopic[]> => {
   try {
     const sdk = getChatSDK();
     const response = await sdk.getTopics(TopicType.Group, {
@@ -27,24 +24,7 @@ export const fetchAllGroups = async (
       limit
     });
 
-    const groupObjects = response.data.map(topic => {
-      // Extract group info from the topic if available
-      const groupInfo = topic.group || topic.groupInfo || {};
-
-      return {
-        id: topic.id,
-        topicId: topic.id,
-        title:
-          groupInfo.title || topic.title || 'Group ' + topic.id.substring(0, 8),
-        description: groupInfo.description || topic.description || null,
-        avatarUrl: groupInfo.avatarUrl || topic.avatarUrl || null,
-        createdAt: topic.createdAt,
-        updatedAt: topic.updatedAt,
-        deletedAt: topic.deletedAt || null
-      };
-    });
-
-    groups.value = groupObjects;
+    groups.value = response.data;
 
     return groups.value;
   } catch (err) {
@@ -53,17 +33,12 @@ export const fetchAllGroups = async (
   }
 };
 
-export const fetchGroupMembers = async (
-  groupId: string
-): Promise<IUserProps[]> => {
+export const fetchGroupMembers = async (groupId: string): Promise<IUser[]> => {
   try {
     const sdk = getChatSDK();
     const group = await sdk.getGroup(groupId, { page: 1, limit: 1000 });
 
-    const groupWithMembers = group as any;
-    const members: any[] =
-      groupWithMembers.members || groupWithMembers.users || [];
-    groupMembers.value = members;
+    groupMembers.value = group.members || [];
 
     return groupMembers.value;
   } catch (err) {
@@ -94,48 +69,18 @@ const createGroup = async (
     throw new Error('Failed to create group: invalid response from server');
   }
 
-  const groupItem: any = {
-    id: group.id,
-    groupId: group.id,
-    conversationId: group.topicId,
-    nickname: group.title,
-    avatarUrl: group.avatarUrl,
-    latestMessage: '',
-    latestMessageTime: Date.now(),
-    notificationCount: 0,
-    isPin: false,
-    membersLength: (() => {
-      const groupWithMembers = group as any;
-      return (
-        (groupWithMembers.members || groupWithMembers.users || []).length || 0
-      );
-    })()
-  };
-
-  groups.value = [groupItem, ...groups.value];
-  return { ...group, conversationId: group.topicId, groupId: group.id };
+  return group;
 };
 
-const getGroupList = (): IContactProps[] => {
-  return groups.value.map(group => ({
-    id: group.id,
-    user: group.user,
-    lastOnline: null,
-    createdAt: group.createdAt,
-    updatedAt: group.updatedAt,
-    deletedAt: group.deletedAt,
-    conversationId: group.conversationId,
-    latestMessage: '',
-    membersLength: 0,
-    members: []
-  }));
+const getGroupList = (): ITopic[] => {
+  return groups.value;
 };
 
-const setGroupList = (value: GroupWithMembers[]): void => {
+const setGroupList = (value: ITopic[]): void => {
   groups.value = value || [];
 };
 
-const updateGroupList = (value: GroupWithMembers[]): void => {
+const updateGroupList = (value: ITopic[]): void => {
   const map = new Map(groups.value.map(group => [group.id, group]));
   value.forEach(item => map.set(item.id, item));
   groups.value = Array.from(map.values());

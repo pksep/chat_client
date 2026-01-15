@@ -32,7 +32,7 @@ import { isShowContactList } from '../composables/useShowContactList';
 import { MAX_W_MD } from '../utils/constants';
 import { computed } from 'vue';
 import type { IMenuEmits } from './interfaces/interfaces';
-import { IUserProps } from './interfaces/interfaces';
+import { IUser } from './interfaces/interfaces';
 import { markAsRead } from '../services/useChat';
 import { getTopicList } from '../composables/useTopics';
 
@@ -61,7 +61,7 @@ watch(
 );
 
 watch(
-  () => props.contact?.conversationId,
+  () => props.contact?.topicId,
   (newConversationId, oldConversationId) => {
     if (newConversationId && newConversationId !== oldConversationId) {
       markAsRead(newConversationId).catch(error => {
@@ -90,7 +90,7 @@ const handleUnmountChapter = (
   }
 };
 
-const handleUnmountContact = (contact: IUserProps): void => {
+const handleUnmountContact = (contact: IUser): void => {
   emits('unmount-contact', contact);
 };
 

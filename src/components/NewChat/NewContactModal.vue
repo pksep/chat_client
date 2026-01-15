@@ -36,7 +36,7 @@ import {
 } from '@pksep/yui';
 import ContactSelector from './ContactSelector.vue';
 import type { INewContactProps } from './interfaces/new-contact';
-import { IUserProps } from '../interfaces/interfaces';
+import { ITopic, IUser } from '../interfaces/interfaces';
 
 const props = withDefaults(defineProps<INewContactProps>(), {
   open: false,
@@ -48,14 +48,14 @@ const props = withDefaults(defineProps<INewContactProps>(), {
 
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
-  (e: 'unmount-new-contact', contact: IUserProps[] | IUserProps);
+  (e: 'unmount-new-contact', contact: ITopic[] | IUser);
 }>();
 
 const closeModal = (): void => {
   emits('unmount-close');
 };
 
-const handleNewContact = (contacts: IUserProps[] | IUserProps): void => {
+const handleNewContact = (contacts: IUser[] | IUser): void => {
   if (props.isAddOne) {
     emits('unmount-new-contact', contacts);
   } else {

@@ -30,7 +30,7 @@
         <template v-if="user">
           <UserProfile
             :class="['menu__user-profile', props.userClass ?? '']"
-            v-bind="user"
+            :user="user"
             :dataTestid="`${props.dataTestid}-ContactListInModal-UserProfile${index + 1}`"
             @unmount-click="openActivePopover(user.id.toString(), $event)"
           />
@@ -78,11 +78,11 @@ import NewContactModal from '../NewChat/NewContactModal.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import { removeUserFromGroup } from '../../services/useGroup';
-import type { IUserProps } from '../interfaces/interfaces';
+import type { IUser } from '../interfaces/interfaces';
 
 interface ContactListInModalProps {
   showAddButton?: boolean;
-  contacts?: IUserProps[];
+  contacts?: IUser[];
   dataTestid?: string;
   class?: string;
   addButtonClass?: string;

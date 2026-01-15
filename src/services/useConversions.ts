@@ -1,6 +1,6 @@
 import { ref, shallowRef } from 'vue';
 import { getChatSDK, getCurrentUserId } from './useChat';
-import { IContactProps } from '../components/interfaces/interfaces';
+import { ITopic } from '../components/interfaces/interfaces';
 import { setGroupList } from './useGroup';
 import { getUsersList } from '../composables/useUsers';
 import { updateItemList } from '../utils/listUtils';
@@ -12,7 +12,7 @@ enum TopicType {
   DM = 'DM'
 }
 
-const conversionStore = shallowRef<IContactProps[]>([]);
+const conversionStore = shallowRef<ITopic[]>([]);
 const allNotificationCount = ref<number>(0);
 
 let isSDKReady = false;
@@ -42,9 +42,7 @@ export const onSDKReady = (callback: () => void) => {
 };
 
 const resolveParticipants = (topic: any) => {
-  return (
-    topic.members || topic.users || topic.participants || topic.memberList || []
-  );
+  return topic.members || [];
 };
 
 const resolveTopicMeta = (topic: any) => {
@@ -97,19 +95,20 @@ export const manipulateConversationList = (topics: any[]): any[] => {
     const initials = user?.initials || otherUser?.initials || nickname;
 
     // Create user object for both DM and Group chats to ensure consistent interface
-    const contactUser = topic.type === TopicType.Group
-      ? {
-          id: topic.id, // Use topic.id as the identifier for group
-          initials: title || `Group ${topic.id.substring(0, 8)}`,
-          nickname: title || `Group ${topic.id.substring(0, 8)}`,
-          avatarUrl: avatarUrl || ''
-        }
-      : {
-          id: otherUser?.id || contactId,
-          initials,
-          nickname,
-          avatarUrl: contactAvatarUrl
-        };
+    const contactUser =
+      topic.type === TopicType.Group
+        ? {
+            id: topic.id, // Use topic.id as the identifier for group
+            initials: title || `Group ${topic.id.substring(0, 8)}`,
+            nickname: title || `Group ${topic.id.substring(0, 8)}`,
+            avatarUrl: avatarUrl || ''
+          }
+        : {
+            id: otherUser?.id || contactId,
+            initials,
+            nickname,
+            avatarUrl: contactAvatarUrl
+          };
 
     return {
       id: contactId,
@@ -130,60 +129,14 @@ export const manipulateConversationList = (topics: any[]): any[] => {
       isRead: lastMessage?.status === MessageStatus.Read,
       latestMessageStatus: lastMessage?.status,
       isLatestMessageFromMe: lastMessage?.senderUserId === currentUserId,
-      conversationId: topic.type === TopicType.Group ? groupId || topic.id : topic.id
+      topicId: topic.type === TopicType.Group ? groupId || topic.id : topic.id
     };
   });
 };
 
-const fetchConversationList = async () => {
-  if (!isSDKReady) {
-    console.debug('SDK not ready yet, skipping conversation list fetch');
-    return;
-  }
+const fetchConversationList = async () => {};
 
-  try {
-    const sdk = getChatSDK();
-    const response = await sdk.getTopics();
-    const topics = response.data || [];
-
-    const totalUnread = topics.reduce(
-      (sum: number, topic: any) => sum + (topic.unreadCount || 0),
-      0
-    );
-
-    setAllNotificationCount(totalUnread);
-
-    const dmTopics = topics.filter(
-      (topic: any) => topic.type !== TopicType.Group
-    );
-    const groupTopics = topics.filter(
-      (topic: any) => topic.type === TopicType.Group
-    );
-
-    setConversationList(dmTopics);
-    setGroupList(manipulateConversationList(groupTopics));
-  } catch (err) {
-    console.error('Failed to get topic list:', err);
-  }
-};
-
-const setPinConversation = async (topicId: string, isPinned: boolean) => {
-  try {
-    const sdk = getChatSDK();
-    const userId = getCurrentUserId();
-    if (!userId) return;
-
-    if (isPinned) {
-      await sdk.togglePinTopic(topicId, userId);
-    } else {
-      await sdk.togglePinTopic(topicId, userId);
-    }
-  } catch (err) {
-    console.error('Failed to pin/unpin topic:', err);
-  }
-};
-
-const getConversationList = (): IContactProps[] => {
+const getConversationList = (): ITopic[] => {
   return conversionStore.value || [];
 };
 
@@ -198,7 +151,7 @@ const updateConversationList = (value: any[]): void => {
 
 const updateColumnsConversation = (
   conversationID: string,
-  updates: Partial<IContactProps>
+  updates: Partial<ITopic>
 ): void => {
   const index = conversionStore.value.findIndex(
     conv => conv.id === conversationID
@@ -223,9 +176,7 @@ const setAllNotificationCount = (value: number): void => {
   allNotificationCount.value = value;
 };
 
-const getOneConversation = async (
-  topicId: string
-): Promise<IContactProps | null> => {
+const getOneConversation = async (topicId: string): Promise<ITopic | null> => {
   try {
     const sdk = getChatSDK();
     const response = await sdk.getTopics();
@@ -244,7 +195,6 @@ export {
   setConversationList,
   updateConversationList,
   updateColumnsConversation,
-  setPinConversation,
   getOneConversation,
   getAllNotificationCount,
   setAllNotificationCount

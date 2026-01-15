@@ -1,10 +1,10 @@
-import type { IUserProps } from '../../interfaces/interfaces';
+import type { IUser } from '../../interfaces/interfaces';
 
 export interface INewContactProps {
   open: boolean;
   dataTestid?: string;
   isAddOne?: boolean;
-  contacts: IUserProps[];
+  contacts: IUser[];
   title?: string;
-  user?: IUserProps;
+  user?: IUser;
 }

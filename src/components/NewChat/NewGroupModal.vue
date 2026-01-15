@@ -66,7 +66,7 @@
             ref="avatarInputRef"
             type="file"
             accept="image/*"
-            @wwwange="onAvatarSelected"
+            @change="onAvatarSelected"
           />
           <ModalCroppedAvatar
             :image="file"
@@ -107,17 +107,14 @@ import {
 import ContactSelector from './ContactSelector.vue';
 import type { INewContactProps } from './interfaces/new-contact';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';
-import { IUserProps } from '../interfaces/interfaces';
+import { IUser } from '../interfaces/interfaces';
 import { useNewGroupModal } from './composables/useNewGroupModal';
 
-const props = withDefaults(
-  defineProps<INewContactProps & { user?: IUserProps }>(),
-  {
-    open: false,
-    contacts: () => [],
-    dataTestid: () => 'NewGroupModal'
-  }
-);
+const props = withDefaults(defineProps<INewContactProps & { user?: IUser }>(), {
+  open: false,
+  contacts: () => [],
+  dataTestid: () => 'NewGroupModal'
+});
 
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
