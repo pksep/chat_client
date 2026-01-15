@@ -5,23 +5,24 @@
     :data-testid="`${dataTestid}-UserProfile-Container`"
   >
     <Avatar
-      :url="props.group.avatarUrl"
-      :alt="props.group.avatarUrl"
+      :url="props.group?.avatarUrl"
+      :alt="props.group?.avatarUrl"
       class="user-profile__avatar"
-      :initials="props.group.title"
+      :initials="props.group?.title"
       :data-testid="`${dataTestid}-UserProfile-Avatar`"
     />
     <h3
       class="user-profile__title"
       :data-testid="`${dataTestid}-UserProfile-Title`"
     >
-      {{ props.group.title }}
+      {{ props.group?.title }}
     </h3>
     <span
       class="user-profile__ex"
       :data-testid="`${dataTestid}-UserProfile-Ex`"
     >
-      {{ props.membersLength }} {{ getParticipantForm(props.membersLength) }}
+      {{ props.group?.membersLength }}
+      {{ getParticipantForm(props.group?.membersLength) }}
     </span>
   </div>
 </template>
@@ -31,7 +32,7 @@ import { Avatar } from '@pksep/yui';
 import { IGroupProfileProps } from '../interfaces/interfaces';
 
 const props = withDefaults(defineProps<IGroupProfileProps>(), {
-  dataTestid: () => 'GroupProfile'
+  dataTestid: 'GroupProfile'
 });
 
 const getParticipantForm = (num: number = 0): string => {

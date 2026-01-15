@@ -143,7 +143,7 @@ import {
   navigateToAI,
   navigateToDefault,
   setupUrlWatcher
-} from '../composables/useUrlRouting';
+} from '../composables/navigation';
 import { createTopic, getTopicList } from '../composables/useTopics';
 import { getChatSDK } from '../services/useChat';
 

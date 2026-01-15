@@ -19,7 +19,7 @@
     </Button>
     <div
       class="chat__header-profile chat__header-ai-assistant"
-      v-if="props.chapter === 'ai'"
+      v-if="topic.type === 'ai'"
       :data-testid="`${props.dataTestid}-Header-AIAssistant`"
     >
       <AiIconWrapper
@@ -29,12 +29,19 @@
         Ai Ассистент
       </h3>
     </div>
+    <GroupProfile
+      v-else-if="topic.type === 'group'"
+      class="chat__header-profile"
+      avatar-alt="group-profile-alt"
+      :group="state.menuInfo"
+      :data-testid="`${props.dataTestid}-Header-GroupProfile`"
+    />
     <UserProfile
       class="chat__header-profile"
       avatar-alt="user-profile-alt"
-      v-bind="props.contact"
+      :user="state.menuInfo"
       :data-testid="`${props.dataTestid}-Header-UserProfile`"
-      v-else
+      v-else-if="topic.type === 'dialogs'"
     />
     <div
       class="chat__header-buttons"
@@ -62,7 +69,7 @@
         </Button>
       </template>
       <Popover
-        v-if="!popoverRule"
+        v-if="false"
         class="chat__header-popover"
         @click.stop
         :options="getPopoverOptions"
@@ -96,6 +103,7 @@ import { computed, onMounted, reactive, watch } from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';
+import GroupProfile from '../GroupProfile/GroupProfile.vue';
 import MobileModal from '../UI/MobileModal.vue';
 import {
   Button,
@@ -111,15 +119,15 @@ import type { IHeaderProps, IHeaderEmits } from '../interfaces/interfaces';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import MobileChatInfo from './MobileChatInfo.vue';
 import { useMenuInfo } from '../../composables/useMenuInfo';
-import { useInformationMenu } from '../../composables/useInformationMenu';
-import { currentRoute, setupUrlWatcher } from '../../composables/useUrlRouting';
+import { useUrlWatcher } from '../../composables/navigation';
+import { getChatSDK } from '../../services/useChat';
+import { TopicType } from '../../services/useChatSDK/types';
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
   dataTestid: () => 'Header'
 });
 
-setupUrlWatcher();
-const { id: topicId } = currentRoute.value;
+const topic = useUrlWatcher();
 
 const emits = defineEmits<IHeaderEmits>();
 
@@ -141,14 +149,13 @@ const {
   {
     ...props,
     open: state.openMobileInfoModal,
-    isEnabled: props.chapter !== 'ai'
+    isEnabled: topic.value.type !== 'ai'
   },
   emits
 );
 
-const modelInfo = computed(() => menuInfoState.information);
-
-const { muteGroupInfo, getMuteStatus } = useInformationMenu(modelInfo);
+// const modelInfo = computed(() => menuInfoState.information);
+// const { muteGroupInfo, getMuteStatus } = useInformationMenu(modelInfo);
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
@@ -177,12 +184,12 @@ const handleClickHeader = async (): Promise<void> => {
 
 const getPopoverOptions = computed(() => {
   const popoverArray = [];
-  if (props.chapter !== 'ai') {
+  if (topic.value.type !== 'ai') {
     const notificationLabels = {
       value: state.statusNotification.label,
       function: handleNotificationToggle
     };
-    if (!props.contact?.groupId) {
+    if (topic.value.type !== 'group') {
       popoverArray.push(notificationLabels);
     } else {
       popoverArray.push(notificationLabels);
@@ -204,36 +211,34 @@ const getPopoverOptions = computed(() => {
   return popoverArray;
 });
 
-console.log('Topic ID changed:', topicId);
-// make a watch to change of topic id from url parse
-watch(
-  () => topicId,
-  newTopicId => {
-    if (newTopicId !== topicId) {
-    }
+const updateMenuInfo = async (): Promise<void> => {
+  const sdk = getChatSDK();
+  const topics = await sdk.getTopics(
+    topic.value.type === 'group' ? TopicType.Group : TopicType.DM
+  );
+  const findTopic = topics.data.find(to => to.id === topic.value.id);
+  if (topic.value.type === 'group') {
+    const { group, members } = await sdk.getGroup(findTopic.group?.id);
+    state.menuInfo = {
+      avatarUrl: group.avatarUrl,
+      title: group.title,
+      membersLength: members?.data.length
+    };
+    return;
   }
-);
+  state.menuInfo = {
+    avatarUrl: findTopic?.avatarUrl,
+    initials: findTopic?.name,
+    nickname: findTopic?.user.nickname
+  };
+};
 
-/*
-watch(
-  () => props.chapter,
-  async newChapter => {
-    if (props.contact?.groupId) {
-      menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
-    } else {
-      menuInfoState.contacts = [];
-    }
-
-    if (newChapter !== 'ai') {
-      await updateNotificationStatus();
-    }
-  }
-);
-*/
+watch([() => topic.value.id, () => topic.value.type], updateMenuInfo);
 
 const updateNotificationStatus = async (): Promise<void> => {
   try {
-    const isMuted = await getMuteStatus(props.contact);
+    const isMuted = false;
+    // await getMuteStatus(props.contact);
     if (isMuted) {
       state.statusNotification = {
         label: 'Вкл. уведомления',
@@ -259,12 +264,12 @@ const handleExit = (): void => {
 };
 
 const handleNotificationToggle = async (): Promise<void> => {
-  const shouldMute = !state.statusNotification.enabled;
-  await muteGroupInfo(shouldMute, props.contact);
+  // const shouldMute = !state.statusNotification.enabled;
+  // await muteGroupInfo(shouldMute, props.contact);
 
   await updateNotificationStatus();
   emits('unmount-notification', state.statusNotification.label);
 };
 
-onMounted(async () => {});
+onMounted(updateMenuInfo);
 </script>

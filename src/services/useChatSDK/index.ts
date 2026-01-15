@@ -432,8 +432,11 @@ export class ChatSDK {
     return this.group.deleteGroup(groupId);
   }
 
-  async getGroup(groupId: string, params?: SearchParams): Promise<IGroup> {
-    return this.group.getGroup(groupId, params);
+  async getGroup(
+    groupId: string
+  ): Promise<{ group: Group; members: PaginatedResponse<User> }> {
+    const topic = await this.group.getGroup(groupId);
+    return topic;
   }
 
   async updateGroup(
@@ -515,11 +518,8 @@ export class ChatSDK {
     return this.group.editGroup(groupId, groupData);
   }
 
-  async getMessages(
-    topicId: string,
-    params?: SearchParams
-  ): Promise<PaginatedResponse<Message>> {
-    return this.message.getMessages(topicId, params);
+  async getMessages(): null {
+    return null;
   }
 
   async editMessage(

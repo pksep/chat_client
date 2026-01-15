@@ -38,8 +38,10 @@ export interface IHeaderEmits extends IMenuInfoEmits {
 }
 
 export interface IUser extends User {}
+
 export interface IGroup extends Group {
   members?: IUser[];
+  membersLength?: number;
 }
 
 export interface ITopic extends Topic {
@@ -54,7 +56,6 @@ export interface ITopic extends Topic {
 
 export interface IMenuProps {
   open?: boolean;
-  chapter?: string;
   contact?: IUser | null;
   dataTestid?: string;
   class?: string;
@@ -104,5 +105,4 @@ export interface IUserProfileProps {
 export interface IGroupProfileProps {
   group: IGroup;
   dataTestid?: string;
-  membersLength?: number;
 }

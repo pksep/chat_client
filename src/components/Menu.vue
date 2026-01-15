@@ -167,7 +167,7 @@ import {
   navigateToAI,
   navigateToGroup,
   navigateToDialogs
-} from '../composables/useUrlRouting';
+} from '../composables/navigation';
 import { getTopicList } from '../composables/useTopics';
 import { getAuthUser } from '../composables/useAuth';
 import TopicList from './ContactList/TopicList.vue';
