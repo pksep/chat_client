@@ -1,5 +1,5 @@
 // Navigation Domain Composables
-export { 
+export {
   currentRoute,
   initRoute,
   navigateToDialogs,
