@@ -7,7 +7,7 @@
 </template>
 
 <script lang="ts" setup>
-import { navigateToAI } from '@/composables/navigation';
+import { navigateToAI } from '../../composables/navigation';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import Line from '../UI/Line.vue';
 

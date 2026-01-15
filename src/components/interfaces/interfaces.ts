@@ -1,4 +1,4 @@
-import { IMenuInfoEmits } from '@/composables/useMenuInfo';
+import { IMenuInfoEmits } from '../../composables/useMenuInfo';
 import {
   User,
   TopicSetting,

@@ -79,7 +79,7 @@ import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
 import TopicList from './TopicList.vue';
 import { getGroupList } from '../../services/useGroup';
 import { getTopicList } from '../../composables/useTopics';
-import { navigateToAI } from '@/composables/navigation';
+import { navigateToAI } from '../../composables/navigation';
 
 const props = withDefaults(defineProps<IMobileListProps>(), {
   contacts: () => [],
