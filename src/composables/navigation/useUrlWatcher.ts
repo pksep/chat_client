@@ -21,10 +21,15 @@ export const useUrlWatcher = () => {
   };
 
   onMounted(() => {
+    handlePopState();
     window.addEventListener('popstate', handlePopState);
   });
 
   onUnmounted(() => {
+    topic.value = {
+      id: null,
+      type: null
+    };
     window.removeEventListener('popstate', handlePopState);
   });
 

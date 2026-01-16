@@ -3,6 +3,8 @@ import type { INewContactProps } from '../interfaces/new-contact';
 import { createGroup } from '../../../services/useGroup';
 import { uploadFile } from '../../../services/useChat';
 import { IUser } from '../../interfaces/interfaces';
+import { navigateToGroup } from '../../../composables/navigation';
+import { getTopicList } from '../../../composables/useTopics';
 
 interface NewGroupState {
   checkUsers: string[];
@@ -18,7 +20,6 @@ interface ExtendedProps extends INewContactProps {}
 
 type NewGroupModalEmits = {
   (e: 'unmount-close'): void;
-  (e: 'unmount-new-group', group: any): void;
 };
 
 export function useNewGroupModal<Emits extends NewGroupModalEmits>(
@@ -26,6 +27,9 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
   emit: Emits
 ) {
   const avatarInputRef = ref<HTMLInputElement | null>(null);
+
+  const authUser = computed(() => authUser.value);
+  const users = computed(() => getTopicList());
 
   const state = reactive<NewGroupState>({
     checkUsers: [],
@@ -38,8 +42,8 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
   });
 
   const selectedContacts = computed(() => [
-    props.user,
-    ...props.contacts.filter(c => new Set(state.checkUsers).has(c.id))
+    authUser.value,
+    ...users.value.filter(c => new Set(state.checkUsers).has(c.id))
   ]);
 
   watch(
@@ -97,7 +101,7 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
         return state.groupName.substring(0, 140);
       }
       if (group && (group.topicId || group.topicId)) {
-        emit('unmount-new-group', group);
+        navigateToGroup(group.topicId);
 
         closeModal();
         return group;
@@ -113,16 +117,16 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
     }
   };
 
-  const createNiceName = (arr: IUser[]) => {
+  const createNiceName = <T extends { initials: string }>(arr: T[]) => {
     const names = arr.map(user => user.initials || '').join(', ');
     return names;
   };
 
-  const handleOpenGroupInfo = async (contacts: IUser[]): Promise<void> => {
+  const handleOpenGroupInfo = async (users: IUser[]): Promise<void> => {
     state.isSelectedMembers = true;
-    state.checkUsers = contacts.map(contact => contact.id);
+    state.checkUsers = users.map(user => user.id);
     if (!state.groupName) {
-      state.groupName = createNiceName(contacts);
+      state.groupName = createNiceName(users);
     }
   };
 

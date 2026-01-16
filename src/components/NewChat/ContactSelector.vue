@@ -64,6 +64,7 @@ import {
   IContactSelectorEmits,
   IContactSelectorState
 } from './interfaces/contact-selector';
+import { getUsersList } from 'src/composables/useUsers';
 
 const props = withDefaults(defineProps<IContactSelectorProps>(), {
   dataTestid: () => 'ContactSelector'
@@ -75,17 +76,21 @@ const state = reactive<IContactSelectorState>({
   selectedIds: props.selectedContactIds ?? new Set()
 });
 
+const users = computed(() => getUsersList());
+
 const contacts = computed(() =>
-  props.contacts.filter(
+  users.value.filter(
     contact =>
       contact.initials.toLowerCase().includes(state.q.toLowerCase()) ||
       contact.nickname.toLowerCase().includes(state.q.toLowerCase())
   )
 );
 
+/*
 const selectedContacts = computed(() =>
-  props.contacts.filter(contact => state.selectedIds.has(contact.id))
+  users.value.filter(contact => state.selectedIds.has(contact.id))
 );
+ */
 
 const isButtonEnabled = computed(() =>
   props.isButtonDisabled !== undefined
@@ -113,9 +118,9 @@ const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
   updateSelection(contactId, isCheck);
 };
 
-const handleNewContact = (contact: IUser[] | IUser): void => {
+const handleNewContact = (user: IUser): void => {
   if (props.isAddOne) {
-    emits('unmount-contact', contact);
+    emits('unmount-contact', user);
     return;
   }
   // const shouldAdd = !state.selectedIds.has(contact.id);
@@ -123,6 +128,6 @@ const handleNewContact = (contact: IUser[] | IUser): void => {
 };
 
 const onAddClick = (): void => {
-  emits('unmount-contact', selectedContacts.value);
+  // emits('unmount-contact', selectedContacts.value);
 };
 </script>

@@ -26,6 +26,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import {
   Icon,
   IconNameEnum,
@@ -37,12 +38,14 @@ import {
 import ContactSelector from './ContactSelector.vue';
 import type { INewContactProps } from './interfaces/new-contact';
 import { ITopic, IUser } from '../interfaces/interfaces';
+import { navigateToDialogs } from '../../composables/navigation';
+import { getUsersList } from '../../composables/useUsers';
+import { getChatSDK } from '../../services/useChat';
 
 const props = withDefaults(defineProps<INewContactProps>(), {
   open: false,
   isAddOne: true,
   title: 'Создать диалог',
-  contacts: () => [],
   dataTestid: () => 'NewContactModal'
 });
 
@@ -51,15 +54,17 @@ const emits = defineEmits<{
   (e: 'unmount-new-contact', contact: ITopic[] | IUser);
 }>();
 
+const contacts = computed(() => getUsersList());
+
 const closeModal = (): void => {
   emits('unmount-close');
 };
 
-const handleNewContact = (contacts: IUser[] | IUser): void => {
-  if (props.isAddOne) {
-    emits('unmount-new-contact', contacts as IUser);
-  } else {
-    emits('unmount-new-contact', contacts as IUser);
+const handleNewContact = (user: ITopic): void => {
+  if (props.isAddOne && user.id) {
+    navigateToDialogs(user.id as string);
+    const sdk = getChatSDK();
+    sdk.joinTopic(user.id);
   }
   closeModal();
 };

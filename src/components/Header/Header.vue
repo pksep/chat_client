@@ -119,7 +119,14 @@ import type { IHeaderProps, IHeaderEmits } from '../interfaces/interfaces';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import MobileChatInfo from './MobileChatInfo.vue';
 import { useMenuInfo } from '../../composables/useMenuInfo';
-import { useUrlWatcher } from '../../composables/navigation';
+import {
+  navigateToAI,
+  navigateToAssistant,
+  navigateToDefault,
+  navigateToDialogsList,
+  navigateToGroupsList,
+  useUrlWatcher
+} from '../../composables/navigation';
 import { getChatSDK } from '../../services/useChat';
 import { TopicType } from '../../services/useChatSDK/types';
 
@@ -255,7 +262,17 @@ const updateNotificationStatus = async (): Promise<void> => {
 };
 
 const handleExit = (): void => {
-  emits('unmount-exit');
+  if (topic.value.type === 'dialogs') {
+    navigateToDialogsList();
+  } else if (topic.value.type === 'group') {
+    navigateToGroupsList();
+  } else if (topic.value.type === 'assistant') {
+    navigateToAssistant();
+  } else if (topic.value.type === 'ai') {
+    navigateToAI();
+  } else {
+    navigateToDefault();
+  }
 };
 
 const handleNotificationToggle = async (): Promise<void> => {

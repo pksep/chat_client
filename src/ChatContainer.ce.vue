@@ -1,5 +1,9 @@
 <template>
-  <ChatContainer v-if="openChatContainerShow" v-bind="props" />
+  <ChatContainer
+    v-if="openChatContainerShow"
+    v-bind="props"
+    id="chat-container-image"
+  />
   <img
     v-else
     style="position: fixed; width: 100dvw; height: 100dvh; object-fit: contain"

@@ -14,12 +14,9 @@ interface TopicSettingWithUser extends TopicSetting {
  */
 
 export interface IHeaderProps {
-  class?: string;
-  chapter?: string | null;
   contact?: IUser;
   members?: IUser[];
   dataTestid?: string;
-  [key: string]: any; // need delete
 }
 
 export interface IMenuEmits {
