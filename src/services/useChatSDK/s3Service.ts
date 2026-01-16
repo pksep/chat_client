@@ -1,3 +1,5 @@
+import { Reqi } from '@pksep/reqi';
+
 export interface S3Config {
   bucketName: string;
   region: string;
@@ -15,56 +17,23 @@ export interface UploadResult {
 }
 
 export class S3Service {
-  private config: S3Config;
-  private s3Client: any;
+  private reqi: Reqi;
 
-  constructor(config: S3Config) {
-    this.config = config;
+  constructor(reqi: Reqi) {
+    this.reqi = reqi;
   }
 
-  async uploadFile(
-    file: File | Blob,
-    fileName?: string
-  ): Promise<UploadResult> {
-    const fileId = this.generateId();
-    const finalFileName =
-      fileName || `${fileId}.${this.getFileExtension(file)}`;
+  async uploadFile(file: File): Promise<any> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
 
-    return {
-      id: fileId,
-      path: `https://${this.config.bucketName}.s3.${this.config.region}.amazonaws.com/${finalFileName}`,
-      fileName: finalFileName,
-      fileSize: file.size,
-      mimeType: file.type
-    };
-  }
+      const response = await this.reqi.post('/media/upload', formData);
 
-  async deleteFile(fileId: string, filePath: string): Promise<void> {
-    // In a real implementation, this would delete the file from S3
-    // For now, we'll just log the deletion
-    console.log(`Deleting file with ID: ${fileId} at path: ${filePath}`);
-  }
-
-  private generateId(): string {
-    return (
-      Math.random().toString(36).substring(2, 15) +
-      Math.random().toString(36).substring(2, 15)
-    );
-  }
-
-  private getFileExtension(file: File | Blob): string {
-    if (file instanceof File) {
-      const dotIndex = file.name.lastIndexOf('.');
-      if (dotIndex > 0) {
-        return file.name.substring(dotIndex + 1).toLowerCase();
-      }
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      throw new Error(`Failed to upload: ${(error as Error).message}`);
     }
-
-    const mimeType = file.type.split('/')[1];
-    if (mimeType) {
-      return mimeType.toLowerCase();
-    }
-
-    return 'bin';
   }
 }

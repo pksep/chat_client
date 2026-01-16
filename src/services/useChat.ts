@@ -255,14 +255,11 @@ export const sendMessageChat = async (params: {
   }
 };
 
-export const  uploadFile = async (file: File): Promise<string> => {
-  if (!s3Service) {
-    console.warn('[ChatSDK] S3 config missing, cannot upload file.');
-    return '';
-  }
+export const uploadFile = async (file: File): Promise<string> => {
+  const sdk = getChatSDK();
 
-  const uploadResult = await s3Service.uploadFile(file);
-  return uploadResult.path;
+  const url = await sdk.uploadFile(file);
+  return url;
 };
 
 // Store for tracking message history requests
