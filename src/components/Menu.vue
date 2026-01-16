@@ -66,7 +66,8 @@
         <details
           class="menu__user-details"
           v-if="!isCollapse"
-          open
+          :open="detailsOpen[index]"
+          @toggle="handleToggle($event, index)"
           :data-testid="`${props.dataTestid}-Menu-Details${index + 1}`"
         >
           <summary
@@ -146,7 +147,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive, watch } from 'vue';
+import { computed, reactive, watch, onMounted } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_XL } from '../utils/constants';
 import Line from './UI/Line.vue';
@@ -192,6 +193,28 @@ const { state: isCollapse, toggle } = useResizeState({
     emits('unmount-collapse', val);
   }
 });
+
+const detailsOpen = reactive([true, true]);
+
+onMounted(() => {
+  const stored = localStorage.getItem('menu-details-open');
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length === 2) {
+        detailsOpen.splice(0, detailsOpen.length, ...parsed);
+      }
+    } catch (e) {
+      console.warn('Failed to parse menu-details-open from localStorage', e);
+    }
+  }
+});
+
+const handleToggle = (event: Event, index: number) => {
+  const target = event.target as HTMLDetailsElement;
+  detailsOpen[index] = target.open;
+  localStorage.setItem('menu-details-open', JSON.stringify(detailsOpen));
+};
 
 const handleCollapse = (): void => {
   toggle();
