@@ -12,13 +12,14 @@
         :data-testid="`${props.dataTestid}-Menu-ProfileContainer`"
       >
         <UserProfile
+          v-if="authUser"
           :user="authUser"
           class="menu__user-profile"
           :data-testid="`${props.dataTestid}-Menu-UserProfile`"
           v-show="!isCollapse"
         />
         <Avatar
-          v-if="isCollapse"
+          v-if="isCollapse && authUser"
           v-bind="authUser"
           is-icon
           :data-testid="`${props.dataTestid}-Menu-ProfileAvatar`"
@@ -227,7 +228,7 @@ const menuClasses = computed(() => [
 const aiChapterClasses = computed(() => [
   'menu__user-assistant',
   {
-    'menu__user-assistant--active': route.value.type === 'ai'
+    'menu__user-assistant--active': route.value && route.value.type === 'ai'
   }
 ]);
 

@@ -417,7 +417,7 @@ let unsubscribeFromMessageChanges: (() => void) | null = null;
 const lastMessageSentTime = ref(0);
 
 onMounted(async () => {
-  if (route.value.type === 'ai' && !state.chatId) {
+  if (route.value && route.value.type === 'ai' && !state.chatId) {
     state.chatId = generateChatId();
   }
 
@@ -509,7 +509,7 @@ const getMessageFile = (message: ChatMessage) => {
 watch(
   () => state.messages.length,
   (newLength, oldLength) => {
-    if (route.value.type === 'ai') return;
+    if (route.value && route.value.type === 'ai') return;
 
     if (oldLength === 0 && newLength > 0) {
       if (!getIsWebsocketConnecting()) {
@@ -537,7 +537,7 @@ watch(
 );
 
 watch(
-  () => route.value.type,
+  () => route.value?.type,
   async (newValue, oldValue) => {
     if (newValue === oldValue) return;
 
@@ -591,7 +591,7 @@ watch(
 const handleSend = async (): Promise<void> => {
   if (!inputText.value.trim()) return;
 
-  if (route.value.type === 'ai') {
+  if (route.value && route.value.type === 'ai') {
     const text = inputText.value;
     inputText.value = '';
 

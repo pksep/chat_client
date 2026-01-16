@@ -1,12 +1,12 @@
 <template>
   <section class="chat" :data-testid="`${props.dataTestid}-Chat-Container`">
     <ContactListMobile
-      v-if="isMobile && isShowContactList(route.type)"
+      v-if="isMobile && isShowContactList(route.type, route.id || null)"
       class="chat__mobile"
       :data-testid="`${props.dataTestid}-Chat-ContactListMobile`"
     />
     <MessageList
-      v-else-if="!isShowContactList(route.type)"
+      v-else-if="route.id"
       ref="messageListRef"
       :baseUrl="props.baseUrl"
       :contact="props.contact"

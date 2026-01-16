@@ -64,7 +64,7 @@ const updateUrl = (route: Route): void => {
   } else if (route.type === 'ai' && !route.id) {
     newUrl = `${window.location.origin}/ai`;
   } else {
-    newUrl = window.location.origin + window.location.pathname;
+    newUrl = window.location.origin;
   }
 
   const currentUrl = new URL(window.location.href);

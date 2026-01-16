@@ -1,2 +1,4 @@
-export const isShowContactList = (chapter: string): boolean =>
-  chapter === 'group' || chapter === 'dialogs' || chapter === 'assistant';
+export const isShowContactList = (chapter: string, id: string | null = null): boolean =>
+  chapter === 'assistant' ||
+  (chapter === 'group' && id === null) ||
+  (chapter === 'dialogs' && id === null);

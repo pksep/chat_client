@@ -41,7 +41,7 @@
       avatar-alt="user-profile-alt"
       :user="state.menuInfo"
       :data-testid="`${props.dataTestid}-Header-UserProfile`"
-      v-else-if="topic.type === 'dialogs'"
+      v-else-if="topic.type === 'dialogs' && state.menuInfo"
     />
     <div
       class="chat__header-buttons"
@@ -120,7 +120,6 @@ import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import MobileChatInfo from './MobileChatInfo.vue';
 import { useMenuInfo } from '../../composables/useMenuInfo';
 import {
-  navigateToAI,
   navigateToAssistant,
   navigateToDefault,
   navigateToDialogsList,
@@ -187,12 +186,12 @@ const handleClickHeader = async (): Promise<void> => {
 
 const getPopoverOptions = computed(() => {
   const popoverArray = [];
-  if (topic.value.type !== 'ai') {
+  if (topic.value && topic.value.type !== 'ai') {
     const notificationLabels = {
       value: state.statusNotification.label,
       function: handleNotificationToggle
     };
-    if (topic.value.type !== 'group') {
+    if (topic.value && topic.value.type !== 'group') {
       popoverArray.push(notificationLabels);
     } else {
       popoverArray.push(notificationLabels);
@@ -215,7 +214,7 @@ const getPopoverOptions = computed(() => {
 });
 
 const updateMenuInfo = async (): Promise<void> => {
-  if (topic.value.type === 'ai') return;
+  if (!topic.value || topic.value.type === 'ai') return;
 
   let sdk = getChatSDK();
 
@@ -233,14 +232,16 @@ const updateMenuInfo = async (): Promise<void> => {
   }
 
   const topics = await sdk.getTopics(
-    topic.value.type === 'group' ? TopicType.Group : TopicType.DM
+    topic.value && topic.value.type === 'group' ? TopicType.Group : TopicType.DM
   );
-  const findTopic = topics.data.find(to => to.id === topic.value.id);
-  if (topic.value.type === 'group') {
-    const { group, members } = await sdk.getGroup(findTopic.group?.id);
+  const findTopic = topics.data.find(
+    to => topic.value && to.id === topic.value.id
+  );
+  if (topic.value && topic.value.type === 'group') {
+    const { group, members } = await sdk.getGroup(findTopic?.group?.id);
     state.menuInfo = {
-      avatarUrl: group.avatarUrl,
-      title: group.title,
+      avatarUrl: group?.avatarUrl,
+      title: group?.title,
       membersLength: members?.data.length
     };
     return;
@@ -248,11 +249,11 @@ const updateMenuInfo = async (): Promise<void> => {
   state.menuInfo = {
     avatarUrl: findTopic?.avatarUrl,
     initials: findTopic?.name,
-    nickname: findTopic?.user.nickname
+    nickname: findTopic?.user?.nickname
   };
 };
 
-watch([() => topic.value.id, () => topic.value.type], updateMenuInfo);
+watch([() => topic.value?.id, () => topic.value?.type], updateMenuInfo);
 
 const updateNotificationStatus = async (): Promise<void> => {
   try {
@@ -279,14 +280,12 @@ const updateNotificationStatus = async (): Promise<void> => {
 };
 
 const handleExit = (): void => {
-  if (topic.value.type === 'dialogs') {
+  if (topic.value && topic.value.type === 'dialogs') {
     navigateToDialogsList();
-  } else if (topic.value.type === 'group') {
+  } else if (topic.value && topic.value.type === 'group') {
     navigateToGroupsList();
-  } else if (topic.value.type === 'assistant') {
+  } else if (topic.value && topic.value.type === 'ai') {
     navigateToAssistant();
-  } else if (topic.value.type === 'ai') {
-    navigateToAI();
   } else {
     navigateToDefault();
   }
@@ -302,3 +301,11 @@ const handleNotificationToggle = async (): Promise<void> => {
 
 onMounted(updateMenuInfo);
 </script>
+
+<style scoped>
+.chat__header-loading {
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
+}
+</style>

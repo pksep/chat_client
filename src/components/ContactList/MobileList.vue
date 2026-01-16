@@ -29,7 +29,7 @@
     </section>
 
     <section
-      v-else
+      v-else-if="route.type"
       class="chat-list"
       role="region"
       aria-label="Contact list"

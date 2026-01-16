@@ -123,7 +123,6 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
   };
 
   const handleOpenGroupInfo = async (users: IUser[]): Promise<void> => {
-    console.log(users);
     state.isSelectedMembers = true;
     state.checkUsers = users.map(user => user.id);
     if (!state.groupName) {

@@ -217,9 +217,9 @@ const handlePin = (contact: ITopic): void => {
 
 const handleClick = (topic: ITopic): void => {
   if (isMobile.value) {
-    if (route.value.type === 'dialogs') {
+    if (route.value && route.value.type === 'dialogs') {
       navigateToDialogs(topic.id);
-    } else if (route.value.type === 'group') {
+    } else if (route.value && route.value.type === 'group') {
       navigateToGroup(topic.id);
     }
   }

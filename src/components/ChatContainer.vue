@@ -96,7 +96,11 @@ import MobileModal from './UI/MobileModal.vue';
 import { Loader, Button, ButtonTypeEnum } from '@pksep/yui';
 import { usePwaInstall } from '../composables/usePwaInstall';
 import { useAndroidBackButton } from '../composables/useAndroidBackButton';
-import { navigateToGroup, useUrlWatcher } from '../composables/navigation';
+import {
+  navigateToDefault,
+  navigateToGroup,
+  useUrlWatcher
+} from '../composables/navigation';
 import { getChatSDK } from '../services/useChat';
 import { getUsersList } from '../composables/useUsers';
 
@@ -135,7 +139,8 @@ const chatContainerClasses = computed(() => [
   { collapse: isCollapse.value },
   {
     'menu-collapse':
-      route.value.type === 'ai' || route.value.type === 'assistant'
+      (route.value && route.value.type === 'ai') ||
+      (route.value && route.value.type === 'assistant')
         ? true
         : !state.isMenuDesktopOpen
   }
@@ -150,20 +155,6 @@ const props = withDefaults(defineProps<IChatContainerProps>(), {
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 
 const authUser = computed(() => getAuthUser());
-
-/*
-const filteredContacts = computed(() => {
-  const authId = authUser.value?.id;
-  if (!authId) return [];
-  return users.value;
-});
-
-const filteredMembers = computed(() => {
-  const authId = authUser.value?.id;
-  if (!authId) return [];
-  return state.users.filter(user => user.id !== authId);
-});
- */
 
 watch(
   () => isMobile.value,
@@ -215,22 +206,11 @@ const handleInformationClick = (): void => {
 };
 
 const handleClearClick = (): void => {
-  if (route.value.type === 'ai' && chatRef.value) {
+  if (route.value && route.value.type === 'ai' && chatRef.value) {
     chatRef.value.handleClear();
     window.location.reload();
   }
 };
-
-/*
-const handleNewContactMessage = async (contact: IUser): Promise<any> => {
-  if (contact.id) {
-    // navigateToGroup(contact.id);
-  } else {
-    // const createdTopic = await createTopic(contact.id);
-    // conversationId: createdTopic?.id || contact.conversationId || contact.id
-  }
-};
- */
 
 const handleNewGroupMessage = async (group: any): Promise<void> => {
   if (!group || !(group.conversationId || group.topicId)) {
@@ -255,9 +235,19 @@ const isActiveHeader = (
   routeObj: { type?: string | null; id?: string | null } | null
 ): boolean => {
   if (!routeObj) return false;
-  if (routeObj.type === 'group' && routeObj.id !== null) return true;
-  if (routeObj.type === 'dialogs' && routeObj.id !== null) return true;
-  return routeObj.type !== 'assistant' && routeObj.type !== 'default';
+  if (routeObj.type === 'ai') return true;
+  if (routeObj.id !== null) {
+    if (routeObj.type === 'group') return true;
+    if (routeObj.type === 'dialogs') return true;
+    if (!isMobile.value) {
+      return false;
+    }
+    return true;
+  } else if (!isMobile.value) {
+    navigateToDefault();
+    return false;
+  }
+  return false;
 };
 
 useAndroidBackButton({
@@ -271,23 +261,15 @@ useAndroidBackButton({
 });
 
 watch(
-  () => [route.value.id, route.value.type],
+  () => [route.value?.id, route.value?.type],
   () => {
-    if (isMobile.value) {
-      state.isActiveHeader = false;
-    } else {
-      state.isActiveHeader = isActiveHeader(route.value);
-    }
+    state.isActiveHeader = route.value ? isActiveHeader(route.value) : false;
   }
 );
 
 onMounted(async () => {
   try {
-    if (isMobile.value) {
-      state.isActiveHeader = false;
-    } else {
-      state.isActiveHeader = isActiveHeader(route.value);
-    }
+    state.isActiveHeader = route.value ? isActiveHeader(route.value) : false;
   } finally {
     state.isLoading = false;
   }
