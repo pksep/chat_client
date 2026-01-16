@@ -145,18 +145,15 @@ import {
   IconNameEnum,
   Button,
   ButtonTypeEnum,
-  SizesEnum,
-  Checkbox,
-  CheckboxSizeEnum
+  SizesEnum
 } from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
 import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
 import Loading from '../Loading.vue';
 import type { IContactListProps } from './interfaces/contact-list';
-import { authedUser, getAuthUser } from '../../composables/useAuth';
+import { getAuthUser } from '../../composables/useAuth';
 import { ITopic, MessageStatusEnum } from '../interfaces/interfaces';
 import { togglePinTopic } from '../../composables/useTopics';
-import { t } from '@vite-pwa/assets-generator/shared/assets-generator.DnoqiTld';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
