@@ -101,11 +101,9 @@ const contacts = computed(() =>
   )
 );
 
-/*
 const selectedContacts = computed(() =>
   users.value.filter(contact => state.selectedIds.has(contact.id))
 );
- */
 
 const isButtonEnabled = computed(() =>
   props.isButtonDisabled !== undefined
@@ -138,13 +136,9 @@ const handleNewContact = (user: IUser): void => {
     emits('unmount-contact', user);
     return;
   }
-  // const shouldAdd = !state.selectedIds.has(contact.id);
-  // updateSelection(contact.id, shouldAdd);
+  const shouldAdd = !state.selectedIds.has(user.id);
+  updateSelection(user.id, shouldAdd);
 };
-
-const selectedContacts = computed(() =>
-  allContacts.value.filter(contact => state.selectedIds.has(contact.id))
-);
 
 const onAddClick = (): void => {
   emits('unmount-contact', selectedContacts.value);
