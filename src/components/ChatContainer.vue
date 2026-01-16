@@ -88,7 +88,7 @@ import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
 import Chat from './Chat.vue';
 import MenuInfo from './MenuInfo.vue';
-import type { IChatContainerProps, IUser } from './interfaces/interfaces';
+import type { IChatContainerProps } from './interfaces/interfaces';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD, MAX_W_XL } from '../utils/constants';
 import { getAuthUser } from '../composables/useAuth';

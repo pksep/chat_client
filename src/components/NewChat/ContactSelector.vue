@@ -64,7 +64,7 @@ import {
   IContactSelectorEmits,
   IContactSelectorState
 } from './interfaces/contact-selector';
-import { getUsersList } from 'src/composables/useUsers';
+import { getUsersList } from '../../composables/useUsers';
 
 const props = withDefaults(defineProps<IContactSelectorProps>(), {
   dataTestid: () => 'ContactSelector'
