@@ -1,2 +1,2 @@
 export const isShowContactList = (chapter: string): boolean =>
-  chapter === 'channels' || chapter === 'dialogs' || chapter === 'assistant';
+  chapter === 'group' || chapter === 'dialogs' || chapter === 'assistant';

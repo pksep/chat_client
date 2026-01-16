@@ -4,12 +4,11 @@
     role="main"
     :data-testid="`${props.dataTestid}-MobileList-Container`"
   >
-    <Loading
+    <Loader
       v-if="state.isLoading"
-      message="Загрузка списка..."
       :dataTestid="`${props.dataTestid}-MobileList-Loading`"
     />
-    <section v-else-if="props.chapter === 'assistant'">
+    <section v-else-if="route.type === 'assistant'">
       <button
         class="menu__user-assistant"
         @click="handleChapter('ai')"
@@ -37,7 +36,7 @@
       :data-testid="`${props.dataTestid}-ChatList-Section`"
     >
       <TopicList
-        :topics="props.chapter === 'dialogs' ? contactList : groupList"
+        :topics="route.type === 'dialogs' ? contactList : groupList"
         :data-testid="`${props.dataTestid}-ContactList`"
         @unmount-click="handleChapter"
         @unmount-contact="handleContactSelect"
@@ -46,16 +45,16 @@
     <Button
       :type="ButtonTypeEnum.primary"
       @click="handleShowAccount"
-      :disabled="props.chapter === 'assistant' || state.isLoading"
+      :disabled="route.type === 'assistant' || state.isLoading"
       class="mobile__list-button"
     >
       <Icon :name="IconNameEnum.plus" />
     </Button>
-    <template v-if="props.chapter !== 'assistant'">
+    <template v-if="route.type !== 'assistant'">
       <NewChatMobileModal
         :open="state.showAddAccount"
         :contacts="[]"
-        :is-add-one="props.chapter !== 'channels'"
+        :is-add-one="route.type !== 'group'"
         :selected-contact-ids="state.checkUsers"
         @unmount-close="handleCloseModal"
         @unmount-contact="handleNewContact"
@@ -68,23 +67,23 @@
 import { reactive, computed, watch } from 'vue';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import Line from '../UI/Line.vue';
-import Loading from '../Loading.vue';
 import type {
   IMobileListProps,
   IMobileListEmits
 } from './interfaces/mobile-list';
 import type { IUser } from '../interfaces/interfaces';
-import { Button, ButtonTypeEnum, Icon, IconNameEnum } from '@pksep/yui';
+import { Button, ButtonTypeEnum, Icon, IconNameEnum, Loader } from '@pksep/yui';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
 import TopicList from './TopicList.vue';
 import { getGroupList } from '../../services/useGroup';
 import { getTopicList } from '../../composables/useTopics';
-import { navigateToAI } from '../../composables/navigation';
+import { navigateToAI, useUrlWatcher } from '../../composables/navigation';
 
 const props = withDefaults(defineProps<IMobileListProps>(), {
-  contacts: () => [],
   dataTestid: () => 'MobileList'
 });
+
+const route = useUrlWatcher();
 
 const state = reactive({
   showAddAccount: false,

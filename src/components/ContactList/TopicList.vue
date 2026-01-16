@@ -55,7 +55,7 @@
           ></div>
           <div class="contact-list__top">
             <MessageStatusIcons
-              v-if="topic.lastMessage?.senderUserId === state.authedUser.id"
+              v-if="topic.lastMessage?.senderUserId === authedUser.id"
               class="contact-list__message-status-icons"
               :message-status="topic.lastMessage?.status"
               :is-read="topic.lastMessage?.status === MessageStatusEnum.READ"
@@ -153,12 +153,21 @@ import { getAuthUser } from '../../composables/useAuth';
 import { ITopic, MessageStatusEnum } from '../interfaces/interfaces';
 import { togglePinTopic } from '../../composables/useTopics';
 import { useTime } from '../../composables/useTime';
+import { useResizeState } from '../../composables/useResizeState';
+import { MAX_W_MD } from '../../utils/constants';
+import {
+  navigateToDialogs,
+  navigateToGroup,
+  useUrlWatcher
+} from '../../composables/navigation';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
   selectedTopicIds?: Set<string | number>;
   isLoading?: boolean;
 }
+
+const route = useUrlWatcher();
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   showCheckbox: false,
@@ -172,14 +181,22 @@ const emits = defineEmits<{
   (e: 'unmount-topic', contact: ITopic): void;
 }>();
 
+const { state: isMobile } = useResizeState(MAX_W_MD);
+
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
-const state = reactive({
-  isPin: {} as Record<string, boolean>,
-  isNotificationEnabled: {} as Record<string, boolean>,
-  authedUser: computed(() => getAuthUser())
+type ITopicListState = {
+  isPin: Record<string, boolean>;
+  isNotificationEnabled: Record<string, boolean>;
+};
+
+const state = reactive<ITopicListState>({
+  isPin: {},
+  isNotificationEnabled: {}
 });
+
+const authedUser = computed(() => getAuthUser());
 
 watch(
   () => props.topics,
@@ -199,6 +216,13 @@ const handlePin = (contact: ITopic): void => {
 };
 
 const handleClick = (topic: ITopic): void => {
+  if (isMobile.value) {
+    if (route.value.type === 'dialogs') {
+      navigateToDialogs(topic.id);
+    } else if (route.value.type === 'group') {
+      navigateToGroup(topic.id);
+    }
+  }
   emits('unmount-topic', topic);
 };
 

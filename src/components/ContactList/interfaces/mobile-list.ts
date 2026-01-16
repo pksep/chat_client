@@ -1,10 +1,7 @@
 import type { ITopic, IUser } from '../../interfaces/interfaces';
 
 export interface IMobileListProps {
-  contact?: IUser;
-  chapter?: string | null;
   dataTestid?: string;
-  contacts: ITopic[];
 }
 
 export interface IMobileListEmits {
