@@ -140,6 +140,7 @@ const emits = defineEmits<IHeaderEmits>();
 
 const state = reactive({
   menuInfo: null,
+  loader: false,
   openMobileInfoModal: false,
   isSearchInputEnable: false,
   statusNotification: {
@@ -214,7 +215,23 @@ const getPopoverOptions = computed(() => {
 });
 
 const updateMenuInfo = async (): Promise<void> => {
-  const sdk = getChatSDK();
+  if (topic.value.type === 'ai') return;
+
+  let sdk = getChatSDK();
+
+  let attempts = 0;
+  const maxAttempts = 30;
+  while (!sdk && attempts < maxAttempts) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    sdk = getChatSDK();
+    attempts++;
+  }
+
+  if (!sdk) {
+    console.error('ChatSDK is not initialized after waiting');
+    return;
+  }
+
   const topics = await sdk.getTopics(
     topic.value.type === 'group' ? TopicType.Group : TopicType.DM
   );

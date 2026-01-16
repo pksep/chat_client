@@ -123,7 +123,6 @@ onMounted(async () => {
 
     markSDKReady();
 
-    // Start polling after initialization is complete
     startPolling();
   } catch (error) {
     console.error('Failed to initialize chat:', error);

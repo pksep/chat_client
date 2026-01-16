@@ -109,9 +109,6 @@ export const initializeChat = async (options: {
 };
 
 export const getChatSDK = (): ChatSDK => {
-  if (!chatSDK) {
-    throw new Error('ChatSDK is not initialized');
-  }
   return chatSDK;
 };
 
