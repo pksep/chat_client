@@ -2,7 +2,7 @@
   <div
     class="chat__message-wrapper"
     ref="chatWrapperRef"
-    v-if="props.chapter === 'ai'"
+    v-if="route.type === 'ai'"
     :data-testid="`${props.dataTestid}-MessageList-AIMessagesWrapper`"
   >
     <div
@@ -42,7 +42,7 @@
 
   <div
     class="chat__message-wrapper"
-    v-if="state.messages.length && props.chapter !== 'ai'"
+    v-if="state.messages.length && route.type !== 'ai'"
     ref="chatWrapperRef"
     @scroll="handleScroll"
     :data-testid="`${props.dataTestid}-MessageList-UserMessagesWrapper`"
@@ -107,7 +107,7 @@
     </div>
   </div>
   <EmptyChat
-    :chapter="props.chapter"
+    :chapter="route.type"
     :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
     v-if="
       !state.messages.length &&
@@ -123,7 +123,7 @@
   />
   <div
     class="chat__input"
-    v-if="props.chapter && isEnableSend"
+    v-if="route.type !== 'default' && route.id === null"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
   >
     <ContentEditor
@@ -145,8 +145,7 @@ import {
   useTemplateRef,
   nextTick,
   onUnmounted,
-  onMounted,
-  computed
+  onMounted
 } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
@@ -167,6 +166,7 @@ import { formatDay, formatTime } from '../composables/useTime';
 import type { ChatMessage, AIMessage } from '../types/messages';
 import { MediaType } from '@pksep/zod-shared-chat';
 import { MessageStatus } from '../services/useChatSDK/types';
+import { useUrlWatcher } from '../composables/navigation';
 
 interface ChatMessageWithLoading extends ChatMessage {
   loading?: boolean;
@@ -177,12 +177,12 @@ export interface IMessageListExtendedProps extends IMessageListProps {
 }
 
 const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
-  chapter: null,
   dataTestid: () => 'MessageList'
 });
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
 const inputText = ref('');
+const route = useUrlWatcher();
 
 const state = reactive({
   messages: [] as ChatMessageWithLoading[],
@@ -275,8 +275,6 @@ const handleScroll = (): void => {
     }
   }
 };
-
-const isEnableSend = computed(() => !!props.contact?.id);
 
 watch(
   () => props.contact?.id,
@@ -387,7 +385,6 @@ const initializeMastra = () => {
     });
     mastraResult.value = result;
 
-    // Set up a watcher for the messages to update state when they change
     watch(
       () => result.messages.value,
       newMessages => {
@@ -399,7 +396,6 @@ const initializeMastra = () => {
     const result = useMastra(false);
     mastraResult.value = result;
 
-    // Set up a watcher for the messages to update state when they change
     watch(
       () => result.messages.value,
       newMessages => {
@@ -421,7 +417,7 @@ let unsubscribeFromMessageChanges: (() => void) | null = null;
 const lastMessageSentTime = ref(0);
 
 onMounted(async () => {
-  if (props.chapter === 'ai' && !state.chatId) {
+  if (route.value.type === 'ai' && !state.chatId) {
     state.chatId = generateChatId();
   }
 
@@ -513,7 +509,7 @@ const getMessageFile = (message: ChatMessage) => {
 watch(
   () => state.messages.length,
   (newLength, oldLength) => {
-    if (props.chapter === 'ai') return;
+    if (route.value.type === 'ai') return;
 
     if (oldLength === 0 && newLength > 0) {
       if (!getIsWebsocketConnecting()) {
@@ -541,7 +537,7 @@ watch(
 );
 
 watch(
-  () => props.chapter,
+  () => route.value.type,
   async (newValue, oldValue) => {
     if (newValue === oldValue) return;
 
@@ -595,28 +591,22 @@ watch(
 const handleSend = async (): Promise<void> => {
   if (!inputText.value.trim()) return;
 
-  if (props.chapter === 'ai') {
+  if (route.value.type === 'ai') {
     const text = inputText.value;
     inputText.value = '';
 
     if (mastraResult.value && mastraResult.value.sendMessage) {
-      // Add user's message immediately for UI feedback
       const userMessage = {
         role: 'user' as 'user' | 'assistant',
         content: text,
         timestamp: Date.now()
       };
-
-      // Add to current state for immediate UI feedback
       state.aiMessages = [...state.aiMessages, userMessage];
 
-      // Scroll to bottom to show the user's message
       await nextTick();
       requestAnimationFrame(() => scrollToBottom(true));
 
       try {
-        // The sendMessage function in useMastra will process the request
-        // It will add an assistant message with loading state, which will be updated via the watch
         await mastraResult.value.sendMessage(text, () => {
           requestAnimationFrame(() => scrollToBottom(true));
         });
@@ -624,7 +614,6 @@ const handleSend = async (): Promise<void> => {
         console.warn('Mastra failed to send message:', error);
       }
     } else {
-      // If Mastra is not available, add both user and error messages
       const userMessage = {
         role: 'user' as 'user' | 'assistant',
         content: text,

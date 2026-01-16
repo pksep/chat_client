@@ -166,7 +166,8 @@ import { usePwaInstall } from '../composables/usePwaInstall';
 import {
   navigateToAI,
   navigateToGroup,
-  navigateToDialogs
+  navigateToDialogs,
+  useUrlWatcher
 } from '../composables/navigation';
 import { getTopicList } from '../composables/useTopics';
 import { getAuthUser } from '../composables/useAuth';
@@ -175,6 +176,8 @@ import TopicList from './ContactList/TopicList.vue';
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: () => 'Menu'
 });
+
+const route = useUrlWatcher();
 
 const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 
@@ -224,7 +227,7 @@ const menuClasses = computed(() => [
 const aiChapterClasses = computed(() => [
   'menu__user-assistant',
   {
-    'menu__user-assistant--active': false
+    'menu__user-assistant--active': route.value.type === 'ai'
   }
 ]);
 
