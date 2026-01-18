@@ -23,6 +23,7 @@ export interface IMenuEmits {
   (e: 'unmount-collapse', isCollapse: boolean): void;
   (e: 'unmount-new-contact', config: { isChapterOpen?: boolean }): void;
   (e: 'unmount-new-group', config: { isChapterOpen?: boolean }): void;
+  (e: 'unmount-contacts-update', contacts: IUser[]): void;
 }
 
 export interface IHeaderEmits extends IMenuInfoEmits {
@@ -100,6 +101,6 @@ export interface IUserProfileProps {
 }
 
 export interface IGroupProfileProps {
-  group: IGroup;
+  group?: IGroup | null;
   dataTestid?: string;
 }

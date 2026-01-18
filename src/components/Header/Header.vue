@@ -1,6 +1,6 @@
 <template>
   <header
-    class="chat__header"
+    :class="['chat__header', $attrs.class]"
     @click="handleClickHeader"
     :data-testid="`${props.dataTestid}-Header-Container`"
   >
@@ -133,6 +133,11 @@ const props = withDefaults(defineProps<IHeaderProps>(), {
   dataTestid: () => 'Header'
 });
 
+// Disable automatic attribute inheritance since we have multiple root elements
+defineOptions({
+  inheritAttrs: false
+});
+
 const topic = useUrlWatcher();
 
 const emits = defineEmits<IHeaderEmits>();
@@ -168,6 +173,7 @@ const handleCloseMobileInfoModal = (): void => {
 };
 
 const handleClickHeader = async (): Promise<void> => {
+  if (topic.value.type === 'dialogs') return;
   if (isMobile.value) {
     state.openMobileInfoModal = true;
     /*

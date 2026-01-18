@@ -1,7 +1,7 @@
 <template>
   <div
     v-if="props.user"
-    class="user-profile"
+    :class="['user-profile', $attrs.class]"
     @contextmenu="handleClick"
     :data-testid="`${dataTestid}-UserProfile-Container`"
   >
@@ -33,6 +33,10 @@ import { IUserProfileProps } from '../interfaces/interfaces';
 
 const props = withDefaults(defineProps<IUserProfileProps>(), {
   dataTestid: () => 'UserProfile'
+});
+
+defineOptions({
+  inheritAttrs: false
 });
 
 const emits = defineEmits<{

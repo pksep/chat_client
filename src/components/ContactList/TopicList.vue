@@ -143,7 +143,8 @@ import {
   IconNameEnum,
   Button,
   ButtonTypeEnum,
-  SizesEnum
+  SizesEnum,
+  Loader
 } from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
 import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';

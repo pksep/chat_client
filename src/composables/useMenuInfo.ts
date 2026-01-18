@@ -1,6 +1,7 @@
-import { reactive, computed } from 'vue';
+import { reactive, computed, watch } from 'vue';
 import { fetchGroupMembers, setGroupInfo } from '../services/useGroup';
 import { getChatSDK } from '../services/useChat';
+import { getUsersList } from './useUsers';
 import type { IUser } from '../components/interfaces/interfaces';
 import { TopicType } from '../services/useChatSDK/types';
 import { RouteType } from './navigation/useUrlRouting';
@@ -36,9 +37,27 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
   const state = reactive<IMenuInfoState>({
     openAddUser: false,
     contacts: [],
-    filteredMembers: [],
+    filteredMembers: [], // This will be kept for backward compatibility if needed
     information: null
   });
+
+  // Computed property to filter out existing contacts from all users
+  const filteredMembers = computed(() => {
+    const allUsers = getUsersList();
+    const contactIds = new Set(state.contacts.map(contact => contact.id));
+    return allUsers.filter(user => !contactIds.has(user.id));
+  });
+
+  // Watcher to update state.filteredMembers when contacts change
+  watch(
+    () => state.contacts,
+    () => {
+      const allUsers = getUsersList();
+      const contactIds = new Set(state.contacts.map(contact => contact.id));
+      state.filteredMembers = allUsers.filter(user => !contactIds.has(user.id));
+    },
+    { deep: true }
+  );
 
   const handleContactClick = (): void => {
     state.openAddUser = true;
@@ -118,6 +137,7 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
     handleNewContact,
     handleUpdateInformation,
     initializeMenuInfo,
-    handleCloseAddUserModal
+    handleCloseAddUserModal,
+    filteredMembers
   };
 }
