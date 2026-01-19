@@ -66,7 +66,7 @@
         <details
           class="menu__user-details"
           v-if="!isCollapse"
-          :open="detailsOpen[index]"
+          :open="state.detailsOpen[index]"
           @toggle="handleToggle($event, index)"
           :data-testid="`${props.dataTestid}-Menu-Details${index + 1}`"
         >
@@ -177,11 +177,27 @@ const props = withDefaults(defineProps<IMenuProps>(), {
 
 const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 
+const getInitialDetailsOpen = () => {
+  const stored = localStorage.getItem('menu-details-open');
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length === 2) {
+        return parsed;
+      }
+    } catch (e) {
+      console.warn('Failed to parse menu-details-open from localStorage', e);
+    }
+  }
+  return [true, true];
+};
+
 const state = reactive({
   chapter: '',
   selectedContactId: null,
   isLoading: true,
-  authUser: computed(() => getAuthUser())
+  authUser: computed(() => getAuthUser()),
+  detailsOpen: getInitialDetailsOpen()
 });
 
 const emits = defineEmits<IMenuEmits>();
@@ -194,26 +210,10 @@ const { state: isCollapse, toggle } = useResizeState({
   }
 });
 
-const detailsOpen = reactive([true, true]);
-
-onMounted(() => {
-  const stored = localStorage.getItem('menu-details-open');
-  if (stored) {
-    try {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length === 2) {
-        detailsOpen.splice(0, detailsOpen.length, ...parsed);
-      }
-    } catch (e) {
-      console.warn('Failed to parse menu-details-open from localStorage', e);
-    }
-  }
-});
-
-const handleToggle = (event: Event, index: number) => {
+const handleToggle = (event: Event, index: number): void => {
   const target = event.target as HTMLDetailsElement;
-  detailsOpen[index] = target.open;
-  localStorage.setItem('menu-details-open', JSON.stringify(detailsOpen));
+  state.detailsOpen[index] = target.open;
+  localStorage.setItem('menu-details-open', JSON.stringify(state.detailsOpen));
 };
 
 const handleCollapse = (): void => {
