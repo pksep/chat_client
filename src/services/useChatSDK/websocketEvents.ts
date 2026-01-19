@@ -35,7 +35,8 @@ export enum WebSocketEventType {
   AUTHENTICATED = 'AUTHENTICATED',
   AUTHENTICATION_FAILED = 'AUTHENTICATION_FAILED',
   REQUEST_MESSAGE_HISTORY = 'REQUEST_MESSAGE_HISTORY',
-  MESSAGE_HISTORY_RESPONSE = 'MESSAGE_HISTORY_RESPONSE'
+  MESSAGE_HISTORY_RESPONSE = 'MESSAGE_HISTORY_RESPONSE',
+  CHANGE_TOPIC = 'changeTopic'
 }
 
 export interface WebSocketEventPayloads {
@@ -92,6 +93,7 @@ export interface WebSocketEventPayloads {
     messages: Message[];
     error?: string;
   };
+  [WebSocketEventType.CHANGE_TOPIC]: void;
 }
 
 export interface WebSocketEvent<

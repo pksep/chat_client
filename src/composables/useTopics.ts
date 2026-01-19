@@ -2,6 +2,7 @@ import { ref, shallowRef } from 'vue';
 import { getChatSDK } from '../services/useChat';
 import { ITopic } from '../components/interfaces/interfaces';
 import { TopicType } from '../services/useChatSDK/types';
+import { fetchAllGroups } from '../services/useGroup';
 
 const topics = shallowRef<ITopic[]>([]);
 const loading = ref(false);
@@ -54,6 +55,21 @@ export const togglePinTopic = async (topicId: string) => {
   try {
     const sdk = getChatSDK();
     await sdk.togglePinTopic(topicId);
+
+    fetchAllTopics();
+    fetchAllGroups();
+  } catch (err) {
+    console.error('Failed to pin/unpin topic:', err);
+  }
+};
+
+export const toggleMuteTopic = async (topicId: string) => {
+  try {
+    const sdk = getChatSDK();
+    await sdk.toggleMuteTopic(topicId);
+
+    fetchAllTopics();
+    fetchAllGroups();
   } catch (err) {
     console.error('Failed to pin/unpin topic:', err);
   }
