@@ -65,7 +65,8 @@
         <details
           class="menu__user-details"
           v-if="!isCollapse"
-          open
+          :open="state.detailsOpen[index]"
+          @toggle="handleToggle($event, index)"
           :data-testid="`${props.dataTestid}-Menu-Details${index + 1}`"
         >
           <summary
@@ -182,9 +183,26 @@ const route = useUrlWatcher();
 
 const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 
+const getInitialDetailsOpen = () => {
+  const stored = localStorage.getItem('menu-details-open');
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length === 2) {
+        return parsed;
+      }
+    } catch (e) {
+      console.warn('Failed to parse menu-details-open from localStorage', e);
+    }
+  }
+  return [true, true];
+};
+
 const state = reactive({
   selectedContactId: null,
-  isLoading: true
+  isLoading: true,
+  authUser: computed(() => getAuthUser()),
+  detailsOpen: getInitialDetailsOpen()
 });
 
 const authUser = computed(() => getAuthUser());
@@ -198,6 +216,12 @@ const { state: isCollapse, toggle } = useResizeState({
     emits('unmount-collapse', val);
   }
 });
+
+const handleToggle = (event: Event, index: number): void => {
+  const target = event.target as HTMLDetailsElement;
+  state.detailsOpen[index] = target.open;
+  localStorage.setItem('menu-details-open', JSON.stringify(state.detailsOpen));
+};
 
 const handleCollapse = (): void => {
   toggle();
