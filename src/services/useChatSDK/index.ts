@@ -356,14 +356,6 @@ export class ChatSDK {
     return this.topic.toggleMuteTopic(topicId);
   }
 
-  async muteTopic(topicId: string, userId: string): Promise<TopicSetting> {
-    return this.topic.muteTopic(topicId, userId);
-  }
-
-  async unmuteTopic(topicId: string, userId: string): Promise<TopicSetting> {
-    return this.topic.unmuteTopic(topicId, userId);
-  }
-
   async getTopicSettings(
     topicId: string,
     userId: string
