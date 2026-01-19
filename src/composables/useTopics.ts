@@ -1,7 +1,7 @@
 import { ref, shallowRef } from 'vue';
 import { getChatSDK } from '../services/useChat';
 import { ITopic } from '../components/interfaces/interfaces';
-import { TopicType } from '../services/useChatSDK/types';
+import { Message, TopicType } from '../services/useChatSDK/types';
 import { fetchAllGroups } from '../services/useGroup';
 
 const topics = shallowRef<ITopic[]>([]);
@@ -49,6 +49,19 @@ export const createTopic = async (peerId: string): Promise<ITopic[]> => {
   } finally {
     loading.value = false;
   }
+};
+
+export const updateLocalLastMessageTopic = (
+  topicId: string,
+  lastMessage: Message
+): void => {
+  const topic = topics.value.find(topic => topic.id === topicId);
+  if (topic) {
+    topic.lastMessage = lastMessage;
+  }
+
+  topics.value = [...topics.value];
+  console.log('updateLocalLastMessageTopic', topicId, lastMessage);
 };
 
 export const togglePinTopic = async (topicId: string) => {

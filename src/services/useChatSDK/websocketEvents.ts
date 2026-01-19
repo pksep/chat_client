@@ -36,7 +36,8 @@ export enum WebSocketEventType {
   AUTHENTICATION_FAILED = 'AUTHENTICATION_FAILED',
   REQUEST_MESSAGE_HISTORY = 'REQUEST_MESSAGE_HISTORY',
   MESSAGE_HISTORY_RESPONSE = 'MESSAGE_HISTORY_RESPONSE',
-  CHANGE_TOPIC = 'changeTopic'
+  CHANGE_TOPIC = 'changeTopic',
+  CHANGE_MESSAGE = 'changeMessage'
 }
 
 export interface WebSocketEventPayloads {
@@ -48,6 +49,7 @@ export interface WebSocketEventPayloads {
     media?: any[];
     replayMessageId?: string;
   };
+  [WebSocketEventType.CHANGE_MESSAGE]: {data: Message};
   [WebSocketEventType.NEW_MESSAGE]: Message;
   [WebSocketEventType.EDIT_MESSAGE]: { messageId: string; text: string };
   [WebSocketEventType.MESSAGE_UPDATED]: Message;

@@ -64,7 +64,7 @@ const handleNewContact = (user: ITopic): void => {
   if (props.isAddOne && user.id) {
     navigateToDialogs(user.id as string);
     const sdk = getChatSDK();
-    sdk.joinTopic(user.id);
+    sdk.createTopic({ peerId: user.id });
   }
   closeModal();
 };

@@ -7,7 +7,8 @@ import type { ChatMessage } from '../types/messages';
 import { getUserById } from '../composables/useUsers';
 import { setAuthUser, getAuthUser } from '../composables/useAuth';
 import { fetchAllGroups } from './useGroup';
-import { fetchAllTopics } from '../composables/useTopics';
+import { fetchAllTopics, updateLocalLastMessageTopic } from '../composables/useTopics';
+import { addMessageToLocal } from './useMessages';
 
 let chatSDK: ChatSDK | null = null;
 
@@ -92,6 +93,14 @@ const setupChatListeners = (): void => {
     fetchAllGroups();
     fetchAllTopics();
   });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_MESSAGE, ({ payload }) => {
+    console.log(payload);
+    if (payload.type === 'NEW') {
+      addMessageToLocal(payload.data.topicId, payload.data);
+      updateLocalLastMessageTopic(payload.data.topicId, payload.data);
+    }
+  });
 };
 
 export const initializeChat = async (options: {
@@ -125,10 +134,6 @@ export const setCurrentUserId = (userId?: string | null): void => {
 
 export const getCurrentUserId = (): string | null => {
   return currentUserId.value;
-};
-
-export const getMessagesByConversationId = (topicId: string): ChatMessage[] => {
-  return messagesStore.value[topicId] || [];
 };
 
 export const saveMessagesToLocal = (
@@ -257,55 +262,6 @@ const messageHistoryRequests: Map<
   }
 > = new Map();
 
-export const fetchMessagesForTopic = async (
-  topicId: string,
-  opts?: { page?: number; limit?: number; since?: Date; append?: boolean }
-): Promise<ChatMessage[]> => {
-  try {
-    return await new Promise((resolve, reject) => {
-      const cachedMessages = getMessagesByConversationId(topicId);
-
-      if (cachedMessages.length > 0) {
-        resolve(cachedMessages);
-        return;
-      }
-
-      const requestId = `${topicId}_${Date.now()}`;
-
-      const timeoutId = window.setTimeout(() => {
-        messageHistoryRequests.delete(requestId);
-        console.warn(
-          `WebSocket request for message history timed out for topic ${topicId}, falling back to HTTP`
-        );
-        resolve(cachedMessages);
-      }, 5000);
-
-      messageHistoryRequests.set(requestId, { resolve, reject, timeoutId });
-
-      try {
-        const sdk = getChatSDK();
-
-        sdk.sendWebSocketEvent(WebSocketEventType.REQUEST_MESSAGE_HISTORY, {
-          topicId,
-          requestId,
-          limit: opts?.limit || 50,
-          page: opts?.page || 1
-        });
-      } catch (error) {
-        clearTimeout(timeoutId);
-        messageHistoryRequests.delete(requestId);
-        reject(error);
-      }
-    });
-  } catch (error) {
-    console.warn(
-      'WebSocket failed for message history, falling back to HTTP:',
-      error
-    );
-    return [];
-  }
-};
-
 const addMessageHistoryHandler = (): void => {
   if (!chatSDK) return;
   chatSDK.subscribeToEvent(
@@ -339,7 +295,7 @@ const addMessageHistoryHandler = (): void => {
 export const getMessagesWithLoadingStatus = (
   topicId: string
 ): ChatMessage[] => {
-  const cachedMessages = getMessagesByConversationId(topicId);
+  const cachedMessages = [];
   const hasConnection = !getIsWebsocketConnecting();
 
   if (hasConnection) {
@@ -361,7 +317,7 @@ export const getIsRecentlyReconnected = () => isRecentlyReconnected.value;
 
 export const markAsRead = async (topicId: string): Promise<void> => {
   const sdk = getChatSDK();
-  const messages = getMessagesByConversationId(topicId);
+  const messages = [];
   const updatedMessages = messages.map(message => {
     if (message.senderUserId !== currentUserId.value) {
       return {

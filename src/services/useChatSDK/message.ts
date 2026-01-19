@@ -32,6 +32,10 @@ export interface ChatMessageInterface {
     messageId: string,
     status: MessageStatus
   ): Promise<{ success: boolean }>;
+  getMessages(
+    topicId: string,
+    opts?: { limit?: number; lastMessageId?: string }
+  ): Promise<Message[]>;
 }
 
 export class ChatMessage implements ChatMessageInterface {
@@ -194,6 +198,29 @@ export class ChatMessage implements ChatMessageInterface {
       throw new Error(
         `Failed to update message status: ${(error as Error).message}`
       );
+    }
+  }
+
+  async getMessages(
+    topicId: string,
+    opts?: { limit?: number; lastMessageId?: string }
+  ): Promise<Message[]> {
+    const queryParams = new URLSearchParams();
+    if (opts?.limit) queryParams.append('limit', opts.limit.toString());
+    if (opts?.lastMessageId)
+      queryParams.append('lastMessageId', opts.lastMessageId);
+
+    const queryString = queryParams.toString();
+    const endpoint = `/messages/topic/${topicId}${queryString ? `?${queryString}` : ''}`;
+
+    try {
+      const response = (await this.reqi.get<Message[]>(endpoint, {
+        parsed: false
+      })) as any;
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      throw new Error(`Failed to fetch messages: ${(error as Error).message}`);
     }
   }
 }

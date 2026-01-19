@@ -51,7 +51,7 @@
             class="contact-list__description"
             :data-testid="`${props.dataTestid}-ContactList-Description${index + 1}`"
             :aria-label="`Latest message: ${topic.lastMessage || 'No message'}`"
-            v-html="topic.lastMessage || '--'"
+            v-html="topic.lastMessage.text || '--'"
           ></div>
           <div class="contact-list__top">
             <MessageStatusIcons
@@ -66,9 +66,9 @@
               v-if="topic.lastMessage?.createdAt"
               class="contact-list__time"
               :data-testid="`${props.dataTestid}-ContactList-Time${index + 1}`"
-              :aria-label="`Last message at ${useTime(new Date(topic.lastMessage?.createdAt))}`"
+              :aria-label="`Last message at ${formatTime(new Date(topic.lastMessage?.createdAt))}`"
             >
-              {{ useTime(new Date(topic.lastMessage?.createdAt)) }}
+              {{ formatTime(new Date(topic.lastMessage?.createdAt)) }}
             </span>
           </div>
           <div class="contact-list__bottom">
@@ -81,7 +81,7 @@
               {{ 1 }}
             </div>
             <div
-              v-if="topic.info.isPin"
+              v-if="topic.info?.isPin"
               :data-testid="`${props.dataTestid}-ContactList-Pin${index + 1}`"
               :aria-label="`Pinned contact`"
             >
@@ -152,7 +152,7 @@ import type { IContactListProps } from './interfaces/contact-list';
 import { getAuthUser } from '../../composables/useAuth';
 import { ITopic, MessageStatusEnum } from '../interfaces/interfaces';
 import { toggleMuteTopic, togglePinTopic } from '../../composables/useTopics';
-import { useTime } from '../../composables/useTime';
+import { formatTime } from '../../composables/useTime';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import {

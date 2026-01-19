@@ -20,7 +20,10 @@ import type {
   IChatContainerEmits,
   IChatContainerProps
 } from './components/interfaces/interfaces';
-import { initializeChat, setCurrentUserId } from './services/useChat';
+import {
+  initializeChat,
+  setCurrentUserId
+} from './services/useChat';
 import { saveUserIdToSession, hasUserIdInSession } from './services/useMastra';
 import {
   getAllNotificationCount,
@@ -32,6 +35,8 @@ import { getConfig } from './services/useConfig';
 import { useUnreadMessagePolling } from './composables/useUnreadMessagePolling';
 import { fetchAllTopics } from './composables/useTopics';
 import { fetchAllGroups } from './services/useGroup';
+import { useUrlWatcher } from './composables/navigation';
+import { fetchMessagesForTopic } from './services/useMessages';
 
 const emits = defineEmits<IChatContainerEmits>();
 const props = defineProps<IChatContainerProps>();
@@ -41,6 +46,8 @@ const openChatContainerShow = ref(true);
 const showMobileAuth = ref(false);
 
 const { startPolling } = useUnreadMessagePolling(30000, false);
+
+const route = useUrlWatcher();
 
 const handleMobileAuthSuccess = (token: string) => {
   if (token) {
@@ -115,6 +122,7 @@ const runAppInitialization = async () => {
 
     await fetchAllTopics();
     await fetchAllGroups();
+    await fetchMessagesForTopic(route.value.id);
 
     markSDKReady();
     startPolling();

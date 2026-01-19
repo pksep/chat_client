@@ -10,14 +10,14 @@
       ref="messageListRef"
       :baseUrl="props.baseUrl"
       :contact="props.contact"
-      :user
+      :user="authUser"
       :data-testid="`${props.dataTestid}-Chat-MessageList`"
     />
   </section>
 </template>
 
 <script lang="ts" setup>
-import { useTemplateRef } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import MessageList from './MessageList.vue';
 import ContactListMobile from './ContactList/MobileList.vue';
@@ -25,6 +25,7 @@ import type { IMessageListProps } from './interfaces/message-list';
 import { isShowContactList } from '../composables/useShowContactList';
 import { MAX_W_MD } from '../utils/constants';
 import { useUrlWatcher } from '../composables/navigation';
+import { getAuthUser } from '../composables/useAuth';
 
 export interface IChatProps extends IMessageListProps {
   dataTestid?: string;
@@ -33,6 +34,8 @@ export interface IChatProps extends IMessageListProps {
 const props = withDefaults(defineProps<IChatProps>(), {
   dataTestid: 'Chat'
 });
+
+const authUser = computed(() => getAuthUser());
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
