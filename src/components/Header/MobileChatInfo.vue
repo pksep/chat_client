@@ -43,7 +43,6 @@
   >
     <MenuInfoButtons
       :data-testid="`${props.dataTestid}-Header-MenuInfoButtons`"
-      @unmount-mute="handleMute"
       @unmount-leave="handleUnmountLeave"
     />
     <p

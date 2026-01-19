@@ -11,8 +11,6 @@ export interface ChatTopicInterface {
   deleteTopic(topicId: string): Promise<void>;
   togglePinTopic(topicId: string): Promise<TopicSetting>;
   toggleMuteTopic(topicId: string): Promise<TopicSetting>;
-  muteTopic(topicId: string, userId: string): Promise<TopicSetting>;
-  unmuteTopic(topicId: string, userId: string): Promise<TopicSetting>;
   getTopicSettings(topicId: string, userId: string): Promise<TopicSetting>;
   updateTopicSettings(
     topicId: string,
@@ -118,14 +116,6 @@ export class ChatTopic implements ChatTopicInterface {
         `Failed to toggle mute topic: ${(error as Error).message}`
       );
     }
-  }
-
-  async muteTopic(topicId: string, userId: string): Promise<TopicSetting> {
-    return this.toggleMuteTopic(topicId, userId);
-  }
-
-  async unmuteTopic(topicId: string, userId: string): Promise<TopicSetting> {
-    return this.toggleMuteTopic(topicId, userId);
   }
 
   async getTopicSettings(

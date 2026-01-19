@@ -115,9 +115,6 @@ export const initializeChat = async (options: {
   );
 
   currentUserId.value = options.userId || null;
-  if (options.s3Config) {
-    s3Service = new S3Service(options.s3Config);
-  }
 
   isWebsocketConnecting.value = true;
   await chatSDK.connect();
