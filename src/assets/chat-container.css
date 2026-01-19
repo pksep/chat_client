@@ -17,6 +17,7 @@
 @import url('./mobile-modal.css');
 @import url('./new-group.css');
 @import url('./mobile-info-modal.css');
+@import url('./mobile-auth.css');
 
 .chat-container {
   --neutral-text-light: #b8b8b8;

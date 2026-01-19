@@ -1,34 +1,40 @@
 <template>
-  <div class="mobile-auth-container">
-    <div
-      class="qr-content"
-      style="
-        position: fixed;
-        width: 100dvw;
-        height: 100dvh;
-        object-fit: contain;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-      "
-    >
-      <h2>Мобильный вход</h2>
+  <main class="mobile-auth-container">
+    <picture class="mobile-auth-container__logo">
+      <img
+        src="/images/sep-chat-logo.svg"
+        alt="logotype
+      of Chat Logo"
+      />
+    </picture>
 
+    <section class="mobile-auth-container__qr-content">
+      <h2 class="mobile-auth-container__qr-content__title">Вход в систему</h2>
       <Button
+        class="mobile-auth-container__qr-content__button"
         :type="ButtonTypeEnum.primary"
-        :size="SizesEnum.large"
+        :size="SizesEnum.medium"
         @click="scanQrCode"
         :loading="isScanning"
       >
-        Авторизоваться по QR
-      </Button>
-
-      <p v-if="scanError" style="color: red; text-align: center; padding: 10px">
-        {{ scanError }}
-      </p>
-    </div>
-  </div>
+        Вход с помощью QR</Button
+      >
+    </section>
+    <PushNotification
+      v-if="isError"
+      :class="[
+        'mobile-auth-container__error',
+        {
+          'mobile-auth-container__error--error': isError
+        }
+      ]"
+      title="Ошибка"
+      :push-key="1"
+      :description="scanError"
+      type="error"
+      @close="() => (isError = false)"
+    />
+  </main>
 </template>
 
 <script setup lang="ts">
@@ -37,7 +43,12 @@ import {
   BarcodeScanner,
   BarcodeFormat
 } from '@capacitor-mlkit/barcode-scanning';
-import { Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
+import {
+  PushNotification,
+  Button,
+  ButtonTypeEnum,
+  SizesEnum
+} from '@pksep/yui';
 
 const emit = defineEmits<{
   (e: 'auth-success', token: string): void;
@@ -45,6 +56,7 @@ const emit = defineEmits<{
 
 const scanError = ref('');
 const isScanning = ref(false);
+const isError = ref(false);
 
 const scanQrCode = async () => {
   scanError.value = '';
@@ -65,10 +77,11 @@ const scanQrCode = async () => {
         emit('auth-success', token);
       }
     } else {
-      scanError.value =
-        'Нет доступа к камере. Разрешите доступ в настройках телефона.';
+      isError.value = true;
+      scanError.value = 'Не удалось открыть камеру';
     }
   } catch (e: any) {
+    isError.value = true;
     console.error('Ошибка сканирования:', e);
     if (e.message.includes('canceled')) {
       scanError.value = '';
@@ -80,11 +93,3 @@ const scanQrCode = async () => {
   }
 };
 </script>
-
-<style>
-.error-text {
-  color: #ff4d4f;
-  margin-top: 15px;
-  font-size: 14px;
-}
-</style>
