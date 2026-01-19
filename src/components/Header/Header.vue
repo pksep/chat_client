@@ -1,6 +1,6 @@
 <template>
   <header
-    class="chat__header"
+    :class="['chat__header', $attrs.class]"
     @click="handleClickHeader"
     :data-testid="`${props.dataTestid}-Header-Container`"
   >
@@ -19,7 +19,7 @@
     </Button>
     <div
       class="chat__header-profile chat__header-ai-assistant"
-      v-if="props.chapter === 'ai'"
+      v-if="topic.type === 'ai'"
       :data-testid="`${props.dataTestid}-Header-AIAssistant`"
     >
       <AiIconWrapper
@@ -29,13 +29,19 @@
         Ai Ассистент
       </h3>
     </div>
+    <GroupProfile
+      v-else-if="topic.type === 'group'"
+      class="chat__header-profile"
+      avatar-alt="group-profile-alt"
+      :group="state.menuInfo"
+      :data-testid="`${props.dataTestid}-Header-GroupProfile`"
+    />
     <UserProfile
       class="chat__header-profile"
       avatar-alt="user-profile-alt"
-      v-bind="props.contact.user"
-      :members-length="menuInfoState.contacts.length"
+      :user="state.menuInfo"
       :data-testid="`${props.dataTestid}-Header-UserProfile`"
-      v-else
+      v-else-if="topic.type === 'dialogs' && state.menuInfo"
     />
     <div
       class="chat__header-buttons"
@@ -63,7 +69,7 @@
         </Button>
       </template>
       <Popover
-        v-if="!popoverRule"
+        v-if="false"
         class="chat__header-popover"
         @click.stop
         :options="getPopoverOptions"
@@ -97,6 +103,7 @@ import { computed, onMounted, reactive, watch } from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';
+import GroupProfile from '../GroupProfile/GroupProfile.vue';
 import MobileModal from '../UI/MobileModal.vue';
 import {
   Button,
@@ -112,17 +119,31 @@ import type { IHeaderProps, IHeaderEmits } from '../interfaces/interfaces';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import MobileChatInfo from './MobileChatInfo.vue';
 import { useMenuInfo } from '../../composables/useMenuInfo';
-import { useInformationMenu } from '../../composables/useInformationMenu';
-import { fetchGroupMembers } from '../../services/useGroup';
+import {
+  navigateToAssistant,
+  navigateToDefault,
+  navigateToDialogsList,
+  navigateToGroupsList,
+  useUrlWatcher
+} from '../../composables/navigation';
+import { getChatSDK } from '../../services/useChat';
+import { TopicType } from '../../services/useChatSDK/types';
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
   dataTestid: () => 'Header'
 });
 
+defineOptions({
+  inheritAttrs: false
+});
+
+const topic = useUrlWatcher();
+
 const emits = defineEmits<IHeaderEmits>();
 
 const state = reactive({
   menuInfo: null,
+  loader: false,
   openMobileInfoModal: false,
   isSearchInputEnable: false,
   statusNotification: {
@@ -131,22 +152,7 @@ const state = reactive({
   }
 });
 
-const {
-  state: menuInfoState,
-  initializeMenuInfo,
-  handleUpdateInformation
-} = useMenuInfo(
-  {
-    ...props,
-    open: state.openMobileInfoModal,
-    isEnabled: props.chapter !== 'ai'
-  },
-  emits
-);
-
-const modelInfo = computed(() => menuInfoState.information);
-
-const { muteGroupInfo, getMuteStatus } = useInformationMenu(modelInfo);
+const { state: menuInfoState, handleUpdateInformation } = useMenuInfo();
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
@@ -159,15 +165,9 @@ const handleCloseMobileInfoModal = (): void => {
 };
 
 const handleClickHeader = async (): Promise<void> => {
-  if (props.chapter === 'ai') return;
-  if (!props.contact?.groupId) return;
+  if (topic.value.type === 'dialogs') return;
   if (isMobile.value) {
     state.openMobileInfoModal = true;
-    await initializeMenuInfo({
-      ...props,
-      isEnabled: true,
-      open: state.openMobileInfoModal
-    });
     emits('unmount-click');
     return;
   }
@@ -175,49 +175,14 @@ const handleClickHeader = async (): Promise<void> => {
   emits('unmount-click');
 };
 
-watch(
-  () => props.contact?.id,
-  async (newId, oldId) => {
-    if (newId && newId !== oldId && props.contact?.groupId) {
-      menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
-    }
-  }
-);
-
-watch(
-  () => props.contact?.groupId,
-  async (newGroupId, oldGroupId) => {
-    if (newGroupId && newGroupId !== oldGroupId) {
-      menuInfoState.contacts = await fetchGroupMembers(newGroupId);
-    }
-  }
-);
-
-watch(
-  () => props.contact?.membersLength,
-  async (newLength, oldLength) => {
-    if (
-      newLength !== undefined &&
-      newLength !== oldLength &&
-      props.contact?.groupId
-    ) {
-      menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
-    }
-  }
-);
-
-const popoverRule = computed(
-  () => isMobile.value && (props.contact?.groupId || props.chapter === 'ai')
-);
-
 const getPopoverOptions = computed(() => {
   const popoverArray = [];
-  if (props.chapter !== 'ai') {
+  if (topic.value && topic.value.type !== 'ai') {
     const notificationLabels = {
       value: state.statusNotification.label,
       function: handleNotificationToggle
     };
-    if (!props.contact?.groupId) {
+    if (topic.value && topic.value.type !== 'group') {
       popoverArray.push(notificationLabels);
     } else {
       popoverArray.push(notificationLabels);
@@ -239,24 +204,51 @@ const getPopoverOptions = computed(() => {
   return popoverArray;
 });
 
-watch(
-  () => props.chapter,
-  async newChapter => {
-    if (props.contact?.groupId) {
-      menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
-    } else {
-      menuInfoState.contacts = [];
-    }
+const updateMenuInfo = async (): Promise<void> => {
+  if (!topic.value || topic.value.type === 'ai') return;
 
-    if (newChapter !== 'ai') {
-      await updateNotificationStatus();
-    }
+  let sdk = getChatSDK();
+
+  let attempts = 0;
+  const maxAttempts = 30;
+  while (!sdk && attempts < maxAttempts) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    sdk = getChatSDK();
+    attempts++;
   }
-);
+
+  if (!sdk) {
+    console.error('ChatSDK is not initialized after waiting');
+    return;
+  }
+
+  const topics = await sdk.getTopics(
+    topic.value && topic.value.type === 'group' ? TopicType.Group : TopicType.DM
+  );
+  const findTopic = topics.data.find(
+    to => topic.value && to.id === topic.value.id
+  );
+  if (topic.value && topic.value.type === 'group') {
+    const { group, members } = await sdk.getGroup(findTopic?.group?.id);
+    state.menuInfo = {
+      avatarUrl: group?.avatarUrl,
+      title: group?.title,
+      membersLength: members?.data.length
+    };
+    return;
+  }
+  state.menuInfo = {
+    avatarUrl: findTopic?.avatarUrl,
+    initials: findTopic?.name,
+    nickname: findTopic?.user?.nickname
+  };
+};
+
+watch([() => topic.value?.id, () => topic.value?.type], updateMenuInfo);
 
 const updateNotificationStatus = async (): Promise<void> => {
   try {
-    const isMuted = await getMuteStatus(props.contact);
+    const isMuted = false;
     if (isMuted) {
       state.statusNotification = {
         label: 'Вкл. уведомления',
@@ -278,20 +270,29 @@ const updateNotificationStatus = async (): Promise<void> => {
 };
 
 const handleExit = (): void => {
-  emits('unmount-exit');
+  if (topic.value && topic.value.type === 'dialogs') {
+    navigateToDialogsList();
+  } else if (topic.value && topic.value.type === 'group') {
+    navigateToGroupsList();
+  } else if (topic.value && topic.value.type === 'ai') {
+    navigateToAssistant();
+  } else {
+    navigateToDefault();
+  }
 };
 
 const handleNotificationToggle = async (): Promise<void> => {
-  const shouldMute = !state.statusNotification.enabled;
-  await muteGroupInfo(shouldMute, props.contact);
-
   await updateNotificationStatus();
   emits('unmount-notification', state.statusNotification.label);
 };
 
-onMounted(async () => {
-  if (props.contact?.groupId) {
-    menuInfoState.contacts = await fetchGroupMembers(props.contact.groupId);
-  }
-});
+onMounted(updateMenuInfo);
 </script>
+
+<style scoped>
+.chat__header-loading {
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
+}
+</style>

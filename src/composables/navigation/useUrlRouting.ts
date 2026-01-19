@@ -1,13 +1,21 @@
 import { ref } from 'vue';
 
-type RouteType = 'dialogs' | 'group' | 'assistant' | 'ai' | 'default';
+const RouteTypes = {
+  DIALOGS: 'dialogs',
+  GROUP: 'group',
+  ASSISTANT: 'assistant',
+  AI: 'ai',
+  DEFAULT: 'default'
+} as const;
+
+type RouteType = (typeof RouteTypes)[keyof typeof RouteTypes];
 
 interface Route {
   type: RouteType;
   id: string | null;
 }
 
-const currentRoute = ref<Route>({ type: 'default', id: null });
+const currentRoute = ref<Route>({ type: RouteTypes.DEFAULT, id: null });
 
 const parseUrl = (): Route => {
   const url = new URL(window.location.href);
@@ -17,22 +25,22 @@ const parseUrl = (): Route => {
     const type = pathParts[0];
     const id = pathParts[1];
 
-    if (type === 'dialogs' && id) {
-      return { type: 'dialogs', id };
-    } else if (type === 'group' && id) {
-      return { type: 'group', id };
+    if (type === RouteTypes.DIALOGS && id) {
+      return { type: RouteTypes.DIALOGS, id };
+    } else if (type === RouteTypes.GROUP && id) {
+      return { type: RouteTypes.GROUP, id };
     }
   } else if (pathParts.length === 1) {
     const type = pathParts[0];
 
-    if (type === 'dialogs') {
-      return { type: 'dialogs', id: null };
-    } else if (type === 'group') {
-      return { type: 'group', id: null };
-    } else if (type === 'assistant') {
-      return { type: 'assistant', id: null };
-    } else if (type === 'ai') {
-      return { type: 'ai', id: null };
+    if (type === RouteTypes.DIALOGS) {
+      return { type: RouteTypes.DIALOGS, id: null };
+    } else if (type === RouteTypes.GROUP) {
+      return { type: RouteTypes.GROUP, id: null };
+    } else if (type === RouteTypes.ASSISTANT) {
+      return { type: RouteTypes.ASSISTANT, id: null };
+    } else if (type === RouteTypes.AI) {
+      return { type: RouteTypes.AI, id: null };
     }
   }
 
@@ -40,31 +48,31 @@ const parseUrl = (): Route => {
   const groupId = url.searchParams.get('group');
 
   if (dialogsId) {
-    return { type: 'dialogs', id: dialogsId };
+    return { type: RouteTypes.DIALOGS, id: dialogsId };
   } else if (groupId) {
-    return { type: 'group', id: groupId };
+    return { type: RouteTypes.GROUP, id: groupId };
   }
 
-  return { type: 'default', id: null };
+  return { type: RouteTypes.DEFAULT, id: null };
 };
 
 const updateUrl = (route: Route): void => {
   let newUrl: string;
 
-  if (route.type === 'dialogs' && route.id) {
+  if (route.type === RouteTypes.DIALOGS && route.id) {
     newUrl = `${window.location.origin}/dialogs/${route.id}`;
-  } else if (route.type === 'dialogs' && !route.id) {
+  } else if (route.type === RouteTypes.DIALOGS && !route.id) {
     newUrl = `${window.location.origin}/dialogs`;
-  } else if (route.type === 'group' && route.id) {
+  } else if (route.type === RouteTypes.GROUP && route.id) {
     newUrl = `${window.location.origin}/group/${route.id}`;
-  } else if (route.type === 'group' && !route.id) {
+  } else if (route.type === RouteTypes.GROUP && !route.id) {
     newUrl = `${window.location.origin}/group`;
-  } else if (route.type === 'assistant' && !route.id) {
+  } else if (route.type === RouteTypes.ASSISTANT && !route.id) {
     newUrl = `${window.location.origin}/assistant`;
-  } else if (route.type === 'ai' && !route.id) {
+  } else if (route.type === RouteTypes.AI && !route.id) {
     newUrl = `${window.location.origin}/ai`;
   } else {
-    newUrl = window.location.origin + window.location.pathname;
+    newUrl = window.location.origin;
   }
 
   const currentUrl = new URL(window.location.href);
@@ -84,31 +92,31 @@ const updateUrl = (route: Route): void => {
 };
 
 const navigateToDialogs = (dialogsId: string): void => {
-  updateUrl({ type: 'dialogs', id: dialogsId });
+  updateUrl({ type: RouteTypes.DIALOGS, id: dialogsId });
 };
 
 const navigateToDialogsList = (): void => {
-  updateUrl({ type: 'dialogs', id: null });
+  updateUrl({ type: RouteTypes.DIALOGS, id: null });
 };
 
 const navigateToGroup = (groupId: string): void => {
-  updateUrl({ type: 'group', id: groupId });
+  updateUrl({ type: RouteTypes.GROUP, id: groupId });
 };
 
 const navigateToGroupsList = (): void => {
-  updateUrl({ type: 'group', id: null });
+  updateUrl({ type: RouteTypes.GROUP, id: null });
 };
 
 const navigateToAssistant = (): void => {
-  updateUrl({ type: 'assistant', id: null });
+  updateUrl({ type: RouteTypes.ASSISTANT, id: null });
 };
 
 const navigateToAI = (): void => {
-  updateUrl({ type: 'ai', id: null });
+  updateUrl({ type: RouteTypes.AI, id: null });
 };
 
 const navigateToDefault = (): void => {
-  updateUrl({ type: 'default', id: null });
+  updateUrl({ type: RouteTypes.DEFAULT, id: null });
 };
 
 const initRoute = (): void => {
@@ -121,8 +129,14 @@ const setupUrlWatcher = (): void => {
   });
 };
 
+const getIdForRouteType = (): { type: RouteType; id: string | null } => {
+  const route = parseUrl();
+  return { type: route.type, id: route.id };
+};
+
 export {
   currentRoute,
+  parseUrl,
   initRoute,
   navigateToDialogs,
   navigateToDialogsList,
@@ -131,5 +145,8 @@ export {
   navigateToAssistant,
   navigateToAI,
   navigateToDefault,
-  setupUrlWatcher
+  getIdForRouteType,
+  setupUrlWatcher,
+  type RouteType,
+  RouteTypes
 };

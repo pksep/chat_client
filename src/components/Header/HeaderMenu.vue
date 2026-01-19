@@ -26,7 +26,7 @@
             {{ item.label }}
           </button>
           <div
-            v-if="activeChapter === item.key"
+            v-if="topic.type === item.key"
             class="header-menu-item__selected"
           ></div>
         </li>
@@ -39,42 +39,45 @@
 import { computed } from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
-import type { IMenuEmits } from '../interfaces/interfaces';
-
-interface IHeaderMenuProps {
-  dataTestid?: string;
-  activeChapter?: string;
-}
+import type { IHeaderMenuProps } from './interfaces/header-menu';
+import {
+  navigateToAssistant,
+  navigateToDialogsList,
+  navigateToGroupsList,
+  useUrlWatcher
+} from '../../composables/navigation';
 
 const props = withDefaults(defineProps<IHeaderMenuProps>(), {
-  dataTestid: () => 'HeaderMenu',
-  activeChapter: () => 'assistant'
+  dataTestid: () => 'HeaderMenu'
 });
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
-const emit = defineEmits<IMenuEmits>();
+const topic = useUrlWatcher();
 
 const listClass = (key: string) => ({
   'header-menu__item': true,
-  'header-menu__item--active': props.activeChapter === key
+  'header-menu__item--active': topic.value.type === key
 });
 
-const menuItems = computed(() => [
+const menuItems = computed<
+  {
+    key: 'assistant' | 'group' | 'dialogs';
+    label: string;
+  }[]
+>(() => [
   { key: 'assistant', label: 'ИИ' },
-  { key: 'channels', label: 'Каналы' },
+  { key: 'group', label: 'Каналы' },
   { key: 'dialogs', label: 'Диалоги' }
 ]);
 
-const handleUnmountChapter = chapter => {
-  if (!chapter) {
-    chapter = 'assistant';
-  }
-
-  if (chapter === 'dialogs') {
-    emit('unmount-chapter', chapter);
-  } else {
-    emit('unmount-chapter', chapter);
+const handleUnmountChapter = (route: 'assistant' | 'group' | 'dialogs') => {
+  if (route === 'assistant') {
+    navigateToAssistant();
+  } else if (route === 'group') {
+    navigateToGroupsList();
+  } else if (route === 'dialogs') {
+    navigateToDialogsList();
   }
 };
 </script>

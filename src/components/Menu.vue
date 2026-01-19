@@ -12,16 +12,15 @@
         :data-testid="`${props.dataTestid}-Menu-ProfileContainer`"
       >
         <UserProfile
-          :user="state.authUser"
+          v-if="authUser"
+          :user="authUser"
           class="menu__user-profile"
           :data-testid="`${props.dataTestid}-Menu-UserProfile`"
           v-show="!isCollapse"
         />
         <Avatar
-          v-if="isCollapse"
-          :initials="state.authUser?.initials"
-          :url="state.authUser?.avatarUrl"
-          :alt="state.authUser?.avatarUrl"
+          v-if="isCollapse && authUser"
+          v-bind="authUser"
           is-icon
           :data-testid="`${props.dataTestid}-Menu-ProfileAvatar`"
         />
@@ -146,7 +145,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive, watch } from 'vue';
+import { computed, reactive } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_XL } from '../utils/constants';
 import Line from './UI/Line.vue';
@@ -165,7 +164,12 @@ import { getGroupList } from '../services/useGroup';
 import { markAsRead } from '../services/useChat';
 import Triangle from './Triangle.vue';
 import { usePwaInstall } from '../composables/usePwaInstall';
-import { navigateToAI } from '../composables/useUrlRouting';
+import {
+  navigateToAI,
+  navigateToGroup,
+  navigateToDialogs,
+  useUrlWatcher
+} from '../composables/navigation';
 import { getTopicList } from '../composables/useTopics';
 import { getAuthUser } from '../composables/useAuth';
 import TopicList from './ContactList/TopicList.vue';
@@ -174,14 +178,16 @@ const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: () => 'Menu'
 });
 
+const route = useUrlWatcher();
+
 const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 
 const state = reactive({
-  chapter: '',
   selectedContactId: null,
-  isLoading: true,
-  authUser: computed(() => getAuthUser())
+  isLoading: true
 });
+
+const authUser = computed(() => getAuthUser());
 
 const emits = defineEmits<IMenuEmits>();
 
@@ -197,30 +203,20 @@ const handleCollapse = (): void => {
   toggle();
 };
 
-watch(
-  () => props.chapter,
-  () => {
-    if (props.chapter !== state.chapter) {
-      state.chapter = props.chapter;
-    }
-  }
-);
-
 const unmountClickAI = (): void => {
-  state.selectedContactId = 'ai';
-  state.chapter = 'ai';
   navigateToAI();
-  emits('unmount-select-ai');
 };
 
 const unmountTopicClick = (topic: ITopic): void => {
-  state.selectedContactId = typeof topic === 'string' ? topic : topic.id;
-  state.chapter = topic.name;
+  state.selectedContactId = topic.id;
+  if (topic.type === 'GROUP') {
+    navigateToGroup(topic.id);
+  } else if (topic.type === 'DM') {
+    navigateToDialogs(topic.id);
+  }
   markAsRead(topic.id).catch(error => {
     console.warn('Failed to mark messages as read:', error);
   });
-
-  emits('unmount-select-topic', topic);
 };
 
 const menuClasses = computed(() => [
@@ -232,7 +228,7 @@ const menuClasses = computed(() => [
 const aiChapterClasses = computed(() => [
   'menu__user-assistant',
   {
-    'menu__user-assistant--active': state.chapter === 'ai'
+    'menu__user-assistant--active': route.value && route.value.type === 'ai'
   }
 ]);
 

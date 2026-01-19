@@ -58,12 +58,14 @@ import {
   Search
 } from '@pksep/yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
-import { ITopic } from '../interfaces/interfaces';
+import { IUser } from '../interfaces/interfaces';
 import {
   IContactSelectorProps,
   IContactSelectorEmits,
   IContactSelectorState
 } from './interfaces/contact-selector';
+import { getUsersList } from '../../composables/useUsers';
+import { getAuthUser } from '../../composables/useAuth';
 
 const props = withDefaults(defineProps<IContactSelectorProps>(), {
   dataTestid: () => 'ContactSelector'
@@ -75,8 +77,24 @@ const state = reactive<IContactSelectorState>({
   selectedIds: props.selectedContactIds ?? new Set()
 });
 
+const users = computed(() => getUsersList());
+const authUser = computed(() => getAuthUser());
+
+const allContacts = computed(() => {
+  const userList = [...users.value];
+
+  if (
+    authUser.value &&
+    !userList.some(user => user.id === authUser.value?.id)
+  ) {
+    userList.push(authUser.value);
+  }
+
+  return userList;
+});
+
 const contacts = computed(() =>
-  props.contacts.filter(
+  allContacts.value.filter(
     contact =>
       contact.initials.toLowerCase().includes(state.q.toLowerCase()) ||
       contact.nickname.toLowerCase().includes(state.q.toLowerCase())
@@ -84,7 +102,7 @@ const contacts = computed(() =>
 );
 
 const selectedContacts = computed(() =>
-  props.contacts.filter(contact => state.selectedIds.has(contact.id))
+  users.value.filter(contact => state.selectedIds.has(contact.id))
 );
 
 const isButtonEnabled = computed(() =>
@@ -113,13 +131,13 @@ const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {
   updateSelection(contactId, isCheck);
 };
 
-const handleNewContact = (contact: ITopic): void => {
+const handleNewContact = (user: IUser): void => {
   if (props.isAddOne) {
-    emits('unmount-contact', contact);
+    emits('unmount-contact', user);
     return;
   }
-  const shouldAdd = !state.selectedIds.has(contact.id);
-  updateSelection(contact.id, shouldAdd);
+  const shouldAdd = !state.selectedIds.has(user.id);
+  updateSelection(user.id, shouldAdd);
 };
 
 const onAddClick = (): void => {

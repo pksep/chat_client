@@ -20,7 +20,7 @@ export const updateItemList = <T extends ITopic>(
     if (a.isPin && !b.isPin) return -1;
     if (!a.isPin && b.isPin) return 1;
 
-    return b.latestMessageTime - a.latestMessageTime;
+    return Number(b.lastMessage.createdAt) - Number(a.lastMessage.createdAt);
   });
 };
 
@@ -39,6 +39,6 @@ export const createSortedList = <T>(
     if (a.isPin && !b.isPin) return -1;
     if (!a.isPin && b.isPin) return 1;
 
-    return b.latestMessageTime - a.latestMessageTime;
+    return Number(b.lastMessage.createdAt) - Number(a.lastMessage.createdAt);
   });
 };
