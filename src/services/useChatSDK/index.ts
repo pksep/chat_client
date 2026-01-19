@@ -32,7 +32,7 @@ import { ChatGroup, ChatGroupInterface } from './group';
 import { ChatMedia, ChatMediaInterface } from './media';
 import { ChatWS, ChatWSInterface } from './ws';
 import { ChatUtils, ChatUtilsInterface } from './utils';
-import { IGroup, ITopic } from '../../components/interfaces/interfaces';
+import { ITopic } from '../../components/interfaces/interfaces';
 
 export interface ChatSDKOptions {
   apiUrl: string;
@@ -103,7 +103,7 @@ export class ChatSDK {
           auth: {
             token: this.token
           },
-          // Enable automatic reconnection with exponential backoff
+
           reconnection: true,
           reconnectionAttempts: Infinity,
           reconnectionDelay: 1000,
@@ -410,7 +410,6 @@ export class ChatSDK {
   }
 
   async joinTopic(topicId: string): Promise<void> {
-    // Send JOIN_TOPIC event via WebSocket
     this.ws.sendWebSocketEvent(WebSocketEventType.JOIN_TOPIC, { topicId });
   }
 
@@ -428,8 +427,11 @@ export class ChatSDK {
     return this.group.deleteGroup(groupId);
   }
 
-  async getGroup(groupId: string, params?: SearchParams): Promise<IGroup> {
-    return this.group.getGroup(groupId, params);
+  async getGroup(
+    groupId: string
+  ): Promise<{ group: Group; members: PaginatedResponse<User> }> {
+    const topic = await this.group.getGroup(groupId);
+    return topic;
   }
 
   async updateGroup(
@@ -511,11 +513,8 @@ export class ChatSDK {
     return this.group.editGroup(groupId, groupData);
   }
 
-  async getMessages(
-    topicId: string,
-    params?: SearchParams
-  ): Promise<PaginatedResponse<Message>> {
-    return this.message.getMessages(topicId, params);
+  async getMessages(): Promise<Message[]> {
+    return [];
   }
 
   async editMessage(
@@ -585,7 +584,6 @@ export class ChatSDK {
       return MediaType.Video;
     } else if (mimeType.startsWith('audio/')) {
       return null;
-      // return MediaType;
     } else {
       return MediaType.File;
     }

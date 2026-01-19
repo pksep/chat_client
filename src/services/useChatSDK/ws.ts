@@ -1,5 +1,5 @@
 import { Socket } from 'socket.io-client';
-import { WsEmit, WsSubscribeMessage } from '@pksep/zod-shared-chat';
+import { WsSubscribeMessage } from '@pksep/zod-shared-chat';
 import {
   WebSocketEventType,
   WebSocketEvent,

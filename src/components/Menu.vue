@@ -12,16 +12,15 @@
         :data-testid="`${props.dataTestid}-Menu-ProfileContainer`"
       >
         <UserProfile
-          :user="state.authUser"
+          v-if="authUser"
+          :user="authUser"
           class="menu__user-profile"
           :data-testid="`${props.dataTestid}-Menu-UserProfile`"
           v-show="!isCollapse"
         />
         <Avatar
-          v-if="isCollapse"
-          :initials="state.authUser?.initials"
-          :url="state.authUser?.avatarUrl"
-          :alt="state.authUser?.avatarUrl"
+          v-if="isCollapse && authUser"
+          v-bind="authUser"
           is-icon
           :data-testid="`${props.dataTestid}-Menu-ProfileAvatar`"
         />
@@ -66,7 +65,8 @@
         <details
           class="menu__user-details"
           v-if="!isCollapse"
-          open
+          :open="state.detailsOpen[index]"
+          @toggle="handleToggle($event, index)"
           :data-testid="`${props.dataTestid}-Menu-Details${index + 1}`"
         >
           <summary
@@ -146,7 +146,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive, watch } from 'vue';
+import { computed, reactive } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_XL } from '../utils/constants';
 import Line from './UI/Line.vue';
@@ -165,7 +165,12 @@ import { getGroupList } from '../services/useGroup';
 import { markAsRead } from '../services/useChat';
 import Triangle from './Triangle.vue';
 import { usePwaInstall } from '../composables/usePwaInstall';
-import { navigateToAI } from '../composables/useUrlRouting';
+import {
+  navigateToAI,
+  navigateToGroup,
+  navigateToDialogs,
+  useUrlWatcher
+} from '../composables/navigation';
 import { getTopicList } from '../composables/useTopics';
 import { getAuthUser } from '../composables/useAuth';
 import TopicList from './ContactList/TopicList.vue';
@@ -174,14 +179,33 @@ const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: () => 'Menu'
 });
 
+const route = useUrlWatcher();
+
 const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 
+const getInitialDetailsOpen = () => {
+  const stored = localStorage.getItem('menu-details-open');
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length === 2) {
+        return parsed;
+      }
+    } catch (e) {
+      console.warn('Failed to parse menu-details-open from localStorage', e);
+    }
+  }
+  return [true, true];
+};
+
 const state = reactive({
-  chapter: '',
   selectedContactId: null,
   isLoading: true,
-  authUser: computed(() => getAuthUser())
+  authUser: computed(() => getAuthUser()),
+  detailsOpen: getInitialDetailsOpen()
 });
+
+const authUser = computed(() => getAuthUser());
 
 const emits = defineEmits<IMenuEmits>();
 
@@ -193,34 +217,30 @@ const { state: isCollapse, toggle } = useResizeState({
   }
 });
 
+const handleToggle = (event: Event, index: number): void => {
+  const target = event.target as HTMLDetailsElement;
+  state.detailsOpen[index] = target.open;
+  localStorage.setItem('menu-details-open', JSON.stringify(state.detailsOpen));
+};
+
 const handleCollapse = (): void => {
   toggle();
 };
 
-watch(
-  () => props.chapter,
-  () => {
-    if (props.chapter !== state.chapter) {
-      state.chapter = props.chapter;
-    }
-  }
-);
-
 const unmountClickAI = (): void => {
-  state.selectedContactId = 'ai';
-  state.chapter = 'ai';
   navigateToAI();
-  emits('unmount-select-ai');
 };
 
 const unmountTopicClick = (topic: ITopic): void => {
-  state.selectedContactId = typeof topic === 'string' ? topic : topic.id;
-  state.chapter = topic.name;
+  state.selectedContactId = topic.id;
+  if (topic.type === 'GROUP') {
+    navigateToGroup(topic.id);
+  } else if (topic.type === 'DM') {
+    navigateToDialogs(topic.id);
+  }
   markAsRead(topic.id).catch(error => {
     console.warn('Failed to mark messages as read:', error);
   });
-
-  emits('unmount-select-topic', topic);
 };
 
 const menuClasses = computed(() => [
@@ -232,7 +252,7 @@ const menuClasses = computed(() => [
 const aiChapterClasses = computed(() => [
   'menu__user-assistant',
   {
-    'menu__user-assistant--active': state.chapter === 'ai'
+    'menu__user-assistant--active': route.value && route.value.type === 'ai'
   }
 ]);
 

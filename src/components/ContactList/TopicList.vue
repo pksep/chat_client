@@ -1,12 +1,5 @@
 <template>
-  <div v-if="props.isLoading" class="contact-list__loading">
-    <Loading
-      message="Загрузка контактов..."
-      :dataTestid="`${props.dataTestid}-ContactList-Loading`"
-    />
-  </div>
   <ul
-    v-else
     :class="['contact-list', props.class]"
     role="list"
     :data-testid="`${props.dataTestid}-ContactList-List`"
@@ -62,7 +55,7 @@
           ></div>
           <div class="contact-list__top">
             <MessageStatusIcons
-              v-if="topic.lastMessage?.senderUserId === state.authedUser.id"
+              v-if="topic.lastMessage?.senderUserId === authedUser.id"
               class="contact-list__message-status-icons"
               :message-status="topic.lastMessage?.status"
               :is-read="topic.lastMessage?.status === MessageStatusEnum.READ"
@@ -133,6 +126,11 @@
         </Button>
       </ContextMenu>
     </li>
+    <Loader
+      v-if="props.isLoading"
+      message="Загрузка контактов..."
+      :dataTestid="`${props.dataTestid}-ContactList-Loading`"
+    />
   </ul>
 </template>
 
@@ -145,21 +143,31 @@ import {
   IconNameEnum,
   Button,
   ButtonTypeEnum,
-  SizesEnum
+  SizesEnum,
+  Loader
 } from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
 import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
-import Loading from '../Loading.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { getAuthUser } from '../../composables/useAuth';
 import { ITopic, MessageStatusEnum } from '../interfaces/interfaces';
 import { togglePinTopic } from '../../composables/useTopics';
+import { useTime } from '../../composables/useTime';
+import { useResizeState } from '../../composables/useResizeState';
+import { MAX_W_MD } from '../../utils/constants';
+import {
+  navigateToDialogs,
+  navigateToGroup,
+  useUrlWatcher
+} from '../../composables/navigation';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
   selectedTopicIds?: Set<string | number>;
   isLoading?: boolean;
 }
+
+const route = useUrlWatcher();
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   showCheckbox: false,
@@ -173,14 +181,22 @@ const emits = defineEmits<{
   (e: 'unmount-topic', contact: ITopic): void;
 }>();
 
+const { state: isMobile } = useResizeState(MAX_W_MD);
+
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
-const state = reactive({
-  isPin: {} as Record<string, boolean>,
-  isNotificationEnabled: {} as Record<string, boolean>,
-  authedUser: computed(() => getAuthUser())
+type ITopicListState = {
+  isPin: Record<string, boolean>;
+  isNotificationEnabled: Record<string, boolean>;
+};
+
+const state = reactive<ITopicListState>({
+  isPin: {},
+  isNotificationEnabled: {}
 });
+
+const authedUser = computed(() => getAuthUser());
 
 watch(
   () => props.topics,
@@ -199,8 +215,15 @@ const handlePin = (contact: ITopic): void => {
   closeActivePopover(contact.id);
 };
 
-const handleClick = (contact: ITopic): void => {
-  emits('unmount-topic', contact);
+const handleClick = (topic: ITopic): void => {
+  if (isMobile.value) {
+    if (route.value && route.value.type === 'dialogs') {
+      navigateToDialogs(topic.id);
+    } else if (route.value && route.value.type === 'group') {
+      navigateToGroup(topic.id);
+    }
+  }
+  emits('unmount-topic', topic);
 };
 
 const handleNotification = (contactId: string): void => {
@@ -214,17 +237,5 @@ const handleKeyDown = (contact: ITopic, event: KeyboardEvent): void => {
   if (event.key === 'Enter' || event.key === ' ') {
     handleClick(contact);
   }
-};
-
-const useTime = (date: Date = new Date()): string => {
-  let hours: string | number = date.getHours();
-  let minutes: string | number = date.getMinutes();
-  if (hours < 10) {
-    hours = `0${hours}`;
-  }
-  if (minutes < 10) {
-    minutes = `0${minutes}`;
-  }
-  return `${hours}:${minutes}`;
 };
 </script>

@@ -109,17 +109,19 @@ import type { INewContactProps } from './interfaces/new-contact';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';
 import { IUser } from '../interfaces/interfaces';
 import { useNewGroupModal } from './composables/useNewGroupModal';
+import { computed } from 'vue';
+import { getUsersList } from '../../composables/useUsers';
 
 const props = withDefaults(defineProps<INewContactProps & { user?: IUser }>(), {
   open: false,
-  contacts: () => [],
   dataTestid: () => 'NewGroupModal'
 });
 
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
-  (e: 'unmount-new-group', group: any): void;
 }>();
+
+const contacts = computed(() => getUsersList());
 
 const {
   avatarInputRef,

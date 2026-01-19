@@ -11,7 +11,10 @@ export interface ChatGroupInterface {
     admins: string[];
   }): Promise<Group>;
   deleteGroup(groupId: string): Promise<void>;
-  getGroup(groupId: string, params?: SearchParams): Promise<Group>;
+  getGroup(
+    groupId: string,
+    params?: SearchParams
+  ): Promise<{ group: Group; members: PaginatedResponse<User> }>;
   updateGroup(
     groupId: string,
     groupData: Partial<{
@@ -99,7 +102,10 @@ export class ChatGroup implements ChatGroupInterface {
     }
   }
 
-  async getGroup(groupId: string, params?: SearchParams): Promise<Group> {
+  async getGroup(
+    groupId: string,
+    params?: SearchParams
+  ): Promise<{ group: Group; members: PaginatedResponse<User> }> {
     const queryParams = new URLSearchParams();
 
     if (params?.search) queryParams.append('search', params.search);

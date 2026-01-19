@@ -12,12 +12,12 @@
     "build:prod": "cross-env VITE_BASE_MODE=app vite build ",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "generate:assets": "pwa-assets-generator",
     "format": "prettier -w {src,scripts}/**/*.ts -w {src,scripts}/**/*.vue",
     "prepare": "echo 'Running preinstall script' && lefthook install",
     "start:ios": "bun vite build && npx cap open ios",
     "start:android": "bun vite build && npx cap open android",
-    "sync": "npx cap sync"
+    "sync": "bun vite build && npx cap sync",
+    "generate:assets": "npx capacitor-assets generate --ios"
   },
   "exports": {
     ".": {

@@ -57,7 +57,7 @@ export interface WebSocketEventPayloads {
     emoji: string;
     topicId: string;
   };
-  [WebSocketEventType.REACTION_UPDATED]: any; // Server sends reaction toggle result
+  [WebSocketEventType.REACTION_UPDATED]: any;
   [WebSocketEventType.TOGGLE_PIN]: { messageId: string };
   [WebSocketEventType.MESSAGE_PINNED]: { messageId: string; isPin: boolean };
   [WebSocketEventType.READ_MESSAGES]: { messageIds: string[]; topicId: string };

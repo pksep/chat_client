@@ -1,14 +1,7 @@
 import { ref } from 'vue';
 import { getChatSDK, getCurrentUserId } from './useChat';
-import type {
-  ITopic,
-  IUser
-} from '../components/interfaces/interfaces';
-
-enum TopicType {
-  Group = 'GROUP',
-  DM = 'DM'
-}
+import { TopicType } from './useChatSDK/types';
+import type { ITopic, IUser } from '../components/interfaces/interfaces';
 
 const groups = ref<ITopic[]>([]);
 const groupMembers = ref<IUser[]>([]);
@@ -36,9 +29,9 @@ export const fetchAllGroups = async (
 export const fetchGroupMembers = async (groupId: string): Promise<IUser[]> => {
   try {
     const sdk = getChatSDK();
-    const group = await sdk.getGroup(groupId, { page: 1, limit: 1000 });
+    const { members } = await sdk.getGroup(groupId);
 
-    groupMembers.value = group.members || [];
+    groupMembers.value = members.data;
 
     return groupMembers.value;
   } catch (err) {
