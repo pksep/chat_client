@@ -47,7 +47,7 @@ button.mobile-auth-container__qr-content__button.medium {
 }
 
 .mobile-auth-container:has(
-    .mobile-auth-container__error.push-notification-yui-kit.mobile-auth-container__error--error
+    .mobile-auth-container__error.push-notification-yui-kit.mobile-auth-container__error--no-error
   )
   .mobile-auth-container__logo {
   visibility: hidden;

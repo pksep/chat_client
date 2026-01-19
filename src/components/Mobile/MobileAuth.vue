@@ -25,7 +25,7 @@
       :class="[
         'mobile-auth-container__error',
         {
-          'mobile-auth-container__error--error': !isError
+          'mobile-auth-container__error--no-error': !isError
         }
       ]"
       title="Ошибка"
