@@ -134,24 +134,15 @@ export class ChatMessage implements ChatMessageInterface {
     topicId: string,
     messageId?: string
   ): Promise<Media> {
-    if (!this.s3Service) {
-      throw new Error('S3 service not initialized');
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('topicId', topicId);
+    if (messageId) {
+      formData.append('messageId', messageId);
     }
 
     try {
-      const uploadResult = await this.s3Service.uploadFile(file);
-
-      const mediaData: Media = {
-        id: '',
-        path: uploadResult.path,
-        type: file.type,
-        messageId: messageId || '',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        deletedAt: null
-      };
-
-      const response = (await this.reqi.post<Media>('/media', mediaData, {
+      const response = (await this.reqi.post<Media>('/media/upload', formData, {
         parsed: false
       })) as any;
       const data = await response.json();

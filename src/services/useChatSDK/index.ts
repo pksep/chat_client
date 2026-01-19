@@ -71,15 +71,11 @@ export class ChatSDK {
 
     this.reqi = new Reqi(this.apiUrl, {
       headers: {
-        'Content-Type': 'application/json',
         ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
       }
     });
 
-    if (s3Config) {
-      this.s3Service = new S3Service(s3Config);
-    }
-
+    this.s3Service = new S3Service(this.reqi);
     this.auth = new ChatAuth(this.apiUrl, this.token);
     this.user = new ChatUser(this.reqi);
     this.topic = new ChatTopic(this.reqi);
@@ -561,6 +557,17 @@ export class ChatSDK {
     messageId?: string
   ): Promise<Media> {
     return this.message.uploadMedia(file, topicId, messageId);
+  }
+
+  async uploadFile(file: File): Promise<string> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = (await this.reqi.post<Media>('/media/upload', formData, {
+      parsed: false
+    })) as any;
+    const data = await response.json();
+    return data.url;
   }
 
   async updateMessageStatus(

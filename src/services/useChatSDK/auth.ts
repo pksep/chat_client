@@ -16,7 +16,6 @@ export class ChatAuth implements ChatAuthInterface {
     this.token = token;
     this.reqi = new Reqi(apiUrl, {
       headers: {
-        'Content-Type': 'application/json',
         ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
       }
     });
