@@ -93,7 +93,7 @@ import {
 } from '@pksep/yui';
 import ContactListInModal from './ContactList/ContactListInModal.vue';
 import InformationMenu from './InformationMenu.vue';
-import type { IMenuRightProps, IMenuEmits } from './interfaces/interfaces';
+import type { IMenuRightProps, IUser } from './interfaces/interfaces';
 import { useMenuInfo } from '../composables/useMenuInfo';
 import NewContactModal from './NewChat/NewContactModal.vue';
 import { useUrlWatcher } from '../composables/navigation';
@@ -117,11 +117,8 @@ const menuInfoClasses = computed(() => [
 */
 const handleUpdateGroupMembers = async (): Promise<void> => {
   if (state.openAddUser) {
-    // Close the modal first
     handleCloseAddUserModal();
   }
-
-  // Refresh the group members to reflect the changes
   await refreshGroupMembers();
 };
 
@@ -137,8 +134,6 @@ const handleCloseMenu = (): void => {
 };
 
 const handleNewContactAdded = async (): Promise<void> => {
-  // The actual contact addition should happen in the modal,
-  // and then we update the group members to reflect the changes
   await handleUpdateGroupMembers();
 };
 
@@ -147,7 +142,6 @@ const {
   checkGroupId,
   initializeMenuInfo,
   handleContactClick,
-  handleNewContact,
   handleUpdateInformation,
   handleCloseAddUserModal,
   filteredMembers

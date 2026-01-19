@@ -133,7 +133,6 @@ const props = withDefaults(defineProps<IHeaderProps>(), {
   dataTestid: () => 'Header'
 });
 
-// Disable automatic attribute inheritance since we have multiple root elements
 defineOptions({
   inheritAttrs: false
 });

@@ -1,12 +1,13 @@
 import { ref, shallowRef } from 'vue';
 import { ChatSDK } from './useChatSDK';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
-import { Message, Media } from '@pksep/zod-shared-chat';
+import { Message, Media, User } from '@pksep/zod-shared-chat';
 import { MessageStatus } from './useChatSDK/types';
 import type { S3Config } from './useChatSDK/s3Service';
 import { S3Service } from './useChatSDK/s3Service';
 import type { ChatMessage } from '../types/messages';
 import { getUserById } from '../composables/useUsers';
+import { setAuthUser, getAuthUser } from '../composables/useAuth';
 
 let chatSDK: ChatSDK | null = null;
 let s3Service: S3Service | null = null;
@@ -77,6 +78,16 @@ const setupChatListeners = (): void => {
         notifyMessageChange(topicId);
       }
     });
+  });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.USER_UPDATED, event => {
+    const updatedUser: User = event.payload;
+    const currentAuthUser = getAuthUser();
+
+    // Check if the updated user is the current authenticated user
+    if (currentAuthUser && currentAuthUser.id === updatedUser.id) {
+      setAuthUser(updatedUser);
+    }
   });
 };
 
