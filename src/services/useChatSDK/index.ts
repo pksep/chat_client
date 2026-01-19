@@ -352,11 +352,8 @@ export class ChatSDK {
     return this.topic.togglePinTopic(topicId);
   }
 
-  async toggleMuteTopic(
-    topicId: string,
-    userId: string
-  ): Promise<TopicSetting> {
-    return this.topic.toggleMuteTopic(topicId, userId);
+  async toggleMuteTopic(topicId: string): Promise<TopicSetting> {
+    return this.topic.toggleMuteTopic(topicId);
   }
 
   async muteTopic(topicId: string, userId: string): Promise<TopicSetting> {

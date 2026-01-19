@@ -81,7 +81,7 @@
               {{ 1 }}
             </div>
             <div
-              v-if="state.isPin[topic.id]"
+              v-if="topic.info.isPin"
               :data-testid="`${props.dataTestid}-ContactList-Pin${index + 1}`"
               :aria-label="`Pinned contact`"
             >
@@ -102,24 +102,24 @@
           @click.stop="() => handlePin(topic)"
           :data-testid="`${props.dataTestid}-ContactList-PinButton${index + 1}`"
           :aria-label="
-            state.isPin[topic.id] ? `Unpin ${topic.name}` : `Pin ${topic.name}`
+            topic.info.isPin ? `Unpin ${topic.name}` : `Pin ${topic.name}`
           "
         >
-          <template v-if="!state.isPin[topic.id]"> Закрепить </template>
+          <template v-if="!topic.info.isPin"> Закрепить </template>
           <template v-else> Открепить </template>
         </Button>
         <Button
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.small"
-          @click="() => handleNotification(topic.id)"
+          @click="() => handleMute(topic)"
           :data-testid="`${props.dataTestid}-ContactList-NotificationButton${index + 1}`"
           :aria-label="
-            state.isNotificationEnabled[topic.id]
+            topic.info.isMute
               ? `Disable notifications for ${topic.name}`
               : `Enable notifications for ${topic.name}`
           "
         >
-          <template v-if="state.isNotificationEnabled[topic.id] ?? true">
+          <template v-if="topic.info.isMute ?? true">
             Выкл. уведомление
           </template>
           <template v-else> Вкл. уведомление </template>
@@ -151,7 +151,7 @@ import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { getAuthUser } from '../../composables/useAuth';
 import { ITopic, MessageStatusEnum } from '../interfaces/interfaces';
-import { togglePinTopic } from '../../composables/useTopics';
+import { toggleMuteTopic, togglePinTopic } from '../../composables/useTopics';
 import { useTime } from '../../composables/useTime';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
@@ -186,33 +186,16 @@ const { state: isMobile } = useResizeState(MAX_W_MD);
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
-type ITopicListState = {
-  isPin: Record<string, boolean>;
-  isNotificationEnabled: Record<string, boolean>;
-};
-
-const state = reactive<ITopicListState>({
-  isPin: {},
-  isNotificationEnabled: {}
-});
-
 const authedUser = computed(() => getAuthUser());
 
-watch(
-  () => props.topics,
-  topics => {
-    if (topics) {
-      topics.forEach(topic => {
-        state.isPin[topic.id] = topic.info?.isPin;
-      });
-    }
-  },
-  { immediate: true }
-);
+const handlePin = (topic: ITopic): void => {
+  togglePinTopic(topic.id);
+  closeActivePopover(topic.id);
+};
 
-const handlePin = (contact: ITopic): void => {
-  togglePinTopic(contact.id);
-  closeActivePopover(contact.id);
+const handleMute = (topic: ITopic): void => {
+  toggleMuteTopic(topic.id);
+  closeActivePopover(topic.id);
 };
 
 const handleClick = (topic: ITopic): void => {
@@ -224,13 +207,6 @@ const handleClick = (topic: ITopic): void => {
     }
   }
   emits('unmount-topic', topic);
-};
-
-const handleNotification = (contactId: string): void => {
-  const currentEnabled = state.isNotificationEnabled[contactId] ?? true;
-  state.isNotificationEnabled[contactId] = !currentEnabled;
-  emits('unmount-notification', contactId);
-  closeActivePopover(contactId);
 };
 
 const handleKeyDown = (contact: ITopic, event: KeyboardEvent): void => {

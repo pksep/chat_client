@@ -50,34 +50,6 @@ export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
     model.value = { ...model.value, ...config };
   };
 
-  const muteGroupInfo = async (
-    isMute: boolean,
-    contact?: { groupId?: string; userId?: string; topicId?: string }
-  ): Promise<void> => {
-    const targetContact = contact || model.value;
-    const topicId = targetContact?.topicId;
-
-    if (!topicId) {
-      console.warn('No topic ID provided for muting conversation');
-      return;
-    }
-
-    try {
-      const sdk = getChatSDK();
-      const currentUserId = getCurrentUserId();
-      if (!currentUserId) return;
-
-      if (isMute) {
-        await sdk.muteTopic(topicId, currentUserId);
-      } else {
-        await sdk.unmuteTopic(topicId, currentUserId);
-      }
-    } catch (error) {
-      console.error('Failed to update topic mute status:', error);
-      throw error;
-    }
-  };
-
   const leaveGroupInfo = async (): Promise<void> => {
     try {
       if (model.value?.groupId) {
@@ -125,7 +97,6 @@ export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
     closeEditProfileIcon,
     onSaveAvatar,
     handleSave,
-    muteGroupInfo,
     getMuteStatus,
     leaveGroupInfo
   };

@@ -40,3 +40,14 @@ export enum MessageStatus {
 }
 
 export type { Media, Reaction, Message, Topic, TopicSetting, User, Group };
+
+export interface TopicChangePayload {
+  type: 'CREATE' | 'UPDATE' | 'DELETE';
+  topicId: string;
+  data:
+    | {
+        avatarUrl?: string;
+        name?: string;
+      }
+    | { id: string };
+}

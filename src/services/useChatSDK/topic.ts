@@ -10,7 +10,7 @@ export interface ChatTopicInterface {
   createTopic(topicData: { peerId: string }): Promise<Topic>;
   deleteTopic(topicId: string): Promise<void>;
   togglePinTopic(topicId: string): Promise<TopicSetting>;
-  toggleMuteTopic(topicId: string, userId: string): Promise<TopicSetting>;
+  toggleMuteTopic(topicId: string): Promise<TopicSetting>;
   muteTopic(topicId: string, userId: string): Promise<TopicSetting>;
   unmuteTopic(topicId: string, userId: string): Promise<TopicSetting>;
   getTopicSettings(topicId: string, userId: string): Promise<TopicSetting>;
@@ -104,14 +104,11 @@ export class ChatTopic implements ChatTopicInterface {
     }
   }
 
-  async toggleMuteTopic(
-    topicId: string,
-    userId: string
-  ): Promise<TopicSetting> {
+  async toggleMuteTopic(topicId: string): Promise<TopicSetting> {
     try {
       const response = (await this.reqi.patch<TopicSetting>(
         `/topics/${topicId}/mute`,
-        { userId },
+        {},
         { parsed: false }
       )) as any;
       const data = await response.json();

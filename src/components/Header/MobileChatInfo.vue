@@ -89,7 +89,6 @@ const avatarInputRef = useTemplateRef('avatarInputRef');
 const {
   state: stateInfo,
   init,
-  muteGroupInfo,
   leaveGroupInfo,
   onSaveAvatar,
   onOpenEditAvatar,
@@ -98,10 +97,6 @@ const {
 
 const handleUnmountLeave = () => {
   leaveGroupInfo();
-};
-
-const handleMute = (isMute: boolean) => {
-  muteGroupInfo(isMute);
 };
 
 const handleEditProfileIcon = () => {
