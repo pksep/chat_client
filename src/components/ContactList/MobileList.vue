@@ -78,7 +78,10 @@ import TopicList from './TopicList.vue';
 import { getGroupList } from '../../services/useGroup';
 import { getTopicList } from '../../composables/useTopics';
 import { navigateToAI, useUrlWatcher } from '../../composables/navigation';
-import { RouteTypes } from '../../composables/navigation/useUrlRouting';
+import {
+  RouteType,
+  RouteTypes
+} from '../../composables/navigation/useUrlRouting';
 
 const route = useUrlWatcher();
 
@@ -111,8 +114,8 @@ watch(
   { immediate: true }
 );
 
-const handleChapter = (route: 'ai' | 'dialog') => {
-  if (route === 'ai') {
+const handleChapter = (route: RouteType) => {
+  if (route === RouteTypes.AI) {
     navigateToAI();
   }
 };

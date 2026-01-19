@@ -37,18 +37,16 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
   const state = reactive<IMenuInfoState>({
     openAddUser: false,
     contacts: [],
-    filteredMembers: [], // This will be kept for backward compatibility if needed
+    filteredMembers: [],
     information: null
   });
 
-  // Computed property to filter out existing contacts from all users
   const filteredMembers = computed(() => {
     const allUsers = getUsersList();
     const contactIds = new Set(state.contacts.map(contact => contact.id));
     return allUsers.filter(user => !contactIds.has(user.id));
   });
 
-  // Watcher to update state.filteredMembers when contacts change
   watch(
     () => state.contacts,
     () => {

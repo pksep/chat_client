@@ -84,7 +84,6 @@ const setupChatListeners = (): void => {
     const updatedUser: User = event.payload;
     const currentAuthUser = getAuthUser();
 
-    // Check if the updated user is the current authenticated user
     if (currentAuthUser && currentAuthUser.id === updatedUser.id) {
       setAuthUser(updatedUser);
     }
@@ -214,25 +213,6 @@ export const sendMessageChat = async (params: {
 }): Promise<void> => {
   const sdk = getChatSDK();
 
-  /*
-  const tempMedia = params.file
-    ? [
-        {
-          id: `temp-media-${Date.now()}`,
-          path: URL.createObjectURL(params.file),
-          messageId: '',
-          type: params.file.type.startsWith('image/')
-            ? MediaType.Image
-            : params.file.type.startsWith('video/')
-              ? MediaType.Video
-              : MediaType.File,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      ]
-    : undefined;
-    */
-
   const tempMessage = buildTempMessage({
     topicId: params.topicId,
     text: params.text,
@@ -275,7 +255,6 @@ export const uploadFile = async (file: File): Promise<string> => {
   return uploadResult.path;
 };
 
-// Store for tracking message history requests
 const messageHistoryRequests: Map<
   string,
   {

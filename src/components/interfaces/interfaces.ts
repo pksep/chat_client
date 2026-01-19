@@ -7,12 +7,6 @@ import {
   Group
 } from '@pksep/zod-shared-chat';
 
-/*
-interface TopicSettingWithUser extends TopicSetting {
-  user?: User;
-}
- */
-
 export interface IHeaderProps {
   contact?: IUser;
   members?: IUser[];

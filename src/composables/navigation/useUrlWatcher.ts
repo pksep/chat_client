@@ -1,10 +1,6 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue';
 import { currentRoute, parseUrl, type RouteType } from './useUrlRouting';
 
-/**
- * Composable that watches for URL changes and returns the topic object
- * @returns A ref containing the current topic object with id and type
- */
 export const useUrlWatcher = () => {
   const topic = ref<{ id: string | null; type: RouteType | null }>({
     id: currentRoute.value.id,

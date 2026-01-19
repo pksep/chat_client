@@ -16,8 +16,8 @@ export interface ChatMessage extends ChatSDKMessage {
   senderNickname?: string;
   sendTime?: number;
   loading?: boolean;
-  media?: any[]; // Add media property to ChatMessage type
-  reactions?: any[]; // Add reactions property to ChatMessage type
+  media?: any[];
+  reactions?: any[];
   tempId?: string;
 }
 

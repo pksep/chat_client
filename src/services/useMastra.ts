@@ -91,7 +91,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
       loading: true,
       timestamp: Date.now()
     };
-    const assistantMessageIndex = messages.value.length; // This will be the index of the assistant message
+    const assistantMessageIndex = messages.value.length;
     messages.value = [...messages.value, assistantMessage];
 
     await saveMessages(chatId, messages.value);

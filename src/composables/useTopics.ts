@@ -21,7 +21,6 @@ export const fetchAllTopics = async (
       limit
     });
 
-    // Сохраняем полученные данные в реактивное состояние
     topics.value = response.data;
     return response.data;
   } catch (err) {

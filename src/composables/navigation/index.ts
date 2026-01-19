@@ -1,4 +1,3 @@
-// Navigation Domain Composables
 export {
   currentRoute,
   initRoute,

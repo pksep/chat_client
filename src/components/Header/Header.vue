@@ -152,14 +152,7 @@ const state = reactive({
   }
 });
 
-const {
-  state: menuInfoState,
-  // initializeMenuInfo,
-  handleUpdateInformation
-} = useMenuInfo();
-
-// const modelInfo = computed(() => menuInfoState.information);
-// const { muteGroupInfo, getMuteStatus } = useInformationMenu(modelInfo);
+const { state: menuInfoState, handleUpdateInformation } = useMenuInfo();
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
@@ -175,13 +168,6 @@ const handleClickHeader = async (): Promise<void> => {
   if (topic.value.type === 'dialogs') return;
   if (isMobile.value) {
     state.openMobileInfoModal = true;
-    /*
-    await initializeMenuInfo({
-      ...props,
-      isEnabled: true,
-      open: state.openMobileInfoModal
-    });
-     */
     emits('unmount-click');
     return;
   }
@@ -263,7 +249,6 @@ watch([() => topic.value?.id, () => topic.value?.type], updateMenuInfo);
 const updateNotificationStatus = async (): Promise<void> => {
   try {
     const isMuted = false;
-    // await getMuteStatus(props.contact);
     if (isMuted) {
       state.statusNotification = {
         label: 'Вкл. уведомления',
@@ -297,9 +282,6 @@ const handleExit = (): void => {
 };
 
 const handleNotificationToggle = async (): Promise<void> => {
-  // const shouldMute = !state.statusNotification.enabled;
-  // await muteGroupInfo(shouldMute, props.contact);
-
   await updateNotificationStatus();
   emits('unmount-notification', state.statusNotification.label);
 };

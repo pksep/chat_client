@@ -107,7 +107,7 @@ export class ChatSDK {
           auth: {
             token: this.token
           },
-          // Enable automatic reconnection with exponential backoff
+
           reconnection: true,
           reconnectionAttempts: Infinity,
           reconnectionDelay: 1000,
@@ -414,7 +414,6 @@ export class ChatSDK {
   }
 
   async joinTopic(topicId: string): Promise<void> {
-    // Send JOIN_TOPIC event via WebSocket
     this.ws.sendWebSocketEvent(WebSocketEventType.JOIN_TOPIC, { topicId });
   }
 
@@ -578,7 +577,6 @@ export class ChatSDK {
       return MediaType.Video;
     } else if (mimeType.startsWith('audio/')) {
       return null;
-      // return MediaType;
     } else {
       return MediaType.File;
     }

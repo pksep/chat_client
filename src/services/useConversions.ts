@@ -71,7 +71,7 @@ export const manipulateConversationList = (topics: any[]): any[] => {
   return topics.map(topic => {
     const { title, avatarUrl, groupId } = resolveTopicMeta(topic);
     const participants = resolveParticipants(topic);
-    // For self-chat, we allow the current user to be the other user too
+
     const otherUser =
       participants.find((user: any) => user.id !== currentUserId) ||
       participants[0];
@@ -92,11 +92,10 @@ export const manipulateConversationList = (topics: any[]): any[] => {
         : avatarUrl;
     const initials = user?.initials || otherUser?.initials || nickname;
 
-    // Create user object for both DM and Group chats to ensure consistent interface
     const contactUser =
       topic.type === TopicType.Group
         ? {
-            id: topic.id, // Use topic.id as the identifier for group
+            id: topic.id,
             initials: title || `Group ${topic.id.substring(0, 8)}`,
             nickname: title || `Group ${topic.id.substring(0, 8)}`,
             avatarUrl: avatarUrl || ''
@@ -113,7 +112,7 @@ export const manipulateConversationList = (topics: any[]): any[] => {
       userId: topic.type === TopicType.DM ? otherUser?.id : undefined,
       nickname,
       avatarUrl: contactAvatarUrl,
-      // Add user object for ContactList component compatibility
+
       user: contactUser,
       isPin:
         topic.isPin || topic.isPinned || topic.topicSetting?.isPin || false,

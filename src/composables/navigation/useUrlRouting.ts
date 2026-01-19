@@ -8,7 +8,7 @@ const RouteTypes = {
   DEFAULT: 'default'
 } as const;
 
-type RouteType = 'dialogs' | 'group' | 'assistant' | 'ai' | 'default';
+type RouteType = (typeof RouteTypes)[keyof typeof RouteTypes];
 
 interface Route {
   type: RouteType;
