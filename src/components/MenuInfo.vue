@@ -112,9 +112,6 @@ const menuInfoClasses = computed(() => [
   props.class
 ]);
 
-/*
-@TODO: Implement handleUpdateGroupMembers
-*/
 const handleUpdateGroupMembers = async (): Promise<void> => {
   if (state.openAddUser) {
     handleCloseAddUserModal();
@@ -149,17 +146,14 @@ const {
 
 let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
 
-// Watch for changes in openAddUser state to refresh data when modal closes
 watch(
   () => state.openAddUser,
   (newVal, oldVal) => {
-    // When modal closes, refresh the group members to reflect any changes
     if (oldVal && !newVal) {
-      // Clear any existing timeout
       if (refreshTimeout) {
         clearTimeout(refreshTimeout);
       }
-      // Small delay to ensure modal closes properly
+
       refreshTimeout = setTimeout(() => {
         refreshGroupMembers();
         refreshTimeout = null;

@@ -184,7 +184,6 @@ const handleHeaderClick = (): void => {
 
 const handleNewContact = async (config): Promise<void> => {
   if (isMobile.value) {
-    // const contact = await handleNewContactMessage(config);
     return;
   }
   state.isNewContactOpen = config.isChapterOpen;
