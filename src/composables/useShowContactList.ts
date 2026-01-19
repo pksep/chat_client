@@ -1,7 +1,9 @@
+import { RouteTypes, type RouteType } from './navigation/useUrlRouting';
+
 export const isShowContactList = (
-  chapter: string,
+  chapter: RouteType,
   id: string | null = null
 ): boolean =>
-  chapter === 'assistant' ||
-  (chapter === 'group' && id === null) ||
-  (chapter === 'dialogs' && id === null);
+  chapter === RouteTypes.ASSISTANT ||
+  (chapter === RouteTypes.GROUP && id === null) ||
+  (chapter === RouteTypes.DIALOGS && id === null);

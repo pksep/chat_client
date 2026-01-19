@@ -8,7 +8,7 @@
       v-if="state.isLoading"
       :dataTestid="`${props.dataTestid}-MobileList-Loading`"
     />
-    <section v-else-if="route.type === 'assistant'">
+    <section v-else-if="isAssistantRoute">
       <button
         class="menu__user-assistant"
         @click="handleChapter('ai')"
@@ -36,7 +36,7 @@
       :data-testid="`${props.dataTestid}-ChatList-Section`"
     >
       <TopicList
-        :topics="route.type === 'dialogs' ? contactList : groupList"
+        :topics="isDialogsRoute ? contactList : groupList"
         :data-testid="`${props.dataTestid}-ContactList`"
         @unmount-click="handleChapter"
         @unmount-contact="handleContactSelect"
@@ -45,16 +45,16 @@
     <Button
       :type="ButtonTypeEnum.primary"
       @click="handleShowAccount"
-      :disabled="route.type === 'assistant' || state.isLoading"
+      :disabled="isAssistantRoute || state.isLoading"
       class="mobile__list-button"
     >
       <Icon :name="IconNameEnum.plus" />
     </Button>
-    <template v-if="route.type !== 'assistant'">
+    <template v-if="!isAssistantRoute">
       <NewChatMobileModal
         :open="state.showAddAccount"
         :contacts="[]"
-        :is-add-one="route.type !== 'group'"
+        :is-add-one="!isGroupRoute"
         :selected-contact-ids="state.checkUsers"
         @unmount-close="handleCloseModal"
         @unmount-contact="handleNewContact"
@@ -78,12 +78,19 @@ import TopicList from './TopicList.vue';
 import { getGroupList } from '../../services/useGroup';
 import { getTopicList } from '../../composables/useTopics';
 import { navigateToAI, useUrlWatcher } from '../../composables/navigation';
+import { RouteTypes } from '../../composables/navigation/useUrlRouting';
+
+const route = useUrlWatcher();
+
+const isAssistantRoute = computed(
+  () => route.value?.type === RouteTypes.ASSISTANT
+);
+const isDialogsRoute = computed(() => route.value?.type === RouteTypes.DIALOGS);
+const isGroupRoute = computed(() => route.value?.type === RouteTypes.GROUP);
 
 const props = withDefaults(defineProps<IMobileListProps>(), {
   dataTestid: () => 'MobileList'
 });
-
-const route = useUrlWatcher();
 
 const state = reactive({
   showAddAccount: false,

@@ -5,7 +5,6 @@ import { getUsersList } from '../composables/useUsers';
 import { updateItemList } from '../utils/listUtils';
 import { MessageStatus } from './useChatSDK/types';
 
-// Define TopicType enum locally since it's not exported from the shared package
 enum TopicType {
   Group = 'GROUP',
   DM = 'DM'

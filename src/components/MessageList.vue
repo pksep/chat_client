@@ -2,7 +2,7 @@
   <div
     class="chat__message-wrapper"
     ref="chatWrapperRef"
-    v-if="route.type === 'ai'"
+    v-if="isAiRoute"
     :data-testid="`${props.dataTestid}-MessageList-AIMessagesWrapper`"
   >
     <div
@@ -42,7 +42,7 @@
 
   <div
     class="chat__message-wrapper"
-    v-if="state.messages.length && route.type !== 'ai'"
+    v-if="state.messages.length && !isAiRoute"
     ref="chatWrapperRef"
     @scroll="handleScroll"
     :data-testid="`${props.dataTestid}-MessageList-UserMessagesWrapper`"
@@ -123,7 +123,7 @@
   />
   <div
     class="chat__input"
-    v-if="route.type !== 'default' && route.id === null"
+    v-if="!isDefaultRoute && route.id === null"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
   >
     <ContentEditor
@@ -145,7 +145,8 @@ import {
   useTemplateRef,
   nextTick,
   onUnmounted,
-  onMounted
+  onMounted,
+  computed
 } from 'vue';
 import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
@@ -167,6 +168,7 @@ import type { ChatMessage, AIMessage } from '../types/messages';
 import { MediaType } from '@pksep/zod-shared-chat';
 import { MessageStatus } from '../services/useChatSDK/types';
 import { useUrlWatcher } from '../composables/navigation';
+import { RouteTypes } from '../composables/navigation/useUrlRouting';
 
 interface ChatMessageWithLoading extends ChatMessage {
   loading?: boolean;
@@ -183,6 +185,9 @@ const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
 const inputText = ref('');
 const route = useUrlWatcher();
+
+const isAiRoute = computed(() => route.value?.type === RouteTypes.AI);
+const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
 
 const state = reactive({
   messages: [] as ChatMessageWithLoading[],
@@ -417,7 +422,7 @@ let unsubscribeFromMessageChanges: (() => void) | null = null;
 const lastMessageSentTime = ref(0);
 
 onMounted(async () => {
-  if (route.value && route.value.type === 'ai' && !state.chatId) {
+  if (route.value && route.value.type === RouteTypes.AI && !state.chatId) {
     state.chatId = generateChatId();
   }
 
@@ -509,7 +514,7 @@ const getMessageFile = (message: ChatMessage) => {
 watch(
   () => state.messages.length,
   (newLength, oldLength) => {
-    if (route.value && route.value.type === 'ai') return;
+    if (route.value && route.value.type === RouteTypes.AI) return;
 
     if (oldLength === 0 && newLength > 0) {
       if (!getIsWebsocketConnecting()) {
@@ -545,7 +550,7 @@ watch(
       scrollState.previousScrollTop = chatWrapperRef.value.scrollTop;
     }
 
-    if (newValue !== 'ai' && props.contact?.id) {
+    if (newValue !== RouteTypes.AI && props.contact?.id) {
       state.messages = [];
       state.hasMoreMessages = true;
       state.isLoadingMore = false;
@@ -568,7 +573,7 @@ watch(
         updateMessages();
         isLoadingInitialMessages.value = false;
       }
-    } else if (newValue !== 'ai') {
+    } else if (newValue !== RouteTypes.AI) {
       state.messages = [];
     }
 
@@ -591,7 +596,7 @@ watch(
 const handleSend = async (): Promise<void> => {
   if (!inputText.value.trim()) return;
 
-  if (route.value && route.value.type === 'ai') {
+  if (route.value && route.value.type === RouteTypes.AI) {
     const text = inputText.value;
     inputText.value = '';
 
