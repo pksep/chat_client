@@ -25,13 +25,13 @@
       :class="[
         'mobile-auth-container__error',
         {
-          'mobile-auth-container__error--error': isError
+          'mobile-auth-container__error--error': !isError
         }
       ]"
       title="Ошибка"
       :push-key="1"
       :description="scanError"
-      type="error"
+      :type="MessageTypeEnum.error"
       @close="() => (isError = false)"
     />
   </main>
@@ -47,7 +47,8 @@ import {
   PushNotification,
   Button,
   ButtonTypeEnum,
-  SizesEnum
+  SizesEnum,
+  MessageTypeEnum
 } from '@pksep/yui';
 
 const emit = defineEmits<{
@@ -61,6 +62,7 @@ const isError = ref(false);
 const scanQrCode = async () => {
   scanError.value = '';
   isScanning.value = true;
+  isError.value = false;
 
   try {
     const { camera } = await BarcodeScanner.requestPermissions();
