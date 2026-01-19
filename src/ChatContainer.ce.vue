@@ -82,22 +82,11 @@ const runAppInitialization = async () => {
       throw new Error('Chat API/WS URLs are not configured');
     }
 
-    const s3Config = config.CHAT_S3_BUCKET_NAME
-      ? {
-          bucketName: config.CHAT_S3_BUCKET_NAME,
-          region: config.CHAT_S3_REGION || '',
-          accessKeyId: config.CHAT_S3_ACCESS_KEY_ID || '',
-          secretAccessKey: config.CHAT_S3_SECRET_ACCESS_KEY || '',
-          endpoint: config.CHAT_S3_ENDPOINT
-        }
-      : undefined;
-
     await initializeChat({
       token: authData.token,
       apiUrl: apiAddr,
       wsUrl: wsAddr,
-      userId: authUserId || undefined,
-      s3Config
+      userId: authUserId || undefined
     });
 
     setCurrentUserId(authUserId || undefined);

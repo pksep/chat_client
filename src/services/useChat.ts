@@ -2,9 +2,7 @@ import { ref, shallowRef } from 'vue';
 import { ChatSDK } from './useChatSDK';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
 import { Message, Media, User } from '@pksep/zod-shared-chat';
-import { MessageStatus, TopicChangePayload } from './useChatSDK/types';
-import type { S3Config } from './useChatSDK/s3Service';
-import { S3Service } from './useChatSDK/s3Service';
+import { MessageStatus } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { getUserById } from '../composables/useUsers';
 import { setAuthUser, getAuthUser } from '../composables/useAuth';
@@ -12,7 +10,6 @@ import { fetchAllGroups } from './useGroup';
 import { fetchAllTopics } from '../composables/useTopics';
 
 let chatSDK: ChatSDK | null = null;
-let s3Service: S3Service | null = null;
 
 const isWebsocketConnecting = ref(true);
 const isRecentlyReconnected = ref(false);
@@ -91,8 +88,7 @@ const setupChatListeners = (): void => {
     }
   });
 
-  chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_TOPIC, event => {
-    const topic: TopicChangePayload = event.payload;
+  chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_TOPIC, () => {
     fetchAllGroups();
     fetchAllTopics();
   });
@@ -103,16 +99,12 @@ export const initializeChat = async (options: {
   apiUrl: string;
   wsUrl: string;
   userId?: string;
-  s3Config?: S3Config;
 }): Promise<void> => {
-  chatSDK = new ChatSDK(
-    {
-      apiUrl: options.apiUrl,
-      wsUrl: options.wsUrl,
-      token: options.token
-    },
-    options.s3Config
-  );
+  chatSDK = new ChatSDK({
+    apiUrl: options.apiUrl,
+    wsUrl: options.wsUrl,
+    token: options.token
+  });
 
   currentUserId.value = options.userId || null;
 

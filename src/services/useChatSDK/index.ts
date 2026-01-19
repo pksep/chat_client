@@ -9,7 +9,7 @@ import {
   MediaTypeType
 } from '@pksep/zod-shared-chat';
 
-import { S3Service, S3Config } from './s3Service';
+import { S3Service } from './s3Service';
 import {
   WebSocketEventType,
   WebSocketEventHandler,
@@ -64,7 +64,7 @@ export class ChatSDK {
   private s3Service?: S3Service;
   private reqi: Reqi;
 
-  constructor(options: ChatSDKOptions, s3Config?: S3Config) {
+  constructor(options: ChatSDKOptions) {
     this.apiUrl = options.apiUrl;
     this.wsUrl = options.wsUrl;
     this.token = options.token;

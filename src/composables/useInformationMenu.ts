@@ -1,6 +1,6 @@
 import { reactive, Ref } from 'vue';
 import { quitGroup } from '../services/useGroup';
-import { getChatSDK, getCurrentUserId, uploadFile } from '../services/useChat';
+import { uploadFile } from '../services/useChat';
 import { IMenuInfoInformation } from './useMenuInfo';
 
 export function useInformationMenu(model: Ref<IMenuInfoInformation>) {

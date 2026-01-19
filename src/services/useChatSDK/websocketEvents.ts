@@ -1,5 +1,4 @@
 import { Message, Topic, User, Group } from '@pksep/zod-shared-chat';
-import { TopicChangePayload } from './types';
 
 export enum WebSocketEventType {
   JOIN_TOPIC = 'joinTopic',
@@ -94,7 +93,7 @@ export interface WebSocketEventPayloads {
     messages: Message[];
     error?: string;
   };
-  [WebSocketEventType.CHANGE_TOPIC]: TopicChangePayload;
+  [WebSocketEventType.CHANGE_TOPIC]: void;
 }
 
 export interface WebSocketEvent<

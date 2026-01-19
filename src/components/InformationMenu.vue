@@ -65,7 +65,6 @@ const {
   onOpenEditAvatar,
   closeEditProfileIcon,
   onSaveAvatar: originalOnSaveAvatar,
-  muteGroupInfo,
   leaveGroupInfo
 } = useInformationMenu(model);
 

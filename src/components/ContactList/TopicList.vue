@@ -135,7 +135,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, watch, computed } from 'vue';
+import { computed } from 'vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import {
   Avatar,
