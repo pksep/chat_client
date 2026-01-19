@@ -1,5 +1,3 @@
-// Define the interfaces that were missing from the state module
-
 export interface MenuState {
   open?: boolean;
   chapter?: string;
@@ -33,9 +31,9 @@ export interface UseResizeStateOptions {
 
 export interface IMenuInfoState {
   open?: boolean;
-  contact?: any; // Should be replaced with proper IUser if available
-  members?: any[]; // Should be replaced with proper IUser[] if available
-  contacts?: any[]; // Should be replaced with proper IUser[] if available
+  contact?: any;
+  members?: any[];
+  contacts?: any[];
   information?: IMenuInfoInformation;
   openAddUser?: boolean;
   filteredMembers?: any[];
@@ -54,7 +52,7 @@ export interface NewChatMobileModalState {
 }
 
 export interface IContactSelectorState {
-  selectedContacts?: any[]; // Should be replaced with proper contact type if available
+  selectedContacts?: any[];
   q?: string;
   selectedIds?: string[];
 }
@@ -62,7 +60,7 @@ export interface IContactSelectorState {
 export interface NewGroupState {
   groupName?: string;
   groupAvatar?: string;
-  selectedMembers?: any[]; // Should be replaced with proper member type if available
+  selectedMembers?: any[];
   checkUsers?: any[];
   file?: File;
   isEditAvatar?: boolean;

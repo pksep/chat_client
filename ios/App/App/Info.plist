@@ -48,6 +48,6 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Нам нужен доступ к камере для сканирования QR-кода авторизации</string>
+	<string>Сканирование QR-кодов</string>
 </dict>
 </plist>

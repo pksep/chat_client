@@ -2,7 +2,7 @@
   <div
     class="chat__message-wrapper"
     ref="chatWrapperRef"
-    v-if="props.chapter === 'ai'"
+    v-if="isAiRoute"
     :data-testid="`${props.dataTestid}-MessageList-AIMessagesWrapper`"
   >
     <div
@@ -42,7 +42,7 @@
 
   <div
     class="chat__message-wrapper"
-    v-if="state.messages.length && props.chapter !== 'ai'"
+    v-if="state.messages.length && !isAiRoute"
     ref="chatWrapperRef"
     @scroll="handleScroll"
     :data-testid="`${props.dataTestid}-MessageList-UserMessagesWrapper`"
@@ -107,7 +107,7 @@
     </div>
   </div>
   <EmptyChat
-    :chapter="props.chapter"
+    :chapter="route.type"
     :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
     v-if="
       !state.messages.length &&
@@ -123,7 +123,7 @@
   />
   <div
     class="chat__input"
-    v-if="props.chapter && isEnableSend"
+    v-if="!isDefaultRoute && route.id === null"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
   >
     <ContentEditor
@@ -167,6 +167,8 @@ import { formatDay, formatTime } from '../composables/useTime';
 import type { ChatMessage, AIMessage } from '../types/messages';
 import { MediaType } from '@pksep/zod-shared-chat';
 import { MessageStatus } from '../services/useChatSDK/types';
+import { useUrlWatcher } from '../composables/navigation';
+import { RouteTypes } from '../composables/navigation/useUrlRouting';
 
 interface ChatMessageWithLoading extends ChatMessage {
   loading?: boolean;
@@ -177,12 +179,15 @@ export interface IMessageListExtendedProps extends IMessageListProps {
 }
 
 const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
-  chapter: null,
   dataTestid: () => 'MessageList'
 });
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
 const inputText = ref('');
+const route = useUrlWatcher();
+
+const isAiRoute = computed(() => route.value?.type === RouteTypes.AI);
+const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
 
 const state = reactive({
   messages: [] as ChatMessageWithLoading[],
@@ -197,8 +202,8 @@ const state = reactive({
 const isLoadingInitialMessages = ref(false);
 
 const updateMessages = () => {
-  if (props.contact?.topicId) {
-    const newMessages = getMessagesWithLoadingStatus(props.contact.topicId);
+  if (props.contact?.id) {
+    const newMessages = getMessagesWithLoadingStatus(props.contact.id);
     state.messages = JSON.parse(JSON.stringify([...newMessages]));
   } else {
     state.messages = [];
@@ -248,14 +253,14 @@ const handleScroll = (): void => {
   if (
     distanceFromTop < 100 &&
     !isScrollLoading &&
-    props.contact?.topicId &&
+    props.contact?.id &&
     state.hasMoreMessages
   ) {
     isScrollLoading = true;
 
     if (!getIsWebsocketConnecting()) {
       state.page += 1;
-      fetchMessagesForTopic(props.contact.topicId, {
+      fetchMessagesForTopic(props.contact.id, {
         page: state.page,
         limit: state.limit,
         append: true
@@ -276,10 +281,8 @@ const handleScroll = (): void => {
   }
 };
 
-const isEnableSend = computed(() => !!props.contact?.topicId);
-
 watch(
-  () => props.contact?.topicId,
+  () => props.contact?.id,
   async (newConversationId, oldConversationId) => {
     if (newConversationId && newConversationId !== oldConversationId) {
       state.messages = [];
@@ -329,9 +332,9 @@ watch(
 
     if (previousConnectingState.value && !currentConnectingState) {
       setTimeout(async () => {
-        if (props.contact?.topicId) {
+        if (props.contact?.id) {
           try {
-            await fetchMessagesForTopic(props.contact.topicId, {
+            await fetchMessagesForTopic(props.contact.id, {
               page: 1,
               limit: state.limit
             });
@@ -351,9 +354,9 @@ watch(
 const lastReconnectedState = ref(false);
 
 const handleReconnection = async () => {
-  if (props.contact?.topicId) {
+  if (props.contact?.id) {
     try {
-      await fetchMessagesForTopic(props.contact.topicId, {
+      await fetchMessagesForTopic(props.contact.id, {
         page: 1,
         limit: state.limit
       });
@@ -387,7 +390,6 @@ const initializeMastra = () => {
     });
     mastraResult.value = result;
 
-    // Set up a watcher for the messages to update state when they change
     watch(
       () => result.messages.value,
       newMessages => {
@@ -399,7 +401,6 @@ const initializeMastra = () => {
     const result = useMastra(false);
     mastraResult.value = result;
 
-    // Set up a watcher for the messages to update state when they change
     watch(
       () => result.messages.value,
       newMessages => {
@@ -421,7 +422,7 @@ let unsubscribeFromMessageChanges: (() => void) | null = null;
 const lastMessageSentTime = ref(0);
 
 onMounted(async () => {
-  if (props.chapter === 'ai' && !state.chatId) {
+  if (route.value && route.value.type === RouteTypes.AI && !state.chatId) {
     state.chatId = generateChatId();
   }
 
@@ -429,7 +430,7 @@ onMounted(async () => {
     async (newMessageConversationId?: string) => {
       await new Promise(resolve => setTimeout(resolve, 50));
 
-      if (newMessageConversationId === props.contact?.topicId) {
+      if (newMessageConversationId === props.contact?.id) {
         const timeSinceLastSend = Date.now() - lastMessageSentTime.value;
         if (!getIsWebsocketConnecting() && timeSinceLastSend > 2000) {
           await fetchMessagesForTopic(newMessageConversationId, {
@@ -442,7 +443,7 @@ onMounted(async () => {
     }
   );
 
-  if (props.contact?.topicId) {
+  if (props.contact?.id) {
     state.messages = [];
     state.hasMoreMessages = true;
     state.isLoadingMore = false;
@@ -451,7 +452,7 @@ onMounted(async () => {
 
     try {
       if (!getIsWebsocketConnecting()) {
-        const messages = await fetchMessagesForTopic(props.contact.topicId, {
+        const messages = await fetchMessagesForTopic(props.contact.id, {
           page: state.page,
           limit: state.limit
         });
@@ -513,7 +514,7 @@ const getMessageFile = (message: ChatMessage) => {
 watch(
   () => state.messages.length,
   (newLength, oldLength) => {
-    if (props.chapter === 'ai') return;
+    if (route.value && route.value.type === RouteTypes.AI) return;
 
     if (oldLength === 0 && newLength > 0) {
       if (!getIsWebsocketConnecting()) {
@@ -541,7 +542,7 @@ watch(
 );
 
 watch(
-  () => props.chapter,
+  () => route.value?.type,
   async (newValue, oldValue) => {
     if (newValue === oldValue) return;
 
@@ -549,7 +550,7 @@ watch(
       scrollState.previousScrollTop = chatWrapperRef.value.scrollTop;
     }
 
-    if (newValue !== 'ai' && props.contact?.topicId) {
+    if (newValue !== RouteTypes.AI && props.contact?.id) {
       state.messages = [];
       state.hasMoreMessages = true;
       state.isLoadingMore = false;
@@ -558,7 +559,7 @@ watch(
 
       try {
         if (!getIsWebsocketConnecting()) {
-          const messages = await fetchMessagesForTopic(props.contact.topicId, {
+          const messages = await fetchMessagesForTopic(props.contact.id, {
             page: state.page,
             limit: state.limit
           });
@@ -572,7 +573,7 @@ watch(
         updateMessages();
         isLoadingInitialMessages.value = false;
       }
-    } else if (newValue !== 'ai') {
+    } else if (newValue !== RouteTypes.AI) {
       state.messages = [];
     }
 
@@ -595,28 +596,22 @@ watch(
 const handleSend = async (): Promise<void> => {
   if (!inputText.value.trim()) return;
 
-  if (props.chapter === 'ai') {
+  if (route.value && route.value.type === RouteTypes.AI) {
     const text = inputText.value;
     inputText.value = '';
 
     if (mastraResult.value && mastraResult.value.sendMessage) {
-      // Add user's message immediately for UI feedback
       const userMessage = {
         role: 'user' as 'user' | 'assistant',
         content: text,
         timestamp: Date.now()
       };
-
-      // Add to current state for immediate UI feedback
       state.aiMessages = [...state.aiMessages, userMessage];
 
-      // Scroll to bottom to show the user's message
       await nextTick();
       requestAnimationFrame(() => scrollToBottom(true));
 
       try {
-        // The sendMessage function in useMastra will process the request
-        // It will add an assistant message with loading state, which will be updated via the watch
         await mastraResult.value.sendMessage(text, () => {
           requestAnimationFrame(() => scrollToBottom(true));
         });
@@ -624,7 +619,6 @@ const handleSend = async (): Promise<void> => {
         console.warn('Mastra failed to send message:', error);
       }
     } else {
-      // If Mastra is not available, add both user and error messages
       const userMessage = {
         role: 'user' as 'user' | 'assistant',
         content: text,
@@ -645,7 +639,7 @@ const handleSend = async (): Promise<void> => {
     return;
   }
 
-  if (!props.contact?.topicId) {
+  if (!props.contact?.id) {
     console.error('[ChatSDK] Cannot send message: no topic provided');
     return;
   }
@@ -656,7 +650,7 @@ const handleSend = async (): Promise<void> => {
   try {
     lastMessageSentTime.value = Date.now();
     await sendMessageChat({
-      topicId: props.contact.topicId,
+      topicId: props.contact.id,
       text
     });
   } catch (error) {
@@ -670,7 +664,7 @@ const handleSend = async (): Promise<void> => {
 const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
   if (!files.length) return;
 
-  if (!props.contact?.topicId) {
+  if (!props.contact?.id) {
     console.error('[ChatSDK] Cannot send message: no topic provided');
     return;
   }
@@ -679,7 +673,7 @@ const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
     try {
       lastMessageSentTime.value = Date.now();
       await sendMessageChat({
-        topicId: props.contact.topicId,
+        topicId: props.contact.id,
         file,
         onlyMedia
       });

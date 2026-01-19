@@ -40,8 +40,6 @@ export class S3Service {
   }
 
   async deleteFile(fileId: string, filePath: string): Promise<void> {
-    // In a real implementation, this would delete the file from S3
-    // For now, we'll just log the deletion
     console.log(`Deleting file with ID: ${fileId} at path: ${filePath}`);
   }
 

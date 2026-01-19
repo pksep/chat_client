@@ -57,7 +57,7 @@
     </ul>
   </section>
   <NewContactModal
-    :contacts="props.contacts"
+    :contacts="props.filteredContacts"
     :open="newContactOpen"
     :dataTestid="`${props.dataTestid}-ContactListInModal-NewContactModal`"
     @unmount-close="closeContactModal"
@@ -83,6 +83,7 @@ import type { IUser } from '../interfaces/interfaces';
 interface ContactListInModalProps {
   showAddButton?: boolean;
   contacts?: IUser[];
+  filteredContacts?: IUser[];
   dataTestid?: string;
   class?: string;
   addButtonClass?: string;
@@ -105,6 +106,7 @@ const props = withDefaults(defineProps<ContactListInModalProps>(), {
       deletedAt: null
     }
   ],
+  filteredContacts: () => [],
   dataTestid: () => 'ContactListInModal'
 });
 

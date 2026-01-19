@@ -1,13 +1,7 @@
 <template>
-  <MobileAuth 
-    v-if="showMobileAuth" 
-    @auth-success="handleMobileAuthSuccess" 
-  />
+  <MobileAuth v-if="showMobileAuth" @auth-success="handleMobileAuthSuccess" />
 
-  <ChatContainer 
-    v-else-if="openChatContainerShow" 
-    v-bind="props" 
-  />
+  <ChatContainer v-else-if="openChatContainerShow" v-bind="props" />
 
   <img
     v-else
@@ -51,7 +45,7 @@ const { startPolling } = useUnreadMessagePolling(30000, false);
 const handleMobileAuthSuccess = (token: string) => {
   if (token) {
     localStorage.setItem('erp_token', token);
-    showMobileAuth.value = false; 
+    showMobileAuth.value = false;
     runAppInitialization();
   }
 };
@@ -114,20 +108,20 @@ const runAppInitialization = async () => {
     await Promise.all([fetchAuthUser(), fetchAllUsers()]);
 
     if (!authData.user && authUserId) {
-       const fallbackUser = getUserById(authUserId);
-       if (fallbackUser) {
-         setAuthUser({
-            ...fallbackUser,
-            id: fallbackUser.id || '',
-            initials: fallbackUser.initials || fallbackUser.initial || '',
-            nickname: fallbackUser.nickname || fallbackUser.id || '',
-            avatarUrl: fallbackUser.avatarUrl || '',
-            lastOnline: new Date(),
-            createdAt: fallbackUser.createdAt || new Date(),
-            updatedAt: fallbackUser.updatedAt || new Date(),
-            deletedAt: fallbackUser.deletedAt || null
-         });
-       }
+      const fallbackUser = getUserById(authUserId);
+      if (fallbackUser) {
+        setAuthUser({
+          ...fallbackUser,
+          id: fallbackUser.id || '',
+          initials: fallbackUser.initials || '',
+          nickname: fallbackUser.nickname || fallbackUser.id || '',
+          avatarUrl: fallbackUser.avatarUrl || '',
+          lastOnline: new Date(),
+          createdAt: fallbackUser.createdAt || new Date(),
+          updatedAt: fallbackUser.updatedAt || new Date(),
+          deletedAt: fallbackUser.deletedAt || null
+        });
+      }
     }
 
     await fetchAllTopics();
@@ -135,10 +129,9 @@ const runAppInitialization = async () => {
 
     markSDKReady();
     startPolling();
-    
+
     // Если все прошло успешно, убираем лоадер
     openChatContainerShow.value = true;
-
   } catch (error) {
     console.error('Failed to initialize chat:', error);
 
@@ -146,10 +139,10 @@ const runAppInitialization = async () => {
     // Мы сбрасываем токен и снова показываем QR сканер
     const isMobile = window.innerWidth <= 768;
     if (isMobile) {
-        localStorage.removeItem('erp_token');
-        showMobileAuth.value = true;
-        openChatContainerShow.value = false;
-        return;
+      localStorage.removeItem('erp_token');
+      showMobileAuth.value = true;
+      openChatContainerShow.value = false;
+      return;
     }
 
     // Логика редиректа для десктопа
@@ -169,8 +162,8 @@ const runAppInitialization = async () => {
       encodeURIComponent(window.location.href);
   } finally {
     if (tokenUrl) {
-        url.searchParams.delete('token');
-        window.history.replaceState({}, document.title, url.toString());
+      url.searchParams.delete('token');
+      window.history.replaceState({}, document.title, url.toString());
     }
   }
 };
