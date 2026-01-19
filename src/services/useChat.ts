@@ -4,13 +4,12 @@ import { WebSocketEventType } from './useChatSDK/websocketEvents';
 import { Message, Media, User } from '@pksep/zod-shared-chat';
 import { MessageStatus } from './useChatSDK/types';
 import type { S3Config } from './useChatSDK/s3Service';
-import { S3Service } from './useChatSDK/s3Service';
+
 import type { ChatMessage } from '../types/messages';
 import { getUserById } from '../composables/useUsers';
 import { setAuthUser, getAuthUser } from '../composables/useAuth';
 
 let chatSDK: ChatSDK | null = null;
-let s3Service: S3Service | null = null;
 
 const isWebsocketConnecting = ref(true);
 const isRecentlyReconnected = ref(false);
@@ -97,14 +96,11 @@ export const initializeChat = async (options: {
   userId?: string;
   s3Config?: S3Config;
 }): Promise<void> => {
-  chatSDK = new ChatSDK(
-    {
-      apiUrl: options.apiUrl,
-      wsUrl: options.wsUrl,
-      token: options.token
-    },
-    options.s3Config
-  );
+  chatSDK = new ChatSDK({
+    apiUrl: options.apiUrl,
+    wsUrl: options.wsUrl,
+    token: options.token
+  });
 
   currentUserId.value = options.userId || null;
   isWebsocketConnecting.value = true;
