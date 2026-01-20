@@ -95,7 +95,7 @@ import {
 } from '@pksep/yui';
 import ContactListInModal from './ContactList/ContactListInModal.vue';
 import InformationMenu from './InformationMenu.vue';
-import type { IMenuRightProps, IUser } from './interfaces/interfaces';
+import type { IMenuRightProps, IUser, ITopic } from './interfaces/interfaces';
 import { useMenuInfo } from '../composables/useMenuInfo';
 import NewContactModal from './NewChat/NewContactModal.vue';
 import { useUrlWatcher } from '../composables/navigation';
@@ -148,10 +148,26 @@ const handleCloseMenu = (): void => {
   emits('unmount-collapse', false);
 };
 
-const handleNewContactAdded = async (users: IUser[]): Promise<void> => {
-  if (state.information?.groupId) {
-    await addGroupMembers(state.information.groupId, users);
-    emits('unmount-contacts-update', users);
+const handleNewContactAdded = async (
+  contact: IUser | ITopic[]
+): Promise<void> => {
+  if (Array.isArray(contact)) {
+    // If it's an array of ITopic, we can't add them as users to a group
+    // Only proceed if it's an array of IUser
+    if (contact.length > 0 && 'initials' in contact[0]) {
+      const users = contact as unknown as IUser[];
+      if (state.information?.groupId) {
+        await addGroupMembers(state.information.groupId, users);
+        emits('unmount-contacts-update', users);
+      }
+    }
+  } else {
+    // Single user case
+    if (state.information?.groupId) {
+      const users = [contact as unknown as IUser];
+      await addGroupMembers(state.information.groupId, users);
+      emits('unmount-contacts-update', users);
+    }
   }
 };
 

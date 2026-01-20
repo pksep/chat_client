@@ -1,5 +1,9 @@
 import { reactive, computed, watch } from 'vue';
-import { fetchGroupMembers, setGroupInfo, addGroupMembers } from '../services/useGroup';
+import {
+  fetchGroupMembers,
+  setGroupInfo,
+  addGroupMembers
+} from '../services/useGroup';
 import { getChatSDK } from '../services/useChat';
 import { getUsersList } from './useUsers';
 import type { IUser } from '../components/interfaces/interfaces';
@@ -65,7 +69,10 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
     state.contacts = [...state.contacts, ...contacts];
 
     try {
-      const success = await addGroupMembers(state.information.groupId, contacts);
+      const success = await addGroupMembers(
+        state.information.groupId,
+        contacts
+      );
 
       if (success) {
         state.contacts = await fetchGroupMembers(state.information.groupId);

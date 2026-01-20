@@ -67,13 +67,13 @@ const closeModal = (): void => {
   emits('unmount-close');
 };
 
-const handleNewContact = (user: ITopic[] | IUser | ITopic): void => {
+const handleNewContact = (contact: ITopic[] | IUser): void => {
   const sdk = getChatSDK();
-  if (props.isAddOne && user.id) {
-    navigateToDialogs(user.id as string);
-    sdk.joinTopic(user.id);
+  if (props.isAddOne && 'id' in contact && contact.id) {
+    navigateToDialogs(contact.id as string);
+    sdk.joinTopic(contact.id);
   } else {
-    emits('unmount-new-contact', user);
+    emits('unmount-new-contact', contact);
   }
   closeModal();
 };

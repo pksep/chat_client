@@ -16,7 +16,9 @@
         v-for="(contact, index) in contacts"
         :key="contact.id"
         class="contact-selector__item"
-        :class="{ 'contact-selector__item--excluded': isContactExcluded(contact.id) }"
+        :class="{
+          'contact-selector__item--excluded': isContactExcluded(contact.id)
+        }"
         @click="!isContactExcluded(contact.id) && handleNewContact(contact)"
         :data-testid="`${props.dataTestid}-ContactSelector-Item${index + 1}`"
       >
@@ -126,7 +128,9 @@ const contacts = computed(() => {
 
 const selectedContacts = computed(() => {
   // Create a new array to ensure reactivity
-  const filteredContacts = users.value.filter(contact => state.selectedIds.has(contact.id));
+  const filteredContacts = users.value.filter(contact =>
+    state.selectedIds.has(contact.id)
+  );
   // Return a new array reference to ensure Vue reactivity
   return [...filteredContacts];
 });

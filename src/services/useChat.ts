@@ -108,9 +108,12 @@ const setupChatListeners = (): void => {
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.USER_UPDATED, event => {
-    const updatedUser = event.payload;
-    // Update user info in the global users list
-    // This ensures that user updates are reflected in the UI
+    const updatedUser: User = event.payload;
+    const currentAuthUser = getAuthUser();
+
+    if (currentAuthUser && currentAuthUser.id === updatedUser.id) {
+      setAuthUser(updatedUser);
+    }
   });
 };
 

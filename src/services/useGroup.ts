@@ -173,7 +173,10 @@ export const addGroupMembers = async (
       if (groupIndex !== -1) {
         const updatedGroup = { ...groups.value[groupIndex] };
         // Update member count if available
-        if (typeof updatedGroup.memberCount === 'number') {
+        if (
+          'memberCount' in updatedGroup &&
+          typeof updatedGroup.memberCount === 'number'
+        ) {
           updatedGroup.memberCount += newMembers.length;
         }
         // Force reactivity by creating new array reference
@@ -202,7 +205,9 @@ export const removeUserFromGroup = async (
     await sdk.removeUserFromGroup(groupId, userId);
 
     // Update the local group members cache
-    const updatedMembers = groupMembers.value.filter(member => member.id !== userId);
+    const updatedMembers = groupMembers.value.filter(
+      member => member.id !== userId
+    );
     groupMembers.value = updatedMembers;
 
     // Update the specific group in the global groups list
@@ -210,7 +215,11 @@ export const removeUserFromGroup = async (
     if (groupIndex !== -1) {
       const updatedGroup = { ...groups.value[groupIndex] };
       // Update member count if available
-      if (typeof updatedGroup.memberCount === 'number' && updatedGroup.memberCount > 0) {
+      if (
+        'memberCount' in updatedGroup &&
+        typeof updatedGroup.memberCount === 'number' &&
+        updatedGroup.memberCount > 0
+      ) {
         updatedGroup.memberCount -= 1;
       }
       // Force reactivity by creating new array reference
