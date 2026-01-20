@@ -67,6 +67,6 @@ const handleUnmountLeave = () => {
 };
 
 const handleMute = () => {
-  toggleMuteTopic(state.topic.id);
+  toggleMuteTopic(state.topic);
 };
 </script>

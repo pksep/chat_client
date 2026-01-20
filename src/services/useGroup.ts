@@ -1,7 +1,8 @@
 import { ref } from 'vue';
 import { getChatSDK, getCurrentUserId } from './useChat';
-import { TopicType } from './useChatSDK/types';
+import { Message, TopicSetting, TopicType } from './useChatSDK/types';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
+import { sortTopics } from '../composables/useTopics';
 
 const groups = ref<ITopic[]>([]);
 const groupMembers = ref<IUser[]>([]);
@@ -66,7 +67,7 @@ const createGroup = async (
 };
 
 const getGroupList = (): ITopic[] => {
-  return groups.value;
+  return sortTopics(groups.value);
 };
 
 const setGroupList = (value: ITopic[]): void => {
@@ -157,6 +158,49 @@ export const removeUserFromGroup = async (
     console.error('Failed to remove user from group:', err);
     return false;
   }
+};
+
+export const updateLocalLastMessageGroup = (
+  topicId: string,
+  lastMessage: Message
+): void => {
+  const topic = groups.value.find(topic => topic.id === topicId);
+  if (topic) {
+    topic.lastMessage = lastMessage;
+  }
+
+  groups.value = [...groups.value];
+};
+
+export const updateLocalGroupDetails = (
+  topicId: string,
+  name: string,
+  avatarUrl: string
+): void => {
+  const topic = groups.value.find(topic => topic.id === topicId);
+  if (topic) {
+    topic.name = name;
+    topic.avatarUrl = avatarUrl;
+    topic.group.title = name;
+    topic.group.avatarUrl = avatarUrl;
+  }
+  groups.value = [...groups.value];
+};
+
+export const updateLocalGroupInfo = (
+  topicId: string,
+  info: Partial<TopicSetting>
+): void => {
+  const topic = groups.value.find(topic => topic.id === topicId);
+  if (topic) {
+    topic.info = { ...topic.info, ...info };
+  }
+
+  groups.value = [...groups.value];
+};
+
+export const addGroupList = (value: ITopic): void => {
+  groups.value = [value, ...groups.value];
 };
 
 export {

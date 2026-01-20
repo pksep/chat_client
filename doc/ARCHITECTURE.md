@@ -183,7 +183,6 @@ sequenceDiagram
 
     Server->>WS: newMessage
     WS->>SDK: onNewMessage handler
-    SDK->>SDK: mapMessage(rawMessage)
     SDK->>Store: appendMessageToLocal()
     SDK->>SDK: notifyMessageChange(topicId)
     SDK->>UI: callback(topicId)

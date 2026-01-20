@@ -60,11 +60,11 @@ const closeModal = (): void => {
   emits('unmount-close');
 };
 
-const handleNewContact = (user: ITopic): void => {
+const handleNewContact = async (user: ITopic): Promise<void> => {
   if (props.isAddOne && user.id) {
-    navigateToDialogs(user.id as string);
     const sdk = getChatSDK();
-    sdk.joinTopic(user.id);
+    const topic = await sdk.createTopic({ peerId: user.id });
+    navigateToDialogs(topic.id);
   }
   closeModal();
 };
