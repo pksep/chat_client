@@ -352,19 +352,8 @@ export class ChatSDK {
     return this.topic.togglePinTopic(topicId);
   }
 
-  async toggleMuteTopic(
-    topicId: string,
-    userId: string
-  ): Promise<TopicSetting> {
-    return this.topic.toggleMuteTopic(topicId, userId);
-  }
-
-  async muteTopic(topicId: string, userId: string): Promise<TopicSetting> {
-    return this.topic.muteTopic(topicId, userId);
-  }
-
-  async unmuteTopic(topicId: string, userId: string): Promise<TopicSetting> {
-    return this.topic.unmuteTopic(topicId, userId);
+  async toggleMuteTopic(topicId: string): Promise<TopicSetting> {
+    return this.topic.toggleMuteTopic(topicId);
   }
 
   async getTopicSettings(
@@ -513,8 +502,11 @@ export class ChatSDK {
     return this.group.editGroup(groupId, groupData);
   }
 
-  async getMessages(): Promise<Message[]> {
-    return [];
+  async getMessages(
+    topicId: string,
+    opts?: { limit?: number; lastMessageId?: string }
+  ): Promise<Message[]> {
+    return this.message.getMessages(topicId, opts);
   }
 
   async editMessage(

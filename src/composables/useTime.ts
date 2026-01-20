@@ -21,7 +21,7 @@ export const formatTime = (date: Date = new Date()) => {
   });
 };
 
-export const formatDay = (timestamp: number): string => {
+export const formatDay = (timestamp: Date): string => {
   return new Date(timestamp).toLocaleDateString('ru-RU', {
     day: 'numeric',
     month: 'long'

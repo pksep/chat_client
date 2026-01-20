@@ -28,10 +28,7 @@
     @unmount-close="closeEditProfileIcon"
     @unmount-save="onSaveAvatar"
   />
-  <MenuInfoButtons
-    @unmount-mute="muteGroupInfo"
-    @unmount-leave="leaveGroupInfo"
-  />
+  <MenuInfoButtons @unmount-leave="leaveGroupInfo" />
   <NewChatInformationForm
     :model-value="model"
     @unmount-save="handleSaveFromForm"
@@ -68,7 +65,6 @@ const {
   onOpenEditAvatar,
   closeEditProfileIcon,
   onSaveAvatar: originalOnSaveAvatar,
-  muteGroupInfo,
   leaveGroupInfo
 } = useInformationMenu(model);
 

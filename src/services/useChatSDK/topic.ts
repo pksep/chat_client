@@ -1,6 +1,7 @@
 import { Topic, Message, TopicSetting, User } from '@pksep/zod-shared-chat';
 import { Reqi } from '@pksep/reqi';
 import { SearchParams, PaginatedResponse, TopicType } from './types';
+import { ITopic } from '../../components/interfaces/interfaces';
 
 export interface ChatTopicInterface {
   getTopics(
@@ -10,9 +11,7 @@ export interface ChatTopicInterface {
   createTopic(topicData: { peerId: string }): Promise<Topic>;
   deleteTopic(topicId: string): Promise<void>;
   togglePinTopic(topicId: string): Promise<TopicSetting>;
-  toggleMuteTopic(topicId: string, userId: string): Promise<TopicSetting>;
-  muteTopic(topicId: string, userId: string): Promise<TopicSetting>;
-  unmuteTopic(topicId: string, userId: string): Promise<TopicSetting>;
+  toggleMuteTopic(topicId: string): Promise<TopicSetting>;
   getTopicSettings(topicId: string, userId: string): Promise<TopicSetting>;
   updateTopicSettings(
     topicId: string,
@@ -43,7 +42,7 @@ export class ChatTopic implements ChatTopicInterface {
   async getTopics(
     type?: TopicType,
     params?: SearchParams
-  ): Promise<PaginatedResponse<Topic & { lastMessage?: Message }>> {
+  ): Promise<PaginatedResponse<ITopic>> {
     const queryParams = new URLSearchParams();
 
     if (type) queryParams.append('type', type);
@@ -56,9 +55,10 @@ export class ChatTopic implements ChatTopicInterface {
     const endpoint = `/topics${queryString ? `?${queryString}` : ''}`;
 
     try {
-      const response = (await this.reqi.get<
-        PaginatedResponse<Topic & { lastMessage?: Message }>
-      >(endpoint, { parsed: false })) as any;
+      const response = (await this.reqi.get<PaginatedResponse<ITopic>>(
+        endpoint,
+        { parsed: false }
+      )) as any;
       const data = await response.json();
       return data;
     } catch (error) {
@@ -104,14 +104,11 @@ export class ChatTopic implements ChatTopicInterface {
     }
   }
 
-  async toggleMuteTopic(
-    topicId: string,
-    userId: string
-  ): Promise<TopicSetting> {
+  async toggleMuteTopic(topicId: string): Promise<TopicSetting> {
     try {
       const response = (await this.reqi.patch<TopicSetting>(
         `/topics/${topicId}/mute`,
-        { userId },
+        {},
         { parsed: false }
       )) as any;
       const data = await response.json();
@@ -121,14 +118,6 @@ export class ChatTopic implements ChatTopicInterface {
         `Failed to toggle mute topic: ${(error as Error).message}`
       );
     }
-  }
-
-  async muteTopic(topicId: string, userId: string): Promise<TopicSetting> {
-    return this.toggleMuteTopic(topicId, userId);
-  }
-
-  async unmuteTopic(topicId: string, userId: string): Promise<TopicSetting> {
-    return this.toggleMuteTopic(topicId, userId);
   }
 
   async getTopicSettings(
