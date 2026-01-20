@@ -20,10 +20,7 @@ import type {
   IChatContainerEmits,
   IChatContainerProps
 } from './components/interfaces/interfaces';
-import {
-  initializeChat,
-  setCurrentUserId
-} from './services/useChat';
+import { initializeChat, setCurrentUserId } from './services/useChat';
 import { saveUserIdToSession, hasUserIdInSession } from './services/useMastra';
 import {
   getAllNotificationCount,

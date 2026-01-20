@@ -98,3 +98,7 @@ export interface IGroupProfileProps {
   topic?: ITopic | null;
   dataTestid?: string;
 }
+
+export interface IMessage extends Message {
+  senderUser?: IUser;
+}

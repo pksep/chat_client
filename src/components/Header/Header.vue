@@ -101,7 +101,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, reactive, watch } from 'vue';
+import { computed, reactive } from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';

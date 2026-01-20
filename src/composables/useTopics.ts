@@ -2,7 +2,7 @@ import { ref, shallowRef } from 'vue';
 import { getChatSDK } from '../services/useChat';
 import { ITopic } from '../components/interfaces/interfaces';
 import { Message, TopicSetting, TopicType } from '../services/useChatSDK/types';
-import { fetchAllGroups, updateLocalGroupInfo } from '../services/useGroup';
+import { updateLocalGroupInfo } from '../services/useGroup';
 
 const topics = shallowRef<ITopic[]>([]);
 const loading = ref(false);

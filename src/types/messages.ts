@@ -8,13 +8,11 @@ export interface AIMessage {
 }
 
 export interface ChatMessage extends ChatSDKMessage {
-  isSystemMessage?: boolean;
   systemMessageType?: string;
   systemMessageContent?: string;
   senderFaceUrl?: string;
   faceURL?: string;
   senderNickname?: string;
-  sendTime?: number;
   loading?: boolean;
   media?: any[];
   reactions?: any[];

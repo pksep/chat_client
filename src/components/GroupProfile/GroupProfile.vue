@@ -29,7 +29,7 @@
 
 <script lang="ts" setup>
 import { Avatar } from '@pksep/yui';
-import { IGroupProfileProps, ITopic } from '../interfaces/interfaces';
+import { IGroupProfileProps } from '../interfaces/interfaces';
 
 const props = withDefaults(defineProps<IGroupProfileProps>(), {
   dataTestid: 'GroupProfile',

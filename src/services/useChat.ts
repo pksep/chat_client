@@ -1,10 +1,9 @@
 import { ref, shallowRef } from 'vue';
 import { ChatSDK } from './useChatSDK';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
-import { Message, Media, User } from '@pksep/zod-shared-chat';
+import { Media, User } from '@pksep/zod-shared-chat';
 import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
-import { getUserById } from '../composables/useUsers';
 import { setAuthUser, getAuthUser } from '../composables/useAuth';
 import {
   addGroupList,
@@ -27,30 +26,6 @@ const messagesStore = shallowRef<Record<string, ChatMessage[]>>({});
 
 const messageChangeCallbacks: Array<(topicId?: string) => void> = [];
 
-const normalizeDate = (value?: Date | string | number): Date => {
-  if (!value) return new Date();
-  if (value instanceof Date) return value;
-  return new Date(value);
-};
-
-const mapMessage = (message: Message): ChatMessage => {
-  const sender = message.senderUserId
-    ? getUserById(message.senderUserId)
-    : null;
-  const createdAt = normalizeDate(message.createdAt);
-
-  return {
-    ...message,
-    createdAt,
-    updatedAt: normalizeDate(message.updatedAt),
-    sendTime: createdAt.getTime(),
-    senderNickname: sender?.nickname || '',
-    faceURL: sender?.avatarUrl || '',
-    isSystemMessage: message.isSystem || false,
-    systemMessageContent: message.isSystem ? message.text || '' : undefined
-  };
-};
-
 const notifyMessageChange = (topicId?: string): void => {
   messageChangeCallbacks.forEach(callback => {
     try {
@@ -65,14 +40,11 @@ const setupChatListeners = (): void => {
   if (!chatSDK) return;
 
   chatSDK.subscribeToEvent(WebSocketEventType.NEW_MESSAGE, event => {
-    const msg = mapMessage(event.payload);
-
-    appendMessageToLocal(msg.topicId, msg);
+    appendMessageToLocal(event.payload.topicId, event.payload);
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.MESSAGE_UPDATED, event => {
-    const msg = mapMessage(event.payload);
-    appendMessageToLocal(msg.topicId, msg);
+    appendMessageToLocal(event.payload.topicId, event.payload);
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.MESSAGE_DELETED, event => {
@@ -193,39 +165,6 @@ export const subscribeToMessageChanges = (
   };
 };
 
-const buildTempMessage = (params: {
-  topicId: string;
-  text?: string;
-  media?: Media[];
-}): ChatMessage => {
-  const createdAt = new Date();
-  const sender = currentUserId.value ? getUserById(currentUserId.value) : null;
-  const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-  console.log('buildTempMessage', params.topicId);
-
-  return {
-    id: tempId,
-    topicId: params.topicId,
-    senderUserId: currentUserId.value || '',
-    reactions: [],
-    text: params.text,
-    media: params.media || [],
-    replyMessageId: undefined,
-    isEdit: false,
-    status: MessageStatus.Wait,
-    isPin: false,
-    isSystem: false,
-    createdAt,
-    updatedAt: createdAt,
-    sendTime: createdAt.getTime(),
-    senderNickname: sender?.nickname || '',
-    faceURL: sender?.avatarUrl || '',
-    deletedAt: null,
-    loading: true,
-    tempId
-  };
-};
-
 export const sendMessageChat = async (params: {
   topicId: string;
   text?: string;
@@ -233,14 +172,6 @@ export const sendMessageChat = async (params: {
   onlyMedia?: boolean;
 }): Promise<void> => {
   const sdk = getChatSDK();
-
-  const tempMessage = buildTempMessage({
-    topicId: params.topicId,
-    text: params.text,
-    media: []
-  });
-
-  appendMessageToLocal(params.topicId, tempMessage);
 
   try {
     let media: Media[] | undefined;
@@ -257,12 +188,6 @@ export const sendMessageChat = async (params: {
     });
   } catch (error) {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);
-    const existingMessages = messagesStore.value[params.topicId] || [];
-    const updatedMessages = existingMessages.map(msg =>
-      msg.id === tempMessage.id ? { ...msg, status: MessageStatus.Wait } : msg
-    );
-    messagesStore.value[params.topicId] = updatedMessages;
-    notifyMessageChange(params.topicId);
   }
 };
 
@@ -296,24 +221,21 @@ const addMessageHistoryHandler = (): void => {
         if (error) {
           request.reject(new Error(error));
         } else {
-          const processedMessages = messages.map(mapMessage);
-          const topicId = processedMessages[0]?.topicId;
+          const topicId = messages[0]?.topicId;
 
           if (topicId) {
-            saveMessagesToLocal(topicId, processedMessages);
+            saveMessagesToLocal(topicId, messages);
             notifyMessageChange(topicId);
           }
 
-          request.resolve(processedMessages);
+          request.resolve(messages);
         }
       }
     }
   );
 };
 
-export const getMessagesWithLoadingStatus = (
-  topicId: string
-): ChatMessage[] => {
+export const getMessagesWithLoadingStatus = (): ChatMessage[] => {
   const cachedMessages = [];
   const hasConnection = !getIsWebsocketConnecting();
 

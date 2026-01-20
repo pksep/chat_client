@@ -14,7 +14,9 @@
           v-if="isNewDate(index, true)"
           class="top-element"
           :data-divider="
-            isNewDate(index, true) ? formatDay(message.timestamp) : undefined
+            isNewDate(index, true)
+              ? formatDay(new Date(message.timestamp))
+              : undefined
           "
         >
           <div
@@ -23,7 +25,7 @@
           >
             <span
               :data-testid="`${props.dataTestid}-MessageList-DateLabelAI${index + 1}`"
-              >{{ formatDay(message.timestamp) }}</span
+              >{{ formatDay(new Date(message.timestamp)) }}</span
             >
           </div>
         </div>
@@ -52,10 +54,7 @@
       :data-testid="`${props.dataTestid}-MessageList-UserMessagesContainer`"
     >
       <template v-for="(message, index) in state.messages" :key="message.id">
-        <div
-          class="top-element"
-          v-if="isNewDate(index) || message.isSystemMessage"
-        >
+        <div class="top-element" v-if="isNewDate(index) || message.isSystem">
           <div
             v-if="isNewDate(index)"
             class="date-divider"
@@ -63,12 +62,12 @@
           >
             <span
               :data-testid="`${props.dataTestid}-MessageList-DateLabelUser${index + 1}`"
-              >{{ formatDay(message.sendTime) }}</span
+              >{{ formatDay(message.createdAt) }}</span
             >
           </div>
 
           <div
-            v-if="message.isSystemMessage"
+            v-if="message.isSystem"
             class="system-message"
             :data-testid="`${props.dataTestid}-MessageList-SystemMessageUser${index + 1}`"
           >
@@ -82,7 +81,7 @@
         </div>
 
         <MessageBubble
-          v-if="!message.isSystemMessage"
+          v-if="!message.isSystem"
           :class="
             messageChat(
               props.user?.id === message.senderUserId ? 'user' : 'assistant'
@@ -92,9 +91,9 @@
           :media="getMessageMedia(message)"
           :file="getMessageFile(message)"
           :is-me-sender="props.user.id === message.senderUserId"
-          :time="formatTime(new Date(message.sendTime))"
-          :sender="message.senderNickname || ''"
-          :avatar="message.faceURL"
+          :time="formatTime(new Date(message.createdAt))"
+          :sender="message.senderUser?.nickname || ''"
+          :avatar="message.senderUser?.avatarUrl || ''"
           :is-read="
             props.user.id === message.senderUserId
               ? message.status === MessageStatus.Read
@@ -173,10 +172,6 @@ import {
   getMessagesByTopicId
 } from '../services/useMessages';
 
-interface ChatMessageWithLoading extends ChatMessage {
-  loading?: boolean;
-}
-
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
 }
@@ -206,7 +201,7 @@ const isLoadingInitialMessages = ref(false);
 
 const updateMessages = () => {
   if (props.contact?.id) {
-    const newMessages = getMessagesWithLoadingStatus(props.contact.id);
+    const newMessages = getMessagesWithLoadingStatus();
     state.messages = JSON.parse(JSON.stringify([...newMessages]));
   } else {
     state.messages = [];
@@ -603,14 +598,14 @@ const isNewDate = (index: number, isMastra: boolean = false) => {
   if (isMastra) {
     const currentMsg = state.aiMessages[index];
     const prevMsg = state.aiMessages[index - 1];
-    const currentDay = formatDay(currentMsg.timestamp);
-    const prevDay = formatDay(prevMsg.timestamp);
+    const currentDay = formatDay(new Date(currentMsg.timestamp));
+    const prevDay = formatDay(new Date(prevMsg.timestamp));
     return currentDay !== prevDay;
   } else {
     const currentMsg = state.messages[index];
     const prevMsg = state.messages[index - 1];
-    const currentDay = formatDay(currentMsg.sendTime);
-    const prevDay = formatDay(prevMsg.sendTime);
+    const currentDay = formatDay(currentMsg.createdAt);
+    const prevDay = formatDay(prevMsg.createdAt);
     return currentDay !== prevDay;
   }
 };

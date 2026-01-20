@@ -1,4 +1,5 @@
 import { Message, Topic, User, Group } from '@pksep/zod-shared-chat';
+import { ITopic } from 'src/components/interfaces/interfaces';
 
 export enum WebSocketEventType {
   JOIN_TOPIC = 'joinTopic',
@@ -49,7 +50,11 @@ export interface WebSocketEventPayloads {
     media?: any[];
     replayMessageId?: string;
   };
-  [WebSocketEventType.CHANGE_MESSAGE]: {data: Message};
+  [WebSocketEventType.CHANGE_MESSAGE]: {
+    data: Message;
+    type: 'NEW';
+    messageId: string;
+  };
   [WebSocketEventType.NEW_MESSAGE]: Message;
   [WebSocketEventType.EDIT_MESSAGE]: { messageId: string; text: string };
   [WebSocketEventType.MESSAGE_UPDATED]: Message;
@@ -95,7 +100,11 @@ export interface WebSocketEventPayloads {
     messages: Message[];
     error?: string;
   };
-  [WebSocketEventType.CHANGE_TOPIC]: void;
+  [WebSocketEventType.CHANGE_TOPIC]: {
+    data: ITopic;
+    type: 'CREATE' | 'UPDATE';
+    topicId: string;
+  };
 }
 
 export interface WebSocketEvent<

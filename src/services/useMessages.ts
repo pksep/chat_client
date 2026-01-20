@@ -1,15 +1,13 @@
 import { ref } from 'vue';
-import { ChatMessage } from './useChatSDK/message';
 import { getChatSDK } from './useChat';
-import { getUserById } from '../composables/useUsers';
-import { Message } from '@pksep/zod-shared-chat';
+import { IMessage } from '../components/interfaces/interfaces';
 
-const messagesStore = ref<Record<string, ChatMessage[]>>({});
+const messagesStore = ref<Record<string, IMessage[]>>({});
 
 export const fetchMessagesForTopic = async (
   topicId: string,
   opts?: { lastMessageId?: string; limit?: number }
-): Promise<ChatMessage[]> => {
+): Promise<IMessage[]> => {
   try {
     const sdk = getChatSDK();
     const messages = await sdk.getMessages(topicId, {
@@ -17,52 +15,27 @@ export const fetchMessagesForTopic = async (
       lastMessageId: opts?.lastMessageId
     });
 
-    const processedMessages = messages.map(mapMessage);
-    saveMessagesToLocal(topicId, processedMessages);
+    saveMessagesToLocal(topicId, messages);
 
-    return processedMessages;
+    return messages;
   } catch (error) {
     console.warn('Failed to fetch message history:', error);
     return getMessagesByTopicId(topicId);
   }
 };
 
-export const addMessageToLocal = (topicId: string, message: Message): void => {
+export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   const existingMessages = messagesStore.value[topicId] || [];
-  messagesStore.value[topicId] = [...existingMessages, mapMessage(message)];
-};
-
-const normalizeDate = (value?: Date | string | number): Date => {
-  if (!value) return new Date();
-  if (value instanceof Date) return value;
-  return new Date(value);
-};
-
-const mapMessage = (message: any): ChatMessage => {
-  const sender = message.senderUserId
-    ? getUserById(message.senderUserId)
-    : null;
-  const createdAt = normalizeDate(message.createdAt);
-
-  return {
-    ...message,
-    createdAt,
-    updatedAt: normalizeDate(message.updatedAt),
-    sendTime: createdAt.getTime(),
-    senderNickname: sender?.nickname || '',
-    faceURL: sender?.avatarUrl || '',
-    isSystemMessage: message.isSystem || false,
-    systemMessageContent: message.isSystem ? message.text || '' : undefined
-  };
+  messagesStore.value[topicId] = [...existingMessages, message];
 };
 
 export const saveMessagesToLocal = (
   topicId: string,
-  messages: ChatMessage[]
+  messages: IMessage[]
 ): void => {
   messagesStore.value[topicId] = messages;
 };
 
-export const getMessagesByTopicId = (topicId: string): ChatMessage[] => {
+export const getMessagesByTopicId = (topicId: string): IMessage[] => {
   return messagesStore.value[topicId] || [];
 };
