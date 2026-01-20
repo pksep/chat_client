@@ -161,7 +161,7 @@ import {
 } from '@pksep/yui';
 import UserProfile from './UserProfile/UserProfile.vue';
 import type { ITopic, IMenuEmits, IMenuProps } from './interfaces/interfaces';
-import { getGroupList } from '../services/useGroup';
+import { useGroup } from '../composables/useGroup';
 import { markAsRead } from '../services/useChat';
 import Triangle from './Triangle.vue';
 import { usePwaInstall } from '../composables/usePwaInstall';
@@ -264,16 +264,19 @@ const handleNewContactModal = () => {
   emits('unmount-new-contact', { isChapterOpen: true });
 };
 
-const topicGroups = computed(() => [
-  {
-    type: 'GROUP',
-    onClickPlusButton: handleNewGroupModal,
-    items: getGroupList()
-  },
-  {
-    title: 'DM',
-    onClickPlusButton: handleNewContactModal,
-    items: getTopicList()
-  }
-]);
+const topicGroups = computed(() => {
+  const { getGroupList } = useGroup();
+  return [
+    {
+      type: 'GROUP',
+      onClickPlusButton: handleNewGroupModal,
+      items: getGroupList()
+    },
+    {
+      title: 'DM',
+      onClickPlusButton: handleNewContactModal,
+      items: getTopicList()
+    }
+  ];
+});
 </script>

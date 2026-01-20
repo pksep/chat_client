@@ -1,9 +1,5 @@
 import { reactive, computed, watch } from 'vue';
-import {
-  fetchGroupMembers,
-  setGroupInfo,
-  addGroupMembers
-} from '../services/useGroup';
+import { useGroup } from '../composables/useGroup';
 import { getChatSDK } from '../services/useChat';
 import { getUsersList } from './useUsers';
 import type { IUser } from '../components/interfaces/interfaces';
@@ -69,6 +65,7 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
     state.contacts = [...state.contacts, ...contacts];
 
     try {
+      const { addGroupMembers, fetchGroupMembers } = useGroup();
       const success = await addGroupMembers(
         state.information.groupId,
         contacts
@@ -82,6 +79,7 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
       }
     } catch (error) {
       console.error('Failed to invite users to group:', error);
+      const { fetchGroupMembers } = useGroup();
       state.contacts = await fetchGroupMembers(state.information.groupId);
     }
   };
@@ -89,6 +87,7 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
   const handleUpdateInformation = (value: any) => {
     state.information = value;
     if (state.information?.groupId) {
+      const { setGroupInfo } = useGroup();
       setGroupInfo(state.information?.groupId, {
         groupName: state.information?.name,
         faceURL: state.information?.avatarUrl,

@@ -78,7 +78,7 @@ import { ref, computed } from 'vue';
 import NewContactModal from '../NewChat/NewContactModal.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
-import { removeUserFromGroup } from '../../services/useGroup';
+import { useGroup } from '../../composables/useGroup';
 import type { IUser } from '../interfaces/interfaces';
 
 interface ContactListInModalProps {
@@ -149,6 +149,7 @@ const addUser = (): void => {
 const deleteUserFromChat = (userId: string) => {
   console.log(props.groupId);
 
+  const { removeUserFromGroup } = useGroup();
   removeUserFromGroup(props.groupId, userId);
   closeActivePopover(userId);
 };

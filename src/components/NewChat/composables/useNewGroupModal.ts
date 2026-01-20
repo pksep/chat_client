@@ -1,10 +1,11 @@
 import { computed, reactive, ref, watch, toRefs } from 'vue';
 import type { INewContactProps } from '../interfaces/new-contact';
-import { createGroup } from '../../../services/useGroup';
+import { useGroup } from '../../../composables/useGroup';
 import { uploadFile } from '../../../services/useChat';
 import { IUser } from '../../interfaces/interfaces';
 import { navigateToGroup } from '../../../composables/navigation';
 import { getTopicList } from '../../../composables/useTopics';
+import { getAuthUser } from '../../../composables/useAuth';
 
 interface NewGroupState {
   checkUsers: string[];
@@ -28,7 +29,7 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
 ) {
   const avatarInputRef = ref<HTMLInputElement | null>(null);
 
-  const authUser = computed(() => authUser.value);
+  const authUser = computed(() => getAuthUser());
   const users = computed(() => getTopicList());
 
   const state = reactive<NewGroupState>({
@@ -41,10 +42,13 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
     isCreating: false
   });
 
-  const selectedContacts = computed(() => [
-    authUser.value,
-    ...users.value.filter(c => new Set(state.checkUsers).has(c.id))
-  ]);
+  const selectedContacts = computed(() => {
+    const authUserValue = authUser.value;
+    return [
+      authUserValue,
+      ...users.value.filter(c => new Set(state.checkUsers).has(c.id))
+    ].filter(Boolean); // Filter out undefined values
+  });
 
   watch(
     () => props.open,
@@ -89,6 +93,7 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
   const handleCreateGroup = async (): Promise<any> => {
     state.isCreating = true;
     try {
+      const { createGroup } = useGroup();
       const group = await createGroup(
         state.checkUsers,
         state.groupName,

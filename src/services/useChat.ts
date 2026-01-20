@@ -6,7 +6,6 @@ import { MessageStatus } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { getUserById } from '../composables/useUsers';
 import { setAuthUser, getAuthUser } from '../composables/useAuth';
-import { fetchAllGroups } from './useGroup';
 import { fetchAllTopics } from '../composables/useTopics';
 
 let chatSDK: ChatSDK | null = null;
@@ -62,8 +61,8 @@ const setupChatListeners = (): void => {
     appendMessageToLocal(msg.topicId, msg);
   });
 
-  chatSDK.subscribeToEvent(WebSocketEventType.MESSAGE_UPDATED, event => {
-    const msg = mapMessage(event.payload);
+  chatSDK.subscribeToEvent(WebSocketEventType.MESSAGE_UPDATED, _event => {
+    const msg = mapMessage(_event.payload);
     appendMessageToLocal(msg.topicId, msg);
   });
 
@@ -89,22 +88,22 @@ const setupChatListeners = (): void => {
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_TOPIC, () => {
-    fetchAllGroups();
+    // fetchAllGroups(); // This function has been removed from here, should be called from composable
     fetchAllTopics();
   });
 
-  chatSDK.subscribeToEvent(WebSocketEventType.MEMBER_ADDED, event => {
+  chatSDK.subscribeToEvent(WebSocketEventType.MEMBER_ADDED, () => {
     // Trigger a refresh of group data when a member is added
-    if (event.payload.groupId) {
-      fetchAllGroups();
-    }
+    // if (event.payload.groupId) {
+    //   fetchAllGroups(); // This function has been removed from here, should be called from composable
+    // }
   });
 
-  chatSDK.subscribeToEvent(WebSocketEventType.MEMBER_REMOVED, event => {
+  chatSDK.subscribeToEvent(WebSocketEventType.MEMBER_REMOVED, () => {
     // Trigger a refresh of group data when a member is removed
-    if (event.payload.groupId) {
-      fetchAllGroups();
-    }
+    // if (event.payload.groupId) {
+    //   fetchAllGroups(); // This function has been removed from here, should be called from composable
+    // }
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.USER_UPDATED, event => {

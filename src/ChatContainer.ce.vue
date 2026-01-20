@@ -31,7 +31,7 @@ import { fetchAllUsers, getUserById } from './composables/useUsers';
 import { getConfig } from './services/useConfig';
 import { useUnreadMessagePolling } from './composables/useUnreadMessagePolling';
 import { fetchAllTopics } from './composables/useTopics';
-import { fetchAllGroups } from './services/useGroup';
+import { useGroup } from './composables/useGroup';
 
 const emits = defineEmits<IChatContainerEmits>();
 const props = defineProps<IChatContainerProps>();
@@ -114,6 +114,7 @@ const runAppInitialization = async () => {
     }
 
     await fetchAllTopics();
+    const { fetchAllGroups } = useGroup();
     await fetchAllGroups();
 
     markSDKReady();

@@ -36,7 +36,7 @@
         <template #header2> Информация </template>
         <template #tab1>
           <ContactListInModal
-            :contacts="selectedContacts"
+            :contacts="filteredSelectedContacts"
             :excluded-contact-ids="excludedContactIds"
             class="new-group__tab2-profile"
             @unmount-click-add-button="handleCloseGroupInfo"
@@ -142,11 +142,22 @@ const {
   handleCloseGroupInfo
 } = useNewGroupModal(props, emits);
 
+// Filter selected contacts to only include IUser objects
+const filteredSelectedContacts = computed(() => {
+  return selectedContacts.value.filter(
+    contact =>
+      contact &&
+      'initials' in contact &&
+      'nickname' in contact &&
+      'lastOnline' in contact
+  ) as IUser[];
+});
+
 const excludedContactIds = computed(() => {
   // Create a set of contact IDs that are already in the selected contacts to exclude them from the selector
   const ids = new Set<string | number>();
-  if (selectedContacts.value) {
-    selectedContacts.value.forEach(contact => {
+  if (filteredSelectedContacts.value) {
+    filteredSelectedContacts.value.forEach(contact => {
       if (contact && contact.id) {
         ids.add(contact.id);
       }

@@ -75,7 +75,7 @@ import type { IUser } from '../interfaces/interfaces';
 import { Button, ButtonTypeEnum, Icon, IconNameEnum, Loader } from '@pksep/yui';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
 import TopicList from './TopicList.vue';
-import { getGroupList } from '../../services/useGroup';
+import { useGroup } from '../../composables/useGroup';
 import { getTopicList } from '../../composables/useTopics';
 import { navigateToAI, useUrlWatcher } from '../../composables/navigation';
 import {
@@ -110,6 +110,7 @@ const contactList = computed(() => {
 
 const groupList = computed(() => {
   // Create a new array to ensure reactivity
+  const { getGroupList } = useGroup();
   const groups = getGroupList();
   // Return a new array reference to ensure Vue reactivity
   return [...groups];

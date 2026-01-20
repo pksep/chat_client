@@ -48,7 +48,7 @@ const props = withDefaults(defineProps<INewContactProps>(), {
   isAddOne: true,
   title: 'Создать диалог',
   excludedContactIds: () => new Set<string | number>(),
-  dataTestid: () => 'NewContactModal'
+  dataTestid: 'NewContactModal'
 });
 
 const emits = defineEmits<{
@@ -57,9 +57,7 @@ const emits = defineEmits<{
 }>();
 
 const contacts = computed(() => {
-  // Create a new array to ensure reactivity
   const userContacts = props.contacts || getUsersList();
-  // Return a new array reference to ensure Vue reactivity
   return [...userContacts];
 });
 

@@ -1,5 +1,5 @@
 import { reactive, Ref } from 'vue';
-import { quitGroup } from '../services/useGroup';
+import { useGroup } from '../composables/useGroup';
 import { uploadFile } from '../services/useChat';
 import { IMenuInfoInformation } from './useMenuInfo';
 
@@ -53,6 +53,7 @@ export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
   const leaveGroupInfo = async (): Promise<void> => {
     try {
       if (model.value?.groupId) {
+        const { quitGroup } = useGroup();
         await quitGroup(model.value?.groupId);
       }
     } catch (error) {

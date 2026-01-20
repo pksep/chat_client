@@ -1,15 +1,12 @@
 import { ref } from 'vue';
-import { getChatSDK, getCurrentUserId } from './useChat';
-import { TopicType } from './useChatSDK/types';
+import { getChatSDK, getCurrentUserId } from '../services/useChat';
+import { TopicType } from '../services/useChatSDK/types';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
 
 const groups = ref<ITopic[]>([]);
 const groupMembers = ref<IUser[]>([]);
 
-export const fetchAllGroups = async (
-  page = 1,
-  limit = 200
-): Promise<ITopic[]> => {
+const fetchAllGroups = async (page = 1, limit = 200): Promise<ITopic[]> => {
   try {
     const sdk = getChatSDK();
     const response = await sdk.getTopics(TopicType.Group, {
@@ -27,7 +24,7 @@ export const fetchAllGroups = async (
   }
 };
 
-export const fetchGroupMembers = async (groupId: string): Promise<IUser[]> => {
+const fetchGroupMembers = async (groupId: string): Promise<IUser[]> => {
   try {
     const sdk = getChatSDK();
     const { members } = await sdk.getGroup(groupId);
@@ -126,7 +123,7 @@ const quitGroup = async (groupId: string) => {
   await fetchAllGroups();
 };
 
-export const getGroupInfo = async (groupIds: string[]) => {
+const getGroupInfo = async (groupIds: string[]) => {
   const sdk = getChatSDK();
   const groupResponses = await Promise.all(
     groupIds.map(groupId => sdk.getGroup(groupId))
@@ -138,9 +135,7 @@ export const getGroupInfo = async (groupIds: string[]) => {
   }));
 };
 
-export const fetchGroupMemberCount = async (
-  groupId: string
-): Promise<number> => {
+const fetchGroupMemberCount = async (groupId: string): Promise<number> => {
   try {
     const groupInfo = await getGroupInfo([groupId]);
     const firstGroup = groupInfo?.[0] as any;
@@ -151,7 +146,7 @@ export const fetchGroupMemberCount = async (
   }
 };
 
-export const addGroupMembers = async (
+const addGroupMembers = async (
   groupId: string,
   users: IUser[]
 ): Promise<boolean> => {
@@ -196,7 +191,7 @@ export const addGroupMembers = async (
   }
 };
 
-export const removeUserFromGroup = async (
+const removeUserFromGroup = async (
   groupId: string,
   userId: string
 ): Promise<boolean> => {
@@ -238,11 +233,21 @@ export const removeUserFromGroup = async (
   }
 };
 
-export {
-  createGroup,
-  getGroupList,
-  setGroupList,
-  updateGroupList,
-  setGroupInfo,
-  quitGroup
-};
+export function useGroup() {
+  return {
+    groups,
+    groupMembers,
+    fetchAllGroups,
+    fetchGroupMembers,
+    createGroup,
+    getGroupList,
+    setGroupList,
+    updateGroupList,
+    setGroupInfo,
+    quitGroup,
+    getGroupInfo,
+    fetchGroupMemberCount,
+    addGroupMembers,
+    removeUserFromGroup
+  };
+}

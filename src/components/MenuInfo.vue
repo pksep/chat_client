@@ -49,7 +49,7 @@
       <template #tab1>
         <ContactListInModal
           :show-add-button="!checkGroupId"
-          :contacts="state.contacts"
+          :contacts="groupMembers"
           :filtered-contacts="filteredMembers"
           :excluded-contact-ids="excludedContactIds"
           @unmount-click-add-button="handleContactClick"
@@ -99,7 +99,7 @@ import type { IMenuRightProps, IUser, ITopic } from './interfaces/interfaces';
 import { useMenuInfo } from '../composables/useMenuInfo';
 import NewContactModal from './NewChat/NewContactModal.vue';
 import { useUrlWatcher } from '../composables/navigation';
-import { addGroupMembers } from '../services/useGroup';
+import { useGroup } from '../composables/useGroup';
 
 const props = withDefaults(defineProps<IMenuRightProps>(), {
   open: false,
@@ -115,6 +115,8 @@ const {
   handleCloseAddUserModal,
   filteredMembers
 } = useMenuInfo();
+
+const { groupMembers, addGroupMembers, fetchGroupMembers } = useGroup();
 
 const topic = useUrlWatcher();
 
@@ -152,17 +154,15 @@ const handleNewContactAdded = async (
   contact: IUser | ITopic[]
 ): Promise<void> => {
   if (Array.isArray(contact)) {
-    // If it's an array of ITopic, we can't add them as users to a group
-    // Only proceed if it's an array of IUser
     if (contact.length > 0 && 'initials' in contact[0]) {
       const users = contact as unknown as IUser[];
       if (state.information?.groupId) {
         await addGroupMembers(state.information.groupId, users);
+        console.log('Group members added:', groupMembers.value);
         emits('unmount-contacts-update', users);
       }
     }
   } else {
-    // Single user case
     if (state.information?.groupId) {
       const users = [contact as unknown as IUser];
       await addGroupMembers(state.information.groupId, users);
@@ -180,6 +180,7 @@ watch(
         isEnabled: true,
         topic: topic.value
       });
+      await fetchGroupMembers(state.information?.groupId);
     }
   }
 );
