@@ -199,7 +199,7 @@ const getInitialDetailsOpen = () => {
 };
 
 const state = reactive({
-  selectedContactId: null,
+  selectedContactId: computed(() => route.value?.id),
   isLoading: true,
   authUser: computed(() => getAuthUser()),
   detailsOpen: getInitialDetailsOpen()
@@ -232,7 +232,6 @@ const unmountClickAI = (): void => {
 };
 
 const unmountTopicClick = (topic: ITopic): void => {
-  state.selectedContactId = topic.id;
   if (topic.type === 'GROUP') {
     navigateToGroup(topic.id);
   } else if (topic.type === 'DM') {

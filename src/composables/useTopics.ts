@@ -1,8 +1,8 @@
 import { ref, shallowRef } from 'vue';
 import { getChatSDK } from '../services/useChat';
 import { ITopic } from '../components/interfaces/interfaces';
-import { Message, TopicType } from '../services/useChatSDK/types';
-import { fetchAllGroups } from '../services/useGroup';
+import { Message, TopicSetting, TopicType } from '../services/useChatSDK/types';
+import { fetchAllGroups, updateLocalGroupInfo } from '../services/useGroup';
 
 const topics = shallowRef<ITopic[]>([]);
 const loading = ref(false);
@@ -61,33 +61,64 @@ export const updateLocalLastMessageTopic = (
   }
 
   topics.value = [...topics.value];
-  console.log('updateLocalLastMessageTopic', topicId, lastMessage);
 };
 
-export const togglePinTopic = async (topicId: string) => {
+export const updateLocalTopicInfo = (
+  topicId: string,
+  info: Partial<TopicSetting>
+): void => {
+  const topic = topics.value.find(topic => topic.id === topicId);
+  if (topic) {
+    topic.info = { ...topic.info, ...info };
+  }
+
+  topics.value = [...topics.value];
+};
+
+export const togglePinTopic = async (topic: ITopic) => {
   try {
     const sdk = getChatSDK();
-    await sdk.togglePinTopic(topicId);
+    await sdk.togglePinTopic(topic.id);
 
-    fetchAllTopics();
-    fetchAllGroups();
+    if (topic.type === TopicType.DM) {
+      updateLocalTopicInfo(topic.id, { isPin: !topic.info.isPin });
+    } else if (topic.type === TopicType.Group) {
+      updateLocalGroupInfo(topic.id, { isPin: !topic.info.isPin });
+    }
   } catch (err) {
     console.error('Failed to pin/unpin topic:', err);
   }
 };
 
-export const toggleMuteTopic = async (topicId: string) => {
+export const toggleMuteTopic = async (topic: ITopic) => {
   try {
     const sdk = getChatSDK();
-    await sdk.toggleMuteTopic(topicId);
-
-    fetchAllTopics();
-    fetchAllGroups();
+    await sdk.toggleMuteTopic(topic.id);
+    if (topic.type === TopicType.DM) {
+      updateLocalTopicInfo(topic.id, { isMute: !topic.info.isMute });
+    } else if (topic.type === TopicType.Group) {
+      updateLocalGroupInfo(topic.id, { isMute: !topic.info.isMute });
+    }
   } catch (err) {
     console.error('Failed to pin/unpin topic:', err);
   }
+};
+
+export const addTopicList = (value: ITopic): void => {
+  topics.value = [value, ...topics.value];
+};
+
+export const sortTopics = (topics: ITopic[]): ITopic[] => {
+  return topics.sort((a, b) => {
+    const aPin = a.info?.isPin || false;
+    const bPin = b.info?.isPin || false;
+    if (aPin !== bPin) {
+      return aPin ? -1 : 1;
+    }
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
 };
 
 export const getTopicList = (): ITopic[] => {
-  return topics.value || [];
+  return sortTopics(topics.value || []);
 };

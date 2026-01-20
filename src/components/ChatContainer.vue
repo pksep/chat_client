@@ -103,7 +103,6 @@ import {
 } from '../composables/navigation';
 import { getChatSDK } from '../services/useChat';
 import { getUsersList } from '../composables/useUsers';
-import { fetchMessagesForTopic } from '../services/useMessages';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')

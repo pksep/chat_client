@@ -2,12 +2,19 @@ import { ref, shallowRef } from 'vue';
 import { ChatSDK } from './useChatSDK';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
 import { Message, Media, User } from '@pksep/zod-shared-chat';
-import { MessageStatus } from './useChatSDK/types';
+import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { getUserById } from '../composables/useUsers';
 import { setAuthUser, getAuthUser } from '../composables/useAuth';
-import { fetchAllGroups } from './useGroup';
-import { fetchAllTopics, updateLocalLastMessageTopic } from '../composables/useTopics';
+import {
+  addGroupList,
+  updateLocalGroupDetails,
+  updateLocalLastMessageGroup
+} from './useGroup';
+import {
+  addTopicList,
+  updateLocalLastMessageTopic
+} from '../composables/useTopics';
 import { addMessageToLocal } from './useMessages';
 
 let chatSDK: ChatSDK | null = null;
@@ -89,16 +96,28 @@ const setupChatListeners = (): void => {
     }
   });
 
-  chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_TOPIC, () => {
-    fetchAllGroups();
-    fetchAllTopics();
+  chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_TOPIC, ({ payload }) => {
+    if (payload.type === 'UPDATE') {
+      updateLocalGroupDetails(
+        payload.topicId,
+        payload.data.name,
+        payload.data.avatarUrl
+      );
+    } else if (payload.type === 'CREATE') {
+      if (payload.data.type === TopicType.Group) {
+        addGroupList(payload.data);
+      } else if (payload.data.type === TopicType.DM) {
+        addTopicList(payload.data);
+      }
+    }
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_MESSAGE, ({ payload }) => {
-    console.log(payload);
     if (payload.type === 'NEW') {
       addMessageToLocal(payload.data.topicId, payload.data);
+
       updateLocalLastMessageTopic(payload.data.topicId, payload.data);
+      updateLocalLastMessageGroup(payload.data.topicId, payload.data);
     }
   });
 };

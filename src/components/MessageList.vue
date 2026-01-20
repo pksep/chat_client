@@ -622,7 +622,7 @@ const getSystemMessageContent = (message: ChatMessage) => {
 watch(
   () => route.value,
   () => {
-    if (!route.value.id) return;
+    if (!route.value?.id) return;
 
     fetchMessagesForTopic(route.value.id);
   },

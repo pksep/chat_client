@@ -51,7 +51,7 @@
             class="contact-list__description"
             :data-testid="`${props.dataTestid}-ContactList-Description${index + 1}`"
             :aria-label="`Latest message: ${topic.lastMessage || 'No message'}`"
-            v-html="topic.lastMessage.text || '--'"
+            v-html="topic.lastMessage?.text || '--'"
           ></div>
           <div class="contact-list__top">
             <MessageStatusIcons
@@ -119,10 +119,8 @@
               : `Enable notifications for ${topic.name}`
           "
         >
-          <template v-if="topic.info.isMute ?? true">
-            Выкл. уведомление
-          </template>
-          <template v-else> Вкл. уведомление </template>
+          <template v-if="topic.info.isMute"> Вкл. уведомление </template>
+          <template v-else> Выкл. уведомление </template>
         </Button>
       </ContextMenu>
     </li>
@@ -189,12 +187,12 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
 const authedUser = computed(() => getAuthUser());
 
 const handlePin = (topic: ITopic): void => {
-  togglePinTopic(topic.id);
+  togglePinTopic(topic);
   closeActivePopover(topic.id);
 };
 
 const handleMute = (topic: ITopic): void => {
-  toggleMuteTopic(topic.id);
+  toggleMuteTopic(topic);
   closeActivePopover(topic.id);
 };
 
