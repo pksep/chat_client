@@ -22,7 +22,6 @@ export const fetchAllTopics = async (
       limit
     });
 
-    // Force reactivity by creating new array reference
     topics.value = [...response.data];
     return response.data;
   } catch (err) {

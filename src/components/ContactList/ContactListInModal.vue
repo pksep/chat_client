@@ -147,8 +147,6 @@ const addUser = (): void => {
 };
 
 const deleteUserFromChat = (userId: string) => {
-  console.log(props.groupId);
-
   const { removeUserFromGroup } = useGroup();
   removeUserFromGroup(props.groupId, userId);
   closeActivePopover(userId);

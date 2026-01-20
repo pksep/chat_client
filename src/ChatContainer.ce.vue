@@ -22,10 +22,7 @@ import type {
 } from './components/interfaces/interfaces';
 import { initializeChat, setCurrentUserId } from './services/useChat';
 import { saveUserIdToSession, hasUserIdInSession } from './services/useMastra';
-import {
-  getAllNotificationCount,
-  markSDKReady
-} from './services/useConversions';
+import { getAllNotificationCount } from './services/useConversions';
 import { fetchAuthUser, setAuthUser, useAuth } from './composables/useAuth';
 import { fetchAllUsers, getUserById } from './composables/useUsers';
 import { getConfig } from './services/useConfig';
@@ -39,6 +36,8 @@ const props = defineProps<IChatContainerProps>();
 const allNotificationCount = computed(() => getAllNotificationCount());
 const openChatContainerShow = ref(true);
 const showMobileAuth = ref(false);
+
+const { fetchAllGroups } = useGroup();
 
 const { startPolling } = useUnreadMessagePolling(30000, false);
 
@@ -56,7 +55,6 @@ const runAppInitialization = async () => {
   const REDIRECT_KEY = 'chat_redirect_attempts';
   const MAX_REDIRECTS = 2;
 
-  // Если токен пришел в URL (обычный веб)
   if (tokenUrl) {
     localStorage.setItem('erp_token', tokenUrl);
   }
@@ -114,13 +112,9 @@ const runAppInitialization = async () => {
     }
 
     await fetchAllTopics();
-    const { fetchAllGroups } = useGroup();
     await fetchAllGroups();
-
-    markSDKReady();
     startPolling();
 
-    // Если все прошло успешно, убираем лоадер
     openChatContainerShow.value = true;
   } catch (error) {
     console.error('Failed to initialize chat:', error);

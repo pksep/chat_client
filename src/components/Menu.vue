@@ -179,6 +179,8 @@ const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: () => 'Menu'
 });
 
+const { groups } = useGroup();
+
 const route = useUrlWatcher();
 
 const { canInstall, handleInstall, isInstalled } = usePwaInstall();
@@ -198,10 +200,24 @@ const getInitialDetailsOpen = () => {
   return [true, true];
 };
 
+const topicGroups = computed(() => {
+  return [
+    {
+      type: 'GROUP',
+      onClickPlusButton: handleNewGroupModal,
+      items: groups.value
+    },
+    {
+      title: 'DM',
+      onClickPlusButton: handleNewContactModal,
+      items: getTopicList()
+    }
+  ];
+});
+
 const state = reactive({
   selectedContactId: null,
   isLoading: true,
-  authUser: computed(() => getAuthUser()),
   detailsOpen: getInitialDetailsOpen()
 });
 
@@ -263,20 +279,4 @@ const handleNewGroupModal = () => {
 const handleNewContactModal = () => {
   emits('unmount-new-contact', { isChapterOpen: true });
 };
-
-const topicGroups = computed(() => {
-  const { getGroupList } = useGroup();
-  return [
-    {
-      type: 'GROUP',
-      onClickPlusButton: handleNewGroupModal,
-      items: getGroupList()
-    },
-    {
-      title: 'DM',
-      onClickPlusButton: handleNewContactModal,
-      items: getTopicList()
-    }
-  ];
-});
 </script>

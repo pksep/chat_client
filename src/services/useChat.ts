@@ -87,23 +87,19 @@ const setupChatListeners = (): void => {
     }
   });
 
-  chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_TOPIC, () => {
-    // fetchAllGroups(); // This function has been removed from here, should be called from composable
-    fetchAllTopics();
+  chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_TOPIC, async () => {
+    await fetchAllTopics();
   });
 
-  chatSDK.subscribeToEvent(WebSocketEventType.MEMBER_ADDED, () => {
+  chatSDK.subscribeToEvent(WebSocketEventType.MEMBER_ADDED, async event => {
     // Trigger a refresh of group data when a member is added
-    // if (event.payload.groupId) {
-    //   fetchAllGroups(); // This function has been removed from here, should be called from composable
-    // }
+    if (event.payload.groupId) return;
   });
 
-  chatSDK.subscribeToEvent(WebSocketEventType.MEMBER_REMOVED, () => {
+  chatSDK.subscribeToEvent(WebSocketEventType.MEMBER_REMOVED, async event => {
     // Trigger a refresh of group data when a member is removed
-    // if (event.payload.groupId) {
-    //   fetchAllGroups(); // This function has been removed from here, should be called from composable
-    // }
+    console.log('WebSocket: MEMBER_REMOVED event received', event.payload);
+    if (event.payload.groupId) return;
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.USER_UPDATED, event => {
@@ -137,7 +133,7 @@ export const initializeChat = async (options: {
   addMessageHistoryHandler();
 };
 
-export const getChatSDK = (): ChatSDK => {
+export const getChatSDK = (): ChatSDK | null => {
   return chatSDK;
 };
 

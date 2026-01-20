@@ -41,7 +41,7 @@
             class="menu-info__user-count"
             :data-testid="`${props.dataTestid}-MenuInfo-UserCount`"
           >
-            {{ state.contacts.length }}
+            {{ groupMembers.length }}
           </div>
         </span>
       </template>
@@ -127,7 +127,6 @@ const menuInfoClasses = computed(() => [
 ]);
 
 const excludedContactIds = computed(() => {
-  // Create a set of contact IDs that are already in the current list to exclude them from the selector
   const ids = new Set<string | number>();
   if (state.contacts) {
     state.contacts.forEach(contact => {
@@ -158,15 +157,12 @@ const handleNewContactAdded = async (
       const users = contact as unknown as IUser[];
       if (state.information?.groupId) {
         await addGroupMembers(state.information.groupId, users);
-        console.log('Group members added:', groupMembers.value);
-        emits('unmount-contacts-update', users);
       }
     }
   } else {
     if (state.information?.groupId) {
       const users = [contact as unknown as IUser];
       await addGroupMembers(state.information.groupId, users);
-      emits('unmount-contacts-update', users);
     }
   }
 };

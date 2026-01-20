@@ -30,10 +30,7 @@ export interface ChatGroupInterface {
     groupId: string,
     params?: SearchParams
   ): Promise<PaginatedResponse<User>>;
-  addGroupMembers(
-    groupId: string,
-    userIds: string[]
-  ): Promise<{ success: boolean; addedMembers: User[] }>;
+  addGroupMembers(groupId: string, userIds: string[]): Promise<User[]>;
   removeGroupMember(
     groupId: string,
     userId: string
@@ -192,10 +189,7 @@ export class ChatGroup implements ChatGroupInterface {
     }
   }
 
-  async addGroupMembers(
-    groupId: string,
-    userIds: string[]
-  ): Promise<{ success: boolean; addedMembers: User[] }> {
+  async addGroupMembers(groupId: string, userIds: string[]): Promise<User[]> {
     try {
       const response = (await this.reqi.post(
         `/groups/${groupId}/members`,

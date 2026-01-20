@@ -447,10 +447,7 @@ export class ChatSDK {
     return this.group.getGroupMembers(groupId, params);
   }
 
-  async addGroupMembers(
-    groupId: string,
-    userIds: string[]
-  ): Promise<{ success: boolean; addedMembers: User[] }> {
+  async addGroupMembers(groupId: string, userIds: string[]): Promise<User[]> {
     return this.group.addGroupMembers(groupId, userIds);
   }
 
