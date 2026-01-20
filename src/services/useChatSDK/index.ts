@@ -499,8 +499,11 @@ export class ChatSDK {
     return this.group.editGroup(groupId, groupData);
   }
 
-  async getMessages(): Promise<Message[]> {
-    return [];
+  async getMessages(
+    topicId: string,
+    opts?: { limit?: number; lastMessageId?: string }
+  ): Promise<Message[]> {
+    return this.message.getMessages(topicId, opts);
   }
 
   async editMessage(

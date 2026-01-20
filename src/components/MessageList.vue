@@ -14,7 +14,9 @@
           v-if="isNewDate(index, true)"
           class="top-element"
           :data-divider="
-            isNewDate(index, true) ? formatDay(message.timestamp) : undefined
+            isNewDate(index, true)
+              ? formatDay(new Date(message.timestamp))
+              : undefined
           "
         >
           <div
@@ -23,7 +25,7 @@
           >
             <span
               :data-testid="`${props.dataTestid}-MessageList-DateLabelAI${index + 1}`"
-              >{{ formatDay(message.timestamp) }}</span
+              >{{ formatDay(new Date(message.timestamp)) }}</span
             >
           </div>
         </div>
@@ -52,10 +54,7 @@
       :data-testid="`${props.dataTestid}-MessageList-UserMessagesContainer`"
     >
       <template v-for="(message, index) in state.messages" :key="message.id">
-        <div
-          class="top-element"
-          v-if="isNewDate(index) || message.isSystemMessage"
-        >
+        <div class="top-element" v-if="isNewDate(index) || message.isSystem">
           <div
             v-if="isNewDate(index)"
             class="date-divider"
@@ -63,12 +62,12 @@
           >
             <span
               :data-testid="`${props.dataTestid}-MessageList-DateLabelUser${index + 1}`"
-              >{{ formatDay(message.sendTime) }}</span
+              >{{ formatDay(message.createdAt) }}</span
             >
           </div>
 
           <div
-            v-if="message.isSystemMessage"
+            v-if="message.isSystem"
             class="system-message"
             :data-testid="`${props.dataTestid}-MessageList-SystemMessageUser${index + 1}`"
           >
@@ -82,19 +81,19 @@
         </div>
 
         <MessageBubble
-          v-if="!message.isSystemMessage"
+          v-if="!message.isSystem"
           :class="
             messageChat(
-              props.user.id === message.senderUserId ? 'user' : 'assistant'
+              props.user?.id === message.senderUserId ? 'user' : 'assistant'
             )
           "
           :message="message.text || ''"
           :media="getMessageMedia(message)"
           :file="getMessageFile(message)"
           :is-me-sender="props.user.id === message.senderUserId"
-          :time="formatTime(new Date(message.sendTime))"
-          :sender="message.senderNickname || ''"
-          :avatar="message.faceURL"
+          :time="formatTime(new Date(message.createdAt))"
+          :sender="message.senderUser?.nickname || ''"
+          :avatar="message.senderUser?.avatarUrl || ''"
           :is-read="
             props.user.id === message.senderUserId
               ? message.status === MessageStatus.Read
@@ -123,7 +122,7 @@
   />
   <div
     class="chat__input"
-    v-if="!isDefaultRoute && route.id === null"
+    v-if="!isDefaultRoute"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
   >
     <ContentEditor
@@ -156,7 +155,6 @@ import { useMastra, generateChatId } from '../services/useMastra';
 import { removeMessageLoading } from '../services/useChatDb';
 import { subscribeToMessageChanges } from '../services/useChat';
 import {
-  fetchMessagesForTopic,
   getMessagesWithLoadingStatus,
   sendMessageChat,
   getIsWebsocketConnecting,
@@ -169,10 +167,10 @@ import { MediaType } from '@pksep/zod-shared-chat';
 import { MessageStatus } from '../services/useChatSDK/types';
 import { useUrlWatcher } from '../composables/navigation';
 import { RouteTypes } from '../composables/navigation/useUrlRouting';
-
-interface ChatMessageWithLoading extends ChatMessage {
-  loading?: boolean;
-}
+import {
+  fetchMessagesForTopic,
+  getMessagesByTopicId
+} from '../services/useMessages';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -190,7 +188,7 @@ const isAiRoute = computed(() => route.value?.type === RouteTypes.AI);
 const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
 
 const state = reactive({
-  messages: [] as ChatMessageWithLoading[],
+  messages: computed(() => getMessagesByTopicId(route.value.id)),
   chatId: null as string | null,
   hasMoreMessages: true,
   isLoadingMore: false,
@@ -203,7 +201,7 @@ const isLoadingInitialMessages = ref(false);
 
 const updateMessages = () => {
   if (props.contact?.id) {
-    const newMessages = getMessagesWithLoadingStatus(props.contact.id);
+    const newMessages = getMessagesWithLoadingStatus();
     state.messages = JSON.parse(JSON.stringify([...newMessages]));
   } else {
     state.messages = [];
@@ -260,66 +258,26 @@ const handleScroll = (): void => {
 
     if (!getIsWebsocketConnecting()) {
       state.page += 1;
-      fetchMessagesForTopic(props.contact.id, {
-        page: state.page,
-        limit: state.limit,
-        append: true
-      })
-        .then(messages => {
-          if (messages.length < state.limit) {
-            state.hasMoreMessages = false;
-          }
-          updateMessages();
-        })
-        .finally(() => {
-          isScrollLoading = false;
-        });
+      // fetchMessagesForTopic(props.contact.id, {
+      //   page: state.page,
+      //   limit: state.limit,
+      //   append: true
+      // })
+      //   .then(messages => {
+      //     if (messages.length < state.limit) {
+      //       state.hasMoreMessages = false;
+      //     }
+      //     updateMessages();
+      //   })
+      //   .finally(() => {
+      //     isScrollLoading = false;
+      //   });
     } else {
       updateMessages();
       isScrollLoading = false;
     }
   }
 };
-
-watch(
-  () => props.contact?.id,
-  async (newConversationId, oldConversationId) => {
-    if (newConversationId && newConversationId !== oldConversationId) {
-      state.messages = [];
-      state.hasMoreMessages = true;
-      state.isLoadingMore = false;
-      state.page = 1;
-      isLoadingInitialMessages.value = true;
-
-      try {
-        if (!getIsWebsocketConnecting()) {
-          const messages = await fetchMessagesForTopic(newConversationId, {
-            page: state.page,
-            limit: state.limit
-          });
-          if (messages.length < state.limit) {
-            state.hasMoreMessages = false;
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load messages for new conversation:', error);
-      } finally {
-        updateMessages();
-        isLoadingInitialMessages.value = false;
-      }
-
-      await nextTick();
-      requestAnimationFrame(() => {
-        if (chatWrapperRef?.value) {
-          scrollToBottom(false);
-          scrollState.shouldAutoScroll = true;
-          scrollState.isInitialLoad = true;
-        }
-      });
-    }
-  },
-  { immediate: true }
-);
 
 const previousConnectingState = ref(getIsWebsocketConnecting());
 
@@ -334,10 +292,10 @@ watch(
       setTimeout(async () => {
         if (props.contact?.id) {
           try {
-            await fetchMessagesForTopic(props.contact.id, {
-              page: 1,
-              limit: state.limit
-            });
+            // await fetchMessagesForTopic(props.contact.id, {
+            //   page: 1,
+            //   limit: state.limit
+            // });
             updateMessages();
           } catch (error) {
             console.error(
@@ -356,10 +314,10 @@ const lastReconnectedState = ref(false);
 const handleReconnection = async () => {
   if (props.contact?.id) {
     try {
-      await fetchMessagesForTopic(props.contact.id, {
-        page: 1,
-        limit: state.limit
-      });
+      // await fetchMessagesForTopic(props.contact.id, {
+      //   page: 1,
+      //   limit: state.limit
+      // });
       updateMessages();
     } catch (error) {
       console.error('Failed to reload messages after reconnection:', error);
@@ -433,10 +391,10 @@ onMounted(async () => {
       if (newMessageConversationId === props.contact?.id) {
         const timeSinceLastSend = Date.now() - lastMessageSentTime.value;
         if (!getIsWebsocketConnecting() && timeSinceLastSend > 2000) {
-          await fetchMessagesForTopic(newMessageConversationId, {
-            page: 1,
-            limit: state.limit
-          });
+          // await fetchMessagesForTopic(newMessageConversationId, {
+          //   page: 1,
+          //   limit: state.limit
+          // });
         }
         updateMessages();
       }
@@ -452,13 +410,13 @@ onMounted(async () => {
 
     try {
       if (!getIsWebsocketConnecting()) {
-        const messages = await fetchMessagesForTopic(props.contact.id, {
-          page: state.page,
-          limit: state.limit
-        });
-        if (messages.length < state.limit) {
-          state.hasMoreMessages = false;
-        }
+        // const messages = await fetchMessagesForTopic(props.contact.id, {
+        //   page: state.page,
+        //   limit: state.limit
+        // });
+        // if (messages.length < state.limit) {
+        //   state.hasMoreMessages = false;
+        // }
       }
     } catch (error) {
       console.error('Failed to load initial messages:', error);
@@ -486,6 +444,8 @@ onUnmounted(() => {
   if (state.chatId) {
     removeMessageLoading(state.chatId, state.aiMessages.length);
   }
+
+  console.log(state.messages, 'state.messages');
 });
 
 const clearAiMessages = () => {
@@ -541,58 +501,6 @@ watch(
   }
 );
 
-watch(
-  () => route.value?.type,
-  async (newValue, oldValue) => {
-    if (newValue === oldValue) return;
-
-    if (chatWrapperRef?.value) {
-      scrollState.previousScrollTop = chatWrapperRef.value.scrollTop;
-    }
-
-    if (newValue !== RouteTypes.AI && props.contact?.id) {
-      state.messages = [];
-      state.hasMoreMessages = true;
-      state.isLoadingMore = false;
-      state.page = 1;
-      isLoadingInitialMessages.value = true;
-
-      try {
-        if (!getIsWebsocketConnecting()) {
-          const messages = await fetchMessagesForTopic(props.contact.id, {
-            page: state.page,
-            limit: state.limit
-          });
-          if (messages.length < state.limit) {
-            state.hasMoreMessages = false;
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load messages when changing chapter:', error);
-      } finally {
-        updateMessages();
-        isLoadingInitialMessages.value = false;
-      }
-    } else if (newValue !== RouteTypes.AI) {
-      state.messages = [];
-    }
-
-    await nextTick();
-
-    scrollState.isInitialLoad = true;
-    scrollState.shouldAutoScroll = true;
-    scrollState.isUserScrolling = false;
-
-    requestAnimationFrame(() => {
-      if (chatWrapperRef?.value) {
-        scrollToBottom(false);
-        scrollState.isInitialLoad = false;
-      }
-    });
-  },
-  { immediate: true }
-);
-
 const handleSend = async (): Promise<void> => {
   if (!inputText.value.trim()) return;
 
@@ -639,7 +547,7 @@ const handleSend = async (): Promise<void> => {
     return;
   }
 
-  if (!props.contact?.id) {
+  if (!route.value.id) {
     console.error('[ChatSDK] Cannot send message: no topic provided');
     return;
   }
@@ -650,7 +558,7 @@ const handleSend = async (): Promise<void> => {
   try {
     lastMessageSentTime.value = Date.now();
     await sendMessageChat({
-      topicId: props.contact.id,
+      topicId: route.value.id,
       text
     });
   } catch (error) {
@@ -690,14 +598,14 @@ const isNewDate = (index: number, isMastra: boolean = false) => {
   if (isMastra) {
     const currentMsg = state.aiMessages[index];
     const prevMsg = state.aiMessages[index - 1];
-    const currentDay = formatDay(currentMsg.timestamp);
-    const prevDay = formatDay(prevMsg.timestamp);
+    const currentDay = formatDay(new Date(currentMsg.timestamp));
+    const prevDay = formatDay(new Date(prevMsg.timestamp));
     return currentDay !== prevDay;
   } else {
     const currentMsg = state.messages[index];
     const prevMsg = state.messages[index - 1];
-    const currentDay = formatDay(currentMsg.sendTime);
-    const prevDay = formatDay(prevMsg.sendTime);
+    const currentDay = formatDay(currentMsg.createdAt);
+    const prevDay = formatDay(prevMsg.createdAt);
     return currentDay !== prevDay;
   }
 };
@@ -705,6 +613,16 @@ const isNewDate = (index: number, isMastra: boolean = false) => {
 const getSystemMessageContent = (message: ChatMessage) => {
   return message.systemMessageContent || message.text || '';
 };
+
+watch(
+  () => route.value,
+  () => {
+    if (!route.value?.id) return;
+
+    fetchMessagesForTopic(route.value.id);
+  },
+  { deep: true, immediate: true }
+);
 
 defineExpose({
   handleClear: clearAiMessages

@@ -8,13 +8,11 @@ export interface AIMessage {
 }
 
 interface ExtendedChatMessage {
-  isSystemMessage?: boolean;
   systemMessageType?: string;
   systemMessageContent?: string;
   senderFaceUrl?: string;
   faceURL?: string;
   senderNickname?: string;
-  sendTime?: number;
   loading?: boolean;
   media?: any[];
 }

@@ -5,24 +5,24 @@
     :data-testid="`${dataTestid}-UserProfile-Container`"
   >
     <Avatar
-      :url="props.group?.avatarUrl"
-      :alt="props.group?.avatarUrl || 'group-avatar'"
+      :url="props.topic.group?.avatarUrl"
+      :alt="props.topic.group?.avatarUrl || 'group-avatar'"
       class="user-profile__avatar"
-      :initials="props.group?.title || 'G'"
+      :initials="props.topic.group?.title || 'G'"
       :data-testid="`${dataTestid}-UserProfile-Avatar`"
     />
     <h3
       class="user-profile__title"
       :data-testid="`${dataTestid}-UserProfile-Title`"
     >
-      {{ props.group?.title || 'Group' }}
+      {{ props.topic.group?.title || 'Group' }}
     </h3>
     <span
       class="user-profile__ex"
       :data-testid="`${dataTestid}-UserProfile-Ex`"
     >
-      {{ props.group?.membersLength || 0 }}
-      {{ getParticipantForm(props.group?.membersLength) }}
+      {{ props.topic?.members?.length || 0 }}
+      {{ getParticipantForm(props.topic?.members?.length) }}
     </span>
   </div>
 </template>
@@ -33,7 +33,7 @@ import { IGroupProfileProps } from '../interfaces/interfaces';
 
 const props = withDefaults(defineProps<IGroupProfileProps>(), {
   dataTestid: 'GroupProfile',
-  group: () => null as any
+  topic: () => null
 });
 
 defineOptions({

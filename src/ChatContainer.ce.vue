@@ -29,6 +29,8 @@ import { getConfig } from './services/useConfig';
 import { useUnreadMessagePolling } from './composables/useUnreadMessagePolling';
 import { fetchAllTopics } from './composables/useTopics';
 import { useGroup } from './composables/useGroup';
+import { useUrlWatcher } from './composables/navigation';
+import { fetchMessagesForTopic } from './services/useMessages';
 
 const emits = defineEmits<IChatContainerEmits>();
 const props = defineProps<IChatContainerProps>();
@@ -40,6 +42,8 @@ const showMobileAuth = ref(false);
 const { fetchAllGroups } = useGroup();
 
 const { startPolling } = useUnreadMessagePolling(30000, false);
+
+const route = useUrlWatcher();
 
 const handleMobileAuthSuccess = (token: string) => {
   if (token) {
@@ -113,6 +117,7 @@ const runAppInitialization = async () => {
 
     await fetchAllTopics();
     await fetchAllGroups();
+    await fetchMessagesForTopic(route.value.id);
     startPolling();
 
     openChatContainerShow.value = true;

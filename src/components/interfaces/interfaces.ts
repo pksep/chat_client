@@ -96,6 +96,10 @@ export interface IUserProfileProps {
 }
 
 export interface IGroupProfileProps {
-  group?: IGroup | null;
+  topic?: ITopic | null;
   dataTestid?: string;
+}
+
+export interface IMessage extends Message {
+  senderUser?: IUser;
 }

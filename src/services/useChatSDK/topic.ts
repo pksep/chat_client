@@ -1,6 +1,7 @@
 import { Topic, Message, TopicSetting, User } from '@pksep/zod-shared-chat';
 import { Reqi } from '@pksep/reqi';
 import { SearchParams, PaginatedResponse, TopicType } from './types';
+import { ITopic } from '../../components/interfaces/interfaces';
 
 export interface ChatTopicInterface {
   getTopics(
@@ -41,7 +42,7 @@ export class ChatTopic implements ChatTopicInterface {
   async getTopics(
     type?: TopicType,
     params?: SearchParams
-  ): Promise<PaginatedResponse<Topic & { lastMessage?: Message }>> {
+  ): Promise<PaginatedResponse<ITopic>> {
     const queryParams = new URLSearchParams();
 
     if (type) queryParams.append('type', type);
@@ -54,9 +55,10 @@ export class ChatTopic implements ChatTopicInterface {
     const endpoint = `/topics${queryString ? `?${queryString}` : ''}`;
 
     try {
-      const response = (await this.reqi.get<
-        PaginatedResponse<Topic & { lastMessage?: Message }>
-      >(endpoint, { parsed: false })) as any;
+      const response = (await this.reqi.get<PaginatedResponse<ITopic>>(
+        endpoint,
+        { parsed: false }
+      )) as any;
       const data = await response.json();
       return data;
     } catch (error) {

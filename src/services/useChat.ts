@@ -1,12 +1,16 @@
 import { ref, shallowRef } from 'vue';
 import { ChatSDK } from './useChatSDK';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
-import { Message, Media, User } from '@pksep/zod-shared-chat';
-import { MessageStatus } from './useChatSDK/types';
+import { Media, User } from '@pksep/zod-shared-chat';
+import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
-import { getUserById } from '../composables/useUsers';
 import { setAuthUser, getAuthUser } from '../composables/useAuth';
 import { fetchAllTopics } from '../composables/useTopics';
+import {
+  addTopicList,
+  updateLocalLastMessageTopic
+} from '../composables/useTopics';
+import { addMessageToLocal } from './useMessages';
 
 let chatSDK: ChatSDK | null = null;
 
@@ -17,30 +21,6 @@ const currentUserId = ref<string | null>(null);
 const messagesStore = shallowRef<Record<string, ChatMessage[]>>({});
 
 const messageChangeCallbacks: Array<(topicId?: string) => void> = [];
-
-const normalizeDate = (value?: Date | string | number): Date => {
-  if (!value) return new Date();
-  if (value instanceof Date) return value;
-  return new Date(value);
-};
-
-const mapMessage = (message: Message): ChatMessage => {
-  const sender = message.senderUserId
-    ? getUserById(message.senderUserId)
-    : null;
-  const createdAt = normalizeDate(message.createdAt);
-
-  return {
-    ...message,
-    createdAt,
-    updatedAt: normalizeDate(message.updatedAt),
-    sendTime: createdAt.getTime(),
-    senderNickname: sender?.nickname || '',
-    faceURL: sender?.avatarUrl || '',
-    isSystemMessage: message.isSystem || false,
-    systemMessageContent: message.isSystem ? message.text || '' : undefined
-  };
-};
 
 const notifyMessageChange = (topicId?: string): void => {
   messageChangeCallbacks.forEach(callback => {
@@ -56,14 +36,11 @@ const setupChatListeners = (): void => {
   if (!chatSDK) return;
 
   chatSDK.subscribeToEvent(WebSocketEventType.NEW_MESSAGE, event => {
-    const msg = mapMessage(event.payload);
-
-    appendMessageToLocal(msg.topicId, msg);
+    appendMessageToLocal(event.payload.topicId, event.payload);
   });
 
-  chatSDK.subscribeToEvent(WebSocketEventType.MESSAGE_UPDATED, _event => {
-    const msg = mapMessage(_event.payload);
-    appendMessageToLocal(msg.topicId, msg);
+  chatSDK.subscribeToEvent(WebSocketEventType.MESSAGE_UPDATED, event => {
+    appendMessageToLocal(event.payload.topicId, event.payload);
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.MESSAGE_DELETED, event => {
@@ -87,27 +64,28 @@ const setupChatListeners = (): void => {
     }
   });
 
-  chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_TOPIC, async () => {
-    await fetchAllTopics();
+  chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_TOPIC, ({ payload }) => {
+    if (payload.type === 'UPDATE') {
+      updateLocalGroupDetails(
+        payload.topicId,
+        payload.data.name,
+        payload.data.avatarUrl
+      );
+    } else if (payload.type === 'CREATE') {
+      if (payload.data.type === TopicType.Group) {
+        addGroupList(payload.data);
+      } else if (payload.data.type === TopicType.DM) {
+        addTopicList(payload.data);
+      }
+    }
   });
 
-  chatSDK.subscribeToEvent(WebSocketEventType.MEMBER_ADDED, async event => {
-    // Trigger a refresh of group data when a member is added
-    if (event.payload.groupId) return;
-  });
+  chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_MESSAGE, ({ payload }) => {
+    if (payload.type === 'NEW') {
+      addMessageToLocal(payload.data.topicId, payload.data);
 
-  chatSDK.subscribeToEvent(WebSocketEventType.MEMBER_REMOVED, async event => {
-    // Trigger a refresh of group data when a member is removed
-    console.log('WebSocket: MEMBER_REMOVED event received', event.payload);
-    if (event.payload.groupId) return;
-  });
-
-  chatSDK.subscribeToEvent(WebSocketEventType.USER_UPDATED, event => {
-    const updatedUser: User = event.payload;
-    const currentAuthUser = getAuthUser();
-
-    if (currentAuthUser && currentAuthUser.id === updatedUser.id) {
-      setAuthUser(updatedUser);
+      updateLocalLastMessageTopic(payload.data.topicId, payload.data);
+      updateLocalLastMessageGroup(payload.data.topicId, payload.data);
     }
   });
 };
@@ -143,10 +121,6 @@ export const setCurrentUserId = (userId?: string | null): void => {
 
 export const getCurrentUserId = (): string | null => {
   return currentUserId.value;
-};
-
-export const getMessagesByConversationId = (topicId: string): ChatMessage[] => {
-  return messagesStore.value[topicId] || [];
 };
 
 export const saveMessagesToLocal = (
@@ -187,39 +161,6 @@ export const subscribeToMessageChanges = (
   };
 };
 
-const buildTempMessage = (params: {
-  topicId: string;
-  text?: string;
-  media?: Media[];
-}): ChatMessage => {
-  const createdAt = new Date();
-  const sender = currentUserId.value ? getUserById(currentUserId.value) : null;
-  const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-  console.log('buildTempMessage', params.topicId);
-
-  return {
-    id: tempId,
-    topicId: params.topicId,
-    senderUserId: currentUserId.value || '',
-    reactions: [],
-    text: params.text,
-    media: params.media || [],
-    replyMessageId: undefined,
-    isEdit: false,
-    status: MessageStatus.Wait,
-    isPin: false,
-    isSystem: false,
-    createdAt,
-    updatedAt: createdAt,
-    sendTime: createdAt.getTime(),
-    senderNickname: sender?.nickname || '',
-    faceURL: sender?.avatarUrl || '',
-    deletedAt: null,
-    loading: true,
-    tempId
-  };
-};
-
 export const sendMessageChat = async (params: {
   topicId: string;
   text?: string;
@@ -227,14 +168,6 @@ export const sendMessageChat = async (params: {
   onlyMedia?: boolean;
 }): Promise<void> => {
   const sdk = getChatSDK();
-
-  const tempMessage = buildTempMessage({
-    topicId: params.topicId,
-    text: params.text,
-    media: []
-  });
-
-  appendMessageToLocal(params.topicId, tempMessage);
 
   try {
     let media: Media[] | undefined;
@@ -251,12 +184,6 @@ export const sendMessageChat = async (params: {
     });
   } catch (error) {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);
-    const existingMessages = messagesStore.value[params.topicId] || [];
-    const updatedMessages = existingMessages.map(msg =>
-      msg.id === tempMessage.id ? { ...msg, status: MessageStatus.Wait } : msg
-    );
-    messagesStore.value[params.topicId] = updatedMessages;
-    notifyMessageChange(params.topicId);
   }
 };
 
@@ -275,55 +202,6 @@ const messageHistoryRequests: Map<
   }
 > = new Map();
 
-export const fetchMessagesForTopic = async (
-  topicId: string,
-  opts?: { page?: number; limit?: number; since?: Date; append?: boolean }
-): Promise<ChatMessage[]> => {
-  try {
-    return await new Promise((resolve, reject) => {
-      const cachedMessages = getMessagesByConversationId(topicId);
-
-      if (cachedMessages.length > 0) {
-        resolve(cachedMessages);
-        return;
-      }
-
-      const requestId = `${topicId}_${Date.now()}`;
-
-      const timeoutId = window.setTimeout(() => {
-        messageHistoryRequests.delete(requestId);
-        console.warn(
-          `WebSocket request for message history timed out for topic ${topicId}, falling back to HTTP`
-        );
-        resolve(cachedMessages);
-      }, 5000);
-
-      messageHistoryRequests.set(requestId, { resolve, reject, timeoutId });
-
-      try {
-        const sdk = getChatSDK();
-
-        sdk.sendWebSocketEvent(WebSocketEventType.REQUEST_MESSAGE_HISTORY, {
-          topicId,
-          requestId,
-          limit: opts?.limit || 50,
-          page: opts?.page || 1
-        });
-      } catch (error) {
-        clearTimeout(timeoutId);
-        messageHistoryRequests.delete(requestId);
-        reject(error);
-      }
-    });
-  } catch (error) {
-    console.warn(
-      'WebSocket failed for message history, falling back to HTTP:',
-      error
-    );
-    return [];
-  }
-};
-
 const addMessageHistoryHandler = (): void => {
   if (!chatSDK) return;
   chatSDK.subscribeToEvent(
@@ -339,25 +217,22 @@ const addMessageHistoryHandler = (): void => {
         if (error) {
           request.reject(new Error(error));
         } else {
-          const processedMessages = messages.map(mapMessage);
-          const topicId = processedMessages[0]?.topicId;
+          const topicId = messages[0]?.topicId;
 
           if (topicId) {
-            saveMessagesToLocal(topicId, processedMessages);
+            saveMessagesToLocal(topicId, messages);
             notifyMessageChange(topicId);
           }
 
-          request.resolve(processedMessages);
+          request.resolve(messages);
         }
       }
     }
   );
 };
 
-export const getMessagesWithLoadingStatus = (
-  topicId: string
-): ChatMessage[] => {
-  const cachedMessages = getMessagesByConversationId(topicId);
+export const getMessagesWithLoadingStatus = (): ChatMessage[] => {
+  const cachedMessages = [];
   const hasConnection = !getIsWebsocketConnecting();
 
   if (hasConnection) {
@@ -379,7 +254,7 @@ export const getIsRecentlyReconnected = () => isRecentlyReconnected.value;
 
 export const markAsRead = async (topicId: string): Promise<void> => {
   const sdk = getChatSDK();
-  const messages = getMessagesByConversationId(topicId);
+  const messages = [];
   const updatedMessages = messages.map(message => {
     if (message.senderUserId !== currentUserId.value) {
       return {

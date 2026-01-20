@@ -99,6 +99,7 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
         state.groupName,
         state.avatarPreview
       );
+
       if (state.groupName.length > 140) {
         return state.groupName.substring(0, 140);
       }

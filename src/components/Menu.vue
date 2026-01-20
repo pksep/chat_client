@@ -216,7 +216,7 @@ const topicGroups = computed(() => {
 });
 
 const state = reactive({
-  selectedContactId: null,
+  selectedContactId: computed(() => route.value?.id),
   isLoading: true,
   detailsOpen: getInitialDetailsOpen()
 });
@@ -248,7 +248,6 @@ const unmountClickAI = (): void => {
 };
 
 const unmountTopicClick = (topic: ITopic): void => {
-  state.selectedContactId = topic.id;
   if (topic.type === 'GROUP') {
     navigateToGroup(topic.id);
   } else if (topic.type === 'DM') {
