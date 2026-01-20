@@ -20,6 +20,7 @@
     <ContactSelector
       :is-add-one="props.isAddOne"
       :contacts="contacts"
+      :excluded-contact-ids="props.excludedContactIds"
       @unmount-contact="handleNewContact"
     />
   </Modal>
@@ -46,6 +47,7 @@ const props = withDefaults(defineProps<INewContactProps>(), {
   open: false,
   isAddOne: true,
   title: 'Создать диалог',
+  excludedContactIds: () => new Set<string | number>(),
   dataTestid: () => 'NewContactModal'
 });
 
@@ -54,17 +56,24 @@ const emits = defineEmits<{
   (e: 'unmount-new-contact', contact: ITopic[] | IUser);
 }>();
 
-const contacts = computed(() => getUsersList());
+const contacts = computed(() => {
+  // Create a new array to ensure reactivity
+  const userContacts = props.contacts || getUsersList();
+  // Return a new array reference to ensure Vue reactivity
+  return [...userContacts];
+});
 
 const closeModal = (): void => {
   emits('unmount-close');
 };
 
-const handleNewContact = (user: ITopic): void => {
+const handleNewContact = (user: ITopic[] | IUser | ITopic): void => {
+  const sdk = getChatSDK();
   if (props.isAddOne && user.id) {
     navigateToDialogs(user.id as string);
-    const sdk = getChatSDK();
     sdk.joinTopic(user.id);
+  } else {
+    emits('unmount-new-contact', user);
   }
   closeModal();
 };

@@ -37,6 +37,7 @@
         <template #tab1>
           <ContactListInModal
             :contacts="selectedContacts"
+            :excluded-contact-ids="excludedContactIds"
             class="new-group__tab2-profile"
             @unmount-click-add-button="handleCloseGroupInfo"
           />
@@ -140,4 +141,17 @@ const {
   handleOpenGroupInfo,
   handleCloseGroupInfo
 } = useNewGroupModal(props, emits);
+
+const excludedContactIds = computed(() => {
+  // Create a set of contact IDs that are already in the selected contacts to exclude them from the selector
+  const ids = new Set<string | number>();
+  if (selectedContacts.value) {
+    selectedContacts.value.forEach(contact => {
+      if (contact && contact.id) {
+        ids.add(contact.id);
+      }
+    });
+  }
+  return ids;
+});
 </script>

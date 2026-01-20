@@ -57,6 +57,7 @@ export interface IMenuRightProps extends IMenuProps {
   members?: IUser[];
   activeTabId?: number;
   groupId?: string;
+  excludedContactIds?: Set<string | number>;
 }
 
 export enum MessageStatusEnum {

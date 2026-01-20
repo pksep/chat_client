@@ -22,7 +22,8 @@ export const fetchAllTopics = async (
       limit
     });
 
-    topics.value = response.data;
+    // Force reactivity by creating new array reference
+    topics.value = [...response.data];
     return response.data;
   } catch (err) {
     error.value = (err as Error).message;
@@ -41,6 +42,7 @@ export const createTopic = async (peerId: string): Promise<ITopic[]> => {
     const sdk = getChatSDK();
     const newTopic = await sdk.createTopic({ peerId });
 
+    // Force reactivity by creating new array reference
     topics.value = [newTopic, ...topics.value];
   } catch (err) {
     error.value = (err as Error).message;
@@ -56,8 +58,8 @@ export const togglePinTopic = async (topicId: string) => {
     const sdk = getChatSDK();
     await sdk.togglePinTopic(topicId);
 
-    fetchAllTopics();
-    fetchAllGroups();
+    await fetchAllTopics();
+    await fetchAllGroups();
   } catch (err) {
     console.error('Failed to pin/unpin topic:', err);
   }
@@ -68,13 +70,15 @@ export const toggleMuteTopic = async (topicId: string) => {
     const sdk = getChatSDK();
     await sdk.toggleMuteTopic(topicId);
 
-    fetchAllTopics();
-    fetchAllGroups();
+    await fetchAllTopics();
+    await fetchAllGroups();
   } catch (err) {
     console.error('Failed to pin/unpin topic:', err);
   }
 };
 
 export const getTopicList = (): ITopic[] => {
-  return topics.value || [];
+  const currentTopics = topics.value || [];
+  // Return a new array reference to ensure Vue reactivity
+  return [...currentTopics];
 };

@@ -22,8 +22,8 @@
       :data-testid="`${props.dataTestid}-ContactListInModal-List`"
     >
       <li
-        v-for="(user, index) in props.contacts"
-        :key="index"
+        v-for="(user, index) in reactiveContacts"
+        :key="user.id"
         class="menu__info-user-list--item"
         :data-testid="`${props.dataTestid}-ContactListInModal-Item${index + 1}`"
       >
@@ -58,6 +58,7 @@
   </section>
   <NewContactModal
     :contacts="props.filteredContacts"
+    :excluded-contact-ids="excludedContactIds"
     :open="newContactOpen"
     :dataTestid="`${props.dataTestid}-ContactListInModal-NewContactModal`"
     @unmount-close="closeContactModal"
@@ -73,7 +74,7 @@ import {
   SizesEnum
 } from '@pksep/yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import NewContactModal from '../NewChat/NewContactModal.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
@@ -90,6 +91,7 @@ interface ContactListInModalProps {
   listClass?: string;
   userClass?: string;
   groupId?: string;
+  excludedContactIds?: Set<string | number>;
 }
 
 const props = withDefaults(defineProps<ContactListInModalProps>(), {
@@ -107,12 +109,33 @@ const props = withDefaults(defineProps<ContactListInModalProps>(), {
     }
   ],
   filteredContacts: () => [],
+  excludedContactIds: () => new Set<string | number>(),
   dataTestid: () => 'ContactListInModal'
 });
 
 const emits = defineEmits<{
   (e: 'unmount-click-add-button'): void;
 }>();
+
+const reactiveContacts = computed(() => {
+  // Create a new array to ensure reactivity
+  const contacts = props.contacts || [];
+  // Return a new array reference to ensure Vue reactivity
+  return [...contacts];
+});
+
+const excludedContactIds = computed(() => {
+  // Create a set of contact IDs that are already in the current list to exclude them from the selector
+  const ids = new Set<string | number>();
+  if (props.contacts) {
+    props.contacts.forEach(contact => {
+      if (contact && contact.id) {
+        ids.add(contact.id);
+      }
+    });
+  }
+  return ids;
+});
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();

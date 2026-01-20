@@ -51,6 +51,7 @@
           :show-add-button="!checkGroupId"
           :contacts="state.contacts"
           :filtered-contacts="filteredMembers"
+          :excluded-contact-ids="excludedContactIds"
           @unmount-click-add-button="handleContactClick"
           :data-testid="`${props.dataTestid}-MenuInfo-ContactListInModal`"
         />
@@ -75,6 +76,7 @@
     :open="state.openAddUser"
     :isAddOne="false"
     :contacts="filteredMembers"
+    :excluded-contact-ids="excludedContactIds"
     @unmount-new-contact="handleNewContactAdded"
     @unmount-close="handleCloseAddUserModal"
     title="Добавить контакт"
@@ -82,7 +84,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, watch, onUnmounted } from 'vue';
+import { computed, watch } from 'vue';
 import {
   Tabs,
   Button,
@@ -97,12 +99,22 @@ import type { IMenuRightProps, IUser } from './interfaces/interfaces';
 import { useMenuInfo } from '../composables/useMenuInfo';
 import NewContactModal from './NewChat/NewContactModal.vue';
 import { useUrlWatcher } from '../composables/navigation';
-import { fetchGroupMembers } from '../services/useGroup';
+import { addGroupMembers } from '../services/useGroup';
 
 const props = withDefaults(defineProps<IMenuRightProps>(), {
   open: false,
   dataTestid: () => 'MenuInfo'
 });
+
+const {
+  state,
+  checkGroupId,
+  initializeMenuInfo,
+  handleContactClick,
+  handleUpdateInformation,
+  handleCloseAddUserModal,
+  filteredMembers
+} = useMenuInfo();
 
 const topic = useUrlWatcher();
 
@@ -112,12 +124,18 @@ const menuInfoClasses = computed(() => [
   props.class
 ]);
 
-const handleUpdateGroupMembers = async (): Promise<void> => {
-  if (state.openAddUser) {
-    handleCloseAddUserModal();
+const excludedContactIds = computed(() => {
+  // Create a set of contact IDs that are already in the current list to exclude them from the selector
+  const ids = new Set<string | number>();
+  if (state.contacts) {
+    state.contacts.forEach(contact => {
+      if (contact && contact.id) {
+        ids.add(contact.id);
+      }
+    });
   }
-  await refreshGroupMembers();
-};
+  return ids;
+});
 
 const emits = defineEmits<{
   (e: 'unmount-collapse', isCollapse: boolean): void;
@@ -130,51 +148,12 @@ const handleCloseMenu = (): void => {
   emits('unmount-collapse', false);
 };
 
-const handleNewContactAdded = async (): Promise<void> => {
-  await handleUpdateGroupMembers();
-};
-
-const {
-  state,
-  checkGroupId,
-  initializeMenuInfo,
-  handleContactClick,
-  handleUpdateInformation,
-  handleCloseAddUserModal,
-  filteredMembers
-} = useMenuInfo();
-
-let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
-
-watch(
-  () => state.openAddUser,
-  (newVal, oldVal) => {
-    if (oldVal && !newVal) {
-      if (refreshTimeout) {
-        clearTimeout(refreshTimeout);
-      }
-
-      refreshTimeout = setTimeout(() => {
-        refreshGroupMembers();
-        refreshTimeout = null;
-      }, 300);
-    }
-  }
-);
-
-const refreshGroupMembers = async (): Promise<void> => {
+const handleNewContactAdded = async (users: IUser[]): Promise<void> => {
   if (state.information?.groupId) {
-    const updatedContacts = await fetchGroupMembers(state.information.groupId);
-    state.contacts = updatedContacts;
-    emits('unmount-contacts-update', updatedContacts);
+    await addGroupMembers(state.information.groupId, users);
+    emits('unmount-contacts-update', users);
   }
 };
-
-onUnmounted(() => {
-  if (refreshTimeout) {
-    clearTimeout(refreshTimeout);
-  }
-});
 
 watch(
   () => [props.open, topic.value.id],

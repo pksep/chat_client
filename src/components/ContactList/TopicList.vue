@@ -81,7 +81,7 @@
               {{ 1 }}
             </div>
             <div
-              v-if="topic.info.isPin"
+              v-if="topic.info?.isPin"
               :data-testid="`${props.dataTestid}-ContactList-Pin${index + 1}`"
               :aria-label="`Pinned contact`"
             >

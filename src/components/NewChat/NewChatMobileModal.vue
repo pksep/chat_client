@@ -16,6 +16,7 @@
         is-button-disabled
         :contacts="props.contacts"
         :selected-contact-ids="props.selectedContactIds"
+        :excluded-contact-ids="props.excludedContactIds"
         @unmount-contact="handleCheckUsers"
         @unmount-close="handleCloseModal"
       />

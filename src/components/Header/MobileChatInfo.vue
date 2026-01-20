@@ -54,6 +54,7 @@
     <ContactListInModal
       :show-add-button="false"
       :contacts="props.members"
+      :excluded-contact-ids="excludedContactIds"
       class="modal-info-mobile__contact-list"
       :data-testid="`${props.dataTestid}-Header-ContactListInModal`"
     />
@@ -61,7 +62,7 @@
 </template>
 
 <script lang="ts" setup>
-import { useTemplateRef } from 'vue';
+import { useTemplateRef, computed } from 'vue';
 import type { IUser } from '../interfaces/interfaces';
 import { Avatar } from '@pksep/yui';
 import NewChatInformationForm from '../NewChat/NewChatInformationForm.vue';
@@ -75,10 +76,25 @@ interface IMobileChatInfoProps {
   members: IUser[];
   dataTestid?: string;
   isMenuInfo?: boolean;
+  excludedContactIds?: Set<string | number>;
 }
 
 const props = withDefaults(defineProps<IMobileChatInfoProps>(), {
-  dataTestid: () => 'MobileChatInfo'
+  dataTestid: () => 'MobileChatInfo',
+  excludedContactIds: () => new Set<string | number>()
+});
+
+const excludedContactIds = computed(() => {
+  // Create a set of contact IDs that are already in the members list to exclude them from the selector
+  const ids = new Set<string | number>();
+  if (props.members) {
+    props.members.forEach(contact => {
+      if (contact && contact.id) {
+        ids.add(contact.id);
+      }
+    });
+  }
+  return ids;
 });
 
 const information = defineModel<IMenuInfoInformation>();

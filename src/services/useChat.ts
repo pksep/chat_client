@@ -92,6 +92,26 @@ const setupChatListeners = (): void => {
     fetchAllGroups();
     fetchAllTopics();
   });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.MEMBER_ADDED, event => {
+    // Trigger a refresh of group data when a member is added
+    if (event.payload.groupId) {
+      fetchAllGroups();
+    }
+  });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.MEMBER_REMOVED, event => {
+    // Trigger a refresh of group data when a member is removed
+    if (event.payload.groupId) {
+      fetchAllGroups();
+    }
+  });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.USER_UPDATED, event => {
+    const updatedUser = event.payload;
+    // Update user info in the global users list
+    // This ensures that user updates are reflected in the UI
+  });
 };
 
 export const initializeChat = async (options: {

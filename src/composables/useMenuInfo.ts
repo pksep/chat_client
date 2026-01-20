@@ -1,5 +1,5 @@
 import { reactive, computed, watch } from 'vue';
-import { fetchGroupMembers, setGroupInfo } from '../services/useGroup';
+import { fetchGroupMembers, setGroupInfo, addGroupMembers } from '../services/useGroup';
 import { getChatSDK } from '../services/useChat';
 import { getUsersList } from './useUsers';
 import type { IUser } from '../components/interfaces/interfaces';
@@ -65,13 +65,14 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
     state.contacts = [...state.contacts, ...contacts];
 
     try {
-      const sdk = getChatSDK();
-      await sdk.addUsersToGroup(
-        state.information.groupId,
-        contacts.map(contact => contact.id)
-      );
+      const success = await addGroupMembers(state.information.groupId, contacts);
 
-      state.contacts = await fetchGroupMembers(state.information.groupId);
+      if (success) {
+        state.contacts = await fetchGroupMembers(state.information.groupId);
+      } else {
+        console.error('Failed to add users to group');
+        state.contacts = await fetchGroupMembers(state.information.groupId);
+      }
     } catch (error) {
       console.error('Failed to invite users to group:', error);
       state.contacts = await fetchGroupMembers(state.information.groupId);
