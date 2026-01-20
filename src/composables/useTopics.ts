@@ -1,16 +1,14 @@
 import { ref, shallowRef } from 'vue';
 import { getChatSDK } from '../services/useChat';
 import { ITopic } from '../components/interfaces/interfaces';
-import { TopicType } from '../services/useChatSDK/types';
 import { Message, TopicSetting, TopicType } from '../services/useChatSDK/types';
 import { useGroup } from '../composables/useGroup';
-updateLocalGroupInfo;
 
 const topics = shallowRef<ITopic[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
-const { fetchAllGroups } = useGroup();
+const { fetchAllGroups, updateLocalGroupInfo } = useGroup();
 
 export const fetchAllTopics = async (
   page = 1,
@@ -100,7 +98,7 @@ export const togglePinTopic = async (topic: ITopic) => {
 export const toggleMuteTopic = async (topic: ITopic) => {
   try {
     const sdk = getChatSDK();
-    await sdk.toggleMuteTopic(topicId);
+    await sdk.toggleMuteTopic(topic.id);
 
     await fetchAllTopics();
     await fetchAllGroups();

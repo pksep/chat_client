@@ -129,7 +129,7 @@ import {
   useUrlWatcher
 } from '../../composables/navigation';
 import { getTopicList } from '../../composables/useTopics';
-import { getGroupList } from '../../services/useGroup';
+import { getGroupList } from '../../composables/useGroup';
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
   dataTestid: () => 'Header'

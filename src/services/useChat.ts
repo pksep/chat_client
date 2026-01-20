@@ -5,12 +5,16 @@ import { Media, User } from '@pksep/zod-shared-chat';
 import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { setAuthUser, getAuthUser } from '../composables/useAuth';
-import { fetchAllTopics } from '../composables/useTopics';
 import {
   addTopicList,
   updateLocalLastMessageTopic
 } from '../composables/useTopics';
 import { addMessageToLocal } from './useMessages';
+import {
+  updateLocalGroupDetails,
+  addGroupList,
+  updateLocalLastMessageGroup
+} from '../composables/useGroup';
 
 let chatSDK: ChatSDK | null = null;
 
