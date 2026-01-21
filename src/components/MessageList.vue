@@ -205,8 +205,9 @@ const scrollState = reactive({
   isInitialLoad: true
 });
 
-const scrollToBottom = (): void => {
+const scrollToBottom = (smooth: boolean = false): void => {
   if (!chatWrapperRef?.value || !scrollState.shouldAutoScroll) return;
+  console.log(smooth);
 
   // if (chatWrapperRef.value) {
   //   if (smooth) {
