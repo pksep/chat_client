@@ -93,7 +93,7 @@
     <MobileChatInfo
       is-menu-info
       :model-value="currentGroup"
-      :members="route.type === 'group' && currentGroup?.members"
+      :members="route.type === RouteTypes.GROUP && currentGroup?.members"
       @update:model-value="handleUpdateInformation"
       :data-testid="props.dataTestid"
     />
@@ -182,12 +182,12 @@ const handleClickHeader = async (): Promise<void> => {
 
 const getPopoverOptions = computed(() => {
   const popoverArray = [];
-  if (route.value && route.value.type !== 'ai') {
+  if (route.value && route.value.type !== RouteTypes.AI) {
     const notificationLabels = {
       value: state.statusNotification.label,
       function: handleNotificationToggle
     };
-    if (route.value && route.value.type !== 'group') {
+    if (route.value && route.value.type !== RouteTypes.GROUP) {
       popoverArray.push(notificationLabels);
     } else {
       popoverArray.push(notificationLabels);
@@ -244,11 +244,11 @@ const updateNotificationStatus = async (): Promise<void> => {
 };
 
 const handleExit = (): void => {
-  if (route.value && route.value.type === 'dialogs') {
+  if (route.value && route.value.type === RouteTypes.DIALOGS) {
     navigateToDialogsList();
-  } else if (route.value && route.value.type === 'group') {
+  } else if (route.value && route.value.type === RouteTypes.GROUP) {
     navigateToGroupsList();
-  } else if (route.value && route.value.type === 'ai') {
+  } else if (route.value && route.value.type === RouteTypes.AI) {
     navigateToAssistant();
   } else {
     navigateToDefault();
@@ -274,11 +274,3 @@ watch(
   }
 );
 </script>
-
-<style scoped>
-.chat__header-loading {
-  display: flex;
-  align-items: center;
-  padding: 0 1rem;
-}
-</style>

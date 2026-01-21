@@ -4,6 +4,7 @@ aside.menu-info {
   border-left-width: 0.5px;
   border-left-style: solid;
   height: var(--default-height);
+  overflow: hidden;
   --size-avatar: 42.5px;
   &.menu-info--open .collapse {
     width: 100%;
@@ -58,6 +59,11 @@ section.menu-info__info-section {
   line-height: 100%;
   width: 20px;
   height: 20px;
+}
+
+.menu__info-users-list {
+  height: calc(100vh - 77px - 14px - 75px);
+  overflow: auto;
 }
 
 button.tabs__navigation-button {

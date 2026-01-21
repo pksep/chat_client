@@ -1,6 +1,6 @@
 <template>
   <section
-    :class="['menu__info-users', props.class]"
+    :class="['menu__info-users', $attrs.class]"
     :data-testid="`${props.dataTestid}-Container`"
   >
     <Button

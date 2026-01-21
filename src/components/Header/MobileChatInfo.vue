@@ -52,25 +52,24 @@
       Участники:
     </p>
     <ContactListInModal
-      :show-add-button="false"
       :contacts="props.members"
       :excluded-contact-ids="excludedContactIds"
       class="modal-info-mobile__contact-list"
       :data-testid="`${props.dataTestid}-Header-ContactListInModal`"
+      @unmount-click-add-button="handleContactClick"
     />
   </div>
 </template>
 
 <script lang="ts" setup>
-import { useTemplateRef, computed } from 'vue';
-import type { IUser } from '../interfaces/interfaces';
+import { useTemplateRef, computed, onMounted } from 'vue';
 import { Avatar } from '@pksep/yui';
 import NewChatInformationForm from '../NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from '../MenuInfoButtons.vue';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';
 import { IMenuInfoInformation } from '../../composables/useMenuInfo';
 import { useInformationMenu } from '../../composables/useInformationMenu';
-import { onMounted } from 'vue';
+import type { IUser } from '../interfaces/interfaces';
 
 interface IMobileChatInfoProps {
   members: IUser[];
@@ -80,12 +79,11 @@ interface IMobileChatInfoProps {
 }
 
 const props = withDefaults(defineProps<IMobileChatInfoProps>(), {
-  dataTestid: () => 'MobileChatInfo',
-  excludedContactIds: () => new Set<string | number>()
+  excludedContactIds: () => new Set<string | number>(),
+  dataTestid: 'MobileChatInfo'
 });
 
 const excludedContactIds = computed(() => {
-  // Create a set of contact IDs that are already in the members list to exclude them from the selector
   const ids = new Set<string | number>();
   if (props.members) {
     props.members.forEach(contact => {
@@ -136,6 +134,8 @@ const handleImageSave = async (config: {
     ...config
   };
 };
+
+const handleContactClick = (): void => {};
 
 onMounted(async () => {
   await init();
