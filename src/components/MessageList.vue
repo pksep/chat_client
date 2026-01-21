@@ -155,7 +155,6 @@ import { useMastra, generateChatId } from '../services/useMastra';
 import { removeMessageLoading } from '../services/useChatDb';
 import { subscribeToMessageChanges } from '../services/useChat';
 import {
-  getMessagesWithLoadingStatus,
   sendMessageChat,
   getIsWebsocketConnecting,
   getIsRecentlyReconnected
@@ -206,7 +205,7 @@ const scrollState = reactive({
   isInitialLoad: true
 });
 
-const scrollToBottom = (smooth: boolean = false): void => {
+const scrollToBottom = (): void => {
   if (!chatWrapperRef?.value || !scrollState.shouldAutoScroll) return;
 
   // if (chatWrapperRef.value) {
