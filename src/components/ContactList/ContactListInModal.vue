@@ -94,6 +94,8 @@ interface ContactListInModalProps {
   excludedContactIds?: Set<string | number>;
 }
 
+const { removeUserFromGroup } = useGroup();
+
 const props = withDefaults(defineProps<ContactListInModalProps>(), {
   showAddButton: true,
   contacts: () => [
@@ -118,14 +120,11 @@ const emits = defineEmits<{
 }>();
 
 const reactiveContacts = computed(() => {
-  // Create a new array to ensure reactivity
   const contacts = props.contacts || [];
-  // Return a new array reference to ensure Vue reactivity
   return [...contacts];
 });
 
 const excludedContactIds = computed(() => {
-  // Create a set of contact IDs that are already in the current list to exclude them from the selector
   const ids = new Set<string | number>();
   if (props.contacts) {
     props.contacts.forEach(contact => {
@@ -147,7 +146,6 @@ const addUser = (): void => {
 };
 
 const deleteUserFromChat = (userId: string) => {
-  const { removeUserFromGroup } = useGroup();
   removeUserFromGroup(props.groupId, userId);
   closeActivePopover(userId);
 };

@@ -479,10 +479,7 @@ export class ChatSDK {
     return this.group.addUsersToGroup(groupId, userIds);
   }
 
-  async removeUserFromGroup(
-    groupId: string,
-    userId: string
-  ): Promise<{ success: boolean }> {
+  async removeUserFromGroup(groupId: string, userId: string): Promise<number> {
     return this.group.removeUserFromGroup(groupId, userId);
   }
 

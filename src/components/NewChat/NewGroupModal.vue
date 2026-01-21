@@ -115,7 +115,7 @@ import { getUsersList } from '../../composables/useUsers';
 
 const props = withDefaults(defineProps<INewContactProps & { user?: IUser }>(), {
   open: false,
-  dataTestid: () => 'NewGroupModal'
+  dataTestid: 'NewGroupModal'
 });
 
 const emits = defineEmits<{

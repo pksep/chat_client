@@ -31,10 +31,7 @@ export interface ChatGroupInterface {
     params?: SearchParams
   ): Promise<PaginatedResponse<User>>;
   addGroupMembers(groupId: string, userIds: string[]): Promise<User[]>;
-  removeGroupMember(
-    groupId: string,
-    userId: string
-  ): Promise<{ success: boolean }>;
+  removeGroupMember(groupId: string, userId: string): Promise<number>;
   promoteToAdmin(
     groupId: string,
     userId: string
@@ -47,10 +44,7 @@ export interface ChatGroupInterface {
     groupId: string,
     userIds: string[]
   ): Promise<{ success: boolean; addedMembers: User[] }>;
-  removeUserFromGroup(
-    groupId: string,
-    userId: string
-  ): Promise<{ success: boolean }>;
+  removeUserFromGroup(groupId: string, userId: string): Promise<number>;
   editGroup(
     groupId: string,
     groupData: Partial<{
@@ -150,10 +144,9 @@ export class ChatGroup implements ChatGroupInterface {
 
   async leaveGroup(groupId: string): Promise<void> {
     try {
-      const response = await this.reqi.delete(`/groups/${groupId}/leave`, {
+      await this.reqi.delete(`/groups/${groupId}/leave`, {
         parsed: false
       });
-      await response.json();
     } catch (error) {
       throw new Error(`Failed to leave group: ${(error as Error).message}`);
     }
@@ -205,19 +198,12 @@ export class ChatGroup implements ChatGroupInterface {
     }
   }
 
-  async removeGroupMember(
-    groupId: string,
-    userId: string
-  ): Promise<{ success: boolean }> {
+  async removeGroupMember(groupId: string, userId: string): Promise<number> {
     try {
-      const response = (await this.reqi.delete(
-        `/groups/${groupId}/members/${userId}`,
-        {
-          parsed: false
-        }
-      )) as any;
-      const data = await response.json();
-      return data;
+      await this.reqi.delete(`/groups/${groupId}/members/${userId}`, {
+        parsed: false
+      });
+      return 200;
     } catch (error) {
       throw new Error(
         `Failed to remove member from group: ${(error as Error).message}`
@@ -283,10 +269,7 @@ export class ChatGroup implements ChatGroupInterface {
     }
   }
 
-  async removeUserFromGroup(
-    groupId: string,
-    userId: string
-  ): Promise<{ success: boolean }> {
+  async removeUserFromGroup(groupId: string, userId: string): Promise<number> {
     try {
       const response = (await this.reqi.delete(
         `/groups/${groupId}/members/${userId}`,
@@ -294,8 +277,7 @@ export class ChatGroup implements ChatGroupInterface {
           parsed: false
         }
       )) as any;
-      const data = await response.json();
-      return data;
+      return response.status;
     } catch (error) {
       throw new Error(
         `Failed to remove user from group: ${(error as Error).message}`

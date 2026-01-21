@@ -153,11 +153,6 @@ export const useGroup = () => {
     userId: string
   ): Promise<boolean> => {
     const sdk = getChatSDK();
-    if (!sdk) {
-      console.error('Chat SDK is not initialized');
-      return false;
-    }
-
     try {
       await sdk.removeUserFromGroup(groupId, userId);
       removeGroupMember(groupId, userId);

@@ -93,7 +93,7 @@
     <MobileChatInfo
       is-menu-info
       :model-value="currentGroup"
-      :members="route.type === 'group' ? groupMembers.value || [] : []"
+      :members="route.type === 'group' && groupMembers"
       @update:model-value="handleUpdateInformation"
       :data-testid="props.dataTestid"
     />

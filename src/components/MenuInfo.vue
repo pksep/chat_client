@@ -50,6 +50,7 @@
         <ContactListInModal
           :show-add-button="!checkGroupId"
           :contacts="groupMembers"
+          :group-id="currentGroup.group.id"
           :filtered-contacts="filteredMembers"
           :excluded-contact-ids="excludedContactIds"
           @unmount-click-add-button="handleContactClick"
@@ -116,7 +117,7 @@ const {
   filteredMembers
 } = useMenuInfo();
 
-const { groupMembers, addGroupMembers } = useGroup();
+const { currentGroup, groupMembers, addGroupMembers } = useGroup();
 
 const topic = useUrlWatcher();
 
