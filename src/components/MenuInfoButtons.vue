@@ -51,7 +51,7 @@ import { useResizeState } from '../composables/useResizeState';
 import { computed, reactive } from 'vue';
 import { useUrlWatcher } from '../composables/navigation';
 import { useGroup } from '../composables/useGroup';
-import { toggleMuteTopic } from '../composables/useTopics';
+import { useTopics } from '../composables/useTopics';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
@@ -71,6 +71,7 @@ const handleUnmountLeave = () => {
 };
 
 const handleMute = () => {
+  const { toggleMuteTopic } = useTopics();
   toggleMuteTopic(state.topic);
 };
 </script>

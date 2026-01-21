@@ -76,7 +76,7 @@ import { Button, ButtonTypeEnum, Icon, IconNameEnum, Loader } from '@pksep/yui';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
 import TopicList from './TopicList.vue';
 import { useGroup } from '../../composables/useGroup';
-import { getTopicList } from '../../composables/useTopics';
+import { useTopics } from '../../composables/useTopics';
 import { navigateToAI, useUrlWatcher } from '../../composables/navigation';
 import {
   RouteType,
@@ -103,6 +103,7 @@ const state = reactive({
 
 const contactList = computed(() => {
   // Create a new array to ensure reactivity
+  const { getTopicList } = useTopics();
   const topics = getTopicList();
   // Return a new array reference to ensure Vue reactivity
   return [...topics];

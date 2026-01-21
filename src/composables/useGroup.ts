@@ -2,7 +2,7 @@ import { ref } from 'vue';
 import { getChatSDK, getCurrentUserId } from '../services/useChat';
 import { Message, TopicSetting, TopicType } from '../services/useChatSDK/types';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
-import { sortTopics } from './useTopics';
+import { useTopics } from './useTopics';
 
 const groups = ref<ITopic[]>([]);
 const groupMembers = ref<IUser[]>([]);
@@ -166,6 +166,7 @@ export const useGroup = () => {
   };
 
   const getGroupList = (): ITopic[] => {
+    const { sortTopics } = useTopics();
     setGroupList(sortTopics(groups.value));
     return groups.value;
   };

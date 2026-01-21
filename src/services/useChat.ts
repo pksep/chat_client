@@ -5,10 +5,7 @@ import { Media, User } from '@pksep/zod-shared-chat';
 import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { setAuthUser, getAuthUser } from '../composables/useAuth';
-import {
-  addTopicList,
-  updateLocalLastMessageTopic
-} from '../composables/useTopics';
+import { useTopics } from '../composables/useTopics';
 import { addMessageToLocal } from './useMessages';
 import {
   updateLocalGroupDetails,
@@ -79,6 +76,7 @@ const setupChatListeners = (): void => {
       if (payload.data.type === TopicType.Group) {
         addGroupList(payload.data);
       } else if (payload.data.type === TopicType.DM) {
+        const { addTopicList } = useTopics();
         addTopicList(payload.data);
       }
     }
@@ -88,6 +86,7 @@ const setupChatListeners = (): void => {
     if (payload.type === 'NEW') {
       addMessageToLocal(payload.data.topicId, payload.data);
 
+      const { updateLocalLastMessageTopic } = useTopics();
       updateLocalLastMessageTopic(payload.data.topicId, payload.data);
       updateLocalLastMessageGroup(payload.data.topicId, payload.data);
     }

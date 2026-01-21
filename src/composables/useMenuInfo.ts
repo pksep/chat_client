@@ -2,7 +2,7 @@ import { reactive, computed } from 'vue';
 import { useGroup } from '../composables/useGroup';
 import { getChatSDK } from '../services/useChat';
 import { getUsersList } from './useUsers';
-import { topics } from './useTopics';
+import { useTopics } from './useTopics';
 import type { IUser } from '../components/interfaces/interfaces';
 import { TopicType } from '../services/useChatSDK/types';
 import { RouteType } from './navigation/useUrlRouting';
@@ -62,6 +62,7 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
         ex: undefined
       });
     } else if (value?.topicId) {
+      const { topics } = useTopics();
       const topicIndex = topics.value.findIndex(t => t.id === value.topicId);
       if (topicIndex !== -1) {
         const updatedTopic = { ...topics.value[topicIndex] };

@@ -171,7 +171,7 @@ import {
   navigateToDialogs,
   useUrlWatcher
 } from '../composables/navigation';
-import { getTopicList } from '../composables/useTopics';
+import { useTopics } from '../composables/useTopics';
 import { getAuthUser } from '../composables/useAuth';
 import TopicList from './ContactList/TopicList.vue';
 
@@ -180,6 +180,7 @@ const props = withDefaults(defineProps<IMenuProps>(), {
 });
 
 const { groups } = useGroup();
+const { getTopicList } = useTopics();
 
 const route = useUrlWatcher();
 

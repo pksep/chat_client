@@ -27,7 +27,7 @@ import { fetchAuthUser, setAuthUser, useAuth } from './composables/useAuth';
 import { fetchAllUsers, getUserById } from './composables/useUsers';
 import { getConfig } from './services/useConfig';
 import { useUnreadMessagePolling } from './composables/useUnreadMessagePolling';
-import { fetchAllTopics } from './composables/useTopics';
+import { useTopics } from './composables/useTopics';
 import { useGroup } from './composables/useGroup';
 import { useUrlWatcher } from './composables/navigation';
 import { fetchMessagesForTopic } from './services/useMessages';
@@ -40,6 +40,7 @@ const openChatContainerShow = ref(true);
 const showMobileAuth = ref(false);
 
 const { fetchAllGroups } = useGroup();
+const { fetchAllTopics } = useTopics();
 
 const { startPolling } = useUnreadMessagePolling(30000, false);
 
