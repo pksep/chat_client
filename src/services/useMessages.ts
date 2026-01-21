@@ -15,6 +15,12 @@ export const fetchMessagesForTopic = async (
       lastMessageId: opts?.lastMessageId
     });
 
+    if (opts?.lastMessageId) {
+      const existingMessages = getMessagesByTopicId(topicId);
+      const combinedMessages = [...messages, ...existingMessages];
+      saveMessagesToLocal(topicId, combinedMessages);
+      return combinedMessages;
+    }
     saveMessagesToLocal(topicId, messages);
 
     return messages;

@@ -199,15 +199,6 @@ const state = reactive({
 
 const isLoadingInitialMessages = ref(false);
 
-const updateMessages = () => {
-  if (props.contact?.id) {
-    const newMessages = getMessagesWithLoadingStatus();
-    state.messages = JSON.parse(JSON.stringify([...newMessages]));
-  } else {
-    state.messages = [];
-  }
-};
-
 const scrollState = reactive({
   isUserScrolling: false,
   previousScrollTop: 0,
@@ -218,16 +209,18 @@ const scrollState = reactive({
 const scrollToBottom = (smooth: boolean = false): void => {
   if (!chatWrapperRef?.value || !scrollState.shouldAutoScroll) return;
 
-  if (chatWrapperRef.value) {
-    if (smooth) {
-      chatWrapperRef.value.scrollTo({
-        top: chatWrapperRef.value.scrollHeight,
-        behavior: 'smooth'
-      });
-    } else {
-      chatWrapperRef.value.scrollTop = chatWrapperRef.value.scrollHeight;
-    }
-  }
+  // if (chatWrapperRef.value) {
+  //   if (smooth) {
+  //     console.log('test');
+
+  //     chatWrapperRef.value.scrollTo({
+  //       top: chatWrapperRef.value.scrollHeight,
+  //       behavior: 'smooth'
+  //     });
+  //   } else {
+  //     chatWrapperRef.value.scrollTop = chatWrapperRef.value.scrollHeight;
+  //   }
+  // }
 };
 
 let isScrollLoading = false;
@@ -248,32 +241,15 @@ const handleScroll = (): void => {
     scrollState.isInitialLoad = false;
   }
 
-  if (
-    distanceFromTop < 100 &&
-    !isScrollLoading &&
-    props.contact?.id &&
-    state.hasMoreMessages
-  ) {
+  if (distanceFromTop < 100 && !isScrollLoading && state.hasMoreMessages) {
     isScrollLoading = true;
 
     if (!getIsWebsocketConnecting()) {
       state.page += 1;
-      // fetchMessagesForTopic(props.contact.id, {
-      //   page: state.page,
-      //   limit: state.limit,
-      //   append: true
-      // })
-      //   .then(messages => {
-      //     if (messages.length < state.limit) {
-      //       state.hasMoreMessages = false;
-      //     }
-      //     updateMessages();
-      //   })
-      //   .finally(() => {
-      //     isScrollLoading = false;
-      //   });
+      fetchMessagesForTopic(route.value.id, {
+        lastMessageId: state.messages[0]?.id
+      });
     } else {
-      updateMessages();
       isScrollLoading = false;
     }
   }
@@ -286,8 +262,6 @@ watch(
   currentConnectingState => {
     previousConnectingState.value = currentConnectingState;
 
-    updateMessages();
-
     if (previousConnectingState.value && !currentConnectingState) {
       setTimeout(async () => {
         if (props.contact?.id) {
@@ -296,7 +270,6 @@ watch(
             //   page: 1,
             //   limit: state.limit
             // });
-            updateMessages();
           } catch (error) {
             console.error(
               'Failed to reload messages after connection restored:',
@@ -318,7 +291,6 @@ const handleReconnection = async () => {
       //   page: 1,
       //   limit: state.limit
       // });
-      updateMessages();
     } catch (error) {
       console.error('Failed to reload messages after reconnection:', error);
     }
@@ -396,13 +368,11 @@ onMounted(async () => {
           //   limit: state.limit
           // });
         }
-        updateMessages();
       }
     }
   );
 
   if (props.contact?.id) {
-    state.messages = [];
     state.hasMoreMessages = true;
     state.isLoadingMore = false;
     state.page = 1;
@@ -421,7 +391,6 @@ onMounted(async () => {
     } catch (error) {
       console.error('Failed to load initial messages:', error);
     } finally {
-      updateMessages();
       isLoadingInitialMessages.value = false;
     }
 
@@ -565,7 +534,6 @@ const handleSend = async (): Promise<void> => {
     console.error('[ChatSDK] Failed to send message:', error);
   }
 
-  updateMessages();
   scrollToBottom(true);
 };
 
@@ -585,7 +553,6 @@ const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
         file,
         onlyMedia
       });
-      updateMessages();
     } catch (error) {
       console.error('[ChatSDK] Failed to send file:', error);
     }

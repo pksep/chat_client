@@ -1,6 +1,7 @@
 <template>
   <div class="menu-info__buttons">
     <Button
+      v-if="state.topic"
       :type="ButtonTypeEnum.secondary"
       :size="SizesEnum.large"
       class="menu-info__secondary-button"
