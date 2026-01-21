@@ -33,11 +33,12 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import {
-  BarcodeScanner,
-  BarcodeFormat
-} from '@capacitor-mlkit/barcode-scanning';
 import { Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
+import { 
+  CapacitorBarcodeScanner,
+  CapacitorBarcodeScannerTypeHint,
+  CapacitorBarcodeScannerAndroidScanningLibrary
+} from '@capacitor/barcode-scanner';
 
 const emit = defineEmits<{
   (e: 'auth-success', token: string): void;
@@ -47,36 +48,22 @@ const scanError = ref('');
 const isScanning = ref(false);
 
 const scanQrCode = async () => {
-  scanError.value = '';
-  isScanning.value = true;
-
   try {
-    const { camera } = await BarcodeScanner.requestPermissions();
+    const result = await CapacitorBarcodeScanner.scanBarcode({
+      // Подсказка, какие коды искать (или ALL для всех)
+      hint: CapacitorBarcodeScannerTypeHint.ALL,
+      // Важно: явно просим использовать MLKit для Android (он быстрее ZXing)
+      android: {
+        scanningLibrary: CapacitorBarcodeScannerAndroidScanningLibrary.MLKIT
+      },
+      // Текст инструкции для пользователя (появится на экране камеры)
+      scanInstructions: "Наведите камеру на QR-код"
+    });
 
-    if (camera === 'granted' || camera === 'limited') {
-      const { barcodes } = await BarcodeScanner.scan({
-        formats: [BarcodeFormat.QrCode]
-      });
-
-      if (barcodes.length > 0) {
-        const token = barcodes[0].rawValue;
-        console.log('QR Scan Success:', token);
-
-        emit('auth-success', token);
-      }
-    } else {
-      scanError.value =
-        'Нет доступа к камере. Разрешите доступ в настройках телефона.';
-    }
-  } catch (e: any) {
-    console.error('Ошибка сканирования:', e);
-    if (e.message.includes('canceled')) {
-      scanError.value = '';
-    } else {
-      scanError.value = 'Ошибка запуска камеры: ' + e.message;
-    }
-  } finally {
-    isScanning.value = false;
+    console.log('Результат сканирования:', result.ScanResult);
+    return result.ScanResult;
+  } catch (error) {
+    console.error('Ошибка сканирования:', error);
   }
 };
 </script>
