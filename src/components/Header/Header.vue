@@ -93,7 +93,7 @@
     <MobileChatInfo
       is-menu-info
       :model-value="currentGroup"
-      :members="route.type === 'group' && groupMembers"
+      :members="route.type === 'group' && currentGroup?.members"
       @update:model-value="handleUpdateInformation"
       :data-testid="props.dataTestid"
     />
@@ -101,7 +101,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive, watch, onMounted } from 'vue';
+import { computed, reactive, watch } from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';
