@@ -29,19 +29,19 @@
         Ai Ассистент
       </h3>
     </div>
-    <template v-else-if="menuInfo">
+    <template v-else-if="currentGroup || user">
       <GroupProfile
         v-if="route.type === 'group'"
         class="chat__header-profile"
         avatar-alt="group-profile-alt"
-        :topic="menuInfo"
+        :topic="currentGroup"
         :data-testid="`${props.dataTestid}-Header-GroupProfile`"
       />
       <UserProfile
         v-else-if="route.type === 'dialogs'"
         class="chat__header-profile"
         avatar-alt="user-profile-alt"
-        :user="menuInfo.user"
+        :user
         :data-testid="`${props.dataTestid}-Header-UserProfile`"
       />
     </template>
@@ -92,8 +92,8 @@
   >
     <MobileChatInfo
       is-menu-info
-      :model-value="menuInfoState.information"
-      :members="route.type === 'group' ? groupApi.groupMembers.value || [] : []"
+      :model-value="currentGroup"
+      :members="route.type === 'group' ? groupMembers.value || [] : []"
       @update:model-value="handleUpdateInformation"
       :data-testid="props.dataTestid"
     />
@@ -101,7 +101,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive } from 'vue';
+import { computed, reactive, watch, onMounted } from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';
@@ -129,15 +129,13 @@ import {
   useUrlWatcher
 } from '../../composables/navigation';
 import { getTopicList } from '../../composables/useTopics';
-import { useGroup, getGroupById } from '../../composables/useGroup';
+import { useGroup } from '../../composables/useGroup';
 
-const groupApi = useGroup();
+const { groups, currentGroup, getGroupById } = useGroup();
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
-  dataTestid: () => 'Header'
+  dataTestid: 'Header'
 });
-
-const { groups } = useGroup();
 
 defineOptions({
   inheritAttrs: false
@@ -145,18 +143,11 @@ defineOptions({
 
 const route = useUrlWatcher();
 
-const emits = defineEmits<IHeaderEmits>();
+const user = computed(
+  () => getTopicList().find(topic => topic.id === route.value.id) || null
+);
 
-const menuInfo = computed(() => {
-  if (route.value.type === 'dialogs') {
-    const topics = getTopicList();
-    // Assuming getTopicList() returns an array, we want the topic matching the route
-    return topics.find(topic => topic.id === route.value.id) || null;
-  } else {
-    return getGroupById(route.value.id) || null;
-  }
-});
-console.log(groups.value);
+const emits = defineEmits<IHeaderEmits>();
 
 const state = reactive({
   loader: false,
@@ -168,7 +159,7 @@ const state = reactive({
   }
 });
 
-const { state: menuInfoState, handleUpdateInformation } = useMenuInfo();
+const { handleUpdateInformation } = useMenuInfo();
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
@@ -220,6 +211,13 @@ const getPopoverOptions = computed(() => {
   return popoverArray;
 });
 
+watch(
+  () => route.value.id,
+  async () => {
+    await getGroupById(route.value.id);
+  }
+);
+
 const updateNotificationStatus = async (): Promise<void> => {
   try {
     const isMuted = false;
@@ -259,6 +257,18 @@ const handleNotificationToggle = async (): Promise<void> => {
   await updateNotificationStatus();
   emits('unmount-notification', state.statusNotification.label);
 };
+
+watch(
+  () => groups.value.length,
+  async () => {
+    await getGroupById(route.value.id);
+  },
+  {
+    immediate: true
+  }
+);
+
+onMounted(async () => {});
 </script>
 
 <style scoped>

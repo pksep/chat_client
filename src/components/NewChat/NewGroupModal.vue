@@ -142,7 +142,6 @@ const {
   handleCloseGroupInfo
 } = useNewGroupModal(props, emits);
 
-// Filter selected contacts to only include IUser objects
 const filteredSelectedContacts = computed(() => {
   return selectedContacts.value.filter(
     contact =>
@@ -154,7 +153,6 @@ const filteredSelectedContacts = computed(() => {
 });
 
 const excludedContactIds = computed(() => {
-  // Create a set of contact IDs that are already in the selected contacts to exclude them from the selector
   const ids = new Set<string | number>();
   if (filteredSelectedContacts.value) {
     filteredSelectedContacts.value.forEach(contact => {

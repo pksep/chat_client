@@ -116,7 +116,7 @@ const {
   filteredMembers
 } = useMenuInfo();
 
-const { groupMembers, addGroupMembers, fetchGroupMembers } = useGroup();
+const { groupMembers, addGroupMembers } = useGroup();
 
 const topic = useUrlWatcher();
 
@@ -176,9 +176,6 @@ watch(
         isEnabled: true,
         topic: topic.value
       });
-      if (state.information?.groupId) {
-        await fetchGroupMembers(state.information.groupId);
-      }
     }
   },
   { immediate: true }

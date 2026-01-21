@@ -13,10 +13,9 @@ type IMenuInfoProps = {
   members?: IUser[];
 };
 
-// Define the simplified state interface (removed contacts since we use groupMembers)
 type IMenuInfoState = {
   openAddUser: boolean;
-  information: IMenuInfoInformation | null; // Store the information
+  information: IMenuInfoInformation | null;
 };
 
 export type IMenuInfoInformation = {
@@ -34,17 +33,14 @@ export type IMenuInfoEmits = {
 };
 
 export function useMenuInfo<Props extends IMenuInfoProps>() {
-  // Initialize the simplified state
   const state = reactive<IMenuInfoState>({
     openAddUser: false,
     information: null
   });
 
-  // Compute filtered members based on groupMembers from useGroup
   const computedFilteredMembers = computed(() => {
     const allUsers = getUsersList();
-    const { groupMembers } = useGroup(); // Get the current group members
-    // Use the current groupMembers to determine which users to exclude
+    const { groupMembers } = useGroup();
     const memberIds = new Set(groupMembers.value.map(member => member.id));
     return allUsers.filter(user => !memberIds.has(user.id));
   });
@@ -108,7 +104,6 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
         date: group?.createdAt ? new Date(group.createdAt) : undefined
       };
 
-      // Update the global group members state to ensure consistency
       const { setGroupMembers } = useGroup();
       if (members?.data) {
         setGroupMembers(members.data);
