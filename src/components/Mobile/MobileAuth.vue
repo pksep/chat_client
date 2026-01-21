@@ -34,7 +34,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
-import { 
+import {
   CapacitorBarcodeScanner,
   CapacitorBarcodeScannerTypeHint,
   CapacitorBarcodeScannerAndroidScanningLibrary
@@ -57,7 +57,7 @@ const scanQrCode = async () => {
         scanningLibrary: CapacitorBarcodeScannerAndroidScanningLibrary.MLKIT
       },
       // Текст инструкции для пользователя (появится на экране камеры)
-      scanInstructions: "Наведите камеру на QR-код"
+      scanInstructions: 'Наведите камеру на QR-код'
     });
 
     console.log('Результат сканирования:', result.ScanResult);
