@@ -40,10 +40,6 @@ import {
   CapacitorBarcodeScannerAndroidScanningLibrary
 } from '@capacitor/barcode-scanner';
 
-const emit = defineEmits<{
-  (e: 'auth-success', token: string): void;
-}>();
-
 const scanError = ref('');
 const isScanning = ref(false);
 
