@@ -93,7 +93,7 @@
     <MobileChatInfo
       is-menu-info
       :model-value="menuInfoState.information"
-      :members="menuInfoState.contacts"
+      :members="route.type === 'group' ? groupApi.groupMembers.value || [] : []"
       @update:model-value="handleUpdateInformation"
       :data-testid="props.dataTestid"
     />
@@ -129,11 +129,15 @@ import {
   useUrlWatcher
 } from '../../composables/navigation';
 import { getTopicList } from '../../composables/useTopics';
-import { getGroupList } from '../../composables/useGroup';
+import { useGroup, getGroupById } from '../../composables/useGroup';
+
+const groupApi = useGroup();
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
   dataTestid: () => 'Header'
 });
+
+const { groups } = useGroup();
 
 defineOptions({
   inheritAttrs: false
@@ -142,12 +146,17 @@ defineOptions({
 const route = useUrlWatcher();
 
 const emits = defineEmits<IHeaderEmits>();
-const menuInfo = computed(
-  () =>
-    (route.value.type === 'dialogs' ? getTopicList() : getGroupList()).find(
-      t => t.id === route.value.id
-    ) || null
-);
+
+const menuInfo = computed(() => {
+  if (route.value.type === 'dialogs') {
+    const topics = getTopicList();
+    // Assuming getTopicList() returns an array, we want the topic matching the route
+    return topics.find(topic => topic.id === route.value.id) || null;
+  } else {
+    return getGroupById(route.value.id) || null;
+  }
+});
+console.log(groups.value);
 
 const state = reactive({
   loader: false,

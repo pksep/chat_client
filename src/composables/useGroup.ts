@@ -7,7 +7,6 @@ import { sortTopics } from './useTopics';
 const groups = ref<ITopic[]>([]);
 const groupMembers = ref<IUser[]>([]);
 
-// Global functions that can be imported directly
 export const fetchAllGroups = async (
   page = 1,
   limit = 200
@@ -147,6 +146,16 @@ export const fetchGroupMemberCount = async (
   }
 };
 
+export const getGroupById = (groupId: string): ITopic | undefined => {
+  try {
+    const localGroup = groups.value.find(group => group.id === groupId);
+    return localGroup;
+  } catch (err) {
+    console.error('Failed to fetch group by ID:', err);
+    return undefined;
+  }
+};
+
 export const removeUserFromGroup = async (
   groupId: string,
   userId: string
@@ -204,15 +213,6 @@ export const updateLocalGroupInfo = (
 
 export const addGroupList = (value: ITopic): void => {
   groups.value = [value, ...groups.value];
-};
-
-export {
-  createGroup,
-  getGroupList,
-  setGroupList,
-  updateGroupList,
-  setGroupInfo,
-  quitGroup
 };
 
 export const useGroup = () => {
@@ -394,10 +394,21 @@ export const useGroup = () => {
     setGroupInfo,
     quitGroup,
     getGroupInfo,
+    getGroupById,
     fetchGroupMemberCount,
     updateLocalLastMessageGroup,
     updateLocalGroupDetails,
     updateLocalGroupInfo,
-    addGroupList
+    addGroupList,
+    setGroupMembers
   };
+};
+
+export {
+  createGroup,
+  getGroupList,
+  setGroupList,
+  updateGroupList,
+  setGroupInfo,
+  quitGroup
 };

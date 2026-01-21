@@ -4,7 +4,7 @@ import { ITopic } from '../components/interfaces/interfaces';
 import { Message, TopicSetting, TopicType } from '../services/useChatSDK/types';
 import { fetchAllGroups, updateLocalGroupInfo } from '../composables/useGroup';
 
-const topics = shallowRef<ITopic[]>([]);
+export const topics = shallowRef<ITopic[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 

@@ -128,8 +128,8 @@ const menuInfoClasses = computed(() => [
 
 const excludedContactIds = computed(() => {
   const ids = new Set<string | number>();
-  if (state.contacts) {
-    state.contacts.forEach(contact => {
+  if (groupMembers.value) {
+    groupMembers.value.forEach(contact => {
       if (contact && contact.id) {
         ids.add(contact.id);
       }
@@ -176,8 +176,11 @@ watch(
         isEnabled: true,
         topic: topic.value
       });
-      await fetchGroupMembers(state.information?.groupId);
+      if (state.information?.groupId) {
+        await fetchGroupMembers(state.information.groupId);
+      }
     }
-  }
+  },
+  { immediate: true }
 );
 </script>

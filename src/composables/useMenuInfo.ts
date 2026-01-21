@@ -1,7 +1,8 @@
-import { reactive, computed, watch } from 'vue';
+import { reactive, computed } from 'vue';
 import { useGroup } from '../composables/useGroup';
 import { getChatSDK } from '../services/useChat';
 import { getUsersList } from './useUsers';
+import { topics } from './useTopics';
 import type { IUser } from '../components/interfaces/interfaces';
 import { TopicType } from '../services/useChatSDK/types';
 import { RouteType } from './navigation/useUrlRouting';
@@ -12,11 +13,10 @@ type IMenuInfoProps = {
   members?: IUser[];
 };
 
+// Define the simplified state interface (removed contacts since we use groupMembers)
 type IMenuInfoState = {
   openAddUser: boolean;
-  contacts: IUser[];
-  filteredMembers: IUser[];
-  information: IMenuInfoInformation | null;
+  information: IMenuInfoInformation | null; // Store the information
 };
 
 export type IMenuInfoInformation = {
@@ -34,73 +34,53 @@ export type IMenuInfoEmits = {
 };
 
 export function useMenuInfo<Props extends IMenuInfoProps>() {
+  // Initialize the simplified state
   const state = reactive<IMenuInfoState>({
     openAddUser: false,
-    contacts: [],
-    filteredMembers: [],
     information: null
   });
 
-  const filteredMembers = computed(() => {
+  // Compute filtered members based on groupMembers from useGroup
+  const computedFilteredMembers = computed(() => {
     const allUsers = getUsersList();
-    const contactIds = new Set(state.contacts.map(contact => contact.id));
-    return allUsers.filter(user => !contactIds.has(user.id));
+    const { groupMembers } = useGroup(); // Get the current group members
+    // Use the current groupMembers to determine which users to exclude
+    const memberIds = new Set(groupMembers.value.map(member => member.id));
+    return allUsers.filter(user => !memberIds.has(user.id));
   });
-
-  watch(
-    () => state.contacts,
-    () => {
-      const allUsers = getUsersList();
-      const contactIds = new Set(state.contacts.map(contact => contact.id));
-      state.filteredMembers = allUsers.filter(user => !contactIds.has(user.id));
-    },
-    { deep: true }
-  );
 
   const handleContactClick = (): void => {
     state.openAddUser = true;
   };
 
-  const handleNewContact = async (contacts: IUser[]): Promise<void> => {
-    state.contacts = [...state.contacts, ...contacts];
-
-    try {
-      const { addGroupMembers, fetchGroupMembers } = useGroup();
-      const success = await addGroupMembers(
-        state.information.groupId,
-        contacts
-      );
-
-      if (success) {
-        state.contacts = await fetchGroupMembers(state.information.groupId);
-      } else {
-        console.error('Failed to add users to group');
-        state.contacts = await fetchGroupMembers(state.information.groupId);
-      }
-    } catch (error) {
-      console.error('Failed to invite users to group:', error);
-      const { fetchGroupMembers } = useGroup();
-      state.contacts = await fetchGroupMembers(state.information.groupId);
-    }
-  };
-
-  const handleUpdateInformation = (value: any) => {
+  const handleUpdateInformation = (value: IMenuInfoInformation) => {
     state.information = value;
-    if (state.information?.groupId) {
+
+    if (value?.groupId) {
       const { setGroupInfo } = useGroup();
-      setGroupInfo(state.information?.groupId, {
-        groupName: state.information?.name,
-        faceURL: state.information?.avatarUrl,
-        notification: null
+      setGroupInfo(value.groupId, {
+        groupName: value.name,
+        faceURL: value.avatarUrl || undefined,
+        introduction: undefined,
+        notification: null,
+        ex: undefined
       });
+    } else if (value?.topicId) {
+      const topicIndex = topics.value.findIndex(t => t.id === value.topicId);
+      if (topicIndex !== -1) {
+        const updatedTopic = { ...topics.value[topicIndex] };
+        if (value.name) updatedTopic.name = value.name;
+        if (value.avatarUrl) updatedTopic.avatarUrl = value.avatarUrl;
+
+        const updatedTopics = [...topics.value];
+        updatedTopics[topicIndex] = updatedTopic;
+        topics.value = updatedTopics;
+      }
     }
   };
 
   const checkGroupId = computed(
-    () =>
-      state.information?.groupId === undefined ||
-      state.information?.groupId === null ||
-      state.information?.groupId === ''
+    () => !state.information?.groupId || state.information?.groupId === ''
   );
 
   const initializeMenuInfo = async (
@@ -110,16 +90,15 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
     }
   ) => {
     if (!props.isEnabled) return;
+
     const sdk = getChatSDK();
     const topics = await sdk.getTopics(
       props.topic.type === 'group' ? TopicType.Group : TopicType.DM
     );
     const findTopic = topics.data.find(to => to.id === props.topic.id);
 
-    if (findTopic.type === TopicType.Group) {
+    if (findTopic?.type === TopicType.Group) {
       const { group, members } = await sdk.getGroup(findTopic.group.id);
-
-      state.contacts = members.data || [];
 
       state.information = {
         name: group?.title,
@@ -127,6 +106,23 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
         groupId: group?.id,
         topicId: findTopic.id,
         date: group?.createdAt ? new Date(group.createdAt) : undefined
+      };
+
+      // Update the global group members state to ensure consistency
+      const { setGroupMembers } = useGroup();
+      if (members?.data) {
+        setGroupMembers(members.data);
+      }
+    } else if (findTopic?.type === TopicType.DM) {
+      state.information = {
+        name:
+          findTopic.user?.nickname ||
+          (findTopic.user as Record<string, any>)?.['name'],
+        avatarUrl:
+          (findTopic.user as Record<string, any>)?.['faceURL'] ||
+          (findTopic.user as Record<string, any>)?.['avatarUrl'],
+        userId: findTopic.user?.id,
+        topicId: findTopic.id
       };
     }
   };
@@ -139,10 +135,9 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
     state,
     checkGroupId,
     handleContactClick,
-    handleNewContact,
     handleUpdateInformation,
     initializeMenuInfo,
     handleCloseAddUserModal,
-    filteredMembers
+    filteredMembers: computedFilteredMembers
   };
 }
