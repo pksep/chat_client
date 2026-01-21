@@ -133,7 +133,7 @@ import { useTopics } from '../../composables/useTopics';
 import { useGroup } from '../../composables/useGroup';
 
 const { groups, currentGroup, getGroupById } = useGroup();
-const { getTopicById, currentTopic } = useTopics();
+const { topics, currentTopic, getTopicById } = useTopics();
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
   dataTestid: 'Header'
@@ -261,15 +261,10 @@ const handleNotificationToggle = async (): Promise<void> => {
 };
 
 watch(
-  () => groups.value.length,
-  () => {
-    const { topics } = useTopics();
-    return topics.value;
-  },
+  [() => groups.value.length, () => topics.value.length],
   async () => {
     if (route.value.type === RouteTypes.DIALOGS) {
       await getTopicById(route.value.id);
-      console.log('Topic loaded:', currentTopic.value);
       return;
     }
     await getGroupById(route.value.id);
@@ -278,8 +273,6 @@ watch(
     immediate: true
   }
 );
-
-onMounted(async () => {});
 </script>
 
 <style scoped>
