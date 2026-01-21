@@ -92,7 +92,7 @@
           :file="getMessageFile(message)"
           :is-me-sender="props.user.id === message.senderUserId"
           :time="formatTime(new Date(message.createdAt))"
-          :sender="message.senderUser?.nickname || ''"
+          :sender="message.senderUser?.initials || ''"
           :avatar="message.senderUser?.avatarUrl || ''"
           :is-read="
             props.user.id === message.senderUserId
@@ -101,6 +101,7 @@
           "
           :message-status="message.status"
           :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
+          :data-message-id="message.id"
         />
       </template>
     </div>
@@ -153,11 +154,10 @@ import Loading from './Loading.vue';
 import { ContentEditor } from '@pksep/yui';
 import { useMastra, generateChatId } from '../services/useMastra';
 import { removeMessageLoading } from '../services/useChatDb';
-import { subscribeToMessageChanges } from '../services/useChat';
 import {
   sendMessageChat,
   getIsWebsocketConnecting,
-  getIsRecentlyReconnected
+  markAsRead
 } from '../services/useChat';
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
@@ -189,9 +189,7 @@ const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
 const state = reactive({
   messages: computed(() => getMessagesByTopicId(route.value.id)),
   chatId: null as string | null,
-  hasMoreMessages: true,
   isLoadingMore: false,
-  page: 1,
   limit: 50,
   aiMessages: [] as AIMessage[]
 });
@@ -205,26 +203,69 @@ const scrollState = reactive({
   isInitialLoad: true
 });
 
-const scrollToBottom = (smooth: boolean = false): void => {
-  if (!chatWrapperRef?.value || !scrollState.shouldAutoScroll) return;
-  console.log(smooth);
+let isScrollLoading = false;
+let hasMoreMessage = true;
+let scrollMarkReadTimeout: number | null = null;
+let intersectionObserver: IntersectionObserver | null = null;
 
-  // if (chatWrapperRef.value) {
-  //   if (smooth) {
-  //     console.log('test');
+const setupIntersectionObserver = () => {
+  if (intersectionObserver) {
+    intersectionObserver.disconnect();
+  }
 
-  //     chatWrapperRef.value.scrollTo({
-  //       top: chatWrapperRef.value.scrollHeight,
-  //       behavior: 'smooth'
-  //     });
-  //   } else {
-  //     chatWrapperRef.value.scrollTop = chatWrapperRef.value.scrollHeight;
-  //   }
-  // }
+  intersectionObserver = new IntersectionObserver(
+    entries => {
+      const visibleUnreadMessageIds: string[] = [];
+
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const messageId = entry.target.getAttribute('data-message-id');
+          if (messageId) {
+            // Check if this message is unread and not from the current user
+            const message = state.messages.find(m => m.id === messageId);
+            if (
+              message &&
+              message.senderUserId !== props.user?.id &&
+              message.status !== MessageStatus.Read
+            ) {
+              visibleUnreadMessageIds.push(messageId);
+            }
+          }
+        }
+      });
+
+      if (visibleUnreadMessageIds.length > 0 && route.value?.id) {
+        // Mark specific messages as read when they become visible
+        markAsRead({
+          messageIds: visibleUnreadMessageIds,
+          topicId: route.value.id
+        }).catch(error => {
+          console.warn('Failed to mark messages as read:', error);
+        });
+      }
+    },
+    {
+      root: chatWrapperRef.value,
+      threshold: 0.1, // Trigger when 10% of the message is visible
+      rootMargin: '0px 0px -50px 0px' // Trigger slightly before fully visible
+    }
+  );
+
+  // Observe all message elements
+  nextTick(() => {
+    if (chatWrapperRef.value) {
+      const messageElements =
+        chatWrapperRef.value.querySelectorAll('[data-message-id]');
+      messageElements.forEach(element => {
+        if (element instanceof HTMLElement) {
+          intersectionObserver?.observe(element);
+        }
+      });
+    }
+  });
 };
 
-let isScrollLoading = false;
-const handleScroll = (): void => {
+const handleScroll = async (): Promise<void> => {
   const el = chatWrapperRef.value;
   if (!el) return;
 
@@ -241,73 +282,41 @@ const handleScroll = (): void => {
     scrollState.isInitialLoad = false;
   }
 
-  if (distanceFromTop < 100 && !isScrollLoading && state.hasMoreMessages) {
+  if (scrollState.isUserScrolling && route.value?.id) {
+    if (scrollMarkReadTimeout) {
+      clearTimeout(scrollMarkReadTimeout);
+    }
+    scrollMarkReadTimeout = window.setTimeout(() => {
+      const unreadMessages = state.messages.filter(
+        message =>
+          message.senderUserId !== props.user?.id &&
+          message.status !== MessageStatus.Read
+      );
+
+      if (unreadMessages.length > 0) {
+        markAsRead({
+          messageIds: unreadMessages.map(m => m.id),
+          topicId: route.value.id
+        }).catch(error => {
+          console.warn('Failed to mark messages as read:', error);
+        });
+      }
+      scrollMarkReadTimeout = null;
+    }, 500);
+  }
+
+  if (distanceFromTop < 50 && !isScrollLoading && hasMoreMessage) {
     isScrollLoading = true;
 
     if (!getIsWebsocketConnecting()) {
-      state.page += 1;
-      fetchMessagesForTopic(route.value.id, {
+      const result = await fetchMessagesForTopic(route.value.id, {
         lastMessageId: state.messages[0]?.id
       });
-    } else {
-      isScrollLoading = false;
+      hasMoreMessage = result.length > 0;
     }
+    isScrollLoading = false;
   }
 };
-
-const previousConnectingState = ref(getIsWebsocketConnecting());
-
-watch(
-  () => getIsWebsocketConnecting(),
-  currentConnectingState => {
-    previousConnectingState.value = currentConnectingState;
-
-    if (previousConnectingState.value && !currentConnectingState) {
-      setTimeout(async () => {
-        if (props.contact?.id) {
-          try {
-            // await fetchMessagesForTopic(props.contact.id, {
-            //   page: 1,
-            //   limit: state.limit
-            // });
-          } catch (error) {
-            console.error(
-              'Failed to reload messages after connection restored:',
-              error
-            );
-          }
-        }
-      }, 300);
-    }
-  }
-);
-
-const lastReconnectedState = ref(false);
-
-const handleReconnection = async () => {
-  if (props.contact?.id) {
-    try {
-      // await fetchMessagesForTopic(props.contact.id, {
-      //   page: 1,
-      //   limit: state.limit
-      // });
-    } catch (error) {
-      console.error('Failed to reload messages after reconnection:', error);
-    }
-  }
-};
-
-watch(
-  () => getIsRecentlyReconnected(),
-  isReconnected => {
-    if (isReconnected && !lastReconnectedState.value) {
-      setTimeout(() => {
-        handleReconnection();
-      }, 500);
-    }
-    lastReconnectedState.value = isReconnected;
-  }
-);
 
 const mastraResult = ref(null as any);
 
@@ -356,49 +365,16 @@ onMounted(async () => {
     state.chatId = generateChatId();
   }
 
-  unsubscribeFromMessageChanges = subscribeToMessageChanges(
-    async (newMessageConversationId?: string) => {
-      await new Promise(resolve => setTimeout(resolve, 50));
-
-      if (newMessageConversationId === props.contact?.id) {
-        const timeSinceLastSend = Date.now() - lastMessageSentTime.value;
-        if (!getIsWebsocketConnecting() && timeSinceLastSend > 2000) {
-          // await fetchMessagesForTopic(newMessageConversationId, {
-          //   page: 1,
-          //   limit: state.limit
-          // });
-        }
-      }
-    }
-  );
-
   if (props.contact?.id) {
-    state.hasMoreMessages = true;
     state.isLoadingMore = false;
-    state.page = 1;
     isLoadingInitialMessages.value = true;
-
-    try {
-      if (!getIsWebsocketConnecting()) {
-        // const messages = await fetchMessagesForTopic(props.contact.id, {
-        //   page: state.page,
-        //   limit: state.limit
-        // });
-        // if (messages.length < state.limit) {
-        //   state.hasMoreMessages = false;
-        // }
-      }
-    } catch (error) {
-      console.error('Failed to load initial messages:', error);
-    } finally {
-      isLoadingInitialMessages.value = false;
-    }
 
     await nextTick();
     requestAnimationFrame(() => {
       if (chatWrapperRef?.value) {
         scrollState.shouldAutoScroll = true;
         scrollState.isInitialLoad = true;
+        setupIntersectionObserver();
       }
     });
   }
@@ -410,11 +386,19 @@ onUnmounted(() => {
     unsubscribeFromMessageChanges = null;
   }
 
+  if (scrollMarkReadTimeout) {
+    clearTimeout(scrollMarkReadTimeout);
+    scrollMarkReadTimeout = null;
+  }
+
+  if (intersectionObserver) {
+    intersectionObserver.disconnect();
+    intersectionObserver = null;
+  }
+
   if (state.chatId) {
     removeMessageLoading(state.chatId, state.aiMessages.length);
   }
-
-  console.log(state.messages, 'state.messages');
 });
 
 const clearAiMessages = () => {
@@ -448,7 +432,6 @@ watch(
     if (oldLength === 0 && newLength > 0) {
       if (!getIsWebsocketConnecting()) {
         scrollState.shouldAutoScroll = true;
-        scrollToBottom(true);
       }
     }
   },
@@ -470,6 +453,26 @@ watch(
   }
 );
 
+// Re-setup intersection observer when messages change
+watch(
+  () => state.messages,
+  () => {
+    nextTick(() => {
+      setupIntersectionObserver();
+    });
+  },
+  { deep: true }
+);
+
+const scrollToBottom = () => {
+  if (chatWrapperRef.value) {
+    setTimeout(() => {
+      chatWrapperRef.value.scrollTop =
+        chatWrapperRef.value.scrollHeight - chatWrapperRef.value.clientHeight;
+    }, 100);
+  }
+};
+
 const handleSend = async (): Promise<void> => {
   if (!inputText.value.trim()) return;
 
@@ -486,12 +489,9 @@ const handleSend = async (): Promise<void> => {
       state.aiMessages = [...state.aiMessages, userMessage];
 
       await nextTick();
-      requestAnimationFrame(() => scrollToBottom(true));
 
       try {
-        await mastraResult.value.sendMessage(text, () => {
-          requestAnimationFrame(() => scrollToBottom(true));
-        });
+        await mastraResult.value.sendMessage(text);
       } catch (error) {
         console.warn('Mastra failed to send message:', error);
       }
@@ -510,8 +510,11 @@ const handleSend = async (): Promise<void> => {
       };
       state.aiMessages = [...state.aiMessages, assistantMessage];
 
+      // Scroll to bottom after adding fallback messages
+      await nextTick();
+      scrollToBottom();
+
       console.warn('Mastra is not available, message added locally only');
-      requestAnimationFrame(() => scrollToBottom(true));
     }
     return;
   }
@@ -530,11 +533,12 @@ const handleSend = async (): Promise<void> => {
       topicId: route.value.id,
       text
     });
+
+    await nextTick();
+    scrollToBottom();
   } catch (error) {
     console.error('[ChatSDK] Failed to send message:', error);
   }
-
-  scrollToBottom(true);
 };
 
 const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
@@ -587,6 +591,27 @@ watch(
     if (!route.value?.id) return;
 
     fetchMessagesForTopic(route.value.id);
+    hasMoreMessage = true;
+
+    // Mark messages as read when viewing the topic
+    const unreadMessages = state.messages.filter(
+      message =>
+        message.senderUserId !== props.user?.id &&
+        message.status !== MessageStatus.Read
+    );
+    if (unreadMessages.length > 0) {
+      markAsRead({
+        messageIds: unreadMessages.map(m => m.id),
+        topicId: route.value.id
+      }).catch(error => {
+        console.warn('Failed to mark messages as read:', error);
+      });
+    }
+
+    // Reset intersection observer for new topic
+    nextTick(() => {
+      setupIntersectionObserver();
+    });
   },
   { deep: true, immediate: true }
 );

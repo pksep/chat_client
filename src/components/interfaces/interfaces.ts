@@ -45,6 +45,7 @@ export interface ITopic extends Topic {
   user?: IUser;
   name?: string;
   avatarUrl?: string;
+  unreadMessageCount?: number;
 }
 
 export interface IMenuProps {
