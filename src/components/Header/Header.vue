@@ -29,7 +29,7 @@
         Ai Ассистент
       </h3>
     </div>
-    <template v-else-if="currentGroup || user">
+    <template v-else-if="currentGroup || currentTopic">
       <GroupProfile
         v-if="route.type === 'group'"
         class="chat__header-profile"
@@ -41,7 +41,7 @@
         v-else-if="route.type === 'dialogs'"
         class="chat__header-profile"
         avatar-alt="user-profile-alt"
-        :user
+        :user="currentTopic.user"
         :data-testid="`${props.dataTestid}-Header-UserProfile`"
       />
     </template>
@@ -128,7 +128,12 @@ import {
   navigateToGroupsList,
   useUrlWatcher
 } from '../../composables/navigation';
-import { getTopicList } from '../../composables/useTopics';
+import { RouteTypes } from '../../composables/navigation/useUrlRouting';
+import {
+  getTopicById,
+  topics,
+  currentTopic
+} from '../../composables/useTopics';
 import { useGroup } from '../../composables/useGroup';
 
 const { groups, currentGroup, getGroupById } = useGroup();
@@ -142,10 +147,6 @@ defineOptions({
 });
 
 const route = useUrlWatcher();
-
-const user = computed(
-  () => getTopicList().find(topic => topic.id === route.value.id) || null
-);
 
 const emits = defineEmits<IHeaderEmits>();
 
@@ -214,6 +215,10 @@ const getPopoverOptions = computed(() => {
 watch(
   () => route.value.id,
   async () => {
+    if (route.value.type === RouteTypes.DIALOGS) {
+      await getTopicById(route.value.id);
+      return;
+    }
     await getGroupById(route.value.id);
   }
 );
@@ -260,7 +265,13 @@ const handleNotificationToggle = async (): Promise<void> => {
 
 watch(
   () => groups.value.length,
+  () => topics.value,
   async () => {
+    if (route.value.type === RouteTypes.DIALOGS) {
+      await getTopicById(route.value.id);
+      console.log('Topic loaded:', currentTopic.value);
+      return;
+    }
     await getGroupById(route.value.id);
   },
   {

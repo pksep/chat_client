@@ -1,10 +1,11 @@
-import { ref, shallowRef } from 'vue';
+import { ref } from 'vue';
 import { getChatSDK } from '../services/useChat';
 import { ITopic } from '../components/interfaces/interfaces';
 import { Message, TopicSetting, TopicType } from '../services/useChatSDK/types';
 import { fetchAllGroups, updateLocalGroupInfo } from '../composables/useGroup';
 
-export const topics = shallowRef<ITopic[]>([]);
+export const topics = ref<ITopic[]>([]);
+export const currentTopic = ref<ITopic | undefined>(undefined);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
@@ -41,7 +42,6 @@ export const createTopic = async (peerId: string): Promise<ITopic[]> => {
     const sdk = getChatSDK();
     const newTopic = await sdk.createTopic({ peerId });
 
-    // Force reactivity by creating new array reference
     topics.value = [newTopic, ...topics.value];
   } catch (err) {
     error.value = (err as Error).message;
@@ -128,4 +128,9 @@ export const sortTopics = (topics: ITopic[]): ITopic[] => {
 
 export const getTopicList = (): ITopic[] => {
   return sortTopics(topics.value || []);
+};
+
+export const getTopicById = (id: string): ITopic | undefined => {
+  currentTopic.value = topics.value.find(topic => topic.id === id);
+  return currentTopic.value;
 };
