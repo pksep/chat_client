@@ -1,4 +1,4 @@
-import { Message, Topic, Media, MediaTypeType } from '@pksep/zod-shared-chat';
+import { Message, Topic, Media } from '@pksep/zod-shared-chat';
 import { Reqi } from '@pksep/reqi';
 import { SearchParams, PaginatedResponse, MessageStatus } from './types';
 import { S3Service } from './s3Service';

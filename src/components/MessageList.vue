@@ -54,7 +54,11 @@
       :data-testid="`${props.dataTestid}-MessageList-UserMessagesContainer`"
     >
       <template v-for="(message, index) in state.messages" :key="message.id">
-        <div class="top-element" v-if="isNewDate(index) || message.isSystem">
+        <div
+          class="top-element"
+          v-if="isNewDate(index) || message.isSystem"
+          :data-message-id="message.id"
+        >
           <div
             v-if="isNewDate(index)"
             class="date-divider"
@@ -161,7 +165,7 @@ import {
 } from '../services/useChat';
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
-import type { ChatMessage, AIMessage } from '../types/messages';
+import type { AIMessage } from '../types/messages';
 import { MediaType } from '@pksep/zod-shared-chat';
 import { MessageStatus } from '../services/useChatSDK/types';
 import { useUrlWatcher } from '../composables/navigation';
@@ -587,10 +591,6 @@ const isNewDate = (index: number, isMastra: boolean = false) => {
     const prevDay = formatDay(prevMsg.createdAt);
     return currentDay !== prevDay;
   }
-};
-
-const getSystemMessageContent = (message: ChatMessage) => {
-  return message.systemMessageContent || message.text || '';
 };
 
 watch(

@@ -118,7 +118,7 @@
                 @click.stop="unmountTopicClick(contact)"
               >
                 <Avatar
-                  :url="contact.avatarUrl"
+                  :url="`${config.CHAT_PATH_TO_FILE_CDN}/${contact.avatarUrl}`"
                   :initials="contact.name"
                   :data-testid="`${props.dataTestid}-Menu-UserAvatar${index + 1}`"
                 />
@@ -173,6 +173,7 @@ import {
 import { getTopicList } from '../composables/useTopics';
 import { getAuthUser } from '../composables/useAuth';
 import TopicList from './ContactList/TopicList.vue';
+import { getConfig } from '../services/useConfig';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: () => 'Menu'
@@ -207,6 +208,8 @@ const state = reactive({
 const authUser = computed(() => getAuthUser());
 
 const emits = defineEmits<IMenuEmits>();
+
+const config = getConfig();
 
 const { state: isCollapse, toggle } = useResizeState({
   breakpoint: MAX_W_XL,

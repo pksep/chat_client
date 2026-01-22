@@ -85,12 +85,10 @@
         </div>
       </article>
 
-      <template
-        v-if="!props.loader"
-        v-for="media in props.media || []"
-        :key="media.id"
-      >
+      <template v-if="!props.loader">
         <article
+          v-for="media in props.media || []"
+          :key="media.id"
           :class="messageArticleStyles(media.type)"
           @contextmenu="evt => openActivePopover('', evt)"
           :data-testid="`${dataTestid}-MessageBubble-Article`"
@@ -105,8 +103,11 @@
               :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
             >
               <img
-                @click="() => (fullImagePath = media.path)"
-                :src="media.path"
+                @click="
+                  () =>
+                    (fullImagePath = `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`)
+                "
+                :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`"
                 :alt="props.sender ? props.sender + ' image' : 'Shared image'"
                 :data-testid="`${dataTestid}-MessageBubble-Image`"
               />
@@ -117,8 +118,11 @@
               :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
             >
               <video
-                @click="() => (fullImagePath = media.path)"
-                :src="media.path"
+                @click="
+                  () =>
+                    (fullImagePath = `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`)
+                "
+                :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`"
                 controls
                 :data-testid="`${dataTestid}-MessageBubble-Video`"
                 :aria-label="
@@ -129,7 +133,10 @@
 
             <div
               v-if="media.type === MediaType.File"
-              @click="() => (fullImagePath = media.path)"
+              @click="
+                () =>
+                  (fullImagePath = `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`)
+              "
               class="message-content__file"
               :data-testid="`${dataTestid}-MessageBubble-FileContainer`"
             >
@@ -210,6 +217,7 @@ import MessageStatusIcons from './MessageStatusIcons.vue';
 import { getFormatFileSize, getShortName } from '../../utils/getFormatFileSize';
 import { SliderModal } from '@pksep/yui';
 import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
+import { getConfig } from '../../services/useConfig';
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
@@ -233,6 +241,8 @@ const messageArticlesStyles = computed(() => ({
   message__content__articles: true,
   message__content__articles__my: props.isMeSender
 }));
+
+const config = getConfig();
 
 const blockquote = computed(() => false);
 

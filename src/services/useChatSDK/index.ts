@@ -551,7 +551,7 @@ export class ChatSDK {
       parsed: false
     })) as any;
     const data = await response.json();
-    return data.url;
+    return data.objectName;
   }
 
   async updateMessageStatus(

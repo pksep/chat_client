@@ -44,7 +44,7 @@
         <template #tab2>
           <div class="menu-info__group-info new-group-info">
             <Avatar
-              :url="avatarPreview"
+              :url="`${config.CHAT_PATH_TO_FILE_CDN}/${avatarPreview}`"
               :alt="groupName"
               class="user-profile__avatar"
               :initials="groupName"
@@ -111,6 +111,7 @@ import { IUser } from '../interfaces/interfaces';
 import { useNewGroupModal } from './composables/useNewGroupModal';
 import { computed } from 'vue';
 import { getUsersList } from '../../composables/useUsers';
+import { getConfig } from '../../services/useConfig';
 
 const props = withDefaults(defineProps<INewContactProps & { user?: IUser }>(), {
   open: false,
@@ -122,6 +123,8 @@ const emits = defineEmits<{
 }>();
 
 const contacts = computed(() => getUsersList());
+
+const config = getConfig();
 
 const {
   avatarInputRef,

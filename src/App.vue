@@ -13,6 +13,7 @@ const config: IChatContainerConfig = {
   CHAT_API_DOMAIN: import.meta.env.VITE_CHAT_API_DOMAIN,
   CHAT_WS_DOMAIN: import.meta.env.VITE_CHAT_WS_DOMAIN,
   CHAT_ERP_URL: import.meta.env.VITE_ERP_URL,
+  CHAT_PATH_TO_FILE_CDN: import.meta.env.VITE_PATH_TO_FILE_CDN,
   CHAT_S3_BUCKET_NAME: import.meta.env.VITE_CHAT_S3_BUCKET_NAME,
   CHAT_S3_REGION: import.meta.env.VITE_CHAT_S3_REGION,
   CHAT_S3_ACCESS_KEY_ID: import.meta.env.VITE_CHAT_S3_ACCESS_KEY_ID,

@@ -11,7 +11,7 @@
   <button class="menu-info__avatar-button" @click="openEditProfileIcon">
     <Avatar
       :initials="model?.name"
-      :url="model?.avatarUrl"
+      :url="`${config.CHAT_PATH_TO_FILE_CDN}/${model?.avatarUrl}`"
       alt="use-avatar-circle"
     />
   </button>
@@ -43,6 +43,7 @@ import { ModalCroppedAvatar, Avatar } from '@pksep/yui';
 import NewChatInformationForm from './NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from './MenuInfoButtons.vue';
 import type { IMenuInfoInformation } from '../composables/useMenuInfo';
+import { getConfig } from '../services/useConfig';
 
 withDefaults(
   defineProps<{
@@ -57,6 +58,8 @@ withDefaults(
 const model = defineModel<IMenuInfoInformation>();
 
 const avatarInputRef = useTemplateRef('avatarInputRef');
+
+const config = getConfig();
 
 const {
   state,

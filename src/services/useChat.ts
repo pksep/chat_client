@@ -1,7 +1,7 @@
 import { ref, shallowRef } from 'vue';
 import { ChatSDK } from './useChatSDK';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
-import { Media, MediaType, MediaTypeType, User } from '@pksep/zod-shared-chat';
+import { User } from '@pksep/zod-shared-chat';
 import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { setAuthUser, getAuthUser } from '../composables/useAuth';
@@ -195,20 +195,6 @@ export const sendMessageChat = async (params: {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);
   }
 };
-
-export function getMediaTypeByPath(path: string): MediaTypeType {
-  const ext = path.split('?')[0].split('.').pop()?.toLowerCase();
-
-  if (
-    ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'avif'].includes(ext!)
-  )
-    return MediaType.Image;
-
-  if (['mp4', 'webm', 'mov', 'avi', 'mkv', 'flv', 'wmv', 'm4v'].includes(ext!))
-    return MediaType.Video;
-
-  return MediaType.File;
-}
 
 export const uploadFile = async (
   file: File
