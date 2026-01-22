@@ -38,7 +38,8 @@ export enum WebSocketEventType {
   REQUEST_MESSAGE_HISTORY = 'REQUEST_MESSAGE_HISTORY',
   MESSAGE_HISTORY_RESPONSE = 'MESSAGE_HISTORY_RESPONSE',
   CHANGE_TOPIC = 'changeTopic',
-  CHANGE_MESSAGE = 'changeMessage'
+  CHANGE_MESSAGE = 'changeMessage',
+  READ_MESSAGE = 'readMessage'
 }
 
 export interface WebSocketEventPayloads {
@@ -54,6 +55,11 @@ export interface WebSocketEventPayloads {
     data: Message;
     type: 'NEW';
     messageId: string;
+  };
+  [WebSocketEventType.READ_MESSAGE]: {
+    messageIds: string[];
+    topicId: string;
+    userId?: string;
   };
   [WebSocketEventType.NEW_MESSAGE]: Message;
   [WebSocketEventType.EDIT_MESSAGE]: { messageId: string; text: string };
