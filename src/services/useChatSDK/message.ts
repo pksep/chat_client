@@ -19,7 +19,7 @@ export interface ChatMessageInterface {
     topicId: string,
     messageId: string
   ): Promise<{ success: boolean }>;
-  uploadMedia(file: File, topicId: string, messageId?: string): Promise<Media>;
+  uploadMedia(file: File): Promise<Media>;
   searchMessages(
     query: string,
     params?: SearchParams
@@ -110,17 +110,9 @@ export class ChatMessage implements ChatMessageInterface {
     }
   }
 
-  async uploadMedia(
-    file: File,
-    topicId: string,
-    messageId?: string
-  ): Promise<Media> {
+  async uploadMedia(file: File): Promise<Media> {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('topicId', topicId);
-    if (messageId) {
-      formData.append('messageId', messageId);
-    }
 
     try {
       const response = (await this.reqi.post<Media>('/media/upload', formData, {

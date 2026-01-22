@@ -166,6 +166,15 @@ div.message-content__file {
   }
 }
 
+.message__content__articles {
+  display: grid;
+  gap: 5px;
+}
+
+.message__content__articles__my {
+  justify-items: end;
+}
+
 @keyframes pulse {
   0%,
   100% {

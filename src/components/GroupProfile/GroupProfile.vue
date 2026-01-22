@@ -5,7 +5,7 @@
     :data-testid="`${dataTestid}-UserProfile-Container`"
   >
     <Avatar
-      :url="props.topic.group?.avatarUrl"
+      :url="`${config.CHAT_PATH_TO_FILE_CDN}/${props.topic.group?.avatarUrl}`"
       :alt="props.topic.group?.avatarUrl || 'group-avatar'"
       class="user-profile__avatar"
       :initials="props.topic.group?.title || 'G'"
@@ -30,11 +30,14 @@
 <script lang="ts" setup>
 import { Avatar } from '@pksep/yui';
 import { IGroupProfileProps } from '../interfaces/interfaces';
+import { getConfig } from '../../services/useConfig';
 
 const props = withDefaults(defineProps<IGroupProfileProps>(), {
   dataTestid: 'GroupProfile',
   topic: () => null
 });
+
+const config = getConfig();
 
 defineOptions({
   inheritAttrs: false

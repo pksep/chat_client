@@ -33,7 +33,7 @@
         <Avatar
           class="contact-list__avatar"
           :initials="topic.name"
-          :url="topic.avatarUrl"
+          :url="`${config.CHAT_PATH_TO_FILE_CDN}/${topic.avatarUrl}`"
           :alt="`Avatar of ${topic.name}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           is-icon
@@ -164,6 +164,7 @@ import {
   navigateToGroup,
   useUrlWatcher
 } from '../../composables/navigation';
+import { getConfig } from '../../services/useConfig';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
@@ -191,6 +192,8 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
 const authedUser = computed(() => getAuthUser());
+
+const config = getConfig();
 
 const handlePin = (topic: ITopic): void => {
   const { togglePinTopic } = useTopics();

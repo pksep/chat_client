@@ -12,7 +12,7 @@
     >
       <Avatar
         is-icon
-        :url="information?.avatarUrl"
+        :url="`${config.CHAT_PATH_TO_FILE_CDN}/${information?.avatarUrl}`"
         :initials="information?.name"
         :caption="`image with a channel ${information?.name}`"
         class="modal-info-mobile__avatar"
@@ -70,6 +70,7 @@ import ContactListInModal from '../ContactList/ContactListInModal.vue';
 import { IMenuInfoInformation } from '../../composables/useMenuInfo';
 import { useInformationMenu } from '../../composables/useInformationMenu';
 import type { IUser } from '../interfaces/interfaces';
+import { getConfig } from '../../services/useConfig';
 
 interface IMobileChatInfoProps {
   members: IUser[];
@@ -96,6 +97,8 @@ const excludedContactIds = computed(() => {
 });
 
 const information = defineModel<IMenuInfoInformation>();
+
+const config = getConfig();
 
 const avatarInputRef = useTemplateRef('avatarInputRef');
 

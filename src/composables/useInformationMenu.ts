@@ -44,8 +44,8 @@ export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
   };
 
   const onSaveAvatar = async (file: File): Promise<void> => {
-    const url = await uploadFile(file);
-    model.value = { ...model.value, avatarUrl: url };
+    const { path } = await uploadFile(file);
+    model.value = { ...model.value, avatarUrl: path };
   };
 
   const handleSave = async (config: { name: string }): Promise<void> => {

@@ -550,14 +550,6 @@ export class ChatSDK {
     this.socket.emit(WebSocketEventType.READ_MESSAGE, { messageIds, topicId });
   }
 
-  async uploadMedia(
-    file: File,
-    topicId: string,
-    messageId?: string
-  ): Promise<Media> {
-    return this.message.uploadMedia(file, topicId, messageId);
-  }
-
   async uploadFile(file: File): Promise<string> {
     const formData = new FormData();
     formData.append('file', file);
@@ -566,7 +558,7 @@ export class ChatSDK {
       parsed: false
     })) as any;
     const data = await response.json();
-    return data.url;
+    return data.objectName;
   }
 
   async updateMessageStatus(

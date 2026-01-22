@@ -1,73 +1,98 @@
 <template>
-  <div class="mobile-auth-container">
-    <div
-      class="qr-content"
-      style="
-        position: fixed;
-        width: 100dvw;
-        height: 100dvh;
-        object-fit: contain;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-      "
-    >
-      <h2>Мобильный вход</h2>
+  <main class="mobile-auth-container">
+    <picture class="mobile-auth-container__logo">
+      <img src="/images/sep-chat-logo.svg" alt="logotype of Chat Logo" />
+    </picture>
 
+    <section class="mobile-auth-container__qr-content">
+      <h2 class="mobile-auth-container__qr-content__title">Вход в систему</h2>
       <Button
+        class="mobile-auth-container__qr-content__button"
         :type="ButtonTypeEnum.primary"
-        :size="SizesEnum.large"
+        :size="SizesEnum.medium"
         @click="scanQrCode"
         :loading="isScanning"
       >
-        Авторизоваться по QR
+        Вход с помощью QR
       </Button>
+    </section>
 
-      <p v-if="scanError" style="color: red; text-align: center; padding: 10px">
-        {{ scanError }}
-      </p>
-    </div>
-  </div>
+    <PushNotification
+      v-if="isError"
+      :class="[
+        'mobile-auth-container__error',
+        {
+          'mobile-auth-container__error--no-error': !isError
+        }
+      ]"
+      title="Ошибка"
+      :push-key="notificationKey"
+      :description="scanError"
+      :type="MessageTypeEnum.error"
+      @close="() => (isError = false)"
+    />
+  </main>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import { Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
+import { ref, nextTick } from 'vue';
+import { Capacitor } from '@capacitor/core';
 import {
   CapacitorBarcodeScanner,
   CapacitorBarcodeScannerTypeHint,
   CapacitorBarcodeScannerAndroidScanningLibrary
 } from '@capacitor/barcode-scanner';
+import {
+  PushNotification,
+  Button,
+  ButtonTypeEnum,
+  SizesEnum,
+  MessageTypeEnum
+} from '@pksep/yui';
 
 const scanError = ref('');
+const isError = ref(false);
 const isScanning = ref(false);
+const notificationKey = ref(0);
 
 const scanQrCode = async () => {
+  isError.value = false;
+  scanError.value = '';
+
+  await nextTick();
+
+  notificationKey.value++;
+
+  if (!Capacitor.isNativePlatform() && !window.isSecureContext) {
+    scanError.value = 'Соединение не защищено (HTTP). Камера недоступна.';
+    isError.value = true;
+    return;
+  }
+
   try {
+    isScanning.value = true;
     const result = await CapacitorBarcodeScanner.scanBarcode({
-      // Подсказка, какие коды искать (или ALL для всех)
       hint: CapacitorBarcodeScannerTypeHint.ALL,
-      // Важно: явно просим использовать MLKit для Android (он быстрее ZXing)
       android: {
         scanningLibrary: CapacitorBarcodeScannerAndroidScanningLibrary.MLKIT
       },
-      // Текст инструкции для пользователя (появится на экране камеры)
       scanInstructions: 'Наведите камеру на QR-код'
     });
 
-    console.log('Результат сканирования:', result.ScanResult);
-    return result.ScanResult;
+    if (result.ScanResult) {
+      isScanning.value = false;
+      return result.ScanResult;
+    } else {
+      scanError.value = 'Сканирование отменено';
+      isError.value = true;
+      isScanning.value = false;
+    }
   } catch (error) {
     console.error('Ошибка сканирования:', error);
+    scanError.value = 'Не удалось открыть камеру';
+    isError.value = true;
+  } finally {
+    isScanning.value = false;
   }
 };
 </script>
-
-<style>
-.error-text {
-  color: #ff4d4f;
-  margin-top: 15px;
-  font-size: 14px;
-}
-</style>
