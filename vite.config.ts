@@ -9,7 +9,6 @@ import { VitePWA } from 'vite-plugin-pwa';
 import basicSsl from '@vitejs/plugin-basic-ssl';
 
 export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
-
   const vuePlugin = vue({
     template: {
       compilerOptions: {

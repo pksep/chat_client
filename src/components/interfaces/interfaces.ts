@@ -4,7 +4,8 @@ import {
   TopicSetting,
   Topic,
   Message,
-  Group
+  Group,
+  Media
 } from '@pksep/zod-shared-chat';
 
 export interface IHeaderProps {
@@ -60,6 +61,12 @@ export interface IMenuRightProps extends IMenuProps {
   groupId?: string;
 }
 
+export interface IMedia extends Media {
+  publicUrl: string;
+  size: number;
+  originName: string;
+}
+
 export enum MessageStatusEnum {
   READ = 'READ',
   DELIVERED = 'DELIVERED',
@@ -73,6 +80,7 @@ export interface IChatContainerConfig {
   CHAT_API_DOMAIN?: string;
   CHAT_WS_DOMAIN?: string;
   CHAT_ERP_URL?: string;
+  CHAT_PATH_TO_FILE_CDN?: string;
   CHAT_S3_BUCKET_NAME?: string;
   CHAT_S3_REGION?: string;
   CHAT_S3_ACCESS_KEY_ID?: string;
@@ -102,4 +110,5 @@ export interface IGroupProfileProps {
 
 export interface IMessage extends Message {
   senderUser?: IUser;
+  media?: IMedia[];
 }
