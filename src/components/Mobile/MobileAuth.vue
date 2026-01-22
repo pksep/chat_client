@@ -43,7 +43,7 @@ import {
   CapacitorBarcodeScanner,
   CapacitorBarcodeScannerTypeHint,
   CapacitorBarcodeScannerAndroidScanningLibrary
-} from '@capacitor-mlkit/barcode-scanning';
+} from '@capacitor/barcode-scanner';
 import {
   PushNotification,
   Button,
@@ -53,15 +53,12 @@ import {
 } from '@pksep/yui';
 
 const scanError = ref('');
-const isScanning = ref(false);
 const isError = ref(false);
+const isScanning = ref(false);
 
 const scanQrCode = async () => {
-  scanError.value = '';
-  isScanning.value = true;
-  isError.value = false;
-
   try {
+    isScanning.value = true;
     const result = await CapacitorBarcodeScanner.scanBarcode({
       hint: CapacitorBarcodeScannerTypeHint.ALL,
       android: {
@@ -69,11 +66,20 @@ const scanQrCode = async () => {
       },
       scanInstructions: 'Наведите камеру на QR-код'
     });
-    scanError.value = 'Не удалось открыть камеру';
-    return result.ScanResult;
+    if (result.ScanResult) {
+      isScanning.value = false;
+      return result.ScanResult;
+    } else {
+      scanError.value = 'Не удалось открыть камеру';
+      isError.value = true;
+      isScanning.value = false;
+    }
   } catch (error) {
-    isError.value = true;
     console.error('Ошибка сканирования:', error);
+    scanError.value = 'Не удалось открыть камеру';
+    isError.value = true;
+  } finally {
+    isScanning.value = false;
   }
 };
 </script>
