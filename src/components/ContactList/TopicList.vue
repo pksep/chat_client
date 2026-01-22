@@ -73,12 +73,18 @@
           </div>
           <div class="contact-list__bottom">
             <div
-              v-if="topic.lastMessage?.status !== MessageStatusEnum.READ"
-              class="contact-list__notification"
+              v-if="
+                topic.unreadMessageCount > 0 &&
+                topic.lastMessage?.senderUserId !== authedUser.id
+              "
+              :class="{
+                'contact-list__notification': true,
+                'contact-list__notification--muted': topic.info.isMute
+              }"
               :data-testid="`${props.dataTestid}-ContactList-Notification${index + 1}`"
-              :aria-label="`${1} new messages`"
+              :aria-label="`${topic.unreadMessageCount} new messages`"
             >
-              {{ 1 }}
+              {{ topic.unreadMessageCount }}
             </div>
             <div
               v-if="topic.info?.isPin"

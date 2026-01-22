@@ -12,9 +12,14 @@ import {
 } from './useGroup';
 import {
   addTopicList,
+  changeUnreadMessageCount,
   updateLocalLastMessageTopic
 } from '../composables/useTopics';
-import { addMessageToLocal } from './useMessages';
+import {
+  addMessageToLocal,
+  changeLocalReadStatus,
+  playNotificationSound
+} from './useMessages';
 
 let chatSDK: ChatSDK | null = null;
 
@@ -87,10 +92,18 @@ const setupChatListeners = (): void => {
   chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_MESSAGE, ({ payload }) => {
     if (payload.type === 'NEW') {
       addMessageToLocal(payload.data.topicId, payload.data);
+      if (payload.data.senderUserId !== currentUserId.value) {
+        playNotificationSound(payload.data.topicId);
+        changeUnreadMessageCount(1, payload.data.topicId);
+      }
 
       updateLocalLastMessageTopic(payload.data.topicId, payload.data);
       updateLocalLastMessageGroup(payload.data.topicId, payload.data);
     }
+  });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.READ_MESSAGE, ({ payload }) => {
+    changeLocalReadStatus(payload.topicId, payload.messageIds);
   });
 };
 
@@ -179,7 +192,6 @@ export const sendMessageChat = async (params: {
       const uploaded = await sdk.uploadMedia(params.file, params.topicId);
       media = [uploaded];
     }
-    console.log('sendWebSocketEvent', params.topicId);
 
     sdk.sendWebSocketEvent(WebSocketEventType.SEND_MESSAGE, {
       topicId: params.topicId,
@@ -256,28 +268,14 @@ export const getIsWebsocketConnecting = () => isWebsocketConnecting.value;
 
 export const getIsRecentlyReconnected = () => isRecentlyReconnected.value;
 
-export const markAsRead = async (topicId: string): Promise<void> => {
+export const markAsRead = async (dto: {
+  messageIds: string[];
+  topicId: string;
+}): Promise<void> => {
   const sdk = getChatSDK();
-  const messages = [];
-  const updatedMessages = messages.map(message => {
-    if (message.senderUserId !== currentUserId.value) {
-      return {
-        ...message,
-        status: MessageStatus.Read
-      };
-    }
-    return message;
-  });
+  const { messageIds, topicId } = dto;
 
-  saveMessagesToLocal(topicId, updatedMessages);
-  notifyMessageChange(topicId);
+  if (messageIds.length === 0) return;
 
-  const unreadMessages = messages.filter(
-    message => message.senderUserId !== currentUserId.value
-  );
-  await Promise.all(
-    unreadMessages.map(message =>
-      sdk.updateMessageStatus(message.id, MessageStatus.Read)
-    )
-  );
+  await sdk.markMessagesAsRead(topicId, messageIds);
 };

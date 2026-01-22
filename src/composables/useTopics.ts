@@ -1,8 +1,13 @@
 import { ref, shallowRef } from 'vue';
 import { getChatSDK } from '../services/useChat';
 import { ITopic } from '../components/interfaces/interfaces';
-import { Message, TopicSetting, TopicType } from '../services/useChatSDK/types';
-import { updateLocalGroupInfo } from '../services/useGroup';
+import {
+  Message,
+  TopicSetting,
+  TopicType,
+  MessageStatus
+} from '../services/useChatSDK/types';
+import { getGroupList, updateLocalGroupInfo } from '../services/useGroup';
 
 const topics = shallowRef<ITopic[]>([]);
 const loading = ref(false);
@@ -58,6 +63,37 @@ export const updateLocalLastMessageTopic = (
   const topic = topics.value.find(topic => topic.id === topicId);
   if (topic) {
     topic.lastMessage = lastMessage;
+  }
+
+  topics.value = [...topics.value];
+};
+
+export const updateLocalTopicReadStatus = (
+  topicId: string,
+  messageIds: string[]
+): void => {
+  const groups = getGroupList();
+  const topic = [...topics.value, ...groups].find(
+    topic => topic.id === topicId
+  );
+  if (topic) {
+    const lastMessage = topic.lastMessage;
+    if (lastMessage && messageIds.includes(lastMessage.id)) {
+      lastMessage.status = MessageStatus.Read;
+    }
+  }
+
+  topics.value = [...topics.value];
+};
+
+export const changeUnreadMessageCount = (delta: number, topicId: string) => {
+  const groups = getGroupList();
+  const topic = [...topics.value, ...groups].find(
+    topic => topic.id === topicId
+  );
+
+  if (topic) {
+    topic.unreadMessageCount += delta;
   }
 
   topics.value = [...topics.value];
@@ -121,4 +157,13 @@ export const sortTopics = (topics: ITopic[]): ITopic[] => {
 
 export const getTopicList = (): ITopic[] => {
   return sortTopics(topics.value || []);
+};
+
+export const getTopicById = (topicId: string): ITopic | undefined => {
+  return topics.value.find(topic => topic.id === topicId);
+};
+
+export const isTopicMuted = (topicId: string): boolean => {
+  const topic = getTopicById(topicId);
+  return topic?.info?.isMute || false;
 };

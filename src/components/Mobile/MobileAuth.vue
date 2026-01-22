@@ -40,8 +40,9 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import {
-  BarcodeScanner,
-  BarcodeFormat
+  CapacitorBarcodeScanner,
+  CapacitorBarcodeScannerTypeHint,
+  CapacitorBarcodeScannerAndroidScanningLibrary
 } from '@capacitor-mlkit/barcode-scanning';
 import {
   PushNotification,
@@ -50,10 +51,6 @@ import {
   SizesEnum,
   MessageTypeEnum
 } from '@pksep/yui';
-
-const emit = defineEmits<{
-  (e: 'auth-success', token: string): void;
-}>();
 
 const scanError = ref('');
 const isScanning = ref(false);
@@ -65,33 +62,18 @@ const scanQrCode = async () => {
   isError.value = false;
 
   try {
-    const { camera } = await BarcodeScanner.requestPermissions();
-
-    if (camera === 'granted' || camera === 'limited') {
-      const { barcodes } = await BarcodeScanner.scan({
-        formats: [BarcodeFormat.QrCode]
-      });
-
-      if (barcodes.length > 0) {
-        const token = barcodes[0].rawValue;
-        console.log('QR Scan Success:', token);
-
-        emit('auth-success', token);
-      }
-    } else {
-      isError.value = true;
-      scanError.value = 'Не удалось открыть камеру';
-    }
-  } catch (e: any) {
+    const result = await CapacitorBarcodeScanner.scanBarcode({
+      hint: CapacitorBarcodeScannerTypeHint.ALL,
+      android: {
+        scanningLibrary: CapacitorBarcodeScannerAndroidScanningLibrary.MLKIT
+      },
+      scanInstructions: 'Наведите камеру на QR-код'
+    });
+    scanError.value = 'Не удалось открыть камеру';
+    return result.ScanResult;
+  } catch (error) {
     isError.value = true;
-    console.error('Ошибка сканирования:', e);
-    if (e.message.includes('canceled')) {
-      scanError.value = '';
-    } else {
-      scanError.value = 'Ошибка запуска камеры: ' + e.message;
-    }
-  } finally {
-    isScanning.value = false;
+    console.error('Ошибка сканирования:', error);
   }
 };
 </script>

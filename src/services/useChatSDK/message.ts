@@ -19,10 +19,6 @@ export interface ChatMessageInterface {
     topicId: string,
     messageId: string
   ): Promise<{ success: boolean }>;
-  markMessagesAsRead(
-    topicId: string,
-    messageIds: string[]
-  ): Promise<{ success: boolean }>;
   uploadMedia(file: File, topicId: string, messageId?: string): Promise<Media>;
   searchMessages(
     query: string,
@@ -111,25 +107,6 @@ export class ChatMessage implements ChatMessageInterface {
       return data;
     } catch (error) {
       throw new Error(`Failed to toggle pin: ${(error as Error).message}`);
-    }
-  }
-
-  async markMessagesAsRead(
-    topicId: string,
-    messageIds: string[]
-  ): Promise<{ success: boolean }> {
-    try {
-      const response = (await this.reqi.post(
-        `/topics/${topicId}/messages/read`,
-        { messageIds },
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to mark messages as read: ${(error as Error).message}`
-      );
     }
   }
 
