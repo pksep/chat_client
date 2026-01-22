@@ -30,7 +30,6 @@
       ]"
       title="Ошибка"
       :push-key="1"
-      :timeout="0"
       :description="scanError"
       :type="MessageTypeEnum.error"
       @close="() => (isError = false)"
