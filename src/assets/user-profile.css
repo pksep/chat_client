@@ -21,7 +21,8 @@
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
-  /*margin-bottom: 4px;*/
+  margin-bottom: 4px;
+  height: 1.2em;
   font-size: var(--font-size-title, 16px);
 }
 
@@ -29,6 +30,6 @@
   cursor: default;
   font-size: var(--font-size-nickname, 16px);
   color: var(--text-grey);
-  /*margin-top: -7px;*/
+  margin-top: -7px;
   grid-area: description;
 }

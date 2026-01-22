@@ -60,6 +60,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   width: 170px;
+  font-size: 14px;
+  height: 1.2em;
 }
 
 .contact-list__description br {

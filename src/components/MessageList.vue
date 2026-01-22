@@ -180,7 +180,7 @@ export interface IMessageListExtendedProps extends IMessageListProps {
 }
 
 const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
-  dataTestid: () => 'MessageList'
+  dataTestid: 'MessageList'
 });
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
@@ -226,7 +226,6 @@ const setupIntersectionObserver = () => {
         if (entry.isIntersecting) {
           const messageId = entry.target.getAttribute('data-message-id');
           if (messageId) {
-            // Check if this message is unread and not from the current user
             const message = state.messages.find(m => m.id === messageId);
             if (
               message &&
@@ -240,7 +239,6 @@ const setupIntersectionObserver = () => {
       });
 
       if (visibleUnreadMessageIds.length > 0 && route.value?.id) {
-        // Mark specific messages as read when they become visible
         markAsRead({
           messageIds: visibleUnreadMessageIds,
           topicId: route.value.id
@@ -251,12 +249,11 @@ const setupIntersectionObserver = () => {
     },
     {
       root: chatWrapperRef.value,
-      threshold: 0.1, // Trigger when 10% of the message is visible
-      rootMargin: '0px 0px -50px 0px' // Trigger slightly before fully visible
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
     }
   );
 
-  // Observe all message elements
   nextTick(() => {
     if (chatWrapperRef.value) {
       const messageElements =
@@ -444,7 +441,6 @@ watch(
   }
 );
 
-// Re-setup intersection observer when messages change
 watch(
   () => state.messages,
   () => {
