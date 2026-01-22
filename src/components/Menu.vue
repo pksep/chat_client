@@ -43,6 +43,7 @@
         :data-testid="`${props.dataTestid}-Menu-SeparatorLine`"
       />
       <div
+        v-if="false"
         :class="aiChapterClasses"
         @click="unmountClickAI"
         :data-testid="`${props.dataTestid}-Menu-AIAssistantContainer`"
@@ -59,7 +60,7 @@
         </h3>
       </div>
       <template v-for="(item, index) in topicGroups" :key="index">
-        <template v-if="isCollapse && item.items.length !== 0">
+        <template v-if="isCollapse && item.items.length !== 0 && index !== 0">
           <Line :data-testid="`${props.dataTestid}-Menu-Line${index + 1}`" />
         </template>
         <details
@@ -176,7 +177,7 @@ import TopicList from './ContactList/TopicList.vue';
 import { getConfig } from '../services/useConfig';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
-  dataTestid: () => 'Menu'
+  dataTestid: 'Menu'
 });
 
 const route = useUrlWatcher();
