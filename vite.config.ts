@@ -9,7 +9,6 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
-
   const vuePlugin = vue({
     template: {
       compilerOptions: {

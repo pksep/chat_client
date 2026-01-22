@@ -4,7 +4,8 @@ import {
   TopicSetting,
   Topic,
   Message,
-  Group
+  Group,
+  Media
 } from '@pksep/zod-shared-chat';
 
 export interface IHeaderProps {
@@ -102,4 +103,5 @@ export interface IGroupProfileProps {
 
 export interface IMessage extends Message {
   senderUser?: IUser;
+  media?: Media[];
 }

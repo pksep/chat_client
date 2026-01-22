@@ -75,7 +75,7 @@
               :data-testid="`${props.dataTestid}-MessageList-SystemLabelUser${index + 1}`"
               class="system-message-text"
             >
-              {{ getSystemMessageContent(message) }}
+              {{ message.text }}
             </span>
           </div>
         </div>
@@ -88,8 +88,7 @@
             )
           "
           :message="message.text || ''"
-          :media="getMessageMedia(message)"
-          :file="getMessageFile(message)"
+          :media="message.media"
           :is-me-sender="props.user.id === message.senderUserId"
           :time="formatTime(new Date(message.createdAt))"
           :sender="message.senderUser?.initials || ''"
@@ -157,7 +156,8 @@ import { removeMessageLoading } from '../services/useChatDb';
 import {
   sendMessageChat,
   getIsWebsocketConnecting,
-  markAsRead
+  markAsRead,
+  uploadFile
 } from '../services/useChat';
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
@@ -191,7 +191,8 @@ const state = reactive({
   chatId: null as string | null,
   isLoadingMore: false,
   limit: 50,
-  aiMessages: [] as AIMessage[]
+  aiMessages: [] as AIMessage[],
+  medias: [] //as Media[]
 });
 
 const isLoadingInitialMessages = ref(false);
@@ -358,8 +359,6 @@ watch([() => state.chatId, () => props.baseUrl], () => {
 
 let unsubscribeFromMessageChanges: (() => void) | null = null;
 
-const lastMessageSentTime = ref(0);
-
 onMounted(async () => {
   if (route.value && route.value.type === RouteTypes.AI && !state.chatId) {
     state.chatId = generateChatId();
@@ -412,18 +411,6 @@ const messageChat = (role: string) => [
   { message__other: role === 'user' }
 ];
 
-const getMessageMedia = (message: ChatMessage) => {
-  return (
-    message.media?.find(
-      item => item.type === MediaType.Image || item.type === MediaType.Video
-    ) || null
-  );
-};
-
-const getMessageFile = (message: ChatMessage) => {
-  return message.media?.find(item => item.type === MediaType.File) || null;
-};
-
 watch(
   () => state.messages.length,
   (newLength, oldLength) => {
@@ -474,7 +461,7 @@ const scrollToBottom = () => {
 };
 
 const handleSend = async (): Promise<void> => {
-  if (!inputText.value.trim()) return;
+  if (!inputText.value.trim() && !state.medias.length) return;
 
   if (route.value && route.value.type === RouteTypes.AI) {
     const text = inputText.value;
@@ -528,39 +515,60 @@ const handleSend = async (): Promise<void> => {
   inputText.value = '';
 
   try {
-    lastMessageSentTime.value = Date.now();
     await sendMessageChat({
       topicId: route.value.id,
-      text
+      text,
+      medias: state.medias
     });
 
     await nextTick();
+    state.medias = [];
+
     scrollToBottom();
   } catch (error) {
     console.error('[ChatSDK] Failed to send message:', error);
   }
 };
-
-const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
+const handleAttachFile = async (files: FileList, isMedia = false) => {
   if (!files.length) return;
 
-  if (!props.contact?.id) {
-    console.error('[ChatSDK] Cannot send message: no topic provided');
-    return;
-  }
-
-  Array.from(files).forEach(async file => {
+  for (const uploadedFile of Array.from(files)) {
     try {
-      lastMessageSentTime.value = Date.now();
-      await sendMessageChat({
-        topicId: props.contact.id,
-        file,
-        onlyMedia
+      const { file, path } = await uploadFile(uploadedFile);
+
+      const type = !isMedia
+        ? MediaType.File
+        : file.type.startsWith('image/')
+          ? MediaType.Image
+          : file.type.startsWith('video/')
+            ? MediaType.Video
+            : MediaType.File;
+
+      state.medias.push({
+        path,
+        originName: file.name,
+        size: file.size,
+        type
       });
     } catch (error) {
       console.error('[ChatSDK] Failed to send file:', error);
     }
-  });
+  }
+
+  try {
+    await sendMessageChat({
+      topicId: route.value.id,
+      text: '',
+      medias: state.medias
+    });
+
+    await nextTick();
+    scrollToBottom();
+
+    state.medias = [];
+  } catch (error) {
+    console.error('[ChatSDK] Failed to send message:', error);
+  }
 };
 
 const isNewDate = (index: number, isMastra: boolean = false) => {
