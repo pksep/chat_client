@@ -43,7 +43,13 @@ button.mobile-auth-container__qr-content__button.medium {
 }
 
 .mobile-auth-container__error.push-notification-yui-kit {
+  width: 305px;
   height: 77px;
+}
+.mobile-auth-container__error.push-notification-yui-kit
+  button.medium.ghost-yui-kit.notification-yui-kit__exit
+  svg.icon-yui-kit {
+  margin-bottom: auto;
 }
 
 .mobile-auth-container:has(
