@@ -162,7 +162,6 @@ import {
 import UserProfile from './UserProfile/UserProfile.vue';
 import type { ITopic, IMenuEmits, IMenuProps } from './interfaces/interfaces';
 import { useGroup } from '../composables/useGroup';
-import { markAsRead } from '../services/useChat';
 import Triangle from './Triangle.vue';
 import { usePwaInstall } from '../composables/usePwaInstall';
 import {
@@ -254,9 +253,6 @@ const unmountTopicClick = (topic: ITopic): void => {
   } else if (topic.type === 'DM') {
     navigateToDialogs(topic.id);
   }
-  markAsRead(topic.id).catch(error => {
-    console.warn('Failed to mark messages as read:', error);
-  });
 };
 
 const menuClasses = computed(() => [

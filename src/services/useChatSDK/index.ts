@@ -546,8 +546,8 @@ export class ChatSDK {
   async markMessagesAsRead(
     topicId: string,
     messageIds: string[]
-  ): Promise<{ success: boolean }> {
-    return this.message.markMessagesAsRead(topicId, messageIds);
+  ): Promise<void> {
+    this.socket.emit(WebSocketEventType.READ_MESSAGE, { messageIds, topicId });
   }
 
   async uploadMedia(

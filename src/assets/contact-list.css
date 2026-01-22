@@ -78,6 +78,10 @@
   justify-content: center;
 }
 
+.contact-list__notification--muted {
+  background-color: var(--text-light-color);
+}
+
 svg.icon-yui-kit.contact-list__pin-icon {
   color: var(--grey5);
   font-size: 16px;

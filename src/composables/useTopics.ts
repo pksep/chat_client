@@ -1,8 +1,13 @@
 import { ref } from 'vue';
 import { getChatSDK } from '../services/useChat';
 import { ITopic } from '../components/interfaces/interfaces';
-import { Message, TopicSetting, TopicType } from '../services/useChatSDK/types';
-import { fetchAllGroups, updateLocalGroupInfo } from '../composables/useGroup';
+import {
+  Message,
+  TopicSetting,
+  TopicType,
+  MessageStatus
+} from '../services/useChatSDK/types';
+import { getGroupList, updateLocalGroupInfo } from '../composables/useGroup';
 
 const topics = ref<ITopic[]>([]);
 const currentTopic = ref<ITopic | undefined>(undefined);
@@ -66,6 +71,37 @@ export const useTopics = () => {
     topics.value = [...topics.value];
   };
 
+  const updateLocalTopicReadStatus = (
+    topicId: string,
+    messageIds: string[]
+  ): void => {
+    const groups = getGroupList();
+    const topic = [...topics.value, ...groups].find(
+      topic => topic.id === topicId
+    );
+    if (topic) {
+      const lastMessage = topic.lastMessage;
+      if (lastMessage && messageIds.includes(lastMessage.id)) {
+        lastMessage.status = MessageStatus.Read;
+      }
+    }
+
+    topics.value = [...topics.value];
+  };
+
+  const changeUnreadMessageCount = (delta: number, topicId: string) => {
+    const groups = getGroupList();
+    const topic = [...topics.value, ...groups].find(
+      topic => topic.id === topicId
+    );
+
+    if (topic) {
+      topic.unreadMessageCount += delta;
+    }
+
+    topics.value = [...topics.value];
+  };
+
   const updateLocalTopicInfo = (
     topicId: string,
     info: Partial<TopicSetting>
@@ -83,8 +119,6 @@ export const useTopics = () => {
       const sdk = getChatSDK();
       await sdk.togglePinTopic(topic.id);
 
-      await fetchAllTopics();
-      await fetchAllGroups();
       if (topic.type === TopicType.DM) {
         updateLocalTopicInfo(topic.id, { isPin: !topic.info.isPin });
       } else if (topic.type === TopicType.Group) {
@@ -99,17 +133,13 @@ export const useTopics = () => {
     try {
       const sdk = getChatSDK();
       await sdk.toggleMuteTopic(topic.id);
-
-      await fetchAllTopics();
-      await fetchAllGroups();
-      await sdk.toggleMuteTopic(topic.id);
       if (topic.type === TopicType.DM) {
         updateLocalTopicInfo(topic.id, { isMute: !topic.info.isMute });
       } else if (topic.type === TopicType.Group) {
         updateLocalGroupInfo(topic.id, { isMute: !topic.info.isMute });
       }
     } catch (err) {
-      console.error('Failed to pin/unpin topic:', err);
+      console.error('Failed to mute/unmute topic:', err);
     }
   };
 
@@ -137,6 +167,15 @@ export const useTopics = () => {
     return currentTopic.value;
   };
 
+  const getTopicByIdWithoutCurrent = (topicId: string): ITopic | undefined => {
+    return topics.value.find(topic => topic.id === topicId);
+  };
+
+  const isTopicMuted = (topicId: string): boolean => {
+    const topic = getTopicByIdWithoutCurrent(topicId);
+    return topic?.info?.isMute || false;
+  };
+
   return {
     topics,
     currentTopic,
@@ -145,42 +184,48 @@ export const useTopics = () => {
     fetchAllTopics,
     createTopic,
     updateLocalLastMessageTopic,
+    updateLocalTopicReadStatus,
+    changeUnreadMessageCount,
     updateLocalTopicInfo,
     togglePinTopic,
     toggleMuteTopic,
     addTopicList,
     sortTopics,
     getTopicList,
-    getTopicById
+    getTopicById,
+    getTopicByIdWithoutCurrent,
+    isTopicMuted
   };
 };
 
 const {
-  fetchAllTopics,
-  createTopic,
-  updateLocalLastMessageTopic,
-  updateLocalTopicInfo,
-  togglePinTopic,
+  changeUnreadMessageCount,
   toggleMuteTopic,
+  togglePinTopic,
   addTopicList,
   sortTopics,
   getTopicList,
-  getTopicById
+  getTopicById,
+  fetchAllTopics,
+  createTopic,
+  updateLocalLastMessageTopic,
+  updateLocalTopicReadStatus,
+  updateLocalTopicInfo,
+  isTopicMuted
 } = useTopics();
 
 export {
-  topics,
-  currentTopic,
-  loading,
-  error,
   fetchAllTopics,
   createTopic,
   updateLocalLastMessageTopic,
+  updateLocalTopicReadStatus,
+  changeUnreadMessageCount,
   updateLocalTopicInfo,
   togglePinTopic,
   toggleMuteTopic,
   addTopicList,
   sortTopics,
   getTopicList,
-  getTopicById
+  getTopicById,
+  isTopicMuted
 };
