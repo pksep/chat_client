@@ -1,10 +1,7 @@
 <template>
   <main class="mobile-auth-container">
     <picture class="mobile-auth-container__logo">
-      <img
-        src="/images/sep-chat-logo.svg"
-        alt="logotype of Chat Logo"
-      />
+      <img src="/images/sep-chat-logo.svg" alt="logotype of Chat Logo" />
     </picture>
 
     <section class="mobile-auth-container__qr-content">
@@ -81,7 +78,7 @@ const scanQrCode = async () => {
       },
       scanInstructions: 'Наведите камеру на QR-код'
     });
-    
+
     if (result.ScanResult) {
       isScanning.value = false;
       return result.ScanResult;
