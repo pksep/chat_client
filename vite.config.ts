@@ -6,8 +6,8 @@ import {
 } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 
-// https://vite.dev/config/
 export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
 
   const vuePlugin = vue({
@@ -65,14 +65,17 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
     }) as PluginOption
   ];
 
-  const plugins: PluginOption[] = [vuePlugin, ...appPlugins];
+  const plugins: PluginOption[] = [
+    vuePlugin, 
+    ...appPlugins,
+    basicSsl() 
+  ];
 
   return {
-    // // for local development in smartphone
-    // server: {
-    //   host: '0.0.0.0',
-    //   port: 5173
-    // },
+    server: {
+      host: '0.0.0.0',
+      port: 5173
+    },
     build: {
       outDir: 'build',
       sourcemap: mode !== 'production'
