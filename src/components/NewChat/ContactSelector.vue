@@ -16,15 +16,26 @@
         v-for="(contact, index) in contacts"
         :key="contact.id"
         class="contact-selector__item"
-        @click="handleNewContact(contact)"
+        :class="{
+          'contact-selector__item--excluded': isContactExcluded(contact.id)
+        }"
+        @click="!isContactExcluded(contact.id) && handleNewContact(contact)"
         :data-testid="`${props.dataTestid}-ContactSelector-Item${index + 1}`"
       >
         <UserProfile
           :user="contact"
           :dataTestid="`${props.dataTestid}-ContactSelector-UserProfile${index + 1}`"
+          :class="{ 'user-profile--excluded': isContactExcluded(contact.id) }"
         />
+        <div
+          v-if="isContactExcluded(contact.id)"
+          class="contact-selector__excluded-indicator"
+          :data-testid="`${props.dataTestid}-ContactSelector-ExcludedIndicator${index + 1}`"
+        >
+          Добавлен
+        </div>
         <Checkbox
-          v-if="!props.isAddOne"
+          v-else-if="!props.isAddOne"
           @click.stop
           :size="CheckboxSizeEnum.small"
           @update:model-value="value => handleCheckbox(value, contact.id)"
@@ -93,17 +104,36 @@ const allContacts = computed(() => {
   return userList;
 });
 
-const contacts = computed(() =>
-  allContacts.value.filter(
+const contacts = computed(() => {
+  // Create a new array to ensure reactivity
+  let filteredContacts = allContacts.value;
+
+  // Filter by search query
+  filteredContacts = filteredContacts.filter(
     contact =>
       contact.initials.toLowerCase().includes(state.q.toLowerCase()) ||
       contact.nickname.toLowerCase().includes(state.q.toLowerCase())
-  )
-);
+  );
 
-const selectedContacts = computed(() =>
-  users.value.filter(contact => state.selectedIds.has(contact.id))
-);
+  // If we have excluded IDs (e.g., already added to group), filter them out
+  if (props.excludedContactIds && props.excludedContactIds.size > 0) {
+    filteredContacts = filteredContacts.filter(
+      contact => !props.excludedContactIds.has(contact.id)
+    );
+  }
+
+  // Return a new array reference to ensure Vue reactivity
+  return [...filteredContacts];
+});
+
+const selectedContacts = computed(() => {
+  // Create a new array to ensure reactivity
+  const filteredContacts = users.value.filter(contact =>
+    state.selectedIds.has(contact.id)
+  );
+  // Return a new array reference to ensure Vue reactivity
+  return [...filteredContacts];
+});
 
 const isButtonEnabled = computed(() =>
   props.isButtonDisabled !== undefined
@@ -140,7 +170,36 @@ const handleNewContact = (user: IUser): void => {
   updateSelection(user.id, shouldAdd);
 };
 
+const isContactExcluded = (contactId: string | number): boolean => {
+  // Check if contact is in excluded list
+  if (props.excludedContactIds && props.excludedContactIds.has(contactId)) {
+    return true;
+  }
+  return false;
+};
+
 const onAddClick = (): void => {
   emits('unmount-contact', selectedContacts.value);
 };
 </script>
+
+<style scoped>
+.contact-selector__item--excluded {
+  opacity: 0.6;
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.contact-selector__excluded-indicator {
+  margin-left: auto;
+  padding: 4px 8px;
+  background-color: #e0e0e0;
+  border-radius: 4px;
+  font-size: 0.8em;
+  color: #666;
+}
+
+.user-profile--excluded {
+  opacity: 0.7;
+}
+</style>

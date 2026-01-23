@@ -155,7 +155,7 @@ import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { getAuthUser } from '../../composables/useAuth';
 import { ITopic, MessageStatusEnum } from '../interfaces/interfaces';
-import { toggleMuteTopic, togglePinTopic } from '../../composables/useTopics';
+import { useTopics } from '../../composables/useTopics';
 import { formatTime } from '../../composables/useTime';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
@@ -196,11 +196,13 @@ const authedUser = computed(() => getAuthUser());
 const config = getConfig();
 
 const handlePin = (topic: ITopic): void => {
+  const { togglePinTopic } = useTopics();
   togglePinTopic(topic);
   closeActivePopover(topic.id);
 };
 
 const handleMute = (topic: ITopic): void => {
+  const { toggleMuteTopic } = useTopics();
   toggleMuteTopic(topic);
   closeActivePopover(topic.id);
 };
