@@ -9,6 +9,7 @@
         "@capacitor/barcode-scanner": "^3.0.0",
         "@capacitor/core": "^8.0.1",
         "@capacitor/ios": "^8.0.1",
+        "@capacitor/push-notifications": "^8.0.0",
         "@fontsource-variable/inter": "^5.2.6",
         "@mastra/client-js": "^0.12.3",
         "@pksep/reqi": "^0.0.25",
@@ -282,6 +283,8 @@
     "@capacitor/core": ["@capacitor/core@8.0.1", "", { "dependencies": { "tslib": "^2.1.0" } }, "sha512-5UqSWxGMp/B8KhYu7rAijqNtYslhcLh+TrbfU48PfdMDsPfaU/VY48sMNzC22xL8BmoFoql/3SKyP+pavTOvOA=="],
 
     "@capacitor/ios": ["@capacitor/ios@8.0.1", "", { "peerDependencies": { "@capacitor/core": "^8.0.0" } }, "sha512-pDxwQtx3n07DBhRKFGvYh4g00ruIsT7HxPm6IIT+tJD8VuTNgwgWYmEOZzfHkG6mZuCe03KqCsuD+aVmg5Rctg=="],
+
+    "@capacitor/push-notifications": ["@capacitor/push-notifications@8.0.0", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-xJWQLqAfC8b2ETqAPmwDnkKB4t/lVrbYc2D8VpA2fSu10JFSL/R722Vk0Lfl9Lo9WusmyIiQbVfILNQ3iFNGKw=="],
 
     "@colors/colors": ["@colors/colors@1.5.0", "", {}, "sha512-ooWCrlZP11i8GImSjTHYHLkvFDP48nS4+204nGb1RiX/WXYHmJA2III9/e2DWVabCESdW7hBAEzHRqUn9OUVvQ=="],
 
