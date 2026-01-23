@@ -16,7 +16,6 @@ module.exports = {
     '**/dist',
     '**/build',
     '**/dev-dist',
-    '**/wasm_exec.js'
   ],
   overrides: [
     {
