@@ -27,9 +27,9 @@ export const initPushNotifications = async () => {
   // --- СЛУШАТЕЛИ ---
 
   // А) Успешная регистрация -> Шлем токен на бэкенд через useChatApi
-  PushNotifications.addListener('registration', async (token) => {
+  PushNotifications.addListener('registration', async token => {
     console.log('FCM Token:', token.value);
-    
+
     try {
       const api = useChatApi();
       // Отправляем токен и платформу
@@ -44,12 +44,12 @@ export const initPushNotifications = async () => {
   });
 
   // Б) Ошибка регистрации
-  PushNotifications.addListener('registrationError', (error) => {
+  PushNotifications.addListener('registrationError', error => {
     console.error('Push registration error: ', error);
   });
 
   // В) Пришел пуш, когда приложение ОТКРЫТО
-  PushNotifications.addListener('pushNotificationReceived', (notification) => {
+  PushNotifications.addListener('pushNotificationReceived', notification => {
     console.log('Push received foreground:', notification);
     // Тут можно дернуть стор, чтобы обновить счетчик непрочитанных, если нужно
   });
@@ -57,7 +57,7 @@ export const initPushNotifications = async () => {
   // Г) Клик по пушу (из шторки)
   // PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
   //   const data = notification.notification.data;
-    
+
   //   // Логика перехода
   //   if (data && data.topicId) {
   //     router.push(`/chat/${data.topicId}`);
