@@ -1,4 +1,4 @@
-package com.example.app;
+package sep.pksep.app;
 
 import com.getcapacitor.BridgeActivity;
 

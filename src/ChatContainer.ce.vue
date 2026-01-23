@@ -31,6 +31,7 @@ import { useTopics } from './composables/useTopics';
 import { useGroup } from './composables/useGroup';
 import { useUrlWatcher } from './composables/navigation';
 import { fetchMessagesForTopic } from './services/useMessages';
+import { initPushNotifications } from './services/usePushNotifications';
 
 const emits = defineEmits<IChatContainerEmits>();
 const props = defineProps<IChatContainerProps>();
@@ -123,6 +124,9 @@ const runAppInitialization = async () => {
     }
 
     startPolling();
+
+    // В этот момент у нас точно есть токен, User ID и приложение готово к работе.
+    await initPushNotifications();
 
     openChatContainerShow.value = true;
   } catch (error) {
