@@ -51,6 +51,8 @@ import {
 } from './interfaces/contact-selector';
 import { useNewGroupModal } from './composables/useNewGroupModal';
 import { IUser } from '../interfaces/interfaces';
+import { getChatSDK } from '../../services/useChat';
+import { navigateToDialogs } from '../../composables/navigation';
 
 const props = withDefaults(defineProps<INewChatMobileProps>(), {
   open: false,
@@ -72,7 +74,6 @@ const {
   handleCloseGroupInfo
 } = useNewGroupModal(props, emits);
 
-// Filter contacts to only include IUser objects
 const filteredContacts = computed<IUser[]>(() => {
   return props.contacts.filter(
     contact =>
@@ -84,7 +85,6 @@ const filteredContacts = computed<IUser[]>(() => {
   ) as IUser[];
 });
 
-// Filter selected contacts to only include IUser objects
 const filteredSelectedContacts = computed<IUser[]>(() => {
   return selectedContacts.value.filter(
     contact =>
@@ -113,13 +113,16 @@ const handleCloseModal = () => {
   emits('unmount-close');
 };
 
-const handleCheckUsers = (contacts: IUser[] | IUser): void => {
-  if (props.isAddOne) {
-    emits('unmount-contact', contacts);
+const handleCheckUsers = async (contacts: IUser[] | IUser): Promise<void> => {
+  const sdk = getChatSDK();
+  if (props.isAddOne && 'id' in contacts && contacts.id) {
+    const topic = await sdk.createTopic({ peerId: contacts.id });
+    navigateToDialogs(topic.id as string);
     return;
-  }
-  if (Array.isArray(contacts) && contacts.length > 0) {
-    state.checkMembers = contacts;
+  } else {
+    if (Array.isArray(contacts) && contacts.length > 0) {
+      state.checkMembers = contacts;
+    }
   }
 };
 

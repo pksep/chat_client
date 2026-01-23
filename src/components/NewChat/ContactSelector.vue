@@ -105,33 +105,27 @@ const allContacts = computed(() => {
 });
 
 const contacts = computed(() => {
-  // Create a new array to ensure reactivity
   let filteredContacts = allContacts.value;
 
-  // Filter by search query
   filteredContacts = filteredContacts.filter(
     contact =>
       contact.initials.toLowerCase().includes(state.q.toLowerCase()) ||
       contact.nickname.toLowerCase().includes(state.q.toLowerCase())
   );
 
-  // If we have excluded IDs (e.g., already added to group), filter them out
   if (props.excludedContactIds && props.excludedContactIds.size > 0) {
     filteredContacts = filteredContacts.filter(
       contact => !props.excludedContactIds.has(contact.id)
     );
   }
 
-  // Return a new array reference to ensure Vue reactivity
   return [...filteredContacts];
 });
 
 const selectedContacts = computed(() => {
-  // Create a new array to ensure reactivity
   const filteredContacts = users.value.filter(contact =>
     state.selectedIds.has(contact.id)
   );
-  // Return a new array reference to ensure Vue reactivity
   return [...filteredContacts];
 });
 
@@ -171,7 +165,6 @@ const handleNewContact = (user: IUser): void => {
 };
 
 const isContactExcluded = (contactId: string | number): boolean => {
-  // Check if contact is in excluded list
   if (props.excludedContactIds && props.excludedContactIds.has(contactId)) {
     return true;
   }

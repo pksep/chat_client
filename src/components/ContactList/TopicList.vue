@@ -158,6 +158,7 @@ import { ITopic, MessageStatusEnum } from '../interfaces/interfaces';
 import { useTopics } from '../../composables/useTopics';
 import { formatTime } from '../../composables/useTime';
 import { useResizeState } from '../../composables/useResizeState';
+import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { MAX_W_MD } from '../../utils/constants';
 import {
   navigateToDialogs,
@@ -173,6 +174,8 @@ interface IExtendedContactListProps extends IContactListProps {
 }
 
 const route = useUrlWatcher();
+
+const { togglePinTopic, toggleMuteTopic } = useTopics();
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   showCheckbox: false,
@@ -196,22 +199,20 @@ const authedUser = computed(() => getAuthUser());
 const config = getConfig();
 
 const handlePin = (topic: ITopic): void => {
-  const { togglePinTopic } = useTopics();
   togglePinTopic(topic);
   closeActivePopover(topic.id);
 };
 
 const handleMute = (topic: ITopic): void => {
-  const { toggleMuteTopic } = useTopics();
   toggleMuteTopic(topic);
   closeActivePopover(topic.id);
 };
 
 const handleClick = (topic: ITopic): void => {
   if (isMobile.value) {
-    if (route.value && route.value.type === 'dialogs') {
+    if (route.value && route.value.type === RouteTypes.DIALOGS) {
       navigateToDialogs(topic.id);
-    } else if (route.value && route.value.type === 'group') {
+    } else if (route.value && route.value.type === RouteTypes.GROUP) {
       navigateToGroup(topic.id);
     }
   }
