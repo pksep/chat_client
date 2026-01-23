@@ -118,7 +118,10 @@ const runAppInitialization = async () => {
 
     await fetchAllTopics();
     await fetchAllGroups();
-    await fetchMessagesForTopic(route.value.id);
+    if (route.value.id) {
+      await fetchMessagesForTopic(route.value.id);
+    }
+
     startPolling();
 
     openChatContainerShow.value = true;

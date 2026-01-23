@@ -71,7 +71,6 @@
         </Button>
       </template>
       <Popover
-        v-if="false"
         class="chat__header-popover"
         @click.stop
         :options="getPopoverOptions"
@@ -190,7 +189,6 @@ const getPopoverOptions = computed(() => {
     if (route.value && route.value.type !== RouteTypes.GROUP) {
       popoverArray.push(notificationLabels);
     } else {
-      popoverArray.push(notificationLabels);
       popoverArray.push({
         value: 'Информация',
         function: () => {
