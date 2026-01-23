@@ -102,18 +102,14 @@ const state = reactive({
 });
 
 const contactList = computed(() => {
-  // Create a new array to ensure reactivity
   const { getTopicList } = useTopics();
   const topics = getTopicList();
-  // Return a new array reference to ensure Vue reactivity
   return [...topics];
 });
 
 const groupList = computed(() => {
-  // Create a new array to ensure reactivity
   const { getGroupList } = useGroup();
   const groups = getGroupList();
-  // Return a new array reference to ensure Vue reactivity
   return [...groups];
 });
 

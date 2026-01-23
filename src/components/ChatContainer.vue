@@ -37,7 +37,7 @@
     <template v-if="!isMobile">
       <MenuInfo
         class="chat__info"
-        :open="state.isMenuDesktopOpen"
+        :open="state.isMenuDesktopOpen && !isMenuCollapsed"
         :active-tab-id="state.activeTabId"
         :dataTestid="`${props.dataTestid}-ChatContainer-MenuInfo`"
         @unmount-collapse="handleMenuToggle"
@@ -48,8 +48,6 @@
       :data-testid="`${props.dataTestid}-ChatContainer-NewContactModal`"
       @unmount-close="closeModals"
     />
-    <!-- <Teleport to="#chat-container-image"> -->
-    <!-- </Teleport> -->
     <NewGroupModal
       :user="authUser"
       :contacts="users"
@@ -91,6 +89,7 @@ import Chat from './Chat.vue';
 import MenuInfo from './MenuInfo.vue';
 import type { IChatContainerProps } from './interfaces/interfaces';
 import { useResizeState } from '../composables/useResizeState';
+import { useMenuCollapse } from '../composables/useMenuCollapse';
 import { MAX_W_MD, MAX_W_XL } from '../utils/constants';
 import { getAuthUser } from '../composables/useAuth';
 import MobileModal from './UI/MobileModal.vue';
@@ -119,10 +118,10 @@ const route = useUrlWatcher();
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
-const { state: isCollapse, toggle } = useResizeState({
-  breakpoint: MAX_W_XL,
-  storageKey: 'menu-collapse'
-});
+const { isCollapsed: isMenuCollapsed, toggleCollapse } = useMenuCollapse();
+
+// Keep the XL breakpoint state for responsive behavior, but separate from menu collapse
+const { state: isLargeScreen } = useResizeState(MAX_W_XL);
 
 const state = reactive({
   isPwaModalOpen: true,
@@ -138,13 +137,12 @@ const state = reactive({
 
 const chatContainerClasses = computed(() => [
   'chat-container',
-  { collapse: isCollapse.value },
   {
     'menu-collapse':
       (route.value && route.value.type === 'ai') ||
       (route.value && route.value.type === 'assistant')
-        ? true
-        : !state.isMenuDesktopOpen
+        ? isMenuCollapsed.value // For AI/Assistant routes, use the collapse state
+        : !state.isMenuDesktopOpen && isMenuCollapsed.value // For other routes, use collapse state when menu is closed
   }
 ]);
 
@@ -164,11 +162,15 @@ watch(
     if (newIsMobile) {
       state.isMenuDesktopOpen = false;
     }
+    // On mobile view, we don't want the menu to be collapsed by default
+    if (newIsMobile && isMenuCollapsed.value) {
+      toggleCollapse();
+    }
   }
 );
 
 const handleCollapse = (): void => {
-  toggle();
+  toggleCollapse();
 };
 
 const handleMenuToggle = (isOpen: boolean): void => {
@@ -269,6 +271,16 @@ watch(
       state.isMenuDesktopOpen = false;
       state.isNewContactOpen = false;
       state.isNewGroupOpen = false;
+    }
+  }
+);
+
+// Watch for collapse changes to ensure MenuInfo closes when menu collapses
+watch(
+  () => isMenuCollapsed.value,
+  collapsed => {
+    if (collapsed) {
+      state.isMenuDesktopOpen = false;
     }
   }
 );
