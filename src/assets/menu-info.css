@@ -32,6 +32,7 @@ header.menu-info__header h4 {
   max-width: 140ch;
   overflow: hidden;
   text-overflow: ellipsis;
+  height: 1.1em;
 }
 
 section.menu-info__info-section {
@@ -62,8 +63,12 @@ section.menu-info__info-section {
 }
 
 .menu__info-users-list {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.menu-info--open.chat__info .menu__info-users-list {
   height: calc(100vh - 77px - 14px - 75px);
-  overflow: auto;
 }
 
 button.tabs__navigation-button {
