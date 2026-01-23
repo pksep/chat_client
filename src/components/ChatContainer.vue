@@ -4,6 +4,7 @@
     :dataTestid="`${props.dataTestid}-ChatContainer-Loading`"
   />
   <main
+    id="chat-container-image"
     v-else
     :class="chatContainerClasses"
     :data-testid="`${props.dataTestid}-ChatContainer-Container`"
@@ -103,6 +104,7 @@ import {
 } from '../composables/navigation';
 import { getChatSDK } from '../services/useChat';
 import { getUsersList } from '../composables/useUsers';
+import { RouteTypes } from '../composables/navigation/useUrlRouting';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -263,6 +265,11 @@ watch(
   () => [route.value?.id, route.value?.type],
   () => {
     state.isActiveHeader = route.value ? isActiveHeader(route.value) : false;
+    if (route.value.type === RouteTypes.DIALOGS) {
+      state.isMenuDesktopOpen = false;
+      state.isNewContactOpen = false;
+      state.isNewGroupOpen = false;
+    }
   }
 );
 

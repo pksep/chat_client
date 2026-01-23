@@ -447,10 +447,7 @@ export class ChatSDK {
     return this.group.getGroupMembers(groupId, params);
   }
 
-  async addGroupMembers(
-    groupId: string,
-    userIds: string[]
-  ): Promise<{ success: boolean; addedMembers: User[] }> {
+  async addGroupMembers(groupId: string, userIds: string[]): Promise<User[]> {
     return this.group.addGroupMembers(groupId, userIds);
   }
 
@@ -458,7 +455,12 @@ export class ChatSDK {
     groupId: string,
     userId: string
   ): Promise<{ success: boolean }> {
-    return this.group.removeGroupMember(groupId, userId);
+    const result = await this.group.removeGroupMember(groupId, userId);
+    // Handle the case where the underlying method returns a number
+    if (typeof result === 'number') {
+      return { success: result > 0 };
+    }
+    return result;
   }
 
   async promoteToAdmin(
@@ -486,7 +488,12 @@ export class ChatSDK {
     groupId: string,
     userId: string
   ): Promise<{ success: boolean }> {
-    return this.group.removeUserFromGroup(groupId, userId);
+    const result = await this.group.removeUserFromGroup(groupId, userId);
+    // Handle the case where the underlying method returns a number
+    if (typeof result === 'number') {
+      return { success: result > 0 };
+    }
+    return result;
   }
 
   async editGroup(

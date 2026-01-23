@@ -36,7 +36,8 @@
         <template #header2> Информация </template>
         <template #tab1>
           <ContactListInModal
-            :contacts="selectedContacts"
+            :contacts="filteredSelectedContacts"
+            :excluded-contact-ids="excludedContactIds"
             class="new-group__tab2-profile"
             @unmount-click-add-button="handleCloseGroupInfo"
           />
@@ -115,7 +116,7 @@ import { getConfig } from '../../services/useConfig';
 
 const props = withDefaults(defineProps<INewContactProps & { user?: IUser }>(), {
   open: false,
-  dataTestid: () => 'NewGroupModal'
+  dataTestid: 'NewGroupModal'
 });
 
 const emits = defineEmits<{
@@ -143,4 +144,26 @@ const {
   handleOpenGroupInfo,
   handleCloseGroupInfo
 } = useNewGroupModal(props, emits);
+
+const filteredSelectedContacts = computed(() => {
+  return selectedContacts.value.filter(
+    contact =>
+      contact &&
+      'initials' in contact &&
+      'nickname' in contact &&
+      'lastOnline' in contact
+  ) as IUser[];
+});
+
+const excludedContactIds = computed(() => {
+  const ids = new Set<string | number>();
+  if (filteredSelectedContacts.value) {
+    filteredSelectedContacts.value.forEach(contact => {
+      if (contact && contact.id) {
+        ids.add(contact.id);
+      }
+    });
+  }
+  return ids;
+});
 </script>

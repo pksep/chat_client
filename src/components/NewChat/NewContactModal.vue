@@ -20,6 +20,7 @@
     <ContactSelector
       :is-add-one="props.isAddOne"
       :contacts="contacts"
+      :excluded-contact-ids="props.excludedContactIds"
       @unmount-contact="handleNewContact"
     />
   </Modal>
@@ -46,7 +47,8 @@ const props = withDefaults(defineProps<INewContactProps>(), {
   open: false,
   isAddOne: true,
   title: 'Создать диалог',
-  dataTestid: () => 'NewContactModal'
+  excludedContactIds: () => new Set<string | number>(),
+  dataTestid: 'NewContactModal'
 });
 
 const emits = defineEmits<{
@@ -54,17 +56,22 @@ const emits = defineEmits<{
   (e: 'unmount-new-contact', contact: ITopic[] | IUser);
 }>();
 
-const contacts = computed(() => getUsersList());
+const contacts = computed(() => {
+  const userContacts = props.contacts || getUsersList();
+  return [...userContacts];
+});
 
 const closeModal = (): void => {
   emits('unmount-close');
 };
 
-const handleNewContact = async (user: ITopic): Promise<void> => {
-  if (props.isAddOne && user.id) {
-    const sdk = getChatSDK();
-    const topic = await sdk.createTopic({ peerId: user.id });
-    navigateToDialogs(topic.id);
+const handleNewContact = (contact: ITopic[] | IUser): void => {
+  const sdk = getChatSDK();
+  if (props.isAddOne && 'id' in contact && contact.id) {
+    navigateToDialogs(contact.id as string);
+    sdk.joinTopic(contact.id);
+  } else {
+    emits('unmount-new-contact', contact);
   }
   closeModal();
 };

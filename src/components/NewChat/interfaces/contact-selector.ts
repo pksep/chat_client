@@ -13,6 +13,7 @@ export interface IContactSelectorProps {
   contacts: IUser[];
   isButtonDisabled?: boolean;
   selectedContactIds?: Set<string | number>;
+  excludedContactIds?: Set<string | number>;
   isAddOne?: boolean;
   dataTestid?: string;
 }
@@ -20,6 +21,7 @@ export interface IContactSelectorProps {
 export interface INewChatMobileProps extends IContactSelectorProps {
   open: boolean;
   user?: IUser;
+  excludedContactIds?: Set<string | number>;
 }
 
 export interface INewChatMobileEmits extends IContactSelectorEmits {

@@ -5,16 +5,12 @@ import { User } from '@pksep/zod-shared-chat';
 import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { setAuthUser, getAuthUser } from '../composables/useAuth';
+import { useTopics, changeUnreadMessageCount } from '../composables/useTopics';
 import {
-  addGroupList,
   updateLocalGroupDetails,
+  addGroupList,
   updateLocalLastMessageGroup
-} from './useGroup';
-import {
-  addTopicList,
-  changeUnreadMessageCount,
-  updateLocalLastMessageTopic
-} from '../composables/useTopics';
+} from '../composables/useGroup';
 import {
   addMessageToLocal,
   changeLocalReadStatus,
@@ -84,6 +80,7 @@ const setupChatListeners = (): void => {
       if (payload.data.type === TopicType.Group) {
         addGroupList(payload.data);
       } else if (payload.data.type === TopicType.DM) {
+        const { addTopicList } = useTopics();
         addTopicList(payload.data);
       }
     }
@@ -97,6 +94,7 @@ const setupChatListeners = (): void => {
         changeUnreadMessageCount(1, payload.data.topicId);
       }
 
+      const { updateLocalLastMessageTopic } = useTopics();
       updateLocalLastMessageTopic(payload.data.topicId, payload.data);
       updateLocalLastMessageGroup(payload.data.topicId, payload.data);
     }
@@ -128,7 +126,7 @@ export const initializeChat = async (options: {
   addMessageHistoryHandler();
 };
 
-export const getChatSDK = (): ChatSDK => {
+export const getChatSDK = (): ChatSDK | null => {
   return chatSDK;
 };
 

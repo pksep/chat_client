@@ -161,7 +161,7 @@ import {
 } from '@pksep/yui';
 import UserProfile from './UserProfile/UserProfile.vue';
 import type { ITopic, IMenuEmits, IMenuProps } from './interfaces/interfaces';
-import { getGroupList } from '../services/useGroup';
+import { useGroup } from '../composables/useGroup';
 import Triangle from './Triangle.vue';
 import { usePwaInstall } from '../composables/usePwaInstall';
 import {
@@ -170,7 +170,7 @@ import {
   navigateToDialogs,
   useUrlWatcher
 } from '../composables/navigation';
-import { getTopicList } from '../composables/useTopics';
+import { useTopics } from '../composables/useTopics';
 import { getAuthUser } from '../composables/useAuth';
 import TopicList from './ContactList/TopicList.vue';
 import { getConfig } from '../services/useConfig';
@@ -178,6 +178,9 @@ import { getConfig } from '../services/useConfig';
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: () => 'Menu'
 });
+
+const { groups } = useGroup();
+const { getTopicList } = useTopics();
 
 const route = useUrlWatcher();
 
@@ -198,10 +201,24 @@ const getInitialDetailsOpen = () => {
   return [true, true];
 };
 
+const topicGroups = computed(() => {
+  return [
+    {
+      type: 'GROUP',
+      onClickPlusButton: handleNewGroupModal,
+      items: groups.value
+    },
+    {
+      title: 'DM',
+      onClickPlusButton: handleNewContactModal,
+      items: getTopicList()
+    }
+  ];
+});
+
 const state = reactive({
   selectedContactId: computed(() => route.value?.id),
   isLoading: true,
-  authUser: computed(() => getAuthUser()),
   detailsOpen: getInitialDetailsOpen()
 });
 
@@ -261,17 +278,4 @@ const handleNewGroupModal = () => {
 const handleNewContactModal = () => {
   emits('unmount-new-contact', { isChapterOpen: true });
 };
-
-const topicGroups = computed(() => [
-  {
-    type: 'GROUP',
-    onClickPlusButton: handleNewGroupModal,
-    items: getGroupList()
-  },
-  {
-    title: 'DM',
-    onClickPlusButton: handleNewContactModal,
-    items: getTopicList()
-  }
-]);
 </script>

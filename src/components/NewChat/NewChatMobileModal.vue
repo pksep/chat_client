@@ -14,8 +14,9 @@
         class="mobile__list-modal__contact-selector"
         :is-add-one="props.isAddOne"
         is-button-disabled
-        :contacts="props.contacts"
+        :contacts="filteredContacts"
         :selected-contact-ids="props.selectedContactIds"
+        :excluded-contact-ids="props.excludedContactIds"
         @unmount-contact="handleCheckUsers"
         @unmount-close="handleCloseModal"
       />
@@ -33,14 +34,14 @@
     <MobileChatInfo
       :model-value="state.information"
       @update:model-value="handleCreateInformation"
-      :members="selectedContacts"
+      :members="filteredSelectedContacts"
       :data-testid="`${props.dataTestid}-NewChatMobileModal-MobileChatInfo`"
     />
   </MobileModal>
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue';
+import { reactive, computed } from 'vue';
 import MobileModal from '../UI/MobileModal.vue';
 import ContactSelector from './ContactSelector.vue';
 import MobileChatInfo from '../Header/MobileChatInfo.vue';
@@ -70,6 +71,30 @@ const {
   handleOpenGroupInfo,
   handleCloseGroupInfo
 } = useNewGroupModal(props, emits);
+
+// Filter contacts to only include IUser objects
+const filteredContacts = computed<IUser[]>(() => {
+  return props.contacts.filter(
+    contact =>
+      contact &&
+      typeof contact === 'object' &&
+      'initials' in contact &&
+      'nickname' in contact &&
+      'lastOnline' in contact
+  ) as IUser[];
+});
+
+// Filter selected contacts to only include IUser objects
+const filteredSelectedContacts = computed<IUser[]>(() => {
+  return selectedContacts.value.filter(
+    contact =>
+      contact &&
+      typeof contact === 'object' &&
+      'initials' in contact &&
+      'nickname' in contact &&
+      'lastOnline' in contact
+  ) as IUser[];
+});
 
 const state = reactive({
   checkMembers: [],

@@ -75,8 +75,8 @@ import type { IUser } from '../interfaces/interfaces';
 import { Button, ButtonTypeEnum, Icon, IconNameEnum, Loader } from '@pksep/yui';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
 import TopicList from './TopicList.vue';
-import { getGroupList } from '../../services/useGroup';
-import { getTopicList } from '../../composables/useTopics';
+import { useGroup } from '../../composables/useGroup';
+import { useTopics } from '../../composables/useTopics';
 import { navigateToAI, useUrlWatcher } from '../../composables/navigation';
 import {
   RouteType,
@@ -101,8 +101,21 @@ const state = reactive({
   isLoading: true
 });
 
-const contactList = computed(() => getTopicList());
-const groupList = computed(() => getGroupList());
+const contactList = computed(() => {
+  // Create a new array to ensure reactivity
+  const { getTopicList } = useTopics();
+  const topics = getTopicList();
+  // Return a new array reference to ensure Vue reactivity
+  return [...topics];
+});
+
+const groupList = computed(() => {
+  // Create a new array to ensure reactivity
+  const { getGroupList } = useGroup();
+  const groups = getGroupList();
+  // Return a new array reference to ensure Vue reactivity
+  return [...groups];
+});
 
 watch(
   [() => contactList.value, () => groupList.value],

@@ -50,15 +50,18 @@ import { MAX_W_MD } from '../utils/constants';
 import { useResizeState } from '../composables/useResizeState';
 import { computed, reactive } from 'vue';
 import { useUrlWatcher } from '../composables/navigation';
-import { getGroupList } from '../services/useGroup';
-import { toggleMuteTopic } from '../composables/useTopics';
+import { useGroup } from '../composables/useGroup';
+import { useTopics } from '../composables/useTopics';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const route = useUrlWatcher();
 
 const state = reactive({
-  topic: computed(() => getGroupList().find(t => t.id === route.value.id))
+  topic: computed(() => {
+    const { getGroupList } = useGroup();
+    return getGroupList().find(t => t.id === route.value.id);
+  })
 });
 
 const emits = defineEmits(['unmount-leave']);
@@ -68,6 +71,7 @@ const handleUnmountLeave = () => {
 };
 
 const handleMute = () => {
+  const { toggleMuteTopic } = useTopics();
   toggleMuteTopic(state.topic);
 };
 </script>

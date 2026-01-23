@@ -52,34 +52,48 @@
       Участники:
     </p>
     <ContactListInModal
-      :show-add-button="false"
       :contacts="props.members"
+      :excluded-contact-ids="excludedContactIds"
       class="modal-info-mobile__contact-list"
       :data-testid="`${props.dataTestid}-Header-ContactListInModal`"
+      @unmount-click-add-button="handleContactClick"
     />
   </div>
 </template>
 
 <script lang="ts" setup>
-import { useTemplateRef } from 'vue';
-import type { IUser } from '../interfaces/interfaces';
+import { useTemplateRef, computed, onMounted } from 'vue';
 import { Avatar } from '@pksep/yui';
 import NewChatInformationForm from '../NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from '../MenuInfoButtons.vue';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';
 import { IMenuInfoInformation } from '../../composables/useMenuInfo';
 import { useInformationMenu } from '../../composables/useInformationMenu';
-import { onMounted } from 'vue';
+import type { IUser } from '../interfaces/interfaces';
 import { getConfig } from '../../services/useConfig';
 
 interface IMobileChatInfoProps {
   members: IUser[];
   dataTestid?: string;
   isMenuInfo?: boolean;
+  excludedContactIds?: Set<string | number>;
 }
 
 const props = withDefaults(defineProps<IMobileChatInfoProps>(), {
-  dataTestid: () => 'MobileChatInfo'
+  excludedContactIds: () => new Set<string | number>(),
+  dataTestid: 'MobileChatInfo'
+});
+
+const excludedContactIds = computed(() => {
+  const ids = new Set<string | number>();
+  if (props.members) {
+    props.members.forEach(contact => {
+      if (contact && contact.id) {
+        ids.add(contact.id);
+      }
+    });
+  }
+  return ids;
 });
 
 const information = defineModel<IMenuInfoInformation>();
@@ -123,6 +137,8 @@ const handleImageSave = async (config: {
     ...config
   };
 };
+
+const handleContactClick = (): void => {};
 
 onMounted(async () => {
   await init();
