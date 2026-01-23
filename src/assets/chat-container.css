@@ -35,7 +35,7 @@
   scroll-behavior: smooth;
 }
 
-.chat-container.collapse {
+.chat-container:has(.menu.menu--collapse) {
   --size-left-menu: 75px;
 }
 

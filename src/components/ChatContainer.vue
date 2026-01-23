@@ -119,7 +119,7 @@ const route = useUrlWatcher();
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
-const { state: isCollapse, toggle } = useResizeState({
+const { toggle } = useResizeState({
   breakpoint: MAX_W_XL,
   storageKey: 'menu-collapse'
 });
@@ -138,7 +138,6 @@ const state = reactive({
 
 const chatContainerClasses = computed(() => [
   'chat-container',
-  { collapse: isCollapse.value },
   {
     'menu-collapse':
       (route.value && route.value.type === 'ai') ||
