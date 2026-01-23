@@ -19,9 +19,11 @@ button.button-yui-kit.new-group__button-close {
   padding-inline: 0;
 }
 
-.tabs > .tabs__navigation {
-  margin-left: -10px;
-  margin-right: -10px;
+.modal-yui-kit__modal-content:has(.new-group__header) {
+  .tabs > .tabs__navigation {
+    margin-left: -10px;
+    margin-right: -10px;
+  }
 }
 
 .group-selector__item {

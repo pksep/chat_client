@@ -71,7 +71,6 @@
         </Button>
       </template>
       <Popover
-        v-if="false"
         class="chat__header-popover"
         @click.stop
         :options="getPopoverOptions"
@@ -130,9 +129,10 @@ import {
 } from '../../composables/navigation';
 import { getTopicList } from '../../composables/useTopics';
 import { getGroupList } from '../../services/useGroup';
+import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
-  dataTestid: () => 'Header'
+  dataTestid: 'Header'
 });
 
 defineOptions({
@@ -184,15 +184,14 @@ const handleClickHeader = async (): Promise<void> => {
 
 const getPopoverOptions = computed(() => {
   const popoverArray = [];
-  if (route.value && route.value.type !== 'ai') {
+  if (route.value && route.value.type !== RouteTypes.AI) {
     const notificationLabels = {
       value: state.statusNotification.label,
       function: handleNotificationToggle
     };
-    if (route.value && route.value.type !== 'group') {
+    if (route.value && route.value.type !== RouteTypes.GROUP) {
       popoverArray.push(notificationLabels);
     } else {
-      popoverArray.push(notificationLabels);
       popoverArray.push({
         value: 'Информация',
         function: () => {
