@@ -42,6 +42,7 @@
     :data-testid="`${props.dataTestid}-Header-ModalEndContainer`"
   >
     <MenuInfoButtons
+      v-if="props.isMenuInfo"
       :data-testid="`${props.dataTestid}-Header-MenuInfoButtons`"
       @unmount-leave="handleUnmountLeave"
     />
