@@ -38,7 +38,7 @@
     "@fontsource-variable/inter": "^5.2.6",
     "@mastra/client-js": "^0.12.3",
     "@pksep/reqi": "^0.0.25",
-    "@pksep/yui": "0.1.179",
+    "@pksep/yui": "0.1.180",
     "@pksep/zod-shared-chat": "0.0.6",
     "@vitejs/plugin-basic-ssl": "^2.1.4",
     "socket.io-client": "^4.8.3",
