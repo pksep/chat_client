@@ -1,7 +1,9 @@
 import { reactive, Ref } from 'vue';
-import { quitGroup } from '../services/useGroup';
+import { useGroup } from '../composables/useGroup';
 import { uploadFile } from '../services/useChat';
 import { IMenuInfoInformation } from './useMenuInfo';
+import { currentRoute } from './navigation';
+import { RouteTypes } from './navigation/useUrlRouting';
 
 export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
   const state = reactive({
@@ -42,8 +44,8 @@ export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
   };
 
   const onSaveAvatar = async (file: File): Promise<void> => {
-    const url = await uploadFile(file);
-    model.value = { ...model.value, avatarUrl: url };
+    const { path } = await uploadFile(file);
+    model.value = { ...model.value, avatarUrl: path };
   };
 
   const handleSave = async (config: { name: string }): Promise<void> => {
@@ -53,28 +55,13 @@ export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
   const leaveGroupInfo = async (): Promise<void> => {
     try {
       if (model.value?.groupId) {
+        const { quitGroup } = useGroup();
         await quitGroup(model.value?.groupId);
+        currentRoute.value = { type: RouteTypes.GROUP, id: null };
+        requestAnimationFrame(() => window.location.reload());
       }
     } catch (error) {
-      const errorDetails = {
-        error: error,
-        operation: model.value?.groupId ? 'quitGroup' : 'leaveDirectChat',
-        groupID: model.value?.groupId || null,
-        userID: model.value?.userId || null,
-        timestamp: new Date().toISOString(),
-        operationID: error?.operationID || error?.data?.operationID || null,
-        event: error?.event || error?.data?.event || null,
-        errorMessage: error?.errorMessage || error?.message || 'Unknown error'
-      };
-
-      console.error('Failed to leave group or delete friend:', errorDetails);
-
-      if (error?.operationID) {
-        console.info(`Operation ID: ${error.operationID}`);
-      }
-      if (error?.event) {
-        console.info(`Event: ${error.event}`);
-      }
+      console.error('Failed to leave group or delete friend:', error);
     }
   };
 

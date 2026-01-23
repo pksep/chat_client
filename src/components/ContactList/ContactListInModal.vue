@@ -1,6 +1,6 @@
 <template>
   <section
-    :class="['menu__info-users', props.class]"
+    :class="['menu__info-users', $attrs.class]"
     :data-testid="`${props.dataTestid}-Container`"
   >
     <Button
@@ -22,8 +22,8 @@
       :data-testid="`${props.dataTestid}-ContactListInModal-List`"
     >
       <li
-        v-for="(user, index) in props.contacts"
-        :key="index"
+        v-for="(user, index) in reactiveContacts"
+        :key="user.id"
         class="menu__info-user-list--item"
         :data-testid="`${props.dataTestid}-ContactListInModal-Item${index + 1}`"
       >
@@ -58,6 +58,7 @@
   </section>
   <NewContactModal
     :contacts="props.filteredContacts"
+    :excluded-contact-ids="excludedContactIds"
     :open="newContactOpen"
     :dataTestid="`${props.dataTestid}-ContactListInModal-NewContactModal`"
     @unmount-close="closeContactModal"
@@ -73,11 +74,11 @@ import {
   SizesEnum
 } from '@pksep/yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import NewContactModal from '../NewChat/NewContactModal.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
-import { removeUserFromGroup } from '../../services/useGroup';
+import { useGroup } from '../../composables/useGroup';
 import type { IUser } from '../interfaces/interfaces';
 
 interface ContactListInModalProps {
@@ -90,7 +91,10 @@ interface ContactListInModalProps {
   listClass?: string;
   userClass?: string;
   groupId?: string;
+  excludedContactIds?: Set<string | number>;
 }
+
+const { removeUserFromGroup } = useGroup();
 
 const props = withDefaults(defineProps<ContactListInModalProps>(), {
   showAddButton: true,
@@ -107,12 +111,30 @@ const props = withDefaults(defineProps<ContactListInModalProps>(), {
     }
   ],
   filteredContacts: () => [],
+  excludedContactIds: () => new Set<string | number>(),
   dataTestid: () => 'ContactListInModal'
 });
 
 const emits = defineEmits<{
   (e: 'unmount-click-add-button'): void;
 }>();
+
+const reactiveContacts = computed(() => {
+  const contacts = props.contacts || [];
+  return [...contacts];
+});
+
+const excludedContactIds = computed(() => {
+  const ids = new Set<string | number>();
+  if (props.contacts) {
+    props.contacts.forEach(contact => {
+      if (contact && contact.id) {
+        ids.add(contact.id);
+      }
+    });
+  }
+  return ids;
+});
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
@@ -124,8 +146,6 @@ const addUser = (): void => {
 };
 
 const deleteUserFromChat = (userId: string) => {
-  console.log(props.groupId);
-
   removeUserFromGroup(props.groupId, userId);
   closeActivePopover(userId);
 };

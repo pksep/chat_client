@@ -6,6 +6,9 @@
   font-weight: bold;
   align-items: center;
   justify-content: space-between;
+}
+
+.modal-yui-kit__modal-content:not(:has(.tabs__navigation)) .new-group__header {
   border-bottom-style: solid;
   border-bottom-width: 1px;
   border-bottom-color: var(--border-grey);
@@ -14,6 +17,13 @@
 button.button-yui-kit.new-group__button-close {
   padding-block: 0;
   padding-inline: 0;
+}
+
+.modal-yui-kit__modal-content:has(.new-group__header) {
+  .tabs > .tabs__navigation {
+    margin-left: -10px;
+    margin-right: -10px;
+  }
 }
 
 .group-selector__item {

@@ -60,6 +60,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   width: 170px;
+  font-size: 14px;
+  height: 1.2em;
 }
 
 .contact-list__description br {
@@ -139,6 +141,9 @@ svg.icon-yui-kit.contact-list__read-icon {
 
 .contact-selector__item:hover {
   background-color: #f5f5f5;
+}
+
+.menu__info-users-list {
 }
 
 .menu__info-users-list > li {

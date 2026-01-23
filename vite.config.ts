@@ -9,7 +9,6 @@ import { VitePWA } from 'vite-plugin-pwa';
 import basicSsl from '@vitejs/plugin-basic-ssl';
 
 export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
-
   const vuePlugin = vue({
     template: {
       compilerOptions: {
@@ -62,14 +61,13 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         type: 'module',
         navigateFallback: 'index.html'
       }
-    }) as PluginOption
+    }) as PluginOption,
+    basicSsl({
+      name: 'SEP:Chat'
+    })
   ];
 
-  const plugins: PluginOption[] = [
-    vuePlugin, 
-    ...appPlugins,
-    basicSsl() 
-  ];
+  const plugins: PluginOption[] = [vuePlugin, ...appPlugins];
 
   return {
     server: {

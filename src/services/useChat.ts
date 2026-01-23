@@ -1,20 +1,16 @@
 import { ref, shallowRef } from 'vue';
 import { ChatSDK } from './useChatSDK';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
-import { Media, User } from '@pksep/zod-shared-chat';
+import { User } from '@pksep/zod-shared-chat';
 import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { setAuthUser, getAuthUser } from '../composables/useAuth';
+import { useTopics, changeUnreadMessageCount } from '../composables/useTopics';
 import {
-  addGroupList,
   updateLocalGroupDetails,
+  addGroupList,
   updateLocalLastMessageGroup
-} from './useGroup';
-import {
-  addTopicList,
-  changeUnreadMessageCount,
-  updateLocalLastMessageTopic
-} from '../composables/useTopics';
+} from '../composables/useGroup';
 import {
   addMessageToLocal,
   changeLocalReadStatus,
@@ -84,6 +80,7 @@ const setupChatListeners = (): void => {
       if (payload.data.type === TopicType.Group) {
         addGroupList(payload.data);
       } else if (payload.data.type === TopicType.DM) {
+        const { addTopicList } = useTopics();
         addTopicList(payload.data);
       }
     }
@@ -97,6 +94,7 @@ const setupChatListeners = (): void => {
         changeUnreadMessageCount(1, payload.data.topicId);
       }
 
+      const { updateLocalLastMessageTopic } = useTopics();
       updateLocalLastMessageTopic(payload.data.topicId, payload.data);
       updateLocalLastMessageGroup(payload.data.topicId, payload.data);
     }
@@ -128,7 +126,7 @@ export const initializeChat = async (options: {
   addMessageHistoryHandler();
 };
 
-export const getChatSDK = (): ChatSDK => {
+export const getChatSDK = (): ChatSDK | null => {
   return chatSDK;
 };
 
@@ -181,32 +179,27 @@ export const subscribeToMessageChanges = (
 export const sendMessageChat = async (params: {
   topicId: string;
   text?: string;
-  file?: File;
-  onlyMedia?: boolean;
+  medias?: any[]; //Media[]
 }): Promise<void> => {
   const sdk = getChatSDK();
 
   try {
-    let media: Media[] | undefined;
-    if (params.file) {
-      const uploaded = await sdk.uploadMedia(params.file, params.topicId);
-      media = [uploaded];
-    }
-
     sdk.sendWebSocketEvent(WebSocketEventType.SEND_MESSAGE, {
       topicId: params.topicId,
       text: params.text,
-      media
+      medias: params.medias
     });
   } catch (error) {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);
   }
 };
 
-export const uploadFile = async (file: File): Promise<string> => {
+export const uploadFile = async (
+  file: File
+): Promise<{ path: string; file: File }> => {
   const sdk = getChatSDK();
-  const url = await sdk.uploadFile(file);
-  return url;
+  const path = await sdk.uploadFile(file);
+  return { file, path };
 };
 
 const messageHistoryRequests: Map<

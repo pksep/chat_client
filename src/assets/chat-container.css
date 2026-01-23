@@ -35,7 +35,7 @@
   scroll-behavior: smooth;
 }
 
-.chat-container.collapse {
+.chat-container:has(.menu.menu--collapse) {
   --size-left-menu: 75px;
 }
 
@@ -124,6 +124,9 @@ button.primary-yui-kit.disabled-yui-kit {
     & .chat__info {
       display: none;
     }
+  }
+  .chat-container.menu-collapse {
+    --size-left-menu: 75px;
   }
 }
 

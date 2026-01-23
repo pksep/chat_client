@@ -1,10 +1,11 @@
 import { computed, reactive, ref, watch, toRefs } from 'vue';
 import type { INewContactProps } from '../interfaces/new-contact';
-import { createGroup } from '../../../services/useGroup';
+import { useGroup } from '../../../composables/useGroup';
 import { uploadFile } from '../../../services/useChat';
 import { IUser } from '../../interfaces/interfaces';
 import { navigateToGroup } from '../../../composables/navigation';
-import { getTopicList } from '../../../composables/useTopics';
+import { getAuthUser } from '../../../composables/useAuth';
+import { getUsersList } from '../../../composables/useUsers';
 
 interface NewGroupState {
   checkUsers: string[];
@@ -27,9 +28,10 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
   emit: Emits
 ) {
   const avatarInputRef = ref<HTMLInputElement | null>(null);
+  const { createGroup } = useGroup();
 
-  const authUser = computed(() => authUser.value);
-  const users = computed(() => getTopicList());
+  const authUser = computed(() => getAuthUser());
+  const users = computed(() => getUsersList());
 
   const state = reactive<NewGroupState>({
     checkUsers: [],
@@ -64,8 +66,10 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
   };
 
   const onSaveAvatar = async (): Promise<void> => {
-    const url = await uploadFile(state.file!);
-    state.avatarPreview = url;
+    const file = await uploadFile(state.file!);
+    console.log(file);
+
+    state.avatarPreview = file.path;
     state.isEditAvatar = false;
   };
 

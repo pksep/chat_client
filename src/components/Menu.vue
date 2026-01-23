@@ -43,6 +43,7 @@
         :data-testid="`${props.dataTestid}-Menu-SeparatorLine`"
       />
       <div
+        v-if="false"
         :class="aiChapterClasses"
         @click="unmountClickAI"
         :data-testid="`${props.dataTestid}-Menu-AIAssistantContainer`"
@@ -59,7 +60,7 @@
         </h3>
       </div>
       <template v-for="(item, index) in topicGroups" :key="index">
-        <template v-if="isCollapse && item.items.length !== 0">
+        <template v-if="isCollapse && item.items.length !== 0 && index !== 0">
           <Line :data-testid="`${props.dataTestid}-Menu-Line${index + 1}`" />
         </template>
         <details
@@ -118,7 +119,7 @@
                 @click.stop="unmountTopicClick(contact)"
               >
                 <Avatar
-                  :url="contact.avatarUrl"
+                  :url="`${config.CHAT_PATH_TO_FILE_CDN}/${contact.avatarUrl}`"
                   :initials="contact.name"
                   :data-testid="`${props.dataTestid}-Menu-UserAvatar${index + 1}`"
                 />
@@ -161,7 +162,7 @@ import {
 } from '@pksep/yui';
 import UserProfile from './UserProfile/UserProfile.vue';
 import type { ITopic, IMenuEmits, IMenuProps } from './interfaces/interfaces';
-import { getGroupList } from '../services/useGroup';
+import { useGroup } from '../composables/useGroup';
 import Triangle from './Triangle.vue';
 import { usePwaInstall } from '../composables/usePwaInstall';
 import {
@@ -170,13 +171,17 @@ import {
   navigateToDialogs,
   useUrlWatcher
 } from '../composables/navigation';
-import { getTopicList } from '../composables/useTopics';
+import { useTopics } from '../composables/useTopics';
 import { getAuthUser } from '../composables/useAuth';
 import TopicList from './ContactList/TopicList.vue';
+import { getConfig } from '../services/useConfig';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
-  dataTestid: () => 'Menu'
+  dataTestid: 'Menu'
 });
+
+const { groups } = useGroup();
+const { getTopicList } = useTopics();
 
 const route = useUrlWatcher();
 
@@ -197,16 +202,32 @@ const getInitialDetailsOpen = () => {
   return [true, true];
 };
 
+const topicGroups = computed(() => {
+  return [
+    {
+      type: 'GROUP',
+      onClickPlusButton: handleNewGroupModal,
+      items: groups.value
+    },
+    {
+      title: 'DM',
+      onClickPlusButton: handleNewContactModal,
+      items: getTopicList()
+    }
+  ];
+});
+
 const state = reactive({
   selectedContactId: computed(() => route.value?.id),
   isLoading: true,
-  authUser: computed(() => getAuthUser()),
   detailsOpen: getInitialDetailsOpen()
 });
 
 const authUser = computed(() => getAuthUser());
 
 const emits = defineEmits<IMenuEmits>();
+
+const config = getConfig();
 
 const { state: isCollapse, toggle } = useResizeState({
   breakpoint: MAX_W_XL,
@@ -258,17 +279,4 @@ const handleNewGroupModal = () => {
 const handleNewContactModal = () => {
   emits('unmount-new-contact', { isChapterOpen: true });
 };
-
-const topicGroups = computed(() => [
-  {
-    type: 'GROUP',
-    onClickPlusButton: handleNewGroupModal,
-    items: getGroupList()
-  },
-  {
-    title: 'DM',
-    onClickPlusButton: handleNewContactModal,
-    items: getTopicList()
-  }
-]);
 </script>

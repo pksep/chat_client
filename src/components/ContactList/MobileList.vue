@@ -38,7 +38,6 @@
       <TopicList
         :topics="isDialogsRoute ? contactList : groupList"
         :data-testid="`${props.dataTestid}-ContactList`"
-        @unmount-click="handleChapter"
         @unmount-contact="handleContactSelect"
       />
     </section>
@@ -75,8 +74,8 @@ import type { IUser } from '../interfaces/interfaces';
 import { Button, ButtonTypeEnum, Icon, IconNameEnum, Loader } from '@pksep/yui';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
 import TopicList from './TopicList.vue';
-import { getGroupList } from '../../services/useGroup';
-import { getTopicList } from '../../composables/useTopics';
+import { useGroup } from '../../composables/useGroup';
+import { useTopics } from '../../composables/useTopics';
 import { navigateToAI, useUrlWatcher } from '../../composables/navigation';
 import {
   RouteType,
@@ -101,8 +100,17 @@ const state = reactive({
   isLoading: true
 });
 
-const contactList = computed(() => getTopicList());
-const groupList = computed(() => getGroupList());
+const contactList = computed(() => {
+  const { getTopicList } = useTopics();
+  const topics = getTopicList();
+  return [...topics];
+});
+
+const groupList = computed(() => {
+  const { getGroupList } = useGroup();
+  const groups = getGroupList();
+  return [...groups];
+});
 
 watch(
   [() => contactList.value, () => groupList.value],

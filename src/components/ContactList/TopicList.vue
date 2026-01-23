@@ -33,7 +33,7 @@
         <Avatar
           class="contact-list__avatar"
           :initials="topic.name"
-          :url="topic.avatarUrl"
+          :url="`${config.CHAT_PATH_TO_FILE_CDN}/${topic.avatarUrl}`"
           :alt="`Avatar of ${topic.name}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           is-icon
@@ -155,15 +155,17 @@ import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { getAuthUser } from '../../composables/useAuth';
 import { ITopic, MessageStatusEnum } from '../interfaces/interfaces';
-import { toggleMuteTopic, togglePinTopic } from '../../composables/useTopics';
+import { useTopics } from '../../composables/useTopics';
 import { formatTime } from '../../composables/useTime';
 import { useResizeState } from '../../composables/useResizeState';
+import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { MAX_W_MD } from '../../utils/constants';
 import {
   navigateToDialogs,
   navigateToGroup,
   useUrlWatcher
 } from '../../composables/navigation';
+import { getConfig } from '../../services/useConfig';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
@@ -172,6 +174,8 @@ interface IExtendedContactListProps extends IContactListProps {
 }
 
 const route = useUrlWatcher();
+
+const { togglePinTopic, toggleMuteTopic } = useTopics();
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   showCheckbox: false,
@@ -192,6 +196,8 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
 
 const authedUser = computed(() => getAuthUser());
 
+const config = getConfig();
+
 const handlePin = (topic: ITopic): void => {
   togglePinTopic(topic);
   closeActivePopover(topic.id);
@@ -204,9 +210,9 @@ const handleMute = (topic: ITopic): void => {
 
 const handleClick = (topic: ITopic): void => {
   if (isMobile.value) {
-    if (route.value && route.value.type === 'dialogs') {
+    if (route.value && route.value.type === RouteTypes.DIALOGS) {
       navigateToDialogs(topic.id);
-    } else if (route.value && route.value.type === 'group') {
+    } else if (route.value && route.value.type === RouteTypes.GROUP) {
       navigateToGroup(topic.id);
     }
   }

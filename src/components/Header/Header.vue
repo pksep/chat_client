@@ -29,19 +29,19 @@
         Ai Ассистент
       </h3>
     </div>
-    <template v-else-if="menuInfo">
+    <template v-else-if="currentGroup || currentTopic">
       <GroupProfile
         v-if="route.type === 'group'"
         class="chat__header-profile"
         avatar-alt="group-profile-alt"
-        :topic="menuInfo"
+        :topic="currentGroup"
         :data-testid="`${props.dataTestid}-Header-GroupProfile`"
       />
       <UserProfile
         v-else-if="route.type === 'dialogs'"
         class="chat__header-profile"
         avatar-alt="user-profile-alt"
-        :user="menuInfo.user"
+        :user="currentTopic.user"
         :data-testid="`${props.dataTestid}-Header-UserProfile`"
       />
     </template>
@@ -71,7 +71,6 @@
         </Button>
       </template>
       <Popover
-        v-if="false"
         class="chat__header-popover"
         @click.stop
         :options="getPopoverOptions"
@@ -92,8 +91,8 @@
   >
     <MobileChatInfo
       is-menu-info
-      :model-value="menuInfoState.information"
-      :members="menuInfoState.contacts"
+      :model-value="currentGroup"
+      :members="route.type === RouteTypes.GROUP && currentGroup?.members"
       @update:model-value="handleUpdateInformation"
       :data-testid="props.dataTestid"
     />
@@ -101,7 +100,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive } from 'vue';
+import { computed, reactive, watch } from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';
@@ -128,11 +127,15 @@ import {
   navigateToGroupsList,
   useUrlWatcher
 } from '../../composables/navigation';
-import { getTopicList } from '../../composables/useTopics';
-import { getGroupList } from '../../services/useGroup';
+import { RouteTypes } from '../../composables/navigation/useUrlRouting';
+import { useTopics } from '../../composables/useTopics';
+import { useGroup } from '../../composables/useGroup';
+
+const { groups, currentGroup, getGroupById } = useGroup();
+const { topics, currentTopic, getTopicById } = useTopics();
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
-  dataTestid: () => 'Header'
+  dataTestid: 'Header'
 });
 
 defineOptions({
@@ -142,12 +145,6 @@ defineOptions({
 const route = useUrlWatcher();
 
 const emits = defineEmits<IHeaderEmits>();
-const menuInfo = computed(
-  () =>
-    (route.value.type === 'dialogs' ? getTopicList() : getGroupList()).find(
-      t => t.id === route.value.id
-    ) || null
-);
 
 const state = reactive({
   loader: false,
@@ -159,7 +156,7 @@ const state = reactive({
   }
 });
 
-const { state: menuInfoState, handleUpdateInformation } = useMenuInfo();
+const { handleUpdateInformation } = useMenuInfo();
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
@@ -184,15 +181,14 @@ const handleClickHeader = async (): Promise<void> => {
 
 const getPopoverOptions = computed(() => {
   const popoverArray = [];
-  if (route.value && route.value.type !== 'ai') {
+  if (route.value && route.value.type !== RouteTypes.AI) {
     const notificationLabels = {
       value: state.statusNotification.label,
       function: handleNotificationToggle
     };
-    if (route.value && route.value.type !== 'group') {
+    if (route.value && route.value.type !== RouteTypes.GROUP) {
       popoverArray.push(notificationLabels);
     } else {
-      popoverArray.push(notificationLabels);
       popoverArray.push({
         value: 'Информация',
         function: () => {
@@ -210,6 +206,17 @@ const getPopoverOptions = computed(() => {
   }
   return popoverArray;
 });
+
+watch(
+  () => route.value.id,
+  async () => {
+    if (route.value.type === RouteTypes.DIALOGS) {
+      await getTopicById(route.value.id);
+      return;
+    }
+    await getGroupById(route.value.id);
+  }
+);
 
 const updateNotificationStatus = async (): Promise<void> => {
   try {
@@ -235,11 +242,11 @@ const updateNotificationStatus = async (): Promise<void> => {
 };
 
 const handleExit = (): void => {
-  if (route.value && route.value.type === 'dialogs') {
+  if (route.value && route.value.type === RouteTypes.DIALOGS) {
     navigateToDialogsList();
-  } else if (route.value && route.value.type === 'group') {
+  } else if (route.value && route.value.type === RouteTypes.GROUP) {
     navigateToGroupsList();
-  } else if (route.value && route.value.type === 'ai') {
+  } else if (route.value && route.value.type === RouteTypes.AI) {
     navigateToAssistant();
   } else {
     navigateToDefault();
@@ -250,12 +257,18 @@ const handleNotificationToggle = async (): Promise<void> => {
   await updateNotificationStatus();
   emits('unmount-notification', state.statusNotification.label);
 };
-</script>
 
-<style scoped>
-.chat__header-loading {
-  display: flex;
-  align-items: center;
-  padding: 0 1rem;
-}
-</style>
+watch(
+  [() => groups.value.length, () => topics.value.length],
+  async () => {
+    if (route.value.type === RouteTypes.DIALOGS) {
+      await getTopicById(route.value.id);
+      return;
+    }
+    await getGroupById(route.value.id);
+  },
+  {
+    immediate: true
+  }
+);
+</script>

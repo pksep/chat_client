@@ -54,7 +54,11 @@
       :data-testid="`${props.dataTestid}-MessageList-UserMessagesContainer`"
     >
       <template v-for="(message, index) in state.messages" :key="message.id">
-        <div class="top-element" v-if="isNewDate(index) || message.isSystem">
+        <div
+          class="top-element"
+          v-if="isNewDate(index) || message.isSystem"
+          :data-message-id="message.id"
+        >
           <div
             v-if="isNewDate(index)"
             class="date-divider"
@@ -75,7 +79,7 @@
               :data-testid="`${props.dataTestid}-MessageList-SystemLabelUser${index + 1}`"
               class="system-message-text"
             >
-              {{ getSystemMessageContent(message) }}
+              {{ message.text }}
             </span>
           </div>
         </div>
@@ -88,8 +92,7 @@
             )
           "
           :message="message.text || ''"
-          :media="getMessageMedia(message)"
-          :file="getMessageFile(message)"
+          :media="message.media"
           :is-me-sender="props.user.id === message.senderUserId"
           :time="formatTime(new Date(message.createdAt))"
           :sender="message.senderUser?.initials || ''"
@@ -157,11 +160,12 @@ import { removeMessageLoading } from '../services/useChatDb';
 import {
   sendMessageChat,
   getIsWebsocketConnecting,
-  markAsRead
+  markAsRead,
+  uploadFile
 } from '../services/useChat';
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
-import type { ChatMessage, AIMessage } from '../types/messages';
+import type { AIMessage } from '../types/messages';
 import { MediaType } from '@pksep/zod-shared-chat';
 import { MessageStatus } from '../services/useChatSDK/types';
 import { useUrlWatcher } from '../composables/navigation';
@@ -176,7 +180,7 @@ export interface IMessageListExtendedProps extends IMessageListProps {
 }
 
 const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
-  dataTestid: () => 'MessageList'
+  dataTestid: 'MessageList'
 });
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
@@ -191,7 +195,8 @@ const state = reactive({
   chatId: null as string | null,
   isLoadingMore: false,
   limit: 50,
-  aiMessages: [] as AIMessage[]
+  aiMessages: [] as AIMessage[],
+  medias: [] //as Media[]
 });
 
 const isLoadingInitialMessages = ref(false);
@@ -221,7 +226,6 @@ const setupIntersectionObserver = () => {
         if (entry.isIntersecting) {
           const messageId = entry.target.getAttribute('data-message-id');
           if (messageId) {
-            // Check if this message is unread and not from the current user
             const message = state.messages.find(m => m.id === messageId);
             if (
               message &&
@@ -235,7 +239,6 @@ const setupIntersectionObserver = () => {
       });
 
       if (visibleUnreadMessageIds.length > 0 && route.value?.id) {
-        // Mark specific messages as read when they become visible
         markAsRead({
           messageIds: visibleUnreadMessageIds,
           topicId: route.value.id
@@ -246,12 +249,11 @@ const setupIntersectionObserver = () => {
     },
     {
       root: chatWrapperRef.value,
-      threshold: 0.1, // Trigger when 10% of the message is visible
-      rootMargin: '0px 0px -50px 0px' // Trigger slightly before fully visible
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
     }
   );
 
-  // Observe all message elements
   nextTick(() => {
     if (chatWrapperRef.value) {
       const messageElements =
@@ -358,8 +360,6 @@ watch([() => state.chatId, () => props.baseUrl], () => {
 
 let unsubscribeFromMessageChanges: (() => void) | null = null;
 
-const lastMessageSentTime = ref(0);
-
 onMounted(async () => {
   if (route.value && route.value.type === RouteTypes.AI && !state.chatId) {
     state.chatId = generateChatId();
@@ -412,18 +412,6 @@ const messageChat = (role: string) => [
   { message__other: role === 'user' }
 ];
 
-const getMessageMedia = (message: ChatMessage) => {
-  return (
-    message.media?.find(
-      item => item.type === MediaType.Image || item.type === MediaType.Video
-    ) || null
-  );
-};
-
-const getMessageFile = (message: ChatMessage) => {
-  return message.media?.find(item => item.type === MediaType.File) || null;
-};
-
 watch(
   () => state.messages.length,
   (newLength, oldLength) => {
@@ -453,7 +441,6 @@ watch(
   }
 );
 
-// Re-setup intersection observer when messages change
 watch(
   () => state.messages,
   () => {
@@ -474,7 +461,7 @@ const scrollToBottom = () => {
 };
 
 const handleSend = async (): Promise<void> => {
-  if (!inputText.value.trim()) return;
+  if (!inputText.value.trim() && !state.medias.length) return;
 
   if (route.value && route.value.type === RouteTypes.AI) {
     const text = inputText.value;
@@ -528,39 +515,60 @@ const handleSend = async (): Promise<void> => {
   inputText.value = '';
 
   try {
-    lastMessageSentTime.value = Date.now();
     await sendMessageChat({
       topicId: route.value.id,
-      text
+      text,
+      medias: state.medias
     });
 
     await nextTick();
+    state.medias = [];
+
     scrollToBottom();
   } catch (error) {
     console.error('[ChatSDK] Failed to send message:', error);
   }
 };
-
-const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
+const handleAttachFile = async (files: FileList, isMedia = false) => {
   if (!files.length) return;
 
-  if (!props.contact?.id) {
-    console.error('[ChatSDK] Cannot send message: no topic provided');
-    return;
-  }
-
-  Array.from(files).forEach(async file => {
+  for (const uploadedFile of Array.from(files)) {
     try {
-      lastMessageSentTime.value = Date.now();
-      await sendMessageChat({
-        topicId: props.contact.id,
-        file,
-        onlyMedia
+      const { file, path } = await uploadFile(uploadedFile);
+
+      const type = !isMedia
+        ? MediaType.File
+        : file.type.startsWith('image/')
+          ? MediaType.Image
+          : file.type.startsWith('video/')
+            ? MediaType.Video
+            : MediaType.File;
+
+      state.medias.push({
+        path,
+        originName: file.name,
+        size: file.size,
+        type
       });
     } catch (error) {
       console.error('[ChatSDK] Failed to send file:', error);
     }
-  });
+  }
+
+  try {
+    await sendMessageChat({
+      topicId: route.value.id,
+      text: '',
+      medias: state.medias
+    });
+
+    await nextTick();
+    scrollToBottom();
+
+    state.medias = [];
+  } catch (error) {
+    console.error('[ChatSDK] Failed to send message:', error);
+  }
 };
 
 const isNewDate = (index: number, isMastra: boolean = false) => {
@@ -579,10 +587,6 @@ const isNewDate = (index: number, isMastra: boolean = false) => {
     const prevDay = formatDay(prevMsg.createdAt);
     return currentDay !== prevDay;
   }
-};
-
-const getSystemMessageContent = (message: ChatMessage) => {
-  return message.systemMessageContent || message.text || '';
 };
 
 watch(

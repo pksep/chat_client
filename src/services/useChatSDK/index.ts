@@ -447,10 +447,7 @@ export class ChatSDK {
     return this.group.getGroupMembers(groupId, params);
   }
 
-  async addGroupMembers(
-    groupId: string,
-    userIds: string[]
-  ): Promise<{ success: boolean; addedMembers: User[] }> {
+  async addGroupMembers(groupId: string, userIds: string[]): Promise<User[]> {
     return this.group.addGroupMembers(groupId, userIds);
   }
 
@@ -458,7 +455,12 @@ export class ChatSDK {
     groupId: string,
     userId: string
   ): Promise<{ success: boolean }> {
-    return this.group.removeGroupMember(groupId, userId);
+    const result = await this.group.removeGroupMember(groupId, userId);
+    // Handle the case where the underlying method returns a number
+    if (typeof result === 'number') {
+      return { success: result > 0 };
+    }
+    return result;
   }
 
   async promoteToAdmin(
@@ -486,7 +488,12 @@ export class ChatSDK {
     groupId: string,
     userId: string
   ): Promise<{ success: boolean }> {
-    return this.group.removeUserFromGroup(groupId, userId);
+    const result = await this.group.removeUserFromGroup(groupId, userId);
+    // Handle the case where the underlying method returns a number
+    if (typeof result === 'number') {
+      return { success: result > 0 };
+    }
+    return result;
   }
 
   async editGroup(
@@ -543,14 +550,6 @@ export class ChatSDK {
     this.socket.emit(WebSocketEventType.READ_MESSAGE, { messageIds, topicId });
   }
 
-  async uploadMedia(
-    file: File,
-    topicId: string,
-    messageId?: string
-  ): Promise<Media> {
-    return this.message.uploadMedia(file, topicId, messageId);
-  }
-
   async uploadFile(file: File): Promise<string> {
     const formData = new FormData();
     formData.append('file', file);
@@ -559,7 +558,7 @@ export class ChatSDK {
       parsed: false
     })) as any;
     const data = await response.json();
-    return data.url;
+    return data.objectName;
   }
 
   async updateMessageStatus(
