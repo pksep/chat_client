@@ -51,7 +51,7 @@ import {
 } from '@pksep/yui';
 
 const emit = defineEmits<{
-  (e: 'auth-success', token: string): void
+  (e: 'auth-success', token: string): void;
 }>();
 
 const scanError = ref('');

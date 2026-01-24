@@ -4,7 +4,7 @@
   <ChatContainer v-else-if="openChatContainerShow" v-bind="props" />
 
   <img
-    v-else 
+    v-else
     style="position: fixed; width: 100dvw; height: 100dvh; object-fit: contain"
     src="/images/deploy-bg.svg"
     alt="deploy-bg"
