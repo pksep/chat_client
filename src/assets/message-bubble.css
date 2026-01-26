@@ -18,6 +18,13 @@
   align-self: start;
 }
 
+.message__article-initals {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary-base);
+  margin-bottom: -2px;
+}
+
 .message__no-author {
   margin-left: 28px;
 }
