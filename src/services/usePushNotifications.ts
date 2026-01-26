@@ -5,7 +5,6 @@ import { useChatApi } from './useApi';
 export const initPushNotifications = async () => {
   // 1. Проверяем, что мы на нативном устройстве (Android/iOS)
   if (!Capacitor.isNativePlatform()) {
-    console.log('Push Notifications: Not native platform, skipping.');
     return;
   }
 
@@ -28,8 +27,6 @@ export const initPushNotifications = async () => {
 
   // А) Успешная регистрация -> Шлем токен на бэкенд через useChatApi
   PushNotifications.addListener('registration', async token => {
-    console.log('FCM Token:', token.value);
-
     try {
       const api = useChatApi();
       // Отправляем токен и платформу
@@ -37,7 +34,6 @@ export const initPushNotifications = async () => {
         token: token.value,
         platform: Capacitor.getPlatform() // 'android' или 'ios'
       });
-      console.log('Token sent to server successfully');
     } catch (e) {
       console.error('Failed to send token to server:', e);
     }
@@ -50,7 +46,6 @@ export const initPushNotifications = async () => {
 
   // В) Пришел пуш, когда приложение ОТКРЫТО
   PushNotifications.addListener('pushNotificationReceived', notification => {
-    console.log('Push received foreground:', notification);
     // Тут можно дернуть стор, чтобы обновить счетчик непрочитанных, если нужно
   });
 

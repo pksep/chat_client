@@ -34,9 +34,6 @@ export const useUnreadMessagePolling = (
       }
     }, pollingInterval);
 
-    console.log(
-      `Started unread message polling with interval: ${pollingInterval}ms`
-    );
   };
 
   const stopPolling = () => {
@@ -45,7 +42,6 @@ export const useUnreadMessagePolling = (
       pollingIntervalId = null;
     }
     isPollingActive.value = false;
-    console.log('Stopped unread message polling');
   };
 
   onUnmounted(() => {

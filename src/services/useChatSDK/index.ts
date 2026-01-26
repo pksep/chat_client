@@ -114,7 +114,6 @@ export class ChatSDK {
         this.ws.setSocket(this.socket);
 
         this.socket.on('connect', () => {
-          console.log('Connected to chat server');
           resolve();
         });
 
@@ -124,17 +123,12 @@ export class ChatSDK {
         });
 
         this.socket.on('disconnect', reason => {
-          console.log('Disconnected from chat server:', reason);
         });
 
         this.socket.on('reconnect_attempt', attemptNumber => {
-          console.log(`Attempting to reconnect (${attemptNumber})...`);
         });
 
         this.socket.on('reconnect', attemptNumber => {
-          console.log(
-            `Reconnected to chat server after ${attemptNumber} attempts`
-          );
         });
 
         this.socket.on('reconnect_error', error => {
