@@ -1,5 +1,5 @@
 import { Message, Topic, User, Group } from '@pksep/zod-shared-chat';
-import { ITopic } from 'src/components/interfaces/interfaces';
+import { IMedia, ITopic } from 'src/components/interfaces/interfaces';
 
 export enum WebSocketEventType {
   JOIN_TOPIC = 'joinTopic',
@@ -48,7 +48,7 @@ export interface WebSocketEventPayloads {
   [WebSocketEventType.SEND_MESSAGE]: {
     topicId: string;
     text?: string;
-    medias?: any[]; //Media[]
+    medias?: IMedia[];
     replayMessageId?: string;
   };
   [WebSocketEventType.CHANGE_MESSAGE]: {

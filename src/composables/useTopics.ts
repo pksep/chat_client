@@ -99,6 +99,8 @@ export const useTopics = () => {
       topic.unreadMessageCount += delta;
     }
 
+    topic.unreadMessageCount = Math.max(0, topic.unreadMessageCount);
+
     topics.value = [...topics.value];
   };
 
