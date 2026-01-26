@@ -45,7 +45,7 @@ export const initPushNotifications = async () => {
   });
 
   // В) Пришел пуш, когда приложение ОТКРЫТО
-  PushNotifications.addListener('pushNotificationReceived', notification => {
+  PushNotifications.addListener('pushNotificationReceived', () => {
     // Тут можно дернуть стор, чтобы обновить счетчик непрочитанных, если нужно
   });
 

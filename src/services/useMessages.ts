@@ -96,7 +96,7 @@ export const playNotificationSound = (topicId?: string): void => {
       'error',
       e => {
         console.warn('Notification sound failed to load:', e);
-        
+
         if ('Notification' in window && Notification.permission === 'granted') {
           new Notification('New Message', {
             silent: false,

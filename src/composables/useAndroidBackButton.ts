@@ -9,7 +9,6 @@ import {
 } from './navigation/useUrlRouting';
 
 interface UseAndroidBackButtonOptions {
-  
   onBack?: () => boolean | void;
   onForward?: () => void;
   handleExit?: () => void;
@@ -48,17 +47,15 @@ export const getPlatformSpecificExitHandler = (): (() => void) => {
   if (isPWA()) {
     if (isAndroid()) {
       return () => {
-        
         window.close();
       };
     } else if (isIOS()) {
       return () => {
-
         navigateToDefault();
       };
     }
   }
-  
+
   return () => {
     window.history.back();
   };
@@ -82,31 +79,25 @@ const performContextAwareBackNavigation = (
   switch (route.type) {
     case RouteTypes.DIALOGS:
       if (route.id) {
-        
         navigateToDialogsList();
       } else {
-        
         navigateToDefault();
       }
       break;
 
     case RouteTypes.GROUP:
       if (route.id) {
-        
         navigateToGroupsList();
       } else {
-        
         navigateToDefault();
       }
       break;
 
     case RouteTypes.AI:
-      
       navigateToAssistant();
       break;
 
     case RouteTypes.ASSISTANT:
-      
       navigateToDefault();
       break;
 
@@ -140,7 +131,6 @@ export function useAndroidBackButton(
     if (onBack) {
       const handled = onBack();
       if (handled === true) {
-        
         window.history.pushState({}, document.title, window.location.href);
         return;
       }
@@ -149,7 +139,6 @@ export function useAndroidBackButton(
     if (enableContextAwareNavigation) {
       performContextAwareBackNavigation(handleExit);
     } else {
-      
       window.history.pushState({}, document.title, window.location.pathname);
     }
   };
@@ -166,7 +155,6 @@ export function useAndroidBackButton(
   };
 
   const handlePageShow = (event: PageTransitionEvent): void => {
-    
     if (event.persisted) {
       checkForForwardNavigation();
     }
@@ -194,7 +182,6 @@ export function useAndroidBackButton(
   };
 
   const triggerBack = (): void => {
-    
     if (onBack) {
       const handled = onBack();
       if (handled === true) {

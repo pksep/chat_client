@@ -40,7 +40,7 @@ export const fetchAllUsers = async (
 
 export const getUsersList = (): IUser[] => {
   const currentUsers = users.value || [];
-  
+
   return [...currentUsers];
 };
 

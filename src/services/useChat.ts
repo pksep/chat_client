@@ -179,7 +179,7 @@ export const subscribeToMessageChanges = (
 export const sendMessageChat = async (params: {
   topicId: string;
   text?: string;
-  medias?: any[]; 
+  medias?: any[];
 }): Promise<void> => {
   const sdk = getChatSDK();
 

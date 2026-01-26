@@ -196,7 +196,7 @@ const state = reactive({
   isLoadingMore: false,
   limit: 50,
   aiMessages: [] as AIMessage[],
-  medias: [] 
+  medias: []
 });
 
 const isLoadingInitialMessages = ref(false);

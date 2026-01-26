@@ -252,7 +252,6 @@ const isActiveHeader = (
 useAndroidBackButton({
   enableContextAwareNavigation: true,
   onBack: () => {
-    
     if (isMobile.value) {
       if (
         state.isMenuMobileOpen ||
@@ -262,10 +261,10 @@ useAndroidBackButton({
         state.isMenuMobileOpen = false;
         state.isNewContactOpen = false;
         state.isNewGroupOpen = false;
-        return true; 
+        return true;
       }
     }
-    
+
     return false;
   }
 });
