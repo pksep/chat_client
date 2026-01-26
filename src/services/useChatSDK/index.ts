@@ -122,14 +122,11 @@ export class ChatSDK {
           reject(error);
         });
 
-        this.socket.on('disconnect', reason => {
-        });
+        this.socket.on('disconnect', reason => {});
 
-        this.socket.on('reconnect_attempt', attemptNumber => {
-        });
+        this.socket.on('reconnect_attempt', attemptNumber => {});
 
-        this.socket.on('reconnect', attemptNumber => {
-        });
+        this.socket.on('reconnect', attemptNumber => {});
 
         this.socket.on('reconnect_error', error => {
           console.error('Reconnection error:', error);
@@ -450,7 +447,7 @@ export class ChatSDK {
     userId: string
   ): Promise<{ success: boolean }> {
     const result = await this.group.removeGroupMember(groupId, userId);
-    // Handle the case where the underlying method returns a number
+    
     if (typeof result === 'number') {
       return { success: result > 0 };
     }
@@ -483,7 +480,7 @@ export class ChatSDK {
     userId: string
   ): Promise<{ success: boolean }> {
     const result = await this.group.removeUserFromGroup(groupId, userId);
-    // Handle the case where the underlying method returns a number
+    
     if (typeof result === 'number') {
       return { success: result > 0 };
     }

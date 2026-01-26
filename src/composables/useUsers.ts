@@ -24,7 +24,6 @@ export const fetchAllUsers = async (
       limit
     });
 
-    // Force reactivity by creating new array reference
     users.value = [...response.data];
 
     lastUsersUpdate = Date.now();
@@ -41,7 +40,7 @@ export const fetchAllUsers = async (
 
 export const getUsersList = (): IUser[] => {
   const currentUsers = users.value || [];
-  // Return a new array reference to ensure Vue reactivity
+  
   return [...currentUsers];
 };
 
@@ -50,7 +49,6 @@ export const getUserById = (userId: string): IUser | undefined => {
     return userMapCache.get(userId);
   }
 
-  // Create a new array to ensure we have fresh data
   const currentUsers = users.value || [];
   userMapCache = new Map(currentUsers.map(user => [user.id, user]));
   return userMapCache.get(userId);

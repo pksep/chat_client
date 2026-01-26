@@ -33,7 +33,6 @@ export const useUnreadMessagePolling = (
         });
       }
     }, pollingInterval);
-
   };
 
   const stopPolling = () => {

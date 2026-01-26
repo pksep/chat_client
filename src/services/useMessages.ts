@@ -82,7 +82,6 @@ export const playNotificationSound = (topicId?: string): void => {
     audio.src = '/audio/new-message.mp3';
     audio.preload = 'auto';
 
-    // Check if audio can load
     audio.addEventListener(
       'canplaythrough',
       () => {
@@ -97,7 +96,7 @@ export const playNotificationSound = (topicId?: string): void => {
       'error',
       e => {
         console.warn('Notification sound failed to load:', e);
-        // Fallback: try browser notification sound if available
+        
         if ('Notification' in window && Notification.permission === 'granted') {
           new Notification('New Message', {
             silent: false,
@@ -108,7 +107,6 @@ export const playNotificationSound = (topicId?: string): void => {
       { once: true }
     );
 
-    // Load the audio
     audio.load();
   } catch (err) {
     console.warn('Audio not supported in this browser');

@@ -125,15 +125,12 @@ const runAppInitialization = async () => {
 
     startPolling();
 
-    // В этот момент у нас точно есть токен, User ID и приложение готово к работе.
     await initPushNotifications();
 
     openChatContainerShow.value = true;
   } catch (error) {
     console.error('Failed to initialize chat:', error);
 
-    // Если ошибка инициализации произошла на мобилке (например, токен протух)
-    // Мы сбрасываем токен и снова показываем QR сканер
     const isMobile = window.innerWidth <= 768;
     if (isMobile) {
       localStorage.removeItem('erp_token');
@@ -142,7 +139,6 @@ const runAppInitialization = async () => {
       return;
     }
 
-    // Логика редиректа для десктопа
     const attempts = Number(localStorage.getItem(REDIRECT_KEY) || 0) + 1;
     localStorage.setItem(REDIRECT_KEY, String(attempts));
 
@@ -170,7 +166,6 @@ onMounted(async () => {
   const hasLocalToken = !!localStorage.getItem('erp_token');
   const hasUrlToken = window.location.href.includes('token=');
 
-  // Если мы на мобилке И у нас нет никакого токена (ни в URL, ни в памяти)
   if (isMobile && !hasLocalToken && !hasUrlToken) {
     showMobileAuth.value = true;
     openChatContainerShow.value = false;

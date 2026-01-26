@@ -48,7 +48,7 @@ export interface WebSocketEventPayloads {
   [WebSocketEventType.SEND_MESSAGE]: {
     topicId: string;
     text?: string;
-    medias?: any[]; //Media[]
+    medias?: any[]; 
     replayMessageId?: string;
   };
   [WebSocketEventType.CHANGE_MESSAGE]: {

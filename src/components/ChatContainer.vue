@@ -48,8 +48,7 @@
       :data-testid="`${props.dataTestid}-ChatContainer-NewContactModal`"
       @unmount-close="closeModals"
     />
-    <!-- <Teleport to="#chat-container-image"> -->
-    <!-- </Teleport> -->
+
     <NewGroupModal
       :user="authUser"
       :contacts="users"
@@ -253,7 +252,7 @@ const isActiveHeader = (
 useAndroidBackButton({
   enableContextAwareNavigation: true,
   onBack: () => {
-    // First, close any open modals before navigation
+    
     if (isMobile.value) {
       if (
         state.isMenuMobileOpen ||
@@ -263,10 +262,10 @@ useAndroidBackButton({
         state.isMenuMobileOpen = false;
         state.isNewContactOpen = false;
         state.isNewGroupOpen = false;
-        return true; // Return true to indicate event was handled
+        return true; 
       }
     }
-    // Return false/undefined to continue with context-aware navigation
+    
     return false;
   }
 });
