@@ -1,4 +1,6 @@
 name: Release
+env:
+  LEFTHOOK: 0
 on:
   push:
     branches:
