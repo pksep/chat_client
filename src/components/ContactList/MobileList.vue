@@ -4,10 +4,16 @@
     role="main"
     :data-testid="`${props.dataTestid}-MobileList-Container`"
   >
-    <Loader
-      v-if="state.isLoading"
-      :dataTestid="`${props.dataTestid}-MobileList-Loading`"
-    />
+    <template v-if="state.isLoading">
+      <Modal
+        :open="state.isLoading"
+        position="center"
+        width="150px"
+        height="160px"
+      >
+        <Loader :dataTestid="`${props.dataTestid}-ChatContainer-Loading`" />
+      </Modal>
+    </template>
     <section v-else-if="isAssistantRoute">
       <button
         class="menu__user-assistant"
