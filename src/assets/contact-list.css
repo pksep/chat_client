@@ -47,6 +47,7 @@
 
 .contact-list__description {
   grid-area: description;
+  display: grid;
   justify-self: start;
   font-size: 14px;
 
@@ -61,7 +62,11 @@
   white-space: nowrap;
   width: 170px;
   font-size: 14px;
-  height: 1.2em;
+}
+
+.contact-list__description p {
+  align-self: center;
+  height: 19px;
 }
 
 .contact-list__description br {
