@@ -25,13 +25,14 @@
 
 .contact-list__title {
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
-  line-clamp: 3;
+  line-clamp: 1;
   grid-area: title;
   margin: 0;
-  max-width: 50ch;
+  max-width: 80ch;
   font-size: 16px;
+  height: 19px;
   color: var(--text-black);
   font-weight: 600;
   hyphens: auto;
@@ -60,7 +61,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  width: 170px;
+  width: 22ch;
   font-size: 14px;
 }
 
@@ -130,6 +131,13 @@ svg.icon-yui-kit.contact-list__read-icon {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  cursor: pointer;
+  &:hover {
+    cursor: pointer;
+  }
+}
+
+.contact-selector__item:hover .user-profile > * {
   cursor: pointer;
 }
 
