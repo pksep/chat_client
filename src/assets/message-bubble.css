@@ -238,6 +238,9 @@ div.message-content__file {
     max-width: 30ch;
     margin: 0;
   }
+  .message__article {
+    width: 100%;
+  }
 
   .chat__message-wrapper {
     width: 100%;
