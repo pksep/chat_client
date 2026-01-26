@@ -106,6 +106,7 @@ div.message-content__loading-circle:nth-child(3) {
 }
 
 div.message-content__html > p {
+  max-width: 100ch;
   margin: 0;
 }
 
@@ -232,6 +233,11 @@ div.message-content__file {
 }
 
 @media screen and (width <= 480px) {
+  div.message-content__html > p {
+    max-width: 35ch;
+    margin: 0;
+  }
+
   .chat__message-wrapper {
     width: 100%;
     padding-right: 15px;
