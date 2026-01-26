@@ -177,7 +177,7 @@ export const subscribeToMessageChanges = (
   };
 };
 
-const generateNewMessage = (params: {
+export const generateNewMessage = (params: {
   topicId: string;
   text?: string;
   medias?: IMedia[];

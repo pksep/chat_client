@@ -4,9 +4,7 @@ import {
   Group,
   Message,
   TopicSetting,
-  MediaType,
-  Media,
-  MediaTypeType
+  Media
 } from '@pksep/zod-shared-chat';
 
 import { S3Service } from './s3Service';
