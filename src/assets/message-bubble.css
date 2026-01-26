@@ -235,7 +235,7 @@ div.message-content__file {
 
 @media screen and (width <= 480px) {
   div.message-content__html > p {
-    max-width: 35ch;
+    max-width: 30ch;
     margin: 0;
   }
 
