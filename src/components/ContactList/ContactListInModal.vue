@@ -34,24 +34,26 @@
             :dataTestid="`${props.dataTestid}-ContactListInModal-UserProfile${index + 1}`"
             @unmount-click="openActivePopover(user.id.toString(), $event)"
           />
-          <ContextMenu
-            :visible="isOpen[user.id.toString()]"
-            :position="position"
-            @unmount-close="closeActivePopover(user.id.toString())"
-            :data-testid="`${props.dataTestid}-ContactListInModal-ContextMenu${index + 1}`"
-          >
-            <template #default>
-              <Button
-                class="menu__info-button-little"
-                :type="ButtonTypeEnum.ghost"
-                :size="SizesEnum.little"
-                @click="deleteUserFromChat(user.id.toString())"
-                :data-testid="`${props.dataTestid}-ContactListInModal-RemoveButton${index + 1}`"
-              >
-                Удалить из канала
-              </Button>
-            </template>
-          </ContextMenu>
+          <template v-if="false">
+            <ContextMenu
+              :visible="isOpen[user.id.toString()]"
+              :position="position"
+              @unmount-close="closeActivePopover(user.id.toString())"
+              :data-testid="`${props.dataTestid}-ContactListInModal-ContextMenu${index + 1}`"
+            >
+              <template #default>
+                <Button
+                  class="menu__info-button-little"
+                  :type="ButtonTypeEnum.ghost"
+                  :size="SizesEnum.little"
+                  @click="deleteUserFromChat(user.id.toString())"
+                  :data-testid="`${props.dataTestid}-ContactListInModal-RemoveButton${index + 1}`"
+                >
+                  Удалить из канала
+                </Button>
+              </template>
+            </ContextMenu>
+          </template>
         </template>
       </li>
     </ul>

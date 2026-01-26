@@ -71,17 +71,23 @@
   --size-avatar: 15px;
 }
 
-button.menu__user-profile-collapse {
+button.small.ghost-yui-kit.menu__user-profile-collapse {
   grid-area: collapse;
   display: grid;
-  padding: 2px;
+  padding: 4px;
+  min-height: 24px;
   align-items: center;
-  color: var(--grey4);
+  color: var(--text-light-color);
   background-color: var(--white);
 }
 
+button.small.ghost-yui-kit.menu__user-profile-collapse:hover
+  .menu__user-profile-collapse-icon {
+  color: var(--primary-color);
+}
+
 .menu__user-profile-collapse-icon {
-  color: #b8b8b8;
+  color: var(--text-light-color);
   background-color: var(--white);
 }
 

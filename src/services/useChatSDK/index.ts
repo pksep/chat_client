@@ -114,7 +114,6 @@ export class ChatSDK {
         this.ws.setSocket(this.socket);
 
         this.socket.on('connect', () => {
-          console.log('Connected to chat server');
           resolve();
         });
 
@@ -123,19 +122,11 @@ export class ChatSDK {
           reject(error);
         });
 
-        this.socket.on('disconnect', reason => {
-          console.log('Disconnected from chat server:', reason);
-        });
+        this.socket.on('disconnect', () => {});
 
-        this.socket.on('reconnect_attempt', attemptNumber => {
-          console.log(`Attempting to reconnect (${attemptNumber})...`);
-        });
+        this.socket.on('reconnect_attempt', () => {});
 
-        this.socket.on('reconnect', attemptNumber => {
-          console.log(
-            `Reconnected to chat server after ${attemptNumber} attempts`
-          );
-        });
+        this.socket.on('reconnect', () => {});
 
         this.socket.on('reconnect_error', error => {
           console.error('Reconnection error:', error);
@@ -456,7 +447,7 @@ export class ChatSDK {
     userId: string
   ): Promise<{ success: boolean }> {
     const result = await this.group.removeGroupMember(groupId, userId);
-    // Handle the case where the underlying method returns a number
+
     if (typeof result === 'number') {
       return { success: result > 0 };
     }
@@ -489,7 +480,7 @@ export class ChatSDK {
     userId: string
   ): Promise<{ success: boolean }> {
     const result = await this.group.removeUserFromGroup(groupId, userId);
-    // Handle the case where the underlying method returns a number
+
     if (typeof result === 'number') {
       return { success: result > 0 };
     }
