@@ -251,12 +251,23 @@ const isActiveHeader = (
 };
 
 useAndroidBackButton({
+  enableContextAwareNavigation: true,
   onBack: () => {
+    // First, close any open modals before navigation
     if (isMobile.value) {
-      state.isMenuMobileOpen = false;
-      state.isNewContactOpen = false;
-      state.isNewGroupOpen = false;
+      if (
+        state.isMenuMobileOpen ||
+        state.isNewContactOpen ||
+        state.isNewGroupOpen
+      ) {
+        state.isMenuMobileOpen = false;
+        state.isNewContactOpen = false;
+        state.isNewGroupOpen = false;
+        return true; // Return true to indicate event was handled
+      }
     }
+    // Return false/undefined to continue with context-aware navigation
+    return false;
   }
 });
 
