@@ -45,7 +45,8 @@
   align-items: center;
   justify-self: end;
   & svg.icon-yui-kit {
-    font-size: 16px;
+    display: grid;
+    font-size: 12px;
   }
 }
 
