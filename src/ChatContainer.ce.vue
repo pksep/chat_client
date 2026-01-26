@@ -32,6 +32,9 @@ import { useGroup } from './composables/useGroup';
 import { useUrlWatcher } from './composables/navigation';
 import { fetchMessagesForTopic } from './services/useMessages';
 import { initPushNotifications } from './services/usePushNotifications';
+import { useResizeState } from './composables/useResizeState';
+import { navigateToDialogsList } from './composables/navigation';
+import { MAX_W_MD } from './utils/constants';
 
 const emits = defineEmits<IChatContainerEmits>();
 const props = defineProps<IChatContainerProps>();
@@ -44,6 +47,7 @@ const { fetchAllGroups } = useGroup();
 const { fetchAllTopics } = useTopics();
 
 const { startPolling } = useUnreadMessagePolling(30000, false);
+const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const route = useUrlWatcher();
 
@@ -60,6 +64,10 @@ const runAppInitialization = async () => {
   const tokenUrl = url.searchParams.get('token')?.split('?token')[0];
   const REDIRECT_KEY = 'chat_redirect_attempts';
   const MAX_REDIRECTS = 2;
+
+  if (isMobile.value) {
+    navigateToDialogsList();
+  }
 
   if (tokenUrl) {
     localStorage.setItem('erp_token', tokenUrl);
@@ -125,16 +133,12 @@ const runAppInitialization = async () => {
 
     startPolling();
 
-    // В этот момент у нас точно есть токен, User ID и приложение готово к работе.
     await initPushNotifications();
 
     openChatContainerShow.value = true;
   } catch (error) {
     console.error('Failed to initialize chat:', error);
 
-    // Если ошибка инициализации произошла на мобилке (например, токен протух)
-    // Мы сбрасываем токен и снова показываем QR сканер
-    const isMobile = window.innerWidth <= 768;
     if (isMobile) {
       localStorage.removeItem('erp_token');
       showMobileAuth.value = true;
@@ -142,7 +146,6 @@ const runAppInitialization = async () => {
       return;
     }
 
-    // Логика редиректа для десктопа
     const attempts = Number(localStorage.getItem(REDIRECT_KEY) || 0) + 1;
     localStorage.setItem(REDIRECT_KEY, String(attempts));
 
@@ -166,11 +169,9 @@ const runAppInitialization = async () => {
 };
 
 onMounted(async () => {
-  const isMobile = window.innerWidth <= 768;
   const hasLocalToken = !!localStorage.getItem('erp_token');
   const hasUrlToken = window.location.href.includes('token=');
 
-  // Если мы на мобилке И у нас нет никакого токена (ни в URL, ни в памяти)
   if (isMobile && !hasLocalToken && !hasUrlToken) {
     showMobileAuth.value = true;
     openChatContainerShow.value = false;
