@@ -32,7 +32,7 @@
   margin: 0;
   max-width: 80ch;
   font-size: 16px;
-  height: 19px;
+  height: 18px;
   color: var(--text-black);
   font-weight: 600;
   hyphens: auto;
@@ -61,7 +61,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  width: 22ch;
+  max-width: 22ch;
   font-size: 14px;
 }
 
