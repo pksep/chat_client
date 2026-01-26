@@ -36,7 +36,8 @@
         <template #header2> Информация </template>
         <template #tab1>
           <ContactListInModal
-            :contacts="selectedContacts"
+            :contacts="filteredSelectedContacts"
+            :excluded-contact-ids="excludedContactIds"
             class="new-group__tab2-profile"
             @unmount-click-add-button="handleCloseGroupInfo"
           />
@@ -44,7 +45,7 @@
         <template #tab2>
           <div class="menu-info__group-info new-group-info">
             <Avatar
-              :url="avatarPreview"
+              :url="`${config.CHAT_PATH_TO_FILE_CDN}/${avatarPreview}`"
               :alt="groupName"
               class="user-profile__avatar"
               :initials="groupName"
@@ -107,22 +108,24 @@ import {
 import ContactSelector from './ContactSelector.vue';
 import type { INewContactProps } from './interfaces/new-contact';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';
-import { IUserProps } from '../interfaces/interfaces';
+import { IUser } from '../interfaces/interfaces';
 import { useNewGroupModal } from './composables/useNewGroupModal';
+import { computed } from 'vue';
+import { getUsersList } from '../../composables/useUsers';
+import { getConfig } from '../../services/useConfig';
 
-const props = withDefaults(
-  defineProps<INewContactProps & { user?: IUserProps }>(),
-  {
-    open: false,
-    contacts: () => [],
-    dataTestid: () => 'NewGroupModal'
-  }
-);
+const props = withDefaults(defineProps<INewContactProps & { user?: IUser }>(), {
+  open: false,
+  dataTestid: 'NewGroupModal'
+});
 
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
-  (e: 'unmount-new-group', group: any): void;
 }>();
+
+const contacts = computed(() => getUsersList());
+
+const config = getConfig();
 
 const {
   avatarInputRef,
@@ -141,4 +144,26 @@ const {
   handleOpenGroupInfo,
   handleCloseGroupInfo
 } = useNewGroupModal(props, emits);
+
+const filteredSelectedContacts = computed(() => {
+  return selectedContacts.value.filter(
+    contact =>
+      contact &&
+      'initials' in contact &&
+      'nickname' in contact &&
+      'lastOnline' in contact
+  ) as IUser[];
+});
+
+const excludedContactIds = computed(() => {
+  const ids = new Set<string | number>();
+  if (filteredSelectedContacts.value) {
+    filteredSelectedContacts.value.forEach(contact => {
+      if (contact && contact.id) {
+        ids.add(contact.id);
+      }
+    });
+  }
+  return ids;
+});
 </script>

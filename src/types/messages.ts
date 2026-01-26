@@ -1,4 +1,4 @@
-import { MessageItem } from '@openim/wasm-client-sdk';
+import type { Message as ChatSDKMessage } from '@pksep/zod-shared-chat';
 
 export interface AIMessage {
   role: 'user' | 'assistant';
@@ -7,24 +7,24 @@ export interface AIMessage {
   timestamp?: number;
 }
 
-interface ExtendedOpenIMMessage {
-  isSystemMessage?: boolean;
+export interface ChatMessage extends ChatSDKMessage {
   systemMessageType?: string;
   systemMessageContent?: string;
   senderFaceUrl?: string;
   faceURL?: string;
-  isReadByPeer?: boolean;
+  senderNickname?: string;
   loading?: boolean;
+  media?: any[];
+  reactions?: any[];
+  tempId?: string;
 }
 
-export type OpenIMMessage = Partial<MessageItem> & ExtendedOpenIMMessage;
-
-export type Message = AIMessage | OpenIMMessage;
+export type Message = AIMessage | ChatMessage;
 
 export function isAIMessage(message: Message): message is AIMessage {
   return 'role' in message && 'content' in message;
 }
 
-export function isOpenIMMessage(message: Message): message is OpenIMMessage {
-  return 'sendID' in message && 'sendTime' in message;
+export function isChatMessage(message: Message): message is ChatMessage {
+  return 'topicId' in message && 'senderUserId' in message;
 }

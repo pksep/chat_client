@@ -5,14 +5,17 @@
       :name="IconNameEnum.read"
       :data-testid="`${dataTestid}-ReadIcon`"
     />
-    <template v-else-if="props.messageStatus !== undefined">
+    <template v-else-if="props.messageStatus">
       <Icon
-        v-if="props.messageStatus === 2"
+        v-if="props.messageStatus === MessageStatus.Delivery"
         :name="IconNameEnum.delivered"
         :data-testid="`${dataTestid}-DeliveredIcon`"
       />
       <Icon
-        v-else-if="props.messageStatus === 1"
+        v-else-if="
+          props.messageStatus === MessageStatus.Wait ||
+          props.messageStatus === MessageStatus.NotDelivered
+        "
         :name="IconNameEnum.notDelivered"
         :data-testid="`${dataTestid}-SendingIcon`"
       />
@@ -23,6 +26,7 @@
 <script setup lang="ts">
 import { Icon, IconNameEnum } from '@pksep/yui';
 import type { IMessageStatusIconsProps } from './interface/interface';
+import { MessageStatus } from '../../services/useChatSDK/types';
 
 const props = withDefaults(defineProps<IMessageStatusIconsProps>(), {
   isRead: false,

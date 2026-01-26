@@ -1,10 +1,13 @@
-import { onMounted, onUnmounted, ref } from 'vue';
+import { onUnmounted, ref } from 'vue';
 import { fetchConversationList } from '../services/useConversions';
 
 const isPollingActive = ref(false);
 let pollingIntervalId: number | null = null;
 
-export const useUnreadMessagePolling = (pollingInterval: number = 30000) => {
+export const useUnreadMessagePolling = (
+  pollingInterval: number = 30000,
+  autoStart: boolean = false
+) => {
   const startPolling = () => {
     if (isPollingActive.value) {
       console.warn('Polling is already active');
@@ -45,13 +48,13 @@ export const useUnreadMessagePolling = (pollingInterval: number = 30000) => {
     console.log('Stopped unread message polling');
   };
 
-  onMounted(() => {
-    startPolling();
-  });
-
   onUnmounted(() => {
     stopPolling();
   });
+
+  if (autoStart) {
+    startPolling();
+  }
 
   return {
     startPolling,

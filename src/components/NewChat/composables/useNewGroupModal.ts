@@ -1,8 +1,11 @@
 import { computed, reactive, ref, watch, toRefs } from 'vue';
 import type { INewContactProps } from '../interfaces/new-contact';
-import { createGroup } from '../../../services/useGroup';
-import { uploadFile } from '../../../services/useOpenIM';
-import { IUserProps } from '../../interfaces/interfaces';
+import { useGroup } from '../../../composables/useGroup';
+import { uploadFile } from '../../../services/useChat';
+import { IUser } from '../../interfaces/interfaces';
+import { navigateToGroup } from '../../../composables/navigation';
+import { getAuthUser } from '../../../composables/useAuth';
+import { getUsersList } from '../../../composables/useUsers';
 
 interface NewGroupState {
   checkUsers: string[];
@@ -18,7 +21,6 @@ interface ExtendedProps extends INewContactProps {}
 
 type NewGroupModalEmits = {
   (e: 'unmount-close'): void;
-  (e: 'unmount-new-group', group: any): void;
 };
 
 export function useNewGroupModal<Emits extends NewGroupModalEmits>(
@@ -26,6 +28,10 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
   emit: Emits
 ) {
   const avatarInputRef = ref<HTMLInputElement | null>(null);
+  const { createGroup } = useGroup();
+
+  const authUser = computed(() => getAuthUser());
+  const users = computed(() => getUsersList());
 
   const state = reactive<NewGroupState>({
     checkUsers: [],
@@ -38,8 +44,8 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
   });
 
   const selectedContacts = computed(() => [
-    props.user,
-    ...props.contacts.filter(c => new Set(state.checkUsers).has(c.id))
+    authUser.value,
+    ...users.value.filter(c => new Set(state.checkUsers).has(c.id))
   ]);
 
   watch(
@@ -60,8 +66,10 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
   };
 
   const onSaveAvatar = async (): Promise<void> => {
-    const url = await uploadFile(state.file!);
-    state.avatarPreview = url;
+    const file = await uploadFile(state.file!);
+    console.log(file);
+
+    state.avatarPreview = file.path;
     state.isEditAvatar = false;
   };
 
@@ -90,11 +98,12 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
         state.groupName,
         state.avatarPreview
       );
+
       if (state.groupName.length > 140) {
         return state.groupName.substring(0, 140);
       }
-      if (group && group.conversationID) {
-        emit('unmount-new-group', group);
+      if (group && (group.topicId || group.topicId)) {
+        navigateToGroup(group.topicId);
 
         closeModal();
         return group;
@@ -110,16 +119,16 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
     }
   };
 
-  const createNiceName = (arr: IUserProps[]) => {
-    const names = arr.map(user => user.nickname).join(', ');
+  const createNiceName = <T extends { initials: string }>(arr: T[]) => {
+    const names = arr.map(user => user.initials || '').join(', ');
     return names;
   };
 
-  const handleOpenGroupInfo = async (contacts: IUserProps[]): Promise<void> => {
+  const handleOpenGroupInfo = async (users: IUser[]): Promise<void> => {
     state.isSelectedMembers = true;
-    state.checkUsers = contacts.map(contact => contact.id);
+    state.checkUsers = users.map(user => user.id);
     if (!state.groupName) {
-      state.groupName = createNiceName(contacts);
+      state.groupName = createNiceName(users);
     }
   };
 

@@ -1,4 +1,14 @@
-import { FileElem } from '@openim/wasm-client-sdk';
+import { MediaTypeType } from '@pksep/zod-shared-chat';
+import { IMedia } from 'src/components/interfaces/interfaces';
+
+export interface MessageMediaItem {
+  id: string;
+  type: MediaTypeType;
+  path: string;
+  fileName?: string;
+  fileSize?: number;
+  mimeType?: string;
+}
 
 export interface IMessageBubbleProps {
   message: string;
@@ -9,24 +19,15 @@ export interface IMessageBubbleProps {
   isMeSender?: boolean;
   sender?: string;
   avatar?: string;
-  media?: {
-    sourcePicture: {
-      uuid: string;
-      name?: string;
-      size: number;
-      type: string;
-      url: string;
-      height: number;
-    };
-  };
-  file?: FileElem;
+  media?: IMedia[];
+  file?: MessageMediaItem[];
   dataTestid?: string;
-  messageStatus?: number;
+  messageStatus?: string;
 }
 
 export interface IMessageStatusIconsProps {
   isRead?: boolean;
-  messageStatus?: number;
+  messageStatus?: string;
   isMeSender?: boolean;
   dataTestid?: string;
 }

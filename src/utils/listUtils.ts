@@ -1,4 +1,4 @@
-import { IContactProps } from '../components/interfaces/interfaces';
+import { ITopic } from '../components/interfaces/interfaces';
 
 /**
  * Updates a list of items with new values, merging existing items with new ones
@@ -6,7 +6,7 @@ import { IContactProps } from '../components/interfaces/interfaces';
  * @param newItems - The new items to update with
  * @returns Updated and sorted list
  */
-export const updateItemList = <T extends IContactProps>(
+export const updateItemList = <T extends ITopic>(
   existingList: T[],
   newItems: T[]
 ): T[] => {
@@ -20,25 +20,25 @@ export const updateItemList = <T extends IContactProps>(
     if (a.isPin && !b.isPin) return -1;
     if (!a.isPin && b.isPin) return 1;
 
-    return b.latestMessageTime - a.latestMessageTime;
+    return Number(b.lastMessage.createdAt) - Number(a.lastMessage.createdAt);
   });
 };
 
 /**
  * Creates a sorted list by applying manipulate function and sorting
  * @param items - The raw items to process
- * @param manipulateFn - Function to transform raw items to IContactProps
+ * @param manipulateFn - Function to transform raw items to ITopic
  * @returns Sorted list of processed items
  */
 export const createSortedList = <T>(
   items: T[],
-  manipulateFn: (items: T[]) => IContactProps[]
-): IContactProps[] => {
+  manipulateFn: (items: T[]) => ITopic[]
+): ITopic[] => {
   const processedItems = manipulateFn(items);
   return processedItems.sort((a, b) => {
     if (a.isPin && !b.isPin) return -1;
     if (!a.isPin && b.isPin) return 1;
 
-    return b.latestMessageTime - a.latestMessageTime;
+    return Number(b.lastMessage.createdAt) - Number(a.lastMessage.createdAt);
   });
 };

@@ -7,13 +7,11 @@
 </template>
 
 <script lang="ts" setup>
+import { navigateToAI } from '../../composables/navigation';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import Line from '../UI/Line.vue';
-import type { IMenuEmits } from '../interfaces/interfaces';
-
-const emit = defineEmits<IMenuEmits>();
 
 const handleAiChapter = () => {
-  emit('unmount-chapter', 'ai');
+  navigateToAI();
 };
 </script>

@@ -19,11 +19,8 @@
       "vite-plugin-pwa/client",
       "vite-plugin-pwa/pwa-assets"
     ],
-    "rootDir": ".",
     "baseUrl": ".",
-    "paths": {
-      "@/*": ["./src/*"]
-    },
+    "paths": {},
     "lib": ["esnext", "dom", "dom.iterable", "scripthost"],
     "typeRoots": ["./types", "./node_modules/@types"]
   },

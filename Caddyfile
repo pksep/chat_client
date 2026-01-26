@@ -8,11 +8,6 @@ encode gzip
 }
 header @javascript Content-Type application/javascript
 
-@wasm {
-    path *.wasm
-}
-header @wasm Content-Type application/wasm
-
 @html {
     path *.html
 }

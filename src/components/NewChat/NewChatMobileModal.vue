@@ -14,8 +14,9 @@
         class="mobile__list-modal__contact-selector"
         :is-add-one="props.isAddOne"
         is-button-disabled
-        :contacts="props.contacts"
+        :contacts="filteredContacts"
         :selected-contact-ids="props.selectedContactIds"
+        :excluded-contact-ids="props.excludedContactIds"
         @unmount-contact="handleCheckUsers"
         @unmount-close="handleCloseModal"
       />
@@ -33,14 +34,14 @@
     <MobileChatInfo
       :model-value="state.information"
       @update:model-value="handleCreateInformation"
-      :members="selectedContacts"
+      :members="filteredSelectedContacts"
       :data-testid="`${props.dataTestid}-NewChatMobileModal-MobileChatInfo`"
     />
   </MobileModal>
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue';
+import { reactive, computed } from 'vue';
 import MobileModal from '../UI/MobileModal.vue';
 import ContactSelector from './ContactSelector.vue';
 import MobileChatInfo from '../Header/MobileChatInfo.vue';
@@ -49,7 +50,9 @@ import {
   INewChatMobileEmits
 } from './interfaces/contact-selector';
 import { useNewGroupModal } from './composables/useNewGroupModal';
-import { IUserProps } from '../interfaces/interfaces';
+import { IUser } from '../interfaces/interfaces';
+import { getChatSDK } from '../../services/useChat';
+import { navigateToDialogs } from '../../composables/navigation';
 
 const props = withDefaults(defineProps<INewChatMobileProps>(), {
   open: false,
@@ -71,6 +74,28 @@ const {
   handleCloseGroupInfo
 } = useNewGroupModal(props, emits);
 
+const filteredContacts = computed<IUser[]>(() => {
+  return props.contacts.filter(
+    contact =>
+      contact &&
+      typeof contact === 'object' &&
+      'initials' in contact &&
+      'nickname' in contact &&
+      'lastOnline' in contact
+  ) as IUser[];
+});
+
+const filteredSelectedContacts = computed<IUser[]>(() => {
+  return selectedContacts.value.filter(
+    contact =>
+      contact &&
+      typeof contact === 'object' &&
+      'initials' in contact &&
+      'nickname' in contact &&
+      'lastOnline' in contact
+  ) as IUser[];
+});
+
 const state = reactive({
   checkMembers: [],
   information: {
@@ -88,17 +113,20 @@ const handleCloseModal = () => {
   emits('unmount-close');
 };
 
-const handleCheckUsers = (contacts: IUserProps[] | IUserProps): void => {
-  if (props.isAddOne) {
-    emits('unmount-contact', contacts);
+const handleCheckUsers = async (contacts: IUser[] | IUser): Promise<void> => {
+  const sdk = getChatSDK();
+  if (props.isAddOne && 'id' in contacts && contacts.id) {
+    const topic = await sdk.createTopic({ peerId: contacts.id });
+    navigateToDialogs(topic.id as string);
     return;
-  }
-  if (Array.isArray(contacts) && contacts.length > 0) {
-    state.checkMembers = contacts;
+  } else {
+    if (Array.isArray(contacts) && contacts.length > 0) {
+      state.checkMembers = contacts;
+    }
   }
 };
 
-const handleNext = (contacts: IUserProps[]): void => {
+const handleNext = (contacts: IUser[]): void => {
   if (props.isAddOne) return;
   state.information.name = createNiceName(contacts);
   handleOpenGroupInfo(contacts);

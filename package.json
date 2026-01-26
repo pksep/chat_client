@@ -7,17 +7,17 @@
   "scripts": {
     "start:dev": "vite",
     "start": "vite preview",
-    "lint": "vue-tsc && eslint --fix --ext .ts,.vue src scripts",
+    "lint": "vue-tsc && eslint --fix --ext .ts,.vue src",
     "build": "vue-tsc && vite build",
     "build:prod": "cross-env VITE_BASE_MODE=app vite build ",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "build:lib": "cross-env VITE_BASE_MODE=lib bun run build",
-    "publish:lib": "npm version patch && bun run build:lib && bun publish --access public --no-git-checks",
-    "generate:assets": "pwa-assets-generator",
-    "init:openim": "bun ./scripts/copyOpenIM.ts",
     "format": "prettier -w {src,scripts}/**/*.ts -w {src,scripts}/**/*.vue",
-    "prepare": "echo 'Running preinstall script' && lefthook install"
+    "prepare": "echo 'Running preinstall script' && lefthook install",
+    "start:ios": "bun run sync && npx cap open ios",
+    "start:android": "bun run sync && npx cap open android",
+    "sync": "bun vite build && npx cap sync",
+    "generate:assets": "npx capacitor-assets generate --ios"
   },
   "exports": {
     ".": {
@@ -27,15 +27,22 @@
   },
   "files": [
     "build/lib/*.js",
-    "build/lib/*.ts",
-    "build/lib/*.wasm"
+    "build/lib/*.ts"
   ],
   "dependencies": {
+    "@capacitor/android": "^8.0.1",
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/barcode-scanner": "^3.0.0",
+    "@capacitor/core": "^8.0.1",
+    "@capacitor/ios": "^8.0.1",
+    "@capacitor/push-notifications": "^8.0.0",
     "@fontsource-variable/inter": "^5.2.6",
     "@mastra/client-js": "^0.12.3",
-    "@openim/wasm-client-sdk": "3.8.3-patch.10",
     "@pksep/reqi": "^0.0.25",
-    "@pksep/yui": "0.1.167",
+    "@pksep/yui": "0.1.180",
+    "@pksep/zod-shared-chat": "0.0.6",
+    "@vitejs/plugin-basic-ssl": "^2.1.4",
+    "socket.io-client": "^4.8.3",
     "zod": "3"
   },
   "peerDependencies": {
@@ -44,16 +51,18 @@
   "devDependencies": {
     "@babel/eslint-parser": "^7.28.0",
     "@babel/plugin-transform-private-methods": "^7.27.1",
+    "@capacitor/cli": "^8.0.1",
     "@playwright/experimental-ct-vue": "^1.56.1",
     "@playwright/test": "^1.56.1",
     "@rushstack/eslint-patch": "^1.12.0",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^12.0.2",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "@vite-pwa/assets-generator": "^1.0.2",
     "@vitejs/plugin-vue": "^6.0.3",
-    "@vue/compiler-sfc": "^3.5.25",
     "@vue/eslint-config-airbnb": "^8.0.0",
-    "@vue/runtime-dom": "^3.5.25",
     "babel-eslint": "^10.1.0",
     "cross-env": "^10.1.0",
     "eslint": "^8.57.1",
@@ -62,6 +71,7 @@
     "eslint-plugin-vue": "^9.33.0",
     "lefthook": "^1.12.3",
     "prettier": "3.2.4",
+    "semantic-release": "^25.0.2",
     "typescript": "~5.6.3",
     "vite": "^7.1.7",
     "vite-plugin-dts": "^4.5.4",

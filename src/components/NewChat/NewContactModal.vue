@@ -20,12 +20,14 @@
     <ContactSelector
       :is-add-one="props.isAddOne"
       :contacts="contacts"
+      :excluded-contact-ids="props.excludedContactIds"
       @unmount-contact="handleNewContact"
     />
   </Modal>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import {
   Icon,
   IconNameEnum,
@@ -36,30 +38,40 @@ import {
 } from '@pksep/yui';
 import ContactSelector from './ContactSelector.vue';
 import type { INewContactProps } from './interfaces/new-contact';
-import { IUserProps } from '../interfaces/interfaces';
+import { ITopic, IUser } from '../interfaces/interfaces';
+import { navigateToDialogs } from '../../composables/navigation';
+import { getUsersList } from '../../composables/useUsers';
+import { getChatSDK } from '../../services/useChat';
 
 const props = withDefaults(defineProps<INewContactProps>(), {
   open: false,
   isAddOne: true,
   title: 'Создать диалог',
-  contacts: () => [],
-  dataTestid: () => 'NewContactModal'
+  excludedContactIds: () => new Set<string | number>(),
+  dataTestid: 'NewContactModal'
 });
 
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
-  (e: 'unmount-new-contact', contact: IUserProps[] | IUserProps);
+  (e: 'unmount-new-contact', contact: ITopic[] | IUser);
 }>();
+
+const contacts = computed(() => {
+  const userContacts = props.contacts || getUsersList();
+  return [...userContacts];
+});
 
 const closeModal = (): void => {
   emits('unmount-close');
 };
 
-const handleNewContact = (contacts: IUserProps[] | IUserProps): void => {
-  if (props.isAddOne) {
-    emits('unmount-new-contact', contacts);
+const handleNewContact = async (contact: ITopic[] | IUser): Promise<void> => {
+  const sdk = getChatSDK();
+  if (props.isAddOne && 'id' in contact && contact.id) {
+    const topic = await sdk.createTopic({ peerId: contact.id });
+    navigateToDialogs(topic.id as string);
   } else {
-    emits('unmount-new-contact', contacts);
+    emits('unmount-new-contact', contact);
   }
   closeModal();
 };

@@ -1,12 +1,16 @@
-import { ConversationItem } from '@openim/wasm-client-sdk';
 import { ref, shallowRef } from 'vue';
-import { IMSDK } from './useOpenIM';
-import { IContactProps } from '../components/interfaces/interfaces';
-import { setGroupList } from './useGroup';
+import { getChatSDK, getCurrentUserId } from './useChat';
+import { ITopic } from '../components/interfaces/interfaces';
 import { getUsersList } from '../composables/useUsers';
 import { updateItemList } from '../utils/listUtils';
+import { MessageStatus } from './useChatSDK/types';
 
-const conversionStore = shallowRef<IContactProps[]>([]);
+enum TopicType {
+  Group = 'GROUP',
+  DM = 'DM'
+}
+
+const conversionStore = shallowRef<ITopic[]>([]);
 const allNotificationCount = ref<number>(0);
 
 let isSDKReady = false;
@@ -35,138 +39,105 @@ export const onSDKReady = (callback: () => void) => {
   }
 };
 
-const fetchConversationList = async () => {
-  if (!isSDKReady) {
-    console.debug('SDK not ready yet, skipping conversation list fetch');
-    return;
-  }
-
-  try {
-    const response = await IMSDK.getAllConversationList();
-
-    const result = response.data || [];
-
-    if (!Array.isArray(result)) {
-      console.warn('Conversation list response is not an array:', result);
-      return;
-    }
-
-    const totalUnread = result.reduce(
-      (sum, conv) => sum + (conv.unreadCount || 0),
-      0
-    );
-
-    setAllNotificationCount(totalUnread);
-    setConversationList(result.filter(item => !item.groupID));
-    setGroupList(result.filter(item => !!item.groupID));
-  } catch (err) {
-    const errorDetails = {
-      error: err,
-      operation: 'getAllConversationList',
-      timestamp: new Date().toISOString(),
-      operationID: err?.operationID || err?.data?.operationID || null,
-      event: err?.event || err?.data?.event || null,
-      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
-    };
-
-    console.error('Failed to get conversation list:', errorDetails);
-
-    if (err?.operationID) {
-      console.info(`Operation ID: ${err.operationID}`);
-    }
-    if (err?.event) {
-      console.info(`Event: ${err.event}`);
-    }
-  }
+const resolveParticipants = (topic: any) => {
+  return topic.members || [];
 };
 
-const setPinConversation = async (
-  conversationID: string,
-  isPinned: boolean
-) => {
-  try {
-    await IMSDK.setConversation({
-      conversationID,
-      isPinned
-    });
-  } catch (err) {
-    const errorDetails = {
-      error: err,
-      operation: 'setConversation',
-      conversationID,
-      isPinned,
-      timestamp: new Date().toISOString(),
-      operationID: err?.operationID || err?.data?.operationID || null,
-      event: err?.event || err?.data?.event || null,
-      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
-    };
+const resolveTopicMeta = (topic: any) => {
+  const group = topic.group || topic.groupInfo || null;
+  const title = topic.title || group?.title || group?.groupName || '';
+  const avatarUrl = topic.avatarUrl || group?.avatarUrl || group?.faceURL || '';
+  const groupId =
+    topic.groupId ||
+    group?.id ||
+    group?.groupID ||
+    (topic.type === TopicType.Group ? topic.id : undefined);
 
-    console.error('Failed to pin/unpin conversation:', errorDetails);
-
-    if (err?.operationID) {
-      console.info(`Operation ID: ${err.operationID}`);
-    }
-    if (err?.event) {
-      console.info(`Event: ${err.event}`);
-    }
-  }
+  return { title, avatarUrl, groupId };
 };
 
-const parseMessage = (messageStr: string | undefined) => {
-  if (!messageStr) return null;
-  try {
-    return JSON.parse(messageStr);
-  } catch (error) {
-    console.error('Failed to parse message JSON:', error);
-    return null;
-  }
+const parseLastMessagePreview = (lastMessage: any): string => {
+  if (!lastMessage) return '';
+  if (lastMessage.text) return lastMessage.text;
+  const firstMedia = lastMessage.media?.[0];
+  return firstMedia?.fileName || firstMedia?.path || '';
 };
 
-export const manipulateConversationList = (
-  conversations: Partial<ConversationItem>[]
-): IContactProps[] => {
+export const manipulateConversationList = (topics: any[]): any[] => {
   const users = getUsersList();
-
   const userMap = new Map(users.map(user => [user.id, user]));
-  const currentUser = JSON.parse(sessionStorage.getItem('openim_user') || '{}');
-  const currentUserId = currentUser?.userID;
+  const currentUserId = getCurrentUserId();
 
-  return conversations.map(c => {
-    const user = userMap.get(c.userID);
-    const parsedMsg = c.latestMsg ? parseMessage(c.latestMsg) : null;
+  return topics.map(topic => {
+    const { title, avatarUrl, groupId } = resolveTopicMeta(topic);
+    const participants = resolveParticipants(topic);
+
+    const otherUser =
+      participants.find((user: any) => user.id !== currentUserId) ||
+      participants[0];
+    const user = otherUser ? userMap.get(otherUser.id) : null;
+    const lastMessage = topic.lastMessage;
+    const contactId =
+      topic.type === TopicType.Group
+        ? groupId || topic.id
+        : otherUser?.id || topic.id;
+
+    const nickname =
+      topic.type === TopicType.DM
+        ? user?.nickname || otherUser?.nickname || title
+        : title;
+    const contactAvatarUrl =
+      topic.type === TopicType.DM
+        ? user?.avatarUrl || otherUser?.avatarUrl || ''
+        : avatarUrl;
+    const initials = user?.initials || otherUser?.initials || nickname;
+
+    const contactUser =
+      topic.type === TopicType.Group
+        ? {
+            id: topic.id,
+            initials: title || `Group ${topic.id.substring(0, 8)}`,
+            nickname: title || `Group ${topic.id.substring(0, 8)}`,
+            avatarUrl: avatarUrl || ''
+          }
+        : {
+            id: otherUser?.id || contactId,
+            initials,
+            nickname,
+            avatarUrl: contactAvatarUrl
+          };
 
     return {
-      id: c.conversationID,
-      userId: c.userID,
-      nickname: c.showName,
-      avatarUrl: c.faceURL,
-      isPin: c.isPinned,
-      tabel: user?.tabel || '',
-      initial: user?.initial || '',
-      latestMessage: parsedMsg
-        ? parsedMsg.textElem?.content ||
-          parsedMsg.fileElem?.fileName ||
-          parsedMsg.pictureElem?.sourcePath ||
-          ''
-        : '',
-      latestMessageTime:
-        c.latestMsgSendTime || (parsedMsg ? parsedMsg.sendTime || '' : ''),
-      notificationCount: c.unreadCount,
-      groupId: c.groupID,
-      isRead: parsedMsg
-        ? parsedMsg.isRead && c.userID !== parsedMsg.sendID
-        : false,
-      latestMessageStatus: parsedMsg?.status,
-      isLatestMessageFromMe: parsedMsg?.sendID === currentUserId
+      id: contactId,
+      userId: topic.type === TopicType.DM ? otherUser?.id : undefined,
+      nickname,
+      avatarUrl: contactAvatarUrl,
+
+      user: contactUser,
+      isPin:
+        topic.isPin || topic.isPinned || topic.topicSetting?.isPin || false,
+      initial: '',
+      latestMessage: parseLastMessagePreview(lastMessage),
+      latestMessageTime: lastMessage?.createdAt
+        ? new Date(lastMessage.createdAt).getTime()
+        : undefined,
+      notificationCount: topic.unreadCount || 0,
+      groupId,
+      isRead: lastMessage?.status === MessageStatus.Read,
+      latestMessageStatus: lastMessage?.status,
+      isLatestMessageFromMe: lastMessage?.senderUserId === currentUserId,
+      topicId: topic.type === TopicType.Group ? groupId || topic.id : topic.id
     };
   });
 };
 
-const getConversationList = (): IContactProps[] => {
+const fetchConversationList = async () => {};
+
+const getConversationList = (): ITopic[] => {
   return conversionStore.value || [];
 };
 
-const setConversationList = (value: ConversationItem[]): void => {
+const setConversationList = (value: any[]): void => {
   conversionStore.value = manipulateConversationList(value);
 };
 
@@ -175,14 +146,9 @@ const updateConversationList = (value: any[]): void => {
   conversionStore.value = updateItemList(conversionStore.value, newItems);
 };
 
-/**
- * Updates specific columns/properties of a conversation record
- * @param conversationID The ID of the conversation to update
- * @param updates Object containing the properties to update
- */
 const updateColumnsConversation = (
   conversationID: string,
-  updates: Partial<IContactProps>
+  updates: Partial<ITopic>
 ): void => {
   const index = conversionStore.value.findIndex(
     conv => conv.id === conversationID
@@ -207,39 +173,16 @@ const setAllNotificationCount = (value: number): void => {
   allNotificationCount.value = value;
 };
 
-const getOneConversation = async (
-  sourceID: string,
-  sessionType: number
-): Promise<any> => {
+const getOneConversation = async (topicId: string): Promise<ITopic | null> => {
   try {
-    const response = await IMSDK.getOneConversation({
-      sourceID,
-      sessionType
-    });
-
-    return response.data;
+    const sdk = getChatSDK();
+    const response = await sdk.getTopics();
+    const topic = response.data.find((item: any) => item.id === topicId);
+    if (!topic) return null;
+    return manipulateConversationList([topic])[0] || null;
   } catch (err) {
-    const errorDetails = {
-      error: err,
-      operation: 'getOneConversation',
-      sourceID,
-      sessionType,
-      timestamp: new Date().toISOString(),
-      operationID: err?.operationID || err?.data?.operationID || null,
-      event: err?.event || err?.data?.event || null,
-      errorMessage: err?.errorMessage || err?.message || 'Unknown error'
-    };
-
-    console.error('Failed to get one conversation:', errorDetails);
-
-    if (err?.operationID) {
-      console.info(`Operation ID: ${err.operationID}`);
-    }
-    if (err?.event) {
-      console.info(`Event: ${err.event}`);
-    }
-
-    throw err;
+    console.error('Failed to get one topic:', err);
+    return null;
   }
 };
 
@@ -249,7 +192,6 @@ export {
   setConversationList,
   updateConversationList,
   updateColumnsConversation,
-  setPinConversation,
   getOneConversation,
   getAllNotificationCount,
   setAllNotificationCount

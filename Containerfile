@@ -6,8 +6,6 @@ COPY . .
 
 RUN bun install --ignore-scripts
 
-RUN bun run init:openim
-
 RUN bun run build:prod
 
 FROM caddy:2-alpine

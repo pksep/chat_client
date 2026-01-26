@@ -1,34 +1,24 @@
 import { Reqi } from '@pksep/reqi';
 import { getAuthToken } from '../composables/useLogin';
-import { getPlatformId } from '../composables/useAuth';
 import { getConfig } from './useConfig';
-
-export const createOpenIMRestApi = (): Reqi => {
-  const config = getConfig();
-
-  const instance = new Reqi(config.CHAT_OPENIM_API_DOMAIN);
-
-  instance.request.use((request: Request): Request => {
-    request.headers.set('operationID', `${getPlatformId()}_${Date.now()}`);
-    return request;
-  });
-
-  return instance;
-};
 
 let apiInstance: Reqi | null = null;
 
-export const useOpenIMRestApi = (): Reqi => {
+export const useChatApi = (): Reqi => {
   if (!apiInstance) {
-    apiInstance = createOpenIMRestApi();
+    const config = getConfig();
+    apiInstance = new Reqi(config.CHAT_API_DOMAIN);
 
     apiInstance.request.use(async (request: Request): Promise<Request> => {
       try {
-        request.headers.set('token', getAuthToken());
+        const token = getAuthToken();
+        if (token) {
+          request.headers.set('Authorization', `Bearer ${token}`);
+        }
         return request;
       } catch (error) {
         console.error('Failed to fetch token:', error);
-        throw new Error('OpenIM token is not defined in environment variables');
+        throw new Error('Chat token is not defined in environment variables');
       }
     });
   }

@@ -1,23 +1,20 @@
 import { reactive, computed } from 'vue';
-import {
-  fetchGroupMembers,
-  getGroupInfo,
-  setGroupInfo
-} from '../services/useGroup';
-import { IMSDK } from '../services/useOpenIM';
-import { generateChatId } from '../services/useChatDb';
-import type { IUserProps } from '../components/interfaces/interfaces';
+import { useGroup } from '../composables/useGroup';
+import { getChatSDK } from '../services/useChat';
+import { getUsersList } from './useUsers';
+import { useTopics } from './useTopics';
+import type { IUser } from '../components/interfaces/interfaces';
+import { TopicType } from '../services/useChatSDK/types';
+import { RouteType } from './navigation/useUrlRouting';
 
 type IMenuInfoProps = {
   open: boolean;
-  contact?: IUserProps | null;
-  members?: IUserProps[];
+  contact?: IUser | null;
+  members?: IUser[];
 };
 
 type IMenuInfoState = {
   openAddUser: boolean;
-  contacts: IUserProps[];
-  filteredMembers: IUserProps[];
   information: IMenuInfoInformation | null;
 };
 
@@ -27,130 +24,102 @@ export type IMenuInfoInformation = {
   groupId?: string | null;
   userId?: string;
   avatarUrl?: string;
+  topicId?: string;
 };
 
 export type IMenuInfoEmits = {
-  (e: 'unmount-contact', contact: IUserProps): void;
   (e: 'unmount-collapse', isCollapse: boolean): void;
   (e: 'unmount-new-contact', config: { isChapterOpen?: boolean }): void;
-  (e: 'unmount-new-group', config: { isChapterOpen?: boolean }): void;
-  (
-    e: 'unmount-chapter',
-    config: { nickname: string; contact: IUserProps } | string | null
-  ): void;
-  (e: 'unmount-user-add'): void;
 };
 
-export function useMenuInfo<
-  Props extends IMenuInfoProps,
-  Emits extends IMenuInfoEmits
->(props: Props & { isEnabled: boolean }, emits: Emits) {
+export function useMenuInfo<Props extends IMenuInfoProps>() {
   const state = reactive<IMenuInfoState>({
     openAddUser: false,
-    contacts: [],
-    filteredMembers: [],
     information: null
+  });
+
+  const computedFilteredMembers = computed(() => {
+    const allUsers = getUsersList();
+    const { groupMembers } = useGroup();
+    const memberIds = new Set(groupMembers.value.map(member => member.id));
+    return allUsers.filter(user => !memberIds.has(user.id));
   });
 
   const handleContactClick = (): void => {
     state.openAddUser = true;
   };
 
-  const handleNewContact = async (contacts: IUserProps[]): Promise<void> => {
-    state.contacts = [...state.contacts, ...contacts];
-
-    try {
-      await IMSDK.inviteUserToGroup(
-        {
-          groupID: state.information.groupId,
-          reason: 'Sent invitation',
-          userIDList: contacts.map(contact => contact.id)
-        },
-        generateChatId()
-      );
-
-      state.contacts = await fetchGroupMembers(state.information.groupId);
-    } catch (error) {
-      console.error('Failed to invite users to group:', error);
-      state.contacts = await fetchGroupMembers(state.information.groupId);
-    }
-  };
-
-  const handleUpdateInformation = (value: any) => {
+  const handleUpdateInformation = (value: IMenuInfoInformation) => {
     state.information = value;
-    if (state.information?.groupId) {
-      setGroupInfo(state.information?.groupId, {
-        groupName: state.information?.name,
-        faceURL: state.information?.avatarUrl,
-        notification: null
-      }).catch(error => {
-        const errorDetails = {
-          error: error,
-          operation: 'setGroupInfo',
-          groupID: props.contact?.groupId,
-          timestamp: new Date().toISOString(),
-          operationID: error?.operationID || error?.data?.operationID || null,
-          event: error?.event || error?.data?.event || null,
-          errorMessage: error?.errorMessage || error?.message || 'Unknown error'
-        };
 
-        console.error('Failed to update group info:', errorDetails);
-
-        if (error?.operationID) {
-          console.info(`Operation ID: ${error.operationID}`);
-        }
-        if (error?.event) {
-          console.info(`Event: ${error.event}`);
-        }
+    if (value?.groupId) {
+      const { setGroupInfo } = useGroup();
+      setGroupInfo(value.groupId, {
+        groupName: value.name,
+        faceURL: value.avatarUrl || undefined,
+        introduction: undefined,
+        notification: null,
+        ex: undefined
       });
-    }
+    } else if (value?.topicId) {
+      const { topics } = useTopics();
+      const topicIndex = topics.value.findIndex(t => t.id === value.topicId);
+      if (topicIndex !== -1) {
+        const updatedTopic = { ...topics.value[topicIndex] };
+        if (value.name) updatedTopic.name = value.name;
+        if (value.avatarUrl) updatedTopic.avatarUrl = value.avatarUrl;
 
-    emits('unmount-contact', {
-      ...state.information,
-      nickname: state.information?.name,
-      avatarUrl: state.information?.avatarUrl
-    });
+        const updatedTopics = [...topics.value];
+        updatedTopics[topicIndex] = updatedTopic;
+        topics.value = updatedTopics;
+      }
+    }
   };
 
   const checkGroupId = computed(
-    () =>
-      state.information?.groupId === undefined ||
-      state.information?.groupId === null ||
-      state.information?.groupId === ''
+    () => !state.information?.groupId || state.information?.groupId === ''
   );
 
-  const initializeMenuInfo = async (props: Props & { isEnabled: boolean }) => {
-    if (!props.isEnabled) return;
-    if (props.contact?.id && checkGroupId.value) {
-      if (props.contact) {
-        state.contacts = [props.contact];
-        state.information = {
-          userId: props.contact.id
-        };
-      }
+  const initializeMenuInfo = async (
+    props: Props & {
+      isEnabled: boolean;
+      topic: { id: string; type: RouteType };
     }
-    if (props.contact?.groupId) {
-      const groupId = props.contact.groupId;
-      if (groupId) {
-        state.contacts = await fetchGroupMembers(groupId);
-        const groups = await getGroupInfo([groupId]);
-        state.filteredMembers =
-          props.members?.filter(
-            item => !state.contacts.some(contact => contact.id === item.id)
-          ) || [];
-        let date = new Date();
-        if (groups?.length > 0 && groups[0]?.createTime) {
-          date = new Date(groups[0].createTime);
-        }
-        state.information = {
-          ...props.contact,
-          userId: props.contact.id,
-          groupId: groupId,
-          date,
-          name: props.contact.nickname || '',
-          avatarUrl: props.contact.avatarUrl
-        };
+  ) => {
+    if (!props.isEnabled) return;
+
+    const sdk = getChatSDK();
+    const topics = await sdk.getTopics(
+      props.topic.type === 'group' ? TopicType.Group : TopicType.DM
+    );
+    const findTopic = topics.data.find(to => to.id === props.topic.id);
+
+    if (findTopic?.type === TopicType.Group) {
+      const { group, members } = await sdk.getGroup(findTopic.group.id);
+
+      state.information = {
+        name: group?.title,
+        avatarUrl: group?.avatarUrl,
+        groupId: group?.id,
+        topicId: findTopic.id,
+        date: group?.createdAt ? new Date(group.createdAt) : undefined
+      };
+
+      const { setGroupMembers } = useGroup();
+      if (members?.data) {
+        setGroupMembers(members.data);
       }
+    } else if (findTopic?.type === TopicType.DM) {
+      state.information = {
+        name:
+          findTopic.user?.nickname ||
+          (findTopic.user as Record<string, any>)?.['name'],
+        avatarUrl:
+          (findTopic.user as Record<string, any>)?.['faceURL'] ||
+          (findTopic.user as Record<string, any>)?.['avatarUrl'],
+        userId: findTopic.user?.id,
+        topicId: findTopic.id
+      };
     }
   };
 
@@ -162,9 +131,9 @@ export function useMenuInfo<
     state,
     checkGroupId,
     handleContactClick,
-    handleNewContact,
     handleUpdateInformation,
     initializeMenuInfo,
-    handleCloseAddUserModal
+    handleCloseAddUserModal,
+    filteredMembers: computedFilteredMembers
   };
 }

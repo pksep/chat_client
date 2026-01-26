@@ -19,139 +19,167 @@
       v-else-if="props.author === 'assistant'"
       :data-testid="`${dataTestid}-MessageBubble-AssistantIcon`"
     />
-    <article
-      :class="messageArticle"
-      @contextmenu="evt => openActivePopover('', evt)"
-      :data-testid="`${dataTestid}-MessageBubble-Article`"
-    >
-      <div
-        class="message-content"
-        :data-testid="`${dataTestid}-MessageBubble-Content`"
+    <div :class="messageArticlesStyles">
+      <article
+        v-if="!!props.message"
+        :class="messageArticleStyles()"
+        @contextmenu="evt => openActivePopover('', evt)"
+        :data-testid="`${dataTestid}-MessageBubble-Article`"
       >
-        <blockquote
-          v-if="blockquote"
-          class="message-content__blockquote"
-          :data-testid="`${dataTestid}-MessageBubble-Blockquote`"
-        >
-          <div
-            class="message-content__blockquote-container"
-            :data-testid="`${dataTestid}-MessageBubble-BlockquoteContainer`"
-          >
-            <h5 :data-testid="`${dataTestid}-MessageBubble-BlockquoteAuthor`">
-              Ivan Ivanov
-            </h5>
-            <div :data-testid="`${dataTestid}-MessageBubble-BlockquoteText`">
-              How are you?
-            </div>
-          </div>
-        </blockquote>
         <div
-          class="message-content__loading"
-          v-if="props.loader"
-          :data-testid="`${dataTestid}-MessageBubble-Loading`"
+          class="message-content"
+          :data-testid="`${dataTestid}-MessageBubble-Content`"
         >
-          <template v-for="i in generateArray(3)" :key="i">
+          <blockquote
+            v-if="blockquote"
+            class="message-content__blockquote"
+            :data-testid="`${dataTestid}-MessageBubble-Blockquote`"
+          >
             <div
-              class="message-content__loading-circle"
-              :data-testid="`${dataTestid}-MessageBubble-LoadingCircle${i}`"
+              class="message-content__blockquote-container"
+              :data-testid="`${dataTestid}-MessageBubble-BlockquoteContainer`"
+            >
+              <h5 :data-testid="`${dataTestid}-MessageBubble-BlockquoteAuthor`">
+                Ivan Ivanov
+              </h5>
+              <div :data-testid="`${dataTestid}-MessageBubble-BlockquoteText`">
+                How are you?
+              </div>
+            </div>
+          </blockquote>
+          <div
+            class="message-content__loading"
+            v-if="props.loader"
+            :data-testid="`${dataTestid}-MessageBubble-Loading`"
+          >
+            <template v-for="i in generateArray(3)" :key="i">
+              <div
+                class="message-content__loading-circle"
+                :data-testid="`${dataTestid}-MessageBubble-LoadingCircle${i}`"
+              ></div>
+            </template>
+          </div>
+          <template v-else-if="!props.loader">
+            <div
+              v-if="!!props.message"
+              class="message-content__html"
+              v-html="props.message"
+              :data-testid="`${dataTestid}-MessageBubble-MessageText`"
             ></div>
           </template>
         </div>
-        <template v-else-if="!props.loader">
+        <div
+          class="message-time"
+          v-if="!props.loader"
+          :data-testid="`${dataTestid}-MessageBubble-Time`"
+        >
+          <span :data-testid="`${dataTestid}-MessageBubble-TimeText`">{{
+            props.time
+          }}</span>
+          <MessageStatusIcons
+            v-if="props.isMeSender"
+            :is-read="props.isRead"
+            :message-status="props.messageStatus"
+            :data-testid="`${dataTestid}-MessageBubble`"
+          />
+        </div>
+      </article>
+
+      <template v-if="!props.loader">
+        <article
+          v-for="media in props.media || []"
+          :key="media.id"
+          :class="messageArticleStyles(media.type)"
+          @contextmenu="evt => openActivePopover('', evt)"
+          :data-testid="`${dataTestid}-MessageBubble-Article`"
+        >
           <div
-            v-if="!!props.message"
-            class="message-content__html"
-            v-html="props.message"
-            :data-testid="`${dataTestid}-MessageBubble-MessageText`"
-          ></div>
-          <div
-            v-else-if="isImage"
-            class="message-content__media"
-            :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
+            class="message-content"
+            :data-testid="`${dataTestid}-MessageBubble-Content`"
           >
-            <img
-              @click="() => (fullImagePath = mediaSrc)"
-              :src="mediaSrc"
-              :alt="props.sender ? props.sender + ' image' : 'Shared image'"
-              :data-testid="`${dataTestid}-MessageBubble-Image`"
-            />
-          </div>
-          <div
-            v-else-if="isVideo"
-            class="message-content__media"
-            :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
-          >
-            <video
-              @click="() => (fullImagePath = mediaSrc)"
-              :src="mediaSrc"
-              controls
-              :data-testid="`${dataTestid}-MessageBubble-Video`"
-              :aria-label="
-                props.sender ? `${props.sender} video` : 'Shared video'
+            <div
+              v-if="media.type === MediaType.Image"
+              class="message-content__media"
+              :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
+            >
+              <img
+                @click="
+                  () =>
+                    (fullImagePath = `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`)
+                "
+                :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`"
+                :alt="props.sender ? props.sender + ' image' : 'Shared image'"
+                :data-testid="`${dataTestid}-MessageBubble-Image`"
+              />
+            </div>
+            <div
+              v-if="media.type === MediaType.Video"
+              class="message-content__media"
+              :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
+            >
+              <video
+                @click="
+                  () =>
+                    (fullImagePath = `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`)
+                "
+                :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`"
+                controls
+                :data-testid="`${dataTestid}-MessageBubble-Video`"
+                :aria-label="
+                  props.sender ? `${props.sender} video` : 'Shared video'
+                "
+              ></video>
+            </div>
+
+            <div
+              v-if="media.type === MediaType.File"
+              @click="
+                () =>
+                  (fullImagePath = `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`)
               "
-            ></video>
-          </div>
-          <div
-            v-else-if="!!props.file"
-            @click="() => (fullImagePath = props.file.sourceUrl)"
-            class="message-content__file"
-            :data-testid="`${dataTestid}-MessageBubble-FileContainer`"
-          >
-            <FileIcon
-              :is-me-sender="props.isMeSender"
-              :dataTestid="`${dataTestid}-MessageBubble-FileIcon`"
-            />
-            <div :data-testid="`${dataTestid}-MessageBubble-FileInfo`">
-              <div :data-testid="`${dataTestid}-MessageBubble-FileDetails`">
-                <p
-                  class="message-content__file__name"
-                  :data-testid="`${dataTestid}-MessageBubble-FileName`"
-                >
-                  {{ getShortName(props.file.fileName) }}
-                </p>
-                <p
-                  class="message-content__file__size"
-                  :data-testid="`${dataTestid}-MessageBubble-FileSize`"
-                >
-                  {{ getFormatFileSize(props.file.fileSize) }}
-                </p>
-              </div>
-              <div
-                class="message-time"
-                :data-testid="`${dataTestid}-MessageBubble-FileTime`"
-              >
-                <span
-                  :data-testid="`${dataTestid}-MessageBubble-FileTimeText`"
-                  >{{ props.time }}</span
-                >
-                <MessageStatusIcons
-                  v-if="props.isMeSender"
-                  :is-read="props.isRead"
-                  :message-status="props.messageStatus"
-                  :data-testid="`${dataTestid}-MessageBubble`"
-                />
+              class="message-content__file"
+              :data-testid="`${dataTestid}-MessageBubble-FileContainer`"
+            >
+              <FileIcon
+                :is-me-sender="props.isMeSender"
+                :dataTestid="`${dataTestid}-MessageBubble-FileIcon`"
+              />
+              <div :data-testid="`${dataTestid}-MessageBubble-FileInfo`">
+                <div :data-testid="`${dataTestid}-MessageBubble-FileDetails`">
+                  <p
+                    class="message-content__file__name"
+                    :data-testid="`${dataTestid}-MessageBubble-FileName`"
+                  >
+                    {{ getShortName(media.originName) }}
+                  </p>
+                  <p
+                    class="message-content__file__size"
+                    :data-testid="`${dataTestid}-MessageBubble-FileSize`"
+                  >
+                    {{ getFormatFileSize(media.size) }}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-        </template>
-      </div>
-      <div
-        class="message-time"
-        v-if="!props.loader && !props.file"
-        :data-testid="`${dataTestid}-MessageBubble-Time`"
-      >
-        <span :data-testid="`${dataTestid}-MessageBubble-TimeText`">{{
-          props.time
-        }}</span>
-        <MessageStatusIcons
-          v-if="props.isMeSender"
-          :is-read="props.isRead"
-          :message-status="props.messageStatus"
-          :data-testid="`${dataTestid}-MessageBubble`"
-        />
-      </div>
-    </article>
-
+          <div
+            class="message-time"
+            v-if="!props.loader && !props.file"
+            :data-testid="`${dataTestid}-MessageBubble-Time`"
+          >
+            <span :data-testid="`${dataTestid}-MessageBubble-TimeText`">{{
+              props.time
+            }}</span>
+            <MessageStatusIcons
+              v-if="props.isMeSender"
+              :is-read="props.isRead"
+              :message-status="props.messageStatus"
+              :data-testid="`${dataTestid}-MessageBubble`"
+            />
+          </div>
+        </article>
+      </template>
+    </div>
     <SliderModal
       :open="!!fullImagePath"
       @close="() => (fullImagePath = null)"
@@ -188,64 +216,37 @@ import FileIcon from '../UI/FileIcon.vue';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import { getFormatFileSize, getShortName } from '../../utils/getFormatFileSize';
 import { SliderModal } from '@pksep/yui';
+import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
+import { getConfig } from '../../services/useConfig';
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
-  dataTestid: () => 'MessageBubble'
+  dataTestid: () => 'MessageBubble',
+  media: () => []
 });
 
-const messageArticle = computed(() => [
+const messageArticleStyles = (type?: MediaTypeType) => [
   'message__article',
   {
     'message__no-author': props.isMeSender,
-    message__article__media: !!props.media,
-    message__article__file: !!props.file
+    message__article__media:
+      type === MediaType.Image || type === MediaType.Video,
+    message__article__file: type === MediaType.File
   }
-]);
+];
+
+const messageArticlesStyles = computed(() => ({
+  message__content__articles: true,
+  message__content__articles__my: props.isMeSender
+}));
+
+const config = getConfig();
 
 const blockquote = computed(() => false);
 
-const imageRegex = /\.(jpg|jpeg|png|gif|webp|svg)$/i;
-const videoRegex = /\.(mp4|webm|mov|ogg)$/i;
-
-const isImage = computed(() => {
-  if (
-    props.media &&
-    typeof props.media === 'object' &&
-    props.media.sourcePicture.type?.startsWith('image/')
-  ) {
-    return true;
-  }
-  if (typeof props.media === 'string' && imageRegex.test(props.media)) {
-    return true;
-  }
-  return false;
-});
-
-const isVideo = computed(() => {
-  if (
-    props.media &&
-    typeof props.media === 'object' &&
-    props.media.sourcePicture.type?.startsWith('video/')
-  ) {
-    return true;
-  }
-  if (typeof props.media === 'string' && videoRegex.test(props.media)) {
-    return true;
-  }
-  return false;
-});
-
-const mediaSrc = computed(() => {
-  if (props.media) {
-    return props.media.sourcePicture?.url;
-  }
-  return '';
-});
-
-const fullImagePath = ref<string>(null);
+const fullImagePath = ref<string | null>(null);
 
 const generateArray = (n: number): number[] => {
   return Array.from({ length: n });

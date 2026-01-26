@@ -2,7 +2,7 @@
   <div
     class="chat__message-wrapper"
     ref="chatWrapperRef"
-    v-if="props.chapter === 'ai'"
+    v-if="isAiRoute"
     :data-testid="`${props.dataTestid}-MessageList-AIMessagesWrapper`"
   >
     <div
@@ -14,7 +14,9 @@
           v-if="isNewDate(index, true)"
           class="top-element"
           :data-divider="
-            isNewDate(index, true) ? formatDay(message.timestamp) : undefined
+            isNewDate(index, true)
+              ? formatDay(new Date(message.timestamp))
+              : undefined
           "
         >
           <div
@@ -23,7 +25,7 @@
           >
             <span
               :data-testid="`${props.dataTestid}-MessageList-DateLabelAI${index + 1}`"
-              >{{ formatDay(message.timestamp) }}</span
+              >{{ formatDay(new Date(message.timestamp)) }}</span
             >
           </div>
         </div>
@@ -42,7 +44,7 @@
 
   <div
     class="chat__message-wrapper"
-    v-if="state.messages.length && props.chapter !== 'ai'"
+    v-if="state.messages.length && !isAiRoute"
     ref="chatWrapperRef"
     @scroll="handleScroll"
     :data-testid="`${props.dataTestid}-MessageList-UserMessagesWrapper`"
@@ -51,17 +53,11 @@
       class="chat__message-bubble"
       :data-testid="`${props.dataTestid}-MessageList-UserMessagesContainer`"
     >
-      <template
-        v-for="(message, index) in state.messages"
-        :key="message.clientMsgID"
-      >
+      <template v-for="(message, index) in state.messages" :key="message.id">
         <div
           class="top-element"
-          v-if="
-            isNewDate(index) ||
-            message.isSystemMessage ||
-            message.notificationElem
-          "
+          v-if="isNewDate(index) || message.isSystem"
+          :data-message-id="message.id"
         >
           <div
             v-if="isNewDate(index)"
@@ -70,12 +66,12 @@
           >
             <span
               :data-testid="`${props.dataTestid}-MessageList-DateLabelUser${index + 1}`"
-              >{{ formatDay(message.sendTime) }}</span
+              >{{ formatDay(message.createdAt) }}</span
             >
           </div>
 
           <div
-            v-if="message.isSystemMessage || message.notificationElem"
+            v-if="message.isSystem"
             class="system-message"
             :data-testid="`${props.dataTestid}-MessageList-SystemMessageUser${index + 1}`"
           >
@@ -83,36 +79,38 @@
               :data-testid="`${props.dataTestid}-MessageList-SystemLabelUser${index + 1}`"
               class="system-message-text"
             >
-              {{ getSystemMessageContent(message) }}
+              {{ message.text }}
             </span>
           </div>
         </div>
 
         <MessageBubble
-          v-if="!(message.isSystemMessage || message.notificationElem)"
+          v-if="!message.isSystem"
           :class="
-            messageChat(props.user.id === message.sendID ? 'user' : 'assistant')
+            messageChat(
+              props.user?.id === message.senderUserId ? 'user' : 'assistant'
+            )
           "
-          :message="message.textElem?.content || ''"
-          :media="message.pictureElem"
-          :file="message.fileElem"
-          :is-me-sender="props.user.id === message.sendID"
-          :time="formatTime(new Date(message.sendTime))"
-          :sender="message.senderNickname"
-          :avatar="message.faceURL"
+          :message="message.text || ''"
+          :media="message.media"
+          :is-me-sender="props.user.id === message.senderUserId"
+          :time="formatTime(new Date(message.createdAt))"
+          :sender="message.senderUser?.initials || ''"
+          :avatar="message.senderUser?.avatarUrl || ''"
           :is-read="
-            props.user.id === message.sendID
-              ? message.isReadByPeer
-              : message.isRead
+            props.user.id === message.senderUserId
+              ? message.status === MessageStatus.Read
+              : message.status === MessageStatus.Read
           "
           :message-status="message.status"
           :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
+          :data-message-id="message.id"
         />
       </template>
     </div>
   </div>
   <EmptyChat
-    :chapter="props.chapter"
+    :chapter="route.type"
     :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
     v-if="
       !state.messages.length &&
@@ -128,7 +126,7 @@
   />
   <div
     class="chat__input"
-    v-if="props.chapter && isEnableSend"
+    v-if="!isDefaultRoute"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
   >
     <ContentEditor
@@ -159,59 +157,49 @@ import Loading from './Loading.vue';
 import { ContentEditor } from '@pksep/yui';
 import { useMastra, generateChatId } from '../services/useMastra';
 import { removeMessageLoading } from '../services/useChatDb';
-import { subscribeToMessageChanges } from '../services/useOpenIM';
 import {
-  getMessagesByConversationId,
-  getMessagesWithLoadingStatus,
-  sendMessageIM,
+  sendMessageChat,
   getIsWebsocketConnecting,
-  isRecentlyReconnected
-} from '../services/useOpenIM';
+  markAsRead,
+  uploadFile
+} from '../services/useChat';
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
+import type { AIMessage } from '../types/messages';
+import { MediaType } from '@pksep/zod-shared-chat';
+import { MessageStatus } from '../services/useChatSDK/types';
+import { useUrlWatcher } from '../composables/navigation';
+import { RouteTypes } from '../composables/navigation/useUrlRouting';
 import {
-  OpenIMNotificationType,
-  parseGroupNotification
-} from '../utils/systemMessages';
-import type { OpenIMMessage, AIMessage } from '../types/messages';
-import { authedUser } from '../composables/useAuth';
-
-interface OpenIMMessageWithLoading extends OpenIMMessage {
-  loading?: boolean;
-}
+  fetchMessagesForTopic,
+  getMessagesByTopicId
+} from '../services/useMessages';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
 }
 
 const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
-  chapter: null,
-  dataTestid: () => 'MessageList'
+  dataTestid: 'MessageList'
 });
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
 const inputText = ref('');
+const route = useUrlWatcher();
+
+const isAiRoute = computed(() => route.value?.type === RouteTypes.AI);
+const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
 
 const state = reactive({
-  messages: [] as OpenIMMessageWithLoading[],
+  messages: computed(() => getMessagesByTopicId(route.value.id)),
   chatId: null as string | null,
-  hasMoreMessages: true,
   isLoadingMore: false,
-  aiMessages: [] as AIMessage[]
+  limit: 50,
+  aiMessages: [] as AIMessage[],
+  medias: [] //as Media[]
 });
 
 const isLoadingInitialMessages = ref(false);
-
-const updateMessages = () => {
-  if (props.contact?.conversationId) {
-    const newMessages = getMessagesWithLoadingStatus(
-      props.contact.conversationId
-    );
-    state.messages = JSON.parse(JSON.stringify([...newMessages]));
-  } else {
-    state.messages = [];
-  }
-};
 
 const scrollState = reactive({
   isUserScrolling: false,
@@ -220,23 +208,66 @@ const scrollState = reactive({
   isInitialLoad: true
 });
 
-const scrollToBottom = (smooth: boolean = false): void => {
-  if (!chatWrapperRef?.value || !scrollState.shouldAutoScroll) return;
+let isScrollLoading = false;
+let hasMoreMessage = true;
+let scrollMarkReadTimeout: number | null = null;
+let intersectionObserver: IntersectionObserver | null = null;
 
-  if (chatWrapperRef.value) {
-    if (smooth) {
-      chatWrapperRef.value.scrollTo({
-        top: chatWrapperRef.value.scrollHeight,
-        behavior: 'smooth'
-      });
-    } else {
-      chatWrapperRef.value.scrollTop = chatWrapperRef.value.scrollHeight;
-    }
+const setupIntersectionObserver = () => {
+  if (intersectionObserver) {
+    intersectionObserver.disconnect();
   }
+
+  intersectionObserver = new IntersectionObserver(
+    entries => {
+      const visibleUnreadMessageIds: string[] = [];
+
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const messageId = entry.target.getAttribute('data-message-id');
+          if (messageId) {
+            const message = state.messages.find(m => m.id === messageId);
+            if (
+              message &&
+              message.senderUserId !== props.user?.id &&
+              message.status !== MessageStatus.Read
+            ) {
+              visibleUnreadMessageIds.push(messageId);
+            }
+          }
+        }
+      });
+
+      if (visibleUnreadMessageIds.length > 0 && route.value?.id) {
+        markAsRead({
+          messageIds: visibleUnreadMessageIds,
+          topicId: route.value.id
+        }).catch(error => {
+          console.warn('Failed to mark messages as read:', error);
+        });
+      }
+    },
+    {
+      root: chatWrapperRef.value,
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
+    }
+  );
+
+  nextTick(() => {
+    if (chatWrapperRef.value) {
+      const messageElements =
+        chatWrapperRef.value.querySelectorAll('[data-message-id]');
+      messageElements.forEach(element => {
+        if (element instanceof HTMLElement) {
+          intersectionObserver?.observe(element);
+        }
+      });
+    }
+  });
 };
 
-let isScrollLoading = false;
-const handleScroll = (): void => {
+const handleScroll = async (): Promise<void> => {
   const el = chatWrapperRef.value;
   if (!el) return;
 
@@ -253,128 +284,41 @@ const handleScroll = (): void => {
     scrollState.isInitialLoad = false;
   }
 
-  if (
-    distanceFromTop < 100 &&
-    !isScrollLoading &&
-    props.contact?.conversationId
-  ) {
+  if (scrollState.isUserScrolling && route.value?.id) {
+    if (scrollMarkReadTimeout) {
+      clearTimeout(scrollMarkReadTimeout);
+    }
+    scrollMarkReadTimeout = window.setTimeout(() => {
+      const unreadMessages = state.messages.filter(
+        message =>
+          message.senderUserId !== props.user?.id &&
+          message.status !== MessageStatus.Read
+      );
+
+      if (unreadMessages.length > 0) {
+        markAsRead({
+          messageIds: unreadMessages.map(m => m.id),
+          topicId: route.value.id
+        }).catch(error => {
+          console.warn('Failed to mark messages as read:', error);
+        });
+      }
+      scrollMarkReadTimeout = null;
+    }, 500);
+  }
+
+  if (distanceFromTop < 50 && !isScrollLoading && hasMoreMessage) {
     isScrollLoading = true;
 
     if (!getIsWebsocketConnecting()) {
-      getMessagesByConversationId(
-        props.contact.conversationId,
-        state.messages[0]?.clientMsgID
-      )
-        .then(() => {
-          updateMessages();
-        })
-        .finally(() => {
-          isScrollLoading = false;
-        });
-    } else {
-      updateMessages();
-      isScrollLoading = false;
-    }
-  }
-};
-
-const isEnableSend = computed(() => {
-  try {
-    const lastMessage = state.messages[state.messages.length - 1];
-    if (lastMessage.contentType === OpenIMNotificationType.GroupDeleted) {
-      return false;
-    }
-    const detail = JSON.parse(lastMessage.notificationElem.detail);
-    return detail.quitUser.userID !== authedUser.value.userID;
-  } catch (e) {
-    return true;
-  }
-});
-
-watch(
-  () => props.contact?.conversationId,
-  async (newConversationId, oldConversationId) => {
-    if (newConversationId && newConversationId !== oldConversationId) {
-      state.messages = [];
-      state.hasMoreMessages = true;
-      state.isLoadingMore = false;
-      isLoadingInitialMessages.value = true;
-
-      try {
-        if (!getIsWebsocketConnecting()) {
-          await getMessagesByConversationId(newConversationId, '');
-        }
-      } catch (error) {
-        console.error('Failed to load messages for new conversation:', error);
-      } finally {
-        updateMessages();
-        isLoadingInitialMessages.value = false;
-      }
-
-      await nextTick();
-      requestAnimationFrame(() => {
-        if (chatWrapperRef?.value) {
-          scrollToBottom(false);
-          scrollState.shouldAutoScroll = true;
-          scrollState.isInitialLoad = true;
-        }
+      const result = await fetchMessagesForTopic(route.value.id, {
+        lastMessageId: state.messages[0]?.id
       });
+      hasMoreMessage = result.length > 0;
     }
-  },
-  { immediate: true }
-);
-
-const previousConnectingState = ref(getIsWebsocketConnecting());
-
-watch(
-  () => getIsWebsocketConnecting(),
-  currentConnectingState => {
-    previousConnectingState.value = currentConnectingState;
-
-    updateMessages();
-
-    if (previousConnectingState.value && !currentConnectingState) {
-      setTimeout(async () => {
-        if (props.contact?.conversationId) {
-          try {
-            await getMessagesByConversationId(props.contact.conversationId, '');
-            updateMessages();
-          } catch (error) {
-            console.error(
-              'Failed to reload messages after connection restored:',
-              error
-            );
-          }
-        }
-      }, 300);
-    }
-  }
-);
-
-const lastReconnectedState = ref(false);
-
-const handleReconnection = async () => {
-  if (props.contact?.conversationId) {
-    try {
-      await getMessagesByConversationId(props.contact.conversationId, '');
-      updateMessages();
-    } catch (error) {
-      console.error('Failed to reload messages after reconnection:', error);
-    }
+    isScrollLoading = false;
   }
 };
-
-watch(
-  () => isRecentlyReconnected(),
-  isReconnected => {
-    if (isReconnected && !lastReconnectedState.value) {
-      setTimeout(() => {
-        handleReconnection();
-      }, 500);
-    }
-    lastReconnectedState.value = isReconnected;
-  }
-);
 
 const mastraResult = ref(null as any);
 
@@ -387,7 +331,6 @@ const initializeMastra = () => {
     });
     mastraResult.value = result;
 
-    // Set up a watcher for the messages to update state when they change
     watch(
       () => result.messages.value,
       newMessages => {
@@ -399,7 +342,6 @@ const initializeMastra = () => {
     const result = useMastra(false);
     mastraResult.value = result;
 
-    // Set up a watcher for the messages to update state when they change
     watch(
       () => result.messages.value,
       newMessages => {
@@ -418,49 +360,21 @@ watch([() => state.chatId, () => props.baseUrl], () => {
 
 let unsubscribeFromMessageChanges: (() => void) | null = null;
 
-const lastMessageSentTime = ref(0);
-
 onMounted(async () => {
-  if (props.chapter === 'ai' && !state.chatId) {
+  if (route.value && route.value.type === RouteTypes.AI && !state.chatId) {
     state.chatId = generateChatId();
   }
 
-  unsubscribeFromMessageChanges = subscribeToMessageChanges(
-    async (newMessageConversationId?: string) => {
-      await new Promise(resolve => setTimeout(resolve, 50));
-
-      if (newMessageConversationId === props.contact?.conversationId) {
-        const timeSinceLastSend = Date.now() - lastMessageSentTime.value;
-        if (!getIsWebsocketConnecting() && timeSinceLastSend > 2000) {
-          await getMessagesByConversationId(newMessageConversationId, '');
-        }
-        updateMessages();
-      }
-    }
-  );
-
-  if (props.contact?.conversationId) {
-    state.messages = [];
-    state.hasMoreMessages = true;
+  if (props.contact?.id) {
     state.isLoadingMore = false;
     isLoadingInitialMessages.value = true;
-
-    try {
-      if (!getIsWebsocketConnecting()) {
-        await getMessagesByConversationId(props.contact.conversationId, '');
-      }
-    } catch (error) {
-      console.error('Failed to load initial messages:', error);
-    } finally {
-      updateMessages();
-      isLoadingInitialMessages.value = false;
-    }
 
     await nextTick();
     requestAnimationFrame(() => {
       if (chatWrapperRef?.value) {
         scrollState.shouldAutoScroll = true;
         scrollState.isInitialLoad = true;
+        setupIntersectionObserver();
       }
     });
   }
@@ -470,6 +384,16 @@ onUnmounted(() => {
   if (unsubscribeFromMessageChanges) {
     unsubscribeFromMessageChanges();
     unsubscribeFromMessageChanges = null;
+  }
+
+  if (scrollMarkReadTimeout) {
+    clearTimeout(scrollMarkReadTimeout);
+    scrollMarkReadTimeout = null;
+  }
+
+  if (intersectionObserver) {
+    intersectionObserver.disconnect();
+    intersectionObserver = null;
   }
 
   if (state.chatId) {
@@ -491,12 +415,11 @@ const messageChat = (role: string) => [
 watch(
   () => state.messages.length,
   (newLength, oldLength) => {
-    if (props.chapter === 'ai') return;
+    if (route.value && route.value.type === RouteTypes.AI) return;
 
     if (oldLength === 0 && newLength > 0) {
       if (!getIsWebsocketConnecting()) {
         scrollState.shouldAutoScroll = true;
-        scrollToBottom(true);
       }
     }
   },
@@ -519,83 +442,47 @@ watch(
 );
 
 watch(
-  () => props.chapter,
-  async (newValue, oldValue) => {
-    if (newValue === oldValue) return;
-
-    if (chatWrapperRef?.value) {
-      scrollState.previousScrollTop = chatWrapperRef.value.scrollTop;
-    }
-
-    if (newValue !== 'ai' && props.contact?.conversationId) {
-      state.messages = [];
-      state.hasMoreMessages = true;
-      state.isLoadingMore = false;
-      isLoadingInitialMessages.value = true;
-
-      try {
-        if (!getIsWebsocketConnecting()) {
-          await getMessagesByConversationId(props.contact.conversationId, '');
-        }
-      } catch (error) {
-        console.error('Failed to load messages when changing chapter:', error);
-      } finally {
-        updateMessages();
-        isLoadingInitialMessages.value = false;
-      }
-    } else if (newValue !== 'ai') {
-      state.messages = [];
-    }
-
-    await nextTick();
-
-    scrollState.isInitialLoad = true;
-    scrollState.shouldAutoScroll = true;
-    scrollState.isUserScrolling = false;
-
-    requestAnimationFrame(() => {
-      if (chatWrapperRef?.value) {
-        scrollToBottom(false);
-        scrollState.isInitialLoad = false;
-      }
+  () => state.messages,
+  () => {
+    nextTick(() => {
+      setupIntersectionObserver();
     });
   },
-  { immediate: true }
+  { deep: true }
 );
 
-const handleSend = async (): Promise<void> => {
-  if (!inputText.value.trim()) return;
+const scrollToBottom = () => {
+  if (chatWrapperRef.value) {
+    setTimeout(() => {
+      chatWrapperRef.value.scrollTop =
+        chatWrapperRef.value.scrollHeight - chatWrapperRef.value.clientHeight;
+    }, 100);
+  }
+};
 
-  if (props.chapter === 'ai') {
+const handleSend = async (): Promise<void> => {
+  if (!inputText.value.trim() && !state.medias.length) return;
+
+  if (route.value && route.value.type === RouteTypes.AI) {
     const text = inputText.value;
     inputText.value = '';
 
     if (mastraResult.value && mastraResult.value.sendMessage) {
-      // Add user's message immediately for UI feedback
       const userMessage = {
         role: 'user' as 'user' | 'assistant',
         content: text,
         timestamp: Date.now()
       };
-
-      // Add to current state for immediate UI feedback
       state.aiMessages = [...state.aiMessages, userMessage];
 
-      // Scroll to bottom to show the user's message
       await nextTick();
-      requestAnimationFrame(() => scrollToBottom(true));
 
       try {
-        // The sendMessage function in useMastra will process the request
-        // It will add an assistant message with loading state, which will be updated via the watch
-        await mastraResult.value.sendMessage(text, () => {
-          requestAnimationFrame(() => scrollToBottom(true));
-        });
+        await mastraResult.value.sendMessage(text);
       } catch (error) {
         console.warn('Mastra failed to send message:', error);
       }
     } else {
-      // If Mastra is not available, add both user and error messages
       const userMessage = {
         role: 'user' as 'user' | 'assistant',
         content: text,
@@ -610,40 +497,17 @@ const handleSend = async (): Promise<void> => {
       };
       state.aiMessages = [...state.aiMessages, assistantMessage];
 
+      // Scroll to bottom after adding fallback messages
+      await nextTick();
+      scrollToBottom();
+
       console.warn('Mastra is not available, message added locally only');
-      requestAnimationFrame(() => scrollToBottom(true));
     }
     return;
   }
 
-  if (!props.contact) {
-    console.error('[OpenIM] Cannot send message: no contact provided');
-    return;
-  }
-
-  let resolvedUserId = props.contact.userId;
-  let resolvedGroupId = props.contact.groupId;
-
-  if (!resolvedUserId && !resolvedGroupId && props.contact.conversationId) {
-    if (props.contact.conversationId.startsWith('si_')) {
-      const parts = props.contact.conversationId.substring(3).split('_');
-      if (parts.length === 2) {
-        const [smallerId, largerId] = parts;
-        if (props.user?.id) {
-          resolvedUserId = smallerId === props.user.id ? largerId : smallerId;
-        } else {
-          resolvedUserId = largerId;
-        }
-      }
-    } else if (props.contact.conversationId.startsWith('sg_')) {
-      resolvedGroupId = props.contact.conversationId.substring(3);
-    }
-  }
-
-  if (!resolvedUserId && !resolvedGroupId) {
-    console.error(
-      '[OpenIM] Cannot send message: no valid recipient (userId or groupId) available'
-    );
+  if (!route.value.id) {
+    console.error('[ChatSDK] Cannot send message: no topic provided');
     return;
   }
 
@@ -651,84 +515,60 @@ const handleSend = async (): Promise<void> => {
   inputText.value = '';
 
   try {
-    if (resolvedGroupId) {
-      await sendMessageIM({
-        message: text,
-        to: '',
-        groupId: resolvedGroupId
-      });
-    } else if (resolvedUserId) {
-      await sendMessageIM({
-        message: text,
-        to: resolvedUserId,
-        groupId: ''
-      });
-    }
+    await sendMessageChat({
+      topicId: route.value.id,
+      text,
+      medias: state.medias
+    });
+
+    await nextTick();
+    state.medias = [];
+
+    scrollToBottom();
   } catch (error) {
-    console.error('[OpenIM] Failed to send message:', error);
+    console.error('[ChatSDK] Failed to send message:', error);
   }
-
-  updateMessages();
-  scrollToBottom(true);
 };
-
-const handleAttachFile = async (files: FileList, onlyMedia: boolean) => {
+const handleAttachFile = async (files: FileList, isMedia = false) => {
   if (!files.length) return;
 
-  if (!props.contact) {
-    console.error('[OpenIM] Cannot send message: no contact provided');
-    return;
-  }
-
-  let resolvedUserId = props.contact.userId;
-  let resolvedGroupId = props.contact.groupId;
-
-  if (!resolvedUserId && !resolvedGroupId && props.contact.conversationId) {
-    if (props.contact.conversationId.startsWith('si_')) {
-      const parts = props.contact.conversationId.substring(3).split('_');
-      if (parts.length === 2) {
-        const [smallerId, largerId] = parts;
-        if (props.user?.id) {
-          resolvedUserId = smallerId === props.user.id ? largerId : smallerId;
-        } else {
-          resolvedUserId = largerId;
-        }
-      }
-    } else if (props.contact.conversationId.startsWith('sg_')) {
-      resolvedGroupId = props.contact.conversationId.substring(3);
-    }
-  }
-
-  if (!resolvedUserId && !resolvedGroupId) {
-    console.error(
-      '[OpenIM] Cannot send message: no valid recipient (userId or groupId) available'
-    );
-    return;
-  }
-
-  Array.from(files).forEach(async file => {
+  for (const uploadedFile of Array.from(files)) {
     try {
-      if (resolvedGroupId) {
-        await sendMessageIM({
-          type: onlyMedia ? 'image' : 'file',
-          to: '',
-          groupId: resolvedGroupId,
-          file
-        });
-      } else if (resolvedUserId) {
-        await sendMessageIM({
-          type: onlyMedia ? 'image' : 'file',
-          to: resolvedUserId,
-          groupId: '',
-          file
-        });
-      }
+      const { file, path } = await uploadFile(uploadedFile);
 
-      updateMessages();
+      const type = !isMedia
+        ? MediaType.File
+        : file.type.startsWith('image/')
+          ? MediaType.Image
+          : file.type.startsWith('video/')
+            ? MediaType.Video
+            : MediaType.File;
+
+      state.medias.push({
+        path,
+        originName: file.name,
+        size: file.size,
+        type
+      });
     } catch (error) {
-      console.error('[OpenIM] Failed to send file:', error);
+      console.error('[ChatSDK] Failed to send file:', error);
     }
-  });
+  }
+
+  try {
+    await sendMessageChat({
+      topicId: route.value.id,
+      text: '',
+      medias: state.medias
+    });
+
+    await nextTick();
+    scrollToBottom();
+
+    state.medias = [];
+  } catch (error) {
+    console.error('[ChatSDK] Failed to send message:', error);
+  }
 };
 
 const isNewDate = (index: number, isMastra: boolean = false) => {
@@ -737,22 +577,48 @@ const isNewDate = (index: number, isMastra: boolean = false) => {
   if (isMastra) {
     const currentMsg = state.aiMessages[index];
     const prevMsg = state.aiMessages[index - 1];
-    const currentDay = formatDay(currentMsg.timestamp);
-    const prevDay = formatDay(prevMsg.timestamp);
+    const currentDay = formatDay(new Date(currentMsg.timestamp));
+    const prevDay = formatDay(new Date(prevMsg.timestamp));
     return currentDay !== prevDay;
   } else {
     const currentMsg = state.messages[index];
     const prevMsg = state.messages[index - 1];
-    const currentDay = formatDay(currentMsg.sendTime);
-    const prevDay = formatDay(prevMsg.sendTime);
+    const currentDay = formatDay(currentMsg.createdAt);
+    const prevDay = formatDay(prevMsg.createdAt);
     return currentDay !== prevDay;
   }
 };
 
-const getSystemMessageContent = message => {
-  const notification = parseGroupNotification(message);
-  return notification || message.textElem?.content || message.showName || '';
-};
+watch(
+  () => route.value,
+  () => {
+    if (!route.value?.id) return;
+
+    fetchMessagesForTopic(route.value.id);
+    hasMoreMessage = true;
+
+    // Mark messages as read when viewing the topic
+    const unreadMessages = state.messages.filter(
+      message =>
+        message.senderUserId !== props.user?.id &&
+        message.status !== MessageStatus.Read
+    );
+    if (unreadMessages.length > 0) {
+      markAsRead({
+        messageIds: unreadMessages.map(m => m.id),
+        topicId: route.value.id
+      }).catch(error => {
+        console.warn('Failed to mark messages as read:', error);
+      });
+    }
+
+    // Reset intersection observer for new topic
+    nextTick(() => {
+      setupIntersectionObserver();
+    });
+  },
+  { deep: true, immediate: true }
+);
 
 defineExpose({
   handleClear: clearAiMessages

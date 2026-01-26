@@ -4,12 +4,11 @@
     role="main"
     :data-testid="`${props.dataTestid}-MobileList-Container`"
   >
-    <Loading
+    <Loader
       v-if="state.isLoading"
-      message="Загрузка списка..."
       :dataTestid="`${props.dataTestid}-MobileList-Loading`"
     />
-    <section v-else-if="props.chapter === 'assistant'">
+    <section v-else-if="isAssistantRoute">
       <button
         class="menu__user-assistant"
         @click="handleChapter('ai')"
@@ -30,34 +29,31 @@
     </section>
 
     <section
-      v-else
+      v-else-if="route.type"
       class="chat-list"
       role="region"
       aria-label="Contact list"
       :data-testid="`${props.dataTestid}-ChatList-Section`"
     >
-      <ContactList
-        :contacts="
-          props.chapter === 'dialogs' ? state.contactList : state.groupList
-        "
+      <TopicList
+        :topics="isDialogsRoute ? contactList : groupList"
         :data-testid="`${props.dataTestid}-ContactList`"
-        @unmount-click="handleChapter"
         @unmount-contact="handleContactSelect"
       />
     </section>
     <Button
       :type="ButtonTypeEnum.primary"
       @click="handleShowAccount"
-      :disabled="props.chapter === 'assistant' || state.isLoading"
+      :disabled="isAssistantRoute || state.isLoading"
       class="mobile__list-button"
     >
       <Icon :name="IconNameEnum.plus" />
     </Button>
-    <template v-if="props.chapter !== 'assistant'">
+    <template v-if="!isAssistantRoute">
       <NewChatMobileModal
         :open="state.showAddAccount"
-        :contacts="props.contacts"
-        :is-add-one="props.chapter !== 'channels'"
+        :contacts="[]"
+        :is-add-one="!isGroupRoute"
         :selected-contact-ids="state.checkUsers"
         @unmount-close="handleCloseModal"
         @unmount-contact="handleNewContact"
@@ -67,38 +63,57 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue';
+import { reactive, computed, watch } from 'vue';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import Line from '../UI/Line.vue';
-import ContactList from './ContactList.vue';
-import Loading from '../Loading.vue';
 import type {
   IMobileListProps,
   IMobileListEmits
 } from './interfaces/mobile-list';
-import type { IUserProps } from '../interfaces/interfaces';
-import { Button, ButtonTypeEnum, Icon, IconNameEnum } from '@pksep/yui';
+import type { IUser } from '../interfaces/interfaces';
+import { Button, ButtonTypeEnum, Icon, IconNameEnum, Loader } from '@pksep/yui';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
-import { getConversationList } from '../../services/useConversions';
-import { getGroupList } from '../../services/useGroup';
+import TopicList from './TopicList.vue';
+import { useGroup } from '../../composables/useGroup';
+import { useTopics } from '../../composables/useTopics';
+import { navigateToAI, useUrlWatcher } from '../../composables/navigation';
+import {
+  RouteType,
+  RouteTypes
+} from '../../composables/navigation/useUrlRouting';
+
+const route = useUrlWatcher();
+
+const isAssistantRoute = computed(
+  () => route.value?.type === RouteTypes.ASSISTANT
+);
+const isDialogsRoute = computed(() => route.value?.type === RouteTypes.DIALOGS);
+const isGroupRoute = computed(() => route.value?.type === RouteTypes.GROUP);
 
 const props = withDefaults(defineProps<IMobileListProps>(), {
-  contacts: () => [],
   dataTestid: () => 'MobileList'
 });
 
 const state = reactive({
   showAddAccount: false,
   checkUsers: new Set<string | number>(),
-  isLoading: true,
-  contactList: computed(() => getConversationList()),
-  groupList: computed(() => getGroupList())
+  isLoading: true
 });
 
-import { watch } from 'vue';
+const contactList = computed(() => {
+  const { getTopicList } = useTopics();
+  const topics = getTopicList();
+  return [...topics];
+});
+
+const groupList = computed(() => {
+  const { getGroupList } = useGroup();
+  const groups = getGroupList();
+  return [...groups];
+});
 
 watch(
-  [() => getConversationList(), () => getGroupList()],
+  [() => contactList.value, () => groupList.value],
   ([convList, groupList]) => {
     if (state.isLoading && (convList.length > 0 || groupList.length > 0)) {
       state.isLoading = false;
@@ -107,26 +122,15 @@ watch(
   { immediate: true }
 );
 
-const emits = defineEmits<IMobileListEmits>();
-
-const handleChapter = (
-  chapter: { nickname: string; contact: IUserProps } | string | null
-): void => {
-  if (typeof chapter === 'string') {
-    emits('unmount-chapter', chapter);
-  } else if (chapter && chapter.contact.id) {
-    emits('unmount-chapter', chapter);
-  } else {
-    emits('unmount-chapter', null);
+const handleChapter = (route: RouteType) => {
+  if (route === RouteTypes.AI) {
+    navigateToAI();
   }
 };
 
-const handleContactSelect = (contact: IUserProps): void => {
-  emits('unmount-chapter', {
-    nickname: contact.nickname || contact.conversationId,
-    contact
-  });
-};
+const emits = defineEmits<IMobileListEmits>();
+
+const handleContactSelect = (): void => {};
 
 const handleShowAccount = () => {
   state.showAddAccount = true;
@@ -137,12 +141,8 @@ const handleCloseModal = () => {
   state.checkUsers.clear();
 };
 
-const handleNewContact = (contact: IUserProps): void => {
+const handleNewContact = (contact: IUser): void => {
   emits('unmount-contact', contact);
-  handleChapter({
-    nickname: contact.nickname || contact.conversationId,
-    contact
-  });
   handleCloseModal();
 };
 </script>

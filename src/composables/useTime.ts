@@ -1,9 +1,9 @@
 import { ref, onUnmounted } from 'vue';
 
-export const useTime = () => {
+export const useTime = (date: Date = new Date()) => {
   const time = ref<string>('');
   const interval = setInterval(() => {
-    time.value = new Date().toLocaleTimeString([], {
+    time.value = date.toLocaleTimeString([], {
       hour: '2-digit',
       minute: '2-digit'
     });
@@ -15,13 +15,13 @@ export const useTime = () => {
 };
 
 export const formatTime = (date: Date = new Date()) => {
-  return date.toLocaleTimeString([], {
+  return date.toLocaleTimeString('ru-RU', {
     hour: '2-digit',
     minute: '2-digit'
   });
 };
 
-export const formatDay = (timestamp: number): string => {
+export const formatDay = (timestamp: Date): string => {
   return new Date(timestamp).toLocaleDateString('ru-RU', {
     day: 'numeric',
     month: 'long'

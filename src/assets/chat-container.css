@@ -17,6 +17,7 @@
 @import url('./mobile-modal.css');
 @import url('./new-group.css');
 @import url('./mobile-info-modal.css');
+@import url('./mobile-auth.css');
 
 .chat-container {
   --neutral-text-light: #b8b8b8;
@@ -34,7 +35,7 @@
   scroll-behavior: smooth;
 }
 
-.chat-container.collapse {
+.chat-container:has(.menu.menu--collapse) {
   --size-left-menu: 75px;
 }
 
@@ -123,6 +124,9 @@ button.primary-yui-kit.disabled-yui-kit {
     & .chat__info {
       display: none;
     }
+  }
+  .chat-container.menu-collapse {
+    --size-left-menu: 75px;
   }
 }
 

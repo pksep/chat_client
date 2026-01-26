@@ -1,4 +1,4 @@
-import { useOpenIMRestApi } from '../services/useApi';
+import { useChatApi } from '../services/useApi';
 
 export type RegisterUser = {
   userID: string;
@@ -37,7 +37,7 @@ const removeCookie = (name: string): void => {
 export const useRegister = async (
   params: RegisterParams
 ): Promise<{ errCode: number; errDlt: string; errMsg: string }> => {
-  const api = useOpenIMRestApi();
+  const api = useChatApi();
   const response = await api.post('/user/user_register', params);
 
   const data = await response.json();
@@ -48,13 +48,17 @@ export const useRegister = async (
 export const useLogout = (): void => {
   removeCookie('authToken');
 
-  sessionStorage.removeItem('openim_user');
+  sessionStorage.removeItem('chat_user');
 };
 
 export const setAuthToken = (
   token: string,
-  expireTimeSeconds: number
+  expireTimeSeconds?: number
 ): void => {
+  if (!expireTimeSeconds) {
+    document.cookie = `authToken=${token};path=/;SameSite=Strict`;
+    return;
+  }
   setCookie('authToken', token, expireTimeSeconds);
 };
 

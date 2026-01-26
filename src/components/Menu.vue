@@ -3,13 +3,7 @@
     :class="menuClasses"
     :data-testid="`${props.dataTestid}-Menu-Container`"
   >
-    <Loading
-      v-if="state.isLoading"
-      message="Загрузка меню..."
-      :dataTestid="`${props.dataTestid}-Menu-Loading`"
-    />
     <div
-      v-else
       class="menu__start"
       :data-testid="`${props.dataTestid}-Menu-StartContainer`"
     >
@@ -18,16 +12,15 @@
         :data-testid="`${props.dataTestid}-Menu-ProfileContainer`"
       >
         <UserProfile
-          v-bind="props.user"
+          v-if="authUser"
+          :user="authUser"
           class="menu__user-profile"
           :data-testid="`${props.dataTestid}-Menu-UserProfile`"
           v-show="!isCollapse"
         />
         <Avatar
-          v-if="isCollapse"
-          :initials="props.user?.nickname"
-          :url="props.user?.avatarUrl"
-          :alt="props.user?.avatarAlt"
+          v-if="isCollapse && authUser"
+          v-bind="authUser"
           is-icon
           :data-testid="`${props.dataTestid}-Menu-ProfileAvatar`"
         />
@@ -50,8 +43,9 @@
         :data-testid="`${props.dataTestid}-Menu-SeparatorLine`"
       />
       <div
+        v-if="false"
         :class="aiChapterClasses"
-        @click="unmountContactClick('ai')"
+        @click="unmountClickAI"
         :data-testid="`${props.dataTestid}-Menu-AIAssistantContainer`"
       >
         <AiIconWrapper
@@ -65,14 +59,15 @@
           AI Ассистент
         </h3>
       </div>
-      <template v-for="(item, index) in listChannels" :key="index">
-        <template v-if="isCollapse && item.items.length !== 0">
+      <template v-for="(item, index) in topicGroups" :key="index">
+        <template v-if="isCollapse && item.items.length !== 0 && index !== 0">
           <Line :data-testid="`${props.dataTestid}-Menu-Line${index + 1}`" />
         </template>
         <details
           class="menu__user-details"
           v-if="!isCollapse"
-          open
+          :open="state.detailsOpen[index]"
+          @toggle="handleToggle($event, index)"
           :data-testid="`${props.dataTestid}-Menu-Details${index + 1}`"
         >
           <summary
@@ -83,7 +78,7 @@
               class="menu__user-details-summary--title"
               :data-testid="`${props.dataTestid}-Menu-DetailsTitle${index + 1}`"
             >
-              {{ item.title }}
+              {{ item.type === 'GROUP' ? 'Каналы' : 'Личные сообщения' }}
               <Triangle class="menu__user-details-summary-triangle" />
             </h4>
             <Button
@@ -98,11 +93,11 @@
               />
             </Button>
           </summary>
-          <ContactList
+          <TopicList
             class="menu__contact-list"
-            :contacts="item.items"
-            @unmount-contact="unmountContactClick"
-            :selected-contact-id="state.selectedContactId"
+            :topics="item.items"
+            @unmount-topic="unmountTopicClick"
+            :selected-topic-id="state.selectedContactId"
             :data-testid="`${props.dataTestid}-Menu-ContactList${index + 1}`"
           />
         </details>
@@ -111,21 +106,21 @@
             class="menu__user"
             :data-testid="`${props.dataTestid}-Menu-CollapsedUser${index + 1}`"
           >
-            <template v-for="(user, index) in item.items" :key="index">
+            <template v-for="(contact, index) in item.items" :key="index">
               <li
                 :class="[
                   'menu-user__item',
                   {
                     'menu-user__item--active':
-                      user.id === state.selectedContactId
+                      contact.id === state.selectedContactId
                   }
                 ]"
                 :data-testid="`${props.dataTestid}-Menu-CollapsedAvatar${index + 1}`"
-                @click.stop="unmountContactClick(user)"
+                @click.stop="unmountTopicClick(contact)"
               >
                 <Avatar
-                  :url="user.avatarUrl"
-                  :initials="user.nickname"
+                  :url="`${config.CHAT_PATH_TO_FILE_CDN}/${contact.avatarUrl}`"
+                  :initials="contact.name"
                   :data-testid="`${props.dataTestid}-Menu-UserAvatar${index + 1}`"
                 />
               </li>
@@ -152,7 +147,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, reactive, watch } from 'vue';
+import { computed, reactive } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_XL } from '../utils/constants';
 import Line from './UI/Line.vue';
@@ -166,37 +161,73 @@ import {
   SizesEnum
 } from '@pksep/yui';
 import UserProfile from './UserProfile/UserProfile.vue';
-import ContactList from './ContactList/ContactList.vue';
-import Loading from './Loading.vue';
-import type {
-  IContactProps,
-  IMenuEmits,
-  IMenuProps
-} from './interfaces/interfaces';
-import {
-  fetchConversationList,
-  getConversationList,
-  onSDKReady
-} from '../services/useConversions';
-import { getGroupList } from '../services/useGroup';
-import { markAsRead } from '../services/useOpenIM';
+import type { ITopic, IMenuEmits, IMenuProps } from './interfaces/interfaces';
+import { useGroup } from '../composables/useGroup';
 import Triangle from './Triangle.vue';
 import { usePwaInstall } from '../composables/usePwaInstall';
-import { navigateToAI } from '../composables/useUrlRouting';
+import {
+  navigateToAI,
+  navigateToGroup,
+  navigateToDialogs,
+  useUrlWatcher
+} from '../composables/navigation';
+import { useTopics } from '../composables/useTopics';
+import { getAuthUser } from '../composables/useAuth';
+import TopicList from './ContactList/TopicList.vue';
+import { getConfig } from '../services/useConfig';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
-  dataTestid: () => 'Menu'
+  dataTestid: 'Menu'
 });
+
+const { groups } = useGroup();
+const { getTopicList } = useTopics();
+
+const route = useUrlWatcher();
 
 const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 
-const state = reactive({
-  chapter: '',
-  selectedContactId: null,
-  isLoading: true
+const getInitialDetailsOpen = () => {
+  const stored = localStorage.getItem('menu-details-open');
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length === 2) {
+        return parsed;
+      }
+    } catch (e) {
+      console.warn('Failed to parse menu-details-open from localStorage', e);
+    }
+  }
+  return [true, true];
+};
+
+const topicGroups = computed(() => {
+  return [
+    {
+      type: 'GROUP',
+      onClickPlusButton: handleNewGroupModal,
+      items: groups.value
+    },
+    {
+      title: 'DM',
+      onClickPlusButton: handleNewContactModal,
+      items: getTopicList()
+    }
+  ];
 });
 
+const state = reactive({
+  selectedContactId: computed(() => route.value?.id),
+  isLoading: true,
+  detailsOpen: getInitialDetailsOpen()
+});
+
+const authUser = computed(() => getAuthUser());
+
 const emits = defineEmits<IMenuEmits>();
+
+const config = getConfig();
 
 const { state: isCollapse, toggle } = useResizeState({
   breakpoint: MAX_W_XL,
@@ -206,56 +237,25 @@ const { state: isCollapse, toggle } = useResizeState({
   }
 });
 
+const handleToggle = (event: Event, index: number): void => {
+  const target = event.target as HTMLDetailsElement;
+  state.detailsOpen[index] = target.open;
+  localStorage.setItem('menu-details-open', JSON.stringify(state.detailsOpen));
+};
+
 const handleCollapse = (): void => {
   toggle();
 };
 
-watch(
-  () => props.chapter,
-  () => {
-    if (props.chapter !== state.chapter) {
-      state.chapter = props.chapter;
-    }
-  }
-);
+const unmountClickAI = (): void => {
+  navigateToAI();
+};
 
-const unmountContactClick = (contact: IContactProps | string): void => {
-  state.selectedContactId = typeof contact === 'string' ? contact : contact.id;
-  if (contact === 'ai') {
-    state.chapter = 'ai';
-    navigateToAI();
-    emits('unmount-chapter', 'ai');
-    return;
-  }
-
-  if (typeof contact === 'string') {
-    const foundContact = getConversationList().find(c => c.id === contact);
-    if (foundContact) {
-      state.chapter = foundContact.nickname;
-
-      if (foundContact.groupId) {
-        markAsRead(foundContact.id).catch(error => {
-          console.warn('Failed to mark messages as read:', error);
-        });
-
-        emits('unmount-chapter', {
-          nickname: foundContact.nickname,
-          contact: foundContact
-        });
-      }
-    }
-  } else {
-    state.chapter = contact.nickname;
-    if (contact.id) {
-      markAsRead(contact.id).catch(error => {
-        console.warn('Failed to mark messages as read:', error);
-      });
-    }
-
-    emits('unmount-chapter', {
-      nickname: contact.nickname,
-      contact
-    });
+const unmountTopicClick = (topic: ITopic): void => {
+  if (topic.type === 'GROUP') {
+    navigateToGroup(topic.id);
+  } else if (topic.type === 'DM') {
+    navigateToDialogs(topic.id);
   }
 };
 
@@ -268,7 +268,7 @@ const menuClasses = computed(() => [
 const aiChapterClasses = computed(() => [
   'menu__user-assistant',
   {
-    'menu__user-assistant--active': state.chapter === 'ai'
+    'menu__user-assistant--active': route.value && route.value.type === 'ai'
   }
 ]);
 
@@ -279,25 +279,4 @@ const handleNewGroupModal = () => {
 const handleNewContactModal = () => {
   emits('unmount-new-contact', { isChapterOpen: true });
 };
-
-const listChannels = computed(() => [
-  {
-    title: 'Каналы',
-    onClickPlusButton: handleNewGroupModal,
-    items: getGroupList()
-  },
-  {
-    title: 'Личные сообщения',
-    onClickPlusButton: handleNewContactModal,
-    items: getConversationList()
-  }
-]);
-
-onMounted(() => {
-  onSDKReady(() => {
-    fetchConversationList().finally(() => {
-      state.isLoading = false;
-    });
-  });
-});
 </script>

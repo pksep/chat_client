@@ -1,9 +1,8 @@
-import { IContactProps, IUserProps } from './interfaces';
+import { ITopic, IUser } from './interfaces';
 
 export interface IMessageListProps {
-  user?: IUserProps;
-  contacts?: IContactProps[];
+  user?: IUser;
+  contacts?: ITopic[];
   baseUrl?: string;
-  chapter?: string | null;
-  contact?: IContactProps | null;
+  contact?: ITopic | null;
 }
