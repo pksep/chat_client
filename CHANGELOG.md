@@ -1,3 +1,24 @@
+# [1.1.0](https://github.com/pksep/chat_client/compare/v1.0.0...v1.1.0) (2026-01-26)
+
+
+### Bug Fixes
+
+* clear comments and change after lint ([9677de2](https://github.com/pksep/chat_client/commit/9677de279334e1c0499b45e9ace8bf369add67f4))
+* isMobile error ([24b41d2](https://github.com/pksep/chat_client/commit/24b41d21e76cfe0fbb3c999de0322fc8fcceea50))
+* message content bubble ([658f5e3](https://github.com/pksep/chat_client/commit/658f5e34ab07681beb87469c88a2188ec470c143))
+* remove comments ([ed028de](https://github.com/pksep/chat_client/commit/ed028de1edf503c343f3ca83ea828e8993676218))
+* sizes of unicode smiles ([76406cf](https://github.com/pksep/chat_client/commit/76406cf0489b023b622ffff0a36a03a9e407bb2f))
+
+
+### Features
+
+* add overflow-x hidden ([96dbefa](https://github.com/pksep/chat_client/commit/96dbefa636e7d302bfc1840e4d9609153b0656b2))
+* adjust message bubble padding and icon size ([8652887](https://github.com/pksep/chat_client/commit/865288700f4c466f14e6d75bd5c1316734f93a01))
+* enhance mobile navigation with context-aware back button for PWA ([98b441e](https://github.com/pksep/chat_client/commit/98b441e1b7c417b3230a46057dfa1c7bd7b198f7))
+* improve collapse button styling and topic active state ([9063c95](https://github.com/pksep/chat_client/commit/9063c951d8dd41b630c0550867d028210e3f989d))
+* show message status icons for all messages ([4022f2e](https://github.com/pksep/chat_client/commit/4022f2e56627a63faf27e50ea4a792caa72556f8))
+* update UI styles and temporarily disable features ([9842ae9](https://github.com/pksep/chat_client/commit/9842ae9e04c660541eec1797427652d3299c1d13))
+
 # 1.0.0 (2026-01-26)
 
 
