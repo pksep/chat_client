@@ -50,6 +50,10 @@ import {
   MessageTypeEnum
 } from '@pksep/yui';
 
+const emit = defineEmits<{
+  (e: 'auth-success', token: string): void;
+}>();
+
 const scanError = ref('');
 const isError = ref(false);
 const isScanning = ref(false);
@@ -60,7 +64,6 @@ const scanQrCode = async () => {
   scanError.value = '';
 
   await nextTick();
-
   notificationKey.value++;
 
   if (!Capacitor.isNativePlatform() && !window.isSecureContext) {
@@ -81,7 +84,21 @@ const scanQrCode = async () => {
 
     if (result.ScanResult) {
       isScanning.value = false;
-      return result.ScanResult;
+
+      let finalToken = result.ScanResult;
+      try {
+        const url = new URL(result.ScanResult);
+        const tokenFromUrl = url.searchParams.get('token');
+        if (tokenFromUrl) {
+          // Убираем возможный мусор вроде ?token на конце (как в вашем split в родителе)
+          finalToken = tokenFromUrl.split('?token')[0];
+        }
+      } catch (e) {
+        scanError.value = 'Не удалось получить токен';
+        isError.value = true;
+      }
+
+      emit('auth-success', finalToken);
     } else {
       scanError.value = 'Сканирование отменено';
       isError.value = true;
