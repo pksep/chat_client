@@ -58,6 +58,7 @@
 
 .chat__menu {
   grid-area: menu;
+  overflow-x: hidden;
 }
 
 .chat__messages {
