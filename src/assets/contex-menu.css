@@ -12,7 +12,17 @@
   }
 }
 
+.template {
+  display: grid;
+  gap: 5px;
+}
+
 .tip {
   display: none;
   font-size: 10px;
+}
+
+.context-menu button.button-yui-kit.small.ghost-yui-kit {
+  padding: 5px;
+  min-height: 27px;
 }

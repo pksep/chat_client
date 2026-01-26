@@ -66,9 +66,9 @@ const menuItems = computed<
     label: string;
   }[]
 >(() => [
-  { key: 'assistant', label: 'ИИ' },
+  { key: 'dialogs', label: 'Диалоги' },
   { key: 'group', label: 'Каналы' },
-  { key: 'dialogs', label: 'Диалоги' }
+  { key: 'assistant', label: 'ИИ' }
 ]);
 
 const handleUnmountChapter = (route: 'assistant' | 'group' | 'dialogs') => {

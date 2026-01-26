@@ -27,6 +27,7 @@
   --neutral-text: var(--grey6);
   --neutral-border: var(--grey3);
   display: grid;
+  font-family: 'Inter Variable', sans-serif;
   height: var(--default-height);
   background-color: var(--blue15);
   grid-template-areas: 'menu header info' 'menu chat info';
@@ -57,6 +58,7 @@
 
 .chat__menu {
   grid-area: menu;
+  overflow-x: hidden;
 }
 
 .chat__messages {

@@ -77,7 +77,6 @@
             props.time
           }}</span>
           <MessageStatusIcons
-            v-if="props.isMeSender"
             :is-read="props.isRead"
             :message-status="props.messageStatus"
             :data-testid="`${dataTestid}-MessageBubble`"
