@@ -11,7 +11,7 @@
 .message__article {
   display: grid;
   gap: 4px;
-  padding: 8px 16px;
+  padding: 9.5px 16px;
   width: max-content;
   background-color: var(--message-background-color, var(--white));
   border-radius: 12px;
@@ -46,7 +46,7 @@
   justify-self: end;
   & svg.icon-yui-kit {
     display: grid;
-    font-size: 12px;
+    font-size: 14px;
   }
 }
 
