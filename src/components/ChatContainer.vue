@@ -48,8 +48,7 @@
       :data-testid="`${props.dataTestid}-ChatContainer-NewContactModal`"
       @unmount-close="closeModals"
     />
-    <!-- <Teleport to="#chat-container-image"> -->
-    <!-- </Teleport> -->
+
     <NewGroupModal
       :user="authUser"
       :contacts="users"
@@ -251,12 +250,22 @@ const isActiveHeader = (
 };
 
 useAndroidBackButton({
+  enableContextAwareNavigation: true,
   onBack: () => {
     if (isMobile.value) {
-      state.isMenuMobileOpen = false;
-      state.isNewContactOpen = false;
-      state.isNewGroupOpen = false;
+      if (
+        state.isMenuMobileOpen ||
+        state.isNewContactOpen ||
+        state.isNewGroupOpen
+      ) {
+        state.isMenuMobileOpen = false;
+        state.isNewContactOpen = false;
+        state.isNewGroupOpen = false;
+        return true;
+      }
     }
+
+    return false;
   }
 });
 
