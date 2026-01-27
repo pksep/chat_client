@@ -39,6 +39,12 @@ h3.mobile__modal-header--title {
 @media (width <= 480px) {
   .modal-yui-kit__modal-content {
     overflow: hidden;
+    padding-right: 5px;
+  }
+  .mobile__modal-divider__wrapper,
+  .mobile__modal-header,
+  .contact-selector__search {
+    padding-inline-end: 5px;
   }
   .modal__new-contact h3.mobile__modal-header--title {
     padding-bottom: 3px;

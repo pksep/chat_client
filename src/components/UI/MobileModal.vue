@@ -35,11 +35,13 @@
         </button>
       </slot>
     </header>
-    <Line
-      v-if="showDivider"
-      class="mobile__modal-divider"
-      :data-testid="`${dataTestid}-MobileModal-Divider`"
-    />
+    <div class="mobile__modal-divider__wrapper">
+      <Line
+        v-if="showDivider"
+        class="mobile__modal-divider"
+        :data-testid="`${dataTestid}-MobileModal-Divider`"
+      />
+    </div>
     <div
       :data-testid="`${dataTestid}-MobileModal-Content`"
       class="mobile__modal-content"
