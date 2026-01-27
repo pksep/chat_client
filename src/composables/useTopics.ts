@@ -95,6 +95,9 @@ export const useTopics = () => {
       topic => topic.id === topicId
     );
 
+    if (!topic.unreadMessageCount) {
+      topic.unreadMessageCount = 0;
+    }
     if (topic) {
       topic.unreadMessageCount += delta;
     }
