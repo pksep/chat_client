@@ -6,14 +6,14 @@ const form = reactive({
 });
 
 export const useNewInformationModal = (model: {
-  name: string;
+  name?: string;
   avatarUrl?: string;
 }) => {
   form.name = model.name;
   form.avatarUrl = model.avatarUrl;
 
   const handleUpdateInformation = (information: {
-    name: string;
+    name?: string;
     avatarUrl?: string;
   }) => {
     form.name = information.name;
@@ -22,7 +22,6 @@ export const useNewInformationModal = (model: {
 
   watch([() => model.name, () => model.avatarUrl], () => {
     if (model.name || model.avatarUrl) {
-      console.log('watch', model.name, model.avatarUrl);
       form.name = model.name;
       form.avatarUrl = model.avatarUrl;
     }

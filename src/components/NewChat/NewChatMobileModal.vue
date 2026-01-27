@@ -43,7 +43,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, watch } from 'vue';
+import { reactive, computed } from 'vue';
 import MobileModal from '../UI/MobileModal.vue';
 import ContactSelector from './ContactSelector.vue';
 import MobileChatInfo from '../Header/MobileChatInfo.vue';
@@ -103,7 +103,7 @@ const state = reactive({
   checkMembers: []
 });
 
-const { form } = useNewInformationModal({
+const { form, handleUpdateInformation } = useNewInformationModal({
   name: '',
   avatarUrl: ''
 });
@@ -129,13 +129,10 @@ const handleCheckUsers = async (contacts: IUser[] | IUser): Promise<void> => {
 
 const handleNext = (contacts: IUser[]): void => {
   if (props.isAddOne) return;
-  form.name = createNiceName(contacts);
+  const name = createNiceName(contacts);
+  handleUpdateInformation({ avatarUrl: form.avatarUrl, name });
   handleOpenGroupInfo(contacts);
 };
-
-watch([() => form.name, () => form.avatarUrl], () => {
-  handleCreateInformation({ avatarUrl: form.avatarUrl, name: form.name });
-});
 
 const handleCreateInformation = ({ avatarUrl, name }) => {
   avatarPreview.value = avatarUrl;
@@ -143,7 +140,7 @@ const handleCreateInformation = ({ avatarUrl, name }) => {
 };
 
 const handleCreateMobileGroup = () => {
-  console.log('handleCreateMobileGroup', form);
+  handleCreateInformation(form);
   handleCreateGroup();
 };
 </script>

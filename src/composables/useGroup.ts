@@ -255,6 +255,9 @@ export const useGroup = () => {
       const localGroup = groups.value.find(group => group.id === groupId);
       if (localGroup) {
         currentGroup.value = { ...localGroup };
+        currentGroup.value.members = localGroup.members.map(item =>
+          'dataValues' in item ? item.dataValues : item
+        ) as IUser[];
       } else {
         currentGroup.value = null;
       }
