@@ -1,3 +1,21 @@
+# [1.2.0](https://github.com/pksep/chat_client/compare/v1.1.0...v1.2.0) (2026-01-27)
+
+
+### Bug Fixes
+
+* console logs ([f427efe](https://github.com/pksep/chat_client/commit/f427efe680b81d27d82ad18602a6e9e545a3fdbd))
+* getting group ([4aab65c](https://github.com/pksep/chat_client/commit/4aab65ccc825e110d466525db24aa62a1a399e1f))
+* lint ([2c64b67](https://github.com/pksep/chat_client/commit/2c64b67cb28624ebc44cae60d86d0db2be0eb584))
+* lint ([5b029b4](https://github.com/pksep/chat_client/commit/5b029b4cae67805f47a818c661126bde27dfa9a5))
+* sorting ([06e667d](https://github.com/pksep/chat_client/commit/06e667d899b74fa25b699170e3fd8f19ee74e83c))
+* sorting if havent last message ([8208cac](https://github.com/pksep/chat_client/commit/8208cac8b21ee64f7c98ef7c06fee3480ff06374))
+* unreadMessageCount ([318a7a6](https://github.com/pksep/chat_client/commit/318a7a6c0fe48a299365404db412af78e905dd0a))
+
+
+### Features
+
+* reconnecting socket ([d9498e5](https://github.com/pksep/chat_client/commit/d9498e5d191b276b32616d9b6d48ec464031d0d6))
+
 # [1.1.0](https://github.com/pksep/chat_client/compare/v1.0.0...v1.1.0) (2026-01-26)
 
 
