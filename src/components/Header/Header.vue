@@ -169,7 +169,11 @@ const handleCloseMobileInfoModal = (): void => {
 };
 
 const handleClickHeader = async (): Promise<void> => {
-  if (route.value.type === 'dialogs') return;
+  if (
+    route.value.type === RouteTypes.DIALOGS ||
+    route.value.type === RouteTypes.AI
+  )
+    return;
   if (isMobile.value) {
     state.openMobileInfoModal = true;
     emits('unmount-click');
