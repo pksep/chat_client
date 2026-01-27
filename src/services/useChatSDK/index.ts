@@ -115,21 +115,23 @@ export class ChatSDK {
         this.ws.setSocket(this.socket);
 
         this.socket.on('connect', () => {
-          console.log('Connected to chat server');
+          console.log('Socket.IO: Connected to chat server');
           resolve();
         });
 
         this.socket.on('connect_error', error => {
-          console.error('Socket.IO connection error:', error);
+          console.error('Socket.IO: Connection error:', error);
           reject(error);
         });
 
         this.socket.on('disconnect', reason => {
-          console.log('Disconnected from chat server:', reason);
+          console.log('Socket.IO: Disconnected from chat server:', reason);
         });
 
         this.socket.on('reconnect_attempt', attemptNumber => {
-          console.log(`Attempting to reconnect (${attemptNumber})...`);
+          console.log(
+            `Socket.IO: Attempting to reconnect (${attemptNumber})...`
+          );
         });
 
         this.socket.on('reconnect', attemptNumber => {
