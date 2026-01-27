@@ -162,7 +162,7 @@ import {
 } from '@pksep/yui';
 import UserProfile from './UserProfile/UserProfile.vue';
 import type { ITopic, IMenuEmits, IMenuProps } from './interfaces/interfaces';
-import { getGroupList } from '../composables/useGroup';
+import { useGroup } from '../composables/useGroup';
 import Triangle from './Triangle.vue';
 import { usePwaInstall } from '../composables/usePwaInstall';
 import {
@@ -180,6 +180,7 @@ const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: 'Menu'
 });
 
+const { getGroupList } = useGroup();
 const { getTopicList } = useTopics();
 
 const route = useUrlWatcher();

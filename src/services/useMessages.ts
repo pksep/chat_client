@@ -18,6 +18,7 @@ export const fetchMessagesForTopic = async (
   opts?: { lastMessageId?: string; limit?: number }
 ): Promise<IMessage[]> => {
   try {
+    if (!topicId) return;
     const sdk = getChatSDK();
     if (!sdk) return;
     const messages = await sdk.getMessages(topicId, {
