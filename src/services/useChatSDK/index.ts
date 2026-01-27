@@ -117,6 +117,10 @@ export class ChatSDK {
         this.socket.on('connect', () => {
           console.log('Socket.IO: Connected to chat server');
           resolve();
+
+          fetchAllTopics();
+          fetchAllGroups();
+          fetchMessagesForTopic();
         });
 
         this.socket.on('connect_error', error => {

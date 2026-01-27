@@ -156,10 +156,11 @@ export const useTopics = () => {
       if (aPin !== bPin) {
         return aPin ? -1 : 1;
       }
-      return (
-        new Date(b.lastMessage.createdAt).getTime() -
-        new Date(a.lastMessage.createdAt).getTime()
-      );
+
+      const aTime = new Date(a.lastMessage?.createdAt ?? a.createdAt).getTime();
+      const bTime = new Date(b.lastMessage?.createdAt ?? b.createdAt).getTime();
+
+      return bTime - aTime;
     });
   };
 
