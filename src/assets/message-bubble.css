@@ -11,7 +11,7 @@
 .message__article {
   display: grid;
   gap: 4px;
-  padding: 8px 16px;
+  padding: 9.5px 16px;
   width: max-content;
   background-color: var(--message-background-color, var(--white));
   border-radius: 12px;
@@ -45,7 +45,8 @@
   align-items: center;
   justify-self: end;
   & svg.icon-yui-kit {
-    font-size: 16px;
+    display: grid;
+    font-size: 14px;
   }
 }
 
@@ -106,6 +107,7 @@ div.message-content__loading-circle:nth-child(3) {
 }
 
 div.message-content__html > p {
+  max-width: 100ch;
   margin: 0;
 }
 
@@ -232,6 +234,11 @@ div.message-content__file {
 }
 
 @media screen and (width <= 480px) {
+  div.message-content__html > p {
+    max-width: 35ch;
+    margin: 0;
+  }
+
   .chat__message-wrapper {
     width: 100%;
     padding-right: 15px;

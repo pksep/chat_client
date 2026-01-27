@@ -18,7 +18,8 @@
         :class="[
           'contact-list__item',
           {
-            'contact-list__item--active': topic.id === props.selectedTopicId
+            'contact-list__item--active':
+              topic.id === props.selectedTopicId || isOpen[topic.id]
           }
         ]"
         role="button"

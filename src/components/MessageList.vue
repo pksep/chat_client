@@ -196,7 +196,7 @@ const state = reactive({
   isLoadingMore: false,
   limit: 50,
   aiMessages: [] as AIMessage[],
-  medias: [] //as Media[]
+  medias: []
 });
 
 const isLoadingInitialMessages = ref(false);
@@ -501,7 +501,6 @@ const handleSend = async (): Promise<void> => {
       };
       state.aiMessages = [...state.aiMessages, assistantMessage];
 
-      // Scroll to bottom after adding fallback messages
       await nextTick();
       scrollToBottom();
 
@@ -601,7 +600,6 @@ watch(
     fetchMessagesForTopic(route.value.id);
     hasMoreMessage = true;
 
-    // Mark messages as read when viewing the topic
     const unreadMessages = state.messages.filter(
       message =>
         message.senderUserId !== props.user?.id &&
@@ -616,7 +614,6 @@ watch(
       });
     }
 
-    // Reset intersection observer for new topic
     nextTick(() => {
       setupIntersectionObserver();
     });

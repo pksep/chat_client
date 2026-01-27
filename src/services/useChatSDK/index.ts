@@ -466,7 +466,7 @@ export class ChatSDK {
     userId: string
   ): Promise<{ success: boolean }> {
     const result = await this.group.removeGroupMember(groupId, userId);
-    // Handle the case where the underlying method returns a number
+
     if (typeof result === 'number') {
       return { success: result > 0 };
     }
@@ -499,7 +499,7 @@ export class ChatSDK {
     userId: string
   ): Promise<{ success: boolean }> {
     const result = await this.group.removeUserFromGroup(groupId, userId);
-    // Handle the case where the underlying method returns a number
+
     if (typeof result === 'number') {
       return { success: result > 0 };
     }
