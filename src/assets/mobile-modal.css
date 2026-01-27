@@ -52,6 +52,9 @@ h3.mobile__modal-header--title {
   .contact-selector__search {
     margin-bottom: 0;
   }
+  .modal__new-group button.menu__info-save-button {
+    display: none;
+  }
 }
 
 @media (width >= 480px) {

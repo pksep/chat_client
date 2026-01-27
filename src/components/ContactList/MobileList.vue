@@ -77,7 +77,14 @@ import type {
   IMobileListEmits
 } from './interfaces/mobile-list';
 import type { IUser } from '../interfaces/interfaces';
-import { Button, ButtonTypeEnum, Icon, IconNameEnum, Loader } from '@pksep/yui';
+import {
+  Button,
+  ButtonTypeEnum,
+  Icon,
+  IconNameEnum,
+  Loader,
+  Modal
+} from '@pksep/yui';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
 import TopicList from './TopicList.vue';
 import { useGroup } from '../../composables/useGroup';

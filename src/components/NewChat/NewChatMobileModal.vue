@@ -1,6 +1,6 @@
 <template>
   <MobileModal
-    :class="props.isAddOne ? 'modal__new-contact' : ''"
+    :class="props.isAddOne ? 'modal__new-contact' : 'modal__new-group'"
     :open="props.open"
     @unmount-close="handleCloseModal"
     @unmount-next="handleNext(state.checkMembers)"
@@ -27,14 +27,15 @@
     :open="isSelectedMembers"
     @unmount-close="handleCloseGroupInfo"
     title="Канал"
+    class="modal__new-group"
     @unmount-next="handleCreateMobileGroup"
     start-button-text="Создать"
     close-button-text="Назад"
     :data-testid="`${props.dataTestid}-NewChatMobileModal-GroupModal`"
   >
     <MobileChatInfo
-      :model-value="state.information"
-      @update:model-value="handleCreateInformation"
+      :is-button-for-save="false"
+      :model-value="form"
       :members="filteredSelectedContacts"
       :data-testid="`${props.dataTestid}-NewChatMobileModal-MobileChatInfo`"
     />
@@ -42,7 +43,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue';
+import { reactive, computed, watch } from 'vue';
 import MobileModal from '../UI/MobileModal.vue';
 import ContactSelector from './ContactSelector.vue';
 import MobileChatInfo from '../Header/MobileChatInfo.vue';
@@ -54,6 +55,7 @@ import { useNewGroupModal } from './composables/useNewGroupModal';
 import { IUser } from '../interfaces/interfaces';
 import { getChatSDK } from '../../services/useChat';
 import { navigateToDialogs } from '../../composables/navigation';
+import { useNewInformationModal } from '../../composables/useNewInformationModal';
 
 const props = withDefaults(defineProps<INewChatMobileProps>(), {
   open: false,
@@ -98,14 +100,12 @@ const filteredSelectedContacts = computed<IUser[]>(() => {
 });
 
 const state = reactive({
-  checkMembers: [],
-  information: {
-    name: groupName.value,
-    avatarUrl: avatarPreview.value,
-    groupId: null,
-    userId: props.user?.id,
-    date: new Date()
-  }
+  checkMembers: []
+});
+
+const { form } = useNewInformationModal({
+  name: '',
+  avatarUrl: ''
 });
 
 const handleCloseModal = () => {
@@ -129,25 +129,21 @@ const handleCheckUsers = async (contacts: IUser[] | IUser): Promise<void> => {
 
 const handleNext = (contacts: IUser[]): void => {
   if (props.isAddOne) return;
-  state.information.name = createNiceName(contacts);
+  form.name = createNiceName(contacts);
   handleOpenGroupInfo(contacts);
 };
 
+watch([() => form.name, () => form.avatarUrl], () => {
+  handleCreateInformation({ avatarUrl: form.avatarUrl, name: form.name });
+});
+
 const handleCreateInformation = ({ avatarUrl, name }) => {
   avatarPreview.value = avatarUrl;
-  state.information.avatarUrl = avatarUrl;
-  state.information.name = name;
   groupName.value = name;
 };
 
 const handleCreateMobileGroup = () => {
+  console.log('handleCreateMobileGroup', form);
   handleCreateGroup();
-  state.information = {
-    name: groupName.value,
-    avatarUrl: null,
-    groupId: null,
-    userId: props.user?.id,
-    date: new Date()
-  };
 };
 </script>
