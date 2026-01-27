@@ -162,7 +162,7 @@ import {
 } from '@pksep/yui';
 import UserProfile from './UserProfile/UserProfile.vue';
 import type { ITopic, IMenuEmits, IMenuProps } from './interfaces/interfaces';
-import { useGroup } from '../composables/useGroup';
+import { getGroupList, useGroup } from '../composables/useGroup';
 import Triangle from './Triangle.vue';
 import { usePwaInstall } from '../composables/usePwaInstall';
 import {
@@ -207,7 +207,7 @@ const topicGroups = computed(() => {
     {
       type: 'GROUP',
       onClickPlusButton: handleNewGroupModal,
-      items: groups.value
+      items: getGroupList()
     },
     {
       title: 'DM',

@@ -461,7 +461,11 @@ const scrollToBottom = () => {
 };
 
 const handleSend = async (): Promise<void> => {
-  if (!inputText.value.trim() && !state.medias.length) return;
+  if (
+    (!inputText.value.trim() || inputText.value.trim() === '<p></p>') &&
+    !state.medias.length
+  )
+    return;
 
   if (route.value && route.value.type === RouteTypes.AI) {
     const text = inputText.value;

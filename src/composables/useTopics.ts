@@ -150,13 +150,16 @@ export const useTopics = () => {
   };
 
   const sortTopics = (topics: ITopic[]): ITopic[] => {
-    return topics.sort((a, b) => {
+    return [...topics].sort((a, b) => {
       const aPin = a.info?.isPin || false;
       const bPin = b.info?.isPin || false;
       if (aPin !== bPin) {
         return aPin ? -1 : 1;
       }
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      return (
+        new Date(b.lastMessage.createdAt).getTime() -
+        new Date(a.lastMessage.createdAt).getTime()
+      );
     });
   };
 
