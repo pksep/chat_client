@@ -200,7 +200,7 @@ svg.icon-yui-kit.contact-list__read-icon {
     max-width: 100%;
   }
   .contact-selector__list {
-    max-height: 100%;
+    max-height: calc(var(--default-height) - 120px);
   }
 }
 

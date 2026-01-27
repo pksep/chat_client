@@ -1,8 +1,6 @@
 .mobile-list-container {
   display: grid;
-  height: calc(var(--default-height) - var(--mobile-list-height, 53px));
-  overflow-y: auto;
-  overflow-x: hidden;
+  /*height: calc(var(--default-height) - var(--mobile-list-height, 53px));*/
 }
 
 button.button-yui-kit.mobile__list-button {
@@ -42,5 +40,11 @@ button.button-yui-kit.mobile__list-button {
 @media screen and (width <= 480px) {
   .mobile-list-container {
     --mobile-list-height: 53px;
+  }
+  .mobile__list-modal__contact-selector {
+    overflow-y: auto;
+  }
+  .contact-selector__item {
+    margin-inline-end: 5px;
   }
 }

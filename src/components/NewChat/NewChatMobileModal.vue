@@ -1,5 +1,6 @@
 <template>
   <MobileModal
+    :class="props.isAddOne ? 'modal__new-contact' : ''"
     :open="props.open"
     @unmount-close="handleCloseModal"
     @unmount-next="handleNext(state.checkMembers)"

@@ -37,6 +37,12 @@ h3.mobile__modal-header--title {
 }
 
 @media (width <= 480px) {
+  .modal-yui-kit__modal-content {
+    overflow: hidden;
+  }
+  .modal__new-contact h3.mobile__modal-header--title {
+    padding-bottom: 3px;
+  }
   .contact-selector__search {
     margin-bottom: 0;
   }
