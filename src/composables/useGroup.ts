@@ -167,8 +167,7 @@ export const useGroup = () => {
 
   const getGroupList = (): ITopic[] => {
     const { sortTopics } = useTopics();
-    setGroupList(sortTopics(groups.value));
-    return groups.value;
+    return sortTopics(groups.value || []);
   };
 
   const setGroupList = (value: ITopic[]): void => {

@@ -7,14 +7,18 @@ import {
   updateLocalTopicReadStatus
 } from '../composables/useTopics';
 import { isTopicMuted } from '../composables/useTopics';
+import { useUrlWatcher } from '../composables/navigation';
 
 const messagesStore = ref<Record<string, IMessage[]>>({});
 
+const route = useUrlWatcher();
+
 export const fetchMessagesForTopic = async (
-  topicId: string,
+  topicId: string = route.value.id,
   opts?: { lastMessageId?: string; limit?: number }
 ): Promise<IMessage[]> => {
   try {
+    if (!topicId) return;
     const sdk = getChatSDK();
     if (!sdk) return;
     const messages = await sdk.getMessages(topicId, {

@@ -95,9 +95,14 @@ export const useTopics = () => {
       topic => topic.id === topicId
     );
 
+    if (!topic.unreadMessageCount) {
+      topic.unreadMessageCount = 0;
+    }
     if (topic) {
       topic.unreadMessageCount += delta;
     }
+
+    topic.unreadMessageCount = Math.max(0, topic.unreadMessageCount);
 
     topics.value = [...topics.value];
   };
@@ -148,13 +153,17 @@ export const useTopics = () => {
   };
 
   const sortTopics = (topics: ITopic[]): ITopic[] => {
-    return topics.sort((a, b) => {
+    return [...topics].sort((a, b) => {
       const aPin = a.info?.isPin || false;
       const bPin = b.info?.isPin || false;
       if (aPin !== bPin) {
         return aPin ? -1 : 1;
       }
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+
+      const aTime = new Date(a.lastMessage?.createdAt ?? a.createdAt).getTime();
+      const bTime = new Date(b.lastMessage?.createdAt ?? b.createdAt).getTime();
+
+      return bTime - aTime;
     });
   };
 
