@@ -28,7 +28,7 @@
         </h3>
 
         <button
-          v-if="props.startButtonText"
+          v-show="props.startButtonText"
           class="mobile__modal-header--button"
           @click="handleStartStep"
           :disabled="props.isDisabledStartButton"
