@@ -5,7 +5,6 @@ import type { ITopic, IUser } from '../components/interfaces/interfaces';
 import { useTopics } from './useTopics';
 
 const groups = ref<ITopic[]>([]);
-const groupMembers = ref<IUser[]>([]);
 const currentGroup = ref<ITopic | null>(null);
 
 export const useGroup = () => {
@@ -13,14 +12,9 @@ export const useGroup = () => {
     groups.value = [...newGroups];
   };
 
-  const setGroupMembers = (newMembers: IUser[]) => {
-    groupMembers.value = [...newMembers];
-  };
-
   const addGroupMembersToList = (groupId: string, newMembers: IUser[]) => {
     const membersToAdd = Array.isArray(newMembers) ? newMembers : [];
-    const updatedMembers = [...groupMembers.value, ...membersToAdd];
-    groupMembers.value = updatedMembers;
+    const updatedMembers = [...currentGroup.value.members, ...membersToAdd];
     currentGroup.value.members = updatedMembers;
 
     const groupIndex = groups.value.findIndex(g => g.id === groupId);
@@ -39,10 +33,10 @@ export const useGroup = () => {
   };
 
   const removeGroupMember = (groupId: string, userId: string) => {
-    const updatedMembers = groupMembers.value.filter(
+    const updatedMembers = currentGroup.value.members.filter(
       member => member.id !== userId
     );
-    groupMembers.value = updatedMembers;
+    currentGroup.value.members = updatedMembers;
 
     const groupIndex = groups.value.findIndex(g => g.id === groupId);
     if (groupIndex !== -1) {
@@ -79,26 +73,6 @@ export const useGroup = () => {
     } catch (err) {
       console.error('Failed to fetch topics', err);
       return groups.value || [];
-    }
-  };
-
-  const fetchGroupMembers = async (groupId: string): Promise<IUser[]> => {
-    const sdk = getChatSDK();
-    if (!sdk) {
-      console.error('Chat SDK is not initialized');
-      return [];
-    }
-
-    try {
-      const { members } = await sdk.getGroup(groupId);
-
-      setGroupMembers(members.data);
-      currentGroup.value.members = members.data;
-
-      return groupMembers.value;
-    } catch (err) {
-      console.error('Failed to fetch group members:', err);
-      return [];
     }
   };
 
@@ -156,7 +130,6 @@ export const useGroup = () => {
     try {
       await sdk.removeUserFromGroup(groupId, userId);
       removeGroupMember(groupId, userId);
-      await fetchGroupMembers(groupId);
 
       return true;
     } catch (err) {
@@ -167,8 +140,7 @@ export const useGroup = () => {
 
   const getGroupList = (): ITopic[] => {
     const { sortTopics } = useTopics();
-    setGroupList(sortTopics(groups.value));
-    return groups.value;
+    return sortTopics(groups.value || []);
   };
 
   const setGroupList = (value: ITopic[]): void => {
@@ -327,19 +299,15 @@ export const useGroup = () => {
     const currentUserId = getCurrentUserId();
     if (!currentUserId) return false;
     const admins =
-      currentGroup.value?.group?.admins ??
-      (currentGroup.value as ITopic & { admins?: string[] })?.admins ??
-      [];
+      currentGroup.value?.group?.admins ?? currentGroup.value?.admins ?? [];
     return Array.isArray(admins) && admins.includes(currentUserId);
   });
 
   return {
     groups,
-    groupMembers,
     currentGroup,
     isCurrentUserGroupAdmin,
     fetchAllGroups,
-    fetchGroupMembers,
     createGroup,
     addGroupMembers,
     removeUserFromGroup,
@@ -354,14 +322,12 @@ export const useGroup = () => {
     updateLocalLastMessageGroup,
     updateLocalGroupDetails,
     updateLocalGroupInfo,
-    addGroupList,
-    setGroupMembers
+    addGroupList
   };
 };
 
 const {
   fetchAllGroups,
-  fetchGroupMembers,
   createGroup,
   addGroupMembers,
   removeUserFromGroup,
@@ -377,15 +343,13 @@ const {
   updateLocalGroupDetails,
   updateLocalGroupInfo,
   addGroupList,
-  setGroupMembers,
   isCurrentUserGroupAdmin
 } = useGroup();
 
 export {
   groups,
-  groupMembers,
+  currentGroup,
   fetchAllGroups,
-  fetchGroupMembers,
   createGroup,
   addGroupMembers,
   removeUserFromGroup,
@@ -401,6 +365,5 @@ export {
   updateLocalGroupDetails,
   updateLocalGroupInfo,
   addGroupList,
-  setGroupMembers,
   isCurrentUserGroupAdmin
 };

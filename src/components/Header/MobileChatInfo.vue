@@ -13,9 +13,9 @@
     >
       <Avatar
         is-icon
-        :url="`${config.CHAT_PATH_TO_FILE_CDN}/${form?.avatarUrl}`"
-        :initials="form?.name"
-        :caption="`image with a channel ${form?.name}`"
+        :url="`${config.CHAT_PATH_TO_FILE_CDN}/${information?.avatarUrl}`"
+        :initials="information?.name"
+        :caption="`image with a channel ${information?.name}`"
         class="modal-info-mobile__avatar"
         :data-testid="`${props.dataTestid}-Header-ModalAvatar`"
       />
@@ -31,7 +31,7 @@
     <NewChatInformationForm
       :is-button-for-save="props.isButtonForSave"
       :model-value="form"
-      :disabled-form="props.isMenuInfo || !isEditable"
+      :disabled-form="props.isMenuInfo"
       @unmount-save="handleImageSave"
       :data-testid="`${props.dataTestid}-Header-InformationForm`"
     >
@@ -66,17 +66,22 @@
 </template>
 
 <script lang="ts" setup>
-import { useTemplateRef, computed, onMounted, watch } from 'vue';
+import { useTemplateRef, computed } from 'vue';
 import { Avatar } from '@pksep/yui';
 import NewChatInformationForm from '../NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from '../MenuInfoButtons.vue';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';
 import { IMenuInfoInformation } from '../../composables/useMenuInfo';
-import { useInformationMenu } from '../../composables/useInformationMenu';
 import type { IUser } from '../interfaces/interfaces';
 import { getConfig } from '../../services/useConfig';
 import { uploadFile } from '../../services/useChat';
-import { currentGroup, setGroupInfo, useGroup } from '../../composables/useGroup';
+import { useInformationMenu } from '../../composables/useInformationMenu';
+import {
+  currentGroup,
+  setGroupInfo,
+  useGroup
+} from '../../composables/useGroup';
+import { useNewInformationModal } from '../../composables/useNewInformationModal';
 
 interface IMobileChatInfoProps {
   members: IUser[];
@@ -88,19 +93,14 @@ interface IMobileChatInfoProps {
 
 const props = withDefaults(defineProps<IMobileChatInfoProps>(), {
   excludedContactIds: () => new Set<string | number>(),
-  dataTestid: 'MobileChatInfo',
-  isButtonForSave: true
+  dataTestid: 'MobileChatInfo'
 });
 
 const excludedContactIds = computed(() => {
   const ids = new Set<string | number>();
-  if (props.members) {
-    props.members.forEach(contact => {
-      if (contact && contact.id) {
-        ids.add(contact.id);
-      }
-    });
-  }
+  props.members?.forEach(contact => {
+    if (contact?.id) ids.add(contact.id);
+  });
   return ids;
 });
 
@@ -108,23 +108,13 @@ const { isCurrentUserGroupAdmin } = useGroup();
 const isEditable = computed(() => isCurrentUserGroupAdmin.value);
 
 const information = defineModel<IMenuInfoInformation>();
-
 const config = getConfig();
-
 const avatarInputRef = useTemplateRef('avatarInputRef');
 
-const {
-  state: stateInfo,
-  init,
-  leaveGroupInfo,
-  onSaveAvatar,
-  onOpenEditAvatar,
-  openEditProfileIcon
-} = useInformationMenu(information);
+const { form } = useNewInformationModal(information.value);
 
-const { form, handleUpdateInformation } = useNewInformationModal(
-  information.value
-);
+const { leaveGroupInfo, onOpenEditAvatar, openEditProfileIcon } =
+  useInformationMenu(information);
 
 const handleUnmountLeave = () => {
   leaveGroupInfo();
@@ -136,36 +126,28 @@ const handleEditProfileIcon = () => {
 };
 
 const handleImagePublish = async (event: Event) => {
-  if (!isEditable.value) return;
   const localFile = onOpenEditAvatar(event);
   if (!localFile) return;
 
   const file = await uploadFile(localFile);
 
   if (!file) return;
-  stateInfo.fileImage = file;
-  if (stateInfo.fileImage) {
-    await onSaveAvatar(stateInfo.fileImage);
-  }
+
+  await setGroupInfo(currentGroup.value.group.id, {
+    faceURL: file.path,
+    groupName: currentGroup.value.group.title
+  });
+
+  information.value.avatarUrl = file.path;
 };
 
 // Handle saving information form
 const handleImageSave = (data: { name: string; avatarUrl?: string }) => {
-  if (!isEditable.value) return;
   information.value = {
     ...information.value,
     ...data
   };
 };
 
-watch(
-  () => information.value,
-  () => {
-    handleUpdateInformation(information.value);
-  }
-);
-
-onMounted(async () => {
-  await init();
-});
+const handleContactClick = (): void => {};
 </script>

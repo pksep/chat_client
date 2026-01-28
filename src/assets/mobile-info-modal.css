@@ -47,14 +47,10 @@ p.modal-info-mobile__end--paragraph {
     display: grid;
   }
   dialog.modal-yui-kit.modal-yui-kit_bottom.chat__header-modal-info--active {
-    border-radius: 0;
     & .mobile__modal-header {
       align-items: center;
       padding-top: 10.5px;
       padding-bottom: 10.5px;
-    }
-    h3.mobile__modal-header--title {
-      padding-bottom: 4px;
     }
     & .mobile__modal-content {
       padding-inline: 0;
@@ -62,9 +58,6 @@ p.modal-info-mobile__end--paragraph {
     & .modal-yui-kit__modal-content {
       padding-top: 5px;
       padding-inline: 10px;
-    }
-    & button.mobile__modal-header--button {
-      padding-block: 6.5px;
     }
   }
 }

@@ -42,7 +42,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, useTemplateRef, onMounted } from 'vue';
+import { useTemplateRef, computed } from 'vue';
 import { useInformationMenu } from '../composables/useInformationMenu';
 import { ModalCroppedAvatar, Avatar } from '@pksep/yui';
 import NewChatInformationForm from './NewChat/NewChatInformationForm.vue';
@@ -71,7 +71,6 @@ const isEditable = computed(() => isCurrentUserGroupAdmin.value);
 
 const {
   state,
-  init,
   openEditProfileIcon: composableOpenEditProfileIcon,
   onOpenEditAvatar,
   closeEditProfileIcon,
@@ -103,8 +102,4 @@ const openEditProfileIcon = () => {
   if (!isEditable.value) return;
   composableOpenEditProfileIcon(avatarInputRef.value);
 };
-
-onMounted(async () => {
-  await init();
-});
 </script>

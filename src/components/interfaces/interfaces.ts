@@ -34,6 +34,7 @@ export interface IUser extends User {}
 
 export interface IGroup extends Group {
   members?: IUser[];
+  admins?: string[];
   membersLength?: number;
 }
 
@@ -42,7 +43,8 @@ export interface ITopic extends Topic {
   isPin?: boolean;
   lastMessage?: Message;
   members?: IUser[];
-  group?: Group;
+  admins?: string[];
+  group?: IGroup;
   user?: IUser;
   name?: string;
   avatarUrl?: string;
