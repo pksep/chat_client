@@ -63,16 +63,17 @@
 </template>
 
 <script lang="ts" setup>
-import { useTemplateRef, computed, onMounted, watch } from 'vue';
+import { useTemplateRef, computed } from 'vue';
 import { Avatar } from '@pksep/yui';
 import NewChatInformationForm from '../NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from '../MenuInfoButtons.vue';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';
 import { IMenuInfoInformation } from '../../composables/useMenuInfo';
-import { useInformationMenu } from '../../composables/useInformationMenu';
 import type { IUser } from '../interfaces/interfaces';
 import { getConfig } from '../../services/useConfig';
-import { useNewInformationModal } from '../../composables/useNewInformationModal';
+import { useInformationMenu } from '../../composables/useInformationMenu';
+import { uploadFile } from '../../services/useChat';
+import { currentGroup, setGroupInfo } from '../../composables/useGroup';
 
 interface IMobileChatInfoProps {
   members: IUser[];
@@ -90,30 +91,18 @@ const props = withDefaults(defineProps<IMobileChatInfoProps>(), {
 
 const excludedContactIds = computed(() => {
   const ids = new Set<string | number>();
-  if (props.members) {
-    props.members.forEach(contact => {
-      if (contact && contact.id) {
-        ids.add(contact.id);
-      }
-    });
-  }
+  props.members?.forEach(contact => {
+    if (contact?.id) ids.add(contact.id);
+  });
   return ids;
 });
 
 const information = defineModel<IMenuInfoInformation>();
-
 const config = getConfig();
-
 const avatarInputRef = useTemplateRef('avatarInputRef');
 
-const {
-  state: stateInfo,
-  init,
-  leaveGroupInfo,
-  onSaveAvatar,
-  onOpenEditAvatar,
-  openEditProfileIcon
-} = useInformationMenu(information);
+const { leaveGroupInfo, onOpenEditAvatar, openEditProfileIcon } =
+  useInformationMenu(information);
 
 const { form, handleUpdateInformation } = useNewInformationModal(
   information.value
@@ -128,24 +117,28 @@ const handleEditProfileIcon = () => {
 };
 
 const handleImagePublish = async (event: Event) => {
-  const file = onOpenEditAvatar(event);
+  const localFile = onOpenEditAvatar(event);
+  if (!localFile) return;
+
+  const file = await uploadFile(localFile);
+
   if (!file) return;
-  stateInfo.fileImage = file;
-  if (stateInfo.fileImage) {
-    await onSaveAvatar(stateInfo.fileImage);
-  }
+
+  await setGroupInfo(currentGroup.value.group.id, {
+    faceURL: file.path,
+    groupName: currentGroup.value.group.title
+  });
+
+  information.value.avatarUrl = file.path;
 };
 
-const handleContactClick = () => {};
+// Handle saving information form
+const handleImageSave = (data: { name: string; avatarUrl?: string }) => {
+  information.value = {
+    ...information.value,
+    ...data
+  };
+};
 
-watch(
-  () => information.value,
-  () => {
-    handleUpdateInformation(information.value);
-  }
-);
-
-onMounted(async () => {
-  await init();
-});
+const handleContactClick = (): void => {};
 </script>

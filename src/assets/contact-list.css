@@ -63,6 +63,7 @@
   white-space: nowrap;
   max-width: 22ch;
   font-size: 14px;
+  display: block;
 }
 
 .contact-list__description p {

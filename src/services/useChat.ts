@@ -4,7 +4,7 @@ import { WebSocketEventType } from './useChatSDK/websocketEvents';
 import { User } from '@pksep/zod-shared-chat';
 import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
-import { setAuthUser, getAuthUser } from '../composables/useAuth';
+import { setAuthUser, getAuthUser, authedUser } from '../composables/useAuth';
 import { useTopics, changeUnreadMessageCount } from '../composables/useTopics';
 import {
   updateLocalGroupDetails,
@@ -16,6 +16,7 @@ import {
   changeLocalReadStatus,
   playNotificationSound
 } from './useMessages';
+import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
 
 let chatSDK: ChatSDK | null = null;
 
@@ -176,10 +177,33 @@ export const subscribeToMessageChanges = (
   };
 };
 
+export const generateNewMessage = (params: {
+  topicId: string;
+  text?: string;
+  medias?: IMedia[];
+}): IMessage => {
+  return {
+    createdAt: new Date(),
+    topicId: params.topicId,
+    deletedAt: null,
+    isEdit: false,
+    isPin: false,
+    id: null,
+    isSystem: false,
+    replyMessageId: null,
+    senderUserId: authedUser.value.id,
+    status: MessageStatus.Wait,
+    text: params.text,
+    updatedAt: null,
+    senderUser: authedUser.value,
+    media: params.medias
+  };
+};
+
 export const sendMessageChat = async (params: {
   topicId: string;
   text?: string;
-  medias?: any[];
+  medias?: IMedia[];
 }): Promise<void> => {
   const sdk = getChatSDK();
 

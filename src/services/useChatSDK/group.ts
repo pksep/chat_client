@@ -26,10 +26,6 @@ export interface ChatGroupInterface {
     }>
   ): Promise<Group>;
   leaveGroup(groupId: string): Promise<void>;
-  getGroupMembers(
-    groupId: string,
-    params?: SearchParams
-  ): Promise<PaginatedResponse<User>>;
   addGroupMembers(groupId: string, userIds: string[]): Promise<User[]>;
   removeGroupMember(groupId: string, userId: string): Promise<number>;
   promoteToAdmin(
@@ -149,36 +145,6 @@ export class ChatGroup implements ChatGroupInterface {
       });
     } catch (error) {
       throw new Error(`Failed to leave group: ${(error as Error).message}`);
-    }
-  }
-
-  async getGroupMembers(
-    groupId: string,
-    params?: SearchParams
-  ): Promise<PaginatedResponse<User>> {
-    const queryParams = new URLSearchParams();
-
-    if (params?.search) queryParams.append('search', params.search);
-    if (params?.page !== undefined && params?.page !== null)
-      queryParams.append('page', params.page.toString());
-    if (params?.limit !== undefined && params?.limit !== null)
-      queryParams.append('limit', params.limit.toString());
-
-    const queryString = queryParams.toString();
-    const endpoint = `/groups/${groupId}/members${
-      queryString ? `?${queryString}` : ''
-    }`;
-
-    try {
-      const response = (await this.reqi.get<PaginatedResponse<User>>(endpoint, {
-        parsed: false
-      })) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(
-        `Failed to fetch group members: ${(error as Error).message}`
-      );
     }
   }
 

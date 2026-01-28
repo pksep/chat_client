@@ -2,7 +2,9 @@ FROM oven/bun:1-alpine AS builder
 
 WORKDIR /app
 
+ARG ENV_FILE=.env
 COPY . .
+COPY ${ENV_FILE} ./.env
 
 RUN bun install --ignore-scripts
 

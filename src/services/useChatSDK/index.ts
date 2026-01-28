@@ -4,9 +4,7 @@ import {
   Group,
   Message,
   TopicSetting,
-  MediaType,
-  Media,
-  MediaTypeType
+  Media
 } from '@pksep/zod-shared-chat';
 
 import { S3Service } from './s3Service';
@@ -33,6 +31,9 @@ import { ChatMedia, ChatMediaInterface } from './media';
 import { ChatWS, ChatWSInterface } from './ws';
 import { ChatUtils, ChatUtilsInterface } from './utils';
 import { ITopic } from '../../components/interfaces/interfaces';
+import { fetchAllTopics } from '../../composables/useTopics';
+import { fetchAllGroups } from '../../composables/useGroup';
+import { fetchMessagesForTopic } from '../useMessages';
 
 export interface ChatSDKOptions {
   apiUrl: string;
@@ -114,19 +115,37 @@ export class ChatSDK {
         this.ws.setSocket(this.socket);
 
         this.socket.on('connect', () => {
+          console.log('Socket.IO: Connected to chat server');
           resolve();
+
+          fetchAllTopics();
+          fetchAllGroups();
+          fetchMessagesForTopic();
         });
 
         this.socket.on('connect_error', error => {
-          console.error('Socket.IO connection error:', error);
+          console.error('Socket.IO: Connection error:', error);
           reject(error);
         });
 
-        this.socket.on('disconnect', () => {});
+        this.socket.on('disconnect', reason => {
+          console.log('Socket.IO: Disconnected from chat server:', reason);
+        });
 
-        this.socket.on('reconnect_attempt', () => {});
+        this.socket.on('reconnect_attempt', attemptNumber => {
+          console.log(
+            `Socket.IO: Attempting to reconnect (${attemptNumber})...`
+          );
+        });
 
-        this.socket.on('reconnect', () => {});
+        this.socket.on('reconnect', attemptNumber => {
+          console.log(
+            `Reconnected to chat server after ${attemptNumber} attempts`
+          );
+          fetchAllTopics();
+          fetchAllGroups();
+          fetchMessagesForTopic();
+        });
 
         this.socket.on('reconnect_error', error => {
           console.error('Reconnection error:', error);
@@ -332,26 +351,26 @@ export class ChatSDK {
   }
 
   async createTopic(topicData: { peerId: string }): Promise<Topic> {
-    return this.topic.createTopic(topicData);
+    return await this.topic.createTopic(topicData);
   }
 
   async deleteTopic(topicId: string): Promise<void> {
-    return this.topic.deleteTopic(topicId);
+    return await this.topic.deleteTopic(topicId);
   }
 
   async togglePinTopic(topicId: string): Promise<TopicSetting> {
-    return this.topic.togglePinTopic(topicId);
+    return await this.topic.togglePinTopic(topicId);
   }
 
   async toggleMuteTopic(topicId: string): Promise<TopicSetting> {
-    return this.topic.toggleMuteTopic(topicId);
+    return await this.topic.toggleMuteTopic(topicId);
   }
 
   async getTopicSettings(
     topicId: string,
     userId: string
   ): Promise<TopicSetting> {
-    return this.topic.getTopicSettings(topicId, userId);
+    return await this.topic.getTopicSettings(topicId, userId);
   }
 
   async updateTopicSettings(
@@ -359,23 +378,23 @@ export class ChatSDK {
     userId: string,
     settings: Partial<TopicSetting>
   ): Promise<TopicSetting> {
-    return this.topic.updateTopicSettings(topicId, userId, settings);
+    return await this.topic.updateTopicSettings(topicId, userId, settings);
   }
 
   async leaveTopic(topicId: string): Promise<void> {
-    return this.topic.leaveTopic(topicId);
+    return await this.topic.leaveTopic(topicId);
   }
 
   async getTopicById(topicId: string): Promise<Topic> {
-    return this.topic.getTopicById(topicId);
+    return await this.topic.getTopicById(topicId);
   }
 
   async getTopicParticipants(topicId: string): Promise<User[]> {
-    return this.topic.getTopicParticipants(topicId);
+    return await this.topic.getTopicParticipants(topicId);
   }
 
   async createDMWithUser(peerId: string): Promise<Topic> {
-    return this.topic.createDMWithUser(peerId);
+    return await this.topic.createDMWithUser(peerId);
   }
 
   async updateTopic(
@@ -386,7 +405,7 @@ export class ChatSDK {
       avatarUrl?: string;
     }>
   ): Promise<Topic> {
-    return this.topic.updateTopic(topicId, topicData);
+    return await this.topic.updateTopic(topicId, topicData);
   }
 
   async joinTopic(topicId: string): Promise<void> {
@@ -400,11 +419,11 @@ export class ChatSDK {
     memberIds: string[];
     admins: string[];
   }): Promise<Group> {
-    return this.group.createGroup(groupData);
+    return await this.group.createGroup(groupData);
   }
 
   async deleteGroup(groupId: string): Promise<void> {
-    return this.group.deleteGroup(groupId);
+    return await this.group.deleteGroup(groupId);
   }
 
   async getGroup(
@@ -424,22 +443,15 @@ export class ChatSDK {
       admins: string[];
     }>
   ): Promise<Group> {
-    return this.group.updateGroup(groupId, groupData);
+    return await this.group.updateGroup(groupId, groupData);
   }
 
   async leaveGroup(groupId: string): Promise<void> {
-    return this.group.leaveGroup(groupId);
-  }
-
-  async getGroupMembers(
-    groupId: string,
-    params?: SearchParams
-  ): Promise<PaginatedResponse<User>> {
-    return this.group.getGroupMembers(groupId, params);
+    return await this.group.leaveGroup(groupId);
   }
 
   async addGroupMembers(groupId: string, userIds: string[]): Promise<User[]> {
-    return this.group.addGroupMembers(groupId, userIds);
+    return await this.group.addGroupMembers(groupId, userIds);
   }
 
   async removeGroupMember(
@@ -458,21 +470,21 @@ export class ChatSDK {
     groupId: string,
     userId: string
   ): Promise<{ success: boolean }> {
-    return this.group.promoteToAdmin(groupId, userId);
+    return await this.group.promoteToAdmin(groupId, userId);
   }
 
   async demoteFromAdmin(
     groupId: string,
     userId: string
   ): Promise<{ success: boolean }> {
-    return this.group.demoteFromAdmin(groupId, userId);
+    return await this.group.demoteFromAdmin(groupId, userId);
   }
 
   async addUsersToGroup(
     groupId: string,
     userIds: string[]
   ): Promise<{ success: boolean; addedMembers: User[] }> {
-    return this.group.addUsersToGroup(groupId, userIds);
+    return await this.group.addUsersToGroup(groupId, userIds);
   }
 
   async removeUserFromGroup(
@@ -497,14 +509,14 @@ export class ChatSDK {
       admins: string[];
     }>
   ): Promise<Group> {
-    return this.group.editGroup(groupId, groupData);
+    return await this.group.editGroup(groupId, groupData);
   }
 
   async getMessages(
     topicId: string,
     opts?: { limit?: number; lastMessageId?: string }
   ): Promise<Message[]> {
-    return this.message.getMessages(topicId, opts);
+    return await this.message.getMessages(topicId, opts);
   }
 
   async editMessage(
@@ -512,11 +524,11 @@ export class ChatSDK {
     messageId: string,
     content: string
   ): Promise<Message> {
-    return this.message.editMessage(topicId, messageId, content);
+    return await this.message.editMessage(topicId, messageId, content);
   }
 
   async deleteMessage(topicId: string, messageId: string): Promise<void> {
-    return this.message.deleteMessage(topicId, messageId);
+    return await this.message.deleteMessage(topicId, messageId);
   }
 
   async toggleMessageReaction(
@@ -524,14 +536,14 @@ export class ChatSDK {
     messageId: string,
     emoji: string
   ): Promise<{ success: boolean }> {
-    return this.message.toggleMessageReaction(topicId, messageId, emoji);
+    return await this.message.toggleMessageReaction(topicId, messageId, emoji);
   }
 
   async toggleMessagePin(
     topicId: string,
     messageId: string
   ): Promise<{ success: boolean }> {
-    return this.message.toggleMessagePin(topicId, messageId);
+    return await this.message.toggleMessagePin(topicId, messageId);
   }
 
   async markMessagesAsRead(
@@ -556,39 +568,27 @@ export class ChatSDK {
     messageId: string,
     status: MessageStatus
   ): Promise<{ success: boolean }> {
-    return this.message.updateMessageStatus(messageId, status);
-  }
-
-  private getMediaType(mimeType: string): MediaTypeType | null {
-    if (mimeType.startsWith('image/')) {
-      return MediaType.Image;
-    } else if (mimeType.startsWith('video/')) {
-      return MediaType.Video;
-    } else if (mimeType.startsWith('audio/')) {
-      return null;
-    } else {
-      return MediaType.File;
-    }
+    return await this.message.updateMessageStatus(messageId, status);
   }
 
   async searchMessages(
     query: string,
     params?: SearchParams
   ): Promise<PaginatedResponse<Message & { topic: Topic }>> {
-    return this.utils.searchMessages(query, params);
+    return await this.utils.searchMessages(query, params);
   }
 
   async searchTopics(
     query: string,
     params?: SearchParams
   ): Promise<PaginatedResponse<Topic>> {
-    return this.utils.searchTopics(query, params);
+    return await this.utils.searchTopics(query, params);
   }
 
   async getUnreadCounts(): Promise<{
     totalUnread: number;
     topicsUnread: { [topicId: string]: number };
   }> {
-    return this.utils.getUnreadCounts();
+    return await this.utils.getUnreadCounts();
   }
 }
