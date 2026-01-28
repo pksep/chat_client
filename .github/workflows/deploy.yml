@@ -25,18 +25,15 @@ jobs:
                     cd ~/erp_k8s/erp_k8s && \
                     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml && \
                     
-                    # 1. Выполняем деплой
                     if env "APP=sep-erp-client" "BRANCH=${{ github.ref_name }}" "MODE=prod" bun utils.ts switch-branch; then
                       STATUS="✅ Success"
                     else
                       STATUS="❌ Failed"
                     fi
 
-                    # 2. Фиксируем время СРАЗУ после выполнения (время окончания)
                     END_TIME=$(date +'%H:%M:%S')
 
-                    # 3. Отправляем данные боту
-                    curl -X POST http://localhost:30012/webhook \
+                    curl -X POST http://localhost:30012/notify \
                       -H "Content-Type: application/json" \
                       -d "{
                         \"service\": \"sep-erp-client\",
