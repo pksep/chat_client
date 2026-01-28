@@ -16,7 +16,6 @@ export function usePwaInstall() {
   const shouldShowButton = computed(
     () => canInstall.value || (isInstalled.value && !isStandalone.value)
   );
-  console.log('shouldShowButton', isStandalone.value);
 
   const buttonLabel = computed(() => {
     if (canInstall.value) {
@@ -53,8 +52,8 @@ export function usePwaInstall() {
   };
 
   const handleOpenApp = () => {
-    const startUrl = window.location.origin;
-    window.open(startUrl, '_blank');
+    const protocolUrl = 'web+sepchat://open';
+    window.location.href = protocolUrl;
   };
 
   const handleButtonAction = async () => {

@@ -30,6 +30,8 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         description: 'Chatting application',
         theme_color: '#ffffff',
         background_color: '#ffffff',
+        start_url: '/',
+        scope: '/',
         icons: [
           {
             src: 'images/pwa-64x64.png',
@@ -53,7 +55,13 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
             purpose: 'maskable'
           }
         ],
-        screenshots: []
+        screenshots: [],
+        protocol_handlers: [
+          {
+            protocol: 'web+sepchat',
+            url: '/?source=%s'
+          }
+        ]
       },
       devOptions: {
         enabled: true,
