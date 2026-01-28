@@ -41,7 +41,7 @@
             class="menu-info__user-count"
             :data-testid="`${props.dataTestid}-MenuInfo-UserCount`"
           >
-            {{ groupMembers.length }}
+            {{ currentGroup.members.length }}
           </div>
         </span>
       </template>
@@ -49,7 +49,7 @@
       <template #tab1>
         <ContactListInModal
           :show-add-button="!checkGroupId"
-          :contacts="groupMembers"
+          :contacts="currentGroup.members"
           :group-id="currentGroup.group.id"
           :filtered-contacts="filteredMembers"
           :excluded-contact-ids="excludedContactIds"
@@ -100,7 +100,7 @@ import type { IMenuRightProps, IUser, ITopic } from './interfaces/interfaces';
 import { useMenuInfo } from '../composables/useMenuInfo';
 import NewContactModal from './NewChat/NewContactModal.vue';
 import { useUrlWatcher } from '../composables/navigation';
-import { useGroup } from '../composables/useGroup';
+import { currentGroup, useGroup } from '../composables/useGroup';
 
 const props = withDefaults(defineProps<IMenuRightProps>(), {
   open: false,
@@ -117,7 +117,7 @@ const {
   filteredMembers
 } = useMenuInfo();
 
-const { currentGroup, groupMembers, addGroupMembers } = useGroup();
+const { addGroupMembers } = useGroup();
 
 const topic = useUrlWatcher();
 
@@ -129,8 +129,8 @@ const menuInfoClasses = computed(() => [
 
 const excludedContactIds = computed(() => {
   const ids = new Set<string | number>();
-  if (groupMembers.value) {
-    groupMembers.value.forEach(contact => {
+  if (currentGroup.value?.members) {
+    currentGroup.value?.members.forEach(contact => {
       if (contact && contact.id) {
         ids.add(contact.id);
       }

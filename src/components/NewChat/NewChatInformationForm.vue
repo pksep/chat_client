@@ -17,6 +17,7 @@
     </div>
     <slot name="button">
       <Button
+        v-if="props.isButtonForSave"
         class="menu__info-save-button"
         :type="ButtonTypeEnum.primary"
         :size="SizesEnum.little"
@@ -32,19 +33,26 @@
 <script setup lang="ts">
 import { IMenuInfoInformation } from '../../composables/useMenuInfo';
 import { Button, ButtonTypeEnum, Input, SizesEnum, Textarea } from '@pksep/yui';
-import { watch, computed, reactive } from 'vue';
+import { computed } from 'vue';
+import { useNewInformationModal } from '../../composables/useNewInformationModal';
 
-const props = defineProps<{ disabledForm?: boolean }>();
+const props = withDefaults(
+  defineProps<{
+    disabledForm?: boolean;
+    isButtonForSave?: boolean;
+  }>(),
+  {
+    isButtonForSave: true
+  }
+);
+
 const model = defineModel<IMenuInfoInformation>();
 
 const emits = defineEmits<{
   (e: 'unmount-save', value: { name: string; avatarUrl?: string }): void;
 }>();
 
-const form = reactive({
-  name: model.value?.name || '',
-  avatarUrl: model.value?.avatarUrl || ''
-});
+const { form } = useNewInformationModal(model?.value || {});
 
 const isFormValid = computed(() => {
   if (props.disabledForm) return true;
@@ -56,13 +64,6 @@ const isFormValid = computed(() => {
     form.name.trim() !== '' &&
     form.name !== (model.value?.name ?? '')
   );
-});
-
-watch([() => model.value?.name, () => model.value?.avatarUrl], () => {
-  if (model.value) {
-    form.name = model.value.name;
-    form.avatarUrl = model.value.avatarUrl;
-  }
 });
 
 const onSave = () => {

@@ -3,12 +3,28 @@
   align-items: center;
   padding-top: 5px;
   padding-bottom: 5px;
+  height: 39px;
+}
+
+.mobile__modal-header > *:first-child {
+  width: 20%;
+  text-align: left;
+}
+
+.mobile__modal-header > h3 {
+  width: 60%;
+  max-width: 60%;
+  text-align: center;
+}
+
+.mobile__modal-header > *:last-child {
+  width: 20%;
+  text-align: right;
 }
 
 button.mobile__modal-header--button {
   font-size: 16px;
   color: var(--text-blue);
-  padding-block: 6.5px;
   text-align: center;
   line-height: 100%;
   letter-spacing: 0;
@@ -21,7 +37,6 @@ button.mobile__modal-header--button {
 h3.mobile__modal-header--title {
   flex: 1;
   margin: 0;
-  padding-bottom: 3.5px;
   line-height: 100%;
   text-align: center;
   letter-spacing: 0;
@@ -37,8 +52,20 @@ h3.mobile__modal-header--title {
 }
 
 @media (width <= 480px) {
+  .modal-yui-kit__modal-content {
+    overflow: hidden;
+    padding-right: 5px;
+  }
+  .mobile__modal-divider__wrapper,
+  .mobile__modal-header,
+  .contact-selector__search {
+    padding-inline-end: 5px;
+  }
   .contact-selector__search {
     margin-bottom: 0;
+  }
+  .modal__new-group button.menu__info-save-button {
+    display: none;
   }
 }
 

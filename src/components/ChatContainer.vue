@@ -1,11 +1,16 @@
 <template>
-  <Loader
-    v-if="state.isLoading"
-    :dataTestid="`${props.dataTestid}-ChatContainer-Loading`"
-  />
+  <template v-if="state.isLoading">
+    <Modal
+      :open="state.isLoading"
+      position="center"
+      width="150px"
+      height="160px"
+    >
+      <Loader :dataTestid="`${props.dataTestid}-ChatContainer-Loading`" />
+    </Modal>
+  </template>
   <main
     id="chat-container-image"
-    v-else
     :class="chatContainerClasses"
     :data-testid="`${props.dataTestid}-ChatContainer-Container`"
   >
@@ -104,6 +109,7 @@ import {
 import { getChatSDK } from '../services/useChat';
 import { getUsersList } from '../composables/useUsers';
 import { RouteTypes } from '../composables/navigation/useUrlRouting';
+import { Modal } from '@pksep/yui';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')

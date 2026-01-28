@@ -36,7 +36,6 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted } from 'vue';
 import { useTemplateRef } from 'vue';
 import { useInformationMenu } from '../composables/useInformationMenu';
 import { ModalCroppedAvatar, Avatar } from '@pksep/yui';
@@ -63,7 +62,6 @@ const config = getConfig();
 
 const {
   state,
-  init,
   openEditProfileIcon: composableOpenEditProfileIcon,
   onOpenEditAvatar,
   closeEditProfileIcon,
@@ -86,8 +84,4 @@ const handleSaveFromForm = (value: { name: string; avatarUrl?: string }) => {
 
 const openEditProfileIcon = () =>
   composableOpenEditProfileIcon(avatarInputRef.value);
-
-onMounted(async () => {
-  await init();
-});
 </script>

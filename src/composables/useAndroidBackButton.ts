@@ -5,7 +5,9 @@ import {
   navigateToDialogsList,
   navigateToGroupsList,
   navigateToAssistant,
-  RouteTypes
+  RouteTypes,
+  navigateToGroup,
+  navigateToDialogs
 } from './navigation/useUrlRouting';
 
 interface UseAndroidBackButtonOptions {
@@ -51,7 +53,7 @@ export const getPlatformSpecificExitHandler = (): (() => void) => {
       };
     } else if (isIOS()) {
       return () => {
-        navigateToDefault();
+        navigateToDialogsList();
       };
     }
   }
@@ -79,17 +81,17 @@ const performContextAwareBackNavigation = (
   switch (route.type) {
     case RouteTypes.DIALOGS:
       if (route.id) {
-        navigateToDialogsList();
+        navigateToDialogs(route.id);
       } else {
-        navigateToDefault();
+        navigateToDialogsList();
       }
       break;
 
     case RouteTypes.GROUP:
       if (route.id) {
-        navigateToGroupsList();
+        navigateToGroup(route.id);
       } else {
-        navigateToDefault();
+        navigateToGroupsList();
       }
       break;
 
@@ -98,11 +100,11 @@ const performContextAwareBackNavigation = (
       break;
 
     case RouteTypes.ASSISTANT:
-      navigateToDefault();
+      navigateToDialogsList();
       break;
 
     default:
-      navigateToDefault();
+      navigateToDialogsList();
       break;
   }
 };

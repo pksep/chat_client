@@ -12,14 +12,25 @@
   display: grid;
   gap: 4px;
   padding: 9.5px 16px;
-  width: max-content;
+  width: 100%;
   background-color: var(--message-background-color, var(--white));
   border-radius: 12px;
   align-self: start;
 }
 
+.message__article-initals {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary-base);
+  margin-bottom: -2px;
+}
+
 .message__no-author {
   margin-left: 28px;
+}
+
+.message__no-author div.message-content__html > p {
+  text-align: right;
 }
 
 .message__article__media {
@@ -108,7 +119,11 @@ div.message-content__loading-circle:nth-child(3) {
 
 div.message-content__html > p {
   max-width: 100ch;
-  margin: 0;
+  margin-block: 0;
+}
+
+.message__no-author {
+  margin-left: 0;
 }
 
 div.message-content__media {
@@ -198,7 +213,7 @@ div.message-content__file {
 }
 
 .message:not(.message__no-author) > .message__other {
-  margin-left: 28px;
+  /*margin-left: 28px;*/
 }
 
 .message__other {
@@ -235,10 +250,8 @@ div.message-content__file {
 
 @media screen and (width <= 480px) {
   div.message-content__html > p {
-    max-width: 35ch;
-    margin: 0;
+    max-width: 30ch;
   }
-
   .chat__message-wrapper {
     width: 100%;
     padding-right: 15px;

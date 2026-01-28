@@ -4,10 +4,16 @@
     role="main"
     :data-testid="`${props.dataTestid}-MobileList-Container`"
   >
-    <Loader
-      v-if="state.isLoading"
-      :dataTestid="`${props.dataTestid}-MobileList-Loading`"
-    />
+    <template v-if="state.isLoading">
+      <Modal
+        :open="state.isLoading"
+        position="center"
+        width="150px"
+        height="160px"
+      >
+        <Loader :dataTestid="`${props.dataTestid}-ChatContainer-Loading`" />
+      </Modal>
+    </template>
     <section v-else-if="isAssistantRoute">
       <button
         class="menu__user-assistant"
@@ -71,7 +77,14 @@ import type {
   IMobileListEmits
 } from './interfaces/mobile-list';
 import type { IUser } from '../interfaces/interfaces';
-import { Button, ButtonTypeEnum, Icon, IconNameEnum, Loader } from '@pksep/yui';
+import {
+  Button,
+  ButtonTypeEnum,
+  Icon,
+  IconNameEnum,
+  Loader,
+  Modal
+} from '@pksep/yui';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
 import TopicList from './TopicList.vue';
 import { useGroup } from '../../composables/useGroup';

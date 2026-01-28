@@ -32,7 +32,7 @@
   margin: 0;
   max-width: 80ch;
   font-size: 16px;
-  height: 19px;
+  height: 18px;
   color: var(--text-black);
   font-weight: 600;
   hyphens: auto;
@@ -61,8 +61,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  width: 22ch;
+  max-width: 22ch;
   font-size: 14px;
+  display: block;
 }
 
 .contact-list__description p {
@@ -199,8 +200,12 @@ svg.icon-yui-kit.contact-list__read-icon {
     grid-template-rows: auto 1fr;
     max-width: 100%;
   }
+
+  svg.icon-yui-kit.contact-list__pin-icon {
+    font-size: 24px;
+  }
   .contact-selector__list {
-    max-height: 100%;
+    max-height: calc(var(--default-height) - 120px);
   }
 }
 

@@ -1,3 +1,7 @@
+dialog.modal-yui-kit.modal-yui-kit_bottom {
+  display: none;
+}
+
 .modal-info-mobile__end > div.menu-info__buttons {
   grid-template-columns: repeat(3, 1fr);
 }
@@ -39,8 +43,10 @@ p.modal-info-mobile__end--paragraph {
 }
 
 @media screen and (width <= 480px) {
+  dialog.modal-yui-kit.modal-yui-kit_bottom {
+    display: grid;
+  }
   dialog.modal-yui-kit.modal-yui-kit_bottom.chat__header-modal-info--active {
-    border-radius: 0;
     & .mobile__modal-header {
       align-items: center;
       padding-top: 10.5px;
@@ -52,9 +58,6 @@ p.modal-info-mobile__end--paragraph {
     & .modal-yui-kit__modal-content {
       padding-top: 5px;
       padding-inline: 10px;
-    }
-    & button.mobile__modal-header--button {
-      padding-block: 6.5px;
     }
   }
 }
