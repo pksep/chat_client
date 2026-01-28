@@ -130,18 +130,20 @@
       </template>
     </div>
     <Button
-      v-if="canInstall && !isInstalled && !state.isLoading"
+      v-if="shouldShowButton && !state.isLoading"
       class="menu__button-install-prompt"
       :type="ButtonTypeEnum.ghost"
       :size="SizesEnum.small"
-      @click="handleInstall"
+      @click="handleButtonAction"
       :data-testid="`${props.dataTestid}-Menu-InstallButton`"
     >
       <Icon
-        :name="IconNameEnum.uploadCloud"
+        :name="
+          canInstall ? IconNameEnum.uploadCloud : IconNameEnum.externalLink
+        "
         :data-testid="`${props.dataTestid}-Menu-InstallIcon`"
       />
-      <template v-if="!isCollapse"> Загрузить на устройство </template>
+      <template v-if="!isCollapse"> {{ buttonLabel }} </template>
     </Button>
   </aside>
 </template>
@@ -185,7 +187,8 @@ const { getTopicList } = useTopics();
 
 const route = useUrlWatcher();
 
-const { canInstall, handleInstall, isInstalled } = usePwaInstall();
+const { canInstall, shouldShowButton, buttonLabel, handleButtonAction } =
+  usePwaInstall();
 
 const getInitialDetailsOpen = () => {
   const stored = localStorage.getItem('menu-details-open');

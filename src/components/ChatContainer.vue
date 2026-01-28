@@ -63,10 +63,10 @@
       class="mobile-modal"
       headerClass="hidden"
       :show-divider="false"
-      :open="state.isPwaModalOpen && canInstall && !isInstalled"
+      :open="state.isPwaModalOpen && shouldShowButton"
       @unmount-close="closeModals"
     >
-      <Button @click="handleInstall">Загрузить на устройство</Button>
+      <Button @click="handleButtonAction">{{ buttonLabel }}</Button>
       <Button :type="ButtonTypeEnum.secondary" @click="closeModals"
         >Закрыть</Button
       >
@@ -112,7 +112,7 @@ const NewGroupModal = defineAsyncComponent(
   () => import('./NewChat/NewGroupModal.vue')
 );
 
-const { canInstall, handleInstall, isInstalled } = usePwaInstall();
+const { shouldShowButton, buttonLabel, handleButtonAction } = usePwaInstall();
 
 const route = useUrlWatcher();
 
