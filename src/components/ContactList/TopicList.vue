@@ -80,7 +80,7 @@
               "
               :class="{
                 'contact-list__notification': true,
-                'contact-list__notification--muted': topic.info.isMute
+                'contact-list__notification--muted': topic.info?.isMute
               }"
               :data-testid="`${props.dataTestid}-ContactList-Notification${index + 1}`"
               :aria-label="`${topic.unreadMessageCount} new messages`"

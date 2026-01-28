@@ -149,6 +149,8 @@ const updateSelection = (
   if (props.isButtonDisabled) {
     onAddClick();
   }
+
+  emits('unmount-select-contact', selectedContacts.value);
 };
 
 const handleCheckbox = (isCheck: boolean, contactId: string | number): void => {

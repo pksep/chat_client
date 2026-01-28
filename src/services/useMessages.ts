@@ -77,7 +77,7 @@ export const changeLocalReadStatus = (
 };
 
 export const playNotificationSound = (topicId?: string): void => {
-  if (topicId && isTopicMuted(topicId)) {
+  if ((topicId && isTopicMuted(topicId)) || route.value.id === topicId) {
     return;
   }
 

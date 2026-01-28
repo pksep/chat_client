@@ -450,13 +450,6 @@ export class ChatSDK {
     return await this.group.leaveGroup(groupId);
   }
 
-  async getGroupMembers(
-    groupId: string,
-    params?: SearchParams
-  ): Promise<PaginatedResponse<User>> {
-    return await this.group.getGroupMembers(groupId, params);
-  }
-
   async addGroupMembers(groupId: string, userIds: string[]): Promise<User[]> {
     return await this.group.addGroupMembers(groupId, userIds);
   }

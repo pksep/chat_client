@@ -2,6 +2,7 @@ import { ITopic, IUser } from '../../interfaces/interfaces';
 
 export interface IContactSelectorEmits {
   (e: 'unmount-contact', topic: ITopic | ITopic[] | IUser | IUser[]): void;
+  (e: 'unmount-select-contact', topic: ITopic | ITopic[] | IUser | IUser[]): void;
 }
 
 export interface IContactSelectorState {

@@ -1,5 +1,5 @@
 import { reactive, computed } from 'vue';
-import { useGroup } from '../composables/useGroup';
+import { currentGroup, useGroup } from '../composables/useGroup';
 import { getChatSDK } from '../services/useChat';
 import { getUsersList } from './useUsers';
 import { useTopics } from './useTopics';
@@ -40,8 +40,9 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
 
   const computedFilteredMembers = computed(() => {
     const allUsers = getUsersList();
-    const { groupMembers } = useGroup();
-    const memberIds = new Set(groupMembers.value.map(member => member.id));
+    const memberIds = new Set(
+      currentGroup.value?.members.map(member => member.id) || []
+    );
     return allUsers.filter(user => !memberIds.has(user.id));
   });
 
@@ -104,11 +105,6 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
         topicId: findTopic.id,
         date: group?.createdAt ? new Date(group.createdAt) : undefined
       };
-
-      const { setGroupMembers } = useGroup();
-      if (members?.data) {
-        setGroupMembers(members.data);
-      }
     } else if (findTopic?.type === TopicType.DM) {
       state.information = {
         name:
