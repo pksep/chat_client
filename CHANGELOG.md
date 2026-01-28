@@ -1,3 +1,10 @@
+## [1.3.2](https://github.com/pksep/chat_client/compare/v1.3.1...v1.3.2) (2026-01-28)
+
+
+### Bug Fixes
+
+* scroll ([700cd0f](https://github.com/pksep/chat_client/commit/700cd0fa8167d5c6d1fcae8556935b1841ef85d7))
+
 ## [1.3.1](https://github.com/pksep/chat_client/compare/v1.3.0...v1.3.1) (2026-01-28)
 
 
