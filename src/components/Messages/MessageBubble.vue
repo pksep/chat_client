@@ -11,7 +11,7 @@
       :url="props.sender"
       :alt="props.sender"
       :initials="props.sender"
-      v-if="!props.isMeSender && !props.author"
+      v-if="!isAvatarExist"
       :data-testid="`${dataTestid}-MessageBubble-Avatar`"
     />
     <AiIconWrapper
@@ -26,7 +26,7 @@
         @contextmenu="evt => openActivePopover('', evt)"
         :data-testid="`${dataTestid}-MessageBubble-Article`"
       >
-        <h3 class="message__article-initals" v-if="!props.isMeSender">
+        <h3 class="message__article-initals" v-if="!isInitialsExist">
           {{ props.sender }}
         </h3>
         <div
@@ -220,14 +220,42 @@ import { getFormatFileSize, getShortName } from '../../utils/getFormatFileSize';
 import { SliderModal } from '@pksep/yui';
 import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
 import { getConfig } from '../../services/useConfig';
+import { useUrlWatcher } from '../../composables/navigation/useUrlWatcher';
+import { useResizeState } from '../../composables/useResizeState';
+import { RouteTypes } from '../../composables/navigation/useUrlRouting';
+import { MAX_W_MD } from '../../utils/constants';
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
+
+const route = useUrlWatcher();
+const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
   media: () => []
 });
+
+const isAvatarExist = computed(() => {
+  if (props.isMeSender) return true;
+  if (props.isMeSender && props.author) {
+    return true;
+  }
+  if (
+    route.value.type === RouteTypes.DIALOGS ||
+    route.value.type === RouteTypes.GROUP
+  ) {
+    if (isMobile.value) {
+      return true;
+    }
+    return false;
+  }
+  return false;
+});
+
+const isInitialsExist = computed(
+  () => props.isMeSender || route.value.type === RouteTypes.DIALOGS
+);
 
 const messageArticleStyles = (type?: MediaTypeType) => [
   'message__article',
