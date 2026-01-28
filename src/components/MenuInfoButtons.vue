@@ -7,7 +7,7 @@
       class="menu-info__secondary-button"
       @click="handleMute"
     >
-      <template v-if="state.topic.info.isMute">
+      <template v-if="state.topic.info?.isMute">
         <Icon :name="IconNameEnum.noDistrub" />
         Звук выкл.
       </template>

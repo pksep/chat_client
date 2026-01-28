@@ -1,6 +1,8 @@
 .mobile-list-container {
   display: grid;
-  /*height: calc(var(--default-height) - var(--mobile-list-height, 53px));*/
+  height: calc(var(--default-height) - var(--mobile-list-height, 53px));
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 button.button-yui-kit.mobile__list-button {
