@@ -38,7 +38,8 @@ jobs:
                       -d "{
                         \"service\": \"ai-client\",
                         \"status\": \"$STATUS\",
-                        \"branch\": \"main\",
+                        \"branch\": \"${{ github.ref_name }}\",
                         \"time\": \"$END_TIME\",
-                        \"env\": \"DEV\"
+                        \"env\": \"DEV\",
+                        \"commit_url\": \"https://github.com/${{ github.repository }}/commit/${{ github.sha }}\"
                       }"
