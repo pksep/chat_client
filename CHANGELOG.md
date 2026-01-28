@@ -1,3 +1,11 @@
+## [1.2.1](https://github.com/pksep/chat_client/compare/v1.2.0...v1.2.1) (2026-01-28)
+
+
+### Bug Fixes
+
+* group action via mobile ([752d467](https://github.com/pksep/chat_client/commit/752d4678ca26d881529f5f69977f07ff5ecd5186))
+* lint ([762d6dc](https://github.com/pksep/chat_client/commit/762d6dc60a8f48979571aacedcc3c8fa8df88ea8))
+
 # [1.2.0](https://github.com/pksep/chat_client/compare/v1.1.0...v1.2.0) (2026-01-27)
 
 
