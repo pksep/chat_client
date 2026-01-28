@@ -39,5 +39,6 @@ jobs:
                         \"service\": \"sep-erp-client\",
                         \"status\": \"$STATUS\",
                         \"branch\": \"${{ github.ref_name }}\",
-                        \"deployed_at\": \"$END_TIME\"
+                        \"time\": \"$END_TIME\",
+                        \"env\": \"DEV"
                       }"
