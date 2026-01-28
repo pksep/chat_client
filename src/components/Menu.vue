@@ -130,7 +130,7 @@
       </template>
     </div>
     <Button
-      v-if="shouldShowButton && !state.isLoading"
+      v-if="shouldShowButton"
       class="menu__button-install-prompt"
       :type="ButtonTypeEnum.ghost"
       :size="SizesEnum.small"
