@@ -26,9 +26,9 @@ jobs:
                     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml && \
                     
                     if env "APP=sep-erp-client" "BRANCH=${{ github.ref_name }}" "MODE=prod" bun utils.ts switch-branch; then
-                      STATUS="✅ Success"
+                      STATUS="Success"
                     else
-                      STATUS="❌ Failed"
+                      STATUS="Failed"
                     fi
 
                     END_TIME=$(date +'%H:%M:%S')
@@ -36,7 +36,7 @@ jobs:
                     curl -X POST http://localhost:30012/notify \
                       -H "Content-Type: application/json" \
                       -d "{
-                        \"service\": \"sep-erp-client\",
+                        \"service\": \"ai-client\",
                         \"status\": \"$STATUS\",
                         \"branch\": \"main\",
                         \"time\": \"$END_TIME\",
