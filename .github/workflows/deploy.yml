@@ -41,5 +41,5 @@ jobs:
                         \"branch\": \"${{ github.ref_name }}\",
                         \"time\": \"$END_TIME\",
                         \"env\": \"DEV\",
-                        \"commit_url\": \"https://github.com/${{ github.repository }}/commit/${{ github.sha }}\"
+                        \"actionUrl\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
                       }"
