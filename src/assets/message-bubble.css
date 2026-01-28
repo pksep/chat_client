@@ -30,7 +30,7 @@
 }
 
 .message__no-author div.message-content__html > p {
-  text-align: right;
+  text-align: left;
 }
 
 .message__article__media {
