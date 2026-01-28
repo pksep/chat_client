@@ -12,9 +12,9 @@
     >
       <Avatar
         is-icon
-        :url="`${config.CHAT_PATH_TO_FILE_CDN}/${information?.avatarUrl}`"
-        :initials="information?.name"
-        :caption="`image with a channel ${information?.name}`"
+        :url="`${config.CHAT_PATH_TO_FILE_CDN}/${form?.avatarUrl}`"
+        :initials="form?.name"
+        :caption="`image with a channel ${form?.name}`"
         class="modal-info-mobile__avatar"
         :data-testid="`${props.dataTestid}-Header-ModalAvatar`"
       />
@@ -27,9 +27,9 @@
       @change="handleImagePublish"
     />
     <NewChatInformationForm
-      :model-value="information"
+      :is-button-for-save="props.isButtonForSave"
+      :model-value="form"
       :disabled-form="props.isMenuInfo"
-      @unmount-save="handleImageSave"
       :data-testid="`${props.dataTestid}-Header-InformationForm`"
     >
       <template #button>
@@ -79,12 +79,14 @@ interface IMobileChatInfoProps {
   members: IUser[];
   dataTestid?: string;
   isMenuInfo?: boolean;
+  isButtonForSave?: boolean;
   excludedContactIds?: Set<string | number>;
 }
 
 const props = withDefaults(defineProps<IMobileChatInfoProps>(), {
   excludedContactIds: () => new Set<string | number>(),
-  dataTestid: 'MobileChatInfo'
+  dataTestid: 'MobileChatInfo',
+  isButtonForSave: true
 });
 
 const excludedContactIds = computed(() => {
@@ -101,6 +103,10 @@ const avatarInputRef = useTemplateRef('avatarInputRef');
 
 const { leaveGroupInfo, onOpenEditAvatar, openEditProfileIcon } =
   useInformationMenu(information);
+
+const { form, handleUpdateInformation } = useNewInformationModal(
+  information.value
+);
 
 const handleUnmountLeave = () => {
   leaveGroupInfo();
