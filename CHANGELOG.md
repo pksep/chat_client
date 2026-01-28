@@ -1,3 +1,26 @@
+# [1.3.0](https://github.com/pksep/chat_client/compare/v1.2.1...v1.3.0) (2026-01-28)
+
+
+### Bug Fixes
+
+* max-width 30 ch ([880b78b](https://github.com/pksep/chat_client/commit/880b78b78af64c137e2ec336fbc879c0d6ba6a30))
+* message article 100%, not max-content ([5de4ae7](https://github.com/pksep/chat_client/commit/5de4ae76709f3c758dcf7c6643860b5029fadee2))
+* path to navigation ([04eb42a](https://github.com/pksep/chat_client/commit/04eb42a28b3e1f50900013c4575fe944476b2cf3))
+* pin icon with design match ([4d53831](https://github.com/pksep/chat_client/commit/4d53831550fb81c135de78ab5deced0a3afd4179))
+
+
+### Features
+
+* add useNewInformationModal composable ([8beb362](https://github.com/pksep/chat_client/commit/8beb3623e0709e09b701136ac79f9e8c76f925bb))
+* add useNewInformationModal composable for form state ([0aed27a](https://github.com/pksep/chat_client/commit/0aed27a27ea5959e7e536be81499c4e1265196c6))
+* fix group creation and member data handling ([6ec0531](https://github.com/pksep/chat_client/commit/6ec0531d857f2836592ae0f8f9a1d11af335b064))
+* fix mobile modal layout and contact list overflow ([b6acebc](https://github.com/pksep/chat_client/commit/b6acebc3b2fcf03844ca6a50519521824e014d7b))
+* fix mobile modal padding alignment ([34a67d7](https://github.com/pksep/chat_client/commit/34a67d7fd8717140ca238e8a73e594a8581ce9d8))
+* fix width and no_author margin ([2fda9b9](https://github.com/pksep/chat_client/commit/2fda9b9131c514267883d56ba40e7f2fd4d2a05b))
+* initals realized ([7b38e19](https://github.com/pksep/chat_client/commit/7b38e191b0674c7918f46a23b29f5e7e96724b77))
+* prevent header click action on AI route ([377be80](https://github.com/pksep/chat_client/commit/377be80489011a13b33a2f1b947e2546d5e44437))
+* wrap loading indicators in centered modals ([8fb4942](https://github.com/pksep/chat_client/commit/8fb49429e6e9eff0975ab007bb553bc116c949fc))
+
 ## [1.2.1](https://github.com/pksep/chat_client/compare/v1.2.0...v1.2.1) (2026-01-28)
 
 
