@@ -96,7 +96,7 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
     const findTopic = topics.data.find(to => to.id === props.topic.id);
 
     if (findTopic?.type === TopicType.Group) {
-      const { group, members } = await sdk.getGroup(findTopic.group.id);
+      const { group } = await sdk.getGroup(findTopic.group.id);
 
       state.information = {
         name: group?.title,
