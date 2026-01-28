@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { getChatSDK, getCurrentUserId } from '../services/useChat';
 import { Message, TopicSetting, TopicType } from '../services/useChatSDK/types';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
@@ -191,6 +191,12 @@ export const useGroup = () => {
       ex?: string;
     }>
   ) => {
+    if (!isCurrentUserGroupAdmin.value) {
+      console.warn(
+        '[setGroupInfo] Current user is not a group admin. Skipping update.'
+      );
+      return;
+    }
     const sdk = getChatSDK();
     await sdk.editGroup(groupId, {
       title: groupInfo.groupName,
@@ -317,10 +323,21 @@ export const useGroup = () => {
     groups.value = [value, ...groups.value];
   };
 
+  const isCurrentUserGroupAdmin = computed(() => {
+    const currentUserId = getCurrentUserId();
+    if (!currentUserId) return false;
+    const admins =
+      currentGroup.value?.group?.admins ??
+      (currentGroup.value as ITopic & { admins?: string[] })?.admins ??
+      [];
+    return Array.isArray(admins) && admins.includes(currentUserId);
+  });
+
   return {
     groups,
     groupMembers,
     currentGroup,
+    isCurrentUserGroupAdmin,
     fetchAllGroups,
     fetchGroupMembers,
     createGroup,
@@ -360,7 +377,8 @@ const {
   updateLocalGroupDetails,
   updateLocalGroupInfo,
   addGroupList,
-  setGroupMembers
+  setGroupMembers,
+  isCurrentUserGroupAdmin
 } = useGroup();
 
 export {
@@ -383,5 +401,6 @@ export {
   updateLocalGroupDetails,
   updateLocalGroupInfo,
   addGroupList,
-  setGroupMembers
+  setGroupMembers,
+  isCurrentUserGroupAdmin
 };

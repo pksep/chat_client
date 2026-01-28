@@ -8,6 +8,7 @@
   >
     <button
       class="modal-info-mobile__avatar-button"
+      :disabled="!isEditable"
       @click="handleEditProfileIcon"
     >
       <Avatar
@@ -24,12 +25,14 @@
       ref="avatarInputRef"
       type="file"
       accept="image/*"
+      :disabled="!isEditable"
       @change="handleImagePublish"
     />
     <NewChatInformationForm
       :is-button-for-save="props.isButtonForSave"
       :model-value="form"
-      :disabled-form="props.isMenuInfo"
+      :disabled-form="props.isMenuInfo || !isEditable"
+      @unmount-save="handleImageSave"
       :data-testid="`${props.dataTestid}-Header-InformationForm`"
     >
       <template #button>
@@ -72,7 +75,8 @@ import { IMenuInfoInformation } from '../../composables/useMenuInfo';
 import { useInformationMenu } from '../../composables/useInformationMenu';
 import type { IUser } from '../interfaces/interfaces';
 import { getConfig } from '../../services/useConfig';
-import { useNewInformationModal } from '../../composables/useNewInformationModal';
+import { uploadFile } from '../../services/useChat';
+import { currentGroup, setGroupInfo, useGroup } from '../../composables/useGroup';
 
 interface IMobileChatInfoProps {
   members: IUser[];
@@ -100,6 +104,9 @@ const excludedContactIds = computed(() => {
   return ids;
 });
 
+const { isCurrentUserGroupAdmin } = useGroup();
+const isEditable = computed(() => isCurrentUserGroupAdmin.value);
+
 const information = defineModel<IMenuInfoInformation>();
 
 const config = getConfig();
@@ -124,11 +131,17 @@ const handleUnmountLeave = () => {
 };
 
 const handleEditProfileIcon = () => {
+  if (!isEditable.value) return;
   openEditProfileIcon(avatarInputRef.value);
 };
 
 const handleImagePublish = async (event: Event) => {
-  const file = onOpenEditAvatar(event);
+  if (!isEditable.value) return;
+  const localFile = onOpenEditAvatar(event);
+  if (!localFile) return;
+
+  const file = await uploadFile(localFile);
+
   if (!file) return;
   stateInfo.fileImage = file;
   if (stateInfo.fileImage) {
@@ -136,7 +149,14 @@ const handleImagePublish = async (event: Event) => {
   }
 };
 
-const handleContactClick = () => {};
+// Handle saving information form
+const handleImageSave = (data: { name: string; avatarUrl?: string }) => {
+  if (!isEditable.value) return;
+  information.value = {
+    ...information.value,
+    ...data
+  };
+};
 
 watch(
   () => information.value,

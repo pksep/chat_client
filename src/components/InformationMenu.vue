@@ -8,7 +8,11 @@
       {{ model?.date?.toLocaleDateString('ru-RU') }}
     </span>
   </div>
-  <button class="menu-info__avatar-button" @click="openEditProfileIcon">
+  <button
+    class="menu-info__avatar-button"
+    :disabled="!isEditable"
+    @click="openEditProfileIcon"
+  >
     <Avatar
       :initials="model?.name"
       :url="`${config.CHAT_PATH_TO_FILE_CDN}/${model?.avatarUrl}`"
@@ -20,7 +24,8 @@
     ref="avatarInputRef"
     type="file"
     accept="image/*"
-    @change="onOpenEditAvatar"
+    :disabled="!isEditable"
+    @change="handleOpenEditAvatar"
   />
   <ModalCroppedAvatar
     :image="state.fileImage"
@@ -31,19 +36,20 @@
   <MenuInfoButtons @unmount-leave="leaveGroupInfo" />
   <NewChatInformationForm
     :model-value="model"
+    :disabled-form="!isEditable"
     @unmount-save="handleSaveFromForm"
   />
 </template>
 
 <script lang="ts" setup>
-import { onMounted } from 'vue';
-import { useTemplateRef } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 import { useInformationMenu } from '../composables/useInformationMenu';
 import { ModalCroppedAvatar, Avatar } from '@pksep/yui';
 import NewChatInformationForm from './NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from './MenuInfoButtons.vue';
 import type { IMenuInfoInformation } from '../composables/useMenuInfo';
 import { getConfig } from '../services/useConfig';
+import { useGroup } from '../composables/useGroup';
 
 withDefaults(
   defineProps<{
@@ -60,6 +66,8 @@ const model = defineModel<IMenuInfoInformation>();
 const avatarInputRef = useTemplateRef('avatarInputRef');
 
 const config = getConfig();
+const { isCurrentUserGroupAdmin } = useGroup();
+const isEditable = computed(() => isCurrentUserGroupAdmin.value);
 
 const {
   state,
@@ -72,10 +80,12 @@ const {
 } = useInformationMenu(model);
 
 const onSaveAvatar = async (file: File): Promise<void> => {
+  if (!isEditable.value) return;
   await originalOnSaveAvatar(file);
 };
 
 const handleSaveFromForm = (value: { name: string; avatarUrl?: string }) => {
+  if (!isEditable.value) return;
   const updatedValue = {
     ...model.value,
     name: value.name,
@@ -84,7 +94,13 @@ const handleSaveFromForm = (value: { name: string; avatarUrl?: string }) => {
   model.value = updatedValue;
 };
 
-const openEditProfileIcon = () =>
+const handleOpenEditAvatar = (event: Event) => {
+  if (!isEditable.value) return;
+  onOpenEditAvatar(event);
+};
+
+const openEditProfileIcon = () => {
+  if (!isEditable.value) return;
   composableOpenEditProfileIcon(avatarInputRef.value);
 
 onMounted(async () => {

@@ -21,7 +21,7 @@
         class="menu__info-save-button"
         :type="ButtonTypeEnum.primary"
         :size="SizesEnum.little"
-        :disabled="!isFormValid"
+        :disabled="!isFormValid || props.disabledForm"
         @click="onSave"
       >
         Сохранить

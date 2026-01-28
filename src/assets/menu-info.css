@@ -155,3 +155,7 @@ aside.menu-info .tabs__navigation-content > section.menu__info-users {
   text-align: center;
   font-weight: 600;
 }
+
+fieldset.input-yui-kit:disabled .input-yui-kit__input {
+  background-color: var(--background-light-color);
+}

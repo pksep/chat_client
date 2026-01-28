@@ -37,6 +37,7 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
     openAddUser: false,
     information: null
   });
+  const { isCurrentUserGroupAdmin } = useGroup();
 
   const computedFilteredMembers = computed(() => {
     const allUsers = getUsersList();
@@ -50,6 +51,12 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
   };
 
   const handleUpdateInformation = (value: IMenuInfoInformation) => {
+    if (value?.groupId && !isCurrentUserGroupAdmin.value) {
+      console.warn(
+        '[handleUpdateInformation] Current user is not a group admin.'
+      );
+      return;
+    }
     state.information = value;
 
     if (value?.groupId) {
