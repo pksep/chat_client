@@ -58,13 +58,27 @@
       </li>
     </ul>
   </section>
-  <NewContactModal
-    :contacts="props.filteredContacts"
-    :excluded-contact-ids="excludedContactIds"
+
+  <MobileModal
+    v-if="isMobile"
     :open="newContactOpen"
-    :dataTestid="`${props.dataTestid}-ContactListInModal-NewContactModal`"
     @unmount-close="closeContactModal"
-  />
+    @unmount-next="handleAddMembers"
+    title="Канал"
+    close-button-text="Назад"
+    start-button-text="Добавить"
+    :data-testid="`${props.dataTestid}-NewChatMobileModal-Container`"
+  >
+    <template #default>
+      <ContactSelector
+        class="mobile__list-modal__contact-selector"
+        :contacts="props.filteredContacts"
+        :excluded-contact-ids="excludedContactIds"
+        @unmount-select-contact="handleNewContact"
+        is-button-disabled
+      />
+    </template>
+  </MobileModal>
 </template>
 
 <script setup lang="ts">
@@ -77,11 +91,15 @@ import {
 } from '@pksep/yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import { ref, computed } from 'vue';
-import NewContactModal from '../NewChat/NewContactModal.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
-import { useGroup } from '../../composables/useGroup';
+import { currentGroup, useGroup } from '../../composables/useGroup';
 import type { IUser } from '../interfaces/interfaces';
+import MobileModal from '../UI/MobileModal.vue';
+import ContactSelector from '../NewChat/ContactSelector.vue';
+import { useResizeState } from '../../composables/useResizeState';
+import { MAX_W_MD } from '../../utils/constants';
+import { useUrlWatcher } from '../../composables/navigation';
 
 interface ContactListInModalProps {
   showAddButton?: boolean;
@@ -121,6 +139,8 @@ const emits = defineEmits<{
   (e: 'unmount-click-add-button'): void;
 }>();
 
+const route = useUrlWatcher();
+
 const reactiveContacts = computed(() => {
   const contacts = props.contacts || [];
   return [...contacts];
@@ -141,15 +161,37 @@ const excludedContactIds = computed(() => {
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
+const { addGroupMembers } = useGroup();
+
 const newContactOpen = ref(false);
 
+const selectedUsers = ref<IUser[]>([]);
+
+const { state: isMobile } = useResizeState(MAX_W_MD);
+
 const addUser = (): void => {
+  openContactModal();
   emits('unmount-click-add-button');
 };
 
 const deleteUserFromChat = (userId: string) => {
   removeUserFromGroup(props.groupId, userId);
   closeActivePopover(userId);
+};
+
+const handleNewContact = (users: IUser[]) => {
+  selectedUsers.value = users;
+};
+
+const handleAddMembers = async (): Promise<void> => {
+  if (route.value.id) {
+    await addGroupMembers(currentGroup.value.group.id, selectedUsers.value);
+  }
+  closeContactModal();
+};
+
+const openContactModal = (): void => {
+  newContactOpen.value = true;
 };
 
 const closeContactModal = (): void => {

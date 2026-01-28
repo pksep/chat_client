@@ -129,9 +129,9 @@ import {
 } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { useTopics } from '../../composables/useTopics';
-import { useGroup } from '../../composables/useGroup';
+import { currentGroup, useGroup } from '../../composables/useGroup';
 
-const { groups, currentGroup, getGroupById } = useGroup();
+const { groups, getGroupById } = useGroup();
 const { topics, currentTopic, getTopicById } = useTopics();
 
 const props = withDefaults(defineProps<IHeaderProps>(), {

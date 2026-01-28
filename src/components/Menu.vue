@@ -180,7 +180,7 @@ const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: 'Menu'
 });
 
-const { groups } = useGroup();
+const { getGroupList } = useGroup();
 const { getTopicList } = useTopics();
 
 const route = useUrlWatcher();
@@ -207,7 +207,7 @@ const topicGroups = computed(() => {
     {
       type: 'GROUP',
       onClickPlusButton: handleNewGroupModal,
-      items: groups.value
+      items: getGroupList()
     },
     {
       title: 'DM',
