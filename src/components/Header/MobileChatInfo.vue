@@ -70,7 +70,6 @@ import { getConfig } from '../../services/useConfig';
 import { useInformationMenu } from '../../composables/useInformationMenu';
 import { uploadFile } from '../../services/useChat';
 import { currentGroup, setGroupInfo } from '../../composables/useGroup';
-import { getAuthUser } from '../../composables/useAuth';
 
 interface IMobileChatInfoProps {
   members: IUser[];
