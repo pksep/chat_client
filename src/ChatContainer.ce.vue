@@ -73,6 +73,8 @@ const runAppInitialization = async () => {
     localStorage.setItem('erp_token', tokenUrl);
   }
 
+  console.log(tokenUrl, 111);
+
   const localToken = localStorage.getItem('erp_token');
   const config = getConfig();
 
@@ -139,7 +141,7 @@ const runAppInitialization = async () => {
   } catch (error) {
     console.error('Failed to initialize chat:', error);
 
-    if (isMobile) {
+    if (isMobile.value) {
       localStorage.removeItem('erp_token');
       showMobileAuth.value = true;
       openChatContainerShow.value = false;
@@ -172,7 +174,7 @@ onMounted(async () => {
   const hasLocalToken = !!localStorage.getItem('erp_token');
   const hasUrlToken = window.location.href.includes('token=');
 
-  if (isMobile && !hasLocalToken && !hasUrlToken) {
+  if (isMobile.value && !hasLocalToken && !hasUrlToken) {
     showMobileAuth.value = true;
     openChatContainerShow.value = false;
   } else {
