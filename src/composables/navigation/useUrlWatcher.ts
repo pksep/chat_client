@@ -7,7 +7,9 @@ export const useUrlWatcher = () => {
     type: currentRoute.value.type
   });
 
-  const handlePopState = () => {
+  const handlePopState = (e?: PopStateEvent) => {
+    alert();
+    e?.preventDefault();
     const parsedRoute = parseUrl();
     currentRoute.value = parsedRoute;
     topic.value = {
@@ -17,7 +19,6 @@ export const useUrlWatcher = () => {
   };
 
   onMounted(() => {
-    handlePopState();
     window.addEventListener('popstate', handlePopState);
   });
 

@@ -6,6 +6,7 @@ import { useTopics } from './useTopics';
 
 const groups = ref<ITopic[]>([]);
 const currentGroup = ref<ITopic | null>(null);
+const loading = ref(false);
 
 export const useGroup = () => {
   const setGroups = (newGroups: ITopic[]) => {
@@ -56,6 +57,7 @@ export const useGroup = () => {
 
   const fetchAllGroups = async (page = 1, limit = 200): Promise<ITopic[]> => {
     try {
+      loading.value = true;
       const sdk = getChatSDK();
       if (!sdk) {
         console.error('Chat SDK is not initialized');
@@ -73,6 +75,8 @@ export const useGroup = () => {
     } catch (err) {
       console.error('Failed to fetch topics', err);
       return groups.value || [];
+    } finally {
+      loading.value = false;
     }
   };
 
@@ -292,6 +296,7 @@ export const useGroup = () => {
   return {
     groups,
     currentGroup,
+    loading,
     fetchAllGroups,
     createGroup,
     addGroupMembers,

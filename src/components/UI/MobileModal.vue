@@ -56,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Modal } from '@pksep/yui';
 import Line from './Line.vue';
 import type {
@@ -134,19 +134,12 @@ const onTouchEndHeader = (e: TouchEvent) => {
 const onTouchEndContent = (e: TouchEvent) => {
   if (!isSwiping) return;
 
-  const diffY = currentY - startY;
   const diffX = currentX - startX;
+  const diffY = currentY - startY;
 
   const absX = Math.abs(diffX);
   const absY = Math.abs(diffY);
 
-  // swipe down (from content)
-  if (diffY > SWIPE_CLOSE_THRESHOLD && absY > absX) {
-    handleCloseModal();
-    console.log('Swipe down on content detected, closing modal');
-  }
-
-  // swipe left/right
   if (absX > SWIPE_CLOSE_THRESHOLD && absX > absY) {
     handleCloseModal();
     console.log('Swipe horizontal detected, closing modal');
@@ -156,9 +149,6 @@ const onTouchEndContent = (e: TouchEvent) => {
   e.stopPropagation();
 };
 
-/* ------------------------
-   WATCH ELEMENTS
------------------------- */
 watch(
   headerRef,
   (el, oldEl) => {

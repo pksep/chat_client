@@ -112,34 +112,24 @@ const isGroupRoute = computed(() => route.value?.type === RouteTypes.GROUP);
 const props = withDefaults(defineProps<IMobileListProps>(), {
   dataTestid: () => 'MobileList'
 });
-
-const state = reactive({
-  showAddAccount: false,
-  checkUsers: new Set<string | number>(),
-  isLoading: true
-});
+const { getTopicList, loading: loadingTopics } = useTopics();
+const { getGroupList, loading: loadingGroups } = useGroup();
 
 const contactList = computed(() => {
-  const { getTopicList } = useTopics();
   const topics = getTopicList();
   return [...topics];
 });
 
 const groupList = computed(() => {
-  const { getGroupList } = useGroup();
   const groups = getGroupList();
   return [...groups];
 });
 
-watch(
-  [() => contactList.value, () => groupList.value],
-  ([convList, groupList]) => {
-    if (state.isLoading && (convList.length > 0 || groupList.length > 0)) {
-      state.isLoading = false;
-    }
-  },
-  { immediate: true }
-);
+const state = reactive({
+  showAddAccount: false,
+  checkUsers: new Set<string | number>(),
+  isLoading: computed(() => loadingTopics.value || loadingGroups.value)
+});
 
 const touchStartX = ref(0);
 const touchStartY = ref(0);
