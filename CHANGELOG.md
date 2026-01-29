@@ -1,3 +1,11 @@
+## [1.3.3](https://github.com/pksep/chat_client/compare/v1.3.2...v1.3.3) (2026-01-29)
+
+
+### Bug Fixes
+
+* css + swipes + scroll ([6575dd2](https://github.com/pksep/chat_client/commit/6575dd2078a41bc78c04d6877e72110be91d0174))
+* lint ([a691a19](https://github.com/pksep/chat_client/commit/a691a190acb0f8afe212a31c91602040d6d04a3a))
+
 ## [1.3.2](https://github.com/pksep/chat_client/compare/v1.3.1...v1.3.2) (2026-01-28)
 
 
