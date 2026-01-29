@@ -29,10 +29,6 @@
   margin-left: 28px;
 }
 
-.message__no-author div.message-content__html > p {
-  text-align: right;
-}
-
 .message__article__media {
   padding: 4px 4px 6px;
   cursor: pointer;
@@ -210,10 +206,6 @@ div.message-content__file {
   &:last-child {
     margin-bottom: 5px;
   }
-}
-
-.message:not(.message__no-author) > .message__other {
-  /*margin-left: 28px;*/
 }
 
 .message__other {
