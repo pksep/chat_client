@@ -1,3 +1,12 @@
+## [1.5.1](https://github.com/pksep/chat_client/compare/v1.5.0...v1.5.1) (2026-01-29)
+
+
+### Bug Fixes
+
+* create and edit groups ([a2f0239](https://github.com/pksep/chat_client/commit/a2f0239b237b505132a1f0e72a3c39d55c0bfc80))
+* lint ([17c224b](https://github.com/pksep/chat_client/commit/17c224b2d9db9c9c1cb1cef8dcf38f9a008c3271))
+* lint ([c64758f](https://github.com/pksep/chat_client/commit/c64758fdb6d4c64138099b31311545e5997b7274))
+
 # [1.5.0](https://github.com/pksep/chat_client/compare/v1.4.0...v1.5.0) (2026-01-29)
 
 
