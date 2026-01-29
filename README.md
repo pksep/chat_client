@@ -40,6 +40,20 @@
 bun run start:dev
 ```
 
+Чтобы запустить на Android 
+- Установить AndoidStudio https://developer.android.com/studio?hl=ru
+- Установить зависимости и SDK в AndoidStudia
+- Подключить Смартфон к ПК по USB 
+- На смартфоне нужно включить режим разработчика и режим передачи файлов
+
+Запустить следующие команды:
+```bash
+bun run sync
+
+bun run start:android
+```
+
+
 ## Доступные скрипты
 
 | Скрипт                | Описание                                                |
