@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/pksep/chat_client/compare/v1.4.0...v1.5.0) (2026-01-29)
+
+
+### Features
+
+* release ([fa27a04](https://github.com/pksep/chat_client/commit/fa27a04724ae7a630cc4710475bc54afcc15fe09))
+
 # [1.4.0](https://github.com/pksep/chat_client/compare/v1.3.4...v1.4.0) (2026-01-29)
 
 
