@@ -100,7 +100,6 @@ import { getAuthUser } from '../composables/useAuth';
 import MobileModal from './UI/MobileModal.vue';
 import { Loader, Button, ButtonTypeEnum } from '@pksep/yui';
 import { usePwaInstall } from '../composables/usePwaInstall';
-import { useAndroidBackButton } from '../composables/useAndroidBackButton';
 import {
   navigateToDefault,
   navigateToGroup,
@@ -254,26 +253,6 @@ const isActiveHeader = (
   }
   return false;
 };
-
-useAndroidBackButton({
-  enableContextAwareNavigation: true,
-  onBack: () => {
-    if (isMobile.value) {
-      if (
-        state.isMenuMobileOpen ||
-        state.isNewContactOpen ||
-        state.isNewGroupOpen
-      ) {
-        state.isMenuMobileOpen = false;
-        state.isNewContactOpen = false;
-        state.isNewGroupOpen = false;
-        return true;
-      }
-    }
-
-    return false;
-  }
-});
 
 watch(
   () => [route.value?.id, route.value?.type],
