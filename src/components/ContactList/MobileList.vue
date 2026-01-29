@@ -72,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, watch, ref } from 'vue';
+import { reactive, computed, ref } from 'vue';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import Line from '../UI/Line.vue';
 import type {

@@ -56,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 import { Modal } from '@pksep/yui';
 import Line from './Line.vue';
 import type {
