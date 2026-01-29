@@ -73,8 +73,6 @@ const runAppInitialization = async () => {
     localStorage.setItem('erp_token', tokenUrl);
   }
 
-  console.log(tokenUrl, 111);
-
   const localToken = localStorage.getItem('erp_token');
   const config = getConfig();
 

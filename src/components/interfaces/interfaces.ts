@@ -113,3 +113,8 @@ export interface IMessage extends Message {
   senderUser?: IUser;
   media?: IMedia[];
 }
+
+export enum MobilePlatformEnum {
+  ANDROID = 'android',
+  APPLE = 'apple'
+}

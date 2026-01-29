@@ -1,35 +1,34 @@
+import { MobilePlatformEnum } from '../components/interfaces/interfaces';
 import { ref, onMounted } from 'vue';
 
-type MobilePlatform = 'android' | 'apple' | null;
-
 export function useMobileApp() {
-  const platform = ref<MobilePlatform>(null);
+  const mobilePlatform = ref<MobilePlatformEnum>(null);
   const isMobileApp = ref(false);
 
   const detect = () => {
     const ua = navigator.userAgent || '';
 
     if (/Android/i.test(ua)) {
-      platform.value = 'android';
+      mobilePlatform.value = MobilePlatformEnum.ANDROID;
       isMobileApp.value = true;
       return;
     }
 
     if (/iPhone|iPad|iPod/i.test(ua)) {
-      platform.value = 'apple';
+      mobilePlatform.value = MobilePlatformEnum.APPLE;
       isMobileApp.value = true;
       return;
     }
 
-    platform.value = null;
+    mobilePlatform.value = null;
     isMobileApp.value = false;
   };
 
   const handleInstall = () => {
-    if (!platform.value) return;
+    if (!mobilePlatform.value) return;
 
     // ANDROID
-    if (platform.value === 'android') {
+    if (mobilePlatform.value === MobilePlatformEnum.ANDROID) {
       const start = Date.now();
 
       // пробуем открыть приложение
@@ -46,7 +45,7 @@ export function useMobileApp() {
     }
 
     // IOS
-    if (platform.value === 'apple') {
+    if (mobilePlatform.value === MobilePlatformEnum.APPLE) {
       /**
        * iOS:
        * если app установлен → откроется через Universal Link
@@ -59,7 +58,7 @@ export function useMobileApp() {
   onMounted(detect);
 
   return {
-    platform,
+    mobilePlatform,
     isMobileApp,
     handleInstall
   };

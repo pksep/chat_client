@@ -64,7 +64,7 @@
     />
 
     <MobileModal
-      v-if="isMobile"
+      v-if="mobilePlatform"
       class="mobile-modal"
       headerClass="hidden"
       :show-divider="false"
@@ -72,13 +72,13 @@
       @unmount-close="closeModals"
     >
       <Button
-        v-if="platform === 'android'"
+        v-if="mobilePlatform === MobilePlatformEnum.ANDROID"
         class="mobile-modal-download-button"
         @click="handleInstall"
         ><AndroidIcon />Загрузить на Android</Button
       >
       <Button
-        v-if="platform === 'apple'"
+        v-if="mobilePlatform === MobilePlatformEnum.APPLE"
         disabled
         class="mobile-modal-download-button"
         @click="handleInstall"
@@ -105,7 +105,10 @@ import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
 import Chat from './Chat.vue';
 import MenuInfo from './MenuInfo.vue';
-import type { IChatContainerProps } from './interfaces/interfaces';
+import {
+  MobilePlatformEnum,
+  type IChatContainerProps
+} from './interfaces/interfaces';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD, MAX_W_XL } from '../utils/constants';
 import { getAuthUser } from '../composables/useAuth';
@@ -131,7 +134,7 @@ const NewGroupModal = defineAsyncComponent(
   () => import('./NewChat/NewGroupModal.vue')
 );
 
-const { platform, handleInstall } = useMobileApp();
+const { mobilePlatform, handleInstall } = useMobileApp();
 
 const route = useUrlWatcher();
 
