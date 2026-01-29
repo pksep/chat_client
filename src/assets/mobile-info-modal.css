@@ -54,6 +54,7 @@ p.modal-info-mobile__end--paragraph {
     }
     & .mobile__modal-content {
       padding-inline: 0;
+      min-height: calc(100dvh - 150px);
     }
     & .modal-yui-kit__modal-content {
       padding-top: 5px;

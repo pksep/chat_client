@@ -11,7 +11,9 @@
       :url="props.sender"
       :alt="props.sender"
       :initials="props.sender"
-      v-if="!props.isMeSender && !props.author"
+      v-if="
+        !props.isMeSender && !props.author && route.type !== RouteTypes.DIALOGS
+      "
       :data-testid="`${dataTestid}-MessageBubble-Avatar`"
     />
     <AiIconWrapper
@@ -26,7 +28,7 @@
         @contextmenu="evt => openActivePopover('', evt)"
         :data-testid="`${dataTestid}-MessageBubble-Article`"
       >
-        <h3 class="message__article-initals" v-if="!props.isMeSender">
+        <h3 class="message__article-initals" v-if="!props.isMeSender && route.type !== RouteTypes.DIALOGS">
           {{ props.sender }}
         </h3>
         <div
@@ -220,6 +222,8 @@ import { getFormatFileSize, getShortName } from '../../utils/getFormatFileSize';
 import { SliderModal } from '@pksep/yui';
 import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
 import { getConfig } from '../../services/useConfig';
+import { useUrlWatcher } from '../../composables/navigation';
+import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
@@ -247,6 +251,8 @@ const messageArticlesStyles = computed(() => ({
 const config = getConfig();
 
 const blockquote = computed(() => false);
+
+const route = useUrlWatcher();
 
 const fullImagePath = ref<string | null>(null);
 

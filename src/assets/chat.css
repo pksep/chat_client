@@ -30,6 +30,7 @@ p.chat__nothing-paragraph {
 .chat__message-wrapper {
   padding: 15px 5px 15px 15px;
   max-height: var(--basic-height);
+  min-height: calc(100vh - 200px);
   overflow-y: scroll;
   display: flex;
   flex-direction: column-reverse;

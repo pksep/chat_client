@@ -3,6 +3,8 @@
     class="mobile-list-container"
     role="main"
     :data-testid="`${props.dataTestid}-MobileList-Container`"
+    @touchstart="onTouchStart"
+    @touchend="onTouchEnd"
   >
     <template v-if="state.isLoading">
       <Modal
@@ -55,21 +57,22 @@
     >
       <Icon :name="IconNameEnum.plus" />
     </Button>
-    <template v-if="!isAssistantRoute">
-      <NewChatMobileModal
-        :open="state.showAddAccount"
-        :contacts="[]"
-        :is-add-one="!isGroupRoute"
-        :selected-contact-ids="state.checkUsers"
-        @unmount-close="handleCloseModal"
-        @unmount-contact="handleNewContact"
-      />
-    </template>
   </div>
+
+  <template v-if="!isAssistantRoute">
+    <NewChatMobileModal
+      :open="state.showAddAccount"
+      :contacts="[]"
+      :is-add-one="!isGroupRoute"
+      :selected-contact-ids="state.checkUsers"
+      @unmount-close="handleCloseModal"
+      @unmount-contact="handleNewContact"
+    />
+  </template>
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, watch } from 'vue';
+import { reactive, computed, watch, ref } from 'vue';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import Line from '../UI/Line.vue';
 import type {
@@ -91,6 +94,9 @@ import { useGroup } from '../../composables/useGroup';
 import { useTopics } from '../../composables/useTopics';
 import { navigateToAI, useUrlWatcher } from '../../composables/navigation';
 import {
+  navigateToAssistant,
+  navigateToDialogsList,
+  navigateToGroupsList,
   RouteType,
   RouteTypes
 } from '../../composables/navigation/useUrlRouting';
@@ -134,6 +140,45 @@ watch(
   },
   { immediate: true }
 );
+
+const touchStartX = ref(0);
+const touchStartY = ref(0);
+const touchEndX = ref(0);
+
+const SWIPE_THRESHOLD = 70;
+const VERTICAL_LIMIT = 50;
+
+const onTouchStart = (e: TouchEvent) => {
+  const touch = e.changedTouches[0];
+  touchStartX.value = touch.clientX;
+  touchStartY.value = touch.clientY;
+};
+
+const onTouchEnd = (e: TouchEvent) => {
+  const touch = e.changedTouches[0];
+  touchEndX.value = touch.clientX;
+
+  const deltaX = touchEndX.value - touchStartX.value;
+  const deltaY = Math.abs(touch.clientY - touchStartY.value);
+
+  if (Math.abs(deltaX) < SWIPE_THRESHOLD || deltaY > VERTICAL_LIMIT) {
+    return;
+  }
+
+  if (deltaX < 0) {
+    if (route.value.type === RouteTypes.GROUP) {
+      navigateToAssistant();
+    } else if (route.value.type === RouteTypes.DIALOGS) {
+      navigateToGroupsList();
+    }
+  } else {
+    if (route.value.type === RouteTypes.GROUP) {
+      navigateToDialogsList();
+    } else if (route.value.type === RouteTypes.ASSISTANT) {
+      navigateToGroupsList();
+    }
+  }
+};
 
 const handleChapter = (route: RouteType) => {
   if (route === RouteTypes.AI) {

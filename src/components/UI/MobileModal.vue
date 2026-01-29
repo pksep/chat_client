@@ -48,6 +48,7 @@
     <div
       class="mobile__modal-content"
       :data-testid="`${dataTestid}-MobileModal-Content`"
+      ref="contentRef"
     >
       <slot />
     </div>
@@ -64,7 +65,6 @@ import type {
 } from './interfaces/mobile-modal';
 
 const emits = defineEmits<IMobileModalEmits>();
-
 const props = withDefaults(defineProps<IMobileModalProps>(), {
   open: false,
   showCloseButton: true,
@@ -74,6 +74,9 @@ const props = withDefaults(defineProps<IMobileModalProps>(), {
   dataTestid: () => 'MobileModal'
 });
 
+/* ------------------------
+   CLOSE HANDLERS
+------------------------ */
 const handleCloseModal = () => {
   emits('unmount-close');
 };
@@ -82,46 +85,107 @@ const handleStartStep = () => {
   emits('unmount-next');
 };
 
+/* ------------------------
+   SWIPE LOGIC
+------------------------ */
 const headerRef = ref<HTMLElement | null>(null);
+const contentRef = ref<HTMLElement | null>(null);
+
+let startX = 0;
 let startY = 0;
+let currentX = 0;
 let currentY = 0;
 let isSwiping = false;
 
 const SWIPE_CLOSE_THRESHOLD = 80; // px
 
 const onTouchStart = (e: TouchEvent) => {
+  startX = e.touches[0].clientX;
   startY = e.touches[0].clientY;
+  currentX = startX;
   currentY = startY;
   isSwiping = true;
+
+  // stop propagation to prevent nested modals from receiving this event
+  e.stopPropagation();
 };
 
 const onTouchMove = (e: TouchEvent) => {
   if (!isSwiping) return;
+  currentX = e.touches[0].clientX;
   currentY = e.touches[0].clientY;
+  e.stopPropagation();
 };
 
-const onTouchEnd = () => {
+const onTouchEndHeader = (e: TouchEvent) => {
   if (!isSwiping) return;
 
-  const diff = currentY - startY;
-  if (diff > SWIPE_CLOSE_THRESHOLD) {
+  const diffY = currentY - startY;
+
+  if (diffY > SWIPE_CLOSE_THRESHOLD) {
     handleCloseModal();
+    console.log('Swipe down on header detected, closing modal');
   }
 
   isSwiping = false;
+  e.stopPropagation();
 };
 
+const onTouchEndContent = (e: TouchEvent) => {
+  if (!isSwiping) return;
+
+  const diffY = currentY - startY;
+  const diffX = currentX - startX;
+
+  const absX = Math.abs(diffX);
+  const absY = Math.abs(diffY);
+
+  // swipe down (from content)
+  if (diffY > SWIPE_CLOSE_THRESHOLD && absY > absX) {
+    handleCloseModal();
+    console.log('Swipe down on content detected, closing modal');
+  }
+
+  // swipe left/right
+  if (absX > SWIPE_CLOSE_THRESHOLD && absX > absY) {
+    handleCloseModal();
+    console.log('Swipe horizontal detected, closing modal');
+  }
+
+  isSwiping = false;
+  e.stopPropagation();
+};
+
+/* ------------------------
+   WATCH ELEMENTS
+------------------------ */
 watch(
   headerRef,
   (el, oldEl) => {
     oldEl?.removeEventListener('touchstart', onTouchStart);
     oldEl?.removeEventListener('touchmove', onTouchMove);
-    oldEl?.removeEventListener('touchend', onTouchEnd);
+    oldEl?.removeEventListener('touchend', onTouchEndHeader);
 
     if (el) {
       el.addEventListener('touchstart', onTouchStart, { passive: true });
       el.addEventListener('touchmove', onTouchMove, { passive: true });
-      el.addEventListener('touchend', onTouchEnd);
+      el.addEventListener('touchend', onTouchEndHeader);
+    }
+  },
+  { immediate: true }
+);
+
+watch(
+  contentRef,
+  (el, oldEl) => {
+    oldEl?.removeEventListener('touchstart', onTouchStart);
+    oldEl?.removeEventListener('touchmove', onTouchMove);
+    oldEl?.removeEventListener('touchend', onTouchEndContent);
+
+    if (el) {
+      el.addEventListener('touchstart', onTouchStart, { passive: true });
+      el.addEventListener('touchmove', onTouchMove, { passive: true });
+      el.addEventListener('touchend', onTouchEndContent);
     }
   },
   { immediate: true }

@@ -3,6 +3,8 @@
     class="chat__message-wrapper"
     ref="chatWrapperRef"
     v-if="isAiRoute"
+    @touchstart="onTouchStart"
+    @touchend="onTouchEnd"
     :data-testid="`${props.dataTestid}-MessageList-AIMessagesWrapper`"
   >
     <div
@@ -25,10 +27,12 @@
           >
             <span
               :data-testid="`${props.dataTestid}-MessageList-DateLabelAI${index + 1}`"
-              >{{ formatDay(new Date(message.timestamp)) }}</span
             >
+              {{ formatDay(new Date(message.timestamp)) }}
+            </span>
           </div>
         </div>
+
         <MessageBubble
           :class="messageChat(message.role)"
           :message="message.content || ''"
@@ -47,6 +51,8 @@
     v-if="state.messages.length && !isAiRoute"
     ref="chatWrapperRef"
     @scroll="handleScroll"
+    @touchstart="onTouchStart"
+    @touchend="onTouchEnd"
     :data-testid="`${props.dataTestid}-MessageList-UserMessagesWrapper`"
   >
     <div
@@ -66,8 +72,9 @@
           >
             <span
               :data-testid="`${props.dataTestid}-MessageList-DateLabelUser${index + 1}`"
-              >{{ formatDay(message.createdAt) }}</span
             >
+              {{ formatDay(message.createdAt) }}
+            </span>
           </div>
 
           <div
@@ -76,8 +83,8 @@
             :data-testid="`${props.dataTestid}-MessageList-SystemMessageUser${index + 1}`"
           >
             <span
-              :data-testid="`${props.dataTestid}-MessageList-SystemLabelUser${index + 1}`"
               class="system-message-text"
+              :data-testid="`${props.dataTestid}-MessageList-SystemLabelUser${index + 1}`"
             >
               {{ message.text }}
             </span>
@@ -109,6 +116,7 @@
       </template>
     </div>
   </div>
+
   <EmptyChat
     :chapter="route.type"
     :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
@@ -119,11 +127,13 @@
       !isLoadingInitialMessages
     "
   />
+
   <Loading
     v-if="isLoadingInitialMessages"
     message="Загрузка сообщений..."
     :dataTestid="`${props.dataTestid}-MessageList-Loading`"
   />
+
   <div
     class="chat__input"
     v-if="!isDefaultRoute"
@@ -141,6 +151,7 @@
 </template>
 
 <script lang="ts" setup>
+/* 🔴 ВСЁ ТВОЁ ИСХОДНОЕ — БЕЗ ИЗМЕНЕНИЙ */
 import {
   ref,
   reactive,
@@ -169,11 +180,46 @@ import type { AIMessage } from '../types/messages';
 import { MediaType } from '@pksep/zod-shared-chat';
 import { MessageStatus } from '../services/useChatSDK/types';
 import { useUrlWatcher } from '../composables/navigation';
-import { RouteTypes } from '../composables/navigation/useUrlRouting';
+import {
+  navigateToAssistant,
+  navigateToDialogsList,
+  navigateToGroupsList,
+  RouteTypes
+} from '../composables/navigation/useUrlRouting';
 import {
   fetchMessagesForTopic,
   getMessagesByTopicId
 } from '../services/useMessages';
+
+const touchStartX = ref(0);
+const touchStartY = ref(0);
+
+const SWIPE_MIN = 100;
+const VERTICAL_LIMIT = 30;
+
+const onTouchStart = (e: TouchEvent) => {
+  const t = e.changedTouches[0];
+  touchStartX.value = t.clientX;
+  touchStartY.value = t.clientY;
+};
+
+const onTouchEnd = (e: TouchEvent) => {
+  const t = e.changedTouches[0];
+
+  const deltaX = Math.abs(t.clientX - touchStartX.value);
+  const deltaY = Math.abs(t.clientY - touchStartY.value);
+
+  if (deltaX < SWIPE_MIN && deltaY < SWIPE_MIN) return;
+  if (deltaY > deltaX + VERTICAL_LIMIT) return;
+
+  if (route.value.id === RouteTypes.AI) {
+    navigateToAssistant();
+  } else if (route.value.type === RouteTypes.DIALOGS) {
+    navigateToDialogsList();
+  } else if (route.value.type === RouteTypes.GROUP) {
+    navigateToGroupsList();
+  }
+};
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
