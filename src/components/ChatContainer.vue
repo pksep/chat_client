@@ -68,12 +68,24 @@
       class="mobile-modal"
       headerClass="hidden"
       :show-divider="false"
-      :open="state.isPwaModalOpen && canInstall && !isInstalled"
+      :open="state.isAppModalOpen"
       @unmount-close="closeModals"
     >
-      <Button @click="handleInstall">Загрузить на устройство</Button>
+      <Button
+        v-if="platform === 'android'"
+        class="mobile-modal-download-button"
+        @click="handleInstall"
+        ><AndroidIcon />Загрузить на Android</Button
+      >
+      <Button
+        v-if="platform === 'apple'"
+        disabled
+        class="mobile-modal-download-button"
+        @click="handleInstall"
+        ><AppleIcon /> Загрузить на iOS</Button
+      >
       <Button :type="ButtonTypeEnum.secondary" @click="closeModals"
-        >Закрыть</Button
+        >Остаться в браузере</Button
       >
     </MobileModal>
   </main>
@@ -99,7 +111,6 @@ import { MAX_W_MD, MAX_W_XL } from '../utils/constants';
 import { getAuthUser } from '../composables/useAuth';
 import MobileModal from './UI/MobileModal.vue';
 import { Loader, Button, ButtonTypeEnum } from '@pksep/yui';
-import { usePwaInstall } from '../composables/usePwaInstall';
 import {
   navigateToDefault,
   navigateToGroup,
@@ -109,6 +120,9 @@ import { getChatSDK } from '../services/useChat';
 import { getUsersList } from '../composables/useUsers';
 import { RouteTypes } from '../composables/navigation/useUrlRouting';
 import { Modal } from '@pksep/yui';
+import AndroidIcon from './UI/AndroidIcon.vue';
+import AppleIcon from './UI/AppleIcon.vue';
+import { useMobileApp } from '../composables/useMobileApp';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -117,7 +131,7 @@ const NewGroupModal = defineAsyncComponent(
   () => import('./NewChat/NewGroupModal.vue')
 );
 
-const { canInstall, handleInstall, isInstalled } = usePwaInstall();
+const { platform, handleInstall } = useMobileApp();
 
 const route = useUrlWatcher();
 
@@ -129,7 +143,7 @@ const { toggle } = useResizeState({
 });
 
 const state = reactive({
-  isPwaModalOpen: true,
+  isAppModalOpen: true,
   isMenuDesktopOpen: false,
   isMenuMobileOpen: false,
   activeTabId: null,
@@ -201,7 +215,7 @@ const handleNewGroup = (config): void => {
 const closeModals = (): void => {
   state.isNewContactOpen = false;
   state.isNewGroupOpen = false;
-  state.isPwaModalOpen = false;
+  state.isAppModalOpen = false;
 };
 
 const handleInformationClick = (): void => {

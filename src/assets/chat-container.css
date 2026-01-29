@@ -93,6 +93,10 @@ svg.ai-icon {
   height: 50px;
 }
 
+.mobile-modal-download-button {
+  gap: 10px !important;
+}
+
 button.primary-yui-kit.disabled-yui-kit {
   color: var(--neutral-text-light);
   background-color: var(--neutral-button);
