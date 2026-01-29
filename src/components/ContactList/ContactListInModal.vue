@@ -137,6 +137,7 @@ const props = withDefaults(defineProps<ContactListInModalProps>(), {
 
 const emits = defineEmits<{
   (e: 'unmount-click-add-button'): void;
+  (e: 'unmount-added-users', selectedUsers: IUser[]): void;
 }>();
 
 const route = useUrlWatcher();
@@ -186,6 +187,8 @@ const handleNewContact = (users: IUser[]) => {
 const handleAddMembers = async (): Promise<void> => {
   if (route.value.id) {
     await addGroupMembers(currentGroup.value.group.id, selectedUsers.value);
+  } else {
+    emits('unmount-added-users', selectedUsers.value);
   }
   closeContactModal();
 };

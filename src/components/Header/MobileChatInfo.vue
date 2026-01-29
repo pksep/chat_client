@@ -31,11 +31,7 @@
       :disabled-form="props.isMenuInfo"
       @unmount-save="handleImageSave"
       :data-testid="`${props.dataTestid}-Header-InformationForm`"
-    >
-      <template #button>
-        <template v-if="props.isMenuInfo">{{}}</template>
-      </template>
-    </NewChatInformationForm>
+    />
   </div>
   <div
     class="modal-info-mobile__end"
@@ -57,7 +53,7 @@
       :excluded-contact-ids="excludedContactIds"
       class="modal-info-mobile__contact-list"
       :data-testid="`${props.dataTestid}-Header-ContactListInModal`"
-      @unmount-click-add-button="handleContactClick"
+      @unmount-added-users="handleContactClick"
     />
   </div>
 </template>
@@ -86,6 +82,10 @@ const props = withDefaults(defineProps<IMobileChatInfoProps>(), {
   excludedContactIds: () => new Set<string | number>(),
   dataTestid: 'MobileChatInfo'
 });
+
+const emits = defineEmits<{
+  (e: 'unmount-added-users', selectedUsers: IUser[]): void;
+}>();
 
 const excludedContactIds = computed(() => {
   const ids = new Set<string | number>();
@@ -118,10 +118,12 @@ const handleImagePublish = async (event: Event) => {
 
   if (!file) return;
 
-  await setGroupInfo(currentGroup.value.group.id, {
-    faceURL: file.path,
-    groupName: currentGroup.value.group.title
-  });
+  if (currentGroup.value) {
+    await setGroupInfo(currentGroup.value.group.id, {
+      faceURL: file.path,
+      groupName: currentGroup.value.group.title
+    });
+  }
 
   information.value.avatarUrl = file.path;
 };
@@ -134,5 +136,7 @@ const handleImageSave = (data: { name: string; avatarUrl?: string }) => {
   };
 };
 
-const handleContactClick = (): void => {};
+const handleContactClick = (newUsers: IUser[]): void => {
+  emits('unmount-added-users', newUsers);
+};
 </script>

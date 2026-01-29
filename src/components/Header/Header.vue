@@ -90,7 +90,6 @@
     :data-testid="`${props.dataTestid}-Header-MobileModal`"
   >
     <MobileChatInfo
-      is-menu-info
       :model-value="currentGroup"
       :members="route.type === RouteTypes.GROUP && currentGroup?.members"
       @update:model-value="handleUpdateInformation"

@@ -38,6 +38,7 @@
       :model-value="form"
       :members="filteredSelectedContacts"
       :data-testid="`${props.dataTestid}-NewChatMobileModal-MobileChatInfo`"
+      @unmount-added-users="handleAddUsers"
     />
   </MobileModal>
 </template>
@@ -142,5 +143,12 @@ const handleCreateInformation = ({ avatarUrl, name }) => {
 const handleCreateMobileGroup = () => {
   handleCreateInformation(form);
   handleCreateGroup();
+};
+
+const handleAddUsers = (addedUsers: IUser[]) => {
+  handleOpenGroupInfo([
+    ...filteredSelectedContacts.value.slice(1),
+    ...addedUsers
+  ]);
 };
 </script>
