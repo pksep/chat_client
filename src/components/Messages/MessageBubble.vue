@@ -28,7 +28,10 @@
         @contextmenu="evt => openActivePopover('', evt)"
         :data-testid="`${dataTestid}-MessageBubble-Article`"
       >
-        <h3 class="message__article-initals" v-if="!props.isMeSender && route.type !== RouteTypes.DIALOGS">
+        <h3
+          class="message__article-initals"
+          v-if="!props.isMeSender && route.type !== RouteTypes.DIALOGS"
+        >
           {{ props.sender }}
         </h3>
         <div
