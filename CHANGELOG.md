@@ -1,3 +1,12 @@
+## [1.3.4](https://github.com/pksep/chat_client/compare/v1.3.3...v1.3.4) (2026-01-29)
+
+
+### Bug Fixes
+
+* lint ([f3e92f1](https://github.com/pksep/chat_client/commit/f3e92f1a541928f2c23fd7b8c1db649b4c0df6f2))
+* loading and swipe ([55e3406](https://github.com/pksep/chat_client/commit/55e34064a033091208007639813e68d87fe90081))
+* redirects ([fd4b29a](https://github.com/pksep/chat_client/commit/fd4b29a77d192c4eb1649b9de8d5b5d66ca83ade))
+
 ## [1.3.3](https://github.com/pksep/chat_client/compare/v1.3.2...v1.3.3) (2026-01-29)
 
 
