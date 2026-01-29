@@ -6,8 +6,6 @@
     ]"
     :data-testid="`${props.dataTestid}-Header-ModalStartContainer`"
   >
-    {{ console.log(currentGroup) }}
-
     <button
       class="modal-info-mobile__avatar-button"
       @click="handleEditProfileIcon"
@@ -72,7 +70,7 @@ import { getConfig } from '../../services/useConfig';
 import { useInformationMenu } from '../../composables/useInformationMenu';
 import { uploadFile } from '../../services/useChat';
 import { currentGroup, setGroupInfo } from '../../composables/useGroup';
-import { getAuthUser, useAuth } from '../../composables/useAuth';
+import { getAuthUser } from '../../composables/useAuth';
 
 interface IMobileChatInfoProps {
   members: IUser[];
@@ -89,8 +87,6 @@ const props = withDefaults(defineProps<IMobileChatInfoProps>(), {
 const emits = defineEmits<{
   (e: 'unmount-added-users', selectedUsers: IUser[]): void;
 }>();
-
-const authUser = computed(() => getAuthUser());
 
 const excludedContactIds = computed(() => {
   const ids = new Set<string | number>();
