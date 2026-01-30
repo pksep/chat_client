@@ -113,6 +113,7 @@
           :topic-id="message.topicId"
           :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
           :data-message-id="message.id"
+          :message-id="message.id"
         />
       </template>
     </div>

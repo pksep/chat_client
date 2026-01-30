@@ -25,8 +25,8 @@
       <article
         v-if="!!props.message"
         :class="messageArticleStyles()"
-        @contextmenu="evt => openActivePopover(props.dataMessageId, evt)"
-        @click="evt => isMobile && openActivePopover(props.dataMessageId, evt)"
+        @contextmenu="evt => openActivePopover(props.messageId, evt)"
+        @click="evt => isMobile && openActivePopover(props.messageId, evt)"
         :data-testid="`${dataTestid}-MessageBubble-Article`"
       >
         <h3
@@ -194,9 +194,9 @@
     />
 
     <ContextMenu
-      :visible="!!isOpen[props.dataMessageId]"
+      :visible="!!isOpen[props.messageId]"
       :position="position"
-      @unmount-close="closeActivePopover(props.dataMessageId)"
+      @unmount-close="closeActivePopover(props.messageId)"
       :data-testid="`${dataTestid}-MessageBubble-ContextMenu`"
     >
       <Button
@@ -312,7 +312,7 @@ const handleCloseModal = () => {
 
 const handleDeleteMessage = async (): Promise<void> => {
   await deleteMessageChat({
-    messageId: props.dataMessageId,
+    messageId: props.messageId,
     topicId: props.topicId
   });
   handleCloseModal();
