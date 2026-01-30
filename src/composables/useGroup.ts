@@ -3,6 +3,7 @@ import { getChatSDK, getCurrentUserId } from '../services/useChat';
 import { Message, TopicSetting, TopicType } from '../services/useChatSDK/types';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
 import { useTopics } from './useTopics';
+import { getMessagesByTopicId } from '../services/useMessages';
 
 const groups = ref<ITopic[]>([]);
 const currentGroup = ref<ITopic | null>(null);
@@ -246,14 +247,23 @@ export const useGroup = () => {
 
   const updateLocalLastMessageGroup = (
     topicId: string,
-    lastMessage: Message
+    lastMessage?: Message
   ): void => {
     const topic = groups.value.find(topic => topic.id === topicId);
+    const messages = getMessagesByTopicId(topicId);
+
     if (topic) {
-      topic.lastMessage = lastMessage;
+      if (lastMessage) {
+        topic.lastMessage = lastMessage;
+      } else {
+        topic.lastMessage = messages.at(-1);
+      }
 
       if (currentGroup.value?.id === topicId) {
-        currentGroup.value = { ...currentGroup.value, lastMessage };
+        currentGroup.value = {
+          ...currentGroup.value,
+          lastMessage: topic.lastMessage
+        };
       }
     }
 

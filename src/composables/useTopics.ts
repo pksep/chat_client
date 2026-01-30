@@ -8,6 +8,7 @@ import {
   MessageStatus
 } from '../services/useChatSDK/types';
 import { getGroupList, updateLocalGroupInfo } from '../composables/useGroup';
+import { getMessagesByTopicId } from '../services/useMessages';
 
 const topics = ref<ITopic[]>([]);
 const currentTopic = ref<ITopic | undefined>(undefined);
@@ -61,11 +62,16 @@ export const useTopics = () => {
 
   const updateLocalLastMessageTopic = (
     topicId: string,
-    lastMessage: Message
+    lastMessage?: Message
   ): void => {
     const topic = topics.value.find(topic => topic.id === topicId);
     if (topic) {
-      topic.lastMessage = lastMessage;
+      if (lastMessage) {
+        topic.lastMessage = lastMessage;
+      } else {
+        const messages = getMessagesByTopicId(topicId);
+        topic.lastMessage = messages.at(-1);
+      }
     }
 
     topics.value = [...topics.value];

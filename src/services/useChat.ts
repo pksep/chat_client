@@ -14,6 +14,7 @@ import {
 import {
   addMessageToLocal,
   changeLocalReadStatus,
+  deleteMessageFromLocal,
   playNotificationSound
 } from './useMessages';
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
@@ -98,6 +99,12 @@ const setupChatListeners = (): void => {
       const { updateLocalLastMessageTopic } = useTopics();
       updateLocalLastMessageTopic(payload.data.topicId, payload.data);
       updateLocalLastMessageGroup(payload.data.topicId, payload.data);
+    } else if (payload.type === 'DELETE') {
+      deleteMessageFromLocal(payload.data.topicId, payload.data.id);
+
+      const { updateLocalLastMessageTopic } = useTopics();
+      updateLocalLastMessageTopic(payload.data.topicId);
+      updateLocalLastMessageGroup(payload.data.topicId);
     }
   });
 
@@ -212,6 +219,22 @@ export const sendMessageChat = async (params: {
       topicId: params.topicId,
       text: params.text,
       medias: params.medias
+    });
+  } catch (error) {
+    console.error('[ChatSDK] Failed to send message via WebSocket:', error);
+  }
+};
+
+export const deleteMessageChat = async (params: {
+  messageId: string;
+  topicId: string;
+}): Promise<void> => {
+  const sdk = getChatSDK();
+
+  try {
+    sdk.sendWebSocketEvent(WebSocketEventType.DELETE_MESSAGE, {
+      messageId: params.messageId,
+      topicId: params.topicId
     });
   } catch (error) {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);

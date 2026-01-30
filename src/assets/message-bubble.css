@@ -199,7 +199,6 @@ div.message-content__file {
 }
 
 .message__bubble {
-  text-wrap: balance;
   hyphens: auto;
   overflow-wrap: anywhere;
   justify-self: start;
@@ -269,4 +268,56 @@ div.message-content__file {
 .slider-modal .modal-yui-kit__modal-content {
   width: auto;
   padding: 0;
+}
+
+.message__delete {
+  text-align: center;
+}
+
+.message__delete .modal-yui-kit__modal-content {
+  padding: 20px;
+  gap: 0;
+}
+
+.message__delete__title {
+  font-size: 20px;
+  margin: 0;
+  color: var(--text-color);
+}
+
+.message__delete__description {
+  font-size: 14px;
+  margin: 20px 0 25px;
+  color: var(--text-neutral-color);
+  font-weight: 700;
+  padding-inline: 30px;
+}
+
+.message__delete__buttons {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.message__delete__buttons button{
+  width: 170px;
+  justify-content: center;
+}
+
+
+@media screen and (width <= 540px) {
+  .message__delete .modal-yui-kit__modal-content {
+    max-width: 300px;
+    max-height: max-content;
+  }
+
+  .message__delete__description {
+    font-size: 14px;
+    margin: 10px 0 15px;
+    padding-inline: 0;
+}
+
+  .message__delete__buttons button{
+    width: 100px;
+  }
 }
