@@ -25,7 +25,8 @@ jobs:
                     cd ~/erp_k8s/erp_k8s && \
                     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml && \
                     
-                    
+                    kubectl get pods
+
                     if env "APP=sep-erp-client" "BRANCH=${{ github.ref_name }}" "MODE=prod" bun utils.ts switch-branch; then
                       STATUS="Success"
                     else
