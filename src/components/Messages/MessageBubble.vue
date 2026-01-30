@@ -21,12 +21,14 @@
       v-else-if="props.author === 'assistant'"
       :data-testid="`${dataTestid}-MessageBubble-AssistantIcon`"
     />
-    <div :class="messageArticlesStyles">
+    <div
+      :class="messageArticlesStyles"
+      @contextmenu="evt => openActivePopover(props.messageId, evt)"
+      @click="evt => isMobile && openActivePopover(props.messageId, evt)"
+    >
       <article
         v-if="!!props.message"
         :class="messageArticleStyles()"
-        @contextmenu="evt => openActivePopover(props.messageId, evt)"
-        @click="evt => isMobile && openActivePopover(props.messageId, evt)"
         :data-testid="`${dataTestid}-MessageBubble-Article`"
       >
         <h3
