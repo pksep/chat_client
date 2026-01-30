@@ -27,7 +27,7 @@ jobs:
                     
                     kubectl get pods
 
-                    if env "APP=sep-erp-client" "BRANCH=${{ github.ref_name }}" "MODE=prod" bun utils.ts switch-branch; then
+                    if env "APP=ai-client" "BRANCH=${{ github.ref_name }}" "MODE=prod" bun utils.ts switch-branch; then
                       STATUS="Success"
                     else
                       STATUS="Failed"
