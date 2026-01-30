@@ -82,11 +82,7 @@ export interface IChatContainerConfig {
   CHAT_WS_DOMAIN?: string;
   CHAT_ERP_URL?: string;
   CHAT_PATH_TO_FILE_CDN?: string;
-  CHAT_S3_BUCKET_NAME?: string;
-  CHAT_S3_REGION?: string;
-  CHAT_S3_ACCESS_KEY_ID?: string;
-  CHAT_S3_SECRET_ACCESS_KEY?: string;
-  CHAT_S3_ENDPOINT?: string;
+  CHAT_URL?: string;
 }
 
 export interface IChatContainerProps {
