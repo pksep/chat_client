@@ -221,7 +221,31 @@
       </Button>
     </ContextMenu>
 
+    <MobileModal
+      v-if="isMobile"
+      class="message__delete__mobile"
+      headerClass="hidden"
+      :show-divider="false"
+      :open="modalOpen"
+      @unmount-close="handleCloseModal"
+    >
+      <h2 class="message__delete__title">Удалить сообщение</h2>
+      <p class="message__delete__description">
+        Вы уверены, что хотите удалить сообщение для всех участников чата?
+      </p>
+      <Button
+        :type="ButtonTypeEnum.secondary"
+        @click.stop="handleCloseModal"
+      >
+        Нет
+      </Button>
+      <Button :type="ButtonTypeEnum.primary" @click.stop="handleDeleteMessage">
+        Да
+      </Button>
+    </MobileModal>
+
     <Modal
+      v-else
       :open="modalOpen"
       position="center"
       width="492px"
@@ -275,6 +299,7 @@ import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import { deleteMessageChat } from '../../services/useChat';
+import MobileModal from '../UI/MobileModal.vue';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
