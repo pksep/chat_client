@@ -8,6 +8,7 @@ import {
 } from '../composables/useTopics';
 import { isTopicMuted } from '../composables/useTopics';
 import { useUrlWatcher } from '../composables/navigation';
+import { authedUser } from '../composables/useAuth';
 
 const messagesStore = ref<Record<string, IMessage[]>>({});
 
@@ -44,6 +45,26 @@ export const fetchMessagesForTopic = async (
 export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   const existingMessages = messagesStore.value[topicId] || [];
   messagesStore.value[topicId] = [...existingMessages, message];
+};
+
+export const deleteMessageFromLocal = (
+  topicId: string,
+  messageId: string
+): void => {
+  const existingMessages = messagesStore.value[topicId] || [];
+  const deletedMessage = existingMessages.find(
+    message => message.id === messageId
+  );
+  messagesStore.value[topicId] = existingMessages.filter(
+    message => message.id !== messageId
+  );
+
+  if (
+    deletedMessage.senderUser.id !== authedUser.value.id &&
+    deletedMessage.status !== 'READ'
+  ) {
+    changeUnreadMessageCount(-1, topicId);
+  }
 };
 
 export const saveMessagesToLocal = (

@@ -21,11 +21,14 @@
       v-else-if="props.author === 'assistant'"
       :data-testid="`${dataTestid}-MessageBubble-AssistantIcon`"
     />
-    <div :class="messageArticlesStyles">
+    <div
+      :class="messageArticlesStyles"
+      @contextmenu="evt => openActivePopover(props.messageId, evt)"
+      @click="evt => isMobile && openActivePopover(props.messageId, evt)"
+    >
       <article
         v-if="!!props.message"
         :class="messageArticleStyles()"
-        @contextmenu="evt => openActivePopover('', evt)"
         :data-testid="`${dataTestid}-MessageBubble-Article`"
       >
         <h3
@@ -39,7 +42,7 @@
           :data-testid="`${dataTestid}-MessageBubble-Content`"
         >
           <blockquote
-            v-if="blockquote"
+            v-if="false"
             class="message-content__blockquote"
             :data-testid="`${dataTestid}-MessageBubble-Blockquote`"
           >
@@ -97,7 +100,6 @@
           v-for="media in props.media || []"
           :key="media.id"
           :class="messageArticleStyles(media.type)"
-          @contextmenu="evt => openActivePopover('', evt)"
           :data-testid="`${dataTestid}-MessageBubble-Article`"
         >
           <div
@@ -194,29 +196,93 @@
     />
 
     <ContextMenu
-      v-if="false"
-      :visible="!!isOpen"
+      :visible="!!isOpen[props.messageId]"
       :position="position"
-      @unmount-close="closeActivePopover('')"
+      @unmount-close="closeActivePopover(props.messageId)"
       :data-testid="`${dataTestid}-MessageBubble-ContextMenu`"
     >
       <Button
+        disabled
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.small"
-        @click.stop=""
         :data-testid="`${dataTestid}-MessageBubble-ReplyButton`"
       >
         Ответить
       </Button>
+      <Button
+        v-if="props.isMeSender"
+        style="color: var(--error-color)"
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="handleOpenModal"
+        :data-testid="`${dataTestid}-MessageBubble-ReplyButton`"
+      >
+        Удалить
+      </Button>
     </ContextMenu>
+
+    <MobileModal
+      v-if="isMobile"
+      class="message__delete__mobile"
+      headerClass="hidden"
+      :show-divider="false"
+      :open="modalOpen"
+      @unmount-close="handleCloseModal"
+    >
+      <h2 class="message__delete__title">Удалить сообщение</h2>
+      <p class="message__delete__description">
+        Вы уверены, что хотите удалить сообщение для всех участников чата?
+      </p>
+      <Button :type="ButtonTypeEnum.secondary" @click.stop="handleCloseModal">
+        Нет
+      </Button>
+      <Button :type="ButtonTypeEnum.primary" @click.stop="handleDeleteMessage">
+        Да
+      </Button>
+    </MobileModal>
+
+    <Modal
+      v-else
+      :open="modalOpen"
+      position="center"
+      width="492px"
+      height="178px"
+      class="message__delete"
+    >
+      <h2 class="message__delete__title">Удалить сообщение</h2>
+      <p class="message__delete__description">
+        Вы уверены, что хотите удалить сообщение для всех участников чата?
+      </p>
+      <div class="message__delete__buttons">
+        <Button
+          :type="ButtonTypeEnum.secondary"
+          :size="SizesEnum.small"
+          @click.stop="handleCloseModal"
+        >
+          Нет
+        </Button>
+        <Button
+          :type="ButtonTypeEnum.primary"
+          :size="SizesEnum.small"
+          @click.stop="handleDeleteMessage"
+        >
+          Да
+        </Button>
+      </div>
+    </Modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Avatar, Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
+import { Avatar, Button, ButtonTypeEnum, Modal, SizesEnum } from '@pksep/yui';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
-import { useContextMenu } from '../../composables/useContextMenu';
+import {
+  isOpen,
+  position,
+  openActivePopover,
+  closeActivePopover
+} from '../../composables/useContextMenu';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import FileIcon from '../UI/FileIcon.vue';
@@ -227,9 +293,10 @@ import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
 import { getConfig } from '../../services/useConfig';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
-
-const { isOpen, position, openActivePopover, closeActivePopover } =
-  useContextMenu();
+import { useResizeState } from '../../composables/useResizeState';
+import { MAX_W_MD } from '../../utils/constants';
+import { deleteMessageChat } from '../../services/useChat';
+import MobileModal from '../UI/MobileModal.vue';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -253,11 +320,29 @@ const messageArticlesStyles = computed(() => ({
 
 const config = getConfig();
 
-const blockquote = computed(() => false);
-
 const route = useUrlWatcher();
 
 const fullImagePath = ref<string | null>(null);
+
+const modalOpen = ref<boolean>(false);
+
+const handleOpenModal = () => {
+  modalOpen.value = true;
+};
+
+const handleCloseModal = () => {
+  modalOpen.value = false;
+};
+
+const handleDeleteMessage = async (): Promise<void> => {
+  await deleteMessageChat({
+    messageId: props.messageId,
+    topicId: props.topicId
+  });
+  handleCloseModal();
+};
+
+const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const generateArray = (n: number): number[] => {
   return Array.from({ length: n });
