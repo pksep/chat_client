@@ -95,56 +95,23 @@
         </div>
       </article>
 
-      <template v-if="!props.loader">
+      <template v-if="!props.loader && docFiles.length > 0">
         <article
-          v-for="media in props.media || []"
-          :key="media.id"
-          :class="messageArticleStyles(media.type)"
+          :class="messageArticleStyles(MediaType.File)"
           :data-testid="`${dataTestid}-MessageBubble-Article`"
         >
           <div
+            v-for="media in docFiles"
+            :key="media.id"
             class="message-content"
             :data-testid="`${dataTestid}-MessageBubble-Content`"
           >
             <div
-              v-if="media.type === MediaType.Image"
-              class="message-content__media"
-              :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
-            >
-              <img
-                @click="
-                  () =>
-                    (fullImagePath = `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`)
-                "
-                :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`"
-                :alt="props.sender ? props.sender + ' image' : 'Shared image'"
-                :data-testid="`${dataTestid}-MessageBubble-Image`"
-              />
-            </div>
-            <div
-              v-if="media.type === MediaType.Video"
-              class="message-content__media"
-              :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
-            >
-              <video
-                @click="
-                  () =>
-                    (fullImagePath = `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`)
-                "
-                :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`"
-                controls
-                :data-testid="`${dataTestid}-MessageBubble-Video`"
-                :aria-label="
-                  props.sender ? `${props.sender} video` : 'Shared video'
-                "
-              ></video>
-            </div>
-
-            <div
-              v-if="media.type === MediaType.File"
               @click="
                 () =>
-                  (fullImagePath = `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`)
+                  (fullImagePath = media.path.includes('blob:')
+                    ? media.path
+                    : `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`)
               "
               class="message-content__file"
               :data-testid="`${dataTestid}-MessageBubble-FileContainer`"
@@ -152,6 +119,7 @@
               <FileIcon
                 :is-me-sender="props.isMeSender"
                 :dataTestid="`${dataTestid}-MessageBubble-FileIcon`"
+                :is-loaded="!media.isLoading"
               />
               <div :data-testid="`${dataTestid}-MessageBubble-FileInfo`">
                 <div :data-testid="`${dataTestid}-MessageBubble-FileDetails`">
@@ -184,6 +152,70 @@
               :is-read="props.isRead"
               :message-status="props.messageStatus"
               :data-testid="`${dataTestid}-MessageBubble`"
+            />
+          </div>
+        </article>
+      </template>
+
+      <template v-if="!props.loader && mediaFiles.length > 0">
+        <article
+          :class="messageArticleStyles(MediaType.Image)"
+          :data-testid="`${dataTestid}-MessageBubble-Article`"
+        >
+          <div
+            class="message-content"
+            :data-testid="`${dataTestid}-MessageBubble-Content`"
+          >
+            <div
+              v-for="media in mediaFiles"
+              :key="media.id"
+              class="message-content__media"
+              :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
+            >
+              <img
+                v-if="media.type === MediaType.Image"
+                @click="
+                  fullImagePath = media.path.includes('blob:')
+                    ? media.path
+                    : `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`
+                "
+                :src="
+                  media.path.includes('blob:')
+                    ? media.path
+                    : `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`
+                "
+                :alt="props.sender ? props.sender + ' image' : 'Shared image'"
+              />
+
+              <video
+                v-if="media.type === MediaType.Video"
+                @click="
+                  fullImagePath = media.path.includes('blob:')
+                    ? media.path
+                    : `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`
+                "
+                :src="
+                  media.path.includes('blob:')
+                    ? media.path
+                    : `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`
+                "
+              />
+
+              <div
+                v-if="typeof media.isLoading === 'boolean'"
+                class="message-content__media-loading"
+              >
+                <LoadingIcon :is-loaded="!media.isLoading" />
+              </div>
+            </div>
+          </div>
+
+          <div class="message-time" v-if="!props.file">
+            <span>{{ props.time }}</span>
+            <MessageStatusIcons
+              v-if="props.isMeSender"
+              :is-read="props.isRead"
+              :message-status="props.messageStatus"
             />
           </div>
         </article>
@@ -297,6 +329,7 @@ import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import { deleteMessageChat } from '../../services/useChat';
 import MobileModal from '../UI/MobileModal.vue';
+import LoadingIcon from '../UI/LoadingIcon.vue';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -325,6 +358,14 @@ const route = useUrlWatcher();
 const fullImagePath = ref<string | null>(null);
 
 const modalOpen = ref<boolean>(false);
+
+const docFiles = computed(
+  () => props.media?.filter(media => media.type === MediaType.File) || []
+);
+
+const mediaFiles = computed(
+  () => props.media?.filter(media => media.type !== MediaType.File) || []
+);
 
 const handleOpenModal = () => {
   modalOpen.value = true;

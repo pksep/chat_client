@@ -60,7 +60,7 @@ export const deleteMessageFromLocal = (
   );
 
   if (
-    deletedMessage.senderUser.id !== authedUser.value.id &&
+    deletedMessage.senderUser?.id !== authedUser.value?.id &&
     deletedMessage.status !== 'READ'
   ) {
     changeUnreadMessageCount(-1, topicId);
@@ -95,6 +95,17 @@ export const changeLocalReadStatus = (
   updateLocalTopicReadStatus(topicId, messageIds);
   changeUnreadMessageCount(-messageIds.length, topicId);
   messagesStore.value[topicId] = updatedMessages;
+};
+
+export const changeFileLoadingStatus = (
+  topicId: string,
+  messageId: string,
+  fileId: string
+): void => {
+  const existingMessages = messagesStore.value[topicId] || [];
+  const message = existingMessages.find(message => message.id === messageId);
+  const media = message.media?.find(media => media.id === fileId);
+  media.isLoading = false;
 };
 
 export const playNotificationSound = (topicId?: string): void => {

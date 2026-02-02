@@ -179,7 +179,7 @@ import {
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
 import type { AIMessage } from '../types/messages';
-import { MediaType } from '@pksep/zod-shared-chat';
+import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
 import { MessageStatus } from '../services/useChatSDK/types';
 import { useUrlWatcher } from '../composables/navigation';
 import {
@@ -189,9 +189,14 @@ import {
   RouteTypes
 } from '../composables/navigation/useUrlRouting';
 import {
+  addMessageToLocal,
+  changeFileLoadingStatus,
+  deleteMessageFromLocal,
   fetchMessagesForTopic,
   getMessagesByTopicId
 } from '../services/useMessages';
+import { getAuthUser } from '../composables/useAuth';
+import { IMedia, IMessage } from './interfaces/interfaces';
 
 const touchStartX = ref(0);
 const touchStartY = ref(0);
@@ -237,14 +242,14 @@ const route = useUrlWatcher();
 
 const isAiRoute = computed(() => route.value?.type === RouteTypes.AI);
 const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
+const authUser = computed(() => getAuthUser());
 
 const state = reactive({
   messages: computed(() => getMessagesByTopicId(route.value.id)),
   chatId: null as string | null,
   isLoadingMore: false,
   limit: 50,
-  aiMessages: [] as AIMessage[],
-  medias: []
+  aiMessages: [] as AIMessage[]
 });
 
 const isLoadingInitialMessages = ref(false);
@@ -508,12 +513,15 @@ const scrollToBottom = () => {
   }
 };
 
+const getMediaType = (file: File, isMedia: boolean): MediaTypeType => {
+  if (!isMedia) return MediaType.File;
+  if (file.type.startsWith('image/')) return MediaType.Image;
+  if (file.type.startsWith('video/')) return MediaType.Video;
+  return MediaType.File;
+};
+
 const handleSend = async (): Promise<void> => {
-  if (
-    (!inputText.value.trim() || inputText.value.trim() === '<p></p>') &&
-    !state.medias.length
-  )
-    return;
+  if (!inputText.value.trim() || inputText.value.trim() === '<p></p>') return;
 
   if (route.value && route.value.type === RouteTypes.AI) {
     const text = inputText.value;
@@ -568,38 +576,85 @@ const handleSend = async (): Promise<void> => {
   try {
     await sendMessageChat({
       topicId: route.value.id,
-      text,
-      medias: state.medias
+      text
     });
 
     await nextTick();
-    state.medias = [];
 
     scrollToBottom();
   } catch (error) {
     console.error('[ChatSDK] Failed to send message:', error);
   }
 };
+
 const handleAttachFile = async (files: FileList, isMedia = false) => {
   if (!files.length) return;
 
-  for (const uploadedFile of Array.from(files)) {
+  const CHUNK_SIZE = 10;
+  const filesArray = Array.from(files);
+
+  for (let i = 0; i < filesArray.length; i += CHUNK_SIZE) {
+    const chunk = filesArray.slice(i, i + CHUNK_SIZE);
+
+    const chunkFileList = {
+      length: chunk.length,
+      item: (index: number) => chunk[index],
+      ...chunk
+    } as FileList;
+
+    handleAttachFileChunk(chunkFileList, isMedia);
+  }
+};
+
+const handleAttachFileChunk = async (files: FileList, isMedia = false) => {
+  if (!files.length) return;
+  const localMessageId = generateChatId();
+
+  const localMedia: IMedia[] = Array.from(files).map((file, i) => ({
+    path: URL.createObjectURL(file),
+    originName: file.name,
+    size: file.size,
+    id: i + '',
+    createdAt: null,
+    deletedAt: null,
+    updatedAt: null,
+    messageId: localMessageId,
+    publicUrl: '',
+    type: getMediaType(file, isMedia),
+    isLoading: true
+  }));
+
+  const newMessage: IMessage = {
+    id: localMessageId,
+    status: 'WAIT',
+    createdAt: new Date(),
+    deletedAt: null,
+    updatedAt: null,
+    isEdit: false,
+    isPin: false,
+    isSystem: false,
+    replyMessageId: null,
+    senderUserId: authUser.value.id,
+    text: null,
+    topicId: route.value.id,
+    media: localMedia
+  };
+
+  addMessageToLocal(route.value.id, newMessage);
+
+  const medias = [];
+
+  for (const [i, uploadedFile] of Array.from(files).entries()) {
     try {
       const { file, path } = await uploadFile(uploadedFile);
 
-      const type = !isMedia
-        ? MediaType.File
-        : file.type.startsWith('image/')
-          ? MediaType.Image
-          : file.type.startsWith('video/')
-            ? MediaType.Video
-            : MediaType.File;
+      changeFileLoadingStatus(route.value.id, localMessageId, i.toString());
 
-      state.medias.push({
+      medias.push({
         path,
         originName: file.name,
         size: file.size,
-        type
+        type: getMediaType(file, isMedia)
       });
     } catch (error) {
       console.error('[ChatSDK] Failed to send file:', error);
@@ -610,13 +665,14 @@ const handleAttachFile = async (files: FileList, isMedia = false) => {
     await sendMessageChat({
       topicId: route.value.id,
       text: '',
-      medias: state.medias
+      medias
     });
 
-    await nextTick();
-    scrollToBottom();
+    deleteMessageFromLocal(route.value.id, localMessageId);
 
-    state.medias = [];
+    await nextTick();
+
+    scrollToBottom();
   } catch (error) {
     console.error('[ChatSDK] Failed to send message:', error);
   }

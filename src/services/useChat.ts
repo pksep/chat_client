@@ -215,11 +215,13 @@ export const sendMessageChat = async (params: {
   const sdk = getChatSDK();
 
   try {
-    sdk.sendWebSocketEvent(WebSocketEventType.SEND_MESSAGE, {
+    const x = sdk.sendWebSocketEvent(WebSocketEventType.SEND_MESSAGE, {
       topicId: params.topicId,
       text: params.text,
       medias: params.medias
     });
+
+    console.log(x);
   } catch (error) {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);
   }

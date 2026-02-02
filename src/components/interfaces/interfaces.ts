@@ -66,6 +66,7 @@ export interface IMedia extends Media {
   publicUrl: string;
   size: number;
   originName: string;
+  isLoading?: boolean;
 }
 
 export enum MessageStatusEnum {
