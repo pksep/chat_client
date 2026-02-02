@@ -233,10 +233,7 @@
       <p class="message__delete__description">
         Вы уверены, что хотите удалить сообщение для всех участников чата?
       </p>
-      <Button
-        :type="ButtonTypeEnum.secondary"
-        @click.stop="handleCloseModal"
-      >
+      <Button :type="ButtonTypeEnum.secondary" @click.stop="handleCloseModal">
         Нет
       </Button>
       <Button :type="ButtonTypeEnum.primary" @click.stop="handleDeleteMessage">
