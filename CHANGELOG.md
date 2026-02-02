@@ -1,3 +1,18 @@
+# [1.6.0](https://github.com/pksep/chat_client/compare/v1.5.1...v1.6.0) (2026-02-02)
+
+
+### Bug Fixes
+
+* deleting medias ([949d8b6](https://github.com/pksep/chat_client/commit/949d8b6425dd56dd05a30bab623b053f8931dda1))
+* lint ([9faddb4](https://github.com/pksep/chat_client/commit/9faddb48b12af403f34e5836e71009618e80c06a))
+* lint ([59c6baf](https://github.com/pksep/chat_client/commit/59c6baf8c5b7c96c3ffc791d6f81f7aef716bb66))
+
+
+### Features
+
+* add mobile modal ([aed121c](https://github.com/pksep/chat_client/commit/aed121c50f8a57f2fc0cc06c042fce1176d7af63))
+* delete message ([b4f6c42](https://github.com/pksep/chat_client/commit/b4f6c4240b8a6d601a88654f61299a3ba265ac03))
+
 ## [1.5.1](https://github.com/pksep/chat_client/compare/v1.5.0...v1.5.1) (2026-01-29)
 
 
