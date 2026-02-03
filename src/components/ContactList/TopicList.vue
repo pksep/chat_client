@@ -49,11 +49,28 @@
             {{ topic.name }}
           </h5>
           <div
+            v-if="!!topic.lastMessage?.text"
             class="contact-list__description"
             :data-testid="`${props.dataTestid}-ContactList-Description${index + 1}`"
             :aria-label="`Latest message: ${topic.lastMessage || 'No message'}`"
-            v-html="topic.lastMessage?.text || '--'"
+            v-html="topic.lastMessage?.text"
           ></div>
+          <div
+            v-else-if="topic.lastMessage?.media?.length > 0"
+            class="contact-list__description__media"
+            :data-testid="`${props.dataTestid}-ContactList-Media${index + 1}`"
+          >
+            <template
+              v-for="media in topic.lastMessage.media.slice(0, 3)"
+              :key="media.id"
+            >
+              <img
+                v-if="media.type === MediaType.Image"
+                :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.publicPath || media.path}`"
+              />
+            </template>
+          </div>
+          <div v-else class="contact-list__description" v-html="'--'" />
           <div class="contact-list__top">
             <MessageStatusIcons
               v-if="topic.lastMessage?.senderUserId === authedUser.id"
@@ -167,6 +184,7 @@ import {
   useUrlWatcher
 } from '../../composables/navigation';
 import { getConfig } from '../../services/useConfig';
+import { MediaType } from '@pksep/zod-shared-chat';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;

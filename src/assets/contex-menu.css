@@ -25,4 +25,8 @@
 .context-menu button.button-yui-kit.small.ghost-yui-kit {
   padding: 5px;
   min-height: 27px;
+  width: max-content;
+}
+.context-menu--flip {
+  transform: translateX(-100%);
 }

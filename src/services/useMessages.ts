@@ -23,7 +23,7 @@ export const fetchMessagesForTopic = async (
     const sdk = getChatSDK();
     if (!sdk) return;
     const messages = await sdk.getMessages(topicId, {
-      limit: opts?.limit || 50,
+      limit: opts?.limit || 20,
       lastMessageId: opts?.lastMessageId
     });
 
@@ -44,7 +44,31 @@ export const fetchMessagesForTopic = async (
 
 export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   const existingMessages = messagesStore.value[topicId] || [];
-  messagesStore.value[topicId] = [...existingMessages, message];
+
+  const clientId = message.ex ? JSON.parse(message.ex)?.clientId : null;
+
+  if (!clientId) {
+    messagesStore.value[topicId] = [...existingMessages, message];
+    return;
+  }
+
+  const lastMessage = existingMessages.at(-1);
+
+  if (lastMessage.id === clientId) {
+    const media = existingMessages[existingMessages.length - 1].media;
+
+    media.forEach((m, i) => {
+      m.isLoading = null;
+      m.publicPath = message.media[i].path;
+    });
+    existingMessages[existingMessages.length - 1] = { ...message, media };
+
+    return;
+  }
+
+  const filtered = existingMessages.filter(m => m.id !== clientId);
+
+  messagesStore.value[topicId] = [...filtered, message];
 };
 
 export const deleteMessageFromLocal = (

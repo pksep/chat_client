@@ -1,12 +1,9 @@
 import { ref, Ref } from 'vue';
 import { MastraClient } from '@mastra/client-js';
-import {
-  saveMessages,
-  getOrCreateChatHistory,
-  generateChatId
-} from './useChatDb';
+import { saveMessages, getOrCreateChatHistory } from './useChatDb';
 import { AIMessage } from '../types/messages';
 import { getConfig } from './useConfig';
+import { generateUUID } from '../utils/generateUUID';
 
 type Message = AIMessage;
 
@@ -68,7 +65,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
     if (!input.trim()) return;
 
     if (!chatId) {
-      chatId = generateChatId();
+      chatId = generateUUID();
       messages.value = [];
       isInitializing.value = false;
     }
@@ -323,4 +320,4 @@ const useMastra = (options?: UseMastraOptions | false) => {
   };
 };
 
-export { useMastra, generateChatId, saveUserIdToSession, hasUserIdInSession };
+export { useMastra, saveUserIdToSession, hasUserIdInSession };

@@ -153,7 +153,6 @@
 </template>
 
 <script lang="ts" setup>
-/* 🔴 ВСЁ ТВОЁ ИСХОДНОЕ — БЕЗ ИЗМЕНЕНИЙ */
 import {
   ref,
   reactive,
@@ -168,7 +167,7 @@ import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
 import Loading from './Loading.vue';
 import { ContentEditor } from '@pksep/yui';
-import { useMastra, generateChatId } from '../services/useMastra';
+import { useMastra } from '../services/useMastra';
 import { removeMessageLoading } from '../services/useChatDb';
 import {
   sendMessageChat,
@@ -191,12 +190,13 @@ import {
 import {
   addMessageToLocal,
   changeFileLoadingStatus,
-  deleteMessageFromLocal,
   fetchMessagesForTopic,
   getMessagesByTopicId
 } from '../services/useMessages';
 import { getAuthUser } from '../composables/useAuth';
 import { IMedia, IMessage } from './interfaces/interfaces';
+import { fileToDataURL } from '../utils/fileToDataURL';
+import { generateUUID } from '../utils/generateUUID';
 
 const touchStartX = ref(0);
 const touchStartY = ref(0);
@@ -415,7 +415,7 @@ let unsubscribeFromMessageChanges: (() => void) | null = null;
 
 onMounted(async () => {
   if (route.value && route.value.type === RouteTypes.AI && !state.chatId) {
-    state.chatId = generateChatId();
+    state.chatId = generateUUID();
   }
 
   if (props.contact?.id) {
@@ -608,24 +608,25 @@ const handleAttachFile = async (files: FileList, isMedia = false) => {
 
 const handleAttachFileChunk = async (files: FileList, isMedia = false) => {
   if (!files.length) return;
-  const localMessageId = generateChatId();
+  const clientId = generateUUID();
 
-  const localMedia: IMedia[] = Array.from(files).map((file, i) => ({
-    path: URL.createObjectURL(file),
-    originName: file.name,
-    size: file.size,
-    id: i + '',
-    createdAt: null,
-    deletedAt: null,
-    updatedAt: null,
-    messageId: localMessageId,
-    publicUrl: '',
-    type: getMediaType(file, isMedia),
-    isLoading: true
-  }));
+  const localMedia: IMedia[] = await Promise.all(
+    Array.from(files).map(async (file, i) => ({
+      path: await fileToDataURL(file),
+      originName: file.name,
+      size: file.size,
+      id: i + '',
+      createdAt: null,
+      deletedAt: null,
+      updatedAt: null,
+      messageId: clientId,
+      type: getMediaType(file, isMedia),
+      isLoading: true
+    }))
+  );
 
   const newMessage: IMessage = {
-    id: localMessageId,
+    id: clientId,
     status: 'WAIT',
     createdAt: new Date(),
     deletedAt: null,
@@ -648,7 +649,7 @@ const handleAttachFileChunk = async (files: FileList, isMedia = false) => {
     try {
       const { file, path } = await uploadFile(uploadedFile);
 
-      changeFileLoadingStatus(route.value.id, localMessageId, i.toString());
+      changeFileLoadingStatus(route.value.id, clientId, i.toString());
 
       medias.push({
         path,
@@ -665,13 +666,11 @@ const handleAttachFileChunk = async (files: FileList, isMedia = false) => {
     await sendMessageChat({
       topicId: route.value.id,
       text: '',
-      medias
+      medias,
+      ex: JSON.stringify({ clientId })
     });
 
-    deleteMessageFromLocal(route.value.id, localMessageId);
-
     await nextTick();
-
     scrollToBottom();
   } catch (error) {
     console.error('[ChatSDK] Failed to send message:', error);

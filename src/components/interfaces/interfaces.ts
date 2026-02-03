@@ -40,7 +40,7 @@ export interface IGroup extends Group {
 export interface ITopic extends Topic {
   info?: Partial<TopicSetting>;
   isPin?: boolean;
-  lastMessage?: Message;
+  lastMessage?: IMessage;
   members?: IUser[];
   group?: Group;
   user?: IUser;
@@ -63,10 +63,10 @@ export interface IMenuRightProps extends IMenuProps {
 }
 
 export interface IMedia extends Media {
-  publicUrl: string;
   size: number;
   originName: string;
   isLoading?: boolean;
+  publicPath?: string;
 }
 
 export enum MessageStatusEnum {
@@ -113,4 +113,5 @@ export interface IGroupProfileProps {
 export interface IMessage extends Message {
   senderUser?: IUser;
   media?: IMedia[];
+  ex?: string; // "{ clientId: string }"
 }
