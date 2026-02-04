@@ -1,3 +1,12 @@
+# [1.7.0](https://github.com/pksep/chat_client/compare/v1.6.0...v1.7.0) (2026-02-04)
+
+
+### Features
+
+* add loading files ([f4cef5e](https://github.com/pksep/chat_client/commit/f4cef5e67defdb8ef76434ab86dfaea3f08ff497))
+* add thumbnails ([524be92](https://github.com/pksep/chat_client/commit/524be9279887c46107a2fda351cf157bec2aa4e3))
+* ex in medias ([e29f6b9](https://github.com/pksep/chat_client/commit/e29f6b99fffa741c3a1f1538ac31856d54eea709))
+
 # [1.6.0](https://github.com/pksep/chat_client/compare/v1.5.1...v1.6.0) (2026-02-02)
 
 
