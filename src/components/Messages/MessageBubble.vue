@@ -24,7 +24,6 @@
     <div
       :class="messageArticlesStyles"
       @contextmenu="evt => openActivePopover(props.messageId, evt)"
-      @click="evt => isMobile && openActivePopover(props.messageId, evt)"
     >
       <article
         v-if="!!props.message"
@@ -88,6 +87,7 @@
             props.time
           }}</span>
           <MessageStatusIcons
+            v-if="props.isMeSender"
             :is-read="props.isRead"
             :message-status="props.messageStatus"
             :data-testid="`${dataTestid}-MessageBubble`"
@@ -95,63 +95,26 @@
         </div>
       </article>
 
-      <template v-if="!props.loader">
+      <template v-if="!props.loader && docFiles.length > 0">
         <article
-          v-for="media in props.media || []"
-          :key="media.id"
-          :class="messageArticleStyles(media.type)"
+          :class="messageArticleStyles(MediaType.File)"
           :data-testid="`${dataTestid}-MessageBubble-Article`"
         >
           <div
+            v-for="(media, i) in docFiles"
+            :key="media.id"
             class="message-content"
             :data-testid="`${dataTestid}-MessageBubble-Content`"
           >
             <div
-              v-if="media.type === MediaType.Image"
-              class="message-content__media"
-              :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
-            >
-              <img
-                @click="
-                  () =>
-                    (fullImagePath = `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`)
-                "
-                :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`"
-                :alt="props.sender ? props.sender + ' image' : 'Shared image'"
-                :data-testid="`${dataTestid}-MessageBubble-Image`"
-              />
-            </div>
-            <div
-              v-if="media.type === MediaType.Video"
-              class="message-content__media"
-              :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
-            >
-              <video
-                @click="
-                  () =>
-                    (fullImagePath = `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`)
-                "
-                :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`"
-                controls
-                :data-testid="`${dataTestid}-MessageBubble-Video`"
-                :aria-label="
-                  props.sender ? `${props.sender} video` : 'Shared video'
-                "
-              ></video>
-            </div>
-
-            <div
-              v-if="media.type === MediaType.File"
-              @click="
-                () =>
-                  (fullImagePath = `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`)
-              "
+              @click="setSliderElement(docFiles, i)"
               class="message-content__file"
               :data-testid="`${dataTestid}-MessageBubble-FileContainer`"
             >
               <FileIcon
                 :is-me-sender="props.isMeSender"
                 :dataTestid="`${dataTestid}-MessageBubble-FileIcon`"
+                :is-loaded="!media.isLoading"
               />
               <div :data-testid="`${dataTestid}-MessageBubble-FileInfo`">
                 <div :data-testid="`${dataTestid}-MessageBubble-FileDetails`">
@@ -188,11 +151,72 @@
           </div>
         </article>
       </template>
+
+      <template v-if="!props.loader && mediaFiles.length > 0">
+        <article
+          :class="messageArticleStyles(MediaType.Image)"
+          :data-testid="`${dataTestid}-MessageBubble-Article`"
+        >
+          <div
+            :class="`message-content message-content-${mediaFiles.length}-item`"
+            :data-testid="`${dataTestid}-MessageBubble-Content`"
+          >
+            <div
+              v-for="(media, i) in mediaFiles"
+              :key="media.id"
+              class="message-content__media"
+              :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
+            >
+              <video
+                v-if="
+                  media.type === MediaType.Video &&
+                  (!media.thumbnailPath || media.thumbnailPath === media.path)
+                "
+                :src="getFullMediaPath(media)"
+              />
+
+              <img
+                v-else
+                @click="setSliderElement(mediaFiles, i)"
+                :src="getFullMediaPath(media)"
+                :alt="props.sender ? props.sender + ' image' : 'Shared image'"
+              />
+
+              <div
+                v-if="typeof media.isLoading === 'boolean'"
+                class="message-content__media-loading"
+              >
+                <LoadingIcon :is-loaded="!media.isLoading" />
+              </div>
+
+              <div
+                v-else-if="media.type === MediaType.Video"
+                @click="setSliderElement(mediaFiles, i)"
+                class="message-content__media-video"
+              >
+                <PlayIcon />
+              </div>
+            </div>
+          </div>
+
+          <div class="message-time" v-if="!props.file">
+            <span>{{ props.time }}</span>
+            <MessageStatusIcons
+              v-if="props.isMeSender"
+              :is-read="props.isRead"
+              :message-status="props.messageStatus"
+            />
+          </div>
+        </article>
+      </template>
     </div>
     <SliderModal
-      :open="!!fullImagePath"
-      @close="() => (fullImagePath = null)"
-      :items="[{ path: fullImagePath }]"
+      @touchstart.stop
+      @touchend.stop
+      :open="sliderElementPaths.length > 0"
+      @close="() => (sliderElementPaths = [])"
+      :items="sliderElementPaths?.map(path => ({ path }))"
+      :default-index="defaultIndexSlider"
     />
 
     <ContextMenu
@@ -226,24 +250,27 @@
       class="message__delete__mobile"
       headerClass="hidden"
       :show-divider="false"
-      :open="modalOpen"
+      :open="deleteModalOpen"
       @unmount-close="handleCloseModal"
     >
       <h2 class="message__delete__title">Удалить сообщение</h2>
       <p class="message__delete__description">
         Вы уверены, что хотите удалить сообщение для всех участников чата?
       </p>
-      <Button :type="ButtonTypeEnum.secondary" @click.stop="handleCloseModal">
+      <Button :type="ButtonTypeEnum.primary" @click.stop="handleCloseModal">
         Нет
       </Button>
-      <Button :type="ButtonTypeEnum.primary" @click.stop="handleDeleteMessage">
+      <Button
+        :type="ButtonTypeEnum.secondary"
+        @click.stop="handleDeleteMessage"
+      >
         Да
       </Button>
     </MobileModal>
 
     <Modal
       v-else
-      :open="modalOpen"
+      :open="deleteModalOpen"
       position="center"
       width="492px"
       height="178px"
@@ -297,6 +324,9 @@ import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import { deleteMessageChat } from '../../services/useChat';
 import MobileModal from '../UI/MobileModal.vue';
+import LoadingIcon from '../UI/LoadingIcon.vue';
+import PlayIcon from '../UI/PlayIcon.vue';
+import { IMedia } from '../interfaces/interfaces';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -322,16 +352,25 @@ const config = getConfig();
 
 const route = useUrlWatcher();
 
-const fullImagePath = ref<string | null>(null);
+const sliderElementPaths = ref<string[]>([]);
+const defaultIndexSlider = ref<number>(0);
 
-const modalOpen = ref<boolean>(false);
+const deleteModalOpen = ref<boolean>(false);
+
+const docFiles = computed(
+  () => props.media?.filter(media => media.type === MediaType.File) || []
+);
+
+const mediaFiles = computed(
+  () => props.media?.filter(media => media.type !== MediaType.File) || []
+);
 
 const handleOpenModal = () => {
-  modalOpen.value = true;
+  deleteModalOpen.value = true;
 };
 
 const handleCloseModal = () => {
-  modalOpen.value = false;
+  deleteModalOpen.value = false;
 };
 
 const handleDeleteMessage = async (): Promise<void> => {
@@ -346,5 +385,21 @@ const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const generateArray = (n: number): number[] => {
   return Array.from({ length: n });
+};
+
+const getFullMediaPath = (media: IMedia, isThumb = true) => {
+  if (!media.path.includes('data:')) {
+    return `${config.CHAT_PATH_TO_FILE_CDN}/${isThumb ? media.thumbnailPath : media.localPath || media.path}`;
+  } else {
+    return media.path;
+  }
+};
+
+const setSliderElement = (medias: IMedia[], defaultIndex: number = 0) => {
+  sliderElementPaths.value = medias.map(media =>
+    getFullMediaPath(media, false)
+  );
+
+  defaultIndexSlider.value = defaultIndex;
 };
 </script>

@@ -23,7 +23,7 @@ export const fetchMessagesForTopic = async (
     const sdk = getChatSDK();
     if (!sdk) return;
     const messages = await sdk.getMessages(topicId, {
-      limit: opts?.limit || 50,
+      limit: opts?.limit || 20,
       lastMessageId: opts?.lastMessageId
     });
 
@@ -44,7 +44,31 @@ export const fetchMessagesForTopic = async (
 
 export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   const existingMessages = messagesStore.value[topicId] || [];
-  messagesStore.value[topicId] = [...existingMessages, message];
+
+  const clientId = message.ex ? JSON.parse(message.ex)?.clientId : null;
+
+  if (!clientId) {
+    messagesStore.value[topicId] = [...existingMessages, message];
+    return;
+  }
+
+  const lastMessage = existingMessages.at(-1);
+
+  if (lastMessage.id === clientId) {
+    const media = existingMessages[existingMessages.length - 1].media;
+
+    media.forEach((m, i) => {
+      m.isLoading = null;
+      m.localPath = message.media[i].path;
+    });
+    existingMessages[existingMessages.length - 1] = { ...message, media };
+
+    return;
+  }
+
+  const filtered = existingMessages.filter(m => m.id !== clientId);
+
+  messagesStore.value[topicId] = [...filtered, message];
 };
 
 export const deleteMessageFromLocal = (
@@ -60,7 +84,7 @@ export const deleteMessageFromLocal = (
   );
 
   if (
-    deletedMessage.senderUser.id !== authedUser.value.id &&
+    deletedMessage.senderUser?.id !== authedUser.value?.id &&
     deletedMessage.status !== 'READ'
   ) {
     changeUnreadMessageCount(-1, topicId);
@@ -95,6 +119,17 @@ export const changeLocalReadStatus = (
   updateLocalTopicReadStatus(topicId, messageIds);
   changeUnreadMessageCount(-messageIds.length, topicId);
   messagesStore.value[topicId] = updatedMessages;
+};
+
+export const changeFileLoadingStatus = (
+  topicId: string,
+  messageId: string,
+  fileId: string
+): void => {
+  const existingMessages = messagesStore.value[topicId] || [];
+  const message = existingMessages.find(message => message.id === messageId);
+  const media = message.media?.find(media => media.id === fileId);
+  media.isLoading = false;
 };
 
 export const playNotificationSound = (topicId?: string): void => {

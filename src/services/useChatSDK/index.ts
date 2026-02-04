@@ -553,7 +553,9 @@ export class ChatSDK {
     this.socket.emit(WebSocketEventType.READ_MESSAGE, { messageIds, topicId });
   }
 
-  async uploadFile(file: File): Promise<string> {
+  async uploadFile(
+    file: File
+  ): Promise<{ objectName: string; thumbnailObjectName: string }> {
     const formData = new FormData();
     formData.append('file', file);
 
@@ -561,7 +563,10 @@ export class ChatSDK {
       parsed: false
     })) as any;
     const data = await response.json();
-    return data.objectName;
+    return {
+      objectName: data.objectName,
+      thumbnailObjectName: data.thumbnailObjectName
+    };
   }
 
   async updateMessageStatus(

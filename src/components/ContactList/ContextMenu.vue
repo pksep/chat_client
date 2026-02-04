@@ -3,7 +3,7 @@
     v-if="props.visible"
     v-on-click-outside="closePopover"
     :style="position"
-    class="context-menu"
+    :class="{ 'context-menu': true, 'context-menu--flip': flip }"
     :data-testid="`${props.dataTestid}-ContextMenu-Container`"
   >
     <div class="template">
@@ -17,7 +17,7 @@
 
 <script setup lang="ts">
 import { vOnClickOutside } from '@pksep/yui';
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = withDefaults(
   defineProps<{
@@ -25,21 +25,32 @@ const props = withDefaults(
     position?: { x: number; y: number };
     dataTestid?: string;
   }>(),
-  {
-    dataTestid: () => 'ContextMenu'
-  }
+  { dataTestid: () => 'ContextMenu' }
 );
 
 const emits = defineEmits<{
   (e: 'unmount-close', event: Event): void;
 }>();
 
+const flip = ref(false);
+
 const position = computed(() => ({
   left: `${props.position.x}px`,
   top: `${props.position.y}px`
 }));
 
-const closePopover = (event: Event): void => {
-  emits('unmount-close', event);
-};
+watch(
+  () => [props.visible, props.position?.x],
+  async () => {
+    if (!props.visible) {
+      flip.value = false;
+      return;
+    }
+
+    flip.value = props.position.x + 200 > window.innerWidth;
+  },
+  { immediate: true }
+);
+
+const closePopover = (event: Event) => emits('unmount-close', event);
 </script>

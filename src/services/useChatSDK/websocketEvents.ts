@@ -50,6 +50,7 @@ export interface WebSocketEventPayloads {
     text?: string;
     medias?: IMedia[];
     replayMessageId?: string;
+    ex?: string;
   };
   [WebSocketEventType.CHANGE_MESSAGE]: {
     data: Message;

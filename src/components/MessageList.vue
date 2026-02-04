@@ -153,7 +153,6 @@
 </template>
 
 <script lang="ts" setup>
-/* 🔴 ВСЁ ТВОЁ ИСХОДНОЕ — БЕЗ ИЗМЕНЕНИЙ */
 import {
   ref,
   reactive,
@@ -168,7 +167,7 @@ import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
 import Loading from './Loading.vue';
 import { ContentEditor } from '@pksep/yui';
-import { useMastra, generateChatId } from '../services/useMastra';
+import { useMastra } from '../services/useMastra';
 import { removeMessageLoading } from '../services/useChatDb';
 import {
   sendMessageChat,
@@ -179,7 +178,7 @@ import {
 import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
 import type { AIMessage } from '../types/messages';
-import { MediaType } from '@pksep/zod-shared-chat';
+import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
 import { MessageStatus } from '../services/useChatSDK/types';
 import { useUrlWatcher } from '../composables/navigation';
 import {
@@ -189,9 +188,16 @@ import {
   RouteTypes
 } from '../composables/navigation/useUrlRouting';
 import {
+  addMessageToLocal,
+  changeFileLoadingStatus,
+  deleteMessageFromLocal,
   fetchMessagesForTopic,
   getMessagesByTopicId
 } from '../services/useMessages';
+import { getAuthUser } from '../composables/useAuth';
+import { IMedia, IMessage } from './interfaces/interfaces';
+import { fileToDataURL } from '../utils/fileToDataURL';
+import { generateUUID } from '../utils/generateUUID';
 
 const touchStartX = ref(0);
 const touchStartY = ref(0);
@@ -237,14 +243,14 @@ const route = useUrlWatcher();
 
 const isAiRoute = computed(() => route.value?.type === RouteTypes.AI);
 const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
+const authUser = computed(() => getAuthUser());
 
 const state = reactive({
   messages: computed(() => getMessagesByTopicId(route.value.id)),
   chatId: null as string | null,
   isLoadingMore: false,
   limit: 50,
-  aiMessages: [] as AIMessage[],
-  medias: []
+  aiMessages: [] as AIMessage[]
 });
 
 const isLoadingInitialMessages = ref(false);
@@ -410,7 +416,7 @@ let unsubscribeFromMessageChanges: (() => void) | null = null;
 
 onMounted(async () => {
   if (route.value && route.value.type === RouteTypes.AI && !state.chatId) {
-    state.chatId = generateChatId();
+    state.chatId = generateUUID();
   }
 
   if (props.contact?.id) {
@@ -508,12 +514,15 @@ const scrollToBottom = () => {
   }
 };
 
+const getMediaType = (file: File, isMedia: boolean): MediaTypeType => {
+  if (!isMedia) return MediaType.File;
+  if (file.type.startsWith('image/')) return MediaType.Image;
+  if (file.type.startsWith('video/')) return MediaType.Video;
+  return MediaType.File;
+};
+
 const handleSend = async (): Promise<void> => {
-  if (
-    (!inputText.value.trim() || inputText.value.trim() === '<p></p>') &&
-    !state.medias.length
-  )
-    return;
+  if (!inputText.value.trim() || inputText.value.trim() === '<p></p>') return;
 
   if (route.value && route.value.type === RouteTypes.AI) {
     const text = inputText.value;
@@ -568,41 +577,92 @@ const handleSend = async (): Promise<void> => {
   try {
     await sendMessageChat({
       topicId: route.value.id,
-      text,
-      medias: state.medias
+      text
     });
 
     await nextTick();
-    state.medias = [];
 
     scrollToBottom();
   } catch (error) {
     console.error('[ChatSDK] Failed to send message:', error);
   }
 };
+
 const handleAttachFile = async (files: FileList, isMedia = false) => {
   if (!files.length) return;
 
-  for (const uploadedFile of Array.from(files)) {
+  const CHUNK_SIZE = 10;
+  const filesArray = Array.from(files);
+
+  for (let i = 0; i < filesArray.length; i += CHUNK_SIZE) {
+    const chunk = filesArray.slice(i, i + CHUNK_SIZE);
+
+    const chunkFileList = {
+      length: chunk.length,
+      item: (index: number) => chunk[index],
+      ...chunk
+    } as FileList;
+
+    handleAttachFileChunk(chunkFileList, isMedia);
+  }
+};
+
+const handleAttachFileChunk = async (files: FileList, isMedia = false) => {
+  if (!files.length) return;
+  const clientId = generateUUID();
+
+  const localMedia: IMedia[] = await Promise.all(
+    Array.from(files).map(async (file, i) => ({
+      path: await fileToDataURL(file),
+      originName: file.name,
+      size: file.size,
+      id: i + '',
+      createdAt: null,
+      deletedAt: null,
+      updatedAt: null,
+      messageId: clientId,
+      type: getMediaType(file, isMedia),
+      isLoading: true
+    }))
+  );
+
+  const newMessage: IMessage = {
+    id: clientId,
+    status: 'WAIT',
+    createdAt: new Date(),
+    deletedAt: null,
+    updatedAt: null,
+    isEdit: false,
+    isPin: false,
+    isSystem: false,
+    replyMessageId: null,
+    senderUserId: authUser.value.id,
+    text: null,
+    topicId: route.value.id,
+    media: localMedia
+  };
+
+  addMessageToLocal(route.value.id, newMessage);
+
+  const medias = [];
+
+  for (const [i, uploadedFile] of Array.from(files).entries()) {
     try {
-      const { file, path } = await uploadFile(uploadedFile);
+      const { file, path, thumbnailPath } = await uploadFile(uploadedFile);
 
-      const type = !isMedia
-        ? MediaType.File
-        : file.type.startsWith('image/')
-          ? MediaType.Image
-          : file.type.startsWith('video/')
-            ? MediaType.Video
-            : MediaType.File;
+      changeFileLoadingStatus(route.value.id, clientId, i.toString());
 
-      state.medias.push({
+      medias.push({
         path,
+        thumbnailPath,
         originName: file.name,
         size: file.size,
-        type
+        type: getMediaType(file, isMedia)
       });
     } catch (error) {
-      console.error('[ChatSDK] Failed to send file:', error);
+      alert(error.message);
+      deleteMessageFromLocal(route.value.id, clientId);
+      return;
     }
   }
 
@@ -610,13 +670,12 @@ const handleAttachFile = async (files: FileList, isMedia = false) => {
     await sendMessageChat({
       topicId: route.value.id,
       text: '',
-      medias: state.medias
+      medias,
+      ex: JSON.stringify({ clientId })
     });
 
     await nextTick();
     scrollToBottom();
-
-    state.medias = [];
   } catch (error) {
     console.error('[ChatSDK] Failed to send message:', error);
   }

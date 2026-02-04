@@ -211,6 +211,7 @@ export const sendMessageChat = async (params: {
   topicId: string;
   text?: string;
   medias?: IMedia[];
+  ex?: string;
 }): Promise<void> => {
   const sdk = getChatSDK();
 
@@ -218,7 +219,8 @@ export const sendMessageChat = async (params: {
     sdk.sendWebSocketEvent(WebSocketEventType.SEND_MESSAGE, {
       topicId: params.topicId,
       text: params.text,
-      medias: params.medias
+      medias: params.medias,
+      ex: params.ex
     });
   } catch (error) {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);
@@ -243,10 +245,11 @@ export const deleteMessageChat = async (params: {
 
 export const uploadFile = async (
   file: File
-): Promise<{ path: string; file: File }> => {
+): Promise<{ path: string; thumbnailPath: string; file: File }> => {
   const sdk = getChatSDK();
-  const path = await sdk.uploadFile(file);
-  return { file, path };
+
+  const { objectName, thumbnailObjectName } = await sdk.uploadFile(file);
+  return { file, path: objectName, thumbnailPath: thumbnailObjectName };
 };
 
 const messageHistoryRequests: Map<
