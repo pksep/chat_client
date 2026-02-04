@@ -245,10 +245,11 @@ export const deleteMessageChat = async (params: {
 
 export const uploadFile = async (
   file: File
-): Promise<{ path: string; file: File }> => {
+): Promise<{ path: string; thumbnailPath: string; file: File }> => {
   const sdk = getChatSDK();
-  const path = await sdk.uploadFile(file);
-  return { file, path };
+
+  const { objectName, thumbnailObjectName } = await sdk.uploadFile(file);
+  return { file, path: objectName, thumbnailPath: thumbnailObjectName };
 };
 
 const messageHistoryRequests: Map<

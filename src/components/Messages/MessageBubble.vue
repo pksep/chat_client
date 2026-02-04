@@ -167,16 +167,19 @@
               class="message-content__media"
               :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
             >
+              <video
+                v-if="
+                  media.type === MediaType.Video &&
+                  (!media.thumbnailPath || media.thumbnailPath === media.path)
+                "
+                :src="getFullMediaPath(media)"
+              />
+
               <img
-                v-if="media.type === MediaType.Image"
+                v-else
                 @click="setSliderElement(mediaFiles, i)"
                 :src="getFullMediaPath(media)"
                 :alt="props.sender ? props.sender + ' image' : 'Shared image'"
-              />
-
-              <video
-                v-if="media.type === MediaType.Video"
-                :src="getFullMediaPath(media)"
               />
 
               <div
@@ -384,16 +387,18 @@ const generateArray = (n: number): number[] => {
   return Array.from({ length: n });
 };
 
-const getFullMediaPath = (media: IMedia, inSlider: boolean = false) => {
-  if (!media.path.includes('data:') || inSlider) {
-    return `${config.CHAT_PATH_TO_FILE_CDN}/${media.publicPath || media.path}`;
+const getFullMediaPath = (media: IMedia, isThumb = true) => {
+  if (!media.path.includes('data:')) {
+    return `${config.CHAT_PATH_TO_FILE_CDN}/${isThumb ? media.thumbnailPath : media.localPath || media.path}`;
   } else {
     return media.path;
   }
 };
 
 const setSliderElement = (medias: IMedia[], defaultIndex: number = 0) => {
-  sliderElementPaths.value = medias.map(media => getFullMediaPath(media, true));
+  sliderElementPaths.value = medias.map(media =>
+    getFullMediaPath(media, false)
+  );
 
   defaultIndexSlider.value = defaultIndex;
 };

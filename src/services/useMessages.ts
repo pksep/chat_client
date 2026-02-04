@@ -59,7 +59,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
 
     media.forEach((m, i) => {
       m.isLoading = null;
-      m.publicPath = message.media[i].path;
+      m.localPath = message.media[i].path;
     });
     existingMessages[existingMessages.length - 1] = { ...message, media };
 

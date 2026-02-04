@@ -60,13 +60,10 @@
             class="contact-list__description__media"
             :data-testid="`${props.dataTestid}-ContactList-Media${index + 1}`"
           >
-            <template
-              v-for="media in topic.lastMessage.media.slice(0, 3)"
-              :key="media.id"
-            >
+            <template v-for="media in topic.lastMessage.media" :key="media.id">
               <img
-                v-if="media.type === MediaType.Image"
-                :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.publicPath || media.path}`"
+                v-if="media.type !== MediaType.File"
+                :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.thumbnailPath || media.path}`"
               />
             </template>
           </div>

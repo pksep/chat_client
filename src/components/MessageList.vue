@@ -190,6 +190,7 @@ import {
 import {
   addMessageToLocal,
   changeFileLoadingStatus,
+  deleteMessageFromLocal,
   fetchMessagesForTopic,
   getMessagesByTopicId
 } from '../services/useMessages';
@@ -647,18 +648,21 @@ const handleAttachFileChunk = async (files: FileList, isMedia = false) => {
 
   for (const [i, uploadedFile] of Array.from(files).entries()) {
     try {
-      const { file, path } = await uploadFile(uploadedFile);
+      const { file, path, thumbnailPath } = await uploadFile(uploadedFile);
 
       changeFileLoadingStatus(route.value.id, clientId, i.toString());
 
       medias.push({
         path,
+        thumbnailPath,
         originName: file.name,
         size: file.size,
         type: getMediaType(file, isMedia)
       });
     } catch (error) {
-      console.error('[ChatSDK] Failed to send file:', error);
+      alert(error.message);
+      deleteMessageFromLocal(route.value.id, clientId);
+      return;
     }
   }
 

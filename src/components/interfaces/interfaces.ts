@@ -66,7 +66,8 @@ export interface IMedia extends Media {
   size: number;
   originName: string;
   isLoading?: boolean;
-  publicPath?: string;
+  thumbnailPath?: string;
+  localPath?: string;
 }
 
 export enum MessageStatusEnum {
