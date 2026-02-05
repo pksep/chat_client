@@ -79,7 +79,10 @@
                   :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.thumbnailPath || media.path}`"
                 />
 
-                <MiniPlayIcon class="contact-list__description__media__play" />
+                <MiniPlayIcon
+                  v-if="media.type === MediaType.Video"
+                  class="contact-list__description__media__play"
+                />
               </div>
             </template>
 

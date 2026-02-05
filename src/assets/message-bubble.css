@@ -218,7 +218,7 @@ div.message-content__html > p {
 .message-content__media {
   position: relative;
   width: 100%;
-  aspect-ratio: 1 / 1;
+  /* aspect-ratio: 1 / 1; */
   overflow: hidden;
   border-radius: 8px;
 }

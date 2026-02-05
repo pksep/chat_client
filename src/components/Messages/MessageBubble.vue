@@ -100,6 +100,12 @@
           :class="messageArticleStyles(MediaType.File)"
           :data-testid="`${dataTestid}-MessageBubble-Article`"
         >
+          <h3
+            class="message__article-initals"
+            v-if="!props.isMeSender && route.type !== RouteTypes.DIALOGS"
+          >
+            {{ props.sender }}
+          </h3>
           <div
             v-for="(media, i) in docFiles"
             :key="media.id"
@@ -168,10 +174,7 @@
               :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
             >
               <video
-                v-if="
-                  media.type === MediaType.Video &&
-                  (!media.thumbnailPath || media.thumbnailPath === media.path)
-                "
+                v-if="media.type === MediaType.Video && media.localPath"
                 :src="getFullMediaPath(media)"
               />
 
@@ -389,13 +392,11 @@ const generateArray = (n: number): number[] => {
 };
 
 const getFullMediaPath = (media: IMedia, isThumb = true) => {
-  if (!media.path.includes('data:')) {
-    return `${config.CHAT_PATH_TO_FILE_CDN}/${isThumb ? media.thumbnailPath : media.localPath || media.path}`;
-  } else {
-    return media.localPath
-      ? `${config.CHAT_PATH_TO_FILE_CDN}/${media.localPath}`
-      : media.path;
+  if (media.localPath && isThumb) {
+    return media.localPath;
   }
+
+  return `${config.CHAT_PATH_TO_FILE_CDN}/${isThumb ? media.thumbnailPath : media.path}`;
 };
 
 const setSliderElement = (medias: IMedia[], defaultIndex: number = 0) => {

@@ -639,7 +639,8 @@ const handleAttachFileChunk = async (files: FileList, isMedia = false) => {
 
   const localMedia: IMedia[] = await Promise.all(
     Array.from(files).map(async (file, i) => ({
-      path: await fileToDataURL(file),
+      localPath: await fileToDataURL(file),
+      path: '',
       originName: file.name,
       size: file.size,
       id: i + '',
