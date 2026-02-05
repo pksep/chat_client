@@ -521,68 +521,94 @@ const getMediaType = (file: File, isMedia: boolean): MediaTypeType => {
   return MediaType.File;
 };
 
-const handleSend = async (): Promise<void> => {
-  if (!inputText.value.trim() || inputText.value.trim() === '<p></p>') return;
+const MAX_HTML_LENGTH = 2000;
 
-  if (route.value && route.value.type === RouteTypes.AI) {
-    const text = inputText.value;
-    inputText.value = '';
+const splitHtmlByLength = (
+  html: string,
+  maxLength = MAX_HTML_LENGTH
+): string[] => {
+  const blocks = html.split(/(?=<p|<div|<br|<ul|<ol|<li)/i);
+  const parts: string[] = [];
 
-    if (mastraResult.value && mastraResult.value.sendMessage) {
-      const userMessage = {
-        role: 'user' as 'user' | 'assistant',
-        content: text,
-        timestamp: Date.now()
-      };
-      state.aiMessages = [...state.aiMessages, userMessage];
+  let current = '';
 
-      await nextTick();
-
-      try {
-        await mastraResult.value.sendMessage(text);
-      } catch (error) {
-        console.warn('Mastra failed to send message:', error);
-      }
+  for (const block of blocks) {
+    if ((current + block).length > maxLength) {
+      if (current) parts.push(current);
+      current = block;
     } else {
+      current += block;
+    }
+  }
+
+  if (current) parts.push(current);
+
+  return parts;
+};
+
+const handleSend = async (): Promise<void> => {
+  const rawText = inputText.value;
+
+  if (!rawText.trim() || rawText.trim() === '<p></p>') return;
+
+  inputText.value = '';
+
+  const parts = splitHtmlByLength(rawText);
+
+  /* ================= AI ROUTE ================= */
+  if (route.value?.type === RouteTypes.AI) {
+    for (const part of parts) {
       const userMessage = {
         role: 'user' as 'user' | 'assistant',
-        content: text,
+        content: part,
         timestamp: Date.now()
       };
+
       state.aiMessages = [...state.aiMessages, userMessage];
-
-      const assistantMessage = {
-        role: 'assistant' as 'user' | 'assistant',
-        content: 'Mastra is currently unavailable. Please try again later.',
-        timestamp: Date.now()
-      };
-      state.aiMessages = [...state.aiMessages, assistantMessage];
-
       await nextTick();
-      scrollToBottom();
 
-      console.warn('Mastra is not available, message added locally only');
+      if (mastraResult.value?.sendMessage) {
+        try {
+          await mastraResult.value.sendMessage(part);
+        } catch (error) {
+          console.warn('Mastra failed to send message:', error);
+          break;
+        }
+      } else {
+        const assistantMessage = {
+          role: 'assistant' as 'user' | 'assistant',
+          content: 'Mastra is currently unavailable. Please try again later.',
+          timestamp: Date.now()
+        };
+
+        state.aiMessages = [...state.aiMessages, assistantMessage];
+        await nextTick();
+        scrollToBottom();
+
+        console.warn('Mastra is not available, message added locally only');
+        break;
+      }
     }
+
     return;
   }
 
-  if (!route.value.id) {
+  /* ================= NORMAL CHAT ================= */
+  if (!route.value?.id) {
     console.error('[ChatSDK] Cannot send message: no topic provided');
     return;
   }
 
-  const text = inputText.value;
-  inputText.value = '';
-
   try {
-    await sendMessageChat({
-      topicId: route.value.id,
-      text
-    });
+    for (const part of parts) {
+      await sendMessageChat({
+        topicId: route.value.id,
+        text: part
+      });
 
-    await nextTick();
-
-    scrollToBottom();
+      await nextTick();
+      scrollToBottom();
+    }
   } catch (error) {
     console.error('[ChatSDK] Failed to send message:', error);
   }

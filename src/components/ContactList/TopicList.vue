@@ -56,18 +56,35 @@
             v-html="topic.lastMessage?.text"
           ></div>
           <div
+            v-else-if="
+              topic.lastMessage?.media?.length > 0 &&
+              topic.lastMessage.media[0].type === MediaType.File
+            "
+            class="contact-list__description contact-list__description__media"
+          >
+            <AttachFileIcon />
+            <p>Медиа</p>
+          </div>
+          <div
             v-else-if="topic.lastMessage?.media?.length > 0"
-            class="contact-list__description__media"
+            class="contact-list__description contact-list__description__media"
             :data-testid="`${props.dataTestid}-ContactList-Media${index + 1}`"
           >
-            <template v-for="media in topic.lastMessage.media" :key="media.id">
-              <img
-                v-if="media.type !== MediaType.File"
-                :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.thumbnailPath || media.path}`"
-              />
+            <template
+              v-for="media in topic.lastMessage.media.slice(0, 3)"
+              :key="media.id"
+              ><div>
+                <img
+                  v-if="media.type !== MediaType.File"
+                  :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.thumbnailPath || media.path}`"
+                />
+
+                <MiniPlayIcon class="contact-list__description__media__play" />
+              </div>
             </template>
+
+            <p>{{ getTopicLastMessageLabel(topic.lastMessage?.media) }}</p>
           </div>
-          <div v-else class="contact-list__description" v-html="'--'" />
           <div class="contact-list__top">
             <MessageStatusIcons
               v-if="topic.lastMessage?.senderUserId === authedUser.id"
@@ -169,7 +186,7 @@ import ContextMenu from './ContextMenu.vue';
 import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { getAuthUser } from '../../composables/useAuth';
-import { ITopic, MessageStatusEnum } from '../interfaces/interfaces';
+import { IMedia, ITopic, MessageStatusEnum } from '../interfaces/interfaces';
 import { useTopics } from '../../composables/useTopics';
 import { formatTime } from '../../composables/useTime';
 import { useResizeState } from '../../composables/useResizeState';
@@ -182,6 +199,8 @@ import {
 } from '../../composables/navigation';
 import { getConfig } from '../../services/useConfig';
 import { MediaType } from '@pksep/zod-shared-chat';
+import AttachFileIcon from '../UI/AttachFileIcon.vue';
+import MiniPlayIcon from '../UI/MiniPlayIcon.vue';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
@@ -239,5 +258,24 @@ const handleKeyDown = (contact: ITopic, event: KeyboardEvent): void => {
   if (event.key === 'Enter' || event.key === ' ') {
     handleClick(contact);
   }
+};
+
+const getTopicLastMessageLabel = (media: IMedia[]): string => {
+  let text = '';
+  const haveImage = media.some(m => m.type === MediaType.Image);
+  const haveVideo = media.some(m => m.type === MediaType.Video);
+  if (haveImage) {
+    text += 'Фото';
+  }
+
+  if (haveVideo) {
+    if (text) {
+      text += ', видео';
+    } else {
+      text = 'Видео';
+    }
+  }
+
+  return text;
 };
 </script>

@@ -339,7 +339,8 @@ const messageArticleStyles = (type?: MediaTypeType) => [
     'message__no-author': props.isMeSender,
     message__article__media:
       type === MediaType.Image || type === MediaType.Video,
-    message__article__file: type === MediaType.File
+    message__article__file: type === MediaType.File,
+    message__article__text: !type
   }
 ];
 
@@ -391,7 +392,9 @@ const getFullMediaPath = (media: IMedia, isThumb = true) => {
   if (!media.path.includes('data:')) {
     return `${config.CHAT_PATH_TO_FILE_CDN}/${isThumb ? media.thumbnailPath : media.localPath || media.path}`;
   } else {
-    return media.path;
+    return media.localPath
+      ? `${config.CHAT_PATH_TO_FILE_CDN}/${media.localPath}`
+      : media.path;
   }
 };
 
