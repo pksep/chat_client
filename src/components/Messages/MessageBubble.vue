@@ -342,7 +342,8 @@ const messageArticleStyles = (type?: MediaTypeType) => [
     'message__no-author': props.isMeSender,
     message__article__media:
       type === MediaType.Image || type === MediaType.Video,
-    message__article__file: type === MediaType.File
+    message__article__file: type === MediaType.File,
+    message__article__text: !type
   }
 ];
 

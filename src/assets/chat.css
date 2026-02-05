@@ -1,7 +1,3 @@
-* {
-  user-select: none;
-}
-
 .chat__nothing {
   display: grid;
   margin-top: 0;
@@ -167,5 +163,11 @@ p.chat__nothing-paragraph {
   }
   .chat__message-bubble > .top-element > .date-divider {
     margin-top: 5px;
+  }
+}
+
+@media screen and (width <= 480px) {
+  * {
+    user-select: none;
   }
 }
