@@ -60,11 +60,20 @@
             class="contact-list__description__media"
             :data-testid="`${props.dataTestid}-ContactList-Media${index + 1}`"
           >
-            <template v-for="media in topic.lastMessage.media" :key="media.id">
-              <img
-                v-if="media.type !== MediaType.File"
-                :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.thumbnailPath || media.path}`"
-              />
+            <template
+              v-for="media in topic.lastMessage.media.slice(0, 3)"
+              :key="media.id"
+              ><div>
+                <img
+                  v-if="media.type !== MediaType.File"
+                  :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.thumbnailPath || media.path}`"
+                />
+
+                <MiniPlayIcon
+                  v-if="media.type === MediaType.Video"
+                  class="contact-list__description__media__play"
+                />
+              </div>
             </template>
           </div>
           <div v-else class="contact-list__description" v-html="'--'" />
