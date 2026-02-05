@@ -79,7 +79,7 @@
                   :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.thumbnailPath || media.path}`"
                 />
 
-                <MiniPlayIcon class="contact-list__description__media__play"/>
+                <MiniPlayIcon class="contact-list__description__media__play" />
               </div>
             </template>
 
