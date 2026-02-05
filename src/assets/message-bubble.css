@@ -305,6 +305,13 @@ div.message-content__file {
   gap: 5px;
 }
 
+.message__content__articles:has(.message__article__text) {
+  max-width: calc(100% - 50px);
+}
+.message__article__text .message-content {
+  max-width: 100%;
+}
+
 .message__content__articles__my {
   justify-items: end;
 }
@@ -340,10 +347,10 @@ div.message-content__file {
 
 .chat__input {
   align-self: end;
-  padding: 15px;
+  padding: 0 10px 15px 15px;
 
   .editor-content {
-    max-height: calc(var(--basic-height) / 2);
+    max-height: 70px;
     overflow: auto;
     overflow-wrap: break-word;
     word-break: break-word;

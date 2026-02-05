@@ -30,6 +30,7 @@
     class="modal__new-group"
     @unmount-next="handleCreateMobileGroup"
     start-button-text="Создать"
+    :is-disabled-start-button="state.disableCreateButton"
     close-button-text="Назад"
     :data-testid="`${props.dataTestid}-NewChatMobileModal-GroupModal`"
   >
@@ -101,7 +102,8 @@ const filteredSelectedContacts = computed<IUser[]>(() => {
 });
 
 const state = reactive({
-  checkMembers: []
+  checkMembers: [],
+  disableCreateButton: false
 });
 
 const { form, handleUpdateInformation } = useNewInformationModal({
@@ -140,9 +142,11 @@ const handleCreateInformation = ({ avatarUrl, name }) => {
   groupName.value = name;
 };
 
-const handleCreateMobileGroup = () => {
+const handleCreateMobileGroup = async () => {
+  state.disableCreateButton = true;
   handleCreateInformation(form);
-  handleCreateGroup();
+  await handleCreateGroup();
+  state.disableCreateButton = false;
 };
 
 const handleAddUsers = (addedUsers: IUser[]) => {
