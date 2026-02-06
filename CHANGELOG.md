@@ -1,3 +1,10 @@
+## [1.7.2](https://github.com/pksep/chat_client/compare/v1.7.1...v1.7.2) (2026-02-06)
+
+
+### Bug Fixes
+
+* bar problem ([2c0aaf1](https://github.com/pksep/chat_client/commit/2c0aaf14abe0ea0c0ca26be70ae28042a845f545))
+
 ## [1.7.1](https://github.com/pksep/chat_client/compare/v1.7.0...v1.7.1) (2026-02-05)
 
 
