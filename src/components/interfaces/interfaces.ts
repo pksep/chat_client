@@ -47,6 +47,7 @@ export interface ITopic extends Topic {
   name?: string;
   avatarUrl?: string;
   unreadMessageCount?: number;
+  isAdmin?: boolean;
 }
 
 export interface IMenuProps {

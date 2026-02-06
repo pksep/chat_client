@@ -7,7 +7,6 @@ import {
   Media
 } from '@pksep/zod-shared-chat';
 
-import { S3Service } from './s3Service';
 import {
   WebSocketEventType,
   WebSocketEventHandler,
@@ -62,7 +61,6 @@ export class ChatSDK {
   private ws: ChatWSInterface;
   private utils: ChatUtilsInterface;
 
-  private s3Service?: S3Service;
   private reqi: Reqi;
 
   constructor(options: ChatSDKOptions) {
@@ -76,11 +74,10 @@ export class ChatSDK {
       }
     });
 
-    this.s3Service = new S3Service(this.reqi);
     this.auth = new ChatAuth(this.apiUrl, this.token);
     this.user = new ChatUser(this.reqi);
     this.topic = new ChatTopic(this.reqi);
-    this.message = new ChatMessage(this.reqi, this.s3Service);
+    this.message = new ChatMessage(this.reqi);
     this.group = new ChatGroup(this.reqi);
     this.media = new ChatMedia(this.reqi);
     this.ws = new ChatWS(null);

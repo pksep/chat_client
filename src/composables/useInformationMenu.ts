@@ -2,8 +2,7 @@ import { reactive, Ref } from 'vue';
 import { useGroup } from '../composables/useGroup';
 import { uploadFile } from '../services/useChat';
 import { IMenuInfoInformation } from './useMenuInfo';
-import { currentRoute } from './navigation';
-import { RouteTypes } from './navigation/useUrlRouting';
+import { navigateToGroupsList } from './navigation/useUrlRouting';
 
 export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
   const state = reactive({
@@ -57,8 +56,7 @@ export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
       if (model.value?.groupId) {
         const { quitGroup } = useGroup();
         await quitGroup(model.value?.groupId);
-        currentRoute.value = { type: RouteTypes.GROUP, id: null };
-        requestAnimationFrame(() => window.location.reload());
+        navigateToGroupsList();
       }
     } catch (error) {
       console.error('Failed to leave group or delete friend:', error);

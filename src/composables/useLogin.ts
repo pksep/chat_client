@@ -3,7 +3,6 @@ import { useChatApi } from '../services/useApi';
 export type RegisterUser = {
   userID: string;
   nickname: string;
-  faceURL?: string;
   ex?: string;
 };
 

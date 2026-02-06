@@ -119,6 +119,10 @@ const contacts = computed(() => {
     );
   }
 
+  filteredContacts = filteredContacts.filter(
+    contact => contact.id !== authUser.value.id
+  );
+
   return [...filteredContacts];
 });
 

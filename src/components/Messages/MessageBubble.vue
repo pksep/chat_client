@@ -248,64 +248,19 @@
       </Button>
     </ContextMenu>
 
-    <MobileModal
-      v-if="isMobile"
-      class="message__delete__mobile"
-      headerClass="hidden"
-      :show-divider="false"
+    <ConfirmModal
       :open="deleteModalOpen"
+      title="Удалить сообщение"
+      description="Вы уверены, что хотите удалить сообщение для всех участников чата?"
       @unmount-close="handleCloseModal"
-    >
-      <h2 class="message__delete__title">Удалить сообщение</h2>
-      <p class="message__delete__description">
-        Вы уверены, что хотите удалить сообщение для всех участников чата?
-      </p>
-      <Button :type="ButtonTypeEnum.primary" @click.stop="handleCloseModal">
-        Нет
-      </Button>
-      <Button
-        :type="ButtonTypeEnum.secondary"
-        @click.stop="handleDeleteMessage"
-      >
-        Да
-      </Button>
-    </MobileModal>
-
-    <Modal
-      v-else
-      :open="deleteModalOpen"
-      position="center"
-      width="492px"
-      height="178px"
-      class="message__delete"
-    >
-      <h2 class="message__delete__title">Удалить сообщение</h2>
-      <p class="message__delete__description">
-        Вы уверены, что хотите удалить сообщение для всех участников чата?
-      </p>
-      <div class="message__delete__buttons">
-        <Button
-          :type="ButtonTypeEnum.secondary"
-          :size="SizesEnum.small"
-          @click.stop="handleCloseModal"
-        >
-          Нет
-        </Button>
-        <Button
-          :type="ButtonTypeEnum.primary"
-          :size="SizesEnum.small"
-          @click.stop="handleDeleteMessage"
-        >
-          Да
-        </Button>
-      </div>
-    </Modal>
+      @unmount-confirm="handleDeleteMessage"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Avatar, Button, ButtonTypeEnum, Modal, SizesEnum } from '@pksep/yui';
+import { Avatar, Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import {
   isOpen,
@@ -323,13 +278,11 @@ import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
 import { getConfig } from '../../services/useConfig';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
-import { useResizeState } from '../../composables/useResizeState';
-import { MAX_W_MD } from '../../utils/constants';
 import { deleteMessageChat } from '../../services/useChat';
-import MobileModal from '../UI/MobileModal.vue';
 import LoadingIcon from '../UI/LoadingIcon.vue';
 import PlayIcon from '../UI/PlayIcon.vue';
 import { IMedia } from '../interfaces/interfaces';
+import ConfirmModal from '../UI/ConfirmModal.vue';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -385,8 +338,6 @@ const handleDeleteMessage = async (): Promise<void> => {
   handleCloseModal();
 };
 
-const { state: isMobile } = useResizeState(MAX_W_MD);
-
 const generateArray = (n: number): number[] => {
   return Array.from({ length: n });
 };
@@ -394,6 +345,10 @@ const generateArray = (n: number): number[] => {
 const getFullMediaPath = (media: IMedia, isThumb = true) => {
   if (media.localPath && isThumb) {
     return media.localPath;
+  }
+
+  if (media.path.endsWith('.gif')) {
+    return `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`;
   }
 
   return `${config.CHAT_PATH_TO_FILE_CDN}/${isThumb ? media.thumbnailPath : media.path}`;

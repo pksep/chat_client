@@ -1,7 +1,6 @@
 import { Message, Topic, Media } from '@pksep/zod-shared-chat';
 import { Reqi } from '@pksep/reqi';
 import { SearchParams, PaginatedResponse, MessageStatus } from './types';
-import { S3Service } from './s3Service';
 
 export interface ChatMessageInterface {
   editMessage(
@@ -36,11 +35,9 @@ export interface ChatMessageInterface {
 
 export class ChatMessage implements ChatMessageInterface {
   private reqi: Reqi;
-  private s3Service?: S3Service;
 
-  constructor(reqi: Reqi, s3Service?: S3Service) {
+  constructor(reqi: Reqi) {
     this.reqi = reqi;
-    this.s3Service = s3Service;
   }
 
   async editMessage(
