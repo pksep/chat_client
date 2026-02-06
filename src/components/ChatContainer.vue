@@ -263,6 +263,10 @@ watch(
       state.isNewContactOpen = false;
       state.isNewGroupOpen = false;
     }
+
+    if (!route.value?.id) {
+      state.isMenuDesktopOpen = false;
+    }
   }
 );
 

@@ -203,6 +203,7 @@ svg.icon-yui-kit.contact-list__read-icon {
 
 .menu__info-user-list--item {
   --size-avatar: 25px;
+  cursor: pointer;
 }
 
 .contact-list__me {

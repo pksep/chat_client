@@ -32,28 +32,30 @@
             :class="['menu__user-profile', props.userClass ?? '']"
             :user="user"
             :dataTestid="`${props.dataTestid}-ContactListInModal-UserProfile${index + 1}`"
-            @unmount-click="openActivePopover(user.id.toString(), $event)"
+            @unmount-click="
+              user.id !== authUser.id &&
+                openActivePopover(user.id.toString(), $event)
+            "
           />
-          <template v-if="false">
-            <ContextMenu
-              :visible="isOpen[user.id.toString()]"
-              :position="position"
-              @unmount-close="closeActivePopover(user.id.toString())"
-              :data-testid="`${props.dataTestid}-ContactListInModal-ContextMenu${index + 1}`"
-            >
-              <template #default>
-                <Button
-                  class="menu__info-button-little"
-                  :type="ButtonTypeEnum.ghost"
-                  :size="SizesEnum.little"
-                  @click="deleteUserFromChat(user.id.toString())"
-                  :data-testid="`${props.dataTestid}-ContactListInModal-RemoveButton${index + 1}`"
-                >
-                  Удалить из канала
-                </Button>
-              </template>
-            </ContextMenu>
-          </template>
+          <ContextMenu
+            v-if="currentGroup.isAdmin"
+            :visible="isOpen[user.id.toString()]"
+            :position="position"
+            @unmount-close="closeActivePopover(user.id.toString())"
+            :data-testid="`${props.dataTestid}-ContactListInModal-ContextMenu${index + 1}`"
+          >
+            <template #default>
+              <Button
+                class="menu__info-button-little error-dark-color"
+                :type="ButtonTypeEnum.ghost"
+                :size="SizesEnum.little"
+                @click="deleteUserFromChat(user.id.toString())"
+                :data-testid="`${props.dataTestid}-ContactListInModal-RemoveButton${index + 1}`"
+              >
+                Удалить из канала
+              </Button>
+            </template>
+          </ContextMenu>
         </template>
       </li>
     </ul>
@@ -100,6 +102,7 @@ import ContactSelector from '../NewChat/ContactSelector.vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import { useUrlWatcher } from '../../composables/navigation';
+import { getAuthUser } from '../../composables/useAuth';
 
 interface ContactListInModalProps {
   showAddButton?: boolean;
@@ -141,6 +144,8 @@ const emits = defineEmits<{
 }>();
 
 const route = useUrlWatcher();
+
+const authUser = computed(() => getAuthUser());
 
 const reactiveContacts = computed(() => {
   const contacts = props.contacts || [];

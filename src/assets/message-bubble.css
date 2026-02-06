@@ -218,7 +218,7 @@ div.message-content__html > p {
 .message-content__media {
   position: relative;
   width: 100%;
-  /* aspect-ratio: 1 / 1; */
+  aspect-ratio: 1 / 1;
   overflow: hidden;
   border-radius: 8px;
 }
@@ -396,73 +396,6 @@ div.message-content__file {
 .slider-modal .modal-yui-kit__modal-content {
   width: auto;
   padding: 0;
-}
-
-.message__delete {
-  text-align: center;
-}
-
-.message__delete .modal-yui-kit__modal-content {
-  padding: 20px;
-  gap: 0;
-}
-
-.message__delete__title {
-  font-size: 20px;
-  margin: 0;
-  color: var(--text-color);
-  line-height: 24px;
-}
-
-.message__delete__description {
-  font-size: 14px;
-  margin: 20px 0 25px;
-  color: var(--text-neutral-color);
-  font-weight: 700;
-  padding-inline: 30px;
-}
-
-.message__delete__buttons {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-}
-
-.message__delete__buttons button {
-  width: 170px;
-  justify-content: center;
-}
-
-.message__delete__mobile.modal-yui-kit.modal-yui-kit_bottom {
-  text-align: center;
-  margin-top: auto;
-  height: 238px;
-  padding: 20px 10px;
-}
-
-.message__delete__mobile .message__delete__description {
-  font-size: 14px;
-  text-align: center;
-  padding-inline: 0;
-  margin: 10px auto 0;
-  width: 320px;
-  line-height: 17px;
-}
-
-.message__delete__mobile .modal-yui-kit__modal-content {
-  padding: 0;
-}
-
-.message__delete__mobile button {
-  width: 100%;
-  justify-content: center;
-  margin-top: 10px;
-  font-size: 20px;
-  padding: 0 !important;
-}
-
-.message__delete__mobile button:first-of-type {
-  margin-top: 20px;
 }
 
 .message-content__media-loading__icon {

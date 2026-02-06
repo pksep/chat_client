@@ -7,8 +7,9 @@
         id="name"
         class="initial"
         placeholder="Text"
-        v-model="form.name"
-        :disabled="props.disabledForm"
+        :model-value="newName"
+        @update:model-value="handleChangeName"
+        :disabled="!!currentGroup && !currentGroup.isAdmin"
       />
     </div>
     <div class="menu__info-form-block form__textarea" v-if="false">
@@ -17,7 +18,7 @@
     </div>
     <slot name="button">
       <Button
-        v-if="props.isButtonForSave"
+        v-if="!currentGroup || currentGroup.isAdmin"
         class="menu__info-save-button"
         :type="ButtonTypeEnum.primary"
         :size="SizesEnum.little"
@@ -31,53 +32,57 @@
 </template>
 
 <script setup lang="ts">
-import { IMenuInfoInformation } from '../../composables/useMenuInfo';
 import { Button, ButtonTypeEnum, Input, SizesEnum, Textarea } from '@pksep/yui';
-import { computed } from 'vue';
-import { useNewInformationModal } from '../../composables/useNewInformationModal';
+import { computed, ref, watch } from 'vue';
+import { currentGroup } from '../../composables/useGroup';
+import { useUrlWatcher } from '../../composables/navigation';
+
+const emits = defineEmits<{
+  (e: 'unmount-save', value: { name: string }): void;
+  (e: 'unmount-change', value: { name: string }): void;
+}>();
+
+const route = useUrlWatcher();
 
 const props = withDefaults(
   defineProps<{
-    disabledForm?: boolean;
-    isButtonForSave?: boolean;
+    name?: string;
   }>(),
-  {
-    isButtonForSave: true
-  }
+  { name: '' }
 );
 
-const model = defineModel<IMenuInfoInformation>();
-
-const emits = defineEmits<{
-  (e: 'unmount-save', value: { name: string; avatarUrl?: string }): void;
-}>();
-
-const { form } = useNewInformationModal(model?.value || {});
+const oldName = ref(props.name);
+const newName = ref(props.name);
 
 const isFormValid = computed(() => {
-  if (props.disabledForm) return true;
-  if ((model.value?.avatarUrl ?? '') !== form.avatarUrl) {
-    return true;
-  }
-  return (
-    form.name &&
-    form.name.trim() !== '' &&
-    form.name !== (model.value?.name ?? '')
-  );
+  return newName.value?.trim() !== '' && newName.value !== oldName.value;
 });
 
 const onSave = () => {
   if (isFormValid.value) {
-    model.value = {
-      ...model.value,
-      name: form.name,
-      avatarUrl: form.avatarUrl
+    currentGroup.value = {
+      ...currentGroup.value,
+      name: newName.value
     };
-    emits('unmount-save', { name: form.name, avatarUrl: form.avatarUrl });
+    oldName.value = newName.value;
+    emits('unmount-save', { name: newName.value });
   }
 };
 
 const onSubmit = () => {
   onSave();
 };
+
+const handleChangeName = (newVal: string) => {
+  newName.value = newVal;
+  emits('unmount-change', { name: newName.value });
+};
+
+watch(
+  () => [currentGroup.value?.id, route.value.id],
+  () => {
+    newName.value = currentGroup.value?.name || props.name;
+  },
+  { immediate: true }
+);
 </script>

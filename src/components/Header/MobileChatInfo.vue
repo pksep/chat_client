@@ -27,9 +27,9 @@
       @change="handleImagePublish"
     />
     <NewChatInformationForm
-      :model-value="information"
-      :disabled-form="props.isMenuInfo"
-      @unmount-save="handleImageSave"
+      :name="information?.name"
+      @unmount-save="handleSaveFromForm"
+      @unmount-change="handleChangeFromForm"
       :data-testid="`${props.dataTestid}-Header-InformationForm`"
     />
   </div>
@@ -120,20 +120,22 @@ const handleImagePublish = async (event: Event) => {
 
   if (currentGroup.value) {
     await setGroupInfo(currentGroup.value.group.id, {
-      faceURL: file.path,
-      groupName: currentGroup.value.group.title
+      avatarUrl: file.path
     });
   }
 
   information.value.avatarUrl = file.path;
 };
 
-// Handle saving information form
-const handleImageSave = (data: { name: string; avatarUrl?: string }) => {
-  information.value = {
-    ...information.value,
-    ...data
-  };
+const handleSaveFromForm = async (value: { name: string }) => {
+  await setGroupInfo(currentGroup.value.group.id, {
+    avatarUrl: currentGroup.value.group.avatarUrl,
+    groupName: value.name
+  });
+};
+
+const handleChangeFromForm = async (value: { name: string }) => {
+  information.value.name = value.name;
 };
 
 const handleContactClick = (newUsers: IUser[]): void => {

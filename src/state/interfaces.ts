@@ -59,7 +59,6 @@ export interface IContactSelectorState {
 
 export interface NewGroupState {
   groupName?: string;
-  groupAvatar?: string;
   selectedMembers?: any[];
   checkUsers?: any[];
   file?: File;

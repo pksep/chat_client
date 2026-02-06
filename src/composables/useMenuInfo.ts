@@ -19,6 +19,7 @@ type IMenuInfoState = {
 };
 
 export type IMenuInfoInformation = {
+  id?: string;
   name?: string;
   date?: Date;
   groupId?: string | null;
@@ -57,8 +58,7 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
       const { setGroupInfo } = useGroup();
       setGroupInfo(value.groupId, {
         groupName: value.name,
-        faceURL: value.avatarUrl || undefined,
-        introduction: undefined,
+        avatarUrl: value.avatarUrl || undefined,
         notification: null,
         ex: undefined
       });
@@ -76,10 +76,6 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
       }
     }
   };
-
-  const checkGroupId = computed(
-    () => !state.information?.groupId || state.information?.groupId === ''
-  );
 
   const initializeMenuInfo = async (
     props: Props & {
@@ -110,9 +106,7 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
         name:
           findTopic.user?.nickname ||
           (findTopic.user as Record<string, any>)?.['name'],
-        avatarUrl:
-          (findTopic.user as Record<string, any>)?.['faceURL'] ||
-          (findTopic.user as Record<string, any>)?.['avatarUrl'],
+        avatarUrl: (findTopic.user as Record<string, any>)?.['avatarUrl'],
         userId: findTopic.user?.id,
         topicId: findTopic.id
       };
@@ -125,7 +119,6 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
 
   return {
     state,
-    checkGroupId,
     handleContactClick,
     handleUpdateInformation,
     initializeMenuInfo,

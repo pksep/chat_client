@@ -18,6 +18,7 @@
 @import url('./new-group.css');
 @import url('./mobile-info-modal.css');
 @import url('./mobile-auth.css');
+@import url('./confirm-modal.css');
 
 .chat-container {
   --neutral-text-light: #b8b8b8;
@@ -56,6 +57,10 @@
   z-index: 2;
 }
 
+.chat__header .popover-yui-kit svg.popover-yui-kit__icon {
+  font-size: 24px;
+}
+
 .chat__menu {
   grid-area: menu;
   overflow-x: hidden;
@@ -91,6 +96,14 @@ svg.ai-icon {
   margin-top: 10px;
   font-size: 20px;
   height: 50px;
+}
+
+.error-color {
+  color: var(--error-color) !important;
+}
+
+.error-dark-color {
+  color: var(--error-dark-color) !important;
 }
 
 button.primary-yui-kit.disabled-yui-kit {

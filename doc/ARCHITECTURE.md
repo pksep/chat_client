@@ -99,7 +99,6 @@ graph TB
 
     subgraph Services
         UC[useChat]
-        UCO[useConversions]
         UG[useGroup]
         UCF[useConfig]
     end
@@ -244,7 +243,6 @@ graph TD
     end
 
     subgraph Data
-        UCO[useConversions.ts]
         UG[useGroup.ts]
         UU[useUsers.ts]
         UT[useTopics.ts]
@@ -305,13 +303,11 @@ src/
 │   └── useUnreadMessagePolling.ts
 ├── services/             # Business logic services
 │   ├── useChat.ts
-│   ├── useConversions.ts
 │   ├── useGroup.ts
 │   ├── useConfig.ts
 │   └── useChatSDK/
 │       ├── index.ts
 │       ├── types.ts
-│       └── s3Service.ts
 ├── utils/                # Utility functions
 └── assets/               # Static assets
 ```

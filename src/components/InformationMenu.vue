@@ -29,10 +29,7 @@
     @unmount-save="onSaveAvatar"
   />
   <MenuInfoButtons @unmount-leave="leaveGroupInfo" />
-  <NewChatInformationForm
-    :model-value="model"
-    @unmount-save="handleSaveFromForm"
-  />
+  <NewChatInformationForm @unmount-save="handleSaveFromForm" />
 </template>
 
 <script lang="ts" setup>
@@ -44,13 +41,15 @@ import MenuInfoButtons from './MenuInfoButtons.vue';
 import type { IMenuInfoInformation } from '../composables/useMenuInfo';
 import { getConfig } from '../services/useConfig';
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     modelValue?: IMenuInfoInformation;
     dataTestid?: string;
+    isAdmin?: boolean;
   }>(),
   {
-    dataTestid: () => 'InformationMenu'
+    dataTestid: () => 'InformationMenu',
+    isAdmin: false
   }
 );
 
@@ -73,15 +72,16 @@ const onSaveAvatar = async (file: File): Promise<void> => {
   await originalOnSaveAvatar(file);
 };
 
-const handleSaveFromForm = (value: { name: string; avatarUrl?: string }) => {
+const handleSaveFromForm = (value: { name: string }) => {
   const updatedValue = {
     ...model.value,
-    name: value.name,
-    avatarUrl: value.avatarUrl
+    name: value.name
   };
   model.value = updatedValue;
 };
 
-const openEditProfileIcon = () =>
+const openEditProfileIcon = () => {
+  if (!props.isAdmin) return;
   composableOpenEditProfileIcon(avatarInputRef.value);
+};
 </script>

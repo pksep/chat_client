@@ -5,7 +5,11 @@ import { User } from '@pksep/zod-shared-chat';
 import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { setAuthUser, getAuthUser, authedUser } from '../composables/useAuth';
-import { useTopics, changeUnreadMessageCount } from '../composables/useTopics';
+import {
+  useTopics,
+  changeUnreadMessageCount,
+  deleteTopicFromList
+} from '../composables/useTopics';
 import {
   updateLocalGroupDetails,
   addGroupList,
@@ -85,6 +89,8 @@ const setupChatListeners = (): void => {
         const { addTopicList } = useTopics();
         addTopicList(payload.data);
       }
+    } else if (payload.type === 'DELETE') {
+      deleteTopicFromList(payload.data.id);
     }
   });
 
