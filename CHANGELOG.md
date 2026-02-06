@@ -1,3 +1,15 @@
+# [1.8.0](https://github.com/pksep/chat_client/compare/v1.7.2...v1.8.0) (2026-02-06)
+
+
+### Bug Fixes
+
+* lint ([2fd6dbc](https://github.com/pksep/chat_client/commit/2fd6dbcd33befe01c5192dec2cb5bc2d82bfd21e))
+
+
+### Features
+
+* logic kick and leave from group ([12b1eaa](https://github.com/pksep/chat_client/commit/12b1eaa85bd19428ab23f274ddac56b017bc4b1b))
+
 ## [1.7.2](https://github.com/pksep/chat_client/compare/v1.7.1...v1.7.2) (2026-02-06)
 
 
