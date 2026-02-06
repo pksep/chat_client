@@ -16,10 +16,7 @@ import { onMounted, ref } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
 import MobileAuth from './components/Mobile/MobileAuth.vue';
 
-import type {
-  IChatContainerEmits,
-  IChatContainerProps
-} from './components/interfaces/interfaces';
+import type { IChatContainerProps } from './components/interfaces/interfaces';
 import { initializeChat, setCurrentUserId } from './services/useChat';
 import { saveUserIdToSession, hasUserIdInSession } from './services/useMastra';
 import { fetchAuthUser, setAuthUser, useAuth } from './composables/useAuth';
@@ -34,7 +31,6 @@ import { useResizeState } from './composables/useResizeState';
 import { navigateToDialogsList } from './composables/navigation';
 import { MAX_W_MD } from './utils/constants';
 
-const emits = defineEmits<IChatContainerEmits>();
 const props = defineProps<IChatContainerProps>();
 
 const openChatContainerShow = ref(true);

@@ -2,8 +2,7 @@ import { reactive, Ref } from 'vue';
 import { useGroup } from '../composables/useGroup';
 import { uploadFile } from '../services/useChat';
 import { IMenuInfoInformation } from './useMenuInfo';
-import { currentRoute } from './navigation';
-import { navigateToGroupsList, RouteTypes } from './navigation/useUrlRouting';
+import { navigateToGroupsList } from './navigation/useUrlRouting';
 
 export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
   const state = reactive({
