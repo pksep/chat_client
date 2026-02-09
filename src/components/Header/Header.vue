@@ -34,7 +34,7 @@
         v-if="route.type === 'group'"
         class="chat__header-profile"
         avatar-alt="group-profile-alt"
-        :topic="currentGroup"
+        :topic="currentGroup || currentTopic"
         :data-testid="`${props.dataTestid}-Header-GroupProfile`"
       />
       <UserProfile

@@ -15,8 +15,6 @@ interface Route {
   id: string | null;
 }
 
-const currentRoute = ref<Route>({ type: RouteTypes.DEFAULT, id: null });
-
 const parseUrl = (): Route => {
   const url = new URL(window.location.href);
   const pathParts = url.pathname.split('/').filter(part => part !== '');
@@ -55,6 +53,8 @@ const parseUrl = (): Route => {
 
   return { type: RouteTypes.DEFAULT, id: null };
 };
+
+const currentRoute = ref<Route>(parseUrl());
 
 const updateUrl = (route: Route): void => {
   let newUrl: string;
