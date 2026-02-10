@@ -98,6 +98,10 @@ svg.ai-icon {
   height: 50px;
 }
 
+.mobile-modal-download-button {
+  gap: 10px !important;
+}
+
 .error-color {
   color: var(--error-color) !important;
 }
