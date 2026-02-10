@@ -105,21 +105,26 @@ export const getMessagesByTopicId = (topicId: string): IMessage[] => {
 
 export const changeLocalReadStatus = (
   topicId: string,
-  messageIds: string[]
+  messageIds: string[],
+  userId: string
 ): void => {
   const existingMessages = messagesStore.value[topicId] || [];
   const updatedMessages = existingMessages.map(message => {
     if (messageIds.includes(message.id)) {
       return {
         ...message,
-        status: MessageStatus.Read
+        status: MessageStatus.Read,
+        isRead: true
       };
     }
     return message;
   });
   updateLocalTopicReadStatus(topicId, messageIds);
-  changeUnreadMessageCount(-messageIds.length, topicId);
   messagesStore.value[topicId] = updatedMessages;
+
+  if (userId === authedUser.value.id) {
+    changeUnreadMessageCount(-messageIds.length, topicId);
+  }
 };
 
 export const changeFileLoadingStatus = (

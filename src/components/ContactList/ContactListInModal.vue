@@ -38,7 +38,7 @@
             "
           />
           <ContextMenu
-            v-if="currentGroup.isAdmin"
+            v-if="currentGroup?.isAdmin"
             :visible="isOpen[user.id.toString()]"
             :position="position"
             @unmount-close="closeActivePopover(user.id.toString())"

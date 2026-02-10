@@ -104,11 +104,7 @@
           :time="formatTime(new Date(message.createdAt))"
           :sender="message.senderUser?.initials || ''"
           :avatar="message.senderUser?.avatarUrl || ''"
-          :is-read="
-            props.user.id === message.senderUserId
-              ? message.status === MessageStatus.Read
-              : message.status === MessageStatus.Read
-          "
+          :is-read="message.status === MessageStatus.Read"
           :message-status="message.status"
           :topic-id="message.topicId"
           :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
@@ -344,9 +340,7 @@ const handleScroll = async (): Promise<void> => {
     }
     scrollMarkReadTimeout = window.setTimeout(() => {
       const unreadMessages = state.messages.filter(
-        message =>
-          message.senderUserId !== props.user?.id &&
-          message.status !== MessageStatus.Read
+        message => message.senderUserId !== props.user?.id && !message.isReadByMe
       );
 
       if (unreadMessages.length > 0) {
@@ -735,9 +729,7 @@ watch(
     hasMoreMessage = true;
 
     const unreadMessages = state.messages.filter(
-      message =>
-        message.senderUserId !== props.user?.id &&
-        message.status !== MessageStatus.Read
+      message => message.senderUserId !== props.user?.id && !message.isReadByMe
     );
     if (unreadMessages.length > 0) {
       markAsRead({

@@ -23,7 +23,7 @@ import { fetchAuthUser, setAuthUser, useAuth } from './composables/useAuth';
 import { fetchAllUsers, getUserById } from './composables/useUsers';
 import { getConfig } from './services/useConfig';
 import { useTopics } from './composables/useTopics';
-import { useGroup } from './composables/useGroup';
+import { getGroupById, useGroup } from './composables/useGroup';
 import { useUrlWatcher } from './composables/navigation';
 import { fetchMessagesForTopic } from './services/useMessages';
 import { initPushNotifications } from './services/usePushNotifications';
@@ -122,6 +122,10 @@ const runAppInitialization = async () => {
     await fetchAllGroups();
     if (route.value.id) {
       await fetchMessagesForTopic(route.value.id);
+
+      if (route.value.type === RouteTypes.GROUP) {
+        getGroupById(route.value.id);
+      }
     }
 
     await initPushNotifications();

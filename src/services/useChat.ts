@@ -115,7 +115,7 @@ const setupChatListeners = (): void => {
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.READ_MESSAGE, ({ payload }) => {
-    changeLocalReadStatus(payload.topicId, payload.messageIds);
+    changeLocalReadStatus(payload.topicId, payload.messageIds, payload.userId);
   });
 };
 
