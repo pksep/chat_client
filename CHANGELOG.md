@@ -1,3 +1,17 @@
+# [1.9.0](https://github.com/pksep/chat_client/compare/v1.8.0...v1.9.0) (2026-02-10)
+
+
+### Bug Fixes
+
+* config ([2654d9c](https://github.com/pksep/chat_client/commit/2654d9c83290f14df9ec490e1cd0af12e5bede48))
+* modal for mobile ([533f76d](https://github.com/pksep/chat_client/commit/533f76d6b11d78565e662ac6a0f51f7cc12e1840))
+
+
+### Features
+
+* add download buttons ([da21b3a](https://github.com/pksep/chat_client/commit/da21b3afadd88f54414e969850e2ea0a3047a3ab))
+* save route redirects ([55ebf73](https://github.com/pksep/chat_client/commit/55ebf7336e7d1bb968f5ee4936aa0d87aef3821b))
+
 # [1.8.0](https://github.com/pksep/chat_client/compare/v1.7.2...v1.8.0) (2026-02-06)
 
 
