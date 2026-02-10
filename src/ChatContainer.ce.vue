@@ -30,6 +30,7 @@ import { initPushNotifications } from './services/usePushNotifications';
 import { useResizeState } from './composables/useResizeState';
 import { navigateToDialogsList } from './composables/navigation';
 import { MAX_W_MD } from './utils/constants';
+import { RouteTypes } from './composables/navigation/useUrlRouting';
 
 const props = defineProps<IChatContainerProps>();
 
@@ -57,7 +58,7 @@ const runAppInitialization = async () => {
   const REDIRECT_KEY = 'chat_redirect_attempts';
   const MAX_REDIRECTS = 2;
 
-  if (isMobile.value) {
+  if (isMobile.value && route.value.type === RouteTypes.DEFAULT) {
     navigateToDialogsList();
   }
 
