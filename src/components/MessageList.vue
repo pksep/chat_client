@@ -340,7 +340,8 @@ const handleScroll = async (): Promise<void> => {
     }
     scrollMarkReadTimeout = window.setTimeout(() => {
       const unreadMessages = state.messages.filter(
-        message => message.senderUserId !== props.user?.id && !message.isReadByMe
+        message =>
+          message.senderUserId !== props.user?.id && !message.isReadByMe
       );
 
       if (unreadMessages.length > 0) {
