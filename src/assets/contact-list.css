@@ -50,31 +50,66 @@
 
 .contact-list__description {
   grid-area: description;
-  display: grid;
+  display: flex;
   justify-self: start;
+  align-items: center;
   font-size: 14px;
 
   color: var(--text-grey);
+  height: 18px;
 }
 
 .contact-list__description,
-.contact-list__description p {
+.contact-list__description p,
+.contact-list__description strong {
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 22ch;
   font-size: 14px;
-  display: block;
 }
 
 .contact-list__description p {
   align-self: center;
-  height: 19px;
+  display: block;
+  height: 18px;
 }
 
 .contact-list__description br {
   display: none;
+}
+
+.contact-list__description__media {
+  display: flex;
+  gap: 2px;
+}
+
+.contact-list__description__media div {
+  position: relative;
+  height: 18px;
+}
+
+.contact-list__description__media .contact-list__description__media__play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.contact-list__description__media div:last-child {
+  margin-right: 2px;
+}
+
+.contact-list__description__media p {
+  height: max-content;
+}
+
+.contact-list__description__media img {
+  width: 18px;
+  height: 18px;
+  border-radius: 2px;
+  object-fit: cover;
 }
 
 .contact-list__notification {
@@ -168,6 +203,7 @@ svg.icon-yui-kit.contact-list__read-icon {
 
 .menu__info-user-list--item {
   --size-avatar: 25px;
+  cursor: pointer;
 }
 
 .contact-list__me {

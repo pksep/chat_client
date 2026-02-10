@@ -48,7 +48,7 @@
       <template #header2> Информация </template>
       <template #tab1>
         <ContactListInModal
-          :show-add-button="!checkGroupId"
+          :show-add-button="currentGroup.isAdmin"
           :contacts="currentGroup.members"
           :group-id="currentGroup.group.id"
           :filtered-contacts="filteredMembers"
@@ -64,6 +64,7 @@
         >
           <slot name="information-menu">
             <InformationMenu
+              :is-admin="currentGroup.isAdmin"
               :model-value="state.information"
               @update:model-value="handleUpdateInformation"
               :data-testid="`${props.dataTestid}-MenuInfo-InformationMenu`"
@@ -109,7 +110,6 @@ const props = withDefaults(defineProps<IMenuRightProps>(), {
 
 const {
   state,
-  checkGroupId,
   initializeMenuInfo,
   handleContactClick,
   handleUpdateInformation,

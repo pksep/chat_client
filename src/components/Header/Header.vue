@@ -48,6 +48,7 @@
     <div
       class="chat__header-buttons"
       :data-testid="`${props.dataTestid}-Header-ButtonsContainer`"
+      @click.stop
     >
       <template v-if="!isMobile">
         <Search
@@ -72,10 +73,10 @@
       </template>
       <Popover
         class="chat__header-popover"
-        @click.stop
         :options="getPopoverOptions"
         isWCUse
         :data-testid="`${props.dataTestid}-Header-Popover`"
+        :icon-name="IconNameEnum.moreHorizontal"
       />
     </div>
   </header>
@@ -96,10 +97,17 @@
       :data-testid="props.dataTestid"
     />
   </MobileModal>
+  <ConfirmModal
+    :open="state.openActionModal"
+    :title="actionModalTitle"
+    :description="actionModalDescription"
+    @unmount-close="handleCloseActionModal"
+    @unmount-confirm="handleConfirmActionModal"
+  />
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive, watch } from 'vue';
+import { computed, onUnmounted, reactive, watch } from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';
@@ -127,11 +135,21 @@ import {
   useUrlWatcher
 } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
-import { useTopics } from '../../composables/useTopics';
-import { currentGroup, useGroup } from '../../composables/useGroup';
+import {
+  deleteTopic,
+  toggleMuteTopic,
+  useTopics
+} from '../../composables/useTopics';
+import {
+  currentGroup,
+  deleteGroup,
+  quitGroup,
+  useGroup
+} from '../../composables/useGroup';
+import ConfirmModal from '../UI/ConfirmModal.vue';
 
-const { groups, getGroupById } = useGroup();
-const { topics, currentTopic, getTopicById } = useTopics();
+const { getGroupById } = useGroup();
+const { getSelectedTopic } = useTopics();
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
   dataTestid: 'Header'
@@ -149,11 +167,25 @@ const state = reactive({
   loader: false,
   openMobileInfoModal: false,
   isSearchInputEnable: false,
-  statusNotification: {
-    label: 'Выкл. уведомления',
-    enabled: false
-  }
+  openActionModal: false
 });
+
+const actionModalTitle = computed(() =>
+  route.value.type === RouteTypes.DIALOGS
+    ? 'Удаление чата'
+    : currentGroup.value?.isAdmin
+      ? 'Удаление канала'
+      : 'Выход из канала'
+);
+const actionModalDescription = computed(() =>
+  route.value.type === RouteTypes.DIALOGS
+    ? 'Вы уверены, что хотите удалить чат'
+    : currentGroup.value?.isAdmin
+      ? 'Вы уверены, что хотите удалить канал?'
+      : 'Вы уверены, что хотите покинуть канал?'
+);
+
+const currentTopic = computed(() => getSelectedTopic());
 
 const { handleUpdateInformation } = useMenuInfo();
 
@@ -185,18 +217,35 @@ const handleClickHeader = async (): Promise<void> => {
 const getPopoverOptions = computed(() => {
   const popoverArray = [];
   if (route.value && route.value.type !== RouteTypes.AI) {
-    const notificationLabels = {
-      value: state.statusNotification.label,
-      function: handleNotificationToggle
-    };
-    if (route.value && route.value.type !== RouteTypes.GROUP) {
-      popoverArray.push(notificationLabels);
-    } else {
+    if (route.value.type === RouteTypes.GROUP) {
       popoverArray.push({
         value: 'Информация',
         function: () => {
           emits('unmount-information');
         }
+      });
+    }
+
+    popoverArray.push({
+      value: `${currentTopic.value?.info.isMute ? 'Вкл. уведомление' : 'Выкл. уведомление'}`,
+      function: () => {
+        toggleMuteTopic(currentTopic.value);
+      }
+    });
+
+    if (route.value.type !== RouteTypes.GROUP) {
+      popoverArray.push({
+        value: 'Удалить чат',
+        function: handleOpenActionModal,
+        style: 'color: var(--error-color)'
+      });
+    } else {
+      popoverArray.push({
+        value: currentGroup.value?.isAdmin
+          ? 'Удалить канал'
+          : 'Выйти из канала',
+        function: handleOpenActionModal,
+        style: 'color: var(--error-color)'
       });
     }
   } else {
@@ -210,38 +259,28 @@ const getPopoverOptions = computed(() => {
   return popoverArray;
 });
 
-watch(
-  () => route.value.id,
-  async () => {
-    if (route.value.type === RouteTypes.DIALOGS) {
-      await getTopicById(route.value.id);
-      return;
-    }
-    await getGroupById(route.value.id);
-  }
-);
+const handleOpenActionModal = () => {
+  state.openActionModal = true;
+};
 
-const updateNotificationStatus = async (): Promise<void> => {
-  try {
-    const isMuted = false;
-    if (isMuted) {
-      state.statusNotification = {
-        label: 'Вкл. уведомления',
-        enabled: false
-      };
+const handleCloseActionModal = () => {
+  state.openActionModal = false;
+};
+
+const handleConfirmActionModal = () => {
+  if (route.value.type === RouteTypes.DIALOGS) {
+    deleteTopic(route.value.id);
+    navigateToDialogsList();
+  } else if (route.value.type === RouteTypes.GROUP) {
+    if (currentGroup.value.isAdmin) {
+      deleteGroup(currentGroup.value.group.id);
     } else {
-      state.statusNotification = {
-        label: 'Выкл. уведомления',
-        enabled: true
-      };
+      quitGroup(currentGroup.value.group.id);
     }
-  } catch (error) {
-    console.error('Failed to update notification status:', error);
-    state.statusNotification = {
-      label: 'Выкл. уведомления',
-      enabled: true
-    };
+    navigateToGroupsList();
   }
+
+  handleCloseActionModal();
 };
 
 const handleExit = (): void => {
@@ -256,22 +295,19 @@ const handleExit = (): void => {
   }
 };
 
-const handleNotificationToggle = async (): Promise<void> => {
-  await updateNotificationStatus();
-  emits('unmount-notification', state.statusNotification.label);
-};
-
 watch(
-  [() => groups.value.length, () => topics.value.length],
-  async () => {
-    if (route.value.type === RouteTypes.DIALOGS) {
-      await getTopicById(route.value.id);
-      return;
+  () => route.value.id,
+  () => {
+    if (route.value.type === RouteTypes.GROUP) {
+      getGroupById(route.value.id);
     }
-    await getGroupById(route.value.id);
   },
   {
     immediate: true
   }
 );
+
+onUnmounted(() => {
+  currentGroup.value = null;
+});
 </script>

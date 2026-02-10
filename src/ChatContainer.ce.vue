@@ -12,21 +12,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { onMounted, ref } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
 import MobileAuth from './components/Mobile/MobileAuth.vue';
 
-import type {
-  IChatContainerEmits,
-  IChatContainerProps
-} from './components/interfaces/interfaces';
+import type { IChatContainerProps } from './components/interfaces/interfaces';
 import { initializeChat, setCurrentUserId } from './services/useChat';
 import { saveUserIdToSession, hasUserIdInSession } from './services/useMastra';
-import { getAllNotificationCount } from './services/useConversions';
 import { fetchAuthUser, setAuthUser, useAuth } from './composables/useAuth';
 import { fetchAllUsers, getUserById } from './composables/useUsers';
 import { getConfig } from './services/useConfig';
-import { useUnreadMessagePolling } from './composables/useUnreadMessagePolling';
 import { useTopics } from './composables/useTopics';
 import { useGroup } from './composables/useGroup';
 import { useUrlWatcher } from './composables/navigation';
@@ -36,17 +31,14 @@ import { useResizeState } from './composables/useResizeState';
 import { navigateToDialogsList } from './composables/navigation';
 import { MAX_W_MD } from './utils/constants';
 
-const emits = defineEmits<IChatContainerEmits>();
 const props = defineProps<IChatContainerProps>();
 
-const allNotificationCount = computed(() => getAllNotificationCount());
 const openChatContainerShow = ref(true);
 const showMobileAuth = ref(false);
 
 const { fetchAllGroups } = useGroup();
 const { fetchAllTopics } = useTopics();
 
-const { startPolling } = useUnreadMessagePolling(30000, false);
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const route = useUrlWatcher();
@@ -131,8 +123,6 @@ const runAppInitialization = async () => {
       await fetchMessagesForTopic(route.value.id);
     }
 
-    startPolling();
-
     await initPushNotifications();
 
     openChatContainerShow.value = true;
@@ -179,13 +169,6 @@ onMounted(async () => {
     await runAppInitialization();
   }
 });
-
-watch(
-  () => allNotificationCount.value,
-  () => {
-    emits('unmount-notification-count', allNotificationCount.value);
-  }
-);
 </script>
 
 <style>

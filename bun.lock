@@ -1,6 +1,5 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "@pksep/chat-core",
@@ -11,10 +10,11 @@
         "@capacitor/core": "^8.0.1",
         "@capacitor/ios": "^8.0.1",
         "@capacitor/push-notifications": "^8.0.0",
+        "@capawesome/capacitor-android-edge-to-edge-support": "^8.0.5",
         "@fontsource-variable/inter": "^5.2.6",
         "@mastra/client-js": "^0.12.3",
         "@pksep/reqi": "^0.0.25",
-        "@pksep/yui": "0.1.180",
+        "@pksep/yui": "0.1.187",
         "@pksep/zod-shared-chat": "0.0.6",
         "@vitejs/plugin-basic-ssl": "^2.1.4",
         "socket.io-client": "^4.8.3",
@@ -286,6 +286,8 @@
     "@capacitor/ios": ["@capacitor/ios@8.0.1", "", { "peerDependencies": { "@capacitor/core": "^8.0.0" } }, "sha512-pDxwQtx3n07DBhRKFGvYh4g00ruIsT7HxPm6IIT+tJD8VuTNgwgWYmEOZzfHkG6mZuCe03KqCsuD+aVmg5Rctg=="],
 
     "@capacitor/push-notifications": ["@capacitor/push-notifications@8.0.0", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-xJWQLqAfC8b2ETqAPmwDnkKB4t/lVrbYc2D8VpA2fSu10JFSL/R722Vk0Lfl9Lo9WusmyIiQbVfILNQ3iFNGKw=="],
+
+    "@capawesome/capacitor-android-edge-to-edge-support": ["@capawesome/capacitor-android-edge-to-edge-support@8.0.5", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-yBcqrMte9IDdm3q7ynVtUgehFW6+UaBtSSowFXe1Gr5/GTHwCMqg8eYnHX0QTqUssdsSIc43gAirGaLoi06RGQ=="],
 
     "@colors/colors": ["@colors/colors@1.5.0", "", {}, "sha512-ooWCrlZP11i8GImSjTHYHLkvFDP48nS4+204nGb1RiX/WXYHmJA2III9/e2DWVabCESdW7hBAEzHRqUn9OUVvQ=="],
 
@@ -727,7 +729,7 @@
 
     "@pksep/reqi": ["@pksep/reqi@0.0.25", "", { "dependencies": { "content-type": "^1.0.5", "lz-string": "^1.5.0" } }, "sha512-sSed6Susoh0CZfBFcNRit5SruksP+S+uEZKLz2qkY97hsSbOVc8GvWoGY3O1X6b/APWNFwFq4e2jJyVP6zEGlw=="],
 
-    "@pksep/yui": ["@pksep/yui@0.1.180", "", { "dependencies": { "@floating-ui/vue": "^1.1.8", "@fontsource-variable/inter": "^5.1.0", "@fontsource/source-sans-pro": "^5.1.0", "@tiptap/core": "^3.6.2", "@tiptap/extension-image": "^3.6.2", "@tiptap/extension-link": "^3.6.2", "@tiptap/extension-placeholder": "^3.6.2", "@tiptap/starter-kit": "^3.6.2", "@tiptap/vue-3": "^3.6.2", "@vueuse/components": "^11.1.0", "@vueuse/core": "^11.0.3", "col-cal": "2.0.0-alpha.1", "pdfjs-dist": "^5.4.449", "print-js": "^1.6.0", "vue": "^3.5.22", "vue3-emoji-picker": "^1.1.8", "vue3-perfect-scrollbar": "^2.0.0" } }, "sha512-wUKFy/bo8X7VVNc4V50eie+L2cSCtY11NtVOT/9rXyLekEelbW2lHFiSUE6swj+BWhXlgD98+pIrQZsEd7aUaQ=="],
+    "@pksep/yui": ["@pksep/yui@0.1.187", "", { "dependencies": { "@floating-ui/vue": "^1.1.8", "@fontsource-variable/inter": "^5.1.0", "@fontsource/source-sans-pro": "^5.1.0", "@tiptap/core": "^3.6.2", "@tiptap/extension-image": "^3.6.2", "@tiptap/extension-link": "^3.6.2", "@tiptap/extension-placeholder": "^3.6.2", "@tiptap/starter-kit": "^3.6.2", "@tiptap/vue-3": "^3.6.2", "@vueuse/components": "^11.1.0", "@vueuse/core": "^11.0.3", "col-cal": "2.0.0-alpha.1", "pdfjs-dist": "^5.4.449", "print-js": "^1.6.0", "vue": "^3.5.22", "vue3-emoji-picker": "^1.1.8", "vue3-perfect-scrollbar": "^2.0.0" } }, "sha512-168in/ju5Bz00RIe93ajPJLPoX3Kvnd/dYEtm49wpmQlST9hr0raPoVVQdhM1X0x8uQrkIfDy3RUW2jEiHGqpA=="],
 
     "@pksep/zod-shared-chat": ["@pksep/zod-shared-chat@0.0.6", "", { "peerDependencies": { "zod": "^3.22.0" } }, "sha512-70HR9AMzkBFsnICp9nTzu1EBsWhhmFHPpe0jIcGSVae8itVDV5bPzj0MrxxxaFeg3cK8Pxd4XzdigiJZ8P6VJg=="],
 

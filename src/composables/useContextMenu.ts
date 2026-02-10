@@ -37,3 +37,8 @@ export const useContextMenu = () => {
     closeActivePopover
   };
 };
+
+const { isOpen, position, openActivePopover, closeActivePopover } =
+  useContextMenu();
+
+export { isOpen, position, openActivePopover, closeActivePopover };

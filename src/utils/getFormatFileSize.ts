@@ -19,8 +19,7 @@ export const getShortName = (name: string): string => {
 
   if (base.length <= 25) return name;
 
-  const start = base.slice(0, 10);
-  const end = base.slice(-10);
+  const start = base.slice(0, 22);
 
-  return `${start} ... ${end}${ext}`;
+  return `${start} ... ${ext}`;
 };

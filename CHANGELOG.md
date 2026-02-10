@@ -1,3 +1,63 @@
+# [1.8.0](https://github.com/pksep/chat_client/compare/v1.7.2...v1.8.0) (2026-02-06)
+
+
+### Bug Fixes
+
+* lint ([2fd6dbc](https://github.com/pksep/chat_client/commit/2fd6dbcd33befe01c5192dec2cb5bc2d82bfd21e))
+
+
+### Features
+
+* logic kick and leave from group ([12b1eaa](https://github.com/pksep/chat_client/commit/12b1eaa85bd19428ab23f274ddac56b017bc4b1b))
+
+## [1.7.2](https://github.com/pksep/chat_client/compare/v1.7.1...v1.7.2) (2026-02-06)
+
+
+### Bug Fixes
+
+* bar problem ([2c0aaf1](https://github.com/pksep/chat_client/commit/2c0aaf14abe0ea0c0ca26be70ae28042a845f545))
+
+## [1.7.1](https://github.com/pksep/chat_client/compare/v1.7.0...v1.7.1) (2026-02-05)
+
+
+### Bug Fixes
+
+* lint ([01fdc79](https://github.com/pksep/chat_client/commit/01fdc79a70ac0acea3590713b1b982600a2a8f76))
+* styles and long message ([5e31d86](https://github.com/pksep/chat_client/commit/5e31d86c3793d4ba4e48fe44076001a301004dae))
+
+# [1.7.0](https://github.com/pksep/chat_client/compare/v1.6.0...v1.7.0) (2026-02-04)
+
+
+### Features
+
+* add loading files ([f4cef5e](https://github.com/pksep/chat_client/commit/f4cef5e67defdb8ef76434ab86dfaea3f08ff497))
+* add thumbnails ([524be92](https://github.com/pksep/chat_client/commit/524be9279887c46107a2fda351cf157bec2aa4e3))
+* ex in medias ([e29f6b9](https://github.com/pksep/chat_client/commit/e29f6b99fffa741c3a1f1538ac31856d54eea709))
+
+# [1.6.0](https://github.com/pksep/chat_client/compare/v1.5.1...v1.6.0) (2026-02-02)
+
+
+### Bug Fixes
+
+* deleting medias ([949d8b6](https://github.com/pksep/chat_client/commit/949d8b6425dd56dd05a30bab623b053f8931dda1))
+* lint ([9faddb4](https://github.com/pksep/chat_client/commit/9faddb48b12af403f34e5836e71009618e80c06a))
+* lint ([59c6baf](https://github.com/pksep/chat_client/commit/59c6baf8c5b7c96c3ffc791d6f81f7aef716bb66))
+
+
+### Features
+
+* add mobile modal ([aed121c](https://github.com/pksep/chat_client/commit/aed121c50f8a57f2fc0cc06c042fce1176d7af63))
+* delete message ([b4f6c42](https://github.com/pksep/chat_client/commit/b4f6c4240b8a6d601a88654f61299a3ba265ac03))
+
+## [1.5.1](https://github.com/pksep/chat_client/compare/v1.5.0...v1.5.1) (2026-01-29)
+
+
+### Bug Fixes
+
+* create and edit groups ([a2f0239](https://github.com/pksep/chat_client/commit/a2f0239b237b505132a1f0e72a3c39d55c0bfc80))
+* lint ([17c224b](https://github.com/pksep/chat_client/commit/17c224b2d9db9c9c1cb1cef8dcf38f9a008c3271))
+* lint ([c64758f](https://github.com/pksep/chat_client/commit/c64758fdb6d4c64138099b31311545e5997b7274))
+
 # [1.5.0](https://github.com/pksep/chat_client/compare/v1.4.0...v1.5.0) (2026-01-29)
 
 

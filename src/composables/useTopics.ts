@@ -7,12 +7,19 @@ import {
   TopicType,
   MessageStatus
 } from '../services/useChatSDK/types';
-import { getGroupList, updateLocalGroupInfo } from '../composables/useGroup';
+import {
+  getGroupList,
+  groups,
+  updateLocalGroupInfo
+} from '../composables/useGroup';
+import { getMessagesByTopicId } from '../services/useMessages';
+import { useUrlWatcher } from './navigation';
 
 const topics = ref<ITopic[]>([]);
-const currentTopic = ref<ITopic | undefined>(undefined);
 const loading = ref(false);
 const error = ref<string | null>(null);
+
+const route = useUrlWatcher();
 
 export const useTopics = () => {
   const setTopics = (newTopics: ITopic[]) => {
@@ -59,13 +66,28 @@ export const useTopics = () => {
     }
   };
 
+  const deleteTopic = async (topicId: string): Promise<void> => {
+    try {
+      const sdk = getChatSDK();
+      await sdk.deleteTopic(topicId);
+    } catch (err) {
+      error.value = (err as Error).message;
+      console.error('Failed to delete topic:', error.value);
+    }
+  };
+
   const updateLocalLastMessageTopic = (
     topicId: string,
-    lastMessage: Message
+    lastMessage?: Message
   ): void => {
     const topic = topics.value.find(topic => topic.id === topicId);
     if (topic) {
-      topic.lastMessage = lastMessage;
+      if (lastMessage) {
+        topic.lastMessage = lastMessage;
+      } else {
+        const messages = getMessagesByTopicId(topicId);
+        topic.lastMessage = messages.at(-1);
+      }
     }
 
     topics.value = [...topics.value];
@@ -152,6 +174,11 @@ export const useTopics = () => {
     topics.value = [value, ...topics.value];
   };
 
+  const deleteTopicFromList = (topicId: string): void => {
+    topics.value = [...topics.value.filter(t => t.id !== topicId)];
+    groups.value = [...groups.value.filter(t => t.id !== topicId)];
+  };
+
   const sortTopics = (topics: ITopic[]): ITopic[] => {
     return [...topics].sort((a, b) => {
       const aPin = a.info?.isPin || false;
@@ -171,23 +198,21 @@ export const useTopics = () => {
     return sortTopics(topics.value || []);
   };
 
-  const getTopicById = (id: string): ITopic | undefined => {
-    currentTopic.value = topics.value.find(topic => topic.id === id);
-    return currentTopic.value;
-  };
+  const getSelectedTopic = (
+    topicId: string = route.value.id
+  ): ITopic | undefined => {
+    const groups = getGroupList();
 
-  const getTopicByIdWithoutCurrent = (topicId: string): ITopic | undefined => {
-    return topics.value.find(topic => topic.id === topicId);
+    return [...topics.value, ...groups].find(topic => topic.id === topicId);
   };
 
   const isTopicMuted = (topicId: string): boolean => {
-    const topic = getTopicByIdWithoutCurrent(topicId);
+    const topic = getSelectedTopic(topicId);
     return topic?.info?.isMute || false;
   };
 
   return {
     topics,
-    currentTopic,
     loading,
     error,
     fetchAllTopics,
@@ -201,9 +226,10 @@ export const useTopics = () => {
     addTopicList,
     sortTopics,
     getTopicList,
-    getTopicById,
-    getTopicByIdWithoutCurrent,
-    isTopicMuted
+    getSelectedTopic,
+    isTopicMuted,
+    deleteTopic,
+    deleteTopicFromList
   };
 };
 
@@ -214,13 +240,14 @@ const {
   addTopicList,
   sortTopics,
   getTopicList,
-  getTopicById,
   fetchAllTopics,
   createTopic,
   updateLocalLastMessageTopic,
   updateLocalTopicReadStatus,
   updateLocalTopicInfo,
-  isTopicMuted
+  isTopicMuted,
+  deleteTopic,
+  deleteTopicFromList
 } = useTopics();
 
 export {
@@ -235,6 +262,7 @@ export {
   addTopicList,
   sortTopics,
   getTopicList,
-  getTopicById,
-  isTopicMuted
+  isTopicMuted,
+  deleteTopic,
+  deleteTopicFromList
 };

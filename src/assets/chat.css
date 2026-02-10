@@ -31,7 +31,7 @@ p.chat__nothing-paragraph {
   padding: 15px 5px 15px 15px;
   max-height: var(--basic-height);
   min-height: calc(100vh - 200px);
-  overflow-y: scroll;
+  overflow: hidden scroll;
   display: flex;
   flex-direction: column-reverse;
 }
@@ -163,5 +163,11 @@ p.chat__nothing-paragraph {
   }
   .chat__message-bubble > .top-element > .date-divider {
     margin-top: 5px;
+  }
+}
+
+@media screen and (width <= 480px) {
+  * {
+    user-select: none;
   }
 }

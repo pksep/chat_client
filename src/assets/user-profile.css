@@ -13,7 +13,6 @@
 }
 
 .user-profile__title {
-  cursor: default;
   grid-area: title;
   color: var(--text-black);
   max-width: 125ch;
@@ -27,7 +26,6 @@
 }
 
 .user-profile__ex {
-  cursor: default;
   font-size: var(--font-size-nickname, 16px);
   color: var(--text-grey);
   margin-top: -7px;

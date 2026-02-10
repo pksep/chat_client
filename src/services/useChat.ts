@@ -5,7 +5,11 @@ import { User } from '@pksep/zod-shared-chat';
 import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { setAuthUser, getAuthUser, authedUser } from '../composables/useAuth';
-import { useTopics, changeUnreadMessageCount } from '../composables/useTopics';
+import {
+  useTopics,
+  changeUnreadMessageCount,
+  deleteTopicFromList
+} from '../composables/useTopics';
 import {
   updateLocalGroupDetails,
   addGroupList,
@@ -14,6 +18,7 @@ import {
 import {
   addMessageToLocal,
   changeLocalReadStatus,
+  deleteMessageFromLocal,
   playNotificationSound
 } from './useMessages';
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
@@ -84,6 +89,8 @@ const setupChatListeners = (): void => {
         const { addTopicList } = useTopics();
         addTopicList(payload.data);
       }
+    } else if (payload.type === 'DELETE') {
+      deleteTopicFromList(payload.data.id);
     }
   });
 
@@ -98,6 +105,12 @@ const setupChatListeners = (): void => {
       const { updateLocalLastMessageTopic } = useTopics();
       updateLocalLastMessageTopic(payload.data.topicId, payload.data);
       updateLocalLastMessageGroup(payload.data.topicId, payload.data);
+    } else if (payload.type === 'DELETE') {
+      deleteMessageFromLocal(payload.data.topicId, payload.data.id);
+
+      const { updateLocalLastMessageTopic } = useTopics();
+      updateLocalLastMessageTopic(payload.data.topicId);
+      updateLocalLastMessageGroup(payload.data.topicId);
     }
   });
 
@@ -204,6 +217,7 @@ export const sendMessageChat = async (params: {
   topicId: string;
   text?: string;
   medias?: IMedia[];
+  ex?: string;
 }): Promise<void> => {
   const sdk = getChatSDK();
 
@@ -211,7 +225,24 @@ export const sendMessageChat = async (params: {
     sdk.sendWebSocketEvent(WebSocketEventType.SEND_MESSAGE, {
       topicId: params.topicId,
       text: params.text,
-      medias: params.medias
+      medias: params.medias,
+      ex: params.ex
+    });
+  } catch (error) {
+    console.error('[ChatSDK] Failed to send message via WebSocket:', error);
+  }
+};
+
+export const deleteMessageChat = async (params: {
+  messageId: string;
+  topicId: string;
+}): Promise<void> => {
+  const sdk = getChatSDK();
+
+  try {
+    sdk.sendWebSocketEvent(WebSocketEventType.DELETE_MESSAGE, {
+      messageId: params.messageId,
+      topicId: params.topicId
     });
   } catch (error) {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);
@@ -220,10 +251,11 @@ export const sendMessageChat = async (params: {
 
 export const uploadFile = async (
   file: File
-): Promise<{ path: string; file: File }> => {
+): Promise<{ path: string; thumbnailPath: string; file: File }> => {
   const sdk = getChatSDK();
-  const path = await sdk.uploadFile(file);
-  return { file, path };
+
+  const { objectName, thumbnailObjectName } = await sdk.uploadFile(file);
+  return { file, path: objectName, thumbnailPath: thumbnailObjectName };
 };
 
 const messageHistoryRequests: Map<

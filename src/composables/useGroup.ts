@@ -3,6 +3,7 @@ import { getChatSDK, getCurrentUserId } from '../services/useChat';
 import { Message, TopicSetting, TopicType } from '../services/useChatSDK/types';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
 import { useTopics } from './useTopics';
+import { getMessagesByTopicId } from '../services/useMessages';
 
 const groups = ref<ITopic[]>([]);
 const currentGroup = ref<ITopic | null>(null);
@@ -161,8 +162,8 @@ export const useGroup = () => {
     groupId: string,
     groupInfo: Partial<{
       groupName?: string;
-      faceURL?: string;
-      introduction?: string;
+      avatarUrl?: string;
+      description?: string;
       notification?: string;
       ex?: string;
     }>
@@ -170,8 +171,8 @@ export const useGroup = () => {
     const sdk = getChatSDK();
     await sdk.editGroup(groupId, {
       title: groupInfo.groupName,
-      description: groupInfo.introduction,
-      avatarUrl: groupInfo.faceURL
+      description: groupInfo.description,
+      avatarUrl: groupInfo.avatarUrl
     });
 
     const index = groups.value.findIndex(group => group.id === groupId);
@@ -180,7 +181,7 @@ export const useGroup = () => {
       const updatedGroup = {
         ...existing,
         nickname: groupInfo.groupName,
-        avatarUrl: groupInfo.faceURL
+        avatarUrl: groupInfo.avatarUrl
       };
       const next = [...groups.value];
       next[index] = updatedGroup;
@@ -194,10 +195,14 @@ export const useGroup = () => {
     if (!currentUserId) return;
 
     await sdk.leaveGroup(groupId);
+  };
 
-    if (currentGroup.value?.id === groupId) {
-      currentGroup.value = null;
-    }
+  const deleteGroup = async (groupId: string) => {
+    const sdk = getChatSDK();
+    const currentUserId = getCurrentUserId();
+    if (!currentUserId) return;
+
+    await sdk.deleteGroup(groupId);
   };
 
   const getGroupInfo = async (groupIds: string[]) => {
@@ -246,14 +251,23 @@ export const useGroup = () => {
 
   const updateLocalLastMessageGroup = (
     topicId: string,
-    lastMessage: Message
+    lastMessage?: Message
   ): void => {
     const topic = groups.value.find(topic => topic.id === topicId);
+    const messages = getMessagesByTopicId(topicId);
+
     if (topic) {
-      topic.lastMessage = lastMessage;
+      if (lastMessage) {
+        topic.lastMessage = lastMessage;
+      } else {
+        topic.lastMessage = messages.at(-1);
+      }
 
       if (currentGroup.value?.id === topicId) {
-        currentGroup.value = { ...currentGroup.value, lastMessage };
+        currentGroup.value = {
+          ...currentGroup.value,
+          lastMessage: topic.lastMessage
+        };
       }
     }
 
@@ -312,7 +326,8 @@ export const useGroup = () => {
     updateLocalLastMessageGroup,
     updateLocalGroupDetails,
     updateLocalGroupInfo,
-    addGroupList
+    addGroupList,
+    deleteGroup
   };
 };
 
@@ -332,7 +347,8 @@ const {
   updateLocalLastMessageGroup,
   updateLocalGroupDetails,
   updateLocalGroupInfo,
-  addGroupList
+  addGroupList,
+  deleteGroup
 } = useGroup();
 
 export {
@@ -353,5 +369,6 @@ export {
   updateLocalLastMessageGroup,
   updateLocalGroupDetails,
   updateLocalGroupInfo,
-  addGroupList
+  addGroupList,
+  deleteGroup
 };

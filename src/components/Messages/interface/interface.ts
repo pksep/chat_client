@@ -22,6 +22,8 @@ export interface IMessageBubbleProps {
   media?: IMedia[];
   file?: MessageMediaItem[];
   dataTestid?: string;
+  topicId?: string;
+  messageId?: string;
   messageStatus?: string;
 }
 

@@ -21,11 +21,13 @@
       v-else-if="props.author === 'assistant'"
       :data-testid="`${dataTestid}-MessageBubble-AssistantIcon`"
     />
-    <div :class="messageArticlesStyles">
+    <div
+      :class="messageArticlesStyles"
+      @contextmenu="evt => openActivePopover(props.messageId, evt)"
+    >
       <article
         v-if="!!props.message"
         :class="messageArticleStyles()"
-        @contextmenu="evt => openActivePopover('', evt)"
         :data-testid="`${dataTestid}-MessageBubble-Article`"
       >
         <h3
@@ -39,7 +41,7 @@
           :data-testid="`${dataTestid}-MessageBubble-Content`"
         >
           <blockquote
-            v-if="blockquote"
+            v-if="false"
             class="message-content__blockquote"
             :data-testid="`${dataTestid}-MessageBubble-Blockquote`"
           >
@@ -85,6 +87,7 @@
             props.time
           }}</span>
           <MessageStatusIcons
+            v-if="props.isMeSender"
             :is-read="props.isRead"
             :message-status="props.messageStatus"
             :data-testid="`${dataTestid}-MessageBubble`"
@@ -92,64 +95,32 @@
         </div>
       </article>
 
-      <template v-if="!props.loader">
+      <template v-if="!props.loader && docFiles.length > 0">
         <article
-          v-for="media in props.media || []"
-          :key="media.id"
-          :class="messageArticleStyles(media.type)"
-          @contextmenu="evt => openActivePopover('', evt)"
+          :class="messageArticleStyles(MediaType.File)"
           :data-testid="`${dataTestid}-MessageBubble-Article`"
         >
+          <h3
+            class="message__article-initals"
+            v-if="!props.isMeSender && route.type !== RouteTypes.DIALOGS"
+          >
+            {{ props.sender }}
+          </h3>
           <div
+            v-for="(media, i) in docFiles"
+            :key="media.id"
             class="message-content"
             :data-testid="`${dataTestid}-MessageBubble-Content`"
           >
             <div
-              v-if="media.type === MediaType.Image"
-              class="message-content__media"
-              :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
-            >
-              <img
-                @click="
-                  () =>
-                    (fullImagePath = `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`)
-                "
-                :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`"
-                :alt="props.sender ? props.sender + ' image' : 'Shared image'"
-                :data-testid="`${dataTestid}-MessageBubble-Image`"
-              />
-            </div>
-            <div
-              v-if="media.type === MediaType.Video"
-              class="message-content__media"
-              :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
-            >
-              <video
-                @click="
-                  () =>
-                    (fullImagePath = `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`)
-                "
-                :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`"
-                controls
-                :data-testid="`${dataTestid}-MessageBubble-Video`"
-                :aria-label="
-                  props.sender ? `${props.sender} video` : 'Shared video'
-                "
-              ></video>
-            </div>
-
-            <div
-              v-if="media.type === MediaType.File"
-              @click="
-                () =>
-                  (fullImagePath = `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`)
-              "
+              @click="setSliderElement(docFiles, i)"
               class="message-content__file"
               :data-testid="`${dataTestid}-MessageBubble-FileContainer`"
             >
               <FileIcon
                 :is-me-sender="props.isMeSender"
                 :dataTestid="`${dataTestid}-MessageBubble-FileIcon`"
+                :is-loaded="!media.isLoading"
               />
               <div :data-testid="`${dataTestid}-MessageBubble-FileInfo`">
                 <div :data-testid="`${dataTestid}-MessageBubble-FileDetails`">
@@ -186,29 +157,104 @@
           </div>
         </article>
       </template>
+
+      <template v-if="!props.loader && mediaFiles.length > 0">
+        <article
+          :class="messageArticleStyles(MediaType.Image)"
+          :data-testid="`${dataTestid}-MessageBubble-Article`"
+        >
+          <div
+            :class="`message-content message-content-${mediaFiles.length}-item`"
+            :data-testid="`${dataTestid}-MessageBubble-Content`"
+          >
+            <div
+              v-for="(media, i) in mediaFiles"
+              :key="media.id"
+              class="message-content__media"
+              :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
+            >
+              <video
+                v-if="media.type === MediaType.Video && media.localPath"
+                :src="getFullMediaPath(media)"
+              />
+
+              <img
+                v-else
+                @click="setSliderElement(mediaFiles, i)"
+                :src="getFullMediaPath(media)"
+                :alt="props.sender ? props.sender + ' image' : 'Shared image'"
+              />
+
+              <div
+                v-if="typeof media.isLoading === 'boolean'"
+                class="message-content__media-loading"
+              >
+                <LoadingIcon :is-loaded="!media.isLoading" />
+              </div>
+
+              <div
+                v-else-if="media.type === MediaType.Video"
+                @click="setSliderElement(mediaFiles, i)"
+                class="message-content__media-video"
+              >
+                <PlayIcon />
+              </div>
+            </div>
+          </div>
+
+          <div class="message-time" v-if="!props.file">
+            <span>{{ props.time }}</span>
+            <MessageStatusIcons
+              v-if="props.isMeSender"
+              :is-read="props.isRead"
+              :message-status="props.messageStatus"
+            />
+          </div>
+        </article>
+      </template>
     </div>
     <SliderModal
-      :open="!!fullImagePath"
-      @close="() => (fullImagePath = null)"
-      :items="[{ path: fullImagePath }]"
+      @touchstart.stop
+      @touchend.stop
+      :open="sliderElementPaths.length > 0"
+      @close="() => (sliderElementPaths = [])"
+      :items="sliderElementPaths?.map(path => ({ path }))"
+      :default-index="defaultIndexSlider"
     />
 
     <ContextMenu
-      v-if="false"
-      :visible="!!isOpen"
+      :visible="!!isOpen[props.messageId]"
       :position="position"
-      @unmount-close="closeActivePopover('')"
+      @unmount-close="closeActivePopover(props.messageId)"
       :data-testid="`${dataTestid}-MessageBubble-ContextMenu`"
     >
       <Button
+        disabled
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.small"
-        @click.stop=""
         :data-testid="`${dataTestid}-MessageBubble-ReplyButton`"
       >
         Ответить
       </Button>
+      <Button
+        v-if="props.isMeSender"
+        style="color: var(--error-color)"
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="handleOpenModal"
+        :data-testid="`${dataTestid}-MessageBubble-ReplyButton`"
+      >
+        Удалить
+      </Button>
     </ContextMenu>
+
+    <ConfirmModal
+      :open="deleteModalOpen"
+      title="Удалить сообщение"
+      description="Вы уверены, что хотите удалить сообщение для всех участников чата?"
+      @unmount-close="handleCloseModal"
+      @unmount-confirm="handleDeleteMessage"
+    />
   </div>
 </template>
 
@@ -216,7 +262,12 @@
 import { computed, ref } from 'vue';
 import { Avatar, Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
-import { useContextMenu } from '../../composables/useContextMenu';
+import {
+  isOpen,
+  position,
+  openActivePopover,
+  closeActivePopover
+} from '../../composables/useContextMenu';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import FileIcon from '../UI/FileIcon.vue';
@@ -227,9 +278,11 @@ import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
 import { getConfig } from '../../services/useConfig';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
-
-const { isOpen, position, openActivePopover, closeActivePopover } =
-  useContextMenu();
+import { deleteMessageChat } from '../../services/useChat';
+import LoadingIcon from '../UI/LoadingIcon.vue';
+import PlayIcon from '../UI/PlayIcon.vue';
+import { IMedia } from '../interfaces/interfaces';
+import ConfirmModal from '../UI/ConfirmModal.vue';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -242,7 +295,8 @@ const messageArticleStyles = (type?: MediaTypeType) => [
     'message__no-author': props.isMeSender,
     message__article__media:
       type === MediaType.Image || type === MediaType.Video,
-    message__article__file: type === MediaType.File
+    message__article__file: type === MediaType.File,
+    message__article__text: !type
   }
 ];
 
@@ -253,13 +307,58 @@ const messageArticlesStyles = computed(() => ({
 
 const config = getConfig();
 
-const blockquote = computed(() => false);
-
 const route = useUrlWatcher();
 
-const fullImagePath = ref<string | null>(null);
+const sliderElementPaths = ref<string[]>([]);
+const defaultIndexSlider = ref<number>(0);
+
+const deleteModalOpen = ref<boolean>(false);
+
+const docFiles = computed(
+  () => props.media?.filter(media => media.type === MediaType.File) || []
+);
+
+const mediaFiles = computed(
+  () => props.media?.filter(media => media.type !== MediaType.File) || []
+);
+
+const handleOpenModal = () => {
+  deleteModalOpen.value = true;
+};
+
+const handleCloseModal = () => {
+  deleteModalOpen.value = false;
+};
+
+const handleDeleteMessage = async (): Promise<void> => {
+  await deleteMessageChat({
+    messageId: props.messageId,
+    topicId: props.topicId
+  });
+  handleCloseModal();
+};
 
 const generateArray = (n: number): number[] => {
   return Array.from({ length: n });
+};
+
+const getFullMediaPath = (media: IMedia, isThumb = true) => {
+  if (media.localPath && isThumb) {
+    return media.localPath;
+  }
+
+  if (media.path.endsWith('.gif')) {
+    return `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`;
+  }
+
+  return `${config.CHAT_PATH_TO_FILE_CDN}/${isThumb ? media.thumbnailPath : media.path}`;
+};
+
+const setSliderElement = (medias: IMedia[], defaultIndex: number = 0) => {
+  sliderElementPaths.value = medias.map(media =>
+    getFullMediaPath(media, false)
+  );
+
+  defaultIndexSlider.value = defaultIndex;
 };
 </script>

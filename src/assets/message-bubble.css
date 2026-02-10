@@ -30,13 +30,22 @@
 }
 
 .message__article__media {
-  padding: 4px 4px 6px;
+  padding: 4px;
+  width: max-content;
   cursor: pointer;
 }
 
 .message__article__file {
   cursor: pointer;
   padding: 8px;
+  gap: 18px;
+  position: relative;
+}
+
+.message__article__file .message-time {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
 }
 
 .message-content {
@@ -122,21 +131,133 @@ div.message-content__html > p {
   margin-left: 0;
 }
 
-div.message-content__media {
-  max-height: fit-content;
+.message-content {
+  display: grid;
+  gap: 2px;
   max-width: 265px;
-  & > img,
-  & > video {
-    object-fit: contain;
-    width: 100%;
-    height: 100%;
-    border-radius: 8px;
-  }
+}
+
+.message__article__file .message-content {
+  display: grid;
+  gap: 2px;
+  max-width: 320px;
+}
+
+.message-content.message-content-1-item {
+  grid-template-columns: 1fr;
+}
+
+.message-content.message-content-2-item {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.message-content.message-content-3-item {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.message-content.message-content-3-item > :first-child {
+  grid-column: span 2;
+}
+
+.message-content.message-content-4-item {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.message-content.message-content-5-item {
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.message-content.message-content-5-item > :nth-child(-n + 2) {
+  grid-column: span 3;
+}
+
+.message-content.message-content-5-item > :nth-last-child(-n + 3) {
+  grid-column: span 2;
+}
+
+.message-content.message-content-6-item {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.message-content.message-content-7-item {
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.message-content.message-content-7-item > :nth-child(-n + 4) {
+  grid-column: span 3;
+}
+
+.message-content.message-content-7-item > :nth-last-child(-n + 3) {
+  grid-column: span 2;
+}
+
+.message-content.message-content-8-item {
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.message-content.message-content-8-item > :nth-child(-n + 2) {
+  grid-column: span 3;
+}
+
+.message-content.message-content-8-item > :nth-child(n + 3) {
+  grid-column: span 2;
+}
+
+.message-content.message-content-9-item {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.message-content.message-content-10-item {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.message-content.message-content-10-item > :first-child {
+  grid-column: span 3;
+}
+
+.message-content__media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.message-content__media img,
+.message-content__media video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.message-content__media img:active,
+.message-content__media video:active {
+  transform: scale(0.98);
+}
+
+.message-content__media-loading,
+.message-content__media-video {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.message-content__media-loading {
+  background-color: #1c263566;
 }
 
 div.message-content__file {
   display: flex;
   align-items: center;
+  max-width: inherit;
   gap: 4px;
 
   & > div {
@@ -184,6 +305,13 @@ div.message-content__file {
   gap: 5px;
 }
 
+.message__content__articles:has(.message__article__text) {
+  max-width: calc(100% - 50px);
+}
+.message__article__text .message-content {
+  max-width: 100%;
+}
+
 .message__content__articles__my {
   justify-items: end;
 }
@@ -199,7 +327,6 @@ div.message-content__file {
 }
 
 .message__bubble {
-  text-wrap: balance;
   hyphens: auto;
   overflow-wrap: anywhere;
   justify-self: start;
@@ -220,10 +347,10 @@ div.message-content__file {
 
 .chat__input {
   align-self: end;
-  padding: 15px;
+  padding: 0 10px 15px 15px;
 
   .editor-content {
-    max-height: calc(var(--basic-height) / 2);
+    max-height: 70px;
     overflow: auto;
     overflow-wrap: break-word;
     word-break: break-word;
@@ -269,4 +396,17 @@ div.message-content__file {
 .slider-modal .modal-yui-kit__modal-content {
   width: auto;
   padding: 0;
+}
+
+.message-content__media-loading__icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
