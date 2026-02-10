@@ -166,8 +166,12 @@ p.chat__nothing-paragraph {
   }
 }
 
-@media screen and (width <= 480px) {
-  * {
-    user-select: none;
+* {
+  user-select: none;
+}
+
+@media screen and (width > 480px) {
+  .message-content__html * {
+    user-select: text;
   }
 }
