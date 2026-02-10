@@ -183,6 +183,7 @@
                 @click="setSliderElement(mediaFiles, i)"
                 :src="getFullMediaPath(media)"
                 :alt="props.sender ? props.sender + ' image' : 'Shared image'"
+                @dragstart="handleDragStart($event, media)"
               />
 
               <div
@@ -360,5 +361,12 @@ const setSliderElement = (medias: IMedia[], defaultIndex: number = 0) => {
   );
 
   defaultIndexSlider.value = defaultIndex;
+};
+
+const handleDragStart = (event: DragEvent, media: IMedia) => {
+  const originalUrl = getFullMediaPath(media, false);
+
+  event.dataTransfer?.setData('text/uri-list', originalUrl);
+  event.dataTransfer?.setData('text/plain', originalUrl);
 };
 </script>
