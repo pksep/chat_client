@@ -141,6 +141,7 @@
   >
     <ContentEditor
       v-model="inputText"
+      ref="contentEditorRef"
       active-attach-file
       send-on-enter
       @unmount-send="handleSend"
@@ -279,6 +280,8 @@ const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
 });
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
+const contentEditorRef =
+  useTemplateRef<typeof ContentEditor>('contentEditorRef');
 const inputText = ref('');
 const route = useUrlWatcher();
 
@@ -812,6 +815,8 @@ watch(
     }
 
     nextTick(() => {
+      contentEditorRef.value?.focus();
+      inputText.value = '';
       setupIntersectionObserver();
     });
   },
