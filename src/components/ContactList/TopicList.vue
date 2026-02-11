@@ -52,7 +52,7 @@
             v-if="!!topic.lastMessage?.text"
             class="contact-list__description"
             :data-testid="`${props.dataTestid}-ContactList-Description${index + 1}`"
-            :aria-label="`Latest message: ${topic.lastMessage?.text || 'No message'}`"
+            :aria-label="`Latest message: ${stripHtml(topic.lastMessage?.text || 'No message')}`"
           >
             {{ stripHtml(topic.lastMessage?.text) }}
           </div>
