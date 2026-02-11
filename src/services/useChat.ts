@@ -19,6 +19,7 @@ import {
   addMessageToLocal,
   changeLocalReadStatus,
   deleteMessageFromLocal,
+  editMessageFromLocal,
   playNotificationSound
 } from './useMessages';
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
@@ -95,23 +96,22 @@ const setupChatListeners = (): void => {
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_MESSAGE, ({ payload }) => {
+    const { updateLocalLastMessageTopic } = useTopics();
+
     if (payload.type === 'NEW') {
       addMessageToLocal(payload.data.topicId, payload.data);
       if (payload.data.senderUserId !== currentUserId.value) {
         playNotificationSound(payload.data.topicId);
         changeUnreadMessageCount(1, payload.data.topicId);
       }
-
-      const { updateLocalLastMessageTopic } = useTopics();
-      updateLocalLastMessageTopic(payload.data.topicId, payload.data);
-      updateLocalLastMessageGroup(payload.data.topicId, payload.data);
     } else if (payload.type === 'DELETE') {
       deleteMessageFromLocal(payload.data.topicId, payload.data.id);
-
-      const { updateLocalLastMessageTopic } = useTopics();
-      updateLocalLastMessageTopic(payload.data.topicId);
-      updateLocalLastMessageGroup(payload.data.topicId);
+    } else if (payload.type === 'CHANGE') {
+      editMessageFromLocal(payload.data.topicId, payload.data);
     }
+
+    updateLocalLastMessageTopic(payload.data.topicId);
+    updateLocalLastMessageGroup(payload.data.topicId);
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.READ_MESSAGE, ({ payload }) => {
@@ -216,12 +216,22 @@ export const generateNewMessage = (params: {
 export const sendMessageChat = async (params: {
   topicId: string;
   text?: string;
+  messageId?: string;
   medias?: IMedia[];
   ex?: string;
 }): Promise<void> => {
   const sdk = getChatSDK();
 
   try {
+    if (params.messageId) {
+      sdk.sendWebSocketEvent(WebSocketEventType.EDIT_MESSAGE, {
+        messageId: params.messageId,
+        text: params.text
+      });
+
+      return;
+    }
+
     sdk.sendWebSocketEvent(WebSocketEventType.SEND_MESSAGE, {
       topicId: params.topicId,
       text: params.text,

@@ -52,9 +52,10 @@
             v-if="!!topic.lastMessage?.text"
             class="contact-list__description"
             :data-testid="`${props.dataTestid}-ContactList-Description${index + 1}`"
-            :aria-label="`Latest message: ${topic.lastMessage || 'No message'}`"
-            v-html="topic.lastMessage?.text"
-          ></div>
+            :aria-label="`Latest message: ${topic.lastMessage?.text || 'No message'}`"
+          >
+            {{ stripHtml(topic.lastMessage?.text) }}
+          </div>
           <div
             v-else-if="
               topic.lastMessage?.media?.length > 0 &&
@@ -204,6 +205,7 @@ import { getConfig } from '../../services/useConfig';
 import { MediaType } from '@pksep/zod-shared-chat';
 import AttachFileIcon from '../UI/AttachFileIcon.vue';
 import MiniPlayIcon from '../UI/MiniPlayIcon.vue';
+import { stripHtml } from '../../utils/stripHtml';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;

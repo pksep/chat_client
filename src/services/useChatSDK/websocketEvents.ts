@@ -54,7 +54,7 @@ export interface WebSocketEventPayloads {
   };
   [WebSocketEventType.CHANGE_MESSAGE]: {
     data: Message;
-    type: 'NEW';
+    type: 'NEW' | 'CHANGE' | 'DELETE';
     messageId: string;
   };
   [WebSocketEventType.READ_MESSAGE]: {

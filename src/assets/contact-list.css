@@ -50,7 +50,7 @@
 
 .contact-list__description {
   grid-area: description;
-  display: flex;
+  display: block;
   justify-self: start;
   align-items: center;
   font-size: 14px;
