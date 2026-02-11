@@ -376,12 +376,55 @@ const getFullMediaPath = (media: IMedia, isThumb = true) => {
   return `${config.CHAT_PATH_TO_FILE_CDN}/${isThumb ? media.thumbnailPath : media.path}`;
 };
 
+const isSliderContentUrl = (fileUrl: string) => {
+  return fileUrl?.match(/\.(jpg|jpeg|png|webp|svg|mp4|mp3|avif|pdf)$/i);
+};
+
 const setSliderElement = (medias: IMedia[], defaultIndex: number = 0) => {
-  sliderElementPaths.value = medias.map(media =>
+  const selectedMedia = medias[defaultIndex];
+
+  // Download logic
+  if (
+    selectedMedia.type === MediaType.File &&
+    !isSliderContentUrl(selectedMedia.originName)
+  ) {
+    const url = getFullMediaPath(selectedMedia, false);
+    const fileName = selectedMedia.originName || 'file';
+
+    fetch(url)
+      .then(res => res.blob())
+      .then(blob => {
+        const blobUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = fileName.includes('.') ? fileName : fileName + '.txt';
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        window.URL.revokeObjectURL(blobUrl);
+      })
+      .catch(err => {
+        console.error('Download failed', err);
+      });
+
+    return;
+  }
+
+  const sliderMedias = medias.filter(media =>
+    isSliderContentUrl(getFullMediaPath(media, false))
+  );
+
+  sliderElementPaths.value = sliderMedias.map(media =>
     getFullMediaPath(media, false)
   );
 
-  defaultIndexSlider.value = defaultIndex;
+  const correctedIndex = sliderMedias.findIndex(
+    media => media === selectedMedia
+  );
+
+  defaultIndexSlider.value = correctedIndex !== -1 ? correctedIndex : 0;
 };
 
 const handleDragStart = (event: DragEvent, media: IMedia) => {

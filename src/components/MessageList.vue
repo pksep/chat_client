@@ -169,6 +169,16 @@
       </template>
     </ContentEditor>
   </div>
+
+  <PushNotification
+    v-if="!!state.errorMessage"
+    class="mobile-auth-container__error"
+    title="Ошибка"
+    :push-key="Math.random()"
+    :description="state.errorMessage"
+    :type="MessageTypeEnum.error"
+    @close="() => (state.errorMessage = '')"
+  />
 </template>
 
 <script lang="ts" setup>
@@ -191,6 +201,8 @@ import {
   ContentEditor,
   Icon,
   IconNameEnum,
+  MessageTypeEnum,
+  PushNotification,
   SizesEnum
 } from '@pksep/yui';
 import { useMastra } from '../services/useMastra';
@@ -216,6 +228,7 @@ import {
 import {
   addMessageToLocal,
   changeFileLoadingStatus,
+  deleteFileAfterLoading,
   deleteMessageFromLocal,
   fetchMessagesForTopic,
   getMessagesByTopicId
@@ -279,7 +292,8 @@ const state = reactive({
   isLoadingMore: false,
   limit: 50,
   aiMessages: [] as AIMessage[],
-  editMessage: null as IMessage | null
+  editMessage: null as IMessage | null,
+  errorMessage: ''
 });
 
 const isLoadingInitialMessages = ref(false);
@@ -715,15 +729,16 @@ const handleAttachFileChunk = async (files: FileList, isMedia = false) => {
     media: localMedia
   };
 
-  addMessageToLocal(route.value.id, newMessage);
+  addMessageToLocal(newMessage.topicId, newMessage);
 
   const medias = [];
+  state.errorMessage = '';
 
   for (const [i, uploadedFile] of Array.from(files).entries()) {
     try {
       const { file, path, thumbnailPath } = await uploadFile(uploadedFile);
 
-      changeFileLoadingStatus(route.value.id, clientId, i.toString());
+      changeFileLoadingStatus(newMessage.topicId, clientId, i.toString());
 
       medias.push({
         path,
@@ -733,10 +748,14 @@ const handleAttachFileChunk = async (files: FileList, isMedia = false) => {
         type: getMediaType(file, isMedia)
       });
     } catch (error) {
-      alert(error.message);
-      deleteMessageFromLocal(route.value.id, clientId);
-      return;
+      deleteFileAfterLoading(newMessage.topicId, clientId, i.toString());
+      state.errorMessage = error.message || 'Failed to upload file';
     }
+  }
+
+  if (medias.length === 0) {
+    deleteMessageFromLocal(newMessage.topicId, clientId);
+    return;
   }
 
   try {
