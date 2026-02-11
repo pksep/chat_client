@@ -86,10 +86,24 @@ export const deleteMessageFromLocal = (
 
   if (
     deletedMessage.senderUser?.id !== authedUser.value?.id &&
-    deletedMessage.status !== 'READ'
+    !deletedMessage.isReadByMe
   ) {
     changeUnreadMessageCount(-1, topicId);
   }
+};
+
+export const editMessageFromLocal = (
+  topicId: string,
+  message: IMessage
+): void => {
+  const existingMessages = messagesStore.value[topicId] || [];
+
+  messagesStore.value[topicId] = existingMessages.map(msg => {
+    if (msg.id === message.id) {
+      return message;
+    }
+    return msg;
+  });
 };
 
 export const saveMessagesToLocal = (

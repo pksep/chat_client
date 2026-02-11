@@ -30,7 +30,7 @@ p.chat__nothing-paragraph {
 .chat__message-wrapper {
   padding: 15px 5px 15px 15px;
   max-height: var(--basic-height);
-  min-height: calc(100vh - 200px);
+  min-height: calc(100vh - 345px);
   overflow: hidden scroll;
   display: flex;
   flex-direction: column-reverse;
@@ -173,5 +173,66 @@ p.chat__nothing-paragraph {
 @media screen and (width > 480px) {
   .message-content__html * {
     user-select: text;
+  }
+}
+
+.chat__input__action {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 15px;
+}
+
+.chat__input__action > svg {
+  flex-shrink: 0;
+  width: 30px;
+}
+
+.chat__input__action > .button-yui-kit {
+  padding: 4px;
+  margin-left: auto;
+}
+
+.chat__input__action__blog {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  padding-left: 8px;
+}
+
+.chat__input__action__blog::after {
+  content: '';
+  position: absolute;
+  left: 0px;
+  top: -2px;
+  width: 4px;
+  height: 38px;
+  background-color: var(--primary-color);
+  border-radius: 4px 0 0 4px;
+}
+
+.chat__input__action__blog h5 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 17px;
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.chat__input__action__blog p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 17px;
+  color: var(--text-color);
+  font-weight: 400;
+  width: calc(100vw - var(--size-left-menu) - var(--size-right-menu) - 170px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media screen and (width <= 480px) {
+  .chat__input__action__blog p {
+    width: calc(100vw - 150px);
   }
 }

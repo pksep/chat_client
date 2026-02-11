@@ -83,6 +83,11 @@
           v-if="!props.loader"
           :data-testid="`${dataTestid}-MessageBubble-Time`"
         >
+          <span
+            v-if="props.isEdit"
+            :data-testid="`${dataTestid}-MessageBubble-Edited`"
+            >изменено</span
+          >
           <span :data-testid="`${dataTestid}-MessageBubble-TimeText`">{{
             props.time
           }}</span>
@@ -238,6 +243,15 @@
         Ответить
       </Button>
       <Button
+        v-if="props.isMeSender && !!props.message"
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="handleEditMessage"
+        :data-testid="`${dataTestid}-MessageBubble-EditButton`"
+      >
+        Редактировать
+      </Button>
+      <Button
         v-if="props.isMeSender"
         style="color: var(--error-color)"
         :type="ButtonTypeEnum.ghost"
@@ -290,6 +304,8 @@ const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   media: () => []
 });
 
+const emits = defineEmits(['unmount-edit-message-id']);
+
 const messageArticleStyles = (type?: MediaTypeType) => [
   'message__article',
   {
@@ -337,6 +353,11 @@ const handleDeleteMessage = async (): Promise<void> => {
     topicId: props.topicId
   });
   handleCloseModal();
+};
+
+const handleEditMessage = () => {
+  emits('unmount-edit-message-id', props.messageId);
+  closeActivePopover(props.messageId);
 };
 
 const generateArray = (n: number): number[] => {

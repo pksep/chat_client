@@ -316,6 +316,14 @@ div.message-content__file {
   justify-items: end;
 }
 
+.message__content__articles__my .link {
+  color: var(--white);
+}
+
+.message__content__articles__my .link:visited {
+  color: var(--background-primary-color);
+}
+
 @keyframes pulse {
   0%,
   100% {
@@ -350,7 +358,7 @@ div.message-content__file {
   padding: 0 10px 15px 15px;
 
   .editor-content {
-    max-height: 70px;
+    max-height: 180px;
     overflow: auto;
     overflow-wrap: break-word;
     word-break: break-word;
@@ -382,7 +390,6 @@ div.message-content__file {
     padding: 0;
     & .editor-component {
       min-height: 17px;
-      padding: 8px;
       border-radius: 0;
     }
     & .editor-content {

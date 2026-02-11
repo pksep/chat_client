@@ -105,11 +105,13 @@
           :sender="message.senderUser?.initials || ''"
           :avatar="message.senderUser?.avatarUrl || ''"
           :is-read="message.status === MessageStatus.Read"
+          :is-edit="message.isEdit"
           :message-status="message.status"
           :topic-id="message.topicId"
           :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
           :data-message-id="message.id"
           :message-id="message.id"
+          @unmount-edit-message-id="handleSetEditMessage"
         />
       </template>
     </div>
@@ -144,7 +146,28 @@
       @unmount-send="handleSend"
       @unmount-attach-file="handleAttachFile"
       :data-testid="`${props.dataTestid}-MessageList-ContentEditor`"
-    />
+    >
+      <template v-if="!!state.editMessage" #action>
+        <div class="chat__input__action">
+          <EditIcon />
+          <div class="chat__input__action__blog">
+            <h5>Редактирование</h5>
+            <p>{{ stripHtml(state.editMessage.text || '') }}</p>
+          </div>
+          <Button
+            :type="ButtonTypeEnum.ghost"
+            :size="SizesEnum.little"
+            @click="handleSetEditMessage(null)"
+            :data-testid="`${props.dataTestid}-MenuInfo-CloseButton`"
+          >
+            <Icon
+              :name="IconNameEnum.crossLarge"
+              color="var(--text-neutral-color)"
+            />
+          </Button>
+        </div>
+      </template>
+    </ContentEditor>
   </div>
 </template>
 
@@ -162,7 +185,14 @@ import {
 import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
 import Loading from './Loading.vue';
-import { ContentEditor } from '@pksep/yui';
+import {
+  Button,
+  ButtonTypeEnum,
+  ContentEditor,
+  Icon,
+  IconNameEnum,
+  SizesEnum
+} from '@pksep/yui';
 import { useMastra } from '../services/useMastra';
 import { removeMessageLoading } from '../services/useChatDb';
 import {
@@ -194,6 +224,8 @@ import { getAuthUser } from '../composables/useAuth';
 import { IMedia, IMessage } from './interfaces/interfaces';
 import { fileToDataURL } from '../utils/fileToDataURL';
 import { generateUUID } from '../utils/generateUUID';
+import EditIcon from './UI/EditIcon.vue';
+import { stripHtml } from '../utils/stripHtml';
 
 const touchStartX = ref(0);
 const touchStartY = ref(0);
@@ -246,7 +278,8 @@ const state = reactive({
   chatId: null as string | null,
   isLoadingMore: false,
   limit: 50,
-  aiMessages: [] as AIMessage[]
+  aiMessages: [] as AIMessage[],
+  editMessage: null as IMessage | null
 });
 
 const isLoadingInitialMessages = ref(false);
@@ -461,6 +494,14 @@ const messageChat = (role: string) => [
   { message__other: role === 'user' }
 ];
 
+const handleSetEditMessage = (messageId?: string) => {
+  state.editMessage = messageId
+    ? state.messages.find(m => m.id === messageId) || null
+    : null;
+
+  inputText.value = state.editMessage?.text || '';
+};
+
 watch(
   () => state.messages.length,
   (newLength, oldLength) => {
@@ -547,6 +588,16 @@ const handleSend = async (): Promise<void> => {
   if (!rawText.trim() || rawText.trim() === '<p></p>') return;
 
   inputText.value = '';
+
+  if (state.editMessage) {
+    await sendMessageChat({
+      messageId: state.editMessage.id,
+      topicId: route.value.id,
+      text: rawText
+    });
+    state.editMessage = null;
+    return;
+  }
 
   const parts = splitHtmlByLength(rawText);
 
