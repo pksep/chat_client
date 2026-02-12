@@ -1,67 +1,82 @@
 import { PushNotifications } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
 import { useChatApi } from './useApi';
+import { getCurrentUserId } from './useChat';
 
 export const initPushNotifications = async () => {
-  // 1. Проверяем, что мы на нативном устройстве (Android/iOS)
-  if (!Capacitor.isNativePlatform()) {
-    return;
-  }
+  const api = useChatApi();
+  // Android/iOS
 
-  // 2. Проверка и запрос прав
-  let permStatus = await PushNotifications.checkPermissions();
+  if (Capacitor.isNativePlatform()) {
+    let permStatus = await PushNotifications.checkPermissions();
+    if (permStatus.receive === 'prompt') {
+      permStatus = await PushNotifications.requestPermissions();
+    }
+    if (permStatus.receive !== 'granted')
+      return console.error('Permission denied');
 
-  if (permStatus.receive === 'prompt') {
-    permStatus = await PushNotifications.requestPermissions();
-  }
+    await PushNotifications.register();
 
-  if (permStatus.receive !== 'granted') {
-    console.error('Push Notifications: Permission denied');
-    return;
-  }
-
-  // 3. Регистрируемся в FCM
-  await PushNotifications.register();
-
-  // --- СЛУШАТЕЛИ ---
-
-  // А) Успешная регистрация -> Шлем токен на бэкенд через useChatApi
-  PushNotifications.addListener('registration', async token => {
-    try {
-      const api = useChatApi();
-      // Отправляем токен и платформу
+    PushNotifications.addListener('registration', async token => {
       await api.post('/notifications/device', {
         token: token.value,
-        platform: Capacitor.getPlatform() // 'android' или 'ios'
+        platform: Capacitor.getPlatform()
       });
-    } catch (e) {
-      console.error('Failed to send token to server:', e);
-    }
-  });
+    });
 
-  // Б) Ошибка регистрации
-  PushNotifications.addListener('registrationError', error => {
-    console.error('Push registration error: ', error);
-  });
+    PushNotifications.addListener('pushNotificationReceived', n =>
+      console.log('Native push:', n)
+    );
+    PushNotifications.addListener('registrationError', e =>
+      console.error('Push error:', e)
+    );
 
-  // В) Пришел пуш, когда приложение ОТКРЫТО
-  PushNotifications.addListener('pushNotificationReceived', () => {
-    // Тут можно дернуть стор, чтобы обновить счетчик непрочитанных, если нужно
-  });
+    return;
+  }
 
-  // Г) Клик по пушу (из шторки)
-  // PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
-  //   const data = notification.notification.data;
+  // Web Push (Browser)
+  if (!('serviceWorker' in navigator)) return;
 
-  //   // Логика перехода
-  //   if (data && data.topicId) {
-  //     router.push(`/chat/${data.topicId}`);
-  //   }
-  // });
+  if (Notification.permission === 'default')
+    await Notification.requestPermission();
+  if (Notification.permission !== 'granted') return;
+
+  const registration =
+    await navigator.serviceWorker.register('/service-worker.js');
+
+  // Get public key from server
+  const resp = await api.get<{ publicKey: string }>('/push/public-key');
+  const data = await resp.json();
+  const publicKey = data?.publicKey;
+  if (!publicKey) return console.error('Missing VAPID key');
+
+  const applicationServerKey = urlBase64ToArrayBuffer(publicKey);
+
+  let subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey
+    });
+  }
+
+  const userId = getCurrentUserId();
+  if (!userId) return console.warn('No user ID, skipping subscribe');
+
+  await api.post('/push/subscribe', { userId, subscription });
 };
 
 export const removePushListeners = async () => {
   if (Capacitor.isNativePlatform()) {
     await PushNotifications.removeAllListeners();
   }
+};
+
+const urlBase64ToArrayBuffer = (base64String: string) => {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = window.atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i);
+  return output.buffer;
 };
