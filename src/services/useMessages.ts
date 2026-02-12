@@ -152,6 +152,16 @@ export const changeFileLoadingStatus = (
   media.isLoading = false;
 };
 
+export const deleteFileAfterLoading = (
+  topicId: string,
+  messageId: string,
+  fileId: string
+): void => {
+  const existingMessages = messagesStore.value[topicId] || [];
+  const message = existingMessages.find(message => message.id === messageId);
+  message.media = message.media.filter(media => media.id !== fileId);
+};
+
 export const playNotificationSound = (topicId?: string): void => {
   if ((topicId && isTopicMuted(topicId)) || route.value.id === topicId) {
     return;

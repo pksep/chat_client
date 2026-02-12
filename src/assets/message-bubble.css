@@ -273,6 +273,7 @@ div.message-content__file {
   }
 
   & .message-content__file__name {
+    min-width: 90px;
     margin-right: 10px;
     font-weight: 400;
     font-size: 16px;
