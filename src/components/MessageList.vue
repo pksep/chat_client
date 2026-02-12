@@ -106,6 +106,7 @@
           :avatar="message.senderUser?.avatarUrl || ''"
           :is-read="message.status === MessageStatus.Read"
           :is-edit="message.isEdit"
+          :is-pin="message.isPin"
           :message-status="message.status"
           :topic-id="message.topicId"
           :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"

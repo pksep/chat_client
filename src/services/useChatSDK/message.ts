@@ -14,10 +14,6 @@ export interface ChatMessageInterface {
     messageId: string,
     emoji: string
   ): Promise<{ success: boolean }>;
-  toggleMessagePin(
-    topicId: string,
-    messageId: string
-  ): Promise<{ success: boolean }>;
   uploadMedia(file: File): Promise<Media>;
   searchMessages(
     query: string,
@@ -87,23 +83,6 @@ export class ChatMessage implements ChatMessageInterface {
       return data;
     } catch (error) {
       throw new Error(`Failed to toggle reaction: ${(error as Error).message}`);
-    }
-  }
-
-  async toggleMessagePin(
-    topicId: string,
-    messageId: string
-  ): Promise<{ success: boolean }> {
-    try {
-      const response = (await this.reqi.post(
-        `/topics/${topicId}/messages/${messageId}/pin`,
-        {},
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to toggle pin: ${(error as Error).message}`);
     }
   }
 

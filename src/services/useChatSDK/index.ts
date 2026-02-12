@@ -536,13 +536,6 @@ export class ChatSDK {
     return await this.message.toggleMessageReaction(topicId, messageId, emoji);
   }
 
-  async toggleMessagePin(
-    topicId: string,
-    messageId: string
-  ): Promise<{ success: boolean }> {
-    return await this.message.toggleMessagePin(topicId, messageId);
-  }
-
   async markMessagesAsRead(
     topicId: string,
     messageIds: string[]

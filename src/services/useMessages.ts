@@ -100,7 +100,7 @@ export const editMessageFromLocal = (
 
   messagesStore.value[topicId] = existingMessages.map(msg => {
     if (msg.id === message.id) {
-      return message;
+      return { ...msg, text: message.text, isPin: message.isPin };
     }
     return msg;
   });

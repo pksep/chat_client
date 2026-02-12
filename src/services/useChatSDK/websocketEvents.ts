@@ -12,7 +12,7 @@ export enum WebSocketEventType {
   MESSAGE_DELETED = 'messageDeleted',
   TOGGLE_REACTION = 'toggleReaction',
   REACTION_UPDATED = 'reactionUpdated',
-  TOGGLE_PIN = 'togglePin',
+  TOGGLE_PIN_MESSAGE = 'togglePinMessage',
   MESSAGE_PINNED = 'messagePinned',
   READ_MESSAGES = 'readMessages',
   MESSAGES_READ = 'messagesRead',
@@ -52,6 +52,10 @@ export interface WebSocketEventPayloads {
     replayMessageId?: string;
     ex?: string;
   };
+  [WebSocketEventType.TOGGLE_PIN_MESSAGE]: {
+    messageId: string;
+    topicId: string;
+  };
   [WebSocketEventType.CHANGE_MESSAGE]: {
     data: Message;
     type: 'NEW' | 'CHANGE' | 'DELETE';
@@ -73,7 +77,6 @@ export interface WebSocketEventPayloads {
     topicId: string;
   };
   [WebSocketEventType.REACTION_UPDATED]: any;
-  [WebSocketEventType.TOGGLE_PIN]: { messageId: string };
   [WebSocketEventType.MESSAGE_PINNED]: { messageId: string; isPin: boolean };
   [WebSocketEventType.READ_MESSAGES]: { messageIds: string[]; topicId: string };
   [WebSocketEventType.MESSAGES_READ]: { userId: string; messageIds: string[] };
