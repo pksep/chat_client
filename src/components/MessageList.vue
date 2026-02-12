@@ -314,6 +314,25 @@ let hasMoreMessage = true;
 let scrollMarkReadTimeout: number | null = null;
 let intersectionObserver: IntersectionObserver | null = null;
 
+const markAllVisibleAsRead = async () => {
+  if (!route.value?.id) return;
+
+  const unreadMessages = state.messages.filter(
+    m => m.senderUserId !== props.user?.id && m.status !== MessageStatus.Read
+  );
+
+  if (unreadMessages.length === 0) return;
+
+  try {
+    await markAsRead({
+      messageIds: unreadMessages.map(m => m.id),
+      topicId: route.value.id
+    });
+  } catch (error) {
+    console.warn('Failed to mark messages as read:', error);
+  }
+};
+
 const setupIntersectionObserver = () => {
   if (intersectionObserver) {
     intersectionObserver.disconnect();
@@ -390,19 +409,7 @@ const handleScroll = async (): Promise<void> => {
       clearTimeout(scrollMarkReadTimeout);
     }
     scrollMarkReadTimeout = window.setTimeout(() => {
-      const unreadMessages = state.messages.filter(
-        message =>
-          message.senderUserId !== props.user?.id && !message.isReadByMe
-      );
-
-      if (unreadMessages.length > 0) {
-        markAsRead({
-          messageIds: unreadMessages.map(m => m.id),
-          topicId: route.value.id
-        }).catch(error => {
-          console.warn('Failed to mark messages as read:', error);
-        });
-      }
+      markAllVisibleAsRead();
       scrollMarkReadTimeout = null;
     }, 500);
   }
@@ -557,6 +564,16 @@ watch(
     });
   },
   { deep: true }
+);
+
+watch(
+  () => route.value?.id,
+  () => {
+    nextTick(() => {
+      markAllVisibleAsRead();
+    });
+  },
+  { immediate: true }
 );
 
 const scrollToBottom = () => {
