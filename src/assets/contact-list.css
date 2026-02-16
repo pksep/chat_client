@@ -174,7 +174,7 @@ svg.icon-yui-kit.contact-list__read-icon {
 .contact-list {
   gap: 2px;
   display: grid;
-  height: calc(100vh - 155px);
+  max-height: calc(100vh - 155px);
   overflow: hidden scroll;
 }
 
