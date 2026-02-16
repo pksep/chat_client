@@ -23,7 +23,7 @@ import { fetchAuthUser, setAuthUser, useAuth } from './composables/useAuth';
 import { fetchAllUsers, getUserById } from './composables/useUsers';
 import { getConfig } from './services/useConfig';
 import { useTopics } from './composables/useTopics';
-import { getGroupById, useGroup } from './composables/useGroup';
+import { getGroupById } from './composables/useGroup';
 import { useUrlWatcher } from './composables/navigation';
 import {
   fetchMessagesForTopic,
@@ -40,7 +40,6 @@ const props = defineProps<IChatContainerProps>();
 const openChatContainerShow = ref(true);
 const showMobileAuth = ref(false);
 
-const { fetchAllGroups } = useGroup();
 const { fetchAllTopics } = useTopics();
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
@@ -122,7 +121,6 @@ const runAppInitialization = async () => {
     }
 
     await fetchAllTopics();
-    await fetchAllGroups();
     if (route.value.id) {
       await fetchMessagesForTopic(route.value.id);
       fetchPinnedMessagesForTopic(route.value.id);
