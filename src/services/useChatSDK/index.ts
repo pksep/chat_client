@@ -14,12 +14,7 @@ import {
 } from './websocketEvents';
 import { Reqi } from '@pksep/reqi';
 import io, { Socket } from 'socket.io-client';
-import {
-  SearchParams,
-  PaginatedResponse,
-  TopicType,
-  MessageStatus
-} from './types';
+import { SearchParams, PaginatedResponse, MessageStatus } from './types';
 
 import { ChatAuth, ChatAuthInterface } from './auth';
 import { ChatUser, ChatUserInterface } from './user';
@@ -31,7 +26,6 @@ import { ChatWS, ChatWSInterface } from './ws';
 import { ChatUtils, ChatUtilsInterface } from './utils';
 import { ITopic } from '../../components/interfaces/interfaces';
 import { fetchAllTopics } from '../../composables/useTopics';
-import { fetchAllGroups } from '../../composables/useGroup';
 import { fetchMessagesForTopic } from '../useMessages';
 
 export interface ChatSDKOptions {
@@ -116,7 +110,6 @@ export class ChatSDK {
           resolve();
 
           fetchAllTopics();
-          fetchAllGroups();
           fetchMessagesForTopic();
         });
 
@@ -140,7 +133,6 @@ export class ChatSDK {
             `Reconnected to chat server after ${attemptNumber} attempts`
           );
           fetchAllTopics();
-          fetchAllGroups();
           fetchMessagesForTopic();
         });
 
@@ -340,11 +332,8 @@ export class ChatSDK {
     return result;
   }
 
-  async getTopics(
-    type?: TopicType,
-    params?: SearchParams
-  ): Promise<PaginatedResponse<ITopic>> {
-    return this.topic.getTopics(type, params);
+  async getTopics(): Promise<PaginatedResponse<ITopic>> {
+    return this.topic.getTopics();
   }
 
   async createTopic(topicData: { peerId: string }): Promise<Topic> {
@@ -511,9 +500,17 @@ export class ChatSDK {
 
   async getMessages(
     topicId: string,
-    opts?: { limit?: number; lastMessageId?: string }
+    opts?: { limit?: number; lastMessageId?: string; afterMessageId?: string }
   ): Promise<Message[]> {
     return await this.message.getMessages(topicId, opts);
+  }
+
+  async getPinnedMessages(topicId: string): Promise<Message[]> {
+    return await this.message.getPinnedMessages(topicId);
+  }
+
+  async getAroundMessage(messageId: string): Promise<Message[]> {
+    return await this.message.getAroundMessage(messageId);
   }
 
   async editMessage(
@@ -534,13 +531,6 @@ export class ChatSDK {
     emoji: string
   ): Promise<{ success: boolean }> {
     return await this.message.toggleMessageReaction(topicId, messageId, emoji);
-  }
-
-  async toggleMessagePin(
-    topicId: string,
-    messageId: string
-  ): Promise<{ success: boolean }> {
-    return await this.message.toggleMessagePin(topicId, messageId);
   }
 
   async markMessagesAsRead(

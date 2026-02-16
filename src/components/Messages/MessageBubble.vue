@@ -83,6 +83,11 @@
           v-if="!props.loader"
           :data-testid="`${dataTestid}-MessageBubble-Time`"
         >
+          <span
+            v-if="props.isEdit"
+            :data-testid="`${dataTestid}-MessageBubble-Edited`"
+            >изменено</span
+          >
           <span :data-testid="`${dataTestid}-MessageBubble-TimeText`">{{
             props.time
           }}</span>
@@ -183,6 +188,7 @@
                 @click="setSliderElement(mediaFiles, i)"
                 :src="getFullMediaPath(media)"
                 :alt="props.sender ? props.sender + ' image' : 'Shared image'"
+                @dragstart="handleDragStart($event, media)"
               />
 
               <div
@@ -234,17 +240,35 @@
         :size="SizesEnum.small"
         :data-testid="`${dataTestid}-MessageBubble-ReplyButton`"
       >
-        Ответить
+        <ReplyIcon /> Ответить
+      </Button>
+      <Button
+        v-if="props.isMeSender && !!props.message"
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="handleEditMessage"
+        :data-testid="`${dataTestid}-MessageBubble-EditButton`"
+      >
+        <EditIcon /> Редактировать
+      </Button>
+      <Button
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="handlePinMessage"
+        :data-testid="`${dataTestid}-MessageBubble-PinButton`"
+      >
+        <template v-if="!props.isPin"> <PinIcon /> Закрепить </template>
+        <template v-else> <UnpinIcon /> Открепить </template>
       </Button>
       <Button
         v-if="props.isMeSender"
-        style="color: var(--error-color)"
+        class="red-context-button"
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.small"
         @click.stop="handleOpenModal"
         :data-testid="`${dataTestid}-MessageBubble-ReplyButton`"
       >
-        Удалить
+        <Icon :name="IconNameEnum.deleteSmall" /> Удалить
       </Button>
     </ContextMenu>
 
@@ -260,7 +284,14 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Avatar, Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
+import {
+  Avatar,
+  Button,
+  ButtonTypeEnum,
+  Icon,
+  IconNameEnum,
+  SizesEnum
+} from '@pksep/yui';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import {
   isOpen,
@@ -278,16 +309,25 @@ import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
 import { getConfig } from '../../services/useConfig';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
-import { deleteMessageChat } from '../../services/useChat';
+import {
+  deleteMessageChat,
+  togglePinMessageChat
+} from '../../services/useChat';
 import LoadingIcon from '../UI/LoadingIcon.vue';
 import PlayIcon from '../UI/PlayIcon.vue';
 import { IMedia } from '../interfaces/interfaces';
 import ConfirmModal from '../UI/ConfirmModal.vue';
+import ReplyIcon from '../UI/ReplyIcon.vue';
+import EditIcon from '../UI/EditIcon.vue';
+import PinIcon from '../UI/PinIcon.vue';
+import UnpinIcon from '../UI/UnpinIcon.vue';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
   media: () => []
 });
+
+const emits = defineEmits(['unmount-edit-message-id']);
 
 const messageArticleStyles = (type?: MediaTypeType) => [
   'message__article',
@@ -338,6 +378,19 @@ const handleDeleteMessage = async (): Promise<void> => {
   handleCloseModal();
 };
 
+const handleEditMessage = () => {
+  emits('unmount-edit-message-id', props.messageId);
+  closeActivePopover(props.messageId);
+};
+
+const handlePinMessage = async () => {
+  await togglePinMessageChat({
+    messageId: props.messageId,
+    topicId: props.topicId
+  });
+  closeActivePopover(props.messageId);
+};
+
 const generateArray = (n: number): number[] => {
   return Array.from({ length: n });
 };
@@ -354,11 +407,61 @@ const getFullMediaPath = (media: IMedia, isThumb = true) => {
   return `${config.CHAT_PATH_TO_FILE_CDN}/${isThumb ? media.thumbnailPath : media.path}`;
 };
 
+const isSliderContentUrl = (fileUrl: string) => {
+  return fileUrl?.match(/\.(jpg|jpeg|png|webp|svg|mp4|mp3|avif|pdf)$/i);
+};
+
 const setSliderElement = (medias: IMedia[], defaultIndex: number = 0) => {
-  sliderElementPaths.value = medias.map(media =>
+  const selectedMedia = medias[defaultIndex];
+
+  // Download logic
+  if (
+    selectedMedia.type === MediaType.File &&
+    !isSliderContentUrl(selectedMedia.originName)
+  ) {
+    const url = getFullMediaPath(selectedMedia, false);
+    const fileName = selectedMedia.originName || 'file';
+
+    fetch(url)
+      .then(res => res.blob())
+      .then(blob => {
+        const blobUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = fileName.includes('.') ? fileName : fileName + '.txt';
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        window.URL.revokeObjectURL(blobUrl);
+      })
+      .catch(err => {
+        console.error('Download failed', err);
+      });
+
+    return;
+  }
+
+  const sliderMedias = medias.filter(media =>
+    isSliderContentUrl(getFullMediaPath(media, false))
+  );
+
+  sliderElementPaths.value = sliderMedias.map(media =>
     getFullMediaPath(media, false)
   );
 
-  defaultIndexSlider.value = defaultIndex;
+  const correctedIndex = sliderMedias.findIndex(
+    media => media === selectedMedia
+  );
+
+  defaultIndexSlider.value = correctedIndex !== -1 ? correctedIndex : 0;
+};
+
+const handleDragStart = (event: DragEvent, media: IMedia) => {
+  const originalUrl = getFullMediaPath(media, false);
+
+  event.dataTransfer?.setData('text/uri-list', originalUrl);
+  event.dataTransfer?.setData('text/plain', originalUrl);
 };
 </script>

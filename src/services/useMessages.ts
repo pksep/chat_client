@@ -11,34 +11,79 @@ import { useUrlWatcher } from '../composables/navigation';
 import { authedUser } from '../composables/useAuth';
 
 const messagesStore = ref<Record<string, IMessage[]>>({});
+const pinnedMessagesStore = ref<Record<string, IMessage[]>>({});
 
 const route = useUrlWatcher();
 
 export const fetchMessagesForTopic = async (
   topicId: string = route.value.id,
-  opts?: { lastMessageId?: string; limit?: number }
+  opts?: { lastMessageId?: string; limit?: number; afterMessageId?: string }
 ): Promise<IMessage[]> => {
   try {
     if (!topicId) return;
     const sdk = getChatSDK();
     if (!sdk) return;
+
     const messages = await sdk.getMessages(topicId, {
-      limit: opts?.limit || 20,
-      lastMessageId: opts?.lastMessageId
+      limit: opts?.limit,
+      lastMessageId: opts?.lastMessageId,
+      afterMessageId: opts?.afterMessageId
     });
 
+    const existing = getMessagesByTopicId(topicId) || [];
+
+    let combined = messages;
+
     if (opts?.lastMessageId) {
-      const existingMessages = getMessagesByTopicId(topicId);
-      const combinedMessages = [...messages, ...existingMessages];
-      saveMessagesToLocal(topicId, combinedMessages);
-      return messages;
+      combined = [...messages, ...existing];
+    } else if (opts?.afterMessageId) {
+      combined = [...existing, ...messages];
     }
-    saveMessagesToLocal(topicId, messages);
+    const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
+
+    saveMessagesToLocal(topicId, unique);
 
     return messages;
   } catch (error) {
     console.warn('Failed to fetch message history:', error);
     return getMessagesByTopicId(topicId);
+  }
+};
+
+export const fetchPinnedMessagesForTopic = async (
+  topicId: string = route.value.id
+): Promise<IMessage[]> => {
+  try {
+    if (!topicId) return;
+    const sdk = getChatSDK();
+    if (!sdk) return;
+    const messages = await sdk.getPinnedMessages(topicId);
+
+    savePinnedMessagesToLocal(topicId, messages);
+
+    return messages;
+  } catch (error) {
+    console.warn('Failed to fetch pinned message history:', error);
+    return getPinnedMessagesByTopicId(topicId);
+  }
+};
+
+export const fetchAroundMessage = async (
+  messageId: string,
+  topicId: string = route.value.id
+): Promise<IMessage[]> => {
+  try {
+    if (!messageId) return;
+    const sdk = getChatSDK();
+    if (!sdk) return;
+
+    const messages = await sdk.getAroundMessage(messageId);
+    saveMessagesToLocal(topicId, messages);
+
+    return messages;
+  } catch (error) {
+    console.warn('Failed to fetch around message:', error);
+    return [];
   }
 };
 
@@ -86,10 +131,35 @@ export const deleteMessageFromLocal = (
 
   if (
     deletedMessage.senderUser?.id !== authedUser.value?.id &&
-    deletedMessage.status !== 'READ'
+    !deletedMessage.isReadByMe
   ) {
     changeUnreadMessageCount(-1, topicId);
   }
+};
+
+export const editMessageFromLocal = (
+  topicId: string,
+  message: IMessage
+): void => {
+  const existingMessages = messagesStore.value[topicId] || [];
+
+  messagesStore.value[topicId] = existingMessages.map(msg => {
+    if (msg.id === message.id) {
+      if (message.isPin !== msg.isPin) {
+        const pinnedMessages = getPinnedMessagesByTopicId(topicId);
+        if (message.isPin) {
+          savePinnedMessagesToLocal(topicId, [...pinnedMessages, message]);
+        } else {
+          savePinnedMessagesToLocal(
+            topicId,
+            pinnedMessages.filter(m => m.id !== message.id)
+          );
+        }
+      }
+      return { ...msg, text: message.text, isPin: message.isPin };
+    }
+    return msg;
+  });
 };
 
 export const saveMessagesToLocal = (
@@ -103,23 +173,46 @@ export const getMessagesByTopicId = (topicId: string): IMessage[] => {
   return messagesStore.value[topicId] || [];
 };
 
+export const savePinnedMessagesToLocal = (
+  topicId: string,
+  messages: IMessage[]
+): void => {
+  pinnedMessagesStore.value[topicId] = messages;
+};
+
+export const getPinnedMessagesByTopicId = (topicId: string): IMessage[] => {
+  return pinnedMessagesStore.value[topicId] || [];
+};
+
+export const getGroupMessageWithPinned = (
+  topicId: string,
+  messages: IMessage[]
+): void => {
+  pinnedMessagesStore.value[topicId] = messages;
+};
+
 export const changeLocalReadStatus = (
   topicId: string,
-  messageIds: string[]
+  messageIds: string[],
+  userId: string
 ): void => {
   const existingMessages = messagesStore.value[topicId] || [];
   const updatedMessages = existingMessages.map(message => {
     if (messageIds.includes(message.id)) {
       return {
         ...message,
-        status: MessageStatus.Read
+        status: MessageStatus.Read,
+        isRead: true
       };
     }
     return message;
   });
   updateLocalTopicReadStatus(topicId, messageIds);
-  changeUnreadMessageCount(-messageIds.length, topicId);
   messagesStore.value[topicId] = updatedMessages;
+
+  if (userId === authedUser.value.id) {
+    changeUnreadMessageCount(-messageIds.length, topicId);
+  }
 };
 
 export const changeFileLoadingStatus = (
@@ -131,6 +224,16 @@ export const changeFileLoadingStatus = (
   const message = existingMessages.find(message => message.id === messageId);
   const media = message.media?.find(media => media.id === fileId);
   media.isLoading = false;
+};
+
+export const deleteFileAfterLoading = (
+  topicId: string,
+  messageId: string,
+  fileId: string
+): void => {
+  const existingMessages = messagesStore.value[topicId] || [];
+  const message = existingMessages.find(message => message.id === messageId);
+  message.media = message.media.filter(media => media.id !== fileId);
 };
 
 export const playNotificationSound = (topicId?: string): void => {

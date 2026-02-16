@@ -24,110 +24,70 @@
           is-icon
           :data-testid="`${props.dataTestid}-Menu-ProfileAvatar`"
         />
-        <Button
-          :size="SizesEnum.small"
-          :type="ButtonTypeEnum.ghost"
-          class="menu__user-profile-collapse"
+        <Icon
+          :name="
+            isCollapse ? IconNameEnum.chevronRight : IconNameEnum.chevronLeft
+          "
+          class="menu__user-profile__collapse"
           @click="handleCollapse"
-          :data-testid="`${props.dataTestid}-Menu-CollapseButton`"
+          :data-testid="`${props.dataTestid}-Menu-CollapseIcon`"
+        />
+      </div>
+      <Line :data-testid="`${props.dataTestid}-Menu-Line`" />
+
+      <div class="menu__user-details-summary">
+        <h4
+          v-if="!isCollapse"
+          class="menu__user-details-summary--title"
+          :data-testid="`${props.dataTestid}-Menu-DetailsTitle`"
+        >
+          Чаты
+        </h4>
+        <Button
+          :type="ButtonTypeEnum.primary"
+          :size="SizesEnum.little"
+          :data-testid="`${props.dataTestid}-Menu-PlusButton`"
+          @click="evt => openActivePopover('plusMenu', evt as MouseEvent)"
         >
           <Icon
-            :name="IconNameEnum.sidebar"
-            class="menu__user-profile-collapse-icon"
-            :data-testid="`${props.dataTestid}-Menu-CollapseIcon`"
+            :name="IconNameEnum.plus"
+            :data-testid="`${props.dataTestid}-Menu-PlusIcon`"
           />
         </Button>
+
+        <ContextMenu
+          :visible="!!isOpen['plusMenu']"
+          :position="position"
+          @unmount-close="closeActivePopover('plusMenu')"
+          @click="closeActivePopover('plusMenu')"
+          :data-testid="`${dataTestid}-MessageBubble-ContextMenu`"
+        >
+          <Button
+            @click="handleNewContactModal"
+            :type="ButtonTypeEnum.ghost"
+            :size="SizesEnum.small"
+            :data-testid="`${dataTestid}-MessageBubble-ReplyButton`"
+          >
+            <MessageIcon /> Создать диалог
+          </Button>
+          <Button
+            @click="handleNewGroupModal"
+            :type="ButtonTypeEnum.ghost"
+            :size="SizesEnum.small"
+            :data-testid="`${dataTestid}-MessageBubble-EditButton`"
+          >
+            <GroupIcon /> Создать группу
+          </Button>
+        </ContextMenu>
       </div>
-      <Line
-        class="menu__user-line"
-        :data-testid="`${props.dataTestid}-Menu-SeparatorLine`"
+
+      <TopicList
+        class="menu__contact-list"
+        :topics="topicGroups"
+        @unmount-topic="unmountTopicClick"
+        :selected-topic-id="state.selectedContactId"
+        :data-testid="`${props.dataTestid}-Menu-ContactList`"
       />
-      <div
-        v-if="false"
-        :class="aiChapterClasses"
-        @click="unmountClickAI"
-        :data-testid="`${props.dataTestid}-Menu-AIAssistantContainer`"
-      >
-        <AiIconWrapper
-          :data-testid="`${props.dataTestid}-Menu-AIAssistantIcon`"
-        />
-        <h3
-          class="menu__user-assistant-title"
-          v-if="!isCollapse"
-          :data-testid="`${props.dataTestid}-Menu-AIAssistantTitle`"
-        >
-          AI Ассистент
-        </h3>
-      </div>
-      <template v-for="(item, index) in topicGroups" :key="index">
-        <template v-if="isCollapse && item.items.length !== 0 && index !== 0">
-          <Line :data-testid="`${props.dataTestid}-Menu-Line${index + 1}`" />
-        </template>
-        <details
-          class="menu__user-details"
-          v-if="!isCollapse"
-          :open="state.detailsOpen[index]"
-          @toggle="handleToggle($event, index)"
-          :data-testid="`${props.dataTestid}-Menu-Details${index + 1}`"
-        >
-          <summary
-            class="menu__user-details-summary"
-            :data-testid="`${props.dataTestid}-Menu-DetailsSummary${index + 1}`"
-          >
-            <h4
-              class="menu__user-details-summary--title"
-              :data-testid="`${props.dataTestid}-Menu-DetailsTitle${index + 1}`"
-            >
-              {{ item.type === 'GROUP' ? 'Каналы' : 'Личные сообщения' }}
-              <Triangle class="menu__user-details-summary-triangle" />
-            </h4>
-            <Button
-              :type="ButtonTypeEnum.ghost"
-              :size="SizesEnum.little"
-              @click="item.onClickPlusButton"
-              :data-testid="`${props.dataTestid}-Menu-PlusButton${index + 1}`"
-            >
-              <Icon
-                :name="IconNameEnum.plus"
-                :data-testid="`${props.dataTestid}-Menu-PlusIcon${index + 1}`"
-              />
-            </Button>
-          </summary>
-          <TopicList
-            class="menu__contact-list"
-            :topics="item.items"
-            @unmount-topic="unmountTopicClick"
-            :selected-topic-id="state.selectedContactId"
-            :data-testid="`${props.dataTestid}-Menu-ContactList${index + 1}`"
-          />
-        </details>
-        <template v-if="isCollapse">
-          <ul
-            class="menu__user"
-            :data-testid="`${props.dataTestid}-Menu-CollapsedUser${index + 1}`"
-          >
-            <template v-for="(contact, index) in item.items" :key="index">
-              <li
-                :class="[
-                  'menu-user__item',
-                  {
-                    'menu-user__item--active':
-                      contact.id === state.selectedContactId
-                  }
-                ]"
-                :data-testid="`${props.dataTestid}-Menu-CollapsedAvatar${index + 1}`"
-                @click.stop="unmountTopicClick(contact)"
-              >
-                <Avatar
-                  :url="`${config.CHAT_PATH_TO_FILE_CDN}/${contact.avatarUrl}`"
-                  :initials="contact.name"
-                  :data-testid="`${props.dataTestid}-Menu-UserAvatar${index + 1}`"
-                />
-              </li>
-            </template>
-          </ul>
-        </template>
-      </template>
     </div>
     <Button
       v-if="canInstall && !isInstalled"
@@ -151,7 +111,6 @@ import { computed, reactive } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_XL } from '../utils/constants';
 import Line from './UI/Line.vue';
-import AiIconWrapper from './UI/AiIconWrapper.vue';
 import {
   Icon,
   Button,
@@ -162,11 +121,8 @@ import {
 } from '@pksep/yui';
 import UserProfile from './UserProfile/UserProfile.vue';
 import type { ITopic, IMenuEmits, IMenuProps } from './interfaces/interfaces';
-import { useGroup } from '../composables/useGroup';
-import Triangle from './Triangle.vue';
 import { usePwaInstall } from '../composables/usePwaInstall';
 import {
-  navigateToAI,
   navigateToGroup,
   navigateToDialogs,
   useUrlWatcher
@@ -174,13 +130,15 @@ import {
 import { useTopics } from '../composables/useTopics';
 import { getAuthUser } from '../composables/useAuth';
 import TopicList from './ContactList/TopicList.vue';
-import { getConfig } from '../services/useConfig';
+import { useContextMenu } from '../composables/useContextMenu';
+import ContextMenu from './ContactList/ContextMenu.vue';
+import MessageIcon from './UI/MessageIcon.vue';
+import GroupIcon from './UI/GroupIcon.vue';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: 'Menu'
 });
 
-const { getGroupList } = useGroup();
 const { getTopicList } = useTopics();
 
 const route = useUrlWatcher();
@@ -202,20 +160,7 @@ const getInitialDetailsOpen = () => {
   return [true, true];
 };
 
-const topicGroups = computed(() => {
-  return [
-    {
-      type: 'GROUP',
-      onClickPlusButton: handleNewGroupModal,
-      items: getGroupList()
-    },
-    {
-      title: 'DM',
-      onClickPlusButton: handleNewContactModal,
-      items: getTopicList()
-    }
-  ];
-});
+const topicGroups = computed(() => getTopicList());
 
 const state = reactive({
   selectedContactId: computed(() => route.value?.id),
@@ -223,11 +168,12 @@ const state = reactive({
   detailsOpen: getInitialDetailsOpen()
 });
 
+const { isOpen, position, openActivePopover, closeActivePopover } =
+  useContextMenu();
+
 const authUser = computed(() => getAuthUser());
 
 const emits = defineEmits<IMenuEmits>();
-
-const config = getConfig();
 
 const { state: isCollapse, toggle } = useResizeState({
   breakpoint: MAX_W_XL,
@@ -237,18 +183,8 @@ const { state: isCollapse, toggle } = useResizeState({
   }
 });
 
-const handleToggle = (event: Event, index: number): void => {
-  const target = event.target as HTMLDetailsElement;
-  state.detailsOpen[index] = target.open;
-  localStorage.setItem('menu-details-open', JSON.stringify(state.detailsOpen));
-};
-
 const handleCollapse = (): void => {
   toggle();
-};
-
-const unmountClickAI = (): void => {
-  navigateToAI();
 };
 
 const unmountTopicClick = (topic: ITopic): void => {
@@ -263,13 +199,6 @@ const menuClasses = computed(() => [
   'menu',
   { 'menu--collapse': isCollapse.value },
   props.class
-]);
-
-const aiChapterClasses = computed(() => [
-  'menu__user-assistant',
-  {
-    'menu__user-assistant--active': route.value && route.value.type === 'ai'
-  }
 ]);
 
 const handleNewGroupModal = () => {

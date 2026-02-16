@@ -2,7 +2,7 @@ import { ref, shallowRef } from 'vue';
 import { ChatSDK } from './useChatSDK';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
 import { User } from '@pksep/zod-shared-chat';
-import { MessageStatus, TopicType } from './useChatSDK/types';
+import { MessageStatus } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { setAuthUser, getAuthUser, authedUser } from '../composables/useAuth';
 import {
@@ -12,13 +12,13 @@ import {
 } from '../composables/useTopics';
 import {
   updateLocalGroupDetails,
-  addGroupList,
   updateLocalLastMessageGroup
 } from '../composables/useGroup';
 import {
   addMessageToLocal,
   changeLocalReadStatus,
   deleteMessageFromLocal,
+  editMessageFromLocal,
   playNotificationSound
 } from './useMessages';
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
@@ -83,39 +83,34 @@ const setupChatListeners = (): void => {
         payload.data.avatarUrl
       );
     } else if (payload.type === 'CREATE') {
-      if (payload.data.type === TopicType.Group) {
-        addGroupList(payload.data);
-      } else if (payload.data.type === TopicType.DM) {
-        const { addTopicList } = useTopics();
-        addTopicList(payload.data);
-      }
+      const { addTopicList } = useTopics();
+      addTopicList(payload.data);
     } else if (payload.type === 'DELETE') {
       deleteTopicFromList(payload.data.id);
     }
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_MESSAGE, ({ payload }) => {
+    const { updateLocalLastMessageTopic } = useTopics();
+
     if (payload.type === 'NEW') {
       addMessageToLocal(payload.data.topicId, payload.data);
       if (payload.data.senderUserId !== currentUserId.value) {
         playNotificationSound(payload.data.topicId);
         changeUnreadMessageCount(1, payload.data.topicId);
       }
-
-      const { updateLocalLastMessageTopic } = useTopics();
-      updateLocalLastMessageTopic(payload.data.topicId, payload.data);
-      updateLocalLastMessageGroup(payload.data.topicId, payload.data);
     } else if (payload.type === 'DELETE') {
       deleteMessageFromLocal(payload.data.topicId, payload.data.id);
-
-      const { updateLocalLastMessageTopic } = useTopics();
-      updateLocalLastMessageTopic(payload.data.topicId);
-      updateLocalLastMessageGroup(payload.data.topicId);
+    } else if (payload.type === 'CHANGE' || payload.type === 'PIN') {
+      editMessageFromLocal(payload.data.topicId, payload.data);
     }
+
+    updateLocalLastMessageTopic(payload.data.topicId);
+    updateLocalLastMessageGroup(payload.data.topicId);
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.READ_MESSAGE, ({ payload }) => {
-    changeLocalReadStatus(payload.topicId, payload.messageIds);
+    changeLocalReadStatus(payload.topicId, payload.messageIds, payload.userId);
   });
 };
 
@@ -216,17 +211,44 @@ export const generateNewMessage = (params: {
 export const sendMessageChat = async (params: {
   topicId: string;
   text?: string;
+  messageId?: string;
   medias?: IMedia[];
   ex?: string;
 }): Promise<void> => {
   const sdk = getChatSDK();
 
   try {
+    if (params.messageId) {
+      sdk.sendWebSocketEvent(WebSocketEventType.EDIT_MESSAGE, {
+        messageId: params.messageId,
+        text: params.text
+      });
+
+      return;
+    }
+
     sdk.sendWebSocketEvent(WebSocketEventType.SEND_MESSAGE, {
       topicId: params.topicId,
       text: params.text,
       medias: params.medias,
       ex: params.ex
+    });
+  } catch (error) {
+    console.error('[ChatSDK] Failed to send message via WebSocket:', error);
+  }
+};
+
+export const togglePinMessageChat = async (params: {
+  topicId: string;
+  messageId?: string;
+}): Promise<void> => {
+  const sdk = getChatSDK();
+
+  try {
+    sdk.sendWebSocketEvent(WebSocketEventType.TOGGLE_PIN_MESSAGE, {
+      topicId: params.topicId,
+      messageId: params.messageId,
+      userId: authedUser.value.id
     });
   } catch (error) {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);

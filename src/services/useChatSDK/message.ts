@@ -14,10 +14,6 @@ export interface ChatMessageInterface {
     messageId: string,
     emoji: string
   ): Promise<{ success: boolean }>;
-  toggleMessagePin(
-    topicId: string,
-    messageId: string
-  ): Promise<{ success: boolean }>;
   uploadMedia(file: File): Promise<Media>;
   searchMessages(
     query: string,
@@ -29,8 +25,10 @@ export interface ChatMessageInterface {
   ): Promise<{ success: boolean }>;
   getMessages(
     topicId: string,
-    opts?: { limit?: number; lastMessageId?: string }
+    opts?: { limit?: number; lastMessageId?: string; afterMessageId?: string }
   ): Promise<Message[]>;
+  getPinnedMessages(topicId: string): Promise<Message[]>;
+  getAroundMessage(messageId: string): Promise<Message[]>;
 }
 
 export class ChatMessage implements ChatMessageInterface {
@@ -87,23 +85,6 @@ export class ChatMessage implements ChatMessageInterface {
       return data;
     } catch (error) {
       throw new Error(`Failed to toggle reaction: ${(error as Error).message}`);
-    }
-  }
-
-  async toggleMessagePin(
-    topicId: string,
-    messageId: string
-  ): Promise<{ success: boolean }> {
-    try {
-      const response = (await this.reqi.post(
-        `/topics/${topicId}/messages/${messageId}/pin`,
-        {},
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw new Error(`Failed to toggle pin: ${(error as Error).message}`);
     }
   }
 
@@ -169,12 +150,14 @@ export class ChatMessage implements ChatMessageInterface {
 
   async getMessages(
     topicId: string,
-    opts?: { limit?: number; lastMessageId?: string }
+    opts?: { limit?: number; lastMessageId?: string; afterMessageId?: string }
   ): Promise<Message[]> {
     const queryParams = new URLSearchParams();
     if (opts?.limit) queryParams.append('limit', opts.limit.toString());
     if (opts?.lastMessageId)
       queryParams.append('lastMessageId', opts.lastMessageId);
+    if (opts?.afterMessageId)
+      queryParams.append('afterMessageId', opts.afterMessageId);
 
     const queryString = queryParams.toString();
     const endpoint = `/messages/topic/${topicId}${queryString ? `?${queryString}` : ''}`;
@@ -187,6 +170,40 @@ export class ChatMessage implements ChatMessageInterface {
       return data;
     } catch (error) {
       throw new Error(`Failed to fetch messages: ${(error as Error).message}`);
+    }
+  }
+
+  async getPinnedMessages(topicId: string): Promise<Message[]> {
+    try {
+      const response = (await this.reqi.get<Message[]>(
+        `/messages/topic/${topicId}/pinned`,
+        {
+          parsed: false
+        }
+      )) as any;
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      throw new Error(
+        `Failed to fetch pinned messages: ${(error as Error).message}`
+      );
+    }
+  }
+
+  async getAroundMessage(messageId: string): Promise<Message[]> {
+    try {
+      const response = (await this.reqi.get<Message[]>(
+        `/messages/${messageId}/around`,
+        {
+          parsed: false
+        }
+      )) as any;
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      throw new Error(
+        `Failed to fetch pinned messages: ${(error as Error).message}`
+      );
     }
   }
 }

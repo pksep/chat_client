@@ -1,36 +1,34 @@
 import { ref } from 'vue';
 import { getChatSDK, getCurrentUserId } from '../services/useChat';
-import { Message, TopicSetting, TopicType } from '../services/useChatSDK/types';
+import { Message, TopicSetting } from '../services/useChatSDK/types';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
-import { useTopics } from './useTopics';
+import { setTopics, topics, useTopics } from './useTopics';
 import { getMessagesByTopicId } from '../services/useMessages';
 
-const groups = ref<ITopic[]>([]);
 const currentGroup = ref<ITopic | null>(null);
 const loading = ref(false);
 
 export const useGroup = () => {
-  const setGroups = (newGroups: ITopic[]) => {
-    groups.value = [...newGroups];
-  };
-
   const addGroupMembersToList = (groupId: string, newMembers: IUser[]) => {
     const membersToAdd = Array.isArray(newMembers) ? newMembers : [];
     const updatedMembers = [...currentGroup.value.members, ...membersToAdd];
     currentGroup.value.members = updatedMembers;
 
-    const groupIndex = groups.value.findIndex(g => g.id === groupId);
+    const groupIndex = topics.value.findIndex(g => g.group?.id === groupId);
+
     if (groupIndex !== -1) {
-      const updatedGroup = { ...groups.value[groupIndex] };
+      const updatedGroup = { ...topics.value[groupIndex] };
       if (
         'memberCount' in updatedGroup &&
         typeof updatedGroup.memberCount === 'number'
       ) {
         updatedGroup.memberCount += membersToAdd.length;
       }
-      const updatedGroups = [...groups.value];
+
+      updatedGroup.members = updatedMembers;
+      const updatedGroups = [...topics.value];
       updatedGroups[groupIndex] = updatedGroup;
-      groups.value = updatedGroups;
+      setTopics(updatedGroups);
     }
   };
 
@@ -40,9 +38,9 @@ export const useGroup = () => {
     );
     currentGroup.value.members = updatedMembers;
 
-    const groupIndex = groups.value.findIndex(g => g.id === groupId);
+    const groupIndex = topics.value.findIndex(g => g.group?.id === groupId);
     if (groupIndex !== -1) {
-      const updatedGroup = { ...groups.value[groupIndex] };
+      const updatedGroup = { ...topics.value[groupIndex] };
       if (
         'memberCount' in updatedGroup &&
         typeof updatedGroup.memberCount === 'number' &&
@@ -50,34 +48,10 @@ export const useGroup = () => {
       ) {
         updatedGroup.memberCount -= 1;
       }
-      const updatedGroups = [...groups.value];
+      updatedGroup.members = updatedMembers;
+      const updatedGroups = [...topics.value];
       updatedGroups[groupIndex] = updatedGroup;
-      groups.value = updatedGroups;
-    }
-  };
-
-  const fetchAllGroups = async (page = 1, limit = 200): Promise<ITopic[]> => {
-    try {
-      loading.value = true;
-      const sdk = getChatSDK();
-      if (!sdk) {
-        console.error('Chat SDK is not initialized');
-        return groups.value || [];
-      }
-
-      const response = await sdk.getTopics(TopicType.Group, {
-        page,
-        limit
-      });
-
-      setGroups(response.data);
-
-      return response.data;
-    } catch (err) {
-      console.error('Failed to fetch topics', err);
-      return groups.value || [];
-    } finally {
-      loading.value = false;
+      setTopics(updatedGroups);
     }
   };
 
@@ -145,17 +119,17 @@ export const useGroup = () => {
 
   const getGroupList = (): ITopic[] => {
     const { sortTopics } = useTopics();
-    return sortTopics(groups.value || []);
+    return sortTopics(topics.value || []);
   };
 
   const setGroupList = (value: ITopic[]): void => {
-    groups.value = value || [];
+    topics.value = value || [];
   };
 
   const updateGroupList = (value: ITopic[]): void => {
-    const map = new Map(groups.value.map(group => [group.id, group]));
+    const map = new Map(topics.value.map(group => [group.id, group]));
     value.forEach(item => map.set(item.id, item));
-    groups.value = Array.from(map.values());
+    topics.value = Array.from(map.values());
   };
 
   const setGroupInfo = async (
@@ -175,17 +149,17 @@ export const useGroup = () => {
       avatarUrl: groupInfo.avatarUrl
     });
 
-    const index = groups.value.findIndex(group => group.id === groupId);
+    const index = topics.value.findIndex(group => group.id === groupId);
     if (index !== -1) {
-      const existing = groups.value[index];
+      const existing = topics.value[index];
       const updatedGroup = {
         ...existing,
         nickname: groupInfo.groupName,
         avatarUrl: groupInfo.avatarUrl
       };
-      const next = [...groups.value];
+      const next = [...topics.value];
       next[index] = updatedGroup;
-      groups.value = next;
+      topics.value = next;
     }
   };
 
@@ -233,7 +207,7 @@ export const useGroup = () => {
 
   const getGroupById = (groupId: string): ITopic | undefined => {
     try {
-      const localGroup = groups.value.find(group => group.id === groupId);
+      const localGroup = topics.value.find(group => group.id === groupId);
       if (localGroup) {
         currentGroup.value = { ...localGroup };
         currentGroup.value.members = localGroup.members.map(item =>
@@ -253,7 +227,7 @@ export const useGroup = () => {
     topicId: string,
     lastMessage?: Message
   ): void => {
-    const topic = groups.value.find(topic => topic.id === topicId);
+    const topic = topics.value.find(topic => topic.id === topicId);
     const messages = getMessagesByTopicId(topicId);
 
     if (topic) {
@@ -271,7 +245,7 @@ export const useGroup = () => {
       }
     }
 
-    groups.value = [...groups.value];
+    topics.value = [...topics.value];
   };
 
   const updateLocalGroupDetails = (
@@ -279,7 +253,7 @@ export const useGroup = () => {
     name: string,
     avatarUrl: string
   ): void => {
-    const topic = groups.value.find(topic => topic.id === topicId);
+    const topic = topics.value.find(topic => topic.id === topicId);
     if (topic) {
       topic.name = name;
       topic.avatarUrl = avatarUrl;
@@ -288,30 +262,24 @@ export const useGroup = () => {
         topic.group.avatarUrl = avatarUrl;
       }
     }
-    groups.value = [...groups.value];
+    topics.value = [...topics.value];
   };
 
   const updateLocalGroupInfo = (
     topicId: string,
     info: Partial<TopicSetting>
   ): void => {
-    const topic = groups.value.find(topic => topic.id === topicId);
+    const topic = topics.value.find(topic => topic.id === topicId);
     if (topic) {
       topic.info = { ...topic.info, ...info };
     }
 
-    groups.value = [...groups.value];
-  };
-
-  const addGroupList = (value: ITopic): void => {
-    groups.value = [value, ...groups.value];
+    topics.value = [...topics.value];
   };
 
   return {
-    groups,
     currentGroup,
     loading,
-    fetchAllGroups,
     createGroup,
     addGroupMembers,
     removeUserFromGroup,
@@ -326,13 +294,11 @@ export const useGroup = () => {
     updateLocalLastMessageGroup,
     updateLocalGroupDetails,
     updateLocalGroupInfo,
-    addGroupList,
     deleteGroup
   };
 };
 
 const {
-  fetchAllGroups,
   createGroup,
   addGroupMembers,
   removeUserFromGroup,
@@ -347,14 +313,12 @@ const {
   updateLocalLastMessageGroup,
   updateLocalGroupDetails,
   updateLocalGroupInfo,
-  addGroupList,
   deleteGroup
 } = useGroup();
 
 export {
-  groups,
+  topics as groups,
   currentGroup,
-  fetchAllGroups,
   createGroup,
   addGroupMembers,
   removeUserFromGroup,
@@ -369,6 +333,5 @@ export {
   updateLocalLastMessageGroup,
   updateLocalGroupDetails,
   updateLocalGroupInfo,
-  addGroupList,
   deleteGroup
 };

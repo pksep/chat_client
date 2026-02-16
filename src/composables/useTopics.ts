@@ -26,16 +26,13 @@ export const useTopics = () => {
     topics.value = [...newTopics];
   };
 
-  const fetchAllTopics = async (page = 1, limit = 200): Promise<ITopic[]> => {
+  const fetchAllTopics = async (): Promise<ITopic[]> => {
     loading.value = true;
     error.value = null;
 
     try {
       const sdk = getChatSDK();
-      const response = await sdk.getTopics(TopicType.DM, {
-        page,
-        limit
-      });
+      const response = await sdk.getTopics();
 
       setTopics(response.data);
       return response.data;
@@ -215,6 +212,7 @@ export const useTopics = () => {
     topics,
     loading,
     error,
+    setTopics,
     fetchAllTopics,
     createTopic,
     updateLocalLastMessageTopic,
@@ -234,6 +232,7 @@ export const useTopics = () => {
 };
 
 const {
+  setTopics,
   changeUnreadMessageCount,
   toggleMuteTopic,
   togglePinTopic,
@@ -251,6 +250,8 @@ const {
 } = useTopics();
 
 export {
+  topics,
+  setTopics,
   fetchAllTopics,
   createTopic,
   updateLocalLastMessageTopic,

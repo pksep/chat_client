@@ -61,6 +61,7 @@
     >
       <template v-for="(message, index) in state.messages" :key="message.id">
         <div
+          :key="message.id"
           class="top-element"
           v-if="isNewDate(index) || message.isSystem"
           :data-message-id="message.id"
@@ -92,6 +93,7 @@
         </div>
 
         <MessageBubble
+          :key="message.id"
           v-if="!message.isSystem"
           :class="
             messageChat(
@@ -104,16 +106,15 @@
           :time="formatTime(new Date(message.createdAt))"
           :sender="message.senderUser?.initials || ''"
           :avatar="message.senderUser?.avatarUrl || ''"
-          :is-read="
-            props.user.id === message.senderUserId
-              ? message.status === MessageStatus.Read
-              : message.status === MessageStatus.Read
-          "
+          :is-read="message.status === MessageStatus.Read"
+          :is-edit="message.isEdit"
+          :is-pin="message.isPin"
           :message-status="message.status"
           :topic-id="message.topicId"
           :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
           :data-message-id="message.id"
           :message-id="message.id"
+          @unmount-edit-message-id="handleSetEditMessage"
         />
       </template>
     </div>
@@ -143,13 +144,45 @@
   >
     <ContentEditor
       v-model="inputText"
+      ref="contentEditorRef"
       active-attach-file
       send-on-enter
       @unmount-send="handleSend"
       @unmount-attach-file="handleAttachFile"
       :data-testid="`${props.dataTestid}-MessageList-ContentEditor`"
-    />
+    >
+      <template v-if="!!state.editMessage" #action>
+        <div class="chat__input__action">
+          <EditIcon />
+          <div class="chat__input__action__blog">
+            <h5>Редактирование</h5>
+            <p>{{ stripHtml(state.editMessage.text || '') }}</p>
+          </div>
+          <Button
+            :type="ButtonTypeEnum.ghost"
+            :size="SizesEnum.little"
+            @click="handleSetEditMessage(null)"
+            :data-testid="`${props.dataTestid}-MenuInfo-CloseButton`"
+          >
+            <Icon
+              :name="IconNameEnum.crossLarge"
+              color="var(--text-neutral-color)"
+            />
+          </Button>
+        </div>
+      </template>
+    </ContentEditor>
   </div>
+
+  <PushNotification
+    v-if="!!state.errorMessage"
+    class="mobile-auth-container__error"
+    title="Ошибка"
+    :push-key="Math.random()"
+    :description="state.errorMessage"
+    :type="MessageTypeEnum.error"
+    @close="() => (state.errorMessage = '')"
+  />
 </template>
 
 <script lang="ts" setup>
@@ -166,7 +199,16 @@ import {
 import MessageBubble from './Messages/MessageBubble.vue';
 import EmptyChat from './EmptyChat.vue';
 import Loading from './Loading.vue';
-import { ContentEditor } from '@pksep/yui';
+import {
+  Button,
+  ButtonTypeEnum,
+  ContentEditor,
+  Icon,
+  IconNameEnum,
+  MessageTypeEnum,
+  PushNotification,
+  SizesEnum
+} from '@pksep/yui';
 import { useMastra } from '../services/useMastra';
 import { removeMessageLoading } from '../services/useChatDb';
 import {
@@ -190,14 +232,19 @@ import {
 import {
   addMessageToLocal,
   changeFileLoadingStatus,
+  deleteFileAfterLoading,
   deleteMessageFromLocal,
+  fetchAroundMessage,
   fetchMessagesForTopic,
+  fetchPinnedMessagesForTopic,
   getMessagesByTopicId
 } from '../services/useMessages';
 import { getAuthUser } from '../composables/useAuth';
 import { IMedia, IMessage } from './interfaces/interfaces';
 import { fileToDataURL } from '../utils/fileToDataURL';
 import { generateUUID } from '../utils/generateUUID';
+import EditIcon from './UI/EditIcon.vue';
+import { stripHtml } from '../utils/stripHtml';
 
 const touchStartX = ref(0);
 const touchStartY = ref(0);
@@ -238,6 +285,8 @@ const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
 });
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
+const contentEditorRef =
+  useTemplateRef<typeof ContentEditor>('contentEditorRef');
 const inputText = ref('');
 const route = useUrlWatcher();
 
@@ -250,7 +299,9 @@ const state = reactive({
   chatId: null as string | null,
   isLoadingMore: false,
   limit: 50,
-  aiMessages: [] as AIMessage[]
+  aiMessages: [] as AIMessage[],
+  editMessage: null as IMessage | null,
+  errorMessage: ''
 });
 
 const isLoadingInitialMessages = ref(false);
@@ -263,9 +314,30 @@ const scrollState = reactive({
 });
 
 let isScrollLoading = false;
-let hasMoreMessage = true;
+let isAutoScrollLoading = false;
+let hasOldMessage = true;
+let hasNewMessage = true;
 let scrollMarkReadTimeout: number | null = null;
 let intersectionObserver: IntersectionObserver | null = null;
+
+const markAllVisibleAsRead = async () => {
+  if (!route.value?.id) return;
+
+  const unreadMessages = state.messages.filter(
+    m => m.senderUserId !== props.user?.id && m.status !== MessageStatus.Read
+  );
+
+  if (unreadMessages.length === 0) return;
+
+  try {
+    await markAsRead({
+      messageIds: unreadMessages.map(m => m.id),
+      topicId: route.value.id
+    });
+  } catch (error) {
+    console.warn('Failed to mark messages as read:', error);
+  }
+};
 
 const setupIntersectionObserver = () => {
   if (intersectionObserver) {
@@ -322,6 +394,10 @@ const setupIntersectionObserver = () => {
 };
 
 const handleScroll = async (): Promise<void> => {
+  if (isAutoScrollLoading) {
+    return;
+  }
+
   const el = chatWrapperRef.value;
   if (!el) return;
 
@@ -343,32 +419,32 @@ const handleScroll = async (): Promise<void> => {
       clearTimeout(scrollMarkReadTimeout);
     }
     scrollMarkReadTimeout = window.setTimeout(() => {
-      const unreadMessages = state.messages.filter(
-        message =>
-          message.senderUserId !== props.user?.id &&
-          message.status !== MessageStatus.Read
-      );
-
-      if (unreadMessages.length > 0) {
-        markAsRead({
-          messageIds: unreadMessages.map(m => m.id),
-          topicId: route.value.id
-        }).catch(error => {
-          console.warn('Failed to mark messages as read:', error);
-        });
-      }
+      markAllVisibleAsRead();
       scrollMarkReadTimeout = null;
     }, 500);
   }
 
-  if (distanceFromTop < 50 && !isScrollLoading && hasMoreMessage) {
+  if (distanceFromTop < 50 && !isScrollLoading && hasOldMessage) {
     isScrollLoading = true;
 
     if (!getIsWebsocketConnecting()) {
+      const lastMessageId = state.messages[0]?.id;
       const result = await fetchMessagesForTopic(route.value.id, {
-        lastMessageId: state.messages[0]?.id
+        lastMessageId
       });
-      hasMoreMessage = result.length > 0;
+      hasOldMessage = result.length > 0;
+    }
+    isScrollLoading = false;
+  } else if (distanceFromBottom > -50 && !isScrollLoading && hasNewMessage) {
+    isScrollLoading = true;
+
+    if (!getIsWebsocketConnecting()) {
+      const lastMessage = state.messages[state.messages.length - 1];
+
+      const result = await fetchMessagesForTopic(route.value.id, {
+        afterMessageId: lastMessage?.id
+      });
+      hasNewMessage = result.length > 0;
     }
     isScrollLoading = false;
   }
@@ -461,10 +537,44 @@ const clearAiMessages = () => {
   }
 };
 
+const handleScrollToMessage = async (messageId: string) => {
+  isAutoScrollLoading = true;
+
+  nextTick(async () => {
+    const messageElement = chatWrapperRef.value?.querySelector(
+      `[data-message-id="${messageId}"]`
+    );
+    if (messageElement instanceof HTMLElement) {
+      messageElement.scrollIntoView({ block: 'center' });
+      messageElement.classList.add('highlighted');
+      setTimeout(() => {
+        messageElement.classList.remove('highlighted');
+        isAutoScrollLoading = false;
+      }, 1000);
+    } else {
+      await fetchAroundMessage(messageId).then(messages => {
+        if (messages.some(m => m.id === messageId)) {
+          setTimeout(() => {
+            handleScrollToMessage(messageId);
+          }, 300);
+        }
+      });
+    }
+  });
+};
+
 const messageChat = (role: string) => [
   'message__bubble',
   { message__other: role === 'user' }
 ];
+
+const handleSetEditMessage = (messageId?: string) => {
+  state.editMessage = messageId
+    ? state.messages.find(m => m.id === messageId) || null
+    : null;
+
+  inputText.value = state.editMessage?.text || '';
+};
 
 watch(
   () => state.messages.length,
@@ -503,6 +613,16 @@ watch(
     });
   },
   { deep: true }
+);
+
+watch(
+  () => route.value?.id,
+  () => {
+    nextTick(() => {
+      markAllVisibleAsRead();
+    });
+  },
+  { immediate: true }
 );
 
 const scrollToBottom = () => {
@@ -552,6 +672,16 @@ const handleSend = async (): Promise<void> => {
   if (!rawText.trim() || rawText.trim() === '<p></p>') return;
 
   inputText.value = '';
+
+  if (state.editMessage) {
+    await sendMessageChat({
+      messageId: state.editMessage.id,
+      topicId: route.value.id,
+      text: rawText
+    });
+    state.editMessage = null;
+    return;
+  }
 
   const parts = splitHtmlByLength(rawText);
 
@@ -669,15 +799,16 @@ const handleAttachFileChunk = async (files: FileList, isMedia = false) => {
     media: localMedia
   };
 
-  addMessageToLocal(route.value.id, newMessage);
+  addMessageToLocal(newMessage.topicId, newMessage);
 
   const medias = [];
+  state.errorMessage = '';
 
   for (const [i, uploadedFile] of Array.from(files).entries()) {
     try {
       const { file, path, thumbnailPath } = await uploadFile(uploadedFile);
 
-      changeFileLoadingStatus(route.value.id, clientId, i.toString());
+      changeFileLoadingStatus(newMessage.topicId, clientId, i.toString());
 
       medias.push({
         path,
@@ -687,10 +818,14 @@ const handleAttachFileChunk = async (files: FileList, isMedia = false) => {
         type: getMediaType(file, isMedia)
       });
     } catch (error) {
-      alert(error.message);
-      deleteMessageFromLocal(route.value.id, clientId);
-      return;
+      deleteFileAfterLoading(newMessage.topicId, clientId, i.toString());
+      state.errorMessage = error.message || 'Failed to upload file';
     }
+  }
+
+  if (medias.length === 0) {
+    deleteMessageFromLocal(newMessage.topicId, clientId);
+    return;
   }
 
   try {
@@ -732,12 +867,12 @@ watch(
     if (!route.value?.id) return;
 
     fetchMessagesForTopic(route.value.id);
-    hasMoreMessage = true;
+    fetchPinnedMessagesForTopic(route.value.id);
+
+    hasOldMessage = true;
 
     const unreadMessages = state.messages.filter(
-      message =>
-        message.senderUserId !== props.user?.id &&
-        message.status !== MessageStatus.Read
+      message => message.senderUserId !== props.user?.id && !message.isReadByMe
     );
     if (unreadMessages.length > 0) {
       markAsRead({
@@ -749,6 +884,8 @@ watch(
     }
 
     nextTick(() => {
+      contentEditorRef.value?.focus();
+      inputText.value = '';
       setupIntersectionObserver();
     });
   },
@@ -756,6 +893,7 @@ watch(
 );
 
 defineExpose({
-  handleClear: clearAiMessages
+  handleClear: clearAiMessages,
+  scrollToMessage: handleScrollToMessage
 });
 </script>

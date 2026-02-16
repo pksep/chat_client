@@ -1,13 +1,10 @@
-import { Topic, Message, TopicSetting, User } from '@pksep/zod-shared-chat';
+import { Topic, TopicSetting, User } from '@pksep/zod-shared-chat';
 import { Reqi } from '@pksep/reqi';
-import { SearchParams, PaginatedResponse, TopicType } from './types';
+import { PaginatedResponse } from './types';
 import { ITopic } from '../../components/interfaces/interfaces';
 
 export interface ChatTopicInterface {
-  getTopics(
-    type?: TopicType,
-    params?: SearchParams
-  ): Promise<PaginatedResponse<Topic & { lastMessage?: Message }>>;
+  getTopics(): Promise<PaginatedResponse<ITopic>>;
   createTopic(topicData: { peerId: string }): Promise<Topic>;
   deleteTopic(topicId: string): Promise<void>;
   togglePinTopic(topicId: string): Promise<TopicSetting>;
@@ -39,17 +36,10 @@ export class ChatTopic implements ChatTopicInterface {
     this.reqi = reqi;
   }
 
-  async getTopics(
-    type?: TopicType,
-    params?: SearchParams
-  ): Promise<PaginatedResponse<ITopic>> {
+  async getTopics(): Promise<PaginatedResponse<ITopic>> {
     const queryParams = new URLSearchParams();
-
-    if (type) queryParams.append('type', type);
-    if (params?.page !== undefined && params?.page !== null)
-      queryParams.append('page', params.page.toString());
-    if (params?.limit !== undefined && params?.limit !== null)
-      queryParams.append('limit', params.limit.toString());
+    queryParams.append('page', '1');
+    queryParams.append('limit', '999');
 
     const queryString = queryParams.toString();
     const endpoint = `/topics${queryString ? `?${queryString}` : ''}`;

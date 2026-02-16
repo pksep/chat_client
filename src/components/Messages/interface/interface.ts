@@ -16,6 +16,8 @@ export interface IMessageBubbleProps {
   time: string;
   loader?: boolean;
   isRead?: boolean;
+  isPin?: boolean;
+  isEdit?: boolean;
   isMeSender?: boolean;
   sender?: string;
   avatar?: string;

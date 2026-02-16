@@ -111,6 +111,7 @@ export interface IGroupProfileProps {
 export interface IMessage extends Message {
   senderUser?: IUser;
   media?: IMedia[];
+  isReadByMe?: boolean;
   ex?: string; // "{ clientId: string }"
 }
 

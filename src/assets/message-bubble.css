@@ -18,6 +18,11 @@
   align-self: start;
 }
 
+.highlighted.message__bubble {
+  border-radius: 16px;
+  background-color: #d2e2ff;
+}
+
 .message__article-initals {
   font-size: 14px;
   font-weight: 600;
@@ -273,6 +278,7 @@ div.message-content__file {
   }
 
   & .message-content__file__name {
+    min-width: 90px;
     margin-right: 10px;
     font-weight: 400;
     font-size: 16px;
@@ -316,6 +322,14 @@ div.message-content__file {
   justify-items: end;
 }
 
+.message__content__articles__my .link {
+  color: var(--white);
+}
+
+.message__content__articles__my .link:visited {
+  color: var(--background-primary-color);
+}
+
 @keyframes pulse {
   0%,
   100% {
@@ -327,6 +341,7 @@ div.message-content__file {
 }
 
 .message__bubble {
+  transition: all 0.3s;
   hyphens: auto;
   overflow-wrap: anywhere;
   justify-self: start;
@@ -350,7 +365,7 @@ div.message-content__file {
   padding: 0 10px 15px 15px;
 
   .editor-content {
-    max-height: 70px;
+    max-height: 180px;
     overflow: auto;
     overflow-wrap: break-word;
     word-break: break-word;
@@ -382,7 +397,6 @@ div.message-content__file {
     padding: 0;
     & .editor-component {
       min-height: 17px;
-      padding: 8px;
       border-radius: 0;
     }
     & .editor-content {

@@ -86,9 +86,7 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
     if (!props.isEnabled) return;
 
     const sdk = getChatSDK();
-    const topics = await sdk.getTopics(
-      props.topic.type === 'group' ? TopicType.Group : TopicType.DM
-    );
+    const topics = await sdk.getTopics();
     const findTopic = topics.data.find(to => to.id === props.topic.id);
 
     if (findTopic?.type === TopicType.Group) {

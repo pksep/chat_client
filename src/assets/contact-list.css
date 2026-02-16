@@ -1,7 +1,7 @@
 .contact-list__item {
   --size-avatar: 25px;
   display: flex;
-  align-content: center;
+  justify-content: center;
   gap: 10px;
   padding-inline: 10px;
   min-height: 58px;
@@ -21,6 +21,10 @@
   grid-template-areas:
     'title block'
     'description block2';
+}
+
+.menu--collapse .contact-list__block--wrapper {
+  display: none;
 }
 
 .contact-list__title {
@@ -50,7 +54,7 @@
 
 .contact-list__description {
   grid-area: description;
-  display: flex;
+  display: block;
   justify-self: start;
   align-items: center;
   font-size: 14px;
@@ -128,6 +132,14 @@
   background-color: var(--text-light-color);
 }
 
+.contact-list__pin {
+  display: flex;
+  align-items: center;
+  color: var(--text-neutral-color);
+  width: 16px;
+  height: 16px;
+}
+
 svg.icon-yui-kit.contact-list__pin-icon {
   color: var(--grey5);
   font-size: 16px;
@@ -160,8 +172,14 @@ svg.icon-yui-kit.contact-list__read-icon {
 }
 
 .contact-list {
-  gap: 10px;
+  gap: 2px;
   display: grid;
+  height: calc(100vh - 155px);
+  overflow: hidden scroll;
+}
+
+.contact-list::-webkit-scrollbar {
+  width: 0;
 }
 
 .contact-selector__item {
@@ -222,7 +240,7 @@ svg.icon-yui-kit.contact-list__read-icon {
 @media (width <= 480px) {
   .contact-list__block--wrapper {
     border-bottom: 1px solid var(--grey1);
-    padding-bottom: 26px;
+    padding-bottom: 22px;
   }
   .contact-list__description {
     margin-top: 5px;

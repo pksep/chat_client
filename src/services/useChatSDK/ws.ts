@@ -84,9 +84,6 @@ export class ChatWS implements ChatWSInterface {
         case WebSocketEventType.TOGGLE_REACTION:
           serverEventType = 'toggleReaction';
           break;
-        case WebSocketEventType.TOGGLE_PIN:
-          serverEventType = 'togglePin';
-          break;
         case WebSocketEventType.READ_MESSAGES:
           serverEventType = 'readMessages';
           break;

@@ -143,12 +143,11 @@ import {
 import {
   currentGroup,
   deleteGroup,
-  quitGroup,
-  useGroup
+  getGroupById,
+  quitGroup
 } from '../../composables/useGroup';
 import ConfirmModal from '../UI/ConfirmModal.vue';
 
-const { getGroupById } = useGroup();
 const { getSelectedTopic } = useTopics();
 
 const props = withDefaults(defineProps<IHeaderProps>(), {

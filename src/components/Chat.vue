@@ -1,5 +1,6 @@
 <template>
   <section class="chat" :data-testid="`${props.dataTestid}-Chat-Container`">
+    <PinnedMessages @unmount-set-selected-message="scrollToMessage" />
     <ContactListMobile
       v-if="isMobile && isShowContactList(route.type, route.id || null)"
       class="chat__mobile"
@@ -26,6 +27,8 @@ import { isShowContactList } from '../composables/useShowContactList';
 import { MAX_W_MD } from '../utils/constants';
 import { useUrlWatcher } from '../composables/navigation';
 import { getAuthUser } from '../composables/useAuth';
+import PinnedMessages from './Messages/PinnedMessages.vue';
+import { IMessage } from './interfaces/interfaces';
 
 export interface IChatProps extends IMessageListProps {
   dataTestid?: string;
@@ -39,9 +42,13 @@ const authUser = computed(() => getAuthUser());
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
-const messageListRef = useTemplateRef<any>(null);
+const messageListRef = useTemplateRef<any>('messageListRef');
 
 const route = useUrlWatcher();
+
+const scrollToMessage = (message: IMessage) => {
+  messageListRef.value?.scrollToMessage(message.id);
+};
 
 defineExpose({
   handleClear: () => messageListRef.value?.handleClear()
