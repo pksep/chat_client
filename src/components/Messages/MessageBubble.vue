@@ -240,7 +240,7 @@
         :size="SizesEnum.small"
         :data-testid="`${dataTestid}-MessageBubble-ReplyButton`"
       >
-        Ответить
+        <ReplyIcon /> Ответить
       </Button>
       <Button
         v-if="props.isMeSender && !!props.message"
@@ -249,7 +249,7 @@
         @click.stop="handleEditMessage"
         :data-testid="`${dataTestid}-MessageBubble-EditButton`"
       >
-        Редактировать
+        <EditIcon /> Редактировать
       </Button>
       <Button
         :type="ButtonTypeEnum.ghost"
@@ -257,17 +257,18 @@
         @click.stop="handlePinMessage"
         :data-testid="`${dataTestid}-MessageBubble-PinButton`"
       >
-        {{ props.isPin ? 'Открепить' : 'Закрепить' }}
+        <template v-if="!props.isPin"> <PinIcon /> Закрепить </template>
+        <template v-else> <UnpinIcon /> Открепить </template>
       </Button>
       <Button
         v-if="props.isMeSender"
-        style="color: var(--error-color)"
+        class="red-context-button"
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.small"
         @click.stop="handleOpenModal"
         :data-testid="`${dataTestid}-MessageBubble-ReplyButton`"
       >
-        Удалить
+        <Icon :name="IconNameEnum.deleteSmall" /> Удалить
       </Button>
     </ContextMenu>
 
@@ -283,7 +284,14 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Avatar, Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
+import {
+  Avatar,
+  Button,
+  ButtonTypeEnum,
+  Icon,
+  IconNameEnum,
+  SizesEnum
+} from '@pksep/yui';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import {
   isOpen,
@@ -309,6 +317,10 @@ import LoadingIcon from '../UI/LoadingIcon.vue';
 import PlayIcon from '../UI/PlayIcon.vue';
 import { IMedia } from '../interfaces/interfaces';
 import ConfirmModal from '../UI/ConfirmModal.vue';
+import ReplyIcon from '../UI/ReplyIcon.vue';
+import EditIcon from '../UI/EditIcon.vue';
+import PinIcon from '../UI/PinIcon.vue';
+import UnpinIcon from '../UI/UnpinIcon.vue';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',

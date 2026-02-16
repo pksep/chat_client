@@ -51,7 +51,7 @@
     </section>
     <Button
       :type="ButtonTypeEnum.primary"
-      @click="handleShowAccount"
+      @click="evt => openActivePopover('plusMenu', evt as MouseEvent)"
       :disabled="isAssistantRoute || state.isLoading"
       class="mobile__list-button"
     >
@@ -68,6 +68,31 @@
       @unmount-close="handleCloseModal"
       @unmount-contact="handleNewContact"
     />
+
+    <ContextMenu
+      :visible="!!isOpen['plusMenu']"
+      :position="{ ...position, y: position.y - 80 }"
+      @unmount-close="closeActivePopover('plusMenu')"
+      @click="closeActivePopover('plusMenu')"
+      :data-testid="`${dataTestid}-MessageBubble-ContextMenu`"
+    >
+      <Button
+        @click="handleShowAccount(TopicType.DM)"
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        :data-testid="`${dataTestid}-MessageBubble-ReplyButton`"
+      >
+        <MessageIcon /> Создать диалог
+      </Button>
+      <Button
+        @click="handleShowAccount(TopicType.Group)"
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        :data-testid="`${dataTestid}-MessageBubble-EditButton`"
+      >
+        <GroupIcon /> Создать группу
+      </Button>
+    </ContextMenu>
   </template>
 </template>
 
@@ -86,7 +111,8 @@ import {
   Icon,
   IconNameEnum,
   Loader,
-  Modal
+  Modal,
+  SizesEnum
 } from '@pksep/yui';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
 import TopicList from './TopicList.vue';
@@ -100,6 +126,11 @@ import {
   RouteType,
   RouteTypes
 } from '../../composables/navigation/useUrlRouting';
+import { useContextMenu } from '../../composables/useContextMenu';
+import { TopicType } from '../../services/useChatSDK/types';
+import ContextMenu from './ContextMenu.vue';
+import MessageIcon from '../UI/MessageIcon.vue';
+import GroupIcon from '../UI/GroupIcon.vue';
 
 const route = useUrlWatcher();
 
@@ -108,6 +139,8 @@ const isAssistantRoute = computed(
 );
 const isDialogsRoute = computed(() => route.value?.type === RouteTypes.DIALOGS);
 const isGroupRoute = computed(() => route.value?.type === RouteTypes.GROUP);
+const { isOpen, position, openActivePopover, closeActivePopover } =
+  useContextMenu();
 
 const props = withDefaults(defineProps<IMobileListProps>(), {
   dataTestid: () => 'MobileList'
@@ -180,8 +213,14 @@ const emits = defineEmits<IMobileListEmits>();
 
 const handleContactSelect = (): void => {};
 
-const handleShowAccount = () => {
+const handleShowAccount = (topicType: TopicType) => {
   state.showAddAccount = true;
+
+  if (topicType === TopicType.DM) {
+    navigateToDialogsList();
+  } else if (topicType === TopicType.Group) {
+    navigateToGroupsList();
+  }
 };
 
 const handleCloseModal = () => {

@@ -12,28 +12,27 @@
 .menu__start {
   display: grid;
   gap: 10px;
-  padding: 10px;
+  padding: 10px 0;
   align-content: start;
+}
+
+.menu__start > .line {
+  margin-left: 10px;
+  width: calc(100% - 20px);
 }
 
 .menu.menu--collapse {
   justify-items: center;
   gap: 0;
-  padding: 0;
 
-  & .menu__start {
-    padding: 0;
-  }
   & .menu__user-line {
     margin-top: 0;
   }
 }
 
 .menu.menu--collapse .menu__profile {
-  --size-avatar: 25px;
   justify-items: center;
   justify-content: center;
-  margin-bottom: 10px;
   grid-template-areas:
     'collapse collapse'
     'profile profile';
@@ -47,6 +46,8 @@
   grid-template-areas:
     'profile collapse'
     'profile collapse';
+  position: relative;
+  padding-inline: 10px;
 }
 
 .menu-user__item {
@@ -63,32 +64,25 @@
   grid-area: profile;
 }
 
-.menu:not(.menu--collapse) button.menu__user-profile-collapse {
-  justify-self: end;
-}
-
 .menu__contact-list > li > .contact-list__item {
-  --size-avatar: 15px;
+  --size-avatar: 19px;
 }
 
-button.small.ghost-yui-kit.menu__user-profile-collapse {
-  grid-area: collapse;
+.menu__user-profile__collapse {
   display: grid;
   padding: 4px;
   min-height: 24px;
   align-items: center;
-  color: var(--text-light-color);
   background-color: var(--white);
-}
-
-button.small.ghost-yui-kit.menu__user-profile-collapse:hover
-  .menu__user-profile-collapse-icon {
-  color: var(--primary-color);
-}
-
-.menu__user-profile-collapse-icon {
-  color: var(--text-light-color);
-  background-color: var(--white);
+  box-shadow: 0px 0px 22px 0px #00000012;
+  border-radius: 50%;
+  cursor: pointer;
+  justify-self: end;
+  position: fixed;
+  top: 20px;
+  left: calc(var(--size-left-menu) - 12px);
+  z-index: 9;
+  transition: transform 0.3s;
 }
 
 .menu__user-assistant {
@@ -117,17 +111,17 @@ details.menu__user-details {
   }
 }
 
-summary.menu__user-details-summary {
+.menu__user-details-summary {
   display: flex;
   align-items: center;
   justify-content: flex-start;
   margin-bottom: 5px;
   color: var(--text-grey);
+  padding: 0 10px;
   &::marker {
     display: none;
   }
   & svg.icon-yui-kit {
-    color: var(--text-grey);
     font-size: 12px;
   }
   & h4.menu__user-details-summary--title {
@@ -138,11 +132,23 @@ summary.menu__user-details-summary {
     align-items: center;
     margin: 0;
   }
-  & button.button-yui-kit {
+  & > button.button-yui-kit {
     margin-left: auto;
     margin-right: 0;
+    min-height: 22px;
+    width: 22px;
+    justify-content: center;
+    padding: 0;
   }
   font-weight: bold;
+}
+
+.menu--collapse {
+  & .menu__user-details-summary {
+    & button.button-yui-kit {
+      margin-right: auto;
+    }
+  }
 }
 
 .menu__user-details-summary-triangle {

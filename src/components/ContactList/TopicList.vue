@@ -123,11 +123,12 @@
               {{ topic.unreadMessageCount }}
             </div>
             <div
+              class="contact-list__pin"
               v-if="topic.info?.isPin"
               :data-testid="`${props.dataTestid}-ContactList-Pin${index + 1}`"
               :aria-label="`Pinned contact`"
             >
-              <Icon class="contact-list__pin-icon" :name="IconNameEnum.pin" />
+              <PinIcon v-if="topic.info?.isPin" />
             </div>
           </div>
         </div>
@@ -147,8 +148,8 @@
             topic.info.isPin ? `Unpin ${topic.name}` : `Pin ${topic.name}`
           "
         >
-          <template v-if="!topic.info.isPin"> Закрепить </template>
-          <template v-else> Открепить </template>
+          <template v-if="!topic.info.isPin"> <PinIcon /> Закрепить </template>
+          <template v-else> <UnpinIcon /> Открепить </template>
         </Button>
         <Button
           :type="ButtonTypeEnum.ghost"
@@ -160,9 +161,12 @@
               ? `Disable notifications for ${topic.name}`
               : `Enable notifications for ${topic.name}`
           "
+          :class="{ 'red-context-button': !topic.info.isMute }"
         >
-          <template v-if="topic.info.isMute"> Вкл. уведомление </template>
-          <template v-else> Выкл. уведомление </template>
+          <template v-if="topic.info.isMute">
+            <UnmuteIcon /> Вкл. уведомление
+          </template>
+          <template v-else><MuteIcon /> Выкл. уведомление </template>
         </Button>
       </ContextMenu>
     </li>
@@ -177,15 +181,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useContextMenu } from '../../composables/useContextMenu';
-import {
-  Avatar,
-  Icon,
-  IconNameEnum,
-  Button,
-  ButtonTypeEnum,
-  SizesEnum,
-  Loader
-} from '@pksep/yui';
+import { Avatar, Button, ButtonTypeEnum, SizesEnum, Loader } from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
 import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
 import type { IContactListProps } from './interfaces/contact-list';
@@ -206,6 +202,10 @@ import { MediaType } from '@pksep/zod-shared-chat';
 import AttachFileIcon from '../UI/AttachFileIcon.vue';
 import MiniPlayIcon from '../UI/MiniPlayIcon.vue';
 import { stripHtml } from '../../utils/stripHtml';
+import PinIcon from '../UI/PinIcon.vue';
+import UnpinIcon from '../UI/UnpinIcon.vue';
+import UnmuteIcon from '../UI/UnmuteIcon.vue';
+import MuteIcon from '../UI/MuteIcon.vue';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;

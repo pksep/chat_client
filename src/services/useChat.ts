@@ -2,7 +2,7 @@ import { ref, shallowRef } from 'vue';
 import { ChatSDK } from './useChatSDK';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
 import { User } from '@pksep/zod-shared-chat';
-import { MessageStatus, TopicType } from './useChatSDK/types';
+import { MessageStatus } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { setAuthUser, getAuthUser, authedUser } from '../composables/useAuth';
 import {
@@ -12,7 +12,6 @@ import {
 } from '../composables/useTopics';
 import {
   updateLocalGroupDetails,
-  addGroupList,
   updateLocalLastMessageGroup
 } from '../composables/useGroup';
 import {
@@ -84,12 +83,8 @@ const setupChatListeners = (): void => {
         payload.data.avatarUrl
       );
     } else if (payload.type === 'CREATE') {
-      if (payload.data.type === TopicType.Group) {
-        addGroupList(payload.data);
-      } else if (payload.data.type === TopicType.DM) {
-        const { addTopicList } = useTopics();
-        addTopicList(payload.data);
-      }
+      const { addTopicList } = useTopics();
+      addTopicList(payload.data);
     } else if (payload.type === 'DELETE') {
       deleteTopicFromList(payload.data.id);
     }
