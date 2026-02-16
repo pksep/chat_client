@@ -511,9 +511,17 @@ export class ChatSDK {
 
   async getMessages(
     topicId: string,
-    opts?: { limit?: number; lastMessageId?: string }
+    opts?: { limit?: number; lastMessageId?: string; afterMessageId?: string }
   ): Promise<Message[]> {
     return await this.message.getMessages(topicId, opts);
+  }
+
+  async getPinnedMessages(topicId: string): Promise<Message[]> {
+    return await this.message.getPinnedMessages(topicId);
+  }
+
+  async getAroundMessage(messageId: string): Promise<Message[]> {
+    return await this.message.getAroundMessage(messageId);
   }
 
   async editMessage(

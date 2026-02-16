@@ -19,6 +19,7 @@
 @import url('./mobile-info-modal.css');
 @import url('./mobile-auth.css');
 @import url('./confirm-modal.css');
+@import url('./pinned-messages.css');
 
 .chat-container {
   --neutral-text-light: #b8b8b8;
@@ -27,6 +28,7 @@
   --neutral-button: var(--grey1);
   --neutral-text: var(--grey6);
   --neutral-border: var(--grey3);
+  --header-height: 57px;
   display: grid;
   font-family: 'Inter Variable', sans-serif;
   height: var(--default-height);
@@ -123,16 +125,13 @@ button.primary-yui-kit.disabled-yui-kit {
   .chat-container,
   .chat-container.collapse,
   .chat-container.menu-collapse {
-    --header-height: 60px;
     --size-right-menu: 0px;
     --size-left-menu: 0;
     grid-template-areas:
       'header header'
       'chat chat';
   }
-  .chat-container:has(.chat__header-menu) {
-    --header-height: 60px;
-  }
+
   .chat__menu {
     display: none;
   }

@@ -252,7 +252,8 @@ export const togglePinMessageChat = async (params: {
   try {
     sdk.sendWebSocketEvent(WebSocketEventType.TOGGLE_PIN_MESSAGE, {
       topicId: params.topicId,
-      messageId: params.messageId
+      messageId: params.messageId,
+      userId: authedUser.value.id
     });
   } catch (error) {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);

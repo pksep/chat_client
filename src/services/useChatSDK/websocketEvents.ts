@@ -55,6 +55,7 @@ export interface WebSocketEventPayloads {
   [WebSocketEventType.TOGGLE_PIN_MESSAGE]: {
     messageId: string;
     topicId: string;
+    userId: string;
   };
   [WebSocketEventType.CHANGE_MESSAGE]: {
     data: Message;

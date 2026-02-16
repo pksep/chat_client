@@ -61,6 +61,7 @@
     >
       <template v-for="(message, index) in state.messages" :key="message.id">
         <div
+          :key="message.id"
           class="top-element"
           v-if="isNewDate(index) || message.isSystem"
           :data-message-id="message.id"
@@ -92,6 +93,7 @@
         </div>
 
         <MessageBubble
+          :key="message.id"
           v-if="!message.isSystem"
           :class="
             messageChat(
@@ -232,7 +234,9 @@ import {
   changeFileLoadingStatus,
   deleteFileAfterLoading,
   deleteMessageFromLocal,
+  fetchAroundMessage,
   fetchMessagesForTopic,
+  fetchPinnedMessagesForTopic,
   getMessagesByTopicId
 } from '../services/useMessages';
 import { getAuthUser } from '../composables/useAuth';
@@ -310,7 +314,9 @@ const scrollState = reactive({
 });
 
 let isScrollLoading = false;
-let hasMoreMessage = true;
+let isAutoScrollLoading = false;
+let hasOldMessage = true;
+let hasNewMessage = true;
 let scrollMarkReadTimeout: number | null = null;
 let intersectionObserver: IntersectionObserver | null = null;
 
@@ -388,6 +394,10 @@ const setupIntersectionObserver = () => {
 };
 
 const handleScroll = async (): Promise<void> => {
+  if (isAutoScrollLoading) {
+    return;
+  }
+
   const el = chatWrapperRef.value;
   if (!el) return;
 
@@ -414,14 +424,27 @@ const handleScroll = async (): Promise<void> => {
     }, 500);
   }
 
-  if (distanceFromTop < 50 && !isScrollLoading && hasMoreMessage) {
+  if (distanceFromTop < 50 && !isScrollLoading && hasOldMessage) {
     isScrollLoading = true;
 
     if (!getIsWebsocketConnecting()) {
+      const lastMessageId = state.messages[0]?.id;
       const result = await fetchMessagesForTopic(route.value.id, {
-        lastMessageId: state.messages[0]?.id
+        lastMessageId
       });
-      hasMoreMessage = result.length > 0;
+      hasOldMessage = result.length > 0;
+    }
+    isScrollLoading = false;
+  } else if (distanceFromBottom > -50 && !isScrollLoading && hasNewMessage) {
+    isScrollLoading = true;
+
+    if (!getIsWebsocketConnecting()) {
+      const lastMessage = state.messages[state.messages.length - 1];
+
+      const result = await fetchMessagesForTopic(route.value.id, {
+        afterMessageId: lastMessage?.id
+      });
+      hasNewMessage = result.length > 0;
     }
     isScrollLoading = false;
   }
@@ -512,6 +535,32 @@ const clearAiMessages = () => {
   if (mastraResult.value) {
     return mastraResult.value.clearMessages();
   }
+};
+
+const handleScrollToMessage = async (messageId: string) => {
+  isAutoScrollLoading = true;
+
+  nextTick(async () => {
+    const messageElement = chatWrapperRef.value?.querySelector(
+      `[data-message-id="${messageId}"]`
+    );
+    if (messageElement instanceof HTMLElement) {
+      messageElement.scrollIntoView({ block: 'center' });
+      messageElement.classList.add('highlighted');
+      setTimeout(() => {
+        messageElement.classList.remove('highlighted');
+        isAutoScrollLoading = false;
+      }, 1000);
+    } else {
+      await fetchAroundMessage(messageId).then(messages => {
+        if (messages.some(m => m.id === messageId)) {
+          setTimeout(() => {
+            handleScrollToMessage(messageId);
+          }, 300);
+        }
+      });
+    }
+  });
 };
 
 const messageChat = (role: string) => [
@@ -818,7 +867,9 @@ watch(
     if (!route.value?.id) return;
 
     fetchMessagesForTopic(route.value.id);
-    hasMoreMessage = true;
+    fetchPinnedMessagesForTopic(route.value.id);
+
+    hasOldMessage = true;
 
     const unreadMessages = state.messages.filter(
       message => message.senderUserId !== props.user?.id && !message.isReadByMe
@@ -841,7 +892,43 @@ watch(
   { deep: true, immediate: true }
 );
 
+let targetScroll = 0;
+let currentVelocity = 0;
+let raf: number | null = null;
+
+const FRICTION = 0.9; // smoothness
+const FORCE = 0.25; // wheel sensitivity
+const MIN_VELOCITY = 0.05; // stop threshold
+
+function animateScroll() {
+  if (!chatWrapperRef.value) return;
+
+  targetScroll += currentVelocity;
+  chatWrapperRef.value.scrollTop += currentVelocity;
+
+  currentVelocity *= FRICTION;
+
+  if (Math.abs(currentVelocity) < MIN_VELOCITY) {
+    currentVelocity = 0;
+    raf = null;
+    return;
+  }
+
+  raf = requestAnimationFrame(animateScroll);
+}
+
+function onWheel(e: WheelEvent) {
+  if (!chatWrapperRef.value) return;
+
+  currentVelocity += e.deltaY * FORCE;
+
+  if (!raf) {
+    raf = requestAnimationFrame(animateScroll);
+  }
+}
+
 defineExpose({
-  handleClear: clearAiMessages
+  handleClear: clearAiMessages,
+  scrollToMessage: handleScrollToMessage
 });
 </script>
