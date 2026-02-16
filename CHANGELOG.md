@@ -1,3 +1,25 @@
+# [1.10.0](https://github.com/pksep/chat_client/compare/v1.9.0...v1.10.0) (2026-02-16)
+
+
+### Bug Fixes
+
+* downloadFile ([7524085](https://github.com/pksep/chat_client/commit/75240856e73c874d760aaf81311bddbfccbea8b3))
+* drag ([0bf99cc](https://github.com/pksep/chat_client/commit/0bf99ccf5d957f0741326427a7d7b14b7f2a4007))
+* focus chat input ([1afa3c5](https://github.com/pksep/chat_client/commit/1afa3c54e9d582310f25053c90190fdb47936340))
+* initial read logic ([a663604](https://github.com/pksep/chat_client/commit/a66360407d49571cfb35c02164341e7d5ee5dbb8))
+* lint ([ae37045](https://github.com/pksep/chat_client/commit/ae370450c6aefb10d26cedba88726aa58f69f792))
+* lint ([8166f93](https://github.com/pksep/chat_client/commit/8166f9347b481d893a7b7157c348dc194fd15788))
+
+
+### Features
+
+* add editing message ([f6c2c40](https://github.com/pksep/chat_client/commit/f6c2c4063373ef3d535c89521ce1c9371a82605d))
+* add webworker ([05fca21](https://github.com/pksep/chat_client/commit/05fca210d2528c96bd20f37cf928c0af4fa8ca7a))
+* merge dm and groups logic ([a221452](https://github.com/pksep/chat_client/commit/a221452ff1580d4d738034139d1764b16801bbdc))
+* navigate to pin message logic ([44851cb](https://github.com/pksep/chat_client/commit/44851cb8f38c5f743eb705125abd7095f14a25f8))
+* start pin message logic ([54a458f](https://github.com/pksep/chat_client/commit/54a458fd02ba28fb5b6c0562f22b04c1ac787f7d))
+* update read status in groups ([347ac9d](https://github.com/pksep/chat_client/commit/347ac9d0f0cc47c3087c619cb0d0661df6d1c434))
+
 # [1.9.0](https://github.com/pksep/chat_client/compare/v1.8.0...v1.9.0) (2026-02-10)
 
 
