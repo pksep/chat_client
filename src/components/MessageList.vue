@@ -892,41 +892,6 @@ watch(
   { deep: true, immediate: true }
 );
 
-let targetScroll = 0;
-let currentVelocity = 0;
-let raf: number | null = null;
-
-const FRICTION = 0.9; // smoothness
-const FORCE = 0.25; // wheel sensitivity
-const MIN_VELOCITY = 0.05; // stop threshold
-
-function animateScroll() {
-  if (!chatWrapperRef.value) return;
-
-  targetScroll += currentVelocity;
-  chatWrapperRef.value.scrollTop += currentVelocity;
-
-  currentVelocity *= FRICTION;
-
-  if (Math.abs(currentVelocity) < MIN_VELOCITY) {
-    currentVelocity = 0;
-    raf = null;
-    return;
-  }
-
-  raf = requestAnimationFrame(animateScroll);
-}
-
-function onWheel(e: WheelEvent) {
-  if (!chatWrapperRef.value) return;
-
-  currentVelocity += e.deltaY * FORCE;
-
-  if (!raf) {
-    raf = requestAnimationFrame(animateScroll);
-  }
-}
-
 defineExpose({
   handleClear: clearAiMessages,
   scrollToMessage: handleScrollToMessage
