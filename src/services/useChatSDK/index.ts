@@ -511,9 +511,17 @@ export class ChatSDK {
 
   async getMessages(
     topicId: string,
-    opts?: { limit?: number; lastMessageId?: string }
+    opts?: { limit?: number; lastMessageId?: string; afterMessageId?: string }
   ): Promise<Message[]> {
     return await this.message.getMessages(topicId, opts);
+  }
+
+  async getPinnedMessages(topicId: string): Promise<Message[]> {
+    return await this.message.getPinnedMessages(topicId);
+  }
+
+  async getAroundMessage(messageId: string): Promise<Message[]> {
+    return await this.message.getAroundMessage(messageId);
   }
 
   async editMessage(
@@ -534,13 +542,6 @@ export class ChatSDK {
     emoji: string
   ): Promise<{ success: boolean }> {
     return await this.message.toggleMessageReaction(topicId, messageId, emoji);
-  }
-
-  async toggleMessagePin(
-    topicId: string,
-    messageId: string
-  ): Promise<{ success: boolean }> {
-    return await this.message.toggleMessagePin(topicId, messageId);
   }
 
   async markMessagesAsRead(

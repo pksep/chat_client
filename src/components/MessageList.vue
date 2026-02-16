@@ -61,6 +61,7 @@
     >
       <template v-for="(message, index) in state.messages" :key="message.id">
         <div
+          :key="message.id"
           class="top-element"
           v-if="isNewDate(index) || message.isSystem"
           :data-message-id="message.id"
@@ -92,6 +93,7 @@
         </div>
 
         <MessageBubble
+          :key="message.id"
           v-if="!message.isSystem"
           :class="
             messageChat(
@@ -106,6 +108,7 @@
           :avatar="message.senderUser?.avatarUrl || ''"
           :is-read="message.status === MessageStatus.Read"
           :is-edit="message.isEdit"
+          :is-pin="message.isPin"
           :message-status="message.status"
           :topic-id="message.topicId"
           :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
@@ -231,7 +234,9 @@ import {
   changeFileLoadingStatus,
   deleteFileAfterLoading,
   deleteMessageFromLocal,
+  fetchAroundMessage,
   fetchMessagesForTopic,
+  fetchPinnedMessagesForTopic,
   getMessagesByTopicId
 } from '../services/useMessages';
 import { getAuthUser } from '../composables/useAuth';
@@ -309,9 +314,30 @@ const scrollState = reactive({
 });
 
 let isScrollLoading = false;
-let hasMoreMessage = true;
+let isAutoScrollLoading = false;
+let hasOldMessage = true;
+let hasNewMessage = true;
 let scrollMarkReadTimeout: number | null = null;
 let intersectionObserver: IntersectionObserver | null = null;
+
+const markAllVisibleAsRead = async () => {
+  if (!route.value?.id) return;
+
+  const unreadMessages = state.messages.filter(
+    m => m.senderUserId !== props.user?.id && m.status !== MessageStatus.Read
+  );
+
+  if (unreadMessages.length === 0) return;
+
+  try {
+    await markAsRead({
+      messageIds: unreadMessages.map(m => m.id),
+      topicId: route.value.id
+    });
+  } catch (error) {
+    console.warn('Failed to mark messages as read:', error);
+  }
+};
 
 const setupIntersectionObserver = () => {
   if (intersectionObserver) {
@@ -368,6 +394,10 @@ const setupIntersectionObserver = () => {
 };
 
 const handleScroll = async (): Promise<void> => {
+  if (isAutoScrollLoading) {
+    return;
+  }
+
   const el = chatWrapperRef.value;
   if (!el) return;
 
@@ -389,31 +419,32 @@ const handleScroll = async (): Promise<void> => {
       clearTimeout(scrollMarkReadTimeout);
     }
     scrollMarkReadTimeout = window.setTimeout(() => {
-      const unreadMessages = state.messages.filter(
-        message =>
-          message.senderUserId !== props.user?.id && !message.isReadByMe
-      );
-
-      if (unreadMessages.length > 0) {
-        markAsRead({
-          messageIds: unreadMessages.map(m => m.id),
-          topicId: route.value.id
-        }).catch(error => {
-          console.warn('Failed to mark messages as read:', error);
-        });
-      }
+      markAllVisibleAsRead();
       scrollMarkReadTimeout = null;
     }, 500);
   }
 
-  if (distanceFromTop < 50 && !isScrollLoading && hasMoreMessage) {
+  if (distanceFromTop < 50 && !isScrollLoading && hasOldMessage) {
     isScrollLoading = true;
 
     if (!getIsWebsocketConnecting()) {
+      const lastMessageId = state.messages[0]?.id;
       const result = await fetchMessagesForTopic(route.value.id, {
-        lastMessageId: state.messages[0]?.id
+        lastMessageId
       });
-      hasMoreMessage = result.length > 0;
+      hasOldMessage = result.length > 0;
+    }
+    isScrollLoading = false;
+  } else if (distanceFromBottom > -50 && !isScrollLoading && hasNewMessage) {
+    isScrollLoading = true;
+
+    if (!getIsWebsocketConnecting()) {
+      const lastMessage = state.messages[state.messages.length - 1];
+
+      const result = await fetchMessagesForTopic(route.value.id, {
+        afterMessageId: lastMessage?.id
+      });
+      hasNewMessage = result.length > 0;
     }
     isScrollLoading = false;
   }
@@ -506,6 +537,32 @@ const clearAiMessages = () => {
   }
 };
 
+const handleScrollToMessage = async (messageId: string) => {
+  isAutoScrollLoading = true;
+
+  nextTick(async () => {
+    const messageElement = chatWrapperRef.value?.querySelector(
+      `[data-message-id="${messageId}"]`
+    );
+    if (messageElement instanceof HTMLElement) {
+      messageElement.scrollIntoView({ block: 'center' });
+      messageElement.classList.add('highlighted');
+      setTimeout(() => {
+        messageElement.classList.remove('highlighted');
+        isAutoScrollLoading = false;
+      }, 1000);
+    } else {
+      await fetchAroundMessage(messageId).then(messages => {
+        if (messages.some(m => m.id === messageId)) {
+          setTimeout(() => {
+            handleScrollToMessage(messageId);
+          }, 300);
+        }
+      });
+    }
+  });
+};
+
 const messageChat = (role: string) => [
   'message__bubble',
   { message__other: role === 'user' }
@@ -556,6 +613,16 @@ watch(
     });
   },
   { deep: true }
+);
+
+watch(
+  () => route.value?.id,
+  () => {
+    nextTick(() => {
+      markAllVisibleAsRead();
+    });
+  },
+  { immediate: true }
 );
 
 const scrollToBottom = () => {
@@ -800,7 +867,9 @@ watch(
     if (!route.value?.id) return;
 
     fetchMessagesForTopic(route.value.id);
-    hasMoreMessage = true;
+    fetchPinnedMessagesForTopic(route.value.id);
+
+    hasOldMessage = true;
 
     const unreadMessages = state.messages.filter(
       message => message.senderUserId !== props.user?.id && !message.isReadByMe
@@ -824,6 +893,7 @@ watch(
 );
 
 defineExpose({
-  handleClear: clearAiMessages
+  handleClear: clearAiMessages,
+  scrollToMessage: handleScrollToMessage
 });
 </script>

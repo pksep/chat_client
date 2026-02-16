@@ -25,7 +25,10 @@ import { getConfig } from './services/useConfig';
 import { useTopics } from './composables/useTopics';
 import { getGroupById, useGroup } from './composables/useGroup';
 import { useUrlWatcher } from './composables/navigation';
-import { fetchMessagesForTopic } from './services/useMessages';
+import {
+  fetchMessagesForTopic,
+  fetchPinnedMessagesForTopic
+} from './services/useMessages';
 import { initPushNotifications } from './services/usePushNotifications';
 import { useResizeState } from './composables/useResizeState';
 import { navigateToDialogsList } from './composables/navigation';
@@ -122,6 +125,7 @@ const runAppInitialization = async () => {
     await fetchAllGroups();
     if (route.value.id) {
       await fetchMessagesForTopic(route.value.id);
+      fetchPinnedMessagesForTopic(route.value.id);
 
       if (route.value.type === RouteTypes.GROUP) {
         getGroupById(route.value.id);

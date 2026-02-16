@@ -106,7 +106,7 @@ const setupChatListeners = (): void => {
       }
     } else if (payload.type === 'DELETE') {
       deleteMessageFromLocal(payload.data.topicId, payload.data.id);
-    } else if (payload.type === 'CHANGE') {
+    } else if (payload.type === 'CHANGE' || payload.type === 'PIN') {
       editMessageFromLocal(payload.data.topicId, payload.data);
     }
 
@@ -237,6 +237,23 @@ export const sendMessageChat = async (params: {
       text: params.text,
       medias: params.medias,
       ex: params.ex
+    });
+  } catch (error) {
+    console.error('[ChatSDK] Failed to send message via WebSocket:', error);
+  }
+};
+
+export const togglePinMessageChat = async (params: {
+  topicId: string;
+  messageId?: string;
+}): Promise<void> => {
+  const sdk = getChatSDK();
+
+  try {
+    sdk.sendWebSocketEvent(WebSocketEventType.TOGGLE_PIN_MESSAGE, {
+      topicId: params.topicId,
+      messageId: params.messageId,
+      userId: authedUser.value.id
     });
   } catch (error) {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);

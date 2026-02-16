@@ -252,6 +252,14 @@
         Редактировать
       </Button>
       <Button
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="handlePinMessage"
+        :data-testid="`${dataTestid}-MessageBubble-PinButton`"
+      >
+        {{ props.isPin ? 'Открепить' : 'Закрепить' }}
+      </Button>
+      <Button
         v-if="props.isMeSender"
         style="color: var(--error-color)"
         :type="ButtonTypeEnum.ghost"
@@ -293,7 +301,10 @@ import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
 import { getConfig } from '../../services/useConfig';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
-import { deleteMessageChat } from '../../services/useChat';
+import {
+  deleteMessageChat,
+  togglePinMessageChat
+} from '../../services/useChat';
 import LoadingIcon from '../UI/LoadingIcon.vue';
 import PlayIcon from '../UI/PlayIcon.vue';
 import { IMedia } from '../interfaces/interfaces';
@@ -357,6 +368,14 @@ const handleDeleteMessage = async (): Promise<void> => {
 
 const handleEditMessage = () => {
   emits('unmount-edit-message-id', props.messageId);
+  closeActivePopover(props.messageId);
+};
+
+const handlePinMessage = async () => {
+  await togglePinMessageChat({
+    messageId: props.messageId,
+    topicId: props.topicId
+  });
   closeActivePopover(props.messageId);
 };
 
