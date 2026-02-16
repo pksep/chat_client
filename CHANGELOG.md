@@ -1,3 +1,10 @@
+## [1.10.1](https://github.com/pksep/chat_client/compare/v1.10.0...v1.10.1) (2026-02-16)
+
+
+### Bug Fixes
+
+* height menu ([c2f272b](https://github.com/pksep/chat_client/commit/c2f272b131fae5073817f40e0c68539c3293fd2e))
+
 # [1.10.0](https://github.com/pksep/chat_client/compare/v1.9.0...v1.10.0) (2026-02-16)
 
 
