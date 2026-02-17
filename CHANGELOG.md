@@ -1,3 +1,10 @@
+## [1.12.1](https://github.com/pksep/chat_client/compare/v1.12.0...v1.12.1) (2026-02-17)
+
+
+### Bug Fixes
+
+* not markAsRead if browser not active ([78c5a42](https://github.com/pksep/chat_client/commit/78c5a423bde5081e71dfb824ffacd9338c5bed75))
+
 # [1.12.0](https://github.com/pksep/chat_client/compare/v1.11.0...v1.12.0) (2026-02-17)
 
 
