@@ -193,8 +193,7 @@ import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import {
   navigateToDialogs,
-  navigateToGroup,
-  useUrlWatcher
+  navigateToGroup
 } from '../../composables/navigation';
 import { getConfig } from '../../services/useConfig';
 import { MediaType } from '@pksep/zod-shared-chat';

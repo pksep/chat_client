@@ -75,9 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, ref } from 'vue';
-import AiIconWrapper from '../UI/AiIconWrapper.vue';
-import Line from '../UI/Line.vue';
+import { reactive, computed } from 'vue';
 import type {
   IMobileListProps,
   IMobileListEmits
@@ -94,14 +92,11 @@ import {
 } from '@pksep/yui';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
 import TopicList from './TopicList.vue';
-import { useGroup } from '../../composables/useGroup';
 import { useTopics } from '../../composables/useTopics';
-import { navigateToAI, useUrlWatcher } from '../../composables/navigation';
+import { useUrlWatcher } from '../../composables/navigation';
 import {
-  navigateToAssistant,
   navigateToDialogsList,
   navigateToGroupsList,
-  RouteType,
   RouteTypes
 } from '../../composables/navigation/useUrlRouting';
 import { useContextMenu } from '../../composables/useContextMenu';
@@ -115,7 +110,6 @@ const route = useUrlWatcher();
 const isAssistantRoute = computed(
   () => route.value?.type === RouteTypes.ASSISTANT
 );
-const isDialogsRoute = computed(() => route.value?.type === RouteTypes.DIALOGS);
 const isGroupRoute = computed(() => route.value?.type === RouteTypes.GROUP);
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
@@ -135,12 +129,6 @@ const state = reactive({
   checkUsers: new Set<string | number>(),
   isLoading: computed(() => loadingTopics.value)
 });
-
-const handleChapter = (route: RouteType) => {
-  if (route === RouteTypes.AI) {
-    navigateToAI();
-  }
-};
 
 const emits = defineEmits<IMobileListEmits>();
 
