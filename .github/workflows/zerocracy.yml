@@ -21,13 +21,13 @@ jobs:
           token: ${{ secrets.ZEROCRACY_TOKEN }}
           github-token: ${{ secrets.ZEROCRACY_PAT }}
           repositories: pksep/chat_client
-          factbase: chat_client.fb 
+          factbase: chat-client.fb 
 
       - name: Generate Pages
         uses: zerocracy/pages-action@0.6.4
         with:
           github-token: ${{ secrets.ZEROCRACY_PAT }}
-          factbase: chat_client.fb
+          factbase: chat-client.fb
 
       - name: Deploy to GH Pages
         uses: JamesIves/github-pages-deploy-action@v4.6.0
