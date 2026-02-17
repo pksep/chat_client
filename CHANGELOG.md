@@ -1,3 +1,15 @@
+# [1.12.0](https://github.com/pksep/chat_client/compare/v1.11.0...v1.12.0) (2026-02-17)
+
+
+### Bug Fixes
+
+* lint ([35af413](https://github.com/pksep/chat_client/commit/35af41336ca1f2d9cb1a5be8cc5607497b75c31e))
+
+
+### Features
+
+* reply and fix styles ([69c97ee](https://github.com/pksep/chat_client/commit/69c97ee66150665b8b447c026f507ca63d3661c3))
+
 # [1.11.0](https://github.com/pksep/chat_client/compare/v1.10.1...v1.11.0) (2026-02-16)
 
 
