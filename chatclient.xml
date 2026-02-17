@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="70244">
+<fb version="0.19.6" size="73083">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <error t="S">undefined method '[]' for nil</error>
     <inserted t="I">8</inserted>
-    <seconds t="F">3.57937552</seconds>
+    <seconds t="F">23.647242336</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-02-17T12:04:42Z</when>
+    <when t="T">2026-02-17T13:52:09Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -4042,15 +4042,176 @@
     <who t="I">40199504</who>
   </f>
   <f>
-    <_id t="I">185</_id>
-    <_job t="I">22097732055</_job>
-    <_time t="T">2026-02-17T12:04:40Z</_time>
+    <_id t="I">186</_id>
+    <_job t="I">22101052019</_job>
+    <_time t="T">2026-02-17T13:51:51Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <commits t="I">16</commits>
+    <contributors>
+      <v t="I">40199504</v>
+      <v t="I">93074025</v>
+      <v t="I">32174276</v>
+    </contributors>
+    <details t="S">A new release "v1.12.1" has been published in pksep/chat_client by @github-actions[bot].</details>
+    <event_id t="I">6642229014</event_id>
+    <event_type t="S">ReleaseEvent</event_type>
+    <hoc t="I">462</hoc>
+    <is_human t="I">0</is_human>
+    <last_commit t="S">81791b7299adc0e1009249cbd49f26d8146cf5c4</last_commit>
+    <release t="I">287228185</release>
+    <repository t="I">1053332035</repository>
+    <tag t="S">v1.12.1</tag>
+    <what t="S">release-published</what>
+    <when t="T">2026-02-17T12:15:39Z</when>
+    <where t="S">github</where>
+    <who t="I">41898282</who>
+  </f>
+  <f>
+    <_id t="I">187</_id>
+    <_job t="I">22101052019</_job>
+    <_time t="T">2026-02-17T13:51:52Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <commit t="S">05c39ba02c4633f0e26ad0cf12bff36e3abc5abe</commit>
+    <default_branch t="S">main</default_branch>
+    <details t="S">A new Git push #30820192201 has arrived to pksep/chat_client, made by @github-actions[bot] (default branch is "main"), not associated with any pull request.</details>
+    <event_id t="I">8525214135</event_id>
+    <event_type t="S">PushEvent</event_type>
+    <is_human t="I">0</is_human>
+    <push_id t="I">30820192201</push_id>
+    <ref t="S">refs/heads/main</ref>
+    <repository t="I">1053332035</repository>
+    <to_master t="I">1</to_master>
+    <what t="S">git-was-pushed</what>
+    <when t="T">2026-02-17T12:15:39Z</when>
+    <where t="S">github</where>
+    <who t="I">41898282</who>
+  </f>
+  <f>
+    <_id t="I">188</_id>
+    <_job t="I">22101052019</_job>
+    <_time t="T">2026-02-17T13:51:52Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">canary</branch>
+    <details t="S">The pull request pksep/chat_client#76 has been opened by @ekn1000.</details>
+    <event_id t="I">6642172872</event_id>
+    <event_type t="S">PullRequestEvent</event_type>
+    <is_human t="I">1</is_human>
+    <issue t="I">76</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-02-17T12:13:26Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">189</_id>
+    <_job t="I">22101052019</_job>
+    <_time t="T">2026-02-17T13:51:53Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">fix-browser-active</branch>
+    <details t="S">The pull request pksep/chat_client#75 has been opened by @ekn1000.</details>
+    <event_id t="I">6642161740</event_id>
+    <event_type t="S">PullRequestEvent</event_type>
+    <is_human t="I">1</is_human>
+    <issue t="I">75</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-02-17T12:12:59Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">190</_id>
+    <_job t="I">22101052019</_job>
+    <_time t="T">2026-02-17T13:51:54Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">fix-browser-active</branch>
+    <comments t="I">1</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">0</comments_by_author>
+    <comments_by_reviewers t="I">1</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#75 has been "pull-was-merged".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">1</files>
+    <hoc t="I">1</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">75</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-merged</what>
+    <when t="T">2026-02-17T12:13:04Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">191</_id>
+    <_job t="I">22101052019</_job>
+    <_time t="T">2026-02-17T13:52:01Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">canary</branch>
+    <comments t="I">1</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">0</comments_by_author>
+    <comments_by_reviewers t="I">1</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#76 has been "pull-was-merged".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">1</files>
+    <hoc t="I">1</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">76</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-merged</what>
+    <when t="T">2026-02-17T12:13:33Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">192</_id>
+    <_job t="I">22101052019</_job>
+    <_time t="T">2026-02-17T13:52:04Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <earliest_issue_was_found t="I">1</earliest_issue_was_found>
     <latest_issue_was_found t="I">72</latest_issue_was_found>
-    <min_pull_was_found t="I">9</min_pull_was_found>
+    <min_pull_was_found t="I">10</min_pull_was_found>
     <repository t="I">1053332035</repository>
     <what t="S">iterate</what>
     <where t="S">github</where>
+  </f>
+  <f>
+    <_id t="I">193</_id>
+    <_job t="I">22101052019</_job>
+    <_time t="T">2026-02-17T13:52:06Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-170</branch>
+    <details t="S">The missing pull pksep/chat_client#73 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">73</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-02-17T11:50:23Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">194</_id>
+    <_job t="I">22101052019</_job>
+    <_time t="T">2026-02-17T13:52:07Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">canary</branch>
+    <details t="S">The missing pull pksep/chat_client#74 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">74</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-02-17T11:58:57Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
   </f>
 </fb>
