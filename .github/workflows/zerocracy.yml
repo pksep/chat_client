@@ -42,5 +42,5 @@ jobs:
           username: ${{ secrets.PROD_SSH_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
           script: |
-            cd ~/Desktop/zerocracy/autotests/autotests
+            cd ~/Desktop/zerocracy/chat_client/chat_client
             git pull
