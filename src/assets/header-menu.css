@@ -8,18 +8,6 @@
     position: sticky;
     top: 0;
   }
-  .header-menu__list {
-    padding-top: 56px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background-color: var(--white);
-    gap: 40px;
-    border-bottom-style: solid;
-    border-bottom-width: 1px;
-    border-bottom-color: var(--border-grey);
-    width: var(--default-width);
-  }
   .header-menu-item__selected {
     position: absolute;
     left: 14px;

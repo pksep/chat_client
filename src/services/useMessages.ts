@@ -99,7 +99,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
 
   const lastMessage = existingMessages.at(-1);
 
-  if (lastMessage.id === clientId) {
+  if (lastMessage?.id === clientId) {
     const media = existingMessages[existingMessages.length - 1].media;
 
     media.forEach((m, i) => {
@@ -144,6 +144,7 @@ export const editMessageFromLocal = (
   const existingMessages = messagesStore.value[topicId] || [];
 
   messagesStore.value[topicId] = existingMessages.map(msg => {
+    let isEdit = msg.isEdit;
     if (msg.id === message.id) {
       if (message.isPin !== msg.isPin) {
         const pinnedMessages = getPinnedMessagesByTopicId(topicId);
@@ -155,8 +156,10 @@ export const editMessageFromLocal = (
             pinnedMessages.filter(m => m.id !== message.id)
           );
         }
+      } else {
+        isEdit = true;
       }
-      return { ...msg, text: message.text, isPin: message.isPin };
+      return { ...msg, text: message.text, isPin: message.isPin, isEdit };
     }
     return msg;
   });
@@ -237,7 +240,13 @@ export const deleteFileAfterLoading = (
 };
 
 export const playNotificationSound = (topicId?: string): void => {
-  if ((topicId && isTopicMuted(topicId)) || route.value.id === topicId) {
+  const isHidden = document.hidden;
+
+  if (topicId && isTopicMuted(topicId)) {
+    return;
+  }
+
+  if (!isHidden && route.value.id === topicId) {
     return;
   }
 

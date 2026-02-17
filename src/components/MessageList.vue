@@ -64,7 +64,7 @@
           :key="message.id"
           class="top-element"
           v-if="isNewDate(index) || message.isSystem"
-          :data-message-id="message.id"
+          :data-message-id="isNewDate(index) ? null : message.id"
         >
           <div
             v-if="isNewDate(index)"
@@ -114,7 +114,12 @@
           :data-testid="`${props.dataTestid}-MessageList-MessageBubbleUser${index + 1}`"
           :data-message-id="message.id"
           :message-id="message.id"
+          :reply-message="message.replyMessage"
           @unmount-edit-message-id="handleSetEditMessage"
+          @unmount-reply-message-id="handleSetReplyMessage"
+          @unmount-navigate-message-id="
+            handleScrollToMessage(message.replyMessage.id)
+          "
         />
       </template>
     </div>
@@ -152,16 +157,45 @@
       :data-testid="`${props.dataTestid}-MessageList-ContentEditor`"
     >
       <template v-if="!!state.editMessage" #action>
-        <div class="chat__input__action">
+        <div
+          class="chat__input__action"
+          @click="handleScrollToMessage(state.editMessage.id)"
+        >
           <EditIcon />
           <div class="chat__input__action__blog">
             <h5>Редактирование</h5>
-            <p>{{ stripHtml(state.editMessage.text || '') }}</p>
+            <p>
+              {{ stripHtml(state.editMessage?.text || '') }}
+            </p>
           </div>
           <Button
             :type="ButtonTypeEnum.ghost"
             :size="SizesEnum.little"
             @click="handleSetEditMessage(null)"
+            :data-testid="`${props.dataTestid}-MenuInfo-CloseButton`"
+          >
+            <Icon
+              :name="IconNameEnum.crossLarge"
+              color="var(--text-neutral-color)"
+            />
+          </Button>
+        </div>
+      </template>
+      <template v-else-if="!!state.replyMessage" #action>
+        <div
+          class="chat__input__action"
+          @click="handleScrollToMessage(state.replyMessage.id)"
+        >
+          <div class="chat__input__action__blog">
+            <h5>В ответ {{ state.replyMessage.senderUser.initials }}</h5>
+            <p>
+              {{ stripHtml(state.replyMessage?.text || 'Вложение') }}
+            </p>
+          </div>
+          <Button
+            :type="ButtonTypeEnum.ghost"
+            :size="SizesEnum.little"
+            @click="handleSetReplyMessage(null)"
             :data-testid="`${props.dataTestid}-MenuInfo-CloseButton`"
           >
             <Icon
@@ -301,6 +335,7 @@ const state = reactive({
   limit: 50,
   aiMessages: [] as AIMessage[],
   editMessage: null as IMessage | null,
+  replyMessage: null as IMessage | null,
   errorMessage: ''
 });
 
@@ -321,10 +356,8 @@ let scrollMarkReadTimeout: number | null = null;
 let intersectionObserver: IntersectionObserver | null = null;
 
 const markAllVisibleAsRead = async () => {
-  if (!route.value?.id) return;
-
   const unreadMessages = state.messages.filter(
-    m => m.senderUserId !== props.user?.id && m.status !== MessageStatus.Read
+    m => m.senderUserId !== props.user?.id
   );
 
   if (unreadMessages.length === 0) return;
@@ -569,11 +602,19 @@ const messageChat = (role: string) => [
 ];
 
 const handleSetEditMessage = (messageId?: string) => {
+  state.replyMessage = null;
   state.editMessage = messageId
     ? state.messages.find(m => m.id === messageId) || null
     : null;
 
   inputText.value = state.editMessage?.text || '';
+};
+
+const handleSetReplyMessage = (messageId?: string) => {
+  state.editMessage = null;
+  state.replyMessage = messageId
+    ? state.messages.find(m => m.id === messageId) || null
+    : null;
 };
 
 watch(
@@ -616,13 +657,22 @@ watch(
 );
 
 watch(
-  () => route.value?.id,
+  () => route.value,
   () => {
     nextTick(() => {
       markAllVisibleAsRead();
     });
   },
-  { immediate: true }
+  { immediate: true, deep: true }
+);
+
+watch(
+  () => state.messages.length,
+  () => {
+    nextTick(() => {
+      markAllVisibleAsRead();
+    });
+  }
 );
 
 const scrollToBottom = () => {
@@ -733,7 +783,8 @@ const handleSend = async (): Promise<void> => {
     for (const part of parts) {
       await sendMessageChat({
         topicId: route.value.id,
-        text: part
+        text: part,
+        replyMessageId: state.replyMessage?.id
       });
 
       await nextTick();
@@ -742,6 +793,8 @@ const handleSend = async (): Promise<void> => {
   } catch (error) {
     console.error('[ChatSDK] Failed to send message:', error);
   }
+
+  state.replyMessage = null;
 };
 
 const handleAttachFile = async (files: FileList, isMedia = false) => {
@@ -793,6 +846,7 @@ const handleAttachFileChunk = async (files: FileList, isMedia = false) => {
     isPin: false,
     isSystem: false,
     replyMessageId: null,
+    replyMessage: state.replyMessage,
     senderUserId: authUser.value.id,
     text: null,
     topicId: route.value.id,
@@ -833,7 +887,8 @@ const handleAttachFileChunk = async (files: FileList, isMedia = false) => {
       topicId: route.value.id,
       text: '',
       medias,
-      ex: JSON.stringify({ clientId })
+      ex: JSON.stringify({ clientId }),
+      replyMessageId: state.replyMessage?.id
     });
 
     await nextTick();
@@ -841,6 +896,8 @@ const handleAttachFileChunk = async (files: FileList, isMedia = false) => {
   } catch (error) {
     console.error('[ChatSDK] Failed to send message:', error);
   }
+
+  state.replyMessage = null;
 };
 
 const isNewDate = (index: number, isMastra: boolean = false) => {

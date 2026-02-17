@@ -5,6 +5,10 @@
   overflow-x: hidden;
 }
 
+.mobile-list-container:has(.chat-list) {
+  height: calc(var(--default-height));
+}
+
 button.button-yui-kit.mobile__list-button {
   position: fixed;
   bottom: 0;

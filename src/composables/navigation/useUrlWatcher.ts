@@ -8,7 +8,6 @@ export const useUrlWatcher = () => {
   });
 
   const handlePopState = (e?: PopStateEvent) => {
-    alert();
     e?.preventDefault();
     const parsedRoute = parseUrl();
     currentRoute.value = parsedRoute;

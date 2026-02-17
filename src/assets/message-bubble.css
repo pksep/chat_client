@@ -35,7 +35,7 @@
 }
 
 .message__article__media {
-  padding: 4px;
+  /* padding: 4px; */
   width: max-content;
   cursor: pointer;
 }
@@ -67,7 +67,7 @@
   justify-self: end;
   & svg.icon-yui-kit {
     display: grid;
-    font-size: 14px;
+    font-size: 20px;
   }
 }
 
@@ -91,18 +91,26 @@ blockquote.message-content__blockquote {
   border-left-color: var(--blockquote-border-color, var(--blue1));
   border-left-width: 4px;
   border-left-style: solid;
-  border-top-left-radius: 4px;
-  border-bottom-left-radius: 4px;
+  border-radius: 4px;
   margin-bottom: 5px;
 }
 
 blockquote.message-content__blockquote
   div.message-content__blockquote-container {
+  cursor: pointer;
   display: grid;
   margin-left: 4px;
   padding-block: 2px;
-  & h5 {
+  & h5,
+  & p {
     margin: 0;
+    font-size: 14px;
+    line-height: 17px;
+    color: var(--message-text-color);
+  }
+
+  & p {
+    font-weight: 400;
   }
 }
 div.message-content__loading {
@@ -130,6 +138,7 @@ div.message-content__loading-circle:nth-child(3) {
 div.message-content__html > p {
   max-width: 100ch;
   margin-block: 0;
+  line-height: 17px;
 }
 
 .message__no-author {
@@ -369,6 +378,10 @@ div.message-content__file {
     overflow: auto;
     overflow-wrap: break-word;
     word-break: break-word;
+
+    .tiptap p {
+      line-height: 17px;
+    }
   }
 }
 

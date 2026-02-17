@@ -177,6 +177,7 @@ p.chat__nothing-paragraph {
 }
 
 .chat__input__action {
+  cursor: pointer;
   display: flex;
   align-items: center;
   width: 100%;

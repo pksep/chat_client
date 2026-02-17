@@ -112,6 +112,7 @@ export interface IMessage extends Message {
   senderUser?: IUser;
   media?: IMedia[];
   isReadByMe?: boolean;
+  replyMessage?: IMessage;
   ex?: string; // "{ clientId: string }"
 }
 
