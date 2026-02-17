@@ -49,7 +49,7 @@ export interface WebSocketEventPayloads {
     topicId: string;
     text?: string;
     medias?: IMedia[];
-    replayMessageId?: string;
+    replyMessageId?: string;
     ex?: string;
   };
   [WebSocketEventType.TOGGLE_PIN_MESSAGE]: {
