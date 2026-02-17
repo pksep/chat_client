@@ -81,5 +81,5 @@ bun run start:android
 
 Этот проект распространяется под лицензией [SEP_ERP_CLIENT License](./LICENSE).
 
-## Zerocracy
+## Zerocracy Progress
 [![Zerocracy](https://www.zerocracy.com/badge/pksep/chat_client.svg)](https://pksep.github.io/chat_client/)

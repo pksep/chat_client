@@ -1,5 +1,5 @@
 name: zerocracy
-'on':
+on:
   schedule:
     - cron: '42 * * * *'
   workflow_dispatch:
@@ -12,17 +12,25 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - uses: zerocracy/judges-action@0.17.11
+        with:
+          fetch-depth: 0
+
+      - name: Run Judges
+        uses: zerocracy/judges-action@0.17.11
         with:
           token: ${{ secrets.ZEROCRACY_TOKEN }}
           github-token: ${{ secrets.ZEROCRACY_PAT }}
           repositories: pksep/chat_client
-          factbase: foo.fb
-      - uses: zerocracy/pages-action@0.6.4
+          factbase: chat_client.fb 
+
+      - name: Generate Pages
+        uses: zerocracy/pages-action@0.6.4
         with:
           github-token: ${{ secrets.ZEROCRACY_PAT }}
-          factbase: foo.fb
-      - uses: JamesIves/github-pages-deploy-action@v4.6.0
+          factbase: chat_client.fb
+
+      - name: Deploy to GH Pages
+        uses: JamesIves/github-pages-deploy-action@v4.6.0
         with:
           folder: pages
           clean: false
