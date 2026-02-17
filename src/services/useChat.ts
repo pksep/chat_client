@@ -345,6 +345,7 @@ export const markAsRead = async (dto: {
   messageIds: string[];
   topicId: string;
 }): Promise<void> => {
+  if (document.hidden) return;
   const sdk = getChatSDK();
   const { messageIds, topicId } = dto;
 
