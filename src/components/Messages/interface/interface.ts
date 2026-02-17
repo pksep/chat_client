@@ -1,5 +1,5 @@
 import { MediaTypeType } from '@pksep/zod-shared-chat';
-import { IMedia } from 'src/components/interfaces/interfaces';
+import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
 
 export interface MessageMediaItem {
   id: string;
@@ -27,6 +27,7 @@ export interface IMessageBubbleProps {
   topicId?: string;
   messageId?: string;
   messageStatus?: string;
+  replyMessage?: IMessage;
 }
 
 export interface IMessageStatusIconsProps {

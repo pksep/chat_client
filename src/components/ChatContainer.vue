@@ -64,7 +64,7 @@
     />
 
     <MobileModal
-      v-if="mobilePlatform"
+      v-if="false"
       class="mobile-modal"
       headerClass="hidden"
       :show-divider="false"

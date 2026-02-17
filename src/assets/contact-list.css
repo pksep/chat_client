@@ -152,8 +152,8 @@ svg.icon-yui-kit.contact-list__read-icon {
 .contact-list__top {
   grid-area: block;
   display: flex;
+  align-items: center;
   gap: 7px;
-  align-items: start;
   justify-self: end;
 }
 
@@ -174,7 +174,7 @@ svg.icon-yui-kit.contact-list__read-icon {
 .contact-list {
   gap: 2px;
   display: grid;
-  height: calc(100vh - 155px);
+  max-height: calc(100vh - 155px);
   overflow: hidden scroll;
 }
 
@@ -230,14 +230,22 @@ svg.icon-yui-kit.contact-list__read-icon {
 }
 
 .contact-list__message-status-icons {
-  height: 1em;
+  height: 20px;
 }
 .contact-list__message-status-icons > svg.icon-yui-kit {
   color: var(--neutral-text);
-  font-size: 16px;
+  font-size: 20px;
 }
 
 @media (width <= 480px) {
+  .chat-container:has(.chat-list) {
+    --header-height: 0;
+  }
+
+  .contact-list {
+    max-height: initial;
+  }
+
   .contact-list__block--wrapper {
     border-bottom: 1px solid var(--grey1);
     padding-bottom: 22px;

@@ -190,12 +190,10 @@ import { IMedia, ITopic, MessageStatusEnum } from '../interfaces/interfaces';
 import { useTopics } from '../../composables/useTopics';
 import { formatTime } from '../../composables/useTime';
 import { useResizeState } from '../../composables/useResizeState';
-import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { MAX_W_MD } from '../../utils/constants';
 import {
   navigateToDialogs,
-  navigateToGroup,
-  useUrlWatcher
+  navigateToGroup
 } from '../../composables/navigation';
 import { getConfig } from '../../services/useConfig';
 import { MediaType } from '@pksep/zod-shared-chat';
@@ -206,14 +204,13 @@ import PinIcon from '../UI/PinIcon.vue';
 import UnpinIcon from '../UI/UnpinIcon.vue';
 import UnmuteIcon from '../UI/UnmuteIcon.vue';
 import MuteIcon from '../UI/MuteIcon.vue';
+import { TopicType } from '../../services/useChatSDK/types';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
   selectedTopicIds?: Set<string | number>;
   isLoading?: boolean;
 }
-
-const route = useUrlWatcher();
 
 const { togglePinTopic, toggleMuteTopic } = useTopics();
 
@@ -250,9 +247,9 @@ const handleMute = (topic: ITopic): void => {
 
 const handleClick = (topic: ITopic): void => {
   if (isMobile.value) {
-    if (route.value && route.value.type === RouteTypes.DIALOGS) {
+    if (topic.type === TopicType.DM) {
       navigateToDialogs(topic.id);
-    } else if (route.value && route.value.type === RouteTypes.GROUP) {
+    } else if (topic.type === TopicType.Group) {
       navigateToGroup(topic.id);
     }
   }

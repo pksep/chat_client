@@ -29,16 +29,16 @@
         Ai Ассистент
       </h3>
     </div>
-    <template v-else-if="currentGroup || currentTopic">
+    <template v-else-if="currentTopic">
       <GroupProfile
-        v-if="route.type === 'group'"
+        v-if="currentTopic.type === TopicType.Group"
         class="chat__header-profile"
         avatar-alt="group-profile-alt"
         :topic="currentGroup || currentTopic"
         :data-testid="`${props.dataTestid}-Header-GroupProfile`"
       />
       <UserProfile
-        v-else-if="route.type === 'dialogs'"
+        v-else-if="currentTopic.type === TopicType.DM"
         class="chat__header-profile"
         avatar-alt="user-profile-alt"
         :user="currentTopic.user"
@@ -147,6 +147,7 @@ import {
   quitGroup
 } from '../../composables/useGroup';
 import ConfirmModal from '../UI/ConfirmModal.vue';
+import { TopicType } from '../../services/useChatSDK/types';
 
 const { getSelectedTopic } = useTopics();
 

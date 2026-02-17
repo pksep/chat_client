@@ -2,7 +2,7 @@
   <section class="chat" :data-testid="`${props.dataTestid}-Chat-Container`">
     <PinnedMessages @unmount-set-selected-message="scrollToMessage" />
     <ContactListMobile
-      v-if="isMobile && isShowContactList(route.type, route.id || null)"
+      v-if="isMobile && !route.id"
       class="chat__mobile"
       :data-testid="`${props.dataTestid}-Chat-ContactListMobile`"
     />
@@ -23,7 +23,6 @@ import { useResizeState } from '../composables/useResizeState';
 import MessageList from './MessageList.vue';
 import ContactListMobile from './ContactList/MobileList.vue';
 import type { IMessageListProps } from './interfaces/message-list';
-import { isShowContactList } from '../composables/useShowContactList';
 import { MAX_W_MD } from '../utils/constants';
 import { useUrlWatcher } from '../composables/navigation';
 import { getAuthUser } from '../composables/useAuth';

@@ -5,6 +5,7 @@
     :data-role="props.author"
     :data-is-loading="!!props.loader"
     :data-is-me-sender="props.isMeSender"
+    @contextmenu="evt => openActivePopover(props.messageId, evt)"
   >
     <Avatar
       class="message__avatar"
@@ -21,10 +22,7 @@
       v-else-if="props.author === 'assistant'"
       :data-testid="`${dataTestid}-MessageBubble-AssistantIcon`"
     />
-    <div
-      :class="messageArticlesStyles"
-      @contextmenu="evt => openActivePopover(props.messageId, evt)"
-    >
+    <div :class="messageArticlesStyles">
       <article
         v-if="!!props.message"
         :class="messageArticleStyles()"
@@ -41,7 +39,8 @@
           :data-testid="`${dataTestid}-MessageBubble-Content`"
         >
           <blockquote
-            v-if="false"
+            v-if="!!props.replyMessage"
+            @click="handleNavigateMessage"
             class="message-content__blockquote"
             :data-testid="`${dataTestid}-MessageBubble-Blockquote`"
           >
@@ -50,11 +49,11 @@
               :data-testid="`${dataTestid}-MessageBubble-BlockquoteContainer`"
             >
               <h5 :data-testid="`${dataTestid}-MessageBubble-BlockquoteAuthor`">
-                Ivan Ivanov
+                {{ props.replyMessage?.senderUser?.initials }}
               </h5>
-              <div :data-testid="`${dataTestid}-MessageBubble-BlockquoteText`">
-                How are you?
-              </div>
+              <p :data-testid="`${dataTestid}-MessageBubble-BlockquoteText`">
+                {{ stripHtml(props.replyMessage?.text || 'Вложение') }}
+              </p>
             </div>
           </blockquote>
           <div
@@ -83,6 +82,10 @@
           v-if="!props.loader"
           :data-testid="`${dataTestid}-MessageBubble-Time`"
         >
+          <PinIcon
+            style="width: 15px; height: 15px; margin-right: -2px"
+            v-if="props.isPin"
+          />
           <span
             v-if="props.isEdit"
             :data-testid="`${dataTestid}-MessageBubble-Edited`"
@@ -105,12 +108,35 @@
           :class="messageArticleStyles(MediaType.File)"
           :data-testid="`${dataTestid}-MessageBubble-Article`"
         >
-          <h3
-            class="message__article-initals"
-            v-if="!props.isMeSender && route.type !== RouteTypes.DIALOGS"
-          >
-            {{ props.sender }}
-          </h3>
+          <div style="margin-bottom: -13px">
+            <h3
+              style="margin-bottom: 5px"
+              class="message__article-initals"
+              v-if="!props.isMeSender && route.type !== RouteTypes.DIALOGS"
+            >
+              {{ props.sender }}
+            </h3>
+            <blockquote
+              v-if="!!props.replyMessage"
+              @click="handleNavigateMessage"
+              class="message-content__blockquote"
+              :data-testid="`${dataTestid}-MessageBubble-Blockquote`"
+            >
+              <div
+                class="message-content__blockquote-container"
+                :data-testid="`${dataTestid}-MessageBubble-BlockquoteContainer`"
+              >
+                <h5
+                  :data-testid="`${dataTestid}-MessageBubble-BlockquoteAuthor`"
+                >
+                  {{ props.replyMessage?.senderUser?.initials }}
+                </h5>
+                <p :data-testid="`${dataTestid}-MessageBubble-BlockquoteText`">
+                  {{ stripHtml(props.replyMessage?.text || 'Вложение') }}
+                </p>
+              </div>
+            </blockquote>
+          </div>
           <div
             v-for="(media, i) in docFiles"
             :key="media.id"
@@ -150,6 +176,10 @@
             v-if="!props.loader && !props.file"
             :data-testid="`${dataTestid}-MessageBubble-Time`"
           >
+            <PinIcon
+              style="width: 15px; height: 15px; margin-right: -2px"
+              v-if="props.isPin"
+            />
             <span :data-testid="`${dataTestid}-MessageBubble-TimeText`">{{
               props.time
             }}</span>
@@ -168,6 +198,30 @@
           :class="messageArticleStyles(MediaType.Image)"
           :data-testid="`${dataTestid}-MessageBubble-Article`"
         >
+          <h3
+            class="message__article-initals"
+            v-if="!props.isMeSender && route.type !== RouteTypes.DIALOGS"
+          >
+            {{ props.sender }}
+          </h3>
+          <blockquote
+            v-if="!!props.replyMessage"
+            @click="handleNavigateMessage"
+            class="message-content__blockquote"
+            :data-testid="`${dataTestid}-MessageBubble-Blockquote`"
+          >
+            <div
+              class="message-content__blockquote-container"
+              :data-testid="`${dataTestid}-MessageBubble-BlockquoteContainer`"
+            >
+              <h5 :data-testid="`${dataTestid}-MessageBubble-BlockquoteAuthor`">
+                {{ props.replyMessage?.senderUser?.initials || '' }}
+              </h5>
+              <p :data-testid="`${dataTestid}-MessageBubble-BlockquoteText`">
+                {{ stripHtml(props.replyMessage?.text || 'Вложение') }}
+              </p>
+            </div>
+          </blockquote>
           <div
             :class="`message-content message-content-${mediaFiles.length}-item`"
             :data-testid="`${dataTestid}-MessageBubble-Content`"
@@ -209,6 +263,10 @@
           </div>
 
           <div class="message-time" v-if="!props.file">
+            <PinIcon
+              style="width: 15px; height: 15px; margin-right: -2px"
+              v-if="props.isPin"
+            />
             <span>{{ props.time }}</span>
             <MessageStatusIcons
               v-if="props.isMeSender"
@@ -235,9 +293,9 @@
       :data-testid="`${dataTestid}-MessageBubble-ContextMenu`"
     >
       <Button
-        disabled
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.small"
+        @click.stop="handleReplyMessage"
         :data-testid="`${dataTestid}-MessageBubble-ReplyButton`"
       >
         <ReplyIcon /> Ответить
@@ -321,13 +379,18 @@ import ReplyIcon from '../UI/ReplyIcon.vue';
 import EditIcon from '../UI/EditIcon.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import UnpinIcon from '../UI/UnpinIcon.vue';
+import { stripHtml } from '../../utils/stripHtml';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
   media: () => []
 });
 
-const emits = defineEmits(['unmount-edit-message-id']);
+const emits = defineEmits([
+  'unmount-edit-message-id',
+  'unmount-reply-message-id',
+  'unmount-navigate-message-id'
+]);
 
 const messageArticleStyles = (type?: MediaTypeType) => [
   'message__article',
@@ -381,6 +444,15 @@ const handleDeleteMessage = async (): Promise<void> => {
 const handleEditMessage = () => {
   emits('unmount-edit-message-id', props.messageId);
   closeActivePopover(props.messageId);
+};
+
+const handleReplyMessage = () => {
+  emits('unmount-reply-message-id', props.messageId);
+  closeActivePopover(props.messageId);
+};
+
+const handleNavigateMessage = () => {
+  emits('unmount-navigate-message-id', props.replyMessage?.id);
 };
 
 const handlePinMessage = async () => {
