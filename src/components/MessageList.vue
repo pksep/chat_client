@@ -572,6 +572,7 @@ const clearAiMessages = () => {
 
 const handleScrollToMessage = async (messageId: string) => {
   isAutoScrollLoading = true;
+  hasNewMessage = true;
 
   nextTick(async () => {
     const messageElement = chatWrapperRef.value?.querySelector(
@@ -927,6 +928,7 @@ watch(
     fetchPinnedMessagesForTopic(route.value.id);
 
     hasOldMessage = true;
+    hasNewMessage = true;
 
     const unreadMessages = state.messages.filter(
       message => message.senderUserId !== props.user?.id && !message.isReadByMe

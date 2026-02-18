@@ -1,0 +1,46 @@
+name: zerocracy
+on:
+  schedule:
+    - cron: '42 * * * *'
+  workflow_dispatch:
+concurrency:
+  group: zerocracy
+  cancel-in-progress: false
+jobs:
+  zerocracy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Judges
+        uses: zerocracy/judges-action@0.17.11
+        with:
+          token: ${{ secrets.ZEROCRACY_TOKEN }}
+          github-token: ${{ secrets.ZEROCRACY_PAT }}
+          repositories: pksep/chat_client
+          factbase: chatclient.fb
+
+      - name: Generate Pages
+        uses: zerocracy/pages-action@0.7.0
+        with:
+          github-token: ${{ secrets.ZEROCRACY_PAT }}
+          factbase: chatclient.fb
+
+      - name: Deploy to GH Pages
+        uses: JamesIves/github-pages-deploy-action@v4.6.0
+        with:
+          folder: pages
+          clean: false
+
+      - name: Update code on server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEV_SSH_HOST }} 
+          username: ${{ secrets.PROD_SSH_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd ~/Desktop/zerocracy/chat_client/chat_client
+            git pull

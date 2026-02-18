@@ -1,3 +1,36 @@
+## [1.12.1](https://github.com/pksep/chat_client/compare/v1.12.0...v1.12.1) (2026-02-17)
+
+
+### Bug Fixes
+
+* not markAsRead if browser not active ([78c5a42](https://github.com/pksep/chat_client/commit/78c5a423bde5081e71dfb824ffacd9338c5bed75))
+
+# [1.12.0](https://github.com/pksep/chat_client/compare/v1.11.0...v1.12.0) (2026-02-17)
+
+
+### Bug Fixes
+
+* lint ([35af413](https://github.com/pksep/chat_client/commit/35af41336ca1f2d9cb1a5be8cc5607497b75c31e))
+
+
+### Features
+
+* reply and fix styles ([69c97ee](https://github.com/pksep/chat_client/commit/69c97ee66150665b8b447c026f507ca63d3661c3))
+
+# [1.11.0](https://github.com/pksep/chat_client/compare/v1.10.1...v1.11.0) (2026-02-16)
+
+
+### Features
+
+* release ([6a196d6](https://github.com/pksep/chat_client/commit/6a196d604236abbc7e0b621a2957f1179c52586d))
+
+## [1.10.1](https://github.com/pksep/chat_client/compare/v1.10.0...v1.10.1) (2026-02-16)
+
+
+### Bug Fixes
+
+* height menu ([c2f272b](https://github.com/pksep/chat_client/commit/c2f272b131fae5073817f40e0c68539c3293fd2e))
+
 # [1.10.0](https://github.com/pksep/chat_client/compare/v1.9.0...v1.10.0) (2026-02-16)
 
 
