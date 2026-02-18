@@ -321,7 +321,7 @@ div.message-content__file {
 }
 
 .message__content__articles:has(.message__article__text) {
-  max-width: calc(100% - 50px);
+  max-width: min(calc(100% - 50px), 450px);
 }
 
 .message__article__text {
