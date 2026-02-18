@@ -1,3 +1,15 @@
+## [1.12.2](https://github.com/pksep/chat_client/compare/v1.12.1...v1.12.2) (2026-02-18)
+
+
+### Bug Fixes
+
+* if tab active, not get notification ([bffa637](https://github.com/pksep/chat_client/commit/bffa637e3eba10a039e087b4c8362d3a5e6b9c86))
+* login logic ([9c81583](https://github.com/pksep/chat_client/commit/9c81583cf425234d1e44136b6441e95bffd5b6d3))
+* service-worker ([010947f](https://github.com/pksep/chat_client/commit/010947f3c851dfd82605f184394a389628785dff))
+* styles ([fe464e1](https://github.com/pksep/chat_client/commit/fe464e1f00a1ffbc91a1d78e39d6f585aa627bdc))
+* styles ([e3b42cd](https://github.com/pksep/chat_client/commit/e3b42cd18a8cdda150d8d58dbffa355b5d3538b0))
+* styles and scroll ([e147fe6](https://github.com/pksep/chat_client/commit/e147fe60f39107381d1da4224577e47d57df3469))
+
 ## [1.12.1](https://github.com/pksep/chat_client/compare/v1.12.0...v1.12.1) (2026-02-17)
 
 
