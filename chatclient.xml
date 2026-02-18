@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="74089">
+<fb version="0.19.6" size="74325">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <error t="S">undefined method '[]' for nil</error>
     <inserted t="I">8</inserted>
-    <seconds t="F">5.003493698</seconds>
+    <seconds t="F">10.034509702</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-02-18T07:39:03Z</when>
+    <when t="T">2026-02-18T08:09:01Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -4277,13 +4277,23 @@
     <when t="T">2026-02-18T06:41:47Z</when>
   </f>
   <f>
-    <_id t="I">199</_id>
-    <_job t="I">22130883013</_job>
-    <_time t="T">2026-02-18T07:39:01Z</_time>
+    <_id t="I">200</_id>
+    <_job t="I">61863</_job>
+    <_time t="T">2026-02-18T07:39:22Z</_time>
+    <_version t="S">0.19.4/0.59.0/0.17.11</_version>
+    <analyzers t="I">18</analyzers>
+    <text t="S">The average monthly turnover (2.0 developers) is increasing (R=0.71).</text>
+    <what t="S">assessment</what>
+    <when t="T">2026-02-18T07:39:22Z</when>
+  </f>
+  <f>
+    <_id t="I">201</_id>
+    <_job t="I">22131648917</_job>
+    <_time t="T">2026-02-18T08:08:57Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <earliest_issue_was_found t="I">1</earliest_issue_was_found>
     <latest_issue_was_found t="I">72</latest_issue_was_found>
-    <min_pull_was_found t="I">24</min_pull_was_found>
+    <min_pull_was_found t="I">25</min_pull_was_found>
     <repository t="I">1053332035</repository>
     <what t="S">iterate</what>
     <where t="S">github</where>
