@@ -609,6 +609,7 @@ const messageChat = (role: string) => [
 ];
 
 const handleSetEditMessage = (messageId?: string) => {
+  contentEditorRef.value?.focus();
   state.replyMessage = null;
   state.editMessage = messageId
     ? state.messages.find(m => m.id === messageId) || null
@@ -618,6 +619,7 @@ const handleSetEditMessage = (messageId?: string) => {
 };
 
 const handleSetReplyMessage = (messageId?: string) => {
+  contentEditorRef.value?.focus();
   state.editMessage = null;
   state.replyMessage = messageId
     ? state.messages.find(m => m.id === messageId) || null
