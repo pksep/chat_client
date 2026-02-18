@@ -108,7 +108,13 @@
           :class="messageArticleStyles(MediaType.File)"
           :data-testid="`${dataTestid}-MessageBubble-Article`"
         >
-          <div style="margin-bottom: -13px">
+          <div
+            v-if="
+              (!props.isMeSender && route.type !== RouteTypes.DIALOGS) ||
+              !!props.replyMessage
+            "
+            style="margin-bottom: -13px"
+          >
             <h3
               style="margin-bottom: 5px"
               class="message__article-initals"
