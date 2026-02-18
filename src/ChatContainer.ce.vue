@@ -40,10 +40,30 @@ const openChatContainerShow = ref(true);
 const showMobileAuth = ref(false);
 
 const { fetchAllTopics } = useTopics();
-
 const { state: isMobile } = useResizeState(MAX_W_MD);
-
 const route = useUrlWatcher();
+
+const sendFocusStateToSW = (focused: boolean) => {
+  if (!navigator.serviceWorker?.controller) return;
+
+  navigator.serviceWorker.controller.postMessage({
+    type: 'APP_FOCUS',
+    focused
+  });
+};
+
+const updateFocusState = () => {
+  const focused = !document.hidden && document.hasFocus();
+  sendFocusStateToSW(focused);
+};
+
+const initFocusTracking = () => {
+  navigator.serviceWorker?.ready.then(updateFocusState);
+
+  window.addEventListener('focus', updateFocusState);
+  window.addEventListener('blur', updateFocusState);
+  document.addEventListener('visibilitychange', updateFocusState);
+};
 
 const handleMobileAuthSuccess = (token: string) => {
   if (token) {
@@ -69,6 +89,7 @@ const runAppInitialization = async () => {
   try {
     const authData = await useAuth(tokenUrl || localToken);
     const authUserId = authData.user?.id || '';
+
     if (authUserId && !hasUserIdInSession(authUserId)) {
       saveUserIdToSession(authUserId);
     }
@@ -77,24 +98,15 @@ const runAppInitialization = async () => {
       throw new Error('Chat token is missing from auth response');
     }
 
-    const apiAddr = config.CHAT_API_DOMAIN;
-    const wsAddr = config.CHAT_WS_DOMAIN;
-
-    if (!apiAddr || !wsAddr) {
-      throw new Error('Chat API/WS URLs are not configured');
-    }
-
     await initializeChat({
       token: authData.token,
-      apiUrl: apiAddr,
-      wsUrl: wsAddr,
+      apiUrl: config.CHAT_API_DOMAIN,
+      wsUrl: config.CHAT_WS_DOMAIN,
       userId: authUserId || undefined
     });
 
     setCurrentUserId(authUserId || undefined);
-    if (authData.user) {
-      setAuthUser(authData.user);
-    }
+    if (authData.user) setAuthUser(authData.user);
 
     await Promise.all([fetchAuthUser(), fetchAllUsers()]);
 
@@ -104,8 +116,8 @@ const runAppInitialization = async () => {
         setAuthUser({
           ...fallbackUser,
           id: fallbackUser.id || '',
-          initials: fallbackUser.initials || '',
           nickname: fallbackUser.nickname || fallbackUser.id || '',
+          initials: fallbackUser.initials || '',
           avatarUrl: fallbackUser.avatarUrl || '',
           lastOnline: new Date(),
           createdAt: fallbackUser.createdAt || new Date(),
@@ -116,6 +128,7 @@ const runAppInitialization = async () => {
     }
 
     await fetchAllTopics();
+
     if (route.value.id) {
       await fetchMessagesForTopic(route.value.id);
       fetchPinnedMessagesForTopic(route.value.id);
@@ -138,16 +151,6 @@ const runAppInitialization = async () => {
       return;
     }
 
-    const attempts = Number(localStorage.getItem(REDIRECT_KEY) || 0) + 1;
-    localStorage.setItem(REDIRECT_KEY, String(attempts));
-
-    if (attempts >= MAX_REDIRECTS) {
-      localStorage.removeItem(REDIRECT_KEY);
-      console.error('Redirect blocked: too many attempts');
-      openChatContainerShow.value = false;
-      return;
-    }
-
     window.location.href =
       config.CHAT_ERP_URL +
       '?redirect=' +
@@ -161,6 +164,8 @@ const runAppInitialization = async () => {
 };
 
 onMounted(async () => {
+  initFocusTracking();
+
   const hasLocalToken = !!localStorage.getItem('erp_token');
   const hasUrlToken = window.location.href.includes('token=');
 
