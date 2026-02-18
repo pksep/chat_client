@@ -151,6 +151,16 @@ const runAppInitialization = async () => {
       return;
     }
 
+    const attempts = Number(localStorage.getItem(REDIRECT_KEY) || 0) + 1;
+    localStorage.setItem(REDIRECT_KEY, String(attempts));
+
+    if (attempts >= MAX_REDIRECTS) {
+      localStorage.removeItem(REDIRECT_KEY);
+      console.error('Redirect blocked: too many attempts');
+      openChatContainerShow.value = false;
+      return;
+    }
+
     window.location.href =
       config.CHAT_ERP_URL +
       '?redirect=' +
@@ -171,7 +181,6 @@ onMounted(async () => {
 
   if (isMobile.value && !hasLocalToken && !hasUrlToken) {
     showMobileAuth.value = true;
-    openChatContainerShow.value = false;
   } else {
     await runAppInitialization();
   }
