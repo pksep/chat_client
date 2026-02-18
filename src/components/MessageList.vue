@@ -440,8 +440,13 @@ const handleScroll = async (): Promise<void> => {
   const distanceFromBottom = scrollTop;
   const distanceFromTop = maxScroll + scrollTop;
 
-  scrollState.shouldAutoScroll = distanceFromBottom < 50;
-  scrollState.isUserScrolling = distanceFromBottom >= 50;
+  const SCROLL_DISTANCE_FOR_REQUEST =
+    (distanceFromTop - distanceFromBottom) / 2;
+
+  scrollState.shouldAutoScroll =
+    distanceFromBottom < SCROLL_DISTANCE_FOR_REQUEST;
+  scrollState.isUserScrolling =
+    distanceFromBottom >= SCROLL_DISTANCE_FOR_REQUEST;
 
   if (scrollState.isInitialLoad) {
     scrollState.isInitialLoad = false;
@@ -457,7 +462,11 @@ const handleScroll = async (): Promise<void> => {
     }, 500);
   }
 
-  if (distanceFromTop < 50 && !isScrollLoading && hasOldMessage) {
+  if (
+    distanceFromTop < SCROLL_DISTANCE_FOR_REQUEST &&
+    !isScrollLoading &&
+    hasOldMessage
+  ) {
     isScrollLoading = true;
 
     if (!getIsWebsocketConnecting()) {
@@ -468,7 +477,11 @@ const handleScroll = async (): Promise<void> => {
       hasOldMessage = result.length > 0;
     }
     isScrollLoading = false;
-  } else if (distanceFromBottom > -50 && !isScrollLoading && hasNewMessage) {
+  } else if (
+    distanceFromBottom > -SCROLL_DISTANCE_FOR_REQUEST &&
+    !isScrollLoading &&
+    hasNewMessage
+  ) {
     isScrollLoading = true;
 
     if (!getIsWebsocketConnecting()) {
@@ -521,8 +534,6 @@ watch([() => state.chatId, () => props.baseUrl], () => {
   initializeMastra();
 });
 
-let unsubscribeFromMessageChanges: (() => void) | null = null;
-
 onMounted(async () => {
   if (route.value && route.value.type === RouteTypes.AI && !state.chatId) {
     state.chatId = generateUUID();
@@ -544,11 +555,6 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  if (unsubscribeFromMessageChanges) {
-    unsubscribeFromMessageChanges();
-    unsubscribeFromMessageChanges = null;
-  }
-
   if (scrollMarkReadTimeout) {
     clearTimeout(scrollMarkReadTimeout);
     scrollMarkReadTimeout = null;
