@@ -1,25 +1,47 @@
-self.addEventListener('push', event => {
-  console.log(event);
+// ===============================
+// PUSH PRESENCE STATE
+// ===============================
+let appFocused = false;
 
-  let data = {};
-  try {
-    data = event.data?.json() || {};
-  } catch {
-    data = {
-      title: 'Новое уведомление',
-      body: event.data?.text() || ''
-    };
+// receive focus state from page
+self.addEventListener('message', event => {
+  if (event.data?.type === 'APP_FOCUS') {
+    appFocused = event.data.focused;
   }
+});
 
-  const title = data.title || 'Новое уведомление';
-  const options = {
-    body: data.body || '',
-    icon: data.icon || '/images/favicon.ico',
-    data: data.url || '/'
-  };
-
+// ===============================
+// PUSH HANDLER
+// ===============================
+self.addEventListener('push', event => {
   event.waitUntil(
     (async () => {
+      // if user is actually watching chat -> no push
+      if (appFocused) {
+        return;
+      }
+
+      let data = {};
+      try {
+        data = event.data?.json() || {};
+      } catch {
+        data = {
+          title: 'Новое сообщение',
+          body: event.data?.text() || ''
+        };
+      }
+
+      const title = data.title || 'Новое сообщение';
+
+      const options = {
+        body: data.body || '',
+        icon: data.icon || '/images/favicon.ico',
+        data: data.url || '/',
+        badge: data.icon || '/images/favicon.ico',
+        tag: data.tag || 'chat-message',
+        renotify: true
+      };
+
       await self.registration.showNotification(title, options);
     })()
   );

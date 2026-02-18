@@ -92,7 +92,10 @@
           <div class="contact-list__top">
             <MessageStatusIcons
               v-if="topic.lastMessage?.senderUserId === authedUser.id"
-              class="contact-list__message-status-icons"
+              :class="{
+                'contact-list__message-status-icons': true,
+                'is-read': topic.lastMessage?.status === MessageStatusEnum.READ
+              }"
               :message-status="topic.lastMessage?.status"
               :is-read="topic.lastMessage?.status === MessageStatusEnum.READ"
               :is-me-sender="true"

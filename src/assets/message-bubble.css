@@ -11,11 +11,13 @@
 .message__article {
   display: grid;
   gap: 4px;
-  padding: 9.5px 16px;
+  padding: 8px;
   width: 100%;
+  max-width: 100%;
   background-color: var(--message-background-color, var(--white));
   border-radius: 12px;
   align-self: start;
+  position: relative;
 }
 
 .highlighted.message__bubble {
@@ -35,7 +37,6 @@
 }
 
 .message__article__media {
-  /* padding: 4px; */
   width: max-content;
   cursor: pointer;
 }
@@ -56,6 +57,8 @@
 .message-content {
   font-size: 14px;
   color: var(--message-text-color, var(--text-black));
+  width: 100%;
+  min-width: 0;
 }
 
 .message-time {
@@ -107,6 +110,9 @@ blockquote.message-content__blockquote
     font-size: 14px;
     line-height: 17px;
     color: var(--message-text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   & p {
@@ -321,8 +327,13 @@ div.message-content__file {
 }
 
 .message__content__articles:has(.message__article__text) {
-  max-width: calc(100% - 50px);
+  max-width: min(calc(100% - 50px), 450px);
 }
+
+.message__article__text {
+  user-select: text;
+}
+
 .message__article__text .message-content {
   max-width: 100%;
 }
