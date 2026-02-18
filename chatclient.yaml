@@ -4,10 +4,10 @@
   deleted: 8
   error: undefined method '[]' for nil
   inserted: 8
-  seconds: 4.106952575
+  seconds: 21.569551283
   version: 0.60.0
   what: judges-summary
-  when: 2026-02-18 12:04:22.654852654 Z
+  when: 2026-02-18 13:53:06.337306486 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -4012,13 +4012,52 @@
   when: 2026-02-18 09:26:21.000000000 Z
   where: github
   who: 93074025
-- _id: 204
-  _job: 22138954275
-  _time: 2026-02-18 12:04:20.872577762 Z
+- _id: 205
+  _job: 22142452769
+  _time: 2026-02-18 13:52:49.086394333 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-148-2
+  details: The pull request pksep/chat_client#78 has been opened by @ekn1000.
+  event_id: 6674378739
+  event_type: PullRequestEvent
+  is_human: 1
+  issue: 78
+  repository: 1053332035
+  what: pull-was-opened
+  when: 2026-02-18 12:27:13.000000000 Z
+  where: github
+  who: 93074025
+- _id: 206
+  _job: 22142452769
+  _time: 2026-02-18 13:52:51.754525775 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-148-2
+  comments: 0
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 0
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#78 has been "pull-was-merged".
+  failed_builds: 0
+  files: 2
+  hoc: 30
+  is_human: 1
+  issue: 78
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-02-18 12:27:20.000000000 Z
+  where: github
+  who: 93074025
+- _id: 207
+  _job: 22142452769
+  _time: 2026-02-18 13:53:02.653871273 Z
   _version: 0.19.6/0.60.0/0.17.11
   earliest_issue_was_found: 1
   latest_issue_was_found: 72
-  min_pull_was_found: 29
+  min_pull_was_found: 30
   repository: 1053332035
   what: iterate
   where: github
