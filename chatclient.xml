@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="73844">
+<fb version="0.19.6" size="73846">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <error t="S">undefined method '[]' for nil</error>
     <inserted t="I">8</inserted>
-    <seconds t="F">4.218145725</seconds>
+    <seconds t="F">7.440104626</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-02-17T23:59:43Z</when>
+    <when t="T">2026-02-18T03:29:42Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -4260,12 +4260,12 @@
   </f>
   <f>
     <_id t="I">197</_id>
-    <_job t="I">22120650154</_job>
-    <_time t="T">2026-02-17T23:59:41Z</_time>
+    <_job t="I">22125303521</_job>
+    <_time t="T">2026-02-18T03:29:40Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <earliest_issue_was_found t="I">1</earliest_issue_was_found>
     <latest_issue_was_found t="I">72</latest_issue_was_found>
-    <min_pull_was_found t="I">20</min_pull_was_found>
+    <min_pull_was_found t="I">21</min_pull_was_found>
     <repository t="I">1053332035</repository>
     <what t="S">iterate</what>
     <where t="S">github</where>
