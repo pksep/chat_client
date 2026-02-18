@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="77985">
+<fb version="0.19.6" size="78000">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <error t="S">undefined method '[]' for nil</error>
     <inserted t="I">8</inserted>
-    <seconds t="F">21.317857774</seconds>
+    <seconds t="F">14.115438816</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-02-18T15:32:51Z</when>
+    <when t="T">2026-02-18T16:42:06Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -4471,6 +4471,7 @@
     <is_human t="I">1</is_human>
     <issue t="I">79</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -4497,6 +4498,7 @@
     <is_human t="I">1</is_human>
     <issue t="I">80</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -4506,12 +4508,12 @@
   </f>
   <f>
     <_id t="I">214</_id>
-    <_job t="I">22146106711</_job>
-    <_time t="T">2026-02-18T15:32:48Z</_time>
+    <_job t="I">22148678565</_job>
+    <_time t="T">2026-02-18T16:42:02Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <earliest_issue_was_found t="I">1</earliest_issue_was_found>
     <latest_issue_was_found t="I">72</latest_issue_was_found>
-    <min_pull_was_found t="I">31</min_pull_was_found>
+    <min_pull_was_found t="I">32</min_pull_was_found>
     <repository t="I">1053332035</repository>
     <what t="S">iterate</what>
     <where t="S">github</where>
