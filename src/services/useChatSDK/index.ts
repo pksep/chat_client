@@ -171,15 +171,6 @@ export class ChatSDK {
           this.handleWebSocketEvent(message);
         });
 
-        this.socket?.on('reactionUpdated', data => {
-          const message: WebSocketEvent = {
-            type: WebSocketEventType.REACTION_UPDATED,
-            payload: data,
-            timestamp: new Date()
-          };
-          this.handleWebSocketEvent(message);
-        });
-
         this.socket?.on('messagePinned', data => {
           const message: WebSocketEvent = {
             type: WebSocketEventType.MESSAGE_PINNED,
@@ -219,9 +210,6 @@ export class ChatSDK {
               break;
             case 'messageDeleted':
               mappedEventType = WebSocketEventType.MESSAGE_DELETED;
-              break;
-            case 'reactionUpdated':
-              mappedEventType = WebSocketEventType.REACTION_UPDATED;
               break;
             case 'messagePinned':
               mappedEventType = WebSocketEventType.MESSAGE_PINNED;

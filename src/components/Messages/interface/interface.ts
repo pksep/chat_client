@@ -1,4 +1,4 @@
-import { MediaTypeType } from '@pksep/zod-shared-chat';
+import { MediaTypeType, Reaction } from '@pksep/zod-shared-chat';
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
 
 export interface MessageMediaItem {
@@ -13,7 +13,7 @@ export interface MessageMediaItem {
 export interface IMessageBubbleProps {
   message: string;
   author?: string;
-  time: string;
+  time?: string;
   loader?: boolean;
   isRead?: boolean;
   isPin?: boolean;
@@ -28,6 +28,12 @@ export interface IMessageBubbleProps {
   messageId?: string;
   messageStatus?: string;
   replyMessage?: IMessage;
+  reactions?: Reaction[];
+}
+
+export interface IMessageContextMenu extends IMessageBubbleProps {
+  isOpen: any;
+  position: any;
 }
 
 export interface IMessageStatusIconsProps {

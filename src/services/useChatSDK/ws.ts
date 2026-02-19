@@ -81,9 +81,6 @@ export class ChatWS implements ChatWSInterface {
         case WebSocketEventType.DELETE_MESSAGE:
           serverEventType = 'deleteMessage';
           break;
-        case WebSocketEventType.TOGGLE_REACTION:
-          serverEventType = 'toggleReaction';
-          break;
         case WebSocketEventType.READ_MESSAGES:
           serverEventType = 'readMessages';
           break;

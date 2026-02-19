@@ -1,4 +1,4 @@
-import { Message, Topic, User, Group } from '@pksep/zod-shared-chat';
+import { Message, Topic, User, Group, Reaction } from '@pksep/zod-shared-chat';
 import { IMedia, ITopic } from 'src/components/interfaces/interfaces';
 
 export enum WebSocketEventType {
@@ -59,7 +59,7 @@ export interface WebSocketEventPayloads {
   };
   [WebSocketEventType.CHANGE_MESSAGE]: {
     data: Message;
-    type: 'NEW' | 'CHANGE' | 'DELETE';
+    type: 'NEW' | 'CHANGE' | 'DELETE' | 'PIN';
     messageId: string;
   };
   [WebSocketEventType.READ_MESSAGE]: {
@@ -77,7 +77,13 @@ export interface WebSocketEventPayloads {
     emoji: string;
     topicId: string;
   };
-  [WebSocketEventType.REACTION_UPDATED]: any;
+  [WebSocketEventType.REACTION_UPDATED]: {
+    action: 'added' | 'updated' | 'removed';
+    messageId: string;
+    reactionId?: string;
+    topicId: string;
+    reaction?: Reaction;
+  };
   [WebSocketEventType.MESSAGE_PINNED]: { messageId: string; isPin: boolean };
   [WebSocketEventType.READ_MESSAGES]: { messageIds: string[]; topicId: string };
   [WebSocketEventType.MESSAGES_READ]: { userId: string; messageIds: string[] };

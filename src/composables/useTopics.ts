@@ -113,16 +113,15 @@ export const useTopics = () => {
     const topic = [...topics.value, ...groups].find(
       topic => topic.id === topicId
     );
-
-    if (!topic.unreadMessageCount) {
-      topic.unreadMessageCount = 0;
-    }
     if (topic) {
+      if (!topic.unreadMessageCount) {
+        topic.unreadMessageCount = 0;
+      }
+
       topic.unreadMessageCount += delta;
+
+      topic.unreadMessageCount = Math.max(0, topic.unreadMessageCount);
     }
-
-    topic.unreadMessageCount = Math.max(0, topic.unreadMessageCount);
-
     topics.value = [...topics.value];
   };
 

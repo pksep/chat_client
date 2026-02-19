@@ -5,7 +5,8 @@ import {
   Topic,
   Message,
   Group,
-  Media
+  Media,
+  Reaction
 } from '@pksep/zod-shared-chat';
 
 export interface IHeaderProps {
@@ -113,6 +114,7 @@ export interface IMessage extends Message {
   media?: IMedia[];
   isReadByMe?: boolean;
   replyMessage?: IMessage;
+  reactions?: Reaction[];
   ex?: string; // "{ clientId: string }"
 }
 

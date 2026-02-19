@@ -115,6 +115,7 @@
           :data-message-id="message.id"
           :message-id="message.id"
           :reply-message="message.replyMessage"
+          :reactions="message.reactions"
           @unmount-edit-message-id="handleSetEditMessage"
           @unmount-reply-message-id="handleSetReplyMessage"
           @unmount-navigate-message-id="
@@ -363,6 +364,7 @@ const markAllVisibleAsRead = async () => {
   if (unreadMessages.length === 0) return;
 
   try {
+    if (document.hidden) return;
     await markAsRead({
       messageIds: unreadMessages.map(m => m.id),
       topicId: route.value.id
