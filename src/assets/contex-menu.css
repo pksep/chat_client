@@ -28,6 +28,21 @@
   gap: 10px;
   width: 100%;
 }
+
+.context-menu:has(.v3-emoji-picker) {
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%);
+}
+
 .context-menu--flip {
-  transform: translateX(-100%);
+  transform-origin: top right;
+}
+
+.context-menu--flip-y {
+  transform-origin: bottom left;
+}
+
+.context-menu--flip.context-menu--flip-y {
+  transform-origin: bottom right;
 }

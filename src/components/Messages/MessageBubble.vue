@@ -82,6 +82,7 @@
           v-if="!props.loader"
           :data-testid="`${dataTestid}-MessageBubble-Time`"
         >
+          <MessageEmojies :reactions="props.reactions" />
           <PinIcon
             style="width: 15px; height: 15px; margin-right: -2px"
             v-if="props.isPin"
@@ -182,6 +183,7 @@
             v-if="!props.loader && !props.file"
             :data-testid="`${dataTestid}-MessageBubble-Time`"
           >
+            <MessageEmojies :reactions="props.reactions" />
             <PinIcon
               style="width: 15px; height: 15px; margin-right: -2px"
               v-if="props.isPin"
@@ -269,6 +271,7 @@
           </div>
 
           <div class="message-time" v-if="!props.file">
+            <MessageEmojies :reactions="props.reactions" />
             <PinIcon
               style="width: 15px; height: 15px; margin-right: -2px"
               v-if="props.isPin"
@@ -292,78 +295,30 @@
       :default-index="defaultIndexSlider"
     />
 
-    <ContextMenu
-      :visible="!!isOpen[props.messageId]"
+    <MessageContextMenu
+      :is-open="isOpen"
       :position="position"
-      @unmount-close="closeActivePopover(props.messageId)"
-      :data-testid="`${dataTestid}-MessageBubble-ContextMenu`"
-    >
-      <Button
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        @click.stop="handleReplyMessage"
-        :data-testid="`${dataTestid}-MessageBubble-ReplyButton`"
-      >
-        <ReplyIcon /> Ответить
-      </Button>
-      <Button
-        v-if="props.isMeSender && !!props.message"
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        @click.stop="handleEditMessage"
-        :data-testid="`${dataTestid}-MessageBubble-EditButton`"
-      >
-        <EditIcon /> Редактировать
-      </Button>
-      <Button
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        @click.stop="handlePinMessage"
-        :data-testid="`${dataTestid}-MessageBubble-PinButton`"
-      >
-        <template v-if="!props.isPin"> <PinIcon /> Закрепить </template>
-        <template v-else> <UnpinIcon /> Открепить </template>
-      </Button>
-      <Button
-        v-if="props.isMeSender"
-        class="red-context-button"
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        @click.stop="handleOpenModal"
-        :data-testid="`${dataTestid}-MessageBubble-ReplyButton`"
-      >
-        <Icon :name="IconNameEnum.deleteSmall" /> Удалить
-      </Button>
-    </ContextMenu>
-
-    <ConfirmModal
-      :open="deleteModalOpen"
-      title="Удалить сообщение"
-      description="Вы уверены, что хотите удалить сообщение для всех участников чата?"
-      @unmount-close="handleCloseModal"
-      @unmount-confirm="handleDeleteMessage"
+      :message-id="props.messageId"
+      :topic-id="props.topicId"
+      :is-me-sender="props.isMeSender"
+      :message="props.message"
+      :is-pin="props.isPin"
+      :data-testid="dataTestid"
+      @unmount-edit-message-id="emits('unmount-edit-message-id', $event)"
+      @unmount-reply-message-id="emits('unmount-reply-message-id', $event)"
     />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import {
-  Avatar,
-  Button,
-  ButtonTypeEnum,
-  Icon,
-  IconNameEnum,
-  SizesEnum
-} from '@pksep/yui';
+import { Avatar } from '@pksep/yui';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import {
   isOpen,
   position,
-  openActivePopover,
-  closeActivePopover
+  openActivePopover
 } from '../../composables/useContextMenu';
-import ContextMenu from '../ContactList/ContextMenu.vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import FileIcon from '../UI/FileIcon.vue';
 import MessageStatusIcons from './MessageStatusIcons.vue';
@@ -373,19 +328,13 @@ import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
 import { getConfig } from '../../services/useConfig';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
-import {
-  deleteMessageChat,
-  togglePinMessageChat
-} from '../../services/useChat';
 import LoadingIcon from '../UI/LoadingIcon.vue';
 import PlayIcon from '../UI/PlayIcon.vue';
 import { IMedia } from '../interfaces/interfaces';
-import ConfirmModal from '../UI/ConfirmModal.vue';
-import ReplyIcon from '../UI/ReplyIcon.vue';
-import EditIcon from '../UI/EditIcon.vue';
 import PinIcon from '../UI/PinIcon.vue';
-import UnpinIcon from '../UI/UnpinIcon.vue';
 import { stripHtml } from '../../utils/stripHtml';
+import MessageContextMenu from './MessageContextMenu.vue';
+import MessageEmojies from './MessageEmojies.vue';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -421,8 +370,6 @@ const route = useUrlWatcher();
 const sliderElementPaths = ref<string[]>([]);
 const defaultIndexSlider = ref<number>(0);
 
-const deleteModalOpen = ref<boolean>(false);
-
 const docFiles = computed(
   () => props.media?.filter(media => media.type === MediaType.File) || []
 );
@@ -431,42 +378,8 @@ const mediaFiles = computed(
   () => props.media?.filter(media => media.type !== MediaType.File) || []
 );
 
-const handleOpenModal = () => {
-  deleteModalOpen.value = true;
-};
-
-const handleCloseModal = () => {
-  deleteModalOpen.value = false;
-};
-
-const handleDeleteMessage = async (): Promise<void> => {
-  await deleteMessageChat({
-    messageId: props.messageId,
-    topicId: props.topicId
-  });
-  handleCloseModal();
-};
-
-const handleEditMessage = () => {
-  emits('unmount-edit-message-id', props.messageId);
-  closeActivePopover(props.messageId);
-};
-
-const handleReplyMessage = () => {
-  emits('unmount-reply-message-id', props.messageId);
-  closeActivePopover(props.messageId);
-};
-
 const handleNavigateMessage = () => {
   emits('unmount-navigate-message-id', props.replyMessage?.id);
-};
-
-const handlePinMessage = async () => {
-  await togglePinMessageChat({
-    messageId: props.messageId,
-    topicId: props.topicId
-  });
-  closeActivePopover(props.messageId);
 };
 
 const generateArray = (n: number): number[] => {
