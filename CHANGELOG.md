@@ -1,3 +1,10 @@
+# [1.13.0](https://github.com/pksep/chat_client/compare/v1.12.2...v1.13.0) (2026-02-19)
+
+
+### Features
+
+* add icons ([987c8ff](https://github.com/pksep/chat_client/commit/987c8ffbe36c85bee4de5aa49b1bf71cab287203))
+
 ## [1.12.2](https://github.com/pksep/chat_client/compare/v1.12.1...v1.12.2) (2026-02-18)
 
 
