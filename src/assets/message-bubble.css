@@ -67,11 +67,93 @@
   font-size: 10px;
   color: var(--message-time-color, var(--text-grey));
   align-items: center;
-  justify-self: end;
+  justify-content: end;
+  width: 100%;
   & svg.icon-yui-kit {
     display: grid;
     font-size: 20px;
   }
+}
+
+.reactions {
+  margin-right: auto;
+  display: flex;
+  gap: 4px;
+  position: relative;
+
+  & .reaction {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 2px;
+    background-color: var(--message-emoji-background, var(--blue1));
+    border-radius: 50px;
+    min-width: 20px;
+    height: 20px;
+    cursor: pointer;
+    &:has(.reaction-count) {
+      padding-inline: 4px;
+    }
+
+    & .reaction-item {
+      font-size: 12px;
+      padding-bottom: 2px;
+    }
+    & .reaction-count {
+      margin: 0;
+      font-weight: 600;
+      font-size: 10px;
+      line-height: 20px;
+      height: 20px;
+      padding-right: 1px;
+      color: var(--message-background-color, var(--white));
+    }
+  }
+}
+
+.reactions {
+}
+
+.reaction-enter-from {
+  opacity: 0;
+  transform: translateY(6px) scale(0.6);
+}
+
+.reaction-enter-active {
+  transition:
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 120ms ease;
+}
+
+.reaction-enter-to {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.reaction-leave-from {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.reaction-leave-active {
+  position: absolute;
+  transition:
+    transform 150ms cubic-bezier(0.4, 0, 1, 1),
+    opacity 120ms ease;
+}
+
+.reaction-leave-to {
+  opacity: 0;
+  transform: translateY(4px) scale(0.5);
+}
+
+.reaction-move {
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.reaction:active {
+  transform: scale(0.88);
+  transition: transform 80ms ease;
 }
 
 .full-image {
@@ -376,6 +458,7 @@ div.message-content__file {
   --message-background-color: var(--blue1);
   --message-text-color: var(--white);
   --message-time-color: var(--white);
+  --message-emoji-background: var(--white);
   --blockquote-bg-color: #9abdff;
   --blockquote-border-color: var(--white);
 }

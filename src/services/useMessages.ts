@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { getChatSDK } from './useChat';
 import { IMessage } from '../components/interfaces/interfaces';
-import { MessageStatus } from './useChatSDK/types';
+import { MessageStatus, Reaction } from './useChatSDK/types';
 import {
   changeUnreadMessageCount,
   updateLocalTopicReadStatus
@@ -161,6 +161,37 @@ export const editMessageFromLocal = (
       }
       return { ...msg, text: message.text, isPin: message.isPin, isEdit };
     }
+    return msg;
+  });
+};
+
+export const changeReactionFromLocal = (
+  topicId: string,
+  messageId: string,
+  action: string,
+  reaction?: Reaction,
+  reactionId?: string
+): void => {
+  const existingMessages = messagesStore.value[topicId] || [];
+
+  messagesStore.value[topicId] = existingMessages.map(msg => {
+    if (msg.id === messageId) {
+      if (action === 'removed') {
+        msg.reactions = msg.reactions.filter(
+          reaction => reaction.id !== reactionId
+        );
+      } else if (action === 'added') {
+        msg.reactions = [...msg.reactions, reaction];
+      } else if (action === 'updated') {
+        msg.reactions = msg.reactions.map(r => {
+          if (r.id !== reaction.id) {
+            return r;
+          }
+          return reaction;
+        });
+      }
+    }
+
     return msg;
   });
 };

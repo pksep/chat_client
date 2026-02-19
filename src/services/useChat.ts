@@ -17,6 +17,7 @@ import {
 import {
   addMessageToLocal,
   changeLocalReadStatus,
+  changeReactionFromLocal,
   deleteMessageFromLocal,
   editMessageFromLocal,
   playNotificationSound
@@ -112,6 +113,19 @@ const setupChatListeners = (): void => {
   chatSDK.subscribeToEvent(WebSocketEventType.READ_MESSAGE, ({ payload }) => {
     changeLocalReadStatus(payload.topicId, payload.messageIds, payload.userId);
   });
+
+  chatSDK.subscribeToEvent(
+    WebSocketEventType.REACTION_UPDATED,
+    ({ payload }) => {
+      changeReactionFromLocal(
+        payload.topicId,
+        payload.messageId,
+        payload.action,
+        payload.reaction,
+        payload.reactionId
+      );
+    }
+  );
 };
 
 export const initializeChat = async (options: {
@@ -268,6 +282,20 @@ export const deleteMessageChat = async (params: {
       messageId: params.messageId,
       topicId: params.topicId
     });
+  } catch (error) {
+    console.error('[ChatSDK] Failed to send message via WebSocket:', error);
+  }
+};
+
+export const setReactionMessage = async (params: {
+  messageId: string;
+  emoji: string;
+  topicId: string;
+}): Promise<void> => {
+  const sdk = getChatSDK();
+
+  try {
+    sdk.sendWebSocketEvent(WebSocketEventType.TOGGLE_REACTION, params);
   } catch (error) {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);
   }
