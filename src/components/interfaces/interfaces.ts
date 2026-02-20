@@ -31,7 +31,7 @@ export interface IHeaderEmits extends IMenuInfoEmits {
   (e: 'unmount-exit'): void;
 }
 
-export interface IUser extends User { }
+export interface IUser extends User {}
 
 export interface IGroup extends Group {
   members?: IUser[];
