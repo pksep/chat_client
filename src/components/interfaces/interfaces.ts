@@ -31,7 +31,7 @@ export interface IHeaderEmits extends IMenuInfoEmits {
   (e: 'unmount-exit'): void;
 }
 
-export interface IUser extends User {}
+export interface IUser extends User { }
 
 export interface IGroup extends Group {
   members?: IUser[];
@@ -121,4 +121,8 @@ export interface IMessage extends Message {
 export enum MobilePlatformEnum {
   ANDROID = 'android',
   APPLE = 'apple'
+}
+
+declare global {
+  const __APP_VERSION__: string;
 }

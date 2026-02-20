@@ -7,6 +7,7 @@ import {
 import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
 import basicSsl from '@vitejs/plugin-basic-ssl';
+import { version } from './package.json';
 
 export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
   const vuePlugin = vue({
@@ -71,6 +72,9 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
   const plugins: PluginOption[] = [vuePlugin, ...appPlugins];
 
   return {
+    define: {
+      __APP_VERSION__: JSON.stringify(process.env.npm_package_version || version)
+    },
     server: {
       host: '0.0.0.0',
       port: 5173
