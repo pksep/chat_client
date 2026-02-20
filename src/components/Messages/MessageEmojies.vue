@@ -7,7 +7,9 @@
         class="reaction"
         @click="handleToggleEmoji(messageReaction)"
       >
-        <div class="reaction-item">{{ emoji }}</div>
+        <div class="reaction-item">
+          {{ emoji }}
+        </div>
         <p class="reaction-count" v-if="messageReaction.count > 1">
           {{ messageReaction.count }}
         </p>
