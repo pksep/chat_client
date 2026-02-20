@@ -4,10 +4,10 @@
   deleted: 8
   error: undefined method '[]' for nil
   inserted: 8
-  seconds: 20.997265576
+  seconds: 5.638140174
   version: 0.60.0
   what: judges-summary
-  when: 2026-02-20 09:24:57.978976766 Z
+  when: 2026-02-20 10:09:30.600100965 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -3956,14 +3956,6 @@
   total_stars: 0
   what: dimensions-of-terrain
   when: 2026-02-18 06:41:47.160110958 Z
-- _id: 200
-  _job: 61863
-  _time: 2026-02-18 07:39:22.775034023 Z
-  _version: 0.19.4/0.59.0/0.17.11
-  analyzers: 18
-  text: The average monthly turnover (2.0 developers) is increasing (R=0.71).
-  what: assessment
-  when: 2026-02-18 07:39:22.796072902 Z
 - _id: 202
   _job: 22134049565
   _time: 2026-02-18 09:29:48.030811652 Z
@@ -4415,6 +4407,7 @@
   is_human: 1
   issue: 83
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -4439,19 +4432,28 @@
   is_human: 1
   issue: 84
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
   when: 2026-02-20 08:35:12.000000000 Z
   where: github
   who: 93074025
-- _id: 233
-  _job: 22218525865
-  _time: 2026-02-20 09:24:55.388882723 Z
+- _id: 234
+  _job: 62286
+  _time: 2026-02-20 09:25:22.351880551 Z
+  _version: 0.19.7/0.60.0/0.17.11!0.17.12
+  analyzers: 18
+  text: The average monthly turnover (2.0 developers) is increasing (R=0.71).
+  what: assessment
+  when: 2026-02-20 09:25:22.375941945 Z
+- _id: 235
+  _job: 22219893794
+  _time: 2026-02-20 10:09:28.656259553 Z
   _version: 0.19.6/0.60.0/0.17.11
   earliest_issue_was_found: 1
   latest_issue_was_found: 72
-  min_pull_was_found: 66
+  min_pull_was_found: 67
   repository: 1053332035
   what: iterate
   where: github
