@@ -119,7 +119,7 @@
           @unmount-edit-message-id="handleSetEditMessage"
           @unmount-reply-message-id="handleSetReplyMessage"
           @unmount-navigate-message-id="
-            handleScrollToMessage(message.replyMessage.id)
+            handleScrollToMessage(message.replyMessage)
           "
         />
       </template>
@@ -160,7 +160,7 @@
       <template v-if="!!state.editMessage" #action>
         <div
           class="chat__input__action"
-          @click="handleScrollToMessage(state.editMessage.id)"
+          @click="handleScrollToMessage(state.editMessage)"
         >
           <EditIcon />
           <div class="chat__input__action__blog">
@@ -185,7 +185,7 @@
       <template v-else-if="!!state.replyMessage" #action>
         <div
           class="chat__input__action"
-          @click="handleScrollToMessage(state.replyMessage.id)"
+          @click="handleScrollToMessage(state.replyMessage)"
         >
           <div class="chat__input__action__blog">
             <h5>В ответ {{ state.replyMessage.senderUser.initials }}</h5>
@@ -578,11 +578,15 @@ const clearAiMessages = () => {
   }
 };
 
-const handleScrollToMessage = async (messageId: string) => {
+const handleScrollToMessage = async (message: IMessage) => {
   isAutoScrollLoading = true;
   hasNewMessage = true;
 
+  if (message.topicId !== route.value.id) return;
+
   nextTick(async () => {
+    const messageId = message.id;
+
     const messageElement = chatWrapperRef.value?.querySelector(
       `[data-message-id="${messageId}"]`
     );
@@ -597,7 +601,7 @@ const handleScrollToMessage = async (messageId: string) => {
       await fetchAroundMessage(messageId).then(messages => {
         if (messages.some(m => m.id === messageId)) {
           setTimeout(() => {
-            handleScrollToMessage(messageId);
+            handleScrollToMessage(message);
           }, 300);
         }
       });

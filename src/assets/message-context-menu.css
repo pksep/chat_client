@@ -27,6 +27,7 @@
   transition: all 0.3s;
   cursor: pointer;
   line-height: 20px;
+  font-size: 20px;
 
   &:hover {
     background-color: var(--background-primary-color);
