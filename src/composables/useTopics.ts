@@ -14,6 +14,7 @@ import {
 } from '../composables/useGroup';
 import { getMessagesByTopicId } from '../services/useMessages';
 import { useUrlWatcher } from './navigation';
+import { authedUser } from './useAuth';
 
 const topics = ref<ITopic[]>([]);
 const loading = ref(false);
@@ -167,6 +168,14 @@ export const useTopics = () => {
   };
 
   const addTopicList = (value: ITopic): void => {
+    if (value.type === TopicType.DM) {
+      value.user = value.members.find(user => user.id !== authedUser.value.id);
+      value.avatarUrl = value.user?.avatarUrl;
+      value.name = value.user?.initials;
+
+      delete value.members;
+    }
+
     topics.value = [value, ...topics.value];
   };
 
