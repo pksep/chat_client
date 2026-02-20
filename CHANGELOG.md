@@ -1,3 +1,10 @@
+## [1.13.1](https://github.com/pksep/chat_client/compare/v1.13.0...v1.13.1) (2026-02-20)
+
+
+### Bug Fixes
+
+* slider and styles ([08ba466](https://github.com/pksep/chat_client/commit/08ba46635ee489351861db99ddaf98e1b01021dc))
+
 # [1.13.0](https://github.com/pksep/chat_client/compare/v1.12.2...v1.13.0) (2026-02-19)
 
 
