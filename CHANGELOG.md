@@ -1,3 +1,10 @@
+## [1.13.2](https://github.com/pksep/chat_client/compare/v1.13.1...v1.13.2) (2026-02-20)
+
+
+### Bug Fixes
+
+* new topic ([de11128](https://github.com/pksep/chat_client/commit/de111284ebcf62e1dab6abb513fcccc8d06a001a))
+
 ## [1.13.1](https://github.com/pksep/chat_client/compare/v1.13.0...v1.13.1) (2026-02-20)
 
 
