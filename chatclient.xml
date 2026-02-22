@@ -6,10 +6,10 @@
     <deleted t="I">8</deleted>
     <error t="S">undefined method '[]' for nil</error>
     <inserted t="I">8</inserted>
-    <seconds t="F">3.982910365</seconds>
+    <seconds t="F">5.919068474</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-02-22T14:03:10Z</when>
+    <when t="T">2026-02-22T14:58:30Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
