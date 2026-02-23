@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="87464">
+<fb version="0.19.6" size="87466">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <error t="S">undefined method '[]' for nil</error>
     <inserted t="I">8</inserted>
-    <seconds t="F">4.084557692</seconds>
+    <seconds t="F">7.256599413</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-02-23T10:33:28Z</when>
+    <when t="T">2026-02-23T11:26:44Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -5013,16 +5013,6 @@
     <when t="T">2026-02-21T09:01:33Z</when>
   </f>
   <f>
-    <_id t="I">248</_id>
-    <_job t="I">62439</_job>
-    <_time t="T">2026-02-21T09:57:01Z</_time>
-    <_version t="S">0.19.7/0.60.0/0.17.11!0.17.12</_version>
-    <analyzers t="I">18</analyzers>
-    <text t="S">The average monthly turnover (2.0 developers) is increasing (R=0.71).</text>
-    <what t="S">assessment</what>
-    <when t="T">2026-02-21T09:57:01Z</when>
-  </f>
-  <f>
     <_id t="I">249</_id>
     <_job t="I">22274102353</_job>
     <_time t="T">2026-02-22T09:02:04Z</_time>
@@ -5067,5 +5057,15 @@
     <total_stars t="I">0</total_stars>
     <what t="S">dimensions-of-terrain</what>
     <when t="T">2026-02-23T09:36:14Z</when>
+  </f>
+  <f>
+    <_id t="I">252</_id>
+    <_job t="I">62701</_job>
+    <_time t="T">2026-02-23T10:33:47Z</_time>
+    <_version t="S">0.19.7/0.60.0/0.17.11!0.17.12</_version>
+    <analyzers t="I">18</analyzers>
+    <text t="S">The average monthly turnover (2.0 developers) is increasing (R=0.71).</text>
+    <what t="S">assessment</what>
+    <when t="T">2026-02-23T10:33:47Z</when>
   </f>
 </fb>
