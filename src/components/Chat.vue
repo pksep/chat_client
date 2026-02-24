@@ -46,7 +46,7 @@ const messageListRef = useTemplateRef<any>('messageListRef');
 const route = useUrlWatcher();
 
 const scrollToMessage = (message: IMessage) => {
-  messageListRef.value?.scrollToMessage(message.id);
+  messageListRef.value?.scrollToMessage(message);
 };
 
 defineExpose({
