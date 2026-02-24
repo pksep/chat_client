@@ -1,3 +1,16 @@
+# [1.16.0](https://github.com/pksep/chat_client/compare/v1.15.0...v1.16.0) (2026-02-24)
+
+
+### Bug Fixes
+
+* click notification, not open in new tab ([f4a0029](https://github.com/pksep/chat_client/commit/f4a00294bc796cc6b9f3249228c9de1c65d025a4))
+* scroll to message ([9692df2](https://github.com/pksep/chat_client/commit/9692df279c3cdcfedaafc2306f646d4da59c3713))
+
+
+### Features
+
+* update yui for avatars ([1b905fc](https://github.com/pksep/chat_client/commit/1b905fc119edafb928978fc217c7b49b1fda71ad))
+
 # [1.15.0](https://github.com/pksep/chat_client/compare/v1.14.0...v1.15.0) (2026-02-20)
 
 
