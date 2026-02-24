@@ -6,7 +6,7 @@
     <div class="contact-selector__badges">
       <Badges
         v-for="contact in selectedContacts"
-        v-key="contact.id"
+        :key="contact.id"
         :text="contact.initials"
         :type="BadgesTypeEnum.blue"
         @remove="updateSelection(contact.id, false)"
