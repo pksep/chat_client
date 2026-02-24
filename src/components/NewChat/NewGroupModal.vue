@@ -175,8 +175,4 @@ const excludedContactIds = computed(() => {
   }
   return ids;
 });
-
-const handleUnselect = (...args) => {
-  console.log(args);
-};
 </script>
