@@ -77,6 +77,9 @@
         :contacts="props.filteredContacts"
         :excluded-contact-ids="excludedContactIds"
         @unmount-select-contact="handleNewContact"
+        :selected-contact-ids="
+          new Set(props.filteredContacts.map(user => user.id))
+        "
         is-button-disabled
       />
     </template>
@@ -113,7 +116,6 @@ interface ContactListInModalProps {
   addButtonClass?: string;
   listClass?: string;
   userClass?: string;
-  groupId?: string;
   excludedContactIds?: Set<string | number>;
 }
 
@@ -181,7 +183,7 @@ const addUser = (): void => {
 };
 
 const deleteUserFromChat = (userId: string) => {
-  removeUserFromGroup(props.groupId, userId);
+  removeUserFromGroup(currentGroup.value.group.id, userId);
   closeActivePopover(userId);
 };
 

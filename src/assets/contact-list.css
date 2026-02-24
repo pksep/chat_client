@@ -202,6 +202,13 @@ svg.icon-yui-kit.contact-list__read-icon {
   margin-bottom: 16px;
 }
 
+.contact-selector__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 0 10px 10px;
+}
+
 .contact-selector__list {
   max-height: 300px;
   overflow-y: auto;

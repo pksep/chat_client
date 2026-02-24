@@ -3,6 +3,15 @@
     class="contact-selector"
     :data-testid="`${props.dataTestid}-ContactSelector-Container`"
   >
+    <div class="contact-selector__badges">
+      <Badges
+        v-for="contact in selectedContacts"
+        :text="contact.initials"
+        :type="BadgesTypeEnum.blue"
+        @remove="updateSelection(contact.id, false)"
+        choosed
+      />
+    </div>
     <Search
       class="contact-selector__search"
       v-model="state.q"
@@ -66,7 +75,9 @@ import {
   Button,
   CheckboxSizeEnum,
   SizesEnum,
-  Search
+  Search,
+  BadgesTypeEnum,
+  Badges
 } from '@pksep/yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import { IUser } from '../interfaces/interfaces';
@@ -110,7 +121,10 @@ const contacts = computed(() => {
   filteredContacts = filteredContacts.filter(
     contact =>
       contact.initials.toLowerCase().includes(state.q.toLowerCase()) ||
-      contact.nickname.toLowerCase().includes(state.q.toLowerCase())
+      contact.nickname.toLowerCase().includes(state.q.toLowerCase()) ||
+      JSON.parse(contact.ex as string)
+        ?.erpInitials?.toLowerCase()
+        .includes(state.q.toLowerCase())
   );
 
   if (props.excludedContactIds && props.excludedContactIds.size > 0) {

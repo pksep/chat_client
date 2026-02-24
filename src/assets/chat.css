@@ -34,6 +34,7 @@ p.chat__nothing-paragraph {
   overflow: hidden scroll;
   display: flex;
   flex-direction: column-reverse;
+  position: relative;
 }
 
 .chat__message-bubble {
@@ -42,6 +43,25 @@ p.chat__nothing-paragraph {
   width: 100%;
   gap: 5px;
   margin-bottom: auto;
+}
+
+.chat__message-bubble__arrow-down {
+  width: 40px;
+  height: 40px;
+  background-color: var(--white);
+  border-radius: 100px;
+  box-shadow: 0px 4px 9.8px 0px #0000000d;
+  position: fixed;
+  right: 15px;
+  margin-bottom: -5px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+}
+
+.chat__message-bubble__arrow-down > svg.icon-yui-kit {
+  font-size: 18px;
 }
 
 .system-message,

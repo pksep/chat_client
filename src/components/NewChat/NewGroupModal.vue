@@ -21,6 +21,11 @@
       v-if="!isSelectedMembers"
       :contacts="contacts"
       @unmount-contact="handleOpenGroupInfo"
+      :selected-contact-ids="
+        new Set(
+          selectedContacts.filter(u => u.id !== authedUser.id).map(u => u.id)
+        )
+      "
     />
 
     <div v-else class="menu-info__modal-wrapper">
@@ -40,6 +45,9 @@
             :excluded-contact-ids="excludedContactIds"
             class="new-group__tab2-profile"
             @unmount-click-add-button="handleCloseGroupInfo"
+            :filtered-contacts="
+              selectedContacts.filter(u => u.id !== authedUser.id)
+            "
           />
         </template>
         <template #tab2>
@@ -113,6 +121,7 @@ import { useNewGroupModal } from './composables/useNewGroupModal';
 import { computed } from 'vue';
 import { getUsersList } from '../../composables/useUsers';
 import { getConfig } from '../../services/useConfig';
+import { authedUser } from '../../composables/useAuth';
 
 const props = withDefaults(defineProps<INewContactProps & { user?: IUser }>(), {
   open: false,
@@ -166,4 +175,8 @@ const excludedContactIds = computed(() => {
   }
   return ids;
 });
+
+const handleUnselect = (...args) => {
+  console.log(args);
+};
 </script>
