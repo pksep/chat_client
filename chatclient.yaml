@@ -4,10 +4,10 @@
   deleted: 8
   error: undefined method '[]' for nil
   inserted: 8
-  seconds: 19.458249199
+  seconds: 23.347666853
   version: 0.60.0
   what: judges-summary
-  when: 2026-02-24 15:37:20.421292762 Z
+  when: 2026-02-24 16:42:51.894517363 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -4902,6 +4902,7 @@
   is_human: 1
   issue: 91
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -4926,22 +4927,13 @@
   is_human: 1
   issue: 92
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
   when: 2026-02-24 14:59:56.000000000 Z
   where: github
   who: 93074025
-- _id: 269
-  _job: 22357896827
-  _time: 2026-02-24 15:37:16.255762817 Z
-  _version: 0.19.6/0.60.0/0.17.11
-  earliest_issue_was_found: 1
-  latest_issue_was_found: 72
-  min_pull_was_found: 91
-  repository: 1053332035
-  what: iterate
-  where: github
 - _id: 270
   _job: 22357896827
   _time: 2026-02-24 15:37:17.581830988 Z
@@ -4968,3 +4960,61 @@
   when: 2026-02-24 14:36:23.000000000 Z
   where: github
   who: 93074025
+- _id: 272
+  _job: 22360544655
+  _time: 2026-02-24 16:42:35.558402157 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: hot-fix-3
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#89 has been "pull-was-merged".
+  failed_builds: 0
+  files: 10
+  hoc: 123
+  is_human: 1
+  issue: 89
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-02-24 14:35:48.000000000 Z
+  where: github
+  who: 93074025
+- _id: 273
+  _job: 22360544655
+  _time: 2026-02-24 16:42:43.945257222 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: canary
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#90 has been "pull-was-merged".
+  failed_builds: 0
+  files: 10
+  hoc: 123
+  is_human: 1
+  issue: 90
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-02-24 14:36:31.000000000 Z
+  where: github
+  who: 93074025
+- _id: 274
+  _job: 22360544655
+  _time: 2026-02-24 16:42:47.379829131 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  earliest_issue_was_found: 1
+  latest_issue_was_found: 72
+  min_pull_was_found: 92
+  repository: 1053332035
+  what: iterate
+  where: github
