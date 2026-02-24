@@ -50,7 +50,6 @@
         <ContactListInModal
           :show-add-button="currentGroup.isAdmin"
           :contacts="currentGroup.members"
-          :group-id="currentGroup.group.id"
           :filtered-contacts="filteredMembers"
           :excluded-contact-ids="excludedContactIds"
           @unmount-click-add-button="handleContactClick"
