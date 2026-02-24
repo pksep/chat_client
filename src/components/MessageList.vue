@@ -124,6 +124,14 @@
         />
       </template>
     </div>
+
+    <div
+      class="chat__message-bubble__arrow-down"
+      v-if="isShowScrollToBottomButton"
+      @click="scrollToBottom"
+    >
+      <Icon :name="IconNameEnum.arrowDown" />
+    </div>
   </div>
 
   <EmptyChat
@@ -322,12 +330,20 @@ const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
 const contentEditorRef =
   useTemplateRef<typeof ContentEditor>('contentEditorRef');
-const inputText = ref('');
+
 const route = useUrlWatcher();
+
+const getLocalStorageInputText = computed(() => {
+  const inputsJson = JSON.parse(localStorage.getItem('inputs') || '{}');
+  return inputsJson[route.value.id] || '';
+});
+
+const inputText = ref(getLocalStorageInputText.value);
 
 const isAiRoute = computed(() => route.value?.type === RouteTypes.AI);
 const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
 const authUser = computed(() => getAuthUser());
+const isShowScrollToBottomButton = ref(false);
 
 const state = reactive({
   messages: computed(() => getMessagesByTopicId(route.value.id)),
@@ -429,14 +445,16 @@ const setupIntersectionObserver = () => {
 };
 
 const handleScroll = async (): Promise<void> => {
-  if (isAutoScrollLoading) {
-    return;
-  }
-
   const el = chatWrapperRef.value;
   if (!el) return;
 
   const { scrollTop, scrollHeight, clientHeight } = el;
+
+  isShowScrollToBottomButton.value = scrollTop < -200;
+
+  if (isAutoScrollLoading) {
+    return;
+  }
 
   const maxScroll = scrollHeight - clientHeight;
   const distanceFromBottom = scrollTop;
@@ -957,13 +975,36 @@ watch(
     }
 
     nextTick(() => {
+      state.editMessage = null;
+      state.replyMessage = null;
       contentEditorRef.value?.focus();
-      inputText.value = '';
+      inputText.value = getLocalStorageInputText.value;
       setupIntersectionObserver();
+      scrollToBottom();
     });
   },
   { deep: true, immediate: true }
 );
+
+const updateLocalStorageInputText = () => {
+  const inputsJson = JSON.parse(localStorage.getItem('inputs') || '{}');
+  if (inputsJson) {
+    inputsJson[route.value.id] = inputText.value;
+  }
+
+  localStorage.setItem('inputs', JSON.stringify(inputsJson));
+};
+
+watch(
+  () => inputText.value,
+  () => {
+    updateLocalStorageInputText();
+  }
+);
+
+window.onclick = () => {
+  contentEditorRef.value?.focus();
+};
 
 defineExpose({
   handleClear: clearAiMessages,
