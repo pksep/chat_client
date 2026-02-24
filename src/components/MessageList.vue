@@ -128,7 +128,7 @@
     <div
       class="chat__message-bubble__arrow-down"
       v-if="isShowScrollToBottomButton"
-      @click="scrollToBottom"
+      @click="handleScrollToButton"
     >
       <Icon :name="IconNameEnum.arrowDown" />
     </div>
@@ -707,6 +707,11 @@ watch(
     });
   }
 );
+
+const handleScrollToButton = async () => {
+  await fetchMessagesForTopic(route.value.id);
+  scrollToBottom();
+};
 
 const scrollToBottom = () => {
   if (chatWrapperRef.value) {
