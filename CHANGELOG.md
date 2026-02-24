@@ -1,3 +1,12 @@
+## [1.16.1](https://github.com/pksep/chat_client/compare/v1.16.0...v1.16.1) (2026-02-24)
+
+
+### Bug Fixes
+
+* key for v-for ([3a17ef2](https://github.com/pksep/chat_client/commit/3a17ef2ca1b378212d5a7276fc9af4ecc9c6018b))
+* lint ([3663926](https://github.com/pksep/chat_client/commit/36639262f7d173dab3dc2dc20cc812f28715956e))
+* messages media style and add button for scroll to bottom ([dd23bc2](https://github.com/pksep/chat_client/commit/dd23bc24446946aa83057e7097a382e1f8bd9606))
+
 # [1.16.0](https://github.com/pksep/chat_client/compare/v1.15.0...v1.16.0) (2026-02-24)
 
 
