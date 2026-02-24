@@ -51,27 +51,31 @@ self.addEventListener('notificationclick', event => {
   event.notification.close();
 
   event.waitUntil(
-    self.registration
-      .getNotifications()
-      .then(notifications => {
-        // Close all notifications
-        notifications.forEach(notification => notification.close());
-      })
-      .then(() => {
-        const url = event.notification.data;
+    (async () => {
+      const targetUrl = event.notification.data;
 
-        return clients
-          .matchAll({ type: 'window', includeUncontrolled: true })
-          .then(clientList => {
-            for (const client of clientList) {
-              if (client.url === url && 'focus' in client) {
-                return client.focus();
-              }
-            }
-            if (clients.openWindow) {
-              return clients.openWindow(url);
-            }
-          });
-      })
+      const clientList = await clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true
+      });
+
+      // Try to find already opened PWA window
+      for (const client of clientList) {
+        // Check if it's YOUR app (same origin)
+        if (new URL(client.url).origin === self.location.origin) {
+          await client.focus();
+
+          // Navigate existing tab to saved URL
+          if ('navigate' in client) {
+            await client.navigate(targetUrl);
+          }
+
+          return; // STOP — do not open new tab
+        }
+      }
+
+      // If no PWA window exists → open new
+      await clients.openWindow(targetUrl);
+    })()
   );
 });
