@@ -1,3 +1,7 @@
+.message-context-menu {
+  position: fixed;
+}
+
 .select-reactions {
   position: absolute;
   left: 0;
