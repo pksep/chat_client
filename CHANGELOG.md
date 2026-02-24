@@ -1,3 +1,10 @@
+## [1.16.2](https://github.com/pksep/chat_client/compare/v1.16.1...v1.16.2) (2026-02-24)
+
+
+### Bug Fixes
+
+* messages scroll ([2c3246f](https://github.com/pksep/chat_client/commit/2c3246f02192fba2a5d12af6bc94f9db2f8fc696))
+
 ## [1.16.1](https://github.com/pksep/chat_client/compare/v1.16.0...v1.16.1) (2026-02-24)
 
 
