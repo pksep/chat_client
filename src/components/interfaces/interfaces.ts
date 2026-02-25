@@ -31,6 +31,10 @@ export interface IHeaderEmits extends IMenuInfoEmits {
   (e: 'unmount-exit'): void;
 }
 
+export interface ITopicPropsEmits {
+  (e: 'unmount-select', topic?: ITopic): void;
+}
+
 export interface IUser extends User {}
 
 export interface IGroup extends Group {
@@ -114,6 +118,7 @@ export interface IMessage extends Message {
   media?: IMedia[];
   isReadByMe?: boolean;
   replyMessage?: IMessage;
+  forwardUser?: IUser;
   reactions?: Reaction[];
   ex?: string; // "{ clientId: string }"
 }
@@ -121,6 +126,11 @@ export interface IMessage extends Message {
 export enum MobilePlatformEnum {
   ANDROID = 'android',
   APPLE = 'apple'
+}
+
+export interface ITopicSelectorProps {
+  topic?: ITopic | null;
+  dataTestid?: string;
 }
 
 declare global {

@@ -15,7 +15,6 @@
         class="mobile__list-modal__contact-selector"
         :is-add-one="props.isAddOne"
         is-button-disabled
-        :contacts="filteredContacts"
         :selected-contact-ids="props.selectedContactIds"
         :excluded-contact-ids="props.excludedContactIds"
         @unmount-contact="handleCheckUsers"
@@ -78,17 +77,6 @@ const {
   handleOpenGroupInfo,
   handleCloseGroupInfo
 } = useNewGroupModal(props, emits);
-
-const filteredContacts = computed<IUser[]>(() => {
-  return props.contacts.filter(
-    contact =>
-      contact &&
-      typeof contact === 'object' &&
-      'initials' in contact &&
-      'nickname' in contact &&
-      'lastOnline' in contact
-  ) as IUser[];
-});
 
 const filteredSelectedContacts = computed<IUser[]>(() => {
   return selectedContacts.value.filter(

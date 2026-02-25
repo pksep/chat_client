@@ -115,9 +115,11 @@
           :data-message-id="message.id"
           :message-id="message.id"
           :reply-message="message.replyMessage"
+          :forward-user="message.forwardUser"
           :reactions="message.reactions"
           @unmount-edit-message-id="handleSetEditMessage"
           @unmount-reply-message-id="handleSetReplyMessage"
+          @unmount-forward-message="handleSetForwardMessage"
           @unmount-navigate-message-id="
             handleScrollToMessage(message.replyMessage)
           "
@@ -157,6 +159,7 @@
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
   >
     <ContentEditor
+      :active-send="!!state.forwardMessage"
       v-model="inputText"
       ref="contentEditorRef"
       active-attach-file
@@ -205,6 +208,29 @@
             :type="ButtonTypeEnum.ghost"
             :size="SizesEnum.little"
             @click="handleSetReplyMessage(null)"
+            :data-testid="`${props.dataTestid}-MenuInfo-CloseButton`"
+          >
+            <Icon
+              :name="IconNameEnum.crossLarge"
+              color="var(--text-neutral-color)"
+            />
+          </Button>
+        </div>
+      </template>
+      <template v-else-if="!!state.forwardMessage" #action>
+        <div class="chat__input__action">
+          <ForwardIcon />
+          <div class="chat__input__action__blog">
+            <h5>Переслать 1 сообщение</h5>
+            <p>
+              {{ state.forwardMessage.senderUser?.initials }}:
+              {{ stripHtml(state.forwardMessage?.text || 'Вложение') }}
+            </p>
+          </div>
+          <Button
+            :type="ButtonTypeEnum.ghost"
+            :size="SizesEnum.little"
+            @click="handleSetForwardMessage(null)"
             :data-testid="`${props.dataTestid}-MenuInfo-CloseButton`"
           >
             <Icon
@@ -264,11 +290,13 @@ import type { IMessageListProps } from './interfaces/message-list';
 import { formatDay, formatTime } from '../composables/useTime';
 import type { AIMessage } from '../types/messages';
 import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
-import { MessageStatus } from '../services/useChatSDK/types';
+import { MessageStatus, TopicType } from '../services/useChatSDK/types';
 import { useUrlWatcher } from '../composables/navigation';
 import {
   navigateToAssistant,
+  navigateToDialogs,
   navigateToDialogsList,
+  navigateToGroup,
   navigateToGroupsList,
   RouteTypes
 } from '../composables/navigation/useUrlRouting';
@@ -283,11 +311,12 @@ import {
   getMessagesByTopicId
 } from '../services/useMessages';
 import { getAuthUser } from '../composables/useAuth';
-import { IMedia, IMessage } from './interfaces/interfaces';
+import { IMedia, IMessage, ITopic } from './interfaces/interfaces';
 import { fileToDataURL } from '../utils/fileToDataURL';
 import { generateUUID } from '../utils/generateUUID';
 import EditIcon from './UI/EditIcon.vue';
 import { stripHtml } from '../utils/stripHtml';
+import ForwardIcon from './UI/ForwardIcon.vue';
 
 const touchStartX = ref(0);
 const touchStartY = ref(0);
@@ -353,6 +382,7 @@ const state = reactive({
   aiMessages: [] as AIMessage[],
   editMessage: null as IMessage | null,
   replyMessage: null as IMessage | null,
+  forwardMessage: null as IMessage | null,
   errorMessage: ''
 });
 
@@ -632,9 +662,15 @@ const messageChat = (role: string) => [
   { message__other: role === 'user' }
 ];
 
-const handleSetEditMessage = (messageId?: string) => {
+const clearSellectedMessage = () => {
   contentEditorRef.value?.focus();
   state.replyMessage = null;
+  state.editMessage = null;
+  state.forwardMessage = null;
+};
+
+const handleSetEditMessage = (messageId?: string) => {
+  clearSellectedMessage();
   state.editMessage = messageId
     ? state.messages.find(m => m.id === messageId) || null
     : null;
@@ -643,11 +679,35 @@ const handleSetEditMessage = (messageId?: string) => {
 };
 
 const handleSetReplyMessage = (messageId?: string) => {
-  contentEditorRef.value?.focus();
-  state.editMessage = null;
+  clearSellectedMessage();
   state.replyMessage = messageId
     ? state.messages.find(m => m.id === messageId) || null
     : null;
+};
+
+const handleSetForwardMessage = (
+  props: {
+    message: IMessage;
+    topic: ITopic;
+  } | null
+) => {
+  clearSellectedMessage();
+  if (!props) {
+    state.forwardMessage = null;
+    return;
+  }
+  if (props.topic.type === TopicType.DM) {
+    navigateToDialogs(props.topic.id);
+  } else {
+    navigateToGroup(props.topic.id);
+  }
+  setTimeout(() => {
+    state.forwardMessage = props.message;
+  }, 0);
+
+  setTimeout(() => {
+    contentEditorRef.value?.focus();
+  }, 500);
 };
 
 watch(
@@ -757,7 +817,11 @@ const splitHtmlByLength = (
 const handleSend = async (): Promise<void> => {
   const rawText = inputText.value;
 
-  if (!rawText.trim() || rawText.trim() === '<p></p>') return;
+  if (
+    (!rawText.trim() || rawText.trim() === '<p></p>') &&
+    !state.forwardMessage
+  )
+    return;
 
   inputText.value = '';
 
@@ -818,21 +882,30 @@ const handleSend = async (): Promise<void> => {
   }
 
   try {
+    if (parts.length === 0 && !!state.forwardMessage) {
+      await sendMessageChat({
+        topicId: route.value.id,
+        text: '',
+        replyMessageId: state.replyMessage?.id,
+        forwardMessageId: state.forwardMessage?.id
+      });
+    }
     for (const part of parts) {
       await sendMessageChat({
         topicId: route.value.id,
         text: part,
-        replyMessageId: state.replyMessage?.id
+        replyMessageId: state.replyMessage?.id,
+        forwardMessageId: state.forwardMessage?.id
       });
-
-      await nextTick();
-      scrollToBottom();
     }
+
+    await nextTick();
+    scrollToBottom();
   } catch (error) {
     console.error('[ChatSDK] Failed to send message:', error);
   }
 
-  state.replyMessage = null;
+  clearSellectedMessage();
 };
 
 const handleAttachFile = async (files: FileList, isMedia = false) => {
@@ -926,7 +999,8 @@ const handleAttachFileChunk = async (files: FileList, isMedia = false) => {
       text: '',
       medias,
       ex: JSON.stringify({ clientId }),
-      replyMessageId: state.replyMessage?.id
+      replyMessageId: state.replyMessage?.id,
+      forwardMessageId: state.forwardMessage?.id
     });
 
     await nextTick();
@@ -980,9 +1054,7 @@ watch(
     }
 
     nextTick(() => {
-      state.editMessage = null;
-      state.replyMessage = null;
-      contentEditorRef.value?.focus();
+      clearSellectedMessage();
       inputText.value = getLocalStorageInputText.value;
       setupIntersectionObserver();
       scrollToBottom();

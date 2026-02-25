@@ -74,7 +74,6 @@
     <template #default>
       <ContactSelector
         class="mobile__list-modal__contact-selector"
-        :contacts="props.filteredContacts"
         :excluded-contact-ids="excludedContactIds"
         @unmount-select-contact="handleNewContact"
         :selected-contact-ids="

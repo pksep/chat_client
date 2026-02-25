@@ -28,6 +28,9 @@
         :class="messageArticleStyles()"
         :data-testid="`${dataTestid}-MessageBubble-Article`"
       >
+        <h5 v-if="props.forwardUser" class="message__article-forward-info">
+          Переслано: от {{ props.forwardUser.initials }}
+        </h5>
         <h3
           class="message__article-initals"
           v-if="!props.isMeSender && route.type !== RouteTypes.DIALOGS"
@@ -70,6 +73,7 @@
           </div>
           <template v-else-if="!props.loader">
             <div
+              @click.stop
               v-if="!!props.message"
               class="message-content__html"
               v-html="props.message"
@@ -105,6 +109,9 @@
       </article>
 
       <template v-if="!props.loader && docFiles.length > 0">
+        <h5 v-if="props.forwardUser" class="message__article-forward-info">
+          Переслано: от {{ props.forwardUser.initials }}
+        </h5>
         <article
           :class="messageArticleStyles(MediaType.File)"
           :data-testid="`${dataTestid}-MessageBubble-Article`"
@@ -202,6 +209,9 @@
       </template>
 
       <template v-if="!props.loader && mediaFiles.length > 0">
+        <h5 v-if="props.forwardUser" class="message__article-forward-info">
+          Переслано: от {{ props.forwardUser.initials }}
+        </h5>
         <article
           :class="messageArticleStyles(MediaType.Image)"
           :data-testid="`${dataTestid}-MessageBubble-Article`"
@@ -306,6 +316,7 @@
       :data-testid="dataTestid"
       @unmount-edit-message-id="emits('unmount-edit-message-id', $event)"
       @unmount-reply-message-id="emits('unmount-reply-message-id', $event)"
+      @unmount-forward-message="emits('unmount-forward-message', $event)"
     />
   </div>
 </template>
@@ -344,6 +355,7 @@ const props = withDefaults(defineProps<IMessageBubbleProps>(), {
 const emits = defineEmits([
   'unmount-edit-message-id',
   'unmount-reply-message-id',
+  'unmount-forward-message',
   'unmount-navigate-message-id'
 ]);
 
