@@ -132,3 +132,7 @@ export interface ITopicSelectorProps {
   topic?: ITopic | null;
   dataTestid?: string;
 }
+
+declare global {
+  const __APP_VERSION__: string;
+}

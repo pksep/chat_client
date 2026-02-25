@@ -1,3 +1,60 @@
+## [1.16.2](https://github.com/pksep/chat_client/compare/v1.16.1...v1.16.2) (2026-02-24)
+
+
+### Bug Fixes
+
+* messages scroll ([2c3246f](https://github.com/pksep/chat_client/commit/2c3246f02192fba2a5d12af6bc94f9db2f8fc696))
+
+## [1.16.1](https://github.com/pksep/chat_client/compare/v1.16.0...v1.16.1) (2026-02-24)
+
+
+### Bug Fixes
+
+* key for v-for ([3a17ef2](https://github.com/pksep/chat_client/commit/3a17ef2ca1b378212d5a7276fc9af4ecc9c6018b))
+* lint ([3663926](https://github.com/pksep/chat_client/commit/36639262f7d173dab3dc2dc20cc812f28715956e))
+* messages media style and add button for scroll to bottom ([dd23bc2](https://github.com/pksep/chat_client/commit/dd23bc24446946aa83057e7097a382e1f8bd9606))
+
+# [1.16.0](https://github.com/pksep/chat_client/compare/v1.15.0...v1.16.0) (2026-02-24)
+
+
+### Bug Fixes
+
+* click notification, not open in new tab ([f4a0029](https://github.com/pksep/chat_client/commit/f4a00294bc796cc6b9f3249228c9de1c65d025a4))
+* scroll to message ([9692df2](https://github.com/pksep/chat_client/commit/9692df279c3cdcfedaafc2306f646d4da59c3713))
+
+
+### Features
+
+* update yui for avatars ([1b905fc](https://github.com/pksep/chat_client/commit/1b905fc119edafb928978fc217c7b49b1fda71ad))
+
+# [1.15.0](https://github.com/pksep/chat_client/compare/v1.14.0...v1.15.0) (2026-02-20)
+
+
+### Features
+
+* release ([0624b45](https://github.com/pksep/chat_client/commit/0624b450bf352a436bae8231fd028abfefaf9742))
+
+# [1.14.0](https://github.com/pksep/chat_client/compare/v1.13.2...v1.14.0) (2026-02-20)
+
+
+### Features
+
+* sync verions ([2ad395a](https://github.com/pksep/chat_client/commit/2ad395aff6020fc24e2b1bc658e102fa7b904dda))
+
+## [1.13.2](https://github.com/pksep/chat_client/compare/v1.13.1...v1.13.2) (2026-02-20)
+
+
+### Bug Fixes
+
+* new topic ([de11128](https://github.com/pksep/chat_client/commit/de111284ebcf62e1dab6abb513fcccc8d06a001a))
+
+## [1.13.1](https://github.com/pksep/chat_client/compare/v1.13.0...v1.13.1) (2026-02-20)
+
+
+### Bug Fixes
+
+* slider and styles ([08ba466](https://github.com/pksep/chat_client/commit/08ba46635ee489351861db99ddaf98e1b01021dc))
+
 # [1.13.0](https://github.com/pksep/chat_client/compare/v1.12.2...v1.13.0) (2026-02-19)
 
 
