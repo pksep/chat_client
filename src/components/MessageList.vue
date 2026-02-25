@@ -882,6 +882,14 @@ const handleSend = async (): Promise<void> => {
   }
 
   try {
+    if (parts.length === 0 && !!state.forwardMessage) {
+      await sendMessageChat({
+        topicId: route.value.id,
+        text: '',
+        replyMessageId: state.replyMessage?.id,
+        forwardMessageId: state.forwardMessage?.id
+      });
+    }
     for (const part of parts) {
       await sendMessageChat({
         topicId: route.value.id,
@@ -889,10 +897,10 @@ const handleSend = async (): Promise<void> => {
         replyMessageId: state.replyMessage?.id,
         forwardMessageId: state.forwardMessage?.id
       });
-
-      await nextTick();
-      scrollToBottom();
     }
+
+    await nextTick();
+    scrollToBottom();
   } catch (error) {
     console.error('[ChatSDK] Failed to send message:', error);
   }
