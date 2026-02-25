@@ -14,7 +14,6 @@ export interface IContactSelectorState {
 }
 
 export interface IContactSelectorProps {
-  contacts: IUser[];
   isButtonDisabled?: boolean;
   selectedContactIds?: Set<string | number>;
   excludedContactIds?: Set<string | number>;

@@ -71,11 +71,20 @@
       </Button>
 
       <Button
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="handleOpenForwardModal"
+        :data-testid="`${props.dataTestid}-MessageBubble-PinButton`"
+      >
+        <ForwardIcon /> Переслать
+      </Button>
+
+      <Button
         v-if="props.isMeSender"
         class="red-context-button"
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.small"
-        @click.stop="handleOpenModal"
+        @click.stop="handleOpenDeleteModal"
         :data-testid="`${props.dataTestid}-MessageBubble-DeleteButton`"
       >
         <Icon :name="IconNameEnum.deleteSmall" /> Удалить
@@ -88,8 +97,14 @@
     :open="deleteModalOpen"
     title="Удалить сообщение"
     description="Вы уверены, что хотите удалить сообщение для всех участников чата?"
-    @unmount-close="handleCloseModal"
+    @unmount-close="handleCloseDeleteModal"
     @unmount-confirm="handleDeleteMessage"
+  />
+
+  <ForwardModal
+    :open="forwardModalOpen"
+    @unmount-close="handleCloseForwardModal"
+    @unmount-select-topic="handleForwardMessage"
   />
 </template>
 
@@ -121,6 +136,10 @@ import {
 
 import EmojiPicker from 'vue3-emoji-picker';
 import 'vue3-emoji-picker/css';
+import ForwardIcon from '../UI/ForwardIcon.vue';
+import ForwardModal from './ForwardModal.vue';
+import { ITopic } from '../interfaces/interfaces';
+import { getMessagesByTopicId } from '../../services/useMessages';
 
 const props = withDefaults(defineProps<IMessageContextMenu>(), {
   dataTestid: 'MessageContextMenu'
@@ -128,12 +147,16 @@ const props = withDefaults(defineProps<IMessageContextMenu>(), {
 
 const emits = defineEmits([
   'unmount-edit-message-id',
-  'unmount-reply-message-id'
+  'unmount-reply-message-id',
+  'unmount-forward-message'
 ]);
 
 const quickReactonList = computed(() => ['♥️', '🔥', '👍', '😂', '👌', '😭']);
 
+const messages = computed(() => getMessagesByTopicId(props.topicId));
+
 const deleteModalOpen = ref(false);
+const forwardModalOpen = ref(false);
 const reactionRow = ref<HTMLElement | null>(null);
 const flipReactions = ref(false);
 const showEmojies = ref(false);
@@ -156,12 +179,20 @@ watch(
   }
 );
 
-const handleOpenModal = () => {
+const handleOpenDeleteModal = () => {
   deleteModalOpen.value = true;
 };
 
-const handleCloseModal = () => {
+const handleCloseDeleteModal = () => {
   deleteModalOpen.value = false;
+};
+
+const handleOpenForwardModal = () => {
+  forwardModalOpen.value = true;
+};
+
+const handleCloseForwardModal = () => {
+  forwardModalOpen.value = false;
 };
 
 const handleDeleteMessage = async (): Promise<void> => {
@@ -170,7 +201,7 @@ const handleDeleteMessage = async (): Promise<void> => {
     topicId: props.topicId
   });
 
-  handleCloseModal();
+  handleCloseDeleteModal();
   handleClosePopover();
 };
 
@@ -181,6 +212,17 @@ const handleEditMessage = () => {
 
 const handleReplyMessage = () => {
   emits('unmount-reply-message-id', props.messageId);
+  handleClosePopover();
+};
+
+const handleForwardMessage = (topic: ITopic) => {
+  const message = messages.value.find(
+    message => message.id === props.messageId
+  );
+  emits('unmount-forward-message', {
+    message: message,
+    topic: topic
+  });
   handleClosePopover();
 };
 

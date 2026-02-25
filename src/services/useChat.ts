@@ -227,6 +227,7 @@ export const sendMessageChat = async (params: {
   text?: string;
   messageId?: string;
   replyMessageId?: string;
+  forwardMessageId?: string;
   medias?: IMedia[];
   ex?: string;
 }): Promise<void> => {
@@ -247,7 +248,8 @@ export const sendMessageChat = async (params: {
       text: params.text,
       medias: params.medias,
       ex: params.ex,
-      replyMessageId: params.replyMessageId
+      replyMessageId: params.replyMessageId,
+      forwardMessageId: params.forwardMessageId
     });
   } catch (error) {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);

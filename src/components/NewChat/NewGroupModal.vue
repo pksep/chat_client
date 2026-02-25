@@ -19,7 +19,6 @@
     </header>
     <ContactSelector
       v-if="!isSelectedMembers"
-      :contacts="contacts"
       @unmount-contact="handleOpenGroupInfo"
       :selected-contact-ids="
         new Set(
@@ -63,6 +62,7 @@
             <div>
               <h4>Название:</h4>
               <Input
+                @click.stop
                 placeholder="Название:"
                 class="minor"
                 v-model="groupName"
@@ -119,7 +119,6 @@ import ContactListInModal from '../ContactList/ContactListInModal.vue';
 import { IUser } from '../interfaces/interfaces';
 import { useNewGroupModal } from './composables/useNewGroupModal';
 import { computed } from 'vue';
-import { getUsersList } from '../../composables/useUsers';
 import { getConfig } from '../../services/useConfig';
 import { authedUser } from '../../composables/useAuth';
 
@@ -131,8 +130,6 @@ const props = withDefaults(defineProps<INewContactProps & { user?: IUser }>(), {
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
 }>();
-
-const contacts = computed(() => getUsersList());
 
 const config = getConfig();
 

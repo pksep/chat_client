@@ -50,6 +50,7 @@ export interface WebSocketEventPayloads {
     text?: string;
     medias?: IMedia[];
     replyMessageId?: string;
+    forwardMessageId?: string;
     ex?: string;
   };
   [WebSocketEventType.TOGGLE_PIN_MESSAGE]: {

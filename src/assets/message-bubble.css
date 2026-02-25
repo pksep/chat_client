@@ -32,6 +32,25 @@
   margin-bottom: -2px;
 }
 
+.message__article-forward-info {
+  margin: 0;
+  font-size: 12px;
+  color: var(--message-time-color, var(--text-grey));
+  font-weight: 400;
+  text-align: right;
+  background-color: var(--message-background-color, var(--white));
+  padding: 8px;
+  border-radius: 12px;
+  width: max-content;
+}
+
+article .message__article-forward-info {
+  padding: 0;
+  border-radius: 0;
+  background-color: transparent;
+  width: 100%;
+}
+
 .message__no-author {
   margin-left: 28px;
 }

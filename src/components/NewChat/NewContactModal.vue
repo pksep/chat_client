@@ -19,7 +19,6 @@
     </header>
     <ContactSelector
       :is-add-one="props.isAddOne"
-      :contacts="contacts"
       :excluded-contact-ids="props.excludedContactIds"
       @unmount-contact="handleNewContact"
     />
@@ -27,7 +26,6 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
 import {
   Icon,
   IconNameEnum,
@@ -40,7 +38,6 @@ import ContactSelector from './ContactSelector.vue';
 import type { INewContactProps } from './interfaces/new-contact';
 import { ITopic, IUser } from '../interfaces/interfaces';
 import { navigateToDialogs } from '../../composables/navigation';
-import { getUsersList } from '../../composables/useUsers';
 import { getChatSDK } from '../../services/useChat';
 
 const props = withDefaults(defineProps<INewContactProps>(), {
@@ -55,11 +52,6 @@ const emits = defineEmits<{
   (e: 'unmount-close'): void;
   (e: 'unmount-new-contact', contact: ITopic[] | IUser);
 }>();
-
-const contacts = computed(() => {
-  const userContacts = props.contacts || getUsersList();
-  return [...userContacts];
-});
 
 const closeModal = (): void => {
   emits('unmount-close');

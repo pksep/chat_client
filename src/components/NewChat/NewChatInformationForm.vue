@@ -4,6 +4,7 @@
     <div class="menu__info-form-block form__name">
       <label for="name" class="menu__info-title-text"> Название: </label>
       <Input
+        @click.stop
         id="name"
         class="initial"
         placeholder="Text"
