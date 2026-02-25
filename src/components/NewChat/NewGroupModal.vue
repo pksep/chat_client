@@ -118,7 +118,6 @@ import ContactListInModal from '../ContactList/ContactListInModal.vue';
 import { IUser } from '../interfaces/interfaces';
 import { useNewGroupModal } from './composables/useNewGroupModal';
 import { computed } from 'vue';
-import { getUsersList } from '../../composables/useUsers';
 import { getConfig } from '../../services/useConfig';
 import { authedUser } from '../../composables/useAuth';
 
@@ -130,8 +129,6 @@ const props = withDefaults(defineProps<INewContactProps & { user?: IUser }>(), {
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
 }>();
-
-const contacts = computed(() => getUsersList());
 
 const config = getConfig();
 
