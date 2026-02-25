@@ -19,7 +19,6 @@
     </header>
     <ContactSelector
       :is-add-one="props.isAddOne"
-      :contacts="contacts"
       :excluded-contact-ids="props.excludedContactIds"
       @unmount-contact="handleNewContact"
     />

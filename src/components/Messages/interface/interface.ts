@@ -1,5 +1,5 @@
 import { MediaTypeType, Reaction } from '@pksep/zod-shared-chat';
-import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
+import { IMedia, IMessage, IUser } from 'src/components/interfaces/interfaces';
 
 export interface MessageMediaItem {
   id: string;
@@ -28,6 +28,7 @@ export interface IMessageBubbleProps {
   messageId?: string;
   messageStatus?: string;
   replyMessage?: IMessage;
+  forwardUser?: IUser;
   reactions?: Reaction[];
 }
 
@@ -40,5 +41,10 @@ export interface IMessageStatusIconsProps {
   isRead?: boolean;
   messageStatus?: string;
   isMeSender?: boolean;
+  dataTestid?: string;
+}
+
+export interface IForwardModalProps {
+  open?: boolean;
   dataTestid?: string;
 }

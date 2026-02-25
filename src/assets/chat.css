@@ -207,6 +207,13 @@ p.chat__nothing-paragraph {
 .chat__input__action > svg {
   flex-shrink: 0;
   width: 30px;
+  color: var(--blue1);
+}
+
+@media screen and (width < 480px) {
+  .chat__input__action > svg {
+    display: none;
+  }
 }
 
 .chat__input__action > .button-yui-kit {

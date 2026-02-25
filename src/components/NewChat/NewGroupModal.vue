@@ -19,7 +19,6 @@
     </header>
     <ContactSelector
       v-if="!isSelectedMembers"
-      :contacts="contacts"
       @unmount-contact="handleOpenGroupInfo"
       :selected-contact-ids="
         new Set(
