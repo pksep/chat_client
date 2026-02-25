@@ -62,6 +62,7 @@
             <div>
               <h4>Название:</h4>
               <Input
+                @click.stop
                 placeholder="Название:"
                 class="minor"
                 v-model="groupName"
