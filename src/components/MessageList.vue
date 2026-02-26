@@ -372,7 +372,9 @@ const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
 });
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
-const unreadMessageStartRef = useTemplateRef('unreadMessageStartRef');
+const unreadMessageStartRef = useTemplateRef<HTMLDivElement[]>(
+  'unreadMessageStartRef'
+);
 const contentEditorRef =
   useTemplateRef<typeof ContentEditor>('contentEditorRef');
 
@@ -731,7 +733,7 @@ const scrollToBottom = () => {
   if (!chatWrapperRef.value) return;
 
   setTimeout(() => {
-    if (unreadMessageStartRef.value && unreadMessageStartRef.value.length > 0) {
+    if (unreadMessageStartRef.value?.length > 0) {
       const firstUnread = unreadMessageStartRef.value[0];
       const container = chatWrapperRef.value;
 
