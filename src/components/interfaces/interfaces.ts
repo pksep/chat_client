@@ -117,6 +117,7 @@ export interface IMessage extends Message {
   senderUser?: IUser;
   media?: IMedia[];
   isReadByMe?: boolean;
+  isRead?: boolean;
   replyMessage?: IMessage;
   forwardUser?: IUser;
   reactions?: Reaction[];
