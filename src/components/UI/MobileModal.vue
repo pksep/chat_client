@@ -56,7 +56,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, onUnmounted } from 'vue';
+import { useBackButton } from '../../composables/useBackButton';
 import { Modal } from '@pksep/yui';
 import Line from './Line.vue';
 import type {
@@ -148,6 +149,24 @@ const onTouchEndContent = (e: TouchEvent) => {
   isSwiping = false;
   e.stopPropagation();
 };
+
+const { addHandler, removeHandler } = useBackButton();
+
+watch(
+  () => props.open,
+  isOpen => {
+    if (isOpen) {
+      addHandler(handleCloseModal);
+    } else {
+      removeHandler(handleCloseModal);
+    }
+  },
+  { immediate: true }
+);
+
+onUnmounted(() => {
+  removeHandler(handleCloseModal);
+});
 
 watch(
   headerRef,
