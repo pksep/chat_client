@@ -50,6 +50,7 @@
     class="chat__message-wrapper"
     v-if="state.messages.length && !isAiRoute"
     ref="chatWrapperRef"
+    @vue:mounted="scrollToBottom"
     @scroll="handleScroll"
     @touchstart="onTouchStart"
     @touchend="onTouchEnd"
@@ -60,6 +61,20 @@
       :data-testid="`${props.dataTestid}-MessageList-UserMessagesContainer`"
     >
       <template v-for="(message, index) in state.messages" :key="message.id">
+        <div
+          class="chat__message-unread_messages_start"
+          ref="unreadMessageStartRef"
+          v-if="
+            !!state.messages[index - 1] &&
+            !message.isSystem &&
+            !state.messages[index - 1].isSystem &&
+            message.senderUserId !== authUser.id &&
+            !message.isReadByMe &&
+            state.messages[index - 1].isReadByMe
+          "
+        >
+          Непрочитанные сообщения
+        </div>
         <div
           :key="message.id"
           class="top-element"
@@ -357,6 +372,9 @@ const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
 });
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
+const unreadMessageStartRef = useTemplateRef<HTMLDivElement[]>(
+  'unreadMessageStartRef'
+);
 const contentEditorRef =
   useTemplateRef<typeof ContentEditor>('contentEditorRef');
 
@@ -378,7 +396,6 @@ const state = reactive({
   messages: computed(() => getMessagesByTopicId(route.value.id)),
   chatId: null as string | null,
   isLoadingMore: false,
-  limit: 50,
   aiMessages: [] as AIMessage[],
   editMessage: null as IMessage | null,
   replyMessage: null as IMessage | null,
@@ -506,10 +523,6 @@ const handleScroll = async (): Promise<void> => {
     if (scrollMarkReadTimeout) {
       clearTimeout(scrollMarkReadTimeout);
     }
-    scrollMarkReadTimeout = window.setTimeout(() => {
-      markAllVisibleAsRead();
-      scrollMarkReadTimeout = null;
-    }, 500);
   }
 
   if (
@@ -710,6 +723,29 @@ const handleSetForwardMessage = (
   }, 500);
 };
 
+const handleScrollToButton = async () => {
+  await fetchMessagesForTopic(route.value.id, { newMessages: true });
+  scrollToBottom();
+  markAllVisibleAsRead();
+};
+
+const scrollToBottom = () => {
+  if (!chatWrapperRef.value) return;
+
+  setTimeout(() => {
+    if (unreadMessageStartRef.value?.length > 0) {
+      const firstUnread = unreadMessageStartRef.value[0];
+      const container = chatWrapperRef.value;
+
+      container.scrollTop = firstUnread.offsetTop - container.offsetTop;
+      return;
+    }
+
+    chatWrapperRef.value.scrollTop =
+      chatWrapperRef.value.scrollHeight - chatWrapperRef.value.clientHeight;
+  }, 100);
+};
+
 watch(
   () => state.messages.length,
   (newLength, oldLength) => {
@@ -750,37 +786,23 @@ watch(
 );
 
 watch(
-  () => route.value,
-  () => {
-    nextTick(() => {
-      markAllVisibleAsRead();
-    });
-  },
-  { immediate: true, deep: true }
-);
+  () => state.messages.map(m => m.id),
+  (newIds, oldIds) => {
+    if (!oldIds || !chatWrapperRef.value) return;
 
-watch(
-  () => state.messages.length,
-  () => {
-    nextTick(() => {
-      markAllVisibleAsRead();
-    });
+    const oldSet = new Set(oldIds);
+
+    const containsAllOld = oldIds.every(id => newIds.includes(id));
+
+    const hasNew = newIds.some(id => !oldSet.has(id));
+
+    if (containsAllOld && hasNew && chatWrapperRef.value.scrollTop > -100) {
+      nextTick(() => {
+        scrollToBottom();
+      });
+    }
   }
 );
-
-const handleScrollToButton = async () => {
-  await fetchMessagesForTopic(route.value.id);
-  scrollToBottom();
-};
-
-const scrollToBottom = () => {
-  if (chatWrapperRef.value) {
-    setTimeout(() => {
-      chatWrapperRef.value.scrollTop =
-        chatWrapperRef.value.scrollHeight - chatWrapperRef.value.clientHeight;
-    }, 100);
-  }
-};
 
 const getMediaType = (file: File, isMedia: boolean): MediaTypeType => {
   if (!isMedia) return MediaType.File;
@@ -1032,26 +1054,14 @@ const isNewDate = (index: number, isMastra: boolean = false) => {
 
 watch(
   () => route.value,
-  () => {
+  async () => {
     if (!route.value?.id) return;
 
+    await fetchPinnedMessagesForTopic(route.value.id);
     fetchMessagesForTopic(route.value.id);
-    fetchPinnedMessagesForTopic(route.value.id);
 
     hasOldMessage = true;
     hasNewMessage = true;
-
-    const unreadMessages = state.messages.filter(
-      message => message.senderUserId !== props.user?.id && !message.isReadByMe
-    );
-    if (unreadMessages.length > 0) {
-      markAsRead({
-        messageIds: unreadMessages.map(m => m.id),
-        topicId: route.value.id
-      }).catch(error => {
-        console.warn('Failed to mark messages as read:', error);
-      });
-    }
 
     nextTick(() => {
       clearSellectedMessage();

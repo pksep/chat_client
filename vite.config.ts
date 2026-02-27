@@ -73,7 +73,9 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
 
   return {
     define: {
-      __APP_VERSION__: JSON.stringify(process.env.npm_package_version || version)
+      __APP_VERSION__: JSON.stringify(
+        process.env.npm_package_version || version
+      )
     },
     server: {
       host: '0.0.0.0',

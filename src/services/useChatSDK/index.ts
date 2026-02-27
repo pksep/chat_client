@@ -110,7 +110,6 @@ export class ChatSDK {
           resolve();
 
           fetchAllTopics();
-          fetchMessagesForTopic();
         });
 
         this.socket.on('connect_error', error => {
@@ -488,7 +487,12 @@ export class ChatSDK {
 
   async getMessages(
     topicId: string,
-    opts?: { limit?: number; lastMessageId?: string; afterMessageId?: string }
+    opts?: {
+      limit?: number;
+      lastMessageId?: string;
+      afterMessageId?: string;
+      newMessages?: boolean;
+    }
   ): Promise<Message[]> {
     return await this.message.getMessages(topicId, opts);
   }

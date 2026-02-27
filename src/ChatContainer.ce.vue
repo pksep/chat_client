@@ -130,8 +130,8 @@ const runAppInitialization = async () => {
     await fetchAllTopics();
 
     if (route.value.id) {
+      await fetchPinnedMessagesForTopic(route.value.id);
       await fetchMessagesForTopic(route.value.id);
-      fetchPinnedMessagesForTopic(route.value.id);
 
       if (route.value.type === RouteTypes.GROUP) {
         getGroupById(route.value.id);
