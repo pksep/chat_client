@@ -23,278 +23,25 @@
       :data-testid="`${dataTestid}-MessageBubble-AssistantIcon`"
     />
     <div :class="messageArticlesStyles">
-      <article
+      <MessageBubbleText
         v-if="!!props.message"
-        :class="messageArticleStyles()"
-        :data-testid="`${dataTestid}-MessageBubble-Article`"
-      >
-        <h5 v-if="props.forwardUser" class="message__article-forward-info">
-          Переслано: от {{ props.forwardUser.initials }}
-        </h5>
-        <h3
-          class="message__article-initals"
-          v-if="!props.isMeSender && route.type !== RouteTypes.DIALOGS"
-        >
-          {{ props.sender }}
-        </h3>
-        <div
-          class="message-content"
-          :data-testid="`${dataTestid}-MessageBubble-Content`"
-        >
-          <blockquote
-            v-if="!!props.replyMessage"
-            @click="handleNavigateMessage"
-            class="message-content__blockquote"
-            :data-testid="`${dataTestid}-MessageBubble-Blockquote`"
-          >
-            <div
-              class="message-content__blockquote-container"
-              :data-testid="`${dataTestid}-MessageBubble-BlockquoteContainer`"
-            >
-              <h5 :data-testid="`${dataTestid}-MessageBubble-BlockquoteAuthor`">
-                {{ props.replyMessage?.senderUser?.initials }}
-              </h5>
-              <p :data-testid="`${dataTestid}-MessageBubble-BlockquoteText`">
-                {{ stripHtml(props.replyMessage?.text || 'Вложение') }}
-              </p>
-            </div>
-          </blockquote>
-          <div
-            class="message-content__loading"
-            v-if="props.loader"
-            :data-testid="`${dataTestid}-MessageBubble-Loading`"
-          >
-            <template v-for="i in generateArray(3)" :key="i">
-              <div
-                class="message-content__loading-circle"
-                :data-testid="`${dataTestid}-MessageBubble-LoadingCircle${i}`"
-              ></div>
-            </template>
-          </div>
-          <template v-else-if="!props.loader">
-            <div
-              @click.stop
-              v-if="!!props.message"
-              class="message-content__html"
-              v-html="props.message"
-              :data-testid="`${dataTestid}-MessageBubble-MessageText`"
-            ></div>
-          </template>
-        </div>
-        <div
-          class="message-time"
-          v-if="!props.loader"
-          :data-testid="`${dataTestid}-MessageBubble-Time`"
-        >
-          <MessageEmojies :reactions="props.reactions" />
-          <PinIcon
-            style="width: 15px; height: 15px; margin-right: -2px"
-            v-if="props.isPin"
-          />
-          <span
-            v-if="props.isEdit"
-            :data-testid="`${dataTestid}-MessageBubble-Edited`"
-            >изменено</span
-          >
-          <span :data-testid="`${dataTestid}-MessageBubble-TimeText`">{{
-            props.time
-          }}</span>
-          <MessageStatusIcons
-            v-if="props.isMeSender"
-            :is-read="props.isRead"
-            :message-status="props.messageStatus"
-            :data-testid="`${dataTestid}-MessageBubble`"
-          />
-        </div>
-      </article>
+        v-bind="props"
+        @navigate-message="handleNavigateMessage"
+      />
 
-      <template v-if="!props.loader && docFiles.length > 0">
-        <h5 v-if="props.forwardUser" class="message__article-forward-info">
-          Переслано: от {{ props.forwardUser.initials }}
-        </h5>
-        <article
-          :class="messageArticleStyles(MediaType.File)"
-          :data-testid="`${dataTestid}-MessageBubble-Article`"
-        >
-          <div
-            v-if="
-              (!props.isMeSender && route.type !== RouteTypes.DIALOGS) ||
-              !!props.replyMessage
-            "
-            style="margin-bottom: -13px"
-          >
-            <h3
-              style="margin-bottom: 5px"
-              class="message__article-initals"
-              v-if="!props.isMeSender && route.type !== RouteTypes.DIALOGS"
-            >
-              {{ props.sender }}
-            </h3>
-            <blockquote
-              v-if="!!props.replyMessage"
-              @click="handleNavigateMessage"
-              class="message-content__blockquote"
-              :data-testid="`${dataTestid}-MessageBubble-Blockquote`"
-            >
-              <div
-                class="message-content__blockquote-container"
-                :data-testid="`${dataTestid}-MessageBubble-BlockquoteContainer`"
-              >
-                <h5
-                  :data-testid="`${dataTestid}-MessageBubble-BlockquoteAuthor`"
-                >
-                  {{ props.replyMessage?.senderUser?.initials }}
-                </h5>
-                <p :data-testid="`${dataTestid}-MessageBubble-BlockquoteText`">
-                  {{ stripHtml(props.replyMessage?.text || 'Вложение') }}
-                </p>
-              </div>
-            </blockquote>
-          </div>
-          <div
-            v-for="(media, i) in docFiles"
-            :key="media.id"
-            class="message-content"
-            :data-testid="`${dataTestid}-MessageBubble-Content`"
-          >
-            <div
-              @click="setSliderElement(docFiles, i)"
-              class="message-content__file"
-              :data-testid="`${dataTestid}-MessageBubble-FileContainer`"
-            >
-              <FileIcon
-                :is-me-sender="props.isMeSender"
-                :dataTestid="`${dataTestid}-MessageBubble-FileIcon`"
-                :is-loaded="!media.isLoading"
-              />
-              <div :data-testid="`${dataTestid}-MessageBubble-FileInfo`">
-                <div :data-testid="`${dataTestid}-MessageBubble-FileDetails`">
-                  <p
-                    class="message-content__file__name"
-                    :data-testid="`${dataTestid}-MessageBubble-FileName`"
-                  >
-                    {{ getShortName(media.originName) }}
-                  </p>
-                  <p
-                    class="message-content__file__size"
-                    :data-testid="`${dataTestid}-MessageBubble-FileSize`"
-                  >
-                    {{ getFormatFileSize(media.size) }}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div
-            class="message-time"
-            v-if="!props.loader && !props.file"
-            :data-testid="`${dataTestid}-MessageBubble-Time`"
-          >
-            <MessageEmojies :reactions="props.reactions" />
-            <PinIcon
-              style="width: 15px; height: 15px; margin-right: -2px"
-              v-if="props.isPin"
-            />
-            <span :data-testid="`${dataTestid}-MessageBubble-TimeText`">{{
-              props.time
-            }}</span>
-            <MessageStatusIcons
-              v-if="props.isMeSender"
-              :is-read="props.isRead"
-              :message-status="props.messageStatus"
-              :data-testid="`${dataTestid}-MessageBubble`"
-            />
-          </div>
-        </article>
-      </template>
+      <MessageBubbleFiles
+        v-if="!props.loader && docFiles.length > 0"
+        v-bind="props"
+        @navigate-message="handleNavigateMessage"
+        @set-slider="setSliderElement"
+      />
 
-      <template v-if="!props.loader && mediaFiles.length > 0">
-        <h5 v-if="props.forwardUser" class="message__article-forward-info">
-          Переслано: от {{ props.forwardUser.initials }}
-        </h5>
-        <article
-          :class="messageArticleStyles(MediaType.Image)"
-          :data-testid="`${dataTestid}-MessageBubble-Article`"
-        >
-          <h3
-            class="message__article-initals"
-            v-if="!props.isMeSender && route.type !== RouteTypes.DIALOGS"
-          >
-            {{ props.sender }}
-          </h3>
-          <blockquote
-            v-if="!!props.replyMessage"
-            @click="handleNavigateMessage"
-            class="message-content__blockquote"
-            :data-testid="`${dataTestid}-MessageBubble-Blockquote`"
-          >
-            <div
-              class="message-content__blockquote-container"
-              :data-testid="`${dataTestid}-MessageBubble-BlockquoteContainer`"
-            >
-              <h5 :data-testid="`${dataTestid}-MessageBubble-BlockquoteAuthor`">
-                {{ props.replyMessage?.senderUser?.initials || '' }}
-              </h5>
-              <p :data-testid="`${dataTestid}-MessageBubble-BlockquoteText`">
-                {{ stripHtml(props.replyMessage?.text || 'Вложение') }}
-              </p>
-            </div>
-          </blockquote>
-          <div
-            :class="`message-content message-content-${mediaFiles.length}-item`"
-            :data-testid="`${dataTestid}-MessageBubble-Content`"
-          >
-            <div
-              v-for="(media, i) in mediaFiles"
-              :key="media.id"
-              class="message-content__media"
-              :data-testid="`${dataTestid}-MessageBubble-MediaContainer`"
-            >
-              <video
-                v-if="media.type === MediaType.Video && media.localPath"
-                :src="getFullMediaPath(media)"
-              />
-
-              <img
-                v-else
-                @click="setSliderElement(mediaFiles, i)"
-                :src="getFullMediaPath(media)"
-                :alt="props.sender ? props.sender + ' image' : 'Shared image'"
-                @dragstart="handleDragStart($event, media)"
-              />
-
-              <div
-                v-if="typeof media.isLoading === 'boolean'"
-                class="message-content__media-loading"
-              >
-                <LoadingIcon :is-loaded="!media.isLoading" />
-              </div>
-
-              <div
-                v-else-if="media.type === MediaType.Video"
-                @click="setSliderElement(mediaFiles, i)"
-                class="message-content__media-video"
-              >
-                <PlayIcon />
-              </div>
-            </div>
-          </div>
-
-          <div class="message-time" v-if="!props.file">
-            <MessageEmojies :reactions="props.reactions" />
-            <PinIcon
-              style="width: 15px; height: 15px; margin-right: -2px"
-              v-if="props.isPin"
-            />
-            <span>{{ props.time }}</span>
-            <MessageStatusIcons
-              v-if="props.isMeSender"
-              :is-read="props.isRead"
-              :message-status="props.messageStatus"
-            />
-          </div>
-        </article>
-      </template>
+      <MessageBubbleMedia
+        v-if="!props.loader && mediaFiles.length > 0"
+        v-bind="props"
+        @navigate-message="handleNavigateMessage"
+        @set-slider="setSliderElement"
+      />
     </div>
     <SliderModal
       @touchstart.stop
@@ -331,21 +78,16 @@ import {
   openActivePopover
 } from '../../composables/useContextMenu';
 import type { IMessageBubbleProps } from './interface/interface';
-import FileIcon from '../UI/FileIcon.vue';
-import MessageStatusIcons from './MessageStatusIcons.vue';
-import { getFormatFileSize, getShortName } from '../../utils/getFormatFileSize';
 import { SliderModal } from '@pksep/yui';
-import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
-import { getConfig } from '../../services/useConfig';
+import { MediaType } from '@pksep/zod-shared-chat';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
-import LoadingIcon from '../UI/LoadingIcon.vue';
-import PlayIcon from '../UI/PlayIcon.vue';
 import { IMedia } from '../interfaces/interfaces';
-import PinIcon from '../UI/PinIcon.vue';
-import { stripHtml } from '../../utils/stripHtml';
 import MessageContextMenu from './MessageContextMenu.vue';
-import MessageEmojies from './MessageEmojies.vue';
+import MessageBubbleText from './MessageBubbleText.vue';
+import MessageBubbleFiles from './MessageBubbleFiles.vue';
+import MessageBubbleMedia from './MessageBubbleMedia.vue';
+import { useMessageMedia } from './composables/useMessageMedia';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -359,23 +101,12 @@ const emits = defineEmits([
   'unmount-navigate-message-id'
 ]);
 
-const messageArticleStyles = (type?: MediaTypeType) => [
-  'message__article',
-  {
-    'message__no-author': props.isMeSender,
-    message__article__media:
-      type === MediaType.Image || type === MediaType.Video,
-    message__article__file: type === MediaType.File,
-    message__article__text: !type
-  }
-];
-
 const messageArticlesStyles = computed(() => ({
   message__content__articles: true,
   message__content__articles__my: props.isMeSender
 }));
 
-const config = getConfig();
+const { getFullMediaPath, isSliderContentUrl } = useMessageMedia();
 
 const route = useUrlWatcher();
 
@@ -392,26 +123,6 @@ const mediaFiles = computed(
 
 const handleNavigateMessage = () => {
   emits('unmount-navigate-message-id', props.replyMessage?.id);
-};
-
-const generateArray = (n: number): number[] => {
-  return Array.from({ length: n });
-};
-
-const getFullMediaPath = (media: IMedia, isThumb = true) => {
-  if (media.localPath && isThumb) {
-    return media.localPath;
-  }
-
-  if (media.path.endsWith('.gif')) {
-    return `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`;
-  }
-
-  return `${config.CHAT_PATH_TO_FILE_CDN}/${isThumb ? media.thumbnailPath : media.path}`;
-};
-
-const isSliderContentUrl = (fileUrl: string) => {
-  return fileUrl?.match(/\.(jpg|jpeg|png|webp|svg|mp4|mp3|avif|pdf)$/i);
 };
 
 const setSliderElement = (medias: IMedia[], defaultIndex: number = 0) => {
@@ -459,12 +170,5 @@ const setSliderElement = (medias: IMedia[], defaultIndex: number = 0) => {
   );
 
   defaultIndexSlider.value = correctedIndex !== -1 ? correctedIndex : 0;
-};
-
-const handleDragStart = (event: DragEvent, media: IMedia) => {
-  const originalUrl = getFullMediaPath(media, false);
-
-  event.dataTransfer?.setData('text/uri-list', originalUrl);
-  event.dataTransfer?.setData('text/plain', originalUrl);
 };
 </script>
