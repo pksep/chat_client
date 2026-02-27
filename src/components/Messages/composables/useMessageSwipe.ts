@@ -1,6 +1,5 @@
 import { ref, onMounted, onUnmounted, type Ref } from 'vue';
-import { App as CapacitorApp } from '@capacitor/app';
-import type { PluginListenerHandle } from '@capacitor/core';
+import { useBackButton } from '../../../composables/useBackButton';
 import {
   navigateToAssistant,
   navigateToDialogsList,
@@ -15,7 +14,7 @@ export function useMessageSwipe(route: Ref<{ id: string; type: string }>) {
   const SWIPE_MIN = 100;
   const VERTICAL_LIMIT = 30;
 
-  let backButtonListener: PluginListenerHandle | null = null;
+  const { addHandler, removeHandler } = useBackButton();
 
   const navigateBack = () => {
     if (route.value.type === RouteTypes.AI) {
@@ -45,16 +44,12 @@ export function useMessageSwipe(route: Ref<{ id: string; type: string }>) {
     navigateBack();
   };
 
-  onMounted(async () => {
-    backButtonListener = await CapacitorApp.addListener('backButton', () => {
-      navigateBack();
-    });
+  onMounted(() => {
+    addHandler(navigateBack);
   });
 
   onUnmounted(() => {
-    if (backButtonListener) {
-      backButtonListener.remove();
-    }
+    removeHandler(navigateBack);
   });
 
   return {
