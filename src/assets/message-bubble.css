@@ -130,9 +130,6 @@ article .message__article-forward-info {
   }
 }
 
-.reactions {
-}
-
 .reaction-enter-from {
   opacity: 0;
   transform: translateY(6px) scale(0.6);
@@ -214,6 +211,7 @@ blockquote.message-content__blockquote
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 416px;
   }
 
   & p {

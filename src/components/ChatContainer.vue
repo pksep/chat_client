@@ -64,7 +64,7 @@
     />
 
     <MobileModal
-      v-if="false"
+      v-if="showDownloadModal"
       class="mobile-modal"
       headerClass="hidden"
       :show-divider="false"
@@ -134,7 +134,7 @@ const NewGroupModal = defineAsyncComponent(
   () => import('./NewChat/NewGroupModal.vue')
 );
 
-const { mobilePlatform, handleInstall } = useMobileApp();
+const { mobilePlatform, handleInstall, showDownloadModal } = useMobileApp();
 
 const route = useUrlWatcher();
 

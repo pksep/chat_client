@@ -17,7 +17,12 @@ const route = useUrlWatcher();
 
 export const fetchMessagesForTopic = async (
   topicId: string = route.value.id,
-  opts?: { lastMessageId?: string; limit?: number; afterMessageId?: string }
+  opts?: {
+    lastMessageId?: string;
+    limit?: number;
+    afterMessageId?: string;
+    newMessages?: boolean;
+  }
 ): Promise<IMessage[]> => {
   try {
     if (!topicId) return;
@@ -27,7 +32,8 @@ export const fetchMessagesForTopic = async (
     const messages = await sdk.getMessages(topicId, {
       limit: opts?.limit,
       lastMessageId: opts?.lastMessageId,
-      afterMessageId: opts?.afterMessageId
+      afterMessageId: opts?.afterMessageId,
+      newMessages: opts?.newMessages
     });
 
     const existing = getMessagesByTopicId(topicId) || [];

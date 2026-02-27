@@ -64,6 +64,17 @@ p.chat__nothing-paragraph {
   font-size: 18px;
 }
 
+.chat__message-unread_messages_start {
+  color: var(--text-neutral-color);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+  height: 20px;
+  background-color: var(--blue12);
+  border-radius: 10px;
+}
+
 .system-message,
 .date-divider {
   margin-top: 10px;
