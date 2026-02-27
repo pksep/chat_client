@@ -58,6 +58,8 @@ export function useMessageScroll(
       entries => {
         const visibleUnreadMessageIds: string[] = [];
 
+        console.log(state.messages);
+
         entries.forEach(entry => {
           if (entry.isIntersecting) {
             const messageId = entry.target.getAttribute('data-message-id');
@@ -66,7 +68,7 @@ export function useMessageScroll(
               if (
                 message &&
                 message.senderUserId !== props.user?.id &&
-                message.status !== MessageStatus.Read
+                !message.isReadByMe
               ) {
                 visibleUnreadMessageIds.push(messageId);
               }
