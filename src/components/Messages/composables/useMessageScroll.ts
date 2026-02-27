@@ -4,7 +4,6 @@ import {
   markAsRead
 } from '../../../services/useChat';
 import { fetchMessagesForTopic } from '../../../services/useMessages';
-import { MessageStatus } from '../../../services/useChatSDK/types';
 import type { IMessage } from '../../interfaces/interfaces';
 
 export function useMessageScroll(
