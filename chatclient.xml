@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="100479">
+<fb version="0.19.6" size="100779">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <error t="S">undefined method '[]' for nil</error>
     <inserted t="I">8</inserted>
-    <seconds t="F">26.550208624</seconds>
+    <seconds t="F">12.680222523</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-03-01T03:34:43Z</when>
+    <when t="T">2026-03-01T05:10:45Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -5187,16 +5187,6 @@
     <who t="I">93074025</who>
   </f>
   <f>
-    <_id t="I">261</_id>
-    <_job t="I">62860</_job>
-    <_time t="T">2026-02-24T11:27:47Z</_time>
-    <_version t="S">0.19.7/0.60.0/0.17.11!0.17.12</_version>
-    <analyzers t="I">18</analyzers>
-    <text t="S">The average monthly turnover (2.0 developers) is increasing (R=0.71).</text>
-    <what t="S">assessment</what>
-    <when t="T">2026-02-24T11:27:47Z</when>
-  </f>
-  <f>
     <_id t="I">263</_id>
     <_job t="I">22357896827</_job>
     <_time t="T">2026-02-24T15:37:04Z</_time>
@@ -5721,6 +5711,7 @@
     <is_human t="I">1</is_human>
     <issue t="I">95</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -5747,6 +5738,7 @@
     <is_human t="I">1</is_human>
     <issue t="I">96</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -5773,6 +5765,7 @@
     <is_human t="I">1</is_human>
     <issue t="I">97</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -5799,6 +5792,7 @@
     <is_human t="I">1</is_human>
     <issue t="I">99</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -5825,24 +5819,13 @@
     <is_human t="I">1</is_human>
     <issue t="I">100</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
     <when t="T">2026-02-27T14:15:37Z</when>
     <where t="S">github</where>
     <who t="I">93074025</who>
-  </f>
-  <f>
-    <_id t="I">296</_id>
-    <_job t="I">22535108187</_job>
-    <_time t="T">2026-03-01T03:34:38Z</_time>
-    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
-    <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <latest_issue_was_found t="I">72</latest_issue_was_found>
-    <min_pull_was_found t="I">95</min_pull_was_found>
-    <repository t="I">1053332035</repository>
-    <what t="S">iterate</what>
-    <where t="S">github</where>
   </f>
   <f>
     <_id t="I">297</_id>
@@ -5861,5 +5844,43 @@
     <total_stars t="I">0</total_stars>
     <what t="S">dimensions-of-terrain</what>
     <when t="T">2026-03-01T03:34:39Z</when>
+  </f>
+  <f>
+    <_id t="I">298</_id>
+    <_job t="I">63417</_job>
+    <_time t="T">2026-03-01T03:35:04Z</_time>
+    <_version t="S">0.19.8/0.60.0/0.17.11!0.17.13</_version>
+    <analyzers t="I">18</analyzers>
+    <text t="S">The average monthly turnover (2.0 developers) is increasing (R=0.71).</text>
+    <what t="S">assessment</what>
+    <when t="T">2026-03-01T03:35:04Z</when>
+  </f>
+  <f>
+    <_id t="I">299</_id>
+    <_job t="I">63417</_job>
+    <_time t="T">2026-03-01T03:35:32Z</_time>
+    <_version t="S">0.19.8/0.60.0/0.17.11!0.17.13</_version>
+    <ac t="I">0</ac>
+    <cost_of_qod t="F">0.1329890394866623</cost_of_qod>
+    <ev t="I">0</ev>
+    <pv t="I">32</pv>
+    <qod t="I">0</qod>
+    <qod_per_day t="F">20.563818748222886</qod_per_day>
+    <qod_per_sec t="F">0.0</qod_per_sec>
+    <start t="T">2026-02-17T06:25:50Z</start>
+    <what t="S">earned-value</what>
+    <when t="T">2026-03-01T03:35:32Z</when>
+  </f>
+  <f>
+    <_id t="I">300</_id>
+    <_job t="I">22536515713</_job>
+    <_time t="T">2026-03-01T05:10:41Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <earliest_issue_was_found t="I">1</earliest_issue_was_found>
+    <latest_issue_was_found t="I">72</latest_issue_was_found>
+    <min_pull_was_found t="I">96</min_pull_was_found>
+    <repository t="I">1053332035</repository>
+    <what t="S">iterate</what>
+    <where t="S">github</where>
   </f>
 </fb>

@@ -4,10 +4,10 @@
   deleted: 8
   error: undefined method '[]' for nil
   inserted: 8
-  seconds: 26.550208624
+  seconds: 12.680222523
   version: 0.60.0
   what: judges-summary
-  when: 2026-03-01 03:34:43.795113321 Z
+  when: 2026-03-01 05:10:45.583281907 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -833,7 +833,7 @@
   qod: 0
   qod_per_day: 21.017742008902
   qod_per_sec: 0
-  start: 2026-02-17 06:25:50.000000000 Z
+  start: &1 2026-02-17 06:25:50.000000000 Z
   what: earned-value
   when: 2026-02-17 06:27:43.161294317 Z
 - _id: 25
@@ -4797,14 +4797,6 @@
   when: 2026-02-24 10:39:30.000000000 Z
   where: github
   who: 93074025
-- _id: 261
-  _job: 62860
-  _time: 2026-02-24 11:27:47.387903822 Z
-  _version: 0.19.7/0.60.0/0.17.11!0.17.12
-  analyzers: 18
-  text: The average monthly turnover (2.0 developers) is increasing (R=0.71).
-  what: assessment
-  when: 2026-02-24 11:27:47.422352970 Z
 - _id: 263
   _job: 22357896827
   _time: 2026-02-24 15:37:04.583423504 Z
@@ -5282,6 +5274,7 @@
   is_human: 1
   issue: 95
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -5306,6 +5299,7 @@
   is_human: 1
   issue: 96
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -5330,6 +5324,7 @@
   is_human: 1
   issue: 97
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -5354,6 +5349,7 @@
   is_human: 1
   issue: 99
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -5378,22 +5374,13 @@
   is_human: 1
   issue: 100
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
   when: 2026-02-27 14:15:37.000000000 Z
   where: github
   who: 93074025
-- _id: 296
-  _job: 22535108187
-  _time: 2026-03-01 03:34:38.784954575 Z
-  _version: 0.19.6/0.60.0/0.17.11
-  earliest_issue_was_found: 1
-  latest_issue_was_found: 72
-  min_pull_was_found: 95
-  repository: 1053332035
-  what: iterate
-  where: github
 - _id: 297
   _job: 22535108187
   _time: 2026-03-01 03:34:39.577844577 Z
@@ -5410,3 +5397,35 @@
   total_stars: 0
   what: dimensions-of-terrain
   when: 2026-03-01 03:34:39.590360225 Z
+- _id: 298
+  _job: 63417
+  _time: 2026-03-01 03:35:04.883513629 Z
+  _version: 0.19.8/0.60.0/0.17.11!0.17.13
+  analyzers: 18
+  text: The average monthly turnover (2.0 developers) is increasing (R=0.71).
+  what: assessment
+  when: 2026-03-01 03:35:04.906029845 Z
+- _id: 299
+  _job: 63417
+  _time: 2026-03-01 03:35:32.450909083 Z
+  _version: 0.19.8/0.60.0/0.17.11!0.17.13
+  ac: 0
+  cost_of_qod: 0.1329890394866623
+  ev: 0
+  pv: 32
+  qod: 0
+  qod_per_day: 20.563818748222886
+  qod_per_sec: 0.0
+  start: *1
+  what: earned-value
+  when: 2026-03-01 03:35:32.451103944 Z
+- _id: 300
+  _job: 22536515713
+  _time: 2026-03-01 05:10:41.656347916 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  earliest_issue_was_found: 1
+  latest_issue_was_found: 72
+  min_pull_was_found: 96
+  repository: 1053332035
+  what: iterate
+  where: github
