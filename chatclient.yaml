@@ -4,10 +4,10 @@
   deleted: 8
   error: undefined method '[]' for nil
   inserted: 8
-  seconds: 12.126409966
+  seconds: 3.883381736
   version: 0.60.0
   what: judges-summary
-  when: 2026-03-02 07:36:49.925512940 Z
+  when: 2026-03-02 08:06:12.662495629 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
