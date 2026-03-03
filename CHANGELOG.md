@@ -1,3 +1,24 @@
+# [1.18.0](https://github.com/pksep/chat_client/compare/v1.17.0...v1.18.0) (2026-03-03)
+
+
+### Bug Fixes
+
+* add useBackButton logic ([82423c9](https://github.com/pksep/chat_client/commit/82423c9ba717c255f6217b15a21f9c44e100c142))
+* delete console log ([5abe481](https://github.com/pksep/chat_client/commit/5abe481efc4ea752b817df367f6ccab5767531de))
+* lint ([53788ef](https://github.com/pksep/chat_client/commit/53788efb2b57190f882db59e56b8b8573e253dd4))
+* lint ([55e7670](https://github.com/pksep/chat_client/commit/55e767084b32e5944af1e837f41358019f94f853))
+* lint ([ebdf43d](https://github.com/pksep/chat_client/commit/ebdf43d6ff7a27e25902c67d71f59192409fe906))
+* lint ([1c13d61](https://github.com/pksep/chat_client/commit/1c13d615b5f80f2dfb28bf3f78216857e5b38ec6))
+* read logic ([e5a13da](https://github.com/pksep/chat_client/commit/e5a13da47f6f1645e8278bacc177a3d52a5cd42a))
+* user avatars ([9183680](https://github.com/pksep/chat_client/commit/91836809bb1558783593f5da34092d484714656e))
+
+
+### Features
+
+* add tag user logic ([907382f](https://github.com/pksep/chat_client/commit/907382f5e4873a43f29e473edd81dca2f905beec))
+* add unread messages section ([a2d9164](https://github.com/pksep/chat_client/commit/a2d9164b0f081304fd3f730bd84a72b645d192e1))
+* refactor big components ([dffb0fb](https://github.com/pksep/chat_client/commit/dffb0fb87ee508ae890e25507cce5dd829a3b637))
+
 # [1.17.0](https://github.com/pksep/chat_client/compare/v1.16.2...v1.17.0) (2026-02-25)
 
 
