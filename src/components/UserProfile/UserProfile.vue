@@ -7,7 +7,7 @@
     @click="emits('click')"
   >
     <Avatar
-      :url="props.user.avatarUrl"
+      :url="`${config.CHAT_ERP_PATH_TO_FILE_CDN}/${props.user.avatarUrl}`"
       :alt="props.user.avatarUrl"
       class="user-profile__avatar"
       :initials="props.user.initials"
@@ -31,6 +31,9 @@
 <script lang="ts" setup>
 import { Avatar } from '@pksep/yui';
 import { IUserProfileProps } from '../interfaces/interfaces';
+import { getConfig } from '../../services/useConfig';
+
+const config = getConfig();
 
 const props = withDefaults(defineProps<IUserProfileProps>(), {
   dataTestid: () => 'UserProfile'

@@ -21,6 +21,7 @@
         <Avatar
           v-if="isCollapse && authUser"
           v-bind="authUser"
+          :url="`${config.CHAT_ERP_PATH_TO_FILE_CDN}/${authUser?.avatarUrl}`"
           is-icon
           :data-testid="`${props.dataTestid}-Menu-ProfileAvatar`"
         />
@@ -134,6 +135,7 @@ import { useContextMenu } from '../composables/useContextMenu';
 import ContextMenu from './ContactList/ContextMenu.vue';
 import MessageIcon from './UI/MessageIcon.vue';
 import GroupIcon from './UI/GroupIcon.vue';
+import { getConfig } from '../services/useConfig';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: 'Menu'
@@ -142,6 +144,8 @@ const props = withDefaults(defineProps<IMenuProps>(), {
 const { getTopicList } = useTopics();
 
 const route = useUrlWatcher();
+
+const config = getConfig();
 
 const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 
