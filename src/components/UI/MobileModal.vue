@@ -125,7 +125,6 @@ const onTouchEndHeader = (e: TouchEvent) => {
 
   if (diffY > SWIPE_CLOSE_THRESHOLD) {
     handleCloseModal();
-    console.log('Swipe down on header detected, closing modal');
   }
 
   isSwiping = false;
@@ -143,7 +142,6 @@ const onTouchEndContent = (e: TouchEvent) => {
 
   if (absX > SWIPE_CLOSE_THRESHOLD && absX > absY) {
     handleCloseModal();
-    console.log('Swipe horizontal detected, closing modal');
   }
 
   isSwiping = false;

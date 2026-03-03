@@ -26,7 +26,7 @@
         tabindex="0"
         :aria-expanded="isOpen[topic.id] ? 'true' : 'false'"
         :aria-haspopup="true"
-        @click.stop="handleClick(topic)"
+        @click="handleClick(topic)"
         @contextmenu="openActivePopover(topic.id, $event)"
         @keydown.enter="handleClick(topic)"
         @keydown.space="handleClick(topic)"
@@ -34,7 +34,7 @@
         <Avatar
           class="contact-list__avatar"
           :initials="topic.name"
-          :url="`${config.CHAT_PATH_TO_FILE_CDN}/${topic.avatarUrl}`"
+          :url="`${topic.type === TopicType.DM ? config.CHAT_ERP_PATH_TO_FILE_CDN : config.CHAT_PATH_TO_FILE_CDN}/${topic.avatarUrl}`"
           :alt="`Avatar of ${topic.name}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           is-icon
@@ -111,6 +111,13 @@
             </span>
           </div>
           <div class="contact-list__bottom">
+            <div
+              v-if="topic.taggedMe"
+              class="contact-list__notification contact-list__mention"
+              :data-testid="`${props.dataTestid}-ContactList-Mention${index + 1}`"
+            >
+              @
+            </div>
             <div
               v-if="
                 topic.unreadMessageCount > 0 &&

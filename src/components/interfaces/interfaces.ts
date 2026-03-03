@@ -53,6 +53,7 @@ export interface ITopic extends Topic {
   avatarUrl?: string;
   unreadMessageCount?: number;
   isAdmin?: boolean;
+  taggedMe?: boolean;
 }
 
 export interface IMenuProps {
@@ -90,6 +91,7 @@ export interface IChatContainerConfig {
   CHAT_WS_DOMAIN?: string;
   CHAT_ERP_URL?: string;
   CHAT_PATH_TO_FILE_CDN?: string;
+  CHAT_ERP_PATH_TO_FILE_CDN?: string;
   CHAT_URL?: string;
 }
 
@@ -122,6 +124,7 @@ export interface IMessage extends Message {
   forwardUser?: IUser;
   reactions?: Reaction[];
   ex?: string; // "{ clientId: string }"
+  taggedUserIds?: string[];
 }
 
 export enum MobilePlatformEnum {

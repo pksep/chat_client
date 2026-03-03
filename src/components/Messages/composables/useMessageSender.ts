@@ -53,13 +53,14 @@ export function useMessageSender(
     replyMessage: IMessage | null;
     forwardMessage: IMessage | null;
     errorMessage: string;
+    hideUnreadMarker: boolean;
   },
   authUser: Ref<any>,
   mastraResult: Ref<any>,
   scrollToBottom: () => void,
   clearSellectedMessage: () => void
 ) {
-  const handleSend = async (): Promise<void> => {
+  const handleSend = async (taggedUserIds?: string[]): Promise<void> => {
     const rawText = inputText.value;
 
     if (
@@ -117,6 +118,7 @@ export function useMessageSender(
         }
       }
 
+      state.hideUnreadMarker = true;
       return;
     }
 
@@ -140,9 +142,11 @@ export function useMessageSender(
           topicId: route.value.id,
           text: part,
           replyMessageId: state.replyMessage?.id,
-          forwardMessageId: state.forwardMessage?.id
+          forwardMessageId: state.forwardMessage?.id,
+          taggedUserIds
         });
       }
+      state.hideUnreadMarker = true;
 
       await nextTick();
       scrollToBottom();

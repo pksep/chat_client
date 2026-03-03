@@ -2,10 +2,6 @@ import { PushNotifications } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
 import { useChatApi } from './useApi';
 import { getCurrentUserId } from './useChat';
-import {
-  navigateToDialogs,
-  navigateToGroup
-} from '../composables/navigation/useUrlRouting';
 
 export const initPushNotifications = async () => {
   const api = useChatApi();
@@ -28,53 +24,12 @@ export const initPushNotifications = async () => {
       });
     });
 
-    PushNotifications.addListener('pushNotificationReceived', async n => {
-      console.log('Native push:', n);
-      // Если пришел silent push для очистки уведомлений (например, прочитали на другом устройстве)
-      if (n.data && n.data.action === 'CLEAR_CHAT_NOTIFICATIONS') {
-        const topicId = n.data.topicId;
-        if (topicId) {
-          try {
-            // В ОС Android/iOS пуши сохраняются с идентификаторами (id) или tag
-            // Мы передаем topicId как id/tag, поэтому ищем уведомления
-            const delivered =
-              await PushNotifications.getDeliveredNotifications();
-            const toRemove = delivered.notifications.filter(
-              note =>
-                note.data?.topicId === topicId ||
-                note.tag === topicId ||
-                String(note.id) === String(topicId)
-            );
-
-            if (toRemove.length > 0) {
-              await PushNotifications.removeDeliveredNotifications({
-                notifications: toRemove
-              });
-              console.log('Cleared notifications for topic:', topicId);
-            }
-          } catch (e) {
-            console.error('Error clearing notifications', e);
-          }
-        }
-      }
-    });
+    PushNotifications.addListener('pushNotificationReceived', n =>
+      console.log('Native push:', n)
+    );
     PushNotifications.addListener('registrationError', e =>
       console.error('Push error:', e)
     );
-
-    PushNotifications.addListener('pushNotificationActionPerformed', action => {
-      console.log('Action performed:', action);
-      const data = action.notification.data;
-      if (data?.topicId) {
-        if (data.topicType === 'GROUP') {
-          navigateToGroup(data.topicId);
-        } else {
-          navigateToDialogs(data.topicId);
-        }
-      } else if (data?.url) {
-        window.location.href = data.url;
-      }
-    });
 
     return;
   }
@@ -85,6 +40,13 @@ export const initPushNotifications = async () => {
   if (Notification.permission === 'default')
     await Notification.requestPermission();
   if (Notification.permission !== 'granted') return;
+
+  // Unregister all old service workers to ensure we always have the latest
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  for (const reg of registrations) {
+    await reg.unregister();
+    console.log('Unregistered old service worker');
+  }
 
   const registration =
     await navigator.serviceWorker.register('/service-worker.js');

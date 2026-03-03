@@ -52,6 +52,7 @@ export interface WebSocketEventPayloads {
     replyMessageId?: string;
     forwardMessageId?: string;
     ex?: string;
+    taggedUserIds?: string[];
   };
   [WebSocketEventType.TOGGLE_PIN_MESSAGE]: {
     messageId: string;
