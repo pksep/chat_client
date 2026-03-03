@@ -4,7 +4,8 @@ import { IMessage } from '../components/interfaces/interfaces';
 import { MessageStatus, Reaction } from './useChatSDK/types';
 import {
   changeUnreadMessageCount,
-  updateLocalTopicReadStatus
+  updateLocalTopicReadStatus,
+  setTopicTaggedMe
 } from '../composables/useTopics';
 import { isTopicMuted } from '../composables/useTopics';
 import { useUrlWatcher } from '../composables/navigation';
@@ -97,6 +98,14 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   const existingMessages = messagesStore.value[topicId] || [];
 
   const clientId = message.ex ? JSON.parse(message.ex)?.clientId : null;
+
+  if (
+    message.taggedUserIds?.includes(authedUser.value?.id) &&
+    message.senderUserId !== authedUser.value?.id &&
+    !message.isReadByMe
+  ) {
+    setTopicTaggedMe(topicId, true);
+  }
 
   if (!clientId) {
     messagesStore.value[topicId] = [...existingMessages, message];
@@ -207,6 +216,16 @@ export const saveMessagesToLocal = (
   messages: IMessage[]
 ): void => {
   messagesStore.value[topicId] = messages;
+
+  const isTagged = messages.some(
+    m =>
+      m.taggedUserIds?.includes(authedUser.value?.id) &&
+      m.senderUserId !== authedUser.value?.id &&
+      !m.isReadByMe
+  );
+  if (isTagged) {
+    setTopicTaggedMe(topicId, true);
+  }
 };
 
 export const getMessagesByTopicId = (topicId: string): IMessage[] => {
@@ -252,6 +271,18 @@ export const changeLocalReadStatus = (
 
   if (userId === authedUser.value.id) {
     changeUnreadMessageCount(-messageIds.length, topicId);
+
+    // Re-evaluate taggedMe status for the topic
+    const hasUnreadMentions = updatedMessages.some(
+      m =>
+        m.taggedUserIds?.includes(authedUser.value?.id) &&
+        m.senderUserId !== authedUser.value?.id &&
+        !m.isReadByMe &&
+        !messageIds.includes(m.id)
+    );
+    if (!hasUnreadMentions) {
+      setTopicTaggedMe(topicId, false);
+    }
   }
 };
 

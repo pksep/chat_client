@@ -8,6 +8,7 @@
         class="chat__message-unread_messages_start"
         ref="unreadMessageStartRef"
         v-if="
+          !props.hideUnreadMarker &&
           !!props.messages[index - 1] &&
           !message.isSystem &&
           !props.messages[index - 1].isSystem &&
@@ -83,6 +84,7 @@ interface Props {
   messages: IMessage[];
   user?: any;
   authUserId?: string;
+  hideUnreadMarker?: boolean;
 }
 
 const props = defineProps<Props>();

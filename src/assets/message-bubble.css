@@ -483,6 +483,7 @@ div.message-content__file {
 .chat__input {
   align-self: end;
   padding: 0 10px 15px 15px;
+  position: relative;
 
   .editor-content {
     max-height: 180px;
@@ -494,10 +495,74 @@ div.message-content__file {
       line-height: 17px;
     }
   }
+
+  .chat__input__users {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    background-color: var(--white);
+    padding: 10px;
+    border-radius: 10px;
+    min-height: 65px;
+    max-height: 220px;
+    overflow-y: auto;
+    width: calc(100% - 25px);
+    position: absolute;
+    bottom: calc(100% - 10px);
+    z-index: 0;
+    box-shadow: 0px 4px 9.8px 0px #0000000d;
+
+    .chat__input__users__item {
+      display: flex;
+      align-items: center;
+      padding: 4px 5px;
+      gap: 5px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.3s;
+      width: 100%;
+
+      &:hover,
+      &:active,
+      &.chat__input__users__item--active {
+        background-color: var(--primary-hover-light-color);
+      }
+
+      .avatar-yui-kit {
+        --size-avatar: 13.5px;
+      }
+
+      .user-profile__title {
+        margin: 0;
+        font-weight: 400;
+        font-size: 14px;
+        height: 14px;
+      }
+
+      .user-profile__ex {
+        display: none;
+      }
+    }
+
+    .chat__input__users__divider {
+      width: 100%;
+      min-height: 1px;
+      background-color: var(--border-color);
+    }
+  }
 }
 
 .primary-yui-kit.toolbar-button {
   color: var(--white) !important;
+}
+
+.editor-component {
+  position: relative;
+  z-index: 1;
+
+  & .link {
+    user-select: text;
+  }
 }
 
 @media screen and (width >= 480px) {
@@ -527,6 +592,10 @@ div.message-content__file {
       & .tiptap {
         padding: 5px;
       }
+    }
+
+    & .chat__input__users {
+      width: 100%;
     }
   }
 }

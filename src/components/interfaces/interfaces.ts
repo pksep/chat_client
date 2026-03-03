@@ -53,6 +53,7 @@ export interface ITopic extends Topic {
   avatarUrl?: string;
   unreadMessageCount?: number;
   isAdmin?: boolean;
+  taggedMe?: boolean;
 }
 
 export interface IMenuProps {
@@ -122,6 +123,7 @@ export interface IMessage extends Message {
   forwardUser?: IUser;
   reactions?: Reaction[];
   ex?: string; // "{ clientId: string }"
+  taggedUserIds?: string[];
 }
 
 export enum MobilePlatformEnum {

@@ -4,6 +4,7 @@
     :class="['user-profile', $attrs.class]"
     @contextmenu="handleClick"
     :data-testid="`${dataTestid}-UserProfile-Container`"
+    @click="emits('click')"
   >
     <Avatar
       :url="props.user.avatarUrl"
@@ -41,6 +42,7 @@ defineOptions({
 
 const emits = defineEmits<{
   (e: 'unmount-click', event: MouseEvent): void;
+  (e: 'click'): void;
 }>();
 
 const handleClick = (event: MouseEvent): void => {
