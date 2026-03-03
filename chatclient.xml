@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="101962">
+<fb version="0.19.6" size="101969">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <error t="S">undefined method '[]' for nil</error>
     <inserted t="I">8</inserted>
-    <seconds t="F">19.949130219</seconds>
+    <seconds t="F">6.639103207</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-03-03T09:25:21Z</when>
+    <when t="T">2026-03-03T10:23:34Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -5943,6 +5943,7 @@
     <is_human t="I">1</is_human>
     <issue t="I">101</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
