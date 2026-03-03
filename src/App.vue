@@ -14,7 +14,7 @@ const config: IChatContainerConfig = {
   CHAT_WS_DOMAIN: import.meta.env.VITE_CHAT_WS_DOMAIN,
   CHAT_ERP_URL: import.meta.env.VITE_ERP_URL,
   CHAT_PATH_TO_FILE_CDN: import.meta.env.VITE_PATH_TO_FILE_CDN,
-  CHAT_ERP_PATH_TO_FILE_CDN: import.meta.env.VITE_ERP_PATH_TO_FILE_CDN,
+  CHAT_ERP_PATH_TO_FILE_CDN: import.meta.env.VITE_ERP_PATH_TO_FILE_CDN
 };
 
 setConfig(config);
