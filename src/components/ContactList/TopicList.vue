@@ -34,7 +34,7 @@
         <Avatar
           class="contact-list__avatar"
           :initials="topic.name"
-          :url="`${config.CHAT_PATH_TO_FILE_CDN}/${topic.avatarUrl}`"
+          :url="`${topic.type === TopicType.DM ? config.CHAT_ERP_PATH_TO_FILE_CDN : config.CHAT_PATH_TO_FILE_CDN}/${topic.avatarUrl}`"
           :alt="`Avatar of ${topic.name}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           is-icon

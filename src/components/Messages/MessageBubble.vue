@@ -9,7 +9,7 @@
   >
     <Avatar
       class="message__avatar"
-      :url="props.sender"
+      :url="`${config.CHAT_ERP_PATH_TO_FILE_CDN}/${props.avatar}`"
       :alt="props.sender"
       :initials="props.sender"
       v-if="
@@ -46,9 +46,9 @@
     <SliderModal
       @touchstart.stop
       @touchend.stop
-      :open="sliderElementPaths.length > 0"
-      @close="() => (sliderElementPaths = [])"
-      :items="sliderElementPaths?.map(path => ({ path }))"
+      :open="sliderElements.length > 0"
+      @close="() => (sliderElements = [])"
+      :items="sliderElements"
       :default-index="defaultIndexSlider"
     />
 
@@ -88,6 +88,7 @@ import MessageBubbleText from './MessageBubbleText.vue';
 import MessageBubbleFiles from './MessageBubbleFiles.vue';
 import MessageBubbleMedia from './MessageBubbleMedia.vue';
 import { useMessageMedia } from './composables/useMessageMedia';
+import { getConfig } from '../../services/useConfig';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -110,7 +111,9 @@ const { getFullMediaPath, isSliderContentUrl } = useMessageMedia();
 
 const route = useUrlWatcher();
 
-const sliderElementPaths = ref<string[]>([]);
+const config = getConfig();
+
+const sliderElements = ref<{ path: string; name: string }[]>([]);
 const defaultIndexSlider = ref<number>(0);
 
 const docFiles = computed(
@@ -161,9 +164,10 @@ const setSliderElement = (medias: IMedia[], defaultIndex: number = 0) => {
     isSliderContentUrl(getFullMediaPath(media, false))
   );
 
-  sliderElementPaths.value = sliderMedias.map(media =>
-    getFullMediaPath(media, false)
-  );
+  sliderElements.value = sliderMedias.map(media => ({
+    path: getFullMediaPath(media, false),
+    name: media.originName || 'file'
+  }));
 
   const correctedIndex = sliderMedias.findIndex(
     media => media === selectedMedia
