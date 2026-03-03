@@ -133,6 +133,10 @@
   background-color: var(--text-light-color);
 }
 
+.contact-list__mention {
+  padding-bottom: 2px;
+}
+
 .contact-list__pin {
   display: flex;
   align-items: center;
@@ -166,6 +170,7 @@ svg.icon-yui-kit.contact-list__read-icon {
 
 .contact-list__bottom {
   grid-area: block2;
+  gap: 3px;
   justify-self: end;
   display: flex;
   place-content: center;

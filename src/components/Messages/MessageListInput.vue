@@ -3,14 +3,35 @@
     class="chat__input"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
   >
+    <div class="chat__input__users" v-if="state.tagedUserModal && users.length">
+      <template v-for="(user, index) in users" :key="user.id">
+        <UserProfile
+          class="chat__input__users__item"
+          :class="{
+            'chat__input__users__item--active': index === state.selectedIndex
+          }"
+          :user="user"
+          @click="selectUser(user)"
+          :data-testid="`${props.dataTestid}-MessageList-UserProfile`"
+        />
+        <div
+          v-if="index < users.length - 1"
+          class="chat__input__users__divider"
+        ></div>
+      </template>
+    </div>
     <ContentEditor
       :active-send="!!props.forwardMessage"
       v-model="internalInputText"
       ref="contentEditorRef"
       active-attach-file
-      send-on-enter
-      @unmount-send="$emit('send')"
+      active-select-user
+      :is-mention-modal-open="state.tagedUserModal"
+      :disable-send-on-enter="state.tagedUserModal"
+      @unmount-send="handleSend"
       @unmount-attach-file="(...args: any[]) => $emit('attachFile', ...args)"
+      @mention-change="handleMentionChange"
+      @keydown="handleMentionNav"
       :data-testid="`${props.dataTestid}-MessageList-ContentEditor`"
     >
       <template v-if="!!props.editMessage" #action>
@@ -90,7 +111,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, useTemplateRef } from 'vue';
+import { computed, reactive, useTemplateRef } from 'vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -103,6 +124,10 @@ import EditIcon from '../UI/EditIcon.vue';
 import ForwardIcon from '../UI/ForwardIcon.vue';
 import { stripHtml } from '../../utils/stripHtml';
 import type { IMessage } from '../interfaces/interfaces';
+import { currentGroup } from '../../composables/useGroup';
+import UserProfile from '../UserProfile/UserProfile.vue';
+import { useUrlWatcher } from '../../composables/navigation';
+import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 
 interface Props {
   dataTestid: string;
@@ -127,6 +152,95 @@ const emit = defineEmits([
 const internalInputText = computed({
   get: () => props.modelValue,
   set: val => emit('update:modelValue', val)
+});
+
+const route = useUrlWatcher();
+
+const state = reactive({
+  tagedUsers: [],
+  tagedUserModal: false,
+  selectedIndex: 0,
+  mentionSearch: ''
+});
+
+const selectUser = (user: any) => {
+  const cleanName = user.initials || 'User';
+  contentEditorRef.value?.addSpanLink(`@${cleanName} `, { userId: user.id });
+  state.tagedUserModal = false;
+};
+
+const handleSend = () => {
+  const tiptapEditor = contentEditorRef.value?.editor;
+  if (!tiptapEditor) return;
+
+  const usersSet = new Set<string>();
+
+  tiptapEditor.state.doc.descendants(node => {
+    if (node.type.name === 'spanNode' && node.attrs.userId) {
+      usersSet.add(node.attrs.userId);
+    }
+  });
+
+  const uniqueUsers = Array.from(usersSet);
+
+  console.log('Tagged Users in message:', uniqueUsers);
+
+  emit('send', uniqueUsers);
+};
+
+const handleMentionChange = (search: string | null) => {
+  if (search !== null) {
+    state.mentionSearch = search;
+    if (!state.tagedUserModal) {
+      state.selectedIndex = 0;
+    }
+    state.tagedUserModal = true;
+  } else {
+    state.tagedUserModal = false;
+    state.mentionSearch = '';
+  }
+};
+
+const handleMentionNav = (e: KeyboardEvent) => {
+  if (!state.tagedUserModal || !users.value.length) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    state.selectedIndex = (state.selectedIndex + 1) % users.value.length;
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    state.selectedIndex =
+      (state.selectedIndex - 1 + users.value.length) % users.value.length;
+  } else if (e.key === 'Enter') {
+    if (state.selectedIndex >= 0 && state.selectedIndex < users.value.length) {
+      e.preventDefault();
+      selectUser(users.value[state.selectedIndex]);
+    }
+  } else if (e.key === 'Escape') {
+    state.tagedUserModal = false;
+  }
+};
+
+const users = computed(() => {
+  const allMembers =
+    route.value.type === RouteTypes.GROUP
+      ? currentGroup.value?.members || []
+      : [];
+
+  if (!state.mentionSearch) return allMembers;
+
+  return allMembers.filter(user => {
+    const nameMatch = (user.nickname || '')
+      .toLowerCase()
+      .includes(state.mentionSearch);
+    const erpInitialsMatch = JSON.parse((user.ex as string) || '{}')
+      .erpInitials?.toLowerCase()
+      .includes(state.mentionSearch);
+    const initialsMatch = (user.initials || '')
+      .toLowerCase()
+      .includes(state.mentionSearch);
+    return nameMatch || erpInitialsMatch || initialsMatch;
+  });
 });
 
 const contentEditorRef =

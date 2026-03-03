@@ -1,3 +1,17 @@
+# [1.17.0](https://github.com/pksep/chat_client/compare/v1.16.2...v1.17.0) (2026-02-25)
+
+
+### Bug Fixes
+
+* focus in inputs ([a0ac862](https://github.com/pksep/chat_client/commit/a0ac862c6591a7ecbe37df3e1ae687a9fee2712c))
+* forward without content ([99a08a1](https://github.com/pksep/chat_client/commit/99a08a134dab2810954c1b5870ab5c244b8f3ee4))
+* lint ([9a518fa](https://github.com/pksep/chat_client/commit/9a518fa05cca643c6d8fdc3cbb1df1784cebf193))
+
+
+### Features
+
+* add forward message logic ([2a059db](https://github.com/pksep/chat_client/commit/2a059db97b1e38d8612ed2ceb56ec6a259a3d2a9))
+
 ## [1.16.2](https://github.com/pksep/chat_client/compare/v1.16.1...v1.16.2) (2026-02-24)
 
 

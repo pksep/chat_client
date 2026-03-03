@@ -28,6 +28,7 @@
       :messages="state.messages"
       :user="props.user"
       :auth-user-id="authUser.id"
+      :hide-unread-marker="state.hideUnreadMarker"
       :data-testid="props.dataTestid"
       @set-edit-message="handleSetEditMessage"
       @set-reply-message="handleSetReplyMessage"
@@ -165,7 +166,8 @@ const state = reactive({
   editMessage: null as IMessage | null,
   replyMessage: null as IMessage | null,
   forwardMessage: null as IMessage | null,
-  errorMessage: ''
+  errorMessage: '',
+  hideUnreadMarker: false
 });
 
 const {
@@ -286,6 +288,7 @@ watch(
     nextTick(() => {
       state.replyMessage = null;
       state.editMessage = null;
+      state.hideUnreadMarker = false;
       inputText.value = getLocalStorageInputText.value;
       setupIntersectionObserver();
       scrollToBottom();
@@ -302,6 +305,10 @@ const updateLocalStorageInputText = () => {
 
   localStorage.setItem('inputs', JSON.stringify(inputsJson));
 };
+
+onMounted(() => {
+  messageListInputRef.value?.focus();
+});
 
 watch(
   () => inputText.value,

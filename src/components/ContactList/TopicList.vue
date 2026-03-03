@@ -26,7 +26,7 @@
         tabindex="0"
         :aria-expanded="isOpen[topic.id] ? 'true' : 'false'"
         :aria-haspopup="true"
-        @click.stop="handleClick(topic)"
+        @click="handleClick(topic)"
         @contextmenu="openActivePopover(topic.id, $event)"
         @keydown.enter="handleClick(topic)"
         @keydown.space="handleClick(topic)"
@@ -111,6 +111,13 @@
             </span>
           </div>
           <div class="contact-list__bottom">
+            <div
+              v-if="topic.taggedMe"
+              class="contact-list__notification contact-list__mention"
+              :data-testid="`${props.dataTestid}-ContactList-Mention${index + 1}`"
+            >
+              @
+            </div>
             <div
               v-if="
                 topic.unreadMessageCount > 0 &&

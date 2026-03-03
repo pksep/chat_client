@@ -126,6 +126,15 @@ export const useTopics = () => {
     topics.value = [...topics.value];
   };
 
+  const setTopicTaggedMe = (topicId: string, taggedMe: boolean): void => {
+    const topic = topics.value.find(topic => topic.id === topicId);
+    if (topic) {
+      topic.taggedMe = taggedMe;
+    }
+
+    topics.value = [...topics.value];
+  };
+
   const updateLocalTopicInfo = (
     topicId: string,
     info: Partial<TopicSetting>
@@ -235,7 +244,8 @@ export const useTopics = () => {
     getSelectedTopic,
     isTopicMuted,
     deleteTopic,
-    deleteTopicFromList
+    deleteTopicFromList,
+    setTopicTaggedMe
   };
 };
 
@@ -254,7 +264,8 @@ const {
   updateLocalTopicInfo,
   isTopicMuted,
   deleteTopic,
-  deleteTopicFromList
+  deleteTopicFromList,
+  setTopicTaggedMe
 } = useTopics();
 
 export {
@@ -273,5 +284,6 @@ export {
   getTopicList,
   isTopicMuted,
   deleteTopic,
-  deleteTopicFromList
+  deleteTopicFromList,
+  setTopicTaggedMe
 };

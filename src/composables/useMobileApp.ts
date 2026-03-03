@@ -36,20 +36,18 @@ export function useMobileApp() {
   const handleInstall = () => {
     if (!mobilePlatform.value) return;
 
+    const start = Date.now();
+    const apkUrl = `${window.location.origin}/release/android/app.apk`;
+
     // ANDROID
     if (mobilePlatform.value === MobilePlatformEnum.ANDROID) {
-      const start = Date.now();
-
-      // пробуем открыть приложение
-      window.location.href = 'myapp://open';
-
-      // если не открылось — качаем APK
-      setTimeout(() => {
-        if (Date.now() - start < 1500) {
-          window.location.href = '/release/android/app.apk';
-        }
-      }, 1200);
-
+      /**
+       * Используем intent:// для Chrome на Android.
+       * Если приложение установлено — оно откроется.
+       * Если нет — браузер перенаправит на S.browser_fallback_url (прямую ссылку на APK).
+       */
+      const intentUrl = `intent://open#Intent;scheme=myapp;package=sep.pksep.app;S.browser_fallback_url=${encodeURIComponent(apkUrl)};end`;
+      window.location.href = intentUrl;
       return;
     }
 
@@ -57,10 +55,18 @@ export function useMobileApp() {
     if (mobilePlatform.value === MobilePlatformEnum.APPLE) {
       /**
        * iOS:
-       * если app установлен → откроется через Universal Link
-       * если нет → просто откроется сайт (ничего делать не нужно)
+       * Пробуем открыть через кастомную схему.
+       * Если не открылось за 1.5 сек — значит приложения нет.
        */
-      window.location.href = 'https://your-domain.com/open';
+      window.location.href = 'myapp://open';
+
+      setTimeout(() => {
+        if (Date.now() - start < 1500) {
+          // Для iOS нет прямой загрузки APK/IPA обычно,
+          // можно редиректить в App Store или на лендинг
+          window.location.href = 'https://your-domain.com/open';
+        }
+      }, 1200);
     }
   };
 

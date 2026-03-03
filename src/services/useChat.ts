@@ -202,6 +202,7 @@ export const subscribeToMessageChanges = (
 export const generateNewMessage = (params: {
   topicId: string;
   text?: string;
+  taggedUserIds?: string[];
   medias?: IMedia[];
 }): IMessage => {
   return {
@@ -216,6 +217,7 @@ export const generateNewMessage = (params: {
     senderUserId: authedUser.value.id,
     status: MessageStatus.Wait,
     text: params.text,
+    taggedUserIds: params.taggedUserIds,
     updatedAt: null,
     senderUser: authedUser.value,
     media: params.medias
@@ -228,6 +230,7 @@ export const sendMessageChat = async (params: {
   messageId?: string;
   replyMessageId?: string;
   forwardMessageId?: string;
+  taggedUserIds?: string[];
   medias?: IMedia[];
   ex?: string;
 }): Promise<void> => {
@@ -249,7 +252,8 @@ export const sendMessageChat = async (params: {
       medias: params.medias,
       ex: params.ex,
       replyMessageId: params.replyMessageId,
-      forwardMessageId: params.forwardMessageId
+      forwardMessageId: params.forwardMessageId,
+      taggedUserIds: params.taggedUserIds
     });
   } catch (error) {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);
