@@ -111,7 +111,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive, useTemplateRef, watch } from 'vue';
+import { computed, reactive, useTemplateRef } from 'vue';
 import {
   Button,
   ButtonTypeEnum,

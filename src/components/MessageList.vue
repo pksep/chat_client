@@ -123,7 +123,6 @@ import {
   getMessagesByTopicId
 } from '../services/useMessages';
 import { getAuthUser } from '../composables/useAuth';
-import { setTopicTaggedMe } from '../composables/useTopics';
 import { IMessage } from './interfaces/interfaces';
 
 import { useMessageSwipe } from './Messages/composables/useMessageSwipe';
