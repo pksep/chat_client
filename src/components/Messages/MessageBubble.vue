@@ -9,7 +9,7 @@
   >
     <Avatar
       class="message__avatar"
-      :url="`${config.CHAT_ERP_PATH_TO_FILE_CDN}/${props.avatar}`"
+      :url="`${config.CHAT_PATH_TO_FILE_CDN}/${props.avatar}`"
       :alt="props.sender"
       :initials="props.sender"
       v-if="

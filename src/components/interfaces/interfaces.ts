@@ -91,7 +91,6 @@ export interface IChatContainerConfig {
   CHAT_WS_DOMAIN?: string;
   CHAT_ERP_URL?: string;
   CHAT_PATH_TO_FILE_CDN?: string;
-  CHAT_ERP_PATH_TO_FILE_CDN?: string;
   CHAT_URL?: string;
 }
 

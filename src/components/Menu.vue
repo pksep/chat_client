@@ -21,7 +21,7 @@
         <Avatar
           v-if="isCollapse && authUser"
           v-bind="authUser"
-          :url="`${config.CHAT_ERP_PATH_TO_FILE_CDN}/${authUser?.avatarUrl}`"
+          :url="`${config.CHAT_PATH_TO_FILE_CDN}/${authUser?.avatarUrl}`"
           is-icon
           :data-testid="`${props.dataTestid}-Menu-ProfileAvatar`"
         />

@@ -7,7 +7,7 @@
     @click="emits('click')"
   >
     <Avatar
-      :url="`${config.CHAT_ERP_PATH_TO_FILE_CDN}/${props.user.avatarUrl}`"
+      :url="`${config.CHAT_PATH_TO_FILE_CDN}/${props.user.avatarUrl}`"
       :alt="props.user.avatarUrl"
       class="user-profile__avatar"
       :initials="props.user.initials"
