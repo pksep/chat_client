@@ -62,9 +62,12 @@ const filteredTopics = computed(() =>
       topic.user?.initials?.toLowerCase().includes(query) ||
       topic.user?.nickname?.toLowerCase().includes(query) ||
       topic.group?.title?.toLowerCase().includes(query) ||
-      JSON.parse((topic.user?.ex as string) || '{}')
-        ?.erpInitials?.toLowerCase()
-        .includes(query)
+      (typeof topic.user?.ex === 'string'
+        ? JSON.parse(topic.user.ex)
+        : topic.user.ex
+      )?.erpInitials
+        ?.toLowerCase()
+        ?.includes(query)
     );
   })
 );

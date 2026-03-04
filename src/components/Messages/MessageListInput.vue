@@ -233,9 +233,11 @@ const users = computed(() => {
     const nameMatch = (user.nickname || '')
       .toLowerCase()
       .includes(state.mentionSearch);
-    const erpInitialsMatch = JSON.parse((user.ex as string) || '{}')
-      .erpInitials?.toLowerCase()
-      .includes(state.mentionSearch);
+    const erpInitialsMatch = (
+      typeof user.ex === 'string' ? JSON.parse(user.ex) : user.ex
+    )?.erpInitials
+      ?.toLowerCase()
+      ?.includes(state.mentionSearch);
     const initialsMatch = (user.initials || '')
       .toLowerCase()
       .includes(state.mentionSearch);
