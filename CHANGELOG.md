@@ -1,3 +1,16 @@
+# [1.19.0](https://github.com/pksep/chat_client/compare/v1.18.0...v1.19.0) (2026-03-05)
+
+
+### Bug Fixes
+
+* avatar show ([2b58765](https://github.com/pksep/chat_client/commit/2b587652cc8e668b7285384837ab42cc267a71ce))
+* lint ([943138e](https://github.com/pksep/chat_client/commit/943138e1a498f2cea208b4982202bdf0d525e836))
+
+
+### Features
+
+* add online logic ([fba0132](https://github.com/pksep/chat_client/commit/fba01323455bbe75b45ce028d4a104509c1bd6bd))
+
 # [1.18.0](https://github.com/pksep/chat_client/compare/v1.17.0...v1.18.0) (2026-03-03)
 
 
