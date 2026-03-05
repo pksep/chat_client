@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { getChatSDK } from '../services/useChat';
 import { ITopic } from '../components/interfaces/interfaces';
 import {
@@ -225,10 +225,37 @@ export const useTopics = () => {
     return topic?.info?.isMute || false;
   };
 
+  const totalUnreadCount = computed(() => {
+    return topics.value.reduce(
+      (acc, topic) => acc + (topic.unreadMessageCount || 0),
+      0
+    );
+  });
+
+  watch(
+    totalUnreadCount,
+    count => {
+      const baseTitle = 'SEP:Chat';
+      if (count > 0) {
+        document.title = `(${count}) ${baseTitle}`;
+        if ('setAppBadge' in navigator) {
+          (navigator as any).setAppBadge(count);
+        }
+      } else {
+        document.title = baseTitle;
+        if ('clearAppBadge' in navigator) {
+          (navigator as any).clearAppBadge();
+        }
+      }
+    },
+    { immediate: true }
+  );
+
   return {
     topics,
     loading,
     error,
+    totalUnreadCount,
     setTopics,
     fetchAllTopics,
     createTopic,
@@ -265,7 +292,8 @@ const {
   isTopicMuted,
   deleteTopic,
   deleteTopicFromList,
-  setTopicTaggedMe
+  setTopicTaggedMe,
+  totalUnreadCount
 } = useTopics();
 
 export {
@@ -285,5 +313,6 @@ export {
   isTopicMuted,
   deleteTopic,
   deleteTopicFromList,
-  setTopicTaggedMe
+  setTopicTaggedMe,
+  totalUnreadCount
 };

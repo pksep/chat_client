@@ -20,9 +20,9 @@
         />
         <Avatar
           v-if="isCollapse && authUser"
-          v-bind="authUser"
-          :url="`${config.CHAT_PATH_TO_FILE_CDN}/${authUser?.avatarUrl}`"
-          is-icon
+          :url="`${config.CHAT_PATH_TO_FILE_CDN}/${authUser.avatarUrl}`"
+          :alt="authUser.avatarUrl"
+          :initials="authUser.initials"
           :data-testid="`${props.dataTestid}-Menu-ProfileAvatar`"
         />
         <Icon

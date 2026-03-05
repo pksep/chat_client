@@ -123,8 +123,11 @@ const contacts = computed(() => {
     contact =>
       contact.initials.toLowerCase().includes(state.q.toLowerCase()) ||
       contact.nickname.toLowerCase().includes(state.q.toLowerCase()) ||
-      JSON.parse(contact.ex as string)
-        ?.erpInitials?.toLowerCase()
+      (typeof contact.ex === 'string'
+        ? JSON.parse(contact.ex)
+        : contact.ex
+      )?.erpInitials
+        ?.toLowerCase()
         .includes(state.q.toLowerCase())
   );
 

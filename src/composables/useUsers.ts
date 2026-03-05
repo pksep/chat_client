@@ -7,9 +7,6 @@ const users = shallowRef<IUser[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
-let userMapCache: Map<string, IUser> | null = null;
-let lastUsersUpdate = 0;
-
 export const fetchAllUsers = async (
   page = 1,
   limit = 200
@@ -25,8 +22,6 @@ export const fetchAllUsers = async (
     });
 
     users.value = [...response.data];
-
-    lastUsersUpdate = Date.now();
 
     return users.value;
   } catch (err) {
@@ -45,11 +40,42 @@ export const getUsersList = (): IUser[] => {
 };
 
 export const getUserById = (userId: string): IUser | undefined => {
-  if (userMapCache && Date.now() - lastUsersUpdate < 30000) {
-    return userMapCache.get(userId);
-  }
-
   const currentUsers = users.value || [];
-  userMapCache = new Map(currentUsers.map(user => [user.id, user]));
-  return userMapCache.get(userId);
+  return currentUsers.find(user => user.id === userId);
+};
+
+export const updateLocalUserStatus = (
+  userId: string,
+  lastOnline: Date | null
+): void => {
+  const currentUsers = users.value || [];
+  const index = currentUsers.findIndex(u => u.id === userId);
+
+  if (index !== -1) {
+    const updatedUsers = [...currentUsers];
+    updatedUsers[index] = {
+      ...updatedUsers[index],
+      lastOnline
+    };
+    users.value = updatedUsers;
+  }
+};
+
+export const updateLocalUserIsOnline = (userId: string): void => {
+  const currentUsers = users.value || [];
+  const index = currentUsers.findIndex(u => u.id === userId);
+
+  if (index !== -1) {
+    const updatedUsers = [...currentUsers];
+    updatedUsers[index] = {
+      ...updatedUsers[index],
+      lastOnline: updatedUsers[index].lastOnline
+    };
+    users.value = updatedUsers;
+  }
+};
+
+export const getUserLastOnline = (user: IUser): Date | null => {
+  const storeUser = getUserById(user.id);
+  return storeUser ? storeUser.lastOnline : user.lastOnline;
 };
