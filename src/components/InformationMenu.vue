@@ -68,8 +68,10 @@ const {
   leaveGroupInfo
 } = useInformationMenu(model);
 
-const onSaveAvatar = async (file: File): Promise<void> => {
-  await originalOnSaveAvatar(file);
+const onSaveAvatar = async (): Promise<void> => {
+  if (state.fileImage) {
+    await originalOnSaveAvatar(state.fileImage);
+  }
 };
 
 const handleSaveFromForm = (value: { name: string }) => {

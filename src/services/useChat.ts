@@ -1,10 +1,9 @@
 import { ref, shallowRef } from 'vue';
 import { ChatSDK } from './useChatSDK';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
-import { User } from '@pksep/zod-shared-chat';
 import { MessageStatus } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
-import { setAuthUser, getAuthUser, authedUser } from '../composables/useAuth';
+import { authedUser } from '../composables/useAuth';
 import {
   useTopics,
   changeUnreadMessageCount,
@@ -14,6 +13,7 @@ import {
   updateLocalGroupDetails,
   updateLocalLastMessageGroup
 } from '../composables/useGroup';
+import { updateLocalUserStatus } from '../composables/useUsers';
 import {
   addMessageToLocal,
   changeLocalReadStatus,
@@ -68,12 +68,8 @@ const setupChatListeners = (): void => {
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.USER_UPDATED, event => {
-    const updatedUser: User = event.payload;
-    const currentAuthUser = getAuthUser();
-
-    if (currentAuthUser && currentAuthUser.id === updatedUser.id) {
-      setAuthUser(updatedUser);
-    }
+    const { id, lastOnline } = event.payload;
+    updateLocalUserStatus(id, lastOnline);
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_TOPIC, ({ payload }) => {
@@ -128,6 +124,9 @@ const setupChatListeners = (): void => {
   );
 };
 
+let isVisibilityListenerAdded = false;
+let lastVisibilityState = document.visibilityState;
+
 export const initializeChat = async (options: {
   token: string;
   apiUrl: string;
@@ -141,6 +140,21 @@ export const initializeChat = async (options: {
   });
 
   currentUserId.value = options.userId || null;
+
+  if (!isVisibilityListenerAdded) {
+    document.addEventListener('visibilitychange', () => {
+      if (!chatSDK) return;
+      if (document.visibilityState === lastVisibilityState) return;
+
+      const isActive = document.visibilityState === 'visible';
+      lastVisibilityState = document.visibilityState;
+
+      chatSDK.sendWebSocketEvent(WebSocketEventType.TOGGLE_PRESENCE, {
+        isActive
+      });
+    });
+    isVisibilityListenerAdded = true;
+  }
 
   isWebsocketConnecting.value = true;
   await chatSDK.connect();

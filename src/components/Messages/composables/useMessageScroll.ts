@@ -174,6 +174,8 @@ export function useMessageScroll(
     if (!chatWrapperRef.value) return;
 
     setTimeout(() => {
+      if (!chatWrapperRef.value) return;
+
       const unreadRef = messageListUserItemsRef.value?.unreadMessageStartRef;
       if (unreadRef?.length > 0) {
         const firstUnread = unreadRef[0];

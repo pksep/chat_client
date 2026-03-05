@@ -34,10 +34,15 @@
         <Avatar
           class="contact-list__avatar"
           :initials="topic.name"
-          :url="`${topic.type === TopicType.DM ? config.CHAT_ERP_PATH_TO_FILE_CDN : config.CHAT_PATH_TO_FILE_CDN}/${topic.avatarUrl}`"
+          :url="`${config.CHAT_PATH_TO_FILE_CDN}/${topic.avatarUrl}`"
           :alt="`Avatar of ${topic.name}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           is-icon
+          :is-online="
+            topic.type === TopicType.DM &&
+            !!topic.user &&
+            !getUserLastOnline(topic.user)
+          "
         />
         <div class="contact-list__block--wrapper">
           <h5
@@ -215,6 +220,7 @@ import UnpinIcon from '../UI/UnpinIcon.vue';
 import UnmuteIcon from '../UI/UnmuteIcon.vue';
 import MuteIcon from '../UI/MuteIcon.vue';
 import { TopicType } from '../../services/useChatSDK/types';
+import { getUserLastOnline } from '../../composables/useUsers';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;

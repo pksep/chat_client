@@ -17,7 +17,7 @@ export function useMessageMedia() {
   };
 
   const isSliderContentUrl = (fileUrl: string) => {
-    return fileUrl?.match(/\.(jpg|jpeg|png|webp|svg|mp4|mp3|avif|pdf)$/i);
+    return fileUrl?.match(/\.(jpg|jpeg|png|webp|svg|mp4|mp3|avif|pdf|mov)$/i);
   };
 
   const handleDragStart = (event: DragEvent, media: IMedia) => {
