@@ -12,6 +12,7 @@
       class="user-profile__avatar"
       :initials="props.user.initials"
       :data-testid="`${dataTestid}-UserProfile-Avatar`"
+      :is-online="!effectiveLastOnline && !isCurrentUser"
     />
     <h3
       class="user-profile__title"
@@ -21,22 +22,38 @@
     </h3>
     <span
       class="user-profile__ex"
+      :class="{
+        'user-profile__ex--online': !effectiveLastOnline && !isCurrentUser
+      }"
       :data-testid="`${dataTestid}-UserProfile-Ex`"
     >
-      @{{ props.user.nickname }}
+      {{ formattedStatus }}
     </span>
   </div>
 </template>
 
 <script lang="ts" setup>
+import { computed } from 'vue';
 import { Avatar } from '@pksep/yui';
 import { IUserProfileProps } from '../interfaces/interfaces';
 import { getConfig } from '../../services/useConfig';
+import { formatLastSeen } from '../../utils/dateUtils';
+import { getUserLastOnline } from '../../composables/useUsers';
+import { getAuthUser } from '../../composables/useAuth';
 
 const config = getConfig();
 
 const props = withDefaults(defineProps<IUserProfileProps>(), {
   dataTestid: () => 'UserProfile'
+});
+
+const effectiveLastOnline = computed(() => getUserLastOnline(props.user));
+
+const isCurrentUser = computed(() => getAuthUser()?.id === props.user.id);
+
+const formattedStatus = computed(() => {
+  if (isCurrentUser.value) return `@${props.user.nickname}`;
+  return formatLastSeen(effectiveLastOnline.value);
 });
 
 defineOptions({

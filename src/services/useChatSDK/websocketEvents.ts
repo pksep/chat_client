@@ -30,7 +30,6 @@ export enum WebSocketEventType {
   MEMBER_LEFT = 'MEMBER_LEFT',
   USER_JOINED = 'USER_JOINED',
   USER_LEFT = 'USER_LEFT',
-  USER_UPDATED = 'USER_UPDATED',
   CONNECTED = 'CONNECTED',
   DISCONNECTED = 'DISCONNECTED',
   AUTHENTICATED = 'AUTHENTICATED',
@@ -39,7 +38,9 @@ export enum WebSocketEventType {
   MESSAGE_HISTORY_RESPONSE = 'MESSAGE_HISTORY_RESPONSE',
   CHANGE_TOPIC = 'changeTopic',
   CHANGE_MESSAGE = 'changeMessage',
-  READ_MESSAGE = 'readMessage'
+  READ_MESSAGE = 'readMessage',
+  USER_UPDATED = 'userUpdated',
+  TOGGLE_PRESENCE = 'togglePresence'
 }
 
 export interface WebSocketEventPayloads {
@@ -124,6 +125,7 @@ export interface WebSocketEventPayloads {
     type: 'CREATE' | 'UPDATE';
     topicId: string;
   };
+  [WebSocketEventType.TOGGLE_PRESENCE]: { isActive: boolean };
 }
 
 export interface WebSocketEvent<
