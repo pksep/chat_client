@@ -19,12 +19,7 @@
       >
         Непрочитанные сообщения
       </div>
-      <div
-        :key="message.id"
-        class="top-element"
-        v-if="isNewDate(index) || message.isSystem"
-        :data-message-id="isNewDate(index) ? null : message.id"
-      >
+      <div :key="message.id" class="top-element" v-if="isNewDate(index)">
         <div
           v-if="isNewDate(index)"
           class="date-divider"
@@ -36,7 +31,13 @@
             {{ formatDay(message.createdAt) }}
           </span>
         </div>
-
+      </div>
+      <div
+        :key="message.id"
+        class="top-element"
+        v-if="message.isSystem"
+        :data-message-id="message.id"
+      >
         <div
           v-if="message.isSystem"
           class="system-message"
