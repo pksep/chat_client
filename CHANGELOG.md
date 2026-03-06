@@ -1,3 +1,10 @@
+## [1.19.2](https://github.com/pksep/chat_client/compare/v1.19.1...v1.19.2) (2026-03-06)
+
+
+### Bug Fixes
+
+* gradient ([22148e4](https://github.com/pksep/chat_client/commit/22148e42071cf71219e8fc48bd52d8f14a2fa916))
+
 ## [1.19.1](https://github.com/pksep/chat_client/compare/v1.19.0...v1.19.1) (2026-03-06)
 
 
