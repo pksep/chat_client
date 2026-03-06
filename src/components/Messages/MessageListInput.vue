@@ -183,8 +183,6 @@ const handleSend = () => {
 
   const uniqueUsers = Array.from(usersSet);
 
-  console.log('Tagged Users in message:', uniqueUsers);
-
   emit('send', uniqueUsers);
 };
 
