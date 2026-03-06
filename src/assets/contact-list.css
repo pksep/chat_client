@@ -9,6 +9,19 @@
   &.contact-list__item--active {
     cursor: pointer;
     background-color: var(--blue15);
+
+    & .contact-list__bottom {
+      background-color: var(--blue15);
+    }
+
+    .contact-list__description::after,
+    .contact-list__description p::after,
+    .contact-list__description strong::after {
+      background: linear-gradient(to right, transparent 0%, var(--blue15) 100%);
+    }
+    .contact-list__bottom::before {
+      background: linear-gradient(to right, transparent 0%, var(--blue15) 80%);
+    }
   }
 }
 
@@ -72,9 +85,20 @@
   max-width: 29ch;
   font-size: 14px;
   height: 22px;
-  background: linear-gradient(to right, var(--text-grey) 80%, transparent 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  position: relative;
+}
+
+.contact-list__description::after,
+.contact-list__description p::after,
+.contact-list__description strong::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 20ch;
+  width: 9ch;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent 0%, var(--white) 100%);
 }
 
 .contact-list__description p {
@@ -178,6 +202,19 @@ svg.icon-yui-kit.contact-list__read-icon {
   place-content: center;
   text-align: center;
   background-color: var(--white);
+  z-index: 9;
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 100%;
+    width: 30px;
+    height: 100%;
+    pointer-events: none;
+    background: linear-gradient(to right, transparent 0%, var(--white) 80%);
+  }
 }
 
 .contact-list {
