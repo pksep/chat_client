@@ -261,11 +261,13 @@ export const changeLocalReadStatus = (
       return {
         ...message,
         status: MessageStatus.Read,
-        isRead: true
+        isRead: true,
+        isReadByMe: true
       };
     }
     return message;
   });
+
   updateLocalTopicReadStatus(topicId, messageIds);
   messagesStore.value[topicId] = updatedMessages;
 

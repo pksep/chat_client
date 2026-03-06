@@ -3,7 +3,10 @@ import {
   getIsWebsocketConnecting,
   markAsRead
 } from '../../../services/useChat';
-import { fetchMessagesForTopic } from '../../../services/useMessages';
+import {
+  changeLocalReadStatus,
+  fetchMessagesForTopic
+} from '../../../services/useMessages';
 import type { IMessage } from '../../interfaces/interfaces';
 
 export function useMessageScroll(
@@ -29,6 +32,7 @@ export function useMessageScroll(
   let hasNewMessage = true;
   const scrollMarkReadTimeout: number | null = null;
   let intersectionObserver: IntersectionObserver | null = null;
+  const pendingReadIds = new Set<string>();
 
   const markAllVisibleAsRead = async () => {
     const unreadMessages = state.messages.filter(
@@ -43,6 +47,11 @@ export function useMessageScroll(
         messageIds: unreadMessages.map((m: IMessage) => m.id),
         topicId: route.value.id
       });
+      changeLocalReadStatus(
+        route.value.id,
+        unreadMessages.map((m: IMessage) => m.id),
+        props.user?.id
+      );
     } catch (error) {
       console.warn('Failed to mark messages as read:', error);
     }
@@ -60,7 +69,7 @@ export function useMessageScroll(
         entries.forEach(entry => {
           if (entry.isIntersecting) {
             const messageId = entry.target.getAttribute('data-message-id');
-            if (messageId) {
+            if (messageId && !pendingReadIds.has(messageId)) {
               const message = state.messages.find(m => m.id === messageId);
               if (
                 message &&
@@ -68,6 +77,7 @@ export function useMessageScroll(
                 !message.isReadByMe
               ) {
                 visibleUnreadMessageIds.push(messageId);
+                pendingReadIds.add(messageId);
               }
             }
           }
@@ -79,6 +89,8 @@ export function useMessageScroll(
             topicId: route.value.id
           }).catch(error => {
             console.warn('Failed to mark messages as read:', error);
+            // Optionally remove from pending on failure to allow retry
+            visibleUnreadMessageIds.forEach(id => pendingReadIds.delete(id));
           });
         }
       },
@@ -261,6 +273,7 @@ export function useMessageScroll(
   const resetScrollState = () => {
     hasOldMessage = true;
     hasNewMessage = true;
+    pendingReadIds.clear();
   };
 
   return {
