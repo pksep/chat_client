@@ -1,3 +1,10 @@
+## [1.19.1](https://github.com/pksep/chat_client/compare/v1.19.0...v1.19.1) (2026-03-06)
+
+
+### Bug Fixes
+
+* styles ([fcb3cd1](https://github.com/pksep/chat_client/commit/fcb3cd1fc41cd0bda1c7f9a2ff8eedfecbe1fcfe))
+
 # [1.19.0](https://github.com/pksep/chat_client/compare/v1.18.0...v1.19.0) (2026-03-05)
 
 
