@@ -50,27 +50,23 @@
       :data-testid="`${props.dataTestid}-Header-ButtonsContainer`"
       @click.stop
     >
-      <template v-if="!isMobile">
-        <Search
-          v-if="state.isSearchInputEnable"
-          class="chat__header-search"
-          @click.stop
-          :data-testid="`${props.dataTestid}-Header-SearchInput`"
-        />
-        <Button
-          v-if="!state.isSearchInputEnable"
-          :type="ButtonTypeEnum.ghost"
-          :size="SizesEnum.small"
-          @click.stop="showSearch"
-          :data-testid="`${props.dataTestid}-Header-SearchButton`"
-        >
-          <Icon
-            class="small-icon"
-            :name="IconNameEnum.search"
-            :data-testid="`${props.dataTestid}-Header-SearchIcon`"
-          />
-        </Button>
-      </template>
+      <Search
+        v-if="state.isSearchInputEnable"
+        class="chat__header-search"
+        @click.stop
+        :data-testid="`${props.dataTestid}-Header-SearchInput`"
+      />
+      <SearchIcon
+        v-if="!state.isSearchInputEnable && !isMobile"
+        @click.stop="showSearch"
+        class="chat__header__icon"
+        :data-testid="`${props.dataTestid}-Header-SearchIcon`"
+      />
+      <CallIcon
+        class="chat__header__icon"
+        :data-testid="`${props.dataTestid}-Header-CallIcon`"
+        @click.stop="handleCall"
+      />
       <Popover
         class="chat__header-popover"
         :options="getPopoverOptions"
@@ -103,6 +99,12 @@
     :description="actionModalDescription"
     @unmount-close="handleCloseActionModal"
     @unmount-confirm="handleConfirmActionModal"
+  />
+  <CallModal
+    :open="state.isCallModalOpen"
+    @unmount-close="handleEndCall"
+    :data-testid="`${props.dataTestid}-CallModal`"
+    :user="state.calledUser"
   />
 </template>
 
@@ -148,6 +150,9 @@ import {
 } from '../../composables/useGroup';
 import ConfirmModal from '../UI/ConfirmModal.vue';
 import { TopicType } from '../../services/useChatSDK/types';
+import CallIcon from '../CallModal/UI/CallIcon.vue';
+import SearchIcon from '../UI/SearchIcon.vue';
+import CallModal from '../CallModal/CallModal.vue';
 
 const { getSelectedTopic } = useTopics();
 
@@ -167,7 +172,9 @@ const state = reactive({
   loader: false,
   openMobileInfoModal: false,
   isSearchInputEnable: false,
-  openActionModal: false
+  openActionModal: false,
+  isCallModalOpen: false,
+  calledUser: null
 });
 
 const actionModalTitle = computed(() =>
@@ -193,6 +200,16 @@ const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const showSearch = (): void => {
   state.isSearchInputEnable = true;
+};
+
+const handleCall = (): void => {
+  state.isCallModalOpen = true;
+  state.calledUser = currentTopic.value.user;
+};
+
+const handleEndCall = (): void => {
+  state.isCallModalOpen = false;
+  state.calledUser = null;
 };
 
 const handleCloseMobileInfoModal = (): void => {

@@ -1,0 +1,142 @@
+.call-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-color);
+}
+
+.call-modal__container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--white);
+  border-radius: 25px;
+  width: 700px;
+  height: 510px;
+  padding: 30px;
+  box-shadow: 0px 0px 22px 0px #00000012;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.call-modal__avatar-container {
+  position: absolute;
+  bottom: calc(50% - 84px);
+}
+
+.call-modal__container--full-screen {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0 !important;
+}
+
+.call-modal__avatar {
+  --size-avatar: 80px;
+
+  & .avatar-yui-kit__text {
+    font-size: 50px;
+  }
+}
+
+.call-modal__user-name {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.call-modal__status {
+  font-weight: 400;
+  font-size: 14px;
+  text-align: center;
+  margin-top: 5px;
+  margin-bottom: 94px;
+  height: 17px;
+}
+
+.call-modal__controls {
+  display: flex;
+  gap: 40px;
+  margin-top: auto;
+  padding: 24px 0;
+}
+
+.call-modal__control-button-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 25px;
+
+  & .call-modal__control-button {
+    background-color: var(--blue1);
+    padding: 12px;
+    cursor: pointer;
+
+    &.call-modal__control-button__inactive {
+      color: var(--blue1);
+      background-color: var(--blue10);
+    }
+
+    &:last-child {
+      background-color: var(--red4);
+    }
+  }
+}
+
+.call-modal__control-button {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #fff;
+}
+
+.call-modal__control-button:hover {
+  transform: scale(1.1);
+}
+
+.call-modal__control-button--fullscreen {
+  width: 45px;
+  height: 45px;
+  position: absolute;
+  top: 15px;
+  left: 15px;
+}
+
+svg.icon-yui-kit.call-modal__control-button__chevron-down {
+  background-color: var(--blue1);
+  color: var(--white);
+  width: 45px;
+  height: 45px;
+  position: absolute;
+  top: 20px;
+  left: 16px;
+  padding: 13.5px;
+  border-radius: 50px;
+  cursor: pointer;
+}
+
+@media screen and (max-width: 480px) {
+  .call-modal__container {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+
+  .call-modal__control-button-wrapper {
+    padding: 15px;
+    background-color: var(--blue1);
+    border-radius: 50px;
+
+    & .call-modal__control-button.call-modal__control-button__inactive {
+      background-color: var(--white);
+    }
+  }
+}

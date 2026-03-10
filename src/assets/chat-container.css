@@ -21,6 +21,7 @@
 @import url('./mobile-auth.css');
 @import url('./confirm-modal.css');
 @import url('./pinned-messages.css');
+@import url('./call-modal.css');
 
 .chat-container {
   --neutral-text-light: #b8b8b8;

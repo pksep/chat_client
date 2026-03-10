@@ -14,10 +14,29 @@
 
 .chat__header-buttons {
   display: flex;
-  gap: 10px;
   margin-right: 8px;
   & button.button-yui-kit.ghost-yui-kit {
     color: var(--neutral-text-light);
+  }
+
+  & .chat__header-popover {
+    min-width: 40px;
+    display: flex;
+    justify-content: center;
+  }
+
+  & .chat__header__icon {
+    font-size: 16px;
+    color: var(--text-light-color);
+    width: 42px;
+    height: 40px;
+    padding: 11px;
+    transition: all 0.3s;
+
+    &:hover,
+    &:active {
+      color: var(--border-primary-color);
+    }
   }
 }
 
