@@ -1,79 +1,95 @@
 <template>
   <header
-    :class="['chat__header', $attrs.class]"
-    @click="handleClickHeader"
+    :class="['chat__header-wrapper', $attrs.class]"
     :data-testid="`${props.dataTestid}-Header-Container`"
   >
-    <Button
-      v-if="isMobile"
-      :type="ButtonTypeEnum.ghost"
-      :size="SizesEnum.small"
-      @click.stop="handleExit"
-      :data-testid="`${props.dataTestid}-Header-BackButton`"
-    >
-      <Icon
-        class="medium-icon"
-        :name="IconNameEnum.arrowLeft"
-        :data-testid="`${props.dataTestid}-Header-BackIcon`"
-      />
-    </Button>
     <div
-      class="chat__header-profile chat__header-ai-assistant"
-      v-if="route.type === 'ai'"
-      :data-testid="`${props.dataTestid}-Header-AIAssistant`"
+      v-if="(open || openCall) && !isModalVisible"
+      class="chat__header-active-call"
+      @click.stop="showModal"
     >
-      <AiIconWrapper
-        :data-testid="`${props.dataTestid}-Header-AIAssistantIcon`"
-      />
-      <h3 :data-testid="`${props.dataTestid}-Header-AIAssistantTitle`">
-        Ai Ассистент
-      </h3>
+      <LeaveIcon />
+      <span>{{ isCalling ? 'Соединение...' : `${user?.initials}` }}</span>
+
+      <span class="chat__header-active-call__time" v-if="!isCalling"> •</span>
+
+      <span class="chat__header-active-call__time" v-if="!isCalling">
+        {{ formattedTime }}
+      </span>
     </div>
-    <template v-else-if="currentTopic">
-      <GroupProfile
-        v-if="currentTopic.type === TopicType.Group"
-        class="chat__header-profile"
-        avatar-alt="group-profile-alt"
-        :topic="currentGroup || currentTopic"
-        :data-testid="`${props.dataTestid}-Header-GroupProfile`"
-      />
-      <UserProfile
-        v-else-if="currentTopic.type === TopicType.DM"
-        class="chat__header-profile"
-        avatar-alt="user-profile-alt"
-        :user="currentTopic.user"
-        :data-testid="`${props.dataTestid}-Header-UserProfile`"
-      />
-    </template>
-    <div
-      class="chat__header-buttons"
-      :data-testid="`${props.dataTestid}-Header-ButtonsContainer`"
-      @click.stop
-    >
-      <Search
-        v-if="state.isSearchInputEnable"
-        class="chat__header-search"
+    <div class="chat__header-main" @click="handleClickHeader">
+      <Button
+        v-if="isMobile"
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="handleExit"
+        :data-testid="`${props.dataTestid}-Header-BackButton`"
+      >
+        <Icon
+          class="medium-icon"
+          :name="IconNameEnum.arrowLeft"
+          :data-testid="`${props.dataTestid}-Header-BackIcon`"
+        />
+      </Button>
+      <div
+        class="chat__header-profile chat__header-ai-assistant"
+        v-if="route.type === 'ai'"
+        :data-testid="`${props.dataTestid}-Header-AIAssistant`"
+      >
+        <AiIconWrapper
+          :data-testid="`${props.dataTestid}-Header-AIAssistantIcon`"
+        />
+        <h3 :data-testid="`${props.dataTestid}-Header-AIAssistantTitle`">
+          Ai Ассистент
+        </h3>
+      </div>
+      <template v-else-if="currentTopic">
+        <GroupProfile
+          v-if="currentTopic.type === TopicType.Group"
+          class="chat__header-profile"
+          avatar-alt="group-profile-alt"
+          :topic="currentGroup || currentTopic"
+          :data-testid="`${props.dataTestid}-Header-GroupProfile`"
+        />
+        <UserProfile
+          v-else-if="currentTopic.type === TopicType.DM"
+          class="chat__header-profile"
+          avatar-alt="user-profile-alt"
+          :user="currentTopic.user"
+          :data-testid="`${props.dataTestid}-Header-UserProfile`"
+        />
+      </template>
+      <div
+        class="chat__header-buttons"
+        :data-testid="`${props.dataTestid}-Header-ButtonsContainer`"
         @click.stop
-        :data-testid="`${props.dataTestid}-Header-SearchInput`"
-      />
-      <SearchIcon
-        v-if="!state.isSearchInputEnable && !isMobile"
-        @click.stop="showSearch"
-        class="chat__header__icon"
-        :data-testid="`${props.dataTestid}-Header-SearchIcon`"
-      />
-      <CallIcon
-        class="chat__header__icon"
-        :data-testid="`${props.dataTestid}-Header-CallIcon`"
-        @click.stop="handleCall"
-      />
-      <Popover
-        class="chat__header-popover"
-        :options="getPopoverOptions"
-        isWCUse
-        :data-testid="`${props.dataTestid}-Header-Popover`"
-        :icon-name="IconNameEnum.moreHorizontal"
-      />
+      >
+        <Search
+          v-if="state.isSearchInputEnable"
+          class="chat__header-search"
+          @click.stop
+          :data-testid="`${props.dataTestid}-Header-SearchInput`"
+        />
+        <SearchIcon
+          v-if="!state.isSearchInputEnable && !isMobile"
+          @click.stop="showSearch"
+          class="chat__header__icon"
+          :data-testid="`${props.dataTestid}-Header-SearchIcon`"
+        />
+        <CallIcon
+          v-if="!(open || openCall)"
+          class="chat__header__icon"
+          :data-testid="`${props.dataTestid}-Header-CallIcon`"
+          @click.stop="handleCall"
+        />
+        <Popover
+          class="chat__header-popover"
+          :options="getPopoverOptions"
+          isWCUse
+          :data-testid="`${props.dataTestid}-Header-Popover`"
+          :icon-name="IconNameEnum.moreHorizontal"
+        />
+      </div>
     </div>
   </header>
   <MobileModal
@@ -146,7 +162,16 @@ import ConfirmModal from '../UI/ConfirmModal.vue';
 import { TopicType } from '../../services/useChatSDK/types';
 import CallIcon from '../CallModal/UI/CallIcon.vue';
 import SearchIcon from '../UI/SearchIcon.vue';
-import { startCall } from '../../services/useJitsi';
+import {
+  startCall,
+  open,
+  openCall,
+  isModalVisible,
+  formattedTime,
+  isCalling,
+  user
+} from '../../services/useJitsi';
+import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 
 const { getSelectedTopic } = useTopics();
 
@@ -203,6 +228,10 @@ const handleCall = async () => {
   if (!state.calledUser) return;
   nextTick();
   await startCall(state.calledUser, route.value.id);
+};
+
+const showModal = () => {
+  isModalVisible.value = true;
 };
 
 const handleCloseMobileInfoModal = (): void => {

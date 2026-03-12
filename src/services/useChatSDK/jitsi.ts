@@ -57,12 +57,12 @@ export class Jitsi implements JitsiInterface {
       jwt: token,
       parentNode,
       userInfo: {
-        displayName: user?.name || user?.initials || 'User',
+        displayName: user?.initials || 'User',
         email: user?.email
       },
       configOverwrite: {
-        startWithAudioMuted: false,
-        startWithVideoMuted: false,
+        startWithAudioMuted: true,
+        startWithVideoMuted: true,
         prejoinPageEnabled: false,
         prejoinConfig: {
           enabled: false

@@ -1,12 +1,17 @@
-.chat__header {
+.chat__header-wrapper {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
   background-color: var(--white);
-  padding: 7.5px 8px;
   border-bottom-width: 0.5px;
   border-bottom-style: solid;
   border-bottom-color: var(--border-grey);
+}
+
+.chat__header-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7.5px 8px;
   &:hover {
     cursor: pointer;
   }
@@ -69,12 +74,46 @@ button.button-yui-kit {
   }
 }
 
+.chat__header-active-call {
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 0 5px;
+  height: 45px;
+  font-size: 18px;
+  font-weight: 400;
+  width: 100%;
+  transition: opacity 0.2s;
+  color: var(--primary-base);
+  border-bottom: 1px solid var(--border-grey);
+
+  & span {
+    margin-left: 5px;
+  }
+
+  & svg {
+    color: var(--green2);
+    width: 28px;
+    height: 28px;
+    transform: rotate(-120deg);
+  }
+
+  & .chat__header-active-call__time {
+    font-size: 14px;
+  }
+}
+
+.chat__header-active-call:hover {
+  opacity: 0.8;
+}
+
 @media screen and (width <= 480px) {
-  .chat__header {
+  .chat__header-main {
     justify-content: start;
     gap: 10px;
   }
-  .chat__header:has(.search-yui-kit__input) {
+  .chat__header-wrapper:has(.search-yui-kit__input) {
     .chat__header-profile {
       & h3 {
         display: none;

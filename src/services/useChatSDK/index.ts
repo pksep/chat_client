@@ -585,7 +585,7 @@ export class ChatSDK {
     parentNode: HTMLElement,
     token?: string
   ) {
-    await this.jitsi.startCall(user, topicId, parentNode, token);
+    return await this.jitsi.startCall(user, topicId, parentNode, token);
   }
 
   endCall() {

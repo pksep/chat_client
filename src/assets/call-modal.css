@@ -24,9 +24,16 @@
   transition: all 0.3s ease;
 }
 
+.call-modal--hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .call-modal__avatar-container {
   position: absolute;
   bottom: calc(50% - 84px);
+  text-align: center;
 }
 
 .call-modal__container--full-screen {

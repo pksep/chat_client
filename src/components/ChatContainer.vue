@@ -129,6 +129,7 @@ import AndroidIcon from './UI/AndroidIcon.vue';
 import AppleIcon from './UI/AppleIcon.vue';
 import { useMobileApp } from '../composables/useMobileApp';
 import CallModal from './CallModal/CallModal.vue';
+import { open, openCall, isModalVisible } from '../services/useJitsi';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -167,7 +168,9 @@ const chatContainerClasses = computed(() => [
       (route.value && route.value.type === 'ai') ||
       (route.value && route.value.type === 'assistant')
         ? true
-        : !state.isMenuDesktopOpen
+        : !state.isMenuDesktopOpen,
+    'chat-container--active-call':
+      (open.value || openCall.value) && !isModalVisible.value
   }
 ]);
 

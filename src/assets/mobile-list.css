@@ -18,6 +18,7 @@ button.button-yui-kit.mobile__list-button {
   justify-self: end;
   margin: 12px 10px;
   max-height: 56px;
+  z-index: 9;
 }
 
 .mobile__list-modal__contact-selector {

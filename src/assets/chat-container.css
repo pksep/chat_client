@@ -39,6 +39,10 @@
   grid-template-columns: var(--size-left-menu) auto var(--size-right-menu);
   grid-template-rows: var(--header-height) 1fr;
   scroll-behavior: smooth;
+
+  &.chat-container--active-call {
+    --header-height: 95px;
+  }
 }
 
 .chat-container:has(.menu.menu--collapse) {
@@ -160,12 +164,14 @@ button.primary-yui-kit.disabled-yui-kit {
 }
 
 @media screen and (width <= 480px) {
-  .chat__header {
+  .chat__header-wrapper .chat__header-main {
     padding-block: 9.5px;
     padding-inline: 16px;
     gap: 0;
   }
-  .chat__header button.button-yui-kit.small.ghost-yui-kit {
+  .chat__header-wrapper
+    .chat__header-main
+    button.button-yui-kit.small.ghost-yui-kit {
     padding: 8px;
   }
 

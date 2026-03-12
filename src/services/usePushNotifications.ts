@@ -2,6 +2,9 @@ import { PushNotifications } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
 import { useChatApi } from './useApi';
 import { getCurrentUserId } from './useChat';
+import { getUserById } from '../composables/useUsers';
+import { receiveCall } from './useJitsi';
+import { showIncomingCallKit } from './useCallKit';
 
 export const initPushNotifications = async () => {
   const api = useChatApi();
@@ -24,12 +27,28 @@ export const initPushNotifications = async () => {
       });
     });
 
-    PushNotifications.addListener('pushNotificationReceived', n =>
-      console.log('Native push:', n)
-    );
+    PushNotifications.addListener('pushNotificationReceived', n => {
+      console.log('Native push received:', n);
+      handleCallPush(n);
+    });
+
+    PushNotifications.addListener('pushNotificationActionPerformed', n => {
+      console.log('Native push action:', n);
+      handleCallPush(n.notification);
+    });
+
     PushNotifications.addListener('registrationError', e =>
       console.error('Push error:', e)
     );
+
+    // Handle the case where the app was launched by a notification
+    const handleInitialPush = async () => {
+      const result = await PushNotifications.getDeliveredNotifications();
+      if (result.notifications.length > 0) {
+        result.notifications.forEach(n => handleCallPush(n));
+      }
+    };
+    handleInitialPush();
 
     return;
   }
@@ -71,6 +90,23 @@ export const initPushNotifications = async () => {
   if (!userId) return console.warn('No user ID, skipping subscribe');
 
   await api.post('/push/subscribe', { userId, subscription });
+};
+
+const handleCallPush = (notification: any) => {
+  const data = notification.data;
+  if (data && data.type === 'incoming_call') {
+    const callerId = data.callerId;
+    const roomId = data.roomId;
+    const topicId = data.topicId;
+
+    const user = getUserById(callerId);
+    if (user) {
+      receiveCall(user, roomId, topicId);
+      if (Capacitor.isNativePlatform()) {
+        showIncomingCallKit(user.initials, roomId);
+      }
+    }
+  }
 };
 
 export const removePushListeners = async () => {

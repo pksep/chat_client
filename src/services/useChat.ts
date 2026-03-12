@@ -24,8 +24,11 @@ import {
 } from './useMessages';
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
 import { receiveCall, handleCallAnswered, handleCallEnded } from './useJitsi';
+import { Capacitor } from '@capacitor/core';
+import { initCallKit, showIncomingCallKit, endAllCallKits } from './useCallKit';
 
 let chatSDK: ChatSDK | null = null;
+let activeCallNotification: Notification | null = null;
 
 const isWebsocketConnecting = ref(true);
 const isRecentlyReconnected = ref(false);
@@ -129,14 +132,56 @@ const setupChatListeners = (): void => {
     const user = getUserById(payload.callerId);
     if (user) {
       receiveCall(user, payload.roomId, payload.topicId);
+
+      // If we are on native mobile, show the system incoming call screen
+      if (Capacitor.isNativePlatform()) {
+        showIncomingCallKit(user.initials, payload.roomId, user.avatarUrl);
+      } else {
+        // Desktop/Web: If page is hidden (minimized), show a system notification
+        if (document.hidden && 'Notification' in window) {
+          if (Notification.permission === 'granted') {
+            if (activeCallNotification) activeCallNotification.close();
+
+            activeCallNotification = new Notification('Входящий вызов', {
+              body: `Звонит ${user.initials}`,
+              icon: '/favicon.ico',
+              requireInteraction: true
+            });
+
+            activeCallNotification.onclick = () => {
+              window.focus();
+              if (activeCallNotification) {
+                activeCallNotification.close();
+                activeCallNotification = null;
+              }
+            };
+          } else if (Notification.permission !== 'denied') {
+            Notification.requestPermission();
+          }
+        }
+      }
     }
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CALL_ANSWERED, ({ payload }) => {
+    if (activeCallNotification) {
+      activeCallNotification.close();
+      activeCallNotification = null;
+    }
+    if (Capacitor.isNativePlatform()) {
+      endAllCallKits();
+    }
     handleCallAnswered(payload.userId);
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CALL_ENDED, () => {
+    if (activeCallNotification) {
+      activeCallNotification.close();
+      activeCallNotification = null;
+    }
+    if (Capacitor.isNativePlatform()) {
+      endAllCallKits();
+    }
     handleCallEnded();
   });
 };
@@ -177,6 +222,11 @@ export const initializeChat = async (options: {
   await chatSDK.connect();
   isWebsocketConnecting.value = false;
   setupChatListeners();
+
+  if (Capacitor.isNativePlatform()) {
+    initCallKit();
+  }
+
   addMessageHistoryHandler();
 };
 
