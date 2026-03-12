@@ -89,6 +89,8 @@
       >
     </MobileModal>
   </main>
+
+  <CallModal />
 </template>
 
 <script setup lang="ts">
@@ -126,6 +128,7 @@ import { Modal } from '@pksep/yui';
 import AndroidIcon from './UI/AndroidIcon.vue';
 import AppleIcon from './UI/AppleIcon.vue';
 import { useMobileApp } from '../composables/useMobileApp';
+import CallModal from './CallModal/CallModal.vue';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')

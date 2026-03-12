@@ -13,7 +13,7 @@ import {
   updateLocalGroupDetails,
   updateLocalLastMessageGroup
 } from '../composables/useGroup';
-import { updateLocalUserStatus } from '../composables/useUsers';
+import { getUserById, updateLocalUserStatus } from '../composables/useUsers';
 import {
   addMessageToLocal,
   changeLocalReadStatus,
@@ -23,6 +23,7 @@ import {
   playNotificationSound
 } from './useMessages';
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
+import { receiveCall, handleCallAnswered, handleCallEnded } from './useJitsi';
 
 let chatSDK: ChatSDK | null = null;
 
@@ -122,6 +123,22 @@ const setupChatListeners = (): void => {
       );
     }
   );
+
+  // Jitsi Calls
+  chatSDK.subscribeToEvent(WebSocketEventType.INCOMING_CALL, ({ payload }) => {
+    const user = getUserById(payload.callerId);
+    if (user) {
+      receiveCall(user, payload.roomId, payload.topicId);
+    }
+  });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.CALL_ANSWERED, ({ payload }) => {
+    handleCallAnswered(payload.userId);
+  });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.CALL_ENDED, () => {
+    handleCallEnded();
+  });
 };
 
 let isVisibilityListenerAdded = false;

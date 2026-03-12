@@ -27,6 +27,7 @@ import { ChatUtils, ChatUtilsInterface } from './utils';
 import { ITopic } from '../../components/interfaces/interfaces';
 import { fetchAllTopics } from '../../composables/useTopics';
 import { fetchMessagesForTopic } from '../useMessages';
+import { Jitsi, JitsiInterface } from './jitsi';
 
 export interface ChatSDKOptions {
   apiUrl: string;
@@ -54,6 +55,7 @@ export class ChatSDK {
   private media: ChatMediaInterface;
   private ws: ChatWSInterface;
   private utils: ChatUtilsInterface;
+  private jitsi: JitsiInterface;
 
   private reqi: Reqi;
 
@@ -76,6 +78,7 @@ export class ChatSDK {
     this.media = new ChatMedia(this.reqi);
     this.ws = new ChatWS(null);
     this.utils = new ChatUtils(this.reqi);
+    this.jitsi = new Jitsi(this.reqi);
   }
 
   private createReqiInstance(): Reqi {
@@ -574,5 +577,25 @@ export class ChatSDK {
     topicsUnread: { [topicId: string]: number };
   }> {
     return await this.utils.getUnreadCounts();
+  }
+
+  async startCall(user: any, topicId: string, parentNode: HTMLElement, token?: string) {
+    await this.jitsi.startCall(user, topicId, parentNode, token);
+  }
+
+  endCall() {
+    this.jitsi.leaveCall();
+  }
+
+  getJitsiApi() {
+    return this.jitsi;
+  }
+
+  async getJitsiToken(roomId: string, userId: string): Promise<string | null> {
+    return this.jitsi.getCallToken(roomId, userId);
+  }
+
+  executeJitsiCommand(command: string, ...args: any[]) {
+    this.jitsi.executeCommand(command, ...args);
   }
 }

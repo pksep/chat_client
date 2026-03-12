@@ -40,7 +40,13 @@ export enum WebSocketEventType {
   CHANGE_MESSAGE = 'changeMessage',
   READ_MESSAGE = 'readMessage',
   USER_UPDATED = 'userUpdated',
-  TOGGLE_PRESENCE = 'togglePresence'
+  TOGGLE_PRESENCE = 'togglePresence',
+  START_CALL = 'startCall',
+  INCOMING_CALL = 'incomingCall',
+  ANSWER_CALL = 'answerCall',
+  CALL_ANSWERED = 'callAnswered',
+  END_CALL = 'endCall',
+  CALL_ENDED = 'callEnded'
 }
 
 export interface WebSocketEventPayloads {
@@ -126,6 +132,36 @@ export interface WebSocketEventPayloads {
     topicId: string;
   };
   [WebSocketEventType.TOGGLE_PRESENCE]: { isActive: boolean };
+  [WebSocketEventType.START_CALL]: {
+    userId: string;
+    roomId: string;
+    topicId: string;
+  };
+  [WebSocketEventType.ANSWER_CALL]: {
+    userId: string;
+    roomId: string;
+    topicId: string;
+  };
+  [WebSocketEventType.CALL_ANSWERED]: {
+    userId: string;
+    roomId: string;
+    topicId: string;
+  };
+  [WebSocketEventType.END_CALL]: {
+    userId: string;
+    roomId: string;
+    topicId: string;
+  };
+  [WebSocketEventType.CALL_ENDED]: {
+    userId: string;
+    roomId: string;
+    topicId: string;
+  };
+  [WebSocketEventType.INCOMING_CALL]: {
+    roomId: string;
+    callerId: string;
+    topicId: string;
+  };
 }
 
 export interface WebSocketEvent<

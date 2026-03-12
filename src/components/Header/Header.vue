@@ -100,16 +100,10 @@
     @unmount-close="handleCloseActionModal"
     @unmount-confirm="handleConfirmActionModal"
   />
-  <CallModal
-    :open="state.isCallModalOpen"
-    @unmount-close="handleEndCall"
-    :data-testid="`${props.dataTestid}-CallModal`"
-    :user="state.calledUser"
-  />
 </template>
 
 <script lang="ts" setup>
-import { computed, onUnmounted, reactive, watch } from 'vue';
+import { computed, nextTick, onUnmounted, reactive, watch } from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';
@@ -153,6 +147,7 @@ import { TopicType } from '../../services/useChatSDK/types';
 import CallIcon from '../CallModal/UI/CallIcon.vue';
 import SearchIcon from '../UI/SearchIcon.vue';
 import CallModal from '../CallModal/CallModal.vue';
+import { startCall, leaveCall, open } from '../../services/useJitsi';
 
 const { getSelectedTopic } = useTopics();
 
@@ -174,7 +169,8 @@ const state = reactive({
   isSearchInputEnable: false,
   openActionModal: false,
   isCallModalOpen: false,
-  calledUser: null
+  calledUser: null,
+  roomId: null
 });
 
 const actionModalTitle = computed(() =>
@@ -202,13 +198,17 @@ const showSearch = (): void => {
   state.isSearchInputEnable = true;
 };
 
-const handleCall = (): void => {
-  state.isCallModalOpen = true;
+const handleCall = async () => {
   state.calledUser = currentTopic.value.user;
+
+  if (!state.calledUser) return;
+  nextTick();
+  await startCall(state.calledUser, route.value.id);
 };
 
-const handleEndCall = (): void => {
-  state.isCallModalOpen = false;
+// Close call
+const handleEndCall = () => {
+  leaveCall();
   state.calledUser = null;
 };
 

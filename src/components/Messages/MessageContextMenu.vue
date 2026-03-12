@@ -51,6 +51,15 @@
       </Button>
 
       <Button
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="handleOpenForwardModal"
+        :data-testid="`${props.dataTestid}-MessageBubble-PinButton`"
+      >
+        <ForwardIcon /> Переслать
+      </Button>
+
+      <Button
         v-if="props.isMeSender && !!props.message"
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.small"
@@ -68,15 +77,6 @@
       >
         <template v-if="!props.isPin"> <PinIcon /> Закрепить </template>
         <template v-else> <UnpinIcon /> Открепить </template>
-      </Button>
-
-      <Button
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        @click.stop="handleOpenForwardModal"
-        :data-testid="`${props.dataTestid}-MessageBubble-PinButton`"
-      >
-        <ForwardIcon /> Переслать
       </Button>
 
       <Button
