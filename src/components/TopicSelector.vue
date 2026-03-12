@@ -64,7 +64,7 @@ const filteredTopics = computed(() =>
       topic.group?.title?.toLowerCase().includes(query) ||
       (typeof topic.user?.ex === 'string'
         ? JSON.parse(topic.user.ex)
-        : topic.user.ex
+        : topic.user?.ex
       )?.erpInitials
         ?.toLowerCase()
         ?.includes(query)
