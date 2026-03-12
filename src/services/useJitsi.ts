@@ -52,7 +52,9 @@ export function useJitsi() {
     isCalling.value = true;
     topicId.value = currentTopicId || null;
 
-    const currentRoom = currentTopicId ? `Chat_${currentTopicId}` : `Call_${Date.now()}`;
+    const currentRoom = currentTopicId
+      ? `Chat_${currentTopicId}`
+      : `Call_${Date.now()}`;
     roomId.value = currentRoom;
 
     await nextTick();
@@ -69,7 +71,11 @@ export function useJitsi() {
     });
   };
 
-  const receiveCall = (u: IUser, incomingRoomId: string, incomingTopicId: string) => {
+  const receiveCall = (
+    u: IUser,
+    incomingRoomId: string,
+    incomingTopicId: string
+  ) => {
     if (open.value || openCall.value || isIncoming.value) return;
 
     user.value = u;
@@ -100,7 +106,12 @@ export function useJitsi() {
         topicId: topicId.value || currentRoom
       });
 
-      jitsiApi = await sdk.startCall(me, currentRoom, jitsiContainer.value, token || undefined);
+      jitsiApi = await sdk.startCall(
+        me,
+        currentRoom,
+        jitsiContainer.value,
+        token || undefined
+      );
       setupApiListeners(jitsiApi);
       startTimer();
     }
@@ -120,7 +131,7 @@ export function useJitsi() {
 
   const handleCallAnswered = async (uId: string) => {
     console.log(`User ${uId} answered the call`);
-    
+
     // If we are the caller and Jitsi hasn't started yet, start it now
     if (isCalling.value && !jitsiApi && roomId.value) {
       const sdk = getChatSDK();
@@ -134,7 +145,12 @@ export function useJitsi() {
         const currentRoom = roomId.value;
         const token = await sdk.getJitsiToken(currentRoom, me.id);
 
-        jitsiApi = await sdk.startCall(me, currentRoom, jitsiContainer.value, token || undefined);
+        jitsiApi = await sdk.startCall(
+          me,
+          currentRoom,
+          jitsiContainer.value,
+          token || undefined
+        );
         setupApiListeners(jitsiApi);
         startTimer();
       }

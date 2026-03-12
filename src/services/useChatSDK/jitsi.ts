@@ -4,7 +4,12 @@ export interface JitsiInterface {
   open: boolean;
   user: any | null;
 
-  startCall(user: any, roomId: string, parentNode: HTMLElement, token?: string): Promise<any>;
+  startCall(
+    user: any,
+    roomId: string,
+    parentNode: HTMLElement,
+    token?: string
+  ): Promise<any>;
   leaveCall(): void;
   executeCommand(command: string, ...args: any[]): void;
   getCallToken(roomId: string, userId: string): Promise<string | null>;
@@ -33,7 +38,12 @@ export class Jitsi implements JitsiInterface {
     });
   }
 
-  public async startCall(user: any, roomId: string, parentNode: HTMLElement, token?: string) {
+  public async startCall(
+    user: any,
+    roomId: string,
+    parentNode: HTMLElement,
+    token?: string
+  ) {
     this.user = user;
     this.open = true;
 
@@ -46,7 +56,7 @@ export class Jitsi implements JitsiInterface {
       roomName: roomId,
       jwt: token,
       parentNode,
-      userInfo: { 
+      userInfo: {
         displayName: user?.name || user?.initials || 'User',
         email: user?.email
       },
@@ -63,7 +73,13 @@ export class Jitsi implements JitsiInterface {
         requireDisplayName: false,
         enableWelcomePage: false,
         filmStripOnly: false,
-        hiddenPremeetingButtons: ['videomute', 'microphone', 'select-background', 'videomute', 'microphone'],
+        hiddenPremeetingButtons: [
+          'videomute',
+          'microphone',
+          'select-background',
+          'videomute',
+          'microphone'
+        ],
         readOnlyName: true,
         disableInviteFunctions: true,
         disableJoinLeaveSounds: true,
@@ -105,12 +121,15 @@ export class Jitsi implements JitsiInterface {
     }
   }
 
-  public async getCallToken(roomId: string, userId: string): Promise<string | null> {
+  public async getCallToken(
+    roomId: string,
+    userId: string
+  ): Promise<string | null> {
     try {
-      const response = await this.reqi.get<{ token: string }>(
+      const response = (await this.reqi.get<{ token: string }>(
         `/calls/jitsi-token?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(userId)}`,
         { parsed: false }
-      ) as any;
+      )) as any;
       const data = await response.json();
       return data.token;
     } catch (error) {

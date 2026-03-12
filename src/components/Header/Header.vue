@@ -146,8 +146,7 @@ import ConfirmModal from '../UI/ConfirmModal.vue';
 import { TopicType } from '../../services/useChatSDK/types';
 import CallIcon from '../CallModal/UI/CallIcon.vue';
 import SearchIcon from '../UI/SearchIcon.vue';
-import CallModal from '../CallModal/CallModal.vue';
-import { startCall, leaveCall, open } from '../../services/useJitsi';
+import { startCall } from '../../services/useJitsi';
 
 const { getSelectedTopic } = useTopics();
 
@@ -204,12 +203,6 @@ const handleCall = async () => {
   if (!state.calledUser) return;
   nextTick();
   await startCall(state.calledUser, route.value.id);
-};
-
-// Close call
-const handleEndCall = () => {
-  leaveCall();
-  state.calledUser = null;
 };
 
 const handleCloseMobileInfoModal = (): void => {

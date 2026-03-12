@@ -579,7 +579,12 @@ export class ChatSDK {
     return await this.utils.getUnreadCounts();
   }
 
-  async startCall(user: any, topicId: string, parentNode: HTMLElement, token?: string) {
+  async startCall(
+    user: any,
+    topicId: string,
+    parentNode: HTMLElement,
+    token?: string
+  ) {
     await this.jitsi.startCall(user, topicId, parentNode, token);
   }
 
