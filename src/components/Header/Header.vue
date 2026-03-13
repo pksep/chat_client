@@ -184,8 +184,7 @@ import {
   isModalVisible,
   formattedTime,
   isCalling,
-  user,
-  isJitsiReady
+  user
 } from '../../services/useJitsi';
 import {
   startWebRTCCall,
@@ -193,11 +192,9 @@ import {
   isWebRTCCalling,
   isWebRTCModalVisible,
   webRTCUser,
-  formattedTime as webRTCFormattedTime,
-  isWebRTCIncoming
+  formattedTime as webRTCFormattedTime
 } from '../../services/useWebRTC';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
-import { getAuthUser } from '../../composables/useAuth';
 
 const { getSelectedTopic } = useTopics();
 

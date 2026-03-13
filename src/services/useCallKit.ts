@@ -76,5 +76,7 @@ export const endAllCallKits = async () => {
       parsedOptions: {},
       options: ''
     });
-  } catch (e) {}
+  } catch (e) {
+    console.error('[CallKit] Error:', e);
+  }
 };

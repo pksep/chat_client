@@ -1,4 +1,4 @@
-import { ref, reactive, computed, nextTick } from 'vue';
+import { ref, reactive, computed } from 'vue';
 import { getChatSDK } from '../services/useChat';
 import type { IUser } from '../components/interfaces/interfaces';
 import { getAuthUser } from '../composables/useAuth';
