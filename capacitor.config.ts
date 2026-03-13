@@ -8,10 +8,10 @@ const config: CapacitorConfig = {
   webDir: 'build',
   plugins: {
     EdgeToEdge: {
-      backgroundColor: "#ffffff", // Общий цвет фона
-      navigationBarColor: "#ffffff", // Цвет нижней панели навигации
-      statusBarColor: "#ffffff", // Цвет верхней строки состояния
-    },
+      backgroundColor: '#ffffff', // Общий цвет фона
+      navigationBarColor: '#ffffff', // Цвет нижней панели навигации
+      statusBarColor: '#ffffff' // Цвет верхней строки состояния
+    }
   }
 };
 

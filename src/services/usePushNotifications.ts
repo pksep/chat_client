@@ -93,6 +93,7 @@ export const initPushNotifications = async () => {
 };
 
 const handleCallPush = (notification: any) => {
+  return;
   const data = notification.data;
   if (data && data.type === 'incoming_call') {
     const callerId = data.callerId;

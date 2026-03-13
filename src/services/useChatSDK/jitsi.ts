@@ -1,4 +1,5 @@
 import type { Reqi } from '@pksep/reqi';
+import { getConfig } from '../useConfig';
 
 export interface JitsiInterface {
   open: boolean;
@@ -13,6 +14,8 @@ export interface JitsiInterface {
   leaveCall(): void;
   executeCommand(command: string, ...args: any[]): void;
   getCallToken(roomId: string, userId: string): Promise<string | null>;
+  getAvailableDevices(): Promise<any>;
+  setAudioOutputDevice(label: string, deviceId: string): void;
 }
 
 export class Jitsi implements JitsiInterface {
@@ -51,6 +54,8 @@ export class Jitsi implements JitsiInterface {
 
     if (this.api) this.api.dispose();
 
+    const config = getConfig();
+
     const domain = 'video.pksep.ru';
     const options = {
       roomName: roomId,
@@ -58,24 +63,21 @@ export class Jitsi implements JitsiInterface {
       parentNode,
       userInfo: {
         displayName: user?.initials || 'User',
-        email: user?.email
+        avatarURL: `${config.CHAT_PATH_TO_FILE_CDN}/${user?.avatarUrl}`
       },
       configOverwrite: {
-        startWithAudioMuted: true,
+        startWithAudioMuted: false,
         startWithVideoMuted: true,
         prejoinPageEnabled: false,
         prejoinConfig: {
           enabled: false
         },
         skipPrejoin: true,
-        toolbarButtons: [],
         disableDeepLinking: true,
         requireDisplayName: false,
         enableWelcomePage: false,
         filmStripOnly: false,
         hiddenPremeetingButtons: [
-          'videomute',
-          'microphone',
           'select-background',
           'videomute',
           'microphone'
@@ -84,21 +86,64 @@ export class Jitsi implements JitsiInterface {
         disableInviteFunctions: true,
         disableJoinLeaveSounds: true,
         doNotFlipLocalVideo: false,
-        disableSelfView: false
+        disableSelfView: false,
+        hideConferenceSubject: true,
+        hideParticipantsStats: true,
+        disableRemoteMute: true,
+        remoteVideoMenu: {
+          disabled: true
+        },
+        participantsPane: {
+          enabled: false
+        },
+        videoQuality: {
+          disabled: true
+        },
+        tileView: {
+          enabled: false
+        },
+        helpButton: {
+          enabled: false
+        },
+        disablePolls: true,
+        disableReactions: true,
+        disableShortcuts: true,
+        hideLobbyButton: true,
+        enableFeaturesBasedOnToken: true,
+        defaultRemoteDisplayName: ' ',
+        hideDisplayName: true,
+        hideDominantSpeakerBadge: true,
+        disableTileView: true,
+        enableNoAudioDetection: false,
+        enableNoVideoDetection: false,
+        enableTalkWhileMuted: false,
+        disableProfile: true,
+        gravatar: {
+          disabled: true
+        }
       },
       interfaceConfigOverwrite: {
         SHOW_JITSI_WATERMARK: false,
         SHOW_WATERMARK_FOR_GUESTS: false,
         HIDE_INVITE_MORE_HEADER: true,
         MOBILE_APP_PROMO: false,
-        TOOLBAR_BUTTONS: [],
         SETTINGS_SECTIONS: [],
         FILM_STRIP_MAX_HEIGHT: 0,
         DISABLE_VIDEO_BACKGROUND: true,
         GENERATE_ROOMNAMES_ON_WELCOME_PAGE: false,
         DISPLAY_WELCOME_PAGE_CONTENT: false,
         DISPLAY_WELCOME_PAGE_TOOLBAR_ADDITIONAL_CONTENT: false,
-        VIDEO_QUALITY_LABEL_DISABLED: true
+        VIDEO_QUALITY_LABEL_DISABLED: true,
+        RECENT_LIST_ENABLED: false,
+        SHOW_CHROME_EXTENSION_BANNER: false,
+        ENFORCE_NOTIFICATION_AUTO_DISMISS_TIMEOUT: 0,
+        INDICATOR_CONTAINER_DISPLAY_MODE: 'none',
+        DEFAULT_BACKGROUND: '#ffffff',
+        SHOW_BRAND_WATERMARK: false,
+        BRAND_WATERMARK_LINK: '',
+        JITSI_WATERMARK_LINK: '',
+        TOOLBAR_BUTTONS: [],
+        TOOLBAR_ALWAYS_VISIBLE: false
       }
     };
 
@@ -135,6 +180,19 @@ export class Jitsi implements JitsiInterface {
     } catch (error) {
       console.error('[Jitsi] Failed to fetch call token:', error);
       return null;
+    }
+  }
+
+  public async getAvailableDevices(): Promise<any> {
+    if (this.api) {
+      return this.api.getAvailableDevices();
+    }
+    return Promise.resolve({});
+  }
+
+  public setAudioOutputDevice(label: string, deviceId: string): void {
+    if (this.api) {
+      this.api.setAudioOutputDevice(label, deviceId);
     }
   }
 }

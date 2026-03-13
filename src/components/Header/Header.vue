@@ -4,17 +4,32 @@
     :data-testid="`${props.dataTestid}-Header-Container`"
   >
     <div
-      v-if="(open || openCall) && !isModalVisible"
+      v-if="
+        ((open || openCall) && !isModalVisible) ||
+        (isWebRTCOpen && !isWebRTCModalVisible)
+      "
       class="chat__header-active-call"
       @click.stop="showModal"
     >
       <LeaveIcon />
-      <span>{{ isCalling ? 'Соединение...' : `${user?.initials}` }}</span>
+      <span>{{
+        isCalling || isWebRTCCalling
+          ? 'Соединение...'
+          : `${(user || webRTCUser)?.initials}`
+      }}</span>
 
-      <span class="chat__header-active-call__time" v-if="!isCalling"> •</span>
+      <span
+        class="chat__header-active-call__time"
+        v-if="!isCalling && !isWebRTCCalling"
+      >
+        •</span
+      >
 
-      <span class="chat__header-active-call__time" v-if="!isCalling">
-        {{ formattedTime }}
+      <span
+        class="chat__header-active-call__time"
+        v-if="!isCalling && !isWebRTCCalling"
+      >
+        {{ open || openCall ? formattedTime : webRTCFormattedTime }}
       </span>
     </div>
     <div class="chat__header-main" @click="handleClickHeader">
@@ -77,7 +92,7 @@
           :data-testid="`${props.dataTestid}-Header-SearchIcon`"
         />
         <CallIcon
-          v-if="!(open || openCall)"
+          v-if="!(open || openCall || isWebRTCOpen)"
           class="chat__header__icon"
           :data-testid="`${props.dataTestid}-Header-CallIcon`"
           @click.stop="handleCall"
@@ -169,9 +184,20 @@ import {
   isModalVisible,
   formattedTime,
   isCalling,
-  user
+  user,
+  isJitsiReady
 } from '../../services/useJitsi';
+import {
+  startWebRTCCall,
+  isWebRTCOpen,
+  isWebRTCCalling,
+  isWebRTCModalVisible,
+  webRTCUser,
+  formattedTime as webRTCFormattedTime,
+  isWebRTCIncoming
+} from '../../services/useWebRTC';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
+import { getAuthUser } from '../../composables/useAuth';
 
 const { getSelectedTopic } = useTopics();
 
@@ -223,7 +249,20 @@ const showSearch = (): void => {
 };
 
 const handleCall = async () => {
-  state.calledUser = currentTopic.value.user;
+  if (currentTopic.value?.type === TopicType.DM) {
+    state.calledUser = currentTopic.value.user;
+  }
+
+  if (!state.calledUser) return;
+  nextTick();
+  // Default to WebRTC call now
+  await startWebRTCCall(state.calledUser, route.value.id);
+};
+
+const handleJitsiCall = async () => {
+  if (currentTopic.value?.type === TopicType.DM) {
+    state.calledUser = currentTopic.value.user;
+  }
 
   if (!state.calledUser) return;
   nextTick();
@@ -231,7 +270,11 @@ const handleCall = async () => {
 };
 
 const showModal = () => {
-  isModalVisible.value = true;
+  if (isWebRTCOpen.value) {
+    isWebRTCModalVisible.value = true;
+  } else {
+    isModalVisible.value = true;
+  }
 };
 
 const handleCloseMobileInfoModal = (): void => {
@@ -256,6 +299,13 @@ const handleClickHeader = async (): Promise<void> => {
 const getPopoverOptions = computed(() => {
   const popoverArray = [];
   if (route.value && route.value.type !== RouteTypes.AI) {
+    if (currentTopic.value?.type === TopicType.DM) {
+      popoverArray.push({
+        value: 'Jitsi Call',
+        function: handleJitsiCall
+      });
+    }
+
     if (route.value.type === RouteTypes.GROUP) {
       popoverArray.push({
         value: 'Информация',

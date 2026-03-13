@@ -585,7 +585,15 @@ export class ChatSDK {
     parentNode: HTMLElement,
     token?: string
   ) {
-    return await this.jitsi.startCall(user, topicId, parentNode, token);
+    await this.jitsi.startCall(user, topicId, parentNode, token);
+  }
+
+  async getJitsiAvailableDevices(): Promise<any> {
+    return await this.jitsi.getAvailableDevices();
+  }
+
+  setJitsiAudioOutputDevice(label: string, deviceId: string) {
+    this.jitsi.setAudioOutputDevice(label, deviceId);
   }
 
   endCall() {

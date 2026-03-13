@@ -130,6 +130,7 @@ import AppleIcon from './UI/AppleIcon.vue';
 import { useMobileApp } from '../composables/useMobileApp';
 import CallModal from './CallModal/CallModal.vue';
 import { open, openCall, isModalVisible } from '../services/useJitsi';
+import { isWebRTCOpen, isWebRTCModalVisible } from '../services/useWebRTC';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -170,7 +171,8 @@ const chatContainerClasses = computed(() => [
         ? true
         : !state.isMenuDesktopOpen,
     'chat-container--active-call':
-      (open.value || openCall.value) && !isModalVisible.value
+      ((open.value || openCall.value) && !isModalVisible.value) ||
+      (isWebRTCOpen.value && !isWebRTCModalVisible.value)
   }
 ]);
 

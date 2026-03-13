@@ -1,51 +1,70 @@
 <template>
   <div
     @click.stop="hideModal"
-    v-if="open || openCall"
+    v-if="isWebRTCOpen"
     class="call-modal"
-    :class="{ 'call-modal--hidden': !isModalVisible }"
+    :class="{ 'call-modal--hidden': !isWebRTCModalVisible }"
   >
     <div
       class="call-modal__container"
       :class="{
-        'call-modal__container--full-screen': state.isFullScreen || isMobile
+        'call-modal__container--full-screen':
+          webRTCState.isFullScreen || isMobile
       }"
       @click.stop
     >
       <div class="call-modal__avatar-container">
-        <h3 v-if="user" class="call-modal__user-name">
-          {{ user.initials }}
+        <h3 v-if="webRTCUser" class="call-modal__user-name">
+          {{ webRTCUser?.initials }}
         </h3>
         <p class="call-modal__status">
-          <span v-if="isIncoming">Входящий вызов...</span>
-          <span v-else-if="isCalling">Соединение...</span>
+          <span v-if="isWebRTCIncoming">Входящий вызов...</span>
+          <span v-else-if="isWebRTCCalling">Соединение...</span>
           <span v-else>{{ formattedTime }}</span>
         </p>
 
         <Avatar
-          v-if="user"
-          :url="`${config.CHAT_PATH_TO_FILE_CDN}/${user.avatarUrl}`"
-          :alt="user.avatarUrl"
+          v-if="webRTCUser"
+          :url="`${config.CHAT_PATH_TO_FILE_CDN}/${webRTCUser?.avatarUrl}`"
+          :alt="webRTCUser?.avatarUrl"
           class="call-modal__avatar"
-          :initials="user.initials"
+          :initials="webRTCUser?.initials"
         />
       </div>
-      <div v-show="false" ref="jitsiContainer" class="call-modal__video"></div>
+
+      <div
+        v-if="isWebRTCOpen && !isWebRTCIncoming && !isWebRTCCalling"
+        class="call-modal__webrtc-container"
+      >
+        <video
+          ref="remoteVideo"
+          autoplay
+          playsinline
+          class="call-modal__remote-video"
+        ></video>
+        <video
+          ref="localVideo"
+          autoplay
+          playsinline
+          muted
+          class="call-modal__local-video"
+        ></video>
+      </div>
 
       <div class="call-modal__controls">
-        <template v-if="isIncoming">
+        <template v-if="isWebRTCIncoming">
           <div
             class="call-modal__control-button-wrapper call-modal__control-button-wrapper--incoming"
           >
             <button
               class="call-modal__control-button call-modal__control-button--answer"
-              @click="confirmAnswer"
+              @click="acceptWebRTCCall"
             >
-              <CallIcon />
+              <LeaveIcon />
             </button>
             <button
               class="call-modal__control-button call-modal__control-button--reject"
-              @click="rejectCall"
+              @click="endWebRTCCall"
             >
               <LeaveIcon />
             </button>
@@ -55,10 +74,10 @@
           <button
             v-if="!isMobile"
             class="call-modal__control-button call-modal__control-button--fullscreen"
-            @click="toggleFullScreen"
+            @click="webRTCState.isFullScreen = !webRTCState.isFullScreen"
             title="Fullscreen"
           >
-            <FullscreenIcon v-if="!state.isFullScreen" />
+            <FullscreenIcon v-if="!webRTCState.isFullScreen" />
             <MinimizeIcon v-else />
           </button>
 
@@ -71,52 +90,51 @@
 
           <div class="call-modal__control-button-wrapper">
             <button
+              v-if="false && Capacitor.isNativePlatform()"
               class="call-modal__control-button"
               :class="{
-                'call-modal__control-button__inactive': !state.isSpeakerActive
+                'call-modal__control-button__inactive':
+                  !webRTCState.isSpeakerActive
               }"
-              @click="toggleAudioOutput"
-              :disabled="!isJitsiReady"
+              @click="
+                webRTCState.isSpeakerActive = !webRTCState.isSpeakerActive
+              "
             >
-              <VolumeIcon v-if="state.isSpeakerActive" />
+              <VolumeIcon v-if="webRTCState.isSpeakerActive" />
               <EarpieceIcon v-else />
             </button>
 
             <button
-              v-if="state.isMicActive"
+              v-if="webRTCState.isMicActive"
               class="call-modal__control-button"
-              @click="toggleMic"
-              :disabled="!isJitsiReady"
+              @click="handleToggleMic"
             >
               <MicIcon />
             </button>
             <button
               v-else
               class="call-modal__control-button call-modal__control-button__inactive"
-              @click="toggleMic"
-              :disabled="!isJitsiReady"
+              @click="handleToggleMic"
             >
               <MicDisableIcon />
             </button>
 
             <button
-              v-if="state.isVideoActive"
+              v-if="webRTCState.isVideoActive"
               class="call-modal__control-button"
-              @click="toggleVideo"
-              :disabled="!isJitsiReady"
+              @click="handleToggleVideo"
             >
               <VideoIcon />
             </button>
             <button
               v-else
               class="call-modal__control-button call-modal__control-button__inactive"
-              @click="toggleVideo"
-              :disabled="!isJitsiReady"
+              @click="handleToggleVideo"
             >
               <VideoDisableIcon />
             </button>
 
-            <button class="call-modal__control-button" @click="leaveCall">
+            <button class="call-modal__control-button" @click="endWebRTCCall">
               <LeaveIcon />
             </button>
           </div>
@@ -128,6 +146,7 @@
 
 <script setup lang="ts">
 import { Avatar, Icon, IconNameEnum } from '@pksep/yui';
+import { Capacitor } from '@capacitor/core';
 import { MAX_W_MD } from '../../utils/constants';
 import { useResizeState } from '../../composables/useResizeState';
 import { getConfig } from '../../services/useConfig';
@@ -142,31 +161,67 @@ import VideoDisableIcon from './UI/VideoDisableIcon.vue';
 import CallIcon from './UI/CallIcon.vue';
 import LeaveIcon from './UI/LeaveIcon.vue';
 import {
-  open,
-  openCall,
-  isIncoming,
-  isCalling,
-  user,
-  state,
-  jitsiContainer,
-  isJitsiReady,
-  isModalVisible,
+  isWebRTCOpen,
+  isWebRTCIncoming,
+  isWebRTCCalling,
+  isWebRTCModalVisible,
+  webRTCUser,
+  webRTCState,
+  localStream,
+  remoteStream,
   formattedTime,
-  toggleMic,
-  toggleVideo,
-  toggleFullScreen,
-  toggleAudioOutput,
-  leaveCall,
-  confirmAnswer,
-  rejectCall
-} from '../../services/useJitsi';
+  acceptWebRTCCall,
+  endWebRTCCall
+} from '../../services/useWebRTC';
+import { watch, ref } from 'vue';
 
 const config = getConfig();
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
+const localVideo = ref<HTMLVideoElement | null>(null);
+const remoteVideo = ref<HTMLVideoElement | null>(null);
+
+watch(
+  [localVideo, localStream],
+  ([video, stream]) => {
+    if (video && stream) {
+      video.srcObject = stream;
+    }
+  },
+  { immediate: true }
+);
+
+watch(
+  [remoteVideo, remoteStream],
+  ([video, stream]) => {
+    if (video && stream) {
+      video.srcObject = stream;
+    }
+  },
+  { immediate: true }
+);
+
 const hideModal = () => {
-  if (!isIncoming.value && !isCalling.value) {
-    isModalVisible.value = false;
+  if (!isWebRTCCalling.value && !isWebRTCIncoming.value) {
+    isWebRTCModalVisible.value = false;
+  }
+};
+
+const handleToggleMic = () => {
+  webRTCState.isMicActive = !webRTCState.isMicActive;
+  if (localStream.value) {
+    localStream.value.getAudioTracks().forEach(track => {
+      track.enabled = webRTCState.isMicActive;
+    });
+  }
+};
+
+const handleToggleVideo = () => {
+  webRTCState.isVideoActive = !webRTCState.isVideoActive;
+  if (localStream.value) {
+    localStream.value.getVideoTracks().forEach(track => {
+      track.enabled = webRTCState.isVideoActive;
+    });
   }
 };
 </script>

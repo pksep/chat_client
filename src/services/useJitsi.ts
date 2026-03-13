@@ -23,7 +23,7 @@ const isJitsiReady = ref(false);
 const isModalVisible = ref(false);
 const state = reactive({
   isFullScreen: false,
-  isMicActive: false,
+  isMicActive: true,
   isVideoActive: false,
   isSpeakerActive: true
 });
@@ -259,10 +259,11 @@ export function useJitsi() {
     }
 
     const sdk = getChatSDK();
-    if (sdk && roomId.value && topicId.value) {
+    const me = getAuthUser();
+    if (sdk && me && roomId.value && topicId.value) {
       sdk.sendWebSocketEvent(WebSocketEventType.END_CALL, {
         roomId: roomId.value,
-        userId: user.value?.id || '',
+        userId: me.id,
         topicId: topicId.value
       });
     }
@@ -319,10 +320,11 @@ export function useJitsi() {
 
   const leaveCall = () => {
     const sdk = getChatSDK();
-    if (sdk && roomId.value && topicId.value) {
+    const me = getAuthUser();
+    if (sdk && me && roomId.value && topicId.value) {
       sdk.sendWebSocketEvent(WebSocketEventType.END_CALL, {
         roomId: roomId.value,
-        userId: user.value?.id || '',
+        userId: me.id,
         topicId: topicId.value
       });
       sdk.endCall();
@@ -388,15 +390,92 @@ export function useJitsi() {
 
   const toggleAudioOutput = async () => {
     state.isSpeakerActive = !state.isSpeakerActive;
+    const sdk = getChatSDK();
+    if (!sdk) return;
+
+    // Small delay to ensure Jitsi API is ready for commands
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     if (Capacitor.isNativePlatform()) {
-      // Audio output switching requires a native plugin. 
-      // Since we are not touching node_modules, we will implement this 
-      // via a standard Capacitor bridge if available in the future.
-      console.info('[Jitsi] Mobile audio output switching triggered:', state.isSpeakerActive ? 'speaker' : 'earpiece');
-    } else {
-      const sdk = getChatSDK();
-      sdk?.executeJitsiCommand('setVolume', state.isSpeakerActive ? 1 : 0.2);
+      try {
+        const devices = await sdk.getJitsiAvailableDevices();
+        const audioOutputs = (devices?.audioOutput || []) as Array<{
+          label: string;
+          deviceId: string;
+        }>;
+
+        console.log(
+          '[Jitsi] Available audio output devices:',
+          JSON.stringify(audioOutputs)
+        );
+
+        let targetDevice;
+        const searchTerms = {
+          speaker: ['speaker', 'loudspeaker', 'loud', 'speakerphone'],
+          earpiece: [
+            'earpiece',
+            'receiver',
+            'handset',
+            'phone',
+            'internal',
+            'telephony',
+            'iphone'
+          ]
+        };
+
+        const currentMode = state.isSpeakerActive ? 'speaker' : 'earpiece';
+        const keywords = searchTerms[currentMode];
+
+        // 1. Try matching with keywords
+        targetDevice = audioOutputs.find(d => {
+          const label = (d.label || '').toLowerCase();
+          return keywords.some(k => label.includes(k));
+        });
+
+        // 2. Fallback for earpiece: find any device that is NOT a speaker
+        if (!targetDevice && currentMode === 'earpiece') {
+          targetDevice = audioOutputs.find(d => {
+            const label = (d.label || '').toLowerCase();
+            return !searchTerms.speaker.some(k => label.includes(k));
+          });
+        }
+
+        // 3. Fallback for speaker: find any device that IS a speaker
+        if (!targetDevice && currentMode === 'speaker') {
+          targetDevice = audioOutputs.find(d => {
+            const label = (d.label || '').toLowerCase();
+            return searchTerms.speaker.some(k => label.includes(k));
+          });
+        }
+
+        if (targetDevice) {
+          console.log(
+            `[Jitsi] Switching to ${currentMode}:`,
+            targetDevice.label,
+            targetDevice.deviceId
+          );
+          sdk.setJitsiAudioOutputDevice(
+            targetDevice.label,
+            targetDevice.deviceId
+          );
+        } else if (audioOutputs.length > 0) {
+          // 4. Final fallback: pick first device if earpiece, or last if speaker (often speaker is last)
+          const fallbackDevice =
+            currentMode === 'earpiece'
+              ? audioOutputs[0]
+              : audioOutputs[audioOutputs.length - 1];
+          console.warn(
+            `[Jitsi] No perfect match for ${currentMode}, using fallback:`,
+            fallbackDevice.label
+          );
+          sdk.setJitsiAudioOutputDevice(
+            fallbackDevice.label,
+            fallbackDevice.deviceId
+          );
+        }
+      } catch (error) {
+        console.error('[Jitsi] Error switching audio output:', error);
+      }
     }
   };
 

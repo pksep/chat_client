@@ -24,6 +24,7 @@ import {
 } from './useMessages';
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
 import { receiveCall, handleCallAnswered, handleCallEnded } from './useJitsi';
+import { useWebRTC } from './useWebRTC';
 import { Capacitor } from '@capacitor/core';
 import { initCallKit, showIncomingCallKit, endAllCallKits } from './useCallKit';
 
@@ -183,7 +184,35 @@ const setupChatListeners = (): void => {
       endAllCallKits();
     }
     handleCallEnded();
+    const { cleanup } = useWebRTC();
+    cleanup();
   });
+
+  // WebRTC Calls
+  chatSDK.subscribeToEvent(WebSocketEventType.WEBRTC_OFFER, ({ payload }) => {
+    const { handleOffer } = useWebRTC();
+    if (payload.fromUserId) {
+      handleOffer(
+        payload.fromUserId,
+        payload.offer,
+        payload.roomId,
+        payload.topicId
+      );
+    }
+  });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.WEBRTC_ANSWER, ({ payload }) => {
+    const { handleAnswer } = useWebRTC();
+    handleAnswer(payload.answer, payload.roomId, payload.topicId);
+  });
+
+  chatSDK.subscribeToEvent(
+    WebSocketEventType.WEBRTC_ICE_CANDIDATE,
+    ({ payload }) => {
+      const { handleIceCandidate } = useWebRTC();
+      handleIceCandidate(payload.candidate, payload.roomId, payload.topicId);
+    }
+  );
 };
 
 let isVisibilityListenerAdded = false;

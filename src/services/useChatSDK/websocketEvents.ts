@@ -46,7 +46,10 @@ export enum WebSocketEventType {
   ANSWER_CALL = 'answerCall',
   CALL_ANSWERED = 'callAnswered',
   END_CALL = 'endCall',
-  CALL_ENDED = 'callEnded'
+  CALL_ENDED = 'callEnded',
+  WEBRTC_OFFER = 'webrtcOffer',
+  WEBRTC_ANSWER = 'webrtcAnswer',
+  WEBRTC_ICE_CANDIDATE = 'webrtcIceCandidate'
 }
 
 export interface WebSocketEventPayloads {
@@ -160,6 +163,27 @@ export interface WebSocketEventPayloads {
   [WebSocketEventType.INCOMING_CALL]: {
     roomId: string;
     callerId: string;
+    topicId: string;
+  };
+  [WebSocketEventType.WEBRTC_OFFER]: {
+    toUserId: string;
+    fromUserId?: string;
+    offer: RTCSessionDescriptionInit;
+    roomId: string;
+    topicId: string;
+  };
+  [WebSocketEventType.WEBRTC_ANSWER]: {
+    toUserId: string;
+    fromUserId?: string;
+    answer: RTCSessionDescriptionInit;
+    roomId: string;
+    topicId: string;
+  };
+  [WebSocketEventType.WEBRTC_ICE_CANDIDATE]: {
+    toUserId: string;
+    fromUserId?: string;
+    candidate: RTCIceCandidateInit;
+    roomId: string;
     topicId: string;
   };
 }
