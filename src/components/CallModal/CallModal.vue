@@ -158,7 +158,6 @@ import MicIcon from './UI/MicIcon.vue';
 import VideoIcon from './UI/VideoIcon.vue';
 import MicDisableIcon from './UI/MicDisableIcon.vue';
 import VideoDisableIcon from './UI/VideoDisableIcon.vue';
-import CallIcon from './UI/CallIcon.vue';
 import LeaveIcon from './UI/LeaveIcon.vue';
 import {
   isWebRTCOpen,
