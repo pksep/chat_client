@@ -152,8 +152,6 @@ import ForwardIcon from '../UI/ForwardIcon.vue';
 import ForwardModal from './ForwardModal.vue';
 import { ITopic } from '../interfaces/interfaces';
 import { getMessagesByTopicId } from '../../services/useMessages';
-import { useMessageMedia } from './composables/useMessageMedia';
-import { MediaType } from '@pksep/zod-shared-chat';
 
 const props = withDefaults(defineProps<IMessageContextMenu>(), {
   dataTestid: 'MessageContextMenu'
@@ -174,8 +172,6 @@ const forwardModalOpen = ref(false);
 const reactionRow = ref<HTMLElement | null>(null);
 const flipReactions = ref(false);
 const showEmojies = ref(false);
-
-const { getFullMediaPath } = useMessageMedia();
 
 const checkFlip = async () => {
   const windowWidth = window.innerWidth;
