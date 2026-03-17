@@ -13,7 +13,10 @@
       }"
       @click.stop
     >
-      <div class="call-modal__avatar-container">
+      <div
+        v-show="!isRemoteVideoActive || isWebRTCCalling || isWebRTCIncoming"
+        class="call-modal__avatar-container"
+      >
         <h3 v-if="webRTCUser" class="call-modal__user-name">
           {{ webRTCUser?.initials }}
         </h3>
@@ -34,15 +37,21 @@
 
       <div
         v-if="isWebRTCOpen && !isWebRTCIncoming && !isWebRTCCalling"
+        v-show="isRemoteVideoActive || webRTCState.isVideoActive"
         class="call-modal__webrtc-container"
+        :class="{
+          'call-modal__webrtc-container--transparent': !isRemoteVideoActive
+        }"
       >
         <video
+          v-show="isRemoteVideoActive"
           ref="remoteVideo"
           autoplay
           playsinline
           class="call-modal__remote-video"
         ></video>
         <video
+          v-show="webRTCState.isVideoActive"
           ref="localVideo"
           autoplay
           playsinline
@@ -90,15 +99,13 @@
 
           <div class="call-modal__control-button-wrapper">
             <button
-              v-if="false && Capacitor.isNativePlatform()"
+              v-if="Capacitor.isNativePlatform()"
               class="call-modal__control-button"
               :class="{
                 'call-modal__control-button__inactive':
                   !webRTCState.isSpeakerActive
               }"
-              @click="
-                webRTCState.isSpeakerActive = !webRTCState.isSpeakerActive
-              "
+              @click="handleToggleAudioOutput"
             >
               <VolumeIcon v-if="webRTCState.isSpeakerActive" />
               <EarpieceIcon v-else />
@@ -147,6 +154,8 @@
 <script setup lang="ts">
 import { Avatar, Icon, IconNameEnum } from '@pksep/yui';
 import { Capacitor } from '@capacitor/core';
+import { getChatSDK } from '../../services/useChat';
+import { WebSocketEventType } from '../../services/useChatSDK/websocketEvents';
 import { MAX_W_MD } from '../../utils/constants';
 import { useResizeState } from '../../composables/useResizeState';
 import { getConfig } from '../../services/useConfig';
@@ -165,14 +174,26 @@ import {
   isWebRTCCalling,
   isWebRTCModalVisible,
   webRTCUser,
+  webRTCRoomId,
   webRTCState,
   localStream,
   remoteStream,
+  isRemoteVideoActive,
   formattedTime,
   acceptWebRTCCall,
-  endWebRTCCall
+  endWebRTCCall,
+  toggleSpeaker
 } from '../../services/useWebRTC';
+import { AudioOutput } from '../../services/useAudioOutput';
 import { watch, ref } from 'vue';
+import {
+  enableProximityLock,
+  disableProximityLock
+} from '../../services/useProximityLock';
+import {
+  showIncomingCallScreen,
+  hideIncomingCallScreen
+} from '../../services/useCallScreen';
 
 const config = getConfig();
 const { state: isMobile } = useResizeState(MAX_W_MD);
@@ -206,11 +227,53 @@ const hideModal = () => {
   }
 };
 
+const handleToggleAudioOutput = () => {
+  toggleSpeaker();
+};
+
+// Enable proximity lock and locked screen behavior when call becomes active
+watch([isWebRTCOpen, isWebRTCIncoming, isWebRTCCalling], ([open, incoming]) => {
+  if (open) {
+    // Put app on top of lock screen
+    showIncomingCallScreen();
+
+    if (!incoming) {
+      if (!webRTCState.isSpeakerActive) {
+        enableProximityLock();
+      } else {
+        disableProximityLock();
+      }
+
+      // Apply initial audio output state
+      if (Capacitor.isNativePlatform()) {
+        AudioOutput.toggleAudio({
+          useSpeaker: webRTCState.isSpeakerActive
+        }).catch(err =>
+          console.warn('Failed to set initial audio output:', err)
+        );
+      }
+    }
+  } else if (!open) {
+    hideIncomingCallScreen();
+    disableProximityLock();
+  }
+});
+
 const handleToggleMic = () => {
   webRTCState.isMicActive = !webRTCState.isMicActive;
   if (localStream.value) {
     localStream.value.getAudioTracks().forEach(track => {
       track.enabled = webRTCState.isMicActive;
+    });
+  }
+
+  const sdk = getChatSDK();
+  if (sdk && webRTCUser.value && webRTCRoomId.value) {
+    sdk.sendWebSocketEvent(WebSocketEventType.WEBRTC_TRACK_STATUS, {
+      toUserId: webRTCUser.value.id,
+      video: webRTCState.isVideoActive,
+      audio: webRTCState.isMicActive,
+      roomId: webRTCRoomId.value
     });
   }
 };
@@ -220,6 +283,16 @@ const handleToggleVideo = () => {
   if (localStream.value) {
     localStream.value.getVideoTracks().forEach(track => {
       track.enabled = webRTCState.isVideoActive;
+    });
+  }
+
+  const sdk = getChatSDK();
+  if (sdk && webRTCUser.value && webRTCRoomId.value) {
+    sdk.sendWebSocketEvent(WebSocketEventType.WEBRTC_TRACK_STATUS, {
+      toUserId: webRTCUser.value.id,
+      video: webRTCState.isVideoActive,
+      audio: webRTCState.isMicActive,
+      roomId: webRTCRoomId.value
     });
   }
 };

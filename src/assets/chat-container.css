@@ -40,8 +40,14 @@
   grid-template-rows: var(--header-height) 1fr;
   scroll-behavior: smooth;
 
-  &.chat-container--active-call {
-    --header-height: 95px;
+  @media screen and (width > 480px) {
+    &.chat-container--active-call {
+      --header-height: 95px;
+    }
+
+    .chat {
+      --basic-height: calc(var(--default-height) - var(--header-height));
+    }
   }
 }
 

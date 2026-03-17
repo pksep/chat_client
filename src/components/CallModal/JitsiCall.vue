@@ -30,7 +30,11 @@
         />
       </div>
       <div
-        v-show="!isIncoming && !isCalling"
+        v-show="
+          !isIncoming &&
+          !isCalling &&
+          (state.isVideoActive || isRemoteVideoActive)
+        "
         ref="jitsiContainer"
         class="call-modal__video"
       ></div>
@@ -79,7 +83,7 @@
               :class="{
                 'call-modal__control-button__inactive': !state.isSpeakerActive
               }"
-              @click="toggleAudioOutput"
+              @click="handleToggleAudioOutput"
               :disabled="!isJitsiReady"
             >
               <VolumeIcon v-if="state.isSpeakerActive" />
@@ -156,6 +160,7 @@ import {
   jitsiContainer,
   isJitsiReady,
   isModalVisible,
+  isRemoteVideoActive,
   toggleMic,
   toggleVideo,
   toggleFullScreen,
@@ -164,6 +169,11 @@ import {
   confirmAnswer,
   rejectCall
 } from '../../services/useJitsi';
+import {
+  enableProximityLock,
+  disableProximityLock
+} from '../../services/useProximityLock';
+import { watch } from 'vue';
 
 const config = getConfig();
 const { state: isMobile } = useResizeState(MAX_W_MD);
@@ -173,4 +183,33 @@ const hideModal = () => {
     isModalVisible.value = false;
   }
 };
+
+const handleToggleAudioOutput = async () => {
+  await toggleAudioOutput();
+
+  // Toggle proximity lock based on speaker mode
+  if (state.isSpeakerActive) {
+    disableProximityLock();
+  } else {
+    enableProximityLock();
+  }
+};
+
+// Enable proximity lock when call becomes active or dialing (and speaker is off by default)
+watch(
+  [open, openCall, isIncoming, isCalling],
+  ([isOpen, isOpenCall, incoming]) => {
+    const isCallActiveOrCalling = (isOpen || isOpenCall) && !incoming;
+    if (isCallActiveOrCalling) {
+      if (!state.isSpeakerActive) {
+        enableProximityLock();
+      } else {
+        disableProximityLock();
+      }
+    } else if (!isOpen && !isOpenCall) {
+      disableProximityLock();
+    }
+  },
+  { immediate: true }
+);
 </script>

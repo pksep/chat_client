@@ -4,6 +4,7 @@ import {
 } from 'capacitor-incoming-call-kit';
 import { Capacitor } from '@capacitor/core';
 import { confirmAnswer, rejectCall } from './useJitsi';
+import { useWebRTC } from './useWebRTC';
 
 export const initCallKit = async () => {
   if (!Capacitor.isNativePlatform()) return;
@@ -14,6 +15,8 @@ export const initCallKit = async () => {
     (data: any) => {
       console.log('[CallKit] Accepted:', data);
       confirmAnswer();
+      const { acceptWebRTCCall } = useWebRTC();
+      acceptWebRTCCall();
     }
   );
 
@@ -22,6 +25,8 @@ export const initCallKit = async () => {
     (data: any) => {
       console.log('[CallKit] Declined:', data);
       rejectCall();
+      const { endWebRTCCall } = useWebRTC();
+      endWebRTCCall();
     }
   );
 };
@@ -74,7 +79,7 @@ export const endAllCallKits = async () => {
     await FlutterCallkitIncoming.onMethod({
       methodName: 'endAllCalls',
       parsedOptions: {},
-      options: ''
+      options: JSON.stringify({})
     });
   } catch (e) {
     console.error('[CallKit] Error:', e);

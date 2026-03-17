@@ -21,11 +21,12 @@ const timerSeconds = ref(0);
 const jitsiContainer = ref<HTMLElement | null>(null);
 const isJitsiReady = ref(false);
 const isModalVisible = ref(false);
+const isRemoteVideoActive = ref(false);
 const state = reactive({
   isFullScreen: false,
   isMicActive: true,
   isVideoActive: false,
-  isSpeakerActive: true
+  isSpeakerActive: false
 });
 
 let jitsiApi: any = null;
@@ -66,7 +67,10 @@ const startTimer = () => {
 };
 
 const stopTimer = () => {
-  if (timerInterval) clearInterval(timerInterval);
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
   timerSeconds.value = 0;
 };
 
@@ -273,6 +277,14 @@ export function useJitsi() {
   const handleCallAnswered = async (uId: string) => {
     console.log(`User ${uId} answered the call`);
 
+    const me = getAuthUser();
+    // If WE answered on another device, close the incoming call modal here
+    if (me && uId === me.id && isIncoming.value) {
+      console.log('[Jitsi] Call answered on another device, closing local UI');
+      cleanup();
+      return;
+    }
+
     // If we are the caller and Jitsi hasn't started yet, start it now
     if (isCalling.value && !jitsiApi && roomId.value) {
       const sdk = getChatSDK();
@@ -345,7 +357,10 @@ export function useJitsi() {
     topicId.value = null;
     state.isFullScreen = false;
     state.isVideoActive = false;
+    state.isMicActive = true;
+    state.isSpeakerActive = false;
     isJitsiReady.value = false;
+    isRemoteVideoActive.value = false;
     stopRingtone();
     if (Capacitor.isNativePlatform()) {
       endAllCallKits();
@@ -368,8 +383,27 @@ export function useJitsi() {
       },
       videoMuteStatusChanged: (event: any) => {
         state.isVideoActive = !event.muted;
+      },
+      participantVideoStatusChanged: (event: any) => {
+        console.log('[Jitsi] Participant video status changed:', event);
+        // If it's a remote participant (not us)
+        if (event.id !== api._myUserId) {
+          isRemoteVideoActive.value = !event.muted;
+        }
       }
     });
+
+    // Also check initial remote participants
+    const participants = api.getParticipantsInfo();
+    if (participants && participants.length > 0) {
+      const remoteParticipant = participants.find(
+        (p: any) => p.id !== api._myUserId
+      );
+      if (remoteParticipant) {
+        // Jitsi doesn't always provide video status in getParticipantsInfo reliably
+        // but we can assume false initially if muted is true in events
+      }
+    }
   };
 
   const toggleMic = () => {
@@ -390,6 +424,10 @@ export function useJitsi() {
 
   const toggleAudioOutput = async () => {
     state.isSpeakerActive = !state.isSpeakerActive;
+    await applyAudioOutput();
+  };
+
+  const applyAudioOutput = async () => {
     const sdk = getChatSDK();
     if (!sdk) return;
 
@@ -479,6 +517,13 @@ export function useJitsi() {
     }
   };
 
+  watch(isJitsiReady, async ready => {
+    if (ready) {
+      // Apply initial audio output state when Jitsi is ready
+      await applyAudioOutput();
+    }
+  });
+
   return {
     open: computed(() => open.value),
     openCall: computed(() => openCall.value),
@@ -502,6 +547,7 @@ export function useJitsi() {
     toggleVideo,
     toggleFullScreen,
     toggleAudioOutput,
+    applyAudioOutput,
     leaveCall
   };
 }
@@ -529,6 +575,7 @@ export {
   isModalVisible,
   isIncoming,
   isCalling,
+  isRemoteVideoActive,
   user,
   roomId,
   topicId,
@@ -537,3 +584,12 @@ export {
   timerSeconds,
   formattedTime
 };
+
+// Handle tab close proactively
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    if (open.value || openCall.value) {
+      leaveCall();
+    }
+  });
+}

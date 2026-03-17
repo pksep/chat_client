@@ -1,10 +1,11 @@
 import { PushNotifications } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
+import { App } from '@capacitor/app';
 import { useChatApi } from './useApi';
 import { getCurrentUserId } from './useChat';
 import { getUserById } from '../composables/useUsers';
-import { receiveCall } from './useJitsi';
 import { showIncomingCallKit } from './useCallKit';
+import { receiveWebRTCCall } from './useWebRTC';
 
 export const initPushNotifications = async () => {
   const api = useChatApi();
@@ -41,15 +42,8 @@ export const initPushNotifications = async () => {
       console.error('Push error:', e)
     );
 
-    // Handle the case where the app was launched by a notification
-    const handleInitialPush = async () => {
-      const result = await PushNotifications.getDeliveredNotifications();
-      if (result.notifications.length > 0) {
-        result.notifications.forEach(n => handleCallPush(n));
-      }
-    };
-    handleInitialPush();
-
+    // No need to handle initial push for calls here, it causes ghost calls
+    // pushNotificationActionPerformed will handle it if user clicks.
     return;
   }
 
@@ -93,18 +87,20 @@ export const initPushNotifications = async () => {
 };
 
 const handleCallPush = (notification: any) => {
-  return;
   const data = notification.data;
   if (data && data.type === 'incoming_call') {
-    const callerId = data.callerId;
+    const callerId = data.callerId || data.fromUserId;
     const roomId = data.roomId;
-    const topicId = data.topicId;
 
     const user = getUserById(callerId);
     if (user) {
-      receiveCall(user, roomId, topicId);
+      receiveWebRTCCall(user, roomId, data.topicId || roomId);
       if (Capacitor.isNativePlatform()) {
-        showIncomingCallKit(user.initials, roomId);
+        App.getState().then(state => {
+          if (!state.isActive) {
+            showIncomingCallKit(user.initials, roomId);
+          }
+        });
       }
     }
   }

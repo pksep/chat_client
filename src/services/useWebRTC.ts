@@ -1,9 +1,15 @@
 import { ref, reactive, computed } from 'vue';
-import { getChatSDK } from '../services/useChat';
+import { getChatSDK } from './useChat';
 import type { IUser } from '../components/interfaces/interfaces';
 import { getAuthUser } from '../composables/useAuth';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
 import { getUserById } from '../composables/useUsers';
+import { Capacitor } from '@capacitor/core';
+import { showIncomingCallKit } from './useCallKit';
+import { App } from '@capacitor/app';
+
+import { AudioOutput } from './useAudioOutput';
+import { enableProximityLock, disableProximityLock } from './useProximityLock';
 
 // Global state for WebRTC
 const isWebRTCOpen = ref(false);
@@ -18,16 +24,37 @@ const remoteStream = ref<MediaStream | null>(null);
 const peerConnection = ref<RTCPeerConnection | null>(null);
 const pendingIceCandidates = ref<RTCIceCandidateInit[]>([]);
 const isWebRTCModalVisible = ref(false);
+const isRemoteVideoActive = ref(false);
+const isRemoteAudioActive = ref(true);
+const waitToAccept = ref(false);
 
 const webRTCState = reactive({
   isMicActive: true,
-  isVideoActive: true,
-  isSpeakerActive: true,
+  isVideoActive: false,
+  isSpeakerActive: false,
   isFullScreen: false
 });
 
 let webRTCTimerInterval: any = null;
+let dialingTimeout: any = null;
 let ringtoneAudio: HTMLAudioElement | null = null;
+let dialingAudio: HTMLAudioElement | null = null;
+
+const playDialingSound = () => {
+  if (dialingAudio) return;
+  dialingAudio = new Audio('/audio/dialing.mp3');
+  dialingAudio.loop = true;
+  dialingAudio
+    .play()
+    .catch(err => console.warn('[WebRTC] Dialing sound play failed:', err));
+};
+
+const stopDialingSound = () => {
+  if (dialingAudio) {
+    dialingAudio.pause();
+    dialingAudio = null;
+  }
+};
 
 const playRingtone = () => {
   if (ringtoneAudio) return;
@@ -52,14 +79,17 @@ const iceServers = [
 ];
 
 const startTimer = () => {
-  if (webRTCTimerSeconds.value > 0) return;
+  if (webRTCTimerInterval) return;
   webRTCTimerInterval = setInterval(() => {
     webRTCTimerSeconds.value++;
   }, 1000);
 };
 
 const stopTimer = () => {
-  if (webRTCTimerInterval) clearInterval(webRTCTimerInterval);
+  if (webRTCTimerInterval) {
+    clearInterval(webRTCTimerInterval);
+    webRTCTimerInterval = null;
+  }
   webRTCTimerSeconds.value = 0;
 };
 
@@ -121,10 +151,18 @@ export function useWebRTC() {
   const getMediaStream = async () => {
     try {
       // Try both video and audio
-      return await navigator.mediaDevices.getUserMedia({
+      const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true
       });
+      // Set initial track states based on current webRTCState
+      stream.getVideoTracks().forEach(track => {
+        track.enabled = webRTCState.isVideoActive;
+      });
+      stream.getAudioTracks().forEach(track => {
+        track.enabled = webRTCState.isMicActive;
+      });
+      return stream;
     } catch (err) {
       console.warn(
         '[WebRTC] Failed to get both video and audio, trying audio only...',
@@ -132,10 +170,14 @@ export function useWebRTC() {
       );
       try {
         // Fallback to audio only
-        return await navigator.mediaDevices.getUserMedia({
+        const stream = await navigator.mediaDevices.getUserMedia({
           video: false,
           audio: true
         });
+        stream.getAudioTracks().forEach(track => {
+          track.enabled = webRTCState.isMicActive;
+        });
+        return stream;
       } catch (err2) {
         console.error('[WebRTC] Failed to get audio only:', err2);
         throw err2;
@@ -168,10 +210,30 @@ export function useWebRTC() {
     isWebRTCModalVisible.value = true;
     webRTCTopicId.value = currentTopicId;
     webRTCRoomId.value = `WebRTC_${Date.now()}`;
+    webRTCState.isSpeakerActive = false; // Default to earpiece for dialing
+    playDialingSound();
+
+    // End call if not answered within 20 seconds
+    if (dialingTimeout) clearTimeout(dialingTimeout);
+    dialingTimeout = setTimeout(() => {
+      if (isWebRTCCalling.value) {
+        console.log('[WebRTC] Call timeout: No answer after 20 seconds');
+        endWebRTCCall();
+      }
+    }, 20000);
 
     try {
       console.log('[WebRTC] Requesting local media...');
       localStream.value = await getMediaStream();
+
+      // Enforce audio route after media acquisition
+      if (Capacitor.isNativePlatform()) {
+        setTimeout(() => {
+          AudioOutput.toggleAudio({
+            useSpeaker: webRTCState.isSpeakerActive
+          }).catch(err => console.warn('[WebRTC] Audio toggle failed:', err));
+        }, 500);
+      }
 
       console.log('[WebRTC] Local media obtained, creating PC...');
       const pc = createPeerConnection(u.id);
@@ -187,10 +249,49 @@ export function useWebRTC() {
           roomId: webRTCRoomId.value!,
           topicId: webRTCTopicId.value!
         });
+
+        // Send initial track status
+        sdk.sendWebSocketEvent(WebSocketEventType.WEBRTC_TRACK_STATUS, {
+          toUserId: u.id,
+          video: webRTCState.isVideoActive,
+          audio: webRTCState.isMicActive,
+          roomId: webRTCRoomId.value!
+        });
       }
     } catch (err) {
       console.error('[WebRTC] Failed to start call:', err);
       cleanup();
+    }
+  };
+
+  const receiveWebRTCCall = (
+    u: IUser,
+    incomingRoomId: string,
+    incomingTopicId: string
+  ) => {
+    if (isWebRTCOpen.value) return;
+
+    webRTCUser.value = u;
+    isWebRTCIncoming.value = true;
+    isWebRTCOpen.value = true;
+    isWebRTCModalVisible.value = true;
+    webRTCRoomId.value = incomingRoomId;
+    webRTCTopicId.value = incomingTopicId;
+
+    // This is called from Push Notification or Jitsi fallback
+    // We launch the system UI so the user can answer before the app fully foregrounds
+    if (Capacitor.isNativePlatform()) {
+      App.getState().then(state => {
+        if (!state.isActive) {
+          showIncomingCallKit(u.initials, incomingRoomId);
+        }
+      });
+    }
+
+    playRingtone();
+    if (!Capacitor.isNativePlatform()) {
+      startTitleFlash();
+      window.focus();
     }
   };
 
@@ -204,8 +305,13 @@ export function useWebRTC() {
       roomId,
       topicId
     });
-    if (isWebRTCOpen.value) {
-      console.warn('[WebRTC] Already in a call, ignoring offer');
+
+    // If we are already receiving the call via Push (isWebRTCOpen is true),
+    // we don't want to play ringtone again, just store the offer
+    const isAlreadyOpening = isWebRTCOpen.value;
+
+    if (isWebRTCOpen.value && webRTCRoomId.value !== roomId) {
+      console.warn('[WebRTC] Already in another call, ignoring offer');
       return;
     }
 
@@ -225,7 +331,25 @@ export function useWebRTC() {
     // Store the offer temporarily
     (window as any)._pendingWebRTCOffer = offer;
 
-    playRingtone();
+    if (waitToAccept.value) {
+      waitToAccept.value = false;
+      acceptWebRTCCall();
+    } else if (!isAlreadyOpening) {
+      // If the app was already foregrounded and we got the offer via socket first,
+      // show the system UI only if the app is not active (e.g. screen locked but app open)
+      if (Capacitor.isNativePlatform()) {
+        App.getState().then(state => {
+          if (!state.isActive) {
+            showIncomingCallKit(user.initials, roomId);
+          }
+        });
+      }
+      playRingtone();
+      if (!Capacitor.isNativePlatform()) {
+        startTitleFlash();
+        window.focus();
+      }
+    }
   };
 
   const acceptWebRTCCall = async () => {
@@ -240,11 +364,28 @@ export function useWebRTC() {
     }
 
     stopRingtone();
+
+    if (!(window as any)._pendingWebRTCOffer) {
+      console.log('[WebRTC] Offer not received yet, waiting...');
+      waitToAccept.value = true;
+      isWebRTCIncoming.value = false; // Hide "Incoming" buttons, show "Connecting..."
+      return;
+    }
+
     isWebRTCIncoming.value = false;
 
     try {
       console.log('[WebRTC] Requesting local media...');
       localStream.value = await getMediaStream();
+
+      // Enforce audio route after media acquisition
+      if (Capacitor.isNativePlatform()) {
+        setTimeout(() => {
+          AudioOutput.toggleAudio({
+            useSpeaker: webRTCState.isSpeakerActive
+          }).catch(err => console.warn('[WebRTC] Audio toggle failed:', err));
+        }, 500);
+      }
 
       console.log('[WebRTC] Local media obtained, creating PC...');
       const pc = createPeerConnection(webRTCUser.value.id);
@@ -265,6 +406,14 @@ export function useWebRTC() {
           answer,
           roomId: webRTCRoomId.value!,
           topicId: webRTCTopicId.value!
+        });
+
+        // Send initial track status
+        sdk.sendWebSocketEvent(WebSocketEventType.WEBRTC_TRACK_STATUS, {
+          toUserId: webRTCUser.value.id,
+          video: webRTCState.isVideoActive,
+          audio: webRTCState.isMicActive,
+          roomId: webRTCRoomId.value!
         });
       }
 
@@ -296,6 +445,11 @@ export function useWebRTC() {
           new RTCSessionDescription(answer)
         );
         isWebRTCCalling.value = false;
+        if (dialingTimeout) {
+          clearTimeout(dialingTimeout);
+          dialingTimeout = null;
+        }
+        stopDialingSound();
 
         // Add any pending ICE candidates
         console.log(
@@ -345,9 +499,49 @@ export function useWebRTC() {
     }
   };
 
+  let titleInterval: any = null;
+  const startTitleFlash = () => {
+    if (titleInterval) return;
+    const oldTitle = document.title;
+    let step = 0;
+    titleInterval = setInterval(() => {
+      document.title = step % 2 === 0 ? '📞 Входящий звонок...' : oldTitle;
+      step++;
+    }, 1000);
+
+    // Store old title to restore later
+    (window as any)._originalTitle = oldTitle;
+  };
+
+  const stopTitleFlash = () => {
+    if (titleInterval) {
+      clearInterval(titleInterval);
+      titleInterval = null;
+      if ((window as any)._originalTitle) {
+        document.title = (window as any)._originalTitle;
+      }
+    }
+  };
+
+  const handleRemoteTrackStatus = (
+    video: boolean,
+    audio: boolean,
+    roomId: string
+  ) => {
+    if (webRTCRoomId.value === roomId) {
+      isRemoteVideoActive.value = video;
+      isRemoteAudioActive.value = audio;
+    }
+  };
+
   const cleanup = () => {
+    if (dialingTimeout) {
+      clearTimeout(dialingTimeout);
+      dialingTimeout = null;
+    }
     stopTimer();
     stopRingtone();
+    stopDialingSound();
     if (localStream.value) {
       localStream.value.getTracks().forEach(track => track.stop());
       localStream.value = null;
@@ -367,8 +561,16 @@ export function useWebRTC() {
     webRTCUser.value = null;
     webRTCRoomId.value = null;
     webRTCTopicId.value = null;
+    waitToAccept.value = false;
     pendingIceCandidates.value = [];
+    isRemoteVideoActive.value = false;
+    isRemoteAudioActive.value = true;
+    webRTCState.isMicActive = true;
+    webRTCState.isVideoActive = false;
+    webRTCState.isSpeakerActive = false;
+    webRTCState.isFullScreen = false;
     delete (window as any)._pendingWebRTCOffer;
+    stopTitleFlash();
   };
 
   const endWebRTCCall = () => {
@@ -390,14 +592,46 @@ export function useWebRTC() {
     cleanup();
   };
 
+  const toggleSpeaker = async () => {
+    webRTCState.isSpeakerActive = !webRTCState.isSpeakerActive;
+
+    // Toggle proximity lock based on speaker mode
+    if (webRTCState.isSpeakerActive) {
+      disableProximityLock();
+    } else {
+      enableProximityLock();
+    }
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await AudioOutput.toggleAudio({
+          useSpeaker: webRTCState.isSpeakerActive
+        });
+      } catch (err) {
+        console.warn('[WebRTC] Audio toggle failed:', err);
+      }
+    }
+  };
+
+  const handleCallAnswered = (uId: string) => {
+    const me = getAuthUser();
+    // If WE answered on another device, close the incoming call modal here
+    if (me && uId === me.id && isWebRTCIncoming.value) {
+      console.log('[WebRTC] Call answered on another device, closing local UI');
+      cleanup();
+    }
+  };
+
   return {
-    isWebRTCOpen,
-    isWebRTCIncoming,
     isWebRTCCalling,
     webRTCUser,
+    webRTCRoomId,
+    webRTCTopicId,
     webRTCState,
     localStream,
     remoteStream,
+    isRemoteVideoActive,
+    isRemoteAudioActive,
     formattedTime,
     startWebRTCCall,
     acceptWebRTCCall,
@@ -405,19 +639,34 @@ export function useWebRTC() {
     handleOffer,
     handleAnswer,
     handleIceCandidate,
-    cleanup
+    handleRemoteTrackStatus,
+    handleCallAnswered,
+    receiveWebRTCCall,
+    toggleSpeaker,
+    cleanup,
+    startTitleFlash,
+    stopTitleFlash
   };
 }
 
-const {
+// Export functions and state directly for use in other files
+const webRTC = useWebRTC();
+
+export const {
   startWebRTCCall,
   acceptWebRTCCall,
   endWebRTCCall,
   handleOffer,
   handleAnswer,
   handleIceCandidate,
-  cleanup
-} = useWebRTC();
+  handleRemoteTrackStatus,
+  handleCallAnswered,
+  receiveWebRTCCall,
+  toggleSpeaker,
+  cleanup,
+  startTitleFlash,
+  stopTitleFlash
+} = webRTC;
 
 export {
   isWebRTCOpen,
@@ -425,15 +674,21 @@ export {
   isWebRTCCalling,
   isWebRTCModalVisible,
   webRTCUser,
+  webRTCRoomId,
+  webRTCTopicId,
   webRTCState,
   localStream,
   remoteStream,
-  formattedTime,
-  startWebRTCCall,
-  acceptWebRTCCall,
-  endWebRTCCall,
-  handleOffer,
-  handleAnswer,
-  handleIceCandidate,
-  cleanup
+  isRemoteVideoActive,
+  isRemoteAudioActive,
+  formattedTime
 };
+
+// Handle tab close proactively
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    if (isWebRTCOpen.value) {
+      endWebRTCCall();
+    }
+  });
+}

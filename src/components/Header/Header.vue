@@ -22,13 +22,6 @@
         class="chat__header-active-call__time"
         v-if="!isCalling && !isWebRTCCalling"
       >
-        •</span
-      >
-
-      <span
-        class="chat__header-active-call__time"
-        v-if="!isCalling && !isWebRTCCalling"
-      >
         {{ open || openCall ? formattedTime : webRTCFormattedTime }}
       </span>
     </div>
@@ -92,7 +85,10 @@
           :data-testid="`${props.dataTestid}-Header-SearchIcon`"
         />
         <CallIcon
-          v-if="!(open || openCall || isWebRTCOpen)"
+          v-if="
+            route.type === RouteTypes.DIALOGS &&
+            !(open || openCall || isWebRTCOpen)
+          "
           class="chat__header__icon"
           :data-testid="`${props.dataTestid}-Header-CallIcon`"
           @click.stop="handleCall"
@@ -178,7 +174,6 @@ import { TopicType } from '../../services/useChatSDK/types';
 import CallIcon from '../CallModal/UI/CallIcon.vue';
 import SearchIcon from '../UI/SearchIcon.vue';
 import {
-  startCall,
   open,
   openCall,
   isModalVisible,
@@ -215,7 +210,6 @@ const state = reactive({
   openMobileInfoModal: false,
   isSearchInputEnable: false,
   openActionModal: false,
-  isCallModalOpen: false,
   calledUser: null,
   roomId: null
 });
@@ -256,15 +250,15 @@ const handleCall = async () => {
   await startWebRTCCall(state.calledUser, route.value.id);
 };
 
-const handleJitsiCall = async () => {
-  if (currentTopic.value?.type === TopicType.DM) {
-    state.calledUser = currentTopic.value.user;
-  }
+// const handleJitsiCall = async () => {
+//   if (currentTopic.value?.type === TopicType.DM) {
+//     state.calledUser = currentTopic.value.user;
+//   }
 
-  if (!state.calledUser) return;
-  nextTick();
-  await startCall(state.calledUser, route.value.id);
-};
+//   if (!state.calledUser) return;
+//   nextTick();
+//   await startCall(state.calledUser, route.value.id);
+// };
 
 const showModal = () => {
   if (isWebRTCOpen.value) {
@@ -296,12 +290,12 @@ const handleClickHeader = async (): Promise<void> => {
 const getPopoverOptions = computed(() => {
   const popoverArray = [];
   if (route.value && route.value.type !== RouteTypes.AI) {
-    if (currentTopic.value?.type === TopicType.DM) {
-      popoverArray.push({
-        value: 'Jitsi Call',
-        function: handleJitsiCall
-      });
-    }
+    // if (currentTopic.value?.type === TopicType.DM) {
+    //   popoverArray.push({
+    //     value: 'Jitsi Call',
+    //     function: handleJitsiCall
+    //   });
+    // }
 
     if (route.value.type === RouteTypes.GROUP) {
       popoverArray.push({

@@ -2,25 +2,20 @@ package sep.pksep.app;
 
 import com.getcapacitor.BridgeActivity;
 import android.os.Bundle;
-import android.os.Build;
-import android.view.WindowManager;
+
+import sep.pksep.app.plugins.AudioOutputPlugin;
+import sep.pksep.app.plugins.ProximityLockPlugin;
+import sep.pksep.app.plugins.CallScreenPlugin;
 
 public class MainActivity extends BridgeActivity {
     @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    protected void onCreate(Bundle savedInstanceState) {
+        // Регистрируем кастомный Capacitor plugin ДО super.onCreate(),
+        // чтобы Bridge подхватил плагин при инициализации
+        registerPlugin(AudioOutputPlugin.class);
+        registerPlugin(ProximityLockPlugin.class);
+        registerPlugin(CallScreenPlugin.class);
 
-        // Позволяем приложению просыпаться и показываться поверх экрана блокировки для звонков
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true);
-            setTurnScreenOn(true);
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-                    | WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON);
-        } else {
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
-                    | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
-                    | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-                    | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        }
+        super.onCreate(savedInstanceState);
     }
 }
