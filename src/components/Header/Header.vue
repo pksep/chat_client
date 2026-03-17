@@ -1,83 +1,106 @@
 <template>
   <header
-    :class="['chat__header', $attrs.class]"
-    @click="handleClickHeader"
+    :class="['chat__header-wrapper', $attrs.class]"
     :data-testid="`${props.dataTestid}-Header-Container`"
   >
-    <Button
-      v-if="isMobile"
-      :type="ButtonTypeEnum.ghost"
-      :size="SizesEnum.small"
-      @click.stop="handleExit"
-      :data-testid="`${props.dataTestid}-Header-BackButton`"
-    >
-      <Icon
-        class="medium-icon"
-        :name="IconNameEnum.arrowLeft"
-        :data-testid="`${props.dataTestid}-Header-BackIcon`"
-      />
-    </Button>
     <div
-      class="chat__header-profile chat__header-ai-assistant"
-      v-if="route.type === 'ai'"
-      :data-testid="`${props.dataTestid}-Header-AIAssistant`"
+      v-if="
+        ((open || openCall) && !isModalVisible) ||
+        (isWebRTCOpen && !isWebRTCModalVisible)
+      "
+      class="chat__header-active-call"
+      @click.stop="showModal"
     >
-      <AiIconWrapper
-        :data-testid="`${props.dataTestid}-Header-AIAssistantIcon`"
-      />
-      <h3 :data-testid="`${props.dataTestid}-Header-AIAssistantTitle`">
-        Ai Ассистент
-      </h3>
+      <LeaveIcon />
+      <span>{{
+        isCalling || isWebRTCCalling
+          ? 'Соединение...'
+          : `${(user || webRTCUser)?.initials}`
+      }}</span>
+
+      <span
+        class="chat__header-active-call__time"
+        v-if="!isCalling && !isWebRTCCalling"
+      >
+        {{ open || openCall ? formattedTime : webRTCFormattedTime }}
+      </span>
     </div>
-    <template v-else-if="currentTopic">
-      <GroupProfile
-        v-if="currentTopic.type === TopicType.Group"
-        class="chat__header-profile"
-        avatar-alt="group-profile-alt"
-        :topic="currentGroup || currentTopic"
-        :data-testid="`${props.dataTestid}-Header-GroupProfile`"
-      />
-      <UserProfile
-        v-else-if="currentTopic.type === TopicType.DM"
-        class="chat__header-profile"
-        avatar-alt="user-profile-alt"
-        :user="currentTopic.user"
-        :data-testid="`${props.dataTestid}-Header-UserProfile`"
-      />
-    </template>
-    <div
-      class="chat__header-buttons"
-      :data-testid="`${props.dataTestid}-Header-ButtonsContainer`"
-      @click.stop
-    >
-      <template v-if="!isMobile">
+    <div class="chat__header-main" @click="handleClickHeader">
+      <Button
+        v-if="isMobile"
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="handleExit"
+        :data-testid="`${props.dataTestid}-Header-BackButton`"
+      >
+        <Icon
+          class="medium-icon"
+          :name="IconNameEnum.arrowLeft"
+          :data-testid="`${props.dataTestid}-Header-BackIcon`"
+        />
+      </Button>
+      <div
+        class="chat__header-profile chat__header-ai-assistant"
+        v-if="route.type === 'ai'"
+        :data-testid="`${props.dataTestid}-Header-AIAssistant`"
+      >
+        <AiIconWrapper
+          :data-testid="`${props.dataTestid}-Header-AIAssistantIcon`"
+        />
+        <h3 :data-testid="`${props.dataTestid}-Header-AIAssistantTitle`">
+          Ai Ассистент
+        </h3>
+      </div>
+      <template v-else-if="currentTopic">
+        <GroupProfile
+          v-if="currentTopic.type === TopicType.Group"
+          class="chat__header-profile"
+          avatar-alt="group-profile-alt"
+          :topic="currentGroup || currentTopic"
+          :data-testid="`${props.dataTestid}-Header-GroupProfile`"
+        />
+        <UserProfile
+          v-else-if="currentTopic.type === TopicType.DM"
+          class="chat__header-profile"
+          avatar-alt="user-profile-alt"
+          :user="currentTopic.user"
+          :data-testid="`${props.dataTestid}-Header-UserProfile`"
+        />
+      </template>
+      <div
+        class="chat__header-buttons"
+        :data-testid="`${props.dataTestid}-Header-ButtonsContainer`"
+        @click.stop
+      >
         <Search
           v-if="state.isSearchInputEnable"
           class="chat__header-search"
           @click.stop
           :data-testid="`${props.dataTestid}-Header-SearchInput`"
         />
-        <Button
-          v-if="!state.isSearchInputEnable"
-          :type="ButtonTypeEnum.ghost"
-          :size="SizesEnum.small"
+        <SearchIcon
+          v-if="!state.isSearchInputEnable && !isMobile"
           @click.stop="showSearch"
-          :data-testid="`${props.dataTestid}-Header-SearchButton`"
-        >
-          <Icon
-            class="small-icon"
-            :name="IconNameEnum.search"
-            :data-testid="`${props.dataTestid}-Header-SearchIcon`"
-          />
-        </Button>
-      </template>
-      <Popover
-        class="chat__header-popover"
-        :options="getPopoverOptions"
-        isWCUse
-        :data-testid="`${props.dataTestid}-Header-Popover`"
-        :icon-name="IconNameEnum.moreHorizontal"
-      />
+          class="chat__header__icon"
+          :data-testid="`${props.dataTestid}-Header-SearchIcon`"
+        />
+        <CallIcon
+          v-if="
+            route.type === RouteTypes.DIALOGS &&
+            !(open || openCall || isWebRTCOpen)
+          "
+          class="chat__header__icon"
+          :data-testid="`${props.dataTestid}-Header-CallIcon`"
+          @click.stop="handleCall"
+        />
+        <Popover
+          class="chat__header-popover"
+          :options="getPopoverOptions"
+          isWCUse
+          :data-testid="`${props.dataTestid}-Header-Popover`"
+          :icon-name="IconNameEnum.moreHorizontal"
+        />
+      </div>
     </div>
   </header>
   <MobileModal
@@ -107,7 +130,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onUnmounted, reactive, watch } from 'vue';
+import { computed, nextTick, onUnmounted, reactive, watch } from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';
@@ -148,6 +171,25 @@ import {
 } from '../../composables/useGroup';
 import ConfirmModal from '../UI/ConfirmModal.vue';
 import { TopicType } from '../../services/useChatSDK/types';
+import CallIcon from '../CallModal/UI/CallIcon.vue';
+import SearchIcon from '../UI/SearchIcon.vue';
+import {
+  open,
+  openCall,
+  isModalVisible,
+  formattedTime,
+  isCalling,
+  user
+} from '../../services/useJitsi';
+import {
+  startWebRTCCall,
+  isWebRTCOpen,
+  isWebRTCCalling,
+  isWebRTCModalVisible,
+  webRTCUser,
+  formattedTime as webRTCFormattedTime
+} from '../../services/useWebRTC';
+import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 
 const { getSelectedTopic } = useTopics();
 
@@ -167,7 +209,9 @@ const state = reactive({
   loader: false,
   openMobileInfoModal: false,
   isSearchInputEnable: false,
-  openActionModal: false
+  openActionModal: false,
+  calledUser: null,
+  roomId: null
 });
 
 const actionModalTitle = computed(() =>
@@ -195,6 +239,35 @@ const showSearch = (): void => {
   state.isSearchInputEnable = true;
 };
 
+const handleCall = async () => {
+  if (currentTopic.value?.type === TopicType.DM) {
+    state.calledUser = currentTopic.value.user;
+  }
+
+  if (!state.calledUser) return;
+  nextTick();
+  // Default to WebRTC call now
+  await startWebRTCCall(state.calledUser, route.value.id);
+};
+
+// const handleJitsiCall = async () => {
+//   if (currentTopic.value?.type === TopicType.DM) {
+//     state.calledUser = currentTopic.value.user;
+//   }
+
+//   if (!state.calledUser) return;
+//   nextTick();
+//   await startCall(state.calledUser, route.value.id);
+// };
+
+const showModal = () => {
+  if (isWebRTCOpen.value) {
+    isWebRTCModalVisible.value = true;
+  } else {
+    isModalVisible.value = true;
+  }
+};
+
 const handleCloseMobileInfoModal = (): void => {
   state.openMobileInfoModal = false;
 };
@@ -217,6 +290,13 @@ const handleClickHeader = async (): Promise<void> => {
 const getPopoverOptions = computed(() => {
   const popoverArray = [];
   if (route.value && route.value.type !== RouteTypes.AI) {
+    // if (currentTopic.value?.type === TopicType.DM) {
+    //   popoverArray.push({
+    //     value: 'Jitsi Call',
+    //     function: handleJitsiCall
+    //   });
+    // }
+
     if (route.value.type === RouteTypes.GROUP) {
       popoverArray.push({
         value: 'Информация',

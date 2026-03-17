@@ -13,7 +13,7 @@ import {
   updateLocalGroupDetails,
   updateLocalLastMessageGroup
 } from '../composables/useGroup';
-import { updateLocalUserStatus } from '../composables/useUsers';
+import { getUserById, updateLocalUserStatus } from '../composables/useUsers';
 import {
   addMessageToLocal,
   changeLocalReadStatus,
@@ -23,8 +23,26 @@ import {
   playNotificationSound
 } from './useMessages';
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
+import {
+  receiveCall,
+  handleCallAnswered,
+  handleCallEnded,
+  roomId as jitsiRoomId
+} from './useJitsi';
+import {
+  webRTCRoomId,
+  handleOffer as handleWebRTCOffer,
+  handleAnswer as handleWebRTCAnswer,
+  handleIceCandidate as handleWebRTCIceCandidate,
+  handleCallAnswered as handleWebRTCCallAnswered,
+  handleRemoteTrackStatus,
+  cleanup as cleanupWebRTC
+} from './useWebRTC';
+import { Capacitor } from '@capacitor/core';
+import { initCallKit, showIncomingCallKit, endAllCallKits } from './useCallKit';
 
 let chatSDK: ChatSDK | null = null;
+let activeCallNotification: Notification | null = null;
 
 const isWebsocketConnecting = ref(true);
 const isRecentlyReconnected = ref(false);
@@ -122,6 +140,107 @@ const setupChatListeners = (): void => {
       );
     }
   );
+
+  // Jitsi Calls
+  chatSDK.subscribeToEvent(WebSocketEventType.INCOMING_CALL, ({ payload }) => {
+    const user = getUserById(payload.callerId);
+    if (user) {
+      receiveCall(user, payload.roomId, payload.topicId);
+
+      // If we are on native mobile, show the system incoming call screen
+      if (Capacitor.isNativePlatform()) {
+        showIncomingCallKit(user.initials, payload.roomId, user.avatarUrl);
+      } else {
+        // Desktop/Web: If page is hidden (minimized), show a system notification
+        if (document.hidden && 'Notification' in window) {
+          if (Notification.permission === 'granted') {
+            if (activeCallNotification) activeCallNotification.close();
+
+            activeCallNotification = new Notification('Входящий вызов', {
+              body: `Звонит ${user.initials}`,
+              icon: '/favicon.ico',
+              requireInteraction: true
+            });
+
+            activeCallNotification.onclick = () => {
+              window.focus();
+              if (activeCallNotification) {
+                activeCallNotification.close();
+                activeCallNotification = null;
+              }
+            };
+          } else if (Notification.permission !== 'denied') {
+            Notification.requestPermission();
+          }
+        }
+      }
+    }
+  });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.CALL_ANSWERED, ({ payload }) => {
+    if (activeCallNotification) {
+      activeCallNotification.close();
+      activeCallNotification = null;
+    }
+    if (Capacitor.isNativePlatform()) {
+      endAllCallKits();
+    }
+    handleCallAnswered(payload.userId);
+    handleWebRTCCallAnswered(payload.userId);
+  });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.CALL_ENDED, ({ payload }) => {
+    // Only cleanup if the roomId matches our current active call
+    if (
+      payload.roomId === jitsiRoomId.value ||
+      payload.roomId === webRTCRoomId.value
+    ) {
+      if (activeCallNotification) {
+        activeCallNotification.close();
+        activeCallNotification = null;
+      }
+      if (Capacitor.isNativePlatform()) {
+        endAllCallKits();
+      }
+      handleCallEnded();
+      cleanupWebRTC();
+    }
+  });
+
+  // WebRTC track status (video/audio on/off)
+  chatSDK.subscribeToEvent(
+    WebSocketEventType.WEBRTC_TRACK_STATUS,
+    ({ payload }) => {
+      handleRemoteTrackStatus(payload.video, payload.audio, payload.roomId);
+    }
+  );
+
+  // WebRTC Calls
+  chatSDK.subscribeToEvent(WebSocketEventType.WEBRTC_OFFER, ({ payload }) => {
+    if (payload.fromUserId) {
+      handleWebRTCOffer(
+        payload.fromUserId,
+        payload.offer,
+        payload.roomId,
+        payload.topicId
+      );
+    }
+  });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.WEBRTC_ANSWER, ({ payload }) => {
+    handleWebRTCAnswer(payload.answer, payload.roomId, payload.topicId);
+  });
+
+  chatSDK.subscribeToEvent(
+    WebSocketEventType.WEBRTC_ICE_CANDIDATE,
+    ({ payload }) => {
+      handleWebRTCIceCandidate(
+        payload.candidate,
+        payload.roomId,
+        payload.topicId
+      );
+    }
+  );
 };
 
 let isVisibilityListenerAdded = false;
@@ -160,6 +279,47 @@ export const initializeChat = async (options: {
   await chatSDK.connect();
   isWebsocketConnecting.value = false;
   setupChatListeners();
+
+  if (Capacitor.isNativePlatform()) {
+    initCallKit();
+
+    // Auto-check permissions for call reliability
+    setTimeout(async () => {
+      const {
+        checkCallPermissions,
+        requestOverlayPermission,
+        requestIgnoreBatteryOptimizations,
+        openAutostartSettings
+      } = await import('./useCallScreen');
+
+      const perms = await checkCallPermissions();
+
+      if (!perms.overlay) {
+        const confirmed = confirm(
+          'Разрешите показ звонков поверх других окон, чтобы принимать вызовы, когда телефон заблокирован.'
+        );
+        if (confirmed) {
+          await requestOverlayPermission();
+        }
+      } else if (!perms.battery) {
+        const confirmed = confirm(
+          'Отключите экономию заряда для чата, чтобы звонки доходили мгновенно.'
+        );
+        if (confirmed) {
+          await requestIgnoreBatteryOptimizations();
+        }
+      } else if (!localStorage.getItem('saw_autostart_hint')) {
+        const confirmed = confirm(
+          'Для некоторых телефонов нужно разрешить "Автозапуск" и "Экран блокировки" в настройках. Открыть настройки?'
+        );
+        if (confirmed) {
+          localStorage.setItem('saw_autostart_hint', 'true');
+          await openAutostartSettings();
+        }
+      }
+    }, 1500);
+  }
+
   addMessageHistoryHandler();
 };
 

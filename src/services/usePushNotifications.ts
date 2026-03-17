@@ -1,7 +1,11 @@
 import { PushNotifications } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
+import { App } from '@capacitor/app';
 import { useChatApi } from './useApi';
 import { getCurrentUserId } from './useChat';
+import { getUserById } from '../composables/useUsers';
+import { showIncomingCallKit } from './useCallKit';
+import { receiveWebRTCCall } from './useWebRTC';
 
 export const initPushNotifications = async () => {
   const api = useChatApi();
@@ -24,13 +28,22 @@ export const initPushNotifications = async () => {
       });
     });
 
-    PushNotifications.addListener('pushNotificationReceived', n =>
-      console.log('Native push:', n)
-    );
+    PushNotifications.addListener('pushNotificationReceived', n => {
+      console.log('Native push received:', n);
+      handleCallPush(n);
+    });
+
+    PushNotifications.addListener('pushNotificationActionPerformed', n => {
+      console.log('Native push action:', n);
+      handleCallPush(n.notification);
+    });
+
     PushNotifications.addListener('registrationError', e =>
       console.error('Push error:', e)
     );
 
+    // No need to handle initial push for calls here, it causes ghost calls
+    // pushNotificationActionPerformed will handle it if user clicks.
     return;
   }
 
@@ -71,6 +84,26 @@ export const initPushNotifications = async () => {
   if (!userId) return console.warn('No user ID, skipping subscribe');
 
   await api.post('/push/subscribe', { userId, subscription });
+};
+
+const handleCallPush = (notification: any) => {
+  const data = notification.data;
+  if (data && data.type === 'incoming_call') {
+    const callerId = data.callerId || data.fromUserId;
+    const roomId = data.roomId;
+
+    const user = getUserById(callerId);
+    if (user) {
+      receiveWebRTCCall(user, roomId, data.topicId || roomId);
+      if (Capacitor.isNativePlatform()) {
+        App.getState().then(state => {
+          if (!state.isActive) {
+            showIncomingCallKit(user.initials, roomId);
+          }
+        });
+      }
+    }
+  }
 };
 
 export const removePushListeners = async () => {

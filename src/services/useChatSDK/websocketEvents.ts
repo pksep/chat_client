@@ -40,7 +40,17 @@ export enum WebSocketEventType {
   CHANGE_MESSAGE = 'changeMessage',
   READ_MESSAGE = 'readMessage',
   USER_UPDATED = 'userUpdated',
-  TOGGLE_PRESENCE = 'togglePresence'
+  TOGGLE_PRESENCE = 'togglePresence',
+  START_CALL = 'startCall',
+  INCOMING_CALL = 'incomingCall',
+  ANSWER_CALL = 'answerCall',
+  CALL_ANSWERED = 'callAnswered',
+  END_CALL = 'endCall',
+  CALL_ENDED = 'callEnded',
+  WEBRTC_OFFER = 'webrtcOffer',
+  WEBRTC_ANSWER = 'webrtcAnswer',
+  WEBRTC_ICE_CANDIDATE = 'webrtcIceCandidate',
+  WEBRTC_TRACK_STATUS = 'webrtcTrackStatus'
 }
 
 export interface WebSocketEventPayloads {
@@ -126,6 +136,63 @@ export interface WebSocketEventPayloads {
     topicId: string;
   };
   [WebSocketEventType.TOGGLE_PRESENCE]: { isActive: boolean };
+  [WebSocketEventType.START_CALL]: {
+    userId: string;
+    roomId: string;
+    topicId: string;
+  };
+  [WebSocketEventType.ANSWER_CALL]: {
+    userId: string;
+    roomId: string;
+    topicId: string;
+  };
+  [WebSocketEventType.CALL_ANSWERED]: {
+    userId: string;
+    roomId: string;
+    topicId: string;
+  };
+  [WebSocketEventType.END_CALL]: {
+    userId: string;
+    roomId: string;
+    topicId: string;
+  };
+  [WebSocketEventType.CALL_ENDED]: {
+    userId: string;
+    roomId: string;
+    topicId: string;
+  };
+  [WebSocketEventType.INCOMING_CALL]: {
+    roomId: string;
+    callerId: string;
+    topicId: string;
+  };
+  [WebSocketEventType.WEBRTC_OFFER]: {
+    toUserId: string;
+    fromUserId?: string;
+    offer: RTCSessionDescriptionInit;
+    roomId: string;
+    topicId: string;
+  };
+  [WebSocketEventType.WEBRTC_ANSWER]: {
+    toUserId: string;
+    fromUserId?: string;
+    answer: RTCSessionDescriptionInit;
+    roomId: string;
+    topicId: string;
+  };
+  [WebSocketEventType.WEBRTC_ICE_CANDIDATE]: {
+    toUserId: string;
+    fromUserId?: string;
+    candidate: RTCIceCandidateInit;
+    roomId: string;
+    topicId: string;
+  };
+  [WebSocketEventType.WEBRTC_TRACK_STATUS]: {
+    toUserId: string;
+    video: boolean;
+    audio: boolean;
+    roomId: string;
+  };
 }
 
 export interface WebSocketEvent<

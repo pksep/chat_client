@@ -1,12 +1,17 @@
-.chat__header {
+.chat__header-wrapper {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
   background-color: var(--white);
-  padding: 7.5px 8px;
   border-bottom-width: 0.5px;
   border-bottom-style: solid;
   border-bottom-color: var(--border-grey);
+}
+
+.chat__header-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7.5px 8px;
   &:hover {
     cursor: pointer;
   }
@@ -14,10 +19,29 @@
 
 .chat__header-buttons {
   display: flex;
-  gap: 10px;
   margin-right: 8px;
   & button.button-yui-kit.ghost-yui-kit {
     color: var(--neutral-text-light);
+  }
+
+  & .chat__header-popover {
+    min-width: 40px;
+    display: flex;
+    justify-content: center;
+  }
+
+  & .chat__header__icon {
+    font-size: 16px;
+    color: var(--text-light-color);
+    width: 42px;
+    height: 40px;
+    padding: 11px;
+    transition: all 0.3s;
+
+    &:hover,
+    &:active {
+      color: var(--border-primary-color);
+    }
   }
 }
 
@@ -50,12 +74,54 @@ button.button-yui-kit {
   }
 }
 
+.chat__header-active-call {
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 8px 0;
+  height: 45px;
+  font-size: 18px;
+  font-weight: 400;
+  transition: opacity 0.2s;
+  color: var(--text-color);
+  border-bottom: 1px solid var(--border-grey);
+  margin-inline: 16px;
+
+  & span {
+    margin-left: 5px;
+  }
+
+  & svg {
+    color: var(--green2);
+    width: 20px;
+    height: 20px;
+    transform: rotate(-120deg);
+  }
+
+  & .chat__header-active-call__time {
+    font-size: 14px;
+
+    &:before {
+      content: '•';
+      display: inline-block;
+      font-size: 8px;
+      margin-right: 6px;
+      transform: translateY(-3px);
+    }
+  }
+}
+
+.chat__header-active-call:hover {
+  opacity: 0.8;
+}
+
 @media screen and (width <= 480px) {
-  .chat__header {
+  .chat__header-main {
     justify-content: start;
     gap: 10px;
   }
-  .chat__header:has(.search-yui-kit__input) {
+  .chat__header-wrapper:has(.search-yui-kit__input) {
     .chat__header-profile {
       & h3 {
         display: none;
