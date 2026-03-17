@@ -211,7 +211,9 @@ export function useWebRTC() {
     webRTCTopicId.value = currentTopicId;
     webRTCRoomId.value = `WebRTC_${Date.now()}`;
     webRTCState.isSpeakerActive = false; // Default to earpiece for dialing
-    playDialingSound();
+    setTimeout(() => {
+      playDialingSound();
+    }, 1000);
 
     // End call if not answered within 20 seconds
     if (dialingTimeout) clearTimeout(dialingTimeout);
@@ -220,7 +222,7 @@ export function useWebRTC() {
         console.log('[WebRTC] Call timeout: No answer after 20 seconds');
         endWebRTCCall();
       }
-    }, 20000);
+    }, 30000);
 
     try {
       console.log('[WebRTC] Requesting local media...');
