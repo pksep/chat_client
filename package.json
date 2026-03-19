@@ -41,9 +41,10 @@
     "@fontsource-variable/inter": "^5.2.6",
     "@mastra/client-js": "^0.12.3",
     "@pksep/reqi": "^0.0.25",
-    "@pksep/yui": "^0.1.211",
+    "@pksep/yui": "^0.1.217",
     "@pksep/zod-shared-chat": "0.0.6",
     "@vitejs/plugin-basic-ssl": "^2.1.4",
+    "capacitor-incoming-call-kit": "^1.0.7",
     "socket.io-client": "^4.8.3",
     "zod": "3"
   },

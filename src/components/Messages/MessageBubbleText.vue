@@ -1,5 +1,6 @@
 <template>
   <article
+    @click.stop
     :class="messageArticleStyles"
     :data-testid="`${props.dataTestid}-Article`"
   >

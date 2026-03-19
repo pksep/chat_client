@@ -130,6 +130,7 @@ import { useMessageScroll } from './Messages/composables/useMessageScroll';
 import { useMessageSender } from './Messages/composables/useMessageSender';
 import { useMessageMastra } from './Messages/composables/useMessageMastra';
 import { useMessageActions } from './Messages/composables/useMessageActions';
+import { Capacitor } from '@capacitor/core';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -318,6 +319,7 @@ watch(
 );
 
 window.onclick = () => {
+  if (Capacitor.isNativePlatform()) return;
   messageListInputRef.value?.focus();
 };
 

@@ -61,28 +61,25 @@ self.addEventListener('push', event => {
 self.addEventListener('notificationclick', event => {
   event.notification.close();
 
-  event.waitUntil(
-    self.registration
-      .getNotifications()
-      .then(notifications => {
-        // Close all notifications
-        notifications.forEach(notification => notification.close());
-      })
-      .then(() => {
-        const url = event.notification.data;
+  const targetUrl = event.notification.data;
 
-        return clients
-          .matchAll({ type: 'window', includeUncontrolled: true })
-          .then(clientList => {
-            for (const client of clientList) {
-              if (client.url === url && 'focus' in client) {
-                return client.focus();
-              }
-            }
-            if (clients.openWindow) {
-              return clients.openWindow(url);
-            }
-          });
+  event.waitUntil(
+    clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then(clientList => {
+        if (clientList.length > 0) {
+          const client = clientList[0];
+
+          client.focus();
+
+          if ('navigate' in client) {
+            return client.navigate(targetUrl);
+          }
+
+          return clients.openWindow(targetUrl);
+        }
+
+        return clients.openWindow(targetUrl);
       })
   );
 });

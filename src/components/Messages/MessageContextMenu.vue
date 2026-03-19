@@ -51,6 +51,25 @@
       </Button>
 
       <Button
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="handleOpenForwardModal"
+        :data-testid="`${props.dataTestid}-MessageBubble-PinButton`"
+      >
+        <ForwardIcon /> Переслать
+      </Button>
+
+      <Button
+        v-if="!!props.message"
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="handleCopyMessage"
+        :data-testid="`${props.dataTestid}-MessageBubble-CopyButton`"
+      >
+        <CopyIcon /> Копировать текст
+      </Button>
+
+      <Button
         v-if="props.isMeSender && !!props.message"
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.small"
@@ -68,15 +87,6 @@
       >
         <template v-if="!props.isPin"> <PinIcon /> Закрепить </template>
         <template v-else> <UnpinIcon /> Открепить </template>
-      </Button>
-
-      <Button
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        @click.stop="handleOpenForwardModal"
-        :data-testid="`${props.dataTestid}-MessageBubble-PinButton`"
-      >
-        <ForwardIcon /> Переслать
       </Button>
 
       <Button
@@ -124,6 +134,8 @@ import ReplyIcon from '../UI/ReplyIcon.vue';
 import EditIcon from '../UI/EditIcon.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import UnpinIcon from '../UI/UnpinIcon.vue';
+import CopyIcon from '../UI/CopyIcon.vue';
+import { stripHtml } from '../../utils/stripHtml';
 
 import { IMessageContextMenu } from './interface/interface';
 import { closeActivePopover } from '../../composables/useContextMenu';
@@ -250,6 +262,25 @@ const toggleShowEmojies = () => {
 
 const handleSelectEmoji = (emoji: { i: string }) => {
   handleReactMessage(emoji.i);
+};
+
+const handleCopyMessage = async () => {
+  const selection = window.getSelection();
+  const selectedText = selection?.toString().trim();
+
+  if (selectedText) {
+    await navigator.clipboard.writeText(selectedText);
+    handleClosePopover();
+    return;
+  }
+
+  const textToCopy = stripHtml(props.message);
+
+  if (textToCopy) {
+    await navigator.clipboard.writeText(textToCopy);
+  }
+
+  handleClosePopover();
 };
 
 const handleClosePopover = () => {
