@@ -548,7 +548,8 @@ export function useJitsi() {
     toggleFullScreen,
     toggleAudioOutput,
     applyAudioOutput,
-    leaveCall
+    leaveCall,
+    cleanup
   };
 }
 
@@ -565,7 +566,8 @@ export const {
   toggleAudioOutput,
   leaveCall,
   handleCallAnswered,
-  handleCallEnded
+  handleCallEnded,
+  cleanup
 } = jitsi;
 
 export {

@@ -4,27 +4,20 @@
     :data-testid="`${props.dataTestid}-Header-Container`"
   >
     <div
-      v-if="
-        ((open || openCall) && !isModalVisible) ||
-        (isWebRTCOpen && !isWebRTCModalVisible)
-      "
+      v-if="isCallActive && !isAnyCallModalVisible"
       class="chat__header-active-call"
-      @click.stop="showModal"
+      @click.stop="showCallModal"
     >
       <LeaveIcon />
       <span>{{
-        isCalling || isWebRTCCalling
-          ? 'Соединение...'
-          : `${(user || webRTCUser)?.initials}`
+        isAnyCallDialing ? 'Соединение...' : `${activeCallUser?.initials}`
       }}</span>
 
-      <span
-        class="chat__header-active-call__time"
-        v-if="!isCalling && !isWebRTCCalling"
-      >
-        {{ open || openCall ? formattedTime : webRTCFormattedTime }}
+      <span class="chat__header-active-call__time" v-if="!isAnyCallDialing">
+        {{ activeCallFormattedTime }}
       </span>
     </div>
+
     <div class="chat__header-main" @click="handleClickHeader">
       <Button
         v-if="isMobile"
@@ -85,10 +78,7 @@
           :data-testid="`${props.dataTestid}-Header-SearchIcon`"
         />
         <CallIcon
-          v-if="
-            route.type === RouteTypes.DIALOGS &&
-            !(open || openCall || isWebRTCOpen)
-          "
+          v-if="route.type === RouteTypes.DIALOGS && !isCallActive"
           class="chat__header__icon"
           :data-testid="`${props.dataTestid}-Header-CallIcon`"
           @click.stop="handleCall"
@@ -174,21 +164,15 @@ import { TopicType } from '../../services/useChatSDK/types';
 import CallIcon from '../CallModal/UI/CallIcon.vue';
 import SearchIcon from '../UI/SearchIcon.vue';
 import {
-  open,
-  openCall,
-  isModalVisible,
-  formattedTime,
-  isCalling,
-  user
-} from '../../services/useJitsi';
-import {
-  startWebRTCCall,
-  isWebRTCOpen,
-  isWebRTCCalling,
-  isWebRTCModalVisible,
-  webRTCUser,
-  formattedTime as webRTCFormattedTime
-} from '../../services/useWebRTC';
+  isCallActive,
+  isAnyCallModalVisible,
+  isAnyCallDialing,
+  activeCallUser,
+  activeCallFormattedTime,
+  showCallModal
+} from '../../services/useCalls';
+import { startWebRTCCall } from '../../services/useWebRTC';
+
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 
 const { getSelectedTopic } = useTopics();
@@ -260,13 +244,7 @@ const handleCall = async () => {
 //   await startCall(state.calledUser, route.value.id);
 // };
 
-const showModal = () => {
-  if (isWebRTCOpen.value) {
-    isWebRTCModalVisible.value = true;
-  } else {
-    isModalVisible.value = true;
-  }
-};
+// Removed showModal handle, use showCallModal from useCalls directly in template
 
 const handleCloseMobileInfoModal = (): void => {
   state.openMobileInfoModal = false;
