@@ -91,6 +91,7 @@
   </main>
 
   <CallModal />
+  <JitsiCall />
 </template>
 
 <script setup lang="ts">
@@ -129,8 +130,8 @@ import AndroidIcon from './UI/AndroidIcon.vue';
 import AppleIcon from './UI/AppleIcon.vue';
 import { useMobileApp } from '../composables/useMobileApp';
 import CallModal from './CallModal/CallModal.vue';
-import { open, openCall, isModalVisible } from '../services/useJitsi';
-import { isWebRTCOpen, isWebRTCModalVisible } from '../services/useWebRTC';
+import JitsiCall from './CallModal/JitsiCall.vue';
+import { isCallActive, isAnyCallModalVisible } from '../services/useCalls';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -171,8 +172,7 @@ const chatContainerClasses = computed(() => [
         ? true
         : !state.isMenuDesktopOpen,
     'chat-container--active-call':
-      ((open.value || openCall.value) && !isModalVisible.value) ||
-      (isWebRTCOpen.value && !isWebRTCModalVisible.value)
+      isCallActive.value && !isAnyCallModalVisible.value
   }
 ]);
 

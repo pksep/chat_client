@@ -44,9 +44,12 @@ const playDialingSound = () => {
   if (dialingAudio) return;
   dialingAudio = new Audio('/audio/dialing.mp3');
   dialingAudio.loop = true;
-  dialingAudio
-    .play()
-    .catch(err => console.warn('[WebRTC] Dialing sound play failed:', err));
+  setTimeout(() => {
+    if (dialingAudio)
+      dialingAudio
+        .play()
+        .catch(err => console.warn('[WebRTC] Dialing sound play failed:', err));
+  }, 2000);
 };
 
 const stopDialingSound = () => {
@@ -138,6 +141,25 @@ export function useWebRTC() {
       startTimer();
     };
 
+    pc.oniceconnectionstatechange = () => {
+      console.log('[WebRTC] ICE connection state:', pc.iceConnectionState);
+      if (
+        pc.iceConnectionState === 'disconnected' ||
+        pc.iceConnectionState === 'failed' ||
+        pc.iceConnectionState === 'closed'
+      ) {
+        console.log('[WebRTC] Connection lost/closed, cleaning up');
+        cleanup();
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      console.log('[WebRTC] Connection state:', pc.connectionState);
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        cleanup();
+      }
+    };
+
     if (localStream.value) {
       localStream.value.getTracks().forEach(track => {
         pc.addTrack(track, localStream.value!);
@@ -211,9 +233,7 @@ export function useWebRTC() {
     webRTCTopicId.value = currentTopicId;
     webRTCRoomId.value = `WebRTC_${Date.now()}`;
     webRTCState.isSpeakerActive = false; // Default to earpiece for dialing
-    setTimeout(() => {
-      playDialingSound();
-    }, 1000);
+    playDialingSound();
 
     // End call if not answered within 20 seconds
     if (dialingTimeout) clearTimeout(dialingTimeout);
@@ -378,7 +398,18 @@ export function useWebRTC() {
 
     try {
       console.log('[WebRTC] Requesting local media...');
-      localStream.value = await getMediaStream();
+      const stream = await getMediaStream();
+
+      // Check if call was closed while waiting for media
+      if (!isWebRTCOpen.value) {
+        console.log(
+          '[WebRTC] Call was closed while awaiting media, stopping stream.'
+        );
+        stream.getTracks().forEach(t => t.stop());
+        return;
+      }
+
+      localStream.value = stream;
 
       // Enforce audio route after media acquisition
       if (Capacitor.isNativePlatform()) {
@@ -537,6 +568,11 @@ export function useWebRTC() {
   };
 
   const cleanup = () => {
+    isWebRTCOpen.value = false;
+    isWebRTCIncoming.value = false;
+    isWebRTCCalling.value = false;
+    isWebRTCModalVisible.value = false;
+
     if (dialingTimeout) {
       clearTimeout(dialingTimeout);
       dialingTimeout = null;
@@ -545,21 +581,53 @@ export function useWebRTC() {
     stopRingtone();
     stopDialingSound();
     if (localStream.value) {
-      localStream.value.getTracks().forEach(track => track.stop());
+      localStream.value.getTracks().forEach(track => {
+        track.stop();
+        track.enabled = false;
+      });
       localStream.value = null;
     }
     if (remoteStream.value) {
-      remoteStream.value.getTracks().forEach(track => track.stop());
+      remoteStream.value.getTracks().forEach(track => {
+        track.stop();
+        track.enabled = false;
+      });
       remoteStream.value = null;
     }
     if (peerConnection.value) {
-      peerConnection.value.close();
+      const pc = peerConnection.value;
+      pc.onicecandidate = null;
+      pc.ontrack = null;
+      pc.oniceconnectionstatechange = null;
+      pc.onconnectionstatechange = null;
+      pc.onsignalingstatechange = null;
+      pc.onicegatheringstatechange = null;
+      pc.onnegotiationneeded = null;
+
+      try {
+        if (pc.getSenders) {
+          pc.getSenders().forEach(sender => {
+            if (sender.track) {
+              sender.track.stop();
+              sender.track.enabled = false;
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('[WebRTC] Error stopping senders during cleanup:', e);
+      }
+
+      pc.close();
       peerConnection.value = null;
     }
-    isWebRTCOpen.value = false;
-    isWebRTCIncoming.value = false;
-    isWebRTCCalling.value = false;
-    isWebRTCModalVisible.value = false;
+
+    // Reset native audio routing if applicable
+    if (Capacitor.isNativePlatform() && webRTCState.isSpeakerActive) {
+      AudioOutput.toggleAudio({ useSpeaker: false }).catch(err =>
+        console.warn('[WebRTC] Audio reset failed during cleanup:', err)
+      );
+    }
+
     webRTCUser.value = null;
     webRTCRoomId.value = null;
     webRTCTopicId.value = null;

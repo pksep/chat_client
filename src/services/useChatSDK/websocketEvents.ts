@@ -165,7 +165,9 @@ export interface WebSocketEventPayloads {
     roomId: string;
     callerId: string;
     topicId: string;
+    callType?: string;
   };
+
   [WebSocketEventType.WEBRTC_OFFER]: {
     toUserId: string;
     fromUserId?: string;

@@ -3,8 +3,7 @@ import {
   CallKitParams
 } from 'capacitor-incoming-call-kit';
 import { Capacitor } from '@capacitor/core';
-import { confirmAnswer, rejectCall } from './useJitsi';
-import { useWebRTC } from './useWebRTC';
+import { acceptCall, declineCall } from './useCalls';
 
 export const initCallKit = async () => {
   if (!Capacitor.isNativePlatform()) return;
@@ -14,9 +13,7 @@ export const initCallKit = async () => {
     'com.hiennv.flutter_callkit_incoming.ACTION_CALL_ACCEPT',
     (data: any) => {
       console.log('[CallKit] Accepted:', data);
-      confirmAnswer();
-      const { acceptWebRTCCall } = useWebRTC();
-      acceptWebRTCCall();
+      acceptCall();
     }
   );
 
@@ -24,9 +21,7 @@ export const initCallKit = async () => {
     'com.hiennv.flutter_callkit_incoming.ACTION_CALL_DECLINE',
     (data: any) => {
       console.log('[CallKit] Declined:', data);
-      rejectCall();
-      const { endWebRTCCall } = useWebRTC();
-      endWebRTCCall();
+      declineCall();
     }
   );
 };
