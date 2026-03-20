@@ -13,6 +13,3 @@ project(':capacitor-push-notifications').projectDir = new File('../node_modules/
 
 include ':capawesome-capacitor-android-edge-to-edge-support'
 project(':capawesome-capacitor-android-edge-to-edge-support').projectDir = new File('../node_modules/@capawesome/capacitor-android-edge-to-edge-support/android')
-
-include ':capacitor-incoming-call-kit'
-project(':capacitor-incoming-call-kit').projectDir = new File('../node_modules/capacitor-incoming-call-kit/android')
