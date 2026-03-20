@@ -50,14 +50,9 @@
           playsinline
           class="call-modal__remote-video"
         ></video>
-        <video
-          v-show="webRTCState.isVideoActive"
-          ref="localVideo"
-          autoplay
-          playsinline
-          muted
-          class="call-modal__local-video"
-        ></video>
+        <div class="call-modal__local-video" v-show="webRTCState.isVideoActive">
+          <video ref="localVideo" autoplay playsinline muted></video>
+        </div>
       </div>
 
       <div class="call-modal__controls">
@@ -80,15 +75,22 @@
           </div>
         </template>
         <template v-else>
-          <button
-            v-if="!isMobile"
-            class="call-modal__control-button call-modal__control-button--fullscreen"
-            @click="webRTCState.isFullScreen = !webRTCState.isFullScreen"
-            title="Fullscreen"
-          >
-            <FullscreenIcon v-if="!webRTCState.isFullScreen" />
-            <MinimizeIcon v-else />
-          </button>
+          <template v-if="!isMobile">
+            <button
+              class="call-modal__control-button call-modal__control-button--fullscreen"
+              @click="webRTCState.isFullScreen = !webRTCState.isFullScreen"
+              title="Fullscreen"
+            >
+              <FullscreenIcon v-if="!webRTCState.isFullScreen" />
+              <MinimizeIcon v-else />
+            </button>
+            <div v-if="isRemoteVideoActive" class="call-modal__info">
+              <p>
+                {{ webRTCUser?.initials }}
+              </p>
+              <span>{{ formattedTime }}</span>
+            </div>
+          </template>
 
           <Icon
             v-else
@@ -130,6 +132,7 @@
               v-if="webRTCState.isVideoActive"
               class="call-modal__control-button"
               @click="handleToggleVideo"
+              :disabled="webRTCState.isScreenSharingActive"
             >
               <VideoIcon />
             </button>
@@ -139,6 +142,19 @@
               @click="handleToggleVideo"
             >
               <VideoDisableIcon />
+            </button>
+
+            <!-- Screen Share Button -->
+            <button
+              v-if="!isMobile && !Capacitor.isNativePlatform()"
+              class="call-modal__control-button"
+              :class="{
+                'call-modal__control-button__inactive':
+                  !webRTCState.isScreenSharingActive
+              }"
+              @click="handleToggleScreenShare"
+            >
+              <ScreenShareIcon />
             </button>
 
             <button class="call-modal__control-button" @click="endWebRTCCall">
@@ -168,6 +184,7 @@ import VideoIcon from './UI/VideoIcon.vue';
 import MicDisableIcon from './UI/MicDisableIcon.vue';
 import VideoDisableIcon from './UI/VideoDisableIcon.vue';
 import LeaveIcon from './UI/LeaveIcon.vue';
+import ScreenShareIcon from './UI/ScreenShareIcon.vue';
 import {
   isWebRTCOpen,
   isWebRTCIncoming,
@@ -182,7 +199,8 @@ import {
   formattedTime,
   acceptWebRTCCall,
   endWebRTCCall,
-  toggleSpeaker
+  toggleSpeaker,
+  toggleScreenShare
 } from '../../services/useWebRTC';
 import { AudioOutput } from '../../services/useAudioOutput';
 import { watch, ref } from 'vue';
@@ -295,5 +313,12 @@ const handleToggleVideo = () => {
       roomId: webRTCRoomId.value
     });
   }
+};
+
+const handleToggleScreenShare = async () => {
+  if (webRTCState.isVideoActive) {
+    handleToggleVideo();
+  }
+  await toggleScreenShare();
 };
 </script>
