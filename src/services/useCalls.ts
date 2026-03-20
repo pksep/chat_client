@@ -35,7 +35,7 @@ export enum CallType {
 export const currentCallType = ref<CallType | string | null>(null);
 
 export const activeCallUser = computed(() => {
-  if (currentCallType.value === CallType.WEBRTC) return webRTCUser.value;
+  if (currentCallType.value !== CallType.JITSI) return webRTCUser.value;
   return jitsiUser.value;
 });
 
@@ -57,7 +57,7 @@ export const isAnyCallIncoming = computed(
 );
 
 export const activeCallFormattedTime = computed(() => {
-  if (currentCallType.value === CallType.WEBRTC)
+  if (currentCallType.value !== CallType.JITSI)
     return webRTCFormattedTime.value;
   return jitsiFormattedTime.value;
 });
@@ -70,7 +70,7 @@ export const handleIncomingCall = (
 ) => {
   currentCallType.value = callType || CallType.JITSI;
 
-  if (currentCallType.value === CallType.WEBRTC) {
+  if (currentCallType.value !== CallType.JITSI) {
     receiveWebRTCCall(user, roomId, topicId);
   } else {
     receiveJitsi(user, roomId, topicId);
@@ -78,7 +78,7 @@ export const handleIncomingCall = (
 };
 
 export const acceptCall = () => {
-  if (currentCallType.value === CallType.WEBRTC) {
+  if (currentCallType.value !== CallType.JITSI) {
     acceptWebRTCCall();
   } else {
     confirmJitsi();
@@ -86,7 +86,7 @@ export const acceptCall = () => {
 };
 
 export const declineCall = () => {
-  if (currentCallType.value === CallType.WEBRTC) {
+  if (currentCallType.value !== CallType.JITSI) {
     endWebRTCCall();
   } else {
     rejectJitsi();
@@ -94,7 +94,7 @@ export const declineCall = () => {
 };
 
 export const showCallModal = () => {
-  if (currentCallType.value === CallType.WEBRTC) {
+  if (currentCallType.value !== CallType.JITSI) {
     isWebRTCModalVisible.value = true;
   } else {
     isJitsiModalVisible.value = true;

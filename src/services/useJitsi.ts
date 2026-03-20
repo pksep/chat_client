@@ -89,14 +89,6 @@ const formattedTime = computed(() => {
   ) {
     return 'Участник ответил, подключено...';
   }
-  console.log(
-    '#########',
-    isJitsiReady.value,
-    open.value,
-    openCall.value,
-    isIncoming.value,
-    isCalling.value
-  );
 
   return formatTime(timerSeconds.value);
 });
