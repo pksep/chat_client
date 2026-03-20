@@ -36,12 +36,29 @@
   text-align: center;
 }
 
-.call-modal__container--full-screen {
-  width: 100% !important;
-  height: 100% !important;
-  border-radius: 0 !important;
-}
+@media screen and (min-width: 481px) {
+  .call-modal__container--full-screen {
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 0 !important;
 
+    & .call-modal__webrtc-container {
+      width: calc(100% - 340px) !important;
+      height: calc(100% - 240px) !important;
+      top: 120px;
+      left: 170px;
+      border-radius: 25px;
+    }
+
+    & .call-modal__local-video {
+      width: 380px;
+      height: 260px;
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+    }
+  }
+}
 .call-modal__avatar {
   --size-avatar: 80px;
 
@@ -68,7 +85,6 @@
   display: flex;
   gap: 40px;
   margin-top: auto;
-  padding: 24px 0;
   z-index: 9;
 }
 
@@ -119,6 +135,28 @@
   left: 15px;
 }
 
+.call-modal__info {
+  position: absolute;
+  top: 15px;
+  left: 70px;
+  color: var(--text-color);
+  font-size: 14px;
+  font-weight: 400;
+
+  & p {
+    font-weight: 700;
+    font-size: 24px;
+    line-height: 100%;
+    margin: 0 0 5px;
+  }
+
+  & span {
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 100%;
+  }
+}
+
 svg.icon-yui-kit.call-modal__control-button__chevron-down {
   background-color: var(--blue1);
   color: var(--white);
@@ -150,9 +188,8 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   }
 
   .call-modal__local-video {
-    top: 90px;
+    bottom: 150px !important;
     right: 16px;
-    bottom: auto;
     width: 100px;
     height: 150px;
     border-radius: 12px;
@@ -161,7 +198,7 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
 }
 
 .call-modal__control-button--answer {
-  background-color: #57D278 !important; /* Green */
+  background-color: #57d278 !important; /* Green */
   transform: rotate(-90deg);
 
   &:hover {
@@ -208,14 +245,36 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
 
 .call-modal__local-video {
   position: absolute;
-  bottom: 20px;
+  bottom: 100px;
   right: 20px;
-  width: 150px;
-  height: 100px;
+  width: 190px;
+  height: 130px;
   border-radius: 8px;
   object-fit: cover;
-  border: 2px solid white;
   z-index: 2;
+
+  & video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+  }
+
+  &::after {
+    content: 'Вы';
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    width: 40px;
+    height: 21px;
+    background-color: var(--blue1);
+    border-radius: 100px;
+    font-weight: 400;
+    font-size: 14px;
+    color: var(--white);
+    text-align: center;
+    line-height: 21px;
+  }
 }
 
 /* Target the call timer in the toolbar */

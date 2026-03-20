@@ -31,9 +31,12 @@ const waitToAccept = ref(false);
 const webRTCState = reactive({
   isMicActive: true,
   isVideoActive: false,
+  isScreenSharingActive: false,
   isSpeakerActive: false,
   isFullScreen: false
 });
+
+let originalVideoTrack: MediaStreamTrack | null = null;
 
 let webRTCTimerInterval: any = null;
 let dialingTimeout: any = null;
@@ -637,8 +640,15 @@ export function useWebRTC() {
     isRemoteAudioActive.value = true;
     webRTCState.isMicActive = true;
     webRTCState.isVideoActive = false;
+    webRTCState.isScreenSharingActive = false;
     webRTCState.isSpeakerActive = false;
     webRTCState.isFullScreen = false;
+
+    if (originalVideoTrack) {
+      originalVideoTrack.stop();
+      originalVideoTrack = null;
+    }
+
     delete (window as any)._pendingWebRTCOffer;
     stopTitleFlash();
   };
@@ -683,6 +693,107 @@ export function useWebRTC() {
     }
   };
 
+  const toggleScreenShare = async () => {
+    try {
+      if (!webRTCState.isScreenSharingActive) {
+        // Start screen sharing
+        const displayStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true
+        });
+        const screenTrack = displayStream.getVideoTracks()[0];
+
+        if (screenTrack) {
+          screenTrack.onended = () => {
+            if (webRTCState.isScreenSharingActive) {
+              toggleScreenShare(); // revert when stopped via browser UI
+            }
+          };
+
+          if (localStream.value) {
+            const currentVideoTrack = localStream.value.getVideoTracks()[0];
+            if (currentVideoTrack && !originalVideoTrack) {
+              originalVideoTrack = currentVideoTrack; // Save the camera track
+            }
+            if (currentVideoTrack) {
+              localStream.value.removeTrack(currentVideoTrack);
+            }
+            localStream.value.addTrack(screenTrack);
+
+            // Force reactivity for standard setups
+            localStream.value = new MediaStream(localStream.value.getTracks());
+          }
+
+          if (peerConnection.value) {
+            const sender = peerConnection.value
+              .getSenders()
+              .find(s => s.track?.kind === 'video');
+            if (sender) {
+              await sender.replaceTrack(screenTrack);
+            } else if (localStream.value) {
+              peerConnection.value.addTrack(screenTrack, localStream.value);
+            }
+          }
+
+          webRTCState.isScreenSharingActive = true;
+          webRTCState.isVideoActive = true; // Ensure video shows as active
+
+          const sdk = getChatSDK();
+          if (sdk && webRTCUser.value && webRTCRoomId.value) {
+            sdk.sendWebSocketEvent(WebSocketEventType.WEBRTC_TRACK_STATUS, {
+              toUserId: webRTCUser.value.id,
+              video: true,
+              audio: webRTCState.isMicActive,
+              roomId: webRTCRoomId.value
+            });
+          }
+        }
+      } else {
+        // Stop screen sharing and revert to camera if it was enabled, or disable video
+        webRTCState.isScreenSharingActive = false;
+
+        const screenTrack = localStream.value?.getVideoTracks()[0];
+        if (screenTrack) {
+          screenTrack.stop();
+          localStream.value?.removeTrack(screenTrack);
+        }
+
+        if (originalVideoTrack) {
+          if (localStream.value) {
+            localStream.value.addTrack(originalVideoTrack);
+            localStream.value = new MediaStream(localStream.value.getTracks());
+          }
+          if (peerConnection.value) {
+            const sender = peerConnection.value
+              .getSenders()
+              .find(s => s.track?.kind === 'video');
+            if (sender) {
+              await sender.replaceTrack(originalVideoTrack);
+            }
+          }
+          originalVideoTrack = null;
+        } else {
+          // If no original track, disable video flag completely
+          webRTCState.isVideoActive = false;
+        }
+
+        const sdk = getChatSDK();
+        if (sdk && webRTCUser.value && webRTCRoomId.value) {
+          sdk.sendWebSocketEvent(WebSocketEventType.WEBRTC_TRACK_STATUS, {
+            toUserId: webRTCUser.value.id,
+            video: webRTCState.isVideoActive,
+            audio: webRTCState.isMicActive,
+            roomId: webRTCRoomId.value
+          });
+        }
+      }
+    } catch (err) {
+      console.error(
+        '[WebRTC] Screen sharing failed or cancelled by user:',
+        err
+      );
+    }
+  };
+
   const handleCallAnswered = (uId: string) => {
     const me = getAuthUser();
     // If WE answered on another device, close the incoming call modal here
@@ -713,6 +824,7 @@ export function useWebRTC() {
     handleCallAnswered,
     receiveWebRTCCall,
     toggleSpeaker,
+    toggleScreenShare,
     cleanup,
     startTitleFlash,
     stopTitleFlash
@@ -733,6 +845,7 @@ export const {
   handleCallAnswered,
   receiveWebRTCCall,
   toggleSpeaker,
+  toggleScreenShare,
   cleanup,
   startTitleFlash,
   stopTitleFlash
