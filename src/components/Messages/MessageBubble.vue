@@ -50,6 +50,7 @@
       @close="() => (sliderElements = [])"
       :items="sliderElements"
       :default-index="defaultIndexSlider"
+      @keydown.escape.stop="() => (sliderElements = [])"
     />
 
     <MessageContextMenu

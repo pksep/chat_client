@@ -115,7 +115,10 @@ import { getIsWebsocketConnecting } from '../services/useChat';
 import type { IMessageListProps } from './interfaces/message-list';
 import type { AIMessage } from '../types/messages';
 import { useUrlWatcher } from '../composables/navigation';
-import { RouteTypes } from '../composables/navigation/useUrlRouting';
+import {
+  navigateToDefault,
+  RouteTypes
+} from '../composables/navigation/useUrlRouting';
 import {
   fetchAroundMessage,
   fetchMessagesForTopic,
@@ -321,6 +324,12 @@ watch(
 window.onclick = () => {
   if (Capacitor.isNativePlatform()) return;
   messageListInputRef.value?.focus();
+};
+
+window.onkeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape') {
+    navigateToDefault();
+  }
 };
 
 defineExpose({
