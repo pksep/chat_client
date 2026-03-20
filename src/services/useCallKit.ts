@@ -1,4 +1,3 @@
-
 import { Capacitor } from '@capacitor/core';
 // import { acceptCall, declineCall } from './useCalls';
 
@@ -29,6 +28,7 @@ export const showIncomingCallKit = async (
   avatar?: string
 ) => {
   if (!Capacitor.isNativePlatform()) return;
+  console.log('Showing incoming call kit', callerName, callId, avatar);
 
   // const params: CallKitParams = {
   //   id: callId,
