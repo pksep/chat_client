@@ -9,10 +9,14 @@
   overflow-y: auto;
 }
 
+.menu:has(.menu__button-install-prompt) .contact-list {
+  max-height: calc(100vh - 195px);
+}
+
 .menu__start {
   display: grid;
   gap: 10px;
-  padding: 10px 0;
+  padding: 10px 0 0;
   align-content: start;
 }
 
