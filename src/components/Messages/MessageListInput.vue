@@ -31,7 +31,7 @@
       @unmount-send="handleSend"
       @unmount-attach-file="(...args: any[]) => $emit('attachFile', ...args)"
       @mention-change="handleMentionChange"
-      @keydown="handleMentionNav"
+      @keydown.capture="handleMentionNav"
       :data-testid="`${props.dataTestid}-MessageList-ContentEditor`"
     >
       <template v-if="!!props.editMessage" #action>
@@ -202,19 +202,31 @@ const handleMentionChange = (search: string | null) => {
 const handleMentionNav = (e: KeyboardEvent) => {
   if (!state.tagedUserModal || !users.value.length) return;
 
-  if (e.key === 'ArrowDown') {
+  const { key } = e;
+  const len = users.value.length;
+
+  const prevent = () => {
     e.preventDefault();
-    state.selectedIndex = (state.selectedIndex + 1) % users.value.length;
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    state.selectedIndex =
-      (state.selectedIndex - 1 + users.value.length) % users.value.length;
-  } else if (e.key === 'Enter') {
-    if (state.selectedIndex >= 0 && state.selectedIndex < users.value.length) {
-      e.preventDefault();
+    e.stopPropagation();
+  };
+
+  if (key === 'ArrowDown' || key === 'ArrowUp') {
+    prevent();
+    const delta = key === 'ArrowDown' ? 1 : -1;
+    state.selectedIndex = (state.selectedIndex + delta + len) % len;
+    return;
+  }
+
+  if (key === 'Enter') {
+    if (state.selectedIndex >= 0 && state.selectedIndex < len) {
+      prevent();
       selectUser(users.value[state.selectedIndex]);
     }
-  } else if (e.key === 'Escape') {
+    return;
+  }
+
+  if (key === 'Escape') {
+    prevent();
     state.tagedUserModal = false;
   }
 };
