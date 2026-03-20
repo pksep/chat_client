@@ -14,6 +14,10 @@
       :user="authUser"
       :data-testid="`${props.dataTestid}-Chat-MessageList`"
     />
+    <div class="chat__unselected-topic" v-else>
+      <img src="/images/messages.svg" alt="messages" />
+      <p>Выберите чат</p>
+    </div>
   </section>
 </template>
 
