@@ -140,24 +140,12 @@ const setSliderElement = (medias: IMedia[], defaultIndex: number = 0) => {
     const url = getFullMediaPath(selectedMedia, false);
     const fileName = selectedMedia.originName || 'file';
 
-    fetch(url)
-      .then(res => res.blob())
-      .then(blob => {
-        const blobUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = fileName.includes('.') ? fileName : fileName + '.txt';
-
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        window.URL.revokeObjectURL(blobUrl);
-      })
-      .catch(err => {
-        console.error('Download failed', err);
-      });
-
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     return;
   }
 
