@@ -1,7 +1,5 @@
 <template>
-  <MobileAuth v-if="showMobileAuth" @auth-success="handleMobileAuthSuccess" />
-
-  <ChatContainer v-else-if="openChatContainerShow" v-bind="props" />
+  <ChatContainer v-if="openChatContainerShow" v-bind="props" />
 
   <img
     v-else
@@ -14,12 +12,17 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
-import MobileAuth from './components/Mobile/MobileAuth.vue';
 
 import type { IChatContainerProps } from './components/interfaces/interfaces';
 import { initializeChat, setCurrentUserId } from './services/useChat';
 import { saveUserIdToSession, hasUserIdInSession } from './services/useMastra';
-import { fetchAuthUser, setAuthUser, useAuth } from './composables/useAuth';
+import {
+  fetchAuthUser,
+  setAuthUser,
+  useAuth,
+  getChatAuthSession,
+  clearChatAuthSession
+} from './composables/useAuth';
 import { fetchAllUsers, getUserById } from './composables/useUsers';
 import { getConfig } from './services/useConfig';
 import { useTopics } from './composables/useTopics';
@@ -37,7 +40,6 @@ import { RouteTypes } from './composables/navigation/useUrlRouting';
 const props = defineProps<IChatContainerProps>();
 
 const openChatContainerShow = ref(true);
-const showMobileAuth = ref(false);
 
 const { fetchAllTopics } = useTopics();
 const { state: isMobile } = useResizeState(MAX_W_MD);
@@ -65,29 +67,31 @@ const initFocusTracking = () => {
   document.addEventListener('visibilitychange', updateFocusState);
 };
 
-const handleMobileAuthSuccess = (token: string) => {
-  if (token) {
-    localStorage.setItem('erp_token', token);
-    showMobileAuth.value = false;
-    runAppInitialization();
-  }
+const getStoredErpToken = () =>
+  localStorage.getItem('erp_token') || sessionStorage.getItem('erp_token');
+
+const clearStoredErpToken = () => {
+  localStorage.removeItem('erp_token');
+  sessionStorage.removeItem('erp_token');
 };
 
 const runAppInitialization = async () => {
   const url = new URL(window.location.href);
   const tokenUrl = url.searchParams.get('token')?.split('?token')[0];
-  const REDIRECT_KEY = 'chat_redirect_attempts';
-  const MAX_REDIRECTS = 2;
 
   if (tokenUrl) {
     localStorage.setItem('erp_token', tokenUrl);
   }
 
-  const localToken = localStorage.getItem('erp_token');
+  const localToken = getStoredErpToken();
+  const directAuthSession = getChatAuthSession();
   const config = getConfig();
 
   try {
-    const authData = await useAuth(tokenUrl || localToken);
+    const authData =
+      tokenUrl || localToken
+        ? await useAuth(tokenUrl || localToken)
+        : directAuthSession;
     const authUserId = authData.user?.id || '';
 
     if (authUserId && !hasUserIdInSession(authUserId)) {
@@ -145,29 +149,16 @@ const runAppInitialization = async () => {
     console.error('Failed to initialize chat:', error);
 
     if (isMobile.value) {
-      localStorage.removeItem('erp_token');
-      showMobileAuth.value = true;
+      clearStoredErpToken();
+      clearChatAuthSession();
       openChatContainerShow.value = false;
       return;
     }
-
-    const attempts = Number(localStorage.getItem(REDIRECT_KEY) || 0) + 1;
-    localStorage.setItem(REDIRECT_KEY, String(attempts));
-
-    if (attempts >= MAX_REDIRECTS) {
-      localStorage.removeItem(REDIRECT_KEY);
-      console.error('Redirect blocked: too many attempts');
-      openChatContainerShow.value = false;
-      return;
-    }
-
-    window.location.href =
-      config.CHAT_ERP_URL +
-      '?redirect=' +
-      encodeURIComponent(window.location.href);
+    openChatContainerShow.value = false;
   } finally {
     if (tokenUrl) {
       url.searchParams.delete('token');
+      url.searchParams.delete('organization');
       window.history.replaceState({}, document.title, url.toString());
     }
   }
@@ -176,14 +167,7 @@ const runAppInitialization = async () => {
 onMounted(async () => {
   initFocusTracking();
 
-  const hasLocalToken = !!localStorage.getItem('erp_token');
-  const hasUrlToken = window.location.href.includes('token=');
-
-  if (isMobile.value && !hasLocalToken && !hasUrlToken) {
-    showMobileAuth.value = true;
-  } else {
-    await runAppInitialization();
-  }
+  await runAppInitialization();
 });
 </script>
 
