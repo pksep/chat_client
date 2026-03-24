@@ -97,7 +97,7 @@ export interface IChatContainerConfig {
 export interface IChatContainerProps {
   baseUrl?: string;
   dataTestid?: string;
-  config: IChatContainerConfig;
+  config?: IChatContainerConfig;
 }
 
 export interface IChatContainerEmits {
