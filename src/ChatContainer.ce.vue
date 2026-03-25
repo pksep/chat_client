@@ -15,6 +15,7 @@ import ChatContainer from './components/ChatContainer.vue';
 
 import type { IChatContainerProps } from './components/interfaces/interfaces';
 import { initializeChat, setCurrentUserId } from './services/useChat';
+import { restoreInvitedGroupCallFromUrl } from './services/useCalls';
 import { saveUserIdToSession, hasUserIdInSession } from './services/useMastra';
 import {
   fetchAuthUser,
@@ -130,6 +131,8 @@ const runAppInitialization = async () => {
         });
       }
     }
+
+    await restoreInvitedGroupCallFromUrl();
 
     await fetchAllTopics();
 

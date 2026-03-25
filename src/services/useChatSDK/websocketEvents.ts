@@ -41,16 +41,13 @@ export enum WebSocketEventType {
   READ_MESSAGE = 'readMessage',
   USER_UPDATED = 'userUpdated',
   TOGGLE_PRESENCE = 'togglePresence',
+  ACTIVE_CALLS = 'activeCalls',
   START_CALL = 'startCall',
   INCOMING_CALL = 'incomingCall',
   ANSWER_CALL = 'answerCall',
   CALL_ANSWERED = 'callAnswered',
   END_CALL = 'endCall',
-  CALL_ENDED = 'callEnded',
-  WEBRTC_OFFER = 'webrtcOffer',
-  WEBRTC_ANSWER = 'webrtcAnswer',
-  WEBRTC_ICE_CANDIDATE = 'webrtcIceCandidate',
-  WEBRTC_TRACK_STATUS = 'webrtcTrackStatus'
+  CALL_ENDED = 'callEnded'
 }
 
 export interface WebSocketEventPayloads {
@@ -136,6 +133,13 @@ export interface WebSocketEventPayloads {
     topicId: string;
   };
   [WebSocketEventType.TOGGLE_PRESENCE]: { isActive: boolean };
+  [WebSocketEventType.ACTIVE_CALLS]: {
+    calls: Array<{
+      roomId: string;
+      topicId: string;
+      callType: string;
+    }>;
+  };
   [WebSocketEventType.START_CALL]: {
     userId: string;
     roomId: string;
@@ -166,34 +170,6 @@ export interface WebSocketEventPayloads {
     callerId: string;
     topicId: string;
     callType?: string;
-  };
-
-  [WebSocketEventType.WEBRTC_OFFER]: {
-    toUserId: string;
-    fromUserId?: string;
-    offer: RTCSessionDescriptionInit;
-    roomId: string;
-    topicId: string;
-  };
-  [WebSocketEventType.WEBRTC_ANSWER]: {
-    toUserId: string;
-    fromUserId?: string;
-    answer: RTCSessionDescriptionInit;
-    roomId: string;
-    topicId: string;
-  };
-  [WebSocketEventType.WEBRTC_ICE_CANDIDATE]: {
-    toUserId: string;
-    fromUserId?: string;
-    candidate: RTCIceCandidateInit;
-    roomId: string;
-    topicId: string;
-  };
-  [WebSocketEventType.WEBRTC_TRACK_STATUS]: {
-    toUserId: string;
-    video: boolean;
-    audio: boolean;
-    roomId: string;
   };
 }
 
