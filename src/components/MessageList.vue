@@ -310,8 +310,78 @@ const updateLocalStorageInputText = () => {
   localStorage.setItem('inputs', JSON.stringify(inputsJson));
 };
 
-onMounted(() => {
+const isEditableElement = (element: EventTarget | null) => {
+  if (!(element instanceof HTMLElement)) return false;
+
+  return Boolean(
+    element.closest('input, textarea, select') ||
+      element.isContentEditable ||
+      element.closest('[contenteditable="true"]')
+  );
+};
+
+const isEditableEventTarget = (e: Event) => {
+  return e.composedPath().some(target => isEditableElement(target));
+};
+
+const focusMessageInput = () => {
   messageListInputRef.value?.focus();
+};
+
+const insertTextToMessageInput = (text: string) => {
+  messageListInputRef.value?.insertText?.(text);
+};
+
+const pasteTextToMessageInput = async () => {
+  const clipboardText = await navigator.clipboard.readText();
+
+  if (!clipboardText) return;
+
+  insertTextToMessageInput(clipboardText);
+};
+
+const handleWindowKeydown = async (e: KeyboardEvent) => {
+  const hasModifierKey = e.ctrlKey || e.metaKey || e.altKey;
+  const isPasteShortcut =
+    (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v';
+  const isPrintableKey = e.key.length === 1 && !hasModifierKey;
+  const shouldFocusMessageInput =
+    !Capacitor.isNativePlatform() &&
+    (!hasModifierKey || isPasteShortcut) &&
+    !isEditableEventTarget(e);
+
+  if (shouldFocusMessageInput) {
+    if (isPrintableKey || isPasteShortcut) {
+      e.preventDefault();
+    }
+
+    focusMessageInput();
+
+    if (isPrintableKey) {
+      insertTextToMessageInput(e.key);
+    }
+
+    if (isPasteShortcut) {
+      try {
+        await pasteTextToMessageInput();
+      } catch (error) {
+        console.error('Failed to paste into message input:', error);
+      }
+    }
+  }
+
+  if (e.key === 'Escape') {
+    navigateToDefault();
+  }
+};
+
+onMounted(() => {
+  focusMessageInput();
+  window.addEventListener('keydown', handleWindowKeydown, true);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleWindowKeydown, true);
 });
 
 watch(
@@ -320,17 +390,6 @@ watch(
     updateLocalStorageInputText();
   }
 );
-
-window.onclick = () => {
-  if (Capacitor.isNativePlatform()) return;
-  messageListInputRef.value?.focus();
-};
-
-window.onkeydown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape') {
-    navigateToDefault();
-  }
-};
 
 defineExpose({
   handleClear: clearAiMessages,

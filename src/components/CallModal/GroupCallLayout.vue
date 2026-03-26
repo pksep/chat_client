@@ -70,8 +70,9 @@
         class="call-modal__pagination-arrow"
         :disabled="currentPage === 0"
         @click="goToPage(currentPage - 1)"
-        v-text="'<'"
-      ></button>
+      >
+        <Icon :name="IconNameEnum.leftBig" />
+      </button>
       <div class="call-modal__pagination-dots">
         <button
           v-for="page in totalPages"
@@ -87,14 +88,15 @@
         class="call-modal__pagination-arrow"
         :disabled="currentPage === totalPages - 1"
         @click="goToPage(currentPage + 1)"
-        v-text="'>'"
-      ></button>
+      >
+        <Icon :name="IconNameEnum.rightBig" />
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Avatar } from '@pksep/yui';
+import { Avatar, Icon, IconNameEnum } from '@pksep/yui';
 import { getConfig } from '../../services/useConfig';
 
 const config = getConfig();

@@ -90,7 +90,7 @@ article .message__article-forward-info {
   width: 100%;
   & svg.icon-yui-kit {
     display: grid;
-    font-size: 20px;
+    font-size: 20px !important;
   }
 }
 

@@ -276,13 +276,28 @@ const screenShareVideo = ref<HTMLVideoElement | null>(null);
 const remoteVideoRefs = ref<Record<string, HTMLVideoElement | null>>({});
 const remoteAudioRefs = ref<Record<string, HTMLAudioElement | null>>({});
 const currentParticipantPage = ref(0);
-const maxParticipantsPerPage = computed(() => (isMobile.value ? 4 : 9));
+const maxParticipantsPerPage = computed(() =>
+  isMobile.value ? 4 : liveKitState.isFullScreen ? 9 : 6
+);
 const state = ref({
   openGroupInfoModal: false
 });
 
 const remoteParticipantViews = computed(() =>
-  remoteParticipants.value.map(participant => {
+  [
+    ...remoteParticipants.value,
+    ...remoteParticipants.value,
+    ...remoteParticipants.value,
+    ...remoteParticipants.value,
+    ...remoteParticipants.value,
+    ...remoteParticipants.value,
+    ...remoteParticipants.value,
+    ...remoteParticipants.value,
+    ...remoteParticipants.value,
+    ...remoteParticipants.value,
+    ...remoteParticipants.value,
+    ...remoteParticipants.value
+  ].map(participant => {
     const knownUser = getUsersList().find(
       (item: any) => item.id === participant.identity
     ) as any;
@@ -369,6 +384,7 @@ const visibleParticipantGridViews = computed(() => {
   );
 });
 const visibleGroupParticipants = computed(() => {
+  return visibleParticipantGridViews.value;
   if (!activeScreenShare.value) {
     return visibleParticipantGridViews.value;
   }

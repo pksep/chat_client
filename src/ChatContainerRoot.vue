@@ -157,6 +157,7 @@ const runAppInitialization = async () => {
       openChatContainerShow.value = false;
       return;
     }
+
     openChatContainerShow.value = false;
   } finally {
     if (tokenUrl) {
@@ -173,7 +174,3 @@ onMounted(async () => {
   await runAppInitialization();
 });
 </script>
-
-<style>
-@import './assets/chat-container.css';
-</style>
