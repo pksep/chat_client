@@ -47,25 +47,28 @@
       />
 
       <div v-if="showGroupInfoBar" class="call-modal__group-info">
-        <button
-          v-if="!isMobile"
-          class="call-modal__control-button call-modal__control-button--action"
-          title="Fullscreen"
-          @click="liveKitState.isFullScreen = !liveKitState.isFullScreen"
-        >
-          <FullscreenIcon v-if="!liveKitState.isFullScreen" />
-          <MinimizeIcon v-else />
-        </button>
-        <Icon
-          v-else
-          :name="IconNameEnum.chevronDown"
-          class="call-modal__control-button call-modal__control-button__chevron-down-group"
-          @click="hideModal"
-        />
-        <div class="call-modal__group-info-text">
-          <p>{{ resolvedGroupCallTitle }}</p>
-          <span>{{ displayGroupCallMeta }}</span>
+        <div>
+          <button
+            v-if="!isMobile"
+            class="call-modal__control-button call-modal__control-button--action"
+            title="Fullscreen"
+            @click="liveKitState.isFullScreen = !liveKitState.isFullScreen"
+          >
+            <FullscreenIcon v-if="!liveKitState.isFullScreen" />
+            <MinimizeIcon v-else />
+          </button>
+          <Icon
+            v-else
+            :name="IconNameEnum.chevronDown"
+            class="call-modal__control-button call-modal__control-button__chevron-down-group"
+            @click="hideModal"
+          />
+          <div class="call-modal__group-info-text">
+            <p>{{ resolvedGroupCallTitle }}</p>
+            <span>{{ displayGroupCallMeta }}</span>
+          </div>
         </div>
+
         <button
           class="call-modal__control-button call-modal__control-button--action"
           @click="state.openGroupInfoModal = true"

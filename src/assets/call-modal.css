@@ -122,6 +122,10 @@
   color: #fff;
 }
 
+.call-modal__control-button--fullscreen {
+  background-color: var(--blue1);
+}
+
 .call-modal__control-button:hover {
   transform: scale(1.1);
 }
@@ -171,7 +175,24 @@
   z-index: 5;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  padding: 0 5px;
   gap: 16px;
+
+  & > div {
+    display: flex;
+    align-items: center;
+    background-color: #f8f9fdb2;
+    border-radius: 50px;
+
+    & > div {
+      padding: 0 10px;
+
+      & > p {
+        text-align: start;
+      }
+    }
+  }
 }
 
 .call-modal__group-info-text {
