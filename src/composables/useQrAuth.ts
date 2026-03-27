@@ -5,6 +5,7 @@ import {
   CapacitorBarcodeScannerAndroidScanningLibrary,
   CapacitorBarcodeScannerTypeHint
 } from '@capacitor/barcode-scanner';
+import { showErrorNotification } from './useNotifications';
 
 export interface IQrAuthResult {
   token: string;
@@ -12,21 +13,15 @@ export interface IQrAuthResult {
 }
 
 export const useQrAuth = () => {
-  const scanError = ref('');
-  const isError = ref(false);
   const isScanning = ref(false);
-  const notificationKey = ref(0);
 
   const scanQrCode = async (): Promise<IQrAuthResult | null> => {
-    isError.value = false;
-    scanError.value = '';
-
     await nextTick();
-    notificationKey.value += 1;
 
     if (!Capacitor.isNativePlatform() && !window.isSecureContext) {
-      scanError.value = 'Соединение не защищено (HTTP). Камера недоступна.';
-      isError.value = true;
+      showErrorNotification(
+        'Соединение не защищено (HTTP). Камера недоступна.'
+      );
       return null;
     }
 
@@ -42,8 +37,7 @@ export const useQrAuth = () => {
       });
 
       if (!result.ScanResult) {
-        scanError.value = 'Сканирование отменено';
-        isError.value = true;
+        showErrorNotification('Сканирование отменено');
         return null;
       }
 
@@ -52,8 +46,7 @@ export const useQrAuth = () => {
         const token = url.searchParams.get('token')?.split('?token')[0] || '';
 
         if (!token) {
-          scanError.value = 'Не удалось получить токен';
-          isError.value = true;
+          showErrorNotification('Не удалось получить токен');
           return null;
         }
 
@@ -68,8 +61,7 @@ export const useQrAuth = () => {
       }
     } catch (error) {
       console.error('Ошибка сканирования:', error);
-      scanError.value = 'Не удалось открыть камеру';
-      isError.value = true;
+      showErrorNotification('Не удалось открыть камеру');
       return null;
     } finally {
       isScanning.value = false;
@@ -77,10 +69,7 @@ export const useQrAuth = () => {
   };
 
   return {
-    isError,
     isScanning,
-    notificationKey,
-    scanError,
     scanQrCode
   };
 };

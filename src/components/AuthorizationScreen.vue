@@ -129,20 +129,18 @@
         </section>
 
         <section v-else class="authorization-screen__credentials">
-          <label
-            class="authorization-screen__credentials-label"
-            for="chat-identifier"
-          >
+          <label class="authorization-screen__credentials-label" for="tabel">
             Логин
           </label>
-          <Input
-            id="chat-identifier"
-            class="authorization-screen__credentials-input initial"
+          <Combobox
+            id="tabel"
+            class="authorization__combobox"
+            data-testid="LoginForm-TabelNumber-Combobox"
             placeholder="Введите логин"
-            :model-value="props.identifier"
-            @update:model-value="value => emits('update:identifier', value)"
+            :default-option="props.identifier"
+            :options="userOptions"
+            @change="handleIdentifierChange"
           />
-
           <label
             class="authorization-screen__credentials-label"
             for="chat-password"
@@ -173,9 +171,9 @@
               :model-value="props.rememberAccount"
             />
 
-            <span class="authorization-screen__remember-text"
-              >Запомнить аккаунт</span
-            >
+            <span class="authorization-screen__remember-text">
+              Запомнить аккаунт
+            </span>
           </label>
 
           <Button
@@ -198,23 +196,10 @@
           Вход с помощью QR
         </Button>
 
-        <p v-if="props.errorMessage" class="authorization-screen__error">
-          {{ props.errorMessage }}
-        </p>
-
         <p v-if="!props.isCredentialsStep" class="authorization-screen__footer">
           Ссылку вы можете получить у администратора
         </p>
       </div>
-
-      <PushNotification
-        v-if="isError"
-        title="Ошибка"
-        :push-key="notificationKey"
-        :description="scanError"
-        :type="MessageTypeEnum.error"
-        @close="() => (isError = false)"
-      />
 
       <div class="authorization-screen__toolbar" aria-hidden="true">
         <span
@@ -242,16 +227,17 @@ import {
   ButtonTypeEnum,
   Checkbox,
   CheckboxSizeEnum,
+  Combobox,
   Icon,
   IconNameEnum,
   Input,
-  MessageTypeEnum,
-  PushNotification,
   TextFieldEnum
 } from '@pksep/yui';
 import LinkIcon from './UI/LinkIcon.vue';
-import { ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useQrAuth } from '../composables/useQrAuth';
+import { showErrorNotification } from '../composables/useNotifications';
+import { getUsersList } from '../composables/useUsers';
 
 interface IAuthorizationScreenProps {
   url: string;
@@ -285,11 +271,14 @@ interface IAuthorizationScreenEmits {
 
 const props = defineProps<IAuthorizationScreenProps>();
 const emits = defineEmits<IAuthorizationScreenEmits>();
-const { isError, isScanning, notificationKey, scanError, scanQrCode } =
-  useQrAuth();
+const { isScanning, scanQrCode } = useQrAuth();
 
 const handleInput = (value: string): void => {
   emits('update:url', value);
+};
+
+const handleIdentifierChange = (value: string | string[]): void => {
+  emits('update:identifier', Array.isArray(value) ? value[0] || '' : value);
 };
 
 const showPassword = ref(false);
@@ -301,6 +290,24 @@ const handleQrAuth = async () => {
     emits('qr-auth-success', authResult);
   }
 };
+
+const getUserLoginValue = (user: any): string =>
+  user?.initials || user?.nickname || '';
+
+const userOptions = computed(() =>
+  getUsersList()
+    .map(user => getUserLoginValue(user))
+    .filter((value, index, list) => !!value && list.indexOf(value) === index)
+);
+
+watch(
+  () => props.errorMessage,
+  errorMessage => {
+    if (errorMessage) {
+      showErrorNotification(errorMessage);
+    }
+  }
+);
 </script>
 
 <style>
