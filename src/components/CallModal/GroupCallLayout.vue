@@ -61,6 +61,13 @@
             :initials="participant.initials"
           />
         </div>
+        <div
+          v-if="participant.isHandRaised"
+          class="call-modal__remote-hand"
+          :title="`${participant.name} raised a hand`"
+        >
+          <HandRaiseIcon />
+        </div>
         <div class="call-modal__remote-name">{{ participant.name }}</div>
       </div>
     </div>
@@ -98,6 +105,7 @@
 <script setup lang="ts">
 import { Avatar, Icon, IconNameEnum } from '@pksep/yui';
 import { getConfig } from '../../services/useConfig';
+import HandRaiseIcon from './UI/HandRaiseIcon.vue';
 
 const config = getConfig();
 
@@ -115,6 +123,7 @@ defineProps<{
     avatarUrl: string;
     isVideoActive: boolean;
     isLocal: boolean;
+    isHandRaised: boolean;
   }>;
   currentPage: number;
   currentPageParticipantCount: number;

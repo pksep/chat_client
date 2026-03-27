@@ -680,6 +680,13 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   font-size: 10px;
 }
 
+.call-modal__remote-grid--screen-share .call-modal__remote-hand {
+  top: 6px;
+  left: 6px;
+  width: 24px;
+  height: 24px;
+}
+
 .call-modal__remote-grid--screen-share .call-modal__avatar {
   --size-avatar: 50px;
 }
@@ -765,6 +772,27 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   color: var(--white);
   font-size: 11px;
   z-index: 3;
+}
+
+.call-modal__remote-hand {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--blue4);
+  color: var(--white);
+  z-index: 3;
+}
+
+.call-modal__remote-hand svg {
+  width: 15px;
+  height: 15px;
+  margin-left: 1px;
 }
 
 .call-modal__pagination {

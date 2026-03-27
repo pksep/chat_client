@@ -189,6 +189,18 @@
               <ScreenShareIcon />
             </button>
 
+            <button
+              v-if="isGroupCallLayout"
+              class="call-modal__control-button"
+              :class="{
+                'call-modal__control-button__inactive':
+                  !liveKitState.isHandRaised
+              }"
+              @click="handleToggleHandRaise"
+            >
+              <HandRaiseIcon />
+            </button>
+
             <button class="call-modal__control-button" @click="leaveCall">
               <LeaveIcon />
             </button>
@@ -226,6 +238,7 @@ import MicDisableIcon from './UI/MicDisableIcon.vue';
 import VideoDisableIcon from './UI/VideoDisableIcon.vue';
 import LeaveIcon from './UI/LeaveIcon.vue';
 import ScreenShareIcon from './UI/ScreenShareIcon.vue';
+import HandRaiseIcon from './UI/HandRaiseIcon.vue';
 import DirectCallLayout from './DirectCallLayout.vue';
 import GroupCallLayout from './GroupCallLayout.vue';
 import GroupCallInfoPanel from './GroupCallInfoPanel.vue';
@@ -244,6 +257,7 @@ import {
   open as isCallOpen,
   remoteParticipants,
   state as liveKitState,
+  toggleHandRaise,
   toggleMic,
   toggleScreenShare,
   toggleSpeaker,
@@ -284,26 +298,14 @@ const state = ref({
 });
 
 const remoteParticipantViews = computed(() =>
-  [
-    ...remoteParticipants.value,
-    ...remoteParticipants.value,
-    ...remoteParticipants.value,
-    ...remoteParticipants.value,
-    ...remoteParticipants.value,
-    ...remoteParticipants.value,
-    ...remoteParticipants.value,
-    ...remoteParticipants.value,
-    ...remoteParticipants.value,
-    ...remoteParticipants.value,
-    ...remoteParticipants.value,
-    ...remoteParticipants.value
-  ].map(participant => {
+  remoteParticipants.value.map(participant => {
     const knownUser = getUsersList().find(
       (item: any) => item.id === participant.identity
     ) as any;
 
     return {
       ...participant,
+      isHandRaised: participant.isHandRaised,
       initials:
         knownUser?.initials ||
         participant.name
@@ -350,15 +352,20 @@ const localParticipantView = computed(() => {
       (liveKitState.isVideoActive || liveKitState.isScreenSharingActive),
     videoStream: localVideoStream.value,
     audioStream: null,
-    isLocal: true
+    isLocal: true,
+    isHandRaised: liveKitState.isHandRaised
   };
 });
 
 const participantGridViews = computed(() => {
-  const remoteViews = remoteParticipantViews.value.map(participant => ({
-    ...participant,
-    isLocal: false
-  }));
+  const remoteViews = remoteParticipantViews.value
+    .map(participant => ({
+      ...participant,
+      isLocal: false
+    }))
+    .sort(
+      (left, right) => Number(right.isHandRaised) - Number(left.isHandRaised)
+    );
 
   if (!isGroupCallLayout.value) {
     return remoteViews;
@@ -384,7 +391,6 @@ const visibleParticipantGridViews = computed(() => {
   );
 });
 const visibleGroupParticipants = computed(() => {
-  return visibleParticipantGridViews.value;
   if (!activeScreenShare.value) {
     return visibleParticipantGridViews.value;
   }
@@ -614,5 +620,9 @@ const handleToggleVideo = async () => {
 
 const handleToggleScreenShare = async () => {
   await toggleScreenShare();
+};
+
+const handleToggleHandRaise = async () => {
+  await toggleHandRaise();
 };
 </script>

@@ -61,7 +61,7 @@ p.chat__nothing-paragraph {
 }
 
 .chat__message-bubble__arrow-down > svg.icon-yui-kit {
-  font-size: 18px;
+  font-size: 18px !important;
 }
 
 .chat__message-unread_messages_start {

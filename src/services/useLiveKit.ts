@@ -22,6 +22,7 @@ const isModalVisible = ref(false);
 const isRemoteVideoActive = ref(false);
 const localVideoStream = ref<MediaStream | null>(null);
 const localScreenShareStream = ref<MediaStream | null>(null);
+const handRaisedParticipants = ref<Record<string, boolean>>({});
 const remoteParticipants = ref<
   Array<{
     identity: string;
@@ -32,6 +33,7 @@ const remoteParticipants = ref<
     audioStream: MediaStream | null;
     isVideoActive: boolean;
     isScreenShareActive: boolean;
+    isHandRaised: boolean;
   }>
 >([]);
 const activeGroupCalls = ref<
@@ -60,8 +62,11 @@ const state = reactive({
   isVideoActive: false,
   isScreenSharingActive: false,
   isSpeakerActive: false,
-  isFullScreen: false
+  isFullScreen: false,
+  isHandRaised: false
 });
+
+const HAND_RAISE_TOPIC = 'group-call-hand-raise';
 
 let room: Room | null = null;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
@@ -254,13 +259,55 @@ const syncRemoteParticipantState = () => {
         ? new MediaStream([audioPublication.track.mediaStreamTrack])
         : null,
       isVideoActive: !!preferredVideoPublication?.track?.mediaStreamTrack,
-      isScreenShareActive: !!screenSharePublication?.track?.mediaStreamTrack
+      isScreenShareActive: !!screenSharePublication?.track?.mediaStreamTrack,
+      isHandRaised: !!handRaisedParticipants.value[remoteParticipant.identity]
     };
   });
 
   isRemoteVideoActive.value = remoteParticipants.value.some(
     participant => participant.isVideoActive
   );
+};
+
+const publishHandRaiseState = async (isRaised: boolean) => {
+  if (!room) return;
+
+  const payload = new TextEncoder().encode(
+    JSON.stringify({
+      type: HAND_RAISE_TOPIC,
+      isRaised
+    })
+  );
+
+  await room.localParticipant.publishData(payload, {
+    reliable: true,
+    topic: HAND_RAISE_TOPIC
+  });
+};
+
+const handleHandRaiseData = (
+  payload: Uint8Array,
+  participant?: RemoteParticipant,
+  topic?: string
+) => {
+  if (!participant || topic !== HAND_RAISE_TOPIC) return;
+
+  try {
+    const parsedPayload = JSON.parse(new TextDecoder().decode(payload)) as {
+      type?: string;
+      isRaised?: boolean;
+    };
+
+    if (parsedPayload.type !== HAND_RAISE_TOPIC) return;
+
+    handRaisedParticipants.value = {
+      ...handRaisedParticipants.value,
+      [participant.identity]: !!parsedPayload.isRaised
+    };
+    syncRemoteParticipantState();
+  } catch (error) {
+    console.warn('[LiveKit] Failed to parse hand raise event:', error);
+  }
 };
 
 const activeScreenShare = computed(() => {
@@ -338,8 +385,14 @@ const setupRoomListeners = (activeRoom: Room) => {
     .on(RoomEvent.ParticipantConnected, () => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      if (state.isHandRaised) {
+        void publishHandRaiseState(true);
+      }
     })
-    .on(RoomEvent.ParticipantDisconnected, () => {
+    .on(RoomEvent.ParticipantDisconnected, participant => {
+      const nextHandRaisedParticipants = { ...handRaisedParticipants.value };
+      delete nextHandRaisedParticipants[participant.identity];
+      handRaisedParticipants.value = nextHandRaisedParticipants;
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
     })
@@ -348,6 +401,9 @@ const setupRoomListeners = (activeRoom: Room) => {
     })
     .on(RoomEvent.LocalTrackUnpublished, () => {
       syncLocalTrackState();
+    })
+    .on(RoomEvent.DataReceived, (payload, participant, _, topic) => {
+      handleHandRaiseData(payload, participant, topic);
     })
     .on(RoomEvent.Disconnected, () => {
       cleanup(false);
@@ -409,12 +465,14 @@ const connectToRoom = async () => {
 const resetMediaState = () => {
   localVideoStream.value = null;
   remoteParticipants.value = [];
+  handRaisedParticipants.value = {};
   isRemoteVideoActive.value = false;
   state.isMicActive = true;
   state.isVideoActive = false;
   state.isScreenSharingActive = false;
   state.isSpeakerActive = false;
   state.isFullScreen = false;
+  state.isHandRaised = false;
 };
 
 export const startLiveKitCall = async (
@@ -736,6 +794,20 @@ export const toggleScreenShare = async () => {
   );
   syncLocalTrackState();
   syncRemoteParticipantState();
+};
+
+export const toggleHandRaise = async () => {
+  if (!room) return;
+
+  const nextValue = !state.isHandRaised;
+
+  try {
+    state.isHandRaised = nextValue;
+    await publishHandRaiseState(nextValue);
+  } catch (error) {
+    state.isHandRaised = !nextValue;
+    console.warn('[LiveKit] Failed to update hand raise state:', error);
+  }
 };
 
 export const leaveCall = () => {
