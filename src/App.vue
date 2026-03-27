@@ -42,8 +42,6 @@ import {
   clearErpAuthSession,
   getChatAuthSession,
   getStoredBootstrapErpAccessToken,
-  getStoredChatAccessToken,
-  getStoredChatRefreshToken,
   loginWithCredentials,
   saveBootstrapErpSession,
   saveChatAuthSession
@@ -152,17 +150,10 @@ const getUrlOrganization = () => {
 
 const hasBootstrapToken = () =>
   !!getUrlErpToken() || !!getStoredBootstrapErpAccessToken();
-const hasLocalChatToken = () => !!getStoredChatAccessToken();
-const hasStoredRefreshToken = () => !!getStoredChatRefreshToken();
-const hasDirectChatSession = () => !!getChatAuthSession();
+const hasChatSession = () => !!getChatAuthSession();
 
 const openCredentialsStepIfNeeded = () => {
-  if (
-    hasBootstrapToken() ||
-    hasLocalChatToken() ||
-    hasStoredRefreshToken() ||
-    hasDirectChatSession()
-  ) {
+  if (hasBootstrapToken() || hasChatSession()) {
     isCredentialsStep.value = false;
     return;
   }

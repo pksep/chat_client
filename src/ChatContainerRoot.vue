@@ -87,22 +87,21 @@ const runAppInitialization = async () => {
   const bootstrapErpToken = tokenUrl || getStoredBootstrapErpAccessToken();
   const directAuthSession = getChatAuthSession();
   const config = getConfig();
-  const persistSession = isStoredChatSessionPersistent();
+  const persistSession = !!tokenUrl || isStoredChatSessionPersistent();
   const shouldUseBootstrapToken = !!bootstrapErpToken;
 
   try {
-    const authData =
-      shouldUseBootstrapToken
-        ? await useAuth(bootstrapErpToken).catch(async error => {
-            const refreshedAuth = await tryRefreshErpSession();
+    const authData = shouldUseBootstrapToken
+      ? await useAuth(bootstrapErpToken).catch(async error => {
+          const refreshedAuth = await tryRefreshErpSession();
 
-            if (!refreshedAuth?.token) {
-              throw error;
-            }
+          if (!refreshedAuth?.token) {
+            throw error;
+          }
 
-            return refreshedAuth;
-          })
-        : directAuthSession?.token || storedChatToken
+          return refreshedAuth;
+        })
+      : directAuthSession?.token || storedChatToken
         ? {
             token: directAuthSession?.token || storedChatToken || '',
             user: directAuthSession?.user

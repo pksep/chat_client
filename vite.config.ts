@@ -62,11 +62,11 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         type: 'module',
         navigateFallback: 'index.html'
       }
-    }) as PluginOption,
+    }) as PluginOption
     // Оставили на случай тестирования
-    basicSsl({
-      name: 'SEP:Chat'
-    })
+    // basicSsl({
+    //   name: 'SEP:Chat'
+    // })
   ];
 
   const plugins: PluginOption[] = [vuePlugin, ...appPlugins];

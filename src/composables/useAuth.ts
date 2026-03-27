@@ -53,7 +53,9 @@ export const useAuth = async (erpToken: string): Promise<AuthResponse> => {
 
   return {
     token,
-    user
+    user,
+    erpToken: data.erpToken ?? data.accessToken,
+    refreshToken: data.refreshToken
   };
 };
 
