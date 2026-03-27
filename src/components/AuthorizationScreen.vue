@@ -188,8 +188,9 @@
         </section>
 
         <Button
+          v-if="!props.isCredentialsStep"
           class="authorization-screen__qr-button"
-          :type="ButtonTypeEnum.secondary"
+          :type="ButtonTypeEnum.outline"
           :disabled="props.isLoading"
           :loading="isScanning"
           @click="handleQrAuth"

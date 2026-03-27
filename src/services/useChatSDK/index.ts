@@ -27,7 +27,7 @@ import { ChatUtils, ChatUtilsInterface } from './utils';
 import { ITopic } from '../../components/interfaces/interfaces';
 import { fetchAllTopics } from '../../composables/useTopics';
 import { fetchMessagesForTopic } from '../useMessages';
-import { Jitsi, JitsiInterface } from './jitsi';
+import { getConfig } from '../useConfig';
 
 export interface ChatSDKOptions {
   apiUrl: string;
@@ -55,7 +55,6 @@ export class ChatSDK {
   private media: ChatMediaInterface;
   private ws: ChatWSInterface;
   private utils: ChatUtilsInterface;
-  private jitsi: JitsiInterface;
 
   private reqi: Reqi;
 
@@ -78,7 +77,6 @@ export class ChatSDK {
     this.media = new ChatMedia(this.reqi);
     this.ws = new ChatWS(null);
     this.utils = new ChatUtils(this.reqi);
-    this.jitsi = new Jitsi(this.reqi);
   }
 
   private createReqiInstance(): Reqi {
@@ -579,36 +577,97 @@ export class ChatSDK {
     return await this.utils.getUnreadCounts();
   }
 
-  async startCall(
-    user: any,
-    topicId: string,
-    parentNode: HTMLElement,
-    token?: string
-  ) {
-    await this.jitsi.startCall(user, topicId, parentNode, token);
+  getConfig() {
+    return getConfig();
   }
 
-  async getJitsiAvailableDevices(): Promise<any> {
-    return await this.jitsi.getAvailableDevices();
+  async getLiveKitToken(
+    roomId: string,
+    userId: string
+  ): Promise<string | null> {
+    try {
+      const response = (await this.reqi.get<{ token: string }>(
+        `/calls/livekit-token?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(userId)}`,
+        { parsed: false }
+      )) as any;
+      const data = await response.json();
+      return data.token;
+    } catch (error) {
+      console.error('[LiveKit] Failed to fetch call token:', error);
+      return null;
+    }
   }
 
-  setJitsiAudioOutputDevice(label: string, deviceId: string) {
-    this.jitsi.setAudioOutputDevice(label, deviceId);
+  async createGroupCallInvite(roomId: string): Promise<{
+    inviteToken: string;
+    roomId: string;
+    topicId: string;
+  } | null> {
+    try {
+      const response = (await this.reqi.get<{
+        invite: {
+          inviteToken: string;
+          roomId: string;
+          topicId: string;
+        };
+      }>(`/calls/invite-link?roomId=${encodeURIComponent(roomId)}`, {
+        parsed: false
+      })) as any;
+      const data = await response.json();
+      return data.invite || null;
+    } catch (error) {
+      console.error('[LiveKit] Failed to create invite link:', error);
+      return null;
+    }
   }
 
-  endCall() {
-    this.jitsi.leaveCall();
+  async getGroupCallInvitePreview(
+    roomId: string,
+    inviteToken: string
+  ): Promise<{
+    roomId: string;
+    topicId: string;
+    title: string;
+    avatarUrl?: string | null;
+    participantCount: number;
+    members: User[];
+  } | null> {
+    try {
+      const response = (await this.reqi.get<{
+        preview: {
+          roomId: string;
+          topicId: string;
+          title: string;
+          avatarUrl?: string | null;
+          participantCount: number;
+          members: User[];
+        };
+      }>(
+        `/calls/invite-preview?roomId=${encodeURIComponent(roomId)}&invite=${encodeURIComponent(inviteToken)}`,
+        { parsed: false }
+      )) as any;
+      const data = await response.json();
+      return data.preview || null;
+    } catch (error) {
+      console.error('[LiveKit] Failed to fetch invite preview:', error);
+      return null;
+    }
   }
 
-  getJitsiApi() {
-    return this.jitsi;
-  }
-
-  async getJitsiToken(roomId: string, userId: string): Promise<string | null> {
-    return this.jitsi.getCallToken(roomId, userId);
-  }
-
-  executeJitsiCommand(command: string, ...args: any[]) {
-    this.jitsi.executeCommand(command, ...args);
+  async getInviteLiveKitToken(
+    roomId: string,
+    inviteToken: string
+  ): Promise<string | null> {
+    try {
+      const response = (await this.reqi.get<{ token: string }>(
+        `/calls/invite-livekit-token?roomId=${encodeURIComponent(roomId)}&invite=${encodeURIComponent(inviteToken)}`,
+        { parsed: false }
+      )) as any;
+      const data = await response.json();
+      return data.token;
+    } catch (error) {
+      console.error('[LiveKit] Failed to fetch invite call token:', error);
+      return null;
+    }
   }
 }

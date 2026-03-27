@@ -91,7 +91,6 @@
   </main>
 
   <CallModal />
-  <JitsiCall />
 </template>
 
 <script setup lang="ts">
@@ -130,8 +129,12 @@ import AndroidIcon from './UI/AndroidIcon.vue';
 import AppleIcon from './UI/AppleIcon.vue';
 import { useMobileApp } from '../composables/useMobileApp';
 import CallModal from './CallModal/CallModal.vue';
-import JitsiCall from './CallModal/JitsiCall.vue';
-import { isCallActive, isAnyCallModalVisible } from '../services/useCalls';
+import {
+  invitedGroupCallInfo,
+  isCallActive,
+  isAnyCallModalVisible,
+  pendingGroupCallInfo
+} from '../services/useCalls';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -172,7 +175,9 @@ const chatContainerClasses = computed(() => [
         ? true
         : !state.isMenuDesktopOpen,
     'chat-container--active-call':
-      isCallActive.value && !isAnyCallModalVisible.value
+      (isCallActive.value && !isAnyCallModalVisible.value) ||
+      !!pendingGroupCallInfo.value?.[route.value?.id || ''] ||
+      !!invitedGroupCallInfo.value?.isJoinAvailable
   }
 ]);
 
@@ -263,6 +268,10 @@ const handleNewGroupMessage = async (group: any): Promise<void> => {
 const isActiveHeader = (
   routeObj: { type?: string | null; id?: string | null } | null
 ): boolean => {
+  if (invitedGroupCallInfo.value?.isJoinAvailable) {
+    return true;
+  }
+
   if (!routeObj) return false;
   if (routeObj.type === 'ai') return true;
   if (routeObj.id !== null) {

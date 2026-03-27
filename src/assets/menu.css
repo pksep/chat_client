@@ -126,7 +126,7 @@ details.menu__user-details {
     display: none;
   }
   & svg.icon-yui-kit {
-    font-size: 12px;
+    font-size: 12px !important;
   }
   & h4.menu__user-details-summary--title {
     cursor: pointer;
@@ -176,7 +176,7 @@ details.menu__user-details {
   color: var(--text-grey);
   padding-block: 10px;
   & svg.icon-yui-kit {
-    font-size: 16px;
+    font-size: 16px !important;
   }
 }
 

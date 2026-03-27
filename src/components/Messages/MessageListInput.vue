@@ -259,6 +259,8 @@ const contentEditorRef =
   useTemplateRef<typeof ContentEditor>('contentEditorRef');
 
 defineExpose({
-  focus: () => contentEditorRef.value?.focus()
+  focus: () => contentEditorRef.value?.focus(),
+  insertText: (text: string) =>
+    contentEditorRef.value?.editor?.commands?.insertContent?.(text)
 });
 </script>

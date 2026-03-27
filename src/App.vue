@@ -1,7 +1,5 @@
 <template>
-  <!-- eslint-disable-next-line vue/html-self-closing-->
-  <chat-container v-if="config && !isCredentialsStep" :config.prop="config">
-  </chat-container>
+  <ChatContainer v-if="config && !isCredentialsStep" :config="config" />
 
   <AuthorizationScreen
     v-else
@@ -27,8 +25,8 @@
 <script lang="ts" setup>
 import { computed, onMounted, ref } from 'vue';
 import { IChatContainerConfig } from './components/interfaces/interfaces';
+import ChatContainer from './ChatContainerRoot.vue';
 import AuthorizationScreen from './components/AuthorizationScreen.vue';
-import './index';
 import { setConfig } from './services/useConfig';
 import {
   CHAT_AUTH_SESSION_KEY,
@@ -97,7 +95,8 @@ const parseRuntimeConfig = (
     CHAT_API_DOMAIN: envMap.VITE_CHAT_API_DOMAIN,
     CHAT_WS_DOMAIN: envMap.VITE_CHAT_WS_DOMAIN,
     CHAT_ERP_URL: envMap.VITE_ERP_URL,
-    CHAT_PATH_TO_FILE_CDN: envMap.VITE_PATH_TO_FILE_CDN
+    CHAT_PATH_TO_FILE_CDN: envMap.VITE_PATH_TO_FILE_CDN,
+    CHAT_LIVEKIT_URL: envMap.VITE_LIVEKIT_URL
   };
 };
 

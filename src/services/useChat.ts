@@ -26,16 +26,13 @@ import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
 import {
   handleIncomingCall,
   handleCallAnswered,
-  handleCallEnded
+  handleCallEnded,
+  removeActiveGroupCall,
+  removeInvitedGroupCall,
+  restoreInvitedGroupCallFromUrl,
+  syncServerActiveCalls
 } from './useCalls';
-import { roomId as jitsiRoomId } from './useJitsi';
-import {
-  webRTCRoomId,
-  handleOffer as handleWebRTCOffer,
-  handleAnswer as handleWebRTCAnswer,
-  handleIceCandidate as handleWebRTCIceCandidate,
-  handleRemoteTrackStatus
-} from './useWebRTC';
+import { roomId as liveKitRoomId } from './useLiveKit';
 import { Capacitor } from '@capacitor/core';
 import { initCallKit, showIncomingCallKit, endAllCallKits } from './useCallKit';
 
@@ -142,12 +139,7 @@ const setupChatListeners = (): void => {
   chatSDK.subscribeToEvent(WebSocketEventType.INCOMING_CALL, ({ payload }) => {
     const user = getUserById(payload.callerId);
     if (user) {
-      handleIncomingCall(
-        user,
-        payload.roomId,
-        payload.topicId,
-        payload.callType
-      );
+      handleIncomingCall(user, payload.roomId, payload.topicId);
 
       // If we are on native mobile, show the system incoming call screen
       if (Capacitor.isNativePlatform()) {
@@ -187,15 +179,19 @@ const setupChatListeners = (): void => {
     if (Capacitor.isNativePlatform()) {
       endAllCallKits();
     }
-    handleCallAnswered(payload.userId);
+    handleCallAnswered(payload.userId, payload.roomId);
+  });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.ACTIVE_CALLS, ({ payload }) => {
+    syncServerActiveCalls(payload.calls);
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CALL_ENDED, ({ payload }) => {
+    removeActiveGroupCall(payload.topicId);
+    removeInvitedGroupCall(payload.roomId);
+
     // Only cleanup if the roomId matches our current active call
-    if (
-      payload.roomId === jitsiRoomId.value ||
-      payload.roomId === webRTCRoomId.value
-    ) {
+    if (payload.roomId === liveKitRoomId.value) {
       if (activeCallNotification) {
         activeCallNotification.close();
         activeCallNotification = null;
@@ -206,41 +202,6 @@ const setupChatListeners = (): void => {
       handleCallEnded();
     }
   });
-
-  // WebRTC track status (video/audio on/off)
-  chatSDK.subscribeToEvent(
-    WebSocketEventType.WEBRTC_TRACK_STATUS,
-    ({ payload }) => {
-      handleRemoteTrackStatus(payload.video, payload.audio, payload.roomId);
-    }
-  );
-
-  // WebRTC Calls
-  chatSDK.subscribeToEvent(WebSocketEventType.WEBRTC_OFFER, ({ payload }) => {
-    if (payload.fromUserId) {
-      handleWebRTCOffer(
-        payload.fromUserId,
-        payload.offer,
-        payload.roomId,
-        payload.topicId
-      );
-    }
-  });
-
-  chatSDK.subscribeToEvent(WebSocketEventType.WEBRTC_ANSWER, ({ payload }) => {
-    handleWebRTCAnswer(payload.answer, payload.roomId, payload.topicId);
-  });
-
-  chatSDK.subscribeToEvent(
-    WebSocketEventType.WEBRTC_ICE_CANDIDATE,
-    ({ payload }) => {
-      handleWebRTCIceCandidate(
-        payload.candidate,
-        payload.roomId,
-        payload.topicId
-      );
-    }
-  );
 };
 
 let isVisibilityListenerAdded = false;
@@ -279,6 +240,7 @@ export const initializeChat = async (options: {
   await chatSDK.connect();
   isWebsocketConnecting.value = false;
   setupChatListeners();
+  await restoreInvitedGroupCallFromUrl();
 
   if (Capacitor.isNativePlatform()) {
     initCallKit();

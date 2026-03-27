@@ -12,7 +12,7 @@ import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
 import type { IMessage, IMedia } from '../../interfaces/interfaces';
 import { RouteTypes } from '../../../composables/navigation/useUrlRouting';
 
-const MAX_HTML_LENGTH = 2000;
+const MAX_HTML_LENGTH = 4000;
 
 export function splitHtmlByLength(
   html: string,

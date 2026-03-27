@@ -15,6 +15,7 @@ import ChatContainer from './components/ChatContainer.vue';
 
 import type { IChatContainerProps } from './components/interfaces/interfaces';
 import { initializeChat, setCurrentUserId } from './services/useChat';
+import { restoreInvitedGroupCallFromUrl } from './services/useCalls';
 import { saveUserIdToSession, hasUserIdInSession } from './services/useMastra';
 import {
   fetchAuthUser,
@@ -131,6 +132,8 @@ const runAppInitialization = async () => {
       }
     }
 
+    await restoreInvitedGroupCallFromUrl();
+
     await fetchAllTopics();
 
     if (route.value.id) {
@@ -154,6 +157,7 @@ const runAppInitialization = async () => {
       openChatContainerShow.value = false;
       return;
     }
+
     openChatContainerShow.value = false;
   } finally {
     if (tokenUrl) {
@@ -170,7 +174,3 @@ onMounted(async () => {
   await runAppInitialization();
 });
 </script>
-
-<style>
-@import './assets/chat-container.css';
-</style>
