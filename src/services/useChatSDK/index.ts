@@ -26,6 +26,8 @@ import { ChatWS, ChatWSInterface } from './ws';
 import { ChatUtils, ChatUtilsInterface } from './utils';
 import { ITopic } from '../../components/interfaces/interfaces';
 import { fetchAllTopics } from '../../composables/useTopics';
+import { getAuthToken } from '../../composables/useLogin';
+import { isAuthError, tryRefreshErpSession, withErpRefreshOnAuthError } from '../../composables/useAuth';
 import { fetchMessagesForTopic } from '../useMessages';
 import { getConfig } from '../useConfig';
 
@@ -63,11 +65,7 @@ export class ChatSDK {
     this.wsUrl = options.wsUrl;
     this.token = options.token;
 
-    this.reqi = new Reqi(this.apiUrl, {
-      headers: {
-        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
-      }
-    });
+    this.reqi = this.createReqiInstance();
 
     this.auth = new ChatAuth(this.apiUrl, this.token);
     this.user = new ChatUser(this.reqi);
@@ -80,21 +78,53 @@ export class ChatSDK {
   }
 
   private createReqiInstance(): Reqi {
-    return new Reqi(this.apiUrl, {
+    const reqi = new Reqi(this.apiUrl, {
       headers: {
         'Content-Type': 'application/json',
         ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
       }
     });
+
+    reqi.request.use(async (request: Request): Promise<Request> => {
+      const token = getAuthToken() || this.token;
+
+      if (token) {
+        request.headers.set('Authorization', `Bearer ${token}`);
+      } else {
+        request.headers.delete('Authorization');
+      }
+
+      return request;
+    });
+
+    const methodNames = ['get', 'post', 'put', 'patch', 'delete'] as const;
+
+    for (const methodName of methodNames) {
+      const originalMethod = (reqi as any)[methodName];
+
+      if (typeof originalMethod !== 'function') {
+        continue;
+      }
+
+      (reqi as any)[methodName] = (...args: any[]) => {
+        return withErpRefreshOnAuthError(() => originalMethod.apply(reqi, args));
+      };
+    }
+
+    return reqi;
   }
 
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
+      let authReconnectAttempted = false;
+
       try {
         this.socket = io(this.wsUrl, {
           transports: ['websocket'],
-          auth: {
-            token: this.token
+          auth: cb => {
+            cb({
+              token: getAuthToken() || this.token
+            });
           },
 
           reconnection: true,
@@ -107,13 +137,26 @@ export class ChatSDK {
         this.ws.setSocket(this.socket);
 
         this.socket.on('connect', () => {
+          authReconnectAttempted = false;
           console.log('Socket.IO: Connected to chat server');
           resolve();
 
           fetchAllTopics();
         });
 
-        this.socket.on('connect_error', error => {
+        this.socket.on('connect_error', async error => {
+          if (!authReconnectAttempted && isAuthError(error)) {
+            authReconnectAttempted = true;
+
+            const refreshed = await tryRefreshErpSession();
+
+            if (refreshed?.token && this.socket) {
+              this.token = refreshed.token;
+              this.socket.connect();
+              return;
+            }
+          }
+
           console.error('Socket.IO: Connection error:', error);
           reject(error);
         });

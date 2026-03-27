@@ -21,17 +21,35 @@
     @back="returnToOrganizationStep"
     @qr-auth-success="handleQrAuthSuccess"
   />
+
+  <PushNotification
+    v-if="notificationState.open"
+    :title="notificationState.title"
+    :push-key="notificationState.key"
+    :description="notificationState.description"
+    :type="notificationState.type"
+    @close="closeNotification"
+  />
 </template>
 <script lang="ts" setup>
 import { computed, onMounted, ref } from 'vue';
+import { PushNotification } from '@pksep/yui';
 import { IChatContainerConfig } from './components/interfaces/interfaces';
 import ChatContainer from './ChatContainerRoot.vue';
 import AuthorizationScreen from './components/AuthorizationScreen.vue';
 import { setConfig } from './services/useConfig';
 import {
-  CHAT_AUTH_SESSION_KEY,
-  loginWithCredentials
+  clearErpAuthSession,
+  getChatAuthSession,
+  getStoredBootstrapErpAccessToken,
+  getStoredChatAccessToken,
+  getStoredChatRefreshToken,
+  loginWithCredentials,
+  saveBootstrapErpSession,
+  saveChatAuthSession
 } from './composables/useAuth';
+import { fetchUsersForAuth } from './composables/useUsers';
+import { useNotifications } from './composables/useNotifications';
 
 const ORGANIZATIONS_KEY = 'chat_runtime_organizations';
 const LAST_ORGANIZATION_KEY = 'chat_runtime_last_organization';
@@ -67,6 +85,7 @@ const selectedOrganization = ref(
 const isAddingNewOrganization = ref(!organizations.value.length);
 const serverUrl = ref(selectedOrganization.value);
 const isCredentialsStep = ref(false);
+const { state: notificationState, closeNotification } = useNotifications();
 
 const parseRuntimeConfig = (
   rawConfig: string
@@ -110,8 +129,13 @@ const applyConfig = (resolvedConfig: IChatContainerConfig) => {
   setConfig(resolvedConfig);
 };
 
-const getStoredErpToken = () =>
-  localStorage.getItem('erp_token') || sessionStorage.getItem('erp_token');
+const preloadAuthUsers = async () => {
+  try {
+    await fetchUsersForAuth();
+  } catch (error) {
+    console.error('Failed to preload users for auth:', error);
+  }
+};
 
 const getUrlErpToken = () => {
   const url = new URL(window.location.href);
@@ -126,25 +150,25 @@ const getUrlOrganization = () => {
   return organization ? normalizeServerUrl(organization) : '';
 };
 
-const saveErpToken = (token: string, persist: boolean) => {
-  const storage = persist ? localStorage : sessionStorage;
-  const secondaryStorage = persist ? sessionStorage : localStorage;
-
-  secondaryStorage.removeItem('erp_token');
-  storage.setItem('erp_token', token);
-};
-
-const hasLocalErpToken = () => !!getStoredErpToken();
-const hasDirectChatSession = () =>
-  !!localStorage.getItem(CHAT_AUTH_SESSION_KEY);
+const hasBootstrapToken = () =>
+  !!getUrlErpToken() || !!getStoredBootstrapErpAccessToken();
+const hasLocalChatToken = () => !!getStoredChatAccessToken();
+const hasStoredRefreshToken = () => !!getStoredChatRefreshToken();
+const hasDirectChatSession = () => !!getChatAuthSession();
 
 const openCredentialsStepIfNeeded = () => {
-  if (hasLocalErpToken() || hasDirectChatSession()) {
+  if (
+    hasBootstrapToken() ||
+    hasLocalChatToken() ||
+    hasStoredRefreshToken() ||
+    hasDirectChatSession()
+  ) {
     isCredentialsStep.value = false;
     return;
   }
 
   isCredentialsStep.value = true;
+  void preloadAuthUsers();
 };
 
 const saveOrganizations = (items: IStoredOrganization[]) => {
@@ -218,7 +242,7 @@ const handleQrAuthSuccess = (payload: {
     return;
   }
 
-  localStorage.setItem('erp_token', payload.token);
+  saveBootstrapErpSession({ accessToken: payload.token }, true);
   errorMessage.value = '';
   isCredentialsStep.value = false;
 
@@ -325,11 +349,27 @@ const submitCredentialsLogin = async () => {
       password: passwordValue.value.trim()
     });
 
-    if (!authData.erpToken) {
-      throw new Error('ERP token missing in credentials response');
+    if (!authData.token) {
+      throw new Error('Chat token missing in credentials response');
     }
 
-    saveErpToken(authData.erpToken, rememberAccount.value);
+    saveChatAuthSession(
+      {
+        token: authData.token,
+        refreshToken: authData.refreshToken,
+        user: authData.user
+      },
+      rememberAccount.value
+    );
+
+    if (authData.erpToken) {
+      saveBootstrapErpSession(
+        {
+          accessToken: authData.erpToken
+        },
+        rememberAccount.value
+      );
+    }
 
     if (!rememberAccount.value) {
       identifierValue.value = '';
@@ -338,8 +378,7 @@ const submitCredentialsLogin = async () => {
     isCredentialsStep.value = false;
   } catch (error) {
     console.error(error);
-    localStorage.removeItem('erp_token');
-    sessionStorage.removeItem('erp_token');
+    clearErpAuthSession();
     errorMessage.value = 'Не удалось войти по логину.';
   } finally {
     isLoading.value = false;
@@ -349,12 +388,7 @@ const submitCredentialsLogin = async () => {
 onMounted(() => {
   localStorage.removeItem('chat_runtime_config_url');
 
-  const urlErpToken = getUrlErpToken();
   const urlOrganization = getUrlOrganization();
-
-  if (urlErpToken) {
-    localStorage.setItem('erp_token', urlErpToken);
-  }
 
   if (urlOrganization) {
     const storedOrganization = organizations.value.find(

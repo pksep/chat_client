@@ -1,5 +1,6 @@
 import { ref, shallowRef } from 'vue';
 import { getChatSDK } from '../services/useChat';
+import { getConfig } from '../services/useConfig';
 
 import type { IUser } from '../components/interfaces/interfaces';
 
@@ -37,6 +38,46 @@ export const getUsersList = (): IUser[] => {
   const currentUsers = users.value || [];
 
   return [...currentUsers];
+};
+
+export const fetchUsersForAuth = async (
+  page = 1,
+  limit = 200
+): Promise<IUser[]> => {
+  loading.value = true;
+  error.value = null;
+
+  try {
+    const config = getConfig();
+    const apiUrl = config.CHAT_API_DOMAIN;
+
+    if (!apiUrl) {
+      return users.value || [];
+    }
+
+    const queryParams = new URLSearchParams({
+      page: String(page),
+      limit: String(limit)
+    });
+    const response = await fetch(
+      `${apiUrl}/users/login-options?${queryParams.toString()}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch users: ${response.status}`);
+    }
+
+    const data = (await response.json()) as { data?: IUser[] };
+    users.value = [...(data.data || [])];
+
+    return users.value;
+  } catch (err) {
+    error.value = (err as Error).message;
+    console.error('Failed to fetch auth users:', error.value);
+    return users.value || [];
+  } finally {
+    loading.value = false;
+  }
 };
 
 export const getUserById = (userId: string): IUser | undefined => {

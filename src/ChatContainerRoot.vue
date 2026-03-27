@@ -18,11 +18,18 @@ import { initializeChat, setCurrentUserId } from './services/useChat';
 import { restoreInvitedGroupCallFromUrl } from './services/useCalls';
 import { saveUserIdToSession, hasUserIdInSession } from './services/useMastra';
 import {
+  clearBootstrapErpSession,
+  clearChatAuthSession,
+  clearErpAuthSession,
   fetchAuthUser,
-  setAuthUser,
-  useAuth,
   getChatAuthSession,
-  clearChatAuthSession
+  getStoredBootstrapErpAccessToken,
+  getStoredChatAccessToken,
+  isStoredChatSessionPersistent,
+  saveChatAuthSession,
+  setAuthUser,
+  tryRefreshErpSession,
+  useAuth
 } from './composables/useAuth';
 import { fetchAllUsers, getUserById } from './composables/useUsers';
 import { getConfig } from './services/useConfig';
@@ -68,40 +75,58 @@ const initFocusTracking = () => {
   document.addEventListener('visibilitychange', updateFocusState);
 };
 
-const getStoredErpToken = () =>
-  localStorage.getItem('erp_token') || sessionStorage.getItem('erp_token');
-
 const clearStoredErpToken = () => {
-  localStorage.removeItem('erp_token');
-  sessionStorage.removeItem('erp_token');
+  clearErpAuthSession();
 };
 
 const runAppInitialization = async () => {
   const url = new URL(window.location.href);
   const tokenUrl = url.searchParams.get('token')?.split('?token')[0];
 
-  if (tokenUrl) {
-    localStorage.setItem('erp_token', tokenUrl);
-  }
-
-  const localToken = getStoredErpToken();
+  const storedChatToken = getStoredChatAccessToken();
+  const bootstrapErpToken = tokenUrl || getStoredBootstrapErpAccessToken();
   const directAuthSession = getChatAuthSession();
   const config = getConfig();
+  const persistSession = isStoredChatSessionPersistent();
+  const shouldUseBootstrapToken = !!bootstrapErpToken;
 
   try {
     const authData =
-      tokenUrl || localToken
-        ? await useAuth(tokenUrl || localToken)
-        : directAuthSession;
+      shouldUseBootstrapToken
+        ? await useAuth(bootstrapErpToken).catch(async error => {
+            const refreshedAuth = await tryRefreshErpSession();
+
+            if (!refreshedAuth?.token) {
+              throw error;
+            }
+
+            return refreshedAuth;
+          })
+        : directAuthSession?.token || storedChatToken
+        ? {
+            token: directAuthSession?.token || storedChatToken || '',
+            user: directAuthSession?.user
+          }
+        : await tryRefreshErpSession();
+    if (!authData?.token) {
+      throw new Error('Chat token is missing from auth response');
+    }
+
     const authUserId = authData.user?.id || '';
 
     if (authUserId && !hasUserIdInSession(authUserId)) {
       saveUserIdToSession(authUserId);
     }
 
-    if (!authData.token) {
-      throw new Error('Chat token is missing from auth response');
-    }
+    saveChatAuthSession(
+      {
+        token: authData.token,
+        refreshToken: authData.refreshToken ?? directAuthSession?.refreshToken,
+        user: authData.user
+      },
+      persistSession
+    );
+    clearBootstrapErpSession();
 
     await initializeChat({
       token: authData.token,
@@ -154,6 +179,7 @@ const runAppInitialization = async () => {
     if (isMobile.value) {
       clearStoredErpToken();
       clearChatAuthSession();
+      clearBootstrapErpSession();
       openChatContainerShow.value = false;
       return;
     }
