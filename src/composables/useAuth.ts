@@ -226,7 +226,10 @@ export const isAuthError = (error: unknown): boolean => {
     return true;
   }
 
-  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  const message =
+    error instanceof Error
+      ? error.message.toLowerCase()
+      : String(error).toLowerCase();
 
   return (
     message.includes('401') ||

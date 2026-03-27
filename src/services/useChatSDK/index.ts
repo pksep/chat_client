@@ -27,7 +27,11 @@ import { ChatUtils, ChatUtilsInterface } from './utils';
 import { ITopic } from '../../components/interfaces/interfaces';
 import { fetchAllTopics } from '../../composables/useTopics';
 import { getAuthToken } from '../../composables/useLogin';
-import { isAuthError, tryRefreshErpSession, withErpRefreshOnAuthError } from '../../composables/useAuth';
+import {
+  isAuthError,
+  tryRefreshErpSession,
+  withErpRefreshOnAuthError
+} from '../../composables/useAuth';
 import { fetchMessagesForTopic } from '../useMessages';
 import { getConfig } from '../useConfig';
 
@@ -107,7 +111,9 @@ export class ChatSDK {
       }
 
       (reqi as any)[methodName] = (...args: any[]) => {
-        return withErpRefreshOnAuthError(() => originalMethod.apply(reqi, args));
+        return withErpRefreshOnAuthError(() =>
+          originalMethod.apply(reqi, args)
+        );
       };
     }
 
