@@ -9,6 +9,7 @@
       <Loader :dataTestid="`${props.dataTestid}-ChatContainer-Loading`" />
     </Modal>
   </template>
+  <div v-if="appMode" class="chat_container_alert">{{ appMode }}</div>
   <main
     id="chat-container-image"
     :class="chatContainerClasses"
@@ -165,6 +166,10 @@ const state = reactive({
   isLoading: true,
   isActiveHeader: false
 });
+
+const appMode = ['local', 'test'].includes(import.meta.env.VITE_APP_MODE)
+  ? import.meta.env.VITE_APP_MODE
+  : null;
 
 const chatContainerClasses = computed(() => [
   'chat-container',
