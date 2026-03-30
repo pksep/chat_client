@@ -129,7 +129,41 @@ const handleNavigateMessage = () => {
   emits('unmount-navigate-message-id', props.replyMessage?.id);
 };
 
-const setSliderElement = (medias: IMedia[], defaultIndex: number = 0) => {
+const downloadMediaFile = async (media: IMedia) => {
+  const url = getFullMediaPath(media, false);
+  const fileName = media.originName || 'file';
+
+  try {
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`Failed to download file: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = blobUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(blobUrl);
+    return;
+  } catch {
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+};
+
+const setSliderElement = async (medias: IMedia[], defaultIndex: number = 0) => {
   const selectedMedia = medias[defaultIndex];
 
   // Download logic
@@ -137,15 +171,7 @@ const setSliderElement = (medias: IMedia[], defaultIndex: number = 0) => {
     selectedMedia.type === MediaType.File &&
     !isSliderContentUrl(selectedMedia.originName)
   ) {
-    const url = getFullMediaPath(selectedMedia, false);
-    const fileName = selectedMedia.originName || 'file';
-
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    await downloadMediaFile(selectedMedia);
     return;
   }
 
