@@ -1,25 +1,29 @@
 <template>
-  <MobileAuth v-if="showMobileAuth" @auth-success="handleMobileAuthSuccess" />
-
-  <ChatContainer v-else-if="openChatContainerShow" v-bind="props" />
-
-  <img
-    v-else
-    style="position: fixed; width: 100dvw; height: 100dvh; object-fit: contain"
-    src="/images/deploy-bg.svg"
-    alt="deploy-bg"
-  />
+  <ChatContainer v-bind="props" />
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
-import MobileAuth from './components/Mobile/MobileAuth.vue';
 
 import type { IChatContainerProps } from './components/interfaces/interfaces';
 import { initializeChat, setCurrentUserId } from './services/useChat';
+import { restoreInvitedGroupCallFromUrl } from './services/useCalls';
 import { saveUserIdToSession, hasUserIdInSession } from './services/useMastra';
-import { fetchAuthUser, setAuthUser, useAuth } from './composables/useAuth';
+import {
+  clearBootstrapErpSession,
+  clearChatAuthSession,
+  clearErpAuthSession,
+  fetchAuthUser,
+  getChatAuthSession,
+  getStoredBootstrapErpAccessToken,
+  getStoredChatAccessToken,
+  isStoredChatSessionPersistent,
+  saveChatAuthSession,
+  setAuthUser,
+  tryRefreshErpSession,
+  useAuth
+} from './composables/useAuth';
 import { fetchAllUsers, getUserById } from './composables/useUsers';
 import { getConfig } from './services/useConfig';
 import { useTopics } from './composables/useTopics';
@@ -35,9 +39,6 @@ import { MAX_W_MD } from './utils/constants';
 import { RouteTypes } from './composables/navigation/useUrlRouting';
 
 const props = defineProps<IChatContainerProps>();
-
-const openChatContainerShow = ref(true);
-const showMobileAuth = ref(false);
 
 const { fetchAllTopics } = useTopics();
 const { state: isMobile } = useResizeState(MAX_W_MD);
@@ -65,38 +66,57 @@ const initFocusTracking = () => {
   document.addEventListener('visibilitychange', updateFocusState);
 };
 
-const handleMobileAuthSuccess = (token: string) => {
-  if (token) {
-    localStorage.setItem('erp_token', token);
-    showMobileAuth.value = false;
-    runAppInitialization();
-  }
+const clearStoredErpToken = () => {
+  clearErpAuthSession();
 };
 
 const runAppInitialization = async () => {
   const url = new URL(window.location.href);
   const tokenUrl = url.searchParams.get('token')?.split('?token')[0];
-  const REDIRECT_KEY = 'chat_redirect_attempts';
-  const MAX_REDIRECTS = 2;
 
-  if (tokenUrl) {
-    localStorage.setItem('erp_token', tokenUrl);
-  }
-
-  const localToken = localStorage.getItem('erp_token');
+  const storedChatToken = getStoredChatAccessToken();
+  const bootstrapErpToken = tokenUrl || getStoredBootstrapErpAccessToken();
+  const directAuthSession = getChatAuthSession();
   const config = getConfig();
+  const persistSession = !!tokenUrl || isStoredChatSessionPersistent();
+  const shouldUseBootstrapToken = !!bootstrapErpToken;
 
   try {
-    const authData = await useAuth(tokenUrl || localToken);
+    const authData = shouldUseBootstrapToken
+      ? await useAuth(bootstrapErpToken).catch(async error => {
+          const refreshedAuth = await tryRefreshErpSession();
+
+          if (!refreshedAuth?.token) {
+            throw error;
+          }
+
+          return refreshedAuth;
+        })
+      : directAuthSession?.token || storedChatToken
+        ? {
+            token: directAuthSession?.token || storedChatToken || '',
+            user: directAuthSession?.user
+          }
+        : await tryRefreshErpSession();
+    if (!authData?.token) {
+      throw new Error('Chat token is missing from auth response');
+    }
+
     const authUserId = authData.user?.id || '';
 
     if (authUserId && !hasUserIdInSession(authUserId)) {
       saveUserIdToSession(authUserId);
     }
 
-    if (!authData.token) {
-      throw new Error('Chat token is missing from auth response');
-    }
+    saveChatAuthSession(
+      {
+        token: authData.token,
+        refreshToken: authData.refreshToken ?? directAuthSession?.refreshToken,
+        user: authData.user
+      },
+      persistSession
+    );
+    clearBootstrapErpSession();
 
     await initializeChat({
       token: authData.token,
@@ -127,6 +147,8 @@ const runAppInitialization = async () => {
       }
     }
 
+    await restoreInvitedGroupCallFromUrl();
+
     await fetchAllTopics();
 
     if (route.value.id) {
@@ -139,35 +161,19 @@ const runAppInitialization = async () => {
     }
 
     await initPushNotifications();
-
-    openChatContainerShow.value = true;
   } catch (error) {
     console.error('Failed to initialize chat:', error);
 
     if (isMobile.value) {
-      localStorage.removeItem('erp_token');
-      showMobileAuth.value = true;
-      openChatContainerShow.value = false;
+      clearStoredErpToken();
+      clearChatAuthSession();
+      clearBootstrapErpSession();
       return;
     }
-
-    const attempts = Number(localStorage.getItem(REDIRECT_KEY) || 0) + 1;
-    localStorage.setItem(REDIRECT_KEY, String(attempts));
-
-    if (attempts >= MAX_REDIRECTS) {
-      localStorage.removeItem(REDIRECT_KEY);
-      console.error('Redirect blocked: too many attempts');
-      openChatContainerShow.value = false;
-      return;
-    }
-
-    window.location.href =
-      config.CHAT_ERP_URL +
-      '?redirect=' +
-      encodeURIComponent(window.location.href);
   } finally {
     if (tokenUrl) {
       url.searchParams.delete('token');
+      url.searchParams.delete('organization');
       window.history.replaceState({}, document.title, url.toString());
     }
   }
@@ -176,17 +182,6 @@ const runAppInitialization = async () => {
 onMounted(async () => {
   initFocusTracking();
 
-  const hasLocalToken = !!localStorage.getItem('erp_token');
-  const hasUrlToken = window.location.href.includes('token=');
-
-  if (isMobile.value && !hasLocalToken && !hasUrlToken) {
-    showMobileAuth.value = true;
-  } else {
-    await runAppInitialization();
-  }
+  await runAppInitialization();
 });
 </script>
-
-<style>
-@import './assets/chat-container.css';
-</style>

@@ -22,6 +22,17 @@
 @import url('./confirm-modal.css');
 @import url('./pinned-messages.css');
 @import url('./call-modal.css');
+@import url('./authorization-screen.css');
+
+.chat_container_alert {
+  background-color: var(--error-dark-color);
+  opacity: 0.5;
+  color: var(--white);
+  position: fixed;
+  width: 100%;
+  text-align: center;
+  z-index: 99999;
+}
 
 .chat-container {
   --neutral-text-light: #b8b8b8;
@@ -130,11 +141,11 @@ button.primary-yui-kit.disabled-yui-kit {
 }
 
 .ghost-yui-kit.red-context-button {
-  color: var(--error-color);
+  color: var(--error-color) !important;
 
   &:active {
-    background-color: var(--ban-color);
-    color: var(--error-color);
+    background-color: var(--ban-color) !important;
+    color: var(--error-color) !important;
   }
 }
 

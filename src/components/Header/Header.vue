@@ -4,16 +4,17 @@
     :data-testid="`${props.dataTestid}-Header-Container`"
   >
     <div
-      v-if="isCallActive && !isAnyCallModalVisible"
+      v-if="showHeaderCallBanner"
       class="chat__header-active-call"
-      @click.stop="showCallModal"
+      @click.stop="handleHeaderCallClick"
     >
       <LeaveIcon />
-      <span>{{
-        isAnyCallDialing ? 'Соединение...' : `${activeCallUser?.initials}`
-      }}</span>
+      <span>{{ headerCallLabel }}</span>
 
-      <span class="chat__header-active-call__time" v-if="!isAnyCallDialing">
+      <span
+        v-if="isCallActive && !isAnyCallDialing"
+        class="chat__header-active-call__time"
+      >
         {{ activeCallFormattedTime }}
       </span>
     </div>
@@ -23,8 +24,8 @@
         v-if="isMobile"
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.small"
-        @click.stop="handleExit"
         :data-testid="`${props.dataTestid}-Header-BackButton`"
+        @click.stop="handleExit"
       >
         <Icon
           class="medium-icon"
@@ -32,9 +33,10 @@
           :data-testid="`${props.dataTestid}-Header-BackIcon`"
         />
       </Button>
+
       <div
-        class="chat__header-profile chat__header-ai-assistant"
         v-if="route.type === 'ai'"
+        class="chat__header-profile chat__header-ai-assistant"
         :data-testid="`${props.dataTestid}-Header-AIAssistant`"
       >
         <AiIconWrapper
@@ -44,6 +46,7 @@
           Ai Ассистент
         </h3>
       </div>
+
       <template v-else-if="currentTopic">
         <GroupProfile
           v-if="currentTopic.type === TopicType.Group"
@@ -60,6 +63,7 @@
           :data-testid="`${props.dataTestid}-Header-UserProfile`"
         />
       </template>
+
       <div
         class="chat__header-buttons"
         :data-testid="`${props.dataTestid}-Header-ButtonsContainer`"
@@ -68,17 +72,22 @@
         <Search
           v-if="state.isSearchInputEnable"
           class="chat__header-search"
-          @click.stop
           :data-testid="`${props.dataTestid}-Header-SearchInput`"
+          @click.stop
         />
         <SearchIcon
           v-if="!state.isSearchInputEnable && !isMobile"
-          @click.stop="showSearch"
           class="chat__header__icon"
           :data-testid="`${props.dataTestid}-Header-SearchIcon`"
+          @click.stop="showSearch"
         />
         <CallIcon
-          v-if="route.type === RouteTypes.DIALOGS && !isCallActive"
+          v-if="
+            (route.type === RouteTypes.DIALOGS ||
+              route.type === RouteTypes.GROUP) &&
+            !isCallActive &&
+            !hasPendingCallForCurrentTopic
+          "
           class="chat__header__icon"
           :data-testid="`${props.dataTestid}-Header-CallIcon`"
           @click.stop="handleCall"
@@ -93,23 +102,23 @@
       </div>
     </div>
   </header>
+
   <MobileModal
     :open="state.openMobileInfoModal"
     title="Канал"
     close-button-text="Назад"
-    @unmount-close="handleCloseMobileInfoModal"
-    :class="{
-      'chat__header-modal-info--active': true
-    }"
+    :class="{ 'chat__header-modal-info--active': true }"
     :data-testid="`${props.dataTestid}-Header-MobileModal`"
+    @unmount-close="handleCloseMobileInfoModal"
   >
     <MobileChatInfo
       :model-value="currentGroup"
       :members="route.type === RouteTypes.GROUP && currentGroup?.members"
-      @update:model-value="handleUpdateInformation"
       :data-testid="props.dataTestid"
+      @update:model-value="handleUpdateInformation"
     />
   </MobileModal>
+
   <ConfirmModal
     :open="state.openActionModal"
     :title="actionModalTitle"
@@ -164,15 +173,20 @@ import { TopicType } from '../../services/useChatSDK/types';
 import CallIcon from '../CallModal/UI/CallIcon.vue';
 import SearchIcon from '../UI/SearchIcon.vue';
 import {
-  isCallActive,
-  isAnyCallModalVisible,
-  isAnyCallDialing,
-  activeCallUser,
   activeCallFormattedTime,
+  isAnyCallDialing,
+  isAnyCallModalVisible,
+  isCallActive,
+  invitedGroupCallInfo,
+  joinInviteGroupCall,
+  joinGroupCall,
+  pendingGroupCallInfo,
   showCallModal
 } from '../../services/useCalls';
-import { startWebRTCCall } from '../../services/useWebRTC';
-
+import {
+  startLiveKitCall,
+  startLiveKitGroupCall
+} from '../../services/useLiveKit';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 
 const { getSelectedTopic } = useTopics();
@@ -186,7 +200,6 @@ defineOptions({
 });
 
 const route = useUrlWatcher();
-
 const emits = defineEmits<IHeaderEmits>();
 
 const state = reactive({
@@ -205,46 +218,81 @@ const actionModalTitle = computed(() =>
       ? 'Удаление канала'
       : 'Выход из канала'
 );
+
 const actionModalDescription = computed(() =>
   route.value.type === RouteTypes.DIALOGS
-    ? 'Вы уверены, что хотите удалить чат'
+    ? 'Вы уверены, что хотите удалить чат?'
     : currentGroup.value?.isAdmin
       ? 'Вы уверены, что хотите удалить канал?'
       : 'Вы уверены, что хотите покинуть канал?'
 );
 
 const currentTopic = computed(() => getSelectedTopic());
-
 const { handleUpdateInformation } = useMenuInfo();
-
 const { state: isMobile } = useResizeState(MAX_W_MD);
+const currentPendingCall = computed(
+  () => pendingGroupCallInfo.value?.[route.value.id || ''] || null
+);
+const currentInvitedCall = computed(() => invitedGroupCallInfo.value || null);
+const hasPendingCallForCurrentTopic = computed(
+  () => !!currentPendingCall.value
+);
+const hasInvitedCall = computed(
+  () => !!currentInvitedCall.value?.isJoinAvailable
+);
+
+const showHeaderCallBanner = computed(
+  () =>
+    (isCallActive.value && !isAnyCallModalVisible.value) ||
+    hasPendingCallForCurrentTopic.value ||
+    hasInvitedCall.value
+);
+
+const headerCallLabel = computed(() => {
+  if (hasInvitedCall.value && !isCallActive.value) {
+    return 'Присоединяйтесь к звонку';
+  }
+
+  if (hasPendingCallForCurrentTopic.value && !isCallActive.value) {
+    return 'Присоединяйтесь к звонку';
+  }
+
+  return 'Групповой звонок';
+});
 
 const showSearch = (): void => {
   state.isSearchInputEnable = true;
 };
 
 const handleCall = async () => {
+  nextTick();
+
+  if (currentTopic.value?.type === TopicType.Group) {
+    await startLiveKitGroupCall(route.value.id);
+    return;
+  }
+
   if (currentTopic.value?.type === TopicType.DM) {
     state.calledUser = currentTopic.value.user;
   }
 
   if (!state.calledUser) return;
-  nextTick();
-  // Default to WebRTC call now
-  await startWebRTCCall(state.calledUser, route.value.id);
+  await startLiveKitCall(state.calledUser, route.value.id);
 };
 
-// const handleJitsiCall = async () => {
-//   if (currentTopic.value?.type === TopicType.DM) {
-//     state.calledUser = currentTopic.value.user;
-//   }
+const handleHeaderCallClick = async () => {
+  if (hasInvitedCall.value && !isCallActive.value) {
+    await joinInviteGroupCall();
+    return;
+  }
 
-//   if (!state.calledUser) return;
-//   nextTick();
-//   await startCall(state.calledUser, route.value.id);
-// };
+  if (hasPendingCallForCurrentTopic.value && !isCallActive.value) {
+    await joinGroupCall(route.value.id);
+    return;
+  }
 
-// Removed showModal handle, use showCallModal from useCalls directly in template
+  showCallModal();
+};
 
 const handleCloseMobileInfoModal = (): void => {
   state.openMobileInfoModal = false;
@@ -254,27 +302,24 @@ const handleClickHeader = async (): Promise<void> => {
   if (
     route.value.type === RouteTypes.DIALOGS ||
     route.value.type === RouteTypes.AI
-  )
+  ) {
     return;
+  }
+
   if (isMobile.value) {
     state.openMobileInfoModal = true;
     emits('unmount-click');
     return;
   }
+
   state.isSearchInputEnable = false;
   emits('unmount-click');
 };
 
 const getPopoverOptions = computed(() => {
   const popoverArray = [];
-  if (route.value && route.value.type !== RouteTypes.AI) {
-    // if (currentTopic.value?.type === TopicType.DM) {
-    //   popoverArray.push({
-    //     value: 'Jitsi Call',
-    //     function: handleJitsiCall
-    //   });
-    // }
 
+  if (route.value && route.value.type !== RouteTypes.AI) {
     if (route.value.type === RouteTypes.GROUP) {
       popoverArray.push({
         value: 'Информация',
@@ -285,7 +330,11 @@ const getPopoverOptions = computed(() => {
     }
 
     popoverArray.push({
-      value: `${currentTopic.value?.info.isMute ? 'Вкл. уведомление' : 'Выкл. уведомление'}`,
+      value: `${
+        currentTopic.value?.info.isMute
+          ? 'Вкл. уведомления'
+          : 'Выкл. уведомления'
+      }`,
       function: () => {
         toggleMuteTopic(currentTopic.value);
       }
@@ -314,6 +363,7 @@ const getPopoverOptions = computed(() => {
       }
     });
   }
+
   return popoverArray;
 });
 

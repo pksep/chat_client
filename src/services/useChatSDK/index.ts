@@ -26,8 +26,14 @@ import { ChatWS, ChatWSInterface } from './ws';
 import { ChatUtils, ChatUtilsInterface } from './utils';
 import { ITopic } from '../../components/interfaces/interfaces';
 import { fetchAllTopics } from '../../composables/useTopics';
+import { getAuthToken } from '../../composables/useLogin';
+import {
+  isAuthError,
+  tryRefreshErpSession,
+  withErpRefreshOnAuthError
+} from '../../composables/useAuth';
 import { fetchMessagesForTopic } from '../useMessages';
-import { Jitsi, JitsiInterface } from './jitsi';
+import { getConfig } from '../useConfig';
 
 export interface ChatSDKOptions {
   apiUrl: string;
@@ -55,7 +61,6 @@ export class ChatSDK {
   private media: ChatMediaInterface;
   private ws: ChatWSInterface;
   private utils: ChatUtilsInterface;
-  private jitsi: JitsiInterface;
 
   private reqi: Reqi;
 
@@ -64,11 +69,7 @@ export class ChatSDK {
     this.wsUrl = options.wsUrl;
     this.token = options.token;
 
-    this.reqi = new Reqi(this.apiUrl, {
-      headers: {
-        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
-      }
-    });
+    this.reqi = this.createReqiInstance();
 
     this.auth = new ChatAuth(this.apiUrl, this.token);
     this.user = new ChatUser(this.reqi);
@@ -78,25 +79,57 @@ export class ChatSDK {
     this.media = new ChatMedia(this.reqi);
     this.ws = new ChatWS(null);
     this.utils = new ChatUtils(this.reqi);
-    this.jitsi = new Jitsi(this.reqi);
   }
 
   private createReqiInstance(): Reqi {
-    return new Reqi(this.apiUrl, {
+    const reqi = new Reqi(this.apiUrl, {
       headers: {
-        'Content-Type': 'application/json',
         ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
       }
     });
+
+    reqi.request.use(async (request: Request): Promise<Request> => {
+      const token = getAuthToken() || this.token;
+
+      if (token) {
+        request.headers.set('Authorization', `Bearer ${token}`);
+      } else {
+        request.headers.delete('Authorization');
+      }
+
+      return request;
+    });
+
+    const methodNames = ['get', 'post', 'put', 'patch', 'delete'] as const;
+
+    for (const methodName of methodNames) {
+      const originalMethod = (reqi as any)[methodName];
+
+      if (typeof originalMethod !== 'function') {
+        continue;
+      }
+
+      (reqi as any)[methodName] = (...args: any[]) => {
+        return withErpRefreshOnAuthError(() =>
+          originalMethod.apply(reqi, args)
+        );
+      };
+    }
+
+    return reqi;
   }
 
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
+      let authReconnectAttempted = false;
+
       try {
         this.socket = io(this.wsUrl, {
           transports: ['websocket'],
-          auth: {
-            token: this.token
+          auth: cb => {
+            cb({
+              token: getAuthToken() || this.token
+            });
           },
 
           reconnection: true,
@@ -109,13 +142,26 @@ export class ChatSDK {
         this.ws.setSocket(this.socket);
 
         this.socket.on('connect', () => {
+          authReconnectAttempted = false;
           console.log('Socket.IO: Connected to chat server');
           resolve();
 
           fetchAllTopics();
         });
 
-        this.socket.on('connect_error', error => {
+        this.socket.on('connect_error', async error => {
+          if (!authReconnectAttempted && isAuthError(error)) {
+            authReconnectAttempted = true;
+
+            const refreshed = await tryRefreshErpSession();
+
+            if (refreshed?.token && this.socket) {
+              this.token = refreshed.token;
+              this.socket.connect();
+              return;
+            }
+          }
+
           console.error('Socket.IO: Connection error:', error);
           reject(error);
         });
@@ -579,36 +625,97 @@ export class ChatSDK {
     return await this.utils.getUnreadCounts();
   }
 
-  async startCall(
-    user: any,
-    topicId: string,
-    parentNode: HTMLElement,
-    token?: string
-  ) {
-    await this.jitsi.startCall(user, topicId, parentNode, token);
+  getConfig() {
+    return getConfig();
   }
 
-  async getJitsiAvailableDevices(): Promise<any> {
-    return await this.jitsi.getAvailableDevices();
+  async getLiveKitToken(
+    roomId: string,
+    userId: string
+  ): Promise<string | null> {
+    try {
+      const response = (await this.reqi.get<{ token: string }>(
+        `/calls/livekit-token?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(userId)}`,
+        { parsed: false }
+      )) as any;
+      const data = await response.json();
+      return data.token;
+    } catch (error) {
+      console.error('[LiveKit] Failed to fetch call token:', error);
+      return null;
+    }
   }
 
-  setJitsiAudioOutputDevice(label: string, deviceId: string) {
-    this.jitsi.setAudioOutputDevice(label, deviceId);
+  async createGroupCallInvite(roomId: string): Promise<{
+    inviteToken: string;
+    roomId: string;
+    topicId: string;
+  } | null> {
+    try {
+      const response = (await this.reqi.get<{
+        invite: {
+          inviteToken: string;
+          roomId: string;
+          topicId: string;
+        };
+      }>(`/calls/invite-link?roomId=${encodeURIComponent(roomId)}`, {
+        parsed: false
+      })) as any;
+      const data = await response.json();
+      return data.invite || null;
+    } catch (error) {
+      console.error('[LiveKit] Failed to create invite link:', error);
+      return null;
+    }
   }
 
-  endCall() {
-    this.jitsi.leaveCall();
+  async getGroupCallInvitePreview(
+    roomId: string,
+    inviteToken: string
+  ): Promise<{
+    roomId: string;
+    topicId: string;
+    title: string;
+    avatarUrl?: string | null;
+    participantCount: number;
+    members: User[];
+  } | null> {
+    try {
+      const response = (await this.reqi.get<{
+        preview: {
+          roomId: string;
+          topicId: string;
+          title: string;
+          avatarUrl?: string | null;
+          participantCount: number;
+          members: User[];
+        };
+      }>(
+        `/calls/invite-preview?roomId=${encodeURIComponent(roomId)}&invite=${encodeURIComponent(inviteToken)}`,
+        { parsed: false }
+      )) as any;
+      const data = await response.json();
+      return data.preview || null;
+    } catch (error) {
+      console.error('[LiveKit] Failed to fetch invite preview:', error);
+      return null;
+    }
   }
 
-  getJitsiApi() {
-    return this.jitsi;
-  }
-
-  async getJitsiToken(roomId: string, userId: string): Promise<string | null> {
-    return this.jitsi.getCallToken(roomId, userId);
-  }
-
-  executeJitsiCommand(command: string, ...args: any[]) {
-    this.jitsi.executeCommand(command, ...args);
+  async getInviteLiveKitToken(
+    roomId: string,
+    inviteToken: string
+  ): Promise<string | null> {
+    try {
+      const response = (await this.reqi.get<{ token: string }>(
+        `/calls/invite-livekit-token?roomId=${encodeURIComponent(roomId)}&invite=${encodeURIComponent(inviteToken)}`,
+        { parsed: false }
+      )) as any;
+      const data = await response.json();
+      return data.token;
+    } catch (error) {
+      console.error('[LiveKit] Failed to fetch invite call token:', error);
+      return null;
+    }
   }
 }

@@ -1,119 +1,93 @@
-import { ref, computed } from 'vue';
+import { computed } from 'vue';
 import {
-  confirmAnswer as confirmJitsi,
-  rejectCall as rejectJitsi,
-  receiveCall as receiveJitsi,
-  handleCallAnswered as handleJitsiAnswered,
-  handleCallEnded as handleJitsiEnded,
-  cleanup as cleanupJitsi,
-  open as isJitsiOpen,
-  openCall as isJitsiOpenCall,
-  isModalVisible as isJitsiModalVisible,
-  user as jitsiUser,
-  formattedTime as jitsiFormattedTime,
-  isCalling as isJitsiCalling
-} from './useJitsi';
-import {
-  acceptWebRTCCall,
-  endWebRTCCall,
-  receiveWebRTCCall,
-  handleCallAnswered as handleWebRTCAnswered,
-  cleanup as cleanupWebRTC,
-  isWebRTCOpen,
-  isWebRTCModalVisible,
-  webRTCUser,
-  formattedTime as webRTCFormattedTime,
-  isWebRTCCalling,
-  isWebRTCIncoming
-} from './useWebRTC';
+  activeGroupCalls,
+  clearActiveGroupCall,
+  clearInvitedGroupCall,
+  cleanup,
+  copyInvitedGroupCallLink,
+  formattedTime,
+  handleCallAnswered as handleLiveKitAnswered,
+  handleCallEnded as handleLiveKitEnded,
+  hydrateInvitedGroupCallFromUrl,
+  isCalling,
+  isIncoming,
+  isModalVisible,
+  invitedGroupCall,
+  joinInvitedGroupCall,
+  joinPendingGroupCall,
+  open,
+  receiveIncomingCall,
+  syncActiveCalls,
+  user,
+  leaveCall
+} from './useLiveKit';
 
-export enum CallType {
-  JITSI = 'jitsi',
-  WEBRTC = 'webrtc'
-}
-
-export const currentCallType = ref<CallType | string | null>(null);
-
-export const activeCallUser = computed(() => {
-  if (currentCallType.value !== CallType.JITSI) return webRTCUser.value;
-  return jitsiUser.value;
-});
-
-export const isCallActive = computed(
-  () => isJitsiOpen.value || isJitsiOpenCall.value || isWebRTCOpen.value
+export const activeCallUser = computed(() => user.value as any);
+export const isCallActive = computed(() => open.value);
+export const hasPendingGroupCall = computed(
+  () => Object.keys(activeGroupCalls.value).length > 0
 );
-
-export const isAnyCallModalVisible = computed(
-  () => isJitsiModalVisible.value || isWebRTCModalVisible.value
-);
-
-export const isAnyCallDialing = computed(
-  () => isJitsiCalling.value || isWebRTCCalling.value
-);
-
-export const isAnyCallIncoming = computed(
-  () =>
-    (isJitsiOpenCall.value && !isJitsiCalling.value) || isWebRTCIncoming.value
-);
-
-export const activeCallFormattedTime = computed(() => {
-  if (currentCallType.value !== CallType.JITSI)
-    return webRTCFormattedTime.value;
-  return jitsiFormattedTime.value;
-});
+export const pendingGroupCallInfo = computed(() => activeGroupCalls.value);
+export const invitedGroupCallInfo = computed(() => invitedGroupCall.value);
+export const isAnyCallModalVisible = computed(() => isModalVisible.value);
+export const isAnyCallDialing = computed(() => isCalling.value);
+export const isAnyCallIncoming = computed(() => isIncoming.value);
+export const activeCallFormattedTime = computed(() => formattedTime.value);
 
 export const handleIncomingCall = (
-  user: any,
-  roomId: string,
-  topicId: string,
-  callType?: string
+  targetUser: any,
+  activeRoomId: string,
+  activeTopicId: string
 ) => {
-  currentCallType.value = callType || CallType.JITSI;
-
-  if (currentCallType.value !== CallType.JITSI) {
-    receiveWebRTCCall(user, roomId, topicId);
-  } else {
-    receiveJitsi(user, roomId, topicId);
-  }
-};
-
-export const acceptCall = () => {
-  if (currentCallType.value !== CallType.JITSI) {
-    acceptWebRTCCall();
-  } else {
-    confirmJitsi();
-  }
+  receiveIncomingCall(targetUser, activeRoomId, activeTopicId);
 };
 
 export const declineCall = () => {
-  if (currentCallType.value !== CallType.JITSI) {
-    endWebRTCCall();
-  } else {
-    rejectJitsi();
-  }
+  leaveCall();
 };
 
 export const showCallModal = () => {
-  if (currentCallType.value !== CallType.JITSI) {
-    isWebRTCModalVisible.value = true;
-  } else {
-    isJitsiModalVisible.value = true;
-  }
+  isModalVisible.value = true;
 };
 
-export const handleCallAnswered = (userId: string) => {
-  handleJitsiAnswered(userId);
-  handleWebRTCAnswered(userId);
+export const joinGroupCall = async (topicId?: string) => {
+  await joinPendingGroupCall(topicId);
+};
+
+export const joinInviteGroupCall = async () => {
+  await joinInvitedGroupCall();
+};
+
+export const handleCallAnswered = (userId: string, roomId?: string) => {
+  handleLiveKitAnswered(userId, roomId);
 };
 
 export const handleCallEnded = () => {
-  handleJitsiEnded();
-  cleanupWebRTC();
-  currentCallType.value = null;
+  handleLiveKitEnded();
 };
 
 export const cleanupAllCalls = () => {
-  cleanupJitsi();
-  cleanupWebRTC();
-  currentCallType.value = null;
+  cleanup();
+};
+
+export const syncServerActiveCalls = (
+  calls: Array<{ roomId: string; topicId: string; callType: string }>
+) => {
+  syncActiveCalls(calls);
+};
+
+export const removeActiveGroupCall = (topicId?: string) => {
+  clearActiveGroupCall(topicId);
+};
+
+export const removeInvitedGroupCall = (roomId?: string) => {
+  clearInvitedGroupCall(roomId);
+};
+
+export const restoreInvitedGroupCallFromUrl = async () => {
+  await hydrateInvitedGroupCallFromUrl();
+};
+
+export const copyInviteGroupCallLink = async () => {
+  return copyInvitedGroupCallLink();
 };

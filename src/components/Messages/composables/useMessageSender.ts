@@ -2,6 +2,7 @@ import { nextTick, type Ref } from 'vue';
 import { sendMessageChat, uploadFile } from '../../../services/useChat';
 import { generateUUID } from '../../../utils/generateUUID';
 import { fileToDataURL } from '../../../utils/fileToDataURL';
+import { showErrorNotification } from '../../../composables/useNotifications';
 import {
   changeFileLoadingStatus,
   deleteFileAfterLoading,
@@ -12,7 +13,7 @@ import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
 import type { IMessage, IMedia } from '../../interfaces/interfaces';
 import { RouteTypes } from '../../../composables/navigation/useUrlRouting';
 
-const MAX_HTML_LENGTH = 2000;
+const MAX_HTML_LENGTH = 4000;
 
 export function splitHtmlByLength(
   html: string,
@@ -52,7 +53,6 @@ export function useMessageSender(
     editMessage: IMessage | null;
     replyMessage: IMessage | null;
     forwardMessage: IMessage | null;
-    errorMessage: string;
     hideUnreadMarker: boolean;
   },
   authUser: Ref<any>,
@@ -197,8 +197,6 @@ export function useMessageSender(
     addMessageToLocal(newMessage.topicId, newMessage);
 
     const medias = [];
-    state.errorMessage = '';
-
     for (const [i, uploadedFile] of Array.from(files).entries()) {
       try {
         const { file, path, thumbnailPath } = await uploadFile(uploadedFile);
@@ -214,7 +212,7 @@ export function useMessageSender(
         });
       } catch (error: any) {
         deleteFileAfterLoading(newMessage.topicId, clientId, i.toString());
-        state.errorMessage = error.message || 'Failed to upload file';
+        showErrorNotification(error.message || 'Failed to upload file');
       }
     }
 

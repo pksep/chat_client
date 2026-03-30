@@ -91,13 +91,14 @@ export interface IChatContainerConfig {
   CHAT_WS_DOMAIN?: string;
   CHAT_ERP_URL?: string;
   CHAT_PATH_TO_FILE_CDN?: string;
+  CHAT_LIVEKIT_URL?: string;
   CHAT_URL?: string;
 }
 
 export interface IChatContainerProps {
   baseUrl?: string;
   dataTestid?: string;
-  config: IChatContainerConfig;
+  config?: IChatContainerConfig;
 }
 
 export interface IChatContainerEmits {

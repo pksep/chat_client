@@ -1,15 +1,5 @@
-import { defineCustomElement } from 'vue';
-import ChatContainer from './components/ChatContainer.vue';
-import ChatContainerNativeCE from './ChatContainer.ce.vue';
-
-const ChatContainerCE = defineCustomElement(ChatContainerNativeCE);
-
-customElements.define('chat-container', ChatContainerCE);
+import './assets/chat-container.css';
+import ChatContainer from './ChatContainerRoot.vue';
 
 export { ChatContainer };
-
-declare module 'vue' {
-  interface GlobalComponents {
-    'chat-container': typeof ChatContainerCE;
-  }
-}
+export default ChatContainer;

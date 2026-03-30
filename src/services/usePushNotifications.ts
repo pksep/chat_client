@@ -1,11 +1,9 @@
 import { PushNotifications } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
-import { App } from '@capacitor/app';
 import { useChatApi } from './useApi';
 import { getCurrentUserId } from './useChat';
 import { getUserById } from '../composables/useUsers';
-import { showIncomingCallKit } from './useCallKit';
-import { receiveWebRTCCall } from './useWebRTC';
+import { handleIncomingPushCall } from './useLiveKit';
 
 export const initPushNotifications = async () => {
   const api = useChatApi();
@@ -94,14 +92,7 @@ const handleCallPush = (notification: any) => {
 
     const user = getUserById(callerId);
     if (user) {
-      receiveWebRTCCall(user, roomId, data.topicId || roomId);
-      if (Capacitor.isNativePlatform()) {
-        App.getState().then(state => {
-          if (!state.isActive) {
-            showIncomingCallKit(user.initials, roomId);
-          }
-        });
-      }
+      handleIncomingPushCall(user, roomId, data.topicId || roomId);
     }
   }
 };
