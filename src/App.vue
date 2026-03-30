@@ -1,5 +1,5 @@
 <template>
-  <ChatContainer v-if="config && !isCredentialsStep" :config="config" />
+  <ChatContainerRoot v-if="config && !isCredentialsStep" :config="config" />
 
   <AuthorizationScreen
     v-else
@@ -35,7 +35,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { PushNotification } from '@pksep/yui';
 import { IChatContainerConfig } from './components/interfaces/interfaces';
-import ChatContainer from './ChatContainerRoot.vue';
+import ChatContainerRoot from './ChatContainerRoot.vue';
 import AuthorizationScreen from './components/AuthorizationScreen.vue';
 import { setConfig } from './services/useConfig';
 import {

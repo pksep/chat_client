@@ -1,12 +1,5 @@
 <template>
-  <ChatContainer v-if="openChatContainerShow" v-bind="props" />
-
-  <img
-    v-else
-    style="position: fixed; width: 100dvw; height: 100dvh; object-fit: contain"
-    src="/images/deploy-bg.svg"
-    alt="deploy-bg"
-  />
+  <ChatContainer v-bind="props" />
 </template>
 
 <script setup lang="ts">
@@ -46,8 +39,6 @@ import { MAX_W_MD } from './utils/constants';
 import { RouteTypes } from './composables/navigation/useUrlRouting';
 
 const props = defineProps<IChatContainerProps>();
-
-const openChatContainerShow = ref(true);
 
 const { fetchAllTopics } = useTopics();
 const { state: isMobile } = useResizeState(MAX_W_MD);
@@ -170,8 +161,6 @@ const runAppInitialization = async () => {
     }
 
     await initPushNotifications();
-
-    openChatContainerShow.value = true;
   } catch (error) {
     console.error('Failed to initialize chat:', error);
 
@@ -179,11 +168,8 @@ const runAppInitialization = async () => {
       clearStoredErpToken();
       clearChatAuthSession();
       clearBootstrapErpSession();
-      openChatContainerShow.value = false;
       return;
     }
-
-    openChatContainerShow.value = false;
   } finally {
     if (tokenUrl) {
       url.searchParams.delete('token');

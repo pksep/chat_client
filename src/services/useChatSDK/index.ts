@@ -84,7 +84,6 @@ export class ChatSDK {
   private createReqiInstance(): Reqi {
     const reqi = new Reqi(this.apiUrl, {
       headers: {
-        'Content-Type': 'application/json',
         ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
       }
     });
