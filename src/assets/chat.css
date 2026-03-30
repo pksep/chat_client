@@ -211,7 +211,7 @@ p.chat__nothing-paragraph {
 
 .chat__input__action > svg {
   flex-shrink: 0;
-  width: 30px;
+  width: 28px;
   color: var(--blue1);
 }
 

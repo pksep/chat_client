@@ -131,11 +131,11 @@ button.primary-yui-kit.disabled-yui-kit {
 }
 
 .ghost-yui-kit.red-context-button {
-  color: var(--error-color);
+  color: var(--error-color) !important;
 
   &:active {
-    background-color: var(--ban-color);
-    color: var(--error-color);
+    background-color: var(--ban-color) !important;
+    color: var(--error-color) !important;
   }
 }
 
