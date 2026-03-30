@@ -44,7 +44,8 @@ import {
   getStoredBootstrapErpAccessToken,
   loginWithCredentials,
   saveBootstrapErpSession,
-  saveChatAuthSession
+  saveChatAuthSession,
+  clearChatAuthSession
 } from './composables/useAuth';
 import { fetchUsersForAuth } from './composables/useUsers';
 import { useNotifications } from './composables/useNotifications';
@@ -319,6 +320,7 @@ const loadRemoteConfig = async (options?: {
       isAddingNewOrganization.value = false;
       applyConfig(options.fallbackConfig);
       openCredentialsStepIfNeeded();
+      clearChatAuthSession();
     }
   } finally {
     isLoading.value = false;
