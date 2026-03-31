@@ -1,76 +1,74 @@
 <template>
   <div
+    class="call-modal__remote-grid"
+    :class="{
+      'call-modal__remote-grid--screen-share': !!activeScreenShare,
+      'call-modal__remote-grid--single': currentPageParticipantCount === 1,
+      'call-modal__remote-grid--duo': currentPageParticipantCount === 2,
+      'call-modal__remote-grid--group-duo': currentPageParticipantCount === 2,
+      'call-modal__remote-grid--trio': currentPageParticipantCount === 3,
+      'call-modal__remote-grid--quad':
+        currentPageParticipantCount >= 3 && currentPageParticipantCount <= 4,
+      'call-modal__remote-grid--six':
+        currentPageParticipantCount >= 5 && currentPageParticipantCount <= 6,
+      'call-modal__remote-grid--many': currentPageParticipantCount >= 7
+    }"
+  >
+    <div
+      v-for="participant in participants"
+      :key="participant.identity"
+      class="call-modal__remote-tile"
+      :class="{ 'call-modal__remote-tile--local': participant.isLocal }"
+    >
+      <video
+        v-show="participant.isVideoActive"
+        :ref="el => setRemoteVideoRef(participant.identity, el as Element)"
+        autoplay
+        playsinline
+        class="call-modal__remote-video"
+      ></video>
+      <audio
+        :ref="el => setRemoteAudioRef(participant.identity, el as Element)"
+        autoplay
+      ></audio>
+      <div
+        v-if="!participant.isVideoActive"
+        class="call-modal__remote-placeholder"
+      >
+        <Avatar
+          :url="
+            participant.avatarUrl
+              ? `${config.CHAT_PATH_TO_FILE_CDN}/${participant.avatarUrl}`
+              : ''
+          "
+          :alt="participant.name"
+          class="call-modal__avatar"
+          :initials="participant.initials"
+        />
+      </div>
+      <div
+        v-if="participant.isHandRaised"
+        class="call-modal__remote-hand"
+        :title="`${participant.name} raised a hand`"
+      >
+        <HandRaiseIcon />
+      </div>
+      <div class="call-modal__remote-name">{{ participant.name }}</div>
+    </div>
+  </div>
+  <div
+    v-if="activeScreenShare"
     class="call-modal__livekit-container call-modal__livekit-container--group"
     :class="{
       'call-modal__livekit-container--transparent': !isRemoteVideoActive
     }"
   >
-    <div v-if="activeScreenShare" class="call-modal__screen-share-stage">
-      <video
-        :ref="setScreenShareVideoRef"
-        autoplay
-        playsinline
-        class="call-modal__screen-share-video"
-      ></video>
-    </div>
-
-    <div
-      class="call-modal__remote-grid"
-      :class="{
-        'call-modal__remote-grid--screen-share': !!activeScreenShare,
-        'call-modal__remote-grid--single': currentPageParticipantCount === 1,
-        'call-modal__remote-grid--duo': currentPageParticipantCount === 2,
-        'call-modal__remote-grid--group-duo': currentPageParticipantCount === 2,
-        'call-modal__remote-grid--trio': currentPageParticipantCount === 3,
-        'call-modal__remote-grid--quad':
-          currentPageParticipantCount >= 3 && currentPageParticipantCount <= 4,
-        'call-modal__remote-grid--six':
-          currentPageParticipantCount >= 5 && currentPageParticipantCount <= 6,
-        'call-modal__remote-grid--many': currentPageParticipantCount >= 7
-      }"
-    >
-      <div
-        v-for="participant in participants"
-        :key="participant.identity"
-        class="call-modal__remote-tile"
-        :class="{ 'call-modal__remote-tile--local': participant.isLocal }"
-      >
-        <video
-          v-show="participant.isVideoActive"
-          :ref="el => setRemoteVideoRef(participant.identity, el as Element)"
-          autoplay
-          playsinline
-          class="call-modal__remote-video"
-        ></video>
-        <audio
-          :ref="el => setRemoteAudioRef(participant.identity, el as Element)"
-          autoplay
-        ></audio>
-        <div
-          v-if="!participant.isVideoActive"
-          class="call-modal__remote-placeholder"
-        >
-          <Avatar
-            :url="
-              participant.avatarUrl
-                ? `${config.CHAT_PATH_TO_FILE_CDN}/${participant.avatarUrl}`
-                : ''
-            "
-            :alt="participant.name"
-            class="call-modal__avatar"
-            :initials="participant.initials"
-          />
-        </div>
-        <div
-          v-if="participant.isHandRaised"
-          class="call-modal__remote-hand"
-          :title="`${participant.name} raised a hand`"
-        >
-          <HandRaiseIcon />
-        </div>
-        <div class="call-modal__remote-name">{{ participant.name }}</div>
-      </div>
-    </div>
+    <video
+      :ref="setScreenShareVideoRef"
+      autoplay
+      playsinline
+      class="call-modal__screen-share-video"
+    ></video>
 
     <div v-if="totalPages > 1" class="call-modal__pagination">
       <button

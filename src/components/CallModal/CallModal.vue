@@ -13,6 +13,37 @@
       }"
       @click.stop
     >
+      <div v-if="showGroupInfoBar" class="call-modal__group-info">
+        <div>
+          <button
+            v-if="!isMobile"
+            class="call-modal__control-button call-modal__control-button--action"
+            title="Fullscreen"
+            @click="liveKitState.isFullScreen = !liveKitState.isFullScreen"
+          >
+            <FullscreenIcon v-if="!liveKitState.isFullScreen" />
+            <MinimizeIcon v-else />
+          </button>
+          <Icon
+            v-else
+            :name="IconNameEnum.chevronDown"
+            class="call-modal__control-button call-modal__control-button__chevron-down-group"
+            @click="hideModal"
+          />
+          <div class="call-modal__group-info-text">
+            <p>{{ resolvedGroupCallTitle }}</p>
+            <span>{{ displayGroupCallMeta }}</span>
+          </div>
+        </div>
+
+        <button
+          class="call-modal__control-button call-modal__control-button--action"
+          @click="state.openGroupInfoModal = true"
+        >
+          <GroupInfoIcon />
+        </button>
+      </div>
+
       <div v-show="showAvatarFallback" class="call-modal__avatar-container">
         <h3 v-if="displayUser" class="call-modal__user-name">
           {{ displayUser?.initials }}
@@ -45,37 +76,6 @@
         :set-remote-video-ref="setRemoteVideoRef"
         :set-remote-audio-ref="setRemoteAudioRef"
       />
-
-      <div v-if="showGroupInfoBar" class="call-modal__group-info">
-        <div>
-          <button
-            v-if="!isMobile"
-            class="call-modal__control-button call-modal__control-button--action"
-            title="Fullscreen"
-            @click="liveKitState.isFullScreen = !liveKitState.isFullScreen"
-          >
-            <FullscreenIcon v-if="!liveKitState.isFullScreen" />
-            <MinimizeIcon v-else />
-          </button>
-          <Icon
-            v-else
-            :name="IconNameEnum.chevronDown"
-            class="call-modal__control-button call-modal__control-button__chevron-down-group"
-            @click="hideModal"
-          />
-          <div class="call-modal__group-info-text">
-            <p>{{ resolvedGroupCallTitle }}</p>
-            <span>{{ displayGroupCallMeta }}</span>
-          </div>
-        </div>
-
-        <button
-          class="call-modal__control-button call-modal__control-button--action"
-          @click="state.openGroupInfoModal = true"
-        >
-          <GroupInfoIcon />
-        </button>
-      </div>
 
       <DirectCallLayout
         v-if="shouldShowMediaLayout && !isGroupCallLayout"
@@ -302,9 +302,13 @@ const remoteParticipantViews = computed(() =>
     const knownUser = getUsersList().find(
       (item: any) => item.id === participant.identity
     ) as any;
+    const participantVideoStream =
+      participant.cameraStream || participant.videoStream;
 
     return {
       ...participant,
+      videoStream: participantVideoStream,
+      isVideoActive: !!participantVideoStream,
       isHandRaised: participant.isHandRaised,
       initials:
         knownUser?.initials ||
@@ -391,13 +395,7 @@ const visibleParticipantGridViews = computed(() => {
   );
 });
 const visibleGroupParticipants = computed(() => {
-  if (!activeScreenShare.value) {
-    return visibleParticipantGridViews.value;
-  }
-
-  return visibleParticipantGridViews.value.filter(
-    participant => participant.identity !== activeScreenShare.value?.identity
-  );
+  return visibleParticipantGridViews.value;
 });
 const visibleGroupParticipantCount = computed(
   () => visibleGroupParticipants.value.length
