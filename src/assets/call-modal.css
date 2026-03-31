@@ -29,12 +29,6 @@
   pointer-events: none;
 }
 
-.call-modal__avatar-container {
-  position: absolute;
-  bottom: calc(50% - 84px);
-  text-align: center;
-}
-
 @media screen and (min-width: 481px) {
   .call-modal__container--full-screen {
     width: 100% !important;
@@ -347,8 +341,8 @@
 svg.icon-yui-kit.call-modal__control-button__chevron-down-group {
   background-color: var(--blue1);
   color: var(--white);
-  width: 45px;
-  height: 45px;
+  width: 40px !important;
+  height: 40px !important;
   padding: 13.5px;
   border-radius: 50px;
   cursor: pointer;
@@ -358,8 +352,8 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down-group {
 svg.icon-yui-kit.call-modal__control-button__chevron-down {
   background-color: var(--blue1);
   color: var(--white);
-  width: 45px;
-  height: 45px;
+  width: 40px !important;
+  height: 40px !important;
   position: absolute;
   top: 20px;
   left: 16px;
@@ -368,7 +362,16 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   cursor: pointer;
 }
 
+.call-modal__avatar-container {
+  margin-top: 30px;
+  text-align: center;
+}
+
 @media screen and (max-width: 480px) {
+  .call-modal__avatar-container {
+    margin-top: calc(50% - 84px);
+  }
+
   .call-modal__group-panel-header {
     padding: 14px 16px 10px;
   }
@@ -407,7 +410,6 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   .call-modal__remote-grid--many {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-auto-rows: minmax(120px, 1fr);
-    padding: 70px 14px 132px;
     gap: 8px;
   }
 
@@ -591,7 +593,7 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
 .call-modal__screen-share-video {
   width: 100%;
   height: 100%;
-  max-height: 350px;
+  max-height: 300px;
   border-radius: 10px;
   background-color: var(--black);
   object-fit: contain;
@@ -658,7 +660,6 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
 
 .call-modal__remote-grid--group-duo {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: minmax(300px, 1fr);
   align-content: center;
 }
 
@@ -694,7 +695,6 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
 }
 
 .call-modal__remote-grid--group-duo .call-modal__remote-tile {
-  min-height: 300px;
   border-radius: 10px;
 }
 
@@ -747,14 +747,11 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
 }
 
 .call-modal__pagination {
-  position: absolute;
-  left: 18px;
-  right: 18px;
-  bottom: 72px;
+  margin-top: 15px;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  z-index: 4;
 }
 
 .call-modal__pagination-arrow {

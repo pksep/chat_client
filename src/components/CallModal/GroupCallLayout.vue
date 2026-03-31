@@ -69,34 +69,34 @@
       playsinline
       class="call-modal__screen-share-video"
     ></video>
+  </div>
 
-    <div v-if="totalPages > 1" class="call-modal__pagination">
+  <div v-if="totalPages > 1" class="call-modal__pagination">
+    <button
+      class="call-modal__pagination-arrow"
+      :disabled="currentPage === 0"
+      @click="goToPage(currentPage - 1)"
+    >
+      <Icon :name="IconNameEnum.leftBig" />
+    </button>
+    <div class="call-modal__pagination-dots">
       <button
-        class="call-modal__pagination-arrow"
-        :disabled="currentPage === 0"
-        @click="goToPage(currentPage - 1)"
-      >
-        <Icon :name="IconNameEnum.leftBig" />
-      </button>
-      <div class="call-modal__pagination-dots">
-        <button
-          v-for="page in totalPages"
-          :key="page"
-          class="call-modal__pagination-dot"
-          :class="{
-            'call-modal__pagination-dot--active': currentPage === page - 1
-          }"
-          @click="goToPage(page - 1)"
-        ></button>
-      </div>
-      <button
-        class="call-modal__pagination-arrow"
-        :disabled="currentPage === totalPages - 1"
-        @click="goToPage(currentPage + 1)"
-      >
-        <Icon :name="IconNameEnum.rightBig" />
-      </button>
+        v-for="page in totalPages"
+        :key="page"
+        class="call-modal__pagination-dot"
+        :class="{
+          'call-modal__pagination-dot--active': currentPage === page - 1
+        }"
+        @click="goToPage(page - 1)"
+      ></button>
     </div>
+    <button
+      class="call-modal__pagination-arrow"
+      :disabled="currentPage === totalPages - 1"
+      @click="goToPage(currentPage + 1)"
+    >
+      <Icon :name="IconNameEnum.rightBig" />
+    </button>
   </div>
 </template>
 
