@@ -34,6 +34,8 @@ const remoteParticipants = ref<
     isVideoActive: boolean;
     isScreenShareActive: boolean;
     isHandRaised: boolean;
+    isSpeaking: boolean;
+    isMicActive: boolean;
   }>
 >([]);
 const activeGroupCalls = ref<
@@ -182,6 +184,14 @@ const syncLocalTrackState = () => {
   const localVideoTrack = localVideoPublication?.track;
   const localScreenTrack = localScreenSharePublication?.track;
 
+  if (localScreenTrack?.mediaStreamTrack) {
+    localScreenTrack.mediaStreamTrack.onended = () => {
+      if (state.isScreenSharingActive) {
+        void toggleScreenShare();
+      }
+    };
+  }
+
   localVideoStream.value = localVideoTrack?.mediaStreamTrack
     ? new MediaStream([localVideoTrack.mediaStreamTrack])
     : null;
@@ -260,7 +270,9 @@ const syncRemoteParticipantState = () => {
         : null,
       isVideoActive: !!preferredVideoPublication?.track?.mediaStreamTrack,
       isScreenShareActive: !!screenSharePublication?.track?.mediaStreamTrack,
-      isHandRaised: !!handRaisedParticipants.value[remoteParticipant.identity]
+      isHandRaised: !!handRaisedParticipants.value[remoteParticipant.identity],
+      isSpeaking: !!remoteParticipant.isSpeaking,
+      isMicActive: !!audioPublication?.track?.mediaStreamTrack
     };
   });
 
@@ -365,6 +377,15 @@ const syncConnectionState = (activeRoom: Room) => {
 
 const setupRoomListeners = (activeRoom: Room) => {
   activeRoom
+    .on(RoomEvent.TrackPublished, () => {
+      syncRemoteParticipantState();
+      syncConnectionState(activeRoom);
+      void enforceSingleScreenShare();
+    })
+    .on(RoomEvent.TrackUnpublished, () => {
+      syncRemoteParticipantState();
+      syncConnectionState(activeRoom);
+    })
     .on(RoomEvent.TrackSubscribed, () => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
@@ -381,6 +402,9 @@ const setupRoomListeners = (activeRoom: Room) => {
     .on(RoomEvent.TrackUnmuted, () => {
       syncRemoteParticipantState();
       void enforceSingleScreenShare();
+    })
+    .on(RoomEvent.ActiveSpeakersChanged, () => {
+      syncRemoteParticipantState();
     })
     .on(RoomEvent.ParticipantConnected, () => {
       syncRemoteParticipantState();
