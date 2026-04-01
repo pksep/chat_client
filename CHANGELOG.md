@@ -1,3 +1,10 @@
+# [1.21.0](https://github.com/pksep/chat_client/compare/v1.20.1...v1.21.0) (2026-04-01)
+
+
+### Features
+
+* update sep-yui ([2409779](https://github.com/pksep/chat_client/commit/2409779aa870a42e279b1c8738e6f87ca2fb536e))
+
 ## [1.20.1](https://github.com/pksep/chat_client/compare/v1.20.0...v1.20.1) (2026-04-01)
 
 
