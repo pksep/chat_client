@@ -24,6 +24,7 @@ import {
   tryRefreshErpSession,
   useAuth
 } from './composables/useAuth';
+import { setAuthToken } from './composables/useLogin';
 import { fetchAllUsers, getUserById } from './composables/useUsers';
 import { getConfig } from './services/useConfig';
 import { useTopics } from './composables/useTopics';
@@ -80,6 +81,7 @@ const runAppInitialization = async () => {
   const config = getConfig();
   const persistSession = !!tokenUrl || isStoredChatSessionPersistent();
   const shouldUseBootstrapToken = !!bootstrapErpToken;
+  const hasStoredRefreshToken = !!directAuthSession?.refreshToken;
 
   try {
     const authData = shouldUseBootstrapToken
@@ -92,15 +94,25 @@ const runAppInitialization = async () => {
 
           return refreshedAuth;
         })
-      : directAuthSession?.token || storedChatToken
-        ? {
-            token: directAuthSession?.token || storedChatToken || '',
-            user: directAuthSession?.user
-          }
-        : await tryRefreshErpSession();
+      : hasStoredRefreshToken
+        ? (await tryRefreshErpSession()) ??
+          (directAuthSession?.token || storedChatToken
+            ? {
+                token: directAuthSession?.token || storedChatToken || '',
+                user: directAuthSession?.user
+              }
+            : null)
+        : directAuthSession?.token || storedChatToken
+          ? {
+              token: directAuthSession?.token || storedChatToken || '',
+              user: directAuthSession?.user
+            }
+          : await tryRefreshErpSession();
     if (!authData?.token) {
       throw new Error('Chat token is missing from auth response');
     }
+
+    setAuthToken(authData.token);
 
     const authUserId = authData.user?.id || '';
 

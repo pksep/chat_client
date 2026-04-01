@@ -122,10 +122,40 @@ export class ChatSDK {
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       let authReconnectAttempted = false;
+      let isSettled = false;
+      let initialConnectionTimeout: ReturnType<typeof setTimeout> | null = null;
+
+      const clearInitialConnectionTimeout = () => {
+        if (!initialConnectionTimeout) return;
+
+        clearTimeout(initialConnectionTimeout);
+        initialConnectionTimeout = null;
+      };
+
+      const resolveOnce = () => {
+        if (isSettled) return;
+
+        isSettled = true;
+        clearInitialConnectionTimeout();
+        resolve();
+      };
+
+      const rejectOnce = (error: unknown) => {
+        if (isSettled) return;
+
+        isSettled = true;
+        clearInitialConnectionTimeout();
+        reject(error);
+      };
 
       try {
+        console.info('Socket.IO: Initializing chat connection', {
+          wsUrl: this.wsUrl
+        });
+
         this.socket = io(this.wsUrl, {
-          transports: ['websocket'],
+          transports: ['websocket', 'polling'],
+          tryAllTransports: true,
           auth: cb => {
             cb({
               token: getAuthToken() || this.token
@@ -136,15 +166,27 @@ export class ChatSDK {
           reconnectionAttempts: Infinity,
           reconnectionDelay: 1000,
           reconnectionDelayMax: 5000,
-          timeout: 20000
+          timeout: 30000
         });
+
+        initialConnectionTimeout = setTimeout(() => {
+          rejectOnce(
+            new Error(
+              `Socket.IO: Initial connection timed out for ${this.wsUrl}`
+            )
+          );
+        }, 30000);
 
         this.ws.setSocket(this.socket);
 
         this.socket.on('connect', () => {
           authReconnectAttempted = false;
-          console.log('Socket.IO: Connected to chat server');
-          resolve();
+          console.log('Socket.IO: Connected to chat server', {
+            socketId: this.socket?.id,
+            transport: this.socket?.io?.engine?.transport?.name,
+            wsUrl: this.wsUrl
+          });
+          resolveOnce();
 
           fetchAllTopics();
         });
@@ -157,39 +199,83 @@ export class ChatSDK {
 
             if (refreshed?.token && this.socket) {
               this.token = refreshed.token;
+              console.warn(
+                'Socket.IO: Retrying initial connection after token refresh'
+              );
               this.socket.connect();
               return;
             }
+
+            rejectOnce(error);
+            return;
           }
 
-          console.error('Socket.IO: Connection error:', error);
-          reject(error);
+          console.error('Socket.IO: Connection error:', error, {
+            wsUrl: this.wsUrl,
+            transport: this.socket?.io?.engine?.transport?.name,
+            readyState: this.socket?.io?.engine?.readyState
+          });
         });
 
         this.socket.on('disconnect', reason => {
-          console.log('Socket.IO: Disconnected from chat server:', reason);
+          console.log('Socket.IO: Disconnected from chat server:', {
+            reason,
+            transport: this.socket?.io?.engine?.transport?.name,
+            readyState: this.socket?.io?.engine?.readyState
+          });
         });
 
         this.socket.on('reconnect_attempt', attemptNumber => {
           console.log(
-            `Socket.IO: Attempting to reconnect (${attemptNumber})...`
+            `Socket.IO: Attempting to reconnect (${attemptNumber})...`,
+            {
+              wsUrl: this.wsUrl,
+              transport: this.socket?.io?.engine?.transport?.name
+            }
           );
         });
 
         this.socket.on('reconnect', attemptNumber => {
           console.log(
-            `Reconnected to chat server after ${attemptNumber} attempts`
+            `Reconnected to chat server after ${attemptNumber} attempts`,
+            {
+              socketId: this.socket?.id,
+              transport: this.socket?.io?.engine?.transport?.name
+            }
           );
           fetchAllTopics();
           fetchMessagesForTopic();
         });
 
         this.socket.on('reconnect_error', error => {
-          console.error('Reconnection error:', error);
+          console.error('Reconnection error:', error, {
+            wsUrl: this.wsUrl,
+            transport: this.socket?.io?.engine?.transport?.name,
+            readyState: this.socket?.io?.engine?.readyState
+          });
         });
 
         this.socket.on('reconnect_failed', () => {
           console.error('Reconnection failed after maximum attempts');
+        });
+
+        this.socket.io.on('error', error => {
+          console.error('Socket.IO manager error:', error, {
+            wsUrl: this.wsUrl
+          });
+        });
+
+        this.socket.io.engine.on('upgrade', transport => {
+          console.log('Socket.IO: Transport upgraded', {
+            transport: transport.name
+          });
+        });
+
+        this.socket.io.engine.on('close', reason => {
+          console.warn('Socket.IO engine closed', {
+            reason,
+            transport: this.socket?.io?.engine?.transport?.name
+          });
         });
 
         this.socket?.on('newMessage', data => {
@@ -288,7 +374,7 @@ export class ChatSDK {
           }
         });
       } catch (error) {
-        reject(error);
+        rejectOnce(error);
       }
     });
   }

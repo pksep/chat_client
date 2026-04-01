@@ -332,18 +332,56 @@ const insertTextToMessageInput = (text: string) => {
   messageListInputRef.value?.insertText?.(text);
 };
 
+const insertContentToMessageInput = (content: string) => {
+  messageListInputRef.value?.insertContent?.(content);
+};
+
+const escapeHtml = (value: string) =>
+  value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+
+const tryBuildAnchor = (value: string) => {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) return null;
+
+  try {
+    const url = new URL(trimmedValue);
+
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      return null;
+    }
+
+    const safeUrl = escapeHtml(url.toString());
+    const safeText = escapeHtml(trimmedValue);
+
+    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeText}</a> `;
+  } catch {
+    return null;
+  }
+};
+
 const pasteTextToMessageInput = async () => {
   const clipboardText = await navigator.clipboard.readText();
 
   if (!clipboardText) return;
 
-  insertTextToMessageInput(clipboardText);
+  const anchorHtml = tryBuildAnchor(clipboardText);
+
+  insertTextToMessageInput(anchorHtml);
 };
 
 const handleWindowKeydown = async (e: KeyboardEvent) => {
   const hasModifierKey = e.ctrlKey || e.metaKey || e.altKey;
+  const shortcutCode = e.code.toLowerCase();
+  const isModifierShortcut = e.ctrlKey || e.metaKey;
   const isPasteShortcut =
-    (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v';
+    isModifierShortcut &&
+    (shortcutCode === 'keyv' || e.key.toLowerCase() === 'v');
   const isPrintableKey = e.key.length === 1 && !hasModifierKey;
   const shouldFocusMessageInput =
     !Capacitor.isNativePlatform() &&
