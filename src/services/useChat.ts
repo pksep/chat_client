@@ -46,6 +46,7 @@ const currentUserId = ref<string | null>(null);
 const messagesStore = shallowRef<Record<string, ChatMessage[]>>({});
 
 const messageChangeCallbacks: Array<(topicId?: string) => void> = [];
+let areChatListenersBound = false;
 
 const notifyMessageChange = (topicId?: string): void => {
   messageChangeCallbacks.forEach(callback => {
@@ -58,7 +59,9 @@ const notifyMessageChange = (topicId?: string): void => {
 };
 
 const setupChatListeners = (): void => {
-  if (!chatSDK) return;
+  if (!chatSDK || areChatListenersBound) return;
+
+  areChatListenersBound = true;
 
   chatSDK.subscribeToEvent(WebSocketEventType.NEW_MESSAGE, event => {
     appendMessageToLocal(event.payload.topicId, event.payload);
@@ -218,6 +221,7 @@ export const initializeChat = async (options: {
     wsUrl: options.wsUrl,
     token: options.token
   });
+  areChatListenersBound = false;
 
   currentUserId.value = options.userId || null;
 
@@ -237,9 +241,9 @@ export const initializeChat = async (options: {
   }
 
   isWebsocketConnecting.value = true;
+  setupChatListeners();
   await chatSDK.connect();
   isWebsocketConnecting.value = false;
-  setupChatListeners();
   await restoreInvitedGroupCallFromUrl();
 
   if (Capacitor.isNativePlatform()) {

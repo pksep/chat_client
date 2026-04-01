@@ -28,6 +28,7 @@ export class ChatWS implements ChatWSInterface {
   private socket: Socket | null = null;
   private eventHandlers: Map<string, Array<(event: WebSocketEvent) => void>> =
     new Map();
+  private pendingEvents: Map<string, WebSocketEvent[]> = new Map();
 
   constructor(socket: Socket | null = null) {
     this.socket = socket;
@@ -47,6 +48,15 @@ export class ChatWS implements ChatWSInterface {
 
     const handlers = this.eventHandlers.get(type) as WebSocketEventHandler<T>[];
     handlers.push(handler as WebSocketEventHandler<any>);
+
+    const pendingEvents = this.pendingEvents.get(type) || [];
+
+    if (pendingEvents.length) {
+      pendingEvents.forEach(event => {
+        handler(event as WebSocketEvent<T>);
+      });
+      this.pendingEvents.delete(type);
+    }
   }
 
   unsubscribeFromEvent<T extends WebSocketEventType>(
@@ -97,7 +107,7 @@ export class ChatWS implements ChatWSInterface {
 
       this.socket.emit(serverEventType, JSON.stringify(payload));
     } else {
-      console.warn('Socket.IO is not connected. Cannot send event:', type);
+      console.error('Socket.IO is not connected. Cannot send event:', type);
     }
   }
 
@@ -115,6 +125,14 @@ export class ChatWS implements ChatWSInterface {
       )
     ) {
       const handlers = this.eventHandlers.get(event.type) || [];
+
+      if (!handlers.length) {
+        const pendingEvents = this.pendingEvents.get(event.type) || [];
+        pendingEvents.push(event);
+        this.pendingEvents.set(event.type, pendingEvents.slice(-20));
+        return;
+      }
+
       handlers.forEach(handler => handler(event));
     } else {
       console.warn(`Unknown WebSocket event type: ${event.type}`);
