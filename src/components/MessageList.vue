@@ -27,7 +27,7 @@
       ref="messageListUserItemsRef"
       :messages="state.messages"
       :user="props.user"
-      :auth-user-id="authUser.id"
+      :auth-user-id="authUser?.id"
       :hide-unread-marker="state.hideUnreadMarker"
       :data-testid="props.dataTestid"
       @set-edit-message="handleSetEditMessage"

@@ -13,40 +13,7 @@
       }"
       @click.stop
     >
-      <div v-show="showAvatarFallback" class="call-modal__avatar-container">
-        <h3 v-if="displayUser" class="call-modal__user-name">
-          {{ displayUser?.initials }}
-        </h3>
-        <p class="call-modal__status">
-          <span v-if="isIncoming">Входящий вызов...</span>
-          <span v-else-if="isCalling">Соединение...</span>
-          <span v-else>{{ formattedTime }}</span>
-        </p>
-
-        <Avatar
-          v-if="displayUser"
-          :url="`${config.CHAT_PATH_TO_FILE_CDN}/${displayUser?.avatarUrl}`"
-          :alt="displayUser?.avatarUrl"
-          class="call-modal__avatar"
-          :initials="displayUser?.initials"
-        />
-      </div>
-
-      <GroupCallLayout
-        v-if="shouldShowMediaLayout && isGroupCallLayout"
-        :is-remote-video-active="isRemoteVideoActive"
-        :active-screen-share="activeScreenShare"
-        :participants="visibleGroupParticipants"
-        :current-page="currentParticipantPage"
-        :current-page-participant-count="visibleGroupParticipantCount"
-        :total-pages="totalParticipantPages"
-        :go-to-page="goToParticipantPage"
-        :set-screen-share-video-ref="setScreenShareVideoRef"
-        :set-remote-video-ref="setRemoteVideoRef"
-        :set-remote-audio-ref="setRemoteAudioRef"
-      />
-
-      <div v-if="showGroupInfoBar" class="call-modal__group-info">
+      <div class="call-modal__group-info">
         <div>
           <button
             v-if="!isMobile"
@@ -77,14 +44,41 @@
         </button>
       </div>
 
-      <DirectCallLayout
-        v-if="shouldShowMediaLayout && !isGroupCallLayout"
+      <div v-show="showAvatarFallback" class="call-modal__avatar-container">
+        <h3 v-if="displayUser" class="call-modal__user-name">
+          {{ displayUser?.initials }}
+        </h3>
+        <p class="call-modal__status">
+          <span v-if="isIncoming">Входящий вызов...</span>
+          <span v-else-if="isCalling">Соединение...</span>
+          <span v-else>{{ formattedTime }}</span>
+        </p>
+
+        <Avatar
+          v-if="displayUser"
+          :url="`${config.CHAT_PATH_TO_FILE_CDN}/${displayUser?.avatarUrl}`"
+          :alt="displayUser?.avatarUrl"
+          class="call-modal__avatar"
+          :initials="displayUser?.initials"
+        />
+      </div>
+
+      <GroupCallLayout
+        v-if="shouldShowMediaLayout"
         :is-remote-video-active="isRemoteVideoActive"
-        :live-kit-state="liveKitState"
-        :remote-participants="visibleParticipantGridViews"
-        :set-local-video-ref="setLocalVideoRef"
+        :active-screen-share="activeScreenShare"
+        :participants="visibleGroupParticipants"
+        :focused-participant="focusedGroupParticipant"
+        :focused-participant-has-video="focusedParticipantHasVideo"
+        :current-page="currentParticipantPage"
+        :current-page-participant-count="visibleGroupParticipantCount"
+        :total-pages="totalParticipantPages"
+        :go-to-page="goToParticipantPage"
+        :set-screen-share-video-ref="setScreenShareVideoRef"
+        :set-focused-participant-video-ref="setFocusedParticipantVideoRef"
         :set-remote-video-ref="setRemoteVideoRef"
         :set-remote-audio-ref="setRemoteAudioRef"
+        @select-participant="handleSelectParticipant"
       />
 
       <div class="call-modal__controls">
@@ -107,32 +101,6 @@
           </div>
         </template>
         <template v-else>
-          <template v-if="!isMobile">
-            <div
-              v-if="isRemoteVideoActive && !isGroupCallLayout"
-              class="call-modal__info"
-            >
-              <button
-                class="call-modal__control-button call-modal__control-button--fullscreen"
-                title="Fullscreen"
-                @click="liveKitState.isFullScreen = !liveKitState.isFullScreen"
-              >
-                <FullscreenIcon v-if="!liveKitState.isFullScreen" />
-                <MinimizeIcon v-else />
-              </button>
-              <div>
-                <p>{{ displayUser?.initials }}</p>
-                <span>{{ formattedTime }}</span>
-              </div>
-            </div>
-          </template>
-          <Icon
-            v-else-if="!isGroupCallLayout"
-            :name="IconNameEnum.chevronDown"
-            class="call-modal__control-button call-modal__control-button__chevron-down"
-            @click="hideModal"
-          />
-
           <div class="call-modal__control-button-wrapper">
             <button
               v-if="Capacitor.isNativePlatform()"
@@ -239,7 +207,6 @@ import VideoDisableIcon from './UI/VideoDisableIcon.vue';
 import LeaveIcon from './UI/LeaveIcon.vue';
 import ScreenShareIcon from './UI/ScreenShareIcon.vue';
 import HandRaiseIcon from './UI/HandRaiseIcon.vue';
-import DirectCallLayout from './DirectCallLayout.vue';
 import GroupCallLayout from './GroupCallLayout.vue';
 import GroupCallInfoPanel from './GroupCallInfoPanel.vue';
 import {
@@ -254,6 +221,7 @@ import {
   invitedGroupCall,
   leaveCall,
   localVideoStream,
+  localScreenShareStream,
   open as isCallOpen,
   remoteParticipants,
   state as liveKitState,
@@ -287,9 +255,12 @@ const { getSelectedTopic } = useTopics();
 
 const localVideo = ref<HTMLVideoElement | null>(null);
 const screenShareVideo = ref<HTMLVideoElement | null>(null);
+const focusedParticipantVideo = ref<HTMLVideoElement | null>(null);
 const remoteVideoRefs = ref<Record<string, HTMLVideoElement | null>>({});
 const remoteAudioRefs = ref<Record<string, HTMLAudioElement | null>>({});
 const currentParticipantPage = ref(0);
+const focusedParticipantIdentity = ref<string | null>(null);
+const hasManualParticipantSelection = ref(false);
 const maxParticipantsPerPage = computed(() =>
   isMobile.value ? 4 : liveKitState.isFullScreen ? 9 : 6
 );
@@ -297,25 +268,83 @@ const state = ref({
   openGroupInfoModal: false
 });
 
+const buildParticipantEntries = (
+  participant: any,
+  knownUser: any,
+  isLocal: boolean
+) => {
+  const baseParticipant = {
+    identity: participant.identity,
+    name: participant.name,
+    initials:
+      knownUser?.initials ||
+      participant.name
+        .split(' ')
+        .map(part => part[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase(),
+    avatarUrl: knownUser?.avatarUrl || '',
+    audioStream: participant.audioStream || null,
+    isLocal,
+    isHandRaised: participant.isHandRaised,
+    isSpeaking: participant.isSpeaking,
+    isMicActive: participant.isMicActive
+  };
+  const entries: any[] = [];
+
+  if (participant.cameraStream) {
+    entries.push({
+      ...baseParticipant,
+      tileId: `${participant.identity}-camera`,
+      streamKind: 'camera',
+      videoStream: participant.cameraStream,
+      cameraStream: participant.cameraStream,
+      screenShareStream: participant.screenShareStream || null,
+      isVideoActive: !!participant.isVideoActive,
+      isScreenShareActive: false,
+      hasAudio: true
+    });
+  }
+
+  if (participant.screenShareStream) {
+    entries.push({
+      ...baseParticipant,
+      tileId: `${participant.identity}-screen`,
+      streamKind: 'screen',
+      videoStream: participant.screenShareStream,
+      cameraStream: participant.cameraStream || null,
+      screenShareStream: participant.screenShareStream,
+      isVideoActive: true,
+      isScreenShareActive: true,
+      hasAudio: false
+    });
+  }
+
+  if (!entries.length) {
+    entries.push({
+      ...baseParticipant,
+      tileId: `${participant.identity}-avatar`,
+      streamKind: 'avatar',
+      videoStream: participant.videoStream || null,
+      cameraStream: participant.cameraStream || null,
+      screenShareStream: participant.screenShareStream || null,
+      isVideoActive: false,
+      isScreenShareActive: false,
+      hasAudio: true
+    });
+  }
+
+  return entries;
+};
+
 const remoteParticipantViews = computed(() =>
-  remoteParticipants.value.map(participant => {
+  remoteParticipants.value.flatMap(participant => {
     const knownUser = getUsersList().find(
       (item: any) => item.id === participant.identity
     ) as any;
 
-    return {
-      ...participant,
-      isHandRaised: participant.isHandRaised,
-      initials:
-        knownUser?.initials ||
-        participant.name
-          .split(' ')
-          .map(part => part[0])
-          .join('')
-          .slice(0, 2)
-          .toUpperCase(),
-      avatarUrl: knownUser?.avatarUrl || ''
-    };
+    return buildParticipantEntries(participant, knownUser, false);
   })
 );
 
@@ -342,48 +371,77 @@ const localParticipantView = computed(() => {
   const authUser = getAuthUser() as any;
   if (!authUser) return null;
 
-  return {
-    identity: authUser.id,
-    name: authUser.initials || authUser.nickname || 'You',
-    initials: authUser.initials || 'Y',
-    avatarUrl: authUser.avatarUrl || '',
-    isVideoActive:
-      !!localVideoStream.value &&
-      (liveKitState.isVideoActive || liveKitState.isScreenSharingActive),
-    videoStream: localVideoStream.value,
-    audioStream: null,
-    isLocal: true,
-    isHandRaised: liveKitState.isHandRaised
-  };
+  return buildParticipantEntries(
+    {
+      identity: authUser.id,
+      name: authUser.initials || authUser.nickname || 'You',
+      cameraStream: localVideoStream.value,
+      screenShareStream: localScreenShareStream.value,
+      videoStream: localVideoStream.value,
+      audioStream: null,
+      isVideoActive: !!localVideoStream.value && liveKitState.isVideoActive,
+      isHandRaised: liveKitState.isHandRaised,
+      isSpeaking: false,
+      isMicActive: liveKitState.isMicActive
+    },
+    {
+      initials: authUser.initials || 'Y',
+      avatarUrl: authUser.avatarUrl || ''
+    },
+    true
+  );
 });
 
 const participantGridViews = computed(() => {
+  const sortParticipants = (left: any, right: any) => {
+    if (left.isLocal !== right.isLocal) {
+      return Number(left.isLocal) - Number(right.isLocal);
+    }
+
+    if (left.isHandRaised !== right.isHandRaised) {
+      return Number(right.isHandRaised) - Number(left.isHandRaised);
+    }
+
+    if (left.isSpeaking !== right.isSpeaking) {
+      return Number(right.isSpeaking) - Number(left.isSpeaking);
+    }
+
+    return left.name.localeCompare(right.name);
+  };
+
   const remoteViews = remoteParticipantViews.value
     .map(participant => ({
       ...participant,
       isLocal: false
     }))
-    .sort(
-      (left, right) => Number(right.isHandRaised) - Number(left.isHandRaised)
-    );
+    .sort(sortParticipants);
 
-  if (!isGroupCallLayout.value) {
-    return remoteViews;
-  }
+  const localViews = localParticipantView.value
+    ? [...localParticipantView.value].sort(sortParticipants)
+    : [];
 
-  return localParticipantView.value
-    ? [...remoteViews, localParticipantView.value]
-    : remoteViews;
+  return [...remoteViews, ...localViews];
 });
 
 const participantGridCount = computed(() => participantGridViews.value.length);
-const totalParticipantPages = computed(() =>
-  Math.max(
-    1,
-    Math.ceil(participantGridCount.value / maxParticipantsPerPage.value)
+const isScreenShareParticipantsStripActive = computed(() =>
+  participantGridViews.value.some(
+    participant => participant.tileId === focusedParticipantIdentity.value
   )
 );
+const totalParticipantPages = computed(() =>
+  isScreenShareParticipantsStripActive.value
+    ? 1
+    : Math.max(
+        1,
+        Math.ceil(participantGridCount.value / maxParticipantsPerPage.value)
+      )
+);
 const visibleParticipantGridViews = computed(() => {
+  if (isScreenShareParticipantsStripActive.value) {
+    return participantGridViews.value;
+  }
+
   const start = currentParticipantPage.value * maxParticipantsPerPage.value;
   return participantGridViews.value.slice(
     start,
@@ -391,19 +449,49 @@ const visibleParticipantGridViews = computed(() => {
   );
 });
 const visibleGroupParticipants = computed(() => {
-  if (!activeScreenShare.value) {
-    return visibleParticipantGridViews.value;
-  }
-
-  return visibleParticipantGridViews.value.filter(
-    participant => participant.identity !== activeScreenShare.value?.identity
-  );
+  return visibleParticipantGridViews.value;
 });
 const visibleGroupParticipantCount = computed(
   () => visibleGroupParticipants.value.length
 );
+const participantDisplayCount = computed(
+  () =>
+    new Set(participantGridViews.value.map(participant => participant.identity))
+      .size
+);
+const focusedGroupParticipant = computed(() => {
+  const participants = participantGridViews.value;
+
+  if (!participants.length) {
+    return null;
+  }
+
+  return participants.find(
+    participant => participant.tileId === focusedParticipantIdentity.value
+  );
+});
+const focusedParticipantStageStream = computed(() => {
+  const participant = focusedGroupParticipant.value as any;
+
+  if (!participant) {
+    return null;
+  }
+
+  if (participant.isScreenShareActive && participant.screenShareStream) {
+    return participant.screenShareStream;
+  }
+
+  if (participant.isVideoActive) {
+    return participant.cameraStream || participant.videoStream || null;
+  }
+
+  return null;
+});
+const focusedParticipantHasVideo = computed(
+  () => !!focusedParticipantStageStream.value
+);
 const participantCountLabel = computed(() => {
-  const count = participantGridCount.value;
+  const count = participantDisplayCount.value;
 
   if (count % 10 === 1 && count % 100 !== 11) {
     return `${count} участник`;
@@ -434,32 +522,26 @@ const displayGroupCallMeta = computed(
 );
 
 const shouldShowMediaLayout = computed(
-  () =>
-    isCallOpen.value &&
-    !isIncoming.value &&
-    !isCalling.value &&
-    (isGroupCallLayout.value ||
-      isRemoteVideoActive.value ||
-      liveKitState.isVideoActive ||
-      liveKitState.isScreenSharingActive)
+  () => isCallOpen.value && !isIncoming.value && !isCalling.value
 );
 
-const showGroupInfoBar = computed(
-  () => shouldShowMediaLayout.value && isGroupCallLayout.value
-);
-
-const showAvatarFallback = computed(
-  () =>
-    isIncoming.value ||
-    isCalling.value ||
-    (!isGroupCallLayout.value && !isRemoteVideoActive.value)
-);
+const showAvatarFallback = computed(() => isIncoming.value || isCalling.value);
 
 watch(
   [screenShareVideo, activeScreenShare],
   ([video, screenShare]) => {
     if (video) {
       video.srcObject = screenShare?.stream || null;
+    }
+  },
+  { immediate: true }
+);
+
+watch(
+  [focusedParticipantVideo, focusedParticipantStageStream],
+  ([video, stream]) => {
+    if (video) {
+      video.srcObject = stream;
     }
   },
   { immediate: true }
@@ -476,17 +558,17 @@ watch(
 );
 
 watch(
-  remoteParticipants,
+  remoteParticipantViews,
   participants => {
     participants.forEach(participant => {
-      const video = remoteVideoRefs.value[participant.identity];
+      const video = remoteVideoRefs.value[participant.tileId];
       const audio = remoteAudioRefs.value[participant.identity];
 
       if (video) {
         video.srcObject = participant.videoStream;
       }
 
-      if (audio) {
+      if (audio && participant.hasAudio) {
         audio.srcObject = participant.audioStream;
       }
     });
@@ -517,6 +599,29 @@ watch(
     );
     if (currentParticipantPage.value > lastPage) {
       currentParticipantPage.value = lastPage;
+    }
+  },
+  { immediate: true }
+);
+
+watch(
+  participantGridViews,
+  participants => {
+    if (!participants.length) {
+      focusedParticipantIdentity.value = null;
+      hasManualParticipantSelection.value = false;
+      return;
+    }
+
+    const hasFocusedParticipant = participants.some(
+      participant => participant.tileId === focusedParticipantIdentity.value
+    );
+
+    if (!hasFocusedParticipant) {
+      hasManualParticipantSelection.value = false;
+      focusedParticipantIdentity.value =
+        [...participants].reverse().find(participant => !participant.isLocal)
+          ?.tileId || participants[participants.length - 1].tileId;
     }
   },
   { immediate: true }
@@ -557,13 +662,6 @@ watch([isCallOpen, isIncoming, isCalling], ([open, incoming]) => {
   }
 });
 
-const setLocalVideoRef = (el: Element | null) => {
-  localVideo.value = el as HTMLVideoElement | null;
-  if (localVideo.value) {
-    localVideo.value.srcObject = localVideoStream.value;
-  }
-};
-
 const setScreenShareVideoRef = (el: Element | null) => {
   screenShareVideo.value = el as HTMLVideoElement | null;
   if (screenShareVideo.value) {
@@ -571,10 +669,18 @@ const setScreenShareVideoRef = (el: Element | null) => {
   }
 };
 
-const setRemoteVideoRef = (identity: string, el: Element | null) => {
-  remoteVideoRefs.value[identity] = el as HTMLVideoElement | null;
+const setFocusedParticipantVideoRef = (el: Element | null) => {
+  focusedParticipantVideo.value = el as HTMLVideoElement | null;
+  if (focusedParticipantVideo.value) {
+    focusedParticipantVideo.value.srcObject =
+      focusedParticipantStageStream.value;
+  }
+};
+
+const setRemoteVideoRef = (tileId: string, el: Element | null) => {
+  remoteVideoRefs.value[tileId] = el as HTMLVideoElement | null;
   const participant = participantGridViews.value.find(
-    item => item.identity === identity
+    item => item.tileId === tileId
   ) as any;
 
   if (el && participant) {
@@ -598,6 +704,16 @@ const goToParticipantPage = (page: number) => {
     0,
     Math.min(page, totalParticipantPages.value - 1)
   );
+};
+
+const handleSelectParticipant = (identity: string | null) => {
+  if (!identity) {
+    hasManualParticipantSelection.value = false;
+    focusedParticipantIdentity.value = null;
+    return;
+  }
+  hasManualParticipantSelection.value = true;
+  focusedParticipantIdentity.value = identity;
 };
 
 const hideModal = () => {

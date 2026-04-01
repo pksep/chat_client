@@ -76,7 +76,7 @@
           @click.stop
         />
         <SearchIcon
-          v-if="!state.isSearchInputEnable && !isMobile"
+          v-if="false && !state.isSearchInputEnable && !isMobile"
           class="chat__header__icon"
           :data-testid="`${props.dataTestid}-Header-SearchIcon`"
           @click.stop="showSearch"

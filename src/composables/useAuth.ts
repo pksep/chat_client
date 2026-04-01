@@ -9,9 +9,12 @@ export const ERP_BOOTSTRAP_TOKEN_KEY = 'erp_bootstrap_token';
 
 interface AuthResponse {
   token: string;
+  accessToken?: string;
   user?: User;
   erpToken?: string;
   refreshToken?: string;
+  expireTimeSeconds?: number;
+  refreshExpireTimeSeconds?: number;
 }
 
 interface DirectAuthCredentials {
@@ -29,6 +32,58 @@ interface StoredBootstrapErpSession {
   accessToken: string;
 }
 
+const getAccessTokenFromResponse = (data: Record<string, unknown>): string => {
+  const accessTokenCandidate = data.accessToken;
+  if (typeof accessTokenCandidate === 'string' && accessTokenCandidate) {
+    return accessTokenCandidate;
+  }
+
+  const tokenCandidate = data.token;
+  if (typeof tokenCandidate === 'string' && tokenCandidate) {
+    return tokenCandidate;
+  }
+
+  return '';
+};
+
+const normalizeAuthResponse = (data: Record<string, unknown>): AuthResponse => {
+  const accessToken = getAccessTokenFromResponse(data);
+  const refreshToken =
+    typeof data.refreshToken === 'string' ? data.refreshToken : undefined;
+  const expireTimeSeconds =
+    typeof data.expireTimeSeconds === 'number' ? data.expireTimeSeconds : 0;
+  const refreshExpireTimeSeconds =
+    typeof data.refreshExpireTimeSeconds === 'number'
+      ? data.refreshExpireTimeSeconds
+      : undefined;
+
+  if (accessToken) {
+    setAuthToken(accessToken, expireTimeSeconds);
+  }
+
+  const explicitErpToken =
+    typeof data.erpToken === 'string' ? data.erpToken : undefined;
+  const legacyErpTokenCandidate =
+    typeof data.accessToken === 'string' ? data.accessToken : undefined;
+  const erpToken =
+    explicitErpToken ||
+    (typeof data.token === 'string' &&
+    legacyErpTokenCandidate &&
+    legacyErpTokenCandidate !== accessToken
+      ? legacyErpTokenCandidate
+      : undefined);
+
+  return {
+    token: accessToken,
+    accessToken,
+    user: data.user as User | undefined,
+    erpToken,
+    refreshToken,
+    expireTimeSeconds,
+    refreshExpireTimeSeconds
+  };
+};
+
 export const useAuth = async (erpToken: string): Promise<AuthResponse> => {
   const config = getConfig();
   const response = await fetch(`${config.CHAT_AUTH_API}/chat/token`, {
@@ -44,19 +99,7 @@ export const useAuth = async (erpToken: string): Promise<AuthResponse> => {
     throw new Error(data?.error || 'ERP token login failed');
   }
 
-  const token = data.token;
-  const user = data.user;
-
-  if (token) {
-    setAuthToken(token, data.expireTimeSeconds || 0);
-  }
-
-  return {
-    token,
-    user,
-    erpToken: data.erpToken ?? data.accessToken,
-    refreshToken: data.refreshToken
-  };
+  return normalizeAuthResponse(data);
 };
 
 export const loginWithCredentials = async (
@@ -80,23 +123,14 @@ export const loginWithCredentials = async (
     throw new Error(data?.message || data?.error || 'Credentials login failed');
   }
 
-  if (data.token) {
-    setAuthToken(data.token);
-  }
-
-  return {
-    token: data.token,
-    user: data.user,
-    erpToken: data.erpToken ?? data.accessToken,
-    refreshToken: data.refreshToken
-  };
+  return normalizeAuthResponse(data);
 };
 
 export const refreshErpSession = async (
   refreshToken: string
 ): Promise<AuthResponse> => {
   const config = getConfig();
-  const response = await fetch(`${config.CHAT_AUTH_API}/chat/refresh`, {
+  const response = await fetch(`${config.CHAT_API_DOMAIN}/auth/refresh`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -110,15 +144,11 @@ export const refreshErpSession = async (
     throw new Error(data?.message || data?.error || 'ERP refresh failed');
   }
 
-  if (data.token) {
-    setAuthToken(data.token, data.expireTimeSeconds || 0);
-  }
+  const normalizedResponse = normalizeAuthResponse(data);
 
   return {
-    token: data.token,
-    user: data.user,
-    erpToken: data.erpToken ?? data.accessToken,
-    refreshToken: data.refreshToken ?? refreshToken
+    ...normalizedResponse,
+    refreshToken: normalizedResponse.refreshToken ?? refreshToken
   };
 };
 

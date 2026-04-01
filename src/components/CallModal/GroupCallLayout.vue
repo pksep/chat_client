@@ -1,23 +1,17 @@
 <template>
-  <div
-    class="call-modal__livekit-container call-modal__livekit-container--group"
-    :class="{
-      'call-modal__livekit-container--transparent': !isRemoteVideoActive
-    }"
-  >
-    <div v-if="activeScreenShare" class="call-modal__screen-share-stage">
-      <video
-        :ref="setScreenShareVideoRef"
-        autoplay
-        playsinline
-        class="call-modal__screen-share-video"
-      ></video>
-    </div>
-
+  <div class="call-modal__group-layout">
+    <ScreenShareParticipantsStrip
+      v-if="!!focusedParticipant"
+      :participants="participants"
+      :focused-participant="focusedParticipant"
+      :set-remote-video-ref="setRemoteVideoRef"
+      :set-remote-audio-ref="setRemoteAudioRef"
+      @select-participant="emit('select-participant', $event)"
+    />
     <div
+      v-else
       class="call-modal__remote-grid"
       :class="{
-        'call-modal__remote-grid--screen-share': !!activeScreenShare,
         'call-modal__remote-grid--single': currentPageParticipantCount === 1,
         'call-modal__remote-grid--duo': currentPageParticipantCount === 2,
         'call-modal__remote-grid--group-duo': currentPageParticipantCount === 2,
@@ -31,18 +25,20 @@
     >
       <div
         v-for="participant in participants"
-        :key="participant.identity"
+        :key="participant.tileId"
         class="call-modal__remote-tile"
         :class="{ 'call-modal__remote-tile--local': participant.isLocal }"
+        @click="emit('select-participant', participant.tileId)"
       >
         <video
           v-show="participant.isVideoActive"
-          :ref="el => setRemoteVideoRef(participant.identity, el as Element)"
+          :ref="el => setRemoteVideoRef(participant.tileId, el as Element)"
           autoplay
           playsinline
           class="call-modal__remote-video"
         ></video>
         <audio
+          v-if="participant.hasAudio"
           :ref="el => setRemoteAudioRef(participant.identity, el as Element)"
           autoplay
         ></audio>
@@ -68,11 +64,58 @@
         >
           <HandRaiseIcon />
         </div>
-        <div class="call-modal__remote-name">{{ participant.name }}</div>
+        <div class="call-modal__remote-name">
+          {{ participant.name }} <MicIcon v-if="participant.isMicActive" />
+          <MicDisableIcon v-else />
+        </div>
+      </div>
+    </div>
+    <div
+      v-if="!!focusedParticipant"
+      class="call-modal__participant-stage"
+      @click="emit('select-participant', null)"
+    >
+      <video
+        v-if="focusedParticipantHasVideo"
+        :ref="setFocusedParticipantVideoRef"
+        autoplay
+        playsinline
+        muted
+        class="call-modal__screen-share-video"
+      ></video>
+      <div
+        v-else-if="focusedParticipant"
+        class="call-modal__remote-placeholder"
+      >
+        <Avatar
+          :url="
+            focusedParticipant.avatarUrl
+              ? `${config.CHAT_PATH_TO_FILE_CDN}/${focusedParticipant.avatarUrl}`
+              : ''
+          "
+          :alt="focusedParticipant.name"
+          class="call-modal__avatar"
+          :initials="focusedParticipant.initials"
+        />
+      </div>
+      <div
+        v-if="focusedParticipant?.isHandRaised"
+        class="call-modal__remote-hand"
+        :title="`${focusedParticipant.name} raised a hand`"
+      >
+        <HandRaiseIcon />
+      </div>
+      <div v-if="focusedParticipant" class="call-modal__remote-name">
+        {{ focusedParticipant.name }}
+        <MicIcon v-if="focusedParticipant.isMicActive" />
+        <MicDisableIcon v-else />
       </div>
     </div>
 
-    <div v-if="totalPages > 1" class="call-modal__pagination">
+    <div
+      v-if="totalPages > 1 && !focusedParticipant"
+      class="call-modal__pagination"
+    >
       <button
         class="call-modal__pagination-arrow"
         :disabled="currentPage === 0"
@@ -106,8 +149,14 @@
 import { Avatar, Icon, IconNameEnum } from '@pksep/yui';
 import { getConfig } from '../../services/useConfig';
 import HandRaiseIcon from './UI/HandRaiseIcon.vue';
+import MicDisableIcon from './UI/MicDisableIcon.vue';
+import MicIcon from './UI/MicIcon.vue';
+import ScreenShareParticipantsStrip from './ScreenShareParticipantsStrip.vue';
 
 const config = getConfig();
+const emit = defineEmits<{
+  (event: 'select-participant', identity: string | null): void;
+}>();
 
 defineProps<{
   isRemoteVideoActive: boolean;
@@ -118,18 +167,33 @@ defineProps<{
   } | null;
   participants: Array<{
     identity: string;
+    tileId: string;
     name: string;
     initials: string;
     avatarUrl: string;
     isVideoActive: boolean;
     isLocal: boolean;
     isHandRaised: boolean;
+    isSpeaking: boolean;
+    isMicActive: boolean;
+    hasAudio: boolean;
   }>;
+  focusedParticipant: {
+    identity: string;
+    tileId: string;
+    name: string;
+    initials: string;
+    avatarUrl: string;
+    isHandRaised: boolean;
+    isMicActive: boolean;
+  } | null;
+  focusedParticipantHasVideo: boolean;
   currentPage: number;
   currentPageParticipantCount: number;
   totalPages: number;
   goToPage: (page: number) => void;
   setScreenShareVideoRef: (el: Element | null) => void;
+  setFocusedParticipantVideoRef: (el: Element | null) => void;
   setRemoteVideoRef: (identity: string, el: Element | null) => void;
   setRemoteAudioRef: (identity: string, el: Element | null) => void;
 }>();
