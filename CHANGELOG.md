@@ -1,3 +1,11 @@
+## [1.20.1](https://github.com/pksep/chat_client/compare/v1.20.0...v1.20.1) (2026-04-01)
+
+
+### Bug Fixes
+
+* links when paste in input without focus ([62fee9e](https://github.com/pksep/chat_client/commit/62fee9e0ba6acbbec8cd62d0d0637aae7d33f183))
+* socket connection ([eaf7226](https://github.com/pksep/chat_client/commit/eaf7226142566737e475d437cdf3c6b626409846))
+
 # [1.20.0](https://github.com/pksep/chat_client/compare/v1.19.2...v1.20.0) (2026-04-01)
 
 
