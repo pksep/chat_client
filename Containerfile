@@ -10,17 +10,13 @@ RUN bun install --ignore-scripts
 
 RUN bun run build:prod
 
-FROM caddy:2-alpine
+FROM nginx:stable-alpine AS production
 
-RUN mkdir -p /usr/share/caddy
+RUN rm /etc/nginx/conf.d/default.conf
 
-COPY --from=builder /app/build /usr/share/caddy
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/build /usr/share/nginx/html
 
-COPY Caddyfile /etc/caddy/Caddyfile
+EXPOSE 80
 
-EXPOSE 8080
-
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -qO- http://localhost:8080/ || exit 1
-
-
+CMD ["nginx", "-g", "daemon off;"]
