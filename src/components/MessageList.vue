@@ -224,7 +224,7 @@ const handleScrollToMessage = async (message: IMessage) => {
       `[data-message-id="${messageId}"]`
     );
     if (messageElement instanceof HTMLElement) {
-      messageElement.scrollIntoView({ block: 'center' });
+      messageElement.scrollIntoView({ block: 'center', behavior: 'auto' });
       messageElement.classList.add('highlighted');
       setTimeout(() => {
         messageElement.classList.remove('highlighted');
