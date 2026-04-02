@@ -1,11 +1,20 @@
-import { reactive, watch, nextTick, ref, type Ref } from 'vue';
+import {
+  reactive,
+  watch,
+  nextTick,
+  ref,
+  onMounted,
+  onUnmounted,
+  type Ref
+} from 'vue';
 import {
   getIsWebsocketConnecting,
   markAsRead
 } from '../../../services/useChat';
 import {
   changeLocalReadStatus,
-  fetchMessagesForTopic
+  fetchMessagesForTopic,
+  mergeMessagesForTopic
 } from '../../../services/useMessages';
 import type { IMessage } from '../../interfaces/interfaces';
 
@@ -33,6 +42,80 @@ export function useMessageScroll(
   const scrollMarkReadTimeout: number | null = null;
   let intersectionObserver: IntersectionObserver | null = null;
   const pendingReadIds = new Set<string>();
+  const SCROLL_DISTANCE_FOR_REQUEST = 500;
+
+  const getUnreadMessageIdIfTrackable = (element: Element) => {
+    const messageId = element.getAttribute('data-message-id');
+    if (!messageId || pendingReadIds.has(messageId)) {
+      return null;
+    }
+
+    const message = state.messages.find(m => m.id === messageId);
+    if (
+      !message ||
+      message.senderUserId === props.user?.id ||
+      message.isReadByMe
+    ) {
+      return null;
+    }
+
+    return messageId;
+  };
+
+  const submitReadMessages = async (messageIds: string[]) => {
+    if (!messageIds.length || !route.value?.id) return;
+
+    messageIds.forEach(id => pendingReadIds.add(id));
+
+    try {
+      await markAsRead({
+        messageIds,
+        topicId: route.value.id
+      });
+    } catch (error) {
+      console.warn('Failed to mark messages as read:', error);
+      messageIds.forEach(id => pendingReadIds.delete(id));
+    }
+  };
+
+  const collectVisibleUnreadMessageIds = () => {
+    const container = chatWrapperRef.value;
+    if (!container || document.visibilityState !== 'visible') {
+      return [];
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const messageElements = container.querySelectorAll('[data-message-id]');
+    const visibleUnreadMessageIds: string[] = [];
+
+    messageElements.forEach(element => {
+      if (!(element instanceof HTMLElement)) return;
+
+      const rect = element.getBoundingClientRect();
+      const intersectsVertically =
+        rect.bottom > containerRect.top && rect.top < containerRect.bottom - 50;
+      const intersectsHorizontally =
+        rect.right > containerRect.left && rect.left < containerRect.right;
+
+      if (!intersectsVertically || !intersectsHorizontally) {
+        return;
+      }
+
+      const messageId = getUnreadMessageIdIfTrackable(element);
+      if (messageId) {
+        visibleUnreadMessageIds.push(messageId);
+      }
+    });
+
+    return visibleUnreadMessageIds;
+  };
+
+  const flushVisibleUnreadMessages = () => {
+    const visibleUnreadMessageIds = collectVisibleUnreadMessageIds();
+    if (visibleUnreadMessageIds.length > 0) {
+      submitReadMessages(visibleUnreadMessageIds);
+    }
+  };
 
   const markAllVisibleAsRead = async () => {
     const unreadMessages = state.messages.filter(
@@ -42,7 +125,6 @@ export function useMessageScroll(
     if (unreadMessages.length === 0) return;
 
     try {
-      if (document.hidden) return;
       await markAsRead({
         messageIds: unreadMessages.map((m: IMessage) => m.id),
         topicId: route.value.id
@@ -68,30 +150,15 @@ export function useMessageScroll(
 
         entries.forEach(entry => {
           if (entry.isIntersecting) {
-            const messageId = entry.target.getAttribute('data-message-id');
-            if (messageId && !pendingReadIds.has(messageId)) {
-              const message = state.messages.find(m => m.id === messageId);
-              if (
-                message &&
-                message.senderUserId !== props.user?.id &&
-                !message.isReadByMe
-              ) {
-                visibleUnreadMessageIds.push(messageId);
-                pendingReadIds.add(messageId);
-              }
+            const messageId = getUnreadMessageIdIfTrackable(entry.target);
+            if (messageId) {
+              visibleUnreadMessageIds.push(messageId);
             }
           }
         });
 
-        if (visibleUnreadMessageIds.length > 0 && route.value?.id) {
-          markAsRead({
-            messageIds: visibleUnreadMessageIds,
-            topicId: route.value.id
-          }).catch(error => {
-            console.warn('Failed to mark messages as read:', error);
-            // Optionally remove from pending on failure to allow retry
-            visibleUnreadMessageIds.forEach(id => pendingReadIds.delete(id));
-          });
+        if (visibleUnreadMessageIds.length > 0) {
+          submitReadMessages(visibleUnreadMessageIds);
         }
       },
       {
@@ -110,7 +177,66 @@ export function useMessageScroll(
             intersectionObserver?.observe(element);
           }
         });
+
+        flushVisibleUnreadMessages();
       }
+    });
+  };
+
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      nextTick(() => {
+        flushVisibleUnreadMessages();
+      });
+    }
+  };
+
+  const handleWindowFocus = () => {
+    nextTick(() => {
+      flushVisibleUnreadMessages();
+    });
+  };
+
+  const getScrollAnchor = () => {
+    const container = chatWrapperRef.value;
+    if (!container) return null;
+
+    const containerRect = container.getBoundingClientRect();
+    const messageElements = Array.from(
+      container.querySelectorAll('[data-message-id]')
+    );
+
+    for (const element of messageElements) {
+      if (!(element instanceof HTMLElement)) continue;
+
+      const rect = element.getBoundingClientRect();
+      const isVisible =
+        rect.bottom > containerRect.top && rect.top < containerRect.bottom;
+
+      if (isVisible) {
+        return {
+          messageId: element.getAttribute('data-message-id'),
+          topOffset: rect.top - containerRect.top
+        };
+      }
+    }
+
+    return null;
+  };
+
+  const restoreScrollAnchor = (anchor: {
+    messageId: string | null;
+    topOffset: number;
+  }) => {
+    if (!anchor.messageId) return;
+
+    nextTick(() => {
+      const container = chatWrapperRef.value;
+      if (!container) return;
+
+      const anchorElement = container.querySelector(
+        `[data-message-id="${anchor.messageId}"]`
+      );
     });
   };
 
@@ -129,9 +255,6 @@ export function useMessageScroll(
     const maxScroll = scrollHeight - clientHeight;
     const distanceFromBottom = scrollTop;
     const distanceFromTop = maxScroll + scrollTop;
-
-    const SCROLL_DISTANCE_FOR_REQUEST =
-      (distanceFromTop - distanceFromBottom) / 2;
 
     scrollState.shouldAutoScroll =
       distanceFromBottom < SCROLL_DISTANCE_FOR_REQUEST;
@@ -157,10 +280,20 @@ export function useMessageScroll(
 
       if (!getIsWebsocketConnecting()) {
         const lastMessageId = state.messages[0]?.id;
+        const scrollAnchor = getScrollAnchor();
         const result = await fetchMessagesForTopic(route.value.id, {
-          lastMessageId
+          lastMessageId,
+          skipSave: true
         });
         hasOldMessage = result.length > 0;
+
+        if (result.length > 0) {
+          mergeMessagesForTopic(route.value.id, result, 'prepend');
+
+          if (scrollAnchor) {
+            restoreScrollAnchor(scrollAnchor);
+          }
+        }
       }
       isScrollLoading = false;
     } else if (
@@ -174,9 +307,14 @@ export function useMessageScroll(
         const lastMessage = state.messages[state.messages.length - 1];
 
         const result = await fetchMessagesForTopic(route.value.id, {
-          afterMessageId: lastMessage?.id
+          afterMessageId: lastMessage?.id,
+          skipSave: true
         });
         hasNewMessage = result.length > 0;
+
+        if (result.length > 0) {
+          mergeMessagesForTopic(route.value.id, result, 'append');
+        }
       }
       isScrollLoading = false;
     }
@@ -275,6 +413,16 @@ export function useMessageScroll(
     hasNewMessage = true;
     pendingReadIds.clear();
   };
+
+  onMounted(() => {
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleWindowFocus);
+  });
+
+  onUnmounted(() => {
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.removeEventListener('focus', handleWindowFocus);
+  });
 
   return {
     isShowScrollToBottomButton,
