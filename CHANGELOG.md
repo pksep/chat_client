@@ -1,3 +1,19 @@
+# [1.22.0](https://github.com/pksep/chat_client/compare/v1.21.0...v1.22.0) (2026-04-02)
+
+
+### Bug Fixes
+
+* Containerfile ([49ccd5c](https://github.com/pksep/chat_client/commit/49ccd5c6591faa19a6b0372bcfbc40ce1234680e))
+* lint ([6b6d441](https://github.com/pksep/chat_client/commit/6b6d4418d15ad07a314f97aa5071d35411d22cbe))
+* lint ([adbab5a](https://github.com/pksep/chat_client/commit/adbab5ad39d41dd3beee8ccee255aaf4146dbce3))
+* read messages in mozilia ([6a14cb1](https://github.com/pksep/chat_client/commit/6a14cb17b5f57762ff28fbe03f87b1a110283e7e))
+* scrolling ([d3ad1a5](https://github.com/pksep/chat_client/commit/d3ad1a557ecde830b728cf18f7ed54cf8a7d8b16))
+
+
+### Features
+
+* add nginx.conf ([4147b89](https://github.com/pksep/chat_client/commit/4147b895a88c14c1630ba38bf7f1e11d9ac744df))
+
 # [1.21.0](https://github.com/pksep/chat_client/compare/v1.20.1...v1.21.0) (2026-04-01)
 
 
