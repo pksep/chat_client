@@ -23,6 +23,7 @@ export const fetchMessagesForTopic = async (
     limit?: number;
     afterMessageId?: string;
     newMessages?: boolean;
+    skipSave?: boolean;
   }
 ): Promise<IMessage[]> => {
   try {
@@ -37,18 +38,22 @@ export const fetchMessagesForTopic = async (
       newMessages: opts?.newMessages
     });
 
-    const existing = getMessagesByTopicId(topicId) || [];
+    if (!opts?.skipSave) {
+      const existing = getMessagesByTopicId(topicId) || [];
 
-    let combined = messages;
+      let combined = messages;
 
-    if (opts?.lastMessageId) {
-      combined = [...messages, ...existing];
-    } else if (opts?.afterMessageId) {
-      combined = [...existing, ...messages];
+      if (opts?.lastMessageId) {
+        combined = [...messages, ...existing];
+      } else if (opts?.afterMessageId) {
+        combined = [...existing, ...messages];
+      }
+      const unique = Array.from(
+        new Map(combined.map(m => [m.id, m])).values()
+      );
+
+      saveMessagesToLocal(topicId, unique);
     }
-    const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
-
-    saveMessagesToLocal(topicId, unique);
 
     return messages;
   } catch (error) {
@@ -230,6 +235,27 @@ export const saveMessagesToLocal = (
 
 export const getMessagesByTopicId = (topicId: string): IMessage[] => {
   return messagesStore.value[topicId] || [];
+};
+
+export const mergeMessagesForTopic = (
+  topicId: string,
+  messages: IMessage[],
+  mode: 'replace' | 'prepend' | 'append' = 'replace'
+): IMessage[] => {
+  const existing = getMessagesByTopicId(topicId) || [];
+
+  let combined = messages;
+
+  if (mode === 'prepend') {
+    combined = [...messages, ...existing];
+  } else if (mode === 'append') {
+    combined = [...existing, ...messages];
+  }
+
+  const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
+  saveMessagesToLocal(topicId, unique);
+
+  return unique;
 };
 
 export const savePinnedMessagesToLocal = (
