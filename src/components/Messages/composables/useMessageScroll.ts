@@ -234,9 +234,9 @@ export function useMessageScroll(
       const container = chatWrapperRef.value;
       if (!container) return;
 
-      const anchorElement = container.querySelector(
-        `[data-message-id="${anchor.messageId}"]`
-      );
+      // const anchorElement = container.querySelector(
+      //   `[data-message-id="${anchor.messageId}"]`
+      // );
     });
   };
 
