@@ -427,7 +427,9 @@ export class ChatSDK {
     }
 
     if (!this.socket.connected) {
-      console.info('Socket.IO: Forcing reconnect after resume/visibility change');
+      console.info(
+        'Socket.IO: Forcing reconnect after resume/visibility change'
+      );
       this.socket.connect();
     }
   }
