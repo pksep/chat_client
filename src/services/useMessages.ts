@@ -48,9 +48,7 @@ export const fetchMessagesForTopic = async (
       } else if (opts?.afterMessageId) {
         combined = [...existing, ...messages];
       }
-      const unique = Array.from(
-        new Map(combined.map(m => [m.id, m])).values()
-      );
+      const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
 
       saveMessagesToLocal(topicId, unique);
     }
