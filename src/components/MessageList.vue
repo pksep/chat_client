@@ -332,9 +332,9 @@ const insertTextToMessageInput = (text: string) => {
   messageListInputRef.value?.insertText?.(text);
 };
 
-const insertContentToMessageInput = (content: string) => {
-  messageListInputRef.value?.insertContent?.(content);
-};
+// const insertContentToMessageInput = (content: string) => {
+//   messageListInputRef.value?.insertContent?.(content);
+// };
 
 const escapeHtml = (value: string) =>
   value
