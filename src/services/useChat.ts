@@ -208,7 +208,27 @@ const setupChatListeners = (): void => {
 };
 
 let isVisibilityListenerAdded = false;
+let isResumeListenersAdded = false;
 let lastVisibilityState = document.visibilityState;
+
+const reconnectChatOnResume = (): void => {
+  if (!chatSDK) {
+    return;
+  }
+
+  chatSDK.reconnectIfNeeded();
+};
+
+const syncPresenceForVisibility = (): void => {
+  if (!chatSDK) {
+    return;
+  }
+
+  const isActive = document.visibilityState === 'visible';
+  chatSDK.sendWebSocketEvent(WebSocketEventType.TOGGLE_PRESENCE, {
+    isActive
+  });
+};
 
 export const initializeChat = async (options: {
   token: string;
@@ -230,14 +250,29 @@ export const initializeChat = async (options: {
       if (!chatSDK) return;
       if (document.visibilityState === lastVisibilityState) return;
 
-      const isActive = document.visibilityState === 'visible';
       lastVisibilityState = document.visibilityState;
-
-      chatSDK.sendWebSocketEvent(WebSocketEventType.TOGGLE_PRESENCE, {
-        isActive
-      });
+      reconnectChatOnResume();
+      syncPresenceForVisibility();
     });
     isVisibilityListenerAdded = true;
+  }
+
+  if (!isResumeListenersAdded) {
+    window.addEventListener('focus', () => {
+      reconnectChatOnResume();
+      if (!document.hidden) {
+        syncPresenceForVisibility();
+      }
+    });
+
+    window.addEventListener('online', () => {
+      reconnectChatOnResume();
+      if (!document.hidden) {
+        syncPresenceForVisibility();
+      }
+    });
+
+    isResumeListenersAdded = true;
   }
 
   isWebsocketConnecting.value = true;
@@ -483,7 +518,6 @@ export const markAsRead = async (dto: {
   messageIds: string[];
   topicId: string;
 }): Promise<void> => {
-  if (document.hidden) return;
   const sdk = getChatSDK();
   const { messageIds, topicId } = dto;
 
