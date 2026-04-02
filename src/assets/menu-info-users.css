@@ -24,7 +24,7 @@ button.button-yui-kit.secondary-yui-kit.large.button-menu__info {
   font-size: 14px;
 }
 
-@media screen and (width <= 480px) {
+@media screen and (width <= 768px) {
   button.button-yui-kit.secondary-yui-kit.large.button-menu__info {
     margin-top: 5px;
   }

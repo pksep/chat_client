@@ -51,7 +51,7 @@ h3.mobile__modal-header--title {
   padding: 10px;
 }
 
-@media (width <= 480px) {
+@media (width <= 768px) {
   .modal-yui-kit__modal-content {
     overflow: hidden;
     padding-right: 5px;
@@ -69,7 +69,7 @@ h3.mobile__modal-header--title {
   }
 }
 
-@media (width >= 480px) {
+@media (width >= 768px) {
   .modal-yui-kit__modal-content {
     width: 387px;
   }

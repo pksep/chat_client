@@ -110,7 +110,7 @@
 <script lang="ts" setup>
 import { computed, reactive } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
-import { MAX_W_XL } from '../utils/constants';
+import { MAX_W_MD } from '../utils/constants';
 import Line from './UI/Line.vue';
 import {
   Icon,
@@ -180,7 +180,7 @@ const authUser = computed(() => getAuthUser());
 const emits = defineEmits<IMenuEmits>();
 
 const { state: isCollapse, toggle } = useResizeState({
-  breakpoint: MAX_W_XL,
+  breakpoint: MAX_W_MD,
   storageKey: 'menu-collapse',
   onStateChange: val => {
     emits('unmount-collapse', val);

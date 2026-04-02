@@ -565,13 +565,13 @@ div.message-content__file {
   }
 }
 
-@media screen and (width >= 480px) {
+@media screen and (width >= 768px) {
   .message-content__media {
     max-width: 517px;
   }
 }
 
-@media screen and (width <= 480px) {
+@media screen and (width <= 768px) {
   div.message-content__html > p {
     max-width: 30ch;
   }
@@ -582,6 +582,9 @@ div.message-content__file {
   .message__no-author {
     margin-right: 0;
   }
+}
+
+@media screen and (width <= 480px) {
   .chat__input {
     padding: 0;
     & .editor-component {

@@ -44,7 +44,7 @@ button.button-yui-kit.mobile__list-button {
   background-color: transparent !important;
 }
 
-@media screen and (width <= 480px) {
+@media screen and (width <= 768px) {
   .mobile-list-container {
     --mobile-list-height: 53px;
   }

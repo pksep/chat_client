@@ -88,7 +88,7 @@
   position: relative;
 }
 
-@media (width <= 480px) {
+@media (width <= 768px) {
   .contact-list__description,
   .contact-list__description p,
   .contact-list__description strong {
@@ -102,19 +102,11 @@
   content: '';
   position: absolute;
   top: 0;
-  left: 20ch;
+  left: calc(100vw - 100px);
   width: 9ch;
   height: 100%;
   pointer-events: none;
   background: linear-gradient(to right, transparent 0%, var(--white) 100%);
-}
-
-@media (width <= 480px) {
-  .contact-list__description::after,
-  .contact-list__description p::after,
-  .contact-list__description strong::after {
-    left: calc(100vw - 100px);
-  }
 }
 
 .contact-list__description p {
@@ -309,7 +301,7 @@ svg.icon-yui-kit.contact-list__read-icon {
   color: var(--blue1);
 }
 
-@media (width <= 480px) {
+@media (width <= 768px) {
   .chat-container:has(.chat-list) {
     --header-height: 0;
   }

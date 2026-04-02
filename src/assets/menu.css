@@ -180,16 +180,9 @@ details.menu__user-details {
   }
 }
 
-@media screen and (width <= 480px) {
+@media screen and (width <= 768px) {
   .menu__user-assistant-title {
     font-weight: bold;
     font-size: 16px;
-  }
-}
-
-@media screen and (width <= 768px) {
-  .menu:not(.menu--collapse) {
-    width: var(--default-width);
-    z-index: 2;
   }
 }
