@@ -417,6 +417,23 @@ export class ChatSDK {
     this.ws.sendWebSocketEvent(type, payload);
   }
 
+  isConnected(): boolean {
+    return !!this.socket?.connected;
+  }
+
+  reconnectIfNeeded(): void {
+    if (!this.socket) {
+      return;
+    }
+
+    if (!this.socket.connected) {
+      console.info(
+        'Socket.IO: Forcing reconnect after resume/visibility change'
+      );
+      this.socket.connect();
+    }
+  }
+
   async getUsers(params?: SearchParams): Promise<PaginatedResponse<User>> {
     return this.user.getUsers(params);
   }
