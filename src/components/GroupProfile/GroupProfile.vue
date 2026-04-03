@@ -17,7 +17,9 @@
     >
       {{ props.topic.group?.title || 'Group' }}
     </h3>
+    <WaitConnection v-if="!!isWaitingConnection" />
     <span
+      v-else
       class="user-profile__ex"
       :data-testid="`${dataTestid}-UserProfile-Ex`"
     >
@@ -31,6 +33,9 @@
 import { Avatar } from '@pksep/yui';
 import { IGroupProfileProps } from '../interfaces/interfaces';
 import { getConfig } from '../../services/useConfig';
+import { getHasWebsocketConnection } from '../../services/useChat';
+import { computed } from 'vue';
+import WaitConnection from '../UI/WaitConnection.vue';
 
 const props = withDefaults(defineProps<IGroupProfileProps>(), {
   dataTestid: 'GroupProfile',
@@ -38,6 +43,7 @@ const props = withDefaults(defineProps<IGroupProfileProps>(), {
 });
 
 const config = getConfig();
+const isWaitingConnection = computed(() => !getHasWebsocketConnection());
 
 defineOptions({
   inheritAttrs: false

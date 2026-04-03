@@ -21,8 +21,8 @@
 </template>
 
 <script setup lang="ts">
-import { vOnClickOutside } from '@pksep/yui';
-import { computed, nextTick, ref, watch } from 'vue';
+import { vOnClickOutside } from '@vueuse/components';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
 const props = withDefaults(
   defineProps<{
@@ -41,6 +41,17 @@ const menuRef = ref<HTMLElement | null>(null);
 
 const flip = ref(false);
 const flipY = ref(false);
+
+const isOutsideEvent = (event: Event) => {
+  const menu = menuRef.value;
+  const target = event.target;
+
+  if (!menu || !(target instanceof Node)) {
+    return false;
+  }
+
+  return !menu.contains(target);
+};
 
 const position = computed(() => {
   if (!props.position) return {};
@@ -86,4 +97,42 @@ watch(
 );
 
 const closePopover = (event: Event) => emits('unmount-close', event);
+
+const closePopoverOnPointerStart = (event: Event) => {
+  if (!props.visible || !isOutsideEvent(event)) {
+    return;
+  }
+
+  closePopover(event);
+};
+
+watch(
+  () => props.visible,
+  visible => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    if (visible) {
+      document.addEventListener('mousedown', closePopoverOnPointerStart);
+      document.addEventListener('touchstart', closePopoverOnPointerStart, {
+        passive: true
+      });
+      return;
+    }
+
+    document.removeEventListener('mousedown', closePopoverOnPointerStart);
+    document.removeEventListener('touchstart', closePopoverOnPointerStart);
+  },
+  { immediate: true }
+);
+
+onBeforeUnmount(() => {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  document.removeEventListener('mousedown', closePopoverOnPointerStart);
+  document.removeEventListener('touchstart', closePopoverOnPointerStart);
+});
 </script>

@@ -349,7 +349,6 @@ div.message-content__html > p {
   object-fit: cover;
   display: block;
   border-radius: 8px;
-  transition: all 0.3s;
 }
 
 .message-content__media img:active,
@@ -460,7 +459,6 @@ div.message-content__file {
 }
 
 .message__bubble {
-  transition: all 0.3s;
   hyphens: auto;
   overflow-wrap: anywhere;
   justify-self: start;
@@ -565,13 +563,13 @@ div.message-content__file {
   }
 }
 
-@media screen and (width >= 480px) {
+@media screen and (width >= 768px) {
   .message-content__media {
     max-width: 517px;
   }
 }
 
-@media screen and (width <= 480px) {
+@media screen and (width <= 768px) {
   div.message-content__html > p {
     max-width: 30ch;
   }
@@ -582,6 +580,9 @@ div.message-content__file {
   .message__no-author {
     margin-right: 0;
   }
+}
+
+@media screen and (width <= 480px) {
   .chat__input {
     padding: 0;
     & .editor-component {
@@ -616,4 +617,9 @@ div.message-content__file {
   to {
     transform: rotate(360deg);
   }
+}
+
+.emoji-picker-bottom {
+  top: auto !important;
+  bottom: 50px !important;
 }

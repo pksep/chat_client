@@ -197,49 +197,6 @@ export function useMessageScroll(
     });
   };
 
-  const getScrollAnchor = () => {
-    const container = chatWrapperRef.value;
-    if (!container) return null;
-
-    const containerRect = container.getBoundingClientRect();
-    const messageElements = Array.from(
-      container.querySelectorAll('[data-message-id]')
-    );
-
-    for (const element of messageElements) {
-      if (!(element instanceof HTMLElement)) continue;
-
-      const rect = element.getBoundingClientRect();
-      const isVisible =
-        rect.bottom > containerRect.top && rect.top < containerRect.bottom;
-
-      if (isVisible) {
-        return {
-          messageId: element.getAttribute('data-message-id'),
-          topOffset: rect.top - containerRect.top
-        };
-      }
-    }
-
-    return null;
-  };
-
-  const restoreScrollAnchor = (anchor: {
-    messageId: string | null;
-    topOffset: number;
-  }) => {
-    if (!anchor.messageId) return;
-
-    nextTick(() => {
-      const container = chatWrapperRef.value;
-      if (!container) return;
-
-      const anchorElement = container.querySelector(
-        `[data-message-id="${anchor.messageId}"]`
-      );
-    });
-  };
-
   const handleScroll = async (): Promise<void> => {
     const el = chatWrapperRef.value;
     if (!el) return;
@@ -280,7 +237,6 @@ export function useMessageScroll(
 
       if (!getIsWebsocketConnecting()) {
         const lastMessageId = state.messages[0]?.id;
-        const scrollAnchor = getScrollAnchor();
         const result = await fetchMessagesForTopic(route.value.id, {
           lastMessageId,
           skipSave: true
@@ -289,10 +245,6 @@ export function useMessageScroll(
 
         if (result.length > 0) {
           mergeMessagesForTopic(route.value.id, result, 'prepend');
-
-          if (scrollAnchor) {
-            restoreScrollAnchor(scrollAnchor);
-          }
         }
       }
       isScrollLoading = false;

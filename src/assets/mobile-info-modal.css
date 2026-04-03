@@ -42,7 +42,7 @@ p.modal-info-mobile__end--paragraph {
   font-size: 14px;
 }
 
-@media screen and (width <= 480px) {
+@media screen and (width <= 768px) {
   dialog.modal-yui-kit.modal-yui-kit_bottom {
     display: grid;
   }

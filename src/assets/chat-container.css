@@ -23,6 +23,7 @@
 @import url('./pinned-messages.css');
 @import url('./call-modal.css');
 @import url('./authorization-screen.css');
+@import url('./wait-connection.css');
 
 .chat_container_alert {
   background-color: var(--error-dark-color);
@@ -51,7 +52,7 @@
   grid-template-rows: var(--header-height) 1fr;
   scroll-behavior: auto;
 
-  @media screen and (width > 480px) {
+  @media screen and (width > 768px) {
     &.chat-container--active-call {
       --header-height: 95px;
     }
@@ -149,7 +150,7 @@ button.primary-yui-kit.disabled-yui-kit {
   }
 }
 
-@media screen and (width <= 480px) {
+@media screen and (width <= 768px) {
   .chat__info {
     display: none;
   }
@@ -180,7 +181,7 @@ button.primary-yui-kit.disabled-yui-kit {
   }
 }
 
-@media screen and (width <= 480px) {
+@media screen and (width <= 768px) {
   .chat__header-wrapper .chat__header-main {
     padding-block: 9.5px;
     padding-inline: 16px;

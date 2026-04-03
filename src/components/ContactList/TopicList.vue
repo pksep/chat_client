@@ -185,18 +185,13 @@
         </Button>
       </ContextMenu>
     </li>
-    <Loader
-      v-if="props.isLoading"
-      message="Загрузка контактов..."
-      :dataTestid="`${props.dataTestid}-ContactList-Loading`"
-    />
   </ul>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useContextMenu } from '../../composables/useContextMenu';
-import { Avatar, Button, ButtonTypeEnum, SizesEnum, Loader } from '@pksep/yui';
+import { Avatar, Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
 import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
 import type { IContactListProps } from './interfaces/contact-list';
@@ -225,15 +220,13 @@ import { getUserLastOnline } from '../../composables/useUsers';
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
   selectedTopicIds?: Set<string | number>;
-  isLoading?: boolean;
 }
 
 const { togglePinTopic, toggleMuteTopic } = useTopics();
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   showCheckbox: false,
-  selectedTopicIds: () => new Set<string | number>(),
-  isLoading: false
+  selectedTopicIds: () => new Set<string | number>()
 });
 
 const emits = defineEmits<{

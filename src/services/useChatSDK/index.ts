@@ -34,6 +34,7 @@ import {
 } from '../../composables/useAuth';
 import { fetchMessagesForTopic } from '../useMessages';
 import { getConfig } from '../useConfig';
+import type { MediaPreviewDimensions } from '../../utils/mediaPreview';
 
 export interface ChatSDKOptions {
   apiUrl: string;
@@ -61,6 +62,7 @@ export class ChatSDK {
   private media: ChatMediaInterface;
   private ws: ChatWSInterface;
   private utils: ChatUtilsInterface;
+  private connectionStateListener?: (connected: boolean) => void;
 
   private reqi: Reqi;
 
@@ -79,6 +81,14 @@ export class ChatSDK {
     this.media = new ChatMedia(this.reqi);
     this.ws = new ChatWS(null);
     this.utils = new ChatUtils(this.reqi);
+  }
+
+  setConnectionStateListener(listener?: (connected: boolean) => void): void {
+    this.connectionStateListener = listener;
+  }
+
+  private emitConnectionState(connected: boolean): void {
+    this.connectionStateListener?.(connected);
   }
 
   private createReqiInstance(): Reqi {
@@ -117,6 +127,147 @@ export class ChatSDK {
     }
 
     return reqi;
+  }
+
+  private uploadFileToMinio(
+    uploadUrl: string,
+    file: File,
+    onProgress?: (percent: number) => void
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const fileLabel = `${file.name} (${file.size} bytes)`;
+
+      xhr.open('PUT', uploadUrl);
+
+      if (file.type) {
+        xhr.setRequestHeader('Content-Type', file.type);
+      }
+
+      xhr.upload.onprogress = event => {
+        if (!event.lengthComputable || event.total === 0) {
+          return;
+        }
+
+        const percent = Math.round((event.loaded / event.total) * 100);
+        console.log(`[MinIO Upload] ${fileLabel}: ${percent}%`);
+        onProgress?.(percent);
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          console.log(`[MinIO Upload] ${fileLabel}: 100%`);
+          onProgress?.(100);
+          resolve();
+          return;
+        }
+
+        reject(new Error(`Failed to upload media to storage: ${xhr.status}`));
+      };
+
+      xhr.onerror = () => {
+        reject(new Error('Failed to upload media to storage: network error'));
+      };
+
+      xhr.onabort = () => {
+        reject(new Error('Failed to upload media to storage: upload aborted'));
+      };
+
+      xhr.send(file);
+    });
+  }
+
+  private getImageDimensions(file: File): Promise<{
+    width?: number;
+    height?: number;
+  }> {
+    return new Promise(resolve => {
+      const image = new Image();
+      const objectUrl = URL.createObjectURL(file);
+
+      image.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve({
+          width: image.naturalWidth,
+          height: image.naturalHeight
+        });
+      };
+
+      image.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve({});
+      };
+
+      image.src = objectUrl;
+    });
+  }
+
+  private getVideoDimensions(file: File): Promise<{
+    width?: number;
+    height?: number;
+  }> {
+    return new Promise(resolve => {
+      const video = document.createElement('video');
+      const objectUrl = URL.createObjectURL(file);
+
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve({
+          width: video.videoWidth,
+          height: video.videoHeight
+        });
+      };
+
+      video.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve({});
+      };
+
+      video.src = objectUrl;
+    });
+  }
+
+  private async getFileDimensions(file: File): Promise<{
+    width?: number;
+    height?: number;
+  }> {
+    if (file.type.startsWith('image/')) {
+      return this.getImageDimensions(file);
+    }
+
+    if (file.type.startsWith('video/')) {
+      return this.getVideoDimensions(file);
+    }
+
+    return {};
+  }
+
+  private getPreviewDimensions(dimensions: {
+    width?: number;
+    height?: number;
+  }): {
+    previewWidth?: number;
+    previewHeight?: number;
+  } {
+    const PREVIEW_MAX_WIDTH = 265;
+    const PREVIEW_MAX_HEIGHT = 300;
+    const { width, height } = dimensions;
+
+    if (!width || !height) {
+      return {};
+    }
+
+    const scale = Math.min(
+      PREVIEW_MAX_WIDTH / width,
+      PREVIEW_MAX_HEIGHT / height,
+      1
+    );
+
+    return {
+      previewWidth: Math.round(width * scale),
+      previewHeight: Math.round(height * scale)
+    };
   }
 
   async connect(): Promise<void> {
@@ -181,6 +332,7 @@ export class ChatSDK {
 
         this.socket.on('connect', () => {
           authReconnectAttempted = false;
+          this.emitConnectionState(true);
           console.log('Socket.IO: Connected to chat server', {
             socketId: this.socket?.id,
             transport: this.socket?.io?.engine?.transport?.name,
@@ -215,9 +367,11 @@ export class ChatSDK {
             transport: this.socket?.io?.engine?.transport?.name,
             readyState: this.socket?.io?.engine?.readyState
           });
+          this.emitConnectionState(false);
         });
 
         this.socket.on('disconnect', reason => {
+          this.emitConnectionState(false);
           console.log('Socket.IO: Disconnected from chat server:', {
             reason,
             transport: this.socket?.io?.engine?.transport?.name,
@@ -226,6 +380,7 @@ export class ChatSDK {
         });
 
         this.socket.on('reconnect_attempt', attemptNumber => {
+          this.emitConnectionState(false);
           console.log(
             `Socket.IO: Attempting to reconnect (${attemptNumber})...`,
             {
@@ -236,6 +391,7 @@ export class ChatSDK {
         });
 
         this.socket.on('reconnect', attemptNumber => {
+          this.emitConnectionState(true);
           console.log(
             `Reconnected to chat server after ${attemptNumber} attempts`,
             {
@@ -248,6 +404,7 @@ export class ChatSDK {
         });
 
         this.socket.on('reconnect_error', error => {
+          this.emitConnectionState(false);
           console.error('Reconnection error:', error, {
             wsUrl: this.wsUrl,
             transport: this.socket?.io?.engine?.transport?.name,
@@ -256,10 +413,12 @@ export class ChatSDK {
         });
 
         this.socket.on('reconnect_failed', () => {
+          this.emitConnectionState(false);
           console.error('Reconnection failed after maximum attempts');
         });
 
         this.socket.io.on('error', error => {
+          this.emitConnectionState(false);
           console.error('Socket.IO manager error:', error, {
             wsUrl: this.wsUrl
           });
@@ -272,6 +431,7 @@ export class ChatSDK {
         });
 
         this.socket.io.engine.on('close', reason => {
+          this.emitConnectionState(false);
           console.warn('Socket.IO engine closed', {
             reason,
             transport: this.socket?.io?.engine?.transport?.name
@@ -381,6 +541,7 @@ export class ChatSDK {
 
   disconnect(): void {
     if (this.socket) {
+      this.emitConnectionState(false);
       this.socket.disconnect();
       this.socket = null;
     }
@@ -685,18 +846,58 @@ export class ChatSDK {
   }
 
   async uploadFile(
-    file: File
-  ): Promise<{ objectName: string; thumbnailObjectName: string }> {
-    const formData = new FormData();
-    formData.append('file', file);
+    file: File,
+    previewMeta?: MediaPreviewDimensions,
+    onProgress?: (percent: number) => void
+  ): Promise<{
+    objectName: string;
+    thumbnailObjectName: string | null;
+    ex?: {
+      width?: number;
+      height?: number;
+      previewWidth?: number;
+      previewHeight?: number;
+    };
+  }> {
+    const uploadTargetResponse = (await this.reqi.post<{
+      objectName: string;
+      uploadUrl: string;
+    }>(
+      '/media/upload-target',
+      {
+        originName: file.name,
+        size: file.size,
+        contentType: file.type || undefined
+      },
+      {
+        parsed: false
+      }
+    )) as any;
+    const uploadTarget = await uploadTargetResponse.json();
 
-    const response = (await this.reqi.post<Media>('/media/upload', formData, {
-      parsed: false
-    })) as any;
+    await this.uploadFileToMinio(uploadTarget.uploadUrl, file, onProgress);
+
+    const response = (await this.reqi.post<Media>(
+      '/media/upload',
+      {
+        objectName: uploadTarget.objectName,
+        originName: file.name,
+        size: file.size,
+        contentType: file.type || undefined,
+        width: previewMeta?.width,
+        height: previewMeta?.height,
+        previewWidth: previewMeta?.previewWidth,
+        previewHeight: previewMeta?.previewHeight
+      },
+      {
+        parsed: false
+      }
+    )) as any;
     const data = await response.json();
     return {
       objectName: data.objectName,
-      thumbnailObjectName: data.thumbnailObjectName
+      thumbnailObjectName: data.thumbnailObjectName,
+      ex: data.ex
     };
   }
 
