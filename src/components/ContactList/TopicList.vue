@@ -191,7 +191,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useContextMenu } from '../../composables/useContextMenu';
-import { Avatar, Button, ButtonTypeEnum, SizesEnum, Loader } from '@pksep/yui';
+import { Avatar, Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
 import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
 import type { IContactListProps } from './interfaces/contact-list';

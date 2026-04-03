@@ -197,33 +197,6 @@ export function useMessageScroll(
     });
   };
 
-  const getScrollAnchor = () => {
-    const container = chatWrapperRef.value;
-    if (!container) return null;
-
-    const containerRect = container.getBoundingClientRect();
-    const messageElements = Array.from(
-      container.querySelectorAll('[data-message-id]')
-    );
-
-    for (const element of messageElements) {
-      if (!(element instanceof HTMLElement)) continue;
-
-      const rect = element.getBoundingClientRect();
-      const isVisible =
-        rect.bottom > containerRect.top && rect.top < containerRect.bottom;
-
-      if (isVisible) {
-        return {
-          messageId: element.getAttribute('data-message-id'),
-          topOffset: rect.top - containerRect.top
-        };
-      }
-    }
-
-    return null;
-  };
-
   const handleScroll = async (): Promise<void> => {
     const el = chatWrapperRef.value;
     if (!el) return;

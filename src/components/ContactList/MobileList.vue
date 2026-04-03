@@ -75,8 +75,6 @@ import {
   ButtonTypeEnum,
   Icon,
   IconNameEnum,
-  Loader,
-  Modal,
   SizesEnum
 } from '@pksep/yui';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
@@ -106,7 +104,7 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
 const props = withDefaults(defineProps<IMobileListProps>(), {
   dataTestid: () => 'MobileList'
 });
-const { getTopicList, loading: loadingTopics } = useTopics();
+const { getTopicList } = useTopics();
 
 const contactList = computed(() => {
   const topics = getTopicList();
