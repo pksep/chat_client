@@ -3,10 +3,40 @@ import { getChatSDK } from '../services/useChat';
 import { getConfig } from '../services/useConfig';
 
 import type { IUser } from '../components/interfaces/interfaces';
+import {
+  loadCachedUsers,
+  saveCachedUsers
+} from '../services/useChatStateCache';
 
 const users = shallowRef<IUser[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
+let persistUsersTimeout: ReturnType<typeof setTimeout> | null = null;
+
+const schedulePersistUsers = () => {
+  if (persistUsersTimeout) {
+    clearTimeout(persistUsersTimeout);
+  }
+
+  persistUsersTimeout = setTimeout(() => {
+    persistUsersTimeout = null;
+    void saveCachedUsers(users.value || []);
+  }, 150);
+};
+
+export const hydrateUsersFromCache = async (): Promise<IUser[]> => {
+  if (users.value.length > 0) {
+    return [...users.value];
+  }
+
+  const cachedUsers = await loadCachedUsers();
+
+  if (cachedUsers.length > 0) {
+    users.value = [...cachedUsers];
+  }
+
+  return [...users.value];
+};
 
 export const fetchAllUsers = async (
   page = 1,
@@ -23,6 +53,7 @@ export const fetchAllUsers = async (
     });
 
     users.value = [...response.data];
+    schedulePersistUsers();
 
     return users.value;
   } catch (err) {
@@ -69,6 +100,7 @@ export const fetchUsersForAuth = async (
 
     const data = (await response.json()) as { data?: IUser[] };
     users.value = [...(data.data || [])];
+    schedulePersistUsers();
 
     return users.value;
   } catch (err) {
@@ -99,6 +131,7 @@ export const updateLocalUserStatus = (
       lastOnline
     };
     users.value = updatedUsers;
+    schedulePersistUsers();
   }
 };
 
@@ -113,6 +146,7 @@ export const updateLocalUserIsOnline = (userId: string): void => {
       lastOnline: updatedUsers[index].lastOnline
     };
     users.value = updatedUsers;
+    schedulePersistUsers();
   }
 };
 

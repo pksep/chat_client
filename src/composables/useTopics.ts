@@ -15,16 +15,100 @@ import {
 import { getMessagesByTopicId } from '../services/useMessages';
 import { useUrlWatcher } from './navigation';
 import { authedUser } from './useAuth';
+import {
+  loadCachedTopics,
+  saveCachedTopics
+} from '../services/useChatStateCache';
 
 const topics = ref<ITopic[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
+let persistTopicsTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const route = useUrlWatcher();
 
 export const useTopics = () => {
+  const getMessageTimestamp = (
+    message?: Pick<Message, 'createdAt' | 'updatedAt'> | null
+  ): number => {
+    if (!message) {
+      return 0;
+    }
+
+    const value = message.updatedAt || message.createdAt;
+
+    if (!value) {
+      return 0;
+    }
+
+    return new Date(value).getTime();
+  };
+
+  const resolveLatestMessage = (topic: ITopic) => {
+    const localLastMessage = getMessagesByTopicId(topic.id).at(-1);
+    const serverLastMessage = topic.lastMessage;
+
+    if (!localLastMessage) {
+      return serverLastMessage;
+    }
+
+    if (!serverLastMessage) {
+      return localLastMessage;
+    }
+
+    return getMessageTimestamp(localLastMessage) >=
+      getMessageTimestamp(serverLastMessage)
+      ? localLastMessage
+      : serverLastMessage;
+  };
+
+  const normalizeTopic = (topic: ITopic): ITopic => {
+    const normalizedTopic = { ...topic };
+    normalizedTopic.lastMessage = resolveLatestMessage(normalizedTopic);
+
+    if (normalizedTopic.type === TopicType.DM && normalizedTopic.members) {
+      normalizedTopic.user = normalizedTopic.members.find(
+        user => user.id !== authedUser.value?.id
+      );
+      normalizedTopic.avatarUrl =
+        normalizedTopic.avatarUrl || normalizedTopic.user?.avatarUrl;
+      normalizedTopic.name = normalizedTopic.name || normalizedTopic.user?.initials;
+    }
+
+    return normalizedTopic;
+  };
+
+  const normalizeTopics = (items: ITopic[]): ITopic[] =>
+    items.map(topic => normalizeTopic(topic));
+
+  const schedulePersistTopics = () => {
+    if (persistTopicsTimeout) {
+      clearTimeout(persistTopicsTimeout);
+    }
+
+    persistTopicsTimeout = setTimeout(() => {
+      persistTopicsTimeout = null;
+      void saveCachedTopics(topics.value || []);
+    }, 150);
+  };
+
   const setTopics = (newTopics: ITopic[]) => {
-    topics.value = [...newTopics];
+    topics.value = normalizeTopics(newTopics);
+    schedulePersistTopics();
+  };
+
+  const hydrateTopicsFromCache = async (): Promise<ITopic[]> => {
+    if (topics.value.length > 0) {
+      return topics.value;
+    }
+
+    const cachedTopics = await loadCachedTopics();
+
+    if (cachedTopics.length > 0) {
+      topics.value = normalizeTopics(cachedTopics);
+    }
+
+    return topics.value;
   };
 
   const fetchAllTopics = async (): Promise<ITopic[]> => {
@@ -54,7 +138,8 @@ export const useTopics = () => {
       const sdk = getChatSDK();
       const newTopic = await sdk.createTopic({ peerId });
 
-      topics.value = [newTopic, ...topics.value];
+      topics.value = [normalizeTopic(newTopic as ITopic), ...topics.value];
+      schedulePersistTopics();
     } catch (err) {
       error.value = (err as Error).message;
       console.error('Failed to fetch topics:', error.value);
@@ -89,6 +174,7 @@ export const useTopics = () => {
     }
 
     topics.value = [...topics.value];
+    schedulePersistTopics();
   };
 
   const updateLocalTopicReadStatus = (
@@ -107,6 +193,7 @@ export const useTopics = () => {
     }
 
     topics.value = [...topics.value];
+    schedulePersistTopics();
   };
 
   const changeUnreadMessageCount = (delta: number, topicId: string) => {
@@ -124,6 +211,7 @@ export const useTopics = () => {
       topic.unreadMessageCount = Math.max(0, topic.unreadMessageCount);
     }
     topics.value = [...topics.value];
+    schedulePersistTopics();
   };
 
   const setTopicTaggedMe = (topicId: string, taggedMe: boolean): void => {
@@ -133,6 +221,7 @@ export const useTopics = () => {
     }
 
     topics.value = [...topics.value];
+    schedulePersistTopics();
   };
 
   const updateLocalTopicInfo = (
@@ -145,6 +234,7 @@ export const useTopics = () => {
     }
 
     topics.value = [...topics.value];
+    schedulePersistTopics();
   };
 
   const togglePinTopic = async (topic: ITopic) => {
@@ -177,20 +267,14 @@ export const useTopics = () => {
   };
 
   const addTopicList = (value: ITopic): void => {
-    if (value.type === TopicType.DM) {
-      value.user = value.members.find(user => user.id !== authedUser.value.id);
-      value.avatarUrl = value.user?.avatarUrl;
-      value.name = value.user?.initials;
-
-      delete value.members;
-    }
-
-    topics.value = [value, ...topics.value];
+    topics.value = [normalizeTopic(value), ...topics.value];
+    schedulePersistTopics();
   };
 
   const deleteTopicFromList = (topicId: string): void => {
     topics.value = [...topics.value.filter(t => t.id !== topicId)];
     groups.value = [...groups.value.filter(t => t.id !== topicId)];
+    schedulePersistTopics();
   };
 
   const sortTopics = (topics: ITopic[]): ITopic[] => {
@@ -257,6 +341,7 @@ export const useTopics = () => {
     error,
     totalUnreadCount,
     setTopics,
+    hydrateTopicsFromCache,
     fetchAllTopics,
     createTopic,
     updateLocalLastMessageTopic,
@@ -278,6 +363,7 @@ export const useTopics = () => {
 
 const {
   setTopics,
+  hydrateTopicsFromCache,
   changeUnreadMessageCount,
   toggleMuteTopic,
   togglePinTopic,
@@ -299,6 +385,7 @@ const {
 export {
   topics,
   setTopics,
+  hydrateTopicsFromCache,
   fetchAllTopics,
   createTopic,
   updateLocalLastMessageTopic,

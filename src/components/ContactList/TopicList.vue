@@ -185,11 +185,6 @@
         </Button>
       </ContextMenu>
     </li>
-    <Loader
-      v-if="props.isLoading"
-      message="Загрузка контактов..."
-      :dataTestid="`${props.dataTestid}-ContactList-Loading`"
-    />
   </ul>
 </template>
 
@@ -225,15 +220,13 @@ import { getUserLastOnline } from '../../composables/useUsers';
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
   selectedTopicIds?: Set<string | number>;
-  isLoading?: boolean;
 }
 
 const { togglePinTopic, toggleMuteTopic } = useTopics();
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   showCheckbox: false,
-  selectedTopicIds: () => new Set<string | number>(),
-  isLoading: false
+  selectedTopicIds: () => new Set<string | number>()
 });
 
 const emits = defineEmits<{

@@ -4,17 +4,6 @@
     role="main"
     :data-testid="`${props.dataTestid}-MobileList-Container`"
   >
-    <template v-if="state.isLoading">
-      <Modal
-        :open="state.isLoading"
-        position="center"
-        width="150px"
-        height="160px"
-      >
-        <Loader :dataTestid="`${props.dataTestid}-ChatContainer-Loading`" />
-      </Modal>
-    </template>
-
     <section
       class="chat-list"
       role="region"
@@ -30,7 +19,7 @@
     <Button
       :type="ButtonTypeEnum.primary"
       @click="evt => openActivePopover('plusMenu', evt as MouseEvent)"
-      :disabled="isAssistantRoute || state.isLoading"
+      :disabled="isAssistantRoute"
       class="mobile__list-button"
     >
       <Icon :name="IconNameEnum.plus" />
@@ -126,8 +115,7 @@ const contactList = computed(() => {
 
 const state = reactive({
   showAddAccount: false,
-  checkUsers: new Set<string | number>(),
-  isLoading: computed(() => loadingTopics.value)
+  checkUsers: new Set<string | number>()
 });
 
 const emits = defineEmits<IMobileListEmits>();

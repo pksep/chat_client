@@ -620,3 +620,8 @@ div.message-content__file {
     transform: rotate(360deg);
   }
 }
+
+.emoji-picker-bottom {
+  top: auto !important;
+  bottom: 50px !important;
+}

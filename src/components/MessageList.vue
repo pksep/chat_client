@@ -123,7 +123,8 @@ import {
   fetchAroundMessage,
   fetchMessagesForTopic,
   fetchPinnedMessagesForTopic,
-  getMessagesByTopicId
+  getMessagesByTopicId,
+  hydrateMessagesFromCache
 } from '../services/useMessages';
 import { getAuthUser } from '../composables/useAuth';
 import { IMessage } from './interfaces/interfaces';
@@ -284,8 +285,9 @@ watch(
   async () => {
     if (!route.value?.id) return;
 
+    await hydrateMessagesFromCache(route.value.id);
     await fetchPinnedMessagesForTopic(route.value.id);
-    fetchMessagesForTopic(route.value.id);
+    await fetchMessagesForTopic(route.value.id);
 
     resetScrollState();
 

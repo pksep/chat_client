@@ -25,9 +25,13 @@ import {
   useAuth
 } from './composables/useAuth';
 import { setAuthToken } from './composables/useLogin';
-import { fetchAllUsers, getUserById } from './composables/useUsers';
+import {
+  fetchAllUsers,
+  getUserById,
+  hydrateUsersFromCache
+} from './composables/useUsers';
 import { getConfig } from './services/useConfig';
-import { useTopics } from './composables/useTopics';
+import { hydrateTopicsFromCache, useTopics } from './composables/useTopics';
 import { getGroupById } from './composables/useGroup';
 import { useUrlWatcher } from './composables/navigation';
 import {
@@ -38,6 +42,7 @@ import { initPushNotifications } from './services/usePushNotifications';
 import { useResizeState } from './composables/useResizeState';
 import { MAX_W_MD } from './utils/constants';
 import { RouteTypes } from './composables/navigation/useUrlRouting';
+import { hydrateMessagesFromCache } from './services/useMessages';
 
 const props = defineProps<IChatContainerProps>();
 
@@ -130,15 +135,21 @@ const runAppInitialization = async () => {
     );
     clearBootstrapErpSession();
 
+    setCurrentUserId(authUserId || undefined);
+    if (authData.user) setAuthUser(authData.user);
+
+    await Promise.all([hydrateUsersFromCache(), hydrateTopicsFromCache()]);
+
+    if (route.value.id) {
+      await hydrateMessagesFromCache(route.value.id);
+    }
+
     await initializeChat({
       token: authData.token,
       apiUrl: config.CHAT_API_DOMAIN,
       wsUrl: config.CHAT_WS_DOMAIN,
       userId: authUserId || undefined
     });
-
-    setCurrentUserId(authUserId || undefined);
-    if (authData.user) setAuthUser(authData.user);
 
     await Promise.all([fetchAuthUser(), fetchAllUsers()]);
 

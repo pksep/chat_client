@@ -10,11 +10,35 @@ import {
 import { isTopicMuted } from '../composables/useTopics';
 import { useUrlWatcher } from '../composables/navigation';
 import { authedUser } from '../composables/useAuth';
+import {
+  loadCachedTopicMessages,
+  saveCachedTopicMessages
+} from './useTopicMessagesCache';
 
 const messagesStore = ref<Record<string, IMessage[]>>({});
 const pinnedMessagesStore = ref<Record<string, IMessage[]>>({});
+const persistTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
 const route = useUrlWatcher();
+
+const schedulePersistMessages = (topicId: string): void => {
+  if (!topicId) {
+    return;
+  }
+
+  const existingTimeout = persistTimeouts.get(topicId);
+
+  if (existingTimeout) {
+    clearTimeout(existingTimeout);
+  }
+
+  const timeoutId = setTimeout(() => {
+    persistTimeouts.delete(topicId);
+    void saveCachedTopicMessages(topicId, messagesStore.value[topicId] || []);
+  }, 150);
+
+  persistTimeouts.set(topicId, timeoutId);
+};
 
 export const fetchMessagesForTopic = async (
   topicId: string = route.value.id,
@@ -112,6 +136,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
 
   if (!clientId) {
     messagesStore.value[topicId] = [...existingMessages, message];
+    schedulePersistMessages(topicId);
     return;
   }
 
@@ -126,6 +151,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
       m.thumbnailPath = message.media[i].thumbnailPath;
     });
     existingMessages[existingMessages.length - 1] = { ...message, media };
+    schedulePersistMessages(topicId);
 
     return;
   }
@@ -133,6 +159,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   const filtered = existingMessages.filter(m => m.id !== clientId);
 
   messagesStore.value[topicId] = [...filtered, message];
+  schedulePersistMessages(topicId);
 };
 
 export const deleteMessageFromLocal = (
@@ -146,6 +173,7 @@ export const deleteMessageFromLocal = (
   messagesStore.value[topicId] = existingMessages.filter(
     message => message.id !== messageId
   );
+  schedulePersistMessages(topicId);
 
   if (
     deletedMessage.senderUser?.id !== authedUser.value?.id &&
@@ -181,6 +209,7 @@ export const editMessageFromLocal = (
     }
     return msg;
   });
+  schedulePersistMessages(topicId);
 };
 
 export const changeReactionFromLocal = (
@@ -212,6 +241,7 @@ export const changeReactionFromLocal = (
 
     return msg;
   });
+  schedulePersistMessages(topicId);
 };
 
 export const saveMessagesToLocal = (
@@ -219,6 +249,7 @@ export const saveMessagesToLocal = (
   messages: IMessage[]
 ): void => {
   messagesStore.value[topicId] = messages;
+  schedulePersistMessages(topicId);
 
   const isTagged = messages.some(
     m =>
@@ -233,6 +264,26 @@ export const saveMessagesToLocal = (
 
 export const getMessagesByTopicId = (topicId: string): IMessage[] => {
   return messagesStore.value[topicId] || [];
+};
+
+export const hydrateMessagesFromCache = async (
+  topicId: string
+): Promise<IMessage[]> => {
+  if (!topicId) {
+    return [];
+  }
+
+  if ((messagesStore.value[topicId] || []).length > 0) {
+    return messagesStore.value[topicId];
+  }
+
+  const cachedMessages = await loadCachedTopicMessages(topicId);
+
+  if (cachedMessages.length > 0) {
+    saveMessagesToLocal(topicId, cachedMessages);
+  }
+
+  return cachedMessages;
 };
 
 export const mergeMessagesForTopic = (
@@ -294,6 +345,7 @@ export const changeLocalReadStatus = (
 
   updateLocalTopicReadStatus(topicId, messageIds);
   messagesStore.value[topicId] = updatedMessages;
+  schedulePersistMessages(topicId);
 
   if (userId === authedUser.value.id) {
     changeUnreadMessageCount(-messageIds.length, topicId);
@@ -321,6 +373,7 @@ export const changeFileLoadingStatus = (
   const message = existingMessages.find(message => message.id === messageId);
   const media = message.media?.find(media => media.id === fileId);
   media.isLoading = false;
+  schedulePersistMessages(topicId);
 };
 
 export const deleteFileAfterLoading = (
@@ -331,6 +384,7 @@ export const deleteFileAfterLoading = (
   const existingMessages = messagesStore.value[topicId] || [];
   const message = existingMessages.find(message => message.id === messageId);
   message.media = message.media.filter(media => media.id !== fileId);
+  schedulePersistMessages(topicId);
 };
 
 export const playNotificationSound = (topicId?: string): void => {
