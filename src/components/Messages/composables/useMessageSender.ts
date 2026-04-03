@@ -84,6 +84,10 @@ export function useMessageSender(
 
   const handleSend = async (taggedUserIds?: string[]): Promise<void> => {
     const rawText = inputText.value;
+    const topicId = route.value.id;
+    const routeType = route.value?.type;
+    const replyMessageId = state.replyMessage?.id;
+    const forwardMessageId = state.forwardMessage?.id;
 
     if (
       (!rawText.trim() || rawText.trim() === '<p></p>') &&
@@ -96,7 +100,7 @@ export function useMessageSender(
     if (state.editMessage) {
       await sendMessageChat({
         messageId: state.editMessage.id,
-        topicId: route.value.id,
+        topicId,
         text: rawText
       });
       state.editMessage = null;
@@ -106,7 +110,7 @@ export function useMessageSender(
     const parts = splitHtmlByLength(rawText);
 
     /* ================= AI ROUTE ================= */
-    if (route.value?.type === RouteTypes.AI) {
+    if (routeType === RouteTypes.AI) {
       for (const part of parts) {
         const userMessage = {
           role: 'user' as 'user' | 'assistant',
@@ -145,7 +149,7 @@ export function useMessageSender(
     }
 
     /* ================= NORMAL CHAT ================= */
-    if (!route.value?.id) {
+    if (!topicId) {
       console.error('[ChatSDK] Cannot send message: no topic provided');
       return;
     }
@@ -153,18 +157,18 @@ export function useMessageSender(
     try {
       if (parts.length === 0 && !!state.forwardMessage) {
         await sendMessageChat({
-          topicId: route.value.id,
+          topicId,
           text: '',
-          replyMessageId: state.replyMessage?.id,
-          forwardMessageId: state.forwardMessage?.id
+          replyMessageId,
+          forwardMessageId
         });
       }
       for (const part of parts) {
         await sendMessageChat({
-          topicId: route.value.id,
+          topicId,
           text: part,
-          replyMessageId: state.replyMessage?.id,
-          forwardMessageId: state.forwardMessage?.id,
+          replyMessageId,
+          forwardMessageId,
           taggedUserIds
         });
       }
@@ -181,6 +185,16 @@ export function useMessageSender(
 
   const handleAttachFileChunk = async (files: FileList, isMedia = false) => {
     if (!files.length) return;
+    const topicId = route.value.id;
+    const replyMessage = state.replyMessage;
+    const replyMessageId = state.replyMessage?.id;
+    const forwardMessageId = state.forwardMessage?.id;
+
+    if (!topicId) {
+      console.error('[ChatSDK] Cannot attach file: no topic provided');
+      return;
+    }
+
     const clientId = generateUUID();
 
     const localMedia: IMedia[] = await Promise.all(
@@ -227,10 +241,10 @@ export function useMessageSender(
       isPin: false,
       isSystem: false,
       replyMessageId: null,
-      replyMessage: state.replyMessage,
+      replyMessage,
       senderUserId: authUser.value.id,
       text: null,
-      topicId: route.value.id,
+      topicId,
       media: localMedia
     };
 
@@ -278,12 +292,12 @@ export function useMessageSender(
 
     try {
       await sendMessageChat({
-        topicId: route.value.id,
+        topicId,
         text: '',
         medias,
         ex: JSON.stringify({ clientId }),
-        replyMessageId: state.replyMessage?.id,
-        forwardMessageId: state.forwardMessage?.id
+        replyMessageId,
+        forwardMessageId
       });
 
       await nextTick();

@@ -224,6 +224,23 @@ export const useTopics = () => {
     schedulePersistTopics();
   };
 
+  const resetTopicUnreadState = (topicId: string): void => {
+    const groups = getGroupList();
+    const topic = [...topics.value, ...groups].find(
+      topic => topic.id === topicId
+    );
+
+    if (!topic) {
+      return;
+    }
+
+    topic.unreadMessageCount = 0;
+    topic.taggedMe = false;
+
+    topics.value = [...topics.value];
+    schedulePersistTopics();
+  };
+
   const updateLocalTopicInfo = (
     topicId: string,
     info: Partial<TopicSetting>
@@ -357,7 +374,8 @@ export const useTopics = () => {
     isTopicMuted,
     deleteTopic,
     deleteTopicFromList,
-    setTopicTaggedMe
+    setTopicTaggedMe,
+    resetTopicUnreadState
   };
 };
 
@@ -379,6 +397,7 @@ const {
   deleteTopic,
   deleteTopicFromList,
   setTopicTaggedMe,
+  resetTopicUnreadState,
   totalUnreadCount
 } = useTopics();
 
@@ -401,5 +420,6 @@ export {
   deleteTopic,
   deleteTopicFromList,
   setTopicTaggedMe,
+  resetTopicUnreadState,
   totalUnreadCount
 };
