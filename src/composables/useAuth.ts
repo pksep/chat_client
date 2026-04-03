@@ -188,6 +188,12 @@ export const clearErpAuthSession = (): void => {
   sessionStorage.removeItem(ERP_BOOTSTRAP_TOKEN_KEY);
 };
 
+export const redirectToAuthorization = (): void => {
+  clearErpAuthSession();
+  authedUser.value = null;
+  window.location.replace(window.location.origin);
+};
+
 const getAuthErrorStatus = (error: unknown): number | null => {
   if (typeof error !== 'object' || !error) {
     return null;
@@ -236,7 +242,15 @@ export const tryRefreshErpSession = async (): Promise<AuthResponse | null> => {
 export const withErpRefreshOnAuthError = async <T>(
   operation: () => Promise<T>
 ): Promise<T> => {
-  return operation();
+  try {
+    return await operation();
+  } catch (error) {
+    if (isAuthError(error)) {
+      redirectToAuthorization();
+    }
+
+    throw error;
+  }
 };
 
 export const fetchAuthUser = async (): Promise<User | null> => {
