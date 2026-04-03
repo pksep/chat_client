@@ -109,7 +109,9 @@ export const getVideoDimensions = (file: File): Promise<MediaDimensions> => {
   });
 };
 
-export const getFileDimensions = async (file: File): Promise<MediaDimensions> => {
+export const getFileDimensions = async (
+  file: File
+): Promise<MediaDimensions> => {
   if (file.type.startsWith('image/')) {
     return getImageDimensions(file);
   }

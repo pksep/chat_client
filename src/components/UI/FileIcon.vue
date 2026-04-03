@@ -28,7 +28,13 @@
     xmlns="http://www.w3.org/2000/svg"
   >
     <rect x="4" y="4" width="40" height="40" rx="20" fill="white" />
-    <circle cx="24" cy="24" r="10" :stroke="props.backgroundColor" stroke-width="2.5" />
+    <circle
+      cx="24"
+      cy="24"
+      r="10"
+      :stroke="props.backgroundColor"
+      stroke-width="2.5"
+    />
     <circle
       cx="24"
       cy="24"

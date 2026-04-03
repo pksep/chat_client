@@ -83,9 +83,7 @@ export class ChatSDK {
     this.utils = new ChatUtils(this.reqi);
   }
 
-  setConnectionStateListener(
-    listener?: (connected: boolean) => void
-  ): void {
+  setConnectionStateListener(listener?: (connected: boolean) => void): void {
     this.connectionStateListener = listener;
   }
 
@@ -164,9 +162,7 @@ export class ChatSDK {
           return;
         }
 
-        reject(
-          new Error(`Failed to upload media to storage: ${xhr.status}`)
-        );
+        reject(new Error(`Failed to upload media to storage: ${xhr.status}`));
       };
 
       xhr.onerror = () => {

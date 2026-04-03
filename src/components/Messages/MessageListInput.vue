@@ -3,7 +3,11 @@
     class="chat__input"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
   >
-    <div class="chat__input__users" v-if="state.tagedUserModal && users.length">
+    <div
+      ref="mentionUsersRef"
+      class="chat__input__users"
+      v-if="state.tagedUserModal && users.length"
+    >
       <template v-for="(user, index) in users" :key="user.id">
         <UserProfile
           class="chat__input__users__item"
@@ -111,7 +115,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive, useTemplateRef } from 'vue';
+import { computed, nextTick, reactive, useTemplateRef, watch } from 'vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -155,6 +159,7 @@ const internalInputText = computed({
 });
 
 const route = useUrlWatcher();
+const mentionUsersRef = useTemplateRef<HTMLDivElement>('mentionUsersRef');
 
 const state = reactive({
   tagedUsers: [],
@@ -231,6 +236,40 @@ const handleMentionNav = (e: KeyboardEvent) => {
   }
 };
 
+const scrollActiveMentionIntoView = () => {
+  nextTick(() => {
+    const container = mentionUsersRef.value;
+
+    if (!container) {
+      return;
+    }
+
+    const activeItem = container.querySelector(
+      '.chat__input__users__item--active'
+    );
+
+    if (!(activeItem instanceof HTMLElement)) {
+      return;
+    }
+
+    const OFFSET = 50;
+    const itemTop = activeItem.offsetTop;
+    const itemBottom = itemTop + activeItem.offsetHeight;
+    const visibleTop = container.scrollTop;
+    const visibleBottom = visibleTop + container.clientHeight;
+
+    if (itemTop - OFFSET < visibleTop) {
+      container.scrollTop = Math.max(itemTop - OFFSET, 0);
+      return;
+    }
+
+    if (itemBottom + OFFSET > visibleBottom) {
+      container.scrollTop =
+        itemBottom - container.clientHeight + OFFSET;
+    }
+  });
+};
+
 const users = computed(() => {
   const allMembers =
     route.value.type === RouteTypes.GROUP
@@ -257,6 +296,28 @@ const users = computed(() => {
 
 const contentEditorRef =
   useTemplateRef<typeof ContentEditor>('contentEditorRef');
+
+watch(
+  () => state.selectedIndex,
+  () => {
+    if (!state.tagedUserModal) {
+      return;
+    }
+
+    scrollActiveMentionIntoView();
+  }
+);
+
+watch(
+  () => users.value.length,
+  () => {
+    if (!state.tagedUserModal) {
+      return;
+    }
+
+    scrollActiveMentionIntoView();
+  }
+);
 
 defineExpose({
   focus: () => contentEditorRef.value?.focus(),

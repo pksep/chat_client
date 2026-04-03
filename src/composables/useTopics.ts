@@ -72,7 +72,8 @@ export const useTopics = () => {
       );
       normalizedTopic.avatarUrl =
         normalizedTopic.avatarUrl || normalizedTopic.user?.avatarUrl;
-      normalizedTopic.name = normalizedTopic.name || normalizedTopic.user?.initials;
+      normalizedTopic.name =
+        normalizedTopic.name || normalizedTopic.user?.initials;
     }
 
     return normalizedTopic;
