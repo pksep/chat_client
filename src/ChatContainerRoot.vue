@@ -115,7 +115,6 @@ const runAppInitialization = async () => {
   const config = getConfig();
   const persistSession = !!tokenUrl || isStoredChatSessionPersistent();
   const shouldUseBootstrapToken = !!bootstrapErpToken;
-  const hasStoredRefreshToken = !!directAuthSession?.refreshToken;
   const initialUserId =
     directAuthSession?.user?.id || getStoredSessionUserId() || '';
 
@@ -133,29 +132,13 @@ const runAppInitialization = async () => {
 
   try {
     const authData = shouldUseBootstrapToken
-      ? await useAuth(bootstrapErpToken).catch(async error => {
-          const refreshedAuth = await tryRefreshErpSession();
-
-          if (!refreshedAuth?.token) {
-            throw error;
+      ? await useAuth(bootstrapErpToken)
+      : directAuthSession?.token || storedChatToken
+        ? {
+            token: directAuthSession?.token || storedChatToken || '',
+            user: directAuthSession?.user
           }
-
-          return refreshedAuth;
-        })
-      : hasStoredRefreshToken
-        ? (await tryRefreshErpSession()) ??
-          (directAuthSession?.token || storedChatToken
-            ? {
-                token: directAuthSession?.token || storedChatToken || '',
-                user: directAuthSession?.user
-              }
-            : null)
-        : directAuthSession?.token || storedChatToken
-          ? {
-              token: directAuthSession?.token || storedChatToken || '',
-              user: directAuthSession?.user
-            }
-          : await tryRefreshErpSession();
+        : await tryRefreshErpSession();
     if (!authData?.token) {
       throw new Error('Chat token is missing from auth response');
     }
@@ -174,7 +157,6 @@ const runAppInitialization = async () => {
     saveChatAuthSession(
       {
         token: authData.token,
-        refreshToken: authData.refreshToken ?? directAuthSession?.refreshToken,
         user: authData.user
       },
       persistSession
