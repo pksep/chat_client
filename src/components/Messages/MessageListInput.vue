@@ -264,8 +264,7 @@ const scrollActiveMentionIntoView = () => {
     }
 
     if (itemBottom + OFFSET > visibleBottom) {
-      container.scrollTop =
-        itemBottom - container.clientHeight + OFFSET;
+      container.scrollTop = itemBottom - container.clientHeight + OFFSET;
     }
   });
 };
