@@ -29,6 +29,7 @@ import { fetchAllTopics } from '../../composables/useTopics';
 import { getAuthToken } from '../../composables/useLogin';
 import {
   isAuthError,
+  redirectToAuthorization,
   tryRefreshErpSession,
   withErpRefreshOnAuthError
 } from '../../composables/useAuth';
@@ -358,6 +359,7 @@ export class ChatSDK {
               return;
             }
 
+            redirectToAuthorization();
             rejectOnce(error);
             return;
           }
