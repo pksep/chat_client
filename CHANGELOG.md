@@ -1,3 +1,98 @@
+# [1.23.0](https://github.com/pksep/chat_client/compare/v1.22.0...v1.23.0) (2026-04-02)
+
+
+### Features
+
+* new release ([b003339](https://github.com/pksep/chat_client/commit/b00333953628c9a8de495f5b47a848d4515f8dc1))
+* new release ([44a036a](https://github.com/pksep/chat_client/commit/44a036addaebc0c287d178b7940c4439dd7fc275))
+
+# [1.22.0](https://github.com/pksep/chat_client/compare/v1.21.0...v1.22.0) (2026-04-02)
+
+
+### Bug Fixes
+
+* Containerfile ([49ccd5c](https://github.com/pksep/chat_client/commit/49ccd5c6591faa19a6b0372bcfbc40ce1234680e))
+* lint ([6b6d441](https://github.com/pksep/chat_client/commit/6b6d4418d15ad07a314f97aa5071d35411d22cbe))
+* lint ([adbab5a](https://github.com/pksep/chat_client/commit/adbab5ad39d41dd3beee8ccee255aaf4146dbce3))
+* read messages in mozilia ([6a14cb1](https://github.com/pksep/chat_client/commit/6a14cb17b5f57762ff28fbe03f87b1a110283e7e))
+* scrolling ([d3ad1a5](https://github.com/pksep/chat_client/commit/d3ad1a557ecde830b728cf18f7ed54cf8a7d8b16))
+
+
+### Features
+
+* add nginx.conf ([4147b89](https://github.com/pksep/chat_client/commit/4147b895a88c14c1630ba38bf7f1e11d9ac744df))
+
+# [1.21.0](https://github.com/pksep/chat_client/compare/v1.20.1...v1.21.0) (2026-04-01)
+
+
+### Features
+
+* update sep-yui ([2409779](https://github.com/pksep/chat_client/commit/2409779aa870a42e279b1c8738e6f87ca2fb536e))
+
+## [1.20.1](https://github.com/pksep/chat_client/compare/v1.20.0...v1.20.1) (2026-04-01)
+
+
+### Bug Fixes
+
+* links when paste in input without focus ([62fee9e](https://github.com/pksep/chat_client/commit/62fee9e0ba6acbbec8cd62d0d0637aae7d33f183))
+* socket connection ([eaf7226](https://github.com/pksep/chat_client/commit/eaf7226142566737e475d437cdf3c6b626409846))
+
+# [1.20.0](https://github.com/pksep/chat_client/compare/v1.19.2...v1.20.0) (2026-04-01)
+
+
+### Bug Fixes
+
+* call ([2497d39](https://github.com/pksep/chat_client/commit/2497d39391f2343a8dab4cdcbac286c3ab387aa4))
+* call styles ([cc541f1](https://github.com/pksep/chat_client/commit/cc541f1fc0bfb698520af8e9e6e76388d32614db))
+* call styles ([ff408a3](https://github.com/pksep/chat_client/commit/ff408a3fa9101f827a2ab2af2f2cfc6dd9db4910))
+* call-modal__remote-video object fit ([0da5fee](https://github.com/pksep/chat_client/commit/0da5fee3a05639f29f6eb5830928e53999c24fca))
+* clearChatAuthSession after error ([90b2070](https://github.com/pksep/chat_client/commit/90b207082fa6412f7fbe56ad8f973f0c3cf0b671))
+* download file ([927bef2](https://github.com/pksep/chat_client/commit/927bef2e1f7684ed65efb839c1b7b11de45a84e1))
+* download file name ([9eac655](https://github.com/pksep/chat_client/commit/9eac655125a2f78ac97ebdf8047fcc15120133bf))
+* env example ([6f1129c](https://github.com/pksep/chat_client/commit/6f1129c09c42f26a2281895935b01726595c7c76))
+* forward message ([d0c8e23](https://github.com/pksep/chat_client/commit/d0c8e23a0865f7b871e986b38094f8b8c4867de7))
+* group call styles ([ae8f34d](https://github.com/pksep/chat_client/commit/ae8f34dc69588f8c2acbaa6cbd9b4f9a593f1470))
+* info styles ([56a0fed](https://github.com/pksep/chat_client/commit/56a0fedd83cb14401d932e678ea07c7a3fa9e448))
+* input focus and style call ([2173815](https://github.com/pksep/chat_client/commit/2173815bf9fb200398f446ca8bc687c844027418))
+* lint ([b9f70ca](https://github.com/pksep/chat_client/commit/b9f70ca7944ea7f32c066ea973a6bc456a421c5c))
+* lint ([e34481c](https://github.com/pksep/chat_client/commit/e34481c8009217c57881d13e3fbbd96d6b3db5db))
+* lint ([f1967fc](https://github.com/pksep/chat_client/commit/f1967fc3b5bc529a49e305873d24f0035b65be78))
+* lint ([9cabdf6](https://github.com/pksep/chat_client/commit/9cabdf663ccea01babd7a04857cdb5734a3bd906))
+* lint ([ee05c2e](https://github.com/pksep/chat_client/commit/ee05c2ec38a9bc62d9b6f366e15abd857497b8d0))
+* lint ([46175aa](https://github.com/pksep/chat_client/commit/46175aad556d3c596338b17598ea710ef3d5d3cc))
+* logic refresh token ([208fb32](https://github.com/pksep/chat_client/commit/208fb320db09cc0cc4ed205be8e0647d3659e449))
+* notification click ([3e41255](https://github.com/pksep/chat_client/commit/3e41255db93708f03ddb1a26997b2a0622821498))
+* packages ([a2ffaef](https://github.com/pksep/chat_client/commit/a2ffaef2c5bed8239a815cab08dcbe4eddb60085))
+* refine chat token flow ([3911093](https://github.com/pksep/chat_client/commit/39110935df7516c472d406c9d824dbf623065b98))
+* scroll to down button position ([cabf40f](https://github.com/pksep/chat_client/commit/cabf40f03ba36069dffea9621904220a74af51b2))
+* select user ([31d0d81](https://github.com/pksep/chat_client/commit/31d0d8119d78bf0d7cd0a90e5d4e8b0c14f8d6d7))
+* styles ([0fdef35](https://github.com/pksep/chat_client/commit/0fdef35815588af9796f8f8a0e5051e2efbe27ab))
+* topic content scroll ([6731b0a](https://github.com/pksep/chat_client/commit/6731b0a5507f898311cbe7d0ab2da9cab1d2d625))
+* upload file ([336997d](https://github.com/pksep/chat_client/commit/336997d0476a56bfca4d9a3b4b20db375e0ad21d))
+* use token from chat_server and fix design ([c240659](https://github.com/pksep/chat_client/commit/c24065923b47ea687542fb813662bb690fd0e6d8))
+* yui version ([669176f](https://github.com/pksep/chat_client/commit/669176fc912dfce1b811572e9a51df3508495520))
+
+
+### Features
+
+* add call logic ([3c3c84b](https://github.com/pksep/chat_client/commit/3c3c84b29ae05f85a03210b2e251e023ece6e408))
+* add call logic ([35bf58f](https://github.com/pksep/chat_client/commit/35bf58f53de0a40a65e344c1eac5a1bd91d405e9))
+* add call logic ([ee2e5ee](https://github.com/pksep/chat_client/commit/ee2e5ee18dac27d16a05828196581d9e130d2001))
+* add call styles ([724486c](https://github.com/pksep/chat_client/commit/724486c85ecb5dba824460214290d2e197247740))
+* add camera in popover attach file ([94db707](https://github.com/pksep/chat_client/commit/94db7077de2149ff0db6b977c8a895f076775281))
+* add chat_container_alert for dev ([37369be](https://github.com/pksep/chat_client/commit/37369be746a26a742365230e051b7fca1751c44b))
+* add copy text button ([1500198](https://github.com/pksep/chat_client/commit/15001985736655279012bb094f5deb9d61ef4641))
+* add handup ([62814d2](https://github.com/pksep/chat_client/commit/62814d2b1793838bfa1c723b7b87f3f39db58f3c))
+* add organization logic ([7ab0613](https://github.com/pksep/chat_client/commit/7ab06133e22bf7113ae793fe3c1881d693ba55d9))
+* add versions ([36d6212](https://github.com/pksep/chat_client/commit/36d6212de7e42c196f40234025a856c63775f08b))
+* add webrtc ([de5dceb](https://github.com/pksep/chat_client/commit/de5dcebf5af88b4c75012c0674cf94ca5db373a7))
+* change jitsi and webrtc to livekit ([3754f8b](https://github.com/pksep/chat_client/commit/3754f8b6db83e19b5b263e59a112dc25b91c96f7))
+* default page ([e89960d](https://github.com/pksep/chat_client/commit/e89960d73885ad5baeb27e3b5c0e5f505154c3bd))
+* new release ([29103fa](https://github.com/pksep/chat_client/commit/29103fa20894644d56b3d3c77d70cd1e0283dfa9))
+* new release! ([675ffc8](https://github.com/pksep/chat_client/commit/675ffc8dbe6585625899bc500618774b8d1b3199))
+* restore basicSsl ([e043a84](https://github.com/pksep/chat_client/commit/e043a84344ddd5185d99da4077c83284d2ed5f40))
+* update sep-yui ([69d4302](https://github.com/pksep/chat_client/commit/69d4302ff984189fc672318ed3c9588e5bb27aaa))
+
 ## [1.19.2](https://github.com/pksep/chat_client/compare/v1.19.1...v1.19.2) (2026-03-06)
 
 
