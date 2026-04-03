@@ -20,7 +20,9 @@
     >
       {{ props.user.initials }}
     </h3>
+    <WaitConnection v-if="!!isWaitingConnection" />
     <span
+      v-else
       class="user-profile__ex"
       :class="{
         'user-profile__ex--online': !effectiveLastOnline && !isCurrentUser
@@ -40,6 +42,8 @@ import { getConfig } from '../../services/useConfig';
 import { formatLastSeen } from '../../utils/dateUtils';
 import { getUserLastOnline } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
+import WaitConnection from '../UI/WaitConnection.vue';
+import { getHasWebsocketConnection } from '../../services/useChat';
 
 const config = getConfig();
 
@@ -50,6 +54,7 @@ const props = withDefaults(defineProps<IUserProfileProps>(), {
 const effectiveLastOnline = computed(() => getUserLastOnline(props.user));
 
 const isCurrentUser = computed(() => getAuthUser()?.id === props.user.id);
+const isWaitingConnection = computed(() => !getHasWebsocketConnection());
 
 const formattedStatus = computed(() => {
   if (isCurrentUser.value) return `@${props.user.nickname}`;

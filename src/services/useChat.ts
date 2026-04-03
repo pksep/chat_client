@@ -35,11 +35,13 @@ import {
 import { roomId as liveKitRoomId } from './useLiveKit';
 import { Capacitor } from '@capacitor/core';
 import { initCallKit, showIncomingCallKit, endAllCallKits } from './useCallKit';
+import type { MediaPreviewDimensions } from '../utils/mediaPreview';
 
 let chatSDK: ChatSDK | null = null;
 let activeCallNotification: Notification | null = null;
 
 const isWebsocketConnecting = ref(true);
+const hasWebsocketConnection = ref(false);
 const isRecentlyReconnected = ref(false);
 const currentUserId = ref<string | null>(null);
 
@@ -241,6 +243,9 @@ export const initializeChat = async (options: {
     wsUrl: options.wsUrl,
     token: options.token
   });
+  chatSDK.setConnectionStateListener(connected => {
+    hasWebsocketConnection.value = connected;
+  });
   areChatListenersBound = false;
 
   currentUserId.value = options.userId || null;
@@ -276,6 +281,7 @@ export const initializeChat = async (options: {
   }
 
   isWebsocketConnecting.value = true;
+  hasWebsocketConnection.value = false;
   setupChatListeners();
   await chatSDK.connect();
   isWebsocketConnecting.value = false;
@@ -447,12 +453,28 @@ export const setReactionMessage = async (params: {
 };
 
 export const uploadFile = async (
-  file: File
-): Promise<{ path: string; thumbnailPath: string; file: File }> => {
+  file: File,
+  previewMeta?: MediaPreviewDimensions,
+  onProgress?: (percent: number) => void
+): Promise<{
+  path: string;
+  thumbnailPath: string | null;
+  file: File;
+  ex?: {
+    width?: number;
+    height?: number;
+    previewWidth?: number;
+    previewHeight?: number;
+  };
+}> => {
   const sdk = getChatSDK();
 
-  const { objectName, thumbnailObjectName } = await sdk.uploadFile(file);
-  return { file, path: objectName, thumbnailPath: thumbnailObjectName };
+  const { objectName, thumbnailObjectName, ex } = await sdk.uploadFile(
+    file,
+    previewMeta,
+    onProgress
+  );
+  return { file, path: objectName, thumbnailPath: thumbnailObjectName, ex };
 };
 
 const messageHistoryRequests: Map<
@@ -511,6 +533,7 @@ export const getMessagesWithLoadingStatus = (): ChatMessage[] => {
 };
 
 export const getIsWebsocketConnecting = () => isWebsocketConnecting.value;
+export const getHasWebsocketConnection = () => hasWebsocketConnection.value;
 
 export const getIsRecentlyReconnected = () => isRecentlyReconnected.value;
 

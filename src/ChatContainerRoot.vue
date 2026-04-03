@@ -15,6 +15,7 @@ import {
   clearChatAuthSession,
   clearErpAuthSession,
   fetchAuthUser,
+  getAuthUser,
   getChatAuthSession,
   getStoredBootstrapErpAccessToken,
   getStoredChatAccessToken,
@@ -76,6 +77,34 @@ const clearStoredErpToken = () => {
   clearErpAuthSession();
 };
 
+const getStoredSessionUserId = (): string => {
+  return sessionStorage.getItem('userId') || '';
+};
+
+const applyCachedAuthUser = (userId: string): void => {
+  if (!userId || getAuthUser()) {
+    return;
+  }
+
+  const cachedAuthUser = getUserById(userId);
+
+  if (!cachedAuthUser) {
+    return;
+  }
+
+  setAuthUser({
+    ...cachedAuthUser,
+    id: cachedAuthUser.id || '',
+    nickname: cachedAuthUser.nickname || cachedAuthUser.id || '',
+    initials: cachedAuthUser.initials || '',
+    avatarUrl: cachedAuthUser.avatarUrl || '',
+    lastOnline: cachedAuthUser.lastOnline || new Date(),
+    createdAt: cachedAuthUser.createdAt || new Date(),
+    updatedAt: cachedAuthUser.updatedAt || new Date(),
+    deletedAt: cachedAuthUser.deletedAt || null
+  });
+};
+
 const runAppInitialization = async () => {
   const url = new URL(window.location.href);
   const tokenUrl = url.searchParams.get('token')?.split('?token')[0];
@@ -87,6 +116,20 @@ const runAppInitialization = async () => {
   const persistSession = !!tokenUrl || isStoredChatSessionPersistent();
   const shouldUseBootstrapToken = !!bootstrapErpToken;
   const hasStoredRefreshToken = !!directAuthSession?.refreshToken;
+  const initialUserId =
+    directAuthSession?.user?.id || getStoredSessionUserId() || '';
+
+  if (initialUserId) {
+    setCurrentUserId(initialUserId);
+
+    await hydrateUsersFromCache(initialUserId);
+    applyCachedAuthUser(initialUserId);
+    await hydrateTopicsFromCache(initialUserId);
+
+    if (route.value.id) {
+      await hydrateMessagesFromCache(route.value.id, initialUserId);
+    }
+  }
 
   try {
     const authData = shouldUseBootstrapToken
@@ -119,7 +162,10 @@ const runAppInitialization = async () => {
 
     setAuthToken(authData.token);
 
-    const authUserId = authData.user?.id || '';
+    const authUserId =
+      authData.user?.id ||
+      directAuthSession?.user?.id ||
+      getStoredSessionUserId();
 
     if (authUserId && !hasUserIdInSession(authUserId)) {
       saveUserIdToSession(authUserId);
@@ -138,10 +184,12 @@ const runAppInitialization = async () => {
     setCurrentUserId(authUserId || undefined);
     if (authData.user) setAuthUser(authData.user);
 
-    await Promise.all([hydrateUsersFromCache(), hydrateTopicsFromCache()]);
+    await hydrateUsersFromCache(authUserId || undefined);
+    applyCachedAuthUser(authUserId);
+    await hydrateTopicsFromCache(authUserId || undefined);
 
     if (route.value.id) {
-      await hydrateMessagesFromCache(route.value.id);
+      await hydrateMessagesFromCache(route.value.id, authUserId || undefined);
     }
 
     await initializeChat({
@@ -153,21 +201,8 @@ const runAppInitialization = async () => {
 
     await Promise.all([fetchAuthUser(), fetchAllUsers()]);
 
-    if (!authData.user && authUserId) {
-      const fallbackUser = getUserById(authUserId);
-      if (fallbackUser) {
-        setAuthUser({
-          ...fallbackUser,
-          id: fallbackUser.id || '',
-          nickname: fallbackUser.nickname || fallbackUser.id || '',
-          initials: fallbackUser.initials || '',
-          avatarUrl: fallbackUser.avatarUrl || '',
-          lastOnline: new Date(),
-          createdAt: fallbackUser.createdAt || new Date(),
-          updatedAt: fallbackUser.updatedAt || new Date(),
-          deletedAt: fallbackUser.deletedAt || null
-        });
-      }
+    if (!getAuthUser() && authUserId) {
+      applyCachedAuthUser(authUserId);
     }
 
     await restoreInvitedGroupCallFromUrl();

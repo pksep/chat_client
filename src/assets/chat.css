@@ -42,7 +42,6 @@ p.chat__nothing-paragraph {
   flex-direction: column;
   width: 100%;
   gap: 5px;
-  margin-bottom: auto;
 }
 
 .chat__message-bubble__arrow-down {

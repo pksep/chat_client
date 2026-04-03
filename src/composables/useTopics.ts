@@ -97,12 +97,12 @@ export const useTopics = () => {
     schedulePersistTopics();
   };
 
-  const hydrateTopicsFromCache = async (): Promise<ITopic[]> => {
+  const hydrateTopicsFromCache = async (userId?: string): Promise<ITopic[]> => {
     if (topics.value.length > 0) {
       return topics.value;
     }
 
-    const cachedTopics = await loadCachedTopics();
+    const cachedTopics = await loadCachedTopics(userId);
 
     if (cachedTopics.length > 0) {
       topics.value = normalizeTopics(cachedTopics);

@@ -5,6 +5,7 @@ import { fileToDataURL } from '../../../utils/fileToDataURL';
 import { showErrorNotification } from '../../../composables/useNotifications';
 import {
   changeFileLoadingStatus,
+  changeFileUploadPercent,
   deleteFileAfterLoading,
   addMessageToLocal,
   deleteMessageFromLocal
@@ -12,6 +13,10 @@ import {
 import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
 import type { IMessage, IMedia } from '../../interfaces/interfaces';
 import { RouteTypes } from '../../../composables/navigation/useUrlRouting';
+import {
+  calculatePreviewDimensions,
+  getFileDimensions
+} from '../../../utils/mediaPreview';
 
 const MAX_HTML_LENGTH = 4000;
 
@@ -60,6 +65,23 @@ export function useMessageSender(
   scrollToBottom: () => void,
   clearSellectedMessage: () => void
 ) {
+  const waitForPreviewMetrics = async (media?: IMedia): Promise<void> => {
+    if (!media || media.type === MediaType.File) {
+      return;
+    }
+
+    const timeoutMs = 3000;
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+      if (media.ex?.previewWidth && media.ex?.previewHeight) {
+        return;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  };
+
   const handleSend = async (taggedUserIds?: string[]): Promise<void> => {
     const rawText = inputText.value;
 
@@ -162,19 +184,37 @@ export function useMessageSender(
     const clientId = generateUUID();
 
     const localMedia: IMedia[] = await Promise.all(
-      Array.from(files).map(async (file, i) => ({
-        localPath: await fileToDataURL(file),
-        path: '',
-        originName: file.name,
-        size: file.size,
-        id: i + '',
-        createdAt: null,
-        deletedAt: null,
-        updatedAt: null,
-        messageId: clientId,
-        type: getMediaType(file, isMedia),
-        isLoading: true
-      }))
+      Array.from(files).map(async (file, i) => {
+        const type = getMediaType(file, isMedia);
+        const baseMedia = {
+          localPath: await fileToDataURL(file),
+          path: '',
+          originName: file.name,
+          size: file.size,
+          id: i + '',
+          createdAt: null,
+          deletedAt: null,
+          updatedAt: null,
+          messageId: clientId,
+          type,
+          isLoading: true,
+          uploadPercent: null
+        };
+
+        if (type === MediaType.File) {
+          return {
+            ...baseMedia,
+            ex: {}
+          };
+        }
+
+        const dimensions = await getFileDimensions(file);
+
+        return {
+          ...baseMedia,
+          ex: calculatePreviewDimensions(dimensions, files.length, i)
+        };
+      })
     );
 
     const newMessage: IMessage = {
@@ -199,7 +239,21 @@ export function useMessageSender(
     const medias = [];
     for (const [i, uploadedFile] of Array.from(files).entries()) {
       try {
-        const { file, path, thumbnailPath } = await uploadFile(uploadedFile);
+        await waitForPreviewMetrics(localMedia[i]);
+        const previewMeta = localMedia[i]?.ex;
+        const { file, path, thumbnailPath, ex } = await uploadFile(
+          uploadedFile,
+          previewMeta,
+          percent => {
+            localMedia[i].uploadPercent = percent;
+            changeFileUploadPercent(
+              newMessage.topicId,
+              clientId,
+              i.toString(),
+              percent
+            );
+          }
+        );
 
         changeFileLoadingStatus(newMessage.topicId, clientId, i.toString());
 
@@ -208,7 +262,8 @@ export function useMessageSender(
           thumbnailPath,
           originName: file.name,
           size: file.size,
-          type: getMediaType(uploadedFile, isMedia)
+          type: getMediaType(uploadedFile, isMedia),
+          ex
         });
       } catch (error: any) {
         deleteFileAfterLoading(newMessage.topicId, clientId, i.toString());

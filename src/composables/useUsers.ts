@@ -24,12 +24,14 @@ const schedulePersistUsers = () => {
   }, 150);
 };
 
-export const hydrateUsersFromCache = async (): Promise<IUser[]> => {
+export const hydrateUsersFromCache = async (
+  userId?: string
+): Promise<IUser[]> => {
   if (users.value.length > 0) {
     return [...users.value];
   }
 
-  const cachedUsers = await loadCachedUsers();
+  const cachedUsers = await loadCachedUsers(userId);
 
   if (cachedUsers.length > 0) {
     users.value = [...cachedUsers];

@@ -136,6 +136,7 @@ import ContextMenu from './ContactList/ContextMenu.vue';
 import MessageIcon from './UI/MessageIcon.vue';
 import GroupIcon from './UI/GroupIcon.vue';
 import { getConfig } from '../services/useConfig';
+import WaitConnection from './UI/WaitConnection.vue';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: 'Menu'

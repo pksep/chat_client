@@ -52,6 +52,7 @@
             :is-me-sender="props.isMeSender"
             :dataTestid="`${props.dataTestid}-FileIcon`"
             :is-loaded="!media.isLoading"
+            :percent="media.uploadPercent ?? null"
           />
           <div :data-testid="`${props.dataTestid}-FileInfo`">
             <div :data-testid="`${props.dataTestid}-FileDetails`">

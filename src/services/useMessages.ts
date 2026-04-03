@@ -267,7 +267,8 @@ export const getMessagesByTopicId = (topicId: string): IMessage[] => {
 };
 
 export const hydrateMessagesFromCache = async (
-  topicId: string
+  topicId: string,
+  userId?: string
 ): Promise<IMessage[]> => {
   if (!topicId) {
     return [];
@@ -277,7 +278,7 @@ export const hydrateMessagesFromCache = async (
     return messagesStore.value[topicId];
   }
 
-  const cachedMessages = await loadCachedTopicMessages(topicId);
+  const cachedMessages = await loadCachedTopicMessages(topicId, userId);
 
   if (cachedMessages.length > 0) {
     saveMessagesToLocal(topicId, cachedMessages);
@@ -370,9 +371,57 @@ export const changeFileLoadingStatus = (
   fileId: string
 ): void => {
   const existingMessages = messagesStore.value[topicId] || [];
-  const message = existingMessages.find(message => message.id === messageId);
-  const media = message.media?.find(media => media.id === fileId);
-  media.isLoading = false;
+  messagesStore.value[topicId] = existingMessages.map(message => {
+    if (message.id !== messageId || !message.media) {
+      return message;
+    }
+
+    return {
+      ...message,
+      media: message.media.map(media => {
+        if (media.id !== fileId) {
+          return media;
+        }
+
+        return {
+          ...media,
+          isLoading: false,
+          uploadPercent: null
+        };
+      })
+    };
+  });
+
+  schedulePersistMessages(topicId);
+};
+
+export const changeFileUploadPercent = (
+  topicId: string,
+  messageId: string,
+  fileId: string,
+  percent: number | null
+): void => {
+  const existingMessages = messagesStore.value[topicId] || [];
+  messagesStore.value[topicId] = existingMessages.map(message => {
+    if (message.id !== messageId || !message.media) {
+      return message;
+    }
+
+    return {
+      ...message,
+      media: message.media.map(media => {
+        if (media.id !== fileId) {
+          return media;
+        }
+
+        return {
+          ...media,
+          uploadPercent: percent
+        };
+      })
+    };
+  });
+
   schedulePersistMessages(topicId);
 };
 
@@ -383,6 +432,10 @@ export const deleteFileAfterLoading = (
 ): void => {
   const existingMessages = messagesStore.value[topicId] || [];
   const message = existingMessages.find(message => message.id === messageId);
+  if (!message?.media) {
+    return;
+  }
+
   message.media = message.media.filter(media => media.id !== fileId);
   schedulePersistMessages(topicId);
 };

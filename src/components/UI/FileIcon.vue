@@ -1,6 +1,6 @@
 <template>
   <svg
-    v-if="!props.isLoaded"
+    v-if="!props.isLoaded && !hasPercent"
     class="message-content__media-loading__icon"
     width="48"
     height="48"
@@ -11,11 +11,34 @@
     <rect x="4" y="4" width="40" height="40" rx="20" fill="white" />
     <path
       d="M34 24C34 29.5228 29.5228 34 24 34C18.4772 34 14 29.5228 14 24C14 18.4772 18.4772 14 24 14C29.5228 14 34 18.4772 34 24ZM16.2 24C16.2 28.3078 19.6922 31.8 24 31.8C28.3078 31.8 31.8 28.3078 31.8 24C31.8 19.6922 28.3078 16.2 24 16.2C19.6922 16.2 16.2 19.6922 16.2 24Z"
-      fill="#E7E7E7"
+      :fill="props.backgroundColor"
     />
     <path
       d="M24 15.1C24 14.4925 23.506 13.9937 22.9022 14.0604C21.3127 14.236 19.7828 14.7909 18.4443 15.6853C16.7998 16.7841 15.5181 18.3459 14.7612 20.1732C14.0043 22.0004 13.8063 24.0111 14.1921 25.9509C14.578 27.8907 15.5304 29.6725 16.9289 31.0711C18.3275 32.4696 20.1093 33.422 22.0491 33.8079C23.9889 34.1937 25.9996 33.9957 27.8268 33.2388C29.6541 32.4819 31.2159 31.2002 32.3147 29.5557C33.2091 28.2172 33.764 26.6873 33.9396 25.0978C34.0063 24.494 33.5075 24 32.9 24C32.2925 24 31.808 24.4949 31.7226 25.0964C31.5588 26.2499 31.1379 27.357 30.4855 28.3334C29.6284 29.6162 28.4102 30.6159 26.9849 31.2063C25.5597 31.7966 23.9913 31.9511 22.4783 31.6501C20.9652 31.3492 19.5754 30.6063 18.4846 29.5154C17.3937 28.4246 16.6508 27.0348 16.3499 25.5217C16.0489 24.0087 16.2034 22.4403 16.7937 21.0151C17.3841 19.5898 18.3838 18.3716 19.6666 17.5145C20.643 16.8621 21.7501 16.4412 22.9036 16.2774C23.5051 16.192 24 15.7075 24 15.1Z"
       fill="#77A6FF"
+    />
+  </svg>
+
+  <svg
+    v-else-if="!props.isLoaded && hasPercent"
+    width="48"
+    height="48"
+    viewBox="0 0 48 48"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect x="4" y="4" width="40" height="40" rx="20" fill="white" />
+    <circle cx="24" cy="24" r="10" :stroke="props.backgroundColor" stroke-width="2.5" />
+    <circle
+      cx="24"
+      cy="24"
+      r="10"
+      stroke="#77A6FF"
+      stroke-width="2.5"
+      stroke-linecap="round"
+      :stroke-dasharray="circumference"
+      :stroke-dashoffset="dashOffset"
+      transform="rotate(-90 24 24)"
     />
   </svg>
 
@@ -43,17 +66,41 @@
   </svg>
 </template>
 <script setup lang="ts">
+import { computed } from 'vue';
+
 const props = withDefaults(
   defineProps<{
     isMeSender: boolean;
     dataTestid?: string;
     isLoaded?: boolean;
+    percent?: number | null;
+    backgroundColor?: string;
   }>(),
   {
     dataTestid: () => 'FileIcon',
-    isLoaded: false
+    isLoaded: false,
+    percent: null,
+    backgroundColor: '#E7E7E7'
   }
 );
+
+const radius = 10;
+const circumference = 2 * Math.PI * radius;
+
+const normalizedPercent = computed(() => {
+  if (typeof props.percent !== 'number' || Number.isNaN(props.percent)) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(95, props.percent));
+});
+
+const hasPercent = computed(() => normalizedPercent.value !== null);
+
+const dashOffset = computed(() => {
+  const percent = normalizedPercent.value ?? 0;
+  return circumference * (1 - percent / 100);
+});
 </script>
 
 <style scoped></style>
