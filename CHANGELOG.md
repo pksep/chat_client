@@ -1,3 +1,19 @@
+## [1.23.1](https://github.com/pksep/chat_client/compare/v1.23.0...v1.23.1) (2026-04-03)
+
+
+### Bug Fixes
+
+* contextMenu ([0cf42f9](https://github.com/pksep/chat_client/commit/0cf42f93a6f65a10ddd0c0a950889056f3e04e53))
+* delete loading, save cached messages ([d786ae1](https://github.com/pksep/chat_client/commit/d786ae1b71e23a5c8cf9079e888b51ce4cadc770))
+* delete refresh token ([2025d0e](https://github.com/pksep/chat_client/commit/2025d0e33926eaab37b0c725703dcc9f51a3c4ff))
+* delete refresh token ([e0c75f3](https://github.com/pksep/chat_client/commit/e0c75f38b6c4d3f6157218248d20e345fed192ba))
+* empty content, upload with minio, show wait connection ([2b76d14](https://github.com/pksep/chat_client/commit/2b76d1457fc7a3180f657303595dbf9424d47a57))
+* layout for 2 screen ([0ef7d49](https://github.com/pksep/chat_client/commit/0ef7d49b77f3a47493db0574b94fc3686f298550))
+* lint ([bffa7b9](https://github.com/pksep/chat_client/commit/bffa7b911ab3df863dd4a60ff76d7eba059b6a39))
+* lint ([ffd7a69](https://github.com/pksep/chat_client/commit/ffd7a69e3e6a91b9d7d545944b61ef216cc32135))
+* lint ([488814f](https://github.com/pksep/chat_client/commit/488814f4f2536ab76984f94923d4079c813cb55c))
+* redirect in 401 ([0aa8704](https://github.com/pksep/chat_client/commit/0aa8704ff0751e9c6571554c717877680dfb6fe1))
+
 # [1.23.0](https://github.com/pksep/chat_client/compare/v1.22.0...v1.23.0) (2026-04-02)
 
 
