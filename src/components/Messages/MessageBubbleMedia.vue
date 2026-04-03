@@ -8,16 +8,16 @@
       :data-testid="`${props.dataTestid}-Article`"
     >
       <h3
-        class="message__article-initals"
         v-if="!props.isMeSender && !isDialogRoute"
+        class="message__article-initals"
       >
         {{ props.sender }}
       </h3>
       <blockquote
         v-if="!!props.replyMessage"
-        @click="$emit('navigate-message')"
         class="message-content__blockquote"
         :data-testid="`${props.dataTestid}-Blockquote`"
+        @click="$emit('navigate-message')"
       >
         <div
           class="message-content__blockquote-container"
@@ -44,13 +44,17 @@
           <video
             v-if="media.type === MediaType.Video && media.localPath"
             :src="getFullMediaPath(media)"
+            :style="getPreviewStyle(media)"
+            @loadedmetadata="captureVideoPreviewMetrics(media, $event)"
           />
 
           <img
             v-else
-            @click="$emit('set-slider', mediaFiles, i)"
             :src="getFullMediaPath(media)"
             :alt="props.sender ? props.sender + ' image' : 'Shared image'"
+            :style="getPreviewStyle(media)"
+            @load="captureImagePreviewMetrics(media, $event)"
+            @click="$emit('set-slider', mediaFiles, i)"
             @dragstart="handleDragStart($event, media)"
           />
 
@@ -58,24 +62,27 @@
             v-if="typeof media.isLoading === 'boolean'"
             class="message-content__media-loading"
           >
-            <LoadingIcon :is-loaded="!media.isLoading" />
+            <LoadingIcon
+              :is-loaded="!media.isLoading"
+              :percent="media.uploadPercent ?? null"
+            />
           </div>
 
           <div
             v-else-if="media.type === MediaType.Video"
-            @click="$emit('set-slider', mediaFiles, i)"
             class="message-content__media-video"
+            @click="$emit('set-slider', mediaFiles, i)"
           >
             <PlayIcon />
           </div>
         </div>
       </div>
 
-      <div class="message-time" v-if="!props.file">
+      <div v-if="!props.file" class="message-time">
         <MessageEmojies :reactions="props.reactions" />
         <PinIcon
-          style="width: 15px; height: 15px; margin-right: -2px"
           v-if="props.isPin"
+          style="width: 15px; height: 15px; margin-right: -2px"
         />
         <span>{{ props.time }}</span>
         <MessageStatusIcons
@@ -90,7 +97,6 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { IMessageBubbleProps } from './interface/interface';
 import { MediaType } from '@pksep/zod-shared-chat';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import LoadingIcon from '../UI/LoadingIcon.vue';
@@ -101,6 +107,8 @@ import { stripHtml } from '../../utils/stripHtml';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { useMessageMedia } from './composables/useMessageMedia';
+import type { IMessageBubbleProps } from './interface/interface';
+import type { IMedia } from '../interfaces/interfaces';
 
 const props = defineProps<IMessageBubbleProps>();
 
@@ -114,6 +122,48 @@ const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
 const mediaFiles = computed(
   () => props.media?.filter(media => media.type !== MediaType.File) || []
 );
+
+const getPreviewStyle = (media: IMedia): Record<string, string> => {
+  if (!media.ex?.previewWidth || !media.ex?.previewHeight) {
+    return {};
+  }
+
+  return {
+    width: `${media.ex.previewWidth}px`,
+    height: `${media.ex.previewHeight}px`
+  };
+};
+
+const savePreviewMetrics = (
+  media: IMedia,
+  element: HTMLImageElement | HTMLVideoElement,
+  naturalWidth?: number,
+  naturalHeight?: number
+): void => {
+  const rect = element.getBoundingClientRect();
+
+  media.ex = {
+    ...media.ex,
+    width: media.ex?.width || naturalWidth,
+    height: media.ex?.height || naturalHeight,
+    previewWidth: Math.round(rect.width),
+    previewHeight: Math.round(rect.height)
+  };
+};
+
+const captureImagePreviewMetrics = (media: IMedia, event: Event): void => {
+  const image = event.currentTarget as HTMLImageElement | null;
+  if (!image) return;
+
+  savePreviewMetrics(media, image, image.naturalWidth, image.naturalHeight);
+};
+
+const captureVideoPreviewMetrics = (media: IMedia, event: Event): void => {
+  const video = event.currentTarget as HTMLVideoElement | null;
+  if (!video) return;
+
+  savePreviewMetrics(media, video, video.videoWidth, video.videoHeight);
+};
 
 const messageArticleStyles = computed(() => [
   'message__article',

@@ -116,7 +116,7 @@ button.button-yui-kit {
   opacity: 0.8;
 }
 
-@media screen and (width <= 480px) {
+@media screen and (width <= 768px) {
   .chat__header-main {
     justify-content: start;
     gap: 10px;

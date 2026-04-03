@@ -15,6 +15,7 @@ import {
   clearChatAuthSession,
   clearErpAuthSession,
   fetchAuthUser,
+  getAuthUser,
   getChatAuthSession,
   getStoredBootstrapErpAccessToken,
   getStoredChatAccessToken,
@@ -25,9 +26,13 @@ import {
   useAuth
 } from './composables/useAuth';
 import { setAuthToken } from './composables/useLogin';
-import { fetchAllUsers, getUserById } from './composables/useUsers';
+import {
+  fetchAllUsers,
+  getUserById,
+  hydrateUsersFromCache
+} from './composables/useUsers';
 import { getConfig } from './services/useConfig';
-import { useTopics } from './composables/useTopics';
+import { hydrateTopicsFromCache, useTopics } from './composables/useTopics';
 import { getGroupById } from './composables/useGroup';
 import { useUrlWatcher } from './composables/navigation';
 import {
@@ -38,6 +43,7 @@ import { initPushNotifications } from './services/usePushNotifications';
 import { useResizeState } from './composables/useResizeState';
 import { MAX_W_MD } from './utils/constants';
 import { RouteTypes } from './composables/navigation/useUrlRouting';
+import { hydrateMessagesFromCache } from './services/useMessages';
 
 const props = defineProps<IChatContainerProps>();
 
@@ -71,6 +77,34 @@ const clearStoredErpToken = () => {
   clearErpAuthSession();
 };
 
+const getStoredSessionUserId = (): string => {
+  return sessionStorage.getItem('userId') || '';
+};
+
+const applyCachedAuthUser = (userId: string): void => {
+  if (!userId || getAuthUser()) {
+    return;
+  }
+
+  const cachedAuthUser = getUserById(userId);
+
+  if (!cachedAuthUser) {
+    return;
+  }
+
+  setAuthUser({
+    ...cachedAuthUser,
+    id: cachedAuthUser.id || '',
+    nickname: cachedAuthUser.nickname || cachedAuthUser.id || '',
+    initials: cachedAuthUser.initials || '',
+    avatarUrl: cachedAuthUser.avatarUrl || '',
+    lastOnline: cachedAuthUser.lastOnline || new Date(),
+    createdAt: cachedAuthUser.createdAt || new Date(),
+    updatedAt: cachedAuthUser.updatedAt || new Date(),
+    deletedAt: cachedAuthUser.deletedAt || null
+  });
+};
+
 const runAppInitialization = async () => {
   const url = new URL(window.location.href);
   const tokenUrl = url.searchParams.get('token')?.split('?token')[0];
@@ -81,40 +115,40 @@ const runAppInitialization = async () => {
   const config = getConfig();
   const persistSession = !!tokenUrl || isStoredChatSessionPersistent();
   const shouldUseBootstrapToken = !!bootstrapErpToken;
-  const hasStoredRefreshToken = !!directAuthSession?.refreshToken;
+  const initialUserId =
+    directAuthSession?.user?.id || getStoredSessionUserId() || '';
+
+  if (initialUserId) {
+    setCurrentUserId(initialUserId);
+
+    await hydrateUsersFromCache(initialUserId);
+    applyCachedAuthUser(initialUserId);
+    await hydrateTopicsFromCache(initialUserId);
+
+    if (route.value.id) {
+      await hydrateMessagesFromCache(route.value.id, initialUserId);
+    }
+  }
 
   try {
     const authData = shouldUseBootstrapToken
-      ? await useAuth(bootstrapErpToken).catch(async error => {
-          const refreshedAuth = await tryRefreshErpSession();
-
-          if (!refreshedAuth?.token) {
-            throw error;
+      ? await useAuth(bootstrapErpToken)
+      : directAuthSession?.token || storedChatToken
+        ? {
+            token: directAuthSession?.token || storedChatToken || '',
+            user: directAuthSession?.user
           }
-
-          return refreshedAuth;
-        })
-      : hasStoredRefreshToken
-        ? (await tryRefreshErpSession()) ??
-          (directAuthSession?.token || storedChatToken
-            ? {
-                token: directAuthSession?.token || storedChatToken || '',
-                user: directAuthSession?.user
-              }
-            : null)
-        : directAuthSession?.token || storedChatToken
-          ? {
-              token: directAuthSession?.token || storedChatToken || '',
-              user: directAuthSession?.user
-            }
-          : await tryRefreshErpSession();
+        : await tryRefreshErpSession();
     if (!authData?.token) {
       throw new Error('Chat token is missing from auth response');
     }
 
     setAuthToken(authData.token);
 
-    const authUserId = authData.user?.id || '';
+    const authUserId =
+      authData.user?.id ||
+      directAuthSession?.user?.id ||
+      getStoredSessionUserId();
 
     if (authUserId && !hasUserIdInSession(authUserId)) {
       saveUserIdToSession(authUserId);
@@ -123,12 +157,22 @@ const runAppInitialization = async () => {
     saveChatAuthSession(
       {
         token: authData.token,
-        refreshToken: authData.refreshToken ?? directAuthSession?.refreshToken,
         user: authData.user
       },
       persistSession
     );
     clearBootstrapErpSession();
+
+    setCurrentUserId(authUserId || undefined);
+    if (authData.user) setAuthUser(authData.user);
+
+    await hydrateUsersFromCache(authUserId || undefined);
+    applyCachedAuthUser(authUserId);
+    await hydrateTopicsFromCache(authUserId || undefined);
+
+    if (route.value.id) {
+      await hydrateMessagesFromCache(route.value.id, authUserId || undefined);
+    }
 
     await initializeChat({
       token: authData.token,
@@ -137,26 +181,10 @@ const runAppInitialization = async () => {
       userId: authUserId || undefined
     });
 
-    setCurrentUserId(authUserId || undefined);
-    if (authData.user) setAuthUser(authData.user);
-
     await Promise.all([fetchAuthUser(), fetchAllUsers()]);
 
-    if (!authData.user && authUserId) {
-      const fallbackUser = getUserById(authUserId);
-      if (fallbackUser) {
-        setAuthUser({
-          ...fallbackUser,
-          id: fallbackUser.id || '',
-          nickname: fallbackUser.nickname || fallbackUser.id || '',
-          initials: fallbackUser.initials || '',
-          avatarUrl: fallbackUser.avatarUrl || '',
-          lastOnline: new Date(),
-          createdAt: fallbackUser.createdAt || new Date(),
-          updatedAt: fallbackUser.updatedAt || new Date(),
-          deletedAt: fallbackUser.deletedAt || null
-        });
-      }
+    if (!getAuthUser() && authUserId) {
+      applyCachedAuthUser(authUserId);
     }
 
     await restoreInvitedGroupCallFromUrl();

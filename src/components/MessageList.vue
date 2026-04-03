@@ -119,14 +119,17 @@ import {
   navigateToDefault,
   RouteTypes
 } from '../composables/navigation/useUrlRouting';
+import { resetTopicUnreadState } from '../composables/useTopics';
 import {
   fetchAroundMessage,
   fetchMessagesForTopic,
   fetchPinnedMessagesForTopic,
-  getMessagesByTopicId
+  getMessagesByTopicId,
+  hydrateMessagesFromCache
 } from '../services/useMessages';
 import { getAuthUser } from '../composables/useAuth';
 import { IMessage } from './interfaces/interfaces';
+import { MessageStatus } from '../services/useChatSDK/types';
 
 import { useMessageSwipe } from './Messages/composables/useMessageSwipe';
 import { useMessageScroll } from './Messages/composables/useMessageScroll';
@@ -241,6 +244,25 @@ const handleScrollToMessage = async (message: IMessage) => {
   });
 };
 
+const shouldResetUnreadForCurrentTopic = (): boolean => {
+  const lastMessage = state.messages.at(-1);
+  const currentUserId = authUser.value?.id;
+
+  if (!lastMessage || !currentUserId) {
+    return true;
+  }
+
+  if (lastMessage.senderUserId === currentUserId) {
+    return true;
+  }
+
+  return (
+    !!lastMessage.isReadByMe ||
+    !!lastMessage.isRead ||
+    lastMessage.status === MessageStatus.Read
+  );
+};
+
 const { handleSend, handleAttachFile } = useMessageSender(
   route,
   inputText,
@@ -284,8 +306,13 @@ watch(
   async () => {
     if (!route.value?.id) return;
 
+    await hydrateMessagesFromCache(route.value.id);
     await fetchPinnedMessagesForTopic(route.value.id);
-    fetchMessagesForTopic(route.value.id);
+    await fetchMessagesForTopic(route.value.id);
+
+    if (shouldResetUnreadForCurrentTopic()) {
+      resetTopicUnreadState(route.value.id);
+    }
 
     resetScrollState();
 

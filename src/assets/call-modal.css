@@ -29,7 +29,7 @@
   pointer-events: none;
 }
 
-@media screen and (min-width: 481px) {
+@media screen and (min-width: 769px) {
   .call-modal__container--full-screen {
     width: 100% !important;
     height: 100% !important;
@@ -336,7 +336,7 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   text-align: center;
 }
 
-@media screen and (max-width: 480px) {
+@media screen and (max-width: 768px) {
   .call-modal__avatar-container {
     margin-top: calc(50% - 84px);
   }
@@ -463,7 +463,7 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   }
 }
 
-@media screen and (min-width: 481px) {
+@media screen and (min-width: 769px) {
   .call-modal__container--full-screen .call-modal__remote-grid--single {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -839,7 +839,7 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   }
 }
 
-@media screen and (max-width: 480px) {
+@media screen and (max-width: 768px) {
   .call-modal__pagination {
     left: 14px;
     right: 14px;
@@ -847,7 +847,7 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   }
 }
 
-@media screen and (min-width: 481px) {
+@media screen and (min-width: 769px) {
   .call-modal__container--full-screen .call-modal__pagination {
     left: 28px;
     right: 28px;

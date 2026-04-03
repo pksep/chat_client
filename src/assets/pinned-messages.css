@@ -8,7 +8,7 @@
   border-radius: 0 0 10px 10px;
 }
 
-@media screen and (width <= 480px) {
+@media screen and (width <= 768px) {
   .pinned-messages {
     width: 100%;
   }

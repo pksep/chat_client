@@ -349,7 +349,6 @@ const submitCredentialsLogin = async () => {
     saveChatAuthSession(
       {
         token: authData.token,
-        refreshToken: authData.refreshToken,
         user: authData.user
       },
       rememberAccount.value

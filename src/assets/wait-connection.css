@@ -1,0 +1,20 @@
+.wait-connection {
+  display: flex;
+  align-items: center;
+  position: relative;
+  margin-top: -3px;
+
+  & > span {
+    margin-left: 20px;
+    z-index: 2;
+    color: var(--grey6);
+    font-weight: 400;
+    font-size: 12px;
+  }
+
+  & > svg {
+    position: absolute;
+    left: -10px;
+    width: 36px;
+  }
+}

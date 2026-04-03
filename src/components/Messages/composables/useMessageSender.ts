@@ -5,6 +5,7 @@ import { fileToDataURL } from '../../../utils/fileToDataURL';
 import { showErrorNotification } from '../../../composables/useNotifications';
 import {
   changeFileLoadingStatus,
+  changeFileUploadPercent,
   deleteFileAfterLoading,
   addMessageToLocal,
   deleteMessageFromLocal
@@ -12,6 +13,10 @@ import {
 import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
 import type { IMessage, IMedia } from '../../interfaces/interfaces';
 import { RouteTypes } from '../../../composables/navigation/useUrlRouting';
+import {
+  calculatePreviewDimensions,
+  getFileDimensions
+} from '../../../utils/mediaPreview';
 
 const MAX_HTML_LENGTH = 4000;
 
@@ -60,8 +65,29 @@ export function useMessageSender(
   scrollToBottom: () => void,
   clearSellectedMessage: () => void
 ) {
+  const waitForPreviewMetrics = async (media?: IMedia): Promise<void> => {
+    if (!media || media.type === MediaType.File) {
+      return;
+    }
+
+    const timeoutMs = 3000;
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+      if (media.ex?.previewWidth && media.ex?.previewHeight) {
+        return;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  };
+
   const handleSend = async (taggedUserIds?: string[]): Promise<void> => {
     const rawText = inputText.value;
+    const topicId = route.value.id;
+    const routeType = route.value?.type;
+    const replyMessageId = state.replyMessage?.id;
+    const forwardMessageId = state.forwardMessage?.id;
 
     if (
       (!rawText.trim() || rawText.trim() === '<p></p>') &&
@@ -74,7 +100,7 @@ export function useMessageSender(
     if (state.editMessage) {
       await sendMessageChat({
         messageId: state.editMessage.id,
-        topicId: route.value.id,
+        topicId,
         text: rawText
       });
       state.editMessage = null;
@@ -84,7 +110,7 @@ export function useMessageSender(
     const parts = splitHtmlByLength(rawText);
 
     /* ================= AI ROUTE ================= */
-    if (route.value?.type === RouteTypes.AI) {
+    if (routeType === RouteTypes.AI) {
       for (const part of parts) {
         const userMessage = {
           role: 'user' as 'user' | 'assistant',
@@ -123,7 +149,7 @@ export function useMessageSender(
     }
 
     /* ================= NORMAL CHAT ================= */
-    if (!route.value?.id) {
+    if (!topicId) {
       console.error('[ChatSDK] Cannot send message: no topic provided');
       return;
     }
@@ -131,18 +157,18 @@ export function useMessageSender(
     try {
       if (parts.length === 0 && !!state.forwardMessage) {
         await sendMessageChat({
-          topicId: route.value.id,
+          topicId,
           text: '',
-          replyMessageId: state.replyMessage?.id,
-          forwardMessageId: state.forwardMessage?.id
+          replyMessageId,
+          forwardMessageId
         });
       }
       for (const part of parts) {
         await sendMessageChat({
-          topicId: route.value.id,
+          topicId,
           text: part,
-          replyMessageId: state.replyMessage?.id,
-          forwardMessageId: state.forwardMessage?.id,
+          replyMessageId,
+          forwardMessageId,
           taggedUserIds
         });
       }
@@ -159,22 +185,50 @@ export function useMessageSender(
 
   const handleAttachFileChunk = async (files: FileList, isMedia = false) => {
     if (!files.length) return;
+    const topicId = route.value.id;
+    const replyMessage = state.replyMessage;
+    const replyMessageId = state.replyMessage?.id;
+    const forwardMessageId = state.forwardMessage?.id;
+
+    if (!topicId) {
+      console.error('[ChatSDK] Cannot attach file: no topic provided');
+      return;
+    }
+
     const clientId = generateUUID();
 
     const localMedia: IMedia[] = await Promise.all(
-      Array.from(files).map(async (file, i) => ({
-        localPath: await fileToDataURL(file),
-        path: '',
-        originName: file.name,
-        size: file.size,
-        id: i + '',
-        createdAt: null,
-        deletedAt: null,
-        updatedAt: null,
-        messageId: clientId,
-        type: getMediaType(file, isMedia),
-        isLoading: true
-      }))
+      Array.from(files).map(async (file, i) => {
+        const type = getMediaType(file, isMedia);
+        const baseMedia = {
+          localPath: await fileToDataURL(file),
+          path: '',
+          originName: file.name,
+          size: file.size,
+          id: i + '',
+          createdAt: null,
+          deletedAt: null,
+          updatedAt: null,
+          messageId: clientId,
+          type,
+          isLoading: true,
+          uploadPercent: null
+        };
+
+        if (type === MediaType.File) {
+          return {
+            ...baseMedia,
+            ex: {}
+          };
+        }
+
+        const dimensions = await getFileDimensions(file);
+
+        return {
+          ...baseMedia,
+          ex: calculatePreviewDimensions(dimensions, files.length, i)
+        };
+      })
     );
 
     const newMessage: IMessage = {
@@ -187,10 +241,10 @@ export function useMessageSender(
       isPin: false,
       isSystem: false,
       replyMessageId: null,
-      replyMessage: state.replyMessage,
+      replyMessage,
       senderUserId: authUser.value.id,
       text: null,
-      topicId: route.value.id,
+      topicId,
       media: localMedia
     };
 
@@ -199,7 +253,21 @@ export function useMessageSender(
     const medias = [];
     for (const [i, uploadedFile] of Array.from(files).entries()) {
       try {
-        const { file, path, thumbnailPath } = await uploadFile(uploadedFile);
+        await waitForPreviewMetrics(localMedia[i]);
+        const previewMeta = localMedia[i]?.ex;
+        const { file, path, thumbnailPath, ex } = await uploadFile(
+          uploadedFile,
+          previewMeta,
+          percent => {
+            localMedia[i].uploadPercent = percent;
+            changeFileUploadPercent(
+              newMessage.topicId,
+              clientId,
+              i.toString(),
+              percent
+            );
+          }
+        );
 
         changeFileLoadingStatus(newMessage.topicId, clientId, i.toString());
 
@@ -208,7 +276,8 @@ export function useMessageSender(
           thumbnailPath,
           originName: file.name,
           size: file.size,
-          type: getMediaType(uploadedFile, isMedia)
+          type: getMediaType(uploadedFile, isMedia),
+          ex
         });
       } catch (error: any) {
         deleteFileAfterLoading(newMessage.topicId, clientId, i.toString());
@@ -223,12 +292,12 @@ export function useMessageSender(
 
     try {
       await sendMessageChat({
-        topicId: route.value.id,
+        topicId,
         text: '',
         medias,
         ex: JSON.stringify({ clientId }),
-        replyMessageId: state.replyMessage?.id,
-        forwardMessageId: state.forwardMessage?.id
+        replyMessageId,
+        forwardMessageId
       });
 
       await nextTick();

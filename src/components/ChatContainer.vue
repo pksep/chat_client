@@ -113,7 +113,7 @@ import {
   type IChatContainerProps
 } from './interfaces/interfaces';
 import { useResizeState } from '../composables/useResizeState';
-import { MAX_W_MD, MAX_W_XL } from '../utils/constants';
+import { MAX_W_MD } from '../utils/constants';
 import { getAuthUser } from '../composables/useAuth';
 import MobileModal from './UI/MobileModal.vue';
 import { Loader, Button, ButtonTypeEnum } from '@pksep/yui';
@@ -151,7 +151,7 @@ const route = useUrlWatcher();
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const { toggle } = useResizeState({
-  breakpoint: MAX_W_XL,
+  breakpoint: MAX_W_MD,
   storageKey: 'menu-collapse'
 });
 

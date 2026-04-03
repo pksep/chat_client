@@ -12,9 +12,7 @@ interface AuthResponse {
   accessToken?: string;
   user?: User;
   erpToken?: string;
-  refreshToken?: string;
   expireTimeSeconds?: number;
-  refreshExpireTimeSeconds?: number;
 }
 
 interface DirectAuthCredentials {
@@ -24,7 +22,6 @@ interface DirectAuthCredentials {
 
 interface StoredChatAuthSession {
   token: string;
-  refreshToken?: string;
   user?: User;
 }
 
@@ -48,14 +45,8 @@ const getAccessTokenFromResponse = (data: Record<string, unknown>): string => {
 
 const normalizeAuthResponse = (data: Record<string, unknown>): AuthResponse => {
   const accessToken = getAccessTokenFromResponse(data);
-  const refreshToken =
-    typeof data.refreshToken === 'string' ? data.refreshToken : undefined;
   const expireTimeSeconds =
     typeof data.expireTimeSeconds === 'number' ? data.expireTimeSeconds : 0;
-  const refreshExpireTimeSeconds =
-    typeof data.refreshExpireTimeSeconds === 'number'
-      ? data.refreshExpireTimeSeconds
-      : undefined;
 
   if (accessToken) {
     setAuthToken(accessToken, expireTimeSeconds);
@@ -78,9 +69,7 @@ const normalizeAuthResponse = (data: Record<string, unknown>): AuthResponse => {
     accessToken,
     user: data.user as User | undefined,
     erpToken,
-    refreshToken,
-    expireTimeSeconds,
-    refreshExpireTimeSeconds
+    expireTimeSeconds
   };
 };
 
@@ -126,32 +115,6 @@ export const loginWithCredentials = async (
   return normalizeAuthResponse(data);
 };
 
-export const refreshErpSession = async (
-  refreshToken: string
-): Promise<AuthResponse> => {
-  const config = getConfig();
-  const response = await fetch(`${config.CHAT_API_DOMAIN}/auth/refresh`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ refreshToken })
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data?.message || data?.error || 'ERP refresh failed');
-  }
-
-  const normalizedResponse = normalizeAuthResponse(data);
-
-  return {
-    ...normalizedResponse,
-    refreshToken: normalizedResponse.refreshToken ?? refreshToken
-  };
-};
-
 export const saveChatAuthSession = (
   session: StoredChatAuthSession,
   persist = true
@@ -182,10 +145,6 @@ export const getChatAuthSession = (): StoredChatAuthSession | null => {
 
 export const getStoredChatAccessToken = (): string | null => {
   return getChatAuthSession()?.token || null;
-};
-
-export const getStoredChatRefreshToken = (): string | null => {
-  return getChatAuthSession()?.refreshToken || null;
 };
 
 export const isStoredChatSessionPersistent = (): boolean => {
@@ -270,76 +229,14 @@ export const isAuthError = (error: unknown): boolean => {
   );
 };
 
-let erpRefreshPromise: Promise<AuthResponse | null> | null = null;
-
 export const tryRefreshErpSession = async (): Promise<AuthResponse | null> => {
-  const refreshToken = getStoredChatRefreshToken();
-
-  if (!refreshToken) {
-    return null;
-  }
-
-  if (erpRefreshPromise) {
-    return erpRefreshPromise;
-  }
-
-  erpRefreshPromise = (async () => {
-    try {
-      const refreshed = await refreshErpSession(refreshToken);
-
-      if (refreshed.token) {
-        const storedChatSession = getChatAuthSession();
-
-        saveChatAuthSession(
-          {
-            token: refreshed.token,
-            refreshToken: refreshed.refreshToken,
-            user: refreshed.user ?? storedChatSession?.user
-          },
-          isStoredChatSessionPersistent()
-        );
-      }
-
-      if (refreshed.erpToken) {
-        saveBootstrapErpSession(
-          {
-            accessToken: refreshed.erpToken
-          },
-          isStoredChatSessionPersistent()
-        );
-      }
-
-      return refreshed;
-    } catch (error) {
-      console.error('Failed to refresh ERP session after auth error:', error);
-      clearErpAuthSession();
-      return null;
-    } finally {
-      erpRefreshPromise = null;
-    }
-  })();
-
-  return erpRefreshPromise;
+  return null;
 };
 
 export const withErpRefreshOnAuthError = async <T>(
   operation: () => Promise<T>
 ): Promise<T> => {
-  try {
-    return await operation();
-  } catch (error) {
-    if (!isAuthError(error)) {
-      throw error;
-    }
-
-    const refreshed = await tryRefreshErpSession();
-
-    if (!refreshed?.token) {
-      throw error;
-    }
-
-    return operation();
-  }
+  return operation();
 };
 
 export const fetchAuthUser = async (): Promise<User | null> => {

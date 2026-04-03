@@ -72,8 +72,15 @@ export interface IMenuRightProps extends IMenuProps {
 export interface IMedia extends Media {
   size: number;
   originName: string;
+  uploadPercent?: number | null;
+  ex?: {
+    width?: number;
+    height?: number;
+    previewWidth?: number;
+    previewHeight?: number;
+  };
   isLoading?: boolean;
-  thumbnailPath?: string;
+  thumbnailPath?: string | null;
   localPath?: string;
 }
 

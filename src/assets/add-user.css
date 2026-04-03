@@ -56,7 +56,7 @@
   width: 100%;
 }
 
-@media screen and (width <= 480px) {
+@media screen and (width <= 768px) {
   .line {
     margin-top: 0;
   }
