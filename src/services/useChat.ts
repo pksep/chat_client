@@ -246,7 +246,9 @@ const refreshActiveTopicMessagesAfterReconnect = async (
   topicId: string
 ): Promise<void> => {
   const existingMessages = getMessagesByTopicId(topicId);
-  const existingMessageIds = new Set(existingMessages.map(message => message.id));
+  const existingMessageIds = new Set(
+    existingMessages.map(message => message.id)
+  );
   const latestMessages = await fetchMessagesForTopic(topicId, {
     limit: 50,
     skipSave: true
