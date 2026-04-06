@@ -213,10 +213,7 @@ import UnmuteIcon from '../UI/UnmuteIcon.vue';
 import MuteIcon from '../UI/MuteIcon.vue';
 import { TopicType } from '../../services/useChatSDK/types';
 import { getUserLastOnline } from '../../composables/useUsers';
-import {
-  getHasWebsocketConnection,
-  getIsRecentlyReconnected
-} from '../../services/useChat';
+import { getHasWebsocketConnection } from '../../services/useChat';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
