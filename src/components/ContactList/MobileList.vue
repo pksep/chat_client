@@ -99,9 +99,18 @@ const contactList = computed(() => {
     return [...filteredByType];
   }
 
-  return filteredByType.filter(topic =>
-    topic.name?.toLowerCase().includes(query)
-  );
+  return filteredByType.filter(topic => {
+    const nameMatch = (topic.name || '').toLowerCase().includes(query);
+    const erpInitialsMatch = (
+      typeof topic.user?.ex === 'string'
+        ? JSON.parse(topic.user.ex)
+        : topic.user?.ex
+    )?.erpInitials
+      ?.toLowerCase()
+      ?.includes(query);
+
+    return nameMatch || erpInitialsMatch;
+  });
 });
 
 const emits = defineEmits<IMobileListEmits>();
