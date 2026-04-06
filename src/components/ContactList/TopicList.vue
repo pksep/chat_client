@@ -1,5 +1,6 @@
 <template>
   <ul
+    :key="listRenderKey"
     :class="['contact-list', props.class]"
     role="list"
     :data-testid="`${props.dataTestid}-ContactList-List`"
@@ -38,11 +39,7 @@
           :alt="`Avatar of ${topic.name}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           is-icon
-          :is-online="
-            topic.type === TopicType.DM &&
-            !!topic.user &&
-            !getUserLastOnline(topic.user)
-          "
+          :is-online="isTopicUserOnline(topic)"
         />
         <div class="contact-list__block--wrapper">
           <h5
@@ -189,7 +186,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import { Avatar, Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
@@ -216,6 +213,10 @@ import UnmuteIcon from '../UI/UnmuteIcon.vue';
 import MuteIcon from '../UI/MuteIcon.vue';
 import { TopicType } from '../../services/useChatSDK/types';
 import { getUserLastOnline } from '../../composables/useUsers';
+import {
+  getHasWebsocketConnection,
+  getIsRecentlyReconnected
+} from '../../services/useChat';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
@@ -241,8 +242,15 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
 const authedUser = computed(() => getAuthUser());
+const isRecentlyReconnected = computed(() => getHasWebsocketConnection());
+const listRenderKey = ref(0);
 
 const config = getConfig();
+
+watch(isRecentlyReconnected, value => {
+  if (!value) return;
+  listRenderKey.value += 1;
+});
 
 const handlePin = (topic: ITopic): void => {
   togglePinTopic(topic);
@@ -270,6 +278,12 @@ const handleKeyDown = (contact: ITopic, event: KeyboardEvent): void => {
     handleClick(contact);
   }
 };
+
+const isTopicUserOnline = (topic: ITopic): boolean =>
+  topic.type === TopicType.DM &&
+  !!topic.user &&
+  !getUserLastOnline(topic.user) &&
+  getHasWebsocketConnection();
 
 const getTopicLastMessageLabel = (media: IMedia[]): string => {
   let text = '';

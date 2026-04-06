@@ -12,7 +12,9 @@
       class="user-profile__avatar"
       :initials="props.user.initials"
       :data-testid="`${dataTestid}-UserProfile-Avatar`"
-      :is-online="!effectiveLastOnline && !isCurrentUser"
+      :is-online="
+        !isWaitingConnection && !effectiveLastOnline && !isCurrentUser
+      "
     />
     <h3
       class="user-profile__title"
