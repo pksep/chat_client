@@ -37,17 +37,18 @@ export function useMobileApp() {
     if (!mobilePlatform.value) return;
 
     const start = Date.now();
-    const apkUrl = `${window.location.origin}/release/android/app.apk`;
+    const androidStoreUrl = 'https://www.rustore.ru/catalog/app/sep.pksep.app';
 
     // ANDROID
     if (mobilePlatform.value === MobilePlatformEnum.ANDROID) {
-      /**
-       * Используем intent:// для Chrome на Android.
-       * Если приложение установлено — оно откроется.
-       * Если нет — браузер перенаправит на S.browser_fallback_url (прямую ссылку на APK).
-       */
-      const intentUrl = `intent://open#Intent;scheme=myapp;package=sep.pksep.app;S.browser_fallback_url=${encodeURIComponent(apkUrl)};end`;
-      window.location.href = intentUrl;
+      window.location.href = 'myapp://open';
+
+      setTimeout(() => {
+        if (Date.now() - start < 1500) {
+          window.location.href = androidStoreUrl;
+        }
+      }, 1200);
+
       return;
     }
 

@@ -45,17 +45,6 @@
     </div>
   </div>
 
-  <EmptyChat
-    :chapter="route.type"
-    :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
-    v-if="
-      !state.messages.length &&
-      !state.aiMessages.length &&
-      !getIsWebsocketConnecting() &&
-      !isLoadingInitialMessages
-    "
-  />
-
   <Loading
     v-if="isLoadingInitialMessages"
     message="Загрузка сообщений..."
@@ -103,7 +92,6 @@ import {
 import MessageListAIItems from './Messages/MessageListAIItems.vue';
 import MessageListUserItems from './Messages/MessageListUserItems.vue';
 import MessageListInput from './Messages/MessageListInput.vue';
-import EmptyChat from './EmptyChat.vue';
 import Loading from './Loading.vue';
 import {
   MessageTypeEnum,
@@ -111,7 +99,6 @@ import {
   Icon,
   IconNameEnum
 } from '@pksep/yui';
-import { getIsWebsocketConnecting } from '../services/useChat';
 import type { IMessageListProps } from './interfaces/message-list';
 import type { AIMessage } from '../types/messages';
 import { useUrlWatcher } from '../composables/navigation';
@@ -137,6 +124,8 @@ import { useMessageSender } from './Messages/composables/useMessageSender';
 import { useMessageMastra } from './Messages/composables/useMessageMastra';
 import { useMessageActions } from './Messages/composables/useMessageActions';
 import { Capacitor } from '@capacitor/core';
+import { useResizeState } from '../composables/useResizeState';
+import { MAX_W_MD } from '../utils/constants';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -151,6 +140,7 @@ const messageListUserItemsRef = useTemplateRef<any>('messageListUserItemsRef');
 const messageListInputRef = useTemplateRef<any>('messageListInputRef');
 
 const route = useUrlWatcher();
+const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const { onTouchStart, onTouchEnd } = useMessageSwipe(route);
 
@@ -437,7 +427,10 @@ const handleWindowKeydown = async (e: KeyboardEvent) => {
 };
 
 onMounted(() => {
-  focusMessageInput();
+  if (!isMobile.value) {
+    focusMessageInput();
+  }
+
   window.addEventListener('keydown', handleWindowKeydown, true);
 });
 
