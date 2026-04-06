@@ -7,20 +7,30 @@ import { authedUser } from '../composables/useAuth';
 import {
   useTopics,
   changeUnreadMessageCount,
-  deleteTopicFromList
+  deleteTopicFromList,
+  fetchAllTopics
 } from '../composables/useTopics';
 import {
   updateLocalGroupDetails,
-  updateLocalLastMessageGroup
+  updateLocalLastMessageGroup,
+  getGroupById
 } from '../composables/useGroup';
-import { getUserById, updateLocalUserStatus } from '../composables/useUsers';
+import {
+  fetchAllUsers,
+  getUserById,
+  updateLocalUserStatus
+} from '../composables/useUsers';
 import {
   addMessageToLocal,
   changeLocalReadStatus,
   changeReactionFromLocal,
   deleteMessageFromLocal,
   editMessageFromLocal,
-  playNotificationSound
+  playNotificationSound,
+  fetchMessagesForTopic,
+  fetchPinnedMessagesForTopic,
+  getMessagesByTopicId,
+  mergeMessagesForTopic
 } from './useMessages';
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
 import {
@@ -36,6 +46,8 @@ import { roomId as liveKitRoomId } from './useLiveKit';
 import { Capacitor } from '@capacitor/core';
 import { initCallKit, showIncomingCallKit, endAllCallKits } from './useCallKit';
 import type { MediaPreviewDimensions } from '../utils/mediaPreview';
+import { useUrlWatcher } from '../composables/navigation';
+import { RouteTypes } from '../composables/navigation/useUrlRouting';
 
 let chatSDK: ChatSDK | null = null;
 let activeCallNotification: Notification | null = null;
@@ -212,6 +224,86 @@ const setupChatListeners = (): void => {
 let isVisibilityListenerAdded = false;
 let isResumeListenersAdded = false;
 let lastVisibilityState = document.visibilityState;
+let reconnectRefreshTimeout: ReturnType<typeof setTimeout> | null = null;
+let isRefreshingAfterReconnect = false;
+
+const route = useUrlWatcher();
+
+const markRecentlyReconnected = (): void => {
+  isRecentlyReconnected.value = true;
+
+  if (reconnectRefreshTimeout) {
+    clearTimeout(reconnectRefreshTimeout);
+  }
+
+  reconnectRefreshTimeout = setTimeout(() => {
+    isRecentlyReconnected.value = false;
+    reconnectRefreshTimeout = null;
+  }, 3000);
+};
+
+const refreshActiveTopicMessagesAfterReconnect = async (
+  topicId: string
+): Promise<void> => {
+  const existingMessages = getMessagesByTopicId(topicId);
+  const existingMessageIds = new Set(existingMessages.map(message => message.id));
+  const latestMessages = await fetchMessagesForTopic(topicId, {
+    limit: 50,
+    skipSave: true
+  });
+
+  if (latestMessages.length > 0) {
+    mergeMessagesForTopic(topicId, latestMessages, 'replace');
+
+    const hasIncomingMessages = latestMessages.some(
+      message =>
+        !existingMessageIds.has(message.id) &&
+        message.senderUserId !== currentUserId.value
+    );
+
+    if (hasIncomingMessages) {
+      playNotificationSound(topicId);
+    }
+    return;
+  }
+
+  if (existingMessages.length === 0) {
+    const fallbackMessages = await fetchMessagesForTopic(topicId);
+
+    const hasIncomingMessages = fallbackMessages.some(
+      message => message.senderUserId !== currentUserId.value
+    );
+
+    if (hasIncomingMessages) {
+      playNotificationSound(topicId);
+    }
+  }
+};
+
+const refreshDataAfterReconnect = async (): Promise<void> => {
+  if (isRefreshingAfterReconnect) {
+    return;
+  }
+
+  isRefreshingAfterReconnect = true;
+
+  try {
+    await Promise.allSettled([fetchAllTopics(), fetchAllUsers()]);
+
+    if (route.value.id) {
+      await Promise.allSettled([
+        fetchPinnedMessagesForTopic(route.value.id),
+        refreshActiveTopicMessagesAfterReconnect(route.value.id)
+      ]);
+
+      if (route.value.type === RouteTypes.GROUP) {
+        getGroupById(route.value.id);
+      }
+    }
+  } finally {
+    isRefreshingAfterReconnect = false;
+  }
+};
 
 const reconnectChatOnResume = (): void => {
   if (!chatSDK) {
@@ -244,7 +336,13 @@ export const initializeChat = async (options: {
     token: options.token
   });
   chatSDK.setConnectionStateListener(connected => {
+    const wasConnected = hasWebsocketConnection.value;
     hasWebsocketConnection.value = connected;
+
+    if (connected && wasConnected === false && !isWebsocketConnecting.value) {
+      markRecentlyReconnected();
+      void refreshDataAfterReconnect();
+    }
   });
   areChatListenersBound = false;
 

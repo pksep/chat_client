@@ -111,6 +111,14 @@
     @unmount-confirm="handleDeleteMessage"
   />
 
+  <ConfirmModal
+    :open="unpinModalOpen"
+    title="Открепить сообщение"
+    description="Вы уверены, что хотите открепить сообщение?"
+    @unmount-close="handleCloseUnpinModal"
+    @unmount-confirm="handleConfirmUnpinMessage"
+  />
+
   <ForwardModal
     :open="forwardModalOpen"
     @unmount-close="handleCloseForwardModal"
@@ -168,6 +176,7 @@ const quickReactonList = computed(() => ['♥️', '🔥', '👍', '😂', '👌
 const messages = computed(() => getMessagesByTopicId(props.topicId));
 
 const deleteModalOpen = ref(false);
+const unpinModalOpen = ref(false);
 const forwardModalOpen = ref(false);
 const reactionRow = ref<HTMLElement | null>(null);
 const flipReactions = ref(false);
@@ -197,6 +206,14 @@ const handleOpenDeleteModal = () => {
 
 const handleCloseDeleteModal = () => {
   deleteModalOpen.value = false;
+};
+
+const handleOpenUnpinModal = () => {
+  unpinModalOpen.value = true;
+};
+
+const handleCloseUnpinModal = () => {
+  unpinModalOpen.value = false;
 };
 
 const handleOpenForwardModal = () => {
@@ -248,11 +265,26 @@ const handleReactMessage = (emoji: string) => {
 };
 
 const handlePinMessage = async () => {
+  if (props.isPin) {
+    handleOpenUnpinModal();
+    return;
+  }
+
   await togglePinMessageChat({
     messageId: props.messageId,
     topicId: props.topicId
   });
 
+  handleClosePopover();
+};
+
+const handleConfirmUnpinMessage = async () => {
+  await togglePinMessageChat({
+    messageId: props.messageId,
+    topicId: props.topicId
+  });
+
+  handleCloseUnpinModal();
   handleClosePopover();
 };
 
