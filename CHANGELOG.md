@@ -1,3 +1,23 @@
+# [1.24.0](https://github.com/pksep/chat_client/compare/v1.23.1...v1.24.0) (2026-04-06)
+
+
+### Bug Fixes
+
+* apk link ([2747063](https://github.com/pksep/chat_client/commit/274706373caa711d60a40bc9c8594ce83990fffe))
+* chat in blocked apk ([f467639](https://github.com/pksep/chat_client/commit/f467639ab4f60062c48b6e1471b6ed7b14967225))
+* lint ([17291b0](https://github.com/pksep/chat_client/commit/17291b09a7e784a58c5e4dc0bbb9754d1d277cad))
+* lint ([bf4c376](https://github.com/pksep/chat_client/commit/bf4c3767c9da237b280eca8db681c6854753c931))
+* lint ([bc758be](https://github.com/pksep/chat_client/commit/bc758be9b728d70a6869f34c1c7399cdaef65b01))
+* logic when reconnecting ([b32c750](https://github.com/pksep/chat_client/commit/b32c75022870391d8c3bd545d55673baa9768c3d))
+* styles ([c2bceca](https://github.com/pksep/chat_client/commit/c2bceca14ec78d3477d40e0eb9534a5cd3fffe2a))
+* update topics when connection lost ([2f1f49a](https://github.com/pksep/chat_client/commit/2f1f49a967a8f8a7867544a70d43234aae0b6cec))
+
+
+### Features
+
+* add chatsToolbar ([d98c25e](https://github.com/pksep/chat_client/commit/d98c25e9fcde647cd742edc6e76e201c88c6418e))
+* add waitConnection component ([3568f4d](https://github.com/pksep/chat_client/commit/3568f4d8f46069261db52af14fbe4b36343ee06d))
+
 ## [1.23.1](https://github.com/pksep/chat_client/compare/v1.23.0...v1.23.1) (2026-04-03)
 
 
