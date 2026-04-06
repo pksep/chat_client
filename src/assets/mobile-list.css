@@ -13,7 +13,7 @@
 .mobile-list-container__toolbar {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 99;
   background-color: var(--white);
   padding: 10px 0 0;
 }
@@ -44,6 +44,10 @@
 @media screen and (width <= 768px) {
   .mobile-list-container {
     --mobile-list-height: 53px;
+
+    &::-webkit-scrollbar {
+      width: 0;
+    }
   }
 
   .mobile__list-modal__contact-selector {

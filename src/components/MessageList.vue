@@ -124,6 +124,8 @@ import { useMessageSender } from './Messages/composables/useMessageSender';
 import { useMessageMastra } from './Messages/composables/useMessageMastra';
 import { useMessageActions } from './Messages/composables/useMessageActions';
 import { Capacitor } from '@capacitor/core';
+import { useResizeState } from '../composables/useResizeState';
+import { MAX_W_MD } from '../utils/constants';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -138,6 +140,7 @@ const messageListUserItemsRef = useTemplateRef<any>('messageListUserItemsRef');
 const messageListInputRef = useTemplateRef<any>('messageListInputRef');
 
 const route = useUrlWatcher();
+const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const { onTouchStart, onTouchEnd } = useMessageSwipe(route);
 
@@ -424,7 +427,10 @@ const handleWindowKeydown = async (e: KeyboardEvent) => {
 };
 
 onMounted(() => {
-  focusMessageInput();
+  if (!isMobile.value) {
+    focusMessageInput();
+  }
+
   window.addEventListener('keydown', handleWindowKeydown, true);
 });
 

@@ -134,7 +134,7 @@
   border: 1px solid var(--grey13);
   border-radius: 15px;
   background-color: var(--white);
-  color: var(--text-black);
+  color: var(--text-color);
   font-size: 14px;
   transition: all 0.2s ease;
 }
@@ -160,10 +160,6 @@
   left: calc(var(--size-left-menu) - 12px);
   z-index: 9;
   transition: transform 0.3s;
-}
-
-.menu--collapse .chats-toolbar__headline > button.button-yui-kit {
-  margin-right: auto;
 }
 
 .menu__button-install-prompt {

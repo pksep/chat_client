@@ -9,7 +9,7 @@
         Чаты
       </h4>
 
-      <WaitConnection v-if="!!isWaitingConnection" />
+      <WaitConnection v-if="!props.isCollapse && !!isWaitingConnection" />
 
       <Button
         class="chats-toolbar__create-button"

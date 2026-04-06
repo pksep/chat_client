@@ -232,6 +232,14 @@ svg.icon-yui-kit.contact-list__read-icon {
   overflow: hidden scroll;
 }
 
+.menu--collapse .contact-list {
+  max-height: calc(100vh - 125px) !important;
+}
+
+.menu--collapse .chats-toolbar__headline {
+  justify-content: center;
+}
+
 .contact-list::-webkit-scrollbar {
   width: 0;
 }
