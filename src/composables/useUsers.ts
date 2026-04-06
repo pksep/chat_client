@@ -1,6 +1,7 @@
 import { ref, shallowRef } from 'vue';
 import { getChatSDK } from '../services/useChat';
 import { getConfig } from '../services/useConfig';
+import { fetchWithAuthRedirect } from './useAuth';
 
 import type { IUser } from '../components/interfaces/interfaces';
 import {
@@ -92,7 +93,7 @@ export const fetchUsersForAuth = async (
       page: String(page),
       limit: String(limit)
     });
-    const response = await fetch(
+    const response = await fetchWithAuthRedirect(
       `${apiUrl}/users/login-options?${queryParams.toString()}`
     );
 

@@ -92,7 +92,7 @@
   .contact-list__description,
   .contact-list__description p,
   .contact-list__description strong {
-    max-width: calc(100vw - 100px);
+    max-width: calc(100vw - 130px);
   }
 }
 
@@ -228,7 +228,7 @@ svg.icon-yui-kit.contact-list__read-icon {
 .contact-list {
   gap: 2px;
   display: grid;
-  max-height: calc(100vh - 145px);
+  max-height: calc(100vh - 170px);
   overflow: hidden scroll;
 }
 
@@ -308,6 +308,7 @@ svg.icon-yui-kit.contact-list__read-icon {
 
   .contact-list {
     max-height: initial;
+    padding: 10px 16px 0;
   }
 
   .contact-list__block--wrapper {
@@ -334,6 +335,16 @@ svg.icon-yui-kit.contact-list__read-icon {
   }
   .contact-selector__list {
     max-height: calc(var(--default-height) - 120px);
+  }
+
+  .chats-toolbar > .line {
+    margin: 0 !important;
+    width: 100% !important;
+  }
+
+  .chats-toolbar__controls {
+    padding-left: 16px !important;
+    padding-right: 16px;
   }
 }
 

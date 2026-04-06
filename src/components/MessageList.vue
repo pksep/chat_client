@@ -45,17 +45,6 @@
     </div>
   </div>
 
-  <EmptyChat
-    :chapter="route.type"
-    :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
-    v-if="
-      !state.messages.length &&
-      !state.aiMessages.length &&
-      !getIsWebsocketConnecting() &&
-      !isLoadingInitialMessages
-    "
-  />
-
   <Loading
     v-if="isLoadingInitialMessages"
     message="Загрузка сообщений..."
@@ -103,7 +92,6 @@ import {
 import MessageListAIItems from './Messages/MessageListAIItems.vue';
 import MessageListUserItems from './Messages/MessageListUserItems.vue';
 import MessageListInput from './Messages/MessageListInput.vue';
-import EmptyChat from './EmptyChat.vue';
 import Loading from './Loading.vue';
 import {
   MessageTypeEnum,
