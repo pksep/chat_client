@@ -99,7 +99,6 @@ import {
   Icon,
   IconNameEnum
 } from '@pksep/yui';
-import { getIsWebsocketConnecting } from '../services/useChat';
 import type { IMessageListProps } from './interfaces/message-list';
 import type { AIMessage } from '../types/messages';
 import { useUrlWatcher } from '../composables/navigation';
