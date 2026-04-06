@@ -9,6 +9,8 @@
         Чаты
       </h4>
 
+      <WaitConnection v-if="!!isWaitingConnection" />
+
       <Button
         class="chats-toolbar__create-button"
         :type="ButtonTypeEnum.secondary"
@@ -112,6 +114,9 @@ import MessageIcon from '../UI/MessageIcon.vue';
 import GroupIcon from '../UI/GroupIcon.vue';
 import NewTopicIcon from '../UI/NewTopicIcon.vue';
 import type { ChatsToolbarFilter } from '../../composables/useChatsToolbarState';
+import WaitConnection from '../UI/WaitConnection.vue';
+import { getHasWebsocketConnection } from '../../services/useChat';
+import { computed } from 'vue';
 
 const props = withDefaults(
   defineProps<{
@@ -137,6 +142,8 @@ const emits = defineEmits<{
   (e: 'create-group'): void;
   (e: 'collapse'): void;
 }>();
+
+const isWaitingConnection = computed(() => !getHasWebsocketConnection());
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
