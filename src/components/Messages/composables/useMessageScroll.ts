@@ -22,7 +22,11 @@ export function useMessageScroll(
   chatWrapperRef: Ref<HTMLElement | null>,
   messageListUserItemsRef: Ref<any>,
   route: Ref<{ id: string; type: string }>,
-  state: { messages: IMessage[] },
+  state: {
+    messages: IMessage[];
+    hideUnreadMarker?: boolean;
+    unreadMarkerMessageId?: string | null;
+  },
   props: { user?: any }
 ) {
   const isShowScrollToBottomButton = ref(false);
@@ -278,6 +282,20 @@ export function useMessageScroll(
 
     setTimeout(() => {
       if (!chatWrapperRef.value) return;
+
+      if (!state.hideUnreadMarker && state.unreadMarkerMessageId) {
+        const unreadMessageElement = chatWrapperRef.value.querySelector(
+          `[data-message-id="${state.unreadMarkerMessageId}"]`
+        );
+
+        if (unreadMessageElement instanceof HTMLElement) {
+          unreadMessageElement.scrollIntoView({
+            block: 'start',
+            behavior: 'auto'
+          });
+          return;
+        }
+      }
 
       const unreadRef = messageListUserItemsRef.value?.unreadMessageStartRef;
       if (unreadRef?.length > 0) {

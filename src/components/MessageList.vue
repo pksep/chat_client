@@ -164,14 +164,15 @@ const state = reactive({
   replyMessage: null as IMessage | null,
   forwardMessage: null as IMessage | null,
   errorMessage: '',
-  hideUnreadMarker: false
+  hideUnreadMarker: false,
+  unreadMarkerMessageId: null as string | null
 });
 
 const {
   isShowScrollToBottomButton,
   isLoadingInitialMessages,
   scrollState,
-  handleScroll,
+  handleScroll: handleMessageScroll,
   scrollToBottom,
   handleScrollToButton,
   setupIntersectionObserver,
@@ -253,6 +254,49 @@ const shouldResetUnreadForCurrentTopic = (): boolean => {
   );
 };
 
+const getFirstUnreadMessageId = (): string | null => {
+  const currentUserId = authUser.value?.id;
+
+  if (!currentUserId) {
+    return null;
+  }
+
+  const firstUnreadMessage = state.messages.find(
+    message =>
+      !message.isSystem &&
+      message.senderUserId !== currentUserId &&
+      !message.isReadByMe
+  );
+
+  return firstUnreadMessage?.id || null;
+};
+
+const isViewingCurrentTopicBottom = (): boolean => {
+  const wrapper = chatWrapperRef.value;
+
+  if (!route.value?.id || !wrapper || route.value?.type === RouteTypes.AI) {
+    return false;
+  }
+
+  const distanceFromBottom =
+    wrapper.scrollHeight - wrapper.clientHeight - wrapper.scrollTop;
+
+  return distanceFromBottom < 100;
+};
+
+const resetUnreadIfViewingBottom = (): void => {
+  if (!route.value?.id || !isViewingCurrentTopicBottom()) {
+    return;
+  }
+
+  resetTopicUnreadState(route.value.id);
+};
+
+const handleScroll = async (): Promise<void> => {
+  await handleMessageScroll();
+  resetUnreadIfViewingBottom();
+};
+
 const { handleSend, handleAttachFile } = useMessageSender(
   route,
   inputText,
@@ -299,6 +343,7 @@ watch(
     await hydrateMessagesFromCache(route.value.id);
     await fetchPinnedMessagesForTopic(route.value.id);
     await fetchMessagesForTopic(route.value.id);
+    state.unreadMarkerMessageId = getFirstUnreadMessageId();
 
     if (shouldResetUnreadForCurrentTopic()) {
       resetTopicUnreadState(route.value.id);
@@ -442,6 +487,19 @@ watch(
   () => inputText.value,
   () => {
     updateLocalStorageInputText();
+  }
+);
+
+watch(
+  () => state.messages.map(message => message.id),
+  () => {
+    nextTick(() => {
+      if (!state.hideUnreadMarker && !state.unreadMarkerMessageId) {
+        state.unreadMarkerMessageId = getFirstUnreadMessageId();
+      }
+
+      resetUnreadIfViewingBottom();
+    });
   }
 );
 
