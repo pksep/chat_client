@@ -90,6 +90,7 @@ import MessageBubbleFiles from './MessageBubbleFiles.vue';
 import MessageBubbleMedia from './MessageBubbleMedia.vue';
 import { useMessageMedia } from './composables/useMessageMedia';
 import { getConfig } from '../../services/useConfig';
+import { fetchWithAuthRedirect } from '../../composables/useAuth';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -134,7 +135,7 @@ const downloadMediaFile = async (media: IMedia) => {
   const fileName = media.originName || 'file';
 
   try {
-    const response = await fetch(url);
+    const response = await fetchWithAuthRedirect(url);
 
     if (!response.ok) {
       throw new Error(`Failed to download file: ${response.status}`);

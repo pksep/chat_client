@@ -194,6 +194,22 @@ export const redirectToAuthorization = (): void => {
   window.location.replace(window.location.origin);
 };
 
+export const ensureAuthorizedResponse = (response: Response): Response => {
+  if (response.status === 401) {
+    redirectToAuthorization();
+  }
+
+  return response;
+};
+
+export const fetchWithAuthRedirect = async (
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<Response> => {
+  const response = await fetch(input, init);
+  return ensureAuthorizedResponse(response);
+};
+
 const getAuthErrorStatus = (error: unknown): number | null => {
   if (typeof error !== 'object' || !error) {
     return null;

@@ -4,6 +4,17 @@
     role="main"
     :data-testid="`${props.dataTestid}-MobileList-Container`"
   >
+    <ChatsToolbar
+      :model-value="toolbarState.search"
+      :filter="toolbarState.filter"
+      class="mobile-list-container__toolbar"
+      :data-testid="`${props.dataTestid}-MobileList`"
+      @update:model-value="setSearch"
+      @update:filter="setFilter"
+      @create-chat="handleShowAccount(TopicType.DM)"
+      @create-group="handleShowAccount(TopicType.Group)"
+    />
+
     <section
       class="chat-list"
       role="region"
@@ -16,14 +27,6 @@
         @unmount-contact="handleContactSelect"
       />
     </section>
-    <Button
-      :type="ButtonTypeEnum.primary"
-      @click="evt => openActivePopover('plusMenu', evt as MouseEvent)"
-      :disabled="isAssistantRoute"
-      class="mobile__list-button"
-    >
-      <Icon :name="IconNameEnum.plus" />
-    </Button>
   </div>
 
   <template v-if="!isAssistantRoute">
@@ -35,31 +38,6 @@
       @unmount-close="handleCloseModal"
       @unmount-contact="handleNewContact"
     />
-
-    <ContextMenu
-      :visible="!!isOpen['plusMenu']"
-      :position="{ ...position, y: position.y - 80 }"
-      @unmount-close="closeActivePopover('plusMenu')"
-      @click="closeActivePopover('plusMenu')"
-      :data-testid="`${dataTestid}-MessageBubble-ContextMenu`"
-    >
-      <Button
-        @click="handleShowAccount(TopicType.DM)"
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        :data-testid="`${dataTestid}-MessageBubble-ReplyButton`"
-      >
-        <MessageIcon /> Создать диалог
-      </Button>
-      <Button
-        @click="handleShowAccount(TopicType.Group)"
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        :data-testid="`${dataTestid}-MessageBubble-EditButton`"
-      >
-        <GroupIcon /> Создать группу
-      </Button>
-    </ContextMenu>
   </template>
 </template>
 
@@ -70,15 +48,9 @@ import type {
   IMobileListEmits
 } from './interfaces/mobile-list';
 import type { IUser } from '../interfaces/interfaces';
-import {
-  Button,
-  ButtonTypeEnum,
-  Icon,
-  IconNameEnum,
-  SizesEnum
-} from '@pksep/yui';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
 import TopicList from './TopicList.vue';
+import ChatsToolbar from '../Menu/ChatsToolbar.vue';
 import { useTopics } from '../../composables/useTopics';
 import { useUrlWatcher } from '../../composables/navigation';
 import {
@@ -86,11 +58,8 @@ import {
   navigateToGroupsList,
   RouteTypes
 } from '../../composables/navigation/useUrlRouting';
-import { useContextMenu } from '../../composables/useContextMenu';
 import { TopicType } from '../../services/useChatSDK/types';
-import ContextMenu from './ContextMenu.vue';
-import MessageIcon from '../UI/MessageIcon.vue';
-import GroupIcon from '../UI/GroupIcon.vue';
+import { useChatsToolbarState } from '../../composables/useChatsToolbarState';
 
 const route = useUrlWatcher();
 
@@ -98,22 +67,41 @@ const isAssistantRoute = computed(
   () => route.value?.type === RouteTypes.ASSISTANT
 );
 const isGroupRoute = computed(() => route.value?.type === RouteTypes.GROUP);
-const { isOpen, position, openActivePopover, closeActivePopover } =
-  useContextMenu();
 
 const props = withDefaults(defineProps<IMobileListProps>(), {
   dataTestid: () => 'MobileList'
 });
-const { getTopicList } = useTopics();
 
-const contactList = computed(() => {
-  const topics = getTopicList();
-  return [...topics];
-});
+const { getTopicList } = useTopics();
+const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 
 const state = reactive({
   showAddAccount: false,
   checkUsers: new Set<string | number>()
+});
+
+const contactList = computed(() => {
+  const topics = getTopicList();
+  const query = toolbarState.search.toLowerCase().trim();
+  const filteredByType = topics.filter(topic => {
+    if (toolbarState.filter === 'chats') {
+      return topic.type === TopicType.DM;
+    }
+
+    if (toolbarState.filter === 'groups') {
+      return topic.type === TopicType.Group;
+    }
+
+    return true;
+  });
+
+  if (!query) {
+    return [...filteredByType];
+  }
+
+  return filteredByType.filter(topic =>
+    topic.name?.toLowerCase().includes(query)
+  );
 });
 
 const emits = defineEmits<IMobileListEmits>();
@@ -121,6 +109,10 @@ const emits = defineEmits<IMobileListEmits>();
 const handleContactSelect = (): void => {};
 
 const handleShowAccount = (topicType: TopicType) => {
+  if (isAssistantRoute.value) {
+    return;
+  }
+
   state.showAddAccount = true;
 
   if (topicType === TopicType.DM) {

@@ -220,6 +220,7 @@ export function useMessageScroll(
 
     if (scrollState.isInitialLoad) {
       scrollState.isInitialLoad = false;
+      return;
     }
 
     if (scrollState.isUserScrolling && route.value?.id) {

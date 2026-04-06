@@ -1,5 +1,6 @@
 .mobile-list-container {
   display: grid;
+  align-content: start;
   height: calc(var(--default-height) - var(--mobile-list-height, 53px));
   overflow-y: auto;
   overflow-x: hidden;
@@ -9,16 +10,12 @@
   height: calc(var(--default-height));
 }
 
-button.button-yui-kit.mobile__list-button {
-  position: fixed;
-  bottom: 0;
-  border-radius: 16px;
-  align-self: end;
-  height: 50px;
-  justify-self: end;
-  margin: 12px 10px;
-  max-height: 56px;
-  z-index: 9;
+.mobile-list-container__toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 99;
+  background-color: var(--white);
+  padding: 10px 0 0;
 }
 
 .mobile__list-modal__contact-selector {
@@ -47,7 +44,12 @@ button.button-yui-kit.mobile__list-button {
 @media screen and (width <= 768px) {
   .mobile-list-container {
     --mobile-list-height: 53px;
+
+    &::-webkit-scrollbar {
+      width: 0;
+    }
   }
+
   .mobile__list-modal__contact-selector {
     overflow-y: auto;
   }

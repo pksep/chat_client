@@ -18,9 +18,11 @@ p.chat__nothing-paragraph {
   font-family: 'Inter Variable', sans-serif;
   --basic-height: calc(var(--default-height) - 65px);
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   overflow-y: hidden;
   padding-right: 4px;
   height: var(--basic-height);
+  min-height: 0;
 }
 
 .chat.chat__message:not(.menu__user-assistant) {
@@ -28,9 +30,10 @@ p.chat__nothing-paragraph {
 }
 
 .chat__message-wrapper {
+  grid-row: 2;
   padding: 15px 5px 15px 15px;
-  max-height: var(--basic-height);
-  min-height: calc(100vh - 345px);
+  height: 100%;
+  min-height: 0;
   overflow: hidden scroll;
   display: flex;
   flex-direction: column-reverse;
@@ -274,6 +277,7 @@ p.chat__nothing-paragraph {
 }
 
 .chat__unselected-topic {
+  grid-row: 1 / -1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -287,4 +291,12 @@ p.chat__nothing-paragraph {
     font-size: 24px;
     color: var(--text-light-color);
   }
+}
+
+.pinned-messages {
+  grid-row: 1;
+}
+
+.chat__input {
+  grid-row: 3;
 }

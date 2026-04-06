@@ -26,6 +26,10 @@
   width: 100%;
   fieldset.input-yui-kit {
     background-color: var(--blue15);
+
+    :disabled {
+      background-color: transparent !important;
+    }
   }
 }
 
@@ -56,7 +60,7 @@
   width: 100%;
 }
 
-@media screen and (width <= 768px) {
+@media screen and (width <= 480px) {
   .line {
     margin-top: 0;
   }
