@@ -41,13 +41,21 @@
       :dataTestid="`${props.dataTestid}-ChatContainer-Chat`"
     />
     <template v-if="!isMobile">
-      <MenuInfo
-        class="chat__info"
+      <Modal
         :open="state.isMenuDesktopOpen"
-        :active-tab-id="state.activeTabId"
-        :dataTestid="`${props.dataTestid}-ChatContainer-MenuInfo`"
-        @unmount-collapse="handleMenuToggle"
-      />
+        class="chat__info__modal"
+        position="right"
+        width="404px"
+        @close="handleMenuToggle(false)"
+      >
+        <MenuInfo
+          class="chat__info"
+          :open="state.isMenuDesktopOpen"
+          :active-tab-id="state.activeTabId"
+          :dataTestid="`${props.dataTestid}-ChatContainer-MenuInfo`"
+          @unmount-collapse="handleMenuToggle"
+        />
+      </Modal>
     </template>
     <NewContactModal
       :open="state.isNewContactOpen"

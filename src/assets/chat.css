@@ -54,7 +54,7 @@ p.chat__nothing-paragraph {
   border-radius: 100px;
   box-shadow: 0px 4px 9.8px 0px #0000000d;
   position: fixed;
-  right: calc(var(--size-right-menu) + 15px);
+  right: 15px;
   margin-bottom: -5px;
   display: flex;
   justify-content: center;
@@ -151,7 +151,6 @@ p.chat__nothing-paragraph {
   .chat {
     --basic-height: auto;
     --size-left-menu: 0;
-    --size-right-menu: 0;
     padding-right: 0;
     overflow-y: auto;
   }
@@ -260,7 +259,7 @@ p.chat__nothing-paragraph {
   line-height: 17px;
   color: var(--text-color);
   font-weight: 400;
-  width: calc(100vw - var(--size-left-menu) - var(--size-right-menu) - 170px);
+  width: calc(100vw - var(--size-left-menu) - 170px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

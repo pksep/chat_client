@@ -47,8 +47,10 @@
   font-family: 'Inter Variable', sans-serif;
   height: var(--default-height);
   background-color: var(--blue15);
-  grid-template-areas: 'menu header info' 'menu chat info';
-  grid-template-columns: var(--size-left-menu) auto var(--size-right-menu);
+  grid-template-areas:
+    'menu header'
+    'menu chat';
+  grid-template-columns: var(--size-left-menu) auto;
   grid-template-rows: var(--header-height) 1fr;
   scroll-behavior: auto;
 
@@ -68,13 +70,9 @@
 }
 
 .chat-container.menu-collapse {
-  --size-right-menu: 0px;
   grid-template-areas:
     'menu header'
     'menu chat';
-  & .chat__info {
-    display: none;
-  }
 }
 
 .chat__header {
@@ -99,8 +97,12 @@
   height: 100%;
 }
 
+.chat__info__modal::-webkit-scrollbar {
+  width: 0;
+}
+
 .chat__info {
-  grid-area: info;
+  display: contents;
 }
 
 svg.ai-icon {
@@ -160,7 +162,6 @@ button.primary-yui-kit.disabled-yui-kit {
   .chat-container,
   .chat-container.collapse,
   .chat-container.menu-collapse {
-    --size-right-menu: 0px;
     --size-left-menu: 0;
     grid-template-areas:
       'header header'
