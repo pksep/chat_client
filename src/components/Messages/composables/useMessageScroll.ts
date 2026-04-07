@@ -16,6 +16,7 @@ import {
   fetchMessagesForTopic,
   mergeMessagesForTopic
 } from '../../../services/useMessages';
+import { clearTopicNotifications } from '../../../services/useNotificationNavigation';
 import type { IMessage } from '../../interfaces/interfaces';
 
 export function useMessageScroll(
@@ -117,6 +118,7 @@ export function useMessageScroll(
   const flushVisibleUnreadMessages = () => {
     const visibleUnreadMessageIds = collectVisibleUnreadMessageIds();
     if (visibleUnreadMessageIds.length > 0) {
+      void clearTopicNotifications(route.value.id);
       submitReadMessages(visibleUnreadMessageIds);
     }
   };
@@ -129,6 +131,7 @@ export function useMessageScroll(
     if (unreadMessages.length === 0) return;
 
     try {
+      await clearTopicNotifications(route.value.id);
       await markAsRead({
         messageIds: unreadMessages.map((m: IMessage) => m.id),
         topicId: route.value.id

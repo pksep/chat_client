@@ -4,6 +4,11 @@ import { useChatApi } from './useApi';
 import { getCurrentUserId } from './useChat';
 import { getUserById } from '../composables/useUsers';
 import { handleIncomingPushCall, handleNativeCallAction } from './useLiveKit';
+import {
+  clearTopicNotifications,
+  isTopicCurrentlyVisible,
+  navigateToNotificationTarget
+} from './useNotificationNavigation';
 
 export const initPushNotifications = async () => {
   const api = useChatApi();
@@ -28,6 +33,17 @@ export const initPushNotifications = async () => {
 
     PushNotifications.addListener('pushNotificationReceived', n => {
       console.log('Native push received:', n);
+
+      if (n.data?.action === 'CLEAR_CHAT_NOTIFICATIONS') {
+        void clearTopicNotifications(n.data?.topicId);
+        return;
+      }
+
+      if (isTopicCurrentlyVisible(n.data?.topicId)) {
+        void clearTopicNotifications(n.data?.topicId);
+        return;
+      }
+
       handleCallPush(n);
     });
 
@@ -53,6 +69,20 @@ export const initPushNotifications = async () => {
           n.notification.data?.roomId,
           n.notification.data?.topicId || n.notification.data?.roomId
         );
+        return;
+      }
+
+      if (n.notification.data?.action === 'CLEAR_CHAT_NOTIFICATIONS') {
+        void clearTopicNotifications(n.notification.data?.topicId);
+        return;
+      }
+
+      if (n.notification.data?.type === 'incoming_call') {
+        handleCallPush(n.notification);
+        return;
+      }
+
+      if (navigateToNotificationTarget(n.notification.data || {})) {
         return;
       }
 

@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, watch } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
 
 import type { IChatContainerProps } from './components/interfaces/interfaces';
@@ -40,6 +40,10 @@ import {
   fetchPinnedMessagesForTopic
 } from './services/useMessages';
 import { initPushNotifications } from './services/usePushNotifications';
+import {
+  clearTopicNotifications,
+  syncNotificationContext
+} from './services/useNotificationNavigation';
 import { useResizeState } from './composables/useResizeState';
 import { MAX_W_MD } from './utils/constants';
 import { RouteTypes } from './composables/navigation/useUrlRouting';
@@ -51,26 +55,35 @@ const { fetchAllTopics } = useTopics();
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const route = useUrlWatcher();
 
-const sendFocusStateToSW = (focused: boolean) => {
-  if (!navigator.serviceWorker?.controller) return;
+const getActiveChatTopicId = (): string | null => {
+  if (
+    route.value.id &&
+    (route.value.type === RouteTypes.DIALOGS ||
+      route.value.type === RouteTypes.GROUP)
+  ) {
+    return route.value.id;
+  }
 
-  navigator.serviceWorker.controller.postMessage({
-    type: 'APP_FOCUS',
-    focused
-  });
+  return null;
 };
 
-const updateFocusState = () => {
+const updateNotificationContext = () => {
   const focused = !document.hidden && document.hasFocus();
-  sendFocusStateToSW(focused);
+  const topicId = getActiveChatTopicId();
+
+  void syncNotificationContext({ focused, topicId });
+
+  if (focused && topicId) {
+    void clearTopicNotifications(topicId);
+  }
 };
 
 const initFocusTracking = () => {
-  navigator.serviceWorker?.ready.then(updateFocusState);
+  navigator.serviceWorker?.ready.then(updateNotificationContext);
 
-  window.addEventListener('focus', updateFocusState);
-  window.addEventListener('blur', updateFocusState);
-  document.addEventListener('visibilitychange', updateFocusState);
+  window.addEventListener('focus', updateNotificationContext);
+  window.addEventListener('blur', updateNotificationContext);
+  document.addEventListener('visibilitychange', updateNotificationContext);
 };
 
 const clearStoredErpToken = () => {
@@ -224,4 +237,12 @@ onMounted(async () => {
 
   await runAppInitialization();
 });
+
+watch(
+  () => [route.value.type, route.value.id],
+  () => {
+    updateNotificationContext();
+  },
+  { immediate: true }
+);
 </script>

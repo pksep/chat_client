@@ -45,6 +45,7 @@ import {
 import { roomId as liveKitRoomId } from './useLiveKit';
 import { Capacitor } from '@capacitor/core';
 import { initCallKit, showIncomingCallKit, endAllCallKits } from './useCallKit';
+import { clearTopicNotifications } from './useNotificationNavigation';
 import type { MediaPreviewDimensions } from '../utils/mediaPreview';
 import { useUrlWatcher } from '../composables/navigation';
 import { RouteTypes } from '../composables/navigation/useUrlRouting';
@@ -138,6 +139,10 @@ const setupChatListeners = (): void => {
 
   chatSDK.subscribeToEvent(WebSocketEventType.READ_MESSAGE, ({ payload }) => {
     changeLocalReadStatus(payload.topicId, payload.messageIds, payload.userId);
+
+    if (payload.userId === currentUserId.value) {
+      void clearTopicNotifications(payload.topicId);
+    }
   });
 
   chatSDK.subscribeToEvent(
@@ -647,4 +652,5 @@ export const markAsRead = async (dto: {
   if (messageIds.length === 0) return;
 
   await sdk.markMessagesAsRead(topicId, messageIds);
+  await clearTopicNotifications(topicId);
 };
