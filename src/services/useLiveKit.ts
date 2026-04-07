@@ -167,6 +167,35 @@ const clearDialingTimeout = () => {
   }
 };
 
+const stopTrackPublication = (
+  publication?: {
+    track?: { mediaStreamTrack?: MediaStreamTrack | null } | null;
+  } | null
+) => {
+  const mediaStreamTrack = publication?.track?.mediaStreamTrack;
+  if (!mediaStreamTrack) return;
+
+  mediaStreamTrack.onended = null;
+  mediaStreamTrack.stop();
+};
+
+const stopLocalMediaTracks = () => {
+  if (!room) return;
+
+  room.localParticipant.audioTrackPublications.forEach(publication => {
+    stopTrackPublication(publication);
+  });
+
+  room.localParticipant.videoTrackPublications.forEach(publication => {
+    stopTrackPublication(publication);
+  });
+
+  localVideoStream.value?.getTracks().forEach(track => track.stop());
+  localScreenShareStream.value?.getTracks().forEach(track => track.stop());
+  localVideoStream.value = null;
+  localScreenShareStream.value = null;
+};
+
 const syncLocalTrackState = () => {
   if (!room) {
     localVideoStream.value = null;
@@ -225,7 +254,10 @@ const getActiveRemoteAudioPublication = (
       const mediaTrack = publication.track?.mediaStreamTrack;
 
       return (
-        !!mediaTrack && mediaTrack.readyState === 'live' && !publication.isMuted
+        !!mediaTrack &&
+        mediaTrack.readyState === 'live' &&
+        !publication.isMuted &&
+        publication.source === Track.Source.Microphone
       );
     }
   );
@@ -396,10 +428,12 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncConnectionState(activeRoom);
     })
     .on(RoomEvent.TrackMuted, () => {
+      syncLocalTrackState();
       syncRemoteParticipantState();
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.TrackUnmuted, () => {
+      syncLocalTrackState();
       syncRemoteParticipantState();
       void enforceSingleScreenShare();
     })
@@ -428,6 +462,17 @@ const setupRoomListeners = (activeRoom: Room) => {
     })
     .on(RoomEvent.DataReceived, (payload, participant, _, topic) => {
       handleHandRaiseData(payload, participant, topic);
+    })
+    .on(RoomEvent.Reconnecting, () => {
+      syncLocalTrackState();
+      syncRemoteParticipantState();
+      syncConnectionState(activeRoom);
+    })
+    .on(RoomEvent.Reconnected, () => {
+      syncLocalTrackState();
+      syncRemoteParticipantState();
+      syncConnectionState(activeRoom);
+      void enforceSingleScreenShare();
     })
     .on(RoomEvent.Disconnected, () => {
       cleanup(false);
@@ -488,6 +533,7 @@ const connectToRoom = async () => {
 
 const resetMediaState = () => {
   localVideoStream.value = null;
+  localScreenShareStream.value = null;
   remoteParticipants.value = [];
   handRaisedParticipants.value = {};
   isRemoteVideoActive.value = false;
@@ -882,6 +928,7 @@ export const cleanup = (disconnectRoom = true) => {
   stopDialingSound();
 
   if (disconnectRoom && room) {
+    stopLocalMediaTracks();
     room.disconnect();
   }
 
@@ -914,6 +961,38 @@ export const handleIncomingPushCall = (
         showIncomingCallKit(pushUser.initials, callRoomId, pushUser.avatarUrl);
       }
     });
+  }
+};
+
+export const handleNativeCallAction = async (
+  action: 'accept' | 'decline',
+  incomingRoomId?: string,
+  incomingTopicId?: string
+) => {
+  if (action === 'accept') {
+    if (incomingRoomId) {
+      roomId.value = incomingRoomId;
+    }
+
+    if (incomingTopicId || incomingRoomId) {
+      topicId.value = incomingTopicId || incomingRoomId || null;
+    }
+
+    open.value = true;
+    isIncoming.value = true;
+    isModalVisible.value = true;
+
+    await acceptCall();
+    return;
+  }
+
+  if (
+    !incomingRoomId ||
+    !roomId.value ||
+    roomId.value === incomingRoomId ||
+    isIncoming.value
+  ) {
+    leaveCall();
   }
 };
 

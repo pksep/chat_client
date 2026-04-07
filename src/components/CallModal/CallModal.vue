@@ -268,6 +268,23 @@ const state = ref({
   openGroupInfoModal: false
 });
 
+const syncMediaElementStream = (
+  element: HTMLMediaElement | null,
+  stream: MediaStream | null
+) => {
+  if (!element) return;
+
+  if (element.srcObject !== stream) {
+    element.srcObject = stream;
+  }
+
+  if (!stream) return;
+
+  void element.play().catch(error => {
+    console.warn('[LiveKit] Failed to play media element:', error);
+  });
+};
+
 const buildParticipantEntries = (
   participant: any,
   knownUser: any,
@@ -303,7 +320,7 @@ const buildParticipantEntries = (
       screenShareStream: participant.screenShareStream || null,
       isVideoActive: !!participant.isVideoActive,
       isScreenShareActive: false,
-      hasAudio: true
+      hasAudio: !!participant.audioStream
     });
   }
 
@@ -317,7 +334,7 @@ const buildParticipantEntries = (
       screenShareStream: participant.screenShareStream,
       isVideoActive: true,
       isScreenShareActive: true,
-      hasAudio: false
+      hasAudio: !participant.cameraStream && !!participant.audioStream
     });
   }
 
@@ -331,7 +348,7 @@ const buildParticipantEntries = (
       screenShareStream: participant.screenShareStream || null,
       isVideoActive: false,
       isScreenShareActive: false,
-      hasAudio: true
+      hasAudio: !!participant.audioStream
     });
   }
 
@@ -530,9 +547,7 @@ const showAvatarFallback = computed(() => isIncoming.value || isCalling.value);
 watch(
   [screenShareVideo, activeScreenShare],
   ([video, screenShare]) => {
-    if (video) {
-      video.srcObject = screenShare?.stream || null;
-    }
+    syncMediaElementStream(video, screenShare?.stream || null);
   },
   { immediate: true }
 );
@@ -540,9 +555,7 @@ watch(
 watch(
   [focusedParticipantVideo, focusedParticipantStageStream],
   ([video, stream]) => {
-    if (video) {
-      video.srcObject = stream;
-    }
+    syncMediaElementStream(video, stream);
   },
   { immediate: true }
 );
@@ -550,9 +563,7 @@ watch(
 watch(
   [localVideo, localVideoStream],
   ([video, stream]) => {
-    if (video) {
-      video.srcObject = stream;
-    }
+    syncMediaElementStream(video, stream);
   },
   { immediate: true }
 );
@@ -565,11 +576,11 @@ watch(
       const audio = remoteAudioRefs.value[participant.identity];
 
       if (video) {
-        video.srcObject = participant.videoStream;
+        syncMediaElementStream(video, participant.videoStream);
       }
 
       if (audio && participant.hasAudio) {
-        audio.srcObject = participant.audioStream;
+        syncMediaElementStream(audio, participant.audioStream);
       }
     });
   },
@@ -664,17 +675,18 @@ watch([isCallOpen, isIncoming, isCalling], ([open, incoming]) => {
 
 const setScreenShareVideoRef = (el: Element | null) => {
   screenShareVideo.value = el as HTMLVideoElement | null;
-  if (screenShareVideo.value) {
-    screenShareVideo.value.srcObject = activeScreenShare.value?.stream || null;
-  }
+  syncMediaElementStream(
+    screenShareVideo.value,
+    activeScreenShare.value?.stream || null
+  );
 };
 
 const setFocusedParticipantVideoRef = (el: Element | null) => {
   focusedParticipantVideo.value = el as HTMLVideoElement | null;
-  if (focusedParticipantVideo.value) {
-    focusedParticipantVideo.value.srcObject =
-      focusedParticipantStageStream.value;
-  }
+  syncMediaElementStream(
+    focusedParticipantVideo.value,
+    focusedParticipantStageStream.value
+  );
 };
 
 const setRemoteVideoRef = (tileId: string, el: Element | null) => {
@@ -684,7 +696,10 @@ const setRemoteVideoRef = (tileId: string, el: Element | null) => {
   ) as any;
 
   if (el && participant) {
-    (el as HTMLVideoElement).srcObject = participant.videoStream;
+    syncMediaElementStream(
+      el as HTMLVideoElement,
+      participant.videoStream || null
+    );
   }
 };
 
@@ -695,7 +710,10 @@ const setRemoteAudioRef = (identity: string, el: Element | null) => {
   );
 
   if (el && participant) {
-    (el as HTMLAudioElement).srcObject = participant.audioStream;
+    syncMediaElementStream(
+      el as HTMLAudioElement,
+      participant.audioStream || null
+    );
   }
 };
 
