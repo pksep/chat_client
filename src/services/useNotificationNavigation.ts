@@ -12,7 +12,11 @@ export interface NotificationNavigationPayload {
   topicId?: string | null;
   topicType?: string | null;
   url?: string | null;
+  link?: string | null;
   tag?: string | null;
+  chatId?: string | null;
+  dialogsId?: string | null;
+  groupId?: string | null;
 }
 
 const normalizeTopicType = (
@@ -65,16 +69,42 @@ const extractTopicFromUrl = (
 };
 
 const resolveNotificationTarget = (payload: NotificationNavigationPayload) => {
-  const parsedFromUrl = extractTopicFromUrl(payload.url);
-  const topicId = payload.topicId || parsedFromUrl.topicId;
+  const directUrl = payload.url || payload.link || null;
+  const parsedFromUrl = extractTopicFromUrl(directUrl);
+  const topicId = resolveNotificationTopicId(payload) || parsedFromUrl.topicId;
   const topicType =
     normalizeTopicType(payload.topicType) || parsedFromUrl.topicType;
 
   return {
     topicId,
     topicType,
-    url: payload.url || buildNotificationTargetUrl(topicId, topicType)
+    url: directUrl || buildNotificationTargetUrl(topicId, topicType)
   };
+};
+
+export const resolveNotificationTopicId = (
+  payload?: NotificationNavigationPayload | null
+): string | null => {
+  if (!payload) {
+    return null;
+  }
+
+  const directTopicId =
+    payload.topicId ||
+    payload.chatId ||
+    payload.dialogsId ||
+    payload.groupId ||
+    null;
+
+  if (directTopicId) {
+    return directTopicId;
+  }
+
+  if (payload.tag && payload.tag !== 'chat-message') {
+    return payload.tag;
+  }
+
+  return extractTopicFromUrl(payload.url || payload.link || null).topicId;
 };
 
 export const buildNotificationTargetUrl = (
@@ -98,8 +128,9 @@ export const navigateToNotificationTarget = (
   payload: NotificationNavigationPayload
 ): boolean => {
   const target = resolveNotificationTarget(payload);
+  const directUrl = payload.url || payload.link;
 
-  if (!target.topicId && !payload.url) {
+  if (!target.topicId && !directUrl) {
     return false;
   }
 
@@ -156,7 +187,18 @@ export const clearTopicNotifications = async (
       const delivered = await PushNotifications.getDeliveredNotifications();
       const matchingNotifications = delivered.notifications.filter(
         notification =>
-          notification.tag === topicId || notification.data?.topicId === topicId
+          resolveNotificationTopicId({
+            topicId: notification.data?.topicId,
+            chatId: notification.data?.chatId,
+            dialogsId: notification.data?.dialogsId,
+            groupId: notification.data?.groupId,
+            tag: notification.tag || notification.data?.tag,
+            url: notification.link || notification.data?.url,
+            link:
+              notification.click_action ||
+              notification.data?.link ||
+              notification.data?.click_action
+          }) === topicId
       );
 
       if (matchingNotifications.length > 0) {
