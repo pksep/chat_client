@@ -4,6 +4,7 @@ aside.menu-info {
   border-left-width: 0.5px;
   border-left-style: solid;
   height: var(--default-height);
+  width: 100%;
   overflow: hidden;
   --size-avatar: 42.5px;
   &.menu-info--open .collapse {
@@ -65,10 +66,6 @@ section.menu-info__info-section {
 .menu__info-users-list {
   overflow-y: auto;
   overflow-x: hidden;
-}
-
-.menu-info--open.chat__info .menu__info-users-list {
-  height: calc(100vh - 77px - 14px - 75px);
 }
 
 button.tabs__navigation-button {
