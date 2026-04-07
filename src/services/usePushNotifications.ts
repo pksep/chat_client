@@ -3,7 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { useChatApi } from './useApi';
 import { getCurrentUserId } from './useChat';
 import { getUserById } from '../composables/useUsers';
-import { handleIncomingPushCall } from './useLiveKit';
+import { handleIncomingPushCall, handleNativeCallAction } from './useLiveKit';
 
 export const initPushNotifications = async () => {
   const api = useChatApi();
@@ -33,6 +33,29 @@ export const initPushNotifications = async () => {
 
     PushNotifications.addListener('pushNotificationActionPerformed', n => {
       console.log('Native push action:', n);
+      const actionId = n.actionId?.toLowerCase();
+      if (actionId?.includes('accept') || actionId?.includes('answer')) {
+        void handleNativeCallAction(
+          'accept',
+          n.notification.data?.roomId,
+          n.notification.data?.topicId || n.notification.data?.roomId
+        );
+        return;
+      }
+
+      if (
+        actionId?.includes('decline') ||
+        actionId?.includes('reject') ||
+        actionId?.includes('end')
+      ) {
+        void handleNativeCallAction(
+          'decline',
+          n.notification.data?.roomId,
+          n.notification.data?.topicId || n.notification.data?.roomId
+        );
+        return;
+      }
+
       handleCallPush(n.notification);
     });
 

@@ -21,6 +21,60 @@ import java.util.List;
 public class CallScreenPlugin extends Plugin {
 
     private static final String TAG = "CallScreenPlugin";
+    private static final String EVENT_CALL_ACTION = "callAction";
+    private static CallScreenPlugin instance;
+    private static JSObject pendingCallAction;
+
+    @Override
+    public void load() {
+        super.load();
+        instance = this;
+        flushPendingCallAction();
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        if (instance == this) {
+            instance = null;
+        }
+        super.handleOnDestroy();
+    }
+
+    public static void dispatchCallAction(String action, String roomId, String topicId) {
+        JSObject payload = new JSObject();
+        payload.put("action", action);
+        if (roomId != null) {
+            payload.put("roomId", roomId);
+        }
+        if (topicId != null) {
+            payload.put("topicId", topicId);
+        }
+
+        pendingCallAction = payload;
+
+        if (instance != null) {
+            instance.flushPendingCallAction();
+        }
+    }
+
+    private void flushPendingCallAction() {
+        if (pendingCallAction == null) {
+            return;
+        }
+
+        notifyListeners(EVENT_CALL_ACTION, pendingCallAction);
+        pendingCallAction = null;
+    }
+
+    @PluginMethod
+    public void consumePendingCallAction(PluginCall call) {
+        JSObject payload = pendingCallAction;
+        pendingCallAction = null;
+        if (payload == null) {
+            payload = new JSObject();
+        }
+        call.resolve(payload);
+    }
 
     @PluginMethod
     public void showIncomingCallScreen(PluginCall call) {
