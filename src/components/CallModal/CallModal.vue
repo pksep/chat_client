@@ -675,7 +675,10 @@ watch([isCallOpen, isIncoming, isCalling], ([open, incoming]) => {
 
 const setScreenShareVideoRef = (el: Element | null) => {
   screenShareVideo.value = el as HTMLVideoElement | null;
-  syncMediaElementStream(screenShareVideo.value, activeScreenShare.value?.stream || null);
+  syncMediaElementStream(
+    screenShareVideo.value,
+    activeScreenShare.value?.stream || null
+  );
 };
 
 const setFocusedParticipantVideoRef = (el: Element | null) => {

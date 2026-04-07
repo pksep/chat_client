@@ -168,7 +168,9 @@ const clearDialingTimeout = () => {
 };
 
 const stopTrackPublication = (
-  publication?: { track?: { mediaStreamTrack?: MediaStreamTrack | null } | null } | null
+  publication?: {
+    track?: { mediaStreamTrack?: MediaStreamTrack | null } | null;
+  } | null
 ) => {
   const mediaStreamTrack = publication?.track?.mediaStreamTrack;
   if (!mediaStreamTrack) return;

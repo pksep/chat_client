@@ -24,14 +24,13 @@ const CALL_ACTION_URL_SCHEME = 'sepchat://call';
 
 let isCallKitInitialized = false;
 
-const normalizeCallAction = (value?: string | null): NativeCallAction | null => {
+const normalizeCallAction = (
+  value?: string | null
+): NativeCallAction | null => {
   if (!value) return null;
 
   const normalized = value.toLowerCase();
-  if (
-    normalized.includes('accept') ||
-    normalized.includes('answer')
-  ) {
+  if (normalized.includes('accept') || normalized.includes('answer')) {
     return 'accept';
   }
 
