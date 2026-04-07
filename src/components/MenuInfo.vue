@@ -1,7 +1,7 @@
 <template>
   <aside
     :class="menuInfoClasses"
-    v-if="props.open"
+    v-if="props.open && !!currentGroup"
     :data-testid="`${props.dataTestid}-MenuInfo-Container`"
   >
     <header
