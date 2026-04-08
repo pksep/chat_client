@@ -639,6 +639,14 @@ export const getMessagesWithLoadingStatus = (): ChatMessage[] => {
 
 export const getIsWebsocketConnecting = () => isWebsocketConnecting.value;
 export const getHasWebsocketConnection = () => hasWebsocketConnection.value;
+export const getCanSendReadReceipts = (): boolean => {
+  return (
+    hasWebsocketConnection.value &&
+    navigator.onLine &&
+    document.visibilityState === 'visible' &&
+    document.hasFocus()
+  );
+};
 
 export const getIsRecentlyReconnected = () => isRecentlyReconnected.value;
 
