@@ -406,6 +406,7 @@ export function useMessageScroll(
     scrollToBottom,
     handleScrollToButton,
     setupIntersectionObserver,
+    flushVisibleUnreadMessages,
     intersectionObserver,
     resetScrollState,
     scrollMarkReadTimeout
