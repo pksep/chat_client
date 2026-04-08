@@ -7,6 +7,8 @@ import android.os.Bundle;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.BridgeActivity;
 
+import java.io.File;
+
 import sep.pksep.app.plugins.AudioOutputPlugin;
 import sep.pksep.app.plugins.CallScreenPlugin;
 import sep.pksep.app.plugins.NotificationTapPlugin;
@@ -29,6 +31,12 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         handleCallIntent(getIntent());
         handleNotificationLaunchIntent(getIntent());
+    }
+
+    @Override
+    protected void load() {
+        clearWebViewCacheBeforeLoad();
+        super.load();
     }
 
     @Override
@@ -133,5 +141,58 @@ public class MainActivity extends BridgeActivity {
         }
 
         return null;
+    }
+
+    private void clearWebViewCacheBeforeLoad() {
+        clearDirectoryContents(getCacheDir());
+        clearDirectoryContents(getCodeCacheDir());
+
+        File appWebViewDir = new File(getApplicationInfo().dataDir, "app_webview");
+
+        clearDirectoryContents(new File(appWebViewDir, "Cache"));
+        clearDirectoryContents(new File(appWebViewDir, "Code Cache"));
+        clearDirectoryContents(new File(appWebViewDir, "GPUCache"));
+        clearDirectoryContents(new File(appWebViewDir, "blob_storage"));
+        clearDirectoryContents(new File(appWebViewDir, "Service Worker"));
+
+        File defaultDir = new File(appWebViewDir, "Default");
+
+        clearDirectoryContents(new File(defaultDir, "Cache"));
+        clearDirectoryContents(new File(defaultDir, "Code Cache"));
+        clearDirectoryContents(new File(defaultDir, "GPUCache"));
+        clearDirectoryContents(new File(defaultDir, "blob_storage"));
+        clearDirectoryContents(new File(defaultDir, "Service Worker"));
+    }
+
+    private void clearDirectoryContents(File directory) {
+        if (directory == null || !directory.exists() || !directory.isDirectory()) {
+            return;
+        }
+
+        File[] children = directory.listFiles();
+        if (children == null) {
+            return;
+        }
+
+        for (File child : children) {
+            deleteRecursively(child);
+        }
+    }
+
+    private void deleteRecursively(File target) {
+        if (target == null || !target.exists()) {
+            return;
+        }
+
+        if (target.isDirectory()) {
+            File[] children = target.listFiles();
+            if (children != null) {
+                for (File child : children) {
+                    deleteRecursively(child);
+                }
+            }
+        }
+
+        target.delete();
     }
 }

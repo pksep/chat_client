@@ -79,7 +79,9 @@ const updateNotificationContext = () => {
 };
 
 const initFocusTracking = () => {
-  navigator.serviceWorker?.ready.then(updateNotificationContext);
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.ready.then(updateNotificationContext);
+  }
 
   window.addEventListener('focus', updateNotificationContext);
   window.addEventListener('blur', updateNotificationContext);
