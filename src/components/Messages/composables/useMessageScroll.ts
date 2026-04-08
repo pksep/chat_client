@@ -8,6 +8,7 @@ import {
   type Ref
 } from 'vue';
 import {
+  getCanSendReadReceipts,
   getIsWebsocketConnecting,
   markAsRead
 } from '../../../services/useChat';
@@ -16,6 +17,7 @@ import {
   fetchMessagesForTopic,
   mergeMessagesForTopic
 } from '../../../services/useMessages';
+import { clearTopicNotifications } from '../../../services/useNotificationNavigation';
 import type { IMessage } from '../../interfaces/interfaces';
 
 export function useMessageScroll(
@@ -48,6 +50,22 @@ export function useMessageScroll(
   const pendingReadIds = new Set<string>();
   const SCROLL_DISTANCE_FOR_REQUEST = 500;
 
+  const canMarkVisibleMessagesAsRead = (): boolean => {
+    const container = chatWrapperRef.value;
+
+    if (!container) {
+      return false;
+    }
+
+    if (!getCanSendReadReceipts()) {
+      return false;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+
+    return containerRect.width > 0 && containerRect.height > 0;
+  };
+
   const getUnreadMessageIdIfTrackable = (element: Element) => {
     const messageId = element.getAttribute('data-message-id');
     if (!messageId || pendingReadIds.has(messageId)) {
@@ -68,6 +86,7 @@ export function useMessageScroll(
 
   const submitReadMessages = async (messageIds: string[]) => {
     if (!messageIds.length || !route.value?.id) return;
+    if (!canMarkVisibleMessagesAsRead()) return;
 
     messageIds.forEach(id => pendingReadIds.add(id));
 
@@ -84,7 +103,7 @@ export function useMessageScroll(
 
   const collectVisibleUnreadMessageIds = () => {
     const container = chatWrapperRef.value;
-    if (!container || document.visibilityState !== 'visible') {
+    if (!canMarkVisibleMessagesAsRead() || !container) {
       return [];
     }
 
@@ -115,13 +134,22 @@ export function useMessageScroll(
   };
 
   const flushVisibleUnreadMessages = () => {
+    if (!canMarkVisibleMessagesAsRead()) {
+      return;
+    }
+
     const visibleUnreadMessageIds = collectVisibleUnreadMessageIds();
     if (visibleUnreadMessageIds.length > 0) {
+      void clearTopicNotifications(route.value.id);
       submitReadMessages(visibleUnreadMessageIds);
     }
   };
 
   const markAllVisibleAsRead = async () => {
+    if (!canMarkVisibleMessagesAsRead()) {
+      return;
+    }
+
     const unreadMessages = state.messages.filter(
       (m: IMessage) => m.senderUserId !== props.user?.id
     );
@@ -129,6 +157,7 @@ export function useMessageScroll(
     if (unreadMessages.length === 0) return;
 
     try {
+      await clearTopicNotifications(route.value.id);
       await markAsRead({
         messageIds: unreadMessages.map((m: IMessage) => m.id),
         topicId: route.value.id
@@ -153,7 +182,7 @@ export function useMessageScroll(
         const visibleUnreadMessageIds: string[] = [];
 
         entries.forEach(entry => {
-          if (entry.isIntersecting) {
+          if (entry.isIntersecting && canMarkVisibleMessagesAsRead()) {
             const messageId = getUnreadMessageIdIfTrackable(entry.target);
             if (messageId) {
               visibleUnreadMessageIds.push(messageId);
@@ -403,6 +432,7 @@ export function useMessageScroll(
     scrollToBottom,
     handleScrollToButton,
     setupIntersectionObserver,
+    flushVisibleUnreadMessages,
     intersectionObserver,
     resetScrollState,
     scrollMarkReadTimeout
