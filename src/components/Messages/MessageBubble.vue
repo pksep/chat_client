@@ -28,7 +28,6 @@
       :data-testid="`${dataTestid}-MessageBubble-AssistantIcon`"
     />
     <Checkbox
-      circular="circled"
       v-if="props.isSelectionMode"
       class="message-selection-toggle"
       :data-testid="props.selectionTestId"
