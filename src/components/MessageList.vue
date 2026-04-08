@@ -23,6 +23,10 @@
     @touchend="onTouchEnd"
     :data-testid="`${props.dataTestid}-MessageList-UserMessagesWrapper`"
   >
+    <SelectedMessagesContent
+      v-if="isSelectionMode"
+      :data-testid="`${props.dataTestid}-SelectedMessages`"
+    />
     <MessageListUserItems
       ref="messageListUserItemsRef"
       :messages="state.messages"
@@ -108,6 +112,10 @@ import {
 } from '../composables/navigation/useUrlRouting';
 import { resetTopicUnreadState } from '../composables/useTopics';
 import {
+  clearSelectedMessages,
+  isMessageSelectionModeForTopic
+} from '../composables/useSelectedMessages';
+import {
   fetchAroundMessage,
   fetchMessagesForTopic,
   fetchPinnedMessagesForTopic,
@@ -126,6 +134,7 @@ import { useMessageActions } from './Messages/composables/useMessageActions';
 import { Capacitor } from '@capacitor/core';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
+import SelectedMessagesContent from './Header/SelectedMessagesContent.vue';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -155,6 +164,9 @@ let chatVisibilityObserver: ResizeObserver | null = null;
 const isAiRoute = computed(() => route.value?.type === RouteTypes.AI);
 const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
 const authUser = computed(() => getAuthUser());
+const isSelectionMode = computed(() =>
+  isMessageSelectionModeForTopic(route.value.id)
+);
 
 const state = reactive({
   messages: computed(() => getMessagesByTopicId(route.value.id)),
@@ -384,6 +396,8 @@ watch(
   async () => {
     if (!route.value?.id) return;
 
+    clearSelectedMessages();
+
     await hydrateMessagesFromCache(route.value.id);
     await fetchPinnedMessagesForTopic(route.value.id);
     await fetchMessagesForTopic(route.value.id);
@@ -488,6 +502,7 @@ const handleWindowKeydown = async (e: KeyboardEvent) => {
   const isPrintableKey = e.key.length === 1 && !hasModifierKey;
   const shouldFocusMessageInput =
     !Capacitor.isNativePlatform() &&
+    !isSelectionMode.value &&
     (!hasModifierKey || isPasteShortcut) &&
     !isEditableEventTarget(e);
 
@@ -509,6 +524,11 @@ const handleWindowKeydown = async (e: KeyboardEvent) => {
         console.error('Failed to paste into message input:', error);
       }
     }
+  }
+
+  if (e.key === 'Escape' && isSelectionMode.value) {
+    clearSelectedMessages();
+    return;
   }
 
   if (e.key === 'Escape') {

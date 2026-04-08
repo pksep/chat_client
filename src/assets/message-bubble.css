@@ -1,6 +1,33 @@
 .message {
   display: flex;
   gap: 10px;
+  position: relative;
+  width: 100%;
+  align-items: flex-start;
+}
+
+.message-bubble-wrapper {
+  position: relative;
+
+  &:has(.message__other .message__bubble) {
+    padding-right: 30px;
+  }
+}
+
+.message__other .message-selection-toggle {
+  margin-left: 0;
+  order: -1;
+}
+
+.message--selection-active {
+  cursor: pointer;
+}
+
+.message-selection-toggle {
+  flex-shrink: 0;
+  margin-left: auto;
+  order: 99;
+  align-self: center;
 }
 
 .avatar-yui-kit.message__avatar {
@@ -571,6 +598,27 @@ div.message-content__file {
 }
 
 @media screen and (width <= 768px) {
+  .message {
+    gap: 8px;
+  }
+
+  .message .message-selection-toggle {
+    margin-left: 0;
+    margin-right: 0;
+    align-self: start;
+    margin-top: 10px;
+    order: -2 !important;
+  }
+
+  .message__other .message-selection-toggle {
+    order: 2 !important;
+    margin-right: auto;
+  }
+
+  .message__content__articles__my .message-selection-toggle {
+    order: -2 !important;
+  }
+
   div.message-content__html > p {
     max-width: 30ch;
   }

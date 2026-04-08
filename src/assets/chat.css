@@ -299,3 +299,45 @@ p.chat__nothing-paragraph {
 .chat__input {
   grid-row: 3;
 }
+
+.selected-messages-content {
+  position: sticky;
+  bottom: 0;
+  z-index: 99;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  background-color: var(--blue15);
+  transform: translateY(20px);
+}
+
+.selected-messages-content__title {
+  text-align: center;
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--primary-base);
+  font-weight: 500;
+}
+
+.selected-messages-content__action.button-yui-kit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 10px;
+  color: var(--neutral-text-light);
+}
+
+.selected-messages-content__action--danger.button-yui-kit {
+  color: var(--error-color);
+}
+
+@media screen and (width <= 768px) {
+  .selected-messages-content {
+    gap: 6px;
+    padding-inline: 10px;
+  }
+
+  .selected-messages-content__title {
+    font-size: 12px;
+  }
+}

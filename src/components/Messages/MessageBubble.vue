@@ -1,11 +1,16 @@
 <template>
   <div
     class="message"
+    :class="{
+      'message--selection-active': props.isSelectionMode,
+      'message--selected': props.isSelected
+    }"
     :data-testid="`${dataTestid}-MessageBubble-Container`"
     :data-role="props.author"
     :data-is-loading="!!props.loader"
     :data-is-me-sender="props.isMeSender"
-    @contextmenu="evt => openActivePopover(props.messageId, evt)"
+    @contextmenu="handleContextMenu"
+    @click="handleMessageClick"
   >
     <Avatar
       class="message__avatar"
@@ -21,6 +26,15 @@
       class="message__assistant"
       v-else-if="props.author === 'assistant'"
       :data-testid="`${dataTestid}-MessageBubble-AssistantIcon`"
+    />
+    <Checkbox
+      circular="circled"
+      v-if="props.isSelectionMode"
+      class="message-selection-toggle"
+      :data-testid="props.selectionTestId"
+      :model-value="!!props.isSelected"
+      @update:model-value="handleToggleSelection"
+      @click.stop
     />
     <div :class="messageArticlesStyles">
       <MessageBubbleText
@@ -71,7 +85,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Avatar } from '@pksep/yui';
+import { Avatar, Checkbox } from '@pksep/yui';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import {
   isOpen,
@@ -91,6 +105,7 @@ import MessageBubbleMedia from './MessageBubbleMedia.vue';
 import { useMessageMedia } from './composables/useMessageMedia';
 import { getConfig } from '../../services/useConfig';
 import { fetchWithAuthRedirect } from '../../composables/useAuth';
+import { isMessageSelectionModeForTopic } from '../../composables/useSelectedMessages';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -101,7 +116,8 @@ const emits = defineEmits([
   'unmount-edit-message-id',
   'unmount-reply-message-id',
   'unmount-forward-message',
-  'unmount-navigate-message-id'
+  'unmount-navigate-message-id',
+  'toggle-selection'
 ]);
 
 const messageArticlesStyles = computed(() => ({
@@ -190,5 +206,30 @@ const setSliderElement = async (medias: IMedia[], defaultIndex: number = 0) => {
   );
 
   defaultIndexSlider.value = correctedIndex !== -1 ? correctedIndex : 0;
+};
+
+const handleContextMenu = (event: MouseEvent) => {
+  if (isMessageSelectionModeForTopic(props.topicId)) {
+    event.preventDefault();
+    return;
+  }
+
+  openActivePopover(props.messageId, event);
+};
+
+const handleToggleSelection = () => {
+  if (!props.isSelectionMode) {
+    return;
+  }
+
+  emits('toggle-selection');
+};
+
+const handleMessageClick = () => {
+  if (!props.isSelectionMode) {
+    return;
+  }
+
+  emits('toggle-selection');
 };
 </script>

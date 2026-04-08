@@ -99,6 +99,16 @@
       >
         <Icon :name="IconNameEnum.deleteSmall" /> Удалить
       </Button>
+
+      <Button
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="handleSelectMessage"
+        :data-testid="`${props.dataTestid}-MessageBubble-SelectButton`"
+      >
+        <SelectIcon />
+        Выбрать
+      </Button>
     </template>
   </ContextMenu>
 
@@ -160,6 +170,8 @@ import ForwardIcon from '../UI/ForwardIcon.vue';
 import ForwardModal from './ForwardModal.vue';
 import { ITopic } from '../interfaces/interfaces';
 import { getMessagesByTopicId } from '../../services/useMessages';
+import { enterMessageSelection } from '../../composables/useSelectedMessages';
+import SelectIcon from '../UI/SelectIcon.vue';
 
 const props = withDefaults(defineProps<IMessageContextMenu>(), {
   dataTestid: 'MessageContextMenu'
@@ -252,6 +264,21 @@ const handleForwardMessage = (topic: ITopic) => {
     message: message,
     topic: topic
   });
+  handleClosePopover();
+};
+
+const handleSelectMessage = () => {
+  if (!props.topicId) {
+    return;
+  }
+
+  const message = messages.value.find(item => item.id === props.messageId);
+
+  if (!message) {
+    return;
+  }
+
+  enterMessageSelection(props.topicId, message);
   handleClosePopover();
 };
 
