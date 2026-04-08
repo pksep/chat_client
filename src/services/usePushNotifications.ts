@@ -36,9 +36,8 @@ type NativeNotificationData = Record<string, string> & {
   link?: string;
 };
 
-const NotificationTap = registerPlugin<NotificationTapPlugin>(
-  'NotificationTap'
-);
+const NotificationTap =
+  registerPlugin<NotificationTapPlugin>('NotificationTap');
 let nativeNotificationTapListener: PluginListenerHandle | null = null;
 let lastHandledNotificationKey = '';
 let lastHandledNotificationAt = 0;
@@ -105,7 +104,10 @@ const handleNotificationInteraction = (
 
   const normalizedActionId = actionId?.toLowerCase();
 
-  if (normalizedActionId?.includes('accept') || normalizedActionId?.includes('answer')) {
+  if (
+    normalizedActionId?.includes('accept') ||
+    normalizedActionId?.includes('answer')
+  ) {
     void handleNativeCallAction(
       'accept',
       normalizedData.roomId,
@@ -220,7 +222,10 @@ export const initPushNotifications = async () => {
           );
         }
       } catch (error) {
-        console.warn('Failed to consume pending Android notification tap:', error);
+        console.warn(
+          'Failed to consume pending Android notification tap:',
+          error
+        );
       }
     }
 
