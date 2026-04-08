@@ -20,9 +20,13 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
 
   const appPlugins: PluginOption[] = [
     VitePWA({
-      registerType: 'prompt',
+      registerType: 'autoUpdate',
       workbox: {
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
         maximumFileSizeToCacheInBytes: 50 * 1024 * 1024 // 50MB
+        ,
+        skipWaiting: true
       },
       mode: mode === 'development' ? 'development' : 'production',
       manifest: {
