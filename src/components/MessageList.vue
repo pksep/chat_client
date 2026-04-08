@@ -150,6 +150,7 @@ const getLocalStorageInputText = computed(() => {
 });
 
 const inputText = ref(getLocalStorageInputText.value);
+let chatVisibilityObserver: ResizeObserver | null = null;
 
 const isAiRoute = computed(() => route.value?.type === RouteTypes.AI);
 const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
@@ -176,6 +177,7 @@ const {
   scrollToBottom,
   handleScrollToButton,
   setupIntersectionObserver,
+  flushVisibleUnreadMessages,
   intersectionObserver,
   scrollMarkReadTimeout,
   resetScrollState
@@ -292,6 +294,19 @@ const resetUnreadIfViewingBottom = (): void => {
   resetTopicUnreadState(route.value.id);
 };
 
+const syncVisibleUnreadAfterAutoScroll = (): void => {
+  if (!route.value?.id || route.value?.type === RouteTypes.AI) {
+    return;
+  }
+
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      flushVisibleUnreadMessages();
+      resetUnreadIfViewingBottom();
+    });
+  });
+};
+
 const handleScroll = async (): Promise<void> => {
   await handleMessageScroll();
   resetUnreadIfViewingBottom();
@@ -323,6 +338,18 @@ onMounted(async () => {
       }
     });
   }
+
+  if ('ResizeObserver' in window) {
+    chatVisibilityObserver = new ResizeObserver(() => {
+      syncVisibleUnreadAfterAutoScroll();
+    });
+
+    nextTick(() => {
+      if (chatWrapperRef.value) {
+        chatVisibilityObserver?.observe(chatWrapperRef.value);
+      }
+    });
+  }
 });
 
 onUnmounted(() => {
@@ -332,8 +359,25 @@ onUnmounted(() => {
   if (intersectionObserver) {
     intersectionObserver.disconnect();
   }
+  if (chatVisibilityObserver) {
+    chatVisibilityObserver.disconnect();
+    chatVisibilityObserver = null;
+  }
   handleMastraUnmounted();
 });
+
+watch(
+  () => chatWrapperRef.value,
+  wrapper => {
+    if (!chatVisibilityObserver || !wrapper) {
+      return;
+    }
+
+    chatVisibilityObserver.disconnect();
+    chatVisibilityObserver.observe(wrapper);
+    syncVisibleUnreadAfterAutoScroll();
+  }
+);
 
 watch(
   () => route.value,
@@ -358,6 +402,7 @@ watch(
       inputText.value = getLocalStorageInputText.value;
       setupIntersectionObserver();
       scrollToBottom();
+      syncVisibleUnreadAfterAutoScroll();
     });
   },
   { deep: true, immediate: true }
@@ -498,6 +543,7 @@ watch(
         state.unreadMarkerMessageId = getFirstUnreadMessageId();
       }
 
+      syncVisibleUnreadAfterAutoScroll();
       resetUnreadIfViewingBottom();
     });
   }
