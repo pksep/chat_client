@@ -101,6 +101,11 @@
   margin: 0;
 }
 
+.chats-toolbar__context-menu {
+  position: fixed;
+  transform: translate(10px, 10px);
+}
+
 .chats-toolbar__headline > button.button-yui-kit {
   margin-right: 0;
   min-height: 22px;

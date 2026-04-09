@@ -29,6 +29,7 @@
         @unmount-close="closeActivePopover('plusMenu')"
         @click="closeActivePopover('plusMenu')"
         :data-testid="`${props.dataTestid}-ChatsToolbar-ContextMenu`"
+        class="chats-toolbar__context-menu"
       >
         <Button
           @click="handleCreateChat"
