@@ -18,6 +18,17 @@ import {
 const messagesStore = ref<Record<string, IMessage[]>>({});
 const pinnedMessagesStore = ref<Record<string, IMessage[]>>({});
 const persistTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingOutgoingForwardBatches = new Map<
+  string,
+  Array<{
+    forwardBatchId: string;
+    forwardBatchOrder: number;
+  }>
+>();
+const pendingOutgoingForwardBatchTimeouts = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+>();
 
 const route = useUrlWatcher();
 
@@ -38,6 +49,101 @@ const schedulePersistMessages = (topicId: string): void => {
   }, 150);
 
   persistTimeouts.set(topicId, timeoutId);
+};
+
+const schedulePendingOutgoingForwardBatchCleanup = (topicId: string): void => {
+  const existingTimeout = pendingOutgoingForwardBatchTimeouts.get(topicId);
+
+  if (existingTimeout) {
+    clearTimeout(existingTimeout);
+  }
+
+  const timeoutId = setTimeout(() => {
+    pendingOutgoingForwardBatches.delete(topicId);
+    pendingOutgoingForwardBatchTimeouts.delete(topicId);
+  }, 30000);
+
+  pendingOutgoingForwardBatchTimeouts.set(topicId, timeoutId);
+};
+
+const parseMessageEx = (
+  message: Pick<IMessage, 'ex'>
+): Record<string, unknown> | null => {
+  if (!message.ex) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(message.ex);
+  } catch {
+    return null;
+  }
+};
+
+const getMessageTimestamp = (message: IMessage): number => {
+  return new Date(message.createdAt).getTime();
+};
+
+const compareMessages = (left: IMessage, right: IMessage): number => {
+  const leftEx = parseMessageEx(left);
+  const rightEx = parseMessageEx(right);
+  const leftBatchId = leftEx?.forwardBatchId;
+  const rightBatchId = rightEx?.forwardBatchId;
+
+  if (
+    typeof leftBatchId === 'string' &&
+    leftBatchId === rightBatchId &&
+    typeof leftEx?.forwardBatchOrder === 'number' &&
+    typeof rightEx?.forwardBatchOrder === 'number'
+  ) {
+    return leftEx.forwardBatchOrder - rightEx.forwardBatchOrder;
+  }
+
+  const timeDiff = getMessageTimestamp(left) - getMessageTimestamp(right);
+
+  if (timeDiff !== 0) {
+    return timeDiff;
+  }
+
+  return 0;
+};
+
+const consumePendingOutgoingForwardBatchMeta = (
+  topicId: string
+): { forwardBatchId: string; forwardBatchOrder: number } | null => {
+  const pendingBatch = pendingOutgoingForwardBatches.get(topicId);
+
+  if (!pendingBatch || pendingBatch.length === 0) {
+    return null;
+  }
+
+  const nextMeta = pendingBatch.shift() || null;
+
+  if (pendingBatch.length === 0) {
+    pendingOutgoingForwardBatches.delete(topicId);
+    const timeoutId = pendingOutgoingForwardBatchTimeouts.get(topicId);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      pendingOutgoingForwardBatchTimeouts.delete(topicId);
+    }
+  }
+
+  return nextMeta;
+};
+
+export const registerPendingOutgoingForwardBatch = (
+  topicId: string,
+  items: Array<{
+    forwardBatchId: string;
+    forwardBatchOrder: number;
+  }>
+): void => {
+  if (!topicId || items.length === 0) {
+    return;
+  }
+
+  pendingOutgoingForwardBatches.set(topicId, [...items]);
+  schedulePendingOutgoingForwardBatchCleanup(topicId);
 };
 
 export const fetchMessagesForTopic = async (
@@ -124,18 +230,35 @@ export const fetchAroundMessage = async (
 export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   const existingMessages = messagesStore.value[topicId] || [];
 
-  const clientId = message.ex ? JSON.parse(message.ex)?.clientId : null;
+  const parsedEx = parseMessageEx(message);
+  const clientId = parsedEx?.clientId;
+  const pendingOutgoingForwardBatchMeta =
+    message.senderUserId === authedUser.value?.id &&
+    !parsedEx?.forwardBatchId &&
+    !clientId
+      ? consumePendingOutgoingForwardBatchMeta(topicId)
+      : null;
+  const nextMessage =
+    pendingOutgoingForwardBatchMeta && !clientId
+      ? {
+          ...message,
+          ex: JSON.stringify({
+            ...(parsedEx || {}),
+            ...pendingOutgoingForwardBatchMeta
+          })
+        }
+      : message;
 
   if (
-    message.taggedUserIds?.includes(authedUser.value?.id) &&
-    message.senderUserId !== authedUser.value?.id &&
-    !message.isReadByMe
+    nextMessage.taggedUserIds?.includes(authedUser.value?.id) &&
+    nextMessage.senderUserId !== authedUser.value?.id &&
+    !nextMessage.isReadByMe
   ) {
     setTopicTaggedMe(topicId, true);
   }
 
   if (!clientId) {
-    messagesStore.value[topicId] = [...existingMessages, message];
+    messagesStore.value[topicId] = [...existingMessages, nextMessage];
     schedulePersistMessages(topicId);
     return;
   }
@@ -150,7 +273,10 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
       m.path = message.media[i].path;
       m.thumbnailPath = message.media[i].thumbnailPath;
     });
-    existingMessages[existingMessages.length - 1] = { ...message, media };
+    existingMessages[existingMessages.length - 1] = {
+      ...nextMessage,
+      media
+    };
     schedulePersistMessages(topicId);
 
     return;
@@ -158,7 +284,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
 
   const filtered = existingMessages.filter(m => m.id !== clientId);
 
-  messagesStore.value[topicId] = [...filtered, message];
+  messagesStore.value[topicId] = [...filtered, nextMessage];
   schedulePersistMessages(topicId);
 };
 
@@ -263,7 +389,8 @@ export const saveMessagesToLocal = (
 };
 
 export const getMessagesByTopicId = (topicId: string): IMessage[] => {
-  return messagesStore.value[topicId] || [];
+  const messages = messagesStore.value[topicId] || [];
+  return [...messages].sort(compareMessages);
 };
 
 export const hydrateMessagesFromCache = async (

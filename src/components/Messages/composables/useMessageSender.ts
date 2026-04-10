@@ -8,7 +8,8 @@ import {
   changeFileUploadPercent,
   deleteFileAfterLoading,
   addMessageToLocal,
-  deleteMessageFromLocal
+  deleteMessageFromLocal,
+  registerPendingOutgoingForwardBatch
 } from '../../../services/useMessages';
 import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
 import type { IMessage, IMedia } from '../../interfaces/interfaces';
@@ -19,6 +20,27 @@ import {
 } from '../../../utils/mediaPreview';
 
 const MAX_HTML_LENGTH = 4000;
+const FORWARD_TEXT_SEND_DELAY_MS = 250;
+
+const createMessageEx = (
+  payload: Record<string, string | number>,
+  existingEx?: string
+): string => {
+  let parsedEx: Record<string, unknown> = {};
+
+  if (existingEx) {
+    try {
+      parsedEx = JSON.parse(existingEx);
+    } catch {
+      parsedEx = {};
+    }
+  }
+
+  return JSON.stringify({
+    ...parsedEx,
+    ...payload
+  });
+};
 
 export function splitHtmlByLength(
   html: string,
@@ -57,7 +79,7 @@ export function useMessageSender(
     aiMessages: any[];
     editMessage: IMessage | null;
     replyMessage: IMessage | null;
-    forwardMessage: IMessage | null;
+    forwardMessages: IMessage[];
     hideUnreadMarker: boolean;
   },
   authUser: Ref<any>,
@@ -87,11 +109,14 @@ export function useMessageSender(
     const topicId = route.value.id;
     const routeType = route.value?.type;
     const replyMessageId = state.replyMessage?.id;
-    const forwardMessageId = state.forwardMessage?.id;
+    const forwardMessages = state.forwardMessages;
+    const hasForwardMessages = forwardMessages.length > 0;
+    const hasMultipleForwardMessages = forwardMessages.length > 1;
+    const forwardBatchId = hasMultipleForwardMessages ? generateUUID() : null;
 
     if (
       (!rawText.trim() || rawText.trim() === '<p></p>') &&
-      !state.forwardMessage
+      !hasForwardMessages
     )
       return;
 
@@ -155,20 +180,105 @@ export function useMessageSender(
     }
 
     try {
-      if (parts.length === 0 && !!state.forwardMessage) {
-        await sendMessageChat({
-          topicId,
-          text: '',
-          replyMessageId,
-          forwardMessageId
-        });
+      if (parts.length === 0 && hasForwardMessages) {
+        for (const [index, forwardMessage] of forwardMessages.entries()) {
+          const ex = createMessageEx(
+            {
+              clientId: generateUUID(),
+              ...(forwardBatchId
+                ? {
+                    forwardBatchId,
+                    forwardBatchOrder: index
+                  }
+                : {})
+            },
+            undefined
+          );
+
+          await sendMessageChat({
+            topicId,
+            text: '',
+            replyMessageId,
+            forwardMessageId: forwardMessage.id,
+            ex
+          });
+        }
       }
+
+      if (hasMultipleForwardMessages && parts.length > 0) {
+        registerPendingOutgoingForwardBatch(topicId, [
+          ...forwardMessages.map((_, index) => ({
+            forwardBatchId: forwardBatchId as string,
+            forwardBatchOrder: index
+          })),
+          ...parts.map((_, index) => ({
+            forwardBatchId: forwardBatchId as string,
+            forwardBatchOrder: forwardMessages.length + index
+          }))
+        ]);
+
+        for (const [index, forwardMessage] of forwardMessages.entries()) {
+          const ex = createMessageEx({
+            clientId: generateUUID(),
+            forwardBatchId: forwardBatchId as string,
+            forwardBatchOrder: index
+          });
+
+          await sendMessageChat({
+            topicId,
+            text: '',
+            replyMessageId,
+            forwardMessageId: forwardMessage.id,
+            ex
+          });
+        }
+
+        await new Promise(resolve =>
+          setTimeout(resolve, FORWARD_TEXT_SEND_DELAY_MS)
+        );
+
+        for (const [index, part] of parts.entries()) {
+          const ex = createMessageEx({
+            clientId: generateUUID(),
+            forwardBatchId: forwardBatchId as string,
+            forwardBatchOrder: forwardMessages.length + index
+          });
+
+          await sendMessageChat({
+            topicId,
+            text: part,
+            replyMessageId,
+            taggedUserIds,
+            ex
+          });
+        }
+
+        state.hideUnreadMarker = true;
+
+        await nextTick();
+        scrollToBottom();
+        clearSellectedMessage();
+        return;
+      }
+
       for (const part of parts) {
+        if (hasForwardMessages) {
+          for (const forwardMessage of forwardMessages) {
+            await sendMessageChat({
+              topicId,
+              text: part,
+              replyMessageId,
+              forwardMessageId: forwardMessage.id,
+              taggedUserIds
+            });
+          }
+          continue;
+        }
+
         await sendMessageChat({
           topicId,
           text: part,
           replyMessageId,
-          forwardMessageId,
           taggedUserIds
         });
       }
@@ -188,7 +298,7 @@ export function useMessageSender(
     const topicId = route.value.id;
     const replyMessage = state.replyMessage;
     const replyMessageId = state.replyMessage?.id;
-    const forwardMessageId = state.forwardMessage?.id;
+    const forwardMessages = state.forwardMessages;
 
     if (!topicId) {
       console.error('[ChatSDK] Cannot attach file: no topic provided');
@@ -291,14 +401,26 @@ export function useMessageSender(
     }
 
     try {
-      await sendMessageChat({
-        topicId,
-        text: '',
-        medias,
-        ex: JSON.stringify({ clientId }),
-        replyMessageId,
-        forwardMessageId
-      });
+      if (forwardMessages.length > 0) {
+        for (const forwardMessage of forwardMessages) {
+          await sendMessageChat({
+            topicId,
+            text: '',
+            medias,
+            ex: JSON.stringify({ clientId }),
+            replyMessageId,
+            forwardMessageId: forwardMessage.id
+          });
+        }
+      } else {
+        await sendMessageChat({
+          topicId,
+          text: '',
+          medias,
+          ex: JSON.stringify({ clientId }),
+          replyMessageId
+        });
+      }
 
       await nextTick();
       scrollToBottom();

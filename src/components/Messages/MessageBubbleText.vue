@@ -1,6 +1,5 @@
 <template>
   <article
-    @click.stop
     :class="messageArticleStyles"
     :data-testid="`${props.dataTestid}-Article`"
   >
@@ -46,7 +45,6 @@
       </div>
       <template v-else-if="!props.loader">
         <div
-          @click.stop
           class="message-content__html"
           v-html="props.message"
           :data-testid="`${props.dataTestid}-MessageText`"

@@ -30,6 +30,9 @@ export interface IMessageBubbleProps {
   replyMessage?: IMessage;
   forwardUser?: IUser;
   reactions?: Reaction[];
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  selectionTestId?: string;
 }
 
 export interface IMessageContextMenu extends IMessageBubbleProps {

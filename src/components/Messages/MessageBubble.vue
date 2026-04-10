@@ -1,11 +1,17 @@
 <template>
   <div
     class="message"
+    :class="{
+      'message--selection-active': props.isSelectionMode,
+      'message--selected': props.isSelected,
+      highlighted: props.isSelected
+    }"
     :data-testid="`${dataTestid}-MessageBubble-Container`"
     :data-role="props.author"
     :data-is-loading="!!props.loader"
     :data-is-me-sender="props.isMeSender"
-    @contextmenu="evt => openActivePopover(props.messageId, evt)"
+    @contextmenu="handleContextMenu"
+    @click="handleMessageClick"
   >
     <Avatar
       class="message__avatar"
@@ -22,6 +28,20 @@
       v-else-if="props.author === 'assistant'"
       :data-testid="`${dataTestid}-MessageBubble-AssistantIcon`"
     />
+    <div
+      :class="{
+        'message-selection-toggle': true,
+        'message-selection-toggle__hide': !props.isSelectionMode
+      }"
+    >
+      <Checkbox
+        :data-testid="props.selectionTestId"
+        :model-value="!!props.isSelected"
+        :circular="CheckboxCircularEnum.circled"
+        @update:model-value="handleToggleSelection"
+        @click.stop
+      />
+    </div>
     <div :class="messageArticlesStyles">
       <MessageBubbleText
         v-if="!!props.message"
@@ -58,6 +78,8 @@
       :position="position"
       :message-id="props.messageId"
       :topic-id="props.topicId"
+      :is-selection-mode="props.isSelectionMode"
+      :is-selected="props.isSelected"
       :is-me-sender="props.isMeSender"
       :message="props.message"
       :is-pin="props.isPin"
@@ -71,7 +93,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Avatar } from '@pksep/yui';
+import { Avatar, Checkbox, CheckboxCircularEnum } from '@pksep/yui';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import {
   isOpen,
@@ -91,6 +113,7 @@ import MessageBubbleMedia from './MessageBubbleMedia.vue';
 import { useMessageMedia } from './composables/useMessageMedia';
 import { getConfig } from '../../services/useConfig';
 import { fetchWithAuthRedirect } from '../../composables/useAuth';
+import { isMessageSelectionModeForTopic } from '../../composables/useSelectedMessages';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -101,7 +124,8 @@ const emits = defineEmits([
   'unmount-edit-message-id',
   'unmount-reply-message-id',
   'unmount-forward-message',
-  'unmount-navigate-message-id'
+  'unmount-navigate-message-id',
+  'toggle-selection'
 ]);
 
 const messageArticlesStyles = computed(() => ({
@@ -190,5 +214,30 @@ const setSliderElement = async (medias: IMedia[], defaultIndex: number = 0) => {
   );
 
   defaultIndexSlider.value = correctedIndex !== -1 ? correctedIndex : 0;
+};
+
+const handleContextMenu = (event: MouseEvent) => {
+  if (isMessageSelectionModeForTopic(props.topicId) && !props.isSelected) {
+    event.preventDefault();
+    return;
+  }
+
+  openActivePopover(props.messageId, event);
+};
+
+const handleToggleSelection = () => {
+  if (!props.isSelectionMode) {
+    return;
+  }
+
+  emits('toggle-selection');
+};
+
+const handleMessageClick = () => {
+  if (!props.isSelectionMode) {
+    return;
+  }
+
+  emits('toggle-selection');
 };
 </script>
