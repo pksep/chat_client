@@ -1,16 +1,15 @@
 import { type Ref } from 'vue';
 import type { IMessage, ITopic } from '../../interfaces/interfaces';
-import { TopicType } from '../../../services/useChatSDK/types';
 import {
-  navigateToDialogs,
-  navigateToGroup
-} from '../../../composables/navigation/useUrlRouting';
+  clearPendingForwardMessages,
+  openForwardDraft
+} from '../../../composables/useForwardMessages';
 
 export function useMessageActions(
   state: {
     editMessage: IMessage | null;
     replyMessage: IMessage | null;
-    forwardMessage: IMessage | null;
+    forwardMessages: IMessage[];
     messages: IMessage[];
   },
   inputText: Ref<string>,
@@ -20,7 +19,8 @@ export function useMessageActions(
     messageListInputRef.value?.focus();
     state.replyMessage = null;
     state.editMessage = null;
-    state.forwardMessage = null;
+    state.forwardMessages = [];
+    clearPendingForwardMessages();
   };
 
   const handleSetEditMessage = (messageId?: string) => {
@@ -47,17 +47,9 @@ export function useMessageActions(
   ) => {
     clearSellectedMessage();
     if (!props) {
-      state.forwardMessage = null;
       return;
     }
-    if (props.topic.type === TopicType.DM) {
-      navigateToDialogs(props.topic.id);
-    } else {
-      navigateToGroup(props.topic.id);
-    }
-    setTimeout(() => {
-      state.forwardMessage = props.message;
-    }, 0);
+    openForwardDraft(props.topic, props.message);
 
     setTimeout(() => {
       messageListInputRef.value?.focus();

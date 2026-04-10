@@ -23,10 +23,6 @@
     @touchend="onTouchEnd"
     :data-testid="`${props.dataTestid}-MessageList-UserMessagesWrapper`"
   >
-    <SelectedMessagesContent
-      v-if="isSelectionMode"
-      :data-testid="`${props.dataTestid}-SelectedMessages`"
-    />
     <MessageListUserItems
       ref="messageListUserItemsRef"
       :messages="state.messages"
@@ -55,13 +51,17 @@
     :dataTestid="`${props.dataTestid}-MessageList-Loading`"
   />
 
+  <SelectedMessagesContent
+    v-if="isSelectionMode"
+    :data-testid="`${props.dataTestid}-SelectedMessages`"
+  />
   <MessageListInput
-    v-if="!isDefaultRoute"
+    v-if="!isDefaultRoute && !isSelectionMode"
     v-model="inputText"
     ref="messageListInputRef"
     :edit-message="state.editMessage"
     :reply-message="state.replyMessage"
-    :forward-message="state.forwardMessage"
+    :forward-messages="state.forwardMessages"
     :data-testid="props.dataTestid"
     @send="handleSend"
     @attach-file="handleAttachFile"
@@ -135,6 +135,10 @@ import { Capacitor } from '@capacitor/core';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
 import SelectedMessagesContent from './Header/SelectedMessagesContent.vue';
+import {
+  consumePendingForwardMessages,
+  usePendingForwardMessages
+} from '../composables/useForwardMessages';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -160,6 +164,8 @@ const getLocalStorageInputText = computed(() => {
 
 const inputText = ref(getLocalStorageInputText.value);
 let chatVisibilityObserver: ResizeObserver | null = null;
+const { pendingForwardMessages, pendingForwardTopicId } =
+  usePendingForwardMessages();
 
 const isAiRoute = computed(() => route.value?.type === RouteTypes.AI);
 const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
@@ -175,7 +181,7 @@ const state = reactive({
   aiMessages: [] as AIMessage[],
   editMessage: null as IMessage | null,
   replyMessage: null as IMessage | null,
-  forwardMessage: null as IMessage | null,
+  forwardMessages: [] as IMessage[],
   errorMessage: '',
   hideUnreadMarker: false,
   unreadMarkerMessageId: null as string | null
@@ -221,6 +227,23 @@ const {
   handleSetReplyMessage,
   handleSetForwardMessage
 } = useMessageActions(state, inputText, messageListInputRef);
+
+const applyPendingForwardMessages = () => {
+  if (
+    !route.value?.id ||
+    pendingForwardTopicId.value !== route.value.id ||
+    pendingForwardMessages.value.length === 0
+  ) {
+    return;
+  }
+
+  state.replyMessage = null;
+  state.editMessage = null;
+  state.forwardMessages = consumePendingForwardMessages(route.value.id);
+  nextTick(() => {
+    messageListInputRef.value?.focus();
+  });
+};
 
 const handleScrollToMessage = async (message: IMessage) => {
   if (message.topicId !== route.value.id) return;
@@ -396,6 +419,10 @@ watch(
   async () => {
     if (!route.value?.id) return;
 
+    state.replyMessage = null;
+    state.editMessage = null;
+    state.forwardMessages = [];
+
     clearSelectedMessages();
 
     await hydrateMessagesFromCache(route.value.id);
@@ -410,8 +437,14 @@ watch(
     resetScrollState();
 
     nextTick(() => {
-      state.replyMessage = null;
-      state.editMessage = null;
+      const consumedForwardMessages = consumePendingForwardMessages(
+        route.value.id
+      );
+
+      if (consumedForwardMessages.length > 0) {
+        state.forwardMessages = consumedForwardMessages;
+      }
+
       state.hideUnreadMarker = false;
       inputText.value = getLocalStorageInputText.value;
       setupIntersectionObserver();
@@ -420,6 +453,14 @@ watch(
     });
   },
   { deep: true, immediate: true }
+);
+
+watch(
+  [() => route.value.id, pendingForwardTopicId, pendingForwardMessages],
+  () => {
+    applyPendingForwardMessages();
+  },
+  { deep: true }
 );
 
 const updateLocalStorageInputText = () => {

@@ -16,7 +16,7 @@
         "@fontsource-variable/inter": "^5.2.6",
         "@mastra/client-js": "^0.12.3",
         "@pksep/reqi": "^0.0.25",
-        "@pksep/yui": "0.1.220",
+        "@pksep/yui": "0.1.233",
         "@pksep/zod-shared-chat": "0.0.6",
         "@vitejs/plugin-basic-ssl": "^2.1.4",
         "livekit-client": "^2.15.7",
@@ -742,7 +742,7 @@
 
     "@pksep/reqi": ["@pksep/reqi@0.0.25", "", { "dependencies": { "content-type": "^1.0.5", "lz-string": "^1.5.0" } }, "sha512-sSed6Susoh0CZfBFcNRit5SruksP+S+uEZKLz2qkY97hsSbOVc8GvWoGY3O1X6b/APWNFwFq4e2jJyVP6zEGlw=="],
 
-    "@pksep/yui": ["@pksep/yui@0.1.220", "", { "dependencies": { "@floating-ui/vue": "^1.1.8", "@fontsource-variable/inter": "^5.1.0", "@fontsource/source-sans-pro": "^5.1.0", "@panzoom/panzoom": "^4.6.1", "@tiptap/core": "^3.6.2", "@tiptap/extension-image": "^3.6.2", "@tiptap/extension-link": "^3.6.2", "@tiptap/extension-placeholder": "^3.6.2", "@tiptap/starter-kit": "^3.6.2", "@tiptap/vue-3": "^3.6.2", "@vueuse/components": "^11.1.0", "@vueuse/core": "^11.0.3", "col-cal": "2.0.0-alpha.1", "pdfjs-dist": "^5.4.449", "print-js": "^1.6.0", "vue": "^3.5.22", "vue3-emoji-picker": "^1.1.8", "vue3-perfect-scrollbar": "^2.0.0" } }, "sha512-gRwzYgdkNfiuF+GIBcFGhL9kL5elVTShe24prsuUClcvUjHOUmbqXHXJULjw39qE3b4gNr5aJRUDIMt3Dogfcg=="],
+    "@pksep/yui": ["@pksep/yui@0.1.233", "", { "dependencies": { "@floating-ui/vue": "^1.1.8", "@fontsource-variable/inter": "^5.1.0", "@fontsource/source-sans-pro": "^5.1.0", "@panzoom/panzoom": "^4.6.1", "@tiptap/core": "^3.6.2", "@tiptap/extension-image": "^3.6.2", "@tiptap/extension-link": "^3.6.2", "@tiptap/extension-placeholder": "^3.6.2", "@tiptap/starter-kit": "^3.6.2", "@tiptap/vue-3": "^3.6.2", "@vueuse/components": "^11.1.0", "@vueuse/core": "^11.0.3", "col-cal": "2.0.0-alpha.1", "pdfjs-dist": "^5.4.449", "print-js": "^1.6.0", "vue": "^3.5.22", "vue3-emoji-picker": "^1.1.8", "vue3-perfect-scrollbar": "^2.0.0" } }, "sha512-oexorRmmFad4Q4ybWAwSiceJ4tzgK8YSUoKx6NARS9zTr0YssH7RgNfugCWFV5AAo0qpLCkpI+YX/kkxuP/oxQ=="],
 
     "@pksep/zod-shared-chat": ["@pksep/zod-shared-chat@0.0.6", "", { "peerDependencies": { "zod": "^3.22.0" } }, "sha512-70HR9AMzkBFsnICp9nTzu1EBsWhhmFHPpe0jIcGSVae8itVDV5bPzj0MrxxxaFeg3cK8Pxd4XzdigiJZ8P6VJg=="],
 

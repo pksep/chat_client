@@ -26,6 +26,7 @@
     width="492px"
     height="178px"
     class="confirm__modal"
+    @click.stop
   >
     <h2 class="confirm__modal__title">{{ props.title }}</h2>
     <p class="confirm__modal__description">

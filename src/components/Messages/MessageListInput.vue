@@ -25,7 +25,7 @@
       </template>
     </div>
     <ContentEditor
-      :active-send="!!props.forwardMessage"
+      :active-send="props.forwardMessages.length > 0"
       v-model="internalInputText"
       ref="contentEditorRef"
       active-attach-file
@@ -87,14 +87,22 @@
           </Button>
         </div>
       </template>
-      <template v-else-if="!!props.forwardMessage" #action>
+      <template v-else-if="props.forwardMessages.length > 0" #action>
         <div class="chat__input__action">
           <ForwardIcon />
           <div class="chat__input__action__blog">
-            <h5>Переслать 1 сообщение</h5>
+            <h5>
+              Переслать {{ props.forwardMessages.length }}
+              сообщение
+            </h5>
             <p>
-              {{ props.forwardMessage.senderUser?.initials }}:
-              {{ stripHtml(props.forwardMessage?.text || 'Вложение') }}
+              <template v-if="props.forwardMessages.length === 1">
+                {{ props.forwardMessages[0]?.senderUser?.initials }}:
+                {{ stripHtml(props.forwardMessages[0]?.text || 'Вложение') }}
+              </template>
+              <template v-else>
+                {{ formatForwardMessagesLabel(props.forwardMessages.length) }}
+              </template>
             </p>
           </div>
           <Button
@@ -138,7 +146,7 @@ interface Props {
   modelValue: string;
   editMessage: IMessage | null;
   replyMessage: IMessage | null;
-  forwardMessage: IMessage | null;
+  forwardMessages: IMessage[];
 }
 
 const props = defineProps<Props>();
@@ -157,6 +165,21 @@ const internalInputText = computed({
   get: () => props.modelValue,
   set: val => emit('update:modelValue', val)
 });
+
+const formatForwardMessagesLabel = (count: number): string => {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+
+  if (mod10 === 1 && mod100 !== 11) {
+    return `${count} сообщение`;
+  }
+
+  if (mod10 >= 2 && mod10 <= 4 && !(mod100 >= 12 && mod100 <= 14)) {
+    return `${count} сообщения`;
+  }
+
+  return `${count} сообщений`;
+};
 
 const route = useUrlWatcher();
 const mentionUsersRef = useTemplateRef<HTMLDivElement>('mentionUsersRef');

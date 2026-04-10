@@ -1,37 +1,47 @@
 <template>
   <div
-    class="selected-messages-content"
-    :data-testid="`${props.dataTestid}-SelectedMessages-Container`"
+    class="selected-messages"
+    :data-testid="`${props.dataTestid}-SelectedMessages`"
   >
-    <Button
-      class="selected-messages-content__action selected-messages-content__action--danger"
-      :type="ButtonTypeEnum.ghost"
-      :size="SizesEnum.small"
-      :disabled="deletableMessages.length === 0"
-      :data-testid="`${props.dataTestid}-SelectedMessages-DeleteButton`"
-      @click="openDeleteConfirm"
-    >
-      <Icon :name="IconNameEnum.deleteSmall" />
-      Удалить
-    </Button>
-
     <div
-      class="selected-messages-content__title"
-      :data-testid="`${props.dataTestid}-SelectedMessages-Title`"
+      class="selected-messages-content"
+      :data-testid="`${props.dataTestid}-SelectedMessages-Container`"
     >
-      Выбрано {{ selectedMessageCount }} сообщения
-    </div>
+      <Button
+        class="selected-messages-content__action selected-messages-content__action--danger"
+        :type="ButtonTypeEnum.outline"
+        :size="SizesEnum.small"
+        :color="'red'"
+        :disabled="!isDeletableMessages"
+        :data-testid="`${props.dataTestid}-SelectedMessages-DeleteButton`"
+        @click="openDeleteConfirm"
+      >
+        <template #left-icon>
+          <Icon :name="IconNameEnum.deleteSmall" :width="16" :height="16" />
+        </template>
+        <span class="selected-messages-content__action__title">Удалить</span>
+      </Button>
 
-    <Button
-      class="selected-messages-content__action"
-      :type="ButtonTypeEnum.ghost"
-      :size="SizesEnum.small"
-      :data-testid="`${props.dataTestid}-SelectedMessages-ForwardButton`"
-      @click="forwardModalOpen = true"
-    >
-      <ForwardIcon />
-      Переслать
-    </Button>
+      <div
+        class="selected-messages-content__title"
+        :data-testid="`${props.dataTestid}-SelectedMessages-Title`"
+      >
+        Выбрано {{ selectedMessageCount }} сообщения
+      </div>
+
+      <Button
+        class="selected-messages-content__action"
+        :type="ButtonTypeEnum.outline"
+        :size="SizesEnum.small"
+        :data-testid="`${props.dataTestid}-SelectedMessages-ForwardButton`"
+        @click="forwardModalOpen = true"
+      >
+        <template #left-icon>
+          <ForwardIcon :width="16" :height="16" />
+        </template>
+        <span class="selected-messages-content__action__title">Переслать</span>
+      </Button>
+    </div>
   </div>
 
   <ConfirmModal
@@ -64,12 +74,14 @@ import ForwardModal from '../Messages/ForwardModal.vue';
 import ForwardIcon from '../UI/ForwardIcon.vue';
 import { useUrlWatcher } from '../../composables/navigation';
 import { getAuthUser } from '../../composables/useAuth';
-import { deleteMessageChat, sendMessageChat } from '../../services/useChat';
+import { deleteMessageChat } from '../../services/useChat';
+import { deleteMessageFromLocal } from '../../services/useMessages';
 import {
   clearSelectedMessages,
   useSelectedMessages
 } from '../../composables/useSelectedMessages';
 import type { ITopic } from '../interfaces/interfaces';
+import { openForwardDraft } from '../../composables/useForwardMessages';
 
 interface Props {
   dataTestid?: string;
@@ -93,19 +105,18 @@ const selectedMessages = computed(() =>
   )
 );
 
-const deletableMessages = computed(() => {
+const isDeletableMessages = computed(() => {
   const currentUserId = getAuthUser()?.id;
 
-  return selectedMessages.value.filter(
-    message => !!currentUserId && message.senderUserId === currentUserId
+  return (
+    selectedMessages.value.length > 0 &&
+    selectedMessages.value.every(
+      message => !!currentUserId && message.senderUserId === currentUserId
+    )
   );
 });
 
 const openDeleteConfirm = () => {
-  if (deletableMessages.value.length === 0) {
-    return;
-  }
-
   deleteConfirmOpen.value = true;
 };
 
@@ -123,8 +134,14 @@ const handleDeleteSelectedMessages = async (): Promise<void> => {
   }
 
   try {
-    for (const message of deletableMessages.value) {
-      await deleteMessageChat({
+    const messagesToDelete = getSelectedMessagesForTopic(topicId);
+
+    for (const message of messagesToDelete) {
+      deleteMessageFromLocal(topicId, message.id);
+    }
+
+    for (const message of messagesToDelete) {
+      void deleteMessageChat({
         messageId: message.id,
         topicId
       });
@@ -139,13 +156,7 @@ const handleForwardSelectedMessages = async (topic: ITopic): Promise<void> => {
   forwardModalOpen.value = false;
 
   try {
-    for (const message of selectedMessages.value) {
-      await sendMessageChat({
-        topicId: topic.id,
-        text: '',
-        forwardMessageId: message.id
-      });
-    }
+    openForwardDraft(topic, selectedMessages.value);
   } finally {
     clearSelectedMessages();
   }

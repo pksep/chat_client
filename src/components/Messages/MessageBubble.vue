@@ -3,7 +3,8 @@
     class="message"
     :class="{
       'message--selection-active': props.isSelectionMode,
-      'message--selected': props.isSelected
+      'message--selected': props.isSelected,
+      highlighted: props.isSelected
     }"
     :data-testid="`${dataTestid}-MessageBubble-Container`"
     :data-role="props.author"
@@ -27,14 +28,20 @@
       v-else-if="props.author === 'assistant'"
       :data-testid="`${dataTestid}-MessageBubble-AssistantIcon`"
     />
-    <Checkbox
-      v-if="props.isSelectionMode"
-      class="message-selection-toggle"
-      :data-testid="props.selectionTestId"
-      :model-value="!!props.isSelected"
-      @update:model-value="handleToggleSelection"
-      @click.stop
-    />
+    <div
+      :class="{
+        'message-selection-toggle': true,
+        'message-selection-toggle__hide': !props.isSelectionMode
+      }"
+    >
+      <Checkbox
+        :data-testid="props.selectionTestId"
+        :model-value="!!props.isSelected"
+        :circular="CheckboxCircularEnum.circled"
+        @update:model-value="handleToggleSelection"
+        @click.stop
+      />
+    </div>
     <div :class="messageArticlesStyles">
       <MessageBubbleText
         v-if="!!props.message"
@@ -71,6 +78,8 @@
       :position="position"
       :message-id="props.messageId"
       :topic-id="props.topicId"
+      :is-selection-mode="props.isSelectionMode"
+      :is-selected="props.isSelected"
       :is-me-sender="props.isMeSender"
       :message="props.message"
       :is-pin="props.isPin"
@@ -84,7 +93,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Avatar, Checkbox } from '@pksep/yui';
+import { Avatar, Checkbox, CheckboxCircularEnum } from '@pksep/yui';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import {
   isOpen,
@@ -208,7 +217,7 @@ const setSliderElement = async (medias: IMedia[], defaultIndex: number = 0) => {
 };
 
 const handleContextMenu = (event: MouseEvent) => {
-  if (isMessageSelectionModeForTopic(props.topicId)) {
+  if (isMessageSelectionModeForTopic(props.topicId) && !props.isSelected) {
     event.preventDefault();
     return;
   }
