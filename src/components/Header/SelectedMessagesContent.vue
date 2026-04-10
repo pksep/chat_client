@@ -16,9 +16,7 @@
         :data-testid="`${props.dataTestid}-SelectedMessages-DeleteButton`"
         @click="openDeleteConfirm"
       >
-        <template #left-icon>
-          <Icon :name="IconNameEnum.deleteSmall" :width="16" :height="16" />
-        </template>
+        <Icon :name="IconNameEnum.deleteSmall" :width="16" :height="16" />
         <span class="selected-messages-content__action__title">Удалить</span>
       </Button>
 
@@ -36,9 +34,7 @@
         :data-testid="`${props.dataTestid}-SelectedMessages-ForwardButton`"
         @click="forwardModalOpen = true"
       >
-        <template #left-icon>
-          <ForwardIcon :width="16" :height="16" />
-        </template>
+        <ForwardIcon :width="16" :height="16" />
         <span class="selected-messages-content__action__title">Переслать</span>
       </Button>
     </div>
