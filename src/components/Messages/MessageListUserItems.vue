@@ -62,6 +62,7 @@
         "
         v-bind="getBubbleProps(message, index)"
         :data-message-id="message.id"
+        @toggle-selection="toggleMessage(message)"
         @unmount-edit-message-id="$emit('setEditMessage', $event)"
         @unmount-reply-message-id="$emit('setReplyMessage', $event)"
         @unmount-forward-message="$emit('setForwardMessage', $event)"
@@ -79,6 +80,11 @@ import MessageBubble from './MessageBubble.vue';
 import { formatDay, formatTime } from '../../composables/useTime';
 import { MessageStatus } from '../../services/useChatSDK/types';
 import type { IMessage } from '../interfaces/interfaces';
+import {
+  isMessageSelected,
+  isMessageSelectionModeForTopic,
+  toggleSelectedMessage
+} from '../../composables/useSelectedMessages';
 
 interface Props {
   dataTestid: string;
@@ -116,6 +122,18 @@ const messageChat = (role: string) => [
   { message__other: role === 'user' }
 ];
 
+const isSelectionMode = (topicId?: string) =>
+  isMessageSelectionModeForTopic(topicId);
+
+const isSelected = (messageId?: string) => isMessageSelected(messageId);
+
+const toggleMessage = (message: IMessage) => {
+  if (!isSelectionMode(message.topicId)) {
+    return;
+  }
+  toggleSelectedMessage(message.topicId, message);
+};
+
 const getBubbleProps = (message: IMessage, index: number) => ({
   message: message.text || '',
   media: message.media,
@@ -132,7 +150,10 @@ const getBubbleProps = (message: IMessage, index: number) => ({
   messageId: message.id,
   replyMessage: message.replyMessage,
   forwardUser: message.forwardUser,
-  reactions: message.reactions
+  reactions: message.reactions,
+  isSelectionMode: isSelectionMode(message.topicId),
+  isSelected: isSelected(message.id),
+  selectionTestId: `${props.dataTestid}-MessageList-SelectMessage${index + 1}`
 });
 
 defineExpose({

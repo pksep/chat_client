@@ -24,8 +24,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
       workbox: {
         cleanupOutdatedCaches: true,
         clientsClaim: true,
-        maximumFileSizeToCacheInBytes: 50 * 1024 * 1024 // 50MB
-        ,
+        maximumFileSizeToCacheInBytes: 50 * 1024 * 1024, // 50MB
         skipWaiting: true
       },
       mode: mode === 'development' ? 'development' : 'production',
@@ -66,11 +65,11 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         type: 'module',
         navigateFallback: 'index.html'
       }
-    }) as PluginOption,
+    }) as PluginOption
     // Оставили на случай тестирования
-    basicSsl({
-      name: 'SEP:Chat'
-    })
+    // basicSsl({
+    //   name: 'SEP:Chat'
+    // })
   ];
 
   const plugins: PluginOption[] = [vuePlugin, ...appPlugins];

@@ -1,6 +1,62 @@
 .message {
   display: flex;
   gap: 10px;
+  position: relative;
+  width: 100%;
+  align-items: flex-start;
+  --message-selection-offset: 0px;
+}
+
+.message-bubble-wrapper {
+  position: relative;
+
+  &:has(.message__other .message__bubble) {
+    padding-right: 30px;
+  }
+}
+
+.message__other .message-selection-toggle {
+  margin-left: 0;
+  order: -1;
+}
+
+.message--selection-active {
+  cursor: pointer;
+}
+
+.message-selection-toggle {
+  width: 30px !important;
+  flex-shrink: 0;
+  margin-left: auto;
+  order: 99;
+  align-self: center;
+  opacity: 1;
+  overflow: hidden;
+  will-change: width, opacity;
+  transition:
+    width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease;
+}
+
+.message-selection-toggle > * {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  transform-origin: center;
+  will-change: transform, opacity;
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.18s ease;
+}
+
+.message-selection-toggle__hide {
+  width: 0 !important;
+  opacity: 0;
+}
+
+.message-selection-toggle__hide > * {
+  opacity: 0;
+  transform: translateX(8px) scale(0.92);
+  pointer-events: none;
 }
 
 .avatar-yui-kit.message__avatar {
@@ -423,6 +479,17 @@ div.message-content__file {
 .message__content__articles {
   display: grid;
   gap: 5px;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.message.message--selection-active .message__content__articles {
+  transform: translateX(var(--message-selection-offset));
+}
+
+.message[data-is-me-sender='true'].message--selection-active
+  .message__content__articles {
+  transform: translateX(calc(var(--message-selection-offset) * -1));
 }
 
 .message__content__articles:has(.message__article__text) {
@@ -571,6 +638,27 @@ div.message-content__file {
 }
 
 @media screen and (width <= 768px) {
+  .message {
+    gap: 8px;
+  }
+
+  .message .message-selection-toggle {
+    margin-left: 0;
+    margin-right: 0;
+    align-self: start;
+    margin-top: 10px;
+    order: -2 !important;
+  }
+
+  .message__other .message-selection-toggle {
+    order: 2 !important;
+    margin-right: auto;
+  }
+
+  .message__content__articles__my .message-selection-toggle {
+    order: -2 !important;
+  }
+
   div.message-content__html > p {
     max-width: 30ch;
   }

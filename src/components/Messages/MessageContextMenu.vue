@@ -6,12 +6,44 @@
     @unmount-close="handleClosePopover"
     :data-testid="`${props.dataTestid}-MessageBubble-ContextMenu`"
   >
+    <template v-if="isSelectionContextMenu">
+      <Button
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="handleOpenForwardModal"
+        :data-testid="`${props.dataTestid}-MessageBubble-SelectionForwardButton`"
+      >
+        <ForwardIcon /> Переслать
+      </Button>
+
+      <Button
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="handleCancelSelection"
+        :data-testid="`${props.dataTestid}-MessageBubble-SelectionCancelButton`"
+      >
+        <SelectIcon /> Отменить выбор
+      </Button>
+
+      <Button
+        v-if="isAllDeletableSelectedMessages"
+        class="red-context-button"
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="handleOpenDeleteModal"
+        :data-testid="`${props.dataTestid}-MessageBubble-SelectionDeleteButton`"
+      >
+        <Icon :name="IconNameEnum.deleteSmall" /> Удалить
+      </Button>
+    </template>
+
     <EmojiPicker
       ref="reactionRow"
       v-on-click-outside="toggleShowEmojies"
-      v-if="showEmojies"
+      v-else-if="showEmojies"
       @select="handleSelectEmoji"
     />
+
     <template v-else>
       <div
         class="select-reactions"
@@ -99,14 +131,23 @@
       >
         <Icon :name="IconNameEnum.deleteSmall" /> Удалить
       </Button>
+
+      <Button
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.small"
+        @click.stop="handleSelectMessage"
+        :data-testid="`${props.dataTestid}-MessageBubble-SelectButton`"
+      >
+        <SelectIcon />
+        Выбрать
+      </Button>
     </template>
   </ContextMenu>
 
-  <!-- DELETE CONFIRM -->
   <ConfirmModal
     :open="deleteModalOpen"
-    title="Удалить сообщение"
-    description="Вы уверены, что хотите удалить сообщение для всех участников чата?"
+    :title="deleteModalTitle"
+    :description="deleteModalDescription"
     @unmount-close="handleCloseDeleteModal"
     @unmount-confirm="handleDeleteMessage"
   />
@@ -127,14 +168,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import {
   Button,
   ButtonTypeEnum,
-  SizesEnum,
   Icon,
-  IconNameEnum
+  IconNameEnum,
+  SizesEnum
 } from '@pksep/yui';
+import EmojiPicker from 'vue3-emoji-picker';
+import 'vue3-emoji-picker/css';
 
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import ConfirmModal from '../UI/ConfirmModal.vue';
@@ -143,23 +186,31 @@ import EditIcon from '../UI/EditIcon.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import UnpinIcon from '../UI/UnpinIcon.vue';
 import CopyIcon from '../UI/CopyIcon.vue';
+import ForwardIcon from '../UI/ForwardIcon.vue';
+import ForwardModal from './ForwardModal.vue';
+import SelectIcon from '../UI/SelectIcon.vue';
+
 import { stripHtml } from '../../utils/stripHtml';
-
-import { IMessageContextMenu } from './interface/interface';
+import { getAuthUser } from '../../composables/useAuth';
 import { closeActivePopover } from '../../composables/useContextMenu';
-
+import {
+  clearSelectedMessages,
+  enterMessageSelection,
+  useSelectedMessages
+} from '../../composables/useSelectedMessages';
+import { openForwardDraft } from '../../composables/useForwardMessages';
 import {
   deleteMessageChat,
   setReactionMessage,
   togglePinMessageChat
 } from '../../services/useChat';
+import {
+  deleteMessageFromLocal,
+  getMessagesByTopicId
+} from '../../services/useMessages';
 
-import EmojiPicker from 'vue3-emoji-picker';
-import 'vue3-emoji-picker/css';
-import ForwardIcon from '../UI/ForwardIcon.vue';
-import ForwardModal from './ForwardModal.vue';
-import { ITopic } from '../interfaces/interfaces';
-import { getMessagesByTopicId } from '../../services/useMessages';
+import type { ITopic } from '../interfaces/interfaces';
+import type { IMessageContextMenu } from './interface/interface';
 
 const props = withDefaults(defineProps<IMessageContextMenu>(), {
   dataTestid: 'MessageContextMenu'
@@ -172,8 +223,40 @@ const emits = defineEmits([
 ]);
 
 const quickReactonList = computed(() => ['♥️', '🔥', '👍', '😂', '👌', '😭']);
-
 const messages = computed(() => getMessagesByTopicId(props.topicId));
+const { getSelectedMessagesForTopic } = useSelectedMessages();
+
+const selectedMessages = computed(() =>
+  getSelectedMessagesForTopic(props.topicId).sort(
+    (left, right) =>
+      new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+  )
+);
+
+const isAllDeletableSelectedMessages = computed(() => {
+  const currentUserId = getAuthUser()?.id;
+
+  return (
+    selectedMessages.value.length > 0 &&
+    selectedMessages.value.every(
+      message => !!currentUserId && message.senderUserId === currentUserId
+    )
+  );
+});
+
+const isSelectionContextMenu = computed(
+  () => !!props.isSelectionMode && !!props.isSelected
+);
+
+const deleteModalTitle = computed(() =>
+  isSelectionContextMenu.value ? 'Удалить сообщения' : 'Удалить сообщение'
+);
+
+const deleteModalDescription = computed(() =>
+  isSelectionContextMenu.value
+    ? 'Вы уверены, что хотите удалить выбранные сообщения?'
+    : 'Вы уверены, что хотите удалить сообщение для всех участников чата?'
+);
 
 const deleteModalOpen = ref(false);
 const unpinModalOpen = ref(false);
@@ -225,6 +308,32 @@ const handleCloseForwardModal = () => {
 };
 
 const handleDeleteMessage = async (): Promise<void> => {
+  if (isSelectionContextMenu.value) {
+    if (!isAllDeletableSelectedMessages.value) {
+      handleCloseDeleteModal();
+      handleClosePopover();
+      return;
+    }
+
+    const messagesToDelete = [...selectedMessages.value];
+
+    for (const message of messagesToDelete) {
+      deleteMessageFromLocal(message.topicId, message.id);
+    }
+
+    for (const message of messagesToDelete) {
+      void deleteMessageChat({
+        messageId: message.id,
+        topicId: message.topicId
+      });
+    }
+
+    clearSelectedMessages();
+    handleCloseDeleteModal();
+    handleClosePopover();
+    return;
+  }
+
   await deleteMessageChat({
     messageId: props.messageId,
     topicId: props.topicId
@@ -245,13 +354,41 @@ const handleReplyMessage = () => {
 };
 
 const handleForwardMessage = (topic: ITopic) => {
+  if (isSelectionContextMenu.value) {
+    openForwardDraft(topic, selectedMessages.value);
+    clearSelectedMessages();
+    handleClosePopover();
+    return;
+  }
+
   const message = messages.value.find(
     message => message.id === props.messageId
   );
+
   emits('unmount-forward-message', {
-    message: message,
-    topic: topic
+    message,
+    topic
   });
+  handleClosePopover();
+};
+
+const handleSelectMessage = () => {
+  if (!props.topicId) {
+    return;
+  }
+
+  const message = messages.value.find(item => item.id === props.messageId);
+
+  if (!message) {
+    return;
+  }
+
+  enterMessageSelection(props.topicId, message);
+  handleClosePopover();
+};
+
+const handleCancelSelection = () => {
+  clearSelectedMessages();
   handleClosePopover();
 };
 
