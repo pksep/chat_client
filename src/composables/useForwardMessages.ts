@@ -1,10 +1,7 @@
 import { computed, ref } from 'vue';
 import type { IMessage, ITopic } from '../components/interfaces/interfaces';
 import { TopicType } from '../services/useChatSDK/types';
-import {
-  navigateToDialogs,
-  navigateToGroup
-} from './navigation/useUrlRouting';
+import { navigateToDialogs, navigateToGroup } from './navigation/useUrlRouting';
 
 const pendingForwardTopicId = ref<string | null>(null);
 const pendingForwardMessages = ref<IMessage[]>([]);

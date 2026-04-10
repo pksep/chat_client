@@ -1,8 +1,5 @@
 import { nextTick, type Ref } from 'vue';
-import {
-  sendMessageChat,
-  uploadFile
-} from '../../../services/useChat';
+import { sendMessageChat, uploadFile } from '../../../services/useChat';
 import { generateUUID } from '../../../utils/generateUUID';
 import { fileToDataURL } from '../../../utils/fileToDataURL';
 import { showErrorNotification } from '../../../composables/useNotifications';
@@ -209,19 +206,16 @@ export function useMessageSender(
       }
 
       if (hasMultipleForwardMessages && parts.length > 0) {
-        registerPendingOutgoingForwardBatch(
-          topicId,
-          [
-            ...forwardMessages.map((_, index) => ({
-              forwardBatchId: forwardBatchId as string,
-              forwardBatchOrder: index
-            })),
-            ...parts.map((_, index) => ({
-              forwardBatchId: forwardBatchId as string,
-              forwardBatchOrder: forwardMessages.length + index
-            }))
-          ]
-        );
+        registerPendingOutgoingForwardBatch(topicId, [
+          ...forwardMessages.map((_, index) => ({
+            forwardBatchId: forwardBatchId as string,
+            forwardBatchOrder: index
+          })),
+          ...parts.map((_, index) => ({
+            forwardBatchId: forwardBatchId as string,
+            forwardBatchOrder: forwardMessages.length + index
+          }))
+        ]);
 
         for (const [index, forwardMessage] of forwardMessages.entries()) {
           const ex = createMessageEx({
