@@ -9,10 +9,9 @@
     >
       <Button
         class="selected-messages-content__action selected-messages-content__action--danger"
+        :style="{ visibility: isDeletableMessages ? 'visible' : 'hidden' }"
         :type="ButtonTypeEnum.outline"
         :size="SizesEnum.small"
-        :color="'red'"
-        :disabled="!isDeletableMessages"
         :data-testid="`${props.dataTestid}-SelectedMessages-DeleteButton`"
         @click="openDeleteConfirm"
       >
