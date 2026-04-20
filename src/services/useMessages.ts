@@ -646,10 +646,13 @@ export const suspendLocalOwnReadStatus = (
     clearTimeout(existingTimeout);
   }
 
-  const timeoutId = setTimeout(() => {
-    suspendedLocalOwnReadTimeouts.delete(topicId);
-    flushDeferredLocalOwnReadStatus(topicId);
-  }, Math.max(0, durationMs));
+  const timeoutId = setTimeout(
+    () => {
+      suspendedLocalOwnReadTimeouts.delete(topicId);
+      flushDeferredLocalOwnReadStatus(topicId);
+    },
+    Math.max(0, durationMs)
+  );
 
   suspendedLocalOwnReadTimeouts.set(topicId, timeoutId);
 };
