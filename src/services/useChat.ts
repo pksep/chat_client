@@ -6,9 +6,10 @@ import type { ChatMessage } from '../types/messages';
 import { authedUser } from '../composables/useAuth';
 import {
   useTopics,
-  changeUnreadMessageCount,
   deleteTopicFromList,
-  fetchAllTopics
+  fetchAllTopics,
+  incrementDisplayedUnreadCount,
+  totalUnreadCount
 } from '../composables/useTopics';
 import {
   updateLocalGroupDetails,
@@ -122,10 +123,17 @@ const setupChatListeners = (): void => {
     const { updateLocalLastMessageTopic } = useTopics();
 
     if (payload.type === 'NEW') {
+      const unreadCountBefore = totalUnreadCount.value;
       addMessageToLocal(payload.data.topicId, payload.data);
       if (payload.data.senderUserId !== currentUserId.value) {
+        if (
+          document.visibilityState !== 'visible' &&
+          payload.data.topicId === route.value.id &&
+          totalUnreadCount.value === unreadCountBefore
+        ) {
+          incrementDisplayedUnreadCount(1);
+        }
         playNotificationSound(payload.data.topicId);
-        changeUnreadMessageCount(1, payload.data.topicId);
       }
     } else if (payload.type === 'DELETE') {
       deleteMessageFromLocal(payload.data.topicId, payload.data.id);

@@ -1,18 +1,25 @@
 import { ref } from 'vue';
 import { getChatSDK } from './useChat';
-import { IMessage } from '../components/interfaces/interfaces';
+import { IMedia, IMessage } from '../components/interfaces/interfaces';
 import { MessageStatus, Reaction } from './useChatSDK/types';
 import {
-  changeUnreadMessageCount,
   updateLocalTopicReadStatus,
-  setTopicTaggedMe
+  setTopicTaggedMe,
+  syncTopicUnreadState,
+  clearTopicReadPreview
 } from '../composables/useTopics';
 import { isTopicMuted } from '../composables/useTopics';
 import { useUrlWatcher } from '../composables/navigation';
 import { authedUser } from '../composables/useAuth';
 import {
   loadCachedTopicMessages,
-  saveCachedTopicMessages
+  saveCachedTopicMessages,
+  savePendingUploadFile,
+  loadPendingUploadFile,
+  deletePendingUploadFile,
+  savePendingUploadMeta,
+  loadPendingUploadMeta,
+  deletePendingUploadMeta
 } from './useTopicMessagesCache';
 
 const messagesStore = ref<Record<string, IMessage[]>>({});
@@ -29,6 +36,23 @@ const pendingOutgoingForwardBatchTimeouts = new Map<
   string,
   ReturnType<typeof setTimeout>
 >();
+const pendingUploadFiles = new Map<
+  string,
+  Map<string, { file: File; isMedia: boolean }>
+>();
+const pendingUploadMeta = new Map<
+  string,
+  { replyMessageId?: string; forwardMessageIds: string[] }
+>();
+const delayedOutgoingMessages = new Map<
+  string,
+  { message: IMessage; timeoutId: ReturnType<typeof setTimeout> }
+>();
+const suspendedLocalOwnReadTimeouts = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+>();
+const queuedLocalOwnReadIds = new Map<string, Set<string>>();
 
 const route = useUrlWatcher();
 
@@ -108,6 +132,58 @@ const compareMessages = (left: IMessage, right: IMessage): number => {
   return 0;
 };
 
+const getPendingUploadKey = (topicId: string, messageId: string): string =>
+  `${topicId}:${messageId}`;
+
+const getDelayedOutgoingKey = (topicId: string, messageId: string): string =>
+  `${topicId}:${messageId}`;
+
+const hasClientId = (message: IMessage): boolean => {
+  const parsedEx = parseMessageEx(message);
+  return typeof parsedEx?.clientId === 'string' && parsedEx.clientId.length > 0;
+};
+
+const getClientId = (message: IMessage): string | null => {
+  const parsedEx = parseMessageEx(message);
+  return typeof parsedEx?.clientId === 'string' ? parsedEx.clientId : null;
+};
+
+const isPendingOutgoingMessage = (message: IMessage): boolean => {
+  if (message.senderUserId !== authedUser.value?.id) {
+    return false;
+  }
+
+  if (!hasClientId(message)) {
+    return false;
+  }
+
+  return (
+    message.status === MessageStatus.Wait ||
+    message.status === MessageStatus.NotDelivered ||
+    !!message.media?.some(media => media.uploadError || media.isLoading)
+  );
+};
+
+const mergeWithPendingOutgoingMessages = (
+  incomingMessages: IMessage[],
+  existingMessages: IMessage[]
+): IMessage[] => {
+  const incomingIds = new Set(incomingMessages.map(message => message.id));
+  const incomingClientIds = new Set(
+    incomingMessages
+      .map(message => getClientId(message))
+      .filter((clientId): clientId is string => !!clientId)
+  );
+  const pendingMessages = existingMessages.filter(
+    message =>
+      isPendingOutgoingMessage(message) &&
+      !incomingIds.has(message.id as string) &&
+      !incomingClientIds.has(getClientId(message) || '')
+  );
+
+  return [...incomingMessages, ...pendingMessages];
+};
+
 const consumePendingOutgoingForwardBatchMeta = (
   topicId: string
 ): { forwardBatchId: string; forwardBatchOrder: number } | null => {
@@ -171,7 +247,7 @@ export const fetchMessagesForTopic = async (
     if (!opts?.skipSave) {
       const existing = getMessagesByTopicId(topicId) || [];
 
-      let combined = messages;
+      let combined = mergeWithPendingOutgoingMessages(messages, existing);
 
       if (opts?.lastMessageId) {
         combined = [...messages, ...existing];
@@ -231,7 +307,8 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   const existingMessages = messagesStore.value[topicId] || [];
 
   const parsedEx = parseMessageEx(message);
-  const clientId = parsedEx?.clientId;
+  const clientId =
+    typeof parsedEx?.clientId === 'string' ? parsedEx.clientId : null;
   const pendingOutgoingForwardBatchMeta =
     message.senderUserId === authedUser.value?.id &&
     !parsedEx?.forwardBatchId &&
@@ -260,8 +337,11 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   if (!clientId) {
     messagesStore.value[topicId] = [...existingMessages, nextMessage];
     schedulePersistMessages(topicId);
+    syncTopicUnreadState(topicId);
     return;
   }
+
+  cancelDelayedOutgoingMessage(topicId, clientId);
 
   const lastMessage = existingMessages.at(-1);
 
@@ -278,6 +358,8 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
       media
     };
     schedulePersistMessages(topicId);
+    clearPendingUploadMessage(topicId, clientId);
+    syncTopicUnreadState(topicId);
 
     return;
   }
@@ -286,6 +368,57 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
 
   messagesStore.value[topicId] = [...filtered, nextMessage];
   schedulePersistMessages(topicId);
+  clearPendingUploadMessage(topicId, clientId);
+  syncTopicUnreadState(topicId);
+};
+
+export const scheduleDelayedOutgoingMessage = (
+  topicId: string,
+  message: IMessage,
+  delayMs: number
+): void => {
+  if (!topicId || !message?.id) {
+    return;
+  }
+
+  const key = getDelayedOutgoingKey(topicId, message.id);
+  const existing = delayedOutgoingMessages.get(key);
+
+  if (existing) {
+    clearTimeout(existing.timeoutId);
+  }
+
+  const timeoutId = setTimeout(() => {
+    delayedOutgoingMessages.delete(key);
+
+    const alreadyExists = (messagesStore.value[topicId] || []).some(
+      existingMessage => existingMessage.id === message.id
+    );
+
+    if (!alreadyExists) {
+      addMessageToLocal(topicId, message);
+    }
+  }, delayMs);
+
+  delayedOutgoingMessages.set(key, {
+    message,
+    timeoutId
+  });
+};
+
+export const cancelDelayedOutgoingMessage = (
+  topicId: string,
+  messageId: string
+): void => {
+  const key = getDelayedOutgoingKey(topicId, messageId);
+  const pending = delayedOutgoingMessages.get(key);
+
+  if (!pending) {
+    return;
+  }
+
+  clearTimeout(pending.timeoutId);
+  delayedOutgoingMessages.delete(key);
 };
 
 export const deleteMessageFromLocal = (
@@ -293,20 +426,13 @@ export const deleteMessageFromLocal = (
   messageId: string
 ): void => {
   const existingMessages = messagesStore.value[topicId] || [];
-  const deletedMessage = existingMessages.find(
-    message => message.id === messageId
-  );
   messagesStore.value[topicId] = existingMessages.filter(
     message => message.id !== messageId
   );
   schedulePersistMessages(topicId);
+  syncTopicUnreadState(topicId);
 
-  if (
-    deletedMessage.senderUser?.id !== authedUser.value?.id &&
-    !deletedMessage.isReadByMe
-  ) {
-    changeUnreadMessageCount(-1, topicId);
-  }
+  clearPendingUploadMessage(topicId, messageId);
 };
 
 export const editMessageFromLocal = (
@@ -376,6 +502,7 @@ export const saveMessagesToLocal = (
 ): void => {
   messagesStore.value[topicId] = messages;
   schedulePersistMessages(topicId);
+  syncTopicUnreadState(topicId);
 
   const isTagged = messages.some(
     m =>
@@ -421,7 +548,7 @@ export const mergeMessagesForTopic = (
 ): IMessage[] => {
   const existing = getMessagesByTopicId(topicId) || [];
 
-  let combined = messages;
+  let combined = mergeWithPendingOutgoingMessages(messages, existing);
 
   if (mode === 'prepend') {
     combined = [...messages, ...existing];
@@ -453,19 +580,20 @@ export const getGroupMessageWithPinned = (
   pinnedMessagesStore.value[topicId] = messages;
 };
 
-export const changeLocalReadStatus = (
+const applyLocalReadStatus = (
   topicId: string,
   messageIds: string[],
   userId: string
 ): void => {
   const existingMessages = messagesStore.value[topicId] || [];
+  const isReadByCurrentUser = userId === authedUser.value.id;
   const updatedMessages = existingMessages.map(message => {
     if (messageIds.includes(message.id)) {
       return {
         ...message,
         status: MessageStatus.Read,
         isRead: true,
-        isReadByMe: true
+        isReadByMe: isReadByCurrentUser ? true : message.isReadByMe
       };
     }
     return message;
@@ -474,10 +602,10 @@ export const changeLocalReadStatus = (
   updateLocalTopicReadStatus(topicId, messageIds);
   messagesStore.value[topicId] = updatedMessages;
   schedulePersistMessages(topicId);
+  clearTopicReadPreview(topicId, messageIds);
+  syncTopicUnreadState(topicId);
 
   if (userId === authedUser.value.id) {
-    changeUnreadMessageCount(-messageIds.length, topicId);
-
     // Re-evaluate taggedMe status for the topic
     const hasUnreadMentions = updatedMessages.some(
       m =>
@@ -490,6 +618,63 @@ export const changeLocalReadStatus = (
       setTopicTaggedMe(topicId, false);
     }
   }
+};
+
+export const flushDeferredLocalOwnReadStatus = (topicId: string): void => {
+  const queuedIds = Array.from(queuedLocalOwnReadIds.get(topicId) || []);
+
+  if (!queuedIds.length || !authedUser.value?.id) {
+    queuedLocalOwnReadIds.delete(topicId);
+    return;
+  }
+
+  queuedLocalOwnReadIds.delete(topicId);
+  applyLocalReadStatus(topicId, queuedIds, authedUser.value.id);
+};
+
+export const suspendLocalOwnReadStatus = (
+  topicId: string,
+  durationMs: number
+): void => {
+  if (!topicId) {
+    return;
+  }
+
+  const existingTimeout = suspendedLocalOwnReadTimeouts.get(topicId);
+
+  if (existingTimeout) {
+    clearTimeout(existingTimeout);
+  }
+
+  const timeoutId = setTimeout(
+    () => {
+      suspendedLocalOwnReadTimeouts.delete(topicId);
+      flushDeferredLocalOwnReadStatus(topicId);
+    },
+    Math.max(0, durationMs)
+  );
+
+  suspendedLocalOwnReadTimeouts.set(topicId, timeoutId);
+};
+
+const isLocalOwnReadStatusSuspended = (topicId: string): boolean =>
+  suspendedLocalOwnReadTimeouts.has(topicId);
+
+export const changeLocalReadStatus = (
+  topicId: string,
+  messageIds: string[],
+  userId: string
+): void => {
+  const isReadByCurrentUser = userId === authedUser.value?.id;
+
+  if (isReadByCurrentUser && isLocalOwnReadStatusSuspended(topicId)) {
+    const existingIds = queuedLocalOwnReadIds.get(topicId) || new Set<string>();
+    messageIds.forEach(id => existingIds.add(id));
+    queuedLocalOwnReadIds.set(topicId, existingIds);
+    return;
+  }
+
+  applyLocalReadStatus(topicId, messageIds, userId);
 };
 
 export const changeFileLoadingStatus = (
@@ -513,6 +698,52 @@ export const changeFileLoadingStatus = (
         return {
           ...media,
           isLoading: false,
+          uploadPercent: null
+        };
+      })
+    };
+  });
+
+  schedulePersistMessages(topicId);
+};
+
+export const changeMessageStatusLocally = (
+  topicId: string,
+  messageId: string,
+  status: MessageStatus
+): void => {
+  const existingMessages = messagesStore.value[topicId] || [];
+
+  messagesStore.value[topicId] = existingMessages.map(message =>
+    message.id === messageId ? { ...message, status } : message
+  );
+
+  schedulePersistMessages(topicId);
+};
+
+export const setFileUploadPendingStatus = (
+  topicId: string,
+  messageId: string,
+  fileId: string
+): void => {
+  const existingMessages = messagesStore.value[topicId] || [];
+
+  messagesStore.value[topicId] = existingMessages.map(message => {
+    if (message.id !== messageId || !message.media) {
+      return message;
+    }
+
+    return {
+      ...message,
+      media: message.media.map(media => {
+        if (media.id !== fileId) {
+          return media;
+        }
+
+        return {
+          ...media,
+          isLoading: true,
+          uploadError: false,
           uploadPercent: null
         };
       })
@@ -552,6 +783,76 @@ export const changeFileUploadPercent = (
   schedulePersistMessages(topicId);
 };
 
+export const setUploadedFileData = (
+  topicId: string,
+  messageId: string,
+  fileId: string,
+  payload: Pick<
+    IMedia,
+    'path' | 'thumbnailPath' | 'originName' | 'size' | 'type' | 'ex'
+  >
+): void => {
+  const existingMessages = messagesStore.value[topicId] || [];
+
+  messagesStore.value[topicId] = existingMessages.map(message => {
+    if (message.id !== messageId || !message.media) {
+      return message;
+    }
+
+    return {
+      ...message,
+      media: message.media.map(media => {
+        if (media.id !== fileId) {
+          return media;
+        }
+
+        return {
+          ...media,
+          ...payload,
+          isLoading: false,
+          uploadError: false,
+          uploadPercent: null
+        };
+      })
+    };
+  });
+
+  schedulePersistMessages(topicId);
+};
+
+export const changeFileUploadErrorStatus = (
+  topicId: string,
+  messageId: string,
+  fileId: string,
+  uploadError: boolean
+): void => {
+  const existingMessages = messagesStore.value[topicId] || [];
+
+  messagesStore.value[topicId] = existingMessages.map(message => {
+    if (message.id !== messageId || !message.media) {
+      return message;
+    }
+
+    return {
+      ...message,
+      media: message.media.map(media => {
+        if (media.id !== fileId) {
+          return media;
+        }
+
+        return {
+          ...media,
+          isLoading: false,
+          uploadError,
+          uploadPercent: null
+        };
+      })
+    };
+  });
+
+  schedulePersistMessages(topicId);
+};
+
 export const deleteFileAfterLoading = (
   topicId: string,
   messageId: string,
@@ -565,6 +866,106 @@ export const deleteFileAfterLoading = (
 
   message.media = message.media.filter(media => media.id !== fileId);
   schedulePersistMessages(topicId);
+};
+
+export const registerPendingUploadMessage = (
+  topicId: string,
+  messageId: string,
+  meta: { replyMessageId?: string; forwardMessageIds?: string[] }
+): void => {
+  pendingUploadMeta.set(getPendingUploadKey(topicId, messageId), {
+    replyMessageId: meta.replyMessageId,
+    forwardMessageIds: meta.forwardMessageIds || []
+  });
+  void savePendingUploadMeta({
+    topicId,
+    messageId,
+    replyMessageId: meta.replyMessageId,
+    forwardMessageIds: meta.forwardMessageIds || []
+  });
+};
+
+export const getPendingUploadMessageMeta = (
+  topicId: string,
+  messageId: string
+): Promise<{ replyMessageId?: string; forwardMessageIds: string[] } | null> => {
+  const key = getPendingUploadKey(topicId, messageId);
+  const cached = pendingUploadMeta.get(key);
+
+  if (cached) {
+    return Promise.resolve(cached);
+  }
+
+  return loadPendingUploadMeta(topicId, messageId).then(meta => {
+    if (meta) {
+      pendingUploadMeta.set(key, meta);
+    }
+
+    return meta;
+  });
+};
+
+export const registerPendingUploadFile = (
+  topicId: string,
+  messageId: string,
+  fileId: string,
+  payload: { file: File; isMedia: boolean }
+): void => {
+  const key = getPendingUploadKey(topicId, messageId);
+  const messageFiles = pendingUploadFiles.get(key) || new Map();
+
+  messageFiles.set(fileId, payload);
+  pendingUploadFiles.set(key, messageFiles);
+  void savePendingUploadFile({
+    topicId,
+    messageId,
+    fileId,
+    file: payload.file,
+    isMedia: payload.isMedia
+  });
+};
+
+export const getPendingUploadFile = (
+  topicId: string,
+  messageId: string,
+  fileId: string
+): Promise<{ file: File; isMedia: boolean } | null> => {
+  const key = getPendingUploadKey(topicId, messageId);
+  const cached = pendingUploadFiles.get(key)?.get(fileId) || null;
+
+  if (cached) {
+    return Promise.resolve(cached);
+  }
+
+  return loadPendingUploadFile(topicId, messageId, fileId).then(file => {
+    if (!file) {
+      return null;
+    }
+
+    const messageFiles = pendingUploadFiles.get(key) || new Map();
+    messageFiles.set(fileId, file);
+    pendingUploadFiles.set(key, messageFiles);
+
+    return file;
+  });
+};
+
+export const clearPendingUploadMessage = (
+  topicId: string,
+  messageId: string
+): void => {
+  const key = getPendingUploadKey(topicId, messageId);
+  const messageFiles = pendingUploadFiles.get(key);
+
+  if (messageFiles) {
+    Array.from(messageFiles.keys()).forEach(fileId => {
+      void deletePendingUploadFile(topicId, messageId, fileId);
+    });
+  }
+
+  pendingUploadFiles.delete(key);
+  pendingUploadMeta.delete(key);
+  void deletePendingUploadMeta(topicId, messageId);
 };
 
 export const playNotificationSound = (topicId?: string): void => {

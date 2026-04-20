@@ -13,10 +13,10 @@ import {
   markAsRead
 } from '../../../services/useChat';
 import {
-  changeLocalReadStatus,
   fetchMessagesForTopic,
   mergeMessagesForTopic
 } from '../../../services/useMessages';
+import { previewTopicReadMessages } from '../../../composables/useTopics';
 import { clearTopicNotifications } from '../../../services/useNotificationNavigation';
 import type { IMessage } from '../../interfaces/interfaces';
 
@@ -33,6 +33,11 @@ export function useMessageScroll(
 ) {
   const isShowScrollToBottomButton = ref(false);
   const isLoadingInitialMessages = ref(false);
+  const autoReadSuspendedUntil = ref(0);
+  const historyFetchSuspendedUntil = ref(0);
+  const readReceiptsEnabled = ref(true);
+  const queuedReadIds = new Set<string>();
+  const scrolledUnreadMarkerKey = ref<string | null>(null);
 
   const scrollState = reactive({
     isUserScrolling: false,
@@ -50,10 +55,20 @@ export function useMessageScroll(
   const pendingReadIds = new Set<string>();
   const SCROLL_DISTANCE_FOR_REQUEST = 500;
 
-  const canMarkVisibleMessagesAsRead = (): boolean => {
+  const canTrackVisibleMessages = (): boolean => {
     const container = chatWrapperRef.value;
 
     if (!container) {
+      return false;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+
+    return containerRect.width > 0 && containerRect.height > 0;
+  };
+
+  const canMarkVisibleMessagesAsRead = (): boolean => {
+    if (!canTrackVisibleMessages()) {
       return false;
     }
 
@@ -61,9 +76,15 @@ export function useMessageScroll(
       return false;
     }
 
-    const containerRect = container.getBoundingClientRect();
+    if (!readReceiptsEnabled.value) {
+      return false;
+    }
 
-    return containerRect.width > 0 && containerRect.height > 0;
+    if (Date.now() < autoReadSuspendedUntil.value) {
+      return false;
+    }
+
+    return true;
   };
 
   const getUnreadMessageIdIfTrackable = (element: Element) => {
@@ -86,24 +107,45 @@ export function useMessageScroll(
 
   const submitReadMessages = async (messageIds: string[]) => {
     if (!messageIds.length || !route.value?.id) return;
-    if (!canMarkVisibleMessagesAsRead()) return;
+    if (!canTrackVisibleMessages()) return;
 
-    messageIds.forEach(id => pendingReadIds.add(id));
+    const uniqueMessageIds = Array.from(new Set(messageIds)).filter(
+      id => !pendingReadIds.has(id)
+    );
+
+    if (!uniqueMessageIds.length) {
+      return;
+    }
+
+    previewTopicReadMessages(route.value.id, uniqueMessageIds);
+
+    if (!canMarkVisibleMessagesAsRead()) {
+      uniqueMessageIds.forEach(id => queuedReadIds.add(id));
+      return;
+    }
+
+    uniqueMessageIds.forEach(id => {
+      pendingReadIds.add(id);
+      queuedReadIds.delete(id);
+    });
 
     try {
       await markAsRead({
-        messageIds,
+        messageIds: uniqueMessageIds,
         topicId: route.value.id
       });
     } catch (error) {
       console.warn('Failed to mark messages as read:', error);
-      messageIds.forEach(id => pendingReadIds.delete(id));
+      uniqueMessageIds.forEach(id => {
+        pendingReadIds.delete(id);
+        queuedReadIds.add(id);
+      });
     }
   };
 
   const collectVisibleUnreadMessageIds = () => {
     const container = chatWrapperRef.value;
-    if (!canMarkVisibleMessagesAsRead() || !container) {
+    if (!canTrackVisibleMessages() || !container) {
       return [];
     }
 
@@ -116,7 +158,7 @@ export function useMessageScroll(
 
       const rect = element.getBoundingClientRect();
       const intersectsVertically =
-        rect.bottom > containerRect.top && rect.top < containerRect.bottom - 50;
+        rect.bottom > containerRect.top && rect.top < containerRect.bottom;
       const intersectsHorizontally =
         rect.right > containerRect.left && rect.left < containerRect.right;
 
@@ -134,7 +176,7 @@ export function useMessageScroll(
   };
 
   const flushVisibleUnreadMessages = () => {
-    if (!canMarkVisibleMessagesAsRead()) {
+    if (!canTrackVisibleMessages()) {
       return;
     }
 
@@ -142,6 +184,42 @@ export function useMessageScroll(
     if (visibleUnreadMessageIds.length > 0) {
       void clearTopicNotifications(route.value.id);
       submitReadMessages(visibleUnreadMessageIds);
+    }
+  };
+
+  const flushQueuedReadMessages = async () => {
+    if (!route.value?.id || queuedReadIds.size === 0) {
+      return;
+    }
+
+    if (!canMarkVisibleMessagesAsRead()) {
+      return;
+    }
+
+    const messageIds = Array.from(queuedReadIds).filter(
+      id => !pendingReadIds.has(id)
+    );
+
+    if (!messageIds.length) {
+      return;
+    }
+
+    messageIds.forEach(id => {
+      pendingReadIds.add(id);
+      queuedReadIds.delete(id);
+    });
+
+    try {
+      await markAsRead({
+        messageIds,
+        topicId: route.value.id
+      });
+    } catch (error) {
+      console.warn('Failed to flush queued read messages:', error);
+      messageIds.forEach(id => {
+        pendingReadIds.delete(id);
+        queuedReadIds.add(id);
+      });
     }
   };
 
@@ -156,17 +234,17 @@ export function useMessageScroll(
 
     if (unreadMessages.length === 0) return;
 
+    previewTopicReadMessages(
+      route.value.id,
+      unreadMessages.map((m: IMessage) => m.id)
+    );
+
     try {
       await clearTopicNotifications(route.value.id);
       await markAsRead({
         messageIds: unreadMessages.map((m: IMessage) => m.id),
         topicId: route.value.id
       });
-      changeLocalReadStatus(
-        route.value.id,
-        unreadMessages.map((m: IMessage) => m.id),
-        props.user?.id
-      );
     } catch (error) {
       console.warn('Failed to mark messages as read:', error);
     }
@@ -182,7 +260,7 @@ export function useMessageScroll(
         const visibleUnreadMessageIds: string[] = [];
 
         entries.forEach(entry => {
-          if (entry.isIntersecting && canMarkVisibleMessagesAsRead()) {
+          if (entry.isIntersecting && canTrackVisibleMessages()) {
             const messageId = getUnreadMessageIdIfTrackable(entry.target);
             if (messageId) {
               visibleUnreadMessageIds.push(messageId);
@@ -197,7 +275,7 @@ export function useMessageScroll(
       {
         root: chatWrapperRef.value,
         threshold: 0.1,
-        rootMargin: '0px 0px -50px 0px'
+        rootMargin: '0px'
       }
     );
 
@@ -211,6 +289,7 @@ export function useMessageScroll(
           }
         });
 
+        void flushQueuedReadMessages();
         flushVisibleUnreadMessages();
       }
     });
@@ -219,6 +298,7 @@ export function useMessageScroll(
   const handleVisibilityChange = () => {
     if (document.visibilityState === 'visible') {
       nextTick(() => {
+        void flushQueuedReadMessages();
         flushVisibleUnreadMessages();
       });
     }
@@ -226,6 +306,7 @@ export function useMessageScroll(
 
   const handleWindowFocus = () => {
     nextTick(() => {
+      void flushQueuedReadMessages();
       flushVisibleUnreadMessages();
     });
   };
@@ -239,6 +320,10 @@ export function useMessageScroll(
     isShowScrollToBottomButton.value = scrollTop < -200;
 
     if (isAutoScrollLoading) {
+      return;
+    }
+
+    if (Date.now() < historyFetchSuspendedUntil.value) {
       return;
     }
 
@@ -312,20 +397,6 @@ export function useMessageScroll(
     setTimeout(() => {
       if (!chatWrapperRef.value) return;
 
-      if (!state.hideUnreadMarker && state.unreadMarkerMessageId) {
-        const unreadMessageElement = chatWrapperRef.value.querySelector(
-          `[data-message-id="${state.unreadMarkerMessageId}"]`
-        );
-
-        if (unreadMessageElement instanceof HTMLElement) {
-          unreadMessageElement.scrollIntoView({
-            block: 'start',
-            behavior: 'auto'
-          });
-          return;
-        }
-      }
-
       const unreadRef = messageListUserItemsRef.value?.unreadMessageStartRef;
       if (unreadRef?.length > 0) {
         const firstUnread = unreadRef[0];
@@ -336,8 +407,36 @@ export function useMessageScroll(
         return;
       }
 
+      if (!state.hideUnreadMarker && state.unreadMarkerMessageId) {
+        const currentMarkerKey = route.value?.id
+          ? `${route.value.id}:${state.unreadMarkerMessageId}`
+          : state.unreadMarkerMessageId;
+
+        if (scrolledUnreadMarkerKey.value === currentMarkerKey) {
+          return;
+        }
+
+        const unreadMessageElement = chatWrapperRef.value.querySelector(
+          `[data-message-id="${state.unreadMarkerMessageId}"]`
+        );
+
+        if (unreadMessageElement instanceof HTMLElement) {
+          scrolledUnreadMarkerKey.value = currentMarkerKey;
+          unreadMessageElement.scrollIntoView({
+            block: 'start',
+            behavior: 'auto'
+          });
+          return;
+        }
+      }
+
       chatWrapperRef.value.scrollTop =
         chatWrapperRef.value.scrollHeight - chatWrapperRef.value.clientHeight;
+
+      requestAnimationFrame(() => {
+        void flushQueuedReadMessages();
+        flushVisibleUnreadMessages();
+      });
     }, 100);
   };
 
@@ -412,6 +511,26 @@ export function useMessageScroll(
     hasOldMessage = true;
     hasNewMessage = true;
     pendingReadIds.clear();
+    scrolledUnreadMarkerKey.value = null;
+    scrollState.isInitialLoad = true;
+    scrollState.isUserScrolling = false;
+    scrollState.shouldAutoScroll = true;
+  };
+
+  const suspendAutoRead = (durationMs: number) => {
+    autoReadSuspendedUntil.value = Date.now() + Math.max(0, durationMs);
+  };
+
+  const suspendHistoryFetch = (durationMs: number) => {
+    historyFetchSuspendedUntil.value = Date.now() + Math.max(0, durationMs);
+  };
+
+  const setReadReceiptsEnabled = (enabled: boolean) => {
+    readReceiptsEnabled.value = enabled;
+
+    if (enabled) {
+      void flushQueuedReadMessages();
+    }
   };
 
   onMounted(() => {
@@ -435,6 +554,9 @@ export function useMessageScroll(
     flushVisibleUnreadMessages,
     intersectionObserver,
     resetScrollState,
-    scrollMarkReadTimeout
+    scrollMarkReadTimeout,
+    suspendAutoRead,
+    suspendHistoryFetch,
+    setReadReceiptsEnabled
   };
 }
