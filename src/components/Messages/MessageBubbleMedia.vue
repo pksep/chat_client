@@ -40,12 +40,14 @@
           :key="media.id"
           class="message-content__media"
           :data-testid="`${props.dataTestid}-MediaContainer`"
+          @contextmenu.prevent
         >
           <video
             v-if="media.type === MediaType.Video && media.localPath"
             :src="getFullMediaPath(media)"
             :style="getPreviewStyle(media)"
             @loadedmetadata="captureVideoPreviewMetrics(media, $event)"
+            @contextmenu.prevent
           />
 
           <img
@@ -56,13 +58,15 @@
             @load="captureImagePreviewMetrics(media, $event)"
             @click="$emit('set-slider', mediaFiles, i)"
             @dragstart="handleDragStart($event, media)"
+            @contextmenu.prevent
           />
 
           <div
-            v-if="typeof media.isLoading === 'boolean'"
+            v-if="typeof media.isLoading === 'boolean' || media.uploadError"
             class="message-content__media-loading"
           >
             <LoadingIcon
+              v-if="!media.uploadError"
               :is-loaded="!media.isLoading"
               :percent="media.uploadPercent ?? null"
             />
@@ -85,8 +89,9 @@
           style="width: 15px; height: 15px; margin-right: -2px"
         />
         <span>{{ props.time }}</span>
+        <ErrorIcon v-if="showErrorIcon" />
         <MessageStatusIcons
-          v-if="props.isMeSender"
+          v-if="props.isMeSender && !showErrorIcon"
           :is-read="props.isRead"
           :message-status="props.messageStatus"
         />
@@ -103,6 +108,7 @@ import LoadingIcon from '../UI/LoadingIcon.vue';
 import PlayIcon from '../UI/PlayIcon.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import MessageEmojies from './MessageEmojies.vue';
+import ErrorIcon from '../UI/ErrorIcon.vue';
 import { stripHtml } from '../../utils/stripHtml';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
@@ -121,6 +127,12 @@ const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
 
 const mediaFiles = computed(
   () => props.media?.filter(media => media.type !== MediaType.File) || []
+);
+
+const showErrorIcon = computed(
+  () =>
+    props.messageStatus === 'NOT_DELIVERED' ||
+    mediaFiles.value.some(media => media.uploadError)
 );
 
 const getPreviewStyle = (media: IMedia): Record<string, string> => {

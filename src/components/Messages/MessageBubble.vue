@@ -87,6 +87,7 @@
       @unmount-edit-message-id="emits('unmount-edit-message-id', $event)"
       @unmount-reply-message-id="emits('unmount-reply-message-id', $event)"
       @unmount-forward-message="emits('unmount-forward-message', $event)"
+      @unmount-retry-message-id="emits('unmount-retry-message-id', $event)"
     />
   </div>
 </template>
@@ -124,6 +125,7 @@ const emits = defineEmits([
   'unmount-edit-message-id',
   'unmount-reply-message-id',
   'unmount-forward-message',
+  'unmount-retry-message-id',
   'unmount-navigate-message-id',
   'toggle-selection'
 ]);

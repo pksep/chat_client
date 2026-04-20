@@ -45,102 +45,125 @@
     />
 
     <template v-else>
-      <div
-        class="select-reactions"
-        ref="reactionRow"
-        :class="{ 'select-reactions--flip': flipReactions }"
-      >
-        <div
-          v-for="value in quickReactonList"
-          :key="value"
-          @click.stop="handleReactMessage(value)"
-          class="select-reactions-item"
+      <template v-if="canRetryMessage">
+        <Button
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          @click.stop="handleRetryUpload"
+          :data-testid="`${props.dataTestid}-MessageBubble-RetryButton`"
         >
-          {{ value }}
-        </div>
-        <div>
-          <Button
-            class="select-reactions-list-button"
-            :type="ButtonTypeEnum.primary"
-            :size="SizesEnum.little"
-            @click="toggleShowEmojies"
+          <RetryIcon /> Отправить повторно
+        </Button>
+
+        <Button
+          class="red-context-button"
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          @click.stop="handleOpenDeleteModal"
+          :data-testid="`${props.dataTestid}-MessageBubble-DeleteButton`"
+        >
+          <Icon :name="IconNameEnum.deleteSmall" /> Удалить
+        </Button>
+      </template>
+
+      <template v-else>
+        <div
+          class="select-reactions"
+          ref="reactionRow"
+          :class="{ 'select-reactions--flip': flipReactions }"
+        >
+          <div
+            v-for="value in quickReactonList"
+            :key="value"
+            @click.stop="handleReactMessage(value)"
+            class="select-reactions-item"
           >
-            <Icon
-              :name="IconNameEnum.plus"
-              :data-testid="`${props.dataTestid}-Reaction-PlusIcon`"
-            />
-          </Button>
+            {{ value }}
+          </div>
+          <div>
+            <Button
+              class="select-reactions-list-button"
+              :type="ButtonTypeEnum.primary"
+              :size="SizesEnum.little"
+              @click="toggleShowEmojies"
+            >
+              <Icon
+                :name="IconNameEnum.plus"
+                :data-testid="`${props.dataTestid}-Reaction-PlusIcon`"
+              />
+            </Button>
+          </div>
         </div>
-      </div>
 
-      <Button
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        @click.stop="handleReplyMessage"
-        :data-testid="`${props.dataTestid}-MessageBubble-ReplyButton`"
-      >
-        <ReplyIcon /> Ответить
-      </Button>
+        <Button
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          @click.stop="handleReplyMessage"
+          :data-testid="`${props.dataTestid}-MessageBubble-ReplyButton`"
+        >
+          <ReplyIcon /> Ответить
+        </Button>
 
-      <Button
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        @click.stop="handleOpenForwardModal"
-        :data-testid="`${props.dataTestid}-MessageBubble-PinButton`"
-      >
-        <ForwardIcon /> Переслать
-      </Button>
+        <Button
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          @click.stop="handleOpenForwardModal"
+          :data-testid="`${props.dataTestid}-MessageBubble-PinButton`"
+        >
+          <ForwardIcon /> Переслать
+        </Button>
 
-      <Button
-        v-if="!!props.message"
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        @click.stop="handleCopyMessage"
-        :data-testid="`${props.dataTestid}-MessageBubble-CopyButton`"
-      >
-        <CopyIcon /> Копировать текст
-      </Button>
+        <Button
+          v-if="!!props.message"
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          @click.stop="handleCopyMessage"
+          :data-testid="`${props.dataTestid}-MessageBubble-CopyButton`"
+        >
+          <CopyIcon /> Копировать текст
+        </Button>
 
-      <Button
-        v-if="props.isMeSender && !!props.message"
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        @click.stop="handleEditMessage"
-        :data-testid="`${props.dataTestid}-MessageBubble-EditButton`"
-      >
-        <EditIcon /> Редактировать
-      </Button>
+        <Button
+          v-if="props.isMeSender && !!props.message"
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          @click.stop="handleEditMessage"
+          :data-testid="`${props.dataTestid}-MessageBubble-EditButton`"
+        >
+          <EditIcon /> Редактировать
+        </Button>
 
-      <Button
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        @click.stop="handlePinMessage"
-        :data-testid="`${props.dataTestid}-MessageBubble-PinButton`"
-      >
-        <template v-if="!props.isPin"> <PinIcon /> Закрепить </template>
-        <template v-else> <UnpinIcon /> Открепить </template>
-      </Button>
+        <Button
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          @click.stop="handlePinMessage"
+          :data-testid="`${props.dataTestid}-MessageBubble-PinButton`"
+        >
+          <template v-if="!props.isPin"> <PinIcon /> Закрепить </template>
+          <template v-else> <UnpinIcon /> Открепить </template>
+        </Button>
 
-      <Button
-        v-if="props.isMeSender"
-        class="red-context-button"
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        @click.stop="handleOpenDeleteModal"
-        :data-testid="`${props.dataTestid}-MessageBubble-DeleteButton`"
-      >
-        <Icon :name="IconNameEnum.deleteSmall" /> Удалить
-      </Button>
+        <Button
+          v-if="props.isMeSender"
+          class="red-context-button"
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          @click.stop="handleOpenDeleteModal"
+          :data-testid="`${props.dataTestid}-MessageBubble-DeleteButton`"
+        >
+          <Icon :name="IconNameEnum.deleteSmall" /> Удалить
+        </Button>
 
-      <Button
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        @click.stop="handleSelectMessage"
-        :data-testid="`${props.dataTestid}-MessageBubble-SelectButton`"
-      >
-        <SelectIcon />
-        Выбрать
-      </Button>
+        <Button
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          @click.stop="handleSelectMessage"
+          :data-testid="`${props.dataTestid}-MessageBubble-SelectButton`"
+        >
+          <SelectIcon />
+          Выбрать
+        </Button>
+      </template>
     </template>
   </ContextMenu>
 
@@ -189,6 +212,7 @@ import CopyIcon from '../UI/CopyIcon.vue';
 import ForwardIcon from '../UI/ForwardIcon.vue';
 import ForwardModal from './ForwardModal.vue';
 import SelectIcon from '../UI/SelectIcon.vue';
+import RetryIcon from '../UI/RetryIcon.vue';
 
 import { stripHtml } from '../../utils/stripHtml';
 import { getAuthUser } from '../../composables/useAuth';
@@ -211,6 +235,7 @@ import {
 
 import type { ITopic } from '../interfaces/interfaces';
 import type { IMessageContextMenu } from './interface/interface';
+import { MessageStatus } from '../../services/useChatSDK/types';
 
 const props = withDefaults(defineProps<IMessageContextMenu>(), {
   dataTestid: 'MessageContextMenu'
@@ -219,7 +244,8 @@ const props = withDefaults(defineProps<IMessageContextMenu>(), {
 const emits = defineEmits([
   'unmount-edit-message-id',
   'unmount-reply-message-id',
-  'unmount-forward-message'
+  'unmount-forward-message',
+  'unmount-retry-message-id'
 ]);
 
 const quickReactonList = computed(() => ['♥️', '🔥', '👍', '😂', '👌', '😭']);
@@ -246,6 +272,40 @@ const isAllDeletableSelectedMessages = computed(() => {
 
 const isSelectionContextMenu = computed(
   () => !!props.isSelectionMode && !!props.isSelected
+);
+const currentMessage = computed(() =>
+  messages.value.find(message => message.id === props.messageId)
+);
+const currentMessageClientId = computed(() => {
+  if (!currentMessage.value?.ex) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(currentMessage.value.ex) as {
+      clientId?: string;
+    };
+
+    return typeof parsed.clientId === 'string' ? parsed.clientId : null;
+  } catch {
+    return null;
+  }
+});
+
+const isLocalPendingMessage = computed(
+  () =>
+    !!currentMessage.value &&
+    !!currentMessageClientId.value &&
+    currentMessage.value.id === currentMessageClientId.value
+);
+
+const canRetryMessage = computed(
+  () =>
+    !!props.isMeSender &&
+    (currentMessage.value?.status === MessageStatus.NotDelivered ||
+      currentMessage.value?.status === MessageStatus.Wait ||
+      isLocalPendingMessage.value ||
+      !!currentMessage.value?.media?.some(media => media.uploadError))
 );
 
 const deleteModalTitle = computed(() =>
@@ -334,6 +394,16 @@ const handleDeleteMessage = async (): Promise<void> => {
     return;
   }
 
+  if (canRetryMessage.value && currentMessage.value) {
+    deleteMessageFromLocal(
+      currentMessage.value.topicId,
+      currentMessage.value.id
+    );
+    handleCloseDeleteModal();
+    handleClosePopover();
+    return;
+  }
+
   await deleteMessageChat({
     messageId: props.messageId,
     topicId: props.topicId
@@ -350,6 +420,11 @@ const handleEditMessage = () => {
 
 const handleReplyMessage = () => {
   emits('unmount-reply-message-id', props.messageId);
+  handleClosePopover();
+};
+
+const handleRetryUpload = () => {
+  emits('unmount-retry-message-id', props.messageId);
   handleClosePopover();
 };
 

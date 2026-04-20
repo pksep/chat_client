@@ -73,6 +73,7 @@ export interface IMedia extends Media {
   size: number;
   originName: string;
   uploadPercent?: number | null;
+  uploadError?: boolean;
   ex?: {
     width?: number;
     height?: number;

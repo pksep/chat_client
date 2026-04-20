@@ -143,6 +143,7 @@ article .message__article-forward-info {
   color: var(--message-time-color, var(--text-grey));
   align-items: center;
   justify-content: end;
+  height: 20px;
   width: 100%;
   & svg.icon-yui-kit {
     display: grid;
