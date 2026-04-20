@@ -155,12 +155,13 @@
   color: var(--white);
   font-size: 12px;
   height: 18px;
-  width: 18px;
-  border-radius: 50%;
+  min-width: 18px;
+  border-radius: 18px;
   background-color: var(--blue4);
   display: flex;
   align-items: center;
   justify-content: center;
+  padding-inline: 4px;
 }
 
 .contact-list__notification--muted {

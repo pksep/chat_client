@@ -421,9 +421,6 @@ export const deleteMessageFromLocal = (
   messageId: string
 ): void => {
   const existingMessages = messagesStore.value[topicId] || [];
-  const deletedMessage = existingMessages.find(
-    message => message.id === messageId
-  );
   messagesStore.value[topicId] = existingMessages.filter(
     message => message.id !== messageId
   );

@@ -6,7 +6,6 @@ import type { ChatMessage } from '../types/messages';
 import { authedUser } from '../composables/useAuth';
 import {
   useTopics,
-  changeUnreadMessageCount,
   deleteTopicFromList,
   fetchAllTopics
 } from '../composables/useTopics';
@@ -125,7 +124,6 @@ const setupChatListeners = (): void => {
       addMessageToLocal(payload.data.topicId, payload.data);
       if (payload.data.senderUserId !== currentUserId.value) {
         playNotificationSound(payload.data.topicId);
-        changeUnreadMessageCount(1, payload.data.topicId);
       }
     } else if (payload.type === 'DELETE') {
       deleteMessageFromLocal(payload.data.topicId, payload.data.id);
