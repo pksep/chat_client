@@ -207,6 +207,7 @@ svg.icon-yui-kit.contact-list__read-icon {
   grid-area: block2;
   gap: 3px;
   justify-self: end;
+  align-items: center;
   display: flex;
   place-content: center;
   text-align: center;
