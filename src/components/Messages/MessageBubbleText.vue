@@ -101,9 +101,7 @@ const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
 
 const showErrorIcon = computed(
-  () =>
-    props.messageStatus === MessageStatus.NotDelivered ||
-    props.messageStatus === MessageStatus.Wait
+  () => props.messageStatus === MessageStatus.NotDelivered
 );
 
 const messageArticleStyles = computed(() => [
