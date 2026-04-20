@@ -48,6 +48,11 @@ const delayedOutgoingMessages = new Map<
   string,
   { message: IMessage; timeoutId: ReturnType<typeof setTimeout> }
 >();
+const suspendedLocalOwnReadTimeouts = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+>();
+const queuedLocalOwnReadIds = new Map<string, Set<string>>();
 
 const route = useUrlWatcher();
 
@@ -421,9 +426,6 @@ export const deleteMessageFromLocal = (
   messageId: string
 ): void => {
   const existingMessages = messagesStore.value[topicId] || [];
-  const deletedMessage = existingMessages.find(
-    message => message.id === messageId
-  );
   messagesStore.value[topicId] = existingMessages.filter(
     message => message.id !== messageId
   );
@@ -578,7 +580,7 @@ export const getGroupMessageWithPinned = (
   pinnedMessagesStore.value[topicId] = messages;
 };
 
-export const changeLocalReadStatus = (
+const applyLocalReadStatus = (
   topicId: string,
   messageIds: string[],
   userId: string
@@ -616,6 +618,63 @@ export const changeLocalReadStatus = (
       setTopicTaggedMe(topicId, false);
     }
   }
+};
+
+export const flushDeferredLocalOwnReadStatus = (topicId: string): void => {
+  const queuedIds = Array.from(queuedLocalOwnReadIds.get(topicId) || []);
+
+  if (!queuedIds.length || !authedUser.value?.id) {
+    queuedLocalOwnReadIds.delete(topicId);
+    return;
+  }
+
+  queuedLocalOwnReadIds.delete(topicId);
+  applyLocalReadStatus(topicId, queuedIds, authedUser.value.id);
+};
+
+export const suspendLocalOwnReadStatus = (
+  topicId: string,
+  durationMs: number
+): void => {
+  if (!topicId) {
+    return;
+  }
+
+  const existingTimeout = suspendedLocalOwnReadTimeouts.get(topicId);
+
+  if (existingTimeout) {
+    clearTimeout(existingTimeout);
+  }
+
+  const timeoutId = setTimeout(
+    () => {
+      suspendedLocalOwnReadTimeouts.delete(topicId);
+      flushDeferredLocalOwnReadStatus(topicId);
+    },
+    Math.max(0, durationMs)
+  );
+
+  suspendedLocalOwnReadTimeouts.set(topicId, timeoutId);
+};
+
+const isLocalOwnReadStatusSuspended = (topicId: string): boolean =>
+  suspendedLocalOwnReadTimeouts.has(topicId);
+
+export const changeLocalReadStatus = (
+  topicId: string,
+  messageIds: string[],
+  userId: string
+): void => {
+  const isReadByCurrentUser = userId === authedUser.value?.id;
+
+  if (isReadByCurrentUser && isLocalOwnReadStatusSuspended(topicId)) {
+    const existingIds = queuedLocalOwnReadIds.get(topicId) || new Set<string>();
+    messageIds.forEach(id => existingIds.add(id));
+    queuedLocalOwnReadIds.set(topicId, existingIds);
+    return;
+  }
+
+  applyLocalReadStatus(topicId, messageIds, userId);
 };
 
 export const changeFileLoadingStatus = (
