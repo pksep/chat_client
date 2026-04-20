@@ -133,6 +133,7 @@
 }
 
 .chats-toolbar__filter-button {
+  -webkit-tap-highlight-color: transparent;
   cursor: pointer;
   min-height: 33px;
   padding: 0 10px;

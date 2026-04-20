@@ -8,6 +8,7 @@
 }
 
 .chat__header-main {
+  -webkit-tap-highlight-color: transparent;
   display: flex;
   justify-content: space-between;
   align-items: center;
