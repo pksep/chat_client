@@ -16,6 +16,7 @@ import {
   joinInvitedGroupCall,
   joinPendingGroupCall,
   open,
+  remoteParticipants,
   receiveIncomingCall,
   syncActiveCalls,
   user,
@@ -24,6 +25,9 @@ import {
 
 export const activeCallUser = computed(() => user.value as any);
 export const isCallActive = computed(() => open.value);
+export const activeCallParticipantCount = computed(() =>
+  open.value ? remoteParticipants.value.length + 1 : 0
+);
 export const hasPendingGroupCall = computed(
   () => Object.keys(activeGroupCalls.value).length > 0
 );

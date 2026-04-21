@@ -78,6 +78,7 @@
         :set-focused-participant-video-ref="setFocusedParticipantVideoRef"
         :set-remote-video-ref="setRemoteVideoRef"
         :set-remote-audio-ref="setRemoteAudioRef"
+        @open-video-overlay="openStageVideoOverlay"
         @select-participant="handleSelectParticipant"
       />
 
@@ -176,6 +177,147 @@
         </template>
       </div>
     </div>
+
+    <div
+      v-if="isStageVideoOverlayVisible && focusedParticipantHasVideo"
+      class="call-modal__video-overlay"
+      @mousemove="handleVideoOverlayMouseMove"
+      @mouseleave="videoOverlayRegion = null"
+      @click.stop
+    >
+      <video
+        :ref="setOverlayFocusedParticipantVideoRef"
+        autoplay
+        playsinline
+        muted
+        class="call-modal__video-overlay-video"
+      ></video>
+
+      <Transition name="call-modal-overlay-top">
+        <div
+          v-if="videoOverlayRegion === 'top'"
+          class="call-modal__video-overlay-bar call-modal__video-overlay-bar--top"
+        >
+          <div class="call-modal__video-overlay-top-content">
+            <div class="call-modal__group-info call-modal__group-info--overlay">
+              <div>
+                <div class="call-modal__group-info-text">
+                  <p>{{ resolvedGroupCallTitle }}</p>
+                  <span>{{ displayGroupCallMeta }}</span>
+                </div>
+              </div>
+
+              <div class="call-modal__video-overlay-actions">
+                <button
+                  class="call-modal__control-button call-modal__control-button--action"
+                  @click="state.openGroupInfoModal = true"
+                >
+                  <GroupInfoIcon />
+                </button>
+                <button
+                  class="call-modal__control-button call-modal__control-button--action"
+                  @click="closeStageVideoOverlay"
+                >
+                  <MinimizeIcon />
+                </button>
+              </div>
+            </div>
+
+            <CallParticipantsPanel
+              :participants="visibleGroupParticipantsForOverlay"
+              :focused-participant="focusedGroupParticipant"
+              :current-page="currentParticipantPage"
+              :current-page-participant-count="visibleGroupParticipantCount"
+              :total-pages="totalParticipantPages"
+              :go-to-page="goToParticipantPage"
+              :set-remote-video-ref="setOverlayRemoteVideoRef"
+              :set-remote-audio-ref="setOverlayRemoteAudioRef"
+              @select-participant="handleSelectParticipant"
+            />
+          </div>
+        </div>
+      </Transition>
+
+      <Transition name="call-modal-overlay-bottom">
+        <div
+          v-if="videoOverlayRegion === 'bottom'"
+          class="call-modal__video-overlay-bar call-modal__video-overlay-bar--bottom"
+        >
+          <div class="call-modal__control-button-wrapper">
+            <button
+              v-if="Capacitor.isNativePlatform()"
+              class="call-modal__control-button"
+              :class="{
+                'call-modal__control-button__inactive':
+                  !liveKitState.isSpeakerActive
+              }"
+              @click="handleToggleAudioOutput"
+            >
+              <VolumeIcon v-if="liveKitState.isSpeakerActive" />
+              <EarpieceIcon v-else />
+            </button>
+
+            <button
+              v-if="liveKitState.isMicActive"
+              class="call-modal__control-button"
+              @click="handleToggleMic"
+            >
+              <MicIcon />
+            </button>
+            <button
+              v-else
+              class="call-modal__control-button call-modal__control-button__inactive"
+              @click="handleToggleMic"
+            >
+              <MicDisableIcon />
+            </button>
+
+            <button
+              v-if="liveKitState.isVideoActive"
+              class="call-modal__control-button"
+              @click="handleToggleVideo"
+            >
+              <VideoIcon />
+            </button>
+            <button
+              v-else
+              class="call-modal__control-button call-modal__control-button__inactive"
+              @click="handleToggleVideo"
+            >
+              <VideoDisableIcon />
+            </button>
+
+            <button
+              v-if="!isMobile && !Capacitor.isNativePlatform()"
+              class="call-modal__control-button"
+              :class="{
+                'call-modal__control-button__inactive':
+                  !liveKitState.isScreenSharingActive
+              }"
+              @click="handleToggleScreenShare"
+            >
+              <ScreenShareIcon />
+            </button>
+
+            <button
+              v-if="isGroupCallLayout"
+              class="call-modal__control-button"
+              :class="{
+                'call-modal__control-button__inactive':
+                  !liveKitState.isHandRaised
+              }"
+              @click="handleToggleHandRaise"
+            >
+              <HandRaiseIcon />
+            </button>
+
+            <button class="call-modal__control-button" @click="leaveCall">
+              <LeaveIcon />
+            </button>
+          </div>
+        </div>
+      </Transition>
+    </div>
   </div>
 
   <GroupCallInfoPanel
@@ -207,6 +349,7 @@ import VideoDisableIcon from './UI/VideoDisableIcon.vue';
 import LeaveIcon from './UI/LeaveIcon.vue';
 import ScreenShareIcon from './UI/ScreenShareIcon.vue';
 import HandRaiseIcon from './UI/HandRaiseIcon.vue';
+import CallParticipantsPanel from './CallParticipantsPanel.vue';
 import GroupCallLayout from './GroupCallLayout.vue';
 import GroupCallInfoPanel from './GroupCallInfoPanel.vue';
 import {
@@ -256,17 +399,90 @@ const { getSelectedTopic } = useTopics();
 const localVideo = ref<HTMLVideoElement | null>(null);
 const screenShareVideo = ref<HTMLVideoElement | null>(null);
 const focusedParticipantVideo = ref<HTMLVideoElement | null>(null);
+const overlayFocusedParticipantVideo = ref<HTMLVideoElement | null>(null);
 const remoteVideoRefs = ref<Record<string, HTMLVideoElement | null>>({});
+const overlayRemoteVideoRefs = ref<Record<string, HTMLVideoElement | null>>({});
 const remoteAudioRefs = ref<Record<string, HTMLAudioElement | null>>({});
 const currentParticipantPage = ref(0);
 const focusedParticipantIdentity = ref<string | null>(null);
 const hasManualParticipantSelection = ref(false);
+const isStageVideoOverlayVisible = ref(false);
+const videoOverlayRegion = ref<'top' | 'bottom' | null>(null);
 const maxParticipantsPerPage = computed(() =>
   isMobile.value ? 4 : liveKitState.isFullScreen ? 9 : 6
 );
 const state = ref({
   openGroupInfoModal: false
 });
+
+const getParticipantFocusPriority = (participant: any) => {
+  let priority = 0;
+
+  if (!participant.isLocal) {
+    priority += 100;
+  }
+
+  if (participant.isScreenShareActive) {
+    priority += 50;
+  }
+
+  if (participant.isHandRaised) {
+    priority += 20;
+  }
+
+  if (participant.isSpeaking) {
+    priority += 10;
+  }
+
+  if (participant.isVideoActive) {
+    priority += 5;
+  }
+
+  return priority;
+};
+
+const getParticipantSortPriority = (participant: any) => {
+  let priority = 0;
+
+  if (participant.isScreenShareActive) {
+    priority += 100;
+  }
+
+  if (participant.isHandRaised) {
+    priority += 50;
+  }
+
+  if (participant.isSpeaking) {
+    priority += 25;
+  }
+
+  if (participant.isVideoActive) {
+    priority += 10;
+  }
+
+  return priority;
+};
+
+const getAutoFocusedParticipant = (participants: any[]) => {
+  if (!participants.length) {
+    return null;
+  }
+
+  return [...participants].sort((left, right) => {
+    const priorityDifference =
+      getParticipantFocusPriority(right) - getParticipantFocusPriority(left);
+
+    if (priorityDifference !== 0) {
+      return priorityDifference;
+    }
+
+    if (left.isLocal !== right.isLocal) {
+      return Number(left.isLocal) - Number(right.isLocal);
+    }
+
+    return left.name.localeCompare(right.name);
+  })[0];
+};
 
 const syncMediaElementStream = (
   element: HTMLMediaElement | null,
@@ -411,33 +627,29 @@ const localParticipantView = computed(() => {
 
 const participantGridViews = computed(() => {
   const sortParticipants = (left: any, right: any) => {
+    const priorityDifference =
+      getParticipantSortPriority(right) - getParticipantSortPriority(left);
+
+    if (priorityDifference !== 0) {
+      return priorityDifference;
+    }
+
     if (left.isLocal !== right.isLocal) {
       return Number(left.isLocal) - Number(right.isLocal);
-    }
-
-    if (left.isHandRaised !== right.isHandRaised) {
-      return Number(right.isHandRaised) - Number(left.isHandRaised);
-    }
-
-    if (left.isSpeaking !== right.isSpeaking) {
-      return Number(right.isSpeaking) - Number(left.isSpeaking);
     }
 
     return left.name.localeCompare(right.name);
   };
 
-  const remoteViews = remoteParticipantViews.value
-    .map(participant => ({
+  const allParticipants = [
+    ...remoteParticipantViews.value.map(participant => ({
       ...participant,
       isLocal: false
-    }))
-    .sort(sortParticipants);
+    })),
+    ...(localParticipantView.value || [])
+  ];
 
-  const localViews = localParticipantView.value
-    ? [...localParticipantView.value].sort(sortParticipants)
-    : [];
-
-  return [...remoteViews, ...localViews];
+  return allParticipants.sort(sortParticipants);
 });
 
 const participantGridCount = computed(() => participantGridViews.value.length);
@@ -468,6 +680,12 @@ const visibleParticipantGridViews = computed(() => {
 const visibleGroupParticipants = computed(() => {
   return visibleParticipantGridViews.value;
 });
+const visibleGroupParticipantsForOverlay = computed(() =>
+  visibleGroupParticipants.value.map(participant => ({
+    ...participant,
+    hasAudio: false
+  }))
+);
 const visibleGroupParticipantCount = computed(
   () => visibleGroupParticipants.value.length
 );
@@ -524,9 +742,15 @@ const participantCountLabel = computed(() => {
 
   return `${count} участников`;
 });
-const groupCallTitle = computed(
-  () => currentCallTopic.value?.name || 'Групповой звонок'
-);
+const groupCallTitle = computed(() => {
+  if (!isGroupCallLayout.value) {
+    return (
+      displayUser.value?.initials || displayUser.value?.nickname || 'Звонок'
+    );
+  }
+
+  return currentCallTopic.value?.name || 'Групповой звонок';
+});
 
 const resolvedGroupCallTitle = computed(
   () => invitedGroupCall.value?.title || groupCallTitle.value
@@ -561,6 +785,14 @@ watch(
 );
 
 watch(
+  [overlayFocusedParticipantVideo, focusedParticipantStageStream],
+  ([video, stream]) => {
+    syncMediaElementStream(video, stream);
+  },
+  { immediate: true }
+);
+
+watch(
   [localVideo, localVideoStream],
   ([video, stream]) => {
     syncMediaElementStream(video, stream);
@@ -573,10 +805,15 @@ watch(
   participants => {
     participants.forEach(participant => {
       const video = remoteVideoRefs.value[participant.tileId];
+      const overlayVideo = overlayRemoteVideoRefs.value[participant.tileId];
       const audio = remoteAudioRefs.value[participant.identity];
 
       if (video) {
         syncMediaElementStream(video, participant.videoStream);
+      }
+
+      if (overlayVideo) {
+        syncMediaElementStream(overlayVideo, participant.videoStream);
       }
 
       if (audio && participant.hasAudio) {
@@ -621,6 +858,8 @@ watch(
     if (!participants.length) {
       focusedParticipantIdentity.value = null;
       hasManualParticipantSelection.value = false;
+      isStageVideoOverlayVisible.value = false;
+      videoOverlayRegion.value = null;
       return;
     }
 
@@ -628,11 +867,47 @@ watch(
       participant => participant.tileId === focusedParticipantIdentity.value
     );
 
+    const currentFocusedParticipant = hasFocusedParticipant
+      ? participants.find(
+          participant => participant.tileId === focusedParticipantIdentity.value
+        )
+      : null;
+    const autoFocusedParticipant = getAutoFocusedParticipant(participants);
+
     if (!hasFocusedParticipant) {
       hasManualParticipantSelection.value = false;
       focusedParticipantIdentity.value =
-        [...participants].reverse().find(participant => !participant.isLocal)
-          ?.tileId || participants[participants.length - 1].tileId;
+        autoFocusedParticipant?.tileId ||
+        participants[participants.length - 1].tileId;
+      return;
+    }
+
+    if (!autoFocusedParticipant || !currentFocusedParticipant) {
+      return;
+    }
+
+    const shouldPromoteAutoFocus =
+      !hasManualParticipantSelection.value ||
+      (autoFocusedParticipant.isScreenShareActive &&
+        !currentFocusedParticipant.isScreenShareActive);
+
+    if (
+      shouldPromoteAutoFocus &&
+      autoFocusedParticipant.tileId !== currentFocusedParticipant.tileId
+    ) {
+      hasManualParticipantSelection.value = false;
+      focusedParticipantIdentity.value = autoFocusedParticipant.tileId;
+    }
+  },
+  { immediate: true }
+);
+
+watch(
+  [focusedParticipantHasVideo, isCallOpen],
+  ([hasVideo, open]) => {
+    if (!hasVideo || !open) {
+      isStageVideoOverlayVisible.value = false;
+      videoOverlayRegion.value = null;
     }
   },
   { immediate: true }
@@ -689,6 +964,14 @@ const setFocusedParticipantVideoRef = (el: Element | null) => {
   );
 };
 
+const setOverlayFocusedParticipantVideoRef = (el: Element | null) => {
+  overlayFocusedParticipantVideo.value = el as HTMLVideoElement | null;
+  syncMediaElementStream(
+    overlayFocusedParticipantVideo.value,
+    focusedParticipantStageStream.value
+  );
+};
+
 const setRemoteVideoRef = (tileId: string, el: Element | null) => {
   remoteVideoRefs.value[tileId] = el as HTMLVideoElement | null;
   const participant = participantGridViews.value.find(
@@ -702,6 +985,22 @@ const setRemoteVideoRef = (tileId: string, el: Element | null) => {
     );
   }
 };
+
+const setOverlayRemoteVideoRef = (tileId: string, el: Element | null) => {
+  overlayRemoteVideoRefs.value[tileId] = el as HTMLVideoElement | null;
+  const participant = participantGridViews.value.find(
+    item => item.tileId === tileId
+  ) as any;
+
+  if (el && participant) {
+    syncMediaElementStream(
+      el as HTMLVideoElement,
+      participant.videoStream || null
+    );
+  }
+};
+
+const setOverlayRemoteAudioRef = () => {};
 
 const setRemoteAudioRef = (identity: string, el: Element | null) => {
   remoteAudioRefs.value[identity] = el as HTMLAudioElement | null;
@@ -728,10 +1027,41 @@ const handleSelectParticipant = (identity: string | null) => {
   if (!identity) {
     hasManualParticipantSelection.value = false;
     focusedParticipantIdentity.value = null;
+    isStageVideoOverlayVisible.value = false;
+    videoOverlayRegion.value = null;
     return;
   }
   hasManualParticipantSelection.value = true;
   focusedParticipantIdentity.value = identity;
+};
+
+const openStageVideoOverlay = () => {
+  if (!focusedParticipantHasVideo.value) return;
+
+  isStageVideoOverlayVisible.value = true;
+  videoOverlayRegion.value = 'top';
+};
+
+const closeStageVideoOverlay = () => {
+  isStageVideoOverlayVisible.value = false;
+  videoOverlayRegion.value = null;
+};
+
+const handleVideoOverlayMouseMove = (event: MouseEvent) => {
+  const viewportHeight = window.innerHeight || 1;
+  const cursorYRatio = event.clientY / viewportHeight;
+
+  if (cursorYRatio <= 0.35) {
+    videoOverlayRegion.value = 'top';
+    return;
+  }
+
+  if (cursorYRatio >= 0.65) {
+    videoOverlayRegion.value = 'bottom';
+    return;
+  }
+
+  videoOverlayRegion.value = null;
 };
 
 const hideModal = () => {

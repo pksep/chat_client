@@ -9,7 +9,7 @@
       @click.stop="handleHeaderCallClick"
     >
       <LeaveIcon />
-      <span>{{ headerCallLabel }}</span>
+      <span>{{ resolvedHeaderCallLabel }}</span>
 
       <span
         v-if="isCallActive && !isAnyCallDialing"
@@ -173,6 +173,8 @@ import { TopicType } from '../../services/useChatSDK/types';
 import CallIcon from '../CallModal/UI/CallIcon.vue';
 import SearchIcon from '../UI/SearchIcon.vue';
 import {
+  activeCallParticipantCount,
+  activeCallUser,
   activeCallFormattedTime,
   isAnyCallDialing,
   isAnyCallModalVisible,
@@ -248,6 +250,14 @@ const showHeaderCallBanner = computed(
     hasInvitedCall.value
 );
 
+const isActiveDirectCallLabel = computed(
+  () =>
+    isCallActive.value &&
+    currentTopic.value?.type === TopicType.DM &&
+    activeCallParticipantCount.value > 0 &&
+    activeCallParticipantCount.value <= 2
+);
+
 const headerCallLabel = computed(() => {
   if (hasInvitedCall.value && !isCallActive.value) {
     return 'Присоединяйтесь к звонку';
@@ -258,6 +268,22 @@ const headerCallLabel = computed(() => {
   }
 
   return 'Групповой звонок';
+});
+
+const resolvedHeaderCallLabel = computed(() => {
+  if (isActiveDirectCallLabel.value) {
+    return (
+      activeCallUser.value?.initials ||
+      currentTopic.value?.user?.initials ||
+      'Call'
+    );
+  }
+
+  if (isCallActive.value && currentTopic.value?.type === TopicType.Group) {
+    return currentTopic.value?.name || headerCallLabel.value;
+  }
+
+  return headerCallLabel.value;
 });
 
 const showSearch = (): void => {

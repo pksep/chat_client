@@ -565,6 +565,10 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   display: flex;
   flex-direction: column;
   min-height: 0;
+
+  &:has(.call-modal__participant-stage) .call-modal__group-layout {
+    height: auto;
+  }
 }
 
 .call-modal__remote-grid-wrapper {
@@ -711,6 +715,99 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   overflow: hidden;
   border-radius: 14px;
   background: #0f1736;
+}
+
+.call-modal__participant-stage-button {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 4;
+  background-color: rgba(15, 23, 54, 0.78);
+  backdrop-filter: blur(6px);
+}
+
+.call-modal__video-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: #020817;
+}
+
+.call-modal__video-overlay-video {
+  width: 100vw;
+  height: 100vh;
+  object-fit: contain;
+  background: #000;
+}
+
+.call-modal__video-overlay-bar {
+  position: fixed;
+  left: 0;
+  width: 100%;
+  padding: 24px;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.call-modal__video-overlay-bar > * {
+  pointer-events: auto;
+}
+
+.call-modal__video-overlay-bar--top {
+  top: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(2, 8, 23, 0.88) 0%,
+    transparent 100%
+  );
+}
+
+.call-modal__video-overlay-bar--bottom {
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  background: linear-gradient(0deg, rgba(2, 8, 23, 0.92) 0%, transparent 100%);
+}
+
+.call-modal__group-info--overlay {
+  color: var(--white);
+}
+
+.call-modal__group-info--overlay .call-modal__group-info-text span {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.call-modal__video-overlay-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.call-modal__video-overlay-top-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.call-modal-overlay-top-enter-active,
+.call-modal-overlay-top-leave-active,
+.call-modal-overlay-bottom-enter-active,
+.call-modal-overlay-bottom-leave-active {
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s ease;
+}
+
+.call-modal-overlay-top-enter-from,
+.call-modal-overlay-top-leave-to {
+  opacity: 0;
+  transform: translateY(-16px);
+}
+
+.call-modal-overlay-bottom-enter-from,
+.call-modal-overlay-bottom-leave-to {
+  opacity: 0;
+  transform: translateY(16px);
 }
 
 .call-modal__remote-placeholder {
