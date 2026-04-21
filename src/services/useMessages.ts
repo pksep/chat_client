@@ -6,9 +6,11 @@ import {
   updateLocalTopicReadStatus,
   setTopicTaggedMe,
   syncTopicUnreadState,
-  clearTopicReadPreview
+  clearTopicReadPreview,
+  useTopics
 } from '../composables/useTopics';
 import { isTopicMuted } from '../composables/useTopics';
+import { useGroup } from '../composables/useGroup';
 import { useUrlWatcher } from '../composables/navigation';
 import { authedUser } from '../composables/useAuth';
 import {
@@ -55,6 +57,14 @@ const suspendedLocalOwnReadTimeouts = new Map<
 const queuedLocalOwnReadIds = new Map<string, Set<string>>();
 
 const route = useUrlWatcher();
+
+const syncLocalLastMessage = (topicId: string, message?: IMessage): void => {
+  const { updateLocalLastMessageTopic } = useTopics();
+  const { updateLocalLastMessageGroup } = useGroup();
+
+  updateLocalLastMessageTopic(topicId, message);
+  updateLocalLastMessageGroup(topicId, message);
+};
 
 const schedulePersistMessages = (topicId: string): void => {
   if (!topicId) {
@@ -338,6 +348,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
     messagesStore.value[topicId] = [...existingMessages, nextMessage];
     schedulePersistMessages(topicId);
     syncTopicUnreadState(topicId);
+    syncLocalLastMessage(topicId, nextMessage);
     return;
   }
 
@@ -360,6 +371,10 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
     schedulePersistMessages(topicId);
     clearPendingUploadMessage(topicId, clientId);
     syncTopicUnreadState(topicId);
+    syncLocalLastMessage(
+      topicId,
+      existingMessages[existingMessages.length - 1]
+    );
 
     return;
   }
@@ -370,6 +385,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   schedulePersistMessages(topicId);
   clearPendingUploadMessage(topicId, clientId);
   syncTopicUnreadState(topicId);
+  syncLocalLastMessage(topicId, nextMessage);
 };
 
 export const scheduleDelayedOutgoingMessage = (
@@ -431,6 +447,7 @@ export const deleteMessageFromLocal = (
   );
   schedulePersistMessages(topicId);
   syncTopicUnreadState(topicId);
+  syncLocalLastMessage(topicId);
 
   clearPendingUploadMessage(topicId, messageId);
 };
@@ -462,6 +479,7 @@ export const editMessageFromLocal = (
     return msg;
   });
   schedulePersistMessages(topicId);
+  syncLocalLastMessage(topicId);
 };
 
 export const changeReactionFromLocal = (
@@ -503,6 +521,7 @@ export const saveMessagesToLocal = (
   messagesStore.value[topicId] = messages;
   schedulePersistMessages(topicId);
   syncTopicUnreadState(topicId);
+  syncLocalLastMessage(topicId);
 
   const isTagged = messages.some(
     m =>

@@ -41,6 +41,25 @@ const getNotificationUrl = payload => {
   return '/';
 };
 
+const buildCallActionUrl = (payload, action) => {
+  const targetUrl = new URL(
+    getNotificationUrl(payload),
+    self.location.origin
+  );
+
+  targetUrl.searchParams.set('callAction', action);
+
+  if (payload.roomId) {
+    targetUrl.searchParams.set('roomId', payload.roomId);
+  }
+
+  if (payload.topicId) {
+    targetUrl.searchParams.set('topicId', payload.topicId);
+  }
+
+  return targetUrl.toString();
+};
+
 const closeNotificationsForTopic = async topicId => {
   if (!topicId) {
     return;
@@ -98,7 +117,8 @@ self.addEventListener('push', event => {
 
       const title = payload.title || 'New message';
       const url = getNotificationUrl(payload);
-      const tag = payload.tag || topicId || 'chat-message';
+      const isIncomingCall = payload.type === 'incoming_call';
+      const tag = payload.tag || payload.roomId || topicId || 'chat-message';
 
       await self.registration.showNotification(title, {
         body: payload.body || '',
@@ -106,6 +126,20 @@ self.addEventListener('push', event => {
         badge: payload.icon || '/images/favicon.ico',
         tag,
         renotify: true,
+        silent: !isIncomingCall,
+        requireInteraction: isIncomingCall,
+        actions: isIncomingCall
+          ? [
+              {
+                action: 'decline',
+                title: 'Decline'
+              },
+              {
+                action: 'accept',
+                title: 'Answer'
+              }
+            ]
+          : [],
         data: {
           ...payload,
           topicId,
@@ -119,8 +153,15 @@ self.addEventListener('push', event => {
 self.addEventListener('notificationclick', event => {
   event.notification.close();
 
-  const targetUrl = getNotificationUrl(event.notification.data || {});
-  const absoluteUrl = new URL(targetUrl, self.location.origin).toString();
+  const payload = event.notification.data || {};
+  const isIncomingCall = payload.type === 'incoming_call';
+  const action =
+    event.action === 'accept' || event.action === 'decline'
+      ? event.action
+      : null;
+  const absoluteUrl = isIncomingCall && action
+    ? buildCallActionUrl(payload, action)
+    : new URL(getNotificationUrl(payload), self.location.origin).toString();
 
   event.waitUntil(
     clients
@@ -134,13 +175,24 @@ self.addEventListener('notificationclick', event => {
         if (matchingClient) {
           const client = matchingClient;
 
+          client.postMessage({
+            type: 'CALL_ACTION',
+            action,
+            roomId: payload.roomId || null,
+            topicId: payload.topicId || null
+          });
+
           client.focus();
 
-          if ('navigate' in client) {
+          if ('navigate' in client && !isIncomingCall) {
             return client.navigate(absoluteUrl);
           }
 
-          return clients.openWindow(absoluteUrl);
+          if (!isIncomingCall) {
+            return clients.openWindow(absoluteUrl);
+          }
+
+          return undefined;
         }
 
         return clients.openWindow(absoluteUrl);

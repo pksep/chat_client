@@ -1,10 +1,11 @@
 import { ref, shallowRef } from 'vue';
 import { ChatSDK } from './useChatSDK';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
-import { MessageStatus } from './useChatSDK/types';
+import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { authedUser } from '../composables/useAuth';
 import {
+  changeUnreadMessageCount,
   useTopics,
   deleteTopicFromList,
   fetchAllTopics,
@@ -52,7 +53,6 @@ import { useUrlWatcher } from '../composables/navigation';
 import { RouteTypes } from '../composables/navigation/useUrlRouting';
 
 let chatSDK: ChatSDK | null = null;
-let activeCallNotification: Notification | null = null;
 
 const isWebsocketConnecting = ref(true);
 const hasWebsocketConnection = ref(false);
@@ -125,6 +125,15 @@ const setupChatListeners = (): void => {
     if (payload.type === 'NEW') {
       const unreadCountBefore = totalUnreadCount.value;
       addMessageToLocal(payload.data.topicId, payload.data);
+
+      if (
+        payload.data.senderUserId !== currentUserId.value &&
+        payload.data.topicId !== route.value.id &&
+        payload.data.isSystem
+      ) {
+        changeUnreadMessageCount(1, payload.data.topicId);
+      }
+
       if (payload.data.senderUserId !== currentUserId.value) {
         if (
           document.visibilityState !== 'visible' &&
@@ -170,42 +179,22 @@ const setupChatListeners = (): void => {
     const user = getUserById(payload.callerId);
     if (user) {
       handleIncomingCall(user, payload.roomId, payload.topicId);
+      const topic = useTopics().getSelectedTopic(payload.topicId) as any;
+      const isGroupCall = topic?.type === TopicType.Group;
 
       // If we are on native mobile, show the system incoming call screen
-      if (Capacitor.isNativePlatform()) {
-        showIncomingCallKit(user.initials, payload.roomId, user.avatarUrl);
-      } else {
-        // Desktop/Web: If page is hidden (minimized), show a system notification
-        if (document.hidden && 'Notification' in window) {
-          if (Notification.permission === 'granted') {
-            if (activeCallNotification) activeCallNotification.close();
-
-            activeCallNotification = new Notification('Входящий вызов', {
-              body: `Звонит ${user.initials}`,
-              icon: '/favicon.ico',
-              requireInteraction: true
-            });
-
-            activeCallNotification.onclick = () => {
-              window.focus();
-              if (activeCallNotification) {
-                activeCallNotification.close();
-                activeCallNotification = null;
-              }
-            };
-          } else if (Notification.permission !== 'denied') {
-            Notification.requestPermission();
-          }
-        }
+      if (Capacitor.isNativePlatform() && !isGroupCall) {
+        showIncomingCallKit(
+          user.initials,
+          payload.roomId,
+          user.avatarUrl,
+          payload.topicId
+        );
       }
     }
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CALL_ANSWERED, ({ payload }) => {
-    if (activeCallNotification) {
-      activeCallNotification.close();
-      activeCallNotification = null;
-    }
     if (Capacitor.isNativePlatform()) {
       endAllCallKits();
     }
@@ -222,10 +211,6 @@ const setupChatListeners = (): void => {
 
     // Only cleanup if the roomId matches our current active call
     if (payload.roomId === liveKitRoomId.value) {
-      if (activeCallNotification) {
-        activeCallNotification.close();
-        activeCallNotification = null;
-      }
       if (Capacitor.isNativePlatform()) {
         endAllCallKits();
       }

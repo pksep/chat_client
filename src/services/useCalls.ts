@@ -16,14 +16,20 @@ import {
   joinInvitedGroupCall,
   joinPendingGroupCall,
   open,
+  remoteParticipants,
   receiveIncomingCall,
   syncActiveCalls,
+  topicId,
   user,
   leaveCall
 } from './useLiveKit';
 
 export const activeCallUser = computed(() => user.value as any);
+export const activeCallTopicId = computed(() => topicId.value);
 export const isCallActive = computed(() => open.value);
+export const activeCallParticipantCount = computed(() =>
+  open.value ? remoteParticipants.value.length + 1 : 0
+);
 export const hasPendingGroupCall = computed(
   () => Object.keys(activeGroupCalls.value).length > 0
 );

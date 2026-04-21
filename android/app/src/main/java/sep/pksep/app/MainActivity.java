@@ -2,7 +2,9 @@ package sep.pksep.app;
 
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.view.WindowManager;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.BridgeActivity;
@@ -14,28 +16,36 @@ import sep.pksep.app.plugins.CallScreenPlugin;
 import sep.pksep.app.plugins.NotificationTapPlugin;
 import sep.pksep.app.plugins.ProximityLockPlugin;
 
+@SuppressWarnings("deprecation")
 public class MainActivity extends BridgeActivity {
     private static final String EXTRA_ACTION = "action";
     private static final String EXTRA_CALL_ACTION = "callAction";
     private static final String EXTRA_GOOGLE_MESSAGE_ID = "google.message_id";
     private static final String EXTRA_ROOM_ID = "roomId";
     private static final String EXTRA_TOPIC_ID = "topicId";
+    private static final String EXTRA_TYPE = "type";
+    private boolean launchedFromIncomingCall = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        launchedFromIncomingCall = isIncomingCallIntent(getIntent());
+        NotificationChannelHelper.ensureDefaultChannel(this);
         registerPlugin(AudioOutputPlugin.class);
         registerPlugin(ProximityLockPlugin.class);
         registerPlugin(CallScreenPlugin.class);
         registerPlugin(NotificationTapPlugin.class);
 
         super.onCreate(savedInstanceState);
+        configureIncomingCallWindow(getIntent());
         handleCallIntent(getIntent());
         handleNotificationLaunchIntent(getIntent());
     }
 
     @Override
     protected void load() {
-        clearWebViewCacheBeforeLoad();
+        if (!launchedFromIncomingCall) {
+            clearWebViewCacheBeforeLoad();
+        }
         super.load();
     }
 
@@ -43,6 +53,8 @@ public class MainActivity extends BridgeActivity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        launchedFromIncomingCall = isIncomingCallIntent(intent);
+        configureIncomingCallWindow(intent);
         handleCallIntent(intent);
         handleNotificationLaunchIntent(intent);
     }
@@ -53,7 +65,16 @@ public class MainActivity extends BridgeActivity {
         }
 
         Bundle extras = intent.getExtras();
-        if (extras == null || !extras.containsKey(EXTRA_GOOGLE_MESSAGE_ID)) {
+        if (extras == null) {
+            return;
+        }
+
+        boolean isGoogleNotification = extras.containsKey(EXTRA_GOOGLE_MESSAGE_ID);
+        boolean isIncomingCallNotification =
+            "incoming_call".equals(extras.getString(EXTRA_TYPE)) &&
+            extras.containsKey(EXTRA_ROOM_ID);
+
+        if (!isGoogleNotification && !isIncomingCallNotification) {
             return;
         }
 
@@ -106,6 +127,51 @@ public class MainActivity extends BridgeActivity {
         CallScreenPlugin.dispatchCallAction(action, roomId, topicId);
         intent.removeExtra(EXTRA_CALL_ACTION);
         intent.removeExtra(EXTRA_ACTION);
+    }
+
+    private void configureIncomingCallWindow(Intent intent) {
+        setIncomingCallWindowEnabled(isIncomingCallIntent(intent));
+    }
+
+    private boolean isIncomingCallIntent(Intent intent) {
+        if (intent == null) {
+            return false;
+        }
+
+        if ("incoming_call".equals(intent.getStringExtra(EXTRA_TYPE))) {
+            return true;
+        }
+
+        Uri data = intent.getData();
+        return data != null && "incoming_call".equals(data.getQueryParameter(EXTRA_TYPE));
+    }
+
+    public void setIncomingCallWindowEnabled(boolean enabled) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(enabled);
+            setTurnScreenOn(enabled);
+        }
+
+        if (enabled) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        } else {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) {
+                getWindow().clearFlags(
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                        | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                );
+            }
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) {
+            getWindow().addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                    | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            );
+        }
+
     }
 
     private String normalizeAction(String action) {
