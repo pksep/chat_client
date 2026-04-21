@@ -1,6 +1,6 @@
 .context-menu {
   display: grid;
-  position: absolute;
+  position: fixed;
   background: var(--white);
   border-radius: 5px;
   padding: 5px;

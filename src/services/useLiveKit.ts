@@ -1,9 +1,16 @@
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
-import { RemoteParticipant, Room, RoomEvent, Track } from 'livekit-client';
+import {
+  LocalVideoTrack,
+  RemoteParticipant,
+  Room,
+  RoomEvent,
+  Track
+} from 'livekit-client';
 import { computed, reactive, ref } from 'vue';
 import type { IUser } from '../components/interfaces/interfaces';
 import { getAuthUser } from '../composables/useAuth';
+import { showErrorNotification } from '../composables/useNotifications';
 import { AudioOutput } from './useAudioOutput';
 import { endAllCallKits, showIncomingCallKit } from './useCallKit';
 import { getChatSDK } from './useChat';
@@ -76,8 +83,34 @@ let dialingTimeout: ReturnType<typeof setTimeout> | null = null;
 let ringtoneAudio: HTMLAudioElement | null = null;
 let dialingAudio: HTMLAudioElement | null = null;
 let isAcceptingLocally = false;
+let connectPromise: Promise<void> | null = null;
+let connectAttemptId = 0;
+let currentCameraFacingMode: 'user' | 'environment' = 'user';
 
 const createRoomId = () => `livekit-${Math.random().toString(36).slice(2, 10)}`;
+
+const resolveCallTargetTopicId = (
+  incomingRoomId?: string,
+  incomingTopicId?: string
+) => incomingTopicId || topicId.value || incomingRoomId || roomId.value || null;
+
+const emitEndCallEvent = (
+  targetRoomId?: string | null,
+  targetTopicId?: string | null
+) => {
+  const sdk = getChatSDK();
+  const me = getAuthUser();
+
+  if (!sdk || !me || !targetRoomId || !targetTopicId) {
+    return;
+  }
+
+  sdk.sendWebSocketEvent(WebSocketEventType.END_CALL, {
+    roomId: targetRoomId,
+    topicId: targetTopicId,
+    userId: me.id
+  });
+};
 
 const formatTime = (seconds: number) => {
   const minutes = Math.floor(seconds / 60);
@@ -179,19 +212,24 @@ const stopTrackPublication = (
   mediaStreamTrack.stop();
 };
 
+const stopMediaStream = (stream?: MediaStream | null) => {
+  stream?.getTracks().forEach(track => {
+    track.onended = null;
+    track.stop();
+  });
+};
+
 const stopLocalMediaTracks = () => {
-  if (!room) return;
-
-  room.localParticipant.audioTrackPublications.forEach(publication => {
+  room?.localParticipant.audioTrackPublications.forEach(publication => {
     stopTrackPublication(publication);
   });
 
-  room.localParticipant.videoTrackPublications.forEach(publication => {
+  room?.localParticipant.videoTrackPublications.forEach(publication => {
     stopTrackPublication(publication);
   });
 
-  localVideoStream.value?.getTracks().forEach(track => track.stop());
-  localScreenShareStream.value?.getTracks().forEach(track => track.stop());
+  stopMediaStream(localVideoStream.value);
+  stopMediaStream(localScreenShareStream.value);
   localVideoStream.value = null;
   localScreenShareStream.value = null;
 };
@@ -388,6 +426,25 @@ const enforceSingleScreenShare = async () => {
   syncLocalTrackState();
 };
 
+const ensureLocalMicrophoneState = async (activeRoom: Room | null = room) => {
+  if (!activeRoom || !state.isMicActive) return;
+
+  const microphonePublication = Array.from(
+    activeRoom.localParticipant.audioTrackPublications.values()
+  ).find(publication => publication.source === Track.Source.Microphone);
+  const microphoneTrack = microphonePublication?.track?.mediaStreamTrack;
+  const hasLiveMicrophoneTrack =
+    !!microphoneTrack &&
+    microphoneTrack.readyState === 'live' &&
+    !microphonePublication?.isMuted;
+
+  if (hasLiveMicrophoneTrack) {
+    return;
+  }
+
+  await activeRoom.localParticipant.setMicrophoneEnabled(true);
+};
+
 const syncConnectionState = (activeRoom: Room) => {
   const hasRemoteParticipant = activeRoom.remoteParticipants.size > 0;
 
@@ -454,11 +511,23 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
     })
-    .on(RoomEvent.LocalTrackPublished, () => {
+    .on(RoomEvent.LocalTrackPublished, publication => {
       syncLocalTrackState();
+      if (
+        publication.source === Track.Source.ScreenShare ||
+        publication.source === Track.Source.ScreenShareAudio
+      ) {
+        void ensureLocalMicrophoneState(activeRoom);
+      }
     })
-    .on(RoomEvent.LocalTrackUnpublished, () => {
+    .on(RoomEvent.LocalTrackUnpublished, publication => {
       syncLocalTrackState();
+      if (
+        publication.source === Track.Source.ScreenShare ||
+        publication.source === Track.Source.ScreenShareAudio
+      ) {
+        void ensureLocalMicrophoneState(activeRoom);
+      }
     })
     .on(RoomEvent.DataReceived, (payload, participant, _, topic) => {
       handleHandRaiseData(payload, participant, topic);
@@ -472,6 +541,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncLocalTrackState();
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      void ensureLocalMicrophoneState(activeRoom);
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.Disconnected, () => {
@@ -496,42 +566,89 @@ const getToken = async (activeRoomId: string, userId: string) => {
   return sdk.getLiveKitToken(activeRoomId, userId);
 };
 
+const getConnectErrorMessage = (error: unknown) => {
+  const errorMessage =
+    error instanceof Error ? error.message.toLowerCase() : String(error);
+
+  if (errorMessage.includes('429')) {
+    return 'Не удалось подключиться к звонку из-за ограничения запросов. Попробуйте еще раз через несколько секунд.';
+  }
+
+  return 'Не удалось подключиться к звонку. Попробуйте еще раз.';
+};
+
 const connectToRoom = async () => {
-  const sdk = getChatSDK();
-  const me = getAuthUser();
-  const activeRoomId = roomId.value;
-  const config = sdk?.getConfig();
-
-  if (!sdk || !me || !activeRoomId || !config?.CHAT_LIVEKIT_URL) {
-    throw new Error('LiveKit config is incomplete');
+  if (connectPromise) {
+    return connectPromise;
   }
 
-  const token = await getToken(activeRoomId, me.id);
-  if (!token) {
-    throw new Error('Failed to get LiveKit token');
-  }
+  const currentAttemptId = ++connectAttemptId;
 
-  room?.disconnect();
-  room = new Room({
-    adaptiveStream: true,
-    dynacast: true
+  connectPromise = (async () => {
+    const sdk = getChatSDK();
+    const me = getAuthUser();
+    const activeRoomId = roomId.value;
+    const config = sdk?.getConfig();
+
+    if (!sdk || !me || !activeRoomId || !config?.CHAT_LIVEKIT_URL) {
+      throw new Error('LiveKit config is incomplete');
+    }
+
+    const token = await getToken(activeRoomId, me.id);
+    if (!token) {
+      throw new Error('Failed to get LiveKit token');
+    }
+
+    room?.disconnect();
+    const nextRoom = new Room({
+      adaptiveStream: true,
+      dynacast: true
+    });
+    room = nextRoom;
+
+    setupRoomListeners(nextRoom);
+
+    try {
+      await nextRoom.connect(config.CHAT_LIVEKIT_URL, token);
+    } catch (error) {
+      if (room === nextRoom) {
+        room = null;
+      }
+      cleanup(false);
+      showErrorNotification(getConnectErrorMessage(error));
+      throw error;
+    }
+
+    if (currentAttemptId !== connectAttemptId || room !== nextRoom) {
+      nextRoom.disconnect();
+      return;
+    }
+
+    await nextRoom.localParticipant.setMicrophoneEnabled(state.isMicActive);
+    if (state.isVideoActive) {
+      await nextRoom.localParticipant.setCameraEnabled(true);
+    }
+    if (state.isScreenSharingActive) {
+      await nextRoom.localParticipant.setScreenShareEnabled(true);
+      await ensureLocalMicrophoneState(nextRoom);
+    }
+
+    syncLocalTrackState();
+    syncRemoteParticipantState();
+    syncConnectionState(nextRoom);
+    stopDialingSound();
+    stopRingtone();
+  })().finally(() => {
+    if (currentAttemptId === connectAttemptId) {
+      connectPromise = null;
+    }
   });
 
-  setupRoomListeners(room);
-  await room.connect(config.CHAT_LIVEKIT_URL, token);
-  await room.localParticipant.setMicrophoneEnabled(state.isMicActive);
-  if (state.isVideoActive) {
-    await room.localParticipant.setCameraEnabled(true);
-  }
-
-  syncLocalTrackState();
-  syncRemoteParticipantState();
-  syncConnectionState(room);
-  stopDialingSound();
-  stopRingtone();
+  return connectPromise;
 };
 
 const resetMediaState = () => {
+  currentCameraFacingMode = 'user';
   localVideoStream.value = null;
   localScreenShareStream.value = null;
   remoteParticipants.value = [];
@@ -768,12 +885,12 @@ export const handleCallAnswered = async (
     roomId.value === answeredRoomId &&
     !isAcceptingLocally
   ) {
-    cleanup(false);
+    cleanup(true);
   }
 };
 
 export const handleCallEnded = () => {
-  cleanup(false);
+  cleanup(true);
 };
 
 export const syncActiveCalls = (
@@ -835,6 +952,35 @@ export const toggleVideo = async () => {
   syncLocalTrackState();
 };
 
+export const switchCamera = async () => {
+  if (!Capacitor.isNativePlatform() || !room || !state.isVideoActive) {
+    return;
+  }
+
+  const cameraPublication = Array.from(
+    room.localParticipant.videoTrackPublications.values()
+  ).find(publication => publication.source === Track.Source.Camera);
+  const localVideoTrack = cameraPublication?.track;
+
+  if (!(localVideoTrack instanceof LocalVideoTrack)) {
+    return;
+  }
+
+  currentCameraFacingMode =
+    currentCameraFacingMode === 'user' ? 'environment' : 'user';
+
+  try {
+    await localVideoTrack.restartTrack({
+      facingMode: currentCameraFacingMode
+    });
+    syncLocalTrackState();
+  } catch (error) {
+    currentCameraFacingMode =
+      currentCameraFacingMode === 'user' ? 'environment' : 'user';
+    console.warn('[LiveKit] Failed to switch camera:', error);
+  }
+};
+
 export const toggleSpeaker = async () => {
   state.isSpeakerActive = !state.isSpeakerActive;
 
@@ -862,6 +1008,7 @@ export const toggleScreenShare = async () => {
   await room.localParticipant.setScreenShareEnabled(
     state.isScreenSharingActive
   );
+  await ensureLocalMicrophoneState(room);
   syncLocalTrackState();
   syncRemoteParticipantState();
 };
@@ -922,14 +1069,19 @@ export const leaveCall = () => {
 };
 
 export const cleanup = (disconnectRoom = true) => {
+  connectAttemptId += 1;
+  connectPromise = null;
   clearDialingTimeout();
   stopTimer();
   stopRingtone();
   stopDialingSound();
 
-  if (disconnectRoom && room) {
-    stopLocalMediaTracks();
-    room.disconnect();
+  const activeRoom = room;
+
+  stopLocalMediaTracks();
+
+  if (disconnectRoom && activeRoom) {
+    activeRoom.disconnect();
   }
 
   room = null;
@@ -958,7 +1110,12 @@ export const handleIncomingPushCall = (
     App.getState().then(appState => {
       if (!appState.isActive) {
         const pushUser = targetUser as any;
-        showIncomingCallKit(pushUser.initials, callRoomId, pushUser.avatarUrl);
+        showIncomingCallKit(
+          pushUser.initials,
+          callRoomId,
+          pushUser.avatarUrl,
+          callTopicId
+        );
       }
     });
   }
@@ -986,14 +1143,36 @@ export const handleNativeCallAction = async (
     return;
   }
 
-  if (
-    !incomingRoomId ||
-    !roomId.value ||
-    roomId.value === incomingRoomId ||
-    isIncoming.value
-  ) {
-    leaveCall();
+  const targetRoomId = incomingRoomId || roomId.value;
+  const targetTopicId = resolveCallTargetTopicId(
+    incomingRoomId,
+    incomingTopicId
+  );
+  const isCurrentCallTarget =
+    !incomingRoomId || !roomId.value || roomId.value === incomingRoomId;
+
+  if (!isCurrentCallTarget) {
+    emitEndCallEvent(targetRoomId, targetTopicId);
+    if (Capacitor.isNativePlatform()) {
+      endAllCallKits();
+    }
+    return;
   }
+
+  if (incomingRoomId) {
+    roomId.value = incomingRoomId;
+  }
+
+  if (targetTopicId) {
+    topicId.value = targetTopicId;
+  }
+
+  if (roomId.value && topicId.value) {
+    leaveCall();
+    return;
+  }
+
+  cleanup(true);
 };
 
 export const clearActiveGroupCall = (targetTopicId?: string) => {

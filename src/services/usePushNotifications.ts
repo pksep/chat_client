@@ -41,6 +41,7 @@ const NotificationTap =
 let nativeNotificationTapListener: PluginListenerHandle | null = null;
 let lastHandledNotificationKey = '';
 let lastHandledNotificationAt = 0;
+let isWebCallActionListenerBound = false;
 
 const hasPayloadValues = (payload?: Record<string, string> | null) =>
   Boolean(payload && Object.keys(payload).length > 0);
@@ -147,6 +148,65 @@ const handleNotificationInteraction = (
   return false;
 };
 
+const consumeWebCallActionFromUrl = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+  const action = url.searchParams.get('callAction');
+
+  if (action !== 'accept' && action !== 'decline') {
+    return;
+  }
+
+  const roomId = url.searchParams.get('roomId') || undefined;
+  const topicId = url.searchParams.get('topicId') || undefined;
+
+  url.searchParams.delete('callAction');
+  url.searchParams.delete('roomId');
+  url.searchParams.delete('topicId');
+  window.history.replaceState({}, document.title, url.toString());
+
+  void handleNativeCallAction(action, roomId, topicId);
+};
+
+const bindWebCallActionListener = () => {
+  if (
+    Capacitor.isNativePlatform() ||
+    isWebCallActionListenerBound ||
+    !('serviceWorker' in navigator)
+  ) {
+    return;
+  }
+
+  navigator.serviceWorker.addEventListener('message', event => {
+    const payload = event.data as
+      | {
+          type?: string;
+          action?: 'accept' | 'decline';
+          roomId?: string | null;
+          topicId?: string | null;
+        }
+      | undefined;
+
+    if (
+      payload?.type !== 'CALL_ACTION' ||
+      (payload.action !== 'accept' && payload.action !== 'decline')
+    ) {
+      return;
+    }
+
+    void handleNativeCallAction(
+      payload.action,
+      payload.roomId || undefined,
+      payload.topicId || undefined
+    );
+  });
+
+  isWebCallActionListenerBound = true;
+};
+
 export const initPushNotifications = async () => {
   const api = useChatApi();
   // Android/iOS
@@ -248,6 +308,8 @@ export const initPushNotifications = async () => {
 
   const registration =
     await navigator.serviceWorker.register('/service-worker.js');
+  bindWebCallActionListener();
+  consumeWebCallActionFromUrl();
 
   // Get public key from server
   const resp = await api.get<{ publicKey: string }>('/push/public-key');
@@ -276,10 +338,11 @@ const handleCallPush = (notification?: { data?: NativeNotificationData }) => {
   if (data && data.type === 'incoming_call') {
     const callerId = data.callerId || data.fromUserId;
     const roomId = data.roomId;
+    const targetTopicId = data.topicId || roomId;
 
     const user = getUserById(callerId);
     if (user) {
-      handleIncomingPushCall(user, roomId, data.topicId || roomId);
+      handleIncomingPushCall(user, roomId, targetTopicId);
     }
   }
 };
