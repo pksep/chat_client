@@ -174,6 +174,7 @@ import CallIcon from '../CallModal/UI/CallIcon.vue';
 import SearchIcon from '../UI/SearchIcon.vue';
 import {
   activeCallParticipantCount,
+  activeCallTopicId,
   activeCallUser,
   activeCallFormattedTime,
   isAnyCallDialing,
@@ -230,6 +231,9 @@ const actionModalDescription = computed(() =>
 );
 
 const currentTopic = computed(() => getSelectedTopic());
+const activeCallTopic = computed(() =>
+  activeCallTopicId.value ? getSelectedTopic(activeCallTopicId.value) : null
+);
 const { handleUpdateInformation } = useMenuInfo();
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const currentPendingCall = computed(
@@ -253,7 +257,7 @@ const showHeaderCallBanner = computed(
 const isActiveDirectCallLabel = computed(
   () =>
     isCallActive.value &&
-    currentTopic.value?.type === TopicType.DM &&
+    activeCallTopic.value?.type === TopicType.DM &&
     activeCallParticipantCount.value > 0 &&
     activeCallParticipantCount.value <= 2
 );
@@ -274,13 +278,24 @@ const resolvedHeaderCallLabel = computed(() => {
   if (isActiveDirectCallLabel.value) {
     return (
       activeCallUser.value?.initials ||
-      currentTopic.value?.user?.initials ||
+      activeCallTopic.value?.user?.initials ||
+      activeCallTopic.value?.user?.nickname ||
       'Call'
     );
   }
 
-  if (isCallActive.value && currentTopic.value?.type === TopicType.Group) {
-    return currentTopic.value?.name || headerCallLabel.value;
+  if (isCallActive.value) {
+    if (activeCallTopic.value?.type === TopicType.Group) {
+      return activeCallTopic.value?.name || headerCallLabel.value;
+    }
+
+    if (activeCallTopic.value?.type === TopicType.DM) {
+      return (
+        activeCallTopic.value?.user?.nickname ||
+        activeCallTopic.value?.user?.initials ||
+        headerCallLabel.value
+      );
+    }
   }
 
   return headerCallLabel.value;

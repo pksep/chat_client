@@ -12,6 +12,12 @@ interface CallActionPayload {
 interface CallScreenPlugin {
   showIncomingCallScreen(): Promise<void>;
   hideIncomingCallScreen(): Promise<void>;
+  showIncomingCall(options: {
+    callerName?: string;
+    roomId: string;
+    topicId?: string;
+  }): Promise<void>;
+  dismissIncomingCall(options?: { roomId?: string }): Promise<void>;
   consumePendingCallAction(): Promise<CallActionPayload>;
   addListener(
     eventName: 'callAction',
@@ -141,12 +147,28 @@ export const initCallKit = async () => {
 export const showIncomingCallKit = async (
   callerName: string,
   callId: string,
-  avatar?: string
+  avatar?: string,
+  topicId?: string
 ) => {
   if (!Capacitor.isNativePlatform()) return;
-  console.log('Showing incoming call kit', callerName, callId, avatar);
+
+  try {
+    await CallScreen.showIncomingCall({
+      callerName,
+      roomId: callId,
+      topicId
+    });
+  } catch (error) {
+    console.warn('[CallKit] Failed to show incoming call:', error, avatar);
+  }
 };
 
 export const endAllCallKits = async () => {
   if (!Capacitor.isNativePlatform()) return;
+
+  try {
+    await CallScreen.dismissIncomingCall({});
+  } catch (error) {
+    console.warn('[CallKit] Failed to dismiss incoming call:', error);
+  }
 };

@@ -18,6 +18,15 @@
       @click="emit('select-participant', null)"
     >
       <button
+        v-if="canSwitchLocalCamera"
+        class="call-modal__control-button call-modal__control-button--action call-modal__participant-stage-button call-modal__participant-stage-button--left"
+        type="button"
+        title="Switch camera"
+        @click.stop="emit('switch-local-camera')"
+      >
+        <SwitchCameraIcon />
+      </button>
+      <button
         v-if="focusedParticipantHasVideo"
         class="call-modal__control-button call-modal__control-button--action call-modal__participant-stage-button"
         type="button"
@@ -73,11 +82,13 @@ import FullscreenIcon from './UI/FullscreenIcon.vue';
 import HandRaiseIcon from './UI/HandRaiseIcon.vue';
 import MicDisableIcon from './UI/MicDisableIcon.vue';
 import MicIcon from './UI/MicIcon.vue';
+import SwitchCameraIcon from './UI/SwitchCameraIcon.vue';
 
 const config = getConfig();
 const emit = defineEmits<{
   (event: 'select-participant', identity: string | null): void;
   (event: 'open-video-overlay'): void;
+  (event: 'switch-local-camera'): void;
 }>();
 
 defineProps<{
@@ -106,10 +117,12 @@ defineProps<{
     name: string;
     initials: string;
     avatarUrl: string;
+    isLocal: boolean;
     isHandRaised: boolean;
     isMicActive: boolean;
   } | null;
   focusedParticipantHasVideo: boolean;
+  canSwitchLocalCamera: boolean;
   currentPage: number;
   currentPageParticipantCount: number;
   totalPages: number;

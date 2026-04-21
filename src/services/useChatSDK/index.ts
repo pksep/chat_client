@@ -137,7 +137,6 @@ export class ChatSDK {
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      const fileLabel = `${file.name} (${file.size} bytes)`;
 
       xhr.open('PUT', uploadUrl);
 
@@ -151,13 +150,11 @@ export class ChatSDK {
         }
 
         const percent = Math.round((event.loaded / event.total) * 100);
-        console.log(`[MinIO Upload] ${fileLabel}: ${percent}%`);
         onProgress?.(percent);
       };
 
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          console.log(`[MinIO Upload] ${fileLabel}: 100%`);
           onProgress?.(100);
           resolve();
           return;

@@ -12,6 +12,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "AudioOutput")
 public class AudioOutputPlugin extends Plugin {
 
+    @SuppressWarnings("deprecation")
     @PluginMethod
     public void toggleAudio(PluginCall call) {
 

@@ -45,8 +45,8 @@
       </div>
 
       <div v-show="showAvatarFallback" class="call-modal__avatar-container">
-        <h3 v-if="displayUser" class="call-modal__user-name">
-          {{ displayUser?.initials }}
+        <h3 v-if="displayAvatarInfo" class="call-modal__user-name">
+          {{ displayAvatarInfo.initials }}
         </h3>
         <p class="call-modal__status">
           <span v-if="isIncoming">Входящий вызов...</span>
@@ -55,11 +55,15 @@
         </p>
 
         <Avatar
-          v-if="displayUser"
-          :url="`${config.CHAT_PATH_TO_FILE_CDN}/${displayUser?.avatarUrl}`"
-          :alt="displayUser?.avatarUrl"
+          v-if="displayAvatarInfo"
+          :url="
+            displayAvatarInfo.avatarUrl
+              ? `${config.CHAT_PATH_TO_FILE_CDN}/${displayAvatarInfo.avatarUrl}`
+              : ''
+          "
+          :alt="displayAvatarInfo.avatarUrl || displayAvatarInfo.name"
           class="call-modal__avatar"
-          :initials="displayUser?.initials"
+          :initials="displayAvatarInfo.initials"
         />
       </div>
 
@@ -70,6 +74,7 @@
         :participants="visibleGroupParticipants"
         :focused-participant="focusedGroupParticipant"
         :focused-participant-has-video="focusedParticipantHasVideo"
+        :can-switch-local-camera="canSwitchLocalCamera"
         :current-page="currentParticipantPage"
         :current-page-participant-count="visibleGroupParticipantCount"
         :total-pages="totalParticipantPages"
@@ -80,6 +85,7 @@
         :set-remote-audio-ref="setRemoteAudioRef"
         @open-video-overlay="openStageVideoOverlay"
         @select-participant="handleSelectParticipant"
+        @switch-local-camera="handleSwitchLocalCamera"
       />
 
       <div class="call-modal__controls">
@@ -108,12 +114,11 @@
               class="call-modal__control-button"
               :class="{
                 'call-modal__control-button__inactive':
-                  !liveKitState.isSpeakerActive
+                  !!liveKitState.isSpeakerActive
               }"
               @click="handleToggleAudioOutput"
             >
-              <VolumeIcon v-if="liveKitState.isSpeakerActive" />
-              <EarpieceIcon v-else />
+              <VolumeIcon />
             </button>
 
             <button
@@ -151,7 +156,7 @@
               class="call-modal__control-button"
               :class="{
                 'call-modal__control-button__inactive':
-                  !liveKitState.isScreenSharingActive
+                  !!liveKitState.isScreenSharingActive
               }"
               @click="handleToggleScreenShare"
             >
@@ -191,12 +196,18 @@
         playsinline
         muted
         class="call-modal__video-overlay-video"
+        @click.stop="handleVideoOverlayTap"
       ></video>
 
       <Transition name="call-modal-overlay-top">
         <div
-          v-if="videoOverlayRegion === 'top'"
+          v-if="
+            isMobile
+              ? isVideoOverlayControlsVisible
+              : videoOverlayRegion === 'top'
+          "
           class="call-modal__video-overlay-bar call-modal__video-overlay-bar--top"
+          @click.stop
         >
           <div class="call-modal__video-overlay-top-content">
             <div class="call-modal__group-info call-modal__group-info--overlay">
@@ -240,8 +251,13 @@
 
       <Transition name="call-modal-overlay-bottom">
         <div
-          v-if="videoOverlayRegion === 'bottom'"
+          v-if="
+            isMobile
+              ? isVideoOverlayControlsVisible
+              : videoOverlayRegion === 'bottom'
+          "
           class="call-modal__video-overlay-bar call-modal__video-overlay-bar--bottom"
+          @click.stop
         >
           <div class="call-modal__control-button-wrapper">
             <button
@@ -253,8 +269,7 @@
               }"
               @click="handleToggleAudioOutput"
             >
-              <VolumeIcon v-if="liveKitState.isSpeakerActive" />
-              <EarpieceIcon v-else />
+              <VolumeIcon />
             </button>
 
             <button
@@ -341,7 +356,6 @@ import { getConfig } from '../../services/useConfig';
 import FullscreenIcon from './UI/FullscreenIcon.vue';
 import MinimizeIcon from './UI/MinimizeIcon.vue';
 import VolumeIcon from './UI/VolumeIcon.vue';
-import EarpieceIcon from './UI/EarpieceIcon.vue';
 import MicIcon from './UI/MicIcon.vue';
 import VideoIcon from './UI/VideoIcon.vue';
 import MicDisableIcon from './UI/MicDisableIcon.vue';
@@ -372,6 +386,7 @@ import {
   toggleMic,
   toggleScreenShare,
   toggleSpeaker,
+  switchCamera,
   toggleVideo,
   topicId as activeTopicId,
   user as activeUser
@@ -407,6 +422,7 @@ const currentParticipantPage = ref(0);
 const focusedParticipantIdentity = ref<string | null>(null);
 const hasManualParticipantSelection = ref(false);
 const isStageVideoOverlayVisible = ref(false);
+const isVideoOverlayControlsVisible = ref(false);
 const videoOverlayRegion = ref<'top' | 'bottom' | null>(null);
 const maxParticipantsPerPage = computed(() =>
   isMobile.value ? 4 : liveKitState.isFullScreen ? 9 : 6
@@ -599,6 +615,30 @@ const displayUser = computed(() => {
 
   return activeUser.value as any;
 });
+const displayAvatarInfo = computed(() => {
+  if (isGroupCallLayout.value) {
+    const groupName = resolvedGroupCallTitle.value || 'Групповой звонок';
+
+    return {
+      name: groupName,
+      initials: groupName,
+      avatarUrl:
+        invitedGroupCall.value?.avatarUrl ||
+        currentCallTopic.value?.avatarUrl ||
+        ''
+    };
+  }
+
+  if (!displayUser.value) {
+    return null;
+  }
+
+  return {
+    name: displayUser.value.nickname || displayUser.value.initials || 'Звонок',
+    initials: displayUser.value.initials,
+    avatarUrl: displayUser.value.avatarUrl || ''
+  };
+});
 
 const localParticipantView = computed(() => {
   const authUser = getAuthUser() as any;
@@ -724,6 +764,13 @@ const focusedParticipantStageStream = computed(() => {
 });
 const focusedParticipantHasVideo = computed(
   () => !!focusedParticipantStageStream.value
+);
+const canSwitchLocalCamera = computed(
+  () =>
+    Capacitor.isNativePlatform() &&
+    !!focusedGroupParticipant.value?.isLocal &&
+    !!focusedParticipantHasVideo.value &&
+    liveKitState.isVideoActive
 );
 const participantCountLabel = computed(() => {
   const count = participantDisplayCount.value;
@@ -907,6 +954,7 @@ watch(
   ([hasVideo, open]) => {
     if (!hasVideo || !open) {
       isStageVideoOverlayVisible.value = false;
+      isVideoOverlayControlsVisible.value = false;
       videoOverlayRegion.value = null;
     }
   },
@@ -1039,29 +1087,45 @@ const openStageVideoOverlay = () => {
   if (!focusedParticipantHasVideo.value) return;
 
   isStageVideoOverlayVisible.value = true;
-  videoOverlayRegion.value = 'top';
+  isVideoOverlayControlsVisible.value = isMobile.value;
+  videoOverlayRegion.value = isMobile.value ? null : 'top';
 };
 
 const closeStageVideoOverlay = () => {
   isStageVideoOverlayVisible.value = false;
+  isVideoOverlayControlsVisible.value = false;
   videoOverlayRegion.value = null;
 };
 
-const handleVideoOverlayMouseMove = (event: MouseEvent) => {
+const getVideoOverlayRegion = (clientY: number) => {
   const viewportHeight = window.innerHeight || 1;
-  const cursorYRatio = event.clientY / viewportHeight;
+  const cursorYRatio = clientY / viewportHeight;
 
   if (cursorYRatio <= 0.35) {
-    videoOverlayRegion.value = 'top';
-    return;
+    return 'top' as const;
   }
 
   if (cursorYRatio >= 0.65) {
-    videoOverlayRegion.value = 'bottom';
+    return 'bottom' as const;
+  }
+
+  return null;
+};
+
+const handleVideoOverlayMouseMove = (event: MouseEvent) => {
+  if (isMobile.value) {
     return;
   }
 
-  videoOverlayRegion.value = null;
+  videoOverlayRegion.value = getVideoOverlayRegion(event.clientY);
+};
+
+const handleVideoOverlayTap = () => {
+  if (!isMobile.value) {
+    return;
+  }
+
+  isVideoOverlayControlsVisible.value = !isVideoOverlayControlsVisible.value;
 };
 
 const hideModal = () => {
@@ -1082,7 +1146,15 @@ const handleToggleVideo = async () => {
   await toggleVideo();
 };
 
+const handleSwitchLocalCamera = async () => {
+  await switchCamera();
+};
+
 const handleToggleScreenShare = async () => {
+  if (isMobile.value || Capacitor.isNativePlatform()) {
+    return;
+  }
+
   await toggleScreenShare();
 };
 

@@ -17,6 +17,9 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.util.List;
 
+import sep.pksep.app.IncomingCallNotificationHelper;
+import sep.pksep.app.MainActivity;
+
 @CapacitorPlugin(name = "CallScreen")
 public class CallScreenPlugin extends Plugin {
 
@@ -29,7 +32,6 @@ public class CallScreenPlugin extends Plugin {
     public void load() {
         super.load();
         instance = this;
-        flushPendingCallAction();
     }
 
     @Override
@@ -50,20 +52,14 @@ public class CallScreenPlugin extends Plugin {
             payload.put("topicId", topicId);
         }
 
+        // Keep the last native action until the web layer explicitly consumes it.
+        // This is critical on cold start, where the plugin instance may already exist
+        // before JS listeners are attached.
         pendingCallAction = payload;
 
         if (instance != null) {
-            instance.flushPendingCallAction();
+            instance.notifyListeners(EVENT_CALL_ACTION, payload);
         }
-    }
-
-    private void flushPendingCallAction() {
-        if (pendingCallAction == null) {
-            return;
-        }
-
-        notifyListeners(EVENT_CALL_ACTION, pendingCallAction);
-        pendingCallAction = null;
     }
 
     @PluginMethod
@@ -80,17 +76,11 @@ public class CallScreenPlugin extends Plugin {
     public void showIncomingCallScreen(PluginCall call) {
         getActivity().runOnUiThread(() -> {
             try {
-                android.app.ActivityManager activityManager =
-                    (android.app.ActivityManager) getContext().getSystemService(Context.ACTIVITY_SERVICE);
-
-                if (activityManager != null) {
-                    activityManager.moveTaskToFront(
-                        getActivity().getTaskId(),
-                        android.app.ActivityManager.MOVE_TASK_WITH_HOME
-                    );
+                if (getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).setIncomingCallWindowEnabled(true);
                 }
 
-                Log.d(TAG, "Incoming call screen moved to front without lock-screen bypass");
+                Log.d(TAG, "Incoming call screen enabled");
                 call.resolve();
             } catch (Exception e) {
                 Log.e(TAG, "Error enabling incoming call screen", e);
@@ -103,6 +93,10 @@ public class CallScreenPlugin extends Plugin {
     public void hideIncomingCallScreen(PluginCall call) {
         getActivity().runOnUiThread(() -> {
             try {
+                IncomingCallNotificationHelper.dismissAllIncomingCalls(getContext());
+                if (getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).setIncomingCallWindowEnabled(false);
+                }
                 Log.d(TAG, "Incoming call screen disabled");
                 call.resolve();
             } catch (Exception e) {
@@ -110,6 +104,42 @@ public class CallScreenPlugin extends Plugin {
                 call.reject(e.getMessage());
             }
         });
+    }
+
+    @PluginMethod
+    public void showIncomingCall(PluginCall call) {
+        String callerName = call.getString("callerName");
+        String roomId = call.getString("roomId");
+        String topicId = call.getString("topicId");
+
+        if (roomId == null || roomId.trim().isEmpty()) {
+            call.reject("roomId is required");
+            return;
+        }
+
+        IncomingCallNotificationHelper.showIncomingCall(
+            getContext(),
+            null,
+            callerName,
+            roomId,
+            topicId,
+            null
+        );
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void dismissIncomingCall(PluginCall call) {
+        String roomId = call.getString("roomId");
+
+        if (roomId == null || roomId.trim().isEmpty()) {
+            IncomingCallNotificationHelper.dismissAllIncomingCalls(getContext());
+            call.resolve();
+            return;
+        }
+
+        IncomingCallNotificationHelper.dismissIncomingCall(getContext(), roomId);
+        call.resolve();
     }
 
     @PluginMethod
