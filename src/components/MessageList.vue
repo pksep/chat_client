@@ -128,6 +128,7 @@ import {
   hydrateMessagesFromCache,
   suspendLocalOwnReadStatus
 } from '../services/useMessages';
+import { setSuspendIncomingMergeForTopic } from '../services/useChat';
 import { getAuthUser } from '../composables/useAuth';
 import { IMessage } from './interfaces/interfaces';
 
@@ -214,7 +215,8 @@ const {
   resetScrollState,
   suspendAutoRead,
   suspendHistoryFetch,
-  setReadReceiptsEnabled
+  setReadReceiptsEnabled,
+  scrollAnchor
 } = useMessageScroll(
   chatWrapperRef,
   messageListUserItemsRef,
@@ -308,27 +310,31 @@ const handleVisibilityChangeRefresh = () => {
 const handleScrollToMessage = async (message: IMessage) => {
   if (message.topicId !== route.value.id) return;
 
-  nextTick(async () => {
-    const messageId = message.id;
+  const messageId = message.id;
+  const didJump = await scrollAnchor.jumpToMessage(messageId, {
+    block: 'center',
+    behavior: 'auto',
+    highlightClassName: 'highlighted',
+    highlightDurationMs: 1000
+  });
 
-    const messageElement = chatWrapperRef.value?.querySelector(
-      `[data-message-id="${messageId}"]`
-    );
-    if (messageElement instanceof HTMLElement) {
-      messageElement.scrollIntoView({ block: 'center', behavior: 'auto' });
-      messageElement.classList.add('highlighted');
-      setTimeout(() => {
-        messageElement.classList.remove('highlighted');
-      }, 1000);
-    } else {
-      await fetchAroundMessage(messageId).then(messages => {
-        if (messages.some(m => m.id === messageId)) {
-          setTimeout(() => {
-            handleScrollToMessage(message);
-          }, 300);
-        }
-      });
-    }
+  if (didJump) {
+    return;
+  }
+
+  resetScrollState();
+  const messages = await fetchAroundMessage(messageId);
+
+  if (!messages.some(m => m.id === messageId)) {
+    return;
+  }
+
+  await nextTick();
+  await scrollAnchor.jumpToMessage(messageId, {
+    block: 'center',
+    behavior: 'auto',
+    highlightClassName: 'highlighted',
+    highlightDurationMs: 1000
   });
 };
 
@@ -569,8 +575,29 @@ watch(
         setReadReceiptsEnabled(true);
         setupIntersectionObserver();
         syncVisibleUnreadAfterAutoScroll();
+        scrollAnchor.initialize();
       }, 160);
     });
+  },
+  { immediate: true }
+);
+
+watch(
+  [
+    () => route.value?.id,
+    () => route.value?.type,
+    () => scrollAnchor.viewportMode.value
+  ],
+  ([topicId, routeType, viewportMode], [previousTopicId]) => {
+    if (previousTopicId && previousTopicId !== topicId) {
+      setSuspendIncomingMergeForTopic(previousTopicId, false);
+    }
+
+    if (!topicId || routeType === RouteTypes.AI) {
+      return;
+    }
+
+    setSuspendIncomingMergeForTopic(topicId, viewportMode !== 'live');
   },
   { immediate: true }
 );
@@ -708,6 +735,10 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  if (route.value?.id) {
+    setSuspendIncomingMergeForTopic(route.value.id, false);
+  }
+
   window.removeEventListener('keydown', handleWindowKeydown, true);
   window.removeEventListener('focus', handleWindowFocusRefresh);
   document.removeEventListener(

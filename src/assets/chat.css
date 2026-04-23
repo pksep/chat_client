@@ -199,6 +199,7 @@ p.chat__nothing-paragraph {
 
 * {
   user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 @media screen and (width > 768px) {

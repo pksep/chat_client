@@ -3,6 +3,8 @@ import { getChatSDK } from './useChat';
 import { IMedia, IMessage } from '../components/interfaces/interfaces';
 import { MessageStatus, Reaction } from './useChatSDK/types';
 import {
+  decrementServerUnreadCount,
+  incrementServerUnreadCount,
   updateLocalTopicReadStatus,
   setTopicTaggedMe,
   syncTopicUnreadState,
@@ -240,12 +242,24 @@ export const fetchMessagesForTopic = async (
     afterMessageId?: string;
     newMessages?: boolean;
     skipSave?: boolean;
+    syncLastMessage?: boolean;
   }
 ): Promise<IMessage[]> => {
   try {
-    if (!topicId) return;
+    if (!topicId) return [];
+
+    if (!navigator.onLine) {
+      const existingMessages = getMessagesByTopicId(topicId);
+
+      if (existingMessages.length > 0) {
+        return existingMessages;
+      }
+
+      return hydrateMessagesFromCache(topicId);
+    }
+
     const sdk = getChatSDK();
-    if (!sdk) return;
+    if (!sdk) return [];
 
     const messages = await sdk.getMessages(topicId, {
       limit: opts?.limit,
@@ -266,13 +280,21 @@ export const fetchMessagesForTopic = async (
       }
       const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
 
-      saveMessagesToLocal(topicId, unique);
+      saveMessagesToLocal(topicId, unique, {
+        syncLastMessage: opts?.syncLastMessage ?? false
+      });
     }
 
     return messages;
   } catch (error) {
     console.warn('Failed to fetch message history:', error);
-    return getMessagesByTopicId(topicId);
+
+    const existingMessages = getMessagesByTopicId(topicId);
+    if (existingMessages.length > 0) {
+      return existingMessages;
+    }
+
+    return hydrateMessagesFromCache(topicId);
   }
 };
 
@@ -304,7 +326,9 @@ export const fetchAroundMessage = async (
     if (!sdk) return;
 
     const messages = await sdk.getAroundMessage(messageId);
-    saveMessagesToLocal(topicId, messages);
+    mergeMessagesForTopic(topicId, messages, 'append', {
+      syncLastMessage: false
+    });
 
     return messages;
   } catch (error) {
@@ -315,6 +339,7 @@ export const fetchAroundMessage = async (
 
 export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   const existingMessages = messagesStore.value[topicId] || [];
+  const alreadyExists = existingMessages.some(item => item.id === message.id);
 
   const parsedEx = parseMessageEx(message);
   const clientId =
@@ -347,6 +372,15 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   if (!clientId) {
     messagesStore.value[topicId] = [...existingMessages, nextMessage];
     schedulePersistMessages(topicId);
+
+    if (
+      !alreadyExists &&
+      nextMessage.senderUserId !== authedUser.value?.id &&
+      nextMessage.isReadByMe !== true
+    ) {
+      incrementServerUnreadCount(topicId, 1);
+    }
+
     syncTopicUnreadState(topicId);
     syncLocalLastMessage(topicId, nextMessage);
     return;
@@ -370,6 +404,15 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
     };
     schedulePersistMessages(topicId);
     clearPendingUploadMessage(topicId, clientId);
+
+    if (
+      !alreadyExists &&
+      nextMessage.senderUserId !== authedUser.value?.id &&
+      nextMessage.isReadByMe !== true
+    ) {
+      incrementServerUnreadCount(topicId, 1);
+    }
+
     syncTopicUnreadState(topicId);
     syncLocalLastMessage(
       topicId,
@@ -384,6 +427,15 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   messagesStore.value[topicId] = [...filtered, nextMessage];
   schedulePersistMessages(topicId);
   clearPendingUploadMessage(topicId, clientId);
+
+  if (
+    !alreadyExists &&
+    nextMessage.senderUserId !== authedUser.value?.id &&
+    nextMessage.isReadByMe !== true
+  ) {
+    incrementServerUnreadCount(topicId, 1);
+  }
+
   syncTopicUnreadState(topicId);
   syncLocalLastMessage(topicId, nextMessage);
 };
@@ -516,12 +568,16 @@ export const changeReactionFromLocal = (
 
 export const saveMessagesToLocal = (
   topicId: string,
-  messages: IMessage[]
+  messages: IMessage[],
+  opts?: { syncLastMessage?: boolean }
 ): void => {
   messagesStore.value[topicId] = messages;
   schedulePersistMessages(topicId);
   syncTopicUnreadState(topicId);
-  syncLocalLastMessage(topicId);
+
+  if (opts?.syncLastMessage !== false) {
+    syncLocalLastMessage(topicId);
+  }
 
   const isTagged = messages.some(
     m =>
@@ -532,6 +588,19 @@ export const saveMessagesToLocal = (
   if (isTagged) {
     setTopicTaggedMe(topicId, true);
   }
+};
+
+export const clearMessagesForTopic = (
+  topicId: string,
+  opts?: { syncLastMessage?: boolean }
+): void => {
+  if (!topicId) {
+    return;
+  }
+
+  saveMessagesToLocal(topicId, [], {
+    syncLastMessage: opts?.syncLastMessage ?? false
+  });
 };
 
 export const getMessagesByTopicId = (topicId: string): IMessage[] => {
@@ -554,7 +623,7 @@ export const hydrateMessagesFromCache = async (
   const cachedMessages = await loadCachedTopicMessages(topicId, userId);
 
   if (cachedMessages.length > 0) {
-    saveMessagesToLocal(topicId, cachedMessages);
+    saveMessagesToLocal(topicId, cachedMessages, { syncLastMessage: false });
   }
 
   return cachedMessages;
@@ -563,7 +632,8 @@ export const hydrateMessagesFromCache = async (
 export const mergeMessagesForTopic = (
   topicId: string,
   messages: IMessage[],
-  mode: 'replace' | 'prepend' | 'append' = 'replace'
+  mode: 'replace' | 'prepend' | 'append' = 'replace',
+  opts?: { syncLastMessage?: boolean }
 ): IMessage[] => {
   const existing = getMessagesByTopicId(topicId) || [];
 
@@ -576,7 +646,9 @@ export const mergeMessagesForTopic = (
   }
 
   const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
-  saveMessagesToLocal(topicId, unique);
+  saveMessagesToLocal(topicId, unique, {
+    syncLastMessage: opts?.syncLastMessage ?? false
+  });
 
   return unique;
 };
@@ -606,6 +678,14 @@ const applyLocalReadStatus = (
 ): void => {
   const existingMessages = messagesStore.value[topicId] || [];
   const isReadByCurrentUser = userId === authedUser.value.id;
+  const newlyReadCount = isReadByCurrentUser
+    ? existingMessages.filter(
+        message =>
+          messageIds.includes(message.id) &&
+          message.senderUserId !== authedUser.value.id &&
+          message.isReadByMe !== true
+      ).length
+    : 0;
   const updatedMessages = existingMessages.map(message => {
     if (messageIds.includes(message.id)) {
       return {
@@ -621,6 +701,9 @@ const applyLocalReadStatus = (
   updateLocalTopicReadStatus(topicId, messageIds);
   messagesStore.value[topicId] = updatedMessages;
   schedulePersistMessages(topicId);
+  if (newlyReadCount > 0) {
+    decrementServerUnreadCount(topicId, newlyReadCount);
+  }
   clearTopicReadPreview(topicId, messageIds);
   syncTopicUnreadState(topicId);
 

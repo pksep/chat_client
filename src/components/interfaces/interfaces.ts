@@ -83,6 +83,7 @@ export interface IMedia extends Media {
   isLoading?: boolean;
   thumbnailPath?: string | null;
   localPath?: string;
+  localThumbnailPath?: string;
 }
 
 export enum MessageStatusEnum {
