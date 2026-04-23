@@ -44,6 +44,18 @@
       @click="handleScrollToButton"
     >
       <Icon :name="IconNameEnum.arrowDown" />
+      <span
+        v-if="
+          topicUnreadCount > 0 &&
+          activeTopic?.lastMessage?.senderUserId !== authUser?.id
+        "
+        :class="{
+          'contact-list__notification': true,
+          'contact-list__notification--muted': activeTopic?.info?.isMute
+        }"
+      >
+        {{ topicUnreadCount }}
+      </span>
     </div>
   </div>
 
@@ -186,6 +198,12 @@ const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
 const authUser = computed(() => getAuthUser());
 const isSelectionMode = computed(() =>
   isMessageSelectionModeForTopic(route.value.id)
+);
+const activeTopic = computed(() =>
+  route.value.id ? getSelectedTopic(route.value.id) : null
+);
+const topicUnreadCount = computed(
+  () => activeTopic.value?.unreadMessageCount || 0
 );
 
 const state = reactive({

@@ -77,7 +77,6 @@
 }
 
 .highlighted.message__bubble {
-  border-radius: 16px;
   background-color: #d2e2ff;
 }
 
@@ -531,6 +530,8 @@ div.message-content__file {
   hyphens: auto;
   overflow-wrap: anywhere;
   justify-self: start;
+  border-radius: 16px;
+  transition: background-color 0.2s;
   &:last-child {
     margin-bottom: 5px;
   }

@@ -113,19 +113,35 @@ export const consumeBufferedIncomingMessagesForTopic = (
   return messages;
 };
 
+export const getBufferedIncomingMessagesCountForTopic = (
+  topicId: string
+): number => {
+  if (!topicId) {
+    return 0;
+  }
+
+  return bufferedIncomingMessagesByTopic.value[topicId]?.length || 0;
+};
+
 const setupChatListeners = (): void => {
   if (!chatSDK || areChatListenersBound) return;
 
   areChatListenersBound = true;
 
   const handleIncomingSocketMessage = (message: IMessage): void => {
-    const { updateLocalLastMessageTopic } = useTopics();
+    const { getSelectedTopic, updateLocalLastMessageTopic } = useTopics();
     const isDuplicateMessage = hasMessageInTopic(message.topicId, message.id);
     const unreadCountBefore = totalUnreadCount.value;
+    const topic = getSelectedTopic(message.topicId);
+    const previousLastMessageId = topic?.lastMessage?.id;
+    const hasPreviousLastMessageLocally = previousLastMessageId
+      ? hasMessageInTopic(message.topicId, previousLastMessageId)
+      : true;
     const shouldSuspendMerge =
       message.senderUserId !== currentUserId.value &&
       route.value.id === message.topicId &&
-      suspendIncomingMergeByTopic.value[message.topicId] === true;
+      suspendIncomingMergeByTopic.value[message.topicId] === true &&
+      !hasPreviousLastMessageLocally;
 
     if (!shouldSuspendMerge) {
       addMessageToLocal(message.topicId, message);
