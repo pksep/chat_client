@@ -109,6 +109,66 @@ export const getVideoDimensions = (file: File): Promise<MediaDimensions> => {
   });
 };
 
+export const getVideoThumbnail = (file: File): Promise<string | null> => {
+  return new Promise(resolve => {
+    const video = document.createElement('video');
+    const objectUrl = URL.createObjectURL(file);
+    let resolved = false;
+
+    const cleanup = () => {
+      URL.revokeObjectURL(objectUrl);
+      video.removeAttribute('src');
+      video.load();
+    };
+
+    const finish = (value: string | null) => {
+      if (resolved) {
+        return;
+      }
+
+      resolved = true;
+      cleanup();
+      resolve(value);
+    };
+
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+
+    video.onloadeddata = () => {
+      const captureFrame = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+
+          const context = canvas.getContext('2d');
+          if (!context || !canvas.width || !canvas.height) {
+            finish(null);
+            return;
+          }
+
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+          finish(canvas.toDataURL('image/jpeg', 0.85));
+        } catch {
+          finish(null);
+        }
+      };
+
+      if (video.duration > 0.1) {
+        video.onseeked = captureFrame;
+        video.currentTime = 0.1;
+        return;
+      }
+
+      captureFrame();
+    };
+
+    video.onerror = () => finish(null);
+    video.src = objectUrl;
+  });
+};
+
 export const getFileDimensions = async (
   file: File
 ): Promise<MediaDimensions> => {
