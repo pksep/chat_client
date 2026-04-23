@@ -16,25 +16,25 @@ export const formatLastSeen = (lastOnline: string | Date | null): string => {
   );
 
   if (diffInSeconds < 60) {
-    return 'Был(а) в сети только что';
+    return 'Был(а) только что';
   }
 
   const diffInMinutes = Math.floor(diffInSeconds / 60);
   if (diffInMinutes < 60) {
-    return `Был(а) в сети ${diffInMinutes} ${getRussianPlural(diffInMinutes, 'минуту', 'минуты', 'минут')} назад`;
+    return `Был(а) ${diffInMinutes} ${getRussianPlural(diffInMinutes, 'минуту', 'минуты', 'минут')} назад`;
   }
 
   const diffInHours = Math.floor(diffInMinutes / 60);
   if (diffInHours < 24) {
-    return `Был(а) в сети ${diffInHours} ${getRussianPlural(diffInHours, 'час', 'часа', 'часов')} назад`;
+    return `Был(а) ${diffInHours} ${getRussianPlural(diffInHours, 'час', 'часа', 'часов')} назад`;
   }
 
   const diffInDays = Math.floor(diffInHours / 24);
   if (diffInDays < 30) {
-    return `Был(а) в сети ${diffInDays} ${getRussianPlural(diffInDays, 'день', 'дня', 'дней')} назад`;
+    return `Был(а) ${diffInDays} ${getRussianPlural(diffInDays, 'день', 'дня', 'дней')} назад`;
   }
 
-  return 'Был(а) в сети давно';
+  return 'Был(а) давно';
 };
 
 const getRussianPlural = (
