@@ -26,6 +26,7 @@ const error = ref<string | null>(null);
 const displayedUnreadCount = ref(0);
 let persistTopicsTimeout: ReturnType<typeof setTimeout> | null = null;
 const topicReadPreviewIds = ref<Record<string, string[]>>({});
+const serverUnreadCounts = ref<Record<string, number>>({});
 
 const route = useUrlWatcher();
 
@@ -82,6 +83,16 @@ export const useTopics = () => {
 
   const normalizeTopic = (topic: ITopic): ITopic => {
     const normalizedTopic = { ...topic };
+    const resolvedUnreadCount = Math.max(
+      0,
+      normalizedTopic.unreadMessageCount || 0
+    );
+
+    serverUnreadCounts.value = {
+      ...serverUnreadCounts.value,
+      [normalizedTopic.id]: resolvedUnreadCount
+    };
+    normalizedTopic.unreadMessageCount = resolvedUnreadCount;
     normalizedTopic.lastMessage = resolveLatestMessage(normalizedTopic);
 
     if (normalizedTopic.type === TopicType.DM && normalizedTopic.members) {
@@ -229,6 +240,12 @@ export const useTopics = () => {
 
       topic.unreadMessageCount = Math.max(0, topic.unreadMessageCount);
     }
+
+    serverUnreadCounts.value = {
+      ...serverUnreadCounts.value,
+      [topicId]: Math.max(0, (serverUnreadCounts.value[topicId] || 0) + delta)
+    };
+
     topics.value = [...topics.value];
     schedulePersistTopics();
   };
@@ -244,6 +261,34 @@ export const useTopics = () => {
     );
     displayedUnreadCount.value += delta;
     applyDisplayedUnreadCount(displayedUnreadCount.value);
+  };
+
+  const incrementServerUnreadCount = (
+    topicId: string,
+    delta: number = 1
+  ): void => {
+    if (!topicId || delta <= 0) {
+      return;
+    }
+
+    serverUnreadCounts.value = {
+      ...serverUnreadCounts.value,
+      [topicId]: (serverUnreadCounts.value[topicId] || 0) + delta
+    };
+  };
+
+  const decrementServerUnreadCount = (
+    topicId: string,
+    delta: number = 1
+  ): void => {
+    if (!topicId || delta <= 0) {
+      return;
+    }
+
+    serverUnreadCounts.value = {
+      ...serverUnreadCounts.value,
+      [topicId]: Math.max(0, (serverUnreadCounts.value[topicId] || 0) - delta)
+    };
   };
 
   const setTopicTaggedMe = (topicId: string, taggedMe: boolean): void => {
@@ -314,6 +359,11 @@ export const useTopics = () => {
     const currentUserId = authedUser.value.id;
     const messages = getMessagesByTopicId(topicId);
     const previewReadIds = new Set(topicReadPreviewIds.value[topicId] || []);
+    const baseUnreadCount = Math.max(0, serverUnreadCounts.value[topicId] || 0);
+    const effectiveServerUnreadCount = Math.max(
+      0,
+      baseUnreadCount - previewReadIds.size
+    );
     const unreadMessages = messages.filter(
       message =>
         !message.isSystem &&
@@ -322,7 +372,10 @@ export const useTopics = () => {
         !previewReadIds.has(message.id)
     );
 
-    topic.unreadMessageCount = unreadMessages.length;
+    topic.unreadMessageCount = Math.max(
+      unreadMessages.length,
+      effectiveServerUnreadCount
+    );
     topic.taggedMe = unreadMessages.some(message =>
       message.taggedUserIds?.includes(currentUserId)
     );
@@ -343,6 +396,11 @@ export const useTopics = () => {
 
     topic.unreadMessageCount = 0;
     topic.taggedMe = false;
+
+    serverUnreadCounts.value = {
+      ...serverUnreadCounts.value,
+      [topicId]: 0
+    };
 
     if (topicReadPreviewIds.value[topicId]) {
       const next = { ...topicReadPreviewIds.value };
@@ -505,6 +563,8 @@ export const useTopics = () => {
     clearTopicReadPreview,
     syncTopicUnreadState,
     resetTopicUnreadState,
+    incrementServerUnreadCount,
+    decrementServerUnreadCount,
     incrementDisplayedUnreadCount
   };
 };
@@ -532,6 +592,8 @@ const {
   clearTopicReadPreview,
   syncTopicUnreadState,
   resetTopicUnreadState,
+  incrementServerUnreadCount,
+  decrementServerUnreadCount,
   totalUnreadCount,
   incrementDisplayedUnreadCount
 } = useTopics();
@@ -560,6 +622,8 @@ export {
   clearTopicReadPreview,
   syncTopicUnreadState,
   resetTopicUnreadState,
+  incrementServerUnreadCount,
+  decrementServerUnreadCount,
   totalUnreadCount,
   incrementDisplayedUnreadCount
 };

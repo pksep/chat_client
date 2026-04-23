@@ -42,16 +42,7 @@
           :data-testid="`${props.dataTestid}-MediaContainer`"
           @contextmenu.prevent
         >
-          <video
-            v-if="media.type === MediaType.Video && media.localPath"
-            :src="getFullMediaPath(media)"
-            :style="getPreviewStyle(media)"
-            @loadedmetadata="captureVideoPreviewMetrics(media, $event)"
-            @contextmenu.prevent
-          />
-
           <img
-            v-else
             :src="getFullMediaPath(media)"
             :alt="props.sender ? props.sender + ' image' : 'Shared image'"
             :style="getPreviewStyle(media)"
@@ -168,13 +159,6 @@ const captureImagePreviewMetrics = (media: IMedia, event: Event): void => {
   if (!image) return;
 
   savePreviewMetrics(media, image, image.naturalWidth, image.naturalHeight);
-};
-
-const captureVideoPreviewMetrics = (media: IMedia, event: Event): void => {
-  const video = event.currentTarget as HTMLVideoElement | null;
-  if (!video) return;
-
-  savePreviewMetrics(media, video, video.videoWidth, video.videoHeight);
 };
 
 const messageArticleStyles = computed(() => [

@@ -2,6 +2,7 @@ import type { IMessage } from '../components/interfaces/interfaces';
 import { authedUser, getChatAuthSession } from '../composables/useAuth';
 
 const DB_NAME = 'chat-topic-messages-db';
+const DB_VERSION = 3;
 const STORE_NAME = 'topicMessages';
 const PENDING_UPLOADS_STORE_NAME = 'pendingUploads';
 const PENDING_UPLOAD_META_STORE_NAME = 'pendingUploadMeta';
@@ -106,13 +107,67 @@ const getPendingUploadMetaCacheKey = (
   userId = getResolvedUserId()
 ) => `${userId || 'anonymous'}:${topicId}:${messageId}`;
 
+const getMessageTimestamp = (message: IMessage): number => {
+  const candidates = [message.updatedAt, message.deletedAt, message.createdAt];
+
+  for (const candidate of candidates) {
+    const timestamp =
+      candidate instanceof Date
+        ? candidate.getTime()
+        : new Date(candidate || 0).getTime();
+
+    if (!Number.isNaN(timestamp) && timestamp > 0) {
+      return timestamp;
+    }
+  }
+
+  return 0;
+};
+
+const mergeCachedMessages = (
+  existingMessages: IMessage[],
+  incomingMessages: IMessage[]
+): IMessage[] => {
+  const mergedById = new Map<string, IMessage>();
+
+  existingMessages.forEach(message => {
+    if (message?.id) {
+      mergedById.set(message.id, message);
+    }
+  });
+
+  incomingMessages.forEach(message => {
+    if (message?.id) {
+      const existingMessage = mergedById.get(message.id);
+
+      if (!existingMessage) {
+        mergedById.set(message.id, message);
+        return;
+      }
+
+      if (
+        getMessageTimestamp(message) >= getMessageTimestamp(existingMessage)
+      ) {
+        mergedById.set(message.id, {
+          ...existingMessage,
+          ...message
+        });
+      }
+    }
+  });
+
+  return Array.from(mergedById.values()).sort(
+    (left, right) => getMessageTimestamp(left) - getMessageTimestamp(right)
+  );
+};
+
 const openDb = async (): Promise<IDBDatabase | null> => {
   if (!hasIndexedDb()) {
     return null;
   }
 
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 2);
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -196,11 +251,21 @@ export const saveCachedTopicMessages = async (
     }
 
     const cacheKey = getCacheKey(topicId, userId);
+    const existingMessages = await loadCachedTopicMessages(topicId, userId);
+    const mergedMessages =
+      messages.length > 0
+        ? mergeCachedMessages(existingMessages, messages)
+        : existingMessages;
+
+    if (mergedMessages.length === 0) {
+      return;
+    }
+
     const payload: CachedTopicMessages = {
       cacheKey,
       topicId,
       userId,
-      messages: serializeValue(messages) as IMessage[],
+      messages: serializeValue(mergedMessages) as IMessage[],
       updatedAt: new Date().toISOString()
     };
 

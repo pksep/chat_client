@@ -24,7 +24,8 @@ import type { IMessage, IMedia } from '../../interfaces/interfaces';
 import { RouteTypes } from '../../../composables/navigation/useUrlRouting';
 import {
   calculatePreviewDimensions,
-  getFileDimensions
+  getFileDimensions,
+  getVideoThumbnail
 } from '../../../utils/mediaPreview';
 import { MessageStatus } from '../../../services/useChatSDK/types';
 import { getHasWebsocketConnection } from '../../../services/useChat';
@@ -490,8 +491,9 @@ export function useMessageSender(
     const localMedia: IMedia[] = await Promise.all(
       Array.from(files).map(async (file, i) => {
         const type = getMediaType(file, isMedia);
+        const localPath = await fileToDataURL(file);
         const baseMedia = {
-          localPath: await fileToDataURL(file),
+          localPath,
           path: '',
           originName: file.name,
           size: file.size,
@@ -516,6 +518,10 @@ export function useMessageSender(
 
         return {
           ...baseMedia,
+          localThumbnailPath:
+            type === MediaType.Video
+              ? (await getVideoThumbnail(file)) || localPath
+              : undefined,
           ex: calculatePreviewDimensions(dimensions, files.length, i)
         };
       })

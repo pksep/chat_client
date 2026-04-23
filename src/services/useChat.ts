@@ -58,6 +58,8 @@ const isWebsocketConnecting = ref(true);
 const hasWebsocketConnection = ref(false);
 const isRecentlyReconnected = ref(false);
 const currentUserId = ref<string | null>(null);
+const suspendIncomingMergeByTopic = ref<Record<string, boolean>>({});
+const bufferedIncomingMessagesByTopic = ref<Record<string, IMessage[]>>({});
 
 const messagesStore = shallowRef<Record<string, ChatMessage[]>>({});
 
@@ -74,13 +76,103 @@ const notifyMessageChange = (topicId?: string): void => {
   });
 };
 
+const hasMessageInTopic = (
+  topicId: string,
+  messageId?: string | null
+): boolean => {
+  if (!topicId || !messageId) {
+    return false;
+  }
+
+  return getMessagesByTopicId(topicId).some(
+    message => message.id === messageId
+  );
+};
+
+export const setSuspendIncomingMergeForTopic = (
+  topicId: string,
+  suspended: boolean
+): void => {
+  if (!topicId) {
+    return;
+  }
+
+  suspendIncomingMergeByTopic.value[topicId] = suspended;
+};
+
+export const consumeBufferedIncomingMessagesForTopic = (
+  topicId: string
+): IMessage[] => {
+  if (!topicId) {
+    return [];
+  }
+
+  const messages = bufferedIncomingMessagesByTopic.value[topicId] || [];
+  bufferedIncomingMessagesByTopic.value[topicId] = [];
+
+  return messages;
+};
+
 const setupChatListeners = (): void => {
   if (!chatSDK || areChatListenersBound) return;
 
   areChatListenersBound = true;
 
+  const handleIncomingSocketMessage = (message: IMessage): void => {
+    const { updateLocalLastMessageTopic } = useTopics();
+    const isDuplicateMessage = hasMessageInTopic(message.topicId, message.id);
+    const unreadCountBefore = totalUnreadCount.value;
+    const shouldSuspendMerge =
+      message.senderUserId !== currentUserId.value &&
+      route.value.id === message.topicId &&
+      suspendIncomingMergeByTopic.value[message.topicId] === true;
+
+    if (!shouldSuspendMerge) {
+      addMessageToLocal(message.topicId, message);
+    } else if (
+      !isDuplicateMessage &&
+      message.senderUserId !== currentUserId.value &&
+      !message.isReadByMe
+    ) {
+      const existingBuffered =
+        bufferedIncomingMessagesByTopic.value[message.topicId] || [];
+      if (!existingBuffered.some(item => item.id === message.id)) {
+        bufferedIncomingMessagesByTopic.value[message.topicId] = [
+          ...existingBuffered,
+          message
+        ];
+      }
+
+      changeUnreadMessageCount(1, message.topicId);
+    }
+
+    if (
+      !isDuplicateMessage &&
+      message.senderUserId !== currentUserId.value &&
+      message.topicId !== route.value.id &&
+      message.isSystem
+    ) {
+      changeUnreadMessageCount(1, message.topicId);
+    }
+
+    if (!isDuplicateMessage && message.senderUserId !== currentUserId.value) {
+      if (
+        document.visibilityState !== 'visible' &&
+        message.topicId === route.value.id &&
+        totalUnreadCount.value === unreadCountBefore
+      ) {
+        incrementDisplayedUnreadCount(1);
+      }
+
+      playNotificationSound(message.topicId);
+    }
+
+    updateLocalLastMessageTopic(message.topicId, message);
+    updateLocalLastMessageGroup(message.topicId, message);
+  };
+
   chatSDK.subscribeToEvent(WebSocketEventType.NEW_MESSAGE, event => {
-    appendMessageToLocal(event.payload.topicId, event.payload);
+    handleIncomingSocketMessage(event.payload);
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.MESSAGE_UPDATED, event => {
@@ -120,38 +212,16 @@ const setupChatListeners = (): void => {
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_MESSAGE, ({ payload }) => {
-    const { updateLocalLastMessageTopic } = useTopics();
-
     if (payload.type === 'NEW') {
-      const unreadCountBefore = totalUnreadCount.value;
-      addMessageToLocal(payload.data.topicId, payload.data);
-
-      if (
-        payload.data.senderUserId !== currentUserId.value &&
-        payload.data.topicId !== route.value.id &&
-        payload.data.isSystem
-      ) {
-        changeUnreadMessageCount(1, payload.data.topicId);
-      }
-
-      if (payload.data.senderUserId !== currentUserId.value) {
-        if (
-          document.visibilityState !== 'visible' &&
-          payload.data.topicId === route.value.id &&
-          totalUnreadCount.value === unreadCountBefore
-        ) {
-          incrementDisplayedUnreadCount(1);
-        }
-        playNotificationSound(payload.data.topicId);
-      }
+      handleIncomingSocketMessage(payload.data);
     } else if (payload.type === 'DELETE') {
       deleteMessageFromLocal(payload.data.topicId, payload.data.id);
     } else if (payload.type === 'CHANGE' || payload.type === 'PIN') {
       editMessageFromLocal(payload.data.topicId, payload.data);
+      const { updateLocalLastMessageTopic } = useTopics();
+      updateLocalLastMessageTopic(payload.data.topicId);
+      updateLocalLastMessageGroup(payload.data.topicId);
     }
-
-    updateLocalLastMessageTopic(payload.data.topicId);
-    updateLocalLastMessageGroup(payload.data.topicId);
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.READ_MESSAGE, ({ payload }) => {
@@ -253,7 +323,9 @@ const refreshActiveTopicMessagesAfterReconnect = async (
   });
 
   if (latestMessages.length > 0) {
-    mergeMessagesForTopic(topicId, latestMessages, 'replace');
+    mergeMessagesForTopic(topicId, latestMessages, 'replace', {
+      syncLastMessage: true
+    });
 
     const hasIncomingMessages = latestMessages.some(
       message =>
