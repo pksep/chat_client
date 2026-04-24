@@ -256,25 +256,25 @@ export function useMessageSender(
     const hasMultipleForwardMessages = forwardMessages.length > 1;
     const forwardBatchId = hasMultipleForwardMessages ? generateUUID() : null;
 
-    if (
-      (!rawText.trim() || rawText.trim() === '<p></p>') &&
-      !hasForwardMessages
-    )
-      return;
+    const isTextEmpty = !rawText.trim() || rawText.trim() === '<p></p>';
+
+    if (isTextEmpty && !hasForwardMessages) return;
 
     inputText.value = '';
+
+    const textToSend = isTextEmpty ? '' : rawText;
 
     if (state.editMessage) {
       await sendMessageChat({
         messageId: state.editMessage.id,
         topicId,
-        text: rawText
+        text: textToSend
       });
       state.editMessage = null;
       return;
     }
 
-    const parts = splitHtmlByLength(rawText);
+    const parts = textToSend ? splitHtmlByLength(textToSend) : [];
 
     /* ================= AI ROUTE ================= */
     if (routeType === RouteTypes.AI) {
