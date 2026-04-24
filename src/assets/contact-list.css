@@ -315,7 +315,7 @@ svg.icon-yui-kit.contact-list__read-icon {
 
   .contact-list {
     max-height: initial;
-    padding: 0 16px;
+    padding: 0;
   }
 
   .contact-list__block--wrapper {
@@ -335,6 +335,7 @@ svg.icon-yui-kit.contact-list__read-icon {
     --size-avatar: 30px;
     grid-template-rows: auto 1fr;
     max-width: 100%;
+    padding-inline: 16px;
   }
 
   svg.icon-yui-kit.contact-list__pin-icon {
