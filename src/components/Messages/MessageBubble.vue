@@ -115,7 +115,6 @@ import MessageBubbleFiles from './MessageBubbleFiles.vue';
 import MessageBubbleMedia from './MessageBubbleMedia.vue';
 import { useMessageMedia } from './composables/useMessageMedia';
 import { getConfig } from '../../services/useConfig';
-import { fetchWithAuthRedirect } from '../../composables/useAuth';
 import { isMessageSelectionModeForTopic } from '../../composables/useSelectedMessages';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
@@ -158,38 +157,20 @@ const handleNavigateMessage = () => {
   emits('unmount-navigate-message-id', props.replyMessage?.id);
 };
 
-const downloadMediaFile = async (media: IMedia) => {
+const downloadMediaFile = (media: IMedia) => {
   const url = getFullMediaPath(media, false);
   const fileName = media.originName || 'file';
 
-  try {
-    const response = await fetchWithAuthRedirect(url);
+  const link = document.createElement('a');
 
-    if (!response.ok) {
-      throw new Error(`Failed to download file: ${response.status}`);
-    }
+  link.href = url;
+  link.download = fileName;
+  link.target = '_blank';
+  link.rel = 'noopener';
 
-    const blob = await response.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-
-    link.href = blobUrl;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    URL.revokeObjectURL(blobUrl);
-    return;
-  } catch {
-    const link = document.createElement('a');
-
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 };
 
 const setSliderElement = async (medias: IMedia[], defaultIndex: number = 0) => {
