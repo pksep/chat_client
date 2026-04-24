@@ -73,6 +73,7 @@ export interface IMedia extends Media {
   size: number;
   originName: string;
   uploadPercent?: number | null;
+  uploadError?: boolean;
   ex?: {
     width?: number;
     height?: number;
@@ -82,6 +83,7 @@ export interface IMedia extends Media {
   isLoading?: boolean;
   thumbnailPath?: string | null;
   localPath?: string;
+  localThumbnailPath?: string;
 }
 
 export enum MessageStatusEnum {

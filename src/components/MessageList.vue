@@ -29,10 +29,12 @@
       :user="props.user"
       :auth-user-id="authUser?.id"
       :hide-unread-marker="state.hideUnreadMarker"
+      :unread-marker-message-id="state.unreadMarkerMessageId"
       :data-testid="props.dataTestid"
       @set-edit-message="handleSetEditMessage"
       @set-reply-message="handleSetReplyMessage"
       @set-forward-message="handleSetForwardMessage"
+      @retry-message="handleRetryMessage"
       @scroll-to-message="handleScrollToMessage"
     />
 
@@ -42,6 +44,18 @@
       @click="handleScrollToButton"
     >
       <Icon :name="IconNameEnum.arrowDown" />
+      <span
+        v-if="
+          topicUnreadCount > 0 &&
+          activeTopic?.lastMessage?.senderUserId !== authUser?.id
+        "
+        :class="{
+          'contact-list__notification': true,
+          'contact-list__notification--muted': activeTopic?.info?.isMute
+        }"
+      >
+        {{ topicUnreadCount }}
+      </span>
     </div>
   </div>
 
@@ -51,13 +65,17 @@
     :dataTestid="`${props.dataTestid}-MessageList-Loading`"
   />
 
+  <SelectedMessagesContent
+    v-if="isSelectionMode"
+    :data-testid="`${props.dataTestid}-SelectedMessages`"
+  />
   <MessageListInput
-    v-if="!isDefaultRoute"
+    v-if="!isDefaultRoute && !isSelectionMode"
     v-model="inputText"
     ref="messageListInputRef"
     :edit-message="state.editMessage"
     :reply-message="state.replyMessage"
-    :forward-message="state.forwardMessage"
+    :forward-messages="state.forwardMessages"
     :data-testid="props.dataTestid"
     @send="handleSend"
     @attach-file="handleAttachFile"
@@ -106,17 +124,25 @@ import {
   navigateToDefault,
   RouteTypes
 } from '../composables/navigation/useUrlRouting';
-import { resetTopicUnreadState } from '../composables/useTopics';
+import {
+  getSelectedTopic,
+  resetTopicUnreadState
+} from '../composables/useTopics';
+import {
+  clearSelectedMessages,
+  isMessageSelectionModeForTopic
+} from '../composables/useSelectedMessages';
 import {
   fetchAroundMessage,
   fetchMessagesForTopic,
   fetchPinnedMessagesForTopic,
   getMessagesByTopicId,
-  hydrateMessagesFromCache
+  hydrateMessagesFromCache,
+  suspendLocalOwnReadStatus
 } from '../services/useMessages';
+import { setSuspendIncomingMergeForTopic } from '../services/useChat';
 import { getAuthUser } from '../composables/useAuth';
 import { IMessage } from './interfaces/interfaces';
-import { MessageStatus } from '../services/useChatSDK/types';
 
 import { useMessageSwipe } from './Messages/composables/useMessageSwipe';
 import { useMessageScroll } from './Messages/composables/useMessageScroll';
@@ -126,6 +152,11 @@ import { useMessageActions } from './Messages/composables/useMessageActions';
 import { Capacitor } from '@capacitor/core';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
+import SelectedMessagesContent from './Header/SelectedMessagesContent.vue';
+import {
+  consumePendingForwardMessages,
+  usePendingForwardMessages
+} from '../composables/useForwardMessages';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -134,6 +165,8 @@ export interface IMessageListExtendedProps extends IMessageListProps {
 const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
   dataTestid: 'MessageList'
 });
+const TOPIC_SWITCH_AUTO_READ_GRACE_MS = 1200;
+const TOPIC_SWITCH_HISTORY_FETCH_GRACE_MS = 1200;
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
 const messageListUserItemsRef = useTemplateRef<any>('messageListUserItemsRef');
@@ -150,10 +183,28 @@ const getLocalStorageInputText = computed(() => {
 });
 
 const inputText = ref(getLocalStorageInputText.value);
+let chatVisibilityObserver: ResizeObserver | null = null;
+const unreadMarkerMessageIdsByTopic = reactive<Record<string, string | null>>(
+  {}
+);
+const seenUnreadMarkerStateByTopic = reactive<
+  Record<string, { markerId: string; unreadCount: number }>
+>({});
+const { pendingForwardMessages, pendingForwardTopicId } =
+  usePendingForwardMessages();
 
 const isAiRoute = computed(() => route.value?.type === RouteTypes.AI);
 const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
 const authUser = computed(() => getAuthUser());
+const isSelectionMode = computed(() =>
+  isMessageSelectionModeForTopic(route.value.id)
+);
+const activeTopic = computed(() =>
+  route.value.id ? getSelectedTopic(route.value.id) : null
+);
+const topicUnreadCount = computed(
+  () => activeTopic.value?.unreadMessageCount || 0
+);
 
 const state = reactive({
   messages: computed(() => getMessagesByTopicId(route.value.id)),
@@ -162,7 +213,7 @@ const state = reactive({
   aiMessages: [] as AIMessage[],
   editMessage: null as IMessage | null,
   replyMessage: null as IMessage | null,
-  forwardMessage: null as IMessage | null,
+  forwardMessages: [] as IMessage[],
   errorMessage: '',
   hideUnreadMarker: false,
   unreadMarkerMessageId: null as string | null
@@ -176,9 +227,14 @@ const {
   scrollToBottom,
   handleScrollToButton,
   setupIntersectionObserver,
+  flushVisibleUnreadMessages,
   intersectionObserver,
   scrollMarkReadTimeout,
-  resetScrollState
+  resetScrollState,
+  suspendAutoRead,
+  suspendHistoryFetch,
+  setReadReceiptsEnabled,
+  scrollAnchor
 } = useMessageScroll(
   chatWrapperRef,
   messageListUserItemsRef,
@@ -208,36 +264,108 @@ const {
   handleSetForwardMessage
 } = useMessageActions(state, inputText, messageListInputRef);
 
+const applyPendingForwardMessages = () => {
+  if (
+    !route.value?.id ||
+    pendingForwardTopicId.value !== route.value.id ||
+    pendingForwardMessages.value.length === 0
+  ) {
+    return;
+  }
+
+  state.replyMessage = null;
+  state.editMessage = null;
+  state.forwardMessages = consumePendingForwardMessages(route.value.id);
+  nextTick(() => {
+    messageListInputRef.value?.focus();
+  });
+};
+
+const refreshUnreadMarkerState = () => {
+  if (!route.value?.id) {
+    state.unreadMarkerMessageId = null;
+    state.hideUnreadMarker = true;
+    return;
+  }
+
+  const firstUnreadMessageId = getFirstUnreadMessageId();
+  const unreadCount = getCurrentTopicUnreadCount();
+  const seenState = seenUnreadMarkerStateByTopic[route.value.id];
+
+  if (
+    firstUnreadMessageId &&
+    seenState &&
+    seenState.markerId === firstUnreadMessageId &&
+    unreadCount <= seenState.unreadCount
+  ) {
+    state.unreadMarkerMessageId = null;
+    state.hideUnreadMarker = true;
+    return;
+  }
+
+  unreadMarkerMessageIdsByTopic[route.value.id] = firstUnreadMessageId;
+  state.unreadMarkerMessageId = firstUnreadMessageId;
+  state.hideUnreadMarker = !firstUnreadMessageId;
+};
+
+const applyUnreadMarkerStateForTopic = (topicId: string) => {
+  const markerMessageId = unreadMarkerMessageIdsByTopic[topicId] || null;
+
+  state.unreadMarkerMessageId = markerMessageId;
+  state.hideUnreadMarker = !markerMessageId;
+};
+
+const handleWindowFocusRefresh = () => {
+  refreshUnreadMarkerState();
+};
+
+const handleVisibilityChangeRefresh = () => {
+  if (document.visibilityState === 'visible') {
+    refreshUnreadMarkerState();
+  }
+};
+
 const handleScrollToMessage = async (message: IMessage) => {
   if (message.topicId !== route.value.id) return;
 
-  nextTick(async () => {
-    const messageId = message.id;
+  const messageId = message.id;
+  const didJump = await scrollAnchor.jumpToMessage(messageId, {
+    block: 'center',
+    behavior: 'auto',
+    highlightClassName: 'highlighted',
+    highlightDurationMs: 1000
+  });
 
-    const messageElement = chatWrapperRef.value?.querySelector(
-      `[data-message-id="${messageId}"]`
-    );
-    if (messageElement instanceof HTMLElement) {
-      messageElement.scrollIntoView({ block: 'center', behavior: 'auto' });
-      messageElement.classList.add('highlighted');
-      setTimeout(() => {
-        messageElement.classList.remove('highlighted');
-      }, 1000);
-    } else {
-      await fetchAroundMessage(messageId).then(messages => {
-        if (messages.some(m => m.id === messageId)) {
-          setTimeout(() => {
-            handleScrollToMessage(message);
-          }, 300);
-        }
-      });
-    }
+  if (didJump) {
+    return;
+  }
+
+  resetScrollState();
+  const messages = await fetchAroundMessage(messageId);
+
+  if (!messages.some(m => m.id === messageId)) {
+    return;
+  }
+
+  await nextTick();
+  await scrollAnchor.jumpToMessage(messageId, {
+    block: 'center',
+    behavior: 'auto',
+    highlightClassName: 'highlighted',
+    highlightDurationMs: 1000
   });
 };
 
 const shouldResetUnreadForCurrentTopic = (): boolean => {
   const lastMessage = state.messages.at(-1);
   const currentUserId = authUser.value?.id;
+  const topicUnreadCount = route.value?.id
+    ? getSelectedTopic(route.value.id)?.unreadMessageCount || 0
+    : 0;
+
+  if (topicUnreadCount > 0) {
+    return false;
+  }
 
   if (!lastMessage || !currentUserId) {
     return true;
@@ -247,11 +375,7 @@ const shouldResetUnreadForCurrentTopic = (): boolean => {
     return true;
   }
 
-  return (
-    !!lastMessage.isReadByMe ||
-    !!lastMessage.isRead ||
-    lastMessage.status === MessageStatus.Read
-  );
+  return !!lastMessage.isReadByMe;
 };
 
 const getFirstUnreadMessageId = (): string | null => {
@@ -265,39 +389,89 @@ const getFirstUnreadMessageId = (): string | null => {
     message =>
       !message.isSystem &&
       message.senderUserId !== currentUserId &&
-      !message.isReadByMe
+      message.isReadByMe !== true
   );
 
   return firstUnreadMessage?.id || null;
 };
 
-const isViewingCurrentTopicBottom = (): boolean => {
-  const wrapper = chatWrapperRef.value;
+const getCurrentTopicUnreadCount = (): number => {
+  const currentUserId = authUser.value?.id;
 
-  if (!route.value?.id || !wrapper || route.value?.type === RouteTypes.AI) {
-    return false;
+  if (!currentUserId) {
+    return 0;
   }
 
-  const distanceFromBottom =
-    wrapper.scrollHeight - wrapper.clientHeight - wrapper.scrollTop;
-
-  return distanceFromBottom < 100;
+  return state.messages.filter(
+    message =>
+      !message.isSystem &&
+      message.senderUserId !== currentUserId &&
+      message.isReadByMe !== true
+  ).length;
 };
 
-const resetUnreadIfViewingBottom = (): void => {
-  if (!route.value?.id || !isViewingCurrentTopicBottom()) {
+const rememberCurrentUnreadMarkerState = (topicId: string) => {
+  if (!state.unreadMarkerMessageId) {
     return;
   }
 
-  resetTopicUnreadState(route.value.id);
+  seenUnreadMarkerStateByTopic[topicId] = {
+    markerId: state.unreadMarkerMessageId,
+    unreadCount: getCurrentTopicUnreadCount()
+  };
+};
+
+const hideUnreadMarkerIfPassed = (): void => {
+  if (
+    !route.value?.id ||
+    !state.unreadMarkerMessageId ||
+    state.hideUnreadMarker ||
+    !chatWrapperRef.value
+  ) {
+    return;
+  }
+
+  const markerElement = chatWrapperRef.value.querySelector(
+    `[data-message-id="${state.unreadMarkerMessageId}"]`
+  );
+
+  if (!(markerElement instanceof HTMLElement)) {
+    return;
+  }
+
+  const containerRect = chatWrapperRef.value.getBoundingClientRect();
+  const markerRect = markerElement.getBoundingClientRect();
+
+  if (markerRect.bottom <= containerRect.top + 8) {
+    rememberCurrentUnreadMarkerState(route.value.id);
+    state.hideUnreadMarker = true;
+  }
+};
+
+const resetUnreadIfViewingBottom = (): void => {
+  return;
+};
+
+const syncVisibleUnreadAfterAutoScroll = (): void => {
+  if (!route.value?.id || route.value?.type === RouteTypes.AI) {
+    return;
+  }
+
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      flushVisibleUnreadMessages();
+      resetUnreadIfViewingBottom();
+    });
+  });
 };
 
 const handleScroll = async (): Promise<void> => {
   await handleMessageScroll();
+  hideUnreadMarkerIfPassed();
   resetUnreadIfViewingBottom();
 };
 
-const { handleSend, handleAttachFile } = useMessageSender(
+const { handleSend, handleAttachFile, handleRetryMessage } = useMessageSender(
   route,
   inputText,
   state,
@@ -323,6 +497,18 @@ onMounted(async () => {
       }
     });
   }
+
+  if ('ResizeObserver' in window) {
+    chatVisibilityObserver = new ResizeObserver(() => {
+      syncVisibleUnreadAfterAutoScroll();
+    });
+
+    nextTick(() => {
+      if (chatWrapperRef.value) {
+        chatVisibilityObserver?.observe(chatWrapperRef.value);
+      }
+    });
+  }
 });
 
 onUnmounted(() => {
@@ -332,35 +518,114 @@ onUnmounted(() => {
   if (intersectionObserver) {
     intersectionObserver.disconnect();
   }
+  if (chatVisibilityObserver) {
+    chatVisibilityObserver.disconnect();
+    chatVisibilityObserver = null;
+  }
   handleMastraUnmounted();
 });
 
 watch(
-  () => route.value,
-  async () => {
-    if (!route.value?.id) return;
-
-    await hydrateMessagesFromCache(route.value.id);
-    await fetchPinnedMessagesForTopic(route.value.id);
-    await fetchMessagesForTopic(route.value.id);
-    state.unreadMarkerMessageId = getFirstUnreadMessageId();
-
-    if (shouldResetUnreadForCurrentTopic()) {
-      resetTopicUnreadState(route.value.id);
+  () => chatWrapperRef.value,
+  wrapper => {
+    if (!chatVisibilityObserver || !wrapper) {
+      return;
     }
 
+    chatVisibilityObserver.disconnect();
+    chatVisibilityObserver.observe(wrapper);
+    syncVisibleUnreadAfterAutoScroll();
+  }
+);
+
+watch(
+  [() => route.value?.id, () => route.value?.type],
+  async ([topicId]) => {
+    if (!topicId) return;
     resetScrollState();
+    setReadReceiptsEnabled(false);
+    suspendAutoRead(TOPIC_SWITCH_AUTO_READ_GRACE_MS);
+    suspendLocalOwnReadStatus(topicId, TOPIC_SWITCH_AUTO_READ_GRACE_MS);
+    suspendHistoryFetch(TOPIC_SWITCH_HISTORY_FETCH_GRACE_MS);
+    applyUnreadMarkerStateForTopic(topicId);
+
+    const topicUnreadCount = getSelectedTopic(topicId)?.unreadMessageCount || 0;
+    const initialMessagesLimit =
+      topicUnreadCount > 0 ? Math.max(100, topicUnreadCount + 20) : undefined;
+
+    state.replyMessage = null;
+    state.editMessage = null;
+    state.forwardMessages = [];
+
+    clearSelectedMessages();
+
+    await hydrateMessagesFromCache(topicId);
+    await fetchPinnedMessagesForTopic(topicId);
+    await fetchMessagesForTopic(topicId, {
+      limit: initialMessagesLimit
+    });
+    await nextTick();
+    refreshUnreadMarkerState();
+
+    if (state.unreadMarkerMessageId) {
+      suspendAutoRead(TOPIC_SWITCH_AUTO_READ_GRACE_MS);
+      suspendLocalOwnReadStatus(topicId, TOPIC_SWITCH_AUTO_READ_GRACE_MS);
+    }
+
+    if (shouldResetUnreadForCurrentTopic()) {
+      resetTopicUnreadState(topicId);
+      unreadMarkerMessageIdsByTopic[topicId] = null;
+      delete seenUnreadMarkerStateByTopic[topicId];
+      applyUnreadMarkerStateForTopic(topicId);
+    }
 
     nextTick(() => {
-      state.replyMessage = null;
-      state.editMessage = null;
-      state.hideUnreadMarker = false;
+      const consumedForwardMessages = consumePendingForwardMessages(topicId);
+
+      if (consumedForwardMessages.length > 0) {
+        state.forwardMessages = consumedForwardMessages;
+      }
+
       inputText.value = getLocalStorageInputText.value;
-      setupIntersectionObserver();
       scrollToBottom();
+      setTimeout(() => {
+        rememberCurrentUnreadMarkerState(topicId);
+        setReadReceiptsEnabled(true);
+        setupIntersectionObserver();
+        syncVisibleUnreadAfterAutoScroll();
+        scrollAnchor.initialize();
+      }, 160);
     });
   },
-  { deep: true, immediate: true }
+  { immediate: true }
+);
+
+watch(
+  [
+    () => route.value?.id,
+    () => route.value?.type,
+    () => scrollAnchor.viewportMode.value
+  ],
+  ([topicId, routeType, viewportMode], [previousTopicId]) => {
+    if (previousTopicId && previousTopicId !== topicId) {
+      setSuspendIncomingMergeForTopic(previousTopicId, false);
+    }
+
+    if (!topicId || routeType === RouteTypes.AI) {
+      return;
+    }
+
+    setSuspendIncomingMergeForTopic(topicId, viewportMode !== 'live');
+  },
+  { immediate: true }
+);
+
+watch(
+  [() => route.value.id, pendingForwardTopicId, pendingForwardMessages],
+  () => {
+    applyPendingForwardMessages();
+  },
+  { deep: true }
 );
 
 const updateLocalStorageInputText = () => {
@@ -443,6 +708,7 @@ const handleWindowKeydown = async (e: KeyboardEvent) => {
   const isPrintableKey = e.key.length === 1 && !hasModifierKey;
   const shouldFocusMessageInput =
     !Capacitor.isNativePlatform() &&
+    !isSelectionMode.value &&
     (!hasModifierKey || isPasteShortcut) &&
     !isEditableEventTarget(e);
 
@@ -466,6 +732,11 @@ const handleWindowKeydown = async (e: KeyboardEvent) => {
     }
   }
 
+  if (e.key === 'Escape' && isSelectionMode.value) {
+    clearSelectedMessages();
+    return;
+  }
+
   if (e.key === 'Escape') {
     navigateToDefault();
   }
@@ -477,10 +748,21 @@ onMounted(() => {
   }
 
   window.addEventListener('keydown', handleWindowKeydown, true);
+  window.addEventListener('focus', handleWindowFocusRefresh);
+  document.addEventListener('visibilitychange', handleVisibilityChangeRefresh);
 });
 
 onUnmounted(() => {
+  if (route.value?.id) {
+    setSuspendIncomingMergeForTopic(route.value.id, false);
+  }
+
   window.removeEventListener('keydown', handleWindowKeydown, true);
+  window.removeEventListener('focus', handleWindowFocusRefresh);
+  document.removeEventListener(
+    'visibilitychange',
+    handleVisibilityChangeRefresh
+  );
 });
 
 watch(
@@ -494,10 +776,8 @@ watch(
   () => state.messages.map(message => message.id),
   () => {
     nextTick(() => {
-      if (!state.hideUnreadMarker && !state.unreadMarkerMessageId) {
-        state.unreadMarkerMessageId = getFirstUnreadMessageId();
-      }
-
+      syncVisibleUnreadAfterAutoScroll();
+      hideUnreadMarkerIfPassed();
       resetUnreadIfViewingBottom();
     });
   }

@@ -155,12 +155,13 @@
   color: var(--white);
   font-size: 12px;
   height: 18px;
-  width: 18px;
-  border-radius: 50%;
+  min-width: 18px;
+  border-radius: 18px;
   background-color: var(--blue4);
   display: flex;
   align-items: center;
   justify-content: center;
+  padding-inline: 4px;
 }
 
 .contact-list__notification--muted {
@@ -206,6 +207,7 @@ svg.icon-yui-kit.contact-list__read-icon {
   grid-area: block2;
   gap: 3px;
   justify-self: end;
+  align-items: center;
   display: flex;
   place-content: center;
   text-align: center;
@@ -313,7 +315,7 @@ svg.icon-yui-kit.contact-list__read-icon {
 
   .contact-list {
     max-height: initial;
-    padding: 0 16px;
+    padding: 0;
   }
 
   .contact-list__block--wrapper {
@@ -333,6 +335,7 @@ svg.icon-yui-kit.contact-list__read-icon {
     --size-avatar: 30px;
     grid-template-rows: auto 1fr;
     max-width: 100%;
+    padding-inline: 16px;
   }
 
   svg.icon-yui-kit.contact-list__pin-icon {

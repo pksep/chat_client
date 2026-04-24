@@ -12,12 +12,13 @@
         :data-testid="`${dataTestid}-DeliveredIcon`"
       />
       <Icon
-        v-else-if="
-          props.messageStatus === MessageStatus.Wait ||
-          props.messageStatus === MessageStatus.NotDelivered
-        "
+        v-else-if="props.messageStatus === MessageStatus.Wait"
         :name="IconNameEnum.notDelivered"
         :data-testid="`${dataTestid}-SendingIcon`"
+      />
+      <ErrorIcon
+        v-else-if="props.messageStatus === MessageStatus.NotDelivered"
+        :data-testid="`${dataTestid}-ErrorIcon`"
       />
     </template>
   </div>
@@ -27,6 +28,7 @@
 import { Icon, IconNameEnum } from '@pksep/yui';
 import type { IMessageStatusIconsProps } from './interface/interface';
 import { MessageStatus } from '../../services/useChatSDK/types';
+import ErrorIcon from '../UI/ErrorIcon.vue';
 
 const props = withDefaults(defineProps<IMessageStatusIconsProps>(), {
   isRead: false,

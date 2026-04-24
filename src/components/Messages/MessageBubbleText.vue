@@ -1,6 +1,5 @@
 <template>
   <article
-    @click.stop
     :class="messageArticleStyles"
     :data-testid="`${props.dataTestid}-Article`"
   >
@@ -46,7 +45,6 @@
       </div>
       <template v-else-if="!props.loader">
         <div
-          @click.stop
           class="message-content__html"
           v-html="props.message"
           :data-testid="`${props.dataTestid}-MessageText`"
@@ -69,8 +67,12 @@
       <span :data-testid="`${props.dataTestid}-TimeText`">{{
         props.time
       }}</span>
+      <ErrorIcon
+        v-if="showErrorIcon"
+        :data-testid="`${props.dataTestid}-ErrorIcon`"
+      />
       <MessageStatusIcons
-        v-if="props.isMeSender"
+        v-if="props.isMeSender && !showErrorIcon"
         :is-read="props.isRead"
         :message-status="props.messageStatus"
         :data-testid="`${props.dataTestid}`"
@@ -85,9 +87,11 @@ import type { IMessageBubbleProps } from './interface/interface';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import MessageEmojies from './MessageEmojies.vue';
+import ErrorIcon from '../UI/ErrorIcon.vue';
 import { stripHtml } from '../../utils/stripHtml';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
+import { MessageStatus } from '../../services/useChatSDK/types';
 
 const props = defineProps<IMessageBubbleProps>();
 
@@ -95,6 +99,10 @@ defineEmits(['navigate-message']);
 
 const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
+
+const showErrorIcon = computed(
+  () => props.messageStatus === MessageStatus.NotDelivered
+);
 
 const messageArticleStyles = computed(() => [
   'message__article',

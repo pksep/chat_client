@@ -1,4 +1,5 @@
 import {
+  computed,
   reactive,
   watch,
   nextTick,
@@ -7,15 +8,21 @@ import {
   onUnmounted,
   type Ref
 } from 'vue';
+import { useScrollAnchor } from './useScrollAnchor';
 import {
+  getCanSendReadReceipts,
   getIsWebsocketConnecting,
-  markAsRead
+  markAsRead,
+  consumeBufferedIncomingMessagesForTopic
 } from '../../../services/useChat';
 import {
-  changeLocalReadStatus,
   fetchMessagesForTopic,
+  getMessagesByTopicId,
+  hydrateMessagesFromCache,
   mergeMessagesForTopic
 } from '../../../services/useMessages';
+import { previewTopicReadMessages } from '../../../composables/useTopics';
+import { clearTopicNotifications } from '../../../services/useNotificationNavigation';
 import type { IMessage } from '../../interfaces/interfaces';
 
 export function useMessageScroll(
@@ -31,6 +38,16 @@ export function useMessageScroll(
 ) {
   const isShowScrollToBottomButton = ref(false);
   const isLoadingInitialMessages = ref(false);
+  const autoReadSuspendedUntil = ref(0);
+  const historyFetchSuspendedUntil = ref(0);
+  const readReceiptsEnabled = ref(true);
+  const queuedReadIds = new Set<string>();
+  const scrolledUnreadMarkerKey = ref<string | null>(null);
+
+  const scrollAnchor = useScrollAnchor({
+    containerRef: chatWrapperRef,
+    bottomThreshold: 50
+  });
 
   const scrollState = reactive({
     isUserScrolling: false,
@@ -44,9 +61,60 @@ export function useMessageScroll(
   let hasOldMessage = true;
   let hasNewMessage = true;
   const scrollMarkReadTimeout: number | null = null;
+  let autoReadResumeTimeout: ReturnType<typeof setTimeout> | null = null;
   let intersectionObserver: IntersectionObserver | null = null;
+  let pendingMessagesMutationRevision: number | null = null;
+  let preserveViewportForDownPagination = false;
   const pendingReadIds = new Set<string>();
   const SCROLL_DISTANCE_FOR_REQUEST = 500;
+  const unreadTrackableMessageIds = computed(
+    () =>
+      new Set(
+        state.messages
+          .filter(
+            message =>
+              !message.isSystem &&
+              message.senderUserId !== props.user?.id &&
+              message.isReadByMe !== true
+          )
+          .map(message => message.id)
+      )
+  );
+
+  const getMessageIds = () =>
+    state.messages.map((message: IMessage) => message.id);
+
+  const canTrackVisibleMessages = (): boolean => {
+    const container = chatWrapperRef.value;
+
+    if (!container) {
+      return false;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+
+    return containerRect.width > 0 && containerRect.height > 0;
+  };
+
+  const canMarkVisibleMessagesAsRead = (): boolean => {
+    if (!canTrackVisibleMessages()) {
+      return false;
+    }
+
+    if (!getCanSendReadReceipts()) {
+      return false;
+    }
+
+    if (!readReceiptsEnabled.value) {
+      return false;
+    }
+
+    if (Date.now() < autoReadSuspendedUntil.value) {
+      return false;
+    }
+
+    return true;
+  };
 
   const getUnreadMessageIdIfTrackable = (element: Element) => {
     const messageId = element.getAttribute('data-message-id');
@@ -54,12 +122,7 @@ export function useMessageScroll(
       return null;
     }
 
-    const message = state.messages.find(m => m.id === messageId);
-    if (
-      !message ||
-      message.senderUserId === props.user?.id ||
-      message.isReadByMe
-    ) {
+    if (!unreadTrackableMessageIds.value.has(messageId)) {
       return null;
     }
 
@@ -68,23 +131,45 @@ export function useMessageScroll(
 
   const submitReadMessages = async (messageIds: string[]) => {
     if (!messageIds.length || !route.value?.id) return;
+    if (!canTrackVisibleMessages()) return;
 
-    messageIds.forEach(id => pendingReadIds.add(id));
+    const uniqueMessageIds = Array.from(new Set(messageIds)).filter(
+      id => !pendingReadIds.has(id)
+    );
+
+    if (!uniqueMessageIds.length) {
+      return;
+    }
+
+    previewTopicReadMessages(route.value.id, uniqueMessageIds);
+
+    if (!canMarkVisibleMessagesAsRead()) {
+      uniqueMessageIds.forEach(id => queuedReadIds.add(id));
+      return;
+    }
+
+    uniqueMessageIds.forEach(id => {
+      pendingReadIds.add(id);
+      queuedReadIds.delete(id);
+    });
 
     try {
       await markAsRead({
-        messageIds,
+        messageIds: uniqueMessageIds,
         topicId: route.value.id
       });
     } catch (error) {
       console.warn('Failed to mark messages as read:', error);
-      messageIds.forEach(id => pendingReadIds.delete(id));
+      uniqueMessageIds.forEach(id => {
+        pendingReadIds.delete(id);
+        queuedReadIds.add(id);
+      });
     }
   };
 
   const collectVisibleUnreadMessageIds = () => {
     const container = chatWrapperRef.value;
-    if (!container || document.visibilityState !== 'visible') {
+    if (!canTrackVisibleMessages() || !container) {
       return [];
     }
 
@@ -97,7 +182,7 @@ export function useMessageScroll(
 
       const rect = element.getBoundingClientRect();
       const intersectsVertically =
-        rect.bottom > containerRect.top && rect.top < containerRect.bottom - 50;
+        rect.bottom > containerRect.top && rect.top < containerRect.bottom;
       const intersectsHorizontally =
         rect.right > containerRect.left && rect.left < containerRect.right;
 
@@ -115,29 +200,75 @@ export function useMessageScroll(
   };
 
   const flushVisibleUnreadMessages = () => {
+    if (!canTrackVisibleMessages()) {
+      return;
+    }
+
     const visibleUnreadMessageIds = collectVisibleUnreadMessageIds();
     if (visibleUnreadMessageIds.length > 0) {
+      void clearTopicNotifications(route.value.id);
       submitReadMessages(visibleUnreadMessageIds);
     }
   };
 
+  const flushQueuedReadMessages = async () => {
+    if (!route.value?.id || queuedReadIds.size === 0) {
+      return;
+    }
+
+    if (!canMarkVisibleMessagesAsRead()) {
+      return;
+    }
+
+    const messageIds = Array.from(queuedReadIds).filter(
+      id => !pendingReadIds.has(id)
+    );
+
+    if (!messageIds.length) {
+      return;
+    }
+
+    messageIds.forEach(id => {
+      pendingReadIds.add(id);
+      queuedReadIds.delete(id);
+    });
+
+    try {
+      await markAsRead({
+        messageIds,
+        topicId: route.value.id
+      });
+    } catch (error) {
+      console.warn('Failed to flush queued read messages:', error);
+      messageIds.forEach(id => {
+        pendingReadIds.delete(id);
+        queuedReadIds.add(id);
+      });
+    }
+  };
+
   const markAllVisibleAsRead = async () => {
+    if (!canMarkVisibleMessagesAsRead()) {
+      return;
+    }
+
     const unreadMessages = state.messages.filter(
-      (m: IMessage) => m.senderUserId !== props.user?.id
+      (message: IMessage) => message.senderUserId !== props.user?.id
     );
 
     if (unreadMessages.length === 0) return;
 
+    previewTopicReadMessages(
+      route.value.id,
+      unreadMessages.map((message: IMessage) => message.id)
+    );
+
     try {
+      await clearTopicNotifications(route.value.id);
       await markAsRead({
-        messageIds: unreadMessages.map((m: IMessage) => m.id),
+        messageIds: unreadMessages.map((message: IMessage) => message.id),
         topicId: route.value.id
       });
-      changeLocalReadStatus(
-        route.value.id,
-        unreadMessages.map((m: IMessage) => m.id),
-        props.user?.id
-      );
     } catch (error) {
       console.warn('Failed to mark messages as read:', error);
     }
@@ -153,7 +284,7 @@ export function useMessageScroll(
         const visibleUnreadMessageIds: string[] = [];
 
         entries.forEach(entry => {
-          if (entry.isIntersecting) {
+          if (entry.isIntersecting && canTrackVisibleMessages()) {
             const messageId = getUnreadMessageIdIfTrackable(entry.target);
             if (messageId) {
               visibleUnreadMessageIds.push(messageId);
@@ -168,7 +299,7 @@ export function useMessageScroll(
       {
         root: chatWrapperRef.value,
         threshold: 0.1,
-        rootMargin: '0px 0px -50px 0px'
+        rootMargin: '0px'
       }
     );
 
@@ -182,6 +313,7 @@ export function useMessageScroll(
           }
         });
 
+        void flushQueuedReadMessages();
         flushVisibleUnreadMessages();
       }
     });
@@ -190,6 +322,7 @@ export function useMessageScroll(
   const handleVisibilityChange = () => {
     if (document.visibilityState === 'visible') {
       nextTick(() => {
+        void flushQueuedReadMessages();
         flushVisibleUnreadMessages();
       });
     }
@@ -197,6 +330,7 @@ export function useMessageScroll(
 
   const handleWindowFocus = () => {
     nextTick(() => {
+      void flushQueuedReadMessages();
       flushVisibleUnreadMessages();
     });
   };
@@ -205,17 +339,23 @@ export function useMessageScroll(
     const el = chatWrapperRef.value;
     if (!el) return;
 
-    const { scrollTop, scrollHeight, clientHeight } = el;
+    scrollAnchor.onScroll();
 
-    isShowScrollToBottomButton.value = scrollTop < -200;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const maxScroll = Math.max(0, scrollHeight - clientHeight);
+    const normalizedScrollTop = Math.min(scrollTop, 0);
+    const distanceFromBottom = Math.abs(normalizedScrollTop);
+    const distanceFromTop = maxScroll + normalizedScrollTop;
+
+    isShowScrollToBottomButton.value = distanceFromBottom > 200;
 
     if (isAutoScrollLoading) {
       return;
     }
 
-    const maxScroll = scrollHeight - clientHeight;
-    const distanceFromBottom = scrollTop;
-    const distanceFromTop = maxScroll + scrollTop;
+    if (Date.now() < historyFetchSuspendedUntil.value) {
+      return;
+    }
 
     scrollState.shouldAutoScroll =
       distanceFromBottom < SCROLL_DISTANCE_FOR_REQUEST;
@@ -249,20 +389,24 @@ export function useMessageScroll(
         hasOldMessage = result.length > 0;
 
         if (result.length > 0) {
-          mergeMessagesForTopic(route.value.id, result, 'prepend');
+          mergeMessagesForTopic(route.value.id, result, 'prepend', {
+            syncLastMessage: false
+          });
         }
       }
+
       isScrollLoading = false;
     } else if (
-      distanceFromBottom > -SCROLL_DISTANCE_FOR_REQUEST &&
+      distanceFromBottom < SCROLL_DISTANCE_FOR_REQUEST &&
       !isScrollLoading &&
       hasNewMessage
     ) {
       isScrollLoading = true;
 
       if (!getIsWebsocketConnecting()) {
-        const lastMessage = state.messages[state.messages.length - 1];
+        preserveViewportForDownPagination = true;
 
+        const lastMessage = state.messages[state.messages.length - 1];
         const result = await fetchMessagesForTopic(route.value.id, {
           afterMessageId: lastMessage?.id,
           skipSave: true
@@ -270,9 +414,12 @@ export function useMessageScroll(
         hasNewMessage = result.length > 0;
 
         if (result.length > 0) {
-          mergeMessagesForTopic(route.value.id, result, 'append');
+          mergeMessagesForTopic(route.value.id, result, 'append', {
+            syncLastMessage: false
+          });
         }
       }
+
       isScrollLoading = false;
     }
   };
@@ -280,42 +427,99 @@ export function useMessageScroll(
   const scrollToBottom = () => {
     if (!chatWrapperRef.value) return;
 
-    setTimeout(() => {
-      if (!chatWrapperRef.value) return;
+    isShowScrollToBottomButton.value = false;
 
-      if (!state.hideUnreadMarker && state.unreadMarkerMessageId) {
-        const unreadMessageElement = chatWrapperRef.value.querySelector(
-          `[data-message-id="${state.unreadMarkerMessageId}"]`
-        );
+    const unreadRef = messageListUserItemsRef.value?.unreadMessageStartRef;
+    if (unreadRef?.length > 0) {
+      const firstUnread = unreadRef[0];
+      const container = chatWrapperRef.value;
 
-        if (unreadMessageElement instanceof HTMLElement) {
-          unreadMessageElement.scrollIntoView({
-            block: 'start',
-            behavior: 'auto'
-          });
-          return;
-        }
+      if (container && firstUnread) {
+        container.scrollTop = firstUnread.offsetTop - container.offsetTop;
+        requestAnimationFrame(() => {
+          void flushQueuedReadMessages();
+          flushVisibleUnreadMessages();
+        });
       }
 
-      const unreadRef = messageListUserItemsRef.value?.unreadMessageStartRef;
-      if (unreadRef?.length > 0) {
-        const firstUnread = unreadRef[0];
-        const container = chatWrapperRef.value;
-        if (container && firstUnread) {
-          container.scrollTop = firstUnread.offsetTop - container.offsetTop;
-        }
+      return;
+    }
+
+    if (!state.hideUnreadMarker && state.unreadMarkerMessageId) {
+      const currentMarkerKey = route.value?.id
+        ? `${route.value.id}:${state.unreadMarkerMessageId}`
+        : state.unreadMarkerMessageId;
+
+      if (scrolledUnreadMarkerKey.value === currentMarkerKey) {
         return;
       }
 
-      chatWrapperRef.value.scrollTop =
-        chatWrapperRef.value.scrollHeight - chatWrapperRef.value.clientHeight;
-    }, 100);
+      const unreadMessageElement = chatWrapperRef.value.querySelector(
+        `[data-message-id="${state.unreadMarkerMessageId}"]`
+      );
+
+      if (unreadMessageElement instanceof HTMLElement) {
+        scrolledUnreadMarkerKey.value = currentMarkerKey;
+        unreadMessageElement.scrollIntoView({
+          block: 'start',
+          behavior: 'auto'
+        });
+        requestAnimationFrame(() => {
+          void flushQueuedReadMessages();
+          flushVisibleUnreadMessages();
+        });
+        return;
+      }
+    }
+
+    scrollAnchor.scrollToBottomInstant();
+
+    requestAnimationFrame(() => {
+      void flushQueuedReadMessages();
+      flushVisibleUnreadMessages();
+    });
   };
 
   const handleScrollToButton = async () => {
-    await fetchMessagesForTopic(route.value.id, { newMessages: true });
-    scrollToBottom();
+    scrollAnchor.setViewportMode('live');
+    scrollAnchor.scrollToBottomInstant();
+    isShowScrollToBottomButton.value = false;
+
+    if (getMessagesByTopicId(route.value.id).length === 0) {
+      await hydrateMessagesFromCache(route.value.id);
+      await nextTick();
+      scrollAnchor.scrollToBottomInstant();
+    }
+
+    const bufferedIncomingMessages = consumeBufferedIncomingMessagesForTopic(
+      route.value.id
+    );
+
+    if (bufferedIncomingMessages.length > 0) {
+      mergeMessagesForTopic(
+        route.value.id,
+        bufferedIncomingMessages,
+        'append',
+        {
+          syncLastMessage: false
+        }
+      );
+      await nextTick();
+      scrollAnchor.scrollToBottomInstant();
+    }
+
     markAllVisibleAsRead();
+
+    void (async () => {
+      await fetchMessagesForTopic(route.value.id, {
+        limit: 50,
+        syncLastMessage: false
+      });
+      await nextTick();
+      scrollAnchor.scrollToBottomInstant();
+      isShowScrollToBottomButton.value = false;
+      markAllVisibleAsRead();
+    })();
   };
 
   watch(
@@ -339,50 +543,105 @@ export function useMessageScroll(
         !chatWrapperRef.value ||
         scrollState.isInitialLoad ||
         newScrollTop === undefined
-      )
+      ) {
         return;
+      }
 
-      const distanceFromBottom =
-        chatWrapperRef.value.scrollHeight -
-        chatWrapperRef.value.clientHeight -
-        newScrollTop;
-
+      const distanceFromBottom = Math.abs(Math.min(newScrollTop, 0));
       scrollState.shouldAutoScroll = distanceFromBottom < 100;
       scrollState.isUserScrolling = distanceFromBottom >= 100;
     }
   );
 
   watch(
-    () => state.messages,
-    () => {
-      nextTick(() => {
-        setupIntersectionObserver();
+    getMessageIds,
+    (newIds, oldIds) => {
+      if (!oldIds || !chatWrapperRef.value) {
+        pendingMessagesMutationRevision = null;
+        return;
+      }
+
+      const oldSet = new Set(oldIds);
+      const hasNew = newIds.some(id => !oldSet.has(id));
+      const isPrepend =
+        hasNew &&
+        newIds.length > oldIds.length &&
+        oldIds.length > 0 &&
+        newIds.slice(-oldIds.length).join(',') === oldIds.join(',');
+      const isAppend =
+        hasNew &&
+        newIds.length > oldIds.length &&
+        oldIds.length > 0 &&
+        newIds.slice(0, oldIds.length).join(',') === oldIds.join(',');
+
+      const reason = isPrepend ? 'prepend' : isAppend ? 'append' : 'replace';
+      const mutation = scrollAnchor.beginViewportMutation(reason, {
+        forcePreserve: reason === 'append' && preserveViewportForDownPagination
       });
+
+      pendingMessagesMutationRevision = mutation.revision;
     },
-    { deep: true }
+    { flush: 'pre' }
   );
 
   watch(
-    () => state.messages.map((m: IMessage) => m.id),
-    (newIds, oldIds) => {
-      if (!oldIds || !chatWrapperRef.value) return;
+    getMessageIds,
+    () => {
+      nextTick(() => {
+        setupIntersectionObserver();
+        scrollAnchor.setupResizeObserver();
 
-      const oldSet = new Set(oldIds);
-      const containsAllOld = oldIds.every(id => newIds.includes(id));
-      const hasNew = newIds.some(id => !oldSet.has(id));
+        if (pendingMessagesMutationRevision !== null) {
+          scrollAnchor.commitViewportMutation(pendingMessagesMutationRevision);
+          pendingMessagesMutationRevision = null;
+        }
 
-      if (containsAllOld && hasNew && chatWrapperRef.value.scrollTop > -100) {
-        nextTick(() => {
-          scrollToBottom();
-        });
-      }
-    }
+        preserveViewportForDownPagination = false;
+      });
+    },
+    { flush: 'post' }
   );
 
   const resetScrollState = () => {
     hasOldMessage = true;
     hasNewMessage = true;
     pendingReadIds.clear();
+    scrolledUnreadMarkerKey.value = null;
+    pendingMessagesMutationRevision = null;
+    preserveViewportForDownPagination = false;
+    isShowScrollToBottomButton.value = false;
+    scrollState.isInitialLoad = true;
+    scrollState.isUserScrolling = false;
+    scrollState.shouldAutoScroll = true;
+  };
+
+  const suspendAutoRead = (durationMs: number) => {
+    const delay = Math.max(0, durationMs);
+    autoReadSuspendedUntil.value = Date.now() + delay;
+
+    if (autoReadResumeTimeout) {
+      clearTimeout(autoReadResumeTimeout);
+    }
+
+    autoReadResumeTimeout = setTimeout(() => {
+      autoReadResumeTimeout = null;
+      nextTick(() => {
+        void flushQueuedReadMessages();
+        flushVisibleUnreadMessages();
+      });
+    }, delay + 20);
+  };
+
+  const suspendHistoryFetch = (durationMs: number) => {
+    historyFetchSuspendedUntil.value = Date.now() + Math.max(0, durationMs);
+  };
+
+  const setReadReceiptsEnabled = (enabled: boolean) => {
+    readReceiptsEnabled.value = enabled;
+
+    if (enabled) {
+      void flushQueuedReadMessages();
+    }
   };
 
   onMounted(() => {
@@ -391,6 +650,11 @@ export function useMessageScroll(
   });
 
   onUnmounted(() => {
+    if (autoReadResumeTimeout) {
+      clearTimeout(autoReadResumeTimeout);
+      autoReadResumeTimeout = null;
+    }
+
     document.removeEventListener('visibilitychange', handleVisibilityChange);
     window.removeEventListener('focus', handleWindowFocus);
   });
@@ -403,8 +667,13 @@ export function useMessageScroll(
     scrollToBottom,
     handleScrollToButton,
     setupIntersectionObserver,
+    flushVisibleUnreadMessages,
     intersectionObserver,
     resetScrollState,
-    scrollMarkReadTimeout
+    scrollMarkReadTimeout,
+    suspendAutoRead,
+    suspendHistoryFetch,
+    setReadReceiptsEnabled,
+    scrollAnchor
   };
 }

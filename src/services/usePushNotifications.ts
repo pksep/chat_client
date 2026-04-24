@@ -1,9 +1,211 @@
 import { PushNotifications } from '@capacitor/push-notifications';
-import { Capacitor } from '@capacitor/core';
+import {
+  Capacitor,
+  registerPlugin,
+  type PluginListenerHandle
+} from '@capacitor/core';
 import { useChatApi } from './useApi';
 import { getCurrentUserId } from './useChat';
 import { getUserById } from '../composables/useUsers';
-import { handleIncomingPushCall } from './useLiveKit';
+import { handleIncomingPushCall, handleNativeCallAction } from './useLiveKit';
+import {
+  clearTopicNotifications,
+  isTopicCurrentlyVisible,
+  navigateToNotificationTarget,
+  resolveNotificationTopicId
+} from './useNotificationNavigation';
+
+interface NotificationTapPlugin {
+  addListener(
+    eventName: 'notificationTap',
+    listenerFunc: (payload: Record<string, string>) => void
+  ): Promise<PluginListenerHandle>;
+  consumePendingNotificationTap(): Promise<Record<string, string>>;
+}
+
+type NativeNotificationData = Record<string, string> & {
+  action?: string;
+  callerId?: string;
+  fromUserId?: string;
+  roomId?: string;
+  tag?: string;
+  topicId?: string;
+  topicType?: string;
+  type?: string;
+  url?: string;
+  link?: string;
+};
+
+const NotificationTap =
+  registerPlugin<NotificationTapPlugin>('NotificationTap');
+let nativeNotificationTapListener: PluginListenerHandle | null = null;
+let lastHandledNotificationKey = '';
+let lastHandledNotificationAt = 0;
+let isWebCallActionListenerBound = false;
+
+const hasPayloadValues = (payload?: Record<string, string> | null) =>
+  Boolean(payload && Object.keys(payload).length > 0);
+
+const normalizeNativeNotificationData = (
+  data: NativeNotificationData = {}
+): NativeNotificationData => {
+  const url =
+    data.url ||
+    data.link ||
+    data.click_action ||
+    data['gcm.notification.click_action'];
+  const topicId =
+    resolveNotificationTopicId({
+      topicId: data.topicId,
+      chatId: data.chatId,
+      dialogsId: data.dialogsId,
+      groupId: data.groupId,
+      tag: data.tag,
+      url,
+      link: data.link
+    }) || undefined;
+
+  return {
+    ...data,
+    topicId,
+    url
+  };
+};
+
+const getNotificationInteractionKey = (data: NativeNotificationData) =>
+  data['google.message_id'] ||
+  data.messageId ||
+  `${data.topicId || 'unknown'}|${data.url || data.link || ''}|${data.action || ''}`;
+
+const shouldHandleNotificationInteraction = (data: NativeNotificationData) => {
+  const key = getNotificationInteractionKey(data);
+  const now = Date.now();
+
+  if (
+    key === lastHandledNotificationKey &&
+    now - lastHandledNotificationAt < 3000
+  ) {
+    return false;
+  }
+
+  lastHandledNotificationKey = key;
+  lastHandledNotificationAt = now;
+  return true;
+};
+
+const handleNotificationInteraction = (
+  data: NativeNotificationData = {},
+  actionId?: string | null
+) => {
+  const normalizedData = normalizeNativeNotificationData(data);
+
+  if (!shouldHandleNotificationInteraction(normalizedData)) {
+    return true;
+  }
+
+  const normalizedActionId = actionId?.toLowerCase();
+
+  if (
+    normalizedActionId?.includes('accept') ||
+    normalizedActionId?.includes('answer')
+  ) {
+    void handleNativeCallAction(
+      'accept',
+      normalizedData.roomId,
+      normalizedData.topicId || normalizedData.roomId
+    );
+    return true;
+  }
+
+  if (
+    normalizedActionId?.includes('decline') ||
+    normalizedActionId?.includes('reject') ||
+    normalizedActionId?.includes('end')
+  ) {
+    void handleNativeCallAction(
+      'decline',
+      normalizedData.roomId,
+      normalizedData.topicId || normalizedData.roomId
+    );
+    return true;
+  }
+
+  if (normalizedData.action === 'CLEAR_CHAT_NOTIFICATIONS') {
+    void clearTopicNotifications(normalizedData.topicId);
+    return true;
+  }
+
+  if (normalizedData.type === 'incoming_call') {
+    handleCallPush({ data: normalizedData });
+    return true;
+  }
+
+  if (navigateToNotificationTarget(normalizedData)) {
+    return true;
+  }
+
+  handleCallPush({ data: normalizedData });
+  return false;
+};
+
+const consumeWebCallActionFromUrl = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+  const action = url.searchParams.get('callAction');
+
+  if (action !== 'accept' && action !== 'decline') {
+    return;
+  }
+
+  const roomId = url.searchParams.get('roomId') || undefined;
+  const topicId = url.searchParams.get('topicId') || undefined;
+
+  url.searchParams.delete('callAction');
+  url.searchParams.delete('roomId');
+  url.searchParams.delete('topicId');
+  window.history.replaceState({}, document.title, url.toString());
+
+  void handleNativeCallAction(action, roomId, topicId);
+};
+
+const bindWebCallActionListener = () => {
+  if (
+    Capacitor.isNativePlatform() ||
+    isWebCallActionListenerBound ||
+    !('serviceWorker' in navigator)
+  ) {
+    return;
+  }
+
+  navigator.serviceWorker.addEventListener('message', event => {
+    const payload = event.data as
+      | {
+          type?: string;
+          action?: 'accept' | 'decline';
+          roomId?: string | null;
+          topicId?: string | null;
+        }
+      | undefined;
+
+    if (
+      payload?.type !== 'CALL_ACTION' ||
+      (payload.action !== 'accept' && payload.action !== 'decline')
+    ) {
+      return;
+    }
+
+    void handleNativeCallAction(
+      payload.action,
+      payload.roomId || undefined,
+      payload.topicId || undefined
+    );
+  });
+
+  isWebCallActionListenerBound = true;
+};
 
 export const initPushNotifications = async () => {
   const api = useChatApi();
@@ -19,6 +221,18 @@ export const initPushNotifications = async () => {
 
     await PushNotifications.register();
 
+    if (
+      Capacitor.getPlatform() === 'android' &&
+      !nativeNotificationTapListener
+    ) {
+      nativeNotificationTapListener = await NotificationTap.addListener(
+        'notificationTap',
+        payload => {
+          handleNotificationInteraction(payload as NativeNotificationData);
+        }
+      );
+    }
+
     PushNotifications.addListener('registration', async token => {
       await api.post('/notifications/device', {
         token: token.value,
@@ -28,20 +242,53 @@ export const initPushNotifications = async () => {
 
     PushNotifications.addListener('pushNotificationReceived', n => {
       console.log('Native push received:', n);
-      handleCallPush(n);
+      const normalizedData = normalizeNativeNotificationData(
+        (n.data || {}) as NativeNotificationData
+      );
+
+      if (normalizedData.action === 'CLEAR_CHAT_NOTIFICATIONS') {
+        void clearTopicNotifications(normalizedData.topicId);
+        return;
+      }
+
+      if (isTopicCurrentlyVisible(normalizedData.topicId)) {
+        void clearTopicNotifications(normalizedData.topicId);
+        return;
+      }
+
+      handleCallPush({ ...n, data: normalizedData });
     });
 
     PushNotifications.addListener('pushNotificationActionPerformed', n => {
       console.log('Native push action:', n);
-      handleCallPush(n.notification);
+      handleNotificationInteraction(
+        (n.notification.data || {}) as NativeNotificationData,
+        n.actionId
+      );
     });
 
     PushNotifications.addListener('registrationError', e =>
       console.error('Push error:', e)
     );
 
-    // No need to handle initial push for calls here, it causes ghost calls
-    // pushNotificationActionPerformed will handle it if user clicks.
+    // Capacitor covers taps via onNewIntent, but cold starts need a native handoff.
+    if (Capacitor.getPlatform() === 'android') {
+      try {
+        const pendingNotificationTap =
+          await NotificationTap.consumePendingNotificationTap();
+        if (hasPayloadValues(pendingNotificationTap)) {
+          handleNotificationInteraction(
+            pendingNotificationTap as NativeNotificationData
+          );
+        }
+      } catch (error) {
+        console.warn(
+          'Failed to consume pending Android notification tap:',
+          error
+        );
+      }
+    }
+
     return;
   }
 
@@ -61,6 +308,8 @@ export const initPushNotifications = async () => {
 
   const registration =
     await navigator.serviceWorker.register('/service-worker.js');
+  bindWebCallActionListener();
+  consumeWebCallActionFromUrl();
 
   // Get public key from server
   const resp = await api.get<{ publicKey: string }>('/push/public-key');
@@ -84,15 +333,16 @@ export const initPushNotifications = async () => {
   await api.post('/push/subscribe', { userId, subscription });
 };
 
-const handleCallPush = (notification: any) => {
-  const data = notification.data;
+const handleCallPush = (notification?: { data?: NativeNotificationData }) => {
+  const data = notification?.data;
   if (data && data.type === 'incoming_call') {
     const callerId = data.callerId || data.fromUserId;
     const roomId = data.roomId;
+    const targetTopicId = data.topicId || roomId;
 
     const user = getUserById(callerId);
     if (user) {
-      handleIncomingPushCall(user, roomId, data.topicId || roomId);
+      handleIncomingPushCall(user, roomId, targetTopicId);
     }
   }
 };
@@ -100,6 +350,11 @@ const handleCallPush = (notification: any) => {
 export const removePushListeners = async () => {
   if (Capacitor.isNativePlatform()) {
     await PushNotifications.removeAllListeners();
+
+    if (nativeNotificationTapListener) {
+      await nativeNotificationTapListener.remove();
+      nativeNotificationTapListener = null;
+    }
   }
 };
 

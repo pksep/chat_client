@@ -5,7 +5,11 @@ export function useMessageMedia() {
   const config = getConfig();
 
   const getFullMediaPath = (media: IMedia, isThumb = true) => {
-    if (media.localPath && isThumb) {
+    if (isThumb && media.localThumbnailPath) {
+      return media.localThumbnailPath;
+    }
+
+    if (media.localPath && (isThumb || !media.path)) {
       return media.localPath;
     }
 
@@ -17,7 +21,9 @@ export function useMessageMedia() {
   };
 
   const isSliderContentUrl = (fileUrl: string) => {
-    return fileUrl?.match(/\.(jpg|jpeg|png|webp|svg|mp4|mp3|avif|pdf|mov)$/i);
+    return fileUrl?.match(
+      /\.(jpg|jpeg|png|webp|svg|mp4|mp3|avif|pdf|mov|gif|bmp|tiff|ico|webm|mkv|avi|qt|m4v)$/i
+    );
   };
 
   const handleDragStart = (event: DragEvent, media: IMedia) => {

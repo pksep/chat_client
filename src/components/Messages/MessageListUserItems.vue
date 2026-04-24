@@ -7,15 +7,7 @@
       <div
         class="chat__message-unread_messages_start"
         ref="unreadMessageStartRef"
-        v-if="
-          !props.hideUnreadMarker &&
-          !!props.messages[index - 1] &&
-          !message.isSystem &&
-          !props.messages[index - 1].isSystem &&
-          message.senderUserId !== props.authUserId &&
-          !message.isReadByMe &&
-          props.messages[index - 1].isReadByMe
-        "
+        v-if="shouldShowUnreadMarker(message)"
       >
         Непрочитанные сообщения
       </div>
@@ -62,9 +54,11 @@
         "
         v-bind="getBubbleProps(message, index)"
         :data-message-id="message.id"
+        @toggle-selection="toggleMessage(message)"
         @unmount-edit-message-id="$emit('setEditMessage', $event)"
         @unmount-reply-message-id="$emit('setReplyMessage', $event)"
         @unmount-forward-message="$emit('setForwardMessage', $event)"
+        @unmount-retry-message-id="$emit('retryMessage', $event)"
         @unmount-navigate-message-id="
           $emit('scrollToMessage', message.replyMessage)
         "
@@ -79,6 +73,11 @@ import MessageBubble from './MessageBubble.vue';
 import { formatDay, formatTime } from '../../composables/useTime';
 import { MessageStatus } from '../../services/useChatSDK/types';
 import type { IMessage } from '../interfaces/interfaces';
+import {
+  isMessageSelected,
+  isMessageSelectionModeForTopic,
+  toggleSelectedMessage
+} from '../../composables/useSelectedMessages';
 
 interface Props {
   dataTestid: string;
@@ -86,6 +85,7 @@ interface Props {
   user?: any;
   authUserId?: string;
   hideUnreadMarker?: boolean;
+  unreadMarkerMessageId?: string | null;
 }
 
 const props = defineProps<Props>();
@@ -94,6 +94,7 @@ defineEmits([
   'setEditMessage',
   'setReplyMessage',
   'setForwardMessage',
+  'retryMessage',
   'scrollToMessage'
 ]);
 
@@ -116,6 +117,44 @@ const messageChat = (role: string) => [
   { message__other: role === 'user' }
 ];
 
+const isSelectionMode = (topicId?: string) =>
+  isMessageSelectionModeForTopic(topicId);
+
+const isSelected = (messageId?: string) => isMessageSelected(messageId);
+
+const toggleMessage = (message: IMessage) => {
+  if (!isSelectionMode(message.topicId)) {
+    return;
+  }
+  toggleSelectedMessage(message.topicId, message);
+};
+
+const isUnreadForCurrentUser = (message?: IMessage): boolean => {
+  if (!message || message.isSystem) {
+    return false;
+  }
+
+  return (
+    message.senderUserId !== props.authUserId && message.isReadByMe !== true
+  );
+};
+
+const shouldShowUnreadMarker = (message: IMessage): boolean => {
+  if (
+    props.hideUnreadMarker ||
+    !props.unreadMarkerMessageId ||
+    message.isSystem ||
+    message.id !== props.unreadMarkerMessageId
+  ) {
+    return false;
+  }
+
+  return (
+    isUnreadForCurrentUser(message) ||
+    message.id === props.unreadMarkerMessageId
+  );
+};
+
 const getBubbleProps = (message: IMessage, index: number) => ({
   message: message.text || '',
   media: message.media,
@@ -132,7 +171,10 @@ const getBubbleProps = (message: IMessage, index: number) => ({
   messageId: message.id,
   replyMessage: message.replyMessage,
   forwardUser: message.forwardUser,
-  reactions: message.reactions
+  reactions: message.reactions,
+  isSelectionMode: isSelectionMode(message.topicId),
+  isSelected: isSelected(message.id),
+  selectionTestId: `${props.dataTestid}-MessageList-SelectMessage${index + 1}`
 });
 
 defineExpose({

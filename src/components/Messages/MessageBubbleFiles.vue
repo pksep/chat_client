@@ -44,7 +44,8 @@
         :data-testid="`${props.dataTestid}-Content`"
       >
         <div
-          @click="$emit('set-slider', docFiles, i)"
+          @click="handleFileClick(media, i)"
+          @contextmenu.prevent
           class="message-content__file"
           :data-testid="`${props.dataTestid}-FileContainer`"
         >
@@ -85,8 +86,12 @@
         <span :data-testid="`${props.dataTestid}-TimeText`">{{
           props.time
         }}</span>
+        <ErrorIcon
+          v-if="showErrorIcon"
+          :data-testid="`${props.dataTestid}-ErrorIcon`"
+        />
         <MessageStatusIcons
-          v-if="props.isMeSender"
+          v-if="props.isMeSender && !showErrorIcon"
           :is-read="props.isRead"
           :message-status="props.messageStatus"
           :data-testid="`${props.dataTestid}`"
@@ -104,6 +109,7 @@ import MessageStatusIcons from './MessageStatusIcons.vue';
 import FileIcon from '../UI/FileIcon.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import MessageEmojies from './MessageEmojies.vue';
+import ErrorIcon from '../UI/ErrorIcon.vue';
 import { stripHtml } from '../../utils/stripHtml';
 import { getFormatFileSize, getShortName } from '../../utils/getFormatFileSize';
 import { useUrlWatcher } from '../../composables/navigation';
@@ -111,7 +117,7 @@ import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 
 const props = defineProps<IMessageBubbleProps>();
 
-defineEmits(['navigate-message', 'set-slider']);
+const emits = defineEmits(['navigate-message', 'set-slider']);
 
 const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
@@ -119,6 +125,23 @@ const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
 const docFiles = computed(
   () => props.media?.filter(media => media.type === MediaType.File) || []
 );
+
+const showErrorIcon = computed(
+  () =>
+    props.messageStatus === 'NOT_DELIVERED' ||
+    docFiles.value.some(media => media.uploadError)
+);
+
+const handleFileClick = (
+  media: (typeof docFiles.value)[number],
+  index: number
+) => {
+  if (media.uploadError || !media.path) {
+    return;
+  }
+
+  emits('set-slider', docFiles.value, index);
+};
 
 const messageArticleStyles = computed(() => [
   'message__article',

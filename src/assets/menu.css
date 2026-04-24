@@ -74,7 +74,7 @@
   align-items: center;
   justify-content: flex-start;
   color: var(--text-color);
-  padding: 0 10px;
+  padding: 0 16px;
   font-weight: bold;
   gap: 10px;
 
@@ -99,6 +99,14 @@
   gap: 6px;
   align-items: center;
   margin: 0;
+  font-weight: 700;
+  font-size: 20px;
+  line-height: 24px;
+}
+
+.chats-toolbar__context-menu {
+  position: fixed;
+  transform: translate(10px, 10px);
 }
 
 .chats-toolbar__headline > button.button-yui-kit {

@@ -7,7 +7,7 @@ export const useContextMenu = () => {
   const openActivePopover = (id: string, event: MouseEvent): void => {
     if (event.altKey) return;
     event.preventDefault();
-    position.value = { x: event.pageX, y: event.pageY };
+    position.value = { x: event.clientX, y: event.clientY };
     Object.keys(isOpen.value).forEach(key => {
       if (key !== id) {
         isOpen.value[key] = false;
