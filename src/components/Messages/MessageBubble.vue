@@ -64,7 +64,6 @@
       />
     </div>
     <SliderModal
-      v-if="sliderElements.length > 0"
       @touchstart.stop
       @touchend.stop
       :open="sliderElements.length > 0"
