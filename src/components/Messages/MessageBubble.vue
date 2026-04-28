@@ -173,6 +173,10 @@ const downloadMediaFile = (media: IMedia) => {
 };
 
 const setSliderElement = async (medias: IMedia[], defaultIndex: number = 0) => {
+  if (props.isSelectionMode) {
+    return;
+  }
+
   const selectedMedia = medias[defaultIndex];
 
   // Download logic
