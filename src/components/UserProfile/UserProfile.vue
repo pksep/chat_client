@@ -6,8 +6,8 @@
     :data-testid="`${dataTestid}-UserProfile-Container`"
     @click="emits('click')"
   >
-    <Avatar
-      :url="`${config.CHAT_PATH_TO_FILE_CDN}/${props.user.avatarUrl}`"
+    <CachedAvatar
+      :path="props.user.avatarUrl"
       :alt="props.user.avatarUrl"
       class="user-profile__avatar"
       :initials="props.user.initials"
@@ -38,16 +38,13 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue';
-import { Avatar } from '@pksep/yui';
 import { IUserProfileProps } from '../interfaces/interfaces';
-import { getConfig } from '../../services/useConfig';
 import { formatLastSeen } from '../../utils/dateUtils';
 import { getUserLastOnline } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
 import WaitConnection from '../UI/WaitConnection.vue';
 import { getHasWebsocketConnection } from '../../services/useChat';
-
-const config = getConfig();
+import CachedAvatar from '../UI/CachedAvatar.vue';
 
 const props = withDefaults(defineProps<IUserProfileProps>(), {
   dataTestid: () => 'UserProfile'

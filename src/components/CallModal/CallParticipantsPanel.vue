@@ -46,12 +46,8 @@
           v-if="!participant.isVideoActive"
           class="call-modal__remote-placeholder"
         >
-          <Avatar
-            :url="
-              participant.avatarUrl
-                ? `${config.CHAT_PATH_TO_FILE_CDN}/${participant.avatarUrl}`
-                : ''
-            "
+          <CachedAvatar
+            :path="participant.avatarUrl"
             :alt="participant.name"
             class="call-modal__avatar"
             :initials="participant.initials"
@@ -104,14 +100,13 @@
 </template>
 
 <script setup lang="ts">
-import { Avatar, Icon, IconNameEnum } from '@pksep/yui';
-import { getConfig } from '../../services/useConfig';
+import { Icon, IconNameEnum } from '@pksep/yui';
 import HandRaiseIcon from './UI/HandRaiseIcon.vue';
 import MicDisableIcon from './UI/MicDisableIcon.vue';
 import MicIcon from './UI/MicIcon.vue';
 import ScreenShareParticipantsStrip from './ScreenShareParticipantsStrip.vue';
+import CachedAvatar from '../UI/CachedAvatar.vue';
 
-const config = getConfig();
 const emit = defineEmits<{
   (event: 'select-participant', identity: string | null): void;
 }>();

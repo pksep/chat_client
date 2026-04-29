@@ -4,8 +4,8 @@
     @contextmenu="handleClick"
     :data-testid="`${dataTestid}-UserProfile-Container`"
   >
-    <Avatar
-      :url="`${config.CHAT_PATH_TO_FILE_CDN}/${props.topic.group?.avatarUrl}`"
+    <CachedAvatar
+      :path="props.topic.group?.avatarUrl"
       :alt="props.topic.group?.avatarUrl || 'group-avatar'"
       class="user-profile__avatar"
       :initials="props.topic.group?.title || 'G'"
@@ -30,19 +30,17 @@
 </template>
 
 <script lang="ts" setup>
-import { Avatar } from '@pksep/yui';
 import { IGroupProfileProps } from '../interfaces/interfaces';
-import { getConfig } from '../../services/useConfig';
 import { getHasWebsocketConnection } from '../../services/useChat';
 import { computed } from 'vue';
 import WaitConnection from '../UI/WaitConnection.vue';
+import CachedAvatar from '../UI/CachedAvatar.vue';
 
 const props = withDefaults(defineProps<IGroupProfileProps>(), {
   dataTestid: 'GroupProfile',
   topic: () => null
 });
 
-const config = getConfig();
 const isWaitingConnection = computed(() => !getHasWebsocketConnection());
 
 defineOptions({

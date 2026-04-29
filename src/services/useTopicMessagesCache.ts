@@ -2,7 +2,7 @@ import type { IMessage } from '../components/interfaces/interfaces';
 import { authedUser, getChatAuthSession } from '../composables/useAuth';
 
 const DB_NAME = 'chat-topic-messages-db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const STORE_NAME = 'topicMessages';
 const PENDING_UPLOADS_STORE_NAME = 'pendingUploads';
 const PENDING_UPLOAD_META_STORE_NAME = 'pendingUploadMeta';
@@ -12,6 +12,7 @@ const DATE_KEYS = new Set([
   'deletedAt',
   'lastOnline'
 ]);
+let dbPromise: Promise<IDBDatabase | null> | null = null;
 
 interface CachedTopicMessages {
   cacheKey: string;
@@ -124,39 +125,71 @@ const getMessageTimestamp = (message: IMessage): number => {
   return 0;
 };
 
+const parseMessageEx = (
+  message: Pick<IMessage, 'ex'>
+): Record<string, unknown> | null => {
+  if (!message.ex) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(message.ex);
+  } catch {
+    return null;
+  }
+};
+
+const getMessageStableKey = (message: IMessage): string | null => {
+  if (!message?.id) {
+    return null;
+  }
+
+  const clientId = parseMessageEx(message)?.clientId;
+
+  if (typeof clientId === 'string' && clientId.length > 0) {
+    return `client:${clientId}`;
+  }
+
+  return `id:${message.id}`;
+};
+
 const mergeCachedMessages = (
   existingMessages: IMessage[],
   incomingMessages: IMessage[]
 ): IMessage[] => {
-  const mergedById = new Map<string, IMessage>();
+  const mergedByKey = new Map<string, IMessage>();
 
   existingMessages.forEach(message => {
-    if (message?.id) {
-      mergedById.set(message.id, message);
+    const stableKey = getMessageStableKey(message);
+
+    if (stableKey) {
+      mergedByKey.set(stableKey, message);
     }
   });
 
   incomingMessages.forEach(message => {
-    if (message?.id) {
-      const existingMessage = mergedById.get(message.id);
+    const stableKey = getMessageStableKey(message);
 
-      if (!existingMessage) {
-        mergedById.set(message.id, message);
-        return;
-      }
+    if (!stableKey) {
+      return;
+    }
 
-      if (
-        getMessageTimestamp(message) >= getMessageTimestamp(existingMessage)
-      ) {
-        mergedById.set(message.id, {
-          ...existingMessage,
-          ...message
-        });
-      }
+    const existingMessage = mergedByKey.get(stableKey);
+
+    if (!existingMessage) {
+      mergedByKey.set(stableKey, message);
+      return;
+    }
+
+    if (getMessageTimestamp(message) >= getMessageTimestamp(existingMessage)) {
+      mergedByKey.set(stableKey, {
+        ...existingMessage,
+        ...message
+      });
     }
   });
 
-  return Array.from(mergedById.values()).sort(
+  return Array.from(mergedByKey.values()).sort(
     (left, right) => getMessageTimestamp(left) - getMessageTimestamp(right)
   );
 };
@@ -166,7 +199,11 @@ const openDb = async (): Promise<IDBDatabase | null> => {
     return null;
   }
 
-  return new Promise((resolve, reject) => {
+  if (dbPromise) {
+    return dbPromise;
+  }
+
+  dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onupgradeneeded = () => {
@@ -189,9 +226,21 @@ const openDb = async (): Promise<IDBDatabase | null> => {
       }
     };
 
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      db.onversionchange = () => {
+        db.close();
+        dbPromise = null;
+      };
+      resolve(db);
+    };
+    request.onerror = () => {
+      dbPromise = null;
+      reject(request.error);
+    };
   });
+
+  return dbPromise;
 };
 
 export const loadCachedTopicMessages = async (
@@ -224,7 +273,9 @@ export const loadCachedTopicMessages = async (
           return;
         }
 
-        resolve(deserializeValue(result.messages) as IMessage[]);
+        resolve(
+          mergeCachedMessages([], deserializeValue(result.messages) as IMessage[])
+        );
       };
       request.onerror = () => reject(request.error);
     });
@@ -234,9 +285,8 @@ export const loadCachedTopicMessages = async (
   }
 };
 
-export const saveCachedTopicMessages = async (
+export const clearCachedTopicMessages = async (
   topicId: string,
-  messages: IMessage[],
   userId = getResolvedUserId()
 ): Promise<void> => {
   if (!topicId || !userId) {
@@ -251,34 +301,17 @@ export const saveCachedTopicMessages = async (
     }
 
     const cacheKey = getCacheKey(topicId, userId);
-    const existingMessages = await loadCachedTopicMessages(topicId, userId);
-    const mergedMessages =
-      messages.length > 0
-        ? mergeCachedMessages(existingMessages, messages)
-        : existingMessages;
-
-    if (mergedMessages.length === 0) {
-      return;
-    }
-
-    const payload: CachedTopicMessages = {
-      cacheKey,
-      topicId,
-      userId,
-      messages: serializeValue(mergedMessages) as IMessage[],
-      updatedAt: new Date().toISOString()
-    };
 
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
-      const request = store.put(payload);
+      const request = store.delete(cacheKey);
 
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
   } catch (error) {
-    console.warn('Failed to save cached topic messages:', error);
+    console.warn('Failed to clear cached topic messages:', error);
   }
 };
 

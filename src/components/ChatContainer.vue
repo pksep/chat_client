@@ -1,15 +1,5 @@
 <template>
-  <template v-if="state.isLoading">
-    <Modal
-      :open="state.isLoading"
-      position="center"
-      width="150px"
-      height="160px"
-    >
-      <Loader :dataTestid="`${props.dataTestid}-ChatContainer-Loading`" />
-    </Modal>
-  </template>
-  <div v-if="appMode" class="chat_container_alert">{{ appMode }}</div>
+  <div v-if="!state.isLoading && appMode" class="chat_container_alert">{{ appMode }}</div>
   <main
     id="chat-container-image"
     :class="chatContainerClasses"

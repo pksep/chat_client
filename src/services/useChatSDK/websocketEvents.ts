@@ -1,7 +1,24 @@
 import { Message, Topic, User, Group, Reaction } from '@pksep/zod-shared-chat';
 import { IMedia, ITopic } from 'src/components/interfaces/interfaces';
 
+export interface PtsMeta {
+  eventId: string;
+  pts: string;
+  topicId: string;
+}
+
+export interface SyncReplayEvent {
+  eventId: string;
+  pts: string;
+  topicId: string;
+  eventType: string;
+  payload: Record<string, any>;
+  createdAt?: Date | string;
+}
+
 export enum WebSocketEventType {
+  SYNC_STATE = 'syncState',
+  SYNC_REPLAY = 'syncReplay',
   JOIN_TOPIC = 'joinTopic',
   LEAVE_TOPIC = 'leaveTopic',
   SEND_MESSAGE = 'sendMessage',
@@ -51,6 +68,12 @@ export enum WebSocketEventType {
 }
 
 export interface WebSocketEventPayloads {
+  [WebSocketEventType.SYNC_STATE]: { pts?: string };
+  [WebSocketEventType.SYNC_REPLAY]: {
+    fromPts?: string | null;
+    toPts?: string | null;
+    events: SyncReplayEvent[];
+  };
   [WebSocketEventType.JOIN_TOPIC]: { topicId: string };
   [WebSocketEventType.LEAVE_TOPIC]: { topicId: string };
   [WebSocketEventType.SEND_MESSAGE]: {
@@ -71,11 +94,13 @@ export interface WebSocketEventPayloads {
     data: Message;
     type: 'NEW' | 'CHANGE' | 'DELETE' | 'PIN';
     messageId: string;
+    ptsMeta?: PtsMeta;
   };
   [WebSocketEventType.READ_MESSAGE]: {
     messageIds: string[];
     topicId: string;
     userId?: string;
+    ptsMeta?: PtsMeta;
   };
   [WebSocketEventType.NEW_MESSAGE]: Message;
   [WebSocketEventType.EDIT_MESSAGE]: { messageId: string; text: string };
@@ -93,6 +118,7 @@ export interface WebSocketEventPayloads {
     reactionId?: string;
     topicId: string;
     reaction?: Reaction;
+    ptsMeta?: PtsMeta;
   };
   [WebSocketEventType.MESSAGE_PINNED]: { messageId: string; isPin: boolean };
   [WebSocketEventType.READ_MESSAGES]: { messageIds: string[]; topicId: string };
@@ -111,7 +137,7 @@ export interface WebSocketEventPayloads {
   [WebSocketEventType.MEMBER_LEFT]: { groupId: string; userId: string };
   [WebSocketEventType.USER_JOINED]: User;
   [WebSocketEventType.USER_LEFT]: User;
-  [WebSocketEventType.USER_UPDATED]: User;
+  [WebSocketEventType.USER_UPDATED]: User & { ptsMeta?: PtsMeta };
   [WebSocketEventType.CONNECTED]: null;
   [WebSocketEventType.DISCONNECTED]: null;
   [WebSocketEventType.AUTHENTICATED]: { userId: string };
@@ -131,6 +157,7 @@ export interface WebSocketEventPayloads {
     data: ITopic;
     type: 'CREATE' | 'UPDATE';
     topicId: string;
+    ptsMeta?: PtsMeta;
   };
   [WebSocketEventType.TOGGLE_PRESENCE]: { isActive: boolean };
   [WebSocketEventType.ACTIVE_CALLS]: {

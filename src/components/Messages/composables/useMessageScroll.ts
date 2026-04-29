@@ -11,17 +11,20 @@ import {
 import { useScrollAnchor } from './useScrollAnchor';
 import {
   getCanSendReadReceipts,
-  getIsWebsocketConnecting,
   markAsRead,
   consumeBufferedIncomingMessagesForTopic
 } from '../../../services/useChat';
 import {
   fetchMessagesForTopic,
+  getFullMessagesByTopicId,
   getMessagesByTopicId,
   hydrateMessagesFromCache,
   mergeMessagesForTopic
 } from '../../../services/useMessages';
-import { previewTopicReadMessages } from '../../../composables/useTopics';
+import {
+  getSelectedTopic,
+  previewTopicReadMessages
+} from '../../../composables/useTopics';
 import { clearTopicNotifications } from '../../../services/useNotificationNavigation';
 import type { IMessage } from '../../interfaces/interfaces';
 
@@ -340,6 +343,7 @@ export function useMessageScroll(
     if (!el) return;
 
     scrollAnchor.onScroll();
+    schedulePersistScrollMeta();
 
     const { scrollTop, scrollHeight, clientHeight } = el;
     const maxScroll = Math.max(0, scrollHeight - clientHeight);
@@ -380,19 +384,17 @@ export function useMessageScroll(
     ) {
       isScrollLoading = true;
 
-      if (!getIsWebsocketConnecting()) {
-        const lastMessageId = state.messages[0]?.id;
-        const result = await fetchMessagesForTopic(route.value.id, {
-          lastMessageId,
-          skipSave: true
-        });
-        hasOldMessage = result.length > 0;
+      const lastMessageId = state.messages[0]?.id;
+      const result = await fetchMessagesForTopic(route.value.id, {
+        lastMessageId,
+        skipSave: true
+      });
+      hasOldMessage = result.length > 0;
 
-        if (result.length > 0) {
-          mergeMessagesForTopic(route.value.id, result, 'prepend', {
-            syncLastMessage: false
-          });
-        }
+      if (result.length > 0) {
+        mergeMessagesForTopic(route.value.id, result, 'prepend', {
+          syncLastMessage: false
+        });
       }
 
       isScrollLoading = false;
@@ -403,12 +405,19 @@ export function useMessageScroll(
     ) {
       isScrollLoading = true;
 
-      if (!getIsWebsocketConnecting()) {
+      const lastMessage = state.messages[state.messages.length - 1];
+      const latestKnownTopicMessageId =
+        getSelectedTopic(route.value.id)?.lastMessage?.id || null;
+      const shouldFetchNewerRange =
+        !!lastMessage?.id &&
+        !!latestKnownTopicMessageId &&
+        lastMessage.id !== latestKnownTopicMessageId;
+
+      if (shouldFetchNewerRange) {
         preserveViewportForDownPagination = true;
 
-        const lastMessage = state.messages[state.messages.length - 1];
         const result = await fetchMessagesForTopic(route.value.id, {
-          afterMessageId: lastMessage?.id,
+          afterMessageId: lastMessage.id,
           skipSave: true
         });
         hasNewMessage = result.length > 0;
@@ -424,55 +433,67 @@ export function useMessageScroll(
     }
   };
 
-  const scrollToBottom = () => {
+  const scrollToBottom = (opts?: {
+    preferUnreadMarker?: boolean;
+    smooth?: boolean;
+  }) => {
     if (!chatWrapperRef.value) return;
 
     isShowScrollToBottomButton.value = false;
 
-    const unreadRef = messageListUserItemsRef.value?.unreadMessageStartRef;
-    if (unreadRef?.length > 0) {
-      const firstUnread = unreadRef[0];
-      const container = chatWrapperRef.value;
+    if (opts?.preferUnreadMarker !== false) {
+      const unreadRef = messageListUserItemsRef.value?.unreadMessageStartRef;
+      if (unreadRef?.length > 0) {
+        const firstUnread = unreadRef[0];
+        const container = chatWrapperRef.value;
 
-      if (container && firstUnread) {
-        container.scrollTop = firstUnread.offsetTop - container.offsetTop;
-        requestAnimationFrame(() => {
-          void flushQueuedReadMessages();
-          flushVisibleUnreadMessages();
-        });
-      }
+        if (container && firstUnread) {
+          container.scrollTop = firstUnread.offsetTop - container.offsetTop;
+          requestAnimationFrame(() => {
+            void flushQueuedReadMessages();
+            flushVisibleUnreadMessages();
+          });
+          schedulePersistScrollMeta();
+        }
 
-      return;
-    }
-
-    if (!state.hideUnreadMarker && state.unreadMarkerMessageId) {
-      const currentMarkerKey = route.value?.id
-        ? `${route.value.id}:${state.unreadMarkerMessageId}`
-        : state.unreadMarkerMessageId;
-
-      if (scrolledUnreadMarkerKey.value === currentMarkerKey) {
         return;
       }
 
-      const unreadMessageElement = chatWrapperRef.value.querySelector(
-        `[data-message-id="${state.unreadMarkerMessageId}"]`
-      );
+      if (!state.hideUnreadMarker && state.unreadMarkerMessageId) {
+        const currentMarkerKey = route.value?.id
+          ? `${route.value.id}:${state.unreadMarkerMessageId}`
+          : state.unreadMarkerMessageId;
 
-      if (unreadMessageElement instanceof HTMLElement) {
-        scrolledUnreadMarkerKey.value = currentMarkerKey;
-        unreadMessageElement.scrollIntoView({
-          block: 'start',
-          behavior: 'auto'
-        });
-        requestAnimationFrame(() => {
-          void flushQueuedReadMessages();
-          flushVisibleUnreadMessages();
-        });
-        return;
+        if (scrolledUnreadMarkerKey.value === currentMarkerKey) {
+          return;
+        }
+
+        const unreadMessageElement = chatWrapperRef.value.querySelector(
+          `[data-message-id="${state.unreadMarkerMessageId}"]`
+        );
+
+        if (unreadMessageElement instanceof HTMLElement) {
+          scrolledUnreadMarkerKey.value = currentMarkerKey;
+          unreadMessageElement.scrollIntoView({
+            block: 'start',
+            behavior: 'auto'
+          });
+          requestAnimationFrame(() => {
+            void flushQueuedReadMessages();
+            flushVisibleUnreadMessages();
+          });
+          schedulePersistScrollMeta();
+          return;
+        }
       }
     }
 
-    scrollAnchor.scrollToBottomInstant();
+    if (opts?.smooth) {
+      scrollAnchor.scrollToBottomSmooth();
+    } else {
+      scrollAnchor.scrollToBottomInstant();
+    }
+    schedulePersistScrollMeta();
 
     requestAnimationFrame(() => {
       void flushQueuedReadMessages();
@@ -481,14 +502,13 @@ export function useMessageScroll(
   };
 
   const handleScrollToButton = async () => {
-    scrollAnchor.setViewportMode('live');
-    scrollAnchor.scrollToBottomInstant();
+    scrollAnchor.setViewportMode('live', { pin: false });
     isShowScrollToBottomButton.value = false;
+    hasOldMessage = true;
+    hasNewMessage = true;
 
     if (getMessagesByTopicId(route.value.id).length === 0) {
       await hydrateMessagesFromCache(route.value.id);
-      await nextTick();
-      scrollAnchor.scrollToBottomInstant();
     }
 
     const bufferedIncomingMessages = consumeBufferedIncomingMessagesForTopic(
@@ -504,22 +524,77 @@ export function useMessageScroll(
           syncLastMessage: false
         }
       );
-      await nextTick();
-      scrollAnchor.scrollToBottomInstant();
     }
 
+    const localLatestMessages = getFullMessagesByTopicId(route.value.id).slice(
+      -50
+    );
+
+    if (localLatestMessages.length > 0) {
+      scrollAnchor.prepareJumpMutation();
+      mergeMessagesForTopic(route.value.id, localLatestMessages, 'replace', {
+        syncLastMessage: false,
+        windowMode: 'latest'
+      });
+    }
+
+    await nextTick();
+    await scrollAnchor.scrollToBottomSmooth();
+    schedulePersistScrollMeta();
     markAllVisibleAsRead();
 
-    void (async () => {
-      await fetchMessagesForTopic(route.value.id, {
-        limit: 50,
-        syncLastMessage: false
+    const latestKnownTopicMessageId =
+      getSelectedTopic(route.value.id)?.lastMessage?.id || null;
+    const localLatestMessageId =
+      getFullMessagesByTopicId(route.value.id).at(-1)?.id || null;
+    const shouldForceNetworkLatest =
+      !!latestKnownTopicMessageId &&
+      latestKnownTopicMessageId !== localLatestMessageId;
+
+    const latestMessages = await fetchMessagesForTopic(route.value.id, {
+      limit: 50,
+      syncLastMessage: false,
+      skipSave: true,
+      forceRefresh: true,
+      forceNetwork: shouldForceNetworkLatest
+    });
+
+    if (latestMessages.length > 0) {
+      mergeMessagesForTopic(route.value.id, latestMessages, 'append', {
+        syncLastMessage: false,
+        windowMode: 'latest'
       });
-      await nextTick();
-      scrollAnchor.scrollToBottomInstant();
-      isShowScrollToBottomButton.value = false;
-      markAllVisibleAsRead();
-    })();
+    }
+
+    const bufferedMessagesAfterFetch = consumeBufferedIncomingMessagesForTopic(
+      route.value.id
+    );
+
+    if (bufferedMessagesAfterFetch.length > 0) {
+      mergeMessagesForTopic(
+        route.value.id,
+        bufferedMessagesAfterFetch,
+        'append',
+        {
+          syncLastMessage: false,
+          windowMode: 'latest'
+        }
+      );
+    }
+
+    await nextTick();
+    await scrollAnchor.scrollToBottomSmooth();
+    isShowScrollToBottomButton.value = false;
+    markAllVisibleAsRead();
+    schedulePersistScrollMeta();
+  };
+
+  const schedulePersistScrollMeta = () => {
+    return;
+  };
+
+  const restoreShadowScrollState = async (): Promise<boolean> => {
+    return false;
   };
 
   watch(
@@ -528,9 +603,7 @@ export function useMessageScroll(
       if (route.value && route.value.type === 'AI') return;
 
       if (oldLength === 0 && newLength > 0) {
-        if (!getIsWebsocketConnecting()) {
-          scrollState.shouldAutoScroll = true;
-        }
+        scrollState.shouldAutoScroll = true;
       }
     },
     { immediate: true }
@@ -563,16 +636,20 @@ export function useMessageScroll(
 
       const oldSet = new Set(oldIds);
       const hasNew = newIds.some(id => !oldSet.has(id));
+      const firstOldIndex = oldIds.length > 0 ? newIds.indexOf(oldIds[0]) : -1;
+      const lastOldIndex =
+        oldIds.length > 0 ? newIds.indexOf(oldIds[oldIds.length - 1]) : -1;
       const isPrepend =
         hasNew &&
         newIds.length > oldIds.length &&
         oldIds.length > 0 &&
-        newIds.slice(-oldIds.length).join(',') === oldIds.join(',');
+        firstOldIndex > 0;
       const isAppend =
         hasNew &&
         newIds.length > oldIds.length &&
         oldIds.length > 0 &&
-        newIds.slice(0, oldIds.length).join(',') === oldIds.join(',');
+        lastOldIndex >= 0 &&
+        lastOldIndex < newIds.length - 1;
 
       const reason = isPrepend ? 'prepend' : isAppend ? 'append' : 'replace';
       const mutation = scrollAnchor.beginViewportMutation(reason, {
@@ -674,6 +751,7 @@ export function useMessageScroll(
     suspendAutoRead,
     suspendHistoryFetch,
     setReadReceiptsEnabled,
+    restoreShadowScrollState,
     scrollAnchor
   };
 }

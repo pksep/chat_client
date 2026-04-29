@@ -3,12 +3,13 @@ import { AIMessage } from '../types/messages';
 type Message = AIMessage;
 
 const DB_NAME = 'chat-messages-db';
+const DB_VERSION = 2;
 const STORE_NAME = 'messages';
 
 class ChatDB {
   static async openDB(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, 1);
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
       request.onupgradeneeded = () => {
         const db = request.result;
         if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -203,9 +204,6 @@ const getLastSessionId = async (): Promise<string | null> => {
 const clearAllData = async (): Promise<void> => {
   try {
     await ChatDB.clear();
-    indexedDB
-      .databases()
-      .then(dbs => dbs.forEach(db => indexedDB.deleteDatabase(db.name)));
   } catch (error) {
     console.error('Error clearing data:', error);
     throw error;

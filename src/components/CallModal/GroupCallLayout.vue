@@ -47,12 +47,8 @@
         v-else-if="focusedParticipant"
         class="call-modal__remote-placeholder"
       >
-        <Avatar
-          :url="
-            focusedParticipant.avatarUrl
-              ? `${config.CHAT_PATH_TO_FILE_CDN}/${focusedParticipant.avatarUrl}`
-              : ''
-          "
+        <CachedAvatar
+          :path="focusedParticipant.avatarUrl"
           :alt="focusedParticipant.name"
           class="call-modal__avatar"
           :initials="focusedParticipant.initials"
@@ -75,16 +71,14 @@
 </template>
 
 <script setup lang="ts">
-import { Avatar } from '@pksep/yui';
-import { getConfig } from '../../services/useConfig';
 import CallParticipantsPanel from './CallParticipantsPanel.vue';
 import FullscreenIcon from './UI/FullscreenIcon.vue';
 import HandRaiseIcon from './UI/HandRaiseIcon.vue';
 import MicDisableIcon from './UI/MicDisableIcon.vue';
 import MicIcon from './UI/MicIcon.vue';
 import SwitchCameraIcon from './UI/SwitchCameraIcon.vue';
+import CachedAvatar from '../UI/CachedAvatar.vue';
 
-const config = getConfig();
 const emit = defineEmits<{
   (event: 'select-participant', identity: string | null): void;
   (event: 'open-video-overlay'): void;
