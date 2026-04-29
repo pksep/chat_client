@@ -91,8 +91,9 @@ const mountApp = async () => {
         }
       };
 
-      (el as HTMLElement & { __clickOutside__?: typeof handler }).__clickOutside__ =
-        handler;
+      (
+        el as HTMLElement & { __clickOutside__?: typeof handler }
+      ).__clickOutside__ = handler;
 
       document.addEventListener('mousedown', handler);
       document.addEventListener('touchstart', handler);
@@ -108,9 +109,8 @@ const mountApp = async () => {
 
       document.removeEventListener('mousedown', handler);
       document.removeEventListener('touchstart', handler);
-      delete (
-        el as HTMLElement & { __clickOutside__?: (event: Event) => void }
-      ).__clickOutside__;
+      delete (el as HTMLElement & { __clickOutside__?: (event: Event) => void })
+        .__clickOutside__;
     }
   });
 

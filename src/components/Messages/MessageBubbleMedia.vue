@@ -113,8 +113,13 @@ import type { IMedia } from '../interfaces/interfaces';
 const props = defineProps<IMessageBubbleProps>();
 defineEmits(['navigate-message', 'set-slider']);
 
-const { getFullMediaPath, handleDragStart, primeMediaCache, isMediaPathReady, EMPTY_MEDIA_SRC } =
-  useMessageMedia();
+const {
+  getFullMediaPath,
+  handleDragStart,
+  primeMediaCache,
+  isMediaPathReady,
+  EMPTY_MEDIA_SRC
+} = useMessageMedia();
 
 const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);

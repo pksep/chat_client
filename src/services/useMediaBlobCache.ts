@@ -151,7 +151,10 @@ const deleteRecord = async (path: string): Promise<void> => {
 
 const ensureCacheWithinLimit = async (): Promise<void> => {
   const records = await getAllRecords();
-  const totalSize = records.reduce((sum, record) => sum + (record.size || 0), 0);
+  const totalSize = records.reduce(
+    (sum, record) => sum + (record.size || 0),
+    0
+  );
 
   if (totalSize <= MAX_CACHE_BYTES) {
     return;
@@ -184,7 +187,9 @@ const buildMediaSourceUrl = (path: string): string => {
   return `${config.CHAT_PATH_TO_FILE_CDN}/${path}`;
 };
 
-export const getCachedMediaObjectUrl = (path?: string | null): string | null => {
+export const getCachedMediaObjectUrl = (
+  path?: string | null
+): string | null => {
   if (!path) {
     return null;
   }

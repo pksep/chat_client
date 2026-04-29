@@ -47,27 +47,6 @@ const hasIndexedDb = () =>
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const serializeValue = (value: unknown): unknown => {
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(item => serializeValue(item));
-  }
-
-  if (isPlainObject(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, nestedValue]) => [
-        key,
-        serializeValue(nestedValue)
-      ])
-    );
-  }
-
-  return value;
-};
-
 const deserializeValue = (value: unknown, key?: string): unknown => {
   if (typeof value === 'string' && key && DATE_KEYS.has(key)) {
     return new Date(value);
@@ -274,7 +253,10 @@ export const loadCachedTopicMessages = async (
         }
 
         resolve(
-          mergeCachedMessages([], deserializeValue(result.messages) as IMessage[])
+          mergeCachedMessages(
+            [],
+            deserializeValue(result.messages) as IMessage[]
+          )
         );
       };
       request.onerror = () => reject(request.error);

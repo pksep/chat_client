@@ -104,7 +104,6 @@ import {
 import MessageListAIItems from './Messages/MessageListAIItems.vue';
 import MessageListUserItems from './Messages/MessageListUserItems.vue';
 import MessageListInput from './Messages/MessageListInput.vue';
-import Loading from './Loading.vue';
 import {
   MessageTypeEnum,
   PushNotification,
@@ -379,7 +378,9 @@ const hydrateMessageContextFromMemory = async (
     return [];
   }
 
-  const targetIndex = fullMessages.findIndex(message => message.id === messageId);
+  const targetIndex = fullMessages.findIndex(
+    message => message.id === messageId
+  );
 
   if (targetIndex < 0) {
     return [];

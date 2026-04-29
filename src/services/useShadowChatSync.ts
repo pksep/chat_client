@@ -328,7 +328,9 @@ const pruneShadowEventLog = async (userId: string): Promise<void> => {
         const request = store.getAll();
 
         request.onsuccess = () =>
-          resolve((request.result as ShadowChatEventRecord[] | undefined) || []);
+          resolve(
+            (request.result as ShadowChatEventRecord[] | undefined) || []
+          );
         request.onerror = () => reject(request.error);
       }
     );
@@ -606,8 +608,7 @@ export const appendShadowSyncMetaList = async <T>(
   }
 
   try {
-    const existingItems =
-      (await loadShadowSyncMeta<T[]>(key, userId)) || [];
+    const existingItems = (await loadShadowSyncMeta<T[]>(key, userId)) || [];
     const nextItems = [...existingItems, value].slice(-(opts?.limit || 40));
 
     await saveShadowSyncMeta(key, nextItems, userId);
@@ -660,20 +661,24 @@ const mergeShadowLoadedRanges = (
     right: ShadowLoadedRange
   ): ShadowLoadedRange => ({
     fromMessageId:
-      sortRangeBoundary(left.fromCreatedAt) <= sortRangeBoundary(right.fromCreatedAt)
+      sortRangeBoundary(left.fromCreatedAt) <=
+      sortRangeBoundary(right.fromCreatedAt)
         ? left.fromMessageId
         : right.fromMessageId,
     toMessageId:
-      sortRangeBoundary(left.toCreatedAt) >= sortRangeBoundary(right.toCreatedAt)
+      sortRangeBoundary(left.toCreatedAt) >=
+      sortRangeBoundary(right.toCreatedAt)
         ? left.toMessageId
         : right.toMessageId,
-    fromCreatedAt: [left.fromCreatedAt, right.fromCreatedAt]
-      .filter((value): value is string => !!value)
-      .sort()[0] || null,
-    toCreatedAt: [left.toCreatedAt, right.toCreatedAt]
-      .filter((value): value is string => !!value)
-      .sort()
-      .at(-1) || null,
+    fromCreatedAt:
+      [left.fromCreatedAt, right.fromCreatedAt]
+        .filter((value): value is string => !!value)
+        .sort()[0] || null,
+    toCreatedAt:
+      [left.toCreatedAt, right.toCreatedAt]
+        .filter((value): value is string => !!value)
+        .sort()
+        .at(-1) || null,
     updatedAt:
       [left.updatedAt, right.updatedAt]
         .filter((value): value is string => !!value)
@@ -718,8 +723,7 @@ const isMessageInRange = (
 const getMessagesForRange = (
   messages: IMessage[],
   range: ShadowLoadedRange
-): IMessage[] =>
-  messages.filter(message => isMessageInRange(message, range));
+): IMessage[] => messages.filter(message => isMessageInRange(message, range));
 
 const isTimestampInRange = (
   timestamp: number,
@@ -823,10 +827,12 @@ export const loadShadowLoadedRanges = async (
     return [];
   }
 
-  return (await loadShadowSyncMeta<ShadowLoadedRange[]>(
-    `ranges:${topicId}`,
-    userId
-  )) || [];
+  return (
+    (await loadShadowSyncMeta<ShadowLoadedRange[]>(
+      `ranges:${topicId}`,
+      userId
+    )) || []
+  );
 };
 
 export const getCachedShadowLoadedRanges = (
@@ -877,7 +883,12 @@ export const loadShadowTopicContext = async (
   opts?: ShadowTopicContextOptions,
   userId = getResolvedUserId()
 ): Promise<IMessage[]> => {
-  const resolution = await resolveShadowTopicContext(topicId, messageId, opts, userId);
+  const resolution = await resolveShadowTopicContext(
+    topicId,
+    messageId,
+    opts,
+    userId
+  );
   return resolution.messages;
 };
 
@@ -909,7 +920,9 @@ export const resolveShadowTopicContext = async (
   const sortedMessages = [...messages].sort(
     (left, right) => getMessageTimestamp(left) - getMessageTimestamp(right)
   );
-  const targetMessage = sortedMessages.find(message => message.id === messageId);
+  const targetMessage = sortedMessages.find(
+    message => message.id === messageId
+  );
 
   if (!targetMessage) {
     return {
@@ -922,7 +935,9 @@ export const resolveShadowTopicContext = async (
   const rangeMessages = containingRange
     ? getMessagesForRange(sortedMessages, containingRange)
     : sortedMessages;
-  const cursorIndex = rangeMessages.findIndex(message => message.id === messageId);
+  const cursorIndex = rangeMessages.findIndex(
+    message => message.id === messageId
+  );
 
   if (cursorIndex < 0) {
     return {
@@ -997,7 +1012,9 @@ export const resolveShadowTopicPage = async (
   );
 
   if (opts?.lastMessageId) {
-    const cursorMessage = sortedMessages.find(message => message.id === opts.lastMessageId);
+    const cursorMessage = sortedMessages.find(
+      message => message.id === opts.lastMessageId
+    );
 
     if (!cursorMessage) {
       return {
@@ -1071,7 +1088,8 @@ export const resolveShadowTopicPage = async (
         message => message.id === opts.afterMessageId
       );
       const snapshotPage =
-        snapshotCursorIndex >= 0 && snapshotCursorIndex < sortedMessages.length - 1
+        snapshotCursorIndex >= 0 &&
+        snapshotCursorIndex < sortedMessages.length - 1
           ? sortedMessages.slice(
               snapshotCursorIndex + 1,
               snapshotCursorIndex + 1 + limit
@@ -1097,9 +1115,11 @@ export const resolveShadowTopicPage = async (
     };
   }
 
-  const latestRange = [...ranges].sort((left, right) =>
-    (left.toCreatedAt || '').localeCompare(right.toCreatedAt || '')
-  ).at(-1);
+  const latestRange = [...ranges]
+    .sort((left, right) =>
+      (left.toCreatedAt || '').localeCompare(right.toCreatedAt || '')
+    )
+    .at(-1);
 
   if (!latestRange) {
     return {

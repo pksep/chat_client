@@ -351,8 +351,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       return;
     }
 
-    const nearTargetTop =
-      finalTop - Math.sign(delta) * smoothTailDistancePx;
+    const nearTargetTop = finalTop - Math.sign(delta) * smoothTailDistancePx;
 
     setInternalScrollLock();
     container.scrollTo({ top: nearTargetTop, behavior: 'auto' });
@@ -580,7 +579,9 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
 
     for (let frame = 0; frame < maxFrames; frame += 1) {
       await nextTick();
-      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      await new Promise<void>(resolve =>
+        requestAnimationFrame(() => resolve())
+      );
       messageElement = getElement();
 
       if (messageElement) {

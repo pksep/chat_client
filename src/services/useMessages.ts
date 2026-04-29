@@ -234,7 +234,9 @@ const clampMessagesForUi = (
   anchorMessageId?: string
 ): IMessage[] => {
   const uiWindowLimit =
-    mode === 'latest' ? INITIAL_TOPIC_WINDOW_MESSAGES : MAX_ACTIVE_TOPIC_MESSAGES;
+    mode === 'latest'
+      ? INITIAL_TOPIC_WINDOW_MESSAGES
+      : MAX_ACTIVE_TOPIC_MESSAGES;
 
   if (messages.length <= uiWindowLimit) {
     return messages;
@@ -245,16 +247,15 @@ const clampMessagesForUi = (
   }
 
   if (mode === 'around-anchor' && anchorMessageId) {
-    const anchorIndex = messages.findIndex(message => message.id === anchorMessageId);
+    const anchorIndex = messages.findIndex(
+      message => message.id === anchorMessageId
+    );
 
     if (anchorIndex >= 0) {
       const halfWindow = Math.floor(uiWindowLimit / 2);
       const startIndex = Math.max(
         0,
-        Math.min(
-          anchorIndex - halfWindow,
-          messages.length - uiWindowLimit
-        )
+        Math.min(anchorIndex - halfWindow, messages.length - uiWindowLimit)
       );
 
       return messages.slice(startIndex, startIndex + uiWindowLimit);
@@ -562,7 +563,7 @@ export const fetchMessagesForTopic = async (
     forceRefresh?: boolean;
     forceNetwork?: boolean;
   }
-  ): Promise<IMessage[]> => {
+): Promise<IMessage[]> => {
   try {
     if (!topicId) return [];
 
@@ -574,7 +575,6 @@ export const fetchMessagesForTopic = async (
       opts?.lastMessageId || opts?.afterMessageId || opts?.newMessages
     );
     const direction = getHistoryDirection(opts);
-    let shadowResolutionStatus: string | null = null;
 
     if (!navigator.onLine) {
       if (existingMessages.length > 0) {
@@ -598,7 +598,11 @@ export const fetchMessagesForTopic = async (
       return hydrateMessagesFromCache(topicId);
     }
 
-    if (!opts?.forceRefresh && !isPaginationRequest && existingMessages.length > 0) {
+    if (
+      !opts?.forceRefresh &&
+      !isPaginationRequest &&
+      existingMessages.length > 0
+    ) {
       if (!opts?.limit || existingMessages.length >= opts.limit) {
         traceHistoryResolution(topicId, {
           direction,
@@ -653,7 +657,6 @@ export const fetchMessagesForTopic = async (
         lastMessageId: opts?.lastMessageId,
         afterMessageId: opts?.afterMessageId
       });
-      shadowResolutionStatus = shadowPageResolution.status;
       const shadowMessages = shadowPageResolution.messages;
       const normalizedShadowMessages = await applyShadowReadStateToMessages(
         topicId,
@@ -680,7 +683,11 @@ export const fetchMessagesForTopic = async (
         });
         void saveShadowLoadedRange(
           topicId,
-          getRangeMessagesForPersistence(topicId, normalizedShadowMessages, opts)
+          getRangeMessagesForPersistence(
+            topicId,
+            normalizedShadowMessages,
+            opts
+          )
         );
 
         if (!opts?.skipSave) {
@@ -758,11 +765,15 @@ export const fetchMessagesForTopic = async (
       const existingVisible = getMessagesByTopicId(topicId);
       const visibleMessages = opts?.lastMessageId
         ? Array.from(
-            new Map([...messages, ...existingVisible].map(m => [m.id, m])).values()
+            new Map(
+              [...messages, ...existingVisible].map(m => [m.id, m])
+            ).values()
           )
         : opts?.afterMessageId
           ? Array.from(
-              new Map([...existingVisible, ...messages].map(m => [m.id, m])).values()
+              new Map(
+                [...existingVisible, ...messages].map(m => [m.id, m])
+              ).values()
             )
           : messages;
 
@@ -1054,16 +1065,17 @@ export const deleteMessageFromLocal = (
   topicId: string,
   messageId: string
 ): void => {
-  updateTopicMessageStores(
-    topicId,
-    messages => messages.filter(message => message.id !== messageId)
+  updateTopicMessageStores(topicId, messages =>
+    messages.filter(message => message.id !== messageId)
   );
   schedulePersistMessages(topicId);
   syncTopicUnreadState(topicId);
   syncLocalLastMessage(topicId);
   savePinnedMessagesToLocal(
     topicId,
-    getPinnedMessagesByTopicId(topicId).filter(message => message.id !== messageId)
+    getPinnedMessagesByTopicId(topicId).filter(
+      message => message.id !== messageId
+    )
   );
 
   clearPendingUploadMessage(topicId, messageId);
@@ -1127,7 +1139,9 @@ export const changeReactionFromLocal = (
       if (action === 'removed') {
         return {
           ...msg,
-          reactions: msg.reactions.filter(reaction => reaction.id !== reactionId)
+          reactions: msg.reactions.filter(
+            reaction => reaction.id !== reactionId
+          )
         };
       }
 
@@ -1169,7 +1183,9 @@ export const saveMessagesToLocal = (
 ): void => {
   const sortedMessages = dedupeMessagesForTopic(messages).sort(compareMessages);
   const boundedMessages = clampMessagesForUi(
-    dedupeMessagesForTopic(opts?.visibleMessages || sortedMessages).sort(compareMessages),
+    dedupeMessagesForTopic(opts?.visibleMessages || sortedMessages).sort(
+      compareMessages
+    ),
     opts?.windowMode,
     opts?.anchorMessageId
   );
@@ -1281,11 +1297,22 @@ export const hydrateMessagesFromCache = async (
       syncLastMessage: false,
       windowMode: 'latest'
     });
-    void saveShadowTopicSnapshot(topicId, normalizedCachedMessages, 'local', userId, {
-      replace: true
-    });
+    void saveShadowTopicSnapshot(
+      topicId,
+      normalizedCachedMessages,
+      'local',
+      userId,
+      {
+        replace: true
+      }
+    );
     void saveShadowLoadedRange(topicId, normalizedCachedMessages, userId);
-    void syncShadowReadStateFromMessages(topicId, normalizedCachedMessages, 'local', userId);
+    void syncShadowReadStateFromMessages(
+      topicId,
+      normalizedCachedMessages,
+      'local',
+      userId
+    );
     void clearCachedTopicMessages(topicId, userId);
 
     return normalizedCachedMessages;
@@ -1313,7 +1340,10 @@ export const hydrateMessageContextFromShadow = async (
     userId
   );
 
-  if (!shadowMessages.length || !shadowMessages.some(message => message.id === messageId)) {
+  if (
+    !shadowMessages.length ||
+    !shadowMessages.some(message => message.id === messageId)
+  ) {
     return [];
   }
 
@@ -1361,11 +1391,15 @@ export const mergeMessagesForTopic = (
   const visibleCombined =
     mode === 'prepend'
       ? Array.from(
-          new Map([...messages, ...existingVisible].map(m => [m.id, m])).values()
+          new Map(
+            [...messages, ...existingVisible].map(m => [m.id, m])
+          ).values()
         )
       : mode === 'append'
         ? Array.from(
-            new Map([...existingVisible, ...messages].map(m => [m.id, m])).values()
+            new Map(
+              [...existingVisible, ...messages].map(m => [m.id, m])
+            ).values()
           )
         : messages;
   saveMessagesToLocal(topicId, unique, {

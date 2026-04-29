@@ -1,5 +1,7 @@
 <template>
-  <div v-if="!state.isLoading && appMode" class="chat_container_alert">{{ appMode }}</div>
+  <div v-if="!state.isLoading && appMode" class="chat_container_alert">
+    {{ appMode }}
+  </div>
   <main
     id="chat-container-image"
     :class="chatContainerClasses"

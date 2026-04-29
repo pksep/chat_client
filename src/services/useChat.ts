@@ -33,7 +33,6 @@ import {
   fetchMessagesForTopic,
   fetchPinnedMessagesForTopic,
   getFullMessagesByTopicId,
-  getMessagesByTopicId,
   mergeMessagesForTopic
 } from './useMessages';
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
@@ -175,10 +174,9 @@ const setupChatListeners = (): void => {
   areChatListenersBound = true;
 
   const handleIncomingSocketMessage = (message: IMessage): void => {
-    const { getSelectedTopic, updateLocalLastMessageTopic } = useTopics();
+    const { updateLocalLastMessageTopic } = useTopics();
     const isDuplicateMessage = hasMessageInTopic(message.topicId, message.id);
     const unreadCountBefore = totalUnreadCount.value;
-    const topic = getSelectedTopic(message.topicId);
     const shouldSuspendMerge =
       message.senderUserId !== currentUserId.value &&
       route.value.id === message.topicId &&

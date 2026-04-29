@@ -12,10 +12,7 @@ import {
   groups,
   updateLocalGroupInfo
 } from '../composables/useGroup';
-import {
-  getFullMessagesByTopicId,
-  getMessagesByTopicId
-} from '../services/useMessages';
+import { getFullMessagesByTopicId } from '../services/useMessages';
 import { useUrlWatcher } from './navigation';
 import { authedUser } from './useAuth';
 import {
@@ -448,10 +445,9 @@ const createTopicsApi = () => {
       : effectiveServerUnreadCount;
     topic.taggedMe =
       topic.unreadMessageCount > 0 &&
-      (shouldUseComputedUnread
-      ? computedUnreadMessages
-      : unreadMessages
-    ).some(message => message.taggedUserIds?.includes(currentUserId));
+      (shouldUseComputedUnread ? computedUnreadMessages : unreadMessages).some(
+        message => message.taggedUserIds?.includes(currentUserId)
+      );
 
     topics.value = [...topics.value];
     schedulePersistTopics();

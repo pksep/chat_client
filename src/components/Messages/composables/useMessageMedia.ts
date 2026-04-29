@@ -43,7 +43,10 @@ export function useMessageMedia() {
     return Boolean(preferredPath && getCachedMediaObjectUrl(preferredPath));
   };
 
-  const primeMediaCache = (media: IMedia, opts?: { includeOriginal?: boolean }) => {
+  const primeMediaCache = (
+    media: IMedia,
+    opts?: { includeOriginal?: boolean }
+  ) => {
     const thumbnailPath = media.thumbnailPath || media.path;
 
     if (thumbnailPath) {
