@@ -1,8 +1,7 @@
 import { getConfig } from '../../../services/useConfig';
 import {
   ensureMediaObjectUrl,
-  getCachedMediaObjectUrl,
-  prefetchMediaObjectUrl
+  getCachedMediaObjectUrl
 } from '../../../services/useMediaBlobCache';
 import type { IMedia } from '../../interfaces/interfaces';
 
@@ -75,28 +74,11 @@ export function useMessageMedia() {
       return media.localPath;
     }
 
-    const preferredPath = getPreferredMediaPath(media, isThumb);
-    const cachedObjectUrl = getCachedMediaObjectUrl(preferredPath);
-
-    if (cachedObjectUrl) {
-      setCachedObjectUrlOnMedia(media, preferredPath, cachedObjectUrl, isThumb);
-      return cachedObjectUrl;
-    }
-
-    if (preferredPath) {
-      prefetchMediaObjectUrl(preferredPath);
-      void ensureMediaObjectUrl(preferredPath).then(objectUrl => {
-        if (objectUrl) {
-          setCachedObjectUrlOnMedia(media, preferredPath, objectUrl, isThumb);
-        }
-      });
-    }
-
-    if (media.path?.endsWith('.gif')) {
+    if (media.path.endsWith('.gif')) {
       return `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`;
     }
 
-    return EMPTY_MEDIA_SRC;
+    return `${config.CHAT_PATH_TO_FILE_CDN}/${isThumb ? media.thumbnailPath : media.path}`;
   };
 
   const isSliderContentUrl = (fileUrl: string) => {
