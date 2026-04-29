@@ -13,9 +13,9 @@
     @contextmenu="handleContextMenu"
     @click="handleMessageClick"
   >
-    <Avatar
+    <CachedAvatar
       class="message__avatar"
-      :url="`${config.CHAT_PATH_TO_FILE_CDN}/${props.avatar}`"
+      :path="props.avatar"
       :alt="props.sender"
       :initials="props.sender"
       v-if="
@@ -95,8 +95,9 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Avatar, Checkbox, CheckboxCircularEnum } from '@pksep/yui';
+import { Checkbox, CheckboxCircularEnum } from '@pksep/yui';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
+import CachedAvatar from '../UI/CachedAvatar.vue';
 import {
   isOpen,
   position,
@@ -113,7 +114,6 @@ import MessageBubbleText from './MessageBubbleText.vue';
 import MessageBubbleFiles from './MessageBubbleFiles.vue';
 import MessageBubbleMedia from './MessageBubbleMedia.vue';
 import { useMessageMedia } from './composables/useMessageMedia';
-import { getConfig } from '../../services/useConfig';
 import { isMessageSelectionModeForTopic } from '../../composables/useSelectedMessages';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
@@ -138,8 +138,6 @@ const messageArticlesStyles = computed(() => ({
 const { getFullMediaPath, isSliderContentUrl } = useMessageMedia();
 
 const route = useUrlWatcher();
-
-const config = getConfig();
 
 const sliderElements = ref<{ path: string; name: string }[]>([]);
 const defaultIndexSlider = ref<number>(0);

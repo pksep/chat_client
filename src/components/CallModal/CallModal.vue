@@ -54,13 +54,9 @@
           <span v-else>{{ formattedTime }}</span>
         </p>
 
-        <Avatar
+        <CachedAvatar
           v-if="displayAvatarInfo"
-          :url="
-            displayAvatarInfo.avatarUrl
-              ? `${config.CHAT_PATH_TO_FILE_CDN}/${displayAvatarInfo.avatarUrl}`
-              : ''
-          "
+          :path="displayAvatarInfo.avatarUrl"
           :alt="displayAvatarInfo.avatarUrl || displayAvatarInfo.name"
           class="call-modal__avatar"
           :initials="displayAvatarInfo.initials"
@@ -348,11 +344,11 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { Avatar, Icon, IconNameEnum } from '@pksep/yui';
+import { Icon, IconNameEnum } from '@pksep/yui';
 import { Capacitor } from '@capacitor/core';
 import { MAX_W_MD } from '../../utils/constants';
 import { useResizeState } from '../../composables/useResizeState';
-import { getConfig } from '../../services/useConfig';
+import CachedAvatar from '../UI/CachedAvatar.vue';
 import FullscreenIcon from './UI/FullscreenIcon.vue';
 import MinimizeIcon from './UI/MinimizeIcon.vue';
 import VolumeIcon from './UI/VolumeIcon.vue';
@@ -407,7 +403,6 @@ import { TopicType } from '../../services/useChatSDK/types';
 import { currentGroup, getGroupById } from '../../composables/useGroup';
 import GroupInfoIcon from './UI/GroupInfoIcon.vue';
 
-const config = getConfig();
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const { getSelectedTopic } = useTopics();
 

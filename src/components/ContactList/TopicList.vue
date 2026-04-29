@@ -32,10 +32,10 @@
         @keydown.enter="handleClick(topic)"
         @keydown.space="handleClick(topic)"
       >
-        <Avatar
+        <CachedAvatar
           class="contact-list__avatar"
           :initials="topic.name"
-          :url="`${config.CHAT_PATH_TO_FILE_CDN}/${topic.avatarUrl}`"
+          :path="topic.avatarUrl"
           :alt="`Avatar of ${topic.name}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           is-icon
@@ -79,7 +79,7 @@
               ><div>
                 <img
                   v-if="media.type !== MediaType.File"
-                  :src="`${config.CHAT_PATH_TO_FILE_CDN}/${media.thumbnailPath || media.path}`"
+                  :src="getFullMediaPath(media)"
                 />
 
                 <MiniPlayIcon
@@ -188,9 +188,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useContextMenu } from '../../composables/useContextMenu';
-import { Avatar, Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
+import { Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
 import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
+import CachedAvatar from '../UI/CachedAvatar.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { getAuthUser } from '../../composables/useAuth';
 import { IMedia, ITopic, MessageStatusEnum } from '../interfaces/interfaces';
@@ -202,7 +203,6 @@ import {
   navigateToDialogs,
   navigateToGroup
 } from '../../composables/navigation';
-import { getConfig } from '../../services/useConfig';
 import { MediaType } from '@pksep/zod-shared-chat';
 import AttachFileIcon from '../UI/AttachFileIcon.vue';
 import MiniPlayIcon from '../UI/MiniPlayIcon.vue';
@@ -214,6 +214,7 @@ import MuteIcon from '../UI/MuteIcon.vue';
 import { TopicType } from '../../services/useChatSDK/types';
 import { getUserLastOnline } from '../../composables/useUsers';
 import { getHasWebsocketConnection } from '../../services/useChat';
+import { useMessageMedia } from '../Messages/composables/useMessageMedia';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
@@ -241,8 +242,7 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
 const authedUser = computed(() => getAuthUser());
 const isRecentlyReconnected = computed(() => getHasWebsocketConnection());
 const listRenderKey = ref(0);
-
-const config = getConfig();
+const { getFullMediaPath } = useMessageMedia();
 
 watch(isRecentlyReconnected, value => {
   if (!value) return;

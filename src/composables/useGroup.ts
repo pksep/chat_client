@@ -3,7 +3,7 @@ import { getChatSDK, getCurrentUserId } from '../services/useChat';
 import { Message, TopicSetting } from '../services/useChatSDK/types';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
 import { setTopics, topics, useTopics } from './useTopics';
-import { getMessagesByTopicId } from '../services/useMessages';
+import { getFullMessagesByTopicId } from '../services/useMessages';
 
 const currentGroup = ref<ITopic | null>(null);
 const loading = ref(false);
@@ -228,7 +228,7 @@ export const useGroup = () => {
     lastMessage?: Message
   ): void => {
     const topic = topics.value.find(topic => topic.id === topicId);
-    const messages = getMessagesByTopicId(topicId);
+    const messages = getFullMessagesByTopicId(topicId);
 
     if (topic) {
       if (lastMessage) {

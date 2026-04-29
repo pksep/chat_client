@@ -1,6 +1,6 @@
 import { nextTick, onMounted, onUnmounted, ref, type Ref } from 'vue';
 
-interface ScrollAnchor {
+export interface ScrollAnchor {
   messageId: string;
   relativeTop: number;
 }
@@ -49,6 +49,10 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
   let scrollRafId = 0;
   let revision = 0;
   let pendingMutation: PendingViewportMutation | null = null;
+  let forceNoPreserveForNextMutation = false;
+  let forceNoPinBottomForNextMutation = false;
+  const smoothTailDistancePx = 120;
+  const smoothSettleDelayMs = 220;
 
   const getContainerMetrics = () => {
     const container = containerRef.value;
@@ -229,22 +233,28 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     const atBottomBeforeMutation = updateBottomState();
     const preserveViewport =
       options?.forcePreserve ??
-      (!atBottomBeforeMutation ||
-        viewportMode.value === 'history' ||
-        viewportMode.value === 'jump');
+      (forceNoPreserveForNextMutation
+        ? false
+        : !atBottomBeforeMutation ||
+          viewportMode.value === 'history' ||
+          viewportMode.value === 'jump');
     const nextAnchor = preserveViewport
       ? captureViewportAnchor(options?.preferredMessageId)
       : null;
+    forceNoPreserveForNextMutation = false;
 
     pendingMutation = {
       anchor: nextAnchor,
       preserveViewport,
       pinToBottom:
         options?.forcePinBottom ??
-        (!preserveViewport && atBottomBeforeMutation),
+        (forceNoPinBottomForNextMutation
+          ? false
+          : !preserveViewport && atBottomBeforeMutation),
       revision,
       reason
     };
+    forceNoPinBottomForNextMutation = false;
 
     if (preserveViewport && reason !== 'jump') {
       viewportMode.value = 'history';
@@ -317,6 +327,82 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     updateBottomState();
   };
 
+  const scrollWithSmoothTail = async (
+    finalTop: number,
+    behavior: ScrollBehavior = 'smooth'
+  ): Promise<void> => {
+    const container = containerRef.value;
+
+    if (!container) {
+      return;
+    }
+
+    const currentTop = container.scrollTop;
+    const delta = finalTop - currentTop;
+
+    if (
+      behavior !== 'smooth' ||
+      !Number.isFinite(delta) ||
+      Math.abs(delta) <= smoothTailDistancePx
+    ) {
+      setInternalScrollLock();
+      container.scrollTo({ top: finalTop, behavior });
+      updateBottomState();
+      return;
+    }
+
+    const nearTargetTop = finalTop - Math.sign(delta) * smoothTailDistancePx;
+
+    setInternalScrollLock();
+    container.scrollTo({ top: nearTargetTop, behavior: 'auto' });
+
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+
+    setInternalScrollLock();
+    container.scrollTo({ top: finalTop, behavior: 'smooth' });
+    await new Promise<void>(resolve =>
+      setTimeout(() => {
+        resolve();
+      }, smoothSettleDelayMs)
+    );
+    setInternalScrollLock();
+    container.scrollTo({ top: finalTop, behavior: 'auto' });
+    updateBottomState();
+  };
+
+  const getMessageTargetTop = (
+    messageElement: HTMLElement,
+    block: ScrollLogicalPosition
+  ): number | null => {
+    const container = containerRef.value;
+
+    if (!container) {
+      return null;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const messageRect = messageElement.getBoundingClientRect();
+    const relativeTop = messageRect.top - containerRect.top;
+
+    if (block === 'start') {
+      return container.scrollTop + relativeTop;
+    }
+
+    if (block === 'end') {
+      return (
+        container.scrollTop +
+        relativeTop -
+        (container.clientHeight - messageRect.height)
+      );
+    }
+
+    return (
+      container.scrollTop +
+      relativeTop -
+      (container.clientHeight - messageRect.height) / 2
+    );
+  };
+
   const handleAppend = (smooth = true): void => {
     if (updateBottomState()) {
       keepBottomPinned(smooth ? 'smooth' : 'auto');
@@ -327,9 +413,9 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     scheduleAnchorRestore(stickyAnchor || captureViewportAnchor());
   };
 
-  const scrollToBottomSmooth = (): void => {
+  const scrollToBottomSmooth = async (): Promise<void> => {
     viewportMode.value = 'live';
-    keepBottomPinned('smooth');
+    await scrollWithSmoothTail(0, 'smooth');
   };
 
   const scrollToBottomInstant = (): void => {
@@ -467,6 +553,45 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     });
   };
 
+  const waitForMessageElement = async (
+    messageId: string,
+    maxFrames = 6
+  ): Promise<HTMLElement | null> => {
+    const getElement = () => {
+      const container = containerRef.value;
+
+      if (!container) {
+        return null;
+      }
+
+      const messageElement = container.querySelector(
+        `[data-message-id="${messageId}"]`
+      );
+
+      return messageElement instanceof HTMLElement ? messageElement : null;
+    };
+
+    let messageElement = getElement();
+
+    if (messageElement) {
+      return messageElement;
+    }
+
+    for (let frame = 0; frame < maxFrames; frame += 1) {
+      await nextTick();
+      await new Promise<void>(resolve =>
+        requestAnimationFrame(() => resolve())
+      );
+      messageElement = getElement();
+
+      if (messageElement) {
+        return messageElement;
+      }
+    }
+
+    return null;
+  };
+
   const jumpToMessage = async (
     messageId: string,
     options?: {
@@ -481,23 +606,24 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       return false;
     }
 
-    await nextTick();
+    const messageElement = await waitForMessageElement(messageId);
 
-    const messageElement = container.querySelector(
-      `[data-message-id="${messageId}"]`
-    );
-
-    if (!(messageElement instanceof HTMLElement)) {
+    if (!messageElement) {
       return false;
     }
 
     viewportMode.value = 'jump';
     stickyAnchor = null;
-    setInternalScrollLock();
-    messageElement.scrollIntoView({
-      block: options?.block || 'center',
-      behavior: options?.behavior || 'auto'
-    });
+    const finalTop = getMessageTargetTop(
+      messageElement,
+      options?.block || 'center'
+    );
+
+    if (finalTop === null) {
+      return false;
+    }
+
+    await scrollWithSmoothTail(finalTop, options?.behavior || 'auto');
 
     const highlightClassName = options?.highlightClassName;
     if (highlightClassName) {
@@ -516,12 +642,51 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     return true;
   };
 
-  const setViewportMode = (mode: ViewportMode): void => {
+  const prepareJumpMutation = (): void => {
+    viewportMode.value = 'jump';
+    stickyAnchor = null;
+    forceNoPreserveForNextMutation = true;
+    forceNoPinBottomForNextMutation = true;
+  };
+
+  const setViewportMode = (
+    mode: ViewportMode,
+    options?: { pin?: boolean }
+  ): void => {
     viewportMode.value = mode;
     if (mode === 'live') {
       stickyAnchor = null;
-      keepBottomPinned('auto');
+      if (options?.pin !== false) {
+        keepBottomPinned('auto');
+      }
     }
+  };
+
+  const restoreViewportFromAnchor = (
+    anchor: ScrollAnchor | null,
+    mode: ViewportMode = 'history'
+  ): boolean => {
+    const container = containerRef.value;
+
+    if (!container) {
+      return false;
+    }
+
+    viewportMode.value = mode;
+
+    if (!anchor) {
+      if (mode === 'live') {
+        keepBottomPinned('auto');
+        return true;
+      }
+
+      return false;
+    }
+
+    stickyAnchor = anchor;
+    scheduleAnchorRestore(anchor);
+
+    return true;
   };
 
   onMounted(() => {
@@ -555,7 +720,9 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     beginViewportMutation,
     commitViewportMutation,
     jumpToMessage,
+    prepareJumpMutation,
     setViewportMode,
+    restoreViewportFromAnchor,
     get isRestoringScroll() {
       return isRestoringScroll;
     }

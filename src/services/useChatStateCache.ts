@@ -2,6 +2,7 @@ import type { ITopic, IUser } from '../components/interfaces/interfaces';
 import { authedUser, getChatAuthSession } from '../composables/useAuth';
 
 const DB_NAME = 'chat-offline-state-db';
+const DB_VERSION = 2;
 const STORE_NAME = 'entities';
 const DATE_KEYS = new Set([
   'createdAt',
@@ -9,6 +10,7 @@ const DATE_KEYS = new Set([
   'deletedAt',
   'lastOnline'
 ]);
+let dbPromise: Promise<IDBDatabase | null> | null = null;
 
 type CacheEntityType = 'topics' | 'users';
 
@@ -79,8 +81,12 @@ const openDb = async (): Promise<IDBDatabase | null> => {
     return null;
   }
 
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
+  if (dbPromise) {
+    return dbPromise;
+  }
+
+  dbPromise = new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -90,9 +96,21 @@ const openDb = async (): Promise<IDBDatabase | null> => {
       }
     };
 
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      db.onversionchange = () => {
+        db.close();
+        dbPromise = null;
+      };
+      resolve(db);
+    };
+    request.onerror = () => {
+      dbPromise = null;
+      reject(request.error);
+    };
   });
+
+  return dbPromise;
 };
 
 const loadCachedEntity = async <T>(

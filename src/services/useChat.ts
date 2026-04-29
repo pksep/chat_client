@@ -1,6 +1,7 @@
 import { ref, shallowRef } from 'vue';
 import { ChatSDK } from './useChatSDK';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
+import type { PtsMeta } from './useChatSDK/websocketEvents';
 import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { authedUser } from '../composables/useAuth';
@@ -31,7 +32,7 @@ import {
   playNotificationSound,
   fetchMessagesForTopic,
   fetchPinnedMessagesForTopic,
-  getMessagesByTopicId,
+  getFullMessagesByTopicId,
   mergeMessagesForTopic
 } from './useMessages';
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
@@ -51,6 +52,12 @@ import { clearTopicNotifications } from './useNotificationNavigation';
 import type { MediaPreviewDimensions } from '../utils/mediaPreview';
 import { useUrlWatcher } from '../composables/navigation';
 import { RouteTypes } from '../composables/navigation/useUrlRouting';
+import {
+  loadShadowSyncMeta,
+  recordShadowChatEvent,
+  saveShadowReadState,
+  saveShadowSyncMeta
+} from './useShadowChatSync';
 
 let chatSDK: ChatSDK | null = null;
 
@@ -84,9 +91,47 @@ const hasMessageInTopic = (
     return false;
   }
 
-  return getMessagesByTopicId(topicId).some(
+  return getFullMessagesByTopicId(topicId).some(
     message => message.id === messageId
   );
+};
+
+const persistPtsMeta = (ptsMeta?: PtsMeta): void => {
+  if (!ptsMeta?.pts) {
+    return;
+  }
+
+  void saveShadowSyncMeta('pts:last', {
+    pts: ptsMeta.pts,
+    eventId: ptsMeta.eventId,
+    topicId: ptsMeta.topicId,
+    timestamp: new Date().toISOString()
+  });
+
+  if (ptsMeta.topicId) {
+    void saveShadowSyncMeta(`pts:topic:${ptsMeta.topicId}`, {
+      pts: ptsMeta.pts,
+      eventId: ptsMeta.eventId,
+      topicId: ptsMeta.topicId,
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
+const syncPtsStateToServer = async (): Promise<void> => {
+  if (!chatSDK) {
+    return;
+  }
+
+  const lastPtsMeta = await loadShadowSyncMeta<{ pts?: string }>('pts:last');
+
+  if (!lastPtsMeta?.pts) {
+    return;
+  }
+
+  chatSDK.sendWebSocketEvent(WebSocketEventType.SYNC_STATE, {
+    pts: lastPtsMeta.pts
+  });
 };
 
 export const setSuspendIncomingMergeForTopic = (
@@ -129,19 +174,13 @@ const setupChatListeners = (): void => {
   areChatListenersBound = true;
 
   const handleIncomingSocketMessage = (message: IMessage): void => {
-    const { getSelectedTopic, updateLocalLastMessageTopic } = useTopics();
+    const { updateLocalLastMessageTopic } = useTopics();
     const isDuplicateMessage = hasMessageInTopic(message.topicId, message.id);
     const unreadCountBefore = totalUnreadCount.value;
-    const topic = getSelectedTopic(message.topicId);
-    const previousLastMessageId = topic?.lastMessage?.id;
-    const hasPreviousLastMessageLocally = previousLastMessageId
-      ? hasMessageInTopic(message.topicId, previousLastMessageId)
-      : true;
     const shouldSuspendMerge =
       message.senderUserId !== currentUserId.value &&
       route.value.id === message.topicId &&
-      suspendIncomingMergeByTopic.value[message.topicId] === true &&
-      !hasPreviousLastMessageLocally;
+      suspendIncomingMergeByTopic.value[message.topicId] === true;
 
     if (!shouldSuspendMerge) {
       addMessageToLocal(message.topicId, message);
@@ -187,32 +226,21 @@ const setupChatListeners = (): void => {
     updateLocalLastMessageGroup(message.topicId, message);
   };
 
-  chatSDK.subscribeToEvent(WebSocketEventType.NEW_MESSAGE, event => {
-    handleIncomingSocketMessage(event.payload);
-  });
+  const handleTopicChangePayload = (payload: {
+    type: 'UPDATE' | 'CREATE' | 'DELETE';
+    topicId: string;
+    data: any;
+    ptsMeta?: PtsMeta;
+  }): void => {
+    persistPtsMeta(payload.ptsMeta);
 
-  chatSDK.subscribeToEvent(WebSocketEventType.MESSAGE_UPDATED, event => {
-    appendMessageToLocal(event.payload.topicId, event.payload);
-  });
-
-  chatSDK.subscribeToEvent(WebSocketEventType.MESSAGE_DELETED, event => {
-    const topicIds = Object.keys(messagesStore.value);
-    topicIds.forEach(topicId => {
-      const existing = messagesStore.value[topicId] || [];
-      const next = existing.filter(item => item.id !== event.payload.messageId);
-      if (next.length !== existing.length) {
-        messagesStore.value[topicId] = next;
-        notifyMessageChange(topicId);
-      }
+    void recordShadowChatEvent({
+      topicId: payload.topicId,
+      type: 'topic_changed',
+      source: 'ws',
+      payload
     });
-  });
 
-  chatSDK.subscribeToEvent(WebSocketEventType.USER_UPDATED, event => {
-    const { id, lastOnline } = event.payload;
-    updateLocalUserStatus(id, lastOnline);
-  });
-
-  chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_TOPIC, ({ payload }) => {
     if (payload.type === 'UPDATE') {
       updateLocalGroupDetails(
         payload.topicId,
@@ -225,41 +253,227 @@ const setupChatListeners = (): void => {
     } else if (payload.type === 'DELETE') {
       deleteTopicFromList(payload.data.id);
     }
-  });
+  };
 
-  chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_MESSAGE, ({ payload }) => {
+  const handleChangeMessagePayload = (payload: {
+    type: 'NEW' | 'CHANGE' | 'DELETE' | 'PIN';
+    data: any;
+    messageId?: string;
+    ptsMeta?: PtsMeta;
+  }): void => {
+    persistPtsMeta(payload.ptsMeta);
+
     if (payload.type === 'NEW') {
+      void recordShadowChatEvent({
+        topicId: payload.data.topicId,
+        type: 'new_message',
+        source: 'ws',
+        payload: payload.data
+      });
       handleIncomingSocketMessage(payload.data);
     } else if (payload.type === 'DELETE') {
+      void recordShadowChatEvent({
+        topicId: payload.data.topicId,
+        type: 'delete_message',
+        source: 'ws',
+        payload: payload.data
+      });
       deleteMessageFromLocal(payload.data.topicId, payload.data.id);
     } else if (payload.type === 'CHANGE' || payload.type === 'PIN') {
+      void recordShadowChatEvent({
+        topicId: payload.data.topicId,
+        type: payload.type === 'PIN' ? 'pin_message' : 'edit_message',
+        source: 'ws',
+        payload: payload.data
+      });
       editMessageFromLocal(payload.data.topicId, payload.data);
       const { updateLocalLastMessageTopic } = useTopics();
       updateLocalLastMessageTopic(payload.data.topicId);
       updateLocalLastMessageGroup(payload.data.topicId);
     }
-  });
+  };
 
-  chatSDK.subscribeToEvent(WebSocketEventType.READ_MESSAGE, ({ payload }) => {
+  const handleReadMessagePayload = (payload: {
+    topicId: string;
+    messageIds: string[];
+    userId?: string;
+    ptsMeta?: PtsMeta;
+  }): void => {
+    persistPtsMeta(payload.ptsMeta);
+
+    void recordShadowChatEvent({
+      topicId: payload.topicId,
+      type: 'read_state',
+      source: 'ws',
+      payload
+    });
+
+    if (payload.userId === currentUserId.value) {
+      const lastReadMessageId =
+        payload.messageIds[payload.messageIds.length - 1] || null;
+      const lastReadMessage = lastReadMessageId
+        ? getFullMessagesByTopicId(payload.topicId).find(
+            message => message.id === lastReadMessageId
+          )
+        : null;
+
+      void saveShadowReadState(
+        payload.topicId,
+        lastReadMessageId,
+        lastReadMessage?.createdAt
+          ? new Date(lastReadMessage.createdAt).toISOString()
+          : new Date().toISOString(),
+        'ws'
+      );
+    }
+
     changeLocalReadStatus(payload.topicId, payload.messageIds, payload.userId);
 
     if (payload.userId === currentUserId.value) {
       void clearTopicNotifications(payload.topicId);
     }
+  };
+
+  const handleReactionPayload = (payload: {
+    action: 'added' | 'updated' | 'removed';
+    messageId: string;
+    reactionId?: string;
+    topicId: string;
+    reaction?: any;
+    ptsMeta?: PtsMeta;
+  }): void => {
+    persistPtsMeta(payload.ptsMeta);
+
+    void recordShadowChatEvent({
+      topicId: payload.topicId,
+      type: 'reaction_updated',
+      source: 'ws',
+      payload
+    });
+
+    changeReactionFromLocal(
+      payload.topicId,
+      payload.messageId,
+      payload.action,
+      payload.reaction,
+      payload.reactionId
+    );
+  };
+
+  const handleUserUpdatedPayload = (payload: {
+    id: string;
+    lastOnline: Date | null;
+    ptsMeta?: PtsMeta;
+  }): void => {
+    persistPtsMeta(payload.ptsMeta);
+    updateLocalUserStatus(payload.id, payload.lastOnline);
+  };
+
+  chatSDK.subscribeToEvent(WebSocketEventType.NEW_MESSAGE, event => {
+    void recordShadowChatEvent({
+      topicId: event.payload.topicId,
+      type: 'new_message',
+      source: 'ws',
+      payload: event.payload
+    });
+    handleIncomingSocketMessage(event.payload);
+  });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.MESSAGE_UPDATED, event => {
+    appendMessageToLocal(event.payload.topicId, event.payload);
+  });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.MESSAGE_DELETED, event => {
+    const payloadTopicId = (event.payload as any).topicId;
+
+    if (payloadTopicId) {
+      deleteMessageFromLocal(payloadTopicId, event.payload.messageId);
+    }
+
+    const topicIds = Object.keys(messagesStore.value);
+    topicIds.forEach(topicId => {
+      const existing = messagesStore.value[topicId] || [];
+      const next = existing.filter(item => item.id !== event.payload.messageId);
+      if (next.length !== existing.length) {
+        messagesStore.value[topicId] = next;
+        notifyMessageChange(topicId);
+      }
+    });
+  });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.USER_UPDATED, event => {
+    handleUserUpdatedPayload(event.payload);
+  });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_TOPIC, ({ payload }) => {
+    handleTopicChangePayload(payload);
+  });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_MESSAGE, ({ payload }) => {
+    handleChangeMessagePayload(payload);
+  });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.READ_MESSAGE, ({ payload }) => {
+    handleReadMessagePayload(payload);
   });
 
   chatSDK.subscribeToEvent(
     WebSocketEventType.REACTION_UPDATED,
     ({ payload }) => {
-      changeReactionFromLocal(
-        payload.topicId,
-        payload.messageId,
-        payload.action,
-        payload.reaction,
-        payload.reactionId
-      );
+      handleReactionPayload(payload);
     }
   );
+
+  chatSDK.subscribeToEvent(WebSocketEventType.SYNC_REPLAY, ({ payload }) => {
+    payload.events.forEach(event => {
+      const ptsMeta: PtsMeta = {
+        eventId: event.eventId,
+        pts: event.pts,
+        topicId: event.topicId
+      };
+
+      switch (event.eventType) {
+        case 'message.new':
+        case 'message.change':
+        case 'message.delete':
+        case 'message.pin':
+          handleChangeMessagePayload({
+            ...(event.payload as any),
+            ptsMeta
+          });
+          break;
+        case 'message.read':
+          handleReadMessagePayload({
+            ...(event.payload as any),
+            ptsMeta
+          });
+          break;
+        case 'message.reaction':
+          handleReactionPayload({
+            ...(event.payload as any),
+            ptsMeta
+          });
+          break;
+        case 'topic.update':
+        case 'topic.create':
+        case 'topic.delete':
+          handleTopicChangePayload({
+            ...(event.payload as any),
+            ptsMeta
+          });
+          break;
+        case 'user.updated':
+          handleUserUpdatedPayload({
+            ...(event.payload as any),
+            ptsMeta
+          });
+          break;
+        default:
+          persistPtsMeta(ptsMeta);
+          break;
+      }
+    });
+  });
 
   chatSDK.subscribeToEvent(WebSocketEventType.INCOMING_CALL, ({ payload }) => {
     const user = getUserById(payload.callerId);
@@ -329,7 +543,7 @@ const markRecentlyReconnected = (): void => {
 const refreshActiveTopicMessagesAfterReconnect = async (
   topicId: string
 ): Promise<void> => {
-  const existingMessages = getMessagesByTopicId(topicId);
+  const existingMessages = getFullMessagesByTopicId(topicId);
   const existingMessageIds = new Set(
     existingMessages.map(message => message.id)
   );
@@ -427,7 +641,13 @@ export const initializeChat = async (options: {
     const wasConnected = hasWebsocketConnection.value;
     hasWebsocketConnection.value = connected;
 
+    void saveShadowSyncMeta('ws_connection', {
+      connected,
+      timestamp: new Date().toISOString()
+    });
+
     if (connected && wasConnected === false && !isWebsocketConnecting.value) {
+      void syncPtsStateToServer();
       markRecentlyReconnected();
       void refreshDataAfterReconnect();
     }
@@ -470,6 +690,7 @@ export const initializeChat = async (options: {
   hasWebsocketConnection.value = false;
   setupChatListeners();
   await chatSDK.connect();
+  await syncPtsStateToServer();
   isWebsocketConnecting.value = false;
   await restoreInvitedGroupCallFromUrl();
 

@@ -16,8 +16,8 @@ import { useGroup } from '../composables/useGroup';
 import { useUrlWatcher } from '../composables/navigation';
 import { authedUser } from '../composables/useAuth';
 import {
+  clearCachedTopicMessages,
   loadCachedTopicMessages,
-  saveCachedTopicMessages,
   savePendingUploadFile,
   loadPendingUploadFile,
   deletePendingUploadFile,
@@ -25,9 +25,29 @@ import {
   loadPendingUploadMeta,
   deletePendingUploadMeta
 } from './useTopicMessagesCache';
+import {
+  appendShadowSyncMetaList,
+  deleteShadowTopicMessage,
+  hasCachedShadowLoadedRanges,
+  hasCachedShadowReadState,
+  isShadowSyncEnabled,
+  loadShadowLoadedRanges,
+  loadShadowReadState,
+  resolveShadowTopicContext,
+  resolveShadowTopicPage,
+  saveShadowLoadedRange,
+  loadShadowTopicContext,
+  loadShadowTopicSnapshot,
+  recordShadowChatEvent,
+  saveShadowTopicSnapshot,
+  syncShadowReadStateFromMessages
+} from './useShadowChatSync';
 
+const fullMessagesStore = ref<Record<string, IMessage[]>>({});
 const messagesStore = ref<Record<string, IMessage[]>>({});
 const pinnedMessagesStore = ref<Record<string, IMessage[]>>({});
+const MAX_ACTIVE_TOPIC_MESSAGES = 250;
+const INITIAL_TOPIC_WINDOW_MESSAGES = 100;
 const persistTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingOutgoingForwardBatches = new Map<
   string,
@@ -81,7 +101,13 @@ const schedulePersistMessages = (topicId: string): void => {
 
   const timeoutId = setTimeout(() => {
     persistTimeouts.delete(topicId);
-    void saveCachedTopicMessages(topicId, messagesStore.value[topicId] || []);
+    const topicMessages = prepareMessagesForPersistence(
+      fullMessagesStore.value[topicId] || []
+    );
+    void saveShadowTopicSnapshot(topicId, topicMessages, 'local', undefined, {
+      replace: true
+    });
+    void syncShadowReadStateFromMessages(topicId, topicMessages, 'local');
   }, 150);
 
   persistTimeouts.set(topicId, timeoutId);
@@ -196,6 +222,297 @@ const mergeWithPendingOutgoingMessages = (
   return [...incomingMessages, ...pendingMessages];
 };
 
+type MessageWindowMode =
+  | 'latest'
+  | 'preserve-start'
+  | 'preserve-end'
+  | 'around-anchor';
+
+const clampMessagesForUi = (
+  messages: IMessage[],
+  mode: MessageWindowMode = 'latest',
+  anchorMessageId?: string
+): IMessage[] => {
+  const uiWindowLimit =
+    mode === 'latest'
+      ? INITIAL_TOPIC_WINDOW_MESSAGES
+      : MAX_ACTIVE_TOPIC_MESSAGES;
+
+  if (messages.length <= uiWindowLimit) {
+    return messages;
+  }
+
+  if (mode === 'preserve-start') {
+    return messages.slice(0, uiWindowLimit);
+  }
+
+  if (mode === 'around-anchor' && anchorMessageId) {
+    const anchorIndex = messages.findIndex(
+      message => message.id === anchorMessageId
+    );
+
+    if (anchorIndex >= 0) {
+      const halfWindow = Math.floor(uiWindowLimit / 2);
+      const startIndex = Math.max(
+        0,
+        Math.min(anchorIndex - halfWindow, messages.length - uiWindowLimit)
+      );
+
+      return messages.slice(startIndex, startIndex + uiWindowLimit);
+    }
+  }
+
+  return messages.slice(-uiWindowLimit);
+};
+
+const stripRuntimeMediaState = (message: IMessage): IMessage => ({
+  ...message,
+  media: message.media?.map(media => ({
+    ...media,
+    localPath: undefined,
+    localThumbnailPath: undefined
+  }))
+});
+
+const prepareMessagesForPersistence = (messages: IMessage[]): IMessage[] =>
+  messages.map(stripRuntimeMediaState);
+
+const dedupeMessagesForTopic = (messages: IMessage[]): IMessage[] => {
+  const byStableKey = new Map<string, IMessage>();
+
+  messages.forEach(message => {
+    const stableKey = getClientId(message) || message.id;
+
+    if (stableKey) {
+      byStableKey.set(stableKey, message);
+    }
+  });
+
+  return Array.from(byStableKey.values());
+};
+
+const resolveLocalTopicPage = (
+  topicId: string,
+  opts?: {
+    lastMessageId?: string;
+    afterMessageId?: string;
+    limit?: number;
+  }
+): IMessage[] => {
+  const messages = getFullMessagesByTopicId(topicId);
+  const limit = Math.max(1, opts?.limit || 50);
+
+  if (!messages.length) {
+    return [];
+  }
+
+  if (opts?.lastMessageId) {
+    const cursorIndex = messages.findIndex(
+      message => message.id === opts.lastMessageId
+    );
+
+    if (cursorIndex <= 0) {
+      return [];
+    }
+
+    return messages.slice(Math.max(0, cursorIndex - limit), cursorIndex);
+  }
+
+  if (opts?.afterMessageId) {
+    const cursorIndex = messages.findIndex(
+      message => message.id === opts.afterMessageId
+    );
+
+    if (cursorIndex < 0 || cursorIndex >= messages.length - 1) {
+      return [];
+    }
+
+    return messages.slice(cursorIndex + 1, cursorIndex + 1 + limit);
+  }
+
+  return messages.slice(-limit);
+};
+
+const normalizePaginationResult = (
+  messages: IMessage[],
+  opts?: {
+    lastMessageId?: string;
+    afterMessageId?: string;
+  }
+): IMessage[] => {
+  if (!messages.length) {
+    return messages;
+  }
+
+  if (opts?.lastMessageId) {
+    return messages.filter(message => message.id !== opts.lastMessageId);
+  }
+
+  if (opts?.afterMessageId) {
+    return messages.filter(message => message.id !== opts.afterMessageId);
+  }
+
+  return messages;
+};
+
+const getRangeMessagesForPersistence = (
+  topicId: string,
+  messages: IMessage[],
+  opts?: {
+    lastMessageId?: string;
+    afterMessageId?: string;
+  }
+): IMessage[] => {
+  if (!messages.length) {
+    return messages;
+  }
+
+  const existingMessages = getFullMessagesByTopicId(topicId);
+  const anchorMessageId = opts?.lastMessageId || opts?.afterMessageId;
+
+  if (!anchorMessageId) {
+    return messages;
+  }
+
+  const anchorMessage = existingMessages.find(
+    message => message.id === anchorMessageId
+  );
+
+  if (!anchorMessage) {
+    return messages;
+  }
+
+  return [...messages, anchorMessage];
+};
+
+const getWindowModeForFetch = (opts?: {
+  lastMessageId?: string;
+  afterMessageId?: string;
+}): MessageWindowMode => {
+  if (opts?.lastMessageId) {
+    return 'preserve-start';
+  }
+
+  if (opts?.afterMessageId) {
+    return 'preserve-end';
+  }
+
+  return 'latest';
+};
+
+const getHistoryDirection = (opts?: {
+  lastMessageId?: string;
+  afterMessageId?: string;
+  newMessages?: boolean;
+}): 'up' | 'down' | 'latest' =>
+  opts?.lastMessageId ? 'up' : opts?.afterMessageId ? 'down' : 'latest';
+
+const traceHistoryResolution = (
+  topicId: string,
+  payload: Record<string, unknown>
+): void => {
+  void appendShadowSyncMetaList(`diag:history:${topicId}`, {
+    timestamp: new Date().toISOString(),
+    ...payload
+  });
+};
+
+const ensureShadowReadStateLoaded = async (
+  topicId: string,
+  userId = authedUser.value?.id
+): Promise<void> => {
+  if (!topicId || !userId || !isShadowSyncEnabled()) {
+    return;
+  }
+
+  if (hasCachedShadowReadState(topicId, userId)) {
+    return;
+  }
+
+  await loadShadowReadState(topicId, userId);
+};
+
+const ensureShadowLoadedRangesLoaded = async (
+  topicId: string,
+  userId = authedUser.value?.id
+): Promise<void> => {
+  if (!topicId || !userId || !isShadowSyncEnabled()) {
+    return;
+  }
+
+  if (hasCachedShadowLoadedRanges(topicId, userId)) {
+    return;
+  }
+
+  await loadShadowLoadedRanges(topicId, userId);
+};
+
+const updateTopicMessageStores = (
+  topicId: string,
+  transform: (messages: IMessage[]) => IMessage[]
+): IMessage[] => {
+  const existingFullMessages = fullMessagesStore.value[topicId] || [];
+  const existingVisibleMessages = messagesStore.value[topicId] || [];
+  const nextFullMessages = [...transform([...existingFullMessages])].sort(
+    compareMessages
+  );
+  const nextVisibleMessages = [...transform([...existingVisibleMessages])].sort(
+    compareMessages
+  );
+
+  fullMessagesStore.value[topicId] = nextFullMessages;
+  messagesStore.value[topicId] = nextVisibleMessages;
+
+  return nextFullMessages;
+};
+
+const applyShadowReadStateToMessages = async (
+  topicId: string,
+  messages: IMessage[],
+  userId = authedUser.value?.id
+): Promise<IMessage[]> => {
+  if (!topicId || !userId || messages.length === 0) {
+    return messages;
+  }
+
+  const readState = await loadShadowReadState(topicId, userId);
+
+  if (!readState?.lastReadMessageId && !readState?.lastReadAt) {
+    return messages;
+  }
+
+  const lastReadMessage = readState?.lastReadMessageId
+    ? messages.find(message => message.id === readState.lastReadMessageId)
+    : null;
+  const lastReadTimestamp = lastReadMessage
+    ? getMessageTimestamp(lastReadMessage)
+    : new Date(readState?.lastReadAt || 0).getTime();
+
+  if (!lastReadTimestamp || Number.isNaN(lastReadTimestamp)) {
+    return messages;
+  }
+
+  return messages.map(message => {
+    if (
+      message.senderUserId === userId ||
+      getMessageTimestamp(message) > lastReadTimestamp
+    ) {
+      return message;
+    }
+
+    return {
+      ...message,
+      isReadByMe: true,
+      isRead: true,
+      status:
+        message.status === MessageStatus.Wait ||
+        message.status === MessageStatus.NotDelivered
+          ? message.status
+          : MessageStatus.Read
+    };
+  });
+};
+
 const consumePendingOutgoingForwardBatchMeta = (
   topicId: string
 ): { forwardBatchId: string; forwardBatchOrder: number } | null => {
@@ -243,33 +560,199 @@ export const fetchMessagesForTopic = async (
     newMessages?: boolean;
     skipSave?: boolean;
     syncLastMessage?: boolean;
+    forceRefresh?: boolean;
+    forceNetwork?: boolean;
   }
 ): Promise<IMessage[]> => {
   try {
     if (!topicId) return [];
 
-    if (!navigator.onLine) {
-      const existingMessages = getMessagesByTopicId(topicId);
+    await ensureShadowReadStateLoaded(topicId);
+    await ensureShadowLoadedRangesLoaded(topicId);
 
+    const existingMessages = getFullMessagesByTopicId(topicId);
+    const isPaginationRequest = Boolean(
+      opts?.lastMessageId || opts?.afterMessageId || opts?.newMessages
+    );
+    const direction = getHistoryDirection(opts);
+
+    if (!navigator.onLine) {
       if (existingMessages.length > 0) {
+        traceHistoryResolution(topicId, {
+          direction,
+          source: 'offline-memory',
+          resultCount: existingMessages.length,
+          lastMessageId: opts?.lastMessageId || null,
+          afterMessageId: opts?.afterMessageId || null
+        });
         return existingMessages;
       }
 
+      traceHistoryResolution(topicId, {
+        direction,
+        source: 'offline-cache',
+        resultCount: 0,
+        lastMessageId: opts?.lastMessageId || null,
+        afterMessageId: opts?.afterMessageId || null
+      });
       return hydrateMessagesFromCache(topicId);
     }
 
-    const sdk = getChatSDK();
-    if (!sdk) return [];
+    if (
+      !opts?.forceRefresh &&
+      !isPaginationRequest &&
+      existingMessages.length > 0
+    ) {
+      if (!opts?.limit || existingMessages.length >= opts.limit) {
+        traceHistoryResolution(topicId, {
+          direction,
+          source: 'memory-store',
+          resultCount: existingMessages.length,
+          lastMessageId: opts?.lastMessageId || null,
+          afterMessageId: opts?.afterMessageId || null
+        });
+        return existingMessages;
+      }
+    }
 
-    const messages = await sdk.getMessages(topicId, {
-      limit: opts?.limit,
-      lastMessageId: opts?.lastMessageId,
-      afterMessageId: opts?.afterMessageId,
-      newMessages: opts?.newMessages
+    if (
+      !opts?.forceNetwork &&
+      (opts?.lastMessageId || opts?.afterMessageId) &&
+      existingMessages.length > 0
+    ) {
+      const localPage = await applyShadowReadStateToMessages(
+        topicId,
+        resolveLocalTopicPage(topicId, opts)
+      );
+
+      if (localPage.length > 0) {
+        if (!opts?.skipSave) {
+          mergeMessagesForTopic(
+            topicId,
+            localPage,
+            opts.lastMessageId ? 'prepend' : 'append',
+            {
+              syncLastMessage: opts?.syncLastMessage ?? false,
+              windowMode: getWindowModeForFetch(opts)
+            }
+          );
+        }
+
+        traceHistoryResolution(topicId, {
+          direction,
+          source: 'memory-store',
+          resolution: 'cache_hit',
+          resultCount: localPage.length,
+          lastMessageId: opts?.lastMessageId || null,
+          afterMessageId: opts?.afterMessageId || null
+        });
+
+        return localPage;
+      }
+    }
+
+    if (isShadowSyncEnabled() && !opts?.forceNetwork) {
+      const shadowPageResolution = await resolveShadowTopicPage(topicId, {
+        limit: opts?.limit,
+        lastMessageId: opts?.lastMessageId,
+        afterMessageId: opts?.afterMessageId
+      });
+      const shadowMessages = shadowPageResolution.messages;
+      const normalizedShadowMessages = await applyShadowReadStateToMessages(
+        topicId,
+        normalizePaginationResult(shadowMessages, opts)
+      );
+      const isPartialInitialShadowHit =
+        !isPaginationRequest &&
+        !!opts?.limit &&
+        normalizedShadowMessages.length < opts.limit &&
+        existingMessages.length < opts.limit;
+
+      if (normalizedShadowMessages.length > 0 && !isPartialInitialShadowHit) {
+        void recordShadowChatEvent({
+          topicId,
+          type: 'bootstrap_history',
+          source: 'local',
+          payload: {
+            resolution: shadowPageResolution.status,
+            lastMessageId: opts?.lastMessageId,
+            afterMessageId: opts?.afterMessageId,
+            limit: opts?.limit,
+            messageIds: normalizedShadowMessages.map(message => message.id)
+          }
+        });
+        void saveShadowLoadedRange(
+          topicId,
+          getRangeMessagesForPersistence(
+            topicId,
+            normalizedShadowMessages,
+            opts
+          )
+        );
+
+        if (!opts?.skipSave) {
+          mergeMessagesForTopic(
+            topicId,
+            normalizedShadowMessages,
+            opts?.lastMessageId
+              ? 'prepend'
+              : opts?.afterMessageId
+                ? 'append'
+                : 'replace',
+            {
+              syncLastMessage: opts?.syncLastMessage ?? false,
+              windowMode: getWindowModeForFetch(opts)
+            }
+          );
+        }
+
+        traceHistoryResolution(topicId, {
+          direction,
+          source: 'indexeddb',
+          resolution: shadowPageResolution.status,
+          resultCount: normalizedShadowMessages.length,
+          lastMessageId: opts?.lastMessageId || null,
+          afterMessageId: opts?.afterMessageId || null
+        });
+
+        return normalizedShadowMessages;
+      }
+    }
+
+    const sdk = getChatSDK();
+    if (!sdk) return existingMessages;
+
+    const messages = normalizePaginationResult(
+      await sdk.getMessages(topicId, {
+        limit: opts?.limit,
+        lastMessageId: opts?.lastMessageId,
+        afterMessageId: opts?.afterMessageId,
+        newMessages: opts?.newMessages
+      }),
+      opts
+    );
+
+    void recordShadowChatEvent({
+      topicId,
+      type: 'bootstrap_history',
+      source: 'http',
+      payload: {
+        lastMessageId: opts?.lastMessageId,
+        afterMessageId: opts?.afterMessageId,
+        newMessages: opts?.newMessages,
+        limit: opts?.limit,
+        messageIds: messages.map(message => message.id)
+      }
     });
+    void saveShadowTopicSnapshot(topicId, messages, 'http');
+    void saveShadowLoadedRange(
+      topicId,
+      getRangeMessagesForPersistence(topicId, messages, opts)
+    );
+    void syncShadowReadStateFromMessages(topicId, messages, 'http');
 
     if (!opts?.skipSave) {
-      const existing = getMessagesByTopicId(topicId) || [];
+      const existing = getFullMessagesByTopicId(topicId) || [];
 
       let combined = mergeWithPendingOutgoingMessages(messages, existing);
 
@@ -279,17 +762,40 @@ export const fetchMessagesForTopic = async (
         combined = [...existing, ...messages];
       }
       const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
+      const existingVisible = getMessagesByTopicId(topicId);
+      const visibleMessages = opts?.lastMessageId
+        ? Array.from(
+            new Map(
+              [...messages, ...existingVisible].map(m => [m.id, m])
+            ).values()
+          )
+        : opts?.afterMessageId
+          ? Array.from(
+              new Map(
+                [...existingVisible, ...messages].map(m => [m.id, m])
+              ).values()
+            )
+          : messages;
 
       saveMessagesToLocal(topicId, unique, {
-        syncLastMessage: opts?.syncLastMessage ?? false
+        syncLastMessage: opts?.syncLastMessage ?? false,
+        windowMode: getWindowModeForFetch(opts),
+        visibleMessages
       });
     }
 
     return messages;
   } catch (error) {
     console.warn('Failed to fetch message history:', error);
+    traceHistoryResolution(topicId, {
+      direction: getHistoryDirection(opts),
+      source: 'error',
+      error: error instanceof Error ? error.message : String(error),
+      lastMessageId: opts?.lastMessageId || null,
+      afterMessageId: opts?.afterMessageId || null
+    });
 
-    const existingMessages = getMessagesByTopicId(topicId);
+    const existingMessages = getFullMessagesByTopicId(topicId);
     if (existingMessages.length > 0) {
       return existingMessages;
     }
@@ -322,12 +828,66 @@ export const fetchAroundMessage = async (
 ): Promise<IMessage[]> => {
   try {
     if (!messageId) return;
+
+    await ensureShadowLoadedRangesLoaded(topicId);
+
+    if (isShadowSyncEnabled()) {
+      const shadowContextResolution = await resolveShadowTopicContext(
+        topicId,
+        messageId,
+        {
+          beforeLimit: 40,
+          afterLimit: 40
+        }
+      );
+      const shadowMessages = shadowContextResolution.messages;
+
+      if (shadowMessages.some(message => message.id === messageId)) {
+        const normalizedShadowMessages = await applyShadowReadStateToMessages(
+          topicId,
+          shadowMessages
+        );
+
+        void recordShadowChatEvent({
+          topicId,
+          type: 'bootstrap_history',
+          source: 'local',
+          payload: {
+            resolution: shadowContextResolution.status,
+            aroundMessageId: messageId,
+            messageIds: normalizedShadowMessages.map(message => message.id)
+          }
+        });
+
+        mergeMessagesForTopic(topicId, normalizedShadowMessages, 'replace', {
+          syncLastMessage: false,
+          windowMode: 'around-anchor',
+          anchorMessageId: messageId
+        });
+
+        return normalizedShadowMessages;
+      }
+    }
+
     const sdk = getChatSDK();
     if (!sdk) return;
 
     const messages = await sdk.getAroundMessage(messageId);
-    mergeMessagesForTopic(topicId, messages, 'append', {
-      syncLastMessage: false
+    void recordShadowChatEvent({
+      topicId,
+      type: 'bootstrap_history',
+      source: 'http',
+      payload: {
+        aroundMessageId: messageId,
+        messageIds: messages.map(message => message.id)
+      }
+    });
+    void saveShadowTopicSnapshot(topicId, messages, 'http');
+    void saveShadowLoadedRange(topicId, messages);
+    mergeMessagesForTopic(topicId, messages, 'replace', {
+      syncLastMessage: false,
+      windowMode: 'around-anchor',
+      anchorMessageId: messageId
     });
 
     return messages;
@@ -338,8 +898,9 @@ export const fetchAroundMessage = async (
 };
 
 export const addMessageToLocal = (topicId: string, message: IMessage): void => {
-  const existingMessages = messagesStore.value[topicId] || [];
+  const existingMessages = getFullMessagesByTopicId(topicId);
   const alreadyExists = existingMessages.some(item => item.id === message.id);
+  const shouldUpdateVisibleWindow = topicId === route.value.id;
 
   const parsedEx = parseMessageEx(message);
   const clientId =
@@ -370,8 +931,11 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   }
 
   if (!clientId) {
-    messagesStore.value[topicId] = [...existingMessages, nextMessage];
-    schedulePersistMessages(topicId);
+    saveMessagesToLocal(topicId, [...existingMessages, nextMessage], {
+      syncLastMessage: true,
+      windowMode: 'preserve-end',
+      updateVisible: shouldUpdateVisibleWindow
+    });
 
     if (
       !alreadyExists &&
@@ -391,17 +955,25 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   const lastMessage = existingMessages.at(-1);
 
   if (lastMessage?.id === clientId) {
-    const media = existingMessages[existingMessages.length - 1].media;
+    updateTopicMessageStores(topicId, messages =>
+      messages.map(existingMessage => {
+        if (existingMessage.id !== clientId) {
+          return existingMessage;
+        }
 
-    media.forEach((m, i) => {
-      m.isLoading = null;
-      m.path = message.media[i].path;
-      m.thumbnailPath = message.media[i].thumbnailPath;
-    });
-    existingMessages[existingMessages.length - 1] = {
-      ...nextMessage,
-      media
-    };
+        const media = [...(existingMessage.media || [])].map((m, i) => ({
+          ...m,
+          isLoading: null,
+          path: message.media[i]?.path,
+          thumbnailPath: message.media[i]?.thumbnailPath
+        }));
+
+        return {
+          ...nextMessage,
+          media
+        };
+      })
+    );
     schedulePersistMessages(topicId);
     clearPendingUploadMessage(topicId, clientId);
 
@@ -414,18 +986,18 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
     }
 
     syncTopicUnreadState(topicId);
-    syncLocalLastMessage(
-      topicId,
-      existingMessages[existingMessages.length - 1]
-    );
+    syncLocalLastMessage(topicId, nextMessage);
 
     return;
   }
 
   const filtered = existingMessages.filter(m => m.id !== clientId);
 
-  messagesStore.value[topicId] = [...filtered, nextMessage];
-  schedulePersistMessages(topicId);
+  saveMessagesToLocal(topicId, [...filtered, nextMessage], {
+    syncLastMessage: true,
+    windowMode: 'preserve-end',
+    updateVisible: shouldUpdateVisibleWindow
+  });
   clearPendingUploadMessage(topicId, clientId);
 
   if (
@@ -459,7 +1031,7 @@ export const scheduleDelayedOutgoingMessage = (
   const timeoutId = setTimeout(() => {
     delayedOutgoingMessages.delete(key);
 
-    const alreadyExists = (messagesStore.value[topicId] || []).some(
+    const alreadyExists = getFullMessagesByTopicId(topicId).some(
       existingMessage => existingMessage.id === message.id
     );
 
@@ -493,43 +1065,60 @@ export const deleteMessageFromLocal = (
   topicId: string,
   messageId: string
 ): void => {
-  const existingMessages = messagesStore.value[topicId] || [];
-  messagesStore.value[topicId] = existingMessages.filter(
-    message => message.id !== messageId
+  updateTopicMessageStores(topicId, messages =>
+    messages.filter(message => message.id !== messageId)
   );
   schedulePersistMessages(topicId);
   syncTopicUnreadState(topicId);
   syncLocalLastMessage(topicId);
+  savePinnedMessagesToLocal(
+    topicId,
+    getPinnedMessagesByTopicId(topicId).filter(
+      message => message.id !== messageId
+    )
+  );
 
   clearPendingUploadMessage(topicId, messageId);
+  void deleteShadowTopicMessage(topicId, messageId);
 };
 
 export const editMessageFromLocal = (
   topicId: string,
   message: IMessage
 ): void => {
-  const existingMessages = messagesStore.value[topicId] || [];
+  const existingMessages = getFullMessagesByTopicId(topicId);
 
-  messagesStore.value[topicId] = existingMessages.map(msg => {
+  const updateMessage = (msg: IMessage): IMessage => {
     let isEdit = msg.isEdit;
-    if (msg.id === message.id) {
-      if (message.isPin !== msg.isPin) {
-        const pinnedMessages = getPinnedMessagesByTopicId(topicId);
-        if (message.isPin) {
-          savePinnedMessagesToLocal(topicId, [...pinnedMessages, message]);
-        } else {
-          savePinnedMessagesToLocal(
-            topicId,
-            pinnedMessages.filter(m => m.id !== message.id)
-          );
-        }
+    if (message.isPin !== msg.isPin) {
+      const pinnedMessages = getPinnedMessagesByTopicId(topicId);
+      if (message.isPin) {
+        savePinnedMessagesToLocal(topicId, [...pinnedMessages, message]);
       } else {
-        isEdit = true;
+        savePinnedMessagesToLocal(
+          topicId,
+          pinnedMessages.filter(m => m.id !== message.id)
+        );
       }
-      return { ...msg, text: message.text, isPin: message.isPin, isEdit };
+    } else {
+      isEdit = true;
     }
-    return msg;
-  });
+
+    return {
+      ...msg,
+      text: message.text,
+      isPin: message.isPin,
+      isEdit
+    };
+  };
+
+  if (!existingMessages.some(msg => msg.id === message.id)) {
+    return;
+  }
+
+  updateTopicMessageStores(topicId, messages =>
+    messages.map(msg => (msg.id === message.id ? updateMessage(msg) : msg))
+  );
   schedulePersistMessages(topicId);
   syncLocalLastMessage(topicId);
 };
@@ -541,37 +1130,70 @@ export const changeReactionFromLocal = (
   reaction?: Reaction,
   reactionId?: string
 ): void => {
-  const existingMessages = messagesStore.value[topicId] || [];
-
-  messagesStore.value[topicId] = existingMessages.map(msg => {
-    if (msg.id === messageId) {
-      if (action === 'removed') {
-        msg.reactions = msg.reactions.filter(
-          reaction => reaction.id !== reactionId
-        );
-      } else if (action === 'added') {
-        msg.reactions = [...msg.reactions, reaction];
-      } else if (action === 'updated') {
-        msg.reactions = msg.reactions.map(r => {
-          if (r.id !== reaction.id) {
-            return r;
-          }
-          return reaction;
-        });
+  updateTopicMessageStores(topicId, messages =>
+    messages.map(msg => {
+      if (msg.id !== messageId) {
+        return msg;
       }
-    }
 
-    return msg;
-  });
+      if (action === 'removed') {
+        return {
+          ...msg,
+          reactions: msg.reactions.filter(
+            reaction => reaction.id !== reactionId
+          )
+        };
+      }
+
+      if (action === 'added') {
+        return {
+          ...msg,
+          reactions: [...msg.reactions, reaction]
+        };
+      }
+
+      if (action === 'updated') {
+        return {
+          ...msg,
+          reactions: msg.reactions.map(r => {
+            if (r.id !== reaction.id) {
+              return r;
+            }
+            return reaction;
+          })
+        };
+      }
+
+      return msg;
+    })
+  );
   schedulePersistMessages(topicId);
 };
 
 export const saveMessagesToLocal = (
   topicId: string,
   messages: IMessage[],
-  opts?: { syncLastMessage?: boolean }
+  opts?: {
+    syncLastMessage?: boolean;
+    windowMode?: MessageWindowMode;
+    anchorMessageId?: string;
+    visibleMessages?: IMessage[];
+    updateVisible?: boolean;
+  }
 ): void => {
-  messagesStore.value[topicId] = messages;
+  const sortedMessages = dedupeMessagesForTopic(messages).sort(compareMessages);
+  const boundedMessages = clampMessagesForUi(
+    dedupeMessagesForTopic(opts?.visibleMessages || sortedMessages).sort(
+      compareMessages
+    ),
+    opts?.windowMode,
+    opts?.anchorMessageId
+  );
+
+  fullMessagesStore.value[topicId] = sortedMessages;
+  if (opts?.updateVisible !== false) {
+    messagesStore.value[topicId] = boundedMessages;
+  }
   schedulePersistMessages(topicId);
   syncTopicUnreadState(topicId);
 
@@ -579,7 +1201,7 @@ export const saveMessagesToLocal = (
     syncLocalLastMessage(topicId);
   }
 
-  const isTagged = messages.some(
+  const isTagged = boundedMessages.some(
     m =>
       m.taggedUserIds?.includes(authedUser.value?.id) &&
       m.senderUserId !== authedUser.value?.id &&
@@ -603,9 +1225,20 @@ export const clearMessagesForTopic = (
   });
 };
 
+export const getFullMessagesByTopicId = (topicId: string): IMessage[] => {
+  return fullMessagesStore.value[topicId] || [];
+};
+
 export const getMessagesByTopicId = (topicId: string): IMessage[] => {
-  const messages = messagesStore.value[topicId] || [];
-  return [...messages].sort(compareMessages);
+  return messagesStore.value[topicId] || [];
+};
+
+export const clearVisibleMessagesForTopic = (topicId: string): void => {
+  if (!topicId) {
+    return;
+  }
+
+  messagesStore.value[topicId] = [];
 };
 
 export const hydrateMessagesFromCache = async (
@@ -616,28 +1249,137 @@ export const hydrateMessagesFromCache = async (
     return [];
   }
 
-  if ((messagesStore.value[topicId] || []).length > 0) {
-    return messagesStore.value[topicId];
+  const existingFullMessages = getFullMessagesByTopicId(topicId);
+
+  if (existingFullMessages.length > 0) {
+    saveMessagesToLocal(topicId, existingFullMessages, {
+      syncLastMessage: false,
+      windowMode: 'latest'
+    });
+
+    return getMessagesByTopicId(topicId);
+  }
+
+  await ensureShadowReadStateLoaded(topicId, userId || authedUser.value?.id);
+  await ensureShadowLoadedRangesLoaded(topicId, userId || authedUser.value?.id);
+
+  if (isShadowSyncEnabled()) {
+    const shadowMessages = await loadShadowTopicSnapshot(topicId, userId);
+
+    if (shadowMessages.length > 0) {
+      await loadShadowReadState(topicId, userId);
+      const existingMessages = getFullMessagesByTopicId(topicId);
+      const normalizedShadowMessages = await applyShadowReadStateToMessages(
+        topicId,
+        prepareMessagesForPersistence([...shadowMessages, ...existingMessages]),
+        userId
+      );
+
+      saveMessagesToLocal(topicId, normalizedShadowMessages, {
+        syncLastMessage: false,
+        windowMode: 'latest'
+      });
+      void saveShadowLoadedRange(topicId, normalizedShadowMessages);
+
+      return normalizedShadowMessages;
+    }
   }
 
   const cachedMessages = await loadCachedTopicMessages(topicId, userId);
 
   if (cachedMessages.length > 0) {
-    saveMessagesToLocal(topicId, cachedMessages, { syncLastMessage: false });
+    const normalizedCachedMessages = prepareMessagesForPersistence([
+      ...cachedMessages,
+      ...getFullMessagesByTopicId(topicId)
+    ]);
+
+    saveMessagesToLocal(topicId, normalizedCachedMessages, {
+      syncLastMessage: false,
+      windowMode: 'latest'
+    });
+    void saveShadowTopicSnapshot(
+      topicId,
+      normalizedCachedMessages,
+      'local',
+      userId,
+      {
+        replace: true
+      }
+    );
+    void saveShadowLoadedRange(topicId, normalizedCachedMessages, userId);
+    void syncShadowReadStateFromMessages(
+      topicId,
+      normalizedCachedMessages,
+      'local',
+      userId
+    );
+    void clearCachedTopicMessages(topicId, userId);
+
+    return normalizedCachedMessages;
   }
 
-  return cachedMessages;
+  return [];
+};
+
+export const hydrateMessageContextFromShadow = async (
+  topicId: string,
+  messageId: string,
+  userId?: string
+): Promise<IMessage[]> => {
+  if (!topicId || !messageId || !isShadowSyncEnabled()) {
+    return [];
+  }
+
+  const shadowMessages = await loadShadowTopicContext(
+    topicId,
+    messageId,
+    {
+      beforeLimit: 40,
+      afterLimit: 40
+    },
+    userId
+  );
+
+  if (
+    !shadowMessages.length ||
+    !shadowMessages.some(message => message.id === messageId)
+  ) {
+    return [];
+  }
+
+  const normalizedShadowMessages = await applyShadowReadStateToMessages(
+    topicId,
+    shadowMessages,
+    userId
+  );
+
+  mergeMessagesForTopic(topicId, normalizedShadowMessages, 'replace', {
+    syncLastMessage: false,
+    windowMode: 'around-anchor',
+    anchorMessageId: messageId
+  });
+  void saveShadowLoadedRange(topicId, normalizedShadowMessages);
+
+  return normalizedShadowMessages;
 };
 
 export const mergeMessagesForTopic = (
   topicId: string,
   messages: IMessage[],
   mode: 'replace' | 'prepend' | 'append' = 'replace',
-  opts?: { syncLastMessage?: boolean }
+  opts?: {
+    syncLastMessage?: boolean;
+    windowMode?: MessageWindowMode;
+    anchorMessageId?: string;
+  }
 ): IMessage[] => {
-  const existing = getMessagesByTopicId(topicId) || [];
+  const existing = getFullMessagesByTopicId(topicId) || [];
+  const existingVisible = getMessagesByTopicId(topicId) || [];
 
-  let combined = mergeWithPendingOutgoingMessages(messages, existing);
+  let combined =
+    mode === 'replace'
+      ? [...existing, ...messages]
+      : mergeWithPendingOutgoingMessages(messages, existing);
 
   if (mode === 'prepend') {
     combined = [...messages, ...existing];
@@ -646,8 +1388,31 @@ export const mergeMessagesForTopic = (
   }
 
   const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
+  const visibleCombined =
+    mode === 'prepend'
+      ? Array.from(
+          new Map(
+            [...messages, ...existingVisible].map(m => [m.id, m])
+          ).values()
+        )
+      : mode === 'append'
+        ? Array.from(
+            new Map(
+              [...existingVisible, ...messages].map(m => [m.id, m])
+            ).values()
+          )
+        : messages;
   saveMessagesToLocal(topicId, unique, {
-    syncLastMessage: opts?.syncLastMessage ?? false
+    syncLastMessage: opts?.syncLastMessage ?? false,
+    windowMode:
+      opts?.windowMode ||
+      (mode === 'prepend'
+        ? 'preserve-start'
+        : mode === 'append'
+          ? 'preserve-end'
+          : 'latest'),
+    anchorMessageId: opts?.anchorMessageId,
+    visibleMessages: visibleCombined
   });
 
   return unique;
@@ -676,7 +1441,7 @@ const applyLocalReadStatus = (
   messageIds: string[],
   userId: string
 ): void => {
-  const existingMessages = messagesStore.value[topicId] || [];
+  const existingMessages = getFullMessagesByTopicId(topicId);
   const isReadByCurrentUser = userId === authedUser.value.id;
   const newlyReadCount = isReadByCurrentUser
     ? existingMessages.filter(
@@ -699,8 +1464,21 @@ const applyLocalReadStatus = (
   });
 
   updateLocalTopicReadStatus(topicId, messageIds);
-  messagesStore.value[topicId] = updatedMessages;
+  updateTopicMessageStores(topicId, messages =>
+    messages.map(message => {
+      if (messageIds.includes(message.id)) {
+        return {
+          ...message,
+          status: MessageStatus.Read,
+          isRead: true,
+          isReadByMe: isReadByCurrentUser ? true : message.isReadByMe
+        };
+      }
+      return message;
+    })
+  );
   schedulePersistMessages(topicId);
+  void syncShadowReadStateFromMessages(topicId, updatedMessages, 'local');
   if (newlyReadCount > 0) {
     decrementServerUnreadCount(topicId, newlyReadCount);
   }
@@ -784,27 +1562,28 @@ export const changeFileLoadingStatus = (
   messageId: string,
   fileId: string
 ): void => {
-  const existingMessages = messagesStore.value[topicId] || [];
-  messagesStore.value[topicId] = existingMessages.map(message => {
-    if (message.id !== messageId || !message.media) {
-      return message;
-    }
+  updateTopicMessageStores(topicId, messages =>
+    messages.map(message => {
+      if (message.id !== messageId || !message.media) {
+        return message;
+      }
 
-    return {
-      ...message,
-      media: message.media.map(media => {
-        if (media.id !== fileId) {
-          return media;
-        }
+      return {
+        ...message,
+        media: message.media.map(media => {
+          if (media.id !== fileId) {
+            return media;
+          }
 
-        return {
-          ...media,
-          isLoading: false,
-          uploadPercent: null
-        };
-      })
-    };
-  });
+          return {
+            ...media,
+            isLoading: false,
+            uploadPercent: null
+          };
+        })
+      };
+    })
+  );
 
   schedulePersistMessages(topicId);
 };
@@ -814,10 +1593,10 @@ export const changeMessageStatusLocally = (
   messageId: string,
   status: MessageStatus
 ): void => {
-  const existingMessages = messagesStore.value[topicId] || [];
-
-  messagesStore.value[topicId] = existingMessages.map(message =>
-    message.id === messageId ? { ...message, status } : message
+  updateTopicMessageStores(topicId, messages =>
+    messages.map(message =>
+      message.id === messageId ? { ...message, status } : message
+    )
   );
 
   schedulePersistMessages(topicId);
@@ -828,29 +1607,29 @@ export const setFileUploadPendingStatus = (
   messageId: string,
   fileId: string
 ): void => {
-  const existingMessages = messagesStore.value[topicId] || [];
+  updateTopicMessageStores(topicId, messages =>
+    messages.map(message => {
+      if (message.id !== messageId || !message.media) {
+        return message;
+      }
 
-  messagesStore.value[topicId] = existingMessages.map(message => {
-    if (message.id !== messageId || !message.media) {
-      return message;
-    }
+      return {
+        ...message,
+        media: message.media.map(media => {
+          if (media.id !== fileId) {
+            return media;
+          }
 
-    return {
-      ...message,
-      media: message.media.map(media => {
-        if (media.id !== fileId) {
-          return media;
-        }
-
-        return {
-          ...media,
-          isLoading: true,
-          uploadError: false,
-          uploadPercent: null
-        };
-      })
-    };
-  });
+          return {
+            ...media,
+            isLoading: true,
+            uploadError: false,
+            uploadPercent: null
+          };
+        })
+      };
+    })
+  );
 
   schedulePersistMessages(topicId);
 };
@@ -861,26 +1640,27 @@ export const changeFileUploadPercent = (
   fileId: string,
   percent: number | null
 ): void => {
-  const existingMessages = messagesStore.value[topicId] || [];
-  messagesStore.value[topicId] = existingMessages.map(message => {
-    if (message.id !== messageId || !message.media) {
-      return message;
-    }
+  updateTopicMessageStores(topicId, messages =>
+    messages.map(message => {
+      if (message.id !== messageId || !message.media) {
+        return message;
+      }
 
-    return {
-      ...message,
-      media: message.media.map(media => {
-        if (media.id !== fileId) {
-          return media;
-        }
+      return {
+        ...message,
+        media: message.media.map(media => {
+          if (media.id !== fileId) {
+            return media;
+          }
 
-        return {
-          ...media,
-          uploadPercent: percent
-        };
-      })
-    };
-  });
+          return {
+            ...media,
+            uploadPercent: percent
+          };
+        })
+      };
+    })
+  );
 
   schedulePersistMessages(topicId);
 };
@@ -894,30 +1674,30 @@ export const setUploadedFileData = (
     'path' | 'thumbnailPath' | 'originName' | 'size' | 'type' | 'ex'
   >
 ): void => {
-  const existingMessages = messagesStore.value[topicId] || [];
+  updateTopicMessageStores(topicId, messages =>
+    messages.map(message => {
+      if (message.id !== messageId || !message.media) {
+        return message;
+      }
 
-  messagesStore.value[topicId] = existingMessages.map(message => {
-    if (message.id !== messageId || !message.media) {
-      return message;
-    }
+      return {
+        ...message,
+        media: message.media.map(media => {
+          if (media.id !== fileId) {
+            return media;
+          }
 
-    return {
-      ...message,
-      media: message.media.map(media => {
-        if (media.id !== fileId) {
-          return media;
-        }
-
-        return {
-          ...media,
-          ...payload,
-          isLoading: false,
-          uploadError: false,
-          uploadPercent: null
-        };
-      })
-    };
-  });
+          return {
+            ...media,
+            ...payload,
+            isLoading: false,
+            uploadError: false,
+            uploadPercent: null
+          };
+        })
+      };
+    })
+  );
 
   schedulePersistMessages(topicId);
 };
@@ -928,29 +1708,29 @@ export const changeFileUploadErrorStatus = (
   fileId: string,
   uploadError: boolean
 ): void => {
-  const existingMessages = messagesStore.value[topicId] || [];
+  updateTopicMessageStores(topicId, messages =>
+    messages.map(message => {
+      if (message.id !== messageId || !message.media) {
+        return message;
+      }
 
-  messagesStore.value[topicId] = existingMessages.map(message => {
-    if (message.id !== messageId || !message.media) {
-      return message;
-    }
+      return {
+        ...message,
+        media: message.media.map(media => {
+          if (media.id !== fileId) {
+            return media;
+          }
 
-    return {
-      ...message,
-      media: message.media.map(media => {
-        if (media.id !== fileId) {
-          return media;
-        }
-
-        return {
-          ...media,
-          isLoading: false,
-          uploadError,
-          uploadPercent: null
-        };
-      })
-    };
-  });
+          return {
+            ...media,
+            isLoading: false,
+            uploadError,
+            uploadPercent: null
+          };
+        })
+      };
+    })
+  );
 
   schedulePersistMessages(topicId);
 };
@@ -960,13 +1740,18 @@ export const deleteFileAfterLoading = (
   messageId: string,
   fileId: string
 ): void => {
-  const existingMessages = messagesStore.value[topicId] || [];
-  const message = existingMessages.find(message => message.id === messageId);
-  if (!message?.media) {
-    return;
-  }
+  updateTopicMessageStores(topicId, messages =>
+    messages.map(message => {
+      if (message.id !== messageId || !message.media) {
+        return message;
+      }
 
-  message.media = message.media.filter(media => media.id !== fileId);
+      return {
+        ...message,
+        media: message.media.filter(media => media.id !== fileId)
+      };
+    })
+  );
   schedulePersistMessages(topicId);
 };
 
