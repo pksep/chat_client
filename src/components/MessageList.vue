@@ -59,12 +59,6 @@
     </div>
   </div>
 
-  <Loading
-    v-if="isLoadingInitialMessages"
-    message="Загрузка сообщений..."
-    :dataTestid="`${props.dataTestid}-MessageList-Loading`"
-  />
-
   <SelectedMessagesContent
     v-if="isSelectionMode"
     :data-testid="`${props.dataTestid}-SelectedMessages`"
@@ -110,7 +104,6 @@ import {
 import MessageListAIItems from './Messages/MessageListAIItems.vue';
 import MessageListUserItems from './Messages/MessageListUserItems.vue';
 import MessageListInput from './Messages/MessageListInput.vue';
-import Loading from './Loading.vue';
 import {
   MessageTypeEnum,
   PushNotification,
@@ -133,11 +126,15 @@ import {
   isMessageSelectionModeForTopic
 } from '../composables/useSelectedMessages';
 import {
+  clearVisibleMessagesForTopic,
   fetchAroundMessage,
   fetchMessagesForTopic,
   fetchPinnedMessagesForTopic,
+  getFullMessagesByTopicId,
   getMessagesByTopicId,
+  hydrateMessageContextFromShadow,
   hydrateMessagesFromCache,
+  mergeMessagesForTopic,
   suspendLocalOwnReadStatus
 } from '../services/useMessages';
 import { setSuspendIncomingMergeForTopic } from '../services/useChat';
@@ -157,6 +154,7 @@ import {
   consumePendingForwardMessages,
   usePendingForwardMessages
 } from '../composables/useForwardMessages';
+import { ensureMediaObjectUrl } from '../services/useMediaBlobCache';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -167,6 +165,7 @@ const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
 });
 const TOPIC_SWITCH_AUTO_READ_GRACE_MS = 1200;
 const TOPIC_SWITCH_HISTORY_FETCH_GRACE_MS = 1200;
+const TOPIC_SWITCH_MEDIA_PREWARM_LIMIT = 12;
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
 const messageListUserItemsRef = useTemplateRef<any>('messageListUserItemsRef');
@@ -205,9 +204,10 @@ const activeTopic = computed(() =>
 const topicUnreadCount = computed(
   () => activeTopic.value?.unreadMessageCount || 0
 );
+const renderedTopicId = ref(route.value.id || '');
 
 const state = reactive({
-  messages: computed(() => getMessagesByTopicId(route.value.id)),
+  messages: computed(() => getMessagesByTopicId(renderedTopicId.value)),
   chatId: null as string | null,
   isLoadingMore: false,
   aiMessages: [] as AIMessage[],
@@ -281,6 +281,39 @@ const applyPendingForwardMessages = () => {
   });
 };
 
+const warmVisibleTopicMedia = async (topicId: string) => {
+  const visibleMessages = getMessagesByTopicId(topicId);
+  const mediaPaths = new Set<string>();
+
+  for (const message of visibleMessages) {
+    for (const media of message.media || []) {
+      const preferredPath = media.thumbnailPath || media.path;
+
+      if (!preferredPath || mediaPaths.has(preferredPath)) {
+        continue;
+      }
+
+      mediaPaths.add(preferredPath);
+
+      if (mediaPaths.size >= TOPIC_SWITCH_MEDIA_PREWARM_LIMIT) {
+        break;
+      }
+    }
+
+    if (mediaPaths.size >= TOPIC_SWITCH_MEDIA_PREWARM_LIMIT) {
+      break;
+    }
+  }
+
+  if (mediaPaths.size === 0) {
+    return;
+  }
+
+  await Promise.allSettled(
+    [...mediaPaths].map(path => ensureMediaObjectUrl(path))
+  );
+};
+
 const refreshUnreadMarkerState = () => {
   if (!route.value?.id) {
     state.unreadMarkerMessageId = null;
@@ -300,6 +333,16 @@ const refreshUnreadMarkerState = () => {
   ) {
     state.unreadMarkerMessageId = null;
     state.hideUnreadMarker = true;
+    return;
+  }
+
+  if (
+    state.unreadMarkerMessageId &&
+    firstUnreadMessageId &&
+    state.unreadMarkerMessageId !== firstUnreadMessageId &&
+    unreadCount > 0
+  ) {
+    state.hideUnreadMarker = false;
     return;
   }
 
@@ -325,22 +368,97 @@ const handleVisibilityChangeRefresh = () => {
   }
 };
 
+const hydrateMessageContextFromMemory = async (
+  topicId: string,
+  messageId: string
+): Promise<IMessage[]> => {
+  const fullMessages = getFullMessagesByTopicId(topicId);
+
+  if (!fullMessages.length) {
+    return [];
+  }
+
+  const targetIndex = fullMessages.findIndex(
+    message => message.id === messageId
+  );
+
+  if (targetIndex < 0) {
+    return [];
+  }
+
+  const beforeLimit = 40;
+  const afterLimit = 40;
+  const startIndex = Math.max(0, targetIndex - beforeLimit);
+  const endIndex = Math.min(fullMessages.length, targetIndex + afterLimit + 1);
+  const contextMessages = fullMessages.slice(startIndex, endIndex);
+
+  scrollAnchor.prepareJumpMutation();
+  mergeMessagesForTopic(topicId, contextMessages, 'replace', {
+    syncLastMessage: false,
+    windowMode: 'around-anchor',
+    anchorMessageId: messageId
+  });
+
+  await nextTick();
+  return contextMessages;
+};
+
 const handleScrollToMessage = async (message: IMessage) => {
   if (message.topicId !== route.value.id) return;
 
   const messageId = message.id;
   const didJump = await scrollAnchor.jumpToMessage(messageId, {
     block: 'center',
-    behavior: 'auto',
+    behavior: 'smooth',
     highlightClassName: 'highlighted',
-    highlightDurationMs: 1000
+    highlightDurationMs: 1400
   });
 
   if (didJump) {
     return;
   }
 
+  const memoryMessages = await hydrateMessageContextFromMemory(
+    route.value.id,
+    messageId
+  );
+
+  if (memoryMessages.some(m => m.id === messageId)) {
+    const didMemoryJump = await scrollAnchor.jumpToMessage(messageId, {
+      block: 'center',
+      behavior: 'smooth',
+      highlightClassName: 'highlighted',
+      highlightDurationMs: 1400
+    });
+
+    if (didMemoryJump) {
+      return;
+    }
+  }
+
+  scrollAnchor.prepareJumpMutation();
+  const shadowMessages = await hydrateMessageContextFromShadow(
+    route.value.id,
+    messageId,
+    authUser.value?.id
+  );
+
+  if (shadowMessages.some(m => m.id === messageId)) {
+    await nextTick();
+    const didShadowJump = await scrollAnchor.jumpToMessage(messageId, {
+      block: 'center',
+      behavior: 'smooth',
+      highlightClassName: 'highlighted',
+      highlightDurationMs: 1400
+    });
+
+    if (didShadowJump) {
+      return;
+    }
+  }
+
   resetScrollState();
+  scrollAnchor.prepareJumpMutation();
   const messages = await fetchAroundMessage(messageId);
 
   if (!messages.some(m => m.id === messageId)) {
@@ -350,9 +468,9 @@ const handleScrollToMessage = async (message: IMessage) => {
   await nextTick();
   await scrollAnchor.jumpToMessage(messageId, {
     block: 'center',
-    behavior: 'auto',
+    behavior: 'smooth',
     highlightClassName: 'highlighted',
-    highlightDurationMs: 1000
+    highlightDurationMs: 1400
   });
 };
 
@@ -396,18 +514,7 @@ const getFirstUnreadMessageId = (): string | null => {
 };
 
 const getCurrentTopicUnreadCount = (): number => {
-  const currentUserId = authUser.value?.id;
-
-  if (!currentUserId) {
-    return 0;
-  }
-
-  return state.messages.filter(
-    message =>
-      !message.isSystem &&
-      message.senderUserId !== currentUserId &&
-      message.isReadByMe !== true
-  ).length;
+  return topicUnreadCount.value || 0;
 };
 
 const rememberCurrentUnreadMarkerState = (topicId: string) => {
@@ -542,6 +649,7 @@ watch(
   [() => route.value?.id, () => route.value?.type],
   async ([topicId]) => {
     if (!topicId) return;
+    isLoadingInitialMessages.value = true;
     resetScrollState();
     setReadReceiptsEnabled(false);
     suspendAutoRead(TOPIC_SWITCH_AUTO_READ_GRACE_MS);
@@ -550,8 +658,7 @@ watch(
     applyUnreadMarkerStateForTopic(topicId);
 
     const topicUnreadCount = getSelectedTopic(topicId)?.unreadMessageCount || 0;
-    const initialMessagesLimit =
-      topicUnreadCount > 0 ? Math.max(100, topicUnreadCount + 20) : undefined;
+    const initialMessagesLimit = Math.max(100, topicUnreadCount + 20);
 
     state.replyMessage = null;
     state.editMessage = null;
@@ -559,11 +666,41 @@ watch(
 
     clearSelectedMessages();
 
-    await hydrateMessagesFromCache(topicId);
-    await fetchPinnedMessagesForTopic(topicId);
-    await fetchMessagesForTopic(topicId, {
+    const existingVisibleMessages = getMessagesByTopicId(topicId);
+    const existingFullMessages = getFullMessagesByTopicId(topicId);
+    const shouldClearPartialVisibleMessages =
+      existingVisibleMessages.length > 0 &&
+      existingFullMessages.length < initialMessagesLimit;
+
+    if (shouldClearPartialVisibleMessages) {
+      clearVisibleMessagesForTopic(topicId);
+    }
+
+    const hydratedMessages = await hydrateMessagesFromCache(topicId);
+
+    if (
+      hydratedMessages.length > 0 ||
+      getMessagesByTopicId(topicId).length > 0
+    ) {
+      await warmVisibleTopicMedia(topicId);
+      renderedTopicId.value = topicId;
+      await nextTick();
+      scrollToBottom({
+        preferUnreadMarker: false,
+        smooth: false
+      });
+    } else if (
+      !shouldClearPartialVisibleMessages &&
+      (existingVisibleMessages.length > 0 || existingFullMessages.length > 0)
+    ) {
+      renderedTopicId.value = topicId;
+    }
+
+    void fetchPinnedMessagesForTopic(topicId);
+    void fetchMessagesForTopic(topicId, {
       limit: initialMessagesLimit
     });
+    renderedTopicId.value = topicId;
     await nextTick();
     refreshUnreadMarkerState();
 
@@ -579,23 +716,25 @@ watch(
       applyUnreadMarkerStateForTopic(topicId);
     }
 
-    nextTick(() => {
-      const consumedForwardMessages = consumePendingForwardMessages(topicId);
+    const consumedForwardMessages = consumePendingForwardMessages(topicId);
 
-      if (consumedForwardMessages.length > 0) {
-        state.forwardMessages = consumedForwardMessages;
-      }
+    if (consumedForwardMessages.length > 0) {
+      state.forwardMessages = consumedForwardMessages;
+    }
 
-      inputText.value = getLocalStorageInputText.value;
-      scrollToBottom();
-      setTimeout(() => {
-        rememberCurrentUnreadMarkerState(topicId);
-        setReadReceiptsEnabled(true);
-        setupIntersectionObserver();
-        syncVisibleUnreadAfterAutoScroll();
-        scrollAnchor.initialize();
-      }, 160);
+    inputText.value = getLocalStorageInputText.value;
+
+    await nextTick();
+    scrollToBottom({
+      preferUnreadMarker: false,
+      smooth: false
     });
+    scrollAnchor.initialize();
+    isLoadingInitialMessages.value = false;
+    rememberCurrentUnreadMarkerState(topicId);
+    setReadReceiptsEnabled(true);
+    setupIntersectionObserver();
+    syncVisibleUnreadAfterAutoScroll();
   },
   { immediate: true }
 );

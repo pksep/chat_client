@@ -1,4 +1,4 @@
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { getChatSDK } from '../services/useChat';
 import { ITopic } from '../components/interfaces/interfaces';
 import {
@@ -12,13 +12,19 @@ import {
   groups,
   updateLocalGroupInfo
 } from '../composables/useGroup';
-import { getMessagesByTopicId } from '../services/useMessages';
+import { getFullMessagesByTopicId } from '../services/useMessages';
 import { useUrlWatcher } from './navigation';
 import { authedUser } from './useAuth';
 import {
   loadCachedTopics,
   saveCachedTopics
 } from '../services/useChatStateCache';
+import {
+  hasCachedShadowLoadedRanges,
+  getCachedShadowReadState,
+  hasCachedShadowReadState,
+  isShadowTimestampCoveredByCachedRanges
+} from '../services/useShadowChatSync';
 
 const topics = ref<ITopic[]>([]);
 const loading = ref(false);
@@ -27,10 +33,23 @@ const displayedUnreadCount = ref(0);
 let persistTopicsTimeout: ReturnType<typeof setTimeout> | null = null;
 const topicReadPreviewIds = ref<Record<string, string[]>>({});
 const serverUnreadCounts = ref<Record<string, number>>({});
+let isTopicsVisibilityBound = false;
+let topicsApi: ReturnType<typeof createTopicsApi> | null = null;
 
 const route = useUrlWatcher();
 
-export const useTopics = () => {
+const bindTopicsVisibilityListener = (
+  handleVisibilityChange: () => void
+): void => {
+  if (isTopicsVisibilityBound || typeof document === 'undefined') {
+    return;
+  }
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  isTopicsVisibilityBound = true;
+};
+
+const createTopicsApi = () => {
   const applyDisplayedUnreadCount = (count: number) => {
     const baseTitle = 'SEP:Chat';
 
@@ -64,7 +83,7 @@ export const useTopics = () => {
   };
 
   const resolveLatestMessage = (topic: ITopic) => {
-    const localLastMessage = getMessagesByTopicId(topic.id).at(-1);
+    const localLastMessage = getFullMessagesByTopicId(topic.id).at(-1);
     const serverLastMessage = topic.lastMessage;
 
     if (!localLastMessage) {
@@ -198,7 +217,7 @@ export const useTopics = () => {
       if (lastMessage) {
         topic.lastMessage = lastMessage;
       } else {
-        const messages = getMessagesByTopicId(topicId);
+        const messages = getFullMessagesByTopicId(topicId);
         topic.lastMessage = messages.at(-1);
       }
     }
@@ -357,7 +376,7 @@ export const useTopics = () => {
     }
 
     const currentUserId = authedUser.value.id;
-    const messages = getMessagesByTopicId(topicId);
+    const messages = getFullMessagesByTopicId(topicId);
     const previewReadIds = new Set(topicReadPreviewIds.value[topicId] || []);
     const baseUnreadCount = Math.max(0, serverUnreadCounts.value[topicId] || 0);
     const effectiveServerUnreadCount = Math.max(
@@ -371,14 +390,64 @@ export const useTopics = () => {
         message.isReadByMe !== true &&
         !previewReadIds.has(message.id)
     );
+    const shadowReadStateExists = hasCachedShadowReadState(
+      topicId,
+      currentUserId
+    );
+    const shadowReadState = getCachedShadowReadState(topicId, currentUserId);
+    const shadowLastReadMessage = shadowReadState?.lastReadMessageId
+      ? messages.find(
+          message => message.id === shadowReadState.lastReadMessageId
+        )
+      : null;
+    const shadowLastReadTimestamp = shadowLastReadMessage
+      ? getMessageTimestamp(shadowLastReadMessage)
+      : new Date(shadowReadState?.lastReadAt || 0).getTime();
+    const computedUnreadMessages = shadowReadStateExists
+      ? messages.filter(message => {
+          if (
+            message.isSystem ||
+            message.senderUserId === currentUserId ||
+            previewReadIds.has(message.id)
+          ) {
+            return false;
+          }
 
-    topic.unreadMessageCount = Math.max(
-      unreadMessages.length,
-      effectiveServerUnreadCount
-    );
-    topic.taggedMe = unreadMessages.some(message =>
-      message.taggedUserIds?.includes(currentUserId)
-    );
+          if (
+            !shadowReadState?.lastReadMessageId &&
+            !shadowReadState?.lastReadAt
+          ) {
+            return true;
+          }
+
+          return getMessageTimestamp(message) > shadowLastReadTimestamp;
+        })
+      : unreadMessages;
+    const latestKnownMessage = resolveLatestMessage(topic);
+    const latestKnownMessageTimestamp = getMessageTimestamp(latestKnownMessage);
+    const hasLoadedRanges = hasCachedShadowLoadedRanges(topicId, currentUserId);
+    const hasLatestRangeCoverage =
+      !hasLoadedRanges ||
+      !latestKnownMessageTimestamp ||
+      isShadowTimestampCoveredByCachedRanges(
+        topicId,
+        latestKnownMessageTimestamp,
+        currentUserId
+      );
+    const shouldUseComputedUnread =
+      shadowReadStateExists &&
+      (effectiveServerUnreadCount === 0 || hasLatestRangeCoverage);
+
+    const computedUnreadCount = computedUnreadMessages.length;
+
+    topic.unreadMessageCount = shouldUseComputedUnread
+      ? Math.min(effectiveServerUnreadCount, computedUnreadCount)
+      : effectiveServerUnreadCount;
+    topic.taggedMe =
+      topic.unreadMessageCount > 0 &&
+      (shouldUseComputedUnread ? computedUnreadMessages : unreadMessages).some(
+        message => message.taggedUserIds?.includes(currentUserId)
+      );
 
     topics.value = [...topics.value];
     schedulePersistTopics();
@@ -528,13 +597,7 @@ export const useTopics = () => {
     }
   };
 
-  onMounted(() => {
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-  });
-
-  onUnmounted(() => {
-    document.removeEventListener('visibilitychange', handleVisibilityChange);
-  });
+  bindTopicsVisibilityListener(handleVisibilityChange);
 
   return {
     topics,
@@ -567,6 +630,14 @@ export const useTopics = () => {
     decrementServerUnreadCount,
     incrementDisplayedUnreadCount
   };
+};
+
+export const useTopics = () => {
+  if (!topicsApi) {
+    topicsApi = createTopicsApi();
+  }
+
+  return topicsApi;
 };
 
 const {

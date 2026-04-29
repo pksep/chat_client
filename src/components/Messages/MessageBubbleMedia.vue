@@ -4,6 +4,7 @@
       Переслано: от {{ props.forwardUser.initials }}
     </h5>
     <article
+      ref="mediaArticleRef"
       :class="messageArticleStyles"
       :data-testid="`${props.dataTestid}-Article`"
     >
@@ -43,9 +44,11 @@
           @contextmenu.prevent
         >
           <img
-            :src="getFullMediaPath(media)"
+            :src="shouldLoadMedia ? getFullMediaPath(media) : EMPTY_MEDIA_SRC"
             :alt="props.sender ? props.sender + ' image' : 'Shared image'"
             :style="getPreviewStyle(media)"
+            loading="lazy"
+            decoding="async"
             @load="captureImagePreviewMetrics(media, $event)"
             @click="$emit('set-slider', mediaFiles, i)"
             @dragstart="handleDragStart($event, media)"
@@ -92,7 +95,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { MediaType } from '@pksep/zod-shared-chat';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import LoadingIcon from '../UI/LoadingIcon.vue';
@@ -108,10 +111,15 @@ import type { IMessageBubbleProps } from './interface/interface';
 import type { IMedia } from '../interfaces/interfaces';
 
 const props = defineProps<IMessageBubbleProps>();
-
 defineEmits(['navigate-message', 'set-slider']);
 
-const { getFullMediaPath, handleDragStart } = useMessageMedia();
+const {
+  getFullMediaPath,
+  handleDragStart,
+  primeMediaCache,
+  isMediaPathReady,
+  EMPTY_MEDIA_SRC
+} = useMessageMedia();
 
 const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
@@ -119,6 +127,74 @@ const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
 const mediaFiles = computed(
   () => props.media?.filter(media => media.type !== MediaType.File) || []
 );
+const mediaArticleRef = ref<HTMLElement | null>(null);
+const shouldLoadMedia = ref(false);
+let visibilityObserver: IntersectionObserver | null = null;
+
+const isNearViewport = (element: HTMLElement, offset = 250) => {
+  const rect = element.getBoundingClientRect();
+
+  return rect.bottom >= -offset && rect.top <= window.innerHeight + offset;
+};
+
+watch(
+  [mediaFiles, shouldLoadMedia],
+  ([medias]) => {
+    if (!shouldLoadMedia.value) {
+      return;
+    }
+
+    medias.forEach(media => {
+      primeMediaCache(media, {
+        includeOriginal: media.type === MediaType.Video
+      });
+    });
+  },
+  {
+    immediate: true,
+    deep: true
+  }
+);
+
+onMounted(() => {
+  if (
+    mediaArticleRef.value &&
+    isNearViewport(mediaArticleRef.value) &&
+    mediaFiles.value.some(media => isMediaPathReady(media))
+  ) {
+    shouldLoadMedia.value = true;
+    return;
+  }
+
+  if (!('IntersectionObserver' in window)) {
+    shouldLoadMedia.value = true;
+    return;
+  }
+
+  visibilityObserver = new IntersectionObserver(
+    entries => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        shouldLoadMedia.value = true;
+        visibilityObserver?.disconnect();
+        visibilityObserver = null;
+      }
+    },
+    {
+      root: null,
+      rootMargin: '250px 0px',
+      threshold: 0.01
+    }
+  );
+
+  if (mediaArticleRef.value) {
+    visibilityObserver.observe(mediaArticleRef.value);
+  }
+});
+
+onUnmounted(() => {
+  visibilityObserver?.disconnect();
+  visibilityObserver = null;
+});
 
 const showErrorIcon = computed(
   () =>

@@ -30,12 +30,8 @@
           :key="member.id"
           class="call-modal__group-panel-member"
         >
-          <Avatar
-            :url="
-              member.avatarUrl
-                ? `${config.CHAT_PATH_TO_FILE_CDN}/${member.avatarUrl}`
-                : ''
-            "
+          <CachedAvatar
+            :path="member.avatarUrl"
             :initials="member.initials"
             :alt="member.initials"
             class="call-modal__group-panel-avatar"
@@ -75,12 +71,8 @@
             :key="member.id"
             class="call-modal__group-panel-member"
           >
-            <Avatar
-              :url="
-                member.avatarUrl
-                  ? `${config.CHAT_PATH_TO_FILE_CDN}/${member.avatarUrl}`
-                  : ''
-              "
+            <CachedAvatar
+              :path="member.avatarUrl"
               :initials="member.initials"
               :alt="member.initials"
               class="call-modal__group-panel-avatar"
@@ -98,13 +90,10 @@
 </template>
 
 <script setup lang="ts">
-import { Avatar } from '@pksep/yui';
 import LinkIcon from '../UI/LinkIcon.vue';
 import MobileModal from '../UI/MobileModal.vue';
-import { getConfig } from '../../services/useConfig';
 import type { IUser } from '../interfaces/interfaces';
-
-const config = getConfig();
+import CachedAvatar from '../UI/CachedAvatar.vue';
 
 const props = defineProps<{
   open: boolean;

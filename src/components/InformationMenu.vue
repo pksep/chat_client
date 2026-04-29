@@ -9,9 +9,9 @@
     </span>
   </div>
   <button class="menu-info__avatar-button" @click="openEditProfileIcon">
-    <Avatar
+    <CachedAvatar
       :initials="model?.name"
-      :url="`${config.CHAT_PATH_TO_FILE_CDN}/${model?.avatarUrl}`"
+      :path="model?.avatarUrl"
       alt="use-avatar-circle"
     />
   </button>
@@ -35,11 +35,11 @@
 <script lang="ts" setup>
 import { useTemplateRef } from 'vue';
 import { useInformationMenu } from '../composables/useInformationMenu';
-import { ModalCroppedAvatar, Avatar } from '@pksep/yui';
+import { ModalCroppedAvatar } from '@pksep/yui';
 import NewChatInformationForm from './NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from './MenuInfoButtons.vue';
 import type { IMenuInfoInformation } from '../composables/useMenuInfo';
-import { getConfig } from '../services/useConfig';
+import CachedAvatar from './UI/CachedAvatar.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -56,8 +56,6 @@ const props = withDefaults(
 const model = defineModel<IMenuInfoInformation>();
 
 const avatarInputRef = useTemplateRef('avatarInputRef');
-
-const config = getConfig();
 
 const {
   state,

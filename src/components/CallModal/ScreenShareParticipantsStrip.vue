@@ -45,12 +45,8 @@
           v-if="!participant.isVideoActive"
           class="call-modal__remote-placeholder"
         >
-          <Avatar
-            :url="
-              participant.avatarUrl
-                ? `${config.CHAT_PATH_TO_FILE_CDN}/${participant.avatarUrl}`
-                : ''
-            "
+          <CachedAvatar
+            :path="participant.avatarUrl"
             :alt="participant.name"
             class="call-modal__avatar"
             :initials="participant.initials"
@@ -88,13 +84,12 @@
 
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Avatar, Icon, IconNameEnum } from '@pksep/yui';
-import { getConfig } from '../../services/useConfig';
+import { Icon, IconNameEnum } from '@pksep/yui';
 import HandRaiseIcon from './UI/HandRaiseIcon.vue';
 import MicDisableIcon from './UI/MicDisableIcon.vue';
 import MicIcon from './UI/MicIcon.vue';
+import CachedAvatar from '../UI/CachedAvatar.vue';
 
-const config = getConfig();
 const remoteGrid = ref<HTMLDivElement | null>(null);
 const canScrollLeft = ref(false);
 const canScrollRight = ref(false);

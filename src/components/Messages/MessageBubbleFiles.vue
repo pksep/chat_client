@@ -4,6 +4,7 @@
       Переслано: от {{ props.forwardUser.initials }}
     </h5>
     <article
+      ref="filesArticleRef"
       :class="messageArticleStyles"
       :data-testid="`${props.dataTestid}-Article`"
     >
@@ -102,7 +103,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import { MediaType } from '@pksep/zod-shared-chat';
 import MessageStatusIcons from './MessageStatusIcons.vue';
@@ -114,17 +115,70 @@ import { stripHtml } from '../../utils/stripHtml';
 import { getFormatFileSize, getShortName } from '../../utils/getFormatFileSize';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
+import { useMessageMedia } from './composables/useMessageMedia';
 
 const props = defineProps<IMessageBubbleProps>();
 
 const emits = defineEmits(['navigate-message', 'set-slider']);
+const { primeMediaCache } = useMessageMedia();
 
 const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
+const filesArticleRef = ref<HTMLElement | null>(null);
+const shouldPrimeFiles = ref(false);
+let filesVisibilityObserver: IntersectionObserver | null = null;
 
 const docFiles = computed(
   () => props.media?.filter(media => media.type === MediaType.File) || []
 );
+
+watch(
+  [docFiles, shouldPrimeFiles],
+  ([medias]) => {
+    if (!shouldPrimeFiles.value) {
+      return;
+    }
+
+    medias.forEach(media => {
+      primeMediaCache(media, { includeOriginal: true });
+    });
+  },
+  {
+    immediate: true,
+    deep: true
+  }
+);
+
+onMounted(() => {
+  if (!('IntersectionObserver' in window)) {
+    shouldPrimeFiles.value = true;
+    return;
+  }
+
+  filesVisibilityObserver = new IntersectionObserver(
+    entries => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        shouldPrimeFiles.value = true;
+        filesVisibilityObserver?.disconnect();
+        filesVisibilityObserver = null;
+      }
+    },
+    {
+      root: null,
+      rootMargin: '250px 0px',
+      threshold: 0.01
+    }
+  );
+
+  if (filesArticleRef.value) {
+    filesVisibilityObserver.observe(filesArticleRef.value);
+  }
+});
+
+onUnmounted(() => {
+  filesVisibilityObserver?.disconnect();
+  filesVisibilityObserver = null;
+});
 
 const showErrorIcon = computed(
   () =>

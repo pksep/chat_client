@@ -10,9 +10,9 @@
       class="modal-info-mobile__avatar-button"
       @click="handleEditProfileIcon"
     >
-      <Avatar
+      <CachedAvatar
         is-icon
-        :url="`${config.CHAT_PATH_TO_FILE_CDN}/${information?.avatarUrl}`"
+        :path="information?.avatarUrl"
         :initials="information?.name"
         :caption="`image with a channel ${information?.name}`"
         class="modal-info-mobile__avatar"
@@ -60,16 +60,15 @@
 
 <script lang="ts" setup>
 import { useTemplateRef, computed } from 'vue';
-import { Avatar } from '@pksep/yui';
 import NewChatInformationForm from '../NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from '../MenuInfoButtons.vue';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';
 import { IMenuInfoInformation } from '../../composables/useMenuInfo';
 import type { IUser } from '../interfaces/interfaces';
-import { getConfig } from '../../services/useConfig';
 import { useInformationMenu } from '../../composables/useInformationMenu';
 import { uploadFile } from '../../services/useChat';
 import { currentGroup, setGroupInfo } from '../../composables/useGroup';
+import CachedAvatar from '../UI/CachedAvatar.vue';
 
 interface IMobileChatInfoProps {
   members: IUser[];
@@ -96,7 +95,6 @@ const excludedContactIds = computed(() => {
 });
 
 const information = defineModel<IMenuInfoInformation>();
-const config = getConfig();
 const avatarInputRef = useTemplateRef('avatarInputRef');
 
 const { leaveGroupInfo, onOpenEditAvatar, openEditProfileIcon } =

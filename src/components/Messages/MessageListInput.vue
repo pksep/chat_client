@@ -88,7 +88,13 @@
         </div>
       </template>
       <template v-else-if="props.forwardMessages.length > 0" #action>
-        <div class="chat__input__action">
+        <div
+          class="chat__input__action"
+          @click="
+            props.forwardMessages[0] &&
+              $emit('scrollToMessage', props.forwardMessages[0])
+          "
+        >
           <ForwardIcon />
           <div class="chat__input__action__blog">
             <h5>
