@@ -116,7 +116,7 @@ import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
 import { getAuthUser } from '../composables/useAuth';
 import MobileModal from './UI/MobileModal.vue';
-import { Loader, Button, ButtonTypeEnum } from '@pksep/yui';
+import { Button, ButtonTypeEnum } from '@pksep/yui';
 import {
   navigateToDefault,
   navigateToGroup,
