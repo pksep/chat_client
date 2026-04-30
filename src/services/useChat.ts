@@ -191,7 +191,8 @@ const setupChatListeners = (): void => {
     } else if (
       !isDuplicateMessage &&
       message.senderUserId !== currentUserId.value &&
-      !message.isReadByMe
+      !message.isReadByMe &&
+      !message.isSystem
     ) {
       const existingBuffered =
         bufferedIncomingMessagesByTopic.value[message.topicId] || [];
@@ -202,15 +203,6 @@ const setupChatListeners = (): void => {
         ];
       }
 
-      changeUnreadMessageCount(1, message.topicId);
-    }
-
-    if (
-      !isDuplicateMessage &&
-      message.senderUserId !== currentUserId.value &&
-      message.topicId !== route.value.id &&
-      message.isSystem
-    ) {
       changeUnreadMessageCount(1, message.topicId);
     }
 

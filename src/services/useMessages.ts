@@ -1052,6 +1052,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
 
     if (
       !alreadyExists &&
+      !nextMessage.isSystem &&
       nextMessage.senderUserId !== authedUser.value?.id &&
       nextMessage.isReadByMe !== true
     ) {
@@ -1097,6 +1098,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
 
     if (
       !alreadyExists &&
+      !nextMessage.isSystem &&
       nextMessage.senderUserId !== authedUser.value?.id &&
       nextMessage.isReadByMe !== true
     ) {
@@ -1124,6 +1126,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
 
   if (
     !alreadyExists &&
+    !nextMessage.isSystem &&
     nextMessage.senderUserId !== authedUser.value?.id &&
     nextMessage.isReadByMe !== true
   ) {
