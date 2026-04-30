@@ -561,7 +561,10 @@ const resetUnreadIfViewingBottom = (): void => {
     return;
   }
 
-  if (scrollAnchor.viewportMode.value === 'live' && getCurrentTopicUnreadCount() > 0) {
+  if (
+    scrollAnchor.viewportMode.value === 'live' &&
+    getCurrentTopicUnreadCount() > 0
+  ) {
     void markAllVisibleAsRead();
   }
 
@@ -944,8 +947,8 @@ watch(
   [
     () => topicUnreadCount.value,
     () =>
-      state.messages.map(message =>
-        `${message.id}:${message.isReadByMe === true ? '1' : '0'}`
+      state.messages.map(
+        message => `${message.id}:${message.isReadByMe === true ? '1' : '0'}`
       )
   ],
   () => {

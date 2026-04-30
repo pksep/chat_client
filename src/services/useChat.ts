@@ -628,7 +628,8 @@ const reconcileTopicCachesAfterReconnect = async (): Promise<void> => {
       }
 
       return (
-        getMessageTimestamp(localLastMessage) < getMessageTimestamp(serverLastMessage)
+        getMessageTimestamp(localLastMessage) <
+        getMessageTimestamp(serverLastMessage)
       );
     })
     .slice(0, MAX_BACKGROUND_TOPIC_RECONCILES);
