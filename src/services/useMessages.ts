@@ -68,9 +68,14 @@ const pendingUploadMeta = new Map<
   string,
   { replyMessageId?: string; forwardMessageIds: string[] }
 >();
+const canonicalTopicStateIds = new Set<string>();
 const delayedOutgoingMessages = new Map<
   string,
   { message: IMessage; timeoutId: ReturnType<typeof setTimeout> }
+>();
+const outgoingDeliveryTimeouts = new Map<
+  string,
+  ReturnType<typeof setTimeout>
 >();
 const suspendedLocalOwnReadTimeouts = new Map<
   string,
@@ -86,6 +91,14 @@ const syncLocalLastMessage = (topicId: string, message?: IMessage): void => {
 
   updateLocalLastMessageTopic(topicId, message);
   updateLocalLastMessageGroup(topicId, message);
+};
+
+const markTopicStateCanonical = (topicId: string): void => {
+  if (!topicId) {
+    return;
+  }
+
+  canonicalTopicStateIds.add(topicId);
 };
 
 const schedulePersistMessages = (topicId: string): void => {
@@ -105,7 +118,7 @@ const schedulePersistMessages = (topicId: string): void => {
       fullMessagesStore.value[topicId] || []
     );
     void saveShadowTopicSnapshot(topicId, topicMessages, 'local', undefined, {
-      replace: true
+      replace: canonicalTopicStateIds.has(topicId)
     });
     void syncShadowReadStateFromMessages(topicId, topicMessages, 'local');
   }, 150);
@@ -176,6 +189,9 @@ const getPendingUploadKey = (topicId: string, messageId: string): string =>
 const getDelayedOutgoingKey = (topicId: string, messageId: string): string =>
   `${topicId}:${messageId}`;
 
+const getOutgoingDeliveryKey = (topicId: string, messageId: string): string =>
+  `${topicId}:${messageId}`;
+
 const hasClientId = (message: IMessage): boolean => {
   const parsedEx = parseMessageEx(message);
   return typeof parsedEx?.clientId === 'string' && parsedEx.clientId.length > 0;
@@ -199,6 +215,61 @@ const isPendingOutgoingMessage = (message: IMessage): boolean => {
     message.status === MessageStatus.Wait ||
     message.status === MessageStatus.NotDelivered ||
     !!message.media?.some(media => media.uploadError || media.isLoading)
+  );
+};
+
+const cancelOutgoingDeliveryTimeout = (
+  topicId: string,
+  messageId: string
+): void => {
+  const key = getOutgoingDeliveryKey(topicId, messageId);
+  const timeoutId = outgoingDeliveryTimeouts.get(key);
+
+  if (!timeoutId) {
+    return;
+  }
+
+  clearTimeout(timeoutId);
+  outgoingDeliveryTimeouts.delete(key);
+};
+
+const scheduleOutgoingDeliveryTimeout = (
+  topicId: string,
+  messageId: string,
+  delayMs = 15000
+): void => {
+  if (!topicId || !messageId) {
+    return;
+  }
+
+  cancelOutgoingDeliveryTimeout(topicId, messageId);
+
+  const timeoutId = setTimeout(
+    () => {
+      outgoingDeliveryTimeouts.delete(
+        getOutgoingDeliveryKey(topicId, messageId)
+      );
+
+      const pendingMessage = getFullMessagesByTopicId(topicId).find(
+        message => message.id === messageId
+      );
+
+      if (!pendingMessage || !isPendingOutgoingMessage(pendingMessage)) {
+        return;
+      }
+
+      changeMessageStatusLocally(
+        topicId,
+        messageId,
+        MessageStatus.NotDelivered
+      );
+    },
+    Math.max(0, delayMs)
+  );
+
+  outgoingDeliveryTimeouts.set(
+    getOutgoingDeliveryKey(topicId, messageId),
+    timeoutId
   );
 };
 
@@ -577,7 +648,41 @@ export const fetchMessagesForTopic = async (
     const direction = getHistoryDirection(opts);
 
     if (!navigator.onLine) {
-      if (existingMessages.length > 0) {
+      if (
+        (opts?.lastMessageId || opts?.afterMessageId) &&
+        existingMessages.length > 0
+      ) {
+        const localPage = await applyShadowReadStateToMessages(
+          topicId,
+          resolveLocalTopicPage(topicId, opts)
+        );
+
+        if (localPage.length > 0) {
+          if (!opts?.skipSave) {
+            mergeMessagesForTopic(
+              topicId,
+              localPage,
+              opts.lastMessageId ? 'prepend' : 'append',
+              {
+                syncLastMessage: opts?.syncLastMessage ?? false,
+                windowMode: getWindowModeForFetch(opts)
+              }
+            );
+          }
+
+          traceHistoryResolution(topicId, {
+            direction,
+            source: 'offline-memory',
+            resolution: 'cache_hit',
+            resultCount: localPage.length,
+            lastMessageId: opts?.lastMessageId || null,
+            afterMessageId: opts?.afterMessageId || null
+          });
+          return localPage;
+        }
+      }
+
+      if (existingMessages.length > 0 && canonicalTopicStateIds.has(topicId)) {
         traceHistoryResolution(topicId, {
           direction,
           source: 'offline-memory',
@@ -601,7 +706,8 @@ export const fetchMessagesForTopic = async (
     if (
       !opts?.forceRefresh &&
       !isPaginationRequest &&
-      existingMessages.length > 0
+      existingMessages.length > 0 &&
+      canonicalTopicStateIds.has(topicId)
     ) {
       if (!opts?.limit || existingMessages.length >= opts.limit) {
         traceHistoryResolution(topicId, {
@@ -669,6 +775,9 @@ export const fetchMessagesForTopic = async (
         existingMessages.length < opts.limit;
 
       if (normalizedShadowMessages.length > 0 && !isPartialInitialShadowHit) {
+        if (!isPaginationRequest) {
+          markTopicStateCanonical(topicId);
+        }
         void recordShadowChatEvent({
           topicId,
           type: 'bootstrap_history',
@@ -775,13 +884,17 @@ export const fetchMessagesForTopic = async (
                 [...existingVisible, ...messages].map(m => [m.id, m])
               ).values()
             )
-          : messages;
+          : mergeWithPendingOutgoingMessages(messages, existingVisible);
 
       saveMessagesToLocal(topicId, unique, {
         syncLastMessage: opts?.syncLastMessage ?? false,
         windowMode: getWindowModeForFetch(opts),
         visibleMessages
       });
+    }
+
+    if (!isPaginationRequest) {
+      markTopicStateCanonical(topicId);
     }
 
     return messages;
@@ -947,10 +1060,15 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
 
     syncTopicUnreadState(topicId);
     syncLocalLastMessage(topicId, nextMessage);
+
+    if (isPendingOutgoingMessage(nextMessage)) {
+      scheduleOutgoingDeliveryTimeout(topicId, nextMessage.id);
+    }
     return;
   }
 
   cancelDelayedOutgoingMessage(topicId, clientId);
+  cancelOutgoingDeliveryTimeout(topicId, clientId);
 
   const lastMessage = existingMessages.at(-1);
 
@@ -988,6 +1106,10 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
     syncTopicUnreadState(topicId);
     syncLocalLastMessage(topicId, nextMessage);
 
+    if (isPendingOutgoingMessage(nextMessage)) {
+      scheduleOutgoingDeliveryTimeout(topicId, nextMessage.id);
+    }
+
     return;
   }
 
@@ -1010,6 +1132,10 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
 
   syncTopicUnreadState(topicId);
   syncLocalLastMessage(topicId, nextMessage);
+
+  if (isPendingOutgoingMessage(nextMessage)) {
+    scheduleOutgoingDeliveryTimeout(topicId, nextMessage.id);
+  }
 };
 
 export const scheduleDelayedOutgoingMessage = (
@@ -1079,6 +1205,7 @@ export const deleteMessageFromLocal = (
   );
 
   clearPendingUploadMessage(topicId, messageId);
+  cancelOutgoingDeliveryTimeout(topicId, messageId);
   void deleteShadowTopicMessage(topicId, messageId);
 };
 
@@ -1223,6 +1350,7 @@ export const clearMessagesForTopic = (
   saveMessagesToLocal(topicId, [], {
     syncLastMessage: opts?.syncLastMessage ?? false
   });
+  canonicalTopicStateIds.delete(topicId);
 };
 
 export const getFullMessagesByTopicId = (topicId: string): IMessage[] => {
@@ -1251,7 +1379,7 @@ export const hydrateMessagesFromCache = async (
 
   const existingFullMessages = getFullMessagesByTopicId(topicId);
 
-  if (existingFullMessages.length > 0) {
+  if (existingFullMessages.length > 0 && canonicalTopicStateIds.has(topicId)) {
     saveMessagesToLocal(topicId, existingFullMessages, {
       syncLastMessage: false,
       windowMode: 'latest'
@@ -1279,6 +1407,7 @@ export const hydrateMessagesFromCache = async (
         syncLastMessage: false,
         windowMode: 'latest'
       });
+      markTopicStateCanonical(topicId);
       void saveShadowLoadedRange(topicId, normalizedShadowMessages);
 
       return normalizedShadowMessages;
@@ -1297,6 +1426,7 @@ export const hydrateMessagesFromCache = async (
       syncLastMessage: false,
       windowMode: 'latest'
     });
+    markTopicStateCanonical(topicId);
     void saveShadowTopicSnapshot(
       topicId,
       normalizedCachedMessages,
@@ -1316,6 +1446,15 @@ export const hydrateMessagesFromCache = async (
     void clearCachedTopicMessages(topicId, userId);
 
     return normalizedCachedMessages;
+  }
+
+  if (existingFullMessages.length > 0) {
+    saveMessagesToLocal(topicId, existingFullMessages, {
+      syncLastMessage: false,
+      windowMode: 'latest'
+    });
+
+    return getMessagesByTopicId(topicId);
   }
 
   return [];
@@ -1401,7 +1540,7 @@ export const mergeMessagesForTopic = (
               [...existingVisible, ...messages].map(m => [m.id, m])
             ).values()
           )
-        : messages;
+        : mergeWithPendingOutgoingMessages(messages, existingVisible);
   saveMessagesToLocal(topicId, unique, {
     syncLastMessage: opts?.syncLastMessage ?? false,
     windowMode:
@@ -1598,6 +1737,15 @@ export const changeMessageStatusLocally = (
       message.id === messageId ? { ...message, status } : message
     )
   );
+
+  if (status === MessageStatus.Wait) {
+    scheduleOutgoingDeliveryTimeout(topicId, messageId);
+  } else if (
+    status === MessageStatus.NotDelivered ||
+    status === MessageStatus.Read
+  ) {
+    cancelOutgoingDeliveryTimeout(topicId, messageId);
+  }
 
   schedulePersistMessages(topicId);
 };
@@ -1852,6 +2000,7 @@ export const clearPendingUploadMessage = (
 
   pendingUploadFiles.delete(key);
   pendingUploadMeta.delete(key);
+  cancelOutgoingDeliveryTimeout(topicId, messageId);
   void deletePendingUploadMeta(topicId, messageId);
 };
 

@@ -17,7 +17,7 @@
     >
       {{ props.topic.group?.title || 'Group' }}
     </h3>
-    <WaitConnection v-if="!!isWaitingConnection" />
+    <ConnectionStatus v-if="!!isWaitingConnection" />
     <span
       v-else
       class="user-profile__ex"
@@ -33,7 +33,7 @@
 import { IGroupProfileProps } from '../interfaces/interfaces';
 import { getHasWebsocketConnection } from '../../services/useChat';
 import { computed } from 'vue';
-import WaitConnection from '../UI/WaitConnection.vue';
+import ConnectionStatus from '../UI/ConnectionStatus.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 
 const props = withDefaults(defineProps<IGroupProfileProps>(), {

@@ -15,6 +15,7 @@ import {
   consumeBufferedIncomingMessagesForTopic
 } from '../../../services/useChat';
 import {
+  changeLocalReadStatus,
   fetchMessagesForTopic,
   getFullMessagesByTopicId,
   getMessagesByTopicId,
@@ -161,6 +162,12 @@ export function useMessageScroll(
         messageIds: uniqueMessageIds,
         topicId: route.value.id
       });
+      if (props.user?.id) {
+        changeLocalReadStatus(route.value.id, uniqueMessageIds, props.user.id);
+      }
+      uniqueMessageIds.forEach(id => {
+        pendingReadIds.delete(id);
+      });
     } catch (error) {
       console.warn('Failed to mark messages as read:', error);
       uniqueMessageIds.forEach(id => {
@@ -241,6 +248,12 @@ export function useMessageScroll(
         messageIds,
         topicId: route.value.id
       });
+      if (props.user?.id) {
+        changeLocalReadStatus(route.value.id, messageIds, props.user.id);
+      }
+      messageIds.forEach(id => {
+        pendingReadIds.delete(id);
+      });
     } catch (error) {
       console.warn('Failed to flush queued read messages:', error);
       messageIds.forEach(id => {
@@ -256,7 +269,10 @@ export function useMessageScroll(
     }
 
     const unreadMessages = state.messages.filter(
-      (message: IMessage) => message.senderUserId !== props.user?.id
+      (message: IMessage) =>
+        message.senderUserId !== props.user?.id &&
+        !message.isSystem &&
+        message.isReadByMe !== true
     );
 
     if (unreadMessages.length === 0) return;
@@ -272,6 +288,13 @@ export function useMessageScroll(
         messageIds: unreadMessages.map((message: IMessage) => message.id),
         topicId: route.value.id
       });
+      if (props.user?.id) {
+        changeLocalReadStatus(
+          route.value.id,
+          unreadMessages.map((message: IMessage) => message.id),
+          props.user.id
+        );
+      }
     } catch (error) {
       console.warn('Failed to mark messages as read:', error);
     }
@@ -745,6 +768,7 @@ export function useMessageScroll(
     handleScrollToButton,
     setupIntersectionObserver,
     flushVisibleUnreadMessages,
+    markAllVisibleAsRead,
     intersectionObserver,
     resetScrollState,
     scrollMarkReadTimeout,

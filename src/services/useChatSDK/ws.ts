@@ -19,7 +19,7 @@ export interface ChatWSInterface {
   sendWebSocketEvent<T extends WebSocketEventType>(
     type: T,
     payload: WebSocketEventPayloads[T]
-  ): void;
+  ): boolean;
   handleWebSocketEvent(rawEvent: any): void;
   setSocket(socket: Socket): void;
 }
@@ -77,7 +77,7 @@ export class ChatWS implements ChatWSInterface {
   sendWebSocketEvent<T extends WebSocketEventType>(
     type: T,
     payload: WebSocketEventPayloads[T]
-  ): void {
+  ): boolean {
     if (this.socket && this.socket.connected) {
       let serverEventType: string = type;
 
@@ -106,8 +106,10 @@ export class ChatWS implements ChatWSInterface {
       }
 
       this.socket.emit(serverEventType, JSON.stringify(payload));
+      return true;
     } else {
       console.error('Socket.IO is not connected. Cannot send event:', type);
+      return false;
     }
   }
 

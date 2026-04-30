@@ -78,7 +78,7 @@
   font-weight: bold;
   gap: 10px;
 
-  & > .wait-connection {
+  & > .connection-status {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
