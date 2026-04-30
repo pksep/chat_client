@@ -573,8 +573,8 @@ export class ChatSDK {
   sendWebSocketEvent<T extends WebSocketEventType>(
     type: T,
     payload: WebSocketEventPayloads[T]
-  ): void {
-    this.ws.sendWebSocketEvent(type, payload);
+  ): boolean {
+    return this.ws.sendWebSocketEvent(type, payload);
   }
 
   isConnected(): boolean {

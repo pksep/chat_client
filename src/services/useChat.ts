@@ -10,6 +10,7 @@ import {
   useTopics,
   deleteTopicFromList,
   fetchAllTopics,
+  getTopicList,
   incrementDisplayedUnreadCount,
   totalUnreadCount
 } from '../composables/useTopics';
@@ -63,6 +64,9 @@ let chatSDK: ChatSDK | null = null;
 
 const isWebsocketConnecting = ref(true);
 const hasWebsocketConnection = ref(false);
+const browserOnline = ref(
+  typeof navigator === 'undefined' ? true : navigator.onLine
+);
 const isRecentlyReconnected = ref(false);
 const currentUserId = ref<string | null>(null);
 const suspendIncomingMergeByTopic = ref<Record<string, boolean>>({});
@@ -524,8 +528,26 @@ let isResumeListenersAdded = false;
 let lastVisibilityState = document.visibilityState;
 let reconnectRefreshTimeout: ReturnType<typeof setTimeout> | null = null;
 let isRefreshingAfterReconnect = false;
+const MAX_BACKGROUND_TOPIC_RECONCILES = 12;
+let networkStatePollInterval: ReturnType<typeof setInterval> | null = null;
 
 const route = useUrlWatcher();
+
+const getMessageTimestamp = (
+  message?: Pick<IMessage, 'createdAt' | 'updatedAt'> | null
+): number => {
+  if (!message) {
+    return 0;
+  }
+
+  const value = message.updatedAt || message.createdAt;
+
+  if (!value) {
+    return 0;
+  }
+
+  return new Date(value).getTime();
+};
 
 const markRecentlyReconnected = (): void => {
   isRecentlyReconnected.value = true;
@@ -582,6 +604,52 @@ const refreshActiveTopicMessagesAfterReconnect = async (
   }
 };
 
+const reconcileTopicCachesAfterReconnect = async (): Promise<void> => {
+  const topicsToRefresh = getTopicList()
+    .filter(topic => {
+      if (!topic?.id || topic.id === route.value.id) {
+        return false;
+      }
+
+      const serverLastMessage = topic.lastMessage;
+
+      if (!serverLastMessage?.id) {
+        return false;
+      }
+
+      const localLastMessage = getFullMessagesByTopicId(topic.id).at(-1);
+
+      if (!localLastMessage?.id) {
+        return true;
+      }
+
+      if (localLastMessage.id !== serverLastMessage.id) {
+        return true;
+      }
+
+      return (
+        getMessageTimestamp(localLastMessage) <
+        getMessageTimestamp(serverLastMessage)
+      );
+    })
+    .slice(0, MAX_BACKGROUND_TOPIC_RECONCILES);
+
+  if (topicsToRefresh.length === 0) {
+    return;
+  }
+
+  await Promise.allSettled(
+    topicsToRefresh.map(topic =>
+      fetchMessagesForTopic(topic.id, {
+        limit: 100,
+        forceRefresh: true,
+        forceNetwork: true,
+        syncLastMessage: true
+      })
+    )
+  );
+};
+
 const refreshDataAfterReconnect = async (): Promise<void> => {
   if (isRefreshingAfterReconnect) {
     return;
@@ -591,6 +659,7 @@ const refreshDataAfterReconnect = async (): Promise<void> => {
 
   try {
     await Promise.allSettled([fetchAllTopics(), fetchAllUsers()]);
+    await reconcileTopicCachesAfterReconnect();
 
     if (route.value.id) {
       await Promise.allSettled([
@@ -613,6 +682,43 @@ const reconnectChatOnResume = (): void => {
   }
 
   chatSDK.reconnectIfNeeded();
+};
+
+const syncBrowserNetworkState = (isOnline: boolean): void => {
+  browserOnline.value = isOnline;
+
+  if (!isOnline) {
+    hasWebsocketConnection.value = false;
+    isWebsocketConnecting.value = false;
+    return;
+  }
+
+  if (chatSDK) {
+    isWebsocketConnecting.value = true;
+    reconnectChatOnResume();
+  }
+};
+
+const pollBrowserNetworkState = (): void => {
+  if (typeof navigator === 'undefined') {
+    return;
+  }
+
+  const nextOnlineState = navigator.onLine;
+
+  if (nextOnlineState !== browserOnline.value) {
+    syncBrowserNetworkState(nextOnlineState);
+  }
+};
+
+const ensureNetworkStatePolling = (): void => {
+  if (networkStatePollInterval) {
+    return;
+  }
+
+  networkStatePollInterval = setInterval(() => {
+    pollBrowserNetworkState();
+  }, 1000);
 };
 
 const syncPresenceForVisibility = (): void => {
@@ -639,6 +745,7 @@ export const initializeChat = async (options: {
   });
   chatSDK.setConnectionStateListener(connected => {
     const wasConnected = hasWebsocketConnection.value;
+    isWebsocketConnecting.value = browserOnline.value && !connected;
     hasWebsocketConnection.value = connected;
 
     void saveShadowSyncMeta('ws_connection', {
@@ -677,16 +784,42 @@ export const initializeChat = async (options: {
     });
 
     window.addEventListener('online', () => {
+      syncBrowserNetworkState(true);
       reconnectChatOnResume();
       if (!document.hidden) {
         syncPresenceForVisibility();
       }
     });
 
+    window.addEventListener('offline', () => {
+      syncBrowserNetworkState(false);
+    });
+
+    const networkInformation = (
+      typeof navigator !== 'undefined'
+        ? (navigator as Navigator & {
+            connection?: {
+              addEventListener?: (type: string, cb: () => void) => void;
+            };
+          })
+        : null
+    )?.connection;
+
+    networkInformation?.addEventListener?.('change', () => {
+      syncBrowserNetworkState(navigator.onLine);
+
+      if (navigator.onLine) {
+        reconnectChatOnResume();
+      }
+    });
+
+    ensureNetworkStatePolling();
+
     isResumeListenersAdded = true;
   }
 
-  isWebsocketConnecting.value = true;
+  browserOnline.value = navigator.onLine;
+  isWebsocketConnecting.value = navigator.onLine;
   hasWebsocketConnection.value = false;
   setupChatListeners();
   await chatSDK.connect();
@@ -785,20 +918,22 @@ export const sendMessageChat = async (params: {
   taggedUserIds?: string[];
   medias?: IMedia[];
   ex?: string;
-}): Promise<void> => {
+}): Promise<boolean> => {
   const sdk = getChatSDK();
 
   try {
+    if (!sdk) {
+      return false;
+    }
+
     if (params.messageId) {
-      sdk.sendWebSocketEvent(WebSocketEventType.EDIT_MESSAGE, {
+      return sdk.sendWebSocketEvent(WebSocketEventType.EDIT_MESSAGE, {
         messageId: params.messageId,
         text: params.text
       });
-
-      return;
     }
 
-    sdk.sendWebSocketEvent(WebSocketEventType.SEND_MESSAGE, {
+    return sdk.sendWebSocketEvent(WebSocketEventType.SEND_MESSAGE, {
       topicId: params.topicId,
       text: params.text,
       medias: params.medias,
@@ -809,6 +944,7 @@ export const sendMessageChat = async (params: {
     });
   } catch (error) {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);
+    return false;
   }
 };
 
@@ -939,14 +1075,21 @@ export const getMessagesWithLoadingStatus = (): ChatMessage[] => {
   return messagesWithStatus;
 };
 
-export const getIsWebsocketConnecting = () => isWebsocketConnecting.value;
-export const getHasWebsocketConnection = () => hasWebsocketConnection.value;
+export const getIsWebsocketConnecting = () =>
+  browserOnline.value && isWebsocketConnecting.value;
+export const getHasWebsocketConnection = () =>
+  browserOnline.value && hasWebsocketConnection.value;
+export const getHasBrowserNetwork = () => browserOnline.value;
 export const getCanSendReadReceipts = (): boolean => {
+  const canUseVisibleAsFocused =
+    Capacitor.isNativePlatform() ||
+    (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
+
   return (
+    browserOnline.value &&
     hasWebsocketConnection.value &&
-    navigator.onLine &&
     document.visibilityState === 'visible' &&
-    document.hasFocus()
+    (document.hasFocus() || canUseVisibleAsFocused)
   );
 };
 

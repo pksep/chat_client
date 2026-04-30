@@ -7,6 +7,7 @@ import {
   changeFileLoadingStatus,
   changeFileUploadPercent,
   addMessageToLocal,
+  cancelDelayedOutgoingMessage,
   scheduleDelayedOutgoingMessage,
   registerPendingOutgoingForwardBatch,
   changeFileUploadErrorStatus,
@@ -174,7 +175,7 @@ export function useMessageSender(
 
     if (messageMeta?.forwardMessageIds?.length) {
       for (const forwardMessageId of messageMeta.forwardMessageIds) {
-        await sendMessageChat({
+        const didSend = await sendMessageChat({
           topicId,
           text: '',
           medias,
@@ -182,15 +183,33 @@ export function useMessageSender(
           replyMessageId: messageMeta.replyMessageId,
           forwardMessageId
         });
+
+        if (!didSend) {
+          changeMessageStatusLocally(
+            topicId,
+            messageId,
+            MessageStatus.NotDelivered
+          );
+          return;
+        }
       }
     } else {
-      await sendMessageChat({
+      const didSend = await sendMessageChat({
         topicId,
         text: '',
         medias,
         ex: JSON.stringify({ clientId: messageId }),
         replyMessageId: messageMeta?.replyMessageId
       });
+
+      if (!didSend) {
+        changeMessageStatusLocally(
+          topicId,
+          messageId,
+          MessageStatus.NotDelivered
+        );
+        return;
+      }
     }
 
     await nextTick();
@@ -244,6 +263,58 @@ export function useMessageSender(
       showErrorNotification(error.message || 'Failed to upload file');
       return false;
     }
+  };
+
+  const queuePendingTextMessage = (params: {
+    topicId: string;
+    text: string;
+    replyMessageId?: string;
+    forwardMessageIds?: string[];
+    taggedUserIds?: string[];
+    ex?: string;
+  }): void => {
+    const parsedEx = params.ex ? JSON.parse(params.ex) : {};
+    const clientId =
+      typeof parsedEx.clientId === 'string'
+        ? parsedEx.clientId
+        : generateUUID();
+    const ex = createMessageEx(
+      {
+        clientId,
+        ...(typeof parsedEx.forwardBatchId === 'string'
+          ? { forwardBatchId: parsedEx.forwardBatchId }
+          : {}),
+        ...(typeof parsedEx.forwardBatchOrder === 'number'
+          ? { forwardBatchOrder: parsedEx.forwardBatchOrder }
+          : {})
+      },
+      undefined
+    );
+
+    addMessageToLocal(params.topicId, {
+      id: clientId,
+      status: MessageStatus.NotDelivered,
+      createdAt: new Date(),
+      deletedAt: null,
+      updatedAt: null,
+      isEdit: false,
+      isPin: false,
+      isSystem: false,
+      replyMessageId: params.replyMessageId,
+      replyMessage: state.replyMessage,
+      senderUserId: authUser.value.id,
+      senderUser: authUser.value,
+      text: params.text,
+      topicId: params.topicId,
+      taggedUserIds: params.taggedUserIds,
+      media: [],
+      ex
+    });
+
+    registerPendingUploadMessage(params.topicId, clientId, {
+      replyMessageId: params.replyMessageId,
+      forwardMessageIds: params.forwardMessageIds || []
+    });
   };
 
   const handleSend = async (taggedUserIds?: string[]): Promise<void> => {
@@ -337,13 +408,23 @@ export function useMessageSender(
             undefined
           );
 
-          await sendMessageChat({
+          const didSend = await sendMessageChat({
             topicId,
             text: '',
             replyMessageId,
             forwardMessageId: forwardMessage.id,
             ex
           });
+
+          if (!didSend) {
+            queuePendingTextMessage({
+              topicId,
+              text: '',
+              replyMessageId,
+              forwardMessageIds: [forwardMessage.id],
+              ex
+            });
+          }
         }
       }
 
@@ -366,13 +447,23 @@ export function useMessageSender(
             forwardBatchOrder: index
           });
 
-          await sendMessageChat({
+          const didSend = await sendMessageChat({
             topicId,
             text: '',
             replyMessageId,
             forwardMessageId: forwardMessage.id,
             ex
           });
+
+          if (!didSend) {
+            queuePendingTextMessage({
+              topicId,
+              text: '',
+              replyMessageId,
+              forwardMessageIds: [forwardMessage.id],
+              ex
+            });
+          }
         }
 
         await new Promise(resolve =>
@@ -386,13 +477,23 @@ export function useMessageSender(
             forwardBatchOrder: forwardMessages.length + index
           });
 
-          await sendMessageChat({
+          const didSend = await sendMessageChat({
             topicId,
             text: part,
             replyMessageId,
             taggedUserIds,
             ex
           });
+
+          if (!didSend) {
+            queuePendingTextMessage({
+              topicId,
+              text: part,
+              replyMessageId,
+              taggedUserIds,
+              ex
+            });
+          }
         }
 
         state.hideUnreadMarker = true;
@@ -406,13 +507,24 @@ export function useMessageSender(
       for (const part of parts) {
         if (hasForwardMessages) {
           for (const forwardMessage of forwardMessages) {
-            await sendMessageChat({
+            const didSend = await sendMessageChat({
               topicId,
               text: part,
               replyMessageId,
               forwardMessageId: forwardMessage.id,
-              taggedUserIds
+              taggedUserIds,
+              ex: JSON.stringify({ clientId: generateUUID() })
             });
+
+            if (!didSend) {
+              queuePendingTextMessage({
+                topicId,
+                text: part,
+                replyMessageId,
+                forwardMessageIds: [forwardMessage.id],
+                taggedUserIds
+              });
+            }
           }
           continue;
         }
@@ -455,13 +567,21 @@ export function useMessageSender(
           TEXT_WAIT_INDICATOR_DELAY_MS
         );
 
-        await sendMessageChat({
+        const didSend = await sendMessageChat({
           topicId,
           text: part,
           replyMessageId,
           taggedUserIds,
           ex: JSON.stringify({ clientId })
         });
+
+        if (!didSend) {
+          cancelDelayedOutgoingMessage(topicId, clientId);
+          addMessageToLocal(topicId, {
+            ...localMessage,
+            status: MessageStatus.NotDelivered
+          });
+        }
       }
       state.hideUnreadMarker = true;
 
@@ -633,13 +753,21 @@ export function useMessageSender(
         return;
       }
 
-      await sendMessageChat({
+      const didSend = await sendMessageChat({
         topicId,
         text: message.text || '',
         replyMessageId: messageMeta?.replyMessageId || message.replyMessageId,
         taggedUserIds: message.taggedUserIds,
         ex: message.ex || JSON.stringify({ clientId: messageId })
       });
+
+      if (!didSend) {
+        changeMessageStatusLocally(
+          topicId,
+          messageId,
+          MessageStatus.NotDelivered
+        );
+      }
 
       return;
     }
