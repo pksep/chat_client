@@ -15,12 +15,14 @@ import sep.pksep.app.plugins.AudioOutputPlugin;
 import sep.pksep.app.plugins.CallScreenPlugin;
 import sep.pksep.app.plugins.NotificationTapPlugin;
 import sep.pksep.app.plugins.ProximityLockPlugin;
+import sep.pksep.app.plugins.RustorePushPlugin;
 
 @SuppressWarnings("deprecation")
 public class MainActivity extends BridgeActivity {
     private static final String EXTRA_ACTION = "action";
     private static final String EXTRA_CALL_ACTION = "callAction";
     private static final String EXTRA_GOOGLE_MESSAGE_ID = "google.message_id";
+    private static final String EXTRA_MESSAGE_ID = "messageId";
     private static final String EXTRA_ROOM_ID = "roomId";
     private static final String EXTRA_TOPIC_ID = "topicId";
     private static final String EXTRA_TYPE = "type";
@@ -34,6 +36,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ProximityLockPlugin.class);
         registerPlugin(CallScreenPlugin.class);
         registerPlugin(NotificationTapPlugin.class);
+        registerPlugin(RustorePushPlugin.class);
 
         super.onCreate(savedInstanceState);
         configureIncomingCallWindow(getIntent());
@@ -70,11 +73,16 @@ public class MainActivity extends BridgeActivity {
         }
 
         boolean isGoogleNotification = extras.containsKey(EXTRA_GOOGLE_MESSAGE_ID);
+        boolean isRustoreNotification = extras.containsKey(EXTRA_MESSAGE_ID);
         boolean isIncomingCallNotification =
             "incoming_call".equals(extras.getString(EXTRA_TYPE)) &&
             extras.containsKey(EXTRA_ROOM_ID);
 
-        if (!isGoogleNotification && !isIncomingCallNotification) {
+        if (
+            !isGoogleNotification &&
+            !isRustoreNotification &&
+            !isIncomingCallNotification
+        ) {
             return;
         }
 

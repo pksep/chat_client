@@ -23,6 +23,9 @@ apply plugin: 'com.android.application'
 android {
     namespace = "sep.pksep.app"
     compileSdk = rootProject.ext.compileSdkVersion
+    buildFeatures {
+        buildConfig true
+    }
     defaultConfig {
         applicationId "sep.pksep.app"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -30,6 +33,7 @@ android {
         versionCode getAppVersionCode()
         versionName getAppVersionName()
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField "String", "RUSTORE_PROJECT_ID", "\"2063701965\""
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -55,7 +59,7 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
-    implementation "com.google.firebase:firebase-messaging:$firebaseMessagingVersion"
+    implementation "ru.rustore.sdk:pushclient:7.1.0"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
@@ -64,12 +68,3 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
-
-try {
-    def servicesJSON = file('google-services.json')
-    if (servicesJSON.text) {
-        apply plugin: 'com.google.gms.google-services'
-    }
-} catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
-}

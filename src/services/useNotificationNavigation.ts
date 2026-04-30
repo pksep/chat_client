@@ -1,10 +1,10 @@
 import { Capacitor } from '@capacitor/core';
-import { PushNotifications } from '@capacitor/push-notifications';
 import { navigateToDialogs, navigateToGroup } from '../composables/navigation';
 import {
   RouteTypes,
   currentRoute
 } from '../composables/navigation/useUrlRouting';
+import { RustorePush } from './nativePush';
 
 type NotificationTopicType = 'DM' | 'GROUP' | null;
 
@@ -184,26 +184,9 @@ export const clearTopicNotifications = async (
 
   if (Capacitor.isNativePlatform()) {
     try {
-      const delivered = await PushNotifications.getDeliveredNotifications();
-      const matchingNotifications = delivered.notifications.filter(
-        notification =>
-          resolveNotificationTopicId({
-            topicId: notification.data?.topicId,
-            chatId: notification.data?.chatId,
-            dialogsId: notification.data?.dialogsId,
-            groupId: notification.data?.groupId,
-            tag: notification.tag || notification.data?.tag,
-            url: notification.link || notification.data?.url,
-            link:
-              notification.click_action ||
-              notification.data?.link ||
-              notification.data?.click_action
-          }) === topicId
-      );
-
-      if (matchingNotifications.length > 0) {
-        await PushNotifications.removeDeliveredNotifications({
-          notifications: matchingNotifications
+      if (Capacitor.getPlatform() === 'android') {
+        await RustorePush.clearNotificationsForTopic({
+          topicId
         });
       }
     } catch (error) {

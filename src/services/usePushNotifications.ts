@@ -1,4 +1,3 @@
-import { PushNotifications } from '@capacitor/push-notifications';
 import {
   Capacitor,
   registerPlugin,
@@ -14,6 +13,9 @@ import {
   navigateToNotificationTarget,
   resolveNotificationTopicId
 } from './useNotificationNavigation';
+import {
+  RustorePush
+} from './nativePush';
 
 interface NotificationTapPlugin {
   addListener(
@@ -39,6 +41,9 @@ type NativeNotificationData = Record<string, string> & {
 const NotificationTap =
   registerPlugin<NotificationTapPlugin>('NotificationTap');
 let nativeNotificationTapListener: PluginListenerHandle | null = null;
+let rustoreRegistrationListener: PluginListenerHandle | null = null;
+let rustoreRegistrationErrorListener: PluginListenerHandle | null = null;
+let rustorePushReceivedListener: PluginListenerHandle | null = null;
 let lastHandledNotificationKey = '';
 let lastHandledNotificationAt = 0;
 let isWebCallActionListenerBound = false;
@@ -209,22 +214,67 @@ const bindWebCallActionListener = () => {
 
 export const initPushNotifications = async () => {
   const api = useChatApi();
-  // Android/iOS
 
-  if (Capacitor.isNativePlatform()) {
-    let permStatus = await PushNotifications.checkPermissions();
+  if (
+    Capacitor.isNativePlatform() &&
+    Capacitor.getPlatform() === 'android'
+  ) {
+    let permStatus = await RustorePush.checkPermissions();
     if (permStatus.receive === 'prompt') {
-      permStatus = await PushNotifications.requestPermissions();
+      permStatus = await RustorePush.requestPermissions();
     }
-    if (permStatus.receive !== 'granted')
+    if (permStatus.receive !== 'granted') {
       return console.error('Permission denied');
+    }
 
-    await PushNotifications.register();
+    if (!rustoreRegistrationListener) {
+      rustoreRegistrationListener = await RustorePush.addListener(
+        'registration',
+        async token => {
+          await api.post('/notifications/device', {
+            token: token.value,
+            platform: 'rustore'
+          });
+        }
+      );
+    }
 
-    if (
-      Capacitor.getPlatform() === 'android' &&
-      !nativeNotificationTapListener
-    ) {
+    if (!rustoreRegistrationErrorListener) {
+      rustoreRegistrationErrorListener = await RustorePush.addListener(
+        'registrationError',
+        error => console.error('Push error:', error)
+      );
+    }
+
+    if (!rustorePushReceivedListener) {
+      rustorePushReceivedListener = await RustorePush.addListener(
+        'pushNotificationReceived',
+        notification => {
+          console.log('Native push received:', notification);
+          const normalizedData = normalizeNativeNotificationData(
+            (notification.data || {}) as NativeNotificationData
+          );
+
+          if (normalizedData.action === 'CLEAR_CHAT_NOTIFICATIONS') {
+            void clearTopicNotifications(normalizedData.topicId);
+            return;
+          }
+
+          if (isTopicCurrentlyVisible(normalizedData.topicId)) {
+            void clearTopicNotifications(normalizedData.topicId);
+            return;
+          }
+
+          handleCallPush({
+            data: normalizedData
+          });
+        }
+      );
+    }
+
+    await RustorePush.register();
+
+    if (!nativeNotificationTapListener) {
       nativeNotificationTapListener = await NotificationTap.addListener(
         'notificationTap',
         payload => {
@@ -233,62 +283,26 @@ export const initPushNotifications = async () => {
       );
     }
 
-    PushNotifications.addListener('registration', async token => {
-      await api.post('/notifications/device', {
-        token: token.value,
-        platform: Capacitor.getPlatform()
-      });
-    });
-
-    PushNotifications.addListener('pushNotificationReceived', n => {
-      console.log('Native push received:', n);
-      const normalizedData = normalizeNativeNotificationData(
-        (n.data || {}) as NativeNotificationData
-      );
-
-      if (normalizedData.action === 'CLEAR_CHAT_NOTIFICATIONS') {
-        void clearTopicNotifications(normalizedData.topicId);
-        return;
-      }
-
-      if (isTopicCurrentlyVisible(normalizedData.topicId)) {
-        void clearTopicNotifications(normalizedData.topicId);
-        return;
-      }
-
-      handleCallPush({ ...n, data: normalizedData });
-    });
-
-    PushNotifications.addListener('pushNotificationActionPerformed', n => {
-      console.log('Native push action:', n);
-      handleNotificationInteraction(
-        (n.notification.data || {}) as NativeNotificationData,
-        n.actionId
-      );
-    });
-
-    PushNotifications.addListener('registrationError', e =>
-      console.error('Push error:', e)
-    );
-
-    // Capacitor covers taps via onNewIntent, but cold starts need a native handoff.
-    if (Capacitor.getPlatform() === 'android') {
-      try {
-        const pendingNotificationTap =
-          await NotificationTap.consumePendingNotificationTap();
-        if (hasPayloadValues(pendingNotificationTap)) {
-          handleNotificationInteraction(
-            pendingNotificationTap as NativeNotificationData
-          );
-        }
-      } catch (error) {
-        console.warn(
-          'Failed to consume pending Android notification tap:',
-          error
+    try {
+      const pendingNotificationTap =
+        await NotificationTap.consumePendingNotificationTap();
+      if (hasPayloadValues(pendingNotificationTap)) {
+        handleNotificationInteraction(
+          pendingNotificationTap as NativeNotificationData
         );
       }
+    } catch (error) {
+      console.warn(
+        'Failed to consume pending Android notification tap:',
+        error
+      );
     }
 
+    return;
+  }
+
+  if (Capacitor.isNativePlatform()) {
+    console.warn('Native push is configured only for Android RuStore builds');
     return;
   }
 
@@ -348,12 +362,25 @@ const handleCallPush = (notification?: { data?: NativeNotificationData }) => {
 };
 
 export const removePushListeners = async () => {
-  if (Capacitor.isNativePlatform()) {
-    await PushNotifications.removeAllListeners();
-
+  if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
     if (nativeNotificationTapListener) {
       await nativeNotificationTapListener.remove();
       nativeNotificationTapListener = null;
+    }
+
+    if (rustoreRegistrationListener) {
+      await rustoreRegistrationListener.remove();
+      rustoreRegistrationListener = null;
+    }
+
+    if (rustoreRegistrationErrorListener) {
+      await rustoreRegistrationErrorListener.remove();
+      rustoreRegistrationErrorListener = null;
+    }
+
+    if (rustorePushReceivedListener) {
+      await rustorePushReceivedListener.remove();
+      rustorePushReceivedListener = null;
     }
   }
 };

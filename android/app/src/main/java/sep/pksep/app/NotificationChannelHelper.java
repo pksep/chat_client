@@ -9,7 +9,7 @@ import android.net.Uri;
 import android.os.Build;
 
 public final class NotificationChannelHelper {
-    public static final String DEFAULT_CHANNEL_ID = "chat_default";
+    public static final String DEFAULT_CHANNEL_ID = "chat_messages";
 
     private NotificationChannelHelper() {}
 
