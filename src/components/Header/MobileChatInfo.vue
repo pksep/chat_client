@@ -49,6 +49,7 @@
       Участники:
     </p>
     <ContactListInModal
+      :show-add-button="props.showAddButton"
       :contacts="props.members"
       :excluded-contact-ids="excludedContactIds"
       class="modal-info-mobile__contact-list"
@@ -74,11 +75,13 @@ interface IMobileChatInfoProps {
   members: IUser[];
   dataTestid?: string;
   isMenuInfo?: boolean;
+  showAddButton?: boolean;
   excludedContactIds?: Set<string | number>;
 }
 
 const props = withDefaults(defineProps<IMobileChatInfoProps>(), {
   excludedContactIds: () => new Set<string | number>(),
+  showAddButton: true,
   dataTestid: 'MobileChatInfo'
 });
 

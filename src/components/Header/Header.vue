@@ -114,6 +114,7 @@
     <MobileChatInfo
       :model-value="currentGroup"
       :members="route.type === RouteTypes.GROUP && currentGroup?.members"
+      :show-add-button="currentGroup?.isAdmin"
       :data-testid="props.dataTestid"
       @update:model-value="handleUpdateInformation"
     />
