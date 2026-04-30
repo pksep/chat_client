@@ -9,7 +9,7 @@
         Чаты
       </h4>
 
-      <WaitConnection v-if="!props.isCollapse && !!isWaitingConnection" />
+      <ConnectionStatus v-if="!props.isCollapse && !!isWaitingConnection" />
 
       <Button
         class="chats-toolbar__create-button"
@@ -115,7 +115,7 @@ import MessageIcon from '../UI/MessageIcon.vue';
 import GroupIcon from '../UI/GroupIcon.vue';
 import NewTopicIcon from '../UI/NewTopicIcon.vue';
 import type { ChatsToolbarFilter } from '../../composables/useChatsToolbarState';
-import WaitConnection from '../UI/WaitConnection.vue';
+import ConnectionStatus from '../UI/ConnectionStatus.vue';
 import { getHasWebsocketConnection } from '../../services/useChat';
 import { computed } from 'vue';
 

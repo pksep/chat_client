@@ -228,6 +228,7 @@ const {
   handleScrollToButton,
   setupIntersectionObserver,
   flushVisibleUnreadMessages,
+  markAllVisibleAsRead,
   intersectionObserver,
   scrollMarkReadTimeout,
   resetScrollState,
@@ -556,7 +557,25 @@ const hideUnreadMarkerIfPassed = (): void => {
 };
 
 const resetUnreadIfViewingBottom = (): void => {
-  return;
+  if (!route.value?.id || !chatWrapperRef.value) {
+    return;
+  }
+
+  if (
+    scrollAnchor.viewportMode.value === 'live' &&
+    getCurrentTopicUnreadCount() > 0
+  ) {
+    void markAllVisibleAsRead();
+  }
+
+  if (getCurrentTopicUnreadCount() > 0) {
+    return;
+  }
+
+  unreadMarkerMessageIdsByTopic[route.value.id] = null;
+  delete seenUnreadMarkerStateByTopic[route.value.id];
+  state.unreadMarkerMessageId = null;
+  state.hideUnreadMarker = true;
 };
 
 const syncVisibleUnreadAfterAutoScroll = (): void => {
@@ -698,7 +717,9 @@ watch(
 
     void fetchPinnedMessagesForTopic(topicId);
     void fetchMessagesForTopic(topicId, {
-      limit: initialMessagesLimit
+      limit: initialMessagesLimit,
+      forceRefresh: true,
+      forceNetwork: navigator.onLine
     });
     renderedTopicId.value = topicId;
     await nextTick();
@@ -920,6 +941,24 @@ watch(
       resetUnreadIfViewingBottom();
     });
   }
+);
+
+watch(
+  [
+    () => topicUnreadCount.value,
+    () =>
+      state.messages.map(
+        message => `${message.id}:${message.isReadByMe === true ? '1' : '0'}`
+      )
+  ],
+  () => {
+    nextTick(() => {
+      refreshUnreadMarkerState();
+      hideUnreadMarkerIfPassed();
+      resetUnreadIfViewingBottom();
+    });
+  },
+  { deep: true }
 );
 
 defineExpose({

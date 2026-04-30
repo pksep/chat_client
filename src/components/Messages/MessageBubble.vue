@@ -115,6 +115,7 @@ import MessageBubbleFiles from './MessageBubbleFiles.vue';
 import MessageBubbleMedia from './MessageBubbleMedia.vue';
 import { useMessageMedia } from './composables/useMessageMedia';
 import { isMessageSelectionModeForTopic } from '../../composables/useSelectedMessages';
+import { ensureMediaObjectUrl } from '../../services/useMediaBlobCache';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -154,16 +155,15 @@ const handleNavigateMessage = () => {
   emits('unmount-navigate-message-id', props.replyMessage?.id);
 };
 
-const downloadMediaFile = (media: IMedia) => {
-  const url = getFullMediaPath(media, false);
+const downloadMediaFile = async (media: IMedia) => {
+  const fallbackUrl = getFullMediaPath(media, false);
   const fileName = media.originName || 'file';
+  const cachedObjectUrl = await ensureMediaObjectUrl(media.path);
 
   const link = document.createElement('a');
 
-  link.href = url;
+  link.href = cachedObjectUrl || fallbackUrl;
   link.download = fileName;
-  link.target = '_blank';
-  link.rel = 'noopener';
 
   document.body.appendChild(link);
   link.click();
