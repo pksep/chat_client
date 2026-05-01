@@ -4,10 +4,10 @@
   deleted: 8
   error: undefined method '[]' for nil
   inserted: 8
-  seconds: 116.510267332
+  seconds: 99.574425215
   version: 0.60.0
   what: judges-summary
-  when: 2026-05-01 07:54:33.473261660 Z
+  when: 2026-05-01 10:12:22.144140317 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -9400,6 +9400,7 @@
   is_human: 1
   issue: 124
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -9448,6 +9449,7 @@
   is_human: 1
   issue: 126
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -9472,6 +9474,7 @@
   is_human: 1
   issue: 127
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -9520,6 +9523,7 @@
   is_human: 1
   issue: 129
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -9544,6 +9548,7 @@
   is_human: 1
   issue: 130
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -9568,6 +9573,7 @@
   is_human: 1
   issue: 131
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -9592,6 +9598,7 @@
   is_human: 1
   issue: 132
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -9616,6 +9623,7 @@
   is_human: 1
   issue: 133
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -9640,6 +9648,7 @@
   is_human: 1
   issue: 134
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -9664,6 +9673,7 @@
   is_human: 1
   issue: 135
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -9688,6 +9698,7 @@
   is_human: 1
   issue: 136
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -9712,6 +9723,7 @@
   is_human: 1
   issue: 137
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -9736,6 +9748,7 @@
   is_human: 1
   issue: 138
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -9760,6 +9773,7 @@
   is_human: 1
   issue: 139
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -9784,22 +9798,13 @@
   is_human: 1
   issue: 154
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
   when: 2026-04-20 13:20:52.000000000 Z
   where: github
   who: 93074025
-- _id: 494
-  _job: 25207120913
-  _time: 2026-05-01 07:53:41.875443101 Z
-  _version: 0.19.6/0.60.0/0.17.11
-  earliest_issue_was_found: 1
-  latest_issue_was_found: 72
-  min_pull_was_found: 142
-  repository: 1053332035
-  what: iterate
-  where: github
 - _id: 495
   _job: 25207120913
   _time: 2026-05-01 07:53:43.534773027 Z
@@ -9826,3 +9831,61 @@
   when: 2026-04-20 14:28:57.000000000 Z
   where: github
   who: 93074025
+- _id: 497
+  _job: 25210688265
+  _time: 2026-05-01 10:11:05.480455460 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-234
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#155 has been "pull-was-merged".
+  failed_builds: 0
+  files: 11
+  hoc: 698
+  is_human: 1
+  issue: 155
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-04-20 14:23:50.000000000 Z
+  where: github
+  who: 93074025
+- _id: 498
+  _job: 25210688265
+  _time: 2026-05-01 10:11:12.396279968 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: canary
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#156 has been "pull-was-merged".
+  failed_builds: 0
+  files: 21
+  hoc: 2095
+  is_human: 1
+  issue: 156
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-04-20 14:29:05.000000000 Z
+  where: github
+  who: 93074025
+- _id: 499
+  _job: 25210688265
+  _time: 2026-05-01 10:11:15.282648185 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  earliest_issue_was_found: 1
+  latest_issue_was_found: 72
+  min_pull_was_found: 143
+  repository: 1053332035
+  what: iterate
+  where: github
