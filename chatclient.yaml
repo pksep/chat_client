@@ -4,10 +4,10 @@
   deleted: 8
   error: undefined method '[]' for nil
   inserted: 8
-  seconds: 12.832162555
+  seconds: 99.591240943
   version: 0.60.0
   what: judges-summary
-  when: 2026-05-01 12:42:12.871271007 Z
+  when: 2026-05-01 14:07:53.301634573 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -9882,12 +9882,12 @@
   where: github
   who: 93074025
 - _id: 499
-  _job: 25214609843
-  _time: 2026-05-01 12:42:05.310859136 Z
+  _job: 25217277960
+  _time: 2026-05-01 14:06:32.570545866 Z
   _version: 0.19.6/0.60.0/0.17.11
   earliest_issue_was_found: 1
   latest_issue_was_found: 72
-  min_pull_was_found: 145
+  min_pull_was_found: 146
   repository: 1053332035
   what: iterate
   where: github
