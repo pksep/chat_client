@@ -6,10 +6,10 @@
     <deleted t="I">8</deleted>
     <error t="S">undefined method '[]' for nil</error>
     <inserted t="I">8</inserted>
-    <seconds t="F">69.705416745</seconds>
+    <seconds t="F">94.503524107</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-05-03T09:08:54Z</when>
+    <when t="T">2026-05-03T10:37:18Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -10748,12 +10748,12 @@
   </f>
   <f>
     <_id t="I">505</_id>
-    <_job t="I">25275040803</_job>
-    <_time t="T">2026-05-03T09:08:01Z</_time>
+    <_job t="I">25276810007</_job>
+    <_time t="T">2026-05-03T10:36:01Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <earliest_issue_was_found t="I">1</earliest_issue_was_found>
     <latest_issue_was_found t="I">72</latest_issue_was_found>
-    <min_pull_was_found t="I">175</min_pull_was_found>
+    <min_pull_was_found t="I">176</min_pull_was_found>
     <repository t="I">1053332035</repository>
     <what t="S">iterate</what>
     <where t="S">github</where>
