@@ -23,7 +23,9 @@ import {
   hasCachedShadowLoadedRanges,
   getCachedShadowReadState,
   hasCachedShadowReadState,
-  isShadowTimestampCoveredByCachedRanges
+  isShadowTimestampCoveredByCachedRanges,
+  loadShadowLoadedRanges,
+  loadShadowReadState
 } from '../services/useShadowChatSync';
 
 const topics = ref<ITopic[]>([]);
@@ -146,8 +148,39 @@ const createTopicsApi = () => {
     schedulePersistTopics();
   };
 
+  const warmShadowUnreadStateForTopics = async (
+    items: ITopic[],
+    userId = authedUser.value?.id
+  ): Promise<void> => {
+    if (!userId || items.length === 0) {
+      return;
+    }
+
+    const topicsToWarm = items.filter(
+      topic =>
+        !!topic?.id &&
+        ((serverUnreadCounts.value[topic.id] || 0) > 0 || !!topic.lastMessage)
+    );
+
+    if (topicsToWarm.length === 0) {
+      return;
+    }
+
+    await Promise.allSettled(
+      topicsToWarm.flatMap(topic => [
+        loadShadowReadState(topic.id, userId),
+        loadShadowLoadedRanges(topic.id, userId)
+      ])
+    );
+
+    topicsToWarm.forEach(topic => {
+      syncTopicUnreadState(topic.id);
+    });
+  };
+
   const hydrateTopicsFromCache = async (userId?: string): Promise<ITopic[]> => {
     if (topics.value.length > 0) {
+      await warmShadowUnreadStateForTopics(topics.value, userId);
       return topics.value;
     }
 
@@ -155,6 +188,7 @@ const createTopicsApi = () => {
 
     if (cachedTopics.length > 0) {
       topics.value = normalizeTopics(cachedTopics);
+      await warmShadowUnreadStateForTopics(topics.value, userId);
     }
 
     return topics.value;
@@ -169,6 +203,7 @@ const createTopicsApi = () => {
       const response = await sdk.getTopics();
 
       setTopics(response.data);
+      await warmShadowUnreadStateForTopics(topics.value);
       return response.data;
     } catch (err) {
       error.value = (err as Error).message;

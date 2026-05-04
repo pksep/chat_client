@@ -55,6 +55,31 @@ const parseUrl = (): Route => {
 };
 
 const currentRoute = ref<Route>(parseUrl());
+let pendingHistoryUrl: string | null = null;
+let pendingHistoryRoute: Route | null = null;
+let scheduledHistoryFlush = false;
+
+const flushPendingHistoryUpdate = (): void => {
+  scheduledHistoryFlush = false;
+
+  if (!pendingHistoryUrl || !pendingHistoryRoute) {
+    return;
+  }
+
+  const nextUrl = pendingHistoryUrl;
+  const nextRoute = pendingHistoryRoute;
+
+  pendingHistoryUrl = null;
+  pendingHistoryRoute = null;
+
+  const currentHref = window.location.href;
+
+  if (currentHref !== nextUrl) {
+    window.history.replaceState({}, document.title, nextUrl);
+  }
+
+  currentRoute.value = nextRoute;
+};
 
 const updateUrl = (route: Route): void => {
   let newUrl: string;
@@ -87,8 +112,23 @@ const updateUrl = (route: Route): void => {
     newUrl += '?' + searchParams.toString();
   }
 
-  window.history.replaceState({}, document.title, newUrl);
-  currentRoute.value = route;
+  if (
+    currentRoute.value.type === route.type &&
+    currentRoute.value.id === route.id &&
+    window.location.href === newUrl
+  ) {
+    return;
+  }
+
+  pendingHistoryUrl = newUrl;
+  pendingHistoryRoute = route;
+
+  if (scheduledHistoryFlush) {
+    return;
+  }
+
+  scheduledHistoryFlush = true;
+  requestAnimationFrame(flushPendingHistoryUpdate);
 };
 
 const navigateToDialogs = (dialogsId: string): void => {
