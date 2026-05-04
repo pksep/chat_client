@@ -668,6 +668,9 @@ watch(
   [() => route.value?.id, () => route.value?.type],
   async ([topicId]) => {
     if (!topicId) return;
+    renderedTopicId.value = '';
+    state.hideUnreadMarker = true;
+    state.unreadMarkerMessageId = null;
     isLoadingInitialMessages.value = true;
     resetScrollState();
     setReadReceiptsEnabled(false);
@@ -708,11 +711,6 @@ watch(
         preferUnreadMarker: false,
         smooth: false
       });
-    } else if (
-      !shouldClearPartialVisibleMessages &&
-      (existingVisibleMessages.length > 0 || existingFullMessages.length > 0)
-    ) {
-      renderedTopicId.value = topicId;
     }
 
     void fetchPinnedMessagesForTopic(topicId);
