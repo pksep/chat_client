@@ -25,6 +25,9 @@ import {
   loadPendingUploadMeta,
   deletePendingUploadMeta
 } from './useTopicMessagesCache';
+import { fileToDataURL } from '../utils/fileToDataURL';
+import { getVideoThumbnail } from '../utils/mediaPreview';
+import { MediaType } from '@pksep/zod-shared-chat';
 import {
   appendShadowSyncMetaList,
   deleteShadowTopicMessage,
@@ -218,6 +221,9 @@ const isPendingOutgoingMessage = (message: IMessage): boolean => {
   );
 };
 
+const hasPendingMediaUpload = (message?: IMessage): boolean =>
+  !!message?.media?.some(media => media.isLoading);
+
 const cancelOutgoingDeliveryTimeout = (
   topicId: string,
   messageId: string
@@ -347,6 +353,76 @@ const stripRuntimeMediaState = (message: IMessage): IMessage => ({
 
 const prepareMessagesForPersistence = (messages: IMessage[]): IMessage[] =>
   messages.map(stripRuntimeMediaState);
+
+const restorePendingUploadMediaState = async (
+  topicId: string,
+  messages: IMessage[]
+): Promise<IMessage[]> =>
+  Promise.all(
+    messages.map(async message => {
+      if (!message.media?.length) {
+        return message;
+      }
+
+      let hadInterruptedUpload = false;
+
+      const restoredMedia = await Promise.all(
+        message.media.map(async media => {
+          const pendingFile = await getPendingUploadFile(
+            topicId,
+            message.id,
+            media.id
+          );
+
+          if (!pendingFile) {
+            if (media.isLoading) {
+              hadInterruptedUpload = true;
+              return {
+                ...media,
+                isLoading: false,
+                uploadError: true,
+                uploadPercent: null
+              };
+            }
+
+            return media;
+          }
+
+          let localPath = media.localPath;
+          let localThumbnailPath = media.localThumbnailPath;
+
+          if (media.type === MediaType.Video) {
+            localPath = URL.createObjectURL(pendingFile.file);
+            localThumbnailPath =
+              (await getVideoThumbnail(pendingFile.file)) || localPath;
+          } else if (media.type === MediaType.Image) {
+            localPath = await fileToDataURL(pendingFile.file);
+          }
+
+          if (media.isLoading) {
+            hadInterruptedUpload = true;
+          }
+
+          return {
+            ...media,
+            localPath,
+            localThumbnailPath,
+            isLoading: media.isLoading ? false : media.isLoading,
+            uploadError: media.isLoading ? true : media.uploadError,
+            uploadPercent: media.isLoading ? null : media.uploadPercent
+          };
+        })
+      );
+
+      return {
+        ...message,
+        status: hadInterruptedUpload
+          ? MessageStatus.NotDelivered
+          : message.status,
+        media: restoredMedia
+      };
+    })
+  );
 
 const dedupeMessagesForTopic = (messages: IMessage[]): IMessage[] => {
   const byStableKey = new Map<string, IMessage>();
@@ -1062,7 +1138,10 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
     syncTopicUnreadState(topicId);
     syncLocalLastMessage(topicId, nextMessage);
 
-    if (isPendingOutgoingMessage(nextMessage)) {
+    if (
+      isPendingOutgoingMessage(nextMessage) &&
+      !hasPendingMediaUpload(nextMessage)
+    ) {
       scheduleOutgoingDeliveryTimeout(topicId, nextMessage.id);
     }
     return;
@@ -1108,7 +1187,10 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
     syncTopicUnreadState(topicId);
     syncLocalLastMessage(topicId, nextMessage);
 
-    if (isPendingOutgoingMessage(nextMessage)) {
+    if (
+      isPendingOutgoingMessage(nextMessage) &&
+      !hasPendingMediaUpload(nextMessage)
+    ) {
       scheduleOutgoingDeliveryTimeout(topicId, nextMessage.id);
     }
 
@@ -1136,7 +1218,10 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   syncTopicUnreadState(topicId);
   syncLocalLastMessage(topicId, nextMessage);
 
-  if (isPendingOutgoingMessage(nextMessage)) {
+  if (
+    isPendingOutgoingMessage(nextMessage) &&
+    !hasPendingMediaUpload(nextMessage)
+  ) {
     scheduleOutgoingDeliveryTimeout(topicId, nextMessage.id);
   }
 };
@@ -1400,10 +1485,16 @@ export const hydrateMessagesFromCache = async (
     if (shadowMessages.length > 0) {
       await loadShadowReadState(topicId, userId);
       const existingMessages = getFullMessagesByTopicId(topicId);
-      const normalizedShadowMessages = await applyShadowReadStateToMessages(
+      const normalizedShadowMessages = await restorePendingUploadMediaState(
         topicId,
-        prepareMessagesForPersistence([...shadowMessages, ...existingMessages]),
-        userId
+        await applyShadowReadStateToMessages(
+          topicId,
+          prepareMessagesForPersistence([
+            ...shadowMessages,
+            ...existingMessages
+          ]),
+          userId
+        )
       );
 
       saveMessagesToLocal(topicId, normalizedShadowMessages, {
@@ -1420,10 +1511,13 @@ export const hydrateMessagesFromCache = async (
   const cachedMessages = await loadCachedTopicMessages(topicId, userId);
 
   if (cachedMessages.length > 0) {
-    const normalizedCachedMessages = prepareMessagesForPersistence([
-      ...cachedMessages,
-      ...getFullMessagesByTopicId(topicId)
-    ]);
+    const normalizedCachedMessages = await restorePendingUploadMediaState(
+      topicId,
+      prepareMessagesForPersistence([
+        ...cachedMessages,
+        ...getFullMessagesByTopicId(topicId)
+      ])
+    );
 
     saveMessagesToLocal(topicId, normalizedCachedMessages, {
       syncLastMessage: false,
@@ -1735,13 +1829,17 @@ export const changeMessageStatusLocally = (
   messageId: string,
   status: MessageStatus
 ): void => {
+  const currentMessage = getFullMessagesByTopicId(topicId).find(
+    message => message.id === messageId
+  );
+
   updateTopicMessageStores(topicId, messages =>
     messages.map(message =>
       message.id === messageId ? { ...message, status } : message
     )
   );
 
-  if (status === MessageStatus.Wait) {
+  if (status === MessageStatus.Wait && !hasPendingMediaUpload(currentMessage)) {
     scheduleOutgoingDeliveryTimeout(topicId, messageId);
   } else if (
     status === MessageStatus.NotDelivered ||
@@ -1758,6 +1856,8 @@ export const setFileUploadPendingStatus = (
   messageId: string,
   fileId: string
 ): void => {
+  cancelOutgoingDeliveryTimeout(topicId, messageId);
+
   updateTopicMessageStores(topicId, messages =>
     messages.map(message => {
       if (message.id !== messageId || !message.media) {

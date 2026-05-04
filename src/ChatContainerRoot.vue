@@ -51,9 +51,46 @@ import { hydrateMessagesFromCache } from './services/useMessages';
 
 const props = defineProps<IChatContainerProps>();
 
-const { fetchAllTopics } = useTopics();
+const { fetchAllTopics, getTopicList } = useTopics();
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const route = useUrlWatcher();
+
+const hydrateCachedMessagesForKnownTopics = async (
+  userId?: string
+): Promise<void> => {
+  const topicIds = Array.from(
+    new Set(
+      [
+        ...getTopicList()
+          .map(topic => topic.id)
+          .filter(Boolean),
+        route.value.id || ''
+      ].filter(Boolean)
+    )
+  );
+
+  if (topicIds.length === 0) {
+    return;
+  }
+
+  const activeTopicId = route.value.id || '';
+
+  if (activeTopicId) {
+    await hydrateMessagesFromCache(activeTopicId, userId);
+  }
+
+  const backgroundTopicIds = topicIds.filter(
+    topicId => topicId !== activeTopicId
+  );
+
+  if (backgroundTopicIds.length === 0) {
+    return;
+  }
+
+  await Promise.allSettled(
+    backgroundTopicIds.map(topicId => hydrateMessagesFromCache(topicId, userId))
+  );
+};
 
 const getActiveChatTopicId = (): string | null => {
   if (
@@ -139,10 +176,7 @@ const runAppInitialization = async () => {
     await hydrateUsersFromCache(initialUserId);
     applyCachedAuthUser(initialUserId);
     await hydrateTopicsFromCache(initialUserId);
-
-    if (route.value.id) {
-      await hydrateMessagesFromCache(route.value.id, initialUserId);
-    }
+    await hydrateCachedMessagesForKnownTopics(initialUserId);
   }
 
   try {
@@ -184,10 +218,7 @@ const runAppInitialization = async () => {
     await hydrateUsersFromCache(authUserId || undefined);
     applyCachedAuthUser(authUserId);
     await hydrateTopicsFromCache(authUserId || undefined);
-
-    if (route.value.id) {
-      await hydrateMessagesFromCache(route.value.id, authUserId || undefined);
-    }
+    await hydrateCachedMessagesForKnownTopics(authUserId || undefined);
 
     await initializeChat({
       token: authData.token,
@@ -205,6 +236,7 @@ const runAppInitialization = async () => {
     await restoreInvitedGroupCallFromUrl();
 
     await fetchAllTopics();
+    void hydrateCachedMessagesForKnownTopics(authUserId || undefined);
 
     if (route.value.id) {
       await fetchPinnedMessagesForTopic(route.value.id);
