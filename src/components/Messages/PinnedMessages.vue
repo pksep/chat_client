@@ -13,7 +13,7 @@
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.little"
         :data-testid="`Pinned-Messages-CloseButton`"
-        @click="handleUnpinMessage"
+        @click="handleOpenUnpinModal"
       >
         <Icon
           :name="IconNameEnum.crossLarge"
@@ -22,6 +22,14 @@
       </Button>
     </div>
   </div>
+
+  <ConfirmModal
+    :open="unpinModalOpen"
+    title="Открепить сообщение"
+    description="Вы уверены, что хотите открепить сообщение?"
+    @unmount-close="handleCloseUnpinModal"
+    @unmount-confirm="handleConfirmUnpinMessage"
+  />
 </template>
 <script setup lang="ts">
 import { stripHtml } from '../../utils/stripHtml';
@@ -36,6 +44,7 @@ import {
   SizesEnum
 } from '@pksep/yui';
 import { togglePinMessageChat } from '../../services/useChat';
+import ConfirmModal from '../UI/ConfirmModal.vue';
 
 const route = useUrlWatcher();
 
@@ -44,6 +53,7 @@ const pinnedMessages = computed(() =>
 );
 
 const index = ref(-1);
+const unpinModalOpen = ref(false);
 
 const emits = defineEmits(['unmount-set-selected-message']);
 
@@ -65,11 +75,22 @@ const handleChangeCurrentIndex = () => {
   }
 };
 
-const handleUnpinMessage = (event: MouseEvent) => {
+const handleOpenUnpinModal = (event: MouseEvent) => {
   event.stopPropagation();
-  togglePinMessageChat({
+
+  unpinModalOpen.value = true;
+};
+
+const handleCloseUnpinModal = () => {
+  unpinModalOpen.value = false;
+};
+
+const handleConfirmUnpinMessage = async () => {
+  await togglePinMessageChat({
     topicId: route.value.id,
     messageId: pinnedMessages.value[index.value].id
   });
+
+  handleCloseUnpinModal();
 };
 </script>
