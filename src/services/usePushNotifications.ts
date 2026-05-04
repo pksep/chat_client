@@ -13,9 +13,7 @@ import {
   navigateToNotificationTarget,
   resolveNotificationTopicId
 } from './useNotificationNavigation';
-import {
-  RustorePush
-} from './nativePush';
+import { RustorePush } from './nativePush';
 
 interface NotificationTapPlugin {
   addListener(
@@ -215,10 +213,7 @@ const bindWebCallActionListener = () => {
 export const initPushNotifications = async () => {
   const api = useChatApi();
 
-  if (
-    Capacitor.isNativePlatform() &&
-    Capacitor.getPlatform() === 'android'
-  ) {
+  if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
     let permStatus = await RustorePush.checkPermissions();
     if (permStatus.receive === 'prompt') {
       permStatus = await RustorePush.requestPermissions();

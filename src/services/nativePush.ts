@@ -35,5 +35,4 @@ export interface RustorePushPlugin {
   clearAllNotifications(): Promise<void>;
 }
 
-export const RustorePush =
-  registerPlugin<RustorePushPlugin>('RustorePush');
+export const RustorePush = registerPlugin<RustorePushPlugin>('RustorePush');
