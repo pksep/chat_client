@@ -198,8 +198,9 @@ onUnmounted(() => {
 
 const showErrorIcon = computed(
   () =>
-    props.messageStatus === 'NOT_DELIVERED' ||
-    mediaFiles.value.some(media => media.uploadError)
+    (props.messageStatus === 'NOT_DELIVERED' &&
+      !mediaFiles.value.some(media => media.isLoading)) ||
+    mediaFiles.value.some(media => media.uploadError && !media.isLoading)
 );
 
 const getPreviewStyle = (media: IMedia): Record<string, string> => {

@@ -126,7 +126,6 @@ import {
   isMessageSelectionModeForTopic
 } from '../composables/useSelectedMessages';
 import {
-  clearVisibleMessagesForTopic,
   fetchAroundMessage,
   fetchMessagesForTopic,
   fetchPinnedMessagesForTopic,
@@ -668,7 +667,6 @@ watch(
   [() => route.value?.id, () => route.value?.type],
   async ([topicId]) => {
     if (!topicId) return;
-    renderedTopicId.value = '';
     state.hideUnreadMarker = true;
     state.unreadMarkerMessageId = null;
     isLoadingInitialMessages.value = true;
@@ -690,13 +688,10 @@ watch(
 
     const existingVisibleMessages = getMessagesByTopicId(topicId);
     const existingFullMessages = getFullMessagesByTopicId(topicId);
-    const shouldClearPartialVisibleMessages =
-      existingVisibleMessages.length > 0 &&
-      existingFullMessages.length < initialMessagesLimit;
+    const hasInstantCachedMessages =
+      existingVisibleMessages.length > 0 || existingFullMessages.length > 0;
 
-    if (shouldClearPartialVisibleMessages) {
-      clearVisibleMessagesForTopic(topicId);
-    }
+    renderedTopicId.value = hasInstantCachedMessages ? topicId : '';
 
     const hydratedMessages = await hydrateMessagesFromCache(topicId);
 

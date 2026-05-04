@@ -611,7 +611,10 @@ export function useMessageSender(
     const localMedia: IMedia[] = await Promise.all(
       Array.from(files).map(async (file, i) => {
         const type = getMediaType(file, isMedia);
-        const localPath = await fileToDataURL(file);
+        const localPath =
+          type === MediaType.Video
+            ? URL.createObjectURL(file)
+            : await fileToDataURL(file);
         const baseMedia = {
           localPath,
           path: '',
