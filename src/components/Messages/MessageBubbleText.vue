@@ -72,7 +72,7 @@
             <span
               v-if="props.isEdit"
               :data-testid="`${props.dataTestid}-Edited`"
-              >Ð¸Ð·Ð¼ÐµÐ½ÐµÐ½Ð¾</span
+              >изменено</span
             >
             <span :data-testid="`${props.dataTestid}-TimeText`">{{
               props.time
@@ -107,7 +107,7 @@
             <span
               v-if="props.isEdit"
               :data-testid="`${props.dataTestid}-Edited`"
-              >Ð¸Ð·Ð¼ÐµÐ½ÐµÐ½Ð¾</span
+              >изменено</span
             >
             <span :data-testid="`${props.dataTestid}-TimeText`">{{
               props.time

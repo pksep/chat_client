@@ -1035,6 +1035,10 @@ div.message-content__file {
   transform-origin: center;
 }
 
+.message__article--emoji .message-bubble-tail {
+  display: none;
+}
+
 .message__article__text {
   user-select: text;
   padding: 10px 15px;
