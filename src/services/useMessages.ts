@@ -80,6 +80,7 @@ const outgoingDeliveryTimeouts = new Map<
   string,
   ReturnType<typeof setTimeout>
 >();
+const notificationSoundSuppressedUntilByTopic = new Map<string, number>();
 const suspendedLocalOwnReadTimeouts = new Map<
   string,
   ReturnType<typeof setTimeout>
@@ -2107,10 +2108,31 @@ export const clearPendingUploadMessage = (
   void deletePendingUploadMeta(topicId, messageId);
 };
 
+export const suppressNotificationSoundForTopic = (
+  topicId: string,
+  durationMs: number
+): void => {
+  if (!topicId) {
+    return;
+  }
+
+  notificationSoundSuppressedUntilByTopic.set(
+    topicId,
+    Date.now() + Math.max(0, durationMs)
+  );
+};
+
 export const playNotificationSound = (topicId?: string): void => {
   const isHidden = document.hidden;
+  const suppressionDeadline = topicId
+    ? notificationSoundSuppressedUntilByTopic.get(topicId) || 0
+    : 0;
 
   if (topicId && isTopicMuted(topicId)) {
+    return;
+  }
+
+  if (suppressionDeadline > Date.now()) {
     return;
   }
 
