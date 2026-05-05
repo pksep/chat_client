@@ -1,96 +1,107 @@
 <template>
   <template v-if="mediaFiles.length > 0">
-    <h5 v-if="props.forwardUser" class="message__article-forward-info">
-      Переслано: от {{ props.forwardUser.initials }}
-    </h5>
-    <article
-      ref="mediaArticleRef"
-      :class="messageArticleStyles"
-      :data-testid="`${props.dataTestid}-Article`"
-    >
-      <h3
-        v-if="!props.isMeSender && !isDialogRoute"
-        class="message__article-initals"
+    <div class="message-bubble-stack">
+      <MessageReferenceBlock
+        v-if="showExternalForward"
+        :forward-user="props.forwardUser"
+        :is-me-sender="props.isMeSender"
+        @navigate-message="$emit('navigate-message')"
+      />
+      <article
+        ref="mediaArticleRef"
+        :class="messageArticleStyles"
+        :data-testid="`${props.dataTestid}-Article`"
       >
-        {{ props.sender }}
-      </h3>
-      <blockquote
-        v-if="!!props.replyMessage"
-        class="message-content__blockquote"
-        :data-testid="`${props.dataTestid}-Blockquote`"
-        @click="$emit('navigate-message')"
-      >
-        <div
-          class="message-content__blockquote-container"
-          :data-testid="`${props.dataTestid}-BlockquoteContainer`"
+        <h3
+          v-if="
+            !props.isMeSender && !isDialogRoute && !props.continuesFromPrevious
+          "
+          class="message__article-initals"
         >
-          <h5 :data-testid="`${props.dataTestid}-BlockquoteAuthor`">
-            {{ props.replyMessage?.senderUser?.initials || '' }}
-          </h5>
-          <p :data-testid="`${props.dataTestid}-BlockquoteText`">
-            {{ stripHtml(props.replyMessage?.text || 'Вложение') }}
-          </p>
-        </div>
-      </blockquote>
-      <div
-        :class="`message-content message-content-${mediaFiles.length}-item`"
-        :data-testid="`${props.dataTestid}-Content`"
-      >
+          {{ props.sender }}
+        </h3>
+        <MessageReferenceBlock
+          :forward-user="showExternalForward ? undefined : props.forwardUser"
+          :reply-message="props.replyMessage"
+          :is-me-sender="props.isMeSender"
+          @navigate-message="$emit('navigate-message')"
+        />
         <div
-          v-for="(media, i) in mediaFiles"
-          :key="media.id"
-          class="message-content__media"
-          :data-testid="`${props.dataTestid}-MediaContainer`"
-          @contextmenu.prevent
+          :class="[
+            `message-content message-content-${mediaFiles.length}-item`,
+            'message-content--media',
+            { 'message-content--media-with-caption': hasCaption }
+          ]"
+          :data-testid="`${props.dataTestid}-Content`"
         >
-          <img
-            :src="shouldLoadMedia ? getFullMediaPath(media) : EMPTY_MEDIA_SRC"
-            :alt="props.sender ? props.sender + ' image' : 'Shared image'"
-            :style="getPreviewStyle(media)"
-            loading="lazy"
-            decoding="async"
-            @load="captureImagePreviewMetrics(media, $event)"
-            @click="$emit('set-slider', mediaFiles, i)"
-            @dragstart="handleDragStart($event, media)"
+          <div
+            v-for="(media, i) in mediaFiles"
+            :key="media.id"
+            class="message-content__media"
+            :data-testid="`${props.dataTestid}-MediaContainer`"
             @contextmenu.prevent
-          />
-
-          <div
-            v-if="typeof media.isLoading === 'boolean' || media.uploadError"
-            class="message-content__media-loading"
           >
-            <LoadingIcon
-              v-if="!media.uploadError"
-              :is-loaded="!media.isLoading"
-              :percent="media.uploadPercent ?? null"
+            <img
+              :src="shouldLoadMedia ? getFullMediaPath(media) : EMPTY_MEDIA_SRC"
+              :alt="props.sender ? props.sender + ' image' : 'Shared image'"
+              :style="getPreviewStyle(media)"
+              loading="lazy"
+              decoding="async"
+              @load="captureImagePreviewMetrics(media, $event)"
+              @click="$emit('set-slider', mediaFiles, i)"
+              @dragstart="handleDragStart($event, media)"
+              @contextmenu.prevent
             />
-          </div>
 
-          <div
-            v-else-if="media.type === MediaType.Video"
-            class="message-content__media-video"
-            @click="$emit('set-slider', mediaFiles, i)"
-          >
-            <PlayIcon />
+            <div
+              v-if="typeof media.isLoading === 'boolean' || media.uploadError"
+              class="message-content__media-loading"
+            >
+              <LoadingIcon
+                v-if="!media.uploadError"
+                :is-loaded="!media.isLoading"
+                :percent="media.uploadPercent ?? null"
+              />
+            </div>
+
+            <div
+              v-else-if="media.type === MediaType.Video"
+              class="message-content__media-video"
+              @click="$emit('set-slider', mediaFiles, i)"
+            >
+              <PlayIcon />
+            </div>
+
+            <div
+              v-if="i === mediaFiles.length - 1"
+              class="message-content__media-overlay-time"
+            >
+              <span>{{ props.time }}</span>
+              <ErrorIcon v-if="showErrorIcon" />
+              <MessageStatusIcons
+                v-if="props.isMeSender && !showErrorIcon"
+                :is-read="props.isRead"
+                :message-status="props.messageStatus"
+              />
+            </div>
           </div>
         </div>
-      </div>
 
-      <div v-if="!props.file" class="message-time">
-        <MessageEmojies :reactions="props.reactions" />
-        <PinIcon
-          v-if="props.isPin"
-          style="width: 15px; height: 15px; margin-right: -2px"
-        />
-        <span>{{ props.time }}</span>
-        <ErrorIcon v-if="showErrorIcon" />
-        <MessageStatusIcons
-          v-if="props.isMeSender && !showErrorIcon"
-          :is-read="props.isRead"
-          :message-status="props.messageStatus"
-        />
-      </div>
-    </article>
+        <div v-if="hasCaption" class="message-media__caption">
+          <div
+            class="message-media__caption-text message-content__html"
+            v-html="props.message"
+            :data-testid="`${props.dataTestid}-MessageText`"
+          ></div>
+        </div>
+      </article>
+
+      <Transition name="reaction-row">
+        <div v-if="props.reactions?.length" class="message-reactions-row">
+          <MessageEmojies :reactions="props.reactions" />
+        </div>
+      </Transition>
+    </div>
   </template>
 </template>
 
@@ -100,7 +111,6 @@ import { MediaType } from '@pksep/zod-shared-chat';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import LoadingIcon from '../UI/LoadingIcon.vue';
 import PlayIcon from '../UI/PlayIcon.vue';
-import PinIcon from '../UI/PinIcon.vue';
 import MessageEmojies from './MessageEmojies.vue';
 import ErrorIcon from '../UI/ErrorIcon.vue';
 import { stripHtml } from '../../utils/stripHtml';
@@ -109,6 +119,7 @@ import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { useMessageMedia } from './composables/useMessageMedia';
 import type { IMessageBubbleProps } from './interface/interface';
 import type { IMedia } from '../interfaces/interfaces';
+import MessageReferenceBlock from './MessageReferenceBlock.vue';
 
 const props = defineProps<IMessageBubbleProps>();
 defineEmits(['navigate-message', 'set-slider']);
@@ -126,6 +137,17 @@ const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
 
 const mediaFiles = computed(
   () => props.media?.filter(media => media.type !== MediaType.File) || []
+);
+const hasCaption = computed(() =>
+  Boolean(stripHtml(props.message || '').trim())
+);
+const showExternalForward = computed(
+  () => !isDialogRoute.value && Boolean(props.forwardUser)
+);
+const hasTopMeta = computed(
+  () =>
+    Boolean(props.replyMessage) ||
+    (!props.isMeSender && !isDialogRoute.value && !props.continuesFromPrevious)
 );
 const mediaArticleRef = ref<HTMLElement | null>(null);
 const shouldLoadMedia = ref(false);
@@ -242,7 +264,9 @@ const messageArticleStyles = computed(() => [
   'message__article',
   {
     'message__no-author': props.isMeSender,
-    message__article__media: true
+    message__article__media: true,
+    'message__article__media--caption': hasCaption.value,
+    'message__article__media--with-top-meta': hasTopMeta.value
   }
 ]);
 </script>

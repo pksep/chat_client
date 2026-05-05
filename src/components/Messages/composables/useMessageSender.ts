@@ -80,6 +80,9 @@ export function splitHtmlByLength(
 
 export function getMediaType(file: File, isMedia: boolean): MediaTypeType {
   if (!isMedia) return MediaType.File;
+  if (file.type === 'video/quicktime' || /\.(mov)$/i.test(file.name || '')) {
+    return MediaType.File;
+  }
   if (file.type.startsWith('image/')) return MediaType.Image;
   if (file.type.startsWith('video/')) return MediaType.Video;
   return MediaType.File;
