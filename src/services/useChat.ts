@@ -558,9 +558,6 @@ const refreshActiveTopicMessagesAfterReconnect = async (
   topicId: string
 ): Promise<void> => {
   const existingMessages = getFullMessagesByTopicId(topicId);
-  const existingMessageIds = new Set(
-    existingMessages.map(message => message.id)
-  );
   const latestMessages = await fetchMessagesForTopic(topicId, {
     limit: 50,
     skipSave: true
@@ -570,29 +567,11 @@ const refreshActiveTopicMessagesAfterReconnect = async (
     mergeMessagesForTopic(topicId, latestMessages, 'replace', {
       syncLastMessage: true
     });
-
-    const hasIncomingMessages = latestMessages.some(
-      message =>
-        !existingMessageIds.has(message.id) &&
-        message.senderUserId !== currentUserId.value
-    );
-
-    if (hasIncomingMessages) {
-      playNotificationSound(topicId);
-    }
     return;
   }
 
   if (existingMessages.length === 0) {
-    const fallbackMessages = await fetchMessagesForTopic(topicId);
-
-    const hasIncomingMessages = fallbackMessages.some(
-      message => message.senderUserId !== currentUserId.value
-    );
-
-    if (hasIncomingMessages) {
-      playNotificationSound(topicId);
-    }
+    await fetchMessagesForTopic(topicId);
   }
 };
 
