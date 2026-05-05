@@ -12,6 +12,9 @@ export interface MediaPreviewDimensions extends MediaDimensions {
   previewHeight?: number;
 }
 
+const VIDEO_THUMBNAIL_TIMESTAMPS = [0.1, 0.5, 1, 2];
+const VIDEO_BLACK_FRAME_BRIGHTNESS_THRESHOLD = 10;
+
 export const getGridColumnsCount = (count: number): number => {
   if (count <= 1) return 1;
   if ([2, 3, 4].includes(count)) return 2;
@@ -135,33 +138,86 @@ export const getVideoThumbnail = (file: File): Promise<string | null> => {
     video.muted = true;
     video.playsInline = true;
 
-    video.onloadeddata = () => {
-      const captureFrame = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
+    const captureFrame = (): string | null => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
 
-          const context = canvas.getContext('2d');
-          if (!context || !canvas.width || !canvas.height) {
-            finish(null);
-            return;
-          }
-
-          context.drawImage(video, 0, 0, canvas.width, canvas.height);
-          finish(canvas.toDataURL('image/jpeg', 0.85));
-        } catch {
-          finish(null);
+        const context = canvas.getContext('2d', {
+          willReadFrequently: true
+        });
+        if (!context || !canvas.width || !canvas.height) {
+          return null;
         }
-      };
 
-      if (video.duration > 0.1) {
-        video.onseeked = captureFrame;
-        video.currentTime = 0.1;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const sampleWidth = Math.min(canvas.width, 32);
+        const sampleHeight = Math.min(canvas.height, 32);
+        const imageData = context.getImageData(0, 0, sampleWidth, sampleHeight);
+        let brightnessSum = 0;
+
+        for (let index = 0; index < imageData.data.length; index += 4) {
+          brightnessSum +=
+            imageData.data[index] +
+            imageData.data[index + 1] +
+            imageData.data[index + 2];
+        }
+
+        const pixelsCount = imageData.data.length / 4;
+        const averageBrightness =
+          pixelsCount > 0 ? brightnessSum / (pixelsCount * 3) : 0;
+
+        if (
+          averageBrightness <= VIDEO_BLACK_FRAME_BRIGHTNESS_THRESHOLD &&
+          video.duration > 0.5
+        ) {
+          return null;
+        }
+
+        return canvas.toDataURL('image/jpeg', 0.85);
+      } catch {
+        return null;
+      }
+    };
+
+    const trySeekAtIndex = (index: number) => {
+      if (index >= VIDEO_THUMBNAIL_TIMESTAMPS.length) {
+        finish(captureFrame());
         return;
       }
 
-      captureFrame();
+      const nextTime = Math.min(
+        VIDEO_THUMBNAIL_TIMESTAMPS[index],
+        Math.max(video.duration - 0.05, 0)
+      );
+
+      video.currentTime = nextTime;
+    };
+
+    video.onloadeddata = () => {
+      if (!video.duration || video.duration <= VIDEO_THUMBNAIL_TIMESTAMPS[0]) {
+        finish(captureFrame());
+        return;
+      }
+
+      trySeekAtIndex(0);
+    };
+
+    video.onseeked = () => {
+      const thumbnail = captureFrame();
+
+      if (thumbnail) {
+        finish(thumbnail);
+        return;
+      }
+
+      const currentIndex = VIDEO_THUMBNAIL_TIMESTAMPS.findIndex(
+        timestamp => Math.abs(timestamp - video.currentTime) < 0.2
+      );
+
+      trySeekAtIndex(currentIndex + 1);
     };
 
     video.onerror = () => finish(null);
