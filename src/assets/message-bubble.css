@@ -977,6 +977,7 @@ div.message-content__file {
 }
 
 .message-media__caption {
+  max-width: 265px;
   align-items: end;
   width: 100%;
   box-sizing: border-box;

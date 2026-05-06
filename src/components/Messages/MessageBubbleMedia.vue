@@ -148,12 +148,8 @@ import MessageReferenceBlock from './MessageReferenceBlock.vue';
 const props = defineProps<IMessageBubbleProps>();
 defineEmits(['navigate-message', 'set-slider']);
 
-const {
-  getFullMediaPath,
-  primeMediaCache,
-  isMediaPathReady,
-  EMPTY_MEDIA_SRC
-} = useMessageMedia();
+const { getFullMediaPath, primeMediaCache, isMediaPathReady, EMPTY_MEDIA_SRC } =
+  useMessageMedia();
 
 const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);

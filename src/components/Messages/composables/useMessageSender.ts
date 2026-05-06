@@ -346,14 +346,17 @@ export function useMessageSender(
   ): Promise<void> => {
     const sendPayload = Array.isArray(payload)
       ? { taggedUserIds: payload }
-      : (payload ?? {});
+      : payload ?? {};
     const rawText = sendPayload.content ?? inputText.value;
     const taggedUserIds = sendPayload.taggedUserIds;
     const attachedFiles = sendPayload.files
       ? Array.from(sendPayload.files).map(file => ({ file, isMedia: false }))
       : [];
     const attachedMediaFiles = sendPayload.mediaFiles
-      ? Array.from(sendPayload.mediaFiles).map(file => ({ file, isMedia: true }))
+      ? Array.from(sendPayload.mediaFiles).map(file => ({
+          file,
+          isMedia: true
+        }))
       : [];
     const queuedFiles = [...attachedMediaFiles, ...attachedFiles];
     const topicId = route.value.id;
@@ -695,7 +698,8 @@ export function useMessageSender(
     const replyMessage = options?.replyMessage ?? state.replyMessage;
     const replyMessageId = options?.replyMessageId ?? state.replyMessage?.id;
     const forwardMessageIds =
-      options?.forwardMessageIds ?? state.forwardMessages.map(message => message.id);
+      options?.forwardMessageIds ??
+      state.forwardMessages.map(message => message.id);
 
     if (!topicId) {
       console.error('[ChatSDK] Cannot attach file: no topic provided');

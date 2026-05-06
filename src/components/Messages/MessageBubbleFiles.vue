@@ -97,7 +97,9 @@
         </div>
         <div
           class="message-time"
-          v-if="!props.loader && !props.file && !hasReactions && !hasInlineCaption"
+          v-if="
+            !props.loader && !props.file && !hasReactions && !hasInlineCaption
+          "
           :data-testid="`${props.dataTestid}-Time`"
         >
           <PinIcon
@@ -184,7 +186,9 @@ let filesVisibilityObserver: IntersectionObserver | null = null;
 const docFiles = computed(
   () => props.media?.filter(media => media.type === MediaType.File) || []
 );
-const hasCaption = computed(() => Boolean(stripHtml(props.message || '').trim()));
+const hasCaption = computed(() =>
+  Boolean(stripHtml(props.message || '').trim())
+);
 const hasMediaFiles = computed(() =>
   Boolean(props.media?.some(media => media.type !== MediaType.File))
 );
