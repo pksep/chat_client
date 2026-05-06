@@ -10,6 +10,13 @@
         <div class="reaction-item">
           {{ emoji }}
         </div>
+        <CachedAvatar
+          v-if="messageReaction.count === 1 && messageReaction.user"
+          class="reaction-avatar"
+          :path="messageReaction.user.avatarUrl"
+          :initials="messageReaction.user.initials"
+          :alt="messageReaction.user.initials"
+        />
         <p class="reaction-count" v-if="messageReaction.count > 1">
           {{ messageReaction.count }}
         </p>
@@ -23,10 +30,13 @@ import { computed } from 'vue';
 import { Reaction } from '@pksep/zod-shared-chat';
 import { setReactionMessage } from '../../services/useChat';
 import { useUrlWatcher } from '../../composables/navigation';
+import { getUserById } from '../../composables/useUsers';
+import type { IUser } from '../interfaces/interfaces';
+import CachedAvatar from '../UI/CachedAvatar.vue';
 
 const props = defineProps<{ reactions: Reaction[] }>();
 
-type MessageReactions = Reaction & { count: number };
+type MessageReactions = Reaction & { count: number; user?: IUser };
 
 const reactionContent = computed<Record<string, MessageReactions>>(
   () =>
@@ -35,7 +45,11 @@ const reactionContent = computed<Record<string, MessageReactions>>(
         if (aggr[val.text]?.count > 0) {
           aggr[val.text].count++;
         } else {
-          aggr[val.text] = { ...val, count: 1 };
+          aggr[val.text] = {
+            ...val,
+            count: 1,
+            user: getUserById(val.senderUserId)
+          };
         }
         return aggr;
       },

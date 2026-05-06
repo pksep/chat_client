@@ -4,15 +4,16 @@
       v-if="props.isRead"
       :name="IconNameEnum.read"
       :data-testid="`${dataTestid}-ReadIcon`"
+      color="var(--blue1)"
     />
     <template v-else-if="props.messageStatus">
       <Icon
         v-if="props.messageStatus === MessageStatus.Delivery"
-        :name="IconNameEnum.delivered"
+        :name="IconNameEnum.read"
         :data-testid="`${dataTestid}-DeliveredIcon`"
       />
       <Icon
-        v-else-if="props.messageStatus === MessageStatus.Wait"
+        v-if="props.messageStatus === MessageStatus.Wait"
         :name="IconNameEnum.notDelivered"
         :data-testid="`${dataTestid}-SendingIcon`"
       />

@@ -46,7 +46,7 @@
       <Icon :name="IconNameEnum.arrowDown" />
       <span
         v-if="
-          topicUnreadCount > 0 &&
+          visibleTopicUnreadCount > 0 &&
           activeTopic?.lastMessage?.senderUserId !== authUser?.id
         "
         :class="{
@@ -54,7 +54,7 @@
           'contact-list__notification--muted': activeTopic?.info?.isMute
         }"
       >
-        {{ topicUnreadCount }}
+        {{ visibleTopicUnreadCount }}
       </span>
     </div>
   </div>
@@ -126,7 +126,6 @@ import {
   isMessageSelectionModeForTopic
 } from '../composables/useSelectedMessages';
 import {
-  clearVisibleMessagesForTopic,
   fetchAroundMessage,
   fetchMessagesForTopic,
   fetchPinnedMessagesForTopic,
@@ -135,6 +134,7 @@ import {
   hydrateMessageContextFromShadow,
   hydrateMessagesFromCache,
   mergeMessagesForTopic,
+  suppressNotificationSoundForTopic,
   suspendLocalOwnReadStatus
 } from '../services/useMessages';
 import { setSuspendIncomingMergeForTopic } from '../services/useChat';
@@ -203,6 +203,22 @@ const activeTopic = computed(() =>
 );
 const topicUnreadCount = computed(
   () => activeTopic.value?.unreadMessageCount || 0
+);
+const isViewingBottom = computed(
+  () =>
+    !!route.value?.id &&
+    route.value.type !== RouteTypes.AI &&
+    scrollAnchor.viewportMode.value === 'live'
+);
+const canClearlyShowUnreadCount = computed(
+  () =>
+    !!route.value?.id &&
+    route.value.type !== RouteTypes.AI &&
+    !!chatWrapperRef.value &&
+    scrollAnchor.viewportMode.value !== 'live'
+);
+const visibleTopicUnreadCount = computed(() =>
+  canClearlyShowUnreadCount.value ? topicUnreadCount.value : 0
 );
 const renderedTopicId = ref(route.value.id || '');
 
@@ -515,7 +531,7 @@ const getFirstUnreadMessageId = (): string | null => {
 };
 
 const getCurrentTopicUnreadCount = (): number => {
-  return topicUnreadCount.value || 0;
+  return visibleTopicUnreadCount.value || 0;
 };
 
 const rememberCurrentUnreadMarkerState = (topicId: string) => {
@@ -561,15 +577,13 @@ const resetUnreadIfViewingBottom = (): void => {
     return;
   }
 
-  if (
-    scrollAnchor.viewportMode.value === 'live' &&
-    getCurrentTopicUnreadCount() > 0
-  ) {
-    void markAllVisibleAsRead();
+  if (!isViewingBottom.value) {
+    return;
   }
 
-  if (getCurrentTopicUnreadCount() > 0) {
-    return;
+  if (topicUnreadCount.value > 0) {
+    resetTopicUnreadState(route.value.id);
+    void markAllVisibleAsRead();
   }
 
   unreadMarkerMessageIdsByTopic[route.value.id] = null;
@@ -668,6 +682,9 @@ watch(
   [() => route.value?.id, () => route.value?.type],
   async ([topicId]) => {
     if (!topicId) return;
+    suppressNotificationSoundForTopic(topicId, TOPIC_SWITCH_AUTO_READ_GRACE_MS);
+    state.hideUnreadMarker = true;
+    state.unreadMarkerMessageId = null;
     isLoadingInitialMessages.value = true;
     resetScrollState();
     setReadReceiptsEnabled(false);
@@ -687,13 +704,10 @@ watch(
 
     const existingVisibleMessages = getMessagesByTopicId(topicId);
     const existingFullMessages = getFullMessagesByTopicId(topicId);
-    const shouldClearPartialVisibleMessages =
-      existingVisibleMessages.length > 0 &&
-      existingFullMessages.length < initialMessagesLimit;
+    const hasInstantCachedMessages =
+      existingVisibleMessages.length > 0 || existingFullMessages.length > 0;
 
-    if (shouldClearPartialVisibleMessages) {
-      clearVisibleMessagesForTopic(topicId);
-    }
+    renderedTopicId.value = hasInstantCachedMessages ? topicId : '';
 
     const hydratedMessages = await hydrateMessagesFromCache(topicId);
 
@@ -708,11 +722,6 @@ watch(
         preferUnreadMarker: false,
         smooth: false
       });
-    } else if (
-      !shouldClearPartialVisibleMessages &&
-      (existingVisibleMessages.length > 0 || existingFullMessages.length > 0)
-    ) {
-      renderedTopicId.value = topicId;
     }
 
     void fetchPinnedMessagesForTopic(topicId);
