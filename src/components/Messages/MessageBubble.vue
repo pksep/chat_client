@@ -136,15 +136,7 @@ const mediaFiles = computed(
 const hasTextContent = computed(() =>
   Boolean(stripHtml(props.message || '').trim())
 );
-const shouldInlineMediaCaption = computed(
-  () => hasTextContent.value && mediaFiles.value.length > 0
-);
-const shouldInlineFileCaption = computed(
-  () =>
-    hasTextContent.value &&
-    docFiles.value.length > 0 &&
-    mediaFiles.value.length === 0
-);
+
 const shouldRenderStandaloneText = computed(
   () =>
     hasTextContent.value &&

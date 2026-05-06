@@ -389,6 +389,7 @@
 
 .message__article__file--caption .message-time {
   position: static;
+  padding-left: 5px;
 }
 
 .message-content {
