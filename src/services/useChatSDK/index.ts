@@ -847,7 +847,8 @@ export class ChatSDK {
   async uploadFile(
     file: File,
     previewMeta?: MediaPreviewDimensions,
-    onProgress?: (percent: number) => void
+    onProgress?: (percent: number) => void,
+    isMedia = false
   ): Promise<{
     objectName: string;
     thumbnailObjectName: string | null;
@@ -866,7 +867,8 @@ export class ChatSDK {
       {
         originName: file.name,
         size: file.size,
-        contentType: file.type || undefined
+        contentType: file.type || undefined,
+        isMedia
       },
       {
         parsed: false
@@ -886,7 +888,8 @@ export class ChatSDK {
         width: previewMeta?.width,
         height: previewMeta?.height,
         previewWidth: previewMeta?.previewWidth,
-        previewHeight: previewMeta?.previewHeight
+        previewHeight: previewMeta?.previewHeight,
+        isMedia
       },
       {
         parsed: false

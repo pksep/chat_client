@@ -969,7 +969,8 @@ export const setReactionMessage = async (params: {
 export const uploadFile = async (
   file: File,
   previewMeta?: MediaPreviewDimensions,
-  onProgress?: (percent: number) => void
+  onProgress?: (percent: number) => void,
+  isMedia = false
 ): Promise<{
   path: string;
   thumbnailPath: string | null;
@@ -986,7 +987,8 @@ export const uploadFile = async (
   const { objectName, thumbnailObjectName, ex } = await sdk.uploadFile(
     file,
     previewMeta,
-    onProgress
+    onProgress,
+    isMedia
   );
   return { file, path: objectName, thumbnailPath: thumbnailObjectName, ex };
 };

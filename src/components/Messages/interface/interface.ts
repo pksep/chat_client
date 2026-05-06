@@ -27,12 +27,16 @@ export interface IMessageBubbleProps {
   topicId?: string;
   messageId?: string;
   messageStatus?: string;
+  messageEx?: unknown;
+  authUserId?: string;
   replyMessage?: IMessage;
   forwardUser?: IUser;
   reactions?: Reaction[];
   isSelectionMode?: boolean;
   isSelected?: boolean;
   selectionTestId?: string;
+  continuesWithNext?: boolean;
+  continuesFromPrevious?: boolean;
 }
 
 export interface IMessageContextMenu extends IMessageBubbleProps {

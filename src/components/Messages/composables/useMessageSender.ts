@@ -239,7 +239,8 @@ export function useMessageSender(
         currentMedia.ex,
         percent => {
           changeFileUploadPercent(topicId, messageId, fileId, percent);
-        }
+        },
+        payload.isMedia
       );
 
       changeFileLoadingStatus(topicId, messageId, fileId);
