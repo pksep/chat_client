@@ -152,6 +152,10 @@
   justify-items: start;
 }
 
+.message__other .message__article--emoji {
+  justify-items: end;
+}
+
 .message__article--call {
   width: auto;
   min-width: 216px;
@@ -428,7 +432,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
     background-color: var(--message-emoji-background, var(--border-blue));
     border-radius: 50px;
     min-width: 20px;
@@ -441,7 +445,8 @@
 
     & .reaction-item {
       font-size: 16px;
-      padding-bottom: 2px;
+      line-height: 18px;
+      width: 18px;
     }
 
     & .avatar-yui-kit.reaction-avatar {
@@ -550,7 +555,7 @@
 .message-reference-block {
   display: grid;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 1px;
 }
 
 .message-reference-block--outgoing {
@@ -590,6 +595,10 @@
   text-align: left;
   position: relative;
   overflow: hidden;
+}
+
+.message__article:has(.message__article-initals) .message-reference-reply {
+  margin-top: 5px;
 }
 
 .message-reference-reply::before {
@@ -709,7 +718,7 @@ div.message-content__html > p {
   display: inline;
 }
 
-.message-content--text .message-content__html > * {
+.message-content--text .message-content__html > *:not(:empty) {
   display: inline;
   margin: 0;
 }
@@ -937,6 +946,7 @@ div.message-content__file {
   font-size: 12px;
   line-height: 1;
   white-space: nowrap;
+  height: 20px;
 }
 
 .message-content__media-overlay-time .message-status-icons {
@@ -1013,6 +1023,10 @@ div.message-content__file {
   gap: 8px;
 }
 
+.message__other .message__article__text {
+  margin-left: auto;
+}
+
 .message-footer-row .message-time {
   width: auto;
   flex-shrink: 0;
@@ -1043,6 +1057,7 @@ div.message-content__file {
   user-select: text;
   padding: 10px 15px;
   overflow: visible;
+  max-width: max-content;
 }
 
 .message__article__text .message-content {

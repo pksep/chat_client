@@ -24,8 +24,6 @@ interface ParsedCallExPayload {
   };
 }
 
-const DURATION_PATTERN = /(\d+\s*(?:ч|час|часа|часов|min|мин|сек|sec|s)\b)/i;
-
 const normalizeMessageLines = (message: string): string[] =>
   message
     .replace(/<br\s*\/?>/gi, '\n')
@@ -132,16 +130,4 @@ export const parseCallMessage = (
   if (!kind) {
     return null;
   }
-
-  const duration =
-    lines.slice(1).find(line => DURATION_PATTERN.test(line)) ||
-    lines[1] ||
-    null;
-
-  return {
-    kind,
-    title,
-    duration,
-    isOutgoing: Boolean(options.isMeSender)
-  };
 };

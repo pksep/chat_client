@@ -2,7 +2,6 @@
   <template v-if="mediaFiles.length > 0">
     <div class="message-bubble-stack">
       <MessageReferenceBlock
-        v-if="showExternalForward"
         :forward-user="props.forwardUser"
         :is-me-sender="props.isMeSender"
         @navigate-message="$emit('navigate-message')"
@@ -20,12 +19,6 @@
         >
           {{ props.sender }}
         </h3>
-        <MessageReferenceBlock
-          :forward-user="showExternalForward ? undefined : props.forwardUser"
-          :reply-message="props.replyMessage"
-          :is-me-sender="props.isMeSender"
-          @navigate-message="$emit('navigate-message')"
-        />
         <div
           :class="[
             `message-content message-content-${mediaFiles.length}-item`,
@@ -140,9 +133,6 @@ const mediaFiles = computed(
 );
 const hasCaption = computed(() =>
   Boolean(stripHtml(props.message || '').trim())
-);
-const showExternalForward = computed(
-  () => !isDialogRoute.value && Boolean(props.forwardUser)
 );
 const hasTopMeta = computed(
   () =>
