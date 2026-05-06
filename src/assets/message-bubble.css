@@ -329,7 +329,7 @@
 }
 
 .message__article__media {
-  width: max-content;
+  width: fit-content;
   cursor: pointer;
   gap: 0;
   overflow: hidden;
@@ -381,6 +381,14 @@
   position: absolute;
   bottom: 9px;
   right: 14px;
+}
+
+.message__article__file--caption {
+  padding-bottom: 10px;
+}
+
+.message__article__file--caption .message-time {
+  position: static;
 }
 
 .message-content {
@@ -447,6 +455,8 @@
       font-size: 16px;
       line-height: 18px;
       width: 18px;
+      display: inline-flex;
+      justify-content: center;
     }
 
     & .avatar-yui-kit.reaction-avatar {
@@ -718,7 +728,7 @@ div.message-content__html > p {
   display: inline;
 }
 
-.message-content--text .message-content__html > *:not(:empty) {
+.message-content--text .message-content__html > *:last-child {
   display: inline;
   margin: 0;
 }
@@ -926,8 +936,17 @@ div.message-content__file {
   border-radius: inherit;
 }
 
-.message-content--media-with-caption.message-content-1-item
-  .message-content__media {
+.message-content--media-with-caption {
+  border-radius: 0;
+}
+
+.message-content--media-with-caption .message-content__media {
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+.message-content--media-with-caption .message-content__media img,
+.message-content--media-with-caption .message-content__media video {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
 }
@@ -958,11 +977,10 @@ div.message-content__file {
 }
 
 .message-media__caption {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
   align-items: end;
-  padding: 10px 14px 12px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6.5px 15px 11.5px;
   background-color: var(--message-background-color, var(--white));
 }
 
@@ -975,6 +993,16 @@ div.message-content__file {
   margin: 0;
 }
 
+.message-file__caption {
+  max-width: 320px;
+  padding: 0 0 0 5px;
+  line-height: 1.25;
+}
+
+.message-file__caption > * {
+  margin: 0;
+}
+
 .message-media__caption-time {
   display: inline-flex;
   align-items: center;
@@ -982,6 +1010,12 @@ div.message-content__file {
   font-size: 12px;
   color: var(--text-neutral-color);
   white-space: nowrap;
+  align-self: end;
+}
+
+.message-media__caption-time .message-status-icons svg,
+.message-media__caption-time svg.icon-yui-kit {
+  font-size: 20px !important;
 }
 
 .message-media__reactions {
@@ -1117,7 +1151,7 @@ div.message-content__file {
   position: relative;
 
   .editor-content {
-    max-height: 180px;
+    max-height: 400px;
     overflow: auto;
     overflow-wrap: break-word;
     word-break: break-word;
@@ -1246,12 +1280,12 @@ div.message-content__file {
 
 @media screen and (width <= 480px) {
   .chat__input {
-    padding: 0;
-    & .editor-component {
-      min-height: 17px;
-      border-radius: 0;
-    }
+    padding: 15px 20px;
+    position: fixed;
+    bottom: 0;
+    width: 100%;
     & .editor-content {
+      max-height: 250px;
       & .tiptap {
         padding: 5px;
       }
@@ -1260,6 +1294,10 @@ div.message-content__file {
     & .chat__input__users {
       width: 100%;
     }
+  }
+
+  .chat__message-wrapper {
+    padding-bottom: 90px;
   }
 }
 

@@ -34,6 +34,8 @@ import { getHasWebsocketConnection } from '../../../services/useChat';
 const MAX_HTML_LENGTH = 4000;
 const FORWARD_TEXT_SEND_DELAY_MS = 250;
 const TEXT_WAIT_INDICATOR_DELAY_MS = 150;
+const MAX_MEDIA_ATTACHMENTS_PER_MESSAGE = 10;
+const MAX_FILE_ATTACHMENTS_PER_MESSAGE = 10;
 
 const createMessageEx = (
   payload: Record<string, string | number>,
@@ -83,6 +85,27 @@ export function getMediaType(file: File, isMedia: boolean): MediaTypeType {
   if (file.type.startsWith('image/')) return MediaType.Image;
   if (file.type.startsWith('video/')) return MediaType.Video;
   return MediaType.File;
+}
+
+interface IHandleSendPayload {
+  taggedUserIds?: string[];
+  content?: string;
+  files?: FileList;
+  mediaFiles?: FileList;
+}
+
+interface IQueuedFilePayload {
+  file: File;
+  isMedia: boolean;
+}
+
+interface IAttachChunkOptions {
+  isMedia?: boolean;
+  text?: string | null;
+  taggedUserIds?: string[];
+  replyMessage?: IMessage | null;
+  replyMessageId?: string;
+  forwardMessageIds?: string[];
 }
 
 export function useMessageSender(
@@ -177,7 +200,7 @@ export function useMessageSender(
       for (const forwardMessageId of messageMeta.forwardMessageIds) {
         const didSend = await sendMessageChat({
           topicId,
-          text: '',
+          text: message.text || '',
           medias,
           ex: JSON.stringify({ clientId: messageId }),
           replyMessageId: messageMeta.replyMessageId,
@@ -196,7 +219,7 @@ export function useMessageSender(
     } else {
       const didSend = await sendMessageChat({
         topicId,
-        text: '',
+        text: message.text || '',
         medias,
         ex: JSON.stringify({ clientId: messageId }),
         replyMessageId: messageMeta?.replyMessageId
@@ -318,8 +341,21 @@ export function useMessageSender(
     });
   };
 
-  const handleSend = async (taggedUserIds?: string[]): Promise<void> => {
-    const rawText = inputText.value;
+  const handleSend = async (
+    payload?: string[] | IHandleSendPayload
+  ): Promise<void> => {
+    const sendPayload = Array.isArray(payload)
+      ? { taggedUserIds: payload }
+      : (payload ?? {});
+    const rawText = sendPayload.content ?? inputText.value;
+    const taggedUserIds = sendPayload.taggedUserIds;
+    const attachedFiles = sendPayload.files
+      ? Array.from(sendPayload.files).map(file => ({ file, isMedia: false }))
+      : [];
+    const attachedMediaFiles = sendPayload.mediaFiles
+      ? Array.from(sendPayload.mediaFiles).map(file => ({ file, isMedia: true }))
+      : [];
+    const queuedFiles = [...attachedMediaFiles, ...attachedFiles];
     const topicId = route.value.id;
     const routeType = route.value?.type;
     const replyMessageId = state.replyMessage?.id;
@@ -327,10 +363,11 @@ export function useMessageSender(
     const hasForwardMessages = forwardMessages.length > 0;
     const hasMultipleForwardMessages = forwardMessages.length > 1;
     const forwardBatchId = hasMultipleForwardMessages ? generateUUID() : null;
+    const hasAttachments = queuedFiles.length > 0;
 
     const isTextEmpty = !rawText.trim() || rawText.trim() === '<p></p>';
 
-    if (isTextEmpty && !hasForwardMessages) return;
+    if (isTextEmpty && !hasForwardMessages && !hasAttachments) return;
 
     inputText.value = '';
 
@@ -394,6 +431,53 @@ export function useMessageSender(
     }
 
     try {
+      if (hasAttachments) {
+        const mediaPayloads = queuedFiles.filter(file => file.isMedia);
+        const filePayloads = queuedFiles.filter(file => !file.isMedia);
+        const batches: IQueuedFilePayload[][] = [];
+
+        for (
+          let index = 0;
+          index < mediaPayloads.length;
+          index += MAX_MEDIA_ATTACHMENTS_PER_MESSAGE
+        ) {
+          batches.push(
+            mediaPayloads.slice(
+              index,
+              index + MAX_MEDIA_ATTACHMENTS_PER_MESSAGE
+            )
+          );
+        }
+
+        for (
+          let index = 0;
+          index < filePayloads.length;
+          index += MAX_FILE_ATTACHMENTS_PER_MESSAGE
+        ) {
+          batches.push(
+            filePayloads.slice(index, index + MAX_FILE_ATTACHMENTS_PER_MESSAGE)
+          );
+        }
+
+        const replyMessage = state.replyMessage;
+
+        for (const [index, batch] of batches.entries()) {
+          await handleAttachFileChunk(batch, {
+            text: index === 0 ? textToSend || null : null,
+            taggedUserIds: index === 0 ? taggedUserIds : undefined,
+            replyMessage,
+            replyMessageId,
+            forwardMessageIds: forwardMessages.map(message => message.id)
+          });
+        }
+
+        state.hideUnreadMarker = true;
+        await nextTick();
+        scrollToBottom();
+        clearSellectedMessage();
+        return;
+      }
+
       if (parts.length === 0 && hasForwardMessages) {
         for (const [index, forwardMessage] of forwardMessages.entries()) {
           const ex = createMessageEx(
@@ -595,12 +679,23 @@ export function useMessageSender(
     clearSellectedMessage();
   };
 
-  const handleAttachFileChunk = async (files: FileList, isMedia = false) => {
-    if (!files.length) return;
+  const handleAttachFileChunk = async (
+    files: FileList | IQueuedFilePayload[],
+    options?: IAttachChunkOptions
+  ) => {
+    const filePayloads = Array.isArray(files)
+      ? files
+      : Array.from(files).map(file => ({
+          file,
+          isMedia: options?.isMedia ?? false
+        }));
+
+    if (!filePayloads.length) return;
     const topicId = route.value.id;
-    const replyMessage = state.replyMessage;
-    const replyMessageId = state.replyMessage?.id;
-    const forwardMessages = state.forwardMessages;
+    const replyMessage = options?.replyMessage ?? state.replyMessage;
+    const replyMessageId = options?.replyMessageId ?? state.replyMessage?.id;
+    const forwardMessageIds =
+      options?.forwardMessageIds ?? state.forwardMessages.map(message => message.id);
 
     if (!topicId) {
       console.error('[ChatSDK] Cannot attach file: no topic provided');
@@ -610,7 +705,7 @@ export function useMessageSender(
     const clientId = generateUUID();
 
     const localMedia: IMedia[] = await Promise.all(
-      Array.from(files).map(async (file, i) => {
+      filePayloads.map(async ({ file, isMedia }, i) => {
         const type = getMediaType(file, isMedia);
         const localPath =
           type === MediaType.Video
@@ -646,7 +741,7 @@ export function useMessageSender(
             type === MediaType.Video
               ? (await getVideoThumbnail(file)) || localPath
               : undefined,
-          ex: calculatePreviewDimensions(dimensions, files.length, i)
+          ex: calculatePreviewDimensions(dimensions, filePayloads.length, i)
         };
       })
     );
@@ -666,8 +761,9 @@ export function useMessageSender(
       replyMessage,
       senderUserId: authUser.value.id,
       senderUser: authUser.value,
-      text: null,
+      text: options?.text || null,
       topicId,
+      taggedUserIds: options?.taggedUserIds,
       media: localMedia,
       ex: JSON.stringify({ clientId })
     };
@@ -675,10 +771,10 @@ export function useMessageSender(
     addMessageToLocal(newMessage.topicId, newMessage);
     registerPendingUploadMessage(newMessage.topicId, clientId, {
       replyMessageId,
-      forwardMessageIds: forwardMessages.map(message => message.id)
+      forwardMessageIds
     });
 
-    Array.from(files).forEach((file, index) => {
+    filePayloads.forEach(({ file, isMedia }, index) => {
       registerPendingUploadFile(
         newMessage.topicId,
         clientId,
@@ -691,12 +787,12 @@ export function useMessageSender(
     });
 
     let hasUploadError = false;
-    for (const [i, uploadedFile] of Array.from(files).entries()) {
+    for (const [i, payload] of filePayloads.entries()) {
       const isUploaded = await uploadMessageFile(
         newMessage.topicId,
         clientId,
         i.toString(),
-        { file: uploadedFile, isMedia }
+        payload
       );
 
       if (!isUploaded) {
@@ -726,7 +822,7 @@ export function useMessageSender(
         ...chunk
       } as any as FileList;
 
-      handleAttachFileChunk(chunkFileList, isMedia);
+      handleAttachFileChunk(chunkFileList, { isMedia });
     }
   };
 

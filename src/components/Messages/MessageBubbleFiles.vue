@@ -63,8 +63,41 @@
           </div>
         </div>
         <div
+          v-if="hasInlineCaption"
+          class="message-file__caption message-content--text"
+        >
+          <div
+            class="message-content__html"
+            v-html="props.message"
+            :data-testid="`${props.dataTestid}-MessageText`"
+          ></div>
+          <div
+            v-if="!hasReactions"
+            class="message-time message-time--inline"
+            :data-testid="`${props.dataTestid}-Time`"
+          >
+            <PinIcon
+              style="width: 15px; height: 15px; margin-right: -2px"
+              v-if="props.isPin"
+            />
+            <span :data-testid="`${props.dataTestid}-TimeText`">{{
+              props.time
+            }}</span>
+            <ErrorIcon
+              v-if="showErrorIcon"
+              :data-testid="`${props.dataTestid}-ErrorIcon`"
+            />
+            <MessageStatusIcons
+              v-if="props.isMeSender && !showErrorIcon"
+              :is-read="props.isRead"
+              :message-status="props.messageStatus"
+              :data-testid="`${props.dataTestid}`"
+            />
+          </div>
+        </div>
+        <div
           class="message-time"
-          v-if="!props.loader && !props.file && !hasReactions"
+          v-if="!props.loader && !props.file && !hasReactions && !hasInlineCaption"
           :data-testid="`${props.dataTestid}-Time`"
         >
           <PinIcon
@@ -135,6 +168,7 @@ import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { useMessageMedia } from './composables/useMessageMedia';
 import MessageReferenceBlock from './MessageReferenceBlock.vue';
 import MessageBubbleTail from './MessageBubbleTail.vue';
+import { stripHtml } from '../../utils/stripHtml';
 
 const props = defineProps<IMessageBubbleProps>();
 
@@ -149,6 +183,13 @@ let filesVisibilityObserver: IntersectionObserver | null = null;
 
 const docFiles = computed(
   () => props.media?.filter(media => media.type === MediaType.File) || []
+);
+const hasCaption = computed(() => Boolean(stripHtml(props.message || '').trim()));
+const hasMediaFiles = computed(() =>
+  Boolean(props.media?.some(media => media.type !== MediaType.File))
+);
+const hasInlineCaption = computed(
+  () => hasCaption.value && !hasMediaFiles.value
 );
 
 watch(
@@ -221,7 +262,8 @@ const messageArticleStyles = computed(() => [
   'message__article',
   {
     'message__no-author': props.isMeSender,
-    message__article__file: true
+    message__article__file: true,
+    'message__article__file--caption': hasInlineCaption.value
   }
 ]);
 </script>

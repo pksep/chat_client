@@ -155,6 +155,12 @@ interface Props {
   forwardMessages: IMessage[];
 }
 
+interface IContentEditorSendPayload {
+  content?: string;
+  files?: FileList;
+  mediaFiles?: FileList;
+}
+
 const props = defineProps<Props>();
 
 const emit = defineEmits([
@@ -203,7 +209,7 @@ const selectUser = (user: any) => {
   state.tagedUserModal = false;
 };
 
-const handleSend = () => {
+const handleSend = (payload?: IContentEditorSendPayload) => {
   const tiptapEditor = contentEditorRef.value?.editor;
   if (!tiptapEditor) return;
 
@@ -217,7 +223,12 @@ const handleSend = () => {
 
   const uniqueUsers = Array.from(usersSet);
 
-  emit('send', uniqueUsers);
+  emit('send', {
+    taggedUserIds: uniqueUsers,
+    content: payload?.content,
+    files: payload?.files,
+    mediaFiles: payload?.mediaFiles
+  });
 };
 
 const handleMentionChange = (search: string | null) => {
