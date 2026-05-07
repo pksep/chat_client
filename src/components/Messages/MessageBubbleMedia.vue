@@ -3,12 +3,14 @@
     <div class="message-bubble-stack">
       <MessageReferenceBlock
         :forward-user="props.forwardUser"
+        :reply-message="props.replyMessage"
         :is-me-sender="props.isMeSender"
         @navigate-message="$emit('navigate-message')"
       />
       <article
         ref="mediaArticleRef"
         :class="messageArticleStyles"
+        :style="articleInlineStyle"
         :data-testid="`${props.dataTestid}-Article`"
       >
         <h3
@@ -23,7 +25,7 @@
           :class="[
             `message-content message-content-${mediaFiles.length}-item`,
             'message-content--media',
-            { 'message-content--media-with-caption': hasCaption }
+            { 'message-content--media-with-caption': hasInlineCaption }
           ]"
           :data-testid="`${props.dataTestid}-Content`"
         >
@@ -38,11 +40,11 @@
               :src="shouldLoadMedia ? getFullMediaPath(media) : EMPTY_MEDIA_SRC"
               :alt="props.sender ? props.sender + ' image' : 'Shared image'"
               :style="getPreviewStyle(media)"
+              draggable="false"
               loading="lazy"
               decoding="async"
               @load="captureImagePreviewMetrics(media, $event)"
               @click="$emit('set-slider', mediaFiles, i)"
-              @dragstart="handleDragStart($event, media)"
               @contextmenu.prevent
             />
 
@@ -66,7 +68,7 @@
             </div>
 
             <div
-              v-if="i === mediaFiles.length - 1"
+              v-if="i === mediaFiles.length - 1 && !hasInlineCaption"
               class="message-content__media-overlay-time"
             >
               <span>{{ props.time }}</span>
@@ -80,18 +82,48 @@
           </div>
         </div>
 
-        <div v-if="hasCaption" class="message-media__caption">
+        <div
+          v-if="hasInlineCaption"
+          class="message-media__caption message-content--text"
+        >
           <div
             class="message-media__caption-text message-content__html"
             v-html="props.message"
             :data-testid="`${props.dataTestid}-MessageText`"
           ></div>
+          <div
+            v-if="!hasReactions"
+            class="message-time message-time--inline message-media__caption-time"
+          >
+            <span>{{ props.time }}</span>
+            <ErrorIcon v-if="showErrorIcon" />
+            <MessageStatusIcons
+              v-if="props.isMeSender && !showErrorIcon"
+              :is-read="props.isRead"
+              :message-status="props.messageStatus"
+            />
+          </div>
         </div>
       </article>
 
       <Transition name="reaction-row">
-        <div v-if="props.reactions?.length" class="message-reactions-row">
-          <MessageEmojies :reactions="props.reactions" />
+        <div v-if="props.reactions?.length" class="message-footer-row">
+          <div class="message-reactions-row">
+            <MessageEmojies :reactions="props.reactions" />
+          </div>
+          <div
+            v-if="hasInlineCaption"
+            class="message-time message-time--bottom"
+            :data-testid="`${props.dataTestid}-Time`"
+          >
+            <span>{{ props.time }}</span>
+            <ErrorIcon v-if="showErrorIcon" />
+            <MessageStatusIcons
+              v-if="props.isMeSender && !showErrorIcon"
+              :is-read="props.isRead"
+              :message-status="props.messageStatus"
+            />
+          </div>
         </div>
       </Transition>
     </div>
@@ -117,13 +149,8 @@ import MessageReferenceBlock from './MessageReferenceBlock.vue';
 const props = defineProps<IMessageBubbleProps>();
 defineEmits(['navigate-message', 'set-slider']);
 
-const {
-  getFullMediaPath,
-  handleDragStart,
-  primeMediaCache,
-  isMediaPathReady,
-  EMPTY_MEDIA_SRC
-} = useMessageMedia();
+const { getFullMediaPath, primeMediaCache, isMediaPathReady, EMPTY_MEDIA_SRC } =
+  useMessageMedia();
 
 const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
@@ -134,11 +161,31 @@ const mediaFiles = computed(
 const hasCaption = computed(() =>
   Boolean(stripHtml(props.message || '').trim())
 );
+const hasInlineCaption = computed(() => hasCaption.value);
 const hasTopMeta = computed(
   () =>
     Boolean(props.replyMessage) ||
     (!props.isMeSender && !isDialogRoute.value && !props.continuesFromPrevious)
 );
+const hasReactions = computed(() => Boolean(props.reactions?.length));
+const singleMediaPreviewWidth = computed(() => {
+  if (mediaFiles.value.length !== 1) {
+    return null;
+  }
+
+  const width = mediaFiles.value[0]?.ex?.previewWidth;
+
+  return typeof width === 'number' && width > 0 ? width : null;
+});
+const articleInlineStyle = computed(() => {
+  if (!hasInlineCaption.value || !singleMediaPreviewWidth.value) {
+    return undefined;
+  }
+
+  return {
+    width: `${singleMediaPreviewWidth.value}px`
+  };
+});
 const mediaArticleRef = ref<HTMLElement | null>(null);
 const shouldLoadMedia = ref(false);
 let visibilityObserver: IntersectionObserver | null = null;
@@ -255,7 +302,7 @@ const messageArticleStyles = computed(() => [
   {
     'message__no-author': props.isMeSender,
     message__article__media: true,
-    'message__article__media--caption': hasCaption.value,
+    'message__article__media--caption': hasInlineCaption.value,
     'message__article__media--with-top-meta': hasTopMeta.value
   }
 ]);

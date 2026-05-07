@@ -31,7 +31,7 @@
     </div>
     <div :class="messageArticlesStyles">
       <MessageBubbleText
-        v-if="!!props.message && mediaFiles.length === 0"
+        v-if="shouldRenderStandaloneText"
         v-bind="props"
         @navigate-message="handleNavigateMessage"
       />
@@ -99,6 +99,7 @@ import MessageBubbleMedia from './MessageBubbleMedia.vue';
 import { useMessageMedia } from './composables/useMessageMedia';
 import { isMessageSelectionModeForTopic } from '../../composables/useSelectedMessages';
 import { ensureMediaObjectUrl } from '../../services/useMediaBlobCache';
+import { stripHtml } from '../../utils/stripHtml';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -130,6 +131,17 @@ const docFiles = computed(
 
 const mediaFiles = computed(
   () => props.media?.filter(media => media.type !== MediaType.File) || []
+);
+
+const hasTextContent = computed(() =>
+  Boolean(stripHtml(props.message || '').trim())
+);
+
+const shouldRenderStandaloneText = computed(
+  () =>
+    hasTextContent.value &&
+    mediaFiles.value.length === 0 &&
+    docFiles.value.length === 0
 );
 
 const handleNavigateMessage = () => {

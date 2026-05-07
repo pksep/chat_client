@@ -1,6 +1,6 @@
 import { ref, computed, watch } from 'vue';
 import { getChatSDK } from '../services/useChat';
-import { ITopic } from '../components/interfaces/interfaces';
+import { ITopic, IUser } from '../components/interfaces/interfaces';
 import {
   Message,
   TopicSetting,
@@ -27,14 +27,17 @@ import {
   loadShadowLoadedRanges,
   loadShadowReadState
 } from '../services/useShadowChatSync';
+import { getUserById } from './useUsers';
 
 const topics = ref<ITopic[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const displayedUnreadCount = ref(0);
+const TYPING_STATE_TTL_MS = 4000;
 let persistTopicsTimeout: ReturnType<typeof setTimeout> | null = null;
 const topicReadPreviewIds = ref<Record<string, string[]>>({});
 const serverUnreadCounts = ref<Record<string, number>>({});
+const typingStateTimers = new Map<string, ReturnType<typeof setTimeout>>();
 let isTopicsVisibilityBound = false;
 let topicsApi: ReturnType<typeof createTopicsApi> | null = null;
 
@@ -84,6 +87,43 @@ const createTopicsApi = () => {
     return new Date(value).getTime();
   };
 
+  const normalizeTypingUserIds = (typingUserIds?: string[]): string[] =>
+    Array.from(new Set((typingUserIds || []).filter(Boolean)));
+
+  const updateTopicTypingUserIds = (
+    topicId: string,
+    typingUserIds: string[]
+  ): void => {
+    const normalizedTypingUserIds = normalizeTypingUserIds(typingUserIds);
+    let hasChanges = false;
+
+    topics.value = topics.value.map(topic => {
+      if (topic.id !== topicId) {
+        return topic;
+      }
+
+      hasChanges = true;
+      return {
+        ...topic,
+        typingUserIds: normalizedTypingUserIds
+      };
+    });
+
+    if (hasChanges) {
+      topics.value = [...topics.value];
+    }
+  };
+
+  const clearTypingStateTimer = (topicId: string, userId: string): void => {
+    const timerKey = `${topicId}:${userId}`;
+    const timerId = typingStateTimers.get(timerKey);
+
+    if (timerId) {
+      clearTimeout(timerId);
+      typingStateTimers.delete(timerKey);
+    }
+  };
+
   const resolveLatestMessage = (topic: ITopic) => {
     const localLastMessage = getFullMessagesByTopicId(topic.id).at(-1);
     const serverLastMessage = topic.lastMessage;
@@ -104,6 +144,7 @@ const createTopicsApi = () => {
 
   const normalizeTopic = (topic: ITopic): ITopic => {
     const normalizedTopic = { ...topic };
+    const existingTopic = topics.value.find(item => item.id === topic.id);
     const resolvedUnreadCount = Math.max(
       0,
       normalizedTopic.unreadMessageCount || 0
@@ -115,6 +156,9 @@ const createTopicsApi = () => {
     };
     normalizedTopic.unreadMessageCount = resolvedUnreadCount;
     normalizedTopic.lastMessage = resolveLatestMessage(normalizedTopic);
+    normalizedTopic.typingUserIds = normalizeTypingUserIds(
+      normalizedTopic.typingUserIds ?? existingTopic?.typingUserIds
+    );
 
     if (normalizedTopic.type === TopicType.DM && normalizedTopic.members) {
       normalizedTopic.user = normalizedTopic.members.find(
@@ -132,6 +176,14 @@ const createTopicsApi = () => {
   const normalizeTopics = (items: ITopic[]): ITopic[] =>
     items.map(topic => normalizeTopic(topic));
 
+  const stripEphemeralTopicState = (items: ITopic[]): ITopic[] =>
+    items.map(topic => {
+      const persistedTopic = { ...topic };
+      delete persistedTopic.typingUserIds;
+
+      return persistedTopic;
+    });
+
   const schedulePersistTopics = () => {
     if (persistTopicsTimeout) {
       clearTimeout(persistTopicsTimeout);
@@ -139,7 +191,7 @@ const createTopicsApi = () => {
 
     persistTopicsTimeout = setTimeout(() => {
       persistTopicsTimeout = null;
-      void saveCachedTopics(topics.value || []);
+      void saveCachedTopics(stripEphemeralTopicState(topics.value || []));
     }, 150);
   };
 
@@ -254,6 +306,13 @@ const createTopicsApi = () => {
       } else {
         const messages = getFullMessagesByTopicId(topicId);
         topic.lastMessage = messages.at(-1);
+      }
+
+      if (lastMessage?.senderUserId) {
+        clearTypingStateTimer(topicId, lastMessage.senderUserId);
+        topic.typingUserIds = (topic.typingUserIds || []).filter(
+          userId => userId !== lastMessage.senderUserId
+        );
       }
     }
 
@@ -563,6 +622,85 @@ const createTopicsApi = () => {
     schedulePersistTopics();
   };
 
+  const setTopicTypingState = (
+    topicId: string,
+    userId: string,
+    isTyping: boolean
+  ): void => {
+    if (!topicId || !userId || userId === authedUser.value?.id) {
+      return;
+    }
+
+    const topic = getSelectedTopic(topicId);
+
+    if (!topic) {
+      return;
+    }
+
+    const nextTypingUserIds = new Set(topic.typingUserIds || []);
+
+    if (isTyping) {
+      nextTypingUserIds.add(userId);
+      clearTypingStateTimer(topicId, userId);
+      typingStateTimers.set(
+        `${topicId}:${userId}`,
+        setTimeout(() => {
+          clearTopicTypingState(topicId, userId);
+        }, TYPING_STATE_TTL_MS)
+      );
+    } else {
+      nextTypingUserIds.delete(userId);
+      clearTypingStateTimer(topicId, userId);
+    }
+
+    updateTopicTypingUserIds(topicId, Array.from(nextTypingUserIds));
+  };
+
+  const clearTopicTypingState = (topicId: string, userId?: string): void => {
+    if (!topicId) {
+      return;
+    }
+
+    if (userId) {
+      const topic = getSelectedTopic(topicId);
+
+      if (!topic) {
+        return;
+      }
+
+      clearTypingStateTimer(topicId, userId);
+      updateTopicTypingUserIds(
+        topicId,
+        (topic.typingUserIds || []).filter(id => id !== userId)
+      );
+      return;
+    }
+
+    const topic = getSelectedTopic(topicId);
+
+    if (!topic?.typingUserIds?.length) {
+      return;
+    }
+
+    topic.typingUserIds.forEach(id => clearTypingStateTimer(topicId, id));
+    updateTopicTypingUserIds(topicId, []);
+  };
+
+  const getTopicTypingUsers = (topicId: string = route.value.id): IUser[] => {
+    const topic = getSelectedTopic(topicId);
+    const typingUserIds = topic?.typingUserIds || [];
+
+    return typingUserIds
+      .map(userId => {
+        return (
+          getUserById(userId) ||
+          topic?.members?.find(member => member.id === userId) ||
+          (topic?.user?.id === userId ? topic.user : undefined)
+        );
+      })
+      .filter(Boolean) as IUser[];
+  };
+
   const deleteTopicFromList = (topicId: string): void => {
     topics.value = [...topics.value.filter(t => t.id !== topicId)];
     groups.value = [...groups.value.filter(t => t.id !== topicId)];
@@ -650,6 +788,9 @@ const createTopicsApi = () => {
     togglePinTopic,
     toggleMuteTopic,
     addTopicList,
+    setTopicTypingState,
+    clearTopicTypingState,
+    getTopicTypingUsers,
     sortTopics,
     getTopicList,
     getSelectedTopic,
@@ -682,6 +823,9 @@ const {
   toggleMuteTopic,
   togglePinTopic,
   addTopicList,
+  setTopicTypingState,
+  clearTopicTypingState,
+  getTopicTypingUsers,
   sortTopics,
   getTopicList,
   getSelectedTopic,
@@ -717,6 +861,9 @@ export {
   togglePinTopic,
   toggleMuteTopic,
   addTopicList,
+  setTopicTypingState,
+  clearTopicTypingState,
+  getTopicTypingUsers,
   sortTopics,
   getTopicList,
   getSelectedTopic,

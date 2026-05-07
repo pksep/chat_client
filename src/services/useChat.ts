@@ -12,6 +12,7 @@ import {
   fetchAllTopics,
   getTopicList,
   incrementDisplayedUnreadCount,
+  setTopicTypingState,
   totalUnreadCount
 } from '../composables/useTopics';
 import {
@@ -399,6 +400,10 @@ const setupChatListeners = (): void => {
 
   chatSDK.subscribeToEvent(WebSocketEventType.USER_UPDATED, event => {
     handleUserUpdatedPayload(event.payload);
+  });
+
+  chatSDK.subscribeToEvent(WebSocketEventType.TYPING_STATUS, ({ payload }) => {
+    setTopicTypingState(payload.topicId, payload.userId, payload.isTyping);
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_TOPIC, ({ payload }) => {
@@ -915,6 +920,27 @@ export const sendMessageChat = async (params: {
     });
   } catch (error) {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);
+    return false;
+  }
+};
+
+export const sendTypingStatus = async (params: {
+  topicId: string;
+  isTyping: boolean;
+}): Promise<boolean> => {
+  const sdk = getChatSDK();
+
+  try {
+    if (!sdk) {
+      return false;
+    }
+
+    return sdk.sendWebSocketEvent(WebSocketEventType.TYPING_STATUS, params);
+  } catch (error) {
+    console.error(
+      '[ChatSDK] Failed to send typing status via WebSocket:',
+      error
+    );
     return false;
   }
 };

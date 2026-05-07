@@ -23,6 +23,12 @@
       {{ props.user.initials }}
     </h3>
     <ConnectionStatus v-if="!!isWaitingConnection" />
+    <TypingIndicator
+      v-else-if="props.typingLabel"
+      class="user-profile__ex user-profile__ex--typing"
+      :label="props.typingLabel"
+      :data-testid="`${dataTestid}-UserProfile-Typing`"
+    />
     <span
       v-else
       class="user-profile__ex"
@@ -45,6 +51,7 @@ import { getAuthUser } from '../../composables/useAuth';
 import ConnectionStatus from '../UI/ConnectionStatus.vue';
 import { getHasWebsocketConnection } from '../../services/useChat';
 import CachedAvatar from '../UI/CachedAvatar.vue';
+import TypingIndicator from '../UI/TypingIndicator.vue';
 
 const props = withDefaults(defineProps<IUserProfileProps>(), {
   dataTestid: () => 'UserProfile'
@@ -73,3 +80,9 @@ const handleClick = (event: MouseEvent): void => {
   emits('unmount-click', event);
 };
 </script>
+
+<style scoped>
+.user-profile__ex--typing {
+  color: var(--primary-color);
+}
+</style>
