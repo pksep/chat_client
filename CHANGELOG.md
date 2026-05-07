@@ -1,3 +1,23 @@
+# [1.26.0](https://github.com/pksep/chat_client/compare/v1.25.0...v1.26.0) (2026-05-07)
+
+
+### Bug Fixes
+
+* edited text ([094c13c](https://github.com/pksep/chat_client/commit/094c13c21a3cd7b56501fc273cf4c1434d796acf))
+* lint ([5d1087f](https://github.com/pksep/chat_client/commit/5d1087fd4292910b9984e27d3af691deebcce948))
+* slider content type ([34d3c9f](https://github.com/pksep/chat_client/commit/34d3c9f257934489d6383509163702e6622fe4d9))
+* style ([f585050](https://github.com/pksep/chat_client/commit/f585050c0a41a59c5b45a7dba07c1cdabc3742aa))
+* styles ([bded7d7](https://github.com/pksep/chat_client/commit/bded7d712ff8867021556ad829e26461c75b7b04))
+* styles ([40c5f38](https://github.com/pksep/chat_client/commit/40c5f38054b04eeb661fcca3770929f115c19f68))
+* upload .mov too media ([e23e04e](https://github.com/pksep/chat_client/commit/e23e04e0581dc37faef092bc133c43e8d91e37bc))
+
+
+### Features
+
+* add content editor props and tools ([b213bc7](https://github.com/pksep/chat_client/commit/b213bc7da124dd9e890f4c62384d6dfaed9af94d))
+* add logic for send media and files in text ([23c56d1](https://github.com/pksep/chat_client/commit/23c56d1ca152a0669619467fa70ed2dd0a866c18))
+* redesign messages ([ff0edf3](https://github.com/pksep/chat_client/commit/ff0edf32a58413df9e45560e07dc365cb53233e4))
+
 # [1.25.0](https://github.com/pksep/chat_client/compare/v1.24.0...v1.25.0) (2026-05-05)
 
 
