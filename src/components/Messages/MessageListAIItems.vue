@@ -30,6 +30,8 @@
         :time="formatTime(new Date(message.timestamp))"
         :loader="message.loading"
         :is-me-sender="message.role === 'user'"
+        :continues-with-next="continuesWithNext(index)"
+        :continues-from-previous="index > 0 && continuesWithNext(index - 1)"
         :data-testid="`${props.dataTestid}-MessageList-MessageBubbleAI${index + 1}`"
       />
     </template>
@@ -56,6 +58,21 @@ const isNewDate = (index: number) => {
   const currentDay = formatDay(new Date(currentMsg.timestamp));
   const prevDay = formatDay(new Date(prevMsg.timestamp));
   return currentDay !== prevDay;
+};
+
+const continuesWithNext = (index: number) => {
+  const currentMessage = props.messages[index];
+  const nextMessage = props.messages[index + 1];
+
+  if (!currentMessage || !nextMessage) {
+    return false;
+  }
+
+  return (
+    currentMessage.role === nextMessage.role &&
+    formatDay(new Date(currentMessage.timestamp)) ===
+      formatDay(new Date(nextMessage.timestamp))
+  );
 };
 
 const messageChat = (role: string) => [

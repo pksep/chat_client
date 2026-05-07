@@ -4,6 +4,8 @@
     :class="{
       'message--selection-active': props.isSelectionMode,
       'message--selected': props.isSelected,
+      'message--continued': props.continuesWithNext,
+      'message--continued-from-previous': props.continuesFromPrevious,
       highlighted: props.isSelected
     }"
     :data-testid="`${dataTestid}-MessageBubble-Container`"
@@ -13,21 +15,6 @@
     @contextmenu="handleContextMenu"
     @click="handleMessageClick"
   >
-    <CachedAvatar
-      class="message__avatar"
-      :path="props.avatar"
-      :alt="props.sender"
-      :initials="props.sender"
-      v-if="
-        !props.isMeSender && !props.author && route.type !== RouteTypes.DIALOGS
-      "
-      :data-testid="`${dataTestid}-MessageBubble-Avatar`"
-    />
-    <AiIconWrapper
-      class="message__assistant"
-      v-else-if="props.author === 'assistant'"
-      :data-testid="`${dataTestid}-MessageBubble-AssistantIcon`"
-    />
     <div
       :class="{
         'message-selection-toggle': true,
@@ -44,7 +31,7 @@
     </div>
     <div :class="messageArticlesStyles">
       <MessageBubbleText
-        v-if="!!props.message"
+        v-if="shouldRenderStandaloneText"
         v-bind="props"
         @navigate-message="handleNavigateMessage"
       />
@@ -96,8 +83,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { Checkbox, CheckboxCircularEnum } from '@pksep/yui';
-import AiIconWrapper from '../UI/AiIconWrapper.vue';
-import CachedAvatar from '../UI/CachedAvatar.vue';
 import {
   isOpen,
   position,
@@ -106,8 +91,6 @@ import {
 import type { IMessageBubbleProps } from './interface/interface';
 import { SliderModal } from '@pksep/yui';
 import { MediaType } from '@pksep/zod-shared-chat';
-import { useUrlWatcher } from '../../composables/navigation';
-import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { IMedia } from '../interfaces/interfaces';
 import MessageContextMenu from './MessageContextMenu.vue';
 import MessageBubbleText from './MessageBubbleText.vue';
@@ -116,6 +99,7 @@ import MessageBubbleMedia from './MessageBubbleMedia.vue';
 import { useMessageMedia } from './composables/useMessageMedia';
 import { isMessageSelectionModeForTopic } from '../../composables/useSelectedMessages';
 import { ensureMediaObjectUrl } from '../../services/useMediaBlobCache';
+import { stripHtml } from '../../utils/stripHtml';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -138,8 +122,6 @@ const messageArticlesStyles = computed(() => ({
 
 const { getFullMediaPath, isSliderContentUrl } = useMessageMedia();
 
-const route = useUrlWatcher();
-
 const sliderElements = ref<{ path: string; name: string }[]>([]);
 const defaultIndexSlider = ref<number>(0);
 
@@ -149,6 +131,17 @@ const docFiles = computed(
 
 const mediaFiles = computed(
   () => props.media?.filter(media => media.type !== MediaType.File) || []
+);
+
+const hasTextContent = computed(() =>
+  Boolean(stripHtml(props.message || '').trim())
+);
+
+const shouldRenderStandaloneText = computed(
+  () =>
+    hasTextContent.value &&
+    mediaFiles.value.length === 0 &&
+    docFiles.value.length === 0
 );
 
 const handleNavigateMessage = () => {

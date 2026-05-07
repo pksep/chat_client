@@ -27,6 +27,8 @@ interface PendingViewportMutation {
   pinToBottom: boolean;
   revision: number;
   reason: MutationReason;
+  scrollHeight: number;
+  scrollTop: number;
 }
 
 export function useScrollAnchor(options: UseScrollAnchorOptions) {
@@ -53,6 +55,14 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
   let forceNoPinBottomForNextMutation = false;
   const smoothTailDistancePx = 120;
   const smoothSettleDelayMs = 220;
+
+  const getMessageSelector = (messageId: string): string => {
+    const escapedMessageId = window.CSS?.escape
+      ? window.CSS.escape(messageId)
+      : messageId.replace(/["\\]/g, '\\$&');
+
+    return `[data-message-id="${escapedMessageId}"]`;
+  };
 
   const getContainerMetrics = () => {
     const container = containerRef.value;
@@ -174,7 +184,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     }
 
     const anchorElement = container.querySelector(
-      `[data-message-id="${anchor.messageId}"]`
+      getMessageSelector(anchor.messageId)
     );
 
     if (!(anchorElement instanceof HTMLElement)) {
@@ -191,13 +201,35 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     }
 
     setInternalScrollLock();
-    container.scrollTop -= drift;
+    container.scrollTop += drift;
 
     return true;
   };
 
-  const scheduleAnchorRestore = (anchor: ScrollAnchor | null) => {
-    if (!anchor) {
+  const restorePrependSnapshot = (
+    mutation: PendingViewportMutation
+  ): boolean => {
+    const container = containerRef.value;
+    if (!container || mutation.reason !== 'prepend') {
+      return false;
+    }
+
+    const heightDelta = container.scrollHeight - mutation.scrollHeight;
+    if (!Number.isFinite(heightDelta) || Math.abs(heightDelta) <= 0.5) {
+      return false;
+    }
+
+    setInternalScrollLock();
+    container.scrollTop = mutation.scrollTop + heightDelta;
+
+    return true;
+  };
+
+  const scheduleAnchorRestore = (
+    anchor: ScrollAnchor | null,
+    mutation?: PendingViewportMutation
+  ) => {
+    if (!anchor && !mutation) {
       return;
     }
 
@@ -207,13 +239,21 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     }
 
     nextTick(() => {
-      restoreAnchorPosition(anchor);
+      if (!restoreAnchorPosition(anchor) && mutation) {
+        restorePrependSnapshot(mutation);
+      }
       restoreRafId = requestAnimationFrame(() => {
-        restoreAnchorPosition(anchor);
+        if (!restoreAnchorPosition(anchor) && mutation) {
+          restorePrependSnapshot(mutation);
+        }
         restoreRafId = requestAnimationFrame(() => {
-          restoreAnchorPosition(anchor);
+          if (!restoreAnchorPosition(anchor) && mutation) {
+            restorePrependSnapshot(mutation);
+          }
           restoreRafId = 0;
-          stickyAnchor = captureViewportAnchor(anchor.messageId) || anchor;
+          stickyAnchor = anchor
+            ? captureViewportAnchor(anchor.messageId) || anchor
+            : captureViewportAnchor();
           updateBottomState();
         });
       });
@@ -252,7 +292,9 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
           ? false
           : !preserveViewport && atBottomBeforeMutation),
       revision,
-      reason
+      reason,
+      scrollHeight: containerRef.value?.scrollHeight || 0,
+      scrollTop: containerRef.value?.scrollTop || 0
     };
     forceNoPinBottomForNextMutation = false;
 
@@ -285,7 +327,13 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     pendingMutation = null;
 
     if (currentMutation.preserveViewport) {
-      scheduleAnchorRestore(options?.forceAnchor ?? currentMutation.anchor);
+      const anchor = options?.forceAnchor ?? currentMutation.anchor;
+
+      if (!restoreAnchorPosition(anchor)) {
+        restorePrependSnapshot(currentMutation);
+      }
+
+      scheduleAnchorRestore(anchor, currentMutation);
       return;
     }
 
@@ -565,7 +613,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       }
 
       const messageElement = container.querySelector(
-        `[data-message-id="${messageId}"]`
+        getMessageSelector(messageId)
       );
 
       return messageElement instanceof HTMLElement ? messageElement : null;

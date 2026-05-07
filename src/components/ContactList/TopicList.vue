@@ -51,7 +51,14 @@
             {{ topic.name }}
           </h5>
           <div
-            v-if="!!topic.lastMessage?.text"
+            v-if="topic.typingUserIds?.length"
+            class="contact-list__description contact-list__description--typing"
+            :data-testid="`${props.dataTestid}-ContactList-Typing${index + 1}`"
+          >
+            <TypingIndicator :label="getTopicTypingLabel(topic)" />
+          </div>
+          <div
+            v-else-if="!!topic.lastMessage?.text"
             class="contact-list__description"
             :data-testid="`${props.dataTestid}-ContactList-Description${index + 1}`"
             :aria-label="`Latest message: ${stripHtml(topic.lastMessage?.text || 'No message')}`"
@@ -215,13 +222,15 @@ import { TopicType } from '../../services/useChatSDK/types';
 import { getUserLastOnline } from '../../composables/useUsers';
 import { getHasWebsocketConnection } from '../../services/useChat';
 import { useMessageMedia } from '../Messages/composables/useMessageMedia';
+import TypingIndicator from '../UI/TypingIndicator.vue';
+import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
   selectedTopicIds?: Set<string | number>;
 }
 
-const { togglePinTopic, toggleMuteTopic } = useTopics();
+const { togglePinTopic, toggleMuteTopic, getTopicTypingUsers } = useTopics();
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   showCheckbox: false,
@@ -300,4 +309,13 @@ const getTopicLastMessageLabel = (media: IMedia[]): string => {
 
   return text;
 };
+
+const getTopicTypingLabel = (topic: ITopic): string =>
+  getTypingIndicatorLabel(topic.type, getTopicTypingUsers(topic.id));
 </script>
+
+<style scoped>
+.contact-list__description--typing {
+  color: var(--primary-color);
+}
+</style>

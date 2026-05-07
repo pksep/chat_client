@@ -222,6 +222,35 @@ const isPendingOutgoingMessage = (message: IMessage): boolean => {
   );
 };
 
+const mergePendingReplyState = (
+  incomingMessage: IMessage,
+  pendingMessage?: IMessage
+): IMessage => {
+  if (!pendingMessage) {
+    return incomingMessage;
+  }
+
+  const replyMessageId =
+    incomingMessage.replyMessageId || pendingMessage.replyMessageId;
+  const shouldReusePendingReply =
+    !incomingMessage.replyMessage &&
+    !!pendingMessage.replyMessage &&
+    !!replyMessageId &&
+    pendingMessage.replyMessage.id === replyMessageId;
+
+  if (!replyMessageId && !shouldReusePendingReply) {
+    return incomingMessage;
+  }
+
+  return {
+    ...incomingMessage,
+    replyMessageId,
+    replyMessage: shouldReusePendingReply
+      ? pendingMessage.replyMessage
+      : incomingMessage.replyMessage
+  };
+};
+
 const hasPendingMediaUpload = (message?: IMessage): boolean =>
   !!message?.media?.some(media => media.isLoading);
 
@@ -940,7 +969,9 @@ export const fetchMessagesForTopic = async (
     if (!opts?.skipSave) {
       const existing = getFullMessagesByTopicId(topicId) || [];
 
-      let combined = mergeWithPendingOutgoingMessages(messages, existing);
+      let combined = isPaginationRequest
+        ? mergeWithPendingOutgoingMessages(messages, existing)
+        : [...existing, ...messages];
 
       if (opts?.lastMessageId) {
         combined = [...messages, ...existing];
@@ -1151,6 +1182,10 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   cancelDelayedOutgoingMessage(topicId, clientId);
   cancelOutgoingDeliveryTimeout(topicId, clientId);
 
+  const pendingMessage = existingMessages.find(
+    message => message.id === clientId
+  );
+  const resolvedMessage = mergePendingReplyState(nextMessage, pendingMessage);
   const lastMessage = existingMessages.at(-1);
 
   if (lastMessage?.id === clientId) {
@@ -1168,7 +1203,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
         }));
 
         return {
-          ...nextMessage,
+          ...resolvedMessage,
           media
         };
       })
@@ -1186,13 +1221,13 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
     }
 
     syncTopicUnreadState(topicId);
-    syncLocalLastMessage(topicId, nextMessage);
+    syncLocalLastMessage(topicId, resolvedMessage);
 
     if (
-      isPendingOutgoingMessage(nextMessage) &&
-      !hasPendingMediaUpload(nextMessage)
+      isPendingOutgoingMessage(resolvedMessage) &&
+      !hasPendingMediaUpload(resolvedMessage)
     ) {
-      scheduleOutgoingDeliveryTimeout(topicId, nextMessage.id);
+      scheduleOutgoingDeliveryTimeout(topicId, resolvedMessage.id);
     }
 
     return;
@@ -1200,7 +1235,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
 
   const filtered = existingMessages.filter(m => m.id !== clientId);
 
-  saveMessagesToLocal(topicId, [...filtered, nextMessage], {
+  saveMessagesToLocal(topicId, [...filtered, resolvedMessage], {
     syncLastMessage: true,
     windowMode: 'preserve-end',
     updateVisible: shouldUpdateVisibleWindow
@@ -1217,13 +1252,13 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   }
 
   syncTopicUnreadState(topicId);
-  syncLocalLastMessage(topicId, nextMessage);
+  syncLocalLastMessage(topicId, resolvedMessage);
 
   if (
-    isPendingOutgoingMessage(nextMessage) &&
-    !hasPendingMediaUpload(nextMessage)
+    isPendingOutgoingMessage(resolvedMessage) &&
+    !hasPendingMediaUpload(resolvedMessage)
   ) {
-    scheduleOutgoingDeliveryTimeout(topicId, nextMessage.id);
+    scheduleOutgoingDeliveryTimeout(topicId, resolvedMessage.id);
   }
 };
 
