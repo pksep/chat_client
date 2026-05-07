@@ -279,6 +279,10 @@ p.chat__nothing-paragraph {
   white-space: nowrap;
 }
 
+.attach-modal-container .chat__input__action__blog p {
+  width: 100%;
+}
+
 @media screen and (width <= 768px) {
   .chat__input__action__blog p {
     width: calc(100vw - 150px);

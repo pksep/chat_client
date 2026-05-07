@@ -3,6 +3,7 @@
     <div class="message-bubble-stack">
       <MessageReferenceBlock
         :forward-user="props.forwardUser"
+        :reply-message="props.replyMessage"
         :is-me-sender="props.isMeSender"
         @navigate-message="$emit('navigate-message')"
       />
