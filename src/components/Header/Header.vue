@@ -53,6 +53,7 @@
           class="chat__header-profile"
           avatar-alt="group-profile-alt"
           :topic="currentGroup || currentTopic"
+          :typing-label="headerTypingLabel || undefined"
           :data-testid="`${props.dataTestid}-Header-GroupProfile`"
         />
         <UserProfile
@@ -60,6 +61,7 @@
           class="chat__header-profile"
           avatar-alt="user-profile-alt"
           :user="currentTopic.user"
+          :typing-label="headerTypingLabel || undefined"
           :data-testid="`${props.dataTestid}-Header-UserProfile`"
         />
       </template>
@@ -160,6 +162,7 @@ import {
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import {
   deleteTopic,
+  getTopicTypingUsers,
   toggleMuteTopic,
   useTopics
 } from '../../composables/useTopics';
@@ -192,6 +195,7 @@ import {
   startLiveKitGroupCall
 } from '../../services/useLiveKit';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
+import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
 
 const { getSelectedTopic } = useTopics();
 
@@ -232,6 +236,12 @@ const actionModalDescription = computed(() =>
 );
 
 const currentTopic = computed(() => getSelectedTopic());
+const currentTypingUsers = computed(() =>
+  route.value?.id ? getTopicTypingUsers(route.value.id) : []
+);
+const headerTypingLabel = computed(() =>
+  getTypingIndicatorLabel(currentTopic.value?.type, currentTypingUsers.value)
+);
 const activeCallTopic = computed(() =>
   activeCallTopicId.value ? getSelectedTopic(activeCallTopicId.value) : null
 );

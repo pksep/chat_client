@@ -662,14 +662,9 @@ export function useMessageScroll(
       const firstOldIndex = oldIds.length > 0 ? newIds.indexOf(oldIds[0]) : -1;
       const lastOldIndex =
         oldIds.length > 0 ? newIds.indexOf(oldIds[oldIds.length - 1]) : -1;
-      const isPrepend =
-        hasNew &&
-        newIds.length > oldIds.length &&
-        oldIds.length > 0 &&
-        firstOldIndex > 0;
+      const isPrepend = hasNew && oldIds.length > 0 && firstOldIndex > 0;
       const isAppend =
         hasNew &&
-        newIds.length > oldIds.length &&
         oldIds.length > 0 &&
         lastOldIndex >= 0 &&
         lastOldIndex < newIds.length - 1;

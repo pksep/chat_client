@@ -3,39 +3,17 @@
     class="chat__input"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
   >
-    <div
-      ref="mentionUsersRef"
-      class="chat__input__users"
-      v-if="state.tagedUserModal && users.length"
-    >
-      <template v-for="(user, index) in users" :key="user.id">
-        <UserProfile
-          class="chat__input__users__item"
-          :class="{
-            'chat__input__users__item--active': index === state.selectedIndex
-          }"
-          :user="user"
-          @click="selectUser(user)"
-          :data-testid="`${props.dataTestid}-MessageList-UserProfile`"
-        />
-        <div
-          v-if="index < users.length - 1"
-          class="chat__input__users__divider"
-        ></div>
-      </template>
-    </div>
     <ContentEditor
       :active-send="props.forwardMessages.length > 0"
       v-model="internalInputText"
       ref="contentEditorRef"
       active-attach-file
       active-select-user
-      :is-mention-modal-open="state.tagedUserModal"
-      :disable-send-on-enter="state.tagedUserModal"
+      :mention-items="users"
+      :mention-config="mentionConfig"
       @unmount-send="handleSend"
       @unmount-attach-file="(...args: any[]) => $emit('attachFile', ...args)"
       @mention-change="handleMentionChange"
-      @keydown.capture="handleMentionNav"
       :data-testid="`${props.dataTestid}-MessageList-ContentEditor`"
     >
       <template v-if="!!props.editMessage" #action>
@@ -129,7 +107,13 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, nextTick, reactive, useTemplateRef, watch } from 'vue';
+import {
+  computed,
+  onBeforeUnmount,
+  reactive,
+  useTemplateRef,
+  watch
+} from 'vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -143,9 +127,14 @@ import ForwardIcon from '../UI/ForwardIcon.vue';
 import { stripHtml } from '../../utils/stripHtml';
 import type { IMessage } from '../interfaces/interfaces';
 import { currentGroup } from '../../composables/useGroup';
-import UserProfile from '../UserProfile/UserProfile.vue';
+import { getUserLastOnline } from '../../composables/useUsers';
+import { getAuthUser } from '../../composables/useAuth';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
+import {
+  getHasWebsocketConnection,
+  sendTypingStatus
+} from '../../services/useChat';
 
 interface Props {
   dataTestid: string;
@@ -162,6 +151,8 @@ interface IContentEditorSendPayload {
 }
 
 const props = defineProps<Props>();
+const TYPING_IDLE_TIMEOUT_MS = 2500;
+const TYPING_PING_INTERVAL_MS = 2000;
 
 const emit = defineEmits([
   'update:modelValue',
@@ -194,22 +185,32 @@ const formatForwardMessagesLabel = (count: number): string => {
 };
 
 const route = useUrlWatcher();
-const mentionUsersRef = useTemplateRef<HTMLDivElement>('mentionUsersRef');
 
 const state = reactive({
-  tagedUsers: [],
-  tagedUserModal: false,
-  selectedIndex: 0,
   mentionSearch: ''
 });
 
-const selectUser = (user: any) => {
-  const cleanName = user.initials || 'User';
-  contentEditorRef.value?.addSpanLink(`@${cleanName} `, { userId: user.id });
-  state.tagedUserModal = false;
+const mentionConfig = {
+  getKey: (user: any) => user.id,
+  getLabel: (user: any) => user.initials || 'User',
+  getSubtitle: (user: any) => {
+    const ex = typeof user.ex === 'string' ? JSON.parse(user.ex) : user.ex;
+
+    return ex?.erpInitials || '';
+  },
+  getAvatarUrl: (user: any) => user.avatarUrl || '',
+  getAvatarInitials: (user: any) => user.initials || user.nickname || 'U',
+  getIsOnline: (user: any) =>
+    getHasWebsocketConnection() &&
+    !getUserLastOnline(user) &&
+    getAuthUser()?.id !== user.id,
+  getInsertLabel: (user: any) => `@${user.initials || 'User'} `,
+  getInsertAttrs: (user: any) => ({ userId: user.id })
 };
 
 const handleSend = (payload?: IContentEditorSendPayload) => {
+  void stopTyping();
+
   const tiptapEditor = contentEditorRef.value?.editor;
   if (!tiptapEditor) return;
 
@@ -234,79 +235,9 @@ const handleSend = (payload?: IContentEditorSendPayload) => {
 const handleMentionChange = (search: string | null) => {
   if (search !== null) {
     state.mentionSearch = search;
-    if (!state.tagedUserModal) {
-      state.selectedIndex = 0;
-    }
-    state.tagedUserModal = true;
   } else {
-    state.tagedUserModal = false;
     state.mentionSearch = '';
   }
-};
-
-const handleMentionNav = (e: KeyboardEvent) => {
-  if (!state.tagedUserModal || !users.value.length) return;
-
-  const { key } = e;
-  const len = users.value.length;
-
-  const prevent = () => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  if (key === 'ArrowDown' || key === 'ArrowUp') {
-    prevent();
-    const delta = key === 'ArrowDown' ? 1 : -1;
-    state.selectedIndex = (state.selectedIndex + delta + len) % len;
-    return;
-  }
-
-  if (key === 'Enter') {
-    if (state.selectedIndex >= 0 && state.selectedIndex < len) {
-      prevent();
-      selectUser(users.value[state.selectedIndex]);
-    }
-    return;
-  }
-
-  if (key === 'Escape') {
-    prevent();
-    state.tagedUserModal = false;
-  }
-};
-
-const scrollActiveMentionIntoView = () => {
-  nextTick(() => {
-    const container = mentionUsersRef.value;
-
-    if (!container) {
-      return;
-    }
-
-    const activeItem = container.querySelector(
-      '.chat__input__users__item--active'
-    );
-
-    if (!(activeItem instanceof HTMLElement)) {
-      return;
-    }
-
-    const OFFSET = 50;
-    const itemTop = activeItem.offsetTop;
-    const itemBottom = itemTop + activeItem.offsetHeight;
-    const visibleTop = container.scrollTop;
-    const visibleBottom = visibleTop + container.clientHeight;
-
-    if (itemTop - OFFSET < visibleTop) {
-      container.scrollTop = Math.max(itemTop - OFFSET, 0);
-      return;
-    }
-
-    if (itemBottom + OFFSET > visibleBottom) {
-      container.scrollTop = itemBottom - container.clientHeight + OFFSET;
-    }
-  });
 };
 
 const users = computed(() => {
@@ -336,31 +267,109 @@ const users = computed(() => {
 const contentEditorRef =
   useTemplateRef<typeof ContentEditor>('contentEditorRef');
 
-watch(
-  () => state.selectedIndex,
-  () => {
-    if (!state.tagedUserModal) {
-      return;
-    }
+let typingStopTimeout: ReturnType<typeof setTimeout> | null = null;
+let isTypingActive = false;
+let activeTypingTopicId: string | null = null;
+let lastTypingPingAt = 0;
 
-    scrollActiveMentionIntoView();
+const clearTypingStopTimeout = (): void => {
+  if (!typingStopTimeout) {
+    return;
   }
-);
 
-watch(
-  () => users.value.length,
-  () => {
-    if (!state.tagedUserModal) {
-      return;
-    }
+  clearTimeout(typingStopTimeout);
+  typingStopTimeout = null;
+};
 
-    scrollActiveMentionIntoView();
+const getHasDraftText = (value: string): boolean =>
+  stripHtml(value || '')
+    .replace(/\u00a0/g, ' ')
+    .trim().length > 0;
+
+const stopTyping = async (topicId = activeTypingTopicId): Promise<void> => {
+  clearTypingStopTimeout();
+
+  if (!topicId || !isTypingActive) {
+    activeTypingTopicId = topicId ?? null;
+    return;
   }
-);
+
+  isTypingActive = false;
+  activeTypingTopicId = null;
+  lastTypingPingAt = 0;
+  await sendTypingStatus({
+    topicId,
+    isTyping: false
+  });
+};
+
+const scheduleTypingStop = (topicId: string): void => {
+  clearTypingStopTimeout();
+  typingStopTimeout = setTimeout(() => {
+    void stopTyping(topicId);
+  }, TYPING_IDLE_TIMEOUT_MS);
+};
+
+const notifyTyping = async (): Promise<void> => {
+  const topicId = route.value.id;
+
+  if (
+    !topicId ||
+    route.value.type === RouteTypes.AI ||
+    !getHasWebsocketConnection()
+  ) {
+    return;
+  }
+
+  const now = Date.now();
+  const shouldPing =
+    !isTypingActive ||
+    activeTypingTopicId !== topicId ||
+    now - lastTypingPingAt >= TYPING_PING_INTERVAL_MS;
+
+  activeTypingTopicId = topicId;
+  scheduleTypingStop(topicId);
+
+  if (!shouldPing) {
+    return;
+  }
+
+  isTypingActive = true;
+  lastTypingPingAt = now;
+  await sendTypingStatus({
+    topicId,
+    isTyping: true
+  });
+};
 
 defineExpose({
   focus: () => contentEditorRef.value?.focus(),
   insertText: (text: string) =>
     contentEditorRef.value?.editor?.commands?.insertContent?.(text)
+});
+
+watch(
+  () => internalInputText.value,
+  value => {
+    if (getHasDraftText(value)) {
+      void notifyTyping();
+      return;
+    }
+
+    void stopTyping();
+  }
+);
+
+watch(
+  () => route.value.id,
+  (nextTopicId, previousTopicId) => {
+    if (previousTopicId && previousTopicId !== nextTopicId) {
+      void stopTyping(previousTopicId);
+    }
+  }
+);
+
+onBeforeUnmount(() => {
+  void stopTyping();
 });
 </script>

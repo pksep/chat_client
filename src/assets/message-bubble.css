@@ -698,10 +698,15 @@ div.message-content__loading-circle:nth-child(3) {
   animation-delay: 0.3s;
 }
 
-div.message-content__html > p {
+div.message-content__html > p,
+div.message-content__html > ol {
   max-width: 100ch;
   margin-block: 0;
   line-height: 17px;
+}
+
+div.message-content__html > ol {
+  padding-left: 15px;
 }
 
 .message__no-author {

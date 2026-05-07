@@ -57,6 +57,7 @@ export enum WebSocketEventType {
   CHANGE_MESSAGE = 'changeMessage',
   READ_MESSAGE = 'readMessage',
   USER_UPDATED = 'userUpdated',
+  TYPING_STATUS = 'typingStatus',
   TOGGLE_PRESENCE = 'togglePresence',
   ACTIVE_CALLS = 'activeCalls',
   START_CALL = 'startCall',
@@ -138,6 +139,11 @@ export interface WebSocketEventPayloads {
   [WebSocketEventType.USER_JOINED]: User;
   [WebSocketEventType.USER_LEFT]: User;
   [WebSocketEventType.USER_UPDATED]: User & { ptsMeta?: PtsMeta };
+  [WebSocketEventType.TYPING_STATUS]: {
+    topicId: string;
+    userId?: string;
+    isTyping: boolean;
+  };
   [WebSocketEventType.CONNECTED]: null;
   [WebSocketEventType.DISCONNECTED]: null;
   [WebSocketEventType.AUTHENTICATED]: { userId: string };

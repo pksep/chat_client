@@ -54,6 +54,7 @@ export interface ITopic extends Topic {
   unreadMessageCount?: number;
   isAdmin?: boolean;
   taggedMe?: boolean;
+  typingUserIds?: string[];
 }
 
 export interface IMenuProps {
@@ -117,11 +118,13 @@ export interface IChatContainerEmits {
 export interface IUserProfileProps {
   user: IUser;
   dataTestid?: string;
+  typingLabel?: string;
 }
 
 export interface IGroupProfileProps {
   topic?: ITopic | null;
   dataTestid?: string;
+  typingLabel?: string;
 }
 
 export interface IMessage extends Message {

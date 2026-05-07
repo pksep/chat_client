@@ -940,7 +940,9 @@ export const fetchMessagesForTopic = async (
     if (!opts?.skipSave) {
       const existing = getFullMessagesByTopicId(topicId) || [];
 
-      let combined = mergeWithPendingOutgoingMessages(messages, existing);
+      let combined = isPaginationRequest
+        ? mergeWithPendingOutgoingMessages(messages, existing)
+        : [...existing, ...messages];
 
       if (opts?.lastMessageId) {
         combined = [...messages, ...existing];
