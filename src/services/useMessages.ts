@@ -1,6 +1,10 @@
 import { ref } from 'vue';
 import { getChatSDK } from './useChat';
-import { IMedia, IMessage } from '../components/interfaces/interfaces';
+import {
+  IMedia,
+  IMessage,
+  IMessageRead
+} from '../components/interfaces/interfaces';
 import { MessageStatus, Reaction } from './useChatSDK/types';
 import {
   decrementServerUnreadCount,
@@ -28,6 +32,10 @@ import {
 import { fileToDataURL } from '../utils/fileToDataURL';
 import { getVideoThumbnail } from '../utils/mediaPreview';
 import { MediaType } from '@pksep/zod-shared-chat';
+import {
+  playNativeNotificationSound,
+  shouldPlayNotificationSound
+} from './useNotificationSoundPolicy';
 import {
   appendShadowSyncMetaList,
   deleteShadowTopicMessage,
@@ -583,6 +591,42 @@ const getHistoryDirection = (opts?: {
   newMessages?: boolean;
 }): 'up' | 'down' | 'latest' =>
   opts?.lastMessageId ? 'up' : opts?.afterMessageId ? 'down' : 'latest';
+
+const upsertMessageReadEntry = (
+  messageReads: IMessageRead[] | undefined,
+  payload: {
+    messageId: string;
+    userId: string;
+    readAt: string;
+  }
+): IMessageRead[] => {
+  const existingReads = messageReads || [];
+  const existingEntry = existingReads.find(
+    read => read.userId === payload.userId
+  );
+
+  if (existingEntry) {
+    return existingReads.map(read =>
+      read.userId === payload.userId
+        ? {
+            ...read,
+            updatedAt: payload.readAt
+          }
+        : read
+    );
+  }
+
+  return [
+    ...existingReads,
+    {
+      id: `${payload.messageId}:${payload.userId}`,
+      messageId: payload.messageId,
+      userId: payload.userId,
+      createdAt: payload.readAt,
+      updatedAt: payload.readAt
+    }
+  ];
+};
 
 const traceHistoryResolution = (
   topicId: string,
@@ -1715,6 +1759,7 @@ const applyLocalReadStatus = (
 ): void => {
   const existingMessages = getFullMessagesByTopicId(topicId);
   const isReadByCurrentUser = userId === authedUser.value.id;
+  const readAt = new Date().toISOString();
   const newlyReadCount = isReadByCurrentUser
     ? existingMessages.filter(
         message =>
@@ -1729,7 +1774,14 @@ const applyLocalReadStatus = (
         ...message,
         status: MessageStatus.Read,
         isRead: true,
-        isReadByMe: isReadByCurrentUser ? true : message.isReadByMe
+        isReadByMe: isReadByCurrentUser ? true : message.isReadByMe,
+        messageRead: isReadByCurrentUser
+          ? message.messageRead
+          : upsertMessageReadEntry(message.messageRead, {
+              messageId: message.id,
+              userId,
+              readAt
+            })
       };
     }
     return message;
@@ -1743,7 +1795,14 @@ const applyLocalReadStatus = (
           ...message,
           status: MessageStatus.Read,
           isRead: true,
-          isReadByMe: isReadByCurrentUser ? true : message.isReadByMe
+          isReadByMe: isReadByCurrentUser ? true : message.isReadByMe,
+          messageRead: isReadByCurrentUser
+            ? message.messageRead
+            : upsertMessageReadEntry(message.messageRead, {
+                messageId: message.id,
+                userId,
+                readAt
+              })
         };
       }
       return message;
@@ -2157,7 +2216,9 @@ export const suppressNotificationSoundForTopic = (
   );
 };
 
-export const playNotificationSound = (topicId?: string): void => {
+const playNotificationSoundInternal = async (
+  topicId?: string
+): Promise<void> => {
   const isHidden = document.hidden;
   const suppressionDeadline = topicId
     ? notificationSoundSuppressedUntilByTopic.get(topicId) || 0
@@ -2172,6 +2233,14 @@ export const playNotificationSound = (topicId?: string): void => {
   }
 
   if (!isHidden && route.value.id === topicId) {
+    return;
+  }
+
+  if (!(await shouldPlayNotificationSound())) {
+    return;
+  }
+
+  if (await playNativeNotificationSound()) {
     return;
   }
 
@@ -2209,4 +2278,8 @@ export const playNotificationSound = (topicId?: string): void => {
   } catch (err) {
     console.warn('Audio not supported in this browser');
   }
+};
+
+export const playNotificationSound = (topicId?: string): void => {
+  void playNotificationSoundInternal(topicId);
 };

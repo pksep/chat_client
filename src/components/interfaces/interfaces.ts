@@ -87,6 +87,14 @@ export interface IMedia extends Media {
   localThumbnailPath?: string;
 }
 
+export interface IMessageRead {
+  id: string;
+  messageId: string;
+  userId: string;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
+
 export enum MessageStatusEnum {
   READ = 'READ',
   DELIVERED = 'DELIVERED',
@@ -130,6 +138,7 @@ export interface IGroupProfileProps {
 export interface IMessage extends Message {
   senderUser?: IUser;
   media?: IMedia[];
+  messageRead?: IMessageRead[];
   isReadByMe?: boolean;
   isRead?: boolean;
   replyMessage?: IMessage;

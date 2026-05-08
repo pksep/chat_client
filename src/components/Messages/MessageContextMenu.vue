@@ -44,6 +44,78 @@
       @select="handleSelectEmoji"
     />
 
+    <template v-else-if="isMobile && showReadDetails">
+      <div
+        class="message-context-menu__mobile-details"
+        :style="{ paddingTop: `${mobileReadDetailsOffsetTop}px` }"
+      >
+        <div
+          class="message-context-menu__mobile-back"
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          @click.stop="handleBackToMenu"
+          :data-testid="`${props.dataTestid}-MessageBubble-DetailsBackButton`"
+        >
+          <span class="message-context-menu__mobile-back-content">
+            <Button
+              class="message-context-menu__mobile-back-button"
+              :type="ButtonTypeEnum.ghost"
+              :size="SizesEnum.small"
+              @click.stop="handleBackToMenu"
+              :data-testid="`${props.dataTestid}-MessageBubble-DetailsBackButton`"
+            >
+              <Icon :name="IconNameEnum.arrowLeft" :width="20" :height="20" />
+            </Button>
+          </span>
+          <span>Просмотрено</span>
+
+          <Icon
+            :name="IconNameEnum.read"
+            :data-testid="`${dataTestid}-ReadIcon`"
+            color="var(--blue1)"
+            :width="20"
+            :height="20"
+          />
+        </div>
+
+        <div
+          v-if="readDetails.length"
+          class="message-context-menu__details-list"
+        >
+          <div
+            v-for="reader in readDetails"
+            :key="reader.userId"
+            class="message-context-menu__details-item"
+          >
+            <CachedAvatar
+              class="message-context-menu__details-avatar"
+              :path="reader.avatarPath"
+              :initials="reader.avatarInitials"
+              :alt="reader.name"
+            />
+
+            <div class="message-context-menu__details-meta">
+              <div class="message-context-menu__details-name">
+                {{ reader.name }}
+              </div>
+              <div class="message-context-menu__details-time">
+                <span class="message-context-menu__details-date">
+                  {{ reader.readAtDateLabel }}
+                </span>
+                <span class="message-context-menu__details-time-value">
+                  {{ reader.readAtTimeLabel }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="message-context-menu__details-empty">
+          Никто еще не просмотрел сообщение
+        </div>
+      </div>
+    </template>
+
     <template v-else>
       <template v-if="canRetryMessage">
         <Button
@@ -70,7 +142,11 @@
         <div
           class="select-reactions"
           ref="reactionRow"
-          :class="{ 'select-reactions--flip': flipReactions }"
+          :class="{
+            'select-reactions--flip': flipReactions,
+            'select-reactions--flip-y': flipReactionsY,
+            'select-reactions--ready': reactionsPositionReady
+          }"
         >
           <div
             v-for="value in quickReactonList"
@@ -108,19 +184,9 @@
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.small"
           @click.stop="handleOpenForwardModal"
-          :data-testid="`${props.dataTestid}-MessageBubble-PinButton`"
+          :data-testid="`${props.dataTestid}-MessageBubble-ForwardButton`"
         >
           <ForwardIcon /> Переслать
-        </Button>
-
-        <Button
-          v-if="!!props.message"
-          :type="ButtonTypeEnum.ghost"
-          :size="SizesEnum.small"
-          @click.stop="handleCopyMessage"
-          :data-testid="`${props.dataTestid}-MessageBubble-CopyButton`"
-        >
-          <CopyIcon /> Копировать текст
         </Button>
 
         <Button
@@ -134,6 +200,16 @@
         </Button>
 
         <Button
+          v-if="!!props.message"
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          @click.stop="handleCopyMessage"
+          :data-testid="`${props.dataTestid}-MessageBubble-CopyButton`"
+        >
+          <CopyIcon /> Копировать текст
+        </Button>
+
+        <Button
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.small"
           @click.stop="handlePinMessage"
@@ -144,6 +220,95 @@
         </Button>
 
         <Button
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          @click.stop="handleSelectMessage"
+          :data-testid="`${props.dataTestid}-MessageBubble-SelectButton`"
+        >
+          <SelectIcon />
+          Выбрать
+        </Button>
+
+        <Button
+          v-if="canShowMessageDetails"
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          ref="detailsTriggerRef"
+          class="message-context-menu__details-trigger"
+          :class="{
+            'message-context-menu__details-trigger--active': showReadDetails
+          }"
+          @click.stop="toggleReadDetails"
+          @mouseenter="handleHoverReadDetails"
+          @mouseleave="handleLeaveReadDetails"
+          @focus="handleHoverReadDetails"
+          :data-testid="`${props.dataTestid}-MessageBubble-DetailsButton`"
+        >
+          <span class="message-context-menu__details-trigger-content">
+            <span class="message-context-menu__details-trigger-label">
+              <Icon :name="IconNameEnum.info" />
+              <span>Данные</span>
+            </span>
+            <Icon :name="IconNameEnum.chevronRight" />
+          </span>
+        </Button>
+
+        <div
+          v-if="showReadDetails && !isMobile"
+          ref="detailsPanelRef"
+          class="message-context-menu__details-panel"
+          :class="{
+            'message-context-menu__details-panel--flip': flipReadDetails
+          }"
+          :style="{ top: `${readDetailsOffsetTop}px` }"
+          @mouseenter="handleHoverReadDetails"
+          @mouseleave="handleLeaveReadDetails"
+        >
+          <div class="message-context-menu__details-title">
+            Просмотрено
+            <Icon
+              :name="IconNameEnum.read"
+              :data-testid="`${dataTestid}-ReadIcon`"
+              color="var(--blue1)"
+              :width="20"
+              :height="20"
+            />
+          </div>
+
+          <div
+            v-if="readDetails.length"
+            class="message-context-menu__details-list"
+          >
+            <div
+              v-for="reader in readDetails"
+              :key="reader.userId"
+              class="message-context-menu__details-item"
+            >
+              <CachedAvatar
+                class="message-context-menu__details-avatar"
+                :path="reader.avatarPath"
+                :initials="reader.avatarInitials"
+                :alt="reader.name"
+              />
+
+              <div class="message-context-menu__details-meta">
+                <div class="message-context-menu__details-name">
+                  {{ reader.name }}
+                </div>
+                <div class="message-context-menu__details-time">
+                  <span class="message-context-menu__details-date">
+                    {{ reader.readAtDateLabel }}
+                  </span>
+                  <span class="message-context-menu__details-time-value">
+                    {{ reader.readAtTimeLabel }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <Button
           v-if="props.isMeSender"
           class="red-context-button"
           :type="ButtonTypeEnum.ghost"
@@ -152,16 +317,6 @@
           :data-testid="`${props.dataTestid}-MessageBubble-DeleteButton`"
         >
           <Icon :name="IconNameEnum.deleteSmall" /> Удалить
-        </Button>
-
-        <Button
-          :type="ButtonTypeEnum.ghost"
-          :size="SizesEnum.small"
-          @click.stop="handleSelectMessage"
-          :data-testid="`${props.dataTestid}-MessageBubble-SelectButton`"
-        >
-          <SelectIcon />
-          Выбрать
         </Button>
       </template>
     </template>
@@ -191,7 +346,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -204,6 +359,7 @@ import 'vue3-emoji-picker/css';
 
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import ConfirmModal from '../UI/ConfirmModal.vue';
+import CachedAvatar from '../UI/CachedAvatar.vue';
 import ReplyIcon from '../UI/ReplyIcon.vue';
 import EditIcon from '../UI/EditIcon.vue';
 import PinIcon from '../UI/PinIcon.vue';
@@ -215,8 +371,12 @@ import SelectIcon from '../UI/SelectIcon.vue';
 import RetryIcon from '../UI/RetryIcon.vue';
 
 import { stripHtml } from '../../utils/stripHtml';
+import { MAX_W_MD } from '../../utils/constants';
 import { getAuthUser } from '../../composables/useAuth';
 import { closeActivePopover } from '../../composables/useContextMenu';
+import { getSelectedTopic } from '../../composables/useTopics';
+import { useResizeState } from '../../composables/useResizeState';
+import { getUserById } from '../../composables/useUsers';
 import {
   clearSelectedMessages,
   enterMessageSelection,
@@ -235,7 +395,7 @@ import {
 
 import type { ITopic } from '../interfaces/interfaces';
 import type { IMessageContextMenu } from './interface/interface';
-import { MessageStatus } from '../../services/useChatSDK/types';
+import { MessageStatus, TopicType } from '../../services/useChatSDK/types';
 
 const props = withDefaults(defineProps<IMessageContextMenu>(), {
   dataTestid: 'MessageContextMenu'
@@ -249,7 +409,13 @@ const emits = defineEmits([
 ]);
 
 const quickReactonList = computed(() => ['♥️', '🔥', '👍', '😂', '👌', '😭']);
-const messages = computed(() => getMessagesByTopicId(props.topicId));
+const { state: isMobile } = useResizeState(MAX_W_MD);
+const messages = computed(() =>
+  props.topicId ? getMessagesByTopicId(props.topicId) : []
+);
+const currentTopic = computed(() =>
+  props.topicId ? getSelectedTopic(props.topicId) : undefined
+);
 const { getSelectedMessagesForTopic } = useSelectedMessages();
 
 const selectedMessages = computed(() =>
@@ -272,6 +438,9 @@ const isAllDeletableSelectedMessages = computed(() => {
 
 const isSelectionContextMenu = computed(
   () => !!props.isSelectionMode && !!props.isSelected
+);
+const isGroupTopic = computed(
+  () => currentTopic.value?.type === TopicType.Group
 );
 const currentMessage = computed(() =>
   messages.value.find(message => message.id === props.messageId)
@@ -308,6 +477,83 @@ const canRetryMessage = computed(
       !!currentMessage.value?.media?.some(media => media.uploadError))
 );
 
+const canShowMessageDetails = computed(
+  () =>
+    !!props.isMeSender &&
+    isGroupTopic.value &&
+    !isSelectionContextMenu.value &&
+    !canRetryMessage.value &&
+    (currentMessage.value?.messageRead || []).some(
+      item =>
+        !!item.userId && item.userId !== currentMessage.value?.senderUserId
+    ) &&
+    !!currentMessage.value
+);
+
+const formatReadDateTime = (
+  value?: string | Date | null
+): { dateLabel: string; timeLabel: string } => {
+  if (!value) {
+    return {
+      dateLabel: 'Время неизвестно',
+      timeLabel: ''
+    };
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return {
+      dateLabel: 'Время неизвестно',
+      timeLabel: ''
+    };
+  }
+
+  return {
+    dateLabel: new Intl.DateTimeFormat('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }).format(date),
+    timeLabel: new Intl.DateTimeFormat('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date)
+  };
+};
+
+const readDetails = computed(() =>
+  (currentMessage.value?.messageRead || [])
+    .filter(
+      item =>
+        !!item.userId && item.userId !== currentMessage.value?.senderUserId
+    )
+    .map(item => {
+      const user =
+        getUserById(item.userId) ||
+        currentTopic.value?.members?.find(
+          member => member.id === item.userId
+        ) ||
+        (currentTopic.value?.user?.id === item.userId
+          ? currentTopic.value.user
+          : undefined);
+      const name = user?.initials || user?.nickname || 'Пользователь';
+      const readAt = item.updatedAt || item.createdAt || null;
+      const formattedReadAt = formatReadDateTime(readAt);
+
+      return {
+        userId: item.userId,
+        name,
+        readAtDateLabel: formattedReadAt.dateLabel,
+        readAtTimeLabel: formattedReadAt.timeLabel,
+        readAtMs: readAt ? new Date(readAt).getTime() : 0,
+        avatarPath: user?.avatarUrl || '',
+        avatarInitials: user?.initials || user?.nickname || name
+      };
+    })
+    .sort((left, right) => left.readAtMs - right.readAtMs)
+);
+
 const deleteModalTitle = computed(() =>
   isSelectionContextMenu.value ? 'Удалить сообщения' : 'Удалить сообщение'
 );
@@ -322,26 +568,155 @@ const deleteModalOpen = ref(false);
 const unpinModalOpen = ref(false);
 const forwardModalOpen = ref(false);
 const reactionRow = ref<HTMLElement | null>(null);
+const detailsTriggerRef = ref<HTMLElement | null>(null);
+const detailsPanelRef = ref<HTMLElement | null>(null);
 const flipReactions = ref(false);
+const flipReactionsY = ref(false);
+const flipReadDetails = ref(false);
+const mobileReadDetailsOffsetTop = ref(0);
+const readDetailsOffsetTop = ref(0);
+const reactionsPositionReady = ref(false);
 const showEmojies = ref(false);
+const showReadDetails = ref(false);
+let readDetailsHoverTimeout: ReturnType<typeof setTimeout> | null = null;
+let reactionLayoutObserver: ResizeObserver | null = null;
+
+const resolveElement = (
+  value: HTMLElement | { $el?: Element | null } | null
+): HTMLElement | null => {
+  if (value instanceof HTMLElement) {
+    return value;
+  }
+
+  return value?.$el instanceof HTMLElement ? value.$el : null;
+};
+
+const clearReadDetailsHoverTimeout = () => {
+  if (readDetailsHoverTimeout) {
+    clearTimeout(readDetailsHoverTimeout);
+    readDetailsHoverTimeout = null;
+  }
+};
+
+const waitForPaint = async () => {
+  await nextTick();
+  await new Promise(resolve => requestAnimationFrame(() => resolve(null)));
+  await new Promise(resolve => requestAnimationFrame(() => resolve(null)));
+};
+
+const disconnectReactionLayoutObserver = () => {
+  reactionLayoutObserver?.disconnect();
+  reactionLayoutObserver = null;
+};
+
+const ensureReactionLayoutObserver = () => {
+  if (typeof ResizeObserver === 'undefined') {
+    return;
+  }
+
+  const reactionElement = resolveElement(reactionRow.value);
+  const menuElement = reactionElement?.closest(
+    '.message-context-menu'
+  ) as HTMLElement | null;
+
+  if (!reactionElement || !menuElement) {
+    return;
+  }
+
+  disconnectReactionLayoutObserver();
+  reactionLayoutObserver = new ResizeObserver(() => {
+    void checkFlip();
+  });
+  reactionLayoutObserver.observe(menuElement);
+  reactionLayoutObserver.observe(reactionElement);
+};
 
 const checkFlip = async () => {
   const windowWidth = window.innerWidth;
-  await nextTick();
+  reactionsPositionReady.value = false;
+  await waitForPaint();
 
-  const el = reactionRow.value;
+  const el = resolveElement(reactionRow.value);
   if (!el) return;
 
-  const rect = el.getBoundingClientRect();
-  flipReactions.value = rect.right > windowWidth;
+  const menu = el.closest('.message-context-menu') as HTMLElement | null;
+  if (!menu) return;
+
+  const menuRect = menu.getBoundingClientRect();
+  const rowWidth = el.offsetWidth;
+  const rowHeight = el.offsetHeight;
+  const defaultRight = menuRect.left + rowWidth;
+  const defaultTop = menuRect.top - rowHeight - 5;
+
+  flipReactions.value = defaultRight > windowWidth - 8;
+  flipReactionsY.value = defaultTop < 8;
+  reactionsPositionReady.value = true;
+};
+
+const syncReadDetailsPosition = async () => {
+  await nextTick();
+
+  const trigger = resolveElement(detailsTriggerRef.value);
+  const menu = trigger?.closest('.message-context-menu') as HTMLElement | null;
+
+  if (!trigger || !menu) {
+    return;
+  }
+
+  const triggerRect = trigger.getBoundingClientRect();
+  const menuRect = menu.getBoundingClientRect();
+
+  if (isMobile.value) {
+    mobileReadDetailsOffsetTop.value = Math.max(
+      0,
+      triggerRect.top - menuRect.top + 6
+    );
+    return;
+  }
+
+  const panel = resolveElement(detailsPanelRef.value);
+
+  if (!panel) {
+    return;
+  }
+
+  const panelRect = panel.getBoundingClientRect();
+  const maxTop = Math.max(8, window.innerHeight - panelRect.height - 8);
+  const clampedTop = Math.max(8, Math.min(triggerRect.top, maxTop));
+
+  readDetailsOffsetTop.value = clampedTop - menuRect.top;
+  flipReadDetails.value =
+    triggerRect.right + panelRect.width + 12 > window.innerWidth;
 };
 
 watch(
   () => props.isOpen[props.messageId],
   opened => {
-    if (opened) checkFlip();
+    if (opened) {
+      ensureReactionLayoutObserver();
+      void checkFlip();
+
+      if (showReadDetails.value) {
+        void syncReadDetailsPosition();
+      }
+
+      return;
+    }
+
+    showReadDetails.value = false;
+    mobileReadDetailsOffsetTop.value = 0;
+    reactionsPositionReady.value = false;
+    disconnectReactionLayoutObserver();
+    flipReactions.value = false;
+    flipReactionsY.value = false;
   }
 );
+
+watch(showReadDetails, opened => {
+  if (opened) {
+    void syncReadDetailsPosition();
+  }
+});
 
 const handleOpenDeleteModal = () => {
   deleteModalOpen.value = true;
@@ -437,7 +812,7 @@ const handleForwardMessage = (topic: ITopic) => {
   }
 
   const message = messages.value.find(
-    message => message.id === props.messageId
+    current => current.id === props.messageId
   );
 
   emits('unmount-forward-message', {
@@ -504,6 +879,44 @@ const toggleShowEmojies = () => {
   showEmojies.value = !showEmojies.value;
 };
 
+const handleHoverReadDetails = () => {
+  if (isMobile.value || !canShowMessageDetails.value) {
+    return;
+  }
+
+  clearReadDetailsHoverTimeout();
+  showReadDetails.value = true;
+};
+
+const handleLeaveReadDetails = () => {
+  if (isMobile.value) {
+    return;
+  }
+
+  clearReadDetailsHoverTimeout();
+  readDetailsHoverTimeout = setTimeout(() => {
+    showReadDetails.value = false;
+  }, 120);
+};
+
+const toggleReadDetails = () => {
+  if (!canShowMessageDetails.value) {
+    return;
+  }
+
+  if (isMobile.value) {
+    showReadDetails.value = true;
+    return;
+  }
+
+  showReadDetails.value = !showReadDetails.value;
+};
+
+const handleBackToMenu = () => {
+  showReadDetails.value = false;
+  mobileReadDetailsOffsetTop.value = 0;
+};
+
 const handleSelectEmoji = (emoji: { i: string }) => {
   handleReactMessage(emoji.i);
 };
@@ -528,7 +941,19 @@ const handleCopyMessage = async () => {
 };
 
 const handleClosePopover = () => {
+  clearReadDetailsHoverTimeout();
+  disconnectReactionLayoutObserver();
   closeActivePopover(props.messageId);
   showEmojies.value = false;
+  showReadDetails.value = false;
+  mobileReadDetailsOffsetTop.value = 0;
+  reactionsPositionReady.value = false;
+  flipReactions.value = false;
+  flipReactionsY.value = false;
 };
+
+onBeforeUnmount(() => {
+  clearReadDetailsHoverTimeout();
+  disconnectReactionLayoutObserver();
+});
 </script>

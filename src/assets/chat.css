@@ -281,6 +281,7 @@ p.chat__nothing-paragraph {
 
 .attach-modal-container .chat__input__action__blog p {
   width: 100%;
+  max-width: 300px;
 }
 
 @media screen and (width <= 768px) {

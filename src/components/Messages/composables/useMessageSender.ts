@@ -2,6 +2,7 @@ import { nextTick, type Ref } from 'vue';
 import { sendMessageChat, uploadFile } from '../../../services/useChat';
 import { generateUUID } from '../../../utils/generateUUID';
 import { fileToDataURL } from '../../../utils/fileToDataURL';
+import { stripHtml } from '../../../utils/stripHtml';
 import { showErrorNotification } from '../../../composables/useNotifications';
 import {
   changeFileLoadingStatus,
@@ -79,6 +80,97 @@ export function splitHtmlByLength(
 
   return parts;
 }
+
+const normalizeMessageHtml = (html: string): string => {
+  if (!html) {
+    return '';
+  }
+
+  const template = document.createElement('template');
+  template.innerHTML = html;
+
+  const isMediaElement = (node: ChildNode | null): boolean =>
+    node instanceof HTMLElement &&
+    ['IMG', 'VIDEO', 'AUDIO', 'IFRAME', 'CANVAS', 'SVG'].includes(node.tagName);
+
+  const isWhitespaceText = (node: ChildNode | null): boolean =>
+    node?.nodeType === Node.TEXT_NODE &&
+    !(node.textContent || '').replace(/\u00a0/g, ' ').trim();
+
+  const isEmptyBlock = (node: ChildNode | null): node is HTMLElement => {
+    if (!(node instanceof HTMLElement)) {
+      return false;
+    }
+
+    if (!['P', 'DIV'].includes(node.tagName)) {
+      return false;
+    }
+
+    const text = (node.textContent || '').replace(/\u00a0/g, ' ').trim();
+    const hasMedia = !!node.querySelector(
+      'img, video, audio, iframe, canvas, svg'
+    );
+
+    return !text && !hasMedia;
+  };
+
+  const trimLeadingNodes = (parent: ParentNode): void => {
+    while (parent.firstChild) {
+      const node = parent.firstChild;
+
+      if (isWhitespaceText(node) || node instanceof HTMLBRElement) {
+        node.remove();
+        continue;
+      }
+
+      if (node instanceof HTMLElement && !isMediaElement(node)) {
+        trimLeadingNodes(node);
+
+        if (isEmptyBlock(node)) {
+          node.remove();
+          continue;
+        }
+      }
+
+      break;
+    }
+  };
+
+  const trimTrailingNodes = (parent: ParentNode): void => {
+    while (parent.lastChild) {
+      const node = parent.lastChild;
+
+      if (isWhitespaceText(node) || node instanceof HTMLBRElement) {
+        node.remove();
+        continue;
+      }
+
+      if (node instanceof HTMLElement && !isMediaElement(node)) {
+        trimTrailingNodes(node);
+
+        if (isEmptyBlock(node)) {
+          node.remove();
+          continue;
+        }
+      }
+
+      break;
+    }
+  };
+
+  trimLeadingNodes(template.content);
+  trimTrailingNodes(template.content);
+
+  while (isEmptyBlock(template.content.firstElementChild)) {
+    template.content.firstElementChild?.remove();
+  }
+
+  while (isEmptyBlock(template.content.lastElementChild)) {
+    template.content.lastElementChild?.remove();
+  }
+
+  return template.innerHTML.trim();
+};
 
 export function getMediaType(file: File, isMedia: boolean): MediaTypeType {
   if (!isMedia) return MediaType.File;
@@ -348,6 +440,7 @@ export function useMessageSender(
       ? { taggedUserIds: payload }
       : payload ?? {};
     const rawText = sendPayload.content ?? inputText.value;
+    const normalizedText = normalizeMessageHtml(rawText);
     const taggedUserIds = sendPayload.taggedUserIds;
     const attachedFiles = sendPayload.files
       ? Array.from(sendPayload.files).map(file => ({ file, isMedia: false }))
@@ -368,13 +461,13 @@ export function useMessageSender(
     const forwardBatchId = hasMultipleForwardMessages ? generateUUID() : null;
     const hasAttachments = queuedFiles.length > 0;
 
-    const isTextEmpty = !rawText.trim() || rawText.trim() === '<p></p>';
+    const isTextEmpty = stripHtml(normalizedText).length === 0;
 
     if (isTextEmpty && !hasForwardMessages && !hasAttachments) return;
 
     inputText.value = '';
 
-    const textToSend = isTextEmpty ? '' : rawText;
+    const textToSend = isTextEmpty ? '' : normalizedText;
 
     if (state.editMessage) {
       await sendMessageChat({
