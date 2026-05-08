@@ -161,8 +161,7 @@ const reactionDetails = computed<ReactionDetailsItem[]>(() =>
     .map(reaction => {
       const user = getUserById(reaction.senderUserId);
       const name = user?.initials || user?.nickname || 'Пользователь';
-      const createdAt =
-        reaction.updatedAt || reaction.createdAt || new Date(0);
+      const createdAt = reaction.updatedAt || reaction.createdAt || new Date(0);
       const createdAtMs = new Date(createdAt).getTime();
       const isOwn = reaction.senderUserId === currentUserId.value;
 
@@ -204,10 +203,7 @@ const syncReactionDetailsPosition = () => {
   let top = y;
 
   if (left + rect.width > window.innerWidth - VIEWPORT_OFFSET_PX) {
-    left = Math.max(
-      VIEWPORT_OFFSET_PX,
-      x - rect.width + VIEWPORT_OFFSET_PX
-    );
+    left = Math.max(VIEWPORT_OFFSET_PX, x - rect.width + VIEWPORT_OFFSET_PX);
   }
 
   if (top + rect.height > window.innerHeight - VIEWPORT_OFFSET_PX) {
