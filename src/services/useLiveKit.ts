@@ -12,6 +12,10 @@ import type { IUser } from '../components/interfaces/interfaces';
 import { getAuthUser } from '../composables/useAuth';
 import { showErrorNotification } from '../composables/useNotifications';
 import { AudioOutput } from './useAudioOutput';
+import {
+  playNativeCallRingtone,
+  stopNativeCallRingtone
+} from './useNotificationSoundPolicy';
 import { endAllCallKits, showIncomingCallKit } from './useCallKit';
 import { getChatSDK } from './useChat';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
@@ -162,7 +166,12 @@ const stopTimer = () => {
 };
 
 const playRingtone = () => {
-  if (Capacitor.isNativePlatform() || ringtoneAudio) return;
+  if (Capacitor.isNativePlatform()) {
+    void playNativeCallRingtone();
+    return;
+  }
+
+  if (ringtoneAudio) return;
   ringtoneAudio = new Audio('/audio/ringtone.mp3');
   ringtoneAudio.loop = true;
   ringtoneAudio
@@ -171,6 +180,10 @@ const playRingtone = () => {
 };
 
 const stopRingtone = () => {
+  if (Capacitor.isNativePlatform()) {
+    void stopNativeCallRingtone();
+  }
+
   if (!ringtoneAudio) return;
   ringtoneAudio.pause();
   ringtoneAudio = null;

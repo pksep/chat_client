@@ -40,7 +40,6 @@
               :src="shouldLoadMedia ? getFullMediaPath(media) : EMPTY_MEDIA_SRC"
               :alt="props.sender ? props.sender + ' image' : 'Shared image'"
               :style="getPreviewStyle(media)"
-              draggable="false"
               loading="lazy"
               decoding="async"
               @load="captureImagePreviewMetrics(media, $event)"
