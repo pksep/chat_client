@@ -3,10 +3,10 @@
   cycles: 1
   deleted: 8
   inserted: 8
-  seconds: 66.614933595
+  seconds: 112.83947257
   version: 0.60.0
   what: judges-summary
-  when: 2026-05-08 12:59:27.948149616 Z
+  when: 2026-05-08 15:12:19.734865359 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -10049,23 +10049,13 @@
   is_human: 1
   issue: 195
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
   when: 2026-05-08 12:14:40.000000000 Z
   where: github
   who: 93074025
-- _id: 525
-  _job: 25556804840
-  _time: 2026-05-08 12:58:37.787031167 Z
-  _version: 0.19.6/0.60.0/0.17.11
-  earliest_issue_was_found: 1
-  events_were_scanned: 9235121713
-  latest_issue_was_found: 72
-  min_pull_was_found: 195
-  repository: 1053332035
-  what: iterate
-  where: github
 - _id: 526
   _job: 25556804840
   _time: 2026-05-08 12:58:39.295412340 Z
@@ -10183,3 +10173,389 @@
   when: 2026-05-08 10:27:57.000000000 Z
   where: github
   who: 93074025
+- _id: 535
+  _job: 25563186706
+  _time: 2026-05-08 15:10:31.532575935 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  commits: 132
+  contributors:
+  - 93074025
+  - 49451722
+  - 32174276
+  details: A new release "v1.27.0" has been published in pksep/chat_client by @github-actions[bot].
+  event_id: 9240301227
+  event_type: ReleaseEvent
+  hoc: 15849
+  is_human: 0
+  last_commit: ef0ff5fd71de43f62bdfecc4182abdd54d3205aa
+  release: 319545586
+  repository: 1053332035
+  tag: v1.27.0
+  what: release-published
+  when: 2026-05-08 14:34:33.000000000 Z
+  where: github
+  who: 41898282
+- _id: 536
+  _job: 25563186706
+  _time: 2026-05-08 15:10:35.787144943 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  commit: 9ace94cc7bb01c09786c3422ef57390abed7ae39
+  default_branch: main
+  details: 'A new Git push #33884587143 has arrived to pksep/chat_client, made by
+    @github-actions[bot] (default branch is "main"), not associated with any pull
+    request.'
+  event_id: 11593512761
+  event_type: PushEvent
+  is_human: 0
+  push_id: 33884587143
+  ref: refs/heads/main
+  repository: 1053332035
+  to_master: 1
+  what: git-was-pushed
+  when: 2026-05-08 14:34:30.000000000 Z
+  where: github
+  who: 41898282
+- _id: 537
+  _job: 25563186706
+  _time: 2026-05-08 15:10:36.634959988 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: canary
+  details: The pull request pksep/chat_client#198 has been opened by @ekn1000.
+  event_id: 9240210623
+  event_type: PullRequestEvent
+  is_human: 1
+  issue: 198
+  repository: 1053332035
+  what: pull-was-opened
+  when: 2026-05-08 14:32:13.000000000 Z
+  where: github
+  who: 93074025
+- _id: 538
+  _job: 25563186706
+  _time: 2026-05-08 15:10:36.895083417 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-86
+  details: The pull request pksep/chat_client#197 has been opened by @ekn1000.
+  event_id: 9240157667
+  event_type: PullRequestEvent
+  is_human: 1
+  issue: 197
+  repository: 1053332035
+  what: pull-was-opened
+  when: 2026-05-08 14:30:50.000000000 Z
+  where: github
+  who: 93074025
+- _id: 539
+  _job: 25563186706
+  _time: 2026-05-08 15:10:36.968431137 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-85
+  details: The pull request pksep/chat_client#196 has been opened by @ekn1000.
+  event_id: 9237198409
+  event_type: PullRequestEvent
+  is_human: 1
+  issue: 196
+  repository: 1053332035
+  what: pull-was-opened
+  when: 2026-05-08 13:14:04.000000000 Z
+  where: github
+  who: 93074025
+- _id: 541
+  _job: 25563186706
+  _time: 2026-05-08 15:10:43.572039614 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-64
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#186 has been "pull-was-merged".
+  failed_builds: 0
+  files: 1
+  hoc: 8
+  is_human: 1
+  issue: 186
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-05-04 09:34:20.000000000 Z
+  where: github
+  who: 93074025
+- _id: 542
+  _job: 25563186706
+  _time: 2026-05-08 15:10:50.100527568 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-66
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#187 has been "pull-was-merged".
+  failed_builds: 0
+  files: 7
+  hoc: 295
+  is_human: 1
+  issue: 187
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-05-04 12:51:22.000000000 Z
+  where: github
+  who: 93074025
+- _id: 543
+  _job: 25563186706
+  _time: 2026-05-08 15:10:52.669230094 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-82
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#188 has been "pull-was-merged".
+  failed_builds: 0
+  files: 1
+  hoc: 27
+  is_human: 1
+  issue: 188
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-05-04 14:37:32.000000000 Z
+  where: github
+  who: 93074025
+- _id: 544
+  _job: 25563186706
+  _time: 2026-05-08 15:10:55.086819647 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-83
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#189 has been "pull-was-merged".
+  failed_builds: 0
+  files: 3
+  hoc: 81
+  is_human: 1
+  issue: 189
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-05-05 06:55:31.000000000 Z
+  where: github
+  who: 93074025
+- _id: 545
+  _job: 25563186706
+  _time: 2026-05-08 15:10:57.837369423 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: canary
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#190 has been "pull-was-merged".
+  failed_builds: 0
+  files: 10
+  hoc: 415
+  is_human: 1
+  issue: 190
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-05-05 07:12:01.000000000 Z
+  where: github
+  who: 93074025
+- _id: 546
+  _job: 25563186706
+  _time: 2026-05-08 15:11:00.246851793 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-71
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#191 has been "pull-was-merged".
+  failed_builds: 0
+  files: 21
+  hoc: 2203
+  is_human: 1
+  issue: 191
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-05-06 07:42:46.000000000 Z
+  where: github
+  who: 93074025
+- _id: 547
+  _job: 25563186706
+  _time: 2026-05-08 15:11:02.770972071 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-72
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#192 has been "pull-was-merged".
+  failed_builds: 0
+  files: 23
+  hoc: 1129
+  is_human: 1
+  issue: 192
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-05-07 14:01:10.000000000 Z
+  where: github
+  who: 93074025
+- _id: 548
+  _job: 25563186706
+  _time: 2026-05-08 15:11:05.360720080 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: canary
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#193 has been "pull-was-merged".
+  failed_builds: 0
+  files: 38
+  hoc: 3292
+  is_human: 1
+  issue: 193
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-05-07 14:01:59.000000000 Z
+  where: github
+  who: 93074025
+- _id: 549
+  _job: 25563186706
+  _time: 2026-05-08 15:11:07.791352666 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-74
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#194 has been "pull-was-merged".
+  failed_builds: 0
+  files: 10
+  hoc: 959
+  is_human: 1
+  issue: 194
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-05-08 10:29:07.000000000 Z
+  where: github
+  who: 93074025
+- _id: 550
+  _job: 25563186706
+  _time: 2026-05-08 15:11:10.457845539 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-85
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#196 has been "pull-was-merged".
+  failed_builds: 0
+  files: 7
+  hoc: 364
+  is_human: 1
+  issue: 196
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-05-08 13:14:13.000000000 Z
+  where: github
+  who: 93074025
+- _id: 551
+  _job: 25563186706
+  _time: 2026-05-08 15:11:12.703936603 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-86
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#197 has been "pull-was-merged".
+  failed_builds: 0
+  files: 3
+  hoc: 83
+  is_human: 1
+  issue: 197
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-05-08 14:30:58.000000000 Z
+  where: github
+  who: 93074025
+- _id: 552
+  _job: 25563186706
+  _time: 2026-05-08 15:11:15.171624506 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: canary
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#198 has been "pull-was-merged".
+  failed_builds: 0
+  files: 18
+  hoc: 1761
+  is_human: 1
+  issue: 198
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-05-08 14:32:20.000000000 Z
+  where: github
+  who: 93074025
+- _id: 553
+  _job: 25563186706
+  _time: 2026-05-08 15:11:17.701411239 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  earliest_issue_was_found: 1
+  events_were_scanned: 11242801553
+  latest_issue_was_found: 72
+  min_pull_was_found: 196
+  repository: 1053332035
+  what: iterate
+  where: github
