@@ -33,6 +33,10 @@ import { fileToDataURL } from '../utils/fileToDataURL';
 import { getVideoThumbnail } from '../utils/mediaPreview';
 import { MediaType } from '@pksep/zod-shared-chat';
 import {
+  playNativeNotificationSound,
+  shouldPlayNotificationSound
+} from './useNotificationSoundPolicy';
+import {
   appendShadowSyncMetaList,
   deleteShadowTopicMessage,
   hasCachedShadowLoadedRanges,
@@ -2212,7 +2216,9 @@ export const suppressNotificationSoundForTopic = (
   );
 };
 
-export const playNotificationSound = (topicId?: string): void => {
+const playNotificationSoundInternal = async (
+  topicId?: string
+): Promise<void> => {
   const isHidden = document.hidden;
   const suppressionDeadline = topicId
     ? notificationSoundSuppressedUntilByTopic.get(topicId) || 0
@@ -2227,6 +2233,14 @@ export const playNotificationSound = (topicId?: string): void => {
   }
 
   if (!isHidden && route.value.id === topicId) {
+    return;
+  }
+
+  if (!(await shouldPlayNotificationSound())) {
+    return;
+  }
+
+  if (await playNativeNotificationSound()) {
     return;
   }
 
@@ -2264,4 +2278,8 @@ export const playNotificationSound = (topicId?: string): void => {
   } catch (err) {
     console.warn('Audio not supported in this browser');
   }
+};
+
+export const playNotificationSound = (topicId?: string): void => {
+  void playNotificationSoundInternal(topicId);
 };

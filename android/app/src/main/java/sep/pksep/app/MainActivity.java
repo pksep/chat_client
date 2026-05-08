@@ -13,6 +13,7 @@ import java.io.File;
 
 import sep.pksep.app.plugins.AudioOutputPlugin;
 import sep.pksep.app.plugins.CallScreenPlugin;
+import sep.pksep.app.plugins.NotificationAudioPlugin;
 import sep.pksep.app.plugins.NotificationTapPlugin;
 import sep.pksep.app.plugins.ProximityLockPlugin;
 
@@ -33,6 +34,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AudioOutputPlugin.class);
         registerPlugin(ProximityLockPlugin.class);
         registerPlugin(CallScreenPlugin.class);
+        registerPlugin(NotificationAudioPlugin.class);
         registerPlugin(NotificationTapPlugin.class);
 
         super.onCreate(savedInstanceState);
