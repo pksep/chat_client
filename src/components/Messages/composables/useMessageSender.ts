@@ -95,7 +95,7 @@ const normalizeMessageHtml = (html: string): string => {
 
   const isWhitespaceText = (node: ChildNode | null): boolean =>
     node?.nodeType === Node.TEXT_NODE &&
-    !((node.textContent || '').replace(/\u00a0/g, ' ').trim());
+    !(node.textContent || '').replace(/\u00a0/g, ' ').trim();
 
   const isEmptyBlock = (node: ChildNode | null): node is HTMLElement => {
     if (!(node instanceof HTMLElement)) {
@@ -107,8 +107,9 @@ const normalizeMessageHtml = (html: string): string => {
     }
 
     const text = (node.textContent || '').replace(/\u00a0/g, ' ').trim();
-    const hasMedia =
-      !!node.querySelector('img, video, audio, iframe, canvas, svg');
+    const hasMedia = !!node.querySelector(
+      'img, video, audio, iframe, canvas, svg'
+    );
 
     return !text && !hasMedia;
   };
