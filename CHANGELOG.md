@@ -1,3 +1,19 @@
+# [1.27.0](https://github.com/pksep/chat_client/compare/v1.26.0...v1.27.0) (2026-05-08)
+
+
+### Bug Fixes
+
+* content editor ([ceea203](https://github.com/pksep/chat_client/commit/ceea203eee65e4466f0dded6faaca2368c72ad29))
+* lint ([33e1732](https://github.com/pksep/chat_client/commit/33e173268e2e0a7ff828b31898ee53847a9b230c))
+* lint ([f5befdd](https://github.com/pksep/chat_client/commit/f5befdd2087fa23e6308865f7dd0e23a0d28a535))
+* sound volume ([8e649c4](https://github.com/pksep/chat_client/commit/8e649c4c9ce8fed8561dfb451d12e3fcc5a71530))
+
+
+### Features
+
+* add info about read message ([3e0a62b](https://github.com/pksep/chat_client/commit/3e0a62b14a599c40af34bd27b43fce911f09d5e3))
+* show reaction setters ([40c726a](https://github.com/pksep/chat_client/commit/40c726ae3acab5c31d9321b73856c09ffedd821b))
+
 # [1.26.0](https://github.com/pksep/chat_client/compare/v1.25.0...v1.26.0) (2026-05-07)
 
 
