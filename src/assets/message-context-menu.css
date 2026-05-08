@@ -1,5 +1,14 @@
 .message-context-menu {
   position: fixed;
+  overflow: visible;
+  border-radius: 15px;
+  box-shadow: 0px 4px 9.8px 0px #0000000d;
+}
+
+.message-context-menu .template {
+  overflow: visible;
+  max-width: none;
+  max-height: none;
 }
 
 .select-reactions {
@@ -14,11 +23,21 @@
   gap: 5px;
   padding: 5px;
   background-color: var(--white);
+  visibility: hidden;
 }
 
 .select-reactions--flip {
   left: auto;
   right: 0;
+}
+
+.select-reactions--flip-y {
+  top: calc(100% + 5px);
+  bottom: auto;
+}
+
+.select-reactions--ready {
+  visibility: visible;
 }
 
 .select-reactions-item {
@@ -56,4 +75,177 @@ button.button-yui-kit.select-reactions-list-button {
 .reaction-pop-enter-to {
   transform: scale(1) translateY(0);
   opacity: 1;
+}
+
+.message-context-menu__details-trigger {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 27px;
+  padding: 5px;
+  border-radius: 6px;
+  color: inherit;
+  transition: background-color 0.2s ease;
+}
+
+.message-context-menu__details-trigger:hover,
+.message-context-menu__details-trigger--active {
+  background-color: var(--background-primary-color);
+}
+
+.message-context-menu__details-trigger-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+}
+
+.message-context-menu__details-trigger-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.message-context-menu__details-panel {
+  position: absolute;
+  left: calc(100% + 8px);
+  width: max-content;
+  min-width: 248px;
+  max-width: 350px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--white);
+  box-shadow: 0 10px 30px #00000014;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.message-context-menu__details-panel--flip {
+  right: calc(100% + 8px);
+  left: auto;
+}
+
+.message-context-menu__mobile-details {
+  display: grid;
+  min-width: 248px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.message-context-menu__mobile-back {
+  display: flex;
+  align-items: center;
+  justify-content: start;
+  gap: 5px;
+  width: 100%;
+  padding: 0 0 5px 10px;
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--text-color);
+}
+
+.message-context-menu__mobile-back-button {
+  padding: 0 !important;
+  min-height: 24px;
+}
+
+.message-context-menu__mobile-back-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--text-color);
+}
+
+.message-context-menu__details-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-color);
+}
+
+.message-context-menu__details-count {
+  color: var(--neutral-text-light);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.message-context-menu__details-list {
+  display: grid;
+  gap: 5px;
+  padding-top: 10px;
+}
+
+.message-context-menu__mobile-details .message-context-menu__details-list {
+  padding: 0 10px 5px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.message-context-menu__details-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  border-top: 0.5px solid var(--border-grey);
+  padding: 5px 5px 0;
+  height: 35px;
+}
+
+.message-context-menu__details-avatar {
+  --size-avatar: 12px;
+}
+
+.message-context-menu__details-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 30px;
+  min-width: 0;
+}
+
+.message-context-menu__details-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.message-context-menu__details-time {
+  color: var(--neutral-text-light);
+  font-size: 12px;
+}
+
+.message-context-menu__details-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.message-context-menu__details-date {
+  color: var(--grey6);
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.message-context-menu__details-time-value {
+  color: var(--text-color);
+  font-weight: 400;
+  font-size: 12px;
+}
+
+@media screen and (width <= 768px) {
+  .message-context-menu__details-trigger {
+    min-height: 32px;
+  }
+
+  .message-context-menu__mobile-details {
+    min-width: 236px;
+  }
 }
