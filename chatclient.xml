@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="167936">
+<fb version="0.19.6" size="171161">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <inserted t="I">8</inserted>
-    <seconds t="F">81.100171048</seconds>
+    <seconds t="F">66.614933595</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-05-08T10:58:23Z</when>
+    <when t="T">2026-05-08T12:59:27Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -10858,16 +10858,194 @@
     <when t="T">2026-05-07T15:56:33Z</when>
   </f>
   <f>
-    <_id t="I">521</_id>
-    <_job t="I">25551760810</_job>
-    <_time t="T">2026-05-08T10:57:07Z</_time>
+    <_id t="I">522</_id>
+    <_job t="I">25556804840</_job>
+    <_time t="T">2026-05-08T12:58:25Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-73</branch>
+    <details t="S">The pull request pksep/chat_client#195 has been opened by @ekn1000.</details>
+    <event_id t="I">9235094915</event_id>
+    <event_type t="S">PullRequestEvent</event_type>
+    <is_human t="I">1</is_human>
+    <issue t="I">195</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-05-08T12:13:54Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">524</_id>
+    <_job t="I">25556804840</_job>
+    <_time t="T">2026-05-08T12:58:32Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-73</branch>
+    <comments t="I">0</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">0</comments_by_author>
+    <comments_by_reviewers t="I">0</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#195 has been "pull-was-merged".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">3</files>
+    <hoc t="I">363</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">195</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-merged</what>
+    <when t="T">2026-05-08T12:14:40Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">525</_id>
+    <_job t="I">25556804840</_job>
+    <_time t="T">2026-05-08T12:58:37Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <events_were_scanned t="I">9231694424</events_were_scanned>
+    <events_were_scanned t="I">9235121713</events_were_scanned>
     <latest_issue_was_found t="I">72</latest_issue_was_found>
-    <min_pull_was_found t="I">185</min_pull_was_found>
+    <min_pull_was_found t="I">195</min_pull_was_found>
     <repository t="I">1053332035</repository>
     <what t="S">iterate</what>
     <where t="S">github</where>
+  </f>
+  <f>
+    <_id t="I">526</_id>
+    <_job t="I">25556804840</_job>
+    <_time t="T">2026-05-08T12:58:39Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-64</branch>
+    <details t="S">The missing pull pksep/chat_client#186 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">186</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-05-04T09:33:54Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">527</_id>
+    <_job t="I">25556804840</_job>
+    <_time t="T">2026-05-08T12:58:39Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-66</branch>
+    <details t="S">The missing pull pksep/chat_client#187 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">187</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-05-04T12:51:14Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">528</_id>
+    <_job t="I">25556804840</_job>
+    <_time t="T">2026-05-08T12:58:40Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-82</branch>
+    <details t="S">The missing pull pksep/chat_client#188 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">188</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-05-04T14:37:25Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">529</_id>
+    <_job t="I">25556804840</_job>
+    <_time t="T">2026-05-08T12:58:41Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-83</branch>
+    <details t="S">The missing pull pksep/chat_client#189 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">189</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-05-05T06:55:24Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">530</_id>
+    <_job t="I">25556804840</_job>
+    <_time t="T">2026-05-08T12:58:41Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">canary</branch>
+    <details t="S">The missing pull pksep/chat_client#190 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">190</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-05-05T07:11:37Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">531</_id>
+    <_job t="I">25556804840</_job>
+    <_time t="T">2026-05-08T12:58:42Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-71</branch>
+    <details t="S">The missing pull pksep/chat_client#191 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">191</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-05-06T07:42:36Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">532</_id>
+    <_job t="I">25556804840</_job>
+    <_time t="T">2026-05-08T12:58:42Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-72</branch>
+    <details t="S">The missing pull pksep/chat_client#192 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">192</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-05-07T14:01:02Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">533</_id>
+    <_job t="I">25556804840</_job>
+    <_time t="T">2026-05-08T12:58:43Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">canary</branch>
+    <details t="S">The missing pull pksep/chat_client#193 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">193</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-05-07T14:01:52Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">534</_id>
+    <_job t="I">25556804840</_job>
+    <_time t="T">2026-05-08T12:58:43Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-74</branch>
+    <details t="S">The missing pull pksep/chat_client#194 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">194</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-05-08T10:27:57Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
   </f>
 </fb>
