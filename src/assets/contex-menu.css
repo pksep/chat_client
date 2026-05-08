@@ -6,7 +6,11 @@
   padding: 5px;
   box-shadow: 0px 0px 22px 0px #00000012;
   z-index: 1000;
+  box-sizing: border-box;
   min-width: max-content;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow: visible;
   & button.button-yui-kit {
     width: 100%;
   }
@@ -15,6 +19,10 @@
 .template {
   display: grid;
   gap: 5px;
+  max-width: calc(100vw - 26px);
+  max-height: calc(100vh - 26px);
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .tip {
