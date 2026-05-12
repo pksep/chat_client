@@ -221,6 +221,7 @@ const visibleTopicUnreadCount = computed(() =>
   canClearlyShowUnreadCount.value ? topicUnreadCount.value : 0
 );
 const renderedTopicId = ref(route.value.id || '');
+let activeTopicSwitchToken = 0;
 
 const state = reactive({
   messages: computed(() => getMessagesByTopicId(renderedTopicId.value)),
@@ -682,6 +683,10 @@ watch(
   [() => route.value?.id, () => route.value?.type],
   async ([topicId]) => {
     if (!topicId) return;
+    const topicSwitchToken = ++activeTopicSwitchToken;
+    const isStaleTopicSwitch = () =>
+      topicSwitchToken !== activeTopicSwitchToken ||
+      route.value?.id !== topicId;
     suppressNotificationSoundForTopic(topicId, TOPIC_SWITCH_AUTO_READ_GRACE_MS);
     state.hideUnreadMarker = true;
     state.unreadMarkerMessageId = null;
@@ -711,13 +716,27 @@ watch(
 
     const hydratedMessages = await hydrateMessagesFromCache(topicId);
 
+    if (isStaleTopicSwitch()) {
+      return;
+    }
+
     if (
       hydratedMessages.length > 0 ||
       getMessagesByTopicId(topicId).length > 0
     ) {
       await warmVisibleTopicMedia(topicId);
+
+      if (isStaleTopicSwitch()) {
+        return;
+      }
+
       renderedTopicId.value = topicId;
       await nextTick();
+
+      if (isStaleTopicSwitch()) {
+        return;
+      }
+
       scrollToBottom({
         preferUnreadMarker: false,
         smooth: false
@@ -732,6 +751,11 @@ watch(
     });
     renderedTopicId.value = topicId;
     await nextTick();
+
+    if (isStaleTopicSwitch()) {
+      return;
+    }
+
     refreshUnreadMarkerState();
 
     if (state.unreadMarkerMessageId) {
@@ -755,6 +779,11 @@ watch(
     inputText.value = getLocalStorageInputText.value;
 
     await nextTick();
+
+    if (isStaleTopicSwitch()) {
+      return;
+    }
+
     scrollToBottom({
       preferUnreadMarker: false,
       smooth: false
