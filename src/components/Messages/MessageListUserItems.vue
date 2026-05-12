@@ -104,6 +104,7 @@ import {
 } from '../../composables/useSelectedMessages';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { parseCallMessage } from '../../utils/parseCallMessage';
+import { parseUserEx } from '../../utils/parseUserEx';
 
 interface Props {
   dataTestid: string;
@@ -283,6 +284,7 @@ const getBubbleProps = (message: IMessage, index: number) => ({
   isMeSender: resolveMessageIsMeSender(message),
   time: formatTime(new Date(message.createdAt)),
   sender: message.senderUser?.initials || '',
+  senderRole: parseUserEx(message.senderUser?.ex)?.erpRole || '',
   avatar: message.senderUser?.avatarUrl || '',
   isRead: message.status === MessageStatus.Read,
   isEdit: message.isEdit,

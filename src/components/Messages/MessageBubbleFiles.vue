@@ -13,14 +13,14 @@
           v-if="!props.continuesWithNext"
           :is-me-sender="props.isMeSender"
         />
-        <h3
+        <MessageAuthorMeta
           v-if="
             !props.isMeSender && !isDialogRoute && !props.continuesFromPrevious
           "
-          class="message__article-initals"
-        >
-          {{ props.sender }}
-        </h3>
+          :sender="props.sender"
+          :sender-role="props.senderRole"
+          :data-testid="`${props.dataTestid}-AuthorMeta`"
+        />
         <MessageReferenceBlock
           :reply-message="props.replyMessage"
           :is-me-sender="props.isMeSender"
@@ -171,6 +171,7 @@ import { useMessageMedia } from './composables/useMessageMedia';
 import MessageReferenceBlock from './MessageReferenceBlock.vue';
 import MessageBubbleTail from './MessageBubbleTail.vue';
 import { stripHtml } from '../../utils/stripHtml';
+import MessageAuthorMeta from './MessageAuthorMeta.vue';
 
 const props = defineProps<IMessageBubbleProps>();
 

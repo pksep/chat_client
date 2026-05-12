@@ -13,14 +13,14 @@
         :style="articleInlineStyle"
         :data-testid="`${props.dataTestid}-Article`"
       >
-        <h3
+        <MessageAuthorMeta
           v-if="
             !props.isMeSender && !isDialogRoute && !props.continuesFromPrevious
           "
-          class="message__article-initals"
-        >
-          {{ props.sender }}
-        </h3>
+          :sender="props.sender"
+          :sender-role="props.senderRole"
+          :data-testid="`${props.dataTestid}-AuthorMeta`"
+        />
         <div
           :class="[
             `message-content message-content-${mediaFiles.length}-item`,
@@ -144,6 +144,7 @@ import { useMessageMedia } from './composables/useMessageMedia';
 import type { IMessageBubbleProps } from './interface/interface';
 import type { IMedia } from '../interfaces/interfaces';
 import MessageReferenceBlock from './MessageReferenceBlock.vue';
+import MessageAuthorMeta from './MessageAuthorMeta.vue';
 
 const props = defineProps<IMessageBubbleProps>();
 defineEmits(['navigate-message', 'set-slider']);
