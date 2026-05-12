@@ -24,14 +24,14 @@
         v-if="!props.continuesWithNext"
         :is-me-sender="props.isMeSender"
       />
-      <h3
+      <MessageAuthorMeta
         v-if="
           !props.isMeSender && !isDialogRoute && !props.continuesFromPrevious
         "
-        class="message__article-initals"
-      >
-        {{ props.sender }}
-      </h3>
+        :sender="props.sender"
+        :sender-role="props.senderRole"
+        :data-testid="`${props.dataTestid}-AuthorMeta`"
+      />
       <MessageReferenceBlock
         :forward-user="showExternalForward ? undefined : props.forwardUser"
         :reply-message="props.replyMessage"
@@ -144,6 +144,7 @@ import MessageBubbleTail from './MessageBubbleTail.vue';
 import MessageBubbleEmoji from './MessageBubbleEmoji.vue';
 import MessageBubbleCall from './MessageBubbleCall.vue';
 import { parseCallMessage } from '../../utils/parseCallMessage';
+import MessageAuthorMeta from './MessageAuthorMeta.vue';
 
 const props = defineProps<IMessageBubbleProps>();
 
