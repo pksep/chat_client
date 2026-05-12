@@ -19,14 +19,14 @@
         v-if="!props.continuesWithNext && !hasReplyReference"
         :is-me-sender="props.isMeSender"
       />
-      <h3
+      <MessageAuthorMeta
         v-if="
           !props.isMeSender && !isDialogRoute && !props.continuesFromPrevious
         "
-        class="message__article-initals"
-      >
-        {{ props.sender }}
-      </h3>
+        :sender="props.sender"
+        :sender-role="props.senderRole"
+        :data-testid="`${props.dataTestid}-AuthorMeta`"
+      />
       <MessageReferenceBlock
         v-if="props.replyMessage"
         :reply-message="props.replyMessage"
@@ -136,6 +136,7 @@ import { MessageStatus } from '../../services/useChatSDK/types';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import MessageBubbleTail from './MessageBubbleTail.vue';
+import MessageAuthorMeta from './MessageAuthorMeta.vue';
 
 const props = defineProps<IMessageBubbleProps>();
 

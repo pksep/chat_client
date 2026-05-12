@@ -138,11 +138,35 @@
   background-color: #e9f0fd;
 }
 
+.message__author-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: -2px;
+}
+
 .message__article-initals {
   font-size: 14px;
+  line-height: 17px;
   font-weight: 600;
   color: var(--primary-base);
-  margin-bottom: -2px;
+  margin-bottom: 0;
+}
+
+.message__author-role {
+  display: inline-flex;
+  align-items: center;
+  height: 17px;
+  padding: 1px 5px;
+  border-radius: 10px;
+  background: var(--blue10);
+  color: var(--link-color);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 15px;
+  white-space: nowrap;
 }
 
 .message__article--emoji {
@@ -1124,6 +1148,7 @@ div.message-content__file {
   box-sizing: border-box;
   padding: 6.5px 15px 11.5px;
   background-color: var(--message-background-color, var(--white));
+  cursor: text;
 }
 
 .message-media__caption-text {
