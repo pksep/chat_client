@@ -1390,7 +1390,9 @@ export const editMessageFromLocal = (
       const pinnedMessages = pinnedMessagesStore.value[topicId] || [];
       if (message.isPin) {
         savePinnedMessagesToLocal(topicId, [
-          ...pinnedMessages.filter(pinnedMessage => pinnedMessage.id !== message.id),
+          ...pinnedMessages.filter(
+            pinnedMessage => pinnedMessage.id !== message.id
+          ),
           {
             ...message,
             isPinnedForAll: true,

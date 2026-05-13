@@ -458,19 +458,7 @@ const isSelectionContextMenu = computed(
 const isGroupTopic = computed(
   () => currentTopic.value?.type === TopicType.Group
 );
-const sharedPinTargetLabel = computed(() => {
-  if (isGroupTopic.value) {
-    return 'Закрепить у всех';
-  }
 
-  const targetName =
-    currentTopic.value?.user?.initials ||
-    currentTopic.value?.user?.nickname ||
-    currentTopic.value?.name ||
-    'Пользователь';
-
-  return `Закрепить у меня и ${targetName}`;
-});
 const currentMessage = computed(() =>
   messages.value.find(message => message.id === props.messageId)
 );
@@ -479,7 +467,7 @@ const isPinnedOnlyForMe = computed(
     Boolean(currentMessage.value?.isPinnedOnlyMe) ||
     isMessagePinnedOnlyForMe(props.topicId, props.messageId)
 );
-const pinScopeLabel = computed(() => sharedPinTargetLabel.value);
+
 const currentMessageClientId = computed(() => {
   if (!currentMessage.value?.ex) {
     return null;
