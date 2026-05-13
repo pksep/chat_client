@@ -34,7 +34,11 @@
 <script setup lang="ts">
 import { stripHtml } from '../../utils/stripHtml';
 import { useUrlWatcher } from '../../composables/navigation';
-import { getPinnedMessagesByTopicId } from '../../services/useMessages';
+import {
+  editMessageFromLocal,
+  getPinnedMessagesByTopicId,
+  unpinLocalMessageForMe
+} from '../../services/useMessages';
 import { computed, ref, watch } from 'vue';
 import {
   Button,
@@ -86,10 +90,32 @@ const handleCloseUnpinModal = () => {
 };
 
 const handleConfirmUnpinMessage = async () => {
-  await togglePinMessageChat({
-    topicId: route.value.id,
-    messageId: pinnedMessages.value[index.value].id
-  });
+  const currentPinnedMessage = pinnedMessages.value[index.value];
+
+  if (!currentPinnedMessage) {
+    handleCloseUnpinModal();
+    return;
+  }
+
+  if (!currentPinnedMessage.isPinnedOnlyMe) {
+    editMessageFromLocal(route.value.id, {
+      ...currentPinnedMessage,
+      isPin: false
+    });
+
+    await togglePinMessageChat({
+      topicId: route.value.id,
+      messageId: currentPinnedMessage.id,
+      scope: 'ALL'
+    });
+  } else {
+    unpinLocalMessageForMe(route.value.id, currentPinnedMessage.id);
+    await togglePinMessageChat({
+      topicId: route.value.id,
+      messageId: currentPinnedMessage.id,
+      scope: 'SELF'
+    });
+  }
 
   handleCloseUnpinModal();
 };

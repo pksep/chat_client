@@ -65,7 +65,7 @@
           v-if="
             !item.isMeSender &&
             shouldShowGroupAvatar &&
-            !item.messages[0].isSystem
+            shouldRenderGroupAvatar(item.messages[0])
           "
           class="message-group__avatar"
           :path="item.messages[0].senderUser?.avatarUrl || ''"
@@ -125,6 +125,7 @@ import { parseCallMessage } from '../../utils/parseCallMessage';
 import { parseUserEx } from '../../utils/parseUserEx';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
+import { isMessagePinnedForMe } from '../../services/useMessages';
 
 interface Props {
   dataTestid: string;
@@ -275,14 +276,26 @@ const getParsedCallMessage = (message?: IMessage) =>
   message
     ? parseCallMessage(message.text || '', {
         messageEx: message.ex,
-        isMeSender: props.user?.id === message.senderUserId,
+        isMeSender: props.authUserId === message.senderUserId,
         authUserId: props.authUserId
       })
     : null;
 
 const resolveMessageIsMeSender = (message?: IMessage) =>
   getParsedCallMessage(message)?.isOutgoing ??
-  props.user?.id === message?.senderUserId;
+  props.authUserId === message?.senderUserId;
+
+const shouldRenderGroupAvatar = (message?: IMessage): boolean => {
+  if (!message) {
+    return false;
+  }
+
+  if (!message.isSystem) {
+    return true;
+  }
+
+  return getParsedCallMessage(message)?.isOutgoing === false;
+};
 
 const isSameMessageGroup = (
   currentMessage?: IMessage,
@@ -362,7 +375,7 @@ const getBubbleProps = (message: IMessage, index: number) => ({
   avatar: message.senderUser?.avatarUrl || '',
   isRead: message.status === MessageStatus.Read,
   isEdit: message.isEdit,
-  isPin: message.isPin,
+  isPin: isMessagePinnedForMe(message.topicId, message.id, message.isPin),
   messageStatus: message.status,
   messageEx: message.ex,
   authUserId: props.authUserId,

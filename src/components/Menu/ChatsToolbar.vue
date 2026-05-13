@@ -94,6 +94,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import { Button, ButtonTypeEnum, Search, SizesEnum } from '@pksep/yui';
 import Line from '../UI/Line.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
@@ -104,7 +105,6 @@ import NewTopicIcon from '../UI/NewTopicIcon.vue';
 import type { ChatsToolbarFilter } from '../../composables/useChatsToolbarState';
 import ConnectionStatus from '../UI/ConnectionStatus.vue';
 import { getHasWebsocketConnection } from '../../services/useChat';
-import { computed } from 'vue';
 
 type ChatsToolbarCounts = Record<ChatsToolbarFilter, number>;
 

@@ -84,6 +84,8 @@ import { useChatMenu } from '../../composables/useChatMenu';
 import MenuBottomNav from '../Menu/MenuBottomNav.vue';
 import MenuCallsPanel from '../Menu/MenuCallsPanel.vue';
 import MenuProfilePanel from '../Menu/MenuProfilePanel.vue';
+import { getAuthUser } from '../../composables/useAuth';
+import { getTopicUnreadBadgeCount } from '../../utils/topicUnreadBadge';
 
 const route = useUrlWatcher();
 
@@ -100,19 +102,25 @@ const { getTopicList } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, setActiveSection } = useChatMenu();
 const allTopics = computed(() => getTopicList());
-const getUnreadCount = (count?: number) => Math.max(0, count || 0);
+const authUserId = computed(() => getAuthUser()?.id || '');
 
 const filterCounts = computed(() => ({
   all: allTopics.value.reduce(
-    (sum, topic) => sum + getUnreadCount(topic.unreadMessageCount),
+    (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
     0
   ),
   chats: allTopics.value
     .filter(topic => topic.type === TopicType.DM)
-    .reduce((sum, topic) => sum + getUnreadCount(topic.unreadMessageCount), 0),
+    .reduce(
+      (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
+      0
+    ),
   groups: allTopics.value
     .filter(topic => topic.type === TopicType.Group)
-    .reduce((sum, topic) => sum + getUnreadCount(topic.unreadMessageCount), 0)
+    .reduce(
+      (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
+      0
+    )
 }));
 
 const state = reactive({

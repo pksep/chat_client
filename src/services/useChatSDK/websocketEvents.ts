@@ -90,12 +90,15 @@ export interface WebSocketEventPayloads {
     messageId: string;
     topicId: string;
     userId: string;
+    scope?: 'ALL' | 'SELF';
   };
   [WebSocketEventType.CHANGE_MESSAGE]: {
     data: Message;
     type: 'NEW' | 'CHANGE' | 'DELETE' | 'PIN';
     messageId: string;
     ptsMeta?: PtsMeta;
+    scope?: 'ALL' | 'SELF';
+    targetUserId?: string | null;
   };
   [WebSocketEventType.READ_MESSAGE]: {
     messageIds: string[];
