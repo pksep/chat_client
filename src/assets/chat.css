@@ -420,13 +420,14 @@ p.chat__nothing-paragraph {
     position: fixed;
     bottom: 0;
     height: 62px;
-    padding: 5px;
+    padding: 5px 15px 20px;
     width: 100%;
   }
 
   .selected-messages-content {
     height: 50px;
-    padding: 0 15px;
+    padding: 0 20px;
+    border-radius: 30px;
   }
 
   .selected-messages-content__action {
@@ -437,5 +438,41 @@ p.chat__nothing-paragraph {
 
   .selected-messages-content__action__title {
     display: none;
+  }
+
+  .selected-messages-content__action.button-yui-kit {
+    display: inline-flex;
+    align-items: center;
+    border: none !important;
+    padding: 0 !important;
+    min-height: 30px !important;
+
+    &:active {
+      background-color: var(--primary-pressed-light-color) !important;
+    }
+
+    & > svg {
+      width: 30px;
+      height: 30px;
+      color: var(--blue1);
+    }
+  }
+
+  .selected-messages-content__action--danger.button-yui-kit {
+    color: var(--error-color) !important;
+    border-color: var(--error-color) !important;
+    border: none !important;
+    padding: 0 !important;
+    min-height: 30px !important;
+
+    &:active {
+      background-color: var(--ban-color) !important;
+    }
+
+    & > svg {
+      width: 30px !important;
+      height: 30px !important;
+      color: var(--error-color);
+    }
   }
 }
