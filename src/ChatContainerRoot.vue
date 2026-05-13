@@ -150,6 +150,7 @@ const applyCachedAuthUser = (userId: string): void => {
     nickname: cachedAuthUser.nickname || cachedAuthUser.id || '',
     initials: cachedAuthUser.initials || '',
     avatarUrl: cachedAuthUser.avatarUrl || '',
+    status: cachedAuthUser.status || null,
     lastOnline: cachedAuthUser.lastOnline || new Date(),
     createdAt: cachedAuthUser.createdAt || new Date(),
     updatedAt: cachedAuthUser.updatedAt || new Date(),

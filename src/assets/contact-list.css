@@ -41,10 +41,9 @@
 }
 
 .contact-list__title {
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  line-clamp: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   grid-area: title;
   margin: 0;
   max-width: 80ch;
@@ -58,6 +57,19 @@
   justify-self: start;
   white-space: nowrap;
   width: 100%;
+}
+
+.contact-list__title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contact-list__title-status {
+  flex-shrink: 0;
+  display: block;
+  transform: translateY(-2px);
 }
 
 .contact-list__avatar {
@@ -279,6 +291,30 @@ svg.icon-yui-kit.contact-list__read-icon {
   margin-bottom: 16px;
 }
 
+.contact-selector__empty {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  row-gap: 10px;
+  min-height: 300px;
+  padding-top: 50px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.contact-selector__empty-title {
+  margin: 0;
+  color: var(--text-color);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.contact-selector__empty-image {
+  width: 68px;
+  height: 68px;
+  object-fit: contain;
+}
+
 .contact-selector__item:hover {
   background-color: #f5f5f5;
 }
@@ -309,13 +345,15 @@ svg.icon-yui-kit.contact-list__read-icon {
 }
 
 @media (width <= 768px) {
-  .chat-container:has(.chat-list) {
+  .chat-container:has(.chat-list),
+  .chat-container:has(.mobile-list-container__content .menu-profile) {
     --header-height: 0;
   }
 
-  .contact-list {
+  .contact-list,
+  .menu-profile {
     max-height: initial;
-    padding: 0;
+    padding: 0 !important;
   }
 
   .contact-list__block--wrapper {
@@ -345,6 +383,11 @@ svg.icon-yui-kit.contact-list__read-icon {
     max-height: calc(var(--default-height) - 120px);
   }
 
+  .contact-selector__empty {
+    min-height: calc(var(--default-height) - 120px);
+    padding-top: 72px;
+  }
+
   .chats-toolbar > .line {
     margin: 0 !important;
     width: 100% !important;
@@ -353,6 +396,14 @@ svg.icon-yui-kit.contact-list__read-icon {
   .chats-toolbar__controls {
     padding-left: 16px !important;
     padding-right: 16px;
+  }
+
+  .menu-profile__title {
+    padding: 10px 16px !important;
+  }
+
+  .menu-profile__form {
+    padding: 0 16px;
   }
 }
 

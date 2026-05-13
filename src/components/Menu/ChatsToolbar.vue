@@ -80,34 +80,21 @@
           :data-testid="`${props.dataTestid}-ChatsToolbar-Filter-${filterOption.value}`"
           @click="emits('update:filter', filterOption.value)"
         >
-          {{ filterOption.label }}
+          <span>{{ filterOption.label }}</span>
+          <span
+            v-if="!!props.filterCounts[filterOption.value]"
+            class="chats-toolbar__filter-count"
+          >
+            {{ props.filterCounts[filterOption.value] }}
+          </span>
         </button>
       </div>
-
-      <Icon
-        v-if="props.showCollapse"
-        :name="
-          props.isCollapse
-            ? IconNameEnum.chevronRight
-            : IconNameEnum.chevronLeft
-        "
-        class="chats-toolbar__collapse"
-        @click="emits('collapse')"
-        :data-testid="`${props.dataTestid}-ChatsToolbar-CollapseIcon`"
-      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import {
-  Button,
-  ButtonTypeEnum,
-  Icon,
-  IconNameEnum,
-  Search,
-  SizesEnum
-} from '@pksep/yui';
+import { Button, ButtonTypeEnum, Search, SizesEnum } from '@pksep/yui';
 import Line from '../UI/Line.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import ContextMenu from '../ContactList/ContextMenu.vue';
@@ -119,19 +106,25 @@ import ConnectionStatus from '../UI/ConnectionStatus.vue';
 import { getHasWebsocketConnection } from '../../services/useChat';
 import { computed } from 'vue';
 
+type ChatsToolbarCounts = Record<ChatsToolbarFilter, number>;
+
 const props = withDefaults(
   defineProps<{
     modelValue: string;
     filter?: ChatsToolbarFilter;
+    filterCounts?: ChatsToolbarCounts;
     isCollapse?: boolean;
-    showCollapse?: boolean;
     dataTestid?: string;
     contextMenuPosition?: { x: number; y: number };
   }>(),
   {
     filter: 'all',
+    filterCounts: () => ({
+      all: 0,
+      chats: 0,
+      groups: 0
+    }),
     isCollapse: false,
-    showCollapse: false,
     dataTestid: 'ChatsToolbar'
   }
 );
@@ -141,7 +134,6 @@ const emits = defineEmits<{
   (e: 'update:filter', value: ChatsToolbarFilter): void;
   (e: 'create-chat'): void;
   (e: 'create-group'): void;
-  (e: 'collapse'): void;
 }>();
 
 const isWaitingConnection = computed(() => !getHasWebsocketConnection());

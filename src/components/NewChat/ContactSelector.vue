@@ -19,6 +19,7 @@
       :data-testid="`${props.dataTestid}-ContactSelector-Search`"
     />
     <ul
+      v-if="contacts.length"
       class="contact-selector__list"
       :data-testid="`${props.dataTestid}-ContactSelector-List`"
     >
@@ -54,6 +55,18 @@
         />
       </li>
     </ul>
+    <div
+      v-else
+      class="contact-selector__empty"
+      :data-testid="`${props.dataTestid}-ContactSelector-Empty`"
+    >
+      <p class="contact-selector__empty-title">Контакты не найдены</p>
+      <img
+        class="contact-selector__empty-image"
+        src="/images/not-found-contact.svg"
+        alt="Контакты не найдены"
+      />
+    </div>
     <Button
       v-if="isButtonEnabled"
       :type="ButtonTypeEnum.primary"

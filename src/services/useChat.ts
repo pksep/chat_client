@@ -12,6 +12,7 @@ import {
   fetchAllTopics,
   getTopicList,
   incrementDisplayedUnreadCount,
+  updateLocalTopicUser,
   setTopicTypingState,
   totalUnreadCount
 } from '../composables/useTopics';
@@ -54,12 +55,15 @@ import { clearTopicNotifications } from './useNotificationNavigation';
 import type { MediaPreviewDimensions } from '../utils/mediaPreview';
 import { useUrlWatcher } from '../composables/navigation';
 import { RouteTypes } from '../composables/navigation/useUrlRouting';
+import { mergeAuthUser } from '../composables/useAuth';
 import {
   loadShadowSyncMeta,
   recordShadowChatEvent,
   saveShadowReadState,
   saveShadowSyncMeta
 } from './useShadowChatSync';
+import { normalizeUserStatus } from '../utils/userStatus';
+import { normalizeDateValue } from '../utils/dateValue';
 
 let chatSDK: ChatSDK | null = null;
 
@@ -359,11 +363,33 @@ const setupChatListeners = (): void => {
 
   const handleUserUpdatedPayload = (payload: {
     id: string;
-    lastOnline: Date | null;
+    lastOnline: Date | string | null;
+    status?: {
+      icon: string;
+      text: string;
+    } | null;
     ptsMeta?: PtsMeta;
   }): void => {
     persistPtsMeta(payload.ptsMeta);
-    updateLocalUserStatus(payload.id, payload.lastOnline);
+    const normalizedLastOnline = normalizeDateValue(payload.lastOnline);
+
+    const normalizedStatus =
+      payload.status === undefined
+        ? undefined
+        : normalizeUserStatus(payload.status);
+
+    updateLocalUserStatus(payload.id, normalizedLastOnline, normalizedStatus);
+    updateLocalTopicUser(payload.id, {
+      lastOnline: normalizedLastOnline,
+      ...(normalizedStatus !== undefined ? { status: normalizedStatus } : {})
+    });
+
+    if (payload.id === currentUserId.value) {
+      mergeAuthUser({
+        lastOnline: normalizedLastOnline,
+        ...(normalizedStatus !== undefined ? { status: normalizedStatus } : {})
+      });
+    }
   };
 
   chatSDK.subscribeToEvent(WebSocketEventType.NEW_MESSAGE, event => {

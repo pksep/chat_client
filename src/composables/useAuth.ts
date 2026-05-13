@@ -3,14 +3,18 @@ import { ref, Ref } from 'vue';
 import { setAuthToken } from './useLogin';
 import { getConfig } from '../services/useConfig';
 
-export const authedUser: Ref<User | null> = ref(null);
+type AuthUser = User & {
+  status?: { icon: string; text: string } | null;
+};
+
+export const authedUser: Ref<AuthUser | null> = ref(null);
 export const CHAT_AUTH_SESSION_KEY = 'chat_auth_session';
 export const ERP_BOOTSTRAP_TOKEN_KEY = 'erp_bootstrap_token';
 
 interface AuthResponse {
   token: string;
   accessToken?: string;
-  user?: User;
+  user?: AuthUser;
   erpToken?: string;
   expireTimeSeconds?: number;
 }
@@ -22,7 +26,7 @@ interface DirectAuthCredentials {
 
 interface StoredChatAuthSession {
   token: string;
-  user?: User;
+  user?: AuthUser;
 }
 
 interface StoredBootstrapErpSession {
@@ -67,7 +71,7 @@ const normalizeAuthResponse = (data: Record<string, unknown>): AuthResponse => {
   return {
     token: accessToken,
     accessToken,
-    user: data.user as User | undefined,
+    user: data.user as AuthUser | undefined,
     erpToken,
     expireTimeSeconds
   };
@@ -269,12 +273,61 @@ export const withErpRefreshOnAuthError = async <T>(
   }
 };
 
-export const fetchAuthUser = async (): Promise<User | null> => {
+export const fetchAuthUser = async (): Promise<AuthUser | null> => {
   return authedUser.value;
 };
 
-export const setAuthUser = (user: User | null) => {
+export const setAuthUser = (user: AuthUser | null) => {
   authedUser.value = user;
 };
 
 export const getAuthUser = () => authedUser.value;
+
+const updateStoredChatSessionUser = (user: AuthUser | null): void => {
+  const localSessionRaw = localStorage.getItem(CHAT_AUTH_SESSION_KEY);
+  const sessionStorageRaw = sessionStorage.getItem(CHAT_AUTH_SESSION_KEY);
+  const storage = localSessionRaw
+    ? localStorage
+    : sessionStorageRaw
+      ? sessionStorage
+      : null;
+
+  if (!storage) {
+    return;
+  }
+
+  try {
+    const rawSession = storage.getItem(CHAT_AUTH_SESSION_KEY);
+
+    if (!rawSession) {
+      return;
+    }
+
+    const parsedSession = JSON.parse(rawSession) as StoredChatAuthSession;
+    storage.setItem(
+      CHAT_AUTH_SESSION_KEY,
+      JSON.stringify({
+        ...parsedSession,
+        user: user || undefined
+      })
+    );
+  } catch (error) {
+    console.error('Failed to update chat auth session user', error);
+  }
+};
+
+export const mergeAuthUser = (
+  patch: Partial<AuthUser> | null | undefined
+): void => {
+  if (!authedUser.value || !patch) {
+    return;
+  }
+
+  const nextUser = {
+    ...authedUser.value,
+    ...patch
+  } as AuthUser;
+
+  authedUser.value = nextUser;
+  updateStoredChatSessionUser(nextUser);
+};

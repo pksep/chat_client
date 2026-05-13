@@ -38,7 +38,17 @@
           :data-testid="`${props.dataTestid}-MessageList-SystemMessageUser${item.index + 1}`"
         >
           <span
-            class="system-message-text"
+            :class="[
+              'system-message-text',
+              {
+                'system-message-text--quoted-overflow':
+                  hasQuotedSystemMessage(item.message.text) &&
+                  hasQuotedSystemMessageOverflow(item.message.id)
+              }
+            ]"
+            ref="systemMessageTextRef"
+            :data-message-id="item.message.id"
+            :data-is-quoted="hasQuotedSystemMessage(item.message.text)"
             :data-testid="`${props.dataTestid}-MessageList-SystemLabelUser${item.index + 1}`"
           >
             {{ item.message.text }}
@@ -90,7 +100,15 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, useTemplateRef } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  useTemplateRef,
+  watch
+} from 'vue';
 import MessageBubble from './MessageBubble.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import { formatDay, formatTime } from '../../composables/useTime';
@@ -105,6 +123,8 @@ import {
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { parseCallMessage } from '../../utils/parseCallMessage';
 import { parseUserEx } from '../../utils/parseUserEx';
+import { useResizeState } from '../../composables/useResizeState';
+import { MAX_W_MD } from '../../utils/constants';
 
 interface Props {
   dataTestid: string;
@@ -128,6 +148,8 @@ type RenderItem =
 
 const props = defineProps<Props>();
 const route = useUrlWatcher();
+const { state: isMobile } = useResizeState(MAX_W_MD);
+const quotedOverflowMessageIds = ref<Set<string>>(new Set());
 
 defineEmits([
   'setEditMessage',
@@ -137,12 +159,64 @@ defineEmits([
   'scrollToMessage'
 ]);
 
+const hasQuotedSystemMessage = (text?: string): boolean =>
+  Boolean(text?.includes('\u00ab') && text.trimEnd().endsWith('\u00bb'));
+
+const hasQuotedSystemMessageOverflow = (messageId?: string): boolean =>
+  Boolean(messageId && quotedOverflowMessageIds.value.has(messageId));
+
 const unreadMessageStartRef = useTemplateRef<HTMLDivElement[]>(
   'unreadMessageStartRef'
+);
+const systemMessageTextRef = useTemplateRef<HTMLSpanElement[]>(
+  'systemMessageTextRef'
 );
 const shouldShowGroupAvatar = computed(
   () => route.value.type !== RouteTypes.DIALOGS
 );
+
+const syncQuotedSystemMessageOverflowState = (): void => {
+  const nextOverflowMessageIds = new Set<string>();
+
+  if (isMobile.value) {
+    for (const element of systemMessageTextRef.value || []) {
+      const messageId = element.dataset.messageId;
+      const isQuoted = element.dataset.isQuoted === 'true';
+
+      if (
+        messageId &&
+        isQuoted &&
+        element.scrollWidth > element.clientWidth + 1
+      ) {
+        nextOverflowMessageIds.add(messageId);
+      }
+    }
+  }
+
+  quotedOverflowMessageIds.value = nextOverflowMessageIds;
+};
+
+const scheduleQuotedSystemMessageOverflowSync = async (): Promise<void> => {
+  await nextTick();
+  syncQuotedSystemMessageOverflowState();
+};
+
+watch(
+  () => [props.messages, isMobile.value],
+  () => {
+    void scheduleQuotedSystemMessageOverflowSync();
+  },
+  { deep: true, immediate: true }
+);
+
+onMounted(() => {
+  window.addEventListener('resize', syncQuotedSystemMessageOverflowState);
+  void scheduleQuotedSystemMessageOverflowSync();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', syncQuotedSystemMessageOverflowState);
+});
 
 const isNewDate = (index: number) => {
   if (index === 0) return true;

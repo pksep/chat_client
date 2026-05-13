@@ -3,29 +3,47 @@
     :class="menuClasses"
     :data-testid="`${props.dataTestid}-Menu-Container`"
   >
+    <Icon
+      :name="isCollapse ? IconNameEnum.chevronRight : IconNameEnum.chevronLeft"
+      class="chats-toolbar__collapse"
+      @click="handleCollapse"
+      :data-testid="`${props.dataTestid}-Menu-ChatsToolbar-CollapseIcon`"
+    />
+
     <div
       class="menu__start"
       :data-testid="`${props.dataTestid}-Menu-StartContainer`"
     >
-      <ChatsToolbar
-        :model-value="toolbarState.search"
-        :filter="toolbarState.filter"
-        :is-collapse="isCollapse"
-        :show-collapse="true"
-        :data-testid="`${props.dataTestid}-Menu`"
-        @update:model-value="setSearch"
-        @update:filter="setFilter"
-        @collapse="handleCollapse"
-        @create-chat="handleNewContactModal"
-        @create-group="handleNewGroupModal"
+      <template v-if="activeSection === 'chats'">
+        <ChatsToolbar
+          :model-value="toolbarState.search"
+          :filter="toolbarState.filter"
+          :filter-counts="filterCounts"
+          :is-collapse="isCollapse"
+          :data-testid="`${props.dataTestid}-Menu`"
+          @update:model-value="setSearch"
+          @update:filter="setFilter"
+          @create-chat="handleNewContactModal"
+          @create-group="handleNewGroupModal"
+        />
+
+        <TopicList
+          class="menu__contact-list"
+          :topics="topicGroups"
+          @unmount-topic="unmountTopicClick"
+          :selected-topic-id="selectedContactId"
+          :data-testid="`${props.dataTestid}-Menu-ContactList`"
+        />
+      </template>
+
+      <MenuCallsPanel
+        v-else-if="activeSection === 'calls'"
+        :data-testid="`${props.dataTestid}-Menu-CallsPanel`"
       />
 
-      <TopicList
-        class="menu__contact-list"
-        :topics="topicGroups"
-        @unmount-topic="unmountTopicClick"
-        :selected-topic-id="selectedContactId"
-        :data-testid="`${props.dataTestid}-Menu-ContactList`"
+      <MenuProfilePanel
+        v-else
+        :data-testid="`${props.dataTestid}-Menu-ProfilePanel`"
       />
     </div>
 
@@ -43,6 +61,11 @@
       />
       <template v-if="!isCollapse"> Загрузить на устройство </template>
     </Button>
+
+    <MenuBottomNav
+      :is-collapse="isCollapse"
+      :data-testid="`${props.dataTestid}-Menu-BottomNav`"
+    />
   </aside>
 </template>
 
@@ -69,6 +92,10 @@ import TopicList from './ContactList/TopicList.vue';
 import ChatsToolbar from './Menu/ChatsToolbar.vue';
 import { TopicType } from '../services/useChatSDK/types';
 import { useChatsToolbarState } from '../composables/useChatsToolbarState';
+import { useChatMenu } from '../composables/useChatMenu';
+import MenuBottomNav from './Menu/MenuBottomNav.vue';
+import MenuCallsPanel from './Menu/MenuCallsPanel.vue';
+import MenuProfilePanel from './Menu/MenuProfilePanel.vue';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: 'Menu'
@@ -79,12 +106,27 @@ const route = useUrlWatcher();
 const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 const selectedContactId = computed(() => route.value?.id);
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
+const { activeSection, setActiveSection } = useChatMenu();
+const allTopics = computed(() => getTopicList());
+const getUnreadCount = (count?: number) => Math.max(0, count || 0);
+
+const filterCounts = computed(() => ({
+  all: allTopics.value.reduce(
+    (sum, topic) => sum + getUnreadCount(topic.unreadMessageCount),
+    0
+  ),
+  chats: allTopics.value
+    .filter(topic => topic.type === TopicType.DM)
+    .reduce((sum, topic) => sum + getUnreadCount(topic.unreadMessageCount), 0),
+  groups: allTopics.value
+    .filter(topic => topic.type === TopicType.Group)
+    .reduce((sum, topic) => sum + getUnreadCount(topic.unreadMessageCount), 0)
+}));
 
 const topicGroups = computed(() => {
-  const allTopics = getTopicList();
   const query = toolbarState.search.toLowerCase().trim();
 
-  const filteredByType = allTopics.filter(topic => {
+  const filteredByType = allTopics.value.filter(topic => {
     if (toolbarState.filter === 'chats') {
       return topic.type === TopicType.DM;
     }
@@ -125,10 +167,16 @@ const { state: isCollapse, toggle } = useResizeState({
 });
 
 const handleCollapse = (): void => {
+  if (!isCollapse.value) {
+    setActiveSection('chats');
+  }
+
   toggle();
 };
 
 const unmountTopicClick = (topic: ITopic): void => {
+  setActiveSection('chats');
+
   if (topic.type === 'GROUP') {
     navigateToGroup(topic.id);
   } else if (topic.type === 'DM') {
