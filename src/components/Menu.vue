@@ -18,6 +18,7 @@
         <ChatsToolbar
           :model-value="toolbarState.search"
           :filter="toolbarState.filter"
+          :filter-counts="filterCounts"
           :is-collapse="isCollapse"
           :data-testid="`${props.dataTestid}-Menu`"
           @update:model-value="setSearch"
@@ -106,12 +107,26 @@ const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 const selectedContactId = computed(() => route.value?.id);
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, setActiveSection } = useChatMenu();
+const allTopics = computed(() => getTopicList());
+const getUnreadCount = (count?: number) => Math.max(0, count || 0);
+
+const filterCounts = computed(() => ({
+  all: allTopics.value.reduce(
+    (sum, topic) => sum + getUnreadCount(topic.unreadMessageCount),
+    0
+  ),
+  chats: allTopics.value
+    .filter(topic => topic.type === TopicType.DM)
+    .reduce((sum, topic) => sum + getUnreadCount(topic.unreadMessageCount), 0),
+  groups: allTopics.value
+    .filter(topic => topic.type === TopicType.Group)
+    .reduce((sum, topic) => sum + getUnreadCount(topic.unreadMessageCount), 0)
+}));
 
 const topicGroups = computed(() => {
-  const allTopics = getTopicList();
   const query = toolbarState.search.toLowerCase().trim();
 
-  const filteredByType = allTopics.filter(topic => {
+  const filteredByType = allTopics.value.filter(topic => {
     if (toolbarState.filter === 'chats') {
       return topic.type === TopicType.DM;
     }

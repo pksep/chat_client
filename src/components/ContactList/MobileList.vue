@@ -9,6 +9,7 @@
         <ChatsToolbar
           :model-value="toolbarState.search"
           :filter="toolbarState.filter"
+          :filter-counts="filterCounts"
           class="mobile-list-container__toolbar"
           :data-testid="`${props.dataTestid}-MobileList`"
           @update:model-value="setSearch"
@@ -98,6 +99,21 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
 const { getTopicList } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, setActiveSection } = useChatMenu();
+const allTopics = computed(() => getTopicList());
+const getUnreadCount = (count?: number) => Math.max(0, count || 0);
+
+const filterCounts = computed(() => ({
+  all: allTopics.value.reduce(
+    (sum, topic) => sum + getUnreadCount(topic.unreadMessageCount),
+    0
+  ),
+  chats: allTopics.value
+    .filter(topic => topic.type === TopicType.DM)
+    .reduce((sum, topic) => sum + getUnreadCount(topic.unreadMessageCount), 0),
+  groups: allTopics.value
+    .filter(topic => topic.type === TopicType.Group)
+    .reduce((sum, topic) => sum + getUnreadCount(topic.unreadMessageCount), 0)
+}));
 
 const state = reactive({
   showAddAccount: false,
@@ -105,9 +121,8 @@ const state = reactive({
 });
 
 const contactList = computed(() => {
-  const topics = getTopicList();
   const query = toolbarState.search.toLowerCase().trim();
-  const filteredByType = topics.filter(topic => {
+  const filteredByType = allTopics.value.filter(topic => {
     if (toolbarState.filter === 'chats') {
       return topic.type === TopicType.DM;
     }
