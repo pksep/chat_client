@@ -140,18 +140,15 @@
               @
             </div>
             <div
-              v-if="
-                topic.unreadMessageCount > 0 &&
-                topic.lastMessage?.senderUserId !== authedUser.id
-              "
+              v-if="hasTopicUnreadBadge(topic, authedUser?.id)"
               :class="{
                 'contact-list__notification': true,
                 'contact-list__notification--muted': topic.info?.isMute
               }"
               :data-testid="`${props.dataTestid}-ContactList-Notification${index + 1}`"
-              :aria-label="`${topic.unreadMessageCount} new messages`"
+              :aria-label="`${getTopicUnreadBadgeCount(topic, authedUser?.id)} new messages`"
             >
-              {{ topic.unreadMessageCount }}
+              {{ getTopicUnreadBadgeCount(topic, authedUser?.id) }}
             </div>
             <div
               class="contact-list__pin"
@@ -237,6 +234,10 @@ import { useMessageMedia } from '../Messages/composables/useMessageMedia';
 import TypingIndicator from '../UI/TypingIndicator.vue';
 import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
 import { formatUserStatusLabel } from '../../utils/userStatus';
+import {
+  getTopicUnreadBadgeCount,
+  hasTopicUnreadBadge
+} from '../../utils/topicUnreadBadge';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;

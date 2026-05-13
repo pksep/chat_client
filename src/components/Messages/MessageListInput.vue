@@ -3,19 +3,19 @@
     class="chat__input"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
   >
-    <ContentEditor
-      :active-send="props.forwardMessages.length > 0"
-      v-model="internalInputText"
-      ref="contentEditorRef"
-      active-attach-file
-      active-select-user
-      :mention-items="users"
-      :mention-config="mentionConfig"
-      @unmount-send="handleSend"
-      @unmount-attach-file="(...args: any[]) => $emit('attachFile', ...args)"
-      @mention-change="handleMentionChange"
-      :data-testid="`${props.dataTestid}-MessageList-ContentEditor`"
-    >
+    <div :data-testid="`${props.dataTestid}-MessageList-ContentEditor`">
+      <ContentEditor
+        :active-send="props.forwardMessages.length > 0"
+        v-model="internalInputText"
+        ref="contentEditorRef"
+        active-attach-file
+        active-select-user
+        :mention-items="users"
+        :mention-config="mentionConfig"
+        @unmount-send="handleSend"
+        @unmount-attach-file="(...args: any[]) => $emit('attachFile', ...args)"
+        @mention-change="handleMentionChange"
+      >
       <template v-if="!!props.editMessage" #action>
         <div
           class="chat__input__action"
@@ -102,7 +102,8 @@
           </Button>
         </div>
       </template>
-    </ContentEditor>
+      </ContentEditor>
+    </div>
   </div>
 </template>
 

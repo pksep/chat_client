@@ -16,7 +16,7 @@
 
 .confirm__modal__description {
   font-size: 14px;
-  margin: 20px 0 25px;
+  margin: 20px 0;
   color: var(--text-neutral-color);
   font-weight: 700;
   padding-inline: 30px;
@@ -30,14 +30,33 @@
 
 .confirm__modal__buttons button {
   width: 170px;
+  height: 35px;
+  min-height: 35px !important;
   justify-content: center;
+}
+
+.confirm__modal__scope {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: fit-content;
+  margin: 0 auto 20px;
+  color: var(--blue1);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.confirm__modal__scope .checkbox-yui-kit {
+  flex-shrink: 0;
 }
 
 .confirm__modal__mobile.modal-yui-kit.modal-yui-kit_bottom {
   text-align: center;
   margin-top: auto !important;
   height: max-content !important;
-  padding: 20px 10px;
+  padding: 30px 15px;
 }
 
 .confirm__modal__mobile .confirm__modal__description {
@@ -45,12 +64,17 @@
   text-align: center;
   padding-inline: 0;
   margin: 10px auto 0;
-  width: 320px;
+  width: 380px;
   line-height: 17px;
 }
 
 .confirm__modal__mobile .modal-yui-kit__modal-content {
   padding: 0;
+}
+
+.confirm__modal__mobile .confirm__modal__scope {
+  margin: 20px auto 0;
+  max-width: 320px;
 }
 
 .confirm__modal__mobile button {

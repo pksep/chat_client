@@ -161,7 +161,7 @@
   display: inline-flex;
   min-width: 18px;
   height: 18px;
-  line-height: 15px;
+  line-height: 0;
   padding: 1.5px 6px;
   align-items: center;
   justify-content: center;

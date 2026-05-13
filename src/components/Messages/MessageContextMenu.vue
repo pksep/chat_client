@@ -322,6 +322,17 @@
     </template>
   </ContextMenu>
 
+  <PinConfirmModal
+    :open="pinModalOpen"
+    title="Закрепить сообщение"
+    description="Вы уверены, что хотите закрепить это сообщение?"
+    scope-label="Закрепить у всех в чате"
+    :pin-for-everyone="pinForEveryone"
+    @update:pin-for-everyone="pinForEveryone = $event"
+    @unmount-close="handleClosePinModal"
+    @unmount-confirm="handleConfirmPinMessage"
+  />
+
   <ConfirmModal
     :open="deleteModalOpen"
     :title="deleteModalTitle"
@@ -359,6 +370,7 @@ import 'vue3-emoji-picker/css';
 
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import ConfirmModal from '../UI/ConfirmModal.vue';
+import PinConfirmModal from '../UI/PinConfirmModal.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import ReplyIcon from '../UI/ReplyIcon.vue';
 import EditIcon from '../UI/EditIcon.vue';
@@ -389,8 +401,12 @@ import {
   togglePinMessageChat
 } from '../../services/useChat';
 import {
+  editMessageFromLocal,
   deleteMessageFromLocal,
-  getMessagesByTopicId
+  getMessagesByTopicId,
+  isMessagePinnedOnlyForMe,
+  pinMessageOnlyForMe,
+  unpinLocalMessageForMe
 } from '../../services/useMessages';
 
 import type { ITopic } from '../interfaces/interfaces';
@@ -442,9 +458,28 @@ const isSelectionContextMenu = computed(
 const isGroupTopic = computed(
   () => currentTopic.value?.type === TopicType.Group
 );
+const sharedPinTargetLabel = computed(() => {
+  if (isGroupTopic.value) {
+    return 'Закрепить у всех';
+  }
+
+  const targetName =
+    currentTopic.value?.user?.initials ||
+    currentTopic.value?.user?.nickname ||
+    currentTopic.value?.name ||
+    'Пользователь';
+
+  return `Закрепить у меня и ${targetName}`;
+});
 const currentMessage = computed(() =>
   messages.value.find(message => message.id === props.messageId)
 );
+const isPinnedOnlyForMe = computed(
+  () =>
+    Boolean(currentMessage.value?.isPinnedOnlyMe) ||
+    isMessagePinnedOnlyForMe(props.topicId, props.messageId)
+);
+const pinScopeLabel = computed(() => sharedPinTargetLabel.value);
 const currentMessageClientId = computed(() => {
   if (!currentMessage.value?.ex) {
     return null;
@@ -565,6 +600,8 @@ const deleteModalDescription = computed(() =>
 );
 
 const deleteModalOpen = ref(false);
+const pinModalOpen = ref(false);
+const pinForEveryone = ref(false);
 const unpinModalOpen = ref(false);
 const forwardModalOpen = ref(false);
 const reactionRow = ref<HTMLElement | null>(null);
@@ -734,6 +771,16 @@ const handleCloseUnpinModal = () => {
   unpinModalOpen.value = false;
 };
 
+const handleOpenPinModal = () => {
+  pinForEveryone.value = true;
+  pinModalOpen.value = true;
+};
+
+const handleClosePinModal = () => {
+  pinModalOpen.value = false;
+  pinForEveryone.value = true;
+};
+
 const handleOpenForwardModal = () => {
   forwardModalOpen.value = true;
 };
@@ -857,19 +904,49 @@ const handlePinMessage = async () => {
     return;
   }
 
-  await togglePinMessageChat({
-    messageId: props.messageId,
-    topicId: props.topicId
-  });
+  handleOpenPinModal();
+};
 
+const handleConfirmPinMessage = async () => {
+  if (pinForEveryone.value) {
+    await togglePinMessageChat({
+      messageId: props.messageId,
+      topicId: props.topicId,
+      scope: 'ALL'
+    });
+  } else {
+    pinMessageOnlyForMe(props.topicId, props.messageId);
+    await togglePinMessageChat({
+      messageId: props.messageId,
+      topicId: props.topicId,
+      scope: 'SELF'
+    });
+  }
+
+  handleClosePinModal();
   handleClosePopover();
 };
 
 const handleConfirmUnpinMessage = async () => {
-  await togglePinMessageChat({
-    messageId: props.messageId,
-    topicId: props.topicId
-  });
+  if (currentMessage.value?.isPin && !isPinnedOnlyForMe.value) {
+    editMessageFromLocal(props.topicId, {
+      ...currentMessage.value,
+      isPin: false
+    });
+
+    await togglePinMessageChat({
+      messageId: props.messageId,
+      topicId: props.topicId,
+      scope: 'ALL'
+    });
+  } else {
+    unpinLocalMessageForMe(props.topicId, props.messageId);
+    await togglePinMessageChat({
+      messageId: props.messageId,
+      topicId: props.topicId,
+      scope: 'SELF'
+    });
+  }
 
   handleCloseUnpinModal();
   handleClosePopover();
