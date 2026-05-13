@@ -67,7 +67,6 @@ import CachedAvatar from '../UI/CachedAvatar.vue';
 import TypingIndicator from '../UI/TypingIndicator.vue';
 import {
   formatUserStatusLabel,
-  formatUserStatusText,
   normalizeUserStatus
 } from '../../utils/userStatus';
 
@@ -87,9 +86,6 @@ const currentStatus = computed(() =>
 );
 const currentStatusLabel = computed(() =>
   formatUserStatusLabel(effectiveUser.value.status)
-);
-const currentStatusText = computed(() =>
-  formatUserStatusText(effectiveUser.value.status)
 );
 const statusIcon = computed(() => currentStatus.value?.icon || '');
 
