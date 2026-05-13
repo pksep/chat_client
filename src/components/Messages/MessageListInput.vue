@@ -3,106 +3,107 @@
     class="chat__input"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
   >
-    <ContentEditor
-      :active-send="props.forwardMessages.length > 0"
-      v-model="internalInputText"
-      ref="contentEditorRef"
-      active-attach-file
-      active-select-user
-      :mention-items="users"
-      :mention-config="mentionConfig"
-      @unmount-send="handleSend"
-      @unmount-attach-file="(...args: any[]) => $emit('attachFile', ...args)"
-      @mention-change="handleMentionChange"
-      :data-testid="`${props.dataTestid}-MessageList-ContentEditor`"
-    >
-      <template v-if="!!props.editMessage" #action>
-        <div
-          class="chat__input__action"
-          @click="$emit('scrollToMessage', props.editMessage)"
-        >
-          <EditIcon />
-          <div class="chat__input__action__blog">
-            <h5>Редактирование</h5>
-            <p>
-              {{ stripHtml(props.editMessage?.text || '') }}
-            </p>
-          </div>
-          <Button
-            :type="ButtonTypeEnum.ghost"
-            :size="SizesEnum.little"
-            @click="$emit('clearEdit')"
-            :data-testid="`${props.dataTestid}-MenuInfo-CloseButton`"
+    <div :data-testid="`${props.dataTestid}-MessageList-ContentEditor`">
+      <ContentEditor
+        :active-send="props.forwardMessages.length > 0"
+        v-model="internalInputText"
+        ref="contentEditorRef"
+        active-attach-file
+        active-select-user
+        :mention-items="users"
+        :mention-config="mentionConfig"
+        @unmount-send="handleSend"
+        @unmount-attach-file="(...args: any[]) => $emit('attachFile', ...args)"
+        @mention-change="handleMentionChange"
+      >
+        <template v-if="!!props.editMessage" #action>
+          <div
+            class="chat__input__action"
+            @click="$emit('scrollToMessage', props.editMessage)"
           >
-            <Icon
-              :name="IconNameEnum.crossLarge"
-              color="var(--text-neutral-color)"
-            />
-          </Button>
-        </div>
-      </template>
-      <template v-else-if="!!props.replyMessage" #action>
-        <div
-          class="chat__input__action"
-          @click="$emit('scrollToMessage', props.replyMessage)"
-        >
-          <div class="chat__input__action__blog">
-            <h5>В ответ {{ props.replyMessage.senderUser?.initials }}</h5>
-            <p>
-              {{ stripHtml(props.replyMessage?.text || 'Вложение') }}
-            </p>
+            <EditIcon />
+            <div class="chat__input__action__blog">
+              <h5>Редактирование</h5>
+              <p>
+                {{ stripHtml(props.editMessage?.text || '') }}
+              </p>
+            </div>
+            <Button
+              :type="ButtonTypeEnum.ghost"
+              :size="SizesEnum.little"
+              @click="$emit('clearEdit')"
+              :data-testid="`${props.dataTestid}-MenuInfo-CloseButton`"
+            >
+              <Icon
+                :name="IconNameEnum.crossLarge"
+                color="var(--text-neutral-color)"
+              />
+            </Button>
           </div>
-          <Button
-            :type="ButtonTypeEnum.ghost"
-            :size="SizesEnum.little"
-            @click="$emit('clearReply')"
-            :data-testid="`${props.dataTestid}-MenuInfo-CloseButton`"
+        </template>
+        <template v-else-if="!!props.replyMessage" #action>
+          <div
+            class="chat__input__action"
+            @click="$emit('scrollToMessage', props.replyMessage)"
           >
-            <Icon
-              :name="IconNameEnum.crossLarge"
-              color="var(--text-neutral-color)"
-            />
-          </Button>
-        </div>
-      </template>
-      <template v-else-if="props.forwardMessages.length > 0" #action>
-        <div
-          class="chat__input__action"
-          @click="
-            props.forwardMessages[0] &&
-              $emit('scrollToMessage', props.forwardMessages[0])
-          "
-        >
-          <ForwardIcon />
-          <div class="chat__input__action__blog">
-            <h5>
-              Переслать {{ props.forwardMessages.length }}
-              сообщение
-            </h5>
-            <p>
-              <template v-if="props.forwardMessages.length === 1">
-                {{ props.forwardMessages[0]?.senderUser?.initials }}:
-                {{ stripHtml(props.forwardMessages[0]?.text || 'Вложение') }}
-              </template>
-              <template v-else>
-                {{ formatForwardMessagesLabel(props.forwardMessages.length) }}
-              </template>
-            </p>
+            <div class="chat__input__action__blog">
+              <h5>В ответ {{ props.replyMessage.senderUser?.initials }}</h5>
+              <p>
+                {{ stripHtml(props.replyMessage?.text || 'Вложение') }}
+              </p>
+            </div>
+            <Button
+              :type="ButtonTypeEnum.ghost"
+              :size="SizesEnum.little"
+              @click="$emit('clearReply')"
+              :data-testid="`${props.dataTestid}-MenuInfo-CloseButton`"
+            >
+              <Icon
+                :name="IconNameEnum.crossLarge"
+                color="var(--text-neutral-color)"
+              />
+            </Button>
           </div>
-          <Button
-            :type="ButtonTypeEnum.ghost"
-            :size="SizesEnum.little"
-            @click="$emit('clearForward')"
-            :data-testid="`${props.dataTestid}-MenuInfo-CloseButton`"
+        </template>
+        <template v-else-if="props.forwardMessages.length > 0" #action>
+          <div
+            class="chat__input__action"
+            @click="
+              props.forwardMessages[0] &&
+                $emit('scrollToMessage', props.forwardMessages[0])
+            "
           >
-            <Icon
-              :name="IconNameEnum.crossLarge"
-              color="var(--text-neutral-color)"
-            />
-          </Button>
-        </div>
-      </template>
-    </ContentEditor>
+            <ForwardIcon />
+            <div class="chat__input__action__blog">
+              <h5>
+                Переслать {{ props.forwardMessages.length }}
+                сообщение
+              </h5>
+              <p>
+                <template v-if="props.forwardMessages.length === 1">
+                  {{ props.forwardMessages[0]?.senderUser?.initials }}:
+                  {{ stripHtml(props.forwardMessages[0]?.text || 'Вложение') }}
+                </template>
+                <template v-else>
+                  {{ formatForwardMessagesLabel(props.forwardMessages.length) }}
+                </template>
+              </p>
+            </div>
+            <Button
+              :type="ButtonTypeEnum.ghost"
+              :size="SizesEnum.little"
+              @click="$emit('clearForward')"
+              :data-testid="`${props.dataTestid}-MenuInfo-CloseButton`"
+            >
+              <Icon
+                :name="IconNameEnum.crossLarge"
+                color="var(--text-neutral-color)"
+              />
+            </Button>
+          </div>
+        </template>
+      </ContentEditor>
+    </div>
   </div>
 </template>
 

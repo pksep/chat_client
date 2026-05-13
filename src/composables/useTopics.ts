@@ -528,20 +528,33 @@ const createTopicsApi = () => {
         latestKnownMessageTimestamp,
         currentUserId
       );
+    const hasLatestMessageInLocalCache =
+      !latestKnownMessage?.id ||
+      messages.some(message => message.id === latestKnownMessage.id);
     const shouldUseComputedUnread =
       shadowReadStateExists &&
-      (effectiveServerUnreadCount === 0 || hasLatestRangeCoverage);
+      (effectiveServerUnreadCount === 0 ||
+        (hasLatestRangeCoverage && hasLatestMessageInLocalCache));
 
     const computedUnreadCount = computedUnreadMessages.length;
-
-    topic.unreadMessageCount = shouldUseComputedUnread
+    const nextUnreadCount = shouldUseComputedUnread
       ? Math.min(effectiveServerUnreadCount, computedUnreadCount)
       : effectiveServerUnreadCount;
-    topic.taggedMe =
-      topic.unreadMessageCount > 0 &&
+    const nextTaggedMe =
+      nextUnreadCount > 0 &&
       (shouldUseComputedUnread ? computedUnreadMessages : unreadMessages).some(
         message => message.taggedUserIds?.includes(currentUserId)
       );
+
+    if (
+      topic.unreadMessageCount === nextUnreadCount &&
+      topic.taggedMe === nextTaggedMe
+    ) {
+      return;
+    }
+
+    topic.unreadMessageCount = nextUnreadCount;
+    topic.taggedMe = nextTaggedMe;
 
     topics.value = [...topics.value];
     schedulePersistTopics();

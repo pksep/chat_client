@@ -149,6 +149,9 @@ export type IMessage = Message & {
   messageRead?: IMessageRead[];
   isReadByMe?: boolean;
   isRead?: boolean;
+  isPinnedForAll?: boolean;
+  isPinnedForMe?: boolean;
+  isPinnedOnlyMe?: boolean;
   replyMessage?: IMessage;
   forwardUser?: IUser;
   reactions?: Reaction[];

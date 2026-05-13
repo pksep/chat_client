@@ -1367,13 +1367,14 @@ export const deleteMessageFromLocal = (
   syncLocalLastMessage(topicId);
   savePinnedMessagesToLocal(
     topicId,
-    getPinnedMessagesByTopicId(topicId).filter(
+    (pinnedMessagesStore.value[topicId] || []).filter(
       message => message.id !== messageId
     )
   );
 
   clearPendingUploadMessage(topicId, messageId);
   cancelOutgoingDeliveryTimeout(topicId, messageId);
+  unpinLocalMessageForMe(topicId, messageId);
   void deleteShadowTopicMessage(topicId, messageId);
 };
 
@@ -1386,9 +1387,19 @@ export const editMessageFromLocal = (
   const updateMessage = (msg: IMessage): IMessage => {
     let isEdit = msg.isEdit;
     if (message.isPin !== msg.isPin) {
-      const pinnedMessages = getPinnedMessagesByTopicId(topicId);
+      const pinnedMessages = pinnedMessagesStore.value[topicId] || [];
       if (message.isPin) {
-        savePinnedMessagesToLocal(topicId, [...pinnedMessages, message]);
+        savePinnedMessagesToLocal(topicId, [
+          ...pinnedMessages.filter(
+            pinnedMessage => pinnedMessage.id !== message.id
+          ),
+          {
+            ...message,
+            isPinnedForAll: true,
+            isPinnedForMe: true,
+            isPinnedOnlyMe: false
+          }
+        ]);
       } else {
         savePinnedMessagesToLocal(
           topicId,
@@ -1401,6 +1412,15 @@ export const editMessageFromLocal = (
 
     return {
       ...msg,
+      ...('isPinnedForAll' in message
+        ? { isPinnedForAll: message.isPinnedForAll }
+        : {}),
+      ...('isPinnedForMe' in message
+        ? { isPinnedForMe: message.isPinnedForMe }
+        : {}),
+      ...('isPinnedOnlyMe' in message
+        ? { isPinnedOnlyMe: message.isPinnedOnlyMe }
+        : {}),
       text: message.text,
       isPin: message.isPin,
       isEdit
@@ -1743,6 +1763,74 @@ export const savePinnedMessagesToLocal = (
 
 export const getPinnedMessagesByTopicId = (topicId: string): IMessage[] => {
   return pinnedMessagesStore.value[topicId] || [];
+};
+
+export const isMessagePinnedOnlyForMe = (
+  topicId: string,
+  messageId: string
+): boolean =>
+  Boolean(
+    (pinnedMessagesStore.value[topicId] || []).find(
+      message => message.id === messageId && message.isPinnedOnlyMe
+    )
+  );
+
+export const isMessagePinnedForMe = (
+  topicId: string,
+  messageId: string,
+  isPinnedForAll = false
+): boolean =>
+  Boolean(isPinnedForAll) ||
+  Boolean(
+    (pinnedMessagesStore.value[topicId] || []).find(
+      message => message.id === messageId
+    )
+  );
+
+export const pinMessageOnlyForMe = (
+  topicId: string,
+  messageId: string
+): void => {
+  const existingPinnedMessages = pinnedMessagesStore.value[topicId] || [];
+
+  if (existingPinnedMessages.some(message => message.id === messageId)) {
+    return;
+  }
+
+  const message = getFullMessagesByTopicId(topicId).find(
+    currentMessage => currentMessage.id === messageId
+  );
+
+  if (!message) {
+    return;
+  }
+
+  savePinnedMessagesToLocal(topicId, [
+    ...existingPinnedMessages,
+    {
+      ...message,
+      isPin: true,
+      isPinnedForAll: false,
+      isPinnedForMe: true,
+      isPinnedOnlyMe: true
+    }
+  ]);
+};
+
+export const unpinLocalMessageForMe = (
+  topicId: string,
+  messageId: string
+): void => {
+  const existingPinnedMessages = pinnedMessagesStore.value[topicId] || [];
+
+  if (!existingPinnedMessages.some(message => message.id === messageId)) {
+    return;
+  }
+
+  savePinnedMessagesToLocal(
+    topicId,
+    existingPinnedMessages.filter(message => message.id !== messageId)
+  );
 };
 
 export const getGroupMessageWithPinned = (

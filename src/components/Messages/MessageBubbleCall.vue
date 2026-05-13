@@ -82,7 +82,9 @@ const messageArticleStyles = computed(() => [
   'message__article',
   'message__article--call',
   {
-    'message__no-author': props.isMeSender
+    'message__no-author': props.isMeSender,
+    'message__article--call-outgoing': props.isMeSender,
+    'message__article--call-incoming': !props.isMeSender
   }
 ]);
 </script>

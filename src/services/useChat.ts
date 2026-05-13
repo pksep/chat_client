@@ -261,7 +261,17 @@ const setupChatListeners = (): void => {
     data: any;
     messageId?: string;
     ptsMeta?: PtsMeta;
+    scope?: 'ALL' | 'SELF';
+    targetUserId?: string | null;
   }): void => {
+    if (
+      payload.scope === 'SELF' &&
+      payload.targetUserId &&
+      payload.targetUserId !== currentUserId.value
+    ) {
+      return;
+    }
+
     persistPtsMeta(payload.ptsMeta);
 
     if (payload.type === 'NEW') {
@@ -287,7 +297,12 @@ const setupChatListeners = (): void => {
         source: 'ws',
         payload: payload.data
       });
-      editMessageFromLocal(payload.data.topicId, payload.data);
+      if (payload.type === 'CHANGE' || payload.scope !== 'SELF') {
+        editMessageFromLocal(payload.data.topicId, payload.data);
+      }
+      if (payload.type === 'PIN') {
+        void fetchPinnedMessagesForTopic(payload.data.topicId);
+      }
       const { updateLocalLastMessageTopic } = useTopics();
       updateLocalLastMessageTopic(payload.data.topicId);
       updateLocalLastMessageGroup(payload.data.topicId);
@@ -974,6 +989,7 @@ export const sendTypingStatus = async (params: {
 export const togglePinMessageChat = async (params: {
   topicId: string;
   messageId?: string;
+  scope?: 'ALL' | 'SELF';
 }): Promise<void> => {
   const sdk = getChatSDK();
 
@@ -981,7 +997,8 @@ export const togglePinMessageChat = async (params: {
     sdk.sendWebSocketEvent(WebSocketEventType.TOGGLE_PIN_MESSAGE, {
       topicId: params.topicId,
       messageId: params.messageId,
-      userId: authedUser.value.id
+      userId: authedUser.value.id,
+      scope: params.scope
     });
   } catch (error) {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);
