@@ -1,13 +1,15 @@
 .mobile-list-container {
   display: grid;
-  align-content: start;
+  grid-template-rows: minmax(0, 1fr) auto;
   height: calc(var(--default-height) - var(--mobile-list-height, 53px));
-  overflow-y: auto;
+  overflow: hidden;
   overflow-x: hidden;
 }
 
-.mobile-list-container:has(.chat-list) {
-  height: calc(var(--default-height));
+.mobile-list-container__content {
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 20px;
 }
 
 .mobile-list-container__toolbar {
@@ -43,11 +45,19 @@
 
 @media screen and (width <= 768px) {
   .mobile-list-container {
-    --mobile-list-height: 53px;
+    --mobile-list-height: 60px;
 
     &::-webkit-scrollbar {
       width: 0;
     }
+  }
+
+  .mobile-list-container__content {
+    padding-bottom: 30px;
+  }
+
+  .mobile-list-container__content::-webkit-scrollbar {
+    width: 0;
   }
 
   .mobile__list-modal__contact-selector {

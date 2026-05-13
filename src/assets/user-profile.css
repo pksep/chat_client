@@ -13,6 +13,9 @@
 }
 
 .user-profile__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   grid-area: title;
   color: var(--text-black);
   max-width: 125ch;
@@ -23,6 +26,19 @@
   margin-bottom: 2px;
   height: 1.2em;
   font-size: var(--font-size-title, 16px);
+}
+
+.user-profile__title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-profile__title-status {
+  flex-shrink: 0;
+  display: block;
+  transform: translateY(-2px);
 }
 
 .user-profile__ex {

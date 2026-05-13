@@ -71,11 +71,9 @@ export class ChatUser implements ChatUserInterface {
     profileData: Partial<User>
   ): Promise<User> {
     try {
-      const response = (await this.reqi.patch<User>(
-        `/users/${userId}`,
-        profileData,
-        { parsed: false }
-      )) as any;
+      const response = (await this.reqi.patch<User>('/users', profileData, {
+        parsed: false
+      })) as any;
       const data = await response.json();
       return data;
     } catch (error) {

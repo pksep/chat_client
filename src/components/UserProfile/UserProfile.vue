@@ -20,7 +20,19 @@
       class="user-profile__title"
       :data-testid="`${dataTestid}-UserProfile-Title`"
     >
-      {{ props.user.initials }}
+      <span class="user-profile__title-text">{{ props.user.initials }}</span>
+      <Tooltip
+        v-if="statusIcon && currentStatusLabel"
+        :hint="currentStatusLabel"
+        position="bottom-center"
+        type="black"
+        size="small"
+        :data-testid="`${dataTestid}-UserProfile-StatusTooltip`"
+      >
+        <span class="user-profile__title-status">
+          {{ statusIcon }}
+        </span>
+      </Tooltip>
     </h3>
     <ConnectionStatus v-if="!!isWaitingConnection" />
     <TypingIndicator
@@ -44,23 +56,38 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue';
+import { Tooltip } from '@pksep/yui';
 import { IUserProfileProps } from '../interfaces/interfaces';
 import { formatLastSeen } from '../../utils/dateUtils';
-import { getUserLastOnline } from '../../composables/useUsers';
+import { getUserById, getUserLastOnline } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
 import ConnectionStatus from '../UI/ConnectionStatus.vue';
 import { getHasWebsocketConnection } from '../../services/useChat';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import TypingIndicator from '../UI/TypingIndicator.vue';
+import {
+  formatUserStatusLabel,
+  normalizeUserStatus
+} from '../../utils/userStatus';
 
 const props = withDefaults(defineProps<IUserProfileProps>(), {
   dataTestid: () => 'UserProfile'
 });
 
+const effectiveUser = computed(() => getUserById(props.user.id) || props.user);
 const effectiveLastOnline = computed(() => getUserLastOnline(props.user));
 
-const isCurrentUser = computed(() => getAuthUser()?.id === props.user.id);
+const isCurrentUser = computed(
+  () => getAuthUser()?.id === effectiveUser.value.id
+);
 const isWaitingConnection = computed(() => !getHasWebsocketConnection());
+const currentStatus = computed(() =>
+  normalizeUserStatus(effectiveUser.value.status)
+);
+const currentStatusLabel = computed(() =>
+  formatUserStatusLabel(effectiveUser.value.status)
+);
+const statusIcon = computed(() => currentStatus.value?.icon || '');
 
 const formattedStatus = computed(() => {
   if (isCurrentUser.value) return `@${props.user.nickname}`;

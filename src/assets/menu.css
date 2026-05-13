@@ -1,12 +1,13 @@
 .menu {
   --size-avatar: 25px;
   display: grid;
-  padding: 10px;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  padding: 10px 10px 0;
   border-right-width: 0.5px;
   border-right-style: solid;
   border-right-color: var(--grey13);
   background-color: var(--white);
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .menu:has(.menu__button-install-prompt) .contact-list {
@@ -15,8 +16,10 @@
 
 .menu__start {
   display: grid;
+  min-height: 0;
   padding: 10px 0 0;
   align-content: start;
+  overflow-y: auto;
 }
 
 .menu.menu--collapse {
@@ -25,6 +28,10 @@
 
   & .menu__user-line {
     margin-top: 0;
+  }
+
+  & .menu__start {
+    overflow: hidden;
   }
 }
 
@@ -170,11 +177,19 @@
   transition: transform 0.3s;
 }
 
+.menu.menu--collapse .menu-bottom-nav {
+  justify-self: center;
+  grid-template-columns: 1fr;
+  padding-inline: 10px;
+  transform: none;
+}
+
 .menu__button-install-prompt {
   display: flex;
   justify-content: center;
   gap: 10px;
   align-self: end;
+  margin-top: 8px;
 }
 
 .menu__button-install-prompt.ghost-yui-kit {

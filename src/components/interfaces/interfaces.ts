@@ -1,5 +1,4 @@
-import { IMenuInfoEmits } from '../../composables/useMenuInfo';
-import {
+import type {
   User,
   TopicSetting,
   Topic,
@@ -22,7 +21,9 @@ export interface IMenuEmits {
   (e: 'unmount-contacts-update', contacts: IUser[]): void;
 }
 
-export interface IHeaderEmits extends IMenuInfoEmits {
+export interface IHeaderEmits {
+  (e: 'unmount-collapse', isCollapse: boolean): void;
+  (e: 'unmount-new-contact', config: { isChapterOpen?: boolean }): void;
   (e: 'unmount-click', isCollapse?: boolean): void;
   (e: 'unmount-contact', contact: IUser): void;
   (e: 'unmount-notification', statusNotification?: string): void;
@@ -35,14 +36,21 @@ export interface ITopicPropsEmits {
   (e: 'unmount-select', topic?: ITopic): void;
 }
 
-export interface IUser extends User {}
-
-export interface IGroup extends Group {
-  members?: IUser[];
-  membersLength?: number;
+export interface IUserStatus {
+  icon: string;
+  text: string;
 }
 
-export interface ITopic extends Topic {
+export type IUser = User & {
+  status?: IUserStatus | null;
+};
+
+export type IGroup = Group & {
+  members?: IUser[];
+  membersLength?: number;
+};
+
+export type ITopic = Topic & {
   info?: Partial<TopicSetting>;
   isPin?: boolean;
   lastMessage?: IMessage;
@@ -55,7 +63,7 @@ export interface ITopic extends Topic {
   isAdmin?: boolean;
   taggedMe?: boolean;
   typingUserIds?: string[];
-}
+};
 
 export interface IMenuProps {
   open?: boolean;
@@ -70,7 +78,7 @@ export interface IMenuRightProps extends IMenuProps {
   excludedContactIds?: Set<string | number>;
 }
 
-export interface IMedia extends Media {
+export type IMedia = Media & {
   size: number;
   originName: string;
   uploadPercent?: number | null;
@@ -85,7 +93,7 @@ export interface IMedia extends Media {
   thumbnailPath?: string | null;
   localPath?: string;
   localThumbnailPath?: string;
-}
+};
 
 export interface IMessageRead {
   id: string;
@@ -135,7 +143,7 @@ export interface IGroupProfileProps {
   typingLabel?: string;
 }
 
-export interface IMessage extends Message {
+export type IMessage = Message & {
   senderUser?: IUser;
   media?: IMedia[];
   messageRead?: IMessageRead[];
@@ -146,7 +154,7 @@ export interface IMessage extends Message {
   reactions?: Reaction[];
   ex?: string; // "{ clientId: string }"
   taggedUserIds?: string[];
-}
+};
 
 export enum MobilePlatformEnum {
   ANDROID = 'android',

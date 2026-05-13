@@ -48,7 +48,19 @@
             class="contact-list__title"
             :data-testid="`${props.dataTestid}-ContactList-Title${index + 1}`"
           >
-            {{ topic.name }}
+            <span class="contact-list__title-text">{{ topic.name }}</span>
+            <Tooltip
+              v-if="getTopicStatusIcon(topic) && getTopicStatusLabel(topic)"
+              :hint="getTopicStatusLabel(topic)"
+              position="top-center"
+              type="black"
+              size="small"
+              :data-testid="`${props.dataTestid}-ContactList-StatusTooltip${index + 1}`"
+            >
+              <span class="contact-list__title-status" @click.stop>
+                {{ getTopicStatusIcon(topic) }}
+              </span>
+            </Tooltip>
           </h5>
           <div
             v-if="topic.typingUserIds?.length"
@@ -195,7 +207,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useContextMenu } from '../../composables/useContextMenu';
-import { Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
+import { Button, ButtonTypeEnum, SizesEnum, Tooltip } from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
 import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
@@ -219,11 +231,12 @@ import UnpinIcon from '../UI/UnpinIcon.vue';
 import UnmuteIcon from '../UI/UnmuteIcon.vue';
 import MuteIcon from '../UI/MuteIcon.vue';
 import { TopicType } from '../../services/useChatSDK/types';
-import { getUserLastOnline } from '../../composables/useUsers';
+import { getUserById, getUserLastOnline } from '../../composables/useUsers';
 import { getHasWebsocketConnection } from '../../services/useChat';
 import { useMessageMedia } from '../Messages/composables/useMessageMedia';
 import TypingIndicator from '../UI/TypingIndicator.vue';
 import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
+import { formatUserStatusLabel } from '../../utils/userStatus';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
@@ -291,6 +304,11 @@ const isTopicUserOnline = (topic: ITopic): boolean =>
   !getUserLastOnline(topic.user) &&
   getHasWebsocketConnection();
 
+const getTopicEffectiveUser = (topic: ITopic) =>
+  topic.type === TopicType.DM && topic.user?.id
+    ? getUserById(topic.user.id) || topic.user
+    : topic.user;
+
 const getTopicLastMessageLabel = (media: IMedia[]): string => {
   let text = '';
   const haveImage = media.some(m => m.type === MediaType.Image);
@@ -312,6 +330,16 @@ const getTopicLastMessageLabel = (media: IMedia[]): string => {
 
 const getTopicTypingLabel = (topic: ITopic): string =>
   getTypingIndicatorLabel(topic.type, getTopicTypingUsers(topic.id));
+
+const getTopicStatusLabel = (topic: ITopic): string =>
+  topic.type === TopicType.DM
+    ? formatUserStatusLabel(getTopicEffectiveUser(topic)?.status)
+    : '';
+
+const getTopicStatusIcon = (topic: ITopic): string =>
+  topic.type === TopicType.DM
+    ? getTopicEffectiveUser(topic)?.status?.icon || ''
+    : '';
 </script>
 
 <style scoped>
