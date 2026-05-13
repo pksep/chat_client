@@ -81,7 +81,10 @@
           @click="emits('update:filter', filterOption.value)"
         >
           <span>{{ filterOption.label }}</span>
-          <span v-if="!!props.filterCounts[filterOption.value]" class="chats-toolbar__filter-count">
+          <span
+            v-if="!!props.filterCounts[filterOption.value]"
+            class="chats-toolbar__filter-count"
+          >
             {{ props.filterCounts[filterOption.value] }}
           </span>
         </button>
