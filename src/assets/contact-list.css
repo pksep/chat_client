@@ -291,6 +291,30 @@ svg.icon-yui-kit.contact-list__read-icon {
   margin-bottom: 16px;
 }
 
+.contact-selector__empty {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  row-gap: 10px;
+  min-height: 300px;
+  padding-top: 50px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.contact-selector__empty-title {
+  margin: 0;
+  color: var(--text-color);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.contact-selector__empty-image {
+  width: 68px;
+  height: 68px;
+  object-fit: contain;
+}
+
 .contact-selector__item:hover {
   background-color: #f5f5f5;
 }
@@ -357,6 +381,11 @@ svg.icon-yui-kit.contact-list__read-icon {
   }
   .contact-selector__list {
     max-height: calc(var(--default-height) - 120px);
+  }
+
+  .contact-selector__empty {
+    min-height: calc(var(--default-height) - 120px);
+    padding-top: 72px;
   }
 
   .chats-toolbar > .line {

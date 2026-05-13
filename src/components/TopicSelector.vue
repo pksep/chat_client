@@ -9,6 +9,7 @@
       :data-testid="`${props.dataTestid}-TopicSelector-Search`"
     />
     <ul
+      v-if="filteredTopics.length"
       class="contact-selector__list"
       :data-testid="`${props.dataTestid}-TopicSelector-List`"
     >
@@ -31,6 +32,18 @@
         />
       </li>
     </ul>
+    <div
+      v-else
+      class="contact-selector__empty"
+      :data-testid="`${props.dataTestid}-TopicSelector-Empty`"
+    >
+      <p class="contact-selector__empty-title">Контакты не найдены</p>
+      <img
+        class="contact-selector__empty-image"
+        src="/images/not-found-contact.svg"
+        alt="Контакты не найдены"
+      />
+    </div>
   </section>
 </template>
 
