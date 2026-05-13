@@ -15,6 +15,9 @@ import {
   resolveNotificationTopicId
 } from './useNotificationNavigation';
 
+const NATIVE_PUSH_TOKEN_STORAGE_KEY = 'chat_native_push_token';
+const WEB_PUSH_ENDPOINT_STORAGE_KEY = 'chat_web_push_endpoint';
+
 interface NotificationTapPlugin {
   addListener(
     eventName: 'notificationTap',
@@ -42,6 +45,25 @@ let nativeNotificationTapListener: PluginListenerHandle | null = null;
 let lastHandledNotificationKey = '';
 let lastHandledNotificationAt = 0;
 let isWebCallActionListenerBound = false;
+
+const storeNativePushToken = (token: string): void => {
+  localStorage.setItem(NATIVE_PUSH_TOKEN_STORAGE_KEY, token);
+};
+
+const getStoredNativePushToken = (): string =>
+  localStorage.getItem(NATIVE_PUSH_TOKEN_STORAGE_KEY) || '';
+
+const storeWebPushEndpoint = (endpoint: string): void => {
+  localStorage.setItem(WEB_PUSH_ENDPOINT_STORAGE_KEY, endpoint);
+};
+
+const getStoredWebPushEndpoint = (): string =>
+  localStorage.getItem(WEB_PUSH_ENDPOINT_STORAGE_KEY) || '';
+
+const clearStoredPushRegistration = (): void => {
+  localStorage.removeItem(NATIVE_PUSH_TOKEN_STORAGE_KEY);
+  localStorage.removeItem(WEB_PUSH_ENDPOINT_STORAGE_KEY);
+};
 
 const hasPayloadValues = (payload?: Record<string, string> | null) =>
   Boolean(payload && Object.keys(payload).length > 0);
@@ -234,6 +256,7 @@ export const initPushNotifications = async () => {
     }
 
     PushNotifications.addListener('registration', async token => {
+      storeNativePushToken(token.value);
       await api.post('/notifications/device', {
         token: token.value,
         platform: Capacitor.getPlatform()
@@ -327,6 +350,10 @@ export const initPushNotifications = async () => {
     });
   }
 
+  if (subscription?.endpoint) {
+    storeWebPushEndpoint(subscription.endpoint);
+  }
+
   const userId = getCurrentUserId();
   if (!userId) return console.warn('No user ID, skipping subscribe');
 
@@ -355,6 +382,96 @@ export const removePushListeners = async () => {
       await nativeNotificationTapListener.remove();
       nativeNotificationTapListener = null;
     }
+  }
+};
+
+const clearAllWebNotifications = async (): Promise<void> => {
+  if (!('serviceWorker' in navigator)) {
+    return;
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const notifications = await registration.getNotifications();
+
+    notifications.forEach(notification => {
+      notification.close();
+    });
+
+    const activeWorker =
+      navigator.serviceWorker.controller ||
+      registration.active ||
+      registration.waiting;
+
+    activeWorker?.postMessage({
+      type: 'CLEAR_ALL_NOTIFICATIONS'
+    });
+  } catch (error) {
+    console.warn('Failed to clear web notifications:', error);
+  }
+};
+
+export const cleanupPushNotificationsOnLogout = async (): Promise<void> => {
+  const api = useChatApi();
+
+  try {
+    if (Capacitor.isNativePlatform()) {
+      const token = getStoredNativePushToken();
+
+      if (token) {
+        try {
+          await api.post('/notifications/device/unregister', { token });
+        } catch (error) {
+          console.warn('Failed to unregister native push token:', error);
+        }
+      }
+
+      try {
+        await PushNotifications.removeAllDeliveredNotifications();
+      } catch (error) {
+        console.warn('Failed to clear native delivered notifications:', error);
+      }
+
+      await removePushListeners();
+
+      try {
+        await PushNotifications.unregister();
+      } catch (error) {
+        console.warn('Failed to unregister native push listeners:', error);
+      }
+
+      clearStoredPushRegistration();
+      return;
+    }
+
+    if (!('serviceWorker' in navigator)) {
+      clearStoredPushRegistration();
+      return;
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    const endpoint = subscription?.endpoint || getStoredWebPushEndpoint();
+
+    if (endpoint) {
+      try {
+        await api.post('/push/unsubscribe', { endpoint });
+      } catch (error) {
+        console.warn('Failed to unregister web push endpoint:', error);
+      }
+    }
+
+    if (subscription) {
+      try {
+        await subscription.unsubscribe();
+      } catch (error) {
+        console.warn('Failed to unsubscribe web push subscription:', error);
+      }
+    }
+
+    await clearAllWebNotifications();
+  } finally {
+    clearStoredPushRegistration();
   }
 };
 

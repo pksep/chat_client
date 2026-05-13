@@ -5,6 +5,7 @@
   <main
     id="chat-container-image"
     :class="chatContainerClasses"
+    :style="chatWallpaperStyle"
     :data-testid="`${props.dataTestid}-ChatContainer-Container`"
   >
     <Header
@@ -136,6 +137,7 @@ import {
   isAnyCallModalVisible,
   pendingGroupCallInfo
 } from '../services/useCalls';
+import { useChatWallpaper } from '../composables/useChatWallpaper';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -170,6 +172,8 @@ const state = reactive({
 const appMode = ['local', 'test'].includes(import.meta.env.VITE_APP_MODE)
   ? import.meta.env.VITE_APP_MODE
   : null;
+const { currentWallpaperStyle: chatWallpaperStyle, isWallpaperApplied } =
+  useChatWallpaper();
 
 const chatContainerClasses = computed(() => [
   'chat-container',
@@ -179,6 +183,7 @@ const chatContainerClasses = computed(() => [
       (route.value && route.value.type === 'assistant')
         ? true
         : !state.isMenuDesktopOpen,
+    'chat-container--wallpaper': isWallpaperApplied.value,
     'chat-container--active-call':
       (isCallActive.value && !isAnyCallModalVisible.value) ||
       !!pendingGroupCallInfo.value?.[route.value?.id || ''] ||

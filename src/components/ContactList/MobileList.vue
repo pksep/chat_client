@@ -4,29 +4,48 @@
     role="main"
     :data-testid="`${props.dataTestid}-MobileList-Container`"
   >
-    <ChatsToolbar
-      :model-value="toolbarState.search"
-      :filter="toolbarState.filter"
-      class="mobile-list-container__toolbar"
-      :data-testid="`${props.dataTestid}-MobileList`"
-      @update:model-value="setSearch"
-      @update:filter="setFilter"
-      @create-chat="handleShowAccount(TopicType.DM)"
-      @create-group="handleShowAccount(TopicType.Group)"
-    />
+    <div class="mobile-list-container__content">
+      <template v-if="activeSection === 'chats'">
+        <ChatsToolbar
+          :model-value="toolbarState.search"
+          :filter="toolbarState.filter"
+          class="mobile-list-container__toolbar"
+          :data-testid="`${props.dataTestid}-MobileList`"
+          @update:model-value="setSearch"
+          @update:filter="setFilter"
+          @create-chat="handleShowAccount(TopicType.DM)"
+          @create-group="handleShowAccount(TopicType.Group)"
+        />
 
-    <section
-      class="chat-list"
-      role="region"
-      aria-label="Contact list"
-      :data-testid="`${props.dataTestid}-ChatList-Section`"
-    >
-      <TopicList
-        :topics="contactList"
-        :data-testid="`${props.dataTestid}-ContactList`"
-        @unmount-contact="handleContactSelect"
+        <section
+          class="chat-list"
+          role="region"
+          aria-label="Contact list"
+          :data-testid="`${props.dataTestid}-ChatList-Section`"
+        >
+          <TopicList
+            :topics="contactList"
+            :data-testid="`${props.dataTestid}-ContactList`"
+            @unmount-contact="handleContactSelect"
+          />
+        </section>
+      </template>
+
+      <MenuCallsPanel
+        v-else-if="activeSection === 'calls'"
+        :data-testid="`${props.dataTestid}-MobileList-CallsPanel`"
       />
-    </section>
+
+      <MenuProfilePanel
+        v-else
+        :data-testid="`${props.dataTestid}-MobileList-ProfilePanel`"
+      />
+    </div>
+
+    <MenuBottomNav
+      :is-collapse="false"
+      :data-testid="`${props.dataTestid}-MobileList-BottomNav`"
+    />
   </div>
 
   <template v-if="!isAssistantRoute">
@@ -60,6 +79,10 @@ import {
 } from '../../composables/navigation/useUrlRouting';
 import { TopicType } from '../../services/useChatSDK/types';
 import { useChatsToolbarState } from '../../composables/useChatsToolbarState';
+import { useChatMenu } from '../../composables/useChatMenu';
+import MenuBottomNav from '../Menu/MenuBottomNav.vue';
+import MenuCallsPanel from '../Menu/MenuCallsPanel.vue';
+import MenuProfilePanel from '../Menu/MenuProfilePanel.vue';
 
 const route = useUrlWatcher();
 
@@ -74,6 +97,7 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
 
 const { getTopicList } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
+const { activeSection, setActiveSection } = useChatMenu();
 
 const state = reactive({
   showAddAccount: false,
@@ -122,6 +146,7 @@ const handleShowAccount = (topicType: TopicType) => {
     return;
   }
 
+  setActiveSection('chats');
   state.showAddAccount = true;
 
   if (topicType === TopicType.DM) {

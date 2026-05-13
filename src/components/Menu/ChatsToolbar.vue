@@ -83,31 +83,12 @@
           {{ filterOption.label }}
         </button>
       </div>
-
-      <Icon
-        v-if="props.showCollapse"
-        :name="
-          props.isCollapse
-            ? IconNameEnum.chevronRight
-            : IconNameEnum.chevronLeft
-        "
-        class="chats-toolbar__collapse"
-        @click="emits('collapse')"
-        :data-testid="`${props.dataTestid}-ChatsToolbar-CollapseIcon`"
-      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import {
-  Button,
-  ButtonTypeEnum,
-  Icon,
-  IconNameEnum,
-  Search,
-  SizesEnum
-} from '@pksep/yui';
+import { Button, ButtonTypeEnum, Search, SizesEnum } from '@pksep/yui';
 import Line from '../UI/Line.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import ContextMenu from '../ContactList/ContextMenu.vue';
@@ -124,14 +105,12 @@ const props = withDefaults(
     modelValue: string;
     filter?: ChatsToolbarFilter;
     isCollapse?: boolean;
-    showCollapse?: boolean;
     dataTestid?: string;
     contextMenuPosition?: { x: number; y: number };
   }>(),
   {
     filter: 'all',
     isCollapse: false,
-    showCollapse: false,
     dataTestid: 'ChatsToolbar'
   }
 );
@@ -141,7 +120,6 @@ const emits = defineEmits<{
   (e: 'update:filter', value: ChatsToolbarFilter): void;
   (e: 'create-chat'): void;
   (e: 'create-group'): void;
-  (e: 'collapse'): void;
 }>();
 
 const isWaitingConnection = computed(() => !getHasWebsocketConnection());

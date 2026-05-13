@@ -138,7 +138,15 @@ export interface WebSocketEventPayloads {
   [WebSocketEventType.MEMBER_LEFT]: { groupId: string; userId: string };
   [WebSocketEventType.USER_JOINED]: User;
   [WebSocketEventType.USER_LEFT]: User;
-  [WebSocketEventType.USER_UPDATED]: User & { ptsMeta?: PtsMeta };
+  [WebSocketEventType.USER_UPDATED]: {
+    id: string;
+    lastOnline: Date | string | null;
+    status?: {
+      icon: string;
+      text: string;
+    } | null;
+    ptsMeta?: PtsMeta;
+  };
   [WebSocketEventType.TYPING_STATUS]: {
     topicId: string;
     userId?: string;

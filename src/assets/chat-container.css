@@ -8,6 +8,7 @@
 @import url('./contex-menu.css');
 @import url('./menu-info.css');
 @import url('./menu.css');
+@import url('./menu-navigation.css');
 @import url('./message-bubble.css');
 @import url('./message-context-menu.css');
 @import url('./new-contact.css');
@@ -42,11 +43,18 @@
   --neutral-button: var(--grey1);
   --neutral-text: var(--grey6);
   --neutral-border: var(--grey3);
-  --header-height: 57px;
+  --header-height: 56px;
   display: grid;
+  position: relative;
   font-family: 'Inter Variable', sans-serif;
   height: var(--default-height);
   background-color: var(--blue15);
+  background-image: none;
+  background-position:
+    center center,
+    var(--chat-wallpaper-position, center top);
+  background-repeat: no-repeat, var(--chat-wallpaper-repeat, repeat);
+  background-size: auto, var(--chat-wallpaper-size, cover);
   grid-template-areas:
     'menu header'
     'menu chat';
@@ -63,6 +71,15 @@
       --basic-height: calc(var(--default-height) - var(--header-height));
     }
   }
+}
+
+.chat-container--wallpaper:has(.chat__message-wrapper) {
+  background-color: var(--chat-wallpaper-background, var(--blue15));
+  background-image: linear-gradient(
+      rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1))),
+      rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1)))
+    ),
+    var(--chat-wallpaper-image);
 }
 
 .chat-container:has(.menu.menu--collapse) {
@@ -203,7 +220,7 @@ button.primary-yui-kit.disabled-yui-kit {
   svg.ai-icon {
     font-size: 40px;
   }
-  .chat-container:has(.chat .chat__message-wrapper) {
+  .chat-container--wallpaper:has(.chat__message-wrapper) {
     background-color: var(--background-light-color);
   }
 }

@@ -77,6 +77,14 @@ const closeNotificationsForTopic = async topicId => {
   });
 };
 
+const closeAllNotifications = async () => {
+  const notifications = await self.registration.getNotifications();
+
+  notifications.forEach(notification => {
+    notification.close();
+  });
+};
+
 self.addEventListener('message', event => {
   if (event.data?.type === 'APP_CONTEXT') {
     appFocused = Boolean(event.data.focused);
@@ -85,6 +93,10 @@ self.addEventListener('message', event => {
 
   if (event.data?.type === 'CLEAR_TOPIC_NOTIFICATIONS') {
     event.waitUntil(closeNotificationsForTopic(event.data.topicId));
+  }
+
+  if (event.data?.type === 'CLEAR_ALL_NOTIFICATIONS') {
+    event.waitUntil(closeAllNotifications());
   }
 });
 

@@ -588,6 +588,71 @@ const createTopicsApi = () => {
     schedulePersistTopics();
   };
 
+  const updateLocalTopicUser = (
+    userId: string,
+    changes: Partial<IUser>
+  ): void => {
+    if (!userId) {
+      return;
+    }
+
+    let hasChanges = false;
+
+    topics.value = topics.value.map(topic => {
+      let topicChanged = false;
+      const nextMembers = topic.members?.map(member => {
+        if (member.id !== userId) {
+          return member;
+        }
+
+        topicChanged = true;
+        return {
+          ...member,
+          ...changes
+        };
+      });
+
+      const nextUser =
+        topic.user?.id === userId
+          ? {
+              ...topic.user,
+              ...changes
+            }
+          : topic.user;
+
+      if (topic.user?.id === userId) {
+        topicChanged = true;
+      }
+
+      if (!topicChanged) {
+        return topic;
+      }
+
+      hasChanges = true;
+
+      return {
+        ...topic,
+        members: nextMembers,
+        user: nextUser,
+        avatarUrl:
+          topic.type === TopicType.DM
+            ? nextUser?.avatarUrl || topic.avatarUrl
+            : topic.avatarUrl,
+        name:
+          topic.type === TopicType.DM
+            ? nextUser?.initials || topic.name
+            : topic.name
+      };
+    });
+
+    if (!hasChanges) {
+      return;
+    }
+
+    topics.value = [...topics.value];
+    schedulePersistTopics();
+  };
+
   const togglePinTopic = async (topic: ITopic) => {
     try {
       const sdk = getChatSDK();
@@ -804,7 +869,8 @@ const createTopicsApi = () => {
     resetTopicUnreadState,
     incrementServerUnreadCount,
     decrementServerUnreadCount,
-    incrementDisplayedUnreadCount
+    incrementDisplayedUnreadCount,
+    updateLocalTopicUser
   };
 };
 
@@ -845,7 +911,8 @@ const {
   incrementServerUnreadCount,
   decrementServerUnreadCount,
   totalUnreadCount,
-  incrementDisplayedUnreadCount
+  incrementDisplayedUnreadCount,
+  updateLocalTopicUser
 } = useTopics();
 
 export {
@@ -878,5 +945,6 @@ export {
   incrementServerUnreadCount,
   decrementServerUnreadCount,
   totalUnreadCount,
-  incrementDisplayedUnreadCount
+  incrementDisplayedUnreadCount,
+  updateLocalTopicUser
 };

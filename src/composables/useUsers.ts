@@ -3,16 +3,46 @@ import { getChatSDK } from '../services/useChat';
 import { getConfig } from '../services/useConfig';
 import { fetchWithAuthRedirect } from './useAuth';
 
-import type { IUser } from '../components/interfaces/interfaces';
+import type { IUser, IUserStatus } from '../components/interfaces/interfaces';
 import {
   loadCachedUsers,
   saveCachedUsers
 } from '../services/useChatStateCache';
+import { normalizeDateValue } from '../utils/dateValue';
 
 const users = shallowRef<IUser[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 let persistUsersTimeout: ReturnType<typeof setTimeout> | null = null;
+
+const mergeUserWithStoredFields = (
+  incomingUser: IUser,
+  existingUser?: IUser
+): IUser => {
+  if (!existingUser) {
+    return incomingUser;
+  }
+
+  return {
+    ...existingUser,
+    ...incomingUser,
+    status:
+      incomingUser.status !== undefined
+        ? incomingUser.status
+        : existingUser.status
+  };
+};
+
+const mergeUsersWithStoredFields = (incomingUsers: IUser[]): IUser[] => {
+  const currentUsers = users.value || [];
+
+  return incomingUsers.map(incomingUser =>
+    mergeUserWithStoredFields(
+      incomingUser,
+      currentUsers.find(existingUser => existingUser.id === incomingUser.id)
+    )
+  );
+};
 
 const schedulePersistUsers = () => {
   if (persistUsersTimeout) {
@@ -55,7 +85,7 @@ export const fetchAllUsers = async (
       limit
     });
 
-    users.value = [...response.data];
+    users.value = [...mergeUsersWithStoredFields(response.data)];
     schedulePersistUsers();
 
     return users.value;
@@ -122,7 +152,8 @@ export const getUserById = (userId: string): IUser | undefined => {
 
 export const updateLocalUserStatus = (
   userId: string,
-  lastOnline: Date | null
+  lastOnline: Date | string | null,
+  status?: IUserStatus | null
 ): void => {
   const currentUsers = users.value || [];
   const index = currentUsers.findIndex(u => u.id === userId);
@@ -131,7 +162,8 @@ export const updateLocalUserStatus = (
     const updatedUsers = [...currentUsers];
     updatedUsers[index] = {
       ...updatedUsers[index],
-      lastOnline
+      lastOnline: normalizeDateValue(lastOnline),
+      ...(status !== undefined ? { status } : {})
     };
     users.value = updatedUsers;
     schedulePersistUsers();
@@ -151,6 +183,26 @@ export const updateLocalUserIsOnline = (userId: string): void => {
     users.value = updatedUsers;
     schedulePersistUsers();
   }
+};
+
+export const upsertLocalUser = (user: IUser): void => {
+  if (!user?.id) {
+    return;
+  }
+
+  const currentUsers = users.value || [];
+  const index = currentUsers.findIndex(item => item.id === user.id);
+
+  if (index === -1) {
+    users.value = [...currentUsers, user];
+    schedulePersistUsers();
+    return;
+  }
+
+  const nextUsers = [...currentUsers];
+  nextUsers[index] = mergeUserWithStoredFields(user, nextUsers[index]);
+  users.value = nextUsers;
+  schedulePersistUsers();
 };
 
 export const getUserLastOnline = (user: IUser): Date | null => {
