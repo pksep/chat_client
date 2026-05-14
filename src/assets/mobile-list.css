@@ -9,7 +9,7 @@
 .mobile-list-container__content {
   min-height: 0;
   overflow-y: auto;
-  padding-bottom: 20px;
+  padding-bottom: 0;
 }
 
 .mobile-list-container__toolbar {
@@ -50,10 +50,6 @@
     &::-webkit-scrollbar {
       width: 0;
     }
-  }
-
-  .mobile-list-container__content {
-    padding-bottom: 30px;
   }
 
   .mobile-list-container__content::-webkit-scrollbar {

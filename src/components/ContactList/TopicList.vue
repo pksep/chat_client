@@ -126,9 +126,9 @@
               v-if="topic.lastMessage?.createdAt"
               class="contact-list__time"
               :data-testid="`${props.dataTestid}-ContactList-Time${index + 1}`"
-              :aria-label="`Last message at ${formatTime(new Date(topic.lastMessage?.createdAt))}`"
+              :aria-label="`Last message at ${formatListTime(new Date(topic.lastMessage?.createdAt))}`"
             >
-              {{ formatTime(new Date(topic.lastMessage?.createdAt)) }}
+              {{ formatListTime(new Date(topic.lastMessage?.createdAt)) }}
             </span>
           </div>
           <div class="contact-list__bottom">
@@ -212,7 +212,7 @@ import type { IContactListProps } from './interfaces/contact-list';
 import { getAuthUser } from '../../composables/useAuth';
 import { IMedia, ITopic, MessageStatusEnum } from '../interfaces/interfaces';
 import { useTopics } from '../../composables/useTopics';
-import { formatTime } from '../../composables/useTime';
+import { formatListTime } from '../../composables/useTime';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import {

@@ -1,6 +1,6 @@
 <template>
   <section class="chat" :data-testid="`${props.dataTestid}-Chat-Container`">
-    <PinnedMessages @unmount-set-selected-message="scrollToMessage" />
+    <PinnedMessages v-if="route.id" @unmount-set-selected-message="scrollToMessage" />
     <ContactListMobile
       v-if="isMobile && !route.id"
       class="chat__mobile"

@@ -293,25 +293,9 @@
   gap: 8px;
 }
 
-.message-call__icon {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-}
-
 .message-call__icon-phone {
   width: 16px;
   height: 16px;
-}
-
-.message-call__icon-badge {
-  position: absolute;
-  right: -2px;
-  top: -2px;
 }
 
 .message-call__icon--missed {

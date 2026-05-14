@@ -62,6 +62,11 @@ import {
   saveShadowReadState,
   saveShadowSyncMeta
 } from './useShadowChatSync';
+import {
+  initializeCallHistorySync,
+  removeCallHistoryMessage,
+  upsertCallHistoryMessage
+} from './useCallHistory';
 import { normalizeUserStatus } from '../utils/userStatus';
 import { normalizeDateValue } from '../utils/dateValue';
 
@@ -184,6 +189,7 @@ const setupChatListeners = (): void => {
 
   const handleIncomingSocketMessage = (message: IMessage): void => {
     const { updateLocalLastMessageTopic } = useTopics();
+    void upsertCallHistoryMessage(message);
     const isDuplicateMessage = hasMessageInTopic(message.topicId, message.id);
     const unreadCountBefore = totalUnreadCount.value;
     const shouldSuspendMerge =
@@ -289,6 +295,7 @@ const setupChatListeners = (): void => {
         source: 'ws',
         payload: payload.data
       });
+      void removeCallHistoryMessage(payload.data.id || payload.messageId);
       deleteMessageFromLocal(payload.data.topicId, payload.data.id);
     } else if (payload.type === 'CHANGE' || payload.type === 'PIN') {
       void recordShadowChatEvent({
@@ -300,6 +307,7 @@ const setupChatListeners = (): void => {
       if (payload.type === 'CHANGE' || payload.scope !== 'SELF') {
         editMessageFromLocal(payload.data.topicId, payload.data);
       }
+      void upsertCallHistoryMessage(payload.data);
       if (payload.type === 'PIN') {
         void fetchPinnedMessagesForTopic(payload.data.topicId);
       }
@@ -418,10 +426,12 @@ const setupChatListeners = (): void => {
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.MESSAGE_UPDATED, event => {
+    void upsertCallHistoryMessage(event.payload);
     appendMessageToLocal(event.payload.topicId, event.payload);
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.MESSAGE_DELETED, event => {
+    void removeCallHistoryMessage(event.payload.messageId);
     const payloadTopicId = (event.payload as any).topicId;
 
     if (payloadTopicId) {
@@ -840,6 +850,7 @@ export const initializeChat = async (options: {
   hasWebsocketConnection.value = false;
   setupChatListeners();
   await chatSDK.connect();
+  initializeCallHistorySync(chatSDK);
   await syncPtsStateToServer();
   isWebsocketConnecting.value = false;
   await restoreInvitedGroupCallFromUrl();

@@ -32,9 +32,9 @@
         </section>
       </template>
 
-      <MenuCallsPanel
+      <CallsPage
         v-else-if="activeSection === 'calls'"
-        :data-testid="`${props.dataTestid}-MobileList-CallsPanel`"
+        :data-testid="`${props.dataTestid}-MobileList-CallsPage`"
       />
 
       <MenuProfilePanel
@@ -82,10 +82,10 @@ import { TopicType } from '../../services/useChatSDK/types';
 import { useChatsToolbarState } from '../../composables/useChatsToolbarState';
 import { useChatMenu } from '../../composables/useChatMenu';
 import MenuBottomNav from '../Menu/MenuBottomNav.vue';
-import MenuCallsPanel from '../Menu/MenuCallsPanel.vue';
 import MenuProfilePanel from '../Menu/MenuProfilePanel.vue';
 import { getAuthUser } from '../../composables/useAuth';
 import { getTopicUnreadBadgeCount } from '../../utils/topicUnreadBadge';
+import CallsPage from '../Calls/CallsPage.vue';
 
 const route = useUrlWatcher();
 
