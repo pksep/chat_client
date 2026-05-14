@@ -13,7 +13,7 @@ interface CallMessageOptions {
   authUserId?: string;
 }
 
-interface ParsedCallExPayload {
+export interface ParsedCallExPayload {
   type?: string;
   call?: {
     event?: 'start' | 'end';
@@ -35,7 +35,9 @@ const normalizeMessageLines = (message: string): string[] =>
     .map(line => line.trim())
     .filter(Boolean);
 
-const parseMessageEx = (messageEx?: unknown): ParsedCallExPayload | null => {
+export const parseCallMessageEx = (
+  messageEx?: unknown
+): ParsedCallExPayload | null => {
   if (!messageEx) {
     return null;
   }
@@ -72,7 +74,7 @@ export const parseCallMessage = (
   message: string,
   options: CallMessageOptions = {}
 ): ParsedCallMessage | null => {
-  const parsedEx = parseMessageEx(options.messageEx);
+  const parsedEx = parseCallMessageEx(options.messageEx);
 
   if (parsedEx?.type === 'call' && parsedEx.call) {
     const creatorId = parsedEx.call.creatorId || null;
@@ -130,4 +132,16 @@ export const parseCallMessage = (
   if (!kind) {
     return null;
   }
+
+  return {
+    kind,
+    title:
+      kind === 'missed'
+        ? 'Пропущенный'
+        : kind === 'outgoing'
+          ? 'Исходящий'
+          : 'Входящий',
+    duration: null,
+    isOutgoing: kind === 'outgoing'
+  };
 };

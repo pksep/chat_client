@@ -1,6 +1,11 @@
 import { Message, Topic, Media } from '@pksep/zod-shared-chat';
 import { Reqi } from '@pksep/reqi';
-import { SearchParams, PaginatedResponse, MessageStatus } from './types';
+import {
+  SearchParams,
+  PaginatedResponse,
+  MessageStatus,
+  CallHistoryResponse
+} from './types';
 
 export interface ChatMessageInterface {
   editMessage(
@@ -27,6 +32,10 @@ export interface ChatMessageInterface {
     topicId: string,
     opts?: { limit?: number; lastMessageId?: string; afterMessageId?: string }
   ): Promise<Message[]>;
+  getCallHistory(opts?: {
+    page?: number;
+    limit?: number;
+  }): Promise<CallHistoryResponse>;
   getPinnedMessages(topicId: string): Promise<Message[]>;
   getAroundMessage(messageId: string): Promise<Message[]>;
 }
@@ -170,6 +179,31 @@ export class ChatMessage implements ChatMessageInterface {
       return data;
     } catch (error) {
       throw new Error(`Failed to fetch messages: ${(error as Error).message}`);
+    }
+  }
+
+  async getCallHistory(opts?: {
+    page?: number;
+    limit?: number;
+  }): Promise<CallHistoryResponse> {
+    const queryParams = new URLSearchParams();
+
+    if (opts?.page) queryParams.append('page', opts.page.toString());
+    if (opts?.limit) queryParams.append('limit', opts.limit.toString());
+
+    const queryString = queryParams.toString();
+    const endpoint = `/messages/calls/history${queryString ? `?${queryString}` : ''}`;
+
+    try {
+      const response = (await this.reqi.get<CallHistoryResponse>(endpoint, {
+        parsed: false
+      })) as any;
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      throw new Error(
+        `Failed to fetch call history: ${(error as Error).message}`
+      );
     }
   }
 

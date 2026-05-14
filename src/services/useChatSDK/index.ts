@@ -14,7 +14,12 @@ import {
 } from './websocketEvents';
 import { Reqi } from '@pksep/reqi';
 import io, { Socket } from 'socket.io-client';
-import { SearchParams, PaginatedResponse, MessageStatus } from './types';
+import {
+  SearchParams,
+  PaginatedResponse,
+  MessageStatus,
+  CallHistoryResponse
+} from './types';
 
 import { ChatAuth, ChatAuthInterface } from './auth';
 import { ChatUser, ChatUserInterface } from './user';
@@ -811,6 +816,13 @@ export class ChatSDK {
 
   async getPinnedMessages(topicId: string): Promise<Message[]> {
     return await this.message.getPinnedMessages(topicId);
+  }
+
+  async getCallHistory(opts?: {
+    page?: number;
+    limit?: number;
+  }): Promise<CallHistoryResponse> {
+    return await this.message.getCallHistory(opts);
   }
 
   async getAroundMessage(messageId: string): Promise<Message[]> {

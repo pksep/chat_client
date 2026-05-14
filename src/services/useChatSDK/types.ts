@@ -23,6 +23,29 @@ export interface SearchParams {
   type?: string | null;
 }
 
+export interface CallHistoryItem {
+  id: string;
+  topicId: string;
+  topicType: 'GROUP' | 'DM';
+  topicName: string;
+  topicAvatarUrl?: string | null;
+  senderUserId: string;
+  text: string;
+  ex: unknown;
+  createdAt: string | Date;
+}
+
+export interface PaginatedMeta {
+  totalItems: number;
+  totalPages: number;
+  currentPage: number;
+}
+
+export interface CallHistoryResponse {
+  data: CallHistoryItem[];
+  meta: PaginatedMeta;
+}
+
 export enum TopicType {
   Group = 'GROUP',
   DM = 'DM'
