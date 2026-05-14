@@ -121,7 +121,10 @@ import {
   toggleSelectedMessage
 } from '../../composables/useSelectedMessages';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
-import { parseCallMessage } from '../../utils/parseCallMessage';
+import {
+  parseCallMessage,
+  parseCallMessageEx
+} from '../../utils/parseCallMessage';
 import { parseUserEx } from '../../utils/parseUserEx';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
@@ -222,8 +225,8 @@ onBeforeUnmount(() => {
 const isNewDate = (index: number) => {
   if (index === 0) return true;
 
-  const currentMsg = props.messages[index];
-  const prevMsg = props.messages[index - 1];
+  const currentMsg = visibleMessages.value[index];
+  const prevMsg = visibleMessages.value[index - 1];
   const currentDay = formatDay(currentMsg.createdAt);
   const prevDay = formatDay(prevMsg.createdAt);
   return currentDay !== prevDay;
@@ -281,6 +284,20 @@ const getParsedCallMessage = (message?: IMessage) =>
       })
     : null;
 
+const shouldHideMessageFromChat = (message?: IMessage): boolean => {
+  if (!message?.isSystem) {
+    return false;
+  }
+
+  const parsedEx = parseCallMessageEx(message.ex);
+
+  return parsedEx?.type === 'call' && parsedEx.call?.event === 'start';
+};
+
+const visibleMessages = computed(() =>
+  props.messages.filter(message => !shouldHideMessageFromChat(message))
+);
+
 const resolveMessageIsMeSender = (message?: IMessage) =>
   getParsedCallMessage(message)?.isOutgoing ??
   props.authUserId === message?.senderUserId;
@@ -325,8 +342,8 @@ const isSameMessageGroup = (
 const renderItems = computed<RenderItem[]>(() => {
   const items: RenderItem[] = [];
 
-  for (let index = 0; index < props.messages.length; index += 1) {
-    const message = props.messages[index];
+  for (let index = 0; index < visibleMessages.value.length; index += 1) {
+    const message = visibleMessages.value[index];
 
     if (shouldShowUnreadMarker(message)) {
       items.push({ kind: 'unread', message });
@@ -345,10 +362,13 @@ const renderItems = computed<RenderItem[]>(() => {
     let endIndex = index;
 
     while (
-      endIndex + 1 < props.messages.length &&
-      isSameMessageGroup(props.messages[endIndex], props.messages[endIndex + 1])
+      endIndex + 1 < visibleMessages.value.length &&
+      isSameMessageGroup(
+        visibleMessages.value[endIndex],
+        visibleMessages.value[endIndex + 1]
+      )
     ) {
-      groupMessages.push(props.messages[endIndex + 1]);
+      groupMessages.push(visibleMessages.value[endIndex + 1]);
       endIndex += 1;
     }
 
@@ -388,8 +408,14 @@ const getBubbleProps = (message: IMessage, index: number) => ({
   isSelectionMode: isSelectionMode(message.topicId),
   isSelected: isSelected(message.id),
   selectionTestId: `${props.dataTestid}-MessageList-SelectMessage${index + 1}`,
-  continuesWithNext: isSameMessageGroup(message, props.messages[index + 1]),
-  continuesFromPrevious: isSameMessageGroup(props.messages[index - 1], message),
+  continuesWithNext: isSameMessageGroup(
+    message,
+    visibleMessages.value[index + 1]
+  ),
+  continuesFromPrevious: isSameMessageGroup(
+    visibleMessages.value[index - 1],
+    message
+  ),
   showAvatar: false
 });
 

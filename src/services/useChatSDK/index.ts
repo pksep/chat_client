@@ -14,7 +14,12 @@ import {
 } from './websocketEvents';
 import { Reqi } from '@pksep/reqi';
 import io, { Socket } from 'socket.io-client';
-import { SearchParams, PaginatedResponse, MessageStatus } from './types';
+import {
+  SearchParams,
+  PaginatedResponse,
+  MessageStatus,
+  CallHistoryResponse
+} from './types';
 
 import { ChatAuth, ChatAuthInterface } from './auth';
 import { ChatUser, ChatUserInterface } from './user';
@@ -813,6 +818,13 @@ export class ChatSDK {
     return await this.message.getPinnedMessages(topicId);
   }
 
+  async getCallHistory(opts?: {
+    page?: number;
+    limit?: number;
+  }): Promise<CallHistoryResponse> {
+    return await this.message.getCallHistory(opts);
+  }
+
   async getAroundMessage(messageId: string): Promise<Message[]> {
     return await this.message.getAroundMessage(messageId);
   }
@@ -952,6 +964,28 @@ export class ChatSDK {
     }
   }
 
+  async getLiveKitCallStatus(roomId: string): Promise<{
+    active: boolean;
+    topicId?: string | null;
+    startTime?: number | null;
+    roomReady?: boolean;
+  } | null> {
+    try {
+      const response = (await this.reqi.get<{
+        active: boolean;
+        topicId?: string | null;
+        startTime?: number | null;
+        roomReady?: boolean;
+      }>(`/calls/status?roomId=${encodeURIComponent(roomId)}`, {
+        parsed: false
+      })) as any;
+      return await response.json();
+    } catch (error) {
+      console.error('[LiveKit] Failed to fetch call status:', error);
+      return null;
+    }
+  }
+
   async createGroupCallInvite(roomId: string): Promise<{
     inviteToken: string;
     roomId: string;
@@ -983,6 +1017,7 @@ export class ChatSDK {
     topicId: string;
     title: string;
     avatarUrl?: string | null;
+    startTime?: number | null;
     participantCount: number;
     members: User[];
   } | null> {
@@ -993,6 +1028,7 @@ export class ChatSDK {
           topicId: string;
           title: string;
           avatarUrl?: string | null;
+          startTime?: number | null;
           participantCount: number;
           members: User[];
         };

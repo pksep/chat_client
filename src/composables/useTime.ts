@@ -21,6 +21,26 @@ export const formatTime = (date: Date = new Date()) => {
   });
 };
 
+export const formatListTime = (date: Date = new Date()): string => {
+  const timestamp = date.getTime();
+
+  if (Number.isNaN(timestamp)) {
+    return '';
+  }
+
+  const diffMs = Date.now() - timestamp;
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  if (diffMs < dayMs) {
+    return formatTime(date);
+  }
+
+  return date.toLocaleDateString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit'
+  });
+};
+
 export const formatDay = (timestamp: Date): string => {
   return new Date(timestamp).toLocaleDateString('ru-RU', {
     day: 'numeric',
