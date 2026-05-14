@@ -964,6 +964,28 @@ export class ChatSDK {
     }
   }
 
+  async getLiveKitCallStatus(roomId: string): Promise<{
+    active: boolean;
+    topicId?: string | null;
+    startTime?: number | null;
+    roomReady?: boolean;
+  } | null> {
+    try {
+      const response = (await this.reqi.get<{
+        active: boolean;
+        topicId?: string | null;
+        startTime?: number | null;
+        roomReady?: boolean;
+      }>(`/calls/status?roomId=${encodeURIComponent(roomId)}`, {
+        parsed: false
+      })) as any;
+      return await response.json();
+    } catch (error) {
+      console.error('[LiveKit] Failed to fetch call status:', error);
+      return null;
+    }
+  }
+
   async createGroupCallInvite(roomId: string): Promise<{
     inviteToken: string;
     roomId: string;
@@ -995,6 +1017,7 @@ export class ChatSDK {
     topicId: string;
     title: string;
     avatarUrl?: string | null;
+    startTime?: number | null;
     participantCount: number;
     members: User[];
   } | null> {
@@ -1005,6 +1028,7 @@ export class ChatSDK {
           topicId: string;
           title: string;
           avatarUrl?: string | null;
+          startTime?: number | null;
           participantCount: number;
           members: User[];
         };

@@ -1,8 +1,8 @@
 <template>
   <div class="call-modal__remote-grid-wrapper">
     <div
-      v-if="canScrollLeft"
       class="call-modal__remote-grid-scroll call-modal__remote-grid-scroll--left"
+      :class="{ 'call-modal__remote-grid-scroll--visible': canScrollLeft }"
     >
       <button
         class="call-modal__pagination-arrow"
@@ -60,7 +60,7 @@
           <HandRaiseIcon />
         </div>
         <div class="call-modal__remote-name">
-          {{ participant.name }}
+          <span>{{ participant.name }}</span>
           <MicIcon v-if="participant.isMicActive" />
           <MicDisableIcon v-else />
         </div>
@@ -68,8 +68,8 @@
     </div>
 
     <div
-      v-if="canScrollRight"
       class="call-modal__remote-grid-scroll call-modal__remote-grid-scroll--right"
+      :class="{ 'call-modal__remote-grid-scroll--visible': canScrollRight }"
     >
       <button
         class="call-modal__pagination-arrow"
@@ -99,7 +99,7 @@ const emit = defineEmits<{
   (event: 'select-participant', identity: string | null): void;
 }>();
 
-const getScrollStep = () => {
+const getScrollStep = (direction: 'left' | 'right') => {
   const remoteGridElement = remoteGrid.value;
 
   if (!remoteGridElement) {
@@ -110,13 +110,36 @@ const getScrollStep = () => {
     '.call-modal__remote-tile'
   ) as HTMLDivElement | null;
 
-  if (!firstTile) {
-    return remoteGridElement.clientWidth;
+  const currentScroll = remoteGridElement.scrollLeft;
+
+  const maxScroll =
+    remoteGridElement.scrollWidth - remoteGridElement.clientWidth;
+
+  let step = remoteGridElement.clientWidth;
+
+  if (firstTile) {
+    const tileWidth = firstTile.getBoundingClientRect().width;
+
+    step = tileWidth * 3 + 24;
   }
 
-  const tileWidth = firstTile.getBoundingClientRect().width;
+  if (direction === 'right') {
+    const remainingRight = maxScroll - currentScroll;
 
-  return tileWidth * 3;
+    if (remainingRight <= 500) {
+      return remainingRight;
+    }
+
+    return step;
+  }
+
+  const remainingLeft = currentScroll;
+
+  if (remainingLeft <= 500) {
+    return remainingLeft;
+  }
+
+  return step;
 };
 
 const updateScrollState = () => {
@@ -136,10 +159,11 @@ const updateScrollState = () => {
 };
 
 const scrollParticipants = (direction: 'left' | 'right') => {
-  const step = getScrollStep();
+  const step = getScrollStep(direction);
 
   remoteGrid.value?.scrollBy({
-    left: direction === 'right' ? step : -step
+    left: direction === 'right' ? step : -step,
+    behavior: 'smooth'
   });
 };
 

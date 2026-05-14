@@ -61,7 +61,8 @@
           <HandRaiseIcon />
         </div>
         <div class="call-modal__remote-name">
-          {{ participant.name }} <MicIcon v-if="participant.isMicActive" />
+          <span>{{ participant.name }}</span>
+          <MicIcon v-if="participant.isMicActive" />
           <MicDisableIcon v-else />
         </div>
       </div>

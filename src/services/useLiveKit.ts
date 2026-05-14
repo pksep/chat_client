@@ -22,12 +22,27 @@ import { WebSocketEventType } from './useChatSDK/websocketEvents';
 import { TopicType } from './useChatSDK/types';
 import { useTopics } from '../composables/useTopics';
 
+type LiveKitCallStatus = {
+  active: boolean;
+  topicId?: string | null;
+  startTime?: number | null;
+  roomReady?: boolean;
+};
+
+type ActiveGroupCallEntry = {
+  roomId: string;
+  topicId: string;
+  caller?: IUser | null;
+  startTime?: number | null;
+};
+
 const open = ref(false);
 const isIncoming = ref(false);
 const isCalling = ref(false);
 const user = ref<IUser | null>(null);
 const roomId = ref<string | null>(null);
 const topicId = ref<string | null>(null);
+const callStartedAt = ref<number | null>(null);
 const timerSeconds = ref(0);
 const isModalVisible = ref(false);
 const isRemoteVideoActive = ref(false);
@@ -49,29 +64,21 @@ const remoteParticipants = ref<
     isMicActive: boolean;
   }>
 >([]);
-const activeGroupCalls = ref<
-  Record<
-    string,
-    {
-      roomId: string;
-      topicId: string;
-      caller?: IUser | null;
-    }
-  >
->({});
+const activeGroupCalls = ref<Record<string, ActiveGroupCallEntry>>({});
 const invitedGroupCall = ref<{
   roomId: string;
   topicId: string;
   inviteToken: string;
   title: string;
   avatarUrl?: string | null;
+  startTime?: number | null;
   participantCount: number;
   members: IUser[];
   isJoinAvailable: boolean;
 } | null>(null);
 
 const state = reactive({
-  isMicActive: true,
+  isMicActive: false,
   isVideoActive: false,
   isScreenSharingActive: false,
   isSpeakerActive: false,
@@ -90,6 +97,7 @@ let isAcceptingLocally = false;
 let connectPromise: Promise<void> | null = null;
 let connectAttemptId = 0;
 let currentCameraFacingMode: 'user' | 'environment' = 'user';
+let shouldEndCallOnConnectFailure = false;
 
 const createRoomId = () => `livekit-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -97,6 +105,29 @@ const resolveCallTargetTopicId = (
   incomingRoomId?: string,
   incomingTopicId?: string
 ) => incomingTopicId || topicId.value || incomingRoomId || roomId.value || null;
+
+const removePendingGroupCallEntry = (targetTopicId?: string | null) => {
+  if (!targetTopicId) return;
+
+  const nextActiveGroupCalls = { ...activeGroupCalls.value };
+  delete nextActiveGroupCalls[targetTopicId];
+  activeGroupCalls.value = nextActiveGroupCalls;
+};
+
+const removeInvitedGroupCallEntry = (activeRoomId?: string | null) => {
+  if (!invitedGroupCall.value) return;
+  if (activeRoomId && invitedGroupCall.value.roomId !== activeRoomId) return;
+
+  invitedGroupCall.value = null;
+};
+
+const clearUnavailableCallState = (
+  targetRoomId?: string | null,
+  targetTopicId?: string | null
+) => {
+  removePendingGroupCallEntry(targetTopicId);
+  removeInvitedGroupCallEntry(targetRoomId);
+};
 
 const emitEndCallEvent = (
   targetRoomId?: string | null,
@@ -114,6 +145,38 @@ const emitEndCallEvent = (
     topicId: targetTopicId,
     userId: me.id
   });
+};
+
+const getLiveKitCallStatus = async (
+  targetRoomId?: string | null,
+  targetTopicId?: string | null
+): Promise<LiveKitCallStatus | null> => {
+  if (!targetRoomId) {
+    return null;
+  }
+
+  const sdk = getChatSDK();
+  if (!sdk) {
+    return null;
+  }
+
+  const status = await sdk.getLiveKitCallStatus(targetRoomId);
+  const isAvailable = status?.active === true;
+
+  if (!isAvailable) {
+    clearUnavailableCallState(targetRoomId, targetTopicId);
+    return null;
+  }
+
+  return status;
+};
+
+const isLiveKitCallAvailable = async (
+  targetRoomId?: string | null,
+  targetTopicId?: string | null
+) => {
+  const status = await getLiveKitCallStatus(targetRoomId, targetTopicId);
+  return status?.active === true;
 };
 
 const formatTime = (seconds: number) => {
@@ -150,10 +213,36 @@ const clearInviteParamsFromUrl = () => {
 
 const formattedTime = computed(() => formatTime(timerSeconds.value));
 
-const startTimer = () => {
+const syncTimerValue = () => {
+  if (!callStartedAt.value) {
+    timerSeconds.value = 0;
+    return;
+  }
+
+  timerSeconds.value = Math.max(
+    0,
+    Math.floor((Date.now() - callStartedAt.value) / 1000)
+  );
+};
+
+const setCallStartedAt = (startTime?: number | null) => {
+  callStartedAt.value =
+    typeof startTime === 'number' && Number.isFinite(startTime)
+      ? startTime
+      : null;
+  syncTimerValue();
+};
+
+const startTimer = (startTime: number | null = callStartedAt.value) => {
+  if (typeof startTime === 'number' && Number.isFinite(startTime)) {
+    callStartedAt.value = startTime;
+  }
+
+  syncTimerValue();
+
   if (timerInterval) return;
   timerInterval = setInterval(() => {
-    timerSeconds.value += 1;
+    syncTimerValue();
   }, 1000);
 };
 
@@ -162,7 +251,7 @@ const stopTimer = () => {
     clearInterval(timerInterval);
     timerInterval = null;
   }
-  timerSeconds.value = 0;
+  setCallStartedAt(null);
 };
 
 const playRingtone = () => {
@@ -463,15 +552,19 @@ const syncConnectionState = (activeRoom: Room) => {
 
   isIncoming.value = false;
 
+  if (callStartedAt.value) {
+    startTimer();
+  } else {
+    stopTimer();
+  }
+
   if (hasRemoteParticipant) {
     isCalling.value = false;
-    startTimer();
     stopDialingSound();
     stopRingtone();
     return;
   }
 
-  stopTimer();
   if (open.value) {
     isCalling.value = true;
   }
@@ -601,6 +694,7 @@ const connectToRoom = async () => {
     const sdk = getChatSDK();
     const me = getAuthUser();
     const activeRoomId = roomId.value;
+    const activeTopicId = topicId.value;
     const config = sdk?.getConfig();
 
     if (!sdk || !me || !activeRoomId || !config?.CHAT_LIVEKIT_URL) {
@@ -627,6 +721,21 @@ const connectToRoom = async () => {
       if (room === nextRoom) {
         room = null;
       }
+
+      if (
+        shouldEndCallOnConnectFailure &&
+        sdk &&
+        me &&
+        activeRoomId &&
+        activeTopicId
+      ) {
+        sdk.sendWebSocketEvent(WebSocketEventType.END_CALL, {
+          roomId: activeRoomId,
+          topicId: activeTopicId,
+          userId: me.id
+        });
+      }
+
       cleanup(false);
       showErrorNotification(getConnectErrorMessage(error));
       throw error;
@@ -649,6 +758,7 @@ const connectToRoom = async () => {
     syncLocalTrackState();
     syncRemoteParticipantState();
     syncConnectionState(nextRoom);
+    shouldEndCallOnConnectFailure = false;
     stopDialingSound();
     stopRingtone();
   })().finally(() => {
@@ -688,6 +798,8 @@ export const startLiveKitCall = async (
   user.value = targetUser;
   topicId.value = currentTopicId;
   roomId.value = createRoomId();
+  setCallStartedAt(Date.now());
+  shouldEndCallOnConnectFailure = true;
   open.value = true;
   isCalling.value = true;
   isModalVisible.value = true;
@@ -710,7 +822,19 @@ export const startLiveKitCall = async (
 };
 
 export const startLiveKitGroupCall = async (currentTopicId: string) => {
-  if (open.value || activeGroupCalls.value[currentTopicId]) return;
+  if (open.value) return;
+
+  const existingGroupCall = activeGroupCalls.value[currentTopicId];
+  if (existingGroupCall) {
+    const isAvailable = await isLiveKitCallAvailable(
+      existingGroupCall.roomId,
+      existingGroupCall.topicId
+    );
+
+    if (isAvailable) {
+      return;
+    }
+  }
 
   const sdk = getChatSDK();
   const me = getAuthUser();
@@ -720,19 +844,12 @@ export const startLiveKitGroupCall = async (currentTopicId: string) => {
   user.value = me as any;
   topicId.value = currentTopicId;
   roomId.value = activeRoomId;
+  setCallStartedAt(Date.now());
+  shouldEndCallOnConnectFailure = true;
   open.value = true;
   isIncoming.value = false;
   isCalling.value = true;
   isModalVisible.value = true;
-
-  activeGroupCalls.value = {
-    ...activeGroupCalls.value,
-    [currentTopicId]: {
-      roomId: activeRoomId,
-      topicId: currentTopicId,
-      caller: me as any
-    }
-  };
 
   sdk.sendWebSocketEvent(WebSocketEventType.START_CALL, {
     roomId: activeRoomId,
@@ -743,34 +860,53 @@ export const startLiveKitGroupCall = async (currentTopicId: string) => {
   await connectToRoom();
 };
 
-export const receiveIncomingCall = (
-  targetUser: IUser,
+export const receiveIncomingCall = async (
+  targetUser: IUser | null,
   incomingRoomId: string,
-  incomingTopicId: string
+  incomingTopicId: string,
+  incomingTopicType?: TopicType | string | null,
+  incomingStartTime?: number | null
 ) => {
   const topic = useTopics().getSelectedTopic(incomingTopicId) as any;
+  const resolvedTopicType = incomingTopicType || topic?.type;
 
-  if (topic?.type === TopicType.Group) {
+  const callStatus = await getLiveKitCallStatus(
+    incomingRoomId,
+    incomingTopicId
+  );
+
+  if (!callStatus?.active) {
+    return false;
+  }
+
+  const resolvedStartTime = incomingStartTime ?? callStatus.startTime ?? null;
+
+  if (resolvedTopicType === TopicType.Group) {
     activeGroupCalls.value = {
       ...activeGroupCalls.value,
       [incomingTopicId]: {
         roomId: incomingRoomId,
         topicId: incomingTopicId,
-        caller: targetUser
+        caller: targetUser,
+        startTime: resolvedStartTime
       }
     };
-    return;
+    return true;
   }
 
-  if (open.value) return;
+  if (!targetUser) return false;
+  if (open.value) return false;
 
   user.value = targetUser;
   roomId.value = incomingRoomId;
   topicId.value = incomingTopicId;
+  setCallStartedAt(resolvedStartTime);
   open.value = true;
   isIncoming.value = true;
   isModalVisible.value = true;
   playRingtone();
+
+  return true;
 };
 
 export const acceptCall = async () => {
@@ -779,6 +915,12 @@ export const acceptCall = async () => {
   const sdk = getChatSDK();
   const me = getAuthUser();
   if (!sdk || !me) return;
+  shouldEndCallOnConnectFailure = false;
+
+  if (!callStartedAt.value) {
+    const callStatus = await getLiveKitCallStatus(roomId.value, topicId.value);
+    setCallStartedAt(callStatus?.startTime ?? null);
+  }
 
   stopRingtone();
   if (Capacitor.isNativePlatform()) {
@@ -814,10 +956,15 @@ export const joinPendingGroupCall = async (targetTopicId?: string) => {
   } = pendingGroupCall;
 
   if (!sdk || !me) return;
+  shouldEndCallOnConnectFailure = false;
+
+  const callStatus = await getLiveKitCallStatus(pendingRoomId, pendingTopicId);
+  if (!callStatus?.active) return;
 
   user.value = caller || null;
   roomId.value = pendingRoomId;
   topicId.value = pendingTopicId;
+  setCallStartedAt(pendingGroupCall.startTime ?? callStatus.startTime ?? null);
   open.value = true;
   isIncoming.value = false;
   isCalling.value = true;
@@ -851,6 +998,7 @@ export const hydrateInvitedGroupCallFromUrl = async () => {
     inviteToken: inviteParams.inviteToken,
     title: preview.title,
     avatarUrl: preview.avatarUrl || null,
+    startTime: preview.startTime ?? null,
     participantCount: preview.participantCount,
     members: (preview.members || []) as IUser[],
     isJoinAvailable: true
@@ -867,10 +1015,15 @@ export const joinInvitedGroupCall = async () => {
   const invite = invitedGroupCall.value;
 
   if (!sdk || !me || !invite || open.value) return;
+  shouldEndCallOnConnectFailure = false;
+
+  const callStatus = await getLiveKitCallStatus(invite.roomId, invite.topicId);
+  if (!callStatus?.active) return;
 
   user.value = me as any;
   roomId.value = invite.roomId;
   topicId.value = invite.topicId;
+  setCallStartedAt(invite.startTime ?? callStatus.startTime ?? null);
   open.value = true;
   isIncoming.value = false;
   isCalling.value = true;
@@ -888,8 +1041,13 @@ export const joinInvitedGroupCall = async () => {
 
 export const handleCallAnswered = async (
   answeredUserId: string,
-  answeredRoomId?: string
+  answeredRoomId?: string,
+  answeredStartTime?: number | null
 ) => {
+  if (answeredRoomId && roomId.value === answeredRoomId) {
+    setCallStartedAt(answeredStartTime ?? callStartedAt.value);
+  }
+
   const me = getAuthUser();
   if (
     me &&
@@ -906,22 +1064,62 @@ export const handleCallEnded = () => {
   cleanup(true);
 };
 
-export const syncActiveCalls = (
-  calls: Array<{ roomId: string; topicId: string; callType: string }>
+export const dismissIncomingCallState = (
+  targetRoomId?: string,
+  targetTopicId?: string
 ) => {
-  activeGroupCalls.value = calls.reduce<
-    Record<
-      string,
-      {
-        roomId: string;
-        topicId: string;
-        caller?: IUser | null;
+  removePendingGroupCallEntry(targetTopicId);
+  removeInvitedGroupCallEntry(targetRoomId);
+
+  if (
+    isIncoming.value &&
+    roomId.value &&
+    targetRoomId &&
+    roomId.value === targetRoomId
+  ) {
+    cleanup(false);
+    return;
+  }
+
+  if (Capacitor.isNativePlatform()) {
+    void endAllCallKits();
+  }
+};
+
+export const syncActiveCalls = async (
+  calls: Array<{
+    roomId: string;
+    topicId: string;
+    callType: string;
+    startTime: number;
+  }>
+) => {
+  const validatedCalls = await Promise.all(
+    calls.map(async call => {
+      const status = await getLiveKitCallStatus(call.roomId, call.topicId);
+
+      if (!status?.active) {
+        return null;
       }
-    >
+
+      return {
+        ...call,
+        startTime: status.startTime ?? call.startTime
+      };
+    })
+  );
+
+  activeGroupCalls.value = validatedCalls.reduce<
+    Record<string, ActiveGroupCallEntry>
   >((acc, call) => {
+    if (!call) {
+      return acc;
+    }
+
     acc[call.topicId] = {
       roomId: call.roomId,
-      topicId: call.topicId
+      topicId: call.topicId,
+      startTime: call.startTime
     };
     return acc;
   }, {});
@@ -1061,9 +1259,12 @@ export const leaveCall = () => {
       [activeTopicId]: {
         roomId: activeRoomId,
         topicId: activeTopicId,
-        caller: activeCaller
+        caller: activeCaller,
+        startTime: callStartedAt.value
       }
     };
+
+    void isLiveKitCallAvailable(activeRoomId, activeTopicId);
   }
 
   if (sdk && me && activeRoomId && activeTopicId) {
@@ -1084,6 +1285,7 @@ export const leaveCall = () => {
 export const cleanup = (disconnectRoom = true) => {
   connectAttemptId += 1;
   connectPromise = null;
+  shouldEndCallOnConnectFailure = false;
   clearDialingTimeout();
   stopTimer();
   stopRingtone();
@@ -1112,14 +1314,26 @@ export const cleanup = (disconnectRoom = true) => {
   }
 };
 
-export const handleIncomingPushCall = (
-  targetUser: IUser,
+export const handleIncomingPushCall = async (
+  targetUser: IUser | null,
   callRoomId: string,
-  callTopicId: string
+  callTopicId: string,
+  callTopicType?: TopicType | string | null,
+  callStartTime?: number | null
 ) => {
-  receiveIncomingCall(targetUser, callRoomId, callTopicId);
+  const isReceived = await receiveIncomingCall(
+    targetUser,
+    callRoomId,
+    callTopicId,
+    callTopicType,
+    callStartTime
+  );
 
-  if (Capacitor.isNativePlatform()) {
+  if (
+    isReceived &&
+    Capacitor.isNativePlatform() &&
+    callTopicType !== TopicType.Group
+  ) {
     App.getState().then(appState => {
       if (!appState.isActive) {
         const pushUser = targetUser as any;
@@ -1139,7 +1353,26 @@ export const handleNativeCallAction = async (
   incomingRoomId?: string,
   incomingTopicId?: string
 ) => {
+  if (Capacitor.isNativePlatform()) {
+    await endAllCallKits();
+  }
+
   if (action === 'accept') {
+    const targetRoomId = incomingRoomId || roomId.value;
+    const targetTopicId = resolveCallTargetTopicId(
+      incomingRoomId,
+      incomingTopicId
+    );
+    const isAvailable = await isLiveKitCallAvailable(
+      targetRoomId,
+      targetTopicId
+    );
+
+    if (!isAvailable) {
+      cleanup(false);
+      return;
+    }
+
     if (incomingRoomId) {
       roomId.value = incomingRoomId;
     }
@@ -1166,9 +1399,6 @@ export const handleNativeCallAction = async (
 
   if (!isCurrentCallTarget) {
     emitEndCallEvent(targetRoomId, targetTopicId);
-    if (Capacitor.isNativePlatform()) {
-      endAllCallKits();
-    }
     return;
   }
 
@@ -1189,18 +1419,11 @@ export const handleNativeCallAction = async (
 };
 
 export const clearActiveGroupCall = (targetTopicId?: string) => {
-  if (!targetTopicId) return;
-
-  const nextActiveGroupCalls = { ...activeGroupCalls.value };
-  delete nextActiveGroupCalls[targetTopicId];
-  activeGroupCalls.value = nextActiveGroupCalls;
+  removePendingGroupCallEntry(targetTopicId);
 };
 
 export const clearInvitedGroupCall = (activeRoomId?: string) => {
-  if (!invitedGroupCall.value) return;
-  if (activeRoomId && invitedGroupCall.value.roomId !== activeRoomId) return;
-
-  invitedGroupCall.value = null;
+  removeInvitedGroupCallEntry(activeRoomId);
 };
 
 export { open, isIncoming, isCalling, user, roomId, topicId, isModalVisible };

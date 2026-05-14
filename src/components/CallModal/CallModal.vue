@@ -152,7 +152,7 @@
               class="call-modal__control-button"
               :class="{
                 'call-modal__control-button__inactive':
-                  !!liveKitState.isScreenSharingActive
+                  !liveKitState.isScreenSharingActive
               }"
               @click="handleToggleScreenShare"
             >
@@ -426,32 +426,6 @@ const state = ref({
   openGroupInfoModal: false
 });
 
-const getParticipantFocusPriority = (participant: any) => {
-  let priority = 0;
-
-  if (!participant.isLocal) {
-    priority += 100;
-  }
-
-  if (participant.isScreenShareActive) {
-    priority += 50;
-  }
-
-  if (participant.isHandRaised) {
-    priority += 20;
-  }
-
-  if (participant.isSpeaking) {
-    priority += 10;
-  }
-
-  if (participant.isVideoActive) {
-    priority += 5;
-  }
-
-  return priority;
-};
-
 const getParticipantSortPriority = (participant: any) => {
   let priority = 0;
 
@@ -463,36 +437,11 @@ const getParticipantSortPriority = (participant: any) => {
     priority += 50;
   }
 
-  if (participant.isSpeaking) {
-    priority += 25;
-  }
-
   if (participant.isVideoActive) {
     priority += 10;
   }
 
   return priority;
-};
-
-const getAutoFocusedParticipant = (participants: any[]) => {
-  if (!participants.length) {
-    return null;
-  }
-
-  return [...participants].sort((left, right) => {
-    const priorityDifference =
-      getParticipantFocusPriority(right) - getParticipantFocusPriority(left);
-
-    if (priorityDifference !== 0) {
-      return priorityDifference;
-    }
-
-    if (left.isLocal !== right.isLocal) {
-      return Number(left.isLocal) - Number(right.isLocal);
-    }
-
-    return left.name.localeCompare(right.name);
-  })[0];
 };
 
 const syncMediaElementStream = (
@@ -797,11 +746,28 @@ const groupCallTitle = computed(() => {
 const resolvedGroupCallTitle = computed(
   () => invitedGroupCall.value?.title || groupCallTitle.value
 );
-const groupInfoMembers = computed(
-  () => currentGroup.value?.members || invitedGroupCall.value?.members || []
-);
+const groupInfoMembers = computed(() => {
+  const sourceMembers = [
+    ...(currentGroup.value?.members || []),
+    ...(invitedGroupCall.value?.members || []),
+    ...getUsersList(),
+    ...(displayUser.value ? [displayUser.value as any] : [])
+  ];
+  const memberMap = new Map(
+    sourceMembers
+      .filter(member => member?.id)
+      .map(member => [member.id, member as any])
+  );
+  const activeParticipantIds = Array.from(
+    new Set(participantGridViews.value.map(participant => participant.identity))
+  );
+
+  return activeParticipantIds
+    .map(participantId => memberMap.get(participantId))
+    .filter(Boolean);
+});
 const displayGroupCallMeta = computed(
-  () => `${formattedTime.value} · ${participantCountLabel.value}`
+  () => `${participantCountLabel.value} · ${formattedTime.value}`
 );
 
 const shouldShowMediaLayout = computed(
@@ -905,6 +871,9 @@ watch(
       return;
     }
 
+    const activeScreenShareParticipant =
+      participants.find(participant => participant.isScreenShareActive) || null;
+
     const hasFocusedParticipant = participants.some(
       participant => participant.tileId === focusedParticipantIdentity.value
     );
@@ -914,31 +883,40 @@ watch(
           participant => participant.tileId === focusedParticipantIdentity.value
         )
       : null;
-    const autoFocusedParticipant = getAutoFocusedParticipant(participants);
 
     if (!hasFocusedParticipant) {
+      if (!activeScreenShareParticipant) {
+        focusedParticipantIdentity.value = null;
+        hasManualParticipantSelection.value = false;
+        return;
+      }
+
       hasManualParticipantSelection.value = false;
+      focusedParticipantIdentity.value = activeScreenShareParticipant.tileId;
+      return;
+    }
+
+    if (!currentFocusedParticipant) {
       focusedParticipantIdentity.value =
-        autoFocusedParticipant?.tileId ||
-        participants[participants.length - 1].tileId;
+        activeScreenShareParticipant?.tileId || null;
+      hasManualParticipantSelection.value = false;
       return;
     }
 
-    if (!autoFocusedParticipant || !currentFocusedParticipant) {
+    if (hasManualParticipantSelection.value) {
       return;
     }
 
-    const shouldPromoteAutoFocus =
-      !hasManualParticipantSelection.value ||
-      (autoFocusedParticipant.isScreenShareActive &&
-        !currentFocusedParticipant.isScreenShareActive);
+    if (!activeScreenShareParticipant) {
+      focusedParticipantIdentity.value = null;
+      return;
+    }
 
     if (
-      shouldPromoteAutoFocus &&
-      autoFocusedParticipant.tileId !== currentFocusedParticipant.tileId
+      activeScreenShareParticipant.tileId !== currentFocusedParticipant.tileId
     ) {
       hasManualParticipantSelection.value = false;
-      focusedParticipantIdentity.value = autoFocusedParticipant.tileId;
+      focusedParticipantIdentity.value = activeScreenShareParticipant.tileId;
     }
   },
   { immediate: true }
@@ -1074,6 +1052,7 @@ const handleSelectParticipant = (identity: string | null) => {
     videoOverlayRegion.value = null;
     return;
   }
+
   hasManualParticipantSelection.value = true;
   focusedParticipantIdentity.value = identity;
 };

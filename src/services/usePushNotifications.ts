@@ -7,7 +7,11 @@ import {
 import { useChatApi } from './useApi';
 import { getCurrentUserId } from './useChat';
 import { getUserById } from '../composables/useUsers';
-import { handleIncomingPushCall, handleNativeCallAction } from './useLiveKit';
+import {
+  handleIncomingPushCall,
+  handleNativeCallAction,
+  dismissIncomingCallState
+} from './useLiveKit';
 import {
   clearTopicNotifications,
   isTopicCurrentlyVisible,
@@ -31,6 +35,7 @@ type NativeNotificationData = Record<string, string> & {
   callerId?: string;
   fromUserId?: string;
   roomId?: string;
+  startTime?: string;
   tag?: string;
   topicId?: string;
   topicType?: string;
@@ -157,6 +162,14 @@ const handleNotificationInteraction = (
     return true;
   }
 
+  if (normalizedData.action === 'DISMISS_INCOMING_CALL') {
+    dismissIncomingCallState(
+      normalizedData.roomId,
+      normalizedData.topicId || normalizedData.roomId
+    );
+    return true;
+  }
+
   if (normalizedData.type === 'incoming_call') {
     handleCallPush({ data: normalizedData });
     return true;
@@ -274,6 +287,14 @@ export const initPushNotifications = async () => {
         return;
       }
 
+      if (normalizedData.action === 'DISMISS_INCOMING_CALL') {
+        dismissIncomingCallState(
+          normalizedData.roomId,
+          normalizedData.topicId || normalizedData.roomId
+        );
+        return;
+      }
+
       if (isTopicCurrentlyVisible(normalizedData.topicId)) {
         void clearTopicNotifications(normalizedData.topicId);
         return;
@@ -369,7 +390,15 @@ const handleCallPush = (notification?: { data?: NativeNotificationData }) => {
 
     const user = getUserById(callerId);
     if (user) {
-      handleIncomingPushCall(user, roomId, targetTopicId);
+      const startTime = data.startTime ? Number(data.startTime) : undefined;
+
+      void handleIncomingPushCall(
+        user,
+        roomId,
+        targetTopicId,
+        data.topicType,
+        Number.isFinite(startTime) ? startTime : undefined
+      );
     }
   }
 };

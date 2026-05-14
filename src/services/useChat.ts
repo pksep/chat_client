@@ -528,14 +528,23 @@ const setupChatListeners = (): void => {
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.INCOMING_CALL, ({ payload }) => {
-    const user = getUserById(payload.callerId);
-    if (user) {
-      handleIncomingCall(user, payload.roomId, payload.topicId);
+    void (async () => {
       const topic = useTopics().getSelectedTopic(payload.topicId) as any;
-      const isGroupCall = topic?.type === TopicType.Group;
+      const topicType = payload.topicType || topic?.type;
+      const user =
+        getUserById(payload.callerId) ||
+        topic?.members?.find((member: any) => member.id === payload.callerId) ||
+        (topic?.user?.id === payload.callerId ? topic.user : null);
+      const isReceived = await handleIncomingCall(
+        user || null,
+        payload.roomId,
+        payload.topicId,
+        topicType,
+        payload.startTime
+      );
+      const isGroupCall = topicType === TopicType.Group;
 
-      // If we are on native mobile, show the system incoming call screen
-      if (Capacitor.isNativePlatform() && !isGroupCall) {
+      if (Capacitor.isNativePlatform() && !isGroupCall && isReceived && user) {
         showIncomingCallKit(
           user.initials,
           payload.roomId,
@@ -543,18 +552,18 @@ const setupChatListeners = (): void => {
           payload.topicId
         );
       }
-    }
+    })();
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CALL_ANSWERED, ({ payload }) => {
     if (Capacitor.isNativePlatform()) {
       endAllCallKits();
     }
-    handleCallAnswered(payload.userId, payload.roomId);
+    handleCallAnswered(payload.userId, payload.roomId, payload.startTime);
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.ACTIVE_CALLS, ({ payload }) => {
-    syncServerActiveCalls(payload.calls);
+    void syncServerActiveCalls(payload.calls);
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CALL_ENDED, ({ payload }) => {
