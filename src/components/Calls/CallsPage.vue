@@ -105,7 +105,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { Button, ButtonTypeEnum, Search, SizesEnum } from '@pksep/yui';
+import { Search } from '@pksep/yui';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import MessageCallInfoIcon from '../Messages/MessageCallInfoIcon.vue';
 import MessageCallTypeIcon from '../Messages/MessageCallTypeIcon.vue';
@@ -122,9 +122,7 @@ import {
   parseCallMessage,
   type CallMessageKind
 } from '../../utils/parseCallMessage';
-import { getChatSDK } from '../../services/useChat';
 import {
-  bootstrapCallHistory,
   hydrateCallHistoryCache,
   useCallHistoryStore
 } from '../../services/useCallHistory';
@@ -231,10 +229,6 @@ const filteredCalls = computed(() => {
     )
   );
 });
-
-const refreshCallHistory = async (): Promise<void> => {
-  await bootstrapCallHistory(getChatSDK(), { force: true });
-};
 
 const openCallTopic = (call: CallHistoryItem): void => {
   if (call.topicType === TopicType.Group) {

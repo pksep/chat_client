@@ -9,7 +9,6 @@
     >
       Профиль
     </h4>
-
     <div v-if="authUser" class="menu-profile__body">
       <header class="menu-profile__header">
         <CachedAvatar

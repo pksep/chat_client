@@ -1,5 +1,8 @@
 <template>
-  <header class="chats-toolbar calls-page__panel-header" :data-testid="`${props.dataTestid}-Container`">
+  <header
+    class="chats-toolbar calls-page__panel-header"
+    :data-testid="`${props.dataTestid}-Container`"
+  >
     <div class="chats-toolbar__headline calls-page__headline">
       <div class="calls-page__header-copy">
         <h4
@@ -10,12 +13,12 @@
         </h4>
       </div>
     </div>
+
     <Line :data-testid="`${props.dataTestid}-Line`" />
   </header>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
 import Line from '../UI/Line.vue';
 
 const props = withDefaults(
@@ -28,19 +31,4 @@ const props = withDefaults(
     dataTestid: 'CallsHeader'
   }
 );
-
-const totalCountLabel = computed(() => {
-  const mod10 = props.totalCount % 10;
-  const mod100 = props.totalCount % 100;
-
-  if (mod10 === 1 && mod100 !== 11) {
-    return `${props.totalCount} звонок`;
-  }
-
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
-    return `${props.totalCount} звонка`;
-  }
-
-  return `${props.totalCount} звонков`;
-});
 </script>

@@ -9,7 +9,10 @@ import {
   type CallHistoryItem as ServerCallHistoryItem
 } from './useChatSDK/types';
 import { loadShadowSyncMeta, saveShadowSyncMeta } from './useShadowChatSync';
-import { parseCallMessage, parseCallMessageEx } from '../utils/parseCallMessage';
+import {
+  parseCallMessage,
+  parseCallMessageEx
+} from '../utils/parseCallMessage';
 
 const CALL_HISTORY_CACHE_KEY = 'calls:history';
 
@@ -102,7 +105,11 @@ const applyCallHistory = async (
   userId: string
 ): Promise<void> => {
   rawCallHistory.value = uniqCallHistoryItems(items);
-  await saveShadowSyncMeta(CALL_HISTORY_CACHE_KEY, rawCallHistory.value, userId);
+  await saveShadowSyncMeta(
+    CALL_HISTORY_CACHE_KEY,
+    rawCallHistory.value,
+    userId
+  );
 };
 
 const resolveCallTopic = (topicId: string): ITopic | undefined =>
@@ -111,7 +118,12 @@ const resolveCallTopic = (topicId: string): ITopic | undefined =>
 const buildCallHistoryItemFromMessage = (
   message: CallHistoryMessageLike
 ): ServerCallHistoryItem | null => {
-  if (!message?.id || !message.topicId || !message.isSystem || message.deletedAt) {
+  if (
+    !message?.id ||
+    !message.topicId ||
+    !message.isSystem ||
+    message.deletedAt
+  ) {
     return null;
   }
 
@@ -143,7 +155,10 @@ const buildCallHistoryItemFromMessage = (
     fallbackUser?.initials ||
     'Звонок';
   const topicAvatarUrl =
-    topic?.avatarUrl || topic?.group?.avatarUrl || topic?.user?.avatarUrl || null;
+    topic?.avatarUrl ||
+    topic?.group?.avatarUrl ||
+    topic?.user?.avatarUrl ||
+    null;
 
   return {
     id: message.id,
@@ -154,7 +169,8 @@ const buildCallHistoryItemFromMessage = (
     senderUserId: message.senderUserId,
     text: message.text || '',
     ex: message.ex ?? null,
-    createdAt: message.createdAt || message.updatedAt || new Date().toISOString()
+    createdAt:
+      message.createdAt || message.updatedAt || new Date().toISOString()
   };
 };
 
@@ -300,7 +316,9 @@ export const upsertCallHistoryMessage = async (
   }
 
   await applyCallHistory(
-    rawCallHistory.value.filter(item => item.id !== nextItem.id).concat(nextItem),
+    rawCallHistory.value
+      .filter(item => item.id !== nextItem.id)
+      .concat(nextItem),
     userId
   );
 };
