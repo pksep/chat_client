@@ -5,6 +5,7 @@ import {
   clearInvitedGroupCall,
   cleanup,
   copyInvitedGroupCallLink,
+  dismissIncomingCallState,
   formattedTime,
   handleCallAnswered as handleLiveKitAnswered,
   handleCallEnded as handleLiveKitEnded,
@@ -43,9 +44,17 @@ export const activeCallFormattedTime = computed(() => formattedTime.value);
 export const handleIncomingCall = (
   targetUser: any,
   activeRoomId: string,
-  activeTopicId: string
+  activeTopicId: string,
+  activeTopicType?: string,
+  startTime?: number | null
 ) => {
-  receiveIncomingCall(targetUser, activeRoomId, activeTopicId);
+  return receiveIncomingCall(
+    targetUser,
+    activeRoomId,
+    activeTopicId,
+    activeTopicType,
+    startTime
+  );
 };
 
 export const declineCall = () => {
@@ -64,12 +73,20 @@ export const joinInviteGroupCall = async () => {
   await joinInvitedGroupCall();
 };
 
-export const handleCallAnswered = (userId: string, roomId?: string) => {
-  handleLiveKitAnswered(userId, roomId);
+export const handleCallAnswered = (
+  userId: string,
+  roomId?: string,
+  startTime?: number | null
+) => {
+  handleLiveKitAnswered(userId, roomId, startTime);
 };
 
 export const handleCallEnded = () => {
   handleLiveKitEnded();
+};
+
+export const dismissIncomingCall = (roomId?: string, topicId?: string) => {
+  dismissIncomingCallState(roomId, topicId);
 };
 
 export const cleanupAllCalls = () => {
@@ -77,9 +94,14 @@ export const cleanupAllCalls = () => {
 };
 
 export const syncServerActiveCalls = (
-  calls: Array<{ roomId: string; topicId: string; callType: string }>
+  calls: Array<{
+    roomId: string;
+    topicId: string;
+    callType: string;
+    startTime: number;
+  }>
 ) => {
-  syncActiveCalls(calls);
+  return syncActiveCalls(calls);
 };
 
 export const removeActiveGroupCall = (topicId?: string) => {

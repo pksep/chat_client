@@ -182,6 +182,7 @@ export interface WebSocketEventPayloads {
       roomId: string;
       topicId: string;
       callType: string;
+      startTime: number;
     }>;
   };
   [WebSocketEventType.START_CALL]: {
@@ -198,6 +199,7 @@ export interface WebSocketEventPayloads {
     userId: string;
     roomId: string;
     topicId: string;
+    startTime?: number | null;
   };
   [WebSocketEventType.END_CALL]: {
     userId: string;
@@ -214,6 +216,8 @@ export interface WebSocketEventPayloads {
     callerId: string;
     topicId: string;
     callType?: string;
+    startTime?: number | null;
+    topicType?: string | null;
   };
 }
 
