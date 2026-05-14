@@ -53,7 +53,7 @@
           <span>{{ meta }}</span>
         </div>
         <button class="call-modal__group-panel-close" @click="$emit('close')">
-          <Icon :name="IconNameEnum.closeTag" :width="24" :height="24"/>
+          <Icon :name="IconNameEnum.closeTag" :width="24" :height="24" />
         </button>
       </div>
 
