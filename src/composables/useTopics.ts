@@ -1,6 +1,6 @@
 import { ref, computed, watch } from 'vue';
 import { getChatSDK } from '../services/useChat';
-import { ITopic, IUser } from '../components/interfaces/interfaces';
+import { IMessage, ITopic, IUser } from '../components/interfaces/interfaces';
 import {
   Message,
   TopicSetting,
@@ -87,6 +87,16 @@ const createTopicsApi = () => {
     return new Date(value).getTime();
   };
 
+  const isNonTrackableSystemMessage = (
+    message?: Pick<IMessage, 'isSystem' | 'ex'> | null
+  ): boolean => {
+    if (!message) {
+      return false;
+    }
+
+    return message.isSystem === true;
+  };
+
   const normalizeTypingUserIds = (typingUserIds?: string[]): string[] =>
     Array.from(new Set((typingUserIds || []).filter(Boolean)));
 
@@ -145,17 +155,36 @@ const createTopicsApi = () => {
   const normalizeTopic = (topic: ITopic): ITopic => {
     const normalizedTopic = { ...topic };
     const existingTopic = topics.value.find(item => item.id === topic.id);
-    const resolvedUnreadCount = Math.max(
+    let resolvedUnreadCount = Math.max(
       0,
       normalizedTopic.unreadMessageCount || 0
     );
+    const localMessages = getFullMessagesByTopicId(normalizedTopic.id);
 
     serverUnreadCounts.value = {
       ...serverUnreadCounts.value,
       [normalizedTopic.id]: resolvedUnreadCount
     };
-    normalizedTopic.unreadMessageCount = resolvedUnreadCount;
     normalizedTopic.lastMessage = resolveLatestMessage(normalizedTopic);
+    const hasLocalUnreadMessages =
+      !!authedUser.value?.id &&
+      localMessages.some(
+        message =>
+          !message.isSystem &&
+          message.senderUserId !== authedUser.value?.id &&
+          message.isReadByMe !== true
+      );
+
+    if (
+      resolvedUnreadCount <= 1 &&
+      normalizedTopic.lastMessage &&
+      isNonTrackableSystemMessage(normalizedTopic.lastMessage) &&
+      !hasLocalUnreadMessages
+    ) {
+      resolvedUnreadCount = 0;
+    }
+
+    normalizedTopic.unreadMessageCount = resolvedUnreadCount;
     normalizedTopic.typingUserIds = normalizeTypingUserIds(
       normalizedTopic.typingUserIds ?? existingTopic?.typingUserIds
     );
@@ -535,11 +564,18 @@ const createTopicsApi = () => {
       shadowReadStateExists &&
       (effectiveServerUnreadCount === 0 ||
         (hasLatestRangeCoverage && hasLatestMessageInLocalCache));
+    const shouldSuppressUnreadForNonTrackableLatestMessage =
+      !!latestKnownMessage &&
+      isNonTrackableSystemMessage(latestKnownMessage) &&
+      effectiveServerUnreadCount <= 1 &&
+      unreadMessages.length === 0;
 
     const computedUnreadCount = computedUnreadMessages.length;
-    const nextUnreadCount = shouldUseComputedUnread
-      ? Math.min(effectiveServerUnreadCount, computedUnreadCount)
-      : effectiveServerUnreadCount;
+    const nextUnreadCount = shouldSuppressUnreadForNonTrackableLatestMessage
+      ? 0
+      : shouldUseComputedUnread
+        ? Math.min(effectiveServerUnreadCount, computedUnreadCount)
+        : effectiveServerUnreadCount;
     const nextTaggedMe =
       nextUnreadCount > 0 &&
       (shouldUseComputedUnread ? computedUnreadMessages : unreadMessages).some(
