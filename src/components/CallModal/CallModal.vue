@@ -49,8 +49,8 @@
           {{ displayAvatarInfo.initials }}
         </h3>
         <p class="call-modal__status">
-          <span v-if="isIncoming">Входящий вызов...</span>
-          <span v-else-if="isCalling">Соединение...</span>
+          <span v-if="isIncoming">{{ incomingCallLabel }}</span>
+          <span v-else-if="isCalling">{{ connectingLabel }}</span>
           <span v-else>{{ formattedTime }}</span>
         </p>
 
@@ -423,6 +423,7 @@ const remoteAudioRefs = ref<Record<string, HTMLAudioElement | null>>({});
 const currentParticipantPage = ref(0);
 const focusedParticipantIdentity = ref<string | null>(null);
 const hasManualParticipantSelection = ref(false);
+const shouldSkipInitialParticipantAutofocus = ref(true);
 const isStageVideoOverlayVisible = ref(false);
 const isVideoOverlayControlsVisible = ref(false);
 const videoOverlayRegion = ref<'top' | 'bottom' | null>(null);
@@ -432,24 +433,14 @@ const maxParticipantsPerPage = computed(() =>
 const state = ref({
   openGroupInfoModal: false
 });
-
-const getParticipantSortPriority = (participant: any) => {
-  let priority = 0;
-
-  if (participant.isScreenShareActive) {
-    priority += 100;
-  }
-
-  if (participant.isHandRaised) {
-    priority += 50;
-  }
-
-  if (participant.isVideoActive) {
-    priority += 10;
-  }
-
-  return priority;
-};
+const incomingCallLabel = 'Входящий вызов...';
+const connectingLabel = 'Соединение...';
+const singleParticipantLabel = 'участник';
+const fewParticipantsLabel = 'участника';
+const manyParticipantsLabel = 'участников';
+const callLabel = 'Звонок';
+const groupCallLabel = 'Групповой звонок';
+const participantOrder = ref<string[]>([]);
 
 const syncMediaElementStream = (
   element: HTMLMediaElement | null,
@@ -574,8 +565,7 @@ const displayUser = computed(() => {
 });
 const displayAvatarInfo = computed(() => {
   if (isGroupCallLayout.value) {
-    const groupName = resolvedGroupCallTitle.value || 'Групповой звонок';
-
+    const groupName = resolvedGroupCallTitle.value || groupCallLabel;
     return {
       name: groupName,
       initials: groupName,
@@ -585,13 +575,11 @@ const displayAvatarInfo = computed(() => {
         ''
     };
   }
-
   if (!displayUser.value) {
     return null;
   }
-
   return {
-    name: displayUser.value.nickname || displayUser.value.initials || 'Звонок',
+    name: displayUser.value.nickname || displayUser.value.initials || callLabel,
     initials: displayUser.value.initials,
     avatarUrl: displayUser.value.avatarUrl || ''
   };
@@ -622,31 +610,108 @@ const localParticipantView = computed(() => {
   );
 });
 
-const participantGridViews = computed(() => {
-  const sortParticipants = (left: any, right: any) => {
-    const priorityDifference =
-      getParticipantSortPriority(right) - getParticipantSortPriority(left);
+const participantDisplayViews = computed(() => [
+  ...remoteParticipantViews.value.map(participant => ({
+    ...participant,
+    isLocal: false
+  })),
+  ...(localParticipantView.value || [])
+]);
 
-    if (priorityDifference !== 0) {
-      return priorityDifference;
-    }
+const swapParticipantOrder = (
+  order: string[],
+  participantId: string,
+  targetIndex: number
+) => {
+  const currentIndex = order.indexOf(participantId);
 
-    if (left.isLocal !== right.isLocal) {
-      return Number(left.isLocal) - Number(right.isLocal);
-    }
+  if (
+    currentIndex === -1 ||
+    currentIndex === targetIndex ||
+    targetIndex < 0 ||
+    targetIndex >= order.length
+  ) {
+    return;
+  }
 
-    return left.name.localeCompare(right.name);
-  };
+  [order[targetIndex], order[currentIndex]] = [
+    order[currentIndex],
+    order[targetIndex]
+  ];
+};
 
-  const allParticipants = [
-    ...remoteParticipantViews.value.map(participant => ({
-      ...participant,
-      isLocal: false
-    })),
-    ...(localParticipantView.value || [])
+const buildPromotedParticipantOrder = (
+  participants: any[],
+  currentOrder: string[]
+) => {
+  const participantMap = new Map(
+    participants.map(participant => [participant.tileId, participant])
+  );
+  const nextOrder = [...currentOrder];
+  const promotedParticipantIds = [
+    ...nextOrder.filter(
+      participantId => participantMap.get(participantId)?.isScreenShareActive
+    ),
+    ...nextOrder.filter(participantId => {
+      const participant = participantMap.get(participantId);
+
+      return !!participant?.isSpeaking && !participant.isScreenShareActive;
+    }),
+    ...nextOrder.filter(participantId => {
+      const participant = participantMap.get(participantId);
+
+      return (
+        !!participant?.isHandRaised &&
+        !participant.isScreenShareActive &&
+        !participant.isSpeaking
+      );
+    })
   ];
 
-  return allParticipants.sort(sortParticipants);
+  promotedParticipantIds.forEach((participantId, index) => {
+    swapParticipantOrder(nextOrder, participantId, index);
+  });
+
+  return nextOrder;
+};
+
+const areOrdersEqual = (left: string[], right: string[]) =>
+  left.length === right.length &&
+  left.every((participantId, index) => participantId === right[index]);
+
+const syncParticipantOrder = (participants: any[]) => {
+  const activeParticipantIds = participants.map(
+    participant => participant.tileId
+  );
+  const nextOrder = participantOrder.value.filter(participantId =>
+    activeParticipantIds.includes(participantId)
+  );
+
+  activeParticipantIds.forEach(participantId => {
+    if (!nextOrder.includes(participantId)) {
+      nextOrder.push(participantId);
+    }
+  });
+
+  const promotedOrder = buildPromotedParticipantOrder(participants, nextOrder);
+
+  if (!areOrdersEqual(promotedOrder, participantOrder.value)) {
+    participantOrder.value = promotedOrder;
+  }
+};
+
+const participantGridViews = computed(() => {
+  const orderIndexMap = new Map(
+    participantOrder.value.map((participantId, index) => [participantId, index])
+  );
+
+  return [...participantDisplayViews.value].sort((left, right) => {
+    const leftIndex = orderIndexMap.get(left.tileId) ?? Number.MAX_SAFE_INTEGER;
+    const rightIndex =
+      orderIndexMap.get(right.tileId) ?? Number.MAX_SAFE_INTEGER;
+
+    return leftIndex - rightIndex;
+  });
 });
 
 const participantGridCount = computed(() => participantGridViews.value.length);
@@ -733,7 +798,7 @@ const participantCountLabel = computed(() => {
   const count = participantDisplayCount.value;
 
   if (count % 10 === 1 && count % 100 !== 11) {
-    return `${count} участник`;
+    return `${count} ${singleParticipantLabel}`;
   }
 
   if (
@@ -741,19 +806,18 @@ const participantCountLabel = computed(() => {
     count % 10 <= 4 &&
     (count % 100 < 12 || count % 100 > 14)
   ) {
-    return `${count} участника`;
+    return `${count} ${fewParticipantsLabel}`;
   }
 
-  return `${count} участников`;
+  return `${count} ${manyParticipantsLabel}`;
 });
 const groupCallTitle = computed(() => {
   if (!isGroupCallLayout.value) {
     return (
-      displayUser.value?.initials || displayUser.value?.nickname || 'Звонок'
+      displayUser.value?.initials || displayUser.value?.nickname || callLabel
     );
   }
-
-  return currentCallTopic.value?.name || 'Групповой звонок';
+  return currentCallTopic.value?.name || groupCallLabel;
 });
 
 const resolvedGroupCallTitle = computed(
@@ -822,6 +886,14 @@ watch(
 );
 
 watch(
+  participantDisplayViews,
+  participants => {
+    syncParticipantOrder(participants);
+  },
+  { immediate: true, deep: true }
+);
+
+watch(
   remoteParticipantViews,
   participants => {
     participants.forEach(participant => {
@@ -879,6 +951,7 @@ watch(
     if (!participants.length) {
       focusedParticipantIdentity.value = null;
       hasManualParticipantSelection.value = false;
+      shouldSkipInitialParticipantAutofocus.value = true;
       isStageVideoOverlayVisible.value = false;
       videoOverlayRegion.value = null;
       return;
@@ -901,6 +974,14 @@ watch(
       if (!activeScreenShareParticipant) {
         focusedParticipantIdentity.value = null;
         hasManualParticipantSelection.value = false;
+        shouldSkipInitialParticipantAutofocus.value = false;
+        return;
+      }
+
+      if (shouldSkipInitialParticipantAutofocus.value) {
+        focusedParticipantIdentity.value = null;
+        hasManualParticipantSelection.value = false;
+        shouldSkipInitialParticipantAutofocus.value = false;
         return;
       }
 
@@ -943,6 +1024,25 @@ watch(
       isVideoOverlayControlsVisible.value = false;
       videoOverlayRegion.value = null;
     }
+  },
+  { immediate: true }
+);
+
+watch(
+  isCallOpen,
+  open => {
+    if (!open) {
+      focusedParticipantIdentity.value = null;
+      hasManualParticipantSelection.value = false;
+      shouldSkipInitialParticipantAutofocus.value = true;
+      currentParticipantPage.value = 0;
+      return;
+    }
+
+    focusedParticipantIdentity.value = null;
+    hasManualParticipantSelection.value = false;
+    shouldSkipInitialParticipantAutofocus.value = true;
+    currentParticipantPage.value = 0;
   },
   { immediate: true }
 );
