@@ -24,17 +24,6 @@ export interface ParsedCallExPayload {
   };
 }
 
-const normalizeMessageLines = (message: string): string[] =>
-  message
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<\/div>/gi, '\n')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/<[^>]+>/g, '')
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean);
-
 export const parseCallMessageEx = (
   messageEx?: unknown
 ): ParsedCallExPayload | null => {
