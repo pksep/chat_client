@@ -1,4 +1,21 @@
 import type { ITopic } from '../components/interfaces/interfaces';
+import { getFullMessagesByTopicId } from '../services/useMessages';
+
+const hasLocalUnreadUserMessages = (
+  topicId?: string,
+  authUserId?: string | null
+): boolean => {
+  if (!topicId || !authUserId) {
+    return false;
+  }
+
+  return getFullMessagesByTopicId(topicId).some(
+    message =>
+      !message.isSystem &&
+      message.senderUserId !== authUserId &&
+      message.isReadByMe !== true
+  );
+};
 
 export const getTopicUnreadBadgeCount = (
   topic?: ITopic,
@@ -11,6 +28,13 @@ export const getTopicUnreadBadgeCount = (
   if (
     (topic.unreadMessageCount || 0) <= 0 ||
     topic.lastMessage?.senderUserId === authUserId
+  ) {
+    return 0;
+  }
+
+  if (
+    topic.lastMessage?.isSystem &&
+    !hasLocalUnreadUserMessages(topic.id, authUserId)
   ) {
     return 0;
   }
