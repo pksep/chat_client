@@ -28,13 +28,6 @@
   font-size: var(--font-size-title, 16px);
 }
 
-.user-profile__title-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .user-profile__title-status {
   flex-shrink: 0;
   display: block;
@@ -50,4 +43,13 @@
 
 .user-profile__ex--online {
   color: var(--primary-base);
+}
+
+@media screen and (min-width: 769px) {
+  .user-profile__title-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }

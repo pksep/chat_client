@@ -115,19 +115,7 @@ export const parseCallMessage = (
     };
   }
 
-  const lines = normalizeMessageLines(message);
-  const title = lines[0] || '';
-  const normalizedTitle = title.toLowerCase();
-
   let kind: CallMessageKind | null = null;
-
-  if (normalizedTitle.includes('пропущ')) {
-    kind = 'missed';
-  } else if (normalizedTitle.includes('входящ')) {
-    kind = 'incoming';
-  } else if (normalizedTitle.includes('исходящ')) {
-    kind = 'outgoing';
-  }
 
   if (!kind) {
     return null;

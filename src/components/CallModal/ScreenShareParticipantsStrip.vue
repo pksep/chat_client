@@ -24,6 +24,7 @@
         class="call-modal__remote-tile"
         :class="{
           'call-modal__remote-tile--local': participant.isLocal,
+          'call-modal__remote-tile--speaking': participant.isSpeaking,
           'call-modal__remote-tile--active':
             focusedParticipant?.tileId === participant.tileId
         }"

@@ -559,6 +559,9 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
 }
 
 .call-modal__remote-video {
+  position: absolute;
+  inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -725,6 +728,10 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   border-color: #63d38d;
 }
 
+.call-modal__remote-tile--speaking {
+  border-color: #63d38d;
+}
+
 .call-modal__remote-grid--group-duo .call-modal__remote-tile {
   border-radius: 10px;
 }
@@ -744,6 +751,10 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   overflow: hidden;
   border-radius: 14px;
   background: #0f1736;
+}
+
+.call-modal__participant-stage--speaking {
+  box-shadow: inset 0 0 0 2px #63d38d;
 }
 
 .call-modal__participant-stage-button {
@@ -845,6 +856,8 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
 }
 
 .call-modal__remote-placeholder {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   display: flex;

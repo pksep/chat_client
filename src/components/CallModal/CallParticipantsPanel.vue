@@ -26,7 +26,10 @@
         v-for="participant in participants"
         :key="participant.tileId"
         class="call-modal__remote-tile"
-        :class="{ 'call-modal__remote-tile--local': participant.isLocal }"
+        :class="{
+          'call-modal__remote-tile--local': participant.isLocal,
+          'call-modal__remote-tile--speaking': participant.isSpeaking
+        }"
         @click="emit('select-participant', participant.tileId)"
       >
         <video
