@@ -36,11 +36,6 @@
           playsinline
           class="call-modal__remote-video"
         ></video>
-        <audio
-          v-if="participant.hasAudio"
-          :ref="el => setRemoteAudioRef(participant.identity, el as Element)"
-          autoplay
-        ></audio>
         <div
           v-if="!participant.isVideoActive"
           class="call-modal__remote-placeholder"
@@ -198,7 +193,6 @@ const props = defineProps<{
     isHandRaised: boolean;
   } | null;
   setRemoteVideoRef: (identity: string, el: Element | null) => void;
-  setRemoteAudioRef: (identity: string, el: Element | null) => void;
 }>();
 
 watch(

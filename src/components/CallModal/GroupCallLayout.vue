@@ -8,7 +8,6 @@
       :total-pages="totalPages"
       :go-to-page="goToPage"
       :set-remote-video-ref="setRemoteVideoRef"
-      :set-remote-audio-ref="setRemoteAudioRef"
       @select-participant="emit('select-participant', $event)"
     />
 
@@ -124,6 +123,5 @@ defineProps<{
   setScreenShareVideoRef: (el: Element | null) => void;
   setFocusedParticipantVideoRef: (el: Element | null) => void;
   setRemoteVideoRef: (identity: string, el: Element | null) => void;
-  setRemoteAudioRef: (identity: string, el: Element | null) => void;
 }>();
 </script>

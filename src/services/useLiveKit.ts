@@ -36,6 +36,26 @@ type ActiveGroupCallEntry = {
   startTime?: number | null;
 };
 
+type ParticipantMediaState = {
+  identity: string;
+  name: string;
+  videoStream: MediaStream | null;
+  cameraStream: MediaStream | null;
+  screenShareStream: MediaStream | null;
+  audioStream: MediaStream | null;
+  isVideoActive: boolean;
+  isScreenShareActive: boolean;
+  isHandRaised: boolean;
+  isSpeaking: boolean;
+  isMicActive: boolean;
+};
+
+type StreamCacheEntry = {
+  trackId: string;
+  track: MediaStreamTrack;
+  stream: MediaStream;
+};
+
 const open = ref(false);
 const isIncoming = ref(false);
 const isCalling = ref(false);
@@ -49,21 +69,7 @@ const isRemoteVideoActive = ref(false);
 const localVideoStream = ref<MediaStream | null>(null);
 const localScreenShareStream = ref<MediaStream | null>(null);
 const handRaisedParticipants = ref<Record<string, boolean>>({});
-const remoteParticipants = ref<
-  Array<{
-    identity: string;
-    name: string;
-    videoStream: MediaStream | null;
-    cameraStream: MediaStream | null;
-    screenShareStream: MediaStream | null;
-    audioStream: MediaStream | null;
-    isVideoActive: boolean;
-    isScreenShareActive: boolean;
-    isHandRaised: boolean;
-    isSpeaking: boolean;
-    isMicActive: boolean;
-  }>
->([]);
+const remoteParticipants = ref<ParticipantMediaState[]>([]);
 const activeGroupCalls = ref<Record<string, ActiveGroupCallEntry>>({});
 const invitedGroupCall = ref<{
   roomId: string;
@@ -98,6 +104,8 @@ let connectPromise: Promise<void> | null = null;
 let connectAttemptId = 0;
 let currentCameraFacingMode: 'user' | 'environment' = 'user';
 let shouldEndCallOnConnectFailure = false;
+const localTrackStreamCache = new Map<string, StreamCacheEntry>();
+const remoteTrackStreamCache = new Map<string, StreamCacheEntry>();
 
 const createRoomId = () => `livekit-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -321,6 +329,57 @@ const stopMediaStream = (stream?: MediaStream | null) => {
   });
 };
 
+const getCachedSingleTrackStream = (
+  cache: Map<string, StreamCacheEntry>,
+  cacheKey: string,
+  mediaStreamTrack?: MediaStreamTrack | null
+) => {
+  if (!mediaStreamTrack || mediaStreamTrack.readyState !== 'live') {
+    cache.delete(cacheKey);
+    return null;
+  }
+
+  const cachedStream = cache.get(cacheKey);
+  if (
+    cachedStream &&
+    cachedStream.trackId === mediaStreamTrack.id &&
+    cachedStream.track === mediaStreamTrack
+  ) {
+    return cachedStream.stream;
+  }
+
+  const stream = new MediaStream([mediaStreamTrack]);
+  cache.set(cacheKey, {
+    trackId: mediaStreamTrack.id,
+    track: mediaStreamTrack,
+    stream
+  });
+
+  return stream;
+};
+
+const clearTrackStreamCaches = () => {
+  localTrackStreamCache.clear();
+  remoteTrackStreamCache.clear();
+};
+
+const buildRemoteStreamCacheKey = (
+  participantIdentity: string,
+  kind: 'video' | 'camera' | 'screen' | 'audio'
+) => `${participantIdentity}:${kind}`;
+
+const pruneRemoteTrackStreamCache = (activeParticipantIds: string[]) => {
+  const activeParticipantIdSet = new Set(activeParticipantIds);
+
+  Array.from(remoteTrackStreamCache.keys()).forEach(cacheKey => {
+    const [participantIdentity] = cacheKey.split(':');
+
+    if (!activeParticipantIdSet.has(participantIdentity)) {
+      remoteTrackStreamCache.delete(cacheKey);
+    }
+  });
+};
+
 const stopLocalMediaTracks = () => {
   room?.localParticipant.audioTrackPublications.forEach(publication => {
     stopTrackPublication(publication);
@@ -338,6 +397,7 @@ const stopLocalMediaTracks = () => {
 
 const syncLocalTrackState = () => {
   if (!room) {
+    localTrackStreamCache.clear();
     localVideoStream.value = null;
     localScreenShareStream.value = null;
     return;
@@ -361,12 +421,16 @@ const syncLocalTrackState = () => {
     };
   }
 
-  localVideoStream.value = localVideoTrack?.mediaStreamTrack
-    ? new MediaStream([localVideoTrack.mediaStreamTrack])
-    : null;
-  localScreenShareStream.value = localScreenTrack?.mediaStreamTrack
-    ? new MediaStream([localScreenTrack.mediaStreamTrack])
-    : null;
+  localVideoStream.value = getCachedSingleTrackStream(
+    localTrackStreamCache,
+    'local-camera',
+    localVideoTrack?.mediaStreamTrack
+  );
+  localScreenShareStream.value = getCachedSingleTrackStream(
+    localTrackStreamCache,
+    'local-screen-share',
+    localScreenTrack?.mediaStreamTrack
+  );
 };
 
 const getActiveRemoteVideoPublication = (
@@ -402,51 +466,85 @@ const getActiveRemoteAudioPublication = (
     }
   );
 
+const buildRemoteParticipantState = (
+  remoteParticipant: RemoteParticipant
+): ParticipantMediaState => {
+  const cameraPublication = getActiveRemoteVideoPublication(
+    remoteParticipant,
+    Track.Source.Camera
+  );
+  const screenSharePublication = getActiveRemoteVideoPublication(
+    remoteParticipant,
+    Track.Source.ScreenShare
+  );
+  const audioPublication = getActiveRemoteAudioPublication(remoteParticipant);
+  const preferredVideoPublication = screenSharePublication || cameraPublication;
+
+  return {
+    identity: remoteParticipant.identity,
+    name: remoteParticipant.name || remoteParticipant.identity,
+    videoStream: getCachedSingleTrackStream(
+      remoteTrackStreamCache,
+      buildRemoteStreamCacheKey(remoteParticipant.identity, 'video'),
+      preferredVideoPublication?.track?.mediaStreamTrack
+    ),
+    cameraStream: getCachedSingleTrackStream(
+      remoteTrackStreamCache,
+      buildRemoteStreamCacheKey(remoteParticipant.identity, 'camera'),
+      cameraPublication?.track?.mediaStreamTrack
+    ),
+    screenShareStream: getCachedSingleTrackStream(
+      remoteTrackStreamCache,
+      buildRemoteStreamCacheKey(remoteParticipant.identity, 'screen'),
+      screenSharePublication?.track?.mediaStreamTrack
+    ),
+    audioStream: getCachedSingleTrackStream(
+      remoteTrackStreamCache,
+      buildRemoteStreamCacheKey(remoteParticipant.identity, 'audio'),
+      audioPublication?.track?.mediaStreamTrack
+    ),
+    isVideoActive: !!preferredVideoPublication?.track?.mediaStreamTrack,
+    isScreenShareActive: !!screenSharePublication?.track?.mediaStreamTrack,
+    isHandRaised: !!handRaisedParticipants.value[remoteParticipant.identity],
+    isSpeaking: !!remoteParticipant.isSpeaking,
+    isMicActive: !!audioPublication?.track?.mediaStreamTrack
+  };
+};
+
+const syncRemoteParticipantSpeakingState = () => {
+  if (!room || !remoteParticipants.value.length) {
+    return;
+  }
+
+  const speakingParticipantIds = new Set(
+    Array.from(room.remoteParticipants.values())
+      .filter(participant => participant.isSpeaking)
+      .map(participant => participant.identity)
+  );
+
+  remoteParticipants.value = remoteParticipants.value.map(participant => ({
+    ...participant,
+    isSpeaking: speakingParticipantIds.has(participant.identity)
+  }));
+};
+
 const syncRemoteParticipantState = () => {
   const activeRoom = room;
   if (!activeRoom) {
+    remoteTrackStreamCache.clear();
     remoteParticipants.value = [];
     isRemoteVideoActive.value = false;
     return;
   }
 
-  remoteParticipants.value = Array.from(
+  const nextRemoteParticipants = Array.from(
     activeRoom.remoteParticipants.values()
-  ).map(remoteParticipant => {
-    const cameraPublication = getActiveRemoteVideoPublication(
-      remoteParticipant,
-      Track.Source.Camera
-    );
-    const screenSharePublication = getActiveRemoteVideoPublication(
-      remoteParticipant,
-      Track.Source.ScreenShare
-    );
-    const audioPublication = getActiveRemoteAudioPublication(remoteParticipant);
-    const preferredVideoPublication =
-      screenSharePublication || cameraPublication;
+  ).map(buildRemoteParticipantState);
 
-    return {
-      identity: remoteParticipant.identity,
-      name: remoteParticipant.name || remoteParticipant.identity,
-      videoStream: preferredVideoPublication?.track?.mediaStreamTrack
-        ? new MediaStream([preferredVideoPublication.track.mediaStreamTrack])
-        : null,
-      cameraStream: cameraPublication?.track?.mediaStreamTrack
-        ? new MediaStream([cameraPublication.track.mediaStreamTrack])
-        : null,
-      screenShareStream: screenSharePublication?.track?.mediaStreamTrack
-        ? new MediaStream([screenSharePublication.track.mediaStreamTrack])
-        : null,
-      audioStream: audioPublication?.track?.mediaStreamTrack
-        ? new MediaStream([audioPublication.track.mediaStreamTrack])
-        : null,
-      isVideoActive: !!preferredVideoPublication?.track?.mediaStreamTrack,
-      isScreenShareActive: !!screenSharePublication?.track?.mediaStreamTrack,
-      isHandRaised: !!handRaisedParticipants.value[remoteParticipant.identity],
-      isSpeaking: !!remoteParticipant.isSpeaking,
-      isMicActive: !!audioPublication?.track?.mediaStreamTrack
-    };
-  });
+  pruneRemoteTrackStreamCache(
+    nextRemoteParticipants.map(participant => participant.identity)
+  );
+  remoteParticipants.value = nextRemoteParticipants;
 
   isRemoteVideoActive.value = remoteParticipants.value.some(
     participant => participant.isVideoActive
@@ -601,7 +699,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.ActiveSpeakersChanged, () => {
-      syncRemoteParticipantState();
+      syncRemoteParticipantSpeakingState();
     })
     .on(RoomEvent.ParticipantConnected, () => {
       syncRemoteParticipantState();
@@ -677,10 +775,10 @@ const getConnectErrorMessage = (error: unknown) => {
     error instanceof Error ? error.message.toLowerCase() : String(error);
 
   if (errorMessage.includes('429')) {
-    return 'Не удалось подключиться к звонку из-за ограничения запросов. Попробуйте еще раз через несколько секунд.';
+    return 'ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ Ð¿Ð¾Ð´ÐºÐ»ÑŽÑ‡Ð¸Ñ‚ÑŒÑÑ Ðº Ð·Ð²Ð¾Ð½ÐºÑƒ Ð¸Ð·-Ð·Ð° Ð¾Ð³Ñ€Ð°Ð½Ð¸Ñ‡ÐµÐ½Ð¸Ñ Ð·Ð°Ð¿Ñ€Ð¾ÑÐ¾Ð². ÐŸÐ¾Ð¿Ñ€Ð¾Ð±ÑƒÐ¹Ñ‚Ðµ ÐµÑ‰Ðµ Ñ€Ð°Ð· Ñ‡ÐµÑ€ÐµÐ· Ð½ÐµÑÐºÐ¾Ð»ÑŒÐºÐ¾ ÑÐµÐºÑƒÐ½Ð´.';
   }
 
-  return 'Не удалось подключиться к звонку. Попробуйте еще раз.';
+  return 'ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ Ð¿Ð¾Ð´ÐºÐ»ÑŽÑ‡Ð¸Ñ‚ÑŒÑÑ Ðº Ð·Ð²Ð¾Ð½ÐºÑƒ. ÐŸÐ¾Ð¿Ñ€Ð¾Ð±ÑƒÐ¹Ñ‚Ðµ ÐµÑ‰Ðµ Ñ€Ð°Ð·.';
 };
 
 const connectToRoom = async () => {
@@ -771,6 +869,7 @@ const connectToRoom = async () => {
 };
 
 const resetMediaState = () => {
+  clearTrackStreamCaches();
   currentCameraFacingMode = 'user';
   localVideoStream.value = null;
   localScreenShareStream.value = null;
