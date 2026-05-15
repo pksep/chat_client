@@ -597,14 +597,6 @@ dialog.menu-profile__wallpaper-modal > .modal-yui-kit__modal-content {
     min-width: 0;
   }
 
-  .menu-profile__wallpaper-preview-mobile
-    .system-message-text
-    .message-content__html {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   .menu-profile__wallpaper-preview-actions {
     display: grid;
     gap: 10px;

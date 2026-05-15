@@ -78,11 +78,19 @@
         :set-screen-share-video-ref="setScreenShareVideoRef"
         :set-focused-participant-video-ref="setFocusedParticipantVideoRef"
         :set-remote-video-ref="setRemoteVideoRef"
-        :set-remote-audio-ref="setRemoteAudioRef"
         @open-video-overlay="openStageVideoOverlay"
         @select-participant="handleSelectParticipant"
         @switch-local-camera="handleSwitchLocalCamera"
       />
+
+      <div v-if="shouldShowMediaLayout" class="call-modal__remote-audio-layer">
+        <audio
+          v-for="participant in remoteAudioParticipants"
+          :key="participant.identity"
+          :ref="el => setRemoteAudioRef(participant.identity, el as Element)"
+          autoplay
+        ></audio>
+      </div>
 
       <div class="call-modal__controls">
         <template v-if="isIncoming">
@@ -238,7 +246,6 @@
               :total-pages="totalParticipantPages"
               :go-to-page="goToParticipantPage"
               :set-remote-video-ref="setOverlayRemoteVideoRef"
-              :set-remote-audio-ref="setOverlayRemoteAudioRef"
               @select-participant="handleSelectParticipant"
             />
           </div>
@@ -539,6 +546,12 @@ const remoteParticipantViews = computed(() =>
 
     return buildParticipantEntries(participant, knownUser, false);
   })
+);
+
+const remoteAudioParticipants = computed(() =>
+  remoteParticipants.value.filter(
+    participant => !!participant.audioStream && !!participant.isMicActive
+  )
 );
 
 const currentCallTopic = computed(() =>
@@ -1020,8 +1033,6 @@ const setOverlayRemoteVideoRef = (tileId: string, el: Element | null) => {
     );
   }
 };
-
-const setOverlayRemoteAudioRef = () => {};
 
 const setRemoteAudioRef = (identity: string, el: Element | null) => {
   remoteAudioRefs.value[identity] = el as HTMLAudioElement | null;

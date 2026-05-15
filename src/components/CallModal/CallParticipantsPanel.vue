@@ -5,7 +5,6 @@
       :participants="participants"
       :focused-participant="focusedParticipant"
       :set-remote-video-ref="setRemoteVideoRef"
-      :set-remote-audio-ref="setRemoteAudioRef"
       @select-participant="emit('select-participant', $event)"
     />
     <div
@@ -37,11 +36,6 @@
           playsinline
           class="call-modal__remote-video"
         ></video>
-        <audio
-          v-if="participant.hasAudio"
-          :ref="el => setRemoteAudioRef(participant.identity, el as Element)"
-          autoplay
-        ></audio>
         <div
           v-if="!participant.isVideoActive"
           class="call-modal__remote-placeholder"
@@ -140,6 +134,5 @@ defineProps<{
   totalPages: number;
   goToPage: (page: number) => void;
   setRemoteVideoRef: (identity: string, el: Element | null) => void;
-  setRemoteAudioRef: (identity: string, el: Element | null) => void;
 }>();
 </script>
