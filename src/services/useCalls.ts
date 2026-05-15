@@ -81,8 +81,8 @@ export const handleCallAnswered = (
   handleLiveKitAnswered(userId, roomId, startTime);
 };
 
-export const handleCallEnded = () => {
-  handleLiveKitEnded();
+export const handleCallEnded = (roomId?: string, topicId?: string) => {
+  handleLiveKitEnded(roomId, topicId);
 };
 
 export const dismissIncomingCall = (roomId?: string, topicId?: string) => {
