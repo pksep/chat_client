@@ -70,6 +70,8 @@ const localVideoStream = ref<MediaStream | null>(null);
 const localScreenShareStream = ref<MediaStream | null>(null);
 const handRaisedParticipants = ref<Record<string, boolean>>({});
 const remoteParticipants = ref<ParticipantMediaState[]>([]);
+const pendingEndCallRoomId = ref<string | null>(null);
+const pendingEndCallTopicId = ref<string | null>(null);
 const activeGroupCalls = ref<Record<string, ActiveGroupCallEntry>>({});
 const invitedGroupCall = ref<{
   roomId: string;
@@ -106,6 +108,8 @@ let currentCameraFacingMode: 'user' | 'environment' = 'user';
 let shouldEndCallOnConnectFailure = false;
 const localTrackStreamCache = new Map<string, StreamCacheEntry>();
 const remoteTrackStreamCache = new Map<string, StreamCacheEntry>();
+let pendingEndCallRetryTimeout: ReturnType<typeof setTimeout> | null = null;
+let pendingEndCallFinalizeTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const createRoomId = () => `livekit-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -137,6 +141,24 @@ const clearUnavailableCallState = (
   removeInvitedGroupCallEntry(targetRoomId);
 };
 
+const clearPendingEndCallTimers = () => {
+  if (pendingEndCallRetryTimeout) {
+    clearTimeout(pendingEndCallRetryTimeout);
+    pendingEndCallRetryTimeout = null;
+  }
+
+  if (pendingEndCallFinalizeTimeout) {
+    clearTimeout(pendingEndCallFinalizeTimeout);
+    pendingEndCallFinalizeTimeout = null;
+  }
+};
+
+const resetPendingEndCallState = () => {
+  clearPendingEndCallTimers();
+  pendingEndCallRoomId.value = null;
+  pendingEndCallTopicId.value = null;
+};
+
 const emitEndCallEvent = (
   targetRoomId?: string | null,
   targetTopicId?: string | null
@@ -154,6 +176,51 @@ const emitEndCallEvent = (
     userId: me.id
   });
 };
+
+const schedulePendingEndCallConfirmation = (
+  targetRoomId?: string | null,
+  targetTopicId?: string | null
+) => {
+  if (!targetRoomId || !targetTopicId) {
+    resetPendingEndCallState();
+    return;
+  }
+
+  clearPendingEndCallTimers();
+  pendingEndCallRoomId.value = targetRoomId;
+  pendingEndCallTopicId.value = targetTopicId;
+
+  pendingEndCallRetryTimeout = setTimeout(() => {
+    if (
+      pendingEndCallRoomId.value === targetRoomId &&
+      pendingEndCallTopicId.value === targetTopicId
+    ) {
+      emitEndCallEvent(targetRoomId, targetTopicId);
+    }
+  }, 1500);
+
+  pendingEndCallFinalizeTimeout = setTimeout(() => {
+    if (
+      pendingEndCallRoomId.value === targetRoomId &&
+      pendingEndCallTopicId.value === targetTopicId
+    ) {
+      resetPendingEndCallState();
+      if (roomId.value === targetRoomId) {
+        roomId.value = null;
+      }
+      if (topicId.value === targetTopicId) {
+        topicId.value = null;
+      }
+    }
+  }, 7000);
+};
+
+const matchesPendingEndCall = (
+  targetRoomId?: string | null,
+  targetTopicId?: string | null
+): boolean =>
+  (!!targetRoomId && pendingEndCallRoomId.value === targetRoomId) ||
+  (!!targetTopicId && pendingEndCallTopicId.value === targetTopicId);
 
 const getLiveKitCallStatus = async (
   targetRoomId?: string | null,
@@ -755,6 +822,10 @@ const setupRoomListeners = (activeRoom: Room) => {
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.Disconnected, () => {
+      if (matchesPendingEndCall(roomId.value, topicId.value)) {
+        return;
+      }
+
       cleanup(false);
     });
 };
@@ -1165,8 +1236,24 @@ export const handleCallAnswered = async (
   }
 };
 
-export const handleCallEnded = () => {
-  cleanup(true);
+export const handleCallEnded = (
+  endedRoomId?: string | null,
+  endedTopicId?: string | null
+) => {
+  if (matchesPendingEndCall(endedRoomId, endedTopicId)) {
+    resetPendingEndCallState();
+    roomId.value = null;
+    topicId.value = null;
+    return;
+  }
+
+  if (
+    (endedRoomId && roomId.value === endedRoomId) ||
+    (endedTopicId && topicId.value === endedTopicId) ||
+    (!endedRoomId && !endedTopicId)
+  ) {
+    cleanup(true);
+  }
 };
 
 export const dismissIncomingCallState = (
@@ -1344,8 +1431,6 @@ export const toggleHandRaise = async () => {
 };
 
 export const leaveCall = () => {
-  const sdk = getChatSDK();
-  const me = getAuthUser();
   const activeRoomId = roomId.value;
   const activeTopicId = topicId.value;
   const activeCaller = user.value;
@@ -1372,25 +1457,47 @@ export const leaveCall = () => {
     void isLiveKitCallAvailable(activeRoomId, activeTopicId);
   }
 
-  if (sdk && me && activeRoomId && activeTopicId) {
-    sdk.sendWebSocketEvent(WebSocketEventType.END_CALL, {
-      roomId: activeRoomId,
-      topicId: activeTopicId,
-      userId: me.id
-    });
-  }
+  schedulePendingEndCallConfirmation(activeRoomId, activeTopicId);
+  emitEndCallEvent(activeRoomId, activeTopicId);
 
   if (invitedGroupCall.value?.roomId === activeRoomId) {
     invitedGroupCall.value = null;
   }
 
-  cleanup(true);
+  connectAttemptId += 1;
+  connectPromise = null;
+  shouldEndCallOnConnectFailure = false;
+  clearDialingTimeout();
+  stopTimer();
+  stopRingtone();
+  stopDialingSound();
+
+  const activeRoom = room;
+
+  stopLocalMediaTracks();
+
+  if (activeRoom) {
+    activeRoom.disconnect();
+  }
+
+  room = null;
+  open.value = false;
+  isIncoming.value = false;
+  isCalling.value = false;
+  isModalVisible.value = false;
+  user.value = null;
+  resetMediaState();
+
+  if (Capacitor.isNativePlatform()) {
+    endAllCallKits();
+  }
 };
 
 export const cleanup = (disconnectRoom = true) => {
   connectAttemptId += 1;
   connectPromise = null;
   shouldEndCallOnConnectFailure = false;
+  resetPendingEndCallState();
   clearDialingTimeout();
   stopTimer();
   stopRingtone();
