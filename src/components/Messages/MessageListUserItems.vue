@@ -121,10 +121,7 @@ import {
   toggleSelectedMessage
 } from '../../composables/useSelectedMessages';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
-import {
-  parseCallMessage,
-  parseCallMessageEx
-} from '../../utils/parseCallMessage';
+import { parseCallMessage } from '../../utils/parseCallMessage';
 import { parseUserEx } from '../../utils/parseUserEx';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
@@ -289,9 +286,11 @@ const shouldHideMessageFromChat = (message?: IMessage): boolean => {
     return false;
   }
 
-  const parsedEx = parseCallMessageEx(message.ex);
+  return true;
 
-  return parsedEx?.type === 'call' && parsedEx.call?.event === 'start';
+  // const parsedEx = parseCallMessageEx(message.ex);
+
+  // return parsedEx?.type === 'call' && parsedEx.call?.event === 'start';
 };
 
 const visibleMessages = computed(() =>

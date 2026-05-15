@@ -14,6 +14,9 @@
     <div
       v-if="!!focusedParticipant"
       class="call-modal__participant-stage"
+      :class="{
+        'call-modal__participant-stage--speaking': focusedParticipant.isSpeaking
+      }"
       @click="emit('select-participant', null)"
     >
       <button
@@ -112,6 +115,7 @@ defineProps<{
     avatarUrl: string;
     isLocal: boolean;
     isHandRaised: boolean;
+    isSpeaking: boolean;
     isMicActive: boolean;
   } | null;
   focusedParticipantHasVideo: boolean;

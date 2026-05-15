@@ -155,6 +155,7 @@ import {
   usePendingForwardMessages
 } from '../composables/useForwardMessages';
 import { ensureMediaObjectUrl } from '../services/useMediaBlobCache';
+import { getTopicUnreadBadgeCount } from '../utils/topicUnreadBadge';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -201,8 +202,8 @@ const isSelectionMode = computed(() =>
 const activeTopic = computed(() =>
   route.value.id ? getSelectedTopic(route.value.id) : null
 );
-const topicUnreadCount = computed(
-  () => activeTopic.value?.unreadMessageCount || 0
+const topicUnreadCount = computed(() =>
+  getTopicUnreadBadgeCount(activeTopic.value || undefined, authUser.value?.id)
 );
 const isViewingBottom = computed(
   () =>
@@ -496,7 +497,10 @@ const shouldResetUnreadForCurrentTopic = (): boolean => {
   const lastMessage = state.messages.at(-1);
   const currentUserId = authUser.value?.id;
   const topicUnreadCount = route.value?.id
-    ? getSelectedTopic(route.value.id)?.unreadMessageCount || 0
+    ? getTopicUnreadBadgeCount(
+        getSelectedTopic(route.value.id),
+        authUser.value?.id
+      )
     : 0;
 
   if (topicUnreadCount > 0) {
@@ -698,7 +702,10 @@ watch(
     suspendHistoryFetch(TOPIC_SWITCH_HISTORY_FETCH_GRACE_MS);
     applyUnreadMarkerStateForTopic(topicId);
 
-    const topicUnreadCount = getSelectedTopic(topicId)?.unreadMessageCount || 0;
+    const topicUnreadCount = getTopicUnreadBadgeCount(
+      getSelectedTopic(topicId),
+      authUser.value?.id
+    );
     const initialMessagesLimit = Math.max(100, topicUnreadCount + 20);
 
     state.replyMessage = null;

@@ -24,17 +24,6 @@ export interface ParsedCallExPayload {
   };
 }
 
-const normalizeMessageLines = (message: string): string[] =>
-  message
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<\/div>/gi, '\n')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/<[^>]+>/g, '')
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean);
-
 export const parseCallMessageEx = (
   messageEx?: unknown
 ): ParsedCallExPayload | null => {
@@ -115,33 +104,5 @@ export const parseCallMessage = (
     };
   }
 
-  const lines = normalizeMessageLines(message);
-  const title = lines[0] || '';
-  const normalizedTitle = title.toLowerCase();
-
-  let kind: CallMessageKind | null = null;
-
-  if (normalizedTitle.includes('пропущ')) {
-    kind = 'missed';
-  } else if (normalizedTitle.includes('входящ')) {
-    kind = 'incoming';
-  } else if (normalizedTitle.includes('исходящ')) {
-    kind = 'outgoing';
-  }
-
-  if (!kind) {
-    return null;
-  }
-
-  return {
-    kind,
-    title:
-      kind === 'missed'
-        ? 'Пропущенный'
-        : kind === 'outgoing'
-          ? 'Исходящий'
-          : 'Входящий',
-    duration: null,
-    isOutgoing: kind === 'outgoing'
-  };
+  return null;
 };

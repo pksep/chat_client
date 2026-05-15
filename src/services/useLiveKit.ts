@@ -188,8 +188,14 @@ const isLiveKitCallAvailable = async (
 };
 
 const formatTime = (seconds: number) => {
-  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
   const secs = seconds % 60;
+
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+
   return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
@@ -775,10 +781,10 @@ const getConnectErrorMessage = (error: unknown) => {
     error instanceof Error ? error.message.toLowerCase() : String(error);
 
   if (errorMessage.includes('429')) {
-    return 'ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ Ð¿Ð¾Ð´ÐºÐ»ÑŽÑ‡Ð¸Ñ‚ÑŒÑÑ Ðº Ð·Ð²Ð¾Ð½ÐºÑƒ Ð¸Ð·-Ð·Ð° Ð¾Ð³Ñ€Ð°Ð½Ð¸Ñ‡ÐµÐ½Ð¸Ñ Ð·Ð°Ð¿Ñ€Ð¾ÑÐ¾Ð². ÐŸÐ¾Ð¿Ñ€Ð¾Ð±ÑƒÐ¹Ñ‚Ðµ ÐµÑ‰Ðµ Ñ€Ð°Ð· Ñ‡ÐµÑ€ÐµÐ· Ð½ÐµÑÐºÐ¾Ð»ÑŒÐºÐ¾ ÑÐµÐºÑƒÐ½Ð´.';
+    return 'Не удалось подключиться к звонку из-за ограничения запросов. Попробуйте еще раз через несколько секунд.';
   }
 
-  return 'ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ Ð¿Ð¾Ð´ÐºÐ»ÑŽÑ‡Ð¸Ñ‚ÑŒÑÑ Ðº Ð·Ð²Ð¾Ð½ÐºÑƒ. ÐŸÐ¾Ð¿Ñ€Ð¾Ð±ÑƒÐ¹Ñ‚Ðµ ÐµÑ‰Ðµ Ñ€Ð°Ð·.';
+  return 'Не удалось подключиться к звонку. Попробуйте еще раз.';
 };
 
 const connectToRoom = async () => {
@@ -876,7 +882,7 @@ const resetMediaState = () => {
   remoteParticipants.value = [];
   handRaisedParticipants.value = {};
   isRemoteVideoActive.value = false;
-  state.isMicActive = true;
+  state.isMicActive = false;
   state.isVideoActive = false;
   state.isScreenSharingActive = false;
   state.isSpeakerActive = false;
