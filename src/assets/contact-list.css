@@ -354,7 +354,7 @@ svg.icon-yui-kit.contact-list__read-icon {
   .contact-list,
   .menu-profile {
     max-height: initial;
-    padding: 0 !important;
+    padding: 0 0 80px !important;
   }
 
   .contact-list__block--wrapper {

@@ -183,13 +183,18 @@
     grid-template-rows: auto minmax(0, 1fr);
   }
 
+  .calls-page__list {
+    max-height: calc(100dvh - 120px);
+    padding-bottom: 80px;
+  }
+
   .calls-page__headline {
     justify-content: space-between;
     padding-top: 10px;
   }
 
   .calls-page__content {
-    padding: 0 16px 24px;
+    padding: 0 16px;
   }
 
   .calls-page__avatar {
