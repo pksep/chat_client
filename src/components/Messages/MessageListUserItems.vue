@@ -286,7 +286,7 @@ const shouldHideMessageFromChat = (message?: IMessage): boolean => {
     return false;
   }
 
-  return true;
+  return false;
 
   // const parsedEx = parseCallMessageEx(message.ex);
 
