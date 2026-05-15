@@ -115,21 +115,5 @@ export const parseCallMessage = (
     };
   }
 
-  let kind: CallMessageKind | null = null;
-
-  if (!kind) {
-    return null;
-  }
-
-  return {
-    kind,
-    title:
-      kind === 'missed'
-        ? 'Пропущенный'
-        : kind === 'outgoing'
-          ? 'Исходящий'
-          : 'Входящий',
-    duration: null,
-    isOutgoing: kind === 'outgoing'
-  };
+  return null;
 };
