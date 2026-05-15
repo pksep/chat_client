@@ -2,7 +2,7 @@
   <template v-if="docFiles.length > 0">
     <div class="message-file-stack">
       <div v-if="props.forwardUser" class="message-reference-forward">
-        Переслано: от {{ props.forwardUser.initials }}
+        {{ forwardedLabel }} {{ props.forwardUser.initials }}
       </div>
       <article
         ref="filesArticleRef"
@@ -33,15 +33,15 @@
           :data-testid="`${props.dataTestid}-Content`"
         >
           <div
-            @click="handleFileClick(media, i)"
-            @contextmenu.prevent
             class="message-content__file"
             :data-testid="`${props.dataTestid}-FileContainer`"
+            @click="handleFileClick(media, i)"
+            @contextmenu.prevent
           >
             <FileIcon
               :is-me-sender="props.isMeSender"
               :dataTestid="`${props.dataTestid}-FileIcon`"
-              :is-loaded="!media.isLoading"
+              :is-loaded="!media.isLoading && !media.isDownloading"
               :percent="media.uploadPercent ?? null"
             />
             <div :data-testid="`${props.dataTestid}-FileInfo`">
@@ -50,7 +50,7 @@
                   class="message-content__file__name"
                   :data-testid="`${props.dataTestid}-FileName`"
                 >
-                  {{ getShortName(media.originName) }}
+                  {{ getDownloadFileName(media.originName) }}
                 </p>
                 <p
                   class="message-content__file__size"
@@ -77,8 +77,8 @@
             :data-testid="`${props.dataTestid}-Time`"
           >
             <PinIcon
-              style="width: 15px; height: 15px; margin-right: -2px"
               v-if="props.isPin"
+              style="width: 15px; height: 15px; margin-right: -2px"
             />
             <span :data-testid="`${props.dataTestid}-TimeText`">{{
               props.time
@@ -96,15 +96,15 @@
           </div>
         </div>
         <div
-          class="message-time"
           v-if="
             !props.loader && !props.file && !hasReactions && !hasInlineCaption
           "
+          class="message-time"
           :data-testid="`${props.dataTestid}-Time`"
         >
           <PinIcon
-            style="width: 15px; height: 15px; margin-right: -2px"
             v-if="props.isPin"
+            style="width: 15px; height: 15px; margin-right: -2px"
           />
           <span :data-testid="`${props.dataTestid}-TimeText`">{{
             props.time
@@ -126,13 +126,13 @@
               <MessageEmojies :reactions="props.reactions" />
             </div>
             <div
-              class="message-time message-time--bottom"
               v-if="!props.loader && !props.file"
+              class="message-time message-time--bottom"
               :data-testid="`${props.dataTestid}-Time`"
             >
               <PinIcon
-                style="width: 15px; height: 15px; margin-right: -2px"
                 v-if="props.isPin"
+                style="width: 15px; height: 15px; margin-right: -2px"
               />
               <span :data-testid="`${props.dataTestid}-TimeText`">{{
                 props.time
@@ -157,14 +157,14 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import type { IMessageBubbleProps } from './interface/interface';
 import { MediaType } from '@pksep/zod-shared-chat';
+import type { IMessageBubbleProps } from './interface/interface';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import FileIcon from '../UI/FileIcon.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import MessageEmojies from './MessageEmojies.vue';
 import ErrorIcon from '../UI/ErrorIcon.vue';
-import { getFormatFileSize, getShortName } from '../../utils/getFormatFileSize';
+import { getFormatFileSize } from '../../utils/getFormatFileSize';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { useMessageMedia } from './composables/useMessageMedia';
@@ -172,17 +172,30 @@ import MessageReferenceBlock from './MessageReferenceBlock.vue';
 import MessageBubbleTail from './MessageBubbleTail.vue';
 import { stripHtml } from '../../utils/stripHtml';
 import MessageAuthorMeta from './MessageAuthorMeta.vue';
+import {
+  downloadMessageFile,
+  getDownloadFileName
+} from '../../services/useFileDownload';
+import { showErrorNotification } from '../../composables/useNotifications';
 
 const props = defineProps<IMessageBubbleProps>();
 
 const emits = defineEmits(['navigate-message', 'set-slider']);
-const { primeMediaCache } = useMessageMedia();
+const { isSliderContentUrl, primeMediaCache } = useMessageMedia();
+const forwardedLabel =
+  '\u041f\u0435\u0440\u0435\u0441\u043b\u0430\u043d\u043e: \u043e\u0442';
+const downloadFailedNotificationText =
+  '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043a\u0430\u0447\u0430\u0442\u044c \u0444\u0430\u0439\u043b';
 
 const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
 const filesArticleRef = ref<HTMLElement | null>(null);
 const shouldPrimeFiles = ref(false);
 let filesVisibilityObserver: IntersectionObserver | null = null;
+const downloadFeedbackTimeouts = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+>();
 
 const docFiles = computed(
   () => props.media?.filter(media => media.type === MediaType.File) || []
@@ -243,6 +256,8 @@ onMounted(() => {
 onUnmounted(() => {
   filesVisibilityObserver?.disconnect();
   filesVisibilityObserver = null;
+  downloadFeedbackTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+  downloadFeedbackTimeouts.clear();
 });
 
 const showErrorIcon = computed(
@@ -252,7 +267,27 @@ const showErrorIcon = computed(
 );
 const hasReactions = computed(() => Boolean(props.reactions?.length));
 
-const handleFileClick = (
+const clearDownloadFeedbackLater = (
+  media: (typeof docFiles.value)[number],
+  delayMs: number
+) => {
+  const timeoutKey = media.id || media.path || media.originName;
+  const existingTimeout = downloadFeedbackTimeouts.get(timeoutKey);
+
+  if (existingTimeout) {
+    clearTimeout(existingTimeout);
+  }
+
+  const timeoutId = setTimeout(() => {
+    media.isDownloading = false;
+    media.downloadError = false;
+    downloadFeedbackTimeouts.delete(timeoutKey);
+  }, delayMs);
+
+  downloadFeedbackTimeouts.set(timeoutKey, timeoutId);
+};
+
+const handleFileClick = async (
   media: (typeof docFiles.value)[number],
   index: number
 ) => {
@@ -260,7 +295,34 @@ const handleFileClick = (
     return;
   }
 
-  emits('set-slider', docFiles.value, index);
+  if (isSliderContentUrl(media.originName || '')) {
+    emits('set-slider', docFiles.value, index);
+    return;
+  }
+
+  media.downloadError = false;
+  media.isDownloading = true;
+
+  try {
+    await downloadMessageFile(media);
+    clearDownloadFeedbackLater(media, 2500);
+  } catch (error) {
+    media.isDownloading = false;
+    media.downloadError = true;
+
+    console.error(
+      '[MessageFileDownload] Failed to download file from message',
+      {
+        mediaId: media.id,
+        mediaPath: media.path,
+        fileName: media.originName,
+        error
+      }
+    );
+
+    showErrorNotification(downloadFailedNotificationText);
+    clearDownloadFeedbackLater(media, 4000);
+  }
 };
 
 const messageArticleStyles = computed(() => [

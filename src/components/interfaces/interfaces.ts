@@ -83,6 +83,8 @@ export type IMedia = Media & {
   originName: string;
   uploadPercent?: number | null;
   uploadError?: boolean;
+  isDownloading?: boolean;
+  downloadError?: boolean;
   ex?: {
     width?: number;
     height?: number;

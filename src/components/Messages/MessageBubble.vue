@@ -98,7 +98,6 @@ import MessageBubbleFiles from './MessageBubbleFiles.vue';
 import MessageBubbleMedia from './MessageBubbleMedia.vue';
 import { useMessageMedia } from './composables/useMessageMedia';
 import { isMessageSelectionModeForTopic } from '../../composables/useSelectedMessages';
-import { ensureMediaObjectUrl } from '../../services/useMediaBlobCache';
 import { stripHtml } from '../../utils/stripHtml';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
@@ -148,36 +147,12 @@ const handleNavigateMessage = () => {
   emits('unmount-navigate-message-id', props.replyMessage?.id);
 };
 
-const downloadMediaFile = async (media: IMedia) => {
-  const fallbackUrl = getFullMediaPath(media, false);
-  const fileName = media.originName || 'file';
-  const cachedObjectUrl = await ensureMediaObjectUrl(media.path);
-
-  const link = document.createElement('a');
-
-  link.href = cachedObjectUrl || fallbackUrl;
-  link.download = fileName;
-
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
-
 const setSliderElement = async (medias: IMedia[], defaultIndex: number = 0) => {
   if (props.isSelectionMode) {
     return;
   }
 
   const selectedMedia = medias[defaultIndex];
-
-  // Download logic
-  if (
-    selectedMedia.type === MediaType.File &&
-    !isSliderContentUrl(selectedMedia.originName)
-  ) {
-    await downloadMediaFile(selectedMedia);
-    return;
-  }
 
   const sliderMedias = medias.filter(media =>
     isSliderContentUrl(getFullMediaPath(media, false))

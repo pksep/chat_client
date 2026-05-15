@@ -188,8 +188,17 @@ const isLiveKitCallAvailable = async (
 };
 
 const formatTime = (seconds: number) => {
+  const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor(seconds / 60);
   const secs = seconds % 60;
+  const normalizedMinutes = Math.floor((seconds % 3600) / 60);
+
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, '0')}:${normalizedMinutes
+      .toString()
+      .padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+
   return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
@@ -806,6 +815,11 @@ const connectToRoom = async () => {
 
     room?.disconnect();
     const nextRoom = new Room({
+      audioCaptureDefaults: {
+        autoGainControl: true,
+        echoCancellation: true,
+        noiseSuppression: true
+      },
       adaptiveStream: true,
       dynacast: true
     });
