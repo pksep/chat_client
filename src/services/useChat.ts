@@ -43,6 +43,7 @@ import {
   handleIncomingCall,
   handleCallAnswered,
   handleCallEnded,
+  dismissIncomingCall,
   removeActiveGroupCall,
   removeInvitedGroupCall,
   restoreInvitedGroupCallFromUrl,
@@ -559,7 +560,13 @@ const setupChatListeners = (): void => {
     if (Capacitor.isNativePlatform()) {
       endAllCallKits();
     }
-    handleCallAnswered(payload.userId, payload.roomId, payload.startTime);
+    dismissIncomingCall(payload.roomId, payload.topicId);
+    handleCallAnswered(
+      payload.userId,
+      payload.roomId,
+      payload.topicId,
+      payload.startTime
+    );
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.ACTIVE_CALLS, ({ payload }) => {
@@ -573,6 +580,26 @@ const setupChatListeners = (): void => {
       endAllCallKits();
     }
     handleCallEnded(payload.roomId, payload.topicId);
+
+    if (payload.topicId) {
+      const endedTopic = useTopics().getSelectedTopic(payload.topicId) as any;
+
+      if (endedTopic?.type === TopicType.DM) {
+        void (async () => {
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          await Promise.allSettled([
+            fetchMessagesForTopic(payload.topicId, {
+              limit: 50,
+              forceRefresh: true,
+              forceNetwork: true,
+              syncLastMessage: true
+            }),
+            fetchAllTopics()
+          ]);
+        })();
+      }
+    }
   });
 };
 

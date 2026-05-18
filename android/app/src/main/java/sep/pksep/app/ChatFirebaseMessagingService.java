@@ -21,6 +21,18 @@ public class ChatFirebaseMessagingService extends FirebaseMessagingService {
             return;
         }
 
+        String action = data.get("action");
+        if ("DISMISS_INCOMING_CALL".equals(action)) {
+            String dismissRoomId = data.get("roomId");
+
+            if (dismissRoomId != null && !dismissRoomId.trim().isEmpty()) {
+                IncomingCallNotificationHelper.dismissIncomingCall(this, dismissRoomId);
+            } else {
+                IncomingCallNotificationHelper.dismissAllIncomingCalls(this);
+            }
+            return;
+        }
+
         String type = data.get("type");
         if (!"incoming_call".equals(type)) {
             return;
