@@ -173,19 +173,6 @@ const markIncomingCallDismissed = (
   }
 };
 
-const clearDismissedIncomingCall = (
-  targetRoomId?: string | null,
-  targetTopicId?: string | null
-) => {
-  if (targetRoomId) {
-    dismissedIncomingCallRooms.delete(targetRoomId);
-  }
-
-  if (targetTopicId) {
-    dismissedIncomingCallTopics.delete(targetTopicId);
-  }
-};
-
 const isIncomingCallDismissed = (
   targetRoomId?: string | null,
   targetTopicId?: string | null
@@ -999,6 +986,25 @@ const getConnectErrorMessage = (error: unknown) => {
   return 'Не удалось подключиться к звонку. Попробуйте еще раз.';
 };
 
+const isExpectedConnectAbort = (
+  error: unknown,
+  targetRoomId?: string | null,
+  targetTopicId?: string | null,
+  currentAttemptId?: number,
+  activeRoom?: Room | null
+) => {
+  const errorMessage =
+    error instanceof Error ? error.message.toLowerCase() : String(error);
+
+  return (
+    errorMessage.includes('client initiated disconnect') ||
+    (!!currentAttemptId && currentAttemptId !== connectAttemptId) ||
+    (!!activeRoom && room !== activeRoom) ||
+    matchesPendingEndCall(targetRoomId, targetTopicId) ||
+    isIncomingCallDismissed(targetRoomId, targetTopicId)
+  );
+};
+
 const connectToRoom = async () => {
   if (connectPromise) {
     return connectPromise;
@@ -1034,8 +1040,20 @@ const connectToRoom = async () => {
     try {
       await nextRoom.connect(config.CHAT_LIVEKIT_URL, token);
     } catch (error) {
+      const isExpectedAbort = isExpectedConnectAbort(
+        error,
+        activeRoomId,
+        activeTopicId,
+        currentAttemptId,
+        nextRoom
+      );
+
       if (room === nextRoom) {
         room = null;
+      }
+
+      if (isExpectedAbort) {
+        return;
       }
 
       if (
@@ -1359,8 +1377,11 @@ export const joinInvitedGroupCall = async () => {
 export const handleCallAnswered = async (
   answeredUserId: string,
   answeredRoomId?: string,
+  answeredTopicId?: string | null,
   answeredStartTime?: number | null
 ) => {
+  markIncomingCallDismissed(answeredRoomId, answeredTopicId);
+
   if (answeredRoomId && roomId.value === answeredRoomId) {
     setCallStartedAt(answeredStartTime ?? callStartedAt.value);
   }

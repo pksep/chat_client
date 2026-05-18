@@ -561,7 +561,12 @@ const setupChatListeners = (): void => {
       endAllCallKits();
     }
     dismissIncomingCall(payload.roomId, payload.topicId);
-    handleCallAnswered(payload.userId, payload.roomId, payload.startTime);
+    handleCallAnswered(
+      payload.userId,
+      payload.roomId,
+      payload.topicId,
+      payload.startTime
+    );
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.ACTIVE_CALLS, ({ payload }) => {
