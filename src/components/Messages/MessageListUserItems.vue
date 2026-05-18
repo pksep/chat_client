@@ -137,11 +137,12 @@ interface Props {
 }
 
 type RenderItem =
-  | { kind: 'unread'; message: IMessage }
-  | { kind: 'date'; message: IMessage; index: number }
-  | { kind: 'system'; message: IMessage; index: number }
+  | { kind: 'unread'; key: string; message: IMessage }
+  | { kind: 'date'; key: string; message: IMessage; index: number }
+  | { kind: 'system'; key: string; message: IMessage; index: number }
   | {
       kind: 'group';
+      key: string;
       messages: IMessage[];
       startIndex: number;
       isMeSender: boolean;
@@ -345,15 +346,29 @@ const renderItems = computed<RenderItem[]>(() => {
     const message = visibleMessages.value[index];
 
     if (shouldShowUnreadMarker(message)) {
-      items.push({ kind: 'unread', message });
+      items.push({
+        kind: 'unread',
+        key: `unread-${message.id || index}`,
+        message
+      });
     }
 
     if (isNewDate(index)) {
-      items.push({ kind: 'date', message, index });
+      items.push({
+        kind: 'date',
+        key: `date-${message.id || index}`,
+        message,
+        index
+      });
     }
 
     if (message.isSystem && !getParsedCallMessage(message)) {
-      items.push({ kind: 'system', message, index });
+      items.push({
+        kind: 'system',
+        key: `system-${message.id || index}`,
+        message,
+        index
+      });
       continue;
     }
 
@@ -373,6 +388,7 @@ const renderItems = computed<RenderItem[]>(() => {
 
     items.push({
       kind: 'group',
+      key: `group-${groupMessages[0]?.id || index}-${groupMessages[groupMessages.length - 1]?.id || endIndex}`,
       messages: groupMessages,
       startIndex: index,
       isMeSender: resolveMessageIsMeSender(message)
