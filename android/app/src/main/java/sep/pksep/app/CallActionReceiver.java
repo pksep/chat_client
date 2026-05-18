@@ -7,6 +7,19 @@ import android.content.Intent;
 import sep.pksep.app.plugins.CallScreenPlugin;
 
 public class CallActionReceiver extends BroadcastReceiver {
+    public static void dispatchAction(
+        Context context,
+        String action,
+        String roomId,
+        String topicId
+    ) {
+        if ("decline".equals(action)) {
+            IncomingCallNotificationHelper.dismissIncomingCall(context, roomId);
+        }
+
+        CallScreenPlugin.dispatchCallAction(action, roomId, topicId);
+    }
+
     public static Intent createIntent(
         Context context,
         String action,
@@ -60,10 +73,6 @@ public class CallActionReceiver extends BroadcastReceiver {
             IncomingCallNotificationHelper.EXTRA_TOPIC_ID
         );
 
-        if ("decline".equals(action)) {
-            IncomingCallNotificationHelper.dismissIncomingCall(context, roomId);
-        }
-
-        CallScreenPlugin.dispatchCallAction(action, roomId, topicId);
+        dispatchAction(context, action, roomId, topicId);
     }
 }

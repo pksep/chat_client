@@ -969,6 +969,8 @@ export class ChatSDK {
     topicId?: string | null;
     startTime?: number | null;
     roomReady?: boolean;
+    participantCount?: number;
+    wasAnswered?: boolean;
   } | null> {
     try {
       const response = (await this.reqi.get<{
@@ -976,6 +978,8 @@ export class ChatSDK {
         topicId?: string | null;
         startTime?: number | null;
         roomReady?: boolean;
+        participantCount?: number;
+        wasAnswered?: boolean;
       }>(`/calls/status?roomId=${encodeURIComponent(roomId)}`, {
         parsed: false
       })) as any;

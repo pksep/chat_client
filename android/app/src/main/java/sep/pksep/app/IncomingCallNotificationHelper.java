@@ -45,14 +45,13 @@ public final class IncomingCallNotificationHelper {
         String resolvedCallerName =
             callerName != null && !callerName.trim().isEmpty()
                 ? callerName
-                : "Incoming call";
+                : "Входящий вызов...";
 
         PendingIntent contentIntent = PendingIntent.getActivity(
             context,
             buildRequestCode(roomId, 0),
-            createCallIntent(
+            createIncomingCallScreenIntent(
                 context,
-                null,
                 roomId,
                 topicId,
                 callerId,
@@ -120,6 +119,7 @@ public final class IncomingCallNotificationHelper {
 
     public static void dismissIncomingCall(Context context, String roomId) {
         NotificationManagerCompat.from(context).cancel(buildNotificationId(roomId));
+        IncomingCallActivity.dismissIfMatches(roomId);
         forgetActiveCall(context, roomId);
         if (getActiveCallRoomIds(context).isEmpty()) {
             IncomingCallRingtonePlayer.stop();
@@ -133,11 +133,12 @@ public final class IncomingCallNotificationHelper {
             manager.cancel(buildNotificationId(roomId));
         }
 
+        IncomingCallActivity.dismissActiveCall();
         clearActiveCalls(context);
         IncomingCallRingtonePlayer.stop();
     }
 
-    private static Intent createCallIntent(
+    static Intent createCallIntent(
         Context context,
         String action,
         String roomId,
@@ -156,6 +157,45 @@ public final class IncomingCallNotificationHelper {
         if (action != null) {
             intent.putExtra(EXTRA_CALL_ACTION, action);
         }
+
+        if (roomId != null) {
+            intent.putExtra(EXTRA_ROOM_ID, roomId);
+        }
+
+        if (topicId != null) {
+            intent.putExtra(EXTRA_TOPIC_ID, topicId);
+        }
+
+        if (callerId != null) {
+            intent.putExtra(EXTRA_CALLER_ID, callerId);
+        }
+
+        if (callerName != null) {
+            intent.putExtra(EXTRA_CALLER_NAME, callerName);
+        }
+
+        if (topicType != null) {
+            intent.putExtra(EXTRA_TOPIC_TYPE, topicType);
+        }
+
+        intent.putExtra(EXTRA_TYPE, "incoming_call");
+        return intent;
+    }
+
+    private static Intent createIncomingCallScreenIntent(
+        Context context,
+        String roomId,
+        String topicId,
+        String callerId,
+        String callerName,
+        String topicType
+    ) {
+        Intent intent = new Intent(context, IncomingCallActivity.class);
+        intent.addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                | Intent.FLAG_ACTIVITY_CLEAR_TOP
+        );
 
         if (roomId != null) {
             intent.putExtra(EXTRA_ROOM_ID, roomId);

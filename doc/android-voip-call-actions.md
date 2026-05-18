@@ -52,7 +52,7 @@ PendingIntent declinePendingIntent = PendingIntent.getActivity(
 NotificationCompat.Builder builder =
     new NotificationCompat.Builder(context, "incoming_call")
         .setSmallIcon(R.drawable.ic_launcher_foreground)
-        .setContentTitle("Incoming call")
+        .setContentTitle("Входящий вызов...")
         .setContentText(callerName)
         .setPriority(NotificationCompat.PRIORITY_MAX)
         .setCategory(NotificationCompat.CATEGORY_CALL)

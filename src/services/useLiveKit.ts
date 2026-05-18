@@ -27,6 +27,8 @@ type LiveKitCallStatus = {
   topicId?: string | null;
   startTime?: number | null;
   roomReady?: boolean;
+  participantCount?: number;
+  wasAnswered?: boolean;
 };
 
 type ActiveGroupCallEntry = {
@@ -70,6 +72,8 @@ const localVideoStream = ref<MediaStream | null>(null);
 const localScreenShareStream = ref<MediaStream | null>(null);
 const handRaisedParticipants = ref<Record<string, boolean>>({});
 const remoteParticipants = ref<ParticipantMediaState[]>([]);
+const pendingEndCallRoomId = ref<string | null>(null);
+const pendingEndCallTopicId = ref<string | null>(null);
 const activeGroupCalls = ref<Record<string, ActiveGroupCallEntry>>({});
 const invitedGroupCall = ref<{
   roomId: string;
@@ -106,6 +110,15 @@ let currentCameraFacingMode: 'user' | 'environment' = 'user';
 let shouldEndCallOnConnectFailure = false;
 const localTrackStreamCache = new Map<string, StreamCacheEntry>();
 const remoteTrackStreamCache = new Map<string, StreamCacheEntry>();
+let pendingEndCallRetryTimeout: ReturnType<typeof setTimeout> | null = null;
+let pendingEndCallFinalizeTimeout: ReturnType<typeof setTimeout> | null = null;
+let pendingNativeCallActionTimeout: ReturnType<typeof setTimeout> | null = null;
+
+const MAX_NATIVE_CALL_ACTION_RETRIES = 12;
+const NATIVE_CALL_ACTION_RETRY_DELAY_MS = 500;
+const DISMISSED_INCOMING_CALL_TTL_MS = 15000;
+const dismissedIncomingCallRooms = new Map<string, number>();
+const dismissedIncomingCallTopics = new Map<string, number>();
 
 const createRoomId = () => `livekit-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -129,12 +142,74 @@ const removeInvitedGroupCallEntry = (activeRoomId?: string | null) => {
   invitedGroupCall.value = null;
 };
 
+const pruneDismissedIncomingCalls = () => {
+  const now = Date.now();
+
+  dismissedIncomingCallRooms.forEach((expiresAt, targetRoomId) => {
+    if (expiresAt <= now) {
+      dismissedIncomingCallRooms.delete(targetRoomId);
+    }
+  });
+
+  dismissedIncomingCallTopics.forEach((expiresAt, targetTopicId) => {
+    if (expiresAt <= now) {
+      dismissedIncomingCallTopics.delete(targetTopicId);
+    }
+  });
+};
+
+const markIncomingCallDismissed = (
+  targetRoomId?: string | null,
+  targetTopicId?: string | null
+) => {
+  pruneDismissedIncomingCalls();
+  const expiresAt = Date.now() + DISMISSED_INCOMING_CALL_TTL_MS;
+
+  if (targetRoomId) {
+    dismissedIncomingCallRooms.set(targetRoomId, expiresAt);
+  }
+
+  if (targetTopicId) {
+    dismissedIncomingCallTopics.set(targetTopicId, expiresAt);
+  }
+};
+
+const isIncomingCallDismissed = (
+  targetRoomId?: string | null,
+  targetTopicId?: string | null
+) => {
+  pruneDismissedIncomingCalls();
+
+  return (
+    (!!targetRoomId && dismissedIncomingCallRooms.has(targetRoomId)) ||
+    (!!targetTopicId && dismissedIncomingCallTopics.has(targetTopicId))
+  );
+};
+
 const clearUnavailableCallState = (
   targetRoomId?: string | null,
   targetTopicId?: string | null
 ) => {
   removePendingGroupCallEntry(targetTopicId);
   removeInvitedGroupCallEntry(targetRoomId);
+};
+
+const clearPendingEndCallTimers = () => {
+  if (pendingEndCallRetryTimeout) {
+    clearTimeout(pendingEndCallRetryTimeout);
+    pendingEndCallRetryTimeout = null;
+  }
+
+  if (pendingEndCallFinalizeTimeout) {
+    clearTimeout(pendingEndCallFinalizeTimeout);
+    pendingEndCallFinalizeTimeout = null;
+  }
+};
+
+const resetPendingEndCallState = () => {
+  clearPendingEndCallTimers();
+  pendingEndCallRoomId.value = null;
+  pendingEndCallTopicId.value = null;
 };
 
 const emitEndCallEvent = (
@@ -154,6 +229,61 @@ const emitEndCallEvent = (
     userId: me.id
   });
 };
+
+const schedulePendingEndCallConfirmation = (
+  targetRoomId?: string | null,
+  targetTopicId?: string | null
+) => {
+  if (!targetRoomId || !targetTopicId) {
+    resetPendingEndCallState();
+    return;
+  }
+
+  clearPendingEndCallTimers();
+  pendingEndCallRoomId.value = targetRoomId;
+  pendingEndCallTopicId.value = targetTopicId;
+
+  pendingEndCallRetryTimeout = setTimeout(() => {
+    if (
+      pendingEndCallRoomId.value === targetRoomId &&
+      pendingEndCallTopicId.value === targetTopicId
+    ) {
+      emitEndCallEvent(targetRoomId, targetTopicId);
+    }
+  }, 1500);
+
+  pendingEndCallFinalizeTimeout = setTimeout(() => {
+    void (async () => {
+      if (
+        pendingEndCallRoomId.value !== targetRoomId ||
+        pendingEndCallTopicId.value !== targetTopicId
+      ) {
+        return;
+      }
+
+      resetPendingEndCallState();
+
+      const status = await getLiveKitCallStatus(targetRoomId, targetTopicId);
+      if (!status?.active) {
+        clearUnavailableCallState(targetRoomId, targetTopicId);
+      }
+
+      if (roomId.value === targetRoomId) {
+        roomId.value = null;
+      }
+      if (topicId.value === targetTopicId) {
+        topicId.value = null;
+      }
+    })();
+  }, 2500);
+};
+
+const matchesPendingEndCall = (
+  targetRoomId?: string | null,
+  targetTopicId?: string | null
+): boolean =>
+  (!!targetRoomId && pendingEndCallRoomId.value === targetRoomId) ||
+  (!!targetTopicId && pendingEndCallTopicId.value === targetTopicId);
 
 const getLiveKitCallStatus = async (
   targetRoomId?: string | null,
@@ -185,6 +315,72 @@ const isLiveKitCallAvailable = async (
 ) => {
   const status = await getLiveKitCallStatus(targetRoomId, targetTopicId);
   return status?.active === true;
+};
+
+const scheduleNativeCallActionRetry = (
+  action: 'accept' | 'decline',
+  incomingRoomId?: string,
+  incomingTopicId?: string,
+  attempt = 0
+) => {
+  if (attempt >= MAX_NATIVE_CALL_ACTION_RETRIES) {
+    console.warn(
+      '[LiveKit] Native call action timed out before chat became ready.',
+      {
+        action,
+        roomId: incomingRoomId,
+        topicId: incomingTopicId
+      }
+    );
+    return;
+  }
+
+  if (pendingNativeCallActionTimeout) {
+    clearTimeout(pendingNativeCallActionTimeout);
+  }
+
+  pendingNativeCallActionTimeout = setTimeout(() => {
+    pendingNativeCallActionTimeout = null;
+    void handleNativeCallAction(
+      action,
+      incomingRoomId,
+      incomingTopicId,
+      attempt + 1
+    );
+  }, NATIVE_CALL_ACTION_RETRY_DELAY_MS);
+};
+
+const restoreGroupCallEntryIfStillActive = (
+  targetRoomId?: string | null,
+  targetTopicId?: string | null,
+  caller?: IUser | null,
+  startTime?: number | null
+) => {
+  if (!targetRoomId || !targetTopicId) {
+    return;
+  }
+
+  setTimeout(() => {
+    void (async () => {
+      const status = await getLiveKitCallStatus(targetRoomId, targetTopicId);
+      const hasOtherParticipants = (status?.participantCount ?? 0) > 0;
+
+      if (!status?.active || !hasOtherParticipants) {
+        clearUnavailableCallState(targetRoomId, targetTopicId);
+        return;
+      }
+
+      activeGroupCalls.value = {
+        ...activeGroupCalls.value,
+        [targetTopicId]: {
+          roomId: targetRoomId,
+          topicId: targetTopicId,
+          caller,
+          startTime: startTime ?? status.startTime ?? null
+        }
+      };
+    })();
+  }, 3000);
 };
 
 const formatTime = (seconds: number) => {
@@ -755,6 +951,10 @@ const setupRoomListeners = (activeRoom: Room) => {
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.Disconnected, () => {
+      if (matchesPendingEndCall(roomId.value, topicId.value)) {
+        return;
+      }
+
       cleanup(false);
     });
 };
@@ -785,6 +985,25 @@ const getConnectErrorMessage = (error: unknown) => {
   }
 
   return 'Не удалось подключиться к звонку. Попробуйте еще раз.';
+};
+
+const isExpectedConnectAbort = (
+  error: unknown,
+  targetRoomId?: string | null,
+  targetTopicId?: string | null,
+  currentAttemptId?: number,
+  activeRoom?: Room | null
+) => {
+  const errorMessage =
+    error instanceof Error ? error.message.toLowerCase() : String(error);
+
+  return (
+    errorMessage.includes('client initiated disconnect') ||
+    (!!currentAttemptId && currentAttemptId !== connectAttemptId) ||
+    (!!activeRoom && room !== activeRoom) ||
+    matchesPendingEndCall(targetRoomId, targetTopicId) ||
+    isIncomingCallDismissed(targetRoomId, targetTopicId)
+  );
 };
 
 const connectToRoom = async () => {
@@ -822,8 +1041,20 @@ const connectToRoom = async () => {
     try {
       await nextRoom.connect(config.CHAT_LIVEKIT_URL, token);
     } catch (error) {
+      const isExpectedAbort = isExpectedConnectAbort(
+        error,
+        activeRoomId,
+        activeTopicId,
+        currentAttemptId,
+        nextRoom
+      );
+
       if (room === nextRoom) {
         room = null;
+      }
+
+      if (isExpectedAbort) {
+        return;
       }
 
       if (
@@ -972,6 +1203,10 @@ export const receiveIncomingCall = async (
   incomingTopicType?: TopicType | string | null,
   incomingStartTime?: number | null
 ) => {
+  if (isIncomingCallDismissed(incomingRoomId, incomingTopicId)) {
+    return false;
+  }
+
   const topic = useTopics().getSelectedTopic(incomingTopicId) as any;
   const resolvedTopicType = incomingTopicType || topic?.type;
 
@@ -981,6 +1216,15 @@ export const receiveIncomingCall = async (
   );
 
   if (!callStatus?.active) {
+    return false;
+  }
+
+  if (isIncomingCallDismissed(incomingRoomId, incomingTopicId)) {
+    return false;
+  }
+
+  if (resolvedTopicType !== TopicType.Group && callStatus.wasAnswered) {
+    markIncomingCallDismissed(incomingRoomId, incomingTopicId);
     return false;
   }
 
@@ -1001,6 +1245,18 @@ export const receiveIncomingCall = async (
 
   if (!targetUser) return false;
   if (open.value) return false;
+
+  if (Capacitor.isNativePlatform()) {
+    user.value = targetUser;
+    roomId.value = incomingRoomId;
+    topicId.value = incomingTopicId;
+    setCallStartedAt(resolvedStartTime);
+    open.value = false;
+    isIncoming.value = true;
+    isModalVisible.value = false;
+    stopRingtone();
+    return true;
+  }
 
   user.value = targetUser;
   roomId.value = incomingRoomId;
@@ -1032,13 +1288,13 @@ export const acceptCall = async () => {
     endAllCallKits();
   }
 
+  isAcceptingLocally = true;
   sdk.sendWebSocketEvent(WebSocketEventType.ANSWER_CALL, {
     roomId: roomId.value,
     topicId: topicId.value,
     userId: me.id
   });
 
-  isAcceptingLocally = true;
   try {
     await connectToRoom();
   } finally {
@@ -1147,8 +1403,11 @@ export const joinInvitedGroupCall = async () => {
 export const handleCallAnswered = async (
   answeredUserId: string,
   answeredRoomId?: string,
+  answeredTopicId?: string | null,
   answeredStartTime?: number | null
 ) => {
+  markIncomingCallDismissed(answeredRoomId, answeredTopicId);
+
   if (answeredRoomId && roomId.value === answeredRoomId) {
     setCallStartedAt(answeredStartTime ?? callStartedAt.value);
   }
@@ -1165,8 +1424,24 @@ export const handleCallAnswered = async (
   }
 };
 
-export const handleCallEnded = () => {
-  cleanup(true);
+export const handleCallEnded = (
+  endedRoomId?: string | null,
+  endedTopicId?: string | null
+) => {
+  if (matchesPendingEndCall(endedRoomId, endedTopicId)) {
+    resetPendingEndCallState();
+    roomId.value = null;
+    topicId.value = null;
+    return;
+  }
+
+  if (
+    (endedRoomId && roomId.value === endedRoomId) ||
+    (endedTopicId && topicId.value === endedTopicId) ||
+    (!endedRoomId && !endedTopicId)
+  ) {
+    cleanup(true);
+  }
 };
 
 export const dismissIncomingCallState = (
@@ -1178,9 +1453,8 @@ export const dismissIncomingCallState = (
 
   if (
     isIncoming.value &&
-    roomId.value &&
-    targetRoomId &&
-    roomId.value === targetRoomId
+    ((roomId.value && targetRoomId && roomId.value === targetRoomId) ||
+      (topicId.value && targetTopicId && topicId.value === targetTopicId))
   ) {
     cleanup(false);
     return;
@@ -1203,7 +1477,7 @@ export const syncActiveCalls = async (
     calls.map(async call => {
       const status = await getLiveKitCallStatus(call.roomId, call.topicId);
 
-      if (!status?.active) {
+      if (!status?.active || (status.participantCount ?? 0) <= 0) {
         return null;
       }
 
@@ -1344,8 +1618,6 @@ export const toggleHandRaise = async () => {
 };
 
 export const leaveCall = () => {
-  const sdk = getChatSDK();
-  const me = getAuthUser();
   const activeRoomId = roomId.value;
   const activeTopicId = topicId.value;
   const activeCaller = user.value;
@@ -1359,38 +1631,55 @@ export const leaveCall = () => {
     invitedGroupCall.value?.roomId !== activeRoomId &&
     activeTopic?.type === TopicType.Group
   ) {
-    activeGroupCalls.value = {
-      ...activeGroupCalls.value,
-      [activeTopicId]: {
-        roomId: activeRoomId,
-        topicId: activeTopicId,
-        caller: activeCaller,
-        startTime: callStartedAt.value
-      }
-    };
-
-    void isLiveKitCallAvailable(activeRoomId, activeTopicId);
+    restoreGroupCallEntryIfStillActive(
+      activeRoomId,
+      activeTopicId,
+      activeCaller,
+      callStartedAt.value
+    );
   }
 
-  if (sdk && me && activeRoomId && activeTopicId) {
-    sdk.sendWebSocketEvent(WebSocketEventType.END_CALL, {
-      roomId: activeRoomId,
-      topicId: activeTopicId,
-      userId: me.id
-    });
-  }
+  schedulePendingEndCallConfirmation(activeRoomId, activeTopicId);
+  emitEndCallEvent(activeRoomId, activeTopicId);
 
   if (invitedGroupCall.value?.roomId === activeRoomId) {
     invitedGroupCall.value = null;
   }
 
-  cleanup(true);
+  connectAttemptId += 1;
+  connectPromise = null;
+  shouldEndCallOnConnectFailure = false;
+  clearDialingTimeout();
+  stopTimer();
+  stopRingtone();
+  stopDialingSound();
+
+  const activeRoom = room;
+
+  stopLocalMediaTracks();
+
+  if (activeRoom) {
+    activeRoom.disconnect();
+  }
+
+  room = null;
+  open.value = false;
+  isIncoming.value = false;
+  isCalling.value = false;
+  isModalVisible.value = false;
+  user.value = null;
+  resetMediaState();
+
+  if (Capacitor.isNativePlatform()) {
+    endAllCallKits();
+  }
 };
 
 export const cleanup = (disconnectRoom = true) => {
   connectAttemptId += 1;
   connectPromise = null;
   shouldEndCallOnConnectFailure = false;
+  resetPendingEndCallState();
   clearDialingTimeout();
   stopTimer();
   stopRingtone();
@@ -1456,10 +1745,24 @@ export const handleIncomingPushCall = async (
 export const handleNativeCallAction = async (
   action: 'accept' | 'decline',
   incomingRoomId?: string,
-  incomingTopicId?: string
+  incomingTopicId?: string,
+  attempt = 0
 ) => {
-  if (Capacitor.isNativePlatform()) {
+  if (Capacitor.isNativePlatform() && attempt === 0) {
     await endAllCallKits();
+  }
+
+  const sdk = getChatSDK();
+  const me = getAuthUser();
+
+  if (!sdk || !me || !sdk.isConnected()) {
+    scheduleNativeCallActionRetry(
+      action,
+      incomingRoomId,
+      incomingTopicId,
+      attempt
+    );
+    return;
   }
 
   if (action === 'accept') {

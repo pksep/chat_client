@@ -76,13 +76,14 @@ export const joinInviteGroupCall = async () => {
 export const handleCallAnswered = (
   userId: string,
   roomId?: string,
+  topicId?: string | null,
   startTime?: number | null
 ) => {
-  handleLiveKitAnswered(userId, roomId, startTime);
+  handleLiveKitAnswered(userId, roomId, topicId, startTime);
 };
 
-export const handleCallEnded = () => {
-  handleLiveKitEnded();
+export const handleCallEnded = (roomId?: string, topicId?: string) => {
+  handleLiveKitEnded(roomId, topicId);
 };
 
 export const dismissIncomingCall = (roomId?: string, topicId?: string) => {

@@ -43,12 +43,12 @@ import {
   handleIncomingCall,
   handleCallAnswered,
   handleCallEnded,
+  dismissIncomingCall,
   removeActiveGroupCall,
   removeInvitedGroupCall,
   restoreInvitedGroupCallFromUrl,
   syncServerActiveCalls
 } from './useCalls';
-import { roomId as liveKitRoomId } from './useLiveKit';
 import { Capacitor } from '@capacitor/core';
 import { initCallKit, showIncomingCallKit, endAllCallKits } from './useCallKit';
 import { clearTopicNotifications } from './useNotificationNavigation';
@@ -192,19 +192,18 @@ const setupChatListeners = (): void => {
     void upsertCallHistoryMessage(message);
     const isDuplicateMessage = hasMessageInTopic(message.topicId, message.id);
     const unreadCountBefore = totalUnreadCount.value;
+    const isIncomingFromAnotherUser =
+      message.senderUserId !== currentUserId.value;
+    const isUnreadIncomingMessage =
+      isIncomingFromAnotherUser && !message.isReadByMe;
     const shouldSuspendMerge =
-      message.senderUserId !== currentUserId.value &&
+      isIncomingFromAnotherUser &&
       route.value.id === message.topicId &&
       suspendIncomingMergeByTopic.value[message.topicId] === true;
 
     if (!shouldSuspendMerge) {
       addMessageToLocal(message.topicId, message);
-    } else if (
-      !isDuplicateMessage &&
-      message.senderUserId !== currentUserId.value &&
-      !message.isReadByMe &&
-      !message.isSystem
-    ) {
+    } else if (!isDuplicateMessage) {
       const existingBuffered =
         bufferedIncomingMessagesByTopic.value[message.topicId] || [];
       if (!existingBuffered.some(item => item.id === message.id)) {
@@ -214,10 +213,12 @@ const setupChatListeners = (): void => {
         ];
       }
 
-      changeUnreadMessageCount(1, message.topicId);
+      if (isUnreadIncomingMessage && !message.isSystem) {
+        changeUnreadMessageCount(1, message.topicId);
+      }
     }
 
-    if (!isDuplicateMessage && message.senderUserId !== currentUserId.value) {
+    if (!isDuplicateMessage && isIncomingFromAnotherUser) {
       if (
         document.visibilityState !== 'visible' &&
         message.topicId === route.value.id &&
@@ -559,7 +560,13 @@ const setupChatListeners = (): void => {
     if (Capacitor.isNativePlatform()) {
       endAllCallKits();
     }
-    handleCallAnswered(payload.userId, payload.roomId, payload.startTime);
+    dismissIncomingCall(payload.roomId, payload.topicId);
+    handleCallAnswered(
+      payload.userId,
+      payload.roomId,
+      payload.topicId,
+      payload.startTime
+    );
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.ACTIVE_CALLS, ({ payload }) => {
@@ -569,13 +576,29 @@ const setupChatListeners = (): void => {
   chatSDK.subscribeToEvent(WebSocketEventType.CALL_ENDED, ({ payload }) => {
     removeActiveGroupCall(payload.topicId);
     removeInvitedGroupCall(payload.roomId);
+    if (Capacitor.isNativePlatform()) {
+      endAllCallKits();
+    }
+    handleCallEnded(payload.roomId, payload.topicId);
 
-    // Only cleanup if the roomId matches our current active call
-    if (payload.roomId === liveKitRoomId.value) {
-      if (Capacitor.isNativePlatform()) {
-        endAllCallKits();
+    if (payload.topicId) {
+      const endedTopic = useTopics().getSelectedTopic(payload.topicId) as any;
+
+      if (endedTopic?.type === TopicType.DM) {
+        void (async () => {
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          await Promise.allSettled([
+            fetchMessagesForTopic(payload.topicId, {
+              limit: 50,
+              forceRefresh: true,
+              forceNetwork: true,
+              syncLastMessage: true
+            }),
+            fetchAllTopics()
+          ]);
+        })();
       }
-      handleCallEnded();
     }
   });
 };
