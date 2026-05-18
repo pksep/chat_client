@@ -25,17 +25,14 @@ public class MainActivity extends BridgeActivity {
     private static final String EXTRA_ROOM_ID = "roomId";
     private static final String EXTRA_TOPIC_ID = "topicId";
     private static final String EXTRA_TYPE = "type";
+    private static boolean customPluginsRegistered = false;
     private boolean launchedFromIncomingCall = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         launchedFromIncomingCall = isIncomingCallIntent(getIntent());
         NotificationChannelHelper.ensureDefaultChannel(this);
-        registerPlugin(AudioOutputPlugin.class);
-        registerPlugin(ProximityLockPlugin.class);
-        registerPlugin(CallScreenPlugin.class);
-        registerPlugin(NotificationAudioPlugin.class);
-        registerPlugin(NotificationTapPlugin.class);
+        registerCustomPluginsIfNeeded();
 
         super.onCreate(savedInstanceState);
         configureIncomingCallWindow(getIntent());
@@ -59,6 +56,19 @@ public class MainActivity extends BridgeActivity {
         configureIncomingCallWindow(intent);
         handleCallIntent(intent);
         handleNotificationLaunchIntent(intent);
+    }
+
+    private void registerCustomPluginsIfNeeded() {
+        if (customPluginsRegistered) {
+            return;
+        }
+
+        registerPlugin(AudioOutputPlugin.class);
+        registerPlugin(ProximityLockPlugin.class);
+        registerPlugin(CallScreenPlugin.class);
+        registerPlugin(NotificationAudioPlugin.class);
+        registerPlugin(NotificationTapPlugin.class);
+        customPluginsRegistered = true;
     }
 
     private void handleNotificationLaunchIntent(Intent intent) {
