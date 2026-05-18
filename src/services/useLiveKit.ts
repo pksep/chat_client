@@ -28,6 +28,7 @@ type LiveKitCallStatus = {
   startTime?: number | null;
   roomReady?: boolean;
   participantCount?: number;
+  wasAnswered?: boolean;
 };
 
 type ActiveGroupCallEntry = {
@@ -1202,6 +1203,10 @@ export const receiveIncomingCall = async (
   incomingTopicType?: TopicType | string | null,
   incomingStartTime?: number | null
 ) => {
+  if (isIncomingCallDismissed(incomingRoomId, incomingTopicId)) {
+    return false;
+  }
+
   const topic = useTopics().getSelectedTopic(incomingTopicId) as any;
   const resolvedTopicType = incomingTopicType || topic?.type;
 
@@ -1211,6 +1216,15 @@ export const receiveIncomingCall = async (
   );
 
   if (!callStatus?.active) {
+    return false;
+  }
+
+  if (isIncomingCallDismissed(incomingRoomId, incomingTopicId)) {
+    return false;
+  }
+
+  if (resolvedTopicType !== TopicType.Group && callStatus.wasAnswered) {
+    markIncomingCallDismissed(incomingRoomId, incomingTopicId);
     return false;
   }
 
@@ -1231,6 +1245,18 @@ export const receiveIncomingCall = async (
 
   if (!targetUser) return false;
   if (open.value) return false;
+
+  if (Capacitor.isNativePlatform()) {
+    user.value = targetUser;
+    roomId.value = incomingRoomId;
+    topicId.value = incomingTopicId;
+    setCallStartedAt(resolvedStartTime);
+    open.value = false;
+    isIncoming.value = true;
+    isModalVisible.value = false;
+    stopRingtone();
+    return true;
+  }
 
   user.value = targetUser;
   roomId.value = incomingRoomId;

@@ -4,4 +4,8 @@
     <string name="title_activity_main">SEP:Chat</string>
     <string name="package_name">sep.pksep.app</string>
     <string name="custom_url_scheme">sep.pksep.app</string>
+    <string name="incoming_call_label">Incoming call</string>
+    <string name="incoming_call_default_name">Unknown caller</string>
+    <string name="incoming_call_accept">Answer</string>
+    <string name="incoming_call_decline">Decline</string>
 </resources>
