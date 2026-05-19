@@ -1,6 +1,6 @@
 <template>
   <div
-    v-if="props.forwardUser || props.replyMessage"
+    v-if="props.forwardUser || shouldRenderReply"
     class="message-reference-block"
     :class="{ 'message-reference-block--outgoing': props.isMeSender }"
   >
@@ -9,9 +9,10 @@
     </div>
 
     <button
-      v-if="props.replyMessage"
+      v-if="shouldRenderReply"
       type="button"
       class="message-reference-reply"
+      :style="replyInlineStyle"
       @click="$emit('navigate-message')"
     >
       <div
@@ -35,9 +36,17 @@
         />
       </div>
 
-      <div class="message-reference-reply__content">
+      <div
+        class="message-reference-reply__content"
+        :style="replyContentInlineStyle"
+      >
         <div class="message-reference-reply__author">{{ replyAuthor }}</div>
-        <div class="message-reference-reply__text">{{ replyText }}</div>
+        <div
+          class="message-reference-reply__text"
+          :style="replyTextInlineStyle"
+        >
+          {{ replyText }}
+        </div>
       </div>
     </button>
   </div>
@@ -50,10 +59,13 @@ import FileIcon from '../UI/FileIcon.vue';
 import { useMessageMedia } from './composables/useMessageMedia';
 import type { IMessageBubbleProps } from './interface/interface';
 
-const props =
-  defineProps<
-    Pick<IMessageBubbleProps, 'forwardUser' | 'replyMessage' | 'isMeSender'>
-  >();
+const props = defineProps<{
+  forwardUser?: IMessageBubbleProps['forwardUser'];
+  replyMessage?: IMessageBubbleProps['replyMessage'];
+  isMeSender?: boolean;
+  referenceWidth?: number | null;
+  deferUntilMeasured?: boolean;
+}>();
 
 defineEmits(['navigate-message']);
 
@@ -72,6 +84,64 @@ const replyPreviewMedia = computed(() => {
 const replyAuthor = computed(
   () => props.replyMessage?.senderUser?.initials || 'Сообщение'
 );
+
+const replyInlineStyle = computed(() => {
+  if (!props.referenceWidth || props.referenceWidth <= 0) {
+    return undefined;
+  }
+
+  return {
+    '--message-reference-width': `${props.referenceWidth}px`
+  };
+});
+
+const replyTextWidth = computed(() => {
+  if (!props.referenceWidth || props.referenceWidth <= 0) {
+    return null;
+  }
+
+  const horizontalPadding = 20;
+  const mediaWidth = replyPreviewMedia.value ? 34 : 0;
+  const mediaGap = replyPreviewMedia.value ? 10 : 0;
+  const safeWidth =
+    props.referenceWidth - horizontalPadding - mediaWidth - mediaGap;
+
+  return safeWidth > 0 ? safeWidth : null;
+});
+
+const replyContentInlineStyle = computed(() => {
+  if (!replyTextWidth.value) {
+    return undefined;
+  }
+
+  return {
+    width: `${Math.max(replyTextWidth.value - 30, 100)}px`,
+    maxWidth: `${Math.max(replyTextWidth.value - 30, 100)}px`
+  };
+});
+
+const replyTextInlineStyle = computed(() => {
+  if (!replyTextWidth.value) {
+    return undefined;
+  }
+
+  return {
+    width: `${Math.max(replyTextWidth.value - 20, 100)}px`,
+    maxWidth: `${Math.max(replyTextWidth.value - 20, 100)}px`
+  };
+});
+
+const shouldRenderReply = computed(() => {
+  if (!props.replyMessage) {
+    return false;
+  }
+
+  if (!props.deferUntilMeasured) {
+    return true;
+  }
+
+  return Boolean(props.referenceWidth && props.referenceWidth > 0);
+});
 
 const replyText = computed(() => {
   const replyMessage = props.replyMessage;

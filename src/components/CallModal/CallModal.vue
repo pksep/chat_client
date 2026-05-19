@@ -54,6 +54,10 @@
           <span v-else>{{ formattedTime }}</span>
         </p>
 
+        <p class="call-modal__notice">
+          <span v-if="callStatusNotice">{{ callStatusNotice }}</span>
+        </p>
+
         <CachedAvatar
           v-if="displayAvatarInfo"
           :path="displayAvatarInfo.avatarUrl"
@@ -99,12 +103,14 @@
           >
             <button
               class="call-modal__control-button call-modal__control-button--answer"
+              :disabled="isBusyNoticeVisible"
               @click="acceptCall"
             >
               <LeaveIcon />
             </button>
             <button
               class="call-modal__control-button call-modal__control-button--reject"
+              :disabled="isBusyNoticeVisible"
               @click="leaveCall"
             >
               <LeaveIcon />
@@ -120,6 +126,7 @@
                 'call-modal__control-button__inactive':
                   !!liveKitState.isSpeakerActive
               }"
+              :disabled="isBusyNoticeVisible"
               @click="handleToggleAudioOutput"
             >
               <VolumeIcon />
@@ -128,6 +135,7 @@
             <button
               v-if="liveKitState.isMicActive"
               class="call-modal__control-button"
+              :disabled="isBusyNoticeVisible"
               @click="handleToggleMic"
             >
               <MicIcon />
@@ -135,6 +143,7 @@
             <button
               v-else
               class="call-modal__control-button call-modal__control-button__inactive"
+              :disabled="isBusyNoticeVisible"
               @click="handleToggleMic"
             >
               <MicDisableIcon />
@@ -143,6 +152,7 @@
             <button
               v-if="liveKitState.isVideoActive"
               class="call-modal__control-button"
+              :disabled="isBusyNoticeVisible"
               @click="handleToggleVideo"
             >
               <VideoIcon />
@@ -150,18 +160,20 @@
             <button
               v-else
               class="call-modal__control-button call-modal__control-button__inactive"
+              :disabled="isBusyNoticeVisible"
               @click="handleToggleVideo"
             >
               <VideoDisableIcon />
             </button>
 
             <button
-              v-if="!isMobile && !Capacitor.isNativePlatform()"
+              v-if="!Capacitor.isNativePlatform()"
               class="call-modal__control-button"
               :class="{
                 'call-modal__control-button__inactive':
                   !liveKitState.isScreenSharingActive
               }"
+              :disabled="isBusyNoticeVisible"
               @click="handleToggleScreenShare"
             >
               <ScreenShareIcon />
@@ -174,6 +186,7 @@
                 'call-modal__control-button__inactive':
                   !liveKitState.isHandRaised
               }"
+              :disabled="isBusyNoticeVisible"
               @click="handleToggleHandRaise"
             >
               <HandRaiseIcon />
@@ -373,6 +386,7 @@ import {
   activeScreenShare,
   acceptCall,
   copyInvitedGroupCallLink as copyInviteGroupCallLink,
+  callStatusNotice,
   formattedTime,
   isCalling,
   isIncoming,
@@ -584,6 +598,7 @@ const displayAvatarInfo = computed(() => {
     avatarUrl: displayUser.value.avatarUrl || ''
   };
 });
+const isBusyNoticeVisible = computed(() => !!callStatusNotice.value);
 
 const localParticipantView = computed(() => {
   const authUser = getAuthUser() as any;
@@ -851,7 +866,9 @@ const shouldShowMediaLayout = computed(
   () => isCallOpen.value && !isIncoming.value && !isCalling.value
 );
 
-const showAvatarFallback = computed(() => isIncoming.value || isCalling.value);
+const showAvatarFallback = computed(
+  () => isIncoming.value || isCalling.value || !!callStatusNotice.value
+);
 
 watch(
   [screenShareVideo, activeScreenShare],
@@ -1214,6 +1231,10 @@ const handleVideoOverlayTap = () => {
 };
 
 const hideModal = () => {
+  if (isBusyNoticeVisible.value) {
+    return;
+  }
+
   if (!isIncoming.value) {
     isCallModalVisible.value = false;
   }

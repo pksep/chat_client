@@ -109,6 +109,12 @@ public class NotificationAudioPlugin extends Plugin {
     @PluginMethod
     public void playCallRingtone(PluginCall call) {
         try {
+            if (!canPlayCallRingtone()) {
+                stopCallRingtonePlayer();
+                call.resolve();
+                return;
+            }
+
             stopCallRingtonePlayer();
 
             callRingtonePlayer = buildAssetPlayer(CALL_RINGTONE_ASSET, true);
@@ -162,6 +168,30 @@ public class NotificationAudioPlugin extends Plugin {
             callRingtonePlayer.release();
             callRingtonePlayer = null;
         }
+    }
+
+    private boolean canPlayCallRingtone() {
+        Context context = getContext();
+        if (context == null) {
+            return true;
+        }
+
+        NotificationManagerCompat notificationManager =
+            NotificationManagerCompat.from(context);
+        if (!notificationManager.areNotificationsEnabled()) {
+            return false;
+        }
+
+        AudioManager audioManager =
+            (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager == null) {
+            return true;
+        }
+
+        int ringerMode = audioManager.getRingerMode();
+        int ringerVolume = audioManager.getStreamVolume(AudioManager.STREAM_RING);
+
+        return ringerMode == AudioManager.RINGER_MODE_NORMAL && ringerVolume > 0;
     }
 
     @SuppressWarnings("deprecation")

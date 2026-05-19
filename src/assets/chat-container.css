@@ -44,7 +44,6 @@
   --neutral-button: var(--grey1);
   --neutral-text: var(--grey6);
   --neutral-border: var(--grey3);
-  --header-height: 56px;
   display: grid;
   position: relative;
   font-family: 'Inter Variable', sans-serif;
@@ -214,8 +213,8 @@ button.primary-yui-kit.disabled-yui-kit {
     padding: 8px;
   }
 
-  .chat-container {
-    background-color: var(--white);
+  .chat-container:not(:has(.chat__message-wrapper)) {
+    background: var(--white) !important;
     overflow: hidden;
   }
   svg.ai-icon {
