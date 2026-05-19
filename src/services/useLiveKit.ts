@@ -58,6 +58,8 @@ type StreamCacheEntry = {
   stream: MediaStream;
 };
 
+type CallEndReason = 'busy';
+
 const open = ref(false);
 const isIncoming = ref(false);
 const isCalling = ref(false);
@@ -72,6 +74,7 @@ const localVideoStream = ref<MediaStream | null>(null);
 const localScreenShareStream = ref<MediaStream | null>(null);
 const handRaisedParticipants = ref<Record<string, boolean>>({});
 const remoteParticipants = ref<ParticipantMediaState[]>([]);
+const callStatusNotice = ref<string | null>(null);
 const pendingEndCallRoomId = ref<string | null>(null);
 const pendingEndCallTopicId = ref<string | null>(null);
 const activeGroupCalls = ref<Record<string, ActiveGroupCallEntry>>({});
@@ -104,6 +107,8 @@ let dialingTimeout: ReturnType<typeof setTimeout> | null = null;
 let ringtoneAudio: HTMLAudioElement | null = null;
 let dialingAudio: HTMLAudioElement | null = null;
 let isAcceptingLocally = false;
+let localAcceptRoomId: string | null = null;
+let localAcceptTopicId: string | null = null;
 let connectPromise: Promise<void> | null = null;
 let connectAttemptId = 0;
 let currentCameraFacingMode: 'user' | 'environment' = 'user';
@@ -113,10 +118,12 @@ const remoteTrackStreamCache = new Map<string, StreamCacheEntry>();
 let pendingEndCallRetryTimeout: ReturnType<typeof setTimeout> | null = null;
 let pendingEndCallFinalizeTimeout: ReturnType<typeof setTimeout> | null = null;
 let pendingNativeCallActionTimeout: ReturnType<typeof setTimeout> | null = null;
+let callStatusNoticeTimeout: ReturnType<typeof setTimeout> | null = null;
 
-const MAX_NATIVE_CALL_ACTION_RETRIES = 12;
+const MAX_NATIVE_CALL_ACTION_RETRIES = 120;
 const NATIVE_CALL_ACTION_RETRY_DELAY_MS = 500;
 const DISMISSED_INCOMING_CALL_TTL_MS = 15000;
+const CALL_STATUS_NOTICE_CLOSE_DELAY_MS = 3000;
 const dismissedIncomingCallRooms = new Map<string, number>();
 const dismissedIncomingCallTopics = new Map<string, number>();
 
@@ -204,6 +211,41 @@ const clearPendingEndCallTimers = () => {
     clearTimeout(pendingEndCallFinalizeTimeout);
     pendingEndCallFinalizeTimeout = null;
   }
+};
+
+const clearCallStatusNotice = () => {
+  if (callStatusNoticeTimeout) {
+    clearTimeout(callStatusNoticeTimeout);
+    callStatusNoticeTimeout = null;
+  }
+
+  callStatusNotice.value = null;
+};
+
+const clearLocalAcceptState = () => {
+  localAcceptRoomId = null;
+  localAcceptTopicId = null;
+};
+
+const showTransientCallStatusNotice = (
+  message: string,
+  closeDelayMs = CALL_STATUS_NOTICE_CLOSE_DELAY_MS
+) => {
+  clearCallStatusNotice();
+  callStatusNotice.value = message;
+  clearDialingTimeout();
+  stopDialingSound();
+  stopRingtone();
+
+  callStatusNoticeTimeout = setTimeout(() => {
+    callStatusNoticeTimeout = null;
+
+    if (callStatusNotice.value !== message) {
+      return;
+    }
+
+    cleanup(true);
+  }, closeDelayMs);
 };
 
 const resetPendingEndCallState = () => {
@@ -1131,6 +1173,7 @@ export const startLiveKitCall = async (
   const me = getAuthUser();
   if (!sdk || !me) return;
 
+  clearCallStatusNotice();
   user.value = targetUser;
   topicId.value = currentTopicId;
   roomId.value = createRoomId();
@@ -1176,6 +1219,7 @@ export const startLiveKitGroupCall = async (currentTopicId: string) => {
   const me = getAuthUser();
   if (!sdk || !me) return;
 
+  clearCallStatusNotice();
   const activeRoomId = createRoomId();
   user.value = me as any;
   topicId.value = currentTopicId;
@@ -1203,6 +1247,8 @@ export const receiveIncomingCall = async (
   incomingTopicType?: TopicType | string | null,
   incomingStartTime?: number | null
 ) => {
+  clearCallStatusNotice();
+
   if (isIncomingCallDismissed(incomingRoomId, incomingTopicId)) {
     return false;
   }
@@ -1276,6 +1322,7 @@ export const acceptCall = async () => {
   const sdk = getChatSDK();
   const me = getAuthUser();
   if (!sdk || !me) return;
+  clearCallStatusNotice();
   shouldEndCallOnConnectFailure = false;
 
   if (!callStartedAt.value) {
@@ -1289,6 +1336,8 @@ export const acceptCall = async () => {
   }
 
   isAcceptingLocally = true;
+  localAcceptRoomId = roomId.value;
+  localAcceptTopicId = topicId.value;
   sdk.sendWebSocketEvent(WebSocketEventType.ANSWER_CALL, {
     roomId: roomId.value,
     topicId: topicId.value,
@@ -1317,6 +1366,7 @@ export const joinPendingGroupCall = async (targetTopicId?: string) => {
   } = pendingGroupCall;
 
   if (!sdk || !me) return;
+  clearCallStatusNotice();
   shouldEndCallOnConnectFailure = false;
 
   const callStatus = await getLiveKitCallStatus(pendingRoomId, pendingTopicId);
@@ -1376,6 +1426,7 @@ export const joinInvitedGroupCall = async () => {
   const invite = invitedGroupCall.value;
 
   if (!sdk || !me || !invite || open.value) return;
+  clearCallStatusNotice();
   shouldEndCallOnConnectFailure = false;
 
   const callStatus = await getLiveKitCallStatus(invite.roomId, invite.topicId);
@@ -1408,25 +1459,38 @@ export const handleCallAnswered = async (
 ) => {
   markIncomingCallDismissed(answeredRoomId, answeredTopicId);
 
+  const matchesCurrentCall =
+    (answeredRoomId && roomId.value === answeredRoomId) ||
+    (answeredTopicId && topicId.value === answeredTopicId);
+  const matchesLocalAccept =
+    (answeredRoomId && localAcceptRoomId === answeredRoomId) ||
+    (answeredTopicId && localAcceptTopicId === answeredTopicId);
+
   if (answeredRoomId && roomId.value === answeredRoomId) {
     setCallStartedAt(answeredStartTime ?? callStartedAt.value);
+  }
+
+  if (matchesLocalAccept) {
+    open.value = true;
+    isModalVisible.value = true;
   }
 
   const me = getAuthUser();
   if (
     me &&
     answeredUserId === me.id &&
-    isIncoming.value &&
-    roomId.value === answeredRoomId &&
-    !isAcceptingLocally
+    matchesCurrentCall &&
+    !isAcceptingLocally &&
+    !matchesLocalAccept
   ) {
-    cleanup(true);
+    cleanup(false);
   }
 };
 
 export const handleCallEnded = (
   endedRoomId?: string | null,
-  endedTopicId?: string | null
+  endedTopicId?: string | null,
+  reason?: CallEndReason
 ) => {
   if (matchesPendingEndCall(endedRoomId, endedTopicId)) {
     resetPendingEndCallState();
@@ -1435,11 +1499,22 @@ export const handleCallEnded = (
     return;
   }
 
-  if (
+  const matchesCurrentCall =
     (endedRoomId && roomId.value === endedRoomId) ||
     (endedTopicId && topicId.value === endedTopicId) ||
-    (!endedRoomId && !endedTopicId)
+    (!endedRoomId && !endedTopicId);
+
+  if (
+    reason === 'busy' &&
+    matchesCurrentCall &&
+    isCalling.value &&
+    !isIncoming.value
   ) {
+    showTransientCallStatusNotice('Пользователь занят');
+    return;
+  }
+
+  if (matchesCurrentCall) {
     cleanup(true);
   }
 };
@@ -1448,14 +1523,32 @@ export const dismissIncomingCallState = (
   targetRoomId?: string,
   targetTopicId?: string
 ) => {
+  markIncomingCallDismissed(targetRoomId, targetTopicId);
   removePendingGroupCallEntry(targetTopicId);
   removeInvitedGroupCallEntry(targetRoomId);
 
-  if (
+  const matchesCurrentIncomingCall =
     isIncoming.value &&
     ((roomId.value && targetRoomId && roomId.value === targetRoomId) ||
-      (topicId.value && targetTopicId && topicId.value === targetTopicId))
+      (topicId.value && targetTopicId && topicId.value === targetTopicId));
+
+  if (matchesCurrentIncomingCall && isAcceptingLocally) {
+    open.value = true;
+    isModalVisible.value = true;
+    return;
+  }
+
+  if (
+    matchesCurrentIncomingCall &&
+    ((targetRoomId && localAcceptRoomId === targetRoomId) ||
+      (targetTopicId && localAcceptTopicId === targetTopicId))
   ) {
+    open.value = true;
+    isModalVisible.value = true;
+    return;
+  }
+
+  if (matchesCurrentIncomingCall) {
     cleanup(false);
     return;
   }
@@ -1649,6 +1742,8 @@ export const leaveCall = () => {
   connectAttemptId += 1;
   connectPromise = null;
   shouldEndCallOnConnectFailure = false;
+  clearLocalAcceptState();
+  clearCallStatusNotice();
   clearDialingTimeout();
   stopTimer();
   stopRingtone();
@@ -1679,6 +1774,8 @@ export const cleanup = (disconnectRoom = true) => {
   connectAttemptId += 1;
   connectPromise = null;
   shouldEndCallOnConnectFailure = false;
+  clearLocalAcceptState();
+  clearCallStatusNotice();
   resetPendingEndCallState();
   clearDialingTimeout();
   stopTimer();
@@ -1789,8 +1886,8 @@ export const handleNativeCallAction = async (
       topicId.value = incomingTopicId || incomingRoomId || null;
     }
 
-    open.value = true;
     isIncoming.value = true;
+    open.value = true;
     isModalVisible.value = true;
 
     await acceptCall();
@@ -1838,6 +1935,7 @@ export { open, isIncoming, isCalling, user, roomId, topicId, isModalVisible };
 export {
   state,
   formattedTime,
+  callStatusNotice,
   localVideoStream,
   localScreenShareStream,
   remoteParticipants,
