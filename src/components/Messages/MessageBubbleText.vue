@@ -41,7 +41,10 @@
         :defer-until-measured="true"
         @navigate-message="$emit('navigate-message')"
       />
-      <div class="message-content message-content--text" :data-testid="`${props.dataTestid}-Content`">
+      <div
+        class="message-content message-content--text"
+        :data-testid="`${props.dataTestid}-Content`"
+      >
         <div
           v-if="props.loader"
           class="message-content__loading"
