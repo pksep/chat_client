@@ -62,10 +62,11 @@ const selectedWallpaperId = ref('none');
 const customWallpapers = ref<StoredCustomWallpaper[]>([]);
 const isInitialized = ref(false);
 const isHydratingCustomWallpapers = ref(false);
+const DEFAULT_WALLPAPER_GRADIENT =
+  'linear-gradient(180deg, rgba(251, 253, 255, 1) 0%, rgba(236, 243, 255, 1) 100%)';
 
 const nonePreviewStyle: CSSProperties = {
-  background:
-    'linear-gradient(180deg, rgba(251, 253, 255, 1) 0%, rgba(236, 243, 255, 1) 100%)'
+  background: DEFAULT_WALLPAPER_GRADIENT
 };
 
 const buildWallpaperCssVariables = (
@@ -348,12 +349,15 @@ const currentWallpaperStyle = computed<CSSProperties>(() => {
   const wallpaperOption = getSelectedWallpaperOption();
 
   if (!wallpaperOption) {
-    return buildWallpaperCssVariables(null, {
-      chatSize: 'cover',
-      repeat: 'no-repeat',
-      opacity: 0,
-      backgroundColor: '#f4f8ff'
-    });
+    return {
+      background: DEFAULT_WALLPAPER_GRADIENT,
+      ...buildWallpaperCssVariables(null, {
+        chatSize: 'cover',
+        repeat: 'no-repeat',
+        opacity: 0,
+        backgroundColor: '#f4f8ff'
+      })
+    };
   }
 
   return buildWallpaperCssVariables(wallpaperOption.imageUrl, wallpaperOption);

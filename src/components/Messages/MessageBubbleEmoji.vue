@@ -8,6 +8,7 @@
     />
 
     <article
+      ref="emojiArticleRef"
       :class="[
         'message__article',
         'message__article--emoji',
@@ -31,6 +32,8 @@
         v-if="props.replyMessage"
         :reply-message="props.replyMessage"
         :is-me-sender="props.isMeSender"
+        :reference-width="replyReferenceWidth"
+        :defer-until-measured="true"
         @navigate-message="$emit('navigate-message')"
       />
 
@@ -126,7 +129,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import MessageReferenceBlock from './MessageReferenceBlock.vue';
 import MessageStatusIcons from './MessageStatusIcons.vue';
@@ -137,10 +140,16 @@ import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import MessageBubbleTail from './MessageBubbleTail.vue';
 import MessageAuthorMeta from './MessageAuthorMeta.vue';
+import { useReferenceWidth } from './composables/useReferenceWidth';
 
 const props = defineProps<IMessageBubbleProps>();
 
 defineEmits(['navigate-message']);
+
+const emojiArticleRef = ref<HTMLElement | null>(null);
+const replyReferenceWidth = useReferenceWidth(emojiArticleRef, {
+  freezeAfterFirstMeasure: true
+});
 
 const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);

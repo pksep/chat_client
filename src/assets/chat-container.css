@@ -214,8 +214,8 @@ button.primary-yui-kit.disabled-yui-kit {
     padding: 8px;
   }
 
-  .chat-container {
-    background-color: var(--white);
+  .chat-container:not(:has(.chat__message-wrapper)) {
+    background: var(--white) !important;
     overflow: hidden;
   }
   svg.ai-icon {

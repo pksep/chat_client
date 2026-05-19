@@ -24,6 +24,8 @@
         <MessageReferenceBlock
           :reply-message="props.replyMessage"
           :is-me-sender="props.isMeSender"
+          :reference-width="replyReferenceWidth"
+          :defer-until-measured="true"
           @navigate-message="$emit('navigate-message')"
         />
         <div
@@ -168,6 +170,7 @@ import { getFormatFileSize, getShortName } from '../../utils/getFormatFileSize';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { useMessageMedia } from './composables/useMessageMedia';
+import { useReferenceWidth } from './composables/useReferenceWidth';
 import MessageReferenceBlock from './MessageReferenceBlock.vue';
 import MessageBubbleTail from './MessageBubbleTail.vue';
 import { stripHtml } from '../../utils/stripHtml';
@@ -181,6 +184,9 @@ const { primeMediaCache } = useMessageMedia();
 const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
 const filesArticleRef = ref<HTMLElement | null>(null);
+const replyReferenceWidth = useReferenceWidth(filesArticleRef, {
+  freezeAfterFirstMeasure: true
+});
 const shouldPrimeFiles = ref(false);
 let filesVisibilityObserver: IntersectionObserver | null = null;
 
