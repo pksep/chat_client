@@ -132,6 +132,7 @@ import { getUserLastOnline } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
+import { getConfig } from '../../services/useConfig';
 import {
   getHasWebsocketConnection,
   sendTypingStatus
@@ -186,6 +187,22 @@ const formatForwardMessagesLabel = (count: number): string => {
 };
 
 const route = useUrlWatcher();
+const config = getConfig();
+
+const isAbsoluteOrLocalUrl = (path?: string | null): boolean =>
+  !!path && /^(blob:|data:|https?:\/\/|file:\/\/|\/)/i.test(path);
+
+const resolveAvatarUrl = (path?: string | null): string => {
+  if (!path) {
+    return '';
+  }
+
+  if (isAbsoluteOrLocalUrl(path)) {
+    return path;
+  }
+
+  return `${config.CHAT_PATH_TO_FILE_CDN}/${path}`;
+};
 
 const state = reactive({
   mentionSearch: ''
@@ -199,7 +216,7 @@ const mentionConfig = {
 
     return ex?.erpInitials || '';
   },
-  getAvatarUrl: (user: any) => user.avatarUrl || '',
+  getAvatarUrl: (user: any) => resolveAvatarUrl(user.avatarUrl),
   getAvatarInitials: (user: any) => user.initials || user.nickname || 'U',
   getIsOnline: (user: any) =>
     getHasWebsocketConnection() &&
