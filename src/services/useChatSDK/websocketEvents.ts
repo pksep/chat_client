@@ -62,6 +62,7 @@ export enum WebSocketEventType {
   ACTIVE_CALLS = 'activeCalls',
   START_CALL = 'startCall',
   INCOMING_CALL = 'incomingCall',
+  DISMISS_INCOMING_CALL = 'dismissIncomingCall',
   ANSWER_CALL = 'answerCall',
   CALL_ANSWERED = 'callAnswered',
   END_CALL = 'endCall',
@@ -190,6 +191,10 @@ export interface WebSocketEventPayloads {
     roomId: string;
     topicId: string;
   };
+  [WebSocketEventType.DISMISS_INCOMING_CALL]: {
+    roomId: string;
+    topicId: string;
+  };
   [WebSocketEventType.ANSWER_CALL]: {
     userId: string;
     roomId: string;
@@ -210,6 +215,7 @@ export interface WebSocketEventPayloads {
     userId: string;
     roomId: string;
     topicId: string;
+    reason?: 'busy';
   };
   [WebSocketEventType.INCOMING_CALL]: {
     roomId: string;

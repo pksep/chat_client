@@ -569,6 +569,16 @@ const setupChatListeners = (): void => {
     );
   });
 
+  chatSDK.subscribeToEvent(
+    WebSocketEventType.DISMISS_INCOMING_CALL,
+    ({ payload }) => {
+      if (Capacitor.isNativePlatform()) {
+        endAllCallKits();
+      }
+      dismissIncomingCall(payload.roomId, payload.topicId);
+    }
+  );
+
   chatSDK.subscribeToEvent(WebSocketEventType.ACTIVE_CALLS, ({ payload }) => {
     void syncServerActiveCalls(payload.calls);
   });
@@ -579,7 +589,7 @@ const setupChatListeners = (): void => {
     if (Capacitor.isNativePlatform()) {
       endAllCallKits();
     }
-    handleCallEnded(payload.roomId, payload.topicId);
+    handleCallEnded(payload.roomId, payload.topicId, payload.reason);
 
     if (payload.topicId) {
       const endedTopic = useTopics().getSelectedTopic(payload.topicId) as any;

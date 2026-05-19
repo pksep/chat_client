@@ -42,6 +42,11 @@ public final class IncomingCallNotificationHelper {
     ) {
         createChannel(context);
 
+        if (!canShowIncomingCallAlert(context)) {
+            IncomingCallRingtonePlayer.stop();
+            return;
+        }
+
         String resolvedCallerName =
             callerName != null && !callerName.trim().isEmpty()
                 ? callerName
@@ -227,6 +232,28 @@ public final class IncomingCallNotificationHelper {
 
     private static int buildRequestCode(String roomId, int salt) {
         return buildNotificationId(roomId) + salt;
+    }
+
+    private static boolean canShowIncomingCallAlert(Context context) {
+        NotificationManagerCompat notificationManagerCompat =
+            NotificationManagerCompat.from(context);
+
+        if (!notificationManagerCompat.areNotificationsEnabled()) {
+            return false;
+        }
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return true;
+        }
+
+        NotificationManager manager =
+            (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null) {
+            return true;
+        }
+
+        NotificationChannel channel = manager.getNotificationChannel(CHANNEL_ID);
+        return channel == null || channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
     }
 
     private static void createChannel(Context context) {
