@@ -167,7 +167,7 @@
             </button>
 
             <button
-              v-if="!isMobile && !Capacitor.isNativePlatform()"
+              v-if="!Capacitor.isNativePlatform()"
               class="call-modal__control-button"
               :class="{
                 'call-modal__control-button__inactive':
