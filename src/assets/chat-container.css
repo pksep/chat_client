@@ -44,7 +44,6 @@
   --neutral-button: var(--grey1);
   --neutral-text: var(--grey6);
   --neutral-border: var(--grey3);
-  --header-height: 56px;
   display: grid;
   position: relative;
   font-family: 'Inter Variable', sans-serif;
