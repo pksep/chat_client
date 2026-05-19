@@ -1,12 +1,6 @@
 <template>
   <template v-if="mediaFiles.length > 0">
     <div class="message-bubble-stack">
-      <MessageReferenceBlock
-        :forward-user="props.forwardUser"
-        :reply-message="props.replyMessage"
-        :is-me-sender="props.isMeSender"
-        @navigate-message="$emit('navigate-message')"
-      />
       <article
         ref="mediaArticleRef"
         :class="messageArticleStyles"
@@ -21,66 +15,84 @@
           :sender-role="props.senderRole"
           :data-testid="`${props.dataTestid}-AuthorMeta`"
         />
+        <MessageReferenceBlock
+          :forward-user="props.forwardUser"
+          :reply-message="props.replyMessage"
+          :is-me-sender="props.isMeSender"
+          :reference-width="replyReferenceWidth"
+          :defer-until-measured="true"
+          @navigate-message="$emit('navigate-message')"
+        />
         <div
           :class="[
-            `message-content message-content-${mediaFiles.length}-item`,
-            'message-content--media',
-            { 'message-content--media-with-caption': hasInlineCaption }
+            {
+              'message-content--media-with-caption-container': hasInlineCaption
+            }
           ]"
-          :data-testid="`${props.dataTestid}-Content`"
+          @click.stop="$emit('set-slider', mediaFiles, 0)"
         >
           <div
-            v-for="(media, i) in mediaFiles"
-            :key="media.id"
-            class="message-content__media"
-            :data-testid="`${props.dataTestid}-MediaContainer`"
-            @contextmenu.prevent
+            :class="[
+              `message-content message-content-${mediaFiles.length}-item`,
+              'message-content--media',
+              { 'message-content--media-with-caption': hasInlineCaption }
+            ]"
+            :data-testid="`${props.dataTestid}-Content`"
           >
-            <img
-              :src="shouldLoadMedia ? getFullMediaPath(media) : EMPTY_MEDIA_SRC"
-              :alt="props.sender ? props.sender + ' image' : 'Shared image'"
-              :style="getPreviewStyle(media)"
-              loading="lazy"
-              decoding="async"
-              @load="captureImagePreviewMetrics(media, $event)"
-              @click="$emit('set-slider', mediaFiles, i)"
+            <div
+              v-for="(media, i) in mediaFiles"
+              :key="media.id"
+              class="message-content__media"
+              :data-testid="`${props.dataTestid}-MediaContainer`"
               @contextmenu.prevent
-            />
-
-            <div
-              v-if="typeof media.isLoading === 'boolean' || media.uploadError"
-              class="message-content__media-loading"
             >
-              <LoadingIcon
-                v-if="!media.uploadError"
-                :is-loaded="!media.isLoading"
-                :percent="media.uploadPercent ?? null"
+              <img
+                :src="
+                  shouldLoadMedia ? getFullMediaPath(media) : EMPTY_MEDIA_SRC
+                "
+                :alt="props.sender ? props.sender + ' image' : 'Shared image'"
+                :style="getPreviewStyle(media)"
+                loading="lazy"
+                decoding="async"
+                @load="captureImagePreviewMetrics(media, $event)"
+                @click.stop="$emit('set-slider', mediaFiles, i)"
+                @contextmenu.prevent
               />
-            </div>
 
-            <div
-              v-else-if="media.type === MediaType.Video"
-              class="message-content__media-video"
-              @click="$emit('set-slider', mediaFiles, i)"
-            >
-              <PlayIcon />
-            </div>
+              <div
+                v-if="typeof media.isLoading === 'boolean' || media.uploadError"
+                class="message-content__media-loading"
+              >
+                <LoadingIcon
+                  v-if="!media.uploadError"
+                  :is-loaded="!media.isLoading"
+                  :percent="media.uploadPercent ?? null"
+                />
+              </div>
 
-            <div
-              v-if="i === mediaFiles.length - 1 && !hasInlineCaption"
-              class="message-content__media-overlay-time"
-            >
-              <span>{{ props.time }}</span>
-              <ErrorIcon v-if="showErrorIcon" />
-              <MessageStatusIcons
-                v-if="props.isMeSender && !showErrorIcon"
-                :is-read="props.isRead"
-                :message-status="props.messageStatus"
-              />
+              <div
+                v-else-if="media.type === MediaType.Video"
+                class="message-content__media-video"
+                @click="$emit('set-slider', mediaFiles, i)"
+              >
+                <PlayIcon />
+              </div>
+
+              <div
+                v-if="i === mediaFiles.length - 1 && !hasInlineCaption"
+                class="message-content__media-overlay-time"
+              >
+                <span>{{ props.time }}</span>
+                <ErrorIcon v-if="showErrorIcon" />
+                <MessageStatusIcons
+                  v-if="props.isMeSender && !showErrorIcon"
+                  :is-read="props.isRead"
+                  :message-status="props.messageStatus"
+                />
+              </div>
             </div>
           </div>
         </div>
-
         <div
           v-if="hasInlineCaption"
           class="message-media__caption message-content--text"
@@ -93,26 +105,6 @@
           <div
             v-if="!hasReactions"
             class="message-time message-time--inline message-media__caption-time"
-          >
-            <span>{{ props.time }}</span>
-            <ErrorIcon v-if="showErrorIcon" />
-            <MessageStatusIcons
-              v-if="props.isMeSender && !showErrorIcon"
-              :is-read="props.isRead"
-              :message-status="props.messageStatus"
-            />
-          </div>
-        </div>
-      </article>
-
-      <Transition name="reaction-row">
-        <div v-if="props.reactions?.length" class="message-footer-row">
-          <div class="message-reactions-row">
-            <MessageEmojies :reactions="props.reactions" />
-          </div>
-          <div
-            v-if="hasInlineCaption"
-            class="message-time message-time--bottom"
             :data-testid="`${props.dataTestid}-Time`"
           >
             <span>{{ props.time }}</span>
@@ -122,6 +114,34 @@
               :is-read="props.isRead"
               :message-status="props.messageStatus"
             />
+          </div>
+          <div v-else class="message-footer-row message-media__caption-footer">
+            <div class="message-reactions-row">
+              <MessageEmojies :reactions="props.reactions" />
+            </div>
+            <div
+              class="message-time message-time--bottom message-media__caption-time"
+              :data-testid="`${props.dataTestid}-Time`"
+            >
+              <span>{{ props.time }}</span>
+              <ErrorIcon v-if="showErrorIcon" />
+              <MessageStatusIcons
+                v-if="props.isMeSender && !showErrorIcon"
+                :is-read="props.isRead"
+                :message-status="props.messageStatus"
+              />
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <Transition name="reaction-row">
+        <div
+          v-if="props.reactions?.length && !hasInlineCaption"
+          class="message-footer-row"
+        >
+          <div class="message-reactions-row">
+            <MessageEmojies :reactions="props.reactions" />
           </div>
         </div>
       </Transition>
@@ -141,6 +161,7 @@ import { stripHtml } from '../../utils/stripHtml';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { useMessageMedia } from './composables/useMessageMedia';
+import { useReferenceWidth } from './composables/useReferenceWidth';
 import type { IMessageBubbleProps } from './interface/interface';
 import type { IMedia } from '../interfaces/interfaces';
 import MessageReferenceBlock from './MessageReferenceBlock.vue';
@@ -183,10 +204,13 @@ const articleInlineStyle = computed(() => {
   }
 
   return {
-    width: `${singleMediaPreviewWidth.value}px`
+    minWidth: `${singleMediaPreviewWidth.value}px`
   };
 });
 const mediaArticleRef = ref<HTMLElement | null>(null);
+const replyReferenceWidth = useReferenceWidth(mediaArticleRef, {
+  freezeAfterFirstMeasure: true
+});
 const shouldLoadMedia = ref(false);
 let visibilityObserver: IntersectionObserver | null = null;
 

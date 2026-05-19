@@ -17,6 +17,7 @@
       @navigate-message="$emit('navigate-message')"
     />
     <article
+      ref="messageArticleRef"
       :class="messageArticleStyles"
       :data-testid="`${props.dataTestid}-Article`"
     >
@@ -36,12 +37,11 @@
         :forward-user="showExternalForward ? undefined : props.forwardUser"
         :reply-message="props.replyMessage"
         :is-me-sender="props.isMeSender"
+        :reference-width="replyReferenceWidth"
+        :defer-until-measured="true"
         @navigate-message="$emit('navigate-message')"
       />
-      <div
-        class="message-content message-content--text"
-        :data-testid="`${props.dataTestid}-Content`"
-      >
+      <div class="message-content message-content--text" :data-testid="`${props.dataTestid}-Content`">
         <div
           v-if="props.loader"
           class="message-content__loading"
@@ -130,7 +130,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import PinIcon from '../UI/PinIcon.vue';
@@ -145,10 +145,16 @@ import MessageBubbleEmoji from './MessageBubbleEmoji.vue';
 import MessageBubbleCall from './MessageBubbleCall.vue';
 import { parseCallMessage } from '../../utils/parseCallMessage';
 import MessageAuthorMeta from './MessageAuthorMeta.vue';
+import { useReferenceWidth } from './composables/useReferenceWidth';
 
 const props = defineProps<IMessageBubbleProps>();
 
 defineEmits(['navigate-message']);
+
+const messageArticleRef = ref<HTMLElement | null>(null);
+const replyReferenceWidth = useReferenceWidth(messageArticleRef, {
+  freezeAfterFirstMeasure: true
+});
 
 const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
