@@ -1009,7 +1009,7 @@ const setupRoomListeners = (activeRoom: Room) => {
     });
 };
 
-const getToken = async (activeRoomId: string, userId: string) => {
+const getToken = async (activeRoomId: string) => {
   const sdk = getChatSDK();
   if (!sdk) return null;
 
@@ -1023,12 +1023,19 @@ const getToken = async (activeRoomId: string, userId: string) => {
     );
   }
 
-  return sdk.getLiveKitToken(activeRoomId, userId);
+  return sdk.getLiveKitToken(activeRoomId);
 };
 
 const getConnectErrorMessage = (error: unknown) => {
   const errorMessage =
     error instanceof Error ? error.message.toLowerCase() : String(error);
+
+  if (
+    errorMessage.includes('call is no longer active') ||
+    errorMessage.includes('failed to get livekit token')
+  ) {
+    return 'Звонок уже завершен.';
+  }
 
   if (errorMessage.includes('429')) {
     return 'Не удалось подключиться к звонку из-за ограничения запросов. Попробуйте еще раз через несколько секунд.';
@@ -1074,8 +1081,13 @@ const connectToRoom = async () => {
       throw new Error('LiveKit config is incomplete');
     }
 
-    const token = await getToken(activeRoomId, me.id);
+    const token = await getToken(activeRoomId);
     if (!token) {
+      const callStatus = await sdk.getLiveKitCallStatus(activeRoomId);
+      if (!callStatus?.active || callStatus.topicId !== activeTopicId) {
+        throw new Error('Call is no longer active');
+      }
+
       throw new Error('Failed to get LiveKit token');
     }
 
