@@ -53,6 +53,7 @@ import {
   saveShadowTopicSnapshot,
   syncShadowReadStateFromMessages
 } from './useShadowChatSync';
+import { isUnreadTrackableMessage } from '../utils/messageTracking';
 
 const fullMessagesStore = ref<Record<string, IMessage[]>>({});
 const messagesStore = ref<Record<string, IMessage[]>>({});
@@ -1204,7 +1205,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
 
     if (
       !alreadyExists &&
-      !nextMessage.isSystem &&
+      isUnreadTrackableMessage(nextMessage) &&
       nextMessage.senderUserId !== authedUser.value?.id &&
       nextMessage.isReadByMe !== true
     ) {
@@ -1257,7 +1258,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
 
     if (
       !alreadyExists &&
-      !nextMessage.isSystem &&
+      isUnreadTrackableMessage(nextMessage) &&
       nextMessage.senderUserId !== authedUser.value?.id &&
       nextMessage.isReadByMe !== true
     ) {
@@ -1288,7 +1289,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
 
   if (
     !alreadyExists &&
-    !nextMessage.isSystem &&
+    isUnreadTrackableMessage(nextMessage) &&
     nextMessage.senderUserId !== authedUser.value?.id &&
     nextMessage.isReadByMe !== true
   ) {

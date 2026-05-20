@@ -28,6 +28,7 @@ import {
 } from '../../../composables/useTopics';
 import { clearTopicNotifications } from '../../../services/useNotificationNavigation';
 import type { IMessage } from '../../interfaces/interfaces';
+import { isUnreadTrackableMessage } from '../../../utils/messageTracking';
 
 export function useMessageScroll(
   chatWrapperRef: Ref<HTMLElement | null>,
@@ -77,7 +78,7 @@ export function useMessageScroll(
         state.messages
           .filter(
             message =>
-              !message.isSystem &&
+              isUnreadTrackableMessage(message) &&
               message.senderUserId !== props.user?.id &&
               message.isReadByMe !== true
           )
@@ -271,7 +272,7 @@ export function useMessageScroll(
     const unreadMessages = state.messages.filter(
       (message: IMessage) =>
         message.senderUserId !== props.user?.id &&
-        !message.isSystem &&
+        isUnreadTrackableMessage(message) &&
         message.isReadByMe !== true
     );
 

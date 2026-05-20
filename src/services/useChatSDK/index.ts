@@ -582,6 +582,14 @@ export class ChatSDK {
     return this.ws.sendWebSocketEvent(type, payload);
   }
 
+  sendWebSocketEventWithAck<T extends WebSocketEventType, R = unknown>(
+    type: T,
+    payload: WebSocketEventPayloads[T],
+    timeoutMs?: number
+  ): Promise<R> {
+    return this.ws.sendWebSocketEventWithAck<T, R>(type, payload, timeoutMs);
+  }
+
   isConnected(): boolean {
     return !!this.socket?.connected;
   }
