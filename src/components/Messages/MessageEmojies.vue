@@ -102,6 +102,7 @@ import { getUserById } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
 import type { IUser } from '../interfaces/interfaces';
 import CachedAvatar from '../UI/CachedAvatar.vue';
+import { useUserInfoModal } from '../../composables/useUserInfoModal';
 
 const LONG_PRESS_DELAY_MS = 450;
 const VIEWPORT_OFFSET_PX = 8;
@@ -115,6 +116,7 @@ type ReactionDetailsItem = {
   messageId: string;
   emoji: string;
   userId: string;
+  user?: IUser;
   name: string;
   avatarPath: string;
   avatarInitials: string;
@@ -155,6 +157,7 @@ const reactionDetailsStyle = ref<Record<string, string>>({
 const reactionDetailsAnchor = ref({ x: 0, y: 0 });
 let longPressTimeout: ReturnType<typeof setTimeout> | null = null;
 let suppressNextToggle = false;
+const { openUserInfo } = useUserInfoModal();
 
 const reactionDetails = computed<ReactionDetailsItem[]>(() =>
   [...(props.reactions || [])]
@@ -170,6 +173,7 @@ const reactionDetails = computed<ReactionDetailsItem[]>(() =>
         messageId: reaction.messageId,
         emoji: reaction.text,
         userId: reaction.senderUserId,
+        user,
         name,
         avatarPath: user?.avatarUrl || '',
         avatarInitials: user?.initials || user?.nickname || name,
@@ -289,6 +293,9 @@ const handleTouchStart = (event: TouchEvent) => {
 
 const handleReactionDetailsItemClick = (reaction: ReactionDetailsItem) => {
   if (!reaction.isOwn) {
+    if (reaction.user) {
+      openUserInfo(reaction.user);
+    }
     return;
   }
 

@@ -29,9 +29,16 @@
       >
         <template v-if="user">
           <UserProfile
-            :class="['menu__user-profile', props.userClass ?? '']"
+            :class="[
+              'menu__user-profile',
+              {
+                'user-profile--interactive': canOpenUserInfo(user)
+              },
+              props.userClass ?? ''
+            ]"
             :user="user"
             :dataTestid="`${props.dataTestid}-ContactListInModal-UserProfile${index + 1}`"
+            @click.stop="openUserInfo(user)"
             @unmount-click="
               user.id !== authUser.id &&
                 openActivePopover(user.id.toString(), $event)
@@ -105,6 +112,7 @@ import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import { useUrlWatcher } from '../../composables/navigation';
 import { getAuthUser } from '../../composables/useAuth';
+import { useUserInfoModal } from '../../composables/useUserInfoModal';
 
 interface ContactListInModalProps {
   showAddButton?: boolean;
@@ -145,6 +153,7 @@ const emits = defineEmits<{
 }>();
 
 const route = useUrlWatcher();
+const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 
 const authUser = computed(() => getAuthUser());
 

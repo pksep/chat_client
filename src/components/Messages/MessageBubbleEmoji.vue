@@ -25,6 +25,7 @@
           !props.isMeSender && !isDialogRoute && !props.continuesFromPrevious
         "
         :sender="props.sender"
+        :sender-user="props.senderUser"
         :sender-role="props.senderRole"
         :data-testid="`${props.dataTestid}-AuthorMeta`"
       />

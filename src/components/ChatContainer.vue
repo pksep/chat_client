@@ -49,7 +49,38 @@
           @unmount-collapse="handleMenuToggle"
         />
       </Modal>
+
+      <Modal
+        :open="isUserInfoOpen"
+        class="chat__user-info-modal"
+        width="404px"
+        @close="closeUserInfo"
+      >
+        <UserInfoPanel
+          :user="activeUser"
+          :topic="activeTopic"
+          show-header
+          :data-testid="`${props.dataTestid}-ChatContainer-UserInfoPanel`"
+          @close="closeUserInfo"
+        />
+      </Modal>
     </template>
+    <MobileModal
+      v-if="isMobile"
+      :open="isUserInfoOpen"
+      title="Информация"
+      close-button-text="Назад"
+      :class="{ 'chat__header-modal-info--active': true }"
+      :data-testid="`${props.dataTestid}-ChatContainer-MobileUserInfoModal`"
+      @unmount-close="closeUserInfo"
+    >
+      <UserInfoPanel
+        :user="activeUser"
+        :topic="activeTopic"
+        :data-testid="`${props.dataTestid}-ChatContainer-MobileUserInfoPanel`"
+        @close="closeUserInfo"
+      />
+    </MobileModal>
     <NewContactModal
       :open="state.isNewContactOpen"
       :data-testid="`${props.dataTestid}-ChatContainer-NewContactModal`"
@@ -109,6 +140,7 @@ import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
 import Chat from './Chat.vue';
 import MenuInfo from './MenuInfo.vue';
+import UserInfoPanel from './UserInfoPanel.vue';
 import {
   MobilePlatformEnum,
   type IChatContainerProps
@@ -138,6 +170,7 @@ import {
   pendingGroupCallInfo
 } from '../services/useCalls';
 import { useChatWallpaper } from '../composables/useChatWallpaper';
+import { useUserInfoModal } from '../composables/useUserInfoModal';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -192,6 +225,8 @@ const chatContainerClasses = computed(() => [
 ]);
 
 const users = computed(() => getUsersList());
+const { isUserInfoOpen, activeUser, activeTopic, closeUserInfo } =
+  useUserInfoModal();
 
 const props = withDefaults(defineProps<IChatContainerProps>(), {
   dataTestid: 'ChatContainer'

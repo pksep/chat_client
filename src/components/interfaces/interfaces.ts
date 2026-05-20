@@ -28,6 +28,7 @@ export interface IHeaderEmits {
   (e: 'unmount-contact', contact: IUser): void;
   (e: 'unmount-notification', statusNotification?: string): void;
   (e: 'unmount-information', info?: boolean): void;
+  (e: 'unmount-user-profile', info?: boolean): void;
   (e: 'unmount-clear'): void;
   (e: 'unmount-exit'): void;
 }
@@ -43,6 +44,7 @@ export interface IUserStatus {
 
 export type IUser = User & {
   status?: IUserStatus | null;
+  ex?: unknown;
 };
 
 export type IGroup = Group & {
