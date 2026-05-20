@@ -1,5 +1,9 @@
 import type { ITopic } from '../components/interfaces/interfaces';
 import { getFullMessagesByTopicId } from '../services/useMessages';
+import {
+  isUnreadIgnoredSystemMessage,
+  isUnreadTrackableMessage
+} from './messageTracking';
 
 const hasLocalUnreadUserMessages = (
   topicId?: string,
@@ -11,7 +15,7 @@ const hasLocalUnreadUserMessages = (
 
   return getFullMessagesByTopicId(topicId).some(
     message =>
-      !message.isSystem &&
+      isUnreadTrackableMessage(message) &&
       message.senderUserId !== authUserId &&
       message.isReadByMe !== true
   );
@@ -33,7 +37,7 @@ export const getTopicUnreadBadgeCount = (
   }
 
   if (
-    topic.lastMessage?.isSystem &&
+    isUnreadIgnoredSystemMessage(topic.lastMessage) &&
     !hasLocalUnreadUserMessages(topic.id, authUserId)
   ) {
     return 0;

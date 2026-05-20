@@ -156,6 +156,7 @@ import {
 } from '../composables/useForwardMessages';
 import { ensureMediaObjectUrl } from '../services/useMediaBlobCache';
 import { getTopicUnreadBadgeCount } from '../utils/topicUnreadBadge';
+import { isUnreadTrackableMessage } from '../utils/messageTracking';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -527,7 +528,7 @@ const getFirstUnreadMessageId = (): string | null => {
 
   const firstUnreadMessage = state.messages.find(
     message =>
-      !message.isSystem &&
+      isUnreadTrackableMessage(message) &&
       message.senderUserId !== currentUserId &&
       message.isReadByMe !== true
   );

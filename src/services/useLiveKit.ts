@@ -60,6 +60,14 @@ type StreamCacheEntry = {
 
 type CallEndReason = 'busy';
 
+type CallSocketAck = {
+  accepted?: boolean;
+  roomId?: string | null;
+  topicId?: string | null;
+  startTime?: number | null;
+  isNewCall?: boolean;
+};
+
 const open = ref(false);
 const isIncoming = ref(false);
 const isCalling = ref(false);
@@ -1163,6 +1171,38 @@ const resetMediaState = () => {
   state.isHandRaised = false;
 };
 
+const applyCallSocketAck = (
+  ack?: CallSocketAck | null,
+  fallback?: {
+    roomId?: string | null;
+    topicId?: string | null;
+    startTime?: number | null;
+    isNewCall?: boolean;
+  }
+) => {
+  const resolvedRoomId = ack?.roomId ?? fallback?.roomId ?? null;
+  const resolvedTopicId = ack?.topicId ?? fallback?.topicId ?? null;
+  const resolvedStartTime = ack?.startTime ?? fallback?.startTime ?? null;
+
+  if (resolvedRoomId) {
+    roomId.value = resolvedRoomId;
+  }
+
+  if (resolvedTopicId) {
+    topicId.value = resolvedTopicId;
+  }
+
+  if (resolvedStartTime) {
+    setCallStartedAt(resolvedStartTime);
+  }
+
+  if (typeof ack?.isNewCall === 'boolean') {
+    shouldEndCallOnConnectFailure = ack.isNewCall;
+  } else if (typeof fallback?.isNewCall === 'boolean') {
+    shouldEndCallOnConnectFailure = fallback.isNewCall;
+  }
+};
+
 export const startLiveKitCall = async (
   targetUser: IUser,
   currentTopicId: string
@@ -1184,11 +1224,25 @@ export const startLiveKitCall = async (
   isModalVisible.value = true;
   playDialingSound();
 
-  sdk.sendWebSocketEvent(WebSocketEventType.START_CALL, {
+  const startAck = await sdk.sendWebSocketEventWithAck<
+    WebSocketEventType.START_CALL,
+    CallSocketAck
+  >(WebSocketEventType.START_CALL, {
     roomId: roomId.value,
     topicId: currentTopicId,
     userId: me.id
   });
+
+  applyCallSocketAck(startAck, {
+    roomId: roomId.value,
+    topicId: currentTopicId,
+    startTime: callStartedAt.value,
+    isNewCall: true
+  });
+
+  if (startAck?.accepted === false) {
+    return;
+  }
 
   await connectToRoom();
 
@@ -1231,11 +1285,25 @@ export const startLiveKitGroupCall = async (currentTopicId: string) => {
   isCalling.value = true;
   isModalVisible.value = true;
 
-  sdk.sendWebSocketEvent(WebSocketEventType.START_CALL, {
+  const startAck = await sdk.sendWebSocketEventWithAck<
+    WebSocketEventType.START_CALL,
+    CallSocketAck
+  >(WebSocketEventType.START_CALL, {
     roomId: activeRoomId,
     topicId: currentTopicId,
     userId: me.id
   });
+
+  applyCallSocketAck(startAck, {
+    roomId: activeRoomId,
+    topicId: currentTopicId,
+    startTime: callStartedAt.value,
+    isNewCall: true
+  });
+
+  if (startAck?.accepted === false) {
+    return;
+  }
 
   await connectToRoom();
 };
@@ -1338,11 +1406,22 @@ export const acceptCall = async () => {
   isAcceptingLocally = true;
   localAcceptRoomId = roomId.value;
   localAcceptTopicId = topicId.value;
-  sdk.sendWebSocketEvent(WebSocketEventType.ANSWER_CALL, {
+  const answerAck = await sdk.sendWebSocketEventWithAck<
+    WebSocketEventType.ANSWER_CALL,
+    CallSocketAck
+  >(WebSocketEventType.ANSWER_CALL, {
     roomId: roomId.value,
     topicId: topicId.value,
     userId: me.id
   });
+  applyCallSocketAck(answerAck, {
+    roomId: roomId.value,
+    topicId: topicId.value,
+    startTime: callStartedAt.value,
+    isNewCall: false
+  });
+  localAcceptRoomId = roomId.value;
+  localAcceptTopicId = topicId.value;
 
   try {
     await connectToRoom();
@@ -1381,13 +1460,31 @@ export const joinPendingGroupCall = async (targetTopicId?: string) => {
   isCalling.value = true;
   isModalVisible.value = true;
 
-  sdk.sendWebSocketEvent(WebSocketEventType.ANSWER_CALL, {
+  isAcceptingLocally = true;
+  localAcceptRoomId = pendingRoomId;
+  localAcceptTopicId = pendingTopicId;
+  const answerAck = await sdk.sendWebSocketEventWithAck<
+    WebSocketEventType.ANSWER_CALL,
+    CallSocketAck
+  >(WebSocketEventType.ANSWER_CALL, {
     roomId: pendingRoomId,
     topicId: pendingTopicId,
     userId: me.id
   });
+  applyCallSocketAck(answerAck, {
+    roomId: pendingRoomId,
+    topicId: pendingTopicId,
+    startTime: pendingGroupCall.startTime ?? callStatus.startTime ?? null,
+    isNewCall: false
+  });
+  localAcceptRoomId = roomId.value;
+  localAcceptTopicId = topicId.value;
 
-  await connectToRoom();
+  try {
+    await connectToRoom();
+  } finally {
+    isAcceptingLocally = false;
+  }
 };
 
 export const hydrateInvitedGroupCallFromUrl = async () => {
@@ -1441,14 +1538,32 @@ export const joinInvitedGroupCall = async () => {
   isCalling.value = true;
   isModalVisible.value = true;
 
-  sdk.sendWebSocketEvent(WebSocketEventType.ANSWER_CALL, {
+  isAcceptingLocally = true;
+  localAcceptRoomId = invite.roomId;
+  localAcceptTopicId = invite.topicId;
+  const answerAck = await sdk.sendWebSocketEventWithAck<
+    WebSocketEventType.ANSWER_CALL,
+    CallSocketAck
+  >(WebSocketEventType.ANSWER_CALL, {
     roomId: invite.roomId,
     topicId: invite.topicId,
     userId: me.id
   });
+  applyCallSocketAck(answerAck, {
+    roomId: invite.roomId,
+    topicId: invite.topicId,
+    startTime: invite.startTime ?? callStatus.startTime ?? null,
+    isNewCall: false
+  });
+  localAcceptRoomId = roomId.value;
+  localAcceptTopicId = topicId.value;
 
-  await connectToRoom();
-  clearInviteParamsFromUrl();
+  try {
+    await connectToRoom();
+    clearInviteParamsFromUrl();
+  } finally {
+    isAcceptingLocally = false;
+  }
 };
 
 export const handleCallAnswered = async (
