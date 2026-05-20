@@ -44,10 +44,7 @@ export interface IUserStatus {
 
 export type IUser = User & {
   status?: IUserStatus | null;
-  ex?: {
-    erpInitials: string;
-    erpRole: string;
-  };
+  ex?: unknown;
 };
 
 export type IGroup = Group & {

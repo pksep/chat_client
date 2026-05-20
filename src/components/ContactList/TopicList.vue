@@ -46,7 +46,9 @@
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           is-icon
           :is-online="isTopicUserOnline(topic)"
-          @click.stop="topic.type === TopicType.DM && openUserInfo(topic.user, topic)"
+          @click.stop="
+            topic.type === TopicType.DM && openUserInfo(topic.user, topic)
+          "
         />
         <div class="contact-list__block--wrapper">
           <h5

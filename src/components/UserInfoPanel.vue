@@ -117,11 +117,7 @@ import MuteIcon from './UI/MuteIcon.vue';
 import UnmuteIcon from './UI/UnmuteIcon.vue';
 import { getUserById, getUserLastOnline } from '../composables/useUsers';
 import { getAuthUser } from '../composables/useAuth';
-import { formatLastSeen } from '../utils/dateUtils';
-import {
-  formatUserStatusLabel,
-  normalizeUserStatus
-} from '../utils/userStatus';
+import { parseUserEx } from '../utils/parseUserEx';
 import { startLiveKitCall } from '../services/useLiveKit';
 import { useTopics } from '../composables/useTopics';
 import { TopicType } from '../services/useChatSDK/types';
@@ -157,9 +153,7 @@ const lastOnline = computed(() =>
 const isCurrentUser = computed(
   () => !!resolvedUser.value?.id && getAuthUser()?.id === resolvedUser.value.id
 );
-const normalizedStatus = computed(() =>
-  normalizeUserStatus(resolvedUser.value?.status)
-);
+
 const directTopic = computed(() => {
   if (!resolvedUser.value?.id) {
     return null;
@@ -174,7 +168,7 @@ const directTopic = computed(() => {
 
   return resolveDirectTopicByUserId(resolvedUser.value.id);
 });
-const role = computed(() => resolvedUser.value.ex?.erpRole);
+const role = computed(() => parseUserEx(resolvedUser.value?.ex).erpRole);
 const isOnline = computed(() => !isCurrentUser.value && !lastOnline.value);
 const isMuted = computed(() => !!directTopic.value?.info?.isMute);
 const canCall = computed(

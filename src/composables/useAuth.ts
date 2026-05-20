@@ -1,11 +1,9 @@
-import type { User } from '@pksep/zod-shared-chat';
+import type { IUser } from '../components/interfaces/interfaces';
 import { ref, Ref } from 'vue';
 import { setAuthToken } from './useLogin';
 import { getConfig } from '../services/useConfig';
 
-type AuthUser = User & {
-  status?: { icon: string; text: string } | null;
-};
+type AuthUser = IUser;
 
 export const authedUser: Ref<AuthUser | null> = ref(null);
 export const CHAT_AUTH_SESSION_KEY = 'chat_auth_session';

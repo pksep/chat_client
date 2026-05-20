@@ -6,7 +6,9 @@ const MENTION_USER_SELECTOR = '[data-user-id]';
 export const useMentionUserClick = () => {
   const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 
-  const syncMentionUserInteractivity = (container?: HTMLElement | null): void => {
+  const syncMentionUserInteractivity = (
+    container?: HTMLElement | null
+  ): void => {
     container
       ?.querySelectorAll<HTMLElement>(MENTION_USER_SELECTOR)
       .forEach(element => {
@@ -19,9 +21,9 @@ export const useMentionUserClick = () => {
 
   const handleMentionUserClick = (event: MouseEvent): void => {
     const target = event.target as HTMLElement | null;
-    const mentionElement = target?.closest(MENTION_USER_SELECTOR) as
-      | HTMLElement
-      | null;
+    const mentionElement = target?.closest(
+      MENTION_USER_SELECTOR
+    ) as HTMLElement | null;
 
     if (!mentionElement) {
       return;

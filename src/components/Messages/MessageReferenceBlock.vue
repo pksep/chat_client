@@ -9,8 +9,9 @@
       :class="[
         'message-reference-forward',
         {
-          'message-reference-forward--interactive':
-            canOpenUserInfo(props.forwardUser)
+          'message-reference-forward--interactive': canOpenUserInfo(
+            props.forwardUser
+          )
         }
       ]"
       @click.stop="handleOpenUserInfo(props.forwardUser)"
@@ -54,8 +55,9 @@
           :class="[
             'message-reference-reply__author',
             {
-              'message-reference-reply__author--interactive':
-                canOpenUserInfo(props.replyMessage?.senderUser)
+              'message-reference-reply__author--interactive': canOpenUserInfo(
+                props.replyMessage?.senderUser
+              )
             }
           ]"
           @click.stop="handleOpenUserInfo(props.replyMessage?.senderUser)"
