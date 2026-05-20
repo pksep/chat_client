@@ -1008,7 +1008,10 @@ export class ChatSDK {
       const data = await response.json();
       return data.token;
     } catch (error) {
-      console.error(`[LiveKit] Failed to fetch call token for room ${roomId}:`, error);
+      console.error(
+        `[LiveKit] Failed to fetch call token for room ${roomId}:`,
+        error
+      );
       return null;
     }
   }
