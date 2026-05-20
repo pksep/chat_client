@@ -1319,6 +1319,11 @@ div.message-content__file {
   color: var(--blue1);
 }
 
+.message-content__html [data-user-id][data-user-openable='true'],
+.message-content__html .link[data-user-id][data-user-openable='true'] {
+  cursor: pointer;
+}
+
 @keyframes pulse {
   0%,
   100% {

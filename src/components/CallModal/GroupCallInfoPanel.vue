@@ -28,6 +28,7 @@
           v-for="member in members"
           :key="member.id"
           class="call-modal__group-panel-member"
+          @click="handleOpenUserInfo(member)"
         >
           <CachedAvatar
             :path="member.avatarUrl"
@@ -68,6 +69,7 @@
             v-for="member in members"
             :key="member.id"
             class="call-modal__group-panel-member"
+            @click="handleOpenUserInfo(member)"
           >
             <CachedAvatar
               :path="member.avatarUrl"
@@ -94,6 +96,7 @@ import MobileModal from '../UI/MobileModal.vue';
 import type { IUser } from '../interfaces/interfaces';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import { Icon, IconNameEnum } from '@pksep/yui';
+import { useUserInfoModal } from '../../composables/useUserInfoModal';
 
 const props = defineProps<{
   open: boolean;
@@ -107,6 +110,7 @@ const props = defineProps<{
 defineEmits<{
   (e: 'close'): void;
 }>();
+const { openUserInfo } = useUserInfoModal();
 
 const isCopied = ref(false);
 let copiedResetTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -161,5 +165,13 @@ const handleCopyLink = async () => {
   } catch (error) {
     console.warn('Failed to copy group call link', error);
   }
+};
+
+const handleOpenUserInfo = (user?: IUser): void => {
+  if (!user) {
+    return;
+  }
+
+  openUserInfo(user);
 };
 </script>

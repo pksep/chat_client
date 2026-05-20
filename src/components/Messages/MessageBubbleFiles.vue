@@ -18,6 +18,7 @@
             !props.isMeSender && !isDialogRoute && !props.continuesFromPrevious
           "
           :sender="props.sender"
+          :sender-user="props.senderUser"
           :sender-role="props.senderRole"
           :data-testid="`${props.dataTestid}-AuthorMeta`"
         />
@@ -69,9 +70,11 @@
           class="message-file__caption message-content--text"
         >
           <div
+            ref="messageHtmlRef"
             class="message-content__html"
             v-html="props.message"
             :data-testid="`${props.dataTestid}-MessageText`"
+            @click="handleMentionUserClick"
           ></div>
           <div
             v-if="!hasReactions"
@@ -158,7 +161,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import { MediaType } from '@pksep/zod-shared-chat';
 import MessageStatusIcons from './MessageStatusIcons.vue';
@@ -175,6 +178,7 @@ import MessageReferenceBlock from './MessageReferenceBlock.vue';
 import MessageBubbleTail from './MessageBubbleTail.vue';
 import { stripHtml } from '../../utils/stripHtml';
 import MessageAuthorMeta from './MessageAuthorMeta.vue';
+import { useMentionUserClick } from './composables/useMentionUserClick';
 
 const props = defineProps<IMessageBubbleProps>();
 
@@ -183,6 +187,9 @@ const { primeMediaCache } = useMessageMedia();
 
 const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
+const messageHtmlRef = ref<HTMLElement | null>(null);
+const { handleMentionUserClick, syncMentionUserInteractivity } =
+  useMentionUserClick();
 const filesArticleRef = ref<HTMLElement | null>(null);
 const replyReferenceWidth = useReferenceWidth(filesArticleRef, {
   freezeAfterFirstMeasure: true
@@ -203,6 +210,11 @@ const hasInlineCaption = computed(
   () => hasCaption.value && !hasMediaFiles.value
 );
 
+const syncMentions = async (): Promise<void> => {
+  await nextTick();
+  syncMentionUserInteractivity(messageHtmlRef.value);
+};
+
 watch(
   [docFiles, shouldPrimeFiles],
   ([medias]) => {
@@ -220,7 +232,17 @@ watch(
   }
 );
 
+watch(
+  () => props.message,
+  () => {
+    void syncMentions();
+  },
+  { immediate: true }
+);
+
 onMounted(() => {
+  void syncMentions();
+
   if (!('IntersectionObserver' in window)) {
     shouldPrimeFiles.value = true;
     return;
