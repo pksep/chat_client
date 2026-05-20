@@ -39,6 +39,7 @@ import {
   mergeMessagesForTopic
 } from './useMessages';
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
+import { isUnreadTrackableMessage } from '../utils/messageTracking';
 import {
   handleIncomingCall,
   handleCallAnswered,
@@ -213,7 +214,7 @@ const setupChatListeners = (): void => {
         ];
       }
 
-      if (isUnreadIncomingMessage && !message.isSystem) {
+      if (isUnreadIncomingMessage && isUnreadTrackableMessage(message)) {
         changeUnreadMessageCount(1, message.topicId);
       }
     }

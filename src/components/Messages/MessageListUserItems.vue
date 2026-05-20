@@ -126,6 +126,7 @@ import { parseUserEx } from '../../utils/parseUserEx';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import { isMessagePinnedForMe } from '../../services/useMessages';
+import { isUnreadTrackableMessage } from '../../utils/messageTracking';
 
 interface Props {
   dataTestid: string;
@@ -248,7 +249,7 @@ const toggleMessage = (message: IMessage) => {
 };
 
 const isUnreadForCurrentUser = (message?: IMessage): boolean => {
-  if (!message || message.isSystem) {
+  if (!message || !isUnreadTrackableMessage(message)) {
     return false;
   }
 
@@ -261,7 +262,6 @@ const shouldShowUnreadMarker = (message: IMessage): boolean => {
   if (
     props.hideUnreadMarker ||
     !props.unreadMarkerMessageId ||
-    message.isSystem ||
     message.id !== props.unreadMarkerMessageId
   ) {
     return false;

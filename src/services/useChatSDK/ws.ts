@@ -20,6 +20,11 @@ export interface ChatWSInterface {
     type: T,
     payload: WebSocketEventPayloads[T]
   ): boolean;
+  sendWebSocketEventWithAck<T extends WebSocketEventType, R = unknown>(
+    type: T,
+    payload: WebSocketEventPayloads[T],
+    timeoutMs?: number
+  ): Promise<R>;
   handleWebSocketEvent(rawEvent: any): void;
   setSocket(socket: Socket): void;
 }
@@ -36,6 +41,27 @@ export class ChatWS implements ChatWSInterface {
 
   setSocket(socket: Socket) {
     this.socket = socket;
+  }
+
+  private resolveServerEventType<T extends WebSocketEventType>(
+    type: T
+  ): string {
+    switch (type) {
+      case WebSocketEventType.SEND_MESSAGE:
+        return WsSubscribeMessage.SendMessage;
+      case WebSocketEventType.EDIT_MESSAGE:
+        return 'editMessage';
+      case WebSocketEventType.DELETE_MESSAGE:
+        return 'deleteMessage';
+      case WebSocketEventType.READ_MESSAGES:
+        return 'readMessages';
+      case WebSocketEventType.JOIN_TOPIC:
+        return WsSubscribeMessage.JoinTopic;
+      case WebSocketEventType.LEAVE_TOPIC:
+        return 'leaveTopic';
+      default:
+        return type;
+    }
   }
 
   subscribeToEvent<T extends WebSocketEventType>(
@@ -79,38 +105,42 @@ export class ChatWS implements ChatWSInterface {
     payload: WebSocketEventPayloads[T]
   ): boolean {
     if (this.socket && this.socket.connected) {
-      let serverEventType: string = type;
-
-      switch (type) {
-        case WebSocketEventType.SEND_MESSAGE:
-          serverEventType = WsSubscribeMessage.SendMessage;
-          break;
-        case WebSocketEventType.EDIT_MESSAGE:
-          serverEventType = 'editMessage';
-          break;
-        case WebSocketEventType.DELETE_MESSAGE:
-          serverEventType = 'deleteMessage';
-          break;
-        case WebSocketEventType.READ_MESSAGES:
-          serverEventType = 'readMessages';
-          break;
-        case WebSocketEventType.JOIN_TOPIC:
-          serverEventType = WsSubscribeMessage.JoinTopic;
-          break;
-        case WebSocketEventType.LEAVE_TOPIC:
-          serverEventType = 'leaveTopic';
-          break;
-        default:
-          serverEventType = type;
-          break;
-      }
-
-      this.socket.emit(serverEventType, JSON.stringify(payload));
+      this.socket.emit(
+        this.resolveServerEventType(type),
+        JSON.stringify(payload)
+      );
       return true;
     } else {
       console.error('Socket.IO is not connected. Cannot send event:', type);
       return false;
     }
+  }
+
+  sendWebSocketEventWithAck<T extends WebSocketEventType, R = unknown>(
+    type: T,
+    payload: WebSocketEventPayloads[T],
+    timeoutMs = 10000
+  ): Promise<R> {
+    if (!this.socket || !this.socket.connected) {
+      return Promise.reject(
+        new Error(`Socket.IO is not connected. Cannot send event: ${type}`)
+      );
+    }
+
+    return new Promise<R>((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error(`Socket.IO ack timeout for event: ${type}`));
+      }, timeoutMs);
+
+      this.socket?.emit(
+        this.resolveServerEventType(type),
+        JSON.stringify(payload),
+        (response: R) => {
+          clearTimeout(timeoutId);
+          resolve(response);
+        }
+      );
+    });
   }
 
   handleWebSocketEvent(rawEvent: any): void {
