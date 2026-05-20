@@ -1420,6 +1420,11 @@ export const acceptCall = async () => {
     startTime: callStartedAt.value,
     isNewCall: false
   });
+  if (answerAck?.accepted === false) {
+    isAcceptingLocally = false;
+    showTransientCallStatusNotice('Звонок уже завершен');
+    return;
+  }
   localAcceptRoomId = roomId.value;
   localAcceptTopicId = topicId.value;
 
@@ -1477,6 +1482,11 @@ export const joinPendingGroupCall = async (targetTopicId?: string) => {
     startTime: pendingGroupCall.startTime ?? callStatus.startTime ?? null,
     isNewCall: false
   });
+  if (answerAck?.accepted === false) {
+    isAcceptingLocally = false;
+    showTransientCallStatusNotice('Звонок уже завершен');
+    return;
+  }
   localAcceptRoomId = roomId.value;
   localAcceptTopicId = topicId.value;
 
@@ -1555,6 +1565,11 @@ export const joinInvitedGroupCall = async () => {
     startTime: invite.startTime ?? callStatus.startTime ?? null,
     isNewCall: false
   });
+  if (answerAck?.accepted === false) {
+    isAcceptingLocally = false;
+    showTransientCallStatusNotice('Звонок уже завершен');
+    return;
+  }
   localAcceptRoomId = roomId.value;
   localAcceptTopicId = topicId.value;
 
