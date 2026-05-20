@@ -349,9 +349,11 @@ const getLiveKitCallStatus = async (
   }
 
   const status = await sdk.getLiveKitCallStatus(targetRoomId);
-  const isAvailable = status?.active === true;
+  if (!status) {
+    return null;
+  }
 
-  if (!isAvailable) {
+  if (status.active !== true) {
     clearUnavailableCallState(targetRoomId, targetTopicId);
     return null;
   }
@@ -1708,17 +1710,18 @@ export const syncActiveCalls = async (
     startTime: number;
   }>
 ) => {
+  const previousActiveGroupCalls = activeGroupCalls.value;
   const validatedCalls = await Promise.all(
     calls.map(async call => {
       const status = await getLiveKitCallStatus(call.roomId, call.topicId);
 
-      if (!status?.active || (status.participantCount ?? 0) <= 0) {
+      if (status?.active === false) {
         return null;
       }
 
       return {
         ...call,
-        startTime: status.startTime ?? call.startTime
+        startTime: status?.startTime ?? call.startTime
       };
     })
   );
@@ -1730,9 +1733,11 @@ export const syncActiveCalls = async (
       return acc;
     }
 
+    const previousEntry = previousActiveGroupCalls[call.topicId];
     acc[call.topicId] = {
       roomId: call.roomId,
       topicId: call.topicId,
+      caller: previousEntry?.caller,
       startTime: call.startTime
     };
     return acc;
