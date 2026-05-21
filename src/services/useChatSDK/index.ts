@@ -135,6 +135,40 @@ export class ChatSDK {
     return reqi;
   }
 
+  private async readErrorResponse(
+    response: Response,
+    fallbackMessage: string
+  ): Promise<string> {
+    try {
+      const contentType = response.headers.get('content-type') || '';
+
+      if (contentType.includes('application/json')) {
+        const data = (await response.json()) as Record<string, unknown>;
+        const message =
+          typeof data?.message === 'string'
+            ? data.message
+            : Array.isArray(data?.message)
+              ? data.message.filter(Boolean).join(', ')
+              : typeof data?.error === 'string'
+                ? data.error
+                : null;
+
+        if (message) {
+          return `${response.status} ${message}`;
+        }
+      } else {
+        const text = (await response.text()).trim();
+        if (text) {
+          return `${response.status} ${text}`;
+        }
+      }
+    } catch {
+      // Ignore response parsing errors and fall back to the default message.
+    }
+
+    return fallbackMessage;
+  }
+
   private uploadFileToMinio(
     uploadUrl: string,
     file: File,
@@ -955,19 +989,29 @@ export class ChatSDK {
     return getConfig();
   }
 
-  async getLiveKitToken(
-    roomId: string,
-    userId: string
-  ): Promise<string | null> {
+  async getLiveKitToken(roomId: string): Promise<string | null> {
     try {
       const response = (await this.reqi.get<{ token: string }>(
-        `/calls/livekit-token?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(userId)}`,
+        `/calls/livekit-token?roomId=${encodeURIComponent(roomId)}`,
         { parsed: false }
       )) as any;
+
+      if (!response.ok) {
+        throw new Error(
+          await this.readErrorResponse(
+            response,
+            `Failed to fetch call token: ${response.status}`
+          )
+        );
+      }
+
       const data = await response.json();
       return data.token;
     } catch (error) {
-      console.error('[LiveKit] Failed to fetch call token:', error);
+      console.error(
+        `[LiveKit] Failed to fetch call token for room ${roomId}:`,
+        error
+      );
       return null;
     }
   }

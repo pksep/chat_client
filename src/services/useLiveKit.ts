@@ -349,9 +349,11 @@ const getLiveKitCallStatus = async (
   }
 
   const status = await sdk.getLiveKitCallStatus(targetRoomId);
-  const isAvailable = status?.active === true;
+  if (!status) {
+    return null;
+  }
 
-  if (!isAvailable) {
+  if (status.active !== true) {
     clearUnavailableCallState(targetRoomId, targetTopicId);
     return null;
   }
@@ -1009,7 +1011,7 @@ const setupRoomListeners = (activeRoom: Room) => {
     });
 };
 
-const getToken = async (activeRoomId: string, userId: string) => {
+const getToken = async (activeRoomId: string) => {
   const sdk = getChatSDK();
   if (!sdk) return null;
 
@@ -1023,12 +1025,19 @@ const getToken = async (activeRoomId: string, userId: string) => {
     );
   }
 
-  return sdk.getLiveKitToken(activeRoomId, userId);
+  return sdk.getLiveKitToken(activeRoomId);
 };
 
 const getConnectErrorMessage = (error: unknown) => {
   const errorMessage =
     error instanceof Error ? error.message.toLowerCase() : String(error);
+
+  if (
+    errorMessage.includes('call is no longer active') ||
+    errorMessage.includes('failed to get livekit token')
+  ) {
+    return 'Звонок уже завершен.';
+  }
 
   if (errorMessage.includes('429')) {
     return 'Не удалось подключиться к звонку из-за ограничения запросов. Попробуйте еще раз через несколько секунд.';
@@ -1074,8 +1083,13 @@ const connectToRoom = async () => {
       throw new Error('LiveKit config is incomplete');
     }
 
-    const token = await getToken(activeRoomId, me.id);
+    const token = await getToken(activeRoomId);
     if (!token) {
+      const callStatus = await sdk.getLiveKitCallStatus(activeRoomId);
+      if (!callStatus?.active || callStatus.topicId !== activeTopicId) {
+        throw new Error('Call is no longer active');
+      }
+
       throw new Error('Failed to get LiveKit token');
     }
 
@@ -1420,6 +1434,11 @@ export const acceptCall = async () => {
     startTime: callStartedAt.value,
     isNewCall: false
   });
+  if (answerAck?.accepted === false) {
+    isAcceptingLocally = false;
+    showTransientCallStatusNotice('Звонок уже завершен');
+    return;
+  }
   localAcceptRoomId = roomId.value;
   localAcceptTopicId = topicId.value;
 
@@ -1477,6 +1496,11 @@ export const joinPendingGroupCall = async (targetTopicId?: string) => {
     startTime: pendingGroupCall.startTime ?? callStatus.startTime ?? null,
     isNewCall: false
   });
+  if (answerAck?.accepted === false) {
+    isAcceptingLocally = false;
+    showTransientCallStatusNotice('Звонок уже завершен');
+    return;
+  }
   localAcceptRoomId = roomId.value;
   localAcceptTopicId = topicId.value;
 
@@ -1555,6 +1579,11 @@ export const joinInvitedGroupCall = async () => {
     startTime: invite.startTime ?? callStatus.startTime ?? null,
     isNewCall: false
   });
+  if (answerAck?.accepted === false) {
+    isAcceptingLocally = false;
+    showTransientCallStatusNotice('Звонок уже завершен');
+    return;
+  }
   localAcceptRoomId = roomId.value;
   localAcceptTopicId = topicId.value;
 
@@ -1681,17 +1710,18 @@ export const syncActiveCalls = async (
     startTime: number;
   }>
 ) => {
+  const previousActiveGroupCalls = activeGroupCalls.value;
   const validatedCalls = await Promise.all(
     calls.map(async call => {
       const status = await getLiveKitCallStatus(call.roomId, call.topicId);
 
-      if (!status?.active || (status.participantCount ?? 0) <= 0) {
+      if (status?.active === false) {
         return null;
       }
 
       return {
         ...call,
-        startTime: status.startTime ?? call.startTime
+        startTime: status?.startTime ?? call.startTime
       };
     })
   );
@@ -1703,9 +1733,11 @@ export const syncActiveCalls = async (
       return acc;
     }
 
+    const previousEntry = previousActiveGroupCalls[call.topicId];
     acc[call.topicId] = {
       roomId: call.roomId,
       topicId: call.topicId,
+      caller: previousEntry?.caller,
       startTime: call.startTime
     };
     return acc;

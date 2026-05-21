@@ -177,15 +177,19 @@ const canCall = computed(
 const canToggleMute = computed(() => !!directTopic.value?.id);
 
 const handleCall = async () => {
-  if (!canCall.value || !resolvedUser.value?.id) {
+  const targetUser = resolvedUser.value;
+
+  if (!canCall.value || !targetUser?.id) {
     return;
   }
+
+  emits('close');
 
   let targetTopicId = directTopic.value?.id || null;
 
   if (!targetTopicId) {
     const sdk = getChatSDK();
-    const topic = await sdk.createTopic({ peerId: resolvedUser.value.id });
+    const topic = await sdk.createTopic({ peerId: targetUser.id });
     targetTopicId = topic?.id || null;
   }
 
@@ -193,8 +197,7 @@ const handleCall = async () => {
     return;
   }
 
-  await startLiveKitCall(resolvedUser.value, targetTopicId);
-  emits('close');
+  await startLiveKitCall(targetUser, targetTopicId);
 };
 
 const handleToggleMute = () => {
