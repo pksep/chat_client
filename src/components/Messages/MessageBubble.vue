@@ -82,6 +82,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { Capacitor } from '@capacitor/core';
 import { Checkbox, CheckboxCircularEnum } from '@pksep/yui';
 import {
   isOpen,
@@ -99,6 +100,11 @@ import MessageBubbleMedia from './MessageBubbleMedia.vue';
 import { useMessageMedia } from './composables/useMessageMedia';
 import { isMessageSelectionModeForTopic } from '../../composables/useSelectedMessages';
 import { ensureMediaObjectUrl } from '../../services/useMediaBlobCache';
+import {
+  downloadNativeFile,
+  isNativePdfMedia,
+  openNativeFile
+} from '../../services/useNativeFile';
 import { stripHtml } from '../../utils/stripHtml';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
@@ -122,7 +128,7 @@ const messageArticlesStyles = computed(() => ({
 
 const { getFullMediaPath, isSliderContentUrl } = useMessageMedia();
 
-const sliderElements = ref<{ path: string; name: string }[]>([]);
+const sliderElements = ref<{ path: string; name: string; file?: File }[]>([]);
 const defaultIndexSlider = ref<number>(0);
 
 const docFiles = computed(
@@ -143,12 +149,62 @@ const shouldRenderStandaloneText = computed(
     mediaFiles.value.length === 0 &&
     docFiles.value.length === 0
 );
+const isAndroidNativePlatform = () =>
+  Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
 const handleNavigateMessage = () => {
   emits('unmount-navigate-message-id', props.replyMessage?.id);
 };
 
+const getSliderDetectionValue = (media: IMedia) =>
+  media.originName || media.path || '';
+
+const isSliderContentMedia = (media: IMedia) =>
+  Boolean(isSliderContentUrl(getSliderDetectionValue(media)));
+
+const buildSliderItem = async (media: IMedia) => {
+  const fallbackPath = getFullMediaPath(media, false);
+
+  if (!isNativePdfMedia(media) || !media.path) {
+    return {
+      path: fallbackPath,
+      name: media.originName || 'file'
+    };
+  }
+
+  const cachedObjectUrl = await ensureMediaObjectUrl(media.path);
+
+  if (!cachedObjectUrl) {
+    return {
+      path: fallbackPath,
+      name: media.originName || 'file'
+    };
+  }
+
+  try {
+    const blob = await fetch(cachedObjectUrl).then(response => response.blob());
+    const file = new File([blob], media.originName || 'file.pdf', {
+      type: blob.type || 'application/pdf'
+    });
+
+    return {
+      path: cachedObjectUrl,
+      name: media.originName || 'file',
+      file
+    };
+  } catch {
+    return {
+      path: cachedObjectUrl,
+      name: media.originName || 'file'
+    };
+  }
+};
+
 const downloadMediaFile = async (media: IMedia) => {
+  if (await downloadNativeFile(media)) {
+    return;
+  }
+
   const fallbackUrl = getFullMediaPath(media, false);
   const fileName = media.originName || 'file';
   const cachedObjectUrl = await ensureMediaObjectUrl(media.path);
@@ -170,23 +226,46 @@ const setSliderElement = async (medias: IMedia[], defaultIndex: number = 0) => {
 
   const selectedMedia = medias[defaultIndex];
 
+  if (
+    selectedMedia.type === MediaType.File &&
+    isNativePdfMedia(selectedMedia) &&
+    isAndroidNativePlatform()
+  ) {
+    try {
+      if (await openNativeFile(selectedMedia)) {
+        return;
+      }
+    } catch {
+      // Fall back to download in Android APK when native PDF opening fails.
+    }
+
+    await downloadMediaFile(selectedMedia);
+    return;
+  }
+
+  if (
+    selectedMedia.type === MediaType.File &&
+    isNativePdfMedia(selectedMedia)
+  ) {
+    if (await openNativeFile(selectedMedia)) {
+      return;
+    }
+  }
+
   // Download logic
   if (
     selectedMedia.type === MediaType.File &&
-    !isSliderContentUrl(selectedMedia.originName)
+    !isSliderContentMedia(selectedMedia)
   ) {
     await downloadMediaFile(selectedMedia);
     return;
   }
 
-  const sliderMedias = medias.filter(media =>
-    isSliderContentUrl(getFullMediaPath(media, false))
-  );
+  const sliderMedias = medias.filter(isSliderContentMedia);
 
-  sliderElements.value = sliderMedias.map(media => ({
-    path: getFullMediaPath(media, false),
-    name: media.originName || 'file'
-  }));
+  sliderElements.value = await Promise.all(
+    sliderMedias.map(media => buildSliderItem(media))
+  );
 
   const correctedIndex = sliderMedias.findIndex(
     media => media === selectedMedia
