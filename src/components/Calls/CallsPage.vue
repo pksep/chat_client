@@ -38,6 +38,7 @@
             :path="call.avatarUrl"
             :initials="call.avatarInitials"
             is-icon
+            @click.stop="handleOpenCallUserInfo(call)"
           />
 
           <div class="calls-page__body">
@@ -127,6 +128,7 @@ import {
   useCallHistoryStore
 } from '../../services/useCallHistory';
 import CallsHeader from './CallsHeader.vue';
+import { useUserInfoModal } from '../../composables/useUserInfoModal';
 
 interface CallHistoryItem {
   messageId: string;
@@ -158,6 +160,7 @@ const authUserId = computed(() => getAuthUser()?.id || '');
 const { getSelectedTopic } = useTopics();
 const { rawCallHistory, callHistoryState } = useCallHistoryStore();
 const state = callHistoryState;
+const { openUserInfo } = useUserInfoModal();
 
 const buildCallItem = (
   serverCall: ServerCallHistoryItem
@@ -237,6 +240,19 @@ const openCallTopic = (call: CallHistoryItem): void => {
   }
 
   navigateToDialogs(call.topicId);
+};
+
+const handleOpenCallUserInfo = (call: CallHistoryItem): void => {
+  if (call.topicType !== TopicType.DM) {
+    return;
+  }
+
+  const topic = getSelectedTopic(call.topicId);
+  if (!topic?.user) {
+    return;
+  }
+
+  openUserInfo(topic.user, topic);
 };
 
 onMounted(() => {

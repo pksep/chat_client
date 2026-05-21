@@ -4,7 +4,7 @@
     :class="['user-profile', $attrs.class]"
     @contextmenu="handleClick"
     :data-testid="`${dataTestid}-UserProfile-Container`"
-    @click="emits('click')"
+    @click="handleProfileClick"
   >
     <CachedAvatar
       :path="props.user.avatarUrl"
@@ -100,15 +100,23 @@ defineOptions({
 
 const emits = defineEmits<{
   (e: 'unmount-click', event: MouseEvent): void;
-  (e: 'click'): void;
+  (e: 'click', event: MouseEvent): void;
 }>();
 
 const handleClick = (event: MouseEvent): void => {
   emits('unmount-click', event);
 };
+
+const handleProfileClick = (event: MouseEvent): void => {
+  emits('click', event);
+};
 </script>
 
 <style scoped>
+.user-profile--interactive {
+  cursor: pointer;
+}
+
 .user-profile__ex--typing {
   color: var(--primary-color);
 }

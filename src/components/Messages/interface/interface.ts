@@ -20,6 +20,7 @@ export interface IMessageBubbleProps {
   isEdit?: boolean;
   isMeSender?: boolean;
   sender?: string;
+  senderUser?: IUser;
   senderRole?: string;
   avatar?: string;
   media?: IMedia[];

@@ -33,13 +33,22 @@
         @keydown.space="handleClick(topic)"
       >
         <CachedAvatar
-          class="contact-list__avatar"
+          :class="[
+            'contact-list__avatar',
+            {
+              'contact-list__avatar--interactive':
+                topic.type === TopicType.DM && canOpenUserInfo(topic.user)
+            }
+          ]"
           :initials="topic.name"
           :path="topic.avatarUrl"
           :alt="`Avatar of ${topic.name}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           is-icon
           :is-online="isTopicUserOnline(topic)"
+          @click.stop="
+            topic.type === TopicType.DM && openUserInfo(topic.user, topic)
+          "
         />
         <div class="contact-list__block--wrapper">
           <h5
@@ -238,6 +247,7 @@ import {
   getTopicUnreadBadgeCount,
   hasTopicUnreadBadge
 } from '../../utils/topicUnreadBadge';
+import { useUserInfoModal } from '../../composables/useUserInfoModal';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
@@ -245,6 +255,7 @@ interface IExtendedContactListProps extends IContactListProps {
 }
 
 const { togglePinTopic, toggleMuteTopic, getTopicTypingUsers } = useTopics();
+const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   showCheckbox: false,
@@ -344,6 +355,10 @@ const getTopicStatusIcon = (topic: ITopic): string =>
 </script>
 
 <style scoped>
+.contact-list__avatar--interactive {
+  cursor: pointer;
+}
+
 .contact-list__description--typing {
   color: var(--primary-color);
 }

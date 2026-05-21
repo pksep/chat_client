@@ -58,11 +58,17 @@
         />
         <UserProfile
           v-else-if="currentTopic.type === TopicType.DM"
-          class="chat__header-profile"
+          :class="[
+            'chat__header-profile',
+            {
+              'user-profile--interactive': canOpenUserInfo(currentTopic.user)
+            }
+          ]"
           avatar-alt="user-profile-alt"
           :user="currentTopic.user"
           :typing-label="headerTypingLabel || undefined"
           :data-testid="`${props.dataTestid}-Header-UserProfile`"
+          @click.stop="handleUserProfileClick"
         />
       </template>
 
@@ -119,6 +125,22 @@
       :show-add-button="currentGroup?.isAdmin"
       :data-testid="props.dataTestid"
       @update:model-value="handleUpdateInformation"
+    />
+  </MobileModal>
+
+  <MobileModal
+    :open="state.openMobileUserProfileModal"
+    title="Информация"
+    close-button-text="Назад"
+    :class="{ 'chat__header-modal-info--active': true }"
+    :data-testid="`${props.dataTestid}-Header-MobileUserProfileModal`"
+    @unmount-close="handleCloseMobileUserProfileModal"
+  >
+    <UserInfoPanel
+      :user="currentTopic?.user"
+      :topic="currentTopic"
+      :data-testid="`${props.dataTestid}-Header-UserInfoPanel`"
+      @close="handleCloseMobileUserProfileModal"
     />
   </MobileModal>
 
@@ -196,8 +218,11 @@ import {
 } from '../../services/useLiveKit';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
+import UserInfoPanel from '../UserInfoPanel.vue';
+import { useUserInfoModal } from '../../composables/useUserInfoModal';
 
 const { getSelectedTopic } = useTopics();
+const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
   dataTestid: 'Header'
@@ -213,6 +238,7 @@ const emits = defineEmits<IHeaderEmits>();
 const state = reactive({
   loader: false,
   openMobileInfoModal: false,
+  openMobileUserProfileModal: false,
   isSearchInputEnable: false,
   openActionModal: false,
   calledUser: null,
@@ -350,6 +376,18 @@ const handleCloseMobileInfoModal = (): void => {
   state.openMobileInfoModal = false;
 };
 
+const handleCloseMobileUserProfileModal = (): void => {
+  state.openMobileUserProfileModal = false;
+};
+
+const handleUserProfileClick = (): void => {
+  if (currentTopic.value?.type !== TopicType.DM || !currentTopic.value?.user) {
+    return;
+  }
+
+  openUserInfo(currentTopic.value.user, currentTopic.value);
+};
+
 const handleClickHeader = async (): Promise<void> => {
   if (
     route.value.type === RouteTypes.DIALOGS ||
@@ -458,6 +496,8 @@ const handleExit = (): void => {
 watch(
   () => route.value.id,
   () => {
+    state.openMobileUserProfileModal = false;
+
     if (route.value.type === RouteTypes.GROUP) {
       getGroupById(route.value.id);
     }

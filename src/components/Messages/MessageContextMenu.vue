@@ -85,7 +85,14 @@
           <div
             v-for="reader in readDetails"
             :key="reader.userId"
-            class="message-context-menu__details-item"
+            :class="[
+              'message-context-menu__details-item',
+              {
+                'message-context-menu__details-item--interactive':
+                  canOpenUserInfo(reader.user)
+              }
+            ]"
+            @click.stop="handleOpenReadDetailUser(reader.user)"
           >
             <CachedAvatar
               class="message-context-menu__details-avatar"
@@ -282,7 +289,14 @@
             <div
               v-for="reader in readDetails"
               :key="reader.userId"
-              class="message-context-menu__details-item"
+              :class="[
+                'message-context-menu__details-item',
+                {
+                  'message-context-menu__details-item--interactive':
+                    canOpenUserInfo(reader.user)
+                }
+              ]"
+              @click.stop="handleOpenReadDetailUser(reader.user)"
             >
               <CachedAvatar
                 class="message-context-menu__details-avatar"
@@ -395,6 +409,7 @@ import {
   useSelectedMessages
 } from '../../composables/useSelectedMessages';
 import { openForwardDraft } from '../../composables/useForwardMessages';
+import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import {
   deleteMessageChat,
   setReactionMessage,
@@ -416,6 +431,7 @@ import { MessageStatus, TopicType } from '../../services/useChatSDK/types';
 const props = withDefaults(defineProps<IMessageContextMenu>(), {
   dataTestid: 'MessageContextMenu'
 });
+const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 
 const emits = defineEmits([
   'unmount-edit-message-id',
@@ -566,6 +582,7 @@ const readDetails = computed(() =>
 
       return {
         userId: item.userId,
+        user,
         name,
         readAtDateLabel: formattedReadAt.dateLabel,
         readAtTimeLabel: formattedReadAt.timeLabel,
@@ -982,6 +999,14 @@ const handleBackToMenu = () => {
   mobileReadDetailsOffsetTop.value = 0;
 };
 
+const handleOpenReadDetailUser = (user?: any) => {
+  if (!user) {
+    return;
+  }
+
+  openUserInfo(user);
+};
+
 const handleSelectEmoji = (emoji: { i: string }) => {
   handleReactMessage(emoji.i);
 };
@@ -1022,3 +1047,9 @@ onBeforeUnmount(() => {
   disconnectReactionLayoutObserver();
 });
 </script>
+
+<style scoped>
+.message-context-menu__details-item--interactive {
+  cursor: pointer;
+}
+</style>
