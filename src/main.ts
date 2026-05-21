@@ -4,6 +4,7 @@ import '@fontsource-variable/inter';
 import './assets/globals.css';
 import './assets/chat-container.css';
 import '@pksep/yui/styles';
+import { registerNativeFileBridge } from './services/useNativeFile';
 
 const INDEXED_DB_RESET_EPOCH = 'chat-client-indexeddb-reset-2026-04-29-v1';
 const INDEXED_DB_RESET_DONE_KEY = 'chat.indexeddb.reset.done';
@@ -74,6 +75,7 @@ const runIndexedDbResetIfNeeded = async (): Promise<void> => {
 
 const mountApp = async () => {
   await runIndexedDbResetIfNeeded();
+  registerNativeFileBridge();
 
   const app = createApp(App);
 
