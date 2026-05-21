@@ -65,6 +65,7 @@
   />
   <MessageListInput
     v-if="!isDefaultRoute && !isSelectionMode"
+    :key="`${route.type}:${route.id || 'default'}`"
     v-model="inputText"
     ref="messageListInputRef"
     :edit-message="state.editMessage"

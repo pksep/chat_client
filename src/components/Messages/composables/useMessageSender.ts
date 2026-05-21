@@ -192,6 +192,7 @@ interface IQueuedFilePayload {
 }
 
 interface IAttachChunkOptions {
+  topicId?: string;
   isMedia?: boolean;
   text?: string | null;
   taggedUserIds?: string[];
@@ -559,6 +560,7 @@ export function useMessageSender(
 
         for (const [index, batch] of batches.entries()) {
           await handleAttachFileChunk(batch, {
+            topicId,
             text: index === 0 ? textToSend || null : null,
             taggedUserIds: index === 0 ? taggedUserIds : undefined,
             replyMessage,
@@ -787,7 +789,7 @@ export function useMessageSender(
         }));
 
     if (!filePayloads.length) return;
-    const topicId = route.value.id;
+    const topicId = options?.topicId ?? route.value.id;
     const replyMessage = options?.replyMessage ?? state.replyMessage;
     const replyMessageId = options?.replyMessageId ?? state.replyMessage?.id;
     const forwardMessageIds =
@@ -909,6 +911,7 @@ export function useMessageSender(
 
     const CHUNK_SIZE = 10;
     const filesArray = Array.from(files);
+    const topicId = route.value.id;
 
     for (let i = 0; i < filesArray.length; i += CHUNK_SIZE) {
       const chunk = filesArray.slice(i, i + CHUNK_SIZE);
@@ -919,7 +922,7 @@ export function useMessageSender(
         ...chunk
       } as any as FileList;
 
-      handleAttachFileChunk(chunkFileList, { isMedia });
+      handleAttachFileChunk(chunkFileList, { topicId, isMedia });
     }
   };
 
