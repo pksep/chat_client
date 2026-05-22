@@ -5,11 +5,11 @@
   >
     <div :data-testid="`${props.dataTestid}-MessageList-ContentEditor`">
       <ContentEditor
-        :active-send="props.forwardMessages.length > 0"
+        :active-send="props.forwardMessages.length > 0 || props.allowEmptySend"
         v-model="internalInputText"
         ref="contentEditorRef"
-        active-attach-file
-        active-select-user
+        :active-attach-file="props.allowAttachFile"
+        :active-select-user="props.allowSelectUser"
         :mention-items="users"
         :mention-config="mentionConfig"
         @unmount-send="handleSend"
@@ -102,6 +102,21 @@
             </Button>
           </div>
         </template>
+        <template
+          v-else-if="props.customActionTitle || props.customActionDescription"
+          #action
+        >
+          <div class="chat__input__action">
+            <div class="chat__input__action__blog">
+              <h5 v-if="props.customActionTitle">
+                {{ props.customActionTitle }}
+              </h5>
+              <p v-if="props.customActionDescription">
+                {{ props.customActionDescription }}
+              </p>
+            </div>
+          </div>
+        </template>
       </ContentEditor>
     </div>
   </div>
@@ -144,6 +159,11 @@ interface Props {
   editMessage: IMessage | null;
   replyMessage: IMessage | null;
   forwardMessages: IMessage[];
+  allowEmptySend?: boolean;
+  allowAttachFile?: boolean;
+  allowSelectUser?: boolean;
+  customActionTitle?: string;
+  customActionDescription?: string;
 }
 
 interface IContentEditorSendPayload {
@@ -152,7 +172,13 @@ interface IContentEditorSendPayload {
   mediaFiles?: FileList;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  allowEmptySend: false,
+  allowAttachFile: true,
+  allowSelectUser: true,
+  customActionTitle: '',
+  customActionDescription: ''
+});
 const TYPING_IDLE_TIMEOUT_MS = 2500;
 const TYPING_PING_INTERVAL_MS = 2000;
 

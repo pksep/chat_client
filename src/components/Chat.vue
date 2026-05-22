@@ -21,6 +21,7 @@
       <img src="/images/messages.svg" alt="messages" />
       <p>Выберите чат</p>
     </div>
+    <ShareSelectionOverlay v-if="isMobile" />
   </section>
 </template>
 
@@ -35,6 +36,7 @@ import { useUrlWatcher } from '../composables/navigation';
 import { getAuthUser } from '../composables/useAuth';
 import PinnedMessages from './Messages/PinnedMessages.vue';
 import { IMessage } from './interfaces/interfaces';
+import ShareSelectionOverlay from './ShareSelectionOverlay.vue';
 
 export interface IChatProps extends IMessageListProps {
   dataTestid?: string;

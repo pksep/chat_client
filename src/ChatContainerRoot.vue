@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, watch } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
 
 import type { IChatContainerProps } from './components/interfaces/interfaces';
@@ -48,12 +48,16 @@ import { useResizeState } from './composables/useResizeState';
 import { MAX_W_MD } from './utils/constants';
 import { RouteTypes } from './composables/navigation/useUrlRouting';
 import { hydrateMessagesFromCache } from './services/useMessages';
+import { useShareSelection } from './composables/useShareSelection';
 
 const props = defineProps<IChatContainerProps>();
 
 const { fetchAllTopics, getTopicList } = useTopics();
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const route = useUrlWatcher();
+const isChatReady = ref(false);
+const { hasPendingShareBatches, isShareSelectionActive, startShareSelection } =
+  useShareSelection();
 
 const hydrateCachedMessagesForKnownTopics = async (
   userId?: string
@@ -249,6 +253,7 @@ const runAppInitialization = async () => {
     }
 
     await initPushNotifications();
+    isChatReady.value = true;
   } catch (error) {
     console.error('Failed to initialize chat:', error);
 
@@ -259,6 +264,10 @@ const runAppInitialization = async () => {
       return;
     }
   } finally {
+    if (!isMobile.value) {
+      isChatReady.value = true;
+    }
+
     if (tokenUrl) {
       url.searchParams.delete('token');
       url.searchParams.delete('organization');
@@ -277,6 +286,16 @@ watch(
   () => [route.value.type, route.value.id],
   () => {
     updateNotificationContext();
+  },
+  { immediate: true }
+);
+
+watch(
+  () => [hasPendingShareBatches.value, isShareSelectionActive.value],
+  ([hasPendingShares, isShareActive]) => {
+    if (hasPendingShares && !isShareActive) {
+      startShareSelection();
+    }
   },
   { immediate: true }
 );

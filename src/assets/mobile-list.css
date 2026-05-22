@@ -4,6 +4,23 @@
   height: calc(var(--default-height) - var(--mobile-list-height, 53px));
   overflow: hidden;
   overflow-x: hidden;
+  position: relative;
+}
+
+.mobile-list-container--dragover::after {
+  content: 'Отпустите файлы, чтобы выбрать чаты';
+  position: absolute;
+  inset: 12px 12px 72px;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--yui-color-primary, #2a6df5);
+  border-radius: 18px;
+  background: rgb(255 255 255 / 92%);
+  color: var(--black);
+  font-size: 16px;
+  font-weight: 600;
+  z-index: 120;
+  pointer-events: none;
 }
 
 .mobile-list-container__content {
