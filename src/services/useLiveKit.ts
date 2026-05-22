@@ -12,6 +12,7 @@ import type { IUser } from '../components/interfaces/interfaces';
 import { getAuthUser } from '../composables/useAuth';
 import { showErrorNotification } from '../composables/useNotifications';
 import { AudioOutput } from './useAudioOutput';
+import { copyTextToClipboard } from '../utils/copyTextToClipboard';
 import {
   playNativeCallRingtone,
   stopNativeCallRingtone
@@ -29,6 +30,8 @@ type LiveKitCallStatus = {
   roomReady?: boolean;
   participantCount?: number;
   wasAnswered?: boolean;
+  groupMode?: boolean;
+  elapsedDurationMs?: number;
 };
 
 type ActiveGroupCallEntry = {
@@ -36,6 +39,9 @@ type ActiveGroupCallEntry = {
   topicId: string;
   caller?: IUser | null;
   startTime?: number | null;
+  participantCount?: number;
+  groupMode?: boolean;
+  elapsedDurationMs?: number;
 };
 
 type ParticipantMediaState = {
@@ -65,6 +71,7 @@ type CallSocketAck = {
   roomId?: string | null;
   topicId?: string | null;
   startTime?: number | null;
+  elapsedDurationMs?: number;
   isNewCall?: boolean;
 };
 
@@ -75,6 +82,7 @@ const user = ref<IUser | null>(null);
 const roomId = ref<string | null>(null);
 const topicId = ref<string | null>(null);
 const callStartedAt = ref<number | null>(null);
+const callElapsedMs = ref(0);
 const timerSeconds = ref(0);
 const isModalVisible = ref(false);
 const isRemoteVideoActive = ref(false);
@@ -93,6 +101,7 @@ const invitedGroupCall = ref<{
   title: string;
   avatarUrl?: string | null;
   startTime?: number | null;
+  elapsedDurationMs?: number;
   participantCount: number;
   members: IUser[];
   isJoinAvailable: boolean;
@@ -207,6 +216,17 @@ const clearUnavailableCallState = (
 ) => {
   removePendingGroupCallEntry(targetTopicId);
   removeInvitedGroupCallEntry(targetRoomId);
+  if (targetTopicId) {
+    const topicsApi = useTopics();
+    topicsApi.topics.value = topicsApi.topics.value.map(topic =>
+      topic.id === targetTopicId
+        ? {
+            ...topic,
+            activeCall: null
+          }
+        : topic
+    );
+  }
 };
 
 const clearPendingEndCallTimers = () => {
@@ -428,7 +448,10 @@ const restoreGroupCallEntryIfStillActive = (
           roomId: targetRoomId,
           topicId: targetTopicId,
           caller,
-          startTime: startTime ?? status.startTime ?? null
+          startTime: startTime ?? status.startTime ?? null,
+          participantCount: status.participantCount,
+          groupMode: status.groupMode,
+          elapsedDurationMs: status.elapsedDurationMs
         }
       };
     })();
@@ -475,19 +498,22 @@ const clearInviteParamsFromUrl = () => {
 
 const formattedTime = computed(() => formatTime(timerSeconds.value));
 
-const syncTimerValue = () => {
-  if (!callStartedAt.value) {
-    timerSeconds.value = 0;
-    return;
-  }
+const getElapsedCallDurationMs = () =>
+  callElapsedMs.value +
+  (callStartedAt.value ? Date.now() - callStartedAt.value : 0);
 
+const syncTimerValue = () => {
   timerSeconds.value = Math.max(
     0,
-    Math.floor((Date.now() - callStartedAt.value) / 1000)
+    Math.floor(getElapsedCallDurationMs() / 1000)
   );
 };
 
-const setCallStartedAt = (startTime?: number | null) => {
+const setCallStartedAt = (
+  startTime?: number | null,
+  elapsedMs = callElapsedMs.value
+) => {
+  callElapsedMs.value = Math.max(0, elapsedMs);
   callStartedAt.value =
     typeof startTime === 'number' && Number.isFinite(startTime)
       ? startTime
@@ -508,12 +534,20 @@ const startTimer = (startTime: number | null = callStartedAt.value) => {
   }, 1000);
 };
 
-const stopTimer = () => {
+const pauseTimer = (elapsedMs = getElapsedCallDurationMs()) => {
   if (timerInterval) {
     clearInterval(timerInterval);
     timerInterval = null;
   }
-  setCallStartedAt(null);
+  setCallStartedAt(null, elapsedMs);
+};
+
+const resetTimer = () => {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+  setCallStartedAt(null, 0);
 };
 
 const playRingtone = () => {
@@ -907,7 +941,7 @@ const syncConnectionState = (activeRoom: Room) => {
   if (callStartedAt.value) {
     startTimer();
   } else {
-    stopTimer();
+    pauseTimer();
   }
 
   if (hasRemoteParticipant) {
@@ -1191,12 +1225,15 @@ const applyCallSocketAck = (
     roomId?: string | null;
     topicId?: string | null;
     startTime?: number | null;
+    elapsedDurationMs?: number;
     isNewCall?: boolean;
   }
 ) => {
   const resolvedRoomId = ack?.roomId ?? fallback?.roomId ?? null;
   const resolvedTopicId = ack?.topicId ?? fallback?.topicId ?? null;
   const resolvedStartTime = ack?.startTime ?? fallback?.startTime ?? null;
+  const resolvedElapsedDurationMs =
+    ack?.elapsedDurationMs ?? fallback?.elapsedDurationMs ?? 0;
 
   if (resolvedRoomId) {
     roomId.value = resolvedRoomId;
@@ -1206,8 +1243,8 @@ const applyCallSocketAck = (
     topicId.value = resolvedTopicId;
   }
 
-  if (resolvedStartTime) {
-    setCallStartedAt(resolvedStartTime);
+  if (resolvedStartTime !== undefined) {
+    setCallStartedAt(resolvedStartTime ?? null, resolvedElapsedDurationMs);
   }
 
   if (typeof ack?.isNewCall === 'boolean') {
@@ -1231,7 +1268,7 @@ export const startLiveKitCall = async (
   user.value = targetUser;
   topicId.value = currentTopicId;
   roomId.value = createRoomId();
-  setCallStartedAt(Date.now());
+  setCallStartedAt(null, 0);
   shouldEndCallOnConnectFailure = true;
   open.value = true;
   isCalling.value = true;
@@ -1250,7 +1287,8 @@ export const startLiveKitCall = async (
   applyCallSocketAck(startAck, {
     roomId: roomId.value,
     topicId: currentTopicId,
-    startTime: callStartedAt.value,
+    startTime: null,
+    elapsedDurationMs: 0,
     isNewCall: true
   });
 
@@ -1292,7 +1330,7 @@ export const startLiveKitGroupCall = async (currentTopicId: string) => {
   user.value = me as any;
   topicId.value = currentTopicId;
   roomId.value = activeRoomId;
-  setCallStartedAt(Date.now());
+  setCallStartedAt(null, 0);
   shouldEndCallOnConnectFailure = true;
   open.value = true;
   isIncoming.value = false;
@@ -1311,7 +1349,8 @@ export const startLiveKitGroupCall = async (currentTopicId: string) => {
   applyCallSocketAck(startAck, {
     roomId: activeRoomId,
     topicId: currentTopicId,
-    startTime: callStartedAt.value,
+    startTime: null,
+    elapsedDurationMs: 0,
     isNewCall: true
   });
 
@@ -1357,6 +1396,23 @@ export const receiveIncomingCall = async (
   }
 
   const resolvedStartTime = incomingStartTime ?? callStatus.startTime ?? null;
+  const resolvedElapsedDurationMs = callStatus.elapsedDurationMs ?? 0;
+  const topicsApi = useTopics();
+  topicsApi.topics.value = topicsApi.topics.value.map(topic =>
+    topic.id === incomingTopicId
+      ? {
+          ...topic,
+          activeCall: {
+            roomId: incomingRoomId,
+            startTime: resolvedStartTime,
+            participantCount: callStatus.participantCount,
+            callType: 'livekit',
+            groupMode: callStatus.groupMode,
+            elapsedDurationMs: resolvedElapsedDurationMs
+          }
+        }
+      : topic
+  );
 
   if (resolvedTopicType === TopicType.Group) {
     activeGroupCalls.value = {
@@ -1365,7 +1421,10 @@ export const receiveIncomingCall = async (
         roomId: incomingRoomId,
         topicId: incomingTopicId,
         caller: targetUser,
-        startTime: resolvedStartTime
+        startTime: resolvedStartTime,
+        participantCount: callStatus.participantCount,
+        groupMode: callStatus.groupMode,
+        elapsedDurationMs: resolvedElapsedDurationMs
       }
     };
     return true;
@@ -1378,7 +1437,7 @@ export const receiveIncomingCall = async (
     user.value = targetUser;
     roomId.value = incomingRoomId;
     topicId.value = incomingTopicId;
-    setCallStartedAt(resolvedStartTime);
+    setCallStartedAt(resolvedStartTime, resolvedElapsedDurationMs);
     open.value = false;
     isIncoming.value = true;
     isModalVisible.value = false;
@@ -1389,7 +1448,7 @@ export const receiveIncomingCall = async (
   user.value = targetUser;
   roomId.value = incomingRoomId;
   topicId.value = incomingTopicId;
-  setCallStartedAt(resolvedStartTime);
+  setCallStartedAt(resolvedStartTime, resolvedElapsedDurationMs);
   open.value = true;
   isIncoming.value = true;
   isModalVisible.value = true;
@@ -1409,7 +1468,10 @@ export const acceptCall = async () => {
 
   if (!callStartedAt.value) {
     const callStatus = await getLiveKitCallStatus(roomId.value, topicId.value);
-    setCallStartedAt(callStatus?.startTime ?? null);
+    setCallStartedAt(
+      callStatus?.startTime ?? null,
+      callStatus?.elapsedDurationMs ?? 0
+    );
   }
 
   stopRingtone();
@@ -1432,6 +1494,7 @@ export const acceptCall = async () => {
     roomId: roomId.value,
     topicId: topicId.value,
     startTime: callStartedAt.value,
+    elapsedDurationMs: callElapsedMs.value,
     isNewCall: false
   });
   if (answerAck?.accepted === false) {
@@ -1473,7 +1536,10 @@ export const joinPendingGroupCall = async (targetTopicId?: string) => {
   user.value = caller || null;
   roomId.value = pendingRoomId;
   topicId.value = pendingTopicId;
-  setCallStartedAt(pendingGroupCall.startTime ?? callStatus.startTime ?? null);
+  setCallStartedAt(
+    pendingGroupCall.startTime ?? callStatus.startTime ?? null,
+    pendingGroupCall.elapsedDurationMs ?? callStatus.elapsedDurationMs ?? 0
+  );
   open.value = true;
   isIncoming.value = false;
   isCalling.value = true;
@@ -1494,6 +1560,8 @@ export const joinPendingGroupCall = async (targetTopicId?: string) => {
     roomId: pendingRoomId,
     topicId: pendingTopicId,
     startTime: pendingGroupCall.startTime ?? callStatus.startTime ?? null,
+    elapsedDurationMs:
+      pendingGroupCall.elapsedDurationMs ?? callStatus.elapsedDurationMs ?? 0,
     isNewCall: false
   });
   if (answerAck?.accepted === false) {
@@ -1531,6 +1599,7 @@ export const hydrateInvitedGroupCallFromUrl = async () => {
     title: preview.title,
     avatarUrl: preview.avatarUrl || null,
     startTime: preview.startTime ?? null,
+    elapsedDurationMs: preview.elapsedDurationMs ?? 0,
     participantCount: preview.participantCount,
     members: (preview.members || []) as IUser[],
     isJoinAvailable: true
@@ -1556,7 +1625,10 @@ export const joinInvitedGroupCall = async () => {
   user.value = me as any;
   roomId.value = invite.roomId;
   topicId.value = invite.topicId;
-  setCallStartedAt(invite.startTime ?? callStatus.startTime ?? null);
+  setCallStartedAt(
+    invite.startTime ?? callStatus.startTime ?? null,
+    invite.elapsedDurationMs ?? callStatus.elapsedDurationMs ?? 0
+  );
   open.value = true;
   isIncoming.value = false;
   isCalling.value = true;
@@ -1577,6 +1649,8 @@ export const joinInvitedGroupCall = async () => {
     roomId: invite.roomId,
     topicId: invite.topicId,
     startTime: invite.startTime ?? callStatus.startTime ?? null,
+    elapsedDurationMs:
+      invite.elapsedDurationMs ?? callStatus.elapsedDurationMs ?? 0,
     isNewCall: false
   });
   if (answerAck?.accepted === false) {
@@ -1599,9 +1673,44 @@ export const handleCallAnswered = async (
   answeredUserId: string,
   answeredRoomId?: string,
   answeredTopicId?: string | null,
-  answeredStartTime?: number | null
+  answeredStartTime?: number | null,
+  answeredElapsedDurationMs?: number
 ) => {
   markIncomingCallDismissed(answeredRoomId, answeredTopicId);
+
+  if (answeredTopicId) {
+    const existingPendingCall = activeGroupCalls.value[answeredTopicId];
+    if (existingPendingCall) {
+      activeGroupCalls.value = {
+        ...activeGroupCalls.value,
+        [answeredTopicId]: {
+          ...existingPendingCall,
+          startTime: answeredStartTime ?? existingPendingCall.startTime ?? null,
+          elapsedDurationMs:
+            answeredElapsedDurationMs ?? existingPendingCall.elapsedDurationMs
+        }
+      };
+    }
+
+    const topicsApi = useTopics();
+    topicsApi.topics.value = topicsApi.topics.value.map(topic =>
+      topic.id === answeredTopicId
+        ? {
+            ...topic,
+            activeCall: {
+              roomId: answeredRoomId || topic.activeCall?.roomId || topic.id,
+              startTime:
+                answeredStartTime ?? topic.activeCall?.startTime ?? null,
+              participantCount: topic.activeCall?.participantCount,
+              callType: topic.activeCall?.callType || 'livekit',
+              groupMode: topic.activeCall?.groupMode,
+              elapsedDurationMs:
+                answeredElapsedDurationMs ?? topic.activeCall?.elapsedDurationMs
+            }
+          }
+        : topic
+    );
+  }
 
   const matchesCurrentCall =
     (answeredRoomId && roomId.value === answeredRoomId) ||
@@ -1611,7 +1720,10 @@ export const handleCallAnswered = async (
     (answeredTopicId && localAcceptTopicId === answeredTopicId);
 
   if (answeredRoomId && roomId.value === answeredRoomId) {
-    setCallStartedAt(answeredStartTime ?? callStartedAt.value);
+    setCallStartedAt(
+      answeredStartTime ?? callStartedAt.value,
+      answeredElapsedDurationMs ?? callElapsedMs.value
+    );
   }
 
   if (matchesLocalAccept) {
@@ -1707,7 +1819,10 @@ export const syncActiveCalls = async (
     roomId: string;
     topicId: string;
     callType: string;
-    startTime: number;
+    startTime?: number | null;
+    participantCount?: number;
+    groupMode?: boolean;
+    elapsedDurationMs?: number;
   }>
 ) => {
   const previousActiveGroupCalls = activeGroupCalls.value;
@@ -1721,7 +1836,11 @@ export const syncActiveCalls = async (
 
       return {
         ...call,
-        startTime: status?.startTime ?? call.startTime
+        startTime: status?.startTime ?? call.startTime,
+        participantCount: status?.participantCount ?? call.participantCount,
+        groupMode: status?.groupMode ?? call.groupMode,
+        elapsedDurationMs:
+          status?.elapsedDurationMs ?? call.elapsedDurationMs ?? 0
       };
     })
   );
@@ -1738,10 +1857,32 @@ export const syncActiveCalls = async (
       roomId: call.roomId,
       topicId: call.topicId,
       caller: previousEntry?.caller,
-      startTime: call.startTime
+      startTime: call.startTime,
+      participantCount: call.participantCount,
+      groupMode: call.groupMode,
+      elapsedDurationMs: call.elapsedDurationMs
     };
     return acc;
   }, {});
+
+  const topicsApi = useTopics();
+  topicsApi.topics.value = topicsApi.topics.value.map(topic => {
+    const activeCall = activeGroupCalls.value[topic.id];
+
+    return {
+      ...topic,
+      activeCall: activeCall
+        ? {
+            roomId: activeCall.roomId,
+            startTime: activeCall.startTime ?? null,
+            participantCount: activeCall.participantCount,
+            callType: 'livekit',
+            groupMode: activeCall.groupMode,
+            elapsedDurationMs: activeCall.elapsedDurationMs
+          }
+        : null
+    };
+  });
 };
 
 export const copyInvitedGroupCallLink = async () => {
@@ -1763,7 +1904,7 @@ export const copyInvitedGroupCallLink = async () => {
     url.searchParams.set('organization', organization);
   }
 
-  await navigator.clipboard.writeText(url.toString());
+  await copyTextToClipboard(url.toString());
   return true;
 };
 
@@ -1869,7 +2010,10 @@ export const leaveCall = () => {
     activeRoomId &&
     activeTopicId &&
     invitedGroupCall.value?.roomId !== activeRoomId &&
-    activeTopic?.type === TopicType.Group
+    (activeTopic?.type === TopicType.Group ||
+      activeTopic?.activeCall?.groupMode ||
+      remoteParticipants.value.length > 1 ||
+      (activeTopic?.activeCall?.participantCount ?? 0) > 2)
   ) {
     restoreGroupCallEntryIfStillActive(
       activeRoomId,
@@ -1892,7 +2036,7 @@ export const leaveCall = () => {
   clearLocalAcceptState();
   clearCallStatusNotice();
   clearDialingTimeout();
-  stopTimer();
+  resetTimer();
   stopRingtone();
   stopDialingSound();
 
@@ -1925,7 +2069,7 @@ export const cleanup = (disconnectRoom = true) => {
   clearCallStatusNotice();
   resetPendingEndCallState();
   clearDialingTimeout();
-  stopTimer();
+  resetTimer();
   stopRingtone();
   stopDialingSound();
 
@@ -2072,6 +2216,17 @@ export const handleNativeCallAction = async (
 
 export const clearActiveGroupCall = (targetTopicId?: string) => {
   removePendingGroupCallEntry(targetTopicId);
+  if (targetTopicId) {
+    const topicsApi = useTopics();
+    topicsApi.topics.value = topicsApi.topics.value.map(topic =>
+      topic.id === targetTopicId
+        ? {
+            ...topic,
+            activeCall: null
+          }
+        : topic
+    );
+  }
 };
 
 export const clearInvitedGroupCall = (activeRoomId?: string) => {

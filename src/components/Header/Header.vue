@@ -11,11 +11,8 @@
       <LeaveIcon />
       <span>{{ resolvedHeaderCallLabel }}</span>
 
-      <span
-        v-if="isCallActive && !isAnyCallDialing"
-        class="chat__header-active-call__time"
-      >
-        {{ activeCallFormattedTime }}
+      <span v-if="showHeaderCallTime" class="chat__header-active-call__time">
+        {{ headerCallTimeLabel }}
       </span>
     </div>
 
@@ -154,7 +151,15 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, nextTick, onUnmounted, reactive, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  watch
+} from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';
@@ -277,8 +282,14 @@ const currentPendingCall = computed(
   () => pendingGroupCallInfo.value?.[route.value.id || ''] || null
 );
 const currentInvitedCall = computed(() => invitedGroupCallInfo.value || null);
+const currentTopicActiveCall = computed(
+  () => currentTopic.value?.activeCall || null
+);
+const currentHeaderCallEntry = computed(
+  () => currentPendingCall.value || currentTopicActiveCall.value || null
+);
 const hasPendingCallForCurrentTopic = computed(
-  () => !!currentPendingCall.value
+  () => !!currentPendingCall.value || !!currentTopicActiveCall.value?.roomId
 );
 const hasInvitedCall = computed(
   () => !!currentInvitedCall.value?.isJoinAvailable
@@ -287,9 +298,56 @@ const hasInvitedCall = computed(
 const showHeaderCallBanner = computed(
   () =>
     (isCallActive.value && !isAnyCallModalVisible.value) ||
-    hasPendingCallForCurrentTopic.value ||
+    !!currentHeaderCallEntry.value ||
     hasInvitedCall.value
 );
+const currentTime = ref(Date.now());
+let headerCallTimerInterval: ReturnType<typeof setInterval> | null = null;
+
+const formatElapsedCallTime = (durationMs: number): string => {
+  const elapsedSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  const hours = Math.floor(elapsedSeconds / 3600);
+  const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+  const seconds = elapsedSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+};
+
+const headerCallTimeLabel = computed(() => {
+  if (
+    isCallActive.value &&
+    activeCallTopicId.value === route.value?.id &&
+    !isAnyCallDialing.value
+  ) {
+    return activeCallFormattedTime.value;
+  }
+
+  const entry = currentHeaderCallEntry.value;
+  if (!entry) {
+    return '';
+  }
+
+  const elapsedDurationMs = entry.elapsedDurationMs ?? 0;
+  const startTime = entry.startTime;
+
+  if (typeof startTime === 'number' && Number.isFinite(startTime)) {
+    return formatElapsedCallTime(
+      elapsedDurationMs + Math.max(0, currentTime.value - startTime)
+    );
+  }
+
+  if (elapsedDurationMs > 0) {
+    return formatElapsedCallTime(elapsedDurationMs);
+  }
+
+  return '';
+});
+
+const showHeaderCallTime = computed(() => !!headerCallTimeLabel.value);
 
 const isActiveDirectCallLabel = computed(
   () =>
@@ -364,7 +422,7 @@ const handleHeaderCallClick = async () => {
     return;
   }
 
-  if (hasPendingCallForCurrentTopic.value && !isCallActive.value) {
+  if (currentHeaderCallEntry.value && !isCallActive.value) {
     await joinGroupCall(route.value.id);
     return;
   }
@@ -507,7 +565,18 @@ watch(
   }
 );
 
+onMounted(() => {
+  headerCallTimerInterval = setInterval(() => {
+    currentTime.value = Date.now();
+  }, 1000);
+});
+
 onUnmounted(() => {
+  if (headerCallTimerInterval) {
+    clearInterval(headerCallTimerInterval);
+    headerCallTimerInterval = null;
+  }
+
   currentGroup.value = null;
 });
 </script>

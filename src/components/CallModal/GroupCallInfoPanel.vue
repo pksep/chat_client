@@ -97,6 +97,7 @@ import type { IUser } from '../interfaces/interfaces';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import { Icon, IconNameEnum } from '@pksep/yui';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
+import { copyTextToClipboard } from '../../utils/copyTextToClipboard';
 
 const props = defineProps<{
   open: boolean;
@@ -160,7 +161,7 @@ const handleCopyLink = async () => {
       return;
     }
 
-    await navigator.clipboard.writeText(window.location.href);
+    await copyTextToClipboard(window.location.href);
     markCopied();
   } catch (error) {
     console.warn('Failed to copy group call link', error);

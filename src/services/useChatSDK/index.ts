@@ -1023,6 +1023,8 @@ export class ChatSDK {
     roomReady?: boolean;
     participantCount?: number;
     wasAnswered?: boolean;
+    groupMode?: boolean;
+    elapsedDurationMs?: number;
   } | null> {
     try {
       const response = (await this.reqi.get<{
@@ -1032,6 +1034,8 @@ export class ChatSDK {
         roomReady?: boolean;
         participantCount?: number;
         wasAnswered?: boolean;
+        groupMode?: boolean;
+        elapsedDurationMs?: number;
       }>(`/calls/status?roomId=${encodeURIComponent(roomId)}`, {
         parsed: false
       })) as any;
@@ -1074,6 +1078,7 @@ export class ChatSDK {
     title: string;
     avatarUrl?: string | null;
     startTime?: number | null;
+    elapsedDurationMs?: number;
     participantCount: number;
     members: User[];
   } | null> {
@@ -1085,6 +1090,7 @@ export class ChatSDK {
           title: string;
           avatarUrl?: string | null;
           startTime?: number | null;
+          elapsedDurationMs?: number;
           participantCount: number;
           members: User[];
         };
