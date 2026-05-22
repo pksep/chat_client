@@ -49,6 +49,7 @@ import {
 } from './composables/useAuth';
 import { fetchUsersForAuth } from './composables/useUsers';
 import { useNotifications } from './composables/useNotifications';
+import { initShareIntentHandling } from './services/useShareIntent';
 
 const ORGANIZATIONS_KEY = 'chat_runtime_organizations';
 const LAST_ORGANIZATION_KEY = 'chat_runtime_last_organization';
@@ -378,6 +379,7 @@ const submitCredentialsLogin = async () => {
 };
 
 onMounted(() => {
+  void initShareIntentHandling();
   localStorage.removeItem('chat_runtime_config_url');
 
   const urlOrganization = getUrlOrganization();

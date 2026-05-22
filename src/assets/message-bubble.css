@@ -1488,6 +1488,7 @@ div.message-content__file {
     position: fixed;
     bottom: 0;
     width: 100%;
+    z-index: 9;
     & .editor-content {
       max-height: 250px;
       & .tiptap {

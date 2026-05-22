@@ -90,6 +90,7 @@ export type IMedia = Media & {
     height?: number;
     previewWidth?: number;
     previewHeight?: number;
+    fillPreview?: boolean;
   };
   isLoading?: boolean;
   thumbnailPath?: string | null;

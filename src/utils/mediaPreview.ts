@@ -10,6 +10,7 @@ export interface MediaDimensions {
 export interface MediaPreviewDimensions extends MediaDimensions {
   previewWidth?: number;
   previewHeight?: number;
+  fillPreview?: boolean;
 }
 
 const VIDEO_THUMBNAIL_TIMESTAMPS = [0.1, 0.5, 1, 2];

@@ -17,6 +17,7 @@ import sep.pksep.app.plugins.NativeFilePlugin;
 import sep.pksep.app.plugins.NotificationAudioPlugin;
 import sep.pksep.app.plugins.NotificationTapPlugin;
 import sep.pksep.app.plugins.ProximityLockPlugin;
+import sep.pksep.app.plugins.ShareIntentPlugin;
 
 @SuppressWarnings("deprecation")
 public class MainActivity extends BridgeActivity {
@@ -39,6 +40,7 @@ public class MainActivity extends BridgeActivity {
         configureIncomingCallWindow(getIntent());
         handleCallIntent(getIntent());
         handleNotificationLaunchIntent(getIntent());
+        handleShareIntent(getIntent());
     }
 
     @Override
@@ -57,6 +59,7 @@ public class MainActivity extends BridgeActivity {
         configureIncomingCallWindow(intent);
         handleCallIntent(intent);
         handleNotificationLaunchIntent(intent);
+        handleShareIntent(intent);
     }
 
     private void registerCustomPluginsIfNeeded() {
@@ -70,6 +73,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NativeFilePlugin.class);
         registerPlugin(NotificationAudioPlugin.class);
         registerPlugin(NotificationTapPlugin.class);
+        registerPlugin(ShareIntentPlugin.class);
         customPluginsRegistered = true;
     }
 
@@ -145,6 +149,42 @@ public class MainActivity extends BridgeActivity {
 
     private void configureIncomingCallWindow(Intent intent) {
         setIncomingCallWindowEnabled(isIncomingCallIntent(intent));
+    }
+
+    private void handleShareIntent(Intent intent) {
+        if (!isShareIntent(intent)) {
+            return;
+        }
+
+        ShareIntentPlugin.dispatchShareIntent(this, intent);
+        clearHandledShareIntent(intent);
+    }
+
+    private boolean isShareIntent(Intent intent) {
+        if (intent == null) {
+            return false;
+        }
+
+        String action = intent.getAction();
+
+        return Intent.ACTION_SEND.equals(action) ||
+            Intent.ACTION_SEND_MULTIPLE.equals(action);
+    }
+
+    private void clearHandledShareIntent(Intent intent) {
+        if (intent == null) {
+            return;
+        }
+
+        intent.removeExtra(Intent.EXTRA_STREAM);
+        intent.removeExtra(Intent.EXTRA_TEXT);
+        intent.setType(null);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+            intent.setClipData(null);
+        }
+
+        intent.setAction(null);
     }
 
     private boolean isIncomingCallIntent(Intent intent) {

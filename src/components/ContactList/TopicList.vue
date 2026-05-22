@@ -20,7 +20,10 @@
           'contact-list__item',
           {
             'contact-list__item--active':
-              topic.id === props.selectedTopicId || isOpen[topic.id]
+              topic.id === props.selectedTopicId ||
+              isOpen[topic.id] ||
+              props.selectedTopicIds.has(topic.id),
+            'contact-list__item--selection': props.showCheckbox
           }
         ]"
         role="button"
@@ -28,7 +31,9 @@
         :aria-expanded="isOpen[topic.id] ? 'true' : 'false'"
         :aria-haspopup="true"
         @click="handleClick(topic)"
-        @contextmenu="openActivePopover(topic.id, $event)"
+        @contextmenu="
+          !props.showCheckbox && openActivePopover(topic.id, $event)
+        "
         @keydown.enter="handleClick(topic)"
         @keydown.space="handleClick(topic)"
       >
@@ -37,7 +42,9 @@
             'contact-list__avatar',
             {
               'contact-list__avatar--interactive':
-                topic.type === TopicType.DM && canOpenUserInfo(topic.user)
+                !props.showCheckbox &&
+                topic.type === TopicType.DM &&
+                canOpenUserInfo(topic.user)
             }
           ]"
           :initials="topic.name"
@@ -47,10 +54,19 @@
           is-icon
           :is-online="isTopicUserOnline(topic)"
           @click.stop="
-            topic.type === TopicType.DM && openUserInfo(topic.user, topic)
+            !props.showCheckbox &&
+              topic.type === TopicType.DM &&
+              openUserInfo(topic.user, topic)
           "
         />
-        <div class="contact-list__block--wrapper">
+        <div
+          :class="[
+            'contact-list__block--wrapper',
+            {
+              'contact-list__block--wrapper--selection': props.showCheckbox
+            }
+          ]"
+        >
           <h5
             role="heading"
             aria-level="5"
@@ -119,7 +135,7 @@
 
             <p>{{ getTopicLastMessageLabel(topic.lastMessage?.media) }}</p>
           </div>
-          <div class="contact-list__top">
+          <div v-if="!props.showCheckbox" class="contact-list__top">
             <MessageStatusIcons
               v-if="topic.lastMessage?.senderUserId === authedUser.id"
               :class="{
@@ -140,7 +156,7 @@
               {{ formatListTime(new Date(topic.lastMessage?.createdAt)) }}
             </span>
           </div>
-          <div class="contact-list__bottom">
+          <div v-if="!props.showCheckbox" class="contact-list__bottom">
             <div
               v-if="topic.taggedMe"
               class="contact-list__notification contact-list__mention"
@@ -169,8 +185,18 @@
             </div>
           </div>
         </div>
+        <Checkbox
+          v-if="props.showCheckbox"
+          class="contact-list__selection-checkbox"
+          :size="CheckboxSizeEnum.small"
+          :model-value="props.selectedTopicIds.has(topic.id)"
+          @click.stop
+          @update:model-value="() => handleClick(topic)"
+          :data-testid="`${props.dataTestid}-ContactList-Checkbox${index + 1}`"
+        />
       </div>
       <ContextMenu
+        v-if="!props.showCheckbox"
         :visible="!!isOpen[topic.id]"
         :position="position"
         :data-testid="`${props.dataTestid}-ContactList-ContextMenu${index + 1}`"
@@ -213,7 +239,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useContextMenu } from '../../composables/useContextMenu';
-import { Button, ButtonTypeEnum, SizesEnum, Tooltip } from '@pksep/yui';
+import {
+  Button,
+  ButtonTypeEnum,
+  Checkbox,
+  CheckboxSizeEnum,
+  SizesEnum,
+  Tooltip
+} from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
 import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
@@ -294,6 +327,11 @@ const handleMute = (topic: ITopic): void => {
 };
 
 const handleClick = (topic: ITopic): void => {
+  if (props.showCheckbox) {
+    emits('unmount-topic', topic);
+    return;
+  }
+
   if (isMobile.value) {
     if (topic.type === TopicType.DM) {
       navigateToDialogs(topic.id);
@@ -361,5 +399,38 @@ const getTopicStatusIcon = (topic: ITopic): string =>
 
 .contact-list__description--typing {
   color: var(--primary-color);
+}
+
+.contact-list__block--wrapper--selection .contact-list__description,
+.contact-list__block--wrapper--selection .contact-list__description p,
+.contact-list__block--wrapper--selection .contact-list__description strong {
+  width: calc(100vw - 180px);
+}
+
+.contact-list__block--wrapper--selection .contact-list__description::after,
+.contact-list__block--wrapper--selection .contact-list__description p::after,
+.contact-list__block--wrapper--selection
+  .contact-list__description
+  strong::after {
+  left: auto;
+  right: 0;
+  width: 56px;
+}
+
+.contact-list__item--selection.contact-list__item--active
+  .contact-list__description::after,
+.contact-list__item--selection.contact-list__item--active
+  .contact-list__description
+  p::after,
+.contact-list__item--selection.contact-list__item--active
+  .contact-list__description
+  strong::after {
+  background: linear-gradient(to right, transparent 0%, var(--blue15) 100%);
+}
+
+.contact-list__selection-checkbox {
+  margin-left: 12px;
+  align-self: center;
+  flex-shrink: 0;
 }
 </style>

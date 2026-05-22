@@ -16,6 +16,7 @@
     >
       <template v-if="activeSection === 'chats'">
         <ChatsToolbar
+          v-if="!isShareSelectionActive"
           :model-value="toolbarState.search"
           :filter="toolbarState.filter"
           :filter-counts="filterCounts"
@@ -27,11 +28,31 @@
           @create-group="handleNewGroupModal"
         />
 
+        <ShareSelectionToolbar
+          v-else
+          :message="shareMessage"
+          :search="toolbarState.search"
+          :filter="toolbarState.filter"
+          :filter-counts="filterCounts"
+          :selected-count="selectedTopicsCount"
+          :summary-label="pendingShareSummaryLabel"
+          :is-sending="isSendingSharedFiles"
+          :is-collapse="isCollapse"
+          :data-testid="`${props.dataTestid}-Menu`"
+          @update:message="updateShareMessage"
+          @update:search="setSearch"
+          @update:filter="setFilter"
+          @cancel="closeShareSelection"
+          @send="handleSendSharedFiles"
+        />
+
         <TopicList
           class="menu__contact-list"
           :topics="topicGroups"
           @unmount-topic="unmountTopicClick"
           :selected-topic-id="selectedContactId"
+          :show-checkbox="isShareSelectionActive"
+          :selected-topic-ids="selectedTopicIds"
           :data-testid="`${props.dataTestid}-Menu-ContactList`"
         />
       </template>
@@ -90,6 +111,7 @@ import {
 import { useTopics } from '../composables/useTopics';
 import TopicList from './ContactList/TopicList.vue';
 import ChatsToolbar from './Menu/ChatsToolbar.vue';
+import ShareSelectionToolbar from './Menu/ShareSelectionToolbar.vue';
 import { TopicType } from '../services/useChatSDK/types';
 import { useChatsToolbarState } from '../composables/useChatsToolbarState';
 import { useChatMenu } from '../composables/useChatMenu';
@@ -98,6 +120,8 @@ import MenuProfilePanel from './Menu/MenuProfilePanel.vue';
 import { getAuthUser } from '../composables/useAuth';
 import { getTopicUnreadBadgeCount } from '../utils/topicUnreadBadge';
 import CallsPage from './Calls/CallsPage.vue';
+import { useShareSelection } from '../composables/useShareSelection';
+import { getShareSelectionSummaryLabel } from '../utils/shareSelectionSummary';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: 'Menu'
@@ -109,8 +133,25 @@ const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 const selectedContactId = computed(() => route.value?.id);
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, setActiveSection } = useChatMenu();
+const {
+  pendingShareBatches,
+  isShareSelectionActive,
+  isSendingSharedFiles,
+  shareMessage,
+  selectedTopicIds,
+  selectedTopicsCount,
+  closeShareSelection,
+  toggleShareTopic,
+  updateShareMessage,
+  sendSharedFiles
+} = useShareSelection();
 const allTopics = computed(() => getTopicList());
 const authUserId = computed(() => getAuthUser()?.id || '');
+const pendingShareSummaryLabel = computed(() =>
+  getShareSelectionSummaryLabel(
+    pendingShareBatches.value.flatMap(batch => batch.files)
+  )
+);
 
 const filterCounts = computed(() => ({
   all: allTopics.value.reduce(
@@ -183,6 +224,11 @@ const handleCollapse = (): void => {
 };
 
 const unmountTopicClick = (topic: ITopic): void => {
+  if (isShareSelectionActive.value) {
+    toggleShareTopic(topic.id);
+    return;
+  }
+
   setActiveSection('chats');
 
   if (topic.type === 'GROUP') {
@@ -190,6 +236,14 @@ const unmountTopicClick = (topic: ITopic): void => {
   } else if (topic.type === 'DM') {
     navigateToDialogs(topic.id);
   }
+};
+
+const handleSendSharedFiles = async (): Promise<void> => {
+  const selectedTopics = allTopics.value.filter(topic =>
+    selectedTopicIds.value.has(topic.id)
+  );
+
+  await sendSharedFiles(selectedTopics);
 };
 
 const menuClasses = computed(() => [
