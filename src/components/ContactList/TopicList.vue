@@ -537,5 +537,6 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
   font-size: 12px;
   line-height: 15px;
   font-weight: 400;
+  width: 50px;
 }
 </style>

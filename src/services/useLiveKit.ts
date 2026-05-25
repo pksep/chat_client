@@ -44,6 +44,13 @@ type ActiveGroupCallEntry = {
   elapsedDurationMs?: number;
 };
 
+export type CallReaction =
+  | 'heart'
+  | 'thumbs-up'
+  | 'thumbs-down'
+  | 'joy'
+  | 'sob';
+
 type ParticipantMediaState = {
   identity: string;
   name: string;
@@ -54,6 +61,8 @@ type ParticipantMediaState = {
   isVideoActive: boolean;
   isScreenShareActive: boolean;
   isHandRaised: boolean;
+  activeReaction: CallReaction | null;
+  activeReactionExpiresAt: number | null;
   isSpeaking: boolean;
   isMicActive: boolean;
 };
@@ -89,6 +98,9 @@ const isRemoteVideoActive = ref(false);
 const localVideoStream = ref<MediaStream | null>(null);
 const localScreenShareStream = ref<MediaStream | null>(null);
 const handRaisedParticipants = ref<Record<string, boolean>>({});
+const participantReactions = ref<
+  Record<string, { reaction: CallReaction; expiresAt: number }>
+>({});
 const remoteParticipants = ref<ParticipantMediaState[]>([]);
 const callStatusNotice = ref<string | null>(null);
 const pendingEndCallRoomId = ref<string | null>(null);
@@ -113,10 +125,14 @@ const state = reactive({
   isScreenSharingActive: false,
   isSpeakerActive: false,
   isFullScreen: false,
-  isHandRaised: false
+  isHandRaised: false,
+  activeReaction: null as CallReaction | null,
+  activeReactionExpiresAt: null as number | null
 });
 
 const HAND_RAISE_TOPIC = 'group-call-hand-raise';
+const CALL_REACTION_TOPIC = 'group-call-reaction';
+const CALL_REACTION_DURATION_MS = 4000;
 
 let room: Room | null = null;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
@@ -136,6 +152,10 @@ let pendingEndCallRetryTimeout: ReturnType<typeof setTimeout> | null = null;
 let pendingEndCallFinalizeTimeout: ReturnType<typeof setTimeout> | null = null;
 let pendingNativeCallActionTimeout: ReturnType<typeof setTimeout> | null = null;
 let callStatusNoticeTimeout: ReturnType<typeof setTimeout> | null = null;
+const participantReactionTimeouts = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+>();
 
 const MAX_NATIVE_CALL_ACTION_RETRIES = 120;
 const NATIVE_CALL_ACTION_RETRY_DELAY_MS = 500;
@@ -157,6 +177,92 @@ const removePendingGroupCallEntry = (targetTopicId?: string | null) => {
   const nextActiveGroupCalls = { ...activeGroupCalls.value };
   delete nextActiveGroupCalls[targetTopicId];
   activeGroupCalls.value = nextActiveGroupCalls;
+};
+
+const clearParticipantReactionTimeout = (participantId: string) => {
+  const timeout = participantReactionTimeouts.get(participantId);
+
+  if (timeout) {
+    clearTimeout(timeout);
+    participantReactionTimeouts.delete(participantId);
+  }
+};
+
+const clearParticipantReaction = (
+  participantId: string,
+  shouldSyncRemoteState = true
+) => {
+  clearParticipantReactionTimeout(participantId);
+
+  if (!participantReactions.value[participantId]) {
+    if (getAuthUser()?.id === participantId) {
+      state.activeReaction = null;
+      state.activeReactionExpiresAt = null;
+    }
+    return;
+  }
+
+  const nextParticipantReactions = { ...participantReactions.value };
+  delete nextParticipantReactions[participantId];
+  participantReactions.value = nextParticipantReactions;
+
+  if (getAuthUser()?.id === participantId) {
+    state.activeReaction = null;
+    state.activeReactionExpiresAt = null;
+  }
+
+  if (shouldSyncRemoteState) {
+    syncRemoteParticipantState();
+  }
+};
+
+const applyParticipantReaction = (
+  participantId: string,
+  reaction: CallReaction,
+  expiresAt = Date.now() + CALL_REACTION_DURATION_MS,
+  shouldSyncRemoteState = true
+) => {
+  const normalizedExpiresAt =
+    typeof expiresAt === 'number' && Number.isFinite(expiresAt)
+      ? Math.max(expiresAt, Date.now() + 250)
+      : Date.now() + CALL_REACTION_DURATION_MS;
+
+  clearParticipantReactionTimeout(participantId);
+  participantReactions.value = {
+    ...participantReactions.value,
+    [participantId]: {
+      reaction,
+      expiresAt: normalizedExpiresAt
+    }
+  };
+
+  if (getAuthUser()?.id === participantId) {
+    state.activeReaction = reaction;
+    state.activeReactionExpiresAt = normalizedExpiresAt;
+  }
+
+  participantReactionTimeouts.set(
+    participantId,
+    setTimeout(
+      () => {
+        clearParticipantReaction(participantId);
+      },
+      Math.max(0, normalizedExpiresAt - Date.now())
+    )
+  );
+
+  if (shouldSyncRemoteState) {
+    syncRemoteParticipantState();
+  }
+};
+
+const clearAllParticipantReactions = () => {
+  Array.from(participantReactionTimeouts.keys()).forEach(participantId => {
+    clearParticipantReactionTimeout(participantId);
+  });
+  participantReactions.value = {};
+  state.activeReaction = null;
+  state.activeReactionExpiresAt = null;
 };
 
 const removeInvitedGroupCallEntry = (activeRoomId?: string | null) => {
@@ -794,6 +900,10 @@ const buildRemoteParticipantState = (
     isVideoActive: !!preferredVideoPublication?.track?.mediaStreamTrack,
     isScreenShareActive: !!screenSharePublication?.track?.mediaStreamTrack,
     isHandRaised: !!handRaisedParticipants.value[remoteParticipant.identity],
+    activeReaction:
+      participantReactions.value[remoteParticipant.identity]?.reaction || null,
+    activeReactionExpiresAt:
+      participantReactions.value[remoteParticipant.identity]?.expiresAt || null,
     isSpeaking: !!remoteParticipant.isSpeaking,
     isMicActive: !!audioPublication?.track?.mediaStreamTrack
   };
@@ -855,6 +965,30 @@ const publishHandRaiseState = async (isRaised: boolean) => {
   });
 };
 
+const publishCallReaction = async (reaction: CallReaction) => {
+  if (!room) return;
+
+  const expiresAt = Date.now() + CALL_REACTION_DURATION_MS;
+  const payload = new TextEncoder().encode(
+    JSON.stringify({
+      type: CALL_REACTION_TOPIC,
+      reaction,
+      expiresAt
+    })
+  );
+
+  await room.localParticipant.publishData(payload, {
+    reliable: true,
+    topic: CALL_REACTION_TOPIC
+  });
+
+  const authUser = getAuthUser();
+
+  if (authUser?.id) {
+    applyParticipantReaction(authUser.id, reaction, expiresAt, false);
+  }
+};
+
 const handleHandRaiseData = (
   payload: Uint8Array,
   participant?: RemoteParticipant,
@@ -877,6 +1011,40 @@ const handleHandRaiseData = (
     syncRemoteParticipantState();
   } catch (error) {
     console.warn('[LiveKit] Failed to parse hand raise event:', error);
+  }
+};
+
+const handleCallReactionData = (
+  payload: Uint8Array,
+  participant?: RemoteParticipant,
+  topic?: string
+) => {
+  if (!participant || topic !== CALL_REACTION_TOPIC) return;
+
+  try {
+    const parsedPayload = JSON.parse(new TextDecoder().decode(payload)) as {
+      type?: string;
+      reaction?: CallReaction;
+      expiresAt?: number;
+    };
+
+    if (
+      parsedPayload.type !== CALL_REACTION_TOPIC ||
+      !parsedPayload.reaction ||
+      !['heart', 'thumbs-up', 'thumbs-down', 'joy', 'sob'].includes(
+        parsedPayload.reaction
+      )
+    ) {
+      return;
+    }
+
+    applyParticipantReaction(
+      participant.identity,
+      parsedPayload.reaction,
+      parsedPayload.expiresAt
+    );
+  } catch (error) {
+    console.warn('[LiveKit] Failed to parse reaction event:', error);
   }
 };
 
@@ -1000,6 +1168,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       const nextHandRaisedParticipants = { ...handRaisedParticipants.value };
       delete nextHandRaisedParticipants[participant.identity];
       handRaisedParticipants.value = nextHandRaisedParticipants;
+      clearParticipantReaction(participant.identity, false);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
     })
@@ -1023,6 +1192,7 @@ const setupRoomListeners = (activeRoom: Room) => {
     })
     .on(RoomEvent.DataReceived, (payload, participant, _, topic) => {
       handleHandRaiseData(payload, participant, topic);
+      handleCallReactionData(payload, participant, topic);
     })
     .on(RoomEvent.Reconnecting, () => {
       syncLocalTrackState();
@@ -1210,6 +1380,7 @@ const resetMediaState = () => {
   localScreenShareStream.value = null;
   remoteParticipants.value = [];
   handRaisedParticipants.value = {};
+  clearAllParticipantReactions();
   isRemoteVideoActive.value = false;
   state.isMicActive = false;
   state.isVideoActive = false;
@@ -1217,6 +1388,8 @@ const resetMediaState = () => {
   state.isSpeakerActive = false;
   state.isFullScreen = false;
   state.isHandRaised = false;
+  state.activeReaction = null;
+  state.activeReactionExpiresAt = null;
 };
 
 const applyCallSocketAck = (
@@ -1995,6 +2168,22 @@ export const toggleHandRaise = async () => {
   } catch (error) {
     state.isHandRaised = !nextValue;
     console.warn('[LiveKit] Failed to update hand raise state:', error);
+  }
+};
+
+export const sendCallReaction = async (reaction: CallReaction) => {
+  if (!room) return;
+
+  try {
+    await publishCallReaction(reaction);
+  } catch (error) {
+    const authUser = getAuthUser();
+
+    if (authUser?.id) {
+      clearParticipantReaction(authUser.id, false);
+    }
+
+    console.warn('[LiveKit] Failed to send call reaction:', error);
   }
 };
 

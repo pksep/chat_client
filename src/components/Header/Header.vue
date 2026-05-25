@@ -16,7 +16,11 @@
       </span>
     </div>
 
-    <div class="chat__header-main" @click="handleClickHeader">
+    <div
+      v-if="!!isMobile || route.type === 'ai' || !!currentTopic"
+      class="chat__header-main"
+      @click="handleClickHeader"
+    >
       <Button
         v-if="isMobile"
         :type="ButtonTypeEnum.ghost"
@@ -285,8 +289,19 @@ const currentInvitedCall = computed(() => invitedGroupCallInfo.value || null);
 const currentTopicActiveCall = computed(
   () => currentTopic.value?.activeCall || null
 );
+const activeCallTopicEntry = computed(
+  () =>
+    activeCallTopic.value?.activeCall ||
+    (activeCallTopicId.value
+      ? pendingGroupCallInfo.value?.[activeCallTopicId.value] || null
+      : null)
+);
 const currentHeaderCallEntry = computed(
-  () => currentPendingCall.value || currentTopicActiveCall.value || null
+  () =>
+    currentPendingCall.value ||
+    currentTopicActiveCall.value ||
+    activeCallTopicEntry.value ||
+    null
 );
 const hasPendingCallForCurrentTopic = computed(
   () => !!currentPendingCall.value || !!currentTopicActiveCall.value?.roomId
@@ -318,11 +333,7 @@ const formatElapsedCallTime = (durationMs: number): string => {
 };
 
 const headerCallTimeLabel = computed(() => {
-  if (
-    isCallActive.value &&
-    activeCallTopicId.value === route.value?.id &&
-    !isAnyCallDialing.value
-  ) {
+  if (isCallActive.value && !isAnyCallDialing.value) {
     return activeCallFormattedTime.value;
   }
 
@@ -374,8 +385,7 @@ const resolvedHeaderCallLabel = computed(() => {
     return (
       activeCallUser.value?.initials ||
       activeCallTopic.value?.user?.initials ||
-      activeCallTopic.value?.user?.nickname ||
-      'Call'
+      'Групповой звонок'
     );
   }
 

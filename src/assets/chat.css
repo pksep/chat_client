@@ -347,8 +347,11 @@ p.chat__nothing-paragraph {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: start;
-  height: calc(50dvh + 160px);
+  justify-content: center;
+  height: 100dvh;
+  position: absolute;
+  top: 0;
+  width: calc(100vw - var(--size-left-menu));
   gap: 10px;
 
   p {

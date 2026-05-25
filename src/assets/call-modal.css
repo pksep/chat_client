@@ -106,10 +106,6 @@
     &.call-modal__control-button__inactive:disabled {
       color: var(--text-light-color);
     }
-
-    &:last-child {
-      background-color: var(--red4);
-    }
   }
 }
 
@@ -141,6 +137,84 @@
 
 .call-modal__control-button--action {
   background-color: var(--blue1);
+}
+
+.call-modal__control-button--leave {
+  background-color: var(--red4) !important;
+}
+
+.call-modal__reaction-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.call-modal__reaction-popover {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 16px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px;
+  border-radius: 25px;
+  background: var(--white);
+  box-shadow: 0 14px 32px rgba(24, 43, 87, 0.2);
+  transform: translateX(-50%);
+  z-index: 12;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: calc(50% - 1px);
+    bottom: -7px;
+    width: 14px;
+    height: 14px;
+    background: inherit;
+    transform: translateX(-50%) rotate(45deg);
+  }
+}
+
+.call-modal__reaction-option {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    background-color 0.2s ease;
+  z-index: 1;
+
+  & span {
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  &:hover {
+    background: var(--blue12);
+  }
+}
+
+.call-modal__reaction-preload {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.call-modal__reaction-preload video {
+  width: 1px;
+  height: 1px;
 }
 
 .call-modal__group-info {
@@ -592,6 +666,21 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   object-fit: cover;
 }
 
+.call-modal__remote-reaction-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.12s linear;
+  will-change: opacity, transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
 .call-modal__remote-grid {
   width: 100%;
   height: 100%;
@@ -778,6 +867,21 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   background: #0f1736;
 }
 
+.call-modal__reaction-stage-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.12s linear;
+  will-change: opacity, transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
 .call-modal__participant-stage--speaking {
   box-shadow: inset 0 0 0 2px #63d38d;
 }
@@ -808,6 +912,25 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   height: 100vh;
   object-fit: contain;
   background: #000;
+}
+
+.call-modal__video-overlay-reaction {
+  position: absolute;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: contain;
+  pointer-events: none;
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.12s linear;
+  will-change: opacity, transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.call-modal__reaction-video--visible {
+  opacity: 1;
 }
 
 .call-modal__video-overlay-bar {
@@ -932,15 +1055,41 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 3;
   background: var(--blue4);
   color: var(--white);
-  z-index: 3;
 }
 
 .call-modal__remote-hand svg {
   width: 15px;
   height: 15px;
   margin-left: 1px;
+}
+
+.call-modal__remote-hand--stage {
+  top: 12px;
+  left: 12px;
+}
+
+.call-modal__remote-hand--reaction {
+  animation: call-modal-reaction-pop 0.22s ease-out;
+}
+
+.call-modal__remote-hand--reaction span {
+  font-size: 15px;
+  line-height: 1;
+}
+
+@keyframes call-modal-reaction-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.88);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .call-modal__pagination {
@@ -1024,6 +1173,10 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
     left: 14px;
     right: 14px;
     bottom: 125px;
+  }
+
+  .call-modal__reaction-popover {
+    bottom: calc(100% + 28px);
   }
 }
 

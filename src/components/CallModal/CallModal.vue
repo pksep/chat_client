@@ -179,19 +179,52 @@
               <ScreenShareIcon />
             </button>
 
-            <button
-              class="call-modal__control-button"
-              :class="{
-                'call-modal__control-button__inactive':
-                  !liveKitState.isHandRaised
-              }"
-              :disabled="isBusyNoticeVisible"
-              @click="handleToggleHandRaise"
+            <div
+              class="call-modal__reaction-picker"
+              @mouseenter="handleReactionPickerMouseEnter('main')"
+              @mouseleave="handleReactionPickerMouseLeave"
             >
-              <HandRaiseIcon />
-            </button>
+              <div
+                v-if="activeReactionPopover === 'main'"
+                class="call-modal__reaction-popover"
+                @mouseenter="handleReactionPickerMouseEnter('main')"
+                @mouseleave="handleReactionPickerMouseLeave"
+              >
+                <button
+                  v-for="option in callReactionOptions"
+                  :key="option.reaction"
+                  class="call-modal__reaction-option"
+                  type="button"
+                  :disabled="isBusyNoticeVisible"
+                  :title="option.label"
+                  :aria-label="option.label"
+                  @click.stop="handleSendReaction(option.reaction)"
+                >
+                  <span>{{ option.emoji }}</span>
+                </button>
+              </div>
+              <button
+                class="call-modal__control-button"
+                :class="{
+                  'call-modal__control-button__inactive':
+                    !liveKitState.isHandRaised
+                }"
+                :disabled="isBusyNoticeVisible"
+                @focus="handleReactionButtonFocus('main')"
+                @blur="scheduleReactionPopoverClose"
+                @touchstart="beginReactionLongPress('main')"
+                @touchend="endReactionLongPress"
+                @touchcancel="endReactionLongPress"
+                @click="handleToggleHandRaise"
+              >
+                <HandRaiseIcon />
+              </button>
+            </div>
 
-            <button class="call-modal__control-button" @click="leaveCall">
+            <button
+              class="call-modal__control-button call-modal__control-button--leave"
+              @click="leaveCall"
+            >
               <LeaveIcon />
             </button>
           </div>
@@ -214,6 +247,12 @@
         class="call-modal__video-overlay-video"
         @click.stop="handleVideoOverlayTap"
       ></video>
+      <ReactionVideoOverlay
+        v-if="focusedGroupParticipant?.activeReactionVideoSrc"
+        :src="focusedGroupParticipant.activeReactionVideoSrc"
+        :video-key="focusedGroupParticipant.activeReactionVideoKey"
+        class-name="call-modal__video-overlay-reaction"
+      />
 
       <Transition name="call-modal-overlay-top">
         <div
@@ -329,18 +368,51 @@
               <ScreenShareIcon />
             </button>
 
-            <button
-              class="call-modal__control-button"
-              :class="{
-                'call-modal__control-button__inactive':
-                  !liveKitState.isHandRaised
-              }"
-              @click="handleToggleHandRaise"
+            <div
+              class="call-modal__reaction-picker"
+              @mouseenter="handleReactionPickerMouseEnter('overlay')"
+              @mouseleave="handleReactionPickerMouseLeave"
             >
-              <HandRaiseIcon />
-            </button>
+              <div
+                v-if="activeReactionPopover === 'overlay'"
+                class="call-modal__reaction-popover"
+                @mouseenter="handleReactionPickerMouseEnter('overlay')"
+                @mouseleave="handleReactionPickerMouseLeave"
+              >
+                <button
+                  v-for="option in callReactionOptions"
+                  :key="option.reaction"
+                  class="call-modal__reaction-option"
+                  type="button"
+                  :disabled="isBusyNoticeVisible"
+                  :title="option.label"
+                  :aria-label="option.label"
+                  @click.stop="handleSendReaction(option.reaction)"
+                >
+                  <span>{{ option.emoji }}</span>
+                </button>
+              </div>
+              <button
+                class="call-modal__control-button"
+                :class="{
+                  'call-modal__control-button__inactive':
+                    !liveKitState.isHandRaised
+                }"
+                @focus="handleReactionButtonFocus('overlay')"
+                @blur="scheduleReactionPopoverClose"
+                @touchstart="beginReactionLongPress('overlay')"
+                @touchend="endReactionLongPress"
+                @touchcancel="endReactionLongPress"
+                @click="handleToggleHandRaise"
+              >
+                <HandRaiseIcon />
+              </button>
+            </div>
 
-            <button class="call-modal__control-button" @click="leaveCall">
+            <button
+              class="call-modal__control-button call-modal__control-button--leave"
+              @click="leaveCall"
+            >
               <LeaveIcon />
             </button>
           </div>
@@ -358,6 +430,16 @@
     :on-copy-link="copyInviteGroupCallLink"
     @close="state.openGroupInfoModal = false"
   />
+  <div class="call-modal__reaction-preload" aria-hidden="true">
+    <video
+      v-for="src in reactionPreloadSources"
+      :key="src"
+      :src="src"
+      preload="auto"
+      muted
+      playsinline
+    ></video>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -380,6 +462,7 @@ import HandRaiseIcon from './UI/HandRaiseIcon.vue';
 import CallParticipantsPanel from './CallParticipantsPanel.vue';
 import GroupCallLayout from './GroupCallLayout.vue';
 import GroupCallInfoPanel from './GroupCallInfoPanel.vue';
+import ReactionVideoOverlay from './ReactionVideoOverlay.vue';
 import {
   activeScreenShare,
   acceptCall,
@@ -396,6 +479,7 @@ import {
   localScreenShareStream,
   open as isCallOpen,
   remoteParticipants,
+  sendCallReaction,
   state as liveKitState,
   toggleHandRaise,
   toggleMic,
@@ -406,6 +490,7 @@ import {
   topicId as activeTopicId,
   user as activeUser
 } from '../../services/useLiveKit';
+import type { CallReaction } from '../../services/useLiveKit';
 import { AudioOutput } from '../../services/useAudioOutput';
 import {
   disableProximityLock,
@@ -445,6 +530,11 @@ const maxParticipantsPerPage = computed(() =>
 const state = ref({
   openGroupInfoModal: false
 });
+const activeReactionPopover = ref<'main' | 'overlay' | null>(null);
+let reactionPopoverCloseTimeout: ReturnType<typeof setTimeout> | null = null;
+let reactionLongPressTimeout: ReturnType<typeof setTimeout> | null = null;
+let didOpenReactionPopoverByLongPress = false;
+let lastReactionTouchAt = 0;
 const incomingCallLabel = 'Входящий вызов...';
 const connectingLabel = 'Соединение...';
 const singleParticipantLabel = 'участник';
@@ -453,6 +543,52 @@ const manyParticipantsLabel = 'участников';
 const callLabel = 'Звонок';
 const groupCallLabel = 'Групповой звонок';
 const participantOrder = ref<string[]>([]);
+const callReactionOptions: Array<{
+  reaction: CallReaction;
+  emoji: string;
+  label: string;
+}> = [
+  {
+    reaction: 'heart',
+    emoji: '❤️',
+    label: 'Heart'
+  },
+  {
+    reaction: 'thumbs-up',
+    emoji: '👍',
+    label: 'Thumbs up'
+  },
+  {
+    reaction: 'thumbs-down',
+    emoji: '👎',
+    label: 'Thumbs down'
+  },
+  {
+    reaction: 'joy',
+    emoji: '😂',
+    label: 'Joy'
+  },
+  {
+    reaction: 'sob',
+    emoji: '😭',
+    label: 'Sob'
+  }
+];
+
+const getCallReactionEmoji = (reaction?: CallReaction | null) =>
+  callReactionOptions.find(option => option.reaction === reaction)?.emoji || '';
+
+const callReactionVideoSources: Record<CallReaction, string> = {
+  heart: '/video/heart-fullscreen-zoomlike-transparent.webm',
+  joy: '/video/joy-fullscreen-zoomlike-transparent.webm',
+  sob: '/video/sob-fullscreen-zoomlike-transparent.webm',
+  'thumbs-up': '/video/thumbs-up-fullscreen-zoomlike-transparent.webm',
+  'thumbs-down': '/video/thumbs-down-fullscreen-zoomlike-transparent.webm'
+};
+
+const getCallReactionVideoSrc = (reaction?: CallReaction | null) =>
+  reaction ? callReactionVideoSources[reaction] || '' : '';
+const reactionPreloadSources = Object.values(callReactionVideoSources);
 
 const syncMediaElementStream = (
   element: HTMLMediaElement | null,
@@ -491,6 +627,9 @@ const buildParticipantEntries = (
     audioStream: participant.audioStream || null,
     isLocal,
     isHandRaised: participant.isHandRaised,
+    activeReactionEmoji: getCallReactionEmoji(participant.activeReaction),
+    activeReactionVideoSrc: '',
+    activeReactionVideoKey: '',
     isSpeaking: participant.isSpeaking,
     isMicActive: participant.isMicActive
   };
@@ -504,6 +643,13 @@ const buildParticipantEntries = (
       videoStream: participant.cameraStream,
       cameraStream: participant.cameraStream,
       screenShareStream: participant.screenShareStream || null,
+      activeReactionVideoSrc: participant.activeReaction
+        ? getCallReactionVideoSrc(participant.activeReaction)
+        : '',
+      activeReactionVideoKey:
+        participant.activeReaction && participant.activeReactionExpiresAt
+          ? `${participant.activeReaction}-${participant.activeReactionExpiresAt}`
+          : '',
       isVideoActive: !!participant.isVideoActive,
       isScreenShareActive: false,
       hasAudio: !!participant.audioStream
@@ -614,6 +760,8 @@ const localParticipantView = computed(() => {
       audioStream: null,
       isVideoActive: !!localVideoStream.value && liveKitState.isVideoActive,
       isHandRaised: liveKitState.isHandRaised,
+      activeReaction: liveKitState.activeReaction,
+      activeReactionExpiresAt: liveKitState.activeReactionExpiresAt,
       isSpeaking: false,
       isMicActive: liveKitState.isMicActive
     },
@@ -676,7 +824,9 @@ const buildPromotedParticipantOrder = (
       const participant = participantMap.get(participantId);
 
       return (
-        !!participant?.isHandRaised &&
+        (!!participant?.isHandRaised ||
+          !!participant?.activeReactionEmoji ||
+          !!participant?.activeReactionVideoSrc) &&
         !participant.isScreenShareActive &&
         !participant.isSpeaking
       );
@@ -1264,7 +1414,101 @@ const handleToggleScreenShare = async () => {
   await toggleScreenShare();
 };
 
+const clearReactionPopoverCloseTimeout = () => {
+  if (reactionPopoverCloseTimeout) {
+    clearTimeout(reactionPopoverCloseTimeout);
+    reactionPopoverCloseTimeout = null;
+  }
+};
+
+const clearReactionLongPressTimeout = () => {
+  if (reactionLongPressTimeout) {
+    clearTimeout(reactionLongPressTimeout);
+    reactionLongPressTimeout = null;
+  }
+};
+
+const hasRecentReactionTouch = () => Date.now() - lastReactionTouchAt < 800;
+
+const openReactionPopover = (target: 'main' | 'overlay') => {
+  if (isBusyNoticeVisible.value) {
+    return;
+  }
+
+  clearReactionPopoverCloseTimeout();
+  activeReactionPopover.value = target;
+};
+
+const scheduleReactionPopoverClose = () => {
+  clearReactionPopoverCloseTimeout();
+  reactionPopoverCloseTimeout = setTimeout(() => {
+    activeReactionPopover.value = null;
+    reactionPopoverCloseTimeout = null;
+  }, 120);
+};
+
+const closeReactionPopover = () => {
+  clearReactionPopoverCloseTimeout();
+  clearReactionLongPressTimeout();
+  activeReactionPopover.value = null;
+};
+
+const handleReactionButtonFocus = (target: 'main' | 'overlay') => {
+  if (isMobile.value) {
+    return;
+  }
+
+  openReactionPopover(target);
+};
+
+const handleReactionPickerMouseEnter = (target: 'main' | 'overlay') => {
+  if (isMobile.value || hasRecentReactionTouch()) {
+    return;
+  }
+
+  openReactionPopover(target);
+};
+
+const handleReactionPickerMouseLeave = () => {
+  if (isMobile.value || hasRecentReactionTouch()) {
+    return;
+  }
+
+  scheduleReactionPopoverClose();
+};
+
+const beginReactionLongPress = (target: 'main' | 'overlay') => {
+  if (!isMobile.value || isBusyNoticeVisible.value) {
+    return;
+  }
+
+  lastReactionTouchAt = Date.now();
+  clearReactionLongPressTimeout();
+  didOpenReactionPopoverByLongPress = false;
+  reactionLongPressTimeout = setTimeout(() => {
+    didOpenReactionPopoverByLongPress = true;
+    openReactionPopover(target);
+    reactionLongPressTimeout = null;
+  }, 550);
+};
+
+const endReactionLongPress = () => {
+  lastReactionTouchAt = Date.now();
+  clearReactionLongPressTimeout();
+};
+
+const handleSendReaction = async (reaction: CallReaction) => {
+  await sendCallReaction(reaction);
+  didOpenReactionPopoverByLongPress = false;
+  closeReactionPopover();
+};
+
 const handleToggleHandRaise = async () => {
+  if (isMobile.value && didOpenReactionPopoverByLongPress) {
+    didOpenReactionPopoverByLongPress = false;
+    return;
+  }
+
   await toggleHandRaise();
 };
 </script>
