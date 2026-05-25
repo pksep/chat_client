@@ -203,6 +203,7 @@ const createTopicsApi = () => {
     items.map(topic => {
       const persistedTopic = { ...topic };
       delete persistedTopic.typingUserIds;
+      delete persistedTopic.activeCall;
 
       return persistedTopic;
     });
@@ -278,6 +279,24 @@ const createTopicsApi = () => {
       const response = await sdk.getTopics();
 
       setTopics(response.data);
+      const serverActiveCalls = response.data
+        .filter(
+          topic =>
+            !!topic.activeCall?.roomId &&
+            typeof topic.activeCall?.callType === 'string'
+        )
+        .map(topic => ({
+          roomId: topic.activeCall!.roomId,
+          topicId: topic.id,
+          callType: topic.activeCall!.callType || 'livekit',
+          startTime: topic.activeCall?.startTime ?? null,
+          participantCount: topic.activeCall?.participantCount,
+          groupMode: topic.activeCall?.groupMode,
+          elapsedDurationMs: topic.activeCall?.elapsedDurationMs
+        }));
+
+      const { syncServerActiveCalls } = await import('../services/useCalls');
+      await syncServerActiveCalls(serverActiveCalls);
       await warmShadowUnreadStateForTopics(topics.value);
       return response.data;
     } catch (err) {

@@ -180,7 +180,6 @@
             </button>
 
             <button
-              v-if="isGroupCallLayout"
               class="call-modal__control-button"
               :class="{
                 'call-modal__control-button__inactive':
@@ -331,7 +330,6 @@
             </button>
 
             <button
-              v-if="isGroupCallLayout"
               class="call-modal__control-button"
               :class="{
                 'call-modal__control-button__inactive':
@@ -567,7 +565,9 @@ const currentCallTopic = computed(() =>
 
 const isGroupCallLayout = computed(
   () =>
-    currentCallTopic.value?.type === TopicType.Group || !!invitedGroupCall.value
+    currentCallTopic.value?.type === TopicType.Group ||
+    !!invitedGroupCall.value ||
+    remoteParticipants.value.length > 1
 );
 
 const displayUser = computed(() => {

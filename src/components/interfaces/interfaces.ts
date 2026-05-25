@@ -56,6 +56,14 @@ export type ITopic = Topic & {
   info?: Partial<TopicSetting>;
   isPin?: boolean;
   lastMessage?: IMessage;
+  activeCall?: {
+    roomId: string;
+    startTime?: number | null;
+    participantCount?: number;
+    callType?: string;
+    groupMode?: boolean;
+    elapsedDurationMs?: number;
+  } | null;
   members?: IUser[];
   group?: Group;
   user?: IUser;

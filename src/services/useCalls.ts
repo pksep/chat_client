@@ -77,9 +77,10 @@ export const handleCallAnswered = (
   userId: string,
   roomId?: string,
   topicId?: string | null,
-  startTime?: number | null
+  startTime?: number | null,
+  elapsedDurationMs?: number
 ) => {
-  handleLiveKitAnswered(userId, roomId, topicId, startTime);
+  handleLiveKitAnswered(userId, roomId, topicId, startTime, elapsedDurationMs);
 };
 
 export const handleCallEnded = (
@@ -103,7 +104,10 @@ export const syncServerActiveCalls = (
     roomId: string;
     topicId: string;
     callType: string;
-    startTime: number;
+    startTime?: number | null;
+    participantCount?: number;
+    groupMode?: boolean;
+    elapsedDurationMs?: number;
   }>
 ) => {
   return syncActiveCalls(calls);

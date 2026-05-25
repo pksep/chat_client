@@ -86,6 +86,18 @@
                 {{ getTopicStatusIcon(topic) }}
               </span>
             </Tooltip>
+
+            <div
+              v-if="getTopicActiveCall(topic)"
+              class="contact-list__call-indicator"
+              :data-testid="`${props.dataTestid}-ContactList-Call${index + 1}`"
+              :aria-label="`Active call in ${topic.name}`"
+            >
+              <LeaveIcon class="contact-list__call-indicator-icon" />
+              <span class="contact-list__time contact-list__time--call">
+                {{ getTopicActiveCallTime(topic) }}
+              </span>
+            </div>
           </h5>
           <div
             v-if="topic.typingUserIds?.length"
@@ -237,7 +249,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import {
   Button,
@@ -281,6 +293,13 @@ import {
   hasTopicUnreadBadge
 } from '../../utils/topicUnreadBadge';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
+import {
+  activeCallFormattedTime,
+  activeCallTopicId,
+  isCallActive,
+  pendingGroupCallInfo
+} from '../../services/useCalls';
+import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
@@ -310,10 +329,25 @@ const authedUser = computed(() => getAuthUser());
 const isRecentlyReconnected = computed(() => getHasWebsocketConnection());
 const listRenderKey = ref(0);
 const { getFullMediaPath } = useMessageMedia();
+const currentTime = ref(Date.now());
+let currentTimeInterval: ReturnType<typeof setInterval> | null = null;
 
 watch(isRecentlyReconnected, value => {
   if (!value) return;
   listRenderKey.value += 1;
+});
+
+onMounted(() => {
+  currentTimeInterval = setInterval(() => {
+    currentTime.value = Date.now();
+  }, 1000);
+});
+
+onBeforeUnmount(() => {
+  if (currentTimeInterval) {
+    clearInterval(currentTimeInterval);
+    currentTimeInterval = null;
+  }
 });
 
 const handlePin = (topic: ITopic): void => {
@@ -390,6 +424,57 @@ const getTopicStatusIcon = (topic: ITopic): string =>
   topic.type === TopicType.DM
     ? getTopicEffectiveUser(topic)?.status?.icon || ''
     : '';
+
+const getTopicActiveCall = (topic: ITopic) => {
+  if (isCallActive.value && activeCallTopicId.value === topic.id) {
+    return {
+      roomId: topic.activeCall?.roomId || topic.id,
+      startTime: topic.activeCall?.startTime ?? null
+    };
+  }
+
+  return pendingGroupCallInfo.value?.[topic.id] || topic.activeCall || null;
+};
+
+const getTopicActiveCallTime = (topic: ITopic): string => {
+  if (isCallActive.value && activeCallTopicId.value === topic.id) {
+    return activeCallFormattedTime.value;
+  }
+
+  const startTime = getTopicActiveCall(topic)?.startTime;
+  const elapsedDurationMs = getTopicActiveCall(topic)?.elapsedDurationMs ?? 0;
+
+  if (typeof startTime !== 'number' || !Number.isFinite(startTime)) {
+    if (elapsedDurationMs > 0) {
+      const elapsedSeconds = Math.max(0, Math.floor(elapsedDurationMs / 1000));
+      const hours = Math.floor(elapsedSeconds / 3600);
+      const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+      const seconds = elapsedSeconds % 60;
+
+      if (hours > 0) {
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }
+
+      return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    return 'Звонок';
+  }
+
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor((elapsedDurationMs + (currentTime.value - startTime)) / 1000)
+  );
+  const hours = Math.floor(elapsedSeconds / 3600);
+  const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+  const seconds = elapsedSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+};
 </script>
 
 <style scoped>
@@ -432,5 +517,25 @@ const getTopicStatusIcon = (topic: ITopic): string =>
   margin-left: 12px;
   align-self: center;
   flex-shrink: 0;
+}
+
+.contact-list__call-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 20px;
+}
+
+.contact-list__call-indicator-icon {
+  color: var(--green2);
+  width: 20px;
+  transform: rotate(-120deg);
+}
+
+.contact-list__time--call {
+  color: var(--text-color);
+  font-size: 12px;
+  line-height: 15px;
+  font-weight: 400;
 }
 </style>
