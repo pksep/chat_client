@@ -37,6 +37,12 @@
           playsinline
           class="call-modal__remote-video"
         ></video>
+        <ReactionVideoOverlay
+          v-if="participant.activeReactionVideoSrc"
+          :src="participant.activeReactionVideoSrc"
+          :video-key="participant.activeReactionVideoKey"
+          class-name="call-modal__remote-reaction-video"
+        />
         <div
           v-if="!participant.isVideoActive"
           class="call-modal__remote-placeholder"
@@ -49,11 +55,33 @@
           />
         </div>
         <div
-          v-if="participant.isHandRaised"
+          v-if="
+            (participant.activeReactionEmoji &&
+              !participant.activeReactionVideoSrc) ||
+            participant.isHandRaised
+          "
           class="call-modal__remote-hand"
-          :title="`${participant.name} raised a hand`"
+          :class="{
+            'call-modal__remote-hand--reaction':
+              !!participant.activeReactionEmoji &&
+              !participant.activeReactionVideoSrc
+          }"
+          :title="
+            participant.activeReactionEmoji &&
+            !participant.activeReactionVideoSrc
+              ? `${participant.name} reacted`
+              : `${participant.name} raised a hand`
+          "
         >
-          <HandRaiseIcon />
+          <span
+            v-if="
+              participant.activeReactionEmoji &&
+              !participant.activeReactionVideoSrc
+            "
+          >
+            {{ participant.activeReactionEmoji }}
+          </span>
+          <HandRaiseIcon v-else />
         </div>
         <div class="call-modal__remote-name">
           <span>{{ participant.name }}</span>
@@ -84,6 +112,7 @@ import { Icon, IconNameEnum } from '@pksep/yui';
 import HandRaiseIcon from './UI/HandRaiseIcon.vue';
 import MicDisableIcon from './UI/MicDisableIcon.vue';
 import MicIcon from './UI/MicIcon.vue';
+import ReactionVideoOverlay from './ReactionVideoOverlay.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 
 const remoteGrid = ref<HTMLDivElement | null>(null);
@@ -181,6 +210,9 @@ const props = defineProps<{
     isVideoActive: boolean;
     isLocal: boolean;
     isHandRaised: boolean;
+    activeReactionEmoji: string;
+    activeReactionVideoSrc: string;
+    activeReactionVideoKey: string;
     isSpeaking: boolean;
     isMicActive: boolean;
     hasAudio: boolean;
@@ -192,6 +224,9 @@ const props = defineProps<{
     initials: string;
     avatarUrl: string;
     isHandRaised: boolean;
+    activeReactionEmoji: string;
+    activeReactionVideoSrc: string;
+    activeReactionVideoKey: string;
   } | null;
   setRemoteVideoRef: (identity: string, el: Element | null) => void;
 }>();

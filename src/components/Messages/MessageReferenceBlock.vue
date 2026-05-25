@@ -60,7 +60,6 @@
               )
             }
           ]"
-          @click.stop="handleOpenUserInfo(props.replyMessage?.senderUser)"
         >
           {{ replyAuthor }}
         </div>

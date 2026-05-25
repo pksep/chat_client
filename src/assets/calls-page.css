@@ -47,7 +47,7 @@
 .calls-page__list {
   display: grid;
   gap: 12px;
-  max-height: calc(100vh - 200px);
+  max-height: calc(100vh - 185px);
   overflow-y: auto;
 
   &::-webkit-scrollbar {

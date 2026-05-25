@@ -56,12 +56,40 @@
           :initials="focusedParticipant.initials"
         />
       </div>
+      <ReactionVideoOverlay
+        v-if="focusedParticipant?.activeReactionVideoSrc"
+        :src="focusedParticipant.activeReactionVideoSrc"
+        :video-key="focusedParticipant.activeReactionVideoKey"
+        class-name="call-modal__reaction-stage-video"
+      />
       <div
-        v-if="focusedParticipant?.isHandRaised"
-        class="call-modal__remote-hand"
-        :title="`${focusedParticipant.name} raised a hand`"
+        v-if="
+          (focusedParticipant?.activeReactionEmoji &&
+            !focusedParticipant?.activeReactionVideoSrc) ||
+          focusedParticipant?.isHandRaised
+        "
+        class="call-modal__remote-hand call-modal__remote-hand--stage"
+        :class="{
+          'call-modal__remote-hand--reaction':
+            !!focusedParticipant?.activeReactionEmoji &&
+            !focusedParticipant?.activeReactionVideoSrc
+        }"
+        :title="
+          focusedParticipant?.activeReactionEmoji &&
+          !focusedParticipant?.activeReactionVideoSrc
+            ? `${focusedParticipant.name} reacted`
+            : `${focusedParticipant?.name} raised a hand`
+        "
       >
-        <HandRaiseIcon />
+        <span
+          v-if="
+            focusedParticipant?.activeReactionEmoji &&
+            !focusedParticipant?.activeReactionVideoSrc
+          "
+        >
+          {{ focusedParticipant.activeReactionEmoji }}
+        </span>
+        <HandRaiseIcon v-else />
       </div>
       <div v-if="focusedParticipant" class="call-modal__remote-name">
         <span>{{ focusedParticipant.name }}</span>
@@ -78,6 +106,7 @@ import FullscreenIcon from './UI/FullscreenIcon.vue';
 import HandRaiseIcon from './UI/HandRaiseIcon.vue';
 import MicDisableIcon from './UI/MicDisableIcon.vue';
 import MicIcon from './UI/MicIcon.vue';
+import ReactionVideoOverlay from './ReactionVideoOverlay.vue';
 import SwitchCameraIcon from './UI/SwitchCameraIcon.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 
@@ -103,6 +132,9 @@ defineProps<{
     isVideoActive: boolean;
     isLocal: boolean;
     isHandRaised: boolean;
+    activeReactionEmoji: string;
+    activeReactionVideoSrc: string;
+    activeReactionVideoKey: string;
     isSpeaking: boolean;
     isMicActive: boolean;
     hasAudio: boolean;
@@ -115,6 +147,9 @@ defineProps<{
     avatarUrl: string;
     isLocal: boolean;
     isHandRaised: boolean;
+    activeReactionEmoji: string;
+    activeReactionVideoSrc: string;
+    activeReactionVideoKey: string;
     isSpeaking: boolean;
     isMicActive: boolean;
   } | null;
