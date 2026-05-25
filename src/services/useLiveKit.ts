@@ -5,7 +5,10 @@ import {
   RemoteParticipant,
   Room,
   RoomEvent,
-  Track
+  ScreenSharePresets,
+  Track,
+  VideoPresets,
+  VideoQuality
 } from 'livekit-client';
 import { computed, reactive, ref } from 'vue';
 import type { IUser } from '../components/interfaces/interfaces';
@@ -74,6 +77,7 @@ type StreamCacheEntry = {
 };
 
 type CallEndReason = 'busy';
+type RemoteVideoSource = 'camera' | 'screen';
 
 type CallSocketAck = {
   accepted?: boolean;
@@ -163,6 +167,33 @@ const DISMISSED_INCOMING_CALL_TTL_MS = 15000;
 const CALL_STATUS_NOTICE_CLOSE_DELAY_MS = 3000;
 const dismissedIncomingCallRooms = new Map<string, number>();
 const dismissedIncomingCallTopics = new Map<string, number>();
+const CAMERA_CAPTURE_DEFAULTS = {
+  facingMode: 'user' as const,
+  frameRate: 30,
+  resolution: VideoPresets.h1080.resolution
+};
+const CAMERA_PUBLISH_DEFAULTS = {
+  degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
+  simulcast: true,
+  videoEncoding: VideoPresets.h1080.encoding,
+  videoSimulcastLayers: [VideoPresets.h216, VideoPresets.h540]
+};
+const SCREEN_SHARE_CAPTURE_DEFAULTS = {
+  contentHint: 'detail' as const,
+  resolution: ScreenSharePresets.original.resolution,
+  selfBrowserSurface: 'exclude' as const,
+  surfaceSwitching: 'include' as const,
+  systemAudio: 'include' as const
+};
+const SCREEN_SHARE_PUBLISH_DEFAULTS = {
+  degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
+  simulcast: true,
+  screenShareEncoding: ScreenSharePresets.original.encoding,
+  screenShareSimulcastLayers: [
+    ScreenSharePresets.h360fps15,
+    ScreenSharePresets.h1080fps30
+  ]
+};
 
 const createRoomId = () => `livekit-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -844,6 +875,89 @@ const getActiveRemoteVideoPublication = (
     }
   );
 
+const getRemoteVideoPublicationBySource = (
+  participantIdentity: string,
+  source: RemoteVideoSource
+) => {
+  const remoteParticipant = room?.remoteParticipants.get(participantIdentity);
+
+  if (!remoteParticipant) {
+    return null;
+  }
+
+  return (
+    Array.from(remoteParticipant.videoTrackPublications.values()).find(
+      publication =>
+        publication.source ===
+        (source === 'screen' ? Track.Source.ScreenShare : Track.Source.Camera)
+    ) || null
+  );
+};
+
+const buildRequestedVideoDimensions = (element: HTMLVideoElement) => {
+  const rect = element.getBoundingClientRect();
+  const pixelDensity =
+    typeof window !== 'undefined'
+      ? Math.min(window.devicePixelRatio || 1, 2)
+      : 1;
+  const width = Math.round(
+    (rect.width || element.clientWidth || 0) * pixelDensity
+  );
+  const height = Math.round(
+    (rect.height || element.clientHeight || 0) * pixelDensity
+  );
+
+  if (!width || !height) {
+    return null;
+  }
+
+  return { width, height };
+};
+
+const applyRemoteVideoSubscriptionPreferences = (
+  participantIdentity: string,
+  source: RemoteVideoSource,
+  element?: HTMLVideoElement | null
+) => {
+  const publication = getRemoteVideoPublicationBySource(
+    participantIdentity,
+    source
+  );
+
+  if (!publication) {
+    return;
+  }
+
+  publication.setEnabled(true);
+  publication.setVideoFPS(source === 'screen' ? 30 : 24);
+
+  const dimensions = element ? buildRequestedVideoDimensions(element) : null;
+
+  if (dimensions) {
+    publication.setVideoDimensions(dimensions);
+    return;
+  }
+
+  publication.setVideoQuality(VideoQuality.HIGH);
+};
+
+const requestHighQualityForAllRemoteVideoTracks = () => {
+  if (!room) {
+    return;
+  }
+
+  Array.from(room.remoteParticipants.values()).forEach(remoteParticipant => {
+    applyRemoteVideoSubscriptionPreferences(
+      remoteParticipant.identity,
+      'screen'
+    );
+    applyRemoteVideoSubscriptionPreferences(
+      remoteParticipant.identity,
+      'camera'
+    );
+  });
+};
+
 const getActiveRemoteAudioPublication = (
   remoteParticipant: RemoteParticipant
 ) =>
@@ -1129,6 +1243,7 @@ const setupRoomListeners = (activeRoom: Room) => {
     .on(RoomEvent.TrackPublished, () => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      requestHighQualityForAllRemoteVideoTracks();
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.TrackUnpublished, () => {
@@ -1138,6 +1253,7 @@ const setupRoomListeners = (activeRoom: Room) => {
     .on(RoomEvent.TrackSubscribed, () => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      requestHighQualityForAllRemoteVideoTracks();
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.TrackUnsubscribed, () => {
@@ -1152,6 +1268,7 @@ const setupRoomListeners = (activeRoom: Room) => {
     .on(RoomEvent.TrackUnmuted, () => {
       syncLocalTrackState();
       syncRemoteParticipantState();
+      requestHighQualityForAllRemoteVideoTracks();
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.ActiveSpeakersChanged, () => {
@@ -1160,6 +1277,7 @@ const setupRoomListeners = (activeRoom: Room) => {
     .on(RoomEvent.ParticipantConnected, () => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      requestHighQualityForAllRemoteVideoTracks();
       if (state.isHandRaised) {
         void publishHandRaiseState(true);
       }
@@ -1203,6 +1321,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncLocalTrackState();
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      requestHighQualityForAllRemoteVideoTracks();
       void ensureLocalMicrophoneState(activeRoom);
       void enforceSingleScreenShare();
     })
@@ -1299,8 +1418,15 @@ const connectToRoom = async () => {
 
     room?.disconnect();
     const nextRoom = new Room({
-      adaptiveStream: true,
-      dynacast: true
+      adaptiveStream: {
+        pixelDensity: 'screen'
+      },
+      dynacast: true,
+      publishDefaults: {
+        ...CAMERA_PUBLISH_DEFAULTS,
+        ...SCREEN_SHARE_PUBLISH_DEFAULTS
+      },
+      videoCaptureDefaults: CAMERA_CAPTURE_DEFAULTS
     });
     room = nextRoom;
 
@@ -1351,16 +1477,25 @@ const connectToRoom = async () => {
 
     await nextRoom.localParticipant.setMicrophoneEnabled(state.isMicActive);
     if (state.isVideoActive) {
-      await nextRoom.localParticipant.setCameraEnabled(true);
+      await nextRoom.localParticipant.setCameraEnabled(
+        true,
+        CAMERA_CAPTURE_DEFAULTS,
+        CAMERA_PUBLISH_DEFAULTS
+      );
     }
     if (state.isScreenSharingActive) {
-      await nextRoom.localParticipant.setScreenShareEnabled(true);
+      await nextRoom.localParticipant.setScreenShareEnabled(
+        true,
+        SCREEN_SHARE_CAPTURE_DEFAULTS,
+        SCREEN_SHARE_PUBLISH_DEFAULTS
+      );
       await ensureLocalMicrophoneState(nextRoom);
     }
 
     syncLocalTrackState();
     syncRemoteParticipantState();
     syncConnectionState(nextRoom);
+    requestHighQualityForAllRemoteVideoTracks();
     shouldEndCallOnConnectFailure = false;
     stopDialingSound();
     stopRingtone();
@@ -2092,7 +2227,11 @@ export const toggleVideo = async () => {
   state.isVideoActive = !state.isVideoActive;
   if (!room) return;
 
-  await room.localParticipant.setCameraEnabled(state.isVideoActive);
+  await room.localParticipant.setCameraEnabled(
+    state.isVideoActive,
+    CAMERA_CAPTURE_DEFAULTS,
+    CAMERA_PUBLISH_DEFAULTS
+  );
   syncLocalTrackState();
 };
 
@@ -2115,6 +2254,7 @@ export const switchCamera = async () => {
 
   try {
     await localVideoTrack.restartTrack({
+      ...CAMERA_CAPTURE_DEFAULTS,
       facingMode: currentCameraFacingMode
     });
     syncLocalTrackState();
@@ -2150,11 +2290,21 @@ export const toggleScreenShare = async () => {
 
   state.isScreenSharingActive = !state.isScreenSharingActive;
   await room.localParticipant.setScreenShareEnabled(
-    state.isScreenSharingActive
+    state.isScreenSharingActive,
+    SCREEN_SHARE_CAPTURE_DEFAULTS,
+    SCREEN_SHARE_PUBLISH_DEFAULTS
   );
   await ensureLocalMicrophoneState(room);
   syncLocalTrackState();
   syncRemoteParticipantState();
+};
+
+export const updateRemoteVideoSubscription = (
+  participantIdentity: string,
+  source: RemoteVideoSource,
+  element?: HTMLVideoElement | null
+) => {
+  applyRemoteVideoSubscriptionPreferences(participantIdentity, source, element);
 };
 
 export const toggleHandRaise = async () => {

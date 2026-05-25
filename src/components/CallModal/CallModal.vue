@@ -443,7 +443,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch
+} from 'vue';
 import { Icon, IconNameEnum } from '@pksep/yui';
 import { Capacitor } from '@capacitor/core';
 import { MAX_W_MD } from '../../utils/constants';
@@ -488,6 +495,7 @@ import {
   switchCamera,
   toggleVideo,
   topicId as activeTopicId,
+  updateRemoteVideoSubscription,
   user as activeUser
 } from '../../services/useLiveKit';
 import type { CallReaction } from '../../services/useLiveKit';
@@ -589,6 +597,11 @@ const callReactionVideoSources: Record<CallReaction, string> = {
 const getCallReactionVideoSrc = (reaction?: CallReaction | null) =>
   reaction ? callReactionVideoSources[reaction] || '' : '';
 const reactionPreloadSources = Object.values(callReactionVideoSources);
+let remoteVideoResizeObserver: ResizeObserver | null = null;
+let observedRemoteVideoBindings = new Map<
+  HTMLVideoElement,
+  { identity: string; streamKind: 'camera' | 'screen' }
+>();
 
 const syncMediaElementStream = (
   element: HTMLMediaElement | null,
@@ -605,6 +618,89 @@ const syncMediaElementStream = (
   void element.play().catch(error => {
     console.warn('[LiveKit] Failed to play media element:', error);
   });
+};
+
+const syncRemoteVideoSubscriptionPreference = (
+  participant:
+    | {
+        identity: string;
+        isLocal: boolean;
+        isVideoActive: boolean;
+        streamKind: string;
+      }
+    | null
+    | undefined,
+  element: HTMLVideoElement | null
+) => {
+  if (
+    !participant ||
+    !element ||
+    participant.isLocal ||
+    !participant.isVideoActive ||
+    (participant.streamKind !== 'camera' && participant.streamKind !== 'screen')
+  ) {
+    return;
+  }
+
+  const source = participant.streamKind === 'screen' ? 'screen' : 'camera';
+
+  updateRemoteVideoSubscription(participant.identity, source, element);
+};
+
+const rebuildRemoteVideoSubscriptionBindings = () => {
+  remoteVideoResizeObserver?.disconnect();
+  observedRemoteVideoBindings = new Map();
+
+  const bindVideo = (
+    participant:
+      | {
+          identity: string;
+          isLocal: boolean;
+          isVideoActive: boolean;
+          streamKind: string;
+        }
+      | null
+      | undefined,
+    element: HTMLVideoElement | null
+  ) => {
+    if (
+      !participant ||
+      !element ||
+      participant.isLocal ||
+      !participant.isVideoActive ||
+      (participant.streamKind !== 'camera' &&
+        participant.streamKind !== 'screen')
+    ) {
+      return;
+    }
+
+    const source = participant.streamKind === 'screen' ? 'screen' : 'camera';
+
+    observedRemoteVideoBindings.set(element, {
+      identity: participant.identity,
+      streamKind: source
+    });
+    remoteVideoResizeObserver?.observe(element);
+    syncRemoteVideoSubscriptionPreference(participant, element);
+  };
+
+  remoteParticipantViews.value.forEach(participant => {
+    bindVideo(participant, remoteVideoRefs.value[participant.tileId]);
+    bindVideo(participant, overlayRemoteVideoRefs.value[participant.tileId]);
+  });
+
+  bindVideo(
+    focusedGroupParticipant.value as any,
+    focusedParticipantVideo.value
+  );
+  bindVideo(
+    focusedGroupParticipant.value as any,
+    overlayFocusedParticipantVideo.value
+  );
+};
+
+const scheduleRemoteVideoSubscriptionSync = () => {
+  void nextTick().then(rebuildRemoteVideoSubscriptionBindings);
 };
 
 const buildParticipantEntries = (
@@ -773,12 +869,50 @@ const localParticipantView = computed(() => {
   );
 });
 
+const localParticipantDisplayViews = computed(() => {
+  const entries = (localParticipantView.value || []).filter(
+    participant => participant.streamKind !== 'screen'
+  );
+
+  if (entries.length) {
+    return entries;
+  }
+
+  const authUser = getAuthUser() as any;
+
+  if (!authUser) {
+    return [];
+  }
+
+  return buildParticipantEntries(
+    {
+      identity: authUser.id,
+      name: authUser.initials || authUser.nickname || 'You',
+      cameraStream: null,
+      screenShareStream: null,
+      videoStream: null,
+      audioStream: null,
+      isVideoActive: false,
+      isHandRaised: liveKitState.isHandRaised,
+      activeReaction: liveKitState.activeReaction,
+      activeReactionExpiresAt: liveKitState.activeReactionExpiresAt,
+      isSpeaking: false,
+      isMicActive: liveKitState.isMicActive
+    },
+    {
+      initials: authUser.initials || 'Y',
+      avatarUrl: authUser.avatarUrl || ''
+    },
+    true
+  );
+});
+
 const participantDisplayViews = computed(() => [
   ...remoteParticipantViews.value.map(participant => ({
     ...participant,
     isLocal: false
   })),
-  ...(localParticipantView.value || [])
+  ...localParticipantDisplayViews.value
 ]);
 
 const swapParticipantOrder = (
@@ -1024,6 +1158,9 @@ watch(
   [screenShareVideo, activeScreenShare],
   ([video, screenShare]) => {
     syncMediaElementStream(video, screenShare?.stream || null);
+    if (screenShare) {
+      updateRemoteVideoSubscription(screenShare.identity, 'screen', video);
+    }
   },
   { immediate: true }
 );
@@ -1032,6 +1169,10 @@ watch(
   [focusedParticipantVideo, focusedParticipantStageStream],
   ([video, stream]) => {
     syncMediaElementStream(video, stream);
+    syncRemoteVideoSubscriptionPreference(
+      focusedGroupParticipant.value as any,
+      video
+    );
   },
   { immediate: true }
 );
@@ -1040,6 +1181,10 @@ watch(
   [overlayFocusedParticipantVideo, focusedParticipantStageStream],
   ([video, stream]) => {
     syncMediaElementStream(video, stream);
+    syncRemoteVideoSubscriptionPreference(
+      focusedGroupParticipant.value as any,
+      video
+    );
   },
   { immediate: true }
 );
@@ -1070,16 +1215,20 @@ watch(
 
       if (video) {
         syncMediaElementStream(video, participant.videoStream);
+        syncRemoteVideoSubscriptionPreference(participant, video);
       }
 
       if (overlayVideo) {
         syncMediaElementStream(overlayVideo, participant.videoStream);
+        syncRemoteVideoSubscriptionPreference(participant, overlayVideo);
       }
 
       if (audio && participant.hasAudio) {
         syncMediaElementStream(audio, participant.audioStream);
       }
     });
+
+    scheduleRemoteVideoSubscriptionSync();
   },
   { immediate: true, deep: true }
 );
@@ -1184,6 +1333,14 @@ watch(
 );
 
 watch(
+  [focusedGroupParticipant, isStageVideoOverlayVisible],
+  () => {
+    scheduleRemoteVideoSubscriptionSync();
+  },
+  { immediate: true }
+);
+
+watch(
   [focusedParticipantHasVideo, isCallOpen],
   ([hasVideo, open]) => {
     if (!hasVideo || !open) {
@@ -1191,6 +1348,8 @@ watch(
       isVideoOverlayControlsVisible.value = false;
       videoOverlayRegion.value = null;
     }
+
+    scheduleRemoteVideoSubscriptionSync();
   },
   { immediate: true }
 );
@@ -1210,6 +1369,7 @@ watch(
     hasManualParticipantSelection.value = false;
     shouldSkipInitialParticipantAutofocus.value = true;
     currentParticipantPage.value = 0;
+    scheduleRemoteVideoSubscriptionSync();
   },
   { immediate: true }
 );
@@ -1249,12 +1409,50 @@ watch([isCallOpen, isIncoming, isCalling], ([open, incoming]) => {
   }
 });
 
+onMounted(() => {
+  if (typeof ResizeObserver !== 'undefined') {
+    remoteVideoResizeObserver = new ResizeObserver(entries => {
+      entries.forEach(entry => {
+        const binding = observedRemoteVideoBindings.get(
+          entry.target as HTMLVideoElement
+        );
+
+        if (!binding) {
+          return;
+        }
+
+        updateRemoteVideoSubscription(
+          binding.identity,
+          binding.streamKind,
+          entry.target as HTMLVideoElement
+        );
+      });
+    });
+  }
+
+  scheduleRemoteVideoSubscriptionSync();
+});
+
+onBeforeUnmount(() => {
+  remoteVideoResizeObserver?.disconnect();
+  remoteVideoResizeObserver = null;
+  observedRemoteVideoBindings = new Map();
+});
+
 const setScreenShareVideoRef = (el: Element | null) => {
   screenShareVideo.value = el as HTMLVideoElement | null;
   syncMediaElementStream(
     screenShareVideo.value,
     activeScreenShare.value?.stream || null
   );
+  if (activeScreenShare.value) {
+    updateRemoteVideoSubscription(
+      activeScreenShare.value.identity,
+      'screen',
+      screenShareVideo.value
+    );
+  }
+  scheduleRemoteVideoSubscriptionSync();
 };
 
 const setFocusedParticipantVideoRef = (el: Element | null) => {
@@ -1263,6 +1461,11 @@ const setFocusedParticipantVideoRef = (el: Element | null) => {
     focusedParticipantVideo.value,
     focusedParticipantStageStream.value
   );
+  syncRemoteVideoSubscriptionPreference(
+    focusedGroupParticipant.value as any,
+    focusedParticipantVideo.value
+  );
+  scheduleRemoteVideoSubscriptionSync();
 };
 
 const setOverlayFocusedParticipantVideoRef = (el: Element | null) => {
@@ -1271,6 +1474,11 @@ const setOverlayFocusedParticipantVideoRef = (el: Element | null) => {
     overlayFocusedParticipantVideo.value,
     focusedParticipantStageStream.value
   );
+  syncRemoteVideoSubscriptionPreference(
+    focusedGroupParticipant.value as any,
+    overlayFocusedParticipantVideo.value
+  );
+  scheduleRemoteVideoSubscriptionSync();
 };
 
 const setRemoteVideoRef = (tileId: string, el: Element | null) => {
@@ -1284,7 +1492,10 @@ const setRemoteVideoRef = (tileId: string, el: Element | null) => {
       el as HTMLVideoElement,
       participant.videoStream || null
     );
+    syncRemoteVideoSubscriptionPreference(participant, el as HTMLVideoElement);
   }
+
+  scheduleRemoteVideoSubscriptionSync();
 };
 
 const setOverlayRemoteVideoRef = (tileId: string, el: Element | null) => {
@@ -1298,7 +1509,10 @@ const setOverlayRemoteVideoRef = (tileId: string, el: Element | null) => {
       el as HTMLVideoElement,
       participant.videoStream || null
     );
+    syncRemoteVideoSubscriptionPreference(participant, el as HTMLVideoElement);
   }
+
+  scheduleRemoteVideoSubscriptionSync();
 };
 
 const setRemoteAudioRef = (identity: string, el: Element | null) => {
