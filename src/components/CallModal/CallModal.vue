@@ -724,8 +724,13 @@ const buildParticipantEntries = (
     isLocal,
     isHandRaised: participant.isHandRaised,
     activeReactionEmoji: getCallReactionEmoji(participant.activeReaction),
-    activeReactionVideoSrc: '',
-    activeReactionVideoKey: '',
+    activeReactionVideoSrc: participant.activeReaction
+      ? getCallReactionVideoSrc(participant.activeReaction)
+      : '',
+    activeReactionVideoKey:
+      participant.activeReaction && participant.activeReactionExpiresAt
+        ? `${participant.activeReaction}-${participant.activeReactionExpiresAt}`
+        : '',
     isSpeaking: participant.isSpeaking,
     isMicActive: participant.isMicActive
   };
@@ -739,13 +744,6 @@ const buildParticipantEntries = (
       videoStream: participant.cameraStream,
       cameraStream: participant.cameraStream,
       screenShareStream: participant.screenShareStream || null,
-      activeReactionVideoSrc: participant.activeReaction
-        ? getCallReactionVideoSrc(participant.activeReaction)
-        : '',
-      activeReactionVideoKey:
-        participant.activeReaction && participant.activeReactionExpiresAt
-          ? `${participant.activeReaction}-${participant.activeReactionExpiresAt}`
-          : '',
       isVideoActive: !!participant.isVideoActive,
       isScreenShareActive: false,
       hasAudio: !!participant.audioStream
@@ -870,9 +868,7 @@ const localParticipantView = computed(() => {
 });
 
 const localParticipantDisplayViews = computed(() => {
-  const entries = (localParticipantView.value || []).filter(
-    participant => participant.streamKind !== 'screen'
-  );
+  const entries = localParticipantView.value || [];
 
   if (entries.length) {
     return entries;
@@ -1274,7 +1270,9 @@ watch(
     }
 
     const activeScreenShareParticipant =
-      participants.find(participant => participant.isScreenShareActive) || null;
+      participants.find(
+        participant => participant.isScreenShareActive && !participant.isLocal
+      ) || null;
 
     const hasFocusedParticipant = participants.some(
       participant => participant.tileId === focusedParticipantIdentity.value

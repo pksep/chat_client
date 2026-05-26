@@ -55,33 +55,11 @@
           />
         </div>
         <div
-          v-if="
-            (participant.activeReactionEmoji &&
-              !participant.activeReactionVideoSrc) ||
-            participant.isHandRaised
-          "
+          v-if="participant.isHandRaised"
           class="call-modal__remote-hand"
-          :class="{
-            'call-modal__remote-hand--reaction':
-              !!participant.activeReactionEmoji &&
-              !participant.activeReactionVideoSrc
-          }"
-          :title="
-            participant.activeReactionEmoji &&
-            !participant.activeReactionVideoSrc
-              ? `${participant.name} reacted`
-              : `${participant.name} raised a hand`
-          "
+          :title="`${participant.name} raised a hand`"
         >
-          <span
-            v-if="
-              participant.activeReactionEmoji &&
-              !participant.activeReactionVideoSrc
-            "
-          >
-            {{ participant.activeReactionEmoji }}
-          </span>
-          <HandRaiseIcon v-else />
+          <HandRaiseIcon />
         </div>
         <div class="call-modal__remote-name">
           <span>{{ participant.name }}</span>

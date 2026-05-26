@@ -141,6 +141,11 @@ const CALL_REACTION_DURATION_MS = 4000;
 let room: Room | null = null;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
 let dialingTimeout: ReturnType<typeof setTimeout> | null = null;
+let dialingSoundWatchdogInterval: ReturnType<typeof setInterval> | null = null;
+let dialingAudioContext: AudioContext | null = null;
+let dialingAudioBuffer: AudioBuffer | null = null;
+let dialingAudioSource: AudioBufferSourceNode | null = null;
+let dialingAudioStartPromise: Promise<void> | null = null;
 let ringtoneAudio: HTMLAudioElement | null = null;
 let dialingAudio: HTMLAudioElement | null = null;
 let isAcceptingLocally = false;
@@ -707,19 +712,149 @@ const stopRingtone = () => {
   ringtoneAudio = null;
 };
 
+const getDialingAudioContext = () => {
+  if (dialingAudioContext) {
+    return dialingAudioContext;
+  }
+
+  const AudioContextCtor =
+    window.AudioContext ||
+    (
+      window as typeof window & {
+        webkitAudioContext?: typeof AudioContext;
+      }
+    ).webkitAudioContext;
+
+  if (!AudioContextCtor) {
+    return null;
+  }
+
+  dialingAudioContext = new AudioContextCtor();
+  return dialingAudioContext;
+};
+
+const loadDialingAudioBuffer = async () => {
+  if (dialingAudioBuffer) {
+    return dialingAudioBuffer;
+  }
+
+  const context = getDialingAudioContext();
+
+  if (!context) {
+    return null;
+  }
+
+  const response = await fetch('/audio/dialing.mp3');
+  const audioArrayBuffer = await response.arrayBuffer();
+  dialingAudioBuffer = await context.decodeAudioData(audioArrayBuffer);
+
+  return dialingAudioBuffer;
+};
+
+const startDialingBufferLoop = async () => {
+  const context = getDialingAudioContext();
+  const buffer = await loadDialingAudioBuffer();
+
+  if (!context || !buffer || !isCalling.value) {
+    return;
+  }
+
+  if (context.state === 'suspended') {
+    await context.resume();
+  }
+
+  if (dialingAudioSource) {
+    return;
+  }
+
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+  source.connect(context.destination);
+  source.onended = () => {
+    if (dialingAudioSource === source) {
+      dialingAudioSource = null;
+    }
+  };
+  source.start(0);
+  dialingAudioSource = source;
+};
+
+const stopDialingBufferLoop = () => {
+  if (!dialingAudioSource) {
+    return;
+  }
+
+  dialingAudioSource.onended = null;
+  dialingAudioSource.stop();
+  dialingAudioSource.disconnect();
+  dialingAudioSource = null;
+};
+
+const ensureDialingSoundPlayback = () => {
+  if (dialingAudioSource) {
+    return;
+  }
+
+  if (dialingAudioStartPromise) {
+    return;
+  }
+
+  dialingAudioStartPromise = (async () => {
+    try {
+      await startDialingBufferLoop();
+    } catch (error) {
+      if (!dialingAudio) {
+        dialingAudio = new Audio('/audio/dialing.mp3');
+        dialingAudio.preload = 'auto';
+        dialingAudio.loop = true;
+      }
+
+      if (dialingAudio.paused || dialingAudio.ended) {
+        dialingAudio.currentTime = 0;
+        await dialingAudio.play().catch(err => {
+          console.warn('[LiveKit] Dialing failed:', err);
+        });
+      }
+
+      console.warn(
+        '[LiveKit] Dialing buffer failed, fallback to audio tag:',
+        error
+      );
+    } finally {
+      dialingAudioStartPromise = null;
+    }
+  })();
+};
+
 const playDialingSound = () => {
-  if (dialingAudio) return;
-  dialingAudio = new Audio('/audio/dialing.mp3');
-  dialingAudio.loop = true;
-  setTimeout(() => {
-    dialingAudio
-      ?.play()
-      .catch(err => console.warn('[LiveKit] Dialing failed:', err));
-  }, 1200);
+  ensureDialingSoundPlayback();
+
+  if (dialingSoundWatchdogInterval) {
+    clearInterval(dialingSoundWatchdogInterval);
+  }
+
+  dialingSoundWatchdogInterval = setInterval(() => {
+    if (!isCalling.value || !dialingAudio) {
+      return;
+    }
+
+    ensureDialingSoundPlayback();
+  }, 1500);
 };
 
 const stopDialingSound = () => {
+  if (dialingSoundWatchdogInterval) {
+    clearInterval(dialingSoundWatchdogInterval);
+    dialingSoundWatchdogInterval = null;
+  }
+
+  dialingAudioStartPromise = null;
+  stopDialingBufferLoop();
+
   if (!dialingAudio) return;
+  dialingAudio.onpause = null;
+  dialingAudio.onended = null;
   dialingAudio.pause();
   dialingAudio = null;
 };
@@ -1493,8 +1628,10 @@ const connectToRoom = async () => {
     syncConnectionState(nextRoom);
     requestHighQualityForAllRemoteVideoTracks();
     shouldEndCallOnConnectFailure = false;
-    stopDialingSound();
-    stopRingtone();
+
+    if (isIncoming.value) {
+      stopRingtone();
+    }
   })().finally(() => {
     if (currentAttemptId === connectAttemptId) {
       connectPromise = null;
