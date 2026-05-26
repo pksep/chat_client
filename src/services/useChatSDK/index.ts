@@ -54,6 +54,10 @@ export interface WebSocketEvent {
   timestamp?: Date;
 }
 
+const UPLOAD_PROGRESS_MAX_PERCENT = 50;
+const FINALIZING_PROGRESS_TARGET_PERCENT = 97;
+const FINALIZING_PROGRESS_INTERVAL_MS = 350;
+
 export class ChatSDK {
   private apiUrl: string;
   private wsUrl: string;
@@ -189,12 +193,12 @@ export class ChatSDK {
         }
 
         const percent = Math.round((event.loaded / event.total) * 100);
-        onProgress?.(percent);
+        onProgress?.(this.mapUploadProgress(percent));
       };
 
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          onProgress?.(100);
+          onProgress?.(UPLOAD_PROGRESS_MAX_PERCENT);
           resolve();
           return;
         }
@@ -211,6 +215,129 @@ export class ChatSDK {
       };
 
       xhr.send(file);
+    });
+  }
+
+  private uploadFileDirectly(
+    file: File,
+    previewMeta?: MediaPreviewDimensions,
+    onProgress?: (percent: number) => void,
+    isMedia = false
+  ): Promise<{
+    objectName: string;
+    thumbnailObjectName: string | null;
+    ex?: {
+      width?: number;
+      height?: number;
+      previewWidth?: number;
+      previewHeight?: number;
+    };
+  }> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const formData = new FormData();
+      const token = getAuthToken() || this.token;
+      let stopFakeFinalizingProgress = () => undefined;
+      let hasStartedFakeFinalizingProgress = false;
+
+      const startFakeFinalizingProgress = () => {
+        if (hasStartedFakeFinalizingProgress) {
+          return;
+        }
+
+        hasStartedFakeFinalizingProgress = true;
+        stopFakeFinalizingProgress = this.startFakeFinalizingProgress(
+          onProgress,
+          UPLOAD_PROGRESS_MAX_PERCENT
+        );
+      };
+
+      formData.append('file', file);
+      formData.append('originName', file.name);
+      formData.append('size', String(file.size));
+      formData.append('contentType', file.type || 'application/octet-stream');
+      formData.append('isMedia', String(isMedia));
+
+      if (previewMeta?.width !== undefined) {
+        formData.append('width', String(previewMeta.width));
+      }
+      if (previewMeta?.height !== undefined) {
+        formData.append('height', String(previewMeta.height));
+      }
+      if (previewMeta?.previewWidth !== undefined) {
+        formData.append('previewWidth', String(previewMeta.previewWidth));
+      }
+      if (previewMeta?.previewHeight !== undefined) {
+        formData.append('previewHeight', String(previewMeta.previewHeight));
+      }
+
+      xhr.open('POST', `${this.apiUrl}/media/upload`);
+
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
+
+      xhr.upload.onprogress = event => {
+        if (!event.lengthComputable || event.total === 0) {
+          return;
+        }
+
+        const percent = Math.round((event.loaded / event.total) * 100);
+        onProgress?.(this.mapUploadProgress(percent));
+      };
+
+      xhr.upload.onload = () => {
+        startFakeFinalizingProgress();
+      };
+
+      xhr.onload = () => {
+        stopFakeFinalizingProgress();
+
+        if (xhr.status < 200 || xhr.status >= 300) {
+          reject(
+            new Error(`Failed to upload media directly: ${xhr.status}`)
+          );
+          return;
+        }
+
+        try {
+          const data = JSON.parse(xhr.responseText) as {
+            objectName: string;
+            thumbnailObjectName: string | null;
+            ex?: {
+              width?: number;
+              height?: number;
+              previewWidth?: number;
+              previewHeight?: number;
+            };
+          };
+
+          onProgress?.(100);
+          resolve({
+            objectName: data.objectName,
+            thumbnailObjectName: data.thumbnailObjectName,
+            ex: data.ex
+          });
+        } catch (error) {
+          reject(
+            new Error(
+              `Failed to parse direct upload response: ${(error as Error).message}`
+            )
+          );
+        }
+      };
+
+      xhr.onerror = () => {
+        stopFakeFinalizingProgress();
+        reject(new Error('Failed to upload media directly: network error'));
+      };
+
+      xhr.onabort = () => {
+        stopFakeFinalizingProgress();
+        reject(new Error('Failed to upload media directly: upload aborted'));
+      };
+
+      xhr.send(formData);
     });
   }
 
@@ -913,6 +1040,15 @@ export class ChatSDK {
       previewHeight?: number;
     };
   }> {
+    onProgress?.(0);
+
+    const shouldUploadDirectly =
+      isMedia && file.type.toLowerCase().startsWith('video/');
+
+    if (shouldUploadDirectly) {
+      return this.uploadFileDirectly(file, previewMeta, onProgress, isMedia);
+    }
+
     const uploadTargetResponse = (await this.reqi.post<{
       objectName: string;
       uploadUrl: string;
@@ -931,29 +1067,85 @@ export class ChatSDK {
     const uploadTarget = await uploadTargetResponse.json();
 
     await this.uploadFileToMinio(uploadTarget.uploadUrl, file, onProgress);
+    const stopFakeFinalizingProgress = this.startFakeFinalizingProgress(
+      onProgress,
+      UPLOAD_PROGRESS_MAX_PERCENT
+    );
 
-    const response = (await this.reqi.post<Media>(
-      '/media/upload',
-      {
-        objectName: uploadTarget.objectName,
-        originName: file.name,
-        size: file.size,
-        contentType: file.type || undefined,
-        width: previewMeta?.width,
-        height: previewMeta?.height,
-        previewWidth: previewMeta?.previewWidth,
-        previewHeight: previewMeta?.previewHeight,
-        isMedia
-      },
-      {
-        parsed: false
+    try {
+      const response = (await this.reqi.post<Media>(
+        '/media/upload',
+        {
+          objectName: uploadTarget.objectName,
+          originName: file.name,
+          size: file.size,
+          contentType: file.type || undefined,
+          width: previewMeta?.width,
+          height: previewMeta?.height,
+          previewWidth: previewMeta?.previewWidth,
+          previewHeight: previewMeta?.previewHeight,
+          isMedia
+        },
+        {
+          parsed: false
+        }
+      )) as any;
+      const data = await response.json();
+      stopFakeFinalizingProgress();
+      onProgress?.(100);
+      return {
+        objectName: data.objectName,
+        thumbnailObjectName: data.thumbnailObjectName,
+        ex: data.ex
+      };
+    } catch (error) {
+      stopFakeFinalizingProgress();
+      throw error;
+    }
+  }
+
+  private mapUploadProgress(percent: number): number {
+    const normalizedPercent = Math.max(0, Math.min(percent, 100));
+
+    return Math.round(
+      (normalizedPercent / 100) * UPLOAD_PROGRESS_MAX_PERCENT
+    );
+  }
+
+  private startFakeFinalizingProgress(
+    onProgress?: (percent: number) => void,
+    initialPercent = UPLOAD_PROGRESS_MAX_PERCENT
+  ): () => void {
+    if (!onProgress) {
+      return () => undefined;
+    }
+
+    let currentPercent = Math.max(
+      0,
+      Math.min(initialPercent, FINALIZING_PROGRESS_TARGET_PERCENT)
+    );
+
+    onProgress?.(currentPercent);
+
+    const intervalId = setInterval(() => {
+      const remainingPercent =
+        FINALIZING_PROGRESS_TARGET_PERCENT - currentPercent;
+
+      if (remainingPercent <= 0) {
+        clearInterval(intervalId);
+        return;
       }
-    )) as any;
-    const data = await response.json();
-    return {
-      objectName: data.objectName,
-      thumbnailObjectName: data.thumbnailObjectName,
-      ex: data.ex
+
+      const step = Math.max(1, Math.ceil(remainingPercent * 0.18));
+      currentPercent = Math.min(
+        FINALIZING_PROGRESS_TARGET_PERCENT,
+        currentPercent + step
+      );
+      onProgress?.(currentPercent);
+    }, FINALIZING_PROGRESS_INTERVAL_MS);
+
+    return () => {
+      clearInterval(intervalId);
     };
   }
 
