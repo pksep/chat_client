@@ -1049,14 +1049,14 @@ export class ChatSDK {
   async createGroupCallInvite(roomId: string): Promise<{
     inviteToken: string;
     roomId: string;
-    topicId: string;
+    topicId?: string | null;
   } | null> {
     try {
       const response = (await this.reqi.get<{
         invite: {
           inviteToken: string;
           roomId: string;
-          topicId: string;
+          topicId?: string | null;
         };
       }>(`/calls/invite-link?roomId=${encodeURIComponent(roomId)}`, {
         parsed: false
@@ -1074,7 +1074,7 @@ export class ChatSDK {
     inviteToken: string
   ): Promise<{
     roomId: string;
-    topicId: string;
+    topicId?: string | null;
     title: string;
     avatarUrl?: string | null;
     startTime?: number | null;
@@ -1086,7 +1086,7 @@ export class ChatSDK {
       const response = (await this.reqi.get<{
         preview: {
           roomId: string;
-          topicId: string;
+          topicId?: string | null;
           title: string;
           avatarUrl?: string | null;
           startTime?: number | null;
