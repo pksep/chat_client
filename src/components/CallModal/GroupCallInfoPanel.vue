@@ -20,7 +20,7 @@
     <div class="call-modal__group-panel-content">
       <button class="call-modal__group-panel-copy" @click="handleCopyLink">
         <LinkIcon />
-        <span>{{ copiedLabel }}</span>
+        <span>Скопировать ссылку</span>
       </button>
 
       <div class="call-modal__group-panel-members">
@@ -61,7 +61,7 @@
       <div class="call-modal__group-panel-content">
         <button class="call-modal__group-panel-copy" @click="handleCopyLink">
           <LinkIcon />
-          <span>{{ copiedLabel }}</span>
+          <span>Скопировать ссылку</span>
         </button>
 
         <div class="call-modal__group-panel-members">
@@ -90,13 +90,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import LinkIcon from '../UI/LinkIcon.vue';
 import MobileModal from '../UI/MobileModal.vue';
 import type { IUser } from '../interfaces/interfaces';
 import CachedAvatar from '../UI/CachedAvatar.vue';
-import { Icon, IconNameEnum } from '@pksep/yui';
+import { Icon, IconNameEnum, MessageTypeEnum } from '@pksep/yui';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
+import { showNotification } from '../../composables/useNotifications';
 import { copyTextToClipboard } from '../../utils/copyTextToClipboard';
 
 const props = defineProps<{
@@ -111,58 +111,29 @@ const props = defineProps<{
 defineEmits<{
   (e: 'close'): void;
 }>();
+
 const { openUserInfo } = useUserInfoModal();
 
-const isCopied = ref(false);
-let copiedResetTimeout: ReturnType<typeof setTimeout> | null = null;
-
-const copiedLabel = computed(() =>
-  isCopied.value ? 'Скопировано' : 'Скопировать ссылку'
-);
-
-const resetCopiedState = () => {
-  if (copiedResetTimeout) {
-    clearTimeout(copiedResetTimeout);
-    copiedResetTimeout = null;
-  }
-
-  isCopied.value = false;
+const notifyCopied = () => {
+  showNotification({
+    title: 'Скопировано',
+    description: 'Ссылка на встречу скопирована',
+    type: MessageTypeEnum.success
+  });
 };
-
-const markCopied = () => {
-  resetCopiedState();
-  isCopied.value = true;
-  copiedResetTimeout = setTimeout(() => {
-    isCopied.value = false;
-    copiedResetTimeout = null;
-  }, 2000);
-};
-
-watch(
-  () => props.open,
-  isOpen => {
-    if (!isOpen) {
-      resetCopiedState();
-    }
-  }
-);
-
-onBeforeUnmount(() => {
-  resetCopiedState();
-});
 
 const handleCopyLink = async () => {
   try {
     if (props.onCopyLink) {
       const result = await props.onCopyLink();
       if (result !== false) {
-        markCopied();
+        notifyCopied();
       }
       return;
     }
 
     await copyTextToClipboard(window.location.href);
-    markCopied();
+    notifyCopied();
   } catch (error) {
     console.warn('Failed to copy group call link', error);
   }

@@ -112,7 +112,7 @@ const pendingEndCallTopicId = ref<string | null>(null);
 const activeGroupCalls = ref<Record<string, ActiveGroupCallEntry>>({});
 const invitedGroupCall = ref<{
   roomId: string;
-  topicId: string;
+  topicId?: string | null;
   inviteToken: string;
   title: string;
   avatarUrl?: string | null;
@@ -427,7 +427,7 @@ const emitEndCallEvent = (
   const sdk = getChatSDK();
   const me = getAuthUser();
 
-  if (!sdk || !me || !targetRoomId || !targetTopicId) {
+  if (!sdk || !me || !targetRoomId) {
     return;
   }
 
@@ -442,7 +442,7 @@ const schedulePendingEndCallConfirmation = (
   targetRoomId?: string | null,
   targetTopicId?: string | null
 ) => {
-  if (!targetRoomId || !targetTopicId) {
+  if (!targetRoomId) {
     resetPendingEndCallState();
     return;
   }
@@ -623,6 +623,23 @@ const getInviteParamsFromUrl = () => {
     roomId: activeRoomId,
     inviteToken
   };
+};
+
+const buildInviteUrl = (invite: {
+  roomId: string;
+  inviteToken: string;
+}): string => {
+  const currentUrl = new URL(window.location.href);
+  const url = new URL(window.location.origin);
+  url.searchParams.set('callRoom', invite.roomId);
+  url.searchParams.set('callInvite', invite.inviteToken);
+
+  const organization = currentUrl.searchParams.get('organization');
+  if (organization) {
+    url.searchParams.set('organization', organization);
+  }
+
+  return url.toString();
 };
 
 const clearInviteParamsFromUrl = () => {
@@ -1540,7 +1557,10 @@ const connectToRoom = async () => {
     const token = await getToken(activeRoomId);
     if (!token) {
       const callStatus = await sdk.getLiveKitCallStatus(activeRoomId);
-      if (!callStatus?.active || callStatus.topicId !== activeTopicId) {
+      if (
+        !callStatus?.active ||
+        (activeTopicId !== null && callStatus.topicId !== activeTopicId)
+      ) {
         throw new Error('Call is no longer active');
       }
 
@@ -1582,13 +1602,7 @@ const connectToRoom = async () => {
         return;
       }
 
-      if (
-        shouldEndCallOnConnectFailure &&
-        sdk &&
-        me &&
-        activeRoomId &&
-        activeTopicId
-      ) {
+      if (shouldEndCallOnConnectFailure && sdk && me && activeRoomId) {
         sdk.sendWebSocketEvent(WebSocketEventType.END_CALL, {
           roomId: activeRoomId,
           topicId: activeTopicId,
@@ -1680,7 +1694,7 @@ const applyCallSocketAck = (
     roomId.value = resolvedRoomId;
   }
 
-  if (resolvedTopicId) {
+  if (resolvedTopicId !== undefined) {
     topicId.value = resolvedTopicId;
   }
 
@@ -1800,6 +1814,88 @@ export const startLiveKitGroupCall = async (currentTopicId: string) => {
   }
 
   await connectToRoom();
+};
+
+export const startStandaloneMeetingCall = async () => {
+  if (open.value) return;
+
+  const sdk = getChatSDK();
+  const me = getAuthUser();
+  if (!sdk || !me) return;
+
+  clearCallStatusNotice();
+  const activeRoomId = createRoomId();
+  user.value = me as any;
+  topicId.value = null;
+  roomId.value = activeRoomId;
+  setCallStartedAt(null, 0);
+  shouldEndCallOnConnectFailure = true;
+  open.value = true;
+  isIncoming.value = false;
+  isCalling.value = false;
+  isModalVisible.value = true;
+
+  const startAck = await sdk.sendWebSocketEventWithAck<
+    WebSocketEventType.START_CALL,
+    CallSocketAck
+  >(WebSocketEventType.START_CALL, {
+    roomId: activeRoomId,
+    topicId: null,
+    userId: me.id
+  });
+
+  applyCallSocketAck(startAck, {
+    roomId: activeRoomId,
+    topicId: null,
+    startTime: null,
+    elapsedDurationMs: 0,
+    isNewCall: true
+  });
+
+  if (startAck?.accepted === false) {
+    return;
+  }
+
+  await connectToRoom();
+};
+
+export const createStandaloneMeetingInviteLink = async (): Promise<boolean> => {
+  const sdk = getChatSDK();
+  const me = getAuthUser();
+
+  if (!sdk || !me) {
+    return false;
+  }
+
+  const requestedRoomId = createRoomId();
+  const startAck = await sdk.sendWebSocketEventWithAck<
+    WebSocketEventType.START_CALL,
+    CallSocketAck
+  >(WebSocketEventType.START_CALL, {
+    roomId: requestedRoomId,
+    topicId: null,
+    userId: me.id
+  });
+
+  const activeRoomId = startAck?.roomId ?? requestedRoomId;
+
+  if (startAck?.accepted === false || !activeRoomId) {
+    return false;
+  }
+
+  try {
+    const invite = await sdk.createGroupCallInvite(activeRoomId);
+
+    if (!invite?.inviteToken) {
+      return false;
+    }
+
+    await copyTextToClipboard(buildInviteUrl(invite));
+    return true;
+  } catch (error) {
+    console.warn('Failed to create standalone meeting invite link', error);
+    return false;
+  }
 };
 
 export const receiveIncomingCall = async (
@@ -2258,7 +2354,7 @@ export const dismissIncomingCallState = (
 export const syncActiveCalls = async (
   calls: Array<{
     roomId: string;
-    topicId: string;
+    topicId?: string | null;
     callType: string;
     startTime?: number | null;
     participantCount?: number;
@@ -2289,7 +2385,7 @@ export const syncActiveCalls = async (
   activeGroupCalls.value = validatedCalls.reduce<
     Record<string, ActiveGroupCallEntry>
   >((acc, call) => {
-    if (!call) {
+    if (!call || !call.topicId) {
       return acc;
     }
 
@@ -2335,17 +2431,7 @@ export const copyInvitedGroupCallLink = async () => {
   const invite = await sdk.createGroupCallInvite(activeRoomId);
   if (!invite) return false;
 
-  const currentUrl = new URL(window.location.href);
-  const url = new URL(window.location.origin);
-  url.searchParams.set('callRoom', invite.roomId);
-  url.searchParams.set('callInvite', invite.inviteToken);
-
-  const organization = currentUrl.searchParams.get('organization');
-  if (organization) {
-    url.searchParams.set('organization', organization);
-  }
-
-  await copyTextToClipboard(url.toString());
+  await copyTextToClipboard(buildInviteUrl(invite));
   return true;
 };
 

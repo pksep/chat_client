@@ -173,6 +173,27 @@
   cursor: default;
 }
 
+.calls-page__meeting-button {
+  color: var(--blue4);
+}
+
+.calls-page__context-menu .template {
+  display: grid;
+  gap: 4px;
+}
+
+.calls-page__context-action {
+  justify-content: flex-start;
+  gap: 10px;
+  color: var(--text-color) !important;
+}
+
+.calls-page__context-action svg {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+}
+
 .calls-page__details .message-call__icon--incoming,
 .calls-page__details .message-call__icon--outgoing {
   color: var(--text-neutral-color);
