@@ -294,9 +294,7 @@ export class ChatSDK {
         stopFakeFinalizingProgress();
 
         if (xhr.status < 200 || xhr.status >= 300) {
-          reject(
-            new Error(`Failed to upload media directly: ${xhr.status}`)
-          );
+          reject(new Error(`Failed to upload media directly: ${xhr.status}`));
           return;
         }
 
@@ -1107,9 +1105,7 @@ export class ChatSDK {
   private mapUploadProgress(percent: number): number {
     const normalizedPercent = Math.max(0, Math.min(percent, 100));
 
-    return Math.round(
-      (normalizedPercent / 100) * UPLOAD_PROGRESS_MAX_PERCENT
-    );
+    return Math.round((normalizedPercent / 100) * UPLOAD_PROGRESS_MAX_PERCENT);
   }
 
   private startFakeFinalizingProgress(
