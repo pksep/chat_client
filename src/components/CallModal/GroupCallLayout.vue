@@ -63,33 +63,11 @@
         class-name="call-modal__reaction-stage-video"
       />
       <div
-        v-if="
-          (focusedParticipant?.activeReactionEmoji &&
-            !focusedParticipant?.activeReactionVideoSrc) ||
-          focusedParticipant?.isHandRaised
-        "
+        v-if="focusedParticipant?.isHandRaised"
         class="call-modal__remote-hand call-modal__remote-hand--stage"
-        :class="{
-          'call-modal__remote-hand--reaction':
-            !!focusedParticipant?.activeReactionEmoji &&
-            !focusedParticipant?.activeReactionVideoSrc
-        }"
-        :title="
-          focusedParticipant?.activeReactionEmoji &&
-          !focusedParticipant?.activeReactionVideoSrc
-            ? `${focusedParticipant.name} reacted`
-            : `${focusedParticipant?.name} raised a hand`
-        "
+        :title="`${focusedParticipant?.name} raised a hand`"
       >
-        <span
-          v-if="
-            focusedParticipant?.activeReactionEmoji &&
-            !focusedParticipant?.activeReactionVideoSrc
-          "
-        >
-          {{ focusedParticipant.activeReactionEmoji }}
-        </span>
-        <HandRaiseIcon v-else />
+        <HandRaiseIcon />
       </div>
       <div v-if="focusedParticipant" class="call-modal__remote-name">
         <span>{{ focusedParticipant.name }}</span>
@@ -146,6 +124,7 @@ defineProps<{
     initials: string;
     avatarUrl: string;
     isLocal: boolean;
+    isScreenShareActive: boolean;
     isHandRaised: boolean;
     activeReactionEmoji: string;
     activeReactionVideoSrc: string;
