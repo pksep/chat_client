@@ -187,12 +187,8 @@ const SCREEN_SHARE_CAPTURE_DEFAULTS = {
 };
 const SCREEN_SHARE_PUBLISH_DEFAULTS = {
   degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
-  simulcast: true,
-  screenShareEncoding: ScreenSharePresets.original.encoding,
-  screenShareSimulcastLayers: [
-    ScreenSharePresets.h360fps15,
-    ScreenSharePresets.h1080fps30
-  ]
+  simulcast: false,
+  screenShareEncoding: ScreenSharePresets.original.encoding
 };
 
 const createRoomId = () => `livekit-${Math.random().toString(36).slice(2, 10)}`;
