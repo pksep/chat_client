@@ -1,6 +1,12 @@
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
+  BackgroundProcessor,
+  type BackgroundProcessorWrapper
+} from '@livekit/track-processors';
+import {
+  createLocalVideoTrack,
+  LocalTrackPublication,
   LocalVideoTrack,
   RemoteParticipant,
   Room,
@@ -10,9 +16,10 @@ import {
   VideoPresets,
   VideoQuality
 } from 'livekit-client';
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import type { IUser } from '../components/interfaces/interfaces';
 import { getAuthUser } from '../composables/useAuth';
+import { useCallBackground } from '../composables/useCallBackground';
 import { showErrorNotification } from '../composables/useNotifications';
 import { AudioOutput } from './useAudioOutput';
 import { copyTextToClipboard } from '../utils/copyTextToClipboard';
@@ -165,6 +172,8 @@ const participantReactionTimeouts = new Map<
   string,
   ReturnType<typeof setTimeout>
 >();
+const { selectedCallBackgroundImageUrl, selectedCallBackgroundMode } =
+  useCallBackground();
 
 const MAX_NATIVE_CALL_ACTION_RETRIES = 120;
 const NATIVE_CALL_ACTION_RETRY_DELAY_MS = 500;
@@ -195,8 +204,246 @@ const SCREEN_SHARE_PUBLISH_DEFAULTS = {
   simulcast: false,
   screenShareEncoding: ScreenSharePresets.original.encoding
 };
+const CALL_BACKGROUND_ASSET_PATHS = {
+  tasksVisionFileSet: '/call-background/wasm',
+  modelAssetPath: '/call-background/selfie_segmenter.tflite'
+};
+let localBackgroundProcessor: BackgroundProcessorWrapper | null = null;
+let localBackgroundProcessorTrack: LocalVideoTrack | null = null;
+let localBackgroundProcessorSignature: string | null = null;
+let hasShownBackgroundProcessorSupportError = false;
+let requestedVideoActive = false;
+let videoToggleOperation: Promise<void> | null = null;
 
 const createRoomId = () => `livekit-${Math.random().toString(36).slice(2, 10)}`;
+
+const getLocalCameraTrack = (): LocalVideoTrack | null => {
+  if (!room) {
+    return null;
+  }
+
+  const publication = Array.from(
+    room.localParticipant.videoTrackPublications.values()
+  ).find(item => item.source === Track.Source.Camera);
+
+  return publication?.track instanceof LocalVideoTrack
+    ? publication.track
+    : null;
+};
+
+const getLocalCameraPublication = (activeRoom: Room) =>
+  Array.from(activeRoom.localParticipant.videoTrackPublications.values()).find(
+    item => item.source === Track.Source.Camera
+  );
+
+const shouldUseManagedBackgroundCamera = (): boolean =>
+  selectedCallBackgroundMode.value !== 'none';
+
+const getCallBackgroundProcessorSignature = (): string => {
+  if (selectedCallBackgroundMode.value === 'blur') {
+    return 'blur';
+  }
+
+  if (selectedCallBackgroundMode.value === 'image') {
+    return `image:${selectedCallBackgroundImageUrl.value || ''}`;
+  }
+
+  return 'none';
+};
+
+const getCallBackgroundProcessorConfig = () => {
+  if (selectedCallBackgroundMode.value === 'blur') {
+    return {
+      mode: 'background-blur' as const,
+      blurRadius: 12,
+      assetPaths: CALL_BACKGROUND_ASSET_PATHS
+    };
+  }
+
+  if (
+    selectedCallBackgroundMode.value === 'image' &&
+    selectedCallBackgroundImageUrl.value
+  ) {
+    return {
+      mode: 'virtual-background' as const,
+      imagePath: selectedCallBackgroundImageUrl.value,
+      assetPaths: CALL_BACKGROUND_ASSET_PATHS
+    };
+  }
+
+  return {
+    mode: 'disabled' as const,
+    assetPaths: CALL_BACKGROUND_ASSET_PATHS
+  };
+};
+
+const getCallBackgroundProcessorSwitchOptions = () => {
+  if (selectedCallBackgroundMode.value === 'blur') {
+    return {
+      mode: 'background-blur' as const,
+      blurRadius: 12
+    };
+  }
+
+  if (
+    selectedCallBackgroundMode.value === 'image' &&
+    selectedCallBackgroundImageUrl.value
+  ) {
+    return {
+      mode: 'virtual-background' as const,
+      imagePath: selectedCallBackgroundImageUrl.value
+    };
+  }
+
+  return {
+    mode: 'disabled' as const
+  };
+};
+
+const stopLocalBackgroundProcessor = async (): Promise<void> => {
+  const activeTrack = localBackgroundProcessorTrack;
+  localBackgroundProcessorTrack = null;
+  localBackgroundProcessor = null;
+  localBackgroundProcessorSignature = null;
+
+  if (!activeTrack?.getProcessor()) {
+    return;
+  }
+
+  try {
+    await activeTrack.stopProcessor();
+  } catch (error) {
+    console.warn('[LiveKit] Failed to stop background processor:', error);
+  }
+};
+
+const ensureLocalBackgroundProcessor = async (
+  track: LocalVideoTrack
+): Promise<{
+  processor: BackgroundProcessorWrapper | null;
+  didCreate: boolean;
+}> => {
+  if (localBackgroundProcessorTrack === track && localBackgroundProcessor) {
+    return {
+      processor: localBackgroundProcessor,
+      didCreate: false
+    };
+  }
+
+  if (
+    localBackgroundProcessorTrack &&
+    localBackgroundProcessorTrack !== track
+  ) {
+    await stopLocalBackgroundProcessor();
+  }
+
+  const processor = BackgroundProcessor(
+    getCallBackgroundProcessorConfig(),
+    'call-background-processor'
+  );
+
+  await track.setProcessor(processor);
+  localBackgroundProcessorTrack = track;
+  localBackgroundProcessor = processor;
+  localBackgroundProcessorSignature = getCallBackgroundProcessorSignature();
+  return {
+    processor,
+    didCreate: true
+  };
+};
+
+const publishCameraWithBackground = async (
+  activeRoom: Room
+): Promise<LocalTrackPublication | undefined> => {
+  const existingPublication = Array.from(
+    activeRoom.localParticipant.videoTrackPublications.values()
+  ).find(item => item.source === Track.Source.Camera);
+
+  if (existingPublication?.track) {
+    await activeRoom.localParticipant.unpublishTrack(
+      existingPublication.track,
+      true
+    );
+  }
+
+  const localVideoTrack = await createLocalVideoTrack(CAMERA_CAPTURE_DEFAULTS);
+  const { processor } = await ensureLocalBackgroundProcessor(localVideoTrack);
+
+  if (!processor) {
+    localVideoTrack.stop();
+    throw new Error('Failed to initialize camera background processor');
+  }
+
+  await waitForLocalProcessedVideoTrack(localVideoTrack, 250);
+
+  const publication = await activeRoom.localParticipant.publishTrack(
+    localVideoTrack,
+    CAMERA_PUBLISH_DEFAULTS
+  );
+
+  syncLocalTrackStateWhenProcessedTrackReady(localVideoTrack);
+
+  return publication;
+};
+
+const waitForLocalProcessedVideoTrack = async (
+  track: LocalVideoTrack,
+  timeoutMs = 500
+): Promise<MediaStreamTrack | null> => {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const processedTrack = track.getProcessor()?.processedTrack;
+
+    if (processedTrack?.readyState === 'live') {
+      return processedTrack;
+    }
+
+    await new Promise(resolve => {
+      setTimeout(resolve, 50);
+    });
+  }
+
+  return track.getProcessor()?.processedTrack || null;
+};
+
+const syncLocalTrackStateWhenProcessedTrackReady = (
+  track: LocalVideoTrack,
+  timeoutMs = 2500
+): void => {
+  void (async () => {
+    const processedTrack = await waitForLocalProcessedVideoTrack(
+      track,
+      timeoutMs
+    );
+
+    if (
+      !processedTrack ||
+      !state.isVideoActive ||
+      localBackgroundProcessorTrack !== track ||
+      getLocalCameraTrack() !== track
+    ) {
+      return;
+    }
+
+    syncLocalTrackState();
+  })();
+};
+
+const disableLocalCamera = async (activeRoom: Room): Promise<void> => {
+  const cameraPublication = getLocalCameraPublication(activeRoom);
+
+  if (cameraPublication?.track) {
+    await activeRoom.localParticipant.unpublishTrack(
+      cameraPublication.track,
+      true
+    );
+  } else {
+    await activeRoom.localParticipant.setCameraEnabled(false);
+  }
+
+  await stopLocalBackgroundProcessor();
+};
 
 const resolveCallTargetTopicId = (
   incomingRoomId?: string,
@@ -985,6 +1232,16 @@ const syncLocalTrackState = () => {
 
   const localVideoTrack = localVideoPublication?.track;
   const localScreenTrack = localScreenSharePublication?.track;
+  const localProcessedVideoTrack =
+    localVideoTrack instanceof LocalVideoTrack
+      ? localVideoTrack.getProcessor()?.processedTrack ||
+        localVideoTrack.mediaStreamTrack
+      : localVideoTrack?.mediaStreamTrack;
+  const shouldHideUnprocessedLocalVideo =
+    selectedCallBackgroundMode.value !== 'none' &&
+    state.isVideoActive &&
+    localVideoTrack instanceof LocalVideoTrack &&
+    !localVideoTrack.getProcessor()?.processedTrack;
 
   if (localScreenTrack?.mediaStreamTrack) {
     localScreenTrack.mediaStreamTrack.onended = () => {
@@ -997,13 +1254,69 @@ const syncLocalTrackState = () => {
   localVideoStream.value = getCachedSingleTrackStream(
     localTrackStreamCache,
     'local-camera',
-    localVideoTrack?.mediaStreamTrack
+    shouldHideUnprocessedLocalVideo ? null : localProcessedVideoTrack
   );
   localScreenShareStream.value = getCachedSingleTrackStream(
     localTrackStreamCache,
     'local-screen-share',
     localScreenTrack?.mediaStreamTrack
   );
+};
+
+const syncLocalCallBackgroundProcessor = async (): Promise<void> => {
+  const localCameraTrack = getLocalCameraTrack();
+  if (!localCameraTrack || !state.isVideoActive) {
+    await stopLocalBackgroundProcessor();
+    hasShownBackgroundProcessorSupportError = false;
+    syncLocalTrackState();
+    return;
+  }
+
+  hasShownBackgroundProcessorSupportError = false;
+
+  try {
+    const { processor, didCreate } =
+      await ensureLocalBackgroundProcessor(localCameraTrack);
+    const nextSignature = getCallBackgroundProcessorSignature();
+
+    if (!processor) {
+      return;
+    }
+
+    if (!didCreate && localBackgroundProcessorSignature === nextSignature) {
+      if (
+        selectedCallBackgroundMode.value !== 'none' &&
+        !localCameraTrack.getProcessor()?.processedTrack
+      ) {
+        syncLocalTrackStateWhenProcessedTrackReady(localCameraTrack);
+      }
+
+      syncLocalTrackState();
+      return;
+    }
+
+    if (!didCreate) {
+      await processor.switchTo(getCallBackgroundProcessorSwitchOptions());
+      localBackgroundProcessorSignature = nextSignature;
+    }
+
+    if (selectedCallBackgroundMode.value !== 'none' && !didCreate) {
+      await waitForLocalProcessedVideoTrack(localCameraTrack);
+      syncLocalTrackStateWhenProcessedTrackReady(localCameraTrack);
+    }
+
+    hasShownBackgroundProcessorSupportError = false;
+    syncLocalTrackState();
+  } catch (error) {
+    console.warn('[LiveKit] Failed to apply call background processor:', error);
+    if (
+      selectedCallBackgroundMode.value !== 'none' &&
+      !hasShownBackgroundProcessorSupportError
+    ) {
+      hasShownBackgroundProcessorSupportError = true;
+      showErrorNotification('Не удалось применить фон для звонка');
+    }
+  }
 };
 
 const getActiveRemoteVideoPublication = (
@@ -1622,11 +1935,24 @@ const connectToRoom = async () => {
 
     await nextRoom.localParticipant.setMicrophoneEnabled(state.isMicActive);
     if (state.isVideoActive) {
-      await nextRoom.localParticipant.setCameraEnabled(
-        true,
-        CAMERA_CAPTURE_DEFAULTS,
-        CAMERA_PUBLISH_DEFAULTS
-      );
+      if (shouldUseManagedBackgroundCamera()) {
+        try {
+          await publishCameraWithBackground(nextRoom);
+        } catch (error) {
+          state.isVideoActive = false;
+          console.warn(
+            '[LiveKit] Failed to publish camera with background:',
+            error
+          );
+          showErrorNotification('Не удалось применить фон для звонка');
+        }
+      } else {
+        await nextRoom.localParticipant.setCameraEnabled(
+          true,
+          CAMERA_CAPTURE_DEFAULTS,
+          CAMERA_PUBLISH_DEFAULTS
+        );
+      }
     }
     if (state.isScreenSharingActive) {
       await nextRoom.localParticipant.setScreenShareEnabled(
@@ -1658,6 +1984,12 @@ const connectToRoom = async () => {
 const resetMediaState = () => {
   clearTrackStreamCaches();
   currentCameraFacingMode = 'user';
+  localBackgroundProcessor = null;
+  localBackgroundProcessorTrack = null;
+  localBackgroundProcessorSignature = null;
+  hasShownBackgroundProcessorSupportError = false;
+  requestedVideoActive = false;
+  videoToggleOperation = null;
   localVideoStream.value = null;
   localScreenShareStream.value = null;
   remoteParticipants.value = [];
@@ -2442,16 +2774,82 @@ export const toggleMic = async () => {
   }
 };
 
+const applyRequestedVideoState = async (): Promise<void> => {
+  while (room && state.isVideoActive !== requestedVideoActive) {
+    const activeRoom = room;
+
+    if (!activeRoom) {
+      break;
+    }
+
+    if (requestedVideoActive) {
+      state.isVideoActive = true;
+
+      try {
+        if (shouldUseManagedBackgroundCamera()) {
+          await publishCameraWithBackground(activeRoom);
+        } else {
+          await activeRoom.localParticipant.setCameraEnabled(
+            true,
+            CAMERA_CAPTURE_DEFAULTS,
+            CAMERA_PUBLISH_DEFAULTS
+          );
+        }
+      } catch (error) {
+        state.isVideoActive = false;
+        requestedVideoActive = false;
+        console.warn('[LiveKit] Failed to enable camera:', error);
+        if (shouldUseManagedBackgroundCamera()) {
+          showErrorNotification('Не удалось применить фон для звонка');
+        } else {
+          showErrorNotification('Не удалось включить камеру');
+        }
+      } finally {
+        syncLocalTrackState();
+      }
+
+      continue;
+    }
+
+    state.isVideoActive = false;
+
+    try {
+      await disableLocalCamera(activeRoom);
+    } finally {
+      syncLocalTrackState();
+    }
+  }
+};
+
 export const toggleVideo = async () => {
-  state.isVideoActive = !state.isVideoActive;
   if (!room) return;
 
-  await room.localParticipant.setCameraEnabled(
-    state.isVideoActive,
-    CAMERA_CAPTURE_DEFAULTS,
-    CAMERA_PUBLISH_DEFAULTS
-  );
-  syncLocalTrackState();
+  requestedVideoActive = !(videoToggleOperation
+    ? requestedVideoActive
+    : state.isVideoActive);
+
+  if (videoToggleOperation) {
+    await videoToggleOperation;
+    return;
+  }
+
+  videoToggleOperation = applyRequestedVideoState();
+
+  try {
+    await videoToggleOperation;
+  } finally {
+    videoToggleOperation = null;
+
+    if (room && state.isVideoActive !== requestedVideoActive) {
+      videoToggleOperation = applyRequestedVideoState();
+
+      try {
+        await videoToggleOperation;
+      } finally {
+        videoToggleOperation = null;
+      }
+    }
+  }
 };
 
 export const switchCamera = async () => {
@@ -2600,6 +2998,7 @@ export const leaveCall = () => {
 
   const activeRoom = room;
 
+  void stopLocalBackgroundProcessor();
   stopLocalMediaTracks();
 
   if (activeRoom) {
@@ -2633,6 +3032,7 @@ export const cleanup = (disconnectRoom = true) => {
 
   const activeRoom = room;
 
+  void stopLocalBackgroundProcessor();
   stopLocalMediaTracks();
 
   if (disconnectRoom && activeRoom) {
@@ -2790,6 +3190,20 @@ export const clearActiveGroupCall = (targetTopicId?: string) => {
 export const clearInvitedGroupCall = (activeRoomId?: string) => {
   removeInvitedGroupCallEntry(activeRoomId);
 };
+
+watch(
+  [selectedCallBackgroundMode, selectedCallBackgroundImageUrl],
+  () => {
+    if (!state.isVideoActive) {
+      return;
+    }
+
+    void syncLocalCallBackgroundProcessor();
+  },
+  {
+    immediate: true
+  }
+);
 
 export { open, isIncoming, isCalling, user, roomId, topicId, isModalVisible };
 export {

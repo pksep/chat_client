@@ -48,8 +48,14 @@
         <div
           v-if="!participant.isVideoActive"
           class="call-modal__remote-placeholder"
+          :class="{
+            'call-modal__remote-placeholder--background':
+              !!participant.backgroundPlaceholderStyle
+          }"
+          :style="participant.backgroundPlaceholderStyle || undefined"
         >
           <CachedAvatar
+            v-if="!participant.backgroundPlaceholderStyle"
             :path="participant.avatarUrl"
             :alt="participant.name"
             class="call-modal__avatar"
@@ -104,6 +110,7 @@
 </template>
 
 <script setup lang="ts">
+import type { CSSProperties } from 'vue';
 import { Icon, IconNameEnum } from '@pksep/yui';
 import HandRaiseIcon from './UI/HandRaiseIcon.vue';
 import MicDisableIcon from './UI/MicDisableIcon.vue';
@@ -132,6 +139,7 @@ defineProps<{
     isSpeaking: boolean;
     isMicActive: boolean;
     hasAudio: boolean;
+    backgroundPlaceholderStyle?: CSSProperties | null;
   }>;
   focusedParticipant: {
     identity: string;
@@ -144,6 +152,7 @@ defineProps<{
     activeReactionVideoSrc: string;
     activeReactionVideoKey: string;
     isMicActive: boolean;
+    backgroundPlaceholderStyle?: CSSProperties | null;
   } | null;
   currentPage: number;
   currentPageParticipantCount: number;

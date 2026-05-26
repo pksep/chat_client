@@ -1,4 +1,14 @@
 import { computed, ref, type CSSProperties } from 'vue';
+import {
+  createNativeImageStoreConfig,
+  createPersistentCustomImageId,
+  isNativeCustomImagePersistenceAvailable,
+  loadPersistentCustomImages,
+  migratePersistentCustomImages,
+  persistSelectedId,
+  readPersistedSelectedId,
+  savePersistentCustomImage
+} from '../services/customImagePersistence';
 
 export interface ChatWallpaperOption {
   id: string;
@@ -29,6 +39,12 @@ const LEGACY_CHAT_WALLPAPER_CUSTOM_STORAGE_KEY =
 const WALLPAPER_DB_NAME = 'chat-custom-wallpapers-db';
 const WALLPAPER_DB_VERSION = 1;
 const WALLPAPER_STORE_NAME = 'wallpapers';
+const WALLPAPER_NATIVE_STORE = createNativeImageStoreConfig({
+  directoryName: 'chat-wallpapers',
+  metadataKey: 'chat_wallpaper_custom_images_v1',
+  selectionKey: CHAT_WALLPAPER_STORAGE_KEY,
+  customIdPrefix: 'custom-wallpaper'
+});
 
 const wallpaperOptions: ChatWallpaperOption[] = [
   {
@@ -174,12 +190,16 @@ const persistSelectedWallpaperId = (wallpaperId: string): void => {
     return;
   }
 
+  if (isNativeCustomImagePersistenceAvailable()) {
+    void persistSelectedId(WALLPAPER_NATIVE_STORE.selectionKey, wallpaperId);
+    return;
+  }
+
   window.localStorage.setItem(CHAT_WALLPAPER_STORAGE_KEY, wallpaperId);
 };
 
 const createCustomWallpaperId = (): string => {
-  const randomPart = Math.random().toString(36).slice(2, 8);
-  return `custom-wallpaper-${Date.now()}-${randomPart}`;
+  return createPersistentCustomImageId(WALLPAPER_NATIVE_STORE.customIdPrefix);
 };
 
 const getSelectedWallpaperOption = (): ChatWallpaperOption | null => {
@@ -219,6 +239,44 @@ const reconcileSelectedWallpaper = (): void => {
 
   selectedWallpaperId.value = 'none';
   persistSelectedWallpaperId('none');
+};
+
+const readBrowserSelectedWallpaperId = (): string => {
+  if (typeof window === 'undefined') {
+    return 'none';
+  }
+
+  return (
+    window.localStorage.getItem(CHAT_WALLPAPER_STORAGE_KEY) ||
+    window.localStorage.getItem(LEGACY_CHAT_WALLPAPER_STORAGE_KEY) ||
+    'none'
+  );
+};
+
+const loadBrowserCustomWallpapers = async (): Promise<
+  StoredCustomWallpaper[]
+> => {
+  const wallpapers = await loadStoredCustomWallpapers();
+
+  if (typeof window === 'undefined') {
+    return wallpapers;
+  }
+
+  const legacyDataUrl =
+    window.localStorage.getItem(LEGACY_CHAT_WALLPAPER_CUSTOM_STORAGE_KEY) || '';
+
+  if (
+    legacyDataUrl &&
+    !wallpapers.some(wallpaper => wallpaper.dataUrl === legacyDataUrl)
+  ) {
+    wallpapers.unshift({
+      id: createCustomWallpaperId(),
+      dataUrl: legacyDataUrl,
+      createdAt: Date.now()
+    });
+  }
+
+  return wallpapers.sort((a, b) => b.createdAt - a.createdAt);
 };
 
 const migrateLegacyCustomWallpaper = async (): Promise<void> => {
@@ -270,6 +328,55 @@ const hydrateCustomWallpapers = async (): Promise<void> => {
   isHydratingCustomWallpapers.value = true;
 
   try {
+    if (isNativeCustomImagePersistenceAvailable()) {
+      const browserCustomWallpapers = await loadBrowserCustomWallpapers();
+      let nativeCustomWallpapers = await loadPersistentCustomImages(
+        WALLPAPER_NATIVE_STORE
+      );
+
+      if (browserCustomWallpapers.length > 0) {
+        await migratePersistentCustomImages(
+          WALLPAPER_NATIVE_STORE,
+          browserCustomWallpapers
+        );
+        nativeCustomWallpapers = await loadPersistentCustomImages(
+          WALLPAPER_NATIVE_STORE
+        );
+      }
+
+      customWallpapers.value = nativeCustomWallpapers;
+
+      const persistedSelectedId =
+        (await readPersistedSelectedId(WALLPAPER_NATIVE_STORE.selectionKey)) ||
+        '';
+      const browserSelectedId = readBrowserSelectedWallpaperId();
+      const fallbackSelectedId = persistedSelectedId || browserSelectedId;
+
+      if (
+        fallbackSelectedId &&
+        fallbackSelectedId !== 'none' &&
+        !wallpaperOptionMap.has(fallbackSelectedId)
+      ) {
+        const selectedBrowserWallpaper = browserCustomWallpapers.find(
+          wallpaper => wallpaper.id === fallbackSelectedId
+        );
+        const migratedWallpaper = selectedBrowserWallpaper
+          ? nativeCustomWallpapers.find(
+              wallpaper =>
+                wallpaper.dataUrl === selectedBrowserWallpaper.dataUrl
+            )
+          : null;
+
+        selectedWallpaperId.value = migratedWallpaper?.id || 'none';
+      } else {
+        selectedWallpaperId.value = fallbackSelectedId || 'none';
+      }
+
+      persistSelectedWallpaperId(selectedWallpaperId.value);
+      reconcileSelectedWallpaper();
+      return;
+    }
+
     customWallpapers.value = await loadStoredCustomWallpapers();
     await migrateLegacyCustomWallpaper();
     reconcileSelectedWallpaper();
@@ -286,13 +393,7 @@ const ensureInitialized = (): void => {
   }
 
   isInitialized.value = true;
-
-  const storedSelection =
-    window.localStorage.getItem(CHAT_WALLPAPER_STORAGE_KEY) ||
-    window.localStorage.getItem(LEGACY_CHAT_WALLPAPER_STORAGE_KEY) ||
-    'none';
-
-  selectedWallpaperId.value = storedSelection;
+  selectedWallpaperId.value = readBrowserSelectedWallpaperId();
   void hydrateCustomWallpapers();
 };
 
@@ -327,6 +428,18 @@ const setCustomWallpaper = async (dataUrl: string): Promise<void> => {
   ensureInitialized();
 
   if (!dataUrl) {
+    return;
+  }
+
+  if (isNativeCustomImagePersistenceAvailable()) {
+    const wallpaper = await savePersistentCustomImage(
+      WALLPAPER_NATIVE_STORE,
+      dataUrl
+    );
+
+    customWallpapers.value = [wallpaper, ...customWallpapers.value];
+    selectedWallpaperId.value = wallpaper.id;
+    persistSelectedWallpaperId(wallpaper.id);
     return;
   }
 

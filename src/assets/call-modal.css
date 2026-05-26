@@ -1014,6 +1014,12 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   background: linear-gradient(180deg, #eef4ff 0%, #e2ecff 100%);
 }
 
+.call-modal__remote-placeholder--background {
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
 .call-modal__remote-name {
   position: absolute;
   display: flex;
