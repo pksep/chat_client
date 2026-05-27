@@ -64,7 +64,7 @@
 
   @media screen and (width > 768px) {
     &.chat-container--active-call {
-      --header-height: 95px;
+      --header-height: 101px;
     }
 
     .chat {

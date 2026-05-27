@@ -13,7 +13,7 @@ import {
   registerPendingOutgoingForwardBatch,
   changeFileUploadErrorStatus,
   changeMessageStatusLocally,
-  getMessagesByTopicId,
+  getFullMessagesByTopicId,
   getPendingUploadFile,
   getPendingUploadMessageMeta,
   registerPendingUploadFile,
@@ -195,6 +195,7 @@ interface IAttachChunkOptions {
   topicId?: string;
   isMedia?: boolean;
   text?: string | null;
+  fillSharedPreview?: boolean;
   taggedUserIds?: string[];
   replyMessage?: IMessage | null;
   replyMessageId?: string;
@@ -221,6 +222,10 @@ export function useMessageSender(
       return;
     }
 
+    if (media.ex?.fillPreview) {
+      return;
+    }
+
     const timeoutMs = 3000;
     const startedAt = Date.now();
 
@@ -237,7 +242,7 @@ export function useMessageSender(
     topicId: string,
     messageId: string
   ): IMessage | undefined =>
-    getMessagesByTopicId(topicId).find(message => message.id === messageId);
+    getFullMessagesByTopicId(topicId).find(message => message.id === messageId);
 
   const isSendAvailable = (): boolean =>
     getHasWebsocketConnection() && navigator.onLine;
@@ -529,50 +534,14 @@ export function useMessageSender(
 
     try {
       if (hasAttachments) {
-        const mediaPayloads = queuedFiles.filter(file => file.isMedia);
-        const filePayloads = queuedFiles.filter(file => !file.isMedia);
-        const batches: IQueuedFilePayload[][] = [];
-
-        for (
-          let index = 0;
-          index < mediaPayloads.length;
-          index += MAX_MEDIA_ATTACHMENTS_PER_MESSAGE
-        ) {
-          batches.push(
-            mediaPayloads.slice(
-              index,
-              index + MAX_MEDIA_ATTACHMENTS_PER_MESSAGE
-            )
-          );
-        }
-
-        for (
-          let index = 0;
-          index < filePayloads.length;
-          index += MAX_FILE_ATTACHMENTS_PER_MESSAGE
-        ) {
-          batches.push(
-            filePayloads.slice(index, index + MAX_FILE_ATTACHMENTS_PER_MESSAGE)
-          );
-        }
-
-        const replyMessage = state.replyMessage;
-
-        for (const [index, batch] of batches.entries()) {
-          await handleAttachFileChunk(batch, {
-            topicId,
-            text: index === 0 ? textToSend || null : null,
-            taggedUserIds: index === 0 ? taggedUserIds : undefined,
-            replyMessage,
-            replyMessageId,
-            forwardMessageIds: forwardMessages.map(message => message.id)
-          });
-        }
-
-        state.hideUnreadMarker = true;
-        await nextTick();
-        scrollToBottom();
-        clearSellectedMessage();
+        await handleQueuedAttachmentFiles(queuedFiles, {
+          topicId,
+          text: textToSend || null,
+          taggedUserIds,
+          replyMessage: state.replyMessage,
+          replyMessageId,
+          forwardMessageIds: forwardMessages.map(message => message.id)
+        });
         return;
       }
 
@@ -840,7 +809,14 @@ export function useMessageSender(
             type === MediaType.Video
               ? (await getVideoThumbnail(file)) || localPath
               : undefined,
-          ex: calculatePreviewDimensions(dimensions, filePayloads.length, i)
+          ex:
+            options?.fillSharedPreview === true
+              ? {
+                  width: dimensions.width,
+                  height: dimensions.height,
+                  fillPreview: true
+                }
+              : calculatePreviewDimensions(dimensions, filePayloads.length, i)
         };
       })
     );
@@ -904,6 +880,91 @@ export function useMessageSender(
     }
 
     state.replyMessage = null;
+  };
+
+  const splitQueuedAttachmentBatches = (
+    filePayloads: IQueuedFilePayload[]
+  ): IQueuedFilePayload[][] => {
+    const mediaPayloads = filePayloads.filter(payload => payload.isMedia);
+    const attachmentPayloads = filePayloads.filter(payload => !payload.isMedia);
+    const batches: IQueuedFilePayload[][] = [];
+
+    for (
+      let index = 0;
+      index < mediaPayloads.length;
+      index += MAX_MEDIA_ATTACHMENTS_PER_MESSAGE
+    ) {
+      batches.push(
+        mediaPayloads.slice(index, index + MAX_MEDIA_ATTACHMENTS_PER_MESSAGE)
+      );
+    }
+
+    for (
+      let index = 0;
+      index < attachmentPayloads.length;
+      index += MAX_FILE_ATTACHMENTS_PER_MESSAGE
+    ) {
+      batches.push(
+        attachmentPayloads.slice(
+          index,
+          index + MAX_FILE_ATTACHMENTS_PER_MESSAGE
+        )
+      );
+    }
+
+    return batches;
+  };
+
+  const handleQueuedAttachmentFiles = async (
+    filePayloads: IQueuedFilePayload[],
+    options?: IAttachChunkOptions
+  ): Promise<void> => {
+    if (!filePayloads.length) {
+      return;
+    }
+
+    const batches = splitQueuedAttachmentBatches(filePayloads);
+
+    for (const [index, batch] of batches.entries()) {
+      await handleAttachFileChunk(batch, {
+        ...options,
+        text: index === 0 ? options?.text || null : null,
+        taggedUserIds: index === 0 ? options?.taggedUserIds : undefined
+      });
+    }
+
+    state.hideUnreadMarker = true;
+    await nextTick();
+    scrollToBottom();
+    clearSellectedMessage();
+  };
+
+  const isMediaShareFile = (file: File): boolean =>
+    file.type.startsWith('image/') || file.type.startsWith('video/');
+
+  const handleAttachSharedFiles = async (
+    files: File[],
+    text?: string | null,
+    topicId?: string
+  ): Promise<void> => {
+    if (!files.length) {
+      return;
+    }
+
+    await handleQueuedAttachmentFiles(
+      files.map(file => ({
+        file,
+        isMedia: isMediaShareFile(file)
+      })),
+      {
+        topicId: topicId || route.value.id,
+        text: text || null,
+        fillSharedPreview: true,
+        replyMessage: null,
+        replyMessageId: undefined,
+        forwardMessageIds: []
+      }
+    );
   };
 
   const handleAttachFile = async (files: FileList, isMedia = false) => {
@@ -1010,6 +1071,7 @@ export function useMessageSender(
   return {
     handleSend,
     handleAttachFile,
+    handleAttachSharedFiles,
     handleRetryMessage
   };
 }

@@ -181,46 +181,50 @@ export interface WebSocketEventPayloads {
   [WebSocketEventType.ACTIVE_CALLS]: {
     calls: Array<{
       roomId: string;
-      topicId: string;
+      topicId?: string | null;
       callType: string;
-      startTime: number;
+      startTime?: number | null;
+      participantCount?: number;
+      groupMode?: boolean;
+      elapsedDurationMs?: number;
     }>;
   };
   [WebSocketEventType.START_CALL]: {
     userId: string;
     roomId: string;
-    topicId: string;
+    topicId?: string | null;
   };
   [WebSocketEventType.DISMISS_INCOMING_CALL]: {
     roomId: string;
-    topicId: string;
+    topicId?: string | null;
   };
   [WebSocketEventType.ANSWER_CALL]: {
     userId: string;
     roomId: string;
-    topicId: string;
+    topicId?: string | null;
   };
   [WebSocketEventType.CALL_ANSWERED]: {
     userId: string;
     roomId: string;
-    topicId: string;
+    topicId?: string | null;
     startTime?: number | null;
+    elapsedDurationMs?: number;
   };
   [WebSocketEventType.END_CALL]: {
     userId: string;
     roomId: string;
-    topicId: string;
+    topicId?: string | null;
   };
   [WebSocketEventType.CALL_ENDED]: {
     userId: string;
     roomId: string;
-    topicId: string;
+    topicId?: string | null;
     reason?: 'busy';
   };
   [WebSocketEventType.INCOMING_CALL]: {
     roomId: string;
     callerId: string;
-    topicId: string;
+    topicId?: string | null;
     callType?: string;
     startTime?: number | null;
     topicType?: string | null;

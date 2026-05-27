@@ -56,6 +56,14 @@ export type ITopic = Topic & {
   info?: Partial<TopicSetting>;
   isPin?: boolean;
   lastMessage?: IMessage;
+  activeCall?: {
+    roomId: string;
+    startTime?: number | null;
+    participantCount?: number;
+    callType?: string;
+    groupMode?: boolean;
+    elapsedDurationMs?: number;
+  } | null;
   members?: IUser[];
   group?: Group;
   user?: IUser;
@@ -90,6 +98,7 @@ export type IMedia = Media & {
     height?: number;
     previewWidth?: number;
     previewHeight?: number;
+    fillPreview?: boolean;
   };
   isLoading?: boolean;
   thumbnailPath?: string | null;

@@ -566,7 +566,8 @@ const setupChatListeners = (): void => {
       payload.userId,
       payload.roomId,
       payload.topicId,
-      payload.startTime
+      payload.startTime,
+      payload.elapsedDurationMs
     );
   });
 

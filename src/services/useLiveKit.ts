@@ -1,17 +1,38 @@
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
+  BackgroundProcessor,
+  type BackgroundProcessorWrapper
+} from '@livekit/track-processors';
+import {
+  createLocalVideoTrack,
+  LocalTrackPublication,
   LocalVideoTrack,
+  Participant,
   RemoteParticipant,
   Room,
   RoomEvent,
-  Track
+  ScreenSharePresets,
+  Track,
+  VideoPresets,
+  VideoQuality
 } from 'livekit-client';
-import { computed, reactive, ref } from 'vue';
+import { MessageTypeEnum } from '@pksep/yui';
+import { computed, reactive, ref, watch } from 'vue';
 import type { IUser } from '../components/interfaces/interfaces';
 import { getAuthUser } from '../composables/useAuth';
-import { showErrorNotification } from '../composables/useNotifications';
+import { useCallBackground } from '../composables/useCallBackground';
+import {
+  showErrorNotification,
+  showNotification
+} from '../composables/useNotifications';
+import {
+  playNativeNotificationSound,
+  shouldPlayNotificationSound
+} from './useNotificationSoundPolicy';
 import { AudioOutput } from './useAudioOutput';
+import { prewarmCallBackgroundAssets } from './callBackgroundWarmup';
+import { copyTextToClipboard } from '../utils/copyTextToClipboard';
 import {
   playNativeCallRingtone,
   stopNativeCallRingtone
@@ -29,6 +50,8 @@ type LiveKitCallStatus = {
   roomReady?: boolean;
   participantCount?: number;
   wasAnswered?: boolean;
+  groupMode?: boolean;
+  elapsedDurationMs?: number;
 };
 
 type ActiveGroupCallEntry = {
@@ -36,7 +59,17 @@ type ActiveGroupCallEntry = {
   topicId: string;
   caller?: IUser | null;
   startTime?: number | null;
+  participantCount?: number;
+  groupMode?: boolean;
+  elapsedDurationMs?: number;
 };
+
+export type CallReaction =
+  | 'heart'
+  | 'thumbs-up'
+  | 'thumbs-down'
+  | 'joy'
+  | 'sob';
 
 type ParticipantMediaState = {
   identity: string;
@@ -48,6 +81,8 @@ type ParticipantMediaState = {
   isVideoActive: boolean;
   isScreenShareActive: boolean;
   isHandRaised: boolean;
+  activeReaction: CallReaction | null;
+  activeReactionExpiresAt: number | null;
   isSpeaking: boolean;
   isMicActive: boolean;
 };
@@ -59,12 +94,14 @@ type StreamCacheEntry = {
 };
 
 type CallEndReason = 'busy';
+type RemoteVideoSource = 'camera' | 'screen';
 
 type CallSocketAck = {
   accepted?: boolean;
   roomId?: string | null;
   topicId?: string | null;
   startTime?: number | null;
+  elapsedDurationMs?: number;
   isNewCall?: boolean;
 };
 
@@ -75,12 +112,16 @@ const user = ref<IUser | null>(null);
 const roomId = ref<string | null>(null);
 const topicId = ref<string | null>(null);
 const callStartedAt = ref<number | null>(null);
+const callElapsedMs = ref(0);
 const timerSeconds = ref(0);
 const isModalVisible = ref(false);
 const isRemoteVideoActive = ref(false);
 const localVideoStream = ref<MediaStream | null>(null);
 const localScreenShareStream = ref<MediaStream | null>(null);
 const handRaisedParticipants = ref<Record<string, boolean>>({});
+const participantReactions = ref<
+  Record<string, { reaction: CallReaction; expiresAt: number }>
+>({});
 const remoteParticipants = ref<ParticipantMediaState[]>([]);
 const callStatusNotice = ref<string | null>(null);
 const pendingEndCallRoomId = ref<string | null>(null);
@@ -88,11 +129,12 @@ const pendingEndCallTopicId = ref<string | null>(null);
 const activeGroupCalls = ref<Record<string, ActiveGroupCallEntry>>({});
 const invitedGroupCall = ref<{
   roomId: string;
-  topicId: string;
+  topicId?: string | null;
   inviteToken: string;
   title: string;
   avatarUrl?: string | null;
   startTime?: number | null;
+  elapsedDurationMs?: number;
   participantCount: number;
   members: IUser[];
   isJoinAvailable: boolean;
@@ -104,14 +146,23 @@ const state = reactive({
   isScreenSharingActive: false,
   isSpeakerActive: false,
   isFullScreen: false,
-  isHandRaised: false
+  isHandRaised: false,
+  activeReaction: null as CallReaction | null,
+  activeReactionExpiresAt: null as number | null
 });
 
 const HAND_RAISE_TOPIC = 'group-call-hand-raise';
+const CALL_REACTION_TOPIC = 'group-call-reaction';
+const CALL_REACTION_DURATION_MS = 4000;
 
 let room: Room | null = null;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
 let dialingTimeout: ReturnType<typeof setTimeout> | null = null;
+let dialingSoundWatchdogInterval: ReturnType<typeof setInterval> | null = null;
+let dialingAudioContext: AudioContext | null = null;
+let dialingAudioBuffer: AudioBuffer | null = null;
+let dialingAudioSource: AudioBufferSourceNode | null = null;
+let dialingAudioStartPromise: Promise<void> | null = null;
 let ringtoneAudio: HTMLAudioElement | null = null;
 let dialingAudio: HTMLAudioElement | null = null;
 let isAcceptingLocally = false;
@@ -127,6 +178,12 @@ let pendingEndCallRetryTimeout: ReturnType<typeof setTimeout> | null = null;
 let pendingEndCallFinalizeTimeout: ReturnType<typeof setTimeout> | null = null;
 let pendingNativeCallActionTimeout: ReturnType<typeof setTimeout> | null = null;
 let callStatusNoticeTimeout: ReturnType<typeof setTimeout> | null = null;
+const participantReactionTimeouts = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+>();
+const { selectedCallBackgroundImageUrl, selectedCallBackgroundMode } =
+  useCallBackground();
 
 const MAX_NATIVE_CALL_ACTION_RETRIES = 120;
 const NATIVE_CALL_ACTION_RETRY_DELAY_MS = 500;
@@ -134,8 +191,292 @@ const DISMISSED_INCOMING_CALL_TTL_MS = 15000;
 const CALL_STATUS_NOTICE_CLOSE_DELAY_MS = 3000;
 const dismissedIncomingCallRooms = new Map<string, number>();
 const dismissedIncomingCallTopics = new Map<string, number>();
+const CAMERA_CAPTURE_DEFAULTS = {
+  facingMode: 'user' as const,
+  frameRate: 30,
+  resolution: VideoPresets.h1080.resolution
+};
+const MANAGED_BACKGROUND_CAMERA_CAPTURE_DEFAULTS = {
+  facingMode: 'user' as const,
+  frameRate: 20,
+  resolution: VideoPresets.h540.resolution
+};
+const CAMERA_PUBLISH_DEFAULTS = {
+  degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
+  simulcast: true,
+  videoEncoding: VideoPresets.h1080.encoding,
+  videoSimulcastLayers: [VideoPresets.h216, VideoPresets.h540]
+};
+const MANAGED_BACKGROUND_CAMERA_PUBLISH_DEFAULTS = {
+  degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
+  simulcast: true,
+  videoEncoding: VideoPresets.h540.encoding,
+  videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360]
+};
+const SCREEN_SHARE_CAPTURE_DEFAULTS = {
+  contentHint: 'detail' as const,
+  resolution: ScreenSharePresets.original.resolution,
+  selfBrowserSurface: 'exclude' as const,
+  surfaceSwitching: 'include' as const,
+  systemAudio: 'include' as const
+};
+const SCREEN_SHARE_PUBLISH_DEFAULTS = {
+  degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
+  simulcast: false,
+  screenShareEncoding: ScreenSharePresets.original.encoding
+};
+const CALL_BACKGROUND_ASSET_PATHS = {
+  tasksVisionFileSet: '/call-background/wasm',
+  modelAssetPath: '/call-background/selfie_segmenter.tflite'
+};
+let localBackgroundProcessor: BackgroundProcessorWrapper | null = null;
+let localBackgroundProcessorTrack: LocalVideoTrack | null = null;
+let localBackgroundProcessorSignature: string | null = null;
+let hasShownBackgroundProcessorSupportError = false;
+let requestedVideoActive = false;
+let videoToggleOperation: Promise<void> | null = null;
+let suppressParticipantPresenceNotifications = true;
+let presenceAudioContext: AudioContext | null = null;
 
 const createRoomId = () => `livekit-${Math.random().toString(36).slice(2, 10)}`;
+
+const getLocalCameraTrack = (): LocalVideoTrack | null => {
+  if (!room) {
+    return null;
+  }
+
+  const publication = Array.from(
+    room.localParticipant.videoTrackPublications.values()
+  ).find(item => item.source === Track.Source.Camera);
+
+  return publication?.track instanceof LocalVideoTrack
+    ? publication.track
+    : null;
+};
+
+const getLocalCameraPublication = (activeRoom: Room) =>
+  Array.from(activeRoom.localParticipant.videoTrackPublications.values()).find(
+    item => item.source === Track.Source.Camera
+  );
+
+const shouldUseManagedBackgroundCamera = (): boolean =>
+  selectedCallBackgroundMode.value !== 'none';
+
+const getManagedBackgroundImageUrl = (): string | null =>
+  selectedCallBackgroundMode.value === 'image'
+    ? selectedCallBackgroundImageUrl.value || null
+    : null;
+
+const getCallBackgroundProcessorSignature = (): string => {
+  if (selectedCallBackgroundMode.value === 'blur') {
+    return 'blur';
+  }
+
+  if (selectedCallBackgroundMode.value === 'image') {
+    return `image:${selectedCallBackgroundImageUrl.value || ''}`;
+  }
+
+  return 'none';
+};
+
+const getCallBackgroundProcessorConfig = () => {
+  if (selectedCallBackgroundMode.value === 'blur') {
+    return {
+      mode: 'background-blur' as const,
+      blurRadius: 12,
+      assetPaths: CALL_BACKGROUND_ASSET_PATHS
+    };
+  }
+
+  if (
+    selectedCallBackgroundMode.value === 'image' &&
+    selectedCallBackgroundImageUrl.value
+  ) {
+    return {
+      mode: 'virtual-background' as const,
+      imagePath: selectedCallBackgroundImageUrl.value,
+      assetPaths: CALL_BACKGROUND_ASSET_PATHS
+    };
+  }
+
+  return {
+    mode: 'disabled' as const,
+    assetPaths: CALL_BACKGROUND_ASSET_PATHS
+  };
+};
+
+const getCallBackgroundProcessorSwitchOptions = () => {
+  if (selectedCallBackgroundMode.value === 'blur') {
+    return {
+      mode: 'background-blur' as const,
+      blurRadius: 12
+    };
+  }
+
+  if (
+    selectedCallBackgroundMode.value === 'image' &&
+    selectedCallBackgroundImageUrl.value
+  ) {
+    return {
+      mode: 'virtual-background' as const,
+      imagePath: selectedCallBackgroundImageUrl.value
+    };
+  }
+
+  return {
+    mode: 'disabled' as const
+  };
+};
+
+const stopLocalBackgroundProcessor = async (): Promise<void> => {
+  const activeTrack = localBackgroundProcessorTrack;
+  localBackgroundProcessorTrack = null;
+  localBackgroundProcessor = null;
+  localBackgroundProcessorSignature = null;
+
+  if (!activeTrack?.getProcessor()) {
+    return;
+  }
+
+  try {
+    await activeTrack.stopProcessor();
+  } catch (error) {
+    console.warn('[LiveKit] Failed to stop background processor:', error);
+  }
+};
+
+const ensureLocalBackgroundProcessor = async (
+  track: LocalVideoTrack
+): Promise<{
+  processor: BackgroundProcessorWrapper | null;
+  didCreate: boolean;
+}> => {
+  if (localBackgroundProcessorTrack === track && localBackgroundProcessor) {
+    return {
+      processor: localBackgroundProcessor,
+      didCreate: false
+    };
+  }
+
+  if (
+    localBackgroundProcessorTrack &&
+    localBackgroundProcessorTrack !== track
+  ) {
+    await stopLocalBackgroundProcessor();
+  }
+
+  const processor = BackgroundProcessor(
+    getCallBackgroundProcessorConfig(),
+    'call-background-processor'
+  );
+
+  await track.setProcessor(processor);
+  localBackgroundProcessorTrack = track;
+  localBackgroundProcessor = processor;
+  localBackgroundProcessorSignature = getCallBackgroundProcessorSignature();
+  return {
+    processor,
+    didCreate: true
+  };
+};
+
+const publishCameraWithBackground = async (
+  activeRoom: Room
+): Promise<LocalTrackPublication | undefined> => {
+  const existingPublication = Array.from(
+    activeRoom.localParticipant.videoTrackPublications.values()
+  ).find(item => item.source === Track.Source.Camera);
+
+  if (existingPublication?.track) {
+    await activeRoom.localParticipant.unpublishTrack(
+      existingPublication.track,
+      true
+    );
+  }
+
+  void prewarmCallBackgroundAssets(getManagedBackgroundImageUrl());
+
+  const localVideoTrack = await createLocalVideoTrack({
+    ...MANAGED_BACKGROUND_CAMERA_CAPTURE_DEFAULTS,
+    facingMode: currentCameraFacingMode
+  });
+  const { processor } = await ensureLocalBackgroundProcessor(localVideoTrack);
+
+  if (!processor) {
+    localVideoTrack.stop();
+    throw new Error('Failed to initialize camera background processor');
+  }
+
+  await waitForLocalProcessedVideoTrack(localVideoTrack, 250);
+
+  const publication = await activeRoom.localParticipant.publishTrack(
+    localVideoTrack,
+    MANAGED_BACKGROUND_CAMERA_PUBLISH_DEFAULTS
+  );
+
+  syncLocalTrackStateWhenProcessedTrackReady(localVideoTrack);
+
+  return publication;
+};
+
+const waitForLocalProcessedVideoTrack = async (
+  track: LocalVideoTrack,
+  timeoutMs = 500
+): Promise<MediaStreamTrack | null> => {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const processedTrack = track.getProcessor()?.processedTrack;
+
+    if (processedTrack?.readyState === 'live') {
+      return processedTrack;
+    }
+
+    await new Promise(resolve => {
+      setTimeout(resolve, 50);
+    });
+  }
+
+  return track.getProcessor()?.processedTrack || null;
+};
+
+const syncLocalTrackStateWhenProcessedTrackReady = (
+  track: LocalVideoTrack,
+  timeoutMs = 2500
+): void => {
+  void (async () => {
+    const processedTrack = await waitForLocalProcessedVideoTrack(
+      track,
+      timeoutMs
+    );
+
+    if (
+      !processedTrack ||
+      !state.isVideoActive ||
+      localBackgroundProcessorTrack !== track ||
+      getLocalCameraTrack() !== track
+    ) {
+      return;
+    }
+
+    syncLocalTrackState();
+  })();
+};
+
+const disableLocalCamera = async (activeRoom: Room): Promise<void> => {
+  const cameraPublication = getLocalCameraPublication(activeRoom);
+
+  if (cameraPublication?.track) {
+    await activeRoom.localParticipant.unpublishTrack(
+      cameraPublication.track,
+      true
+    );
+  } else {
+    await activeRoom.localParticipant.setCameraEnabled(false);
+  }
+
+  await stopLocalBackgroundProcessor();
+};
 
 const resolveCallTargetTopicId = (
   incomingRoomId?: string,
@@ -148,6 +489,92 @@ const removePendingGroupCallEntry = (targetTopicId?: string | null) => {
   const nextActiveGroupCalls = { ...activeGroupCalls.value };
   delete nextActiveGroupCalls[targetTopicId];
   activeGroupCalls.value = nextActiveGroupCalls;
+};
+
+const clearParticipantReactionTimeout = (participantId: string) => {
+  const timeout = participantReactionTimeouts.get(participantId);
+
+  if (timeout) {
+    clearTimeout(timeout);
+    participantReactionTimeouts.delete(participantId);
+  }
+};
+
+const clearParticipantReaction = (
+  participantId: string,
+  shouldSyncRemoteState = true
+) => {
+  clearParticipantReactionTimeout(participantId);
+
+  if (!participantReactions.value[participantId]) {
+    if (getAuthUser()?.id === participantId) {
+      state.activeReaction = null;
+      state.activeReactionExpiresAt = null;
+    }
+    return;
+  }
+
+  const nextParticipantReactions = { ...participantReactions.value };
+  delete nextParticipantReactions[participantId];
+  participantReactions.value = nextParticipantReactions;
+
+  if (getAuthUser()?.id === participantId) {
+    state.activeReaction = null;
+    state.activeReactionExpiresAt = null;
+  }
+
+  if (shouldSyncRemoteState) {
+    syncRemoteParticipantState();
+  }
+};
+
+const applyParticipantReaction = (
+  participantId: string,
+  reaction: CallReaction,
+  expiresAt = Date.now() + CALL_REACTION_DURATION_MS,
+  shouldSyncRemoteState = true
+) => {
+  const normalizedExpiresAt =
+    typeof expiresAt === 'number' && Number.isFinite(expiresAt)
+      ? Math.max(expiresAt, Date.now() + 250)
+      : Date.now() + CALL_REACTION_DURATION_MS;
+
+  clearParticipantReactionTimeout(participantId);
+  participantReactions.value = {
+    ...participantReactions.value,
+    [participantId]: {
+      reaction,
+      expiresAt: normalizedExpiresAt
+    }
+  };
+
+  if (getAuthUser()?.id === participantId) {
+    state.activeReaction = reaction;
+    state.activeReactionExpiresAt = normalizedExpiresAt;
+  }
+
+  participantReactionTimeouts.set(
+    participantId,
+    setTimeout(
+      () => {
+        clearParticipantReaction(participantId);
+      },
+      Math.max(0, normalizedExpiresAt - Date.now())
+    )
+  );
+
+  if (shouldSyncRemoteState) {
+    syncRemoteParticipantState();
+  }
+};
+
+const clearAllParticipantReactions = () => {
+  Array.from(participantReactionTimeouts.keys()).forEach(participantId => {
+    clearParticipantReactionTimeout(participantId);
+  });
+  participantReactions.value = {};
+  state.activeReaction = null;
+  state.activeReactionExpiresAt = null;
 };
 
 const removeInvitedGroupCallEntry = (activeRoomId?: string | null) => {
@@ -207,6 +634,17 @@ const clearUnavailableCallState = (
 ) => {
   removePendingGroupCallEntry(targetTopicId);
   removeInvitedGroupCallEntry(targetRoomId);
+  if (targetTopicId) {
+    const topicsApi = useTopics();
+    topicsApi.topics.value = topicsApi.topics.value.map(topic =>
+      topic.id === targetTopicId
+        ? {
+            ...topic,
+            activeCall: null
+          }
+        : topic
+    );
+  }
 };
 
 const clearPendingEndCallTimers = () => {
@@ -269,7 +707,7 @@ const emitEndCallEvent = (
   const sdk = getChatSDK();
   const me = getAuthUser();
 
-  if (!sdk || !me || !targetRoomId || !targetTopicId) {
+  if (!sdk || !me || !targetRoomId) {
     return;
   }
 
@@ -284,7 +722,7 @@ const schedulePendingEndCallConfirmation = (
   targetRoomId?: string | null,
   targetTopicId?: string | null
 ) => {
-  if (!targetRoomId || !targetTopicId) {
+  if (!targetRoomId) {
     resetPendingEndCallState();
     return;
   }
@@ -428,7 +866,10 @@ const restoreGroupCallEntryIfStillActive = (
           roomId: targetRoomId,
           topicId: targetTopicId,
           caller,
-          startTime: startTime ?? status.startTime ?? null
+          startTime: startTime ?? status.startTime ?? null,
+          participantCount: status.participantCount,
+          groupMode: status.groupMode,
+          elapsedDurationMs: status.elapsedDurationMs
         }
       };
     })();
@@ -464,6 +905,23 @@ const getInviteParamsFromUrl = () => {
   };
 };
 
+const buildInviteUrl = (invite: {
+  roomId: string;
+  inviteToken: string;
+}): string => {
+  const currentUrl = new URL(window.location.href);
+  const url = new URL(window.location.origin);
+  url.searchParams.set('callRoom', invite.roomId);
+  url.searchParams.set('callInvite', invite.inviteToken);
+
+  const organization = currentUrl.searchParams.get('organization');
+  if (organization) {
+    url.searchParams.set('organization', organization);
+  }
+
+  return url.toString();
+};
+
 const clearInviteParamsFromUrl = () => {
   if (typeof window === 'undefined') return;
 
@@ -475,19 +933,22 @@ const clearInviteParamsFromUrl = () => {
 
 const formattedTime = computed(() => formatTime(timerSeconds.value));
 
-const syncTimerValue = () => {
-  if (!callStartedAt.value) {
-    timerSeconds.value = 0;
-    return;
-  }
+const getElapsedCallDurationMs = () =>
+  callElapsedMs.value +
+  (callStartedAt.value ? Date.now() - callStartedAt.value : 0);
 
+const syncTimerValue = () => {
   timerSeconds.value = Math.max(
     0,
-    Math.floor((Date.now() - callStartedAt.value) / 1000)
+    Math.floor(getElapsedCallDurationMs() / 1000)
   );
 };
 
-const setCallStartedAt = (startTime?: number | null) => {
+const setCallStartedAt = (
+  startTime?: number | null,
+  elapsedMs = callElapsedMs.value
+) => {
+  callElapsedMs.value = Math.max(0, elapsedMs);
   callStartedAt.value =
     typeof startTime === 'number' && Number.isFinite(startTime)
       ? startTime
@@ -508,12 +969,20 @@ const startTimer = (startTime: number | null = callStartedAt.value) => {
   }, 1000);
 };
 
-const stopTimer = () => {
+const pauseTimer = (elapsedMs = getElapsedCallDurationMs()) => {
   if (timerInterval) {
     clearInterval(timerInterval);
     timerInterval = null;
   }
-  setCallStartedAt(null);
+  setCallStartedAt(null, elapsedMs);
+};
+
+const resetTimer = () => {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+  setCallStartedAt(null, 0);
 };
 
 const playRingtone = () => {
@@ -540,19 +1009,149 @@ const stopRingtone = () => {
   ringtoneAudio = null;
 };
 
+const getDialingAudioContext = () => {
+  if (dialingAudioContext) {
+    return dialingAudioContext;
+  }
+
+  const AudioContextCtor =
+    window.AudioContext ||
+    (
+      window as typeof window & {
+        webkitAudioContext?: typeof AudioContext;
+      }
+    ).webkitAudioContext;
+
+  if (!AudioContextCtor) {
+    return null;
+  }
+
+  dialingAudioContext = new AudioContextCtor();
+  return dialingAudioContext;
+};
+
+const loadDialingAudioBuffer = async () => {
+  if (dialingAudioBuffer) {
+    return dialingAudioBuffer;
+  }
+
+  const context = getDialingAudioContext();
+
+  if (!context) {
+    return null;
+  }
+
+  const response = await fetch('/audio/dialing.mp3');
+  const audioArrayBuffer = await response.arrayBuffer();
+  dialingAudioBuffer = await context.decodeAudioData(audioArrayBuffer);
+
+  return dialingAudioBuffer;
+};
+
+const startDialingBufferLoop = async () => {
+  const context = getDialingAudioContext();
+  const buffer = await loadDialingAudioBuffer();
+
+  if (!context || !buffer || !isCalling.value) {
+    return;
+  }
+
+  if (context.state === 'suspended') {
+    await context.resume();
+  }
+
+  if (dialingAudioSource) {
+    return;
+  }
+
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+  source.connect(context.destination);
+  source.onended = () => {
+    if (dialingAudioSource === source) {
+      dialingAudioSource = null;
+    }
+  };
+  source.start(0);
+  dialingAudioSource = source;
+};
+
+const stopDialingBufferLoop = () => {
+  if (!dialingAudioSource) {
+    return;
+  }
+
+  dialingAudioSource.onended = null;
+  dialingAudioSource.stop();
+  dialingAudioSource.disconnect();
+  dialingAudioSource = null;
+};
+
+const ensureDialingSoundPlayback = () => {
+  if (dialingAudioSource) {
+    return;
+  }
+
+  if (dialingAudioStartPromise) {
+    return;
+  }
+
+  dialingAudioStartPromise = (async () => {
+    try {
+      await startDialingBufferLoop();
+    } catch (error) {
+      if (!dialingAudio) {
+        dialingAudio = new Audio('/audio/dialing.mp3');
+        dialingAudio.preload = 'auto';
+        dialingAudio.loop = true;
+      }
+
+      if (dialingAudio.paused || dialingAudio.ended) {
+        dialingAudio.currentTime = 0;
+        await dialingAudio.play().catch(err => {
+          console.warn('[LiveKit] Dialing failed:', err);
+        });
+      }
+
+      console.warn(
+        '[LiveKit] Dialing buffer failed, fallback to audio tag:',
+        error
+      );
+    } finally {
+      dialingAudioStartPromise = null;
+    }
+  })();
+};
+
 const playDialingSound = () => {
-  if (dialingAudio) return;
-  dialingAudio = new Audio('/audio/dialing.mp3');
-  dialingAudio.loop = true;
-  setTimeout(() => {
-    dialingAudio
-      ?.play()
-      .catch(err => console.warn('[LiveKit] Dialing failed:', err));
-  }, 1200);
+  ensureDialingSoundPlayback();
+
+  if (dialingSoundWatchdogInterval) {
+    clearInterval(dialingSoundWatchdogInterval);
+  }
+
+  dialingSoundWatchdogInterval = setInterval(() => {
+    if (!isCalling.value || !dialingAudio) {
+      return;
+    }
+
+    ensureDialingSoundPlayback();
+  }, 1500);
 };
 
 const stopDialingSound = () => {
+  if (dialingSoundWatchdogInterval) {
+    clearInterval(dialingSoundWatchdogInterval);
+    dialingSoundWatchdogInterval = null;
+  }
+
+  dialingAudioStartPromise = null;
+  stopDialingBufferLoop();
+
   if (!dialingAudio) return;
+  dialingAudio.onpause = null;
+  dialingAudio.onended = null;
   dialingAudio.pause();
   dialingAudio = null;
 };
@@ -666,6 +1265,16 @@ const syncLocalTrackState = () => {
 
   const localVideoTrack = localVideoPublication?.track;
   const localScreenTrack = localScreenSharePublication?.track;
+  const localProcessedVideoTrack =
+    localVideoTrack instanceof LocalVideoTrack
+      ? localVideoTrack.getProcessor()?.processedTrack ||
+        localVideoTrack.mediaStreamTrack
+      : localVideoTrack?.mediaStreamTrack;
+  const shouldHideUnprocessedLocalVideo =
+    selectedCallBackgroundMode.value !== 'none' &&
+    state.isVideoActive &&
+    localVideoTrack instanceof LocalVideoTrack &&
+    !localVideoTrack.getProcessor()?.processedTrack;
 
   if (localScreenTrack?.mediaStreamTrack) {
     localScreenTrack.mediaStreamTrack.onended = () => {
@@ -678,13 +1287,69 @@ const syncLocalTrackState = () => {
   localVideoStream.value = getCachedSingleTrackStream(
     localTrackStreamCache,
     'local-camera',
-    localVideoTrack?.mediaStreamTrack
+    shouldHideUnprocessedLocalVideo ? null : localProcessedVideoTrack
   );
   localScreenShareStream.value = getCachedSingleTrackStream(
     localTrackStreamCache,
     'local-screen-share',
     localScreenTrack?.mediaStreamTrack
   );
+};
+
+const syncLocalCallBackgroundProcessor = async (): Promise<void> => {
+  const localCameraTrack = getLocalCameraTrack();
+  if (!localCameraTrack || !state.isVideoActive) {
+    await stopLocalBackgroundProcessor();
+    hasShownBackgroundProcessorSupportError = false;
+    syncLocalTrackState();
+    return;
+  }
+
+  hasShownBackgroundProcessorSupportError = false;
+
+  try {
+    const { processor, didCreate } =
+      await ensureLocalBackgroundProcessor(localCameraTrack);
+    const nextSignature = getCallBackgroundProcessorSignature();
+
+    if (!processor) {
+      return;
+    }
+
+    if (!didCreate && localBackgroundProcessorSignature === nextSignature) {
+      if (
+        selectedCallBackgroundMode.value !== 'none' &&
+        !localCameraTrack.getProcessor()?.processedTrack
+      ) {
+        syncLocalTrackStateWhenProcessedTrackReady(localCameraTrack);
+      }
+
+      syncLocalTrackState();
+      return;
+    }
+
+    if (!didCreate) {
+      await processor.switchTo(getCallBackgroundProcessorSwitchOptions());
+      localBackgroundProcessorSignature = nextSignature;
+    }
+
+    if (selectedCallBackgroundMode.value !== 'none' && !didCreate) {
+      await waitForLocalProcessedVideoTrack(localCameraTrack);
+      syncLocalTrackStateWhenProcessedTrackReady(localCameraTrack);
+    }
+
+    hasShownBackgroundProcessorSupportError = false;
+    syncLocalTrackState();
+  } catch (error) {
+    console.warn('[LiveKit] Failed to apply call background processor:', error);
+    if (
+      selectedCallBackgroundMode.value !== 'none' &&
+      !hasShownBackgroundProcessorSupportError
+    ) {
+      hasShownBackgroundProcessorSupportError = true;
+      showErrorNotification('Не удалось применить фон для звонка');
+    }
+  }
 };
 
 const getActiveRemoteVideoPublication = (
@@ -703,6 +1368,89 @@ const getActiveRemoteVideoPublication = (
       );
     }
   );
+
+const getRemoteVideoPublicationBySource = (
+  participantIdentity: string,
+  source: RemoteVideoSource
+) => {
+  const remoteParticipant = room?.remoteParticipants.get(participantIdentity);
+
+  if (!remoteParticipant) {
+    return null;
+  }
+
+  return (
+    Array.from(remoteParticipant.videoTrackPublications.values()).find(
+      publication =>
+        publication.source ===
+        (source === 'screen' ? Track.Source.ScreenShare : Track.Source.Camera)
+    ) || null
+  );
+};
+
+const buildRequestedVideoDimensions = (element: HTMLVideoElement) => {
+  const rect = element.getBoundingClientRect();
+  const pixelDensity =
+    typeof window !== 'undefined'
+      ? Math.min(window.devicePixelRatio || 1, 2)
+      : 1;
+  const width = Math.round(
+    (rect.width || element.clientWidth || 0) * pixelDensity
+  );
+  const height = Math.round(
+    (rect.height || element.clientHeight || 0) * pixelDensity
+  );
+
+  if (!width || !height) {
+    return null;
+  }
+
+  return { width, height };
+};
+
+const applyRemoteVideoSubscriptionPreferences = (
+  participantIdentity: string,
+  source: RemoteVideoSource,
+  element?: HTMLVideoElement | null
+) => {
+  const publication = getRemoteVideoPublicationBySource(
+    participantIdentity,
+    source
+  );
+
+  if (!publication) {
+    return;
+  }
+
+  publication.setEnabled(true);
+  publication.setVideoFPS(source === 'screen' ? 30 : 24);
+
+  const dimensions = element ? buildRequestedVideoDimensions(element) : null;
+
+  if (dimensions) {
+    publication.setVideoDimensions(dimensions);
+    return;
+  }
+
+  publication.setVideoQuality(VideoQuality.HIGH);
+};
+
+const requestHighQualityForAllRemoteVideoTracks = () => {
+  if (!room) {
+    return;
+  }
+
+  Array.from(room.remoteParticipants.values()).forEach(remoteParticipant => {
+    applyRemoteVideoSubscriptionPreferences(
+      remoteParticipant.identity,
+      'screen'
+    );
+    applyRemoteVideoSubscriptionPreferences(
+      remoteParticipant.identity,
+      'camera'
+    );
+  });
+};
 
 const getActiveRemoteAudioPublication = (
   remoteParticipant: RemoteParticipant
@@ -760,6 +1508,10 @@ const buildRemoteParticipantState = (
     isVideoActive: !!preferredVideoPublication?.track?.mediaStreamTrack,
     isScreenShareActive: !!screenSharePublication?.track?.mediaStreamTrack,
     isHandRaised: !!handRaisedParticipants.value[remoteParticipant.identity],
+    activeReaction:
+      participantReactions.value[remoteParticipant.identity]?.reaction || null,
+    activeReactionExpiresAt:
+      participantReactions.value[remoteParticipant.identity]?.expiresAt || null,
     isSpeaking: !!remoteParticipant.isSpeaking,
     isMicActive: !!audioPublication?.track?.mediaStreamTrack
   };
@@ -821,6 +1573,30 @@ const publishHandRaiseState = async (isRaised: boolean) => {
   });
 };
 
+const publishCallReaction = async (reaction: CallReaction) => {
+  if (!room) return;
+
+  const expiresAt = Date.now() + CALL_REACTION_DURATION_MS;
+  const payload = new TextEncoder().encode(
+    JSON.stringify({
+      type: CALL_REACTION_TOPIC,
+      reaction,
+      expiresAt
+    })
+  );
+
+  await room.localParticipant.publishData(payload, {
+    reliable: true,
+    topic: CALL_REACTION_TOPIC
+  });
+
+  const authUser = getAuthUser();
+
+  if (authUser?.id) {
+    applyParticipantReaction(authUser.id, reaction, expiresAt, false);
+  }
+};
+
 const handleHandRaiseData = (
   payload: Uint8Array,
   participant?: RemoteParticipant,
@@ -843,6 +1619,40 @@ const handleHandRaiseData = (
     syncRemoteParticipantState();
   } catch (error) {
     console.warn('[LiveKit] Failed to parse hand raise event:', error);
+  }
+};
+
+const handleCallReactionData = (
+  payload: Uint8Array,
+  participant?: RemoteParticipant,
+  topic?: string
+) => {
+  if (!participant || topic !== CALL_REACTION_TOPIC) return;
+
+  try {
+    const parsedPayload = JSON.parse(new TextDecoder().decode(payload)) as {
+      type?: string;
+      reaction?: CallReaction;
+      expiresAt?: number;
+    };
+
+    if (
+      parsedPayload.type !== CALL_REACTION_TOPIC ||
+      !parsedPayload.reaction ||
+      !['heart', 'thumbs-up', 'thumbs-down', 'joy', 'sob'].includes(
+        parsedPayload.reaction
+      )
+    ) {
+      return;
+    }
+
+    applyParticipantReaction(
+      participant.identity,
+      parsedPayload.reaction,
+      parsedPayload.expiresAt
+    );
+  } catch (error) {
+    console.warn('[LiveKit] Failed to parse reaction event:', error);
   }
 };
 
@@ -907,7 +1717,7 @@ const syncConnectionState = (activeRoom: Room) => {
   if (callStartedAt.value) {
     startTimer();
   } else {
-    stopTimer();
+    pauseTimer();
   }
 
   if (hasRemoteParticipant) {
@@ -922,11 +1732,160 @@ const syncConnectionState = (activeRoom: Room) => {
   }
 };
 
+const getPresenceAudioContext = (): AudioContext | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const AudioContextCtor =
+    window.AudioContext ||
+    ((window as typeof window & { webkitAudioContext?: typeof AudioContext })
+      .webkitAudioContext as typeof AudioContext | undefined);
+
+  if (!AudioContextCtor) {
+    return null;
+  }
+
+  if (!presenceAudioContext) {
+    presenceAudioContext = new AudioContextCtor();
+  }
+
+  return presenceAudioContext;
+};
+
+const schedulePresenceTone = (
+  audioContext: AudioContext,
+  startAt: number,
+  frequency: number,
+  durationSeconds: number,
+  gainValue: number
+): number => {
+  const oscillator = audioContext.createOscillator();
+  const gainNode = audioContext.createGain();
+  const endAt = startAt + durationSeconds;
+
+  oscillator.type = 'sine';
+  oscillator.frequency.setValueAtTime(frequency, startAt);
+  gainNode.gain.setValueAtTime(0.0001, startAt);
+  gainNode.gain.linearRampToValueAtTime(gainValue, startAt + 0.015);
+  gainNode.gain.exponentialRampToValueAtTime(0.0001, endAt);
+
+  oscillator.connect(gainNode);
+  gainNode.connect(audioContext.destination);
+  oscillator.start(startAt);
+  oscillator.stop(endAt + 0.02);
+
+  return endAt;
+};
+
+const playPresenceTonePattern = async (
+  type: 'joined' | 'left'
+): Promise<void> => {
+  const audioContext = getPresenceAudioContext();
+
+  if (!audioContext) {
+    return;
+  }
+
+  if (audioContext.state === 'suspended') {
+    try {
+      await audioContext.resume();
+    } catch (error) {
+      console.warn('[LiveKit] Failed to resume presence audio context:', error);
+      return;
+    }
+  }
+
+  let cursor = audioContext.currentTime + 0.01;
+
+  if (type === 'joined') {
+    cursor = schedulePresenceTone(audioContext, cursor, 740, 0.08, 0.03);
+    schedulePresenceTone(audioContext, cursor + 0.04, 988, 0.11, 0.03);
+    return;
+  }
+
+  cursor = schedulePresenceTone(audioContext, cursor, 660, 0.1, 0.028);
+  schedulePresenceTone(audioContext, cursor + 0.03, 523.25, 0.12, 0.026);
+};
+
+const playGroupCallPresenceSound = async (
+  type: 'joined' | 'left'
+): Promise<void> => {
+  if (!(await shouldPlayNotificationSound())) {
+    return;
+  }
+
+  if (await playNativeNotificationSound()) {
+    return;
+  }
+
+  try {
+    await playPresenceTonePattern(type);
+  } catch (error) {
+    console.warn('[LiveKit] Failed to play presence sound:', error);
+  }
+};
+
+const isGroupCallPresenceNotificationEnabled = (activeRoom?: Room): boolean => {
+  const activeTopic = topicId.value
+    ? (useTopics().getSelectedTopic(topicId.value) as any)
+    : null;
+
+  return !!(
+    activeTopic?.type === TopicType.Group ||
+    activeTopic?.activeCall?.groupMode ||
+    invitedGroupCall.value?.topicId ||
+    (activeRoom?.remoteParticipants.size ?? 0) > 1
+  );
+};
+
+const resolveParticipantDisplayName = (
+  participant: Participant | RemoteParticipant
+): string => {
+  const activeTopic = topicId.value
+    ? (useTopics().getSelectedTopic(topicId.value) as any)
+    : null;
+  const topicMember =
+    activeTopic?.members?.find?.(
+      (member: IUser) => member?.id === participant.identity
+    ) || null;
+
+  return (
+    topicMember?.initials ||
+    topicMember?.nickname ||
+    participant.name ||
+    participant.identity
+  );
+};
+
+const showGroupCallPresenceNotification = (
+  participant: Participant | RemoteParticipant,
+  action: 'joined' | 'left',
+  activeRoom?: Room
+): void => {
+  if (
+    suppressParticipantPresenceNotifications ||
+    !isGroupCallPresenceNotificationEnabled(activeRoom)
+  ) {
+    return;
+  }
+
+  showNotification({
+    title: resolveParticipantDisplayName(participant),
+    description:
+      action === 'joined' ? 'присоединился к звонку' : 'покинул звонок',
+    type: MessageTypeEnum.success
+  });
+
+  void playGroupCallPresenceSound(action);
+};
+
 const setupRoomListeners = (activeRoom: Room) => {
   activeRoom
     .on(RoomEvent.TrackPublished, () => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      requestHighQualityForAllRemoteVideoTracks();
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.TrackUnpublished, () => {
@@ -936,6 +1895,7 @@ const setupRoomListeners = (activeRoom: Room) => {
     .on(RoomEvent.TrackSubscribed, () => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      requestHighQualityForAllRemoteVideoTracks();
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.TrackUnsubscribed, () => {
@@ -950,14 +1910,17 @@ const setupRoomListeners = (activeRoom: Room) => {
     .on(RoomEvent.TrackUnmuted, () => {
       syncLocalTrackState();
       syncRemoteParticipantState();
+      requestHighQualityForAllRemoteVideoTracks();
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.ActiveSpeakersChanged, () => {
       syncRemoteParticipantSpeakingState();
     })
-    .on(RoomEvent.ParticipantConnected, () => {
+    .on(RoomEvent.ParticipantConnected, participant => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      requestHighQualityForAllRemoteVideoTracks();
+      showGroupCallPresenceNotification(participant, 'joined', activeRoom);
       if (state.isHandRaised) {
         void publishHandRaiseState(true);
       }
@@ -966,8 +1929,10 @@ const setupRoomListeners = (activeRoom: Room) => {
       const nextHandRaisedParticipants = { ...handRaisedParticipants.value };
       delete nextHandRaisedParticipants[participant.identity];
       handRaisedParticipants.value = nextHandRaisedParticipants;
+      clearParticipantReaction(participant.identity, false);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      showGroupCallPresenceNotification(participant, 'left', activeRoom);
     })
     .on(RoomEvent.LocalTrackPublished, publication => {
       syncLocalTrackState();
@@ -989,6 +1954,7 @@ const setupRoomListeners = (activeRoom: Room) => {
     })
     .on(RoomEvent.DataReceived, (payload, participant, _, topic) => {
       handleHandRaiseData(payload, participant, topic);
+      handleCallReactionData(payload, participant, topic);
     })
     .on(RoomEvent.Reconnecting, () => {
       syncLocalTrackState();
@@ -999,6 +1965,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncLocalTrackState();
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      requestHighQualityForAllRemoteVideoTracks();
       void ensureLocalMicrophoneState(activeRoom);
       void enforceSingleScreenShare();
     })
@@ -1086,7 +2053,10 @@ const connectToRoom = async () => {
     const token = await getToken(activeRoomId);
     if (!token) {
       const callStatus = await sdk.getLiveKitCallStatus(activeRoomId);
-      if (!callStatus?.active || callStatus.topicId !== activeTopicId) {
+      if (
+        !callStatus?.active ||
+        (activeTopicId !== null && callStatus.topicId !== activeTopicId)
+      ) {
         throw new Error('Call is no longer active');
       }
 
@@ -1094,9 +2064,17 @@ const connectToRoom = async () => {
     }
 
     room?.disconnect();
+    suppressParticipantPresenceNotifications = true;
     const nextRoom = new Room({
-      adaptiveStream: true,
-      dynacast: true
+      adaptiveStream: {
+        pixelDensity: 'screen'
+      },
+      dynacast: true,
+      publishDefaults: {
+        ...CAMERA_PUBLISH_DEFAULTS,
+        ...SCREEN_SHARE_PUBLISH_DEFAULTS
+      },
+      videoCaptureDefaults: CAMERA_CAPTURE_DEFAULTS
     });
     room = nextRoom;
 
@@ -1121,13 +2099,7 @@ const connectToRoom = async () => {
         return;
       }
 
-      if (
-        shouldEndCallOnConnectFailure &&
-        sdk &&
-        me &&
-        activeRoomId &&
-        activeTopicId
-      ) {
+      if (shouldEndCallOnConnectFailure && sdk && me && activeRoomId) {
         sdk.sendWebSocketEvent(WebSocketEventType.END_CALL, {
           roomId: activeRoomId,
           topicId: activeTopicId,
@@ -1147,19 +2119,44 @@ const connectToRoom = async () => {
 
     await nextRoom.localParticipant.setMicrophoneEnabled(state.isMicActive);
     if (state.isVideoActive) {
-      await nextRoom.localParticipant.setCameraEnabled(true);
+      if (shouldUseManagedBackgroundCamera()) {
+        try {
+          await publishCameraWithBackground(nextRoom);
+        } catch (error) {
+          state.isVideoActive = false;
+          console.warn(
+            '[LiveKit] Failed to publish camera with background:',
+            error
+          );
+          showErrorNotification('Не удалось применить фон для звонка');
+        }
+      } else {
+        await nextRoom.localParticipant.setCameraEnabled(
+          true,
+          CAMERA_CAPTURE_DEFAULTS,
+          CAMERA_PUBLISH_DEFAULTS
+        );
+      }
     }
     if (state.isScreenSharingActive) {
-      await nextRoom.localParticipant.setScreenShareEnabled(true);
+      await nextRoom.localParticipant.setScreenShareEnabled(
+        true,
+        SCREEN_SHARE_CAPTURE_DEFAULTS,
+        SCREEN_SHARE_PUBLISH_DEFAULTS
+      );
       await ensureLocalMicrophoneState(nextRoom);
     }
 
     syncLocalTrackState();
     syncRemoteParticipantState();
     syncConnectionState(nextRoom);
+    requestHighQualityForAllRemoteVideoTracks();
+    suppressParticipantPresenceNotifications = false;
     shouldEndCallOnConnectFailure = false;
-    stopDialingSound();
-    stopRingtone();
+
+    if (isIncoming.value) {
+      stopRingtone();
+    }
   })().finally(() => {
     if (currentAttemptId === connectAttemptId) {
       connectPromise = null;
@@ -1170,12 +2167,20 @@ const connectToRoom = async () => {
 };
 
 const resetMediaState = () => {
+  suppressParticipantPresenceNotifications = true;
   clearTrackStreamCaches();
   currentCameraFacingMode = 'user';
+  localBackgroundProcessor = null;
+  localBackgroundProcessorTrack = null;
+  localBackgroundProcessorSignature = null;
+  hasShownBackgroundProcessorSupportError = false;
+  requestedVideoActive = false;
+  videoToggleOperation = null;
   localVideoStream.value = null;
   localScreenShareStream.value = null;
   remoteParticipants.value = [];
   handRaisedParticipants.value = {};
+  clearAllParticipantReactions();
   isRemoteVideoActive.value = false;
   state.isMicActive = false;
   state.isVideoActive = false;
@@ -1183,6 +2188,8 @@ const resetMediaState = () => {
   state.isSpeakerActive = false;
   state.isFullScreen = false;
   state.isHandRaised = false;
+  state.activeReaction = null;
+  state.activeReactionExpiresAt = null;
 };
 
 const applyCallSocketAck = (
@@ -1191,23 +2198,26 @@ const applyCallSocketAck = (
     roomId?: string | null;
     topicId?: string | null;
     startTime?: number | null;
+    elapsedDurationMs?: number;
     isNewCall?: boolean;
   }
 ) => {
   const resolvedRoomId = ack?.roomId ?? fallback?.roomId ?? null;
   const resolvedTopicId = ack?.topicId ?? fallback?.topicId ?? null;
   const resolvedStartTime = ack?.startTime ?? fallback?.startTime ?? null;
+  const resolvedElapsedDurationMs =
+    ack?.elapsedDurationMs ?? fallback?.elapsedDurationMs ?? 0;
 
   if (resolvedRoomId) {
     roomId.value = resolvedRoomId;
   }
 
-  if (resolvedTopicId) {
+  if (resolvedTopicId !== undefined) {
     topicId.value = resolvedTopicId;
   }
 
-  if (resolvedStartTime) {
-    setCallStartedAt(resolvedStartTime);
+  if (resolvedStartTime !== undefined) {
+    setCallStartedAt(resolvedStartTime ?? null, resolvedElapsedDurationMs);
   }
 
   if (typeof ack?.isNewCall === 'boolean') {
@@ -1231,7 +2241,7 @@ export const startLiveKitCall = async (
   user.value = targetUser;
   topicId.value = currentTopicId;
   roomId.value = createRoomId();
-  setCallStartedAt(Date.now());
+  setCallStartedAt(null, 0);
   shouldEndCallOnConnectFailure = true;
   open.value = true;
   isCalling.value = true;
@@ -1250,7 +2260,8 @@ export const startLiveKitCall = async (
   applyCallSocketAck(startAck, {
     roomId: roomId.value,
     topicId: currentTopicId,
-    startTime: callStartedAt.value,
+    startTime: null,
+    elapsedDurationMs: 0,
     isNewCall: true
   });
 
@@ -1292,7 +2303,7 @@ export const startLiveKitGroupCall = async (currentTopicId: string) => {
   user.value = me as any;
   topicId.value = currentTopicId;
   roomId.value = activeRoomId;
-  setCallStartedAt(Date.now());
+  setCallStartedAt(null, 0);
   shouldEndCallOnConnectFailure = true;
   open.value = true;
   isIncoming.value = false;
@@ -1311,7 +2322,8 @@ export const startLiveKitGroupCall = async (currentTopicId: string) => {
   applyCallSocketAck(startAck, {
     roomId: activeRoomId,
     topicId: currentTopicId,
-    startTime: callStartedAt.value,
+    startTime: null,
+    elapsedDurationMs: 0,
     isNewCall: true
   });
 
@@ -1320,6 +2332,88 @@ export const startLiveKitGroupCall = async (currentTopicId: string) => {
   }
 
   await connectToRoom();
+};
+
+export const startStandaloneMeetingCall = async () => {
+  if (open.value) return;
+
+  const sdk = getChatSDK();
+  const me = getAuthUser();
+  if (!sdk || !me) return;
+
+  clearCallStatusNotice();
+  const activeRoomId = createRoomId();
+  user.value = me as any;
+  topicId.value = null;
+  roomId.value = activeRoomId;
+  setCallStartedAt(null, 0);
+  shouldEndCallOnConnectFailure = true;
+  open.value = true;
+  isIncoming.value = false;
+  isCalling.value = false;
+  isModalVisible.value = true;
+
+  const startAck = await sdk.sendWebSocketEventWithAck<
+    WebSocketEventType.START_CALL,
+    CallSocketAck
+  >(WebSocketEventType.START_CALL, {
+    roomId: activeRoomId,
+    topicId: null,
+    userId: me.id
+  });
+
+  applyCallSocketAck(startAck, {
+    roomId: activeRoomId,
+    topicId: null,
+    startTime: null,
+    elapsedDurationMs: 0,
+    isNewCall: true
+  });
+
+  if (startAck?.accepted === false) {
+    return;
+  }
+
+  await connectToRoom();
+};
+
+export const createStandaloneMeetingInviteLink = async (): Promise<boolean> => {
+  const sdk = getChatSDK();
+  const me = getAuthUser();
+
+  if (!sdk || !me) {
+    return false;
+  }
+
+  const requestedRoomId = createRoomId();
+  const startAck = await sdk.sendWebSocketEventWithAck<
+    WebSocketEventType.START_CALL,
+    CallSocketAck
+  >(WebSocketEventType.START_CALL, {
+    roomId: requestedRoomId,
+    topicId: null,
+    userId: me.id
+  });
+
+  const activeRoomId = startAck?.roomId ?? requestedRoomId;
+
+  if (startAck?.accepted === false || !activeRoomId) {
+    return false;
+  }
+
+  try {
+    const invite = await sdk.createGroupCallInvite(activeRoomId);
+
+    if (!invite?.inviteToken) {
+      return false;
+    }
+
+    await copyTextToClipboard(buildInviteUrl(invite));
+    return true;
+  } catch (error) {
+    console.warn('Failed to create standalone meeting invite link', error);
+    return false;
+  }
 };
 
 export const receiveIncomingCall = async (
@@ -1357,6 +2451,23 @@ export const receiveIncomingCall = async (
   }
 
   const resolvedStartTime = incomingStartTime ?? callStatus.startTime ?? null;
+  const resolvedElapsedDurationMs = callStatus.elapsedDurationMs ?? 0;
+  const topicsApi = useTopics();
+  topicsApi.topics.value = topicsApi.topics.value.map(topic =>
+    topic.id === incomingTopicId
+      ? {
+          ...topic,
+          activeCall: {
+            roomId: incomingRoomId,
+            startTime: resolvedStartTime,
+            participantCount: callStatus.participantCount,
+            callType: 'livekit',
+            groupMode: callStatus.groupMode,
+            elapsedDurationMs: resolvedElapsedDurationMs
+          }
+        }
+      : topic
+  );
 
   if (resolvedTopicType === TopicType.Group) {
     activeGroupCalls.value = {
@@ -1365,7 +2476,10 @@ export const receiveIncomingCall = async (
         roomId: incomingRoomId,
         topicId: incomingTopicId,
         caller: targetUser,
-        startTime: resolvedStartTime
+        startTime: resolvedStartTime,
+        participantCount: callStatus.participantCount,
+        groupMode: callStatus.groupMode,
+        elapsedDurationMs: resolvedElapsedDurationMs
       }
     };
     return true;
@@ -1378,7 +2492,7 @@ export const receiveIncomingCall = async (
     user.value = targetUser;
     roomId.value = incomingRoomId;
     topicId.value = incomingTopicId;
-    setCallStartedAt(resolvedStartTime);
+    setCallStartedAt(resolvedStartTime, resolvedElapsedDurationMs);
     open.value = false;
     isIncoming.value = true;
     isModalVisible.value = false;
@@ -1389,7 +2503,7 @@ export const receiveIncomingCall = async (
   user.value = targetUser;
   roomId.value = incomingRoomId;
   topicId.value = incomingTopicId;
-  setCallStartedAt(resolvedStartTime);
+  setCallStartedAt(resolvedStartTime, resolvedElapsedDurationMs);
   open.value = true;
   isIncoming.value = true;
   isModalVisible.value = true;
@@ -1409,7 +2523,10 @@ export const acceptCall = async () => {
 
   if (!callStartedAt.value) {
     const callStatus = await getLiveKitCallStatus(roomId.value, topicId.value);
-    setCallStartedAt(callStatus?.startTime ?? null);
+    setCallStartedAt(
+      callStatus?.startTime ?? null,
+      callStatus?.elapsedDurationMs ?? 0
+    );
   }
 
   stopRingtone();
@@ -1432,6 +2549,7 @@ export const acceptCall = async () => {
     roomId: roomId.value,
     topicId: topicId.value,
     startTime: callStartedAt.value,
+    elapsedDurationMs: callElapsedMs.value,
     isNewCall: false
   });
   if (answerAck?.accepted === false) {
@@ -1473,7 +2591,10 @@ export const joinPendingGroupCall = async (targetTopicId?: string) => {
   user.value = caller || null;
   roomId.value = pendingRoomId;
   topicId.value = pendingTopicId;
-  setCallStartedAt(pendingGroupCall.startTime ?? callStatus.startTime ?? null);
+  setCallStartedAt(
+    pendingGroupCall.startTime ?? callStatus.startTime ?? null,
+    pendingGroupCall.elapsedDurationMs ?? callStatus.elapsedDurationMs ?? 0
+  );
   open.value = true;
   isIncoming.value = false;
   isCalling.value = true;
@@ -1494,6 +2615,8 @@ export const joinPendingGroupCall = async (targetTopicId?: string) => {
     roomId: pendingRoomId,
     topicId: pendingTopicId,
     startTime: pendingGroupCall.startTime ?? callStatus.startTime ?? null,
+    elapsedDurationMs:
+      pendingGroupCall.elapsedDurationMs ?? callStatus.elapsedDurationMs ?? 0,
     isNewCall: false
   });
   if (answerAck?.accepted === false) {
@@ -1531,6 +2654,7 @@ export const hydrateInvitedGroupCallFromUrl = async () => {
     title: preview.title,
     avatarUrl: preview.avatarUrl || null,
     startTime: preview.startTime ?? null,
+    elapsedDurationMs: preview.elapsedDurationMs ?? 0,
     participantCount: preview.participantCount,
     members: (preview.members || []) as IUser[],
     isJoinAvailable: true
@@ -1556,7 +2680,10 @@ export const joinInvitedGroupCall = async () => {
   user.value = me as any;
   roomId.value = invite.roomId;
   topicId.value = invite.topicId;
-  setCallStartedAt(invite.startTime ?? callStatus.startTime ?? null);
+  setCallStartedAt(
+    invite.startTime ?? callStatus.startTime ?? null,
+    invite.elapsedDurationMs ?? callStatus.elapsedDurationMs ?? 0
+  );
   open.value = true;
   isIncoming.value = false;
   isCalling.value = true;
@@ -1577,6 +2704,8 @@ export const joinInvitedGroupCall = async () => {
     roomId: invite.roomId,
     topicId: invite.topicId,
     startTime: invite.startTime ?? callStatus.startTime ?? null,
+    elapsedDurationMs:
+      invite.elapsedDurationMs ?? callStatus.elapsedDurationMs ?? 0,
     isNewCall: false
   });
   if (answerAck?.accepted === false) {
@@ -1599,9 +2728,44 @@ export const handleCallAnswered = async (
   answeredUserId: string,
   answeredRoomId?: string,
   answeredTopicId?: string | null,
-  answeredStartTime?: number | null
+  answeredStartTime?: number | null,
+  answeredElapsedDurationMs?: number
 ) => {
   markIncomingCallDismissed(answeredRoomId, answeredTopicId);
+
+  if (answeredTopicId) {
+    const existingPendingCall = activeGroupCalls.value[answeredTopicId];
+    if (existingPendingCall) {
+      activeGroupCalls.value = {
+        ...activeGroupCalls.value,
+        [answeredTopicId]: {
+          ...existingPendingCall,
+          startTime: answeredStartTime ?? existingPendingCall.startTime ?? null,
+          elapsedDurationMs:
+            answeredElapsedDurationMs ?? existingPendingCall.elapsedDurationMs
+        }
+      };
+    }
+
+    const topicsApi = useTopics();
+    topicsApi.topics.value = topicsApi.topics.value.map(topic =>
+      topic.id === answeredTopicId
+        ? {
+            ...topic,
+            activeCall: {
+              roomId: answeredRoomId || topic.activeCall?.roomId || topic.id,
+              startTime:
+                answeredStartTime ?? topic.activeCall?.startTime ?? null,
+              participantCount: topic.activeCall?.participantCount,
+              callType: topic.activeCall?.callType || 'livekit',
+              groupMode: topic.activeCall?.groupMode,
+              elapsedDurationMs:
+                answeredElapsedDurationMs ?? topic.activeCall?.elapsedDurationMs
+            }
+          }
+        : topic
+    );
+  }
 
   const matchesCurrentCall =
     (answeredRoomId && roomId.value === answeredRoomId) ||
@@ -1611,7 +2775,10 @@ export const handleCallAnswered = async (
     (answeredTopicId && localAcceptTopicId === answeredTopicId);
 
   if (answeredRoomId && roomId.value === answeredRoomId) {
-    setCallStartedAt(answeredStartTime ?? callStartedAt.value);
+    setCallStartedAt(
+      answeredStartTime ?? callStartedAt.value,
+      answeredElapsedDurationMs ?? callElapsedMs.value
+    );
   }
 
   if (matchesLocalAccept) {
@@ -1705,9 +2872,12 @@ export const dismissIncomingCallState = (
 export const syncActiveCalls = async (
   calls: Array<{
     roomId: string;
-    topicId: string;
+    topicId?: string | null;
     callType: string;
-    startTime: number;
+    startTime?: number | null;
+    participantCount?: number;
+    groupMode?: boolean;
+    elapsedDurationMs?: number;
   }>
 ) => {
   const previousActiveGroupCalls = activeGroupCalls.value;
@@ -1721,7 +2891,11 @@ export const syncActiveCalls = async (
 
       return {
         ...call,
-        startTime: status?.startTime ?? call.startTime
+        startTime: status?.startTime ?? call.startTime,
+        participantCount: status?.participantCount ?? call.participantCount,
+        groupMode: status?.groupMode ?? call.groupMode,
+        elapsedDurationMs:
+          status?.elapsedDurationMs ?? call.elapsedDurationMs ?? 0
       };
     })
   );
@@ -1729,7 +2903,7 @@ export const syncActiveCalls = async (
   activeGroupCalls.value = validatedCalls.reduce<
     Record<string, ActiveGroupCallEntry>
   >((acc, call) => {
-    if (!call) {
+    if (!call || !call.topicId) {
       return acc;
     }
 
@@ -1738,10 +2912,32 @@ export const syncActiveCalls = async (
       roomId: call.roomId,
       topicId: call.topicId,
       caller: previousEntry?.caller,
-      startTime: call.startTime
+      startTime: call.startTime,
+      participantCount: call.participantCount,
+      groupMode: call.groupMode,
+      elapsedDurationMs: call.elapsedDurationMs
     };
     return acc;
   }, {});
+
+  const topicsApi = useTopics();
+  topicsApi.topics.value = topicsApi.topics.value.map(topic => {
+    const activeCall = activeGroupCalls.value[topic.id];
+
+    return {
+      ...topic,
+      activeCall: activeCall
+        ? {
+            roomId: activeCall.roomId,
+            startTime: activeCall.startTime ?? null,
+            participantCount: activeCall.participantCount,
+            callType: 'livekit',
+            groupMode: activeCall.groupMode,
+            elapsedDurationMs: activeCall.elapsedDurationMs
+          }
+        : null
+    };
+  });
 };
 
 export const copyInvitedGroupCallLink = async () => {
@@ -1753,17 +2949,7 @@ export const copyInvitedGroupCallLink = async () => {
   const invite = await sdk.createGroupCallInvite(activeRoomId);
   if (!invite) return false;
 
-  const currentUrl = new URL(window.location.href);
-  const url = new URL(window.location.origin);
-  url.searchParams.set('callRoom', invite.roomId);
-  url.searchParams.set('callInvite', invite.inviteToken);
-
-  const organization = currentUrl.searchParams.get('organization');
-  if (organization) {
-    url.searchParams.set('organization', organization);
-  }
-
-  await navigator.clipboard.writeText(url.toString());
+  await copyTextToClipboard(buildInviteUrl(invite));
   return true;
 };
 
@@ -1774,12 +2960,82 @@ export const toggleMic = async () => {
   }
 };
 
+const applyRequestedVideoState = async (): Promise<void> => {
+  while (room && state.isVideoActive !== requestedVideoActive) {
+    const activeRoom = room;
+
+    if (!activeRoom) {
+      break;
+    }
+
+    if (requestedVideoActive) {
+      state.isVideoActive = true;
+
+      try {
+        if (shouldUseManagedBackgroundCamera()) {
+          await publishCameraWithBackground(activeRoom);
+        } else {
+          await activeRoom.localParticipant.setCameraEnabled(
+            true,
+            CAMERA_CAPTURE_DEFAULTS,
+            CAMERA_PUBLISH_DEFAULTS
+          );
+        }
+      } catch (error) {
+        state.isVideoActive = false;
+        requestedVideoActive = false;
+        console.warn('[LiveKit] Failed to enable camera:', error);
+        if (shouldUseManagedBackgroundCamera()) {
+          showErrorNotification('Не удалось применить фон для звонка');
+        } else {
+          showErrorNotification('Не удалось включить камеру');
+        }
+      } finally {
+        syncLocalTrackState();
+      }
+
+      continue;
+    }
+
+    state.isVideoActive = false;
+
+    try {
+      await disableLocalCamera(activeRoom);
+    } finally {
+      syncLocalTrackState();
+    }
+  }
+};
+
 export const toggleVideo = async () => {
-  state.isVideoActive = !state.isVideoActive;
   if (!room) return;
 
-  await room.localParticipant.setCameraEnabled(state.isVideoActive);
-  syncLocalTrackState();
+  requestedVideoActive = !(videoToggleOperation
+    ? requestedVideoActive
+    : state.isVideoActive);
+
+  if (videoToggleOperation) {
+    await videoToggleOperation;
+    return;
+  }
+
+  videoToggleOperation = applyRequestedVideoState();
+
+  try {
+    await videoToggleOperation;
+  } finally {
+    videoToggleOperation = null;
+
+    if (room && state.isVideoActive !== requestedVideoActive) {
+      videoToggleOperation = applyRequestedVideoState();
+
+      try {
+        await videoToggleOperation;
+      } finally {
+        videoToggleOperation = null;
+      }
+    }
+  }
 };
 
 export const switchCamera = async () => {
@@ -1801,6 +3057,9 @@ export const switchCamera = async () => {
 
   try {
     await localVideoTrack.restartTrack({
+      ...(shouldUseManagedBackgroundCamera()
+        ? MANAGED_BACKGROUND_CAMERA_CAPTURE_DEFAULTS
+        : CAMERA_CAPTURE_DEFAULTS),
       facingMode: currentCameraFacingMode
     });
     syncLocalTrackState();
@@ -1836,11 +3095,21 @@ export const toggleScreenShare = async () => {
 
   state.isScreenSharingActive = !state.isScreenSharingActive;
   await room.localParticipant.setScreenShareEnabled(
-    state.isScreenSharingActive
+    state.isScreenSharingActive,
+    SCREEN_SHARE_CAPTURE_DEFAULTS,
+    SCREEN_SHARE_PUBLISH_DEFAULTS
   );
   await ensureLocalMicrophoneState(room);
   syncLocalTrackState();
   syncRemoteParticipantState();
+};
+
+export const updateRemoteVideoSubscription = (
+  participantIdentity: string,
+  source: RemoteVideoSource,
+  element?: HTMLVideoElement | null
+) => {
+  applyRemoteVideoSubscriptionPreferences(participantIdentity, source, element);
 };
 
 export const toggleHandRaise = async () => {
@@ -1857,6 +3126,22 @@ export const toggleHandRaise = async () => {
   }
 };
 
+export const sendCallReaction = async (reaction: CallReaction) => {
+  if (!room) return;
+
+  try {
+    await publishCallReaction(reaction);
+  } catch (error) {
+    const authUser = getAuthUser();
+
+    if (authUser?.id) {
+      clearParticipantReaction(authUser.id, false);
+    }
+
+    console.warn('[LiveKit] Failed to send call reaction:', error);
+  }
+};
+
 export const leaveCall = () => {
   const activeRoomId = roomId.value;
   const activeTopicId = topicId.value;
@@ -1869,7 +3154,10 @@ export const leaveCall = () => {
     activeRoomId &&
     activeTopicId &&
     invitedGroupCall.value?.roomId !== activeRoomId &&
-    activeTopic?.type === TopicType.Group
+    (activeTopic?.type === TopicType.Group ||
+      activeTopic?.activeCall?.groupMode ||
+      remoteParticipants.value.length > 1 ||
+      (activeTopic?.activeCall?.participantCount ?? 0) > 2)
   ) {
     restoreGroupCallEntryIfStillActive(
       activeRoomId,
@@ -1892,12 +3180,13 @@ export const leaveCall = () => {
   clearLocalAcceptState();
   clearCallStatusNotice();
   clearDialingTimeout();
-  stopTimer();
+  resetTimer();
   stopRingtone();
   stopDialingSound();
 
   const activeRoom = room;
 
+  void stopLocalBackgroundProcessor();
   stopLocalMediaTracks();
 
   if (activeRoom) {
@@ -1925,12 +3214,13 @@ export const cleanup = (disconnectRoom = true) => {
   clearCallStatusNotice();
   resetPendingEndCallState();
   clearDialingTimeout();
-  stopTimer();
+  resetTimer();
   stopRingtone();
   stopDialingSound();
 
   const activeRoom = room;
 
+  void stopLocalBackgroundProcessor();
   stopLocalMediaTracks();
 
   if (disconnectRoom && activeRoom) {
@@ -2072,11 +3362,40 @@ export const handleNativeCallAction = async (
 
 export const clearActiveGroupCall = (targetTopicId?: string) => {
   removePendingGroupCallEntry(targetTopicId);
+  if (targetTopicId) {
+    const topicsApi = useTopics();
+    topicsApi.topics.value = topicsApi.topics.value.map(topic =>
+      topic.id === targetTopicId
+        ? {
+            ...topic,
+            activeCall: null
+          }
+        : topic
+    );
+  }
 };
 
 export const clearInvitedGroupCall = (activeRoomId?: string) => {
   removeInvitedGroupCallEntry(activeRoomId);
 };
+
+watch(
+  [selectedCallBackgroundMode, selectedCallBackgroundImageUrl],
+  () => {
+    if (selectedCallBackgroundMode.value !== 'none') {
+      void prewarmCallBackgroundAssets(getManagedBackgroundImageUrl());
+    }
+
+    if (!state.isVideoActive) {
+      return;
+    }
+
+    void syncLocalCallBackgroundProcessor();
+  },
+  {
+    immediate: true
+  }
+);
 
 export { open, isIncoming, isCalling, user, roomId, topicId, isModalVisible };
 export {

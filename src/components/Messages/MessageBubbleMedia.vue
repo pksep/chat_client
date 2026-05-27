@@ -308,8 +308,15 @@ const showErrorIcon = computed(
 );
 
 const getPreviewStyle = (media: IMedia): Record<string, string> => {
-  if (!media.ex?.previewWidth || !media.ex?.previewHeight) {
-    return {};
+  if (
+    media.ex?.fillPreview ||
+    !media.ex?.previewWidth ||
+    !media.ex?.previewHeight
+  ) {
+    return {
+      width: `100%`,
+      height: `100%`
+    };
   }
 
   return {
@@ -324,6 +331,10 @@ const savePreviewMetrics = (
   naturalWidth?: number,
   naturalHeight?: number
 ): void => {
+  if (media.ex?.fillPreview) {
+    return;
+  }
+
   const rect = element.getBoundingClientRect();
 
   media.ex = {

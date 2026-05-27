@@ -1,8 +1,15 @@
 <template>
   <div
-    class="mobile-list-container"
+    :class="[
+      'mobile-list-container',
+      { 'mobile-list-container--dragover': isDragOverFiles }
+    ]"
     role="main"
     :data-testid="`${props.dataTestid}-MobileList-Container`"
+    @dragenter="handleDragEnter"
+    @dragover="handleDragOver"
+    @dragleave="handleDragLeave"
+    @drop="handleDropFiles"
   >
     <div class="mobile-list-container__content">
       <template v-if="activeSection === 'chats'">
@@ -27,7 +34,9 @@
           <TopicList
             :topics="contactList"
             :data-testid="`${props.dataTestid}-ContactList`"
-            @unmount-contact="handleContactSelect"
+            :show-checkbox="isShareSelectionActive"
+            :selected-topic-ids="selectedTopicIds"
+            @unmount-topic="handleTopicSelect"
           />
         </section>
       </template>
@@ -42,7 +51,6 @@
         :data-testid="`${props.dataTestid}-MobileList-ProfilePanel`"
       />
     </div>
-
     <MenuBottomNav
       :is-collapse="false"
       :data-testid="`${props.dataTestid}-MobileList-BottomNav`"
@@ -62,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue';
+import { reactive, computed, ref } from 'vue';
 import type {
   IMobileListProps,
   IMobileListEmits
@@ -86,6 +94,9 @@ import MenuProfilePanel from '../Menu/MenuProfilePanel.vue';
 import { getAuthUser } from '../../composables/useAuth';
 import { getTopicUnreadBadgeCount } from '../../utils/topicUnreadBadge';
 import CallsPage from '../Calls/CallsPage.vue';
+import { useShareSelection } from '../../composables/useShareSelection';
+import type { ITopic } from '../interfaces/interfaces';
+import { enqueuePendingShareFiles } from '../../services/useShareIntent';
 
 const route = useUrlWatcher();
 
@@ -101,8 +112,12 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
 const { getTopicList } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, setActiveSection } = useChatMenu();
+const { isShareSelectionActive, selectedTopicIds, toggleShareTopic } =
+  useShareSelection();
 const allTopics = computed(() => getTopicList());
 const authUserId = computed(() => getAuthUser()?.id || '');
+const dragEnterDepth = ref(0);
+const isDragOverFiles = ref(false);
 
 const filterCounts = computed(() => ({
   all: allTopics.value.reduce(
@@ -162,7 +177,11 @@ const contactList = computed(() => {
 
 const emits = defineEmits<IMobileListEmits>();
 
-const handleContactSelect = (): void => {};
+const handleTopicSelect = (topic: ITopic): void => {
+  if (isShareSelectionActive.value) {
+    toggleShareTopic(topic.id);
+  }
+};
 
 const handleShowAccount = (topicType: TopicType) => {
   if (isAssistantRoute.value) {
@@ -187,5 +206,73 @@ const handleCloseModal = () => {
 const handleNewContact = (contact: IUser): void => {
   emits('unmount-contact', contact);
   handleCloseModal();
+};
+
+const hasDraggedFiles = (event: DragEvent): boolean => {
+  if (event.dataTransfer?.files?.length) {
+    return true;
+  }
+
+  return Array.from(event.dataTransfer?.items || []).some(
+    item => item.kind === 'file'
+  );
+};
+
+const resetDragState = (): void => {
+  dragEnterDepth.value = 0;
+  isDragOverFiles.value = false;
+};
+
+const handleDragEnter = (event: DragEvent): void => {
+  if (activeSection.value !== 'chats' || !hasDraggedFiles(event)) {
+    return;
+  }
+
+  event.preventDefault();
+  dragEnterDepth.value += 1;
+  isDragOverFiles.value = true;
+};
+
+const handleDragOver = (event: DragEvent): void => {
+  if (activeSection.value !== 'chats' || !hasDraggedFiles(event)) {
+    return;
+  }
+
+  event.preventDefault();
+
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'copy';
+  }
+};
+
+const handleDragLeave = (event: DragEvent): void => {
+  if (activeSection.value !== 'chats' || !isDragOverFiles.value) {
+    return;
+  }
+
+  event.preventDefault();
+  dragEnterDepth.value = Math.max(0, dragEnterDepth.value - 1);
+
+  if (dragEnterDepth.value === 0) {
+    isDragOverFiles.value = false;
+  }
+};
+
+const handleDropFiles = async (event: DragEvent): Promise<void> => {
+  if (activeSection.value !== 'chats' || !hasDraggedFiles(event)) {
+    resetDragState();
+    return;
+  }
+
+  event.preventDefault();
+
+  const files = Array.from(event.dataTransfer?.files || []);
+  resetDragState();
+
+  if (!files.length) {
+    return;
+  }
+
+  await enqueuePendingShareFiles(files);
 };
 </script>

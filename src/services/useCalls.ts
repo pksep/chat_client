@@ -4,6 +4,7 @@ import {
   clearActiveGroupCall,
   clearInvitedGroupCall,
   cleanup,
+  createStandaloneMeetingInviteLink,
   copyInvitedGroupCallLink,
   dismissIncomingCallState,
   formattedTime,
@@ -44,7 +45,7 @@ export const activeCallFormattedTime = computed(() => formattedTime.value);
 export const handleIncomingCall = (
   targetUser: any,
   activeRoomId: string,
-  activeTopicId: string,
+  activeTopicId?: string | null,
   activeTopicType?: string,
   startTime?: number | null
 ) => {
@@ -77,20 +78,24 @@ export const handleCallAnswered = (
   userId: string,
   roomId?: string,
   topicId?: string | null,
-  startTime?: number | null
+  startTime?: number | null,
+  elapsedDurationMs?: number
 ) => {
-  handleLiveKitAnswered(userId, roomId, topicId, startTime);
+  handleLiveKitAnswered(userId, roomId, topicId, startTime, elapsedDurationMs);
 };
 
 export const handleCallEnded = (
   roomId?: string,
-  topicId?: string,
+  topicId?: string | null,
   reason?: 'busy'
 ) => {
   handleLiveKitEnded(roomId, topicId, reason);
 };
 
-export const dismissIncomingCall = (roomId?: string, topicId?: string) => {
+export const dismissIncomingCall = (
+  roomId?: string,
+  topicId?: string | null
+) => {
   dismissIncomingCallState(roomId, topicId);
 };
 
@@ -101,9 +106,12 @@ export const cleanupAllCalls = () => {
 export const syncServerActiveCalls = (
   calls: Array<{
     roomId: string;
-    topicId: string;
+    topicId?: string | null;
     callType: string;
-    startTime: number;
+    startTime?: number | null;
+    participantCount?: number;
+    groupMode?: boolean;
+    elapsedDurationMs?: number;
   }>
 ) => {
   return syncActiveCalls(calls);
@@ -123,4 +131,8 @@ export const restoreInvitedGroupCallFromUrl = async () => {
 
 export const copyInviteGroupCallLink = async () => {
   return copyInvitedGroupCallLink();
+};
+
+export const createMeetingInviteLink = async () => {
+  return createStandaloneMeetingInviteLink();
 };

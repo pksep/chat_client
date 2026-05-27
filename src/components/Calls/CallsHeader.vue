@@ -12,6 +12,47 @@
           Звонки
         </h4>
       </div>
+
+      <Button
+        class="calls-page__meeting-button"
+        :type="ButtonTypeEnum.secondary"
+        :size="SizesEnum.little"
+        :data-testid="`${props.dataTestid}-MeetingButton`"
+        @click="event => openActivePopover('meetingMenu', event as MouseEvent)"
+      >
+        <CallAddIcon :data-testid="`${props.dataTestid}-MeetingButtonIcon`" />
+      </Button>
+
+      <ContextMenu
+        :visible="!!isOpen['meetingMenu']"
+        :position="position"
+        :data-testid="`${props.dataTestid}-MeetingContextMenu`"
+        class="chats-toolbar__context-menu calls-page__context-menu"
+        @unmount-close="closeActivePopover('meetingMenu')"
+        @click="closeActivePopover('meetingMenu')"
+      >
+        <Button
+          class="calls-page__context-action"
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          :data-testid="`${props.dataTestid}-CreateMeetingButton`"
+          @click="handleCreateMeeting"
+        >
+          <AddIcon />
+          Создать встречу
+        </Button>
+
+        <Button
+          class="calls-page__context-action"
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          :data-testid="`${props.dataTestid}-CreateMeetingLinkButton`"
+          @click="handleCreateMeetingAndCopyLink"
+        >
+          <LinkIcon />
+          Новая ссылка на встречу
+        </Button>
+      </ContextMenu>
     </div>
 
     <Line :data-testid="`${props.dataTestid}-Line`" />
@@ -19,7 +60,24 @@
 </template>
 
 <script setup lang="ts">
+import { Button, ButtonTypeEnum, MessageTypeEnum, SizesEnum } from '@pksep/yui';
 import Line from '../UI/Line.vue';
+import LinkIcon from '../UI/LinkIcon.vue';
+import ContextMenu from '../ContactList/ContextMenu.vue';
+import AddIcon from './AddIcon.vue';
+import CallAddIcon from './CallAddIcon.vue';
+import { useContextMenu } from '../../composables/useContextMenu';
+import {
+  showErrorNotification,
+  showNotification
+} from '../../composables/useNotifications';
+import {
+  createMeetingInviteLink,
+  copyInviteGroupCallLink,
+  isCallActive,
+  showCallModal
+} from '../../services/useCalls';
+import { startStandaloneMeetingCall } from '../../services/useLiveKit';
 
 const props = withDefaults(
   defineProps<{
@@ -31,4 +89,46 @@ const props = withDefaults(
     dataTestid: 'CallsHeader'
   }
 );
+
+const { isOpen, position, openActivePopover, closeActivePopover } =
+  useContextMenu();
+
+const ensureMeetingCallReady = async (): Promise<boolean> => {
+  if (isCallActive.value) {
+    showCallModal();
+    return true;
+  }
+
+  try {
+    await startStandaloneMeetingCall();
+    return isCallActive.value;
+  } catch (error) {
+    console.warn('Failed to start standalone meeting call', error);
+    showErrorNotification('Не удалось создать встречу.');
+    return false;
+  }
+};
+
+const handleCreateMeeting = async () => {
+  closeActivePopover('meetingMenu');
+  await ensureMeetingCallReady();
+};
+
+const handleCreateMeetingAndCopyLink = async () => {
+  closeActivePopover('meetingMenu');
+  const isCopied = isCallActive.value
+    ? await copyInviteGroupCallLink()
+    : await createMeetingInviteLink();
+
+  if (!isCopied) {
+    showErrorNotification('Не удалось скопировать ссылку на встречу.');
+    return;
+  }
+
+  showNotification({
+    title: 'Скопировано',
+    description: 'Ссылка на встречу скопирована',
+    type: MessageTypeEnum.success
+  });
+};
 </script>

@@ -7,6 +7,7 @@ import { getAuthUser } from './useAuth';
 const isUserInfoOpen = ref(false);
 const selectedUser = ref<IUser | null>(null);
 const selectedTopic = ref<ITopic | null>(null);
+const onUserInfoOpenChat = ref<(() => void) | null>(null);
 
 const resolveDirectTopicByUserId = (userId?: string | null): ITopic | null => {
   if (!userId) {
@@ -43,18 +44,30 @@ export const useUserInfoModal = () => {
   const canOpenUserInfo = (user?: IUser | null): boolean =>
     !!user?.id && user.id !== getAuthUser()?.id;
 
-  const openUserInfo = (user?: IUser | null, topic?: ITopic | null): void => {
+  const openUserInfo = (
+    user?: IUser | null,
+    topic?: ITopic | null,
+    onOpenChat?: (() => void) | null
+  ): void => {
     if (!canOpenUserInfo(user)) {
       return;
     }
 
     selectedUser.value = user;
     selectedTopic.value = topic || null;
+    onUserInfoOpenChat.value = onOpenChat || null;
     isUserInfoOpen.value = true;
   };
 
   const closeUserInfo = (): void => {
     isUserInfoOpen.value = false;
+    onUserInfoOpenChat.value = null;
+  };
+
+  const handleUserInfoOpenChat = (): void => {
+    const callback = onUserInfoOpenChat.value;
+    onUserInfoOpenChat.value = null;
+    callback?.();
   };
 
   return {
@@ -63,6 +76,7 @@ export const useUserInfoModal = () => {
     activeTopic,
     openUserInfo,
     closeUserInfo,
+    handleUserInfoOpenChat,
     canOpenUserInfo,
     resolveDirectTopicByUserId,
     resolveUserInfoTopic
