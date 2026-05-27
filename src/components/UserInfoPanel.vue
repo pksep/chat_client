@@ -37,10 +37,11 @@
         />
 
         <span
-          v-if="!!resolvedUser.status?.text"
+          v-if="resolvedUser?.status?.text"
           class="user-info-panel__avatar__status"
-          >{{ resolvedUser.status?.text }}</span
         >
+          {{ resolvedUser.status.text }}
+        </span>
       </div>
 
       <div class="user-info-panel__identity">
@@ -49,15 +50,15 @@
           :data-testid="`${props.dataTestid}-Name`"
         >
           {{ resolvedUser?.initials || 'Пользователь' }}
+          <span class="user-info-panel__subtitle__icon">
+            {{ resolvedUser?.status?.icon }}
+          </span>
         </h3>
         <p
           class="user-info-panel__subtitle"
           :data-testid="`${props.dataTestid}-Subtitle`"
         >
-          {{ role
-          }}<span class="user-info-panel__subtitle__icon">{{
-            resolvedUser.status?.icon
-          }}</span>
+          {{ role }}
         </p>
       </div>
 
@@ -66,7 +67,8 @@
           'menu-info__buttons',
           'user-info-panel__actions',
           {
-            'user-info-panel__actions--single': !canToggleMute
+            'user-info-panel__actions--single': actionButtonCount === 1,
+            'user-info-panel__actions--double': actionButtonCount === 2
           }
         ]"
       >
@@ -96,6 +98,18 @@
           />
           <span>{{ isMuted ? 'Звук выкл.' : 'Звук вкл.' }}</span>
         </Button>
+
+        <Button
+          v-if="canOpenChat"
+          :type="ButtonTypeEnum.secondary"
+          :size="SizesEnum.large"
+          class="menu-info__secondary-button user-info-panel__action-button"
+          :data-testid="`${props.dataTestid}-OpenChatButton`"
+          @click="handleOpenChat"
+        >
+          <MessageIcon class="user-info-panel__action-icon" />
+          <span>Перейти в чат</span>
+        </Button>
       </div>
     </div>
   </section>
@@ -110,19 +124,21 @@ import {
   IconNameEnum,
   SizesEnum
 } from '@pksep/yui';
+import { navigateToDialogs } from '../composables/navigation';
+import { getAuthUser } from '../composables/useAuth';
+import { useTopics } from '../composables/useTopics';
+import { useUserInfoModal } from '../composables/useUserInfoModal';
+import { getUserById, getUserLastOnline } from '../composables/useUsers';
+import { getChatSDK } from '../services/useChat';
+import { startLiveKitCall } from '../services/useLiveKit';
+import { TopicType } from '../services/useChatSDK/types';
+import { parseUserEx } from '../utils/parseUserEx';
 import type { ITopic, IUser } from './interfaces/interfaces';
-import CachedAvatar from './UI/CachedAvatar.vue';
 import CallIcon from './CallModal/UI/CallIcon.vue';
+import CachedAvatar from './UI/CachedAvatar.vue';
+import MessageIcon from './UI/MessageIcon.vue';
 import MuteIcon from './UI/MuteIcon.vue';
 import UnmuteIcon from './UI/UnmuteIcon.vue';
-import { getUserById, getUserLastOnline } from '../composables/useUsers';
-import { getAuthUser } from '../composables/useAuth';
-import { parseUserEx } from '../utils/parseUserEx';
-import { startLiveKitCall } from '../services/useLiveKit';
-import { useTopics } from '../composables/useTopics';
-import { TopicType } from '../services/useChatSDK/types';
-import { getChatSDK } from '../services/useChat';
-import { useUserInfoModal } from '../composables/useUserInfoModal';
 
 const props = withDefaults(
   defineProps<{
@@ -142,7 +158,8 @@ const emits = defineEmits<{
 }>();
 
 const { toggleMuteTopic } = useTopics();
-const { resolveDirectTopicByUserId } = useUserInfoModal();
+const { resolveDirectTopicByUserId, handleUserInfoOpenChat } =
+  useUserInfoModal();
 
 const resolvedUser = computed(() =>
   props.user?.id ? getUserById(props.user.id) || props.user : props.user || null
@@ -168,13 +185,20 @@ const directTopic = computed(() => {
 
   return resolveDirectTopicByUserId(resolvedUser.value.id);
 });
+
 const role = computed(() => parseUserEx(resolvedUser.value?.ex).erpRole);
 const isOnline = computed(() => !isCurrentUser.value && !lastOnline.value);
 const isMuted = computed(() => !!directTopic.value?.info?.isMute);
 const canCall = computed(
   () => !!resolvedUser.value?.id && !isCurrentUser.value
 );
+const canOpenChat = computed(
+  () => !!resolvedUser.value?.id && !isCurrentUser.value
+);
 const canToggleMute = computed(() => !!directTopic.value?.id);
+const actionButtonCount = computed(
+  () => 1 + Number(canToggleMute.value) + Number(canOpenChat.value)
+);
 
 const handleCall = async () => {
   const targetUser = resolvedUser.value;
@@ -206,6 +230,30 @@ const handleToggleMute = () => {
   }
 
   toggleMuteTopic(directTopic.value);
+};
+
+const handleOpenChat = async () => {
+  const targetUser = resolvedUser.value;
+
+  if (!canOpenChat.value || !targetUser?.id) {
+    return;
+  }
+
+  let targetTopicId = directTopic.value?.id || null;
+
+  if (!targetTopicId) {
+    const sdk = getChatSDK();
+    const topic = await sdk.createTopic({ peerId: targetUser.id });
+    targetTopicId = topic?.id || null;
+  }
+
+  if (!targetTopicId) {
+    return;
+  }
+
+  handleUserInfoOpenChat();
+  emits('close');
+  navigateToDialogs(targetTopicId);
 };
 </script>
 
@@ -247,7 +295,7 @@ const handleToggleMute = () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0px 10px;
+  padding: 0 10px;
 }
 
 .user-info-panel__avatar {
@@ -278,6 +326,8 @@ const handleToggleMute = () => {
   font-size: 18px;
   line-height: 22px;
   font-weight: 600;
+  display: flex;
+  gap: 5px;
   color: var(--text-color);
 }
 
@@ -288,18 +338,18 @@ const handleToggleMute = () => {
   color: var(--grey6);
 }
 
-.user-info-panel__subtitle__icon {
-  margin-left: 5px;
-  font-size: 15px;
-}
-
 .user-info-panel__actions {
   width: 100%;
   margin-top: 24px;
+  grid-template-columns: repeat(3, 1fr);
 }
 
 .user-info-panel__actions--single {
   grid-template-columns: 1fr;
+}
+
+.user-info-panel__actions--double {
+  grid-template-columns: repeat(2, 1fr);
 }
 
 .user-info-panel__action-button {

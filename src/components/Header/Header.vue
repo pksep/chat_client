@@ -126,6 +126,7 @@
       :show-add-button="currentGroup?.isAdmin"
       :data-testid="props.dataTestid"
       @update:model-value="handleUpdateInformation"
+      @unmount-open-chat="handleCloseMobileInfoModal"
     />
   </MobileModal>
 
