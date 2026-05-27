@@ -149,7 +149,10 @@
           </div>
           <div v-if="!props.showCheckbox" class="contact-list__top">
             <MessageStatusIcons
-              v-if="topic.lastMessage?.senderUserId === authedUser.id"
+              v-if="
+                topic.lastMessage?.senderUserId === authedUser.id &&
+                !topic.lastMessage?.isSystem
+              "
               :class="{
                 'contact-list__message-status-icons': true,
                 'is-read': topic.lastMessage?.status === MessageStatusEnum.READ
