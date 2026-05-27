@@ -28,7 +28,10 @@
     @unmount-close="closeEditProfileIcon"
     @unmount-save="onSaveAvatar"
   />
-  <MenuInfoButtons @unmount-leave="leaveGroupInfo" />
+  <MenuInfoButtons
+    @unmount-leave="leaveGroupInfo"
+    @unmount-open-chat="emits('unmount-open-chat')"
+  />
   <NewChatInformationForm @unmount-save="handleSaveFromForm" />
 </template>
 
@@ -52,6 +55,10 @@ const props = withDefaults(
     isAdmin: false
   }
 );
+
+const emits = defineEmits<{
+  (e: 'unmount-open-chat'): void;
+}>();
 
 const model = defineModel<IMenuInfoInformation>();
 

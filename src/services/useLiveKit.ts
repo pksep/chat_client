@@ -8,6 +8,7 @@ import {
   createLocalVideoTrack,
   LocalTrackPublication,
   LocalVideoTrack,
+  Participant,
   RemoteParticipant,
   Room,
   RoomEvent,
@@ -16,11 +17,19 @@ import {
   VideoPresets,
   VideoQuality
 } from 'livekit-client';
+import { MessageTypeEnum } from '@pksep/yui';
 import { computed, reactive, ref, watch } from 'vue';
 import type { IUser } from '../components/interfaces/interfaces';
 import { getAuthUser } from '../composables/useAuth';
 import { useCallBackground } from '../composables/useCallBackground';
-import { showErrorNotification } from '../composables/useNotifications';
+import {
+  showErrorNotification,
+  showNotification
+} from '../composables/useNotifications';
+import {
+  playNativeNotificationSound,
+  shouldPlayNotificationSound
+} from './useNotificationSoundPolicy';
 import { AudioOutput } from './useAudioOutput';
 import { prewarmCallBackgroundAssets } from './callBackgroundWarmup';
 import { copyTextToClipboard } from '../utils/copyTextToClipboard';
@@ -226,6 +235,8 @@ let localBackgroundProcessorSignature: string | null = null;
 let hasShownBackgroundProcessorSupportError = false;
 let requestedVideoActive = false;
 let videoToggleOperation: Promise<void> | null = null;
+let suppressParticipantPresenceNotifications = true;
+let presenceAudioContext: AudioContext | null = null;
 
 const createRoomId = () => `livekit-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -1721,6 +1732,154 @@ const syncConnectionState = (activeRoom: Room) => {
   }
 };
 
+const getPresenceAudioContext = (): AudioContext | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const AudioContextCtor =
+    window.AudioContext ||
+    ((window as typeof window & { webkitAudioContext?: typeof AudioContext })
+      .webkitAudioContext as typeof AudioContext | undefined);
+
+  if (!AudioContextCtor) {
+    return null;
+  }
+
+  if (!presenceAudioContext) {
+    presenceAudioContext = new AudioContextCtor();
+  }
+
+  return presenceAudioContext;
+};
+
+const schedulePresenceTone = (
+  audioContext: AudioContext,
+  startAt: number,
+  frequency: number,
+  durationSeconds: number,
+  gainValue: number
+): number => {
+  const oscillator = audioContext.createOscillator();
+  const gainNode = audioContext.createGain();
+  const endAt = startAt + durationSeconds;
+
+  oscillator.type = 'sine';
+  oscillator.frequency.setValueAtTime(frequency, startAt);
+  gainNode.gain.setValueAtTime(0.0001, startAt);
+  gainNode.gain.linearRampToValueAtTime(gainValue, startAt + 0.015);
+  gainNode.gain.exponentialRampToValueAtTime(0.0001, endAt);
+
+  oscillator.connect(gainNode);
+  gainNode.connect(audioContext.destination);
+  oscillator.start(startAt);
+  oscillator.stop(endAt + 0.02);
+
+  return endAt;
+};
+
+const playPresenceTonePattern = async (
+  type: 'joined' | 'left'
+): Promise<void> => {
+  const audioContext = getPresenceAudioContext();
+
+  if (!audioContext) {
+    return;
+  }
+
+  if (audioContext.state === 'suspended') {
+    try {
+      await audioContext.resume();
+    } catch (error) {
+      console.warn('[LiveKit] Failed to resume presence audio context:', error);
+      return;
+    }
+  }
+
+  let cursor = audioContext.currentTime + 0.01;
+
+  if (type === 'joined') {
+    cursor = schedulePresenceTone(audioContext, cursor, 740, 0.08, 0.03);
+    schedulePresenceTone(audioContext, cursor + 0.04, 988, 0.11, 0.03);
+    return;
+  }
+
+  cursor = schedulePresenceTone(audioContext, cursor, 660, 0.1, 0.028);
+  schedulePresenceTone(audioContext, cursor + 0.03, 523.25, 0.12, 0.026);
+};
+
+const playGroupCallPresenceSound = async (
+  type: 'joined' | 'left'
+): Promise<void> => {
+  if (!(await shouldPlayNotificationSound())) {
+    return;
+  }
+
+  if (await playNativeNotificationSound()) {
+    return;
+  }
+
+  try {
+    await playPresenceTonePattern(type);
+  } catch (error) {
+    console.warn('[LiveKit] Failed to play presence sound:', error);
+  }
+};
+
+const isGroupCallPresenceNotificationEnabled = (activeRoom?: Room): boolean => {
+  const activeTopic = topicId.value
+    ? (useTopics().getSelectedTopic(topicId.value) as any)
+    : null;
+
+  return !!(
+    activeTopic?.type === TopicType.Group ||
+    activeTopic?.activeCall?.groupMode ||
+    invitedGroupCall.value?.topicId ||
+    (activeRoom?.remoteParticipants.size ?? 0) > 1
+  );
+};
+
+const resolveParticipantDisplayName = (
+  participant: Participant | RemoteParticipant
+): string => {
+  const activeTopic = topicId.value
+    ? (useTopics().getSelectedTopic(topicId.value) as any)
+    : null;
+  const topicMember =
+    activeTopic?.members?.find?.(
+      (member: IUser) => member?.id === participant.identity
+    ) || null;
+
+  return (
+    topicMember?.initials ||
+    topicMember?.nickname ||
+    participant.name ||
+    participant.identity
+  );
+};
+
+const showGroupCallPresenceNotification = (
+  participant: Participant | RemoteParticipant,
+  action: 'joined' | 'left',
+  activeRoom?: Room
+): void => {
+  if (
+    suppressParticipantPresenceNotifications ||
+    !isGroupCallPresenceNotificationEnabled(activeRoom)
+  ) {
+    return;
+  }
+
+  showNotification({
+    title: resolveParticipantDisplayName(participant),
+    description:
+      action === 'joined' ? 'присоединился к звонку' : 'покинул звонок',
+    type: MessageTypeEnum.success
+  });
+
+  void playGroupCallPresenceSound(action);
+};
+
 const setupRoomListeners = (activeRoom: Room) => {
   activeRoom
     .on(RoomEvent.TrackPublished, () => {
@@ -1757,10 +1916,11 @@ const setupRoomListeners = (activeRoom: Room) => {
     .on(RoomEvent.ActiveSpeakersChanged, () => {
       syncRemoteParticipantSpeakingState();
     })
-    .on(RoomEvent.ParticipantConnected, () => {
+    .on(RoomEvent.ParticipantConnected, participant => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
       requestHighQualityForAllRemoteVideoTracks();
+      showGroupCallPresenceNotification(participant, 'joined', activeRoom);
       if (state.isHandRaised) {
         void publishHandRaiseState(true);
       }
@@ -1772,6 +1932,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       clearParticipantReaction(participant.identity, false);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      showGroupCallPresenceNotification(participant, 'left', activeRoom);
     })
     .on(RoomEvent.LocalTrackPublished, publication => {
       syncLocalTrackState();
@@ -1903,6 +2064,7 @@ const connectToRoom = async () => {
     }
 
     room?.disconnect();
+    suppressParticipantPresenceNotifications = true;
     const nextRoom = new Room({
       adaptiveStream: {
         pixelDensity: 'screen'
@@ -1989,6 +2151,7 @@ const connectToRoom = async () => {
     syncRemoteParticipantState();
     syncConnectionState(nextRoom);
     requestHighQualityForAllRemoteVideoTracks();
+    suppressParticipantPresenceNotifications = false;
     shouldEndCallOnConnectFailure = false;
 
     if (isIncoming.value) {
@@ -2004,6 +2167,7 @@ const connectToRoom = async () => {
 };
 
 const resetMediaState = () => {
+  suppressParticipantPresenceNotifications = true;
   clearTrackStreamCaches();
   currentCameraFacingMode = 'user';
   localBackgroundProcessor = null;

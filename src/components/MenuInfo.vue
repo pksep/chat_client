@@ -66,6 +66,7 @@
               :is-admin="currentGroup.isAdmin"
               :model-value="state.information"
               @update:model-value="handleUpdateInformation"
+              @unmount-open-chat="handleCloseMenu"
               :data-testid="`${props.dataTestid}-MenuInfo-InformationMenu`"
             />
           </slot>

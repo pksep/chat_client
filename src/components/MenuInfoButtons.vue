@@ -29,6 +29,15 @@
       :type="ButtonTypeEnum.secondary"
       :size="SizesEnum.large"
       class="menu-info__secondary-button"
+      @click="handleOpenChat"
+    >
+      <MessageIcon />
+      ÐŸÐµÑ€ÐµÐ¹Ñ‚Ð¸ Ð² Ñ‡Ð°Ñ‚
+    </Button>
+    <Button
+      :type="ButtonTypeEnum.secondary"
+      :size="SizesEnum.large"
+      class="menu-info__secondary-button"
       @click="handleOpenModal"
     >
       <Icon
@@ -65,10 +74,11 @@ import {
 import { MAX_W_MD } from '../utils/constants';
 import { useResizeState } from '../composables/useResizeState';
 import { computed, reactive } from 'vue';
-import { useUrlWatcher } from '../composables/navigation';
+import { navigateToGroup, useUrlWatcher } from '../composables/navigation';
 import { currentGroup, useGroup } from '../composables/useGroup';
 import { useTopics } from '../composables/useTopics';
 import ConfirmModal from './UI/ConfirmModal.vue';
+import MessageIcon from './UI/MessageIcon.vue';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
@@ -82,7 +92,7 @@ const state = reactive({
   openModal: false
 });
 
-const emits = defineEmits(['unmount-leave']);
+const emits = defineEmits(['unmount-leave', 'unmount-open-chat']);
 
 const handleOpenModal = () => {
   state.openModal = true;
@@ -94,6 +104,14 @@ const handleCloseModal = () => {
 
 const handleUnmountLeave = () => {
   emits('unmount-leave');
+};
+
+const handleOpenChat = () => {
+  if (route.value.id) {
+    navigateToGroup(route.value.id);
+  }
+
+  emits('unmount-open-chat');
 };
 
 const handleMute = () => {

@@ -427,7 +427,9 @@
     :title="resolvedGroupCallTitle"
     :meta="displayGroupCallMeta"
     :members="groupInfoMembers"
+    :show-open-chat="!!groupInfoTopic"
     :on-copy-link="copyInviteGroupCallLink"
+    :on-open-chat="handleOpenGroupInfoChat"
     @close="state.openGroupInfoModal = false"
   />
   <div class="call-modal__reaction-preload" aria-hidden="true">
@@ -513,6 +515,10 @@ import { useCallBackground } from '../../composables/useCallBackground';
 import { getUsersList } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
 import { useTopics } from '../../composables/useTopics';
+import {
+  navigateToDialogs,
+  navigateToGroup
+} from '../../composables/navigation';
 import { TopicType } from '../../services/useChatSDK/types';
 import { currentGroup, getGroupById } from '../../composables/useGroup';
 import GroupInfoIcon from './UI/GroupInfoIcon.vue';
@@ -1145,6 +1151,16 @@ const groupCallTitle = computed(() => {
 const resolvedGroupCallTitle = computed(
   () => invitedGroupCall.value?.title || groupCallTitle.value
 );
+const groupInfoTopic = computed(() => {
+  const resolvedTopicId =
+    activeTopicId.value || invitedGroupCall.value?.topicId;
+
+  if (!resolvedTopicId) {
+    return null;
+  }
+
+  return (getSelectedTopic(resolvedTopicId) as any) || null;
+});
 const groupInfoMembers = computed(() => {
   const sourceMembers = [
     ...(currentGroup.value?.members || []),
@@ -1627,6 +1643,25 @@ const hideModal = () => {
   if (!isIncoming.value) {
     isCallModalVisible.value = false;
   }
+};
+
+const handleOpenGroupInfoChat = (): boolean => {
+  const topic = groupInfoTopic.value;
+
+  if (!topic?.id) {
+    return false;
+  }
+
+  if (topic.type === TopicType.Group) {
+    navigateToGroup(topic.id);
+  } else {
+    navigateToDialogs(topic.id);
+  }
+
+  state.value.openGroupInfoModal = false;
+  isCallModalVisible.value = false;
+
+  return true;
 };
 
 const handleToggleAudioOutput = () => {
