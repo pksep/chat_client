@@ -321,7 +321,7 @@
             :type="ButtonTypeEnum.ghost"
             class="menu-profile__logout"
             :data-testid="`${props.dataTestid}-MenuProfilePanel-LogoutButton`"
-            @click="handleLogout"
+            @click="openLogoutConfirmModal"
             :size="SizesEnum.small"
           >
             <template #left-icon>
@@ -567,6 +567,14 @@
     @close="closeCallBackgroundPreview"
     @apply="applyPendingCallBackground"
   />
+
+  <ConfirmModal
+    :open="isLogoutConfirmModalOpen"
+    title="Выход из профиля"
+    description="Вы уверены, что хотите выйти?"
+    @unmount-close="closeLogoutConfirmModal"
+    @unmount-confirm="confirmLogout"
+  />
 </template>
 
 <script setup lang="ts">
@@ -605,6 +613,7 @@ import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import MessageBubble from '../Messages/MessageBubble.vue';
 import CallBackgroundPreviewModal from '../CallModal/CallBackgroundPreviewModal.vue';
+import ConfirmModal from '../UI/ConfirmModal.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -628,6 +637,7 @@ const isApplyingWallpaper = ref(false);
 const isCallBackgroundMenuOpen = ref(false);
 const isCallBackgroundPreviewOpen = ref(false);
 const isApplyingCallBackground = ref(false);
+const isLogoutConfirmModalOpen = ref(false);
 const isSavingStatus = ref(false);
 const statusError = ref('');
 const wallpaperError = ref('');
@@ -812,6 +822,14 @@ const closeCallBackgroundPreview = (): void => {
   isApplyingCallBackground.value = false;
   pendingCallBackgroundDataUrl.value = '';
   pendingCallBackgroundSelectionId.value = '';
+};
+
+const openLogoutConfirmModal = (): void => {
+  isLogoutConfirmModalOpen.value = true;
+};
+
+const closeLogoutConfirmModal = (): void => {
+  isLogoutConfirmModalOpen.value = false;
 };
 
 const handleWallpaperUpload = async (event: Event): Promise<void> => {
@@ -999,5 +1017,10 @@ const handleLogout = async (): Promise<void> => {
     useLogout();
     redirectToAuthorization();
   }
+};
+
+const confirmLogout = async (): Promise<void> => {
+  closeLogoutConfirmModal();
+  await handleLogout();
 };
 </script>
