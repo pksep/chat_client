@@ -227,6 +227,95 @@
           </div>
         </div>
 
+        <div class="menu-profile__wallpapers">
+          <div
+            class="menu-profile__wallpapers-trigger"
+            :data-testid="`${props.dataTestid}-MenuProfilePanel-CallBackgroundTrigger`"
+            @click="toggleCallBackgroundMenu"
+          >
+            <div class="menu-profile__wallpapers-trigger-copy">
+              <span class="menu-profile__wallpapers-trigger-title">
+                Фон для звонков
+              </span>
+            </div>
+            <Icon
+              :name="
+                isCallBackgroundMenuOpen
+                  ? IconNameEnum.chevronUp
+                  : IconNameEnum.chevronDown
+              "
+              :width="24"
+              :height="20"
+            />
+          </div>
+
+          <div
+            v-if="isCallBackgroundMenuOpen"
+            class="menu-profile__wallpapers-menu"
+            :data-testid="`${props.dataTestid}-MenuProfilePanel-CallBackgroundMenu`"
+          >
+            <div class="menu-profile__wallpapers-grid">
+              <button
+                v-for="background in callBackgroundPreviewItems"
+                :key="background.id"
+                type="button"
+                :class="[
+                  'menu-profile__wallpaper-tile',
+                  {
+                    'menu-profile__wallpaper-tile--active':
+                      selectedCallBackgroundId === background.id
+                  }
+                ]"
+                @click="selectCallBackgroundOption(background.id)"
+              >
+                <span
+                  class="menu-profile__wallpaper-tile-preview"
+                  :style="background.previewStyle"
+                />
+                <span
+                  v-if="background.label"
+                  class="menu-profile__call-background-tile-label"
+                >
+                  {{ background.label }}
+                </span>
+                <Checkbox
+                  v-if="selectedCallBackgroundId === background.id"
+                  class="menu-profile__wallpaper-tile-check"
+                  :model-value="true"
+                  :circular="CheckboxCircularEnum.circled"
+                  @click.stop
+                />
+              </button>
+            </div>
+
+            <input
+              v-show="false"
+              ref="callBackgroundInputRef"
+              type="file"
+              accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp"
+              @change="handleCallBackgroundUpload"
+            />
+
+            <div class="menu-profile__wallpapers-actions">
+              <Button
+                :type="ButtonTypeEnum.secondary"
+                :size="SizesEnum.small"
+                class="menu-profile__wallpapers-button"
+                @click="openCallBackgroundPicker"
+              >
+                Загрузить изображение
+              </Button>
+            </div>
+
+            <p
+              v-if="callBackgroundError"
+              class="menu-profile__wallpapers-error"
+            >
+              {{ callBackgroundError }}
+            </p>
+          </div>
+        </div>
+
         <div class="menu-profile__actions">
           <Button
             :type="ButtonTypeEnum.ghost"
@@ -368,6 +457,116 @@
       </div>
     </div>
   </Modal>
+
+  <MobileModal
+    v-if="false && isMobile"
+    class="menu-profile__wallpaper-preview-mobile menu-profile__call-background-preview-mobile"
+    headerClass="hidden"
+    :show-divider="false"
+    :open="isCallBackgroundPreviewOpen"
+    @unmount-close="closeCallBackgroundPreview"
+  >
+    <div class="menu-profile__call-background-preview-modal">
+      <div class="menu-profile__call-background-preview-frame">
+        <div
+          class="menu-profile__call-background-preview-surface"
+          :style="pendingCallBackgroundPreviewStyle"
+        >
+          <img
+            class="menu-profile__call-background-preview-person"
+            :src="callBackgroundPreviewHumanSrc"
+            alt=""
+          />
+        </div>
+      </div>
+
+      <div class="menu-profile__call-background-preview-actions">
+        <Button
+          :type="ButtonTypeEnum.secondary"
+          :size="SizesEnum.small"
+          class="menu-profile__call-background-preview-cancel"
+          @click="closeCallBackgroundPreview"
+        >
+          Отменить
+        </Button>
+        <Button
+          :type="ButtonTypeEnum.primary"
+          :size="SizesEnum.small"
+          class="menu-profile__call-background-preview-apply"
+          :disabled="
+            isApplyingCallBackground ||
+            (!pendingCallBackgroundDataUrl && !pendingCallBackgroundSelectionId)
+          "
+          @click="applyPendingCallBackground"
+        >
+          {{ isApplyingCallBackground ? 'Сохраняем...' : 'Применить' }}
+        </Button>
+      </div>
+    </div>
+  </MobileModal>
+
+  <Modal
+    v-else-if="false"
+    :open="isCallBackgroundPreviewOpen"
+    class="menu-profile__wallpaper-modal"
+    position="center"
+    width="420px"
+    @close="closeCallBackgroundPreview"
+  >
+    <div class="menu-profile__wallpaper-preview-modal">
+      <div class="menu-profile__wallpaper-preview-header">
+        <Button
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.little"
+          class="menu-profile__wallpaper-preview-close"
+          @click="closeCallBackgroundPreview"
+        >
+          <Icon :name="IconNameEnum.crossSmall" :width="24" :height="24" />
+        </Button>
+      </div>
+
+      <div class="menu-profile__call-background-preview-frame">
+        <div
+          class="menu-profile__call-background-preview-surface"
+          :style="pendingCallBackgroundPreviewStyle"
+        >
+          <img
+            class="menu-profile__call-background-preview-person"
+            :src="callBackgroundPreviewHumanSrc"
+            alt=""
+          />
+        </div>
+      </div>
+
+      <div class="menu-profile__wallpaper-preview-actions">
+        <Button
+          :type="ButtonTypeEnum.primary"
+          :size="SizesEnum.small"
+          class="menu-profile__wallpaper-preview-apply"
+          :disabled="
+            isApplyingCallBackground ||
+            (!pendingCallBackgroundDataUrl && !pendingCallBackgroundSelectionId)
+          "
+          @click="applyPendingCallBackground"
+        >
+          {{ isApplyingCallBackground ? 'Сохраняем...' : 'Применить' }}
+        </Button>
+      </div>
+    </div>
+  </Modal>
+
+  <CallBackgroundPreviewModal
+    :open="isCallBackgroundPreviewOpen"
+    :is-mobile="isMobile"
+    :is-applying="isApplyingCallBackground"
+    :disabled="
+      !pendingCallBackgroundDataUrl && !pendingCallBackgroundSelectionId
+    "
+    :pending-selection-id="pendingCallBackgroundSelectionId"
+    :pending-data-url="pendingCallBackgroundDataUrl"
+    @close="closeCallBackgroundPreview"
+    @apply="applyPendingCallBackground"
+  />
 </template>
 
 <script setup lang="ts">
@@ -399,11 +598,13 @@ import {
   USER_STATUS_PRESETS
 } from '../../utils/userStatus';
 import { useChatWallpaper } from '../../composables/useChatWallpaper';
+import { useCallBackground } from '../../composables/useCallBackground';
 import { fileToDataURL } from '../../utils/fileToDataURL';
 import MobileModal from '../UI/MobileModal.vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import MessageBubble from '../Messages/MessageBubble.vue';
+import CallBackgroundPreviewModal from '../CallModal/CallBackgroundPreviewModal.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -424,20 +625,35 @@ const isEmojiPickerOpen = ref(false);
 const isWallpaperMenuOpen = ref(false);
 const isWallpaperPreviewOpen = ref(false);
 const isApplyingWallpaper = ref(false);
+const isCallBackgroundMenuOpen = ref(false);
+const isCallBackgroundPreviewOpen = ref(false);
+const isApplyingCallBackground = ref(false);
 const isSavingStatus = ref(false);
 const statusError = ref('');
 const wallpaperError = ref('');
+const callBackgroundError = ref('');
 const customStatusIcon = ref('');
 const customStatusText = ref('');
 const pendingWallpaperDataUrl = ref('');
 const pendingWallpaperSelectionId = ref('');
+const pendingCallBackgroundDataUrl = ref('');
+const pendingCallBackgroundSelectionId = ref('');
 const wallpaperInputRef = useTemplateRef<HTMLInputElement>('wallpaperInputRef');
+const callBackgroundInputRef = useTemplateRef<HTMLInputElement>(
+  'callBackgroundInputRef'
+);
 const {
   wallpaperPreviewItems,
   selectedWallpaperId,
   selectWallpaper,
   setCustomWallpaper
 } = useChatWallpaper();
+const {
+  callBackgroundPreviewItems,
+  selectedCallBackgroundId,
+  selectCallBackground,
+  setCustomCallBackground
+} = useCallBackground();
 
 const currentStatusLabel = computed(() =>
   formatUserStatusLabel(authUser.value?.status)
@@ -454,27 +670,63 @@ const wallpaperPreviewIncomingMessage =
   '\u0427\u0442\u043e\u0431\u044b \u0443\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u043e\u0431\u043e\u0438, \u043d\u0430\u0436\u043c\u0438\u0442\u0435 "\u041f\u0440\u0438\u043c\u0435\u043d\u0438\u0442\u044c"';
 const wallpaperPreviewOutgoingMessage =
   '\u0421\u043f\u0430\u0441\u0438\u0431\u043e!';
+const callBackgroundPreviewHumanSrc = '/images/human.webp';
 
-const pendingWallpaperPreviewStyle = computed<CSSProperties>(() => {
-  if (pendingWallpaperDataUrl.value) {
+const resolvePendingPreviewStyle = (
+  previewItems: Array<{ id: string; previewStyle: CSSProperties }>,
+  pendingSelectionId: string,
+  pendingDataUrl: string
+): CSSProperties => {
+  if (pendingDataUrl) {
     return {
       backgroundColor: '#f4f8ff',
-      backgroundImage: `url("${pendingWallpaperDataUrl.value}")`,
+      backgroundImage: `url("${pendingDataUrl}")`,
       backgroundPosition: 'center center',
       backgroundRepeat: 'repeat',
       backgroundSize: 'cover'
     };
   }
 
-  const selectedPendingWallpaper = wallpaperPreviewItems.value.find(
-    wallpaper => wallpaper.id === pendingWallpaperSelectionId.value
+  const selectedPreviewItem = previewItems.find(
+    item => item.id === pendingSelectionId
   );
 
   return (
-    selectedPendingWallpaper?.previewStyle || {
+    selectedPreviewItem?.previewStyle || {
       background:
         'linear-gradient(180deg, rgba(251, 253, 255, 1) 0%, rgba(236, 243, 255, 1) 100%)'
     }
+  );
+};
+
+const resolveCustomWallpaperUploadError = (file: File): string => {
+  const isSupportedFile =
+    file.type.startsWith('image/') || file.name.toLowerCase().endsWith('.svg');
+
+  if (!isSupportedFile) {
+    return 'Поддерживаются SVG, PNG, JPG и WebP';
+  }
+
+  if (file.size > MAX_CUSTOM_WALLPAPER_SIZE_BYTES) {
+    return 'Файл слишком большой. Выберите изображение до 2 МБ';
+  }
+
+  return '';
+};
+
+const pendingWallpaperPreviewStyle = computed<CSSProperties>(() => {
+  return resolvePendingPreviewStyle(
+    wallpaperPreviewItems.value,
+    pendingWallpaperSelectionId.value,
+    pendingWallpaperDataUrl.value
+  );
+});
+
+const pendingCallBackgroundPreviewStyle = computed<CSSProperties>(() => {
+  return resolvePendingPreviewStyle(
+    callBackgroundPreviewItems.value,
+    pendingCallBackgroundSelectionId.value,
+    pendingCallBackgroundDataUrl.value
   );
 });
 
@@ -506,6 +758,10 @@ const toggleWallpaperMenu = (): void => {
   isWallpaperMenuOpen.value = !isWallpaperMenuOpen.value;
 };
 
+const toggleCallBackgroundMenu = (): void => {
+  isCallBackgroundMenuOpen.value = !isCallBackgroundMenuOpen.value;
+};
+
 const openWallpaperPreviewForSelection = (wallpaperId: string): void => {
   pendingWallpaperSelectionId.value = wallpaperId;
   pendingWallpaperDataUrl.value = '';
@@ -528,11 +784,34 @@ const openWallpaperPicker = (): void => {
   wallpaperInputRef.value?.click();
 };
 
+const openCallBackgroundPreviewForSelection = (backgroundId: string): void => {
+  pendingCallBackgroundSelectionId.value = backgroundId;
+  pendingCallBackgroundDataUrl.value = '';
+  isCallBackgroundPreviewOpen.value = true;
+};
+
+const selectCallBackgroundOption = (backgroundId: string): void => {
+  callBackgroundError.value = '';
+  openCallBackgroundPreviewForSelection(backgroundId);
+};
+
+const openCallBackgroundPicker = (): void => {
+  callBackgroundError.value = '';
+  callBackgroundInputRef.value?.click();
+};
+
 const closeWallpaperPreview = (): void => {
   isWallpaperPreviewOpen.value = false;
   isApplyingWallpaper.value = false;
   pendingWallpaperDataUrl.value = '';
   pendingWallpaperSelectionId.value = '';
+};
+
+const closeCallBackgroundPreview = (): void => {
+  isCallBackgroundPreviewOpen.value = false;
+  isApplyingCallBackground.value = false;
+  pendingCallBackgroundDataUrl.value = '';
+  pendingCallBackgroundSelectionId.value = '';
 };
 
 const handleWallpaperUpload = async (event: Event): Promise<void> => {
@@ -544,9 +823,8 @@ const handleWallpaperUpload = async (event: Event): Promise<void> => {
   }
 
   wallpaperError.value = '';
-
-  const isSupportedFile =
-    file.type.startsWith('image/') || file.name.toLowerCase().endsWith('.svg');
+  const validationError = resolveCustomWallpaperUploadError(file);
+  const isSupportedFile = !validationError;
 
   if (!isSupportedFile) {
     wallpaperError.value = 'Поддерживаются SVG, PNG, JPG и WebP';
@@ -570,6 +848,7 @@ const handleWallpaperUpload = async (event: Event): Promise<void> => {
     wallpaperError.value =
       'Не получилось сохранить изображение. Попробуйте SVG или файл поменьше';
   } finally {
+    isApplyingWallpaper.value = false;
     input.value = '';
   }
 };
@@ -595,6 +874,65 @@ const applyPendingWallpaper = async (): Promise<void> => {
     wallpaperError.value =
       'Не получилось сохранить изображение. Попробуйте SVG или файл поменьше';
     isApplyingWallpaper.value = false;
+  }
+};
+
+const handleCallBackgroundUpload = async (event: Event): Promise<void> => {
+  const input = event.target as HTMLInputElement | null;
+  const file = input?.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  callBackgroundError.value = '';
+  const validationError = resolveCustomWallpaperUploadError(file);
+
+  if (validationError) {
+    callBackgroundError.value = validationError;
+    input.value = '';
+    return;
+  }
+
+  try {
+    const dataUrl = await fileToDataURL(file);
+    pendingCallBackgroundDataUrl.value = dataUrl;
+    pendingCallBackgroundSelectionId.value = '';
+    isCallBackgroundPreviewOpen.value = true;
+  } catch (error) {
+    console.error('Failed to save custom call background:', error);
+    callBackgroundError.value =
+      'Не получилось сохранить изображение. Попробуйте SVG или файл поменьше';
+  } finally {
+    isApplyingCallBackground.value = false;
+    input.value = '';
+  }
+};
+
+const applyPendingCallBackground = async (): Promise<void> => {
+  if (
+    !pendingCallBackgroundDataUrl.value &&
+    !pendingCallBackgroundSelectionId.value
+  ) {
+    return;
+  }
+
+  callBackgroundError.value = '';
+  isApplyingCallBackground.value = true;
+
+  try {
+    if (pendingCallBackgroundDataUrl.value) {
+      await setCustomCallBackground(pendingCallBackgroundDataUrl.value);
+    } else {
+      selectCallBackground(pendingCallBackgroundSelectionId.value);
+    }
+
+    closeCallBackgroundPreview();
+  } catch (error) {
+    console.error('Failed to persist custom call background:', error);
+    callBackgroundError.value =
+      'Не получилось сохранить изображение. Попробуйте SVG или файл поменьше';
+    isApplyingCallBackground.value = false;
   }
 };
 

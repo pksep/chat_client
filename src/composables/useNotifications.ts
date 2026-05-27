@@ -16,8 +16,9 @@ const state = reactive<INotificationState>({
   type: MessageTypeEnum.error,
   key: 0
 });
+let reopenNotificationTimeout: ReturnType<typeof setTimeout> | null = null;
 
-export const showNotification = ({
+const applyNotificationState = ({
   title,
   description,
   type = MessageTypeEnum.error
@@ -29,8 +30,34 @@ export const showNotification = ({
   state.title = title;
   state.description = description;
   state.type = type;
-  state.open = true;
   state.key += 1;
+  state.open = true;
+};
+
+export const showNotification = ({
+  title,
+  description,
+  type = MessageTypeEnum.error
+}: {
+  title: string;
+  description: string;
+  type?: MessageTypeEnum;
+}) => {
+  if (reopenNotificationTimeout) {
+    clearTimeout(reopenNotificationTimeout);
+    reopenNotificationTimeout = null;
+  }
+
+  if (state.open) {
+    state.open = false;
+    reopenNotificationTimeout = setTimeout(() => {
+      reopenNotificationTimeout = null;
+      applyNotificationState({ title, description, type });
+    }, 0);
+    return;
+  }
+
+  applyNotificationState({ title, description, type });
 };
 
 export const showErrorNotification = (description: string) => {
@@ -42,6 +69,11 @@ export const showErrorNotification = (description: string) => {
 };
 
 export const closeNotification = () => {
+  if (reopenNotificationTimeout) {
+    clearTimeout(reopenNotificationTimeout);
+    reopenNotificationTimeout = null;
+  }
+
   state.open = false;
 };
 

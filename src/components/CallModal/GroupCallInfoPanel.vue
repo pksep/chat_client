@@ -23,6 +23,91 @@
         <span>Скопировать ссылку</span>
       </button>
 
+      <div class="call-modal__group-panel-background-select">
+        <div
+          class="call-modal__group-panel-background-trigger"
+          @click="toggleCallBackgroundMenu"
+        >
+          <div class="call-modal__group-panel-background-trigger-copy">
+            <span class="call-modal__group-panel-background-trigger-title">
+              Фон для звонков
+            </span>
+          </div>
+          <Icon
+            :name="
+              isCallBackgroundMenuOpen
+                ? IconNameEnum.chevronUp
+                : IconNameEnum.chevronDown
+            "
+            :width="24"
+            :height="20"
+          />
+        </div>
+
+        <div
+          v-if="isCallBackgroundMenuOpen"
+          class="call-modal__group-panel-background-menu"
+        >
+          <div class="call-modal__group-panel-background-grid">
+            <button
+              v-for="background in callBackgroundPreviewItems"
+              :key="background.id"
+              type="button"
+              :class="[
+                'call-modal__group-panel-background-tile',
+                {
+                  'call-modal__group-panel-background-tile--active':
+                    selectedCallBackgroundId === background.id
+                }
+              ]"
+              @click="selectCallBackgroundOption(background.id)"
+            >
+              <span
+                class="call-modal__group-panel-background-preview"
+                :style="background.previewStyle"
+              />
+              <span
+                v-if="background.label"
+                class="call-modal__group-panel-background-label"
+              >
+                {{ background.label }}
+              </span>
+              <Checkbox
+                v-if="selectedCallBackgroundId === background.id"
+                class="call-modal__group-panel-background-check"
+                :model-value="true"
+                :circular="CheckboxCircularEnum.circled"
+                @click.stop
+              />
+            </button>
+          </div>
+
+          <input
+            v-show="false"
+            ref="callBackgroundInputRef"
+            type="file"
+            accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp"
+            @change="handleCallBackgroundUpload"
+          />
+
+          <Button
+            :type="ButtonTypeEnum.secondary"
+            :size="SizesEnum.small"
+            class="call-modal__group-panel-background-upload"
+            @click="openCallBackgroundPicker"
+          >
+            Загрузить изображение
+          </Button>
+
+          <p
+            v-if="callBackgroundError"
+            class="call-modal__group-panel-background-error"
+          >
+            {{ callBackgroundError }}
+          </p>
+        </div>
+      </div>
+
       <div class="call-modal__group-panel-members">
         <button
           v-for="member in members"
@@ -64,6 +149,91 @@
           <span>Скопировать ссылку</span>
         </button>
 
+        <div class="call-modal__group-panel-background-select">
+          <div
+            class="call-modal__group-panel-background-trigger"
+            @click="toggleCallBackgroundMenu"
+          >
+            <div class="call-modal__group-panel-background-trigger-copy">
+              <span class="call-modal__group-panel-background-trigger-title">
+                Фон для звонков
+              </span>
+            </div>
+            <Icon
+              :name="
+                isCallBackgroundMenuOpen
+                  ? IconNameEnum.chevronUp
+                  : IconNameEnum.chevronDown
+              "
+              :width="24"
+              :height="20"
+            />
+          </div>
+
+          <div
+            v-if="isCallBackgroundMenuOpen"
+            class="call-modal__group-panel-background-menu"
+          >
+            <div class="call-modal__group-panel-background-grid">
+              <button
+                v-for="background in callBackgroundPreviewItems"
+                :key="background.id"
+                type="button"
+                :class="[
+                  'call-modal__group-panel-background-tile',
+                  {
+                    'call-modal__group-panel-background-tile--active':
+                      selectedCallBackgroundId === background.id
+                  }
+                ]"
+                @click="selectCallBackgroundOption(background.id)"
+              >
+                <span
+                  class="call-modal__group-panel-background-preview"
+                  :style="background.previewStyle"
+                />
+                <span
+                  v-if="background.label"
+                  class="call-modal__group-panel-background-label"
+                >
+                  {{ background.label }}
+                </span>
+                <Checkbox
+                  v-if="selectedCallBackgroundId === background.id"
+                  class="call-modal__group-panel-background-check"
+                  :model-value="true"
+                  :circular="CheckboxCircularEnum.circled"
+                  @click.stop
+                />
+              </button>
+            </div>
+
+            <input
+              v-show="false"
+              ref="callBackgroundInputRef"
+              type="file"
+              accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp"
+              @change="handleCallBackgroundUpload"
+            />
+
+            <Button
+              :type="ButtonTypeEnum.secondary"
+              :size="SizesEnum.small"
+              class="call-modal__group-panel-background-upload"
+              @click="openCallBackgroundPicker"
+            >
+              Загрузить изображение
+            </Button>
+
+            <p
+              v-if="callBackgroundError"
+              class="call-modal__group-panel-background-error"
+            >
+              {{ callBackgroundError }}
+            </p>
+          </div>
+        </div>
+
         <div class="call-modal__group-panel-members">
           <button
             v-for="member in members"
@@ -90,14 +260,26 @@
 </template>
 
 <script setup lang="ts">
-import LinkIcon from '../UI/LinkIcon.vue';
-import MobileModal from '../UI/MobileModal.vue';
-import type { IUser } from '../interfaces/interfaces';
-import CachedAvatar from '../UI/CachedAvatar.vue';
-import { Icon, IconNameEnum, MessageTypeEnum } from '@pksep/yui';
+import { ref } from 'vue';
+import {
+  Button,
+  ButtonTypeEnum,
+  Checkbox,
+  CheckboxCircularEnum,
+  Icon,
+  IconNameEnum,
+  MessageTypeEnum,
+  SizesEnum
+} from '@pksep/yui';
+import { useCallBackground } from '../../composables/useCallBackground';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import { showNotification } from '../../composables/useNotifications';
 import { copyTextToClipboard } from '../../utils/copyTextToClipboard';
+import { fileToDataURL } from '../../utils/fileToDataURL';
+import type { IUser } from '../interfaces/interfaces';
+import CachedAvatar from '../UI/CachedAvatar.vue';
+import LinkIcon from '../UI/LinkIcon.vue';
+import MobileModal from '../UI/MobileModal.vue';
 
 const props = defineProps<{
   open: boolean;
@@ -112,7 +294,34 @@ defineEmits<{
   (e: 'close'): void;
 }>();
 
+const MAX_CUSTOM_WALLPAPER_SIZE_BYTES = 2 * 1024 * 1024;
+
 const { openUserInfo } = useUserInfoModal();
+const {
+  callBackgroundPreviewItems,
+  selectedCallBackgroundId,
+  selectCallBackground,
+  setCustomCallBackground
+} = useCallBackground();
+
+const callBackgroundInputRef = ref<HTMLInputElement | null>(null);
+const callBackgroundError = ref('');
+const isCallBackgroundMenuOpen = ref(false);
+
+const resolveCustomWallpaperUploadError = (file: File): string => {
+  const isSupportedFile =
+    file.type.startsWith('image/') || file.name.toLowerCase().endsWith('.svg');
+
+  if (!isSupportedFile) {
+    return 'Поддерживаются SVG, PNG, JPG и WebP';
+  }
+
+  if (file.size > MAX_CUSTOM_WALLPAPER_SIZE_BYTES) {
+    return 'Файл слишком большой. Выберите изображение до 2 МБ';
+  }
+
+  return '';
+};
 
 const notifyCopied = () => {
   showNotification({
@@ -145,5 +354,48 @@ const handleOpenUserInfo = (user?: IUser): void => {
   }
 
   openUserInfo(user);
+};
+
+const toggleCallBackgroundMenu = (): void => {
+  isCallBackgroundMenuOpen.value = !isCallBackgroundMenuOpen.value;
+};
+
+const selectCallBackgroundOption = (backgroundId: string): void => {
+  callBackgroundError.value = '';
+  selectCallBackground(backgroundId);
+};
+
+const openCallBackgroundPicker = (): void => {
+  callBackgroundError.value = '';
+  callBackgroundInputRef.value?.click();
+};
+
+const handleCallBackgroundUpload = async (event: Event): Promise<void> => {
+  const input = event.target as HTMLInputElement | null;
+  const file = input?.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  callBackgroundError.value = '';
+  const validationError = resolveCustomWallpaperUploadError(file);
+
+  if (validationError) {
+    callBackgroundError.value = validationError;
+    input.value = '';
+    return;
+  }
+
+  try {
+    const dataUrl = await fileToDataURL(file);
+    await setCustomCallBackground(dataUrl);
+  } catch (error) {
+    console.error('Failed to save custom call background:', error);
+    callBackgroundError.value =
+      'Не получилось сохранить изображение. Попробуйте SVG или файл поменьше';
+  } finally {
+    input.value = '';
+  }
 };
 </script>

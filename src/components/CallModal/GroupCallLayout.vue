@@ -48,8 +48,14 @@
       <div
         v-else-if="focusedParticipant"
         class="call-modal__remote-placeholder"
+        :class="{
+          'call-modal__remote-placeholder--background':
+            !!focusedParticipant.backgroundPlaceholderStyle
+        }"
+        :style="focusedParticipant.backgroundPlaceholderStyle || undefined"
       >
         <CachedAvatar
+          v-if="!focusedParticipant.backgroundPlaceholderStyle"
           :path="focusedParticipant.avatarUrl"
           :alt="focusedParticipant.name"
           class="call-modal__avatar"
@@ -79,6 +85,7 @@
 </template>
 
 <script setup lang="ts">
+import type { CSSProperties } from 'vue';
 import CallParticipantsPanel from './CallParticipantsPanel.vue';
 import FullscreenIcon from './UI/FullscreenIcon.vue';
 import HandRaiseIcon from './UI/HandRaiseIcon.vue';
@@ -116,6 +123,7 @@ defineProps<{
     isSpeaking: boolean;
     isMicActive: boolean;
     hasAudio: boolean;
+    backgroundPlaceholderStyle?: CSSProperties | null;
   }>;
   focusedParticipant: {
     identity: string;
@@ -131,6 +139,7 @@ defineProps<{
     activeReactionVideoKey: string;
     isSpeaking: boolean;
     isMicActive: boolean;
+    backgroundPlaceholderStyle?: CSSProperties | null;
   } | null;
   focusedParticipantHasVideo: boolean;
   canSwitchLocalCamera: boolean;

@@ -444,6 +444,7 @@
 
 <script setup lang="ts">
 import {
+  type CSSProperties,
   computed,
   nextTick,
   onBeforeUnmount,
@@ -508,6 +509,7 @@ import {
   hideIncomingCallScreen,
   showIncomingCallScreen
 } from '../../services/useCallScreen';
+import { useCallBackground } from '../../composables/useCallBackground';
 import { getUsersList } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
 import { useTopics } from '../../composables/useTopics';
@@ -517,6 +519,11 @@ import GroupInfoIcon from './UI/GroupInfoIcon.vue';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const { getSelectedTopic } = useTopics();
+const {
+  callBackgroundPreviewItems,
+  selectedCallBackgroundId,
+  selectedCallBackgroundMode
+} = useCallBackground();
 
 const localVideo = ref<HTMLVideoElement | null>(null);
 const screenShareVideo = ref<HTMLVideoElement | null>(null);
@@ -732,7 +739,8 @@ const buildParticipantEntries = (
         ? `${participant.activeReaction}-${participant.activeReactionExpiresAt}`
         : '',
     isSpeaking: participant.isSpeaking,
-    isMicActive: participant.isMicActive
+    isMicActive: participant.isMicActive,
+    backgroundPlaceholderStyle: participant.backgroundPlaceholderStyle || null
   };
   const entries: any[] = [];
 
@@ -839,6 +847,23 @@ const displayAvatarInfo = computed(() => {
   };
 });
 const isBusyNoticeVisible = computed(() => !!callStatusNotice.value);
+const localCallBackgroundPlaceholderStyle = computed<CSSProperties | null>(
+  () => {
+    if (
+      !liveKitState.isVideoActive ||
+      !!localVideoStream.value ||
+      selectedCallBackgroundMode.value === 'none'
+    ) {
+      return null;
+    }
+
+    return (
+      callBackgroundPreviewItems.value.find(
+        item => item.id === selectedCallBackgroundId.value
+      )?.previewStyle || null
+    );
+  }
+);
 
 const localParticipantView = computed(() => {
   const authUser = getAuthUser() as any;
@@ -857,7 +882,8 @@ const localParticipantView = computed(() => {
       activeReaction: liveKitState.activeReaction,
       activeReactionExpiresAt: liveKitState.activeReactionExpiresAt,
       isSpeaking: false,
-      isMicActive: liveKitState.isMicActive
+      isMicActive: liveKitState.isMicActive,
+      backgroundPlaceholderStyle: localCallBackgroundPlaceholderStyle.value
     },
     {
       initials: authUser.initials || 'Y',
@@ -893,7 +919,8 @@ const localParticipantDisplayViews = computed(() => {
       activeReaction: liveKitState.activeReaction,
       activeReactionExpiresAt: liveKitState.activeReactionExpiresAt,
       isSpeaking: false,
-      isMicActive: liveKitState.isMicActive
+      isMicActive: liveKitState.isMicActive,
+      backgroundPlaceholderStyle: localCallBackgroundPlaceholderStyle.value
     },
     {
       initials: authUser.initials || 'Y',
