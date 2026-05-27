@@ -22,6 +22,7 @@ import { getAuthUser } from '../composables/useAuth';
 import { useCallBackground } from '../composables/useCallBackground';
 import { showErrorNotification } from '../composables/useNotifications';
 import { AudioOutput } from './useAudioOutput';
+import { prewarmCallBackgroundAssets } from './callBackgroundWarmup';
 import { copyTextToClipboard } from '../utils/copyTextToClipboard';
 import {
   playNativeCallRingtone,
@@ -186,11 +187,22 @@ const CAMERA_CAPTURE_DEFAULTS = {
   frameRate: 30,
   resolution: VideoPresets.h1080.resolution
 };
+const MANAGED_BACKGROUND_CAMERA_CAPTURE_DEFAULTS = {
+  facingMode: 'user' as const,
+  frameRate: 20,
+  resolution: VideoPresets.h540.resolution
+};
 const CAMERA_PUBLISH_DEFAULTS = {
   degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
   simulcast: true,
   videoEncoding: VideoPresets.h1080.encoding,
   videoSimulcastLayers: [VideoPresets.h216, VideoPresets.h540]
+};
+const MANAGED_BACKGROUND_CAMERA_PUBLISH_DEFAULTS = {
+  degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
+  simulcast: true,
+  videoEncoding: VideoPresets.h540.encoding,
+  videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360]
 };
 const SCREEN_SHARE_CAPTURE_DEFAULTS = {
   contentHint: 'detail' as const,
@@ -238,6 +250,11 @@ const getLocalCameraPublication = (activeRoom: Room) =>
 
 const shouldUseManagedBackgroundCamera = (): boolean =>
   selectedCallBackgroundMode.value !== 'none';
+
+const getManagedBackgroundImageUrl = (): string | null =>
+  selectedCallBackgroundMode.value === 'image'
+    ? selectedCallBackgroundImageUrl.value || null
+    : null;
 
 const getCallBackgroundProcessorSignature = (): string => {
   if (selectedCallBackgroundMode.value === 'blur') {
@@ -366,7 +383,12 @@ const publishCameraWithBackground = async (
     );
   }
 
-  const localVideoTrack = await createLocalVideoTrack(CAMERA_CAPTURE_DEFAULTS);
+  void prewarmCallBackgroundAssets(getManagedBackgroundImageUrl());
+
+  const localVideoTrack = await createLocalVideoTrack({
+    ...MANAGED_BACKGROUND_CAMERA_CAPTURE_DEFAULTS,
+    facingMode: currentCameraFacingMode
+  });
   const { processor } = await ensureLocalBackgroundProcessor(localVideoTrack);
 
   if (!processor) {
@@ -378,7 +400,7 @@ const publishCameraWithBackground = async (
 
   const publication = await activeRoom.localParticipant.publishTrack(
     localVideoTrack,
-    CAMERA_PUBLISH_DEFAULTS
+    MANAGED_BACKGROUND_CAMERA_PUBLISH_DEFAULTS
   );
 
   syncLocalTrackStateWhenProcessedTrackReady(localVideoTrack);
@@ -2871,7 +2893,9 @@ export const switchCamera = async () => {
 
   try {
     await localVideoTrack.restartTrack({
-      ...CAMERA_CAPTURE_DEFAULTS,
+      ...(shouldUseManagedBackgroundCamera()
+        ? MANAGED_BACKGROUND_CAMERA_CAPTURE_DEFAULTS
+        : CAMERA_CAPTURE_DEFAULTS),
       facingMode: currentCameraFacingMode
     });
     syncLocalTrackState();
@@ -3194,6 +3218,10 @@ export const clearInvitedGroupCall = (activeRoomId?: string) => {
 watch(
   [selectedCallBackgroundMode, selectedCallBackgroundImageUrl],
   () => {
+    if (selectedCallBackgroundMode.value !== 'none') {
+      void prewarmCallBackgroundAssets(getManagedBackgroundImageUrl());
+    }
+
     if (!state.isVideoActive) {
       return;
     }

@@ -18,6 +18,7 @@ type NativeImageStoreConfig = {
   directoryName: string;
   metadataKey: string;
   selectionKey: string;
+  selectionFileName?: string;
   customIdPrefix: string;
 };
 
@@ -25,6 +26,15 @@ const isNativePlatform = () => Capacitor.isNativePlatform();
 
 const buildFilePath = (directoryName: string, fileName: string) =>
   `${directoryName}/${fileName}`;
+const DEFAULT_SELECTION_FILE_NAME = 'selected-id.txt';
+
+const ensureNativeDirectory = async (directoryName: string): Promise<void> => {
+  await Filesystem.mkdir({
+    path: directoryName,
+    directory: Directory.Data,
+    recursive: true
+  }).catch(() => {});
+};
 
 const safeParseJson = <T>(value: string | null, fallback: T): T => {
   if (!value) {
@@ -48,27 +58,86 @@ export const createPersistentCustomImageId = (prefix: string): string => {
 };
 
 export const readPersistedSelectedId = async (
-  selectionKey: string
+  config: Pick<
+    NativeImageStoreConfig,
+    'selectionKey' | 'directoryName' | 'selectionFileName'
+  >
 ): Promise<string | null> => {
   if (!isNativePlatform()) {
     return null;
   }
 
-  const { value } = await Preferences.get({ key: selectionKey });
-  return value || null;
+  const { value } = await Preferences.get({ key: config.selectionKey });
+
+  if (value) {
+    await ensureNativeDirectory(config.directoryName);
+    await Filesystem.writeFile({
+      path: buildFilePath(
+        config.directoryName,
+        config.selectionFileName || DEFAULT_SELECTION_FILE_NAME
+      ),
+      directory: Directory.Data,
+      data: value,
+      encoding: Encoding.UTF8,
+      recursive: true
+    }).catch(() => {});
+
+    return value;
+  }
+
+  try {
+    const file = await Filesystem.readFile({
+      path: buildFilePath(
+        config.directoryName,
+        config.selectionFileName || DEFAULT_SELECTION_FILE_NAME
+      ),
+      directory: Directory.Data,
+      encoding: Encoding.UTF8
+    });
+    const selectedId = String(file.data || '').trim();
+
+    if (!selectedId) {
+      return null;
+    }
+
+    await Preferences.set({
+      key: config.selectionKey,
+      value: selectedId
+    });
+
+    return selectedId;
+  } catch {
+    return null;
+  }
 };
 
 export const persistSelectedId = async (
-  selectionKey: string,
+  config: Pick<
+    NativeImageStoreConfig,
+    'selectionKey' | 'directoryName' | 'selectionFileName'
+  >,
   selectedId: string
 ): Promise<void> => {
   if (!isNativePlatform()) {
     return;
   }
 
+  await ensureNativeDirectory(config.directoryName);
+
   await Preferences.set({
-    key: selectionKey,
+    key: config.selectionKey,
     value: selectedId
+  });
+
+  await Filesystem.writeFile({
+    path: buildFilePath(
+      config.directoryName,
+      config.selectionFileName || DEFAULT_SELECTION_FILE_NAME
+    ),
+    directory: Directory.Data,
+    data: selectedId,
+    encoding: Encoding.UTF8,
+    recursive: true
   });
 };
 
@@ -146,11 +215,7 @@ const savePersistentCustomImageRecord = async (
 ): Promise<StoredPersistentCustomImage> => {
   const fileName = `${item.id}.txt`;
 
-  await Filesystem.mkdir({
-    path: config.directoryName,
-    directory: Directory.Data,
-    recursive: true
-  }).catch(() => {});
+  await ensureNativeDirectory(config.directoryName);
 
   await Filesystem.writeFile({
     path: buildFilePath(config.directoryName, fileName),
@@ -227,4 +292,7 @@ export const migratePersistentCustomImages = async (
 
 export const createNativeImageStoreConfig = (
   config: NativeImageStoreConfig
-): NativeImageStoreConfig => config;
+): NativeImageStoreConfig => ({
+  ...config,
+  selectionFileName: config.selectionFileName || DEFAULT_SELECTION_FILE_NAME
+});

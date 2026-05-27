@@ -578,7 +578,6 @@ dialog.menu-profile__wallpaper-modal > .modal-yui-kit__modal-content {
   min-height: 50px !important;
   height: 50px;
   justify-content: center;
-  color: var(--blue1);
   width: 100%;
 }
 

@@ -1,3 +1,4 @@
+import { App } from '@capacitor/app';
 import { computed, ref, type CSSProperties } from 'vue';
 import {
   createNativeImageStoreConfig,
@@ -108,6 +109,7 @@ const selectedCallBackgroundId = ref('none');
 const customCallBackgrounds = ref<StoredCustomCallBackground[]>([]);
 const isInitialized = ref(false);
 const isHydratingCustomCallBackgrounds = ref(false);
+let callBackgroundAppStateListenerRegistered = false;
 const DEFAULT_CALL_BACKGROUND_GRADIENT =
   'linear-gradient(180deg, rgba(251, 253, 255, 1) 0%, rgba(236, 243, 255, 1) 100%)';
 
@@ -223,15 +225,30 @@ const persistSelectedCallBackgroundId = (backgroundId: string): void => {
     return;
   }
 
+  window.localStorage.setItem(CALL_BACKGROUND_STORAGE_KEY, backgroundId);
+
   if (isNativeCustomImagePersistenceAvailable()) {
-    void persistSelectedId(
-      CALL_BACKGROUND_NATIVE_STORE.selectionKey,
-      backgroundId
-    );
+    void persistSelectedId(CALL_BACKGROUND_NATIVE_STORE, backgroundId);
+  }
+};
+
+const registerCallBackgroundAppStatePersistence = (): void => {
+  if (
+    callBackgroundAppStateListenerRegistered ||
+    !isNativeCustomImagePersistenceAvailable()
+  ) {
     return;
   }
 
-  window.localStorage.setItem(CALL_BACKGROUND_STORAGE_KEY, backgroundId);
+  callBackgroundAppStateListenerRegistered = true;
+
+  void App.addListener('appStateChange', ({ isActive }) => {
+    if (isActive) {
+      return;
+    }
+
+    persistSelectedCallBackgroundId(selectedCallBackgroundId.value);
+  });
 };
 
 const createCustomCallBackgroundId = (): string => {
@@ -251,6 +268,28 @@ const getSelectedCallBackgroundOption = (): CallBackgroundOption | null => {
 
   const customBackground = customCallBackgrounds.value.find(
     wallpaper => wallpaper.id === selectedCallBackgroundId.value
+  );
+
+  return customBackground
+    ? buildCustomCallBackgroundOption(customBackground)
+    : null;
+};
+
+const getCallBackgroundOptionById = (
+  backgroundId: string
+): CallBackgroundOption | null => {
+  if (!backgroundId) {
+    return null;
+  }
+
+  const presetBackground = callBackgroundOptionMap.get(backgroundId);
+
+  if (presetBackground) {
+    return presetBackground;
+  }
+
+  const customBackground = customCallBackgrounds.value.find(
+    wallpaper => wallpaper.id === backgroundId
   );
 
   return customBackground
@@ -323,9 +362,7 @@ const hydrateCustomCallBackgrounds = async (): Promise<void> => {
       customCallBackgrounds.value = nativeCustomBackgrounds;
 
       const persistedSelectedId =
-        (await readPersistedSelectedId(
-          CALL_BACKGROUND_NATIVE_STORE.selectionKey
-        )) || '';
+        (await readPersistedSelectedId(CALL_BACKGROUND_NATIVE_STORE)) || '';
       const browserSelectedId = readBrowserSelectedCallBackgroundId();
       const fallbackSelectedId = persistedSelectedId || browserSelectedId;
 
@@ -334,6 +371,17 @@ const hydrateCustomCallBackgrounds = async (): Promise<void> => {
         fallbackSelectedId !== CALL_BACKGROUND_NONE_ID &&
         !callBackgroundOptionMap.has(fallbackSelectedId)
       ) {
+        const selectedNativeBackground = nativeCustomBackgrounds.find(
+          wallpaper => wallpaper.id === fallbackSelectedId
+        );
+
+        if (selectedNativeBackground) {
+          selectedCallBackgroundId.value = selectedNativeBackground.id;
+          persistSelectedCallBackgroundId(selectedCallBackgroundId.value);
+          reconcileSelectedCallBackground();
+          return;
+        }
+
         const selectedBrowserBackground = browserCustomBackgrounds.find(
           wallpaper => wallpaper.id === fallbackSelectedId
         );
@@ -371,7 +419,12 @@ const ensureInitialized = (): void => {
   }
 
   isInitialized.value = true;
-  selectedCallBackgroundId.value = readBrowserSelectedCallBackgroundId();
+
+  if (!isNativeCustomImagePersistenceAvailable()) {
+    selectedCallBackgroundId.value = readBrowserSelectedCallBackgroundId();
+  }
+
+  registerCallBackgroundAppStatePersistence();
   void hydrateCustomCallBackgrounds();
 };
 
@@ -517,6 +570,7 @@ export const useCallBackground = () => {
       () => customCallBackgrounds.value.length > 0
     ),
     isCallBackgroundApplied,
+    getCallBackgroundOptionById,
     selectCallBackground,
     setCustomCallBackground
   };

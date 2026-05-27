@@ -1,3 +1,4 @@
+import { App } from '@capacitor/app';
 import { computed, ref, type CSSProperties } from 'vue';
 import {
   createNativeImageStoreConfig,
@@ -78,6 +79,7 @@ const selectedWallpaperId = ref('none');
 const customWallpapers = ref<StoredCustomWallpaper[]>([]);
 const isInitialized = ref(false);
 const isHydratingCustomWallpapers = ref(false);
+let wallpaperAppStateListenerRegistered = false;
 const DEFAULT_WALLPAPER_GRADIENT =
   'linear-gradient(180deg, rgba(251, 253, 255, 1) 0%, rgba(236, 243, 255, 1) 100%)';
 
@@ -190,12 +192,30 @@ const persistSelectedWallpaperId = (wallpaperId: string): void => {
     return;
   }
 
+  window.localStorage.setItem(CHAT_WALLPAPER_STORAGE_KEY, wallpaperId);
+
   if (isNativeCustomImagePersistenceAvailable()) {
-    void persistSelectedId(WALLPAPER_NATIVE_STORE.selectionKey, wallpaperId);
+    void persistSelectedId(WALLPAPER_NATIVE_STORE, wallpaperId);
+  }
+};
+
+const registerWallpaperAppStatePersistence = (): void => {
+  if (
+    wallpaperAppStateListenerRegistered ||
+    !isNativeCustomImagePersistenceAvailable()
+  ) {
     return;
   }
 
-  window.localStorage.setItem(CHAT_WALLPAPER_STORAGE_KEY, wallpaperId);
+  wallpaperAppStateListenerRegistered = true;
+
+  void App.addListener('appStateChange', ({ isActive }) => {
+    if (isActive) {
+      return;
+    }
+
+    persistSelectedWallpaperId(selectedWallpaperId.value);
+  });
 };
 
 const createCustomWallpaperId = (): string => {
@@ -347,8 +367,7 @@ const hydrateCustomWallpapers = async (): Promise<void> => {
       customWallpapers.value = nativeCustomWallpapers;
 
       const persistedSelectedId =
-        (await readPersistedSelectedId(WALLPAPER_NATIVE_STORE.selectionKey)) ||
-        '';
+        (await readPersistedSelectedId(WALLPAPER_NATIVE_STORE)) || '';
       const browserSelectedId = readBrowserSelectedWallpaperId();
       const fallbackSelectedId = persistedSelectedId || browserSelectedId;
 
@@ -357,6 +376,17 @@ const hydrateCustomWallpapers = async (): Promise<void> => {
         fallbackSelectedId !== 'none' &&
         !wallpaperOptionMap.has(fallbackSelectedId)
       ) {
+        const selectedNativeWallpaper = nativeCustomWallpapers.find(
+          wallpaper => wallpaper.id === fallbackSelectedId
+        );
+
+        if (selectedNativeWallpaper) {
+          selectedWallpaperId.value = selectedNativeWallpaper.id;
+          persistSelectedWallpaperId(selectedWallpaperId.value);
+          reconcileSelectedWallpaper();
+          return;
+        }
+
         const selectedBrowserWallpaper = browserCustomWallpapers.find(
           wallpaper => wallpaper.id === fallbackSelectedId
         );
@@ -393,7 +423,12 @@ const ensureInitialized = (): void => {
   }
 
   isInitialized.value = true;
-  selectedWallpaperId.value = readBrowserSelectedWallpaperId();
+
+  if (!isNativeCustomImagePersistenceAvailable()) {
+    selectedWallpaperId.value = readBrowserSelectedWallpaperId();
+  }
+
+  registerWallpaperAppStatePersistence();
   void hydrateCustomWallpapers();
 };
 

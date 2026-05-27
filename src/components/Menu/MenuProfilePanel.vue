@@ -459,7 +459,7 @@
   </Modal>
 
   <MobileModal
-    v-if="isMobile"
+    v-if="false && isMobile"
     class="menu-profile__wallpaper-preview-mobile menu-profile__call-background-preview-mobile"
     headerClass="hidden"
     :show-divider="false"
@@ -482,7 +482,7 @@
 
       <div class="menu-profile__call-background-preview-actions">
         <Button
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.secondary"
           :size="SizesEnum.small"
           class="menu-profile__call-background-preview-cancel"
           @click="closeCallBackgroundPreview"
@@ -554,6 +554,19 @@
       </div>
     </div>
   </Modal>
+
+  <CallBackgroundPreviewModal
+    :open="isCallBackgroundPreviewOpen"
+    :is-mobile="isMobile"
+    :is-applying="isApplyingCallBackground"
+    :disabled="
+      !pendingCallBackgroundDataUrl && !pendingCallBackgroundSelectionId
+    "
+    :pending-selection-id="pendingCallBackgroundSelectionId"
+    :pending-data-url="pendingCallBackgroundDataUrl"
+    @close="closeCallBackgroundPreview"
+    @apply="applyPendingCallBackground"
+  />
 </template>
 
 <script setup lang="ts">
@@ -591,6 +604,7 @@ import MobileModal from '../UI/MobileModal.vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import MessageBubble from '../Messages/MessageBubble.vue';
+import CallBackgroundPreviewModal from '../CallModal/CallBackgroundPreviewModal.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -778,13 +792,7 @@ const openCallBackgroundPreviewForSelection = (backgroundId: string): void => {
 
 const selectCallBackgroundOption = (backgroundId: string): void => {
   callBackgroundError.value = '';
-
-  if (isMobile.value) {
-    openCallBackgroundPreviewForSelection(backgroundId);
-    return;
-  }
-
-  selectCallBackground(backgroundId);
+  openCallBackgroundPreviewForSelection(backgroundId);
 };
 
 const openCallBackgroundPicker = (): void => {
@@ -888,16 +896,9 @@ const handleCallBackgroundUpload = async (event: Event): Promise<void> => {
 
   try {
     const dataUrl = await fileToDataURL(file);
-
-    if (isMobile.value) {
-      pendingCallBackgroundDataUrl.value = dataUrl;
-      pendingCallBackgroundSelectionId.value = '';
-      isCallBackgroundPreviewOpen.value = true;
-      return;
-    }
-
-    isApplyingCallBackground.value = true;
-    await setCustomCallBackground(dataUrl);
+    pendingCallBackgroundDataUrl.value = dataUrl;
+    pendingCallBackgroundSelectionId.value = '';
+    isCallBackgroundPreviewOpen.value = true;
   } catch (error) {
     console.error('Failed to save custom call background:', error);
     callBackgroundError.value =
