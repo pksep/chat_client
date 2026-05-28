@@ -62,6 +62,7 @@
           <div
             ref="messageHtmlRef"
             class="message-content__html"
+            v-emoji
             v-html="props.message"
             :data-testid="`${props.dataTestid}-MessageText`"
             @click="handleMentionUserClick"

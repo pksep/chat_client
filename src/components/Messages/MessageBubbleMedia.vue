@@ -54,6 +54,7 @@
                 :alt="props.sender ? props.sender + ' image' : 'Shared image'"
                 :style="getPreviewStyle(media)"
                 loading="lazy"
+                fetchpriority="low"
                 decoding="async"
                 @load="captureImagePreviewMetrics(media, $event)"
                 @click.stop="$emit('set-slider', mediaFiles, i)"
@@ -102,6 +103,7 @@
           <div
             ref="messageHtmlRef"
             class="message-media__caption-text message-content__html"
+            v-emoji
             v-html="props.message"
             :data-testid="`${props.dataTestid}-MessageText`"
             @click="handleMentionUserClick"

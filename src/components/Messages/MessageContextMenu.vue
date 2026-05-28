@@ -39,6 +39,8 @@
 
     <EmojiPicker
       ref="reactionRow"
+      v-emoji
+      :native="true"
       v-on-click-outside="toggleShowEmojies"
       v-else-if="showEmojies"
       @select="handleSelectEmoji"
@@ -160,6 +162,7 @@
             :key="value"
             @click.stop="handleReactMessage(value)"
             class="select-reactions-item"
+            v-emoji="{ animated: true }"
           >
             {{ value }}
           </div>

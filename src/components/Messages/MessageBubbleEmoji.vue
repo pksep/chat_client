@@ -50,6 +50,7 @@
             'message-emoji__symbol',
             { 'message-emoji__symbol--referenced': hasReplyReference }
           ]"
+          v-emoji="{ animated: true }"
           :data-testid="`${props.dataTestid}-Emoji`"
         >
           {{ emojiText }}
@@ -130,7 +131,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import MessageReferenceBlock from './MessageReferenceBlock.vue';
 import MessageStatusIcons from './MessageStatusIcons.vue';
@@ -142,6 +143,7 @@ import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import MessageBubbleTail from './MessageBubbleTail.vue';
 import MessageAuthorMeta from './MessageAuthorMeta.vue';
 import { useReferenceWidth } from './composables/useReferenceWidth';
+import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
 
 const props = defineProps<IMessageBubbleProps>();
 
@@ -161,6 +163,18 @@ const emojiText = computed(() =>
     .replace(/<\/?(p|div|span)[^>]*>/gi, '')
     .replace(/&nbsp;/gi, ' ')
     .trim()
+);
+
+watch(
+  emojiText,
+  value => {
+    preloadNotoEmojiAssets(value ? [value] : [], {
+      highPriority: true
+    });
+  },
+  {
+    immediate: true
+  }
 );
 
 const showErrorIcon = computed(
