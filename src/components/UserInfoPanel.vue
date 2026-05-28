@@ -50,9 +50,11 @@
           :data-testid="`${props.dataTestid}-Name`"
         >
           {{ resolvedUser?.initials || 'Пользователь' }}
-          <span class="user-info-panel__subtitle__icon">
-            {{ resolvedUser?.status?.icon }}
-          </span>
+          <EmojiIcon
+            v-if="resolvedUser?.status?.icon"
+            class="user-info-panel__subtitle__icon"
+            :emoji="resolvedUser.status.icon"
+          />
         </h3>
         <p
           class="user-info-panel__subtitle"
@@ -116,7 +118,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -134,8 +136,10 @@ import { startLiveKitCall } from '../services/useLiveKit';
 import { TopicType } from '../services/useChatSDK/types';
 import { parseUserEx } from '../utils/parseUserEx';
 import type { ITopic, IUser } from './interfaces/interfaces';
+import { preloadNotoEmojiAssets } from '../composables/useEmojiStyle';
 import CallIcon from './CallModal/UI/CallIcon.vue';
 import CachedAvatar from './UI/CachedAvatar.vue';
+import EmojiIcon from './UI/EmojiIcon.vue';
 import MessageIcon from './UI/MessageIcon.vue';
 import MuteIcon from './UI/MuteIcon.vue';
 import UnmuteIcon from './UI/UnmuteIcon.vue';
@@ -198,6 +202,18 @@ const canOpenChat = computed(
 const canToggleMute = computed(() => !!directTopic.value?.id);
 const actionButtonCount = computed(
   () => 1 + Number(canToggleMute.value) + Number(canOpenChat.value)
+);
+
+watch(
+  () => resolvedUser.value?.status?.icon || '',
+  icon => {
+    preloadNotoEmojiAssets(icon ? [icon] : [], {
+      highPriority: true
+    });
+  },
+  {
+    immediate: true
+  }
 );
 
 const handleCall = async () => {
@@ -336,6 +352,11 @@ const handleOpenChat = async () => {
   font-size: 14px;
   line-height: 17px;
   color: var(--grey6);
+}
+
+.user-info-panel__subtitle__icon {
+  display: block;
+  flex-shrink: 0;
 }
 
 .user-info-panel__actions {

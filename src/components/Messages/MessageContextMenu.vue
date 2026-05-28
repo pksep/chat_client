@@ -39,6 +39,8 @@
 
     <EmojiPicker
       ref="reactionRow"
+      v-emoji
+      :native="true"
       v-on-click-outside="toggleShowEmojies"
       v-else-if="showEmojies"
       @select="handleSelectEmoji"
@@ -160,6 +162,7 @@
             :key="value"
             @click.stop="handleReactMessage(value)"
             class="select-reactions-item"
+            v-emoji="{ animated: true }"
           >
             {{ value }}
           </div>
@@ -440,7 +443,7 @@ const emits = defineEmits([
   'unmount-retry-message-id'
 ]);
 
-const quickReactonList = computed(() => ['♥️', '🔥', '👍', '😂', '👌', '😭']);
+const quickReactonList = computed(() => ['❤️', '🔥', '👍', '😂', '👌', '😭']);
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const messages = computed(() =>
   props.topicId ? getMessagesByTopicId(props.topicId) : []

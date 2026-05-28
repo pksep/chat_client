@@ -13,7 +13,11 @@
         @touchmove="clearLongPress"
       >
         <div class="reaction-item">
-          {{ emoji }}
+          <EmojiIcon
+            class="reaction-item__emoji"
+            :emoji="emoji"
+            :animated="true"
+          />
         </div>
         <CachedAvatar
           v-if="messageReaction.count === 1 && messageReaction.user"
@@ -79,7 +83,11 @@
             </div>
 
             <div class="message-reactions-details__emoji">
-              {{ reaction.emoji }}
+              <EmojiIcon
+                class="message-reactions-details__emoji-icon"
+                :emoji="reaction.emoji"
+                :animated="true"
+              />
             </div>
           </button>
         </div>
@@ -93,7 +101,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { Reaction } from '@pksep/zod-shared-chat';
 import { setReactionMessage } from '../../services/useChat';
 import { useUrlWatcher } from '../../composables/navigation';
@@ -102,7 +110,9 @@ import { getUserById } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
 import type { IUser } from '../interfaces/interfaces';
 import CachedAvatar from '../UI/CachedAvatar.vue';
+import EmojiIcon from '../UI/EmojiIcon.vue';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
+import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
 
 const LONG_PRESS_DELAY_MS = 450;
 const VIEWPORT_OFFSET_PX = 8;
@@ -141,6 +151,18 @@ const reactionContent = computed<Record<string, MessageReactions>>(
       },
       {} as Record<string, MessageReactions>
     ) || {}
+);
+
+watch(
+  reactionContent,
+  value => {
+    preloadNotoEmojiAssets(Object.keys(value), {
+      highPriority: true
+    });
+  },
+  {
+    immediate: true
+  }
 );
 
 const route = useUrlWatcher();
