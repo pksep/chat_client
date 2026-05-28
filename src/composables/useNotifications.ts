@@ -22,7 +22,10 @@ const state = reactive<INotificationState>({
   items: []
 });
 
-const closeNotificationTimeouts = new Map<number, ReturnType<typeof setTimeout>>();
+const closeNotificationTimeouts = new Map<
+  number,
+  ReturnType<typeof setTimeout>
+>();
 let nextNotificationKey = 1;
 
 const clearCloseNotificationTimeout = (key: number) => {
