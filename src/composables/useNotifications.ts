@@ -75,7 +75,7 @@ export const showNotification = ({
 
 export const showErrorNotification = (description: string) => {
   showNotification({
-    title: 'ÐžÑˆÐ¸Ð±ÐºÐ°',
+    title: 'Ошибка',
     description,
     type: MessageTypeEnum.error
   });

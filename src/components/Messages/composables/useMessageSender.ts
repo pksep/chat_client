@@ -1,4 +1,4 @@
-import { nextTick, type Ref } from 'vue';
+import { nextTick, watch, type Ref } from 'vue';
 import { sendMessageChat, uploadFile } from '../../../services/useChat';
 import { generateUUID } from '../../../utils/generateUUID';
 import { fileToDataURL } from '../../../utils/fileToDataURL';
@@ -14,6 +14,7 @@ import {
   changeFileUploadErrorStatus,
   changeMessageStatusLocally,
   getFullMessagesByTopicId,
+  getTopicIdsWithMessages,
   getPendingUploadFile,
   getPendingUploadMessageMeta,
   registerPendingUploadFile,
@@ -37,6 +38,41 @@ const FORWARD_TEXT_SEND_DELAY_MS = 250;
 const TEXT_WAIT_INDICATOR_DELAY_MS = 150;
 const MAX_MEDIA_ATTACHMENTS_PER_MESSAGE = 10;
 const MAX_FILE_ATTACHMENTS_PER_MESSAGE = 10;
+const MESSAGE_AUTO_RETRY_WINDOW_MS = 180000;
+const MESSAGE_AUTO_RETRY_INITIAL_DELAY_MS = 3000;
+const MESSAGE_AUTO_RETRY_MAX_DELAY_MS = 15000;
+
+type PendingMessageRetryState = {
+  attempt: number;
+  startedAt: number;
+};
+
+const pendingMessageRetryTimers = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+>();
+const pendingMessageRetryStates = new Map<string, PendingMessageRetryState>();
+let arePendingMessageRetryListenersBound = false;
+
+const getPendingMessageRetryKey = (
+  topicId: string,
+  messageId: string
+): string => `${topicId}:${messageId}`;
+
+const parsePendingMessageRetryKey = (
+  key: string
+): { topicId: string; messageId: string } | null => {
+  const separatorIndex = key.indexOf(':');
+
+  if (separatorIndex <= 0 || separatorIndex === key.length - 1) {
+    return null;
+  }
+
+  return {
+    topicId: key.slice(0, separatorIndex),
+    messageId: key.slice(separatorIndex + 1)
+  };
+};
 
 const createMessageEx = (
   payload: Record<string, string | number>,
@@ -244,6 +280,40 @@ export function useMessageSender(
   ): IMessage | undefined =>
     getFullMessagesByTopicId(topicId).find(message => message.id === messageId);
 
+  const isAutoRetryCandidate = (message?: IMessage | null): boolean =>
+    Boolean(
+      message &&
+        (message.status === MessageStatus.Wait ||
+          message.status === MessageStatus.NotDelivered)
+    );
+
+  const canAutoRetryMessage = (message?: IMessage | null): boolean => {
+    if (!isAutoRetryCandidate(message)) {
+      return false;
+    }
+
+    if (!message?.media?.length) {
+      return true;
+    }
+
+    return message.media.every(media => !media.isLoading);
+  };
+
+  const clearPendingMessageAutoRetry = (
+    topicId: string,
+    messageId: string
+  ): void => {
+    const retryKey = getPendingMessageRetryKey(topicId, messageId);
+    const timeoutId = pendingMessageRetryTimers.get(retryKey);
+
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      pendingMessageRetryTimers.delete(retryKey);
+    }
+
+    pendingMessageRetryStates.delete(retryKey);
+  };
+
   const isSendAvailable = (): boolean =>
     getHasWebsocketConnection() && navigator.onLine;
 
@@ -257,14 +327,89 @@ export function useMessageSender(
       ex: media.ex
     }) as IMedia;
 
+  const trySendPendingTextMessage = async (
+    topicId: string,
+    messageId: string,
+    options?: { markNotDeliveredOnFailure?: boolean }
+  ): Promise<boolean> => {
+    const message = getMessageById(topicId, messageId);
+
+    if (!message) {
+      return false;
+    }
+
+    const messageMeta = await getPendingUploadMessageMeta(topicId, messageId);
+    const canSend = isSendAvailable();
+
+    changeMessageStatusLocally(topicId, messageId, MessageStatus.Wait);
+
+    if (!canSend) {
+      if (options?.markNotDeliveredOnFailure !== false) {
+        changeMessageStatusLocally(
+          topicId,
+          messageId,
+          MessageStatus.NotDelivered
+        );
+      }
+
+      return false;
+    }
+
+    if (messageMeta?.forwardMessageIds?.length) {
+      for (const forwardMessageId of messageMeta.forwardMessageIds) {
+        const didSend = await sendMessageChat({
+          topicId,
+          text: message.text || '',
+          replyMessageId: messageMeta.replyMessageId || message.replyMessageId,
+          forwardMessageId,
+          taggedUserIds: message.taggedUserIds,
+          ex: message.ex || JSON.stringify({ clientId: messageId })
+        });
+
+        if (!didSend) {
+          if (options?.markNotDeliveredOnFailure !== false) {
+            changeMessageStatusLocally(
+              topicId,
+              messageId,
+              MessageStatus.NotDelivered
+            );
+          }
+
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    const didSend = await sendMessageChat({
+      topicId,
+      text: message.text || '',
+      replyMessageId: messageMeta?.replyMessageId || message.replyMessageId,
+      taggedUserIds: message.taggedUserIds,
+      ex: message.ex || JSON.stringify({ clientId: messageId })
+    });
+
+    if (!didSend && options?.markNotDeliveredOnFailure !== false) {
+      changeMessageStatusLocally(
+        topicId,
+        messageId,
+        MessageStatus.NotDelivered
+      );
+    }
+
+    return didSend;
+  };
+
   const trySendPendingUploadMessage = async (
     topicId: string,
-    messageId: string
-  ): Promise<void> => {
+    messageId: string,
+    options?: { markNotDeliveredOnFailure?: boolean }
+  ): Promise<boolean> => {
     const message = getMessageById(topicId, messageId);
 
     if (!message?.media?.length) {
-      return;
+      return false;
     }
 
     const hasPendingFiles = message.media.some(
@@ -272,26 +417,33 @@ export function useMessageSender(
     );
 
     if (hasPendingFiles) {
-      changeMessageStatusLocally(
-        topicId,
-        messageId,
-        MessageStatus.NotDelivered
-      );
-      return;
+      if (options?.markNotDeliveredOnFailure !== false) {
+        changeMessageStatusLocally(
+          topicId,
+          messageId,
+          MessageStatus.NotDelivered
+        );
+      }
+
+      return false;
     }
 
     const messageMeta = await getPendingUploadMessageMeta(topicId, messageId);
     const medias = message.media.map(buildMediaPayload);
     const canSend = isSendAvailable();
 
-    changeMessageStatusLocally(
-      topicId,
-      messageId,
-      canSend ? MessageStatus.Wait : MessageStatus.NotDelivered
-    );
+    changeMessageStatusLocally(topicId, messageId, MessageStatus.Wait);
 
     if (!canSend) {
-      return;
+      if (options?.markNotDeliveredOnFailure !== false) {
+        changeMessageStatusLocally(
+          topicId,
+          messageId,
+          MessageStatus.NotDelivered
+        );
+      }
+
+      return false;
     }
 
     if (messageMeta?.forwardMessageIds?.length) {
@@ -306,12 +458,15 @@ export function useMessageSender(
         });
 
         if (!didSend) {
-          changeMessageStatusLocally(
-            topicId,
-            messageId,
-            MessageStatus.NotDelivered
-          );
-          return;
+          if (options?.markNotDeliveredOnFailure !== false) {
+            changeMessageStatusLocally(
+              topicId,
+              messageId,
+              MessageStatus.NotDelivered
+            );
+          }
+
+          return false;
         }
       }
     } else {
@@ -324,24 +479,285 @@ export function useMessageSender(
       });
 
       if (!didSend) {
-        changeMessageStatusLocally(
-          topicId,
-          messageId,
-          MessageStatus.NotDelivered
-        );
-        return;
+        if (options?.markNotDeliveredOnFailure !== false) {
+          changeMessageStatusLocally(
+            topicId,
+            messageId,
+            MessageStatus.NotDelivered
+          );
+        }
+
+        return false;
       }
     }
 
     await nextTick();
     scrollToBottom();
+    return true;
   };
+
+  const tryRecoverPendingMediaUploads = async (
+    topicId: string,
+    messageId: string,
+    options?: {
+      markNotDeliveredOnFailure?: boolean;
+      suppressErrorNotification?: boolean;
+    }
+  ): Promise<boolean> => {
+    const message = getMessageById(topicId, messageId);
+
+    if (!message?.media?.length) {
+      return false;
+    }
+
+    const retryableMedia = message.media.filter(
+      media => media.uploadError || !media.path
+    );
+
+    if (retryableMedia.length === 0) {
+      return true;
+    }
+
+    let hasUploadError = false;
+
+    for (const media of retryableMedia) {
+      const payload = await getPendingUploadFile(topicId, messageId, media.id);
+
+      if (!payload) {
+        hasUploadError = true;
+        changeFileUploadErrorStatus(topicId, messageId, media.id, true);
+        continue;
+      }
+
+      const isUploaded = await uploadMessageFile(
+        topicId,
+        messageId,
+        media.id,
+        payload,
+        options
+      );
+
+      if (!isUploaded) {
+        hasUploadError = true;
+      }
+    }
+
+    return !hasUploadError;
+  };
+
+  const trySendPendingMessage = async (
+    topicId: string,
+    messageId: string,
+    options?: { markNotDeliveredOnFailure?: boolean }
+  ): Promise<boolean> => {
+    const message = getMessageById(topicId, messageId);
+
+    if (!message) {
+      return true;
+    }
+
+    if (!isAutoRetryCandidate(message)) {
+      return true;
+    }
+
+    if (message.media?.length) {
+      const uploadsRecovered = await tryRecoverPendingMediaUploads(
+        topicId,
+        messageId,
+        {
+          markNotDeliveredOnFailure: options?.markNotDeliveredOnFailure,
+          suppressErrorNotification:
+            options?.markNotDeliveredOnFailure === false
+        }
+      );
+
+      if (!uploadsRecovered) {
+        return false;
+      }
+
+      return trySendPendingUploadMessage(topicId, messageId, options);
+    }
+
+    return trySendPendingTextMessage(topicId, messageId, options);
+  };
+
+  const getNextRetryDelayMs = (attempt: number): number =>
+    Math.min(
+      MESSAGE_AUTO_RETRY_MAX_DELAY_MS,
+      MESSAGE_AUTO_RETRY_INITIAL_DELAY_MS + attempt * 2000
+    );
+
+  const scheduleAllPendingMessageAutoRetries = (options?: {
+    immediate?: boolean;
+  }): void => {
+    getTopicIdsWithMessages().forEach(topicId => {
+      schedulePendingMessageAutoRetriesForTopic(topicId, options);
+    });
+
+    Array.from(pendingMessageRetryStates.keys()).forEach(key => {
+      const parsedKey = parsePendingMessageRetryKey(key);
+
+      if (!parsedKey) {
+        pendingMessageRetryStates.delete(key);
+        return;
+      }
+
+      schedulePendingMessageAutoRetry(parsedKey.topicId, parsedKey.messageId, {
+        immediate: options?.immediate
+      });
+    });
+  };
+
+  const schedulePendingMessageAutoRetry = (
+    topicId: string,
+    messageId: string,
+    options?: { immediate?: boolean; reset?: boolean }
+  ): void => {
+    const message = getMessageById(topicId, messageId);
+
+    if (!isAutoRetryCandidate(message)) {
+      clearPendingMessageAutoRetry(topicId, messageId);
+      return;
+    }
+
+    const retryKey = getPendingMessageRetryKey(topicId, messageId);
+    const existingTimeout = pendingMessageRetryTimers.get(retryKey);
+
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+      pendingMessageRetryTimers.delete(retryKey);
+    }
+
+    const retryState =
+      !options?.reset && pendingMessageRetryStates.get(retryKey)
+        ? pendingMessageRetryStates.get(retryKey)!
+        : {
+            attempt: 0,
+            startedAt: Date.now()
+          };
+
+    pendingMessageRetryStates.set(retryKey, retryState);
+
+    if (Date.now() - retryState.startedAt >= MESSAGE_AUTO_RETRY_WINDOW_MS) {
+      changeMessageStatusLocally(
+        topicId,
+        messageId,
+        MessageStatus.NotDelivered
+      );
+      clearPendingMessageAutoRetry(topicId, messageId);
+      return;
+    }
+
+    const delayMs = options?.immediate
+      ? 0
+      : getNextRetryDelayMs(retryState.attempt);
+
+    const timeoutId = setTimeout(async () => {
+      pendingMessageRetryTimers.delete(retryKey);
+
+      const currentMessage = getMessageById(topicId, messageId);
+
+      if (!isAutoRetryCandidate(currentMessage)) {
+        clearPendingMessageAutoRetry(topicId, messageId);
+        return;
+      }
+
+      if (Date.now() - retryState.startedAt >= MESSAGE_AUTO_RETRY_WINDOW_MS) {
+        changeMessageStatusLocally(
+          topicId,
+          messageId,
+          MessageStatus.NotDelivered
+        );
+        clearPendingMessageAutoRetry(topicId, messageId);
+        return;
+      }
+
+      const didSend = await trySendPendingMessage(topicId, messageId, {
+        markNotDeliveredOnFailure: false
+      });
+
+      if (didSend) {
+        clearPendingMessageAutoRetry(topicId, messageId);
+        return;
+      }
+
+      const nextRetryState = pendingMessageRetryStates.get(retryKey);
+
+      if (!nextRetryState) {
+        return;
+      }
+
+      nextRetryState.attempt += 1;
+      pendingMessageRetryStates.set(retryKey, nextRetryState);
+      schedulePendingMessageAutoRetry(topicId, messageId);
+    }, delayMs);
+
+    pendingMessageRetryTimers.set(retryKey, timeoutId);
+  };
+
+  if (!arePendingMessageRetryListenersBound && typeof window !== 'undefined') {
+    const triggerRetry = () => {
+      scheduleAllPendingMessageAutoRetries({ immediate: true });
+    };
+
+    window.addEventListener('online', triggerRetry);
+    window.addEventListener('focus', triggerRetry);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        triggerRetry();
+      }
+    });
+
+    arePendingMessageRetryListenersBound = true;
+  }
+
+  const schedulePendingMessageAutoRetriesForTopic = (
+    topicId?: string,
+    options?: { immediate?: boolean }
+  ): void => {
+    if (!topicId) {
+      return;
+    }
+
+    getFullMessagesByTopicId(topicId).forEach(message => {
+      if (!message.id || !canAutoRetryMessage(message)) {
+        return;
+      }
+
+      schedulePendingMessageAutoRetry(topicId, message.id, {
+        immediate: options?.immediate
+      });
+    });
+  };
+
+  watch(
+    () => route.value.id,
+    nextTopicId => {
+      schedulePendingMessageAutoRetriesForTopic(nextTopicId);
+    },
+    { immediate: true }
+  );
+
+  watch(
+    () => getHasWebsocketConnection(),
+    isConnected => {
+      if (!isConnected) {
+        return;
+      }
+
+      scheduleAllPendingMessageAutoRetries({ immediate: true });
+    }
+  );
 
   const uploadMessageFile = async (
     topicId: string,
     messageId: string,
     fileId: string,
-    payload: { file: File; isMedia: boolean }
+    payload: { file: File; isMedia: boolean },
+    options?: {
+      markNotDeliveredOnFailure?: boolean;
+      suppressErrorNotification?: boolean;
+    }
   ): Promise<boolean> => {
     const message = getMessageById(topicId, messageId);
     const currentMedia = message?.media?.find(media => media.id === fileId);
@@ -377,12 +793,16 @@ export function useMessageSender(
       return true;
     } catch (error: any) {
       changeFileUploadErrorStatus(topicId, messageId, fileId, true);
-      changeMessageStatusLocally(
-        topicId,
-        messageId,
-        MessageStatus.NotDelivered
-      );
-      showErrorNotification(error.message || 'Failed to upload file');
+      if (options?.markNotDeliveredOnFailure !== false) {
+        changeMessageStatusLocally(
+          topicId,
+          messageId,
+          MessageStatus.NotDelivered
+        );
+      }
+      if (!options?.suppressErrorNotification) {
+        showErrorNotification(error.message || 'Failed to upload file');
+      }
       return false;
     }
   };
@@ -415,7 +835,7 @@ export function useMessageSender(
 
     addMessageToLocal(params.topicId, {
       id: clientId,
-      status: MessageStatus.NotDelivered,
+      status: MessageStatus.Wait,
       createdAt: new Date(),
       deletedAt: null,
       updatedAt: null,
@@ -437,6 +857,8 @@ export function useMessageSender(
       replyMessageId: params.replyMessageId,
       forwardMessageIds: params.forwardMessageIds || []
     });
+
+    schedulePendingMessageAutoRetry(params.topicId, clientId, { reset: true });
   };
 
   const handleSend = async (
@@ -682,10 +1104,9 @@ export function useMessageSender(
         }
 
         const clientId = generateUUID();
-        const canSend = isSendAvailable();
         const localMessage: IMessage = {
           id: clientId,
-          status: canSend ? MessageStatus.Wait : MessageStatus.NotDelivered,
+          status: MessageStatus.Wait,
           createdAt: new Date(),
           deletedAt: null,
           updatedAt: null,
@@ -708,8 +1129,11 @@ export function useMessageSender(
           forwardMessageIds: []
         });
 
+        const canSend = isSendAvailable();
+
         if (!canSend) {
           addMessageToLocal(topicId, localMessage);
+          schedulePendingMessageAutoRetry(topicId, clientId, { reset: true });
           continue;
         }
 
@@ -731,8 +1155,9 @@ export function useMessageSender(
           cancelDelayedOutgoingMessage(topicId, clientId);
           addMessageToLocal(topicId, {
             ...localMessage,
-            status: MessageStatus.NotDelivered
+            status: MessageStatus.Wait
           });
+          schedulePendingMessageAutoRetry(topicId, clientId, { reset: true });
         }
       }
       state.hideUnreadMarker = true;
@@ -823,9 +1248,7 @@ export function useMessageSender(
 
     const newMessage: IMessage = {
       id: clientId,
-      status: isSendAvailable()
-        ? MessageStatus.Wait
-        : MessageStatus.NotDelivered,
+      status: MessageStatus.Wait,
       createdAt: new Date(),
       deletedAt: null,
       updatedAt: null,
@@ -867,7 +1290,10 @@ export function useMessageSender(
         newMessage.topicId,
         clientId,
         i.toString(),
-        payload
+        payload,
+        {
+          markNotDeliveredOnFailure: false
+        }
       );
 
       if (!isUploaded) {
@@ -875,8 +1301,24 @@ export function useMessageSender(
       }
     }
 
-    if (!hasUploadError) {
-      await trySendPendingUploadMessage(newMessage.topicId, clientId);
+    if (hasUploadError) {
+      schedulePendingMessageAutoRetry(newMessage.topicId, clientId, {
+        reset: true
+      });
+    } else {
+      const didSend = await trySendPendingUploadMessage(
+        newMessage.topicId,
+        clientId,
+        {
+          markNotDeliveredOnFailure: false
+        }
+      );
+
+      if (!didSend) {
+        schedulePendingMessageAutoRetry(newMessage.topicId, clientId, {
+          reset: true
+        });
+      }
     }
 
     state.replyMessage = null;
@@ -998,36 +1440,31 @@ export function useMessageSender(
 
     if (!message?.media?.length) {
       if (!message?.text) {
-        return;
+        const messageMeta = await getPendingUploadMessageMeta(
+          topicId,
+          messageId
+        );
+
+        if (!messageMeta?.forwardMessageIds?.length) {
+          return;
+        }
       }
 
-      const messageMeta = await getPendingUploadMessageMeta(topicId, messageId);
       const canSend = isSendAvailable();
 
-      changeMessageStatusLocally(
-        topicId,
-        messageId,
-        canSend ? MessageStatus.Wait : MessageStatus.NotDelivered
-      );
+      changeMessageStatusLocally(topicId, messageId, MessageStatus.Wait);
 
       if (!canSend) {
+        schedulePendingMessageAutoRetry(topicId, messageId, { reset: true });
         return;
       }
 
-      const didSend = await sendMessageChat({
-        topicId,
-        text: message.text || '',
-        replyMessageId: messageMeta?.replyMessageId || message.replyMessageId,
-        taggedUserIds: message.taggedUserIds,
-        ex: message.ex || JSON.stringify({ clientId: messageId })
+      const didSend = await trySendPendingTextMessage(topicId, messageId, {
+        markNotDeliveredOnFailure: false
       });
 
       if (!didSend) {
-        changeMessageStatusLocally(
-          topicId,
-          messageId,
-          MessageStatus.NotDelivered
-        );
+        schedulePendingMessageAutoRetry(topicId, messageId, { reset: true });
       }
 
       return;
@@ -1036,7 +1473,14 @@ export function useMessageSender(
     const failedMedia = message.media.filter(media => media.uploadError);
 
     if (failedMedia.length === 0) {
-      await trySendPendingUploadMessage(topicId, messageId);
+      const didSend = await trySendPendingUploadMessage(topicId, messageId, {
+        markNotDeliveredOnFailure: false
+      });
+
+      if (!didSend) {
+        schedulePendingMessageAutoRetry(topicId, messageId, { reset: true });
+      }
+
       return;
     }
 
@@ -1055,7 +1499,10 @@ export function useMessageSender(
         topicId,
         messageId,
         media.id,
-        payload
+        payload,
+        {
+          markNotDeliveredOnFailure: false
+        }
       );
 
       if (!isUploaded) {
@@ -1064,7 +1511,15 @@ export function useMessageSender(
     }
 
     if (!hasUploadError) {
-      await trySendPendingUploadMessage(topicId, messageId);
+      const didSend = await trySendPendingUploadMessage(topicId, messageId, {
+        markNotDeliveredOnFailure: false
+      });
+
+      if (!didSend) {
+        schedulePendingMessageAutoRetry(topicId, messageId, { reset: true });
+      }
+    } else {
+      schedulePendingMessageAutoRetry(topicId, messageId, { reset: true });
     }
   };
 

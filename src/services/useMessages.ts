@@ -89,6 +89,7 @@ const outgoingDeliveryTimeouts = new Map<
   string,
   ReturnType<typeof setTimeout>
 >();
+const OUTGOING_DELIVERY_TIMEOUT_MS = 180000;
 const notificationSoundSuppressedUntilByTopic = new Map<string, number>();
 const suspendedLocalOwnReadTimeouts = new Map<
   string,
@@ -281,7 +282,7 @@ const cancelOutgoingDeliveryTimeout = (
 const scheduleOutgoingDeliveryTimeout = (
   topicId: string,
   messageId: string,
-  delayMs = 15000
+  delayMs = OUTGOING_DELIVERY_TIMEOUT_MS
 ): void => {
   if (!topicId || !messageId) {
     return;
@@ -455,9 +456,7 @@ const restorePendingUploadMediaState = async (
 
       return {
         ...message,
-        status: hadInterruptedUpload
-          ? MessageStatus.NotDelivered
-          : message.status,
+        status: hadInterruptedUpload ? MessageStatus.Wait : message.status,
         media: restoredMedia
       };
     })
@@ -1545,6 +1544,9 @@ export const clearMessagesForTopic = (
 export const getFullMessagesByTopicId = (topicId: string): IMessage[] => {
   return fullMessagesStore.value[topicId] || [];
 };
+
+export const getTopicIdsWithMessages = (): string[] =>
+  Object.keys(fullMessagesStore.value);
 
 export const getMessagesByTopicId = (topicId: string): IMessage[] => {
   return messagesStore.value[topicId] || [];

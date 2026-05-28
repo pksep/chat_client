@@ -32,7 +32,7 @@
       @click="handleOpenChat"
     >
       <MessageIcon />
-      ÐŸÐµÑ€ÐµÐ¹Ñ‚Ð¸ Ð² Ñ‡Ð°Ñ‚
+      Перейти в чат
     </Button>
     <Button
       :type="ButtonTypeEnum.secondary"

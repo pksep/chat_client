@@ -61,13 +61,14 @@
               />
 
               <div
-                v-if="typeof media.isLoading === 'boolean' || media.uploadError"
+                v-if="shouldShowMediaLoading(media)"
                 class="message-content__media-loading"
               >
                 <LoadingIcon
-                  v-if="!media.uploadError"
-                  :is-loaded="!media.isLoading"
-                  :percent="media.uploadPercent ?? null"
+                  :is-loaded="false"
+                  :percent="
+                    media.isLoading ? media.uploadPercent ?? null : null
+                  "
                 />
               </div>
 
@@ -170,6 +171,7 @@ import type { IMedia } from '../interfaces/interfaces';
 import MessageReferenceBlock from './MessageReferenceBlock.vue';
 import MessageAuthorMeta from './MessageAuthorMeta.vue';
 import { useMentionUserClick } from './composables/useMentionUserClick';
+import { MessageStatus } from '../../services/useChatSDK/types';
 
 const props = defineProps<IMessageBubbleProps>();
 defineEmits(['navigate-message', 'set-slider']);
@@ -301,11 +303,14 @@ onUnmounted(() => {
 });
 
 const showErrorIcon = computed(
-  () =>
-    (props.messageStatus === 'NOT_DELIVERED' &&
-      !mediaFiles.value.some(media => media.isLoading)) ||
-    mediaFiles.value.some(media => media.uploadError && !media.isLoading)
+  () => props.messageStatus === MessageStatus.NotDelivered
 );
+
+const shouldShowMediaLoading = (media: IMedia): boolean =>
+  Boolean(
+    media.isLoading ||
+      (media.uploadError && props.messageStatus !== MessageStatus.NotDelivered)
+  );
 
 const getPreviewStyle = (media: IMedia): Record<string, string> => {
   if (
