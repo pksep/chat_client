@@ -1780,11 +1780,11 @@ const schedulePresenceTone = (
 
 const playPresenceTonePattern = async (
   type: 'joined' | 'left'
-): Promise<void> => {
+): Promise<boolean> => {
   const audioContext = getPresenceAudioContext();
 
   if (!audioContext) {
-    return;
+    return false;
   }
 
   if (audioContext.state === 'suspended') {
@@ -1792,20 +1792,21 @@ const playPresenceTonePattern = async (
       await audioContext.resume();
     } catch (error) {
       console.warn('[LiveKit] Failed to resume presence audio context:', error);
-      return;
+      return false;
     }
   }
 
   let cursor = audioContext.currentTime + 0.01;
 
   if (type === 'joined') {
-    cursor = schedulePresenceTone(audioContext, cursor, 740, 0.08, 0.03);
-    schedulePresenceTone(audioContext, cursor + 0.04, 988, 0.11, 0.03);
-    return;
+    cursor = schedulePresenceTone(audioContext, cursor, 740, 0.08, 0.162);
+    schedulePresenceTone(audioContext, cursor + 0.04, 988, 0.11, 0.164);
+    return true;
   }
 
-  cursor = schedulePresenceTone(audioContext, cursor, 660, 0.1, 0.028);
-  schedulePresenceTone(audioContext, cursor + 0.03, 523.25, 0.12, 0.026);
+  cursor = schedulePresenceTone(audioContext, cursor, 660, 0.1, 0.16);
+  schedulePresenceTone(audioContext, cursor + 0.03, 523.25, 0.12, 0.158);
+  return true;
 };
 
 const playGroupCallPresenceSound = async (
@@ -1815,12 +1816,14 @@ const playGroupCallPresenceSound = async (
     return;
   }
 
-  if (await playNativeNotificationSound()) {
+  const didPlayPresenceTone = await playPresenceTonePattern(type);
+
+  if (didPlayPresenceTone) {
     return;
   }
 
   try {
-    await playPresenceTonePattern(type);
+    await playNativeNotificationSound();
   } catch (error) {
     console.warn('[LiveKit] Failed to play presence sound:', error);
   }
