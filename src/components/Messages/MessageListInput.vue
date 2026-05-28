@@ -125,15 +125,11 @@
 <script lang="ts" setup>
 import {
   computed,
-  nextTick,
   onBeforeUnmount,
   reactive,
   useTemplateRef,
   watch
 } from 'vue';
-import type { Editor } from '@tiptap/core';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
-import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import {
   Button,
   ButtonTypeEnum,
@@ -152,7 +148,6 @@ import { getAuthUser } from '../../composables/useAuth';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { getConfig } from '../../services/useConfig';
-import { getNotoEmojiAssetCandidates } from '../../composables/useEmojiStyle';
 import {
   getHasWebsocketConnection,
   sendTypingStatus
@@ -315,179 +310,6 @@ const users = computed(() => {
 
 const contentEditorRef =
   useTemplateRef<typeof ContentEditor>('contentEditorRef');
-const EMOJI_INPUT_PLUGIN_KEY = new PluginKey('chatInputEmojiDecorations');
-const emojiInputPluginEditors = new WeakSet<Editor>();
-const emojiInputPluginFrames = new WeakMap<Editor, number>();
-const emojiSegmenter =
-  typeof Intl !== 'undefined' && 'Segmenter' in Intl
-    ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
-    : null;
-const EMOJI_GRAPHEME_PATTERN =
-  /(?:\p{Extended_Pictographic}|\p{Emoji_Presentation}|[\u{1F1E6}-\u{1F1FF}]|[#*0-9]\uFE0F?\u20E3|[\u00A9\u00AE\u2122]\uFE0F?)/u;
-
-const splitGraphemes = (value: string): string[] => {
-  if (!value) {
-    return [];
-  }
-
-  if (!emojiSegmenter) {
-    return Array.from(value);
-  }
-
-  return Array.from(emojiSegmenter.segment(value), item => item.segment);
-};
-
-const containsEmoji = (value: string): boolean =>
-  EMOJI_GRAPHEME_PATTERN.test(value);
-
-const createEmojiInputWidget = (emoji: string): HTMLElement => {
-  const wrapper = document.createElement('span');
-  const image = document.createElement('img');
-  const candidates = getNotoEmojiAssetCandidates(emoji);
-
-  wrapper.className = 'emoji-input-glyph';
-  wrapper.setAttribute('aria-hidden', 'true');
-  wrapper.setAttribute('contenteditable', 'false');
-
-  image.className = 'emoji-input-glyph__image';
-  image.alt = '';
-  image.decoding = 'async';
-  image.draggable = false;
-
-  if (candidates[0]) {
-    image.src = candidates[0];
-  }
-
-  image.addEventListener('error', () => {
-    wrapper.classList.add('emoji-input-glyph--fallback');
-    wrapper.textContent = emoji;
-  });
-
-  wrapper.append(image);
-
-  return wrapper;
-};
-
-const buildEmojiInputDecorations = (
-  doc: Editor['state']['doc']
-): DecorationSet => {
-  const decorations: Decoration[] = [];
-
-  doc.descendants((node, pos) => {
-    if (!node.isText || !node.text || !containsEmoji(node.text)) {
-      return;
-    }
-
-    const segments = splitGraphemes(node.text);
-    let offset = 0;
-
-    segments.forEach(segment => {
-      const from = pos + offset;
-      const to = from + segment.length;
-
-      offset += segment.length;
-
-      if (!containsEmoji(segment)) {
-        return;
-      }
-
-      decorations.push(
-        Decoration.inline(from, to, {
-          class: 'emoji-input-hidden'
-        })
-      );
-      decorations.push(
-        Decoration.widget(from, () => createEmojiInputWidget(segment), {
-          side: -1
-        })
-      );
-    });
-  });
-
-  return DecorationSet.create(doc, decorations);
-};
-
-const createEmojiInputPlugin = (): Plugin =>
-  new Plugin({
-    key: EMOJI_INPUT_PLUGIN_KEY,
-    state: {
-      init: (_config, state) => buildEmojiInputDecorations(state.doc),
-      apply: (transaction, value, _oldState, newState) =>
-        transaction.docChanged
-          ? buildEmojiInputDecorations(newState.doc)
-          : value
-    },
-    props: {
-      decorations(state) {
-        return EMOJI_INPUT_PLUGIN_KEY.getState(state);
-      }
-    }
-  });
-
-const clearScheduledEmojiInputPlugin = (editor: Editor): void => {
-  const frameId = emojiInputPluginFrames.get(editor);
-
-  if (frameId !== undefined) {
-    window.cancelAnimationFrame(frameId);
-    emojiInputPluginFrames.delete(editor);
-  }
-};
-
-const scheduleEmojiInputPlugin = (
-  editor: Editor,
-  attempt = 0,
-  maxAttempts = 5
-): void => {
-  if (
-    emojiInputPluginEditors.has(editor) ||
-    emojiInputPluginFrames.has(editor)
-  ) {
-    return;
-  }
-
-  const frameId = window.requestAnimationFrame(() => {
-    emojiInputPluginFrames.delete(editor);
-
-    if (editor.isDestroyed || !editor.view?.dom?.isConnected) {
-      if (attempt < maxAttempts) {
-        scheduleEmojiInputPlugin(editor, attempt + 1, maxAttempts);
-      }
-
-      return;
-    }
-
-    try {
-      editor.registerPlugin(createEmojiInputPlugin());
-      emojiInputPluginEditors.add(editor);
-    } catch (error) {
-      if (attempt < maxAttempts) {
-        scheduleEmojiInputPlugin(editor, attempt + 1, maxAttempts);
-        return;
-      }
-
-      console.warn('Failed to register emoji input plugin', error);
-    }
-  });
-
-  emojiInputPluginFrames.set(editor, frameId);
-};
-
-const ensureEmojiInputPlugin = (editor?: Editor | null): void => {
-  if (
-    !editor ||
-    editor.isDestroyed ||
-    !editor.view ||
-    emojiInputPluginEditors.has(editor)
-  ) {
-    return;
-  }
-
-  void nextTick(() => {
-    if (!editor.isDestroyed) {
-      scheduleEmojiInputPlugin(editor);
-    }
-  });
-};
 
 let typingStopTimeout: ReturnType<typeof setTimeout> | null = null;
 let isTypingActive = false;
@@ -591,61 +413,7 @@ watch(
   }
 );
 
-watch(
-  () => contentEditorRef.value?.editor,
-  editor => {
-    if (!editor) {
-      return;
-    }
-
-    ensureEmojiInputPlugin(editor);
-  },
-  {
-    immediate: true
-  }
-);
-
 onBeforeUnmount(() => {
-  const editor = contentEditorRef.value?.editor;
-
-  if (editor) {
-    clearScheduledEmojiInputPlugin(editor);
-
-    if (!editor.isDestroyed && emojiInputPluginEditors.has(editor)) {
-      editor.unregisterPlugin(EMOJI_INPUT_PLUGIN_KEY);
-      emojiInputPluginEditors.delete(editor);
-    }
-  }
-
   void stopTyping();
 });
 </script>
-
-<style scoped>
-.chat__input :deep(.emoji-input-hidden) {
-  font-size: 0 !important;
-  line-height: 0 !important;
-  color: transparent !important;
-}
-
-.chat__input :deep(.emoji-input-glyph) {
-  display: inline-block;
-  width: 1em;
-  height: 1em;
-  vertical-align: -0.12em;
-  pointer-events: none;
-}
-
-.chat__input :deep(.emoji-input-glyph__image) {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.chat__input :deep(.emoji-input-glyph--fallback) {
-  width: auto;
-  height: auto;
-  vertical-align: baseline;
-}
-</style>

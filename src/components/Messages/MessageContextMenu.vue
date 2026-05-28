@@ -443,7 +443,7 @@ const emits = defineEmits([
   'unmount-retry-message-id'
 ]);
 
-const quickReactonList = computed(() => ['♥️', '🔥', '👍', '😂', '👌', '😭']);
+const quickReactonList = computed(() => ['❤️', '🔥', '👍', '😂', '👌', '😭']);
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const messages = computed(() =>
   props.topicId ? getMessagesByTopicId(props.topicId) : []

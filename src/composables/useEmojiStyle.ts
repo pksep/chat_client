@@ -2,6 +2,7 @@ const NOTO_EMOJI_PNG_BASE_PATH = '/emoji/noto/png/128';
 const emojiAssetCandidateCache = new Map<string, string[]>();
 const loadedEmojiAssetSources = new Set<string>();
 const preloadedEmojiAssetSources = new Set<string>();
+const failedEmojiAssetSources = new Set<string>();
 
 type EmojiAssetCandidatesOptions = {
   animated?: boolean;
@@ -40,11 +41,18 @@ export const getNotoEmojiAssetCandidates = (
   options: EmojiAssetCandidatesOptions = {}
 ): string[] => {
   const normalizedKey = toEmojiCodePointKey(emoji);
+
+  if (!normalizedKey) {
+    return [];
+  }
+
   const cacheKey = `${normalizedKey}:${options.animated ? 'animated' : 'static'}`;
   const cachedCandidates = emojiAssetCandidateCache.get(cacheKey);
 
   if (cachedCandidates) {
-    return cachedCandidates;
+    return cachedCandidates.filter(
+      source => !failedEmojiAssetSources.has(source)
+    );
   }
 
   const fallbackKey = stripEmojiVariationSelectors(normalizedKey);
@@ -53,10 +61,27 @@ export const getNotoEmojiAssetCandidates = (
     candidateKeys.map(
       key => `${NOTO_EMOJI_PNG_BASE_PATH}/${toNotoFileName(key)}.png`
     )
-  );
+  ).filter(source => !failedEmojiAssetSources.has(source));
+
+  if (!staticCandidates.length) {
+    return [];
+  }
 
   emojiAssetCandidateCache.set(cacheKey, staticCandidates);
   return staticCandidates;
+};
+
+export const hasFailedNotoEmojiAsset = (source: string): boolean =>
+  failedEmojiAssetSources.has(source);
+
+export const markNotoEmojiAssetFailed = (source: string): void => {
+  if (source) {
+    failedEmojiAssetSources.add(source);
+  }
+};
+
+export const resetNotoEmojiAssetCandidateCache = (): void => {
+  emojiAssetCandidateCache.clear();
 };
 
 export const extractEmojiGraphemes = (value: string): string[] => {

@@ -50,10 +50,18 @@
             'message-emoji__symbol',
             { 'message-emoji__symbol--referenced': hasReplyReference }
           ]"
-          v-emoji="{ animated: true }"
           :data-testid="`${props.dataTestid}-Emoji`"
         >
-          {{ emojiText }}
+          <template v-if="emojiSymbols.length">
+            <EmojiIcon
+              v-for="(emoji, index) in emojiSymbols"
+              :key="`${emoji}-${index}`"
+              class="message-emoji__symbol-icon"
+              :emoji="emoji"
+              :animated="true"
+            />
+          </template>
+          <span v-else>{{ emojiText }}</span>
         </div>
         <div
           v-if="hasReplyReference && !props.reactions?.length"
@@ -143,7 +151,11 @@ import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import MessageBubbleTail from './MessageBubbleTail.vue';
 import MessageAuthorMeta from './MessageAuthorMeta.vue';
 import { useReferenceWidth } from './composables/useReferenceWidth';
-import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
+import EmojiIcon from '../UI/EmojiIcon.vue';
+import {
+  extractEmojiGraphemes,
+  preloadNotoEmojiAssets
+} from '../../composables/useEmojiStyle';
 
 const props = defineProps<IMessageBubbleProps>();
 
@@ -164,11 +176,12 @@ const emojiText = computed(() =>
     .replace(/&nbsp;/gi, ' ')
     .trim()
 );
+const emojiSymbols = computed(() => extractEmojiGraphemes(emojiText.value));
 
 watch(
-  emojiText,
-  value => {
-    preloadNotoEmojiAssets(value ? [value] : [], {
+  emojiSymbols,
+  emojis => {
+    preloadNotoEmojiAssets(emojis, {
       highPriority: true
     });
   },

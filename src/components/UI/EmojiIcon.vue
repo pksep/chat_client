@@ -26,7 +26,9 @@
 import { computed, ref, watch } from 'vue';
 import {
   getNotoEmojiAssetCandidates,
+  hasFailedNotoEmojiAsset,
   hasLoadedNotoEmojiAsset,
+  markNotoEmojiAssetFailed,
   markNotoEmojiAssetLoaded
 } from '../../composables/useEmojiStyle';
 
@@ -58,7 +60,9 @@ const currentSource = computed(
 
 const resetState = (): void => {
   currentIndex.value = 0;
-  isLoaded.value = hasLoadedNotoEmojiAsset(candidateSources.value[0] || '');
+  isLoaded.value =
+    hasLoadedNotoEmojiAsset(candidateSources.value[0] || '') ||
+    hasFailedNotoEmojiAsset(candidateSources.value[0] || '');
   isFallback.value = candidateSources.value.length === 0;
 };
 
@@ -68,11 +72,15 @@ const handleLoad = (): void => {
 };
 
 const handleError = (): void => {
+  markNotoEmojiAssetFailed(currentSource.value);
+
   if (currentIndex.value + 1 < candidateSources.value.length) {
     currentIndex.value += 1;
-    isLoaded.value = hasLoadedNotoEmojiAsset(
-      candidateSources.value[currentIndex.value] || ''
-    );
+    isLoaded.value =
+      hasLoadedNotoEmojiAsset(
+        candidateSources.value[currentIndex.value] || ''
+      ) ||
+      hasFailedNotoEmojiAsset(candidateSources.value[currentIndex.value] || '');
     return;
   }
 
@@ -85,7 +93,10 @@ watch([() => props.emoji, () => props.animated], resetState, {
 });
 
 watch(currentSource, source => {
-  if (source && hasLoadedNotoEmojiAsset(source)) {
+  if (
+    source &&
+    (hasLoadedNotoEmojiAsset(source) || hasFailedNotoEmojiAsset(source))
+  ) {
     isLoaded.value = true;
   }
 });

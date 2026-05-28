@@ -232,10 +232,15 @@
 }
 
 .message-emoji__symbol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
   font-size: 65px;
   line-height: 1;
   text-align: center;
-  width: 65px;
+  min-width: 65px;
+  width: auto;
 }
 
 .message-emoji__symbol--referenced {
@@ -494,6 +499,10 @@
       justify-content: center;
     }
 
+    & .reaction-item__emoji {
+      display: inline-flex;
+    }
+
     & .avatar-yui-kit.reaction-avatar {
       --size-avatar: 10px;
       flex-shrink: 0;
@@ -622,6 +631,12 @@
   font-size: 20px;
   line-height: 1;
   width: 20px;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.message-reactions-details__emoji-icon {
+  display: inline-flex;
 }
 
 .message-reactions-details__empty {

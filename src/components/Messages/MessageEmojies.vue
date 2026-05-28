@@ -12,8 +12,12 @@
         @touchcancel="clearLongPress"
         @touchmove="clearLongPress"
       >
-        <div class="reaction-item" v-emoji="{ animated: true }">
-          {{ emoji }}
+        <div class="reaction-item">
+          <EmojiIcon
+            class="reaction-item__emoji"
+            :emoji="emoji"
+            :animated="true"
+          />
         </div>
         <CachedAvatar
           v-if="messageReaction.count === 1 && messageReaction.user"
@@ -78,11 +82,12 @@
               </div>
             </div>
 
-            <div
-              class="message-reactions-details__emoji"
-              v-emoji="{ animated: true }"
-            >
-              {{ reaction.emoji }}
+            <div class="message-reactions-details__emoji">
+              <EmojiIcon
+                class="message-reactions-details__emoji-icon"
+                :emoji="reaction.emoji"
+                :animated="true"
+              />
             </div>
           </button>
         </div>
@@ -105,6 +110,7 @@ import { getUserById } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
 import type { IUser } from '../interfaces/interfaces';
 import CachedAvatar from '../UI/CachedAvatar.vue';
+import EmojiIcon from '../UI/EmojiIcon.vue';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
 

@@ -1,7 +1,9 @@
 import type { ObjectDirective } from 'vue';
 import {
   getNotoEmojiAssetCandidates,
+  hasFailedNotoEmojiAsset,
   hasLoadedNotoEmojiAsset,
+  markNotoEmojiAssetFailed,
   markNotoEmojiAssetLoaded
 } from '../composables/useEmojiStyle';
 
@@ -93,7 +95,10 @@ const applyStyleToWrapper = (wrapper: HTMLElement): void => {
   wrapper.classList.remove(EMOJI_FALLBACK_CLASS);
   wrapper.setAttribute(
     'data-emoji-loaded',
-    String(hasLoadedNotoEmojiAsset(candidates[0] || ''))
+    String(
+      hasLoadedNotoEmojiAsset(candidates[0] || '') ||
+        hasFailedNotoEmojiAsset(candidates[0] || '')
+    )
   );
   image.dataset.candidates = serializedCandidates;
   image.dataset.candidateIndex = '0';
@@ -126,6 +131,9 @@ const createEmojiNode = (emoji: string): HTMLElement => {
   image.addEventListener('error', () => {
     const candidates = JSON.parse(image.dataset.candidates || '[]') as string[];
     const nextIndex = Number(image.dataset.candidateIndex || '0') + 1;
+    const failedSource = image.currentSrc || image.src;
+
+    markNotoEmojiAssetFailed(failedSource);
 
     if (candidates[nextIndex]) {
       image.dataset.candidateIndex = String(nextIndex);
