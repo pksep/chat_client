@@ -1,80 +1,84 @@
 import { reactive, readonly } from 'vue';
 import { MessageTypeEnum } from '@pksep/yui';
 
-interface INotificationState {
-  open: boolean;
-  title: string;
-  description: string;
-  type: MessageTypeEnum;
-  key: number;
-}
-
-const state = reactive<INotificationState>({
-  open: false,
-  title: '',
-  description: '',
-  type: MessageTypeEnum.error,
-  key: 0
-});
-let reopenNotificationTimeout: ReturnType<typeof setTimeout> | null = null;
-
-const applyNotificationState = ({
-  title,
-  description,
-  type = MessageTypeEnum.error
-}: {
+interface INotificationPayload {
   title: string;
   description: string;
   type?: MessageTypeEnum;
-}) => {
-  state.title = title;
-  state.description = description;
-  state.type = type;
-  state.key += 1;
-  state.open = true;
+}
+
+export interface INotificationItem extends INotificationPayload {
+  key: number;
+  type: MessageTypeEnum;
+}
+
+interface INotificationState {
+  items: INotificationItem[];
+}
+
+const NOTIFICATION_TIMEOUT_MS = 3000;
+
+const state = reactive<INotificationState>({
+  items: []
+});
+
+const closeNotificationTimeouts = new Map<
+  number,
+  ReturnType<typeof setTimeout>
+>();
+let nextNotificationKey = 1;
+
+const clearCloseNotificationTimeout = (key: number) => {
+  const timeout = closeNotificationTimeouts.get(key);
+
+  if (!timeout) {
+    return;
+  }
+
+  clearTimeout(timeout);
+  closeNotificationTimeouts.delete(key);
+};
+
+export const closeNotification = (key?: number) => {
+  if (typeof key !== 'number') {
+    state.items.forEach(item => clearCloseNotificationTimeout(item.key));
+    state.items = [];
+    return;
+  }
+
+  clearCloseNotificationTimeout(key);
+  state.items = state.items.filter(item => item.key !== key);
 };
 
 export const showNotification = ({
   title,
   description,
   type = MessageTypeEnum.error
-}: {
-  title: string;
-  description: string;
-  type?: MessageTypeEnum;
-}) => {
-  if (reopenNotificationTimeout) {
-    clearTimeout(reopenNotificationTimeout);
-    reopenNotificationTimeout = null;
-  }
+}: INotificationPayload) => {
+  const notification: INotificationItem = {
+    key: nextNotificationKey,
+    title,
+    description,
+    type
+  };
 
-  if (state.open) {
-    state.open = false;
-    reopenNotificationTimeout = setTimeout(() => {
-      reopenNotificationTimeout = null;
-      applyNotificationState({ title, description, type });
-    }, 0);
-    return;
-  }
+  nextNotificationKey += 1;
+  state.items = [...state.items, notification];
 
-  applyNotificationState({ title, description, type });
+  closeNotificationTimeouts.set(
+    notification.key,
+    setTimeout(() => {
+      closeNotification(notification.key);
+    }, NOTIFICATION_TIMEOUT_MS)
+  );
 };
 
 export const showErrorNotification = (description: string) => {
   showNotification({
-    title: 'Ошибка',
+    title: 'ÐžÑˆÐ¸Ð±ÐºÐ°',
     description,
     type: MessageTypeEnum.error
   });
-};
-
-export const closeNotification = () => {
-  if (reopenNotificationTimeout) {
-    clearTimeout(reopenNotificationTimeout);
-    reopenNotificationTimeout = null;
-  }
-
-  state.open = false;
 };
 
 export const useNotifications = () => ({
