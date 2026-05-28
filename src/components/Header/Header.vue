@@ -56,6 +56,7 @@
           :topic="currentGroup || currentTopic"
           :typing-label="headerTypingLabel || undefined"
           :data-testid="`${props.dataTestid}-Header-GroupProfile`"
+          @click.stop="handleClickHeader"
         />
         <UserProfile
           v-else-if="currentTopic.type === TopicType.DM"
@@ -101,13 +102,42 @@
           :data-testid="`${props.dataTestid}-Header-CallIcon`"
           @click.stop="handleCall"
         />
-        <Popover
-          class="chat__header-popover"
-          :options="getPopoverOptions"
-          isWCUse
-          :data-testid="`${props.dataTestid}-Header-Popover`"
-          :icon-name="IconNameEnum.moreHorizontal"
+        <Icon
+          class="chat__header__icon chat__header__icon--more"
+          :name="IconNameEnum.moreHorizontal"
+          :data-testid="`${props.dataTestid}-Header-PopoverIcon`"
+          @click.stop="
+            event => openActivePopover('headerMenu', event as MouseEvent)
+          "
         />
+        <ContextMenu
+          class="chat__header-context-menu"
+          :visible="!!isOpen['headerMenu']"
+          :position="position"
+          :data-testid="`${props.dataTestid}-Header-ContextMenu`"
+          @unmount-close="closeActivePopover('headerMenu')"
+          @click="closeActivePopover('headerMenu')"
+        >
+          <Button
+            v-for="option in getHeaderContextMenuOptions"
+            :key="option.value"
+            :type="ButtonTypeEnum.ghost"
+            :size="SizesEnum.small"
+            :style="option.style"
+            :class="[
+              'chat__header-context-menu-button',
+              {
+                'red-context-button':
+                  option.style?.includes('var(--error-color)')
+              }
+            ]"
+            :data-testid="`${props.dataTestid}-Header-ContextMenu-${option.value}`"
+            @click="handleContextMenuAction(option.function)"
+          >
+            <Icon v-if="option.iconName" :name="option.iconName" />
+            {{ option.value }}
+          </Button>
+        </ContextMenu>
       </div>
     </div>
   </header>
@@ -176,8 +206,7 @@ import {
   IconNameEnum,
   ButtonTypeEnum,
   SizesEnum,
-  Search,
-  Popover
+  Search
 } from '@pksep/yui';
 
 import type { IHeaderProps, IHeaderEmits } from '../interfaces/interfaces';
@@ -208,6 +237,7 @@ import ConfirmModal from '../UI/ConfirmModal.vue';
 import { TopicType } from '../../services/useChatSDK/types';
 import CallIcon from '../CallModal/UI/CallIcon.vue';
 import SearchIcon from '../UI/SearchIcon.vue';
+import ContextMenu from '../ContactList/ContextMenu.vue';
 import {
   activeCallParticipantCount,
   activeCallTopicId,
@@ -230,9 +260,12 @@ import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
 import UserInfoPanel from '../UserInfoPanel.vue';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
+import { useContextMenu } from '../../composables/useContextMenu';
 
 const { getSelectedTopic } = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
+const { isOpen, position, openActivePopover, closeActivePopover } =
+  useContextMenu();
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
   dataTestid: 'Header'
@@ -458,10 +491,12 @@ const handleUserProfileClick = (): void => {
 };
 
 const handleClickHeader = async (): Promise<void> => {
-  if (
-    route.value.type === RouteTypes.DIALOGS ||
-    route.value.type === RouteTypes.AI
-  ) {
+  if (route.value.type === RouteTypes.AI) {
+    return;
+  }
+
+  if (route.value.type === RouteTypes.DIALOGS) {
+    handleUserProfileClick();
     return;
   }
 
@@ -483,7 +518,7 @@ const getPopoverOptions = computed(() => {
       popoverArray.push({
         value: 'Информация',
         function: () => {
-          emits('unmount-information');
+          void handleClickHeader();
         }
       });
     }
@@ -526,8 +561,48 @@ const getPopoverOptions = computed(() => {
   return popoverArray;
 });
 
+const getHeaderContextMenuOptions = computed(() => {
+  return getPopoverOptions.value.map((option, index) => {
+    let iconName: IconNameEnum | undefined;
+
+    if (route.value.type === RouteTypes.AI) {
+      iconName = IconNameEnum.deleteSmall;
+    } else if (route.value.type === RouteTypes.GROUP) {
+      if (index === 0) {
+        iconName = IconNameEnum.info;
+      } else if (index === 1) {
+        iconName = currentTopic.value?.info.isMute
+          ? IconNameEnum.distrub
+          : IconNameEnum.noDistrub;
+      } else {
+        iconName = currentGroup.value?.isAdmin
+          ? IconNameEnum.deleteSmall
+          : IconNameEnum.logout;
+      }
+    } else {
+      if (index === 0) {
+        iconName = currentTopic.value?.info.isMute
+          ? IconNameEnum.distrub
+          : IconNameEnum.noDistrub;
+      } else {
+        iconName = IconNameEnum.deleteSmall;
+      }
+    }
+
+    return {
+      ...option,
+      iconName
+    };
+  });
+});
+
 const handleOpenActionModal = () => {
   state.openActionModal = true;
+};
+
+const handleContextMenuAction = (callback: () => void) => {
+  closeActivePopover('headerMenu');
+  callback();
 };
 
 const handleCloseActionModal = () => {
