@@ -69,7 +69,6 @@
 .contact-list__title-status {
   flex-shrink: 0;
   display: block;
-  transform: translateY(-2px);
 }
 
 .contact-list__avatar {
