@@ -66,7 +66,9 @@
               >
                 <LoadingIcon
                   :is-loaded="false"
-                  :percent="media.isLoading ? media.uploadPercent ?? null : null"
+                  :percent="
+                    media.isLoading ? media.uploadPercent ?? null : null
+                  "
                 />
               </div>
 

@@ -54,8 +54,10 @@ const pendingMessageRetryTimers = new Map<
 const pendingMessageRetryStates = new Map<string, PendingMessageRetryState>();
 let arePendingMessageRetryListenersBound = false;
 
-const getPendingMessageRetryKey = (topicId: string, messageId: string): string =>
-  `${topicId}:${messageId}`;
+const getPendingMessageRetryKey = (
+  topicId: string,
+  messageId: string
+): string => `${topicId}:${messageId}`;
 
 const parsePendingMessageRetryKey = (
   key: string
@@ -564,7 +566,8 @@ export function useMessageSender(
         messageId,
         {
           markNotDeliveredOnFailure: options?.markNotDeliveredOnFailure,
-          suppressErrorNotification: options?.markNotDeliveredOnFailure === false
+          suppressErrorNotification:
+            options?.markNotDeliveredOnFailure === false
         }
       );
 
@@ -636,7 +639,11 @@ export function useMessageSender(
     pendingMessageRetryStates.set(retryKey, retryState);
 
     if (Date.now() - retryState.startedAt >= MESSAGE_AUTO_RETRY_WINDOW_MS) {
-      changeMessageStatusLocally(topicId, messageId, MessageStatus.NotDelivered);
+      changeMessageStatusLocally(
+        topicId,
+        messageId,
+        MessageStatus.NotDelivered
+      );
       clearPendingMessageAutoRetry(topicId, messageId);
       return;
     }
@@ -656,7 +663,11 @@ export function useMessageSender(
       }
 
       if (Date.now() - retryState.startedAt >= MESSAGE_AUTO_RETRY_WINDOW_MS) {
-        changeMessageStatusLocally(topicId, messageId, MessageStatus.NotDelivered);
+        changeMessageStatusLocally(
+          topicId,
+          messageId,
+          MessageStatus.NotDelivered
+        );
         clearPendingMessageAutoRetry(topicId, messageId);
         return;
       }
@@ -1429,7 +1440,10 @@ export function useMessageSender(
 
     if (!message?.media?.length) {
       if (!message?.text) {
-        const messageMeta = await getPendingUploadMessageMeta(topicId, messageId);
+        const messageMeta = await getPendingUploadMessageMeta(
+          topicId,
+          messageId
+        );
 
         if (!messageMeta?.forwardMessageIds?.length) {
           return;

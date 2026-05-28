@@ -456,9 +456,7 @@ const restorePendingUploadMediaState = async (
 
       return {
         ...message,
-        status: hadInterruptedUpload
-          ? MessageStatus.Wait
-          : message.status,
+        status: hadInterruptedUpload ? MessageStatus.Wait : message.status,
         media: restoredMedia
       };
     })
