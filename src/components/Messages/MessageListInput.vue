@@ -1,6 +1,6 @@
 <template>
   <div
-    class="chat__input"
+    class="chat__input emoji-font-host"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
   >
     <div :data-testid="`${props.dataTestid}-MessageList-ContentEditor`">

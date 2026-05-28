@@ -35,6 +35,7 @@
   min-height: 27px;
   gap: 10px;
   width: 100%;
+  height: 35px;
 }
 
 .context-menu:has(.v3-emoji-picker) {

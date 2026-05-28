@@ -479,3 +479,9 @@ p.chat__nothing-paragraph {
     }
   }
 }
+
+.popover-yui-kit__content {
+  box-shadow: 0px 4px 9.8px 0px #0000000d !important;
+  border-radius: 15px !important;
+  color: var(--text-color) !important;
+}

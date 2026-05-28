@@ -82,9 +82,11 @@
               size="small"
               :data-testid="`${props.dataTestid}-ContactList-StatusTooltip${index + 1}`"
             >
-              <span class="contact-list__title-status" @click.stop>
-                {{ getTopicStatusIcon(topic) }}
-              </span>
+              <EmojiIcon
+                class="contact-list__title-status"
+                :emoji="getTopicStatusIcon(topic)"
+                @click.stop
+              />
             </Tooltip>
 
             <div
@@ -109,6 +111,7 @@
           <div
             v-else-if="!!topic.lastMessage?.text"
             class="contact-list__description"
+            v-emoji
             :data-testid="`${props.dataTestid}-ContactList-Description${index + 1}`"
             :aria-label="`Latest message: ${stripHtml(topic.lastMessage?.text || 'No message')}`"
           >
@@ -265,6 +268,7 @@ import {
 import ContextMenu from './ContextMenu.vue';
 import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
+import EmojiIcon from '../UI/EmojiIcon.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { getAuthUser } from '../../composables/useAuth';
 import { IMedia, ITopic, MessageStatusEnum } from '../interfaces/interfaces';
@@ -290,7 +294,8 @@ import { getHasWebsocketConnection } from '../../services/useChat';
 import { useMessageMedia } from '../Messages/composables/useMessageMedia';
 import TypingIndicator from '../UI/TypingIndicator.vue';
 import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
-import { formatUserStatusLabel } from '../../utils/userStatus';
+import { formatUserStatusText } from '../../utils/userStatus';
+import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
 import {
   getTopicUnreadBadgeCount,
   hasTopicUnreadBadge
@@ -339,6 +344,25 @@ watch(isRecentlyReconnected, value => {
   if (!value) return;
   listRenderKey.value += 1;
 });
+
+watch(
+  () =>
+    props.topics
+      .map(topic => getTopicStatusIcon(topic))
+      .filter((icon): icon is string => Boolean(icon))
+      .join('|'),
+  iconsSignature => {
+    preloadNotoEmojiAssets(
+      iconsSignature ? iconsSignature.split('|').filter(Boolean) : [],
+      {
+        highPriority: true
+      }
+    );
+  },
+  {
+    immediate: true
+  }
+);
 
 onMounted(() => {
   currentTimeInterval = setInterval(() => {
@@ -420,7 +444,7 @@ const getTopicTypingLabel = (topic: ITopic): string =>
 
 const getTopicStatusLabel = (topic: ITopic): string =>
   topic.type === TopicType.DM
-    ? formatUserStatusLabel(getTopicEffectiveUser(topic)?.status)
+    ? formatUserStatusText(getTopicEffectiveUser(topic)?.status)
     : '';
 
 const getTopicStatusIcon = (topic: ITopic): string =>

@@ -200,7 +200,7 @@
                   :aria-label="option.label"
                   @click.stop="handleSendReaction(option.reaction)"
                 >
-                  <span>{{ option.emoji }}</span>
+                  <span v-emoji="{ animated: true }">{{ option.emoji }}</span>
                 </button>
               </div>
               <button
@@ -389,7 +389,7 @@
                   :aria-label="option.label"
                   @click.stop="handleSendReaction(option.reaction)"
                 >
-                  <span>{{ option.emoji }}</span>
+                  <span v-emoji="{ animated: true }">{{ option.emoji }}</span>
                 </button>
               </div>
               <button

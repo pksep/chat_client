@@ -4,7 +4,10 @@ import '@fontsource-variable/inter';
 import './assets/globals.css';
 import './assets/chat-container.css';
 import '@pksep/yui/styles';
+import { preloadNotoEmojiAssets } from './composables/useEmojiStyle';
+import { emojiDirective, mountGlobalEmojiObserver } from './directives/emoji';
 import { registerNativeFileBridge } from './services/useNativeFile';
+import { USER_STATUS_PRESETS } from './utils/userStatus';
 
 const INDEXED_DB_RESET_EPOCH = 'chat-client-indexeddb-reset-2026-04-29-v1';
 const INDEXED_DB_RESET_DONE_KEY = 'chat.indexeddb.reset.done';
@@ -76,6 +79,12 @@ const runIndexedDbResetIfNeeded = async (): Promise<void> => {
 const mountApp = async () => {
   await runIndexedDbResetIfNeeded();
   registerNativeFileBridge();
+  preloadNotoEmojiAssets(
+    [...USER_STATUS_PRESETS.map(option => option.icon), '🦄'],
+    {
+      highPriority: true
+    }
+  );
 
   const app = createApp(App);
 
@@ -116,7 +125,10 @@ const mountApp = async () => {
     }
   });
 
+  app.directive('emoji', emojiDirective);
+
   app.mount('#app');
+  mountGlobalEmojiObserver(document.body);
 };
 
 void mountApp();

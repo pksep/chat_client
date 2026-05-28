@@ -53,7 +53,14 @@
             class="menu-profile__status-current"
             :data-testid="`${props.dataTestid}-MenuProfilePanel-CurrentStatus`"
           >
-            <span>{{ currentStatusLabel }}</span>
+            <span class="menu-profile__status-current-label">
+              <EmojiIcon
+                v-if="currentStatusIcon"
+                class="menu-profile__status-option-icon"
+                :emoji="currentStatusIcon"
+              />
+              <span>{{ currentStatusText }}</span>
+            </span>
             <Button
               :type="ButtonTypeEnum.ghost"
               class="menu-profile__status-clear"
@@ -78,9 +85,10 @@
               :disabled="isSavingStatus"
               @click="selectPreset(option)"
             >
-              <span class="menu-profile__status-option-icon">
-                {{ option.icon }}
-              </span>
+              <EmojiIcon
+                class="menu-profile__status-option-icon"
+                :emoji="option.icon"
+              />
               <span>{{ option.text }}</span>
             </button>
 
@@ -90,7 +98,7 @@
               :disabled="isSavingStatus"
               @click="openCustomStatus"
             >
-              <span class="menu-profile__status-option-icon">🦄</span>
+              <EmojiIcon class="menu-profile__status-option-icon" emoji="🦄" />
               <span>Свой вариант</span>
             </button>
 
@@ -112,9 +120,11 @@
                     :width="20"
                     :height="20"
                   />
-                  <span v-else class="menu-profile__status-emoji">
-                    {{ customStatusIcon }}
-                  </span>
+                  <EmojiIcon
+                    v-else
+                    class="menu-profile__status-emoji"
+                    :emoji="customStatusIcon"
+                  />
                 </button>
                 <input
                   v-model="customStatusText"
@@ -128,7 +138,11 @@
                 v-if="isEmojiPickerOpen"
                 class="menu-profile__status-emoji-picker"
               >
-                <EmojiPicker @select="handleSelectEmoji" />
+                <EmojiPicker
+                  v-emoji
+                  :native="true"
+                  @select="handleSelectEmoji"
+                />
               </div>
               <Button
                 :type="ButtonTypeEnum.primary"
@@ -593,6 +607,8 @@ import EmojiPicker from 'vue3-emoji-picker';
 import 'vue3-emoji-picker/css';
 import type { IUser, IUserStatus } from '../interfaces/interfaces';
 import CachedAvatar from '../UI/CachedAvatar.vue';
+import EmojiIcon from '../UI/EmojiIcon.vue';
+import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
 import {
   getAuthUser,
   redirectToAuthorization
@@ -602,6 +618,7 @@ import { cleanupPushNotificationsOnLogout } from '../../services/usePushNotifica
 import { updateCurrentUserStatus } from '../../services/useUserStatus';
 import {
   formatUserStatusLabel,
+  formatUserStatusText,
   normalizeUserStatus,
   USER_STATUS_PRESETS
 } from '../../utils/userStatus';
@@ -668,6 +685,16 @@ const {
 const currentStatusLabel = computed(() =>
   formatUserStatusLabel(authUser.value?.status)
 );
+const currentStatusIcon = computed(
+  () => normalizeUserStatus(authUser.value?.status)?.icon || ''
+);
+const currentStatusText = computed(() =>
+  formatUserStatusText(authUser.value?.status)
+);
+
+preloadNotoEmojiAssets([...statusPresets.map(option => option.icon), '🦄'], {
+  highPriority: true
+});
 
 const canSaveCustomStatus = computed(
   () =>

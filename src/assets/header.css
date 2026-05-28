@@ -12,29 +12,30 @@
   justify-content: space-between;
   align-items: center;
   padding: 7.5px 8px;
-  &:hover {
-    cursor: pointer;
-  }
+  cursor: pointer;
 }
 
 .chat__header-buttons {
   display: flex;
   margin-right: 8px;
+  cursor: pointer;
   & button.button-yui-kit.ghost-yui-kit {
-    color: var(--neutral-text-light);
+    color: var(--text-color);
+    gap: 5px !important;
   }
 
-  & .chat__header-popover {
+  & .chat__header-popover-trigger {
     min-width: 40px;
     display: flex;
     justify-content: center;
+    padding: 0;
   }
 
   & .chat__header__icon {
-    font-size: 16px;
+    font-size: 16px !important;
     color: var(--text-light-color);
-    width: 42px;
-    height: 40px;
+    width: 42px !important;
+    height: 40px !important;
     padding: 11px;
     transition: all 0.3s;
 
@@ -43,6 +44,20 @@
       color: var(--border-primary-color);
     }
   }
+
+  & .chat__header__icon--more {
+    padding: 8px;
+  }
+}
+
+.chat__header-context-menu {
+  min-width: 200px;
+}
+
+.chat__header-context-menu-button {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
 }
 
 .user-profile.chat__header-profile {
@@ -130,6 +145,7 @@ button.button-yui-kit {
   }
   .chat__header-buttons {
     margin-left: auto;
+    margin-right: 0;
   }
   .chat__header-search {
     min-width: 100px;

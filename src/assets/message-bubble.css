@@ -232,11 +232,15 @@
 }
 
 .message-emoji__symbol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
   font-size: 65px;
   line-height: 1;
   text-align: center;
-  width: 65px;
-  transform: translateX(-10px);
+  min-width: 65px;
+  width: auto;
 }
 
 .message-emoji__symbol--referenced {
@@ -482,9 +486,9 @@
     min-width: 20px;
     height: 24px;
     cursor: pointer;
-    padding: 2px 4px;
+    padding: 2px 4px 2px 8px;
     &:has(.reaction-count) {
-      padding: 4px;
+      padding: 4px 4px 4px 8px;
     }
 
     & .reaction-item {
@@ -493,6 +497,10 @@
       width: 18px;
       display: inline-flex;
       justify-content: center;
+    }
+
+    & .reaction-item__emoji {
+      display: inline-flex;
     }
 
     & .avatar-yui-kit.reaction-avatar {
@@ -623,6 +631,12 @@
   font-size: 20px;
   line-height: 1;
   width: 20px;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.message-reactions-details__emoji-icon {
+  display: inline-flex;
 }
 
 .message-reactions-details__empty {
@@ -1484,13 +1498,14 @@ div.message-content__file {
 
 @media screen and (width <= 480px) {
   .chat__input {
-    padding: 15px 20px;
+    padding: 15px 10px;
     position: fixed;
     bottom: 0;
     width: 100%;
     z-index: 9;
     & .editor-content {
       max-height: 250px;
+      align-self: center;
       & .tiptap {
         padding: 5px;
       }
@@ -1499,6 +1514,11 @@ div.message-content__file {
     & .chat__input__users {
       width: 100%;
     }
+  }
+
+  .editor-component {
+    min-height: 50px !important;
+    padding-block: 9px !important;
   }
 
   .chat__message-wrapper {

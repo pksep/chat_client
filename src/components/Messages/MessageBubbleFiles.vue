@@ -44,8 +44,8 @@
             <FileIcon
               :is-me-sender="props.isMeSender"
               :dataTestid="`${props.dataTestid}-FileIcon`"
-              :is-loaded="!media.isLoading"
-              :percent="media.uploadPercent ?? null"
+              :is-loaded="!shouldShowFileLoading(media)"
+              :percent="media.isLoading ? media.uploadPercent ?? null : null"
             />
             <div :data-testid="`${props.dataTestid}-FileInfo`">
               <div :data-testid="`${props.dataTestid}-FileDetails`">
@@ -72,6 +72,7 @@
           <div
             ref="messageHtmlRef"
             class="message-content__html"
+            v-emoji
             v-html="props.message"
             :data-testid="`${props.dataTestid}-MessageText`"
             @click="handleMentionUserClick"
@@ -179,6 +180,7 @@ import MessageBubbleTail from './MessageBubbleTail.vue';
 import { stripHtml } from '../../utils/stripHtml';
 import MessageAuthorMeta from './MessageAuthorMeta.vue';
 import { useMentionUserClick } from './composables/useMentionUserClick';
+import { MessageStatus } from '../../services/useChatSDK/types';
 
 const props = defineProps<IMessageBubbleProps>();
 
@@ -274,11 +276,17 @@ onUnmounted(() => {
 });
 
 const showErrorIcon = computed(
-  () =>
-    props.messageStatus === 'NOT_DELIVERED' ||
-    docFiles.value.some(media => media.uploadError)
+  () => props.messageStatus === MessageStatus.NotDelivered
 );
 const hasReactions = computed(() => Boolean(props.reactions?.length));
+
+const shouldShowFileLoading = (
+  media: (typeof docFiles.value)[number]
+): boolean =>
+  Boolean(
+    media.isLoading ||
+      (media.uploadError && props.messageStatus !== MessageStatus.NotDelivered)
+  );
 
 const handleFileClick = (
   media: (typeof docFiles.value)[number],

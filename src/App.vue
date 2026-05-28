@@ -23,12 +23,15 @@
   />
 
   <PushNotification
-    v-if="notificationState.open"
-    :title="notificationState.title"
-    :push-key="notificationState.key"
-    :description="notificationState.description"
-    :type="notificationState.type"
-    @close="closeNotification"
+    v-for="(notification, index) in notificationState.items"
+    :key="notification.key"
+    class="app-notification-stack__item"
+    :style="getNotificationStyle(index)"
+    :title="notification.title"
+    :push-key="notification.key"
+    :description="notification.description"
+    :type="notification.type"
+    @close="closeNotification(notification.key)"
   />
 </template>
 <script lang="ts" setup>
@@ -86,6 +89,16 @@ const isAddingNewOrganization = ref(!organizations.value.length);
 const serverUrl = ref(selectedOrganization.value);
 const isCredentialsStep = ref(false);
 const { state: notificationState, closeNotification } = useNotifications();
+
+const getNotificationStyle = (index: number) => ({
+  position: 'fixed',
+  top: `${16 + index * 88}px`,
+  right: '16px',
+  left: 'auto',
+  bottom: 'auto',
+  margin: '0',
+  zIndex: `${3000 - index}`
+});
 
 const parseRuntimeConfig = (
   rawConfig: string
@@ -431,3 +444,9 @@ onMounted(() => {
   }
 });
 </script>
+
+<style scoped>
+.app-notification-stack__item {
+  pointer-events: auto;
+}
+</style>
