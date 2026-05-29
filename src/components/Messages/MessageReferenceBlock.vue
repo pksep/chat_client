@@ -64,6 +64,7 @@
           {{ replyAuthor }}
         </div>
         <div
+          v-emoji
           class="message-reference-reply__text"
           :style="replyTextInlineStyle"
         >

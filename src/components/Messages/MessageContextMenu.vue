@@ -39,7 +39,6 @@
 
     <EmojiPicker
       ref="reactionRow"
-      v-emoji
       :native="true"
       v-on-click-outside="toggleShowEmojies"
       v-else-if="showEmojies"
