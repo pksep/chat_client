@@ -24,7 +24,7 @@
             <EditIcon />
             <div class="chat__input__action__blog">
               <h5>Редактирование</h5>
-              <p>
+              <p v-emoji>
                 {{ stripHtml(props.editMessage?.text || '') }}
               </p>
             </div>
@@ -48,7 +48,7 @@
           >
             <div class="chat__input__action__blog">
               <h5>В ответ {{ props.replyMessage.senderUser?.initials }}</h5>
-              <p>
+              <p v-emoji>
                 {{ stripHtml(props.replyMessage?.text || 'Вложение') }}
               </p>
             </div>
@@ -79,7 +79,7 @@
                 Переслать {{ props.forwardMessages.length }}
                 сообщение
               </h5>
-              <p>
+              <p v-emoji>
                 <template v-if="props.forwardMessages.length === 1">
                   {{ props.forwardMessages[0]?.senderUser?.initials }}:
                   {{ stripHtml(props.forwardMessages[0]?.text || 'Вложение') }}
@@ -111,7 +111,7 @@
               <h5 v-if="props.customActionTitle">
                 {{ props.customActionTitle }}
               </h5>
-              <p v-if="props.customActionDescription">
+              <p v-emoji v-if="props.customActionDescription">
                 {{ props.customActionDescription }}
               </p>
             </div>

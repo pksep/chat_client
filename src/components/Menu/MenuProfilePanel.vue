@@ -138,11 +138,7 @@
                 v-if="isEmojiPickerOpen"
                 class="menu-profile__status-emoji-picker"
               >
-                <EmojiPicker
-                  v-emoji
-                  :native="true"
-                  @select="handleSelectEmoji"
-                />
+                <EmojiPicker :native="true" @select="handleSelectEmoji" />
               </div>
               <Button
                 :type="ButtonTypeEnum.primary"

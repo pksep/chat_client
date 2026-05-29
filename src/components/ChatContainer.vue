@@ -31,6 +31,11 @@
     <Chat
       class="chat__messages"
       ref="chatRef"
+      :show-update-banner="showUpdateBanner"
+      :update-action-label="updateActionLabel"
+      :is-update-action-disabled="isUpdateActionDisabled"
+      :on-update-click="handleUpdateClick"
+      :on-dismiss-update-banner="dismissUpdateBanner"
       :dataTestid="`${props.dataTestid}-ChatContainer-Chat`"
     />
     <template v-if="!isMobile">
@@ -179,7 +184,16 @@ const NewGroupModal = defineAsyncComponent(
   () => import('./NewChat/NewGroupModal.vue')
 );
 
-const { mobilePlatform, handleInstall, showDownloadModal } = useMobileApp();
+const {
+  mobilePlatform,
+  handleInstall,
+  showDownloadModal,
+  showUpdateBanner,
+  updateActionLabel,
+  isUpdateActionDisabled,
+  handleUpdateClick,
+  dismissUpdateBanner
+} = useMobileApp();
 
 const route = useUrlWatcher();
 
