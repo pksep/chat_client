@@ -7,7 +7,7 @@
     <div class="chat__input__action">
       <div class="chat__input__action__blog">
         <h5>Закрепленное сособщение</h5>
-        <p>{{ stripHtml(pinnedMessages[index].text || 'Вложение') }}</p>
+        <p v-emoji>{{ stripHtml(pinnedMessages[index].text || 'Вложение') }}</p>
       </div>
       <Button
         :type="ButtonTypeEnum.ghost"

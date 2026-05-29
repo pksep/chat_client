@@ -5,7 +5,7 @@ import './assets/globals.css';
 import './assets/chat-container.css';
 import '@pksep/yui/styles';
 import { preloadNotoEmojiAssets } from './composables/useEmojiStyle';
-import { emojiDirective, mountGlobalEmojiObserver } from './directives/emoji';
+import { emojiDirective } from './directives/emoji';
 import { registerNativeFileBridge } from './services/useNativeFile';
 import { USER_STATUS_PRESETS } from './utils/userStatus';
 
@@ -128,7 +128,6 @@ const mountApp = async () => {
   app.directive('emoji', emojiDirective);
 
   app.mount('#app');
-  mountGlobalEmojiObserver(document.body);
 };
 
 void mountApp();

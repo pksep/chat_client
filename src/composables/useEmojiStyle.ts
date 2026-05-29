@@ -14,7 +14,17 @@ type EmojiPreloadOptions = {
 
 const toEmojiCodePointKey = (value: string): string =>
   Array.from(value)
-    .map(character => character.codePointAt(0)?.toString(16))
+    .map(character => {
+      const codePoint = character.codePointAt(0);
+
+      if (!codePoint) {
+        return undefined;
+      }
+
+      const codePointHex = codePoint.toString(16).toLowerCase();
+
+      return codePoint <= 0xffff ? codePointHex.padStart(4, '0') : codePointHex;
+    })
     .filter((part): part is string => Boolean(part))
     .join('-')
     .toLowerCase();
@@ -140,7 +150,11 @@ export const preloadNotoEmojiAssets = (
     return;
   }
 
-  const sources = emojis.flatMap(emoji => getNotoEmojiAssetCandidates(emoji));
+  const sources = buildUniqueCandidates(
+    emojis
+      .map(emoji => getNotoEmojiAssetCandidates(emoji)[0] || '')
+      .filter(Boolean)
+  );
 
   sources.forEach(source => {
     if (!source) {
@@ -161,6 +175,9 @@ export const preloadNotoEmojiAssets = (
     image.src = source;
     image.onload = () => {
       markNotoEmojiAssetLoaded(source);
+    };
+    image.onerror = () => {
+      markNotoEmojiAssetFailed(source);
     };
   });
 };

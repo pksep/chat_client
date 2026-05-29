@@ -38,6 +38,7 @@ const FORWARD_TEXT_SEND_DELAY_MS = 250;
 const TEXT_WAIT_INDICATOR_DELAY_MS = 150;
 const MAX_MEDIA_ATTACHMENTS_PER_MESSAGE = 10;
 const MAX_FILE_ATTACHMENTS_PER_MESSAGE = 10;
+const MESSAGE_MAX_RETRY_AGE_MS = 15 * 60 * 1000;
 const MESSAGE_AUTO_RETRY_WINDOW_MS = 180000;
 const MESSAGE_AUTO_RETRY_INITIAL_DELAY_MS = 3000;
 const MESSAGE_AUTO_RETRY_MAX_DELAY_MS = 15000;
@@ -280,9 +281,30 @@ export function useMessageSender(
   ): IMessage | undefined =>
     getFullMessagesByTopicId(topicId).find(message => message.id === messageId);
 
+  const getMessageCreatedAtMs = (message?: IMessage | null): number | null => {
+    if (!message?.createdAt) {
+      return null;
+    }
+
+    const createdAtMs = new Date(message.createdAt).getTime();
+
+    return Number.isFinite(createdAtMs) ? createdAtMs : null;
+  };
+
+  const isMessageRetryExpired = (message?: IMessage | null): boolean => {
+    const createdAtMs = getMessageCreatedAtMs(message);
+
+    if (createdAtMs === null) {
+      return false;
+    }
+
+    return Date.now() - createdAtMs >= MESSAGE_MAX_RETRY_AGE_MS;
+  };
+
   const isAutoRetryCandidate = (message?: IMessage | null): boolean =>
     Boolean(
       message &&
+        !isMessageRetryExpired(message) &&
         (message.status === MessageStatus.Wait ||
           message.status === MessageStatus.NotDelivered)
     );
@@ -615,6 +637,19 @@ export function useMessageSender(
   ): void => {
     const message = getMessageById(topicId, messageId);
 
+    if (isMessageRetryExpired(message)) {
+      if (message?.status === MessageStatus.Wait) {
+        changeMessageStatusLocally(
+          topicId,
+          messageId,
+          MessageStatus.NotDelivered
+        );
+      }
+
+      clearPendingMessageAutoRetry(topicId, messageId);
+      return;
+    }
+
     if (!isAutoRetryCandidate(message)) {
       clearPendingMessageAutoRetry(topicId, messageId);
       return;
@@ -656,6 +691,19 @@ export function useMessageSender(
       pendingMessageRetryTimers.delete(retryKey);
 
       const currentMessage = getMessageById(topicId, messageId);
+
+      if (isMessageRetryExpired(currentMessage)) {
+        if (currentMessage?.status === MessageStatus.Wait) {
+          changeMessageStatusLocally(
+            topicId,
+            messageId,
+            MessageStatus.NotDelivered
+          );
+        }
+
+        clearPendingMessageAutoRetry(topicId, messageId);
+        return;
+      }
 
       if (!isAutoRetryCandidate(currentMessage)) {
         clearPendingMessageAutoRetry(topicId, messageId);
@@ -1437,6 +1485,19 @@ export function useMessageSender(
     }
 
     const message = getMessageById(topicId, messageId);
+
+    if (isMessageRetryExpired(message)) {
+      if (message?.status === MessageStatus.Wait) {
+        changeMessageStatusLocally(
+          topicId,
+          messageId,
+          MessageStatus.NotDelivered
+        );
+      }
+
+      clearPendingMessageAutoRetry(topicId, messageId);
+      return;
+    }
 
     if (!message?.media?.length) {
       if (!message?.text) {

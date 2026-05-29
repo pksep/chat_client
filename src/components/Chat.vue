@@ -15,6 +15,11 @@
       :baseUrl="props.baseUrl"
       :contact="props.contact"
       :user="authUser"
+      :show-update-banner="props.showUpdateBanner"
+      :update-action-label="props.updateActionLabel"
+      :is-update-action-disabled="props.isUpdateActionDisabled"
+      :on-update-click="props.onUpdateClick"
+      :on-dismiss-update-banner="props.onDismissUpdateBanner"
       :data-testid="`${props.dataTestid}-Chat-MessageList`"
     />
     <div class="chat__unselected-topic" v-else>
