@@ -17,6 +17,7 @@ import sep.pksep.app.plugins.NativeFilePlugin;
 import sep.pksep.app.plugins.NotificationAudioPlugin;
 import sep.pksep.app.plugins.NotificationTapPlugin;
 import sep.pksep.app.plugins.ProximityLockPlugin;
+import sep.pksep.app.plugins.RuStoreUpdatePlugin;
 import sep.pksep.app.plugins.ShareIntentPlugin;
 
 @SuppressWarnings("deprecation")
@@ -73,6 +74,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NativeFilePlugin.class);
         registerPlugin(NotificationAudioPlugin.class);
         registerPlugin(NotificationTapPlugin.class);
+        registerPlugin(RuStoreUpdatePlugin.class);
         registerPlugin(ShareIntentPlugin.class);
         customPluginsRegistered = true;
     }
