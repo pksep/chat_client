@@ -8,36 +8,6 @@
     :style="chatWallpaperStyle"
     :data-testid="`${props.dataTestid}-ChatContainer-Container`"
   >
-    <section
-      v-if="showUpdateBanner"
-      class="chat-update-banner"
-      :data-testid="`${props.dataTestid}-ChatContainer-UpdateBanner`"
-    >
-      <div class="chat-update-banner__content">
-        <p class="chat-update-banner__title">Доступна новая версия</p>
-        <p class="chat-update-banner__description">
-          Обновите приложение, чтобы получить новые функции
-        </p>
-      </div>
-      <button
-        type="button"
-        class="chat-update-banner__action"
-        :data-testid="`${props.dataTestid}-ChatContainer-UpdateBannerInstallButton`"
-        :disabled="isUpdateActionDisabled"
-        @click="handleUpdateClick"
-      >
-        {{ updateActionLabel }}
-      </button>
-      <button
-        type="button"
-        class="chat-update-banner__close"
-        :data-testid="`${props.dataTestid}-ChatContainer-UpdateBannerCloseButton`"
-        aria-label="Закрыть уведомление об обновлении"
-        @click="dismissUpdateBanner"
-      >
-        <Icon :name="IconNameEnum.crossLarge" />
-      </button>
-    </section>
     <Header
       v-if="state.isActiveHeader"
       class="chat__header"
@@ -61,6 +31,11 @@
     <Chat
       class="chat__messages"
       ref="chatRef"
+      :show-update-banner="showUpdateBanner"
+      :update-action-label="updateActionLabel"
+      :is-update-action-disabled="isUpdateActionDisabled"
+      :on-update-click="handleUpdateClick"
+      :on-dismiss-update-banner="dismissUpdateBanner"
       :dataTestid="`${props.dataTestid}-ChatContainer-Chat`"
     />
     <template v-if="!isMobile">
@@ -179,7 +154,7 @@ import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
 import { getAuthUser } from '../composables/useAuth';
 import MobileModal from './UI/MobileModal.vue';
-import { Button, ButtonTypeEnum, Icon, IconNameEnum } from '@pksep/yui';
+import { Button, ButtonTypeEnum } from '@pksep/yui';
 import {
   navigateToDefault,
   navigateToGroup,

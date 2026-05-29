@@ -37,7 +37,69 @@
       @retry-message="handleRetryMessage"
       @scroll-to-message="handleScrollToMessage"
     />
+    <section
+      v-if="props.showUpdateBanner"
+      class="chat-update-banner"
+      :data-testid="`${props.dataTestid}-MessageList-UpdateBanner`"
+    >
+      <svg
+        class="chat-update-banner__download-icon"
+        width="44"
+        height="44"
+        viewBox="0 0 44 44"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <rect width="44" height="44" rx="22" fill="#77A6FF" />
+        <path
+          d="M30 25L30 28.3333C30 28.7754 29.8127 29.1993 29.4793 29.5118C29.1459 29.8244 28.6937 30 28.2222 30L15.7778 30C15.3063 30 14.8541 29.8244 14.5207 29.5118C14.1873 29.1993 14 28.7754 14 28.3333L14 25"
+          stroke="white"
+          stroke-width="1.375"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M17.8346 19.832L22.0013 23.9987L26.168 19.832"
+          stroke="white"
+          stroke-width="1.375"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M22 24L22 14"
+          stroke="white"
+          stroke-width="1.375"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
 
+      <div class="chat-update-banner__content">
+        <p class="chat-update-banner__title">
+          Доступна новая версия <span>приложения</span>
+        </p>
+        <p class="chat-update-banner__description">
+          Обновите приложение, чтобы получить новые функции и улучшения
+        </p>
+      </div>
+      <Button
+        class="chat-update-banner__action"
+        :data-testid="`${props.dataTestid}-MessageList-UpdateBannerInstallButton`"
+        :disabled="props.isUpdateActionDisabled"
+        @click="props.onUpdateClick?.()"
+      >
+        {{ props.updateActionLabel }}
+      </Button>
+      <button
+        type="button"
+        class="chat-update-banner__close"
+        :data-testid="`${props.dataTestid}-MessageList-UpdateBannerCloseButton`"
+        aria-label="Закрыть уведомление об обновлении"
+        @click="props.onDismissUpdateBanner?.()"
+      >
+        <Icon :name="IconNameEnum.crossLarge" />
+      </button>
+    </section>
     <div
       class="chat__message-bubble__arrow-down"
       v-if="isShowScrollToBottomButton"
@@ -109,7 +171,8 @@ import {
   MessageTypeEnum,
   PushNotification,
   Icon,
-  IconNameEnum
+  IconNameEnum,
+  Button
 } from '@pksep/yui';
 import type { IMessageListProps } from './interfaces/message-list';
 import type { AIMessage } from '../types/messages';

@@ -1,5 +1,5 @@
 import { Capacitor } from '@capacitor/core';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { MobilePlatformEnum } from '../components/interfaces/interfaces';
 import {
   RuStoreInstallStatus,
@@ -14,6 +14,9 @@ import {
 } from '../services/useRuStoreUpdate';
 
 const RUSTORE_APP_URL = 'https://www.rustore.ru/catalog/app/sep.pksep.app';
+const WEB_UPDATE_INFO_URL = '/web-update.json';
+const WEB_UPDATE_CHECK_INTERVAL_MS = 60_000;
+const WEB_UPDATE_VERSION_STORAGE_KEY = 'chat_web_seen_update_version';
 
 const shouldShowNativeUpdateBanner = (
   appUpdateInfo: RuStoreAppUpdateInfo | null
@@ -41,6 +44,9 @@ export function useMobileApp() {
   const updateInstallStatus = ref(RuStoreInstallStatus.UNKNOWN);
   const isUpdateFlowPending = ref(false);
   const nativeAppUpdateInfo = ref<RuStoreAppUpdateInfo | null>(null);
+  const isWebUpdateBanner = ref(false);
+  const latestWebUpdateVersion = ref<number | null>(null);
+  let webUpdateIntervalId: number | null = null;
 
   const applyNativeUpdateInfo = (
     appUpdateInfo: RuStoreAppUpdateInfo | null
@@ -98,6 +104,96 @@ export function useMobileApp() {
     await refreshNativeUpdateInfo();
   };
 
+  const fetchWebUpdateVersion = async (): Promise<number | null> => {
+    const response = await fetch(
+      `${WEB_UPDATE_INFO_URL}?t=${Date.now().toString()}`,
+      {
+        cache: 'no-store'
+      }
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as {
+      version?: number | string;
+    };
+    const parsedVersion = Number.parseInt(String(payload.version || ''), 10);
+
+    return Number.isFinite(parsedVersion) ? parsedVersion : null;
+  };
+
+  const applyWebUpdateVersion = (nextVersion: number | null) => {
+    if (Capacitor.isNativePlatform()) {
+      isWebUpdateBanner.value = false;
+      return;
+    }
+
+    if (!Number.isFinite(nextVersion)) {
+      return;
+    }
+
+    latestWebUpdateVersion.value = nextVersion;
+
+    const storedVersion = Number.parseInt(
+      localStorage.getItem(WEB_UPDATE_VERSION_STORAGE_KEY) || '',
+      10
+    );
+
+    if (!Number.isFinite(storedVersion)) {
+      localStorage.setItem(WEB_UPDATE_VERSION_STORAGE_KEY, String(nextVersion));
+      isWebUpdateBanner.value = false;
+      showUpdateBanner.value = false;
+      return;
+    }
+
+    isWebUpdateBanner.value = storedVersion < nextVersion;
+    showUpdateBanner.value = isWebUpdateBanner.value;
+  };
+
+  const checkWebUpdate = async () => {
+    if (Capacitor.isNativePlatform()) {
+      return;
+    }
+
+    try {
+      const nextVersion = await fetchWebUpdateVersion();
+      applyWebUpdateVersion(nextVersion);
+    } catch (error) {
+      console.warn('Failed to check web update version:', error);
+    }
+  };
+
+  const initWebUpdateHandling = async () => {
+    if (Capacitor.isNativePlatform()) {
+      isWebUpdateBanner.value = false;
+      return;
+    }
+
+    await checkWebUpdate();
+
+    webUpdateIntervalId = window.setInterval(() => {
+      void checkWebUpdate();
+    }, WEB_UPDATE_CHECK_INTERVAL_MS);
+  };
+
+  const persistCurrentWebUpdateVersion = () => {
+    if (Capacitor.isNativePlatform()) {
+      return;
+    }
+
+    if (!Number.isFinite(latestWebUpdateVersion.value)) {
+      return;
+    }
+
+    localStorage.setItem(
+      WEB_UPDATE_VERSION_STORAGE_KEY,
+      String(latestWebUpdateVersion.value)
+    );
+    isWebUpdateBanner.value = false;
+  };
+
   const detect = async () => {
     const ua = navigator.userAgent || '';
 
@@ -128,6 +224,7 @@ export function useMobileApp() {
       }
     }
 
+    await initWebUpdateHandling();
     await initNativeUpdateHandling();
   };
 
@@ -161,7 +258,8 @@ export function useMobileApp() {
 
   const handleUpdateClick = async () => {
     if (!isRuStoreUpdateSupported()) {
-      window.location.href = RUSTORE_APP_URL;
+      persistCurrentWebUpdateVersion();
+      window.location.reload();
       return;
     }
 
@@ -198,10 +296,15 @@ export function useMobileApp() {
   };
 
   const dismissUpdateBanner = () => {
+    persistCurrentWebUpdateVersion();
     showUpdateBanner.value = false;
   };
 
   const updateActionLabel = computed(() => {
+    if (!Capacitor.isNativePlatform()) {
+      return 'Обновить';
+    }
+
     if (isUpdateFlowPending.value) {
       return 'Загрузка...';
     }
@@ -219,13 +322,21 @@ export function useMobileApp() {
 
   const isUpdateActionDisabled = computed(
     () =>
-      isUpdateFlowPending.value ||
-      updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADING ||
-      updateInstallStatus.value === RuStoreInstallStatus.PENDING
+      Capacitor.isNativePlatform() &&
+      (isUpdateFlowPending.value ||
+        updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADING ||
+        updateInstallStatus.value === RuStoreInstallStatus.PENDING)
   );
 
   onMounted(() => {
     void detect();
+  });
+
+  onBeforeUnmount(() => {
+    if (webUpdateIntervalId !== null) {
+      window.clearInterval(webUpdateIntervalId);
+      webUpdateIntervalId = null;
+    }
   });
 
   return {

@@ -133,21 +133,17 @@ svg.ai-icon {
 }
 
 .chat-update-banner {
-  position: fixed;
-  inset: calc(env(safe-area-inset-top, 0px) + 12px) 12px auto;
-  z-index: 30;
+  position: sticky;
+  bottom: 100% !important;
+  inset: 0 0 auto;
+  z-index: 4;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px 14px 16px 18px;
-  border: 1px solid #a8c7ff;
+  gap: 15px;
+  padding: 15px;
+  border: 1px solid var(--border-blue);
   border-radius: 20px;
-  background: linear-gradient(
-    180deg,
-    rgb(255 255 255 / 98%),
-    rgb(244 248 255 / 98%)
-  );
-  box-shadow: 0 16px 32px rgb(61 104 186 / 14%);
+  background: var(--blue9);
 }
 
 .chat-update-banner__content {
@@ -156,19 +152,20 @@ svg.ai-icon {
 }
 
 .chat-update-banner__title {
-  margin: 0 0 4px;
-  color: #20232d;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.2;
+  margin: 0;
+  color: var(--text-color);
+  font-weight: 600;
+  font-size: 18px;
+  line-height: 22px;
+  letter-spacing: 0%;
 }
 
 .chat-update-banner__description {
-  margin: 0;
-  color: #69758c;
+  margin: 5px 0 0;
+  font-weight: 600;
   font-size: 14px;
-  font-weight: 500;
-  line-height: 1.35;
+  line-height: 17px;
+  color: var(--grey6);
 }
 
 .chat-update-banner__action,
@@ -179,14 +176,11 @@ svg.ai-icon {
 
 .chat-update-banner__action {
   flex-shrink: 0;
-  padding: 14px 20px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #76a7ff 0%, #5f90ee 100%);
   color: var(--white);
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 1;
-  box-shadow: 0 10px 18px rgb(89 133 226 / 24%);
+  font-size: 14px;
+  font-weight: 400;
+  min-height: 40px !important;
+  height: 40px;
 }
 
 .chat-update-banner__close {
@@ -263,6 +257,10 @@ button.primary-yui-kit.disabled-yui-kit {
   .chat__menu {
     display: none;
   }
+
+  .chat-update-banner__download-icon {
+    display: none;
+  }
 }
 
 @media screen and (width <= 768px) {
@@ -284,18 +282,21 @@ button.primary-yui-kit.disabled-yui-kit {
   }
 
   .chat-update-banner {
-    left: 8px;
-    right: 8px;
-    gap: 10px;
-    padding: 14px 12px 14px 16px;
+    inset: -5px 3px auto;
   }
 
   .chat-update-banner__title {
-    font-size: 18px;
+    font-size: 14px;
+    line-height: 17px;
+
+    & span {
+      display: none;
+    }
   }
 
   .chat-update-banner__description {
-    font-size: 13px;
+    font-size: 12px;
+    line-height: 15px;
   }
 
   .chat-update-banner__action {
