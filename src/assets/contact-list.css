@@ -380,11 +380,11 @@ svg.icon-yui-kit.contact-list__read-icon {
     font-size: 24px;
   }
   .contact-selector__list {
-    max-height: calc(var(--default-height) - 120px);
+    max-height: calc(var(--default-height) - 140px);
   }
 
   .contact-selector__empty {
-    min-height: calc(var(--default-height) - 120px);
+    min-height: calc(var(--default-height) - 140px);
     padding-top: 72px;
   }
 

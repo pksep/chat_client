@@ -42,6 +42,7 @@ const MESSAGE_MAX_RETRY_AGE_MS = 15 * 60 * 1000;
 const MESSAGE_AUTO_RETRY_WINDOW_MS = 180000;
 const MESSAGE_AUTO_RETRY_INITIAL_DELAY_MS = 3000;
 const MESSAGE_AUTO_RETRY_MAX_DELAY_MS = 15000;
+const BACKGROUND_UPLOAD_RETRY_SUPPRESS_MS = 15000;
 
 type PendingMessageRetryState = {
   attempt: number;
@@ -53,12 +54,58 @@ const pendingMessageRetryTimers = new Map<
   ReturnType<typeof setTimeout>
 >();
 const pendingMessageRetryStates = new Map<string, PendingMessageRetryState>();
+const backgroundInterruptedUploadMessages = new Set<string>();
+const activeUploadRequests = new Map<string, Promise<boolean>>();
 let arePendingMessageRetryListenersBound = false;
+let lastDocumentHiddenAt = 0;
 
 const getPendingMessageRetryKey = (
   topicId: string,
   messageId: string
 ): string => `${topicId}:${messageId}`;
+
+const getPendingUploadRequestKey = (
+  topicId: string,
+  messageId: string,
+  fileId: string
+): string => `${topicId}:${messageId}:${fileId}`;
+
+const wasDocumentRecentlyHidden = (): boolean => {
+  if (typeof document === 'undefined') {
+    return false;
+  }
+
+  return (
+    document.hidden ||
+    Date.now() - lastDocumentHiddenAt <= BACKGROUND_UPLOAD_RETRY_SUPPRESS_MS
+  );
+};
+
+const markBackgroundInterruptedUpload = (
+  topicId: string,
+  messageId: string
+): void => {
+  backgroundInterruptedUploadMessages.add(
+    getPendingMessageRetryKey(topicId, messageId)
+  );
+};
+
+const clearBackgroundInterruptedUpload = (
+  topicId: string,
+  messageId: string
+): void => {
+  backgroundInterruptedUploadMessages.delete(
+    getPendingMessageRetryKey(topicId, messageId)
+  );
+};
+
+const isBackgroundInterruptedUpload = (
+  topicId: string,
+  messageId: string
+): boolean =>
+  backgroundInterruptedUploadMessages.has(
+    getPendingMessageRetryKey(topicId, messageId)
+  );
 
 const parsePendingMessageRetryKey = (
   key: string
@@ -311,6 +358,14 @@ export function useMessageSender(
 
   const canAutoRetryMessage = (message?: IMessage | null): boolean => {
     if (!isAutoRetryCandidate(message)) {
+      return false;
+    }
+
+    if (
+      message?.topicId &&
+      message.id &&
+      isBackgroundInterruptedUpload(message.topicId, message.id)
+    ) {
       return false;
     }
 
@@ -751,6 +806,11 @@ export function useMessageSender(
     window.addEventListener('online', triggerRetry);
     window.addEventListener('focus', triggerRetry);
     document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        lastDocumentHiddenAt = Date.now();
+        return;
+      }
+
       if (!document.hidden) {
         triggerRetry();
       }
@@ -807,6 +867,13 @@ export function useMessageSender(
       suppressErrorNotification?: boolean;
     }
   ): Promise<boolean> => {
+    const requestKey = getPendingUploadRequestKey(topicId, messageId, fileId);
+    const existingRequest = activeUploadRequests.get(requestKey);
+
+    if (existingRequest) {
+      return existingRequest;
+    }
+
     const message = getMessageById(topicId, messageId);
     const currentMedia = message?.media?.find(media => media.id === fileId);
 
@@ -814,45 +881,57 @@ export function useMessageSender(
       return false;
     }
 
-    changeMessageStatusLocally(topicId, messageId, MessageStatus.Wait);
-    setFileUploadPendingStatus(topicId, messageId, fileId);
+    const request = (async (): Promise<boolean> => {
+      changeMessageStatusLocally(topicId, messageId, MessageStatus.Wait);
+      setFileUploadPendingStatus(topicId, messageId, fileId);
+      clearBackgroundInterruptedUpload(topicId, messageId);
 
-    try {
-      await waitForPreviewMetrics(currentMedia);
-      const { file, path, thumbnailPath, ex } = await uploadFile(
-        payload.file,
-        currentMedia.ex,
-        percent => {
-          changeFileUploadPercent(topicId, messageId, fileId, percent);
-        },
-        payload.isMedia
-      );
-
-      changeFileLoadingStatus(topicId, messageId, fileId);
-      setUploadedFileData(topicId, messageId, fileId, {
-        path,
-        thumbnailPath,
-        originName: file.name,
-        size: file.size,
-        type: getMediaType(payload.file, payload.isMedia),
-        ex
-      });
-
-      return true;
-    } catch (error: any) {
-      changeFileUploadErrorStatus(topicId, messageId, fileId, true);
-      if (options?.markNotDeliveredOnFailure !== false) {
-        changeMessageStatusLocally(
-          topicId,
-          messageId,
-          MessageStatus.NotDelivered
+      try {
+        await waitForPreviewMetrics(currentMedia);
+        const { file, path, thumbnailPath, ex } = await uploadFile(
+          payload.file,
+          currentMedia.ex,
+          percent => {
+            changeFileUploadPercent(topicId, messageId, fileId, percent);
+          },
+          payload.isMedia
         );
+
+        changeFileLoadingStatus(topicId, messageId, fileId);
+        setUploadedFileData(topicId, messageId, fileId, {
+          path,
+          thumbnailPath,
+          originName: file.name,
+          size: file.size,
+          type: getMediaType(payload.file, payload.isMedia),
+          ex
+        });
+
+        return true;
+      } catch (error: any) {
+        if (payload.isMedia && wasDocumentRecentlyHidden()) {
+          markBackgroundInterruptedUpload(topicId, messageId);
+        }
+
+        changeFileUploadErrorStatus(topicId, messageId, fileId, true);
+        if (options?.markNotDeliveredOnFailure !== false) {
+          changeMessageStatusLocally(
+            topicId,
+            messageId,
+            MessageStatus.NotDelivered
+          );
+        }
+        if (!options?.suppressErrorNotification) {
+          showErrorNotification(error.message || 'Failed to upload file');
+        }
+        return false;
+      } finally {
+        activeUploadRequests.delete(requestKey);
       }
-      if (!options?.suppressErrorNotification) {
-        showErrorNotification(error.message || 'Failed to upload file');
-      }
-      return false;
-    }
+    })();
+
+    activeUploadRequests.set(requestKey, request);
+    return request;
   };
 
   const queuePendingTextMessage = (params: {
@@ -1483,6 +1562,8 @@ export function useMessageSender(
     if (!topicId || !messageId) {
       return;
     }
+
+    clearBackgroundInterruptedUpload(topicId, messageId);
 
     const message = getMessageById(topicId, messageId);
 
