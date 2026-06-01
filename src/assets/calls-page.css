@@ -47,7 +47,7 @@
 .calls-page__list {
   display: grid;
   gap: 12px;
-  max-height: calc(100vh - 200px);
+  max-height: calc(100vh - 185px);
   overflow-y: auto;
 
   &::-webkit-scrollbar {
@@ -84,7 +84,7 @@
   border-bottom: 1px solid var(--border-color);
 }
 
-.calls-page__item:last-child .calls-page__body {
+.calls-page__item:last-of-type .calls-page__body {
   border-bottom: none;
 }
 
@@ -163,6 +163,15 @@
   }
 }
 
+.calls-page__loading-more {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 12px;
+  color: var(--text-grey);
+  font-size: 13px;
+  line-height: 16px;
+}
+
 .calls-page__header-copy {
   min-width: 0;
   display: grid;
@@ -171,6 +180,27 @@
 
 .calls-page__header-title {
   cursor: default;
+}
+
+.calls-page__meeting-button {
+  color: var(--blue4);
+}
+
+.calls-page__context-menu .template {
+  display: grid;
+  gap: 4px;
+}
+
+.calls-page__context-action {
+  justify-content: flex-start;
+  gap: 10px;
+  color: var(--text-color) !important;
+}
+
+.calls-page__context-action svg {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
 }
 
 .calls-page__details .message-call__icon--incoming,

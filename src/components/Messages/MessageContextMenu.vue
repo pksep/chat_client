@@ -39,6 +39,7 @@
 
     <EmojiPicker
       ref="reactionRow"
+      :native="true"
       v-on-click-outside="toggleShowEmojies"
       v-else-if="showEmojies"
       @select="handleSelectEmoji"
@@ -85,7 +86,14 @@
           <div
             v-for="reader in readDetails"
             :key="reader.userId"
-            class="message-context-menu__details-item"
+            :class="[
+              'message-context-menu__details-item',
+              {
+                'message-context-menu__details-item--interactive':
+                  canOpenUserInfo(reader.user)
+              }
+            ]"
+            @click.stop="handleOpenReadDetailUser(reader.user)"
           >
             <CachedAvatar
               class="message-context-menu__details-avatar"
@@ -153,6 +161,7 @@
             :key="value"
             @click.stop="handleReactMessage(value)"
             class="select-reactions-item"
+            v-emoji="{ animated: true }"
           >
             {{ value }}
           </div>
@@ -282,7 +291,14 @@
             <div
               v-for="reader in readDetails"
               :key="reader.userId"
-              class="message-context-menu__details-item"
+              :class="[
+                'message-context-menu__details-item',
+                {
+                  'message-context-menu__details-item--interactive':
+                    canOpenUserInfo(reader.user)
+                }
+              ]"
+              @click.stop="handleOpenReadDetailUser(reader.user)"
             >
               <CachedAvatar
                 class="message-context-menu__details-avatar"
@@ -395,6 +411,7 @@ import {
   useSelectedMessages
 } from '../../composables/useSelectedMessages';
 import { openForwardDraft } from '../../composables/useForwardMessages';
+import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import {
   deleteMessageChat,
   setReactionMessage,
@@ -416,6 +433,7 @@ import { MessageStatus, TopicType } from '../../services/useChatSDK/types';
 const props = withDefaults(defineProps<IMessageContextMenu>(), {
   dataTestid: 'MessageContextMenu'
 });
+const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 
 const emits = defineEmits([
   'unmount-edit-message-id',
@@ -424,7 +442,7 @@ const emits = defineEmits([
   'unmount-retry-message-id'
 ]);
 
-const quickReactonList = computed(() => ['♥️', '🔥', '👍', '😂', '👌', '😭']);
+const quickReactonList = computed(() => ['❤️', '🔥', '👍', '😂', '👌', '😭']);
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const messages = computed(() =>
   props.topicId ? getMessagesByTopicId(props.topicId) : []
@@ -566,6 +584,7 @@ const readDetails = computed(() =>
 
       return {
         userId: item.userId,
+        user,
         name,
         readAtDateLabel: formattedReadAt.dateLabel,
         readAtTimeLabel: formattedReadAt.timeLabel,
@@ -982,6 +1001,14 @@ const handleBackToMenu = () => {
   mobileReadDetailsOffsetTop.value = 0;
 };
 
+const handleOpenReadDetailUser = (user?: any) => {
+  if (!user) {
+    return;
+  }
+
+  openUserInfo(user);
+};
+
 const handleSelectEmoji = (emoji: { i: string }) => {
   handleReactMessage(emoji.i);
 };
@@ -1022,3 +1049,9 @@ onBeforeUnmount(() => {
   disconnectReactionLayoutObserver();
 });
 </script>
+
+<style scoped>
+.message-context-menu__details-item--interactive {
+  cursor: pointer;
+}
+</style>

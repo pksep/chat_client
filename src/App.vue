@@ -23,12 +23,15 @@
   />
 
   <PushNotification
-    v-if="notificationState.open"
-    :title="notificationState.title"
-    :push-key="notificationState.key"
-    :description="notificationState.description"
-    :type="notificationState.type"
-    @close="closeNotification"
+    v-for="(notification, index) in notificationState.items"
+    :key="notification.key"
+    class="app-notification-stack__item"
+    :style="getNotificationStyle(index)"
+    :title="notification.title"
+    :push-key="notification.key"
+    :description="notification.description"
+    :type="notification.type"
+    @close="closeNotification(notification.key)"
   />
 </template>
 <script lang="ts" setup>
@@ -49,6 +52,7 @@ import {
 } from './composables/useAuth';
 import { fetchUsersForAuth } from './composables/useUsers';
 import { useNotifications } from './composables/useNotifications';
+import { initShareIntentHandling } from './services/useShareIntent';
 
 const ORGANIZATIONS_KEY = 'chat_runtime_organizations';
 const LAST_ORGANIZATION_KEY = 'chat_runtime_last_organization';
@@ -85,6 +89,16 @@ const isAddingNewOrganization = ref(!organizations.value.length);
 const serverUrl = ref(selectedOrganization.value);
 const isCredentialsStep = ref(false);
 const { state: notificationState, closeNotification } = useNotifications();
+
+const getNotificationStyle = (index: number) => ({
+  position: 'fixed',
+  top: `${16 + index * 88}px`,
+  right: '16px',
+  left: 'auto',
+  bottom: 'auto',
+  margin: '0',
+  zIndex: `${3000 - index}`
+});
 
 const parseRuntimeConfig = (
   rawConfig: string
@@ -378,6 +392,7 @@ const submitCredentialsLogin = async () => {
 };
 
 onMounted(() => {
+  void initShareIntentHandling();
   localStorage.removeItem('chat_runtime_config_url');
 
   const urlOrganization = getUrlOrganization();
@@ -429,3 +444,9 @@ onMounted(() => {
   }
 });
 </script>
+
+<style scoped>
+.app-notification-stack__item {
+  pointer-events: auto;
+}
+</style>

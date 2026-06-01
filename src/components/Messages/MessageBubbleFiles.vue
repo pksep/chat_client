@@ -18,6 +18,7 @@
             !props.isMeSender && !isDialogRoute && !props.continuesFromPrevious
           "
           :sender="props.sender"
+          :sender-user="props.senderUser"
           :sender-role="props.senderRole"
           :data-testid="`${props.dataTestid}-AuthorMeta`"
         />
@@ -43,8 +44,8 @@
             <FileIcon
               :is-me-sender="props.isMeSender"
               :dataTestid="`${props.dataTestid}-FileIcon`"
-              :is-loaded="!media.isLoading"
-              :percent="media.uploadPercent ?? null"
+              :is-loaded="!shouldShowFileLoading(media)"
+              :percent="media.isLoading ? media.uploadPercent ?? null : null"
             />
             <div :data-testid="`${props.dataTestid}-FileInfo`">
               <div :data-testid="`${props.dataTestid}-FileDetails`">
@@ -69,9 +70,12 @@
           class="message-file__caption message-content--text"
         >
           <div
+            ref="messageHtmlRef"
             class="message-content__html"
+            v-emoji
             v-html="props.message"
             :data-testid="`${props.dataTestid}-MessageText`"
+            @click="handleMentionUserClick"
           ></div>
           <div
             v-if="!hasReactions"
@@ -158,7 +162,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import { MediaType } from '@pksep/zod-shared-chat';
 import MessageStatusIcons from './MessageStatusIcons.vue';
@@ -175,6 +179,8 @@ import MessageReferenceBlock from './MessageReferenceBlock.vue';
 import MessageBubbleTail from './MessageBubbleTail.vue';
 import { stripHtml } from '../../utils/stripHtml';
 import MessageAuthorMeta from './MessageAuthorMeta.vue';
+import { useMentionUserClick } from './composables/useMentionUserClick';
+import { MessageStatus } from '../../services/useChatSDK/types';
 
 const props = defineProps<IMessageBubbleProps>();
 
@@ -183,6 +189,9 @@ const { primeMediaCache } = useMessageMedia();
 
 const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
+const messageHtmlRef = ref<HTMLElement | null>(null);
+const { handleMentionUserClick, syncMentionUserInteractivity } =
+  useMentionUserClick();
 const filesArticleRef = ref<HTMLElement | null>(null);
 const replyReferenceWidth = useReferenceWidth(filesArticleRef, {
   freezeAfterFirstMeasure: true
@@ -203,6 +212,11 @@ const hasInlineCaption = computed(
   () => hasCaption.value && !hasMediaFiles.value
 );
 
+const syncMentions = async (): Promise<void> => {
+  await nextTick();
+  syncMentionUserInteractivity(messageHtmlRef.value);
+};
+
 watch(
   [docFiles, shouldPrimeFiles],
   ([medias]) => {
@@ -220,7 +234,17 @@ watch(
   }
 );
 
+watch(
+  () => props.message,
+  () => {
+    void syncMentions();
+  },
+  { immediate: true }
+);
+
 onMounted(() => {
+  void syncMentions();
+
   if (!('IntersectionObserver' in window)) {
     shouldPrimeFiles.value = true;
     return;
@@ -252,11 +276,17 @@ onUnmounted(() => {
 });
 
 const showErrorIcon = computed(
-  () =>
-    props.messageStatus === 'NOT_DELIVERED' ||
-    docFiles.value.some(media => media.uploadError)
+  () => props.messageStatus === MessageStatus.NotDelivered
 );
 const hasReactions = computed(() => Boolean(props.reactions?.length));
+
+const shouldShowFileLoading = (
+  media: (typeof docFiles.value)[number]
+): boolean =>
+  Boolean(
+    media.isLoading ||
+      (media.uploadError && props.messageStatus !== MessageStatus.NotDelivered)
+  );
 
 const handleFileClick = (
   media: (typeof docFiles.value)[number],

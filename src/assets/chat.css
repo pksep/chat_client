@@ -31,7 +31,7 @@ p.chat__nothing-paragraph {
 
 .chat__message-wrapper {
   grid-row: 2;
-  padding: 15px 5px 15px 15px;
+  padding: 15px 5px 5px 15px;
   height: 100%;
   min-height: 0;
   overflow: hidden scroll;
@@ -64,6 +64,7 @@ p.chat__nothing-paragraph {
   align-items: center;
   cursor: pointer;
   z-index: 3;
+  transform: translateY(-10px);
 }
 
 .chat__message-bubble__arrow-down > svg.icon-yui-kit {
@@ -348,7 +349,10 @@ p.chat__nothing-paragraph {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: calc(100% - var(--header-height));
+  height: 100dvh;
+  position: absolute;
+  top: 0;
+  width: calc(100vw - var(--size-left-menu));
   gap: 10px;
 
   p {
@@ -475,4 +479,10 @@ p.chat__nothing-paragraph {
       color: var(--error-color);
     }
   }
+}
+
+.popover-yui-kit__content {
+  box-shadow: 0px 4px 9.8px 0px #0000000d !important;
+  border-radius: 15px !important;
+  color: var(--text-color) !important;
 }

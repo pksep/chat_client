@@ -28,6 +28,7 @@ button.mobile__modal-header--button {
   text-align: center;
   line-height: 100%;
   letter-spacing: 0;
+  cursor: pointer;
   &:disabled {
     color: var(--text-grey);
     cursor: not-allowed;
@@ -49,6 +50,27 @@ h3.mobile__modal-header--title {
   align-content: start;
   gap: 5px;
   padding: 10px;
+}
+
+[data-testid='GroupCallInfoPanel-MobileModal-Container'],
+[data-testid='ChatContainer-ChatContainer-Header-Header-MobileModal-MobileModal-Container'],
+[data-testid='ChatContainer-ChatContainer-MobileUserInfoModal-MobileModal-Container'],
+[data-testid='NewChatMobileModal-NewChatMobileModal-Container-MobileModal-Container'],
+[data-testid='ChatContainer-ChatContainer-Header-Header-ContactListInModal-NewChatMobileModal-Container-MobileModal-Container'] {
+  border-radius: 0 !important;
+}
+
+[data-testid='GroupCallInfoPanel-MobileModal-Container']
+  .modal-yui-kit__modal-content,
+[data-testid='ChatContainer-ChatContainer-Header-Header-MobileModal-MobileModal-Container']
+  .modal-yui-kit__modal-content,
+[data-testid='ChatContainer-ChatContainer-MobileUserInfoModal-MobileModal-Container']
+  .modal-yui-kit__modal-content,
+[data-testid='NewChatMobileModal-NewChatMobileModal-Container-MobileModal-Container']
+  .modal-yui-kit__modal-content,
+[data-testid='ChatContainer-ChatContainer-Header-Header-ContactListInModal-NewChatMobileModal-Container-MobileModal-Container']
+  .modal-yui-kit__modal-content {
+  border-radius: 0 !important;
 }
 
 @media (width <= 768px) {

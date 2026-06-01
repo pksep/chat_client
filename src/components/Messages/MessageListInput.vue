@@ -1,15 +1,15 @@
 <template>
   <div
-    class="chat__input"
+    class="chat__input emoji-font-host"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
   >
     <div :data-testid="`${props.dataTestid}-MessageList-ContentEditor`">
       <ContentEditor
-        :active-send="props.forwardMessages.length > 0"
+        :active-send="props.forwardMessages.length > 0 || props.allowEmptySend"
         v-model="internalInputText"
         ref="contentEditorRef"
-        active-attach-file
-        active-select-user
+        :active-attach-file="props.allowAttachFile"
+        :active-select-user="props.allowSelectUser"
         :mention-items="users"
         :mention-config="mentionConfig"
         @unmount-send="handleSend"
@@ -24,7 +24,7 @@
             <EditIcon />
             <div class="chat__input__action__blog">
               <h5>Редактирование</h5>
-              <p>
+              <p v-emoji>
                 {{ stripHtml(props.editMessage?.text || '') }}
               </p>
             </div>
@@ -48,7 +48,7 @@
           >
             <div class="chat__input__action__blog">
               <h5>В ответ {{ props.replyMessage.senderUser?.initials }}</h5>
-              <p>
+              <p v-emoji>
                 {{ stripHtml(props.replyMessage?.text || 'Вложение') }}
               </p>
             </div>
@@ -79,7 +79,7 @@
                 Переслать {{ props.forwardMessages.length }}
                 сообщение
               </h5>
-              <p>
+              <p v-emoji>
                 <template v-if="props.forwardMessages.length === 1">
                   {{ props.forwardMessages[0]?.senderUser?.initials }}:
                   {{ stripHtml(props.forwardMessages[0]?.text || 'Вложение') }}
@@ -100,6 +100,21 @@
                 color="var(--text-neutral-color)"
               />
             </Button>
+          </div>
+        </template>
+        <template
+          v-else-if="props.customActionTitle || props.customActionDescription"
+          #action
+        >
+          <div class="chat__input__action">
+            <div class="chat__input__action__blog">
+              <h5 v-if="props.customActionTitle">
+                {{ props.customActionTitle }}
+              </h5>
+              <p v-emoji v-if="props.customActionDescription">
+                {{ props.customActionDescription }}
+              </p>
+            </div>
           </div>
         </template>
       </ContentEditor>
@@ -144,6 +159,11 @@ interface Props {
   editMessage: IMessage | null;
   replyMessage: IMessage | null;
   forwardMessages: IMessage[];
+  allowEmptySend?: boolean;
+  allowAttachFile?: boolean;
+  allowSelectUser?: boolean;
+  customActionTitle?: string;
+  customActionDescription?: string;
 }
 
 interface IContentEditorSendPayload {
@@ -152,7 +172,13 @@ interface IContentEditorSendPayload {
   mediaFiles?: FileList;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  allowEmptySend: false,
+  allowAttachFile: true,
+  allowSelectUser: true,
+  customActionTitle: '',
+  customActionDescription: ''
+});
 const TYPING_IDLE_TIMEOUT_MS = 2500;
 const TYPING_PING_INTERVAL_MS = 2000;
 

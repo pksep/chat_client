@@ -15,12 +15,18 @@
       :baseUrl="props.baseUrl"
       :contact="props.contact"
       :user="authUser"
+      :show-update-banner="props.showUpdateBanner"
+      :update-action-label="props.updateActionLabel"
+      :is-update-action-disabled="props.isUpdateActionDisabled"
+      :on-update-click="props.onUpdateClick"
+      :on-dismiss-update-banner="props.onDismissUpdateBanner"
       :data-testid="`${props.dataTestid}-Chat-MessageList`"
     />
     <div class="chat__unselected-topic" v-else>
       <img src="/images/messages.svg" alt="messages" />
       <p>Выберите чат</p>
     </div>
+    <ShareSelectionOverlay v-if="isMobile" />
   </section>
 </template>
 
@@ -35,6 +41,7 @@ import { useUrlWatcher } from '../composables/navigation';
 import { getAuthUser } from '../composables/useAuth';
 import PinnedMessages from './Messages/PinnedMessages.vue';
 import { IMessage } from './interfaces/interfaces';
+import ShareSelectionOverlay from './ShareSelectionOverlay.vue';
 
 export interface IChatProps extends IMessageListProps {
   dataTestid?: string;

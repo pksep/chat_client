@@ -5,6 +5,10 @@
         v-for="(messageReaction, emoji) in reactionContent"
         :key="emoji"
         class="reaction"
+        :class="{
+          'reaction--own': messageReaction.isOwn,
+          'reaction--other': !messageReaction.isOwn
+        }"
         @click.stop="handleToggleEmoji(messageReaction)"
         @contextmenu="handleOpenReactionDetails($event)"
         @touchstart="handleTouchStart($event)"
@@ -13,7 +17,11 @@
         @touchmove="clearLongPress"
       >
         <div class="reaction-item">
-          {{ emoji }}
+          <EmojiIcon
+            class="reaction-item__emoji"
+            :emoji="emoji"
+            :animated="true"
+          />
         </div>
         <CachedAvatar
           v-if="messageReaction.count === 1 && messageReaction.user"
@@ -79,7 +87,11 @@
             </div>
 
             <div class="message-reactions-details__emoji">
-              {{ reaction.emoji }}
+              <EmojiIcon
+                class="message-reactions-details__emoji-icon"
+                :emoji="reaction.emoji"
+                :animated="true"
+              />
             </div>
           </button>
         </div>
@@ -93,7 +105,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { Reaction } from '@pksep/zod-shared-chat';
 import { setReactionMessage } from '../../services/useChat';
 import { useUrlWatcher } from '../../composables/navigation';
@@ -102,19 +114,29 @@ import { getUserById } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
 import type { IUser } from '../interfaces/interfaces';
 import CachedAvatar from '../UI/CachedAvatar.vue';
+import EmojiIcon from '../UI/EmojiIcon.vue';
+import { useUserInfoModal } from '../../composables/useUserInfoModal';
+import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
 
 const LONG_PRESS_DELAY_MS = 450;
 const VIEWPORT_OFFSET_PX = 8;
 
 const props = defineProps<{ reactions: Reaction[] }>();
 
-type MessageReactions = Reaction & { count: number; user?: IUser };
+const currentUserId = computed(() => getAuthUser()?.id || '');
+
+type MessageReactions = Reaction & {
+  count: number;
+  user?: IUser;
+  isOwn: boolean;
+};
 
 type ReactionDetailsItem = {
   id: string;
   messageId: string;
   emoji: string;
   userId: string;
+  user?: IUser;
   name: string;
   avatarPath: string;
   avatarInitials: string;
@@ -128,11 +150,14 @@ const reactionContent = computed<Record<string, MessageReactions>>(
       (aggr, val) => {
         if (aggr[val.text]?.count > 0) {
           aggr[val.text].count++;
+          aggr[val.text].isOwn =
+            aggr[val.text].isOwn || val.senderUserId === currentUserId.value;
         } else {
           aggr[val.text] = {
             ...val,
             count: 1,
-            user: getUserById(val.senderUserId)
+            user: getUserById(val.senderUserId),
+            isOwn: val.senderUserId === currentUserId.value
           };
         }
         return aggr;
@@ -141,11 +166,22 @@ const reactionContent = computed<Record<string, MessageReactions>>(
     ) || {}
 );
 
+watch(
+  reactionContent,
+  value => {
+    preloadNotoEmojiAssets(Object.keys(value), {
+      highPriority: true
+    });
+  },
+  {
+    immediate: true
+  }
+);
+
 const route = useUrlWatcher();
 const canShowReactionDetails = computed(
   () => route.value.type === RouteTypes.GROUP
 );
-const currentUserId = computed(() => getAuthUser()?.id || '');
 const showReactionDetails = ref(false);
 const reactionDetailsPanelRef = ref<HTMLElement | null>(null);
 const reactionDetailsStyle = ref<Record<string, string>>({
@@ -155,6 +191,7 @@ const reactionDetailsStyle = ref<Record<string, string>>({
 const reactionDetailsAnchor = ref({ x: 0, y: 0 });
 let longPressTimeout: ReturnType<typeof setTimeout> | null = null;
 let suppressNextToggle = false;
+const { openUserInfo } = useUserInfoModal();
 
 const reactionDetails = computed<ReactionDetailsItem[]>(() =>
   [...(props.reactions || [])]
@@ -170,6 +207,7 @@ const reactionDetails = computed<ReactionDetailsItem[]>(() =>
         messageId: reaction.messageId,
         emoji: reaction.text,
         userId: reaction.senderUserId,
+        user,
         name,
         avatarPath: user?.avatarUrl || '',
         avatarInitials: user?.initials || user?.nickname || name,
@@ -289,6 +327,9 @@ const handleTouchStart = (event: TouchEvent) => {
 
 const handleReactionDetailsItemClick = (reaction: ReactionDetailsItem) => {
   if (!reaction.isOwn) {
+    if (reaction.user) {
+      openUserInfo(reaction.user);
+    }
     return;
   }
 

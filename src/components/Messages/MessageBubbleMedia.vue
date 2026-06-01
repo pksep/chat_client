@@ -12,6 +12,7 @@
             !props.isMeSender && !isDialogRoute && !props.continuesFromPrevious
           "
           :sender="props.sender"
+          :sender-user="props.senderUser"
           :sender-role="props.senderRole"
           :data-testid="`${props.dataTestid}-AuthorMeta`"
         />
@@ -53,6 +54,7 @@
                 :alt="props.sender ? props.sender + ' image' : 'Shared image'"
                 :style="getPreviewStyle(media)"
                 loading="lazy"
+                fetchpriority="low"
                 decoding="async"
                 @load="captureImagePreviewMetrics(media, $event)"
                 @click.stop="$emit('set-slider', mediaFiles, i)"
@@ -60,13 +62,14 @@
               />
 
               <div
-                v-if="typeof media.isLoading === 'boolean' || media.uploadError"
+                v-if="shouldShowMediaLoading(media)"
                 class="message-content__media-loading"
               >
                 <LoadingIcon
-                  v-if="!media.uploadError"
-                  :is-loaded="!media.isLoading"
-                  :percent="media.uploadPercent ?? null"
+                  :is-loaded="false"
+                  :percent="
+                    media.isLoading ? media.uploadPercent ?? null : null
+                  "
                 />
               </div>
 
@@ -98,9 +101,12 @@
           class="message-media__caption message-content--text"
         >
           <div
+            ref="messageHtmlRef"
             class="message-media__caption-text message-content__html"
+            v-emoji
             v-html="props.message"
             :data-testid="`${props.dataTestid}-MessageText`"
+            @click="handleMentionUserClick"
           ></div>
           <div
             v-if="!hasReactions"
@@ -150,7 +156,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { MediaType } from '@pksep/zod-shared-chat';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import LoadingIcon from '../UI/LoadingIcon.vue';
@@ -166,6 +172,8 @@ import type { IMessageBubbleProps } from './interface/interface';
 import type { IMedia } from '../interfaces/interfaces';
 import MessageReferenceBlock from './MessageReferenceBlock.vue';
 import MessageAuthorMeta from './MessageAuthorMeta.vue';
+import { useMentionUserClick } from './composables/useMentionUserClick';
+import { MessageStatus } from '../../services/useChatSDK/types';
 
 const props = defineProps<IMessageBubbleProps>();
 defineEmits(['navigate-message', 'set-slider']);
@@ -175,6 +183,9 @@ const { getFullMediaPath, primeMediaCache, isMediaPathReady, EMPTY_MEDIA_SRC } =
 
 const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
+const messageHtmlRef = ref<HTMLElement | null>(null);
+const { handleMentionUserClick, syncMentionUserInteractivity } =
+  useMentionUserClick();
 
 const mediaFiles = computed(
   () => props.media?.filter(media => media.type !== MediaType.File) || []
@@ -208,6 +219,10 @@ const articleInlineStyle = computed(() => {
   };
 });
 const mediaArticleRef = ref<HTMLElement | null>(null);
+const syncMentions = async (): Promise<void> => {
+  await nextTick();
+  syncMentionUserInteractivity(messageHtmlRef.value);
+};
 const replyReferenceWidth = useReferenceWidth(mediaArticleRef, {
   freezeAfterFirstMeasure: true
 });
@@ -239,7 +254,17 @@ watch(
   }
 );
 
+watch(
+  () => props.message,
+  () => {
+    void syncMentions();
+  },
+  { immediate: true }
+);
+
 onMounted(() => {
+  void syncMentions();
+
   if (
     mediaArticleRef.value &&
     isNearViewport(mediaArticleRef.value) &&
@@ -280,15 +305,25 @@ onUnmounted(() => {
 });
 
 const showErrorIcon = computed(
-  () =>
-    (props.messageStatus === 'NOT_DELIVERED' &&
-      !mediaFiles.value.some(media => media.isLoading)) ||
-    mediaFiles.value.some(media => media.uploadError && !media.isLoading)
+  () => props.messageStatus === MessageStatus.NotDelivered
 );
 
+const shouldShowMediaLoading = (media: IMedia): boolean =>
+  Boolean(
+    media.isLoading ||
+      (media.uploadError && props.messageStatus !== MessageStatus.NotDelivered)
+  );
+
 const getPreviewStyle = (media: IMedia): Record<string, string> => {
-  if (!media.ex?.previewWidth || !media.ex?.previewHeight) {
-    return {};
+  if (
+    media.ex?.fillPreview ||
+    !media.ex?.previewWidth ||
+    !media.ex?.previewHeight
+  ) {
+    return {
+      width: `100%`,
+      height: `100%`
+    };
   }
 
   return {
@@ -303,6 +338,10 @@ const savePreviewMetrics = (
   naturalWidth?: number,
   naturalHeight?: number
 ): void => {
+  if (media.ex?.fillPreview) {
+    return;
+  }
+
   const rect = element.getBoundingClientRect();
 
   media.ex = {

@@ -4,7 +4,18 @@
     class="message-reference-block"
     :class="{ 'message-reference-block--outgoing': props.isMeSender }"
   >
-    <div v-if="props.forwardUser" class="message-reference-forward">
+    <div
+      v-if="props.forwardUser"
+      :class="[
+        'message-reference-forward',
+        {
+          'message-reference-forward--interactive': canOpenUserInfo(
+            props.forwardUser
+          )
+        }
+      ]"
+      @click.stop="handleOpenUserInfo(props.forwardUser)"
+    >
       Переслано: от {{ props.forwardUser.initials }}
     </div>
 
@@ -40,8 +51,20 @@
         class="message-reference-reply__content"
         :style="replyContentInlineStyle"
       >
-        <div class="message-reference-reply__author">{{ replyAuthor }}</div>
         <div
+          :class="[
+            'message-reference-reply__author',
+            {
+              'message-reference-reply__author--interactive': canOpenUserInfo(
+                props.replyMessage?.senderUser
+              )
+            }
+          ]"
+        >
+          {{ replyAuthor }}
+        </div>
+        <div
+          v-emoji
           class="message-reference-reply__text"
           :style="replyTextInlineStyle"
         >
@@ -58,6 +81,7 @@ import { MediaType } from '@pksep/zod-shared-chat';
 import FileIcon from '../UI/FileIcon.vue';
 import { useMessageMedia } from './composables/useMessageMedia';
 import type { IMessageBubbleProps } from './interface/interface';
+import { useUserInfoModal } from '../../composables/useUserInfoModal';
 
 const props = defineProps<{
   forwardUser?: IMessageBubbleProps['forwardUser'];
@@ -70,6 +94,7 @@ const props = defineProps<{
 defineEmits(['navigate-message']);
 
 const { getFullMediaPath } = useMessageMedia();
+const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 
 const replyPreviewMedia = computed(() => {
   const medias = props.replyMessage?.media || [];
@@ -143,6 +168,16 @@ const shouldRenderReply = computed(() => {
   return Boolean(props.referenceWidth && props.referenceWidth > 0);
 });
 
+const handleOpenUserInfo = (
+  user?: IMessageBubbleProps['forwardUser']
+): void => {
+  if (!user) {
+    return;
+  }
+
+  openUserInfo(user);
+};
+
 const replyText = computed(() => {
   const replyMessage = props.replyMessage;
   const previewMedia = replyPreviewMedia.value;
@@ -167,3 +202,10 @@ const replyText = computed(() => {
   return rawText || 'Вложение';
 });
 </script>
+
+<style scoped>
+.message-reference-forward--interactive,
+.message-reference-reply__author--interactive {
+  cursor: pointer;
+}
+</style>

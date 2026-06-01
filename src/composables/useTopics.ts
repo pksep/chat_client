@@ -1,6 +1,6 @@
 import { ref, computed, watch } from 'vue';
 import { getChatSDK } from '../services/useChat';
-import { IMessage, ITopic, IUser } from '../components/interfaces/interfaces';
+import { ITopic, IUser } from '../components/interfaces/interfaces';
 import {
   Message,
   TopicSetting,
@@ -28,6 +28,10 @@ import {
   loadShadowReadState
 } from '../services/useShadowChatSync';
 import { getUserById } from './useUsers';
+import {
+  isUnreadIgnoredSystemMessage,
+  isUnreadTrackableMessage
+} from '../utils/messageTracking';
 
 const topics = ref<ITopic[]>([]);
 const loading = ref(false);
@@ -85,16 +89,6 @@ const createTopicsApi = () => {
     }
 
     return new Date(value).getTime();
-  };
-
-  const isNonTrackableSystemMessage = (
-    message?: Pick<IMessage, 'isSystem' | 'ex'> | null
-  ): boolean => {
-    if (!message) {
-      return false;
-    }
-
-    return message.isSystem === true;
   };
 
   const normalizeTypingUserIds = (typingUserIds?: string[]): string[] =>
@@ -170,7 +164,7 @@ const createTopicsApi = () => {
       !!authedUser.value?.id &&
       localMessages.some(
         message =>
-          !message.isSystem &&
+          isUnreadTrackableMessage(message) &&
           message.senderUserId !== authedUser.value?.id &&
           message.isReadByMe !== true
       );
@@ -178,7 +172,7 @@ const createTopicsApi = () => {
     if (
       resolvedUnreadCount <= 1 &&
       normalizedTopic.lastMessage &&
-      isNonTrackableSystemMessage(normalizedTopic.lastMessage) &&
+      isUnreadIgnoredSystemMessage(normalizedTopic.lastMessage) &&
       !hasLocalUnreadMessages
     ) {
       resolvedUnreadCount = 0;
@@ -209,6 +203,7 @@ const createTopicsApi = () => {
     items.map(topic => {
       const persistedTopic = { ...topic };
       delete persistedTopic.typingUserIds;
+      delete persistedTopic.activeCall;
 
       return persistedTopic;
     });
@@ -284,6 +279,24 @@ const createTopicsApi = () => {
       const response = await sdk.getTopics();
 
       setTopics(response.data);
+      const serverActiveCalls = response.data
+        .filter(
+          topic =>
+            !!topic.activeCall?.roomId &&
+            typeof topic.activeCall?.callType === 'string'
+        )
+        .map(topic => ({
+          roomId: topic.activeCall!.roomId,
+          topicId: topic.id,
+          callType: topic.activeCall!.callType || 'livekit',
+          startTime: topic.activeCall?.startTime ?? null,
+          participantCount: topic.activeCall?.participantCount,
+          groupMode: topic.activeCall?.groupMode,
+          elapsedDurationMs: topic.activeCall?.elapsedDurationMs
+        }));
+
+      const { syncServerActiveCalls } = await import('../services/useCalls');
+      await syncServerActiveCalls(serverActiveCalls);
       await warmShadowUnreadStateForTopics(topics.value);
       return response.data;
     } catch (err) {
@@ -508,7 +521,7 @@ const createTopicsApi = () => {
     );
     const unreadMessages = messages.filter(
       message =>
-        !message.isSystem &&
+        isUnreadTrackableMessage(message) &&
         message.senderUserId !== currentUserId &&
         message.isReadByMe !== true &&
         !previewReadIds.has(message.id)
@@ -529,7 +542,7 @@ const createTopicsApi = () => {
     const computedUnreadMessages = shadowReadStateExists
       ? messages.filter(message => {
           if (
-            message.isSystem ||
+            !isUnreadTrackableMessage(message) ||
             message.senderUserId === currentUserId ||
             previewReadIds.has(message.id)
           ) {
@@ -566,7 +579,7 @@ const createTopicsApi = () => {
         (hasLatestRangeCoverage && hasLatestMessageInLocalCache));
     const shouldSuppressUnreadForNonTrackableLatestMessage =
       !!latestKnownMessage &&
-      isNonTrackableSystemMessage(latestKnownMessage) &&
+      isUnreadIgnoredSystemMessage(latestKnownMessage) &&
       effectiveServerUnreadCount <= 1 &&
       unreadMessages.length === 0;
 
@@ -751,7 +764,7 @@ const createTopicsApi = () => {
       return;
     }
 
-    const nextTypingUserIds = new Set(topic.typingUserIds || []);
+    const nextTypingUserIds = new Set<string>(topic.typingUserIds || []);
 
     if (isTyping) {
       nextTypingUserIds.add(userId);

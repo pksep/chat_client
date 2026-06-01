@@ -11,15 +11,16 @@
       <LeaveIcon />
       <span>{{ resolvedHeaderCallLabel }}</span>
 
-      <span
-        v-if="isCallActive && !isAnyCallDialing"
-        class="chat__header-active-call__time"
-      >
-        {{ activeCallFormattedTime }}
+      <span v-if="showHeaderCallTime" class="chat__header-active-call__time">
+        {{ headerCallTimeLabel }}
       </span>
     </div>
 
-    <div class="chat__header-main" @click="handleClickHeader">
+    <div
+      v-if="!!isMobile || route.type === 'ai' || !!currentTopic"
+      class="chat__header-main"
+      @click="handleClickHeader"
+    >
       <Button
         v-if="isMobile"
         :type="ButtonTypeEnum.ghost"
@@ -55,14 +56,21 @@
           :topic="currentGroup || currentTopic"
           :typing-label="headerTypingLabel || undefined"
           :data-testid="`${props.dataTestid}-Header-GroupProfile`"
+          @click.stop="handleClickHeader"
         />
         <UserProfile
           v-else-if="currentTopic.type === TopicType.DM"
-          class="chat__header-profile"
+          :class="[
+            'chat__header-profile',
+            {
+              'user-profile--interactive': canOpenUserInfo(currentTopic.user)
+            }
+          ]"
           avatar-alt="user-profile-alt"
           :user="currentTopic.user"
           :typing-label="headerTypingLabel || undefined"
           :data-testid="`${props.dataTestid}-Header-UserProfile`"
+          @click.stop="handleUserProfileClick"
         />
       </template>
 
@@ -94,13 +102,42 @@
           :data-testid="`${props.dataTestid}-Header-CallIcon`"
           @click.stop="handleCall"
         />
-        <Popover
-          class="chat__header-popover"
-          :options="getPopoverOptions"
-          isWCUse
-          :data-testid="`${props.dataTestid}-Header-Popover`"
-          :icon-name="IconNameEnum.moreHorizontal"
+        <Icon
+          class="chat__header__icon chat__header__icon--more"
+          :name="IconNameEnum.moreHorizontal"
+          :data-testid="`${props.dataTestid}-Header-PopoverIcon`"
+          @click.stop="
+            event => openActivePopover('headerMenu', event as MouseEvent)
+          "
         />
+        <ContextMenu
+          class="chat__header-context-menu"
+          :visible="!!isOpen['headerMenu']"
+          :position="position"
+          :data-testid="`${props.dataTestid}-Header-ContextMenu`"
+          @unmount-close="closeActivePopover('headerMenu')"
+          @click="closeActivePopover('headerMenu')"
+        >
+          <Button
+            v-for="option in getHeaderContextMenuOptions"
+            :key="option.value"
+            :type="ButtonTypeEnum.ghost"
+            :size="SizesEnum.small"
+            :style="option.style"
+            :class="[
+              'chat__header-context-menu-button',
+              {
+                'red-context-button':
+                  option.style?.includes('var(--error-color)')
+              }
+            ]"
+            :data-testid="`${props.dataTestid}-Header-ContextMenu-${option.value}`"
+            @click="handleContextMenuAction(option.function)"
+          >
+            <Icon v-if="option.iconName" :name="option.iconName" />
+            {{ option.value }}
+          </Button>
+        </ContextMenu>
       </div>
     </div>
   </header>
@@ -119,6 +156,23 @@
       :show-add-button="currentGroup?.isAdmin"
       :data-testid="props.dataTestid"
       @update:model-value="handleUpdateInformation"
+      @unmount-open-chat="handleCloseMobileInfoModal"
+    />
+  </MobileModal>
+
+  <MobileModal
+    :open="state.openMobileUserProfileModal"
+    title="Информация"
+    close-button-text="Назад"
+    :class="{ 'chat__header-modal-info--active': true }"
+    :data-testid="`${props.dataTestid}-Header-MobileUserProfileModal`"
+    @unmount-close="handleCloseMobileUserProfileModal"
+  >
+    <UserInfoPanel
+      :user="currentTopic?.user"
+      :topic="currentTopic"
+      :data-testid="`${props.dataTestid}-Header-UserInfoPanel`"
+      @close="handleCloseMobileUserProfileModal"
     />
   </MobileModal>
 
@@ -132,7 +186,15 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, nextTick, onUnmounted, reactive, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  watch
+} from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';
@@ -144,8 +206,7 @@ import {
   IconNameEnum,
   ButtonTypeEnum,
   SizesEnum,
-  Search,
-  Popover
+  Search
 } from '@pksep/yui';
 
 import type { IHeaderProps, IHeaderEmits } from '../interfaces/interfaces';
@@ -176,6 +237,7 @@ import ConfirmModal from '../UI/ConfirmModal.vue';
 import { TopicType } from '../../services/useChatSDK/types';
 import CallIcon from '../CallModal/UI/CallIcon.vue';
 import SearchIcon from '../UI/SearchIcon.vue';
+import ContextMenu from '../ContactList/ContextMenu.vue';
 import {
   activeCallParticipantCount,
   activeCallTopicId,
@@ -196,8 +258,14 @@ import {
 } from '../../services/useLiveKit';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
+import UserInfoPanel from '../UserInfoPanel.vue';
+import { useUserInfoModal } from '../../composables/useUserInfoModal';
+import { useContextMenu } from '../../composables/useContextMenu';
 
 const { getSelectedTopic } = useTopics();
+const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
+const { isOpen, position, openActivePopover, closeActivePopover } =
+  useContextMenu();
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
   dataTestid: 'Header'
@@ -213,6 +281,7 @@ const emits = defineEmits<IHeaderEmits>();
 const state = reactive({
   loader: false,
   openMobileInfoModal: false,
+  openMobileUserProfileModal: false,
   isSearchInputEnable: false,
   openActionModal: false,
   calledUser: null,
@@ -251,8 +320,25 @@ const currentPendingCall = computed(
   () => pendingGroupCallInfo.value?.[route.value.id || ''] || null
 );
 const currentInvitedCall = computed(() => invitedGroupCallInfo.value || null);
+const currentTopicActiveCall = computed(
+  () => currentTopic.value?.activeCall || null
+);
+const activeCallTopicEntry = computed(
+  () =>
+    activeCallTopic.value?.activeCall ||
+    (activeCallTopicId.value
+      ? pendingGroupCallInfo.value?.[activeCallTopicId.value] || null
+      : null)
+);
+const currentHeaderCallEntry = computed(
+  () =>
+    currentPendingCall.value ||
+    currentTopicActiveCall.value ||
+    activeCallTopicEntry.value ||
+    null
+);
 const hasPendingCallForCurrentTopic = computed(
-  () => !!currentPendingCall.value
+  () => !!currentPendingCall.value || !!currentTopicActiveCall.value?.roomId
 );
 const hasInvitedCall = computed(
   () => !!currentInvitedCall.value?.isJoinAvailable
@@ -261,9 +347,52 @@ const hasInvitedCall = computed(
 const showHeaderCallBanner = computed(
   () =>
     (isCallActive.value && !isAnyCallModalVisible.value) ||
-    hasPendingCallForCurrentTopic.value ||
+    !!currentHeaderCallEntry.value ||
     hasInvitedCall.value
 );
+const currentTime = ref(Date.now());
+let headerCallTimerInterval: ReturnType<typeof setInterval> | null = null;
+
+const formatElapsedCallTime = (durationMs: number): string => {
+  const elapsedSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  const hours = Math.floor(elapsedSeconds / 3600);
+  const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+  const seconds = elapsedSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+};
+
+const headerCallTimeLabel = computed(() => {
+  if (isCallActive.value && !isAnyCallDialing.value) {
+    return activeCallFormattedTime.value;
+  }
+
+  const entry = currentHeaderCallEntry.value;
+  if (!entry) {
+    return '';
+  }
+
+  const elapsedDurationMs = entry.elapsedDurationMs ?? 0;
+  const startTime = entry.startTime;
+
+  if (typeof startTime === 'number' && Number.isFinite(startTime)) {
+    return formatElapsedCallTime(
+      elapsedDurationMs + Math.max(0, currentTime.value - startTime)
+    );
+  }
+
+  if (elapsedDurationMs > 0) {
+    return formatElapsedCallTime(elapsedDurationMs);
+  }
+
+  return '';
+});
+
+const showHeaderCallTime = computed(() => !!headerCallTimeLabel.value);
 
 const isActiveDirectCallLabel = computed(
   () =>
@@ -290,8 +419,7 @@ const resolvedHeaderCallLabel = computed(() => {
     return (
       activeCallUser.value?.initials ||
       activeCallTopic.value?.user?.initials ||
-      activeCallTopic.value?.user?.nickname ||
-      'Call'
+      'Групповой звонок'
     );
   }
 
@@ -338,7 +466,7 @@ const handleHeaderCallClick = async () => {
     return;
   }
 
-  if (hasPendingCallForCurrentTopic.value && !isCallActive.value) {
+  if (currentHeaderCallEntry.value && !isCallActive.value) {
     await joinGroupCall(route.value.id);
     return;
   }
@@ -350,11 +478,25 @@ const handleCloseMobileInfoModal = (): void => {
   state.openMobileInfoModal = false;
 };
 
+const handleCloseMobileUserProfileModal = (): void => {
+  state.openMobileUserProfileModal = false;
+};
+
+const handleUserProfileClick = (): void => {
+  if (currentTopic.value?.type !== TopicType.DM || !currentTopic.value?.user) {
+    return;
+  }
+
+  openUserInfo(currentTopic.value.user, currentTopic.value);
+};
+
 const handleClickHeader = async (): Promise<void> => {
-  if (
-    route.value.type === RouteTypes.DIALOGS ||
-    route.value.type === RouteTypes.AI
-  ) {
+  if (route.value.type === RouteTypes.AI) {
+    return;
+  }
+
+  if (route.value.type === RouteTypes.DIALOGS) {
+    handleUserProfileClick();
     return;
   }
 
@@ -376,7 +518,7 @@ const getPopoverOptions = computed(() => {
       popoverArray.push({
         value: 'Информация',
         function: () => {
-          emits('unmount-information');
+          void handleClickHeader();
         }
       });
     }
@@ -419,8 +561,48 @@ const getPopoverOptions = computed(() => {
   return popoverArray;
 });
 
+const getHeaderContextMenuOptions = computed(() => {
+  return getPopoverOptions.value.map((option, index) => {
+    let iconName: IconNameEnum | undefined;
+
+    if (route.value.type === RouteTypes.AI) {
+      iconName = IconNameEnum.deleteSmall;
+    } else if (route.value.type === RouteTypes.GROUP) {
+      if (index === 0) {
+        iconName = IconNameEnum.info;
+      } else if (index === 1) {
+        iconName = currentTopic.value?.info.isMute
+          ? IconNameEnum.distrub
+          : IconNameEnum.noDistrub;
+      } else {
+        iconName = currentGroup.value?.isAdmin
+          ? IconNameEnum.deleteSmall
+          : IconNameEnum.logout;
+      }
+    } else {
+      if (index === 0) {
+        iconName = currentTopic.value?.info.isMute
+          ? IconNameEnum.distrub
+          : IconNameEnum.noDistrub;
+      } else {
+        iconName = IconNameEnum.deleteSmall;
+      }
+    }
+
+    return {
+      ...option,
+      iconName
+    };
+  });
+});
+
 const handleOpenActionModal = () => {
   state.openActionModal = true;
+};
+
+const handleContextMenuAction = (callback: () => void) => {
+  closeActivePopover('headerMenu');
+  callback();
 };
 
 const handleCloseActionModal = () => {
@@ -458,6 +640,8 @@ const handleExit = (): void => {
 watch(
   () => route.value.id,
   () => {
+    state.openMobileUserProfileModal = false;
+
     if (route.value.type === RouteTypes.GROUP) {
       getGroupById(route.value.id);
     }
@@ -467,7 +651,18 @@ watch(
   }
 );
 
+onMounted(() => {
+  headerCallTimerInterval = setInterval(() => {
+    currentTime.value = Date.now();
+  }, 1000);
+});
+
 onUnmounted(() => {
+  if (headerCallTimerInterval) {
+    clearInterval(headerCallTimerInterval);
+    headerCallTimerInterval = null;
+  }
+
   currentGroup.value = null;
 });
 </script>

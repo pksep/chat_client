@@ -28,6 +28,7 @@ export interface IHeaderEmits {
   (e: 'unmount-contact', contact: IUser): void;
   (e: 'unmount-notification', statusNotification?: string): void;
   (e: 'unmount-information', info?: boolean): void;
+  (e: 'unmount-user-profile', info?: boolean): void;
   (e: 'unmount-clear'): void;
   (e: 'unmount-exit'): void;
 }
@@ -43,6 +44,7 @@ export interface IUserStatus {
 
 export type IUser = User & {
   status?: IUserStatus | null;
+  ex?: unknown;
 };
 
 export type IGroup = Group & {
@@ -54,6 +56,14 @@ export type ITopic = Topic & {
   info?: Partial<TopicSetting>;
   isPin?: boolean;
   lastMessage?: IMessage;
+  activeCall?: {
+    roomId: string;
+    startTime?: number | null;
+    participantCount?: number;
+    callType?: string;
+    groupMode?: boolean;
+    elapsedDurationMs?: number;
+  } | null;
   members?: IUser[];
   group?: Group;
   user?: IUser;
@@ -88,6 +98,7 @@ export type IMedia = Media & {
     height?: number;
     previewWidth?: number;
     previewHeight?: number;
+    fillPreview?: boolean;
   };
   isLoading?: boolean;
   thumbnailPath?: string | null;

@@ -6,8 +6,38 @@
   --default-height: 100dvh;
 }
 
+@font-face {
+  font-family: 'Noto Emoji COLRv1 Web';
+  src: url('/emoji/noto/fonts/Noto-COLRv1.ttf') format('truetype');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Noto Emoji Compat Web';
+  src: url('/emoji/noto/fonts/Noto-COLRv1-emojicompat.ttf') format('truetype');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Noto Emoji Windows Web';
+  src: url('/emoji/noto/fonts/NotoColorEmoji_WindowsCompatible.ttf')
+    format('truetype');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Noto Color Emoji Web';
+  src:
+    local('Noto Color Emoji'),
+    local('NotoColorEmoji'),
+    url('/emoji/noto/fonts/NotoColorEmoji.ttf') format('truetype');
+  font-display: swap;
+}
+
 body {
-  font-family: 'Inter Variable', sans-serif;
+  font-family: 'Inter Variable', 'Noto Emoji COLRv1 Web',
+    'Noto Emoji Compat Web', 'Noto Emoji Windows Web', 'Noto Color Emoji Web',
+    'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
   overflow-x: hidden;
 }
 
@@ -26,6 +56,7 @@ button {
   padding: 0;
   background-color: transparent;
   margin: 0;
+  font-family: inherit;
 }
 
 h3,
@@ -41,4 +72,92 @@ ul {
   list-style: none;
   padding: 0;
   margin: 0;
+}
+
+input,
+textarea,
+select,
+.emoji-font-host,
+.emoji-font-host input,
+.emoji-font-host textarea,
+.emoji-font-host [contenteditable='true'],
+.emoji-font-host .ProseMirror,
+.menu-profile__status-input,
+.v3-emoji-picker,
+.v3-emoji-picker button,
+.v3-emoji-picker input,
+.v3-emoji-picker span,
+.v3-input-emoji-picker,
+.v3-input-emoji-picker .v3-emoji-picker-input,
+.v3-input-emoji-picker .v3-emoji-picker-textarea {
+  font-family: inherit;
+}
+
+.chat__input,
+.chat__input [class*='yui-kit'],
+.chat__input .editor-component,
+.chat__input .editor-content,
+.chat__input .tiptap,
+.chat__input .ProseMirror,
+.chat__input .ProseMirror *,
+.chat__input .v3-emoji-picker,
+.chat__input .v3-emoji-picker *,
+.chat__input [contenteditable='true'] {
+  font-family: 'Inter Variable', 'Noto Emoji COLRv1 Web',
+    'Noto Emoji Compat Web', 'Noto Emoji Windows Web', 'Noto Color Emoji Web',
+    'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif !important;
+}
+
+[data-emoji-pending='true'] {
+  visibility: hidden;
+}
+
+.emoji-glyph {
+  position: relative;
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+  vertical-align: -0.3em;
+  min-width: 18px;
+  min-height: 18px;
+  overflow: hidden;
+}
+
+.emoji-glyph__text {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  user-select: text;
+  pointer-events: none;
+}
+
+.emoji-glyph__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.emoji-glyph[data-emoji-loaded='true'] .emoji-glyph__image {
+  opacity: 1;
+}
+
+.emoji-glyph--fallback {
+  width: auto;
+  height: auto;
+  vertical-align: baseline;
+}
+
+.emoji-glyph--fallback .emoji-glyph__text {
+  position: static;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.emoji-glyph--fallback .emoji-glyph__image {
+  display: none;
 }

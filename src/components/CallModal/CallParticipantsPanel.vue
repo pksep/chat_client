@@ -39,11 +39,23 @@
           playsinline
           class="call-modal__remote-video"
         ></video>
+        <ReactionVideoOverlay
+          v-if="participant.activeReactionVideoSrc"
+          :src="participant.activeReactionVideoSrc"
+          :video-key="participant.activeReactionVideoKey"
+          class-name="call-modal__remote-reaction-video"
+        />
         <div
           v-if="!participant.isVideoActive"
           class="call-modal__remote-placeholder"
+          :class="{
+            'call-modal__remote-placeholder--background':
+              !!participant.backgroundPlaceholderStyle
+          }"
+          :style="participant.backgroundPlaceholderStyle || undefined"
         >
           <CachedAvatar
+            v-if="!participant.backgroundPlaceholderStyle"
             :path="participant.avatarUrl"
             :alt="participant.name"
             class="call-modal__avatar"
@@ -98,11 +110,13 @@
 </template>
 
 <script setup lang="ts">
+import type { CSSProperties } from 'vue';
 import { Icon, IconNameEnum } from '@pksep/yui';
 import HandRaiseIcon from './UI/HandRaiseIcon.vue';
 import MicDisableIcon from './UI/MicDisableIcon.vue';
 import MicIcon from './UI/MicIcon.vue';
 import ScreenShareParticipantsStrip from './ScreenShareParticipantsStrip.vue';
+import ReactionVideoOverlay from './ReactionVideoOverlay.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 
 const emit = defineEmits<{
@@ -119,9 +133,13 @@ defineProps<{
     isVideoActive: boolean;
     isLocal: boolean;
     isHandRaised: boolean;
+    activeReactionEmoji: string;
+    activeReactionVideoSrc: string;
+    activeReactionVideoKey: string;
     isSpeaking: boolean;
     isMicActive: boolean;
     hasAudio: boolean;
+    backgroundPlaceholderStyle?: CSSProperties | null;
   }>;
   focusedParticipant: {
     identity: string;
@@ -130,7 +148,11 @@ defineProps<{
     initials: string;
     avatarUrl: string;
     isHandRaised: boolean;
+    activeReactionEmoji: string;
+    activeReactionVideoSrc: string;
+    activeReactionVideoKey: string;
     isMicActive: boolean;
+    backgroundPlaceholderStyle?: CSSProperties | null;
   } | null;
   currentPage: number;
   currentPageParticipantCount: number;

@@ -38,6 +38,7 @@
           :data-testid="`${props.dataTestid}-MessageList-SystemMessageUser${item.index + 1}`"
         >
           <span
+            v-emoji
             :class="[
               'system-message-text',
               {
@@ -67,10 +68,18 @@
             shouldShowGroupAvatar &&
             shouldRenderGroupAvatar(item.messages[0])
           "
-          class="message-group__avatar"
+          :class="[
+            'message-group__avatar',
+            {
+              'message-group__avatar--interactive': canOpenUserInfo(
+                item.messages[0].senderUser
+              )
+            }
+          ]"
           :path="item.messages[0].senderUser?.avatarUrl || ''"
           :alt="item.messages[0].senderUser?.initials || ''"
           :initials="item.messages[0].senderUser?.initials || ''"
+          @click.stop="openUserInfo(item.messages[0].senderUser)"
         />
 
         <div class="message-group__messages">
@@ -126,6 +135,8 @@ import { parseUserEx } from '../../utils/parseUserEx';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import { isMessagePinnedForMe } from '../../services/useMessages';
+import { isUnreadTrackableMessage } from '../../utils/messageTracking';
+import { useUserInfoModal } from '../../composables/useUserInfoModal';
 
 interface Props {
   dataTestid: string;
@@ -152,6 +163,7 @@ const props = defineProps<Props>();
 const route = useUrlWatcher();
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const quotedOverflowMessageIds = ref<Set<string>>(new Set());
+const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 
 defineEmits([
   'setEditMessage',
@@ -248,7 +260,7 @@ const toggleMessage = (message: IMessage) => {
 };
 
 const isUnreadForCurrentUser = (message?: IMessage): boolean => {
-  if (!message || message.isSystem) {
+  if (!message || !isUnreadTrackableMessage(message)) {
     return false;
   }
 
@@ -261,7 +273,6 @@ const shouldShowUnreadMarker = (message: IMessage): boolean => {
   if (
     props.hideUnreadMarker ||
     !props.unreadMarkerMessageId ||
-    message.isSystem ||
     message.id !== props.unreadMarkerMessageId
   ) {
     return false;
@@ -406,6 +417,7 @@ const getBubbleProps = (message: IMessage, index: number) => ({
   isMeSender: resolveMessageIsMeSender(message),
   time: formatTime(new Date(message.createdAt)),
   sender: message.senderUser?.initials || '',
+  senderUser: message.senderUser,
   senderRole: parseUserEx(message.senderUser?.ex)?.erpRole || '',
   avatar: message.senderUser?.avatarUrl || '',
   isRead: message.status === MessageStatus.Read,
@@ -438,3 +450,9 @@ defineExpose({
   unreadMessageStartRef
 });
 </script>
+
+<style scoped>
+.message-group__avatar--interactive {
+  cursor: pointer;
+}
+</style>

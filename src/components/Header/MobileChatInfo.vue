@@ -41,6 +41,7 @@
       v-if="props.isMenuInfo"
       :data-testid="`${props.dataTestid}-Header-MenuInfoButtons`"
       @unmount-leave="handleUnmountLeave"
+      @unmount-open-chat="emits('unmount-open-chat')"
     />
     <p
       class="modal-info-mobile__end--paragraph"
@@ -87,6 +88,7 @@ const props = withDefaults(defineProps<IMobileChatInfoProps>(), {
 
 const emits = defineEmits<{
   (e: 'unmount-added-users', selectedUsers: IUser[]): void;
+  (e: 'unmount-open-chat'): void;
 }>();
 
 const excludedContactIds = computed(() => {

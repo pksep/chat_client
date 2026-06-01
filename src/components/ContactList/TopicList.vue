@@ -20,7 +20,10 @@
           'contact-list__item',
           {
             'contact-list__item--active':
-              topic.id === props.selectedTopicId || isOpen[topic.id]
+              topic.id === props.selectedTopicId ||
+              isOpen[topic.id] ||
+              props.selectedTopicIds.has(topic.id),
+            'contact-list__item--selection': props.showCheckbox
           }
         ]"
         role="button"
@@ -28,20 +31,42 @@
         :aria-expanded="isOpen[topic.id] ? 'true' : 'false'"
         :aria-haspopup="true"
         @click="handleClick(topic)"
-        @contextmenu="openActivePopover(topic.id, $event)"
+        @contextmenu="
+          !props.showCheckbox && openActivePopover(topic.id, $event)
+        "
         @keydown.enter="handleClick(topic)"
         @keydown.space="handleClick(topic)"
       >
         <CachedAvatar
-          class="contact-list__avatar"
+          :class="[
+            'contact-list__avatar',
+            {
+              'contact-list__avatar--interactive':
+                !props.showCheckbox &&
+                topic.type === TopicType.DM &&
+                canOpenUserInfo(topic.user)
+            }
+          ]"
           :initials="topic.name"
           :path="topic.avatarUrl"
           :alt="`Avatar of ${topic.name}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           is-icon
           :is-online="isTopicUserOnline(topic)"
+          @click.stop="
+            !props.showCheckbox &&
+              topic.type === TopicType.DM &&
+              openUserInfo(topic.user, topic)
+          "
         />
-        <div class="contact-list__block--wrapper">
+        <div
+          :class="[
+            'contact-list__block--wrapper',
+            {
+              'contact-list__block--wrapper--selection': props.showCheckbox
+            }
+          ]"
+        >
           <h5
             role="heading"
             aria-level="5"
@@ -57,10 +82,24 @@
               size="small"
               :data-testid="`${props.dataTestid}-ContactList-StatusTooltip${index + 1}`"
             >
-              <span class="contact-list__title-status" @click.stop>
-                {{ getTopicStatusIcon(topic) }}
-              </span>
+              <EmojiIcon
+                class="contact-list__title-status"
+                :emoji="getTopicStatusIcon(topic)"
+                @click.stop
+              />
             </Tooltip>
+
+            <div
+              v-if="getTopicActiveCall(topic)"
+              class="contact-list__call-indicator"
+              :data-testid="`${props.dataTestid}-ContactList-Call${index + 1}`"
+              :aria-label="`Active call in ${topic.name}`"
+            >
+              <LeaveIcon class="contact-list__call-indicator-icon" />
+              <span class="contact-list__time contact-list__time--call">
+                {{ getTopicActiveCallTime(topic) }}
+              </span>
+            </div>
           </h5>
           <div
             v-if="topic.typingUserIds?.length"
@@ -72,6 +111,7 @@
           <div
             v-else-if="!!topic.lastMessage?.text"
             class="contact-list__description"
+            v-emoji
             :data-testid="`${props.dataTestid}-ContactList-Description${index + 1}`"
             :aria-label="`Latest message: ${stripHtml(topic.lastMessage?.text || 'No message')}`"
           >
@@ -110,9 +150,12 @@
 
             <p>{{ getTopicLastMessageLabel(topic.lastMessage?.media) }}</p>
           </div>
-          <div class="contact-list__top">
+          <div v-if="!props.showCheckbox" class="contact-list__top">
             <MessageStatusIcons
-              v-if="topic.lastMessage?.senderUserId === authedUser.id"
+              v-if="
+                topic.lastMessage?.senderUserId === authedUser.id &&
+                !topic.lastMessage?.isSystem
+              "
               :class="{
                 'contact-list__message-status-icons': true,
                 'is-read': topic.lastMessage?.status === MessageStatusEnum.READ
@@ -131,7 +174,7 @@
               {{ formatListTime(new Date(topic.lastMessage?.createdAt)) }}
             </span>
           </div>
-          <div class="contact-list__bottom">
+          <div v-if="!props.showCheckbox" class="contact-list__bottom">
             <div
               v-if="topic.taggedMe"
               class="contact-list__notification contact-list__mention"
@@ -160,8 +203,18 @@
             </div>
           </div>
         </div>
+        <Checkbox
+          v-if="props.showCheckbox"
+          class="contact-list__selection-checkbox"
+          :size="CheckboxSizeEnum.small"
+          :model-value="props.selectedTopicIds.has(topic.id)"
+          @click.stop
+          @update:model-value="() => handleClick(topic)"
+          :data-testid="`${props.dataTestid}-ContactList-Checkbox${index + 1}`"
+        />
       </div>
       <ContextMenu
+        v-if="!props.showCheckbox"
         :visible="!!isOpen[topic.id]"
         :position="position"
         :data-testid="`${props.dataTestid}-ContactList-ContextMenu${index + 1}`"
@@ -202,12 +255,20 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useContextMenu } from '../../composables/useContextMenu';
-import { Button, ButtonTypeEnum, SizesEnum, Tooltip } from '@pksep/yui';
+import {
+  Button,
+  ButtonTypeEnum,
+  Checkbox,
+  CheckboxSizeEnum,
+  SizesEnum,
+  Tooltip
+} from '@pksep/yui';
 import ContextMenu from './ContextMenu.vue';
 import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
+import EmojiIcon from '../UI/EmojiIcon.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { getAuthUser } from '../../composables/useAuth';
 import { IMedia, ITopic, MessageStatusEnum } from '../interfaces/interfaces';
@@ -233,11 +294,20 @@ import { getHasWebsocketConnection } from '../../services/useChat';
 import { useMessageMedia } from '../Messages/composables/useMessageMedia';
 import TypingIndicator from '../UI/TypingIndicator.vue';
 import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
-import { formatUserStatusLabel } from '../../utils/userStatus';
+import { formatUserStatusText } from '../../utils/userStatus';
+import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
 import {
   getTopicUnreadBadgeCount,
   hasTopicUnreadBadge
 } from '../../utils/topicUnreadBadge';
+import { useUserInfoModal } from '../../composables/useUserInfoModal';
+import {
+  activeCallFormattedTime,
+  activeCallTopicId,
+  isCallActive,
+  pendingGroupCallInfo
+} from '../../services/useCalls';
+import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
@@ -245,6 +315,7 @@ interface IExtendedContactListProps extends IContactListProps {
 }
 
 const { togglePinTopic, toggleMuteTopic, getTopicTypingUsers } = useTopics();
+const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   showCheckbox: false,
@@ -266,10 +337,54 @@ const authedUser = computed(() => getAuthUser());
 const isRecentlyReconnected = computed(() => getHasWebsocketConnection());
 const listRenderKey = ref(0);
 const { getFullMediaPath } = useMessageMedia();
+const currentTime = ref(Date.now());
+let currentTimeInterval: ReturnType<typeof setInterval> | null = null;
+
+const getTopicEffectiveUser = (topic: ITopic) =>
+  topic.type === TopicType.DM && topic.user?.id
+    ? getUserById(topic.user.id) || topic.user
+    : topic.user;
+
+const getTopicStatusIcon = (topic: ITopic): string =>
+  topic.type === TopicType.DM
+    ? getTopicEffectiveUser(topic)?.status?.icon || ''
+    : '';
 
 watch(isRecentlyReconnected, value => {
   if (!value) return;
   listRenderKey.value += 1;
+});
+
+watch(
+  () =>
+    props.topics
+      .map(topic => getTopicStatusIcon(topic))
+      .filter((icon): icon is string => Boolean(icon))
+      .join('|'),
+  iconsSignature => {
+    preloadNotoEmojiAssets(
+      iconsSignature ? iconsSignature.split('|').filter(Boolean) : [],
+      {
+        highPriority: true
+      }
+    );
+  },
+  {
+    immediate: true
+  }
+);
+
+onMounted(() => {
+  currentTimeInterval = setInterval(() => {
+    currentTime.value = Date.now();
+  }, 1000);
+});
+
+onBeforeUnmount(() => {
+  if (currentTimeInterval) {
+    clearInterval(currentTimeInterval);
+    currentTimeInterval = null;
+  }
 });
 
 const handlePin = (topic: ITopic): void => {
@@ -283,6 +398,11 @@ const handleMute = (topic: ITopic): void => {
 };
 
 const handleClick = (topic: ITopic): void => {
+  if (props.showCheckbox) {
+    emits('unmount-topic', topic);
+    return;
+  }
+
   if (isMobile.value) {
     if (topic.type === TopicType.DM) {
       navigateToDialogs(topic.id);
@@ -304,11 +424,6 @@ const isTopicUserOnline = (topic: ITopic): boolean =>
   !!topic.user &&
   !getUserLastOnline(topic.user) &&
   getHasWebsocketConnection();
-
-const getTopicEffectiveUser = (topic: ITopic) =>
-  topic.type === TopicType.DM && topic.user?.id
-    ? getUserById(topic.user.id) || topic.user
-    : topic.user;
 
 const getTopicLastMessageLabel = (media: IMedia[]): string => {
   let text = '';
@@ -334,17 +449,121 @@ const getTopicTypingLabel = (topic: ITopic): string =>
 
 const getTopicStatusLabel = (topic: ITopic): string =>
   topic.type === TopicType.DM
-    ? formatUserStatusLabel(getTopicEffectiveUser(topic)?.status)
+    ? formatUserStatusText(getTopicEffectiveUser(topic)?.status)
     : '';
 
-const getTopicStatusIcon = (topic: ITopic): string =>
-  topic.type === TopicType.DM
-    ? getTopicEffectiveUser(topic)?.status?.icon || ''
-    : '';
+const getTopicActiveCall = (topic: ITopic) => {
+  if (isCallActive.value && activeCallTopicId.value === topic.id) {
+    return {
+      roomId: topic.activeCall?.roomId || topic.id,
+      startTime: topic.activeCall?.startTime ?? null
+    };
+  }
+
+  return pendingGroupCallInfo.value?.[topic.id] || topic.activeCall || null;
+};
+
+const getTopicActiveCallTime = (topic: ITopic): string => {
+  if (isCallActive.value && activeCallTopicId.value === topic.id) {
+    return activeCallFormattedTime.value;
+  }
+
+  const startTime = getTopicActiveCall(topic)?.startTime;
+  const elapsedDurationMs = getTopicActiveCall(topic)?.elapsedDurationMs ?? 0;
+
+  if (typeof startTime !== 'number' || !Number.isFinite(startTime)) {
+    if (elapsedDurationMs > 0) {
+      const elapsedSeconds = Math.max(0, Math.floor(elapsedDurationMs / 1000));
+      const hours = Math.floor(elapsedSeconds / 3600);
+      const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+      const seconds = elapsedSeconds % 60;
+
+      if (hours > 0) {
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }
+
+      return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    return 'Звонок';
+  }
+
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor((elapsedDurationMs + (currentTime.value - startTime)) / 1000)
+  );
+  const hours = Math.floor(elapsedSeconds / 3600);
+  const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+  const seconds = elapsedSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+};
 </script>
 
 <style scoped>
+.contact-list__avatar--interactive {
+  cursor: pointer;
+}
+
 .contact-list__description--typing {
   color: var(--primary-color);
+}
+
+.contact-list__block--wrapper--selection .contact-list__description,
+.contact-list__block--wrapper--selection .contact-list__description p,
+.contact-list__block--wrapper--selection .contact-list__description strong {
+  width: calc(100vw - 180px);
+}
+
+.contact-list__block--wrapper--selection .contact-list__description::after,
+.contact-list__block--wrapper--selection .contact-list__description p::after,
+.contact-list__block--wrapper--selection
+  .contact-list__description
+  strong::after {
+  left: auto;
+  right: 0;
+  width: 56px;
+}
+
+.contact-list__item--selection.contact-list__item--active
+  .contact-list__description::after,
+.contact-list__item--selection.contact-list__item--active
+  .contact-list__description
+  p::after,
+.contact-list__item--selection.contact-list__item--active
+  .contact-list__description
+  strong::after {
+  background: linear-gradient(to right, transparent 0%, var(--blue15) 100%);
+}
+
+.contact-list__selection-checkbox {
+  margin-left: 12px;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.contact-list__call-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 20px;
+}
+
+.contact-list__call-indicator-icon {
+  color: var(--green2);
+  width: 20px;
+  transform: rotate(-120deg);
+}
+
+.contact-list__time--call {
+  color: var(--text-color);
+  font-size: 12px;
+  line-height: 15px;
+  font-weight: 400;
+  width: 50px;
 }
 </style>

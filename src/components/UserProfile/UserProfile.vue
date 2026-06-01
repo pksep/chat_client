@@ -4,7 +4,7 @@
     :class="['user-profile', $attrs.class]"
     @contextmenu="handleClick"
     :data-testid="`${dataTestid}-UserProfile-Container`"
-    @click="emits('click')"
+    @click="handleProfileClick"
   >
     <CachedAvatar
       :path="props.user.avatarUrl"
@@ -29,9 +29,7 @@
         size="small"
         :data-testid="`${dataTestid}-UserProfile-StatusTooltip`"
       >
-        <span class="user-profile__title-status">
-          {{ statusIcon }}
-        </span>
+        <EmojiIcon class="user-profile__title-status" :emoji="statusIcon" />
       </Tooltip>
     </h3>
     <ConnectionStatus v-if="!!isWaitingConnection" />
@@ -55,7 +53,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import { Tooltip } from '@pksep/yui';
 import { IUserProfileProps } from '../interfaces/interfaces';
 import { formatLastSeen } from '../../utils/dateUtils';
@@ -64,9 +62,11 @@ import { getAuthUser } from '../../composables/useAuth';
 import ConnectionStatus from '../UI/ConnectionStatus.vue';
 import { getHasWebsocketConnection } from '../../services/useChat';
 import CachedAvatar from '../UI/CachedAvatar.vue';
+import EmojiIcon from '../UI/EmojiIcon.vue';
 import TypingIndicator from '../UI/TypingIndicator.vue';
+import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
 import {
-  formatUserStatusLabel,
+  formatUserStatusText,
   normalizeUserStatus
 } from '../../utils/userStatus';
 
@@ -85,9 +85,21 @@ const currentStatus = computed(() =>
   normalizeUserStatus(effectiveUser.value.status)
 );
 const currentStatusLabel = computed(() =>
-  formatUserStatusLabel(effectiveUser.value.status)
+  formatUserStatusText(effectiveUser.value.status)
 );
 const statusIcon = computed(() => currentStatus.value?.icon || '');
+
+watch(
+  statusIcon,
+  icon => {
+    preloadNotoEmojiAssets(icon ? [icon] : [], {
+      highPriority: true
+    });
+  },
+  {
+    immediate: true
+  }
+);
 
 const formattedStatus = computed(() => {
   if (isCurrentUser.value) return `@${props.user.nickname}`;
@@ -100,15 +112,23 @@ defineOptions({
 
 const emits = defineEmits<{
   (e: 'unmount-click', event: MouseEvent): void;
-  (e: 'click'): void;
+  (e: 'click', event: MouseEvent): void;
 }>();
 
 const handleClick = (event: MouseEvent): void => {
   emits('unmount-click', event);
 };
+
+const handleProfileClick = (event: MouseEvent): void => {
+  emits('click', event);
+};
 </script>
 
 <style scoped>
+.user-profile--interactive {
+  cursor: pointer;
+}
+
 .user-profile__ex--typing {
   color: var(--primary-color);
 }

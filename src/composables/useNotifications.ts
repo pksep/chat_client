@@ -1,36 +1,76 @@
 import { reactive, readonly } from 'vue';
 import { MessageTypeEnum } from '@pksep/yui';
 
-interface INotificationState {
-  open: boolean;
+interface INotificationPayload {
   title: string;
   description: string;
-  type: MessageTypeEnum;
-  key: number;
+  type?: MessageTypeEnum;
 }
 
+export interface INotificationItem extends INotificationPayload {
+  key: number;
+  type: MessageTypeEnum;
+}
+
+interface INotificationState {
+  items: INotificationItem[];
+}
+
+const NOTIFICATION_TIMEOUT_MS = 3000;
+
 const state = reactive<INotificationState>({
-  open: false,
-  title: '',
-  description: '',
-  type: MessageTypeEnum.error,
-  key: 0
+  items: []
 });
+
+const closeNotificationTimeouts = new Map<
+  number,
+  ReturnType<typeof setTimeout>
+>();
+let nextNotificationKey = 1;
+
+const clearCloseNotificationTimeout = (key: number) => {
+  const timeout = closeNotificationTimeouts.get(key);
+
+  if (!timeout) {
+    return;
+  }
+
+  clearTimeout(timeout);
+  closeNotificationTimeouts.delete(key);
+};
+
+export const closeNotification = (key?: number) => {
+  if (typeof key !== 'number') {
+    state.items.forEach(item => clearCloseNotificationTimeout(item.key));
+    state.items = [];
+    return;
+  }
+
+  clearCloseNotificationTimeout(key);
+  state.items = state.items.filter(item => item.key !== key);
+};
 
 export const showNotification = ({
   title,
   description,
   type = MessageTypeEnum.error
-}: {
-  title: string;
-  description: string;
-  type?: MessageTypeEnum;
-}) => {
-  state.title = title;
-  state.description = description;
-  state.type = type;
-  state.open = true;
-  state.key += 1;
+}: INotificationPayload) => {
+  const notification: INotificationItem = {
+    key: nextNotificationKey,
+    title,
+    description,
+    type
+  };
+
+  nextNotificationKey += 1;
+  state.items = [...state.items, notification];
+
+  closeNotificationTimeouts.set(
+    notification.key,
+    setTimeout(() => {
+      closeNotification(notification.key);
+    }, NOTIFICATION_TIMEOUT_MS)
+  );
 };
 
 export const showErrorNotification = (description: string) => {
@@ -39,10 +79,6 @@ export const showErrorNotification = (description: string) => {
     description,
     type: MessageTypeEnum.error
   });
-};
-
-export const closeNotification = () => {
-  state.open = false;
 };
 
 export const useNotifications = () => ({
