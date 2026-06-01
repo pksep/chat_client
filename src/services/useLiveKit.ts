@@ -33,6 +33,7 @@ import {
 import { AudioOutput } from './useAudioOutput';
 import { prewarmCallBackgroundAssets } from './callBackgroundWarmup';
 import { copyTextToClipboard } from '../utils/copyTextToClipboard';
+import { parseGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
 import {
   playNativeCallRingtone,
   stopNativeCallRingtone
@@ -891,17 +892,15 @@ const formatTime = (seconds: number) => {
 const getInviteParamsFromUrl = () => {
   if (typeof window === 'undefined') return null;
 
-  const url = new URL(window.location.href);
-  const inviteToken = url.searchParams.get('callInvite');
-  const activeRoomId = url.searchParams.get('callRoom');
+  const invite = parseGroupCallInviteUrl(window.location.href);
 
-  if (!inviteToken || !activeRoomId) {
+  if (!invite) {
     return null;
   }
 
   return {
-    roomId: activeRoomId,
-    inviteToken
+    roomId: invite.roomId,
+    inviteToken: invite.inviteToken
   };
 };
 
@@ -929,6 +928,16 @@ const clearInviteParamsFromUrl = () => {
   url.searchParams.delete('callInvite');
   url.searchParams.delete('callRoom');
   window.history.replaceState({}, document.title, url.toString());
+};
+
+const handleExpiredInviteLink = () => {
+  removeInvitedGroupCallEntry();
+  clearInviteParamsFromUrl();
+  showNotification({
+    title: 'Ссылка недействительна',
+    description: 'Ссылка на звонок больше не действует.',
+    type: MessageTypeEnum.error
+  });
 };
 
 const formattedTime = computed(() => formatTime(timerSeconds.value));
@@ -2637,18 +2646,21 @@ export const joinPendingGroupCall = async (targetTopicId?: string) => {
   }
 };
 
-export const hydrateInvitedGroupCallFromUrl = async () => {
+export const hydrateInvitedGroupCallFromUrl = async (): Promise<boolean> => {
   const sdk = getChatSDK();
   const inviteParams = getInviteParamsFromUrl();
 
-  if (!sdk || !inviteParams) return;
+  if (!sdk || !inviteParams) return false;
 
   const preview = await sdk.getGroupCallInvitePreview(
     inviteParams.roomId,
     inviteParams.inviteToken
   );
 
-  if (!preview) return;
+  if (!preview) {
+    handleExpiredInviteLink();
+    return false;
+  }
 
   invitedGroupCall.value = {
     roomId: preview.roomId,
@@ -2666,6 +2678,34 @@ export const hydrateInvitedGroupCallFromUrl = async () => {
   if (!open.value) {
     await joinInvitedGroupCall();
   }
+
+  return true;
+};
+
+export const openGroupCallInviteUrl = async (
+  value: string
+): Promise<boolean> => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const invite = parseGroupCallInviteUrl(value);
+
+  if (!invite) {
+    return false;
+  }
+
+  const currentUrl = new URL(window.location.href);
+
+  currentUrl.searchParams.set('callRoom', invite.roomId);
+  currentUrl.searchParams.set('callInvite', invite.inviteToken);
+
+  if (invite.organization) {
+    currentUrl.searchParams.set('organization', invite.organization);
+  }
+
+  window.history.replaceState({}, document.title, currentUrl.toString());
+  return hydrateInvitedGroupCallFromUrl();
 };
 
 export const joinInvitedGroupCall = async () => {

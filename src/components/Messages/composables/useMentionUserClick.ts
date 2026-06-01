@@ -1,7 +1,10 @@
 import { getUserById } from '../../../composables/useUsers';
 import { useUserInfoModal } from '../../../composables/useUserInfoModal';
+import { openGroupCallInviteUrl } from '../../../services/useLiveKit';
+import { isGroupCallInviteUrl } from '../../../utils/groupCallInviteUrl';
 
 const MENTION_USER_SELECTOR = '[data-user-id]';
+const ANCHOR_SELECTOR = 'a[href]';
 
 export const useMentionUserClick = () => {
   const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
@@ -9,6 +12,17 @@ export const useMentionUserClick = () => {
   const syncMentionUserInteractivity = (
     container?: HTMLElement | null
   ): void => {
+    container
+      ?.querySelectorAll<HTMLAnchorElement>(ANCHOR_SELECTOR)
+      .forEach(anchor => {
+        if (!isGroupCallInviteUrl(anchor.href)) {
+          return;
+        }
+
+        anchor.removeAttribute('target');
+        anchor.removeAttribute('rel');
+      });
+
     container
       ?.querySelectorAll<HTMLElement>(MENTION_USER_SELECTOR)
       .forEach(element => {
@@ -21,6 +35,17 @@ export const useMentionUserClick = () => {
 
   const handleMentionUserClick = (event: MouseEvent): void => {
     const target = event.target as HTMLElement | null;
+    const anchorElement = target?.closest(
+      ANCHOR_SELECTOR
+    ) as HTMLAnchorElement | null;
+
+    if (anchorElement && isGroupCallInviteUrl(anchorElement.href)) {
+      event.preventDefault();
+      event.stopPropagation();
+      void openGroupCallInviteUrl(anchorElement.href);
+      return;
+    }
+
     const mentionElement = target?.closest(
       MENTION_USER_SELECTOR
     ) as HTMLElement | null;
