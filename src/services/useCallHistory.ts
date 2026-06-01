@@ -15,6 +15,7 @@ import {
 } from '../utils/parseCallMessage';
 
 const CALL_HISTORY_CACHE_KEY = 'calls:history';
+const CALL_HISTORY_PAGE_SIZE = 50;
 
 type CallHistorySource = 'http' | 'ws';
 
@@ -34,12 +35,20 @@ const rawCallHistory = ref<ServerCallHistoryItem[]>([]);
 const callHistoryState = reactive({
   isCacheReady: false,
   isLoading: false,
+  isLoadingMore: false,
+  hasMore: false,
+  currentPage: 0,
+  totalPages: 1,
+  totalItems: 0,
+  pageSize: CALL_HISTORY_PAGE_SIZE,
   errorMessage: ''
 });
 
 let hydratedUserId: string | null = null;
 let bootstrappedUserId: string | null = null;
 let bootstrapPromise: Promise<void> | null = null;
+let loadMorePromise: Promise<void> | null = null;
+let callHistorySdk: Pick<ChatSDK, 'getCallHistory'> | null = null;
 const pendingUpserts = new Map<string, ServerCallHistoryItem>();
 const pendingRemovals = new Set<string>();
 
@@ -49,6 +58,7 @@ const resetRuntimeState = (): void => {
   pendingUpserts.clear();
   pendingRemovals.clear();
   bootstrapPromise = null;
+  loadMorePromise = null;
 };
 
 const syncUserScope = (): string => {
@@ -58,6 +68,11 @@ const syncUserScope = (): string => {
     rawCallHistory.value = [];
     callHistoryState.isCacheReady = false;
     callHistoryState.isLoading = false;
+    callHistoryState.isLoadingMore = false;
+    callHistoryState.hasMore = false;
+    callHistoryState.currentPage = 0;
+    callHistoryState.totalPages = 1;
+    callHistoryState.totalItems = 0;
     callHistoryState.errorMessage = '';
     hydratedUserId = null;
     bootstrappedUserId = null;
@@ -69,6 +84,11 @@ const syncUserScope = (): string => {
     rawCallHistory.value = [];
     callHistoryState.isCacheReady = false;
     callHistoryState.isLoading = false;
+    callHistoryState.isLoadingMore = false;
+    callHistoryState.hasMore = false;
+    callHistoryState.currentPage = 0;
+    callHistoryState.totalPages = 1;
+    callHistoryState.totalItems = 0;
     callHistoryState.errorMessage = '';
     hydratedUserId = null;
     bootstrappedUserId = null;
@@ -110,6 +130,59 @@ const applyCallHistory = async (
     rawCallHistory.value,
     userId
   );
+};
+
+const updateCallHistoryPagination = (meta?: {
+  totalItems?: number;
+  totalPages?: number;
+  currentPage?: number;
+}): void => {
+  const loadedItemsCount = rawCallHistory.value.length;
+  const totalItems = Math.max(
+    0,
+    Number(meta?.totalItems) || callHistoryState.totalItems || loadedItemsCount
+  );
+  const totalPages = Math.max(
+    1,
+    Number(meta?.totalPages) ||
+      (totalItems > 0
+        ? Math.ceil(totalItems / callHistoryState.pageSize)
+        : callHistoryState.totalPages)
+  );
+  const currentPage = Math.min(
+    totalPages,
+    Math.max(
+      loadedItemsCount > 0 ? 1 : 0,
+      Number(meta?.currentPage) ||
+        (loadedItemsCount > 0
+          ? Math.ceil(loadedItemsCount / callHistoryState.pageSize)
+          : 0)
+    )
+  );
+
+  callHistoryState.totalItems = totalItems;
+  callHistoryState.totalPages = totalPages;
+  callHistoryState.currentPage = currentPage;
+  callHistoryState.hasMore =
+    currentPage < totalPages || loadedItemsCount < totalItems;
+};
+
+const mergePendingHistoryChanges = (
+  items: ServerCallHistoryItem[]
+): ServerCallHistoryItem[] => {
+  let nextItems = uniqCallHistoryItems(items);
+
+  pendingRemovals.forEach(messageId => {
+    nextItems = nextItems.filter(item => item.id !== messageId);
+  });
+
+  pendingUpserts.forEach(item => {
+    nextItems = uniqCallHistoryItems(
+      nextItems.filter(existing => existing.id !== item.id).concat(item)
+    );
+  });
+
+  return nextItems;
 };
 
 const resolveCallTopic = (topicId: string): ITopic | undefined =>
@@ -201,13 +274,17 @@ export const hydrateCallHistoryCache = async (): Promise<void> => {
       userId
     )) || [];
 
-  rawCallHistory.value = uniqCallHistoryItems(cachedItems);
+  rawCallHistory.value = uniqCallHistoryItems(cachedItems).slice(
+    0,
+    callHistoryState.pageSize
+  );
   hydratedUserId = userId;
   callHistoryState.isCacheReady = true;
+  updateCallHistoryPagination();
 };
 
 export const bootstrapCallHistory = async (
-  sdk: Pick<ChatSDK, 'getCallHistory'> | null,
+  sdk: Pick<ChatSDK, 'getCallHistory'> | null = callHistorySdk,
   opts?: { force?: boolean }
 ): Promise<void> => {
   const userId = syncUserScope();
@@ -217,6 +294,7 @@ export const bootstrapCallHistory = async (
   }
 
   await hydrateCallHistoryCache();
+  callHistorySdk = sdk;
 
   if (!sdk) {
     if (!rawCallHistory.value.length) {
@@ -235,38 +313,18 @@ export const bootstrapCallHistory = async (
 
   bootstrapPromise = (async () => {
     callHistoryState.isLoading = true;
+    callHistoryState.isLoadingMore = false;
     callHistoryState.errorMessage = '';
 
     try {
-      const limit = 100;
-      let currentPage = 1;
-      let totalPages = 1;
-      const nextCalls: ServerCallHistoryItem[] = [];
-
-      do {
-        const response = await sdk.getCallHistory({
-          page: currentPage,
-          limit
-        });
-
-        nextCalls.push(...response.data);
-        totalPages = Math.max(1, response.meta.totalPages || 1);
-        currentPage += 1;
-      } while (currentPage <= totalPages);
-
-      let mergedCalls = uniqCallHistoryItems(nextCalls);
-
-      pendingRemovals.forEach(messageId => {
-        mergedCalls = mergedCalls.filter(item => item.id !== messageId);
+      const response = await sdk.getCallHistory({
+        page: 1,
+        limit: callHistoryState.pageSize
       });
-
-      pendingUpserts.forEach(item => {
-        mergedCalls = uniqCallHistoryItems(
-          mergedCalls.filter(existing => existing.id !== item.id).concat(item)
-        );
-      });
+      const mergedCalls = mergePendingHistoryChanges(response.data);
 
       await applyCallHistory(mergedCalls, userId);
+      updateCallHistoryPagination(response.meta);
       bootstrappedUserId = userId;
       pendingRemovals.clear();
       pendingUpserts.clear();
@@ -286,9 +344,73 @@ export const bootstrapCallHistory = async (
   return bootstrapPromise;
 };
 
+export const loadMoreCallHistory = async (
+  sdk: Pick<ChatSDK, 'getCallHistory'> | null = callHistorySdk
+): Promise<void> => {
+  const userId = syncUserScope();
+
+  if (!userId) {
+    return;
+  }
+
+  await hydrateCallHistoryCache();
+  callHistorySdk = sdk;
+
+  if (!sdk) {
+    if (!rawCallHistory.value.length) {
+      callHistoryState.errorMessage =
+        '\u0421\u0435\u0440\u0432\u0438\u0441 \u0447\u0430\u0442\u0430 \u0435\u0449\u0451 \u043d\u0435 \u0438\u043d\u0438\u0446\u0438\u0430\u043b\u0438\u0437\u0438\u0440\u043e\u0432\u0430\u043d.';
+    }
+    return;
+  }
+
+  if (bootstrapPromise) {
+    return bootstrapPromise;
+  }
+
+  if (loadMorePromise || !callHistoryState.hasMore) {
+    return loadMorePromise || Promise.resolve();
+  }
+
+  const nextPage = Math.max(2, callHistoryState.currentPage + 1);
+
+  loadMorePromise = (async () => {
+    callHistoryState.isLoading = true;
+    callHistoryState.isLoadingMore = true;
+    callHistoryState.errorMessage = '';
+
+    try {
+      const response = await sdk.getCallHistory({
+        page: nextPage,
+        limit: callHistoryState.pageSize
+      });
+      const mergedCalls = mergePendingHistoryChanges(
+        rawCallHistory.value.concat(response.data)
+      );
+
+      await applyCallHistory(mergedCalls, userId);
+      updateCallHistoryPagination(response.meta);
+      bootstrappedUserId = userId;
+      pendingRemovals.clear();
+      pendingUpserts.clear();
+    } catch (error) {
+      console.error('Failed to load more call history:', error);
+      callHistoryState.errorMessage =
+        '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0435\u0449\u0451 \u0437\u0432\u043e\u043d\u043a\u0438.';
+    } finally {
+      callHistoryState.isLoadingMore = false;
+      callHistoryState.isLoading = false;
+      loadMorePromise = null;
+    }
+  })();
+
+  return loadMorePromise;
+};
+
 export const initializeCallHistorySync = (
   sdk: Pick<ChatSDK, 'getCallHistory'> | null
 ): void => {
+  callHistorySdk = sdk;
   void hydrateCallHistoryCache();
   void bootstrapCallHistory(sdk);
 };

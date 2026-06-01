@@ -38,6 +38,7 @@
           :data-testid="`${props.dataTestid}-MessageList-SystemMessageUser${item.index + 1}`"
         >
           <span
+            v-emoji
             :class="[
               'system-message-text',
               {

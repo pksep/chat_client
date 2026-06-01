@@ -84,7 +84,7 @@
   border-bottom: 1px solid var(--border-color);
 }
 
-.calls-page__item:last-child .calls-page__body {
+.calls-page__item:last-of-type .calls-page__body {
   border-bottom: none;
 }
 
@@ -161,6 +161,15 @@
     width: 16px;
     height: 16px;
   }
+}
+
+.calls-page__loading-more {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 12px;
+  color: var(--text-grey);
+  font-size: 13px;
+  line-height: 16px;
 }
 
 .calls-page__header-copy {
