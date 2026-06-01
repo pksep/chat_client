@@ -340,6 +340,16 @@ const { getFullMediaPath } = useMessageMedia();
 const currentTime = ref(Date.now());
 let currentTimeInterval: ReturnType<typeof setInterval> | null = null;
 
+const getTopicEffectiveUser = (topic: ITopic) =>
+  topic.type === TopicType.DM && topic.user?.id
+    ? getUserById(topic.user.id) || topic.user
+    : topic.user;
+
+const getTopicStatusIcon = (topic: ITopic): string =>
+  topic.type === TopicType.DM
+    ? getTopicEffectiveUser(topic)?.status?.icon || ''
+    : '';
+
 watch(isRecentlyReconnected, value => {
   if (!value) return;
   listRenderKey.value += 1;
@@ -415,11 +425,6 @@ const isTopicUserOnline = (topic: ITopic): boolean =>
   !getUserLastOnline(topic.user) &&
   getHasWebsocketConnection();
 
-const getTopicEffectiveUser = (topic: ITopic) =>
-  topic.type === TopicType.DM && topic.user?.id
-    ? getUserById(topic.user.id) || topic.user
-    : topic.user;
-
 const getTopicLastMessageLabel = (media: IMedia[]): string => {
   let text = '';
   const haveImage = media.some(m => m.type === MediaType.Image);
@@ -445,11 +450,6 @@ const getTopicTypingLabel = (topic: ITopic): string =>
 const getTopicStatusLabel = (topic: ITopic): string =>
   topic.type === TopicType.DM
     ? formatUserStatusText(getTopicEffectiveUser(topic)?.status)
-    : '';
-
-const getTopicStatusIcon = (topic: ITopic): string =>
-  topic.type === TopicType.DM
-    ? getTopicEffectiveUser(topic)?.status?.icon || ''
     : '';
 
 const getTopicActiveCall = (topic: ITopic) => {

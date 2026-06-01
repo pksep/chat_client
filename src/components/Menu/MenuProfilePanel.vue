@@ -175,7 +175,7 @@
                   : IconNameEnum.chevronDown
               "
               :width="24"
-              :height="20"
+              :height="16"
             />
           </div>
 
@@ -255,7 +255,7 @@
                   : IconNameEnum.chevronDown
               "
               :width="24"
-              :height="20"
+              :height="16"
             />
           </div>
 

@@ -219,6 +219,7 @@ import {
   usePendingForwardMessages
 } from '../composables/useForwardMessages';
 import { ensureMediaObjectUrl } from '../services/useMediaBlobCache';
+import { isGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
 import { getTopicUnreadBadgeCount } from '../utils/topicUnreadBadge';
 import { isUnreadTrackableMessage } from '../utils/messageTracking';
 
@@ -951,8 +952,11 @@ const tryBuildAnchor = (value: string) => {
 
     const safeUrl = escapeHtml(url.toString());
     const safeText = escapeHtml(trimmedValue);
+    const linkAttributes = isGroupCallInviteUrl(url)
+      ? ''
+      : ' target="_blank" rel="noopener noreferrer"';
 
-    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeText}</a> `;
+    return `<a href="${safeUrl}"${linkAttributes}>${safeText}</a> `;
   } catch {
     return null;
   }

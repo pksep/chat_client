@@ -261,6 +261,38 @@ const mergePendingReplyState = (
   };
 };
 
+const mergePendingMediaState = (
+  incomingMessage: IMessage,
+  pendingMessage?: IMessage
+): IMessage => {
+  if (!pendingMessage?.media?.length || !incomingMessage.media?.length) {
+    return incomingMessage;
+  }
+
+  const media = incomingMessage.media.map((incomingMedia, index) => {
+    const pendingMedia = pendingMessage.media?.[index];
+
+    if (!pendingMedia) {
+      return incomingMedia;
+    }
+
+    return {
+      ...pendingMedia,
+      ...incomingMedia,
+      isLoading: false,
+      uploadError: false,
+      uploadPercent: null,
+      path: incomingMedia.path || pendingMedia.path,
+      thumbnailPath: incomingMedia.thumbnailPath || pendingMedia.thumbnailPath
+    };
+  });
+
+  return {
+    ...incomingMessage,
+    media
+  };
+};
+
 const hasPendingMediaUpload = (message?: IMessage): boolean =>
   !!message?.media?.some(media => media.isLoading);
 
@@ -1229,7 +1261,10 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   const pendingMessage = existingMessages.find(
     message => message.id === clientId
   );
-  const resolvedMessage = mergePendingReplyState(nextMessage, pendingMessage);
+  const resolvedMessage = mergePendingMediaState(
+    mergePendingReplyState(nextMessage, pendingMessage),
+    pendingMessage
+  );
   const lastMessage = existingMessages.at(-1);
 
   if (lastMessage?.id === clientId) {
@@ -1239,16 +1274,8 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
           return existingMessage;
         }
 
-        const media = [...(existingMessage.media || [])].map((m, i) => ({
-          ...m,
-          isLoading: null,
-          path: message.media[i]?.path,
-          thumbnailPath: message.media[i]?.thumbnailPath
-        }));
-
         return {
-          ...resolvedMessage,
-          media
+          ...resolvedMessage
         };
       })
     );
