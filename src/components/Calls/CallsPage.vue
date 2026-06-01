@@ -2,7 +2,7 @@
   <section class="calls-page" :data-testid="`${props.dataTestid}-Container`">
     <CallsHeader
       class="calls-page__header"
-      :total-count="callHistory.length"
+      :total-count="state.totalItems || callHistory.length"
       :data-testid="`${props.dataTestid}-Header`"
     />
 
@@ -24,7 +24,12 @@
         <p class="menu-panel__description">История звонков загружается...</p>
       </div>
 
-      <div v-else-if="filteredCalls.length" class="calls-page__list">
+      <div
+        v-else-if="filteredCalls.length"
+        ref="callListRef"
+        class="calls-page__list"
+        @scroll="handleListScroll"
+      >
         <button
           v-for="call in filteredCalls"
           :key="call.messageId"
@@ -74,6 +79,10 @@
             <MessageCallInfoIcon />
           </span>
         </button>
+
+        <div v-if="state.isLoadingMore" class="calls-page__loading-more">
+          {{ loadingMoreLabel }}
+        </div>
       </div>
 
       <div v-else class="menu-panel menu-panel--centered calls-page__empty">
@@ -105,7 +114,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { Search } from '@pksep/yui';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import MessageCallInfoIcon from '../Messages/MessageCallInfoIcon.vue';
@@ -124,7 +133,9 @@ import {
   type CallMessageKind
 } from '../../utils/parseCallMessage';
 import {
+  bootstrapCallHistory,
   hydrateCallHistoryCache,
+  loadMoreCallHistory,
   useCallHistoryStore
 } from '../../services/useCallHistory';
 import CallsHeader from './CallsHeader.vue';
@@ -156,11 +167,15 @@ const props = withDefaults(
 );
 
 const searchValue = ref('');
+const callListRef = ref<HTMLElement | null>(null);
+const loadingMoreLabel =
+  '\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u043c \u0435\u0449\u0451 \u0437\u0432\u043e\u043d\u043a\u0438...';
 const authUserId = computed(() => getAuthUser()?.id || '');
 const { getSelectedTopic } = useTopics();
 const { rawCallHistory, callHistoryState } = useCallHistoryStore();
 const state = callHistoryState;
 const { openUserInfo } = useUserInfoModal();
+const SCROLL_LOAD_MORE_OFFSET = 160;
 
 const buildCallItem = (
   serverCall: ServerCallHistoryItem
@@ -255,7 +270,70 @@ const handleOpenCallUserInfo = (call: CallHistoryItem): void => {
   openUserInfo(topic.user, topic);
 };
 
+const maybeLoadMoreCalls = async (): Promise<void> => {
+  if (
+    !state.hasMore ||
+    state.isLoadingMore ||
+    (state.isLoading && !callHistory.value.length)
+  ) {
+    return;
+  }
+
+  await loadMoreCallHistory();
+};
+
+const handleListScroll = (): void => {
+  const listElement = callListRef.value;
+
+  if (!listElement || !state.hasMore || state.isLoadingMore) {
+    return;
+  }
+
+  const remainingScrollDistance =
+    listElement.scrollHeight - listElement.scrollTop - listElement.clientHeight;
+
+  if (remainingScrollDistance <= SCROLL_LOAD_MORE_OFFSET) {
+    void maybeLoadMoreCalls();
+  }
+};
+
+const ensureListIsFilled = async (): Promise<void> => {
+  const listElement = callListRef.value;
+  const hasSearchQuery = searchValue.value.trim().length > 0;
+
+  if (!state.hasMore || state.isLoadingMore) {
+    return;
+  }
+
+  if (hasSearchQuery && !filteredCalls.value.length) {
+    await maybeLoadMoreCalls();
+    return;
+  }
+
+  if (
+    listElement &&
+    listElement.scrollHeight <=
+      listElement.clientHeight + SCROLL_LOAD_MORE_OFFSET
+  ) {
+    await maybeLoadMoreCalls();
+  }
+};
+
 onMounted(() => {
   void hydrateCallHistoryCache();
+  void bootstrapCallHistory();
+  void nextTick().then(() => ensureListIsFilled());
 });
+
+watch(
+  [
+    () => filteredCalls.value.length,
+    () => searchValue.value,
+    () => state.hasMore,
+    () => state.isLoadingMore
+  ],
+  () => {
+    void nextTick().then(() => ensureListIsFilled());
+  }
+);
 </script>
