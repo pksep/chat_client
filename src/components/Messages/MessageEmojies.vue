@@ -151,8 +151,7 @@ const reactionContent = computed<Record<string, MessageReactions>>(
         if (aggr[val.text]?.count > 0) {
           aggr[val.text].count++;
           aggr[val.text].isOwn =
-            aggr[val.text].isOwn ||
-            val.senderUserId === currentUserId.value;
+            aggr[val.text].isOwn || val.senderUserId === currentUserId.value;
         } else {
           aggr[val.text] = {
             ...val,
