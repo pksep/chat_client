@@ -1,13 +1,13 @@
 <template>
   <div
     class="pinned-messages"
-    v-if="pinnedMessages.length > 0 && index >= 0"
+    v-if="currentPinnedMessage"
     @click="handleChangeCurrentIndex"
   >
     <div class="chat__input__action">
       <div class="chat__input__action__blog">
         <h5>Закрепленное сособщение</h5>
-        <p v-emoji>{{ stripHtml(pinnedMessages[index].text || 'Вложение') }}</p>
+        <p :key="pinnedPreviewKey" v-emoji>{{ pinnedPreviewText }}</p>
       </div>
       <Button
         :type="ButtonTypeEnum.ghost"
@@ -55,6 +55,16 @@ const route = useUrlWatcher();
 const pinnedMessages = computed(() =>
   getPinnedMessagesByTopicId(route.value.id)
 );
+const currentPinnedMessage = computed(
+  () => pinnedMessages.value[index.value] || null
+);
+const pinnedPreviewText = computed(() =>
+  stripHtml(currentPinnedMessage.value?.text || 'Вложение')
+);
+const pinnedPreviewKey = computed(
+  () =>
+    `${route.value.id || 'no-topic'}:${currentPinnedMessage.value?.id || 'no-message'}:${pinnedPreviewText.value}`
+);
 
 const index = ref(-1);
 const unpinModalOpen = ref(false);
@@ -70,7 +80,11 @@ watch(
 );
 
 const handleChangeCurrentIndex = () => {
-  emits('unmount-set-selected-message', pinnedMessages.value[index.value]);
+  if (!currentPinnedMessage.value) {
+    return;
+  }
+
+  emits('unmount-set-selected-message', currentPinnedMessage.value);
 
   if (index.value > 0) {
     index.value -= 1;
@@ -90,29 +104,27 @@ const handleCloseUnpinModal = () => {
 };
 
 const handleConfirmUnpinMessage = async () => {
-  const currentPinnedMessage = pinnedMessages.value[index.value];
-
-  if (!currentPinnedMessage) {
+  if (!currentPinnedMessage.value) {
     handleCloseUnpinModal();
     return;
   }
 
-  if (!currentPinnedMessage.isPinnedOnlyMe) {
+  if (!currentPinnedMessage.value.isPinnedOnlyMe) {
     editMessageFromLocal(route.value.id, {
-      ...currentPinnedMessage,
+      ...currentPinnedMessage.value,
       isPin: false
     });
 
     await togglePinMessageChat({
       topicId: route.value.id,
-      messageId: currentPinnedMessage.id,
+      messageId: currentPinnedMessage.value.id,
       scope: 'ALL'
     });
   } else {
-    unpinLocalMessageForMe(route.value.id, currentPinnedMessage.id);
+    unpinLocalMessageForMe(route.value.id, currentPinnedMessage.value.id);
     await togglePinMessageChat({
       topicId: route.value.id,
-      messageId: currentPinnedMessage.id,
+      messageId: currentPinnedMessage.value.id,
       scope: 'SELF'
     });
   }

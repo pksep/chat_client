@@ -358,6 +358,10 @@
   background: var(--blue15);
   color: var(--text-color);
   cursor: pointer;
+
+  & svg g {
+    stroke-width: 2px;
+  }
 }
 
 .menu-profile__wallpapers-trigger-copy {

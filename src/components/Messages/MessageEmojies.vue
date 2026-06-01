@@ -5,6 +5,10 @@
         v-for="(messageReaction, emoji) in reactionContent"
         :key="emoji"
         class="reaction"
+        :class="{
+          'reaction--own': messageReaction.isOwn,
+          'reaction--other': !messageReaction.isOwn
+        }"
         @click.stop="handleToggleEmoji(messageReaction)"
         @contextmenu="handleOpenReactionDetails($event)"
         @touchstart="handleTouchStart($event)"
@@ -119,7 +123,13 @@ const VIEWPORT_OFFSET_PX = 8;
 
 const props = defineProps<{ reactions: Reaction[] }>();
 
-type MessageReactions = Reaction & { count: number; user?: IUser };
+const currentUserId = computed(() => getAuthUser()?.id || '');
+
+type MessageReactions = Reaction & {
+  count: number;
+  user?: IUser;
+  isOwn: boolean;
+};
 
 type ReactionDetailsItem = {
   id: string;
@@ -140,11 +150,14 @@ const reactionContent = computed<Record<string, MessageReactions>>(
       (aggr, val) => {
         if (aggr[val.text]?.count > 0) {
           aggr[val.text].count++;
+          aggr[val.text].isOwn =
+            aggr[val.text].isOwn || val.senderUserId === currentUserId.value;
         } else {
           aggr[val.text] = {
             ...val,
             count: 1,
-            user: getUserById(val.senderUserId)
+            user: getUserById(val.senderUserId),
+            isOwn: val.senderUserId === currentUserId.value
           };
         }
         return aggr;
@@ -169,7 +182,6 @@ const route = useUrlWatcher();
 const canShowReactionDetails = computed(
   () => route.value.type === RouteTypes.GROUP
 );
-const currentUserId = computed(() => getAuthUser()?.id || '');
 const showReactionDetails = ref(false);
 const reactionDetailsPanelRef = ref<HTMLElement | null>(null);
 const reactionDetailsStyle = ref<Record<string, string>>({

@@ -44,7 +44,7 @@
     "@livekit/track-processors": "^0.7.2",
     "@mastra/client-js": "^0.12.3",
     "@pksep/reqi": "^0.0.25",
-    "@pksep/yui": "^0.1.260",
+    "@pksep/yui": "0.1.269",
     "@pksep/zod-shared-chat": "0.0.6",
     "@vitejs/plugin-basic-ssl": "^2.1.4",
     "livekit-client": "^2.15.7",
