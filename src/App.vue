@@ -22,6 +22,12 @@
     @qr-auth-success="handleQrAuthSuccess"
   />
 
+  <IosInstallPromptModal
+    :open="isIosInstallPromptOpen"
+    data-testid="App"
+    @close="closeIosInstallHelp"
+  />
+
   <PushNotification
     v-for="(notification, index) in notificationState.items"
     :key="notification.key"
@@ -40,6 +46,8 @@ import { PushNotification } from '@pksep/yui';
 import { IChatContainerConfig } from './components/interfaces/interfaces';
 import ChatContainerRoot from './ChatContainerRoot.vue';
 import AuthorizationScreen from './components/AuthorizationScreen.vue';
+import IosInstallPromptModal from './components/Menu/IosInstallPromptModal.vue';
+import { useIosInstallPrompt } from './composables/useIosInstallPrompt';
 import { setConfig } from './services/useConfig';
 import {
   clearErpAuthSession,
@@ -89,6 +97,10 @@ const isAddingNewOrganization = ref(!organizations.value.length);
 const serverUrl = ref(selectedOrganization.value);
 const isCredentialsStep = ref(false);
 const { state: notificationState, closeNotification } = useNotifications();
+const {
+  isOpen: isIosInstallPromptOpen,
+  closeInstallHelp: closeIosInstallHelp
+} = useIosInstallPrompt();
 
 const getNotificationStyle = (index: number) => ({
   position: 'fixed',

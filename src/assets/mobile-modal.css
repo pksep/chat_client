@@ -57,7 +57,8 @@ h3.mobile__modal-header--title {
 [data-testid='ChatContainer-ChatContainer-MobileUserInfoModal-MobileModal-Container'],
 [data-testid='NewChatMobileModal-NewChatMobileModal-Container-MobileModal-Container'],
 [data-testid='ShareSelectionOverlay-ShareSelectionModal-MobileModal-Container'],
-[data-testid='ChatContainer-ChatContainer-Header-Header-ContactListInModal-NewChatMobileModal-Container-MobileModal-Container'] {
+[data-testid='ChatContainer-ChatContainer-Header-Header-ContactListInModal-NewChatMobileModal-Container-MobileModal-Container'],
+[data-testid='App-IosInstallPromptModal-MobileModal-Container'] {
   border-radius: 0 !important;
 }
 
@@ -72,6 +73,8 @@ h3.mobile__modal-header--title {
 [data-testid='ShareSelectionOverlay-ShareSelectionModal-MobileModal-Container']
   .modal-yui-kit__modal-content,
 [data-testid='ChatContainer-ChatContainer-Header-Header-ContactListInModal-NewChatMobileModal-Container-MobileModal-Container']
+  .modal-yui-kit__modal-content,
+[data-testid='App-IosInstallPromptModal-MobileModal-Container']
   .modal-yui-kit__modal-content {
   border-radius: 0 !important;
 }
