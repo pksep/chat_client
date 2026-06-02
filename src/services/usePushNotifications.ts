@@ -49,7 +49,7 @@ const NotificationTap =
 let nativeNotificationTapListener: PluginListenerHandle | null = null;
 let lastHandledNotificationKey = '';
 let lastHandledNotificationAt = 0;
-let isWebCallActionListenerBound = false;
+let isWebServiceWorkerMessageListenerBound = false;
 
 const storeNativePushToken = (token: string): void => {
   localStorage.setItem(NATIVE_PUSH_TOKEN_STORAGE_KEY, token);
@@ -206,10 +206,10 @@ const consumeWebCallActionFromUrl = () => {
   void handleNativeCallAction(action, roomId, topicId);
 };
 
-const bindWebCallActionListener = () => {
+const bindWebServiceWorkerMessageListener = () => {
   if (
     Capacitor.isNativePlatform() ||
-    isWebCallActionListenerBound ||
+    isWebServiceWorkerMessageListenerBound ||
     !('serviceWorker' in navigator)
   ) {
     return;
@@ -222,24 +222,30 @@ const bindWebCallActionListener = () => {
           action?: 'accept' | 'decline';
           roomId?: string | null;
           topicId?: string | null;
+          notification?: NativeNotificationData;
         }
       | undefined;
 
     if (
-      payload?.type !== 'CALL_ACTION' ||
-      (payload.action !== 'accept' && payload.action !== 'decline')
+      payload?.type === 'CALL_ACTION' &&
+      (payload.action === 'accept' || payload.action === 'decline')
     ) {
+      void handleNativeCallAction(
+        payload.action,
+        payload.roomId || undefined,
+        payload.topicId || undefined
+      );
       return;
     }
 
-    void handleNativeCallAction(
-      payload.action,
-      payload.roomId || undefined,
-      payload.topicId || undefined
-    );
+    if (payload?.type !== 'NOTIFICATION_NAVIGATE') {
+      return;
+    }
+
+    handleNotificationInteraction(payload.notification);
   });
 
-  isWebCallActionListenerBound = true;
+  isWebServiceWorkerMessageListenerBound = true;
 };
 
 export const initPushNotifications = async () => {
@@ -352,7 +358,7 @@ export const initPushNotifications = async () => {
 
   const registration =
     await navigator.serviceWorker.register('/service-worker.js');
-  bindWebCallActionListener();
+  bindWebServiceWorkerMessageListener();
   consumeWebCallActionFromUrl();
 
   // Get public key from server

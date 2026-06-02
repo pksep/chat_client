@@ -187,24 +187,21 @@ self.addEventListener('notificationclick', event => {
         if (matchingClient) {
           const client = matchingClient;
 
-          client.postMessage({
-            type: 'CALL_ACTION',
-            action,
-            roomId: payload.roomId || null,
-            topicId: payload.topicId || null
-          });
-
-          client.focus();
-
-          if ('navigate' in client && !isIncomingCall) {
-            return client.navigate(absoluteUrl);
+          if (action) {
+            client.postMessage({
+              type: 'CALL_ACTION',
+              action,
+              roomId: payload.roomId || null,
+              topicId: payload.topicId || null
+            });
+          } else {
+            client.postMessage({
+              type: 'NOTIFICATION_NAVIGATE',
+              notification: payload
+            });
           }
 
-          if (!isIncomingCall) {
-            return clients.openWindow(absoluteUrl);
-          }
-
-          return undefined;
+          return client.focus();
         }
 
         return clients.openWindow(absoluteUrl);
