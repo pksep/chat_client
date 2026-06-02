@@ -31,7 +31,12 @@ import {
   shouldPlayNotificationSound
 } from './useNotificationSoundPolicy';
 import { AudioOutput } from './useAudioOutput';
+import {
+  CALL_BACKGROUND_ASSET_PATHS,
+  MULTICLASS_VIRTUAL_BACKGROUND_DEFAULTS
+} from './callBackgroundProcessorConfig';
 import { prewarmCallBackgroundAssets } from './callBackgroundWarmup';
+import { createMediapipeMulticlassBackgroundTrackProcessor } from './mediapipeMulticlassBackgroundTrackProcessor';
 import { copyTextToClipboard } from '../utils/copyTextToClipboard';
 import { parseGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
 import {
@@ -199,8 +204,8 @@ const CAMERA_CAPTURE_DEFAULTS = {
 };
 const MANAGED_BACKGROUND_CAMERA_CAPTURE_DEFAULTS = {
   facingMode: 'user' as const,
-  frameRate: 20,
-  resolution: VideoPresets.h540.resolution
+  frameRate: 24,
+  resolution: VideoPresets.h720.resolution
 };
 const CAMERA_PUBLISH_DEFAULTS = {
   degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
@@ -211,8 +216,8 @@ const CAMERA_PUBLISH_DEFAULTS = {
 const MANAGED_BACKGROUND_CAMERA_PUBLISH_DEFAULTS = {
   degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
   simulcast: true,
-  videoEncoding: VideoPresets.h540.encoding,
-  videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360]
+  videoEncoding: VideoPresets.h720.encoding,
+  videoSimulcastLayers: [VideoPresets.h216, VideoPresets.h540]
 };
 const SCREEN_SHARE_CAPTURE_DEFAULTS = {
   contentHint: 'detail' as const,
@@ -226,11 +231,11 @@ const SCREEN_SHARE_PUBLISH_DEFAULTS = {
   simulcast: false,
   screenShareEncoding: ScreenSharePresets.original.encoding
 };
-const CALL_BACKGROUND_ASSET_PATHS = {
-  tasksVisionFileSet: '/call-background/wasm',
-  modelAssetPath: '/call-background/selfie_segmenter.tflite'
-};
-let localBackgroundProcessor: BackgroundProcessorWrapper | null = null;
+type LocalManagedVideoProcessor =
+  | BackgroundProcessorWrapper
+  | Parameters<LocalVideoTrack['setProcessor']>[0];
+
+let localBackgroundProcessor: LocalManagedVideoProcessor | null = null;
 let localBackgroundProcessorTrack: LocalVideoTrack | null = null;
 let localBackgroundProcessorSignature: string | null = null;
 let hasShownBackgroundProcessorSupportError = false;
@@ -280,22 +285,15 @@ const getCallBackgroundProcessorSignature = (): string => {
   return 'none';
 };
 
+const shouldUseMediapipeImageBackgroundProcessor = (): boolean =>
+  selectedCallBackgroundMode.value === 'image' &&
+  !!selectedCallBackgroundImageUrl.value;
+
 const getCallBackgroundProcessorConfig = () => {
   if (selectedCallBackgroundMode.value === 'blur') {
     return {
       mode: 'background-blur' as const,
       blurRadius: 12,
-      assetPaths: CALL_BACKGROUND_ASSET_PATHS
-    };
-  }
-
-  if (
-    selectedCallBackgroundMode.value === 'image' &&
-    selectedCallBackgroundImageUrl.value
-  ) {
-    return {
-      mode: 'virtual-background' as const,
-      imagePath: selectedCallBackgroundImageUrl.value,
       assetPaths: CALL_BACKGROUND_ASSET_PATHS
     };
   }
@@ -329,6 +327,12 @@ const getCallBackgroundProcessorSwitchOptions = () => {
   };
 };
 
+const isLiveKitBackgroundProcessorWrapper = (
+  processor: LocalManagedVideoProcessor | null
+): processor is BackgroundProcessorWrapper =>
+  !!processor &&
+  typeof (processor as BackgroundProcessorWrapper).switchTo === 'function';
+
 const stopLocalBackgroundProcessor = async (): Promise<void> => {
   const activeTrack = localBackgroundProcessorTrack;
   localBackgroundProcessorTrack = null;
@@ -349,7 +353,7 @@ const stopLocalBackgroundProcessor = async (): Promise<void> => {
 const ensureLocalBackgroundProcessor = async (
   track: LocalVideoTrack
 ): Promise<{
-  processor: BackgroundProcessorWrapper | null;
+  processor: LocalManagedVideoProcessor | null;
   didCreate: boolean;
 }> => {
   if (localBackgroundProcessorTrack === track && localBackgroundProcessor) {
@@ -366,10 +370,19 @@ const ensureLocalBackgroundProcessor = async (
     await stopLocalBackgroundProcessor();
   }
 
-  const processor = BackgroundProcessor(
-    getCallBackgroundProcessorConfig(),
-    'call-background-processor'
-  );
+  const processor = shouldUseMediapipeImageBackgroundProcessor()
+    ? createMediapipeMulticlassBackgroundTrackProcessor({
+        backgroundImageUrl: selectedCallBackgroundImageUrl.value || '',
+        edgeBlurAmount: MULTICLASS_VIRTUAL_BACKGROUND_DEFAULTS.maskBlurRadius,
+        foregroundThreshold:
+          MULTICLASS_VIRTUAL_BACKGROUND_DEFAULTS.foregroundThreshold,
+        maskProfile: MULTICLASS_VIRTUAL_BACKGROUND_DEFAULTS.maskProfile,
+        outputFps: MANAGED_BACKGROUND_CAMERA_CAPTURE_DEFAULTS.frameRate
+      })
+    : BackgroundProcessor(
+        getCallBackgroundProcessorConfig(),
+        'call-background-processor'
+      );
 
   await track.setProcessor(processor);
   localBackgroundProcessorTrack = track;
@@ -1314,12 +1327,36 @@ const syncLocalCallBackgroundProcessor = async (): Promise<void> => {
     return;
   }
 
+  if (selectedCallBackgroundMode.value === 'none') {
+    await stopLocalBackgroundProcessor();
+    hasShownBackgroundProcessorSupportError = false;
+    syncLocalTrackState();
+    return;
+  }
+
   hasShownBackgroundProcessorSupportError = false;
 
   try {
-    const { processor, didCreate } =
-      await ensureLocalBackgroundProcessor(localCameraTrack);
     const nextSignature = getCallBackgroundProcessorSignature();
+    let processor = localBackgroundProcessor;
+    let didCreate = false;
+
+    if (!processor || localBackgroundProcessorTrack !== localCameraTrack) {
+      ({ processor, didCreate } =
+        await ensureLocalBackgroundProcessor(localCameraTrack));
+    } else if (localBackgroundProcessorSignature !== nextSignature) {
+      if (
+        shouldUseMediapipeImageBackgroundProcessor() ||
+        !isLiveKitBackgroundProcessorWrapper(processor)
+      ) {
+        await stopLocalBackgroundProcessor();
+        ({ processor, didCreate } =
+          await ensureLocalBackgroundProcessor(localCameraTrack));
+      } else {
+        await processor.switchTo(getCallBackgroundProcessorSwitchOptions());
+        localBackgroundProcessorSignature = nextSignature;
+      }
+    }
 
     if (!processor) {
       return;
@@ -1337,12 +1374,7 @@ const syncLocalCallBackgroundProcessor = async (): Promise<void> => {
       return;
     }
 
-    if (!didCreate) {
-      await processor.switchTo(getCallBackgroundProcessorSwitchOptions());
-      localBackgroundProcessorSignature = nextSignature;
-    }
-
-    if (selectedCallBackgroundMode.value !== 'none' && !didCreate) {
+    if (selectedCallBackgroundMode.value !== 'none') {
       await waitForLocalProcessedVideoTrack(localCameraTrack);
       syncLocalTrackStateWhenProcessedTrackReady(localCameraTrack);
     }

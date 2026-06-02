@@ -1,4 +1,5 @@
 import { BackgroundProcessor } from '@livekit/track-processors';
+import { prewarmMediapipeMulticlassBackgroundProcessor } from './mediapipeMulticlassBackgroundTrackProcessor';
 
 const CALL_BACKGROUND_ASSET_PATHS = {
   tasksVisionFileSet: '/call-background/wasm',
@@ -70,7 +71,7 @@ const warmProcessor = async (): Promise<void> => {
     const processor = BackgroundProcessor(
       {
         mode: 'background-blur',
-        blurRadius: 8,
+        blurRadius: 12,
         assetPaths: CALL_BACKGROUND_ASSET_PATHS
       },
       'call-background-warmup'
@@ -111,6 +112,9 @@ export const prewarmCallBackgroundAssets = async (
 
   await Promise.allSettled([
     warmProcessor(),
-    imageUrl ? warmImage(imageUrl) : Promise.resolve()
+    imageUrl ? warmImage(imageUrl) : Promise.resolve(),
+    imageUrl
+      ? prewarmMediapipeMulticlassBackgroundProcessor(imageUrl)
+      : Promise.resolve()
   ]);
 };
