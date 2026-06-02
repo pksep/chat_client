@@ -3,10 +3,10 @@
   cycles: 1
   deleted: 8
   inserted: 8
-  seconds: 122.083037164
+  seconds: 220.961469156
   version: 0.60.0
   what: judges-summary
-  when: 2026-06-01 23:17:40.589909171 Z
+  when: 2026-06-02 02:06:07.975935424 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -6546,7 +6546,7 @@
   total_releases_published: 23
   total_reviews_submitted: 0
   what: quantity-of-deliverables
-  when: 2026-05-01 01:26:22.000000000 Z
+  when: &4 2026-05-01 01:26:22.000000000 Z
 - _id: 378
   _job: 25197780273
   _time: 2026-05-01 01:26:38.099748696 Z
@@ -8704,7 +8704,7 @@
   - 0
   some_unmerged_pulls: 3
   what: quality-of-service
-  when: 2026-05-01 01:28:32.000000000 Z
+  when: &5 2026-05-01 01:28:32.000000000 Z
 - _id: 441
   _job: 69957
   _time: 2026-05-01 01:31:54.037098440 Z
@@ -12298,17 +12298,6 @@
   when: 2026-05-28 09:20:51.000000000 Z
   where: github
   who: 93074025
-- _id: 660
-  _job: 26787799917
-  _time: 2026-06-01 23:15:42.648609054 Z
-  _version: 0.19.6/0.60.0/0.17.11
-  earliest_issue_was_found: 1
-  events_were_scanned: 12677049834
-  latest_issue_was_found: 72
-  min_pull_was_found: 258
-  repository: 1053332035
-  what: iterate
-  where: github
 - _id: 661
   _job: 26787799917
   _time: 2026-06-01 23:15:51.796466588 Z
@@ -12327,6 +12316,7 @@
   is_human: 1
   issue: 233
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -12351,6 +12341,7 @@
   is_human: 1
   issue: 234
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -12375,6 +12366,7 @@
   is_human: 1
   issue: 235
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -12399,6 +12391,7 @@
   is_human: 1
   issue: 236
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -12423,6 +12416,7 @@
   is_human: 1
   issue: 237
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -12447,6 +12441,7 @@
   is_human: 1
   issue: 238
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -12471,6 +12466,7 @@
   is_human: 1
   issue: 239
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -12495,6 +12491,7 @@
   is_human: 1
   issue: 240
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -12519,6 +12516,7 @@
   is_human: 1
   issue: 241
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -12543,6 +12541,7 @@
   is_human: 1
   issue: 242
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -12567,6 +12566,7 @@
   is_human: 1
   issue: 243
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -12591,6 +12591,7 @@
   is_human: 1
   issue: 244
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -12615,6 +12616,7 @@
   is_human: 1
   issue: 245
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -12639,6 +12641,7 @@
   is_human: 1
   issue: 246
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -12663,6 +12666,7 @@
   is_human: 1
   issue: 247
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -12687,6 +12691,7 @@
   is_human: 1
   issue: 248
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -12711,6 +12716,7 @@
   is_human: 1
   issue: 249
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -12795,3 +12801,785 @@
   when: 2026-05-29 14:20:08.000000000 Z
   where: github
   who: 93074025
+- _id: 684
+  _job: 26793753144
+  _time: 2026-06-02 02:02:31.608627014 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  earliest_issue_was_found: 1
+  events_were_scanned: 12680954356
+  latest_issue_was_found: 72
+  min_pull_was_found: 258
+  repository: 1053332035
+  what: iterate
+  where: github
+- _id: 685
+  _job: 26793753144
+  _time: 2026-06-02 02:02:39.366144594 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  since: *4
+  total_builds_ran: 381
+  total_commits_pushed: 177
+  total_hoc_committed: 100576
+  total_issues_created: 75
+  total_pulls_submitted: 75
+  total_releases_published: 5
+  total_reviews_submitted: 0
+  what: quantity-of-deliverables
+  when: 2026-06-02 02:02:39.000000000 Z
+- _id: 686
+  _job: 26793753144
+  _time: 2026-06-02 02:02:55.272178556 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-116
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#250 has been "pull-was-merged".
+  failed_builds: 0
+  files: 6
+  hoc: 147
+  is_human: 1
+  issue: 250
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-05-28 10:22:42.000000000 Z
+  where: github
+  who: 93074025
+- _id: 687
+  _job: 26793753144
+  _time: 2026-06-02 02:02:58.117390178 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-127
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#251 has been "pull-was-merged".
+  failed_builds: 0
+  files: 4151
+  hoc: 1165
+  is_human: 1
+  issue: 251
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-05-28 14:13:34.000000000 Z
+  where: github
+  who: 93074025
+- _id: 688
+  _job: 26793753144
+  _time: 2026-06-02 02:03:00.948269773 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: canary
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#252 has been "pull-was-merged".
+  failed_builds: 0
+  files: 4166
+  hoc: 2104
+  is_human: 1
+  issue: 252
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-05-28 14:28:01.000000000 Z
+  where: github
+  who: 93074025
+- _id: 689
+  _job: 26793753144
+  _time: 2026-06-02 02:03:03.360159301 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-130
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#253 has been "pull-was-merged".
+  failed_builds: 0
+  files: 20
+  hoc: 868
+  is_human: 1
+  issue: 253
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-05-29 14:16:51.000000000 Z
+  where: github
+  who: 93074025
+- _id: 690
+  _job: 26793753144
+  _time: 2026-06-02 02:03:05.661987601 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-130
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#254 has been "pull-was-merged".
+  failed_builds: 0
+  files: 1
+  hoc: 2
+  is_human: 1
+  issue: 254
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-05-29 14:18:55.000000000 Z
+  where: github
+  who: 93074025
+- _id: 691
+  _job: 26793753144
+  _time: 2026-06-02 02:03:07.930035850 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: canary
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#255 has been "pull-was-merged".
+  failed_builds: 0
+  files: 20
+  hoc: 868
+  is_human: 1
+  issue: 255
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-05-29 14:20:17.000000000 Z
+  where: github
+  who: 93074025
+- _id: 692
+  _job: 26793753144
+  _time: 2026-06-02 02:03:12.297647395 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  since: *5
+  some_backlog_size:
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  some_build_duration:
+  - 3
+  - 7
+  - 6
+  - 7
+  - 5
+  - 5
+  - 4
+  - 4
+  - 7
+  - 6
+  - 1
+  - 6
+  - 8
+  - 12
+  - 4
+  - 5
+  - 7
+  - 7
+  - 5
+  - 1
+  - 6
+  - 7
+  - 5
+  - 4
+  - 4
+  - 4
+  - 4
+  - 6
+  - 5
+  - 4
+  - 4
+  - 4
+  - 4
+  - 5
+  - 5
+  - 4
+  - 4
+  - 3
+  - 3
+  - 4
+  - 4
+  - 4
+  - 4
+  - 3
+  - 4
+  - 4
+  - 4
+  - 4
+  - 4
+  - 4
+  - 205
+  - 193
+  - 1
+  - 364
+  - 2
+  - 140
+  - 305
+  - 314
+  - 224
+  - 0
+  some_build_mttr:
+  - 401440
+  - 434876
+  some_build_success_rate:
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 1
+  - 1
+  - 0
+  - 1
+  - 0
+  - 1
+  - 1
+  - 1
+  - 1
+  - 0
+  some_merged_pulls: 75
+  some_pull_files_size:
+  - 23
+  - 14
+  - 4
+  - 1
+  - 4
+  - 20
+  - 1
+  - 20
+  - 4166
+  - 4151
+  - 6
+  - 9
+  - 3
+  - 81
+  - 1
+  - 2
+  - 13
+  - 27
+  - 2
+  - 11
+  - 5
+  - 18
+  - 12
+  - 23
+  - 8
+  - 8
+  - 30
+  - 2
+  - 4
+  - 25
+  - 11
+  - 11
+  - 1
+  - 1
+  - 18
+  - 1
+  - 10
+  - 8
+  - 17
+  - 13
+  - 6
+  - 3
+  - 1
+  - 1
+  - 12
+  - 5
+  - 8
+  - 9
+  - 9
+  - 31
+  - 13
+  - 20
+  - 19
+  - 19
+  - 42
+  - 5
+  - 2
+  - 4
+  - 39
+  - 12
+  - 9
+  - 3
+  - 18
+  - 3
+  - 7
+  - 3
+  - 10
+  - 38
+  - 23
+  - 21
+  - 10
+  - 3
+  - 1
+  - 7
+  - 1
+  some_pull_hoc_size:
+  - 771
+  - 319
+  - 158
+  - 20
+  - 274
+  - 868
+  - 2
+  - 868
+  - 2104
+  - 1165
+  - 147
+  - 636
+  - 160
+  - 8262
+  - 5
+  - 32
+  - 663
+  - 3154
+  - 236
+  - 419
+  - 638
+  - 874
+  - 511
+  - 2122
+  - 643
+  - 643
+  - 929
+  - 8
+  - 115
+  - 814
+  - 313
+  - 313
+  - 19
+  - 19
+  - 709
+  - 1
+  - 447
+  - 261
+  - 812
+  - 369
+  - 292
+  - 165
+  - 2
+  - 2
+  - 392
+  - 102
+  - 290
+  - 272
+  - 272
+  - 1981
+  - 827
+  - 1154
+  - 709
+  - 709
+  - 3530
+  - 68
+  - 43
+  - 72
+  - 3347
+  - 165
+  - 130
+  - 35
+  - 1761
+  - 83
+  - 364
+  - 363
+  - 959
+  - 3292
+  - 1129
+  - 2203
+  - 415
+  - 81
+  - 27
+  - 295
+  - 8
+  some_pull_lifetime:
+  - 8.0
+  - 10.0
+  - 7.0
+  - 9.0
+  - 9.0
+  - 9.0
+  - 7.0
+  - 1670.0
+  - 10.0
+  - 10.0
+  - 10.0
+  - 35.0
+  - 8.0
+  - 11.0
+  - 8.0
+  - 114.0
+  - 6.0
+  - 15.0
+  - 11.0
+  - 35.0
+  - 66128.0
+  - 7.0
+  - 7.0
+  - 130.0
+  - 9.0
+  - 9.0
+  - 80.0
+  - 9.0
+  - 8.0
+  - 51.0
+  - 10.0
+  - 9.0
+  - 13.0
+  - 16.0
+  - 8.0
+  - 7.0
+  - 10.0
+  - 46.0
+  - 46.0
+  - 23.0
+  - 7.0
+  - 23.0
+  - 32.0
+  - 7.0
+  - 8.0
+  - 10.0
+  - 10.0
+  - 6.0
+  - 6.0
+  - 21.0
+  - 57.0
+  - 9.0
+  - 9.0
+  - 33.0
+  - 8.0
+  - 26.0
+  - 16.0
+  - 58.0
+  - 10.0
+  - 8.0
+  - 9.0
+  - 7.0
+  - 7.0
+  - 8.0
+  - 9.0
+  - 46.0
+  - 70.0
+  - 7.0
+  - 8.0
+  - 10.0
+  - 24.0
+  - 7.0
+  - 7.0
+  - 8.0
+  - 26.0
+  some_release_commits_size:
+  - 14
+  - 12
+  - 137
+  - 3
+  some_release_hoc_size:
+  - 3312
+  - 1777
+  - 1633
+  - 13
+  some_release_interval:
+  - 197408.0
+  - 88205.0
+  - 2073039.0
+  - 998.0
+  some_review_size:
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  some_reviewers_per_pull:
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  some_reviews_per_pull:
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  some_unmerged_pulls: 0
+  what: quality-of-service
+  when: 2026-06-02 02:03:12.000000000 Z
