@@ -153,6 +153,7 @@ const state = reactive({
   isSpeakerActive: false,
   isFullScreen: false,
   isHandRaised: false,
+  isSpeaking: false,
   activeReaction: null as CallReaction | null,
   activeReactionExpiresAt: null as number | null
 });
@@ -525,7 +526,7 @@ const clearParticipantReaction = (
       state.activeReaction = null;
       state.activeReactionExpiresAt = null;
     }
-    return;
+    return false;
   }
 
   const nextParticipantReactions = { ...participantReactions.value };
@@ -722,7 +723,7 @@ const emitEndCallEvent = (
   const me = getAuthUser();
 
   if (!sdk || !me || !targetRoomId) {
-    return;
+    return false;
   }
 
   sdk.sendWebSocketEvent(WebSocketEventType.END_CALL, {
@@ -1363,10 +1364,7 @@ const syncLocalCallBackgroundProcessor = async (): Promise<void> => {
     }
 
     if (!didCreate && localBackgroundProcessorSignature === nextSignature) {
-      if (
-        selectedCallBackgroundMode.value !== 'none' &&
-        !localCameraTrack.getProcessor()?.processedTrack
-      ) {
+      if (!localCameraTrack.getProcessor()?.processedTrack) {
         syncLocalTrackStateWhenProcessedTrackReady(localCameraTrack);
       }
 
@@ -1374,19 +1372,14 @@ const syncLocalCallBackgroundProcessor = async (): Promise<void> => {
       return;
     }
 
-    if (selectedCallBackgroundMode.value !== 'none') {
-      await waitForLocalProcessedVideoTrack(localCameraTrack);
-      syncLocalTrackStateWhenProcessedTrackReady(localCameraTrack);
-    }
+    await waitForLocalProcessedVideoTrack(localCameraTrack);
+    syncLocalTrackStateWhenProcessedTrackReady(localCameraTrack);
 
     hasShownBackgroundProcessorSupportError = false;
     syncLocalTrackState();
   } catch (error) {
     console.warn('[LiveKit] Failed to apply call background processor:', error);
-    if (
-      selectedCallBackgroundMode.value !== 'none' &&
-      !hasShownBackgroundProcessorSupportError
-    ) {
+    if (!hasShownBackgroundProcessorSupportError) {
       hasShownBackgroundProcessorSupportError = true;
       showErrorNotification('Не удалось применить фон для звонка');
     }
@@ -1573,6 +1566,10 @@ const syncRemoteParticipantSpeakingState = () => {
     ...participant,
     isSpeaking: speakingParticipantIds.has(participant.identity)
   }));
+};
+
+const syncLocalParticipantSpeakingState = (activeRoom?: Room | null) => {
+  state.isSpeaking = !!activeRoom?.localParticipant?.isSpeaking;
 };
 
 const syncRemoteParticipantState = () => {
@@ -1948,16 +1945,19 @@ const setupRoomListeners = (activeRoom: Room) => {
     })
     .on(RoomEvent.TrackMuted, () => {
       syncLocalTrackState();
+      syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.TrackUnmuted, () => {
       syncLocalTrackState();
+      syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
       requestHighQualityForAllRemoteVideoTracks();
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.ActiveSpeakersChanged, () => {
+      syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantSpeakingState();
     })
     .on(RoomEvent.ParticipantConnected, participant => {
@@ -2002,11 +2002,13 @@ const setupRoomListeners = (activeRoom: Room) => {
     })
     .on(RoomEvent.Reconnecting, () => {
       syncLocalTrackState();
+      syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
     })
     .on(RoomEvent.Reconnected, () => {
       syncLocalTrackState();
+      syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
       requestHighQualityForAllRemoteVideoTracks();
@@ -2232,6 +2234,7 @@ const resetMediaState = () => {
   state.isSpeakerActive = false;
   state.isFullScreen = false;
   state.isHandRaised = false;
+  state.isSpeaking = false;
   state.activeReaction = null;
   state.activeReactionExpiresAt = null;
 };
@@ -2599,23 +2602,55 @@ export const acceptCall = async () => {
   if (answerAck?.accepted === false) {
     isAcceptingLocally = false;
     showTransientCallStatusNotice('Звонок уже завершен');
-    return;
+    return false;
   }
   localAcceptRoomId = roomId.value;
   localAcceptTopicId = topicId.value;
 
   try {
     await connectToRoom();
+    return true;
   } finally {
     isAcceptingLocally = false;
   }
 };
 
-export const joinPendingGroupCall = async (targetTopicId?: string) => {
-  const pendingGroupCall = targetTopicId
-    ? activeGroupCalls.value[targetTopicId]
-    : null;
-  if (!pendingGroupCall || open.value) return;
+const resolveJoinablePendingGroupCall = (
+  targetTopicId?: string
+): ActiveGroupCallEntry | null => {
+  if (!targetTopicId) {
+    return null;
+  }
+
+  const pendingGroupCall = activeGroupCalls.value[targetTopicId];
+
+  if (pendingGroupCall) {
+    return pendingGroupCall;
+  }
+
+  const topic = useTopics().getSelectedTopic(targetTopicId) as any;
+  const activeCall = topic?.activeCall;
+
+  if (!activeCall?.roomId) {
+    return null;
+  }
+
+  return {
+    roomId: activeCall.roomId,
+    topicId: targetTopicId,
+    caller: topic?.user || null,
+    startTime: activeCall.startTime ?? null,
+    participantCount: activeCall.participantCount,
+    groupMode: activeCall.groupMode,
+    elapsedDurationMs: activeCall.elapsedDurationMs
+  };
+};
+
+export const joinPendingGroupCall = async (
+  targetTopicId?: string
+): Promise<boolean> => {
+  const pendingGroupCall = resolveJoinablePendingGroupCall(targetTopicId);
+  if (!pendingGroupCall || open.value) return false;
 
   const sdk = getChatSDK();
   const me = getAuthUser();
@@ -2625,12 +2660,16 @@ export const joinPendingGroupCall = async (targetTopicId?: string) => {
     caller
   } = pendingGroupCall;
 
-  if (!sdk || !me) return;
+  if (!sdk || !me) return false;
   clearCallStatusNotice();
   shouldEndCallOnConnectFailure = false;
 
   const callStatus = await getLiveKitCallStatus(pendingRoomId, pendingTopicId);
-  if (!callStatus?.active) return;
+  if (!callStatus?.active) {
+    clearUnavailableCallState(pendingRoomId, pendingTopicId);
+    showTransientCallStatusNotice('Звонок уже завершен');
+    return false;
+  }
 
   user.value = caller || null;
   roomId.value = pendingRoomId;
@@ -2666,13 +2705,14 @@ export const joinPendingGroupCall = async (targetTopicId?: string) => {
   if (answerAck?.accepted === false) {
     isAcceptingLocally = false;
     showTransientCallStatusNotice('Звонок уже завершен');
-    return;
+    return false;
   }
   localAcceptRoomId = roomId.value;
   localAcceptTopicId = topicId.value;
 
   try {
     await connectToRoom();
+    return true;
   } finally {
     isAcceptingLocally = false;
   }
@@ -2740,17 +2780,22 @@ export const openGroupCallInviteUrl = async (
   return hydrateInvitedGroupCallFromUrl();
 };
 
-export const joinInvitedGroupCall = async () => {
+export const joinInvitedGroupCall = async (): Promise<boolean | void> => {
   const sdk = getChatSDK();
   const me = getAuthUser();
   const invite = invitedGroupCall.value;
 
-  if (!sdk || !me || !invite || open.value) return;
+  if (!sdk || !me || !invite || open.value) return false;
   clearCallStatusNotice();
   shouldEndCallOnConnectFailure = false;
 
   const callStatus = await getLiveKitCallStatus(invite.roomId, invite.topicId);
-  if (!callStatus?.active) return;
+  if (!callStatus?.active) {
+    clearUnavailableCallState(invite.roomId, invite.topicId);
+    clearInviteParamsFromUrl();
+    showTransientCallStatusNotice('Звонок уже завершен');
+    return false;
+  }
 
   user.value = me as any;
   roomId.value = invite.roomId;
@@ -2794,6 +2839,7 @@ export const joinInvitedGroupCall = async () => {
   try {
     await connectToRoom();
     clearInviteParamsFromUrl();
+    return true;
   } finally {
     isAcceptingLocally = false;
   }

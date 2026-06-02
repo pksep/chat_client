@@ -887,7 +887,7 @@ const localParticipantView = computed(() => {
       isHandRaised: liveKitState.isHandRaised,
       activeReaction: liveKitState.activeReaction,
       activeReactionExpiresAt: liveKitState.activeReactionExpiresAt,
-      isSpeaking: false,
+      isSpeaking: liveKitState.isSpeaking,
       isMicActive: liveKitState.isMicActive,
       backgroundPlaceholderStyle: localCallBackgroundPlaceholderStyle.value
     },
@@ -924,7 +924,7 @@ const localParticipantDisplayViews = computed(() => {
       isHandRaised: liveKitState.isHandRaised,
       activeReaction: liveKitState.activeReaction,
       activeReactionExpiresAt: liveKitState.activeReactionExpiresAt,
-      isSpeaking: false,
+      isSpeaking: liveKitState.isSpeaking,
       isMicActive: liveKitState.isMicActive,
       backgroundPlaceholderStyle: localCallBackgroundPlaceholderStyle.value
     },
@@ -981,17 +981,26 @@ const buildPromotedParticipantOrder = (
     ...nextOrder.filter(participantId => {
       const participant = participantMap.get(participantId);
 
-      return !!participant?.isSpeaking && !participant.isScreenShareActive;
+      return !!participant?.isHandRaised && !participant.isScreenShareActive;
     }),
     ...nextOrder.filter(participantId => {
       const participant = participantMap.get(participantId);
 
       return (
-        (!!participant?.isHandRaised ||
-          !!participant?.activeReactionEmoji ||
+        !!participant?.isSpeaking &&
+        !participant.isScreenShareActive &&
+        !participant.isHandRaised
+      );
+    }),
+    ...nextOrder.filter(participantId => {
+      const participant = participantMap.get(participantId);
+
+      return (
+        (!!participant?.activeReactionEmoji ||
           !!participant?.activeReactionVideoSrc) &&
         !participant.isScreenShareActive &&
-        !participant.isSpeaking
+        !participant.isSpeaking &&
+        !participant.isHandRaised
       );
     })
   ];

@@ -167,7 +167,14 @@ import {
   LocalVideoTrack,
   VideoPresets
 } from 'livekit-client';
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  ref,
+  shallowRef,
+  watch
+} from 'vue';
 import { useCallBackground } from '../../composables/useCallBackground';
 import {
   CALL_BACKGROUND_ASSET_PATHS,
@@ -210,8 +217,8 @@ const isLiveKitLoading = ref(false);
 const isTensorflowLoading = ref(false);
 const liveKitPreviewError = ref('');
 const tensorflowPreviewError = ref('');
-const activePreviewTrack = ref<LocalVideoTrack | null>(null);
-const sourcePreviewTrack = ref<LocalVideoTrack | null>(null);
+const activePreviewTrack = shallowRef<LocalVideoTrack | null>(null);
+const sourcePreviewTrack = shallowRef<LocalVideoTrack | null>(null);
 let previewSessionId = 0;
 let activeTensorflowPreviewController: MediapipeMulticlassBackgroundPreviewController | null =
   null;

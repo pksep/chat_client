@@ -271,7 +271,7 @@ export const createMediapipeMulticlassBackgroundTrackProcessor = (
   let sourceVideo: HTMLVideoElement | undefined;
   let backgroundImage: HTMLImageElement | null = null;
   let imageSegmenter: ImageSegmenter | null = null;
-  let frameTimerId: ReturnType<typeof window.setTimeout> | null = null;
+  let frameTimerId: number | null = null;
   let renderFrameId: number | null = null;
   let latestMaskSource: CanvasImageSource | null = null;
   let isDestroyed = false;
