@@ -31,7 +31,12 @@ import {
   shouldPlayNotificationSound
 } from './useNotificationSoundPolicy';
 import { AudioOutput } from './useAudioOutput';
+import {
+  CALL_BACKGROUND_ASSET_PATHS,
+  MULTICLASS_VIRTUAL_BACKGROUND_DEFAULTS
+} from './callBackgroundProcessorConfig';
 import { prewarmCallBackgroundAssets } from './callBackgroundWarmup';
+import { createMediapipeMulticlassBackgroundTrackProcessor } from './mediapipeMulticlassBackgroundTrackProcessor';
 import { copyTextToClipboard } from '../utils/copyTextToClipboard';
 import { parseGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
 import {
@@ -148,6 +153,7 @@ const state = reactive({
   isSpeakerActive: false,
   isFullScreen: false,
   isHandRaised: false,
+  isSpeaking: false,
   activeReaction: null as CallReaction | null,
   activeReactionExpiresAt: null as number | null
 });
@@ -199,8 +205,8 @@ const CAMERA_CAPTURE_DEFAULTS = {
 };
 const MANAGED_BACKGROUND_CAMERA_CAPTURE_DEFAULTS = {
   facingMode: 'user' as const,
-  frameRate: 20,
-  resolution: VideoPresets.h540.resolution
+  frameRate: 24,
+  resolution: VideoPresets.h720.resolution
 };
 const CAMERA_PUBLISH_DEFAULTS = {
   degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
@@ -211,8 +217,8 @@ const CAMERA_PUBLISH_DEFAULTS = {
 const MANAGED_BACKGROUND_CAMERA_PUBLISH_DEFAULTS = {
   degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
   simulcast: true,
-  videoEncoding: VideoPresets.h540.encoding,
-  videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360]
+  videoEncoding: VideoPresets.h720.encoding,
+  videoSimulcastLayers: [VideoPresets.h216, VideoPresets.h540]
 };
 const SCREEN_SHARE_CAPTURE_DEFAULTS = {
   contentHint: 'detail' as const,
@@ -226,11 +232,11 @@ const SCREEN_SHARE_PUBLISH_DEFAULTS = {
   simulcast: false,
   screenShareEncoding: ScreenSharePresets.original.encoding
 };
-const CALL_BACKGROUND_ASSET_PATHS = {
-  tasksVisionFileSet: '/call-background/wasm',
-  modelAssetPath: '/call-background/selfie_segmenter.tflite'
-};
-let localBackgroundProcessor: BackgroundProcessorWrapper | null = null;
+type LocalManagedVideoProcessor =
+  | BackgroundProcessorWrapper
+  | Parameters<LocalVideoTrack['setProcessor']>[0];
+
+let localBackgroundProcessor: LocalManagedVideoProcessor | null = null;
 let localBackgroundProcessorTrack: LocalVideoTrack | null = null;
 let localBackgroundProcessorSignature: string | null = null;
 let hasShownBackgroundProcessorSupportError = false;
@@ -280,22 +286,15 @@ const getCallBackgroundProcessorSignature = (): string => {
   return 'none';
 };
 
+const shouldUseMediapipeImageBackgroundProcessor = (): boolean =>
+  selectedCallBackgroundMode.value === 'image' &&
+  !!selectedCallBackgroundImageUrl.value;
+
 const getCallBackgroundProcessorConfig = () => {
   if (selectedCallBackgroundMode.value === 'blur') {
     return {
       mode: 'background-blur' as const,
       blurRadius: 12,
-      assetPaths: CALL_BACKGROUND_ASSET_PATHS
-    };
-  }
-
-  if (
-    selectedCallBackgroundMode.value === 'image' &&
-    selectedCallBackgroundImageUrl.value
-  ) {
-    return {
-      mode: 'virtual-background' as const,
-      imagePath: selectedCallBackgroundImageUrl.value,
       assetPaths: CALL_BACKGROUND_ASSET_PATHS
     };
   }
@@ -329,6 +328,12 @@ const getCallBackgroundProcessorSwitchOptions = () => {
   };
 };
 
+const isLiveKitBackgroundProcessorWrapper = (
+  processor: LocalManagedVideoProcessor | null
+): processor is BackgroundProcessorWrapper =>
+  !!processor &&
+  typeof (processor as BackgroundProcessorWrapper).switchTo === 'function';
+
 const stopLocalBackgroundProcessor = async (): Promise<void> => {
   const activeTrack = localBackgroundProcessorTrack;
   localBackgroundProcessorTrack = null;
@@ -349,7 +354,7 @@ const stopLocalBackgroundProcessor = async (): Promise<void> => {
 const ensureLocalBackgroundProcessor = async (
   track: LocalVideoTrack
 ): Promise<{
-  processor: BackgroundProcessorWrapper | null;
+  processor: LocalManagedVideoProcessor | null;
   didCreate: boolean;
 }> => {
   if (localBackgroundProcessorTrack === track && localBackgroundProcessor) {
@@ -366,10 +371,19 @@ const ensureLocalBackgroundProcessor = async (
     await stopLocalBackgroundProcessor();
   }
 
-  const processor = BackgroundProcessor(
-    getCallBackgroundProcessorConfig(),
-    'call-background-processor'
-  );
+  const processor = shouldUseMediapipeImageBackgroundProcessor()
+    ? createMediapipeMulticlassBackgroundTrackProcessor({
+        backgroundImageUrl: selectedCallBackgroundImageUrl.value || '',
+        edgeBlurAmount: MULTICLASS_VIRTUAL_BACKGROUND_DEFAULTS.maskBlurRadius,
+        foregroundThreshold:
+          MULTICLASS_VIRTUAL_BACKGROUND_DEFAULTS.foregroundThreshold,
+        maskProfile: MULTICLASS_VIRTUAL_BACKGROUND_DEFAULTS.maskProfile,
+        outputFps: MANAGED_BACKGROUND_CAMERA_CAPTURE_DEFAULTS.frameRate
+      })
+    : BackgroundProcessor(
+        getCallBackgroundProcessorConfig(),
+        'call-background-processor'
+      );
 
   await track.setProcessor(processor);
   localBackgroundProcessorTrack = track;
@@ -512,7 +526,7 @@ const clearParticipantReaction = (
       state.activeReaction = null;
       state.activeReactionExpiresAt = null;
     }
-    return;
+    return false;
   }
 
   const nextParticipantReactions = { ...participantReactions.value };
@@ -709,7 +723,7 @@ const emitEndCallEvent = (
   const me = getAuthUser();
 
   if (!sdk || !me || !targetRoomId) {
-    return;
+    return false;
   }
 
   sdk.sendWebSocketEvent(WebSocketEventType.END_CALL, {
@@ -1314,22 +1328,43 @@ const syncLocalCallBackgroundProcessor = async (): Promise<void> => {
     return;
   }
 
+  if (selectedCallBackgroundMode.value === 'none') {
+    await stopLocalBackgroundProcessor();
+    hasShownBackgroundProcessorSupportError = false;
+    syncLocalTrackState();
+    return;
+  }
+
   hasShownBackgroundProcessorSupportError = false;
 
   try {
-    const { processor, didCreate } =
-      await ensureLocalBackgroundProcessor(localCameraTrack);
     const nextSignature = getCallBackgroundProcessorSignature();
+    let processor = localBackgroundProcessor;
+    let didCreate = false;
+
+    if (!processor || localBackgroundProcessorTrack !== localCameraTrack) {
+      ({ processor, didCreate } =
+        await ensureLocalBackgroundProcessor(localCameraTrack));
+    } else if (localBackgroundProcessorSignature !== nextSignature) {
+      if (
+        shouldUseMediapipeImageBackgroundProcessor() ||
+        !isLiveKitBackgroundProcessorWrapper(processor)
+      ) {
+        await stopLocalBackgroundProcessor();
+        ({ processor, didCreate } =
+          await ensureLocalBackgroundProcessor(localCameraTrack));
+      } else {
+        await processor.switchTo(getCallBackgroundProcessorSwitchOptions());
+        localBackgroundProcessorSignature = nextSignature;
+      }
+    }
 
     if (!processor) {
       return;
     }
 
     if (!didCreate && localBackgroundProcessorSignature === nextSignature) {
-      if (
-        selectedCallBackgroundMode.value !== 'none' &&
-        !localCameraTrack.getProcessor()?.processedTrack
-      ) {
+      if (!localCameraTrack.getProcessor()?.processedTrack) {
         syncLocalTrackStateWhenProcessedTrackReady(localCameraTrack);
       }
 
@@ -1337,24 +1372,14 @@ const syncLocalCallBackgroundProcessor = async (): Promise<void> => {
       return;
     }
 
-    if (!didCreate) {
-      await processor.switchTo(getCallBackgroundProcessorSwitchOptions());
-      localBackgroundProcessorSignature = nextSignature;
-    }
-
-    if (selectedCallBackgroundMode.value !== 'none' && !didCreate) {
-      await waitForLocalProcessedVideoTrack(localCameraTrack);
-      syncLocalTrackStateWhenProcessedTrackReady(localCameraTrack);
-    }
+    await waitForLocalProcessedVideoTrack(localCameraTrack);
+    syncLocalTrackStateWhenProcessedTrackReady(localCameraTrack);
 
     hasShownBackgroundProcessorSupportError = false;
     syncLocalTrackState();
   } catch (error) {
     console.warn('[LiveKit] Failed to apply call background processor:', error);
-    if (
-      selectedCallBackgroundMode.value !== 'none' &&
-      !hasShownBackgroundProcessorSupportError
-    ) {
+    if (!hasShownBackgroundProcessorSupportError) {
       hasShownBackgroundProcessorSupportError = true;
       showErrorNotification('Не удалось применить фон для звонка');
     }
@@ -1541,6 +1566,10 @@ const syncRemoteParticipantSpeakingState = () => {
     ...participant,
     isSpeaking: speakingParticipantIds.has(participant.identity)
   }));
+};
+
+const syncLocalParticipantSpeakingState = (activeRoom?: Room | null) => {
+  state.isSpeaking = !!activeRoom?.localParticipant?.isSpeaking;
 };
 
 const syncRemoteParticipantState = () => {
@@ -1916,16 +1945,19 @@ const setupRoomListeners = (activeRoom: Room) => {
     })
     .on(RoomEvent.TrackMuted, () => {
       syncLocalTrackState();
+      syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.TrackUnmuted, () => {
       syncLocalTrackState();
+      syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
       requestHighQualityForAllRemoteVideoTracks();
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.ActiveSpeakersChanged, () => {
+      syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantSpeakingState();
     })
     .on(RoomEvent.ParticipantConnected, participant => {
@@ -1970,11 +2002,13 @@ const setupRoomListeners = (activeRoom: Room) => {
     })
     .on(RoomEvent.Reconnecting, () => {
       syncLocalTrackState();
+      syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
     })
     .on(RoomEvent.Reconnected, () => {
       syncLocalTrackState();
+      syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
       requestHighQualityForAllRemoteVideoTracks();
@@ -2200,6 +2234,7 @@ const resetMediaState = () => {
   state.isSpeakerActive = false;
   state.isFullScreen = false;
   state.isHandRaised = false;
+  state.isSpeaking = false;
   state.activeReaction = null;
   state.activeReactionExpiresAt = null;
 };
@@ -2567,23 +2602,55 @@ export const acceptCall = async () => {
   if (answerAck?.accepted === false) {
     isAcceptingLocally = false;
     showTransientCallStatusNotice('Звонок уже завершен');
-    return;
+    return false;
   }
   localAcceptRoomId = roomId.value;
   localAcceptTopicId = topicId.value;
 
   try {
     await connectToRoom();
+    return true;
   } finally {
     isAcceptingLocally = false;
   }
 };
 
-export const joinPendingGroupCall = async (targetTopicId?: string) => {
-  const pendingGroupCall = targetTopicId
-    ? activeGroupCalls.value[targetTopicId]
-    : null;
-  if (!pendingGroupCall || open.value) return;
+const resolveJoinablePendingGroupCall = (
+  targetTopicId?: string
+): ActiveGroupCallEntry | null => {
+  if (!targetTopicId) {
+    return null;
+  }
+
+  const pendingGroupCall = activeGroupCalls.value[targetTopicId];
+
+  if (pendingGroupCall) {
+    return pendingGroupCall;
+  }
+
+  const topic = useTopics().getSelectedTopic(targetTopicId) as any;
+  const activeCall = topic?.activeCall;
+
+  if (!activeCall?.roomId) {
+    return null;
+  }
+
+  return {
+    roomId: activeCall.roomId,
+    topicId: targetTopicId,
+    caller: topic?.user || null,
+    startTime: activeCall.startTime ?? null,
+    participantCount: activeCall.participantCount,
+    groupMode: activeCall.groupMode,
+    elapsedDurationMs: activeCall.elapsedDurationMs
+  };
+};
+
+export const joinPendingGroupCall = async (
+  targetTopicId?: string
+): Promise<boolean> => {
+  const pendingGroupCall = resolveJoinablePendingGroupCall(targetTopicId);
+  if (!pendingGroupCall || open.value) return false;
 
   const sdk = getChatSDK();
   const me = getAuthUser();
@@ -2593,12 +2660,16 @@ export const joinPendingGroupCall = async (targetTopicId?: string) => {
     caller
   } = pendingGroupCall;
 
-  if (!sdk || !me) return;
+  if (!sdk || !me) return false;
   clearCallStatusNotice();
   shouldEndCallOnConnectFailure = false;
 
   const callStatus = await getLiveKitCallStatus(pendingRoomId, pendingTopicId);
-  if (!callStatus?.active) return;
+  if (!callStatus?.active) {
+    clearUnavailableCallState(pendingRoomId, pendingTopicId);
+    showTransientCallStatusNotice('Звонок уже завершен');
+    return false;
+  }
 
   user.value = caller || null;
   roomId.value = pendingRoomId;
@@ -2634,13 +2705,14 @@ export const joinPendingGroupCall = async (targetTopicId?: string) => {
   if (answerAck?.accepted === false) {
     isAcceptingLocally = false;
     showTransientCallStatusNotice('Звонок уже завершен');
-    return;
+    return false;
   }
   localAcceptRoomId = roomId.value;
   localAcceptTopicId = topicId.value;
 
   try {
     await connectToRoom();
+    return true;
   } finally {
     isAcceptingLocally = false;
   }
@@ -2708,17 +2780,22 @@ export const openGroupCallInviteUrl = async (
   return hydrateInvitedGroupCallFromUrl();
 };
 
-export const joinInvitedGroupCall = async () => {
+export const joinInvitedGroupCall = async (): Promise<boolean | void> => {
   const sdk = getChatSDK();
   const me = getAuthUser();
   const invite = invitedGroupCall.value;
 
-  if (!sdk || !me || !invite || open.value) return;
+  if (!sdk || !me || !invite || open.value) return false;
   clearCallStatusNotice();
   shouldEndCallOnConnectFailure = false;
 
   const callStatus = await getLiveKitCallStatus(invite.roomId, invite.topicId);
-  if (!callStatus?.active) return;
+  if (!callStatus?.active) {
+    clearUnavailableCallState(invite.roomId, invite.topicId);
+    clearInviteParamsFromUrl();
+    showTransientCallStatusNotice('Звонок уже завершен');
+    return false;
+  }
 
   user.value = me as any;
   roomId.value = invite.roomId;
@@ -2762,6 +2839,7 @@ export const joinInvitedGroupCall = async () => {
   try {
     await connectToRoom();
     clearInviteParamsFromUrl();
+    return true;
   } finally {
     isAcceptingLocally = false;
   }
