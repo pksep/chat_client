@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="224585">
+<fb version="0.19.6" size="224580">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <inserted t="I">8</inserted>
-    <seconds t="F">133.085752939</seconds>
+    <seconds t="F">121.662398646</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-06-02T20:31:59Z</when>
+    <when t="T">2026-06-02T22:40:39Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -14891,8 +14891,8 @@
   </f>
   <f>
     <_id t="I">706</_id>
-    <_job t="I">26846097216</_job>
-    <_time t="T">2026-06-02T20:29:56Z</_time>
+    <_job t="I">26852160345</_job>
+    <_time t="T">2026-06-02T22:38:48Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <branch t="S">chat-126</branch>
     <comments t="I">2</comments>
@@ -14917,8 +14917,8 @@
   </f>
   <f>
     <_id t="I">707</_id>
-    <_job t="I">26846097216</_job>
-    <_time t="T">2026-06-02T20:30:03Z</_time>
+    <_job t="I">26852160345</_job>
+    <_time t="T">2026-06-02T22:38:55Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <branch t="S">canary</branch>
     <comments t="I">1</comments>
@@ -14943,8 +14943,8 @@
   </f>
   <f>
     <_id t="I">708</_id>
-    <_job t="I">26846097216</_job>
-    <_time t="T">2026-06-02T20:30:05Z</_time>
+    <_job t="I">26852160345</_job>
+    <_time t="T">2026-06-02T22:38:57Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <branch t="S">chat-134</branch>
     <comments t="I">1</comments>
@@ -14969,11 +14969,11 @@
   </f>
   <f>
     <_id t="I">709</_id>
-    <_job t="I">26846097216</_job>
-    <_time t="T">2026-06-02T20:30:07Z</_time>
+    <_job t="I">26852160345</_job>
+    <_time t="T">2026-06-02T22:38:59Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <events_were_scanned t="I">12723141262</events_were_scanned>
+    <events_were_scanned t="I">12163712568</events_were_scanned>
     <latest_issue_was_found t="I">72</latest_issue_was_found>
     <min_pull_was_found t="I">263</min_pull_was_found>
     <repository t="I">1053332035</repository>
