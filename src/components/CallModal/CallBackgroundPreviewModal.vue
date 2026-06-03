@@ -24,7 +24,7 @@
             class="call-background-preview__overlay"
           >
             <p v-if="tensorflowPreviewError">{{ tensorflowPreviewError }}</p>
-            <p v-else>Loading MediaPipe preview...</p>
+            <p v-else>Загружаем предпросмотр камеры...</p>
           </div>
         </div>
 
@@ -41,7 +41,7 @@
             class="call-background-preview__overlay"
           >
             <p v-if="liveKitPreviewError">{{ liveKitPreviewError }}</p>
-            <p v-else>Connecting camera...</p>
+            <p v-else>Подключаем камеру...</p>
           </div>
         </div>
       </div>
@@ -53,7 +53,7 @@
           class="call-background-preview__cancel"
           @click="$emit('close')"
         >
-          Cancel
+          Отменить
         </Button>
         <Button
           :type="ButtonTypeEnum.primary"
@@ -62,7 +62,7 @@
           :disabled="disabled || isApplying"
           @click="$emit('apply')"
         >
-          {{ isApplying ? 'Saving...' : 'Apply' }}
+          {{ isApplying ? 'Сохраняем...' : 'Применить' }}
         </Button>
       </div>
     </div>
@@ -104,7 +104,7 @@
             class="call-background-preview__overlay"
           >
             <p v-if="tensorflowPreviewError">{{ tensorflowPreviewError }}</p>
-            <p v-else>Loading MediaPipe preview...</p>
+            <p v-else>Загружаем предпросмотр камеры...</p>
           </div>
         </div>
 
@@ -121,7 +121,7 @@
             class="call-background-preview__overlay"
           >
             <p v-if="liveKitPreviewError">{{ liveKitPreviewError }}</p>
-            <p v-else>Connecting camera...</p>
+            <p v-else>Подключаем камеру...</p>
           </div>
         </div>
       </div>
@@ -134,7 +134,7 @@
           :disabled="disabled || isApplying"
           @click="$emit('apply')"
         >
-          {{ isApplying ? 'Saving...' : 'Apply' }}
+          {{ isApplying ? 'Сохраняем...' : 'Применить' }}
         </Button>
       </div>
     </div>
@@ -204,10 +204,10 @@ defineEmits<{
 const { getCallBackgroundOptionById } = useCallBackground();
 
 const PREVIEW_TRACK_SETTINGS = {
-  frameRate: 24,
-  resolution: VideoPresets.h720.resolution,
+  frameRate: 15,
+  resolution: VideoPresets.h360.resolution,
   delegate: 'GPU' as const,
-  maxFps: 30
+  maxFps: 15
 };
 
 const singlePreviewVideoRef = ref<HTMLVideoElement | null>(null);
@@ -259,7 +259,7 @@ const waitForVideoReady = async (video: HTMLVideoElement): Promise<void> => {
     };
     const handleError = () => {
       cleanup();
-      reject(new Error('Could not initialize the preview camera stream'));
+      reject(new Error('Не получилось запустить камеру для предпросмотра'));
     };
     const cleanup = () => {
       video.removeEventListener('loadeddata', handleLoadedData);
@@ -331,7 +331,7 @@ const startSinglePreview = async (currentSessionId: number): Promise<void> => {
     if (previewSelection.value.mode !== 'none') {
       if (!supportsBackgroundProcessors()) {
         throw new Error(
-          'Virtual camera background is not supported in this browser'
+          'Виртуальный фон камеры не поддерживается в этом браузере'
         );
       }
 
@@ -378,7 +378,7 @@ const startSinglePreview = async (currentSessionId: number): Promise<void> => {
     liveKitPreviewError.value =
       error instanceof Error && error.message
         ? error.message
-        : 'Could not enable the camera preview';
+        : 'Не получилось включить камеру для предпросмотра';
     isLiveKitLoading.value = false;
   }
 };
@@ -390,7 +390,7 @@ const startTensorflowPreview = async (
   const tensorflowCanvas = tensorflowPreviewCanvasRef.value;
 
   if (!sourceVideo || !tensorflowCanvas) {
-    throw new Error('MediaPipe preview is not ready yet');
+    throw new Error('Предпросмотр MediaPipe пока не готов');
   }
 
   isTensorflowLoading.value = true;
@@ -447,7 +447,7 @@ const startTensorflowPreview = async (
     tensorflowPreviewError.value =
       error instanceof Error && error.message
         ? error.message
-        : 'Could not start MediaPipe preview';
+        : 'Не получилось запустить предпросмотр MediaPipe';
     isTensorflowLoading.value = false;
   }
 };
@@ -477,7 +477,7 @@ const startPreview = async (): Promise<void> => {
     liveKitPreviewError.value =
       error instanceof Error && error.message
         ? error.message
-        : 'Could not enable the camera preview';
+        : 'Не получилось включить камеру для предпросмотра';
   }
 };
 

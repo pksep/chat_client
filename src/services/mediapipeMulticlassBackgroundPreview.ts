@@ -43,8 +43,8 @@ const MASK_PROFILE_CLASS_INDICES: Record<
   'no-accessories': [1, 2, 3, 4],
   'body-core': [1, 2, 3]
 };
-const SEGMENTATION_INPUT_MAX_WIDTH = 256;
-const PREVIEW_SEGMENTATION_INTERVAL_MS = 45;
+const SEGMENTATION_INPUT_MAX_WIDTH = 192;
+const PREVIEW_SEGMENTATION_INTERVAL_MS = 80;
 
 const getVisionFileset = async () => {
   if (!wasmFilesetPromise) {
@@ -254,32 +254,37 @@ export const createMediapipeMulticlassBackgroundPreview = async (
   const blurredMaskCanvas = document.createElement('canvas');
   const segmentationCanvas = document.createElement('canvas');
   const segmentationMaskCanvas = document.createElement('canvas');
+  const sourceFrameCanvas = document.createElement('canvas');
   const maskContext = maskCanvas.getContext('2d');
   const segmentationContext = segmentationCanvas.getContext('2d', {
     alpha: false
   });
   const segmentationMaskContext = segmentationMaskCanvas.getContext('2d');
+  const sourceFrameContext = sourceFrameCanvas.getContext('2d', {
+    alpha: false
+  });
 
-  if (!maskContext || !segmentationContext || !segmentationMaskContext) {
+  if (
+    !maskContext ||
+    !segmentationContext ||
+    !segmentationMaskContext ||
+    !sourceFrameContext
+  ) {
     throw new Error('MediaPipe preview mask canvas is not available');
   }
 
   let frameTimerId: number | null = null;
-  let renderFrameId: number | null = null;
   let isStopped = false;
   let isProcessingFrame = false;
   let didReportError = false;
   let latestMaskSource: CanvasImageSource | null = null;
+  let latestForegroundFrameSource: CanvasImageSource | null = null;
 
   const stop = (): void => {
     isStopped = true;
     if (frameTimerId !== null) {
       window.clearTimeout(frameTimerId);
       frameTimerId = null;
-    }
-    if (renderFrameId !== null) {
-      window.cancelAnimationFrame(renderFrameId);
-      renderFrameId = null;
     }
     outputContext.clearRect(
       0,
@@ -289,36 +294,26 @@ export const createMediapipeMulticlassBackgroundPreview = async (
     );
   };
 
-  const drawFrame = (): void => {
-    if (isStopped) {
-      return;
-    }
+  const renderCompositedFrame = (width: number, height: number): void => {
+    ensureCanvasSize(options.outputCanvas, width, height);
 
-    if (
-      options.sourceVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
-      options.sourceVideo.videoWidth &&
-      options.sourceVideo.videoHeight
-    ) {
-      const width = options.sourceVideo.videoWidth;
-      const height = options.sourceVideo.videoHeight;
+    outputContext.save();
+    outputContext.clearRect(0, 0, width, height);
 
-      ensureCanvasSize(options.outputCanvas, width, height);
-
-      outputContext.save();
-      outputContext.clearRect(0, 0, width, height);
+    if (latestForegroundFrameSource) {
+      outputContext.drawImage(latestForegroundFrameSource, 0, 0, width, height);
+    } else {
       outputContext.drawImage(options.sourceVideo, 0, 0, width, height);
-
-      if (latestMaskSource) {
-        outputContext.globalCompositeOperation = 'destination-in';
-        outputContext.drawImage(latestMaskSource, 0, 0, width, height);
-        outputContext.globalCompositeOperation = 'destination-over';
-        drawCoverImage(outputContext, backgroundImage, width, height);
-      }
-
-      outputContext.restore();
     }
 
-    renderFrameId = window.requestAnimationFrame(drawFrame);
+    if (latestMaskSource) {
+      outputContext.globalCompositeOperation = 'destination-in';
+      outputContext.drawImage(latestMaskSource, 0, 0, width, height);
+      outputContext.globalCompositeOperation = 'destination-over';
+      drawCoverImage(outputContext, backgroundImage, width, height);
+    }
+
+    outputContext.restore();
   };
 
   const renderNextFrame = (): void => {
@@ -364,6 +359,7 @@ export const createMediapipeMulticlassBackgroundPreview = async (
       options.sourceVideo.height = height;
 
       ensureCanvasSize(options.outputCanvas, width, height);
+      ensureCanvasSize(sourceFrameCanvas, width, height);
       const segmentationScale = Math.min(
         1,
         SEGMENTATION_INPUT_MAX_WIDTH / width
@@ -388,6 +384,8 @@ export const createMediapipeMulticlassBackgroundPreview = async (
         segmentationHeight
       );
       ensureCanvasSize(maskCanvas, width, height);
+      sourceFrameContext.clearRect(0, 0, width, height);
+      sourceFrameContext.drawImage(options.sourceVideo, 0, 0, width, height);
 
       segmentationContext.clearRect(
         0,
@@ -396,7 +394,7 @@ export const createMediapipeMulticlassBackgroundPreview = async (
         segmentationHeight
       );
       segmentationContext.drawImage(
-        options.sourceVideo,
+        sourceFrameCanvas,
         0,
         0,
         segmentationWidth,
@@ -446,6 +444,8 @@ export const createMediapipeMulticlassBackgroundPreview = async (
         blurredMaskCanvas,
         options.edgeBlurAmount
       );
+      latestForegroundFrameSource = sourceFrameCanvas;
+      renderCompositedFrame(width, height);
 
       options.onFrameProcessed?.({
         segmentationTimeMs,
@@ -468,7 +468,6 @@ export const createMediapipeMulticlassBackgroundPreview = async (
     }
   };
 
-  renderFrameId = window.requestAnimationFrame(drawFrame);
   renderNextFrame();
 
   return {
