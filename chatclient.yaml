@@ -3,10 +3,10 @@
   cycles: 1
   deleted: 8
   inserted: 8
-  seconds: 121.662398646
+  seconds: 141.6627885
   version: 0.60.0
   what: judges-summary
-  when: 2026-06-02 22:40:39.906642192 Z
+  when: 2026-06-03 00:18:36.665649038 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -13731,6 +13731,7 @@
   is_human: 1
   issue: 259
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -13755,6 +13756,7 @@
   is_human: 1
   issue: 260
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -13779,6 +13781,7 @@
   is_human: 1
   issue: 261
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -13786,11 +13789,11 @@
   where: github
   who: 93074025
 - _id: 709
-  _job: 26852160345
-  _time: 2026-06-02 22:38:59.544843128 Z
+  _job: 26855759918
+  _time: 2026-06-03 00:16:24.520927809 Z
   _version: 0.19.6/0.60.0/0.17.11
   earliest_issue_was_found: 1
-  events_were_scanned: 12163712568
+  events_were_scanned: 12736054528
   latest_issue_was_found: 72
   min_pull_was_found: 263
   repository: 1053332035
