@@ -462,12 +462,22 @@ const handleCall = async () => {
 
 const handleHeaderCallClick = async () => {
   if (hasInvitedCall.value && !isCallActive.value) {
-    await joinInviteGroupCall();
+    const didJoin = await joinInviteGroupCall();
+
+    if (!didJoin) {
+      await handleCall();
+    }
+
     return;
   }
 
   if (currentHeaderCallEntry.value && !isCallActive.value) {
-    await joinGroupCall(route.value.id);
+    const didJoin = await joinGroupCall(route.value.id);
+
+    if (!didJoin) {
+      await handleCall();
+    }
+
     return;
   }
 
