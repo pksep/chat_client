@@ -60,7 +60,9 @@ const hashNotificationId = (value: string): number => {
   return Math.abs(hash || 1) % MAX_NOTIFICATION_ID;
 };
 
-const normalizeTopicType = (topicType?: string | null): 'DM' | 'GROUP' | null => {
+const normalizeTopicType = (
+  topicType?: string | null
+): 'DM' | 'GROUP' | null => {
   if (!topicType) {
     return null;
   }
@@ -203,7 +205,9 @@ export const initTauriNotifications = async (
     });
 
     await onAction(notification => {
-      onNotificationAction((notification.extra || {}) as TauriNotificationExtra);
+      onNotificationAction(
+        (notification.extra || {}) as TauriNotificationExtra
+      );
     });
 
     const pendingPayload = await invoke<string | null>(

@@ -135,7 +135,8 @@ export const navigateToNotificationTarget = (
 ): boolean => {
   const target = resolveNotificationTarget(payload);
   const directUrl = payload.url || payload.link;
-  const targetUrl = target.url || buildNotificationTargetUrl(target.topicId, target.topicType);
+  const targetUrl =
+    target.url || buildNotificationTargetUrl(target.topicId, target.topicType);
 
   if (!target.topicId && !directUrl) {
     return false;

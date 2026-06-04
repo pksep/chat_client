@@ -206,8 +206,7 @@ const DIRECT_CALL_RECONNECT_GRACE_MS = 20000;
 const DIRECT_CALL_RECONNECT_POLL_MS = 2000;
 const DIRECT_CALL_RECONNECT_NOTICE =
   'Связь нестабильна. Пытаемся переподключить звонок...';
-const DIRECT_CALL_RECONNECT_FAILED_NOTICE =
-  'Не удалось восстановить звонок';
+const DIRECT_CALL_RECONNECT_FAILED_NOTICE = 'Не удалось восстановить звонок';
 const DIRECT_CALL_ENDED_NOTICE = 'Звонок завершен';
 const dismissedIncomingCallRooms = new Map<string, number>();
 const dismissedIncomingCallTopics = new Map<string, number>();
@@ -257,7 +256,7 @@ let requestedVideoActive = false;
 let videoToggleOperation: Promise<void> | null = null;
 let suppressParticipantPresenceNotifications = true;
 let presenceAudioContext: AudioContext | null = null;
-let pendingAudioRecoveryTimeouts = new Set<ReturnType<typeof setTimeout>>();
+const pendingAudioRecoveryTimeouts = new Set<ReturnType<typeof setTimeout>>();
 const pendingRemoteAudioResubscribeTimeouts = new Map<
   string,
   ReturnType<typeof setTimeout>
@@ -726,7 +725,10 @@ const resetDirectCallRecoveryState = (
   directCallRecoveryTopicId = null;
   directCallRecoveryAttemptId += 1;
 
-  if (!preserveNotice && callStatusNotice.value === DIRECT_CALL_RECONNECT_NOTICE) {
+  if (
+    !preserveNotice &&
+    callStatusNotice.value === DIRECT_CALL_RECONNECT_NOTICE
+  ) {
     clearCallStatusNotice();
   }
 };
@@ -2029,10 +2031,7 @@ const repairRemoteAudioPublication = (
   const hasLiveTrack = !!mediaTrack && mediaTrack.readyState === 'live';
 
   if (hasLiveTrack) {
-    clearPendingRemoteAudioResubscribeTimeout(
-      participantIdentity,
-      publication
-    );
+    clearPendingRemoteAudioResubscribeTimeout(participantIdentity, publication);
     if (publication.isSubscribed === false) {
       publication.setSubscribed?.(true);
     }
@@ -2040,10 +2039,7 @@ const repairRemoteAudioPublication = (
   }
 
   if (publication.isMuted) {
-    clearPendingRemoteAudioResubscribeTimeout(
-      participantIdentity,
-      publication
-    );
+    clearPendingRemoteAudioResubscribeTimeout(participantIdentity, publication);
     return;
   }
 
@@ -2072,7 +2068,10 @@ const repairRemoteAudioPublication = (
     try {
       publication.setSubscribed?.(true);
     } catch (error) {
-      console.warn('[LiveKit] Failed to resubscribe remote audio track:', error);
+      console.warn(
+        '[LiveKit] Failed to resubscribe remote audio track:',
+        error
+      );
     }
   }, 250);
 

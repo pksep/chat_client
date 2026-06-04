@@ -44,9 +44,7 @@ const notifyWindowStateChange = (): void => {
   });
 };
 
-const applyTauriWindowState = (
-  nextState: TauriWindowStatePayload
-): void => {
+const applyTauriWindowState = (nextState: TauriWindowStatePayload): void => {
   const nextFocused =
     typeof nextState.focused === 'boolean'
       ? nextState.focused

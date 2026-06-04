@@ -91,8 +91,7 @@ const createTopicsApi = () => {
   const syncDesktopUnreadBadge = () => {
     void syncTauriTrayBadge({
       count: displayedUnreadCount.value,
-      mutedOnly:
-        displayedUnreadCount.value > 0 && !hasAnyActiveUnreadTopic()
+      mutedOnly: displayedUnreadCount.value > 0 && !hasAnyActiveUnreadTopic()
     });
   };
 

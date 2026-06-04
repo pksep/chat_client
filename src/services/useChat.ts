@@ -53,9 +53,7 @@ import {
 } from './useCalls';
 import { Capacitor } from '@capacitor/core';
 import { initCallKit, showIncomingCallKit, endAllCallKits } from './useCallKit';
-import {
-  clearTopicNotifications
-} from './useNotificationNavigation';
+import { clearTopicNotifications } from './useNotificationNavigation';
 import {
   showTauriIncomingCallNotification,
   showTauriMessageNotification
@@ -252,10 +250,7 @@ const setupChatListeners = (): void => {
 
       playNotificationSound(message.topicId);
 
-      if (
-        !isTopicMuted(message.topicId) &&
-        !isCurrentTopicActivelyVisible
-      ) {
+      if (!isTopicMuted(message.topicId) && !isCurrentTopicActivelyVisible) {
         const topic = useTopics().getSelectedTopic(message.topicId) as any;
 
         void showTauriMessageNotification({
