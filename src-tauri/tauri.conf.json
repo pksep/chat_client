@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "SEP Chat",
+  "version": "1.6.0",
+  "identifier": "ru.pksep.chat",
+  "build": {
+    "beforeDevCommand": "bun run tauri:serve",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "bun run build",
+    "frontendDist": "../build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "SEP Chat",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 420,
+        "minHeight": 640
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "../public/images/pwa-64x64.png",
+      "../public/images/pwa-192x192.png",
+      "../public/images/pwa-512x512.png",
+      "../public/images/favicon.ico"
+    ]
+  }
+}

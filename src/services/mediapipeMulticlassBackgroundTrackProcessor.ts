@@ -241,6 +241,7 @@ export const createMediapipeMulticlassBackgroundTrackProcessor = (
   const blurredMaskCanvas = document.createElement('canvas');
   const segmentationCanvas = document.createElement('canvas');
   const segmentationMaskCanvas = document.createElement('canvas');
+  const sourceFrameCanvas = document.createElement('canvas');
 
   const outputContext = outputCanvas.getContext('2d');
   const maskContext = maskCanvas.getContext('2d');
@@ -248,12 +249,16 @@ export const createMediapipeMulticlassBackgroundTrackProcessor = (
     alpha: false
   });
   const segmentationMaskContext = segmentationMaskCanvas.getContext('2d');
+  const sourceFrameContext = sourceFrameCanvas.getContext('2d', {
+    alpha: false
+  });
 
   if (
     !outputContext ||
     !maskContext ||
     !segmentationContext ||
-    !segmentationMaskContext
+    !segmentationMaskContext ||
+    !sourceFrameContext
   ) {
     throw new Error('Call background processor canvas is not available');
   }
@@ -274,6 +279,7 @@ export const createMediapipeMulticlassBackgroundTrackProcessor = (
   let frameTimerId: number | null = null;
   let renderFrameId: number | null = null;
   let latestMaskSource: CanvasImageSource | null = null;
+  let latestForegroundFrameSource: CanvasImageSource | null = null;
   let isDestroyed = false;
   let isProcessingFrame = false;
 
@@ -307,7 +313,18 @@ export const createMediapipeMulticlassBackgroundTrackProcessor = (
 
       outputContext.save();
       outputContext.clearRect(0, 0, width, height);
-      outputContext.drawImage(sourceVideo, 0, 0, width, height);
+
+      if (latestForegroundFrameSource) {
+        outputContext.drawImage(
+          latestForegroundFrameSource,
+          0,
+          0,
+          width,
+          height
+        );
+      } else {
+        outputContext.drawImage(sourceVideo, 0, 0, width, height);
+      }
 
       if (latestMaskSource && backgroundImage) {
         outputContext.globalCompositeOperation = 'destination-in';
@@ -387,6 +404,10 @@ export const createMediapipeMulticlassBackgroundTrackProcessor = (
         segmentationHeight
       );
       ensureCanvasSize(maskCanvas, width, height);
+      ensureCanvasSize(sourceFrameCanvas, width, height);
+
+      sourceFrameContext.clearRect(0, 0, width, height);
+      sourceFrameContext.drawImage(sourceVideo, 0, 0, width, height);
 
       segmentationContext.clearRect(
         0,
@@ -395,7 +416,7 @@ export const createMediapipeMulticlassBackgroundTrackProcessor = (
         segmentationHeight
       );
       segmentationContext.drawImage(
-        sourceVideo,
+        sourceFrameCanvas,
         0,
         0,
         segmentationWidth,
@@ -441,6 +462,7 @@ export const createMediapipeMulticlassBackgroundTrackProcessor = (
         blurredMaskCanvas,
         options.edgeBlurAmount
       );
+      latestForegroundFrameSource = sourceFrameCanvas;
     } catch (error) {
       console.warn(
         '[LiveKit] MediaPipe multiclass background frame failed:',
@@ -487,6 +509,7 @@ export const createMediapipeMulticlassBackgroundTrackProcessor = (
       isDestroyed = true;
       stopLoops();
       latestMaskSource = null;
+      latestForegroundFrameSource = null;
       outputContext.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
       outputStream.getTracks().forEach(track => {
         if (track.readyState === 'live') {

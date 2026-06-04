@@ -18,6 +18,11 @@ import {
   navigateToNotificationTarget,
   resolveNotificationTopicId
 } from './useNotificationNavigation';
+import {
+  clearAllTauriNotifications,
+  initTauriNotifications,
+  isTauriRuntime
+} from './useTauriNotifications';
 
 const NATIVE_PUSH_TOKEN_STORAGE_KEY = 'chat_native_push_token';
 const WEB_PUSH_ENDPOINT_STORAGE_KEY = 'chat_web_push_endpoint';
@@ -171,6 +176,7 @@ const handleNotificationInteraction = (
   }
 
   if (normalizedData.type === 'incoming_call') {
+    navigateToNotificationTarget(normalizedData);
     handleCallPush({ data: normalizedData });
     return true;
   }
@@ -342,6 +348,14 @@ export const initPushNotifications = async () => {
     return;
   }
 
+  if (
+    await initTauriNotifications(payload => {
+      handleNotificationInteraction(payload as NativeNotificationData);
+    })
+  ) {
+    return;
+  }
+
   // Web Push (Browser)
   if (!('serviceWorker' in navigator)) return;
 
@@ -475,6 +489,12 @@ export const cleanupPushNotificationsOnLogout = async (): Promise<void> => {
         console.warn('Failed to unregister native push listeners:', error);
       }
 
+      clearStoredPushRegistration();
+      return;
+    }
+
+    if (isTauriRuntime()) {
+      await clearAllTauriNotifications();
       clearStoredPushRegistration();
       return;
     }
