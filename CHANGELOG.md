@@ -1,3 +1,17 @@
+# [1.31.0](https://github.com/pksep/chat_client/compare/v1.30.0...v1.31.0) (2026-06-04)
+
+
+### Bug Fixes
+
+* backgraund quality ([cfb820d](https://github.com/pksep/chat_client/commit/cfb820d31c22913ec8a0e02ac0371a1a7ab05063))
+* badge ([c22a1d1](https://github.com/pksep/chat_client/commit/c22a1d164d4ceae79b4295d2054cf8f6a5f9ebea))
+* lint ([3cab03b](https://github.com/pksep/chat_client/commit/3cab03b29fd1bda816243ebf4c7844615418babd))
+
+
+### Features
+
+* add tauri ([10b9442](https://github.com/pksep/chat_client/commit/10b9442b51b5e49502594dd9ab2467ce6326a5ca))
+
 # [1.30.0](https://github.com/pksep/chat_client/compare/v1.29.0...v1.30.0) (2026-06-03)
 
 
