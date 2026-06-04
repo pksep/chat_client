@@ -3,10 +3,10 @@
   cycles: 1
   deleted: 8
   inserted: 8
-  seconds: 77.72390357
+  seconds: 137.983966391
   version: 0.60.0
   what: judges-summary
-  when: 2026-06-04 00:19:17.127814372 Z
+  when: 2026-06-04 05:29:46.290618323 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -10576,14 +10576,6 @@
   total_stars: 0
   what: dimensions-of-terrain
   when: 2026-06-01 05:29:35.497675885 Z
-- _id: 558
-  _job: 74866
-  _time: 2026-06-01 05:31:09.106023811 Z
-  _version: 0.19.10/0.60.3/0.17.11!0.17.17
-  analyzers: 18
-  text: The average monthly turnover (2.0 developers) is staying still.
-  what: assessment
-  when: 2026-06-01 05:31:09.123401380 Z
 - _id: 559
   _job: 74866
   _time: 2026-06-01 05:31:38.220351152 Z
@@ -13824,12 +13816,20 @@
   total_stars: 0
   what: dimensions-of-terrain
   when: 2026-06-03 15:20:40.381180110 Z
-- _id: 713
-  _job: 26921527853
-  _time: 2026-06-04 00:18:03.253014376 Z
+- _id: 714
+  _job: 75499
+  _time: 2026-06-04 00:20:00.553525733 Z
+  _version: 0.19.11/0.60.3/0.17.11!0.17.17
+  analyzers: 18
+  text: The average monthly turnover (2.0 developers) is decreasing (R=-0.20).
+  what: assessment
+  when: 2026-06-04 00:20:00.573975287 Z
+- _id: 715
+  _job: 26932680337
+  _time: 2026-06-04 05:27:33.565402850 Z
   _version: 0.19.6/0.60.0/0.17.11
   earliest_issue_was_found: 1
-  events_were_scanned: 12791554691
+  events_were_scanned: 12795275528
   latest_issue_was_found: 72
   min_pull_was_found: 263
   repository: 1053332035
