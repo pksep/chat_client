@@ -201,7 +201,14 @@ import {
   suppressNotificationSoundForTopic,
   suspendLocalOwnReadStatus
 } from '../services/useMessages';
-import { setSuspendIncomingMergeForTopic } from '../services/useChat';
+import {
+  getCanSendReadReceipts,
+  setSuspendIncomingMergeForTopic
+} from '../services/useChat';
+import {
+  getIsAppActivelyVisible,
+  subscribeToAppVisibilityChanges
+} from '../services/useAppVisibility';
 import { getAuthUser } from '../composables/useAuth';
 import { IMessage } from './interfaces/interfaces';
 
@@ -250,6 +257,7 @@ const getLocalStorageInputText = computed(() => {
 
 const inputText = ref(getLocalStorageInputText.value);
 let chatVisibilityObserver: ResizeObserver | null = null;
+let removeAppVisibilityListener: (() => void) | null = null;
 const unreadMarkerMessageIdsByTopic = reactive<Record<string, string | null>>(
   {}
 );
@@ -621,6 +629,7 @@ const hideUnreadMarkerIfPassed = (): void => {
     !route.value?.id ||
     !state.unreadMarkerMessageId ||
     state.hideUnreadMarker ||
+    !getCanSendReadReceipts() ||
     !chatWrapperRef.value
   ) {
     return;
@@ -645,6 +654,14 @@ const hideUnreadMarkerIfPassed = (): void => {
 
 const resetUnreadIfViewingBottom = (): void => {
   if (!route.value?.id || !chatWrapperRef.value) {
+    return;
+  }
+
+  if (!getIsAppActivelyVisible()) {
+    return;
+  }
+
+  if (state.unreadMarkerMessageId && !state.hideUnreadMarker) {
     return;
   }
 
@@ -1024,6 +1041,12 @@ onMounted(() => {
   window.addEventListener('keydown', handleWindowKeydown, true);
   window.addEventListener('focus', handleWindowFocusRefresh);
   document.addEventListener('visibilitychange', handleVisibilityChangeRefresh);
+
+  removeAppVisibilityListener = subscribeToAppVisibilityChanges(() => {
+    if (getCanSendReadReceipts()) {
+      refreshUnreadMarkerState();
+    }
+  });
 });
 
 onUnmounted(() => {
@@ -1037,6 +1060,8 @@ onUnmounted(() => {
     'visibilitychange',
     handleVisibilityChangeRefresh
   );
+  removeAppVisibilityListener?.();
+  removeAppVisibilityListener = null;
 });
 
 watch(

@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main desktop window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:tray:default",
+    "core:window:allow-set-badge-count",
+    "core:window:allow-set-icon",
+    "core:window:allow-set-overlay-icon",
+    "notification:default",
+    "opener:default"
+  ]
+}

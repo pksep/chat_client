@@ -25,8 +25,45 @@ export const isUnreadTrackableMessage = (
   return !message.isSystem || isCallSystemMessage(message);
 };
 
+export const isOwnEndedCallSystemMessage = (
+  message?: TrackableMessage | null,
+  authUserId?: string | null
+): boolean => {
+  if (!message || !authUserId) {
+    return false;
+  }
+
+  const parsedEx = parseCallMessageEx(message.ex);
+
+  return (
+    parsedEx?.type === 'call' &&
+    parsedEx.call?.event === 'end' &&
+    parsedEx.call?.creatorId === authUserId
+  );
+};
+
+export const isUnreadTrackableMessageForUser = (
+  message?: TrackableMessage | null,
+  authUserId?: string | null
+): boolean => {
+  return (
+    isUnreadTrackableMessage(message) &&
+    !isOwnEndedCallSystemMessage(message, authUserId)
+  );
+};
+
 export const isUnreadIgnoredSystemMessage = (
   message?: TrackableMessage | null
 ): boolean => {
   return Boolean(message?.isSystem) && !isCallSystemMessage(message);
+};
+
+export const isUnreadIgnoredMessageForUser = (
+  message?: TrackableMessage | null,
+  authUserId?: string | null
+): boolean => {
+  return (
+    isUnreadIgnoredSystemMessage(message) ||
+    isOwnEndedCallSystemMessage(message, authUserId)
+  );
 };
