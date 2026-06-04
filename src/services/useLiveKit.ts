@@ -185,6 +185,12 @@ let pendingEndCallRetryTimeout: ReturnType<typeof setTimeout> | null = null;
 let pendingEndCallFinalizeTimeout: ReturnType<typeof setTimeout> | null = null;
 let pendingNativeCallActionTimeout: ReturnType<typeof setTimeout> | null = null;
 let callStatusNoticeTimeout: ReturnType<typeof setTimeout> | null = null;
+let directCallRecoveryTimeout: ReturnType<typeof setTimeout> | null = null;
+let directCallRecoveryAttemptId = 0;
+let directCallRecoveryInFlight = false;
+let directCallRecoveryDeadline = 0;
+let directCallRecoveryRoomId: string | null = null;
+let directCallRecoveryTopicId: string | null = null;
 const participantReactionTimeouts = new Map<
   string,
   ReturnType<typeof setTimeout>
@@ -196,6 +202,13 @@ const MAX_NATIVE_CALL_ACTION_RETRIES = 120;
 const NATIVE_CALL_ACTION_RETRY_DELAY_MS = 500;
 const DISMISSED_INCOMING_CALL_TTL_MS = 15000;
 const CALL_STATUS_NOTICE_CLOSE_DELAY_MS = 3000;
+const DIRECT_CALL_RECONNECT_GRACE_MS = 20000;
+const DIRECT_CALL_RECONNECT_POLL_MS = 2000;
+const DIRECT_CALL_RECONNECT_NOTICE =
+  'Связь нестабильна. Пытаемся переподключить звонок...';
+const DIRECT_CALL_RECONNECT_FAILED_NOTICE =
+  'Не удалось восстановить звонок';
+const DIRECT_CALL_ENDED_NOTICE = 'Звонок завершен';
 const dismissedIncomingCallRooms = new Map<string, number>();
 const dismissedIncomingCallTopics = new Map<string, number>();
 const CAMERA_CAPTURE_DEFAULTS = {
@@ -244,6 +257,11 @@ let requestedVideoActive = false;
 let videoToggleOperation: Promise<void> | null = null;
 let suppressParticipantPresenceNotifications = true;
 let presenceAudioContext: AudioContext | null = null;
+let pendingAudioRecoveryTimeouts = new Set<ReturnType<typeof setTimeout>>();
+const pendingRemoteAudioResubscribeTimeouts = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+>();
 
 const createRoomId = () => `livekit-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -683,9 +701,47 @@ const clearCallStatusNotice = () => {
   callStatusNotice.value = null;
 };
 
+const clearDirectCallRecoveryTimer = () => {
+  if (directCallRecoveryTimeout) {
+    clearTimeout(directCallRecoveryTimeout);
+    directCallRecoveryTimeout = null;
+  }
+};
+
+const resetDirectCallRecoveryState = (
+  preserveNotice = false,
+  attemptId?: number
+) => {
+  if (
+    typeof attemptId === 'number' &&
+    attemptId !== directCallRecoveryAttemptId
+  ) {
+    return;
+  }
+
+  clearDirectCallRecoveryTimer();
+  directCallRecoveryInFlight = false;
+  directCallRecoveryDeadline = 0;
+  directCallRecoveryRoomId = null;
+  directCallRecoveryTopicId = null;
+  directCallRecoveryAttemptId += 1;
+
+  if (!preserveNotice && callStatusNotice.value === DIRECT_CALL_RECONNECT_NOTICE) {
+    clearCallStatusNotice();
+  }
+};
+
 const clearLocalAcceptState = () => {
   localAcceptRoomId = null;
   localAcceptTopicId = null;
+};
+
+const showPersistentCallStatusNotice = (message: string) => {
+  clearCallStatusNotice();
+  callStatusNotice.value = message;
+  clearDialingTimeout();
+  stopDialingSound();
+  stopRingtone();
 };
 
 const showTransientCallStatusNotice = (
@@ -707,6 +763,158 @@ const showTransientCallStatusNotice = (
 
     cleanup(true);
   }, closeDelayMs);
+};
+
+const isRecoverableDirectCallSession = (
+  targetRoomId?: string | null,
+  targetTopicId?: string | null
+): boolean => {
+  const activeTopicId = targetTopicId ?? topicId.value;
+  const activeTopic = activeTopicId
+    ? (useTopics().getSelectedTopic(activeTopicId) as any)
+    : null;
+  const matchesCurrentCall =
+    (!!targetRoomId && roomId.value === targetRoomId) ||
+    (!!targetTopicId && topicId.value === targetTopicId);
+
+  return !!(
+    matchesCurrentCall &&
+    !isIncoming.value &&
+    activeTopicId &&
+    activeTopic?.type !== TopicType.Group &&
+    !activeTopic?.activeCall?.groupMode &&
+    !invitedGroupCall.value
+  );
+};
+
+const resolveDirectCallRecoverySuccess = (activeRoom: Room | null = room) => {
+  if (!directCallRecoveryRoomId || !directCallRecoveryTopicId) {
+    return;
+  }
+
+  const recovered =
+    !!activeRoom &&
+    roomId.value === directCallRecoveryRoomId &&
+    topicId.value === directCallRecoveryTopicId &&
+    activeRoom.remoteParticipants.size > 0;
+
+  if (!recovered) {
+    return;
+  }
+
+  resetDirectCallRecoveryState();
+  syncConnectionState(activeRoom);
+};
+
+const scheduleDirectCallRecoveryAttempt = (attemptId: number) => {
+  clearDirectCallRecoveryTimer();
+  directCallRecoveryTimeout = setTimeout(() => {
+    directCallRecoveryTimeout = null;
+
+    if (attemptId !== directCallRecoveryAttemptId) {
+      return;
+    }
+
+    void recoverDirectCallConnection(attemptId);
+  }, DIRECT_CALL_RECONNECT_POLL_MS);
+};
+
+const recoverDirectCallConnection = async (
+  attemptId = directCallRecoveryAttemptId
+) => {
+  if (attemptId !== directCallRecoveryAttemptId || directCallRecoveryInFlight) {
+    return;
+  }
+
+  const activeRoomId = directCallRecoveryRoomId ?? roomId.value;
+  const activeTopicId = directCallRecoveryTopicId ?? topicId.value;
+
+  if (
+    !activeRoomId ||
+    !activeTopicId ||
+    !isRecoverableDirectCallSession(activeRoomId, activeTopicId)
+  ) {
+    resetDirectCallRecoveryState();
+    return;
+  }
+
+  directCallRecoveryInFlight = true;
+
+  try {
+    const status = await getLiveKitCallStatus(activeRoomId, activeTopicId);
+
+    if (attemptId !== directCallRecoveryAttemptId) {
+      return;
+    }
+
+    if (!status?.active) {
+      resetDirectCallRecoveryState(true, attemptId);
+      showTransientCallStatusNotice(DIRECT_CALL_ENDED_NOTICE);
+      return;
+    }
+
+    if (room?.remoteParticipants.size) {
+      resolveDirectCallRecoverySuccess(room);
+      return;
+    }
+
+    if (!room && !connectPromise) {
+      try {
+        await connectToRoom();
+      } catch (error) {
+        console.warn('[LiveKit] Failed to reconnect direct call:', error);
+      }
+    }
+
+    if (attemptId !== directCallRecoveryAttemptId) {
+      return;
+    }
+
+    if (room?.remoteParticipants.size) {
+      resolveDirectCallRecoverySuccess(room);
+      return;
+    }
+
+    if (Date.now() >= directCallRecoveryDeadline) {
+      resetDirectCallRecoveryState(true, attemptId);
+      showTransientCallStatusNotice(DIRECT_CALL_RECONNECT_FAILED_NOTICE);
+      return;
+    }
+
+    scheduleDirectCallRecoveryAttempt(attemptId);
+  } finally {
+    if (attemptId === directCallRecoveryAttemptId) {
+      directCallRecoveryInFlight = false;
+    }
+  }
+};
+
+const startDirectCallRecovery = (
+  targetRoomId?: string | null,
+  targetTopicId?: string | null
+): boolean => {
+  const activeRoomId = targetRoomId ?? roomId.value;
+  const activeTopicId = targetTopicId ?? topicId.value;
+
+  if (
+    !activeRoomId ||
+    !activeTopicId ||
+    !isRecoverableDirectCallSession(activeRoomId, activeTopicId)
+  ) {
+    return false;
+  }
+
+  directCallRecoveryAttemptId += 1;
+  directCallRecoveryInFlight = false;
+  directCallRecoveryDeadline = Date.now() + DIRECT_CALL_RECONNECT_GRACE_MS;
+  directCallRecoveryRoomId = activeRoomId;
+  directCallRecoveryTopicId = activeTopicId;
+  showPersistentCallStatusNotice(DIRECT_CALL_RECONNECT_NOTICE);
+  open.value = true;
+  isModalVisible.value = true;
+  clearDirectCallRecoveryTimer();
+  void recoverDirectCallConnection(directCallRecoveryAttemptId);
+  return true;
 };
 
 const resetPendingEndCallState = () => {
@@ -1595,6 +1803,57 @@ const syncRemoteParticipantState = () => {
   );
 };
 
+const clearPendingAudioRecoveryTimeouts = () => {
+  pendingAudioRecoveryTimeouts.forEach(timeout => {
+    clearTimeout(timeout);
+  });
+  pendingAudioRecoveryTimeouts.clear();
+};
+
+const getRemoteAudioPublicationKey = (
+  participantIdentity: string,
+  publication: {
+    source?: Track.Source;
+    trackSid?: string;
+    sid?: string;
+  }
+) =>
+  `${participantIdentity}:${publication.trackSid || publication.sid || publication.source || 'microphone'}`;
+
+const clearPendingRemoteAudioResubscribeTimeout = (
+  participantIdentity: string,
+  publication: {
+    source?: Track.Source;
+    trackSid?: string;
+    sid?: string;
+  }
+) => {
+  const key = getRemoteAudioPublicationKey(participantIdentity, publication);
+  const timeout = pendingRemoteAudioResubscribeTimeouts.get(key);
+
+  if (!timeout) {
+    return;
+  }
+
+  clearTimeout(timeout);
+  pendingRemoteAudioResubscribeTimeouts.delete(key);
+};
+
+const clearPendingRemoteAudioResubscribeTimeouts = (
+  participantIdentity?: string
+) => {
+  Array.from(pendingRemoteAudioResubscribeTimeouts.entries()).forEach(
+    ([key, timeout]) => {
+      if (participantIdentity && !key.startsWith(`${participantIdentity}:`)) {
+        return;
+      }
+
+      clearTimeout(timeout);
+      pendingRemoteAudioResubscribeTimeouts.delete(key);
+    }
+  );
+};
+
 const publishHandRaiseState = async (isRaised: boolean) => {
   if (!room) return;
 
@@ -1745,6 +2004,126 @@ const ensureLocalMicrophoneState = async (activeRoom: Room | null = room) => {
   }
 
   await activeRoom.localParticipant.setMicrophoneEnabled(true);
+};
+
+const repairRemoteAudioPublication = (
+  participantIdentity: string,
+  publication: {
+    source?: Track.Source;
+    isMuted?: boolean;
+    isSubscribed?: boolean;
+    track?: { mediaStreamTrack?: MediaStreamTrack | null } | null;
+    setEnabled: (enabled: boolean) => void;
+    setSubscribed?: (subscribed: boolean) => void;
+    trackSid?: string;
+    sid?: string;
+  }
+) => {
+  if (publication.source !== Track.Source.Microphone) {
+    return;
+  }
+
+  publication.setEnabled(true);
+
+  const mediaTrack = publication.track?.mediaStreamTrack;
+  const hasLiveTrack = !!mediaTrack && mediaTrack.readyState === 'live';
+
+  if (hasLiveTrack) {
+    clearPendingRemoteAudioResubscribeTimeout(
+      participantIdentity,
+      publication
+    );
+    if (publication.isSubscribed === false) {
+      publication.setSubscribed?.(true);
+    }
+    return;
+  }
+
+  if (publication.isMuted) {
+    clearPendingRemoteAudioResubscribeTimeout(
+      participantIdentity,
+      publication
+    );
+    return;
+  }
+
+  if (publication.isSubscribed === false) {
+    publication.setSubscribed?.(true);
+  }
+
+  if (typeof publication.setSubscribed !== 'function') {
+    return;
+  }
+
+  const key = getRemoteAudioPublicationKey(participantIdentity, publication);
+  if (pendingRemoteAudioResubscribeTimeouts.has(key)) {
+    return;
+  }
+
+  try {
+    publication.setSubscribed(false);
+  } catch (error) {
+    console.warn('[LiveKit] Failed to unsubscribe remote audio track:', error);
+  }
+
+  const timeout = setTimeout(() => {
+    pendingRemoteAudioResubscribeTimeouts.delete(key);
+
+    try {
+      publication.setSubscribed?.(true);
+    } catch (error) {
+      console.warn('[LiveKit] Failed to resubscribe remote audio track:', error);
+    }
+  }, 250);
+
+  pendingRemoteAudioResubscribeTimeouts.set(key, timeout);
+};
+
+const ensureRemoteAudioSubscriptions = (activeRoom: Room | null = room) => {
+  if (!activeRoom) {
+    return;
+  }
+
+  Array.from(activeRoom.remoteParticipants.values()).forEach(
+    remoteParticipant => {
+      remoteParticipant.audioTrackPublications.forEach(publication => {
+        repairRemoteAudioPublication(remoteParticipant.identity, publication);
+      });
+    }
+  );
+};
+
+const recoverCallAudioState = async (
+  activeRoom: Room | null = room
+): Promise<void> => {
+  if (!activeRoom) {
+    return;
+  }
+
+  ensureRemoteAudioSubscriptions(activeRoom);
+  await ensureLocalMicrophoneState(activeRoom);
+  syncRemoteParticipantState();
+  syncConnectionState(activeRoom);
+};
+
+const scheduleCallAudioRecovery = (activeRoom: Room | null = room): void => {
+  if (!activeRoom) {
+    return;
+  }
+
+  [0, 400, 1500].forEach(delayMs => {
+    const timeout = setTimeout(() => {
+      pendingAudioRecoveryTimeouts.delete(timeout);
+
+      if (room !== activeRoom) {
+        return;
+      }
+
+      void recoverCallAudioState(activeRoom);
+    }, delayMs);
+
+    pendingAudioRecoveryTimeouts.add(timeout);
+  });
 };
 
 const syncConnectionState = (activeRoom: Room) => {
@@ -1927,26 +2306,32 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
       requestHighQualityForAllRemoteVideoTracks();
+      scheduleCallAudioRecovery(activeRoom);
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.TrackUnpublished, () => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      scheduleCallAudioRecovery(activeRoom);
     })
     .on(RoomEvent.TrackSubscribed, () => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
       requestHighQualityForAllRemoteVideoTracks();
+      scheduleCallAudioRecovery(activeRoom);
+      resolveDirectCallRecoverySuccess(activeRoom);
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.TrackUnsubscribed, () => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      scheduleCallAudioRecovery(activeRoom);
     })
     .on(RoomEvent.TrackMuted, () => {
       syncLocalTrackState();
       syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
+      scheduleCallAudioRecovery(activeRoom);
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.TrackUnmuted, () => {
@@ -1954,6 +2339,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
       requestHighQualityForAllRemoteVideoTracks();
+      scheduleCallAudioRecovery(activeRoom);
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.ActiveSpeakersChanged, () => {
@@ -1964,6 +2350,8 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
       requestHighQualityForAllRemoteVideoTracks();
+      scheduleCallAudioRecovery(activeRoom);
+      resolveDirectCallRecoverySuccess(activeRoom);
       showGroupCallPresenceNotification(participant, 'joined', activeRoom);
       if (state.isHandRaised) {
         void publishHandRaiseState(true);
@@ -1973,13 +2361,20 @@ const setupRoomListeners = (activeRoom: Room) => {
       const nextHandRaisedParticipants = { ...handRaisedParticipants.value };
       delete nextHandRaisedParticipants[participant.identity];
       handRaisedParticipants.value = nextHandRaisedParticipants;
+      clearPendingRemoteAudioResubscribeTimeouts(participant.identity);
       clearParticipantReaction(participant.identity, false);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+
+      if (!activeRoom.remoteParticipants.size) {
+        startDirectCallRecovery(roomId.value, topicId.value);
+      }
+
       showGroupCallPresenceNotification(participant, 'left', activeRoom);
     })
     .on(RoomEvent.LocalTrackPublished, publication => {
       syncLocalTrackState();
+      scheduleCallAudioRecovery(activeRoom);
       if (
         publication.source === Track.Source.ScreenShare ||
         publication.source === Track.Source.ScreenShareAudio
@@ -1989,6 +2384,7 @@ const setupRoomListeners = (activeRoom: Room) => {
     })
     .on(RoomEvent.LocalTrackUnpublished, publication => {
       syncLocalTrackState();
+      scheduleCallAudioRecovery(activeRoom);
       if (
         publication.source === Track.Source.ScreenShare ||
         publication.source === Track.Source.ScreenShareAudio
@@ -2005,6 +2401,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      scheduleCallAudioRecovery(activeRoom);
     })
     .on(RoomEvent.Reconnected, () => {
       syncLocalTrackState();
@@ -2012,11 +2409,21 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
       requestHighQualityForAllRemoteVideoTracks();
+      scheduleCallAudioRecovery(activeRoom);
+      resolveDirectCallRecoverySuccess(activeRoom);
       void ensureLocalMicrophoneState(activeRoom);
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.Disconnected, () => {
       if (matchesPendingEndCall(roomId.value, topicId.value)) {
+        return;
+      }
+
+      if (room === activeRoom) {
+        room = null;
+      }
+
+      if (startDirectCallRecovery(roomId.value, topicId.value)) {
         return;
       }
 
@@ -2153,6 +2560,13 @@ const connectToRoom = async () => {
         });
       }
 
+      if (
+        directCallRecoveryRoomId === activeRoomId &&
+        directCallRecoveryTopicId === activeTopicId
+      ) {
+        throw error;
+      }
+
       cleanup(false);
       showErrorNotification(getConnectErrorMessage(error));
       throw error;
@@ -2197,6 +2611,8 @@ const connectToRoom = async () => {
     syncRemoteParticipantState();
     syncConnectionState(nextRoom);
     requestHighQualityForAllRemoteVideoTracks();
+    scheduleCallAudioRecovery(nextRoom);
+    resolveDirectCallRecoverySuccess(nextRoom);
     suppressParticipantPresenceNotifications = false;
     shouldEndCallOnConnectFailure = false;
 
@@ -2946,6 +3362,13 @@ export const handleCallEnded = (
     return;
   }
 
+  if (
+    matchesCurrentCall &&
+    startDirectCallRecovery(endedRoomId, endedTopicId)
+  ) {
+    return;
+  }
+
   if (matchesCurrentCall) {
     cleanup(true);
   }
@@ -3078,6 +3501,9 @@ export const toggleMic = async () => {
   state.isMicActive = !state.isMicActive;
   if (room) {
     await room.localParticipant.setMicrophoneEnabled(state.isMicActive);
+    if (state.isMicActive) {
+      scheduleCallAudioRecovery(room);
+    }
   }
 };
 
@@ -3298,6 +3724,9 @@ export const leaveCall = () => {
   connectAttemptId += 1;
   connectPromise = null;
   shouldEndCallOnConnectFailure = false;
+  resetDirectCallRecoveryState(true);
+  clearPendingAudioRecoveryTimeouts();
+  clearPendingRemoteAudioResubscribeTimeouts();
   clearLocalAcceptState();
   clearCallStatusNotice();
   clearDialingTimeout();
@@ -3331,6 +3760,9 @@ export const cleanup = (disconnectRoom = true) => {
   connectAttemptId += 1;
   connectPromise = null;
   shouldEndCallOnConnectFailure = false;
+  resetDirectCallRecoveryState(true);
+  clearPendingAudioRecoveryTimeouts();
+  clearPendingRemoteAudioResubscribeTimeouts();
   clearLocalAcceptState();
   clearCallStatusNotice();
   resetPendingEndCallState();

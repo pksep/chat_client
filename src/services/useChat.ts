@@ -12,6 +12,7 @@ import {
   fetchAllTopics,
   getTopicList,
   incrementDisplayedUnreadCount,
+  isTopicMuted,
   updateLocalTopicUser,
   setTopicTypingState,
   totalUnreadCount
@@ -39,7 +40,7 @@ import {
   mergeMessagesForTopic
 } from './useMessages';
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
-import { isUnreadTrackableMessage } from '../utils/messageTracking';
+import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import {
   handleIncomingCall,
   handleCallAnswered,
@@ -52,7 +53,18 @@ import {
 } from './useCalls';
 import { Capacitor } from '@capacitor/core';
 import { initCallKit, showIncomingCallKit, endAllCallKits } from './useCallKit';
-import { clearTopicNotifications } from './useNotificationNavigation';
+import {
+  clearTopicNotifications
+} from './useNotificationNavigation';
+import {
+  showTauriIncomingCallNotification,
+  showTauriMessageNotification
+} from './useTauriNotifications';
+import {
+  ensureTauriWindowStateTracking,
+  getIsAppActivelyVisible,
+  subscribeToAppVisibilityChanges
+} from './useAppVisibility';
 import type { MediaPreviewDimensions } from '../utils/mediaPreview';
 import { useUrlWatcher } from '../composables/navigation';
 import { RouteTypes } from '../composables/navigation/useUrlRouting';
@@ -214,14 +226,24 @@ const setupChatListeners = (): void => {
         ];
       }
 
-      if (isUnreadIncomingMessage && isUnreadTrackableMessage(message)) {
+      if (
+        isUnreadIncomingMessage &&
+        isUnreadTrackableMessageForUser(message, currentUserId.value)
+      ) {
         changeUnreadMessageCount(1, message.topicId);
       }
     }
 
     if (!isDuplicateMessage && isIncomingFromAnotherUser) {
+      const isCurrentTopicActivelyVisible =
+        route.value.id === message.topicId && getIsAppActivelyVisible();
+
+      if (isCurrentTopicActivelyVisible) {
+        void clearTopicNotifications(message.topicId);
+      }
+
       if (
-        document.visibilityState !== 'visible' &&
+        !isCurrentTopicActivelyVisible &&
         message.topicId === route.value.id &&
         totalUnreadCount.value === unreadCountBefore
       ) {
@@ -229,6 +251,19 @@ const setupChatListeners = (): void => {
       }
 
       playNotificationSound(message.topicId);
+
+      if (
+        !isTopicMuted(message.topicId) &&
+        !isCurrentTopicActivelyVisible
+      ) {
+        const topic = useTopics().getSelectedTopic(message.topicId) as any;
+
+        void showTauriMessageNotification({
+          message,
+          sender: message.senderUser || getUserById(message.senderUserId),
+          topic
+        });
+      }
     }
 
     updateLocalLastMessageTopic(message.topicId, message);
@@ -438,15 +473,12 @@ const setupChatListeners = (): void => {
 
     if (payloadTopicId) {
       deleteMessageFromLocal(payloadTopicId, event.payload.messageId);
+      return;
     }
 
-    const topicIds = Object.keys(messagesStore.value);
-    topicIds.forEach(topicId => {
-      const existing = messagesStore.value[topicId] || [];
-      const next = existing.filter(item => item.id !== event.payload.messageId);
-      if (next.length !== existing.length) {
-        messagesStore.value[topicId] = next;
-        notifyMessageChange(topicId);
+    Object.entries(messagesStore.value).forEach(([topicId, messages]) => {
+      if (messages.some(item => item.id === event.payload.messageId)) {
+        deleteMessageFromLocal(topicId, event.payload.messageId);
       }
     });
   });
@@ -546,6 +578,16 @@ const setupChatListeners = (): void => {
       );
       const isGroupCall = topicType === TopicType.Group;
 
+      if (isReceived) {
+        void showTauriIncomingCallNotification({
+          caller: user || null,
+          roomId: payload.roomId,
+          topic,
+          topicId: payload.topicId,
+          topicType
+        });
+      }
+
       if (Capacitor.isNativePlatform() && !isGroupCall && isReceived && user) {
         showIncomingCallKit(
           user.initials,
@@ -622,6 +664,7 @@ let reconnectRefreshTimeout: ReturnType<typeof setTimeout> | null = null;
 let isRefreshingAfterReconnect = false;
 const MAX_BACKGROUND_TOPIC_RECONCILES = 12;
 let networkStatePollInterval: ReturnType<typeof setInterval> | null = null;
+let removeAppVisibilityListener: (() => void) | null = null;
 
 const route = useUrlWatcher();
 
@@ -797,7 +840,7 @@ const syncPresenceForVisibility = (): void => {
     return;
   }
 
-  const isActive = document.visibilityState === 'visible';
+  const isActive = getIsAppActivelyVisible();
   chatSDK.sendWebSocketEvent(WebSocketEventType.TOGGLE_PRESENCE, {
     isActive
   });
@@ -849,7 +892,7 @@ export const initializeChat = async (options: {
   if (!isResumeListenersAdded) {
     window.addEventListener('focus', () => {
       reconnectChatOnResume();
-      if (!document.hidden) {
+      if (getIsAppActivelyVisible()) {
         syncPresenceForVisibility();
       }
     });
@@ -857,7 +900,7 @@ export const initializeChat = async (options: {
     window.addEventListener('online', () => {
       syncBrowserNetworkState(true);
       reconnectChatOnResume();
-      if (!document.hidden) {
+      if (getIsAppActivelyVisible()) {
         syncPresenceForVisibility();
       }
     });
@@ -901,6 +944,18 @@ export const initializeChat = async (options: {
 
   if (Capacitor.isNativePlatform()) {
     initCallKit();
+  }
+
+  ensureTauriWindowStateTracking();
+
+  if (!removeAppVisibilityListener) {
+    removeAppVisibilityListener = subscribeToAppVisibilityChanges(() => {
+      syncPresenceForVisibility();
+
+      if (getIsAppActivelyVisible()) {
+        reconnectChatOnResume();
+      }
+    });
   }
 
   addMessageHistoryHandler();
@@ -1178,15 +1233,10 @@ export const getHasWebsocketConnection = () =>
   browserOnline.value && hasWebsocketConnection.value;
 export const getHasBrowserNetwork = () => browserOnline.value;
 export const getCanSendReadReceipts = (): boolean => {
-  const canUseVisibleAsFocused =
-    Capacitor.isNativePlatform() ||
-    (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
-
   return (
     browserOnline.value &&
     hasWebsocketConnection.value &&
-    document.visibilityState === 'visible' &&
-    (document.hasFocus() || canUseVisibleAsFocused)
+    getIsAppActivelyVisible()
   );
 };
 

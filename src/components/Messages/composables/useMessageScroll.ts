@@ -14,6 +14,7 @@ import {
   markAsRead,
   consumeBufferedIncomingMessagesForTopic
 } from '../../../services/useChat';
+import { getIsAppActivelyVisible } from '../../../services/useAppVisibility';
 import {
   changeLocalReadStatus,
   fetchMessagesForTopic,
@@ -28,7 +29,7 @@ import {
 } from '../../../composables/useTopics';
 import { clearTopicNotifications } from '../../../services/useNotificationNavigation';
 import type { IMessage } from '../../interfaces/interfaces';
-import { isUnreadTrackableMessage } from '../../../utils/messageTracking';
+import { isUnreadTrackableMessageForUser } from '../../../utils/messageTracking';
 
 export function useMessageScroll(
   chatWrapperRef: Ref<HTMLElement | null>,
@@ -53,6 +54,7 @@ export function useMessageScroll(
     containerRef: chatWrapperRef,
     bottomThreshold: 50
   });
+  const USER_ACTIVITY_READ_FLUSH_INTERVAL_MS = 350;
 
   const scrollState = reactive({
     isUserScrolling: false,
@@ -70,6 +72,7 @@ export function useMessageScroll(
   let intersectionObserver: IntersectionObserver | null = null;
   let pendingMessagesMutationRevision: number | null = null;
   let preserveViewportForDownPagination = false;
+  let lastUserActivityReadFlushAt = 0;
   const pendingReadIds = new Set<string>();
   const SCROLL_DISTANCE_FOR_REQUEST = 500;
   const unreadTrackableMessageIds = computed(
@@ -78,7 +81,7 @@ export function useMessageScroll(
         state.messages
           .filter(
             message =>
-              isUnreadTrackableMessage(message) &&
+              isUnreadTrackableMessageForUser(message, props.user?.id) &&
               message.senderUserId !== props.user?.id &&
               message.isReadByMe !== true
           )
@@ -121,6 +124,9 @@ export function useMessageScroll(
     return true;
   };
 
+  const canPreviewVisibleMessagesAsRead = (): boolean =>
+    canTrackVisibleMessages() && getIsAppActivelyVisible();
+
   const getUnreadMessageIdIfTrackable = (element: Element) => {
     const messageId = element.getAttribute('data-message-id');
     if (!messageId || pendingReadIds.has(messageId)) {
@@ -146,7 +152,9 @@ export function useMessageScroll(
       return;
     }
 
-    previewTopicReadMessages(route.value.id, uniqueMessageIds);
+    if (canPreviewVisibleMessagesAsRead()) {
+      previewTopicReadMessages(route.value.id, uniqueMessageIds);
+    }
 
     if (!canMarkVisibleMessagesAsRead()) {
       uniqueMessageIds.forEach(id => queuedReadIds.add(id));
@@ -272,7 +280,7 @@ export function useMessageScroll(
     const unreadMessages = state.messages.filter(
       (message: IMessage) =>
         message.senderUserId !== props.user?.id &&
-        isUnreadTrackableMessage(message) &&
+        isUnreadTrackableMessageForUser(message, props.user?.id) &&
         message.isReadByMe !== true
     );
 
@@ -360,6 +368,32 @@ export function useMessageScroll(
       void flushQueuedReadMessages();
       flushVisibleUnreadMessages();
     });
+  };
+
+  const flushReadStateFromUserActivity = () => {
+    if (!route.value?.id || !canMarkVisibleMessagesAsRead()) {
+      return;
+    }
+
+    const now = Date.now();
+
+    if (
+      now - lastUserActivityReadFlushAt <
+      USER_ACTIVITY_READ_FLUSH_INTERVAL_MS
+    ) {
+      return;
+    }
+
+    lastUserActivityReadFlushAt = now;
+
+    requestAnimationFrame(() => {
+      void flushQueuedReadMessages();
+      flushVisibleUnreadMessages();
+    });
+  };
+
+  const handleUserActivity = () => {
+    flushReadStateFromUserActivity();
   };
 
   const handleScroll = async (): Promise<void> => {
@@ -743,6 +777,16 @@ export function useMessageScroll(
   onMounted(() => {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleWindowFocus);
+    window.addEventListener('pointermove', handleUserActivity, {
+      passive: true
+    });
+    window.addEventListener('pointerdown', handleUserActivity, {
+      passive: true
+    });
+    window.addEventListener('keydown', handleUserActivity, true);
+    window.addEventListener('touchstart', handleUserActivity, {
+      passive: true
+    });
   });
 
   onUnmounted(() => {
@@ -753,6 +797,10 @@ export function useMessageScroll(
 
     document.removeEventListener('visibilitychange', handleVisibilityChange);
     window.removeEventListener('focus', handleWindowFocus);
+    window.removeEventListener('pointermove', handleUserActivity);
+    window.removeEventListener('pointerdown', handleUserActivity);
+    window.removeEventListener('keydown', handleUserActivity, true);
+    window.removeEventListener('touchstart', handleUserActivity);
   });
 
   return {

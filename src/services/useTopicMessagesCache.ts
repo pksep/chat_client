@@ -267,6 +267,43 @@ export const loadCachedTopicMessages = async (
   }
 };
 
+export const saveCachedTopicMessages = async (
+  topicId: string,
+  messages: IMessage[],
+  userId = getResolvedUserId()
+): Promise<void> => {
+  if (!topicId || !userId) {
+    return;
+  }
+
+  try {
+    const db = await openDb();
+
+    if (!db) {
+      return;
+    }
+
+    const payload: CachedTopicMessages = {
+      cacheKey: getCacheKey(topicId, userId),
+      topicId,
+      userId,
+      messages,
+      updatedAt: new Date().toISOString()
+    };
+
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.put(payload);
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  } catch (error) {
+    console.warn('Failed to save cached topic messages:', error);
+  }
+};
+
 export const clearCachedTopicMessages = async (
   topicId: string,
   userId = getResolvedUserId()

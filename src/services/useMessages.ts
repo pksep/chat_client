@@ -22,6 +22,7 @@ import { authedUser } from '../composables/useAuth';
 import {
   clearCachedTopicMessages,
   loadCachedTopicMessages,
+  saveCachedTopicMessages,
   savePendingUploadFile,
   loadPendingUploadFile,
   deletePendingUploadFile,
@@ -36,6 +37,7 @@ import {
   playNativeNotificationSound,
   shouldPlayNotificationSound
 } from './useNotificationSoundPolicy';
+import { getIsAppActivelyVisible } from './useAppVisibility';
 import {
   appendShadowSyncMetaList,
   deleteShadowTopicMessage,
@@ -53,7 +55,7 @@ import {
   saveShadowTopicSnapshot,
   syncShadowReadStateFromMessages
 } from './useShadowChatSync';
-import { isUnreadTrackableMessage } from '../utils/messageTracking';
+import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 
 const fullMessagesStore = ref<Record<string, IMessage[]>>({});
 const messagesStore = ref<Record<string, IMessage[]>>({});
@@ -131,6 +133,7 @@ const schedulePersistMessages = (topicId: string): void => {
     const topicMessages = prepareMessagesForPersistence(
       fullMessagesStore.value[topicId] || []
     );
+    void saveCachedTopicMessages(topicId, topicMessages);
     void saveShadowTopicSnapshot(topicId, topicMessages, 'local', undefined, {
       replace: canonicalTopicStateIds.has(topicId)
     });
@@ -1236,7 +1239,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
 
     if (
       !alreadyExists &&
-      isUnreadTrackableMessage(nextMessage) &&
+      isUnreadTrackableMessageForUser(nextMessage, authedUser.value?.id) &&
       nextMessage.senderUserId !== authedUser.value?.id &&
       nextMessage.isReadByMe !== true
     ) {
@@ -1284,7 +1287,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
 
     if (
       !alreadyExists &&
-      isUnreadTrackableMessage(nextMessage) &&
+      isUnreadTrackableMessageForUser(nextMessage, authedUser.value?.id) &&
       nextMessage.senderUserId !== authedUser.value?.id &&
       nextMessage.isReadByMe !== true
     ) {
@@ -1315,7 +1318,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
 
   if (
     !alreadyExists &&
-    isUnreadTrackableMessage(nextMessage) &&
+    isUnreadTrackableMessageForUser(nextMessage, authedUser.value?.id) &&
     nextMessage.senderUserId !== authedUser.value?.id &&
     nextMessage.isReadByMe !== true
   ) {
@@ -2337,7 +2340,7 @@ export const suppressNotificationSoundForTopic = (
 const playNotificationSoundInternal = async (
   topicId?: string
 ): Promise<void> => {
-  const isHidden = document.hidden;
+  const isActivelyVisible = getIsAppActivelyVisible();
   const suppressionDeadline = topicId
     ? notificationSoundSuppressedUntilByTopic.get(topicId) || 0
     : 0;
@@ -2350,7 +2353,7 @@ const playNotificationSoundInternal = async (
     return;
   }
 
-  if (!isHidden && route.value.id === topicId) {
+  if (isActivelyVisible && route.value.id === topicId) {
     return;
   }
 
