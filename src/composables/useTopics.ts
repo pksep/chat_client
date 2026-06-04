@@ -88,9 +88,10 @@ const createTopicsApi = () => {
         (!topic.info?.isMute || topic.taggedMe)
     );
 
-  const syncDesktopUnreadBadge = () => {
+  const syncDesktopUnreadBadge = (force = false) => {
     void syncTauriTrayBadge({
       count: displayedUnreadCount.value,
+      force,
       mutedOnly: displayedUnreadCount.value > 0 && !hasAnyActiveUnreadTopic()
     });
   };
@@ -931,7 +932,7 @@ const createTopicsApi = () => {
     if (getIsAppActivelyVisible()) {
       displayedUnreadCount.value = totalUnreadCount.value;
       applyDisplayedUnreadCount(displayedUnreadCount.value);
-      syncDesktopUnreadBadge();
+      syncDesktopUnreadBadge(true);
     }
   };
 
@@ -944,7 +945,7 @@ const createTopicsApi = () => {
         applyDisplayedUnreadCount(displayedUnreadCount.value);
       }
 
-      syncDesktopUnreadBadge();
+      syncDesktopUnreadBadge(true);
     });
     isDesktopVisibilityBound = true;
   }

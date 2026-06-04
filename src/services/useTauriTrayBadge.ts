@@ -12,6 +12,7 @@ const BADGE_TEXT = '#FFFFFF';
 const BADGE_STROKE = 'transparent';
 const BADGE_FONT = '"Segoe UI", sans-serif';
 const BADGE_INSET = 1;
+const WINDOW_OVERLAY_BADGE_HEIGHT = WINDOW_OVERLAY_ICON_SIZE - 4;
 
 let baseTrayIconImagePromise: Promise<HTMLImageElement> | null = null;
 let lastAppliedDesktopBadgeKey = '';
@@ -133,20 +134,40 @@ const drawBadge = ({
 
   const badgeText = getBadgeText(count);
   const shouldRenderText = showCount && badgeText.length > 0;
-  const fontSize =
-    badgeText.length >= 3 ? 21 : badgeText.length === 2 ? 23 : 25;
+  const isMultiDigit = badgeText.length >= 2;
+  const horizontalPadding = shouldRenderText
+    ? isMultiDigit
+      ? Math.max(6, badgeHeight * 0.3)
+      : badgeHeight * 0.55
+    : 0;
+  const maxBadgeWidth = iconSize - inset * 2;
+  let fontSize = badgeText.length >= 3 ? 21 : badgeText.length === 2 ? 23 : 25;
 
   context.font = `400 ${fontSize}px ${BADGE_FONT}`;
 
-  const badgeWidth = shouldRenderText
+  let badgeWidth = shouldRenderText
     ? Math.max(
         badgeHeight,
-        Math.ceil(context.measureText(badgeText).width + badgeHeight * 0.55)
+        Math.ceil(context.measureText(badgeText).width + horizontalPadding)
       )
     : badgeHeight;
+
+  while (shouldRenderText && badgeWidth > maxBadgeWidth && fontSize > 10) {
+    fontSize -= 1;
+    context.font = `400 ${fontSize}px ${BADGE_FONT}`;
+    badgeWidth = Math.max(
+      badgeHeight,
+      Math.ceil(context.measureText(badgeText).width + horizontalPadding)
+    );
+  }
+
+  badgeWidth = Math.min(badgeWidth, maxBadgeWidth);
+
   const badgeX = iconSize - badgeWidth - inset;
   const badgeY = topInset;
-  const badgeRadius = Math.floor(badgeHeight / 2);
+  const badgeRadius = isMultiDigit
+    ? Math.floor(badgeHeight * 0.4)
+    : Math.floor(badgeHeight / 2);
 
   context.save();
   context.fillStyle = mutedOnly ? BADGE_GRAY : BADGE_RED;
@@ -247,14 +268,14 @@ const renderWindowOverlayIcon = async (
   context.clearRect(0, 0, WINDOW_OVERLAY_ICON_SIZE, WINDOW_OVERLAY_ICON_SIZE);
 
   drawBadge({
-    badgeHeight: WINDOW_OVERLAY_ICON_SIZE - 2,
+    badgeHeight: WINDOW_OVERLAY_BADGE_HEIGHT,
     count,
     iconSize: WINDOW_OVERLAY_ICON_SIZE,
     context,
-    inset: 1,
+    inset: 2,
     mutedOnly,
     showCount: true,
-    topInset: 1
+    topInset: 2
   });
 
   const blob = await new Promise<Blob>((resolve, reject) => {
@@ -273,9 +294,11 @@ const renderWindowOverlayIcon = async (
 
 export const syncTauriTrayBadge = async ({
   count,
+  force = false,
   mutedOnly
 }: {
   count: number;
+  force?: boolean;
   mutedOnly: boolean;
 }): Promise<void> => {
   if (!isTauriRuntime()) {
@@ -285,7 +308,7 @@ export const syncTauriTrayBadge = async ({
   const normalizedCount = Math.max(0, Math.floor(count || 0));
   const badgeKey = `${normalizedCount}:${mutedOnly ? 'muted' : 'active'}`;
 
-  if (lastAppliedDesktopBadgeKey === badgeKey) {
+  if (!force && lastAppliedDesktopBadgeKey === badgeKey) {
     return;
   }
 
