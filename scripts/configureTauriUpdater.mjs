@@ -13,12 +13,24 @@ const normalizePubkey = value => {
     .map(line => line.trim())
     .filter(Boolean);
 
+  if (
+    directLines.length === 1 &&
+    !directLines[0].startsWith('untrusted comment:')
+  ) {
+    return directLines[0];
+  }
+
   if (directLines.length > 1) {
     return directLines.find(line => !line.startsWith('untrusted comment:'));
   }
 
   try {
     const decoded = Buffer.from(trimmedValue, 'base64').toString('utf8');
+
+    if (!decoded.includes('untrusted comment:')) {
+      return trimmedValue;
+    }
+
     const decodedLines = decoded
       .split(/\r?\n/)
       .map(line => line.trim())
