@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="226090">
+<fb version="0.19.6" size="226091">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <inserted t="I">8</inserted>
-    <seconds t="F">88.000676518</seconds>
+    <seconds t="F">97.80197635</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-06-05T01:54:12Z</when>
+    <when t="T">2026-06-05T06:53:33Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -14737,16 +14737,6 @@
     <when t="T">2026-06-02T11:52:29Z</when>
   </f>
   <f>
-    <_id t="I">695</_id>
-    <_job t="I">75233</_job>
-    <_time t="T">2026-06-02T15:42:25Z</_time>
-    <_version t="S">0.19.10/0.60.3/0.17.11!0.17.17</_version>
-    <analyzers t="I">18</analyzers>
-    <text t="S">The average monthly turnover (2.0 developers) is decreasing (R=-0.20).</text>
-    <what t="S">assessment</what>
-    <when t="T">2026-06-02T15:42:25Z</when>
-  </f>
-  <f>
     <_id t="I">696</_id>
     <_job t="I">26835509378</_job>
     <_time t="T">2026-06-02T17:07:26Z</_time>
@@ -15047,12 +15037,22 @@
     <when t="T">2026-06-04T19:03:43Z</when>
   </f>
   <f>
-    <_id t="I">719</_id>
-    <_job t="I">26990533874</_job>
-    <_time t="T">2026-06-05T01:52:48Z</_time>
+    <_id t="I">720</_id>
+    <_job t="I">75773</_job>
+    <_time t="T">2026-06-05T01:54:55Z</_time>
+    <_version t="S">0.19.11/0.60.3/0.17.11!0.17.17</_version>
+    <analyzers t="I">18</analyzers>
+    <text t="S">The average monthly turnover (2.0 developers) is decreasing (R=-0.20).</text>
+    <what t="S">assessment</what>
+    <when t="T">2026-06-05T01:54:55Z</when>
+  </f>
+  <f>
+    <_id t="I">721</_id>
+    <_job t="I">27000176660</_job>
+    <_time t="T">2026-06-05T06:51:59Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <events_were_scanned t="I">12847619949</events_were_scanned>
+    <events_were_scanned t="I">12852357552</events_were_scanned>
     <latest_issue_was_found t="I">72</latest_issue_was_found>
     <min_pull_was_found t="I">263</min_pull_was_found>
     <repository t="I">1053332035</repository>
