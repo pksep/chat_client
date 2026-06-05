@@ -12,6 +12,12 @@ import {
   type RuStoreAppUpdateInfo,
   type RuStoreInstallState
 } from '../services/useRuStoreUpdate';
+import { isTauriRuntime } from '../services/useTauriNotifications';
+import {
+  checkTauriUpdate,
+  installTauriUpdate,
+  type TauriUpdateInfo
+} from '../services/useTauriUpdate';
 
 const RUSTORE_APP_URL = 'https://www.rustore.ru/catalog/app/sep.pksep.app';
 const WEB_UPDATE_INFO_URL = '/web-update.json';
@@ -44,9 +50,14 @@ export function useMobileApp() {
   const updateInstallStatus = ref(RuStoreInstallStatus.UNKNOWN);
   const isUpdateFlowPending = ref(false);
   const nativeAppUpdateInfo = ref<RuStoreAppUpdateInfo | null>(null);
+  const tauriAppUpdateInfo = ref<TauriUpdateInfo | null>(null);
+  const isTauriUpdateBanner = ref(false);
   const isWebUpdateBanner = ref(false);
   const latestWebUpdateVersion = ref<number | null>(null);
   let webUpdateIntervalId: number | null = null;
+
+  const isBrowserWebRuntime = () =>
+    !Capacitor.isNativePlatform() && !isTauriRuntime();
 
   const applyNativeUpdateInfo = (
     appUpdateInfo: RuStoreAppUpdateInfo | null
@@ -125,7 +136,7 @@ export function useMobileApp() {
   };
 
   const applyWebUpdateVersion = (nextVersion: number | null) => {
-    if (Capacitor.isNativePlatform()) {
+    if (!isBrowserWebRuntime()) {
       isWebUpdateBanner.value = false;
       return;
     }
@@ -153,7 +164,7 @@ export function useMobileApp() {
   };
 
   const checkWebUpdate = async () => {
-    if (Capacitor.isNativePlatform()) {
+    if (!isBrowserWebRuntime()) {
       return;
     }
 
@@ -166,7 +177,7 @@ export function useMobileApp() {
   };
 
   const initWebUpdateHandling = async () => {
-    if (Capacitor.isNativePlatform()) {
+    if (!isBrowserWebRuntime()) {
       isWebUpdateBanner.value = false;
       return;
     }
@@ -179,7 +190,7 @@ export function useMobileApp() {
   };
 
   const persistCurrentWebUpdateVersion = () => {
-    if (Capacitor.isNativePlatform()) {
+    if (!isBrowserWebRuntime()) {
       return;
     }
 
@@ -192,6 +203,34 @@ export function useMobileApp() {
       String(latestWebUpdateVersion.value)
     );
     isWebUpdateBanner.value = false;
+  };
+
+  const refreshTauriUpdateInfo = async () => {
+    if (!isTauriRuntime()) {
+      tauriAppUpdateInfo.value = null;
+      isTauriUpdateBanner.value = false;
+      return;
+    }
+
+    try {
+      const updateInfo = await checkTauriUpdate();
+      tauriAppUpdateInfo.value = updateInfo;
+      isTauriUpdateBanner.value = !!updateInfo;
+      showUpdateBanner.value = !!updateInfo;
+    } catch (error) {
+      console.warn('Failed to check Tauri update:', error);
+      tauriAppUpdateInfo.value = null;
+      isTauriUpdateBanner.value = false;
+      showUpdateBanner.value = false;
+    }
+  };
+
+  const initTauriUpdateHandling = async () => {
+    if (!isTauriRuntime()) {
+      return;
+    }
+
+    await refreshTauriUpdateInfo();
   };
 
   const detect = async () => {
@@ -222,6 +261,11 @@ export function useMobileApp() {
       if (!isPWA && !isNative) {
         showDownloadModal.value = true;
       }
+    }
+
+    if (isTauriRuntime()) {
+      await initTauriUpdateHandling();
+      return;
     }
 
     await initWebUpdateHandling();
@@ -257,6 +301,29 @@ export function useMobileApp() {
   };
 
   const handleUpdateClick = async () => {
+    if (isTauriRuntime()) {
+      if (isUpdateFlowPending.value) {
+        return;
+      }
+
+      isUpdateFlowPending.value = true;
+
+      try {
+        const didInstall = await installTauriUpdate();
+
+        if (!didInstall) {
+          await refreshTauriUpdateInfo();
+        }
+      } catch (error) {
+        console.warn('Failed to install Tauri update:', error);
+        await refreshTauriUpdateInfo();
+      } finally {
+        isUpdateFlowPending.value = false;
+      }
+
+      return;
+    }
+
     if (!isRuStoreUpdateSupported()) {
       persistCurrentWebUpdateVersion();
       window.location.reload();
@@ -296,11 +363,21 @@ export function useMobileApp() {
   };
 
   const dismissUpdateBanner = () => {
+    if (isTauriUpdateBanner.value) {
+      isTauriUpdateBanner.value = false;
+      showUpdateBanner.value = false;
+      return;
+    }
+
     persistCurrentWebUpdateVersion();
     showUpdateBanner.value = false;
   };
 
   const updateActionLabel = computed(() => {
+    if (isTauriRuntime()) {
+      return isUpdateFlowPending.value ? 'Загрузка...' : 'Обновить';
+    }
+
     if (!Capacitor.isNativePlatform()) {
       return 'Обновить';
     }
@@ -322,10 +399,10 @@ export function useMobileApp() {
 
   const isUpdateActionDisabled = computed(
     () =>
-      Capacitor.isNativePlatform() &&
-      (isUpdateFlowPending.value ||
-        updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADING ||
-        updateInstallStatus.value === RuStoreInstallStatus.PENDING)
+      isUpdateFlowPending.value ||
+      (Capacitor.isNativePlatform() &&
+        (updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADING ||
+          updateInstallStatus.value === RuStoreInstallStatus.PENDING))
   );
 
   onMounted(() => {

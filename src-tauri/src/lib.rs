@@ -365,7 +365,16 @@ pub fn run() {
         ])
         .setup(|app| {
             #[cfg(desktop)]
-            setup_desktop(app)?;
+            {
+                if let Err(error) = app
+                    .handle()
+                    .plugin(tauri_plugin_updater::Builder::new().build())
+                {
+                    eprintln!("Failed to initialize Tauri updater plugin: {error}");
+                }
+
+                setup_desktop(app)?;
+            }
 
             Ok(())
         })
@@ -388,6 +397,7 @@ pub fn run() {
         })
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_process::init())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

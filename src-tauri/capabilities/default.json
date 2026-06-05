@@ -10,6 +10,8 @@
     "core:window:allow-set-icon",
     "core:window:allow-set-overlay-icon",
     "notification:default",
-    "opener:default"
+    "opener:default",
+    "process:default",
+    "updater:default"
   ]
 }
