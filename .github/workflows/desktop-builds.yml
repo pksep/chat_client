@@ -31,12 +31,12 @@ jobs:
             artifact_name: sep-chat-linux-x64
           - label: macOS Apple Silicon
             os: macos-latest
-            args: '--target aarch64-apple-darwin'
+            args: '--target aarch64-apple-darwin --bundles app'
             rust_target: aarch64-apple-darwin
             artifact_name: sep-chat-macos-arm64
           - label: macOS Intel
             os: macos-latest
-            args: '--target x86_64-apple-darwin'
+            args: '--target x86_64-apple-darwin --bundles app'
             rust_target: x86_64-apple-darwin
             artifact_name: sep-chat-macos-x64
 
