@@ -23,6 +23,9 @@ const RUSTORE_APP_URL = 'https://www.rustore.ru/catalog/app/sep.pksep.app';
 const WEB_UPDATE_INFO_URL = '/web-update.json';
 const WEB_UPDATE_CHECK_INTERVAL_MS = 60_000;
 const WEB_UPDATE_VERSION_STORAGE_KEY = 'chat_web_seen_update_version';
+const TAURI_UPDATE_CHECK_INTERVAL_MS = 60_000;
+const TAURI_UPDATE_DISMISSED_VERSION_STORAGE_KEY =
+  'chat_tauri_dismissed_update_version';
 
 const shouldShowNativeUpdateBanner = (
   appUpdateInfo: RuStoreAppUpdateInfo | null
@@ -55,6 +58,7 @@ export function useMobileApp() {
   const isWebUpdateBanner = ref(false);
   const latestWebUpdateVersion = ref<number | null>(null);
   let webUpdateIntervalId: number | null = null;
+  let tauriUpdateIntervalId: number | null = null;
 
   const isBrowserWebRuntime = () =>
     !Capacitor.isNativePlatform() && !isTauriRuntime();
@@ -214,9 +218,14 @@ export function useMobileApp() {
 
     try {
       const updateInfo = await checkTauriUpdate();
+      const dismissedVersion = localStorage.getItem(
+        TAURI_UPDATE_DISMISSED_VERSION_STORAGE_KEY
+      );
+
       tauriAppUpdateInfo.value = updateInfo;
-      isTauriUpdateBanner.value = !!updateInfo;
-      showUpdateBanner.value = !!updateInfo;
+      isTauriUpdateBanner.value =
+        !!updateInfo && dismissedVersion !== updateInfo.version;
+      showUpdateBanner.value = isTauriUpdateBanner.value;
     } catch (error) {
       console.warn('Failed to check Tauri update:', error);
       tauriAppUpdateInfo.value = null;
@@ -231,6 +240,12 @@ export function useMobileApp() {
     }
 
     await refreshTauriUpdateInfo();
+
+    if (tauriUpdateIntervalId === null) {
+      tauriUpdateIntervalId = window.setInterval(() => {
+        void refreshTauriUpdateInfo();
+      }, TAURI_UPDATE_CHECK_INTERVAL_MS);
+    }
   };
 
   const detect = async () => {
@@ -364,6 +379,13 @@ export function useMobileApp() {
 
   const dismissUpdateBanner = () => {
     if (isTauriUpdateBanner.value) {
+      if (tauriAppUpdateInfo.value?.version) {
+        localStorage.setItem(
+          TAURI_UPDATE_DISMISSED_VERSION_STORAGE_KEY,
+          tauriAppUpdateInfo.value.version
+        );
+      }
+
       isTauriUpdateBanner.value = false;
       showUpdateBanner.value = false;
       return;
@@ -413,6 +435,11 @@ export function useMobileApp() {
     if (webUpdateIntervalId !== null) {
       window.clearInterval(webUpdateIntervalId);
       webUpdateIntervalId = null;
+    }
+
+    if (tauriUpdateIntervalId !== null) {
+      window.clearInterval(tauriUpdateIntervalId);
+      tauriUpdateIntervalId = null;
     }
   });
 

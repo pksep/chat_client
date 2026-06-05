@@ -105,8 +105,7 @@ jobs:
           releaseBody: 'Desktop builds and updater artifacts.'
           releaseDraft: false
           prerelease: false
-          uploadUpdaterJson: true
-          updaterJsonPreferNsis: true
+          includeUpdaterJson: false
           tauriScript: bun run tauri
           args: ${{ matrix.args }}
 
@@ -130,3 +129,19 @@ jobs:
             src-tauri/target/*/release/bundle/**/*.dmg
             src-tauri/target/*/release/bundle/**/*.app
           if-no-files-found: error
+
+  publish-updater-json:
+    name: Publish updater manifest
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-tauri
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Publish latest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/publishTauriLatestJson.mjs

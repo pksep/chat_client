@@ -2,9 +2,9 @@ import { readFile, writeFile } from 'node:fs/promises';
 
 const nextVersion = process.argv[2]?.replace(/^v/, '');
 
-if (!nextVersion || !/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(nextVersion)) {
+if (!nextVersion || !/^\d+\.\d+\.\d+$/.test(nextVersion)) {
   throw new Error(
-    'Usage: node scripts/setDesktopVersion.mjs <semver|vsemver>'
+    'Usage: node scripts/setDesktopVersion.mjs <major.minor.patch|vmajor.minor.patch>'
   );
 }
 
