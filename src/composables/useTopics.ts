@@ -152,18 +152,18 @@ const createTopicsApi = () => {
   const getLatestMessage = (
     messages: Array<Message | undefined>
   ): Message | undefined => {
-    return messages.filter(Boolean).reduce<Message | undefined>(
-      (latestMessage, message) => {
+    return messages
+      .filter(Boolean)
+      .reduce<Message | undefined>((latestMessage, message) => {
         if (!latestMessage) {
           return message;
         }
 
-        return getMessageTimestamp(message) >= getMessageTimestamp(latestMessage)
+        return getMessageTimestamp(message) >=
+          getMessageTimestamp(latestMessage)
           ? message
           : latestMessage;
-      },
-      undefined
-    );
+      }, undefined);
   };
 
   const resolveLatestMessage = (
