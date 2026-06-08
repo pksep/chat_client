@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::{path::Path, time::UNIX_EPOCH};
 use tauri::{Manager, WindowEvent};
 
 #[cfg(desktop)]
@@ -19,7 +20,7 @@ use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartExt};
 
 #[cfg(windows)]
 use windows::{
-    core::{HSTRING, IInspectable, Interface},
+    core::{IInspectable, Interface, HSTRING},
     Data::Xml::Dom::XmlDocument,
     Foundation::TypedEventHandler,
     UI::Notifications::{ToastActivatedEventArgs, ToastNotification, ToastNotificationManager},
@@ -56,6 +57,15 @@ struct WindowStatePayload {
     focused: bool,
     minimized: bool,
     visible: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DroppedFilePayload {
+    name: String,
+    mime_type: String,
+    last_modified: Option<u128>,
+    bytes: Vec<u8>,
 }
 
 #[cfg(desktop)]
@@ -271,6 +281,70 @@ fn consume_pending_notification_target() -> Option<String> {
     None
 }
 
+fn guess_mime_type(path: &Path) -> String {
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    match extension.as_str() {
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "svg" => "image/svg+xml",
+        "heic" => "image/heic",
+        "heif" => "image/heif",
+        "mp4" => "video/mp4",
+        "mov" => "video/quicktime",
+        "webm" => "video/webm",
+        "avi" => "video/x-msvideo",
+        "mkv" => "video/x-matroska",
+        "pdf" => "application/pdf",
+        "txt" => "text/plain",
+        "csv" => "text/csv",
+        "json" => "application/json",
+        "zip" => "application/zip",
+        "doc" => "application/msword",
+        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xls" => "application/vnd.ms-excel",
+        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        _ => "",
+    }
+    .to_string()
+}
+
+#[tauri::command]
+fn read_dropped_file(path: String) -> Result<DroppedFilePayload, String> {
+    let file_path = Path::new(&path);
+    let metadata = std::fs::metadata(file_path).map_err(|error| error.to_string())?;
+
+    if !metadata.is_file() {
+        return Err("Dropped path is not a file".to_string());
+    }
+
+    let bytes = std::fs::read(file_path).map_err(|error| error.to_string())?;
+    let name = file_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("dropped-file")
+        .to_string();
+    let last_modified = metadata
+        .modified()
+        .ok()
+        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis());
+
+    Ok(DroppedFilePayload {
+        name,
+        mime_type: guess_mime_type(file_path),
+        last_modified,
+        bytes,
+    })
+}
+
 #[cfg(desktop)]
 fn setup_desktop<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
     app.handle().plugin(tauri_plugin_autostart::init(
@@ -361,7 +435,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             show_windows_notification,
             clear_windows_topic_notifications,
-            consume_pending_notification_target
+            consume_pending_notification_target,
+            read_dropped_file
         ])
         .setup(|app| {
             #[cfg(desktop)]
