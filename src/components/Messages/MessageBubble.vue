@@ -160,6 +160,8 @@ const getSliderDetectionValue = (media: IMedia) =>
   media.originName || media.path || '';
 
 const isSliderContentMedia = (media: IMedia) =>
+  media.type === MediaType.Image ||
+  media.type === MediaType.Video ||
   Boolean(isSliderContentUrl(getSliderDetectionValue(media)));
 
 const buildSliderItem = async (media: IMedia) => {
@@ -225,6 +227,10 @@ const setSliderElement = async (medias: IMedia[], defaultIndex: number = 0) => {
   }
 
   const selectedMedia = medias[defaultIndex];
+
+  if (!selectedMedia) {
+    return;
+  }
 
   if (
     selectedMedia.type === MediaType.File &&

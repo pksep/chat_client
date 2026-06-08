@@ -98,6 +98,10 @@ const messagesStore = shallowRef<Record<string, ChatMessage[]>>({});
 const messageChangeCallbacks: Array<(topicId?: string) => void> = [];
 let areChatListenersBound = false;
 
+type MessageHandlingOptions = {
+  silent?: boolean;
+};
+
 const notifyMessageChange = (topicId?: string): void => {
   messageChangeCallbacks.forEach(callback => {
     try {
@@ -198,7 +202,10 @@ const setupChatListeners = (): void => {
 
   areChatListenersBound = true;
 
-  const handleIncomingSocketMessage = (message: IMessage): void => {
+  const handleIncomingSocketMessage = (
+    message: IMessage,
+    opts?: MessageHandlingOptions
+  ): void => {
     const { updateLocalLastMessageTopic } = useTopics();
     void upsertCallHistoryMessage(message);
     const isDuplicateMessage = hasMessageInTopic(message.topicId, message.id);
@@ -248,9 +255,15 @@ const setupChatListeners = (): void => {
         incrementDisplayedUnreadCount(1);
       }
 
-      playNotificationSound(message.topicId);
+      if (!opts?.silent) {
+        playNotificationSound(message.topicId);
+      }
 
-      if (!isTopicMuted(message.topicId) && !isCurrentTopicActivelyVisible) {
+      if (
+        !opts?.silent &&
+        !isTopicMuted(message.topicId) &&
+        !isCurrentTopicActivelyVisible
+      ) {
         const topic = useTopics().getSelectedTopic(message.topicId) as any;
 
         void showTauriMessageNotification({
@@ -294,14 +307,17 @@ const setupChatListeners = (): void => {
     }
   };
 
-  const handleChangeMessagePayload = (payload: {
-    type: 'NEW' | 'CHANGE' | 'DELETE' | 'PIN';
-    data: any;
-    messageId?: string;
-    ptsMeta?: PtsMeta;
-    scope?: 'ALL' | 'SELF';
-    targetUserId?: string | null;
-  }): void => {
+  const handleChangeMessagePayload = (
+    payload: {
+      type: 'NEW' | 'CHANGE' | 'DELETE' | 'PIN';
+      data: any;
+      messageId?: string;
+      ptsMeta?: PtsMeta;
+      scope?: 'ALL' | 'SELF';
+      targetUserId?: string | null;
+    },
+    opts?: MessageHandlingOptions
+  ): void => {
     if (
       payload.scope === 'SELF' &&
       payload.targetUserId &&
@@ -319,7 +335,7 @@ const setupChatListeners = (): void => {
         source: 'ws',
         payload: payload.data
       });
-      handleIncomingSocketMessage(payload.data);
+      handleIncomingSocketMessage(payload.data, opts);
     } else if (payload.type === 'DELETE') {
       void recordShadowChatEvent({
         topicId: payload.data.topicId,
@@ -518,10 +534,13 @@ const setupChatListeners = (): void => {
         case 'message.change':
         case 'message.delete':
         case 'message.pin':
-          handleChangeMessagePayload({
-            ...(event.payload as any),
-            ptsMeta
-          });
+          handleChangeMessagePayload(
+            {
+              ...(event.payload as any),
+              ptsMeta
+            },
+            { silent: true }
+          );
           break;
         case 'message.read':
           handleReadMessagePayload({
