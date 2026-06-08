@@ -149,22 +149,30 @@ const createTopicsApi = () => {
     }
   };
 
-  const resolveLatestMessage = (topic: ITopic) => {
+  const getLatestMessage = (
+    messages: Array<Message | undefined>
+  ): Message | undefined => {
+    return messages
+      .filter(Boolean)
+      .reduce<Message | undefined>((latestMessage, message) => {
+        if (!latestMessage) {
+          return message;
+        }
+
+        return getMessageTimestamp(message) >=
+          getMessageTimestamp(latestMessage)
+          ? message
+          : latestMessage;
+      }, undefined);
+  };
+
+  const resolveLatestMessage = (
+    topic: ITopic,
+    lastMessage?: Message
+  ): Message | undefined => {
     const localLastMessage = getFullMessagesByTopicId(topic.id).at(-1);
-    const serverLastMessage = topic.lastMessage;
 
-    if (!localLastMessage) {
-      return serverLastMessage;
-    }
-
-    if (!serverLastMessage) {
-      return localLastMessage;
-    }
-
-    return getMessageTimestamp(localLastMessage) >=
-      getMessageTimestamp(serverLastMessage)
-      ? localLastMessage
-      : serverLastMessage;
+    return getLatestMessage([topic.lastMessage, localLastMessage, lastMessage]);
   };
 
   const normalizeTopic = (topic: ITopic): ITopic => {
@@ -368,7 +376,7 @@ const createTopicsApi = () => {
     const topic = topics.value.find(topic => topic.id === topicId);
     if (topic) {
       if (lastMessage) {
-        topic.lastMessage = lastMessage;
+        topic.lastMessage = resolveLatestMessage(topic, lastMessage);
       } else {
         const messages = getFullMessagesByTopicId(topicId);
         topic.lastMessage = messages.at(-1);
