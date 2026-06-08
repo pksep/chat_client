@@ -1,5 +1,6 @@
 <template>
   <div
+    ref="inputContainerRef"
     class="chat__input emoji-font-host"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
   >
@@ -119,14 +120,27 @@
         </template>
       </ContentEditor>
     </div>
+    <Teleport to="body">
+      <div
+        v-if="isTauriFileDragging"
+        class="chat__input-tauri-dropzone"
+        :data-testid="`${props.dataTestid}-MessageList-TauriDropzone`"
+      >
+        <div class="chat__input-tauri-dropzone__zone">
+          <div class="chat__input-tauri-dropzone__title">Загрузить файл</div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script lang="ts" setup>
 import {
   computed,
+  onMounted,
   onBeforeUnmount,
   reactive,
+  ref,
   useTemplateRef,
   watch
 } from 'vue';
@@ -152,6 +166,7 @@ import {
   getHasWebsocketConnection,
   sendTypingStatus
 } from '../../services/useChat';
+import { bindTauriFileDrop } from '../../services/useTauriDroppedFiles';
 
 interface Props {
   dataTestid: string;
@@ -310,11 +325,14 @@ const users = computed(() => {
 
 const contentEditorRef =
   useTemplateRef<typeof ContentEditor>('contentEditorRef');
+const inputContainerRef = useTemplateRef<HTMLElement>('inputContainerRef');
+const isTauriFileDragging = ref(false);
 
 let typingStopTimeout: ReturnType<typeof setTimeout> | null = null;
 let isTypingActive = false;
 let activeTypingTopicId: string | null = null;
 let lastTypingPingAt = 0;
+let unlistenTauriFileDrop: (() => void) | null = null;
 
 const clearTypingStopTimeout = (): void => {
   if (!typingStopTimeout) {
@@ -386,6 +404,40 @@ const notifyTyping = async (): Promise<void> => {
   });
 };
 
+const toFileList = (files: File[]): FileList => {
+  const dataTransfer = new DataTransfer();
+
+  files.forEach(file => dataTransfer.items.add(file));
+
+  return dataTransfer.files;
+};
+
+const isMediaFile = (file: File): boolean => {
+  const type = file.type.toLowerCase();
+
+  return type.startsWith('image/') || type.startsWith('video/');
+};
+
+const handleTauriFilesDropped = (files: File[]): void => {
+  isTauriFileDragging.value = false;
+
+  if (!files.length || !props.allowAttachFile) {
+    return;
+  }
+
+  const onlyMedia = files.every(isMediaFile);
+  const editor = contentEditorRef.value as typeof contentEditorRef.value & {
+    queueAttachFiles?: (files: FileList | File[], onlyMedia: boolean) => void;
+  };
+
+  if (editor?.queueAttachFiles) {
+    editor.queueAttachFiles(files, onlyMedia);
+    return;
+  }
+
+  emit('attachFile', toFileList(files), onlyMedia);
+};
+
 defineExpose({
   focus: () => contentEditorRef.value?.focus(),
   insertText: (text: string) =>
@@ -413,7 +465,21 @@ watch(
   }
 );
 
+onMounted(() => {
+  void bindTauriFileDrop({
+    getTargetElement: () =>
+      props.allowAttachFile ? inputContainerRef.value : null,
+    onDragStateChange: isDragging => {
+      isTauriFileDragging.value = isDragging;
+    },
+    onFilesDropped: handleTauriFilesDropped
+  }).then(unlisten => {
+    unlistenTauriFileDrop = unlisten;
+  });
+});
+
 onBeforeUnmount(() => {
+  unlistenTauriFileDrop?.();
   void stopTyping();
 });
 </script>

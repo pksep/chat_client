@@ -41,6 +41,10 @@ body {
   overflow-x: hidden;
 }
 
+body.chat-tauri-macos-runtime {
+  padding-right: 0 !important;
+}
+
 h1,
 h2,
 h3,
