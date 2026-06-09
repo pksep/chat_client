@@ -311,7 +311,6 @@ import PinIcon from '../UI/PinIcon.vue';
 import UnpinIcon from '../UI/UnpinIcon.vue';
 import UnmuteIcon from '../UI/UnmuteIcon.vue';
 import MuteIcon from '../UI/MuteIcon.vue';
-import MessageIcon from '../UI/MessageIcon.vue';
 import ReadIcon from '../UI/ReadIcon.vue';
 import { TopicType } from '../../services/useChatSDK/types';
 import { getUserById, getUserLastOnline } from '../../composables/useUsers';
