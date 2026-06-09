@@ -823,6 +823,13 @@ export class ChatSDK {
     return await this.topic.toggleMuteTopic(topicId);
   }
 
+  async setTopicMarkedUnread(
+    topicId: string,
+    isMarkedUnread: boolean
+  ): Promise<TopicSetting> {
+    return await this.topic.setTopicMarkedUnread(topicId, isMarkedUnread);
+  }
+
   async getTopicSettings(
     topicId: string,
     userId: string

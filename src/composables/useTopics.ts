@@ -1,9 +1,12 @@
 import { ref, computed, watch } from 'vue';
 import { getChatSDK } from '../services/useChat';
-import { ITopic, IUser } from '../components/interfaces/interfaces';
+import {
+  ITopic,
+  ITopicInfo,
+  IUser
+} from '../components/interfaces/interfaces';
 import {
   Message,
-  TopicSetting,
   TopicType,
   MessageStatus
 } from '../services/useChatSDK/types';
@@ -669,10 +672,7 @@ const createTopicsApi = () => {
     schedulePersistTopics();
   };
 
-  const updateLocalTopicInfo = (
-    topicId: string,
-    info: Partial<TopicSetting>
-  ): void => {
+  const updateLocalTopicInfo = (topicId: string, info: ITopicInfo): void => {
     const topic = topics.value.find(topic => topic.id === topicId);
     if (topic) {
       topic.info = { ...topic.info, ...info };
@@ -773,6 +773,30 @@ const createTopicsApi = () => {
       }
     } catch (err) {
       console.error('Failed to mute/unmute topic:', err);
+    }
+  };
+
+  const setTopicMarkedUnread = async (
+    topic: ITopic,
+    isMarkedUnread: boolean
+  ) => {
+    const previousMarkedUnread = Boolean(topic.info?.isMarkedUnread);
+    const applyMarkedUnread = (value: boolean) => {
+      if (topic.type === TopicType.DM) {
+        updateLocalTopicInfo(topic.id, { isMarkedUnread: value });
+      } else if (topic.type === TopicType.Group) {
+        updateLocalGroupInfo(topic.id, { isMarkedUnread: value });
+      }
+    };
+
+    applyMarkedUnread(isMarkedUnread);
+
+    try {
+      const sdk = getChatSDK();
+      await sdk.setTopicMarkedUnread(topic.id, isMarkedUnread);
+    } catch (err) {
+      applyMarkedUnread(previousMarkedUnread);
+      console.error('Failed to set topic marked unread:', err);
     }
   };
 
@@ -973,6 +997,7 @@ const createTopicsApi = () => {
     updateLocalTopicInfo,
     togglePinTopic,
     toggleMuteTopic,
+    setTopicMarkedUnread,
     addTopicList,
     setTopicTypingState,
     clearTopicTypingState,
@@ -1009,6 +1034,7 @@ const {
   changeUnreadMessageCount,
   toggleMuteTopic,
   togglePinTopic,
+  setTopicMarkedUnread,
   addTopicList,
   setTopicTypingState,
   clearTopicTypingState,
@@ -1048,6 +1074,7 @@ export {
   updateLocalTopicInfo,
   togglePinTopic,
   toggleMuteTopic,
+  setTopicMarkedUnread,
   addTopicList,
   setTopicTypingState,
   clearTopicTypingState,
