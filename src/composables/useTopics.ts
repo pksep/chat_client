@@ -1,10 +1,6 @@
 import { ref, computed, watch } from 'vue';
 import { getChatSDK } from '../services/useChat';
-import {
-  ITopic,
-  ITopicInfo,
-  IUser
-} from '../components/interfaces/interfaces';
+import { ITopic, ITopicInfo, IUser } from '../components/interfaces/interfaces';
 import {
   Message,
   TopicType,
