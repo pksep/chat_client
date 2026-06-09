@@ -42,10 +42,7 @@ const getNotificationUrl = payload => {
 };
 
 const buildCallActionUrl = (payload, action) => {
-  const targetUrl = new URL(
-    getNotificationUrl(payload),
-    self.location.origin
-  );
+  const targetUrl = new URL(getNotificationUrl(payload), self.location.origin);
 
   targetUrl.searchParams.set('callAction', action);
 
@@ -171,9 +168,10 @@ self.addEventListener('notificationclick', event => {
     event.action === 'accept' || event.action === 'decline'
       ? event.action
       : null;
-  const absoluteUrl = isIncomingCall && action
-    ? buildCallActionUrl(payload, action)
-    : new URL(getNotificationUrl(payload), self.location.origin).toString();
+  const absoluteUrl =
+    isIncomingCall && action
+      ? buildCallActionUrl(payload, action)
+      : new URL(getNotificationUrl(payload), self.location.origin).toString();
 
   event.waitUntil(
     clients

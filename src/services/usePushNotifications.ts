@@ -27,6 +27,8 @@ import {
 const NATIVE_PUSH_TOKEN_STORAGE_KEY = 'chat_native_push_token';
 const WEB_PUSH_ENDPOINT_STORAGE_KEY = 'chat_web_push_endpoint';
 
+type WebPushBrowser = 'chrome' | 'mozilla' | 'yandex' | 'unknown';
+
 interface NotificationTapPlugin {
   addListener(
     eventName: 'notificationTap',
@@ -73,6 +75,45 @@ const getStoredWebPushEndpoint = (): string =>
 const clearStoredPushRegistration = (): void => {
   localStorage.removeItem(NATIVE_PUSH_TOKEN_STORAGE_KEY);
   localStorage.removeItem(WEB_PUSH_ENDPOINT_STORAGE_KEY);
+};
+
+const getWebPushBrowser = (): WebPushBrowser => {
+  if (typeof navigator === 'undefined') {
+    return 'unknown';
+  }
+
+  const navigatorWithUserAgentData = navigator as Navigator & {
+    userAgentData?: {
+      brands?: { brand?: string }[];
+    };
+  };
+  const userAgent = navigator.userAgent.toLowerCase();
+  const brands =
+    navigatorWithUserAgentData.userAgentData?.brands?.map(({ brand }) =>
+      (brand || '').toLowerCase()
+    ) || [];
+  const hasBrand = (needle: string) =>
+    brands.some(brand => brand.includes(needle));
+
+  if (userAgent.includes('yabrowser') || hasBrand('yandex')) {
+    return 'yandex';
+  }
+
+  if (userAgent.includes('firefox') || userAgent.includes('fxios')) {
+    return 'mozilla';
+  }
+
+  if (
+    userAgent.includes('chrome') ||
+    userAgent.includes('crios') ||
+    userAgent.includes('chromium') ||
+    hasBrand('google chrome') ||
+    hasBrand('chromium')
+  ) {
+    return 'chrome';
+  }
+
+  return 'unknown';
 };
 
 const hasPayloadValues = (payload?: Record<string, string> | null) =>
@@ -398,7 +439,17 @@ export const initPushNotifications = async () => {
   const userId = getCurrentUserId();
   if (!userId) return console.warn('No user ID, skipping subscribe');
 
-  await api.post('/push/subscribe', { userId, subscription });
+  const browser = getWebPushBrowser();
+  const subscriptionPayload = {
+    ...subscription.toJSON(),
+    browser
+  };
+
+  await api.post('/push/subscribe', {
+    userId,
+    subscription: subscriptionPayload,
+    browser
+  });
 };
 
 const handleCallPush = (notification?: { data?: NativeNotificationData }) => {
