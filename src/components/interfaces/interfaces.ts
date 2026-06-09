@@ -52,8 +52,12 @@ export type IGroup = Group & {
   membersLength?: number;
 };
 
+export type ITopicInfo = Partial<TopicSetting> & {
+  isMarkedUnread?: boolean;
+};
+
 export type ITopic = Topic & {
-  info?: Partial<TopicSetting>;
+  info?: ITopicInfo;
   isPin?: boolean;
   lastMessage?: IMessage;
   activeCall?: {

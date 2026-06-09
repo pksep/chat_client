@@ -108,15 +108,18 @@
       <Icon :name="IconNameEnum.arrowDown" />
       <span
         v-if="
-          visibleTopicUnreadCount > 0 &&
-          activeTopic?.lastMessage?.senderUserId !== authUser?.id
+          hasVisibleTopicUnreadIndicator &&
+          (visibleTopicUnreadCount === 0 ||
+            activeTopic?.lastMessage?.senderUserId !== authUser?.id)
         "
         :class="{
           'contact-list__notification': true,
           'contact-list__notification--muted': activeTopic?.info?.isMute
         }"
       >
-        {{ visibleTopicUnreadCount }}
+        <template v-if="visibleTopicUnreadCount">
+          {{ visibleTopicUnreadCount }}
+        </template>
       </span>
     </div>
   </div>
@@ -227,7 +230,10 @@ import {
 } from '../composables/useForwardMessages';
 import { ensureMediaObjectUrl } from '../services/useMediaBlobCache';
 import { isGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
-import { getTopicUnreadBadgeCount } from '../utils/topicUnreadBadge';
+import {
+  getTopicUnreadBadgeCount,
+  hasTopicUnreadIndicator
+} from '../utils/topicUnreadBadge';
 import { isUnreadTrackableMessage } from '../utils/messageTracking';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
@@ -294,6 +300,11 @@ const canClearlyShowUnreadCount = computed(
 );
 const visibleTopicUnreadCount = computed(() =>
   canClearlyShowUnreadCount.value ? topicUnreadCount.value : 0
+);
+const hasVisibleTopicUnreadIndicator = computed(
+  () =>
+    canClearlyShowUnreadCount.value &&
+    hasTopicUnreadIndicator(activeTopic.value || undefined, authUser.value?.id)
 );
 const renderedTopicId = ref(route.value.id || '');
 let activeTopicSwitchToken = 0;

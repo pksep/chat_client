@@ -183,15 +183,17 @@
               @
             </div>
             <div
-              v-if="hasTopicUnreadBadge(topic, authedUser?.id)"
+              v-if="hasTopicUnreadIndicator(topic, authedUser?.id)"
               :class="{
                 'contact-list__notification': true,
                 'contact-list__notification--muted': topic.info?.isMute
               }"
               :data-testid="`${props.dataTestid}-ContactList-Notification${index + 1}`"
-              :aria-label="`${getTopicUnreadBadgeCount(topic, authedUser?.id)} new messages`"
+              :aria-label="getTopicUnreadIndicatorLabel(topic)"
             >
-              {{ getTopicUnreadBadgeCount(topic, authedUser?.id) }}
+              <template v-if="getTopicUnreadBadgeCount(topic, authedUser?.id)">
+                {{ getTopicUnreadBadgeCount(topic, authedUser?.id) }}
+              </template>
             </div>
             <div
               class="contact-list__pin"
@@ -235,6 +237,25 @@
         <Button
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.small"
+          @click.stop="() => handleReadState(topic)"
+          :data-testid="`${props.dataTestid}-ContactList-ReadStateButton${index + 1}`"
+          :aria-label="
+            hasTopicUnreadIndicator(topic, authedUser?.id)
+              ? `Mark ${topic.name} as read`
+              : `Mark ${topic.name} as new`
+          "
+        >
+          <template v-if="hasTopicUnreadIndicator(topic, authedUser?.id)">
+            <ReadIcon style="padding: 2px" /> Отметить прочитанным
+          </template>
+          <template v-else
+            ><Icon :name="IconNameEnum.chat" style="padding: 2px" /> Пометить
+            как новое</template
+          >
+        </Button>
+        <Button
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
           @click="() => handleMute(topic)"
           :data-testid="`${props.dataTestid}-ContactList-NotificationButton${index + 1}`"
           :aria-label="
@@ -262,6 +283,8 @@ import {
   ButtonTypeEnum,
   Checkbox,
   CheckboxSizeEnum,
+  Icon,
+  IconNameEnum,
   SizesEnum,
   Tooltip
 } from '@pksep/yui';
@@ -288,9 +311,10 @@ import PinIcon from '../UI/PinIcon.vue';
 import UnpinIcon from '../UI/UnpinIcon.vue';
 import UnmuteIcon from '../UI/UnmuteIcon.vue';
 import MuteIcon from '../UI/MuteIcon.vue';
+import ReadIcon from '../UI/ReadIcon.vue';
 import { TopicType } from '../../services/useChatSDK/types';
 import { getUserById, getUserLastOnline } from '../../composables/useUsers';
-import { getHasWebsocketConnection } from '../../services/useChat';
+import { getHasWebsocketConnection, markAsRead } from '../../services/useChat';
 import { useMessageMedia } from '../Messages/composables/useMessageMedia';
 import TypingIndicator from '../UI/TypingIndicator.vue';
 import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
@@ -298,7 +322,7 @@ import { formatUserStatusText } from '../../utils/userStatus';
 import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
 import {
   getTopicUnreadBadgeCount,
-  hasTopicUnreadBadge
+  hasTopicUnreadIndicator
 } from '../../utils/topicUnreadBadge';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import {
@@ -314,7 +338,13 @@ interface IExtendedContactListProps extends IContactListProps {
   selectedTopicIds?: Set<string | number>;
 }
 
-const { togglePinTopic, toggleMuteTopic, getTopicTypingUsers } = useTopics();
+const {
+  togglePinTopic,
+  toggleMuteTopic,
+  getTopicTypingUsers,
+  setTopicMarkedUnread,
+  resetTopicUnreadState
+} = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
@@ -397,10 +427,33 @@ const handleMute = (topic: ITopic): void => {
   closeActivePopover(topic.id);
 };
 
+const handleReadState = async (topic: ITopic): Promise<void> => {
+  if (hasTopicUnreadIndicator(topic, authedUser.value?.id)) {
+    if (topic.lastMessage?.id) {
+      await markAsRead({
+        topicId: topic.id,
+        messageIds: [topic.lastMessage.id]
+      });
+    }
+
+    await setTopicMarkedUnread(topic, false);
+    resetTopicUnreadState(topic.id);
+    closeActivePopover(topic.id);
+    return;
+  }
+
+  await setTopicMarkedUnread(topic, true);
+  closeActivePopover(topic.id);
+};
+
 const handleClick = (topic: ITopic): void => {
   if (props.showCheckbox) {
     emits('unmount-topic', topic);
     return;
+  }
+
+  if (topic.info?.isMarkedUnread) {
+    void setTopicMarkedUnread(topic, false);
   }
 
   if (isMobile.value) {
@@ -451,6 +504,14 @@ const getTopicStatusLabel = (topic: ITopic): string =>
   topic.type === TopicType.DM
     ? formatUserStatusText(getTopicEffectiveUser(topic)?.status)
     : '';
+
+const getTopicUnreadIndicatorLabel = (topic: ITopic): string => {
+  const unreadCount = getTopicUnreadBadgeCount(topic, authedUser.value?.id);
+
+  return unreadCount > 0
+    ? `${unreadCount} new messages`
+    : `${topic.name} marked as new`;
+};
 
 const getTopicActiveCall = (topic: ITopic) => {
   if (isCallActive.value && activeCallTopicId.value === topic.id) {

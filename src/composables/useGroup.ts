@@ -1,7 +1,11 @@
 import { ref } from 'vue';
 import { getChatSDK, getCurrentUserId } from '../services/useChat';
-import { Message, TopicSetting } from '../services/useChatSDK/types';
-import type { ITopic, IUser } from '../components/interfaces/interfaces';
+import { Message } from '../services/useChatSDK/types';
+import type {
+  ITopic,
+  ITopicInfo,
+  IUser
+} from '../components/interfaces/interfaces';
 import { setTopics, topics, useTopics } from './useTopics';
 import { getFullMessagesByTopicId } from '../services/useMessages';
 
@@ -302,10 +306,7 @@ export const useGroup = () => {
     topics.value = [...topics.value];
   };
 
-  const updateLocalGroupInfo = (
-    topicId: string,
-    info: Partial<TopicSetting>
-  ): void => {
+  const updateLocalGroupInfo = (topicId: string, info: ITopicInfo): void => {
     const topic = topics.value.find(topic => topic.id === topicId);
     if (topic) {
       topic.info = { ...topic.info, ...info };

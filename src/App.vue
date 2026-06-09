@@ -64,6 +64,7 @@ import { initShareIntentHandling } from './services/useShareIntent';
 
 const ORGANIZATIONS_KEY = 'chat_runtime_organizations';
 const LAST_ORGANIZATION_KEY = 'chat_runtime_last_organization';
+const URL_PROTOCOL_REGEXP = /^[a-z][a-z\d+\-.]*:\/\//i;
 
 interface IStoredOrganization {
   url: string;
@@ -144,7 +145,21 @@ const parseRuntimeConfig = (
   };
 };
 
-const normalizeServerUrl = (value: string) => value.trim().replace(/\/+$/, '');
+const normalizeServerUrl = (value: string) => {
+  const trimmedUrl = value.trim().replace(/\/+$/, '');
+
+  if (!trimmedUrl) {
+    return '';
+  }
+
+  if (URL_PROTOCOL_REGEXP.test(trimmedUrl)) {
+    return trimmedUrl;
+  }
+
+  const host = /[.:/]/.test(trimmedUrl) ? trimmedUrl : `${trimmedUrl}.pksep.ru`;
+
+  return `https://${host}`;
+};
 
 const getRuntimeConfigUrl = (baseUrl: string) =>
   `${normalizeServerUrl(baseUrl)}/config`;
@@ -204,16 +219,24 @@ const clearLastOrganization = () => {
   localStorage.removeItem(LAST_ORGANIZATION_KEY);
 };
 
-const getOrganizationByUrl = (url: string) =>
-  organizations.value.find(item => item.url === url);
+const getOrganizationByUrl = (url: string) => {
+  const normalizedUrl = normalizeServerUrl(url);
+
+  return organizations.value.find(
+    item => normalizeServerUrl(item.url) === normalizedUrl
+  );
+};
 
 const upsertOrganization = (url: string, nextConfig: IChatContainerConfig) => {
+  const normalizedUrl = normalizeServerUrl(url);
   const nextOrganizations = [
     {
-      url,
+      url: normalizedUrl,
       config: nextConfig
     },
-    ...organizations.value.filter(item => item.url !== url)
+    ...organizations.value.filter(
+      item => normalizeServerUrl(item.url) !== normalizedUrl
+    )
   ];
 
   saveOrganizations(nextOrganizations);
@@ -221,18 +244,19 @@ const upsertOrganization = (url: string, nextConfig: IChatContainerConfig) => {
 
 const selectOrganization = (url: string) => {
   const organization = getOrganizationByUrl(url);
+  const normalizedUrl = normalizeServerUrl(url);
 
   if (!organization) {
     return;
   }
 
-  setLastOrganization(url);
-  serverUrl.value = url;
+  setLastOrganization(normalizedUrl);
+  serverUrl.value = normalizedUrl;
   isAddingNewOrganization.value = false;
   applyConfig(organization.config);
   openCredentialsStepIfNeeded();
   void loadRemoteConfig({
-    url,
+    url: normalizedUrl,
     fallbackConfig: organization.config
   });
 };
@@ -294,13 +318,14 @@ const handleQrAuthSuccess = (payload: {
 };
 
 const removeOrganization = (url: string) => {
+  const normalizedUrl = normalizeServerUrl(url);
   const nextOrganizations = organizations.value.filter(
-    item => item.url !== url
+    item => normalizeServerUrl(item.url) !== normalizedUrl
   );
 
   saveOrganizations(nextOrganizations);
 
-  if (selectedOrganization.value === url) {
+  if (normalizeServerUrl(selectedOrganization.value) === normalizedUrl) {
     clearLastOrganization();
     startAddOrganization();
   }
@@ -320,6 +345,7 @@ const loadRemoteConfig = async (options?: {
     return;
   }
 
+  serverUrl.value = normalizedUrl;
   isLoading.value = true;
 
   try {
@@ -433,17 +459,22 @@ onMounted(() => {
     return;
   }
 
+  const normalizedSelectedOrganization = normalizeServerUrl(
+    selectedOrganization.value
+  );
   const lastOrganization = organizations.value.find(
-    item => item.url === selectedOrganization.value
+    item => normalizeServerUrl(item.url) === normalizedSelectedOrganization
   );
 
   if (lastOrganization) {
-    serverUrl.value = lastOrganization.url;
+    const normalizedLastOrganization = normalizeServerUrl(lastOrganization.url);
+
+    serverUrl.value = normalizedLastOrganization;
     isAddingNewOrganization.value = false;
     applyConfig(lastOrganization.config);
     openCredentialsStepIfNeeded();
     void loadRemoteConfig({
-      url: lastOrganization.url,
+      url: normalizedLastOrganization,
       fallbackConfig: lastOrganization.config
     });
     return;
