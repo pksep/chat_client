@@ -50,3 +50,12 @@ export const hasTopicUnreadBadge = (
   topic?: ITopic,
   authUserId?: string | null
 ): boolean => getTopicUnreadBadgeCount(topic, authUserId) > 0;
+
+export const hasTopicManualUnreadMark = (topic?: ITopic): boolean =>
+  Boolean(topic?.info?.isMarkedUnread);
+
+export const hasTopicUnreadIndicator = (
+  topic?: ITopic,
+  authUserId?: string | null
+): boolean =>
+  hasTopicUnreadBadge(topic, authUserId) || hasTopicManualUnreadMark(topic);
