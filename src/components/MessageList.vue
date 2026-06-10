@@ -11,6 +11,21 @@
       :messages="state.aiMessages"
       :data-testid="props.dataTestid"
     />
+    <Transition name="chat-floating-date" mode="out-in">
+      <div
+        v-if="floatingDateDividerLabel"
+        :key="floatingDateDividerLabel"
+        :class="[
+          'chat__floating-date-divider',
+          { 'chat__floating-date-divider--hidden': isFloatingDateDividerHidden }
+        ]"
+        :data-testid="`${props.dataTestid}-MessageList-FloatingDateDivider`"
+      >
+        <div class="date-divider">
+          <span>{{ floatingDateDividerLabel }}</span>
+        </div>
+      </div>
+    </Transition>
   </div>
 
   <div
@@ -37,6 +52,21 @@
       @retry-message="handleRetryMessage"
       @scroll-to-message="handleScrollToMessage"
     />
+    <Transition name="chat-floating-date" mode="out-in">
+      <div
+        v-if="floatingDateDividerLabel"
+        :key="floatingDateDividerLabel"
+        :class="[
+          'chat__floating-date-divider',
+          { 'chat__floating-date-divider--hidden': isFloatingDateDividerHidden }
+        ]"
+        :data-testid="`${props.dataTestid}-MessageList-FloatingDateDivider`"
+      >
+        <div class="date-divider">
+          <span>{{ floatingDateDividerLabel }}</span>
+        </div>
+      </div>
+    </Transition>
     <section
       v-if="props.showUpdateBanner"
       class="chat-update-banner"
@@ -263,8 +293,13 @@ const getLocalStorageInputText = computed(() => {
 });
 
 const inputText = ref(getLocalStorageInputText.value);
+const floatingDateDividerLabel = ref('');
+const isFloatingDateDividerHidden = ref(false);
 let chatVisibilityObserver: ResizeObserver | null = null;
 let removeAppVisibilityListener: (() => void) | null = null;
+let floatingDateDividerRafId = 0;
+const FLOATING_DATE_LABEL_HEIGHT_PX = 50;
+const FLOATING_DATE_HIDE_GAP_PX = 50;
 const unreadMarkerMessageIdsByTopic = reactive<Record<string, string | null>>(
   {}
 );
@@ -325,6 +360,71 @@ const state = reactive({
   hideUnreadMarker: false,
   unreadMarkerMessageId: null as string | null
 });
+
+const syncFloatingDateDivider = (): void => {
+  const container = chatWrapperRef.value;
+
+  if (!container) {
+    floatingDateDividerLabel.value = '';
+    isFloatingDateDividerHidden.value = false;
+    return;
+  }
+
+  const dateDividers = Array.from(
+    container.querySelectorAll<HTMLElement>('[data-date-divider-label]')
+  );
+
+  if (!dateDividers.length) {
+    floatingDateDividerLabel.value = '';
+    isFloatingDateDividerHidden.value = false;
+    return;
+  }
+
+  const containerRect = container.getBoundingClientRect();
+  const stickyTop = containerRect.top + 6;
+  const measuredDividers = dateDividers.map(element => ({
+    element,
+    rect: element.getBoundingClientRect()
+  }));
+
+  isFloatingDateDividerHidden.value = measuredDividers.some(({ rect }) => {
+    const isInFloatingZone =
+      rect.bottom >= stickyTop &&
+      rect.top <=
+        stickyTop + FLOATING_DATE_LABEL_HEIGHT_PX + FLOATING_DATE_HIDE_GAP_PX;
+
+    return isInFloatingZone;
+  });
+
+  const passedDividers = measuredDividers
+    .filter(({ rect }) => rect.top <= stickyTop)
+    .sort((left, right) => right.rect.top - left.rect.top);
+
+  const fallbackDivider = !floatingDateDividerLabel.value
+    ? measuredDividers
+        .filter(({ rect }) => rect.top > stickyTop)
+        .sort((left, right) => left.rect.top - right.rect.top)[0]?.element
+    : null;
+  const activeDivider = passedDividers[0]?.element || fallbackDivider;
+
+  if (!activeDivider && floatingDateDividerLabel.value) {
+    return;
+  }
+
+  floatingDateDividerLabel.value =
+    activeDivider?.dataset.dateDividerLabel || floatingDateDividerLabel.value;
+};
+
+const scheduleFloatingDateDividerSync = (): void => {
+  if (floatingDateDividerRafId) {
+    cancelAnimationFrame(floatingDateDividerRafId);
+  }
+
+  floatingDateDividerRafId = requestAnimationFrame(() => {
+    floatingDateDividerRafId = 0;
+    syncFloatingDateDivider();
+  });
+};
 
 const {
   isShowScrollToBottomButton,
@@ -710,6 +810,7 @@ const syncVisibleUnreadAfterAutoScroll = (): void => {
 
 const handleScroll = async (): Promise<void> => {
   await handleMessageScroll();
+  scheduleFloatingDateDividerSync();
   hideUnreadMarkerIfPassed();
   resetUnreadIfViewingBottom();
 };
@@ -726,6 +827,7 @@ const { handleSend, handleAttachFile, handleRetryMessage } = useMessageSender(
 
 onMounted(async () => {
   handleMastraMounted();
+  window.addEventListener('resize', scheduleFloatingDateDividerSync);
 
   if (props.contact?.id) {
     state.isLoadingMore = false;
@@ -737,6 +839,7 @@ onMounted(async () => {
         scrollState.shouldAutoScroll = true;
         scrollState.isInitialLoad = true;
         setupIntersectionObserver();
+        scheduleFloatingDateDividerSync();
       }
     });
   }
@@ -755,6 +858,13 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  window.removeEventListener('resize', scheduleFloatingDateDividerSync);
+
+  if (floatingDateDividerRafId) {
+    cancelAnimationFrame(floatingDateDividerRafId);
+    floatingDateDividerRafId = 0;
+  }
+
   if (scrollMarkReadTimeout) {
     clearTimeout(scrollMarkReadTimeout);
   }
@@ -778,7 +888,21 @@ watch(
     chatVisibilityObserver.disconnect();
     chatVisibilityObserver.observe(wrapper);
     syncVisibleUnreadAfterAutoScroll();
+    scheduleFloatingDateDividerSync();
   }
+);
+
+watch(
+  [
+    () => route.value.id,
+    () => state.messages.length,
+    () => state.aiMessages.length
+  ],
+  async () => {
+    await nextTick();
+    scheduleFloatingDateDividerSync();
+  },
+  { immediate: true }
 );
 
 watch(
