@@ -7,6 +7,13 @@
     :aria-label="`${props.dataTestid} Contact List`"
   >
     <li
+      v-if="showContactSectionTitle"
+      class="contact-list__section-title"
+      :data-testid="`${props.dataTestid}-ContactList-ContactsTitle`"
+    >
+      Контакты
+    </li>
+    <li
       v-for="(topic, index) in props.topics"
       :key="topic.id"
       class="contact-list__li"
@@ -272,6 +279,86 @@
         </Button>
       </ContextMenu>
     </li>
+    <li
+      v-if="showMessageSectionTitle"
+      class="contact-list__section-title"
+      :data-testid="`${props.dataTestid}-ContactList-MessagesTitle`"
+    >
+      Сообщения
+    </li>
+    <li
+      v-if="showMessageSearchLoading"
+      class="contact-list__search-state"
+      :data-testid="`${props.dataTestid}-ContactList-MessageSearchLoading`"
+    >
+      Поиск сообщений...
+    </li>
+    <li
+      v-for="(result, index) in props.messageResults"
+      :key="`message-${result.id}`"
+      class="contact-list__li"
+      role="listitem"
+      tabindex="0"
+      :data-testid="`${props.dataTestid}-ContactList-MessageResult${index + 1}`"
+      @keydown.enter="handleMessageResultClick(result)"
+      @keydown.space="handleMessageResultClick(result)"
+    >
+      <div
+        class="contact-list__item contact-list__item--message-result"
+        role="button"
+        tabindex="0"
+        @click="handleMessageResultClick(result)"
+      >
+        <CachedAvatar
+          class="contact-list__avatar"
+          :initials="getMessageResultTopicName(result)"
+          :path="getMessageResultTopicAvatar(result)"
+          :alt="`Avatar of ${getMessageResultTopicName(result)}`"
+          is-icon
+          :data-testid="`${props.dataTestid}-ContactList-MessageAvatar${index + 1}`"
+        />
+        <div class="contact-list__block--wrapper">
+          <h5
+            role="heading"
+            aria-level="5"
+            class="contact-list__title"
+            :data-testid="`${props.dataTestid}-ContactList-MessageTitle${index + 1}`"
+          >
+            <span class="contact-list__title-text">
+              {{ getMessageResultTopicName(result) }}
+            </span>
+          </h5>
+          <div
+            class="contact-list__description"
+            v-emoji
+            :data-testid="`${props.dataTestid}-ContactList-MessageDescription${index + 1}`"
+          >
+            {{ result.previewText }}
+          </div>
+          <div class="contact-list__top">
+            <span
+              v-if="result.createdAt"
+              class="contact-list__time"
+              :data-testid="`${props.dataTestid}-ContactList-MessageTime${index + 1}`"
+            >
+              {{ formatListTime(new Date(result.createdAt)) }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </li>
+    <li
+      v-if="showSearchEmptyState"
+      class="contact-list__search-state contact-list__search-state--empty"
+      :data-testid="`${props.dataTestid}-ContactList-SearchEmpty`"
+    >
+      <p class="contact-list__search-state-title">Ничего не найдено</p>
+      <img
+        class="contact-list__search-state-image"
+        src="/images/not-found-contact.svg"
+        alt="Ничего не найдено"
+      />
+    </li>
   </ul>
 </template>
 
@@ -332,10 +419,14 @@ import {
   pendingGroupCallInfo
 } from '../../services/useCalls';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
+import type { IMessageSearchResult } from '../../composables/useMessageSearch';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
   selectedTopicIds?: Set<string | number>;
+  searchQuery?: string;
+  messageResults?: IMessageSearchResult[];
+  isMessageSearchLoading?: boolean;
 }
 
 const {
@@ -349,13 +440,17 @@ const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   showCheckbox: false,
-  selectedTopicIds: () => new Set<string | number>()
+  selectedTopicIds: () => new Set<string | number>(),
+  searchQuery: '',
+  messageResults: () => [],
+  isMessageSearchLoading: false
 });
 
 const emits = defineEmits<{
   (e: 'unmount-notification', id: string): void;
   (e: 'unmount-click', id: string): void;
   (e: 'unmount-topic', contact: ITopic): void;
+  (e: 'unmount-message', result: IMessageSearchResult): void;
 }>();
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
@@ -369,6 +464,33 @@ const listRenderKey = ref(0);
 const { getFullMediaPath } = useMessageMedia();
 const currentTime = ref(Date.now());
 let currentTimeInterval: ReturnType<typeof setInterval> | null = null;
+
+const hasSearchQuery = computed(() => props.searchQuery.trim().length > 0);
+const showContactSectionTitle = computed(
+  () => hasSearchQuery.value && !props.showCheckbox && props.topics.length > 0
+);
+const showMessageSectionTitle = computed(
+  () =>
+    hasSearchQuery.value &&
+    !props.showCheckbox &&
+    props.messageResults.length > 0
+);
+const showMessageSearchLoading = computed(
+  () =>
+    hasSearchQuery.value &&
+    !props.showCheckbox &&
+    props.isMessageSearchLoading &&
+    props.topics.length === 0 &&
+    props.messageResults.length === 0
+);
+const showSearchEmptyState = computed(
+  () =>
+    hasSearchQuery.value &&
+    !props.showCheckbox &&
+    !props.isMessageSearchLoading &&
+    props.topics.length === 0 &&
+    props.messageResults.length === 0
+);
 
 const getTopicEffectiveUser = (topic: ITopic) =>
   topic.type === TopicType.DM && topic.user?.id
@@ -471,6 +593,19 @@ const handleKeyDown = (contact: ITopic, event: KeyboardEvent): void => {
     handleClick(contact);
   }
 };
+
+const handleMessageResultClick = (result: IMessageSearchResult): void => {
+  emits('unmount-message', result);
+};
+
+const getMessageResultTopic = (result: IMessageSearchResult): ITopic | null =>
+  result.topic || null;
+
+const getMessageResultTopicName = (result: IMessageSearchResult): string =>
+  getMessageResultTopic(result)?.name || 'Сообщение';
+
+const getMessageResultTopicAvatar = (result: IMessageSearchResult): string =>
+  getMessageResultTopic(result)?.avatarUrl || '';
 
 const isTopicUserOnline = (topic: ITopic): boolean =>
   topic.type === TopicType.DM &&
@@ -626,5 +761,24 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
   line-height: 15px;
   font-weight: 400;
   width: 50px;
+}
+
+.contact-list__section-title {
+  padding: 8px 16px 4px;
+  color: var(--text-light-color);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.contact-list__search-state {
+  padding: 32px 16px;
+  color: var(--text-light-color);
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.contact-list__item--message-result {
+  cursor: pointer;
 }
 </style>

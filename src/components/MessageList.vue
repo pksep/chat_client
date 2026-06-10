@@ -129,7 +129,7 @@
     :data-testid="`${props.dataTestid}-SelectedMessages`"
   />
   <MessageListInput
-    v-if="!isDefaultRoute && !isSelectionMode"
+    v-if="!isDefaultRoute && !isSelectionMode && !isMobileTopicSearchMode"
     :key="`${route.type}:${route.id || 'default'}`"
     v-model="inputText"
     ref="messageListInputRef"
@@ -235,6 +235,7 @@ import {
   hasTopicUnreadIndicator
 } from '../utils/topicUnreadBadge';
 import { isUnreadTrackableMessage } from '../utils/messageTracking';
+import { isMobileTopicSearchActive } from '../composables/useMessageSearch';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -278,6 +279,9 @@ const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
 const authUser = computed(() => getAuthUser());
 const isSelectionMode = computed(() =>
   isMessageSelectionModeForTopic(route.value.id)
+);
+const isMobileTopicSearchMode = computed(
+  () => isMobile.value && isMobileTopicSearchActive.value
 );
 const activeTopic = computed(() =>
   route.value.id ? getSelectedTopic(route.value.id) : null

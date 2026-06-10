@@ -110,7 +110,7 @@ p.chat__nothing-paragraph {
   & > span {
     font-size: 12px;
     line-height: 15px;
-    background: #1c2635b2;
+    background: #616872;
     border-radius: 10px;
     color: var(--white);
     min-height: 20px;
@@ -126,6 +126,19 @@ p.chat__nothing-paragraph {
   margin-inline: auto;
   padding-bottom: 5px;
   height: 20px;
+}
+
+.chat__message-bubble > .top-element:has(.date-divider) {
+  position: sticky;
+  top: 6px;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.chat__message-bubble > .top-element:has(.date-divider) .date-divider {
+  margin-inline: auto;
 }
 
 /*
