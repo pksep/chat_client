@@ -68,7 +68,10 @@ const scrollToMessage = (message: IMessage) => {
 };
 
 const scrollToPendingSearchMessage = async () => {
-  if (!route.value.id || getPendingSearchNavigation()?.topicId !== route.value.id) {
+  if (
+    !route.value.id ||
+    getPendingSearchNavigation()?.topicId !== route.value.id
+  ) {
     return;
   }
 

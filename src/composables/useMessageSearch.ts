@@ -7,10 +7,7 @@ import {
   getTopicIdsWithMessages
 } from '../services/useMessages';
 import { useTopics } from './useTopics';
-import {
-  navigateToDialogs,
-  navigateToGroup
-} from './navigation/useUrlRouting';
+import { navigateToDialogs, navigateToGroup } from './navigation/useUrlRouting';
 import { TopicType } from '../services/useChatSDK/types';
 import { stripHtml } from '../utils/stripHtml';
 import { getAuthUser } from './useAuth';
@@ -184,7 +181,9 @@ const searchRemoteMessages = async (
 
     return {
       results: data
-        .map(message => buildSearchResult(message as IMessage & { topic?: ITopic }))
+        .map(message =>
+          buildSearchResult(message as IMessage & { topic?: ITopic })
+        )
         .filter((result): result is IMessageSearchResult => Boolean(result)),
       total: response.total ?? response.meta?.totalItems ?? null
     };
@@ -240,9 +239,7 @@ export const consumePendingSearchNavigation = (
 
 export const getPendingSearchNavigation = () => pendingSearchNavigation.value;
 
-export const navigateToSearchResult = (
-  result: IMessageSearchResult
-): void => {
+export const navigateToSearchResult = (result: IMessageSearchResult): void => {
   setPendingSearchNavigation(result);
 
   const topic = result.topic || getTopicById(result.topicId);

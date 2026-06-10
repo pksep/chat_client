@@ -225,9 +225,8 @@ const topicGroups = computed(() => {
         ? JSON.parse(topic.user.ex)
         : topic.user?.ex
     )?.erpInitials;
-    const erpInitialsMatch = normalizeToolbarSearchText(erpInitials).includes(
-      query
-    );
+    const erpInitialsMatch =
+      normalizeToolbarSearchText(erpInitials).includes(query);
 
     return nameMatch || erpInitialsMatch;
   });
@@ -239,7 +238,8 @@ const filteredMessageSearchResults = computed(() => {
   }
 
   return messageSearchResults.value.filter(result => {
-    const topic = result.topic || allTopics.value.find(t => t.id === result.topicId);
+    const topic =
+      result.topic || allTopics.value.find(t => t.id === result.topicId);
 
     if (toolbarState.filter === 'chats') {
       return topic?.type === TopicType.DM;
