@@ -14,6 +14,7 @@ export interface PaginatedResponse<T = any> {
   limit: number;
   total: number;
   totalPages: number;
+  meta?: PaginatedMeta;
 }
 
 export interface SearchParams {
@@ -21,6 +22,7 @@ export interface SearchParams {
   limit?: number | null;
   search?: string | null;
   type?: string | null;
+  topicId?: string | null;
 }
 
 export interface CallHistoryItem {

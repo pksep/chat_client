@@ -31,7 +31,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, useTemplateRef } from 'vue';
+import { computed, nextTick, useTemplateRef, watch } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import MessageList from './MessageList.vue';
 import ContactListMobile from './ContactList/MobileList.vue';
@@ -42,6 +42,10 @@ import { getAuthUser } from '../composables/useAuth';
 import PinnedMessages from './Messages/PinnedMessages.vue';
 import { IMessage } from './interfaces/interfaces';
 import ShareSelectionOverlay from './ShareSelectionOverlay.vue';
+import {
+  consumePendingSearchNavigation,
+  getPendingSearchNavigation
+} from '../composables/useMessageSearch';
 
 export interface IChatProps extends IMessageListProps {
   dataTestid?: string;
@@ -62,6 +66,34 @@ const route = useUrlWatcher();
 const scrollToMessage = (message: IMessage) => {
   messageListRef.value?.scrollToMessage(message);
 };
+
+const scrollToPendingSearchMessage = async () => {
+  if (!route.value.id || getPendingSearchNavigation()?.topicId !== route.value.id) {
+    return;
+  }
+
+  await nextTick();
+
+  const pendingResult = consumePendingSearchNavigation(route.value.id);
+
+  if (!pendingResult) {
+    return;
+  }
+
+  messageListRef.value?.scrollToMessage(pendingResult.message);
+};
+
+watch(
+  [
+    () => route.value.id,
+    () => messageListRef.value,
+    () => getPendingSearchNavigation()?.id
+  ],
+  () => {
+    void scrollToPendingSearchMessage();
+  },
+  { immediate: true }
+);
 
 defineExpose({
   handleClear: () => messageListRef.value?.handleClear()

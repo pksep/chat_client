@@ -120,6 +120,33 @@
   background: linear-gradient(to right, transparent 0%, var(--white) 100%);
 }
 
+.contact-list__search-state {
+  color: var(--text-neutral-color);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 17px;
+  text-align: center;
+}
+
+.contact-list__search-state--empty {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  row-gap: 10px;
+  min-height: 220px;
+  padding-top: 50px;
+}
+
+.contact-list__search-state-title {
+  margin: 0;
+}
+
+.contact-list__search-state-image {
+  width: 68px;
+  height: 68px;
+  object-fit: contain;
+}
+
 .contact-list__description p {
   align-self: center;
   display: block;
