@@ -36,6 +36,15 @@
           </div>
         </div>
 
+        <div
+          v-if="callStatusNotice"
+          class="call-modal__connection-status"
+          role="status"
+        >
+          <span class="call-modal__connection-status-spinner"></span>
+          <span>{{ callStatusNotice }}</span>
+        </div>
+
         <button
           class="call-modal__control-button call-modal__control-button--action"
           @click="state.openGroupInfoModal = true"
@@ -55,7 +64,9 @@
         </p>
 
         <p class="call-modal__notice">
-          <span v-if="callStatusNotice">{{ callStatusNotice }}</span>
+          <span v-if="callStatusNotice && !shouldShowMediaLayout">
+            {{ callStatusNotice }}
+          </span>
         </p>
 
         <CachedAvatar
@@ -138,7 +149,10 @@
               :disabled="isBusyNoticeVisible"
               @click="handleToggleMic"
             >
-              <MicIcon :audio-level="liveKitState.audioLevel" />
+              <MicIcon
+                :audio-level="liveKitState.audioLevel"
+                :is-speaking="liveKitState.isSpeaking"
+              />
             </button>
             <button
               v-else
@@ -273,6 +287,15 @@
                 </div>
               </div>
 
+              <div
+                v-if="callStatusNotice"
+                class="call-modal__connection-status call-modal__connection-status--overlay"
+                role="status"
+              >
+                <span class="call-modal__connection-status-spinner"></span>
+                <span>{{ callStatusNotice }}</span>
+              </div>
+
               <div class="call-modal__video-overlay-actions">
                 <button
                   class="call-modal__control-button call-modal__control-button--action"
@@ -331,7 +354,10 @@
               class="call-modal__control-button"
               @click="handleToggleMic"
             >
-              <MicIcon :audio-level="liveKitState.audioLevel" />
+              <MicIcon
+                :audio-level="liveKitState.audioLevel"
+                :is-speaking="liveKitState.isSpeaking"
+              />
             </button>
             <button
               v-else
@@ -747,6 +773,7 @@ const buildParticipantEntries = (
     isSpeaking: participant.isSpeaking,
     audioLevel: participant.audioLevel || 0,
     isMicActive: participant.isMicActive,
+    connectionQuality: participant.connectionQuality || 'unknown',
     backgroundPlaceholderStyle: participant.backgroundPlaceholderStyle || null
   };
   const entries: any[] = [];
@@ -891,6 +918,7 @@ const localParticipantView = computed(() => {
       isSpeaking: liveKitState.isSpeaking,
       audioLevel: liveKitState.audioLevel,
       isMicActive: liveKitState.isMicActive,
+      connectionQuality: liveKitState.connectionQuality,
       backgroundPlaceholderStyle: localCallBackgroundPlaceholderStyle.value
     },
     {
@@ -929,6 +957,7 @@ const localParticipantDisplayViews = computed(() => {
       isSpeaking: liveKitState.isSpeaking,
       audioLevel: liveKitState.audioLevel,
       isMicActive: liveKitState.isMicActive,
+      connectionQuality: liveKitState.connectionQuality,
       backgroundPlaceholderStyle: localCallBackgroundPlaceholderStyle.value
     },
     {

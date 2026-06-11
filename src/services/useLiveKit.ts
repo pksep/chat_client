@@ -6,6 +6,7 @@ import {
 } from '@livekit/track-processors';
 import {
   createLocalVideoTrack,
+  ConnectionQuality,
   LocalTrackPublication,
   LocalVideoTrack,
   Participant,
@@ -92,6 +93,7 @@ type ParticipantMediaState = {
   isSpeaking: boolean;
   audioLevel: number;
   isMicActive: boolean;
+  connectionQuality: ConnectionQuality;
 };
 
 type StreamCacheEntry = {
@@ -156,6 +158,7 @@ const state = reactive({
   isHandRaised: false,
   isSpeaking: false,
   audioLevel: 0,
+  connectionQuality: ConnectionQuality.Unknown,
   activeReaction: null as CallReaction | null,
   activeReactionExpiresAt: null as number | null
 });
@@ -210,6 +213,7 @@ const DIRECT_CALL_RECONNECT_NOTICE =
   'Связь нестабильна. Пытаемся переподключить звонок...';
 const DIRECT_CALL_RECONNECT_FAILED_NOTICE = 'Не удалось восстановить звонок';
 const DIRECT_CALL_ENDED_NOTICE = 'Звонок завершен';
+const CALL_RECONNECT_NOTICE = 'Связь прервана. Переподключение';
 const dismissedIncomingCallRooms = new Map<string, number>();
 const dismissedIncomingCallTopics = new Map<string, number>();
 const CAMERA_CAPTURE_DEFAULTS = {
@@ -729,7 +733,8 @@ const resetDirectCallRecoveryState = (
 
   if (
     !preserveNotice &&
-    callStatusNotice.value === DIRECT_CALL_RECONNECT_NOTICE
+    (callStatusNotice.value === DIRECT_CALL_RECONNECT_NOTICE ||
+      callStatusNotice.value === CALL_RECONNECT_NOTICE)
   ) {
     clearCallStatusNotice();
   }
@@ -769,6 +774,19 @@ const showTransientCallStatusNotice = (
   }, closeDelayMs);
 };
 
+const isGroupCallSession = (targetTopicId?: string | null): boolean => {
+  const activeTopicId = targetTopicId ?? topicId.value;
+  const activeTopic = activeTopicId
+    ? (useTopics().getSelectedTopic(activeTopicId) as any)
+    : null;
+
+  return !!(
+    activeTopic?.type === TopicType.Group ||
+    activeTopic?.activeCall?.groupMode ||
+    invitedGroupCall.value
+  );
+};
+
 const isRecoverableDirectCallSession = (
   targetRoomId?: string | null,
   targetTopicId?: string | null
@@ -785,9 +803,7 @@ const isRecoverableDirectCallSession = (
     matchesCurrentCall &&
     !isIncoming.value &&
     activeTopicId &&
-    activeTopic?.type !== TopicType.Group &&
-    !activeTopic?.activeCall?.groupMode &&
-    !invitedGroupCall.value
+    !!activeTopic
   );
 };
 
@@ -800,7 +816,8 @@ const resolveDirectCallRecoverySuccess = (activeRoom: Room | null = room) => {
     !!activeRoom &&
     roomId.value === directCallRecoveryRoomId &&
     topicId.value === directCallRecoveryTopicId &&
-    activeRoom.remoteParticipants.size > 0;
+    (isGroupCallSession(directCallRecoveryTopicId) ||
+      activeRoom.remoteParticipants.size > 0);
 
   if (!recovered) {
     return;
@@ -857,6 +874,14 @@ const recoverDirectCallConnection = async (
       return;
     }
 
+    if (room) {
+      resolveDirectCallRecoverySuccess(room);
+
+      if (attemptId !== directCallRecoveryAttemptId) {
+        return;
+      }
+    }
+
     if (room?.remoteParticipants.size) {
       resolveDirectCallRecoverySuccess(room);
       return;
@@ -872,6 +897,14 @@ const recoverDirectCallConnection = async (
 
     if (attemptId !== directCallRecoveryAttemptId) {
       return;
+    }
+
+    if (room) {
+      resolveDirectCallRecoverySuccess(room);
+
+      if (attemptId !== directCallRecoveryAttemptId) {
+        return;
+      }
     }
 
     if (room?.remoteParticipants.size) {
@@ -913,7 +946,7 @@ const startDirectCallRecovery = (
   directCallRecoveryDeadline = Date.now() + DIRECT_CALL_RECONNECT_GRACE_MS;
   directCallRecoveryRoomId = activeRoomId;
   directCallRecoveryTopicId = activeTopicId;
-  showPersistentCallStatusNotice(DIRECT_CALL_RECONNECT_NOTICE);
+  showPersistentCallStatusNotice(CALL_RECONNECT_NOTICE);
   open.value = true;
   isModalVisible.value = true;
   clearDirectCallRecoveryTimer();
@@ -1760,7 +1793,9 @@ const buildRemoteParticipantState = (
       participantReactions.value[remoteParticipant.identity]?.expiresAt || null,
     isSpeaking: !!remoteParticipant.isSpeaking,
     audioLevel: remoteParticipant.audioLevel || 0,
-    isMicActive: !!audioPublication?.track?.mediaStreamTrack
+    isMicActive: !!audioPublication?.track?.mediaStreamTrack,
+    connectionQuality:
+      remoteParticipant.connectionQuality || ConnectionQuality.Unknown
   };
 };
 
@@ -1774,7 +1809,9 @@ const syncRemoteParticipantSpeakingState = () => {
       participant.identity,
       {
         isSpeaking: !!participant.isSpeaking,
-        audioLevel: participant.audioLevel || 0
+        audioLevel: participant.audioLevel || 0,
+        connectionQuality:
+          participant.connectionQuality || ConnectionQuality.Unknown
       }
     ])
   );
@@ -1783,7 +1820,10 @@ const syncRemoteParticipantSpeakingState = () => {
     ...participant,
     isSpeaking:
       remoteAudioLevels.get(participant.identity)?.isSpeaking || false,
-    audioLevel: remoteAudioLevels.get(participant.identity)?.audioLevel || 0
+    audioLevel: remoteAudioLevels.get(participant.identity)?.audioLevel || 0,
+    connectionQuality:
+      remoteAudioLevels.get(participant.identity)?.connectionQuality ||
+      ConnectionQuality.Unknown
   }));
 };
 
@@ -1792,6 +1832,8 @@ const syncLocalParticipantSpeakingState = (activeRoom?: Room | null) => {
 
   state.isSpeaking = !!localParticipant?.isSpeaking;
   state.audioLevel = localParticipant?.audioLevel || 0;
+  state.connectionQuality =
+    localParticipant?.connectionQuality || ConnectionQuality.Unknown;
 };
 
 const syncRemoteParticipantState = () => {
@@ -2377,7 +2419,10 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
 
-      if (!activeRoom.remoteParticipants.size) {
+      if (
+        !activeRoom.remoteParticipants.size &&
+        !isGroupCallSession(topicId.value)
+      ) {
         startDirectCallRecovery(roomId.value, topicId.value);
       }
 
@@ -2407,7 +2452,12 @@ const setupRoomListeners = (activeRoom: Room) => {
       handleHandRaiseData(payload, participant, topic);
       handleCallReactionData(payload, participant, topic);
     })
+    .on(RoomEvent.ConnectionQualityChanged, () => {
+      syncLocalParticipantSpeakingState(activeRoom);
+      syncRemoteParticipantState();
+    })
     .on(RoomEvent.Reconnecting, () => {
+      showPersistentCallStatusNotice(CALL_RECONNECT_NOTICE);
       syncLocalTrackState();
       syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
@@ -2415,6 +2465,9 @@ const setupRoomListeners = (activeRoom: Room) => {
       scheduleCallAudioRecovery(activeRoom);
     })
     .on(RoomEvent.Reconnected, () => {
+      if (callStatusNotice.value === CALL_RECONNECT_NOTICE) {
+        clearCallStatusNotice();
+      }
       syncLocalTrackState();
       syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
@@ -2619,6 +2672,7 @@ const connectToRoom = async () => {
     }
 
     syncLocalTrackState();
+    syncLocalParticipantSpeakingState(nextRoom);
     syncRemoteParticipantState();
     syncConnectionState(nextRoom);
     requestHighQualityForAllRemoteVideoTracks();
@@ -2663,6 +2717,7 @@ const resetMediaState = () => {
   state.isHandRaised = false;
   state.isSpeaking = false;
   state.audioLevel = 0;
+  state.connectionQuality = ConnectionQuality.Unknown;
   state.activeReaction = null;
   state.activeReactionExpiresAt = null;
 };

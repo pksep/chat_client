@@ -32,31 +32,115 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 
 const props = withDefaults(
   defineProps<{
     audioLevel?: number;
+    isSpeaking?: boolean;
   }>(),
   {
-    audioLevel: 0
+    audioLevel: 0,
+    isSpeaking: false
   }
 );
 
-const normalizedAudioLevel = computed(() =>
-  Math.max(
+const targetAudioLevel = computed(() => {
+  const rawLevel = Math.max(
     0,
     Math.min(1, Number.isFinite(props.audioLevel) ? props.audioLevel : 0)
-  )
-);
+  );
+  const noiseFloor = 0.004;
+
+  if (rawLevel < noiseFloor) {
+    return 0;
+  }
+
+  const adjustedLevel = (rawLevel - noiseFloor) / (1 - noiseFloor);
+
+  return Math.min(1, 1 - Math.exp(-adjustedLevel * 5.8));
+});
+
+const displayedAudioLevel = ref(0);
+const wavePhase = ref(0);
+let animationFrame: number | null = null;
+let lastAnimationFrameAt = 0;
+
+const animateAudioLevel = (timestamp: number) => {
+  const deltaMs = lastAnimationFrameAt
+    ? Math.min(48, timestamp - lastAnimationFrameAt)
+    : 16;
+  const targetLevel = targetAudioLevel.value;
+  const currentLevel = displayedAudioLevel.value;
+  const smoothing = targetLevel > currentLevel ? 0.38 : 0.24;
+  const step = 1 - Math.pow(1 - smoothing, deltaMs / 16);
+  const nextLevel = currentLevel + (targetLevel - currentLevel) * step;
+  const isWaveActive = targetLevel > 0.02 || nextLevel > 0.02;
+
+  lastAnimationFrameAt = timestamp;
+  wavePhase.value += deltaMs * 0.0085;
+
+  if (Math.abs(targetLevel - nextLevel) < 0.006 && !isWaveActive) {
+    displayedAudioLevel.value = targetLevel;
+    animationFrame = null;
+    lastAnimationFrameAt = 0;
+    return;
+  }
+
+  displayedAudioLevel.value = nextLevel;
+  animationFrame = requestAnimationFrame(animateAudioLevel);
+};
+
+const scheduleAudioLevelAnimation = () => {
+  if (typeof requestAnimationFrame === 'undefined') {
+    displayedAudioLevel.value = targetAudioLevel.value;
+    return;
+  }
+
+  if (animationFrame !== null) {
+    return;
+  }
+
+  animationFrame = requestAnimationFrame(animateAudioLevel);
+};
+
+watch(targetAudioLevel, scheduleAudioLevelAnimation, { immediate: true });
+
+onBeforeUnmount(() => {
+  if (animationFrame !== null) {
+    cancelAnimationFrame(animationFrame);
+  }
+});
+
+const normalizedAudioLevel = computed(() => displayedAudioLevel.value);
 const audioWavePath = computed(() => {
-  const level = normalizedAudioLevel.value;
-  const top = 23.6 - level * 18;
-  const amplitude = 0.7 + level * 1.8;
-  const firstPeak = top - amplitude;
-  const firstDip = top + amplitude;
-  const secondPeak = top - amplitude * 0.9;
-  const secondDip = top + amplitude * 0.9;
+  const baseLevel = normalizedAudioLevel.value;
+  const phase = wavePhase.value;
+  const levelDelta =
+    baseLevel > 0.03
+      ? Math.min(0.15, Math.max(0.05, baseLevel * 0.26)) *
+        Math.sin(phase * 0.72)
+      : 0;
+  const level = Math.max(0, Math.min(1, baseLevel + levelDelta));
+  const surfaceMotion = Math.sin(phase * 0.9) * level * 0.85;
+  const top = 24 - level * 17.5 + surfaceMotion;
+  const amplitude = 1.55 + level * 2.8;
+  const firstPeak = Math.max(
+    4.2,
+    top - amplitude * (1 + Math.sin(phase) * 0.26)
+  );
+  const firstDip = Math.min(
+    25.4,
+    top + amplitude * (1 + Math.cos(phase * 0.8) * 0.24)
+  );
+  const secondPeak = Math.max(
+    4.2,
+    top - amplitude * (0.92 + Math.sin(phase + 1.7) * 0.26)
+  );
+  const secondDip = Math.min(
+    25.4,
+    top + amplitude * (0.92 + Math.cos(phase * 0.9 + 1.1) * 0.24)
+  );
   const firstCurve = [
     'C 12.4',
     firstPeak.toFixed(2),
@@ -89,8 +173,6 @@ const waveClipId = `mic-icon-wave-${Math.random().toString(36).slice(2)}`;
 
 <style scoped>
 .mic-icon__audio-wave {
-  transition:
-    d 120ms ease-out,
-    opacity 120ms ease-out;
+  transition: opacity 120ms ease-out;
 }
 </style>

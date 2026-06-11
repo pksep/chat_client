@@ -67,11 +67,15 @@
         >
           <HandRaiseIcon />
         </div>
+        <ConnectionQualityIndicator
+          :quality="participant.connectionQuality"
+        />
         <div class="call-modal__remote-name">
           <span>{{ participant.name }}</span>
           <MicIcon
             v-if="participant.isMicActive"
             :audio-level="participant.audioLevel"
+            :is-speaking="participant.isSpeaking"
           />
           <MicDisableIcon v-else />
         </div>
@@ -100,6 +104,7 @@ import { Icon, IconNameEnum } from '@pksep/yui';
 import HandRaiseIcon from './UI/HandRaiseIcon.vue';
 import MicDisableIcon from './UI/MicDisableIcon.vue';
 import MicIcon from './UI/MicIcon.vue';
+import ConnectionQualityIndicator from './UI/ConnectionQualityIndicator.vue';
 import ReactionVideoOverlay from './ReactionVideoOverlay.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 
@@ -204,6 +209,7 @@ const props = defineProps<{
     isSpeaking: boolean;
     audioLevel: number;
     isMicActive: boolean;
+    connectionQuality: string;
     hasAudio: boolean;
     backgroundPlaceholderStyle?: CSSProperties | null;
   }>;
