@@ -18,6 +18,7 @@
       <div v-else-if="item.kind === 'date'" class="top-element">
         <div
           class="date-divider"
+          :data-date-divider-label="formatDay(item.message.createdAt)"
           :data-testid="`${props.dataTestid}-MessageList-DateDividerUser${item.index + 1}`"
         >
           <span

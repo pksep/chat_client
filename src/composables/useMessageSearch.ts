@@ -124,8 +124,8 @@ const compareByCreatedAt = (
   left: IMessageSearchResult,
   right: IMessageSearchResult
 ): number =>
-  new Date(left.createdAt || 0).getTime() -
-  new Date(right.createdAt || 0).getTime();
+  new Date(right.createdAt || 0).getTime() -
+  new Date(left.createdAt || 0).getTime();
 
 const dedupeResults = (
   results: IMessageSearchResult[]
