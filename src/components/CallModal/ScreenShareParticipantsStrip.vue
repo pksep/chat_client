@@ -67,9 +67,7 @@
         >
           <HandRaiseIcon />
         </div>
-        <ConnectionQualityIndicator
-          :quality="participant.connectionQuality"
-        />
+        <ConnectionQualityIndicator :quality="participant.connectionQuality" />
         <div class="call-modal__remote-name">
           <span>{{ participant.name }}</span>
           <MicIcon
