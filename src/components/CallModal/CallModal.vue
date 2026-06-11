@@ -138,7 +138,7 @@
               :disabled="isBusyNoticeVisible"
               @click="handleToggleMic"
             >
-              <MicIcon />
+              <MicIcon :audio-level="liveKitState.audioLevel" />
             </button>
             <button
               v-else
@@ -331,7 +331,7 @@
               class="call-modal__control-button"
               @click="handleToggleMic"
             >
-              <MicIcon />
+              <MicIcon :audio-level="liveKitState.audioLevel" />
             </button>
             <button
               v-else
@@ -745,6 +745,7 @@ const buildParticipantEntries = (
         ? `${participant.activeReaction}-${participant.activeReactionExpiresAt}`
         : '',
     isSpeaking: participant.isSpeaking,
+    audioLevel: participant.audioLevel || 0,
     isMicActive: participant.isMicActive,
     backgroundPlaceholderStyle: participant.backgroundPlaceholderStyle || null
   };
@@ -888,6 +889,7 @@ const localParticipantView = computed(() => {
       activeReaction: liveKitState.activeReaction,
       activeReactionExpiresAt: liveKitState.activeReactionExpiresAt,
       isSpeaking: liveKitState.isSpeaking,
+      audioLevel: liveKitState.audioLevel,
       isMicActive: liveKitState.isMicActive,
       backgroundPlaceholderStyle: localCallBackgroundPlaceholderStyle.value
     },
@@ -925,6 +927,7 @@ const localParticipantDisplayViews = computed(() => {
       activeReaction: liveKitState.activeReaction,
       activeReactionExpiresAt: liveKitState.activeReactionExpiresAt,
       isSpeaking: liveKitState.isSpeaking,
+      audioLevel: liveKitState.audioLevel,
       isMicActive: liveKitState.isMicActive,
       backgroundPlaceholderStyle: localCallBackgroundPlaceholderStyle.value
     },

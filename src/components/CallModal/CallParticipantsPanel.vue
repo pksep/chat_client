@@ -71,7 +71,10 @@
         </div>
         <div class="call-modal__remote-name">
           <span>{{ participant.name }}</span>
-          <MicIcon v-if="participant.isMicActive" />
+          <MicIcon
+            v-if="participant.isMicActive"
+            :audio-level="participant.audioLevel"
+          />
           <MicDisableIcon v-else />
         </div>
       </div>
@@ -137,6 +140,7 @@ defineProps<{
     activeReactionVideoSrc: string;
     activeReactionVideoKey: string;
     isSpeaking: boolean;
+    audioLevel: number;
     isMicActive: boolean;
     hasAudio: boolean;
     backgroundPlaceholderStyle?: CSSProperties | null;
@@ -152,6 +156,7 @@ defineProps<{
     activeReactionVideoSrc: string;
     activeReactionVideoKey: string;
     isMicActive: boolean;
+    audioLevel?: number;
     backgroundPlaceholderStyle?: CSSProperties | null;
   } | null;
   currentPage: number;

@@ -90,6 +90,7 @@ type ParticipantMediaState = {
   activeReaction: CallReaction | null;
   activeReactionExpiresAt: number | null;
   isSpeaking: boolean;
+  audioLevel: number;
   isMicActive: boolean;
 };
 
@@ -154,6 +155,7 @@ const state = reactive({
   isFullScreen: false,
   isHandRaised: false,
   isSpeaking: false,
+  audioLevel: 0,
   activeReaction: null as CallReaction | null,
   activeReactionExpiresAt: null as number | null
 });
@@ -1757,6 +1759,7 @@ const buildRemoteParticipantState = (
     activeReactionExpiresAt:
       participantReactions.value[remoteParticipant.identity]?.expiresAt || null,
     isSpeaking: !!remoteParticipant.isSpeaking,
+    audioLevel: remoteParticipant.audioLevel || 0,
     isMicActive: !!audioPublication?.track?.mediaStreamTrack
   };
 };
@@ -1766,20 +1769,29 @@ const syncRemoteParticipantSpeakingState = () => {
     return;
   }
 
-  const speakingParticipantIds = new Set(
-    Array.from(room.remoteParticipants.values())
-      .filter(participant => participant.isSpeaking)
-      .map(participant => participant.identity)
+  const remoteAudioLevels = new Map(
+    Array.from(room.remoteParticipants.values()).map(participant => [
+      participant.identity,
+      {
+        isSpeaking: !!participant.isSpeaking,
+        audioLevel: participant.audioLevel || 0
+      }
+    ])
   );
 
   remoteParticipants.value = remoteParticipants.value.map(participant => ({
     ...participant,
-    isSpeaking: speakingParticipantIds.has(participant.identity)
+    isSpeaking:
+      remoteAudioLevels.get(participant.identity)?.isSpeaking || false,
+    audioLevel: remoteAudioLevels.get(participant.identity)?.audioLevel || 0
   }));
 };
 
 const syncLocalParticipantSpeakingState = (activeRoom?: Room | null) => {
-  state.isSpeaking = !!activeRoom?.localParticipant?.isSpeaking;
+  const localParticipant = activeRoom?.localParticipant;
+
+  state.isSpeaking = !!localParticipant?.isSpeaking;
+  state.audioLevel = localParticipant?.audioLevel || 0;
 };
 
 const syncRemoteParticipantState = () => {
@@ -2650,6 +2662,7 @@ const resetMediaState = () => {
   state.isFullScreen = false;
   state.isHandRaised = false;
   state.isSpeaking = false;
+  state.audioLevel = 0;
   state.activeReaction = null;
   state.activeReactionExpiresAt = null;
 };
