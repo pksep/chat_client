@@ -75,9 +75,18 @@
       >
         <HandRaiseIcon />
       </div>
+      <ConnectionQualityIndicator
+        v-if="focusedParticipant"
+        class="call-modal__connection-quality--stage"
+        :quality="focusedParticipant.connectionQuality"
+      />
       <div v-if="focusedParticipant" class="call-modal__remote-name">
         <span>{{ focusedParticipant.name }}</span>
-        <MicIcon v-if="focusedParticipant.isMicActive" />
+        <MicIcon
+          v-if="focusedParticipant.isMicActive"
+          :audio-level="focusedParticipant.audioLevel"
+          :is-speaking="focusedParticipant.isSpeaking"
+        />
         <MicDisableIcon v-else />
       </div>
     </div>
@@ -87,6 +96,7 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue';
 import CallParticipantsPanel from './CallParticipantsPanel.vue';
+import ConnectionQualityIndicator from './UI/ConnectionQualityIndicator.vue';
 import FullscreenIcon from './UI/FullscreenIcon.vue';
 import HandRaiseIcon from './UI/HandRaiseIcon.vue';
 import MicDisableIcon from './UI/MicDisableIcon.vue';
@@ -121,7 +131,9 @@ defineProps<{
     activeReactionVideoSrc: string;
     activeReactionVideoKey: string;
     isSpeaking: boolean;
+    audioLevel: number;
     isMicActive: boolean;
+    connectionQuality: string;
     hasAudio: boolean;
     backgroundPlaceholderStyle?: CSSProperties | null;
   }>;
@@ -138,7 +150,9 @@ defineProps<{
     activeReactionVideoSrc: string;
     activeReactionVideoKey: string;
     isSpeaking: boolean;
+    audioLevel: number;
     isMicActive: boolean;
+    connectionQuality: string;
     backgroundPlaceholderStyle?: CSSProperties | null;
   } | null;
   focusedParticipantHasVideo: boolean;
