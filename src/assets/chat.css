@@ -124,8 +124,61 @@ p.chat__nothing-paragraph {
 .date-divider {
   width: fit-content;
   margin-inline: auto;
-  padding-bottom: 5px;
-  height: 20px;
+  min-height: 20px;
+  height: auto;
+}
+
+.date-divider[data-date-divider-label] {
+  transition: opacity 0.18s ease;
+}
+
+.chat__floating-date-divider {
+  position: sticky;
+  top: 6px;
+  z-index: 1;
+  flex: 0 0 0;
+  height: 0;
+  display: flex;
+  justify-content: center;
+  overflow: visible;
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.chat__floating-date-divider--hidden {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.chat__message-bubble > .top-element:has(.date-divider) {
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  padding-bottom: 10px;
+}
+
+.chat__floating-date-divider .date-divider,
+.chat__message-bubble > .top-element:has(.date-divider) .date-divider {
+  margin-inline: auto;
+}
+
+.chat-floating-date-enter-active,
+.chat-floating-date-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.chat-floating-date-enter-from {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.chat-floating-date-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
 }
 
 /*

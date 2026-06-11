@@ -13,6 +13,7 @@
       >
         <div
           class="date-divider"
+          :data-date-divider-label="formatDay(new Date(message.timestamp))"
           :data-testid="`${props.dataTestid}-MessageList-DateDividerAI${index + 1}`"
         >
           <span
