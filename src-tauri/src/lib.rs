@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::{path::Path, time::UNIX_EPOCH};
+use std::{path::Path, process::Command, time::UNIX_EPOCH};
 use tauri::{Manager, WindowEvent};
 
 #[cfg(desktop)]
@@ -66,6 +66,22 @@ struct DroppedFilePayload {
     mime_type: String,
     last_modified: Option<u128>,
     bytes: Vec<u8>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VpnStatusPayload {
+    is_active: bool,
+    adapter_names: Vec<String>,
+}
+
+#[cfg(windows)]
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct WindowsNetworkAdapter {
+    name: Option<String>,
+    description: Option<String>,
+    network_interface_type: Option<serde_json::Value>,
 }
 
 #[cfg(desktop)]
@@ -345,6 +361,158 @@ fn read_dropped_file(path: String) -> Result<DroppedFilePayload, String> {
     })
 }
 
+#[cfg(windows)]
+fn adapter_interface_type_matches_vpn(interface_type: &Option<serde_json::Value>) -> bool {
+    match interface_type {
+        Some(serde_json::Value::Number(value)) => value
+            .as_u64()
+            .map(|number| number == 23 || number == 131)
+            .unwrap_or(false),
+        Some(serde_json::Value::String(value)) => {
+            let normalized = value.to_ascii_lowercase();
+            normalized.contains("ppp") || normalized.contains("tunnel")
+        }
+        _ => false,
+    }
+}
+
+#[cfg(windows)]
+fn adapter_text_matches_vpn(adapter: &WindowsNetworkAdapter) -> bool {
+    const VPN_MARKERS: &[&str] = &[
+        "vpn",
+        "wireguard",
+        "openvpn",
+        "tailscale",
+        "zerotier",
+        "anyconnect",
+        "fortinet",
+        "forticlient",
+        "globalprotect",
+        "nordvpn",
+        "protonvpn",
+        "surfshark",
+        "expressvpn",
+        "outline",
+        "cloudflare warp",
+        "warp",
+        "checkpoint",
+        "watchguard",
+        "softether",
+        "l2tp",
+        "pptp",
+        "sstp",
+        "ikev2",
+        "tun",
+        "tap",
+    ];
+
+    let searchable = format!(
+        "{} {}",
+        adapter.name.as_deref().unwrap_or_default(),
+        adapter.description.as_deref().unwrap_or_default()
+    )
+    .to_ascii_lowercase();
+
+    VPN_MARKERS.iter().any(|marker| searchable.contains(marker))
+}
+
+#[cfg(windows)]
+fn parse_windows_network_adapters(output: &str) -> Vec<WindowsNetworkAdapter> {
+    let trimmed = output.trim();
+
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+
+    if let Ok(adapters) = serde_json::from_str::<Vec<WindowsNetworkAdapter>>(trimmed) {
+        return adapters;
+    }
+
+    serde_json::from_str::<WindowsNetworkAdapter>(trimmed)
+        .map(|adapter| vec![adapter])
+        .unwrap_or_default()
+}
+
+#[cfg(windows)]
+#[tauri::command]
+fn get_vpn_status() -> Result<VpnStatusPayload, String> {
+    let output = Command::new("powershell.exe")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "[System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces() | Where-Object { $_.OperationalStatus -eq 'Up' } | Select-Object Name,Description,NetworkInterfaceType | ConvertTo-Json -Compress",
+        ])
+        .output()
+        .map_err(|error| error.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let adapter_names = parse_windows_network_adapters(&stdout)
+        .into_iter()
+        .filter(|adapter| {
+            adapter_interface_type_matches_vpn(&adapter.network_interface_type)
+                || adapter_text_matches_vpn(adapter)
+        })
+        .map(|adapter| {
+            adapter
+                .name
+                .or(adapter.description)
+                .unwrap_or_else(|| "VPN".to_string())
+        })
+        .collect::<Vec<_>>();
+
+    Ok(VpnStatusPayload {
+        is_active: !adapter_names.is_empty(),
+        adapter_names,
+    })
+}
+
+#[cfg(windows)]
+#[tauri::command]
+fn open_vpn_settings() -> Result<bool, String> {
+    Command::new("explorer.exe")
+        .arg("ms-settings:network-vpn")
+        .spawn()
+        .map_err(|error| error.to_string())?;
+
+    Ok(true)
+}
+
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn open_vpn_settings() -> Result<bool, String> {
+    Command::new("open")
+        .arg("x-apple.systempreferences:com.apple.Network-Settings.extension")
+        .spawn()
+        .map_err(|error| error.to_string())?;
+
+    Ok(true)
+}
+
+#[cfg(all(not(windows), not(target_os = "macos")))]
+#[tauri::command]
+fn open_vpn_settings() -> Result<bool, String> {
+    Command::new("sh")
+        .args(["-c", "gnome-control-center network || xdg-open ."])
+        .spawn()
+        .map_err(|error| error.to_string())?;
+
+    Ok(true)
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn get_vpn_status() -> Result<VpnStatusPayload, String> {
+    Ok(VpnStatusPayload {
+        is_active: false,
+        adapter_names: Vec::new(),
+    })
+}
+
 #[cfg(desktop)]
 fn setup_desktop<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
     app.handle().plugin(tauri_plugin_autostart::init(
@@ -436,7 +604,9 @@ pub fn run() {
             show_windows_notification,
             clear_windows_topic_notifications,
             consume_pending_notification_target,
-            read_dropped_file
+            read_dropped_file,
+            get_vpn_status,
+            open_vpn_settings
         ])
         .setup(|app| {
             #[cfg(desktop)]
