@@ -1,3 +1,38 @@
+# [1.31.0](https://github.com/pksep/chat_client/compare/v1.30.0...v1.31.0) (2026-06-04)
+
+
+### Bug Fixes
+
+* backgraund quality ([cfb820d](https://github.com/pksep/chat_client/commit/cfb820d31c22913ec8a0e02ac0371a1a7ab05063))
+* badge ([c22a1d1](https://github.com/pksep/chat_client/commit/c22a1d164d4ceae79b4295d2054cf8f6a5f9ebea))
+* lint ([3cab03b](https://github.com/pksep/chat_client/commit/3cab03b29fd1bda816243ebf4c7844615418babd))
+
+
+### Features
+
+* add tauri ([10b9442](https://github.com/pksep/chat_client/commit/10b9442b51b5e49502594dd9ab2467ce6326a5ca))
+
+# [1.30.0](https://github.com/pksep/chat_client/compare/v1.29.0...v1.30.0) (2026-06-03)
+
+
+### Bug Fixes
+
+* notification click, open chat in self, not new window ([34358b5](https://github.com/pksep/chat_client/commit/34358b5d4bbf49f2ffc4540fabc86866a1947fcc))
+* styles ([62eb132](https://github.com/pksep/chat_client/commit/62eb1326230518ea7b0653c350d6c179a9b2cca0))
+
+
+### Features
+
+* add ios install PWA info ([e7a4afc](https://github.com/pksep/chat_client/commit/e7a4afc1d4e2ba3283277a87ce3137bf427f6681))
+* update call background logic ([180067b](https://github.com/pksep/chat_client/commit/180067b23e042c53a000b3f0d5e9b58b53dee4ce))
+
+# [1.29.0](https://github.com/pksep/chat_client/compare/v1.28.0...v1.29.0) (2026-06-01)
+
+
+### Features
+
+* new release ([cc64141](https://github.com/pksep/chat_client/commit/cc641414a861663b9ea708b5fde7c9e364161997))
+
 # [1.28.0](https://github.com/pksep/chat_client/compare/v1.27.0...v1.28.0) (2026-06-01)
 
 

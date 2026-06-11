@@ -1,7 +1,11 @@
 import { ref } from 'vue';
 import { getChatSDK, getCurrentUserId } from '../services/useChat';
-import { Message, TopicSetting } from '../services/useChatSDK/types';
-import type { ITopic, IUser } from '../components/interfaces/interfaces';
+import { Message } from '../services/useChatSDK/types';
+import type {
+  ITopic,
+  ITopicInfo,
+  IUser
+} from '../components/interfaces/interfaces';
 import { setTopics, topics, useTopics } from './useTopics';
 import { getFullMessagesByTopicId } from '../services/useMessages';
 
@@ -9,6 +13,39 @@ const currentGroup = ref<ITopic | null>(null);
 const loading = ref(false);
 
 export const useGroup = () => {
+  const getMessageTimestamp = (
+    message?: Pick<Message, 'createdAt' | 'updatedAt'> | null
+  ): number => {
+    if (!message) {
+      return 0;
+    }
+
+    const value = message.updatedAt || message.createdAt;
+
+    if (!value) {
+      return 0;
+    }
+
+    return new Date(value).getTime();
+  };
+
+  const getLatestMessage = (
+    messages: Array<Message | undefined>
+  ): Message | undefined => {
+    return messages
+      .filter(Boolean)
+      .reduce<Message | undefined>((latestMessage, message) => {
+        if (!latestMessage) {
+          return message;
+        }
+
+        return getMessageTimestamp(message) >=
+          getMessageTimestamp(latestMessage)
+          ? message
+          : latestMessage;
+      }, undefined);
+  };
+
   const addGroupMembersToList = (groupId: string, newMembers: IUser[]) => {
     const membersToAdd = Array.isArray(newMembers) ? newMembers : [];
     const updatedMembers = [...currentGroup.value.members, ...membersToAdd];
@@ -232,7 +269,11 @@ export const useGroup = () => {
 
     if (topic) {
       if (lastMessage) {
-        topic.lastMessage = lastMessage;
+        topic.lastMessage = getLatestMessage([
+          topic.lastMessage,
+          messages.at(-1),
+          lastMessage
+        ]);
       } else {
         topic.lastMessage = messages.at(-1);
       }
@@ -265,10 +306,7 @@ export const useGroup = () => {
     topics.value = [...topics.value];
   };
 
-  const updateLocalGroupInfo = (
-    topicId: string,
-    info: Partial<TopicSetting>
-  ): void => {
+  const updateLocalGroupInfo = (topicId: string, info: ITopicInfo): void => {
     const topic = topics.value.find(topic => topic.id === topicId);
     if (topic) {
       topic.info = { ...topic.info, ...info };

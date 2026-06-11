@@ -67,11 +67,11 @@ export const showCallModal = () => {
 };
 
 export const joinGroupCall = async (topicId?: string) => {
-  await joinPendingGroupCall(topicId);
+  return !!(await joinPendingGroupCall(topicId));
 };
 
 export const joinInviteGroupCall = async () => {
-  await joinInvitedGroupCall();
+  return !!(await joinInvitedGroupCall());
 };
 
 export const handleCallAnswered = (

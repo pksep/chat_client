@@ -6,6 +6,7 @@ import {
 } from '@livekit/track-processors';
 import {
   createLocalVideoTrack,
+  ConnectionQuality,
   LocalTrackPublication,
   LocalVideoTrack,
   Participant,
@@ -31,7 +32,12 @@ import {
   shouldPlayNotificationSound
 } from './useNotificationSoundPolicy';
 import { AudioOutput } from './useAudioOutput';
+import {
+  CALL_BACKGROUND_ASSET_PATHS,
+  MULTICLASS_VIRTUAL_BACKGROUND_DEFAULTS
+} from './callBackgroundProcessorConfig';
 import { prewarmCallBackgroundAssets } from './callBackgroundWarmup';
+import { createMediapipeMulticlassBackgroundTrackProcessor } from './mediapipeMulticlassBackgroundTrackProcessor';
 import { copyTextToClipboard } from '../utils/copyTextToClipboard';
 import { parseGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
 import {
@@ -85,7 +91,9 @@ type ParticipantMediaState = {
   activeReaction: CallReaction | null;
   activeReactionExpiresAt: number | null;
   isSpeaking: boolean;
+  audioLevel: number;
   isMicActive: boolean;
+  connectionQuality: ConnectionQuality;
 };
 
 type StreamCacheEntry = {
@@ -148,6 +156,9 @@ const state = reactive({
   isSpeakerActive: false,
   isFullScreen: false,
   isHandRaised: false,
+  isSpeaking: false,
+  audioLevel: 0,
+  connectionQuality: ConnectionQuality.Unknown,
   activeReaction: null as CallReaction | null,
   activeReactionExpiresAt: null as number | null
 });
@@ -179,6 +190,12 @@ let pendingEndCallRetryTimeout: ReturnType<typeof setTimeout> | null = null;
 let pendingEndCallFinalizeTimeout: ReturnType<typeof setTimeout> | null = null;
 let pendingNativeCallActionTimeout: ReturnType<typeof setTimeout> | null = null;
 let callStatusNoticeTimeout: ReturnType<typeof setTimeout> | null = null;
+let directCallRecoveryTimeout: ReturnType<typeof setTimeout> | null = null;
+let directCallRecoveryAttemptId = 0;
+let directCallRecoveryInFlight = false;
+let directCallRecoveryDeadline = 0;
+let directCallRecoveryRoomId: string | null = null;
+let directCallRecoveryTopicId: string | null = null;
 const participantReactionTimeouts = new Map<
   string,
   ReturnType<typeof setTimeout>
@@ -190,6 +207,13 @@ const MAX_NATIVE_CALL_ACTION_RETRIES = 120;
 const NATIVE_CALL_ACTION_RETRY_DELAY_MS = 500;
 const DISMISSED_INCOMING_CALL_TTL_MS = 15000;
 const CALL_STATUS_NOTICE_CLOSE_DELAY_MS = 3000;
+const DIRECT_CALL_RECONNECT_GRACE_MS = 20000;
+const DIRECT_CALL_RECONNECT_POLL_MS = 2000;
+const DIRECT_CALL_RECONNECT_NOTICE =
+  'Связь нестабильна. Пытаемся переподключить звонок...';
+const DIRECT_CALL_RECONNECT_FAILED_NOTICE = 'Не удалось восстановить звонок';
+const DIRECT_CALL_ENDED_NOTICE = 'Звонок завершен';
+const CALL_RECONNECT_NOTICE = 'Связь прервана. Переподключение';
 const dismissedIncomingCallRooms = new Map<string, number>();
 const dismissedIncomingCallTopics = new Map<string, number>();
 const CAMERA_CAPTURE_DEFAULTS = {
@@ -199,8 +223,8 @@ const CAMERA_CAPTURE_DEFAULTS = {
 };
 const MANAGED_BACKGROUND_CAMERA_CAPTURE_DEFAULTS = {
   facingMode: 'user' as const,
-  frameRate: 20,
-  resolution: VideoPresets.h540.resolution
+  frameRate: 24,
+  resolution: VideoPresets.h720.resolution
 };
 const CAMERA_PUBLISH_DEFAULTS = {
   degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
@@ -211,8 +235,8 @@ const CAMERA_PUBLISH_DEFAULTS = {
 const MANAGED_BACKGROUND_CAMERA_PUBLISH_DEFAULTS = {
   degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
   simulcast: true,
-  videoEncoding: VideoPresets.h540.encoding,
-  videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360]
+  videoEncoding: VideoPresets.h720.encoding,
+  videoSimulcastLayers: [VideoPresets.h216, VideoPresets.h540]
 };
 const SCREEN_SHARE_CAPTURE_DEFAULTS = {
   contentHint: 'detail' as const,
@@ -226,11 +250,11 @@ const SCREEN_SHARE_PUBLISH_DEFAULTS = {
   simulcast: false,
   screenShareEncoding: ScreenSharePresets.original.encoding
 };
-const CALL_BACKGROUND_ASSET_PATHS = {
-  tasksVisionFileSet: '/call-background/wasm',
-  modelAssetPath: '/call-background/selfie_segmenter.tflite'
-};
-let localBackgroundProcessor: BackgroundProcessorWrapper | null = null;
+type LocalManagedVideoProcessor =
+  | BackgroundProcessorWrapper
+  | Parameters<LocalVideoTrack['setProcessor']>[0];
+
+let localBackgroundProcessor: LocalManagedVideoProcessor | null = null;
 let localBackgroundProcessorTrack: LocalVideoTrack | null = null;
 let localBackgroundProcessorSignature: string | null = null;
 let hasShownBackgroundProcessorSupportError = false;
@@ -238,6 +262,11 @@ let requestedVideoActive = false;
 let videoToggleOperation: Promise<void> | null = null;
 let suppressParticipantPresenceNotifications = true;
 let presenceAudioContext: AudioContext | null = null;
+const pendingAudioRecoveryTimeouts = new Set<ReturnType<typeof setTimeout>>();
+const pendingRemoteAudioResubscribeTimeouts = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+>();
 
 const createRoomId = () => `livekit-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -280,22 +309,15 @@ const getCallBackgroundProcessorSignature = (): string => {
   return 'none';
 };
 
+const shouldUseMediapipeImageBackgroundProcessor = (): boolean =>
+  selectedCallBackgroundMode.value === 'image' &&
+  !!selectedCallBackgroundImageUrl.value;
+
 const getCallBackgroundProcessorConfig = () => {
   if (selectedCallBackgroundMode.value === 'blur') {
     return {
       mode: 'background-blur' as const,
       blurRadius: 12,
-      assetPaths: CALL_BACKGROUND_ASSET_PATHS
-    };
-  }
-
-  if (
-    selectedCallBackgroundMode.value === 'image' &&
-    selectedCallBackgroundImageUrl.value
-  ) {
-    return {
-      mode: 'virtual-background' as const,
-      imagePath: selectedCallBackgroundImageUrl.value,
       assetPaths: CALL_BACKGROUND_ASSET_PATHS
     };
   }
@@ -329,6 +351,12 @@ const getCallBackgroundProcessorSwitchOptions = () => {
   };
 };
 
+const isLiveKitBackgroundProcessorWrapper = (
+  processor: LocalManagedVideoProcessor | null
+): processor is BackgroundProcessorWrapper =>
+  !!processor &&
+  typeof (processor as BackgroundProcessorWrapper).switchTo === 'function';
+
 const stopLocalBackgroundProcessor = async (): Promise<void> => {
   const activeTrack = localBackgroundProcessorTrack;
   localBackgroundProcessorTrack = null;
@@ -349,7 +377,7 @@ const stopLocalBackgroundProcessor = async (): Promise<void> => {
 const ensureLocalBackgroundProcessor = async (
   track: LocalVideoTrack
 ): Promise<{
-  processor: BackgroundProcessorWrapper | null;
+  processor: LocalManagedVideoProcessor | null;
   didCreate: boolean;
 }> => {
   if (localBackgroundProcessorTrack === track && localBackgroundProcessor) {
@@ -366,10 +394,19 @@ const ensureLocalBackgroundProcessor = async (
     await stopLocalBackgroundProcessor();
   }
 
-  const processor = BackgroundProcessor(
-    getCallBackgroundProcessorConfig(),
-    'call-background-processor'
-  );
+  const processor = shouldUseMediapipeImageBackgroundProcessor()
+    ? createMediapipeMulticlassBackgroundTrackProcessor({
+        backgroundImageUrl: selectedCallBackgroundImageUrl.value || '',
+        edgeBlurAmount: MULTICLASS_VIRTUAL_BACKGROUND_DEFAULTS.maskBlurRadius,
+        foregroundThreshold:
+          MULTICLASS_VIRTUAL_BACKGROUND_DEFAULTS.foregroundThreshold,
+        maskProfile: MULTICLASS_VIRTUAL_BACKGROUND_DEFAULTS.maskProfile,
+        outputFps: MANAGED_BACKGROUND_CAMERA_CAPTURE_DEFAULTS.frameRate
+      })
+    : BackgroundProcessor(
+        getCallBackgroundProcessorConfig(),
+        'call-background-processor'
+      );
 
   await track.setProcessor(processor);
   localBackgroundProcessorTrack = track;
@@ -512,7 +549,7 @@ const clearParticipantReaction = (
       state.activeReaction = null;
       state.activeReactionExpiresAt = null;
     }
-    return;
+    return false;
   }
 
   const nextParticipantReactions = { ...participantReactions.value };
@@ -669,9 +706,51 @@ const clearCallStatusNotice = () => {
   callStatusNotice.value = null;
 };
 
+const clearDirectCallRecoveryTimer = () => {
+  if (directCallRecoveryTimeout) {
+    clearTimeout(directCallRecoveryTimeout);
+    directCallRecoveryTimeout = null;
+  }
+};
+
+const resetDirectCallRecoveryState = (
+  preserveNotice = false,
+  attemptId?: number
+) => {
+  if (
+    typeof attemptId === 'number' &&
+    attemptId !== directCallRecoveryAttemptId
+  ) {
+    return;
+  }
+
+  clearDirectCallRecoveryTimer();
+  directCallRecoveryInFlight = false;
+  directCallRecoveryDeadline = 0;
+  directCallRecoveryRoomId = null;
+  directCallRecoveryTopicId = null;
+  directCallRecoveryAttemptId += 1;
+
+  if (
+    !preserveNotice &&
+    (callStatusNotice.value === DIRECT_CALL_RECONNECT_NOTICE ||
+      callStatusNotice.value === CALL_RECONNECT_NOTICE)
+  ) {
+    clearCallStatusNotice();
+  }
+};
+
 const clearLocalAcceptState = () => {
   localAcceptRoomId = null;
   localAcceptTopicId = null;
+};
+
+const showPersistentCallStatusNotice = (message: string) => {
+  clearCallStatusNotice();
+  callStatusNotice.value = message;
+  clearDialingTimeout();
+  stopDialingSound();
+  stopRingtone();
 };
 
 const showTransientCallStatusNotice = (
@@ -695,6 +774,186 @@ const showTransientCallStatusNotice = (
   }, closeDelayMs);
 };
 
+const isGroupCallSession = (targetTopicId?: string | null): boolean => {
+  const activeTopicId = targetTopicId ?? topicId.value;
+  const activeTopic = activeTopicId
+    ? (useTopics().getSelectedTopic(activeTopicId) as any)
+    : null;
+
+  return !!(
+    activeTopic?.type === TopicType.Group ||
+    activeTopic?.activeCall?.groupMode ||
+    invitedGroupCall.value
+  );
+};
+
+const isRecoverableDirectCallSession = (
+  targetRoomId?: string | null,
+  targetTopicId?: string | null
+): boolean => {
+  const activeTopicId = targetTopicId ?? topicId.value;
+  const activeTopic = activeTopicId
+    ? (useTopics().getSelectedTopic(activeTopicId) as any)
+    : null;
+  const matchesCurrentCall =
+    (!!targetRoomId && roomId.value === targetRoomId) ||
+    (!!targetTopicId && topicId.value === targetTopicId);
+
+  return !!(
+    matchesCurrentCall &&
+    !isIncoming.value &&
+    activeTopicId &&
+    !!activeTopic
+  );
+};
+
+const resolveDirectCallRecoverySuccess = (activeRoom: Room | null = room) => {
+  if (!directCallRecoveryRoomId || !directCallRecoveryTopicId) {
+    return;
+  }
+
+  const recovered =
+    !!activeRoom &&
+    roomId.value === directCallRecoveryRoomId &&
+    topicId.value === directCallRecoveryTopicId &&
+    (isGroupCallSession(directCallRecoveryTopicId) ||
+      activeRoom.remoteParticipants.size > 0);
+
+  if (!recovered) {
+    return;
+  }
+
+  resetDirectCallRecoveryState();
+  syncConnectionState(activeRoom);
+};
+
+const scheduleDirectCallRecoveryAttempt = (attemptId: number) => {
+  clearDirectCallRecoveryTimer();
+  directCallRecoveryTimeout = setTimeout(() => {
+    directCallRecoveryTimeout = null;
+
+    if (attemptId !== directCallRecoveryAttemptId) {
+      return;
+    }
+
+    void recoverDirectCallConnection(attemptId);
+  }, DIRECT_CALL_RECONNECT_POLL_MS);
+};
+
+const recoverDirectCallConnection = async (
+  attemptId = directCallRecoveryAttemptId
+) => {
+  if (attemptId !== directCallRecoveryAttemptId || directCallRecoveryInFlight) {
+    return;
+  }
+
+  const activeRoomId = directCallRecoveryRoomId ?? roomId.value;
+  const activeTopicId = directCallRecoveryTopicId ?? topicId.value;
+
+  if (
+    !activeRoomId ||
+    !activeTopicId ||
+    !isRecoverableDirectCallSession(activeRoomId, activeTopicId)
+  ) {
+    resetDirectCallRecoveryState();
+    return;
+  }
+
+  directCallRecoveryInFlight = true;
+
+  try {
+    const status = await getLiveKitCallStatus(activeRoomId, activeTopicId);
+
+    if (attemptId !== directCallRecoveryAttemptId) {
+      return;
+    }
+
+    if (!status?.active) {
+      resetDirectCallRecoveryState(true, attemptId);
+      showTransientCallStatusNotice(DIRECT_CALL_ENDED_NOTICE);
+      return;
+    }
+
+    if (room) {
+      resolveDirectCallRecoverySuccess(room);
+
+      if (attemptId !== directCallRecoveryAttemptId) {
+        return;
+      }
+    }
+
+    if (room?.remoteParticipants.size) {
+      resolveDirectCallRecoverySuccess(room);
+      return;
+    }
+
+    if (!room && !connectPromise) {
+      try {
+        await connectToRoom();
+      } catch (error) {
+        console.warn('[LiveKit] Failed to reconnect direct call:', error);
+      }
+    }
+
+    if (attemptId !== directCallRecoveryAttemptId) {
+      return;
+    }
+
+    if (room) {
+      resolveDirectCallRecoverySuccess(room);
+
+      if (attemptId !== directCallRecoveryAttemptId) {
+        return;
+      }
+    }
+
+    if (room?.remoteParticipants.size) {
+      resolveDirectCallRecoverySuccess(room);
+      return;
+    }
+
+    if (Date.now() >= directCallRecoveryDeadline) {
+      resetDirectCallRecoveryState(true, attemptId);
+      showTransientCallStatusNotice(DIRECT_CALL_RECONNECT_FAILED_NOTICE);
+      return;
+    }
+
+    scheduleDirectCallRecoveryAttempt(attemptId);
+  } finally {
+    if (attemptId === directCallRecoveryAttemptId) {
+      directCallRecoveryInFlight = false;
+    }
+  }
+};
+
+const startDirectCallRecovery = (
+  targetRoomId?: string | null,
+  targetTopicId?: string | null
+): boolean => {
+  const activeRoomId = targetRoomId ?? roomId.value;
+  const activeTopicId = targetTopicId ?? topicId.value;
+
+  if (
+    !activeRoomId ||
+    !activeTopicId ||
+    !isRecoverableDirectCallSession(activeRoomId, activeTopicId)
+  ) {
+    return false;
+  }
+
+  directCallRecoveryAttemptId += 1;
+  directCallRecoveryInFlight = false;
+  directCallRecoveryDeadline = Date.now() + DIRECT_CALL_RECONNECT_GRACE_MS;
+  directCallRecoveryRoomId = activeRoomId;
+  directCallRecoveryTopicId = activeTopicId;
+  showPersistentCallStatusNotice(CALL_RECONNECT_NOTICE);
+  open.value = true;
+  isModalVisible.value = true;
+  clearDirectCallRecoveryTimer();
+  void recoverDirectCallConnection(directCallRecoveryAttemptId);
+  return true;
+};
+
 const resetPendingEndCallState = () => {
   clearPendingEndCallTimers();
   pendingEndCallRoomId.value = null;
@@ -709,7 +968,7 @@ const emitEndCallEvent = (
   const me = getAuthUser();
 
   if (!sdk || !me || !targetRoomId) {
-    return;
+    return false;
   }
 
   sdk.sendWebSocketEvent(WebSocketEventType.END_CALL, {
@@ -1314,22 +1573,43 @@ const syncLocalCallBackgroundProcessor = async (): Promise<void> => {
     return;
   }
 
+  if (selectedCallBackgroundMode.value === 'none') {
+    await stopLocalBackgroundProcessor();
+    hasShownBackgroundProcessorSupportError = false;
+    syncLocalTrackState();
+    return;
+  }
+
   hasShownBackgroundProcessorSupportError = false;
 
   try {
-    const { processor, didCreate } =
-      await ensureLocalBackgroundProcessor(localCameraTrack);
     const nextSignature = getCallBackgroundProcessorSignature();
+    let processor = localBackgroundProcessor;
+    let didCreate = false;
+
+    if (!processor || localBackgroundProcessorTrack !== localCameraTrack) {
+      ({ processor, didCreate } =
+        await ensureLocalBackgroundProcessor(localCameraTrack));
+    } else if (localBackgroundProcessorSignature !== nextSignature) {
+      if (
+        shouldUseMediapipeImageBackgroundProcessor() ||
+        !isLiveKitBackgroundProcessorWrapper(processor)
+      ) {
+        await stopLocalBackgroundProcessor();
+        ({ processor, didCreate } =
+          await ensureLocalBackgroundProcessor(localCameraTrack));
+      } else {
+        await processor.switchTo(getCallBackgroundProcessorSwitchOptions());
+        localBackgroundProcessorSignature = nextSignature;
+      }
+    }
 
     if (!processor) {
       return;
     }
 
     if (!didCreate && localBackgroundProcessorSignature === nextSignature) {
-      if (
-        selectedCallBackgroundMode.value !== 'none' &&
-        !localCameraTrack.getProcessor()?.processedTrack
-      ) {
+      if (!localCameraTrack.getProcessor()?.processedTrack) {
         syncLocalTrackStateWhenProcessedTrackReady(localCameraTrack);
       }
 
@@ -1337,24 +1617,14 @@ const syncLocalCallBackgroundProcessor = async (): Promise<void> => {
       return;
     }
 
-    if (!didCreate) {
-      await processor.switchTo(getCallBackgroundProcessorSwitchOptions());
-      localBackgroundProcessorSignature = nextSignature;
-    }
-
-    if (selectedCallBackgroundMode.value !== 'none' && !didCreate) {
-      await waitForLocalProcessedVideoTrack(localCameraTrack);
-      syncLocalTrackStateWhenProcessedTrackReady(localCameraTrack);
-    }
+    await waitForLocalProcessedVideoTrack(localCameraTrack);
+    syncLocalTrackStateWhenProcessedTrackReady(localCameraTrack);
 
     hasShownBackgroundProcessorSupportError = false;
     syncLocalTrackState();
   } catch (error) {
     console.warn('[LiveKit] Failed to apply call background processor:', error);
-    if (
-      selectedCallBackgroundMode.value !== 'none' &&
-      !hasShownBackgroundProcessorSupportError
-    ) {
+    if (!hasShownBackgroundProcessorSupportError) {
       hasShownBackgroundProcessorSupportError = true;
       showErrorNotification('Не удалось применить фон для звонка');
     }
@@ -1522,7 +1792,10 @@ const buildRemoteParticipantState = (
     activeReactionExpiresAt:
       participantReactions.value[remoteParticipant.identity]?.expiresAt || null,
     isSpeaking: !!remoteParticipant.isSpeaking,
-    isMicActive: !!audioPublication?.track?.mediaStreamTrack
+    audioLevel: remoteParticipant.audioLevel || 0,
+    isMicActive: !!audioPublication?.track?.mediaStreamTrack,
+    connectionQuality:
+      remoteParticipant.connectionQuality || ConnectionQuality.Unknown
   };
 };
 
@@ -1531,16 +1804,36 @@ const syncRemoteParticipantSpeakingState = () => {
     return;
   }
 
-  const speakingParticipantIds = new Set(
-    Array.from(room.remoteParticipants.values())
-      .filter(participant => participant.isSpeaking)
-      .map(participant => participant.identity)
+  const remoteAudioLevels = new Map(
+    Array.from(room.remoteParticipants.values()).map(participant => [
+      participant.identity,
+      {
+        isSpeaking: !!participant.isSpeaking,
+        audioLevel: participant.audioLevel || 0,
+        connectionQuality:
+          participant.connectionQuality || ConnectionQuality.Unknown
+      }
+    ])
   );
 
   remoteParticipants.value = remoteParticipants.value.map(participant => ({
     ...participant,
-    isSpeaking: speakingParticipantIds.has(participant.identity)
+    isSpeaking:
+      remoteAudioLevels.get(participant.identity)?.isSpeaking || false,
+    audioLevel: remoteAudioLevels.get(participant.identity)?.audioLevel || 0,
+    connectionQuality:
+      remoteAudioLevels.get(participant.identity)?.connectionQuality ||
+      ConnectionQuality.Unknown
   }));
+};
+
+const syncLocalParticipantSpeakingState = (activeRoom?: Room | null) => {
+  const localParticipant = activeRoom?.localParticipant;
+
+  state.isSpeaking = !!localParticipant?.isSpeaking;
+  state.audioLevel = localParticipant?.audioLevel || 0;
+  state.connectionQuality =
+    localParticipant?.connectionQuality || ConnectionQuality.Unknown;
 };
 
 const syncRemoteParticipantState = () => {
@@ -1563,6 +1856,57 @@ const syncRemoteParticipantState = () => {
 
   isRemoteVideoActive.value = remoteParticipants.value.some(
     participant => participant.isVideoActive
+  );
+};
+
+const clearPendingAudioRecoveryTimeouts = () => {
+  pendingAudioRecoveryTimeouts.forEach(timeout => {
+    clearTimeout(timeout);
+  });
+  pendingAudioRecoveryTimeouts.clear();
+};
+
+const getRemoteAudioPublicationKey = (
+  participantIdentity: string,
+  publication: {
+    source?: Track.Source;
+    trackSid?: string;
+    sid?: string;
+  }
+) =>
+  `${participantIdentity}:${publication.trackSid || publication.sid || publication.source || 'microphone'}`;
+
+const clearPendingRemoteAudioResubscribeTimeout = (
+  participantIdentity: string,
+  publication: {
+    source?: Track.Source;
+    trackSid?: string;
+    sid?: string;
+  }
+) => {
+  const key = getRemoteAudioPublicationKey(participantIdentity, publication);
+  const timeout = pendingRemoteAudioResubscribeTimeouts.get(key);
+
+  if (!timeout) {
+    return;
+  }
+
+  clearTimeout(timeout);
+  pendingRemoteAudioResubscribeTimeouts.delete(key);
+};
+
+const clearPendingRemoteAudioResubscribeTimeouts = (
+  participantIdentity?: string
+) => {
+  Array.from(pendingRemoteAudioResubscribeTimeouts.entries()).forEach(
+    ([key, timeout]) => {
+      if (participantIdentity && !key.startsWith(`${participantIdentity}:`)) {
+        return;
+      }
+
+      clearTimeout(timeout);
+      pendingRemoteAudioResubscribeTimeouts.delete(key);
+    }
   );
 };
 
@@ -1716,6 +2060,123 @@ const ensureLocalMicrophoneState = async (activeRoom: Room | null = room) => {
   }
 
   await activeRoom.localParticipant.setMicrophoneEnabled(true);
+};
+
+const repairRemoteAudioPublication = (
+  participantIdentity: string,
+  publication: {
+    source?: Track.Source;
+    isMuted?: boolean;
+    isSubscribed?: boolean;
+    track?: { mediaStreamTrack?: MediaStreamTrack | null } | null;
+    setEnabled: (enabled: boolean) => void;
+    setSubscribed?: (subscribed: boolean) => void;
+    trackSid?: string;
+    sid?: string;
+  }
+) => {
+  if (publication.source !== Track.Source.Microphone) {
+    return;
+  }
+
+  publication.setEnabled(true);
+
+  const mediaTrack = publication.track?.mediaStreamTrack;
+  const hasLiveTrack = !!mediaTrack && mediaTrack.readyState === 'live';
+
+  if (hasLiveTrack) {
+    clearPendingRemoteAudioResubscribeTimeout(participantIdentity, publication);
+    if (publication.isSubscribed === false) {
+      publication.setSubscribed?.(true);
+    }
+    return;
+  }
+
+  if (publication.isMuted) {
+    clearPendingRemoteAudioResubscribeTimeout(participantIdentity, publication);
+    return;
+  }
+
+  if (publication.isSubscribed === false) {
+    publication.setSubscribed?.(true);
+  }
+
+  if (typeof publication.setSubscribed !== 'function') {
+    return;
+  }
+
+  const key = getRemoteAudioPublicationKey(participantIdentity, publication);
+  if (pendingRemoteAudioResubscribeTimeouts.has(key)) {
+    return;
+  }
+
+  try {
+    publication.setSubscribed(false);
+  } catch (error) {
+    console.warn('[LiveKit] Failed to unsubscribe remote audio track:', error);
+  }
+
+  const timeout = setTimeout(() => {
+    pendingRemoteAudioResubscribeTimeouts.delete(key);
+
+    try {
+      publication.setSubscribed?.(true);
+    } catch (error) {
+      console.warn(
+        '[LiveKit] Failed to resubscribe remote audio track:',
+        error
+      );
+    }
+  }, 250);
+
+  pendingRemoteAudioResubscribeTimeouts.set(key, timeout);
+};
+
+const ensureRemoteAudioSubscriptions = (activeRoom: Room | null = room) => {
+  if (!activeRoom) {
+    return;
+  }
+
+  Array.from(activeRoom.remoteParticipants.values()).forEach(
+    remoteParticipant => {
+      remoteParticipant.audioTrackPublications.forEach(publication => {
+        repairRemoteAudioPublication(remoteParticipant.identity, publication);
+      });
+    }
+  );
+};
+
+const recoverCallAudioState = async (
+  activeRoom: Room | null = room
+): Promise<void> => {
+  if (!activeRoom) {
+    return;
+  }
+
+  ensureRemoteAudioSubscriptions(activeRoom);
+  await ensureLocalMicrophoneState(activeRoom);
+  syncRemoteParticipantState();
+  syncConnectionState(activeRoom);
+};
+
+const scheduleCallAudioRecovery = (activeRoom: Room | null = room): void => {
+  if (!activeRoom) {
+    return;
+  }
+
+  [0, 400, 1500].forEach(delayMs => {
+    const timeout = setTimeout(() => {
+      pendingAudioRecoveryTimeouts.delete(timeout);
+
+      if (room !== activeRoom) {
+        return;
+      }
+
+      void recoverCallAudioState(activeRoom);
+    }, delayMs);
+
+    pendingAudioRecoveryTimeouts.add(timeout);
+  });
 };
 
 const syncConnectionState = (activeRoom: Room) => {
@@ -1898,40 +2359,52 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
       requestHighQualityForAllRemoteVideoTracks();
+      scheduleCallAudioRecovery(activeRoom);
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.TrackUnpublished, () => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      scheduleCallAudioRecovery(activeRoom);
     })
     .on(RoomEvent.TrackSubscribed, () => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
       requestHighQualityForAllRemoteVideoTracks();
+      scheduleCallAudioRecovery(activeRoom);
+      resolveDirectCallRecoverySuccess(activeRoom);
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.TrackUnsubscribed, () => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      scheduleCallAudioRecovery(activeRoom);
     })
     .on(RoomEvent.TrackMuted, () => {
       syncLocalTrackState();
+      syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
+      scheduleCallAudioRecovery(activeRoom);
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.TrackUnmuted, () => {
       syncLocalTrackState();
+      syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
       requestHighQualityForAllRemoteVideoTracks();
+      scheduleCallAudioRecovery(activeRoom);
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.ActiveSpeakersChanged, () => {
+      syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantSpeakingState();
     })
     .on(RoomEvent.ParticipantConnected, participant => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
       requestHighQualityForAllRemoteVideoTracks();
+      scheduleCallAudioRecovery(activeRoom);
+      resolveDirectCallRecoverySuccess(activeRoom);
       showGroupCallPresenceNotification(participant, 'joined', activeRoom);
       if (state.isHandRaised) {
         void publishHandRaiseState(true);
@@ -1941,13 +2414,23 @@ const setupRoomListeners = (activeRoom: Room) => {
       const nextHandRaisedParticipants = { ...handRaisedParticipants.value };
       delete nextHandRaisedParticipants[participant.identity];
       handRaisedParticipants.value = nextHandRaisedParticipants;
+      clearPendingRemoteAudioResubscribeTimeouts(participant.identity);
       clearParticipantReaction(participant.identity, false);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+
+      if (
+        !activeRoom.remoteParticipants.size &&
+        !isGroupCallSession(topicId.value)
+      ) {
+        startDirectCallRecovery(roomId.value, topicId.value);
+      }
+
       showGroupCallPresenceNotification(participant, 'left', activeRoom);
     })
     .on(RoomEvent.LocalTrackPublished, publication => {
       syncLocalTrackState();
+      scheduleCallAudioRecovery(activeRoom);
       if (
         publication.source === Track.Source.ScreenShare ||
         publication.source === Track.Source.ScreenShareAudio
@@ -1957,6 +2440,7 @@ const setupRoomListeners = (activeRoom: Room) => {
     })
     .on(RoomEvent.LocalTrackUnpublished, publication => {
       syncLocalTrackState();
+      scheduleCallAudioRecovery(activeRoom);
       if (
         publication.source === Track.Source.ScreenShare ||
         publication.source === Track.Source.ScreenShareAudio
@@ -1968,21 +2452,42 @@ const setupRoomListeners = (activeRoom: Room) => {
       handleHandRaiseData(payload, participant, topic);
       handleCallReactionData(payload, participant, topic);
     })
+    .on(RoomEvent.ConnectionQualityChanged, () => {
+      syncLocalParticipantSpeakingState(activeRoom);
+      syncRemoteParticipantState();
+    })
     .on(RoomEvent.Reconnecting, () => {
+      showPersistentCallStatusNotice(CALL_RECONNECT_NOTICE);
       syncLocalTrackState();
+      syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      scheduleCallAudioRecovery(activeRoom);
     })
     .on(RoomEvent.Reconnected, () => {
+      if (callStatusNotice.value === CALL_RECONNECT_NOTICE) {
+        clearCallStatusNotice();
+      }
       syncLocalTrackState();
+      syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
       requestHighQualityForAllRemoteVideoTracks();
+      scheduleCallAudioRecovery(activeRoom);
+      resolveDirectCallRecoverySuccess(activeRoom);
       void ensureLocalMicrophoneState(activeRoom);
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.Disconnected, () => {
       if (matchesPendingEndCall(roomId.value, topicId.value)) {
+        return;
+      }
+
+      if (room === activeRoom) {
+        room = null;
+      }
+
+      if (startDirectCallRecovery(roomId.value, topicId.value)) {
         return;
       }
 
@@ -2119,6 +2624,13 @@ const connectToRoom = async () => {
         });
       }
 
+      if (
+        directCallRecoveryRoomId === activeRoomId &&
+        directCallRecoveryTopicId === activeTopicId
+      ) {
+        throw error;
+      }
+
       cleanup(false);
       showErrorNotification(getConnectErrorMessage(error));
       throw error;
@@ -2160,9 +2672,12 @@ const connectToRoom = async () => {
     }
 
     syncLocalTrackState();
+    syncLocalParticipantSpeakingState(nextRoom);
     syncRemoteParticipantState();
     syncConnectionState(nextRoom);
     requestHighQualityForAllRemoteVideoTracks();
+    scheduleCallAudioRecovery(nextRoom);
+    resolveDirectCallRecoverySuccess(nextRoom);
     suppressParticipantPresenceNotifications = false;
     shouldEndCallOnConnectFailure = false;
 
@@ -2200,6 +2715,9 @@ const resetMediaState = () => {
   state.isSpeakerActive = false;
   state.isFullScreen = false;
   state.isHandRaised = false;
+  state.isSpeaking = false;
+  state.audioLevel = 0;
+  state.connectionQuality = ConnectionQuality.Unknown;
   state.activeReaction = null;
   state.activeReactionExpiresAt = null;
 };
@@ -2567,23 +3085,55 @@ export const acceptCall = async () => {
   if (answerAck?.accepted === false) {
     isAcceptingLocally = false;
     showTransientCallStatusNotice('Звонок уже завершен');
-    return;
+    return false;
   }
   localAcceptRoomId = roomId.value;
   localAcceptTopicId = topicId.value;
 
   try {
     await connectToRoom();
+    return true;
   } finally {
     isAcceptingLocally = false;
   }
 };
 
-export const joinPendingGroupCall = async (targetTopicId?: string) => {
-  const pendingGroupCall = targetTopicId
-    ? activeGroupCalls.value[targetTopicId]
-    : null;
-  if (!pendingGroupCall || open.value) return;
+const resolveJoinablePendingGroupCall = (
+  targetTopicId?: string
+): ActiveGroupCallEntry | null => {
+  if (!targetTopicId) {
+    return null;
+  }
+
+  const pendingGroupCall = activeGroupCalls.value[targetTopicId];
+
+  if (pendingGroupCall) {
+    return pendingGroupCall;
+  }
+
+  const topic = useTopics().getSelectedTopic(targetTopicId) as any;
+  const activeCall = topic?.activeCall;
+
+  if (!activeCall?.roomId) {
+    return null;
+  }
+
+  return {
+    roomId: activeCall.roomId,
+    topicId: targetTopicId,
+    caller: topic?.user || null,
+    startTime: activeCall.startTime ?? null,
+    participantCount: activeCall.participantCount,
+    groupMode: activeCall.groupMode,
+    elapsedDurationMs: activeCall.elapsedDurationMs
+  };
+};
+
+export const joinPendingGroupCall = async (
+  targetTopicId?: string
+): Promise<boolean> => {
+  const pendingGroupCall = resolveJoinablePendingGroupCall(targetTopicId);
+  if (!pendingGroupCall || open.value) return false;
 
   const sdk = getChatSDK();
   const me = getAuthUser();
@@ -2593,12 +3143,16 @@ export const joinPendingGroupCall = async (targetTopicId?: string) => {
     caller
   } = pendingGroupCall;
 
-  if (!sdk || !me) return;
+  if (!sdk || !me) return false;
   clearCallStatusNotice();
   shouldEndCallOnConnectFailure = false;
 
   const callStatus = await getLiveKitCallStatus(pendingRoomId, pendingTopicId);
-  if (!callStatus?.active) return;
+  if (!callStatus?.active) {
+    clearUnavailableCallState(pendingRoomId, pendingTopicId);
+    showTransientCallStatusNotice('Звонок уже завершен');
+    return false;
+  }
 
   user.value = caller || null;
   roomId.value = pendingRoomId;
@@ -2634,13 +3188,14 @@ export const joinPendingGroupCall = async (targetTopicId?: string) => {
   if (answerAck?.accepted === false) {
     isAcceptingLocally = false;
     showTransientCallStatusNotice('Звонок уже завершен');
-    return;
+    return false;
   }
   localAcceptRoomId = roomId.value;
   localAcceptTopicId = topicId.value;
 
   try {
     await connectToRoom();
+    return true;
   } finally {
     isAcceptingLocally = false;
   }
@@ -2708,17 +3263,22 @@ export const openGroupCallInviteUrl = async (
   return hydrateInvitedGroupCallFromUrl();
 };
 
-export const joinInvitedGroupCall = async () => {
+export const joinInvitedGroupCall = async (): Promise<boolean | void> => {
   const sdk = getChatSDK();
   const me = getAuthUser();
   const invite = invitedGroupCall.value;
 
-  if (!sdk || !me || !invite || open.value) return;
+  if (!sdk || !me || !invite || open.value) return false;
   clearCallStatusNotice();
   shouldEndCallOnConnectFailure = false;
 
   const callStatus = await getLiveKitCallStatus(invite.roomId, invite.topicId);
-  if (!callStatus?.active) return;
+  if (!callStatus?.active) {
+    clearUnavailableCallState(invite.roomId, invite.topicId);
+    clearInviteParamsFromUrl();
+    showTransientCallStatusNotice('Звонок уже завершен');
+    return false;
+  }
 
   user.value = me as any;
   roomId.value = invite.roomId;
@@ -2762,6 +3322,7 @@ export const joinInvitedGroupCall = async () => {
   try {
     await connectToRoom();
     clearInviteParamsFromUrl();
+    return true;
   } finally {
     isAcceptingLocally = false;
   }
@@ -2865,6 +3426,13 @@ export const handleCallEnded = (
     !isIncoming.value
   ) {
     showTransientCallStatusNotice('Пользователь занят');
+    return;
+  }
+
+  if (
+    matchesCurrentCall &&
+    startDirectCallRecovery(endedRoomId, endedTopicId)
+  ) {
     return;
   }
 
@@ -3000,6 +3568,9 @@ export const toggleMic = async () => {
   state.isMicActive = !state.isMicActive;
   if (room) {
     await room.localParticipant.setMicrophoneEnabled(state.isMicActive);
+    if (state.isMicActive) {
+      scheduleCallAudioRecovery(room);
+    }
   }
 };
 
@@ -3220,6 +3791,9 @@ export const leaveCall = () => {
   connectAttemptId += 1;
   connectPromise = null;
   shouldEndCallOnConnectFailure = false;
+  resetDirectCallRecoveryState(true);
+  clearPendingAudioRecoveryTimeouts();
+  clearPendingRemoteAudioResubscribeTimeouts();
   clearLocalAcceptState();
   clearCallStatusNotice();
   clearDialingTimeout();
@@ -3253,6 +3827,9 @@ export const cleanup = (disconnectRoom = true) => {
   connectAttemptId += 1;
   connectPromise = null;
   shouldEndCallOnConnectFailure = false;
+  resetDirectCallRecoveryState(true);
+  clearPendingAudioRecoveryTimeouts();
+  clearPendingRemoteAudioResubscribeTimeouts();
   clearLocalAcceptState();
   clearCallStatusNotice();
   resetPendingEndCallState();

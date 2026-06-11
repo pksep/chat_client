@@ -9,6 +9,10 @@ export interface ChatTopicInterface {
   deleteTopic(topicId: string): Promise<void>;
   togglePinTopic(topicId: string): Promise<TopicSetting>;
   toggleMuteTopic(topicId: string): Promise<TopicSetting>;
+  setTopicMarkedUnread(
+    topicId: string,
+    isMarkedUnread: boolean
+  ): Promise<TopicSetting>;
   getTopicSettings(topicId: string, userId: string): Promise<TopicSetting>;
   updateTopicSettings(
     topicId: string,
@@ -106,6 +110,25 @@ export class ChatTopic implements ChatTopicInterface {
     } catch (error) {
       throw new Error(
         `Failed to toggle mute topic: ${(error as Error).message}`
+      );
+    }
+  }
+
+  async setTopicMarkedUnread(
+    topicId: string,
+    isMarkedUnread: boolean
+  ): Promise<TopicSetting> {
+    try {
+      const response = (await this.reqi.patch<TopicSetting>(
+        `/topics/${topicId}/marked-unread`,
+        { isMarkedUnread },
+        { parsed: false }
+      )) as any;
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      throw new Error(
+        `Failed to set topic marked unread: ${(error as Error).message}`
       );
     }
   }

@@ -12,6 +12,7 @@ import {
   fetchAllTopics,
   getTopicList,
   incrementDisplayedUnreadCount,
+  isTopicMuted,
   updateLocalTopicUser,
   setTopicTypingState,
   totalUnreadCount
@@ -39,7 +40,7 @@ import {
   mergeMessagesForTopic
 } from './useMessages';
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
-import { isUnreadTrackableMessage } from '../utils/messageTracking';
+import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import {
   handleIncomingCall,
   handleCallAnswered,
@@ -53,6 +54,15 @@ import {
 import { Capacitor } from '@capacitor/core';
 import { initCallKit, showIncomingCallKit, endAllCallKits } from './useCallKit';
 import { clearTopicNotifications } from './useNotificationNavigation';
+import {
+  showTauriIncomingCallNotification,
+  showTauriMessageNotification
+} from './useTauriNotifications';
+import {
+  ensureTauriWindowStateTracking,
+  getIsAppActivelyVisible,
+  subscribeToAppVisibilityChanges
+} from './useAppVisibility';
 import type { MediaPreviewDimensions } from '../utils/mediaPreview';
 import { useUrlWatcher } from '../composables/navigation';
 import { RouteTypes } from '../composables/navigation/useUrlRouting';
@@ -87,6 +97,10 @@ const messagesStore = shallowRef<Record<string, ChatMessage[]>>({});
 
 const messageChangeCallbacks: Array<(topicId?: string) => void> = [];
 let areChatListenersBound = false;
+
+type MessageHandlingOptions = {
+  silent?: boolean;
+};
 
 const notifyMessageChange = (topicId?: string): void => {
   messageChangeCallbacks.forEach(callback => {
@@ -188,7 +202,10 @@ const setupChatListeners = (): void => {
 
   areChatListenersBound = true;
 
-  const handleIncomingSocketMessage = (message: IMessage): void => {
+  const handleIncomingSocketMessage = (
+    message: IMessage,
+    opts?: MessageHandlingOptions
+  ): void => {
     const { updateLocalLastMessageTopic } = useTopics();
     void upsertCallHistoryMessage(message);
     const isDuplicateMessage = hasMessageInTopic(message.topicId, message.id);
@@ -214,21 +231,47 @@ const setupChatListeners = (): void => {
         ];
       }
 
-      if (isUnreadIncomingMessage && isUnreadTrackableMessage(message)) {
+      if (
+        isUnreadIncomingMessage &&
+        isUnreadTrackableMessageForUser(message, currentUserId.value)
+      ) {
         changeUnreadMessageCount(1, message.topicId);
       }
     }
 
     if (!isDuplicateMessage && isIncomingFromAnotherUser) {
+      const isCurrentTopicActivelyVisible =
+        route.value.id === message.topicId && getIsAppActivelyVisible();
+
+      if (isCurrentTopicActivelyVisible) {
+        void clearTopicNotifications(message.topicId);
+      }
+
       if (
-        document.visibilityState !== 'visible' &&
+        !isCurrentTopicActivelyVisible &&
         message.topicId === route.value.id &&
         totalUnreadCount.value === unreadCountBefore
       ) {
         incrementDisplayedUnreadCount(1);
       }
 
-      playNotificationSound(message.topicId);
+      if (!opts?.silent) {
+        playNotificationSound(message.topicId);
+      }
+
+      if (
+        !opts?.silent &&
+        !isTopicMuted(message.topicId) &&
+        !isCurrentTopicActivelyVisible
+      ) {
+        const topic = useTopics().getSelectedTopic(message.topicId) as any;
+
+        void showTauriMessageNotification({
+          message,
+          sender: message.senderUser || getUserById(message.senderUserId),
+          topic
+        });
+      }
     }
 
     updateLocalLastMessageTopic(message.topicId, message);
@@ -264,14 +307,17 @@ const setupChatListeners = (): void => {
     }
   };
 
-  const handleChangeMessagePayload = (payload: {
-    type: 'NEW' | 'CHANGE' | 'DELETE' | 'PIN';
-    data: any;
-    messageId?: string;
-    ptsMeta?: PtsMeta;
-    scope?: 'ALL' | 'SELF';
-    targetUserId?: string | null;
-  }): void => {
+  const handleChangeMessagePayload = (
+    payload: {
+      type: 'NEW' | 'CHANGE' | 'DELETE' | 'PIN';
+      data: any;
+      messageId?: string;
+      ptsMeta?: PtsMeta;
+      scope?: 'ALL' | 'SELF';
+      targetUserId?: string | null;
+    },
+    opts?: MessageHandlingOptions
+  ): void => {
     if (
       payload.scope === 'SELF' &&
       payload.targetUserId &&
@@ -289,7 +335,7 @@ const setupChatListeners = (): void => {
         source: 'ws',
         payload: payload.data
       });
-      handleIncomingSocketMessage(payload.data);
+      handleIncomingSocketMessage(payload.data, opts);
     } else if (payload.type === 'DELETE') {
       void recordShadowChatEvent({
         topicId: payload.data.topicId,
@@ -438,15 +484,12 @@ const setupChatListeners = (): void => {
 
     if (payloadTopicId) {
       deleteMessageFromLocal(payloadTopicId, event.payload.messageId);
+      return;
     }
 
-    const topicIds = Object.keys(messagesStore.value);
-    topicIds.forEach(topicId => {
-      const existing = messagesStore.value[topicId] || [];
-      const next = existing.filter(item => item.id !== event.payload.messageId);
-      if (next.length !== existing.length) {
-        messagesStore.value[topicId] = next;
-        notifyMessageChange(topicId);
+    Object.entries(messagesStore.value).forEach(([topicId, messages]) => {
+      if (messages.some(item => item.id === event.payload.messageId)) {
+        deleteMessageFromLocal(topicId, event.payload.messageId);
       }
     });
   });
@@ -491,10 +534,13 @@ const setupChatListeners = (): void => {
         case 'message.change':
         case 'message.delete':
         case 'message.pin':
-          handleChangeMessagePayload({
-            ...(event.payload as any),
-            ptsMeta
-          });
+          handleChangeMessagePayload(
+            {
+              ...(event.payload as any),
+              ptsMeta
+            },
+            { silent: true }
+          );
           break;
         case 'message.read':
           handleReadMessagePayload({
@@ -545,6 +591,16 @@ const setupChatListeners = (): void => {
         payload.startTime
       );
       const isGroupCall = topicType === TopicType.Group;
+
+      if (isReceived) {
+        void showTauriIncomingCallNotification({
+          caller: user || null,
+          roomId: payload.roomId,
+          topic,
+          topicId: payload.topicId,
+          topicType
+        });
+      }
 
       if (Capacitor.isNativePlatform() && !isGroupCall && isReceived && user) {
         showIncomingCallKit(
@@ -622,6 +678,7 @@ let reconnectRefreshTimeout: ReturnType<typeof setTimeout> | null = null;
 let isRefreshingAfterReconnect = false;
 const MAX_BACKGROUND_TOPIC_RECONCILES = 12;
 let networkStatePollInterval: ReturnType<typeof setInterval> | null = null;
+let removeAppVisibilityListener: (() => void) | null = null;
 
 const route = useUrlWatcher();
 
@@ -797,7 +854,7 @@ const syncPresenceForVisibility = (): void => {
     return;
   }
 
-  const isActive = document.visibilityState === 'visible';
+  const isActive = getIsAppActivelyVisible();
   chatSDK.sendWebSocketEvent(WebSocketEventType.TOGGLE_PRESENCE, {
     isActive
   });
@@ -849,7 +906,7 @@ export const initializeChat = async (options: {
   if (!isResumeListenersAdded) {
     window.addEventListener('focus', () => {
       reconnectChatOnResume();
-      if (!document.hidden) {
+      if (getIsAppActivelyVisible()) {
         syncPresenceForVisibility();
       }
     });
@@ -857,7 +914,7 @@ export const initializeChat = async (options: {
     window.addEventListener('online', () => {
       syncBrowserNetworkState(true);
       reconnectChatOnResume();
-      if (!document.hidden) {
+      if (getIsAppActivelyVisible()) {
         syncPresenceForVisibility();
       }
     });
@@ -901,6 +958,18 @@ export const initializeChat = async (options: {
 
   if (Capacitor.isNativePlatform()) {
     initCallKit();
+  }
+
+  ensureTauriWindowStateTracking();
+
+  if (!removeAppVisibilityListener) {
+    removeAppVisibilityListener = subscribeToAppVisibilityChanges(() => {
+      syncPresenceForVisibility();
+
+      if (getIsAppActivelyVisible()) {
+        reconnectChatOnResume();
+      }
+    });
   }
 
   addMessageHistoryHandler();
@@ -1178,15 +1247,10 @@ export const getHasWebsocketConnection = () =>
   browserOnline.value && hasWebsocketConnection.value;
 export const getHasBrowserNetwork = () => browserOnline.value;
 export const getCanSendReadReceipts = (): boolean => {
-  const canUseVisibleAsFocused =
-    Capacitor.isNativePlatform() ||
-    (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
-
   return (
     browserOnline.value &&
     hasWebsocketConnection.value &&
-    document.visibilityState === 'visible' &&
-    (document.hasFocus() || canUseVisibleAsFocused)
+    getIsAppActivelyVisible()
   );
 };
 

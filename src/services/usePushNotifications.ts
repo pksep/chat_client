@@ -18,9 +18,16 @@ import {
   navigateToNotificationTarget,
   resolveNotificationTopicId
 } from './useNotificationNavigation';
+import {
+  clearAllTauriNotifications,
+  initTauriNotifications,
+  isTauriRuntime
+} from './useTauriNotifications';
 
 const NATIVE_PUSH_TOKEN_STORAGE_KEY = 'chat_native_push_token';
 const WEB_PUSH_ENDPOINT_STORAGE_KEY = 'chat_web_push_endpoint';
+
+type WebPushBrowser = 'chrome' | 'mozilla' | 'yandex' | 'unknown';
 
 interface NotificationTapPlugin {
   addListener(
@@ -49,7 +56,7 @@ const NotificationTap =
 let nativeNotificationTapListener: PluginListenerHandle | null = null;
 let lastHandledNotificationKey = '';
 let lastHandledNotificationAt = 0;
-let isWebCallActionListenerBound = false;
+let isWebServiceWorkerMessageListenerBound = false;
 
 const storeNativePushToken = (token: string): void => {
   localStorage.setItem(NATIVE_PUSH_TOKEN_STORAGE_KEY, token);
@@ -68,6 +75,45 @@ const getStoredWebPushEndpoint = (): string =>
 const clearStoredPushRegistration = (): void => {
   localStorage.removeItem(NATIVE_PUSH_TOKEN_STORAGE_KEY);
   localStorage.removeItem(WEB_PUSH_ENDPOINT_STORAGE_KEY);
+};
+
+const getWebPushBrowser = (): WebPushBrowser => {
+  if (typeof navigator === 'undefined') {
+    return 'unknown';
+  }
+
+  const navigatorWithUserAgentData = navigator as Navigator & {
+    userAgentData?: {
+      brands?: { brand?: string }[];
+    };
+  };
+  const userAgent = navigator.userAgent.toLowerCase();
+  const brands =
+    navigatorWithUserAgentData.userAgentData?.brands?.map(({ brand }) =>
+      (brand || '').toLowerCase()
+    ) || [];
+  const hasBrand = (needle: string) =>
+    brands.some(brand => brand.includes(needle));
+
+  if (userAgent.includes('yabrowser') || hasBrand('yandex')) {
+    return 'yandex';
+  }
+
+  if (userAgent.includes('firefox') || userAgent.includes('fxios')) {
+    return 'mozilla';
+  }
+
+  if (
+    userAgent.includes('chrome') ||
+    userAgent.includes('crios') ||
+    userAgent.includes('chromium') ||
+    hasBrand('google chrome') ||
+    hasBrand('chromium')
+  ) {
+    return 'chrome';
+  }
+
+  return 'unknown';
 };
 
 const hasPayloadValues = (payload?: Record<string, string> | null) =>
@@ -171,6 +217,7 @@ const handleNotificationInteraction = (
   }
 
   if (normalizedData.type === 'incoming_call') {
+    navigateToNotificationTarget(normalizedData);
     handleCallPush({ data: normalizedData });
     return true;
   }
@@ -206,10 +253,10 @@ const consumeWebCallActionFromUrl = () => {
   void handleNativeCallAction(action, roomId, topicId);
 };
 
-const bindWebCallActionListener = () => {
+const bindWebServiceWorkerMessageListener = () => {
   if (
     Capacitor.isNativePlatform() ||
-    isWebCallActionListenerBound ||
+    isWebServiceWorkerMessageListenerBound ||
     !('serviceWorker' in navigator)
   ) {
     return;
@@ -222,24 +269,30 @@ const bindWebCallActionListener = () => {
           action?: 'accept' | 'decline';
           roomId?: string | null;
           topicId?: string | null;
+          notification?: NativeNotificationData;
         }
       | undefined;
 
     if (
-      payload?.type !== 'CALL_ACTION' ||
-      (payload.action !== 'accept' && payload.action !== 'decline')
+      payload?.type === 'CALL_ACTION' &&
+      (payload.action === 'accept' || payload.action === 'decline')
     ) {
+      void handleNativeCallAction(
+        payload.action,
+        payload.roomId || undefined,
+        payload.topicId || undefined
+      );
       return;
     }
 
-    void handleNativeCallAction(
-      payload.action,
-      payload.roomId || undefined,
-      payload.topicId || undefined
-    );
+    if (payload?.type !== 'NOTIFICATION_NAVIGATE') {
+      return;
+    }
+
+    handleNotificationInteraction(payload.notification);
   });
 
-  isWebCallActionListenerBound = true;
+  isWebServiceWorkerMessageListenerBound = true;
 };
 
 export const initPushNotifications = async () => {
@@ -336,6 +389,14 @@ export const initPushNotifications = async () => {
     return;
   }
 
+  if (
+    await initTauriNotifications(payload => {
+      handleNotificationInteraction(payload as NativeNotificationData);
+    })
+  ) {
+    return;
+  }
+
   // Web Push (Browser)
   if (!('serviceWorker' in navigator)) return;
 
@@ -352,7 +413,7 @@ export const initPushNotifications = async () => {
 
   const registration =
     await navigator.serviceWorker.register('/service-worker.js');
-  bindWebCallActionListener();
+  bindWebServiceWorkerMessageListener();
   consumeWebCallActionFromUrl();
 
   // Get public key from server
@@ -378,7 +439,17 @@ export const initPushNotifications = async () => {
   const userId = getCurrentUserId();
   if (!userId) return console.warn('No user ID, skipping subscribe');
 
-  await api.post('/push/subscribe', { userId, subscription });
+  const browser = getWebPushBrowser();
+  const subscriptionPayload = {
+    ...subscription.toJSON(),
+    browser
+  };
+
+  await api.post('/push/subscribe', {
+    userId,
+    subscription: subscriptionPayload,
+    browser
+  });
 };
 
 const handleCallPush = (notification?: { data?: NativeNotificationData }) => {
@@ -469,6 +540,12 @@ export const cleanupPushNotificationsOnLogout = async (): Promise<void> => {
         console.warn('Failed to unregister native push listeners:', error);
       }
 
+      clearStoredPushRegistration();
+      return;
+    }
+
+    if (isTauriRuntime()) {
+      await clearAllTauriNotifications();
       clearStoredPushRegistration();
       return;
     }

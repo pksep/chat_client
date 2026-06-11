@@ -124,8 +124,61 @@ p.chat__nothing-paragraph {
 .date-divider {
   width: fit-content;
   margin-inline: auto;
-  padding-bottom: 5px;
-  height: 20px;
+  min-height: 20px;
+  height: auto;
+}
+
+.date-divider[data-date-divider-label] {
+  transition: opacity 0.18s ease;
+}
+
+.chat__floating-date-divider {
+  position: sticky;
+  top: 6px;
+  z-index: 1;
+  flex: 0 0 0;
+  height: 0;
+  display: flex;
+  justify-content: center;
+  overflow: visible;
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.chat__floating-date-divider--hidden {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.chat__message-bubble > .top-element:has(.date-divider) {
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  padding-bottom: 10px;
+}
+
+.chat__floating-date-divider .date-divider,
+.chat__message-bubble > .top-element:has(.date-divider) .date-divider {
+  margin-inline: auto;
+}
+
+.chat-floating-date-enter-active,
+.chat-floating-date-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.chat-floating-date-enter-from {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.chat-floating-date-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
 }
 
 /*
@@ -369,6 +422,33 @@ p.chat__nothing-paragraph {
 
 .chat__input {
   grid-row: 3;
+}
+
+.chat__input-tauri-dropzone {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  padding: 10px;
+  background-color: #4a83e01a;
+  backdrop-filter: blur(20px);
+  pointer-events: none;
+}
+
+.chat__input-tauri-dropzone__zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 4px dashed var(--primary-color);
+  border-radius: 24px;
+  color: var(--text-neutral-color);
+  background-color: rgb(255 255 255 / 55%);
+}
+
+.chat__input-tauri-dropzone__title {
+  font-size: 30px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .selected-messages {

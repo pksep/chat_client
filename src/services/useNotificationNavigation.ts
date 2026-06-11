@@ -5,6 +5,12 @@ import {
   RouteTypes,
   currentRoute
 } from '../composables/navigation/useUrlRouting';
+import {
+  activateTauriAppWindow,
+  clearTauriTopicNotifications,
+  isTauriRuntime
+} from './useTauriNotifications';
+import { getIsAppActivelyVisible } from './useAppVisibility';
 
 type NotificationTopicType = 'DM' | 'GROUP' | null;
 
@@ -129,9 +135,55 @@ export const navigateToNotificationTarget = (
 ): boolean => {
   const target = resolveNotificationTarget(payload);
   const directUrl = payload.url || payload.link;
+  const targetUrl =
+    target.url || buildNotificationTargetUrl(target.topicId, target.topicType);
 
   if (!target.topicId && !directUrl) {
     return false;
+  }
+
+  if (isTauriRuntime()) {
+    void (async () => {
+      await activateTauriAppWindow();
+
+      if (target.topicId) {
+        if (target.topicType === 'GROUP') {
+          navigateToGroup(target.topicId);
+        } else {
+          navigateToDialogs(target.topicId);
+        }
+
+        const absoluteUrl = new URL(
+          buildNotificationTargetUrl(target.topicId, target.topicType),
+          window.location.origin
+        ).toString();
+
+        if (window.location.href !== absoluteUrl) {
+          window.history.replaceState({}, document.title, absoluteUrl);
+        }
+
+        window.dispatchEvent(new PopStateEvent('popstate'));
+        return;
+      }
+
+      if (!targetUrl) {
+        return;
+      }
+
+      const absoluteUrl = new URL(targetUrl, window.location.origin).toString();
+
+      if (window.location.href !== absoluteUrl) {
+        window.history.replaceState({}, document.title, absoluteUrl);
+      }
+
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    })();
+
+    if (target.topicId) {
+      void clearTopicNotifications(target.topicId);
+    }
+
+    return true;
   }
 
   if (!target.topicId) {
@@ -158,7 +210,7 @@ export const syncNotificationContext = async (params: {
   focused: boolean;
   topicId?: string | null;
 }) => {
-  if (!('serviceWorker' in navigator)) {
+  if (isTauriRuntime() || !('serviceWorker' in navigator)) {
     return;
   }
 
@@ -213,6 +265,11 @@ export const clearTopicNotifications = async (
     return;
   }
 
+  if (isTauriRuntime()) {
+    await clearTauriTopicNotifications(topicId);
+    return;
+  }
+
   if (!('serviceWorker' in navigator)) {
     return;
   }
@@ -245,7 +302,6 @@ export const isTopicCurrentlyVisible = (topicId?: string | null): boolean => {
   return (
     isChatRoute &&
     currentRoute.value.id === topicId &&
-    !document.hidden &&
-    document.hasFocus()
+    getIsAppActivelyVisible()
   );
 };

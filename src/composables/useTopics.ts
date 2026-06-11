@@ -1,9 +1,8 @@
 import { ref, computed, watch } from 'vue';
 import { getChatSDK } from '../services/useChat';
-import { ITopic, IUser } from '../components/interfaces/interfaces';
+import { ITopic, ITopicInfo, IUser } from '../components/interfaces/interfaces';
 import {
   Message,
-  TopicSetting,
   TopicType,
   MessageStatus
 } from '../services/useChatSDK/types';
@@ -20,6 +19,10 @@ import {
   saveCachedTopics
 } from '../services/useChatStateCache';
 import {
+  getIsAppActivelyVisible,
+  subscribeToAppVisibilityChanges
+} from '../services/useAppVisibility';
+import {
   hasCachedShadowLoadedRanges,
   getCachedShadowReadState,
   hasCachedShadowReadState,
@@ -27,10 +30,11 @@ import {
   loadShadowLoadedRanges,
   loadShadowReadState
 } from '../services/useShadowChatSync';
+import { syncTauriTrayBadge } from '../services/useTauriTrayBadge';
 import { getUserById } from './useUsers';
 import {
-  isUnreadIgnoredSystemMessage,
-  isUnreadTrackableMessage
+  isUnreadIgnoredMessageForUser,
+  isUnreadTrackableMessageForUser
 } from '../utils/messageTracking';
 
 const topics = ref<ITopic[]>([]);
@@ -43,6 +47,7 @@ const topicReadPreviewIds = ref<Record<string, string[]>>({});
 const serverUnreadCounts = ref<Record<string, number>>({});
 const typingStateTimers = new Map<string, ReturnType<typeof setTimeout>>();
 let isTopicsVisibilityBound = false;
+let isDesktopVisibilityBound = false;
 let topicsApi: ReturnType<typeof createTopicsApi> | null = null;
 
 const route = useUrlWatcher();
@@ -73,6 +78,21 @@ const createTopicsApi = () => {
         (navigator as any).clearAppBadge();
       }
     }
+  };
+
+  const hasAnyActiveUnreadTopic = (): boolean =>
+    topics.value.some(
+      topic =>
+        (topic.unreadMessageCount || 0) > 0 &&
+        (!topic.info?.isMute || topic.taggedMe)
+    );
+
+  const syncDesktopUnreadBadge = (force = false) => {
+    void syncTauriTrayBadge({
+      count: displayedUnreadCount.value,
+      force,
+      mutedOnly: displayedUnreadCount.value > 0 && !hasAnyActiveUnreadTopic()
+    });
   };
 
   const getMessageTimestamp = (
@@ -128,22 +148,30 @@ const createTopicsApi = () => {
     }
   };
 
-  const resolveLatestMessage = (topic: ITopic) => {
+  const getLatestMessage = (
+    messages: Array<Message | undefined>
+  ): Message | undefined => {
+    return messages
+      .filter(Boolean)
+      .reduce<Message | undefined>((latestMessage, message) => {
+        if (!latestMessage) {
+          return message;
+        }
+
+        return getMessageTimestamp(message) >=
+          getMessageTimestamp(latestMessage)
+          ? message
+          : latestMessage;
+      }, undefined);
+  };
+
+  const resolveLatestMessage = (
+    topic: ITopic,
+    lastMessage?: Message
+  ): Message | undefined => {
     const localLastMessage = getFullMessagesByTopicId(topic.id).at(-1);
-    const serverLastMessage = topic.lastMessage;
 
-    if (!localLastMessage) {
-      return serverLastMessage;
-    }
-
-    if (!serverLastMessage) {
-      return localLastMessage;
-    }
-
-    return getMessageTimestamp(localLastMessage) >=
-      getMessageTimestamp(serverLastMessage)
-      ? localLastMessage
-      : serverLastMessage;
+    return getLatestMessage([topic.lastMessage, localLastMessage, lastMessage]);
   };
 
   const normalizeTopic = (topic: ITopic): ITopic => {
@@ -164,7 +192,7 @@ const createTopicsApi = () => {
       !!authedUser.value?.id &&
       localMessages.some(
         message =>
-          isUnreadTrackableMessage(message) &&
+          isUnreadTrackableMessageForUser(message, authedUser.value?.id) &&
           message.senderUserId !== authedUser.value?.id &&
           message.isReadByMe !== true
       );
@@ -172,7 +200,10 @@ const createTopicsApi = () => {
     if (
       resolvedUnreadCount <= 1 &&
       normalizedTopic.lastMessage &&
-      isUnreadIgnoredSystemMessage(normalizedTopic.lastMessage) &&
+      isUnreadIgnoredMessageForUser(
+        normalizedTopic.lastMessage,
+        authedUser.value?.id
+      ) &&
       !hasLocalUnreadMessages
     ) {
       resolvedUnreadCount = 0;
@@ -344,7 +375,7 @@ const createTopicsApi = () => {
     const topic = topics.value.find(topic => topic.id === topicId);
     if (topic) {
       if (lastMessage) {
-        topic.lastMessage = lastMessage;
+        topic.lastMessage = resolveLatestMessage(topic, lastMessage);
       } else {
         const messages = getFullMessagesByTopicId(topicId);
         topic.lastMessage = messages.at(-1);
@@ -406,7 +437,7 @@ const createTopicsApi = () => {
   };
 
   const incrementDisplayedUnreadCount = (delta: number = 1): void => {
-    if (delta <= 0 || document.visibilityState === 'visible') {
+    if (delta <= 0 || getIsAppActivelyVisible()) {
       return;
     }
 
@@ -521,7 +552,7 @@ const createTopicsApi = () => {
     );
     const unreadMessages = messages.filter(
       message =>
-        isUnreadTrackableMessage(message) &&
+        isUnreadTrackableMessageForUser(message, currentUserId) &&
         message.senderUserId !== currentUserId &&
         message.isReadByMe !== true &&
         !previewReadIds.has(message.id)
@@ -542,7 +573,7 @@ const createTopicsApi = () => {
     const computedUnreadMessages = shadowReadStateExists
       ? messages.filter(message => {
           if (
-            !isUnreadTrackableMessage(message) ||
+            !isUnreadTrackableMessageForUser(message, currentUserId) ||
             message.senderUserId === currentUserId ||
             previewReadIds.has(message.id)
           ) {
@@ -579,7 +610,7 @@ const createTopicsApi = () => {
         (hasLatestRangeCoverage && hasLatestMessageInLocalCache));
     const shouldSuppressUnreadForNonTrackableLatestMessage =
       !!latestKnownMessage &&
-      isUnreadIgnoredSystemMessage(latestKnownMessage) &&
+      isUnreadIgnoredMessageForUser(latestKnownMessage, currentUserId) &&
       effectiveServerUnreadCount <= 1 &&
       unreadMessages.length === 0;
 
@@ -637,10 +668,7 @@ const createTopicsApi = () => {
     schedulePersistTopics();
   };
 
-  const updateLocalTopicInfo = (
-    topicId: string,
-    info: Partial<TopicSetting>
-  ): void => {
+  const updateLocalTopicInfo = (topicId: string, info: ITopicInfo): void => {
     const topic = topics.value.find(topic => topic.id === topicId);
     if (topic) {
       topic.info = { ...topic.info, ...info };
@@ -741,6 +769,30 @@ const createTopicsApi = () => {
       }
     } catch (err) {
       console.error('Failed to mute/unmute topic:', err);
+    }
+  };
+
+  const setTopicMarkedUnread = async (
+    topic: ITopic,
+    isMarkedUnread: boolean
+  ) => {
+    const previousMarkedUnread = Boolean(topic.info?.isMarkedUnread);
+    const applyMarkedUnread = (value: boolean) => {
+      if (topic.type === TopicType.DM) {
+        updateLocalTopicInfo(topic.id, { isMarkedUnread: value });
+      } else if (topic.type === TopicType.Group) {
+        updateLocalGroupInfo(topic.id, { isMarkedUnread: value });
+      }
+    };
+
+    applyMarkedUnread(isMarkedUnread);
+
+    try {
+      const sdk = getChatSDK();
+      await sdk.setTopicMarkedUnread(topic.id, isMarkedUnread);
+    } catch (err) {
+      applyMarkedUnread(previousMarkedUnread);
+      console.error('Failed to set topic marked unread:', err);
     }
   };
 
@@ -876,7 +928,7 @@ const createTopicsApi = () => {
   watch(
     totalUnreadCount,
     count => {
-      if (document.visibilityState === 'visible') {
+      if (getIsAppActivelyVisible()) {
         displayedUnreadCount.value = count;
       } else {
         displayedUnreadCount.value = Math.max(
@@ -886,18 +938,45 @@ const createTopicsApi = () => {
       }
 
       applyDisplayedUnreadCount(displayedUnreadCount.value);
+      syncDesktopUnreadBadge();
     },
     { immediate: true }
   );
 
+  watch(
+    () =>
+      topics.value.map(topic => ({
+        id: topic.id,
+        unreadMessageCount: topic.unreadMessageCount || 0,
+        isMute: !!topic.info?.isMute
+      })),
+    () => {
+      syncDesktopUnreadBadge();
+    },
+    { deep: true }
+  );
+
   const handleVisibilityChange = () => {
-    if (document.visibilityState === 'visible') {
+    if (getIsAppActivelyVisible()) {
       displayedUnreadCount.value = totalUnreadCount.value;
       applyDisplayedUnreadCount(displayedUnreadCount.value);
+      syncDesktopUnreadBadge(true);
     }
   };
 
   bindTopicsVisibilityListener(handleVisibilityChange);
+
+  if (!isDesktopVisibilityBound) {
+    subscribeToAppVisibilityChanges(() => {
+      if (getIsAppActivelyVisible()) {
+        displayedUnreadCount.value = totalUnreadCount.value;
+        applyDisplayedUnreadCount(displayedUnreadCount.value);
+      }
+
+      syncDesktopUnreadBadge(true);
+    });
+    isDesktopVisibilityBound = true;
+  }
 
   return {
     topics,
@@ -914,6 +993,7 @@ const createTopicsApi = () => {
     updateLocalTopicInfo,
     togglePinTopic,
     toggleMuteTopic,
+    setTopicMarkedUnread,
     addTopicList,
     setTopicTypingState,
     clearTopicTypingState,
@@ -950,6 +1030,7 @@ const {
   changeUnreadMessageCount,
   toggleMuteTopic,
   togglePinTopic,
+  setTopicMarkedUnread,
   addTopicList,
   setTopicTypingState,
   clearTopicTypingState,
@@ -989,6 +1070,7 @@ export {
   updateLocalTopicInfo,
   togglePinTopic,
   toggleMuteTopic,
+  setTopicMarkedUnread,
   addTopicList,
   setTopicTypingState,
   clearTopicTypingState,

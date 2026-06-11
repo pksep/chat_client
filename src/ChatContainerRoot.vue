@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue';
+import { onMounted, onUnmounted, ref, watch } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
 
 import type { IChatContainerProps } from './components/interfaces/interfaces';
@@ -44,6 +44,10 @@ import {
   clearTopicNotifications,
   syncNotificationContext
 } from './services/useNotificationNavigation';
+import {
+  getIsAppActivelyVisible,
+  subscribeToAppVisibilityChanges
+} from './services/useAppVisibility';
 import { useResizeState } from './composables/useResizeState';
 import { MAX_W_MD } from './utils/constants';
 import { RouteTypes } from './composables/navigation/useUrlRouting';
@@ -56,6 +60,7 @@ const { fetchAllTopics, getTopicList } = useTopics();
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const route = useUrlWatcher();
 const isChatReady = ref(false);
+let removeAppVisibilityListener: (() => void) | null = null;
 const { hasPendingShareBatches, isShareSelectionActive, startShareSelection } =
   useShareSelection();
 
@@ -109,7 +114,7 @@ const getActiveChatTopicId = (): string | null => {
 };
 
 const updateNotificationContext = () => {
-  const focused = !document.hidden && document.hasFocus();
+  const focused = getIsAppActivelyVisible();
   const topicId = getActiveChatTopicId();
 
   void syncNotificationContext({ focused, topicId });
@@ -127,7 +132,18 @@ const initFocusTracking = () => {
   window.addEventListener('focus', updateNotificationContext);
   window.addEventListener('blur', updateNotificationContext);
   document.addEventListener('visibilitychange', updateNotificationContext);
+  removeAppVisibilityListener = subscribeToAppVisibilityChanges(
+    updateNotificationContext
+  );
 };
+
+onUnmounted(() => {
+  window.removeEventListener('focus', updateNotificationContext);
+  window.removeEventListener('blur', updateNotificationContext);
+  document.removeEventListener('visibilitychange', updateNotificationContext);
+  removeAppVisibilityListener?.();
+  removeAppVisibilityListener = null;
+});
 
 const clearStoredErpToken = () => {
   clearErpAuthSession();

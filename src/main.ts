@@ -1,4 +1,5 @@
 import { createApp } from 'vue';
+import { isTauri } from '@tauri-apps/api/core';
 import App from './App.vue';
 import '@fontsource-variable/inter';
 import './assets/globals.css';
@@ -21,6 +22,57 @@ const INDEXED_DB_NAMES = [
 
 const hasIndexedDb = () =>
   typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined';
+
+const isMacEnvironment = (): boolean => {
+  if (typeof navigator === 'undefined') {
+    return false;
+  }
+
+  const navigatorWithUserAgentData = navigator as Navigator & {
+    userAgentData?: {
+      platform?: string;
+    };
+  };
+
+  return /mac/i.test(
+    navigatorWithUserAgentData.userAgentData?.platform ||
+      navigator.platform ||
+      navigator.userAgent ||
+      ''
+  );
+};
+
+const applyRuntimeBodyClasses = (): void => {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  if (isTauri()) {
+    document.body.classList.add('chat-tauri-runtime');
+  }
+
+  if (isTauri() && isMacEnvironment()) {
+    document.body.classList.add('chat-tauri-macos-runtime');
+  }
+};
+
+const clearTauriServiceWorkers = async (): Promise<void> => {
+  if (
+    typeof window === 'undefined' ||
+    !isTauri() ||
+    !('serviceWorker' in navigator)
+  ) {
+    return;
+  }
+
+  const registrations = await navigator.serviceWorker.getRegistrations();
+
+  await Promise.allSettled(
+    registrations.map(async registration => {
+      await registration.unregister();
+    })
+  );
+};
 
 const deleteIndexedDb = async (dbName: string): Promise<boolean> => {
   if (!hasIndexedDb()) {
@@ -77,8 +129,10 @@ const runIndexedDbResetIfNeeded = async (): Promise<void> => {
 };
 
 const mountApp = async () => {
+  await clearTauriServiceWorkers();
   await runIndexedDbResetIfNeeded();
   registerNativeFileBridge();
+  applyRuntimeBodyClasses();
   preloadNotoEmojiAssets(
     [...USER_STATUS_PRESETS.map(option => option.icon), '🦄'],
     {

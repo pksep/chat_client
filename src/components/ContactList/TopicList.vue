@@ -7,6 +7,13 @@
     :aria-label="`${props.dataTestid} Contact List`"
   >
     <li
+      v-if="showContactSectionTitle"
+      class="contact-list__section-title"
+      :data-testid="`${props.dataTestid}-ContactList-ContactsTitle`"
+    >
+      Контакты
+    </li>
+    <li
       v-for="(topic, index) in props.topics"
       :key="topic.id"
       class="contact-list__li"
@@ -183,15 +190,17 @@
               @
             </div>
             <div
-              v-if="hasTopicUnreadBadge(topic, authedUser?.id)"
+              v-if="hasTopicUnreadIndicator(topic, authedUser?.id)"
               :class="{
                 'contact-list__notification': true,
                 'contact-list__notification--muted': topic.info?.isMute
               }"
               :data-testid="`${props.dataTestid}-ContactList-Notification${index + 1}`"
-              :aria-label="`${getTopicUnreadBadgeCount(topic, authedUser?.id)} new messages`"
+              :aria-label="getTopicUnreadIndicatorLabel(topic)"
             >
-              {{ getTopicUnreadBadgeCount(topic, authedUser?.id) }}
+              <template v-if="getTopicUnreadBadgeCount(topic, authedUser?.id)">
+                {{ getTopicUnreadBadgeCount(topic, authedUser?.id) }}
+              </template>
             </div>
             <div
               class="contact-list__pin"
@@ -235,6 +244,25 @@
         <Button
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.small"
+          @click.stop="() => handleReadState(topic)"
+          :data-testid="`${props.dataTestid}-ContactList-ReadStateButton${index + 1}`"
+          :aria-label="
+            hasTopicUnreadIndicator(topic, authedUser?.id)
+              ? `Mark ${topic.name} as read`
+              : `Mark ${topic.name} as new`
+          "
+        >
+          <template v-if="hasTopicUnreadIndicator(topic, authedUser?.id)">
+            <ReadIcon style="padding: 2px" /> Отметить прочитанным
+          </template>
+          <template v-else
+            ><Icon :name="IconNameEnum.chat" style="padding: 2px" /> Пометить
+            как новое</template
+          >
+        </Button>
+        <Button
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
           @click="() => handleMute(topic)"
           :data-testid="`${props.dataTestid}-ContactList-NotificationButton${index + 1}`"
           :aria-label="
@@ -251,6 +279,86 @@
         </Button>
       </ContextMenu>
     </li>
+    <li
+      v-if="showMessageSectionTitle"
+      class="contact-list__section-title"
+      :data-testid="`${props.dataTestid}-ContactList-MessagesTitle`"
+    >
+      Сообщения
+    </li>
+    <li
+      v-if="showMessageSearchLoading"
+      class="contact-list__search-state"
+      :data-testid="`${props.dataTestid}-ContactList-MessageSearchLoading`"
+    >
+      Поиск сообщений...
+    </li>
+    <li
+      v-for="(result, index) in props.messageResults"
+      :key="`message-${result.id}`"
+      class="contact-list__li"
+      role="listitem"
+      tabindex="0"
+      :data-testid="`${props.dataTestid}-ContactList-MessageResult${index + 1}`"
+      @keydown.enter="handleMessageResultClick(result)"
+      @keydown.space="handleMessageResultClick(result)"
+    >
+      <div
+        class="contact-list__item contact-list__item--message-result"
+        role="button"
+        tabindex="0"
+        @click="handleMessageResultClick(result)"
+      >
+        <CachedAvatar
+          class="contact-list__avatar"
+          :initials="getMessageResultTopicName(result)"
+          :path="getMessageResultTopicAvatar(result)"
+          :alt="`Avatar of ${getMessageResultTopicName(result)}`"
+          is-icon
+          :data-testid="`${props.dataTestid}-ContactList-MessageAvatar${index + 1}`"
+        />
+        <div class="contact-list__block--wrapper">
+          <h5
+            role="heading"
+            aria-level="5"
+            class="contact-list__title"
+            :data-testid="`${props.dataTestid}-ContactList-MessageTitle${index + 1}`"
+          >
+            <span class="contact-list__title-text">
+              {{ getMessageResultTopicName(result) }}
+            </span>
+          </h5>
+          <div
+            class="contact-list__description"
+            v-emoji
+            :data-testid="`${props.dataTestid}-ContactList-MessageDescription${index + 1}`"
+          >
+            {{ result.previewText }}
+          </div>
+          <div class="contact-list__top">
+            <span
+              v-if="result.createdAt"
+              class="contact-list__time"
+              :data-testid="`${props.dataTestid}-ContactList-MessageTime${index + 1}`"
+            >
+              {{ formatListTime(new Date(result.createdAt)) }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </li>
+    <li
+      v-if="showSearchEmptyState"
+      class="contact-list__search-state contact-list__search-state--empty"
+      :data-testid="`${props.dataTestid}-ContactList-SearchEmpty`"
+    >
+      <p class="contact-list__search-state-title">Ничего не найдено</p>
+      <img
+        class="contact-list__search-state-image"
+        src="/images/not-found-contact.svg"
+        alt="Ничего не найдено"
+      />
+    </li>
   </ul>
 </template>
 
@@ -262,6 +370,8 @@ import {
   ButtonTypeEnum,
   Checkbox,
   CheckboxSizeEnum,
+  Icon,
+  IconNameEnum,
   SizesEnum,
   Tooltip
 } from '@pksep/yui';
@@ -288,9 +398,10 @@ import PinIcon from '../UI/PinIcon.vue';
 import UnpinIcon from '../UI/UnpinIcon.vue';
 import UnmuteIcon from '../UI/UnmuteIcon.vue';
 import MuteIcon from '../UI/MuteIcon.vue';
+import ReadIcon from '../UI/ReadIcon.vue';
 import { TopicType } from '../../services/useChatSDK/types';
 import { getUserById, getUserLastOnline } from '../../composables/useUsers';
-import { getHasWebsocketConnection } from '../../services/useChat';
+import { getHasWebsocketConnection, markAsRead } from '../../services/useChat';
 import { useMessageMedia } from '../Messages/composables/useMessageMedia';
 import TypingIndicator from '../UI/TypingIndicator.vue';
 import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
@@ -298,7 +409,7 @@ import { formatUserStatusText } from '../../utils/userStatus';
 import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
 import {
   getTopicUnreadBadgeCount,
-  hasTopicUnreadBadge
+  hasTopicUnreadIndicator
 } from '../../utils/topicUnreadBadge';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import {
@@ -308,24 +419,38 @@ import {
   pendingGroupCallInfo
 } from '../../services/useCalls';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
+import type { IMessageSearchResult } from '../../composables/useMessageSearch';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
   selectedTopicIds?: Set<string | number>;
+  searchQuery?: string;
+  messageResults?: IMessageSearchResult[];
+  isMessageSearchLoading?: boolean;
 }
 
-const { togglePinTopic, toggleMuteTopic, getTopicTypingUsers } = useTopics();
+const {
+  togglePinTopic,
+  toggleMuteTopic,
+  getTopicTypingUsers,
+  setTopicMarkedUnread,
+  resetTopicUnreadState
+} = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   showCheckbox: false,
-  selectedTopicIds: () => new Set<string | number>()
+  selectedTopicIds: () => new Set<string | number>(),
+  searchQuery: '',
+  messageResults: () => [],
+  isMessageSearchLoading: false
 });
 
 const emits = defineEmits<{
   (e: 'unmount-notification', id: string): void;
   (e: 'unmount-click', id: string): void;
   (e: 'unmount-topic', contact: ITopic): void;
+  (e: 'unmount-message', result: IMessageSearchResult): void;
 }>();
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
@@ -339,6 +464,33 @@ const listRenderKey = ref(0);
 const { getFullMediaPath } = useMessageMedia();
 const currentTime = ref(Date.now());
 let currentTimeInterval: ReturnType<typeof setInterval> | null = null;
+
+const hasSearchQuery = computed(() => props.searchQuery.trim().length > 0);
+const showContactSectionTitle = computed(
+  () => hasSearchQuery.value && !props.showCheckbox && props.topics.length > 0
+);
+const showMessageSectionTitle = computed(
+  () =>
+    hasSearchQuery.value &&
+    !props.showCheckbox &&
+    props.messageResults.length > 0
+);
+const showMessageSearchLoading = computed(
+  () =>
+    hasSearchQuery.value &&
+    !props.showCheckbox &&
+    props.isMessageSearchLoading &&
+    props.topics.length === 0 &&
+    props.messageResults.length === 0
+);
+const showSearchEmptyState = computed(
+  () =>
+    hasSearchQuery.value &&
+    !props.showCheckbox &&
+    !props.isMessageSearchLoading &&
+    props.topics.length === 0 &&
+    props.messageResults.length === 0
+);
 
 const getTopicEffectiveUser = (topic: ITopic) =>
   topic.type === TopicType.DM && topic.user?.id
@@ -397,10 +549,33 @@ const handleMute = (topic: ITopic): void => {
   closeActivePopover(topic.id);
 };
 
+const handleReadState = async (topic: ITopic): Promise<void> => {
+  if (hasTopicUnreadIndicator(topic, authedUser.value?.id)) {
+    if (topic.lastMessage?.id) {
+      await markAsRead({
+        topicId: topic.id,
+        messageIds: [topic.lastMessage.id]
+      });
+    }
+
+    await setTopicMarkedUnread(topic, false);
+    resetTopicUnreadState(topic.id);
+    closeActivePopover(topic.id);
+    return;
+  }
+
+  await setTopicMarkedUnread(topic, true);
+  closeActivePopover(topic.id);
+};
+
 const handleClick = (topic: ITopic): void => {
   if (props.showCheckbox) {
     emits('unmount-topic', topic);
     return;
+  }
+
+  if (topic.info?.isMarkedUnread) {
+    void setTopicMarkedUnread(topic, false);
   }
 
   if (isMobile.value) {
@@ -418,6 +593,19 @@ const handleKeyDown = (contact: ITopic, event: KeyboardEvent): void => {
     handleClick(contact);
   }
 };
+
+const handleMessageResultClick = (result: IMessageSearchResult): void => {
+  emits('unmount-message', result);
+};
+
+const getMessageResultTopic = (result: IMessageSearchResult): ITopic | null =>
+  result.topic || null;
+
+const getMessageResultTopicName = (result: IMessageSearchResult): string =>
+  getMessageResultTopic(result)?.name || 'Сообщение';
+
+const getMessageResultTopicAvatar = (result: IMessageSearchResult): string =>
+  getMessageResultTopic(result)?.avatarUrl || '';
 
 const isTopicUserOnline = (topic: ITopic): boolean =>
   topic.type === TopicType.DM &&
@@ -451,6 +639,14 @@ const getTopicStatusLabel = (topic: ITopic): string =>
   topic.type === TopicType.DM
     ? formatUserStatusText(getTopicEffectiveUser(topic)?.status)
     : '';
+
+const getTopicUnreadIndicatorLabel = (topic: ITopic): string => {
+  const unreadCount = getTopicUnreadBadgeCount(topic, authedUser.value?.id);
+
+  return unreadCount > 0
+    ? `${unreadCount} new messages`
+    : `${topic.name} marked as new`;
+};
 
 const getTopicActiveCall = (topic: ITopic) => {
   if (isCallActive.value && activeCallTopicId.value === topic.id) {
@@ -565,5 +761,24 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
   line-height: 15px;
   font-weight: 400;
   width: 50px;
+}
+
+.contact-list__section-title {
+  padding: 8px 16px 4px;
+  color: var(--text-light-color);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.contact-list__search-state {
+  padding: 32px 16px;
+  color: var(--text-light-color);
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.contact-list__item--message-result {
+  cursor: pointer;
 }
 </style>

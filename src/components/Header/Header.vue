@@ -53,7 +53,7 @@
           v-if="currentTopic.type === TopicType.Group"
           class="chat__header-profile"
           avatar-alt="group-profile-alt"
-          :topic="currentGroup || currentTopic"
+          :topic="currentRouteGroup || currentTopic"
           :typing-label="headerTypingLabel || undefined"
           :data-testid="`${props.dataTestid}-Header-GroupProfile`"
           @click.stop="handleClickHeader"
@@ -79,18 +79,16 @@
         :data-testid="`${props.dataTestid}-Header-ButtonsContainer`"
         @click.stop
       >
-        <Search
-          v-if="state.isSearchInputEnable"
-          class="chat__header-search"
-          :data-testid="`${props.dataTestid}-Header-SearchInput`"
-          @click.stop
-        />
-        <SearchIcon
-          v-if="false && !state.isSearchInputEnable && !isMobile"
-          class="chat__header__icon"
-          :data-testid="`${props.dataTestid}-Header-SearchIcon`"
-          @click.stop="showSearch"
-        />
+        <div
+          v-if="!isMobile && isTopicSearchAvailable"
+          class="chat__header-search-trigger"
+        >
+          <SearchIcon
+            class="chat__header__icon"
+            :data-testid="`${props.dataTestid}-Header-SearchIcon`"
+            @click.stop="showSearch"
+          />
+        </div>
         <CallIcon
           v-if="
             (route.type === RouteTypes.DIALOGS ||
@@ -140,7 +138,167 @@
         </ContextMenu>
       </div>
     </div>
+
+    <div
+      v-if="state.isSearchInputEnable && !isMobile && isTopicSearchAvailable"
+      class="chat__header-desktop-search-row"
+      :data-testid="`${props.dataTestid}-Header-SearchPanel`"
+      @click.stop
+    >
+      <Search
+        class="chat__header-search"
+        :model-value="topicSearchQuery"
+        :data-testid="`${props.dataTestid}-Header-SearchInput`"
+        @update:model-value="handleTopicSearchInput"
+      />
+      <LoadingIcon
+        v-if="isTopicSearchLoading"
+        class="chat__header-search-loader"
+        :is-loaded="false"
+        :data-testid="`${props.dataTestid}-Header-SearchLoader`"
+      />
+      <span
+        v-else-if="hasTopicSearchQuery"
+        class="chat__header-search-count"
+        :data-testid="`${props.dataTestid}-Header-SearchCount`"
+      >
+        {{ topicSearchResultLabel }}
+      </span>
+      <span v-else class="chat__header-search-count"></span>
+
+      <Button
+        v-if="hasTopicSearchResults"
+        class="chat__header-search-nav"
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.little"
+        :disabled="!canNavigateTopicSearchPrev"
+        :data-testid="`${props.dataTestid}-Header-SearchPrev`"
+        @click.stop="navigateTopicSearch(-1)"
+      >
+        <Icon
+          :name="IconNameEnum.arrowLeft"
+          :style="{ transform: 'rotate(90deg)' }"
+        />
+      </Button>
+      <Button
+        v-if="hasTopicSearchResults"
+        class="chat__header-search-nav"
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.little"
+        :disabled="!canNavigateTopicSearchNext"
+        :data-testid="`${props.dataTestid}-Header-SearchNext`"
+        @click.stop="navigateTopicSearch(1)"
+      >
+        <Icon
+          :name="IconNameEnum.arrowLeft"
+          :style="{ transform: 'rotate(-90deg)' }"
+        />
+      </Button>
+
+      <Button
+        class="chat__header-search-nav chat__header-search-close"
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.little"
+        :data-testid="`${props.dataTestid}-Header-SearchClose`"
+        @click.stop="hideSearch"
+      >
+        <Icon
+          :name="IconNameEnum.crossLarge"
+          color="var(--text-neutral-color)"
+        />
+      </Button>
+    </div>
+
+    <div
+      v-if="state.isSearchInputEnable && isMobile && isTopicSearchAvailable"
+      class="chat__header-mobile-search-row"
+      :data-testid="`${props.dataTestid}-Header-MobileSearchRow`"
+      @click.stop
+    >
+      <Search
+        class="chat__header-search"
+        :model-value="topicSearchQuery"
+        :data-testid="`${props.dataTestid}-Header-MobileSearchInput`"
+        @update:model-value="handleTopicSearchInput"
+      />
+      <Button
+        class="chat__header-search-nav"
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.little"
+        :data-testid="`${props.dataTestid}-Header-MobileSearchClose`"
+        @click.stop="hideSearch"
+      >
+        <Icon
+          :name="IconNameEnum.crossLarge"
+          color="var(--text-neutral-color)"
+        />
+      </Button>
+    </div>
   </header>
+
+  <div
+    v-if="state.isSearchInputEnable && isMobile && isTopicSearchAvailable"
+    class="chat__header-mobile-search-controls"
+    :data-testid="`${props.dataTestid}-Header-MobileSearchControls`"
+    @click.stop
+  >
+    <div class="chat__header-mobile-search-controls-content">
+      <LoadingIcon
+        v-if="isTopicSearchLoading"
+        class="chat__header-search-loader"
+        :is-loaded="false"
+        :data-testid="`${props.dataTestid}-Header-MobileSearchLoader`"
+      />
+      <span
+        v-else-if="hasTopicSearchQuery"
+        class="chat__header-search-count"
+        :data-testid="`${props.dataTestid}-Header-MobileSearchCount`"
+      >
+        {{ topicSearchResultLabel }}
+      </span>
+      <span v-else class="chat__header-search-count"></span>
+
+      <div class="chat__header-mobile-search-controls__nav">
+        <Button
+          v-if="hasTopicSearchResults"
+          class="chat__header-search-nav"
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.little"
+          :disabled="!canNavigateTopicSearchPrev"
+          :data-testid="`${props.dataTestid}-Header-MobileSearchPrev`"
+          @click.stop="navigateTopicSearch(-1)"
+          style="transform: rotate(90deg)"
+        >
+          <Icon :name="IconNameEnum.arrowLeft" />
+        </Button>
+        <Button
+          v-if="hasTopicSearchResults"
+          class="chat__header-search-nav"
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.little"
+          :disabled="!canNavigateTopicSearchNext"
+          :data-testid="`${props.dataTestid}-Header-MobileSearchNext`"
+          @click.stop="navigateTopicSearch(1)"
+          style="transform: rotate(-90deg)"
+        >
+          <Icon :name="IconNameEnum.arrowLeft" />
+        </Button>
+      </div>
+
+      <Button
+        class="chat__header-search-nav"
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.little"
+        :data-testid="`${props.dataTestid}-Header-MobileSearchBottomClose`"
+        @click.stop="hideSearch"
+      >
+        <Icon
+          :name="IconNameEnum.crossLarge"
+          color="var(--text-neutral-color)"
+        />
+      </Button>
+    </div>
+  </div>
 
   <MobileModal
     :open="state.openMobileInfoModal"
@@ -151,9 +309,9 @@
     @unmount-close="handleCloseMobileInfoModal"
   >
     <MobileChatInfo
-      :model-value="currentGroup"
-      :members="route.type === RouteTypes.GROUP && currentGroup?.members"
-      :show-add-button="currentGroup?.isAdmin"
+      :model-value="currentRouteGroup"
+      :members="route.type === RouteTypes.GROUP && currentRouteGroup?.members"
+      :show-add-button="currentRouteGroup?.isAdmin"
       :data-testid="props.dataTestid"
       @update:model-value="handleUpdateInformation"
       @unmount-open-chat="handleCloseMobileInfoModal"
@@ -237,6 +395,7 @@ import ConfirmModal from '../UI/ConfirmModal.vue';
 import { TopicType } from '../../services/useChatSDK/types';
 import CallIcon from '../CallModal/UI/CallIcon.vue';
 import SearchIcon from '../UI/SearchIcon.vue';
+import LoadingIcon from '../UI/LoadingIcon.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import {
   activeCallParticipantCount,
@@ -261,6 +420,12 @@ import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
 import UserInfoPanel from '../UserInfoPanel.vue';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import { useContextMenu } from '../../composables/useContextMenu';
+import {
+  navigateToSearchResult,
+  searchMessages,
+  setMobileTopicSearchActive,
+  type IMessageSearchResult
+} from '../../composables/useMessageSearch';
 
 const { getSelectedTopic } = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
@@ -291,7 +456,7 @@ const state = reactive({
 const actionModalTitle = computed(() =>
   route.value.type === RouteTypes.DIALOGS
     ? 'Удаление чата'
-    : currentGroup.value?.isAdmin
+    : currentRouteGroup.value?.isAdmin
       ? 'Удаление канала'
       : 'Выход из канала'
 );
@@ -299,12 +464,23 @@ const actionModalTitle = computed(() =>
 const actionModalDescription = computed(() =>
   route.value.type === RouteTypes.DIALOGS
     ? 'Вы уверены, что хотите удалить чат?'
-    : currentGroup.value?.isAdmin
+    : currentRouteGroup.value?.isAdmin
       ? 'Вы уверены, что хотите удалить канал?'
       : 'Вы уверены, что хотите покинуть канал?'
 );
 
 const currentTopic = computed(() => getSelectedTopic());
+const currentRouteGroup = computed(() => {
+  if (currentTopic.value?.type !== TopicType.Group) {
+    return null;
+  }
+
+  if (currentGroup.value?.id !== currentTopic.value.id) {
+    return null;
+  }
+
+  return currentGroup.value;
+});
 const currentTypingUsers = computed(() =>
   route.value?.id ? getTopicTypingUsers(route.value.id) : []
 );
@@ -352,6 +528,58 @@ const showHeaderCallBanner = computed(
 );
 const currentTime = ref(Date.now());
 let headerCallTimerInterval: ReturnType<typeof setInterval> | null = null;
+let topicSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let topicSearchRequestToken = 0;
+const topicSearchQuery = ref('');
+const topicSearchResults = ref<IMessageSearchResult[]>([]);
+const topicSearchTotal = ref(0);
+const topicSearchActiveIndex = ref(0);
+
+const isTopicSearchLoading = ref(false);
+const hasTopicSearchQuery = computed(
+  () => normalizeTopicSearchQuery(topicSearchQuery.value).length > 0
+);
+const isTopicSearchAvailable = computed(
+  () =>
+    route.value.type === RouteTypes.DIALOGS ||
+    route.value.type === RouteTypes.GROUP
+);
+const hasTopicSearchResults = computed(
+  () => topicSearchResults.value.length > 0
+);
+const canNavigateTopicSearchPrev = computed(
+  () => hasTopicSearchResults.value && topicSearchActiveIndex.value > 0
+);
+const canNavigateTopicSearchNext = computed(
+  () =>
+    hasTopicSearchResults.value &&
+    topicSearchActiveIndex.value < topicSearchResults.value.length - 1
+);
+const topicSearchResultLabel = computed(() => {
+  if (isTopicSearchLoading.value) {
+    return 'Поиск...';
+  }
+
+  if (!hasTopicSearchResults.value) {
+    return '0 из 0';
+  }
+
+  return `${topicSearchActiveIndex.value + 1} из ${topicSearchTotal.value || topicSearchResults.value.length}`;
+});
+
+watch(
+  [
+    () => state.isSearchInputEnable,
+    () => isMobile.value,
+    () => isTopicSearchAvailable.value
+  ],
+  ([isSearchInputEnable, isMobileView, isSearchAvailable]) => {
+    setMobileTopicSearchActive(
+      isSearchInputEnable && isMobileView && isSearchAvailable
+    );
+  },
+  { immediate: true }
+);
 
 const formatElapsedCallTime = (durationMs: number): string => {
   const elapsedSeconds = Math.max(0, Math.floor(durationMs / 1000));
@@ -442,6 +670,115 @@ const resolvedHeaderCallLabel = computed(() => {
 
 const showSearch = (): void => {
   state.isSearchInputEnable = true;
+  setMobileTopicSearchActive(isMobile.value && isTopicSearchAvailable.value);
+};
+
+function normalizeTopicSearchQuery(value: string): string {
+  return value
+    .replace(/\u00a0/g, ' ')
+    .replace(/[\u200b-\u200d\ufeff]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const resetTopicSearch = (): void => {
+  topicSearchQuery.value = '';
+  topicSearchResults.value = [];
+  topicSearchTotal.value = 0;
+  topicSearchActiveIndex.value = 0;
+  isTopicSearchLoading.value = false;
+
+  if (topicSearchDebounceTimer) {
+    clearTimeout(topicSearchDebounceTimer);
+    topicSearchDebounceTimer = null;
+  }
+};
+
+const hideSearch = (): void => {
+  state.isSearchInputEnable = false;
+  setMobileTopicSearchActive(false);
+  resetTopicSearch();
+};
+
+const navigateTopicSearchResult = (index: number): void => {
+  const result = topicSearchResults.value[index];
+
+  if (!result) {
+    return;
+  }
+
+  topicSearchActiveIndex.value = index;
+  navigateToSearchResult(result);
+};
+
+const runTopicSearch = async (): Promise<void> => {
+  const query = normalizeTopicSearchQuery(topicSearchQuery.value);
+  const topicId = route.value.id;
+  const requestToken = ++topicSearchRequestToken;
+
+  if (!query || !topicId) {
+    topicSearchResults.value = [];
+    topicSearchTotal.value = 0;
+    topicSearchActiveIndex.value = 0;
+    isTopicSearchLoading.value = false;
+    return;
+  }
+
+  isTopicSearchLoading.value = true;
+
+  const { results, total } = await searchMessages(query, {
+    topicId,
+    limit: 200
+  });
+
+  if (requestToken !== topicSearchRequestToken) {
+    return;
+  }
+
+  topicSearchResults.value = results;
+  topicSearchTotal.value = total;
+  topicSearchActiveIndex.value = 0;
+  isTopicSearchLoading.value = false;
+
+  if (results.length) {
+    navigateTopicSearchResult(0);
+  }
+};
+
+const handleTopicSearchInput = (value: string): void => {
+  topicSearchQuery.value = value;
+
+  if (topicSearchDebounceTimer) {
+    clearTimeout(topicSearchDebounceTimer);
+  }
+
+  if (!normalizeTopicSearchQuery(value)) {
+    topicSearchResults.value = [];
+    topicSearchTotal.value = 0;
+    topicSearchActiveIndex.value = 0;
+    isTopicSearchLoading.value = false;
+    return;
+  }
+
+  topicSearchDebounceTimer = setTimeout(() => {
+    void runTopicSearch();
+  }, 300);
+};
+
+const navigateTopicSearch = (direction: -1 | 1): void => {
+  const resultsCount = topicSearchResults.value.length;
+
+  if (!resultsCount) {
+    return;
+  }
+
+  const nextIndex = topicSearchActiveIndex.value + direction;
+
+  if (nextIndex < 0 || nextIndex >= resultsCount) {
+    return;
+  }
+
+  navigateTopicSearchResult(nextIndex);
 };
 
 const handleCall = async () => {
@@ -462,12 +799,22 @@ const handleCall = async () => {
 
 const handleHeaderCallClick = async () => {
   if (hasInvitedCall.value && !isCallActive.value) {
-    await joinInviteGroupCall();
+    const didJoin = await joinInviteGroupCall();
+
+    if (!didJoin) {
+      await handleCall();
+    }
+
     return;
   }
 
   if (currentHeaderCallEntry.value && !isCallActive.value) {
-    await joinGroupCall(route.value.id);
+    const didJoin = await joinGroupCall(route.value.id);
+
+    if (!didJoin) {
+      await handleCall();
+    }
+
     return;
   }
 
@@ -514,6 +861,13 @@ const getPopoverOptions = computed(() => {
   const popoverArray = [];
 
   if (route.value && route.value.type !== RouteTypes.AI) {
+    if (isMobile.value && isTopicSearchAvailable.value) {
+      popoverArray.push({
+        value: 'Поиск в чате',
+        function: showSearch
+      });
+    }
+
     if (route.value.type === RouteTypes.GROUP) {
       popoverArray.push({
         value: 'Информация',
@@ -542,7 +896,7 @@ const getPopoverOptions = computed(() => {
       });
     } else {
       popoverArray.push({
-        value: currentGroup.value?.isAdmin
+        value: currentRouteGroup.value?.isAdmin
           ? 'Удалить канал'
           : 'Выйти из канала',
         function: handleOpenActionModal,
@@ -565,22 +919,30 @@ const getHeaderContextMenuOptions = computed(() => {
   return getPopoverOptions.value.map((option, index) => {
     let iconName: IconNameEnum | undefined;
 
-    if (route.value.type === RouteTypes.AI) {
+    if (option.value === 'Поиск в чате') {
+      iconName = IconNameEnum.search;
+    } else if (route.value.type === RouteTypes.AI) {
       iconName = IconNameEnum.deleteSmall;
     } else if (route.value.type === RouteTypes.GROUP) {
-      if (index === 0) {
+      const optionIndex =
+        isMobile.value && isTopicSearchAvailable.value ? index - 1 : index;
+
+      if (optionIndex === 0) {
         iconName = IconNameEnum.info;
-      } else if (index === 1) {
+      } else if (optionIndex === 1) {
         iconName = currentTopic.value?.info.isMute
           ? IconNameEnum.distrub
           : IconNameEnum.noDistrub;
       } else {
-        iconName = currentGroup.value?.isAdmin
+        iconName = currentRouteGroup.value?.isAdmin
           ? IconNameEnum.deleteSmall
           : IconNameEnum.logout;
       }
     } else {
-      if (index === 0) {
+      const optionIndex =
+        isMobile.value && isTopicSearchAvailable.value ? index - 1 : index;
+
+      if (optionIndex === 0) {
         iconName = currentTopic.value?.info.isMute
           ? IconNameEnum.distrub
           : IconNameEnum.noDistrub;
@@ -613,11 +975,11 @@ const handleConfirmActionModal = () => {
   if (route.value.type === RouteTypes.DIALOGS) {
     deleteTopic(route.value.id);
     navigateToDialogsList();
-  } else if (route.value.type === RouteTypes.GROUP) {
-    if (currentGroup.value.isAdmin) {
-      deleteGroup(currentGroup.value.group.id);
+  } else if (route.value.type === RouteTypes.GROUP && currentRouteGroup.value) {
+    if (currentRouteGroup.value.isAdmin) {
+      deleteGroup(currentRouteGroup.value.group.id);
     } else {
-      quitGroup(currentGroup.value.group.id);
+      quitGroup(currentRouteGroup.value.group.id);
     }
     navigateToGroupsList();
   }
@@ -641,6 +1003,7 @@ watch(
   () => route.value.id,
   () => {
     state.openMobileUserProfileModal = false;
+    hideSearch();
 
     if (route.value.type === RouteTypes.GROUP) {
       getGroupById(route.value.id);
@@ -658,6 +1021,13 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  setMobileTopicSearchActive(false);
+
+  if (topicSearchDebounceTimer) {
+    clearTimeout(topicSearchDebounceTimer);
+    topicSearchDebounceTimer = null;
+  }
+
   if (headerCallTimerInterval) {
     clearInterval(headerCallTimerInterval);
     headerCallTimerInterval = null;

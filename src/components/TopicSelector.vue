@@ -37,11 +37,11 @@
       class="contact-selector__empty"
       :data-testid="`${props.dataTestid}-TopicSelector-Empty`"
     >
-      <p class="contact-selector__empty-title">Контакты не найдены</p>
+      <p class="contact-selector__empty-title">Результаты не найдены</p>
       <img
         class="contact-selector__empty-image"
         src="/images/not-found-contact.svg"
-        alt="Контакты не найдены"
+        alt="Результаты не найдены"
       />
     </div>
   </section>

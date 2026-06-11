@@ -82,7 +82,9 @@ export function useMessageMedia() {
   };
 
   const isSliderContentUrl = (fileUrl: string) => {
-    return fileUrl?.match(
+    const cleanUrl = fileUrl?.split(/[?#]/)[0] || '';
+
+    return cleanUrl.match(
       /\.(jpg|jpeg|png|webp|svg|mp4|mp3|avif|pdf|gif|bmp|tiff|ico|webm|mkv|avi|qt|m4v)$/i
     );
   };

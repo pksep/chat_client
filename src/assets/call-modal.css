@@ -609,6 +609,18 @@
   background: transparent;
 }
 
+.call-background-preview__canvas {
+  display: block;
+}
+
+.call-background-preview__hidden-video {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .call-background-preview__overlay {
   position: absolute;
   inset: 0;
@@ -683,6 +695,44 @@
   line-height: 17px;
 }
 
+.call-modal__connection-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--text-neutral-color);
+  font-size: 14px;
+  line-height: 17px;
+  white-space: nowrap;
+}
+
+.call-modal__connection-status span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.call-modal__connection-status--overlay {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.call-modal__connection-status-spinner {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: call-modal-spin 0.9s linear infinite;
+}
+
+@keyframes call-modal-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 svg.icon-yui-kit.call-modal__control-button__chevron-down-group {
   background-color: var(--blue1);
   color: var(--white);
@@ -754,6 +804,18 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   .call-modal__group-info-text span {
     font-size: 12px;
     line-height: 15px;
+  }
+
+  .call-modal__connection-status {
+    max-width: 42%;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 15px;
+  }
+
+  .call-modal__connection-status-spinner {
+    width: 16px;
+    height: 16px;
   }
 
   .call-modal__remote-grid,
@@ -1052,6 +1114,11 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   font-size: 10px;
 }
 
+.call-modal__remote-grid--screen-share .call-modal__connection-quality {
+  top: 6px;
+  right: 6px;
+}
+
 .call-modal__remote-grid--screen-share .call-modal__remote-hand {
   top: 6px;
   left: 6px;
@@ -1120,6 +1187,50 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
 
 .call-modal__remote-tile--speaking {
   border-color: #63d38d;
+}
+
+.call-modal__connection-quality {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 36px;
+  height: 20px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  z-index: 3;
+  background: var(--blue1);
+  color: var(--white);
+  pointer-events: auto;
+}
+
+.call-modal__connection-quality-bar {
+  width: 2px;
+  border-radius: 5px;
+  background: #ffd1c6;
+}
+
+.call-modal__connection-quality-bar:nth-child(1) {
+  height: 6px;
+}
+
+.call-modal__connection-quality-bar:nth-child(2) {
+  height: 10px;
+}
+
+.call-modal__connection-quality-bar:nth-child(3) {
+  height: 14px;
+}
+
+.call-modal__connection-quality-bar--active {
+  background: currentColor;
+}
+
+.call-modal__connection-quality--stage {
+  z-index: 4;
 }
 
 .call-modal__remote-grid--group-duo .call-modal__remote-tile {
@@ -1312,8 +1423,8 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   z-index: 3;
 
   & svg {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     flex: 0 0 auto;
   }
 }

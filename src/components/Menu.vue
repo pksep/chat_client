@@ -53,7 +53,16 @@
           :selected-topic-id="selectedContactId"
           :show-checkbox="isShareSelectionActive"
           :selected-topic-ids="selectedTopicIds"
+          :search-query="toolbarState.search"
+          :message-results="
+            isShareSelectionActive ? [] : filteredMessageSearchResults
+          "
+          :is-message-search-loading="
+            !isShareSelectionActive &&
+            (isMessageSearchPending || isMessageSearchLoading)
+          "
           :data-testid="`${props.dataTestid}-Menu-ContactList`"
+          @unmount-message="handleMessageSearchClick"
         />
       </template>
 
@@ -91,7 +100,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
 import {
@@ -122,6 +131,11 @@ import { getTopicUnreadBadgeCount } from '../utils/topicUnreadBadge';
 import CallsPage from './Calls/CallsPage.vue';
 import { useShareSelection } from '../composables/useShareSelection';
 import { getShareSelectionSummaryLabel } from '../utils/shareSelectionSummary';
+import {
+  navigateToSearchResult,
+  searchMessages,
+  type IMessageSearchResult
+} from '../composables/useMessageSearch';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: 'Menu'
@@ -146,6 +160,11 @@ const {
   sendSharedFiles
 } = useShareSelection();
 const allTopics = computed(() => getTopicList());
+const messageSearchResults = ref<IMessageSearchResult[]>([]);
+const isMessageSearchLoading = ref(false);
+const isMessageSearchPending = ref(false);
+let messageSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let messageSearchRequestToken = 0;
 const authUserId = computed(() => getAuthUser()?.id || '');
 const pendingShareSummaryLabel = computed(() =>
   getShareSelectionSummaryLabel(
@@ -172,8 +191,16 @@ const filterCounts = computed(() => ({
     )
 }));
 
+const normalizeToolbarSearchText = (value?: string): string =>
+  (value || '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/[\u200b-\u200d\ufeff]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
 const topicGroups = computed(() => {
-  const query = toolbarState.search.toLowerCase().trim();
+  const query = normalizeToolbarSearchText(toolbarState.search);
 
   const filteredByType = allTopics.value.filter(topic => {
     if (toolbarState.filter === 'chats') {
@@ -192,16 +219,37 @@ const topicGroups = computed(() => {
   }
 
   return filteredByType.filter(topic => {
-    const nameMatch = (topic.name || '').toLowerCase().includes(query);
-    const erpInitialsMatch = (
+    const nameMatch = normalizeToolbarSearchText(topic.name).includes(query);
+    const erpInitials = (
       typeof topic.user?.ex === 'string'
         ? JSON.parse(topic.user.ex)
         : topic.user?.ex
-    )?.erpInitials
-      ?.toLowerCase()
-      ?.includes(query);
+    )?.erpInitials;
+    const erpInitialsMatch =
+      normalizeToolbarSearchText(erpInitials).includes(query);
 
     return nameMatch || erpInitialsMatch;
+  });
+});
+
+const filteredMessageSearchResults = computed(() => {
+  if (!normalizeToolbarSearchText(toolbarState.search)) {
+    return [];
+  }
+
+  return messageSearchResults.value.filter(result => {
+    const topic =
+      result.topic || allTopics.value.find(t => t.id === result.topicId);
+
+    if (toolbarState.filter === 'chats') {
+      return topic?.type === TopicType.DM;
+    }
+
+    if (toolbarState.filter === 'groups') {
+      return topic?.type === TopicType.Group;
+    }
+
+    return true;
   });
 });
 
@@ -238,6 +286,35 @@ const unmountTopicClick = (topic: ITopic): void => {
   }
 };
 
+const runMessageSearch = async (
+  query: string,
+  requestToken: number
+): Promise<void> => {
+  if (!query || isShareSelectionActive.value) {
+    messageSearchResults.value = [];
+    isMessageSearchLoading.value = false;
+    isMessageSearchPending.value = false;
+    return;
+  }
+
+  isMessageSearchLoading.value = true;
+
+  const { results } = await searchMessages(query, { limit: 50 });
+
+  if (requestToken !== messageSearchRequestToken) {
+    return;
+  }
+
+  messageSearchResults.value = results;
+  isMessageSearchLoading.value = false;
+  isMessageSearchPending.value = false;
+};
+
+const handleMessageSearchClick = (result: IMessageSearchResult): void => {
+  setActiveSection('chats');
+  navigateToSearchResult(result);
+};
+
 const handleSendSharedFiles = async (): Promise<void> => {
   const selectedTopics = allTopics.value.filter(topic =>
     selectedTopicIds.value.has(topic.id)
@@ -259,4 +336,38 @@ const handleNewGroupModal = () => {
 const handleNewContactModal = () => {
   emits('unmount-new-contact', { isChapterOpen: true });
 };
+
+watch(
+  [() => toolbarState.search, isShareSelectionActive],
+  () => {
+    const query = normalizeToolbarSearchText(toolbarState.search);
+    const requestToken = ++messageSearchRequestToken;
+
+    if (messageSearchDebounceTimer) {
+      clearTimeout(messageSearchDebounceTimer);
+      messageSearchDebounceTimer = null;
+    }
+
+    messageSearchResults.value = [];
+
+    if (!query || isShareSelectionActive.value) {
+      isMessageSearchPending.value = false;
+      isMessageSearchLoading.value = false;
+      return;
+    }
+
+    isMessageSearchPending.value = true;
+    messageSearchDebounceTimer = setTimeout(() => {
+      void runMessageSearch(query, requestToken);
+    }, 300);
+  },
+  { immediate: true }
+);
+
+onBeforeUnmount(() => {
+  if (messageSearchDebounceTimer) {
+    clearTimeout(messageSearchDebounceTimer);
+    messageSearchDebounceTimer = null;
+  }
+});
 </script>
