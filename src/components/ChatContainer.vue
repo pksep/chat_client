@@ -129,6 +129,12 @@
   </main>
 
   <CallModal />
+  <VpnConfirmModal
+    :open="isVpnConfirmModalOpen"
+    :data-testid="`${props.dataTestid}-VpnConfirmModal`"
+    @close="handleCloseVpnConfirmModal"
+    @open-settings="handleOpenVpnSettings"
+  />
 </template>
 
 <script setup lang="ts">
@@ -176,6 +182,8 @@ import {
 } from '../services/useCalls';
 import { useChatWallpaper } from '../composables/useChatWallpaper';
 import { useUserInfoModal } from '../composables/useUserInfoModal';
+import VpnConfirmModal from './UI/VpnConfirmModal.vue';
+import { useVpnStatus } from '../services/useVpnStatus';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -198,6 +206,12 @@ const {
 const route = useUrlWatcher();
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
+const {
+  isVpnActive,
+  ensureVpnStatusPolling,
+  openVpnSettings,
+  refreshVpnStatus
+} = useVpnStatus();
 
 const { toggle } = useResizeState({
   breakpoint: MAX_W_MD,
@@ -247,6 +261,8 @@ const props = withDefaults(defineProps<IChatContainerProps>(), {
 });
 
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
+const isVpnConfirmModalOpen = ref(false);
+const hasDismissedActiveVpnWarning = ref(false);
 
 const authUser = computed(() => getAuthUser());
 
@@ -302,6 +318,22 @@ const handleClearClick = (): void => {
   if (route.value && route.value.type === 'ai' && chatRef.value) {
     chatRef.value.handleClear();
     window.location.reload();
+  }
+};
+
+const handleCloseVpnConfirmModal = (): void => {
+  hasDismissedActiveVpnWarning.value = true;
+  isVpnConfirmModalOpen.value = false;
+};
+
+const handleOpenVpnSettings = async (): Promise<void> => {
+  hasDismissedActiveVpnWarning.value = true;
+  isVpnConfirmModalOpen.value = false;
+
+  try {
+    await openVpnSettings();
+  } catch (error) {
+    console.warn('Failed to open VPN settings:', error);
   }
 };
 
@@ -363,9 +395,28 @@ watch(
   }
 );
 
+watch(
+  isVpnActive,
+  active => {
+    if (!active) {
+      hasDismissedActiveVpnWarning.value = false;
+      isVpnConfirmModalOpen.value = false;
+      return;
+    }
+
+    if (!hasDismissedActiveVpnWarning.value) {
+      isVpnConfirmModalOpen.value = true;
+    }
+  },
+  { immediate: true }
+);
+
 onMounted(async () => {
+  ensureVpnStatusPolling();
+
   try {
     state.isActiveHeader = route.value ? isActiveHeader(route.value) : false;
+    await refreshVpnStatus();
   } finally {
     state.isLoading = false;
   }
