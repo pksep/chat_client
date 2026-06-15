@@ -1103,6 +1103,12 @@ div.message-content__file {
   }
 }
 
+.message-content__file-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
 .message__assistant.menu__user-assistant-icon {
   align-self: start;
   & svg {
