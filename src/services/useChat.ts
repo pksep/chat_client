@@ -49,6 +49,7 @@ import {
   removeActiveGroupCall,
   removeInvitedGroupCall,
   restoreInvitedGroupCallFromUrl,
+  isCallActive,
   syncServerActiveCalls
 } from './useCalls';
 import { Capacitor } from '@capacitor/core';
@@ -642,12 +643,23 @@ const setupChatListeners = (): void => {
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CALL_ENDED, ({ payload }) => {
-    removeActiveGroupCall(payload.topicId);
-    removeInvitedGroupCall(payload.roomId);
+    const didEndCall = handleCallEnded(
+      payload.roomId,
+      payload.topicId,
+      payload.reason,
+      payload.userId
+    );
+
+    if (!didEndCall) {
+      return;
+    }
+
     if (Capacitor.isNativePlatform()) {
       endAllCallKits();
     }
-    handleCallEnded(payload.roomId, payload.topicId, payload.reason);
+
+    removeActiveGroupCall(payload.topicId);
+    removeInvitedGroupCall(payload.roomId);
 
     if (payload.topicId) {
       const endedTopic = useTopics().getSelectedTopic(payload.topicId) as any;
@@ -854,7 +866,10 @@ const syncPresenceForVisibility = (): void => {
     return;
   }
 
-  const isActive = getIsAppActivelyVisible();
+  const isActive =
+    getIsAppActivelyVisible() ||
+    (Capacitor.isNativePlatform() && isCallActive.value);
+
   chatSDK.sendWebSocketEvent(WebSocketEventType.TOGGLE_PRESENCE, {
     isActive
   });

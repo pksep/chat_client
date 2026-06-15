@@ -80,6 +80,15 @@
   text-align: center;
 }
 
+.call-modal__avatar-container--ended .call-modal__notice {
+  font-size: 22px;
+  line-height: 27px;
+}
+
+.call-modal__terminal-placeholder {
+  visibility: hidden;
+}
+
 .call-modal__controls {
   display: flex;
   gap: 40px;
@@ -727,6 +736,12 @@
   animation: call-modal-spin 0.9s linear infinite;
 }
 
+.call-modal__connection-status-alert {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
 @keyframes call-modal-spin {
   to {
     transform: rotate(360deg);
@@ -773,6 +788,11 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
     margin-top: 30px;
   }
 
+  .call-modal__avatar-container--ended .call-modal__notice {
+    font-size: 16px;
+    line-height: 20px;
+  }
+
   .call-modal__group-panel-header {
     padding: 14px 16px 10px;
   }
@@ -794,6 +814,19 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
     left: 12px;
     right: 12px;
     gap: 12px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .call-modal__group-info > div:first-child {
+    order: 1;
+    min-width: 0;
+    flex: 1 1 0;
+  }
+
+  .call-modal__group-info > button {
+    order: 2;
+    flex: 0 0 auto;
   }
 
   .call-modal__group-info-text p {
@@ -807,7 +840,11 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   }
 
   .call-modal__connection-status {
-    max-width: 42%;
+    order: 3;
+    justify-content: center;
+    width: 100%;
+    max-width: none;
+    margin-top: 20px;
     gap: 6px;
     font-size: 12px;
     line-height: 15px;
@@ -1227,6 +1264,15 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
 
 .call-modal__connection-quality-bar--active {
   background: currentColor;
+}
+
+.call-modal__connection-quality--poor .call-modal__connection-quality-bar {
+  background: currentColor;
+}
+
+.call-modal__connection-quality--poor
+  .call-modal__connection-quality-bar:nth-child(3) {
+  background: var(--red4);
 }
 
 .call-modal__connection-quality--stage {
