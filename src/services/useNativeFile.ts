@@ -1,18 +1,74 @@
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import {
+  Capacitor,
+  registerPlugin,
+  type PluginListenerHandle
+} from '@capacitor/core';
+import { reactive } from 'vue';
 import type { IMedia } from '../components/interfaces/interfaces';
 import { getConfig } from './useConfig';
 
+type NativeDownloadPhase =
+  | 'unknown'
+  | 'not-downloaded'
+  | 'downloading'
+  | 'downloaded'
+  | 'error';
+
+interface NativeFileDownloadProgress {
+  requestId: string;
+  bytesDownloaded: number;
+  totalBytes: number;
+  percent?: number;
+}
+
+export interface NativeFileDownloadState {
+  phase: NativeDownloadPhase;
+  percent: number | null;
+  localUri?: string;
+  fileName?: string;
+  mimeType?: string;
+}
+
 interface NativeFilePlugin {
+  addListener(
+    eventName: 'fileDownloadProgress',
+    listenerFunc: (payload: NativeFileDownloadProgress) => void
+  ): Promise<PluginListenerHandle>;
   openFile(options: {
     url: string;
     fileName?: string;
     mimeType?: string;
   }): Promise<{ path: string; mimeType: string }>;
+  openDownloadedFile(options: {
+    url: string;
+    fileName?: string;
+    mimeType?: string;
+    size?: number;
+    localUri?: string;
+  }): Promise<{ path: string; mimeType: string }>;
+  getFileStatus(options: {
+    url: string;
+    fileName?: string;
+    mimeType?: string;
+    size?: number;
+  }): Promise<{
+    downloaded: boolean;
+    path: string;
+    fileName: string;
+    mimeType: string;
+  }>;
   downloadFile(options: {
     url: string;
     fileName?: string;
     mimeType?: string;
   }): Promise<{ downloadId: number; fileName: string }>;
+  downloadFileToDownloads(options: {
+    requestId: string;
+    url: string;
+    fileName?: string;
+    mimeType?: string;
+    size?: number;
+  }): Promise<{ path: string; fileName: string; mimeType: string }>;
   downloadBase64(options: {
     base64Data: string;
     fileName?: string;
@@ -39,6 +95,13 @@ declare global {
 }
 
 const NativeFile = registerPlugin<NativeFilePlugin>('NativeFile');
+
+const nativeFileDownloadStates = reactive<
+  Record<string, NativeFileDownloadState>
+>({});
+const pendingNativeDownloads = new Map<string, Promise<boolean>>();
+let nativeProgressListenerPromise: Promise<PluginListenerHandle | null> | null =
+  null;
 
 const FILE_MIME_TYPES: Record<string, string> = {
   pdf: 'application/pdf',
@@ -85,20 +148,241 @@ const guessMimeType = (media: IMedia) => {
   return FILE_MIME_TYPES[extension];
 };
 
+const getNativeFileKey = (media: IMedia) =>
+  media.path || media.id || media.originName || '';
+
+const getNativeFileOptions = (media: IMedia) => ({
+  url: buildAbsoluteFileUrl(media.path),
+  fileName: media.originName || 'file',
+  mimeType: guessMimeType(media),
+  size: media.size
+});
+
+const ensureNativeProgressListener = async () => {
+  if (nativeProgressListenerPromise) {
+    return nativeProgressListenerPromise;
+  }
+
+  if (!isAndroidNativePlatform()) {
+    nativeProgressListenerPromise = Promise.resolve(null);
+    return nativeProgressListenerPromise;
+  }
+
+  nativeProgressListenerPromise = NativeFile.addListener(
+    'fileDownloadProgress',
+    payload => {
+      const currentState = nativeFileDownloadStates[payload.requestId];
+
+      if (!currentState || currentState.phase !== 'downloading') {
+        return;
+      }
+
+      nativeFileDownloadStates[payload.requestId] = {
+        ...currentState,
+        phase: 'downloading',
+        percent:
+          typeof payload.percent === 'number'
+            ? Math.max(0, Math.min(100, payload.percent))
+            : currentState.percent
+      };
+    }
+  ).catch(error => {
+    console.warn('Failed to listen native file download progress:', error);
+    return null;
+  });
+
+  return nativeProgressListenerPromise;
+};
+
 export const isNativePdfMedia = (media: IMedia) =>
   getFileExtension(media.originName) === 'pdf' ||
   getFileExtension(media.path) === 'pdf';
+
+export const isNativeFileDownloadSupported = () => isAndroidNativePlatform();
+
+export const getNativeFileDownloadState = (
+  media: IMedia
+): NativeFileDownloadState => {
+  const key = getNativeFileKey(media);
+
+  return nativeFileDownloadStates[key] || { phase: 'unknown', percent: null };
+};
+
+export const refreshNativeFileDownloadStatus = async (
+  media: IMedia
+): Promise<boolean> => {
+  const key = getNativeFileKey(media);
+
+  if (!isAndroidNativePlatform() || !media.path || !key) {
+    return false;
+  }
+
+  if (nativeFileDownloadStates[key]?.phase === 'downloading') {
+    return false;
+  }
+
+  try {
+    const status = await NativeFile.getFileStatus(getNativeFileOptions(media));
+
+    nativeFileDownloadStates[key] = {
+      phase: status.downloaded ? 'downloaded' : 'not-downloaded',
+      percent: null
+    };
+
+    return status.downloaded;
+  } catch (error) {
+    console.warn('Failed to check native file status:', error);
+    nativeFileDownloadStates[key] = { phase: 'unknown', percent: null };
+    return false;
+  }
+};
+
+export const downloadNativeFileToDownloads = async (
+  media: IMedia
+): Promise<boolean> => {
+  const key = getNativeFileKey(media);
+
+  if (!isAndroidNativePlatform() || !media.path || !key) {
+    return false;
+  }
+
+  const pendingDownload = pendingNativeDownloads.get(key);
+  if (pendingDownload) {
+    return pendingDownload;
+  }
+
+  nativeFileDownloadStates[key] = {
+    phase: 'downloading',
+    percent: null
+  };
+
+  const download = (async () => {
+    await ensureNativeProgressListener();
+
+    try {
+      const downloadedFile = await NativeFile.downloadFileToDownloads({
+        requestId: key,
+        ...getNativeFileOptions(media)
+      });
+
+      nativeFileDownloadStates[key] = {
+        phase: 'downloaded',
+        percent: null,
+        localUri: downloadedFile.path,
+        fileName: downloadedFile.fileName,
+        mimeType: downloadedFile.mimeType
+      };
+
+      return true;
+    } catch (error) {
+      console.warn('Failed to download native file:', error);
+      nativeFileDownloadStates[key] = {
+        phase: 'error',
+        percent: null
+      };
+      return false;
+    } finally {
+      pendingNativeDownloads.delete(key);
+    }
+  })();
+
+  pendingNativeDownloads.set(key, download);
+  return download;
+};
+
+export const openDownloadedNativeFile = async (
+  media: IMedia
+): Promise<boolean> => {
+  const key = getNativeFileKey(media);
+
+  if (!isAndroidNativePlatform() || !media.path || !key) {
+    return false;
+  }
+
+  const currentState = nativeFileDownloadStates[key];
+
+  await NativeFile.openDownloadedFile({
+    ...getNativeFileOptions(media),
+    localUri: currentState?.localUri,
+    fileName: currentState?.fileName || getNativeFileOptions(media).fileName,
+    mimeType: currentState?.mimeType || getNativeFileOptions(media).mimeType
+  });
+  nativeFileDownloadStates[key] = {
+    ...currentState,
+    phase: 'downloaded',
+    percent: null
+  };
+
+  return true;
+};
+
+export const handleNativeFileClick = async (
+  media: IMedia
+): Promise<boolean> => {
+  const key = getNativeFileKey(media);
+
+  if (!isAndroidNativePlatform() || !media.path || !key) {
+    return false;
+  }
+
+  const state = getNativeFileDownloadState(media);
+
+  if (state.phase === 'downloading') {
+    return true;
+  }
+
+  if (state.phase === 'downloaded') {
+    try {
+      await openDownloadedNativeFile(media);
+    } catch (error) {
+      console.warn('Failed to open downloaded native file:', error);
+      nativeFileDownloadStates[key] = {
+        ...state,
+        phase: 'error',
+        percent: null
+      };
+    }
+    return true;
+  }
+
+  nativeFileDownloadStates[key] = {
+    phase: 'downloading',
+    percent: null
+  };
+
+  let isDownloaded = false;
+
+  try {
+    const status = await NativeFile.getFileStatus(getNativeFileOptions(media));
+    isDownloaded = status.downloaded;
+  } catch (error) {
+    console.warn('Failed to check native file before download:', error);
+  }
+
+  if (isDownloaded) {
+    try {
+      await openDownloadedNativeFile(media);
+    } catch (error) {
+      console.warn('Failed to open downloaded native file:', error);
+      nativeFileDownloadStates[key] = {
+        ...nativeFileDownloadStates[key],
+        phase: 'error',
+        percent: null
+      };
+    }
+    return true;
+  }
+
+  await downloadNativeFileToDownloads(media);
+  return true;
+};
 
 export const openNativeFile = async (media: IMedia): Promise<boolean> => {
   if (!isAndroidNativePlatform() || !media.path) {
     return false;
   }
 
-  await NativeFile.openFile({
-    url: buildAbsoluteFileUrl(media.path),
-    fileName: media.originName || 'file',
-    mimeType: guessMimeType(media)
-  });
+  await NativeFile.openFile(getNativeFileOptions(media));
 
   return true;
 };
@@ -108,11 +392,7 @@ export const downloadNativeFile = async (media: IMedia): Promise<boolean> => {
     return false;
   }
 
-  await NativeFile.downloadFile({
-    url: buildAbsoluteFileUrl(media.path),
-    fileName: media.originName || 'file',
-    mimeType: guessMimeType(media)
-  });
+  await NativeFile.downloadFile(getNativeFileOptions(media));
 
   return true;
 };

@@ -81,12 +81,17 @@ export function useMessageMedia() {
     return `${config.CHAT_PATH_TO_FILE_CDN}/${isThumb ? media.thumbnailPath : media.path}`;
   };
 
-  const isSliderContentUrl = (fileUrl: string) => {
+  const isSliderContentUrl = (
+    fileUrl: string,
+    options?: { includePdf?: boolean }
+  ) => {
     const cleanUrl = fileUrl?.split(/[?#]/)[0] || '';
+    const extensions =
+      options?.includePdf === false
+        ? 'jpg|jpeg|png|webp|svg|mp4|mp3|avif|gif|bmp|tiff|ico|webm|mkv|avi|qt|m4v'
+        : 'jpg|jpeg|png|webp|svg|mp4|mp3|avif|pdf|gif|bmp|tiff|ico|webm|mkv|avi|qt|m4v';
 
-    return cleanUrl.match(
-      /\.(jpg|jpeg|png|webp|svg|mp4|mp3|avif|pdf|gif|bmp|tiff|ico|webm|mkv|avi|qt|m4v)$/i
-    );
+    return new RegExp(`\\.(${extensions})$`, 'i').test(cleanUrl);
   };
 
   const handleDragStart = (event: DragEvent, media: IMedia) => {
