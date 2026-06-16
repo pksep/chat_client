@@ -74,32 +74,67 @@ export function useMessageMedia() {
       return media.localPath;
     }
 
-    if (media.path.endsWith('.gif')) {
-      return `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`;
+    const mediaPath = isThumb ? media.thumbnailPath || media.path : media.path;
+
+    if (!mediaPath) {
+      return EMPTY_MEDIA_SRC;
     }
 
-    return `${config.CHAT_PATH_TO_FILE_CDN}/${isThumb ? media.thumbnailPath : media.path}`;
+    if (mediaPath.endsWith('.gif')) {
+      return `${config.CHAT_PATH_TO_FILE_CDN}/${mediaPath}`;
+    }
+
+    return `${config.CHAT_PATH_TO_FILE_CDN}/${mediaPath}`;
   };
 
-  const isSliderContentUrl = (fileUrl: string) => {
+  const isSliderContentUrl = (
+    fileUrl: string,
+    options?: { includePdf?: boolean }
+  ) => {
     const cleanUrl = fileUrl?.split(/[?#]/)[0] || '';
+    const extensions =
+      options?.includePdf === false
+        ? 'jpg|jpeg|png|webp|svg|mp4|mp3|avif|gif|bmp|tiff|ico|webm|mkv|avi|qt|m4v'
+        : 'jpg|jpeg|png|webp|svg|mp4|mp3|avif|pdf|gif|bmp|tiff|ico|webm|mkv|avi|qt|m4v';
 
-    return cleanUrl.match(
-      /\.(jpg|jpeg|png|webp|svg|mp4|mp3|avif|pdf|gif|bmp|tiff|ico|webm|mkv|avi|qt|m4v)$/i
-    );
+    return new RegExp(`\\.(${extensions})$`, 'i').test(cleanUrl);
   };
+
+  const getOriginalMediaUrl = (media: IMedia) => {
+    if (media.localPath) {
+      return media.localPath;
+    }
+
+    return getFullMediaPath(media, false);
+  };
+
+  const canDragMedia = (media: IMedia) =>
+    Boolean(
+      !media.isLoading && !media.uploadError && (media.localPath || media.path)
+    );
 
   const handleDragStart = (event: DragEvent, media: IMedia) => {
-    const originalUrl = getFullMediaPath(media, false);
+    if (!event.dataTransfer || !canDragMedia(media)) {
+      event.preventDefault();
+      return;
+    }
 
-    event.dataTransfer?.setData('text/uri-list', originalUrl);
-    event.dataTransfer?.setData('text/plain', originalUrl);
+    const originalUrl = getOriginalMediaUrl(media);
+    const fallbackUrl = media.path
+      ? `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`
+      : originalUrl;
+
+    event.dataTransfer.effectAllowed = 'copy';
+    event.dataTransfer.dropEffect = 'copy';
+    event.dataTransfer.setData('text/uri-list', fallbackUrl);
+    event.dataTransfer.setData('text/plain', fallbackUrl);
   };
 
   return {
     getFullMediaPath,
     isSliderContentUrl,
     handleDragStart,
+    canDragMedia,
     primeMediaCache,
     isMediaPathReady,
     EMPTY_MEDIA_SRC

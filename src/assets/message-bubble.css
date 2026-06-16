@@ -1043,6 +1043,11 @@ div.message-content__html > ul > li {
   border-radius: 0;
 }
 
+.message-content__media img {
+  -webkit-user-drag: element;
+  user-select: auto;
+}
+
 .message-content-1-item .message-content__media img {
   object-fit: contain;
 }
@@ -1101,6 +1106,12 @@ div.message-content__file {
   & .message-time {
     margin-left: 10px;
   }
+}
+
+.message-content__file-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  cursor: pointer;
 }
 
 .message__assistant.menu__user-assistant-icon {

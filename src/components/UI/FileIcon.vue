@@ -49,6 +49,33 @@
   </svg>
 
   <svg
+    v-else-if="props.icon === 'download'"
+    width="48"
+    height="48"
+    viewBox="0 0 48 48"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    :data-testid="`${props.dataTestid}-FileIcon-Svg`"
+  >
+    <rect
+      x="4"
+      y="4"
+      width="40"
+      height="40"
+      rx="20"
+      :fill="props.isMeSender ? 'white' : '#77A6FF'"
+    />
+    <path
+      d="M24 14C24.8284 14 25.5 14.6716 25.5 15.5V25.3787L28.9393 21.9393C29.5251 21.3536 30.4749 21.3536 31.0607 21.9393C31.6464 22.5251 31.6464 23.4749 31.0607 24.0607L25.0607 30.0607C24.4749 30.6464 23.5251 30.6464 22.9393 30.0607L16.9393 24.0607C16.3536 23.4749 16.3536 22.5251 16.9393 21.9393C17.5251 21.3536 18.4749 21.3536 19.0607 21.9393L22.5 25.3787V15.5C22.5 14.6716 23.1716 14 24 14Z"
+      :fill="!props.isMeSender ? 'white' : '#77A6FF'"
+    />
+    <path
+      d="M17.5 32.5C17.5 31.6716 18.1716 31 19 31H29C29.8284 31 30.5 31.6716 30.5 32.5C30.5 33.3284 29.8284 34 29 34H19C18.1716 34 17.5 33.3284 17.5 32.5Z"
+      :fill="!props.isMeSender ? 'white' : '#77A6FF'"
+    />
+  </svg>
+
+  <svg
     v-else
     width="48"
     height="48"
@@ -81,12 +108,14 @@ const props = withDefaults(
     isLoaded?: boolean;
     percent?: number | null;
     backgroundColor?: string;
+    icon?: 'file' | 'download';
   }>(),
   {
     dataTestid: () => 'FileIcon',
     isLoaded: false,
     percent: null,
-    backgroundColor: '#E7E7E7'
+    backgroundColor: '#E7E7E7',
+    icon: 'file'
   }
 );
 

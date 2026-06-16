@@ -37,16 +37,24 @@
         >
           <div
             @click="handleFileClick(media, i)"
+            :draggable="canDragMedia(media)"
+            @dragstart.stop="handleDragStart($event, media)"
             @contextmenu.prevent
             class="message-content__file"
             :data-testid="`${props.dataTestid}-FileContainer`"
           >
-            <FileIcon
-              :is-me-sender="props.isMeSender"
-              :dataTestid="`${props.dataTestid}-FileIcon`"
-              :is-loaded="!shouldShowFileLoading(media)"
-              :percent="media.isLoading ? media.uploadPercent ?? null : null"
-            />
+            <span
+              class="message-content__file-icon"
+              @click.stop="handleFileClick(media, i)"
+            >
+              <FileIcon
+                :is-me-sender="props.isMeSender"
+                :dataTestid="`${props.dataTestid}-FileIcon`"
+                :is-loaded="isFileIconLoaded(media)"
+                :percent="getFileIconPercent(media)"
+                :icon="getFileIconType(media)"
+              />
+            </span>
             <div :data-testid="`${props.dataTestid}-FileInfo`">
               <div :data-testid="`${props.dataTestid}-FileDetails`">
                 <p
@@ -181,11 +189,18 @@ import { stripHtml } from '../../utils/stripHtml';
 import MessageAuthorMeta from './MessageAuthorMeta.vue';
 import { useMentionUserClick } from './composables/useMentionUserClick';
 import { MessageStatus } from '../../services/useChatSDK/types';
+import type { IMedia } from '../interfaces/interfaces';
+import {
+  getNativeFileDownloadState,
+  isNativeFileDownloadSupported,
+  refreshNativeFileDownloadStatus
+} from '../../services/useNativeFile';
 
 const props = defineProps<IMessageBubbleProps>();
 
 const emits = defineEmits(['navigate-message', 'set-slider']);
-const { primeMediaCache } = useMessageMedia();
+const { primeMediaCache, isSliderContentUrl, handleDragStart, canDragMedia } =
+  useMessageMedia();
 
 const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
@@ -217,6 +232,25 @@ const syncMentions = async (): Promise<void> => {
   syncMentionUserInteractivity(messageHtmlRef.value);
 };
 
+const syncNativeFileStatuses = (): void => {
+  if (!isNativeFileDownloadSupported()) {
+    return;
+  }
+
+  docFiles.value.forEach(media => {
+    if (
+      media.isLoading ||
+      media.uploadError ||
+      !media.path ||
+      isSliderContentFile(media)
+    ) {
+      return;
+    }
+
+    void refreshNativeFileDownloadStatus(media);
+  });
+};
+
 watch(
   [docFiles, shouldPrimeFiles],
   ([medias]) => {
@@ -240,6 +274,14 @@ watch(
     void syncMentions();
   },
   { immediate: true }
+);
+
+watch(
+  docFiles,
+  () => {
+    syncNativeFileStatuses();
+  },
+  { immediate: true, deep: true }
 );
 
 onMounted(() => {
@@ -280,18 +322,55 @@ const showErrorIcon = computed(
 );
 const hasReactions = computed(() => Boolean(props.reactions?.length));
 
-const shouldShowFileLoading = (
-  media: (typeof docFiles.value)[number]
-): boolean =>
+const shouldShowFileLoading = (media: IMedia): boolean =>
   Boolean(
     media.isLoading ||
       (media.uploadError && props.messageStatus !== MessageStatus.NotDelivered)
   );
 
-const handleFileClick = (
-  media: (typeof docFiles.value)[number],
-  index: number
-) => {
+const getSliderDetectionValue = (media: IMedia): string =>
+  media.originName || media.path || '';
+
+const isSliderContentFile = (media: IMedia): boolean =>
+  isSliderContentUrl(getSliderDetectionValue(media), {
+    includePdf: !isNativeFileDownloadSupported()
+  });
+
+const shouldUseNativeFileState = (media: IMedia): boolean =>
+  Boolean(
+    isNativeFileDownloadSupported() &&
+      media.path &&
+      !media.isLoading &&
+      !media.uploadError &&
+      !isSliderContentFile(media)
+  );
+
+const isNativeFileDownloading = (media: IMedia): boolean =>
+  shouldUseNativeFileState(media) &&
+  getNativeFileDownloadState(media).phase === 'downloading';
+
+const isFileIconLoaded = (media: IMedia): boolean =>
+  !shouldShowFileLoading(media) && !isNativeFileDownloading(media);
+
+const getFileIconPercent = (media: IMedia): number | null => {
+  if (isNativeFileDownloading(media)) {
+    return getNativeFileDownloadState(media).percent;
+  }
+
+  return media.isLoading ? media.uploadPercent ?? null : null;
+};
+
+const getFileIconType = (media: IMedia): 'file' | 'download' => {
+  if (!shouldUseNativeFileState(media)) {
+    return 'file';
+  }
+
+  return getNativeFileDownloadState(media).phase === 'downloaded'
+    ? 'file'
+    : 'download';
+};
+
+const handleFileClick = (media: IMedia, index: number) => {
   if (media.uploadError || !media.path) {
     return;
   }

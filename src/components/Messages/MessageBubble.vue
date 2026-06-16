@@ -102,6 +102,7 @@ import { isMessageSelectionModeForTopic } from '../../composables/useSelectedMes
 import { ensureMediaObjectUrl } from '../../services/useMediaBlobCache';
 import {
   downloadNativeFile,
+  handleNativeFileClick,
   isNativePdfMedia,
   openNativeFile
 } from '../../services/useNativeFile';
@@ -162,7 +163,9 @@ const getSliderDetectionValue = (media: IMedia) =>
 const isSliderContentMedia = (media: IMedia) =>
   media.type === MediaType.Image ||
   media.type === MediaType.Video ||
-  Boolean(isSliderContentUrl(getSliderDetectionValue(media)));
+  isSliderContentUrl(getSliderDetectionValue(media), {
+    includePdf: !isAndroidNativePlatform()
+  });
 
 const buildSliderItem = async (media: IMedia) => {
   const fallbackPath = getFullMediaPath(media, false);
@@ -234,6 +237,17 @@ const setSliderElement = async (medias: IMedia[], defaultIndex: number = 0) => {
 
   if (
     selectedMedia.type === MediaType.File &&
+    !isSliderContentMedia(selectedMedia) &&
+    isAndroidNativePlatform()
+  ) {
+    if (await handleNativeFileClick(selectedMedia)) {
+      return;
+    }
+  }
+
+  if (
+    selectedMedia.type === MediaType.File &&
+    !isSliderContentMedia(selectedMedia) &&
     isNativePdfMedia(selectedMedia) &&
     isAndroidNativePlatform()
   ) {
@@ -251,6 +265,7 @@ const setSliderElement = async (medias: IMedia[], defaultIndex: number = 0) => {
 
   if (
     selectedMedia.type === MediaType.File &&
+    !isSliderContentMedia(selectedMedia) &&
     isNativePdfMedia(selectedMedia)
   ) {
     if (await openNativeFile(selectedMedia)) {

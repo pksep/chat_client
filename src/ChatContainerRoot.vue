@@ -268,7 +268,12 @@ const runAppInitialization = async () => {
       }
     }
 
-    await initPushNotifications();
+    try {
+      await initPushNotifications();
+    } catch (error) {
+      console.warn('Не удалось инициализировать push-уведомления:', error);
+    }
+
     isChatReady.value = true;
   } catch (error) {
     console.error('Failed to initialize chat:', error);
