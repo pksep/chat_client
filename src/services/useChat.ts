@@ -650,16 +650,19 @@ const setupChatListeners = (): void => {
       payload.userId
     );
 
+    removeActiveGroupCall(payload.topicId);
+    removeInvitedGroupCall(payload.roomId);
+
     if (!didEndCall) {
+      if (payload.topicId) {
+        void fetchAllTopics();
+      }
       return;
     }
 
     if (Capacitor.isNativePlatform()) {
       endAllCallKits();
     }
-
-    removeActiveGroupCall(payload.topicId);
-    removeInvitedGroupCall(payload.roomId);
 
     if (payload.topicId) {
       const endedTopic = useTopics().getSelectedTopic(payload.topicId) as any;

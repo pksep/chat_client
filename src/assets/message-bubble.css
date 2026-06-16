@@ -1043,6 +1043,11 @@ div.message-content__html > ul > li {
   border-radius: 0;
 }
 
+.message-content__media img {
+  -webkit-user-drag: element;
+  user-select: auto;
+}
+
 .message-content-1-item .message-content__media img {
   object-fit: contain;
 }

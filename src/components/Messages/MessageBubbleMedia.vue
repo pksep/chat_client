@@ -51,13 +51,17 @@
                 :src="
                   shouldLoadMedia ? getFullMediaPath(media) : EMPTY_MEDIA_SRC
                 "
-                :alt="props.sender ? props.sender + ' image' : 'Shared image'"
-                :style="getPreviewStyle(media)"
+                :alt="
+                  props.sender ? `${props.sender} изображение` : 'Изображение'
+                "
+                :style="getPreviewStyle(media, i)"
                 loading="lazy"
                 fetchpriority="low"
                 decoding="async"
+                draggable="true"
                 @load="captureImagePreviewMetrics(media, $event)"
-                @click.stop="$emit('set-slider', mediaFiles, i)"
+                @dragstart="handleMediaImageDragStart"
+                @click.stop="handleMediaClick(i)"
                 @contextmenu.prevent
               />
 
@@ -174,9 +178,10 @@ import MessageReferenceBlock from './MessageReferenceBlock.vue';
 import MessageAuthorMeta from './MessageAuthorMeta.vue';
 import { useMentionUserClick } from './composables/useMentionUserClick';
 import { MessageStatus } from '../../services/useChatSDK/types';
+import { calculatePreviewDimensions } from '../../utils/mediaPreview';
 
 const props = defineProps<IMessageBubbleProps>();
-defineEmits(['navigate-message', 'set-slider']);
+const emit = defineEmits(['navigate-message', 'set-slider']);
 
 const { getFullMediaPath, primeMediaCache, isMediaPathReady, EMPTY_MEDIA_SRC } =
   useMessageMedia();
@@ -228,6 +233,7 @@ const replyReferenceWidth = useReferenceWidth(mediaArticleRef, {
 });
 const shouldLoadMedia = ref(false);
 let visibilityObserver: IntersectionObserver | null = null;
+let lastMediaDragStartedAt = 0;
 
 const isNearViewport = (element: HTMLElement, offset = 250) => {
   const rect = element.getBoundingClientRect();
@@ -314,12 +320,20 @@ const shouldShowMediaLoading = (media: IMedia): boolean =>
       (media.uploadError && props.messageStatus !== MessageStatus.NotDelivered)
   );
 
-const getPreviewStyle = (media: IMedia): Record<string, string> => {
-  if (
-    media.ex?.fillPreview ||
-    !media.ex?.previewWidth ||
-    !media.ex?.previewHeight
-  ) {
+const getPreviewStyle = (
+  media: IMedia,
+  index: number
+): Record<string, string> => {
+  const preview =
+    media.ex?.previewWidth && media.ex?.previewHeight
+      ? media.ex
+      : calculatePreviewDimensions(
+          media.ex || {},
+          mediaFiles.value.length,
+          index
+        );
+
+  if (!preview.previewWidth || !preview.previewHeight) {
     return {
       width: `100%`,
       height: `100%`
@@ -327,8 +341,8 @@ const getPreviewStyle = (media: IMedia): Record<string, string> => {
   }
 
   return {
-    width: `${media.ex.previewWidth}px`,
-    height: `${media.ex.previewHeight}px`
+    width: `${preview.previewWidth}px`,
+    height: `${preview.previewHeight}px`
   };
 };
 
@@ -338,10 +352,6 @@ const savePreviewMetrics = (
   naturalWidth?: number,
   naturalHeight?: number
 ): void => {
-  if (media.ex?.fillPreview) {
-    return;
-  }
-
   const rect = element.getBoundingClientRect();
 
   media.ex = {
@@ -358,6 +368,40 @@ const captureImagePreviewMetrics = (media: IMedia, event: Event): void => {
   if (!image) return;
 
   savePreviewMetrics(media, image, image.naturalWidth, image.naturalHeight);
+};
+
+const handleMediaClick = (index: number): void => {
+  if (Date.now() - lastMediaDragStartedAt < 350) {
+    return;
+  }
+
+  emit('set-slider', mediaFiles.value, index);
+};
+
+const handleMediaImageDragStart = (event: DragEvent): void => {
+  lastMediaDragStartedAt = Date.now();
+  const image = event.currentTarget as HTMLImageElement | null;
+  const dataTransfer = event.dataTransfer;
+
+  if (!image || !dataTransfer) {
+    return;
+  }
+
+  const rect = image.getBoundingClientRect();
+  const clone = image.cloneNode(false) as HTMLImageElement;
+
+  clone.removeAttribute('id');
+  clone.style.position = 'fixed';
+  clone.style.left = '-10000px';
+  clone.style.top = '-10000px';
+  clone.style.width = `${Math.round(rect.width)}px`;
+  clone.style.height = `${Math.round(rect.height)}px`;
+  clone.style.objectFit = getComputedStyle(image).objectFit;
+  clone.style.pointerEvents = 'none';
+
+  document.body.appendChild(clone);
+  dataTransfer.setDragImage(clone, rect.width / 2, rect.height / 2);
+  requestAnimationFrame(() => clone.remove());
 };
 
 const messageArticleStyles = computed(() => [

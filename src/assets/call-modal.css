@@ -1266,12 +1266,8 @@ svg.icon-yui-kit.call-modal__control-button__chevron-down {
   background: currentColor;
 }
 
-.call-modal__connection-quality--poor .call-modal__connection-quality-bar {
-  background: currentColor;
-}
-
 .call-modal__connection-quality--poor
-  .call-modal__connection-quality-bar:nth-child(3) {
+  .call-modal__connection-quality-bar--active {
   background: var(--red4);
 }
 

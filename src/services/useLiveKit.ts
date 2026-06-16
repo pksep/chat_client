@@ -825,19 +825,31 @@ const isRecoverableDirectCallSession = (
   targetRoomId?: string | null,
   targetTopicId?: string | null
 ): boolean => {
+  const activeRoomId = targetRoomId ?? roomId.value;
   const activeTopicId = targetTopicId ?? topicId.value;
   const activeTopic = activeTopicId
     ? (useTopics().getSelectedTopic(activeTopicId) as any)
     : null;
   const matchesCurrentCall =
-    (!!targetRoomId && roomId.value === targetRoomId) ||
+    (!!activeRoomId && roomId.value === activeRoomId) ||
     (!!targetTopicId && topicId.value === targetTopicId);
+  const isInvitedGroupSession =
+    invitedGroupCall.value?.roomId === activeRoomId ||
+    invitedGroupCall.value?.topicId === activeTopicId;
+  const knownParticipantCount =
+    activeTopic?.activeCall?.participantCount ??
+    (roomId.value === activeRoomId && topicId.value === activeTopicId && room
+      ? room.remoteParticipants.size + 1
+      : 0);
 
   return !!(
     matchesCurrentCall &&
     !isIncoming.value &&
     activeTopicId &&
-    !!activeTopic
+    activeTopic?.type === TopicType.DM &&
+    !isInvitedGroupSession &&
+    !activeTopic?.activeCall?.groupMode &&
+    knownParticipantCount <= 2
   );
 };
 
@@ -850,8 +862,7 @@ const resolveDirectCallRecoverySuccess = (activeRoom: Room | null = room) => {
     !!activeRoom &&
     roomId.value === directCallRecoveryRoomId &&
     topicId.value === directCallRecoveryTopicId &&
-    (isGroupCallSession(directCallRecoveryTopicId) ||
-      activeRoom.remoteParticipants.size > 0);
+    activeRoom.remoteParticipants.size > 0;
 
   if (!recovered) {
     return;
@@ -2018,38 +2029,6 @@ const markRemoteParticipantReconnecting = (
   setRemoteReconnectingParticipant(
     buildRemoteReconnectingParticipantState(participant)
   );
-};
-
-const markRemoteUserReconnecting = (reconnectingUser?: IUser | null) => {
-  if (!reconnectingUser?.id) {
-    return;
-  }
-
-  const previousParticipant = remoteParticipants.value.find(
-    participant => participant.identity === reconnectingUser.id
-  );
-
-  setRemoteReconnectingParticipant({
-    identity: reconnectingUser.id,
-    name:
-      previousParticipant?.name ||
-      reconnectingUser.nickname ||
-      reconnectingUser.initials ||
-      reconnectingUser.id,
-    videoStream: null,
-    cameraStream: null,
-    screenShareStream: null,
-    audioStream: null,
-    isVideoActive: false,
-    isScreenShareActive: false,
-    isHandRaised: false,
-    activeReaction: null,
-    activeReactionExpiresAt: null,
-    isSpeaking: false,
-    audioLevel: 0,
-    isMicActive: false,
-    connectionQuality: ConnectionQuality.Poor
-  });
 };
 
 const syncRemoteParticipantState = () => {
@@ -3621,20 +3600,43 @@ export const handleCallAnswered = async (
   markIncomingCallDismissed(answeredRoomId, answeredTopicId);
 
   if (answeredTopicId) {
+    const topicsApi = useTopics();
+    const answeredTopic = topicsApi.getSelectedTopic(answeredTopicId) as any;
     const existingPendingCall = activeGroupCalls.value[answeredTopicId];
-    if (existingPendingCall) {
+    const isGroupAnsweredCall =
+      answeredTopic?.type === TopicType.Group ||
+      existingPendingCall?.groupMode ||
+      answeredTopic?.activeCall?.groupMode;
+
+    if (isGroupAnsweredCall) {
       activeGroupCalls.value = {
         ...activeGroupCalls.value,
         [answeredTopicId]: {
-          ...existingPendingCall,
-          startTime: answeredStartTime ?? existingPendingCall.startTime ?? null,
+          roomId:
+            answeredRoomId ||
+            existingPendingCall?.roomId ||
+            answeredTopic?.activeCall?.roomId ||
+            answeredTopicId,
+          topicId: answeredTopicId,
+          caller: existingPendingCall?.caller,
+          startTime:
+            answeredStartTime ??
+            existingPendingCall?.startTime ??
+            answeredTopic?.activeCall?.startTime ??
+            null,
+          participantCount:
+            answeredTopic?.activeCall?.participantCount ??
+            existingPendingCall?.participantCount,
+          groupMode: true,
           elapsedDurationMs:
-            answeredElapsedDurationMs ?? existingPendingCall.elapsedDurationMs
+            answeredElapsedDurationMs ??
+            existingPendingCall?.elapsedDurationMs ??
+            answeredTopic?.activeCall?.elapsedDurationMs ??
+            0
         }
       };
     }
 
-    const topicsApi = useTopics();
     topicsApi.topics.value = topicsApi.topics.value.map(topic =>
       topic.id === answeredTopicId
         ? {
@@ -3645,7 +3647,7 @@ export const handleCallAnswered = async (
                 answeredStartTime ?? topic.activeCall?.startTime ?? null,
               participantCount: topic.activeCall?.participantCount,
               callType: topic.activeCall?.callType || 'livekit',
-              groupMode: topic.activeCall?.groupMode,
+              groupMode: topic.activeCall?.groupMode ?? isGroupAnsweredCall,
               elapsedDurationMs:
                 answeredElapsedDurationMs ?? topic.activeCall?.elapsedDurationMs
             }
@@ -3780,24 +3782,10 @@ export const handleCallEnded = (
     return true;
   }
 
-  const me = getAuthUser();
-  const isRemoteEndEvent = !!endedByUserId && endedByUserId !== me?.id;
-  const isRemoteParticipantStillConnected =
-    isRemoteEndEvent && !!room?.remoteParticipants.has(endedByUserId);
-  const shouldTryRemoteRecovery =
-    !endedByUserId ||
-    (isRemoteEndEvent && !isRemoteParticipantStillConnected) ||
-    (endedByUserId && remoteReconnectingParticipants.has(endedByUserId));
-
-  if (shouldTryRemoteRecovery) {
-    if (isRemoteEndEvent && user.value?.id === endedByUserId) {
-      markRemoteUserReconnecting(user.value);
-    }
-
+  if (!endedByUserId) {
     if (
       startDirectCallRecovery(endedRoomId, endedTopicId, {
-        waitForRemote: true,
-        remoteUserId: endedByUserId
+        waitForRemote: true
       })
     ) {
       syncRemoteParticipantState();

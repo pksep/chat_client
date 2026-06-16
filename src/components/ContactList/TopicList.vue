@@ -549,18 +549,28 @@ const handleMute = (topic: ITopic): void => {
   closeActivePopover(topic.id);
 };
 
+const markTopicRead = async (
+  topic: ITopic,
+  opts: { closePopover?: boolean } = {}
+): Promise<void> => {
+  if (topic.lastMessage?.id) {
+    await markAsRead({
+      topicId: topic.id,
+      messageIds: [topic.lastMessage.id]
+    });
+  }
+
+  await setTopicMarkedUnread(topic, false);
+  resetTopicUnreadState(topic.id);
+
+  if (opts.closePopover) {
+    closeActivePopover(topic.id);
+  }
+};
+
 const handleReadState = async (topic: ITopic): Promise<void> => {
   if (hasTopicUnreadIndicator(topic, authedUser.value?.id)) {
-    if (topic.lastMessage?.id) {
-      await markAsRead({
-        topicId: topic.id,
-        messageIds: [topic.lastMessage.id]
-      });
-    }
-
-    await setTopicMarkedUnread(topic, false);
-    resetTopicUnreadState(topic.id);
-    closeActivePopover(topic.id);
+    await markTopicRead(topic, { closePopover: true });
     return;
   }
 
@@ -574,7 +584,9 @@ const handleClick = (topic: ITopic): void => {
     return;
   }
 
-  if (topic.info?.isMarkedUnread) {
+  if (hasTopicUnreadIndicator(topic, authedUser.value?.id)) {
+    void markTopicRead(topic);
+  } else if (topic.info?.isMarkedUnread) {
     void setTopicMarkedUnread(topic, false);
   }
 
