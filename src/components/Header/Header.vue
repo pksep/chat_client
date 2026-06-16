@@ -146,6 +146,7 @@
       @click.stop
     >
       <Search
+        ref="desktopTopicSearchRef"
         class="chat__header-search"
         :model-value="topicSearchQuery"
         :data-testid="`${props.dataTestid}-Header-SearchInput`"
@@ -216,6 +217,7 @@
       @click.stop
     >
       <Search
+        ref="mobileTopicSearchRef"
         class="chat__header-search"
         :model-value="topicSearchQuery"
         :data-testid="`${props.dataTestid}-Header-MobileSearchInput`"
@@ -351,6 +353,7 @@ import {
   onUnmounted,
   reactive,
   ref,
+  type ComponentPublicInstance,
   watch
 } from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
@@ -530,10 +533,14 @@ const currentTime = ref(Date.now());
 let headerCallTimerInterval: ReturnType<typeof setInterval> | null = null;
 let topicSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let topicSearchRequestToken = 0;
+type SearchComponentRef = ComponentPublicInstance | Element | null;
+
 const topicSearchQuery = ref('');
 const topicSearchResults = ref<IMessageSearchResult[]>([]);
 const topicSearchTotal = ref(0);
 const topicSearchActiveIndex = ref(0);
+const desktopTopicSearchRef = ref<SearchComponentRef>(null);
+const mobileTopicSearchRef = ref<SearchComponentRef>(null);
 
 const isTopicSearchLoading = ref(false);
 const hasTopicSearchQuery = computed(
@@ -668,9 +675,21 @@ const resolvedHeaderCallLabel = computed(() => {
   return headerCallLabel.value;
 });
 
+const focusTopicSearchInput = (): void => {
+  const searchRef = isMobile.value
+    ? mobileTopicSearchRef.value
+    : desktopTopicSearchRef.value;
+  const searchElement =
+    searchRef instanceof Element ? searchRef : searchRef?.$el;
+  const input = searchElement?.querySelector?.('input');
+
+  input?.focus?.();
+};
+
 const showSearch = (): void => {
   state.isSearchInputEnable = true;
   setMobileTopicSearchActive(isMobile.value && isTopicSearchAvailable.value);
+  void nextTick().then(focusTopicSearchInput);
 };
 
 function normalizeTopicSearchQuery(value: string): string {

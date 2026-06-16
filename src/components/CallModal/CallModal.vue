@@ -37,12 +37,13 @@
         </div>
 
         <div
-          v-if="callStatusNotice"
+          v-if="isCallReconnectingNotice"
           class="call-modal__connection-status"
           role="status"
         >
           <span class="call-modal__connection-status-spinner"></span>
           <span>{{ callStatusNotice }}</span>
+          <ErrorIcon class="call-modal__connection-status-alert" />
         </div>
 
         <button
@@ -53,18 +54,35 @@
         </button>
       </div>
 
-      <div v-show="showAvatarFallback" class="call-modal__avatar-container">
-        <h3 v-if="displayAvatarInfo" class="call-modal__user-name">
+      <div
+        v-show="showAvatarFallback"
+        class="call-modal__avatar-container"
+        :class="{
+          'call-modal__avatar-container--ended': isEndedCallNotice
+        }"
+      >
+        <h3
+          v-if="displayAvatarInfo"
+          class="call-modal__user-name"
+          :class="{
+            'call-modal__terminal-placeholder': isTerminalCallNotice
+          }"
+        >
           {{ displayAvatarInfo.initials }}
         </h3>
-        <p class="call-modal__status">
+        <p
+          class="call-modal__status"
+          :class="{
+            'call-modal__terminal-placeholder': isTerminalCallNotice
+          }"
+        >
           <span v-if="isIncoming">{{ incomingCallLabel }}</span>
           <span v-else-if="isCalling">{{ connectingLabel }}</span>
           <span v-else>{{ formattedTime }}</span>
         </p>
 
         <p class="call-modal__notice">
-          <span v-if="callStatusNotice && !shouldShowMediaLayout">
+          <span v-if="isTerminalCallNotice">
             {{ callStatusNotice }}
           </span>
         </p>
@@ -288,12 +306,13 @@
               </div>
 
               <div
-                v-if="callStatusNotice"
+                v-if="isCallReconnectingNotice"
                 class="call-modal__connection-status call-modal__connection-status--overlay"
                 role="status"
               >
                 <span class="call-modal__connection-status-spinner"></span>
                 <span>{{ callStatusNotice }}</span>
+                <ErrorIcon class="call-modal__connection-status-alert" />
               </div>
 
               <div class="call-modal__video-overlay-actions">
@@ -485,6 +504,7 @@ import { Capacitor } from '@capacitor/core';
 import { MAX_W_MD } from '../../utils/constants';
 import { useResizeState } from '../../composables/useResizeState';
 import CachedAvatar from '../UI/CachedAvatar.vue';
+import ErrorIcon from '../UI/ErrorIcon.vue';
 import FullscreenIcon from './UI/FullscreenIcon.vue';
 import MinimizeIcon from './UI/MinimizeIcon.vue';
 import VolumeIcon from './UI/VolumeIcon.vue';
@@ -504,6 +524,7 @@ import {
   acceptCall,
   copyInvitedGroupCallLink as copyInviteGroupCallLink,
   callStatusNotice,
+  callStatusNoticeKind,
   formattedTime,
   isCalling,
   isIncoming,
@@ -880,7 +901,18 @@ const displayAvatarInfo = computed(() => {
     avatarUrl: displayUser.value.avatarUrl || ''
   };
 });
-const isBusyNoticeVisible = computed(() => !!callStatusNotice.value);
+const isCallReconnectingNotice = computed(
+  () =>
+    !!callStatusNotice.value && callStatusNoticeKind.value === 'reconnecting'
+);
+const isTerminalCallNotice = computed(
+  () =>
+    !!callStatusNotice.value && callStatusNoticeKind.value !== 'reconnecting'
+);
+const isEndedCallNotice = computed(
+  () => !!callStatusNotice.value && callStatusNoticeKind.value === 'ended'
+);
+const isBusyNoticeVisible = computed(() => isTerminalCallNotice.value);
 const localCallBackgroundPlaceholderStyle = computed<CSSProperties | null>(
   () => {
     if (
@@ -1227,11 +1259,15 @@ const displayGroupCallMeta = computed(
 );
 
 const shouldShowMediaLayout = computed(
-  () => isCallOpen.value && !isIncoming.value && !isCalling.value
+  () =>
+    isCallOpen.value &&
+    !isIncoming.value &&
+    !isCalling.value &&
+    !isTerminalCallNotice.value
 );
 
 const showAvatarFallback = computed(
-  () => isIncoming.value || isCalling.value || !!callStatusNotice.value
+  () => isIncoming.value || isCalling.value || isTerminalCallNotice.value
 );
 
 watch(

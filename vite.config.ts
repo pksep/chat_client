@@ -82,11 +82,27 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
     },
     server: {
       host: '0.0.0.0',
-      port: 5173
+      port: 5173,
+      watch: {
+        ignored: [
+          '**/.git/**',
+          '**/.idea/**',
+          '**/.codex-remote-attachments/**',
+          '**/android/**',
+          '**/ios/**',
+          '**/build/**',
+          '**/dev-dist/**',
+          '**/src-tauri/target/**',
+          '**/src-tauri/gen/**'
+        ]
+      }
     },
     build: {
       outDir: 'build',
       sourcemap: mode !== 'production'
+    },
+    optimizeDeps: {
+      entries: ['index.html']
     },
     plugins
   };

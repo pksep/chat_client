@@ -37,6 +37,8 @@
         >
           <div
             @click="handleFileClick(media, i)"
+            :draggable="canDragMedia(media)"
+            @dragstart.stop="handleDragStart($event, media)"
             @contextmenu.prevent
             class="message-content__file"
             :data-testid="`${props.dataTestid}-FileContainer`"
@@ -197,7 +199,8 @@ import {
 const props = defineProps<IMessageBubbleProps>();
 
 const emits = defineEmits(['navigate-message', 'set-slider']);
-const { primeMediaCache, isSliderContentUrl } = useMessageMedia();
+const { primeMediaCache, isSliderContentUrl, handleDragStart, canDragMedia } =
+  useMessageMedia();
 
 const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);

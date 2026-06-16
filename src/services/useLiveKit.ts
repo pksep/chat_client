@@ -102,8 +102,18 @@ type StreamCacheEntry = {
   stream: MediaStream;
 };
 
+type RemoteReconnectingParticipantEntry = {
+  participant: ParticipantMediaState;
+  timeout: ReturnType<typeof setTimeout>;
+};
+
 type CallEndReason = 'busy';
 type RemoteVideoSource = 'camera' | 'screen';
+type CallStatusNoticeKind = 'reconnecting' | 'ended' | 'error';
+type DirectCallRecoveryOptions = {
+  waitForRemote?: boolean;
+  remoteUserId?: string | null;
+};
 
 type CallSocketAck = {
   accepted?: boolean;
@@ -133,6 +143,7 @@ const participantReactions = ref<
 >({});
 const remoteParticipants = ref<ParticipantMediaState[]>([]);
 const callStatusNotice = ref<string | null>(null);
+const callStatusNoticeKind = ref<CallStatusNoticeKind | null>(null);
 const pendingEndCallRoomId = ref<string | null>(null);
 const pendingEndCallTopicId = ref<string | null>(null);
 const activeGroupCalls = ref<Record<string, ActiveGroupCallEntry>>({});
@@ -168,6 +179,9 @@ const CALL_REACTION_TOPIC = 'group-call-reaction';
 const CALL_REACTION_DURATION_MS = 4000;
 
 let room: Room | null = null;
+let ignoredDisconnectedRoom: Room | null = null;
+let isNativeAppInBackground = false;
+let directCallRecoveryWaitForRemote = false;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
 let dialingTimeout: ReturnType<typeof setTimeout> | null = null;
 let dialingSoundWatchdogInterval: ReturnType<typeof setInterval> | null = null;
@@ -200,6 +214,10 @@ const participantReactionTimeouts = new Map<
   string,
   ReturnType<typeof setTimeout>
 >();
+const remoteReconnectingParticipants = new Map<
+  string,
+  RemoteReconnectingParticipantEntry
+>();
 const { selectedCallBackgroundImageUrl, selectedCallBackgroundMode } =
   useCallBackground();
 
@@ -207,10 +225,8 @@ const MAX_NATIVE_CALL_ACTION_RETRIES = 120;
 const NATIVE_CALL_ACTION_RETRY_DELAY_MS = 500;
 const DISMISSED_INCOMING_CALL_TTL_MS = 15000;
 const CALL_STATUS_NOTICE_CLOSE_DELAY_MS = 3000;
-const DIRECT_CALL_RECONNECT_GRACE_MS = 20000;
+const DIRECT_CALL_RECONNECT_GRACE_MS = 180000;
 const DIRECT_CALL_RECONNECT_POLL_MS = 2000;
-const DIRECT_CALL_RECONNECT_NOTICE =
-  'Связь нестабильна. Пытаемся переподключить звонок...';
 const DIRECT_CALL_RECONNECT_FAILED_NOTICE = 'Не удалось восстановить звонок';
 const DIRECT_CALL_ENDED_NOTICE = 'Звонок завершен';
 const CALL_RECONNECT_NOTICE = 'Связь прервана. Переподключение';
@@ -704,6 +720,7 @@ const clearCallStatusNotice = () => {
   }
 
   callStatusNotice.value = null;
+  callStatusNoticeKind.value = null;
 };
 
 const clearDirectCallRecoveryTimer = () => {
@@ -729,13 +746,10 @@ const resetDirectCallRecoveryState = (
   directCallRecoveryDeadline = 0;
   directCallRecoveryRoomId = null;
   directCallRecoveryTopicId = null;
+  directCallRecoveryWaitForRemote = false;
   directCallRecoveryAttemptId += 1;
 
-  if (
-    !preserveNotice &&
-    (callStatusNotice.value === DIRECT_CALL_RECONNECT_NOTICE ||
-      callStatusNotice.value === CALL_RECONNECT_NOTICE)
-  ) {
+  if (!preserveNotice && callStatusNoticeKind.value === 'reconnecting') {
     clearCallStatusNotice();
   }
 };
@@ -745,20 +759,40 @@ const clearLocalAcceptState = () => {
   localAcceptTopicId = null;
 };
 
-const showPersistentCallStatusNotice = (message: string) => {
+const showPersistentCallStatusNotice = (
+  message: string,
+  kind: CallStatusNoticeKind = 'reconnecting'
+) => {
   clearCallStatusNotice();
   callStatusNotice.value = message;
+  callStatusNoticeKind.value = kind;
   clearDialingTimeout();
   stopDialingSound();
   stopRingtone();
 };
 
+const shouldSuppressReconnectNotice = () =>
+  Capacitor.isNativePlatform() && isNativeAppInBackground;
+
+const showReconnectCallStatusNotice = () => {
+  if (shouldSuppressReconnectNotice()) {
+    if (callStatusNoticeKind.value === 'reconnecting') {
+      clearCallStatusNotice();
+    }
+    return;
+  }
+
+  showPersistentCallStatusNotice(CALL_RECONNECT_NOTICE, 'reconnecting');
+};
+
 const showTransientCallStatusNotice = (
   message: string,
-  closeDelayMs = CALL_STATUS_NOTICE_CLOSE_DELAY_MS
+  closeDelayMs = CALL_STATUS_NOTICE_CLOSE_DELAY_MS,
+  kind: CallStatusNoticeKind = 'error'
 ) => {
   clearCallStatusNotice();
   callStatusNotice.value = message;
+  callStatusNoticeKind.value = kind;
   clearDialingTimeout();
   stopDialingSound();
   stopRingtone();
@@ -791,19 +825,31 @@ const isRecoverableDirectCallSession = (
   targetRoomId?: string | null,
   targetTopicId?: string | null
 ): boolean => {
+  const activeRoomId = targetRoomId ?? roomId.value;
   const activeTopicId = targetTopicId ?? topicId.value;
   const activeTopic = activeTopicId
     ? (useTopics().getSelectedTopic(activeTopicId) as any)
     : null;
   const matchesCurrentCall =
-    (!!targetRoomId && roomId.value === targetRoomId) ||
+    (!!activeRoomId && roomId.value === activeRoomId) ||
     (!!targetTopicId && topicId.value === targetTopicId);
+  const isInvitedGroupSession =
+    invitedGroupCall.value?.roomId === activeRoomId ||
+    invitedGroupCall.value?.topicId === activeTopicId;
+  const knownParticipantCount =
+    activeTopic?.activeCall?.participantCount ??
+    (roomId.value === activeRoomId && topicId.value === activeTopicId && room
+      ? room.remoteParticipants.size + 1
+      : 0);
 
   return !!(
     matchesCurrentCall &&
     !isIncoming.value &&
     activeTopicId &&
-    !!activeTopic
+    activeTopic?.type === TopicType.DM &&
+    !isInvitedGroupSession &&
+    !activeTopic?.activeCall?.groupMode &&
+    knownParticipantCount <= 2
   );
 };
 
@@ -816,8 +862,7 @@ const resolveDirectCallRecoverySuccess = (activeRoom: Room | null = room) => {
     !!activeRoom &&
     roomId.value === directCallRecoveryRoomId &&
     topicId.value === directCallRecoveryTopicId &&
-    (isGroupCallSession(directCallRecoveryTopicId) ||
-      activeRoom.remoteParticipants.size > 0);
+    activeRoom.remoteParticipants.size > 0;
 
   if (!recovered) {
     return;
@@ -862,15 +907,61 @@ const recoverDirectCallConnection = async (
   directCallRecoveryInFlight = true;
 
   try {
-    const status = await getLiveKitCallStatus(activeRoomId, activeTopicId);
+    const status = await getRawLiveKitCallStatus(activeRoomId);
 
     if (attemptId !== directCallRecoveryAttemptId) {
       return;
     }
 
-    if (!status?.active) {
+    if (!status) {
+      if (Date.now() >= directCallRecoveryDeadline) {
+        resetDirectCallRecoveryState(true, attemptId);
+        clearUnavailableCallState(activeRoomId, activeTopicId);
+        showTransientCallStatusNotice(
+          DIRECT_CALL_ENDED_NOTICE,
+          CALL_STATUS_NOTICE_CLOSE_DELAY_MS,
+          'ended'
+        );
+        return;
+      }
+
+      scheduleDirectCallRecoveryAttempt(attemptId);
+      return;
+    }
+
+    if (status.topicId && status.topicId !== activeTopicId) {
       resetDirectCallRecoveryState(true, attemptId);
-      showTransientCallStatusNotice(DIRECT_CALL_ENDED_NOTICE);
+      showTransientCallStatusNotice(DIRECT_CALL_RECONNECT_FAILED_NOTICE);
+      return;
+    }
+
+    if (!status?.active) {
+      if (
+        directCallRecoveryWaitForRemote ||
+        remoteReconnectingParticipants.size > 0
+      ) {
+        if (Date.now() >= directCallRecoveryDeadline) {
+          resetDirectCallRecoveryState(true, attemptId);
+          clearUnavailableCallState(activeRoomId, activeTopicId);
+          showTransientCallStatusNotice(
+            DIRECT_CALL_ENDED_NOTICE,
+            CALL_STATUS_NOTICE_CLOSE_DELAY_MS,
+            'ended'
+          );
+          return;
+        }
+
+        scheduleDirectCallRecoveryAttempt(attemptId);
+        return;
+      }
+
+      resetDirectCallRecoveryState(true, attemptId);
+      clearUnavailableCallState(activeRoomId, activeTopicId);
+      showTransientCallStatusNotice(
+        DIRECT_CALL_ENDED_NOTICE,
+        CALL_STATUS_NOTICE_CLOSE_DELAY_MS,
+        'ended'
+      );
       return;
     }
 
@@ -914,7 +1005,11 @@ const recoverDirectCallConnection = async (
 
     if (Date.now() >= directCallRecoveryDeadline) {
       resetDirectCallRecoveryState(true, attemptId);
-      showTransientCallStatusNotice(DIRECT_CALL_RECONNECT_FAILED_NOTICE);
+      showTransientCallStatusNotice(
+        DIRECT_CALL_ENDED_NOTICE,
+        CALL_STATUS_NOTICE_CLOSE_DELAY_MS,
+        'ended'
+      );
       return;
     }
 
@@ -928,7 +1023,8 @@ const recoverDirectCallConnection = async (
 
 const startDirectCallRecovery = (
   targetRoomId?: string | null,
-  targetTopicId?: string | null
+  targetTopicId?: string | null,
+  options: DirectCallRecoveryOptions = {}
 ): boolean => {
   const activeRoomId = targetRoomId ?? roomId.value;
   const activeTopicId = targetTopicId ?? topicId.value;
@@ -946,7 +1042,12 @@ const startDirectCallRecovery = (
   directCallRecoveryDeadline = Date.now() + DIRECT_CALL_RECONNECT_GRACE_MS;
   directCallRecoveryRoomId = activeRoomId;
   directCallRecoveryTopicId = activeTopicId;
-  showPersistentCallStatusNotice(CALL_RECONNECT_NOTICE);
+  directCallRecoveryWaitForRemote =
+    !!options.waitForRemote || remoteReconnectingParticipants.size > 0;
+  shouldEndCallOnConnectFailure = false;
+  showReconnectCallStatusNotice();
+  ensureCallTimerContinues();
+  isCalling.value = false;
   open.value = true;
   isModalVisible.value = true;
   clearDirectCallRecoveryTimer();
@@ -1033,9 +1134,8 @@ const matchesPendingEndCall = (
   (!!targetRoomId && pendingEndCallRoomId.value === targetRoomId) ||
   (!!targetTopicId && pendingEndCallTopicId.value === targetTopicId);
 
-const getLiveKitCallStatus = async (
-  targetRoomId?: string | null,
-  targetTopicId?: string | null
+const getRawLiveKitCallStatus = async (
+  targetRoomId?: string | null
 ): Promise<LiveKitCallStatus | null> => {
   if (!targetRoomId) {
     return null;
@@ -1047,6 +1147,19 @@ const getLiveKitCallStatus = async (
   }
 
   const status = await sdk.getLiveKitCallStatus(targetRoomId);
+  if (!status) {
+    return null;
+  }
+
+  return status;
+};
+
+const getLiveKitCallStatus = async (
+  targetRoomId?: string | null,
+  targetTopicId?: string | null
+): Promise<LiveKitCallStatus | null> => {
+  const status = await getRawLiveKitCallStatus(targetRoomId);
+
   if (!status) {
     return null;
   }
@@ -1235,6 +1348,14 @@ const startTimer = (startTime: number | null = callStartedAt.value) => {
   timerInterval = setInterval(() => {
     syncTimerValue();
   }, 1000);
+};
+
+const ensureCallTimerContinues = () => {
+  if (!callStartedAt.value) {
+    callStartedAt.value = Date.now();
+  }
+
+  startTimer();
 };
 
 const pauseTimer = (elapsedMs = getElapsedCallDurationMs()) => {
@@ -1823,6 +1944,7 @@ const syncRemoteParticipantSpeakingState = () => {
     audioLevel: remoteAudioLevels.get(participant.identity)?.audioLevel || 0,
     connectionQuality:
       remoteAudioLevels.get(participant.identity)?.connectionQuality ||
+      participant.connectionQuality ||
       ConnectionQuality.Unknown
   }));
 };
@@ -1836,9 +1958,92 @@ const syncLocalParticipantSpeakingState = (activeRoom?: Room | null) => {
     localParticipant?.connectionQuality || ConnectionQuality.Unknown;
 };
 
+const clearRemoteReconnectingParticipant = (identity: string) => {
+  const entry = remoteReconnectingParticipants.get(identity);
+
+  if (!entry) {
+    return;
+  }
+
+  clearTimeout(entry.timeout);
+  remoteReconnectingParticipants.delete(identity);
+};
+
+const clearRemoteReconnectingParticipants = () => {
+  remoteReconnectingParticipants.forEach(entry => {
+    clearTimeout(entry.timeout);
+  });
+  remoteReconnectingParticipants.clear();
+};
+
+const setRemoteReconnectingParticipant = (
+  participant: ParticipantMediaState
+) => {
+  clearRemoteReconnectingParticipant(participant.identity);
+
+  const timeout = setTimeout(() => {
+    remoteReconnectingParticipants.delete(participant.identity);
+    syncRemoteParticipantState();
+  }, DIRECT_CALL_RECONNECT_GRACE_MS);
+
+  remoteReconnectingParticipants.set(participant.identity, {
+    participant,
+    timeout
+  });
+};
+
+const buildRemoteReconnectingParticipantState = (
+  participant: Participant | RemoteParticipant
+): ParticipantMediaState => {
+  const previousParticipant =
+    remoteParticipants.value.find(
+      item => item.identity === participant.identity
+    )?.name ||
+    remoteReconnectingParticipants.get(participant.identity)?.participant
+      .name ||
+    participant.name ||
+    participant.identity;
+
+  return {
+    identity: participant.identity,
+    name: previousParticipant,
+    videoStream: null,
+    cameraStream: null,
+    screenShareStream: null,
+    audioStream: null,
+    isVideoActive: false,
+    isScreenShareActive: false,
+    isHandRaised: false,
+    activeReaction: null,
+    activeReactionExpiresAt: null,
+    isSpeaking: false,
+    audioLevel: 0,
+    isMicActive: false,
+    connectionQuality: ConnectionQuality.Poor
+  };
+};
+
+const markRemoteParticipantReconnecting = (
+  participant: Participant | RemoteParticipant
+) => {
+  setRemoteReconnectingParticipant(
+    buildRemoteReconnectingParticipantState(participant)
+  );
+};
+
 const syncRemoteParticipantState = () => {
   const activeRoom = room;
   if (!activeRoom) {
+    if (directCallRecoveryRoomId && remoteReconnectingParticipants.size > 0) {
+      remoteTrackStreamCache.clear();
+      remoteParticipants.value = Array.from(
+        remoteReconnectingParticipants.values()
+      ).map(entry => entry.participant);
+      isRemoteVideoActive.value = false;
+      return;
+    }
+
+    clearRemoteReconnectingParticipants();
     remoteTrackStreamCache.clear();
     remoteParticipants.value = [];
     isRemoteVideoActive.value = false;
@@ -1848,11 +2053,28 @@ const syncRemoteParticipantState = () => {
   const nextRemoteParticipants = Array.from(
     activeRoom.remoteParticipants.values()
   ).map(buildRemoteParticipantState);
+  const activeParticipantIds = new Set(
+    nextRemoteParticipants.map(participant => participant.identity)
+  );
+
+  activeParticipantIds.forEach(identity => {
+    clearRemoteReconnectingParticipant(identity);
+  });
+
+  const reconnectingParticipants = Array.from(
+    remoteReconnectingParticipants.values()
+  )
+    .map(entry => entry.participant)
+    .filter(participant => !activeParticipantIds.has(participant.identity));
+  const displayedRemoteParticipants = [
+    ...nextRemoteParticipants,
+    ...reconnectingParticipants
+  ];
 
   pruneRemoteTrackStreamCache(
     nextRemoteParticipants.map(participant => participant.identity)
   );
-  remoteParticipants.value = nextRemoteParticipants;
+  remoteParticipants.value = displayedRemoteParticipants;
 
   isRemoteVideoActive.value = remoteParticipants.value.some(
     participant => participant.isVideoActive
@@ -2184,6 +2406,17 @@ const syncConnectionState = (activeRoom: Room) => {
 
   isIncoming.value = false;
 
+  if (
+    directCallRecoveryRoomId ||
+    callStatusNoticeKind.value === 'reconnecting'
+  ) {
+    isCalling.value = false;
+    ensureCallTimerContinues();
+    stopDialingSound();
+    stopRingtone();
+    return;
+  }
+
   if (callStartedAt.value) {
     startTimer();
   } else {
@@ -2400,6 +2633,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncRemoteParticipantSpeakingState();
     })
     .on(RoomEvent.ParticipantConnected, participant => {
+      clearRemoteReconnectingParticipant(participant.identity);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
       requestHighQualityForAllRemoteVideoTracks();
@@ -2416,6 +2650,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       handRaisedParticipants.value = nextHandRaisedParticipants;
       clearPendingRemoteAudioResubscribeTimeouts(participant.identity);
       clearParticipantReaction(participant.identity, false);
+      markRemoteParticipantReconnecting(participant);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
 
@@ -2423,7 +2658,9 @@ const setupRoomListeners = (activeRoom: Room) => {
         !activeRoom.remoteParticipants.size &&
         !isGroupCallSession(topicId.value)
       ) {
-        startDirectCallRecovery(roomId.value, topicId.value);
+        startDirectCallRecovery(roomId.value, topicId.value, {
+          waitForRemote: true
+        });
       }
 
       showGroupCallPresenceNotification(participant, 'left', activeRoom);
@@ -2457,7 +2694,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncRemoteParticipantState();
     })
     .on(RoomEvent.Reconnecting, () => {
-      showPersistentCallStatusNotice(CALL_RECONNECT_NOTICE);
+      showReconnectCallStatusNotice();
       syncLocalTrackState();
       syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
@@ -2465,7 +2702,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       scheduleCallAudioRecovery(activeRoom);
     })
     .on(RoomEvent.Reconnected, () => {
-      if (callStatusNotice.value === CALL_RECONNECT_NOTICE) {
+      if (callStatusNoticeKind.value === 'reconnecting') {
         clearCallStatusNotice();
       }
       syncLocalTrackState();
@@ -2479,6 +2716,14 @@ const setupRoomListeners = (activeRoom: Room) => {
       void enforceSingleScreenShare();
     })
     .on(RoomEvent.Disconnected, () => {
+      if (ignoredDisconnectedRoom === activeRoom) {
+        if (room === activeRoom) {
+          room = null;
+        }
+        ignoredDisconnectedRoom = null;
+        return;
+      }
+
       if (matchesPendingEndCall(roomId.value, topicId.value)) {
         return;
       }
@@ -2487,7 +2732,11 @@ const setupRoomListeners = (activeRoom: Room) => {
         room = null;
       }
 
-      if (startDirectCallRecovery(roomId.value, topicId.value)) {
+      if (
+        startDirectCallRecovery(roomId.value, topicId.value, {
+          waitForRemote: true
+        })
+      ) {
         return;
       }
 
@@ -2580,7 +2829,12 @@ const connectToRoom = async () => {
       throw new Error('Failed to get LiveKit token');
     }
 
-    room?.disconnect();
+    const previousRoom = room;
+    if (previousRoom) {
+      ignoredDisconnectedRoom = previousRoom;
+      previousRoom.disconnect();
+    }
+
     suppressParticipantPresenceNotifications = true;
     const nextRoom = new Room({
       adaptiveStream: {
@@ -2616,7 +2870,17 @@ const connectToRoom = async () => {
         return;
       }
 
-      if (shouldEndCallOnConnectFailure && sdk && me && activeRoomId) {
+      const isDirectCallRecovery =
+        directCallRecoveryRoomId === activeRoomId &&
+        directCallRecoveryTopicId === activeTopicId;
+
+      if (
+        shouldEndCallOnConnectFailure &&
+        !isDirectCallRecovery &&
+        sdk &&
+        me &&
+        activeRoomId
+      ) {
         sdk.sendWebSocketEvent(WebSocketEventType.END_CALL, {
           roomId: activeRoomId,
           topicId: activeTopicId,
@@ -2624,10 +2888,7 @@ const connectToRoom = async () => {
         });
       }
 
-      if (
-        directCallRecoveryRoomId === activeRoomId &&
-        directCallRecoveryTopicId === activeTopicId
-      ) {
+      if (isDirectCallRecovery) {
         throw error;
       }
 
@@ -2705,6 +2966,7 @@ const resetMediaState = () => {
   videoToggleOperation = null;
   localVideoStream.value = null;
   localScreenShareStream.value = null;
+  clearRemoteReconnectingParticipants();
   remoteParticipants.value = [];
   handRaisedParticipants.value = {};
   clearAllParticipantReactions();
@@ -3338,20 +3600,43 @@ export const handleCallAnswered = async (
   markIncomingCallDismissed(answeredRoomId, answeredTopicId);
 
   if (answeredTopicId) {
+    const topicsApi = useTopics();
+    const answeredTopic = topicsApi.getSelectedTopic(answeredTopicId) as any;
     const existingPendingCall = activeGroupCalls.value[answeredTopicId];
-    if (existingPendingCall) {
+    const isGroupAnsweredCall =
+      answeredTopic?.type === TopicType.Group ||
+      existingPendingCall?.groupMode ||
+      answeredTopic?.activeCall?.groupMode;
+
+    if (isGroupAnsweredCall) {
       activeGroupCalls.value = {
         ...activeGroupCalls.value,
         [answeredTopicId]: {
-          ...existingPendingCall,
-          startTime: answeredStartTime ?? existingPendingCall.startTime ?? null,
+          roomId:
+            answeredRoomId ||
+            existingPendingCall?.roomId ||
+            answeredTopic?.activeCall?.roomId ||
+            answeredTopicId,
+          topicId: answeredTopicId,
+          caller: existingPendingCall?.caller,
+          startTime:
+            answeredStartTime ??
+            existingPendingCall?.startTime ??
+            answeredTopic?.activeCall?.startTime ??
+            null,
+          participantCount:
+            answeredTopic?.activeCall?.participantCount ??
+            existingPendingCall?.participantCount,
+          groupMode: true,
           elapsedDurationMs:
-            answeredElapsedDurationMs ?? existingPendingCall.elapsedDurationMs
+            answeredElapsedDurationMs ??
+            existingPendingCall?.elapsedDurationMs ??
+            answeredTopic?.activeCall?.elapsedDurationMs ??
+            0
         }
       };
     }
 
-    const topicsApi = useTopics();
     topicsApi.topics.value = topicsApi.topics.value.map(topic =>
       topic.id === answeredTopicId
         ? {
@@ -3362,7 +3647,7 @@ export const handleCallAnswered = async (
                 answeredStartTime ?? topic.activeCall?.startTime ?? null,
               participantCount: topic.activeCall?.participantCount,
               callType: topic.activeCall?.callType || 'livekit',
-              groupMode: topic.activeCall?.groupMode,
+              groupMode: topic.activeCall?.groupMode ?? isGroupAnsweredCall,
               elapsedDurationMs:
                 answeredElapsedDurationMs ?? topic.activeCall?.elapsedDurationMs
             }
@@ -3402,16 +3687,70 @@ export const handleCallAnswered = async (
   }
 };
 
+const showEndedCallNoticeAndReleaseMedia = (
+  activeCaller: IUser | null = user.value
+) => {
+  connectAttemptId += 1;
+  connectPromise = null;
+  shouldEndCallOnConnectFailure = false;
+  resetDirectCallRecoveryState(true);
+  clearPendingAudioRecoveryTimeouts();
+  clearPendingRemoteAudioResubscribeTimeouts();
+  clearLocalAcceptState();
+  clearCallStatusNotice();
+  clearDialingTimeout();
+  resetTimer();
+  stopRingtone();
+  stopDialingSound();
+
+  const activeRoom = room;
+
+  void stopLocalBackgroundProcessor();
+  stopLocalMediaTracks();
+
+  if (activeRoom) {
+    ignoredDisconnectedRoom = activeRoom;
+    activeRoom.disconnect();
+  }
+
+  room = null;
+  isIncoming.value = false;
+  isCalling.value = false;
+  user.value = activeCaller;
+  resetMediaState();
+  open.value = true;
+  isModalVisible.value = true;
+
+  showTransientCallStatusNotice(
+    DIRECT_CALL_ENDED_NOTICE,
+    CALL_STATUS_NOTICE_CLOSE_DELAY_MS,
+    'ended'
+  );
+
+  if (Capacitor.isNativePlatform()) {
+    endAllCallKits();
+  }
+};
+
 export const handleCallEnded = (
   endedRoomId?: string | null,
   endedTopicId?: string | null,
-  reason?: CallEndReason
-) => {
+  reason?: CallEndReason,
+  endedByUserId?: string | null
+): boolean => {
+  const activeCaller = user.value;
+  const wasIncomingCall = isIncoming.value;
+
   if (matchesPendingEndCall(endedRoomId, endedTopicId)) {
     resetPendingEndCallState();
     roomId.value = null;
     topicId.value = null;
-    return;
+
+    if (wasIncomingCall || activeCaller) {
+      showEndedCallNoticeAndReleaseMedia(activeCaller);
+    }
+
+    return true;
   }
 
   const matchesCurrentCall =
@@ -3426,19 +3765,36 @@ export const handleCallEnded = (
     !isIncoming.value
   ) {
     showTransientCallStatusNotice('Пользователь занят');
-    return;
+    return true;
   }
 
-  if (
-    matchesCurrentCall &&
-    startDirectCallRecovery(endedRoomId, endedTopicId)
-  ) {
-    return;
+  if (!matchesCurrentCall) {
+    return false;
   }
 
-  if (matchesCurrentCall) {
-    cleanup(true);
+  const matchesActiveRecovery =
+    !!directCallRecoveryRoomId &&
+    ((endedRoomId && directCallRecoveryRoomId === endedRoomId) ||
+      (endedTopicId && directCallRecoveryTopicId === endedTopicId));
+
+  if (matchesActiveRecovery) {
+    showEndedCallNoticeAndReleaseMedia(activeCaller);
+    return true;
   }
+
+  if (!endedByUserId) {
+    if (
+      startDirectCallRecovery(endedRoomId, endedTopicId, {
+        waitForRemote: true
+      })
+    ) {
+      syncRemoteParticipantState();
+      return false;
+    }
+  }
+
+  showEndedCallNoticeAndReleaseMedia(activeCaller);
+  return true;
 };
 
 export const dismissIncomingCallState = (
@@ -3760,6 +4116,9 @@ export const leaveCall = () => {
   const activeRoomId = roomId.value;
   const activeTopicId = topicId.value;
   const activeCaller = user.value;
+  const wasIncomingCall = isIncoming.value;
+  const shouldShowEndedNotice =
+    open.value && isModalVisible.value && !isIncoming.value;
   const activeTopic = activeTopicId
     ? (useTopics().getSelectedTopic(activeTopicId) as any)
     : null;
@@ -3788,6 +4147,11 @@ export const leaveCall = () => {
     invitedGroupCall.value = null;
   }
 
+  if (shouldShowEndedNotice || wasIncomingCall) {
+    showEndedCallNoticeAndReleaseMedia(activeCaller);
+    return;
+  }
+
   connectAttemptId += 1;
   connectPromise = null;
   shouldEndCallOnConnectFailure = false;
@@ -3814,9 +4178,9 @@ export const leaveCall = () => {
   open.value = false;
   isIncoming.value = false;
   isCalling.value = false;
+  resetMediaState();
   isModalVisible.value = false;
   user.value = null;
-  resetMediaState();
 
   if (Capacitor.isNativePlatform()) {
     endAllCallKits();
@@ -3960,7 +4324,18 @@ export const handleNativeCallAction = async (
     !incomingRoomId || !roomId.value || roomId.value === incomingRoomId;
 
   if (!isCurrentCallTarget) {
-    emitEndCallEvent(targetRoomId, targetTopicId);
+    if (targetRoomId) {
+      roomId.value = targetRoomId;
+    }
+
+    if (targetTopicId) {
+      topicId.value = targetTopicId;
+    }
+
+    isIncoming.value = true;
+    open.value = true;
+    isModalVisible.value = true;
+    leaveCall();
     return;
   }
 
@@ -4022,6 +4397,7 @@ export {
   state,
   formattedTime,
   callStatusNotice,
+  callStatusNoticeKind,
   localVideoStream,
   localScreenShareStream,
   remoteParticipants,
@@ -4032,8 +4408,25 @@ export {
 };
 
 if (typeof window !== 'undefined') {
+  if (Capacitor.isNativePlatform()) {
+    void App.addListener('appStateChange', ({ isActive }) => {
+      isNativeAppInBackground = !isActive;
+
+      if (!isActive) {
+        if (callStatusNoticeKind.value === 'reconnecting') {
+          clearCallStatusNotice();
+        }
+        return;
+      }
+
+      if (directCallRecoveryRoomId && directCallRecoveryTopicId) {
+        showReconnectCallStatusNotice();
+      }
+    });
+  }
+
   window.addEventListener('beforeunload', () => {
-    if (open.value) {
+    if (open.value && !Capacitor.isNativePlatform()) {
       leaveCall();
     }
   });

@@ -306,10 +306,6 @@ export function useMessageSender(
       return;
     }
 
-    if (media.ex?.fillPreview) {
-      return;
-    }
-
     const timeoutMs = 3000;
     const startedAt = Date.now();
 
@@ -1364,8 +1360,11 @@ export function useMessageSender(
           ex:
             options?.fillSharedPreview === true
               ? {
-                  width: dimensions.width,
-                  height: dimensions.height,
+                  ...calculatePreviewDimensions(
+                    dimensions,
+                    filePayloads.length,
+                    i
+                  ),
                   fillPreview: true
                 }
               : calculatePreviewDimensions(dimensions, filePayloads.length, i)

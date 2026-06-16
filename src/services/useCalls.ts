@@ -87,9 +87,10 @@ export const handleCallAnswered = (
 export const handleCallEnded = (
   roomId?: string,
   topicId?: string | null,
-  reason?: 'busy'
+  reason?: 'busy',
+  userId?: string | null
 ) => {
-  handleLiveKitEnded(roomId, topicId, reason);
+  return handleLiveKitEnded(roomId, topicId, reason, userId);
 };
 
 export const dismissIncomingCall = (
