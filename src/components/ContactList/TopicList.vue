@@ -44,7 +44,8 @@
         @keydown.enter="handleClick(topic)"
         @keydown.space="handleClick(topic)"
       >
-        <CachedAvatar
+        <component
+          :is="isBotTopic(topic) ? BotAvatar : CachedAvatar"
           :class="[
             'contact-list__avatar',
             {
@@ -309,12 +310,16 @@
         tabindex="0"
         @click="handleMessageResultClick(result)"
       >
-        <CachedAvatar
+        <component
+          :is="
+            isBotTopic(getMessageResultTopic(result)) ? BotAvatar : CachedAvatar
+          "
           class="contact-list__avatar"
           :initials="getMessageResultTopicName(result)"
           :path="getMessageResultTopicAvatar(result)"
           :alt="`Avatar of ${getMessageResultTopicName(result)}`"
           is-icon
+          :is-online="isBotTopic(getMessageResultTopic(result))"
           :data-testid="`${props.dataTestid}-ContactList-MessageAvatar${index + 1}`"
         />
         <div class="contact-list__block--wrapper">
@@ -378,6 +383,7 @@ import {
 import ContextMenu from './ContextMenu.vue';
 import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
+import BotAvatar from '../UI/BotAvatar.vue';
 import EmojiIcon from '../UI/EmojiIcon.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { getAuthUser } from '../../composables/useAuth';
@@ -420,6 +426,7 @@ import {
 } from '../../services/useCalls';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 import type { IMessageSearchResult } from '../../composables/useMessageSearch';
+import { isBotTopic } from '../../utils/bot';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
@@ -620,10 +627,11 @@ const getMessageResultTopicAvatar = (result: IMessageSearchResult): string =>
   getMessageResultTopic(result)?.avatarUrl || '';
 
 const isTopicUserOnline = (topic: ITopic): boolean =>
-  topic.type === TopicType.DM &&
-  !!topic.user &&
-  !getUserLastOnline(topic.user) &&
-  getHasWebsocketConnection();
+  isBotTopic(topic) ||
+  (topic.type === TopicType.DM &&
+    !!topic.user &&
+    !getUserLastOnline(topic.user) &&
+    getHasWebsocketConnection());
 
 const getTopicLastMessageLabel = (media: IMedia[]): string => {
   let text = '';

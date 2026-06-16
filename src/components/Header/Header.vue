@@ -93,6 +93,7 @@
           v-if="
             (route.type === RouteTypes.DIALOGS ||
               route.type === RouteTypes.GROUP) &&
+            !isBotDialogTopic &&
             !isCallActive &&
             !hasPendingCallForCurrentTopic
           "
@@ -429,6 +430,8 @@ import {
   setMobileTopicSearchActive,
   type IMessageSearchResult
 } from '../../composables/useMessageSearch';
+import { deleteBotTopic } from '../../composables/useBots';
+import { isBotTopic } from '../../utils/bot';
 
 const { getSelectedTopic } = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
@@ -456,23 +459,11 @@ const state = reactive({
   roomId: null
 });
 
-const actionModalTitle = computed(() =>
-  route.value.type === RouteTypes.DIALOGS
-    ? 'Удаление чата'
-    : currentRouteGroup.value?.isAdmin
-      ? 'Удаление канала'
-      : 'Выход из канала'
-);
-
-const actionModalDescription = computed(() =>
-  route.value.type === RouteTypes.DIALOGS
-    ? 'Вы уверены, что хотите удалить чат?'
-    : currentRouteGroup.value?.isAdmin
-      ? 'Вы уверены, что хотите удалить канал?'
-      : 'Вы уверены, что хотите покинуть канал?'
-);
-
 const currentTopic = computed(() => getSelectedTopic());
+const isBotDialogTopic = computed(
+  () =>
+    route.value.type === RouteTypes.DIALOGS && isBotTopic(currentTopic.value)
+);
 const currentRouteGroup = computed(() => {
   if (currentTopic.value?.type !== TopicType.Group) {
     return null;
@@ -484,6 +475,25 @@ const currentRouteGroup = computed(() => {
 
   return currentGroup.value;
 });
+const actionModalTitle = computed(() =>
+  isBotDialogTopic.value
+    ? 'Удаление бота'
+    : route.value.type === RouteTypes.DIALOGS
+      ? 'Удаление чата'
+      : currentRouteGroup.value?.isAdmin
+        ? 'Удаление канала'
+        : 'Выход из канала'
+);
+
+const actionModalDescription = computed(() =>
+  isBotDialogTopic.value
+    ? 'Вы уверены, что хотите удалить бота?'
+    : route.value.type === RouteTypes.DIALOGS
+      ? 'Вы уверены, что хотите удалить чат?'
+      : currentRouteGroup.value?.isAdmin
+        ? 'Вы уверены, что хотите удалить канал?'
+        : 'Вы уверены, что хотите покинуть канал?'
+);
 const currentTypingUsers = computed(() =>
   route.value?.id ? getTopicTypingUsers(route.value.id) : []
 );
@@ -876,105 +886,83 @@ const handleClickHeader = async (): Promise<void> => {
   emits('unmount-click');
 };
 
-const getPopoverOptions = computed(() => {
-  const popoverArray = [];
+const getHeaderContextMenuOptions = computed(() => {
+  const options: Array<{
+    value: string;
+    function: () => void;
+    style?: string;
+    iconName?: IconNameEnum;
+  }> = [];
 
   if (route.value && route.value.type !== RouteTypes.AI) {
     if (isMobile.value && isTopicSearchAvailable.value) {
-      popoverArray.push({
+      options.push({
         value: 'Поиск в чате',
-        function: showSearch
+        function: showSearch,
+        iconName: IconNameEnum.search
       });
     }
 
     if (route.value.type === RouteTypes.GROUP) {
-      popoverArray.push({
+      options.push({
         value: 'Информация',
         function: () => {
           void handleClickHeader();
-        }
+        },
+        iconName: IconNameEnum.info
       });
     }
 
-    popoverArray.push({
-      value: `${
-        currentTopic.value?.info.isMute
-          ? 'Вкл. уведомления'
-          : 'Выкл. уведомления'
-      }`,
+    if (route.value.type === RouteTypes.DIALOGS && isBotDialogTopic.value) {
+      options.push({
+        value: 'Информация о боте',
+        function: handleUserProfileClick,
+        iconName: IconNameEnum.info
+      });
+    }
+
+    options.push({
+      value: currentTopic.value?.info?.isMute
+        ? 'Вкл. уведомления'
+        : 'Выкл. уведомления',
       function: () => {
         toggleMuteTopic(currentTopic.value);
-      }
+      },
+      iconName: currentTopic.value?.info?.isMute
+        ? IconNameEnum.distrub
+        : IconNameEnum.noDistrub
     });
 
-    if (route.value.type !== RouteTypes.GROUP) {
-      popoverArray.push({
-        value: 'Удалить чат',
-        function: handleOpenActionModal,
-        style: 'color: var(--error-color)'
-      });
-    } else {
-      popoverArray.push({
+    if (route.value.type === RouteTypes.GROUP) {
+      options.push({
         value: currentRouteGroup.value?.isAdmin
           ? 'Удалить канал'
           : 'Выйти из канала',
         function: handleOpenActionModal,
-        style: 'color: var(--error-color)'
+        style: 'color: var(--error-color)',
+        iconName: currentRouteGroup.value?.isAdmin
+          ? IconNameEnum.deleteSmall
+          : IconNameEnum.logout
+      });
+    } else {
+      options.push({
+        value: isBotDialogTopic.value ? 'Удалить бота' : 'Удалить чат',
+        function: handleOpenActionModal,
+        style: 'color: var(--error-color)',
+        iconName: IconNameEnum.deleteSmall
       });
     }
   } else {
-    popoverArray.push({
+    options.push({
       value: 'Очистить историю',
       function: () => {
         emits('unmount-clear');
-      }
+      },
+      iconName: IconNameEnum.deleteSmall
     });
   }
 
-  return popoverArray;
-});
-
-const getHeaderContextMenuOptions = computed(() => {
-  return getPopoverOptions.value.map((option, index) => {
-    let iconName: IconNameEnum | undefined;
-
-    if (option.value === 'Поиск в чате') {
-      iconName = IconNameEnum.search;
-    } else if (route.value.type === RouteTypes.AI) {
-      iconName = IconNameEnum.deleteSmall;
-    } else if (route.value.type === RouteTypes.GROUP) {
-      const optionIndex =
-        isMobile.value && isTopicSearchAvailable.value ? index - 1 : index;
-
-      if (optionIndex === 0) {
-        iconName = IconNameEnum.info;
-      } else if (optionIndex === 1) {
-        iconName = currentTopic.value?.info.isMute
-          ? IconNameEnum.distrub
-          : IconNameEnum.noDistrub;
-      } else {
-        iconName = currentRouteGroup.value?.isAdmin
-          ? IconNameEnum.deleteSmall
-          : IconNameEnum.logout;
-      }
-    } else {
-      const optionIndex =
-        isMobile.value && isTopicSearchAvailable.value ? index - 1 : index;
-
-      if (optionIndex === 0) {
-        iconName = currentTopic.value?.info.isMute
-          ? IconNameEnum.distrub
-          : IconNameEnum.noDistrub;
-      } else {
-        iconName = IconNameEnum.deleteSmall;
-      }
-    }
-
-    return {
-      ...option,
-      iconName
-    };
-  });
+  return options;
 });
 
 const handleOpenActionModal = () => {
@@ -990,9 +978,14 @@ const handleCloseActionModal = () => {
   state.openActionModal = false;
 };
 
-const handleConfirmActionModal = () => {
+const handleConfirmActionModal = async (): Promise<void> => {
   if (route.value.type === RouteTypes.DIALOGS) {
-    deleteTopic(route.value.id);
+    if (currentTopic.value && isBotDialogTopic.value) {
+      await deleteBotTopic(currentTopic.value);
+    } else {
+      deleteTopic(route.value.id);
+    }
+
     navigateToDialogsList();
   } else if (route.value.type === RouteTypes.GROUP && currentRouteGroup.value) {
     if (currentRouteGroup.value.isAdmin) {

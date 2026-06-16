@@ -47,6 +47,14 @@
         >
           <GroupIcon /> Создать группу
         </Button>
+        <Button
+          @click="handleCreateBot"
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          :data-testid="`${props.dataTestid}-ChatsToolbar-CreateBotButton`"
+        >
+          <BotIcon /> Создать бота
+        </Button>
       </ContextMenu>
     </div>
 
@@ -99,6 +107,7 @@ import { Button, ButtonTypeEnum, Search, SizesEnum } from '@pksep/yui';
 import Line from '../UI/Line.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import ContextMenu from '../ContactList/ContextMenu.vue';
+import BotIcon from '../UI/BotIcon.vue';
 import MessageIcon from '../UI/MessageIcon.vue';
 import GroupIcon from '../UI/GroupIcon.vue';
 import NewTopicIcon from '../UI/NewTopicIcon.vue';
@@ -122,7 +131,8 @@ const props = withDefaults(
     filterCounts: () => ({
       all: 0,
       chats: 0,
-      groups: 0
+      groups: 0,
+      bots: 0
     }),
     isCollapse: false,
     dataTestid: 'ChatsToolbar'
@@ -134,6 +144,7 @@ const emits = defineEmits<{
   (e: 'update:filter', value: ChatsToolbarFilter): void;
   (e: 'create-chat'): void;
   (e: 'create-group'): void;
+  (e: 'create-bot'): void;
 }>();
 
 const isWaitingConnection = computed(() => !getHasWebsocketConnection());
@@ -151,9 +162,15 @@ const handleCreateGroup = () => {
   emits('create-group');
 };
 
+const handleCreateBot = () => {
+  closeActivePopover('plusMenu');
+  emits('create-bot');
+};
+
 const filterOptions: Array<{ value: ChatsToolbarFilter; label: string }> = [
   { value: 'all', label: 'Все' },
   { value: 'chats', label: 'Чаты' },
-  { value: 'groups', label: 'Группы' }
+  { value: 'groups', label: 'Группы' },
+  { value: 'bots', label: 'Боты' }
 ];
 </script>

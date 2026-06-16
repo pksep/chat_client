@@ -26,6 +26,7 @@
           @update:filter="setFilter"
           @create-chat="handleNewContactModal"
           @create-group="handleNewGroupModal"
+          @create-bot="handleNewBotModal"
         />
 
         <ShareSelectionToolbar
@@ -136,6 +137,7 @@ import {
   searchMessages,
   type IMessageSearchResult
 } from '../composables/useMessageSearch';
+import { isBotTopic } from '../utils/bot';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: 'Menu'
@@ -172,19 +174,45 @@ const pendingShareSummaryLabel = computed(() =>
   )
 );
 
+const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
+  if (!topic) {
+    return false;
+  }
+
+  if (toolbarState.filter === 'chats') {
+    return topic.type === TopicType.DM && !isBotTopic(topic);
+  }
+
+  if (toolbarState.filter === 'groups') {
+    return topic.type === TopicType.Group;
+  }
+
+  if (toolbarState.filter === 'bots') {
+    return isBotTopic(topic);
+  }
+
+  return true;
+};
+
 const filterCounts = computed(() => ({
   all: allTopics.value.reduce(
     (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
     0
   ),
   chats: allTopics.value
-    .filter(topic => topic.type === TopicType.DM)
+    .filter(topic => topic.type === TopicType.DM && !isBotTopic(topic))
     .reduce(
       (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
       0
     ),
   groups: allTopics.value
     .filter(topic => topic.type === TopicType.Group)
+    .reduce(
+      (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
+      0
+    ),
+  bots: allTopics.value
+    .filter(topic => isBotTopic(topic))
     .reduce(
       (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
       0
@@ -202,17 +230,9 @@ const normalizeToolbarSearchText = (value?: string): string =>
 const topicGroups = computed(() => {
   const query = normalizeToolbarSearchText(toolbarState.search);
 
-  const filteredByType = allTopics.value.filter(topic => {
-    if (toolbarState.filter === 'chats') {
-      return topic.type === TopicType.DM;
-    }
-
-    if (toolbarState.filter === 'groups') {
-      return topic.type === TopicType.Group;
-    }
-
-    return true;
-  });
+  const filteredByType = allTopics.value.filter(topic =>
+    matchesToolbarFilter(topic)
+  );
 
   if (!query) {
     return filteredByType;
@@ -241,15 +261,7 @@ const filteredMessageSearchResults = computed(() => {
     const topic =
       result.topic || allTopics.value.find(t => t.id === result.topicId);
 
-    if (toolbarState.filter === 'chats') {
-      return topic?.type === TopicType.DM;
-    }
-
-    if (toolbarState.filter === 'groups') {
-      return topic?.type === TopicType.Group;
-    }
-
-    return true;
+    return matchesToolbarFilter(topic || null);
   });
 });
 
@@ -335,6 +347,10 @@ const handleNewGroupModal = () => {
 
 const handleNewContactModal = () => {
   emits('unmount-new-contact', { isChapterOpen: true });
+};
+
+const handleNewBotModal = () => {
+  emits('unmount-new-bot', { isChapterOpen: true });
 };
 
 watch(

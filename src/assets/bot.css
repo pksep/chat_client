@@ -1,0 +1,235 @@
+.bot-avatar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bot-avatar__image,
+.bot-avatar__fallback {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+.bot-avatar__fallback {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  background: var(--grey1);
+  color: var(--grey6);
+  padding: 7px;
+  border-radius: 50%;
+}
+
+.bot-avatar__status {
+  position: absolute;
+  left: 29.5px;
+  top: 29.5px;
+  width: 9px;
+  height: 9px;
+  background-color: var(--blue1);
+  border-radius: 50%;
+  border: 1px solid var(--white, #fff);
+  transform-origin: center;
+  z-index: 2;
+}
+
+.bot-editor {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  padding: 20px;
+}
+
+.bot-editor--mobile {
+  min-height: calc(100dvh - 210px);
+  padding: 12px 6px 24px;
+}
+
+.bot-editor__avatar-button,
+.bot-info-panel__avatar-button {
+  display: flex;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.bot-editor__avatar,
+.bot-info-panel__avatar {
+  --size-avatar: 74px;
+}
+
+.bot-editor__file-input {
+  display: none;
+}
+
+.bot-editor__fields,
+.bot-info-panel__fields {
+  display: grid;
+  gap: 14px;
+}
+
+.bot-editor__field {
+  display: grid;
+  gap: 6px;
+}
+
+.bot-editor__label {
+  color: var(--grey6);
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.bot-editor__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.bot-info-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
+  background: var(--white);
+}
+
+.bot-info-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  border-bottom: 1px solid var(--border-grey);
+}
+
+.bot-info-panel__header-space {
+  width: 24px;
+  height: 24px;
+}
+
+.bot-info-panel__title {
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--text-color);
+}
+
+.bot-info-panel__close {
+  min-height: 24px !important;
+  height: 24px;
+  padding: 0 !important;
+  color: var(--text-light-color);
+}
+
+.bot-info-panel__body {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: 18px 20px 20px;
+}
+
+.bot-info-panel__value-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.bot-info-panel__value-row:has(:only-child) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.bot-info-panel__input {
+  min-width: 0;
+}
+
+.bot-info-panel__icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--grey6);
+  cursor: pointer;
+}
+
+.bot-info-panel__icon-button svg,
+.bot-info-panel__icon-button .icon-yui-kit {
+  width: 18px;
+  height: 18px;
+}
+
+.bot-info-panel__save {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.bot-info-panel__footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 20px calc(18px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--grey1);
+  background: var(--white);
+}
+
+.bot-info-panel__delete {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-light-color);
+  font-size: 12px;
+  line-height: 14px;
+}
+
+.bot-info-panel__delete svg,
+.bot-info-panel__delete .icon-yui-kit {
+  width: 18px;
+  height: 18px;
+}
+
+.new-bot-mobile .mobile__modal-content {
+  padding-inline: 10px;
+}
+
+@media screen and (width <= 768px) {
+  .bot-info-panel__body {
+    padding-inline: 10px;
+  }
+
+  .bot-info-panel__footer {
+    padding-inline: 10px;
+  }
+
+  .contact-list__li .bot-avatar__fallback {
+    display: inline-flex;
+    width: 60px;
+    height: 60px;
+    align-items: center;
+    justify-content: center;
+    background: var(--grey1);
+    color: var(--grey6);
+    padding: 7px;
+    border-radius: 50%;
+  }
+
+  .contact-list__li .bot-avatar__status {
+    position: absolute;
+    left: 45px;
+    top: 45px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: var(--blue1);
+    border-radius: 50%;
+    border: 1px solid var(--white, #fff);
+    transform-origin: center;
+    z-index: 2;
+  }
+}

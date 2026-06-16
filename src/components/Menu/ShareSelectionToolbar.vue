@@ -121,7 +121,8 @@ const props = withDefaults(
     filterCounts: () => ({
       all: 0,
       chats: 0,
-      groups: 0
+      groups: 0,
+      bots: 0
     }),
     isSending: false,
     isCollapse: false,
@@ -140,7 +141,8 @@ const emits = defineEmits<{
 const filterOptions: Array<{ value: ChatsToolbarFilter; label: string }> = [
   { value: 'all', label: 'Все' },
   { value: 'chats', label: 'Чаты' },
-  { value: 'groups', label: 'Группы' }
+  { value: 'groups', label: 'Группы' },
+  { value: 'bots', label: 'Боты' }
 ];
 </script>
 

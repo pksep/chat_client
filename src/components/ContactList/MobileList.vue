@@ -23,6 +23,7 @@
           @update:filter="setFilter"
           @create-chat="handleShowAccount(TopicType.DM)"
           @create-group="handleShowAccount(TopicType.Group)"
+          @create-bot="handleShowBot"
         />
 
         <section
@@ -75,6 +76,10 @@
       @unmount-close="handleCloseModal"
       @unmount-contact="handleNewContact"
     />
+    <NewBotMobileModal
+      :open="state.showCreateBot"
+      @unmount-close="handleCloseBotModal"
+    />
   </template>
 </template>
 
@@ -86,6 +91,7 @@ import type {
 } from './interfaces/mobile-list';
 import type { IUser } from '../interfaces/interfaces';
 import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
+import NewBotMobileModal from '../NewChat/NewBotMobileModal.vue';
 import TopicList from './TopicList.vue';
 import ChatsToolbar from '../Menu/ChatsToolbar.vue';
 import { useTopics } from '../../composables/useTopics';
@@ -111,6 +117,7 @@ import {
   searchMessages,
   type IMessageSearchResult
 } from '../../composables/useMessageSearch';
+import { isBotTopic } from '../../utils/bot';
 
 const route = useUrlWatcher();
 
@@ -144,7 +151,7 @@ const filterCounts = computed(() => ({
     0
   ),
   chats: allTopics.value
-    .filter(topic => topic.type === TopicType.DM)
+    .filter(topic => topic.type === TopicType.DM && !isBotTopic(topic))
     .reduce(
       (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
       0
@@ -154,13 +161,40 @@ const filterCounts = computed(() => ({
     .reduce(
       (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
       0
+    ),
+  bots: allTopics.value
+    .filter(topic => isBotTopic(topic))
+    .reduce(
+      (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
+      0
     )
 }));
 
 const state = reactive({
   showAddAccount: false,
+  showCreateBot: false,
   checkUsers: new Set<string | number>()
 });
+
+const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
+  if (!topic) {
+    return false;
+  }
+
+  if (toolbarState.filter === 'chats') {
+    return topic.type === TopicType.DM && !isBotTopic(topic);
+  }
+
+  if (toolbarState.filter === 'groups') {
+    return topic.type === TopicType.Group;
+  }
+
+  if (toolbarState.filter === 'bots') {
+    return isBotTopic(topic);
+  }
+
+  return true;
+};
 
 const normalizeToolbarSearchText = (value?: string): string =>
   (value || '')
@@ -172,17 +206,9 @@ const normalizeToolbarSearchText = (value?: string): string =>
 
 const contactList = computed(() => {
   const query = normalizeToolbarSearchText(toolbarState.search);
-  const filteredByType = allTopics.value.filter(topic => {
-    if (toolbarState.filter === 'chats') {
-      return topic.type === TopicType.DM;
-    }
-
-    if (toolbarState.filter === 'groups') {
-      return topic.type === TopicType.Group;
-    }
-
-    return true;
-  });
+  const filteredByType = allTopics.value.filter(topic =>
+    matchesToolbarFilter(topic)
+  );
 
   if (!query) {
     return [...filteredByType];
@@ -211,15 +237,7 @@ const filteredMessageSearchResults = computed(() => {
     const topic =
       result.topic || allTopics.value.find(t => t.id === result.topicId);
 
-    if (toolbarState.filter === 'chats') {
-      return topic?.type === TopicType.DM;
-    }
-
-    if (toolbarState.filter === 'groups') {
-      return topic?.type === TopicType.Group;
-    }
-
-    return true;
+    return matchesToolbarFilter(topic || null);
   });
 });
 
@@ -266,6 +284,7 @@ const handleShowAccount = (topicType: TopicType) => {
   }
 
   setActiveSection('chats');
+  state.showCreateBot = false;
   state.showAddAccount = true;
 
   if (topicType === TopicType.DM) {
@@ -280,9 +299,24 @@ const handleCloseModal = () => {
   state.checkUsers.clear();
 };
 
+const handleCloseBotModal = () => {
+  state.showCreateBot = false;
+};
+
 const handleNewContact = (contact: IUser): void => {
   emits('unmount-contact', contact);
   handleCloseModal();
+};
+
+const handleShowBot = () => {
+  if (isAssistantRoute.value) {
+    return;
+  }
+
+  setActiveSection('chats');
+  state.showAddAccount = false;
+  state.showCreateBot = true;
+  navigateToDialogsList();
 };
 
 const hasDraggedFiles = (event: DragEvent): boolean => {

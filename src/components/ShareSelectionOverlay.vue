@@ -34,6 +34,7 @@ import { getTopicUnreadBadgeCount } from '../utils/topicUnreadBadge';
 import { useShareSelection } from '../composables/useShareSelection';
 import type { ITopic } from './interfaces/interfaces';
 import { getShareSelectionSummaryLabel } from '../utils/shareSelectionSummary';
+import { isBotTopic } from '../utils/bot';
 
 const { getTopicList } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
@@ -103,13 +104,33 @@ const shareModalSummaryLabel = computed(() =>
   ])
 );
 
+const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
+  if (!topic) {
+    return false;
+  }
+
+  if (toolbarState.filter === 'chats') {
+    return topic.type === TopicType.DM && !isBotTopic(topic);
+  }
+
+  if (toolbarState.filter === 'groups') {
+    return topic.type === TopicType.Group;
+  }
+
+  if (toolbarState.filter === 'bots') {
+    return isBotTopic(topic);
+  }
+
+  return true;
+};
+
 const filterCounts = computed(() => ({
   all: allTopics.value.reduce(
     (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
     0
   ),
   chats: allTopics.value
-    .filter(topic => topic.type === TopicType.DM)
+    .filter(topic => topic.type === TopicType.DM && !isBotTopic(topic))
     .reduce(
       (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
       0
@@ -119,22 +140,20 @@ const filterCounts = computed(() => ({
     .reduce(
       (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
       0
+    ),
+  bots: allTopics.value
+    .filter(topic => isBotTopic(topic))
+    .reduce(
+      (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
+      0
     )
 }));
 
 const contactList = computed(() => {
   const query = toolbarState.search.toLowerCase().trim();
-  const filteredByType = allTopics.value.filter(topic => {
-    if (toolbarState.filter === 'chats') {
-      return topic.type === TopicType.DM;
-    }
-
-    if (toolbarState.filter === 'groups') {
-      return topic.type === TopicType.Group;
-    }
-
-    return true;
-  });
+  const filteredByType = allTopics.value.filter(topic =>
+    matchesToolbarFilter(topic)
+  );
 
   if (!query) {
     return [...filteredByType];
