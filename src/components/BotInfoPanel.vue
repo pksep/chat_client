@@ -251,14 +251,6 @@ const handleAvatarChange = async (event: Event): Promise<void> => {
   form.avatarUrl = await fileToDataURL(file);
 };
 
-const handleCopyUsername = async (): Promise<void> => {
-  if (!form.username.trim()) {
-    return;
-  }
-
-  await copyTextToClipboard(`@${form.username.trim().replace(/^@+/, '')}`);
-};
-
 const handleCopyApiKey = async (): Promise<void> => {
   if (!form.apiKey) {
     return;
