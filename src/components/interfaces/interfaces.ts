@@ -168,6 +168,8 @@ export type IMessage = Message & {
   isPinnedForMe?: boolean;
   isPinnedOnlyMe?: boolean;
   replyMessage?: IMessage;
+  replyQuoteText?: string;
+  replyQuoteOccurrenceIndex?: number;
   forwardUser?: IUser;
   reactions?: Reaction[];
   ex?: string; // "{ clientId: string }"

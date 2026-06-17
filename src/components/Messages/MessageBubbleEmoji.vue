@@ -32,6 +32,7 @@
       <MessageReferenceBlock
         v-if="props.replyMessage"
         :reply-message="props.replyMessage"
+        :message-ex="props.messageEx"
         :is-me-sender="props.isMeSender"
         :reference-width="replyReferenceWidth"
         :defer-until-measured="true"

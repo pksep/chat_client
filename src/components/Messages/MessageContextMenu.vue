@@ -186,7 +186,7 @@
           @click.stop="handleReplyMessage"
           :data-testid="`${props.dataTestid}-MessageBubble-ReplyButton`"
         >
-          <ReplyIcon /> Ответить
+          <ReplyIcon /> {{ replyButtonLabel }}
         </Button>
 
         <Button
@@ -399,6 +399,10 @@ import SelectIcon from '../UI/SelectIcon.vue';
 import RetryIcon from '../UI/RetryIcon.vue';
 
 import { stripHtml } from '../../utils/stripHtml';
+import {
+  normalizeReplyQuoteText,
+  normalizeReplyQuoteWhitespace
+} from '../../utils/messageReplyQuote';
 import { MAX_W_MD } from '../../utils/constants';
 import { getAuthUser } from '../../composables/useAuth';
 import { closeActivePopover } from '../../composables/useContextMenu';
@@ -479,6 +483,102 @@ const isGroupTopic = computed(
 
 const currentMessage = computed(() =>
   messages.value.find(message => message.id === props.messageId)
+);
+
+type SelectedReplyQuote = {
+  text: string;
+  occurrenceIndex?: number;
+};
+
+const emptySelectedReplyQuote: SelectedReplyQuote = {
+  text: ''
+};
+
+const isNodeInside = (root: HTMLElement, node: Node): boolean =>
+  root === node || root.contains(node);
+
+const countQuoteOccurrences = (value: string, quoteText: string): number => {
+  if (!quoteText) {
+    return 0;
+  }
+
+  let count = 0;
+  let fromIndex = 0;
+  let occurrenceIndex = value.indexOf(quoteText, fromIndex);
+
+  while (occurrenceIndex >= 0) {
+    count += 1;
+    fromIndex = occurrenceIndex + quoteText.length;
+    occurrenceIndex = value.indexOf(quoteText, fromIndex);
+  }
+
+  return count;
+};
+
+const getSelectedQuoteOccurrenceIndex = (
+  root: HTMLElement,
+  range: Range,
+  quoteText: string
+): number | undefined => {
+  if (
+    !isNodeInside(root, range.startContainer) ||
+    !isNodeInside(root, range.endContainer)
+  ) {
+    return undefined;
+  }
+
+  const beforeSelectionRange = document.createRange();
+  beforeSelectionRange.selectNodeContents(root);
+
+  try {
+    beforeSelectionRange.setEnd(range.startContainer, range.startOffset);
+  } catch {
+    return undefined;
+  }
+
+  return countQuoteOccurrences(
+    normalizeReplyQuoteWhitespace(beforeSelectionRange.toString()),
+    quoteText
+  );
+};
+
+const selectedReplyQuote = computed<SelectedReplyQuote>(() => {
+  props.isOpen[props.messageId];
+
+  const selection = window.getSelection();
+  const selectedText = normalizeReplyQuoteText(selection?.toString());
+
+  if (!selectedText || !selection || selection.rangeCount === 0) {
+    return emptySelectedReplyQuote;
+  }
+
+  const range = selection.getRangeAt(0);
+  const container =
+    range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+      ? (range.commonAncestorContainer as Element)
+      : range.commonAncestorContainer.parentElement;
+  const messageElement = container?.closest('.message[data-message-id]');
+
+  if (messageElement?.getAttribute('data-message-id') !== props.messageId) {
+    return emptySelectedReplyQuote;
+  }
+
+  const contentElement =
+    messageElement.querySelector<HTMLElement>('.message-content__html') ||
+    messageElement.querySelector<HTMLElement>('.message-call__title') ||
+    (messageElement as HTMLElement);
+
+  return {
+    text: selectedText,
+    occurrenceIndex: getSelectedQuoteOccurrenceIndex(
+      contentElement,
+      range,
+      selectedText
+    )
+  };
+});
+const replyButtonLabel = computed(() =>
+  selectedReplyQuote.value.text ? 'Ответить с цитатой' : 'Ответить'
 );
 const isPinnedOnlyForMe = computed(
   () =>
@@ -848,7 +948,11 @@ const handleEditMessage = () => {
 };
 
 const handleReplyMessage = () => {
-  emits('unmount-reply-message-id', props.messageId);
+  emits('unmount-reply-message-id', {
+    messageId: props.messageId,
+    quoteText: selectedReplyQuote.value.text || undefined,
+    quoteOccurrenceIndex: selectedReplyQuote.value.occurrenceIndex
+  });
   handleClosePopover();
 };
 

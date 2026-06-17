@@ -664,11 +664,7 @@ const resolvedHeaderCallLabel = computed(() => {
     }
 
     if (activeCallTopic.value?.type === TopicType.DM) {
-      return (
-        activeCallTopic.value?.user?.nickname ||
-        activeCallTopic.value?.user?.initials ||
-        headerCallLabel.value
-      );
+      return activeCallTopic.value?.user?.initials || headerCallLabel.value;
     }
   }
 
