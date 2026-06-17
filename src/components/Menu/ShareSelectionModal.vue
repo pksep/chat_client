@@ -63,7 +63,13 @@
             <span>{{ filterOption.label }}</span>
             <span
               v-if="!!props.filterCounts[filterOption.value]"
-              class="chats-toolbar__filter-count"
+              :class="[
+                'chats-toolbar__filter-count',
+                {
+                  'chats-toolbar__filter-count--muted':
+                    props.filterMutedOnly[filterOption.value]
+                }
+              ]"
             >
               {{ props.filterCounts[filterOption.value] }}
             </span>
@@ -109,6 +115,7 @@ import type { ITopic } from '../interfaces/interfaces';
 import type { ChatsToolbarFilter } from '../../composables/useChatsToolbarState';
 
 type ChatsToolbarCounts = Record<ChatsToolbarFilter, number>;
+type ChatsToolbarMutedOnly = Record<ChatsToolbarFilter, boolean>;
 
 interface IShareInputPayload {
   content?: string;
@@ -124,6 +131,7 @@ const props = withDefaults(
     search: string;
     filter?: ChatsToolbarFilter;
     filterCounts?: ChatsToolbarCounts;
+    filterMutedOnly?: ChatsToolbarMutedOnly;
     selectedTopicIds: Set<string>;
     selectedCount: number;
     filesCount: number;
@@ -138,6 +146,12 @@ const props = withDefaults(
       chats: 0,
       groups: 0,
       bots: 0
+    }),
+    filterMutedOnly: () => ({
+      all: false,
+      chats: false,
+      groups: false,
+      bots: false
     }),
     isSending: false,
     dataTestid: 'ShareSelectionModal'

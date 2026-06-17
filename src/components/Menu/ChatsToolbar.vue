@@ -48,6 +48,8 @@
           <GroupIcon /> Создать группу
         </Button>
         <Button
+          disabled
+          style="pointer-events: none; color: var(--grey6)"
           @click="handleCreateBot"
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.small"
@@ -91,7 +93,13 @@
           <span>{{ filterOption.label }}</span>
           <span
             v-if="!!props.filterCounts[filterOption.value]"
-            class="chats-toolbar__filter-count"
+            :class="[
+              'chats-toolbar__filter-count',
+              {
+                'chats-toolbar__filter-count--muted':
+                  props.filterMutedOnly[filterOption.value]
+              }
+            ]"
           >
             {{ props.filterCounts[filterOption.value] }}
           </span>
@@ -116,12 +124,14 @@ import ConnectionStatus from '../UI/ConnectionStatus.vue';
 import { getHasWebsocketConnection } from '../../services/useChat';
 
 type ChatsToolbarCounts = Record<ChatsToolbarFilter, number>;
+type ChatsToolbarMutedOnly = Record<ChatsToolbarFilter, boolean>;
 
 const props = withDefaults(
   defineProps<{
     modelValue: string;
     filter?: ChatsToolbarFilter;
     filterCounts?: ChatsToolbarCounts;
+    filterMutedOnly?: ChatsToolbarMutedOnly;
     isCollapse?: boolean;
     dataTestid?: string;
     contextMenuPosition?: { x: number; y: number };
@@ -133,6 +143,12 @@ const props = withDefaults(
       chats: 0,
       groups: 0,
       bots: 0
+    }),
+    filterMutedOnly: () => ({
+      all: false,
+      chats: false,
+      groups: false,
+      bots: false
     }),
     isCollapse: false,
     dataTestid: 'ChatsToolbar'

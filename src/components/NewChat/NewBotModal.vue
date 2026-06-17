@@ -3,8 +3,8 @@
     :open="props.open"
     class="new-bot"
     position="center"
-    @close="handleClose"
     :data-testid="`${props.dataTestid}-NewBotModal-Container`"
+    @close="handleClose"
   >
     <header class="new-contact__header">
       Создать бота
@@ -24,6 +24,8 @@
           :path="form.avatarUrl"
           :initials="form.name || 'Б'"
           class="bot-editor__avatar"
+          :is-online="false"
+          is-edit
         />
       </button>
 
@@ -50,7 +52,7 @@
           <span class="bot-editor__label">Username бота:</span>
           <Input
             class="minor"
-            placeholder="Введите username или @username"
+            placeholder="Введите уникальное имя"
             :model-value="form.username"
             @update:model-value="value => (form.username = value)"
           />

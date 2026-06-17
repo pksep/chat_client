@@ -31,6 +31,8 @@
           :path="form.avatarUrl"
           :initials="form.name || 'Б'"
           class="bot-info-panel__avatar"
+          :is-online="false"
+          is-edit
         />
       </button>
 
@@ -56,14 +58,6 @@
         <label class="bot-editor__field">
           <div>
             <span class="bot-editor__label">Username бота:</span>
-            <button
-              type="button"
-              class="bot-info-panel__icon-button"
-              aria-label="Скопировать username"
-              @click="handleCopyUsername"
-            >
-              <CopyIcon />
-            </button>
           </div>
           <div class="bot-info-panel__value-row">
             <Input
@@ -76,7 +70,7 @@
         </label>
 
         <label class="bot-editor__field">
-          <div>
+          <div class="bot-editor__label__actions">
             <span class="bot-editor__label">API ключ:</span>
             <button
               type="button"
@@ -122,14 +116,14 @@
     </div>
 
     <div class="bot-info-panel__footer">
-      <button
-        type="button"
+      <Button
+        :type="ButtonTypeEnum.secondary"
         class="bot-info-panel__delete"
         @click="isDeleteConfirmOpen = true"
       >
         <Icon :name="IconNameEnum.deleteSmall" />
         <span>Удалить</span>
-      </button>
+      </Button>
     </div>
 
     <ConfirmModal

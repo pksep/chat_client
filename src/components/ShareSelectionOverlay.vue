@@ -7,6 +7,7 @@
     :search="toolbarState.search"
     :filter="toolbarState.filter"
     :filter-counts="filterCounts"
+    :filter-muted-only="filterMutedOnly"
     :selected-topic-ids="selectedTopicIds"
     :selected-count="selectedTopicsCount"
     :files-count="shareModalFilesCount"
@@ -30,11 +31,15 @@ import { useTopics } from '../composables/useTopics';
 import { useChatsToolbarState } from '../composables/useChatsToolbarState';
 import { TopicType } from '../services/useChatSDK/types';
 import { getAuthUser } from '../composables/useAuth';
-import { getTopicUnreadBadgeCount } from '../utils/topicUnreadBadge';
 import { useShareSelection } from '../composables/useShareSelection';
 import type { ITopic } from './interfaces/interfaces';
 import { getShareSelectionSummaryLabel } from '../utils/shareSelectionSummary';
 import { isBotTopic } from '../utils/bot';
+import {
+  getChatsToolbarFilterBadgeState,
+  getChatsToolbarFilterCounts,
+  getChatsToolbarFilterMutedOnly
+} from '../utils/chats-toolbar-filter-badge';
 
 const { getTopicList } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
@@ -124,30 +129,17 @@ const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
   return true;
 };
 
-const filterCounts = computed(() => ({
-  all: allTopics.value.reduce(
-    (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
-    0
-  ),
-  chats: allTopics.value
-    .filter(topic => topic.type === TopicType.DM && !isBotTopic(topic))
-    .reduce(
-      (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
-      0
-    ),
-  groups: allTopics.value
-    .filter(topic => topic.type === TopicType.Group)
-    .reduce(
-      (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
-      0
-    ),
-  bots: allTopics.value
-    .filter(topic => isBotTopic(topic))
-    .reduce(
-      (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
-      0
-    )
-}));
+const filterBadgeState = computed(() =>
+  getChatsToolbarFilterBadgeState(allTopics.value, authUserId.value)
+);
+
+const filterCounts = computed(() =>
+  getChatsToolbarFilterCounts(filterBadgeState.value)
+);
+
+const filterMutedOnly = computed(() =>
+  getChatsToolbarFilterMutedOnly(filterBadgeState.value)
+);
 
 const contactList = computed(() => {
   const query = toolbarState.search.toLowerCase().trim();

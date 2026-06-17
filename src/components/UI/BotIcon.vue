@@ -1,41 +1,31 @@
 <template>
   <svg
-    class="bot-icon"
+    width="24"
+    height="24"
     viewBox="0 0 24 24"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
-    aria-hidden="true"
-    style="width: 24px; height: 24px"
   >
     <path
-      d="M12 3.5V6"
+      d="M12.0012 8V4L9.5 4"
       stroke="currentColor"
-      stroke-width="1.6"
+      stroke-width="1.5"
       stroke-linecap="round"
-    />
-    <path
-      d="M8.25 6.25H15.75C17.8211 6.25 19.5 7.92893 19.5 10V14.5C19.5 16.5711 17.8211 18.25 15.75 18.25H13.5L10.75 20.5V18.25H8.25C6.17893 18.25 4.5 16.5711 4.5 14.5V10C4.5 7.92893 6.17893 6.25 8.25 6.25Z"
-      stroke="currentColor"
-      stroke-width="1.6"
       stroke-linejoin="round"
     />
     <path
-      d="M9.5 11.25H9.55"
+      d="M18 8H6C4.89543 8 4 8.89543 4 10V18C4 19.1046 4.89543 20 6 20H18C19.1046 20 20 19.1046 20 18V10C20 8.89543 19.1046 8 18 8Z"
       stroke="currentColor"
-      stroke-width="2"
+      stroke-width="1.5"
       stroke-linecap="round"
+      stroke-linejoin="round"
     />
     <path
-      d="M14.45 11.25H14.5"
+      d="M2 14H4M20 14H22M15 13V13.5M9 13V13.5"
       stroke="currentColor"
-      stroke-width="2"
+      stroke-width="1.5"
       stroke-linecap="round"
-    />
-    <path
-      d="M9.25 14.25H14.75"
-      stroke="currentColor"
-      stroke-width="1.6"
-      stroke-linecap="round"
+      stroke-linejoin="round"
     />
   </svg>
 </template>

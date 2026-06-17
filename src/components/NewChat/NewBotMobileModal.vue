@@ -17,6 +17,8 @@
           :path="form.avatarUrl"
           :initials="form.name || 'Б'"
           class="bot-editor__avatar"
+          :is-online="false"
+          is-edit
         />
       </button>
 
@@ -43,7 +45,7 @@
           <span class="bot-editor__label">Username бота:</span>
           <Input
             class="minor"
-            placeholder="Введите username или @username"
+            placeholder="Введите уникальное имя"
             :model-value="form.username"
             @update:model-value="value => (form.username = value)"
           />
@@ -56,11 +58,11 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
 import { Input } from '@pksep/yui';
+import { navigateToDialogs } from '../../composables/navigation';
+import { createLocalBotTopic } from '../../composables/useBots';
+import { fileToDataURL } from '../../utils/fileToDataURL';
 import MobileModal from '../UI/MobileModal.vue';
 import BotAvatar from '../UI/BotAvatar.vue';
-import { fileToDataURL } from '../../utils/fileToDataURL';
-import { createLocalBotTopic } from '../../composables/useBots';
-import { navigateToDialogs } from '../../composables/navigation';
 
 const props = withDefaults(
   defineProps<{

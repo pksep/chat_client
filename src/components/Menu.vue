@@ -20,6 +20,7 @@
           :model-value="toolbarState.search"
           :filter="toolbarState.filter"
           :filter-counts="filterCounts"
+          :filter-muted-only="filterMutedOnly"
           :is-collapse="isCollapse"
           :data-testid="`${props.dataTestid}-Menu`"
           @update:model-value="setSearch"
@@ -128,7 +129,6 @@ import { useChatMenu } from '../composables/useChatMenu';
 import MenuBottomNav from './Menu/MenuBottomNav.vue';
 import MenuProfilePanel from './Menu/MenuProfilePanel.vue';
 import { getAuthUser } from '../composables/useAuth';
-import { getTopicUnreadBadgeCount } from '../utils/topicUnreadBadge';
 import CallsPage from './Calls/CallsPage.vue';
 import { useShareSelection } from '../composables/useShareSelection';
 import { getShareSelectionSummaryLabel } from '../utils/shareSelectionSummary';
@@ -138,6 +138,11 @@ import {
   type IMessageSearchResult
 } from '../composables/useMessageSearch';
 import { isBotTopic } from '../utils/bot';
+import {
+  getChatsToolbarFilterBadgeState,
+  getChatsToolbarFilterCounts,
+  getChatsToolbarFilterMutedOnly
+} from '../utils/chats-toolbar-filter-badge';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: 'Menu'
@@ -194,30 +199,17 @@ const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
   return true;
 };
 
-const filterCounts = computed(() => ({
-  all: allTopics.value.reduce(
-    (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
-    0
-  ),
-  chats: allTopics.value
-    .filter(topic => topic.type === TopicType.DM && !isBotTopic(topic))
-    .reduce(
-      (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
-      0
-    ),
-  groups: allTopics.value
-    .filter(topic => topic.type === TopicType.Group)
-    .reduce(
-      (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
-      0
-    ),
-  bots: allTopics.value
-    .filter(topic => isBotTopic(topic))
-    .reduce(
-      (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
-      0
-    )
-}));
+const filterBadgeState = computed(() =>
+  getChatsToolbarFilterBadgeState(allTopics.value, authUserId.value)
+);
+
+const filterCounts = computed(() =>
+  getChatsToolbarFilterCounts(filterBadgeState.value)
+);
+
+const filterMutedOnly = computed(() =>
+  getChatsToolbarFilterMutedOnly(filterBadgeState.value)
+);
 
 const normalizeToolbarSearchText = (value?: string): string =>
   (value || '')
