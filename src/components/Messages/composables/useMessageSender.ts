@@ -1591,19 +1591,6 @@ export function useMessageSender(
 
     const message = getMessageById(topicId, messageId);
 
-    if (isMessageRetryExpired(message)) {
-      if (message?.status === MessageStatus.Wait) {
-        changeMessageStatusLocally(
-          topicId,
-          messageId,
-          MessageStatus.NotDelivered
-        );
-      }
-
-      clearPendingMessageAutoRetry(topicId, messageId);
-      return;
-    }
-
     if (!message?.media?.length) {
       if (!message?.text) {
         const messageMeta = await getPendingUploadMessageMeta(
