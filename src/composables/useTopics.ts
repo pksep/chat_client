@@ -36,6 +36,7 @@ import {
   isUnreadIgnoredMessageForUser,
   isUnreadTrackableMessageForUser
 } from '../utils/messageTracking';
+import { isLocalBotTopic } from '../utils/bot';
 
 const topics = ref<ITopic[]>([]);
 const loading = ref(false);
@@ -230,6 +231,16 @@ const createTopicsApi = () => {
   const normalizeTopics = (items: ITopic[]): ITopic[] =>
     items.map(topic => normalizeTopic(topic));
 
+  const mergeLocalBotTopics = (items: ITopic[]): ITopic[] => {
+    const localBotTopics = topics.value.filter(topic => isLocalBotTopic(topic));
+    const incomingIds = new Set(items.map(topic => topic.id));
+
+    return [
+      ...items,
+      ...localBotTopics.filter(topic => !incomingIds.has(topic.id))
+    ];
+  };
+
   const stripEphemeralTopicState = (items: ITopic[]): ITopic[] =>
     items.map(topic => {
       const persistedTopic = { ...topic };
@@ -251,7 +262,7 @@ const createTopicsApi = () => {
   };
 
   const setTopics = (newTopics: ITopic[]) => {
-    topics.value = normalizeTopics(newTopics);
+    topics.value = normalizeTopics(mergeLocalBotTopics(newTopics));
     schedulePersistTopics();
   };
 

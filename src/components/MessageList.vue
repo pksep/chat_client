@@ -266,6 +266,10 @@ import {
 } from '../utils/topicUnreadBadge';
 import { isUnreadTrackableMessage } from '../utils/messageTracking';
 import { isMobileTopicSearchActive } from '../composables/useMessageSearch';
+import {
+  normalizeReplyQuoteOccurrenceIndex,
+  normalizeReplyQuoteText
+} from '../utils/messageReplyQuote';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -611,16 +615,305 @@ const hydrateMessageContextFromMemory = async (
   return contextMessages;
 };
 
-const handleScrollToMessage = async (message: IMessage) => {
+type ScrollToMessageObjectPayload = {
+  message?: IMessage | null;
+  quoteText?: string;
+  quoteOccurrenceIndex?: number;
+};
+
+type ScrollToMessagePayload = IMessage | ScrollToMessageObjectPayload;
+
+const isScrollToMessageObjectPayload = (
+  payload: ScrollToMessagePayload
+): payload is ScrollToMessageObjectPayload =>
+  Object.prototype.hasOwnProperty.call(payload, 'message');
+
+const getScrollTargetMessage = (
+  payload: ScrollToMessagePayload
+): IMessage | null =>
+  isScrollToMessageObjectPayload(payload) ? payload.message || null : payload;
+
+const getScrollTargetQuoteText = (payload: ScrollToMessagePayload): string =>
+  normalizeReplyQuoteText(
+    isScrollToMessageObjectPayload(payload)
+      ? payload.quoteText || payload.message?.replyQuoteText
+      : payload.replyQuoteText
+  );
+
+const getScrollTargetQuoteOccurrenceIndex = (
+  payload: ScrollToMessagePayload
+): number | undefined =>
+  normalizeReplyQuoteOccurrenceIndex(
+    isScrollToMessageObjectPayload(payload)
+      ? payload.quoteOccurrenceIndex ??
+          payload.message?.replyQuoteOccurrenceIndex
+      : payload.replyQuoteOccurrenceIndex
+  );
+
+const quoteHighlightClassName = 'message-quote-highlight';
+const messageHighlightDurationMs = 3400;
+
+const cleanupQuoteHighlights = (): void => {
+  const marks = chatWrapperRef.value?.querySelectorAll(
+    `mark.${quoteHighlightClassName}`
+  );
+
+  marks?.forEach(mark => {
+    const parent = mark.parentNode;
+
+    while (mark.firstChild) {
+      parent?.insertBefore(mark.firstChild, mark);
+    }
+
+    mark.remove();
+    parent?.normalize();
+  });
+};
+
+const escapeCssValue = (value: string): string =>
+  typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(value)
+    : value.replace(/["\\]/g, '\\$&');
+
+const getTextNodes = (root: HTMLElement): Text[] => {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  let currentNode = walker.nextNode();
+
+  while (currentNode) {
+    if (currentNode.textContent?.trim()) {
+      nodes.push(currentNode as Text);
+    }
+
+    currentNode = walker.nextNode();
+  }
+
+  return nodes;
+};
+
+const buildNormalizedTextMap = (
+  text: string
+): { normalizedText: string; rawIndexByNormalizedIndex: number[] } => {
+  let normalizedText = '';
+  let pendingWhitespaceIndex: number | null = null;
+  const rawIndexByNormalizedIndex: number[] = [];
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+
+    if (/\s/.test(char)) {
+      if (normalizedText) {
+        pendingWhitespaceIndex ??= index;
+      }
+
+      continue;
+    }
+
+    if (pendingWhitespaceIndex !== null) {
+      normalizedText += ' ';
+      rawIndexByNormalizedIndex.push(pendingWhitespaceIndex);
+      pendingWhitespaceIndex = null;
+    }
+
+    normalizedText += char;
+    rawIndexByNormalizedIndex.push(index);
+  }
+
+  return {
+    normalizedText,
+    rawIndexByNormalizedIndex
+  };
+};
+
+const getRangeBoundary = (
+  nodes: Text[],
+  rawOffset: number
+): { node: Text; offset: number } | null => {
+  let traversedLength = 0;
+
+  for (const node of nodes) {
+    const nodeLength = node.textContent?.length || 0;
+    const nextTraversedLength = traversedLength + nodeLength;
+
+    if (rawOffset <= nextTraversedLength) {
+      return {
+        node,
+        offset: Math.max(0, rawOffset - traversedLength)
+      };
+    }
+
+    traversedLength = nextTraversedLength;
+  }
+
+  const lastNode = nodes[nodes.length - 1];
+
+  return lastNode
+    ? {
+        node: lastNode,
+        offset: lastNode.textContent?.length || 0
+      }
+    : null;
+};
+
+const findNormalizedQuoteStartIndex = (
+  normalizedText: string,
+  normalizedQuoteText: string,
+  occurrenceIndex?: number
+): number => {
+  const fallbackIndex = normalizedText.indexOf(normalizedQuoteText);
+  const targetOccurrenceIndex = occurrenceIndex ?? 0;
+
+  if (targetOccurrenceIndex <= 0 || fallbackIndex < 0) {
+    return fallbackIndex;
+  }
+
+  let currentOccurrenceIndex = 0;
+  let fromIndex = 0;
+  let startIndex = normalizedText.indexOf(normalizedQuoteText, fromIndex);
+
+  while (startIndex >= 0) {
+    if (currentOccurrenceIndex === targetOccurrenceIndex) {
+      return startIndex;
+    }
+
+    currentOccurrenceIndex += 1;
+    fromIndex = startIndex + normalizedQuoteText.length;
+    startIndex = normalizedText.indexOf(normalizedQuoteText, fromIndex);
+  }
+
+  return fallbackIndex;
+};
+
+const highlightMessageQuote = (
+  messageId: string,
+  quoteText: string,
+  occurrenceIndex?: number
+): boolean => {
+  cleanupQuoteHighlights();
+
+  if (!quoteText || !chatWrapperRef.value) {
+    return false;
+  }
+
+  const messageElement = chatWrapperRef.value.querySelector<HTMLElement>(
+    `.message[data-message-id="${escapeCssValue(messageId)}"]`
+  );
+
+  if (!messageElement) {
+    return false;
+  }
+
+  const contentElement =
+    messageElement.querySelector<HTMLElement>('.message-content__html') ||
+    messageElement.querySelector<HTMLElement>('.message-call__title');
+
+  if (!contentElement) {
+    return false;
+  }
+
+  const textNodes = getTextNodes(contentElement);
+  const rawText = textNodes.map(node => node.textContent || '').join('');
+  const { normalizedText, rawIndexByNormalizedIndex } =
+    buildNormalizedTextMap(rawText);
+  const normalizedQuoteText = normalizeReplyQuoteText(quoteText);
+  const normalizedStartIndex = findNormalizedQuoteStartIndex(
+    normalizedText,
+    normalizedQuoteText,
+    occurrenceIndex
+  );
+
+  if (normalizedStartIndex < 0) {
+    return false;
+  }
+
+  const normalizedEndIndex =
+    normalizedStartIndex + normalizedQuoteText.length - 1;
+  const rawStart = rawIndexByNormalizedIndex[normalizedStartIndex];
+  const rawEnd = rawIndexByNormalizedIndex[normalizedEndIndex] + 1;
+  const startBoundary = getRangeBoundary(textNodes, rawStart);
+  const endBoundary = getRangeBoundary(textNodes, rawEnd);
+
+  if (!startBoundary || !endBoundary) {
+    return false;
+  }
+
+  const range = document.createRange();
+  range.setStart(startBoundary.node, startBoundary.offset);
+  range.setEnd(endBoundary.node, endBoundary.offset);
+
+  const highlightMark = document.createElement('mark');
+  highlightMark.className = quoteHighlightClassName;
+
+  highlightMark.append(range.extractContents());
+  range.insertNode(highlightMark);
+  highlightMark.scrollIntoView({
+    block: 'center',
+    behavior: 'smooth'
+  });
+
+  window.setTimeout(() => {
+    const parent = highlightMark.parentNode;
+
+    while (highlightMark.firstChild) {
+      parent?.insertBefore(highlightMark.firstChild, highlightMark);
+    }
+
+    highlightMark.remove();
+    parent?.normalize();
+  }, messageHighlightDurationMs);
+
+  return true;
+};
+
+const highlightWholeMessage = (messageId: string): void => {
+  const messageElement = chatWrapperRef.value?.querySelector<HTMLElement>(
+    `.message[data-message-id="${escapeCssValue(messageId)}"]`
+  );
+
+  if (!messageElement) {
+    return;
+  }
+
+  messageElement.classList.add('highlighted');
+  window.setTimeout(() => {
+    messageElement.classList.remove('highlighted');
+  }, messageHighlightDurationMs);
+};
+
+const jumpToMessageWithHighlight = async (
+  messageId: string,
+  quoteText: string,
+  quoteOccurrenceIndex?: number
+): Promise<boolean> => {
+  const didJump = await scrollAnchor.jumpToMessage(messageId, {
+    block: 'center',
+    behavior: 'smooth'
+  });
+
+  if (!didJump) {
+    return false;
+  }
+
+  highlightWholeMessage(messageId);
+  highlightMessageQuote(messageId, quoteText, quoteOccurrenceIndex);
+
+  return true;
+};
+
+const handleScrollToMessage = async (payload: ScrollToMessagePayload) => {
+  const message = getScrollTargetMessage(payload);
+
+  if (!message) return;
   if (message.topicId !== route.value.id) return;
 
   const messageId = message.id;
-  const didJump = await scrollAnchor.jumpToMessage(messageId, {
-    block: 'center',
-    behavior: 'smooth',
-    highlightClassName: 'highlighted',
-    highlightDurationMs: 1400
-  });
+  const quoteText = getScrollTargetQuoteText(payload);
+  const quoteOccurrenceIndex = getScrollTargetQuoteOccurrenceIndex(payload);
+  const didJump = await jumpToMessageWithHighlight(
+    messageId,
+    quoteText,
+    quoteOccurrenceIndex
+  );
 
   if (didJump) {
     return;
@@ -632,12 +925,11 @@ const handleScrollToMessage = async (message: IMessage) => {
   );
 
   if (memoryMessages.some(m => m.id === messageId)) {
-    const didMemoryJump = await scrollAnchor.jumpToMessage(messageId, {
-      block: 'center',
-      behavior: 'smooth',
-      highlightClassName: 'highlighted',
-      highlightDurationMs: 1400
-    });
+    const didMemoryJump = await jumpToMessageWithHighlight(
+      messageId,
+      quoteText,
+      quoteOccurrenceIndex
+    );
 
     if (didMemoryJump) {
       return;
@@ -653,12 +945,11 @@ const handleScrollToMessage = async (message: IMessage) => {
 
   if (shadowMessages.some(m => m.id === messageId)) {
     await nextTick();
-    const didShadowJump = await scrollAnchor.jumpToMessage(messageId, {
-      block: 'center',
-      behavior: 'smooth',
-      highlightClassName: 'highlighted',
-      highlightDurationMs: 1400
-    });
+    const didShadowJump = await jumpToMessageWithHighlight(
+      messageId,
+      quoteText,
+      quoteOccurrenceIndex
+    );
 
     if (didShadowJump) {
       return;
@@ -674,12 +965,7 @@ const handleScrollToMessage = async (message: IMessage) => {
   }
 
   await nextTick();
-  await scrollAnchor.jumpToMessage(messageId, {
-    block: 'center',
-    behavior: 'smooth',
-    highlightClassName: 'highlighted',
-    highlightDurationMs: 1400
-  });
+  await jumpToMessageWithHighlight(messageId, quoteText, quoteOccurrenceIndex);
 };
 
 const shouldResetUnreadForCurrentTopic = (): boolean => {

@@ -18,6 +18,7 @@ export interface IMenuEmits {
   (e: 'unmount-collapse', isCollapse: boolean): void;
   (e: 'unmount-new-contact', config: { isChapterOpen?: boolean }): void;
   (e: 'unmount-new-group', config: { isChapterOpen?: boolean }): void;
+  (e: 'unmount-new-bot', config: { isChapterOpen?: boolean }): void;
   (e: 'unmount-contacts-update', contacts: IUser[]): void;
 }
 
@@ -168,6 +169,8 @@ export type IMessage = Message & {
   isPinnedForMe?: boolean;
   isPinnedOnlyMe?: boolean;
   replyMessage?: IMessage;
+  replyQuoteText?: string;
+  replyQuoteOccurrenceIndex?: number;
   forwardUser?: IUser;
   reactions?: Reaction[];
   ex?: string; // "{ clientId: string }"

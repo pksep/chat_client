@@ -5,6 +5,16 @@ import {
   openForwardDraft
 } from '../../../composables/useForwardMessages';
 
+type ReplyMessagePayload =
+  | string
+  | {
+      messageId?: string;
+      quoteText?: string;
+      quoteOccurrenceIndex?: number;
+    }
+  | null
+  | undefined;
+
 export function useMessageActions(
   state: {
     editMessage: IMessage | null;
@@ -32,11 +42,27 @@ export function useMessageActions(
     inputText.value = state.editMessage?.text || '';
   };
 
-  const handleSetReplyMessage = (messageId?: string) => {
+  const handleSetReplyMessage = (payload?: ReplyMessagePayload) => {
     clearSellectedMessage();
-    state.replyMessage = messageId
+
+    const messageId =
+      typeof payload === 'string' ? payload : payload?.messageId;
+    const quoteText =
+      typeof payload === 'string' ? undefined : payload?.quoteText;
+    const quoteOccurrenceIndex =
+      typeof payload === 'string' ? undefined : payload?.quoteOccurrenceIndex;
+    const message = messageId
       ? state.messages.find(m => m.id === messageId) || null
       : null;
+
+    state.replyMessage =
+      message && quoteText
+        ? {
+            ...message,
+            replyQuoteText: quoteText,
+            replyQuoteOccurrenceIndex: quoteOccurrenceIndex
+          }
+        : message;
   };
 
   const handleSetForwardMessage = (

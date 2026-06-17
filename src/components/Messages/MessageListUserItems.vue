@@ -99,9 +99,7 @@
             @unmount-reply-message-id="$emit('setReplyMessage', $event)"
             @unmount-forward-message="$emit('setForwardMessage', $event)"
             @unmount-retry-message-id="$emit('retryMessage', $event)"
-            @unmount-navigate-message-id="
-              $emit('scrollToMessage', message.replyMessage)
-            "
+            @unmount-navigate-message-id="$emit('scrollToMessage', $event)"
           />
         </div>
       </div>

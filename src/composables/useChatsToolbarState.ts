@@ -1,6 +1,6 @@
 import { reactive, readonly } from 'vue';
 
-export type ChatsToolbarFilter = 'all' | 'chats' | 'groups';
+export type ChatsToolbarFilter = 'all' | 'chats' | 'groups' | 'bots';
 
 const state = reactive({
   search: '',

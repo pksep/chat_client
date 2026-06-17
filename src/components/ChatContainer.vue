@@ -26,6 +26,7 @@
       :dataTestid="`${props.dataTestid}-ChatContainer-Menu`"
       @unmount-collapse="handleCollapse"
       @unmount-new-contact="handleNewContact"
+      @unmount-new-bot="handleNewBot"
       @unmount-new-group="handleNewGroup"
     />
     <Chat
@@ -61,7 +62,16 @@
         width="404px"
         @close="closeUserInfo"
       >
+        <BotInfoPanel
+          v-if="isBotUserInfo"
+          :user="activeUser"
+          :topic="activeTopic"
+          show-header
+          :data-testid="`${props.dataTestid}-ChatContainer-BotInfoPanel`"
+          @close="closeUserInfo"
+        />
         <UserInfoPanel
+          v-else
           :user="activeUser"
           :topic="activeTopic"
           show-header
@@ -73,13 +83,21 @@
     <MobileModal
       v-if="isMobile"
       :open="isUserInfoOpen"
-      title="Информация"
+      :title="userInfoModalTitle"
       close-button-text="Назад"
       :class="{ 'chat__header-modal-info--active': true }"
       :data-testid="`${props.dataTestid}-ChatContainer-MobileUserInfoModal`"
       @unmount-close="closeUserInfo"
     >
+      <BotInfoPanel
+        v-if="isBotUserInfo"
+        :user="activeUser"
+        :topic="activeTopic"
+        :data-testid="`${props.dataTestid}-ChatContainer-MobileBotInfoPanel`"
+        @close="closeUserInfo"
+      />
       <UserInfoPanel
+        v-else
         :user="activeUser"
         :topic="activeTopic"
         :data-testid="`${props.dataTestid}-ChatContainer-MobileUserInfoPanel`"
@@ -89,6 +107,12 @@
     <NewContactModal
       :open="state.isNewContactOpen"
       :data-testid="`${props.dataTestid}-ChatContainer-NewContactModal`"
+      @unmount-close="closeModals"
+    />
+
+    <NewBotModal
+      :open="state.isNewBotOpen"
+      :data-testid="`${props.dataTestid}-ChatContainer-NewBotModal`"
       @unmount-close="closeModals"
     />
 
@@ -152,6 +176,7 @@ import Menu from './Menu.vue';
 import Chat from './Chat.vue';
 import MenuInfo from './MenuInfo.vue';
 import UserInfoPanel from './UserInfoPanel.vue';
+import BotInfoPanel from './BotInfoPanel.vue';
 import {
   MobilePlatformEnum,
   type IChatContainerProps
@@ -184,9 +209,13 @@ import { useChatWallpaper } from '../composables/useChatWallpaper';
 import { useUserInfoModal } from '../composables/useUserInfoModal';
 import VpnConfirmModal from './UI/VpnConfirmModal.vue';
 import { useVpnStatus } from '../services/useVpnStatus';
+import { isBotTopic } from '../utils/bot';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
+);
+const NewBotModal = defineAsyncComponent(
+  () => import('./NewChat/NewBotModal.vue')
 );
 const NewGroupModal = defineAsyncComponent(
   () => import('./NewChat/NewGroupModal.vue')
@@ -225,6 +254,7 @@ const state = reactive({
   activeTabId: null,
   groupId: null,
   isNewContactOpen: false,
+  isNewBotOpen: false,
   isNewGroupOpen: false,
   isLoading: true,
   isActiveHeader: false
@@ -255,6 +285,10 @@ const chatContainerClasses = computed(() => [
 const users = computed(() => getUsersList());
 const { isUserInfoOpen, activeUser, activeTopic, closeUserInfo } =
   useUserInfoModal();
+const isBotUserInfo = computed(() => isBotTopic(activeTopic.value));
+const userInfoModalTitle = computed(() =>
+  isBotUserInfo.value ? 'Информация о боте' : 'Информация'
+);
 
 const props = withDefaults(defineProps<IChatContainerProps>(), {
   dataTestid: 'ChatContainer'
@@ -299,12 +333,21 @@ const handleNewContact = async (config): Promise<void> => {
   state.isNewContactOpen = config.isChapterOpen;
 };
 
+const handleNewBot = async (config): Promise<void> => {
+  if (isMobile.value) {
+    return;
+  }
+
+  state.isNewBotOpen = config.isChapterOpen;
+};
+
 const handleNewGroup = (config): void => {
   state.isNewGroupOpen = config.isChapterOpen;
 };
 
 const closeModals = (): void => {
   state.isNewContactOpen = false;
+  state.isNewBotOpen = false;
   state.isNewGroupOpen = false;
   state.isAppModalOpen = false;
 };
@@ -386,6 +429,7 @@ watch(
     if (route.value.type === RouteTypes.DIALOGS) {
       state.isMenuDesktopOpen = false;
       state.isNewContactOpen = false;
+      state.isNewBotOpen = false;
       state.isNewGroupOpen = false;
     }
 

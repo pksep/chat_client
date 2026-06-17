@@ -6,14 +6,16 @@
     :data-testid="`${dataTestid}-UserProfile-Container`"
     @click="handleProfileClick"
   >
-    <CachedAvatar
+    <component
+      :is="isBot ? BotAvatar : CachedAvatar"
       :path="props.user.avatarUrl"
       :alt="props.user.avatarUrl"
       class="user-profile__avatar"
       :initials="props.user.initials"
       :data-testid="`${dataTestid}-UserProfile-Avatar`"
       :is-online="
-        !isWaitingConnection && !effectiveLastOnline && !isCurrentUser
+        !isWaitingConnection &&
+        (isBot || (!effectiveLastOnline && !isCurrentUser))
       "
     />
     <h3
@@ -62,6 +64,7 @@ import { getAuthUser } from '../../composables/useAuth';
 import ConnectionStatus from '../UI/ConnectionStatus.vue';
 import { getHasWebsocketConnection } from '../../services/useChat';
 import CachedAvatar from '../UI/CachedAvatar.vue';
+import BotAvatar from '../UI/BotAvatar.vue';
 import EmojiIcon from '../UI/EmojiIcon.vue';
 import TypingIndicator from '../UI/TypingIndicator.vue';
 import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
@@ -69,6 +72,7 @@ import {
   formatUserStatusText,
   normalizeUserStatus
 } from '../../utils/userStatus';
+import { getBotUsername, isBotUser } from '../../utils/bot';
 
 const props = withDefaults(defineProps<IUserProfileProps>(), {
   dataTestid: () => 'UserProfile'
@@ -88,6 +92,7 @@ const currentStatusLabel = computed(() =>
   formatUserStatusText(effectiveUser.value.status)
 );
 const statusIcon = computed(() => currentStatus.value?.icon || '');
+const isBot = computed(() => isBotUser(effectiveUser.value));
 
 watch(
   statusIcon,
@@ -102,6 +107,10 @@ watch(
 );
 
 const formattedStatus = computed(() => {
+  if (isBot.value) {
+    return `@${getBotUsername(effectiveUser.value)}`;
+  }
+
   if (isCurrentUser.value) return `@${props.user.nickname}`;
   return formatLastSeen(effectiveLastOnline.value);
 });

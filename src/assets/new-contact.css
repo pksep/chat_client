@@ -1,5 +1,6 @@
 dialog.new-contact > .modal-yui-kit__modal-content,
-dialog.new-group > .modal-yui-kit__modal-content {
+dialog.new-group > .modal-yui-kit__modal-content,
+dialog.new-bot > .modal-yui-kit__modal-content {
   padding-inline: 0 !important;
 }
 

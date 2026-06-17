@@ -26,6 +26,7 @@
 @import url('./calls-page.css');
 @import url('./authorization-screen.css');
 @import url('./connection-status.css');
+@import url('./bot.css');
 
 .chat_container_alert {
   background-color: var(--error-dark-color);
