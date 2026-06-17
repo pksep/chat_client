@@ -19,6 +19,7 @@
       <MessageReferenceBlock
         :forward-user="showExternalForward ? undefined : props.forwardUser"
         :reply-message="props.replyMessage"
+        :message-ex="props.messageEx"
         :is-me-sender="props.isMeSender"
         :reference-width="replyReferenceWidth"
         :defer-until-measured="true"

@@ -1976,9 +1976,17 @@ const clearRemoteReconnectingParticipants = () => {
   remoteReconnectingParticipants.clear();
 };
 
+const shouldKeepRemoteParticipantForReconnect = (): boolean =>
+  isRecoverableDirectCallSession(roomId.value, topicId.value);
+
 const setRemoteReconnectingParticipant = (
   participant: ParticipantMediaState
 ) => {
+  if (!shouldKeepRemoteParticipantForReconnect()) {
+    clearRemoteReconnectingParticipant(participant.identity);
+    return;
+  }
+
   clearRemoteReconnectingParticipant(participant.identity);
 
   const timeout = setTimeout(() => {
@@ -2026,6 +2034,11 @@ const buildRemoteReconnectingParticipantState = (
 const markRemoteParticipantReconnecting = (
   participant: Participant | RemoteParticipant
 ) => {
+  if (!shouldKeepRemoteParticipantForReconnect()) {
+    clearRemoteReconnectingParticipant(participant.identity);
+    return;
+  }
+
   setRemoteReconnectingParticipant(
     buildRemoteReconnectingParticipantState(participant)
   );
@@ -2033,8 +2046,19 @@ const markRemoteParticipantReconnecting = (
 
 const syncRemoteParticipantState = () => {
   const activeRoom = room;
+  const shouldShowReconnectingParticipants =
+    shouldKeepRemoteParticipantForReconnect();
+
+  if (!shouldShowReconnectingParticipants) {
+    clearRemoteReconnectingParticipants();
+  }
+
   if (!activeRoom) {
-    if (directCallRecoveryRoomId && remoteReconnectingParticipants.size > 0) {
+    if (
+      shouldShowReconnectingParticipants &&
+      directCallRecoveryRoomId &&
+      remoteReconnectingParticipants.size > 0
+    ) {
       remoteTrackStreamCache.clear();
       remoteParticipants.value = Array.from(
         remoteReconnectingParticipants.values()
@@ -2061,11 +2085,11 @@ const syncRemoteParticipantState = () => {
     clearRemoteReconnectingParticipant(identity);
   });
 
-  const reconnectingParticipants = Array.from(
-    remoteReconnectingParticipants.values()
-  )
-    .map(entry => entry.participant)
-    .filter(participant => !activeParticipantIds.has(participant.identity));
+  const reconnectingParticipants = shouldShowReconnectingParticipants
+    ? Array.from(remoteReconnectingParticipants.values())
+        .map(entry => entry.participant)
+        .filter(participant => !activeParticipantIds.has(participant.identity))
+    : [];
   const displayedRemoteParticipants = [
     ...nextRemoteParticipants,
     ...reconnectingParticipants

@@ -48,9 +48,9 @@
             @click="$emit('scrollToMessage', props.replyMessage)"
           >
             <div class="chat__input__action__blog">
-              <h5>В ответ {{ props.replyMessage.senderUser?.initials }}</h5>
+              <h5>{{ replyActionTitle }}</h5>
               <p v-emoji>
-                {{ stripHtml(props.replyMessage?.text || 'Вложение') }}
+                {{ replyActionDescription }}
               </p>
             </div>
             <Button
@@ -211,6 +211,20 @@ const internalInputText = computed({
   get: () => props.modelValue,
   set: val => emit('update:modelValue', val)
 });
+
+const replyActionTitle = computed(() => {
+  if (props.replyMessage?.replyQuoteText) {
+    return 'Ответить на фрагмент';
+  }
+
+  return `В ответ ${props.replyMessage?.senderUser?.initials || ''}`.trim();
+});
+
+const replyActionDescription = computed(() =>
+  stripHtml(
+    props.replyMessage?.replyQuoteText || props.replyMessage?.text || 'Вложение'
+  )
+);
 
 const formatForwardMessagesLabel = (count: number): string => {
   const mod10 = count % 10;

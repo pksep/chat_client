@@ -139,6 +139,12 @@
   background-color: #e9f0fdd6;
 }
 
+.message-quote-highlight {
+  display: inline;
+  background-color: var(--blue10);
+  color: inherit;
+}
+
 .message__author-meta {
   display: flex;
   align-items: center;
