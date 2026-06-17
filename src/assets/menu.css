@@ -173,6 +173,10 @@
   font-weight: 400;
 }
 
+.chats-toolbar__filter-count--muted {
+  background-color: var(--text-light-color);
+}
+
 .chats-toolbar__filter-button--active {
   color: var(--blue4);
   border-color: #7ea3ff;

@@ -20,12 +20,14 @@
           :model-value="toolbarState.search"
           :filter="toolbarState.filter"
           :filter-counts="filterCounts"
+          :filter-muted-only="filterMutedOnly"
           :is-collapse="isCollapse"
           :data-testid="`${props.dataTestid}-Menu`"
           @update:model-value="setSearch"
           @update:filter="setFilter"
           @create-chat="handleNewContactModal"
           @create-group="handleNewGroupModal"
+          @create-bot="handleNewBotModal"
         />
 
         <ShareSelectionToolbar
@@ -127,7 +129,6 @@ import { useChatMenu } from '../composables/useChatMenu';
 import MenuBottomNav from './Menu/MenuBottomNav.vue';
 import MenuProfilePanel from './Menu/MenuProfilePanel.vue';
 import { getAuthUser } from '../composables/useAuth';
-import { getTopicUnreadBadgeCount } from '../utils/topicUnreadBadge';
 import CallsPage from './Calls/CallsPage.vue';
 import { useShareSelection } from '../composables/useShareSelection';
 import { getShareSelectionSummaryLabel } from '../utils/shareSelectionSummary';
@@ -136,6 +137,12 @@ import {
   searchMessages,
   type IMessageSearchResult
 } from '../composables/useMessageSearch';
+import { isBotTopic } from '../utils/bot';
+import {
+  getChatsToolbarFilterBadgeState,
+  getChatsToolbarFilterCounts,
+  getChatsToolbarFilterMutedOnly
+} from '../utils/chats-toolbar-filter-badge';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: 'Menu'
@@ -172,24 +179,37 @@ const pendingShareSummaryLabel = computed(() =>
   )
 );
 
-const filterCounts = computed(() => ({
-  all: allTopics.value.reduce(
-    (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
-    0
-  ),
-  chats: allTopics.value
-    .filter(topic => topic.type === TopicType.DM)
-    .reduce(
-      (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
-      0
-    ),
-  groups: allTopics.value
-    .filter(topic => topic.type === TopicType.Group)
-    .reduce(
-      (sum, topic) => sum + getTopicUnreadBadgeCount(topic, authUserId.value),
-      0
-    )
-}));
+const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
+  if (!topic) {
+    return false;
+  }
+
+  if (toolbarState.filter === 'chats') {
+    return topic.type === TopicType.DM && !isBotTopic(topic);
+  }
+
+  if (toolbarState.filter === 'groups') {
+    return topic.type === TopicType.Group;
+  }
+
+  if (toolbarState.filter === 'bots') {
+    return isBotTopic(topic);
+  }
+
+  return true;
+};
+
+const filterBadgeState = computed(() =>
+  getChatsToolbarFilterBadgeState(allTopics.value, authUserId.value)
+);
+
+const filterCounts = computed(() =>
+  getChatsToolbarFilterCounts(filterBadgeState.value)
+);
+
+const filterMutedOnly = computed(() =>
+  getChatsToolbarFilterMutedOnly(filterBadgeState.value)
+);
 
 const normalizeToolbarSearchText = (value?: string): string =>
   (value || '')
@@ -202,17 +222,9 @@ const normalizeToolbarSearchText = (value?: string): string =>
 const topicGroups = computed(() => {
   const query = normalizeToolbarSearchText(toolbarState.search);
 
-  const filteredByType = allTopics.value.filter(topic => {
-    if (toolbarState.filter === 'chats') {
-      return topic.type === TopicType.DM;
-    }
-
-    if (toolbarState.filter === 'groups') {
-      return topic.type === TopicType.Group;
-    }
-
-    return true;
-  });
+  const filteredByType = allTopics.value.filter(topic =>
+    matchesToolbarFilter(topic)
+  );
 
   if (!query) {
     return filteredByType;
@@ -241,15 +253,7 @@ const filteredMessageSearchResults = computed(() => {
     const topic =
       result.topic || allTopics.value.find(t => t.id === result.topicId);
 
-    if (toolbarState.filter === 'chats') {
-      return topic?.type === TopicType.DM;
-    }
-
-    if (toolbarState.filter === 'groups') {
-      return topic?.type === TopicType.Group;
-    }
-
-    return true;
+    return matchesToolbarFilter(topic || null);
   });
 });
 
@@ -335,6 +339,10 @@ const handleNewGroupModal = () => {
 
 const handleNewContactModal = () => {
   emits('unmount-new-contact', { isChapterOpen: true });
+};
+
+const handleNewBotModal = () => {
+  emits('unmount-new-bot', { isChapterOpen: true });
 };
 
 watch(

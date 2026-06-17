@@ -9,6 +9,7 @@ import {
   saveCachedUsers
 } from '../services/useChatStateCache';
 import { normalizeDateValue } from '../utils/dateValue';
+import { isLocalBotUser } from '../utils/bot';
 
 const users = shallowRef<IUser[]>([]);
 const loading = ref(false);
@@ -85,7 +86,14 @@ export const fetchAllUsers = async (
       limit
     });
 
-    users.value = [...mergeUsersWithStoredFields(response.data)];
+    const mergedUsers = mergeUsersWithStoredFields(response.data);
+    const localBotUsers = (users.value || []).filter(
+      user =>
+        isLocalBotUser(user) &&
+        !mergedUsers.some(mergedUser => mergedUser.id === user.id)
+    );
+
+    users.value = [...mergedUsers, ...localBotUsers];
     schedulePersistUsers();
 
     return users.value;
