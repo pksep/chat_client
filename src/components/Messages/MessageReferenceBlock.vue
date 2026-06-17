@@ -82,10 +82,12 @@ import FileIcon from '../UI/FileIcon.vue';
 import { useMessageMedia } from './composables/useMessageMedia';
 import type { IMessageBubbleProps } from './interface/interface';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
+import { getMessageReplyQuoteText } from '../../utils/messageReplyQuote';
 
 const props = defineProps<{
   forwardUser?: IMessageBubbleProps['forwardUser'];
   replyMessage?: IMessageBubbleProps['replyMessage'];
+  messageEx?: IMessageBubbleProps['messageEx'];
   isMeSender?: boolean;
   referenceWidth?: number | null;
   deferUntilMeasured?: boolean;
@@ -108,6 +110,9 @@ const replyPreviewMedia = computed(() => {
 
 const replyAuthor = computed(
   () => props.replyMessage?.senderUser?.initials || 'Сообщение'
+);
+const replyQuoteText = computed(() =>
+  getMessageReplyQuoteText(props.messageEx)
 );
 
 const replyInlineStyle = computed(() => {
@@ -184,6 +189,10 @@ const replyText = computed(() => {
 
   if (!replyMessage) {
     return '';
+  }
+
+  if (replyQuoteText.value) {
+    return replyQuoteText.value;
   }
 
   if (previewMedia?.type === MediaType.File) {

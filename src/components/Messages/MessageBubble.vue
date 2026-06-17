@@ -107,6 +107,10 @@ import {
   openNativeFile
 } from '../../services/useNativeFile';
 import { stripHtml } from '../../utils/stripHtml';
+import {
+  getMessageReplyQuoteOccurrenceIndex,
+  getMessageReplyQuoteText
+} from '../../utils/messageReplyQuote';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -154,7 +158,11 @@ const isAndroidNativePlatform = () =>
   Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
 const handleNavigateMessage = () => {
-  emits('unmount-navigate-message-id', props.replyMessage?.id);
+  emits('unmount-navigate-message-id', {
+    message: props.replyMessage,
+    quoteText: getMessageReplyQuoteText(props.messageEx),
+    quoteOccurrenceIndex: getMessageReplyQuoteOccurrenceIndex(props.messageEx)
+  });
 };
 
 const getSliderDetectionValue = (media: IMedia) =>

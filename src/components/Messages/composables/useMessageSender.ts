@@ -32,6 +32,10 @@ import {
 } from '../../../utils/mediaPreview';
 import { MessageStatus } from '../../../services/useChatSDK/types';
 import { getHasWebsocketConnection } from '../../../services/useChat';
+import {
+  createMessageExWithQuote,
+  parseMessageEx
+} from '../../../utils/messageReplyQuote';
 
 const MAX_HTML_LENGTH = 4000;
 const FORWARD_TEXT_SEND_DELAY_MS = 250;
@@ -123,23 +127,25 @@ const parsePendingMessageRetryKey = (
 };
 
 const createMessageEx = (
-  payload: Record<string, string | number>,
-  existingEx?: string
-): string => {
-  let parsedEx: Record<string, unknown> = {};
+  payload: Record<string, unknown>,
+  existingEx?: unknown
+): string => createMessageExWithQuote(payload, existingEx);
 
-  if (existingEx) {
-    try {
-      parsedEx = JSON.parse(existingEx);
-    } catch {
-      parsedEx = {};
-    }
+const createReplyQuoteEx = (
+  replyMessage?: IMessage | null
+): Record<string, unknown> => {
+  const replyQuoteText = replyMessage?.replyQuoteText;
+
+  if (!replyQuoteText) {
+    return {};
   }
 
-  return JSON.stringify({
-    ...parsedEx,
-    ...payload
-  });
+  return {
+    replyQuoteText,
+    ...(typeof replyMessage.replyQuoteOccurrenceIndex === 'number'
+      ? { replyQuoteOccurrenceIndex: replyMessage.replyQuoteOccurrenceIndex }
+      : {})
+  };
 };
 
 export function splitHtmlByLength(
@@ -525,7 +531,7 @@ export function useMessageSender(
           topicId,
           text: message.text || '',
           medias,
-          ex: JSON.stringify({ clientId: messageId }),
+          ex: createMessageEx({ clientId: messageId }, message.ex),
           replyMessageId: messageMeta.replyMessageId,
           forwardMessageId
         });
@@ -547,7 +553,7 @@ export function useMessageSender(
         topicId,
         text: message.text || '',
         medias,
-        ex: JSON.stringify({ clientId: messageId }),
+        ex: createMessageEx({ clientId: messageId }, message.ex),
         replyMessageId: messageMeta?.replyMessageId
       });
 
@@ -934,11 +940,12 @@ export function useMessageSender(
     topicId: string;
     text: string;
     replyMessageId?: string;
+    replyMessage?: IMessage | null;
     forwardMessageIds?: string[];
     taggedUserIds?: string[];
     ex?: string;
   }): void => {
-    const parsedEx = params.ex ? JSON.parse(params.ex) : {};
+    const parsedEx = parseMessageEx(params.ex);
     const clientId =
       typeof parsedEx.clientId === 'string'
         ? parsedEx.clientId
@@ -953,7 +960,7 @@ export function useMessageSender(
           ? { forwardBatchOrder: parsedEx.forwardBatchOrder }
           : {})
       },
-      undefined
+      params.ex
     );
 
     addMessageToLocal(params.topicId, {
@@ -966,7 +973,7 @@ export function useMessageSender(
       isPin: false,
       isSystem: false,
       replyMessageId: params.replyMessageId,
-      replyMessage: state.replyMessage,
+      replyMessage: params.replyMessage ?? state.replyMessage,
       senderUserId: authUser.value.id,
       senderUser: authUser.value,
       text: params.text,
@@ -1006,6 +1013,7 @@ export function useMessageSender(
     const topicId = route.value.id;
     const routeType = route.value?.type;
     const replyMessageId = state.replyMessage?.id;
+    const replyQuoteEx = createReplyQuoteEx(state.replyMessage);
     const forwardMessages = state.forwardMessages;
     const hasForwardMessages = forwardMessages.length > 0;
     const hasMultipleForwardMessages = forwardMessages.length > 1;
@@ -1095,6 +1103,7 @@ export function useMessageSender(
           const ex = createMessageEx(
             {
               clientId: generateUUID(),
+              ...replyQuoteEx,
               ...(forwardBatchId
                 ? {
                     forwardBatchId,
@@ -1140,6 +1149,7 @@ export function useMessageSender(
         for (const [index, forwardMessage] of forwardMessages.entries()) {
           const ex = createMessageEx({
             clientId: generateUUID(),
+            ...replyQuoteEx,
             forwardBatchId: forwardBatchId as string,
             forwardBatchOrder: index
           });
@@ -1170,6 +1180,7 @@ export function useMessageSender(
         for (const [index, part] of parts.entries()) {
           const ex = createMessageEx({
             clientId: generateUUID(),
+            ...replyQuoteEx,
             forwardBatchId: forwardBatchId as string,
             forwardBatchOrder: forwardMessages.length + index
           });
@@ -1204,13 +1215,17 @@ export function useMessageSender(
       for (const part of parts) {
         if (hasForwardMessages) {
           for (const forwardMessage of forwardMessages) {
+            const ex = createMessageEx({
+              clientId: generateUUID(),
+              ...replyQuoteEx
+            });
             const didSend = await sendMessageChat({
               topicId,
               text: part,
               replyMessageId,
               forwardMessageId: forwardMessage.id,
               taggedUserIds,
-              ex: JSON.stringify({ clientId: generateUUID() })
+              ex
             });
 
             if (!didSend) {
@@ -1218,8 +1233,10 @@ export function useMessageSender(
                 topicId,
                 text: part,
                 replyMessageId,
+                replyMessage: state.replyMessage,
                 forwardMessageIds: [forwardMessage.id],
-                taggedUserIds
+                taggedUserIds,
+                ex
               });
             }
           }
@@ -1227,6 +1244,10 @@ export function useMessageSender(
         }
 
         const clientId = generateUUID();
+        const ex = createMessageEx({
+          clientId,
+          ...replyQuoteEx
+        });
         const localMessage: IMessage = {
           id: clientId,
           status: MessageStatus.Wait,
@@ -1244,7 +1265,7 @@ export function useMessageSender(
           topicId,
           taggedUserIds,
           media: [],
-          ex: JSON.stringify({ clientId })
+          ex
         };
 
         registerPendingUploadMessage(topicId, clientId, {
@@ -1271,7 +1292,7 @@ export function useMessageSender(
           text: part,
           replyMessageId,
           taggedUserIds,
-          ex: JSON.stringify({ clientId })
+          ex
         });
 
         if (!didSend) {
@@ -1309,6 +1330,7 @@ export function useMessageSender(
     const topicId = options?.topicId ?? route.value.id;
     const replyMessage = options?.replyMessage ?? state.replyMessage;
     const replyMessageId = options?.replyMessageId ?? state.replyMessage?.id;
+    const replyQuoteEx = createReplyQuoteEx(replyMessage);
     const forwardMessageIds =
       options?.forwardMessageIds ??
       state.forwardMessages.map(message => message.id);
@@ -1389,7 +1411,10 @@ export function useMessageSender(
       topicId,
       taggedUserIds: options?.taggedUserIds,
       media: localMedia,
-      ex: JSON.stringify({ clientId })
+      ex: createMessageEx({
+        clientId,
+        ...replyQuoteEx
+      })
     };
 
     addMessageToLocal(newMessage.topicId, newMessage);
