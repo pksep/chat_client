@@ -578,7 +578,7 @@ const selectedReplyQuote = computed<SelectedReplyQuote>(() => {
   };
 });
 const replyButtonLabel = computed(() =>
-  selectedReplyQuote.value.text ? 'Ответить с цитатой' : 'Ответить'
+  selectedReplyQuote.value.text ? 'Ответить на фрагмент' : 'Ответить'
 );
 const isPinnedOnlyForMe = computed(
   () =>

@@ -214,7 +214,7 @@ const internalInputText = computed({
 
 const replyActionTitle = computed(() => {
   if (props.replyMessage?.replyQuoteText) {
-    return 'Ответить с цитатой';
+    return 'Ответить на фрагмент';
   }
 
   return `В ответ ${props.replyMessage?.senderUser?.initials || ''}`.trim();
