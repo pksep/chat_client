@@ -26,6 +26,12 @@
       accept="image/*"
       @change="handleImagePublish"
     />
+    <ModalCroppedAvatar
+      :image="informationState.fileImage"
+      :open="informationState.isEditAvatar"
+      @unmount-close="handleCloseImageCrop"
+      @unmount-save="handleImageCropSave"
+    />
     <NewChatInformationForm
       :name="information?.name"
       @unmount-save="handleSaveFromForm"
@@ -62,6 +68,7 @@
 
 <script lang="ts" setup>
 import { useTemplateRef, computed } from 'vue';
+import { ModalCroppedAvatar } from '@pksep/yui';
 import NewChatInformationForm from '../NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from '../MenuInfoButtons.vue';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';
@@ -102,8 +109,13 @@ const excludedContactIds = computed(() => {
 const information = defineModel<IMenuInfoInformation>();
 const avatarInputRef = useTemplateRef('avatarInputRef');
 
-const { leaveGroupInfo, onOpenEditAvatar, openEditProfileIcon } =
-  useInformationMenu(information);
+const {
+  state: informationState,
+  leaveGroupInfo,
+  onOpenEditAvatar,
+  closeEditProfileIcon,
+  openEditProfileIcon
+} = useInformationMenu(information);
 
 const handleUnmountLeave = () => {
   leaveGroupInfo();
@@ -115,9 +127,25 @@ const handleEditProfileIcon = () => {
 
 const handleImagePublish = async (event: Event) => {
   const localFile = onOpenEditAvatar(event);
-  if (!localFile) return;
 
-  const file = await uploadFile(localFile);
+  if (!localFile && avatarInputRef.value) {
+    avatarInputRef.value.value = '';
+  }
+};
+
+const resetAvatarInput = (): void => {
+  if (avatarInputRef.value) {
+    avatarInputRef.value.value = '';
+  }
+};
+
+const handleCloseImageCrop = (): void => {
+  closeEditProfileIcon();
+  resetAvatarInput();
+};
+
+const handleImageCropSave = async (croppedFile: File) => {
+  const file = await uploadFile(croppedFile);
 
   if (!file) return;
 
@@ -128,6 +156,8 @@ const handleImagePublish = async (event: Event) => {
   }
 
   information.value.avatarUrl = file.path;
+  closeEditProfileIcon();
+  resetAvatarInput();
 };
 
 const handleSaveFromForm = async (value: { name: string }) => {

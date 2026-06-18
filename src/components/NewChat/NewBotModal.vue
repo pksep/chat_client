@@ -36,6 +36,12 @@
         accept="image/*"
         @change="handleAvatarChange"
       />
+      <ModalCroppedAvatar
+        :image="avatarFile"
+        :open="isEditAvatar"
+        @unmount-close="closeEditAvatar"
+        @unmount-save="handleAvatarCropSave"
+      />
 
       <div class="bot-editor__fields">
         <label class="bot-editor__field">
@@ -81,6 +87,7 @@ import {
   Icon,
   IconNameEnum,
   Input,
+  ModalCroppedAvatar,
   Modal,
   SizesEnum
 } from '@pksep/yui';
@@ -105,6 +112,8 @@ const emits = defineEmits<{
 }>();
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
+const avatarFile = ref<File | null>(null);
+const isEditAvatar = ref(false);
 const form = reactive({
   name: '',
   username: '',
@@ -119,6 +128,8 @@ const resetForm = (): void => {
   form.name = '';
   form.username = '';
   form.avatarUrl = '';
+  avatarFile.value = null;
+  isEditAvatar.value = false;
 
   if (fileInputRef.value) {
     fileInputRef.value.value = '';
@@ -134,6 +145,12 @@ const openFile = (): void => {
   fileInputRef.value?.click();
 };
 
+const resetAvatarInput = (): void => {
+  if (fileInputRef.value) {
+    fileInputRef.value.value = '';
+  }
+};
+
 const handleAvatarChange = async (event: Event): Promise<void> => {
   const file = (event.target as HTMLInputElement).files?.[0];
 
@@ -141,7 +158,20 @@ const handleAvatarChange = async (event: Event): Promise<void> => {
     return;
   }
 
-  form.avatarUrl = await fileToDataURL(file);
+  avatarFile.value = file;
+  isEditAvatar.value = true;
+};
+
+const closeEditAvatar = (): void => {
+  isEditAvatar.value = false;
+  resetAvatarInput();
+};
+
+const handleAvatarCropSave = async (croppedFile: File): Promise<void> => {
+  form.avatarUrl = await fileToDataURL(croppedFile);
+  avatarFile.value = croppedFile;
+  isEditAvatar.value = false;
+  resetAvatarInput();
 };
 
 const handleCreate = (): void => {
