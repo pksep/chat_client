@@ -10,7 +10,7 @@
           'reaction--other': !messageReaction.isOwn
         }"
         @click.stop="handleToggleEmoji(messageReaction)"
-        @contextmenu="handleOpenReactionDetails($event)"
+        @contextmenu.prevent.stop="handleOpenReactionDetails($event)"
         @touchstart="handleTouchStart($event)"
         @touchend="clearLongPress"
         @touchcancel="clearLongPress"
@@ -38,7 +38,7 @@
 
     <Teleport to="body">
       <div
-        v-if="showReactionDetails"
+        v-show="showReactionDetails"
         ref="reactionDetailsPanelRef"
         v-on-click-outside="closeReactionDetails"
         class="message-reactions-details"
@@ -109,7 +109,6 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { Reaction } from '@pksep/zod-shared-chat';
 import { setReactionMessage } from '../../services/useChat';
 import { useUrlWatcher } from '../../composables/navigation';
-import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { getUserById } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
 import type { IUser } from '../interfaces/interfaces';
@@ -117,6 +116,7 @@ import CachedAvatar from '../UI/CachedAvatar.vue';
 import EmojiIcon from '../UI/EmojiIcon.vue';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
+import { prefetchMediaObjectUrl } from '../../services/useMediaBlobCache';
 
 const LONG_PRESS_DELAY_MS = 450;
 const VIEWPORT_OFFSET_PX = 8;
@@ -179,9 +179,7 @@ watch(
 );
 
 const route = useUrlWatcher();
-const canShowReactionDetails = computed(
-  () => route.value.type === RouteTypes.GROUP
-);
+const canShowReactionDetails = computed(() => Boolean(props.reactions?.length));
 const showReactionDetails = ref(false);
 const reactionDetailsPanelRef = ref<HTMLElement | null>(null);
 const reactionDetailsStyle = ref<Record<string, string>>({
@@ -192,6 +190,9 @@ const reactionDetailsAnchor = ref({ x: 0, y: 0 });
 let longPressTimeout: ReturnType<typeof setTimeout> | null = null;
 let suppressNextToggle = false;
 const { openUserInfo } = useUserInfoModal();
+
+const isCacheableAvatarPath = (path?: string | null): boolean =>
+  !!path && !/^(blob:|data:|https?:\/\/|file:\/\/|\/)/i.test(path);
 
 const reactionDetails = computed<ReactionDetailsItem[]>(() =>
   [...(props.reactions || [])]
@@ -226,6 +227,20 @@ const reactionDetails = computed<ReactionDetailsItem[]>(() =>
 
       return left.name.localeCompare(right.name, 'ru');
     })
+);
+
+watch(
+  reactionDetails,
+  details => {
+    const avatarPaths = new Set(
+      details.map(reaction => reaction.avatarPath).filter(isCacheableAvatarPath)
+    );
+
+    avatarPaths.forEach(path => prefetchMediaObjectUrl(path));
+  },
+  {
+    immediate: true
+  }
 );
 
 const syncReactionDetailsPosition = () => {

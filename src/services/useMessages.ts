@@ -1481,31 +1481,58 @@ export const changeReactionFromLocal = (
         return msg;
       }
 
+      const currentReactions = msg.reactions || [];
+
       if (action === 'removed') {
         return {
           ...msg,
-          reactions: msg.reactions.filter(
+          reactions: currentReactions.filter(
             reaction => reaction.id !== reactionId
           )
         };
       }
 
       if (action === 'added') {
+        if (!reaction) {
+          return msg;
+        }
+
         return {
           ...msg,
-          reactions: [...msg.reactions, reaction]
+          reactions: [
+            ...currentReactions.filter(
+              currentReaction =>
+                currentReaction.id !== reaction.id &&
+                !(
+                  currentReaction.senderUserId === reaction.senderUserId &&
+                  currentReaction.text === reaction.text
+                )
+            ),
+            reaction
+          ]
         };
       }
 
       if (action === 'updated') {
+        if (!reaction) {
+          return msg;
+        }
+
+        let hasUpdatedReaction = false;
+        const updatedReactions = currentReactions.map(currentReaction => {
+          if (currentReaction.id !== reaction.id) {
+            return currentReaction;
+          }
+
+          hasUpdatedReaction = true;
+          return reaction;
+        });
+
         return {
           ...msg,
-          reactions: msg.reactions.map(r => {
-            if (r.id !== reaction.id) {
-              return r;
-            }
-            return reaction;
-          })
+          reactions: hasUpdatedReaction
+            ? updatedReactions
+            : [...updatedReactions, reaction]
         };
       }
 

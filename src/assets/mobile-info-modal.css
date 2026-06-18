@@ -26,11 +26,16 @@ dialog.modal-yui-kit.modal-yui-kit_bottom {
 
 section.menu__info-users.modal-info-mobile__contact-list {
   --size-avatar: max-content;
+  display: grid;
   padding: 0;
   padding-inline: 0;
+  overflow: visible;
   & .menu__info-users-list {
+    height: auto;
+    max-height: none;
     margin-top: 10px;
     margin-inline: 10px;
+    overflow: visible;
   }
 }
 
@@ -54,12 +59,15 @@ p.modal-info-mobile__end--paragraph {
     }
     & .mobile__modal-content {
       padding-inline: 0;
-      min-height: calc(100dvh - 150px);
       overflow-y: auto;
+      overflow-x: hidden;
     }
     & .modal-yui-kit__modal-content {
+      height: 100%;
+      min-height: 0;
       padding-top: 5px;
       padding-inline: 10px;
+      overflow: hidden;
     }
   }
 }

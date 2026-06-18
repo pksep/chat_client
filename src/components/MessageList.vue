@@ -1414,6 +1414,9 @@ const pasteTextToMessageInput = async () => {
   insertTextToMessageInput(anchorHtml);
 };
 
+const isMediaPreviewOpen = (): boolean =>
+  !!document.querySelector('.slider-modal');
+
 const handleWindowKeydown = async (e: KeyboardEvent) => {
   const hasModifierKey = e.ctrlKey || e.metaKey || e.altKey;
   const shortcutCode = e.code.toLowerCase();
@@ -1453,7 +1456,7 @@ const handleWindowKeydown = async (e: KeyboardEvent) => {
     return;
   }
 
-  if (e.key === 'Escape') {
+  if (e.key === 'Escape' && !isMediaPreviewOpen()) {
     navigateToDefault();
   }
 };

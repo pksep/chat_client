@@ -29,10 +29,10 @@
       :type="ButtonTypeEnum.secondary"
       :size="SizesEnum.large"
       class="menu-info__secondary-button"
-      @click="handleOpenChat"
+      @click="handleCall"
     >
-      <MessageIcon />
-      Перейти в чат
+      <CallIcon class="menu-info__call-icon" />
+      Звонок
     </Button>
     <Button
       :type="ButtonTypeEnum.secondary"
@@ -45,17 +45,17 @@
           currentGroup.isAdmin ? IconNameEnum.deleteSmall : IconNameEnum.logout
         "
       />
-      {{ currentGroup.isAdmin ? 'Удалить канал' : 'Выйти' }}
+      {{ currentGroup.isAdmin ? 'Удалить группу' : 'Выйти' }}
     </Button>
   </div>
 
   <ConfirmModal
     :open="state.openModal"
-    :title="currentGroup.isAdmin ? 'Удаление канала' : 'Выход из канала'"
+    :title="currentGroup.isAdmin ? 'Удаление группы' : 'Выход из группы'"
     :description="
       currentGroup?.isAdmin
-        ? 'Вы уверены, что хотите удалить канал?'
-        : 'Вы уверены, что хотите покинуть канал?'
+        ? 'Вы уверены, что хотите удалить группу?'
+        : 'Вы уверены, что хотите покинуть группу?'
     "
     @unmount-close="handleCloseModal"
     @unmount-confirm="handleUnmountLeave"
@@ -74,11 +74,12 @@ import {
 import { MAX_W_MD } from '../utils/constants';
 import { useResizeState } from '../composables/useResizeState';
 import { computed, reactive } from 'vue';
-import { navigateToGroup, useUrlWatcher } from '../composables/navigation';
+import { useUrlWatcher } from '../composables/navigation';
 import { currentGroup, useGroup } from '../composables/useGroup';
 import { useTopics } from '../composables/useTopics';
+import { startLiveKitGroupCall } from '../services/useLiveKit';
 import ConfirmModal from './UI/ConfirmModal.vue';
-import MessageIcon from './UI/MessageIcon.vue';
+import CallIcon from './CallModal/UI/CallIcon.vue';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
@@ -106,12 +107,15 @@ const handleUnmountLeave = () => {
   emits('unmount-leave');
 };
 
-const handleOpenChat = () => {
-  if (route.value.id) {
-    navigateToGroup(route.value.id);
+const handleCall = async () => {
+  const groupId = route.value.id;
+
+  if (!groupId) {
+    return;
   }
 
   emits('unmount-open-chat');
+  await startLiveKitGroupCall(groupId);
 };
 
 const handleMute = () => {

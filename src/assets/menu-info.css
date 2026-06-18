@@ -12,6 +12,13 @@ aside.menu-info {
   }
 }
 
+.chat__info__modal > .modal-yui-kit__modal-content {
+  height: var(--default-height);
+  max-height: var(--default-height);
+  overflow: hidden;
+  padding: 0;
+}
+
 section.menu__info-users {
   --size-avatar: 50px;
   display: grid;
@@ -20,9 +27,22 @@ section.menu__info-users {
 
 header.menu-info__header {
   display: flex;
-  padding: 10px;
+  min-height: 58px;
+  padding-block: 8px;
+  margin-inline: 20px;
+  padding-inline: 20px 10px;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  position: relative;
+  border-bottom: 1px solid var(--border-grey);
+}
+
+.menu-info__header-title {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding-inline: 34px;
 }
 
 header.menu-info__header h4 {
@@ -33,14 +53,49 @@ header.menu-info__header h4 {
   max-width: 140ch;
   overflow: hidden;
   text-overflow: ellipsis;
-  height: 1.1em;
+  margin: 0;
+  color: var(--text-black);
+  font-size: 16px;
+  margin-top: 10px;
+  font-weight: 700;
+  line-height: 17px;
+}
+
+.menu-info__header-title span {
+  color: var(--neutral-text);
+  font-size: 12px;
+  line-height: 15px;
+  margin-top: 5px;
+}
+
+.menu-info__content {
+  box-sizing: border-box;
+  height: calc(var(--default-height) - 58px);
+  min-height: 0;
+  padding-inline: 20px;
+  padding-block-end: 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 section.menu-info__info-section {
-  padding: 10px;
-  padding-inline: 20px;
+  padding-block: 10px 0;
+  padding-inline: 0;
   display: grid;
-  gap: 10px;
+  gap: 12px;
+}
+
+.menu-info__participants {
+  display: grid;
+  padding-inline: 0;
+  padding-block: 16px 0;
+  overflow: visible;
+}
+
+.menu-info__participants .menu__info-users-list {
+  height: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .menu-info__user-header {
@@ -68,15 +123,10 @@ section.menu-info__info-section {
   overflow-x: hidden;
 }
 
-button.tabs__navigation-button {
-  display: flex;
-  align-items: center;
-}
-
 div.menu-info__buttons {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 12px;
 }
 
 .menu-info__create-channel {
@@ -93,20 +143,17 @@ div.menu-info__buttons {
     color: var(--text-black);
   }
 }
-.tabs__navigation {
-  justify-content: start !important;
-  gap: 70px;
-}
-
-.tabs__navigation .tabs__navigation-button:hover {
-  cursor: pointer;
-}
 
 .menu-info__avatar-button {
   --size-avatar: 42.5px;
   display: flex;
-  width: 100%;
+  padding: 0;
+  align-items: center;
   justify-content: center;
+  justify-self: center;
+  border: 1px solid var(--blue1);
+  border-radius: 50%;
+  background-color: transparent;
   &:hover {
     cursor: pointer;
   }
@@ -117,11 +164,11 @@ svg.icon-yui-kit.menu-info__close-icon {
 }
 
 button.menu-info__close-button {
+  position: absolute;
+  inset-inline-end: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   padding: 6px;
-}
-
-button.tabs__navigation-button {
-  margin-inline: 20px !important;
 }
 
 button.button-yui-kit.large.menu-info__secondary-button {
@@ -140,12 +187,34 @@ button.button-yui-kit.large.menu-info__secondary-button {
   }
 }
 
-.tabs__navigation-content > section.menu__info-users {
-  padding-block: 10px;
+.menu-info__call-icon {
+  width: 20px;
+  height: 20px;
 }
 
-aside.menu-info .tabs__navigation-content > section.menu__info-users {
-  padding-inline: 20px;
+.menu-info__name-form {
+  gap: 0;
+}
+
+.menu-info__name-form .form__name {
+  display: grid;
+}
+
+.menu-info__name-form .menu__info-title-text {
+  display: none;
+}
+
+.menu-info__name-form fieldset.input-yui-kit {
+  min-height: 36px;
+}
+
+.menu-info__name-form .menu__info-save-button:disabled {
+  display: none;
+}
+
+.menu-info__participants .menu__info-add-user {
+  min-height: 47px !important;
+  padding-block: 8px !important;
 }
 
 .menu-info__title-text {
