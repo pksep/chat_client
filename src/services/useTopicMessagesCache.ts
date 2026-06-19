@@ -47,6 +47,44 @@ const hasIndexedDb = () =>
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+const serializeValue = (
+  value: unknown,
+  seenObjects = new WeakSet<object>()
+): unknown => {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === 'function' || typeof value === 'symbol') {
+    return undefined;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(item => serializeValue(item, seenObjects));
+  }
+
+  if (isPlainObject(value)) {
+    if (seenObjects.has(value)) {
+      return undefined;
+    }
+
+    seenObjects.add(value);
+
+    const serializedObject = Object.fromEntries(
+      Object.entries(value).map(([key, nestedValue]) => [
+        key,
+        serializeValue(nestedValue, seenObjects)
+      ])
+    );
+
+    seenObjects.delete(value);
+
+    return serializedObject;
+  }
+
+  return value;
+};
+
 const deserializeValue = (value: unknown, key?: string): unknown => {
   if (typeof value === 'string' && key && DATE_KEYS.has(key)) {
     return new Date(value);
@@ -287,7 +325,7 @@ export const saveCachedTopicMessages = async (
       cacheKey: getCacheKey(topicId, userId),
       topicId,
       userId,
-      messages,
+      messages: serializeValue(messages) as IMessage[],
       updatedAt: new Date().toISOString()
     };
 

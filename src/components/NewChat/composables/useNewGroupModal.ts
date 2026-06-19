@@ -65,8 +65,14 @@ export function useNewGroupModal<Emits extends NewGroupModalEmits>(
     state.isEditAvatar = true;
   };
 
-  const onSaveAvatar = async (): Promise<void> => {
-    const file = await uploadFile(state.file!);
+  const onSaveAvatar = async (croppedFile?: File): Promise<void> => {
+    const avatarFile = croppedFile || state.file;
+
+    if (!avatarFile) {
+      return;
+    }
+
+    const file = await uploadFile(avatarFile);
 
     state.avatarPreview = file.path;
     state.isEditAvatar = false;

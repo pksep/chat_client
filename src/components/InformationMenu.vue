@@ -1,18 +1,13 @@
 <template>
-  <div
-    class="menu-info__create-channel"
-    :data-testid="`${dataTestid}-InformationMenu-Container`"
+  <button
+    class="menu-info__avatar-button"
+    :data-testid="`${dataTestid}-InformationMenu-AvatarButton`"
+    @click="openEditProfileIcon"
   >
-    <p class="menu-info__title-text">Канал создан:</p>
-    <span>
-      {{ model?.date?.toLocaleDateString('ru-RU') }}
-    </span>
-  </div>
-  <button class="menu-info__avatar-button" @click="openEditProfileIcon">
     <CachedAvatar
       :initials="model?.name"
       :path="model?.avatarUrl"
-      alt="use-avatar-circle"
+      alt="Аватар группы"
     />
   </button>
   <input
@@ -28,11 +23,15 @@
     @unmount-close="closeEditProfileIcon"
     @unmount-save="onSaveAvatar"
   />
+  <NewChatInformationForm
+    class="menu-info__name-form"
+    :name="model?.name"
+    @unmount-save="handleSaveFromForm"
+  />
   <MenuInfoButtons
     @unmount-leave="leaveGroupInfo"
     @unmount-open-chat="emits('unmount-open-chat')"
   />
-  <NewChatInformationForm @unmount-save="handleSaveFromForm" />
 </template>
 
 <script lang="ts" setup>
@@ -73,9 +72,11 @@ const {
   leaveGroupInfo
 } = useInformationMenu(model);
 
-const onSaveAvatar = async (): Promise<void> => {
-  if (state.fileImage) {
-    await originalOnSaveAvatar(state.fileImage);
+const onSaveAvatar = async (croppedFile?: File): Promise<void> => {
+  const avatarFile = croppedFile || state.fileImage;
+
+  if (avatarFile) {
+    await originalOnSaveAvatar(avatarFile);
   }
 };
 

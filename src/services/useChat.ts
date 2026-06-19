@@ -1171,9 +1171,20 @@ export const setReactionMessage = async (params: {
   const sdk = getChatSDK();
 
   try {
-    sdk.sendWebSocketEvent(WebSocketEventType.TOGGLE_REACTION, params);
+    await sdk.toggleMessageReaction(
+      params.topicId,
+      params.messageId,
+      params.emoji
+    );
   } catch (error) {
-    console.error('[ChatSDK] Failed to send message via WebSocket:', error);
+    try {
+      sdk.sendWebSocketEvent(WebSocketEventType.TOGGLE_REACTION, params);
+    } catch (socketError) {
+      console.error(
+        '[ChatSDK] Failed to toggle message reaction:',
+        socketError
+      );
+    }
   }
 };
 

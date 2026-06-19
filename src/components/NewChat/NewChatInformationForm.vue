@@ -4,18 +4,18 @@
     <div class="menu__info-form-block form__name">
       <label for="name" class="menu__info-title-text"> Название: </label>
       <Input
-        @click.stop
         id="name"
         class="initial"
-        placeholder="Text"
+        placeholder="Название"
         :model-value="newName"
-        @update:model-value="handleChangeName"
         :disabled="!!currentGroup && !currentGroup.isAdmin"
+        @click.stop
+        @update:model-value="handleChangeName"
       />
     </div>
-    <div class="menu__info-form-block form__textarea" v-if="false">
+    <div v-if="false" class="menu__info-form-block form__textarea">
       <label class="menu__info-title-text"> Описание: </label>
-      <Textarea class="initial" placeholder="Text" />
+      <Textarea class="initial" placeholder="Описание" />
     </div>
     <slot name="button">
       <Button
@@ -80,9 +80,10 @@ const handleChangeName = (newVal: string) => {
 };
 
 watch(
-  () => [currentGroup.value?.id, route.value.id],
+  () => [currentGroup.value?.id, route.value.id, props.name],
   () => {
     newName.value = currentGroup.value?.name || props.name;
+    oldName.value = currentGroup.value?.name || props.name;
   },
   { immediate: true }
 );
