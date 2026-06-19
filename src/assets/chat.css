@@ -380,6 +380,11 @@ p.chat__nothing-paragraph {
   max-width: 300px;
 }
 
+.attach-modal-container .modal-yui-kit__modal-content,
+.attach-modal-container .modal-yui-kit__modal-content .image-attachment-editor {
+  padding: 3.5px;
+}
+
 .attach-modal-container:has(.chat__input__action > svg)
   .chat__input__action__blog
   p {
