@@ -5,6 +5,7 @@ import {
   type BackgroundProcessorWrapper
 } from '@livekit/track-processors';
 import {
+  type AudioCaptureOptions,
   createLocalVideoTrack,
   ConnectionQuality,
   LocalTrackPublication,
@@ -228,7 +229,7 @@ const CALL_STATUS_NOTICE_CLOSE_DELAY_MS = 3000;
 const DIRECT_CALL_RECONNECT_GRACE_MS = 180000;
 const DIRECT_CALL_RECONNECT_POLL_MS = 2000;
 const DIRECT_CALL_RECONNECT_FAILED_NOTICE = 'Не удалось восстановить звонок';
-const DIRECT_CALL_ENDED_NOTICE = 'Звонок завершен';
+const DIRECT_CALL_ENDED_NOTICE = 'Звонок завершён';
 const CALL_RECONNECT_NOTICE = 'Связь прервана. Переподключение';
 const dismissedIncomingCallRooms = new Map<string, number>();
 const dismissedIncomingCallTopics = new Map<string, number>();
@@ -259,12 +260,19 @@ const SCREEN_SHARE_CAPTURE_DEFAULTS = {
   resolution: ScreenSharePresets.original.resolution,
   selfBrowserSurface: 'exclude' as const,
   surfaceSwitching: 'include' as const,
-  systemAudio: 'include' as const
+  systemAudio: 'exclude' as const
 };
 const SCREEN_SHARE_PUBLISH_DEFAULTS = {
   degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
   simulcast: false,
   screenShareEncoding: ScreenSharePresets.original.encoding
+};
+const CALL_AUDIO_CAPTURE_DEFAULTS: AudioCaptureOptions = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  voiceIsolation: true,
+  autoGainControl: true,
+  channelCount: 1
 };
 type LocalManagedVideoProcessor =
   | BackgroundProcessorWrapper
@@ -2289,6 +2297,41 @@ const enforceSingleScreenShare = async () => {
   syncLocalTrackState();
 };
 
+const applyLocalMicrophoneVoiceIsolation = async (
+  publication?: LocalTrackPublication
+): Promise<void> => {
+  const microphoneTrack = publication?.track?.mediaStreamTrack;
+
+  if (!microphoneTrack || microphoneTrack.readyState !== 'live') {
+    return;
+  }
+
+  microphoneTrack.contentHint = 'speech';
+
+  try {
+    await microphoneTrack.applyConstraints(CALL_AUDIO_CAPTURE_DEFAULTS);
+  } catch (error) {
+    console.warn(
+      '[LiveKit] Failed to apply microphone voice isolation constraints:',
+      error
+    );
+  }
+};
+
+const setLocalMicrophoneEnabled = async (
+  activeRoom: Room,
+  enabled: boolean
+): Promise<LocalTrackPublication | undefined> => {
+  const publication = await activeRoom.localParticipant.setMicrophoneEnabled(
+    enabled,
+    CALL_AUDIO_CAPTURE_DEFAULTS
+  );
+
+  await applyLocalMicrophoneVoiceIsolation(publication);
+
+  return publication;
+};
+
 const ensureLocalMicrophoneState = async (activeRoom: Room | null = room) => {
   if (!activeRoom || !state.isMicActive) return;
 
@@ -2305,7 +2348,7 @@ const ensureLocalMicrophoneState = async (activeRoom: Room | null = room) => {
     return;
   }
 
-  await activeRoom.localParticipant.setMicrophoneEnabled(true);
+  await setLocalMicrophoneEnabled(activeRoom, true);
 };
 
 const repairRemoteAudioPublication = (
@@ -2793,14 +2836,14 @@ const getConnectErrorMessage = (error: unknown) => {
     errorMessage.includes('call is no longer active') ||
     errorMessage.includes('failed to get livekit token')
   ) {
-    return 'Звонок уже завершен.';
+    return 'Звонок уже завершён.';
   }
 
   if (errorMessage.includes('429')) {
-    return 'Не удалось подключиться к звонку из-за ограничения запросов. Попробуйте еще раз через несколько секунд.';
+    return 'Не удалось подключиться к звонку из-за ограничения запросов. Попробуйте ещё раз через несколько секунд.';
   }
 
-  return 'Не удалось подключиться к звонку. Попробуйте еще раз.';
+  return 'Не удалось подключиться к звонку. Попробуйте ещё раз.';
 };
 
 const isExpectedConnectAbort = (
@@ -2869,6 +2912,7 @@ const connectToRoom = async () => {
         ...CAMERA_PUBLISH_DEFAULTS,
         ...SCREEN_SHARE_PUBLISH_DEFAULTS
       },
+      audioCaptureDefaults: CALL_AUDIO_CAPTURE_DEFAULTS,
       videoCaptureDefaults: CAMERA_CAPTURE_DEFAULTS
     });
     room = nextRoom;
@@ -2926,7 +2970,7 @@ const connectToRoom = async () => {
       return;
     }
 
-    await nextRoom.localParticipant.setMicrophoneEnabled(state.isMicActive);
+    await setLocalMicrophoneEnabled(nextRoom, state.isMicActive);
     if (state.isVideoActive) {
       if (shouldUseManagedBackgroundCamera()) {
         try {
@@ -3370,7 +3414,7 @@ export const acceptCall = async () => {
   });
   if (answerAck?.accepted === false) {
     isAcceptingLocally = false;
-    showTransientCallStatusNotice('Звонок уже завершен');
+    showTransientCallStatusNotice('Звонок уже завершён');
     return false;
   }
   localAcceptRoomId = roomId.value;
@@ -3436,7 +3480,7 @@ export const joinPendingGroupCall = async (
   const callStatus = await getLiveKitCallStatus(pendingRoomId, pendingTopicId);
   if (!callStatus?.active) {
     clearUnavailableCallState(pendingRoomId, pendingTopicId);
-    showTransientCallStatusNotice('Звонок уже завершен');
+    showTransientCallStatusNotice('Звонок уже завершён');
     return false;
   }
 
@@ -3473,7 +3517,7 @@ export const joinPendingGroupCall = async (
   });
   if (answerAck?.accepted === false) {
     isAcceptingLocally = false;
-    showTransientCallStatusNotice('Звонок уже завершен');
+    showTransientCallStatusNotice('Звонок уже завершён');
     return false;
   }
   localAcceptRoomId = roomId.value;
@@ -3562,7 +3606,7 @@ export const joinInvitedGroupCall = async (): Promise<boolean | void> => {
   if (!callStatus?.active) {
     clearUnavailableCallState(invite.roomId, invite.topicId);
     clearInviteParamsFromUrl();
-    showTransientCallStatusNotice('Звонок уже завершен');
+    showTransientCallStatusNotice('Звонок уже завершён');
     return false;
   }
 
@@ -3599,7 +3643,7 @@ export const joinInvitedGroupCall = async (): Promise<boolean | void> => {
   });
   if (answerAck?.accepted === false) {
     isAcceptingLocally = false;
-    showTransientCallStatusNotice('Звонок уже завершен');
+    showTransientCallStatusNotice('Звонок уже завершён');
     return;
   }
   localAcceptRoomId = roomId.value;
@@ -3947,7 +3991,7 @@ export const copyInvitedGroupCallLink = async () => {
 export const toggleMic = async () => {
   state.isMicActive = !state.isMicActive;
   if (room) {
-    await room.localParticipant.setMicrophoneEnabled(state.isMicActive);
+    await setLocalMicrophoneEnabled(room, state.isMicActive);
     if (state.isMicActive) {
       scheduleCallAudioRecovery(room);
     }
