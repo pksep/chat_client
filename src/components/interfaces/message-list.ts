@@ -7,6 +7,7 @@ export interface IMessageListProps {
   contact?: ITopic | null;
   showUpdateBanner?: boolean;
   updateActionLabel?: string;
+  updateProgress?: number | null;
   isUpdateActionDisabled?: boolean;
   onUpdateClick?: () => void | Promise<void>;
   onDismissUpdateBanner?: () => void;
