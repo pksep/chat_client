@@ -42,6 +42,7 @@ export function useMobileApp() {
   const showDownloadModal = ref(false);
   const showUpdateBanner = ref(false);
   const updateInstallStatus = ref(RuStoreInstallStatus.UNKNOWN);
+  const updateDownloadPercent = ref<number | null>(null);
   const isUpdateFlowPending = ref(false);
   const nativeAppUpdateInfo = ref<RuStoreAppUpdateInfo | null>(null);
   const isWebUpdateBanner = ref(false);
@@ -54,12 +55,35 @@ export function useMobileApp() {
     nativeAppUpdateInfo.value = appUpdateInfo;
     updateInstallStatus.value =
       appUpdateInfo?.installStatus ?? RuStoreInstallStatus.UNKNOWN;
+    if (
+      updateInstallStatus.value !== RuStoreInstallStatus.DOWNLOADING &&
+      updateInstallStatus.value !== RuStoreInstallStatus.PENDING
+    ) {
+      updateDownloadPercent.value = null;
+    }
     showUpdateBanner.value = shouldShowNativeUpdateBanner(appUpdateInfo);
   };
 
   const applyNativeInstallState = (installState: RuStoreInstallState) => {
     updateInstallStatus.value =
       installState.installStatus ?? RuStoreInstallStatus.UNKNOWN;
+
+    const bytesDownloaded = Number(installState.bytesDownloaded);
+    const totalBytesToDownload = Number(installState.totalBytesToDownload);
+
+    if (
+      updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADING &&
+      Number.isFinite(bytesDownloaded) &&
+      Number.isFinite(totalBytesToDownload) &&
+      totalBytesToDownload > 0
+    ) {
+      updateDownloadPercent.value = Math.min(
+        95,
+        Math.max(0, Math.round((bytesDownloaded / totalBytesToDownload) * 100))
+      );
+    } else if (updateInstallStatus.value !== RuStoreInstallStatus.PENDING) {
+      updateDownloadPercent.value = null;
+    }
 
     nativeAppUpdateInfo.value = {
       updateAvailability:
@@ -231,21 +255,15 @@ export function useMobileApp() {
   const handleInstall = () => {
     if (!mobilePlatform.value) return;
 
-    const start = Date.now();
-
     if (mobilePlatform.value === MobilePlatformEnum.ANDROID) {
-      window.location.href = 'myapp://open';
-
-      setTimeout(() => {
-        if (Date.now() - start < 1500) {
-          window.location.href = RUSTORE_APP_URL;
-        }
-      }, 1200);
+      window.location.href = RUSTORE_APP_URL;
 
       return;
     }
 
     if (mobilePlatform.value === MobilePlatformEnum.APPLE) {
+      const start = Date.now();
+
       window.location.href = 'myapp://open';
 
       setTimeout(() => {
@@ -282,14 +300,12 @@ export function useMobileApp() {
       await refreshNativeUpdateInfo();
 
       if (!nativeAppUpdateInfo.value) {
-        window.location.href = RUSTORE_APP_URL;
-        return;
+        throw new Error('Не удалось получить информацию об обновлении');
       }
 
       await startRuStoreFlexibleUpdate();
     } catch (error) {
       console.warn('Failed to start RuStore update flow:', error);
-      window.location.href = RUSTORE_APP_URL;
     } finally {
       isUpdateFlowPending.value = false;
     }
@@ -305,19 +321,39 @@ export function useMobileApp() {
       return 'Обновить';
     }
 
-    if (isUpdateFlowPending.value) {
-      return 'Загрузка...';
+    if (typeof updateDownloadPercent.value === 'number') {
+      return `${updateDownloadPercent.value}%`;
     }
 
-    switch (updateInstallStatus.value) {
-      case RuStoreInstallStatus.DOWNLOADING:
-      case RuStoreInstallStatus.PENDING:
-        return 'Загрузка...';
-      case RuStoreInstallStatus.DOWNLOADED:
-        return 'Перезапустить';
-      default:
-        return 'Установить';
+    if (
+      isUpdateFlowPending.value ||
+      updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADING ||
+      updateInstallStatus.value === RuStoreInstallStatus.PENDING
+    ) {
+      return '0%';
     }
+
+    if (updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADED) {
+      return 'Перезапустить';
+    }
+
+    return 'Установить';
+  });
+
+  const updateProgress = computed<number | null | undefined>(() => {
+    if (!Capacitor.isNativePlatform()) {
+      return undefined;
+    }
+
+    if (
+      isUpdateFlowPending.value ||
+      updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADING ||
+      updateInstallStatus.value === RuStoreInstallStatus.PENDING
+    ) {
+      return updateDownloadPercent.value ?? 0;
+    }
+
+    return undefined;
   });
 
   const isUpdateActionDisabled = computed(
@@ -345,6 +381,7 @@ export function useMobileApp() {
     showDownloadModal,
     showUpdateBanner,
     updateActionLabel,
+    updateProgress,
     isUpdateActionDisabled,
     handleInstall,
     handleUpdateClick,

@@ -17,6 +17,7 @@
       :user="authUser"
       :show-update-banner="props.showUpdateBanner"
       :update-action-label="props.updateActionLabel"
+      :update-progress="props.updateProgress"
       :is-update-action-disabled="props.isUpdateActionDisabled"
       :on-update-click="props.onUpdateClick"
       :on-dismiss-update-banner="props.onDismissUpdateBanner"

@@ -34,6 +34,7 @@
       ref="chatRef"
       :show-update-banner="showUpdateBanner"
       :update-action-label="updateActionLabel"
+      :update-progress="updateProgress"
       :is-update-action-disabled="isUpdateActionDisabled"
       :on-update-click="handleUpdateClick"
       :on-dismiss-update-banner="dismissUpdateBanner"
@@ -227,6 +228,7 @@ const {
   showDownloadModal,
   showUpdateBanner,
   updateActionLabel,
+  updateProgress,
   isUpdateActionDisabled,
   handleUpdateClick,
   dismissUpdateBanner
