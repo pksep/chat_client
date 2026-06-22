@@ -8,7 +8,7 @@
         "@capacitor/android": "^8.0.1",
         "@capacitor/app": "^8.0.1",
         "@capacitor/assets": "^3.0.5",
-        "@capacitor/barcode-scanner": "^3.0.0",
+        "@capacitor/clipboard": "8.0.0",
         "@capacitor/core": "^8.0.1",
         "@capacitor/filesystem": "^8.1.2",
         "@capacitor/ios": "^8.0.1",
@@ -19,7 +19,7 @@
         "@livekit/track-processors": "^0.7.2",
         "@mastra/client-js": "^0.12.3",
         "@pksep/reqi": "0.0.25",
-        "@pksep/yui": "^0.1.274",
+        "@pksep/yui": "^0.1.275",
         "@pksep/zod-shared-chat": "0.0.6",
         "@tauri-apps/api": "^2.11.0",
         "@tauri-apps/plugin-notification": "^2.3.3",
@@ -291,9 +291,9 @@
 
     "@capacitor/assets": ["@capacitor/assets@3.0.5", "", { "dependencies": { "@capacitor/cli": "^5.3.0", "@ionic/utils-array": "2.1.6", "@ionic/utils-fs": "3.1.7", "@trapezedev/project": "^7.0.10", "commander": "8.3.0", "debug": "4.3.4", "fs-extra": "10.1.0", "node-fetch": "2.7.0", "node-html-parser": "5.4.2", "sharp": "0.32.6", "tslib": "2.6.2", "yargs": "17.7.2" }, "bin": { "capacitor-assets": "bin/capacitor-assets" } }, "sha512-ohz/OUq61Y1Fc6aVSt0uDrUdeOA7oTH4pkWDbv/8I3UrPjH7oPkzYhShuDRUjekNp9RBi198VSFdt0CetpEOzw=="],
 
-    "@capacitor/barcode-scanner": ["@capacitor/barcode-scanner@3.0.2", "", { "dependencies": { "html5-qrcode": "2.3.8" }, "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-eD8G0dj/vDTytzFY3qK/5EWZtv17NHMN97gx5KSHUuqFXOScf+5e4Rwwak8zDkX17VLXNym6y3eIn8AvCLY+Pg=="],
-
     "@capacitor/cli": ["@capacitor/cli@8.1.0", "", { "dependencies": { "@ionic/cli-framework-output": "^2.2.8", "@ionic/utils-subprocess": "^3.0.1", "@ionic/utils-terminal": "^2.3.5", "commander": "^12.1.0", "debug": "^4.4.0", "env-paths": "^2.2.0", "fs-extra": "^11.2.0", "kleur": "^4.1.5", "native-run": "^2.0.3", "open": "^8.4.0", "plist": "^3.1.0", "prompts": "^2.4.2", "rimraf": "^6.0.1", "semver": "^7.6.3", "tar": "^7.5.3", "tslib": "^2.8.1", "xml2js": "^0.6.2" }, "bin": { "cap": "bin/capacitor", "capacitor": "bin/capacitor" } }, "sha512-JAzA/ckPgTCjZz6YumBLV2dNCFEVXAuR1oOKLD7AJ4LAI5pF5RtRZrf5FoaxvJVb0S4CouZT5cD+7NwsNJX/nw=="],
+
+    "@capacitor/clipboard": ["@capacitor/clipboard@8.0.0", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-nRgx07ThaoxOaTObZo/G39se9wA3oVgP0ooNO539P1TOZzWObwuXWObZgvaRJNpJfHVYcNe45Ylb8nlYl7VleA=="],
 
     "@capacitor/core": ["@capacitor/core@8.1.0", "", { "dependencies": { "tslib": "^2.1.0" } }, "sha512-UfMBMWc1v7J+14AhH03QmeNwV3HZx3qnOWhpwnHfzALEwAwlV/itQOQqcasMQYhOHWL0tiymc5ByaLTn7KKQxw=="],
 
@@ -769,7 +769,7 @@
 
     "@pksep/reqi": ["@pksep/reqi@0.0.25", "", { "dependencies": { "content-type": "^1.0.5", "lz-string": "^1.5.0" } }, "sha512-sSed6Susoh0CZfBFcNRit5SruksP+S+uEZKLz2qkY97hsSbOVc8GvWoGY3O1X6b/APWNFwFq4e2jJyVP6zEGlw=="],
 
-    "@pksep/yui": ["@pksep/yui@0.1.274", "", { "dependencies": { "@floating-ui/vue": "^1.1.8", "@fontsource-variable/inter": "^5.1.0", "@fontsource/source-sans-pro": "^5.1.0", "@panzoom/panzoom": "^4.6.1", "@tiptap/core": "^3.6.2", "@tiptap/extension-image": "^3.6.2", "@tiptap/extension-link": "^3.6.2", "@tiptap/extension-placeholder": "^3.6.2", "@tiptap/pm": "^3.23.4", "@tiptap/starter-kit": "^3.6.2", "@tiptap/vue-3": "^3.6.2", "@vueuse/components": "^11.1.0", "@vueuse/core": "^11.0.3", "col-cal": "2.0.0-alpha.1", "pdfjs-dist": "^5.4.449", "print-js": "^1.6.0", "vue": "^3.5.22", "vue3-emoji-picker": "^1.1.8", "vue3-perfect-scrollbar": "^2.0.0" } }, "sha512-ud7ga3QMZgJDfW66d39rhOOFjnJj3Js2mWl8HZfvEv8s9JmrvuknRcXbYPL9wNimqISHizyduJ2fT6JbZYXQjw=="],
+    "@pksep/yui": ["@pksep/yui@0.1.275", "", { "dependencies": { "@floating-ui/vue": "^1.1.8", "@fontsource-variable/inter": "^5.1.0", "@fontsource/source-sans-pro": "^5.1.0", "@panzoom/panzoom": "^4.6.1", "@tiptap/core": "^3.6.2", "@tiptap/extension-image": "^3.6.2", "@tiptap/extension-link": "^3.6.2", "@tiptap/extension-placeholder": "^3.6.2", "@tiptap/pm": "^3.23.4", "@tiptap/starter-kit": "^3.6.2", "@tiptap/vue-3": "^3.6.2", "@vueuse/components": "^11.1.0", "@vueuse/core": "^11.0.3", "col-cal": "2.0.0-alpha.1", "pdfjs-dist": "^5.4.449", "print-js": "^1.6.0", "vue": "^3.5.22", "vue3-emoji-picker": "^1.1.8", "vue3-perfect-scrollbar": "^2.0.0" } }, "sha512-nPcAZZAwkJvGRm6pagN50Ij4z5Z5zChtHfRjMEaCd7VlF63uz6Qnp3x29B1Z+20QhgKhOiYPpeHZLaToiytyRQ=="],
 
     "@pksep/zod-shared-chat": ["@pksep/zod-shared-chat@0.0.6", "", { "peerDependencies": { "zod": "^3.22.0" } }, "sha512-70HR9AMzkBFsnICp9nTzu1EBsWhhmFHPpe0jIcGSVae8itVDV5bPzj0MrxxxaFeg3cK8Pxd4XzdigiJZ8P6VJg=="],
 
@@ -1812,8 +1812,6 @@
     "hook-std": ["hook-std@4.0.0", "", {}, "sha512-IHI4bEVOt3vRUDJ+bFA9VUJlo7SzvFARPNLw75pqSmAOP2HmTWfFJtPvLBrDrlgjEYXY9zs7SFdHPQaJShkSCQ=="],
 
     "hosted-git-info": ["hosted-git-info@9.0.2", "", { "dependencies": { "lru-cache": "^11.1.0" } }, "sha512-M422h7o/BR3rmCQ8UHi7cyyMqKltdP9Uo+J2fXK+RSAY+wTcKOIRyhTuKv4qn+DJf3g+PL890AzId5KZpX+CBg=="],
-
-    "html5-qrcode": ["html5-qrcode@2.3.8", "", {}, "sha512-jsr4vafJhwoLVEDW3n1KvPnCCXWaQfRng0/EEYk1vNcQGcG/htAdhJX0be8YyqMoSz7+hZvOZSTAepsabiuhiQ=="],
 
     "http-errors": ["http-errors@2.0.1", "", { "dependencies": { "depd": "~2.0.0", "inherits": "~2.0.4", "setprototypeof": "~1.2.0", "statuses": "~2.0.2", "toidentifier": "~1.0.1" } }, "sha512-4FbRdAX+bSdmo4AUFuS0WNiPz8NgFt+r8ThgNWmlrjQjt1Q7ZR9+zTlce2859x4KSXrwIsaeTqDoKQmtP8pLmQ=="],
 
@@ -2933,7 +2931,7 @@
 
     "@awesome.me/webawesome/marked": ["marked@11.2.0", "", { "bin": { "marked": "bin/marked.js" } }, "sha512-HR0m3bvu0jAPYiIvLUUQtdg1g6D247//lvcekpHO1WMvbwDlwSkZAX9Lw4F4YHE1T0HaaNve0tuAWuV1UJ6vtw=="],
 
-    "@awesome.me/webawesome/nanoid": ["nanoid@5.1.14", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-5c8l8kVzqpnDPaicbEop/fV0Q1w16FmbWtVhMqugTozAwYdlIQojWH5a/M7UfziFmGdQRrUdV+EPzc9Xng3VAQ=="],
+    "@awesome.me/webawesome/nanoid": ["nanoid@5.1.15", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-kBg3RpGtIe+RpTbyXwoI6pk5yD7KUiI3sygUqgeBMRst42KmhB4RZC7eiO9Wa1HIpaCCtpE2DJ6OI4Wi5ebwFw=="],
 
     "@babel/helper-compilation-targets/lru-cache": ["lru-cache@5.1.1", "", { "dependencies": { "yallist": "^3.0.2" } }, "sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w=="],
 

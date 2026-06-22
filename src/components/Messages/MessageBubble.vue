@@ -54,10 +54,10 @@
       @touchstart.stop
       @touchend.stop
       :open="sliderElements.length > 0"
-      @close="() => (sliderElements = [])"
+      @close="closeSlider"
       :items="sliderElements"
       :default-index="defaultIndexSlider"
-      @keydown.escape.stop="() => (sliderElements = [])"
+      @keydown.escape.stop="closeSlider"
     />
 
     <MessageContextMenu
@@ -81,7 +81,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { Checkbox, CheckboxCircularEnum } from '@pksep/yui';
 import {
@@ -111,6 +111,7 @@ import {
   getMessageReplyQuoteOccurrenceIndex,
   getMessageReplyQuoteText
 } from '../../utils/messageReplyQuote';
+import { useBackButton } from '../../composables/useBackButton';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -135,6 +136,28 @@ const { getFullMediaPath, isSliderContentUrl } = useMessageMedia();
 
 const sliderElements = ref<{ path: string; name: string; file?: File }[]>([]);
 const defaultIndexSlider = ref<number>(0);
+const { addHandler: addBackHandler, removeHandler: removeBackHandler } =
+  useBackButton();
+
+const closeSlider = (): void => {
+  sliderElements.value = [];
+};
+
+watch(
+  () => sliderElements.value.length > 0,
+  isOpen => {
+    if (isOpen) {
+      addBackHandler(closeSlider);
+      return;
+    }
+
+    removeBackHandler(closeSlider);
+  }
+);
+
+onBeforeUnmount(() => {
+  removeBackHandler(closeSlider);
+});
 
 const docFiles = computed(
   () => props.media?.filter(media => media.type === MediaType.File) || []
