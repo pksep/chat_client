@@ -184,6 +184,22 @@
           </div>
           <div v-if="!props.showCheckbox" class="contact-list__bottom">
             <div
+              v-if="
+                topic.hasUnreadReaction &&
+                getTopicUnreadReactionMessageId(topic.id)
+              "
+              class="contact-list__reaction-indicator"
+              :data-testid="`${props.dataTestid}-ContactList-Reaction${index + 1}`"
+              role="button"
+              tabindex="0"
+              aria-label="Новая реакция на ваше сообщение"
+              @click.stop="handleReactionClick(topic)"
+              @keydown.enter.stop="handleReactionClick(topic)"
+              @keydown.space.stop.prevent="handleReactionClick(topic)"
+            >
+              <ReactionHeartIcon />
+            </div>
+            <div
               v-if="topic.taggedMe"
               class="contact-list__notification contact-list__mention"
               :data-testid="`${props.dataTestid}-ContactList-Mention${index + 1}`"
@@ -427,6 +443,8 @@ import {
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 import type { IMessageSearchResult } from '../../composables/useMessageSearch';
 import { isBotTopic } from '../../utils/bot';
+import ReactionHeartIcon from '../UI/ReactionHeartIcon.vue';
+import { requestTopicReactionJump } from '../../services/useTopicViewportState';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
@@ -441,7 +459,8 @@ const {
   toggleMuteTopic,
   getTopicTypingUsers,
   setTopicMarkedUnread,
-  resetTopicUnreadState
+  resetTopicUnreadState,
+  getTopicUnreadReactionMessageId
 } = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 
@@ -604,6 +623,26 @@ const handleClick = (topic: ITopic): void => {
       navigateToGroup(topic.id);
     }
   }
+  emits('unmount-topic', topic);
+};
+
+const handleReactionClick = (topic: ITopic): void => {
+  const unreadReactionMessageId = getTopicUnreadReactionMessageId(topic.id);
+
+  if (!unreadReactionMessageId) {
+    return;
+  }
+
+  requestTopicReactionJump(topic.id, unreadReactionMessageId);
+
+  if (isMobile.value) {
+    if (topic.type === TopicType.DM) {
+      navigateToDialogs(topic.id);
+    } else if (topic.type === TopicType.Group) {
+      navigateToGroup(topic.id);
+    }
+  }
+
   emits('unmount-topic', topic);
 };
 

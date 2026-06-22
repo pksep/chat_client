@@ -77,6 +77,8 @@ export type ITopic = Topic & {
   unreadMessageCount?: number;
   isAdmin?: boolean;
   taggedMe?: boolean;
+  hasUnreadReaction?: boolean;
+  unreadReactionMessageId?: string;
   typingUserIds?: string[];
 };
 

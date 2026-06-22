@@ -13,6 +13,7 @@
         :active-select-user="props.allowSelectUser"
         :mention-items="users"
         :mention-config="mentionConfig"
+        :read-clipboard-text="readClipboardText"
         @unmount-send="handleSend"
         @unmount-attach-file="(...args: any[]) => $emit('attachFile', ...args)"
         @mention-change="handleMentionChange"
@@ -167,6 +168,8 @@ import {
   sendTypingStatus
 } from '../../services/useChat';
 import { bindTauriFileDrop } from '../../services/useTauriDroppedFiles';
+import { Capacitor } from '@capacitor/core';
+import { Clipboard } from '@capacitor/clipboard';
 
 interface Props {
   dataTestid: string;
@@ -430,6 +433,16 @@ const isMediaFile = (file: File): boolean => {
   const type = file.type.toLowerCase();
 
   return type.startsWith('image/') || type.startsWith('video/');
+};
+
+const readClipboardText = async (): Promise<string> => {
+  if (Capacitor.isNativePlatform()) {
+    const { value } = await Clipboard.read();
+
+    return value || '';
+  }
+
+  return (await navigator.clipboard?.readText?.()) || '';
 };
 
 const handleTauriFilesDropped = (files: File[]): void => {

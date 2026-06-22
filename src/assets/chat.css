@@ -31,7 +31,7 @@ p.chat__nothing-paragraph {
 
 .chat__message-wrapper {
   grid-row: 2;
-  padding: 15px 5px 5px 15px;
+  padding: 15px 5px 5px 10px;
   height: 100%;
   min-height: 0;
   overflow: hidden scroll;
@@ -73,9 +73,16 @@ p.chat__nothing-paragraph {
 
 .chat__message-bubble__arrow-down > .contact-list__notification {
   position: absolute;
-  top: -6px;
+  top: -8px;
+  line-height: 18px;
   right: 50%;
   transform: translateX(50%);
+}
+
+.chat__message-bubble__reaction-indicator {
+  position: absolute;
+  top: -8px;
+  color: var(--primary-color);
 }
 
 .chat__message-unread_messages_start {
@@ -397,7 +404,7 @@ p.chat__nothing-paragraph {
   }
 
   .chat__message-bubble__arrow-down {
-    right: 15px;
+    right: 10px;
   }
 }
 
@@ -509,7 +516,7 @@ p.chat__nothing-paragraph {
     position: fixed;
     bottom: 0;
     height: 62px;
-    padding: 5px 15px 20px;
+    padding: 5px 10px 20px;
     width: 100%;
   }
 
