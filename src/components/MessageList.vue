@@ -132,25 +132,23 @@
     </section>
     <div
       class="chat__message-bubble__arrow-down"
-      v-if="isShowScrollToBottomButton"
-      @click="handleScrollToButton"
+      v-if="isShowScrollToBottomButton || showUnreadReactionScrollButton"
+      @click="handleArrowDownClick"
     >
       <Icon :name="IconNameEnum.arrowDown" />
       <span
-        v-if="
-          hasVisibleTopicUnreadIndicator &&
-          (visibleTopicUnreadCount === 0 ||
-            activeTopic?.lastMessage?.senderUserId !== authUser?.id)
-        "
+        v-if="showUnreadCountOnScrollButton"
         :class="{
           'contact-list__notification': true,
           'contact-list__notification--muted': activeTopic?.info?.isMute
         }"
       >
-        <template v-if="visibleTopicUnreadCount">
-          {{ visibleTopicUnreadCount }}
-        </template>
+        {{ visibleTopicUnreadCount }}
       </span>
+      <ReactionHeartIcon
+        v-else-if="showUnreadReactionScrollButton"
+        class="chat__message-bubble__reaction-indicator"
+      />
     </div>
   </div>
 
@@ -200,6 +198,7 @@ import {
 import MessageListAIItems from './Messages/MessageListAIItems.vue';
 import MessageListUserItems from './Messages/MessageListUserItems.vue';
 import MessageListInput from './Messages/MessageListInput.vue';
+import ReactionHeartIcon from './UI/ReactionHeartIcon.vue';
 import {
   MessageTypeEnum,
   PushNotification,
@@ -215,7 +214,9 @@ import {
   RouteTypes
 } from '../composables/navigation/useUrlRouting';
 import {
+  clearTopicUnreadReaction,
   getSelectedTopic,
+  getTopicUnreadReactionMessageId,
   resetTopicUnreadState
 } from '../composables/useTopics';
 import {
@@ -270,6 +271,11 @@ import {
   normalizeReplyQuoteOccurrenceIndex,
   normalizeReplyQuoteText
 } from '../utils/messageReplyQuote';
+import {
+  clearPendingTopicReactionJump,
+  getIsTopicMessageVisible,
+  pendingTopicReactionJump
+} from '../services/useTopicViewportState';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -349,6 +355,13 @@ const hasVisibleTopicUnreadIndicator = computed(
     canClearlyShowUnreadCount.value &&
     hasTopicUnreadIndicator(activeTopic.value || undefined, authUser.value?.id)
 );
+const unreadReactionMessageId = computed(() => {
+  if (!activeTopic.value?.hasUnreadReaction || !route.value.id) {
+    return null;
+  }
+
+  return getTopicUnreadReactionMessageId(route.value.id);
+});
 const renderedTopicId = ref(route.value.id || '');
 let activeTopicSwitchToken = 0;
 
@@ -432,6 +445,7 @@ const scheduleFloatingDateDividerSync = (): void => {
 
 const {
   isShowScrollToBottomButton,
+  viewportRevision,
   isLoadingInitialMessages,
   scrollState,
   handleScroll: handleMessageScroll,
@@ -454,6 +468,22 @@ const {
   state,
   props
 );
+
+const showUnreadCountOnScrollButton = computed(
+  () =>
+    hasVisibleTopicUnreadIndicator.value && visibleTopicUnreadCount.value > 0
+);
+const showUnreadReactionScrollButton = computed(() => {
+  viewportRevision.value;
+
+  const messageId = unreadReactionMessageId.value;
+
+  return (
+    visibleTopicUnreadCount.value === 0 &&
+    !!messageId &&
+    !getIsTopicMessageVisible(route.value.id, messageId)
+  );
+});
 
 const {
   mastraResult,
@@ -900,15 +930,11 @@ const jumpToMessageWithHighlight = async (
   return true;
 };
 
-const handleScrollToMessage = async (payload: ScrollToMessagePayload) => {
-  const message = getScrollTargetMessage(payload);
-
-  if (!message) return;
-  if (message.topicId !== route.value.id) return;
-
-  const messageId = message.id;
-  const quoteText = getScrollTargetQuoteText(payload);
-  const quoteOccurrenceIndex = getScrollTargetQuoteOccurrenceIndex(payload);
+const navigateToMessageId = async (
+  messageId: string,
+  quoteText = '',
+  quoteOccurrenceIndex?: number
+): Promise<boolean> => {
   const didJump = await jumpToMessageWithHighlight(
     messageId,
     quoteText,
@@ -916,7 +942,7 @@ const handleScrollToMessage = async (payload: ScrollToMessagePayload) => {
   );
 
   if (didJump) {
-    return;
+    return true;
   }
 
   const memoryMessages = await hydrateMessageContextFromMemory(
@@ -932,7 +958,7 @@ const handleScrollToMessage = async (payload: ScrollToMessagePayload) => {
     );
 
     if (didMemoryJump) {
-      return;
+      return true;
     }
   }
 
@@ -952,7 +978,7 @@ const handleScrollToMessage = async (payload: ScrollToMessagePayload) => {
     );
 
     if (didShadowJump) {
-      return;
+      return true;
     }
   }
 
@@ -961,12 +987,66 @@ const handleScrollToMessage = async (payload: ScrollToMessagePayload) => {
   const messages = await fetchAroundMessage(messageId);
 
   if (!messages.some(m => m.id === messageId)) {
-    return;
+    return false;
   }
 
   await nextTick();
-  await jumpToMessageWithHighlight(messageId, quoteText, quoteOccurrenceIndex);
+  return jumpToMessageWithHighlight(messageId, quoteText, quoteOccurrenceIndex);
 };
+
+const handleScrollToMessage = async (payload: ScrollToMessagePayload) => {
+  const message = getScrollTargetMessage(payload);
+
+  if (!message || message.topicId !== route.value.id) {
+    return;
+  }
+
+  await navigateToMessageId(
+    message.id,
+    getScrollTargetQuoteText(payload),
+    getScrollTargetQuoteOccurrenceIndex(payload)
+  );
+};
+
+const handleArrowDownClick = async (): Promise<void> => {
+  if (showUnreadCountOnScrollButton.value) {
+    await handleScrollToButton();
+    return;
+  }
+
+  const messageId = unreadReactionMessageId.value;
+
+  if (!messageId) {
+    await handleScrollToButton();
+    return;
+  }
+
+  const didNavigate = await navigateToMessageId(messageId);
+
+  if (didNavigate) {
+    clearTopicUnreadReaction(route.value.id);
+  }
+};
+
+watch(
+  [pendingTopicReactionJump, () => route.value.id],
+  async ([pendingJump, topicId]) => {
+    if (!pendingJump || pendingJump.topicId !== topicId) {
+      return;
+    }
+
+    await nextTick();
+    const didNavigate = await navigateToMessageId(pendingJump.messageId);
+
+    if (!didNavigate) {
+      return;
+    }
+
+    clearTopicUnreadReaction(topicId);
+    clearPendingTopicReactionJump(topicId, pendingJump.messageId);
+  },
+  { immediate: true }
+);
 
 const shouldResetUnreadForCurrentTopic = (): boolean => {
   const lastMessage = state.messages.at(-1);

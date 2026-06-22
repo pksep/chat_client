@@ -384,6 +384,10 @@ import {
 } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import {
+  clearSelectedMessages,
+  isMessageSelectionModeForTopic
+} from '../../composables/useSelectedMessages';
+import {
   deleteTopic,
   getTopicTypingUsers,
   toggleMuteTopic,
@@ -996,6 +1000,11 @@ const handleConfirmActionModal = async (): Promise<void> => {
 };
 
 const handleExit = (): void => {
+  if (isMessageSelectionModeForTopic(route.value.id)) {
+    clearSelectedMessages();
+    return;
+  }
+
   if (route.value && route.value.type === RouteTypes.DIALOGS) {
     navigateToDialogsList();
   } else if (route.value && route.value.type === RouteTypes.GROUP) {

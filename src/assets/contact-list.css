@@ -210,6 +210,19 @@
   padding-bottom: 2px;
 }
 
+.contact-list__reaction-indicator {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  flex-shrink: 0;
+  color: var(--blue4);
+}
+
+.contact-list__reaction-indicator svg {
+  width: 100%;
+  height: 100%;
+}
+
 .contact-list__pin {
   display: flex;
   align-items: center;

@@ -123,6 +123,8 @@ export interface WebSocketEventPayloads {
     reactionId?: string;
     topicId: string;
     reaction?: Reaction;
+    messageSenderUserId?: string;
+    reactionSenderUserId?: string;
     ptsMeta?: PtsMeta;
   };
   [WebSocketEventType.MESSAGE_PINNED]: { messageId: string; isPin: boolean };

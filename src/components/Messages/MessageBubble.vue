@@ -14,6 +14,7 @@
     :data-is-me-sender="props.isMeSender"
     @contextmenu="handleContextMenu"
     @click="handleMessageClick"
+    @dblclick="handleDoubleTap"
   >
     <div
       :class="{
@@ -112,6 +113,9 @@ import {
   getMessageReplyQuoteText
 } from '../../utils/messageReplyQuote';
 import { useBackButton } from '../../composables/useBackButton';
+import { setReactionMessage } from '../../services/useChat';
+import { useResizeState } from '../../composables/useResizeState';
+import { MAX_W_MD } from '../../utils/constants';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -133,6 +137,7 @@ const messageArticlesStyles = computed(() => ({
 }));
 
 const { getFullMediaPath, isSliderContentUrl } = useMessageMedia();
+const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const sliderElements = ref<{ path: string; name: string; file?: File }[]>([]);
 const defaultIndexSlider = ref<number>(0);
@@ -349,5 +354,44 @@ const handleMessageClick = () => {
   }
 
   emits('toggle-selection');
+};
+
+const handleDoubleTap = (event: MouseEvent): void => {
+  if (
+    !isMobile.value ||
+    props.isSelectionMode ||
+    props.loader ||
+    !props.messageId ||
+    !props.topicId
+  ) {
+    return;
+  }
+
+  const target = event.target;
+
+  if (
+    target instanceof Element &&
+    target.closest('button, a, input, .reactions, .message-selection-toggle')
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const hasOwnHeartReaction = props.reactions?.some(
+    reaction =>
+      reaction.senderUserId === props.authUserId && reaction.text === '❤️'
+  );
+
+  if (hasOwnHeartReaction) {
+    return;
+  }
+
+  void setReactionMessage({
+    messageId: props.messageId,
+    topicId: props.topicId,
+    emoji: '❤️'
+  });
 };
 </script>

@@ -24,10 +24,18 @@ import {
   mergeMessagesForTopic
 } from '../../../services/useMessages';
 import {
+  clearTopicUnreadReaction,
   getSelectedTopic,
+  getTopicUnreadReactionMessageId,
   previewTopicReadMessages
 } from '../../../composables/useTopics';
 import { clearTopicNotifications } from '../../../services/useNotificationNavigation';
+import {
+  clearTopicNearBottomState,
+  clearTopicMessageVisibilityChecker,
+  setTopicMessageVisibilityChecker,
+  setTopicNearBottomState
+} from '../../../services/useTopicViewportState';
 import type { IMessage } from '../../interfaces/interfaces';
 import { isUnreadTrackableMessageForUser } from '../../../utils/messageTracking';
 
@@ -43,6 +51,7 @@ export function useMessageScroll(
   props: { user?: any }
 ) {
   const isShowScrollToBottomButton = ref(false);
+  const viewportRevision = ref(0);
   const isLoadingInitialMessages = ref(false);
   const autoReadSuspendedUntil = ref(0);
   const historyFetchSuspendedUntil = ref(0);
@@ -54,6 +63,66 @@ export function useMessageScroll(
     containerRef: chatWrapperRef,
     bottomThreshold: 50
   });
+  let trackedViewportTopicId = '';
+
+  const isMessageVisibleInViewport = (messageId: string): boolean => {
+    const container = chatWrapperRef.value;
+
+    if (!container) {
+      return false;
+    }
+
+    const messageElement = [
+      ...container.querySelectorAll('[data-message-id]')
+    ].find(element => element.getAttribute('data-message-id') === messageId);
+
+    if (!(messageElement instanceof HTMLElement)) {
+      return false;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const messageRect = messageElement.getBoundingClientRect();
+
+    return (
+      messageRect.bottom > containerRect.top &&
+      messageRect.top < containerRect.bottom &&
+      messageRect.right > containerRect.left &&
+      messageRect.left < containerRect.right
+    );
+  };
+
+  const clearVisibleUnreadReaction = (): void => {
+    const topicId = route.value.id;
+    const unreadReactionMessageId = getTopicUnreadReactionMessageId(topicId);
+
+    if (
+      unreadReactionMessageId &&
+      getIsAppActivelyVisible() &&
+      isMessageVisibleInViewport(unreadReactionMessageId)
+    ) {
+      clearTopicUnreadReaction(topicId);
+    }
+  };
+
+  watch(
+    [() => route.value.id, () => scrollAnchor.isNearBottom.value],
+    ([topicId, isNearBottom]) => {
+      if (trackedViewportTopicId && trackedViewportTopicId !== topicId) {
+        clearTopicNearBottomState(trackedViewportTopicId);
+        clearTopicMessageVisibilityChecker(trackedViewportTopicId);
+      }
+
+      trackedViewportTopicId = topicId;
+
+      if (!topicId) {
+        return;
+      }
+
+      setTopicNearBottomState(topicId, isNearBottom);
+      setTopicMessageVisibilityChecker(topicId, isMessageVisibleInViewport);
+    },
+    { immediate: true }
+  );
   const USER_ACTIVITY_READ_FLUSH_INTERVAL_MS = 350;
 
   const scrollState = reactive({
@@ -330,6 +399,8 @@ export function useMessageScroll(
         if (visibleUnreadMessageIds.length > 0) {
           submitReadMessages(visibleUnreadMessageIds);
         }
+
+        clearVisibleUnreadReaction();
       },
       {
         root: chatWrapperRef.value,
@@ -350,6 +421,7 @@ export function useMessageScroll(
 
         void flushQueuedReadMessages();
         flushVisibleUnreadMessages();
+        clearVisibleUnreadReaction();
       }
     });
   };
@@ -401,7 +473,9 @@ export function useMessageScroll(
     if (!el) return;
 
     scrollAnchor.onScroll();
+    viewportRevision.value += 1;
     schedulePersistScrollMeta();
+    clearVisibleUnreadReaction();
 
     const { scrollTop, scrollHeight, clientHeight } = el;
     const maxScroll = Math.max(0, scrollHeight - clientHeight);
@@ -790,6 +864,11 @@ export function useMessageScroll(
   });
 
   onUnmounted(() => {
+    if (trackedViewportTopicId) {
+      clearTopicNearBottomState(trackedViewportTopicId);
+      clearTopicMessageVisibilityChecker(trackedViewportTopicId);
+    }
+
     if (autoReadResumeTimeout) {
       clearTimeout(autoReadResumeTimeout);
       autoReadResumeTimeout = null;
@@ -805,6 +884,7 @@ export function useMessageScroll(
 
   return {
     isShowScrollToBottomButton,
+    viewportRevision,
     isLoadingInitialMessages,
     scrollState,
     handleScroll,
