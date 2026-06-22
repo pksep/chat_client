@@ -38,6 +38,7 @@
     "@capacitor/android": "^8.0.1",
     "@capacitor/app": "^8.0.1",
     "@capacitor/assets": "^3.0.5",
+    "@capacitor/barcode-scanner": "^3.0.0",
     "@capacitor/clipboard": "8.0.0",
     "@capacitor/core": "^8.0.1",
     "@capacitor/filesystem": "^8.1.2",
