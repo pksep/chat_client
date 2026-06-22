@@ -69,8 +69,22 @@
     </Transition>
     <section
       v-if="props.showUpdateBanner"
-      class="chat-update-banner"
+      ref="updateBannerRef"
+      :class="[
+        'chat-update-banner',
+        {
+          'chat-update-banner--dragging': isUpdateBannerDragging,
+          'chat-update-banner--dismissing': isUpdateBannerDismissing
+        }
+      ]"
+      :style="updateBannerSwipeStyle"
       :data-testid="`${props.dataTestid}-MessageList-UpdateBanner`"
+      @pointerdown="handleUpdateBannerPointerDown"
+      @pointermove="handleUpdateBannerPointerMove"
+      @pointerup="handleUpdateBannerPointerUp"
+      @pointercancel="handleUpdateBannerPointerCancel"
+      @touchstart.stop
+      @touchend.stop
     >
       <svg
         class="chat-update-banner__download-icon"
@@ -80,24 +94,24 @@
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
       >
-        <rect width="44" height="44" rx="22" fill="#77A6FF" />
+        <rect width="44" height="44" rx="22" fill="var(--border-blue)" />
         <path
           d="M30 25L30 28.3333C30 28.7754 29.8127 29.1993 29.4793 29.5118C29.1459 29.8244 28.6937 30 28.2222 30L15.7778 30C15.3063 30 14.8541 29.8244 14.5207 29.5118C14.1873 29.1993 14 28.7754 14 28.3333L14 25"
-          stroke="white"
+          stroke="var(--white)"
           stroke-width="1.375"
           stroke-linecap="round"
           stroke-linejoin="round"
         />
         <path
           d="M17.8346 19.832L22.0013 23.9987L26.168 19.832"
-          stroke="white"
+          stroke="var(--white)"
           stroke-width="1.375"
           stroke-linecap="round"
           stroke-linejoin="round"
         />
         <path
           d="M22 24L22 14"
-          stroke="white"
+          stroke="var(--white)"
           stroke-width="1.375"
           stroke-linecap="round"
           stroke-linejoin="round"
@@ -108,19 +122,55 @@
         <p class="chat-update-banner__title">
           Доступна новая версия <span>приложения</span>
         </p>
-        <p class="chat-update-banner__description">
-          Обновите приложение, чтобы получить новые функции и улучшения
+        <p
+          v-if="
+            !props.updateProgress && props.updateActionLabel !== 'Перезапустить'
+          "
+          class="chat-update-banner__description"
+        >
+          Обновите приложение, чтобы получить новые функции<span>
+            и улучшения</span
+          >
+        </p>
+        <p
+          v-else-if="props.updateActionLabel !== 'Перезапустить'"
+          class="chat-update-banner__description"
+        >
+          Пожалуйста, не закрывайте приложение
+        </p>
+        <p v-else class="chat-update-banner__description">
+          Для начала работы перезапустите приложение
         </p>
       </div>
       <Button
-        class="chat-update-banner__action"
+        :class="[
+          'chat-update-banner__action',
+          {
+            'chat-update-banner__action--progress':
+              props.updateProgress !== undefined
+          }
+        ]"
         :data-testid="`${props.dataTestid}-MessageList-UpdateBannerInstallButton`"
         :disabled="props.isUpdateActionDisabled"
         @click="props.onUpdateClick?.()"
       >
-        {{ props.updateActionLabel }}
+        <template v-if="props.updateProgress !== undefined">
+          <span class="chat-update-banner__action-progress-label">
+            {{ props.updateActionLabel }}
+          </span>
+          <span class="chat-update-banner__action-progress" aria-hidden="true">
+            <FileIcon
+              :is-me-sender="false"
+              :is-loaded="false"
+              :percent="props.updateProgress"
+              background-color="var(--grey2)"
+            />
+          </span>
+        </template>
+        <template v-else>{{ props.updateActionLabel }}</template>
       </Button>
       <button
+        v-if="!isMobile"
         type="button"
         class="chat-update-banner__close"
         :data-testid="`${props.dataTestid}-MessageList-UpdateBannerCloseButton`"
@@ -132,25 +182,23 @@
     </section>
     <div
       class="chat__message-bubble__arrow-down"
-      v-if="isShowScrollToBottomButton"
-      @click="handleScrollToButton"
+      v-if="isShowScrollToBottomButton || showUnreadReactionScrollButton"
+      @click="handleArrowDownClick"
     >
       <Icon :name="IconNameEnum.arrowDown" />
       <span
-        v-if="
-          hasVisibleTopicUnreadIndicator &&
-          (visibleTopicUnreadCount === 0 ||
-            activeTopic?.lastMessage?.senderUserId !== authUser?.id)
-        "
+        v-if="showUnreadCountOnScrollButton"
         :class="{
           'contact-list__notification': true,
           'contact-list__notification--muted': activeTopic?.info?.isMute
         }"
       >
-        <template v-if="visibleTopicUnreadCount">
-          {{ visibleTopicUnreadCount }}
-        </template>
+        {{ visibleTopicUnreadCount }}
       </span>
+      <ReactionHeartIcon
+        v-else-if="showUnreadReactionScrollButton"
+        class="chat__message-bubble__reaction-indicator"
+      />
     </div>
   </div>
 
@@ -200,6 +248,8 @@ import {
 import MessageListAIItems from './Messages/MessageListAIItems.vue';
 import MessageListUserItems from './Messages/MessageListUserItems.vue';
 import MessageListInput from './Messages/MessageListInput.vue';
+import ReactionHeartIcon from './UI/ReactionHeartIcon.vue';
+import FileIcon from './UI/FileIcon.vue';
 import {
   MessageTypeEnum,
   PushNotification,
@@ -215,7 +265,9 @@ import {
   RouteTypes
 } from '../composables/navigation/useUrlRouting';
 import {
+  clearTopicUnreadReaction,
   getSelectedTopic,
+  getTopicUnreadReactionMessageId,
   resetTopicUnreadState
 } from '../composables/useTopics';
 import {
@@ -270,6 +322,11 @@ import {
   normalizeReplyQuoteOccurrenceIndex,
   normalizeReplyQuoteText
 } from '../utils/messageReplyQuote';
+import {
+  clearPendingTopicReactionJump,
+  getIsTopicMessageVisible,
+  pendingTopicReactionJump
+} from '../services/useTopicViewportState';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -285,11 +342,125 @@ const TOPIC_SWITCH_MEDIA_PREWARM_LIMIT = 12;
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
 const messageListUserItemsRef = useTemplateRef<any>('messageListUserItemsRef');
 const messageListInputRef = useTemplateRef<any>('messageListInputRef');
+const updateBannerRef = useTemplateRef<HTMLElement>('updateBannerRef');
 
 const route = useUrlWatcher();
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const { onTouchStart, onTouchEnd } = useMessageSwipe(route);
+
+const UPDATE_BANNER_SWIPE_DURATION_MS = 240;
+const UPDATE_BANNER_SWIPE_MIN_DISTANCE_PX = 24;
+const UPDATE_BANNER_SWIPE_VELOCITY_PX_PER_MS = 0.55;
+const updateBannerOffsetX = ref(0);
+const isUpdateBannerDragging = ref(false);
+const isUpdateBannerDismissing = ref(false);
+let updateBannerPointerId: number | null = null;
+let updateBannerSwipeStartX = 0;
+let updateBannerSwipeStartTime = 0;
+let updateBannerDismissTimeoutId: number | null = null;
+
+const updateBannerSwipeStyle = computed(() => {
+  if (!isMobile.value) {
+    return undefined;
+  }
+
+  const bannerWidth = updateBannerRef.value?.offsetWidth || window.innerWidth;
+  const swipeProgress = Math.min(
+    Math.abs(updateBannerOffsetX.value) / bannerWidth,
+    1
+  );
+
+  return {
+    transform: `translate3d(${updateBannerOffsetX.value}px, 0, 0)`,
+    opacity: String(1 - swipeProgress * 0.85)
+  };
+});
+
+const resetUpdateBannerSwipe = () => {
+  updateBannerPointerId = null;
+  isUpdateBannerDragging.value = false;
+  updateBannerOffsetX.value = 0;
+};
+
+const handleUpdateBannerPointerDown = (event: PointerEvent) => {
+  if (
+    !isMobile.value ||
+    !event.isPrimary ||
+    event.button !== 0 ||
+    (event.target as HTMLElement).closest('button')
+  ) {
+    return;
+  }
+
+  updateBannerPointerId = event.pointerId;
+  updateBannerSwipeStartX = event.clientX;
+  updateBannerSwipeStartTime = performance.now();
+  isUpdateBannerDragging.value = true;
+  updateBannerRef.value?.setPointerCapture(event.pointerId);
+};
+
+const handleUpdateBannerPointerMove = (event: PointerEvent) => {
+  if (event.pointerId !== updateBannerPointerId) {
+    return;
+  }
+
+  const bannerWidth = updateBannerRef.value?.offsetWidth || window.innerWidth;
+  const offsetX = event.clientX - updateBannerSwipeStartX;
+  const maxOffsetX = bannerWidth * 1.1;
+
+  updateBannerOffsetX.value = Math.max(
+    -maxOffsetX,
+    Math.min(offsetX, maxOffsetX)
+  );
+};
+
+const dismissUpdateBannerWithAnimation = (direction: number) => {
+  const bannerWidth = updateBannerRef.value?.offsetWidth || window.innerWidth;
+
+  updateBannerPointerId = null;
+  isUpdateBannerDragging.value = false;
+  isUpdateBannerDismissing.value = true;
+  updateBannerOffsetX.value = direction * (bannerWidth + 32);
+
+  updateBannerDismissTimeoutId = window.setTimeout(() => {
+    props.onDismissUpdateBanner?.();
+    isUpdateBannerDismissing.value = false;
+    updateBannerOffsetX.value = 0;
+    updateBannerDismissTimeoutId = null;
+  }, UPDATE_BANNER_SWIPE_DURATION_MS);
+};
+
+const handleUpdateBannerPointerUp = (event: PointerEvent) => {
+  if (event.pointerId !== updateBannerPointerId) {
+    return;
+  }
+
+  const offsetX = updateBannerOffsetX.value;
+  const bannerWidth = updateBannerRef.value?.offsetWidth || window.innerWidth;
+  const swipeDuration = Math.max(
+    performance.now() - updateBannerSwipeStartTime,
+    1
+  );
+  const swipeVelocity = Math.abs(offsetX) / swipeDuration;
+  const hasEnoughDistance = Math.abs(offsetX) >= bannerWidth * 0.28;
+  const hasEnoughVelocity =
+    Math.abs(offsetX) >= UPDATE_BANNER_SWIPE_MIN_DISTANCE_PX &&
+    swipeVelocity >= UPDATE_BANNER_SWIPE_VELOCITY_PX_PER_MS;
+
+  if (hasEnoughDistance || hasEnoughVelocity) {
+    dismissUpdateBannerWithAnimation(Math.sign(offsetX) || 1);
+    return;
+  }
+
+  resetUpdateBannerSwipe();
+};
+
+const handleUpdateBannerPointerCancel = (event: PointerEvent) => {
+  if (event.pointerId === updateBannerPointerId) {
+    resetUpdateBannerSwipe();
+  }
+};
 
 const getLocalStorageInputText = computed(() => {
   const inputsJson = JSON.parse(localStorage.getItem('inputs') || '{}');
@@ -349,6 +520,13 @@ const hasVisibleTopicUnreadIndicator = computed(
     canClearlyShowUnreadCount.value &&
     hasTopicUnreadIndicator(activeTopic.value || undefined, authUser.value?.id)
 );
+const unreadReactionMessageId = computed(() => {
+  if (!activeTopic.value?.hasUnreadReaction || !route.value.id) {
+    return null;
+  }
+
+  return getTopicUnreadReactionMessageId(route.value.id);
+});
 const renderedTopicId = ref(route.value.id || '');
 let activeTopicSwitchToken = 0;
 
@@ -432,6 +610,7 @@ const scheduleFloatingDateDividerSync = (): void => {
 
 const {
   isShowScrollToBottomButton,
+  viewportRevision,
   isLoadingInitialMessages,
   scrollState,
   handleScroll: handleMessageScroll,
@@ -454,6 +633,22 @@ const {
   state,
   props
 );
+
+const showUnreadCountOnScrollButton = computed(
+  () =>
+    hasVisibleTopicUnreadIndicator.value && visibleTopicUnreadCount.value > 0
+);
+const showUnreadReactionScrollButton = computed(() => {
+  viewportRevision.value;
+
+  const messageId = unreadReactionMessageId.value;
+
+  return (
+    visibleTopicUnreadCount.value === 0 &&
+    !!messageId &&
+    !getIsTopicMessageVisible(route.value.id, messageId)
+  );
+});
 
 const {
   mastraResult,
@@ -900,15 +1095,11 @@ const jumpToMessageWithHighlight = async (
   return true;
 };
 
-const handleScrollToMessage = async (payload: ScrollToMessagePayload) => {
-  const message = getScrollTargetMessage(payload);
-
-  if (!message) return;
-  if (message.topicId !== route.value.id) return;
-
-  const messageId = message.id;
-  const quoteText = getScrollTargetQuoteText(payload);
-  const quoteOccurrenceIndex = getScrollTargetQuoteOccurrenceIndex(payload);
+const navigateToMessageId = async (
+  messageId: string,
+  quoteText = '',
+  quoteOccurrenceIndex?: number
+): Promise<boolean> => {
   const didJump = await jumpToMessageWithHighlight(
     messageId,
     quoteText,
@@ -916,7 +1107,7 @@ const handleScrollToMessage = async (payload: ScrollToMessagePayload) => {
   );
 
   if (didJump) {
-    return;
+    return true;
   }
 
   const memoryMessages = await hydrateMessageContextFromMemory(
@@ -932,7 +1123,7 @@ const handleScrollToMessage = async (payload: ScrollToMessagePayload) => {
     );
 
     if (didMemoryJump) {
-      return;
+      return true;
     }
   }
 
@@ -952,7 +1143,7 @@ const handleScrollToMessage = async (payload: ScrollToMessagePayload) => {
     );
 
     if (didShadowJump) {
-      return;
+      return true;
     }
   }
 
@@ -961,12 +1152,66 @@ const handleScrollToMessage = async (payload: ScrollToMessagePayload) => {
   const messages = await fetchAroundMessage(messageId);
 
   if (!messages.some(m => m.id === messageId)) {
-    return;
+    return false;
   }
 
   await nextTick();
-  await jumpToMessageWithHighlight(messageId, quoteText, quoteOccurrenceIndex);
+  return jumpToMessageWithHighlight(messageId, quoteText, quoteOccurrenceIndex);
 };
+
+const handleScrollToMessage = async (payload: ScrollToMessagePayload) => {
+  const message = getScrollTargetMessage(payload);
+
+  if (!message || message.topicId !== route.value.id) {
+    return;
+  }
+
+  await navigateToMessageId(
+    message.id,
+    getScrollTargetQuoteText(payload),
+    getScrollTargetQuoteOccurrenceIndex(payload)
+  );
+};
+
+const handleArrowDownClick = async (): Promise<void> => {
+  if (showUnreadCountOnScrollButton.value) {
+    await handleScrollToButton();
+    return;
+  }
+
+  const messageId = unreadReactionMessageId.value;
+
+  if (!messageId) {
+    await handleScrollToButton();
+    return;
+  }
+
+  const didNavigate = await navigateToMessageId(messageId);
+
+  if (didNavigate) {
+    clearTopicUnreadReaction(route.value.id);
+  }
+};
+
+watch(
+  [pendingTopicReactionJump, () => route.value.id],
+  async ([pendingJump, topicId]) => {
+    if (!pendingJump || pendingJump.topicId !== topicId) {
+      return;
+    }
+
+    await nextTick();
+    const didNavigate = await navigateToMessageId(pendingJump.messageId);
+
+    if (!didNavigate) {
+      return;
+    }
+
+    clearTopicUnreadReaction(topicId);
+    clearPendingTopicReactionJump(topicId, pendingJump.messageId);
+  },
+  { immediate: true }
+);
 
 const shouldResetUnreadForCurrentTopic = (): boolean => {
   const lastMessage = state.messages.at(-1);
@@ -1145,6 +1390,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', scheduleFloatingDateDividerSync);
+
+  if (updateBannerDismissTimeoutId !== null) {
+    window.clearTimeout(updateBannerDismissTimeoutId);
+  }
 
   if (floatingDateDividerRafId) {
     cancelAnimationFrame(floatingDateDividerRafId);

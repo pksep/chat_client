@@ -14,6 +14,7 @@
     :data-is-me-sender="props.isMeSender"
     @contextmenu="handleContextMenu"
     @click="handleMessageClick"
+    @dblclick="handleDoubleTap"
   >
     <div
       :class="{
@@ -54,10 +55,10 @@
       @touchstart.stop
       @touchend.stop
       :open="sliderElements.length > 0"
-      @close="() => (sliderElements = [])"
+      @close="closeSlider"
       :items="sliderElements"
       :default-index="defaultIndexSlider"
-      @keydown.escape.stop="() => (sliderElements = [])"
+      @keydown.escape.stop="closeSlider"
     />
 
     <MessageContextMenu
@@ -81,7 +82,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { Checkbox, CheckboxCircularEnum } from '@pksep/yui';
 import {
@@ -111,6 +112,10 @@ import {
   getMessageReplyQuoteOccurrenceIndex,
   getMessageReplyQuoteText
 } from '../../utils/messageReplyQuote';
+import { useBackButton } from '../../composables/useBackButton';
+import { setReactionMessage } from '../../services/useChat';
+import { useResizeState } from '../../composables/useResizeState';
+import { MAX_W_MD } from '../../utils/constants';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -132,9 +137,32 @@ const messageArticlesStyles = computed(() => ({
 }));
 
 const { getFullMediaPath, isSliderContentUrl } = useMessageMedia();
+const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const sliderElements = ref<{ path: string; name: string; file?: File }[]>([]);
 const defaultIndexSlider = ref<number>(0);
+const { addHandler: addBackHandler, removeHandler: removeBackHandler } =
+  useBackButton();
+
+const closeSlider = (): void => {
+  sliderElements.value = [];
+};
+
+watch(
+  () => sliderElements.value.length > 0,
+  isOpen => {
+    if (isOpen) {
+      addBackHandler(closeSlider);
+      return;
+    }
+
+    removeBackHandler(closeSlider);
+  }
+);
+
+onBeforeUnmount(() => {
+  removeBackHandler(closeSlider);
+});
 
 const docFiles = computed(
   () => props.media?.filter(media => media.type === MediaType.File) || []
@@ -326,5 +354,44 @@ const handleMessageClick = () => {
   }
 
   emits('toggle-selection');
+};
+
+const handleDoubleTap = (event: MouseEvent): void => {
+  if (
+    !isMobile.value ||
+    props.isSelectionMode ||
+    props.loader ||
+    !props.messageId ||
+    !props.topicId
+  ) {
+    return;
+  }
+
+  const target = event.target;
+
+  if (
+    target instanceof Element &&
+    target.closest('button, a, input, .reactions, .message-selection-toggle')
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const hasOwnHeartReaction = props.reactions?.some(
+    reaction =>
+      reaction.senderUserId === props.authUserId && reaction.text === '❤️'
+  );
+
+  if (hasOwnHeartReaction) {
+    return;
+  }
+
+  void setReactionMessage({
+    messageId: props.messageId,
+    topicId: props.topicId,
+    emoji: '❤️'
+  });
 };
 </script>

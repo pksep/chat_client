@@ -47,6 +47,8 @@ let persistTopicsTimeout: ReturnType<typeof setTimeout> | null = null;
 const topicReadPreviewIds = ref<Record<string, string[]>>({});
 const serverUnreadCounts = ref<Record<string, number>>({});
 const typingStateTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const unreadReactionIdsByTopic = new Map<string, Set<string>>();
+const unreadReactionTargetsByTopic = new Map<string, Map<string, string>>();
 let isTopicsVisibilityBound = false;
 let isDesktopVisibilityBound = false;
 let topicsApi: ReturnType<typeof createTopicsApi> | null = null;
@@ -214,6 +216,11 @@ const createTopicsApi = () => {
     normalizedTopic.typingUserIds = normalizeTypingUserIds(
       normalizedTopic.typingUserIds ?? existingTopic?.typingUserIds
     );
+    normalizedTopic.hasUnreadReaction =
+      normalizedTopic.hasUnreadReaction ?? existingTopic?.hasUnreadReaction;
+    normalizedTopic.unreadReactionMessageId =
+      normalizedTopic.unreadReactionMessageId ??
+      existingTopic?.unreadReactionMessageId;
 
     if (normalizedTopic.type === TopicType.DM && normalizedTopic.members) {
       normalizedTopic.user = normalizedTopic.members.find(
@@ -679,6 +686,90 @@ const createTopicsApi = () => {
     schedulePersistTopics();
   };
 
+  const updateTopicUnreadReaction = (
+    topicId: string,
+    action: 'added' | 'updated' | 'removed',
+    reactionId?: string,
+    messageId?: string
+  ): void => {
+    const topic = topics.value.find(topic => topic.id === topicId);
+
+    if (!topic) {
+      return;
+    }
+
+    const reactionIds =
+      unreadReactionIdsByTopic.get(topicId) || new Set<string>();
+    const reactionTargets =
+      unreadReactionTargetsByTopic.get(topicId) || new Map<string, string>();
+    const reactionKey = reactionId || (messageId ? `message:${messageId}` : '');
+
+    if (action === 'removed') {
+      if (!reactionId || !reactionIds.has(reactionId)) {
+        if (topic.unreadReactionMessageId !== messageId) {
+          return;
+        }
+
+        topic.hasUnreadReaction = false;
+        topic.unreadReactionMessageId = undefined;
+        topics.value = [...topics.value];
+        schedulePersistTopics();
+        return;
+      }
+
+      reactionIds.delete(reactionId);
+      reactionTargets.delete(reactionId);
+      topic.hasUnreadReaction = reactionIds.size > 0;
+      topic.unreadReactionMessageId =
+        [...reactionTargets.values()].at(-1) || undefined;
+    } else {
+      if (reactionKey) {
+        reactionIds.add(reactionKey);
+        unreadReactionIdsByTopic.set(topicId, reactionIds);
+
+        if (messageId) {
+          reactionTargets.delete(reactionKey);
+          reactionTargets.set(reactionKey, messageId);
+          unreadReactionTargetsByTopic.set(topicId, reactionTargets);
+        }
+      }
+
+      topic.hasUnreadReaction = true;
+      topic.unreadReactionMessageId = messageId;
+    }
+
+    topics.value = [...topics.value];
+    schedulePersistTopics();
+  };
+
+  const getTopicUnreadReactionMessageId = (topicId: string): string | null => {
+    const reactionTargets = unreadReactionTargetsByTopic.get(topicId);
+    const topic = topics.value.find(topic => topic.id === topicId);
+    const trackedMessageId = [...(reactionTargets?.values() || [])].at(-1);
+
+    if (trackedMessageId || topic?.unreadReactionMessageId) {
+      return trackedMessageId || topic?.unreadReactionMessageId || null;
+    }
+
+    return null;
+  };
+
+  const clearTopicUnreadReaction = (topicId: string): void => {
+    const topic = topics.value.find(topic => topic.id === topicId);
+
+    unreadReactionIdsByTopic.delete(topicId);
+    unreadReactionTargetsByTopic.delete(topicId);
+
+    if (!topic?.hasUnreadReaction) {
+      return;
+    }
+
+    topic.hasUnreadReaction = false;
+    topic.unreadReactionMessageId = undefined;
+    topics.value = [...topics.value];
+    schedulePersistTopics();
+  };
+
   const updateLocalTopicInfo = (topicId: string, info: ITopicInfo): void => {
     const topic = topics.value.find(topic => topic.id === topicId);
     if (topic) {
@@ -1020,6 +1111,9 @@ const createTopicsApi = () => {
     clearTopicReadPreview,
     syncTopicUnreadState,
     resetTopicUnreadState,
+    updateTopicUnreadReaction,
+    getTopicUnreadReactionMessageId,
+    clearTopicUnreadReaction,
     incrementServerUnreadCount,
     decrementServerUnreadCount,
     incrementDisplayedUnreadCount,
@@ -1062,6 +1156,9 @@ const {
   clearTopicReadPreview,
   syncTopicUnreadState,
   resetTopicUnreadState,
+  updateTopicUnreadReaction,
+  getTopicUnreadReactionMessageId,
+  clearTopicUnreadReaction,
   incrementServerUnreadCount,
   decrementServerUnreadCount,
   totalUnreadCount,
@@ -1097,6 +1194,9 @@ export {
   clearTopicReadPreview,
   syncTopicUnreadState,
   resetTopicUnreadState,
+  updateTopicUnreadReaction,
+  getTopicUnreadReactionMessageId,
+  clearTopicUnreadReaction,
   incrementServerUnreadCount,
   decrementServerUnreadCount,
   totalUnreadCount,

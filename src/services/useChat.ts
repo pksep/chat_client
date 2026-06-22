@@ -15,6 +15,9 @@ import {
   isTopicMuted,
   updateLocalTopicUser,
   setTopicTypingState,
+  updateTopicUnreadReaction,
+  getTopicUnreadReactionMessageId,
+  clearTopicUnreadReaction,
   totalUnreadCount
 } from '../composables/useTopics';
 import {
@@ -81,6 +84,7 @@ import {
 } from './useCallHistory';
 import { normalizeUserStatus } from '../utils/userStatus';
 import { normalizeDateValue } from '../utils/dateValue';
+import { getIsTopicMessageVisible } from './useTopicViewportState';
 
 let chatSDK: ChatSDK | null = null;
 
@@ -202,6 +206,15 @@ const setupChatListeners = (): void => {
   if (!chatSDK || areChatListenersBound) return;
 
   areChatListenersBound = true;
+
+  const clearDeletedReactionTarget = (
+    topicId: string,
+    messageId?: string
+  ): void => {
+    if (messageId && getTopicUnreadReactionMessageId(topicId) === messageId) {
+      clearTopicUnreadReaction(topicId);
+    }
+  };
 
   const handleIncomingSocketMessage = (
     message: IMessage,
@@ -345,7 +358,14 @@ const setupChatListeners = (): void => {
         payload: payload.data
       });
       void removeCallHistoryMessage(payload.data.id || payload.messageId);
-      deleteMessageFromLocal(payload.data.topicId, payload.data.id);
+      clearDeletedReactionTarget(
+        payload.data.topicId,
+        payload.data.id || payload.messageId
+      );
+      deleteMessageFromLocal(
+        payload.data.topicId,
+        payload.data.id || payload.messageId
+      );
     } else if (payload.type === 'CHANGE' || payload.type === 'PIN') {
       void recordShadowChatEvent({
         topicId: payload.data.topicId,
@@ -413,6 +433,8 @@ const setupChatListeners = (): void => {
     reactionId?: string;
     topicId: string;
     reaction?: any;
+    messageSenderUserId?: string;
+    reactionSenderUserId?: string;
     ptsMeta?: PtsMeta;
   }): void => {
     persistPtsMeta(payload.ptsMeta);
@@ -430,6 +452,43 @@ const setupChatListeners = (): void => {
       payload.action,
       payload.reaction,
       payload.reactionId
+    );
+
+    const localMessage = getFullMessagesByTopicId(payload.topicId).find(
+      message => message.id === payload.messageId
+    );
+    const topicLastMessage = useTopics().getSelectedTopic(
+      payload.topicId
+    )?.lastMessage;
+    const messageSenderUserId =
+      payload.messageSenderUserId ||
+      localMessage?.senderUserId ||
+      (topicLastMessage?.id === payload.messageId
+        ? topicLastMessage.senderUserId
+        : undefined);
+    const reactionSenderUserId =
+      payload.reactionSenderUserId || payload.reaction?.senderUserId;
+
+    if (
+      messageSenderUserId !== currentUserId.value ||
+      reactionSenderUserId === currentUserId.value
+    ) {
+      return;
+    }
+
+    if (
+      route.value.id === payload.topicId &&
+      getIsAppActivelyVisible() &&
+      getIsTopicMessageVisible(payload.topicId, payload.messageId)
+    ) {
+      return;
+    }
+
+    updateTopicUnreadReaction(
+      payload.topicId,
+      payload.action,
+      payload.reaction?.id || payload.reactionId,
+      payload.messageId
     );
   };
 
@@ -484,12 +543,14 @@ const setupChatListeners = (): void => {
     const payloadTopicId = (event.payload as any).topicId;
 
     if (payloadTopicId) {
+      clearDeletedReactionTarget(payloadTopicId, event.payload.messageId);
       deleteMessageFromLocal(payloadTopicId, event.payload.messageId);
       return;
     }
 
     Object.entries(messagesStore.value).forEach(([topicId, messages]) => {
       if (messages.some(item => item.id === event.payload.messageId)) {
+        clearDeletedReactionTarget(topicId, event.payload.messageId);
         deleteMessageFromLocal(topicId, event.payload.messageId);
       }
     });

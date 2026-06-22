@@ -6,6 +6,10 @@ import {
   navigateToGroupsList,
   RouteTypes
 } from '../../../composables/navigation/useUrlRouting';
+import {
+  clearSelectedMessages,
+  isMessageSelectionModeForTopic
+} from '../../../composables/useSelectedMessages';
 
 export function useMessageSwipe(route: Ref<{ id: string; type: string }>) {
   const touchStartX = ref(0);
@@ -17,6 +21,11 @@ export function useMessageSwipe(route: Ref<{ id: string; type: string }>) {
   const { addHandler, removeHandler } = useBackButton();
 
   const navigateBack = () => {
+    if (isMessageSelectionModeForTopic(route.value.id)) {
+      clearSelectedMessages();
+      return;
+    }
+
     if (route.value.type === RouteTypes.AI) {
       navigateToAssistant();
     } else if (route.value.type === RouteTypes.DIALOGS) {
