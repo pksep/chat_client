@@ -1,3 +1,221 @@
+# [1.31.0](https://github.com/pksep/chat_client/compare/v1.30.0...v1.31.0) (2026-06-04)
+
+
+### Bug Fixes
+
+* backgraund quality ([cfb820d](https://github.com/pksep/chat_client/commit/cfb820d31c22913ec8a0e02ac0371a1a7ab05063))
+* badge ([c22a1d1](https://github.com/pksep/chat_client/commit/c22a1d164d4ceae79b4295d2054cf8f6a5f9ebea))
+* lint ([3cab03b](https://github.com/pksep/chat_client/commit/3cab03b29fd1bda816243ebf4c7844615418babd))
+
+
+### Features
+
+* add tauri ([10b9442](https://github.com/pksep/chat_client/commit/10b9442b51b5e49502594dd9ab2467ce6326a5ca))
+
+# [1.30.0](https://github.com/pksep/chat_client/compare/v1.29.0...v1.30.0) (2026-06-03)
+
+
+### Bug Fixes
+
+* notification click, open chat in self, not new window ([34358b5](https://github.com/pksep/chat_client/commit/34358b5d4bbf49f2ffc4540fabc86866a1947fcc))
+* styles ([62eb132](https://github.com/pksep/chat_client/commit/62eb1326230518ea7b0653c350d6c179a9b2cca0))
+
+
+### Features
+
+* add ios install PWA info ([e7a4afc](https://github.com/pksep/chat_client/commit/e7a4afc1d4e2ba3283277a87ce3137bf427f6681))
+* update call background logic ([180067b](https://github.com/pksep/chat_client/commit/180067b23e042c53a000b3f0d5e9b58b53dee4ce))
+
+# [1.29.0](https://github.com/pksep/chat_client/compare/v1.28.0...v1.29.0) (2026-06-01)
+
+
+### Features
+
+* new release ([cc64141](https://github.com/pksep/chat_client/commit/cc641414a861663b9ea708b5fde7c9e364161997))
+
+# [1.28.0](https://github.com/pksep/chat_client/compare/v1.27.0...v1.28.0) (2026-06-01)
+
+
+### Bug Fixes
+
+* add and showing emojies ([efb05cb](https://github.com/pksep/chat_client/commit/efb05cbc9aa5ffbd482a18f6c6e3c7f8f7f50ea9))
+* and android call screen, and when answered call in another device, close voip ([f71e1bf](https://github.com/pksep/chat_client/commit/f71e1bf8dac0ab813d3346c5f9f5b62a8c4fdf78))
+* avatars in selecting mentors ([7bd460f](https://github.com/pksep/chat_client/commit/7bd460f1edb18f9faa4354e6705781b5b966a0d8))
+* calls ([c56c4d8](https://github.com/pksep/chat_client/commit/c56c4d85b5dcc80f81bece6857f3ca1220870713))
+* change selected-messages-content style ([fe4f856](https://github.com/pksep/chat_client/commit/fe4f8568a9a966e4f0266fed852277f035a6ce4c))
+* check users after ending call ([7573516](https://github.com/pksep/chat_client/commit/7573516480d363f39a796a025432c414fef9b73a))
+* close profile modal after call ([8a03614](https://github.com/pksep/chat_client/commit/8a0361439d1afda86c7b14d82a6730913d67a521))
+* delete unused script ([4a6fe6b](https://github.com/pksep/chat_client/commit/4a6fe6b199537bd61c58a725074f33e21e5dc1b0))
+* dialing and show screen sharing ([0091164](https://github.com/pksep/chat_client/commit/00911640d67a5a7da22ea31c3bcac51ee672dc2a))
+* dont open new window for call links ([99969f4](https://github.com/pksep/chat_client/commit/99969f44248efe1cb7426ceba22a6a24d9922321))
+* downloading file ([04f92d0](https://github.com/pksep/chat_client/commit/04f92d01437f38be268f1cd8462d26a9f8645e38))
+* end call ([bf39442](https://github.com/pksep/chat_client/commit/bf39442ab259e34406e798a456113ee1737f2c61))
+* end call ([2a08ebe](https://github.com/pksep/chat_client/commit/2a08ebe67f7a36b6e665c34b9587c18ec3ec6618))
+* ending call logic ([1baf112](https://github.com/pksep/chat_client/commit/1baf1124dd4a8711cb53474995b4054b1a349881))
+* filtering messages ([6c583bc](https://github.com/pksep/chat_client/commit/6c583bca302d11ccf683d880202611a902e559ae))
+* get right topic for sending file ([1cf0050](https://github.com/pksep/chat_client/commit/1cf005072189bb0e77b945dcfabbe1f373ba2922))
+* getting token logic ([5285ffe](https://github.com/pksep/chat_client/commit/5285ffece82a2d0ead0fe13dac3410c99dc801ab))
+* have update banner ([cbb6972](https://github.com/pksep/chat_client/commit/cbb6972daf0e477e16c69c318d3fa4bcb0cf93b6))
+* hide read icon if message is system ([bd05bf1](https://github.com/pksep/chat_client/commit/bd05bf11f05603969366e37dad1ef375fe94b20a))
+* line-height ([9c6adc7](https://github.com/pksep/chat_client/commit/9c6adc769dc81a5085a3328bdba1b442882b69f5))
+* lint ([ab0a6a2](https://github.com/pksep/chat_client/commit/ab0a6a2e8711f0b517914824ee8280f343040a41))
+* lint ([1807d25](https://github.com/pksep/chat_client/commit/1807d25a94b02d7a0211fc7a6024cf44c07caf84))
+* lint ([71615df](https://github.com/pksep/chat_client/commit/71615dfef920aa4d06b50c41507801a4cfc54ca9))
+* lint ([7d3d8cb](https://github.com/pksep/chat_client/commit/7d3d8cb909a2a3ba21500e1fb3ba12561e4cc978))
+* lint ([e90d78b](https://github.com/pksep/chat_client/commit/e90d78bf49e3377988b674c0c7c90dcb3796da93))
+* lint ([b95fc5c](https://github.com/pksep/chat_client/commit/b95fc5c8f146cfd72c67ca4d1789741a3ae9b47c))
+* lint ([59fa362](https://github.com/pksep/chat_client/commit/59fa362686c66f916c1bcab908afd0fb18e6dd78))
+* lint ([ae3e9fd](https://github.com/pksep/chat_client/commit/ae3e9fd1a0dcbc9b8e33aa0fb3c06af13767916d))
+* lint ([6c34ce5](https://github.com/pksep/chat_client/commit/6c34ce5b77a124aedff75138c77fc2d721fcc9f2))
+* lint ([908ddcb](https://github.com/pksep/chat_client/commit/908ddcb435bc62cbe18c4b483d360fdb7ccebd1e))
+* lint ([e767c37](https://github.com/pksep/chat_client/commit/e767c37126f540bd9ab59e0e0ffde4eb942f4852))
+* lint ([de708f7](https://github.com/pksep/chat_client/commit/de708f7f722069f18366284cfc23a0ff07a314e3))
+* lint ([446dedc](https://github.com/pksep/chat_client/commit/446dedc3bee180861a829ca346ff8259f26d6880))
+* lint ([4f8e084](https://github.com/pksep/chat_client/commit/4f8e0843b1f74eee6fdf52fe80dd710e3de8ba58))
+* lint ([2f5ce17](https://github.com/pksep/chat_client/commit/2f5ce17156a1df796a5412a90292e1c9aeed421a))
+* not dublicate calls in same topic ([bd4217a](https://github.com/pksep/chat_client/commit/bd4217aebb6f288b5532d0966ac8aae561de4ee3))
+* pinned messages position when have call ([35a4336](https://github.com/pksep/chat_client/commit/35a4336cdc6dcd848480cd7b31cc3dac6cea8fee))
+* popover styles ([6c9148d](https://github.com/pksep/chat_client/commit/6c9148d41352912e25c8fb0049d852c927d542ec))
+* quality screen sharing ([fbc3ee1](https://github.com/pksep/chat_client/commit/fbc3ee169281a3df8dac5a1ddf48c4066d82f6d0))
+* race condition in get messages ([f9fb4d3](https://github.com/pksep/chat_client/commit/f9fb4d36b8ca6cc143c4bb8ce5a62130118fa245))
+* show call banner when have call ([e6909e8](https://github.com/pksep/chat_client/commit/e6909e81b4e1978a773e96069db957548eb9743a))
+* styles ([f511650](https://github.com/pksep/chat_client/commit/f511650e0b411a3b0fe731a006187a671be66444))
+* styles ([99c3bdc](https://github.com/pksep/chat_client/commit/99c3bdc8c7b0255f579c4f63574d8890729e89bb))
+* styles in message media ([bd62e26](https://github.com/pksep/chat_client/commit/bd62e2648ed0d7ed80c7dcb57247ec9b3517df38))
+* upgrade call ([5d26541](https://github.com/pksep/chat_client/commit/5d26541d6a1444646ad11e750d1e367fa7bda878))
+* uploading and converting video ([5d2e723](https://github.com/pksep/chat_client/commit/5d2e723bb52e634d5d71de17a7b9feee05e7c78c))
+
+
+### Features
+
+* add background in call ([6b10431](https://github.com/pksep/chat_client/commit/6b10431a713fcbd7893e55ea856cb6ead278a213))
+* add call history ([afee2ff](https://github.com/pksep/chat_client/commit/afee2ffcf348f7896ea5321ea6e1c4994ba36a11))
+* add compare logic versions with rustore ([02e4acc](https://github.com/pksep/chat_client/commit/02e4accd0bf33c1c1c7dc57991326fc971e9bc4f))
+* add create call logic without topic ([7358c22](https://github.com/pksep/chat_client/commit/7358c2234347ca08c84f6ef810c71b7d5f092a62))
+* add emojies in call ([c2ee82b](https://github.com/pksep/chat_client/commit/c2ee82b796521d62862f92fb0ca3c08621263353))
+* add modal for logout ([4403162](https://github.com/pksep/chat_client/commit/440316282958402e8d024004b9129679fdfcc145))
+* add navigate-to-chat button, upgrade froup call info panel ([1ddd424](https://github.com/pksep/chat_client/commit/1ddd4248812011d794fc307f5101d0c7bacb75bc))
+* add noto emojies ([c6f811e](https://github.com/pksep/chat_client/commit/c6f811e1bea3b92c9274d329e1e0760a2800cd00))
+* add pagination for call page ([fd78fc9](https://github.com/pksep/chat_client/commit/fd78fc91cd90cad58ea96c60753554c30c681bc2))
+* add pin for only me ([d0d2807](https://github.com/pksep/chat_client/commit/d0d28079a1137a12bed7ac54951e338eeff9b5b3))
+* add profile modal ([7707216](https://github.com/pksep/chat_client/commit/770721644e08c75f234182c17cc681f0e422d220))
+* add profile page, status and wallpapers ([3444acc](https://github.com/pksep/chat_client/commit/3444accc513dafe0c7bc2b18d51600ffe8902bab))
+* add quality video streem ([cd4e022](https://github.com/pksep/chat_client/commit/cd4e0225f927523d017c68bb47aeba04da016ba0))
+* add role in messages ([7e30091](https://github.com/pksep/chat_client/commit/7e30091102af84ef09dec87d1d20b059d7804513))
+* add share logic ([eeb3fc3](https://github.com/pksep/chat_client/commit/eeb3fc3d8bcb672c164ec62bfd9147f6e13dbc0c))
+* add topic call status and times ([45e71a9](https://github.com/pksep/chat_client/commit/45e71a9ee951793557acf4b14f189449d9b09a62))
+* add unread count in filters ([fd8343a](https://github.com/pksep/chat_client/commit/fd8343adc62112a5cf3616747c666fdfa6440a9d))
+* after error send message try again 3 minute ([839d2bc](https://github.com/pksep/chat_client/commit/839d2bca2b72affd305fb5b8c84dedd8bfdfc5a6))
+* change background ([52f3f45](https://github.com/pksep/chat_client/commit/52f3f4573413f23a2802244be8a8b306a4335b03))
+* empty contact list ([176b795](https://github.com/pksep/chat_client/commit/176b7959df285190b80d1b6e14ca3d408a6a1964))
+* fix end call via havent user ([2cca534](https://github.com/pksep/chat_client/commit/2cca534f712fd93adcb86ee180a62a41a9a96788))
+* fix notifications and sound ([9bbe465](https://github.com/pksep/chat_client/commit/9bbe4650f96bb74898566def758fc61c162e8e31))
+* in call send event when user busy ([a39a322](https://github.com/pksep/chat_client/commit/a39a322892737b06b1b36d1d8b0c53e66cda1c6c))
+* show ScreenShareIcon in web minimized ([f2302c7](https://github.com/pksep/chat_client/commit/f2302c7e2b36d4775dd3533dda9a73ab05812ba5))
+* update call logic and styles ([300c23c](https://github.com/pksep/chat_client/commit/300c23c7215c9c150c3764e741230d6363997224))
+* update emojies ([57d1b6b](https://github.com/pksep/chat_client/commit/57d1b6b0af389012cf0c12903afce57c86d29c90))
+* update web version ([35aae61](https://github.com/pksep/chat_client/commit/35aae61b139f71eddfb2520ce908fe3811d8708a))
+
+# [1.27.0](https://github.com/pksep/chat_client/compare/v1.26.0...v1.27.0) (2026-05-08)
+
+
+### Bug Fixes
+
+* content editor ([ceea203](https://github.com/pksep/chat_client/commit/ceea203eee65e4466f0dded6faaca2368c72ad29))
+* lint ([33e1732](https://github.com/pksep/chat_client/commit/33e173268e2e0a7ff828b31898ee53847a9b230c))
+* lint ([f5befdd](https://github.com/pksep/chat_client/commit/f5befdd2087fa23e6308865f7dd0e23a0d28a535))
+* sound volume ([8e649c4](https://github.com/pksep/chat_client/commit/8e649c4c9ce8fed8561dfb451d12e3fcc5a71530))
+
+
+### Features
+
+* add info about read message ([3e0a62b](https://github.com/pksep/chat_client/commit/3e0a62b14a599c40af34bd27b43fce911f09d5e3))
+* show reaction setters ([40c726a](https://github.com/pksep/chat_client/commit/40c726ae3acab5c31d9321b73856c09ffedd821b))
+
+# [1.26.0](https://github.com/pksep/chat_client/compare/v1.25.0...v1.26.0) (2026-05-07)
+
+
+### Bug Fixes
+
+* edited text ([094c13c](https://github.com/pksep/chat_client/commit/094c13c21a3cd7b56501fc273cf4c1434d796acf))
+* lint ([5d1087f](https://github.com/pksep/chat_client/commit/5d1087fd4292910b9984e27d3af691deebcce948))
+* slider content type ([34d3c9f](https://github.com/pksep/chat_client/commit/34d3c9f257934489d6383509163702e6622fe4d9))
+* style ([f585050](https://github.com/pksep/chat_client/commit/f585050c0a41a59c5b45a7dba07c1cdabc3742aa))
+* styles ([bded7d7](https://github.com/pksep/chat_client/commit/bded7d712ff8867021556ad829e26461c75b7b04))
+* styles ([40c5f38](https://github.com/pksep/chat_client/commit/40c5f38054b04eeb661fcca3770929f115c19f68))
+* upload .mov too media ([e23e04e](https://github.com/pksep/chat_client/commit/e23e04e0581dc37faef092bc133c43e8d91e37bc))
+
+
+### Features
+
+* add content editor props and tools ([b213bc7](https://github.com/pksep/chat_client/commit/b213bc7da124dd9e890f4c62384d6dfaed9af94d))
+* add logic for send media and files in text ([23c56d1](https://github.com/pksep/chat_client/commit/23c56d1ca152a0669619467fa70ed2dd0a866c18))
+* redesign messages ([ff0edf3](https://github.com/pksep/chat_client/commit/ff0edf32a58413df9e45560e07dc365cb53233e4))
+
+# [1.25.0](https://github.com/pksep/chat_client/compare/v1.24.0...v1.25.0) (2026-05-05)
+
+
+### Bug Fixes
+
+* bulk forward ([15ebc93](https://github.com/pksep/chat_client/commit/15ebc93b6c65a721ab07a0d1ce31bb38e44a2696))
+* buttons ([ad05c8c](https://github.com/pksep/chat_client/commit/ad05c8c07ef7853d900934145e66f4033a288cce))
+* call with screen sharing + full screen ([6af8047](https://github.com/pksep/chat_client/commit/6af804708601ae175c6dfbb569404de531a7e257))
+* **chat:** stabilize message scrolling and media previews ([680d1cb](https://github.com/pksep/chat_client/commit/680d1cb320b94bd2cd085b6c815bb6836e171b12))
+* disable status ([0d1336f](https://github.com/pksep/chat_client/commit/0d1336fa9066fa918f4fa9dce838f4b6121e361b))
+* dont save cache in apk ([7af7446](https://github.com/pksep/chat_client/commit/7af7446e07285f7c0c3cc93151679f84cd056d37))
+* dont show messages in another topics ([c86225d](https://github.com/pksep/chat_client/commit/c86225d89d5ef1b31fe159ec0ef9c51d6c0c3ac3))
+* download in apk ([3dc26f5](https://github.com/pksep/chat_client/commit/3dc26f5ff2a6b5cefb429a788d7292eb9492e656))
+* if not group admin delete add user button ([0f757a0](https://github.com/pksep/chat_client/commit/0f757a080c77b1876f2732db157016eaddec9011))
+* last online text ([23c35db](https://github.com/pksep/chat_client/commit/23c35db6d6db35565bcadb99f9e602d44d0082df))
+* lint ([c003e07](https://github.com/pksep/chat_client/commit/c003e076d2c507658b59852ac820959777c3fbd1))
+* lint ([3f3a661](https://github.com/pksep/chat_client/commit/3f3a661b361217d76c656f565fab84408a99cb7b))
+* lint ([c317c6a](https://github.com/pksep/chat_client/commit/c317c6a0f98707e7adc9c9ea915ee7448938f5a2))
+* lint ([c33c4ea](https://github.com/pksep/chat_client/commit/c33c4ea9639d9d7750c6d8a6354bcedbf1063808))
+* lint ([3eda5e8](https://github.com/pksep/chat_client/commit/3eda5e84653c6b54cd94e3da88661391c23d64c4))
+* lint ([29b4a7d](https://github.com/pksep/chat_client/commit/29b4a7d3442d8fb6a450534ec8686b8b8ee7832a))
+* lint ([659594c](https://github.com/pksep/chat_client/commit/659594ccdaaa0a680fae142d332adcbf8bf77d52))
+* not disable microfon when screen sharing ([af6ae7a](https://github.com/pksep/chat_client/commit/af6ae7acbc74263588a4f62565edb7b86f002fcb))
+* not open media in select message mode ([36e2f2a](https://github.com/pksep/chat_client/commit/36e2f2acfd5e8b78f5115ae9c73d14475b93ffc0))
+* notification and unread message count ([fbefc16](https://github.com/pksep/chat_client/commit/fbefc16f610ab8acce68c76c62ba17b93adfe50e))
+* packages ([9935706](https://github.com/pksep/chat_client/commit/993570694db7b9ba167facdbf9c336181c5f1cde))
+* position for add topic ([16db979](https://github.com/pksep/chat_client/commit/16db97941b6cf70ba8dadf4a7344ad4be7a6ffd9))
+* project in reconnect ([6841393](https://github.com/pksep/chat_client/commit/68413931de04854a0ea5ccb22d8b83d5f436dd26))
+* read message logic ([62ea497](https://github.com/pksep/chat_client/commit/62ea497e73416607d85cea5bc20c08cb0362103e))
+* read message logic ([1df5b55](https://github.com/pksep/chat_client/commit/1df5b55b728c06864a5ecf23e976dadc3e750f28))
+* reseting ([465b95d](https://github.com/pksep/chat_client/commit/465b95d015437e9a29c2a66eb2c676582b428b25))
+* set 0 unreadCount when read message ([ab87711](https://github.com/pksep/chat_client/commit/ab87711ac18235878d50e561889733d3f050fd64))
+* slider ([5ec282d](https://github.com/pksep/chat_client/commit/5ec282d0371034fbaa5142a2325f24eefefdb3b5))
+* style ([78f2eba](https://github.com/pksep/chat_client/commit/78f2eba8e49af7f3a0f19c183cc0b4dee6a58ad9))
+* styles ([bcace50](https://github.com/pksep/chat_client/commit/bcace50b86ae0e3fa21b14b63f508570d5f24ed8))
+* styles in mobile ([f20b2ed](https://github.com/pksep/chat_client/commit/f20b2ede7ff5579c85592481af83c1fa0c184b25))
+* unpin message via modal ([e55a8de](https://github.com/pksep/chat_client/commit/e55a8de6925f3d180d812c2594d1fbc0a0b78f86))
+* unread topic count ([f6ceeb5](https://github.com/pksep/chat_client/commit/f6ceeb513422a4a9bdec23c91f600b0348224d70))
+* unreadcount when have system messages ([f82c83d](https://github.com/pksep/chat_client/commit/f82c83d29bea0c5fc0ccc5ae5760153a30c00417))
+* update notification context ([1680ca0](https://github.com/pksep/chat_client/commit/1680ca0319608e164ec4e7e1a5c35ca80dfadbc4))
+* upload and show video ([c681394](https://github.com/pksep/chat_client/commit/c681394f12f88821ca34e2f4bc859f652b2cce26))
+* useUrlWatcher ([915b00b](https://github.com/pksep/chat_client/commit/915b00b05069b3ec0ea26d0424109e080b59af7d))
+* useUrlWatcher ([68c059b](https://github.com/pksep/chat_client/commit/68c059befbd746d2604e083a9114823063927815))
+* using SliderModal ([829d7ac](https://github.com/pksep/chat_client/commit/829d7ac4a1ada2527e3a23c02f538014af91e806))
+* wait icon for text message ([b6d7fa3](https://github.com/pksep/chat_client/commit/b6d7fa3db3f32ccef4e96cbab9fcdfe29727ba07))
+* поиск топика через юзер ([ef0ff5f](https://github.com/pksep/chat_client/commit/ef0ff5fd71de43f62bdfecc4182abdd54d3205aa))
+
+
+### Features
+
+* 1.5.8 Release ([3da5ef0](https://github.com/pksep/chat_client/commit/3da5ef03e5a1db274102838ccd522cd1e360ca83))
+* add count in scroll to bottom button ([c24afc1](https://github.com/pksep/chat_client/commit/c24afc1f0863ca8346fecf8b21793201394fd9aa))
+* add pts and media cache ([07b9f03](https://github.com/pksep/chat_client/commit/07b9f0396ff69a30cee9162caefd6e92cdf22efe))
+* add pts and media cache ([1c5d76b](https://github.com/pksep/chat_client/commit/1c5d76b8a2a3e83087af0ee814de2dc3bd6dc616))
+* add retry logic, when dont sent message ([4ce344e](https://github.com/pksep/chat_client/commit/4ce344e8f6fcb7ceb553d9bc9c8ea306b219d5f6))
+* add voip calls and fix logic working calls ([b5a72d8](https://github.com/pksep/chat_client/commit/b5a72d8b9a633ec15c253cf4e4099c6ee02a07ad))
+* buld delete and bulk forward ([067533f](https://github.com/pksep/chat_client/commit/067533f4077d310f3aa721808ee6f4d4676bf64f))
+* new release ([cc57aac](https://github.com/pksep/chat_client/commit/cc57aac661001856a23f4f7fe21b07b5063ef97a))
+* new release ([ac81126](https://github.com/pksep/chat_client/commit/ac81126671197fe51ae78b9df16d6c962a7dbdfa))
+* redirect in chat via mobile, and delete notification if I already in chat ([a97f5d3](https://github.com/pksep/chat_client/commit/a97f5d3439471c1585e976d46b4cb87d2ae13bb2))
+* start multiselect messages ([44dd1b7](https://github.com/pksep/chat_client/commit/44dd1b7bb9b38ecf606fe9d30333a3181f9dafc3))
+* update yui ([94afb96](https://github.com/pksep/chat_client/commit/94afb96c9924f15253fcc018971ae320c7a526d1))
+* update yui ([452d27d](https://github.com/pksep/chat_client/commit/452d27d04e98e8132e05d509e7fd2444621e5262))
+
 # [1.24.0](https://github.com/pksep/chat_client/compare/v1.23.1...v1.24.0) (2026-04-06)
 
 
