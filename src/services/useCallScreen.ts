@@ -3,6 +3,8 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 interface CallScreenPlugin {
   showIncomingCallScreen(): Promise<void>;
   hideIncomingCallScreen(): Promise<void>;
+  lockPortraitOrientation(): Promise<void>;
+  allowCallFullscreenOrientation(): Promise<void>;
   checkPermissions(): Promise<{ overlay: boolean; battery: boolean }>;
   requestOverlayPermission(): Promise<void>;
   requestIgnoreBatteryOptimizations(): Promise<void>;
@@ -27,6 +29,26 @@ export const hideIncomingCallScreen = async () => {
       await CallScreen.hideIncomingCallScreen();
     } catch (err) {
       console.error('[CallScreen] Hide error:', err);
+    }
+  }
+};
+
+export const lockPortraitOrientation = async () => {
+  if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
+    try {
+      await CallScreen.lockPortraitOrientation();
+    } catch (err) {
+      console.error('[CallScreen] Orientation lock error:', err);
+    }
+  }
+};
+
+export const allowCallFullscreenOrientation = async () => {
+  if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
+    try {
+      await CallScreen.allowCallFullscreenOrientation();
+    } catch (err) {
+      console.error('[CallScreen] Orientation allow error:', err);
     }
   }
 };

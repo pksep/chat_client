@@ -1,9 +1,11 @@
 package sep.pksep.app;
 
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.View;
 import android.view.WindowManager;
 
 import com.getcapacitor.JSObject;
@@ -12,6 +14,7 @@ import com.getcapacitor.BridgeActivity;
 import java.io.File;
 
 import sep.pksep.app.plugins.AudioOutputPlugin;
+import sep.pksep.app.plugins.AndroidScreenSharePlugin;
 import sep.pksep.app.plugins.CallScreenPlugin;
 import sep.pksep.app.plugins.NativeFilePlugin;
 import sep.pksep.app.plugins.NotificationAudioPlugin;
@@ -31,14 +34,19 @@ public class MainActivity extends BridgeActivity {
     private static final String EXTRA_TYPE = "type";
     private static boolean customPluginsRegistered = false;
     private boolean launchedFromIncomingCall = false;
+    private boolean shouldClearWebViewCacheBeforeLoad = false;
+    private boolean callFullscreenSystemUiEnabled = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         launchedFromIncomingCall = isIncomingCallIntent(getIntent());
+        shouldClearWebViewCacheBeforeLoad =
+            savedInstanceState == null && !launchedFromIncomingCall;
         NotificationChannelHelper.ensureDefaultChannel(this);
         registerCustomPluginsIfNeeded();
 
         super.onCreate(savedInstanceState);
+        setPortraitOrientation();
         configureIncomingCallWindow(getIntent());
         handleCallIntent(getIntent());
         handleNotificationLaunchIntent(getIntent());
@@ -47,7 +55,8 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void load() {
-        if (!launchedFromIncomingCall) {
+        if (shouldClearWebViewCacheBeforeLoad) {
+            shouldClearWebViewCacheBeforeLoad = false;
             clearWebViewCacheBeforeLoad();
         }
         super.load();
@@ -64,12 +73,21 @@ public class MainActivity extends BridgeActivity {
         handleShareIntent(intent);
     }
 
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && callFullscreenSystemUiEnabled) {
+            applyCallFullscreenSystemUi();
+        }
+    }
+
     private void registerCustomPluginsIfNeeded() {
         if (customPluginsRegistered) {
             return;
         }
 
         registerPlugin(AudioOutputPlugin.class);
+        registerPlugin(AndroidScreenSharePlugin.class);
         registerPlugin(ProximityLockPlugin.class);
         registerPlugin(CallScreenPlugin.class);
         registerPlugin(NativeFilePlugin.class);
@@ -230,6 +248,42 @@ public class MainActivity extends BridgeActivity {
             );
         }
 
+    }
+
+    public void setPortraitOrientation() {
+        setCallFullscreenSystemUiEnabled(false);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+    }
+
+    public void setCallFullscreenOrientation() {
+        setCallFullscreenSystemUiEnabled(true);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+    }
+
+    private void setCallFullscreenSystemUiEnabled(boolean enabled) {
+        callFullscreenSystemUiEnabled = enabled;
+
+        if (enabled) {
+            applyCallFullscreenSystemUi();
+            return;
+        }
+
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        );
+    }
+
+    private void applyCallFullscreenSystemUi() {
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        );
     }
 
     private String normalizeAction(String action) {

@@ -15,13 +15,18 @@
       v-if="!!focusedParticipant"
       class="call-modal__participant-stage"
       :class="{
-        'call-modal__participant-stage--speaking': focusedParticipant.isSpeaking
+        'call-modal__participant-stage--speaking':
+          focusedParticipant.isSpeaking,
+        'call-modal__participant-stage--screen-share-stop-visible':
+          canStopMobileScreenShare &&
+          focusedParticipant.isLocal &&
+          focusedParticipant.isScreenShareActive
       }"
       @click="emit('select-participant', null)"
     >
       <button
         v-if="canSwitchLocalCamera"
-        class="call-modal__control-button call-modal__control-button--action call-modal__participant-stage-button call-modal__participant-stage-button--left"
+        class="call-modal__control-button call-modal__control-button--action call-modal__participant-stage-button call-modal__participant-stage-button--bottom"
         type="button"
         title="Switch camera"
         @click.stop="emit('switch-local-camera')"
@@ -89,6 +94,19 @@
         />
         <MicDisableIcon v-else />
       </div>
+      <button
+        v-if="
+          canStopMobileScreenShare &&
+          focusedParticipant.isLocal &&
+          focusedParticipant.isScreenShareActive
+        "
+        class="call-modal__mobile-screen-share-button call-modal__mobile-screen-share-button--stage"
+        type="button"
+        :disabled="isBusyNoticeVisible"
+        @click.stop="emit('toggle-screen-share')"
+      >
+        Выключить демонстрацию
+      </button>
     </div>
   </div>
 </template>
@@ -109,6 +127,7 @@ const emit = defineEmits<{
   (event: 'select-participant', identity: string | null): void;
   (event: 'open-video-overlay'): void;
   (event: 'switch-local-camera'): void;
+  (event: 'toggle-screen-share'): void;
 }>();
 
 defineProps<{
@@ -157,6 +176,8 @@ defineProps<{
   } | null;
   focusedParticipantHasVideo: boolean;
   canSwitchLocalCamera: boolean;
+  canStopMobileScreenShare: boolean;
+  isBusyNoticeVisible: boolean;
   currentPage: number;
   currentPageParticipantCount: number;
   totalPages: number;
