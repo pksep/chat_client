@@ -107,6 +107,36 @@ public class CallScreenPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void lockPortraitOrientation(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            try {
+                if (getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).setPortraitOrientation();
+                }
+                call.resolve();
+            } catch (Exception e) {
+                Log.e(TAG, "Error locking portrait orientation", e);
+                call.reject(e.getMessage());
+            }
+        });
+    }
+
+    @PluginMethod
+    public void allowCallFullscreenOrientation(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            try {
+                if (getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).setCallFullscreenOrientation();
+                }
+                call.resolve();
+            } catch (Exception e) {
+                Log.e(TAG, "Error allowing call fullscreen orientation", e);
+                call.reject(e.getMessage());
+            }
+        });
+    }
+
+    @PluginMethod
     public void showIncomingCall(PluginCall call) {
         String callerName = call.getString("callerName");
         String roomId = call.getString("roomId");

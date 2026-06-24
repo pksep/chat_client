@@ -11,7 +11,7 @@
         'call-modal__container--full-screen':
           liveKitState.isFullScreen || isMobile
       }"
-      @click.stop
+      @click.stop="closeMobileCallActionsMenu"
     >
       <div class="call-modal__group-info">
         <div>
@@ -24,12 +24,15 @@
             <FullscreenIcon v-if="!liveKitState.isFullScreen" />
             <MinimizeIcon v-else />
           </button>
-          <Icon
+          <button
             v-else
-            :name="IconNameEnum.chevronDown"
-            class="call-modal__control-button call-modal__control-button__chevron-down-group"
+            class="call-modal__control-button call-modal__control-button--action call-modal__control-button--chevron-down"
+            type="button"
+            aria-label="Свернуть звонок"
             @click="hideModal"
-          />
+          >
+            <Icon :name="IconNameEnum.chevronDown" />
+          </button>
           <div class="call-modal__group-info-text">
             <p>{{ resolvedGroupCallTitle }}</p>
             <span>{{ displayGroupCallMeta }}</span>
@@ -46,12 +49,66 @@
           <ErrorIcon class="call-modal__connection-status-alert" />
         </div>
 
-        <button
-          class="call-modal__control-button call-modal__control-button--action"
-          @click="state.openGroupInfoModal = true"
-        >
-          <GroupInfoIcon />
-        </button>
+        <div class="call-modal__group-actions">
+          <button
+            v-if="!isMobile"
+            class="call-modal__control-button call-modal__control-button--action"
+            @click="openGroupInfoPanel"
+          >
+            <GroupInfoIcon />
+          </button>
+          <div v-else class="call-modal__mobile-actions">
+            <button
+              class="call-modal__control-button call-modal__control-button--action"
+              type="button"
+              aria-label="Открыть меню звонка"
+              @click.stop="toggleMobileCallActionsMenu"
+            >
+              <CallMoreIcon />
+            </button>
+            <div
+              v-if="state.mobileCallActionsOpen"
+              class="call-modal__mobile-actions-menu"
+              @click.stop
+            >
+              <button
+                class="call-modal__mobile-actions-item"
+                :class="{
+                  'call-modal__mobile-actions-item--active':
+                    liveKitState.isScreenSharingActive
+                }"
+                type="button"
+                :disabled="
+                  isBusyNoticeVisible || isScreenShareUnavailableOnMobile
+                "
+                @click="handleMobileScreenShareAction"
+              >
+                <ScreenShareIcon />
+                <span>{{
+                  liveKitState.isScreenSharingActive
+                    ? 'Выключить демонстрацию'
+                    : 'Включить демонстрацию'
+                }}</span>
+              </button>
+              <button
+                class="call-modal__mobile-actions-item"
+                type="button"
+                disabled
+              >
+                <ScreenRecordIcon />
+                <span>Включить запись экрана</span>
+              </button>
+              <button
+                class="call-modal__mobile-actions-item"
+                type="button"
+                @click="handleOpenMobileCallSettings"
+              >
+                <GroupInfoIcon />
+                <span>Настройки</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div
@@ -68,7 +125,7 @@
             'call-modal__terminal-placeholder': isTerminalCallNotice
           }"
         >
-          {{ displayAvatarInfo.initials }}
+          {{ displayAvatarTitle }}
         </h3>
         <p
           class="call-modal__status"
@@ -104,6 +161,10 @@
         :focused-participant="focusedGroupParticipant"
         :focused-participant-has-video="focusedParticipantHasVideo"
         :can-switch-local-camera="canSwitchLocalCamera"
+        :can-stop-mobile-screen-share="
+          isMobile && liveKitState.isScreenSharingActive
+        "
+        :is-busy-notice-visible="isBusyNoticeVisible"
         :current-page="currentParticipantPage"
         :current-page-participant-count="visibleGroupParticipantCount"
         :total-pages="totalParticipantPages"
@@ -114,6 +175,7 @@
         @open-video-overlay="openStageVideoOverlay"
         @select-participant="handleSelectParticipant"
         @switch-local-camera="handleSwitchLocalCamera"
+        @toggle-screen-share="handleToggleScreenShare"
       />
 
       <div v-if="shouldShowMediaLayout" class="call-modal__remote-audio-layer">
@@ -147,7 +209,9 @@
           </div>
         </template>
         <template v-else>
-          <div class="call-modal__control-button-wrapper">
+          <div
+            class="call-modal__control-button-wrapper call-modal__control-button-wrapper--call-controls"
+          >
             <button
               v-if="Capacitor.isNativePlatform()"
               class="call-modal__control-button"
@@ -199,7 +263,7 @@
             </button>
 
             <button
-              v-if="!Capacitor.isNativePlatform()"
+              v-if="!isMobile && !Capacitor.isNativePlatform()"
               class="call-modal__control-button"
               :class="{
                 'call-modal__control-button__inactive':
@@ -209,6 +273,15 @@
               @click="handleToggleScreenShare"
             >
               <ScreenShareIcon />
+            </button>
+
+            <button
+              v-if="!isMobile"
+              class="call-modal__control-button call-modal__control-button__inactive"
+              type="button"
+              disabled
+            >
+              <ScreenRecordIcon />
             </button>
 
             <div
@@ -266,17 +339,18 @@
 
     <div
       v-if="isStageVideoOverlayVisible && focusedParticipantHasVideo"
+      :ref="setOverlayMediaGestureSurfaceRef"
       class="call-modal__video-overlay"
       @mousemove="handleVideoOverlayMouseMove"
       @mouseleave="videoOverlayRegion = null"
-      @click.stop
+      @click.stop="closeMobileCallActionsMenu"
     >
       <video
         :ref="setOverlayFocusedParticipantVideoRef"
         autoplay
         playsinline
         muted
-        class="call-modal__video-overlay-video"
+        class="call-modal__video-overlay-video call-modal__media-gesture-target"
         @click.stop="handleVideoOverlayTap"
       ></video>
       <ReactionVideoOverlay
@@ -289,7 +363,7 @@
       <Transition name="call-modal-overlay-top">
         <div
           v-if="
-            isMobile
+            isCallFullscreenTouchMode
               ? isVideoOverlayControlsVisible
               : videoOverlayRegion === 'top'
           "
@@ -317,8 +391,9 @@
 
               <div class="call-modal__video-overlay-actions">
                 <button
+                  v-if="!isCallFullscreenTouchMode && !isMobile"
                   class="call-modal__control-button call-modal__control-button--action"
-                  @click="state.openGroupInfoModal = true"
+                  @click="openGroupInfoPanel"
                 >
                   <GroupInfoIcon />
                 </button>
@@ -348,14 +423,16 @@
       <Transition name="call-modal-overlay-bottom">
         <div
           v-if="
-            isMobile
+            isCallFullscreenTouchMode
               ? isVideoOverlayControlsVisible
               : videoOverlayRegion === 'bottom'
           "
           class="call-modal__video-overlay-bar call-modal__video-overlay-bar--bottom"
           @click.stop
         >
-          <div class="call-modal__control-button-wrapper">
+          <div
+            class="call-modal__control-button-wrapper call-modal__control-button-wrapper--call-controls"
+          >
             <button
               v-if="Capacitor.isNativePlatform()"
               class="call-modal__control-button"
@@ -402,7 +479,11 @@
             </button>
 
             <button
-              v-if="!isMobile && !Capacitor.isNativePlatform()"
+              v-if="
+                !isCallFullscreenTouchMode &&
+                !isMobile &&
+                !Capacitor.isNativePlatform()
+              "
               class="call-modal__control-button"
               :class="{
                 'call-modal__control-button__inactive':
@@ -411,6 +492,15 @@
               @click="handleToggleScreenShare"
             >
               <ScreenShareIcon />
+            </button>
+
+            <button
+              v-if="!isCallFullscreenTouchMode && !isMobile"
+              class="call-modal__control-button call-modal__control-button__inactive"
+              type="button"
+              disabled
+            >
+              <ScreenRecordIcon />
             </button>
 
             <div
@@ -514,6 +604,7 @@ import MicDisableIcon from './UI/MicDisableIcon.vue';
 import VideoDisableIcon from './UI/VideoDisableIcon.vue';
 import LeaveIcon from './UI/LeaveIcon.vue';
 import ScreenShareIcon from './UI/ScreenShareIcon.vue';
+import ScreenRecordIcon from './UI/ScreenRecordIcon.vue';
 import HandRaiseIcon from './UI/HandRaiseIcon.vue';
 import CallParticipantsPanel from './CallParticipantsPanel.vue';
 import GroupCallLayout from './GroupCallLayout.vue';
@@ -555,7 +646,9 @@ import {
   enableProximityLock
 } from '../../services/useProximityLock';
 import {
+  allowCallFullscreenOrientation,
   hideIncomingCallScreen,
+  lockPortraitOrientation,
   showIncomingCallScreen
 } from '../../services/useCallScreen';
 import { useCallBackground } from '../../composables/useCallBackground';
@@ -569,6 +662,7 @@ import {
 import { TopicType } from '../../services/useChatSDK/types';
 import { currentGroup, getGroupById } from '../../composables/useGroup';
 import GroupInfoIcon from './UI/GroupInfoIcon.vue';
+import CallMoreIcon from './UI/CallMoreIcon.vue';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const { getSelectedTopic } = useTopics();
@@ -582,6 +676,7 @@ const localVideo = ref<HTMLVideoElement | null>(null);
 const screenShareVideo = ref<HTMLVideoElement | null>(null);
 const focusedParticipantVideo = ref<HTMLVideoElement | null>(null);
 const overlayFocusedParticipantVideo = ref<HTMLVideoElement | null>(null);
+const overlayMediaGestureSurface = ref<HTMLElement | null>(null);
 const remoteVideoRefs = ref<Record<string, HTMLVideoElement | null>>({});
 const overlayRemoteVideoRefs = ref<Record<string, HTMLVideoElement | null>>({});
 const remoteAudioRefs = ref<Record<string, HTMLAudioElement | null>>({});
@@ -592,11 +687,408 @@ const shouldSkipInitialParticipantAutofocus = ref(true);
 const isStageVideoOverlayVisible = ref(false);
 const isVideoOverlayControlsVisible = ref(false);
 const videoOverlayRegion = ref<'top' | 'bottom' | null>(null);
+let focusedScreenShareFitCleanup: (() => void) | null = null;
+let overlayMediaGestureCleanup: (() => void) | null = null;
+let overlayMediaGestureBoundSurface: HTMLElement | null = null;
+let overlayMediaGestureBoundVideo: HTMLVideoElement | null = null;
+let overlayMediaGestureResetKey = '';
+
+const MOBILE_SCREEN_SHARE_VIDEO_CLASS =
+  'call-modal__screen-share-video--mobile';
+const MOBILE_SCREEN_SHARE_MIN_ASPECT_RATIO = 1.9;
+const MEDIA_GESTURE_ACTIVE_CLASS = 'call-modal__media-gesture-target--active';
+const MEDIA_GESTURE_MIN_SCALE = 1;
+const MEDIA_GESTURE_MAX_SCALE = 4;
+
+const isAndroidNativePlatform = (): boolean =>
+  Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+
+type MediaGesturePoint = {
+  x: number;
+  y: number;
+};
+
+type MediaGestureTransform = {
+  scale: number;
+  x: number;
+  y: number;
+};
+
+const clampValue = (value: number, min: number, max: number): number =>
+  Math.min(Math.max(value, min), max);
+
+const getMediaGestureDistance = (
+  first: MediaGesturePoint,
+  second: MediaGesturePoint
+): number => Math.hypot(second.x - first.x, second.y - first.y);
+
+const getMediaGestureCenter = (
+  first: MediaGesturePoint,
+  second: MediaGesturePoint
+) => ({
+  x: (first.x + second.x) / 2,
+  y: (first.y + second.y) / 2
+});
+
+const clampMediaGestureTransform = (
+  surface: HTMLElement,
+  transform: MediaGestureTransform
+): MediaGestureTransform => {
+  const scale = clampValue(
+    transform.scale,
+    MEDIA_GESTURE_MIN_SCALE,
+    MEDIA_GESTURE_MAX_SCALE
+  );
+
+  if (scale <= MEDIA_GESTURE_MIN_SCALE) {
+    return { scale: MEDIA_GESTURE_MIN_SCALE, x: 0, y: 0 };
+  }
+
+  const maxX = (surface.clientWidth * (scale - 1)) / 2;
+  const maxY = (surface.clientHeight * (scale - 1)) / 2;
+
+  return {
+    scale,
+    x: clampValue(transform.x, -maxX, maxX),
+    y: clampValue(transform.y, -maxY, maxY)
+  };
+};
+
+const applyMediaGestureTransform = (
+  element: HTMLElement,
+  transform: MediaGestureTransform
+) => {
+  element.style.transform = `translate3d(${transform.x}px, ${transform.y}px, 0) scale(${transform.scale})`;
+  element.classList.toggle(
+    MEDIA_GESTURE_ACTIVE_CLASS,
+    transform.scale > MEDIA_GESTURE_MIN_SCALE
+  );
+};
+
+const resetMediaGestureTransform = (element: HTMLElement | null) => {
+  if (!element) {
+    return;
+  }
+
+  element.style.transform = '';
+  element.classList.remove(MEDIA_GESTURE_ACTIVE_CLASS);
+};
+
+const getTouchGesturePoints = (touches: TouchList): MediaGesturePoint[] =>
+  Array.from(touches, touch => ({
+    x: touch.clientX,
+    y: touch.clientY
+  }));
+
+const shouldIgnoreMediaGestureTarget = (target: EventTarget | null): boolean =>
+  target instanceof Element &&
+  !!target.closest(
+    'button, a, input, textarea, select, [role="button"], .call-modal__video-overlay-bar'
+  );
+
+const canHandleMediaGesture = (): boolean =>
+  isAndroidNativePlatform() && isStageVideoOverlayVisible.value;
+
+const bindMediaGestureTransform = (
+  surface: HTMLElement | null,
+  element: HTMLVideoElement | null
+): (() => void) | null => {
+  if (!surface || !element) {
+    return null;
+  }
+
+  let transform: MediaGestureTransform = { scale: 1, x: 0, y: 0 };
+  let startTransform: MediaGestureTransform = { ...transform };
+  let startDistance = 0;
+  let startCenter = { x: 0, y: 0 };
+  let startPointer: MediaGesturePoint | null = null;
+  let activeTouchCount = 0;
+  let isGestureIgnored = false;
+  let hasMovedDuringGesture = false;
+  let lastTapAt = 0;
+  let lastTapPoint: MediaGesturePoint | null = null;
+
+  const updateTransform = (nextTransform: MediaGestureTransform) => {
+    transform = clampMediaGestureTransform(surface, nextTransform);
+    applyMediaGestureTransform(element, transform);
+  };
+
+  const resetGestureStart = (pointers: MediaGesturePoint[]) => {
+    activeTouchCount = pointers.length;
+    startTransform = { ...transform };
+
+    if (pointers.length >= 2) {
+      [startPointer] = pointers;
+      startDistance = Math.max(
+        getMediaGestureDistance(pointers[0], pointers[1]),
+        1
+      );
+      startCenter = getMediaGestureCenter(pointers[0], pointers[1]);
+      return;
+    }
+
+    startPointer = pointers[0] || null;
+    startDistance = 0;
+    startCenter = startPointer
+      ? { x: startPointer.x, y: startPointer.y }
+      : { x: 0, y: 0 };
+  };
+
+  const handleTouchStart = (event: TouchEvent) => {
+    if (!canHandleMediaGesture()) {
+      return;
+    }
+
+    if (activeTouchCount === 0) {
+      isGestureIgnored = shouldIgnoreMediaGestureTarget(event.target);
+      hasMovedDuringGesture = false;
+    }
+
+    if (isGestureIgnored) {
+      return;
+    }
+
+    event.stopPropagation();
+
+    if (event.touches.length > 1 || transform.scale > MEDIA_GESTURE_MIN_SCALE) {
+      event.preventDefault();
+    }
+
+    resetGestureStart(getTouchGesturePoints(event.touches));
+  };
+
+  const handleTouchMove = (event: TouchEvent) => {
+    if (
+      isGestureIgnored ||
+      !canHandleMediaGesture() ||
+      activeTouchCount === 0
+    ) {
+      return;
+    }
+
+    event.stopPropagation();
+
+    const pointers = getTouchGesturePoints(event.touches);
+
+    if (pointers.length >= 2) {
+      event.preventDefault();
+      hasMovedDuringGesture = true;
+
+      const distance = Math.max(
+        getMediaGestureDistance(pointers[0], pointers[1]),
+        1
+      );
+      const center = getMediaGestureCenter(pointers[0], pointers[1]);
+      const nextScale = startTransform.scale * (distance / startDistance);
+
+      updateTransform({
+        scale: nextScale,
+        x: startTransform.x + center.x - startCenter.x,
+        y: startTransform.y + center.y - startCenter.y
+      });
+      return;
+    }
+
+    if (!startPointer || transform.scale <= MEDIA_GESTURE_MIN_SCALE) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const currentPointer = pointers[0];
+    const deltaX = currentPointer.x - startPointer.x;
+    const deltaY = currentPointer.y - startPointer.y;
+
+    if (Math.hypot(deltaX, deltaY) > 3) {
+      hasMovedDuringGesture = true;
+    }
+
+    updateTransform({
+      scale: transform.scale,
+      x: startTransform.x + deltaX,
+      y: startTransform.y + deltaY
+    });
+  };
+
+  const handleTouchEnd = (event: TouchEvent) => {
+    if (
+      isGestureIgnored ||
+      !canHandleMediaGesture() ||
+      activeTouchCount === 0
+    ) {
+      return;
+    }
+
+    event.stopPropagation();
+
+    const remainingPointers = getTouchGesturePoints(event.touches);
+
+    if (remainingPointers.length > 0) {
+      resetGestureStart(remainingPointers);
+      return;
+    }
+
+    const endedPoint = event.changedTouches[0]
+      ? {
+          x: event.changedTouches[0].clientX,
+          y: event.changedTouches[0].clientY
+        }
+      : null;
+    const now = Date.now();
+    const isDoubleTap =
+      !hasMovedDuringGesture &&
+      !!endedPoint &&
+      !!lastTapPoint &&
+      now - lastTapAt < 300 &&
+      getMediaGestureDistance(endedPoint, lastTapPoint) < 40;
+
+    if (isDoubleTap) {
+      event.preventDefault();
+      updateTransform(
+        transform.scale > MEDIA_GESTURE_MIN_SCALE
+          ? { scale: 1, x: 0, y: 0 }
+          : { scale: 2, x: 0, y: 0 }
+      );
+      lastTapAt = 0;
+      lastTapPoint = null;
+    } else {
+      lastTapAt = now;
+      lastTapPoint = endedPoint;
+    }
+
+    activeTouchCount = 0;
+    startPointer = null;
+    startDistance = 0;
+    startCenter = { x: 0, y: 0 };
+    isGestureIgnored = false;
+  };
+
+  const handleTouchCancel = () => {
+    activeTouchCount = 0;
+    startPointer = null;
+    startDistance = 0;
+    startCenter = { x: 0, y: 0 };
+    isGestureIgnored = false;
+  };
+
+  const handleResize = () => {
+    updateTransform(transform);
+  };
+
+  const touchListenerOptions = { passive: false };
+  surface.addEventListener(
+    'touchstart',
+    handleTouchStart,
+    touchListenerOptions
+  );
+  surface.addEventListener('touchmove', handleTouchMove, touchListenerOptions);
+  surface.addEventListener('touchend', handleTouchEnd, touchListenerOptions);
+  surface.addEventListener('touchcancel', handleTouchCancel);
+  window.addEventListener('resize', handleResize);
+  resetMediaGestureTransform(element);
+
+  return () => {
+    surface.removeEventListener('touchstart', handleTouchStart);
+    surface.removeEventListener('touchmove', handleTouchMove);
+    surface.removeEventListener('touchend', handleTouchEnd);
+    surface.removeEventListener('touchcancel', handleTouchCancel);
+    window.removeEventListener('resize', handleResize);
+    resetMediaGestureTransform(element);
+  };
+};
+
+const bindOverlayMediaGestureTransform = () => {
+  const surface = overlayMediaGestureSurface.value;
+  const video = overlayFocusedParticipantVideo.value;
+
+  if (
+    overlayMediaGestureBoundSurface === surface &&
+    overlayMediaGestureBoundVideo === video
+  ) {
+    return;
+  }
+
+  overlayMediaGestureCleanup?.();
+  overlayMediaGestureCleanup = null;
+  overlayMediaGestureBoundSurface = surface;
+  overlayMediaGestureBoundVideo = video;
+
+  if (!surface || !video) {
+    return;
+  }
+
+  overlayMediaGestureCleanup = bindMediaGestureTransform(surface, video);
+};
+
+const isMobileScreenShareVideoSize = (video: HTMLVideoElement): boolean => {
+  const width = video.videoWidth;
+  const height = video.videoHeight;
+
+  if (!width || !height) {
+    return false;
+  }
+
+  const longSide = Math.max(width, height);
+  const shortSide = Math.min(width, height);
+
+  return (
+    shortSide > 0 &&
+    longSide / shortSide >= MOBILE_SCREEN_SHARE_MIN_ASPECT_RATIO
+  );
+};
+
+const updateFocusedScreenShareFitClass = () => {
+  const video = focusedParticipantVideo.value;
+  const participant = focusedGroupParticipant.value as any;
+  const isLocalAndroidScreenShare =
+    Capacitor.isNativePlatform() &&
+    Capacitor.getPlatform() === 'android' &&
+    !!participant?.isLocal;
+  const isMobileScreenShare =
+    !!participant?.isScreenShareActive &&
+    (isLocalAndroidScreenShare ||
+      (!!video && isMobileScreenShareVideoSize(video)));
+
+  video?.classList.toggle(MOBILE_SCREEN_SHARE_VIDEO_CLASS, isMobileScreenShare);
+};
+
+const bindFocusedScreenShareFitClass = (video: HTMLVideoElement | null) => {
+  focusedScreenShareFitCleanup?.();
+  focusedScreenShareFitCleanup = null;
+
+  if (!video) {
+    return;
+  }
+
+  const update = () => updateFocusedScreenShareFitClass();
+
+  video.addEventListener('loadedmetadata', update);
+  video.addEventListener('resize', update);
+  focusedScreenShareFitCleanup = () => {
+    video.removeEventListener('loadedmetadata', update);
+    video.removeEventListener('resize', update);
+    video.classList.remove(MOBILE_SCREEN_SHARE_VIDEO_CLASS);
+  };
+
+  update();
+};
 const maxParticipantsPerPage = computed(() =>
   isMobile.value ? 4 : liveKitState.isFullScreen ? 9 : 6
 );
+const isScreenShareUnavailableOnMobile = computed(() => {
+  if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
+    return false;
+  }
+
+  return (
+    typeof navigator === 'undefined' ||
+    !window.isSecureContext ||
+    typeof navigator.mediaDevices?.getDisplayMedia !== 'function'
+  );
+});
 const state = ref({
-  openGroupInfoModal: false
+  openGroupInfoModal: false,
+  mobileCallActionsOpen: false
 });
 const activeReactionPopover = ref<'main' | 'overlay' | null>(null);
 let reactionPopoverCloseTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -880,12 +1372,36 @@ const displayUser = computed(() => {
 
   return activeUser.value as any;
 });
+
+const resolveAvatarInitials = (
+  value?: string | null,
+  fallback = 'G'
+): string => {
+  const normalizedValue = (value || '').trim();
+
+  if (!normalizedValue) {
+    return fallback;
+  }
+
+  const parts = normalizedValue
+    .split(/\s+/)
+    .map(part => part[0] || '')
+    .filter(Boolean)
+    .slice(0, 2);
+
+  if (!parts.length) {
+    return fallback;
+  }
+
+  return parts.join('').toUpperCase();
+};
+
 const displayAvatarInfo = computed(() => {
   if (isGroupCallLayout.value) {
     const groupName = resolvedGroupCallTitle.value || groupCallLabel;
     return {
       name: groupName,
-      initials: groupName,
+      initials: resolveAvatarInitials(groupName),
       avatarUrl:
         invitedGroupCall.value?.avatarUrl ||
         currentCallTopic.value?.avatarUrl ||
@@ -901,6 +1417,12 @@ const displayAvatarInfo = computed(() => {
     avatarUrl: displayUser.value.avatarUrl || ''
   };
 });
+
+const displayAvatarTitle = computed(() =>
+  isGroupCallLayout.value
+    ? displayAvatarInfo.value?.name || groupCallLabel
+    : displayAvatarInfo.value?.initials || ''
+);
 const isCallReconnectingNotice = computed(
   () =>
     !!callStatusNotice.value && callStatusNoticeKind.value === 'reconnecting'
@@ -1185,8 +1707,28 @@ const focusedParticipantStageStream = computed(() => {
 
   return null;
 });
+const focusedParticipantStageMediaKey = computed(() => {
+  const participant = focusedGroupParticipant.value as any;
+
+  if (!participant) {
+    return '';
+  }
+
+  const mediaType = participant.isScreenShareActive ? 'screen' : 'camera';
+
+  return `${participant.tileId}:${mediaType}`;
+});
 const focusedParticipantHasVideo = computed(
   () => !!focusedParticipantStageStream.value
+);
+const isCallFullscreenTouchMode = computed(
+  () => isAndroidNativePlatform() && isStageVideoOverlayVisible.value
+);
+const shouldAllowCallFullscreenOrientation = computed(
+  () =>
+    isAndroidNativePlatform() &&
+    isStageVideoOverlayVisible.value &&
+    focusedParticipantHasVideo.value
 );
 const canSwitchLocalCamera = computed(
   () =>
@@ -1289,13 +1831,33 @@ watch(
       focusedGroupParticipant.value as any,
       video
     );
+    updateFocusedScreenShareFitClass();
   },
   { immediate: true }
 );
 
 watch(
-  [overlayFocusedParticipantVideo, focusedParticipantStageStream],
-  ([video, stream]) => {
+  focusedGroupParticipant,
+  () => {
+    updateFocusedScreenShareFitClass();
+  },
+  { immediate: true }
+);
+
+watch(
+  [
+    overlayFocusedParticipantVideo,
+    focusedParticipantStageStream,
+    focusedParticipantStageMediaKey
+  ],
+  ([video, stream, mediaKey]) => {
+    if (!video) {
+      overlayMediaGestureResetKey = '';
+    } else if (mediaKey !== overlayMediaGestureResetKey) {
+      resetMediaGestureTransform(video);
+      overlayMediaGestureResetKey = mediaKey;
+    }
+
     syncMediaElementStream(video, stream);
     syncRemoteVideoSubscriptionPreference(
       focusedGroupParticipant.value as any,
@@ -1473,6 +2035,19 @@ watch(
 );
 
 watch(
+  shouldAllowCallFullscreenOrientation,
+  allowOrientationChange => {
+    if (allowOrientationChange) {
+      void allowCallFullscreenOrientation();
+      return;
+    }
+
+    void lockPortraitOrientation();
+  },
+  { immediate: true }
+);
+
+watch(
   isCallOpen,
   open => {
     if (!open) {
@@ -1555,6 +2130,13 @@ onBeforeUnmount(() => {
   remoteVideoResizeObserver?.disconnect();
   remoteVideoResizeObserver = null;
   observedRemoteVideoBindings = new Map();
+  focusedScreenShareFitCleanup?.();
+  focusedScreenShareFitCleanup = null;
+  overlayMediaGestureCleanup?.();
+  overlayMediaGestureCleanup = null;
+  overlayMediaGestureBoundSurface = null;
+  overlayMediaGestureBoundVideo = null;
+  void lockPortraitOrientation();
 });
 
 const setScreenShareVideoRef = (el: Element | null) => {
@@ -1574,7 +2156,14 @@ const setScreenShareVideoRef = (el: Element | null) => {
 };
 
 const setFocusedParticipantVideoRef = (el: Element | null) => {
-  focusedParticipantVideo.value = el as HTMLVideoElement | null;
+  const video = el as HTMLVideoElement | null;
+
+  if (focusedParticipantVideo.value === video) {
+    return;
+  }
+
+  focusedParticipantVideo.value = video;
+  bindFocusedScreenShareFitClass(focusedParticipantVideo.value);
   syncMediaElementStream(
     focusedParticipantVideo.value,
     focusedParticipantStageStream.value
@@ -1587,7 +2176,14 @@ const setFocusedParticipantVideoRef = (el: Element | null) => {
 };
 
 const setOverlayFocusedParticipantVideoRef = (el: Element | null) => {
-  overlayFocusedParticipantVideo.value = el as HTMLVideoElement | null;
+  const video = el as HTMLVideoElement | null;
+
+  if (overlayFocusedParticipantVideo.value === video) {
+    return;
+  }
+
+  overlayFocusedParticipantVideo.value = video;
+  bindOverlayMediaGestureTransform();
   syncMediaElementStream(
     overlayFocusedParticipantVideo.value,
     focusedParticipantStageStream.value
@@ -1597,6 +2193,17 @@ const setOverlayFocusedParticipantVideoRef = (el: Element | null) => {
     overlayFocusedParticipantVideo.value
   );
   scheduleRemoteVideoSubscriptionSync();
+};
+
+const setOverlayMediaGestureSurfaceRef = (el: Element | null) => {
+  const surface = el as HTMLElement | null;
+
+  if (overlayMediaGestureSurface.value === surface) {
+    return;
+  }
+
+  overlayMediaGestureSurface.value = surface;
+  bindOverlayMediaGestureTransform();
 };
 
 const setRemoteVideoRef = (tileId: string, el: Element | null) => {
@@ -1670,12 +2277,14 @@ const handleSelectParticipant = (identity: string | null) => {
 const openStageVideoOverlay = () => {
   if (!focusedParticipantHasVideo.value) return;
 
+  closeMobileCallActionsMenu();
   isStageVideoOverlayVisible.value = true;
-  isVideoOverlayControlsVisible.value = isMobile.value;
-  videoOverlayRegion.value = isMobile.value ? null : 'top';
+  isVideoOverlayControlsVisible.value = false;
+  videoOverlayRegion.value = isAndroidNativePlatform() ? null : 'top';
 };
 
 const closeStageVideoOverlay = () => {
+  closeMobileCallActionsMenu();
   isStageVideoOverlayVisible.value = false;
   isVideoOverlayControlsVisible.value = false;
   videoOverlayRegion.value = null;
@@ -1697,7 +2306,7 @@ const getVideoOverlayRegion = (clientY: number) => {
 };
 
 const handleVideoOverlayMouseMove = (event: MouseEvent) => {
-  if (isMobile.value) {
+  if (isCallFullscreenTouchMode.value || isMobile.value) {
     return;
   }
 
@@ -1705,10 +2314,11 @@ const handleVideoOverlayMouseMove = (event: MouseEvent) => {
 };
 
 const handleVideoOverlayTap = () => {
-  if (!isMobile.value) {
+  if (!isCallFullscreenTouchMode.value && !isMobile.value) {
     return;
   }
 
+  closeMobileCallActionsMenu();
   isVideoOverlayControlsVisible.value = !isVideoOverlayControlsVisible.value;
 };
 
@@ -1717,9 +2327,32 @@ const hideModal = () => {
     return;
   }
 
+  closeMobileCallActionsMenu();
+
   if (!isIncoming.value) {
     isCallModalVisible.value = false;
   }
+};
+
+const closeMobileCallActionsMenu = () => {
+  state.value.mobileCallActionsOpen = false;
+};
+
+const toggleMobileCallActionsMenu = () => {
+  if (isBusyNoticeVisible.value) {
+    return;
+  }
+
+  state.value.mobileCallActionsOpen = !state.value.mobileCallActionsOpen;
+};
+
+const openGroupInfoPanel = () => {
+  closeMobileCallActionsMenu();
+  state.value.openGroupInfoModal = true;
+};
+
+const handleOpenMobileCallSettings = () => {
+  openGroupInfoPanel();
 };
 
 const handleOpenGroupInfoChat = (): boolean => {
@@ -1758,11 +2391,16 @@ const handleSwitchLocalCamera = async () => {
 };
 
 const handleToggleScreenShare = async () => {
-  if (isMobile.value || Capacitor.isNativePlatform()) {
+  if (isScreenShareUnavailableOnMobile.value) {
     return;
   }
 
   await toggleScreenShare();
+};
+
+const handleMobileScreenShareAction = async () => {
+  closeMobileCallActionsMenu();
+  await handleToggleScreenShare();
 };
 
 const clearReactionPopoverCloseTimeout = () => {
