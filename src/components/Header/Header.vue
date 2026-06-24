@@ -576,9 +576,7 @@ const canNavigateTopicSearchPrev = computed(
     topicSearchActiveIndex.value < topicSearchResults.value.length - 1
 );
 const canNavigateTopicSearchNext = computed(
-  () =>
-    hasTopicSearchResults.value &&
-    topicSearchActiveIndex.value > 0
+  () => hasTopicSearchResults.value && topicSearchActiveIndex.value > 0
 );
 const topicSearchResultLabel = computed(() => {
   if (isTopicSearchLoading.value) {
