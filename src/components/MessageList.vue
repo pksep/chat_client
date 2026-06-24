@@ -847,6 +847,7 @@ const getScrollTargetQuoteOccurrenceIndex = (
 
 const quoteHighlightClassName = 'message-quote-highlight';
 const messageHighlightDurationMs = 3400;
+let messageHighlightTimeoutId: number | null = null;
 
 const cleanupQuoteHighlights = (): void => {
   const marks = chatWrapperRef.value?.querySelectorAll(
@@ -1061,17 +1062,31 @@ const highlightMessageQuote = (
 };
 
 const highlightWholeMessage = (messageId: string): void => {
-  const messageElement = chatWrapperRef.value?.querySelector<HTMLElement>(
+  const wrapperElement = chatWrapperRef.value;
+  const messageElement = wrapperElement?.querySelector<HTMLElement>(
     `.message[data-message-id="${escapeCssValue(messageId)}"]`
   );
 
-  if (!messageElement) {
+  if (!wrapperElement || !messageElement) {
     return;
   }
 
+  if (messageHighlightTimeoutId !== null) {
+    window.clearTimeout(messageHighlightTimeoutId);
+    messageHighlightTimeoutId = null;
+  }
+
+  wrapperElement
+    .querySelectorAll<HTMLElement>('.message.highlighted')
+    .forEach(element => {
+      element.classList.remove('highlighted');
+    });
+
   messageElement.classList.add('highlighted');
-  window.setTimeout(() => {
+
+  messageHighlightTimeoutId = window.setTimeout(() => {
     messageElement.classList.remove('highlighted');
+    messageHighlightTimeoutId = null;
   }, messageHighlightDurationMs);
 };
 
@@ -1729,6 +1744,11 @@ onMounted(() => {
 onUnmounted(() => {
   if (route.value?.id) {
     setSuspendIncomingMergeForTopic(route.value.id, false);
+  }
+
+  if (messageHighlightTimeoutId !== null) {
+    window.clearTimeout(messageHighlightTimeoutId);
+    messageHighlightTimeoutId = null;
   }
 
   window.removeEventListener('keydown', handleWindowKeydown, true);

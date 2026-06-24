@@ -1275,7 +1275,7 @@
 }
 
 .call-modal__screen-share-video--mobile {
-  object-fit: cover !important;
+  object-fit: contain !important;
 }
 
 .call-modal__media-gesture-target {

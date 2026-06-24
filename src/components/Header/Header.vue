@@ -145,6 +145,7 @@
       class="chat__header-desktop-search-row"
       :data-testid="`${props.dataTestid}-Header-SearchPanel`"
       @click.stop
+      @keydown.capture="handleTopicSearchKeydown"
     >
       <Search
         ref="desktopTopicSearchRef"
@@ -175,7 +176,7 @@
         :size="SizesEnum.little"
         :disabled="!canNavigateTopicSearchPrev"
         :data-testid="`${props.dataTestid}-Header-SearchPrev`"
-        @click.stop="navigateTopicSearch(-1)"
+        @click.stop="navigateTopicSearch(1)"
       >
         <Icon
           :name="IconNameEnum.arrowLeft"
@@ -189,7 +190,7 @@
         :size="SizesEnum.little"
         :disabled="!canNavigateTopicSearchNext"
         :data-testid="`${props.dataTestid}-Header-SearchNext`"
-        @click.stop="navigateTopicSearch(1)"
+        @click.stop="navigateTopicSearch(-1)"
       >
         <Icon
           :name="IconNameEnum.arrowLeft"
@@ -216,6 +217,7 @@
       class="chat__header-mobile-search-row"
       :data-testid="`${props.dataTestid}-Header-MobileSearchRow`"
       @click.stop
+      @keydown.capture="handleTopicSearchKeydown"
     >
       <Search
         ref="mobileTopicSearchRef"
@@ -269,7 +271,7 @@
           :size="SizesEnum.little"
           :disabled="!canNavigateTopicSearchPrev"
           :data-testid="`${props.dataTestid}-Header-MobileSearchPrev`"
-          @click.stop="navigateTopicSearch(-1)"
+          @click.stop="navigateTopicSearch(1)"
           style="transform: rotate(90deg)"
         >
           <Icon :name="IconNameEnum.arrowLeft" />
@@ -281,7 +283,7 @@
           :size="SizesEnum.little"
           :disabled="!canNavigateTopicSearchNext"
           :data-testid="`${props.dataTestid}-Header-MobileSearchNext`"
-          @click.stop="navigateTopicSearch(1)"
+          @click.stop="navigateTopicSearch(-1)"
           style="transform: rotate(-90deg)"
         >
           <Icon :name="IconNameEnum.arrowLeft" />
@@ -569,12 +571,14 @@ const hasTopicSearchResults = computed(
   () => topicSearchResults.value.length > 0
 );
 const canNavigateTopicSearchPrev = computed(
-  () => hasTopicSearchResults.value && topicSearchActiveIndex.value > 0
+  () =>
+    hasTopicSearchResults.value &&
+    topicSearchActiveIndex.value < topicSearchResults.value.length - 1
 );
 const canNavigateTopicSearchNext = computed(
   () =>
     hasTopicSearchResults.value &&
-    topicSearchActiveIndex.value < topicSearchResults.value.length - 1
+    topicSearchActiveIndex.value > 0
 );
 const topicSearchResultLabel = computed(() => {
   if (isTopicSearchLoading.value) {
@@ -808,6 +812,21 @@ const navigateTopicSearch = (direction: -1 | 1): void => {
   }
 
   navigateTopicSearchResult(nextIndex);
+};
+
+const handleTopicSearchKeydown = (event: KeyboardEvent): void => {
+  if (event.key !== 'Enter') {
+    return;
+  }
+
+  if (!hasTopicSearchResults.value || isTopicSearchLoading.value) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  navigateTopicSearch(event.shiftKey ? -1 : 1);
 };
 
 const handleCall = async () => {
