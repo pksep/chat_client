@@ -8,6 +8,7 @@ import {
   type AudioCaptureOptions,
   createLocalVideoTrack,
   ConnectionQuality,
+  DisconnectReason,
   LocalTrackPublication,
   LocalVideoTrack,
   Participant,
@@ -33,6 +34,11 @@ import {
   shouldPlayNotificationSound
 } from './useNotificationSoundPolicy';
 import { AudioOutput } from './useAudioOutput';
+import {
+  isAndroidScreenSharePlatform,
+  prepareAndroidScreenShare,
+  stopAndroidScreenShare
+} from './useAndroidScreenShare';
 import {
   CALL_BACKGROUND_ASSET_PATHS,
   MULTICLASS_VIRTUAL_BACKGROUND_DEFAULTS
@@ -199,6 +205,9 @@ let connectPromise: Promise<void> | null = null;
 let connectAttemptId = 0;
 let currentCameraFacingMode: 'user' | 'environment' = 'user';
 let shouldEndCallOnConnectFailure = false;
+let isExplicitHangupInProgress = false;
+let androidScreenShareTrack: MediaStreamTrack | null = null;
+let isStoppingAndroidScreenShare = false;
 const localTrackStreamCache = new Map<string, StreamCacheEntry>();
 const remoteTrackStreamCache = new Map<string, StreamCacheEntry>();
 let pendingEndCallRetryTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -226,11 +235,13 @@ const MAX_NATIVE_CALL_ACTION_RETRIES = 120;
 const NATIVE_CALL_ACTION_RETRY_DELAY_MS = 500;
 const DISMISSED_INCOMING_CALL_TTL_MS = 15000;
 const CALL_STATUS_NOTICE_CLOSE_DELAY_MS = 3000;
+const ENDED_CALL_STATUS_NOTICE_CLOSE_DELAY_MS = 1200;
 const DIRECT_CALL_RECONNECT_GRACE_MS = 180000;
 const DIRECT_CALL_RECONNECT_POLL_MS = 2000;
 const DIRECT_CALL_RECONNECT_FAILED_NOTICE = 'Не удалось восстановить звонок';
 const DIRECT_CALL_ENDED_NOTICE = 'Звонок завершён';
 const CALL_RECONNECT_NOTICE = 'Связь прервана. Переподключение';
+const OTHER_DEVICE_CONNECTED_NOTICE = 'Звонок открыт на другом устройстве';
 const dismissedIncomingCallRooms = new Map<string, number>();
 const dismissedIncomingCallTopics = new Map<string, number>();
 const CAMERA_CAPTURE_DEFAULTS = {
@@ -767,6 +778,13 @@ const clearLocalAcceptState = () => {
   localAcceptTopicId = null;
 };
 
+const clearExplicitHangupState = () => {
+  isExplicitHangupInProgress = false;
+};
+
+const isDuplicateIdentityDisconnect = (reason?: DisconnectReason): boolean =>
+  reason === DisconnectReason.DUPLICATE_IDENTITY;
+
 const showPersistentCallStatusNotice = (
   message: string,
   kind: CallStatusNoticeKind = 'reconnecting'
@@ -783,6 +801,10 @@ const shouldSuppressReconnectNotice = () =>
   Capacitor.isNativePlatform() && isNativeAppInBackground;
 
 const showReconnectCallStatusNotice = () => {
+  if (isExplicitHangupInProgress) {
+    return;
+  }
+
   if (shouldSuppressReconnectNotice()) {
     if (callStatusNoticeKind.value === 'reconnecting') {
       clearCallStatusNotice();
@@ -927,7 +949,7 @@ const recoverDirectCallConnection = async (
         clearUnavailableCallState(activeRoomId, activeTopicId);
         showTransientCallStatusNotice(
           DIRECT_CALL_ENDED_NOTICE,
-          CALL_STATUS_NOTICE_CLOSE_DELAY_MS,
+          ENDED_CALL_STATUS_NOTICE_CLOSE_DELAY_MS,
           'ended'
         );
         return;
@@ -953,7 +975,7 @@ const recoverDirectCallConnection = async (
           clearUnavailableCallState(activeRoomId, activeTopicId);
           showTransientCallStatusNotice(
             DIRECT_CALL_ENDED_NOTICE,
-            CALL_STATUS_NOTICE_CLOSE_DELAY_MS,
+            ENDED_CALL_STATUS_NOTICE_CLOSE_DELAY_MS,
             'ended'
           );
           return;
@@ -967,7 +989,7 @@ const recoverDirectCallConnection = async (
       clearUnavailableCallState(activeRoomId, activeTopicId);
       showTransientCallStatusNotice(
         DIRECT_CALL_ENDED_NOTICE,
-        CALL_STATUS_NOTICE_CLOSE_DELAY_MS,
+        ENDED_CALL_STATUS_NOTICE_CLOSE_DELAY_MS,
         'ended'
       );
       return;
@@ -1015,7 +1037,7 @@ const recoverDirectCallConnection = async (
       resetDirectCallRecoveryState(true, attemptId);
       showTransientCallStatusNotice(
         DIRECT_CALL_ENDED_NOTICE,
-        CALL_STATUS_NOTICE_CLOSE_DELAY_MS,
+        ENDED_CALL_STATUS_NOTICE_CLOSE_DELAY_MS,
         'ended'
       );
       return;
@@ -1034,6 +1056,10 @@ const startDirectCallRecovery = (
   targetTopicId?: string | null,
   options: DirectCallRecoveryOptions = {}
 ): boolean => {
+  if (isExplicitHangupInProgress) {
+    return false;
+  }
+
   const activeRoomId = targetRoomId ?? roomId.value;
   const activeTopicId = targetTopicId ?? topicId.value;
 
@@ -1650,6 +1676,10 @@ const syncLocalTrackState = () => {
     localTrackStreamCache.clear();
     localVideoStream.value = null;
     localScreenShareStream.value = null;
+    state.isScreenSharingActive = false;
+    if (isAndroidScreenSharePlatform()) {
+      void stopAndroidScreenShare();
+    }
     return;
   }
 
@@ -1662,6 +1692,10 @@ const syncLocalTrackState = () => {
 
   const localVideoTrack = localVideoPublication?.track;
   const localScreenTrack = localScreenSharePublication?.track;
+  state.isScreenSharingActive = !!localScreenTrack?.mediaStreamTrack;
+  if (!state.isScreenSharingActive && isAndroidScreenSharePlatform()) {
+    void stopAndroidScreenShare();
+  }
   const localProcessedVideoTrack =
     localVideoTrack instanceof LocalVideoTrack
       ? localVideoTrack.getProcessor()?.processedTrack ||
@@ -1675,7 +1709,7 @@ const syncLocalTrackState = () => {
 
   if (localScreenTrack?.mediaStreamTrack) {
     localScreenTrack.mediaStreamTrack.onended = () => {
-      if (state.isScreenSharingActive) {
+      if (state.isScreenSharingActive && !isStoppingAndroidScreenShare) {
         void toggleScreenShare();
       }
     };
@@ -2761,6 +2795,10 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncRemoteParticipantState();
     })
     .on(RoomEvent.Reconnecting, () => {
+      if (isExplicitHangupInProgress) {
+        return;
+      }
+
       showReconnectCallStatusNotice();
       syncLocalTrackState();
       syncLocalParticipantSpeakingState(activeRoom);
@@ -2782,12 +2820,31 @@ const setupRoomListeners = (activeRoom: Room) => {
       void ensureLocalMicrophoneState(activeRoom);
       void enforceSingleScreenShare();
     })
-    .on(RoomEvent.Disconnected, () => {
+    .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
       if (ignoredDisconnectedRoom === activeRoom) {
         if (room === activeRoom) {
           room = null;
         }
         ignoredDisconnectedRoom = null;
+        return;
+      }
+
+      if (isExplicitHangupInProgress) {
+        if (room === activeRoom) {
+          room = null;
+        }
+        cleanup(false);
+        return;
+      }
+
+      if (isDuplicateIdentityDisconnect(reason)) {
+        if (room === activeRoom) {
+          room = null;
+        }
+        showEndedCallNoticeAndReleaseMedia(
+          user.value,
+          OTHER_DEVICE_CONNECTED_NOTICE
+        );
         return;
       }
 
@@ -2992,12 +3049,16 @@ const connectToRoom = async () => {
       }
     }
     if (state.isScreenSharingActive) {
-      await nextRoom.localParticipant.setScreenShareEnabled(
-        true,
-        SCREEN_SHARE_CAPTURE_DEFAULTS,
-        SCREEN_SHARE_PUBLISH_DEFAULTS
-      );
-      await ensureLocalMicrophoneState(nextRoom);
+      if (isAndroidScreenSharePlatform()) {
+        await publishAndroidScreenShare(nextRoom);
+      } else {
+        await nextRoom.localParticipant.setScreenShareEnabled(
+          true,
+          SCREEN_SHARE_CAPTURE_DEFAULTS,
+          SCREEN_SHARE_PUBLISH_DEFAULTS
+        );
+        await ensureLocalMicrophoneState(nextRoom);
+      }
     }
 
     syncLocalTrackState();
@@ -3097,6 +3158,7 @@ export const startLiveKitCall = async (
   const me = getAuthUser();
   if (!sdk || !me) return;
 
+  clearExplicitHangupState();
   clearCallStatusNotice();
   user.value = targetUser;
   topicId.value = currentTopicId;
@@ -3158,6 +3220,7 @@ export const startLiveKitGroupCall = async (currentTopicId: string) => {
   const me = getAuthUser();
   if (!sdk || !me) return;
 
+  clearExplicitHangupState();
   clearCallStatusNotice();
   const activeRoomId = createRoomId();
   user.value = me as any;
@@ -3201,6 +3264,7 @@ export const startStandaloneMeetingCall = async () => {
   const me = getAuthUser();
   if (!sdk || !me) return;
 
+  clearExplicitHangupState();
   clearCallStatusNotice();
   const activeRoomId = createRoomId();
   user.value = me as any;
@@ -3378,6 +3442,7 @@ export const acceptCall = async () => {
   const sdk = getChatSDK();
   const me = getAuthUser();
   if (!sdk || !me) return;
+  clearExplicitHangupState();
   clearCallStatusNotice();
   shouldEndCallOnConnectFailure = false;
 
@@ -3599,6 +3664,7 @@ export const joinInvitedGroupCall = async (): Promise<boolean | void> => {
   const invite = invitedGroupCall.value;
 
   if (!sdk || !me || !invite || open.value) return false;
+  clearExplicitHangupState();
   clearCallStatusNotice();
   shouldEndCallOnConnectFailure = false;
 
@@ -3756,7 +3822,8 @@ export const handleCallAnswered = async (
 };
 
 const showEndedCallNoticeAndReleaseMedia = (
-  activeCaller: IUser | null = user.value
+  activeCaller: IUser | null = user.value,
+  message = DIRECT_CALL_ENDED_NOTICE
 ) => {
   connectAttemptId += 1;
   connectPromise = null;
@@ -3790,8 +3857,8 @@ const showEndedCallNoticeAndReleaseMedia = (
   isModalVisible.value = true;
 
   showTransientCallStatusNotice(
-    DIRECT_CALL_ENDED_NOTICE,
-    CALL_STATUS_NOTICE_CLOSE_DELAY_MS,
+    message,
+    ENDED_CALL_STATUS_NOTICE_CLOSE_DELAY_MS,
     'ended'
   );
 
@@ -4118,6 +4185,55 @@ export const toggleSpeaker = async () => {
   }
 };
 
+const getLocalScreenSharePublication = (activeRoom = room) => {
+  if (!activeRoom) {
+    return null;
+  }
+
+  return Array.from(
+    activeRoom.localParticipant.videoTrackPublications.values()
+  ).find(publication => publication.source === Track.Source.ScreenShare);
+};
+
+const publishAndroidScreenShare = async (activeRoom = room) => {
+  if (!activeRoom) {
+    return;
+  }
+
+  const session = await prepareAndroidScreenShare();
+
+  if (!session) {
+    return;
+  }
+
+  androidScreenShareTrack = session.track;
+  await activeRoom.localParticipant.publishTrack(session.track, {
+    ...SCREEN_SHARE_PUBLISH_DEFAULTS,
+    source: Track.Source.ScreenShare,
+    name: Track.Source.ScreenShare,
+    stream: Track.Source.ScreenShare
+  });
+  await ensureLocalMicrophoneState(activeRoom);
+};
+
+const unpublishAndroidScreenShare = async (activeRoom = room) => {
+  if (!activeRoom) {
+    await stopAndroidScreenShare();
+    androidScreenShareTrack = null;
+    return;
+  }
+
+  const publication = getLocalScreenSharePublication(activeRoom);
+  const publishedTrack = publication?.track || androidScreenShareTrack;
+
+  if (publishedTrack) {
+    await activeRoom.localParticipant.unpublishTrack(publishedTrack);
+  }
+
+  await stopAndroidScreenShare();
+  androidScreenShareTrack = null;
+};
+
 export const toggleScreenShare = async () => {
   if (!room) return;
 
@@ -4131,15 +4247,60 @@ export const toggleScreenShare = async () => {
     }
   }
 
-  state.isScreenSharingActive = !state.isScreenSharingActive;
-  await room.localParticipant.setScreenShareEnabled(
-    state.isScreenSharingActive,
-    SCREEN_SHARE_CAPTURE_DEFAULTS,
-    SCREEN_SHARE_PUBLISH_DEFAULTS
-  );
-  await ensureLocalMicrophoneState(room);
-  syncLocalTrackState();
-  syncRemoteParticipantState();
+  const nextScreenShareState = !state.isScreenSharingActive;
+
+  try {
+    if (isAndroidScreenSharePlatform()) {
+      if (nextScreenShareState) {
+        await publishAndroidScreenShare(room);
+      } else {
+        isStoppingAndroidScreenShare = true;
+        await unpublishAndroidScreenShare(room);
+      }
+    } else {
+      await room.localParticipant.setScreenShareEnabled(
+        nextScreenShareState,
+        SCREEN_SHARE_CAPTURE_DEFAULTS,
+        SCREEN_SHARE_PUBLISH_DEFAULTS
+      );
+      await ensureLocalMicrophoneState(room);
+    }
+  } catch (error) {
+    const rawErrorMessage =
+      error instanceof Error ? error.message : String(error);
+    const errorMessage =
+      error instanceof Error ? error.message.toLowerCase() : String(error);
+    const isAndroidNativeScreenShare =
+      Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+    const isCanceledByUser =
+      errorMessage.includes('cancel') ||
+      errorMessage.includes('denied') ||
+      errorMessage.includes('permission');
+    const isUnsupportedDevice =
+      !isAndroidNativeScreenShare &&
+      (errorMessage.includes('getdisplaymedia not supported') ||
+        errorMessage.includes('deviceunsupportederror') ||
+        errorMessage.includes('unsupported'));
+
+    if (!isCanceledByUser) {
+      showErrorNotification(
+        isAndroidNativeScreenShare && rawErrorMessage
+          ? `Не удалось включить демонстрацию экрана: ${rawErrorMessage}`
+          : isUnsupportedDevice
+            ? 'Демонстрация экрана не поддерживается на этом устройстве'
+            : 'Не удалось включить демонстрацию экрана'
+      );
+    }
+
+    console.warn('[LiveKit] Failed to toggle screen share:', error);
+  } finally {
+    isStoppingAndroidScreenShare = false;
+    syncLocalTrackState();
+    syncRemoteParticipantState();
+    if (!state.isScreenSharingActive && isAndroidScreenSharePlatform()) {
+      void stopAndroidScreenShare();
+    }
+  }
 };
 
 export const updateRemoteVideoSubscription = (
@@ -4181,20 +4342,35 @@ export const sendCallReaction = async (reaction: CallReaction) => {
 };
 
 export const leaveCall = () => {
+  isExplicitHangupInProgress = true;
   const activeRoomId = roomId.value;
   const activeTopicId = topicId.value;
   const activeCaller = user.value;
   const wasIncomingCall = isIncoming.value;
-  const shouldShowEndedNotice =
-    open.value && isModalVisible.value && !isIncoming.value;
   const activeTopic = activeTopicId
     ? (useTopics().getSelectedTopic(activeTopicId) as any)
     : null;
+  const hasOtherParticipantsInGroupCall =
+    remoteParticipants.value.length > 0 ||
+    (activeTopic?.activeCall?.participantCount ?? 0) > 1;
+  const isGroupCallSessionActive =
+    !!activeTopicId &&
+    (activeTopic?.type === TopicType.Group ||
+      activeTopic?.activeCall?.groupMode ||
+      invitedGroupCall.value?.roomId === activeRoomId);
+  const shouldCloseImmediatelyAfterHangup =
+    isGroupCallSessionActive && !hasOtherParticipantsInGroupCall;
+  const shouldShowEndedNotice =
+    open.value &&
+    isModalVisible.value &&
+    !isIncoming.value &&
+    !shouldCloseImmediatelyAfterHangup;
 
   if (
     activeRoomId &&
     activeTopicId &&
     invitedGroupCall.value?.roomId !== activeRoomId &&
+    hasOtherParticipantsInGroupCall &&
     (activeTopic?.type === TopicType.Group ||
       activeTopic?.activeCall?.groupMode ||
       remoteParticipants.value.length > 1 ||
@@ -4259,6 +4435,8 @@ export const cleanup = (disconnectRoom = true) => {
   connectAttemptId += 1;
   connectPromise = null;
   shouldEndCallOnConnectFailure = false;
+  clearExplicitHangupState();
+  void stopAndroidScreenShare();
   resetDirectCallRecoveryState(true);
   clearPendingAudioRecoveryTimeouts();
   clearPendingRemoteAudioResubscribeTimeouts();
