@@ -70,13 +70,19 @@ import {
 import type { MediaPreviewDimensions } from '../utils/mediaPreview';
 import { useUrlWatcher } from '../composables/navigation';
 import { RouteTypes } from '../composables/navigation/useUrlRouting';
-import { mergeAuthUser } from '../composables/useAuth';
+import {
+  getStoredChatAccessToken,
+  isAuthError,
+  mergeAuthUser
+} from '../composables/useAuth';
 import {
   loadShadowSyncMeta,
   recordShadowChatEvent,
   saveShadowReadState,
   saveShadowSyncMeta
 } from './useShadowChatSync';
+import { getAuthToken } from '../composables/useLogin';
+import { getConfig } from './useConfig';
 import {
   initializeCallHistorySync,
   removeCallHistoryMessage,
@@ -1230,6 +1236,18 @@ export const setReactionMessage = async (params: {
   topicId: string;
 }): Promise<void> => {
   const sdk = getChatSDK();
+  const sendReactionOverSocket = (): boolean => {
+    try {
+      return sdk.sendWebSocketEvent(WebSocketEventType.TOGGLE_REACTION, params);
+    } catch (error) {
+      console.error('[ChatSDK] Failed to send reaction via WebSocket:', error);
+      return false;
+    }
+  };
+
+  if (sendReactionOverSocket()) {
+    return;
+  }
 
   try {
     await sdk.toggleMessageReaction(
@@ -1238,13 +1256,48 @@ export const setReactionMessage = async (params: {
       params.emoji
     );
   } catch (error) {
-    try {
-      sdk.sendWebSocketEvent(WebSocketEventType.TOGGLE_REACTION, params);
-    } catch (socketError) {
-      console.error(
-        '[ChatSDK] Failed to toggle message reaction:',
-        socketError
-      );
+    if (isAuthError(error)) {
+      const token = getAuthToken() || getStoredChatAccessToken();
+
+      if (!token) {
+        console.warn(
+          '[ChatSDK] Skipping reaction REST fallback because auth token is missing'
+        );
+        return;
+      }
+
+      try {
+        const config = getConfig();
+        const response = await fetch(
+          `${config.CHAT_API_DOMAIN}/topics/${params.topicId}/messages/${params.messageId}/reactions`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({ emoji: params.emoji })
+          }
+        );
+
+        if (!response.ok) {
+          console.warn(
+            '[ChatSDK] Reaction REST fallback returned non-OK status:',
+            response.status
+          );
+        }
+      } catch (fallbackError) {
+        console.error(
+          '[ChatSDK] Failed to toggle reaction via REST fallback:',
+          fallbackError
+        );
+      }
+
+      return;
+    }
+
+    if (!sendReactionOverSocket()) {
+      console.error('[ChatSDK] Failed to toggle message reaction:', error);
     }
   }
 };
