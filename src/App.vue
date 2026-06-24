@@ -141,7 +141,8 @@ const parseRuntimeConfig = (
     CHAT_WS_DOMAIN: envMap.VITE_CHAT_WS_DOMAIN,
     CHAT_ERP_URL: envMap.VITE_ERP_URL,
     CHAT_PATH_TO_FILE_CDN: envMap.VITE_PATH_TO_FILE_CDN,
-    CHAT_LIVEKIT_URL: envMap.VITE_LIVEKIT_URL
+    CHAT_LIVEKIT_URL: envMap.VITE_LIVEKIT_URL,
+    CHAT_BOT_GATEWAY: envMap.VITE_BOT_GATEWAY_URL
   };
 };
 
@@ -158,7 +159,13 @@ const normalizeServerUrl = (value: string) => {
 
   const host = /[.:/]/.test(trimmedUrl) ? trimmedUrl : `${trimmedUrl}.pksep.ru`;
 
-  return `https://${host}`;
+  // Локальная разработка: localhost/127.* обслуживаются по http (нет TLS),
+  // иначе клиент форсит https и получает ERR_SSL_PROTOCOL_ERROR.
+  const protocol = /^(localhost|127\.0\.0\.1|0\.0\.0\.0)(:|$)/.test(host)
+    ? 'http'
+    : 'https';
+
+  return `${protocol}://${host}`;
 };
 
 const getRuntimeConfigUrl = (baseUrl: string) =>

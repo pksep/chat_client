@@ -1,12 +1,14 @@
 import { getAuthUser } from './useAuth';
 import {
   addTopicList,
+  createTopic,
   deleteTopic,
   deleteTopicFromList,
   getSelectedTopic,
   updateLocalTopicUser
 } from './useTopics';
 import { upsertLocalUser } from './useUsers';
+import { getConfig } from '../services/useConfig';
 import type {
   IMessage,
   ITopic,
@@ -106,6 +108,117 @@ export const createLocalBotTopic = (
   addMessageToLocal(topicId, welcomeMessage);
 
   return getSelectedTopic(topicId) || topic;
+};
+
+export type CreateBotResult = {
+  topic: ITopic;
+  token: string;
+  chatUserId: string;
+  username: string;
+};
+
+const resolveBotGatewayUrl = (): string => {
+  const base = (getConfig().CHAT_BOT_GATEWAY || '').replace(/\/+$/, '');
+
+  if (!base) {
+    throw new Error(
+      'Сервис ботов (sep-bot) не настроен: отсутствует CHAT_BOT_GATEWAY'
+    );
+  }
+
+  return base;
+};
+
+type GatewayBotResult = {
+  id?: number;
+  chat_user_id?: string;
+  username?: string;
+  display_name?: string;
+  token?: string;
+};
+
+type GatewayErrorBody = {
+  message?: string | string[];
+  error?: { message?: string };
+};
+
+// Создаёт бота через шлюз sep-bot: бот заводится как реальный пользователь
+// chat_server (is_bot=true), шлюз отдаёт API-токен, после чего открываем
+// настоящий DM с этим пользователем. Токен показывается один раз.
+export const createBotViaGateway = async (
+  payload: CreateBotPayload
+): Promise<CreateBotResult | null> => {
+  const authUser = getAuthUser();
+
+  if (!authUser?.id) {
+    throw new Error(
+      'Не удалось определить владельца: нет авторизованного пользователя'
+    );
+  }
+
+  const username = normalizeBotUsername(payload.username).toLowerCase();
+  const gateway = resolveBotGatewayUrl();
+
+  const response = await fetch(`${gateway}/bots`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Owner-Id': authUser.id
+    },
+    body: JSON.stringify({
+      username,
+      displayName: payload.name.trim()
+    })
+  });
+
+  if (!response.ok) {
+    let message = `Сервис ботов вернул ошибку ${response.status}`;
+
+    try {
+      const errorBody = (await response.json()) as GatewayErrorBody;
+      const detail = errorBody?.message ?? errorBody?.error?.message;
+      message = Array.isArray(detail) ? detail.join(', ') : detail || message;
+    } catch {
+      // тело ошибки не JSON — оставляем дефолтное сообщение
+    }
+
+    throw new Error(message);
+  }
+
+  const body = (await response.json()) as { result?: GatewayBotResult };
+  const result = body?.result;
+
+  if (!result?.chat_user_id || !result?.token) {
+    throw new Error('Сервис ботов вернул неполный ответ');
+  }
+
+  const chatUserId: string = result.chat_user_id;
+  const token: string = result.token;
+
+  // Открываем настоящий DM с только что созданным ботом-пользователем.
+  const topic = await createTopic(chatUserId);
+
+  if (!topic?.id) {
+    throw new Error('Бот создан, но не удалось открыть диалог с ним');
+  }
+
+  // Помечаем пользователя как бота локально и сохраняем токен, чтобы клиент
+  // распознавал бота, а форма редактирования показывала ключ.
+  const ex = buildBotEx(topic.user?.ex, { username, apiKey: token });
+
+  if (topic.user?.id) {
+    upsertLocalUser({
+      ...(topic.user as IUser),
+      nickname: username,
+      ex
+    });
+    updateLocalTopicUser(topic.user.id, {
+      nickname: username,
+      ex
+    });
+  }
+
+  return { topic, token, chatUserId, username };
 };
 
 export const updateLocalBotTopic = (

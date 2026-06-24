@@ -137,6 +137,7 @@ export interface IChatContainerConfig {
   CHAT_PATH_TO_FILE_CDN?: string;
   CHAT_LIVEKIT_URL?: string;
   CHAT_URL?: string;
+  CHAT_BOT_GATEWAY?: string;
 }
 
 export interface IChatContainerProps {

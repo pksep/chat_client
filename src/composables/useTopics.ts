@@ -357,7 +357,7 @@ const createTopicsApi = () => {
     }
   };
 
-  const createTopic = async (peerId: string): Promise<ITopic[]> => {
+  const createTopic = async (peerId: string): Promise<ITopic | null> => {
     loading.value = true;
     error.value = null;
 
@@ -365,12 +365,14 @@ const createTopicsApi = () => {
       const sdk = getChatSDK();
       const newTopic = await sdk.createTopic({ peerId });
 
-      topics.value = [normalizeTopic(newTopic as ITopic), ...topics.value];
+      const normalized = normalizeTopic(newTopic as ITopic);
+      topics.value = [normalized, ...topics.value];
       schedulePersistTopics();
+      return normalized;
     } catch (err) {
       error.value = (err as Error).message;
-      console.error('Failed to fetch topics:', error.value);
-      return topics.value || [];
+      console.error('Failed to create topic:', error.value);
+      return null;
     } finally {
       loading.value = false;
     }

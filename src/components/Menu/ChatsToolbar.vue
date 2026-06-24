@@ -48,8 +48,6 @@
           <GroupIcon /> Создать группу
         </Button>
         <Button
-          disabled
-          style="pointer-events: none; color: var(--grey6)"
           @click="handleCreateBot"
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.small"
