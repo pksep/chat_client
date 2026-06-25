@@ -1333,19 +1333,19 @@
 
   .call-modal__remote-grid--screen-share
     .call-modal__remote-tile.call-modal__remote-tile--local {
-    border-width: 1px;
-    border-color: #8aafff !important;
+    border-width: 2px;
+    border-color: var(--border-blue) !important;
   }
 
   .call-modal__remote-grid--screen-share
     .call-modal__remote-tile.call-modal__remote-tile--speaking {
-    border-width: 0.5px;
-    border-color: #63d38d !important;
+    border-width: 2px;
+    border-color: #57d278 !important;
   }
 
   .call-modal__remote-grid--screen-share
     .call-modal__remote-tile.call-modal__remote-tile--local.call-modal__remote-tile--speaking {
-    border-width: 1px;
+    border-width: 2px;
   }
 
   .call-modal__remote-grid--screen-share
@@ -1483,26 +1483,16 @@
   border-radius: 12px;
   overflow: hidden;
   background: #eaf1ff;
-  border: 0 solid transparent;
+  border: 2px solid transparent;
   cursor: pointer;
 }
 
 .call-modal__remote-tile--local {
-  border-width: 1px;
-  border-color: #8aafff;
-}
-
-.call-modal__remote-tile--active {
-  border-color: #63d38d;
+  border-color: var(--border-blue);
 }
 
 .call-modal__remote-tile--speaking {
-  border-width: 0.5px;
-  border-color: #63d38d;
-}
-
-.call-modal__remote-tile--local.call-modal__remote-tile--speaking {
-  border-width: 1px;
+  border-color: #57d278;
 }
 
 .call-modal__connection-quality {
@@ -1927,12 +1917,12 @@
 
   .call-modal__remote-grid--screen-share
     .call-modal__remote-tile.call-modal__remote-tile--local {
-    border-color: #8aafff !important;
+    border-color: var(--border-blue) !important;
   }
 
   .call-modal__remote-grid--screen-share
     .call-modal__remote-tile.call-modal__remote-tile--speaking {
-    border-color: #63d38d !important;
+    border-color: #57d278 !important;
   }
 
   .call-modal__remote-grid--screen-share .call-modal__avatar {
