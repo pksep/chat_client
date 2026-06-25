@@ -10,13 +10,17 @@
         v-model="internalInputText"
         ref="contentEditorRef"
         :active-attach-file="props.allowAttachFile"
-        :active-select-user="props.allowSelectUser"
+        :active-select-user="allowMentionUsers"
+        :active-select-slash="isBotChat"
         :mention-items="users"
         :mention-config="mentionConfig"
+        :slash-items="botCommands"
+        :slash-config="slashConfig"
         :read-clipboard-text="readClipboardText"
         @unmount-send="handleSend"
         @unmount-attach-file="(...args: any[]) => $emit('attachFile', ...args)"
         @mention-change="handleMentionChange"
+        @slash-change="handleSlashChange"
       >
         <template v-if="!!props.editMessage" #action>
           <div
@@ -162,6 +166,7 @@ import { getUserLastOnline } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
+import { useTopics } from '../../composables/useTopics';
 import { getConfig } from '../../services/useConfig';
 import {
   getHasWebsocketConnection,
@@ -170,6 +175,7 @@ import {
 import { bindTauriFileDrop } from '../../services/useTauriDroppedFiles';
 import { Capacitor } from '@capacitor/core';
 import { Clipboard } from '@capacitor/clipboard';
+import { isBotTopic } from '../../utils/bot';
 
 interface Props {
   dataTestid: string;
@@ -188,6 +194,12 @@ interface IContentEditorSendPayload {
   content?: string;
   files?: FileList;
   mediaFiles?: FileList;
+}
+
+interface BotCommandItem {
+  command: string;
+  description: string;
+  avatarUrl?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -246,6 +258,46 @@ const formatForwardMessagesLabel = (count: number): string => {
 
 const route = useUrlWatcher();
 const config = getConfig();
+const { getSelectedTopic } = useTopics();
+const selectedTopic = computed(() =>
+  route.value.id ? getSelectedTopic(route.value.id) : null
+);
+const isBotChat = computed(() => isBotTopic(selectedTopic.value));
+const allowMentionUsers = computed(
+  () => props.allowSelectUser && route.value.type === RouteTypes.GROUP
+);
+
+const BOT_COMMANDS: BotCommandItem[] = [
+  {
+    command: '/newbot',
+    description: 'create a new bot'
+  },
+  {
+    command: '/mybots',
+    description: 'edit your bots'
+  },
+  {
+    command: '/revoke',
+    description: 'revoke bot access token'
+  },
+  {
+    command: '/setabouttext',
+    description: 'change bot about info'
+  }
+];
+
+const BOT_FALLBACK_AVATAR = `data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg width="27" height="27" viewBox="0 0 27 27" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<rect width="27" height="27" rx="13.5" fill="url(#pattern0_39192_4744)"/>
+<defs>
+<pattern id="pattern0_39192_4744" patternContentUnits="objectBoundingBox" width="1" height="1">
+<use xlink:href="#image0_39192_4744" transform="scale(0.005)"/>
+</pattern>
+<image id="image0_39192_4744" width="200" height="200" preserveAspectRatio="none" xlink:href="data:image/png;base64,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"/>
+</defs>
+</svg>
+`
+)}`;
 
 const isAbsoluteOrLocalUrl = (path?: string | null): boolean =>
   !!path && /^(blob:|data:|https?:\/\/|file:\/\/|\/)/i.test(path);
@@ -263,7 +315,8 @@ const resolveAvatarUrl = (path?: string | null): string => {
 };
 
 const state = reactive({
-  mentionSearch: ''
+  mentionSearch: '',
+  slashSearch: ''
 });
 
 const mentionConfig = {
@@ -282,6 +335,17 @@ const mentionConfig = {
     getAuthUser()?.id !== user.id,
   getInsertLabel: (user: any) => `@${user.initials || 'User'} `,
   getInsertAttrs: (user: any) => ({ userId: user.id })
+};
+
+const slashConfig = {
+  getKey: (command: BotCommandItem) => command.command,
+  getLabel: (command: BotCommandItem) => command.command,
+  getSubtitle: (command: BotCommandItem) => command.description,
+  getAvatarUrl: (command: BotCommandItem) => command.avatarUrl || '',
+  getAvatarDefaultImage: () => BOT_FALLBACK_AVATAR,
+  getAvatarInitials: () => '',
+  getIsOnline: () => false,
+  getInsertLabel: (command: BotCommandItem) => `${command.command} `
 };
 
 const handleSend = (payload?: IContentEditorSendPayload) => {
@@ -316,6 +380,14 @@ const handleMentionChange = (search: string | null) => {
   }
 };
 
+const handleSlashChange = (search: string | null) => {
+  if (search !== null) {
+    state.slashSearch = search;
+  } else {
+    state.slashSearch = '';
+  }
+};
+
 const users = computed(() => {
   const allMembers =
     route.value.type === RouteTypes.GROUP
@@ -338,6 +410,22 @@ const users = computed(() => {
       .includes(state.mentionSearch);
     return nameMatch || erpInitialsMatch || initialsMatch;
   });
+});
+
+const botCommands = computed(() => {
+  if (!isBotChat) {
+    return [];
+  }
+
+  if (!state.slashSearch) {
+    return BOT_COMMANDS;
+  }
+
+  return BOT_COMMANDS.filter(command =>
+    `${command.command} ${command.description}`
+      .toLowerCase()
+      .includes(state.slashSearch)
+  );
 });
 
 const contentEditorRef =
