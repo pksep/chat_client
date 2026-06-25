@@ -226,7 +226,9 @@ const createTopicsApi = () => {
     normalizedTopic.typingUserIds = normalizeTypingUserIds(
       normalizedTopic.typingUserIds ?? existingTopic?.typingUserIds
     );
-    normalizedTopic.hasUnreadReaction = Boolean(resolvedUnreadReactionMessageId);
+    normalizedTopic.hasUnreadReaction = Boolean(
+      resolvedUnreadReactionMessageId
+    );
     normalizedTopic.unreadReactionMessageId = resolvedUnreadReactionMessageId;
 
     if (normalizedTopic.type === TopicType.DM && normalizedTopic.members) {
