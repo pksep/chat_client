@@ -12,7 +12,8 @@ import { useScrollAnchor } from './useScrollAnchor';
 import {
   getCanSendReadReceipts,
   markAsRead,
-  consumeBufferedIncomingMessagesForTopic
+  consumeBufferedIncomingMessagesForTopic,
+  markTopicReactionSeenChat
 } from '../../../services/useChat';
 import { getIsAppActivelyVisible } from '../../../services/useAppVisibility';
 import {
@@ -101,6 +102,7 @@ export function useMessageScroll(
       isMessageVisibleInViewport(unreadReactionMessageId)
     ) {
       clearTopicUnreadReaction(topicId);
+      void markTopicReactionSeenChat({ topicId });
     }
   };
 
@@ -238,7 +240,8 @@ export function useMessageScroll(
     try {
       await markAsRead({
         messageIds: uniqueMessageIds,
-        topicId: route.value.id
+        topicId: route.value.id,
+        reachedEnd: scrollAnchor.isNearBottom.value
       });
       if (props.user?.id) {
         changeLocalReadStatus(route.value.id, uniqueMessageIds, props.user.id);
@@ -324,7 +327,8 @@ export function useMessageScroll(
     try {
       await markAsRead({
         messageIds,
-        topicId: route.value.id
+        topicId: route.value.id,
+        reachedEnd: scrollAnchor.isNearBottom.value
       });
       if (props.user?.id) {
         changeLocalReadStatus(route.value.id, messageIds, props.user.id);
@@ -364,7 +368,8 @@ export function useMessageScroll(
       await clearTopicNotifications(route.value.id);
       await markAsRead({
         messageIds: unreadMessages.map((message: IMessage) => message.id),
-        topicId: route.value.id
+        topicId: route.value.id,
+        reachedEnd: scrollAnchor.isNearBottom.value
       });
       if (props.user?.id) {
         changeLocalReadStatus(

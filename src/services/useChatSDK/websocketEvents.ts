@@ -29,6 +29,8 @@ export enum WebSocketEventType {
   MESSAGE_DELETED = 'messageDeleted',
   TOGGLE_REACTION = 'toggleReaction',
   REACTION_UPDATED = 'reactionUpdated',
+  MARK_REACTION_SEEN = 'markReactionSeen',
+  REACTION_SEEN = 'reactionSeen',
   TOGGLE_PIN_MESSAGE = 'togglePinMessage',
   MESSAGE_PINNED = 'messagePinned',
   READ_MESSAGES = 'readMessages',
@@ -104,6 +106,7 @@ export interface WebSocketEventPayloads {
   [WebSocketEventType.READ_MESSAGE]: {
     messageIds: string[];
     topicId: string;
+    reachedEnd?: boolean;
     userId?: string;
     ptsMeta?: PtsMeta;
   };
@@ -125,6 +128,15 @@ export interface WebSocketEventPayloads {
     reaction?: Reaction;
     messageSenderUserId?: string;
     reactionSenderUserId?: string;
+    ptsMeta?: PtsMeta;
+  };
+  [WebSocketEventType.MARK_REACTION_SEEN]: {
+    topicId: string;
+  };
+  [WebSocketEventType.REACTION_SEEN]: {
+    topicId: string;
+    userId: string;
+    lastSeenReactionAt: string;
     ptsMeta?: PtsMeta;
   };
   [WebSocketEventType.MESSAGE_PINNED]: { messageId: string; isPin: boolean };
