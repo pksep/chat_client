@@ -180,6 +180,16 @@ const createTopicsApi = () => {
   const normalizeTopic = (topic: ITopic): ITopic => {
     const normalizedTopic = { ...topic };
     const existingTopic = topics.value.find(item => item.id === topic.id);
+    const trackedUnreadReactionTargets = unreadReactionTargetsByTopic.get(
+      topic.id
+    );
+    const trackedUnreadReactionMessageId = [
+      ...(trackedUnreadReactionTargets?.values() || [])
+    ].at(-1);
+    const resolvedUnreadReactionMessageId =
+      trackedUnreadReactionMessageId ||
+      normalizedTopic.unreadReactionMessageId ||
+      undefined;
     let resolvedUnreadCount = Math.max(
       0,
       normalizedTopic.unreadMessageCount || 0
@@ -216,11 +226,8 @@ const createTopicsApi = () => {
     normalizedTopic.typingUserIds = normalizeTypingUserIds(
       normalizedTopic.typingUserIds ?? existingTopic?.typingUserIds
     );
-    normalizedTopic.hasUnreadReaction =
-      normalizedTopic.hasUnreadReaction ?? existingTopic?.hasUnreadReaction;
-    normalizedTopic.unreadReactionMessageId =
-      normalizedTopic.unreadReactionMessageId ??
-      existingTopic?.unreadReactionMessageId;
+    normalizedTopic.hasUnreadReaction = Boolean(resolvedUnreadReactionMessageId);
+    normalizedTopic.unreadReactionMessageId = resolvedUnreadReactionMessageId;
 
     if (normalizedTopic.type === TopicType.DM && normalizedTopic.members) {
       normalizedTopic.user = normalizedTopic.members.find(
@@ -253,6 +260,8 @@ const createTopicsApi = () => {
       const persistedTopic = { ...topic };
       delete persistedTopic.typingUserIds;
       delete persistedTopic.activeCall;
+      delete persistedTopic.hasUnreadReaction;
+      delete persistedTopic.unreadReactionMessageId;
 
       return persistedTopic;
     });

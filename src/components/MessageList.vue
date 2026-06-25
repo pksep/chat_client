@@ -181,24 +181,46 @@
       </button>
     </section>
     <div
-      class="chat__message-bubble__arrow-down"
       v-if="isShowScrollToBottomButton || showUnreadReactionScrollButton"
-      @click="handleArrowDownClick"
+      :class="[
+        'chat__message-bubble__scroll-indicators',
+        {
+          'chat__message-bubble__scroll-indicators--with-count':
+            showUnreadCountOnScrollButton
+        }
+      ]"
     >
-      <Icon :name="IconNameEnum.arrowDown" />
-      <span
-        v-if="showUnreadCountOnScrollButton"
-        :class="{
-          'contact-list__notification': true,
-          'contact-list__notification--muted': activeTopic?.info?.isMute
-        }"
+      <button
+        v-if="showUnreadReactionScrollButton"
+        type="button"
+        class="chat__message-bubble__arrow-down chat__message-bubble__arrow-down--reaction"
+        :aria-label="'Перейти к новой реакции'"
+        @click="handleUnreadReactionClick"
       >
-        {{ visibleTopicUnreadCount }}
-      </span>
-      <ReactionHeartIcon
-        v-else-if="showUnreadReactionScrollButton"
-        class="chat__message-bubble__reaction-indicator"
-      />
+        <ReactionHeartIcon
+          variant="outline"
+          class="chat__message-bubble__reaction-indicator"
+        />
+        <span class="contact-list__notification">1</span>
+      </button>
+      <button
+        v-if="isShowScrollToBottomButton"
+        type="button"
+        class="chat__message-bubble__arrow-down"
+        :aria-label="'Перейти к новым сообщениям'"
+        @click="handleArrowDownClick"
+      >
+        <Icon :name="IconNameEnum.arrowDown" />
+        <span
+          v-if="showUnreadCountOnScrollButton"
+          :class="{
+            'contact-list__notification': true,
+            'contact-list__notification--muted': activeTopic?.info?.isMute
+          }"
+        >
+          {{ visibleTopicUnreadCount }}
+        </span>
+      </button>
     </div>
   </div>
 
@@ -288,6 +310,7 @@ import {
 } from '../services/useMessages';
 import {
   getCanSendReadReceipts,
+  markTopicReactionSeenChat,
   setSuspendIncomingMergeForTopic
 } from '../services/useChat';
 import {
@@ -643,11 +666,7 @@ const showUnreadReactionScrollButton = computed(() => {
 
   const messageId = unreadReactionMessageId.value;
 
-  return (
-    visibleTopicUnreadCount.value === 0 &&
-    !!messageId &&
-    !getIsTopicMessageVisible(route.value.id, messageId)
-  );
+  return !!messageId && !getIsTopicMessageVisible(route.value.id, messageId);
 });
 
 const {
@@ -1194,10 +1213,13 @@ const handleArrowDownClick = async (): Promise<void> => {
     return;
   }
 
+  await handleScrollToButton();
+};
+
+const handleUnreadReactionClick = async (): Promise<void> => {
   const messageId = unreadReactionMessageId.value;
 
   if (!messageId) {
-    await handleScrollToButton();
     return;
   }
 
@@ -1205,6 +1227,7 @@ const handleArrowDownClick = async (): Promise<void> => {
 
   if (didNavigate) {
     clearTopicUnreadReaction(route.value.id);
+    void markTopicReactionSeenChat({ topicId: route.value.id });
   }
 };
 
@@ -1223,6 +1246,7 @@ watch(
     }
 
     clearTopicUnreadReaction(topicId);
+    void markTopicReactionSeenChat({ topicId });
     clearPendingTopicReactionJump(topicId, pendingJump.messageId);
   },
   { immediate: true }

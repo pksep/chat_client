@@ -1025,9 +1025,14 @@ export class ChatSDK {
 
   async markMessagesAsRead(
     topicId: string,
-    messageIds: string[]
+    messageIds: string[],
+    reachedEnd = false
   ): Promise<void> {
-    this.socket.emit(WebSocketEventType.READ_MESSAGE, { messageIds, topicId });
+    this.socket.emit(WebSocketEventType.READ_MESSAGE, {
+      messageIds,
+      topicId,
+      reachedEnd
+    });
   }
 
   async uploadFile(

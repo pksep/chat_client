@@ -66,6 +66,7 @@ export type ShadowChatEventType =
   | 'delete_message'
   | 'pin_message'
   | 'reaction_updated'
+  | 'reaction_seen'
   | 'read_state'
   | 'topic_changed';
 
