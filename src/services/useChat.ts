@@ -487,6 +487,9 @@ const setupChatListeners = (): void => {
       getIsAppActivelyVisible() &&
       getIsTopicMessageVisible(payload.topicId, payload.messageId)
     ) {
+      void markTopicReactionSeenChat({
+        topicId: payload.topicId
+      });
       return;
     }
 
@@ -496,6 +499,28 @@ const setupChatListeners = (): void => {
       payload.reaction?.id || payload.reactionId,
       payload.messageId
     );
+  };
+
+  const handleReactionSeenPayload = (payload: {
+    topicId: string;
+    userId: string;
+    lastSeenReactionAt: string;
+    ptsMeta?: PtsMeta;
+  }): void => {
+    persistPtsMeta(payload.ptsMeta);
+
+    void recordShadowChatEvent({
+      topicId: payload.topicId,
+      type: 'reaction_seen',
+      source: 'ws',
+      payload
+    });
+
+    if (payload.userId !== currentUserId.value) {
+      return;
+    }
+
+    clearTopicUnreadReaction(payload.topicId);
   };
 
   const handleUserUpdatedPayload = (payload: {
@@ -589,6 +614,10 @@ const setupChatListeners = (): void => {
     }
   );
 
+  chatSDK.subscribeToEvent(WebSocketEventType.REACTION_SEEN, ({ payload }) => {
+    handleReactionSeenPayload(payload);
+  });
+
   chatSDK.subscribeToEvent(WebSocketEventType.SYNC_REPLAY, ({ payload }) => {
     payload.events.forEach(event => {
       const ptsMeta: PtsMeta = {
@@ -618,6 +647,12 @@ const setupChatListeners = (): void => {
           break;
         case 'message.reaction':
           handleReactionPayload({
+            ...(event.payload as any),
+            ptsMeta
+          });
+          break;
+        case 'message.reaction_seen':
+          handleReactionSeenPayload({
             ...(event.payload as any),
             ptsMeta
           });
@@ -1302,6 +1337,29 @@ export const setReactionMessage = async (params: {
   }
 };
 
+export const markTopicReactionSeenChat = async (params: {
+  topicId: string;
+}): Promise<boolean> => {
+  const sdk = getChatSDK();
+
+  try {
+    if (!sdk) {
+      return false;
+    }
+
+    return sdk.sendWebSocketEvent(
+      WebSocketEventType.MARK_REACTION_SEEN,
+      params
+    );
+  } catch (error) {
+    console.error(
+      '[ChatSDK] Failed to send reaction seen via WebSocket:',
+      error
+    );
+    return false;
+  }
+};
+
 export const uploadFile = async (
   file: File,
   previewMeta?: MediaPreviewDimensions,
@@ -1402,12 +1460,13 @@ export const getIsRecentlyReconnected = () => isRecentlyReconnected.value;
 export const markAsRead = async (dto: {
   messageIds: string[];
   topicId: string;
+  reachedEnd?: boolean;
 }): Promise<void> => {
   const sdk = getChatSDK();
-  const { messageIds, topicId } = dto;
+  const { messageIds, topicId, reachedEnd = false } = dto;
 
   if (messageIds.length === 0) return;
 
-  await sdk.markMessagesAsRead(topicId, messageIds);
+  await sdk.markMessagesAsRead(topicId, messageIds, reachedEnd);
   await clearTopicNotifications(topicId);
 };
