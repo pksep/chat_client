@@ -413,7 +413,7 @@ const users = computed(() => {
 });
 
 const botCommands = computed(() => {
-  if (!isBotChat) {
+  if (!isBotChat.value) {
     return [];
   }
 
