@@ -170,6 +170,63 @@
   justify-content: center;
 }
 
+.call-modal__audio-output-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.call-modal__audio-output-button {
+  padding: 0 !important;
+}
+
+.call-modal__audio-output-menu {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 16px);
+  width: 280px;
+  max-width: calc(100vw - 48px);
+  padding: 18px 20px;
+  border-radius: 20px;
+  background: var(--white);
+  box-shadow: 0 14px 32px rgba(24, 43, 87, 0.18);
+  transform: translateX(-50%);
+  z-index: 13;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.call-modal__audio-output-option {
+  width: 100%;
+  min-height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font: inherit;
+  font-size: 18px;
+  line-height: 24px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.call-modal__audio-output-option:hover {
+  background: var(--blue12);
+}
+
+.call-modal__audio-output-option svg {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  color: currentColor;
+}
+
 .call-modal__reaction-popover {
   position: absolute;
   left: 50%;
@@ -1162,6 +1219,7 @@
 
 .call-modal__control-button-wrapper--incoming {
   gap: 50px !important;
+  width: min-content;
 }
 
 .call-modal__video {
@@ -1999,6 +2057,12 @@
 
   .call-modal__reaction-popover {
     bottom: calc(100% + 28px);
+  }
+
+  .call-modal__audio-output-menu {
+    left: 0;
+    bottom: calc(100% + 28px);
+    transform: none;
   }
 
   .call-modal__group-panel-background-select {
