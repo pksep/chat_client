@@ -10,6 +10,7 @@ import {
   formattedTime,
   handleCallAnswered as handleLiveKitAnswered,
   handleCallEnded as handleLiveKitEnded,
+  handleCallParticipantLeft as handleLiveKitParticipantLeft,
   hydrateInvitedGroupCallFromUrl,
   isCalling,
   isIncoming,
@@ -93,6 +94,14 @@ export const handleCallEnded = (
   return handleLiveKitEnded(roomId, topicId, reason, userId);
 };
 
+export const handleCallParticipantLeft = (
+  participantId: string,
+  roomId?: string,
+  topicId?: string | null
+) => {
+  return handleLiveKitParticipantLeft(participantId, roomId, topicId);
+};
+
 export const dismissIncomingCall = (
   roomId?: string,
   topicId?: string | null
@@ -113,9 +122,10 @@ export const syncServerActiveCalls = (
     participantCount?: number;
     groupMode?: boolean;
     elapsedDurationMs?: number;
-  }>
+  }>,
+  replace = true
 ) => {
-  return syncActiveCalls(calls);
+  return syncActiveCalls(calls, replace);
 };
 
 export const removeActiveGroupCall = (topicId?: string) => {
