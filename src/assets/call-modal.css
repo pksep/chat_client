@@ -359,8 +359,7 @@
   transition: background-color 0.2s ease;
 }
 
-.call-modal__mobile-actions-item:hover:not(:disabled),
-.call-modal__mobile-actions-item--active {
+.call-modal__mobile-actions-item:hover:not(:disabled) {
   background: var(--blue12);
 }
 

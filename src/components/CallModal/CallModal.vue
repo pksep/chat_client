@@ -73,10 +73,6 @@
             >
               <button
                 class="call-modal__mobile-actions-item"
-                :class="{
-                  'call-modal__mobile-actions-item--active':
-                    liveKitState.isScreenSharingActive
-                }"
                 type="button"
                 :disabled="
                   isBusyNoticeVisible || isScreenShareUnavailableOnMobile
@@ -632,7 +628,6 @@ import CachedAvatar from '../UI/CachedAvatar.vue';
 import ErrorIcon from '../UI/ErrorIcon.vue';
 import FullscreenIcon from './UI/FullscreenIcon.vue';
 import MinimizeIcon from './UI/MinimizeIcon.vue';
-import VolumeIcon from './UI/VolumeIcon.vue';
 import AudioOutputBluetoothIcon from './UI/AudioOutputBluetoothIcon.vue';
 import AudioOutputPhoneIcon from './UI/AudioOutputPhoneIcon.vue';
 import AudioOutputSpeakerIcon from './UI/AudioOutputSpeakerIcon.vue';
