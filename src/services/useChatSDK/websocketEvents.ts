@@ -68,7 +68,8 @@ export enum WebSocketEventType {
   ANSWER_CALL = 'answerCall',
   CALL_ANSWERED = 'callAnswered',
   END_CALL = 'endCall',
-  CALL_ENDED = 'callEnded'
+  CALL_ENDED = 'callEnded',
+  CALL_PARTICIPANT_LEFT = 'callParticipantLeft'
 }
 
 export interface WebSocketEventPayloads {
@@ -202,6 +203,7 @@ export interface WebSocketEventPayloads {
       groupMode?: boolean;
       elapsedDurationMs?: number;
     }>;
+    replace?: boolean;
   };
   [WebSocketEventType.START_CALL]: {
     userId: string;
@@ -234,6 +236,11 @@ export interface WebSocketEventPayloads {
     roomId: string;
     topicId?: string | null;
     reason?: 'busy';
+  };
+  [WebSocketEventType.CALL_PARTICIPANT_LEFT]: {
+    participantId: string;
+    roomId: string;
+    topicId?: string | null;
   };
   [WebSocketEventType.INCOMING_CALL]: {
     roomId: string;

@@ -228,6 +228,10 @@ const remoteReconnectingParticipants = new Map<
   string,
   RemoteReconnectingParticipantEntry
 >();
+const remoteExplicitlyLeftParticipants = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+>();
 const { selectedCallBackgroundImageUrl, selectedCallBackgroundMode } =
   useCallBackground();
 
@@ -237,11 +241,13 @@ const DISMISSED_INCOMING_CALL_TTL_MS = 15000;
 const CALL_STATUS_NOTICE_CLOSE_DELAY_MS = 3000;
 const ENDED_CALL_STATUS_NOTICE_CLOSE_DELAY_MS = 1200;
 const DIRECT_CALL_RECONNECT_GRACE_MS = 180000;
+const DIRECT_CALL_EXPLICIT_LEAVE_SUPPRESSION_MS = 30000;
 const DIRECT_CALL_RECONNECT_POLL_MS = 2000;
 const DIRECT_CALL_RECONNECT_FAILED_NOTICE = 'Не удалось восстановить звонок';
 const DIRECT_CALL_ENDED_NOTICE = 'Звонок завершён';
 const CALL_RECONNECT_NOTICE = 'Связь прервана. Переподключение';
 const OTHER_DEVICE_CONNECTED_NOTICE = 'Звонок открыт на другом устройстве';
+const GROUP_CALL_INVITE_TITLE = 'Групповой звонок';
 const dismissedIncomingCallRooms = new Map<string, number>();
 const dismissedIncomingCallTopics = new Map<string, number>();
 const CAMERA_CAPTURE_DEFAULTS = {
@@ -2018,6 +2024,33 @@ const clearRemoteReconnectingParticipants = () => {
   remoteReconnectingParticipants.clear();
 };
 
+const clearRemoteExplicitlyLeftParticipant = (identity: string) => {
+  const timeout = remoteExplicitlyLeftParticipants.get(identity);
+
+  if (timeout) {
+    clearTimeout(timeout);
+  }
+
+  remoteExplicitlyLeftParticipants.delete(identity);
+};
+
+const clearRemoteExplicitlyLeftParticipants = () => {
+  remoteExplicitlyLeftParticipants.forEach(timeout => {
+    clearTimeout(timeout);
+  });
+  remoteExplicitlyLeftParticipants.clear();
+};
+
+const markRemoteParticipantExplicitlyLeft = (identity: string) => {
+  clearRemoteExplicitlyLeftParticipant(identity);
+  remoteExplicitlyLeftParticipants.set(
+    identity,
+    setTimeout(() => {
+      remoteExplicitlyLeftParticipants.delete(identity);
+    }, DIRECT_CALL_EXPLICIT_LEAVE_SUPPRESSION_MS)
+  );
+};
+
 const shouldKeepRemoteParticipantForReconnect = (): boolean =>
   isRecoverableDirectCallSession(roomId.value, topicId.value);
 
@@ -2076,7 +2109,10 @@ const buildRemoteReconnectingParticipantState = (
 const markRemoteParticipantReconnecting = (
   participant: Participant | RemoteParticipant
 ) => {
-  if (!shouldKeepRemoteParticipantForReconnect()) {
+  if (
+    remoteExplicitlyLeftParticipants.has(participant.identity) ||
+    !shouldKeepRemoteParticipantForReconnect()
+  ) {
     clearRemoteReconnectingParticipant(participant.identity);
     return;
   }
@@ -2118,7 +2154,11 @@ const syncRemoteParticipantState = () => {
 
   const nextRemoteParticipants = Array.from(
     activeRoom.remoteParticipants.values()
-  ).map(buildRemoteParticipantState);
+  )
+    .filter(
+      participant => !remoteExplicitlyLeftParticipants.has(participant.identity)
+    )
+    .map(buildRemoteParticipantState);
   const activeParticipantIds = new Set(
     nextRemoteParticipants.map(participant => participant.identity)
   );
@@ -2734,6 +2774,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncRemoteParticipantSpeakingState();
     })
     .on(RoomEvent.ParticipantConnected, participant => {
+      clearRemoteExplicitlyLeftParticipant(participant.identity);
       clearRemoteReconnectingParticipant(participant.identity);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
@@ -3095,6 +3136,7 @@ const resetMediaState = () => {
   videoToggleOperation = null;
   localVideoStream.value = null;
   localScreenShareStream.value = null;
+  clearRemoteExplicitlyLeftParticipants();
   clearRemoteReconnectingParticipants();
   remoteParticipants.value = [];
   handRaisedParticipants.value = {};
@@ -3253,6 +3295,37 @@ export const startLiveKitGroupCall = async (currentTopicId: string) => {
   if (startAck?.accepted === false) {
     return;
   }
+
+  const resolvedRoomId = roomId.value || activeRoomId;
+  activeGroupCalls.value = {
+    ...activeGroupCalls.value,
+    [currentTopicId]: {
+      roomId: resolvedRoomId,
+      topicId: currentTopicId,
+      caller: me as any,
+      startTime: callStartedAt.value,
+      participantCount: 1,
+      groupMode: true,
+      elapsedDurationMs: startAck?.elapsedDurationMs ?? 0
+    }
+  };
+
+  const topicsApi = useTopics();
+  topicsApi.topics.value = topicsApi.topics.value.map(topic =>
+    topic.id === currentTopicId
+      ? {
+          ...topic,
+          activeCall: {
+            roomId: resolvedRoomId,
+            startTime: callStartedAt.value,
+            participantCount: 1,
+            callType: 'livekit',
+            groupMode: true,
+            elapsedDurationMs: startAck?.elapsedDurationMs ?? 0
+          }
+        }
+      : topic
+  );
 
   await connectToRoom();
 };
@@ -3616,7 +3689,7 @@ export const hydrateInvitedGroupCallFromUrl = async (): Promise<boolean> => {
     roomId: preview.roomId,
     topicId: preview.topicId,
     inviteToken: inviteParams.inviteToken,
-    title: preview.title,
+    title: GROUP_CALL_INVITE_TITLE,
     avatarUrl: preview.avatarUrl || null,
     startTime: preview.startTime ?? null,
     elapsedDurationMs: preview.elapsedDurationMs ?? 0,
@@ -3932,6 +4005,45 @@ export const handleCallEnded = (
   return true;
 };
 
+export const handleCallParticipantLeft = (
+  participantId: string,
+  leftRoomId?: string | null,
+  leftTopicId?: string | null
+): boolean => {
+  const matchesCurrentCall =
+    (leftRoomId && roomId.value === leftRoomId) ||
+    (leftTopicId && topicId.value === leftTopicId);
+
+  if (!matchesCurrentCall) {
+    return false;
+  }
+
+  const me = getAuthUser();
+
+  if (me?.id === participantId) {
+    cleanup();
+    return true;
+  }
+
+  markRemoteParticipantExplicitlyLeft(participantId);
+  clearRemoteReconnectingParticipant(participantId);
+  clearPendingRemoteAudioResubscribeTimeouts(participantId);
+  clearParticipantReaction(participantId, false);
+
+  const nextHandRaisedParticipants = { ...handRaisedParticipants.value };
+  delete nextHandRaisedParticipants[participantId];
+  handRaisedParticipants.value = nextHandRaisedParticipants;
+
+  remoteParticipants.value = remoteParticipants.value.filter(
+    participant => participant.identity !== participantId
+  );
+  isRemoteVideoActive.value = remoteParticipants.value.some(
+    participant => participant.isVideoActive
+  );
+
+  return true;
+};
+
 export const dismissIncomingCallState = (
   targetRoomId?: string,
   targetTopicId?: string
@@ -3980,47 +4092,55 @@ export const syncActiveCalls = async (
     participantCount?: number;
     groupMode?: boolean;
     elapsedDurationMs?: number;
-  }>
+  }>,
+  replace = true
 ) => {
   const previousActiveGroupCalls = activeGroupCalls.value;
-  const validatedCalls = await Promise.all(
+  const nextActiveGroupCalls = replace ? {} : { ...previousActiveGroupCalls };
+  const resolvedCalls = await Promise.all(
     calls.map(async call => {
-      const status = await getLiveKitCallStatus(call.roomId, call.topicId);
+      const status = await getRawLiveKitCallStatus(call.roomId);
 
-      if (status?.active === false) {
-        return null;
+      if (!status) {
+        return { call, status: undefined };
+      }
+
+      if (status.active !== true) {
+        clearUnavailableCallState(call.roomId, call.topicId);
+        return { call, status: null };
       }
 
       return {
-        ...call,
-        startTime: status?.startTime ?? call.startTime,
-        participantCount: status?.participantCount ?? call.participantCount,
-        groupMode: status?.groupMode ?? call.groupMode,
-        elapsedDurationMs:
-          status?.elapsedDurationMs ?? call.elapsedDurationMs ?? 0
+        call,
+        status
       };
     })
   );
 
-  activeGroupCalls.value = validatedCalls.reduce<
-    Record<string, ActiveGroupCallEntry>
-  >((acc, call) => {
+  resolvedCalls.forEach(({ call, status }) => {
     if (!call || !call.topicId) {
-      return acc;
+      return;
+    }
+
+    if (status === null) {
+      delete nextActiveGroupCalls[call.topicId];
+      return;
     }
 
     const previousEntry = previousActiveGroupCalls[call.topicId];
-    acc[call.topicId] = {
+    nextActiveGroupCalls[call.topicId] = {
       roomId: call.roomId,
       topicId: call.topicId,
       caller: previousEntry?.caller,
-      startTime: call.startTime,
-      participantCount: call.participantCount,
-      groupMode: call.groupMode,
-      elapsedDurationMs: call.elapsedDurationMs
+      startTime: status?.startTime ?? call.startTime,
+      participantCount: status?.participantCount ?? call.participantCount,
+      groupMode: status?.groupMode ?? call.groupMode,
+      elapsedDurationMs:
+        status?.elapsedDurationMs ?? call.elapsedDurationMs ?? 0
     };
-    return acc;
-  }, {});
+  });
+
+  activeGroupCalls.value = nextActiveGroupCalls;
 
   const topicsApi = useTopics();
   topicsApi.topics.value = topicsApi.topics.value.map(topic => {

@@ -48,6 +48,7 @@ import {
   handleIncomingCall,
   handleCallAnswered,
   handleCallEnded,
+  handleCallParticipantLeft,
   dismissIncomingCall,
   removeActiveGroupCall,
   removeInvitedGroupCall,
@@ -741,7 +742,7 @@ const setupChatListeners = (): void => {
   );
 
   chatSDK.subscribeToEvent(WebSocketEventType.ACTIVE_CALLS, ({ payload }) => {
-    void syncServerActiveCalls(payload.calls);
+    void syncServerActiveCalls(payload.calls, payload.replace ?? true);
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CALL_ENDED, ({ payload }) => {
@@ -786,6 +787,17 @@ const setupChatListeners = (): void => {
       }
     }
   });
+
+  chatSDK.subscribeToEvent(
+    WebSocketEventType.CALL_PARTICIPANT_LEFT,
+    ({ payload }) => {
+      handleCallParticipantLeft(
+        payload.participantId,
+        payload.roomId,
+        payload.topicId
+      );
+    }
+  );
 };
 
 let isVisibilityListenerAdded = false;
