@@ -73,10 +73,6 @@
             >
               <button
                 class="call-modal__mobile-actions-item"
-                :class="{
-                  'call-modal__mobile-actions-item--active':
-                    liveKitState.isScreenSharingActive
-                }"
                 type="button"
                 :disabled="
                   isBusyNoticeVisible || isScreenShareUnavailableOnMobile
@@ -212,18 +208,35 @@
           <div
             class="call-modal__control-button-wrapper call-modal__control-button-wrapper--call-controls"
           >
-            <button
+            <div
               v-if="Capacitor.isNativePlatform()"
-              class="call-modal__control-button"
-              :class="{
-                'call-modal__control-button__inactive':
-                  !!liveKitState.isSpeakerActive
-              }"
-              :disabled="isBusyNoticeVisible"
-              @click="handleToggleAudioOutput"
+              class="call-modal__audio-output-picker"
             >
-              <VolumeIcon />
-            </button>
+              <button
+                class="call-modal__control-button call-modal__audio-output-button"
+                :disabled="isBusyNoticeVisible"
+                type="button"
+                @click.stop="handleToggleAudioOutput('main')"
+              >
+                <component :is="audioOutputButtonIcon" active />
+              </button>
+              <div
+                v-if="activeAudioOutputMenu === 'main'"
+                class="call-modal__audio-output-menu"
+                @click.stop
+              >
+                <button
+                  v-for="option in audioOutputRouteOptions"
+                  :key="option.route"
+                  class="call-modal__audio-output-option"
+                  type="button"
+                  @click="handleSelectAudioOutputRoute(option.route)"
+                >
+                  <component :is="audioOutputRouteIcons[option.route]" />
+                  <span>{{ option.label }}</span>
+                </button>
+              </div>
+            </div>
 
             <button
               v-if="liveKitState.isMicActive"
@@ -433,17 +446,34 @@
           <div
             class="call-modal__control-button-wrapper call-modal__control-button-wrapper--call-controls"
           >
-            <button
+            <div
               v-if="Capacitor.isNativePlatform()"
-              class="call-modal__control-button"
-              :class="{
-                'call-modal__control-button__inactive':
-                  !liveKitState.isSpeakerActive
-              }"
-              @click="handleToggleAudioOutput"
+              class="call-modal__audio-output-picker"
             >
-              <VolumeIcon />
-            </button>
+              <button
+                class="call-modal__control-button call-modal__audio-output-button"
+                type="button"
+                @click.stop="handleToggleAudioOutput('overlay')"
+              >
+                <component :is="audioOutputButtonIcon" active />
+              </button>
+              <div
+                v-if="activeAudioOutputMenu === 'overlay'"
+                class="call-modal__audio-output-menu"
+                @click.stop
+              >
+                <button
+                  v-for="option in audioOutputRouteOptions"
+                  :key="option.route"
+                  class="call-modal__audio-output-option"
+                  type="button"
+                  @click="handleSelectAudioOutputRoute(option.route)"
+                >
+                  <component :is="audioOutputRouteIcons[option.route]" />
+                  <span>{{ option.label }}</span>
+                </button>
+              </div>
+            </div>
 
             <button
               v-if="liveKitState.isMicActive"
@@ -581,6 +611,7 @@
 
 <script setup lang="ts">
 import {
+  type Component,
   type CSSProperties,
   computed,
   nextTick,
@@ -597,7 +628,9 @@ import CachedAvatar from '../UI/CachedAvatar.vue';
 import ErrorIcon from '../UI/ErrorIcon.vue';
 import FullscreenIcon from './UI/FullscreenIcon.vue';
 import MinimizeIcon from './UI/MinimizeIcon.vue';
-import VolumeIcon from './UI/VolumeIcon.vue';
+import AudioOutputBluetoothIcon from './UI/AudioOutputBluetoothIcon.vue';
+import AudioOutputPhoneIcon from './UI/AudioOutputPhoneIcon.vue';
+import AudioOutputSpeakerIcon from './UI/AudioOutputSpeakerIcon.vue';
 import MicIcon from './UI/MicIcon.vue';
 import VideoIcon from './UI/VideoIcon.vue';
 import MicDisableIcon from './UI/MicDisableIcon.vue';
@@ -627,12 +660,13 @@ import {
   localScreenShareStream,
   open as isCallOpen,
   remoteParticipants,
+  refreshAudioOutputRoutes,
   sendCallReaction,
+  selectAudioOutputRoute,
   state as liveKitState,
   toggleHandRaise,
   toggleMic,
   toggleScreenShare,
-  toggleSpeaker,
   switchCamera,
   toggleVideo,
   topicId as activeTopicId,
@@ -640,7 +674,7 @@ import {
   user as activeUser
 } from '../../services/useLiveKit';
 import type { CallReaction } from '../../services/useLiveKit';
-import { AudioOutput } from '../../services/useAudioOutput';
+import type { AudioOutputRoute } from '../../services/useAudioOutput';
 import {
   disableProximityLock,
   enableProximityLock
@@ -1091,6 +1125,7 @@ const state = ref({
   mobileCallActionsOpen: false
 });
 const activeReactionPopover = ref<'main' | 'overlay' | null>(null);
+const activeAudioOutputMenu = ref<'main' | 'overlay' | null>(null);
 let reactionPopoverCloseTimeout: ReturnType<typeof setTimeout> | null = null;
 let reactionLongPressTimeout: ReturnType<typeof setTimeout> | null = null;
 let didOpenReactionPopoverByLongPress = false;
@@ -1102,6 +1137,33 @@ const fewParticipantsLabel = 'участника';
 const manyParticipantsLabel = 'участников';
 const callLabel = 'Звонок';
 const groupCallLabel = 'Групповой звонок';
+type SelectableAudioOutputRoute = Exclude<AudioOutputRoute, 'auto'>;
+const audioOutputRouteOrder: SelectableAudioOutputRoute[] = [
+  'earpiece',
+  'speaker',
+  'bluetooth'
+];
+const audioOutputRouteLabels: Record<SelectableAudioOutputRoute, string> = {
+  bluetooth: 'Bluetooth-устройства',
+  earpiece: 'Телефон',
+  speaker: 'Динамик'
+};
+const audioOutputRouteIcons = {
+  bluetooth: AudioOutputBluetoothIcon,
+  earpiece: AudioOutputPhoneIcon,
+  speaker: AudioOutputSpeakerIcon
+} satisfies Record<SelectableAudioOutputRoute, Component>;
+const audioOutputButtonIcon = computed(
+  () => audioOutputRouteIcons[liveKitState.audioOutputRoute]
+);
+const audioOutputRouteOptions = computed(() =>
+  audioOutputRouteOrder
+    .filter(route => liveKitState.audioOutputAvailableRoutes.includes(route))
+    .map(route => ({
+      route,
+      label: audioOutputRouteLabels[route]
+    }))
+);
 const participantOrder = ref<string[]>([]);
 const callReactionOptions: Array<{
   reaction: CallReaction;
@@ -2077,30 +2139,35 @@ watch(
   { immediate: true }
 );
 
-watch([isCallOpen, isIncoming, isCalling], ([open, incoming]) => {
-  if (open) {
-    showIncomingCallScreen();
+watch(
+  [isCallOpen, isIncoming, isCalling, () => liveKitState.audioOutputRoute],
+  ([open, incoming]) => {
+    if (open) {
+      showIncomingCallScreen();
 
-    if (!incoming) {
-      if (!liveKitState.isSpeakerActive) {
-        enableProximityLock();
-      } else {
-        disableProximityLock();
+      if (!incoming) {
+        if (liveKitState.audioOutputRoute === 'earpiece') {
+          enableProximityLock();
+        } else {
+          disableProximityLock();
+        }
       }
-
-      if (Capacitor.isNativePlatform()) {
-        AudioOutput.toggleAudio({
-          useSpeaker: liveKitState.isSpeakerActive
-        }).catch(err =>
-          console.warn('Failed to set initial audio output:', err)
-        );
-      }
+    } else {
+      closeAudioOutputMenu();
+      hideIncomingCallScreen();
+      disableProximityLock();
     }
-  } else {
-    hideIncomingCallScreen();
-    disableProximityLock();
   }
-});
+);
+
+watch(
+  () => liveKitState.audioOutputAvailableRoutes.includes('bluetooth'),
+  hasBluetoothRoute => {
+    if (!hasBluetoothRoute) {
+      closeAudioOutputMenu();
+    }
+  }
+);
 
 onMounted(() => {
   if (typeof ResizeObserver !== 'undefined') {
@@ -2338,16 +2405,58 @@ const closeMobileCallActionsMenu = () => {
   state.value.mobileCallActionsOpen = false;
 };
 
+const closeAudioOutputMenu = () => {
+  activeAudioOutputMenu.value = null;
+};
+
 const toggleMobileCallActionsMenu = () => {
   if (isBusyNoticeVisible.value) {
     return;
   }
 
+  closeAudioOutputMenu();
   state.value.mobileCallActionsOpen = !state.value.mobileCallActionsOpen;
+};
+
+const handleToggleAudioOutput = async (target: 'main' | 'overlay') => {
+  if (isBusyNoticeVisible.value) {
+    return;
+  }
+
+  closeReactionPopover();
+  closeMobileCallActionsMenu();
+
+  if (activeAudioOutputMenu.value === target) {
+    closeAudioOutputMenu();
+    return;
+  }
+
+  const audioState = await refreshAudioOutputRoutes();
+  const hasBluetoothRoute =
+    audioState?.availableRoutes.includes('bluetooth') ||
+    liveKitState.audioOutputAvailableRoutes.includes('bluetooth');
+
+  if (!hasBluetoothRoute) {
+    closeAudioOutputMenu();
+    await selectAudioOutputRoute(
+      liveKitState.audioOutputRoute === 'speaker' ? 'earpiece' : 'speaker'
+    );
+    return;
+  }
+
+  activeAudioOutputMenu.value = target;
+};
+
+const handleSelectAudioOutputRoute = async (
+  route: SelectableAudioOutputRoute
+) => {
+  await selectAudioOutputRoute(route);
+  closeAudioOutputMenu();
 };
 
 const openGroupInfoPanel = () => {
   closeMobileCallActionsMenu();
+  closeAudioOutputMenu();
   state.value.openGroupInfoModal = true;
 };
 
@@ -2372,10 +2481,6 @@ const handleOpenGroupInfoChat = (): boolean => {
   isCallModalVisible.value = false;
 
   return true;
-};
-
-const handleToggleAudioOutput = () => {
-  toggleSpeaker();
 };
 
 const handleToggleMic = async () => {

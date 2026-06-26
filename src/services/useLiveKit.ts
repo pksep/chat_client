@@ -1,5 +1,5 @@
 import { App } from '@capacitor/app';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
 import {
   BackgroundProcessor,
   type BackgroundProcessorWrapper
@@ -33,7 +33,11 @@ import {
   playNativeNotificationSound,
   shouldPlayNotificationSound
 } from './useNotificationSoundPolicy';
-import { AudioOutput } from './useAudioOutput';
+import {
+  AudioOutput,
+  type AudioOutputRoute,
+  type AudioOutputState
+} from './useAudioOutput';
 import {
   isAndroidScreenSharePlatform,
   prepareAndroidScreenShare,
@@ -172,6 +176,11 @@ const state = reactive({
   isVideoActive: false,
   isScreenSharingActive: false,
   isSpeakerActive: false,
+  audioOutputRoute: 'earpiece' as Exclude<AudioOutputRoute, 'auto'>,
+  audioOutputDefaultRoute: 'earpiece' as Exclude<AudioOutputRoute, 'auto'>,
+  audioOutputAvailableRoutes: ['earpiece', 'speaker'] as Array<
+    Exclude<AudioOutputRoute, 'auto'>
+  >,
   isFullScreen: false,
   isHandRaised: false,
   isSpeaking: false,
@@ -191,6 +200,8 @@ let isNativeAppInBackground = false;
 let directCallRecoveryWaitForRemote = false;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
 let dialingTimeout: ReturnType<typeof setTimeout> | null = null;
+let audioOutputRouteListener: PluginListenerHandle | null = null;
+let isAudioOutputRouteListenerBound = false;
 let dialingSoundWatchdogInterval: ReturnType<typeof setInterval> | null = null;
 let dialingAudioContext: AudioContext | null = null;
 let dialingAudioBuffer: AudioBuffer | null = null;
@@ -248,6 +259,10 @@ const DIRECT_CALL_ENDED_NOTICE = 'Звонок завершён';
 const CALL_RECONNECT_NOTICE = 'Связь прервана. Переподключение';
 const OTHER_DEVICE_CONNECTED_NOTICE = 'Звонок открыт на другом устройстве';
 const GROUP_CALL_INVITE_TITLE = 'Групповой звонок';
+const DEFAULT_AUDIO_OUTPUT_ROUTES: Array<Exclude<AudioOutputRoute, 'auto'>> = [
+  'earpiece',
+  'speaker'
+];
 const dismissedIncomingCallRooms = new Map<string, number>();
 const dismissedIncomingCallTopics = new Map<string, number>();
 const CAMERA_CAPTURE_DEFAULTS = {
@@ -842,6 +857,109 @@ const showTransientCallStatusNotice = (
 
     cleanup(true);
   }, closeDelayMs);
+};
+
+const applyAudioOutputState = (audioState?: AudioOutputState | null) => {
+  const availableRoutes = audioState?.availableRoutes?.length
+    ? audioState.availableRoutes
+    : DEFAULT_AUDIO_OUTPUT_ROUTES;
+  const defaultRoute = audioState?.defaultRoute || 'earpiece';
+  const fallbackRoute = availableRoutes.includes(defaultRoute)
+    ? defaultRoute
+    : 'earpiece';
+  const currentRoute =
+    audioState?.currentRoute &&
+    availableRoutes.includes(audioState.currentRoute)
+      ? audioState.currentRoute
+      : fallbackRoute;
+
+  state.audioOutputAvailableRoutes = availableRoutes;
+  state.audioOutputRoute = currentRoute;
+  state.audioOutputDefaultRoute = defaultRoute;
+  state.isSpeakerActive = currentRoute === 'speaker';
+};
+
+export const refreshAudioOutputRoutes = async () => {
+  if (!Capacitor.isNativePlatform()) {
+    applyAudioOutputState(null);
+    return null;
+  }
+
+  try {
+    const audioState = await AudioOutput.getState();
+    applyAudioOutputState(audioState);
+    return audioState;
+  } catch (error) {
+    console.warn('[LiveKit] Failed to read audio output routes:', error);
+    applyAudioOutputState(null);
+    return null;
+  }
+};
+
+export const selectAudioOutputRoute = async (route: AudioOutputRoute) => {
+  if (!Capacitor.isNativePlatform()) {
+    const nextRoute = route === 'speaker' ? 'speaker' : 'earpiece';
+    applyAudioOutputState({
+      currentRoute: nextRoute,
+      defaultRoute: 'earpiece',
+      availableRoutes: DEFAULT_AUDIO_OUTPUT_ROUTES,
+      bluetoothAvailable: false
+    });
+    return;
+  }
+
+  try {
+    const audioState = await AudioOutput.setRoute({ route });
+    applyAudioOutputState(audioState);
+  } catch (error) {
+    console.warn('[LiveKit] Audio output route failed:', error);
+    await refreshAudioOutputRoutes();
+  }
+};
+
+const handleNativeAudioRouteChanged = async (audioState: AudioOutputState) => {
+  const wasBluetoothActive = state.audioOutputRoute === 'bluetooth';
+  const wasBluetoothAvailable =
+    state.audioOutputAvailableRoutes.includes('bluetooth');
+  const isBluetoothAvailable = audioState.availableRoutes.includes('bluetooth');
+
+  if (wasBluetoothActive && !isBluetoothAvailable) {
+    await selectAudioOutputRoute('earpiece');
+    return;
+  }
+
+  if (open.value && !wasBluetoothAvailable && isBluetoothAvailable) {
+    await selectAudioOutputRoute('bluetooth');
+    return;
+  }
+
+  applyAudioOutputState(audioState);
+};
+
+const setupAudioOutputRouteListener = () => {
+  if (
+    !Capacitor.isNativePlatform() ||
+    isAudioOutputRouteListenerBound ||
+    audioOutputRouteListener
+  ) {
+    return;
+  }
+
+  isAudioOutputRouteListenerBound = true;
+  AudioOutput.addListener('audioRouteChanged', audioState => {
+    void handleNativeAudioRouteChanged(audioState);
+  })
+    .then(listener => {
+      audioOutputRouteListener = listener;
+    })
+    .catch(error => {
+      isAudioOutputRouteListenerBound = false;
+      console.warn('[LiveKit] Failed to listen audio output routes:', error);
+    });
+};
+
+const applyDefaultAudioOutputRoute = async () => {
+  await selectAudioOutputRoute('auto');
 };
 
 const isGroupCallSession = (targetTopicId?: string | null): boolean => {
@@ -3068,6 +3186,8 @@ const connectToRoom = async () => {
       return;
     }
 
+    await applyDefaultAudioOutputRoute();
+
     await setLocalMicrophoneEnabled(nextRoom, state.isMicActive);
     if (state.isVideoActive) {
       if (shouldUseManagedBackgroundCamera()) {
@@ -3146,6 +3266,9 @@ const resetMediaState = () => {
   state.isVideoActive = false;
   state.isScreenSharingActive = false;
   state.isSpeakerActive = false;
+  state.audioOutputRoute = 'earpiece';
+  state.audioOutputDefaultRoute = 'earpiece';
+  state.audioOutputAvailableRoutes = DEFAULT_AUDIO_OUTPUT_ROUTES;
   state.isFullScreen = false;
   state.isHandRaised = false;
   state.isSpeaking = false;
@@ -3207,6 +3330,7 @@ export const startLiveKitCall = async (
   roomId.value = createRoomId();
   setCallStartedAt(null, 0);
   shouldEndCallOnConnectFailure = true;
+  await applyDefaultAudioOutputRoute();
   open.value = true;
   isCalling.value = true;
   isModalVisible.value = true;
@@ -3270,6 +3394,7 @@ export const startLiveKitGroupCall = async (currentTopicId: string) => {
   roomId.value = activeRoomId;
   setCallStartedAt(null, 0);
   shouldEndCallOnConnectFailure = true;
+  await applyDefaultAudioOutputRoute();
   open.value = true;
   isIncoming.value = false;
   isCalling.value = true;
@@ -3345,6 +3470,7 @@ export const startStandaloneMeetingCall = async () => {
   roomId.value = activeRoomId;
   setCallStartedAt(null, 0);
   shouldEndCallOnConnectFailure = true;
+  await applyDefaultAudioOutputRoute();
   open.value = true;
   isIncoming.value = false;
   isCalling.value = false;
@@ -3532,6 +3658,8 @@ export const acceptCall = async () => {
     endAllCallKits();
   }
 
+  await applyDefaultAudioOutputRoute();
+
   isAcceptingLocally = true;
   localAcceptRoomId = roomId.value;
   localAcceptTopicId = topicId.value;
@@ -3629,6 +3757,7 @@ export const joinPendingGroupCall = async (
     pendingGroupCall.startTime ?? callStatus.startTime ?? null,
     pendingGroupCall.elapsedDurationMs ?? callStatus.elapsedDurationMs ?? 0
   );
+  await applyDefaultAudioOutputRoute();
   open.value = true;
   isIncoming.value = false;
   isCalling.value = true;
@@ -3756,6 +3885,7 @@ export const joinInvitedGroupCall = async (): Promise<boolean | void> => {
     invite.startTime ?? callStatus.startTime ?? null,
     invite.elapsedDurationMs ?? callStatus.elapsedDurationMs ?? 0
   );
+  await applyDefaultAudioOutputRoute();
   open.value = true;
   isIncoming.value = false;
   isCalling.value = true;
@@ -4296,13 +4426,11 @@ export const switchCamera = async () => {
 };
 
 export const toggleSpeaker = async () => {
-  state.isSpeakerActive = !state.isSpeakerActive;
-
-  if (Capacitor.isNativePlatform()) {
-    await AudioOutput.toggleAudio({
-      useSpeaker: state.isSpeakerActive
-    }).catch(err => console.warn('[LiveKit] Audio output failed:', err));
-  }
+  await selectAudioOutputRoute(
+    state.audioOutputRoute === 'speaker'
+      ? state.audioOutputDefaultRoute
+      : 'speaker'
+  );
 };
 
 const getLocalScreenSharePublication = (activeRoom = room) => {
@@ -4775,6 +4903,8 @@ export {
 
 if (typeof window !== 'undefined') {
   if (Capacitor.isNativePlatform()) {
+    setupAudioOutputRouteListener();
+
     void App.addListener('appStateChange', ({ isActive }) => {
       isNativeAppInBackground = !isActive;
 

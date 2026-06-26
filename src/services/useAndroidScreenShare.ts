@@ -156,7 +156,7 @@ const createAndroidScreenShareCanvasSession = (): AndroidScreenShareSession => {
 
 const waitForAndroidScreenShareFirstFrame = async (): Promise<void> => {
   await new Promise<void>((resolve, reject) => {
-    let timeoutId: number;
+    let timeoutId: number = undefined;
     const complete = () => {
       window.clearTimeout(timeoutId);
       resolve();
