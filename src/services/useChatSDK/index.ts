@@ -1216,7 +1216,10 @@ export class ChatSDK {
     }
   }
 
-  async getLiveKitCallStatus(roomId: string): Promise<{
+  async getLiveKitCallStatus(
+    roomId: string,
+    options: { includeRoomState?: boolean } = {}
+  ): Promise<{
     active: boolean;
     topicId?: string | null;
     startTime?: number | null;
@@ -1227,6 +1230,11 @@ export class ChatSDK {
     elapsedDurationMs?: number;
   } | null> {
     try {
+      const queryParams = new URLSearchParams({ roomId });
+      if (options.includeRoomState) {
+        queryParams.set('includeRoomState', 'true');
+      }
+
       const response = (await this.reqi.get<{
         active: boolean;
         topicId?: string | null;
@@ -1236,7 +1244,7 @@ export class ChatSDK {
         wasAnswered?: boolean;
         groupMode?: boolean;
         elapsedDurationMs?: number;
-      }>(`/calls/status?roomId=${encodeURIComponent(roomId)}`, {
+      }>(`/calls/status?${queryParams.toString()}`, {
         parsed: false
       })) as any;
       return await response.json();

@@ -1293,7 +1293,8 @@ const matchesPendingEndCall = (
   (!!targetTopicId && pendingEndCallTopicId.value === targetTopicId);
 
 const getRawLiveKitCallStatus = async (
-  targetRoomId?: string | null
+  targetRoomId?: string | null,
+  options: { includeRoomState?: boolean } = {}
 ): Promise<LiveKitCallStatus | null> => {
   if (!targetRoomId) {
     return null;
@@ -1304,7 +1305,7 @@ const getRawLiveKitCallStatus = async (
     return null;
   }
 
-  const status = await sdk.getLiveKitCallStatus(targetRoomId);
+  const status = await sdk.getLiveKitCallStatus(targetRoomId, options);
   if (!status) {
     return null;
   }
