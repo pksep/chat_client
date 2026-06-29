@@ -40,6 +40,7 @@ import {
 } from '../../composables/useAuth';
 import { fetchMessagesForTopic } from '../useMessages';
 import { getConfig } from '../useConfig';
+import { getVideoThumbnail } from '../../utils/mediaPreview';
 import type { MediaPreviewDimensions } from '../../utils/mediaPreview';
 
 export interface ChatSDKOptions {
@@ -54,9 +55,15 @@ export interface WebSocketEvent {
   timestamp?: Date;
 }
 
-const UPLOAD_PROGRESS_MAX_PERCENT = 50;
-const FINALIZING_PROGRESS_TARGET_PERCENT = 97;
+const UPLOAD_PROGRESS_MAX_PERCENT = 100;
+const FINALIZING_PROGRESS_TARGET_PERCENT = 100;
 const FINALIZING_PROGRESS_INTERVAL_MS = 350;
+const VIDEO_UPLOAD_COVER_TIMEOUT_MS = 8000;
+
+interface UploadTarget {
+  objectName: string;
+  uploadUrl: string;
+}
 
 export class ChatSDK {
   private apiUrl: string;
@@ -218,125 +225,83 @@ export class ChatSDK {
     });
   }
 
-  private uploadFileDirectly(
+  private async createUploadTarget(
     file: File,
-    previewMeta?: MediaPreviewDimensions,
-    onProgress?: (percent: number) => void,
     isMedia = false
-  ): Promise<{
-    objectName: string;
-    thumbnailObjectName: string | null;
-    ex?: {
-      width?: number;
-      height?: number;
-      previewWidth?: number;
-      previewHeight?: number;
-    };
-  }> {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      const formData = new FormData();
-      const token = getAuthToken() || this.token;
-      let stopFakeFinalizingProgress = () => undefined;
-      let hasStartedFakeFinalizingProgress = false;
-
-      const startFakeFinalizingProgress = () => {
-        if (hasStartedFakeFinalizingProgress) {
-          return;
-        }
-
-        hasStartedFakeFinalizingProgress = true;
-        stopFakeFinalizingProgress = this.startFakeFinalizingProgress(
-          onProgress,
-          UPLOAD_PROGRESS_MAX_PERCENT
-        );
-      };
-
-      formData.append('file', file);
-      formData.append('originName', file.name);
-      formData.append('size', String(file.size));
-      formData.append('contentType', file.type || 'application/octet-stream');
-      formData.append('isMedia', String(isMedia));
-
-      if (previewMeta?.width !== undefined) {
-        formData.append('width', String(previewMeta.width));
+  ): Promise<UploadTarget> {
+    const response = (await this.reqi.post<UploadTarget>(
+      '/media/upload-target',
+      {
+        originName: file.name,
+        size: file.size,
+        contentType: file.type || undefined,
+        isMedia
+      },
+      {
+        parsed: false
       }
-      if (previewMeta?.height !== undefined) {
-        formData.append('height', String(previewMeta.height));
-      }
-      if (previewMeta?.previewWidth !== undefined) {
-        formData.append('previewWidth', String(previewMeta.previewWidth));
-      }
-      if (previewMeta?.previewHeight !== undefined) {
-        formData.append('previewHeight', String(previewMeta.previewHeight));
+    )) as any;
+
+    return response.json();
+  }
+
+  private async uploadVideoCoverImage(file: File): Promise<string | null> {
+    try {
+      const coverFile = await this.createVideoCoverFile(file);
+
+      if (!coverFile) {
+        return null;
       }
 
-      xhr.open('POST', `${this.apiUrl}/media/upload`);
+      const uploadTarget = await this.createUploadTarget(coverFile, false);
+      await this.uploadFileToMinio(uploadTarget.uploadUrl, coverFile);
 
-      if (token) {
-        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      }
+      return uploadTarget.objectName;
+    } catch (error) {
+      console.warn('[ChatSDK] Failed to upload video cover image:', error);
+      return null;
+    }
+  }
 
-      xhr.upload.onprogress = event => {
-        if (!event.lengthComputable || event.total === 0) {
-          return;
-        }
-
-        const percent = Math.round((event.loaded / event.total) * 100);
-        onProgress?.(this.mapUploadProgress(percent));
-      };
-
-      xhr.upload.onload = () => {
-        startFakeFinalizingProgress();
-      };
-
-      xhr.onload = () => {
-        stopFakeFinalizingProgress();
-
-        if (xhr.status < 200 || xhr.status >= 300) {
-          reject(new Error(`Failed to upload media directly: ${xhr.status}`));
-          return;
-        }
-
-        try {
-          const data = JSON.parse(xhr.responseText) as {
-            objectName: string;
-            thumbnailObjectName: string | null;
-            ex?: {
-              width?: number;
-              height?: number;
-              previewWidth?: number;
-              previewHeight?: number;
-            };
-          };
-
-          onProgress?.(100);
-          resolve({
-            objectName: data.objectName,
-            thumbnailObjectName: data.thumbnailObjectName,
-            ex: data.ex
-          });
-        } catch (error) {
-          reject(
-            new Error(
-              `Failed to parse direct upload response: ${(error as Error).message}`
-            )
-          );
-        }
-      };
-
-      xhr.onerror = () => {
-        stopFakeFinalizingProgress();
-        reject(new Error('Failed to upload media directly: network error'));
-      };
-
-      xhr.onabort = () => {
-        stopFakeFinalizingProgress();
-        reject(new Error('Failed to upload media directly: upload aborted'));
-      };
-
-      xhr.send(formData);
+  private async createVideoCoverFile(file: File): Promise<File | null> {
+    const thumbnailDataUrl = await getVideoThumbnail(file, {
+      timeoutMs: VIDEO_UPLOAD_COVER_TIMEOUT_MS
     });
+
+    if (!thumbnailDataUrl) {
+      return null;
+    }
+
+    return this.dataUrlToFile(
+      thumbnailDataUrl,
+      this.getVideoCoverFileName(file.name)
+    );
+  }
+
+  private getVideoCoverFileName(fileName: string): string {
+    const baseName = fileName.replace(/\.[^.]*$/, '') || 'video';
+
+    return `${baseName}-cover.jpg`;
+  }
+
+  private dataUrlToFile(dataUrl: string, fileName: string): File | null {
+    const match = dataUrl.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
+
+    if (!match) {
+      return null;
+    }
+
+    const mimeType = match[1] || 'image/jpeg';
+    const isBase64 = Boolean(match[2]);
+    const data = match[3] || '';
+    const binaryString = isBase64 ? atob(data) : decodeURIComponent(data);
+    const bytes = new Uint8Array(binaryString.length);
+
+    for (let index = 0; index < binaryString.length; index += 1) {
+      bytes[index] = binaryString.charCodeAt(index);
+    }
+
+    return new File([bytes], fileName, { type: mimeType });
   }
 
   private getImageDimensions(file: File): Promise<{
@@ -1052,31 +1017,14 @@ export class ChatSDK {
   }> {
     onProgress?.(0);
 
-    const shouldUploadDirectly =
-      isMedia && file.type.toLowerCase().startsWith('video/');
-
-    if (shouldUploadDirectly) {
-      return this.uploadFileDirectly(file, previewMeta, onProgress, isMedia);
-    }
-
-    const uploadTargetResponse = (await this.reqi.post<{
-      objectName: string;
-      uploadUrl: string;
-    }>(
-      '/media/upload-target',
-      {
-        originName: file.name,
-        size: file.size,
-        contentType: file.type || undefined,
-        isMedia
-      },
-      {
-        parsed: false
-      }
-    )) as any;
-    const uploadTarget = await uploadTargetResponse.json();
+    const videoCoverObjectNamePromise =
+      isMedia && file.type.startsWith('video/')
+        ? this.uploadVideoCoverImage(file)
+        : Promise.resolve(null);
+    const uploadTarget = await this.createUploadTarget(file, isMedia);
 
     await this.uploadFileToMinio(uploadTarget.uploadUrl, file, onProgress);
+    const videoCoverObjectName = await videoCoverObjectNamePromise;
     const stopFakeFinalizingProgress = this.startFakeFinalizingProgress(
       onProgress,
       UPLOAD_PROGRESS_MAX_PERCENT
@@ -1094,6 +1042,7 @@ export class ChatSDK {
           height: previewMeta?.height,
           previewWidth: previewMeta?.previewWidth,
           previewHeight: previewMeta?.previewHeight,
+          thumbnailObjectName: videoCoverObjectName || undefined,
           isMedia
         },
         {
@@ -1134,6 +1083,10 @@ export class ChatSDK {
     );
 
     onProgress?.(currentPercent);
+
+    if (currentPercent >= FINALIZING_PROGRESS_TARGET_PERCENT) {
+      return () => undefined;
+    }
 
     const intervalId = setInterval(() => {
       const remainingPercent =
@@ -1216,7 +1169,10 @@ export class ChatSDK {
     }
   }
 
-  async getLiveKitCallStatus(roomId: string): Promise<{
+  async getLiveKitCallStatus(
+    roomId: string,
+    options: { includeRoomState?: boolean } = {}
+  ): Promise<{
     active: boolean;
     topicId?: string | null;
     startTime?: number | null;
@@ -1227,6 +1183,11 @@ export class ChatSDK {
     elapsedDurationMs?: number;
   } | null> {
     try {
+      const queryParams = new URLSearchParams({ roomId });
+      if (options.includeRoomState) {
+        queryParams.set('includeRoomState', 'true');
+      }
+
       const response = (await this.reqi.get<{
         active: boolean;
         topicId?: string | null;
@@ -1236,7 +1197,7 @@ export class ChatSDK {
         wasAnswered?: boolean;
         groupMode?: boolean;
         elapsedDurationMs?: number;
-      }>(`/calls/status?roomId=${encodeURIComponent(roomId)}`, {
+      }>(`/calls/status?${queryParams.toString()}`, {
         parsed: false
       })) as any;
       return await response.json();

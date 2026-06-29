@@ -203,7 +203,8 @@ const handleCreate = async (): Promise<void> => {
     const result = await createBotViaGateway({
       name: form.name,
       username: form.username,
-      avatarUrl: form.avatarUrl
+      avatarUrl: form.avatarUrl,
+      avatarFile: avatarFile.value
     });
 
     if (!result?.topic?.id) {

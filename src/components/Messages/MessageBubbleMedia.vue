@@ -48,7 +48,24 @@
               :data-testid="`${props.dataTestid}-MediaContainer`"
               @contextmenu.prevent
             >
+              <video
+                v-if="shouldRenderLocalVideoPreview(media)"
+                :src="media.localPath"
+                :poster="media.localThumbnailPath || VIDEO_FALLBACK_THUMBNAIL"
+                :style="getPreviewStyle(media, i)"
+                muted
+                playsinline
+                preload="metadata"
+                draggable="true"
+                @loadedmetadata="prepareLocalVideoPreview(media, $event)"
+                @loadeddata="captureVideoPreviewMetrics(media, $event)"
+                @dragstart="handleMediaImageDragStart"
+                @click.stop="handleMediaClick(i)"
+                @contextmenu.prevent
+              />
+
               <img
+                v-else
                 :src="
                   shouldLoadMedia ? getFullMediaPath(media) : EMPTY_MEDIA_SRC
                 "
@@ -66,25 +83,29 @@
                 @contextmenu.prevent
               />
 
-              <div
-                v-if="shouldShowMediaLoading(media)"
-                class="message-content__media-loading"
-              >
-                <LoadingIcon
-                  :is-loaded="false"
-                  :percent="
-                    media.isLoading ? media.uploadPercent ?? null : null
-                  "
-                />
-              </div>
+              <Transition name="media-control" mode="out-in">
+                <div
+                  v-if="shouldShowMediaLoading(media)"
+                  key="loading"
+                  class="message-content__media-loading"
+                >
+                  <LoadingIcon
+                    :is-loaded="false"
+                    :percent="
+                      media.isLoading ? media.uploadPercent ?? null : null
+                    "
+                  />
+                </div>
 
-              <div
-                v-else-if="media.type === MediaType.Video"
-                class="message-content__media-video"
-                @click="$emit('set-slider', mediaFiles, i)"
-              >
-                <PlayIcon />
-              </div>
+                <div
+                  v-else-if="media.type === MediaType.Video"
+                  key="play"
+                  class="message-content__media-video"
+                  @click="$emit('set-slider', mediaFiles, i)"
+                >
+                  <PlayIcon />
+                </div>
+              </Transition>
 
               <div
                 v-if="i === mediaFiles.length - 1 && !hasInlineCaption"
@@ -179,7 +200,10 @@ import MessageReferenceBlock from './MessageReferenceBlock.vue';
 import MessageAuthorMeta from './MessageAuthorMeta.vue';
 import { useMentionUserClick } from './composables/useMentionUserClick';
 import { MessageStatus } from '../../services/useChatSDK/types';
-import { calculatePreviewDimensions } from '../../utils/mediaPreview';
+import {
+  calculatePreviewDimensions,
+  VIDEO_FALLBACK_THUMBNAIL
+} from '../../utils/mediaPreview';
 
 const props = defineProps<IMessageBubbleProps>();
 const emit = defineEmits(['navigate-message', 'set-slider']);
@@ -321,6 +345,15 @@ const shouldShowMediaLoading = (media: IMedia): boolean =>
       (media.uploadError && props.messageStatus !== MessageStatus.NotDelivered)
   );
 
+const shouldRenderLocalVideoPreview = (media: IMedia): boolean =>
+  Boolean(
+    media.type === MediaType.Video &&
+      media.isLoading &&
+      media.localPath &&
+      (!media.localThumbnailPath ||
+        media.localThumbnailPath === VIDEO_FALLBACK_THUMBNAIL)
+  );
+
 const getPreviewStyle = (
   media: IMedia,
   index: number
@@ -371,6 +404,30 @@ const captureImagePreviewMetrics = (media: IMedia, event: Event): void => {
   savePreviewMetrics(media, image, image.naturalWidth, image.naturalHeight);
 };
 
+const prepareLocalVideoPreview = (media: IMedia, event: Event): void => {
+  const video = event.currentTarget as HTMLVideoElement | null;
+  if (!video) return;
+
+  savePreviewMetrics(media, video, video.videoWidth, video.videoHeight);
+
+  if (!Number.isFinite(video.duration) || video.duration <= 0.1) {
+    return;
+  }
+
+  try {
+    video.currentTime = Math.min(0.1, video.duration - 0.05);
+  } catch {
+    // Some Firefox codecs reject early seeks; the native poster frame is enough.
+  }
+};
+
+const captureVideoPreviewMetrics = (media: IMedia, event: Event): void => {
+  const video = event.currentTarget as HTMLVideoElement | null;
+  if (!video) return;
+
+  savePreviewMetrics(media, video, video.videoWidth, video.videoHeight);
+};
+
 const handleMediaClick = (index: number): void => {
   if (Date.now() - lastMediaDragStartedAt < 350) {
     return;
@@ -381,15 +438,15 @@ const handleMediaClick = (index: number): void => {
 
 const handleMediaImageDragStart = (event: DragEvent): void => {
   lastMediaDragStartedAt = Date.now();
-  const image = event.currentTarget as HTMLImageElement | null;
+  const element = event.currentTarget as HTMLElement | null;
   const dataTransfer = event.dataTransfer;
 
-  if (!image || !dataTransfer) {
+  if (!element || !dataTransfer) {
     return;
   }
 
-  const rect = image.getBoundingClientRect();
-  const clone = image.cloneNode(false) as HTMLImageElement;
+  const rect = element.getBoundingClientRect();
+  const clone = element.cloneNode(false) as HTMLElement;
 
   clone.removeAttribute('id');
   clone.style.position = 'fixed';
@@ -397,7 +454,7 @@ const handleMediaImageDragStart = (event: DragEvent): void => {
   clone.style.top = '-10000px';
   clone.style.width = `${Math.round(rect.width)}px`;
   clone.style.height = `${Math.round(rect.height)}px`;
-  clone.style.objectFit = getComputedStyle(image).objectFit;
+  clone.style.objectFit = getComputedStyle(element).objectFit;
   clone.style.pointerEvents = 'none';
 
   document.body.appendChild(clone);
