@@ -31,7 +31,10 @@ import {
   deletePendingUploadMeta
 } from './useTopicMessagesCache';
 import { fileToDataURL } from '../utils/fileToDataURL';
-import { getVideoThumbnail } from '../utils/mediaPreview';
+import {
+  getVideoThumbnail,
+  VIDEO_FALLBACK_THUMBNAIL
+} from '../utils/mediaPreview';
 import { MediaType } from '@pksep/zod-shared-chat';
 import {
   playNativeNotificationSound,
@@ -469,7 +472,8 @@ const restorePendingUploadMediaState = async (
           if (media.type === MediaType.Video) {
             localPath = URL.createObjectURL(pendingFile.file);
             localThumbnailPath =
-              (await getVideoThumbnail(pendingFile.file)) || localPath;
+              (await getVideoThumbnail(pendingFile.file)) ||
+              VIDEO_FALLBACK_THUMBNAIL;
           } else if (media.type === MediaType.Image) {
             localPath = await fileToDataURL(pendingFile.file);
           }
@@ -1436,12 +1440,15 @@ export const editMessageFromLocal = (
           pinnedMessages.filter(m => m.id !== message.id)
         );
       }
-    } else {
-      isEdit = true;
+    } else if (message.text !== msg.text) {
+      isEdit = message.isEdit ?? true;
+    } else if ('isEdit' in message) {
+      isEdit = message.isEdit ?? isEdit;
     }
 
     return {
       ...msg,
+      ...message,
       ...('isPinnedForAll' in message
         ? { isPinnedForAll: message.isPinnedForAll }
         : {}),
@@ -1451,8 +1458,13 @@ export const editMessageFromLocal = (
       ...('isPinnedOnlyMe' in message
         ? { isPinnedOnlyMe: message.isPinnedOnlyMe }
         : {}),
-      text: message.text,
-      isPin: message.isPin,
+      media: message.media ?? msg.media,
+      reactions: message.reactions ?? msg.reactions,
+      replyMessage: message.replyMessage ?? msg.replyMessage,
+      senderUser: message.senderUser ?? msg.senderUser,
+      forwardUser: message.forwardUser ?? msg.forwardUser,
+      text: 'text' in message ? message.text : msg.text,
+      isPin: 'isPin' in message ? message.isPin : msg.isPin,
       isEdit
     };
   };
@@ -2150,6 +2162,47 @@ export const changeFileUploadPercent = (
           return {
             ...media,
             uploadPercent: percent
+          };
+        })
+      };
+    })
+  );
+
+  schedulePersistMessages(topicId);
+};
+
+export const setLocalMediaPreviewData = (
+  topicId: string,
+  messageId: string,
+  fileId: string,
+  payload: Pick<IMedia, 'localThumbnailPath' | 'ex'>
+): void => {
+  updateTopicMessageStores(topicId, messages =>
+    messages.map(message => {
+      if (message.id !== messageId || !message.media) {
+        return message;
+      }
+
+      return {
+        ...message,
+        media: message.media.map(media => {
+          if (media.id !== fileId) {
+            return media;
+          }
+
+          return {
+            ...media,
+            ...(payload.localThumbnailPath
+              ? { localThumbnailPath: payload.localThumbnailPath }
+              : {}),
+            ...(payload.ex
+              ? {
+                  ex: {
+                    ...media.ex,
+                    ...payload.ex
+                  }
+                }
+              : {})
           };
         })
       };

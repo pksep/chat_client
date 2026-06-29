@@ -15,6 +15,22 @@ export interface MediaPreviewDimensions extends MediaDimensions {
 
 const VIDEO_THUMBNAIL_TIMESTAMPS = [0.1, 0.5, 1, 2];
 const VIDEO_BLACK_FRAME_BRIGHTNESS_THRESHOLD = 10;
+const VIDEO_METADATA_TIMEOUT_MS = 2500;
+const VIDEO_THUMBNAIL_TIMEOUT_MS = 15000;
+const VIDEO_FRAME_WAIT_TIMEOUT_MS = 120;
+const VIDEO_READY_STATE_HAVE_CURRENT_DATA = 2;
+
+type VideoWithFrameCallback = HTMLVideoElement & {
+  requestVideoFrameCallback?: (callback: (...args: unknown[]) => void) => number;
+};
+
+export const VIDEO_FALLBACK_THUMBNAIL = `data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg width="640" height="360" viewBox="0 0 640 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="640" height="360" fill="#20242B"/>
+<circle cx="320" cy="180" r="54" fill="#FFFFFF" fill-opacity="0.18"/>
+<path d="M304 151L350 180L304 209V151Z" fill="#FFFFFF"/>
+</svg>`
+)}`;
 
 export const getGridColumnsCount = (count: number): number => {
   if (count <= 1) return 1;
@@ -94,35 +110,67 @@ export const getVideoDimensions = (file: File): Promise<MediaDimensions> => {
   return new Promise(resolve => {
     const video = document.createElement('video');
     const objectUrl = URL.createObjectURL(file);
+    let resolved = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+
+      URL.revokeObjectURL(objectUrl);
+    };
+
+    const finish = (dimensions: MediaDimensions) => {
+      if (resolved) {
+        return;
+      }
+
+      resolved = true;
+      cleanup();
+      resolve(dimensions);
+    };
 
     video.preload = 'metadata';
     video.onloadedmetadata = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve({
+      finish({
         width: video.videoWidth,
         height: video.videoHeight
       });
     };
 
-    video.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve({});
-    };
+    video.onerror = () => finish({});
+    timeoutId = setTimeout(() => finish({}), VIDEO_METADATA_TIMEOUT_MS);
 
     video.src = objectUrl;
   });
 };
 
-export const getVideoThumbnail = (file: File): Promise<string | null> => {
+export const getVideoThumbnail = (
+  file: File,
+  options?: { timeoutMs?: number }
+): Promise<string | null> => {
   return new Promise(resolve => {
     const video = document.createElement('video');
+    const videoWithFrameCallback = video as VideoWithFrameCallback;
     const objectUrl = URL.createObjectURL(file);
     let resolved = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let hasStartedSeek = false;
+    let currentSeekIndex = 0;
 
     const cleanup = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+
       URL.revokeObjectURL(objectUrl);
+      video.pause();
       video.removeAttribute('src');
       video.load();
+      video.remove();
     };
 
     const finish = (value: string | null) => {
@@ -135,11 +183,22 @@ export const getVideoThumbnail = (file: File): Promise<string | null> => {
       resolve(value);
     };
 
-    video.preload = 'metadata';
+    video.preload = 'auto';
     video.muted = true;
     video.playsInline = true;
+    video.style.position = 'fixed';
+    video.style.left = '-9999px';
+    video.style.top = '0';
+    video.style.width = '1px';
+    video.style.height = '1px';
+    video.style.opacity = '0';
+    video.style.pointerEvents = 'none';
 
-    const captureFrame = (): string | null => {
+    if (document.body) {
+      document.body.appendChild(video);
+    }
+
+    const captureFrame = (allowDarkFrame = false): string | null => {
       try {
         const canvas = document.createElement('canvas');
         canvas.width = video.videoWidth;
@@ -171,8 +230,9 @@ export const getVideoThumbnail = (file: File): Promise<string | null> => {
           pixelsCount > 0 ? brightnessSum / (pixelsCount * 3) : 0;
 
         if (
+          !allowDarkFrame &&
           averageBrightness <= VIDEO_BLACK_FRAME_BRIGHTNESS_THRESHOLD &&
-          video.duration > 0.5
+          (!Number.isFinite(video.duration) || video.duration > 0.5)
         ) {
           return null;
         }
@@ -183,46 +243,105 @@ export const getVideoThumbnail = (file: File): Promise<string | null> => {
       }
     };
 
-    const trySeekAtIndex = (index: number) => {
+    function waitForDecodedFrame(callback: () => void) {
+      let didRun = false;
+
+      const run = () => {
+        if (didRun || resolved) {
+          return;
+        }
+
+        didRun = true;
+        callback();
+      };
+
+      if (videoWithFrameCallback.requestVideoFrameCallback) {
+        videoWithFrameCallback.requestVideoFrameCallback(run);
+        setTimeout(run, VIDEO_FRAME_WAIT_TIMEOUT_MS);
+        return;
+      }
+
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(run);
+      } else {
+        setTimeout(run, 0);
+      }
+      setTimeout(run, VIDEO_FRAME_WAIT_TIMEOUT_MS);
+    }
+
+    function getSeekTime(timestamp: number): number {
+      if (!Number.isFinite(video.duration) || video.duration <= 0) {
+        return timestamp;
+      }
+
+      return Math.min(timestamp, Math.max(video.duration - 0.05, 0));
+    }
+
+    function captureCurrentFrameOrSeekNext() {
+      waitForDecodedFrame(() => {
+        const thumbnail = captureFrame();
+
+        if (thumbnail) {
+          finish(thumbnail);
+          return;
+        }
+
+        trySeekAtIndex(currentSeekIndex + 1);
+      });
+    }
+
+    function trySeekAtIndex(index: number): void {
+      currentSeekIndex = index;
+
       if (index >= VIDEO_THUMBNAIL_TIMESTAMPS.length) {
-        finish(captureFrame());
+        waitForDecodedFrame(() => finish(captureFrame(true)));
         return;
       }
 
-      const nextTime = Math.min(
-        VIDEO_THUMBNAIL_TIMESTAMPS[index],
-        Math.max(video.duration - 0.05, 0)
-      );
-
-      video.currentTime = nextTime;
-    };
-
-    video.onloadeddata = () => {
-      if (!video.duration || video.duration <= VIDEO_THUMBNAIL_TIMESTAMPS[0]) {
-        finish(captureFrame());
+      if (!video.videoWidth || !video.videoHeight) {
+        finish(null);
         return;
       }
 
+      hasStartedSeek = true;
+      const nextTime = getSeekTime(VIDEO_THUMBNAIL_TIMESTAMPS[index]);
+
+      try {
+        if (
+          video.readyState >= VIDEO_READY_STATE_HAVE_CURRENT_DATA &&
+          Math.abs(video.currentTime - nextTime) < 0.05
+        ) {
+          captureCurrentFrameOrSeekNext();
+          return;
+        }
+
+        video.currentTime = nextTime;
+      } catch {
+        waitForDecodedFrame(() => finish(captureFrame(true)));
+      }
+    }
+
+    video.onloadedmetadata = () => {
       trySeekAtIndex(0);
     };
 
-    video.onseeked = () => {
-      const thumbnail = captureFrame();
-
-      if (thumbnail) {
-        finish(thumbnail);
-        return;
+    video.onloadeddata = () => {
+      if (!hasStartedSeek) {
+        trySeekAtIndex(0);
       }
+    };
 
-      const currentIndex = VIDEO_THUMBNAIL_TIMESTAMPS.findIndex(
-        timestamp => Math.abs(timestamp - video.currentTime) < 0.2
-      );
-
-      trySeekAtIndex(currentIndex + 1);
+    video.onseeked = () => {
+      captureCurrentFrameOrSeekNext();
     };
 
     video.onerror = () => finish(null);
+    timeoutId = setTimeout(
+      () => finish(captureFrame(true)),
+      options?.timeoutMs ?? VIDEO_THUMBNAIL_TIMEOUT_MS
+    );
     video.src = objectUrl;
+    video.load();
   });
 };
 

@@ -66,25 +66,29 @@
                 @contextmenu.prevent
               />
 
-              <div
-                v-if="shouldShowMediaLoading(media)"
-                class="message-content__media-loading"
-              >
-                <LoadingIcon
-                  :is-loaded="false"
-                  :percent="
-                    media.isLoading ? media.uploadPercent ?? null : null
-                  "
-                />
-              </div>
+              <Transition name="media-control" mode="out-in">
+                <div
+                  v-if="shouldShowMediaLoading(media)"
+                  key="loading"
+                  class="message-content__media-loading"
+                >
+                  <LoadingIcon
+                    :is-loaded="false"
+                    :percent="
+                      media.isLoading ? media.uploadPercent ?? null : null
+                    "
+                  />
+                </div>
 
-              <div
-                v-else-if="media.type === MediaType.Video"
-                class="message-content__media-video"
-                @click="$emit('set-slider', mediaFiles, i)"
-              >
-                <PlayIcon />
-              </div>
+                <div
+                  v-else-if="media.type === MediaType.Video"
+                  key="play"
+                  class="message-content__media-video"
+                  @click="$emit('set-slider', mediaFiles, i)"
+                >
+                  <PlayIcon />
+                </div>
+              </Transition>
 
               <div
                 v-if="i === mediaFiles.length - 1 && !hasInlineCaption"
