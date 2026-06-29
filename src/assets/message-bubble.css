@@ -1054,7 +1054,8 @@ div.message-content__html > ul > li {
   user-select: auto;
 }
 
-.message-content-1-item .message-content__media img {
+.message-content-1-item .message-content__media img,
+.message-content-1-item .message-content__media video {
   object-fit: contain;
 }
 

@@ -1056,7 +1056,10 @@ export function useMessageSender(
         });
       })
       .catch(error => {
-        console.warn('[ChatSDK] Failed to create local video thumbnail:', error);
+        console.warn(
+          '[ChatSDK] Failed to create local video thumbnail:',
+          error
+        );
       });
   };
 
@@ -1440,25 +1443,29 @@ export function useMessageSender(
           };
         }
 
+        if (type === MediaType.Video) {
+          return {
+            ...baseMedia,
+            localThumbnailPath: VIDEO_FALLBACK_THUMBNAIL,
+            ex: buildAttachmentPreviewEx(
+              VIDEO_INITIAL_PREVIEW_DIMENSIONS,
+              filePayloads.length,
+              i,
+              options?.fillSharedPreview === true
+            )
+          };
+        }
+
         const dimensions = await getFileDimensions(file);
 
         return {
           ...baseMedia,
-          localThumbnailPath:
-            type === MediaType.Video
-              ? (await getVideoThumbnail(file)) || VIDEO_FALLBACK_THUMBNAIL
-              : undefined,
-          ex:
+          ex: buildAttachmentPreviewEx(
+            dimensions,
+            filePayloads.length,
+            i,
             options?.fillSharedPreview === true
-              ? {
-                  ...calculatePreviewDimensions(
-                    dimensions,
-                    filePayloads.length,
-                    i
-                  ),
-                  fillPreview: true
-                }
-              : calculatePreviewDimensions(dimensions, filePayloads.length, i)
+          )
         };
       })
     );
@@ -1493,15 +1500,24 @@ export function useMessageSender(
     });
 
     filePayloads.forEach(({ file, isMedia }, index) => {
-      registerPendingUploadFile(
-        newMessage.topicId,
-        clientId,
-        index.toString(),
-        {
+      const fileId = index.toString();
+
+      registerPendingUploadFile(newMessage.topicId, clientId, fileId, {
+        file,
+        isMedia
+      });
+
+      if (getMediaType(file, isMedia) === MediaType.Video) {
+        hydrateLocalVideoPreview(
+          newMessage.topicId,
+          clientId,
+          fileId,
           file,
-          isMedia
-        }
-      );
+          filePayloads.length,
+          index,
+          options?.fillSharedPreview === true
+        );
+      }
     });
 
     let hasUploadError = false;

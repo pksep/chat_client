@@ -21,7 +21,9 @@ const VIDEO_FRAME_WAIT_TIMEOUT_MS = 120;
 const VIDEO_READY_STATE_HAVE_CURRENT_DATA = 2;
 
 type VideoWithFrameCallback = HTMLVideoElement & {
-  requestVideoFrameCallback?: (callback: (...args: unknown[]) => void) => number;
+  requestVideoFrameCallback?: (
+    callback: (...args: unknown[]) => void
+  ) => number;
 };
 
 export const VIDEO_FALLBACK_THUMBNAIL = `data:image/svg+xml;utf8,${encodeURIComponent(

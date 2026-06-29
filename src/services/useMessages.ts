@@ -2234,9 +2234,16 @@ export const setUploadedFileData = (
             return media;
           }
 
+          const shouldClearFallbackThumbnail =
+            Boolean(payload.thumbnailPath) &&
+            media.localThumbnailPath === VIDEO_FALLBACK_THUMBNAIL;
+
           return {
             ...media,
             ...payload,
+            ...(shouldClearFallbackThumbnail
+              ? { localThumbnailPath: undefined }
+              : {}),
             isLoading: false,
             uploadError: false,
             uploadPercent: null
