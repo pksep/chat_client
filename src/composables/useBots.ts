@@ -184,8 +184,13 @@ const readGatewayError = async (
 ): Promise<string> => {
   try {
     const errorBody = (await response.json()) as GatewayErrorBody;
-    const detail = errorBody?.message ?? errorBody?.error?.message;
-    return Array.isArray(detail) ? detail.join(', ') : detail || fallback;
+    const detail =
+      errorBody?.message ??
+      (typeof errorBody?.error === 'object'
+        ? errorBody.error.message
+        : errorBody?.error) ??
+      errorBody?.description;
+    return formatErrorDetail(detail) || fallback;
   } catch {
     return fallback;
   }
