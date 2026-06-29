@@ -320,7 +320,9 @@ const createTopicsApi = () => {
       return topics.value;
     }
 
-    const cachedTopics = await loadCachedTopics(userId);
+    const cachedTopics = stripEphemeralTopicState(
+      await loadCachedTopics(userId)
+    );
 
     if (cachedTopics.length > 0) {
       topics.value = normalizeTopics(cachedTopics);
