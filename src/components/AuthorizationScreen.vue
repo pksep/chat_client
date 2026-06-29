@@ -238,6 +238,7 @@ import { computed, ref, watch } from 'vue';
 import { useQrAuth } from '../composables/useQrAuth';
 import { showErrorNotification } from '../composables/useNotifications';
 import { getUsersList } from '../composables/useUsers';
+import { isBotUser } from '../utils/bot';
 
 interface IAuthorizationScreenProps {
   url: string;
@@ -296,6 +297,7 @@ const getUserLoginValue = (user: any): string =>
 
 const userOptions = computed(() =>
   getUsersList()
+    .filter(user => !isBotUser(user))
     .map(user => getUserLoginValue(user))
     .filter((value, index, list) => !!value && list.indexOf(value) === index)
 );

@@ -36,7 +36,7 @@ import {
   isUnreadIgnoredMessageForUser,
   isUnreadTrackableMessageForUser
 } from '../utils/messageTracking';
-import { isLocalBotTopic } from '../utils/bot';
+import { isBotTopic, isBotUser, isLocalBotTopic } from '../utils/bot';
 
 const topics = ref<ITopic[]>([]);
 const loading = ref(false);
@@ -236,7 +236,9 @@ const createTopicsApi = () => {
         user => user.id !== authedUser.value?.id
       );
       normalizedTopic.avatarUrl =
-        normalizedTopic.avatarUrl || normalizedTopic.user?.avatarUrl;
+        isBotTopic(normalizedTopic) || isBotUser(normalizedTopic.user)
+          ? normalizedTopic.user?.avatarUrl || ''
+          : normalizedTopic.avatarUrl || normalizedTopic.user?.avatarUrl;
       normalizedTopic.name =
         normalizedTopic.name || normalizedTopic.user?.initials;
     }
@@ -379,7 +381,10 @@ const createTopicsApi = () => {
       const newTopic = await sdk.createTopic({ peerId });
 
       const normalized = normalizeTopic(newTopic as ITopic);
-      topics.value = [normalized, ...topics.value];
+      topics.value = [
+        normalized,
+        ...topics.value.filter(topic => topic.id !== normalized.id)
+      ];
       schedulePersistTopics();
       return normalized;
     } catch (err) {
@@ -837,13 +842,19 @@ const createTopicsApi = () => {
 
       hasChanges = true;
 
+      const isBotDmTopic =
+        topic.type === TopicType.DM &&
+        (isBotTopic(topic) || isBotUser(nextUser));
+
       return {
         ...topic,
         members: nextMembers,
         user: nextUser,
         avatarUrl:
           topic.type === TopicType.DM
-            ? nextUser?.avatarUrl || topic.avatarUrl
+            ? isBotDmTopic
+              ? nextUser?.avatarUrl || ''
+              : nextUser?.avatarUrl || topic.avatarUrl
             : topic.avatarUrl,
         name:
           topic.type === TopicType.DM
@@ -914,7 +925,11 @@ const createTopicsApi = () => {
   };
 
   const addTopicList = (value: ITopic): void => {
-    topics.value = [normalizeTopic(value), ...topics.value];
+    const normalized = normalizeTopic(value);
+    topics.value = [
+      normalized,
+      ...topics.value.filter(topic => topic.id !== normalized.id)
+    ];
     schedulePersistTopics();
   };
 

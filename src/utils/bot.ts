@@ -9,6 +9,7 @@ type BotMeta = {
   botUsername?: string;
   apiKey?: string;
   botApiKey?: string;
+  botId?: number;
   erpInitials?: string;
   erpRole?: string;
 };
@@ -64,6 +65,7 @@ export const isBotUser = (user?: IUser | null): boolean => {
   const meta = parseBotMeta(user?.ex);
 
   if (
+    user?.isBot ||
     meta.isBot ||
     meta.botUsername ||
     meta.apiKey ||
@@ -111,11 +113,17 @@ export const getBotApiKey = (user?: IUser | null): string => {
   return meta.botApiKey || meta.apiKey || '';
 };
 
+export const getBotId = (user?: IUser | null): number | null => {
+  const meta = parseBotMeta(user?.ex);
+  return typeof meta.botId === 'number' ? meta.botId : null;
+};
+
 export const buildBotEx = (
   currentEx: unknown,
   payload: {
     username: string;
     apiKey: string;
+    botId?: number;
   }
 ): string => {
   const currentMeta = parseBotMeta(currentEx);
@@ -125,6 +133,7 @@ export const buildBotEx = (
     isBot: true,
     botUsername: payload.username,
     botApiKey: payload.apiKey,
+    ...(payload.botId !== undefined ? { botId: payload.botId } : {}),
     erpRole: currentMeta.erpRole || 'Бот'
   });
 };

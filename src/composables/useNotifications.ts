@@ -3,12 +3,13 @@ import { MessageTypeEnum } from '@pksep/yui';
 
 interface INotificationPayload {
   title: string;
-  description: string;
+  description: unknown;
   type?: MessageTypeEnum;
 }
 
 export interface INotificationItem extends INotificationPayload {
   key: number;
+  description: string;
   type: MessageTypeEnum;
 }
 
@@ -27,6 +28,24 @@ const closeNotificationTimeouts = new Map<
   ReturnType<typeof setTimeout>
 >();
 let nextNotificationKey = 1;
+
+const formatNotificationDescription = (value: unknown): string => {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    return value.map(formatNotificationDescription).filter(Boolean).join(', ');
+  }
+  if (value instanceof Error) return value.message;
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return (
+      formatNotificationDescription(record.message) ||
+      formatNotificationDescription(record.description) ||
+      JSON.stringify(value)
+    );
+  }
+  return String(value);
+};
 
 const clearCloseNotificationTimeout = (key: number) => {
   const timeout = closeNotificationTimeouts.get(key);
@@ -58,7 +77,7 @@ export const showNotification = ({
   const notification: INotificationItem = {
     key: nextNotificationKey,
     title,
-    description,
+    description: formatNotificationDescription(description),
     type
   };
 
@@ -73,7 +92,7 @@ export const showNotification = ({
   );
 };
 
-export const showErrorNotification = (description: string) => {
+export const showErrorNotification = (description: unknown) => {
   showNotification({
     title: 'Ошибка',
     description,

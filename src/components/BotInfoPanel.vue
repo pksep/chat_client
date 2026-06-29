@@ -75,7 +75,7 @@
           </div>
         </label>
 
-        <label class="bot-editor__field">
+        <label v-if="false" class="bot-editor__field">
           <div class="bot-editor__label__actions">
             <span class="bot-editor__label">API ключ:</span>
             <button
@@ -113,7 +113,7 @@
         <Button
           :type="ButtonTypeEnum.primary"
           :size="SizesEnum.small"
-          :disabled="!isFormValid"
+          :disabled="!isFormValid || isSaving || isUploadingAvatar"
           @click="handleSave"
         >
           Сохранить
@@ -157,15 +157,16 @@ import BotAvatar from './UI/BotAvatar.vue';
 import CopyIcon from './UI/CopyIcon.vue';
 import ConfirmModal from './UI/ConfirmModal.vue';
 import type { ITopic, IUser } from './interfaces/interfaces';
-import { fileToDataURL } from '../utils/fileToDataURL';
 import {
   deleteBotTopic,
   getBotInitialForm,
-  updateLocalBotTopic
+  updateBotTopic
 } from '../composables/useBots';
+import { showErrorNotification } from '../composables/useNotifications';
 import { copyTextToClipboard } from '../utils/copyTextToClipboard';
 import { maskBotSecret } from '../utils/bot';
 import { navigateToDialogsList } from '../composables/navigation';
+import { uploadAvatarToMinio } from '../utils/uploadAvatarToMinio';
 
 const props = withDefaults(
   defineProps<{
@@ -189,6 +190,8 @@ const avatarFile = ref<File | null>(null);
 const isEditAvatar = ref(false);
 const isApiKeyVisible = ref(false);
 const isDeleteConfirmOpen = ref(false);
+const isSaving = ref(false);
+const isUploadingAvatar = ref(false);
 const form = reactive({
   name: '',
   username: '',
@@ -273,10 +276,20 @@ const closeEditAvatar = (): void => {
 };
 
 const handleAvatarCropSave = async (croppedFile: File): Promise<void> => {
-  form.avatarUrl = await fileToDataURL(croppedFile);
-  avatarFile.value = croppedFile;
-  isEditAvatar.value = false;
-  resetAvatarInput();
+  isUploadingAvatar.value = true;
+
+  try {
+    form.avatarUrl = await uploadAvatarToMinio(croppedFile);
+    avatarFile.value = croppedFile;
+    isEditAvatar.value = false;
+    resetAvatarInput();
+  } catch (error) {
+    showErrorNotification(
+      error instanceof Error ? error.message : 'Failed to upload bot avatar'
+    );
+  } finally {
+    isUploadingAvatar.value = false;
+  }
 };
 
 const handleCopyApiKey = async (): Promise<void> => {
@@ -287,19 +300,34 @@ const handleCopyApiKey = async (): Promise<void> => {
   await copyTextToClipboard(form.apiKey);
 };
 
-const handleSave = (): void => {
-  if (!props.topic || !props.user || !isFormValid.value) {
+const handleSave = async (): Promise<void> => {
+  if (
+    !props.topic ||
+    !props.user ||
+    !isFormValid.value ||
+    isUploadingAvatar.value
+  ) {
     return;
   }
 
-  updateLocalBotTopic(props.topic, {
-    name: form.name,
-    username: form.username,
-    apiKey: form.apiKey,
-    avatarUrl: form.avatarUrl
-  });
+  isSaving.value = true;
 
-  syncForm();
+  try {
+    await updateBotTopic(props.topic, {
+      name: form.name,
+      username: form.username,
+      apiKey: form.apiKey,
+      avatarUrl: form.avatarUrl
+    });
+
+    syncForm();
+  } catch (error) {
+    showErrorNotification(
+      error instanceof Error ? error.message : 'Не удалось сохранить бота'
+    );
+  } finally {
+    isSaving.value = false;
+  }
 };
 
 const handleDelete = async (): Promise<void> => {
@@ -307,9 +335,15 @@ const handleDelete = async (): Promise<void> => {
     return;
   }
 
-  await deleteBotTopic(props.topic);
-  isDeleteConfirmOpen.value = false;
-  emits('close');
-  navigateToDialogsList();
+  try {
+    await deleteBotTopic(props.topic);
+    isDeleteConfirmOpen.value = false;
+    emits('close');
+    navigateToDialogsList();
+  } catch (error) {
+    showErrorNotification(
+      error instanceof Error ? error.message : 'Не удалось удалить бота'
+    );
+  }
 };
 </script>

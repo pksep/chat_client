@@ -9,6 +9,7 @@ import {
 } from './useTopics';
 import { upsertLocalUser } from './useUsers';
 import { getConfig } from '../services/useConfig';
+import { uploadFile } from '../services/useChat';
 import type {
   IMessage,
   ITopic,
@@ -22,6 +23,7 @@ import {
   LOCAL_BOT_USER_ID_PREFIX,
   buildBotEx,
   getBotApiKey,
+  getBotId,
   getBotUsername,
   isLocalBotTopicId
 } from '../utils/bot';
@@ -30,6 +32,7 @@ export type CreateBotPayload = {
   name: string;
   username: string;
   avatarUrl?: string;
+  avatarFile?: File | null;
 };
 
 const normalizeBotUsername = (value: string): string =>
@@ -59,6 +62,7 @@ export const createLocalBotTopic = (
     avatarUrl: payload.avatarUrl || '',
     lastOnline: null,
     status: null,
+    isBot: true,
     ex: buildBotEx(authUser.ex, {
       username,
       apiKey
@@ -134,12 +138,62 @@ type GatewayBotResult = {
   chat_user_id?: string;
   username?: string;
   display_name?: string;
+  description?: string;
+  is_active?: boolean;
   token?: string;
 };
 
 type GatewayErrorBody = {
-  message?: string | string[];
-  error?: { message?: string };
+  message?: unknown;
+  error?: { message?: unknown } | string;
+  description?: unknown;
+};
+
+const formatErrorDetail = (value: unknown): string => {
+  if (!value) {
+    return '';
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(formatErrorDetail).filter(Boolean).join(', ');
+  }
+
+  if (value instanceof Error) {
+    return value.message;
+  }
+
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return (
+      formatErrorDetail(record.message) ||
+      formatErrorDetail(record.description) ||
+      JSON.stringify(value)
+    );
+  }
+
+  return String(value);
+};
+
+const readGatewayError = async (
+  response: Response,
+  fallback: string
+): Promise<string> => {
+  try {
+    const errorBody = (await response.json()) as GatewayErrorBody;
+    const detail =
+      errorBody?.message ??
+      (typeof errorBody?.error === 'object'
+        ? errorBody.error.message
+        : errorBody?.error) ??
+      errorBody?.description;
+    return formatErrorDetail(detail) || fallback;
+  } catch {
+    return fallback;
+  }
 };
 
 // Создаёт бота через шлюз sep-bot: бот заводится как реальный пользователь
@@ -158,6 +212,9 @@ export const createBotViaGateway = async (
 
   const username = normalizeBotUsername(payload.username).toLowerCase();
   const gateway = resolveBotGatewayUrl();
+  const avatarUrl = payload.avatarFile
+    ? (await uploadFile(payload.avatarFile)).path
+    : payload.avatarUrl;
 
   const response = await fetch(`${gateway}/bots`, {
     method: 'POST',
@@ -167,7 +224,8 @@ export const createBotViaGateway = async (
     },
     body: JSON.stringify({
       username,
-      displayName: payload.name.trim()
+      displayName: payload.name.trim(),
+      avatarUrl
     })
   });
 
@@ -176,8 +234,13 @@ export const createBotViaGateway = async (
 
     try {
       const errorBody = (await response.json()) as GatewayErrorBody;
-      const detail = errorBody?.message ?? errorBody?.error?.message;
-      message = Array.isArray(detail) ? detail.join(', ') : detail || message;
+      const detail =
+        errorBody?.message ??
+        (typeof errorBody?.error === 'object'
+          ? errorBody.error.message
+          : errorBody?.error) ??
+        errorBody?.description;
+      message = formatErrorDetail(detail) || message;
     } catch {
       // тело ошибки не JSON — оставляем дефолтное сообщение
     }
@@ -204,16 +267,26 @@ export const createBotViaGateway = async (
 
   // Помечаем пользователя как бота локально и сохраняем токен, чтобы клиент
   // распознавал бота, а форма редактирования показывала ключ.
-  const ex = buildBotEx(topic.user?.ex, { username, apiKey: token });
+  const ex = buildBotEx(topic.user?.ex, {
+    username,
+    apiKey: token,
+    botId: result.id
+  });
 
   if (topic.user?.id) {
     upsertLocalUser({
       ...(topic.user as IUser),
+      initials: result.display_name || payload.name.trim(),
       nickname: username,
+      avatarUrl: avatarUrl || topic.user.avatarUrl || '',
+      isBot: true,
       ex
     });
     updateLocalTopicUser(topic.user.id, {
+      initials: result.display_name || payload.name.trim(),
       nickname: username,
+      avatarUrl: avatarUrl || topic.user.avatarUrl || '',
+      isBot: true,
       ex
     });
   }
@@ -236,15 +309,18 @@ export const updateLocalBotTopic = (
 
   const username = normalizeBotUsername(payload.username);
   const apiKey = payload.apiKey || getBotApiKey(topic.user);
+  const botId = getBotId(topic.user) || undefined;
 
   upsertLocalUser({
     ...(topic.user as IUser),
     initials: payload.name.trim(),
     nickname: username,
     avatarUrl: payload.avatarUrl || '',
+    isBot: true,
     ex: buildBotEx(topic.user.ex, {
       username,
-      apiKey
+      apiKey,
+      botId
     })
   });
 
@@ -252,11 +328,101 @@ export const updateLocalBotTopic = (
     initials: payload.name.trim(),
     nickname: username,
     avatarUrl: payload.avatarUrl || '',
+    isBot: true,
     ex: buildBotEx(topic.user.ex, {
       username,
-      apiKey
+      apiKey,
+      botId
     })
   });
+};
+
+export const updateBotTopic = async (
+  topic: ITopic,
+  payload: {
+    name: string;
+    username: string;
+    apiKey: string;
+    avatarUrl?: string;
+  }
+): Promise<void> => {
+  const botId = getBotId(topic.user);
+
+  if (!botId || isLocalBotTopicId(topic.id)) {
+    updateLocalBotTopic(topic, payload);
+    return;
+  }
+
+  const authUser = getAuthUser();
+
+  if (!authUser?.id) {
+    throw new Error(
+      'Не удалось обновить бота: нет авторизованного пользователя'
+    );
+  }
+
+  const username = normalizeBotUsername(payload.username).toLowerCase();
+  const gateway = resolveBotGatewayUrl();
+  const response = await fetch(`${gateway}/bots/${botId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Owner-Id': authUser.id
+    },
+    body: JSON.stringify({
+      username,
+      displayName: payload.name.trim(),
+      avatarUrl: payload.avatarUrl || undefined
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      await readGatewayError(
+        response,
+        `Сервис ботов вернул ошибку ${response.status}`
+      )
+    );
+  }
+
+  const body = (await response.json()) as { result?: GatewayBotResult };
+  const result = body?.result;
+  const nextUsername = result?.username || username;
+  const nextName = result?.display_name || payload.name.trim();
+  const apiKey = payload.apiKey || getBotApiKey(topic.user);
+  const avatarUrl = payload.avatarUrl || topic.user?.avatarUrl || '';
+
+  updateLocalBotTopic(topic, {
+    ...payload,
+    name: nextName,
+    username: nextUsername,
+    apiKey,
+    avatarUrl
+  });
+
+  if (topic.user?.id) {
+    const ex = buildBotEx(topic.user.ex, {
+      username: nextUsername,
+      apiKey,
+      botId: result?.id || botId
+    });
+
+    upsertLocalUser({
+      ...(topic.user as IUser),
+      initials: nextName,
+      nickname: nextUsername,
+      avatarUrl,
+      isBot: true,
+      ex
+    });
+    updateLocalTopicUser(topic.user.id, {
+      initials: nextName,
+      nickname: nextUsername,
+      avatarUrl,
+      isBot: true,
+      ex
+    });
+  }
 };
 
 export const deleteBotTopic = async (topic: ITopic): Promise<void> => {
@@ -267,6 +433,28 @@ export const deleteBotTopic = async (topic: ITopic): Promise<void> => {
   if (isLocalBotTopicId(topic.id)) {
     deleteTopicFromList(topic.id);
     return;
+  }
+
+  const botId = getBotId(topic.user);
+  const authUser = getAuthUser();
+
+  if (botId && authUser?.id) {
+    const gateway = resolveBotGatewayUrl();
+    const response = await fetch(`${gateway}/bots/${botId}/deactivate`, {
+      method: 'POST',
+      headers: {
+        'X-Owner-Id': authUser.id
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        await readGatewayError(
+          response,
+          `Сервис ботов вернул ошибку ${response.status}`
+        )
+      );
+    }
   }
 
   await deleteTopic(topic.id);
