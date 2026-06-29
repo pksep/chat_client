@@ -46,6 +46,8 @@ export interface IUserStatus {
 export type IUser = User & {
   status?: IUserStatus | null;
   ex?: unknown;
+  isBot?: boolean;
+  is_bot?: boolean;
 };
 
 export type IGroup = Group & {

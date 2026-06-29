@@ -9,6 +9,7 @@ import {
 } from './useTopics';
 import { upsertLocalUser } from './useUsers';
 import { getConfig } from '../services/useConfig';
+import { uploadFile } from '../services/useChat';
 import type {
   IMessage,
   ITopic,
@@ -30,6 +31,7 @@ export type CreateBotPayload = {
   name: string;
   username: string;
   avatarUrl?: string;
+  avatarFile?: File | null;
 };
 
 const normalizeBotUsername = (value: string): string =>
@@ -59,6 +61,7 @@ export const createLocalBotTopic = (
     avatarUrl: payload.avatarUrl || '',
     lastOnline: null,
     status: null,
+    isBot: true,
     ex: buildBotEx(authUser.ex, {
       username,
       apiKey
@@ -138,8 +141,38 @@ type GatewayBotResult = {
 };
 
 type GatewayErrorBody = {
-  message?: string | string[];
-  error?: { message?: string };
+  message?: unknown;
+  error?: { message?: unknown } | string;
+  description?: unknown;
+};
+
+const formatErrorDetail = (value: unknown): string => {
+  if (!value) {
+    return '';
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(formatErrorDetail).filter(Boolean).join(', ');
+  }
+
+  if (value instanceof Error) {
+    return value.message;
+  }
+
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return (
+      formatErrorDetail(record.message) ||
+      formatErrorDetail(record.description) ||
+      JSON.stringify(value)
+    );
+  }
+
+  return String(value);
 };
 
 // Создаёт бота через шлюз sep-bot: бот заводится как реальный пользователь
@@ -158,6 +191,9 @@ export const createBotViaGateway = async (
 
   const username = normalizeBotUsername(payload.username).toLowerCase();
   const gateway = resolveBotGatewayUrl();
+  const avatarUrl = payload.avatarFile
+    ? (await uploadFile(payload.avatarFile)).path
+    : payload.avatarUrl;
 
   const response = await fetch(`${gateway}/bots`, {
     method: 'POST',
@@ -167,7 +203,8 @@ export const createBotViaGateway = async (
     },
     body: JSON.stringify({
       username,
-      displayName: payload.name.trim()
+      displayName: payload.name.trim(),
+      avatarUrl
     })
   });
 
@@ -176,8 +213,13 @@ export const createBotViaGateway = async (
 
     try {
       const errorBody = (await response.json()) as GatewayErrorBody;
-      const detail = errorBody?.message ?? errorBody?.error?.message;
-      message = Array.isArray(detail) ? detail.join(', ') : detail || message;
+      const detail =
+        errorBody?.message ??
+        (typeof errorBody?.error === 'object'
+          ? errorBody.error.message
+          : errorBody?.error) ??
+        errorBody?.description;
+      message = formatErrorDetail(detail) || message;
     } catch {
       // тело ошибки не JSON — оставляем дефолтное сообщение
     }
@@ -210,10 +252,14 @@ export const createBotViaGateway = async (
     upsertLocalUser({
       ...(topic.user as IUser),
       nickname: username,
+      avatarUrl: avatarUrl || topic.user.avatarUrl || '',
+      isBot: true,
       ex
     });
     updateLocalTopicUser(topic.user.id, {
       nickname: username,
+      avatarUrl: avatarUrl || topic.user.avatarUrl || '',
+      isBot: true,
       ex
     });
   }
@@ -242,6 +288,7 @@ export const updateLocalBotTopic = (
     initials: payload.name.trim(),
     nickname: username,
     avatarUrl: payload.avatarUrl || '',
+    isBot: true,
     ex: buildBotEx(topic.user.ex, {
       username,
       apiKey
@@ -252,6 +299,7 @@ export const updateLocalBotTopic = (
     initials: payload.name.trim(),
     nickname: username,
     avatarUrl: payload.avatarUrl || '',
+    isBot: true,
     ex: buildBotEx(topic.user.ex, {
       username,
       apiKey

@@ -377,7 +377,10 @@ const createTopicsApi = () => {
       const newTopic = await sdk.createTopic({ peerId });
 
       const normalized = normalizeTopic(newTopic as ITopic);
-      topics.value = [normalized, ...topics.value];
+      topics.value = [
+        normalized,
+        ...topics.value.filter(topic => topic.id !== normalized.id)
+      ];
       schedulePersistTopics();
       return normalized;
     } catch (err) {
@@ -912,7 +915,11 @@ const createTopicsApi = () => {
   };
 
   const addTopicList = (value: ITopic): void => {
-    topics.value = [normalizeTopic(value), ...topics.value];
+    const normalized = normalizeTopic(value);
+    topics.value = [
+      normalized,
+      ...topics.value.filter(topic => topic.id !== normalized.id)
+    ];
     schedulePersistTopics();
   };
 

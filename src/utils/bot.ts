@@ -6,6 +6,7 @@ export const LOCAL_BOT_USER_ID_PREFIX = 'local-bot-user-';
 
 type BotMeta = {
   isBot?: boolean;
+  is_bot?: boolean;
   botUsername?: string;
   apiKey?: string;
   botApiKey?: string;
@@ -62,9 +63,19 @@ export const isLocalBotTopic = (topic?: ITopic | null): boolean =>
 
 export const isBotUser = (user?: IUser | null): boolean => {
   const meta = parseBotMeta(user?.ex);
+  const botUser = user as
+    | (IUser & {
+        isBot?: boolean;
+        is_bot?: boolean;
+      })
+    | null
+    | undefined;
 
   if (
+    botUser?.isBot ||
+    botUser?.is_bot ||
     meta.isBot ||
+    meta.is_bot ||
     meta.botUsername ||
     meta.apiKey ||
     meta.botApiKey ||

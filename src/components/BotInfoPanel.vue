@@ -75,7 +75,7 @@
           </div>
         </label>
 
-        <label class="bot-editor__field">
+        <label v-if="false" class="bot-editor__field">
           <div class="bot-editor__label__actions">
             <span class="bot-editor__label">API ключ:</span>
             <button
