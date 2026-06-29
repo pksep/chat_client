@@ -1054,7 +1054,8 @@ div.message-content__html > ul > li {
   user-select: auto;
 }
 
-.message-content-1-item .message-content__media img {
+.message-content-1-item .message-content__media img,
+.message-content-1-item .message-content__media video {
   object-fit: contain;
 }
 
@@ -1072,6 +1073,25 @@ div.message-content__html > ul > li {
 
 .message-content__media-loading {
   background-color: #1c263566;
+}
+
+.media-control-enter-active,
+.media-control-leave-active {
+  transition:
+    opacity 180ms ease,
+    scale 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.media-control-enter-from,
+.media-control-leave-to {
+  opacity: 0;
+  scale: 0.92;
+}
+
+.media-control-enter-to,
+.media-control-leave-from {
+  opacity: 1;
+  scale: 1;
 }
 
 div.message-content__file {

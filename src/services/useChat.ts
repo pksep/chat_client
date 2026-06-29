@@ -79,6 +79,7 @@ import {
 import {
   loadShadowSyncMeta,
   recordShadowChatEvent,
+  saveShadowTopicSnapshot,
   saveShadowReadState,
   saveShadowSyncMeta
 } from './useShadowChatSync';
@@ -380,6 +381,7 @@ const setupChatListeners = (): void => {
         source: 'ws',
         payload: payload.data
       });
+      void saveShadowTopicSnapshot(payload.data.topicId, [payload.data], 'ws');
       if (payload.type === 'CHANGE' || payload.scope !== 'SELF') {
         editMessageFromLocal(payload.data.topicId, payload.data);
       }

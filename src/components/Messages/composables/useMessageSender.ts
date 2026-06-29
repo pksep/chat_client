@@ -20,7 +20,8 @@ import {
   registerPendingUploadFile,
   registerPendingUploadMessage,
   setUploadedFileData,
-  setFileUploadPendingStatus
+  setFileUploadPendingStatus,
+  setLocalMediaPreviewData
 } from '../../../services/useMessages';
 import { MediaType, MediaTypeType } from '@pksep/zod-shared-chat';
 import type { IMessage, IMedia } from '../../interfaces/interfaces';
@@ -28,7 +29,8 @@ import { RouteTypes } from '../../../composables/navigation/useUrlRouting';
 import {
   calculatePreviewDimensions,
   getFileDimensions,
-  getVideoThumbnail
+  getVideoThumbnail,
+  VIDEO_FALLBACK_THUMBNAIL
 } from '../../../utils/mediaPreview';
 import { MessageStatus } from '../../../services/useChatSDK/types';
 import { getHasWebsocketConnection } from '../../../services/useChat';
@@ -47,6 +49,10 @@ const MESSAGE_AUTO_RETRY_WINDOW_MS = 180000;
 const MESSAGE_AUTO_RETRY_INITIAL_DELAY_MS = 3000;
 const MESSAGE_AUTO_RETRY_MAX_DELAY_MS = 15000;
 const BACKGROUND_UPLOAD_RETRY_SUPPRESS_MS = 15000;
+const VIDEO_INITIAL_PREVIEW_DIMENSIONS = {
+  width: 640,
+  height: 360
+};
 
 type PendingMessageRetryState = {
   attempt: number;
@@ -308,7 +314,11 @@ export function useMessageSender(
   clearSellectedMessage: () => void
 ) {
   const waitForPreviewMetrics = async (media?: IMedia): Promise<void> => {
-    if (!media || media.type === MediaType.File) {
+    if (
+      !media ||
+      media.type === MediaType.File ||
+      media.type === MediaType.Video
+    ) {
       return;
     }
 
@@ -991,6 +1001,68 @@ export function useMessageSender(
     schedulePendingMessageAutoRetry(params.topicId, clientId, { reset: true });
   };
 
+  const buildAttachmentPreviewEx = (
+    dimensions: { width?: number; height?: number },
+    count: number,
+    index: number,
+    fillSharedPreview?: boolean
+  ) => {
+    const preview = calculatePreviewDimensions(dimensions, count, index);
+
+    return fillSharedPreview
+      ? {
+          ...preview,
+          fillPreview: true
+        }
+      : preview;
+  };
+
+  const hydrateLocalVideoPreview = (
+    topicId: string,
+    messageId: string,
+    fileId: string,
+    file: File,
+    count: number,
+    index: number,
+    fillSharedPreview?: boolean
+  ): void => {
+    void getFileDimensions(file)
+      .then(dimensions => {
+        if (!dimensions.width || !dimensions.height) {
+          return;
+        }
+
+        setLocalMediaPreviewData(topicId, messageId, fileId, {
+          ex: buildAttachmentPreviewEx(
+            dimensions,
+            count,
+            index,
+            fillSharedPreview
+          )
+        });
+      })
+      .catch(error => {
+        console.warn('[ChatSDK] Failed to read local video dimensions:', error);
+      });
+
+    void getVideoThumbnail(file)
+      .then(thumbnail => {
+        if (!thumbnail) {
+          return;
+        }
+
+        setLocalMediaPreviewData(topicId, messageId, fileId, {
+          localThumbnailPath: thumbnail
+        });
+      })
+      .catch(error => {
+        console.warn(
+          '[ChatSDK] Failed to create local video thumbnail:',
+          error
+        );
+      });
+  };
+
   const handleSend = async (
     payload?: string[] | IHandleSendPayload
   ): Promise<void> => {
@@ -1371,25 +1443,29 @@ export function useMessageSender(
           };
         }
 
+        if (type === MediaType.Video) {
+          return {
+            ...baseMedia,
+            localThumbnailPath: VIDEO_FALLBACK_THUMBNAIL,
+            ex: buildAttachmentPreviewEx(
+              VIDEO_INITIAL_PREVIEW_DIMENSIONS,
+              filePayloads.length,
+              i,
+              options?.fillSharedPreview === true
+            )
+          };
+        }
+
         const dimensions = await getFileDimensions(file);
 
         return {
           ...baseMedia,
-          localThumbnailPath:
-            type === MediaType.Video
-              ? (await getVideoThumbnail(file)) || localPath
-              : undefined,
-          ex:
+          ex: buildAttachmentPreviewEx(
+            dimensions,
+            filePayloads.length,
+            i,
             options?.fillSharedPreview === true
-              ? {
-                  ...calculatePreviewDimensions(
-                    dimensions,
-                    filePayloads.length,
-                    i
-                  ),
-                  fillPreview: true
-                }
-              : calculatePreviewDimensions(dimensions, filePayloads.length, i)
+          )
         };
       })
     );
@@ -1424,15 +1500,24 @@ export function useMessageSender(
     });
 
     filePayloads.forEach(({ file, isMedia }, index) => {
-      registerPendingUploadFile(
-        newMessage.topicId,
-        clientId,
-        index.toString(),
-        {
+      const fileId = index.toString();
+
+      registerPendingUploadFile(newMessage.topicId, clientId, fileId, {
+        file,
+        isMedia
+      });
+
+      if (getMediaType(file, isMedia) === MediaType.Video) {
+        hydrateLocalVideoPreview(
+          newMessage.topicId,
+          clientId,
+          fileId,
           file,
-          isMedia
-        }
-      );
+          filePayloads.length,
+          index,
+          options?.fillSharedPreview === true
+        );
+      }
     });
 
     let hasUploadError = false;
