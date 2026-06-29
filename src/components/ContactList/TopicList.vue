@@ -56,7 +56,7 @@
             }
           ]"
           :initials="topic.name"
-          :path="topic.avatarUrl"
+          :path="getTopicAvatarPath(topic)"
           :alt="`Avatar of ${topic.name}`"
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           is-icon
@@ -663,7 +663,10 @@ const getMessageResultTopicName = (result: IMessageSearchResult): string =>
   getMessageResultTopic(result)?.name || 'Сообщение';
 
 const getMessageResultTopicAvatar = (result: IMessageSearchResult): string =>
-  getMessageResultTopic(result)?.avatarUrl || '';
+  getTopicAvatarPath(getMessageResultTopic(result));
+
+const getTopicAvatarPath = (topic?: ITopic | null): string =>
+  isBotTopic(topic) ? topic?.user?.avatarUrl || '' : topic?.avatarUrl || '';
 
 const isTopicUserOnline = (topic: ITopic): boolean =>
   isBotTopic(topic) ||

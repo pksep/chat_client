@@ -44,6 +44,8 @@ export interface IUserStatus {
 }
 
 export type IUser = User & {
+  isBot?: boolean;
+  is_bot?: boolean;
   status?: IUserStatus | null;
   ex?: unknown;
   isBot?: boolean;

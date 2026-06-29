@@ -200,6 +200,8 @@ const getUrlOrganization = () => {
 const hasBootstrapToken = () =>
   !!getUrlErpToken() || !!getStoredBootstrapErpAccessToken();
 const hasChatSession = () => !!getChatAuthSession();
+const shouldLoadFreshConfigBeforeChat = () =>
+  hasBootstrapToken() || hasChatSession();
 
 const openCredentialsStepIfNeeded = () => {
   if (hasBootstrapToken() || hasChatSession()) {
@@ -260,6 +262,15 @@ const selectOrganization = (url: string) => {
   setLastOrganization(normalizedUrl);
   serverUrl.value = normalizedUrl;
   isAddingNewOrganization.value = false;
+
+  if (shouldLoadFreshConfigBeforeChat()) {
+    void loadRemoteConfig({
+      url: normalizedUrl,
+      fallbackConfig: organization.config
+    });
+    return;
+  }
+
   applyConfig(organization.config);
   openCredentialsStepIfNeeded();
   void loadRemoteConfig({
@@ -311,6 +322,14 @@ const handleQrAuthSuccess = (payload: {
   isAddingNewOrganization.value = false;
 
   if (storedOrganization) {
+    if (shouldLoadFreshConfigBeforeChat()) {
+      void loadRemoteConfig({
+        url: scannedOrganization,
+        fallbackConfig: storedOrganization.config
+      });
+      return;
+    }
+
     applyConfig(storedOrganization.config);
     void loadRemoteConfig({
       url: scannedOrganization,
@@ -377,9 +396,9 @@ const loadRemoteConfig = async (options?: {
       serverUrl.value = normalizedUrl;
       setLastOrganization(normalizedUrl);
       isAddingNewOrganization.value = false;
+      clearChatAuthSession();
       applyConfig(options.fallbackConfig);
       openCredentialsStepIfNeeded();
-      clearChatAuthSession();
     }
   } finally {
     isLoading.value = false;
@@ -451,6 +470,14 @@ onMounted(() => {
     isAddingNewOrganization.value = false;
 
     if (storedOrganization) {
+      if (shouldLoadFreshConfigBeforeChat()) {
+        void loadRemoteConfig({
+          url: urlOrganization,
+          fallbackConfig: storedOrganization.config
+        });
+        return;
+      }
+
       applyConfig(storedOrganization.config);
       openCredentialsStepIfNeeded();
       void loadRemoteConfig({
@@ -478,6 +505,15 @@ onMounted(() => {
 
     serverUrl.value = normalizedLastOrganization;
     isAddingNewOrganization.value = false;
+
+    if (shouldLoadFreshConfigBeforeChat()) {
+      void loadRemoteConfig({
+        url: normalizedLastOrganization,
+        fallbackConfig: lastOrganization.config
+      });
+      return;
+    }
+
     applyConfig(lastOrganization.config);
     openCredentialsStepIfNeeded();
     void loadRemoteConfig({

@@ -36,7 +36,7 @@ import {
   isUnreadIgnoredMessageForUser,
   isUnreadTrackableMessageForUser
 } from '../utils/messageTracking';
-import { isLocalBotTopic } from '../utils/bot';
+import { isBotTopic, isBotUser, isLocalBotTopic } from '../utils/bot';
 
 const topics = ref<ITopic[]>([]);
 const loading = ref(false);
@@ -236,7 +236,9 @@ const createTopicsApi = () => {
         user => user.id !== authedUser.value?.id
       );
       normalizedTopic.avatarUrl =
-        normalizedTopic.avatarUrl || normalizedTopic.user?.avatarUrl;
+        isBotTopic(normalizedTopic) || isBotUser(normalizedTopic.user)
+          ? normalizedTopic.user?.avatarUrl || ''
+          : normalizedTopic.avatarUrl || normalizedTopic.user?.avatarUrl;
       normalizedTopic.name =
         normalizedTopic.name || normalizedTopic.user?.initials;
     }
@@ -840,13 +842,19 @@ const createTopicsApi = () => {
 
       hasChanges = true;
 
+      const isBotDmTopic =
+        topic.type === TopicType.DM &&
+        (isBotTopic(topic) || isBotUser(nextUser));
+
       return {
         ...topic,
         members: nextMembers,
         user: nextUser,
         avatarUrl:
           topic.type === TopicType.DM
-            ? nextUser?.avatarUrl || topic.avatarUrl
+            ? isBotDmTopic
+              ? nextUser?.avatarUrl || ''
+              : nextUser?.avatarUrl || topic.avatarUrl
             : topic.avatarUrl,
         name:
           topic.type === TopicType.DM

@@ -74,7 +74,7 @@
           <Button
             :type="ButtonTypeEnum.primary"
             :size="SizesEnum.small"
-            :disabled="!isFormValid || isCreating"
+            :disabled="!isFormValid || isCreating || isUploadingAvatar"
             @click="handleCreate"
           >
             {{ isCreating ? 'Создание…' : 'Создать' }}
