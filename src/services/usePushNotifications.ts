@@ -23,10 +23,7 @@ import {
   initTauriNotifications,
   isTauriRuntime
 } from './useTauriNotifications';
-import {
-  getTelemetryErrorPayload,
-  recordTelemetryEvent
-} from './useTelemetry';
+import { getTelemetryErrorPayload, recordTelemetryEvent } from './useTelemetry';
 
 const NATIVE_PUSH_TOKEN_STORAGE_KEY = 'chat_native_push_token';
 const WEB_PUSH_ENDPOINT_STORAGE_KEY = 'chat_web_push_endpoint';
@@ -430,10 +427,7 @@ export const initPushNotifications = async () => {
           roomId: normalizedData.roomId
         }
       });
-      handleNotificationInteraction(
-        normalizedData,
-        n.actionId
-      );
+      handleNotificationInteraction(normalizedData, n.actionId);
     });
 
     PushNotifications.addListener('registrationError', e => {

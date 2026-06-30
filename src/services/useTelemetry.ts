@@ -227,7 +227,9 @@ export const recordTelemetryEvent = (input: TelemetryEventInput): void => {
   };
 
   telemetryQueue = [...telemetryQueue, event].slice(-TELEMETRY_MAX_QUEUE_SIZE);
-  scheduleTelemetryFlush(input.level === 'error' ? 0 : TELEMETRY_FLUSH_DELAY_MS);
+  scheduleTelemetryFlush(
+    input.level === 'error' ? 0 : TELEMETRY_FLUSH_DELAY_MS
+  );
 };
 
 export const createTelemetryTraceId = (prefix: string): string =>
@@ -249,7 +251,9 @@ export const getTelemetryErrorPayload = (
   };
 };
 
-export const getFileTelemetryPayload = (file: File): Record<string, unknown> => {
+export const getFileTelemetryPayload = (
+  file: File
+): Record<string, unknown> => {
   const extension = file.name.includes('.')
     ? file.name.split('.').pop()?.toLowerCase()
     : undefined;

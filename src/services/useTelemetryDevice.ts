@@ -60,9 +60,7 @@ const getBrowserDeviceContext = (): TelemetryDeviceInfo => {
     language: nav?.language,
     languages: nav?.languages,
     hardwareConcurrency: nav?.hardwareConcurrency,
-    deviceMemory: (nav as
-      | (Navigator & { deviceMemory?: number })
-      | undefined)
+    deviceMemory: (nav as (Navigator & { deviceMemory?: number }) | undefined)
       ?.deviceMemory,
     userAgent: nav?.userAgent,
     screenWidthPx: screenInfo?.width,
