@@ -38,6 +38,12 @@ import {
   createMessageExWithQuote,
   parseMessageEx
 } from '../../../utils/messageReplyQuote';
+import {
+  createTelemetryTraceId,
+  getFileTelemetryPayload,
+  getTelemetryErrorPayload,
+  recordTelemetryEvent
+} from '../../../services/useTelemetry';
 
 const MAX_HTML_LENGTH = 4000;
 const FORWARD_TEXT_SEND_DELAY_MS = 250;
@@ -893,7 +899,27 @@ export function useMessageSender(
       return false;
     }
 
+    const uploadTraceId = createTelemetryTraceId('upload');
+    const uploadStartedAt = Date.now();
+    const uploadTelemetryPayload = {
+      ...getFileTelemetryPayload(payload.file),
+      topicId,
+      messageId,
+      fileId,
+      isMedia: payload.isMedia,
+      mediaType: currentMedia.type
+    };
+
     const request = (async (): Promise<boolean> => {
+      recordTelemetryEvent({
+        category: 'upload',
+        name: 'upload.message_file.start',
+        traceId: uploadTraceId,
+        entityType: 'message',
+        entityId: messageId,
+        payload: uploadTelemetryPayload
+      });
+
       changeMessageStatusLocally(topicId, messageId, MessageStatus.Wait);
       setFileUploadPendingStatus(topicId, messageId, fileId);
       clearBackgroundInterruptedUpload(topicId, messageId);
@@ -906,7 +932,14 @@ export function useMessageSender(
           percent => {
             changeFileUploadPercent(topicId, messageId, fileId, percent);
           },
-          payload.isMedia
+          payload.isMedia,
+          {
+            traceId: uploadTraceId,
+            topicId,
+            messageId,
+            fileId,
+            source: 'message_attachment'
+          }
         );
 
         changeFileLoadingStatus(topicId, messageId, fileId);
@@ -917,6 +950,20 @@ export function useMessageSender(
           size: file.size,
           type: getMediaType(payload.file, payload.isMedia),
           ex
+        });
+
+        recordTelemetryEvent({
+          category: 'upload',
+          name: 'upload.message_file.success',
+          traceId: uploadTraceId,
+          entityType: 'message',
+          entityId: messageId,
+          payload: {
+            ...uploadTelemetryPayload,
+            path,
+            thumbnailPath,
+            elapsedMs: Date.now() - uploadStartedAt
+          }
         });
 
         return true;
@@ -936,6 +983,19 @@ export function useMessageSender(
         if (!options?.suppressErrorNotification) {
           showErrorNotification(error.message || 'Failed to upload file');
         }
+        recordTelemetryEvent({
+          category: 'upload',
+          name: 'upload.message_file.failed',
+          level: 'error',
+          traceId: uploadTraceId,
+          entityType: 'message',
+          entityId: messageId,
+          payload: {
+            ...uploadTelemetryPayload,
+            elapsedMs: Date.now() - uploadStartedAt,
+            ...getTelemetryErrorPayload(error)
+          }
+        });
         return false;
       } finally {
         activeUploadRequests.delete(requestKey);
@@ -1153,12 +1213,58 @@ export function useMessageSender(
 
     /* ================= NORMAL CHAT ================= */
     if (!topicId) {
+      recordTelemetryEvent({
+        category: 'chat',
+        name: 'chat.message_send.failed',
+        level: 'error',
+        entityType: 'message',
+        payload: {
+          reason: 'missing_topic',
+          routeType
+        }
+      });
       console.error('[ChatSDK] Cannot send message: no topic provided');
       return;
     }
 
+    const chatSendTraceId = createTelemetryTraceId('message');
+    const chatSendStartedAt = Date.now();
+    let sentMessageCount = 0;
+    let queuedMessageCount = 0;
+
+    recordTelemetryEvent({
+      category: 'chat',
+      name: 'chat.message_send.start',
+      traceId: chatSendTraceId,
+      entityType: 'message',
+      payload: {
+        topicId,
+        routeType,
+        textLength: stripHtml(textToSend).length,
+        partCount: parts.length,
+        hasAttachments,
+        attachmentCount: queuedFiles.length,
+        mediaCount: queuedFiles.filter(file => file.isMedia).length,
+        forwardCount: forwardMessages.length,
+        hasReply: Boolean(replyMessageId),
+        taggedUserCount: taggedUserIds?.length || 0
+      }
+    });
+
     try {
       if (hasAttachments) {
+        recordTelemetryEvent({
+          category: 'chat',
+          name: 'chat.message_send.delegated_to_upload',
+          traceId: chatSendTraceId,
+          entityType: 'message',
+          payload: {
+            topicId,
+            attachmentCount: queuedFiles.length,
+            mediaCount: queuedFiles.filter(file => file.isMedia).length,
+            elapsedMs: Date.now() - chatSendStartedAt
+          }
+        });
         await handleQueuedAttachmentFiles(queuedFiles, {
           topicId,
           text: textToSend || null,
@@ -1195,6 +1301,7 @@ export function useMessageSender(
           });
 
           if (!didSend) {
+            queuedMessageCount += 1;
             queuePendingTextMessage({
               topicId,
               text: '',
@@ -1202,6 +1309,8 @@ export function useMessageSender(
               forwardMessageIds: [forwardMessage.id],
               ex
             });
+          } else {
+            sentMessageCount += 1;
           }
         }
       }
@@ -1235,6 +1344,7 @@ export function useMessageSender(
           });
 
           if (!didSend) {
+            queuedMessageCount += 1;
             queuePendingTextMessage({
               topicId,
               text: '',
@@ -1242,6 +1352,8 @@ export function useMessageSender(
               forwardMessageIds: [forwardMessage.id],
               ex
             });
+          } else {
+            sentMessageCount += 1;
           }
         }
 
@@ -1266,6 +1378,7 @@ export function useMessageSender(
           });
 
           if (!didSend) {
+            queuedMessageCount += 1;
             queuePendingTextMessage({
               topicId,
               text: part,
@@ -1273,6 +1386,8 @@ export function useMessageSender(
               taggedUserIds,
               ex
             });
+          } else {
+            sentMessageCount += 1;
           }
         }
 
@@ -1301,6 +1416,7 @@ export function useMessageSender(
             });
 
             if (!didSend) {
+              queuedMessageCount += 1;
               queuePendingTextMessage({
                 topicId,
                 text: part,
@@ -1310,6 +1426,8 @@ export function useMessageSender(
                 taggedUserIds,
                 ex
               });
+            } else {
+              sentMessageCount += 1;
             }
           }
           continue;
@@ -1348,6 +1466,7 @@ export function useMessageSender(
         const canSend = isSendAvailable();
 
         if (!canSend) {
+          queuedMessageCount += 1;
           addMessageToLocal(topicId, localMessage);
           schedulePendingMessageAutoRetry(topicId, clientId, { reset: true });
           continue;
@@ -1368,19 +1487,52 @@ export function useMessageSender(
         });
 
         if (!didSend) {
+          queuedMessageCount += 1;
           cancelDelayedOutgoingMessage(topicId, clientId);
           addMessageToLocal(topicId, {
             ...localMessage,
             status: MessageStatus.Wait
           });
           schedulePendingMessageAutoRetry(topicId, clientId, { reset: true });
+        } else {
+          sentMessageCount += 1;
         }
       }
       state.hideUnreadMarker = true;
 
       await nextTick();
       scrollToBottom();
+      recordTelemetryEvent({
+        category: 'chat',
+        name:
+          queuedMessageCount > 0
+            ? 'chat.message_send.queued_retry'
+            : 'chat.message_send.success',
+        level: queuedMessageCount > 0 ? 'warn' : 'info',
+        traceId: chatSendTraceId,
+        entityType: 'message',
+        payload: {
+          topicId,
+          sentMessageCount,
+          queuedMessageCount,
+          elapsedMs: Date.now() - chatSendStartedAt
+        }
+      });
     } catch (error: any) {
+      recordTelemetryEvent({
+        category: 'chat',
+        name: 'chat.message_send.failed',
+        level: 'error',
+        traceId: chatSendTraceId,
+        entityType: 'message',
+        payload: {
+          topicId,
+          sentMessageCount,
+          queuedMessageCount,
+          elapsedMs: Date.now() - chatSendStartedAt,
+          ...getTelemetryErrorPayload(error)
+        }
+      });
       console.error('[ChatSDK] Failed to send message:', error);
     }
 
@@ -1413,6 +1565,7 @@ export function useMessageSender(
     }
 
     const clientId = generateUUID();
+    const messageTraceId = createTelemetryTraceId('attachment');
 
     const localMedia: IMedia[] = await Promise.all(
       filePayloads.map(async ({ file, isMedia }, i) => {
@@ -1499,6 +1652,27 @@ export function useMessageSender(
       forwardMessageIds
     });
 
+    recordTelemetryEvent({
+      category: 'upload',
+      name: 'upload.message.created',
+      traceId: messageTraceId,
+      entityType: 'message',
+      entityId: clientId,
+      payload: {
+        topicId: newMessage.topicId,
+        messageId: clientId,
+        fileCount: filePayloads.length,
+        totalBytes: filePayloads.reduce(
+          (sum, payload) => sum + payload.file.size,
+          0
+        ),
+        mediaCount: filePayloads.filter(payload => payload.isMedia).length,
+        videoCount: filePayloads.filter(payload =>
+          payload.file.type.startsWith('video/')
+        ).length
+      }
+    });
+
     filePayloads.forEach(({ file, isMedia }, index) => {
       const fileId = index.toString();
 
@@ -1538,10 +1712,37 @@ export function useMessageSender(
     }
 
     if (hasUploadError) {
+      recordTelemetryEvent({
+        category: 'upload',
+        name: 'upload.message.waiting_retry',
+        level: 'warn',
+        traceId: messageTraceId,
+        entityType: 'message',
+        entityId: clientId,
+        payload: {
+          topicId: newMessage.topicId,
+          messageId: clientId,
+          reason: 'upload_error'
+        }
+      });
       schedulePendingMessageAutoRetry(newMessage.topicId, clientId, {
         reset: true
       });
     } else {
+      const messageSendStartedAt = Date.now();
+      recordTelemetryEvent({
+        category: 'upload',
+        name: 'upload.message_send.start',
+        traceId: messageTraceId,
+        entityType: 'message',
+        entityId: clientId,
+        payload: {
+          topicId: newMessage.topicId,
+          messageId: clientId,
+          fileCount: filePayloads.length
+        }
+      });
+
       const didSend = await trySendPendingUploadMessage(
         newMessage.topicId,
         clientId,
@@ -1551,8 +1752,34 @@ export function useMessageSender(
       );
 
       if (!didSend) {
+        recordTelemetryEvent({
+          category: 'upload',
+          name: 'upload.message_send.failed',
+          level: 'error',
+          traceId: messageTraceId,
+          entityType: 'message',
+          entityId: clientId,
+          payload: {
+            topicId: newMessage.topicId,
+            messageId: clientId,
+            elapsedMs: Date.now() - messageSendStartedAt
+          }
+        });
         schedulePendingMessageAutoRetry(newMessage.topicId, clientId, {
           reset: true
+        });
+      } else {
+        recordTelemetryEvent({
+          category: 'upload',
+          name: 'upload.message_send.success',
+          traceId: messageTraceId,
+          entityType: 'message',
+          entityId: clientId,
+          payload: {
+            topicId: newMessage.topicId,
+            messageId: clientId,
+            elapsedMs: Date.now() - messageSendStartedAt
+          }
         });
       }
     }

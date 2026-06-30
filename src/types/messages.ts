@@ -8,6 +8,7 @@ export interface AIMessage {
 }
 
 export interface ChatMessage extends ChatSDKMessage {
+  id: string;
   systemMessageType?: string;
   systemMessageContent?: string;
   senderNickname?: string;
