@@ -23,6 +23,7 @@ import {
   initTauriNotifications,
   isTauriRuntime
 } from './useTauriNotifications';
+import { getTelemetryErrorPayload, recordTelemetryEvent } from './useTelemetry';
 
 const NATIVE_PUSH_TOKEN_STORAGE_KEY = 'chat_native_push_token';
 const WEB_PUSH_ENDPOINT_STORAGE_KEY = 'chat_web_push_endpoint';
@@ -297,6 +298,15 @@ const bindWebServiceWorkerMessageListener = () => {
 
 export const initPushNotifications = async () => {
   const api = useChatApi();
+  recordTelemetryEvent({
+    category: 'notification',
+    name: 'notification.init.start',
+    entityType: 'notification',
+    payload: {
+      platform: Capacitor.getPlatform(),
+      isNative: Capacitor.isNativePlatform()
+    }
+  });
   // Android/iOS
 
   if (Capacitor.isNativePlatform()) {
@@ -304,6 +314,16 @@ export const initPushNotifications = async () => {
     if (permStatus.receive === 'prompt') {
       permStatus = await PushNotifications.requestPermissions();
     }
+    recordTelemetryEvent({
+      category: 'notification',
+      name: 'notification.permission.checked',
+      level: permStatus.receive === 'granted' ? 'info' : 'warn',
+      entityType: 'notification',
+      payload: {
+        receive: permStatus.receive,
+        platform: Capacitor.getPlatform()
+      }
+    });
     if (permStatus.receive !== 'granted')
       return console.error('Permission denied');
 
@@ -323,10 +343,30 @@ export const initPushNotifications = async () => {
 
     PushNotifications.addListener('registration', async token => {
       storeNativePushToken(token.value);
-      await api.post('/notifications/device', {
-        token: token.value,
-        platform: Capacitor.getPlatform()
-      });
+      try {
+        await api.post('/notifications/device', {
+          token: token.value,
+          platform: Capacitor.getPlatform()
+        });
+        recordTelemetryEvent({
+          category: 'notification',
+          name: 'notification.native.registration.success',
+          entityType: 'notification',
+          payload: {
+            platform: Capacitor.getPlatform(),
+            tokenLength: token.value.length
+          }
+        });
+      } catch (error) {
+        recordTelemetryEvent({
+          category: 'notification',
+          name: 'notification.native.registration.failed',
+          level: 'error',
+          entityType: 'notification',
+          payload: getTelemetryErrorPayload(error)
+        });
+        console.error('Push registration sync failed:', error);
+      }
     });
 
     PushNotifications.addListener('pushNotificationReceived', n => {
@@ -334,6 +374,19 @@ export const initPushNotifications = async () => {
       const normalizedData = normalizeNativeNotificationData(
         (n.data || {}) as NativeNotificationData
       );
+      recordTelemetryEvent({
+        category: 'notification',
+        name: 'notification.native.received',
+        entityType: 'notification',
+        entityId: normalizedData.topicId || normalizedData.roomId,
+        payload: {
+          action: normalizedData.action,
+          type: normalizedData.type,
+          topicId: normalizedData.topicId,
+          roomId: normalizedData.roomId,
+          topicType: normalizedData.topicType
+        }
+      });
 
       if (normalizedData.action === 'CLEAR_CHAT_NOTIFICATIONS') {
         void clearTopicNotifications(normalizedData.topicId);
@@ -358,15 +411,35 @@ export const initPushNotifications = async () => {
 
     PushNotifications.addListener('pushNotificationActionPerformed', n => {
       console.log('Native push action:', n);
-      handleNotificationInteraction(
-        (n.notification.data || {}) as NativeNotificationData,
-        n.actionId
+      const normalizedData = normalizeNativeNotificationData(
+        (n.notification.data || {}) as NativeNotificationData
       );
+      recordTelemetryEvent({
+        category: 'notification',
+        name: 'notification.native.action',
+        entityType: 'notification',
+        entityId: normalizedData.topicId || normalizedData.roomId,
+        payload: {
+          actionId: n.actionId,
+          action: normalizedData.action,
+          type: normalizedData.type,
+          topicId: normalizedData.topicId,
+          roomId: normalizedData.roomId
+        }
+      });
+      handleNotificationInteraction(normalizedData, n.actionId);
     });
 
-    PushNotifications.addListener('registrationError', e =>
-      console.error('Push error:', e)
-    );
+    PushNotifications.addListener('registrationError', e => {
+      recordTelemetryEvent({
+        category: 'notification',
+        name: 'notification.native.registration_error',
+        level: 'error',
+        entityType: 'notification',
+        payload: getTelemetryErrorPayload(e)
+      });
+      console.error('Push error:', e);
+    });
 
     // Capacitor covers taps via onNewIntent, but cold starts need a native handoff.
     if (Capacitor.getPlatform() === 'android') {
@@ -374,11 +447,26 @@ export const initPushNotifications = async () => {
         const pendingNotificationTap =
           await NotificationTap.consumePendingNotificationTap();
         if (hasPayloadValues(pendingNotificationTap)) {
+          recordTelemetryEvent({
+            category: 'notification',
+            name: 'notification.native.pending_tap',
+            entityType: 'notification',
+            payload: {
+              hasPendingTap: true
+            }
+          });
           handleNotificationInteraction(
             pendingNotificationTap as NativeNotificationData
           );
         }
       } catch (error) {
+        recordTelemetryEvent({
+          category: 'notification',
+          name: 'notification.native.pending_tap_failed',
+          level: 'warn',
+          entityType: 'notification',
+          payload: getTelemetryErrorPayload(error)
+        });
         console.warn(
           'Failed to consume pending Android notification tap:',
           error
@@ -391,6 +479,16 @@ export const initPushNotifications = async () => {
 
   if (
     await initTauriNotifications(payload => {
+      recordTelemetryEvent({
+        category: 'notification',
+        name: 'notification.tauri.received',
+        entityType: 'notification',
+        payload: {
+          type: (payload as NativeNotificationData).type,
+          topicId: (payload as NativeNotificationData).topicId,
+          roomId: (payload as NativeNotificationData).roomId
+        }
+      });
       handleNotificationInteraction(payload as NativeNotificationData);
     })
   ) {
@@ -450,6 +548,15 @@ export const initPushNotifications = async () => {
     subscription: subscriptionPayload,
     browser
   });
+  recordTelemetryEvent({
+    category: 'notification',
+    name: 'notification.web.subscribe.success',
+    entityType: 'notification',
+    payload: {
+      browser,
+      endpointLength: subscription.endpoint.length
+    }
+  });
 };
 
 const handleCallPush = (notification?: { data?: NativeNotificationData }) => {
@@ -482,6 +589,15 @@ export const removePushListeners = async () => {
       await nativeNotificationTapListener.remove();
       nativeNotificationTapListener = null;
     }
+
+    recordTelemetryEvent({
+      category: 'notification',
+      name: 'notification.native.listeners_removed',
+      entityType: 'notification',
+      payload: {
+        platform: Capacitor.getPlatform()
+      }
+    });
   }
 };
 
@@ -513,6 +629,17 @@ const clearAllWebNotifications = async (): Promise<void> => {
 
 export const cleanupPushNotificationsOnLogout = async (): Promise<void> => {
   const api = useChatApi();
+  const startedAt = Date.now();
+
+  recordTelemetryEvent({
+    category: 'notification',
+    name: 'notification.cleanup.start',
+    entityType: 'notification',
+    payload: {
+      platform: Capacitor.getPlatform(),
+      isNative: Capacitor.isNativePlatform()
+    }
+  });
 
   try {
     if (Capacitor.isNativePlatform()) {
@@ -541,17 +668,45 @@ export const cleanupPushNotificationsOnLogout = async (): Promise<void> => {
       }
 
       clearStoredPushRegistration();
+      recordTelemetryEvent({
+        category: 'notification',
+        name: 'notification.cleanup.success',
+        entityType: 'notification',
+        payload: {
+          platform: Capacitor.getPlatform(),
+          elapsedMs: Date.now() - startedAt
+        }
+      });
       return;
     }
 
     if (isTauriRuntime()) {
       await clearAllTauriNotifications();
       clearStoredPushRegistration();
+      recordTelemetryEvent({
+        category: 'notification',
+        name: 'notification.cleanup.success',
+        entityType: 'notification',
+        payload: {
+          platform: 'tauri',
+          elapsedMs: Date.now() - startedAt
+        }
+      });
       return;
     }
 
     if (!('serviceWorker' in navigator)) {
       clearStoredPushRegistration();
+      recordTelemetryEvent({
+        category: 'notification',
+        name: 'notification.cleanup.success',
+        entityType: 'notification',
+        payload: {
+          platform: 'web',
+          serviceWorker: false,
+          elapsedMs: Date.now() - startedAt
+        }
+      });
       return;
     }
 
@@ -576,6 +731,27 @@ export const cleanupPushNotificationsOnLogout = async (): Promise<void> => {
     }
 
     await clearAllWebNotifications();
+    recordTelemetryEvent({
+      category: 'notification',
+      name: 'notification.cleanup.success',
+      entityType: 'notification',
+      payload: {
+        platform: 'web',
+        elapsedMs: Date.now() - startedAt
+      }
+    });
+  } catch (error) {
+    recordTelemetryEvent({
+      category: 'notification',
+      name: 'notification.cleanup.failed',
+      level: 'error',
+      entityType: 'notification',
+      payload: {
+        elapsedMs: Date.now() - startedAt,
+        ...getTelemetryErrorPayload(error)
+      }
+    });
+    throw error;
   } finally {
     clearStoredPushRegistration();
   }

@@ -6,6 +6,7 @@ import {
   WebSocketEventHandler,
   WebSocketEventPayloads
 } from './websocketEvents';
+import { recordTelemetryEvent } from '../useTelemetry';
 
 export interface ChatWSInterface {
   subscribeToEvent<T extends WebSocketEventType>(
@@ -111,6 +112,16 @@ export class ChatWS implements ChatWSInterface {
       );
       return true;
     } else {
+      recordTelemetryEvent({
+        category: 'network',
+        name: 'network.websocket.emit_failed',
+        level: 'error',
+        entityType: 'websocket',
+        payload: {
+          eventType: type,
+          reason: 'socket_not_connected'
+        }
+      });
       console.error('Socket.IO is not connected. Cannot send event:', type);
       return false;
     }
@@ -122,6 +133,17 @@ export class ChatWS implements ChatWSInterface {
     timeoutMs = 10000
   ): Promise<R> {
     if (!this.socket || !this.socket.connected) {
+      recordTelemetryEvent({
+        category: 'network',
+        name: 'network.websocket.emit_failed',
+        level: 'error',
+        entityType: 'websocket',
+        payload: {
+          eventType: type,
+          reason: 'socket_not_connected',
+          requiresAck: true
+        }
+      });
       return Promise.reject(
         new Error(`Socket.IO is not connected. Cannot send event: ${type}`)
       );
@@ -129,6 +151,16 @@ export class ChatWS implements ChatWSInterface {
 
     return new Promise<R>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
+        recordTelemetryEvent({
+          category: 'network',
+          name: 'network.websocket.ack_timeout',
+          level: 'error',
+          entityType: 'websocket',
+          payload: {
+            eventType: type,
+            timeoutMs
+          }
+        });
         reject(new Error(`Socket.IO ack timeout for event: ${type}`));
       }, timeoutMs);
 
@@ -167,6 +199,15 @@ export class ChatWS implements ChatWSInterface {
 
       handlers.forEach(handler => handler(event));
     } else {
+      recordTelemetryEvent({
+        category: 'network',
+        name: 'network.websocket.unknown_event',
+        level: 'warn',
+        entityType: 'websocket',
+        payload: {
+          eventType: event.type
+        }
+      });
       console.warn(`Unknown WebSocket event type: ${event.type}`);
     }
   }

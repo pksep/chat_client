@@ -42,6 +42,12 @@ import { fetchMessagesForTopic } from '../useMessages';
 import { getConfig } from '../useConfig';
 import { getVideoThumbnail } from '../../utils/mediaPreview';
 import type { MediaPreviewDimensions } from '../../utils/mediaPreview';
+import {
+  createTelemetryTraceId,
+  getFileTelemetryPayload,
+  getTelemetryErrorPayload,
+  recordTelemetryEvent
+} from '../useTelemetry';
 
 export interface ChatSDKOptions {
   apiUrl: string;
@@ -63,6 +69,14 @@ const VIDEO_UPLOAD_COVER_TIMEOUT_MS = 8000;
 interface UploadTarget {
   objectName: string;
   uploadUrl: string;
+}
+
+export interface UploadTelemetryContext {
+  traceId?: string;
+  topicId?: string;
+  messageId?: string;
+  fileId?: string;
+  source?: string;
 }
 
 export class ChatSDK {
@@ -227,7 +241,8 @@ export class ChatSDK {
 
   private async createUploadTarget(
     file: File,
-    isMedia = false
+    isMedia = false,
+    clientTraceId?: string
   ): Promise<UploadTarget> {
     const response = (await this.reqi.post<UploadTarget>(
       '/media/upload-target',
@@ -235,7 +250,8 @@ export class ChatSDK {
         originName: file.name,
         size: file.size,
         contentType: file.type || undefined,
-        isMedia
+        isMedia,
+        clientTraceId
       },
       {
         parsed: false
@@ -245,19 +261,71 @@ export class ChatSDK {
     return response.json();
   }
 
-  private async uploadVideoCoverImage(file: File): Promise<string | null> {
+  private async uploadVideoCoverImage(
+    file: File,
+    traceId?: string
+  ): Promise<string | null> {
+    const startedAt = Date.now();
+
     try {
+      recordTelemetryEvent({
+        category: 'upload',
+        name: 'upload.video_cover.start',
+        traceId,
+        entityType: 'upload',
+        payload: getFileTelemetryPayload(file)
+      });
+
       const coverFile = await this.createVideoCoverFile(file);
 
       if (!coverFile) {
+        recordTelemetryEvent({
+          category: 'upload',
+          name: 'upload.video_cover.skipped',
+          level: 'warn',
+          traceId,
+          entityType: 'upload',
+          payload: {
+            ...getFileTelemetryPayload(file),
+            elapsedMs: Date.now() - startedAt,
+            reason: 'cover_not_created'
+          }
+        });
         return null;
       }
 
-      const uploadTarget = await this.createUploadTarget(coverFile, false);
+      const uploadTarget = await this.createUploadTarget(
+        coverFile,
+        false,
+        traceId
+      );
       await this.uploadFileToMinio(uploadTarget.uploadUrl, coverFile);
+
+      recordTelemetryEvent({
+        category: 'upload',
+        name: 'upload.video_cover.success',
+        traceId,
+        entityType: 'upload',
+        payload: {
+          ...getFileTelemetryPayload(coverFile),
+          elapsedMs: Date.now() - startedAt
+        }
+      });
 
       return uploadTarget.objectName;
     } catch (error) {
+      recordTelemetryEvent({
+        category: 'upload',
+        name: 'upload.video_cover.failed',
+        level: 'warn',
+        traceId,
+        entityType: 'upload',
+        payload: {
+          ...getFileTelemetryPayload(file),
+          elapsedMs: Date.now() - startedAt,
+          ...getTelemetryErrorPayload(error)
+        }
+      });
       console.warn('[ChatSDK] Failed to upload video cover image:', error);
       return null;
     }
@@ -460,6 +528,16 @@ export class ChatSDK {
         this.socket.on('connect', () => {
           authReconnectAttempted = false;
           this.emitConnectionState(true);
+          recordTelemetryEvent({
+            category: 'network',
+            name: 'network.websocket.connected',
+            entityType: 'websocket',
+            payload: {
+              socketId: this.socket?.id,
+              transport: this.socket?.io?.engine?.transport?.name,
+              wsUrl: this.wsUrl
+            }
+          });
           console.log('Socket.IO: Connected to chat server', {
             socketId: this.socket?.id,
             transport: this.socket?.io?.engine?.transport?.name,
@@ -495,11 +573,34 @@ export class ChatSDK {
             transport: this.socket?.io?.engine?.transport?.name,
             readyState: this.socket?.io?.engine?.readyState
           });
+          recordTelemetryEvent({
+            category: 'network',
+            name: 'network.websocket.connect_error',
+            level: 'error',
+            entityType: 'websocket',
+            payload: {
+              wsUrl: this.wsUrl,
+              transport: this.socket?.io?.engine?.transport?.name,
+              readyState: this.socket?.io?.engine?.readyState,
+              ...getTelemetryErrorPayload(error)
+            }
+          });
           this.emitConnectionState(false);
         });
 
         this.socket.on('disconnect', reason => {
           this.emitConnectionState(false);
+          recordTelemetryEvent({
+            category: 'network',
+            name: 'network.websocket.disconnected',
+            level: 'warn',
+            entityType: 'websocket',
+            payload: {
+              reason,
+              transport: this.socket?.io?.engine?.transport?.name,
+              readyState: this.socket?.io?.engine?.readyState
+            }
+          });
           console.log('Socket.IO: Disconnected from chat server:', {
             reason,
             transport: this.socket?.io?.engine?.transport?.name,
@@ -509,6 +610,17 @@ export class ChatSDK {
 
         this.socket.on('reconnect_attempt', attemptNumber => {
           this.emitConnectionState(false);
+          recordTelemetryEvent({
+            category: 'network',
+            name: 'network.websocket.reconnect_attempt',
+            level: 'warn',
+            entityType: 'websocket',
+            payload: {
+              attemptNumber,
+              wsUrl: this.wsUrl,
+              transport: this.socket?.io?.engine?.transport?.name
+            }
+          });
           console.log(
             `Socket.IO: Attempting to reconnect (${attemptNumber})...`,
             {
@@ -520,6 +632,16 @@ export class ChatSDK {
 
         this.socket.on('reconnect', attemptNumber => {
           this.emitConnectionState(true);
+          recordTelemetryEvent({
+            category: 'network',
+            name: 'network.websocket.reconnected',
+            entityType: 'websocket',
+            payload: {
+              attemptNumber,
+              socketId: this.socket?.id,
+              transport: this.socket?.io?.engine?.transport?.name
+            }
+          });
           console.log(
             `Reconnected to chat server after ${attemptNumber} attempts`,
             {
@@ -533,6 +655,18 @@ export class ChatSDK {
 
         this.socket.on('reconnect_error', error => {
           this.emitConnectionState(false);
+          recordTelemetryEvent({
+            category: 'network',
+            name: 'network.websocket.reconnect_error',
+            level: 'error',
+            entityType: 'websocket',
+            payload: {
+              wsUrl: this.wsUrl,
+              transport: this.socket?.io?.engine?.transport?.name,
+              readyState: this.socket?.io?.engine?.readyState,
+              ...getTelemetryErrorPayload(error)
+            }
+          });
           console.error('Reconnection error:', error, {
             wsUrl: this.wsUrl,
             transport: this.socket?.io?.engine?.transport?.name,
@@ -542,6 +676,15 @@ export class ChatSDK {
 
         this.socket.on('reconnect_failed', () => {
           this.emitConnectionState(false);
+          recordTelemetryEvent({
+            category: 'network',
+            name: 'network.websocket.reconnect_failed',
+            level: 'error',
+            entityType: 'websocket',
+            payload: {
+              wsUrl: this.wsUrl
+            }
+          });
           console.error('Reconnection failed after maximum attempts');
         });
 
@@ -1004,7 +1147,8 @@ export class ChatSDK {
     file: File,
     previewMeta?: MediaPreviewDimensions,
     onProgress?: (percent: number) => void,
-    isMedia = false
+    isMedia = false,
+    telemetry?: UploadTelemetryContext
   ): Promise<{
     objectName: string;
     thumbnailObjectName: string | null;
@@ -1015,22 +1159,118 @@ export class ChatSDK {
       previewHeight?: number;
     };
   }> {
+    const traceId = telemetry?.traceId || createTelemetryTraceId('upload');
+    const startedAt = Date.now();
+    const basePayload = {
+      ...getFileTelemetryPayload(file),
+      isMedia,
+      topicId: telemetry?.topicId,
+      messageId: telemetry?.messageId,
+      fileId: telemetry?.fileId,
+      source: telemetry?.source
+    };
+
+    recordTelemetryEvent({
+      category: 'upload',
+      name: 'upload.start',
+      traceId,
+      entityType: 'upload',
+      entityId: telemetry?.messageId || telemetry?.fileId,
+      payload: basePayload
+    });
+
     onProgress?.(0);
 
-    const videoCoverObjectNamePromise =
-      isMedia && file.type.startsWith('video/')
-        ? this.uploadVideoCoverImage(file)
-        : Promise.resolve(null);
-    const uploadTarget = await this.createUploadTarget(file, isMedia);
-
-    await this.uploadFileToMinio(uploadTarget.uploadUrl, file, onProgress);
-    const videoCoverObjectName = await videoCoverObjectNamePromise;
-    const stopFakeFinalizingProgress = this.startFakeFinalizingProgress(
-      onProgress,
-      UPLOAD_PROGRESS_MAX_PERCENT
-    );
+    let stopFakeFinalizingProgress: (() => void) | null = null;
+    let currentUploadStep = 'start';
 
     try {
+      const videoCoverObjectNamePromise =
+        isMedia && file.type.startsWith('video/')
+          ? this.uploadVideoCoverImage(file, traceId)
+          : Promise.resolve(null);
+
+      currentUploadStep = 'target';
+      const targetStartedAt = Date.now();
+      recordTelemetryEvent({
+        category: 'upload',
+        name: 'upload.target.start',
+        traceId,
+        entityType: 'upload',
+        entityId: telemetry?.messageId || telemetry?.fileId,
+        payload: basePayload
+      });
+
+      const uploadTarget = await this.createUploadTarget(
+        file,
+        isMedia,
+        traceId
+      );
+
+      recordTelemetryEvent({
+        category: 'upload',
+        name: 'upload.target.success',
+        traceId,
+        entityType: 'upload',
+        entityId: telemetry?.messageId || telemetry?.fileId,
+        payload: {
+          ...basePayload,
+          objectName: uploadTarget.objectName,
+          elapsedMs: Date.now() - targetStartedAt
+        }
+      });
+
+      currentUploadStep = 'storage_put';
+      const minioStartedAt = Date.now();
+      recordTelemetryEvent({
+        category: 'upload',
+        name: 'upload.storage_put.start',
+        traceId,
+        entityType: 'upload',
+        entityId: telemetry?.messageId || telemetry?.fileId,
+        payload: {
+          ...basePayload,
+          objectName: uploadTarget.objectName
+        }
+      });
+
+      await this.uploadFileToMinio(uploadTarget.uploadUrl, file, onProgress);
+
+      recordTelemetryEvent({
+        category: 'upload',
+        name: 'upload.storage_put.success',
+        traceId,
+        entityType: 'upload',
+        entityId: telemetry?.messageId || telemetry?.fileId,
+        payload: {
+          ...basePayload,
+          objectName: uploadTarget.objectName,
+          elapsedMs: Date.now() - minioStartedAt
+        }
+      });
+
+      currentUploadStep = 'video_cover';
+      const videoCoverObjectName = await videoCoverObjectNamePromise;
+      currentUploadStep = 'complete';
+      const completeStartedAt = Date.now();
+      stopFakeFinalizingProgress = this.startFakeFinalizingProgress(
+        onProgress,
+        UPLOAD_PROGRESS_MAX_PERCENT
+      );
+
+      recordTelemetryEvent({
+        category: 'upload',
+        name: 'upload.complete.start',
+        traceId,
+        entityType: 'upload',
+        entityId: telemetry?.messageId || telemetry?.fileId,
+        payload: {
+          ...basePayload,
+          objectName: uploadTarget.objectName,
+          hasVideoCover: Boolean(videoCoverObjectName)
+        }
+      });
+
       const response = (await this.reqi.post<Media>(
         '/media/upload',
         {
@@ -1043,22 +1283,65 @@ export class ChatSDK {
           previewWidth: previewMeta?.previewWidth,
           previewHeight: previewMeta?.previewHeight,
           thumbnailObjectName: videoCoverObjectName || undefined,
-          isMedia
+          isMedia,
+          clientTraceId: traceId
         },
         {
           parsed: false
         }
       )) as any;
       const data = await response.json();
-      stopFakeFinalizingProgress();
+      stopFakeFinalizingProgress?.();
       onProgress?.(100);
+
+      recordTelemetryEvent({
+        category: 'upload',
+        name: 'upload.complete.success',
+        traceId,
+        entityType: 'upload',
+        entityId: telemetry?.messageId || telemetry?.fileId,
+        payload: {
+          ...basePayload,
+          objectName: data.objectName,
+          thumbnailObjectName: data.thumbnailObjectName,
+          elapsedMs: Date.now() - completeStartedAt
+        }
+      });
+
+      recordTelemetryEvent({
+        category: 'upload',
+        name: 'upload.success',
+        traceId,
+        entityType: 'upload',
+        entityId: telemetry?.messageId || telemetry?.fileId,
+        payload: {
+          ...basePayload,
+          objectName: data.objectName,
+          totalElapsedMs: Date.now() - startedAt
+        }
+      });
+
       return {
         objectName: data.objectName,
         thumbnailObjectName: data.thumbnailObjectName,
         ex: data.ex
       };
     } catch (error) {
-      stopFakeFinalizingProgress();
+      stopFakeFinalizingProgress?.();
+      recordTelemetryEvent({
+        category: 'upload',
+        name: 'upload.failed',
+        level: 'error',
+        traceId,
+        entityType: 'upload',
+        entityId: telemetry?.messageId || telemetry?.fileId,
+        payload: {
+          ...basePayload,
+          failedStep: currentUploadStep,
+          totalElapsedMs: Date.now() - startedAt,
+          ...getTelemetryErrorPayload(error)
+        }
+      });
       throw error;
     }
   }

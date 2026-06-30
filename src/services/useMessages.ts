@@ -2175,7 +2175,7 @@ export const setLocalMediaPreviewData = (
   topicId: string,
   messageId: string,
   fileId: string,
-  payload: Pick<IMedia, 'localThumbnailPath' | 'ex'>
+  payload: Partial<Pick<IMedia, 'localThumbnailPath' | 'ex'>>
 ): void => {
   updateTopicMessageStores(topicId, messages =>
     messages.map(message => {

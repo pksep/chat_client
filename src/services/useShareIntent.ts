@@ -4,6 +4,12 @@ import {
   registerPlugin,
   type PluginListenerHandle
 } from '@capacitor/core';
+import {
+  createTelemetryTraceId,
+  getFileTelemetryPayload,
+  getTelemetryErrorPayload,
+  recordTelemetryEvent
+} from './useTelemetry';
 
 interface NativeSharedFileDescriptor {
   filePath?: string;
@@ -136,6 +142,20 @@ const queueResolvedShareFiles = async (
     return;
   }
 
+  recordTelemetryEvent({
+    category: 'upload',
+    name: 'upload.share_intent.queued',
+    traceId: payload.shareId,
+    entityType: 'share_intent',
+    entityId: payload.shareId,
+    payload: {
+      fileCount: payload.files.length,
+      totalBytes: payload.files.reduce((sum, file) => sum + file.size, 0),
+      files: payload.files.map(getFileTelemetryPayload),
+      receivedAt: payload.receivedAt
+    }
+  });
+
   pendingShareBatches.value = [
     ...pendingShareBatches.value,
     {
@@ -154,14 +174,65 @@ const queuePendingSharePayload = async (
     return;
   }
 
-  const files = await resolveSharedFiles(payload);
+  const traceId = payload.shareId || createTelemetryTraceId('share');
+  const startedAt = Date.now();
 
-  await queueResolvedShareFiles({
-    shareId: payload.shareId,
-    text: payload.text,
-    receivedAt: payload.receivedAt,
-    files
+  recordTelemetryEvent({
+    category: 'upload',
+    name: 'upload.share_intent.received',
+    traceId,
+    entityType: 'share_intent',
+    entityId: payload.shareId,
+    payload: {
+      shareId: payload.shareId,
+      fileCount: payload.files?.length || 0,
+      hasText: Boolean(normalizeSharedText(payload.text)),
+      receivedAt: payload.receivedAt,
+      files: (payload.files || []).map(file => ({
+        size: file.size,
+        mimeType: file.mimeType,
+        isMedia: file.isMedia
+      }))
+    }
   });
+
+  try {
+    const files = await resolveSharedFiles(payload);
+
+    recordTelemetryEvent({
+      category: 'upload',
+      name: 'upload.share_intent.resolved',
+      traceId,
+      entityType: 'share_intent',
+      entityId: payload.shareId,
+      payload: {
+        fileCount: files.length,
+        totalBytes: files.reduce((sum, file) => sum + file.size, 0),
+        elapsedMs: Date.now() - startedAt
+      }
+    });
+
+    await queueResolvedShareFiles({
+      shareId: payload.shareId || traceId,
+      text: payload.text,
+      receivedAt: payload.receivedAt,
+      files
+    });
+  } catch (error) {
+    recordTelemetryEvent({
+      category: 'upload',
+      name: 'upload.share_intent.failed',
+      level: 'error',
+      traceId,
+      entityType: 'share_intent',
+      entityId: payload.shareId,
+      payload: {
+        elapsedMs: Date.now() - startedAt,
+        ...getTelemetryErrorPayload(error)
+      }
+    });
+    throw error;
+  }
 };
 
 export const initShareIntentHandling = async (): Promise<void> => {
