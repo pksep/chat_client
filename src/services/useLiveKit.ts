@@ -60,6 +60,11 @@ import { getChatSDK } from './useChat';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
 import { TopicType } from './useChatSDK/types';
 import { useTopics } from '../composables/useTopics';
+import {
+  createTelemetryTraceId,
+  getTelemetryErrorPayload,
+  recordTelemetryEvent
+} from './useTelemetry';
 
 type LiveKitCallStatus = {
   active: boolean;
@@ -214,6 +219,8 @@ let localAcceptRoomId: string | null = null;
 let localAcceptTopicId: string | null = null;
 let connectPromise: Promise<void> | null = null;
 let connectAttemptId = 0;
+let activeCallTraceId: string | null = null;
+let lastTelemetryConnectionQuality: ConnectionQuality | null = null;
 let currentCameraFacingMode: 'user' | 'environment' = 'user';
 let shouldEndCallOnConnectFailure = false;
 let isExplicitHangupInProgress = false;
@@ -325,6 +332,76 @@ const pendingRemoteAudioResubscribeTimeouts = new Map<
 >();
 
 const createRoomId = () => `livekit-${Math.random().toString(36).slice(2, 10)}`;
+
+const ensureCallTelemetryTraceId = (): string => {
+  if (!activeCallTraceId) {
+    activeCallTraceId = createTelemetryTraceId('call');
+    lastTelemetryConnectionQuality = null;
+  }
+
+  return activeCallTraceId;
+};
+
+const resetCallTelemetryState = (): void => {
+  activeCallTraceId = null;
+  lastTelemetryConnectionQuality = null;
+};
+
+const buildCallTelemetryPayload = (
+  payload: Record<string, unknown> = {}
+): Record<string, unknown> => ({
+  roomId: roomId.value,
+  topicId: topicId.value,
+  isIncoming: isIncoming.value,
+  isCalling: isCalling.value,
+  isOpen: open.value,
+  remoteParticipantCount: remoteParticipants.value.length,
+  localParticipantCount: room ? 1 : 0,
+  connectionQuality: state.connectionQuality,
+  micActive: state.isMicActive,
+  videoActive: state.isVideoActive,
+  screenShareActive: state.isScreenSharingActive,
+  audioOutputRoute: state.audioOutputRoute,
+  elapsedCallMs: getElapsedCallDurationMs(),
+  ...payload
+});
+
+const recordCallTelemetryEvent = (
+  name: string,
+  payload?: Record<string, unknown>,
+  level: 'debug' | 'info' | 'warn' | 'error' = 'info'
+): void => {
+  const traceId =
+    activeCallTraceId ||
+    (roomId.value || topicId.value || open.value
+      ? ensureCallTelemetryTraceId()
+      : null);
+
+  if (!traceId) {
+    return;
+  }
+
+  recordTelemetryEvent({
+    category: 'call',
+    name,
+    level,
+    traceId,
+    entityType: 'call',
+    entityId: roomId.value || topicId.value,
+    payload: buildCallTelemetryPayload(payload)
+  });
+};
+
+const recordCallConnectionQualityIfChanged = (): void => {
+  if (lastTelemetryConnectionQuality === state.connectionQuality) {
+    return;
+  }
+
+  lastTelemetryConnectionQuality = state.connectionQuality;
+  recordCallTelemetryEvent('call.connection_quality.changed', {
+    connectionQuality: state.connectionQuality
+  });
+};
 
 const getLocalCameraTrack = (): LocalVideoTrack | null => {
   if (!room) {
@@ -2897,6 +2974,10 @@ const setupRoomListeners = (activeRoom: Room) => {
       clearRemoteReconnectingParticipant(participant.identity);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      recordCallTelemetryEvent('call.participant.connected', {
+        participantId: participant.identity,
+        remoteParticipantCount: activeRoom.remoteParticipants.size
+      });
       requestHighQualityForAllRemoteVideoTracks();
       scheduleCallAudioRecovery(activeRoom);
       resolveDirectCallRecoverySuccess(activeRoom);
@@ -2914,6 +2995,14 @@ const setupRoomListeners = (activeRoom: Room) => {
       markRemoteParticipantReconnecting(participant);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      recordCallTelemetryEvent(
+        'call.participant.disconnected',
+        {
+          participantId: participant.identity,
+          remoteParticipantCount: activeRoom.remoteParticipants.size
+        },
+        'warn'
+      );
 
       if (
         !activeRoom.remoteParticipants.size &&
@@ -2953,12 +3042,14 @@ const setupRoomListeners = (activeRoom: Room) => {
     .on(RoomEvent.ConnectionQualityChanged, () => {
       syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
+      recordCallConnectionQualityIfChanged();
     })
     .on(RoomEvent.Reconnecting, () => {
       if (isExplicitHangupInProgress) {
         return;
       }
 
+      recordCallTelemetryEvent('call.livekit.reconnecting', undefined, 'warn');
       showReconnectCallStatusNotice();
       syncLocalTrackState();
       syncLocalParticipantSpeakingState(activeRoom);
@@ -2979,6 +3070,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       resolveDirectCallRecoverySuccess(activeRoom);
       void ensureLocalMicrophoneState(activeRoom);
       void enforceSingleScreenShare();
+      recordCallTelemetryEvent('call.livekit.reconnected');
     })
     .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
       if (ignoredDisconnectedRoom === activeRoom) {
@@ -2986,6 +3078,9 @@ const setupRoomListeners = (activeRoom: Room) => {
           room = null;
         }
         ignoredDisconnectedRoom = null;
+        recordCallTelemetryEvent('call.livekit.disconnected.ignored', {
+          reason
+        });
         return;
       }
 
@@ -2993,6 +3088,9 @@ const setupRoomListeners = (activeRoom: Room) => {
         if (room === activeRoom) {
           room = null;
         }
+        recordCallTelemetryEvent('call.livekit.disconnected.explicit', {
+          reason
+        });
         cleanup(false);
         return;
       }
@@ -3005,10 +3103,18 @@ const setupRoomListeners = (activeRoom: Room) => {
           user.value,
           OTHER_DEVICE_CONNECTED_NOTICE
         );
+        recordCallTelemetryEvent(
+          'call.livekit.disconnected.duplicate_identity',
+          { reason },
+          'warn'
+        );
         return;
       }
 
       if (matchesPendingEndCall(roomId.value, topicId.value)) {
+        recordCallTelemetryEvent('call.livekit.disconnected.pending_end', {
+          reason
+        });
         return;
       }
 
@@ -3021,9 +3127,21 @@ const setupRoomListeners = (activeRoom: Room) => {
           waitForRemote: true
         })
       ) {
+        recordCallTelemetryEvent(
+          'call.livekit.disconnected.recovery_started',
+          { reason },
+          'warn'
+        );
         return;
       }
 
+      recordCallTelemetryEvent(
+        'call.livekit.disconnected',
+        {
+          reason
+        },
+        'error'
+      );
       cleanup(false);
     });
 };
@@ -3097,12 +3215,40 @@ const connectToRoom = async () => {
     const config = sdk?.getConfig();
 
     if (!sdk || !me || !activeRoomId || !config?.CHAT_LIVEKIT_URL) {
+      recordCallTelemetryEvent(
+        'call.connect.config_incomplete',
+        {
+          hasSdk: Boolean(sdk),
+          hasUser: Boolean(me),
+          hasRoomId: Boolean(activeRoomId),
+          hasLiveKitUrl: Boolean(config?.CHAT_LIVEKIT_URL),
+          attemptId: currentAttemptId
+        },
+        'error'
+      );
       throw new Error('LiveKit config is incomplete');
     }
+
+    const tokenStartedAt = Date.now();
+    recordCallTelemetryEvent('call.token.start', {
+      attemptId: currentAttemptId,
+      roomId: activeRoomId,
+      topicId: activeTopicId
+    });
 
     const token = await getToken(activeRoomId);
     if (!token) {
       const callStatus = await sdk.getLiveKitCallStatus(activeRoomId);
+      recordCallTelemetryEvent(
+        'call.token.failed',
+        {
+          attemptId: currentAttemptId,
+          elapsedMs: Date.now() - tokenStartedAt,
+          callActive: callStatus?.active,
+          statusTopicId: callStatus?.topicId
+        },
+        'error'
+      );
       if (
         !callStatus?.active ||
         (activeTopicId !== null && callStatus.topicId !== activeTopicId)
@@ -3112,6 +3258,11 @@ const connectToRoom = async () => {
 
       throw new Error('Failed to get LiveKit token');
     }
+
+    recordCallTelemetryEvent('call.token.success', {
+      attemptId: currentAttemptId,
+      elapsedMs: Date.now() - tokenStartedAt
+    });
 
     const previousRoom = room;
     if (previousRoom) {
@@ -3137,7 +3288,17 @@ const connectToRoom = async () => {
     setupRoomListeners(nextRoom);
 
     try {
+      const connectStartedAt = Date.now();
+      recordCallTelemetryEvent('call.livekit.connect.start', {
+        attemptId: currentAttemptId,
+        liveKitUrl: config.CHAT_LIVEKIT_URL
+      });
+
       await nextRoom.connect(config.CHAT_LIVEKIT_URL, token);
+      recordCallTelemetryEvent('call.livekit.connect.success', {
+        attemptId: currentAttemptId,
+        elapsedMs: Date.now() - connectStartedAt
+      });
     } catch (error) {
       const isExpectedAbort = isExpectedConnectAbort(
         error,
@@ -3152,6 +3313,14 @@ const connectToRoom = async () => {
       }
 
       if (isExpectedAbort) {
+        recordCallTelemetryEvent(
+          'call.livekit.connect.aborted',
+          {
+            attemptId: currentAttemptId,
+            ...getTelemetryErrorPayload(error)
+          },
+          'warn'
+        );
         return;
       }
 
@@ -3174,9 +3343,25 @@ const connectToRoom = async () => {
       }
 
       if (isDirectCallRecovery) {
+        recordCallTelemetryEvent(
+          'call.livekit.connect.recovery_failed',
+          {
+            attemptId: currentAttemptId,
+            ...getTelemetryErrorPayload(error)
+          },
+          'error'
+        );
         throw error;
       }
 
+      recordCallTelemetryEvent(
+        'call.livekit.connect.failed',
+        {
+          attemptId: currentAttemptId,
+          ...getTelemetryErrorPayload(error)
+        },
+        'error'
+      );
       cleanup(false);
       showErrorNotification(getConnectErrorMessage(error));
       throw error;
@@ -3227,6 +3412,7 @@ const connectToRoom = async () => {
     syncLocalParticipantSpeakingState(nextRoom);
     syncRemoteParticipantState();
     syncConnectionState(nextRoom);
+    recordCallConnectionQualityIfChanged();
     requestHighQualityForAllRemoteVideoTracks();
     scheduleCallAudioRecovery(nextRoom);
     resolveDirectCallRecoverySuccess(nextRoom);
@@ -3329,6 +3515,13 @@ export const startLiveKitCall = async (
   user.value = targetUser;
   topicId.value = currentTopicId;
   roomId.value = createRoomId();
+  resetCallTelemetryState();
+  ensureCallTelemetryTraceId();
+  recordCallTelemetryEvent('call.start.requested', {
+    direction: 'outgoing',
+    targetUserId: targetUser.id,
+    topicId: currentTopicId
+  });
   setCallStartedAt(null, 0);
   shouldEndCallOnConnectFailure = true;
   await applyDefaultAudioOutputRoute();
@@ -3355,8 +3548,20 @@ export const startLiveKitCall = async (
   });
 
   if (startAck?.accepted === false) {
+    recordCallTelemetryEvent(
+      'call.start.rejected',
+      {
+        direction: 'outgoing'
+      },
+      'warn'
+    );
     return;
   }
+
+  recordCallTelemetryEvent('call.start.accepted', {
+    direction: 'outgoing',
+    acceptedRoomId: startAck?.roomId
+  });
 
   await connectToRoom();
 
@@ -3393,6 +3598,13 @@ export const startLiveKitGroupCall = async (currentTopicId: string) => {
   user.value = me as any;
   topicId.value = currentTopicId;
   roomId.value = activeRoomId;
+  resetCallTelemetryState();
+  ensureCallTelemetryTraceId();
+  recordCallTelemetryEvent('call.start.requested', {
+    direction: 'outgoing',
+    groupMode: true,
+    topicId: currentTopicId
+  });
   setCallStartedAt(null, 0);
   shouldEndCallOnConnectFailure = true;
   await applyDefaultAudioOutputRoute();
@@ -3419,8 +3631,22 @@ export const startLiveKitGroupCall = async (currentTopicId: string) => {
   });
 
   if (startAck?.accepted === false) {
+    recordCallTelemetryEvent(
+      'call.start.rejected',
+      {
+        direction: 'outgoing',
+        groupMode: true
+      },
+      'warn'
+    );
     return;
   }
+
+  recordCallTelemetryEvent('call.start.accepted', {
+    direction: 'outgoing',
+    groupMode: true,
+    acceptedRoomId: startAck?.roomId
+  });
 
   const resolvedRoomId = roomId.value || activeRoomId;
   activeGroupCalls.value = {
@@ -3469,6 +3695,12 @@ export const startStandaloneMeetingCall = async () => {
   user.value = me as any;
   topicId.value = null;
   roomId.value = activeRoomId;
+  resetCallTelemetryState();
+  ensureCallTelemetryTraceId();
+  recordCallTelemetryEvent('call.start.requested', {
+    direction: 'outgoing',
+    standalone: true
+  });
   setCallStartedAt(null, 0);
   shouldEndCallOnConnectFailure = true;
   await applyDefaultAudioOutputRoute();
@@ -3495,8 +3727,22 @@ export const startStandaloneMeetingCall = async () => {
   });
 
   if (startAck?.accepted === false) {
+    recordCallTelemetryEvent(
+      'call.start.rejected',
+      {
+        direction: 'outgoing',
+        standalone: true
+      },
+      'warn'
+    );
     return;
   }
+
+  recordCallTelemetryEvent('call.start.accepted', {
+    direction: 'outgoing',
+    standalone: true,
+    acceptedRoomId: startAck?.roomId
+  });
 
   await connectToRoom();
 };
@@ -3565,6 +3811,28 @@ export const receiveIncomingCall = async (
     return false;
   }
 
+  const resolvedStartTime = incomingStartTime ?? callStatus.startTime ?? null;
+  const resolvedElapsedDurationMs = callStatus.elapsedDurationMs ?? 0;
+
+  resetCallTelemetryState();
+  activeCallTraceId = createTelemetryTraceId('call');
+  recordTelemetryEvent({
+    category: 'call',
+    name: 'call.incoming.received',
+    traceId: activeCallTraceId,
+    entityType: 'call',
+    entityId: incomingRoomId,
+    payload: {
+      roomId: incomingRoomId,
+      topicId: incomingTopicId,
+      topicType: resolvedTopicType,
+      groupMode: callStatus.groupMode,
+      participantCount: callStatus.participantCount,
+      startTime: resolvedStartTime,
+      elapsedDurationMs: resolvedElapsedDurationMs
+    }
+  });
+
   if (isIncomingCallDismissed(incomingRoomId, incomingTopicId)) {
     return false;
   }
@@ -3574,8 +3842,6 @@ export const receiveIncomingCall = async (
     return false;
   }
 
-  const resolvedStartTime = incomingStartTime ?? callStatus.startTime ?? null;
-  const resolvedElapsedDurationMs = callStatus.elapsedDurationMs ?? 0;
   const topicsApi = useTopics();
   topicsApi.topics.value = topicsApi.topics.value.map(topic =>
     topic.id === incomingTopicId
@@ -3664,6 +3930,9 @@ export const acceptCall = async () => {
   isAcceptingLocally = true;
   localAcceptRoomId = roomId.value;
   localAcceptTopicId = topicId.value;
+  recordCallTelemetryEvent('call.answer.start', {
+    direction: 'incoming'
+  });
   const answerAck = await sdk.sendWebSocketEventWithAck<
     WebSocketEventType.ANSWER_CALL,
     CallSocketAck
@@ -3689,6 +3958,9 @@ export const acceptCall = async () => {
 
   try {
     await connectToRoom();
+    recordCallTelemetryEvent('call.answer.connected', {
+      direction: 'incoming'
+    });
     return true;
   } finally {
     isAcceptingLocally = false;
@@ -3767,6 +4039,13 @@ export const joinPendingGroupCall = async (
   isAcceptingLocally = true;
   localAcceptRoomId = pendingRoomId;
   localAcceptTopicId = pendingTopicId;
+  resetCallTelemetryState();
+  ensureCallTelemetryTraceId();
+  recordCallTelemetryEvent('call.join.start', {
+    groupMode: true,
+    pendingRoomId,
+    pendingTopicId
+  });
   const answerAck = await sdk.sendWebSocketEventWithAck<
     WebSocketEventType.ANSWER_CALL,
     CallSocketAck
@@ -3793,6 +4072,9 @@ export const joinPendingGroupCall = async (
 
   try {
     await connectToRoom();
+    recordCallTelemetryEvent('call.join.connected', {
+      groupMode: true
+    });
     return true;
   } finally {
     isAcceptingLocally = false;
@@ -3895,6 +4177,14 @@ export const joinInvitedGroupCall = async (): Promise<boolean | void> => {
   isAcceptingLocally = true;
   localAcceptRoomId = invite.roomId;
   localAcceptTopicId = invite.topicId;
+  resetCallTelemetryState();
+  ensureCallTelemetryTraceId();
+  recordCallTelemetryEvent('call.join.start', {
+    invited: true,
+    groupMode: true,
+    inviteRoomId: invite.roomId,
+    inviteTopicId: invite.topicId
+  });
   const answerAck = await sdk.sendWebSocketEventWithAck<
     WebSocketEventType.ANSWER_CALL,
     CallSocketAck
@@ -3922,6 +4212,10 @@ export const joinInvitedGroupCall = async (): Promise<boolean | void> => {
   try {
     await connectToRoom();
     clearInviteParamsFromUrl();
+    recordCallTelemetryEvent('call.join.connected', {
+      invited: true,
+      groupMode: true
+    });
     return true;
   } finally {
     isAcceptingLocally = false;
@@ -4029,6 +4323,9 @@ const showEndedCallNoticeAndReleaseMedia = (
   activeCaller: IUser | null = user.value,
   message = DIRECT_CALL_ENDED_NOTICE
 ) => {
+  recordCallTelemetryEvent('call.ended.notice', {
+    message
+  });
   connectAttemptId += 1;
   connectPromise = null;
   shouldEndCallOnConnectFailure = false;
@@ -4079,6 +4376,12 @@ export const handleCallEnded = (
 ): boolean => {
   const activeCaller = user.value;
   const wasIncomingCall = isIncoming.value;
+  recordCallTelemetryEvent('call.ended.received', {
+    endedRoomId,
+    endedTopicId,
+    reason,
+    endedByUserId
+  });
 
   if (matchesPendingEndCall(endedRoomId, endedTopicId)) {
     resetPendingEndCallState();
@@ -4615,6 +4918,14 @@ export const leaveCall = () => {
     !isIncoming.value &&
     !shouldCloseImmediatelyAfterHangup;
 
+  recordCallTelemetryEvent('call.leave.requested', {
+    activeRoomId,
+    activeTopicId,
+    wasIncomingCall,
+    isGroupCallSessionActive,
+    hasOtherParticipantsInGroupCall
+  });
+
   if (
     activeRoomId &&
     activeTopicId &&
@@ -4678,9 +4989,14 @@ export const leaveCall = () => {
   if (Capacitor.isNativePlatform()) {
     endAllCallKits();
   }
+
+  resetCallTelemetryState();
 };
 
 export const cleanup = (disconnectRoom = true) => {
+  recordCallTelemetryEvent('call.cleanup', {
+    disconnectRoom
+  });
   connectAttemptId += 1;
   connectPromise = null;
   shouldEndCallOnConnectFailure = false;
@@ -4719,6 +5035,8 @@ export const cleanup = (disconnectRoom = true) => {
   if (Capacitor.isNativePlatform()) {
     endAllCallKits();
   }
+
+  resetCallTelemetryState();
 };
 
 export const handleIncomingPushCall = async (

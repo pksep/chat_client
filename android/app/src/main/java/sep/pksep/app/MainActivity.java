@@ -22,6 +22,7 @@ import sep.pksep.app.plugins.NotificationTapPlugin;
 import sep.pksep.app.plugins.ProximityLockPlugin;
 import sep.pksep.app.plugins.RuStoreUpdatePlugin;
 import sep.pksep.app.plugins.ShareIntentPlugin;
+import sep.pksep.app.plugins.TelemetryDevicePlugin;
 import sep.pksep.app.plugins.VpnStatusPlugin;
 
 @SuppressWarnings("deprecation")
@@ -95,6 +96,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NotificationTapPlugin.class);
         registerPlugin(RuStoreUpdatePlugin.class);
         registerPlugin(ShareIntentPlugin.class);
+        registerPlugin(TelemetryDevicePlugin.class);
         registerPlugin(VpnStatusPlugin.class);
         customPluginsRegistered = true;
     }

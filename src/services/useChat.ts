@@ -1,5 +1,6 @@
 import { ref, shallowRef } from 'vue';
 import { ChatSDK } from './useChatSDK';
+import type { UploadTelemetryContext } from './useChatSDK';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
 import type { PtsMeta } from './useChatSDK/websocketEvents';
 import { MessageStatus, TopicType } from './useChatSDK/types';
@@ -1378,7 +1379,8 @@ export const uploadFile = async (
   file: File,
   previewMeta?: MediaPreviewDimensions,
   onProgress?: (percent: number) => void,
-  isMedia = false
+  isMedia = false,
+  telemetry?: UploadTelemetryContext
 ): Promise<{
   path: string;
   thumbnailPath: string | null;
@@ -1396,7 +1398,8 @@ export const uploadFile = async (
     file,
     previewMeta,
     onProgress,
-    isMedia
+    isMedia,
+    telemetry
   );
   return { file, path: objectName, thumbnailPath: thumbnailObjectName, ex };
 };
