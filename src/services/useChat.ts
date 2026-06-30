@@ -111,6 +111,8 @@ const messagesStore = shallowRef<Record<string, ChatMessage[]>>({});
 
 const messageChangeCallbacks: Array<(topicId?: string) => void> = [];
 let areChatListenersBound = false;
+let latestProcessedPts = 0;
+const processedPts = new Set<number>();
 
 type MessageHandlingOptions = {
   silent?: boolean;
@@ -137,6 +139,34 @@ const hasMessageInTopic = (
   return getFullMessagesByTopicId(topicId).some(
     message => message.id === messageId
   );
+};
+
+const normalizePts = (pts?: string | number | null): number => {
+  const normalizedPts = Number(pts);
+  return Number.isFinite(normalizedPts) ? normalizedPts : 0;
+};
+
+const shouldProcessPtsMeta = (ptsMeta?: PtsMeta): boolean => {
+  const pts = normalizePts(ptsMeta?.pts);
+
+  if (!pts) {
+    return true;
+  }
+
+  if (processedPts.has(pts)) {
+    return false;
+  }
+
+  processedPts.add(pts);
+  if (processedPts.size > 1000) {
+    const oldestPts = processedPts.values().next().value;
+    if (oldestPts !== undefined) {
+      processedPts.delete(oldestPts);
+    }
+  }
+
+  latestProcessedPts = Math.max(latestProcessedPts, pts);
+  return true;
 };
 
 const persistPtsMeta = (ptsMeta?: PtsMeta): void => {
@@ -170,6 +200,14 @@ const syncPtsStateToServer = async (): Promise<void> => {
 
   if (!lastPtsMeta?.pts) {
     return;
+  }
+
+  latestProcessedPts = Math.max(
+    latestProcessedPts,
+    normalizePts(lastPtsMeta.pts)
+  );
+  if (latestProcessedPts) {
+    processedPts.add(latestProcessedPts);
   }
 
   chatSDK.sendWebSocketEvent(WebSocketEventType.SYNC_STATE, {
@@ -307,6 +345,10 @@ const setupChatListeners = (): void => {
     data: any;
     ptsMeta?: PtsMeta;
   }): void => {
+    if (!shouldProcessPtsMeta(payload.ptsMeta)) {
+      return;
+    }
+
     persistPtsMeta(payload.ptsMeta);
 
     void recordShadowChatEvent({
@@ -346,6 +388,10 @@ const setupChatListeners = (): void => {
       payload.targetUserId &&
       payload.targetUserId !== currentUserId.value
     ) {
+      return;
+    }
+
+    if (!shouldProcessPtsMeta(payload.ptsMeta)) {
       return;
     }
 
@@ -402,6 +448,10 @@ const setupChatListeners = (): void => {
     userId?: string;
     ptsMeta?: PtsMeta;
   }): void => {
+    if (!shouldProcessPtsMeta(payload.ptsMeta)) {
+      return;
+    }
+
     persistPtsMeta(payload.ptsMeta);
 
     void recordShadowChatEvent({
@@ -447,6 +497,10 @@ const setupChatListeners = (): void => {
     reactionSenderUserId?: string;
     ptsMeta?: PtsMeta;
   }): void => {
+    if (!shouldProcessPtsMeta(payload.ptsMeta)) {
+      return;
+    }
+
     persistPtsMeta(payload.ptsMeta);
 
     void recordShadowChatEvent({
@@ -511,6 +565,10 @@ const setupChatListeners = (): void => {
     lastSeenReactionAt: string;
     ptsMeta?: PtsMeta;
   }): void => {
+    if (!shouldProcessPtsMeta(payload.ptsMeta)) {
+      return;
+    }
+
     persistPtsMeta(payload.ptsMeta);
 
     void recordShadowChatEvent({
@@ -536,6 +594,10 @@ const setupChatListeners = (): void => {
     } | null;
     ptsMeta?: PtsMeta;
   }): void => {
+    if (!shouldProcessPtsMeta(payload.ptsMeta)) {
+      return;
+    }
+
     persistPtsMeta(payload.ptsMeta);
     const normalizedLastOnline = normalizeDateValue(payload.lastOnline);
 
@@ -676,7 +738,9 @@ const setupChatListeners = (): void => {
           });
           break;
         default:
-          persistPtsMeta(ptsMeta);
+          if (shouldProcessPtsMeta(ptsMeta)) {
+            persistPtsMeta(ptsMeta);
+          }
           break;
       }
     });
