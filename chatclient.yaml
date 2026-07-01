@@ -3,10 +3,10 @@
   cycles: 1
   deleted: 8
   inserted: 8
-  seconds: 171.333050498
+  seconds: 187.375852574
   version: 0.60.0
   what: judges-summary
-  when: 2026-07-01 01:57:49.105134638 Z
+  when: 2026-07-01 06:58:04.117643942 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -13808,14 +13808,6 @@
   total_stars: 0
   what: dimensions-of-terrain
   when: 2026-06-03 15:20:40.381180110 Z
-- _id: 714
-  _job: 75499
-  _time: 2026-06-04 00:20:00.553525733 Z
-  _version: 0.19.11/0.60.3/0.17.11!0.17.17
-  analyzers: 18
-  text: The average monthly turnover (2.0 developers) is decreasing (R=-0.20).
-  what: assessment
-  when: 2026-06-04 00:20:00.573975287 Z
 - _id: 716
   _job: 26973190378
   _time: 2026-06-04 19:03:38.847773589 Z
@@ -14636,6 +14628,7 @@
   is_human: 1
   issue: 268
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -14660,6 +14653,7 @@
   is_human: 1
   issue: 269
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -14684,6 +14678,7 @@
   is_human: 1
   issue: 270
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -14708,6 +14703,7 @@
   is_human: 1
   issue: 271
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -14732,6 +14728,7 @@
   is_human: 1
   issue: 272
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -14756,6 +14753,7 @@
   is_human: 1
   issue: 273
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -14780,6 +14778,7 @@
   is_human: 1
   issue: 274
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -14804,6 +14803,7 @@
   is_human: 1
   issue: 275
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -14828,6 +14828,7 @@
   is_human: 1
   issue: 276
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -14852,6 +14853,7 @@
   is_human: 1
   issue: 277
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -14876,6 +14878,7 @@
   is_human: 1
   issue: 278
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -14900,6 +14903,7 @@
   is_human: 1
   issue: 279
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -14924,6 +14928,7 @@
   is_human: 1
   issue: 280
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -14948,6 +14953,7 @@
   is_human: 1
   issue: 281
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -14972,6 +14978,7 @@
   is_human: 1
   issue: 282
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -14996,6 +15003,7 @@
   is_human: 1
   issue: 283
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15020,6 +15028,7 @@
   is_human: 1
   issue: 284
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15044,6 +15053,7 @@
   is_human: 1
   issue: 285
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15068,6 +15078,7 @@
   is_human: 1
   issue: 286
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15092,6 +15103,7 @@
   is_human: 1
   issue: 287
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15116,6 +15128,7 @@
   is_human: 1
   issue: 288
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15140,6 +15153,7 @@
   is_human: 1
   issue: 289
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15164,6 +15178,7 @@
   is_human: 1
   issue: 290
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15188,6 +15203,7 @@
   is_human: 1
   issue: 291
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15212,6 +15228,7 @@
   is_human: 1
   issue: 292
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15236,6 +15253,7 @@
   is_human: 1
   issue: 293
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15260,6 +15278,7 @@
   is_human: 1
   issue: 294
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15284,6 +15303,7 @@
   is_human: 1
   issue: 295
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15308,6 +15328,7 @@
   is_human: 1
   issue: 296
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15332,6 +15353,7 @@
   is_human: 1
   issue: 297
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15356,6 +15378,7 @@
   is_human: 1
   issue: 298
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15380,6 +15403,7 @@
   is_human: 1
   issue: 299
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15404,6 +15428,7 @@
   is_human: 1
   issue: 300
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15428,6 +15453,7 @@
   is_human: 1
   issue: 301
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15452,6 +15478,7 @@
   is_human: 1
   issue: 302
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15476,6 +15503,7 @@
   is_human: 1
   issue: 303
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15500,6 +15528,7 @@
   is_human: 1
   issue: 304
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15524,6 +15553,7 @@
   is_human: 1
   issue: 305
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15548,6 +15578,7 @@
   is_human: 1
   issue: 306
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15572,6 +15603,7 @@
   is_human: 1
   issue: 307
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15596,6 +15628,7 @@
   is_human: 1
   issue: 308
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15620,6 +15653,7 @@
   is_human: 1
   issue: 309
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15644,6 +15678,7 @@
   is_human: 1
   issue: 310
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15668,6 +15703,7 @@
   is_human: 1
   issue: 311
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15692,6 +15728,7 @@
   is_human: 1
   issue: 312
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15716,6 +15753,7 @@
   is_human: 1
   issue: 313
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -15740,23 +15778,13 @@
   is_human: 1
   issue: 314
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
   when: 2026-06-30 09:51:19.000000000 Z
   where: github
   who: 93074025
-- _id: 820
-  _job: 28488107412
-  _time: 2026-07-01 01:56:38.148862660 Z
-  _version: 0.19.6/0.60.0/0.17.11
-  earliest_issue_was_found: 1
-  events_were_scanned: 12747744584
-  latest_issue_was_found: 72
-  min_pull_was_found: 268
-  repository: 1053332035
-  what: iterate
-  where: github
 - _id: 821
   _job: 28488107412
   _time: 2026-07-01 01:56:38.707773142 Z
@@ -15825,3 +15853,132 @@
   when: 2026-06-04 13:28:50.000000000 Z
   where: github
   who: 93074025
+- _id: 826
+  _job: 79503
+  _time: 2026-07-01 01:58:14.301634463 Z
+  _version: 0.19.13/0.60.4/0.17.11!0.17.17
+  analyzers: 18
+  text: The average monthly turnover (2.0 developers) is decreasing (R=-0.14).
+  what: assessment
+  when: 2026-07-01 01:58:14.322953489 Z
+- _id: 827
+  _job: 79503
+  _time: 2026-07-01 01:58:39.699638610 Z
+  _version: 0.19.13/0.60.4/0.17.11!0.17.17
+  ac: 0
+  cost_of_qod: 2.253541785036781
+  ev: 0
+  pv: 10617
+  qod: 0
+  qod_per_day: 35.2104220177899
+  qod_per_sec: 0.0
+  start: *1
+  what: earned-value
+  when: 2026-07-01 01:58:39.699839336 Z
+- _id: 829
+  _job: 28499337642
+  _time: 2026-07-01 06:55:42.049494822 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: canary
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#264 has been "pull-was-merged".
+  failed_builds: 0
+  files: 19
+  hoc: 1883
+  is_human: 1
+  issue: 264
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-06-03 07:15:47.000000000 Z
+  where: github
+  who: 93074025
+- _id: 830
+  _job: 28499337642
+  _time: 2026-07-01 06:55:49.923612344 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-137
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#265 has been "pull-was-merged".
+  failed_builds: 0
+  files: 32
+  hoc: 8378
+  is_human: 1
+  issue: 265
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-06-04 13:06:07.000000000 Z
+  where: github
+  who: 93074025
+- _id: 831
+  _job: 28499337642
+  _time: 2026-07-01 06:55:52.955052845 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: canary
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#266 has been "pull-was-merged".
+  failed_builds: 0
+  files: 32
+  hoc: 8378
+  is_human: 1
+  issue: 266
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-06-04 13:06:41.000000000 Z
+  where: github
+  who: 93074025
+- _id: 832
+  _job: 28499337642
+  _time: 2026-07-01 06:55:56.287354881 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-137
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#267 has been "pull-was-merged".
+  failed_builds: 0
+  files: 3
+  hoc: 0
+  is_human: 1
+  issue: 267
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-06-04 13:28:58.000000000 Z
+  where: github
+  who: 93074025
+- _id: 833
+  _job: 28499337642
+  _time: 2026-07-01 06:55:59.691784943 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  earliest_issue_was_found: 1
+  events_were_scanned: 14143768057
+  latest_issue_was_found: 72
+  min_pull_was_found: 269
+  repository: 1053332035
+  what: iterate
+  where: github
