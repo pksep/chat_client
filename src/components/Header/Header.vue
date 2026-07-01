@@ -415,16 +415,10 @@ import {
   isAnyCallDialing,
   isAnyCallModalVisible,
   isCallActive,
+  isModalVisible as isCallModalVisible,
   invitedGroupCallInfo,
-  joinInviteGroupCall,
-  joinGroupCall,
-  pendingGroupCallInfo,
-  showCallModal
-} from '../../services/useCalls';
-import {
-  startLiveKitCall,
-  startLiveKitGroupCall
-} from '../../services/useLiveKit';
+  pendingGroupCallInfo
+} from '../../services/useCallState';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
 import UserInfoPanel from '../UserInfoPanel.vue';
@@ -443,6 +437,22 @@ const { getSelectedTopic } = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
+
+const showCallModal = (): void => {
+  isCallModalVisible.value = true;
+};
+
+const joinInviteGroupCall = async () => {
+  const { joinInviteGroupCall } = await import('../../services/useCalls');
+
+  return joinInviteGroupCall();
+};
+
+const joinGroupCall = async (topicId?: string) => {
+  const { joinGroupCall } = await import('../../services/useCalls');
+
+  return joinGroupCall(topicId);
+};
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
   dataTestid: 'Header'
@@ -831,6 +841,8 @@ const handleCall = async () => {
   nextTick();
 
   if (currentTopic.value?.type === TopicType.Group) {
+    const { startLiveKitGroupCall } = await import('../../services/useLiveKit');
+
     await startLiveKitGroupCall(route.value.id);
     return;
   }
@@ -840,6 +852,8 @@ const handleCall = async () => {
   }
 
   if (!state.calledUser) return;
+  const { startLiveKitCall } = await import('../../services/useLiveKit');
+
   await startLiveKitCall(state.calledUser, route.value.id);
 };
 

@@ -153,7 +153,7 @@
     </MobileModal>
   </main>
 
-  <CallModal />
+  <CallModal v-if="shouldRenderCallModal" />
   <VpnConfirmModal
     :open="isVpnConfirmModalOpen"
     :data-testid="`${props.dataTestid}-VpnConfirmModal`"
@@ -199,13 +199,14 @@ import { Modal } from '@pksep/yui';
 import AndroidIcon from './UI/AndroidIcon.vue';
 import AppleIcon from './UI/AppleIcon.vue';
 import { useMobileApp } from '../composables/useMobileApp';
-import CallModal from './CallModal/CallModal.vue';
 import {
   invitedGroupCallInfo,
+  isAnyCallDialing,
+  isAnyCallIncoming,
   isCallActive,
   isAnyCallModalVisible,
   pendingGroupCallInfo
-} from '../services/useCalls';
+} from '../services/useCallState';
 import { useChatWallpaper } from '../composables/useChatWallpaper';
 import { useUserInfoModal } from '../composables/useUserInfoModal';
 import VpnConfirmModal from './UI/VpnConfirmModal.vue';
@@ -220,6 +221,9 @@ const NewBotModal = defineAsyncComponent(
 );
 const NewGroupModal = defineAsyncComponent(
   () => import('./NewChat/NewGroupModal.vue')
+);
+const CallModal = defineAsyncComponent(
+  () => import('./CallModal/CallModal.vue')
 );
 
 const {
@@ -283,6 +287,13 @@ const chatContainerClasses = computed(() => [
       !!invitedGroupCallInfo.value?.isJoinAvailable
   }
 ]);
+const shouldRenderCallModal = computed(
+  () =>
+    isCallActive.value ||
+    isAnyCallModalVisible.value ||
+    isAnyCallDialing.value ||
+    isAnyCallIncoming.value
+);
 
 const users = computed(() => getUsersList());
 const { isUserInfoOpen, activeUser, activeTopic, closeUserInfo } =

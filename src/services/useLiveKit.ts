@@ -21,7 +21,7 @@ import {
   VideoQuality
 } from 'livekit-client';
 import { MessageTypeEnum } from '@pksep/yui';
-import { computed, reactive, ref, watch } from 'vue';
+import { watch } from 'vue';
 import type { IUser } from '../components/interfaces/interfaces';
 import { getAuthUser } from '../composables/useAuth';
 import { useCallBackground } from '../composables/useCallBackground';
@@ -65,6 +65,39 @@ import {
   getTelemetryErrorPayload,
   recordTelemetryEvent
 } from './useTelemetry';
+import {
+  activeGroupCalls,
+  activeScreenShare,
+  callElapsedMs,
+  callStartedAt,
+  callStatusNotice,
+  callStatusNoticeKind,
+  formattedTime,
+  handRaisedParticipants,
+  invitedGroupCall,
+  isCalling,
+  isIncoming,
+  isModalVisible,
+  isRemoteVideoActive,
+  localScreenShareStream,
+  localVideoStream,
+  open,
+  participantReactions,
+  pendingEndCallRoomId,
+  pendingEndCallTopicId,
+  remoteParticipants,
+  roomId,
+  state,
+  timerSeconds,
+  topicId,
+  user,
+  type ActiveGroupCallEntry,
+  type CallReaction,
+  type CallStatusNoticeKind,
+  type ParticipantMediaState
+} from './useCallState';
+
+export type { CallReaction } from './useCallState';
 
 type LiveKitCallStatus = {
   active: boolean;
@@ -75,41 +108,6 @@ type LiveKitCallStatus = {
   wasAnswered?: boolean;
   groupMode?: boolean;
   elapsedDurationMs?: number;
-};
-
-type ActiveGroupCallEntry = {
-  roomId: string;
-  topicId: string;
-  caller?: IUser | null;
-  startTime?: number | null;
-  participantCount?: number;
-  groupMode?: boolean;
-  elapsedDurationMs?: number;
-};
-
-export type CallReaction =
-  | 'heart'
-  | 'thumbs-up'
-  | 'thumbs-down'
-  | 'joy'
-  | 'sob';
-
-type ParticipantMediaState = {
-  identity: string;
-  name: string;
-  videoStream: MediaStream | null;
-  cameraStream: MediaStream | null;
-  screenShareStream: MediaStream | null;
-  audioStream: MediaStream | null;
-  isVideoActive: boolean;
-  isScreenShareActive: boolean;
-  isHandRaised: boolean;
-  activeReaction: CallReaction | null;
-  activeReactionExpiresAt: number | null;
-  isSpeaking: boolean;
-  audioLevel: number;
-  isMicActive: boolean;
-  connectionQuality: ConnectionQuality;
 };
 
 type StreamCacheEntry = {
@@ -125,7 +123,6 @@ type RemoteReconnectingParticipantEntry = {
 
 type CallEndReason = 'busy';
 type RemoteVideoSource = 'camera' | 'screen';
-type CallStatusNoticeKind = 'reconnecting' | 'ended' | 'error';
 type DirectCallRecoveryOptions = {
   waitForRemote?: boolean;
   remoteUserId?: string | null;
@@ -139,61 +136,6 @@ type CallSocketAck = {
   elapsedDurationMs?: number;
   isNewCall?: boolean;
 };
-
-const open = ref(false);
-const isIncoming = ref(false);
-const isCalling = ref(false);
-const user = ref<IUser | null>(null);
-const roomId = ref<string | null>(null);
-const topicId = ref<string | null>(null);
-const callStartedAt = ref<number | null>(null);
-const callElapsedMs = ref(0);
-const timerSeconds = ref(0);
-const isModalVisible = ref(false);
-const isRemoteVideoActive = ref(false);
-const localVideoStream = ref<MediaStream | null>(null);
-const localScreenShareStream = ref<MediaStream | null>(null);
-const handRaisedParticipants = ref<Record<string, boolean>>({});
-const participantReactions = ref<
-  Record<string, { reaction: CallReaction; expiresAt: number }>
->({});
-const remoteParticipants = ref<ParticipantMediaState[]>([]);
-const callStatusNotice = ref<string | null>(null);
-const callStatusNoticeKind = ref<CallStatusNoticeKind | null>(null);
-const pendingEndCallRoomId = ref<string | null>(null);
-const pendingEndCallTopicId = ref<string | null>(null);
-const activeGroupCalls = ref<Record<string, ActiveGroupCallEntry>>({});
-const invitedGroupCall = ref<{
-  roomId: string;
-  topicId?: string | null;
-  inviteToken: string;
-  title: string;
-  avatarUrl?: string | null;
-  startTime?: number | null;
-  elapsedDurationMs?: number;
-  participantCount: number;
-  members: IUser[];
-  isJoinAvailable: boolean;
-} | null>(null);
-
-const state = reactive({
-  isMicActive: false,
-  isVideoActive: false,
-  isScreenSharingActive: false,
-  isSpeakerActive: false,
-  audioOutputRoute: 'earpiece' as Exclude<AudioOutputRoute, 'auto'>,
-  audioOutputDefaultRoute: 'earpiece' as Exclude<AudioOutputRoute, 'auto'>,
-  audioOutputAvailableRoutes: ['earpiece', 'speaker'] as Array<
-    Exclude<AudioOutputRoute, 'auto'>
-  >,
-  isFullScreen: false,
-  isHandRaised: false,
-  isSpeaking: false,
-  audioLevel: 0,
-  connectionQuality: ConnectionQuality.Unknown,
-  activeReaction: null as CallReaction | null,
-  activeReactionExpiresAt: null as number | null
-});
 
 const HAND_RAISE_TOPIC = 'group-call-hand-raise';
 const CALL_REACTION_TOPIC = 'group-call-reaction';
@@ -220,7 +162,7 @@ let localAcceptTopicId: string | null = null;
 let connectPromise: Promise<void> | null = null;
 let connectAttemptId = 0;
 let activeCallTraceId: string | null = null;
-let lastTelemetryConnectionQuality: ConnectionQuality | null = null;
+let lastTelemetryConnectionQuality: string | null = null;
 let currentCameraFacingMode: 'user' | 'environment' = 'user';
 let shouldEndCallOnConnectFailure = false;
 let isExplicitHangupInProgress = false;
@@ -1298,20 +1240,64 @@ const resetPendingEndCallState = () => {
 
 const emitEndCallEvent = (
   targetRoomId?: string | null,
-  targetTopicId?: string | null
-) => {
+  targetTopicId?: string | null,
+  source = 'unknown',
+  payload: Record<string, unknown> = {}
+): boolean => {
   const sdk = getChatSDK();
   const me = getAuthUser();
 
   if (!sdk || !me || !targetRoomId) {
+    recordCallTelemetryEvent(
+      'call.end.send_skipped',
+      {
+        targetRoomId,
+        targetTopicId,
+        source,
+        hasSdk: Boolean(sdk),
+        hasUser: Boolean(me),
+        ...payload
+      },
+      'warn'
+    );
     return false;
   }
 
-  sdk.sendWebSocketEvent(WebSocketEventType.END_CALL, {
-    roomId: targetRoomId,
-    topicId: targetTopicId,
-    userId: me.id
-  });
+  try {
+    sdk.sendWebSocketEvent(WebSocketEventType.END_CALL, {
+      roomId: targetRoomId,
+      topicId: targetTopicId,
+      userId: me.id
+    });
+
+    recordCallTelemetryEvent(
+      'call.end.sent',
+      {
+        targetRoomId,
+        targetTopicId,
+        source,
+        senderUserId: me.id,
+        ...payload
+      },
+      'warn'
+    );
+
+    return true;
+  } catch (error) {
+    recordCallTelemetryEvent(
+      'call.end.send_failed',
+      {
+        targetRoomId,
+        targetTopicId,
+        source,
+        senderUserId: me.id,
+        ...payload,
+        ...getTelemetryErrorPayload(error)
+      },
+      'error'
+    );
+    throw error;
+  }
 };
 
 const schedulePendingEndCallConfirmation = (
@@ -1326,13 +1312,25 @@ const schedulePendingEndCallConfirmation = (
   clearPendingEndCallTimers();
   pendingEndCallRoomId.value = targetRoomId;
   pendingEndCallTopicId.value = targetTopicId;
+  recordCallTelemetryEvent(
+    'call.end.pending_confirmation_scheduled',
+    {
+      targetRoomId,
+      targetTopicId
+    },
+    'warn'
+  );
 
   pendingEndCallRetryTimeout = setTimeout(() => {
     if (
       pendingEndCallRoomId.value === targetRoomId &&
       pendingEndCallTopicId.value === targetTopicId
     ) {
-      emitEndCallEvent(targetRoomId, targetTopicId);
+      emitEndCallEvent(
+        targetRoomId,
+        targetTopicId,
+        'pending_confirmation_retry'
+      );
     }
   }, 1500);
 
@@ -1485,18 +1483,6 @@ const restoreGroupCallEntryIfStillActive = (
   }, 3000);
 };
 
-const formatTime = (seconds: number) => {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-
-  if (hours > 0) {
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-
-  return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-};
-
 const getInviteParamsFromUrl = () => {
   if (typeof window === 'undefined') return null;
 
@@ -1547,8 +1533,6 @@ const handleExpiredInviteLink = () => {
     type: MessageTypeEnum.error
   });
 };
-
-const formattedTime = computed(() => formatTime(timerSeconds.value));
 
 const getElapsedCallDurationMs = () =>
   callElapsedMs.value +
@@ -2533,26 +2517,6 @@ const handleCallReactionData = (
   }
 };
 
-const activeScreenShare = computed(() => {
-  const remoteScreenShareParticipant = remoteParticipants.value.find(
-    participant =>
-      participant.isScreenShareActive &&
-      participant.screenShareStream &&
-      participant.screenShareStream
-        .getVideoTracks()
-        .some(track => track.readyState === 'live')
-  );
-
-  if (!remoteScreenShareParticipant?.screenShareStream) return null;
-
-  return {
-    identity: remoteScreenShareParticipant.identity,
-    name: remoteScreenShareParticipant.name,
-    stream: remoteScreenShareParticipant.screenShareStream,
-    isLocal: false
-  };
-});
-
 const enforceSingleScreenShare = async () => {
   if (!room || !state.isScreenSharingActive) return;
 
@@ -3335,10 +3299,10 @@ const connectToRoom = async () => {
         me &&
         activeRoomId
       ) {
-        sdk.sendWebSocketEvent(WebSocketEventType.END_CALL, {
-          roomId: activeRoomId,
-          topicId: activeTopicId,
-          userId: me.id
+        emitEndCallEvent(activeRoomId, activeTopicId, 'connect_failure', {
+          attemptId: currentAttemptId,
+          isDirectCallRecovery,
+          ...getTelemetryErrorPayload(error)
         });
       }
 
@@ -4945,7 +4909,11 @@ export const leaveCall = () => {
   }
 
   schedulePendingEndCallConfirmation(activeRoomId, activeTopicId);
-  emitEndCallEvent(activeRoomId, activeTopicId);
+  emitEndCallEvent(activeRoomId, activeTopicId, 'user_leave', {
+    wasIncomingCall,
+    isGroupCallSessionActive,
+    hasOtherParticipantsInGroupCall
+  });
 
   if (invitedGroupCall.value?.roomId === activeRoomId) {
     invitedGroupCall.value = null;

@@ -53,6 +53,8 @@
                 :src="media.localPath"
                 :poster="media.localThumbnailPath || VIDEO_FALLBACK_THUMBNAIL"
                 :style="getPreviewStyle(media, i)"
+                :width="getPreviewWidth(media, i)"
+                :height="getPreviewHeight(media, i)"
                 muted
                 playsinline
                 preload="metadata"
@@ -73,6 +75,8 @@
                   props.sender ? `${props.sender} изображение` : 'Изображение'
                 "
                 :style="getPreviewStyle(media, i)"
+                :width="getPreviewWidth(media, i)"
+                :height="getPreviewHeight(media, i)"
                 loading="lazy"
                 fetchpriority="low"
                 decoding="async"
@@ -354,10 +358,7 @@ const shouldRenderLocalVideoPreview = (media: IMedia): boolean =>
         media.localThumbnailPath === VIDEO_FALLBACK_THUMBNAIL)
   );
 
-const getPreviewStyle = (
-  media: IMedia,
-  index: number
-): Record<string, string> => {
+const getPreviewDimensions = (media: IMedia, index: number) => {
   const preview =
     media.ex?.previewWidth && media.ex?.previewHeight
       ? media.ex
@@ -366,6 +367,25 @@ const getPreviewStyle = (
           mediaFiles.value.length,
           index
         );
+
+  return preview;
+};
+
+const getPreviewWidth = (media: IMedia, index: number): number | undefined => {
+  const width = getPreviewDimensions(media, index).previewWidth;
+  return typeof width === 'number' && width > 0 ? width : undefined;
+};
+
+const getPreviewHeight = (media: IMedia, index: number): number | undefined => {
+  const height = getPreviewDimensions(media, index).previewHeight;
+  return typeof height === 'number' && height > 0 ? height : undefined;
+};
+
+const getPreviewStyle = (
+  media: IMedia,
+  index: number
+): Record<string, string> => {
+  const preview = getPreviewDimensions(media, index);
 
   if (!preview.previewWidth || !preview.previewHeight) {
     return {

@@ -645,8 +645,6 @@ import GroupCallInfoPanel from './GroupCallInfoPanel.vue';
 import ReactionVideoOverlay from './ReactionVideoOverlay.vue';
 import {
   activeScreenShare,
-  acceptCall,
-  copyInvitedGroupCallLink as copyInviteGroupCallLink,
   callStatusNotice,
   callStatusNoticeKind,
   formattedTime,
@@ -655,25 +653,15 @@ import {
   isModalVisible as isCallModalVisible,
   isRemoteVideoActive,
   invitedGroupCall,
-  leaveCall,
   localVideoStream,
   localScreenShareStream,
   open as isCallOpen,
   remoteParticipants,
-  refreshAudioOutputRoutes,
-  sendCallReaction,
-  selectAudioOutputRoute,
   state as liveKitState,
-  toggleHandRaise,
-  toggleMic,
-  toggleScreenShare,
-  switchCamera,
-  toggleVideo,
   topicId as activeTopicId,
-  updateRemoteVideoSubscription,
   user as activeUser
-} from '../../services/useLiveKit';
-import type { CallReaction } from '../../services/useLiveKit';
+} from '../../services/useCallState';
+import type { CallReaction } from '../../services/useCallState';
 import type { AudioOutputRoute } from '../../services/useAudioOutput';
 import {
   disableProximityLock,
@@ -705,6 +693,90 @@ const {
   selectedCallBackgroundId,
   selectedCallBackgroundMode
 } = useCallBackground();
+type LiveKitModule = typeof import('../../services/useLiveKit');
+
+const loadLiveKit = () => import('../../services/useLiveKit');
+
+const acceptCall = async () => {
+  const { acceptCall: acceptLiveKitCall } = await loadLiveKit();
+
+  return acceptLiveKitCall();
+};
+
+const leaveCall = async () => {
+  const { leaveCall: leaveLiveKitCall } = await loadLiveKit();
+
+  return leaveLiveKitCall();
+};
+
+const copyInviteGroupCallLink = async () => {
+  const { copyInvitedGroupCallLink } = await loadLiveKit();
+
+  return copyInvitedGroupCallLink();
+};
+
+const refreshAudioOutputRoutes = async () => {
+  const { refreshAudioOutputRoutes: refreshLiveKitAudioOutputRoutes } =
+    await loadLiveKit();
+
+  return refreshLiveKitAudioOutputRoutes();
+};
+
+const selectAudioOutputRoute = async (
+  ...args: Parameters<LiveKitModule['selectAudioOutputRoute']>
+) => {
+  const { selectAudioOutputRoute: selectLiveKitAudioOutputRoute } =
+    await loadLiveKit();
+
+  return selectLiveKitAudioOutputRoute(...args);
+};
+
+const sendCallReaction = async (
+  ...args: Parameters<LiveKitModule['sendCallReaction']>
+) => {
+  const { sendCallReaction: sendLiveKitCallReaction } = await loadLiveKit();
+
+  return sendLiveKitCallReaction(...args);
+};
+
+const toggleHandRaise = async () => {
+  const { toggleHandRaise: toggleLiveKitHandRaise } = await loadLiveKit();
+
+  return toggleLiveKitHandRaise();
+};
+
+const toggleMic = async () => {
+  const { toggleMic: toggleLiveKitMic } = await loadLiveKit();
+
+  return toggleLiveKitMic();
+};
+
+const toggleScreenShare = async () => {
+  const { toggleScreenShare: toggleLiveKitScreenShare } = await loadLiveKit();
+
+  return toggleLiveKitScreenShare();
+};
+
+const switchCamera = async () => {
+  const { switchCamera: switchLiveKitCamera } = await loadLiveKit();
+
+  return switchLiveKitCamera();
+};
+
+const toggleVideo = async () => {
+  const { toggleVideo: toggleLiveKitVideo } = await loadLiveKit();
+
+  return toggleLiveKitVideo();
+};
+
+const updateRemoteVideoSubscription = (
+  ...args: Parameters<LiveKitModule['updateRemoteVideoSubscription']>
+) => {
+  void loadLiveKit().then(
+    ({ updateRemoteVideoSubscription: updateLiveKitRemoteVideoSubscription }) =>
+      updateLiveKitRemoteVideoSubscription(...args)
+  );
+};
 
 const localVideo = ref<HTMLVideoElement | null>(null);
 const screenShareVideo = ref<HTMLVideoElement | null>(null);

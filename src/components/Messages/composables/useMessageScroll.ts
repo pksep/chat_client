@@ -141,11 +141,15 @@ export function useMessageScroll(
   const scrollMarkReadTimeout: number | null = null;
   let autoReadResumeTimeout: ReturnType<typeof setTimeout> | null = null;
   let intersectionObserver: IntersectionObserver | null = null;
+  const observedReadMessageElements = new Set<HTMLElement>();
+  let observedMessageTargetsRafId = 0;
   let pendingMessagesMutationRevision: number | null = null;
   let preserveViewportForDownPagination = false;
   let lastUserActivityReadFlushAt = 0;
   const pendingReadIds = new Set<string>();
   const SCROLL_DISTANCE_FOR_REQUEST = 500;
+  const READ_OBSERVER_TARGET_LIMIT = 120;
+  const READ_OBSERVER_VIEWPORT_MARGIN_MULTIPLIER = 2;
   const unreadTrackableMessageIds = computed(
     () =>
       new Set(
@@ -209,6 +213,87 @@ export function useMessageScroll(
     }
 
     return messageId;
+  };
+
+  const getObservableReadMessageElements = (
+    container: HTMLElement
+  ): HTMLElement[] => {
+    const messageElements = Array.from(
+      container.querySelectorAll('[data-message-id]')
+    ).filter(
+      (element): element is HTMLElement => element instanceof HTMLElement
+    );
+
+    if (messageElements.length <= READ_OBSERVER_TARGET_LIMIT) {
+      return messageElements;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const viewportMargin =
+      containerRect.height * READ_OBSERVER_VIEWPORT_MARGIN_MULTIPLIER;
+    const viewportTop = containerRect.top - viewportMargin;
+    const viewportBottom = containerRect.bottom + viewportMargin;
+    const visibleWindowElements = messageElements.filter(element => {
+      const rect = element.getBoundingClientRect();
+      return rect.bottom >= viewportTop && rect.top <= viewportBottom;
+    });
+
+    if (visibleWindowElements.length > 0) {
+      return visibleWindowElements.slice(0, READ_OBSERVER_TARGET_LIMIT);
+    }
+
+    const firstViewportIndex = messageElements.findIndex(element => {
+      const rect = element.getBoundingClientRect();
+      return rect.bottom >= containerRect.top;
+    });
+    const anchorIndex =
+      firstViewportIndex >= 0 ? firstViewportIndex : messageElements.length - 1;
+    const startIndex = Math.max(
+      0,
+      anchorIndex - Math.floor(READ_OBSERVER_TARGET_LIMIT / 2)
+    );
+
+    return messageElements.slice(
+      startIndex,
+      startIndex + READ_OBSERVER_TARGET_LIMIT
+    );
+  };
+
+  const syncObservedReadMessageTargets = (): void => {
+    const container = chatWrapperRef.value;
+
+    if (!intersectionObserver || !container) {
+      return;
+    }
+
+    const nextObservedElements = new Set(
+      getObservableReadMessageElements(container)
+    );
+
+    observedReadMessageElements.forEach(element => {
+      if (!nextObservedElements.has(element)) {
+        intersectionObserver?.unobserve(element);
+        observedReadMessageElements.delete(element);
+      }
+    });
+
+    nextObservedElements.forEach(element => {
+      if (!observedReadMessageElements.has(element)) {
+        intersectionObserver?.observe(element);
+        observedReadMessageElements.add(element);
+      }
+    });
+  };
+
+  const scheduleObservedReadMessageTargetsSync = (): void => {
+    if (observedMessageTargetsRafId) {
+      return;
+    }
+
+    observedMessageTargetsRafId = requestAnimationFrame(() => {
+      observedMessageTargetsRafId = 0;
+      syncObservedReadMessageTargets();
+    });
   };
 
   const submitReadMessages = async (messageIds: string[]) => {
@@ -387,6 +472,7 @@ export function useMessageScroll(
     if (intersectionObserver) {
       intersectionObserver.disconnect();
     }
+    observedReadMessageElements.clear();
 
     intersectionObserver = new IntersectionObserver(
       entries => {
@@ -416,13 +502,7 @@ export function useMessageScroll(
 
     nextTick(() => {
       if (chatWrapperRef.value) {
-        const messageElements =
-          chatWrapperRef.value.querySelectorAll('[data-message-id]');
-        messageElements.forEach(element => {
-          if (element instanceof HTMLElement) {
-            intersectionObserver?.observe(element);
-          }
-        });
+        syncObservedReadMessageTargets();
 
         void flushQueuedReadMessages();
         flushVisibleUnreadMessages();
@@ -479,6 +559,7 @@ export function useMessageScroll(
 
     scrollAnchor.onScroll();
     viewportRevision.value += 1;
+    scheduleObservedReadMessageTargetsSync();
     schedulePersistScrollMeta();
     clearVisibleUnreadReaction();
 
@@ -570,7 +651,7 @@ export function useMessageScroll(
     }
   };
 
-  const scrollToBottom = (opts?: {
+  const scrollToBottom = async (opts?: {
     preferUnreadMarker?: boolean;
     smooth?: boolean;
   }) => {
@@ -597,6 +678,10 @@ export function useMessageScroll(
       }
 
       if (!state.hideUnreadMarker && state.unreadMarkerMessageId) {
+        await messageListUserItemsRef.value?.ensureMessageRendered?.(
+          state.unreadMarkerMessageId
+        );
+
         const currentMarkerKey = route.value?.id
           ? `${route.value.id}:${state.unreadMarkerMessageId}`
           : state.unreadMarkerMessageId;
@@ -878,6 +963,14 @@ export function useMessageScroll(
       clearTimeout(autoReadResumeTimeout);
       autoReadResumeTimeout = null;
     }
+
+    if (observedMessageTargetsRafId) {
+      cancelAnimationFrame(observedMessageTargetsRafId);
+      observedMessageTargetsRafId = 0;
+    }
+
+    intersectionObserver?.disconnect();
+    observedReadMessageElements.clear();
 
     document.removeEventListener('visibilitychange', handleVisibilityChange);
     window.removeEventListener('focus', handleWindowFocus);

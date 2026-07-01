@@ -1,7 +1,25 @@
-import { ref, watch, type Ref } from 'vue';
-import { useMastra } from '../../../services/useMastra';
+import { ref, watch, type Ref, type WatchStopHandle } from 'vue';
 import { generateUUID } from '../../../utils/generateUUID';
 import { removeMessageLoading } from '../../../services/useChatDb';
+import { RouteTypes } from '../../../composables/navigation/useUrlRouting';
+
+type MastraResult = {
+  messages: Ref<any[]>;
+  sendMessage: (
+    input: string,
+    onFinish?: () => void,
+    abortSignal?: AbortSignal
+  ) => Promise<void>;
+  clearMessages: () => void;
+  isInitializing: Ref<boolean>;
+};
+
+const createDisabledMastraResult = (): MastraResult => ({
+  messages: ref([]),
+  sendMessage: async () => {},
+  clearMessages: () => {},
+  isInitializing: ref(false)
+});
 
 export function useMessageMastra(
   route: Ref<{ id: string; type: string }>,
@@ -9,44 +27,54 @@ export function useMessageMastra(
   props: { baseUrl?: string }
 ) {
   const mastraResult = ref<any>(null);
+  let initializeRequestId = 0;
+  let stopWatchingMessages: WatchStopHandle | null = null;
 
-  const initializeMastra = () => {
+  const bindMastraMessages = (result: MastraResult) => {
+    stopWatchingMessages?.();
+    stopWatchingMessages = watch(
+      () => result.messages.value,
+      newMessages => {
+        state.aiMessages = [...newMessages];
+      },
+      { deep: true }
+    );
+  };
+
+  const initializeMastra = async () => {
+    const requestId = ++initializeRequestId;
+
     if (state.chatId && props.baseUrl) {
+      const { useMastra } = await import('../../../services/useMastra');
+
+      if (requestId !== initializeRequestId) {
+        return;
+      }
+
       const result = useMastra({
         agentId: 'generalAgent',
         chatId: state.chatId,
         baseUrl: props.baseUrl
       });
       mastraResult.value = result;
-
-      watch(
-        () => result.messages.value,
-        newMessages => {
-          state.aiMessages = [...newMessages];
-        },
-        { deep: true }
-      );
+      bindMastraMessages(result);
     } else {
-      const result = useMastra(false);
+      const result = createDisabledMastraResult();
       mastraResult.value = result;
-
-      watch(
-        () => result.messages.value,
-        newMessages => {
-          state.aiMessages = [...newMessages];
-        },
-        { deep: true }
-      );
+      bindMastraMessages(result);
     }
   };
 
   const handleMastraMounted = () => {
-    if (route.value && route.value.type === 'AI' && !state.chatId) {
+    if (route.value && route.value.type === RouteTypes.AI && !state.chatId) {
       state.chatId = generateUUID();
     }
   };
 
   const handleMastraUnmounted = () => {
+    stopWatchingMessages?.();
+    stopWatchingMessages = null;
+
     if (state.chatId) {
       removeMessageLoading(state.chatId, state.aiMessages.length);
     }

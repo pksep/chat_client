@@ -8,11 +8,6 @@ import { useChatApi } from './useApi';
 import { getCurrentUserId } from './useChat';
 import { getUserById } from '../composables/useUsers';
 import {
-  handleIncomingPushCall,
-  handleNativeCallAction,
-  dismissIncomingCallState
-} from './useLiveKit';
-import {
   clearTopicNotifications,
   isTopicCurrentlyVisible,
   navigateToNotificationTarget,
@@ -58,6 +53,33 @@ let nativeNotificationTapListener: PluginListenerHandle | null = null;
 let lastHandledNotificationKey = '';
 let lastHandledNotificationAt = 0;
 let isWebServiceWorkerMessageListenerBound = false;
+type LiveKitModule = typeof import('./useLiveKit');
+
+const loadLiveKit = () => import('./useLiveKit');
+
+const handleIncomingPushCallLazy = async (
+  ...args: Parameters<LiveKitModule['handleIncomingPushCall']>
+) => {
+  const { handleIncomingPushCall } = await loadLiveKit();
+
+  return handleIncomingPushCall(...args);
+};
+
+const handleNativeCallActionLazy = async (
+  ...args: Parameters<LiveKitModule['handleNativeCallAction']>
+) => {
+  const { handleNativeCallAction } = await loadLiveKit();
+
+  return handleNativeCallAction(...args);
+};
+
+const dismissIncomingCallStateLazy = async (
+  ...args: Parameters<LiveKitModule['dismissIncomingCallState']>
+) => {
+  const { dismissIncomingCallState } = await loadLiveKit();
+
+  return dismissIncomingCallState(...args);
+};
 
 const storeNativePushToken = (token: string): void => {
   localStorage.setItem(NATIVE_PUSH_TOKEN_STORAGE_KEY, token);
@@ -183,7 +205,7 @@ const handleNotificationInteraction = (
     normalizedActionId?.includes('accept') ||
     normalizedActionId?.includes('answer')
   ) {
-    void handleNativeCallAction(
+    void handleNativeCallActionLazy(
       'accept',
       normalizedData.roomId,
       normalizedData.topicId || normalizedData.roomId
@@ -196,7 +218,7 @@ const handleNotificationInteraction = (
     normalizedActionId?.includes('reject') ||
     normalizedActionId?.includes('end')
   ) {
-    void handleNativeCallAction(
+    void handleNativeCallActionLazy(
       'decline',
       normalizedData.roomId,
       normalizedData.topicId || normalizedData.roomId
@@ -210,7 +232,7 @@ const handleNotificationInteraction = (
   }
 
   if (normalizedData.action === 'DISMISS_INCOMING_CALL') {
-    dismissIncomingCallState(
+    void dismissIncomingCallStateLazy(
       normalizedData.roomId,
       normalizedData.topicId || normalizedData.roomId
     );
@@ -251,7 +273,7 @@ const consumeWebCallActionFromUrl = () => {
   url.searchParams.delete('topicId');
   window.history.replaceState({}, document.title, url.toString());
 
-  void handleNativeCallAction(action, roomId, topicId);
+  void handleNativeCallActionLazy(action, roomId, topicId);
 };
 
 const bindWebServiceWorkerMessageListener = () => {
@@ -278,7 +300,7 @@ const bindWebServiceWorkerMessageListener = () => {
       payload?.type === 'CALL_ACTION' &&
       (payload.action === 'accept' || payload.action === 'decline')
     ) {
-      void handleNativeCallAction(
+      void handleNativeCallActionLazy(
         payload.action,
         payload.roomId || undefined,
         payload.topicId || undefined
@@ -394,7 +416,7 @@ export const initPushNotifications = async () => {
       }
 
       if (normalizedData.action === 'DISMISS_INCOMING_CALL') {
-        dismissIncomingCallState(
+        void dismissIncomingCallStateLazy(
           normalizedData.roomId,
           normalizedData.topicId || normalizedData.roomId
         );
@@ -570,7 +592,7 @@ const handleCallPush = (notification?: { data?: NativeNotificationData }) => {
     if (user) {
       const startTime = data.startTime ? Number(data.startTime) : undefined;
 
-      void handleIncomingPushCall(
+      void handleIncomingPushCallLazy(
         user,
         roomId,
         targetTopicId,
