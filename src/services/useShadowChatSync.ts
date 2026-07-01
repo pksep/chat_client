@@ -182,6 +182,26 @@ const getMessageTimestamp = (message: IMessage): number => {
   return 0;
 };
 
+const getMessageCreatedTimestamp = (message: IMessage): number => {
+  const timestamp =
+    message.createdAt instanceof Date
+      ? message.createdAt.getTime()
+      : new Date(message.createdAt || 0).getTime();
+
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+
+const compareMessagesByPosition = (left: IMessage, right: IMessage): number => {
+  const timeDiff =
+    getMessageCreatedTimestamp(left) - getMessageCreatedTimestamp(right);
+
+  if (timeDiff !== 0) {
+    return timeDiff;
+  }
+
+  return (left.id || '').localeCompare(right.id || '');
+};
+
 const parseMessageEx = (
   message: Pick<IMessage, 'ex'>
 ): Record<string, unknown> | null => {
@@ -246,9 +266,7 @@ const mergeMessages = (
     }
   });
 
-  return Array.from(mergedByKey.values()).sort(
-    (left, right) => getMessageTimestamp(left) - getMessageTimestamp(right)
-  );
+  return Array.from(mergedByKey.values()).sort(compareMessagesByPosition);
 };
 
 const openDb = async (): Promise<IDBDatabase | null> => {
@@ -559,7 +577,8 @@ export const syncShadowReadStateFromMessages = async (
   const lastReadMessage = [...messages]
     .filter(message => message.senderUserId !== userId && message.isReadByMe)
     .sort(
-      (left, right) => getMessageTimestamp(right) - getMessageTimestamp(left)
+      (left, right) =>
+        getMessageCreatedTimestamp(right) - getMessageCreatedTimestamp(left)
     )[0];
 
   await saveShadowReadState(
@@ -710,7 +729,7 @@ const isMessageInRange = (
   message: IMessage,
   range: ShadowLoadedRange
 ): boolean => {
-  const timestamp = getMessageTimestamp(message);
+  const timestamp = getMessageCreatedTimestamp(message);
   const fromTimestamp = range.fromCreatedAt
     ? new Date(range.fromCreatedAt).getTime()
     : Number.NEGATIVE_INFINITY;
@@ -789,9 +808,7 @@ export const saveShadowLoadedRange = async (
     return;
   }
 
-  const sortedMessages = [...messages].sort(
-    (left, right) => getMessageTimestamp(left) - getMessageTimestamp(right)
-  );
+  const sortedMessages = [...messages].sort(compareMessagesByPosition);
   const firstMessage = sortedMessages[0];
   const lastMessage = sortedMessages[sortedMessages.length - 1];
 
@@ -918,9 +935,7 @@ export const resolveShadowTopicContext = async (
     };
   }
 
-  const sortedMessages = [...messages].sort(
-    (left, right) => getMessageTimestamp(left) - getMessageTimestamp(right)
-  );
+  const sortedMessages = [...messages].sort(compareMessagesByPosition);
   const targetMessage = sortedMessages.find(
     message => message.id === messageId
   );
@@ -1008,9 +1023,7 @@ export const resolveShadowTopicPage = async (
   }
 
   const limit = Math.max(1, opts?.limit || 50);
-  const sortedMessages = [...messages].sort(
-    (left, right) => getMessageTimestamp(left) - getMessageTimestamp(right)
-  );
+  const sortedMessages = [...messages].sort(compareMessagesByPosition);
 
   if (opts?.lastMessageId) {
     const cursorMessage = sortedMessages.find(

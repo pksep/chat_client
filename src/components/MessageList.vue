@@ -30,7 +30,7 @@
 
   <div
     class="chat__message-wrapper"
-    v-if="state.messages.length && !isAiRoute"
+    v-if="!isAiRoute && !isDefaultRoute"
     ref="chatWrapperRef"
     @vue:mounted="scrollToBottom"
     @scroll="handleScroll"
@@ -1488,6 +1488,7 @@ watch(
       topicSwitchToken !== activeTopicSwitchToken ||
       route.value?.id !== topicId;
     suppressNotificationSoundForTopic(topicId, TOPIC_SWITCH_AUTO_READ_GRACE_MS);
+    state.errorMessage = '';
     state.hideUnreadMarker = true;
     state.unreadMarkerMessageId = null;
     isLoadingInitialMessages.value = true;
@@ -1547,11 +1548,16 @@ watch(
     }
 
     void fetchPinnedMessagesForTopic(topicId);
-    void fetchMessagesForTopic(topicId, {
+    await fetchMessagesForTopic(topicId, {
       limit: initialMessagesLimit,
       forceRefresh: true,
       forceNetwork: navigator.onLine
     });
+
+    if (isStaleTopicSwitch()) {
+      return;
+    }
+
     renderedTopicId.value = topicId;
     await nextTick();
 

@@ -142,6 +142,26 @@ const getMessageTimestamp = (message: IMessage): number => {
   return 0;
 };
 
+const getMessageCreatedTimestamp = (message: IMessage): number => {
+  const timestamp =
+    message.createdAt instanceof Date
+      ? message.createdAt.getTime()
+      : new Date(message.createdAt || 0).getTime();
+
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+
+const compareMessagesByPosition = (left: IMessage, right: IMessage): number => {
+  const timeDiff =
+    getMessageCreatedTimestamp(left) - getMessageCreatedTimestamp(right);
+
+  if (timeDiff !== 0) {
+    return timeDiff;
+  }
+
+  return (left.id || '').localeCompare(right.id || '');
+};
+
 const parseMessageEx = (
   message: Pick<IMessage, 'ex'>
 ): Record<string, unknown> | null => {
@@ -206,9 +226,7 @@ const mergeCachedMessages = (
     }
   });
 
-  return Array.from(mergedByKey.values()).sort(
-    (left, right) => getMessageTimestamp(left) - getMessageTimestamp(right)
-  );
+  return Array.from(mergedByKey.values()).sort(compareMessagesByPosition);
 };
 
 const openDb = async (): Promise<IDBDatabase | null> => {

@@ -179,6 +179,11 @@ const getMessageTimestamp = (message: IMessage): number => {
   return new Date(message.createdAt).getTime();
 };
 
+const getMessageStableSortKey = (message: IMessage): string => {
+  const clientId = getClientId(message);
+  return message.id || (clientId ? `client:${clientId}` : '');
+};
+
 const compareMessages = (left: IMessage, right: IMessage): number => {
   const leftEx = parseMessageEx(left);
   const rightEx = parseMessageEx(right);
@@ -200,7 +205,9 @@ const compareMessages = (left: IMessage, right: IMessage): number => {
     return timeDiff;
   }
 
-  return 0;
+  return getMessageStableSortKey(left).localeCompare(
+    getMessageStableSortKey(right)
+  );
 };
 
 const getPendingUploadKey = (topicId: string, messageId: string): string =>
@@ -911,6 +918,7 @@ export const fetchMessagesForTopic = async (
     }
 
     if (
+      !opts?.forceRefresh &&
       !opts?.forceNetwork &&
       (opts?.lastMessageId || opts?.afterMessageId) &&
       existingMessages.length > 0
@@ -946,7 +954,7 @@ export const fetchMessagesForTopic = async (
       }
     }
 
-    if (isShadowSyncEnabled() && !opts?.forceNetwork) {
+    if (isShadowSyncEnabled() && !opts?.forceRefresh && !opts?.forceNetwork) {
       const shadowPageResolution = await resolveShadowTopicPage(topicId, {
         limit: opts?.limit,
         lastMessageId: opts?.lastMessageId,
