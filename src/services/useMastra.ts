@@ -13,15 +13,6 @@ interface UseMastraOptions {
   baseUrl?: string;
 }
 
-const saveUserIdToSession = (userId: string): void => {
-  sessionStorage.setItem('userId', userId);
-};
-
-const hasUserIdInSession = (id: string): boolean => {
-  const userId = sessionStorage.getItem('userId');
-  return userId === id;
-};
-
 const useMastra = (options?: UseMastraOptions | false) => {
   if (!options) {
     return {
@@ -320,4 +311,5 @@ const useMastra = (options?: UseMastraOptions | false) => {
   };
 };
 
-export { useMastra, saveUserIdToSession, hasUserIdInSession };
+export { useMastra };
+export { saveUserIdToSession, hasUserIdInSession } from './useSessionUser';

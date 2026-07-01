@@ -3,13 +3,15 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue';
+import { onMounted, onUnmounted, watch } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
 
 import type { IChatContainerProps } from './components/interfaces/interfaces';
 import { initializeChat, setCurrentUserId } from './services/useChat';
-import { restoreInvitedGroupCallFromUrl } from './services/useCalls';
-import { saveUserIdToSession, hasUserIdInSession } from './services/useMastra';
+import {
+  saveUserIdToSession,
+  hasUserIdInSession
+} from './services/useSessionUser';
 import {
   clearBootstrapErpSession,
   clearChatAuthSession,
@@ -35,10 +37,7 @@ import { getConfig } from './services/useConfig';
 import { hydrateTopicsFromCache, useTopics } from './composables/useTopics';
 import { getGroupById } from './composables/useGroup';
 import { useUrlWatcher } from './composables/navigation';
-import {
-  fetchMessagesForTopic,
-  fetchPinnedMessagesForTopic
-} from './services/useMessages';
+import { fetchPinnedMessagesForTopic } from './services/useMessages';
 import { initPushNotifications } from './services/usePushNotifications';
 import {
   clearTopicNotifications,
@@ -53,21 +52,41 @@ import { MAX_W_MD } from './utils/constants';
 import { RouteTypes } from './composables/navigation/useUrlRouting';
 import { hydrateMessagesFromCache } from './services/useMessages';
 import { useShareSelection } from './composables/useShareSelection';
+import { isGroupCallInviteUrl } from './utils/groupCallInviteUrl';
 
 const props = defineProps<IChatContainerProps>();
 
 const { fetchAllTopics, getTopicList } = useTopics();
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const route = useUrlWatcher();
-const isChatReady = ref(false);
 let removeAppVisibilityListener: (() => void) | null = null;
 const { hasPendingShareBatches, isShareSelectionActive, startShareSelection } =
   useShareSelection();
+let hydratedCacheUserId: string | undefined;
 
-const hydrateCachedMessagesForKnownTopics = async (
-  userId?: string
-): Promise<void> => {
-  const topicIds = Array.from(
+const waitForStartupIdle = (): Promise<void> =>
+  new Promise(resolve => {
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(() => resolve(), { timeout: 1500 });
+      return;
+    }
+
+    setTimeout(resolve, 0);
+  });
+
+const runDeferredStartupTask = (
+  label: string,
+  task: () => Promise<void>
+): void => {
+  void waitForStartupIdle()
+    .then(task)
+    .catch(error => {
+      console.warn(`Failed to run deferred startup task "${label}":`, error);
+    });
+};
+
+const getKnownTopicIds = (): string[] =>
+  Array.from(
     new Set(
       [
         ...getTopicList()
@@ -78,27 +97,45 @@ const hydrateCachedMessagesForKnownTopics = async (
     )
   );
 
+const hydrateActiveCachedMessages = async (userId?: string): Promise<void> => {
+  const activeTopicId = route.value.id || '';
+
+  if (!activeTopicId) {
+    return;
+  }
+
+  await hydrateMessagesFromCache(activeTopicId, userId);
+};
+
+const scheduleBackgroundCachedMessageHydration = (userId?: string): void => {
+  const activeTopicId = route.value.id || '';
+  const topicIds = getKnownTopicIds().filter(
+    topicId => topicId !== activeTopicId
+  );
+
   if (topicIds.length === 0) {
     return;
   }
 
-  const activeTopicId = route.value.id || '';
+  runDeferredStartupTask('cached messages hydration', async () => {
+    for (const topicId of topicIds) {
+      await hydrateMessagesFromCache(topicId, userId);
+      await waitForStartupIdle();
+    }
+  });
+};
 
-  if (activeTopicId) {
-    await hydrateMessagesFromCache(activeTopicId, userId);
+const hydrateCriticalCache = async (userId?: string): Promise<void> => {
+  await hydrateUsersFromCache(userId);
+
+  if (userId) {
+    applyCachedAuthUser(userId);
   }
 
-  const backgroundTopicIds = topicIds.filter(
-    topicId => topicId !== activeTopicId
-  );
-
-  if (backgroundTopicIds.length === 0) {
-    return;
-  }
-
-  await Promise.allSettled(
-    backgroundTopicIds.map(topicId => hydrateMessagesFromCache(topicId, userId))
-  );
+  await hydrateTopicsFromCache(userId);
+  await hydrateActiveCachedMessages(userId);
+  scheduleBackgroundCachedMessageHydration(userId);
+  hydratedCacheUserId = userId;
 };
 
 const getActiveChatTopicId = (): string | null => {
@@ -178,6 +215,52 @@ const applyCachedAuthUser = (userId: string): void => {
   });
 };
 
+const restoreInvitedGroupCallDeferred = async (): Promise<void> => {
+  if (
+    typeof window === 'undefined' ||
+    !isGroupCallInviteUrl(window.location.href)
+  ) {
+    return;
+  }
+
+  const { restoreInvitedGroupCallFromUrl } = await import(
+    './services/useCalls'
+  );
+
+  await restoreInvitedGroupCallFromUrl();
+};
+
+const runDeferredOnlineStartup = (authUserId?: string): void => {
+  runDeferredStartupTask('online refresh', async () => {
+    await Promise.all([fetchAuthUser(), fetchAllUsers()]);
+
+    if (!getAuthUser() && authUserId) {
+      applyCachedAuthUser(authUserId);
+    }
+
+    await fetchAllTopics();
+    scheduleBackgroundCachedMessageHydration(authUserId);
+
+    if (route.value.id) {
+      void fetchPinnedMessagesForTopic(route.value.id);
+
+      if (route.value.type === RouteTypes.GROUP) {
+        getGroupById(route.value.id);
+      }
+    }
+  });
+
+  runDeferredStartupTask('group call restore', restoreInvitedGroupCallDeferred);
+
+  runDeferredStartupTask('push notifications', async () => {
+    try {
+      await initPushNotifications();
+    } catch (error) {
+      console.warn('Не удалось инициализировать push-уведомления:', error);
+    }
+  });
+};
+
 const runAppInitialization = async () => {
   const url = new URL(window.location.href);
   const tokenUrl = url.searchParams.get('token')?.split('?token')[0];
@@ -193,11 +276,7 @@ const runAppInitialization = async () => {
 
   if (initialUserId) {
     setCurrentUserId(initialUserId);
-
-    await hydrateUsersFromCache(initialUserId);
-    applyCachedAuthUser(initialUserId);
-    await hydrateTopicsFromCache(initialUserId);
-    await hydrateCachedMessagesForKnownTopics(initialUserId);
+    await hydrateCriticalCache(initialUserId);
   }
 
   try {
@@ -236,10 +315,11 @@ const runAppInitialization = async () => {
     setCurrentUserId(authUserId || undefined);
     if (authData.user) setAuthUser(authData.user);
 
-    await hydrateUsersFromCache(authUserId || undefined);
-    applyCachedAuthUser(authUserId);
-    await hydrateTopicsFromCache(authUserId || undefined);
-    await hydrateCachedMessagesForKnownTopics(authUserId || undefined);
+    if (authUserId !== hydratedCacheUserId) {
+      await hydrateCriticalCache(authUserId || undefined);
+    } else {
+      scheduleBackgroundCachedMessageHydration(authUserId || undefined);
+    }
 
     await initializeChat({
       token: authData.token,
@@ -248,33 +328,7 @@ const runAppInitialization = async () => {
       userId: authUserId || undefined
     });
 
-    await Promise.all([fetchAuthUser(), fetchAllUsers()]);
-
-    if (!getAuthUser() && authUserId) {
-      applyCachedAuthUser(authUserId);
-    }
-
-    await restoreInvitedGroupCallFromUrl();
-
-    await fetchAllTopics();
-    void hydrateCachedMessagesForKnownTopics(authUserId || undefined);
-
-    if (route.value.id) {
-      await fetchPinnedMessagesForTopic(route.value.id);
-      await fetchMessagesForTopic(route.value.id);
-
-      if (route.value.type === RouteTypes.GROUP) {
-        getGroupById(route.value.id);
-      }
-    }
-
-    try {
-      await initPushNotifications();
-    } catch (error) {
-      console.warn('Не удалось инициализировать push-уведомления:', error);
-    }
-
-    isChatReady.value = true;
+    runDeferredOnlineStartup(authUserId || undefined);
   } catch (error) {
     console.error('Failed to initialize chat:', error);
 
@@ -285,10 +339,6 @@ const runAppInitialization = async () => {
       return;
     }
   } finally {
-    if (!isMobile.value) {
-      isChatReady.value = true;
-    }
-
     if (tokenUrl) {
       url.searchParams.delete('token');
       url.searchParams.delete('organization');

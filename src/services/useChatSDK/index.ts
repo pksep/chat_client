@@ -30,7 +30,6 @@ import { ChatMedia, ChatMediaInterface } from './media';
 import { ChatWS, ChatWSInterface } from './ws';
 import { ChatUtils, ChatUtilsInterface } from './utils';
 import { ITopic } from '../../components/interfaces/interfaces';
-import { fetchAllTopics } from '../../composables/useTopics';
 import { getAuthToken } from '../../composables/useLogin';
 import {
   isAuthError,
@@ -38,7 +37,6 @@ import {
   tryRefreshErpSession,
   withErpRefreshOnAuthError
 } from '../../composables/useAuth';
-import { fetchMessagesForTopic } from '../useMessages';
 import { getConfig } from '../useConfig';
 import { getVideoThumbnail } from '../../utils/mediaPreview';
 import type { MediaPreviewDimensions } from '../../utils/mediaPreview';
@@ -544,8 +542,6 @@ export class ChatSDK {
             wsUrl: this.wsUrl
           });
           resolveOnce();
-
-          fetchAllTopics();
         });
 
         this.socket.on('connect_error', async error => {
@@ -649,8 +645,6 @@ export class ChatSDK {
               transport: this.socket?.io?.engine?.transport?.name
             }
           );
-          fetchAllTopics();
-          fetchMessagesForTopic();
         });
 
         this.socket.on('reconnect_error', error => {

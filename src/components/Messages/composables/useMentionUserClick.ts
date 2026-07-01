@@ -1,6 +1,5 @@
 import { getUserById } from '../../../composables/useUsers';
 import { useUserInfoModal } from '../../../composables/useUserInfoModal';
-import { openGroupCallInviteUrl } from '../../../services/useLiveKit';
 import { isGroupCallInviteUrl } from '../../../utils/groupCallInviteUrl';
 
 const MENTION_USER_SELECTOR = '[data-user-id]';
@@ -40,9 +39,12 @@ export const useMentionUserClick = () => {
     ) as HTMLAnchorElement | null;
 
     if (anchorElement && isGroupCallInviteUrl(anchorElement.href)) {
+      const inviteUrl = anchorElement.href;
       event.preventDefault();
       event.stopPropagation();
-      void openGroupCallInviteUrl(anchorElement.href);
+      void import('../../../services/useLiveKit').then(
+        ({ openGroupCallInviteUrl }) => openGroupCallInviteUrl(inviteUrl)
+      );
       return;
     }
 

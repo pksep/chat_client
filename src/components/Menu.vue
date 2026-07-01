@@ -56,6 +56,7 @@
           :show-checkbox="isShareSelectionActive"
           :selected-topic-ids="selectedTopicIds"
           :search-query="toolbarState.search"
+          :toolbar-filter="toolbarState.filter"
           :message-results="
             isShareSelectionActive ? [] : filteredMessageSearchResults
           "
@@ -143,6 +144,10 @@ import {
   getChatsToolbarFilterCounts,
   getChatsToolbarFilterMutedOnly
 } from '../utils/chats-toolbar-filter-badge';
+import {
+  recordChatTopicNavigationRequest,
+  type ChatTopicOpenTelemetryMeta
+} from '../services/useChatNavigationTelemetry';
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: 'Menu'
@@ -275,13 +280,23 @@ const handleCollapse = (): void => {
   toggle();
 };
 
-const unmountTopicClick = (topic: ITopic): void => {
+const unmountTopicClick = (
+  topic: ITopic,
+  telemetry?: ChatTopicOpenTelemetryMeta | null
+): void => {
   if (isShareSelectionActive.value) {
     toggleShareTopic(topic.id);
     return;
   }
 
   setActiveSection('chats');
+
+  recordChatTopicNavigationRequest({
+    telemetry,
+    topicId: topic.id,
+    topicType: topic.type,
+    source: 'menu.unmount_topic'
+  });
 
   if (topic.type === 'GROUP') {
     navigateToGroup(topic.id);

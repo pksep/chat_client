@@ -77,7 +77,6 @@ import { computed, reactive } from 'vue';
 import { useUrlWatcher } from '../composables/navigation';
 import { currentGroup, useGroup } from '../composables/useGroup';
 import { useTopics } from '../composables/useTopics';
-import { startLiveKitGroupCall } from '../services/useLiveKit';
 import ConfirmModal from './UI/ConfirmModal.vue';
 import CallIcon from './CallModal/UI/CallIcon.vue';
 
@@ -115,6 +114,8 @@ const handleCall = async () => {
   }
 
   emits('unmount-open-chat');
+  const { startLiveKitGroupCall } = await import('../services/useLiveKit');
+
   await startLiveKitGroupCall(groupId);
 };
 

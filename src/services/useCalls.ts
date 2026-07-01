@@ -1,55 +1,43 @@
-import { computed } from 'vue';
 import {
-  activeGroupCalls,
-  clearActiveGroupCall,
-  clearInvitedGroupCall,
-  cleanup,
-  createStandaloneMeetingInviteLink,
-  copyInvitedGroupCallLink,
-  dismissIncomingCallState,
-  formattedTime,
-  handleCallAnswered as handleLiveKitAnswered,
-  handleCallEnded as handleLiveKitEnded,
-  handleCallParticipantLeft as handleLiveKitParticipantLeft,
-  hydrateInvitedGroupCallFromUrl,
-  isCalling,
-  isIncoming,
+  activeCallFormattedTime,
+  activeCallParticipantCount,
+  activeCallTopicId,
+  activeCallUser,
+  hasPendingGroupCall,
+  invitedGroupCallInfo,
+  isAnyCallDialing,
+  isAnyCallIncoming,
+  isAnyCallModalVisible,
+  isCallActive,
   isModalVisible,
-  invitedGroupCall,
-  joinInvitedGroupCall,
-  joinPendingGroupCall,
-  open,
-  remoteParticipants,
-  receiveIncomingCall,
-  syncActiveCalls,
-  topicId,
-  user,
-  leaveCall
-} from './useLiveKit';
+  pendingGroupCallInfo
+} from './useCallState';
 
-export const activeCallUser = computed(() => user.value as any);
-export const activeCallTopicId = computed(() => topicId.value);
-export const isCallActive = computed(() => open.value);
-export const activeCallParticipantCount = computed(() =>
-  open.value ? remoteParticipants.value.length + 1 : 0
-);
-export const hasPendingGroupCall = computed(
-  () => Object.keys(activeGroupCalls.value).length > 0
-);
-export const pendingGroupCallInfo = computed(() => activeGroupCalls.value);
-export const invitedGroupCallInfo = computed(() => invitedGroupCall.value);
-export const isAnyCallModalVisible = computed(() => isModalVisible.value);
-export const isAnyCallDialing = computed(() => isCalling.value);
-export const isAnyCallIncoming = computed(() => isIncoming.value);
-export const activeCallFormattedTime = computed(() => formattedTime.value);
+export {
+  activeCallFormattedTime,
+  activeCallParticipantCount,
+  activeCallTopicId,
+  activeCallUser,
+  hasPendingGroupCall,
+  invitedGroupCallInfo,
+  isAnyCallDialing,
+  isAnyCallIncoming,
+  isAnyCallModalVisible,
+  isCallActive,
+  pendingGroupCallInfo
+};
 
-export const handleIncomingCall = (
+const loadLiveKit = () => import('./useLiveKit');
+
+export const handleIncomingCall = async (
   targetUser: any,
   activeRoomId: string,
   activeTopicId?: string | null,
   activeTopicType?: string,
   startTime?: number | null
 ) => {
+  const { receiveIncomingCall } = await loadLiveKit();
+
   return receiveIncomingCall(
     targetUser,
     activeRoomId,
@@ -59,7 +47,9 @@ export const handleIncomingCall = (
   );
 };
 
-export const declineCall = () => {
+export const declineCall = async () => {
+  const { leaveCall } = await loadLiveKit();
+
   leaveCall();
 };
 
@@ -68,52 +58,67 @@ export const showCallModal = () => {
 };
 
 export const joinGroupCall = async (topicId?: string) => {
+  const { joinPendingGroupCall } = await loadLiveKit();
+
   return !!(await joinPendingGroupCall(topicId));
 };
 
 export const joinInviteGroupCall = async () => {
+  const { joinInvitedGroupCall } = await loadLiveKit();
+
   return !!(await joinInvitedGroupCall());
 };
 
-export const handleCallAnswered = (
+export const handleCallAnswered = async (
   userId: string,
   roomId?: string,
   topicId?: string | null,
   startTime?: number | null,
   elapsedDurationMs?: number
 ) => {
+  const { handleCallAnswered: handleLiveKitAnswered } = await loadLiveKit();
+
   handleLiveKitAnswered(userId, roomId, topicId, startTime, elapsedDurationMs);
 };
 
-export const handleCallEnded = (
+export const handleCallEnded = async (
   roomId?: string,
   topicId?: string | null,
   reason?: 'busy',
   userId?: string | null
 ) => {
+  const { handleCallEnded: handleLiveKitEnded } = await loadLiveKit();
+
   return handleLiveKitEnded(roomId, topicId, reason, userId);
 };
 
-export const handleCallParticipantLeft = (
+export const handleCallParticipantLeft = async (
   participantId: string,
   roomId?: string,
   topicId?: string | null
 ) => {
+  const { handleCallParticipantLeft: handleLiveKitParticipantLeft } =
+    await loadLiveKit();
+
   return handleLiveKitParticipantLeft(participantId, roomId, topicId);
 };
 
-export const dismissIncomingCall = (
+export const dismissIncomingCall = async (
   roomId?: string,
   topicId?: string | null
 ) => {
+  const { dismissIncomingCallState } = await loadLiveKit();
+
   dismissIncomingCallState(roomId, topicId);
 };
 
-export const cleanupAllCalls = () => {
+export const cleanupAllCalls = async () => {
+  const { cleanup } = await loadLiveKit();
+
   cleanup();
 };
 
-export const syncServerActiveCalls = (
+export const syncServerActiveCalls = async (
   calls: Array<{
     roomId: string;
     topicId?: string | null;
@@ -125,25 +130,37 @@ export const syncServerActiveCalls = (
   }>,
   replace = true
 ) => {
+  const { syncActiveCalls } = await loadLiveKit();
+
   return syncActiveCalls(calls, replace);
 };
 
-export const removeActiveGroupCall = (topicId?: string) => {
+export const removeActiveGroupCall = async (topicId?: string) => {
+  const { clearActiveGroupCall } = await loadLiveKit();
+
   clearActiveGroupCall(topicId);
 };
 
-export const removeInvitedGroupCall = (roomId?: string) => {
+export const removeInvitedGroupCall = async (roomId?: string) => {
+  const { clearInvitedGroupCall } = await loadLiveKit();
+
   clearInvitedGroupCall(roomId);
 };
 
 export const restoreInvitedGroupCallFromUrl = async () => {
+  const { hydrateInvitedGroupCallFromUrl } = await loadLiveKit();
+
   await hydrateInvitedGroupCallFromUrl();
 };
 
 export const copyInviteGroupCallLink = async () => {
+  const { copyInvitedGroupCallLink } = await loadLiveKit();
+
   return copyInvitedGroupCallLink();
 };
 
 export const createMeetingInviteLink = async () => {
+  const { createStandaloneMeetingInviteLink } = await loadLiveKit();
+
   return createStandaloneMeetingInviteLink();
 };

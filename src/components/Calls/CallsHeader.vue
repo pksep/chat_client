@@ -72,12 +72,9 @@ import {
   showNotification
 } from '../../composables/useNotifications';
 import {
-  createMeetingInviteLink,
-  copyInviteGroupCallLink,
   isCallActive,
-  showCallModal
-} from '../../services/useCalls';
-import { startStandaloneMeetingCall } from '../../services/useLiveKit';
+  isModalVisible as isCallModalVisible
+} from '../../services/useCallState';
 
 const props = withDefaults(
   defineProps<{
@@ -93,6 +90,22 @@ const props = withDefaults(
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
+const showCallModal = (): void => {
+  isCallModalVisible.value = true;
+};
+
+const copyInviteGroupCallLink = async () => {
+  const { copyInviteGroupCallLink } = await import('../../services/useCalls');
+
+  return copyInviteGroupCallLink();
+};
+
+const createMeetingInviteLink = async () => {
+  const { createMeetingInviteLink } = await import('../../services/useCalls');
+
+  return createMeetingInviteLink();
+};
+
 const ensureMeetingCallReady = async (): Promise<boolean> => {
   if (isCallActive.value) {
     showCallModal();
@@ -100,6 +113,10 @@ const ensureMeetingCallReady = async (): Promise<boolean> => {
   }
 
   try {
+    const { startStandaloneMeetingCall } = await import(
+      '../../services/useLiveKit'
+    );
+
     await startStandaloneMeetingCall();
     return isCallActive.value;
   } catch (error) {
