@@ -899,6 +899,7 @@ let isResumeListenersAdded = false;
 let lastVisibilityState = document.visibilityState;
 let reconnectRefreshTimeout: ReturnType<typeof setTimeout> | null = null;
 let isRefreshingAfterReconnect = false;
+let shouldRerunRefreshAfterReconnect = false;
 let hasCompletedInitialConnection = false;
 const MAX_BACKGROUND_TOPIC_RECONCILES = 12;
 let networkStatePollInterval: ReturnType<typeof setInterval> | null = null;
@@ -1011,31 +1012,81 @@ const reconcileTopicCachesAfterReconnect = async (): Promise<void> => {
   }
 };
 
+const shouldContinueReconnectRefresh = (): boolean =>
+  Boolean(chatSDK && browserOnline.value);
+
+const runActiveTopicRefreshAfterReconnect = async (): Promise<void> => {
+  const activeTopicId = route.value.id;
+
+  if (!activeTopicId) {
+    return;
+  }
+
+  await Promise.allSettled([
+    fetchPinnedMessagesForTopic(activeTopicId),
+    refreshActiveTopicMessagesAfterReconnect(activeTopicId)
+  ]);
+
+  if (
+    route.value.id === activeTopicId &&
+    route.value.type === RouteTypes.GROUP
+  ) {
+    getGroupById(activeTopicId);
+  }
+};
+
+const waitForNextReconnectRefreshStage = async (): Promise<void> => {
+  if (!shouldContinueReconnectRefresh()) {
+    return;
+  }
+
+  await waitForReconnectIdle();
+};
+
+const runStagedReconnectRefresh = async (): Promise<void> => {
+  await runActiveTopicRefreshAfterReconnect();
+  await waitForNextReconnectRefreshStage();
+
+  if (!shouldContinueReconnectRefresh()) {
+    return;
+  }
+
+  await fetchAllTopics();
+  await waitForNextReconnectRefreshStage();
+
+  if (!shouldContinueReconnectRefresh()) {
+    return;
+  }
+
+  await fetchAllUsers();
+  await waitForNextReconnectRefreshStage();
+
+  if (!shouldContinueReconnectRefresh()) {
+    return;
+  }
+
+  await reconcileTopicCachesAfterReconnect();
+};
+
 const refreshDataAfterReconnect = async (): Promise<void> => {
   if (isRefreshingAfterReconnect) {
+    shouldRerunRefreshAfterReconnect = true;
     return;
   }
 
   isRefreshingAfterReconnect = true;
 
   try {
-    await fetchAllTopics();
-
-    if (route.value.id) {
-      await Promise.allSettled([
-        fetchPinnedMessagesForTopic(route.value.id),
-        refreshActiveTopicMessagesAfterReconnect(route.value.id)
-      ]);
-
-      if (route.value.type === RouteTypes.GROUP) {
-        getGroupById(route.value.id);
-      }
-    }
-
-    await fetchAllUsers();
-    await reconcileTopicCachesAfterReconnect();
+    do {
+      shouldRerunRefreshAfterReconnect = false;
+      await runStagedReconnectRefresh();
+    } while (
+      shouldRerunRefreshAfterReconnect &&
+      shouldContinueReconnectRefresh()
+    );
   } finally {
     isRefreshingAfterReconnect = false;
+    shouldRerunRefreshAfterReconnect = false;
   }
 };
 
@@ -1113,6 +1164,48 @@ const restoreInvitedGroupCallIfNeeded = (): void => {
     .catch(error => {
       console.warn('Failed to restore invited group call:', error);
     });
+};
+
+const startChatConnectionInBackground = (sdk: ChatSDK): void => {
+  void (async () => {
+    try {
+      await sdk.connect();
+
+      if (chatSDK !== sdk) {
+        return;
+      }
+
+      initializeCallHistorySync(sdk);
+      await syncPtsStateToServer();
+    } catch (error) {
+      if (chatSDK !== sdk) {
+        return;
+      }
+
+      console.warn('Chat websocket startup continues in background:', error);
+    } finally {
+      if (chatSDK === sdk) {
+        isWebsocketConnecting.value = false;
+        restoreInvitedGroupCallIfNeeded();
+
+        if (Capacitor.isNativePlatform()) {
+          initCallKit();
+        }
+
+        ensureTauriWindowStateTracking();
+
+        if (!removeAppVisibilityListener) {
+          removeAppVisibilityListener = subscribeToAppVisibilityChanges(() => {
+            syncPresenceForVisibility();
+
+            if (getIsAppActivelyVisible()) {
+              reconnectChatOnResume();
+            }
+          });
+        }
+      }
+    }
+  })();
 };
 
 export const initializeChat = async (options: {
@@ -1215,29 +1308,8 @@ export const initializeChat = async (options: {
   isWebsocketConnecting.value = navigator.onLine;
   hasWebsocketConnection.value = false;
   setupChatListeners();
-  await chatSDK.connect();
-  initializeCallHistorySync(chatSDK);
-  await syncPtsStateToServer();
-  isWebsocketConnecting.value = false;
-  restoreInvitedGroupCallIfNeeded();
-
-  if (Capacitor.isNativePlatform()) {
-    initCallKit();
-  }
-
-  ensureTauriWindowStateTracking();
-
-  if (!removeAppVisibilityListener) {
-    removeAppVisibilityListener = subscribeToAppVisibilityChanges(() => {
-      syncPresenceForVisibility();
-
-      if (getIsAppActivelyVisible()) {
-        reconnectChatOnResume();
-      }
-    });
-  }
-
   addMessageHistoryHandler();
+  startChatConnectionInBackground(chatSDK);
 };
 
 export const getChatSDK = (): ChatSDK | null => {

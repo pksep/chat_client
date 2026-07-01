@@ -664,6 +664,10 @@ import {
 import type { CallReaction } from '../../services/useCallState';
 import type { AudioOutputRoute } from '../../services/useAudioOutput';
 import {
+  getCallReactionVideoPreloadSources,
+  getCallReactionVideoSrc
+} from '../../services/callReactionAssets';
+import {
   disableProximityLock,
   enableProximityLock
 } from '../../services/useProximityLock';
@@ -1272,17 +1276,7 @@ const callReactionOptions: Array<{
 const getCallReactionEmoji = (reaction?: CallReaction | null) =>
   callReactionOptions.find(option => option.reaction === reaction)?.emoji || '';
 
-const callReactionVideoSources: Record<CallReaction, string> = {
-  heart: '/video/heart-fullscreen-zoomlike-transparent.webm',
-  joy: '/video/joy-fullscreen-zoomlike-transparent.webm',
-  sob: '/video/sob-fullscreen-zoomlike-transparent.webm',
-  'thumbs-up': '/video/thumbs-up-fullscreen-zoomlike-transparent.webm',
-  'thumbs-down': '/video/thumbs-down-fullscreen-zoomlike-transparent.webm'
-};
-
-const getCallReactionVideoSrc = (reaction?: CallReaction | null) =>
-  reaction ? callReactionVideoSources[reaction] || '' : '';
-const reactionPreloadSources = Object.values(callReactionVideoSources);
+const reactionPreloadSources = getCallReactionVideoPreloadSources();
 let remoteVideoResizeObserver: ResizeObserver | null = null;
 let observedRemoteVideoBindings = new Map<
   HTMLVideoElement,

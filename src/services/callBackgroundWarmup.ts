@@ -1,10 +1,6 @@
 import { BackgroundProcessor } from '@livekit/track-processors';
 import { prewarmMediapipeMulticlassBackgroundProcessor } from './mediapipeMulticlassBackgroundTrackProcessor';
-
-const CALL_BACKGROUND_ASSET_PATHS = {
-  tasksVisionFileSet: '/call-background/wasm',
-  modelAssetPath: '/call-background/selfie_segmenter.tflite'
-};
+import { CALL_BACKGROUND_ASSET_PATHS } from './callBackgroundProcessorConfig';
 
 let processorWarmupPromise: Promise<void> | null = null;
 const warmedImageUrls = new Map<string, Promise<void>>();

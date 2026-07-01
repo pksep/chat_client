@@ -53,8 +53,11 @@ import { RouteTypes } from './composables/navigation/useUrlRouting';
 import { hydrateMessagesFromCache } from './services/useMessages';
 import { useShareSelection } from './composables/useShareSelection';
 import { isGroupCallInviteUrl } from './utils/groupCallInviteUrl';
+import { installNotoEmojiFontFaces } from './composables/useEmojiStyle';
 
 const props = defineProps<IChatContainerProps>();
+
+installNotoEmojiFontFaces();
 
 const { fetchAllTopics, getTopicList } = useTopics();
 const { state: isMobile } = useResizeState(MAX_W_MD);
@@ -63,6 +66,7 @@ let removeAppVisibilityListener: (() => void) | null = null;
 const { hasPendingShareBatches, isShareSelectionActive, startShareSelection } =
   useShareSelection();
 let hydratedCacheUserId: string | undefined;
+const MOBILE_CACHED_ACTIVE_TOPIC_LIMIT = 50;
 
 const waitForStartupIdle = (): Promise<void> =>
   new Promise(resolve => {
@@ -104,7 +108,9 @@ const hydrateActiveCachedMessages = async (userId?: string): Promise<void> => {
     return;
   }
 
-  await hydrateMessagesFromCache(activeTopicId, userId);
+  await hydrateMessagesFromCache(activeTopicId, userId, {
+    visibleLimit: isMobile.value ? MOBILE_CACHED_ACTIVE_TOPIC_LIMIT : undefined
+  });
 };
 
 const scheduleBackgroundCachedMessageHydration = (userId?: string): void => {

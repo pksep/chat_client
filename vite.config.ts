@@ -1,6 +1,7 @@
 import {
   ConfigEnv,
   defineConfig,
+  loadEnv,
   type PluginOption,
   type UserConfig
 } from 'vite';
@@ -49,7 +50,68 @@ const cleanGeneratedBuildOutputPlugin = (): PluginOption => ({
   }
 });
 
+const removeEmbeddedReleaseApkPlugin = (): PluginOption => ({
+  name: 'remove-embedded-release-apk',
+  apply: 'build',
+  closeBundle() {
+    const releaseApkPath = resolve(
+      process.cwd(),
+      BUILD_OUT_DIR,
+      'release',
+      'android',
+      'app.apk'
+    );
+
+    if (!existsSync(releaseApkPath)) {
+      return;
+    }
+
+    rmSync(releaseApkPath, {
+      force: true,
+      maxRetries: 3,
+      retryDelay: 100
+    });
+  }
+});
+
+const removeExternalizedPublicDirectoryPlugin = (
+  name: string,
+  directoryName: string,
+  enabled: boolean
+): PluginOption => ({
+  name,
+  apply: 'build',
+  closeBundle() {
+    if (!enabled) {
+      return;
+    }
+
+    const directoryPath = resolve(process.cwd(), BUILD_OUT_DIR, directoryName);
+
+    if (!existsSync(directoryPath)) {
+      return;
+    }
+
+    rmSync(directoryPath, {
+      force: true,
+      recursive: true,
+      maxRetries: 3,
+      retryDelay: 100
+    });
+  }
+});
+
 export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const hasExternalEmojiAssetBase = Boolean(
+    env.VITE_EMOJI_ASSET_BASE_URL?.trim()
+  );
+  const hasExternalCallBackgroundAssetBase = Boolean(
+    env.VITE_CALL_BACKGROUND_ASSET_BASE_URL?.trim()
+  );
+  const hasExternalReactionVideoAssetBase = Boolean(
+    env.VITE_REACTION_VIDEO_ASSET_BASE_URL?.trim()
+  );
   const vuePlugin = vue({
     template: {
       compilerOptions: {
@@ -103,7 +165,8 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
             }
           },
           {
-            urlPattern: /\/(?:call-background|video)\/.*\.(?:gif|png|jpe?g|webp|webm)$/i,
+            urlPattern:
+              /\/(?:call-background|video)\/.*\.(?:gif|png|jpe?g|webp|webm|wasm|js|tflite)$/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'call-media-assets',
@@ -167,7 +230,23 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
   const plugins: PluginOption[] = [
     cleanGeneratedBuildOutputPlugin(),
     vuePlugin,
-    ...appPlugins
+    ...appPlugins,
+    removeExternalizedPublicDirectoryPlugin(
+      'remove-externalized-emoji-assets',
+      'emoji',
+      hasExternalEmojiAssetBase
+    ),
+    removeExternalizedPublicDirectoryPlugin(
+      'remove-externalized-call-background-assets',
+      'call-background',
+      hasExternalCallBackgroundAssetBase
+    ),
+    removeExternalizedPublicDirectoryPlugin(
+      'remove-externalized-reaction-video-assets',
+      'video',
+      hasExternalReactionVideoAssetBase
+    ),
+    removeEmbeddedReleaseApkPlugin()
   ];
   const getManualChunk = (id: string): string | undefined => {
     const normalizedId = id.replace(/\\/g, '/');
@@ -221,10 +300,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
       return 'chat-transport';
     }
 
-    if (
-      normalizedId.includes('/vue/') ||
-      normalizedId.includes('/@vue/')
-    ) {
+    if (normalizedId.includes('/vue/') || normalizedId.includes('/@vue/')) {
       return 'vue-vendor';
     }
 

@@ -1,6 +1,18 @@
+const DEFAULT_CALL_BACKGROUND_ASSET_BASE_URL = '/call-background';
+
+const normalizeAssetBaseUrl = (value?: string): string => {
+  const normalizedValue =
+    value?.trim() || DEFAULT_CALL_BACKGROUND_ASSET_BASE_URL;
+
+  return normalizedValue.replace(/\/+$/, '');
+};
+
+export const getCallBackgroundAssetBaseUrl = (): string =>
+  normalizeAssetBaseUrl(import.meta.env.VITE_CALL_BACKGROUND_ASSET_BASE_URL);
+
 export const CALL_BACKGROUND_ASSET_PATHS = {
-  tasksVisionFileSet: '/call-background/wasm',
-  modelAssetPath: '/call-background/selfie_segmenter.tflite'
+  tasksVisionFileSet: `${getCallBackgroundAssetBaseUrl()}/wasm`,
+  modelAssetPath: `${getCallBackgroundAssetBaseUrl()}/selfie_segmenter.tflite`
 } as const;
 
 export const MEDIAPIPE_MULTICLASS_SEGMENTER_MODEL_ASSET_PATH =

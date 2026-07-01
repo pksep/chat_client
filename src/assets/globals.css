@@ -6,34 +6,6 @@
   --default-height: 100dvh;
 }
 
-@font-face {
-  font-family: 'Noto Emoji COLRv1 Web';
-  src: url('/emoji/noto/fonts/Noto-COLRv1.ttf') format('truetype');
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Noto Emoji Compat Web';
-  src: url('/emoji/noto/fonts/Noto-COLRv1-emojicompat.ttf') format('truetype');
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Noto Emoji Windows Web';
-  src: url('/emoji/noto/fonts/NotoColorEmoji_WindowsCompatible.ttf')
-    format('truetype');
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Noto Color Emoji Web';
-  src:
-    local('Noto Color Emoji'),
-    local('NotoColorEmoji'),
-    url('/emoji/noto/fonts/NotoColorEmoji.ttf') format('truetype');
-  font-display: swap;
-}
-
 body {
   font-family: 'Inter Variable', 'Noto Emoji COLRv1 Web',
     'Noto Emoji Compat Web', 'Noto Emoji Windows Web', 'Noto Color Emoji Web',
