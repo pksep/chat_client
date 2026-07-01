@@ -74,11 +74,7 @@
           :class="{ 'message-group--outgoing': item.isMeSender }"
         >
           <CachedAvatar
-            v-if="
-              !item.isMeSender &&
-              shouldShowGroupAvatar &&
-              shouldRenderGroupAvatar(item.messages[0])
-            "
+            v-if="shouldRenderGroupAvatarForItem(item)"
             :class="[
               'message-group__avatar',
               {
@@ -192,6 +188,8 @@ let scrollParent: HTMLElement | null = null;
 let virtualViewportRafId = 0;
 
 const VIRTUALIZATION_ITEM_THRESHOLD = 140;
+const VIRTUALIZATION_MESSAGE_THRESHOLD = 240;
+const VIRTUAL_MAX_MESSAGES_PER_ITEM = 8;
 const VIRTUAL_OVERSCAN_PX = 1800;
 const VIRTUAL_DEFAULT_ITEM_HEIGHT_PX = 68;
 const VIRTUAL_ITEM_GAP_PX = 5;
@@ -358,6 +356,22 @@ const shouldRenderGroupAvatar = (message?: IMessage): boolean => {
   return getParsedCallMessage(message)?.isOutgoing === false;
 };
 
+const shouldRenderGroupAvatarForItem = (
+  item: Extract<RenderItem, { kind: 'group' }>
+): boolean => {
+  const firstMessage = item.messages[0];
+
+  return (
+    !item.isMeSender &&
+    shouldShowGroupAvatar.value &&
+    shouldRenderGroupAvatar(firstMessage) &&
+    !isSameMessageGroup(
+      visibleMessages.value[item.startIndex - 1],
+      firstMessage
+    )
+  );
+};
+
 const isSameMessageGroup = (
   currentMessage?: IMessage,
   nextMessage?: IMessage
@@ -421,6 +435,7 @@ const renderItems = computed<RenderItem[]>(() => {
 
     while (
       endIndex + 1 < visibleMessages.value.length &&
+      groupMessages.length < VIRTUAL_MAX_MESSAGES_PER_ITEM &&
       isSameMessageGroup(
         visibleMessages.value[endIndex],
         visibleMessages.value[endIndex + 1]
@@ -491,7 +506,9 @@ const totalRenderItemsHeight = computed(() => {
 });
 
 const isVirtualized = computed(
-  () => renderItems.value.length > VIRTUALIZATION_ITEM_THRESHOLD
+  () =>
+    renderItems.value.length > VIRTUALIZATION_ITEM_THRESHOLD ||
+    visibleMessages.value.length > VIRTUALIZATION_MESSAGE_THRESHOLD
 );
 
 const findStartIndex = (offsets: number[], top: number): number => {

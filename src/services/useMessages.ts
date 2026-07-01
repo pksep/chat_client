@@ -393,12 +393,14 @@ type MessageWindowMode =
 const clampMessagesForUi = (
   messages: IMessage[],
   mode: MessageWindowMode = 'latest',
-  anchorMessageId?: string
+  anchorMessageId?: string,
+  windowLimit?: number
 ): IMessage[] => {
   const uiWindowLimit =
-    mode === 'latest'
+    windowLimit ??
+    (mode === 'latest'
       ? INITIAL_TOPIC_WINDOW_MESSAGES
-      : MAX_ACTIVE_TOPIC_MESSAGES;
+      : MAX_ACTIVE_TOPIC_MESSAGES);
 
   if (messages.length <= uiWindowLimit) {
     return messages;
@@ -1570,6 +1572,7 @@ export const saveMessagesToLocal = (
     windowMode?: MessageWindowMode;
     anchorMessageId?: string;
     visibleMessages?: IMessage[];
+    visibleLimit?: number;
     updateVisible?: boolean;
   }
 ): void => {
@@ -1579,7 +1582,8 @@ export const saveMessagesToLocal = (
       compareMessages
     ),
     opts?.windowMode,
-    opts?.anchorMessageId
+    opts?.anchorMessageId,
+    opts?.visibleLimit
   );
 
   fullMessagesStore.value[topicId] = sortedMessages;
@@ -1639,7 +1643,8 @@ export const clearVisibleMessagesForTopic = (topicId: string): void => {
 
 export const hydrateMessagesFromCache = async (
   topicId: string,
-  userId?: string
+  userId?: string,
+  opts?: { visibleLimit?: number }
 ): Promise<IMessage[]> => {
   if (!topicId) {
     return [];
@@ -1650,7 +1655,8 @@ export const hydrateMessagesFromCache = async (
   if (existingFullMessages.length > 0 && canonicalTopicStateIds.has(topicId)) {
     saveMessagesToLocal(topicId, existingFullMessages, {
       syncLastMessage: false,
-      windowMode: 'latest'
+      windowMode: 'latest',
+      visibleLimit: opts?.visibleLimit
     });
 
     return getMessagesByTopicId(topicId);
@@ -1679,7 +1685,8 @@ export const hydrateMessagesFromCache = async (
 
       saveMessagesToLocal(topicId, normalizedShadowMessages, {
         syncLastMessage: false,
-        windowMode: 'latest'
+        windowMode: 'latest',
+        visibleLimit: opts?.visibleLimit
       });
       markTopicStateCanonical(topicId);
       void saveShadowLoadedRange(topicId, normalizedShadowMessages);
@@ -1701,7 +1708,8 @@ export const hydrateMessagesFromCache = async (
 
     saveMessagesToLocal(topicId, normalizedCachedMessages, {
       syncLastMessage: false,
-      windowMode: 'latest'
+      windowMode: 'latest',
+      visibleLimit: opts?.visibleLimit
     });
     markTopicStateCanonical(topicId);
     void saveShadowTopicSnapshot(
@@ -1728,7 +1736,8 @@ export const hydrateMessagesFromCache = async (
   if (existingFullMessages.length > 0) {
     saveMessagesToLocal(topicId, existingFullMessages, {
       syncLastMessage: false,
-      windowMode: 'latest'
+      windowMode: 'latest',
+      visibleLimit: opts?.visibleLimit
     });
 
     return getMessagesByTopicId(topicId);

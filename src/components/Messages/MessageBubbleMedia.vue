@@ -45,6 +45,7 @@
               v-for="(media, i) in mediaFiles"
               :key="media.id"
               class="message-content__media"
+              :style="getPreviewContainerStyle(media, i)"
               :data-testid="`${props.dataTestid}-MediaContainer`"
               @contextmenu.prevent
             >
@@ -69,7 +70,7 @@
               <img
                 v-else
                 :src="
-                  shouldLoadMedia ? getFullMediaPath(media) : EMPTY_MEDIA_SRC
+                  shouldLoadMedia ? getFeedMediaPath(media) : EMPTY_MEDIA_SRC
                 "
                 :alt="
                   props.sender ? `${props.sender} изображение` : 'Изображение'
@@ -206,6 +207,8 @@ import { useMentionUserClick } from './composables/useMentionUserClick';
 import { MessageStatus } from '../../services/useChatSDK/types';
 import {
   calculatePreviewDimensions,
+  getGridItemMaxWidth,
+  type MediaPreviewDimensions,
   VIDEO_FALLBACK_THUMBNAIL
 } from '../../utils/mediaPreview';
 
@@ -278,9 +281,11 @@ watch(
     }
 
     medias.forEach(media => {
-      primeMediaCache(media, {
-        includeOriginal: media.type === MediaType.Video
-      });
+      if (media.type === MediaType.Video && !media.thumbnailPath) {
+        return;
+      }
+
+      primeMediaCache(media);
     });
   },
   {
@@ -358,6 +363,27 @@ const shouldRenderLocalVideoPreview = (media: IMedia): boolean =>
         media.localThumbnailPath === VIDEO_FALLBACK_THUMBNAIL)
   );
 
+const getFallbackPreviewDimensions = (
+  media: IMedia,
+  index: number
+): MediaPreviewDimensions => {
+  const previewWidth = Math.round(
+    Math.max(100, getGridItemMaxWidth(mediaFiles.value.length, index))
+  );
+  const isSingleMedia = mediaFiles.value.length === 1;
+  const fallbackRatio =
+    media.type === MediaType.Video ? 16 / 9 : isSingleMedia ? 4 / 3 : 1;
+  const previewHeight = Math.round(
+    Math.max(100, Math.min(300, previewWidth / fallbackRatio))
+  );
+
+  return {
+    previewWidth,
+    previewHeight,
+    fillPreview: true
+  };
+};
+
 const getPreviewDimensions = (media: IMedia, index: number) => {
   const preview =
     media.ex?.previewWidth && media.ex?.previewHeight
@@ -368,7 +394,9 @@ const getPreviewDimensions = (media: IMedia, index: number) => {
           index
         );
 
-  return preview;
+  return preview.previewWidth && preview.previewHeight
+    ? preview
+    : getFallbackPreviewDimensions(media, index);
 };
 
 const getPreviewWidth = (media: IMedia, index: number): number | undefined => {
@@ -398,6 +426,41 @@ const getPreviewStyle = (
     width: `${preview.previewWidth}px`,
     height: `${preview.previewHeight}px`
   };
+};
+
+const getPreviewContainerStyle = (
+  media: IMedia,
+  index: number
+): Record<string, string> => {
+  const preview = getPreviewDimensions(media, index);
+  const previewWidth = preview.previewWidth;
+  const previewHeight = preview.previewHeight;
+
+  if (!previewWidth || !previewHeight) {
+    return {};
+  }
+
+  return {
+    aspectRatio: `${previewWidth} / ${previewHeight}`,
+    containIntrinsicSize: `${previewWidth}px ${previewHeight}px`,
+    minHeight: `${previewHeight}px`
+  };
+};
+
+const getFeedMediaPath = (media: IMedia): string => {
+  if (media.type !== MediaType.Video) {
+    return getFullMediaPath(media);
+  }
+
+  if (media.localThumbnailPath) {
+    return media.localThumbnailPath;
+  }
+
+  if (media.thumbnailPath) {
+    return getFullMediaPath(media);
+  }
+
+  return VIDEO_FALLBACK_THUMBNAIL;
 };
 
 const savePreviewMetrics = (

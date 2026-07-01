@@ -5,7 +5,10 @@ import '@fontsource-variable/inter';
 import './assets/globals.css';
 import './assets/chat-container.css';
 import '@pksep/yui/styles';
-import { preloadNotoEmojiAssets } from './composables/useEmojiStyle';
+import {
+  installNotoEmojiFontFaces,
+  preloadNotoEmojiAssets
+} from './composables/useEmojiStyle';
 import { emojiDirective } from './directives/emoji';
 import { registerNativeFileBridge } from './services/useNativeFile';
 import { USER_STATUS_PRESETS } from './utils/userStatus';
@@ -133,6 +136,7 @@ const mountApp = async () => {
   await runIndexedDbResetIfNeeded();
   registerNativeFileBridge();
   applyRuntimeBodyClasses();
+  installNotoEmojiFontFaces();
   preloadNotoEmojiAssets(
     [...USER_STATUS_PRESETS.map(option => option.icon), '🦄'],
     {

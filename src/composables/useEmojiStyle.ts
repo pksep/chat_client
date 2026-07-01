@@ -1,4 +1,5 @@
-const NOTO_EMOJI_PNG_BASE_PATH = '/emoji/noto/png/128';
+const DEFAULT_NOTO_EMOJI_ASSET_BASE_URL = '/emoji/noto';
+const NOTO_EMOJI_FONT_STYLE_ID = 'chat-noto-emoji-font-faces';
 const emojiAssetCandidateCache = new Map<string, string[]>();
 const loadedEmojiAssetSources = new Set<string>();
 const preloadedEmojiAssetSources = new Set<string>();
@@ -10,6 +11,65 @@ type EmojiAssetCandidatesOptions = {
 
 type EmojiPreloadOptions = {
   highPriority?: boolean;
+};
+
+const normalizeAssetBaseUrl = (value?: string): string => {
+  const normalizedValue = value?.trim() || DEFAULT_NOTO_EMOJI_ASSET_BASE_URL;
+
+  return normalizedValue.replace(/\/+$/, '');
+};
+
+export const getNotoEmojiAssetBaseUrl = (): string =>
+  normalizeAssetBaseUrl(import.meta.env.VITE_EMOJI_ASSET_BASE_URL);
+
+const getNotoEmojiPngBasePath = (): string =>
+  `${getNotoEmojiAssetBaseUrl()}/png/128`;
+
+const getNotoEmojiFontUrl = (fileName: string): string =>
+  `${getNotoEmojiAssetBaseUrl()}/fonts/${fileName}`;
+
+const escapeCssUrl = (value: string): string =>
+  value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '');
+
+export const installNotoEmojiFontFaces = (): void => {
+  if (
+    typeof document === 'undefined' ||
+    document.getElementById(NOTO_EMOJI_FONT_STYLE_ID)
+  ) {
+    return;
+  }
+
+  const style = document.createElement('style');
+  style.id = NOTO_EMOJI_FONT_STYLE_ID;
+  style.textContent = `
+@font-face {
+  font-family: 'Noto Emoji COLRv1 Web';
+  src: url("${escapeCssUrl(getNotoEmojiFontUrl('Noto-COLRv1.ttf'))}") format('truetype');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Noto Emoji Compat Web';
+  src: url("${escapeCssUrl(getNotoEmojiFontUrl('Noto-COLRv1-emojicompat.ttf'))}") format('truetype');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Noto Emoji Windows Web';
+  src: url("${escapeCssUrl(getNotoEmojiFontUrl('NotoColorEmoji_WindowsCompatible.ttf'))}") format('truetype');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Noto Color Emoji Web';
+  src:
+    local('Noto Color Emoji'),
+    local('NotoColorEmoji'),
+    url("${escapeCssUrl(getNotoEmojiFontUrl('NotoColorEmoji.ttf'))}") format('truetype');
+  font-display: swap;
+}
+`.trim();
+  document.head.append(style);
 };
 
 const toEmojiCodePointKey = (value: string): string =>
@@ -69,7 +129,7 @@ export const getNotoEmojiAssetCandidates = (
   const candidateKeys = buildUniqueCandidates([fallbackKey, normalizedKey]);
   const staticCandidates = buildUniqueCandidates(
     candidateKeys.map(
-      key => `${NOTO_EMOJI_PNG_BASE_PATH}/${toNotoFileName(key)}.png`
+      key => `${getNotoEmojiPngBasePath()}/${toNotoFileName(key)}.png`
     )
   ).filter(source => !failedEmojiAssetSources.has(source));
 
