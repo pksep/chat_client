@@ -326,6 +326,99 @@
           </div>
         </div>
 
+        <div v-if="isMobile" class="menu-profile__update">
+          <div
+            class="menu-profile__wallpapers-trigger"
+            :data-testid="`${props.dataTestid}-MenuProfilePanel-UpdateTrigger`"
+            @click="toggleProfileUpdateMenu"
+          >
+            <div class="menu-profile__wallpapers-trigger-copy">
+              <span class="menu-profile__wallpapers-trigger-title">
+                Проверить обновления
+              </span>
+            </div>
+            <Icon
+              :name="
+                isProfileUpdateMenuOpen
+                  ? IconNameEnum.chevronUp
+                  : IconNameEnum.chevronDown
+              "
+              :width="24"
+              :height="16"
+            />
+          </div>
+
+          <div
+            v-if="isProfileUpdateMenuOpen"
+            class="menu-profile__update-menu"
+            :data-testid="`${props.dataTestid}-MenuProfilePanel-UpdateMenu`"
+          >
+            <div class="menu-profile__update-content">
+              <div class="menu-profile__update-copy">
+                <p class="menu-profile__update-title">
+                  {{ profileUpdateTitle }}
+                </p>
+                <p class="menu-profile__update-description">
+                  {{ profileUpdateDescription }}
+                </p>
+              </div>
+
+              <Button
+                v-if="shouldShowProfileUpdateAction"
+                :type="ButtonTypeEnum.primary"
+                :size="SizesEnum.small"
+                class="menu-profile__update-action"
+                :disabled="isUpdateActionDisabled"
+                :data-testid="`${props.dataTestid}-MenuProfilePanel-UpdateAction`"
+                @click.stop="handleProfileUpdateClick"
+              >
+                {{ updateActionLabel }}
+              </Button>
+
+              <div
+                v-else-if="profileUpdateState === 'downloading'"
+                class="menu-profile__update-progress"
+              >
+                <span>{{ updateActionLabel }}</span>
+                <FileIcon
+                  :is-me-sender="false"
+                  :is-loaded="false"
+                  :percent="updateProgress"
+                  background-color="var(--grey2)"
+                />
+              </div>
+
+              <div
+                v-else-if="profileUpdateState === 'checking'"
+                class="menu-profile__update-progress menu-profile__update-progress--checking"
+              >
+                <FileIcon
+                  :is-me-sender="false"
+                  :is-loaded="false"
+                  :percent="null"
+                  background-color="var(--grey2)"
+                />
+              </div>
+
+              <span
+                v-else-if="profileUpdateState === 'latest'"
+                class="menu-profile__update-check"
+                aria-hidden="true"
+              >
+                <svg viewBox="0 0 18 18" fill="none">
+                  <path
+                    d="M5 9.2L7.7 12L13.2 6"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+            </div>
+          </div>
+        </div>
+
         <div class="menu-profile__actions">
           <Button
             :type="ButtonTypeEnum.ghost"
@@ -627,6 +720,8 @@ import { MAX_W_MD } from '../../utils/constants';
 import MessageBubble from '../Messages/MessageBubble.vue';
 import CallBackgroundPreviewModal from '../CallModal/CallBackgroundPreviewModal.vue';
 import ConfirmModal from '../UI/ConfirmModal.vue';
+import FileIcon from '../UI/FileIcon.vue';
+import { useMobileApp } from '../../composables/useMobileApp';
 
 const props = withDefaults(
   defineProps<{
@@ -650,6 +745,7 @@ const isApplyingWallpaper = ref(false);
 const isCallBackgroundMenuOpen = ref(false);
 const isCallBackgroundPreviewOpen = ref(false);
 const isApplyingCallBackground = ref(false);
+const isProfileUpdateMenuOpen = ref(false);
 const isLogoutConfirmModalOpen = ref(false);
 const isSavingStatus = ref(false);
 const statusError = ref('');
@@ -677,6 +773,14 @@ const {
   selectCallBackground,
   setCustomCallBackground
 } = useCallBackground();
+const {
+  updateActionLabel,
+  updateProgress,
+  profileUpdateState,
+  isUpdateActionDisabled,
+  currentAppVersion,
+  handleUpdateClick
+} = useMobileApp();
 
 const currentStatusLabel = computed(() =>
   formatUserStatusLabel(authUser.value?.status)
@@ -687,6 +791,59 @@ const currentStatusIcon = computed(
 const currentStatusText = computed(() =>
   formatUserStatusText(authUser.value?.status)
 );
+const shouldShowProfileUpdateAction = computed(
+  () =>
+    profileUpdateState.value === 'available' ||
+    profileUpdateState.value === 'downloaded'
+);
+const profileUpdateTitle = computed(() => {
+  if (profileUpdateState.value === 'checking') {
+    return 'Проверяем обновления';
+  }
+
+  if (profileUpdateState.value === 'downloading') {
+    return 'Загружаем обновление';
+  }
+
+  if (profileUpdateState.value === 'downloaded') {
+    return 'Установлено';
+  }
+
+  if (profileUpdateState.value === 'latest') {
+    return 'Установлена новейшая версия';
+  }
+
+  if (profileUpdateState.value === 'available') {
+    return 'Доступна новая версия';
+  }
+
+  return 'Проверить обновления';
+});
+const profileUpdateDescription = computed(() => {
+  if (profileUpdateState.value === 'checking') {
+    return 'Пожалуйста, подождите несколько секунд';
+  }
+
+  if (profileUpdateState.value === 'downloading') {
+    return 'Пожалуйста, не закрывайте приложение';
+  }
+
+  if (profileUpdateState.value === 'downloaded') {
+    return 'Для начала работы перезагрузите приложение';
+  }
+
+  if (profileUpdateState.value === 'latest') {
+    return currentAppVersion.value
+      ? `Сейчас у вас актуальная версия приложения ${currentAppVersion.value}`
+      : 'Сейчас у вас актуальная версия приложения';
+  }
+
+  if (profileUpdateState.value === 'available') {
+    return 'Обновите приложение, чтобы получить новые функции';
+  }
+
+  return 'Нажмите, чтобы проверить доступные обновления';
+});
 
 preloadNotoEmojiAssets([...statusPresets.map(option => option.icon), '🦄'], {
   highPriority: true
@@ -793,6 +950,14 @@ const toggleWallpaperMenu = (): void => {
 
 const toggleCallBackgroundMenu = (): void => {
   isCallBackgroundMenuOpen.value = !isCallBackgroundMenuOpen.value;
+};
+
+const toggleProfileUpdateMenu = (): void => {
+  isProfileUpdateMenuOpen.value = !isProfileUpdateMenuOpen.value;
+};
+
+const handleProfileUpdateClick = async (): Promise<void> => {
+  await handleUpdateClick();
 };
 
 const openWallpaperPreviewForSelection = (wallpaperId: string): void => {

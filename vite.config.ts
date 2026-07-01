@@ -4,10 +4,50 @@ import {
   type PluginOption,
   type UserConfig
 } from 'vite';
+import { existsSync, readdirSync, rmSync } from 'node:fs';
+import { resolve } from 'node:path';
 import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
 import basicSsl from '@vitejs/plugin-basic-ssl';
 import { version } from './package.json';
+
+const BUILD_OUT_DIR = 'build';
+const PUBLIC_BUILD_ENTRIES = new Set([
+  'audio',
+  'call-background',
+  'emoji',
+  'images',
+  'release',
+  'service-worker.js',
+  'video',
+  'web-update.json'
+]);
+
+const cleanGeneratedBuildOutputPlugin = (): PluginOption => ({
+  name: 'clean-generated-build-output',
+  apply: 'build',
+  enforce: 'pre',
+  buildStart() {
+    const outDir = resolve(process.cwd(), BUILD_OUT_DIR);
+
+    if (!existsSync(outDir)) {
+      return;
+    }
+
+    for (const entryName of readdirSync(outDir)) {
+      if (PUBLIC_BUILD_ENTRIES.has(entryName)) {
+        continue;
+      }
+
+      rmSync(resolve(outDir, entryName), {
+        force: true,
+        recursive: true,
+        maxRetries: 3,
+        retryDelay: 100
+      });
+    }
+  }
+});
 
 export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
   const vuePlugin = vue({
@@ -124,7 +164,11 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
     // })
   ];
 
-  const plugins: PluginOption[] = [vuePlugin, ...appPlugins];
+  const plugins: PluginOption[] = [
+    cleanGeneratedBuildOutputPlugin(),
+    vuePlugin,
+    ...appPlugins
+  ];
   const getManualChunk = (id: string): string | undefined => {
     const normalizedId = id.replace(/\\/g, '/');
 
@@ -211,7 +255,8 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
       }
     },
     build: {
-      outDir: 'build',
+      outDir: BUILD_OUT_DIR,
+      emptyOutDir: false,
       sourcemap: mode !== 'production',
       rollupOptions: {
         output: {

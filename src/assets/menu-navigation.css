@@ -457,6 +457,108 @@
   line-height: 18px;
 }
 
+.menu-profile__update {
+  display: grid;
+  gap: 10px;
+}
+
+.menu-profile__update .menu-profile__wallpapers-trigger {
+  border: 1px solid transparent;
+}
+
+.menu-profile__update:has(.menu-profile__update-menu)
+  .menu-profile__wallpapers-trigger {
+  border-color: var(--border-blue);
+}
+
+.menu-profile__update-menu {
+  display: grid;
+}
+
+.menu-profile__update-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--blue9);
+  border: 1px solid var(--border-blue);
+}
+
+.menu-profile__update-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+
+.menu-profile__update-title,
+.menu-profile__update-description {
+  margin: 0;
+}
+
+.menu-profile__update-title {
+  color: var(--text-color);
+  font-size: 14px;
+  line-height: 17px;
+  font-weight: 600;
+}
+
+.menu-profile__update-description {
+  color: var(--grey6);
+  font-size: 12px;
+  line-height: 15px;
+  font-weight: 600;
+  max-width: 260px;
+}
+
+.menu-profile__update-action.button-yui-kit {
+  flex-shrink: 0;
+  min-width: 86px;
+  min-height: 36px !important;
+  height: 36px;
+  padding: 8px 10px !important;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+.menu-profile__update-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  color: var(--blue1);
+  font-size: 14px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.menu-profile__update-progress svg {
+  width: 32px;
+  height: 32px;
+}
+
+.menu-profile__update-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--border-blue);
+}
+
+.menu-profile__update-check svg {
+  width: 22px;
+  height: 22px;
+}
+
 dialog.menu-profile__wallpaper-modal > .modal-yui-kit__modal-content {
   padding: 15px !important;
   border-radius: 25px;
