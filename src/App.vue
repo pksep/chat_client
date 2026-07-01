@@ -1,6 +1,12 @@
 <template>
   <ChatContainerRoot v-if="config && !isCredentialsStep" :config="config" />
 
+  <Loading
+    v-else-if="isBootstrapping"
+    data-testid="App-Bootstrap"
+    :message="''"
+  />
+
   <AuthorizationScreen
     v-else
     v-model:url="serverUrl"
@@ -46,6 +52,7 @@ import { PushNotification } from '@pksep/yui';
 import { IChatContainerConfig } from './components/interfaces/interfaces';
 import ChatContainerRoot from './ChatContainerRoot.vue';
 import AuthorizationScreen from './components/AuthorizationScreen.vue';
+import Loading from './components/Loading.vue';
 import IosInstallPromptModal from './components/Menu/IosInstallPromptModal.vue';
 import { useIosInstallPrompt } from './composables/useIosInstallPrompt';
 import { setConfig } from './services/useConfig';
@@ -84,6 +91,7 @@ const getStoredOrganizations = (): IStoredOrganization[] => {
 const config = ref<IChatContainerConfig | null>(null);
 const errorMessage = ref('');
 const isLoading = ref(false);
+const isBootstrapping = ref(true);
 const identifierValue = ref('');
 const passwordValue = ref('');
 const rememberAccount = ref(true);
@@ -112,6 +120,10 @@ const getNotificationStyle = (index: number) => ({
   margin: '0',
   zIndex: `${3000 - index}`
 });
+
+const finishBootstrapping = () => {
+  isBootstrapping.value = false;
+};
 
 const parseRuntimeConfig = (
   rawConfig: string
@@ -455,22 +467,32 @@ const submitCredentialsLogin = async () => {
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
   void initShareIntentHandling();
   localStorage.removeItem('chat_runtime_config_url');
 
-  const urlOrganization = getUrlOrganization();
+  try {
+    const urlOrganization = getUrlOrganization();
 
-  if (urlOrganization) {
-    const storedOrganization = organizations.value.find(
-      item => normalizeServerUrl(item.url) === urlOrganization
-    );
+    if (urlOrganization) {
+      const storedOrganization = organizations.value.find(
+        item => normalizeServerUrl(item.url) === urlOrganization
+      );
 
-    serverUrl.value = urlOrganization;
-    isAddingNewOrganization.value = false;
+      serverUrl.value = urlOrganization;
+      isAddingNewOrganization.value = false;
 
-    if (storedOrganization) {
-      if (shouldLoadFreshConfigBeforeChat()) {
+      if (storedOrganization) {
+        if (shouldLoadFreshConfigBeforeChat()) {
+          await loadRemoteConfig({
+            url: urlOrganization,
+            fallbackConfig: storedOrganization.config
+          });
+          return;
+        }
+
+        applyConfig(storedOrganization.config);
+        openCredentialsStepIfNeeded();
         void loadRemoteConfig({
           url: urlOrganization,
           fallbackConfig: storedOrganization.config
@@ -478,35 +500,37 @@ onMounted(() => {
         return;
       }
 
-      applyConfig(storedOrganization.config);
-      openCredentialsStepIfNeeded();
-      void loadRemoteConfig({
-        url: urlOrganization,
-        fallbackConfig: storedOrganization.config
+      await loadRemoteConfig({
+        url: urlOrganization
       });
       return;
     }
 
-    void loadRemoteConfig({
-      url: urlOrganization
-    });
-    return;
-  }
+    const normalizedSelectedOrganization = normalizeServerUrl(
+      selectedOrganization.value
+    );
+    const lastOrganization = organizations.value.find(
+      item => normalizeServerUrl(item.url) === normalizedSelectedOrganization
+    );
 
-  const normalizedSelectedOrganization = normalizeServerUrl(
-    selectedOrganization.value
-  );
-  const lastOrganization = organizations.value.find(
-    item => normalizeServerUrl(item.url) === normalizedSelectedOrganization
-  );
+    if (lastOrganization) {
+      const normalizedLastOrganization = normalizeServerUrl(
+        lastOrganization.url
+      );
 
-  if (lastOrganization) {
-    const normalizedLastOrganization = normalizeServerUrl(lastOrganization.url);
+      serverUrl.value = normalizedLastOrganization;
+      isAddingNewOrganization.value = false;
 
-    serverUrl.value = normalizedLastOrganization;
-    isAddingNewOrganization.value = false;
+      if (shouldLoadFreshConfigBeforeChat()) {
+        await loadRemoteConfig({
+          url: normalizedLastOrganization,
+          fallbackConfig: lastOrganization.config
+        });
+        return;
+      }
 
-    if (shouldLoadFreshConfigBeforeChat()) {
+      applyConfig(lastOrganization.config);
+      openCredentialsStepIfNeeded();
       void loadRemoteConfig({
         url: normalizedLastOrganization,
         fallbackConfig: lastOrganization.config
@@ -514,19 +538,13 @@ onMounted(() => {
       return;
     }
 
-    applyConfig(lastOrganization.config);
-    openCredentialsStepIfNeeded();
-    void loadRemoteConfig({
-      url: normalizedLastOrganization,
-      fallbackConfig: lastOrganization.config
-    });
-    return;
-  }
+    clearLastOrganization();
 
-  clearLastOrganization();
-
-  if (!organizations.value.length) {
-    startAddOrganization();
+    if (!organizations.value.length) {
+      startAddOrganization();
+    }
+  } finally {
+    finishBootstrapping();
   }
 });
 </script>
