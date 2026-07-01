@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="262424">
+<fb version="0.19.6" size="262850">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <inserted t="I">8</inserted>
-    <seconds t="F">187.375852574</seconds>
+    <seconds t="F">150.996684333</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-07-01T06:58:04Z</when>
+    <when t="T">2026-07-01T10:59:35Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -17284,6 +17284,7 @@
     <is_human t="I">1</is_human>
     <issue t="I">264</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -17310,6 +17311,7 @@
     <is_human t="I">1</is_human>
     <issue t="I">265</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -17336,6 +17338,7 @@
     <is_human t="I">1</is_human>
     <issue t="I">266</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -17362,6 +17365,7 @@
     <is_human t="I">1</is_human>
     <issue t="I">267</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -17370,14 +17374,40 @@
     <who t="I">93074025</who>
   </f>
   <f>
-    <_id t="I">833</_id>
-    <_job t="I">28499337642</_job>
-    <_time t="T">2026-07-01T06:55:59Z</_time>
+    <_id t="I">834</_id>
+    <_job t="I">28512452433</_job>
+    <_time t="T">2026-07-01T10:57:13Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">fix/chat-sync-cache-recovery</branch>
+    <comments t="I">1</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">0</comments_by_author>
+    <comments_by_reviewers t="I">1</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#315 has been "pull-was-closed".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">5</files>
+    <hoc t="I">153</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">315</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-closed</what>
+    <when t="T">2026-07-01T08:28:48Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">835</_id>
+    <_job t="I">28512452433</_job>
+    <_time t="T">2026-07-01T10:57:19Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <events_were_scanned t="I">14143768057</events_were_scanned>
+    <events_were_scanned t="I">11215365090</events_were_scanned>
     <latest_issue_was_found t="I">72</latest_issue_was_found>
-    <min_pull_was_found t="I">269</min_pull_was_found>
+    <min_pull_was_found t="I">270</min_pull_was_found>
     <repository t="I">1053332035</repository>
     <what t="S">iterate</what>
     <where t="S">github</where>
