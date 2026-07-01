@@ -1,3 +1,16 @@
+# [1.33.0](https://github.com/pksep/chat_client/compare/v1.32.0...v1.33.0) (2026-07-01)
+
+
+### Bug Fixes
+
+* lint ([a86e7e4](https://github.com/pksep/chat_client/commit/a86e7e40c162dfb3f6139ae1b62b4c787318de33))
+* reduce chat startup and media asset load ([ce980b0](https://github.com/pksep/chat_client/commit/ce980b0b6c0984cb0af3703ecdd24869de91848a))
+
+
+### Features
+
+* web update ([2753026](https://github.com/pksep/chat_client/commit/275302687f0aa12837eaa845445a91e7002e465c))
+
 # [1.32.0](https://github.com/pksep/chat_client/compare/v1.31.0...v1.32.0) (2026-07-01)
 
 
