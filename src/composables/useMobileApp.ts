@@ -1,3 +1,4 @@
+import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { MobilePlatformEnum } from '../components/interfaces/interfaces';
@@ -18,6 +19,32 @@ const WEB_UPDATE_INFO_URL = '/web-update.json';
 const WEB_UPDATE_CHECK_INTERVAL_MS = 60_000;
 const WEB_UPDATE_VERSION_STORAGE_KEY = 'chat_web_seen_update_version';
 
+export type MobileAppProfileUpdateState =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'latest';
+
+const mobilePlatform = ref<MobilePlatformEnum | null>(null);
+const isMobileApp = ref(false);
+const showDownloadModal = ref(false);
+const showUpdateBanner = ref(false);
+const updateInstallStatus = ref(RuStoreInstallStatus.UNKNOWN);
+const updateDownloadPercent = ref<number | null>(null);
+const isUpdateFlowPending = ref(false);
+const nativeAppUpdateInfo = ref<RuStoreAppUpdateInfo | null>(null);
+const isWebUpdateBanner = ref(false);
+const latestWebUpdateVersion = ref<number | null>(null);
+const isCheckingForUpdates = ref(false);
+const hasCheckedForUpdates = ref(false);
+const currentAppVersion = ref(__APP_VERSION__);
+let webUpdateIntervalId: number | null = null;
+let activeConsumers = 0;
+let detectPromise: Promise<void> | null = null;
+let nativeUpdateSubscriptionPromise: Promise<void> | null = null;
+
 const shouldShowNativeUpdateBanner = (
   appUpdateInfo: RuStoreAppUpdateInfo | null
 ): boolean => {
@@ -37,18 +64,6 @@ const shouldShowNativeUpdateBanner = (
 };
 
 export function useMobileApp() {
-  const mobilePlatform = ref<MobilePlatformEnum | null>(null);
-  const isMobileApp = ref(false);
-  const showDownloadModal = ref(false);
-  const showUpdateBanner = ref(false);
-  const updateInstallStatus = ref(RuStoreInstallStatus.UNKNOWN);
-  const updateDownloadPercent = ref<number | null>(null);
-  const isUpdateFlowPending = ref(false);
-  const nativeAppUpdateInfo = ref<RuStoreAppUpdateInfo | null>(null);
-  const isWebUpdateBanner = ref(false);
-  const latestWebUpdateVersion = ref<number | null>(null);
-  let webUpdateIntervalId: number | null = null;
-
   const applyNativeUpdateInfo = (
     appUpdateInfo: RuStoreAppUpdateInfo | null
   ) => {
@@ -117,15 +132,36 @@ export function useMobileApp() {
       return;
     }
 
-    try {
-      await subscribeRuStoreUpdateState(installState => {
-        applyNativeInstallState(installState);
-      });
-    } catch (error) {
-      console.warn('Failed to subscribe to RuStore update state:', error);
+    if (!nativeUpdateSubscriptionPromise) {
+      nativeUpdateSubscriptionPromise = subscribeRuStoreUpdateState(
+        installState => {
+          applyNativeInstallState(installState);
+        }
+      )
+        .then(() => undefined)
+        .catch(error => {
+          nativeUpdateSubscriptionPromise = null;
+          console.warn('Failed to subscribe to RuStore update state:', error);
+        });
     }
 
+    await nativeUpdateSubscriptionPromise;
     await refreshNativeUpdateInfo();
+  };
+
+  const loadCurrentAppInfo = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      currentAppVersion.value = '';
+      return;
+    }
+
+    try {
+      const appInfo = await CapacitorApp.getInfo();
+      currentAppVersion.value = appInfo.version || __APP_VERSION__;
+    } catch (error) {
+      console.warn('Failed to get current app info:', error);
+      currentAppVersion.value = __APP_VERSION__;
+    }
   };
 
   const fetchWebUpdateVersion = async (): Promise<number | null> => {
@@ -197,9 +233,11 @@ export function useMobileApp() {
 
     await checkWebUpdate();
 
-    webUpdateIntervalId = window.setInterval(() => {
-      void checkWebUpdate();
-    }, WEB_UPDATE_CHECK_INTERVAL_MS);
+    if (webUpdateIntervalId === null) {
+      webUpdateIntervalId = window.setInterval(() => {
+        void checkWebUpdate();
+      }, WEB_UPDATE_CHECK_INTERVAL_MS);
+    }
   };
 
   const persistCurrentWebUpdateVersion = () => {
@@ -248,8 +286,16 @@ export function useMobileApp() {
       }
     }
 
-    await initWebUpdateHandling();
-    await initNativeUpdateHandling();
+    isCheckingForUpdates.value = true;
+
+    try {
+      await loadCurrentAppInfo();
+      await initWebUpdateHandling();
+      await initNativeUpdateHandling();
+      hasCheckedForUpdates.value = true;
+    } finally {
+      isCheckingForUpdates.value = false;
+    }
   };
 
   const handleInstall = () => {
@@ -311,6 +357,24 @@ export function useMobileApp() {
     }
   };
 
+  const checkForUpdates = async () => {
+    isCheckingForUpdates.value = true;
+
+    try {
+      if (Capacitor.isNativePlatform()) {
+        await loadCurrentAppInfo();
+        await refreshNativeUpdateInfo();
+        hasCheckedForUpdates.value = true;
+        return;
+      }
+
+      await checkWebUpdate();
+      hasCheckedForUpdates.value = true;
+    } finally {
+      isCheckingForUpdates.value = false;
+    }
+  };
+
   const dismissUpdateBanner = () => {
     persistCurrentWebUpdateVersion();
     showUpdateBanner.value = false;
@@ -364,15 +428,53 @@ export function useMobileApp() {
         updateInstallStatus.value === RuStoreInstallStatus.PENDING)
   );
 
+  const profileUpdateState = computed<MobileAppProfileUpdateState>(() => {
+    if (isCheckingForUpdates.value) {
+      return 'checking';
+    }
+
+    if (updateProgress.value !== undefined) {
+      return 'downloading';
+    }
+
+    if (updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADED) {
+      return 'downloaded';
+    }
+
+    if (showUpdateBanner.value) {
+      return 'available';
+    }
+
+    if (hasCheckedForUpdates.value) {
+      return 'latest';
+    }
+
+    return 'idle';
+  });
+
   onMounted(() => {
-    void detect();
+    activeConsumers += 1;
+
+    if (!detectPromise) {
+      detectPromise = detect();
+    }
+
+    void detectPromise;
   });
 
   onBeforeUnmount(() => {
+    activeConsumers = Math.max(0, activeConsumers - 1);
+
+    if (activeConsumers > 0) {
+      return;
+    }
+
     if (webUpdateIntervalId !== null) {
       window.clearInterval(webUpdateIntervalId);
       webUpdateIntervalId = null;
     }
+
+    detectPromise = null;
   });
 
   return {
@@ -382,9 +484,14 @@ export function useMobileApp() {
     showUpdateBanner,
     updateActionLabel,
     updateProgress,
+    profileUpdateState,
     isUpdateActionDisabled,
+    isCheckingForUpdates,
+    hasCheckedForUpdates,
+    currentAppVersion,
     handleInstall,
     handleUpdateClick,
+    checkForUpdates,
     dismissUpdateBanner
   };
 }

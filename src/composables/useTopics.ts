@@ -55,6 +55,16 @@ let topicsApi: ReturnType<typeof createTopicsApi> | null = null;
 
 const route = useUrlWatcher();
 
+const waitForTopicIdle = (): Promise<void> =>
+  new Promise(resolve => {
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      window.requestIdleCallback(() => resolve(), { timeout: 1500 });
+      return;
+    }
+
+    setTimeout(resolve, 0);
+  });
+
 const bindTopicsVisibilityListener = (
   handleVisibilityChange: () => void
 ): void => {
@@ -286,6 +296,21 @@ const createTopicsApi = () => {
     schedulePersistTopics();
   };
 
+  const warmShadowUnreadStateForTopic = async (
+    topic: ITopic,
+    userId: string
+  ): Promise<void> => {
+    if (!topic?.id) {
+      return;
+    }
+
+    await Promise.allSettled([
+      loadShadowReadState(topic.id, userId),
+      loadShadowLoadedRanges(topic.id, userId)
+    ]);
+    syncTopicUnreadState(topic.id);
+  };
+
   const warmShadowUnreadStateForTopics = async (
     items: ITopic[],
     userId = authedUser.value?.id
@@ -304,15 +329,27 @@ const createTopicsApi = () => {
       return;
     }
 
-    await Promise.allSettled(
-      topicsToWarm.flatMap(topic => [
-        loadShadowReadState(topic.id, userId),
-        loadShadowLoadedRanges(topic.id, userId)
-      ])
+    const activeTopicId = route.value?.id || '';
+    const activeTopic = topicsToWarm.find(topic => topic.id === activeTopicId);
+    const backgroundTopics = topicsToWarm.filter(
+      topic => topic.id !== activeTopicId
     );
 
-    topicsToWarm.forEach(topic => {
-      syncTopicUnreadState(topic.id);
+    if (activeTopic) {
+      await warmShadowUnreadStateForTopic(activeTopic, userId);
+    }
+
+    if (backgroundTopics.length === 0) {
+      return;
+    }
+
+    void (async () => {
+      for (const topic of backgroundTopics) {
+        await waitForTopicIdle();
+        await warmShadowUnreadStateForTopic(topic, userId);
+      }
+    })().catch(error => {
+      console.warn('Failed to warm cached topic read state:', error);
     });
   };
 

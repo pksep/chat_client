@@ -19,7 +19,7 @@
       class="contact-list__li"
       role="listitem"
       tabindex="0"
-      @keydown="event => handleKeyDown(topic, event)"
+      @keydown="event => handleKeyDown(topic, index, event)"
       :data-testid="`${props.dataTestid}-ContactList-Item${index + 1}`"
     >
       <div
@@ -37,12 +37,12 @@
         tabindex="0"
         :aria-expanded="isOpen[topic.id] ? 'true' : 'false'"
         :aria-haspopup="true"
-        @click="handleClick(topic)"
+        @click="event => handleClick(topic, index, event)"
         @contextmenu="
           !props.showCheckbox && openActivePopover(topic.id, $event)
         "
-        @keydown.enter="handleClick(topic)"
-        @keydown.space="handleClick(topic)"
+        @keydown.enter="event => handleClick(topic, index, event)"
+        @keydown.space="event => handleClick(topic, index, event)"
       >
         <component
           :is="isBotTopic(topic) ? BotAvatar : CachedAvatar"
@@ -193,9 +193,13 @@
               role="button"
               tabindex="0"
               aria-label="Новая реакция на ваше сообщение"
-              @click.stop="handleReactionClick(topic)"
-              @keydown.enter.stop="handleReactionClick(topic)"
-              @keydown.space.stop.prevent="handleReactionClick(topic)"
+              @click.stop="event => handleReactionClick(topic, index, event)"
+              @keydown.enter.stop="
+                event => handleReactionClick(topic, index, event)
+              "
+              @keydown.space.stop.prevent="
+                event => handleReactionClick(topic, index, event)
+              "
             >
               <ReactionHeartIcon />
             </div>
@@ -235,7 +239,7 @@
           :size="CheckboxSizeEnum.small"
           :model-value="props.selectedTopicIds.has(topic.id)"
           @click.stop
-          @update:model-value="() => handleClick(topic)"
+          @update:model-value="() => handleClick(topic, index)"
           :data-testid="`${props.dataTestid}-ContactList-Checkbox${index + 1}`"
         />
       </div>
@@ -439,17 +443,24 @@ import {
   activeCallTopicId,
   isCallActive,
   pendingGroupCallInfo
-} from '../../services/useCalls';
+} from '../../services/useCallState';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 import type { IMessageSearchResult } from '../../composables/useMessageSearch';
 import { isBotTopic } from '../../utils/bot';
 import ReactionHeartIcon from '../UI/ReactionHeartIcon.vue';
 import { requestTopicReactionJump } from '../../services/useTopicViewportState';
+import {
+  getInteractionTelemetryPayload,
+  recordChatTopicNavigationRequest,
+  recordChatTopicOpenAttempt,
+  type ChatTopicOpenTelemetryMeta
+} from '../../services/useChatNavigationTelemetry';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
   selectedTopicIds?: Set<string | number>;
   searchQuery?: string;
+  toolbarFilter?: string;
   messageResults?: IMessageSearchResult[];
   isMessageSearchLoading?: boolean;
 }
@@ -468,6 +479,7 @@ const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   showCheckbox: false,
   selectedTopicIds: () => new Set<string | number>(),
   searchQuery: '',
+  toolbarFilter: '',
   messageResults: () => [],
   isMessageSearchLoading: false
 });
@@ -475,7 +487,11 @@ const props = withDefaults(defineProps<IExtendedContactListProps>(), {
 const emits = defineEmits<{
   (e: 'unmount-notification', id: string): void;
   (e: 'unmount-click', id: string): void;
-  (e: 'unmount-topic', contact: ITopic): void;
+  (
+    e: 'unmount-topic',
+    contact: ITopic,
+    telemetry?: ChatTopicOpenTelemetryMeta | null
+  ): void;
   (e: 'unmount-message', result: IMessageSearchResult): void;
 }>();
 
@@ -604,11 +620,87 @@ const handleReadState = async (topic: ITopic): Promise<void> => {
   closeActivePopover(topic.id);
 };
 
-const handleClick = (topic: ITopic): void => {
+const getVisibleTopicIds = (): string[] =>
+  props.topics.map(item => item.id).filter(Boolean);
+
+const getTopicTelemetryFlags = (topic: ITopic): Record<string, unknown> => ({
+  hasUnreadIndicator: hasTopicUnreadIndicator(topic, authedUser.value?.id),
+  unreadCount: getTopicUnreadBadgeCount(topic, authedUser.value?.id),
+  isMarkedUnread: !!topic.info?.isMarkedUnread,
+  isPinned: !!topic.info?.isPin,
+  isMuted: !!topic.info?.isMute,
+  taggedMe: !!topic.taggedMe,
+  hasUnreadReaction: !!topic.hasUnreadReaction,
+  unreadReactionMessageId: getTopicUnreadReactionMessageId(topic.id) || null,
+  hasActiveCall: !!getTopicActiveCall(topic),
+  lastMessageId: topic.lastMessage?.id || null,
+  lastMessageCreatedAt: topic.lastMessage?.createdAt || null,
+  lastMessageMediaCount: topic.lastMessage?.media?.length || 0,
+  lastMessageHasVideo:
+    topic.lastMessage?.media?.some(media => media.type === MediaType.Video) ||
+    false,
+  lastMessageSenderIsMe:
+    topic.lastMessage?.senderUserId === authedUser.value?.id
+});
+
+const recordTopicOpenAttempt = (
+  topic: ITopic,
+  index?: number,
+  event?: Event,
+  source = 'topic_list.click'
+): ChatTopicOpenTelemetryMeta | null => {
+  if (props.showCheckbox) {
+    return null;
+  }
+
+  return recordChatTopicOpenAttempt({
+    topicId: topic.id,
+    topicType: topic.type,
+    source,
+    selectedTopicId: props.selectedTopicId,
+    isMobile: isMobile.value,
+    showCheckbox: props.showCheckbox,
+    searchActive: hasSearchQuery.value,
+    searchLength: props.searchQuery.trim().length,
+    toolbarFilter: props.toolbarFilter,
+    visibleTopicIds: getVisibleTopicIds(),
+    clickedIndex: index,
+    interaction: getInteractionTelemetryPayload(event),
+    topicFlags: getTopicTelemetryFlags(topic)
+  });
+};
+
+const navigateToTopicFromList = (
+  topic: ITopic,
+  telemetry: ChatTopicOpenTelemetryMeta | null,
+  source: string
+): void => {
+  recordChatTopicNavigationRequest({
+    telemetry,
+    topicId: topic.id,
+    topicType: topic.type,
+    source
+  });
+
+  if (topic.type === TopicType.DM) {
+    navigateToDialogs(topic.id);
+  } else if (topic.type === TopicType.Group) {
+    navigateToGroup(topic.id);
+  }
+};
+
+const handleClick = (topic: ITopic, index?: number, event?: Event): void => {
   if (props.showCheckbox) {
     emits('unmount-topic', topic);
     return;
   }
+
+  const telemetry = recordTopicOpenAttempt(
+    topic,
+    index,
+    event,
+    event instanceof KeyboardEvent ? 'topic_list.keyboard' : 'topic_list.click'
+  );
 
   if (hasTopicUnreadIndicator(topic, authedUser.value?.id)) {
     void markTopicRead(topic);
@@ -617,38 +709,45 @@ const handleClick = (topic: ITopic): void => {
   }
 
   if (isMobile.value) {
-    if (topic.type === TopicType.DM) {
-      navigateToDialogs(topic.id);
-    } else if (topic.type === TopicType.Group) {
-      navigateToGroup(topic.id);
-    }
+    navigateToTopicFromList(topic, telemetry, 'topic_list.mobile_navigation');
   }
-  emits('unmount-topic', topic);
+  emits('unmount-topic', topic, telemetry);
 };
 
-const handleReactionClick = (topic: ITopic): void => {
+const handleReactionClick = (
+  topic: ITopic,
+  index?: number,
+  event?: Event
+): void => {
   const unreadReactionMessageId = getTopicUnreadReactionMessageId(topic.id);
 
   if (!unreadReactionMessageId) {
     return;
   }
 
+  const telemetry = recordTopicOpenAttempt(
+    topic,
+    index,
+    event,
+    'topic_list.reaction_click'
+  );
+
   requestTopicReactionJump(topic.id, unreadReactionMessageId);
 
   if (isMobile.value) {
-    if (topic.type === TopicType.DM) {
-      navigateToDialogs(topic.id);
-    } else if (topic.type === TopicType.Group) {
-      navigateToGroup(topic.id);
-    }
+    navigateToTopicFromList(topic, telemetry, 'topic_list.reaction_navigation');
   }
 
-  emits('unmount-topic', topic);
+  emits('unmount-topic', topic, telemetry);
 };
 
-const handleKeyDown = (contact: ITopic, event: KeyboardEvent): void => {
+const handleKeyDown = (
+  contact: ITopic,
+  index: number,
+  event: KeyboardEvent
+): void => {
   if (event.key === 'Enter' || event.key === ' ') {
-    handleClick(contact);
+    handleClick(contact, index, event);
   }
 };
 

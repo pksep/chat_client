@@ -30,7 +30,7 @@
 
   <div
     class="chat__message-wrapper"
-    v-if="state.messages.length && !isAiRoute"
+    v-if="!isAiRoute && !isDefaultRoute"
     ref="chatWrapperRef"
     @vue:mounted="scrollToBottom"
     @scroll="handleScroll"
@@ -350,6 +350,7 @@ import {
   getIsTopicMessageVisible,
   pendingTopicReactionJump
 } from '../services/useTopicViewportState';
+import { recordChatMessageListRenderMismatch } from '../services/useChatNavigationTelemetry';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -361,6 +362,9 @@ const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
 const TOPIC_SWITCH_AUTO_READ_GRACE_MS = 1200;
 const TOPIC_SWITCH_HISTORY_FETCH_GRACE_MS = 1200;
 const TOPIC_SWITCH_MEDIA_PREWARM_LIMIT = 12;
+const MOBILE_INITIAL_MESSAGES_LIMIT = 30;
+const MOBILE_MAX_INITIAL_MESSAGES_LIMIT = 50;
+const DESKTOP_INITIAL_MESSAGES_LIMIT = 100;
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
 const messageListUserItemsRef = useTemplateRef<any>('messageListUserItemsRef');
@@ -552,6 +556,67 @@ const unreadReactionMessageId = computed(() => {
 });
 const renderedTopicId = ref(route.value.id || '');
 let activeTopicSwitchToken = 0;
+let topicSwitchStartedAtMs = 0;
+let renderMismatchTelemetryTimeout: ReturnType<typeof setTimeout> | null = null;
+
+const waitForMessageListIdle = (): Promise<void> =>
+  new Promise(resolve => {
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(() => resolve(), { timeout: 1500 });
+      return;
+    }
+
+    setTimeout(resolve, 0);
+  });
+
+const getTopicSwitchFetchLimits = (
+  unreadCount: number
+): { initialLimit: number; expandedLimit: number } => {
+  const unreadWindowLimit = unreadCount + 20;
+  const expandedLimit = Math.max(
+    DESKTOP_INITIAL_MESSAGES_LIMIT,
+    unreadWindowLimit
+  );
+
+  if (!isMobile.value) {
+    return {
+      initialLimit: expandedLimit,
+      expandedLimit
+    };
+  }
+
+  return {
+    initialLimit: Math.min(
+      Math.max(MOBILE_INITIAL_MESSAGES_LIMIT, unreadWindowLimit),
+      MOBILE_MAX_INITIAL_MESSAGES_LIMIT
+    ),
+    expandedLimit
+  };
+};
+
+const scheduleExpandedTopicMessagesFetch = (
+  topicId: string,
+  limit: number,
+  initialFetch: Promise<IMessage[]>,
+  isStaleTopicSwitch: () => boolean
+): void => {
+  void initialFetch
+    .then(waitForMessageListIdle)
+    .then(async () => {
+      if (isStaleTopicSwitch()) {
+        return;
+      }
+
+      await fetchMessagesForTopic(topicId, {
+        limit,
+        forceRefresh: true,
+        forceNetwork: navigator.onLine
+      });
+    })
+    .catch(error => {
+      console.warn('Failed to fetch expanded topic messages:', error);
+    });
+};
 
 const state = reactive({
   messages: computed(() => getMessagesByTopicId(renderedTopicId.value)),
@@ -656,6 +721,55 @@ const {
   state,
   props
 );
+
+const getTopicSwitchLatencyMs = (): number | undefined => {
+  if (!topicSwitchStartedAtMs) {
+    return undefined;
+  }
+
+  return Math.round(performance.now() - topicSwitchStartedAtMs);
+};
+
+const scheduleRenderMismatchTelemetry = (): void => {
+  if (renderMismatchTelemetryTimeout) {
+    clearTimeout(renderMismatchTelemetryTimeout);
+    renderMismatchTelemetryTimeout = null;
+  }
+
+  const routeTopicId = route.value?.id || '';
+  const routeType = route.value?.type || null;
+  const currentRenderedTopicId = renderedTopicId.value;
+
+  if (
+    !routeTopicId ||
+    routeType === RouteTypes.AI ||
+    !currentRenderedTopicId ||
+    currentRenderedTopicId === routeTopicId
+  ) {
+    return;
+  }
+
+  renderMismatchTelemetryTimeout = setTimeout(() => {
+    renderMismatchTelemetryTimeout = null;
+
+    if (
+      route.value?.id !== routeTopicId ||
+      renderedTopicId.value !== currentRenderedTopicId
+    ) {
+      return;
+    }
+
+    recordChatMessageListRenderMismatch({
+      routeTopicId,
+      routeType,
+      renderedTopicId: currentRenderedTopicId,
+      messageCount: state.messages.length,
+      isLoadingInitialMessages: isLoadingInitialMessages.value,
+      switchToken: activeTopicSwitchToken,
+      latencyMs: getTopicSwitchLatencyMs()
+    });
+  }, 900);
+};
 
 const showUnreadCountOnScrollButton = computed(
   () =>
@@ -1114,6 +1228,8 @@ const jumpToMessageWithHighlight = async (
   quoteText: string,
   quoteOccurrenceIndex?: number
 ): Promise<boolean> => {
+  await messageListUserItemsRef.value?.ensureMessageRendered?.(messageId);
+
   const didJump = await scrollAnchor.jumpToMessage(messageId, {
     block: 'center',
     behavior: 'smooth'
@@ -1439,6 +1555,11 @@ onUnmounted(() => {
     floatingDateDividerRafId = 0;
   }
 
+  if (renderMismatchTelemetryTimeout) {
+    clearTimeout(renderMismatchTelemetryTimeout);
+    renderMismatchTelemetryTimeout = null;
+  }
+
   if (scrollMarkReadTimeout) {
     clearTimeout(scrollMarkReadTimeout);
   }
@@ -1484,10 +1605,12 @@ watch(
   async ([topicId]) => {
     if (!topicId) return;
     const topicSwitchToken = ++activeTopicSwitchToken;
+    topicSwitchStartedAtMs = performance.now();
     const isStaleTopicSwitch = () =>
       topicSwitchToken !== activeTopicSwitchToken ||
       route.value?.id !== topicId;
     suppressNotificationSoundForTopic(topicId, TOPIC_SWITCH_AUTO_READ_GRACE_MS);
+    state.errorMessage = '';
     state.hideUnreadMarker = true;
     state.unreadMarkerMessageId = null;
     isLoadingInitialMessages.value = true;
@@ -1502,7 +1625,8 @@ watch(
       getSelectedTopic(topicId),
       authUser.value?.id
     );
-    const initialMessagesLimit = Math.max(100, topicUnreadCount + 20);
+    const { initialLimit: initialMessagesLimit, expandedLimit } =
+      getTopicSwitchFetchLimits(topicUnreadCount);
 
     state.replyMessage = null;
     state.editMessage = null;
@@ -1547,11 +1671,27 @@ watch(
     }
 
     void fetchPinnedMessagesForTopic(topicId);
-    void fetchMessagesForTopic(topicId, {
+    const initialMessagesFetch = fetchMessagesForTopic(topicId, {
       limit: initialMessagesLimit,
       forceRefresh: true,
       forceNetwork: navigator.onLine
     });
+
+    if (expandedLimit > initialMessagesLimit) {
+      scheduleExpandedTopicMessagesFetch(
+        topicId,
+        expandedLimit,
+        initialMessagesFetch,
+        isStaleTopicSwitch
+      );
+    }
+
+    await initialMessagesFetch;
+
+    if (isStaleTopicSwitch()) {
+      return;
+    }
+
     renderedTopicId.value = topicId;
     await nextTick();
 
@@ -1597,6 +1737,19 @@ watch(
     setReadReceiptsEnabled(true);
     setupIntersectionObserver();
     syncVisibleUnreadAfterAutoScroll();
+  },
+  { immediate: true }
+);
+
+watch(
+  [
+    () => route.value?.id,
+    () => route.value?.type,
+    () => renderedTopicId.value,
+    () => state.messages.length
+  ],
+  () => {
+    scheduleRenderMismatchTelemetry();
   },
   { immediate: true }
 );

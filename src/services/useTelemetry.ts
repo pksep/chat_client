@@ -1,6 +1,8 @@
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
-import { useChatApi } from './useApi';
+import { getStoredChatAccessToken } from '../composables/useAuth';
+import { getAuthToken } from '../composables/useLogin';
+import { getConfig } from './useConfig';
 import {
   getTelemetryDeviceContext,
   getTelemetryInstallationId,
@@ -54,6 +56,10 @@ const MAX_DEPTH = 5;
 let telemetryQueue: TelemetryEvent[] = [];
 let telemetryFlushTimer: ReturnType<typeof setTimeout> | null = null;
 let isTelemetryFlushInFlight = false;
+
+const getTelemetryAuthToken = (): string => {
+  return getAuthToken() || getStoredChatAccessToken() || '';
+};
 
 const createUuid = (): string => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -175,6 +181,12 @@ export const flushTelemetryEvents = async (): Promise<void> => {
     return;
   }
 
+  const token = getTelemetryAuthToken();
+
+  if (!token) {
+    return;
+  }
+
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     scheduleTelemetryFlush(TELEMETRY_RETRY_DELAY_MS);
     return;
@@ -185,9 +197,30 @@ export const flushTelemetryEvents = async (): Promise<void> => {
   isTelemetryFlushInFlight = true;
 
   try {
-    await useChatApi().post('/telemetry/events', {
-      events: batch
+    const config = getConfig();
+
+    if (!config.CHAT_API_DOMAIN) {
+      return;
+    }
+
+    const response = await fetch(`${config.CHAT_API_DOMAIN}/telemetry/events`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        events: batch
+      })
     });
+
+    if (response.status === 401 || response.status === 403) {
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error(`Telemetry request failed: ${response.status}`);
+    }
   } catch (error) {
     telemetryQueue = [...batch, ...telemetryQueue].slice(
       -TELEMETRY_MAX_QUEUE_SIZE

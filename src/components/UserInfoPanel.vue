@@ -132,7 +132,6 @@ import { useTopics } from '../composables/useTopics';
 import { useUserInfoModal } from '../composables/useUserInfoModal';
 import { getUserById, getUserLastOnline } from '../composables/useUsers';
 import { getChatSDK } from '../services/useChat';
-import { startLiveKitCall } from '../services/useLiveKit';
 import { TopicType } from '../services/useChatSDK/types';
 import { parseUserEx } from '../utils/parseUserEx';
 import type { ITopic, IUser } from './interfaces/interfaces';
@@ -236,6 +235,8 @@ const handleCall = async () => {
   if (!targetTopicId) {
     return;
   }
+
+  const { startLiveKitCall } = await import('../services/useLiveKit');
 
   await startLiveKitCall(targetUser, targetTopicId);
 };

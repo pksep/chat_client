@@ -45,18 +45,6 @@ import {
 } from './useMessages';
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
 import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
-import {
-  handleIncomingCall,
-  handleCallAnswered,
-  handleCallEnded,
-  handleCallParticipantLeft,
-  dismissIncomingCall,
-  removeActiveGroupCall,
-  removeInvitedGroupCall,
-  restoreInvitedGroupCallFromUrl,
-  isCallActive,
-  syncServerActiveCalls
-} from './useCalls';
 import { Capacitor } from '@capacitor/core';
 import { initCallKit, showIncomingCallKit, endAllCallKits } from './useCallKit';
 import { clearTopicNotifications } from './useNotificationNavigation';
@@ -94,8 +82,23 @@ import {
 import { normalizeUserStatus } from '../utils/userStatus';
 import { normalizeDateValue } from '../utils/dateValue';
 import { getIsTopicMessageVisible } from './useTopicViewportState';
+import { isGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
 
 let chatSDK: ChatSDK | null = null;
+type CallsApi = typeof import('./useCalls');
+let callsApi: CallsApi | null = null;
+let callsApiPromise: Promise<CallsApi> | null = null;
+
+const loadCallsApi = async (): Promise<CallsApi> => {
+  if (!callsApiPromise) {
+    callsApiPromise = import('./useCalls').then(api => {
+      callsApi = api;
+      return api;
+    });
+  }
+
+  return callsApiPromise;
+};
 
 const isWebsocketConnecting = ref(true);
 const hasWebsocketConnection = ref(false);
@@ -111,6 +114,8 @@ const messagesStore = shallowRef<Record<string, ChatMessage[]>>({});
 
 const messageChangeCallbacks: Array<(topicId?: string) => void> = [];
 let areChatListenersBound = false;
+let latestProcessedPts = 0;
+const processedPts = new Set<number>();
 
 type MessageHandlingOptions = {
   silent?: boolean;
@@ -137,6 +142,34 @@ const hasMessageInTopic = (
   return getFullMessagesByTopicId(topicId).some(
     message => message.id === messageId
   );
+};
+
+const normalizePts = (pts?: string | number | null): number => {
+  const normalizedPts = Number(pts);
+  return Number.isFinite(normalizedPts) ? normalizedPts : 0;
+};
+
+const shouldProcessPtsMeta = (ptsMeta?: PtsMeta): boolean => {
+  const pts = normalizePts(ptsMeta?.pts);
+
+  if (!pts) {
+    return true;
+  }
+
+  if (processedPts.has(pts)) {
+    return false;
+  }
+
+  processedPts.add(pts);
+  if (processedPts.size > 1000) {
+    const oldestPts = processedPts.values().next().value;
+    if (oldestPts !== undefined) {
+      processedPts.delete(oldestPts);
+    }
+  }
+
+  latestProcessedPts = Math.max(latestProcessedPts, pts);
+  return true;
 };
 
 const persistPtsMeta = (ptsMeta?: PtsMeta): void => {
@@ -170,6 +203,14 @@ const syncPtsStateToServer = async (): Promise<void> => {
 
   if (!lastPtsMeta?.pts) {
     return;
+  }
+
+  latestProcessedPts = Math.max(
+    latestProcessedPts,
+    normalizePts(lastPtsMeta.pts)
+  );
+  if (latestProcessedPts) {
+    processedPts.add(latestProcessedPts);
   }
 
   chatSDK.sendWebSocketEvent(WebSocketEventType.SYNC_STATE, {
@@ -307,6 +348,10 @@ const setupChatListeners = (): void => {
     data: any;
     ptsMeta?: PtsMeta;
   }): void => {
+    if (!shouldProcessPtsMeta(payload.ptsMeta)) {
+      return;
+    }
+
     persistPtsMeta(payload.ptsMeta);
 
     void recordShadowChatEvent({
@@ -346,6 +391,10 @@ const setupChatListeners = (): void => {
       payload.targetUserId &&
       payload.targetUserId !== currentUserId.value
     ) {
+      return;
+    }
+
+    if (!shouldProcessPtsMeta(payload.ptsMeta)) {
       return;
     }
 
@@ -402,6 +451,10 @@ const setupChatListeners = (): void => {
     userId?: string;
     ptsMeta?: PtsMeta;
   }): void => {
+    if (!shouldProcessPtsMeta(payload.ptsMeta)) {
+      return;
+    }
+
     persistPtsMeta(payload.ptsMeta);
 
     void recordShadowChatEvent({
@@ -447,6 +500,10 @@ const setupChatListeners = (): void => {
     reactionSenderUserId?: string;
     ptsMeta?: PtsMeta;
   }): void => {
+    if (!shouldProcessPtsMeta(payload.ptsMeta)) {
+      return;
+    }
+
     persistPtsMeta(payload.ptsMeta);
 
     void recordShadowChatEvent({
@@ -511,6 +568,10 @@ const setupChatListeners = (): void => {
     lastSeenReactionAt: string;
     ptsMeta?: PtsMeta;
   }): void => {
+    if (!shouldProcessPtsMeta(payload.ptsMeta)) {
+      return;
+    }
+
     persistPtsMeta(payload.ptsMeta);
 
     void recordShadowChatEvent({
@@ -536,6 +597,10 @@ const setupChatListeners = (): void => {
     } | null;
     ptsMeta?: PtsMeta;
   }): void => {
+    if (!shouldProcessPtsMeta(payload.ptsMeta)) {
+      return;
+    }
+
     persistPtsMeta(payload.ptsMeta);
     const normalizedLastOnline = normalizeDateValue(payload.lastOnline);
 
@@ -676,7 +741,9 @@ const setupChatListeners = (): void => {
           });
           break;
         default:
-          persistPtsMeta(ptsMeta);
+          if (shouldProcessPtsMeta(ptsMeta)) {
+            persistPtsMeta(ptsMeta);
+          }
           break;
       }
     });
@@ -684,6 +751,7 @@ const setupChatListeners = (): void => {
 
   chatSDK.subscribeToEvent(WebSocketEventType.INCOMING_CALL, ({ payload }) => {
     void (async () => {
+      const { handleIncomingCall } = await loadCallsApi();
       const topic = useTopics().getSelectedTopic(payload.topicId) as any;
       const topicType = payload.topicType || topic?.type;
       const user =
@@ -721,60 +789,77 @@ const setupChatListeners = (): void => {
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CALL_ANSWERED, ({ payload }) => {
-    if (Capacitor.isNativePlatform()) {
-      endAllCallKits();
-    }
-    dismissIncomingCall(payload.roomId, payload.topicId);
-    handleCallAnswered(
-      payload.userId,
-      payload.roomId,
-      payload.topicId,
-      payload.startTime,
-      payload.elapsedDurationMs
-    );
+    void (async () => {
+      const { dismissIncomingCall, handleCallAnswered } = await loadCallsApi();
+
+      if (Capacitor.isNativePlatform()) {
+        endAllCallKits();
+      }
+      dismissIncomingCall(payload.roomId, payload.topicId);
+      handleCallAnswered(
+        payload.userId,
+        payload.roomId,
+        payload.topicId,
+        payload.startTime,
+        payload.elapsedDurationMs
+      );
+    })();
   });
 
   chatSDK.subscribeToEvent(
     WebSocketEventType.DISMISS_INCOMING_CALL,
     ({ payload }) => {
-      if (Capacitor.isNativePlatform()) {
-        endAllCallKits();
-      }
-      dismissIncomingCall(payload.roomId, payload.topicId);
+      void (async () => {
+        const { dismissIncomingCall } = await loadCallsApi();
+
+        if (Capacitor.isNativePlatform()) {
+          endAllCallKits();
+        }
+        dismissIncomingCall(payload.roomId, payload.topicId);
+      })();
     }
   );
 
   chatSDK.subscribeToEvent(WebSocketEventType.ACTIVE_CALLS, ({ payload }) => {
-    void syncServerActiveCalls(payload.calls, payload.replace ?? true);
+    void (async () => {
+      if (!payload.calls?.length && !callsApi && !callsApiPromise) {
+        return;
+      }
+
+      const { syncServerActiveCalls } = await loadCallsApi();
+      syncServerActiveCalls(payload.calls, payload.replace ?? true);
+    })();
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CALL_ENDED, ({ payload }) => {
-    const didEndCall = handleCallEnded(
-      payload.roomId,
-      payload.topicId,
-      payload.reason,
-      payload.userId
-    );
+    void (async () => {
+      const loadedCallsApi = callsApiPromise ? await loadCallsApi() : callsApi;
+      const didEndCall =
+        loadedCallsApi?.handleCallEnded(
+          payload.roomId,
+          payload.topicId,
+          payload.reason,
+          payload.userId
+        ) ?? false;
 
-    removeActiveGroupCall(payload.topicId);
-    removeInvitedGroupCall(payload.roomId);
+      loadedCallsApi?.removeActiveGroupCall(payload.topicId);
+      loadedCallsApi?.removeInvitedGroupCall(payload.roomId);
 
-    if (!didEndCall) {
-      if (payload.topicId) {
-        void fetchAllTopics();
+      if (!didEndCall) {
+        if (payload.topicId) {
+          void fetchAllTopics();
+        }
+        return;
       }
-      return;
-    }
 
-    if (Capacitor.isNativePlatform()) {
-      endAllCallKits();
-    }
+      if (Capacitor.isNativePlatform()) {
+        endAllCallKits();
+      }
 
-    if (payload.topicId) {
-      const endedTopic = useTopics().getSelectedTopic(payload.topicId) as any;
+      if (payload.topicId) {
+        const endedTopic = useTopics().getSelectedTopic(payload.topicId) as any;
 
-      if (endedTopic?.type === TopicType.DM) {
-        void (async () => {
+        if (endedTopic?.type === TopicType.DM) {
           await new Promise(resolve => setTimeout(resolve, 500));
 
           await Promise.allSettled([
@@ -786,19 +871,25 @@ const setupChatListeners = (): void => {
             }),
             fetchAllTopics()
           ]);
-        })();
+        }
       }
-    }
+    })();
   });
 
   chatSDK.subscribeToEvent(
     WebSocketEventType.CALL_PARTICIPANT_LEFT,
     ({ payload }) => {
-      handleCallParticipantLeft(
-        payload.participantId,
-        payload.roomId,
-        payload.topicId
-      );
+      void (async () => {
+        const loadedCallsApi = callsApiPromise
+          ? await loadCallsApi()
+          : callsApi;
+
+        loadedCallsApi?.handleCallParticipantLeft(
+          payload.participantId,
+          payload.roomId,
+          payload.topicId
+        );
+      })();
     }
   );
 };
@@ -808,11 +899,22 @@ let isResumeListenersAdded = false;
 let lastVisibilityState = document.visibilityState;
 let reconnectRefreshTimeout: ReturnType<typeof setTimeout> | null = null;
 let isRefreshingAfterReconnect = false;
+let hasCompletedInitialConnection = false;
 const MAX_BACKGROUND_TOPIC_RECONCILES = 12;
 let networkStatePollInterval: ReturnType<typeof setInterval> | null = null;
 let removeAppVisibilityListener: (() => void) | null = null;
 
 const route = useUrlWatcher();
+
+const waitForReconnectIdle = (): Promise<void> =>
+  new Promise(resolve => {
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      window.requestIdleCallback(() => resolve(), { timeout: 1500 });
+      return;
+    }
+
+    setTimeout(resolve, 0);
+  });
 
 const getMessageTimestamp = (
   message?: Pick<IMessage, 'createdAt' | 'updatedAt'> | null
@@ -898,16 +1000,15 @@ const reconcileTopicCachesAfterReconnect = async (): Promise<void> => {
     return;
   }
 
-  await Promise.allSettled(
-    topicsToRefresh.map(topic =>
-      fetchMessagesForTopic(topic.id, {
-        limit: 100,
-        forceRefresh: true,
-        forceNetwork: true,
-        syncLastMessage: true
-      })
-    )
-  );
+  for (const topic of topicsToRefresh) {
+    await waitForReconnectIdle();
+    await fetchMessagesForTopic(topic.id, {
+      limit: 100,
+      forceRefresh: true,
+      forceNetwork: true,
+      syncLastMessage: true
+    });
+  }
 };
 
 const refreshDataAfterReconnect = async (): Promise<void> => {
@@ -918,8 +1019,7 @@ const refreshDataAfterReconnect = async (): Promise<void> => {
   isRefreshingAfterReconnect = true;
 
   try {
-    await Promise.allSettled([fetchAllTopics(), fetchAllUsers()]);
-    await reconcileTopicCachesAfterReconnect();
+    await fetchAllTopics();
 
     if (route.value.id) {
       await Promise.allSettled([
@@ -931,6 +1031,9 @@ const refreshDataAfterReconnect = async (): Promise<void> => {
         getGroupById(route.value.id);
       }
     }
+
+    await fetchAllUsers();
+    await reconcileTopicCachesAfterReconnect();
   } finally {
     isRefreshingAfterReconnect = false;
   }
@@ -988,11 +1091,28 @@ const syncPresenceForVisibility = (): void => {
 
   const isActive =
     getIsAppActivelyVisible() ||
-    (Capacitor.isNativePlatform() && isCallActive.value);
+    (Capacitor.isNativePlatform() && callsApi?.isCallActive.value);
 
   chatSDK.sendWebSocketEvent(WebSocketEventType.TOGGLE_PRESENCE, {
     isActive
   });
+};
+
+const restoreInvitedGroupCallIfNeeded = (): void => {
+  if (
+    typeof window === 'undefined' ||
+    !isGroupCallInviteUrl(window.location.href)
+  ) {
+    return;
+  }
+
+  void loadCallsApi()
+    .then(({ restoreInvitedGroupCallFromUrl }) =>
+      restoreInvitedGroupCallFromUrl()
+    )
+    .catch(error => {
+      console.warn('Failed to restore invited group call:', error);
+    });
 };
 
 export const initializeChat = async (options: {
@@ -1006,6 +1126,7 @@ export const initializeChat = async (options: {
     wsUrl: options.wsUrl,
     token: options.token
   });
+  hasCompletedInitialConnection = false;
   chatSDK.setConnectionStateListener(connected => {
     const wasConnected = hasWebsocketConnection.value;
     isWebsocketConnecting.value = browserOnline.value && !connected;
@@ -1016,7 +1137,16 @@ export const initializeChat = async (options: {
       timestamp: new Date().toISOString()
     });
 
-    if (connected && wasConnected === false && !isWebsocketConnecting.value) {
+    if (!connected) {
+      return;
+    }
+
+    if (!hasCompletedInitialConnection) {
+      hasCompletedInitialConnection = true;
+      return;
+    }
+
+    if (wasConnected === false && !isWebsocketConnecting.value) {
       void syncPtsStateToServer();
       markRecentlyReconnected();
       void refreshDataAfterReconnect();
@@ -1089,7 +1219,7 @@ export const initializeChat = async (options: {
   initializeCallHistorySync(chatSDK);
   await syncPtsStateToServer();
   isWebsocketConnecting.value = false;
-  await restoreInvitedGroupCallFromUrl();
+  restoreInvitedGroupCallIfNeeded();
 
   if (Capacitor.isNativePlatform()) {
     initCallKit();
