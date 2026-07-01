@@ -1184,27 +1184,25 @@ const startChatConnectionInBackground = (sdk: ChatSDK): void => {
 
       console.warn('Chat websocket startup continues in background:', error);
     } finally {
-      if (chatSDK !== sdk) {
-        return;
-      }
+      if (chatSDK === sdk) {
+        isWebsocketConnecting.value = false;
+        restoreInvitedGroupCallIfNeeded();
 
-      isWebsocketConnecting.value = false;
-      restoreInvitedGroupCallIfNeeded();
+        if (Capacitor.isNativePlatform()) {
+          initCallKit();
+        }
 
-      if (Capacitor.isNativePlatform()) {
-        initCallKit();
-      }
+        ensureTauriWindowStateTracking();
 
-      ensureTauriWindowStateTracking();
+        if (!removeAppVisibilityListener) {
+          removeAppVisibilityListener = subscribeToAppVisibilityChanges(() => {
+            syncPresenceForVisibility();
 
-      if (!removeAppVisibilityListener) {
-        removeAppVisibilityListener = subscribeToAppVisibilityChanges(() => {
-          syncPresenceForVisibility();
-
-          if (getIsAppActivelyVisible()) {
-            reconnectChatOnResume();
-          }
-        });
+            if (getIsAppActivelyVisible()) {
+              reconnectChatOnResume();
+            }
+          });
+        }
       }
     }
   })();
