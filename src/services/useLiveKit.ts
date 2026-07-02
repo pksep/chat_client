@@ -3497,7 +3497,10 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
     return true;
   }
 
-  if (status?.startTime !== undefined || status?.elapsedDurationMs !== undefined) {
+  if (
+    status?.startTime !== undefined ||
+    status?.elapsedDurationMs !== undefined
+  ) {
     setCallStartedAt(
       status.startTime ?? callStartedAt.value,
       status.elapsedDurationMs ?? callElapsedMs.value
@@ -3551,8 +3554,7 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
       );
       return false;
     } finally {
-      shouldPreserveCallOnConnectFailure =
-        previousPreserveCallOnConnectFailure;
+      shouldPreserveCallOnConnectFailure = previousPreserveCallOnConnectFailure;
     }
   }
 

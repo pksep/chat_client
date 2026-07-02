@@ -938,12 +938,11 @@ let connectionAttemptId = 0;
 const route = useUrlWatcher();
 
 const getNetworkInformation = (): NetworkInformationLike | null =>
-  (
-    typeof navigator !== 'undefined'
-      ? (navigator as Navigator & {
-          connection?: NetworkInformationLike;
-        })
-      : null
+  (typeof navigator !== 'undefined'
+    ? (navigator as Navigator & {
+        connection?: NetworkInformationLike;
+      })
+    : null
   )?.connection || null;
 
 const getNetworkFingerprint = (onlineOverride?: boolean): string => {
@@ -1143,9 +1142,7 @@ const waitForChatHttpHealth = async (
     : 1;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const healthy = await chatSDK.probeConnection(
-      HTTP_HEALTH_PROBE_TIMEOUT_MS
-    );
+    const healthy = await chatSDK.probeConnection(HTTP_HEALTH_PROBE_TIMEOUT_MS);
 
     void saveShadowSyncMeta('fresh_sync:http_health', {
       reason,
@@ -1298,10 +1295,7 @@ const requestFreshDataRefresh = (
 
   const now = Date.now();
 
-  if (
-    !opts?.force &&
-    now - lastFreshSyncRequestedAt < FRESH_SYNC_THROTTLE_MS
-  ) {
+  if (!opts?.force && now - lastFreshSyncRequestedAt < FRESH_SYNC_THROTTLE_MS) {
     if (isRefreshingAfterReconnect) {
       shouldRerunRefreshAfterReconnect = true;
     }
