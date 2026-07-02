@@ -819,9 +819,7 @@ const handleTopicPressMove = (event: PointerEvent): void => {
   pendingActiveTopicId.value = null;
 };
 
-const handleTopicPressEnd = (
-  event: PointerEvent
-): void => {
+const handleTopicPressEnd = (event: PointerEvent): void => {
   if (topicPressPointerId === event.pointerId) {
     pendingActiveTopicId.value = null;
   }

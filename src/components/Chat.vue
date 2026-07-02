@@ -71,21 +71,37 @@
                 }
               ]"
             >
-              <span class="chat__message-skeleton-row chat__message-skeleton-row--incoming">
+              <span
+                class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+              >
                 <span class="chat__message-skeleton-avatar" />
-                <span class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--short" />
+                <span
+                  class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--short"
+                />
               </span>
-              <span class="chat__message-skeleton-media chat__message-skeleton-media--outgoing">
+              <span
+                class="chat__message-skeleton-media chat__message-skeleton-media--outgoing"
+              >
                 <span class="chat__message-skeleton-media-icon" />
               </span>
-              <span class="chat__message-skeleton-row chat__message-skeleton-row--incoming">
+              <span
+                class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+              >
                 <span class="chat__message-skeleton-avatar" />
-                <span class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming" />
+                <span
+                  class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
+                />
               </span>
-              <span class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing chat__message-skeleton-bubble--wide" />
-              <span class="chat__message-skeleton-row chat__message-skeleton-row--incoming">
+              <span
+                class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing chat__message-skeleton-bubble--wide"
+              />
+              <span
+                class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+              >
                 <span class="chat__message-skeleton-avatar" />
-                <span class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--tiny" />
+                <span
+                  class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--tiny"
+                />
               </span>
             </div>
           </div>
@@ -247,11 +263,7 @@ const rememberOpenedMobileTopic = (topicId: string): void => {
 };
 
 const revealMobileMessageContent = (token: number): void => {
-  if (
-    token !== mobileRouteContentToken ||
-    !isMobile.value ||
-    !route.value.id
-  ) {
+  if (token !== mobileRouteContentToken || !isMobile.value || !route.value.id) {
     return;
   }
 

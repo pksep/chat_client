@@ -118,7 +118,14 @@ let savedCallsScrollTop = 0;
 </script>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch
+} from 'vue';
 import { Search } from '@pksep/yui';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import MessageCallInfoIcon from '../Messages/MessageCallInfoIcon.vue';
@@ -450,5 +457,4 @@ watch(
     restoreCallsScrollPosition();
   }
 );
-
 </script>

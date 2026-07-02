@@ -3,8 +3,7 @@
     :class="[
       'chat__message-wrapper',
       {
-        'chat__message-wrapper--content-deferred':
-          shouldRenderAiMessageSkeleton
+        'chat__message-wrapper--content-deferred': shouldRenderAiMessageSkeleton
       }
     ]"
     ref="chatWrapperRef"
@@ -29,33 +28,53 @@
       aria-hidden="true"
       :data-testid="`${props.dataTestid}-MessageList-Skeleton`"
     >
-      <span class="chat__message-skeleton-row chat__message-skeleton-row--incoming">
+      <span
+        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+      >
         <span class="chat__message-skeleton-avatar" />
-        <span class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--short" />
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--short"
+        />
       </span>
-      <span class="chat__message-skeleton-media chat__message-skeleton-media--outgoing">
+      <span
+        class="chat__message-skeleton-media chat__message-skeleton-media--outgoing"
+      >
         <span class="chat__message-skeleton-media-icon" />
       </span>
-      <span class="chat__message-skeleton-row chat__message-skeleton-row--incoming">
+      <span
+        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+      >
         <span class="chat__message-skeleton-avatar" />
-        <span class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming" />
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
+        />
       </span>
-      <span class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing chat__message-skeleton-bubble--wide" />
-      <span class="chat__message-skeleton-row chat__message-skeleton-row--incoming">
+      <span
+        class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing chat__message-skeleton-bubble--wide"
+      />
+      <span
+        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+      >
         <span class="chat__message-skeleton-avatar" />
-        <span class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--tiny" />
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--tiny"
+        />
       </span>
-      <span class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing" />
-      <span class="chat__message-skeleton-row chat__message-skeleton-row--incoming">
+      <span
+        class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing"
+      />
+      <span
+        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+      >
         <span class="chat__message-skeleton-avatar" />
-        <span class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming" />
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
+        />
       </span>
     </div>
     <Transition name="chat-floating-date" mode="out-in">
       <div
-        v-if="
-          !shouldRenderAiMessageSkeleton && shouldShowFloatingDateDivider
-        "
+        v-if="!shouldRenderAiMessageSkeleton && shouldShowFloatingDateDivider"
         :key="floatingDateDividerLabel"
         :class="[
           'chat__floating-date-divider',
@@ -92,8 +111,7 @@
       v-if="shouldMountUserMessageItems"
       ref="messageListUserItemsRef"
       :class="{
-        'chat__message-bubble--warming':
-          shouldCoverUserMessagesWithSkeleton
+        'chat__message-bubble--warming': shouldCoverUserMessagesWithSkeleton
       }"
       :messages="state.messages"
       :user="props.user"
@@ -117,33 +135,53 @@
       aria-hidden="true"
       :data-testid="`${props.dataTestid}-MessageList-Skeleton`"
     >
-      <span class="chat__message-skeleton-row chat__message-skeleton-row--incoming">
+      <span
+        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+      >
         <span class="chat__message-skeleton-avatar" />
-        <span class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--short" />
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--short"
+        />
       </span>
-      <span class="chat__message-skeleton-media chat__message-skeleton-media--outgoing">
+      <span
+        class="chat__message-skeleton-media chat__message-skeleton-media--outgoing"
+      >
         <span class="chat__message-skeleton-media-icon" />
       </span>
-      <span class="chat__message-skeleton-row chat__message-skeleton-row--incoming">
+      <span
+        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+      >
         <span class="chat__message-skeleton-avatar" />
-        <span class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming" />
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
+        />
       </span>
-      <span class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing chat__message-skeleton-bubble--wide" />
-      <span class="chat__message-skeleton-row chat__message-skeleton-row--incoming">
+      <span
+        class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing chat__message-skeleton-bubble--wide"
+      />
+      <span
+        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+      >
         <span class="chat__message-skeleton-avatar" />
-        <span class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--tiny" />
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--tiny"
+        />
       </span>
-      <span class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing" />
-      <span class="chat__message-skeleton-row chat__message-skeleton-row--incoming">
+      <span
+        class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing"
+      />
+      <span
+        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+      >
         <span class="chat__message-skeleton-avatar" />
-        <span class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming" />
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
+        />
       </span>
     </div>
     <Transition name="chat-floating-date" mode="out-in">
       <div
-        v-if="
-          !shouldRenderUserMessageSkeleton && shouldShowFloatingDateDivider
-        "
+        v-if="!shouldRenderUserMessageSkeleton && shouldShowFloatingDateDivider"
         :key="floatingDateDividerLabel"
         :class="[
           'chat__floating-date-divider',
@@ -321,11 +359,7 @@
     :data-testid="`${props.dataTestid}-SelectedMessages`"
   />
   <MessageListInput
-    v-if="
-      !isDefaultRoute &&
-      !isSelectionMode &&
-      !isMobileTopicSearchMode
-    "
+    v-if="!isDefaultRoute && !isSelectionMode && !isMobileTopicSearchMode"
     :key="`${route.type}:${route.id || 'default'}`"
     v-model="inputText"
     ref="messageListInputRef"
@@ -961,9 +995,7 @@ const hasVisibleUserMessages = computed(() => state.messages.length > 0);
 const isUserMessagesRoute = computed(
   () => !isAiRoute.value && !isDefaultRoute.value
 );
-const shouldRenderAiMessageSkeleton = computed(
-  () => props.deferContentRender
-);
+const shouldRenderAiMessageSkeleton = computed(() => props.deferContentRender);
 const shouldRenderUserMessageSkeleton = computed(
   () =>
     props.deferContentRender ||
@@ -2007,9 +2039,13 @@ watch(
 
     renderedTopicId.value = topicId;
 
-    const hydratedMessages = await hydrateMessagesFromCache(topicId, undefined, {
-      visibleLimit: fastInitialMessagesLimit
-    });
+    const hydratedMessages = await hydrateMessagesFromCache(
+      topicId,
+      undefined,
+      {
+        visibleLimit: fastInitialMessagesLimit
+      }
+    );
 
     if (isStaleTopicSwitch()) {
       return;

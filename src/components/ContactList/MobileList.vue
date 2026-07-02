@@ -11,9 +11,7 @@
     @dragleave="handleDragLeave"
     @drop="handleDropFiles"
   >
-    <div
-      :class="['mobile-list-container__content', props.transitionClass]"
-    >
+    <div :class="['mobile-list-container__content', props.transitionClass]">
       <div
         ref="sectionTrackRef"
         class="mobile-list-container__section-track"
