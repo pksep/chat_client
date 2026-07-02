@@ -2,8 +2,9 @@ import type { IMessage } from '../components/interfaces/interfaces';
 import { authedUser, getChatAuthSession } from '../composables/useAuth';
 
 const DB_NAME = 'chat-topic-messages-db';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const STORE_NAME = 'topicMessages';
+const PINNED_MESSAGES_STORE_NAME = 'pinnedMessages';
 const PENDING_UPLOADS_STORE_NAME = 'pendingUploads';
 const PENDING_UPLOAD_META_STORE_NAME = 'pendingUploadMeta';
 const DATE_KEYS = new Set([
@@ -15,6 +16,14 @@ const DATE_KEYS = new Set([
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 
 interface CachedTopicMessages {
+  cacheKey: string;
+  topicId: string;
+  userId: string;
+  messages: IMessage[];
+  updatedAt: string;
+}
+
+interface CachedPinnedTopicMessages {
   cacheKey: string;
   topicId: string;
   userId: string;
@@ -248,6 +257,12 @@ const openDb = async (): Promise<IDBDatabase | null> => {
         db.createObjectStore(STORE_NAME, { keyPath: 'cacheKey' });
       }
 
+      if (!db.objectStoreNames.contains(PINNED_MESSAGES_STORE_NAME)) {
+        db.createObjectStore(PINNED_MESSAGES_STORE_NAME, {
+          keyPath: 'cacheKey'
+        });
+      }
+
       if (!db.objectStoreNames.contains(PENDING_UPLOADS_STORE_NAME)) {
         db.createObjectStore(PENDING_UPLOADS_STORE_NAME, {
           keyPath: 'cacheKey'
@@ -387,6 +402,83 @@ export const clearCachedTopicMessages = async (
     });
   } catch (error) {
     console.warn('Failed to clear cached topic messages:', error);
+  }
+};
+
+export const loadCachedPinnedMessages = async (
+  topicId: string,
+  userId = getResolvedUserId()
+): Promise<IMessage[] | null> => {
+  if (!topicId) {
+    return null;
+  }
+
+  try {
+    const db = await openDb();
+
+    if (!db) {
+      return null;
+    }
+
+    const cacheKey = getCacheKey(topicId, userId);
+
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(PINNED_MESSAGES_STORE_NAME, 'readonly');
+      const store = tx.objectStore(PINNED_MESSAGES_STORE_NAME);
+      const request = store.get(cacheKey);
+
+      request.onsuccess = () => {
+        const result = request.result as CachedPinnedTopicMessages | undefined;
+
+        if (!result) {
+          resolve(null);
+          return;
+        }
+
+        resolve((deserializeValue(result.messages || []) as IMessage[]) || []);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  } catch (error) {
+    console.warn('Failed to load cached pinned messages:', error);
+    return null;
+  }
+};
+
+export const saveCachedPinnedMessages = async (
+  topicId: string,
+  messages: IMessage[],
+  userId = getResolvedUserId()
+): Promise<void> => {
+  if (!topicId || !userId) {
+    return;
+  }
+
+  try {
+    const db = await openDb();
+
+    if (!db) {
+      return;
+    }
+
+    const payload: CachedPinnedTopicMessages = {
+      cacheKey: getCacheKey(topicId, userId),
+      topicId,
+      userId,
+      messages: serializeValue(messages) as IMessage[],
+      updatedAt: new Date().toISOString()
+    };
+
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(PINNED_MESSAGES_STORE_NAME, 'readwrite');
+      const store = tx.objectStore(PINNED_MESSAGES_STORE_NAME);
+      const request = store.put(payload);
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  } catch (error) {
+    console.warn('Failed to save cached pinned messages:', error);
   }
 };
 

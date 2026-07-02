@@ -2,6 +2,7 @@ import type { ITopic, IUser } from '../../interfaces/interfaces';
 
 export interface IMobileListProps {
   dataTestid?: string;
+  transitionClass?: string;
 }
 
 export interface IMobileListEmits {

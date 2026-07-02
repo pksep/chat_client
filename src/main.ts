@@ -11,6 +11,7 @@ import {
 } from './composables/useEmojiStyle';
 import { emojiDirective } from './directives/emoji';
 import { registerNativeFileBridge } from './services/useNativeFile';
+import { initFastNativeNotificationNavigation } from './services/usePushNotifications';
 import { USER_STATUS_PRESETS } from './utils/userStatus';
 
 const INDEXED_DB_RESET_EPOCH = 'chat-client-indexeddb-reset-2026-04-29-v1';
@@ -132,6 +133,7 @@ const runIndexedDbResetIfNeeded = async (): Promise<void> => {
 };
 
 const mountApp = async () => {
+  void initFastNativeNotificationNavigation();
   await clearTauriServiceWorkers();
   await runIndexedDbResetIfNeeded();
   registerNativeFileBridge();

@@ -186,6 +186,8 @@ let virtualItemResizeObserver: ResizeObserver | null = null;
 let viewportResizeObserver: ResizeObserver | null = null;
 let scrollParent: HTMLElement | null = null;
 let virtualViewportRafId = 0;
+let contentReadyRafId = 0;
+let contentReadyToken = 0;
 
 const VIRTUALIZATION_ITEM_THRESHOLD = 140;
 const VIRTUALIZATION_MESSAGE_THRESHOLD = 240;
@@ -194,12 +196,13 @@ const VIRTUAL_OVERSCAN_PX = 1800;
 const VIRTUAL_DEFAULT_ITEM_HEIGHT_PX = 68;
 const VIRTUAL_ITEM_GAP_PX = 5;
 
-defineEmits([
+const emit = defineEmits([
   'setEditMessage',
   'setReplyMessage',
   'setForwardMessage',
   'retryMessage',
-  'scrollToMessage'
+  'scrollToMessage',
+  'contentReady'
 ]);
 
 const hasQuotedSystemMessage = (text?: string): boolean =>
@@ -244,6 +247,51 @@ const scheduleQuotedSystemMessageOverflowSync = async (): Promise<void> => {
   syncQuotedSystemMessageOverflowState();
 };
 
+const cancelContentReadyEmit = (): void => {
+  contentReadyToken += 1;
+
+  if (contentReadyRafId) {
+    cancelAnimationFrame(contentReadyRafId);
+    contentReadyRafId = 0;
+  }
+};
+
+const scheduleContentReadyEmit = async (): Promise<void> => {
+  const token = ++contentReadyToken;
+
+  if (contentReadyRafId) {
+    cancelAnimationFrame(contentReadyRafId);
+    contentReadyRafId = 0;
+  }
+
+  if (!visibleMessages.value.length || !windowedRenderItems.value.length) {
+    return;
+  }
+
+  await nextTick();
+
+  if (token !== contentReadyToken) {
+    return;
+  }
+
+  contentReadyRafId = requestAnimationFrame(() => {
+    contentReadyRafId = 0;
+
+    if (
+      token !== contentReadyToken ||
+      !visibleMessages.value.length ||
+      !listRootRef.value?.querySelector('[data-virtual-item-key]')
+    ) {
+      return;
+    }
+
+    emit('contentReady', {
+      topicId: route.value.id,
+      messageCount: visibleMessages.value.length
+    });
+  });
+};
+
 watch(
   () => [props.messages, isMobile.value],
   () => {
@@ -256,10 +304,12 @@ onMounted(() => {
   window.addEventListener('resize', syncQuotedSystemMessageOverflowState);
   setupVirtualWindowObservers();
   void scheduleQuotedSystemMessageOverflowSync();
+  void scheduleContentReadyEmit();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', syncQuotedSystemMessageOverflowState);
+  cancelContentReadyEmit();
   cleanupVirtualWindowObservers();
 });
 
@@ -572,6 +622,18 @@ const windowedRenderItems = computed(() => {
     item
   }));
 });
+
+watch(
+  [
+    () => route.value.id,
+    () => visibleMessages.value.length,
+    () => windowedRenderItems.value.length
+  ],
+  () => {
+    void scheduleContentReadyEmit();
+  },
+  { immediate: true }
+);
 
 const topSpacerHeight = computed(() =>
   isVirtualized.value

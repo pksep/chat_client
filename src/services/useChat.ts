@@ -79,6 +79,7 @@ import {
   bootstrapCallHistory,
   initializeCallHistorySync,
   removeCallHistoryMessage,
+  shouldRefreshCallHistoryAfterReconnect,
   upsertCallHistoryMessage
 } from './useCallHistory';
 import { normalizeUserStatus } from '../utils/userStatus';
@@ -1247,7 +1248,11 @@ const runStagedReconnectRefresh = async (
   }
 
   await reconcileTopicCachesAfterReconnect();
-  await Promise.allSettled([bootstrapCallHistory(chatSDK, { force: true })]);
+
+  if (shouldRefreshCallHistoryAfterReconnect()) {
+    await Promise.allSettled([bootstrapCallHistory(chatSDK, { force: true })]);
+  }
+
   void saveShadowSyncMeta('fresh_sync:last_completed', {
     reason,
     timestamp: new Date().toISOString()

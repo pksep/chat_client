@@ -26,10 +26,7 @@
         :class="[
           'contact-list__item',
           {
-            'contact-list__item--active':
-              topic.id === props.selectedTopicId ||
-              isOpen[topic.id] ||
-              props.selectedTopicIds.has(topic.id),
+            'contact-list__item--active': isTopicActive(topic),
             'contact-list__item--selection': props.showCheckbox
           }
         ]"
@@ -37,6 +34,10 @@
         tabindex="0"
         :aria-expanded="isOpen[topic.id] ? 'true' : 'false'"
         :aria-haspopup="true"
+        @pointerdown="event => handleTopicPress(topic, event)"
+        @pointermove="handleTopicPressMove"
+        @pointerup="handleTopicPressEnd"
+        @pointercancel="handleTopicPressCancel"
         @click="event => handleClick(topic, index, event)"
         @contextmenu="
           !props.showCheckbox && openActivePopover(topic.id, $event)
@@ -503,9 +504,15 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
 const authedUser = computed(() => getAuthUser());
 const isRecentlyReconnected = computed(() => getHasWebsocketConnection());
 const listRenderKey = ref(0);
+const pendingActiveTopicId = ref<string | null>(null);
 const { getFullMediaPath } = useMessageMedia();
 const currentTime = ref(Date.now());
 let currentTimeInterval: ReturnType<typeof setInterval> | null = null;
+const TOPIC_PRESS_SCROLL_CANCEL_PX = 8;
+let topicPressPointerId: number | null = null;
+let topicPressStartX = 0;
+let topicPressStartY = 0;
+let topicPressMoved = false;
 
 const hasSearchQuery = computed(() => props.searchQuery.trim().length > 0);
 const showContactSectionTitle = computed(
@@ -533,6 +540,12 @@ const showSearchEmptyState = computed(
     props.topics.length === 0 &&
     props.messageResults.length === 0
 );
+
+const isTopicActive = (topic: ITopic): boolean =>
+  topic.id === pendingActiveTopicId.value ||
+  !!isOpen[topic.id] ||
+  props.selectedTopicIds.has(topic.id) ||
+  (!isMobile.value && topic.id === props.selectedTopicId);
 
 const getTopicEffectiveUser = (topic: ITopic) =>
   topic.type === TopicType.DM && topic.user?.id
@@ -689,9 +702,65 @@ const navigateToTopicFromList = (
   }
 };
 
+const navigateToTopicRoute = (topic: ITopic): void => {
+  if (topic.type === TopicType.DM) {
+    navigateToDialogs(topic.id);
+  } else if (topic.type === TopicType.Group) {
+    navigateToGroup(topic.id);
+  }
+};
+
+const syncTopicOpenSideEffects = (
+  topic: ITopic,
+  index?: number,
+  event?: Event,
+  source = 'topic_list.click',
+  navigationSource = 'topic_list.mobile_navigation'
+): void => {
+  const telemetry = recordTopicOpenAttempt(topic, index, event, source);
+
+  recordChatTopicNavigationRequest({
+    telemetry,
+    topicId: topic.id,
+    topicType: topic.type,
+    source: navigationSource
+  });
+
+  if (hasTopicUnreadIndicator(topic, authedUser.value?.id)) {
+    void markTopicRead(topic);
+  } else if (topic.info?.isMarkedUnread) {
+    void setTopicMarkedUnread(topic, false);
+  }
+};
+
 const handleClick = (topic: ITopic, index?: number, event?: Event): void => {
+  if (isMobile.value && topicPressMoved && !(event instanceof KeyboardEvent)) {
+    pendingActiveTopicId.value = null;
+    topicPressMoved = false;
+    return;
+  }
+
   if (props.showCheckbox) {
     emits('unmount-topic', topic);
+    return;
+  }
+
+  if (isMobile.value) {
+    emits('unmount-topic', topic, null);
+    navigateToTopicRoute(topic);
+
+    window.setTimeout(() => {
+      syncTopicOpenSideEffects(
+        topic,
+        index,
+        event,
+        event instanceof KeyboardEvent
+          ? 'topic_list.keyboard'
+          : 'topic_list.click',
+        'topic_list.mobile_navigation'
+      );
+    }, 0);
+
     return;
   }
 
@@ -708,10 +777,62 @@ const handleClick = (topic: ITopic, index?: number, event?: Event): void => {
     void setTopicMarkedUnread(topic, false);
   }
 
-  if (isMobile.value) {
-    navigateToTopicFromList(topic, telemetry, 'topic_list.mobile_navigation');
-  }
   emits('unmount-topic', topic, telemetry);
+};
+
+const handleTopicPress = (topic: ITopic, event: PointerEvent): void => {
+  if (props.showCheckbox || !isMobile.value) {
+    return;
+  }
+
+  if (event.pointerType === 'mouse' && event.button !== 0) {
+    return;
+  }
+
+  topicPressPointerId = event.pointerId;
+  topicPressStartX = event.clientX;
+  topicPressStartY = event.clientY;
+  topicPressMoved = false;
+  pendingActiveTopicId.value = topic.id;
+};
+
+const handleTopicPressMove = (event: PointerEvent): void => {
+  if (
+    topicPressPointerId === null ||
+    event.pointerId !== topicPressPointerId ||
+    !pendingActiveTopicId.value
+  ) {
+    return;
+  }
+
+  const deltaX = event.clientX - topicPressStartX;
+  const deltaY = event.clientY - topicPressStartY;
+
+  if (
+    Math.hypot(deltaX, deltaY) < TOPIC_PRESS_SCROLL_CANCEL_PX &&
+    Math.abs(deltaY) < TOPIC_PRESS_SCROLL_CANCEL_PX
+  ) {
+    return;
+  }
+
+  topicPressMoved = true;
+  pendingActiveTopicId.value = null;
+};
+
+const handleTopicPressEnd = (
+  event: PointerEvent
+): void => {
+  if (topicPressPointerId === event.pointerId) {
+    pendingActiveTopicId.value = null;
+  }
+
+  topicPressPointerId = null;
+};
+
+const handleTopicPressCancel = (): void => {
+  topicPressPointerId = null;
+  topicPressMoved = false;
+  pendingActiveTopicId.value = null;
 };
 
 const handleReactionClick = (
