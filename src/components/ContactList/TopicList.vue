@@ -51,9 +51,7 @@
             'contact-list__avatar',
             {
               'contact-list__avatar--interactive':
-                !props.showCheckbox &&
-                topic.type === TopicType.DM &&
-                canOpenUserInfo(topic.user)
+                !props.showCheckbox && topic.type === TopicType.DM
             }
           ]"
           :initials="topic.name"
@@ -62,11 +60,6 @@
           :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
           is-icon
           :is-online="isTopicUserOnline(topic)"
-          @click.stop="
-            !props.showCheckbox &&
-              topic.type === TopicType.DM &&
-              openUserInfo(topic.user, topic)
-          "
         />
         <div
           :class="[
@@ -438,7 +431,6 @@ import {
   getTopicUnreadBadgeCount,
   hasTopicUnreadIndicator
 } from '../../utils/topicUnreadBadge';
-import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import {
   activeCallFormattedTime,
   activeCallTopicId,
@@ -474,7 +466,6 @@ const {
   resetTopicUnreadState,
   getTopicUnreadReactionMessageId
 } = useTopics();
-const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   showCheckbox: false,

@@ -240,9 +240,7 @@ const shouldShowFirstOpenSkeleton = (topicId: string): boolean => {
     return false;
   }
 
-  return (
-    !openedMobileTopicIds.has(topicId) && !hasKnownTopicMessagesState(topicId)
-  );
+  return !hasKnownTopicMessagesState(topicId);
 };
 
 const rememberOpenedMobileTopic = (topicId: string): void => {
