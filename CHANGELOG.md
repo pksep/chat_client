@@ -1,3 +1,19 @@
+# [1.34.0](https://github.com/pksep/chat_client/compare/v1.33.0...v1.34.0) (2026-07-03)
+
+
+### Bug Fixes
+
+* lint ([18d88d9](https://github.com/pksep/chat_client/commit/18d88d9dcab4951ea4e99e0f5228e1268ec1090b))
+* lint ([bc831b5](https://github.com/pksep/chat_client/commit/bc831b549408a36af973b5fbfcdd4a39a87e8acd))
+* network recovery and screen share state ([fb55622](https://github.com/pksep/chat_client/commit/fb556223f2a83bba768300710755050a6988cb78))
+* skeleton and search ([184d610](https://github.com/pksep/chat_client/commit/184d6108046d707e323d856692313280ad5ae508))
+
+
+### Features
+
+* update web version ([452c7d4](https://github.com/pksep/chat_client/commit/452c7d439b15de77e7be70f845ae4fead905494f))
+* upgrade speed in mobile ([be69b3b](https://github.com/pksep/chat_client/commit/be69b3b37dc627ee3704f7c66cedee1a4438c844))
+
 # [1.33.0](https://github.com/pksep/chat_client/compare/v1.32.0...v1.33.0) (2026-07-01)
 
 
