@@ -463,6 +463,33 @@ export class ChatSDK {
     };
   }
 
+  async probeConnection(timeoutMs = 8000): Promise<boolean> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const token = getAuthToken() || this.token;
+      const baseUrl = this.apiUrl.replace(/\/$/, '');
+      const response = await fetch(
+        `${baseUrl}/topics?page=1&limit=1&_=${Date.now()}`,
+        {
+          cache: 'no-store',
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          signal: controller.signal
+        }
+      );
+
+      return response.status < 500;
+    } catch (error) {
+      console.warn('Chat HTTP health probe failed:', error);
+      return false;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       let authReconnectAttempted = false;

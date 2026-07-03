@@ -1,19 +1,80 @@
 <template>
   <div
-    class="chat__message-wrapper"
+    :class="[
+      'chat__message-wrapper',
+      {
+        'chat__message-wrapper--content-deferred': shouldRenderAiMessageSkeleton
+      }
+    ]"
     ref="chatWrapperRef"
     v-if="isAiRoute"
+    @wheel.passive="handleFloatingDateDividerUserScroll"
+    @touchmove.passive="handleFloatingDateDividerUserScroll"
     @touchstart="onTouchStart"
     @touchend="onTouchEnd"
     :data-testid="`${props.dataTestid}-MessageList-AIMessagesWrapper`"
   >
     <MessageListAIItems
+      v-if="!shouldRenderAiMessageSkeleton"
       :messages="state.aiMessages"
       :data-testid="props.dataTestid"
     />
+    <div
+      v-else
+      :class="[
+        'chat__message-skeleton',
+        { 'chat__message-skeleton--group': route.type === RouteTypes.GROUP }
+      ]"
+      aria-hidden="true"
+      :data-testid="`${props.dataTestid}-MessageList-Skeleton`"
+    >
+      <span
+        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+      >
+        <span class="chat__message-skeleton-avatar" />
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--short"
+        />
+      </span>
+      <span
+        class="chat__message-skeleton-media chat__message-skeleton-media--outgoing"
+      >
+        <span class="chat__message-skeleton-media-icon" />
+      </span>
+      <span
+        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+      >
+        <span class="chat__message-skeleton-avatar" />
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
+        />
+      </span>
+      <span
+        class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing chat__message-skeleton-bubble--wide"
+      />
+      <span
+        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+      >
+        <span class="chat__message-skeleton-avatar" />
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--tiny"
+        />
+      </span>
+      <span
+        class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing"
+      />
+      <span
+        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+      >
+        <span class="chat__message-skeleton-avatar" />
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
+        />
+      </span>
+    </div>
     <Transition name="chat-floating-date" mode="out-in">
       <div
-        v-if="floatingDateDividerLabel"
+        v-if="!shouldRenderAiMessageSkeleton && shouldShowFloatingDateDivider"
         :key="floatingDateDividerLabel"
         :class="[
           'chat__floating-date-divider',
@@ -29,17 +90,29 @@
   </div>
 
   <div
-    class="chat__message-wrapper"
+    :class="[
+      'chat__message-wrapper',
+      {
+        'chat__message-wrapper--content-deferred':
+          shouldRenderUserMessageSkeleton
+      }
+    ]"
     v-if="!isAiRoute && !isDefaultRoute"
     ref="chatWrapperRef"
     @vue:mounted="scrollToBottom"
     @scroll="handleScroll"
+    @wheel.passive="handleFloatingDateDividerUserScroll"
+    @touchmove.passive="handleFloatingDateDividerUserScroll"
     @touchstart="onTouchStart"
     @touchend="onTouchEnd"
     :data-testid="`${props.dataTestid}-MessageList-UserMessagesWrapper`"
   >
     <MessageListUserItems
+      v-if="shouldMountUserMessageItems"
       ref="messageListUserItemsRef"
+      :class="{
+        'chat__message-bubble--warming': shouldCoverUserMessagesWithSkeleton
+      }"
       :messages="state.messages"
       :user="props.user"
       :auth-user-id="authUser?.id"
@@ -51,10 +124,64 @@
       @set-forward-message="handleSetForwardMessage"
       @retry-message="handleRetryMessage"
       @scroll-to-message="handleScrollToMessage"
+      @content-ready="handleUserMessagesContentReady"
     />
+    <div
+      v-if="shouldRenderUserMessageSkeleton"
+      :class="[
+        'chat__message-skeleton',
+        { 'chat__message-skeleton--group': route.type === RouteTypes.GROUP }
+      ]"
+      aria-hidden="true"
+      :data-testid="`${props.dataTestid}-MessageList-Skeleton`"
+    >
+      <span
+        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+      >
+        <span class="chat__message-skeleton-avatar" />
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--short"
+        />
+      </span>
+      <span
+        class="chat__message-skeleton-media chat__message-skeleton-media--outgoing"
+      >
+        <span class="chat__message-skeleton-media-icon" />
+      </span>
+      <span
+        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+      >
+        <span class="chat__message-skeleton-avatar" />
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
+        />
+      </span>
+      <span
+        class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing chat__message-skeleton-bubble--wide"
+      />
+      <span
+        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+      >
+        <span class="chat__message-skeleton-avatar" />
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--tiny"
+        />
+      </span>
+      <span
+        class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing"
+      />
+      <span
+        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+      >
+        <span class="chat__message-skeleton-avatar" />
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
+        />
+      </span>
+    </div>
     <Transition name="chat-floating-date" mode="out-in">
       <div
-        v-if="floatingDateDividerLabel"
+        v-if="!shouldRenderUserMessageSkeleton && shouldShowFloatingDateDivider"
         :key="floatingDateDividerLabel"
         :class="[
           'chat__floating-date-divider',
@@ -68,7 +195,7 @@
       </div>
     </Transition>
     <section
-      v-if="props.showUpdateBanner"
+      v-if="!shouldRenderUserMessageSkeleton && props.showUpdateBanner"
       ref="updateBannerRef"
       :class="[
         'chat-update-banner',
@@ -181,7 +308,10 @@
       </button>
     </section>
     <div
-      v-if="isShowScrollToBottomButton || showUnreadReactionScrollButton"
+      v-if="
+        !shouldRenderUserMessageSkeleton &&
+        (isShowScrollToBottomButton || showUnreadReactionScrollButton)
+      "
       :class="[
         'chat__message-bubble__scroll-indicators',
         {
@@ -225,7 +355,7 @@
   </div>
 
   <SelectedMessagesContent
-    v-if="isSelectionMode"
+    v-if="!shouldRenderUserMessageSkeleton && isSelectionMode"
     :data-testid="`${props.dataTestid}-SelectedMessages`"
   />
   <MessageListInput
@@ -246,7 +376,7 @@
   />
 
   <PushNotification
-    v-if="!!state.errorMessage"
+    v-if="!shouldRenderUserMessageSkeleton && !!state.errorMessage"
     class="mobile-auth-container__error"
     title="Ошибка"
     :push-key="Math.random()"
@@ -302,9 +432,11 @@ import {
   fetchPinnedMessagesForTopic,
   getFullMessagesByTopicId,
   getMessagesByTopicId,
+  hasKnownTopicMessagesState,
   hydrateMessageContextFromShadow,
   hydrateMessagesFromCache,
   mergeMessagesForTopic,
+  setVisibleMessagesLimitForTopic,
   suppressNotificationSoundForTopic,
   suspendLocalOwnReadStatus
 } from '../services/useMessages';
@@ -354,16 +486,23 @@ import { recordChatMessageListRenderMismatch } from '../services/useChatNavigati
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
+  deferContentRender?: boolean;
+  suppressInitialSkeleton?: boolean;
 }
 
 const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
-  dataTestid: 'MessageList'
+  dataTestid: 'MessageList',
+  deferContentRender: false,
+  suppressInitialSkeleton: false
 });
 const TOPIC_SWITCH_AUTO_READ_GRACE_MS = 1200;
 const TOPIC_SWITCH_HISTORY_FETCH_GRACE_MS = 1200;
 const TOPIC_SWITCH_MEDIA_PREWARM_LIMIT = 12;
-const MOBILE_INITIAL_MESSAGES_LIMIT = 30;
-const MOBILE_MAX_INITIAL_MESSAGES_LIMIT = 50;
+const MOBILE_FAST_INITIAL_MESSAGES_LIMIT = 10;
+const MOBILE_FAST_MAX_INITIAL_MESSAGES_LIMIT = 10;
+const MOBILE_VISIBLE_EXPAND_DELAY_MS = 320;
+const MOBILE_INITIAL_MESSAGES_LIMIT = 10;
+const MOBILE_MAX_INITIAL_MESSAGES_LIMIT = 10;
 const DESKTOP_INITIAL_MESSAGES_LIMIT = 100;
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
@@ -497,11 +636,16 @@ const getLocalStorageInputText = computed(() => {
 const inputText = ref(getLocalStorageInputText.value);
 const floatingDateDividerLabel = ref('');
 const isFloatingDateDividerHidden = ref(false);
+const isFloatingDateDividerActive = ref(false);
 let chatVisibilityObserver: ResizeObserver | null = null;
 let removeAppVisibilityListener: (() => void) | null = null;
 let floatingDateDividerRafId = 0;
+let floatingDateDividerHideTimeoutId: number | null = null;
+let floatingDateDividerUserScrollIntentAt = 0;
 const FLOATING_DATE_LABEL_HEIGHT_PX = 50;
 const FLOATING_DATE_HIDE_GAP_PX = 50;
+const FLOATING_DATE_VISIBLE_MS = 900;
+const FLOATING_DATE_USER_SCROLL_GRACE_MS = 500;
 const unreadMarkerMessageIdsByTopic = reactive<Record<string, string | null>>(
   {}
 );
@@ -532,6 +676,12 @@ const isViewingBottom = computed(
     route.value.type !== RouteTypes.AI &&
     scrollAnchor.viewportMode.value === 'live'
 );
+const shouldShowFloatingDateDivider = computed(
+  () =>
+    !!floatingDateDividerLabel.value &&
+    isFloatingDateDividerActive.value &&
+    !isFloatingDateDividerHidden.value
+);
 const canClearlyShowUnreadCount = computed(
   () =>
     !!route.value?.id &&
@@ -555,9 +705,13 @@ const unreadReactionMessageId = computed(() => {
   return getTopicUnreadReactionMessageId(route.value.id);
 });
 const renderedTopicId = ref(route.value.id || '');
+const isAwaitingUserMessagesPaint = ref(false);
 let activeTopicSwitchToken = 0;
 let topicSwitchStartedAtMs = 0;
 let renderMismatchTelemetryTimeout: ReturnType<typeof setTimeout> | null = null;
+let visibleMessagesExpansionTimeoutId: number | null = null;
+let visibleMessagesExpansionFrameId: number | null = null;
+let visibleMessagesExpansionAppliedToken = 0;
 
 const waitForMessageListIdle = (): Promise<void> =>
   new Promise(resolve => {
@@ -592,6 +746,82 @@ const getTopicSwitchFetchLimits = (
     ),
     expandedLimit
   };
+};
+
+const getFastInitialMessagesLimit = (
+  unreadCount: number,
+  initialLimit: number
+): number => {
+  if (!isMobile.value) {
+    return initialLimit;
+  }
+
+  const unreadAwareLimit =
+    unreadCount > 0
+      ? Math.min(MOBILE_FAST_MAX_INITIAL_MESSAGES_LIMIT, unreadCount + 8)
+      : MOBILE_FAST_INITIAL_MESSAGES_LIMIT;
+
+  return Math.min(
+    initialLimit,
+    Math.max(MOBILE_FAST_INITIAL_MESSAGES_LIMIT, unreadAwareLimit)
+  );
+};
+
+const clearVisibleMessagesExpansionSchedule = (): void => {
+  if (visibleMessagesExpansionTimeoutId !== null) {
+    window.clearTimeout(visibleMessagesExpansionTimeoutId);
+    visibleMessagesExpansionTimeoutId = null;
+  }
+
+  if (visibleMessagesExpansionFrameId !== null) {
+    window.cancelAnimationFrame(visibleMessagesExpansionFrameId);
+    visibleMessagesExpansionFrameId = null;
+  }
+};
+
+const scheduleVisibleMessagesExpansion = (
+  topicId: string,
+  visibleLimit: number,
+  topicSwitchToken: number
+): void => {
+  if (!isMobile.value || !topicId) {
+    return;
+  }
+
+  clearVisibleMessagesExpansionSchedule();
+  visibleMessagesExpansionTimeoutId = window.setTimeout(() => {
+    visibleMessagesExpansionTimeoutId = null;
+
+    visibleMessagesExpansionFrameId = window.requestAnimationFrame(() => {
+      visibleMessagesExpansionFrameId = null;
+
+      if (
+        topicSwitchToken !== activeTopicSwitchToken ||
+        route.value?.id !== topicId
+      ) {
+        return;
+      }
+
+      setVisibleMessagesLimitForTopic(topicId, visibleLimit);
+      visibleMessagesExpansionAppliedToken = topicSwitchToken;
+
+      nextTick(() => {
+        if (
+          topicSwitchToken !== activeTopicSwitchToken ||
+          route.value?.id !== topicId
+        ) {
+          return;
+        }
+
+        scrollToBottom({
+          preferUnreadMarker: false,
+          smooth: false
+        });
+        setupIntersectionObserver();
+        syncVisibleUnreadAfterAutoScroll();
+      });
+    });
+  }, MOBILE_VISIBLE_EXPAND_DELAY_MS);
 };
 
 const scheduleExpandedTopicMessagesFetch = (
@@ -637,6 +867,16 @@ const syncFloatingDateDivider = (): void => {
   if (!container) {
     floatingDateDividerLabel.value = '';
     isFloatingDateDividerHidden.value = false;
+    isFloatingDateDividerActive.value = false;
+    return;
+  }
+
+  const isScrollable = container.scrollHeight > container.clientHeight + 1;
+
+  if (!isScrollable || isViewingBottom.value) {
+    floatingDateDividerLabel.value = '';
+    isFloatingDateDividerHidden.value = false;
+    isFloatingDateDividerActive.value = false;
     return;
   }
 
@@ -647,6 +887,7 @@ const syncFloatingDateDivider = (): void => {
   if (!dateDividers.length) {
     floatingDateDividerLabel.value = '';
     isFloatingDateDividerHidden.value = false;
+    isFloatingDateDividerActive.value = false;
     return;
   }
 
@@ -696,6 +937,34 @@ const scheduleFloatingDateDividerSync = (): void => {
   });
 };
 
+const hideFloatingDateDivider = (): void => {
+  if (floatingDateDividerHideTimeoutId !== null) {
+    window.clearTimeout(floatingDateDividerHideTimeoutId);
+    floatingDateDividerHideTimeoutId = null;
+  }
+
+  isFloatingDateDividerActive.value = false;
+};
+
+const keepFloatingDateDividerVisibleBriefly = (): void => {
+  isFloatingDateDividerActive.value = true;
+
+  if (floatingDateDividerHideTimeoutId !== null) {
+    window.clearTimeout(floatingDateDividerHideTimeoutId);
+  }
+
+  floatingDateDividerHideTimeoutId = window.setTimeout(() => {
+    isFloatingDateDividerActive.value = false;
+    floatingDateDividerHideTimeoutId = null;
+  }, FLOATING_DATE_VISIBLE_MS);
+};
+
+const handleFloatingDateDividerUserScroll = (): void => {
+  floatingDateDividerUserScrollIntentAt = performance.now();
+  keepFloatingDateDividerVisibleBriefly();
+  scheduleFloatingDateDividerSync();
+};
+
 const {
   isShowScrollToBottomButton,
   viewportRevision,
@@ -720,6 +989,27 @@ const {
   route,
   state,
   props
+);
+
+const hasVisibleUserMessages = computed(() => state.messages.length > 0);
+const isUserMessagesRoute = computed(
+  () => !isAiRoute.value && !isDefaultRoute.value
+);
+const shouldRenderAiMessageSkeleton = computed(() => props.deferContentRender);
+const shouldRenderUserMessageSkeleton = computed(
+  () =>
+    props.deferContentRender ||
+    (!props.suppressInitialSkeleton &&
+      isMobile.value &&
+      isUserMessagesRoute.value &&
+      ((isLoadingInitialMessages.value && !hasVisibleUserMessages.value) ||
+        isAwaitingUserMessagesPaint.value))
+);
+const shouldMountUserMessageItems = computed(
+  () => !props.deferContentRender && isUserMessagesRoute.value
+);
+const shouldCoverUserMessagesWithSkeleton = computed(
+  () => shouldRenderUserMessageSkeleton.value && hasVisibleUserMessages.value
 );
 
 const getTopicSwitchLatencyMs = (): number | undefined => {
@@ -769,6 +1059,35 @@ const scheduleRenderMismatchTelemetry = (): void => {
       latencyMs: getTopicSwitchLatencyMs()
     });
   }, 900);
+};
+
+const handleUserMessagesContentReady = (payload?: {
+  topicId?: string;
+  messageCount?: number;
+}): void => {
+  if (
+    !isAwaitingUserMessagesPaint.value ||
+    props.deferContentRender ||
+    payload?.topicId !== route.value.id ||
+    !payload?.messageCount
+  ) {
+    return;
+  }
+
+  isAwaitingUserMessagesPaint.value = false;
+
+  nextTick(() => {
+    if (route.value.id !== payload.topicId) {
+      return;
+    }
+
+    scrollToBottom({
+      preferUnreadMarker: false,
+      smooth: false
+    });
+    setupIntersectionObserver();
+    syncVisibleUnreadAfterAutoScroll();
+  });
 };
 
 const showUnreadCountOnScrollButton = computed(
@@ -852,6 +1171,27 @@ const warmVisibleTopicMedia = async (topicId: string) => {
   await Promise.allSettled(
     [...mediaPaths].map(path => ensureMediaObjectUrl(path))
   );
+};
+
+const scheduleVisibleTopicMediaWarm = (
+  topicId: string,
+  isStaleTopicSwitch: () => boolean
+): void => {
+  window.requestAnimationFrame(() => {
+    if (isStaleTopicSwitch()) {
+      return;
+    }
+
+    void waitForMessageListIdle()
+      .then(() => {
+        if (!isStaleTopicSwitch()) {
+          return warmVisibleTopicMedia(topicId);
+        }
+      })
+      .catch(error => {
+        console.warn('Failed to warm visible topic media:', error);
+      });
+  });
 };
 
 const refreshUnreadMarkerState = () => {
@@ -1496,6 +1836,13 @@ const syncVisibleUnreadAfterAutoScroll = (): void => {
 
 const handleScroll = async (): Promise<void> => {
   await handleMessageScroll();
+  const hasRecentUserScrollIntent =
+    performance.now() - floatingDateDividerUserScrollIntentAt <=
+    FLOATING_DATE_USER_SCROLL_GRACE_MS;
+
+  if (isFloatingDateDividerActive.value || hasRecentUserScrollIntent) {
+    keepFloatingDateDividerVisibleBriefly();
+  }
   scheduleFloatingDateDividerSync();
   hideUnreadMarkerIfPassed();
   resetUnreadIfViewingBottom();
@@ -1545,6 +1892,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', scheduleFloatingDateDividerSync);
+  clearVisibleMessagesExpansionSchedule();
 
   if (updateBannerDismissTimeoutId !== null) {
     window.clearTimeout(updateBannerDismissTimeoutId);
@@ -1553,6 +1901,11 @@ onUnmounted(() => {
   if (floatingDateDividerRafId) {
     cancelAnimationFrame(floatingDateDividerRafId);
     floatingDateDividerRafId = 0;
+  }
+
+  if (floatingDateDividerHideTimeoutId !== null) {
+    window.clearTimeout(floatingDateDividerHideTimeoutId);
+    floatingDateDividerHideTimeoutId = null;
   }
 
   if (renderMismatchTelemetryTimeout) {
@@ -1591,9 +1944,14 @@ watch(
   [
     () => route.value.id,
     () => state.messages.length,
-    () => state.aiMessages.length
+    () => state.aiMessages.length,
+    () => props.deferContentRender
   ],
   async () => {
+    if (props.deferContentRender) {
+      return;
+    }
+
     await nextTick();
     scheduleFloatingDateDividerSync();
   },
@@ -1601,14 +1959,50 @@ watch(
 );
 
 watch(
+  () => props.deferContentRender,
+  async isDeferred => {
+    if (isDeferred || !route.value.id) {
+      return;
+    }
+
+    await nextTick();
+
+    requestAnimationFrame(() => {
+      if (props.deferContentRender || !chatWrapperRef.value) {
+        return;
+      }
+
+      scrollToBottom({
+        preferUnreadMarker: false,
+        smooth: false
+      });
+      setupIntersectionObserver();
+      scheduleFloatingDateDividerSync();
+      syncVisibleUnreadAfterAutoScroll();
+    });
+  }
+);
+
+watch(
   [() => route.value?.id, () => route.value?.type],
   async ([topicId]) => {
-    if (!topicId) return;
+    hideFloatingDateDivider();
+    if (!topicId) {
+      isAwaitingUserMessagesPaint.value = false;
+      return;
+    }
     const topicSwitchToken = ++activeTopicSwitchToken;
     topicSwitchStartedAtMs = performance.now();
     const isStaleTopicSwitch = () =>
       topicSwitchToken !== activeTopicSwitchToken ||
       route.value?.id !== topicId;
+    isAwaitingUserMessagesPaint.value =
+      isMobile.value &&
+      route.value?.type !== RouteTypes.AI &&
+      !props.suppressInitialSkeleton &&
+      !hasKnownTopicMessagesState(topicId);
+    clearVisibleMessagesExpansionSchedule();
+    visibleMessagesExpansionAppliedToken = 0;
     suppressNotificationSoundForTopic(topicId, TOPIC_SWITCH_AUTO_READ_GRACE_MS);
     state.errorMessage = '';
     state.hideUnreadMarker = true;
@@ -1627,21 +2021,31 @@ watch(
     );
     const { initialLimit: initialMessagesLimit, expandedLimit } =
       getTopicSwitchFetchLimits(topicUnreadCount);
+    const fastInitialMessagesLimit = getFastInitialMessagesLimit(
+      topicUnreadCount,
+      initialMessagesLimit
+    );
 
     state.replyMessage = null;
     state.editMessage = null;
     state.forwardMessages = [];
+    inputText.value = getLocalStorageInputText.value;
 
     clearSelectedMessages();
 
-    const existingVisibleMessages = getMessagesByTopicId(topicId);
-    const existingFullMessages = getFullMessagesByTopicId(topicId);
-    const hasInstantCachedMessages =
-      existingVisibleMessages.length > 0 || existingFullMessages.length > 0;
+    if (isMobile.value) {
+      setVisibleMessagesLimitForTopic(topicId, fastInitialMessagesLimit);
+    }
 
-    renderedTopicId.value = hasInstantCachedMessages ? topicId : '';
+    renderedTopicId.value = topicId;
 
-    const hydratedMessages = await hydrateMessagesFromCache(topicId);
+    const hydratedMessages = await hydrateMessagesFromCache(
+      topicId,
+      undefined,
+      {
+        visibleLimit: fastInitialMessagesLimit
+      }
+    );
 
     if (isStaleTopicSwitch()) {
       return;
@@ -1651,11 +2055,7 @@ watch(
       hydratedMessages.length > 0 ||
       getMessagesByTopicId(topicId).length > 0
     ) {
-      await warmVisibleTopicMedia(topicId);
-
-      if (isStaleTopicSwitch()) {
-        return;
-      }
+      scheduleVisibleTopicMediaWarm(topicId, isStaleTopicSwitch);
 
       renderedTopicId.value = topicId;
       await nextTick();
@@ -1668,13 +2068,20 @@ watch(
         preferUnreadMarker: false,
         smooth: false
       });
+
+      scheduleVisibleMessagesExpansion(
+        topicId,
+        initialMessagesLimit,
+        topicSwitchToken
+      );
     }
 
     void fetchPinnedMessagesForTopic(topicId);
     const initialMessagesFetch = fetchMessagesForTopic(topicId, {
       limit: initialMessagesLimit,
       forceRefresh: true,
-      forceNetwork: navigator.onLine
+      forceNetwork: navigator.onLine,
+      visibleLimit: fastInitialMessagesLimit
     });
 
     if (expandedLimit > initialMessagesLimit) {
@@ -1690,6 +2097,10 @@ watch(
 
     if (isStaleTopicSwitch()) {
       return;
+    }
+
+    if (getMessagesByTopicId(topicId).length === 0) {
+      isAwaitingUserMessagesPaint.value = false;
     }
 
     renderedTopicId.value = topicId;
@@ -1719,8 +2130,6 @@ watch(
       state.forwardMessages = consumedForwardMessages;
     }
 
-    inputText.value = getLocalStorageInputText.value;
-
     await nextTick();
 
     if (isStaleTopicSwitch()) {
@@ -1731,6 +2140,27 @@ watch(
       preferUnreadMarker: false,
       smooth: false
     });
+
+    if (visibleMessagesExpansionAppliedToken === topicSwitchToken) {
+      setVisibleMessagesLimitForTopic(topicId, initialMessagesLimit);
+      await nextTick();
+
+      if (isStaleTopicSwitch()) {
+        return;
+      }
+
+      scrollToBottom({
+        preferUnreadMarker: false,
+        smooth: false
+      });
+    } else {
+      scheduleVisibleMessagesExpansion(
+        topicId,
+        initialMessagesLimit,
+        topicSwitchToken
+      );
+    }
+
     scrollAnchor.initialize();
     isLoadingInitialMessages.value = false;
     rememberCurrentUnreadMarkerState(topicId);

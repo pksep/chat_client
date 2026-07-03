@@ -189,6 +189,23 @@ const shouldHandleNotificationInteraction = (data: NativeNotificationData) => {
   return true;
 };
 
+const bindNativeNotificationTapListener = async (): Promise<void> => {
+  if (
+    !Capacitor.isNativePlatform() ||
+    Capacitor.getPlatform() !== 'android' ||
+    nativeNotificationTapListener
+  ) {
+    return;
+  }
+
+  nativeNotificationTapListener = await NotificationTap.addListener(
+    'notificationTap',
+    payload => {
+      handleNotificationInteraction(payload as NativeNotificationData);
+    }
+  );
+};
+
 const handleNotificationInteraction = (
   data: NativeNotificationData = {},
   actionId?: string | null
@@ -252,6 +269,39 @@ const handleNotificationInteraction = (
   handleCallPush({ data: normalizedData });
   return false;
 };
+
+export const initFastNativeNotificationNavigation =
+  async (): Promise<boolean> => {
+    if (
+      !Capacitor.isNativePlatform() ||
+      Capacitor.getPlatform() !== 'android'
+    ) {
+      return false;
+    }
+
+    try {
+      await bindNativeNotificationTapListener();
+    } catch (error) {
+      console.warn('Failed to bind fast Android notification tap:', error);
+    }
+
+    try {
+      const pendingNotificationTap =
+        await NotificationTap.consumePendingNotificationTap();
+
+      if (!hasPayloadValues(pendingNotificationTap)) {
+        return false;
+      }
+
+      handleNotificationInteraction(
+        pendingNotificationTap as NativeNotificationData
+      );
+      return true;
+    } catch (error) {
+      console.warn('Failed to consume fast Android notification tap:', error);
+      return false;
+    }
+  };
 
 const consumeWebCallActionFromUrl = () => {
   if (typeof window === 'undefined') {
@@ -355,12 +405,7 @@ export const initPushNotifications = async () => {
       Capacitor.getPlatform() === 'android' &&
       !nativeNotificationTapListener
     ) {
-      nativeNotificationTapListener = await NotificationTap.addListener(
-        'notificationTap',
-        payload => {
-          handleNotificationInteraction(payload as NativeNotificationData);
-        }
-      );
+      await bindNativeNotificationTapListener();
     }
 
     PushNotifications.addListener('registration', async token => {

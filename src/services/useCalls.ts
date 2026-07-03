@@ -135,6 +135,24 @@ export const syncServerActiveCalls = async (
   return syncActiveCalls(calls, replace);
 };
 
+export const recoverActiveCallAfterNetworkChange = async (reason?: string) => {
+  const hasActiveCallRuntime =
+    isCallActive.value ||
+    isAnyCallModalVisible.value ||
+    isAnyCallDialing.value ||
+    isAnyCallIncoming.value ||
+    !!activeCallTopicId.value;
+
+  if (!hasActiveCallRuntime) {
+    return false;
+  }
+
+  const { recoverActiveCallAfterNetworkChange: recoverLiveKitCall } =
+    await loadLiveKit();
+
+  return recoverLiveKitCall(reason);
+};
+
 export const removeActiveGroupCall = async (topicId?: string) => {
   const { clearActiveGroupCall } = await loadLiveKit();
 

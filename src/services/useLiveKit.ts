@@ -8,6 +8,7 @@ import {
   type AudioCaptureOptions,
   createLocalVideoTrack,
   ConnectionQuality,
+  ConnectionState,
   DisconnectReason,
   LocalTrackPublication,
   LocalVideoTrack,
@@ -165,6 +166,7 @@ let activeCallTraceId: string | null = null;
 let lastTelemetryConnectionQuality: string | null = null;
 let currentCameraFacingMode: 'user' | 'environment' = 'user';
 let shouldEndCallOnConnectFailure = false;
+let shouldPreserveCallOnConnectFailure = false;
 let isExplicitHangupInProgress = false;
 let androidScreenShareTrack: MediaStreamTrack | null = null;
 let isStoppingAndroidScreenShare = false;
@@ -180,6 +182,7 @@ let directCallRecoveryInFlight = false;
 let directCallRecoveryDeadline = 0;
 let directCallRecoveryRoomId: string | null = null;
 let directCallRecoveryTopicId: string | null = null;
+let activeCallNetworkRecoveryPromise: Promise<boolean> | null = null;
 const participantReactionTimeouts = new Map<
   string,
   ReturnType<typeof setTimeout>
@@ -1878,7 +1881,11 @@ const syncLocalTrackState = () => {
 
   const localVideoTrack = localVideoPublication?.track;
   const localScreenTrack = localScreenSharePublication?.track;
-  state.isScreenSharingActive = !!localScreenTrack?.mediaStreamTrack;
+  const isLocalScreenSharePublished =
+    !!localScreenSharePublication &&
+    !localScreenSharePublication.isMuted &&
+    localScreenTrack?.mediaStreamTrack?.readyState !== 'ended';
+  state.isScreenSharingActive = isLocalScreenSharePublished;
   if (!state.isScreenSharingActive && isAndroidScreenSharePlatform()) {
     void stopAndroidScreenShare();
   }
@@ -3291,10 +3298,12 @@ const connectToRoom = async () => {
       const isDirectCallRecovery =
         directCallRecoveryRoomId === activeRoomId &&
         directCallRecoveryTopicId === activeTopicId;
+      const shouldPreserveCurrentCall =
+        shouldPreserveCallOnConnectFailure || isDirectCallRecovery;
 
       if (
         shouldEndCallOnConnectFailure &&
-        !isDirectCallRecovery &&
+        !shouldPreserveCurrentCall &&
         sdk &&
         me &&
         activeRoomId
@@ -3306,9 +3315,11 @@ const connectToRoom = async () => {
         });
       }
 
-      if (isDirectCallRecovery) {
+      if (shouldPreserveCurrentCall) {
         recordCallTelemetryEvent(
-          'call.livekit.connect.recovery_failed',
+          isDirectCallRecovery
+            ? 'call.livekit.connect.recovery_failed'
+            : 'call.livekit.connect.preserved_failed',
           {
             attemptId: currentAttemptId,
             ...getTelemetryErrorPayload(error)
@@ -3382,6 +3393,7 @@ const connectToRoom = async () => {
     resolveDirectCallRecoverySuccess(nextRoom);
     suppressParticipantPresenceNotifications = false;
     shouldEndCallOnConnectFailure = false;
+    shouldPreserveCallOnConnectFailure = false;
 
     if (isIncoming.value) {
       stopRingtone();
@@ -3393,6 +3405,198 @@ const connectToRoom = async () => {
   });
 
   return connectPromise;
+};
+
+const shouldForceLiveKitReconnectAfterNetworkChange = (reason?: string) =>
+  [
+    'app-visible',
+    'browser-online',
+    'native-app-active',
+    'native-resume',
+    'network-change',
+    'network-poll'
+  ].includes(reason || '');
+
+const recoverActiveCallMediaState = async (
+  activeRoom: Room | null = room
+): Promise<void> => {
+  if (!activeRoom) {
+    syncLocalTrackState();
+    syncRemoteParticipantState();
+    return;
+  }
+
+  syncLocalTrackState();
+  syncLocalParticipantSpeakingState(activeRoom);
+  syncRemoteParticipantState();
+  syncConnectionState(activeRoom);
+  requestHighQualityForAllRemoteVideoTracks();
+  scheduleCallAudioRecovery(activeRoom);
+  await ensureLocalMicrophoneState(activeRoom);
+  await enforceSingleScreenShare();
+};
+
+const recoverActiveCallAfterNetworkChangeInternal = async (
+  reason = 'network-change'
+): Promise<boolean> => {
+  const activeRoomId = roomId.value || directCallRecoveryRoomId;
+  const activeTopicId = topicId.value || directCallRecoveryTopicId;
+  const hasRecoverableCall =
+    !!activeRoomId &&
+    (open.value ||
+      isModalVisible.value ||
+      isIncoming.value ||
+      isCalling.value ||
+      !!room ||
+      !!directCallRecoveryRoomId);
+
+  if (
+    !hasRecoverableCall ||
+    isExplicitHangupInProgress ||
+    matchesPendingEndCall(activeRoomId, activeTopicId)
+  ) {
+    return false;
+  }
+
+  recordCallTelemetryEvent(
+    'call.network_recovery.start',
+    {
+      reason,
+      liveKitState: room?.state ?? null,
+      hasRoom: Boolean(room)
+    },
+    'warn'
+  );
+
+  const status = await getRawLiveKitCallStatus(activeRoomId, {
+    includeRoomState: true
+  });
+
+  if (status?.topicId && activeTopicId && status.topicId !== activeTopicId) {
+    recordCallTelemetryEvent(
+      'call.network_recovery.topic_mismatch',
+      {
+        reason,
+        statusTopicId: status.topicId
+      },
+      'warn'
+    );
+    return false;
+  }
+
+  if (status && status.active !== true) {
+    clearUnavailableCallState(activeRoomId, activeTopicId);
+    showEndedCallNoticeAndReleaseMedia(user.value);
+    recordCallTelemetryEvent(
+      'call.network_recovery.ended',
+      {
+        reason
+      },
+      'warn'
+    );
+    return true;
+  }
+
+  if (
+    status?.startTime !== undefined ||
+    status?.elapsedDurationMs !== undefined
+  ) {
+    setCallStartedAt(
+      status.startTime ?? callStartedAt.value,
+      status.elapsedDurationMs ?? callElapsedMs.value
+    );
+  }
+
+  if (isIncoming.value && !room) {
+    recordCallTelemetryEvent('call.network_recovery.incoming_preserved', {
+      reason
+    });
+    return true;
+  }
+
+  clearExplicitHangupState();
+  open.value = true;
+  isModalVisible.value = true;
+  showReconnectCallStatusNotice();
+  ensureCallTimerContinues();
+
+  await recoverActiveCallMediaState(room);
+
+  const shouldReconnectRoom =
+    !room ||
+    room.state === ConnectionState.Disconnected ||
+    room.state === ConnectionState.Reconnecting ||
+    room.state === ConnectionState.SignalReconnecting ||
+    (shouldForceLiveKitReconnectAfterNetworkChange(reason) &&
+      room.state === ConnectionState.Connected);
+
+  if (shouldReconnectRoom) {
+    const previousPreserveCallOnConnectFailure =
+      shouldPreserveCallOnConnectFailure;
+    shouldPreserveCallOnConnectFailure = true;
+
+    try {
+      await connectToRoom();
+    } catch (error) {
+      showReconnectCallStatusNotice();
+      if (activeTopicId && !isGroupCallSession(activeTopicId)) {
+        startDirectCallRecovery(activeRoomId, activeTopicId, {
+          waitForRemote: true
+        });
+      }
+      recordCallTelemetryEvent(
+        'call.network_recovery.connect_failed',
+        {
+          reason,
+          ...getTelemetryErrorPayload(error)
+        },
+        'warn'
+      );
+      return false;
+    } finally {
+      shouldPreserveCallOnConnectFailure = previousPreserveCallOnConnectFailure;
+    }
+  }
+
+  await recoverActiveCallMediaState(room);
+
+  if (room && callStatusNoticeKind.value === 'reconnecting') {
+    clearCallStatusNotice();
+  }
+
+  if (
+    room &&
+    !room.remoteParticipants.size &&
+    !isGroupCallSession(activeTopicId) &&
+    activeTopicId
+  ) {
+    startDirectCallRecovery(activeRoomId, activeTopicId, {
+      waitForRemote: true
+    });
+  }
+
+  recordCallTelemetryEvent('call.network_recovery.completed', {
+    reason,
+    liveKitState: room?.state ?? null,
+    remoteParticipantCount: room?.remoteParticipants.size ?? 0
+  });
+
+  return true;
+};
+
+export const recoverActiveCallAfterNetworkChange = async (
+  reason?: string
+): Promise<boolean> => {
+  if (activeCallNetworkRecoveryPromise) {
+    return activeCallNetworkRecoveryPromise;
+  }
+
+  activeCallNetworkRecoveryPromise =
+    recoverActiveCallAfterNetworkChangeInternal(reason).finally(() => {
+      activeCallNetworkRecoveryPromise = null;
+    });
+
+  return activeCallNetworkRecoveryPromise;
 };
 
 const resetMediaState = () => {
@@ -4293,6 +4497,7 @@ const showEndedCallNoticeAndReleaseMedia = (
   connectAttemptId += 1;
   connectPromise = null;
   shouldEndCallOnConnectFailure = false;
+  shouldPreserveCallOnConnectFailure = false;
   resetDirectCallRecoveryState(true);
   clearPendingAudioRecoveryTimeouts();
   clearPendingRemoteAudioResubscribeTimeouts();
@@ -4927,6 +5132,7 @@ export const leaveCall = () => {
   connectAttemptId += 1;
   connectPromise = null;
   shouldEndCallOnConnectFailure = false;
+  shouldPreserveCallOnConnectFailure = false;
   resetDirectCallRecoveryState(true);
   clearPendingAudioRecoveryTimeouts();
   clearPendingRemoteAudioResubscribeTimeouts();
@@ -4968,6 +5174,7 @@ export const cleanup = (disconnectRoom = true) => {
   connectAttemptId += 1;
   connectPromise = null;
   shouldEndCallOnConnectFailure = false;
+  shouldPreserveCallOnConnectFailure = false;
   clearExplicitHangupState();
   void stopAndroidScreenShare();
   resetDirectCallRecoveryState(true);

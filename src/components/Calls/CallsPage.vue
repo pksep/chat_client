@@ -113,8 +113,19 @@
   </section>
 </template>
 
+<script lang="ts">
+let savedCallsScrollTop = 0;
+</script>
+
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch
+} from 'vue';
 import { Search } from '@pksep/yui';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import MessageCallInfoIcon from '../Messages/MessageCallInfoIcon.vue';
@@ -160,9 +171,11 @@ interface CallHistoryItem {
 const props = withDefaults(
   defineProps<{
     dataTestid?: string;
+    isActive?: boolean;
   }>(),
   {
-    dataTestid: 'CallsPage'
+    dataTestid: 'CallsPage',
+    isActive: true
   }
 );
 
@@ -176,6 +189,11 @@ const { rawCallHistory, callHistoryState } = useCallHistoryStore();
 const state = callHistoryState;
 const { openUserInfo } = useUserInfoModal();
 const SCROLL_LOAD_MORE_OFFSET = 160;
+const CALLS_SCROLL_RESTORE_MAX_FRAMES = 8;
+let callsScrollRestoreFrameId: number | null = null;
+let callsScrollRestoreAttempts = 0;
+let pendingCallsScrollTop: number | null = null;
+let isRestoringCallsScroll = false;
 
 const buildCallItem = (
   serverCall: ServerCallHistoryItem
@@ -272,6 +290,7 @@ const handleOpenCallUserInfo = (call: CallHistoryItem): void => {
 
 const maybeLoadMoreCalls = async (): Promise<void> => {
   if (
+    !props.isActive ||
     !state.hasMore ||
     state.isLoadingMore ||
     (state.isLoading && !callHistory.value.length)
@@ -282,8 +301,105 @@ const maybeLoadMoreCalls = async (): Promise<void> => {
   await loadMoreCallHistory();
 };
 
+const saveCallsScrollPosition = (): void => {
+  if (isRestoringCallsScroll || !callListRef.value) {
+    return;
+  }
+
+  savedCallsScrollTop = callListRef.value.scrollTop;
+};
+
+const clearCallsScrollRestoreSchedule = (): void => {
+  if (callsScrollRestoreFrameId !== null) {
+    window.cancelAnimationFrame(callsScrollRestoreFrameId);
+    callsScrollRestoreFrameId = null;
+  }
+};
+
+const finishCallsScrollRestore = (): void => {
+  clearCallsScrollRestoreSchedule();
+  isRestoringCallsScroll = false;
+  pendingCallsScrollTop = null;
+  callsScrollRestoreAttempts = 0;
+};
+
+const applyCallsScrollRestore = (): boolean => {
+  const element = callListRef.value;
+  const targetTop = pendingCallsScrollTop ?? savedCallsScrollTop;
+
+  if (!props.isActive || !element) {
+    return true;
+  }
+
+  const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
+  const nextScrollTop = Math.min(targetTop, maxScrollTop);
+
+  if (Math.abs(element.scrollTop - nextScrollTop) > 1) {
+    element.scrollTop = nextScrollTop;
+  }
+
+  return targetTop <= 0 || Math.abs(element.scrollTop - targetTop) <= 1;
+};
+
+const scheduleCallsScrollRestorePass = (): void => {
+  if (callsScrollRestoreFrameId !== null) {
+    return;
+  }
+
+  callsScrollRestoreFrameId = window.requestAnimationFrame(() => {
+    callsScrollRestoreFrameId = null;
+
+    if (!isRestoringCallsScroll) {
+      return;
+    }
+
+    callsScrollRestoreAttempts += 1;
+
+    if (
+      applyCallsScrollRestore() ||
+      callsScrollRestoreAttempts >= CALLS_SCROLL_RESTORE_MAX_FRAMES
+    ) {
+      finishCallsScrollRestore();
+      return;
+    }
+
+    scheduleCallsScrollRestorePass();
+  });
+};
+
+const restoreCallsScrollPosition = (): void => {
+  if (!props.isActive) {
+    return;
+  }
+
+  pendingCallsScrollTop = savedCallsScrollTop;
+  isRestoringCallsScroll = true;
+  callsScrollRestoreAttempts = 0;
+  clearCallsScrollRestoreSchedule();
+
+  if (applyCallsScrollRestore()) {
+    finishCallsScrollRestore();
+    return;
+  }
+
+  void nextTick(() => {
+    if (!isRestoringCallsScroll) {
+      return;
+    }
+
+    if (applyCallsScrollRestore()) {
+      finishCallsScrollRestore();
+      return;
+    }
+
+    scheduleCallsScrollRestorePass();
+  });
+};
+
 const handleListScroll = (): void => {
   const listElement = callListRef.value;
+
+  saveCallsScrollPosition();
 
   if (!listElement || !state.hasMore || state.isLoadingMore) {
     return;
@@ -297,43 +413,48 @@ const handleListScroll = (): void => {
   }
 };
 
-const ensureListIsFilled = async (): Promise<void> => {
-  const listElement = callListRef.value;
-  const hasSearchQuery = searchValue.value.trim().length > 0;
-
-  if (!state.hasMore || state.isLoadingMore) {
+const ensureCallHistoryReady = async (): Promise<void> => {
+  if (!props.isActive) {
     return;
   }
 
-  if (hasSearchQuery && !filteredCalls.value.length) {
-    await maybeLoadMoreCalls();
-    return;
-  }
-
-  if (
-    listElement &&
-    listElement.scrollHeight <=
-      listElement.clientHeight + SCROLL_LOAD_MORE_OFFSET
-  ) {
-    await maybeLoadMoreCalls();
-  }
+  void hydrateCallHistoryCache();
+  await bootstrapCallHistory();
 };
 
 onMounted(() => {
   void hydrateCallHistoryCache();
-  void bootstrapCallHistory();
-  void nextTick().then(() => ensureListIsFilled());
+
+  if (props.isActive) {
+    void ensureCallHistoryReady();
+    restoreCallsScrollPosition();
+  }
+});
+
+onBeforeUnmount(() => {
+  saveCallsScrollPosition();
+  finishCallsScrollRestore();
 });
 
 watch(
-  [
-    () => filteredCalls.value.length,
-    () => searchValue.value,
-    () => state.hasMore,
-    () => state.isLoadingMore
-  ],
+  () => props.isActive,
+  (isActive, wasActive) => {
+    if (wasActive) {
+      saveCallsScrollPosition();
+    }
+
+    if (isActive) {
+      void ensureCallHistoryReady();
+      restoreCallsScrollPosition();
+    }
+  },
+  { immediate: false }
+);
+
+watch(
+  () => filteredCalls.value.length,
   () => {
-    void nextTick().then(() => ensureListIsFilled());
+    restoreCallsScrollPosition();
   }
 );
 </script>

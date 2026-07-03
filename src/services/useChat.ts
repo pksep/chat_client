@@ -46,6 +46,7 @@ import {
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
 import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 import { initCallKit, showIncomingCallKit, endAllCallKits } from './useCallKit';
 import { clearTopicNotifications } from './useNotificationNavigation';
 import {
@@ -75,8 +76,10 @@ import {
 import { getAuthToken } from '../composables/useLogin';
 import { getConfig } from './useConfig';
 import {
+  bootstrapCallHistory,
   initializeCallHistorySync,
   removeCallHistoryMessage,
+  shouldRefreshCallHistoryAfterReconnect,
   upsertCallHistoryMessage
 } from './useCallHistory';
 import { normalizeUserStatus } from '../utils/userStatus';
@@ -103,7 +106,9 @@ const loadCallsApi = async (): Promise<CallsApi> => {
 const isWebsocketConnecting = ref(true);
 const hasWebsocketConnection = ref(false);
 const browserOnline = ref(
-  typeof navigator === 'undefined' ? true : navigator.onLine
+  Capacitor.isNativePlatform() ||
+    typeof navigator === 'undefined' ||
+    navigator.onLine
 );
 const isRecentlyReconnected = ref(false);
 const currentUserId = ref<string | null>(null);
@@ -119,6 +124,22 @@ const processedPts = new Set<number>();
 
 type MessageHandlingOptions = {
   silent?: boolean;
+};
+
+type ReconnectRefreshReason =
+  | 'websocket-reconnect'
+  | 'app-visible'
+  | 'window-focus'
+  | 'browser-online'
+  | 'native-app-active'
+  | 'native-resume'
+  | 'network-change'
+  | 'network-poll';
+
+type NetworkInformationLike = {
+  type?: string;
+  effectiveType?: string;
+  addEventListener?: (type: string, cb: () => void) => void;
 };
 
 const notifyMessageChange = (topicId?: string): void => {
@@ -902,10 +923,72 @@ let isRefreshingAfterReconnect = false;
 let shouldRerunRefreshAfterReconnect = false;
 let hasCompletedInitialConnection = false;
 const MAX_BACKGROUND_TOPIC_RECONCILES = 12;
+const FRESH_SYNC_THROTTLE_MS = 5000;
+const HARD_RECONNECT_THROTTLE_MS = 10000;
+const NATIVE_NETWORK_RECOVERY_GRACE_MS = 15000;
+const HTTP_HEALTH_PROBE_TIMEOUT_MS = 8000;
+const HTTP_HEALTH_PROBE_RETRY_DELAY_MS = 1500;
+const NATIVE_HTTP_HEALTH_PROBE_ATTEMPTS = 3;
 let networkStatePollInterval: ReturnType<typeof setInterval> | null = null;
 let removeAppVisibilityListener: (() => void) | null = null;
+let lastFreshSyncRequestedAt = 0;
+let lastHardReconnectAt = 0;
+let nativeNetworkRecoveryUntil = 0;
+let connectionAttemptId = 0;
 
 const route = useUrlWatcher();
+
+const getNetworkInformation = (): NetworkInformationLike | null =>
+  (typeof navigator !== 'undefined'
+    ? (navigator as Navigator & {
+        connection?: NetworkInformationLike;
+      })
+    : null
+  )?.connection || null;
+
+const getNetworkFingerprint = (onlineOverride?: boolean): string => {
+  const connection = getNetworkInformation();
+  const online =
+    typeof onlineOverride === 'boolean'
+      ? onlineOverride
+      : typeof navigator === 'undefined'
+        ? true
+        : navigator.onLine;
+
+  return [
+    `online:${online}`,
+    `type:${connection?.type || ''}`,
+    `effectiveType:${connection?.effectiveType || ''}`
+  ].join('|');
+};
+
+let lastKnownNetworkFingerprint = getNetworkFingerprint();
+
+const shouldAssumeOnlineForNativeRecovery = (
+  reason: ReconnectRefreshReason,
+  assumeOnlineOnNative?: boolean
+): boolean =>
+  Capacitor.isNativePlatform() &&
+  (assumeOnlineOnNative ||
+    reason === 'native-app-active' ||
+    reason === 'native-resume' ||
+    Date.now() < nativeNetworkRecoveryUntil ||
+    chatSDK?.isConnected());
+
+const resolveEffectiveOnlineState = (
+  reason: ReconnectRefreshReason,
+  assumeOnlineOnNative?: boolean
+): boolean => {
+  if (typeof navigator === 'undefined') {
+    return true;
+  }
+
+  if (shouldAssumeOnlineForNativeRecovery(reason, assumeOnlineOnNative)) {
+    return true;
+  }
+
+  return navigator.onLine;
+};
 
 const waitForReconnectIdle = (): Promise<void> =>
   new Promise(resolve => {
@@ -915,6 +998,11 @@ const waitForReconnectIdle = (): Promise<void> =>
     }
 
     setTimeout(resolve, 0);
+  });
+
+const waitForReconnectDelay = (delayMs: number): Promise<void> =>
+  new Promise(resolve => {
+    setTimeout(resolve, delayMs);
   });
 
 const getMessageTimestamp = (
@@ -946,12 +1034,35 @@ const markRecentlyReconnected = (): void => {
   }, 3000);
 };
 
+const resetNetworkRuntimeStateForFreshSync = (): void => {
+  processedPts.clear();
+  latestProcessedPts = 0;
+  suspendIncomingMergeByTopic.value = {};
+  bufferedIncomingMessagesByTopic.value = {};
+};
+
+const syncCurrentUserFromFreshUsers = (): void => {
+  if (!currentUserId.value) {
+    return;
+  }
+
+  const refreshedUser = getUserById(currentUserId.value);
+
+  if (!refreshedUser) {
+    return;
+  }
+
+  mergeAuthUser(refreshedUser);
+};
+
 const refreshActiveTopicMessagesAfterReconnect = async (
   topicId: string
 ): Promise<void> => {
   const existingMessages = getFullMessagesByTopicId(topicId);
   const latestMessages = await fetchMessagesForTopic(topicId, {
-    limit: 50,
+    limit: 100,
+    forceRefresh: true,
+    forceNetwork: true,
     skipSave: true
   });
 
@@ -963,7 +1074,12 @@ const refreshActiveTopicMessagesAfterReconnect = async (
   }
 
   if (existingMessages.length === 0) {
-    await fetchMessagesForTopic(topicId);
+    await fetchMessagesForTopic(topicId, {
+      limit: 100,
+      forceRefresh: true,
+      forceNetwork: true,
+      syncLastMessage: true
+    });
   }
 };
 
@@ -1015,6 +1131,47 @@ const reconcileTopicCachesAfterReconnect = async (): Promise<void> => {
 const shouldContinueReconnectRefresh = (): boolean =>
   Boolean(chatSDK && browserOnline.value);
 
+const waitForChatHttpHealth = async (
+  reason: ReconnectRefreshReason
+): Promise<boolean> => {
+  if (!chatSDK) {
+    return false;
+  }
+
+  const attempts = Capacitor.isNativePlatform()
+    ? NATIVE_HTTP_HEALTH_PROBE_ATTEMPTS
+    : 1;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const healthy = await chatSDK.probeConnection(HTTP_HEALTH_PROBE_TIMEOUT_MS);
+
+    void saveShadowSyncMeta('fresh_sync:http_health', {
+      reason,
+      attempt,
+      healthy,
+      timestamp: new Date().toISOString()
+    });
+
+    if (healthy) {
+      browserOnline.value = true;
+      return true;
+    }
+
+    if (attempt < attempts) {
+      await waitForReconnectDelay(HTTP_HEALTH_PROBE_RETRY_DELAY_MS);
+    }
+  }
+
+  hasWebsocketConnection.value = false;
+  isWebsocketConnecting.value = false;
+
+  if (!shouldAssumeOnlineForNativeRecovery(reason)) {
+    browserOnline.value = false;
+  }
+
+  return false;
+};
+
 const runActiveTopicRefreshAfterReconnect = async (): Promise<void> => {
   const activeTopicId = route.value.id;
 
@@ -1035,6 +1192,13 @@ const runActiveTopicRefreshAfterReconnect = async (): Promise<void> => {
   }
 };
 
+const recoverActiveCallAfterReconnect = async (
+  reason: ReconnectRefreshReason
+): Promise<void> => {
+  const { recoverActiveCallAfterNetworkChange } = await loadCallsApi();
+  await recoverActiveCallAfterNetworkChange(reason);
+};
+
 const waitForNextReconnectRefreshStage = async (): Promise<void> => {
   if (!shouldContinueReconnectRefresh()) {
     return;
@@ -1043,8 +1207,25 @@ const waitForNextReconnectRefreshStage = async (): Promise<void> => {
   await waitForReconnectIdle();
 };
 
-const runStagedReconnectRefresh = async (): Promise<void> => {
-  await runActiveTopicRefreshAfterReconnect();
+const runStagedReconnectRefresh = async (
+  reason: ReconnectRefreshReason
+): Promise<void> => {
+  console.info('Chat fresh sync started after reconnect/resume', { reason });
+  void saveShadowSyncMeta('fresh_sync:last_started', {
+    reason,
+    timestamp: new Date().toISOString()
+  });
+  resetNetworkRuntimeStateForFreshSync();
+  await syncPtsStateToServer();
+
+  const hasHttpConnection = await waitForChatHttpHealth(reason);
+
+  if (!hasHttpConnection) {
+    throw new Error('Chat HTTP health check failed');
+  }
+
+  await Promise.allSettled([fetchAllUsers()]);
+  syncCurrentUserFromFreshUsers();
   await waitForNextReconnectRefreshStage();
 
   if (!shouldContinueReconnectRefresh()) {
@@ -1052,13 +1233,14 @@ const runStagedReconnectRefresh = async (): Promise<void> => {
   }
 
   await fetchAllTopics();
+  await Promise.allSettled([recoverActiveCallAfterReconnect(reason)]);
   await waitForNextReconnectRefreshStage();
 
   if (!shouldContinueReconnectRefresh()) {
     return;
   }
 
-  await fetchAllUsers();
+  await runActiveTopicRefreshAfterReconnect();
   await waitForNextReconnectRefreshStage();
 
   if (!shouldContinueReconnectRefresh()) {
@@ -1066,9 +1248,20 @@ const runStagedReconnectRefresh = async (): Promise<void> => {
   }
 
   await reconcileTopicCachesAfterReconnect();
+
+  if (shouldRefreshCallHistoryAfterReconnect()) {
+    await Promise.allSettled([bootstrapCallHistory(chatSDK, { force: true })]);
+  }
+
+  void saveShadowSyncMeta('fresh_sync:last_completed', {
+    reason,
+    timestamp: new Date().toISOString()
+  });
 };
 
-const refreshDataAfterReconnect = async (): Promise<void> => {
+const refreshDataAfterReconnect = async (
+  reason: ReconnectRefreshReason
+): Promise<void> => {
   if (isRefreshingAfterReconnect) {
     shouldRerunRefreshAfterReconnect = true;
     return;
@@ -1079,15 +1272,44 @@ const refreshDataAfterReconnect = async (): Promise<void> => {
   try {
     do {
       shouldRerunRefreshAfterReconnect = false;
-      await runStagedReconnectRefresh();
+      await runStagedReconnectRefresh(reason);
     } while (
       shouldRerunRefreshAfterReconnect &&
       shouldContinueReconnectRefresh()
     );
+  } catch (error) {
+    console.warn('Chat fresh sync failed after reconnect/resume:', error);
+    void saveShadowSyncMeta('fresh_sync:last_failed', {
+      reason,
+      timestamp: new Date().toISOString(),
+      error: error instanceof Error ? error.message : String(error)
+    });
   } finally {
     isRefreshingAfterReconnect = false;
     shouldRerunRefreshAfterReconnect = false;
   }
+};
+
+const requestFreshDataRefresh = (
+  reason: ReconnectRefreshReason,
+  opts?: { force?: boolean }
+): void => {
+  if (!shouldContinueReconnectRefresh()) {
+    return;
+  }
+
+  const now = Date.now();
+
+  if (!opts?.force && now - lastFreshSyncRequestedAt < FRESH_SYNC_THROTTLE_MS) {
+    if (isRefreshingAfterReconnect) {
+      shouldRerunRefreshAfterReconnect = true;
+    }
+    return;
+  }
+
+  lastFreshSyncRequestedAt = now;
+  markRecentlyReconnected();
+  void refreshDataAfterReconnect(reason);
 };
 
 const reconnectChatOnResume = (): void => {
@@ -1096,6 +1318,100 @@ const reconnectChatOnResume = (): void => {
   }
 
   chatSDK.reconnectIfNeeded();
+};
+
+const hardReconnectChatAfterNetworkChange = (
+  reason: ReconnectRefreshReason
+): void => {
+  if (!chatSDK || !browserOnline.value) {
+    return;
+  }
+
+  const now = Date.now();
+
+  if (now - lastHardReconnectAt < HARD_RECONNECT_THROTTLE_MS) {
+    reconnectChatOnResume();
+    return;
+  }
+
+  lastHardReconnectAt = now;
+  console.info('Chat websocket hard reconnect after network change', {
+    reason
+  });
+  void saveShadowSyncMeta('websocket:hard_reconnect', {
+    reason,
+    timestamp: new Date().toISOString()
+  });
+  isWebsocketConnecting.value = true;
+  hasWebsocketConnection.value = false;
+
+  const sdk = chatSDK;
+  sdk.disconnect();
+  startChatConnectionInBackground(sdk);
+};
+
+const syncFreshDataForResume = (
+  reason: ReconnectRefreshReason,
+  opts?: { hardReconnect?: boolean; forceRefresh?: boolean }
+): void => {
+  if (!chatSDK || !browserOnline.value) {
+    return;
+  }
+
+  if (opts?.hardReconnect) {
+    hardReconnectChatAfterNetworkChange(reason);
+  } else {
+    reconnectChatOnResume();
+  }
+
+  if (getIsAppActivelyVisible()) {
+    syncPresenceForVisibility();
+  }
+
+  requestFreshDataRefresh(reason, {
+    force: opts?.forceRefresh || opts?.hardReconnect
+  });
+};
+
+const handleNetworkOrResumeChange = (
+  reason: ReconnectRefreshReason,
+  opts?: {
+    forceHardReconnect?: boolean;
+    forceRefresh?: boolean;
+    assumeOnlineOnNative?: boolean;
+  }
+): void => {
+  if (typeof navigator === 'undefined') {
+    return;
+  }
+
+  const effectiveOnline = resolveEffectiveOnlineState(
+    reason,
+    opts?.assumeOnlineOnNative
+  );
+
+  if (
+    Capacitor.isNativePlatform() &&
+    (opts?.assumeOnlineOnNative ||
+      reason === 'native-app-active' ||
+      reason === 'native-resume')
+  ) {
+    nativeNetworkRecoveryUntil = Date.now() + NATIVE_NETWORK_RECOVERY_GRACE_MS;
+  }
+
+  const nextFingerprint = getNetworkFingerprint(effectiveOnline);
+  const hasNetworkChanged = nextFingerprint !== lastKnownNetworkFingerprint;
+  lastKnownNetworkFingerprint = nextFingerprint;
+  syncBrowserNetworkState(effectiveOnline);
+
+  if (!effectiveOnline) {
+    return;
+  }
+
+  syncFreshDataForResume(reason, {
+    hardReconnect: opts?.forceHardReconnect || hasNetworkChanged,
+    forceRefresh: opts?.forceRefresh || hasNetworkChanged
+  });
 };
 
 const syncBrowserNetworkState = (isOnline: boolean): void => {
@@ -1108,8 +1424,13 @@ const syncBrowserNetworkState = (isOnline: boolean): void => {
   }
 
   if (chatSDK) {
-    isWebsocketConnecting.value = true;
-    reconnectChatOnResume();
+    const isConnected = chatSDK.isConnected();
+    hasWebsocketConnection.value = isConnected;
+    isWebsocketConnecting.value = !isConnected;
+
+    if (!isConnected) {
+      reconnectChatOnResume();
+    }
   }
 };
 
@@ -1119,9 +1440,15 @@ const pollBrowserNetworkState = (): void => {
   }
 
   const nextOnlineState = navigator.onLine;
+  const nextFingerprint = getNetworkFingerprint();
 
-  if (nextOnlineState !== browserOnline.value) {
-    syncBrowserNetworkState(nextOnlineState);
+  if (
+    nextOnlineState !== browserOnline.value ||
+    nextFingerprint !== lastKnownNetworkFingerprint
+  ) {
+    handleNetworkOrResumeChange('network-poll', {
+      forceRefresh: nextOnlineState !== browserOnline.value
+    });
   }
 };
 
@@ -1167,24 +1494,26 @@ const restoreInvitedGroupCallIfNeeded = (): void => {
 };
 
 const startChatConnectionInBackground = (sdk: ChatSDK): void => {
+  const attemptId = ++connectionAttemptId;
+
   void (async () => {
     try {
       await sdk.connect();
 
-      if (chatSDK !== sdk) {
+      if (chatSDK !== sdk || attemptId !== connectionAttemptId) {
         return;
       }
 
       initializeCallHistorySync(sdk);
       await syncPtsStateToServer();
     } catch (error) {
-      if (chatSDK !== sdk) {
+      if (chatSDK !== sdk || attemptId !== connectionAttemptId) {
         return;
       }
 
       console.warn('Chat websocket startup continues in background:', error);
     } finally {
-      if (chatSDK === sdk) {
+      if (chatSDK === sdk && attemptId === connectionAttemptId) {
         isWebsocketConnecting.value = false;
         restoreInvitedGroupCallIfNeeded();
 
@@ -1199,7 +1528,11 @@ const startChatConnectionInBackground = (sdk: ChatSDK): void => {
             syncPresenceForVisibility();
 
             if (getIsAppActivelyVisible()) {
-              reconnectChatOnResume();
+              handleNetworkOrResumeChange('app-visible', {
+                assumeOnlineOnNative: true,
+                forceHardReconnect: true,
+                forceRefresh: true
+              });
             }
           });
         }
@@ -1241,8 +1574,7 @@ export const initializeChat = async (options: {
 
     if (wasConnected === false && !isWebsocketConnecting.value) {
       void syncPtsStateToServer();
-      markRecentlyReconnected();
-      void refreshDataAfterReconnect();
+      requestFreshDataRefresh('websocket-reconnect', { force: true });
     }
   });
   areChatListenersBound = false;
@@ -1255,7 +1587,15 @@ export const initializeChat = async (options: {
       if (document.visibilityState === lastVisibilityState) return;
 
       lastVisibilityState = document.visibilityState;
-      reconnectChatOnResume();
+      if (document.visibilityState === 'visible') {
+        handleNetworkOrResumeChange('app-visible', {
+          assumeOnlineOnNative: true,
+          forceHardReconnect: true,
+          forceRefresh: true
+        });
+        return;
+      }
+
       syncPresenceForVisibility();
     });
     isVisibilityListenerAdded = true;
@@ -1263,40 +1603,64 @@ export const initializeChat = async (options: {
 
   if (!isResumeListenersAdded) {
     window.addEventListener('focus', () => {
-      reconnectChatOnResume();
-      if (getIsAppActivelyVisible()) {
-        syncPresenceForVisibility();
-      }
+      handleNetworkOrResumeChange('window-focus', {
+        assumeOnlineOnNative: true
+      });
     });
 
     window.addEventListener('online', () => {
-      syncBrowserNetworkState(true);
-      reconnectChatOnResume();
-      if (getIsAppActivelyVisible()) {
-        syncPresenceForVisibility();
-      }
+      handleNetworkOrResumeChange('browser-online', {
+        assumeOnlineOnNative: true,
+        forceHardReconnect: true,
+        forceRefresh: true
+      });
     });
 
     window.addEventListener('offline', () => {
+      if (Capacitor.isNativePlatform()) {
+        handleNetworkOrResumeChange('network-change', {
+          assumeOnlineOnNative: true,
+          forceHardReconnect: true,
+          forceRefresh: true
+        });
+        return;
+      }
+
       syncBrowserNetworkState(false);
+      lastKnownNetworkFingerprint = getNetworkFingerprint();
     });
 
-    const networkInformation = (
-      typeof navigator !== 'undefined'
-        ? (navigator as Navigator & {
-            connection?: {
-              addEventListener?: (type: string, cb: () => void) => void;
-            };
-          })
-        : null
-    )?.connection;
+    if (Capacitor.isNativePlatform()) {
+      void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+        if (!isActive) {
+          syncPresenceForVisibility();
+          return;
+        }
+
+        handleNetworkOrResumeChange('native-app-active', {
+          assumeOnlineOnNative: true,
+          forceHardReconnect: true,
+          forceRefresh: true
+        });
+      });
+
+      void CapacitorApp.addListener('resume', () => {
+        handleNetworkOrResumeChange('native-resume', {
+          assumeOnlineOnNative: true,
+          forceHardReconnect: true,
+          forceRefresh: true
+        });
+      });
+    }
+
+    const networkInformation = getNetworkInformation();
 
     networkInformation?.addEventListener?.('change', () => {
-      syncBrowserNetworkState(navigator.onLine);
-
-      if (navigator.onLine) {
-        reconnectChatOnResume();
-      }
+      handleNetworkOrResumeChange('network-change', {
+        assumeOnlineOnNative: true,
+        forceHardReconnect: true,
+        forceRefresh: true
+      });
     });
 
     ensureNetworkStatePolling();
@@ -1304,8 +1668,9 @@ export const initializeChat = async (options: {
     isResumeListenersAdded = true;
   }
 
-  browserOnline.value = navigator.onLine;
-  isWebsocketConnecting.value = navigator.onLine;
+  browserOnline.value = Capacitor.isNativePlatform() || navigator.onLine;
+  lastKnownNetworkFingerprint = getNetworkFingerprint(browserOnline.value);
+  isWebsocketConnecting.value = browserOnline.value;
   hasWebsocketConnection.value = false;
   setupChatListeners();
   addMessageHistoryHandler();

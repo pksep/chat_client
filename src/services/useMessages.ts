@@ -21,7 +21,9 @@ import { useUrlWatcher } from '../composables/navigation';
 import { authedUser } from '../composables/useAuth';
 import {
   clearCachedTopicMessages,
+  loadCachedPinnedMessages,
   loadCachedTopicMessages,
+  saveCachedPinnedMessages,
   saveCachedTopicMessages,
   savePendingUploadFile,
   loadPendingUploadFile,
@@ -831,6 +833,7 @@ export const fetchMessagesForTopic = async (
     syncLastMessage?: boolean;
     forceRefresh?: boolean;
     forceNetwork?: boolean;
+    visibleLimit?: number;
   }
 ): Promise<IMessage[]> => {
   try {
@@ -1090,7 +1093,8 @@ export const fetchMessagesForTopic = async (
       saveMessagesToLocal(topicId, unique, {
         syncLastMessage: opts?.syncLastMessage ?? false,
         windowMode: getWindowModeForFetch(opts),
-        visibleMessages
+        visibleMessages,
+        visibleLimit: opts?.visibleLimit
       });
     }
 
@@ -1121,10 +1125,19 @@ export const fetchMessagesForTopic = async (
 export const fetchPinnedMessagesForTopic = async (
   topicId: string = route.value.id
 ): Promise<IMessage[]> => {
+  if (!topicId) return [];
+
+  const cachedMessages = await loadCachedPinnedMessages(topicId);
+
+  if (cachedMessages) {
+    savePinnedMessagesToLocal(topicId, cachedMessages, {
+      skipCache: true
+    });
+  }
+
   try {
-    if (!topicId) return;
     const sdk = getChatSDK();
-    if (!sdk) return;
+    if (!sdk) return getPinnedMessagesByTopicId(topicId);
     const messages = await sdk.getPinnedMessages(topicId);
 
     savePinnedMessagesToLocal(topicId, messages);
@@ -1633,6 +1646,43 @@ export const getMessagesByTopicId = (topicId: string): IMessage[] => {
   return messagesStore.value[topicId] || [];
 };
 
+export const hasKnownTopicMessagesState = (topicId: string): boolean => {
+  if (!topicId) {
+    return false;
+  }
+
+  return (
+    canonicalTopicStateIds.has(topicId) ||
+    getMessagesByTopicId(topicId).length > 0 ||
+    getFullMessagesByTopicId(topicId).length > 0
+  );
+};
+
+export const setVisibleMessagesLimitForTopic = (
+  topicId: string,
+  visibleLimit: number
+): IMessage[] => {
+  if (!topicId || visibleLimit <= 0) {
+    return [];
+  }
+
+  const fullMessages = getFullMessagesByTopicId(topicId);
+  const visibleMessages = getMessagesByTopicId(topicId);
+  const sourceMessages = fullMessages.length ? fullMessages : visibleMessages;
+
+  if (!sourceMessages.length) {
+    return [];
+  }
+
+  saveMessagesToLocal(topicId, sourceMessages, {
+    syncLastMessage: false,
+    windowMode: 'latest',
+    visibleLimit
+  });
+
+  return getMessagesByTopicId(topicId);
+};
+
 export const clearVisibleMessagesForTopic = (topicId: string): void => {
   if (!topicId) {
     return;
@@ -1845,9 +1895,14 @@ export const mergeMessagesForTopic = (
 
 export const savePinnedMessagesToLocal = (
   topicId: string,
-  messages: IMessage[]
+  messages: IMessage[],
+  opts: { skipCache?: boolean } = {}
 ): void => {
   pinnedMessagesStore.value[topicId] = messages;
+
+  if (!opts.skipCache) {
+    void saveCachedPinnedMessages(topicId, messages);
+  }
 };
 
 export const getPinnedMessagesByTopicId = (topicId: string): IMessage[] => {
@@ -1926,7 +1981,7 @@ export const getGroupMessageWithPinned = (
   topicId: string,
   messages: IMessage[]
 ): void => {
-  pinnedMessagesStore.value[topicId] = messages;
+  savePinnedMessagesToLocal(topicId, messages);
 };
 
 const applyLocalReadStatus = (
