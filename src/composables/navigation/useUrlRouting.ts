@@ -55,31 +55,6 @@ const parseUrl = (): Route => {
 };
 
 const currentRoute = ref<Route>(parseUrl());
-let pendingHistoryUrl: string | null = null;
-let pendingHistoryRoute: Route | null = null;
-let scheduledHistoryFlush = false;
-
-const flushPendingHistoryUpdate = (): void => {
-  scheduledHistoryFlush = false;
-
-  if (!pendingHistoryUrl || !pendingHistoryRoute) {
-    return;
-  }
-
-  const nextUrl = pendingHistoryUrl;
-  const nextRoute = pendingHistoryRoute;
-
-  pendingHistoryUrl = null;
-  pendingHistoryRoute = null;
-
-  const currentHref = window.location.href;
-
-  if (currentHref !== nextUrl) {
-    window.history.replaceState({}, document.title, nextUrl);
-  }
-
-  currentRoute.value = nextRoute;
-};
 
 const updateUrl = (route: Route): void => {
   let newUrl: string;
@@ -120,15 +95,11 @@ const updateUrl = (route: Route): void => {
     return;
   }
 
-  pendingHistoryUrl = newUrl;
-  pendingHistoryRoute = route;
+  currentRoute.value = route;
 
-  if (scheduledHistoryFlush) {
-    return;
+  if (window.location.href !== newUrl) {
+    window.history.replaceState({}, document.title, newUrl);
   }
-
-  scheduledHistoryFlush = true;
-  requestAnimationFrame(flushPendingHistoryUpdate);
 };
 
 const navigateToDialogs = (dialogsId: string): void => {

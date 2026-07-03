@@ -49,6 +49,7 @@ let bootstrappedUserId: string | null = null;
 let bootstrapPromise: Promise<void> | null = null;
 let loadMorePromise: Promise<void> | null = null;
 let callHistorySdk: Pick<ChatSDK, 'getCallHistory'> | null = null;
+let shouldBootstrapWhenSdkReady = false;
 const pendingUpserts = new Map<string, ServerCallHistoryItem>();
 const pendingRemovals = new Set<string>();
 
@@ -59,6 +60,7 @@ const resetRuntimeState = (): void => {
   pendingRemovals.clear();
   bootstrapPromise = null;
   loadMorePromise = null;
+  shouldBootstrapWhenSdkReady = false;
 };
 
 const syncUserScope = (): string => {
@@ -297,6 +299,8 @@ export const bootstrapCallHistory = async (
   callHistorySdk = sdk;
 
   if (!sdk) {
+    shouldBootstrapWhenSdkReady = true;
+
     if (!rawCallHistory.value.length) {
       callHistoryState.errorMessage = 'Сервис чата ещё не инициализирован.';
     }
@@ -326,6 +330,7 @@ export const bootstrapCallHistory = async (
       await applyCallHistory(mergedCalls, userId);
       updateCallHistoryPagination(response.meta);
       bootstrappedUserId = userId;
+      shouldBootstrapWhenSdkReady = false;
       pendingRemovals.clear();
       pendingUpserts.clear();
     } catch (error) {
@@ -391,6 +396,7 @@ export const loadMoreCallHistory = async (
       await applyCallHistory(mergedCalls, userId);
       updateCallHistoryPagination(response.meta);
       bootstrappedUserId = userId;
+      shouldBootstrapWhenSdkReady = false;
       pendingRemovals.clear();
       pendingUpserts.clear();
     } catch (error) {
@@ -412,7 +418,16 @@ export const initializeCallHistorySync = (
 ): void => {
   callHistorySdk = sdk;
   void hydrateCallHistoryCache();
-  void bootstrapCallHistory(sdk);
+
+  if (sdk && shouldBootstrapWhenSdkReady) {
+    void bootstrapCallHistory(sdk);
+  }
+};
+
+export const shouldRefreshCallHistoryAfterReconnect = (): boolean => {
+  const userId = syncUserScope();
+
+  return !!userId && bootstrappedUserId === userId;
 };
 
 export const upsertCallHistoryMessage = async (

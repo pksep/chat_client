@@ -11,4 +11,6 @@ export interface IMessageListProps {
   isUpdateActionDisabled?: boolean;
   onUpdateClick?: () => void | Promise<void>;
   onDismissUpdateBanner?: () => void;
+  deferContentRender?: boolean;
+  suppressInitialSkeleton?: boolean;
 }

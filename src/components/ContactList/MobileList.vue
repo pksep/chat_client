@@ -11,56 +11,94 @@
     @dragleave="handleDragLeave"
     @drop="handleDropFiles"
   >
-    <div class="mobile-list-container__content">
-      <template v-if="activeSection === 'chats'">
-        <ChatsToolbar
-          :model-value="toolbarState.search"
-          :filter="toolbarState.filter"
-          :filter-counts="filterCounts"
-          :filter-muted-only="filterMutedOnly"
-          class="mobile-list-container__toolbar"
-          :data-testid="`${props.dataTestid}-MobileList`"
-          @update:model-value="setSearch"
-          @update:filter="setFilter"
-          @create-chat="handleShowAccount(TopicType.DM)"
-          @create-group="handleShowAccount(TopicType.Group)"
-          @create-bot="handleShowBot"
-        />
-
+    <div :class="['mobile-list-container__content', props.transitionClass]">
+      <div
+        ref="sectionTrackRef"
+        class="mobile-list-container__section-track"
+        :style="sectionTrackBaseStyle"
+        @transitionend="handleSectionTrackTransitionEnd"
+      >
         <section
-          class="chat-list"
+          ref="contentRef"
+          :class="[
+            'mobile-list-container__section mobile-list-container__section--chats',
+            {
+              'mobile-list-container__section--direct-hidden':
+                isSectionHiddenDuringDirectTransition('chats')
+            }
+          ]"
           role="region"
           aria-label="Contact list"
+          :aria-hidden="activeSection !== 'chats'"
           :data-testid="`${props.dataTestid}-ChatList-Section`"
+          @scroll.passive="handleContentScroll"
         >
-          <TopicList
-            :topics="contactList"
-            :data-testid="`${props.dataTestid}-ContactList`"
-            :show-checkbox="isShareSelectionActive"
-            :selected-topic-ids="selectedTopicIds"
-            :search-query="toolbarState.search"
-            :message-results="
-              isShareSelectionActive ? [] : filteredMessageSearchResults
-            "
-            :is-message-search-loading="
-              !isShareSelectionActive &&
-              (isMessageSearchPending || isMessageSearchLoading)
-            "
-            @unmount-topic="handleTopicSelect"
-            @unmount-message="handleMessageSearchClick"
+          <ChatsToolbar
+            :model-value="toolbarState.search"
+            :filter="toolbarState.filter"
+            :filter-counts="filterCounts"
+            :filter-muted-only="filterMutedOnly"
+            class="mobile-list-container__toolbar"
+            :data-testid="`${props.dataTestid}-MobileList`"
+            @update:model-value="setSearch"
+            @update:filter="setFilter"
+            @create-chat="handleShowAccount(TopicType.DM)"
+            @create-group="handleShowAccount(TopicType.Group)"
+            @create-bot="handleShowBot"
+          />
+
+          <div class="chat-list">
+            <TopicList
+              :topics="contactList"
+              :data-testid="`${props.dataTestid}-ContactList`"
+              :selected-topic-id="selectedTopicId"
+              :show-checkbox="isShareSelectionActive"
+              :selected-topic-ids="selectedTopicIds"
+              :search-query="toolbarState.search"
+              :message-results="
+                isShareSelectionActive ? [] : filteredMessageSearchResults
+              "
+              :is-message-search-loading="
+                !isShareSelectionActive &&
+                (isMessageSearchPending || isMessageSearchLoading)
+              "
+              @unmount-topic="handleTopicSelect"
+              @unmount-message="handleMessageSearchClick"
+            />
+          </div>
+        </section>
+
+        <section
+          :class="[
+            'mobile-list-container__section mobile-list-container__section--calls',
+            {
+              'mobile-list-container__section--direct-hidden':
+                isSectionHiddenDuringDirectTransition('calls')
+            }
+          ]"
+          :aria-hidden="activeSection !== 'calls'"
+        >
+          <CallsPage
+            :is-active="activeSection === 'calls'"
+            :data-testid="`${props.dataTestid}-MobileList-CallsPage`"
           />
         </section>
-      </template>
 
-      <CallsPage
-        v-else-if="activeSection === 'calls'"
-        :data-testid="`${props.dataTestid}-MobileList-CallsPage`"
-      />
-
-      <MenuProfilePanel
-        v-else
-        :data-testid="`${props.dataTestid}-MobileList-ProfilePanel`"
-      />
+        <section
+          :class="[
+            'mobile-list-container__section mobile-list-container__section--profile',
+            {
+              'mobile-list-container__section--direct-hidden':
+                isSectionHiddenDuringDirectTransition('profile')
+            }
+          ]"
+          :aria-hidden="activeSection !== 'profile'"
+        >
+          <MenuProfilePanel
+            :data-testid="`${props.dataTestid}-MobileList-ProfilePanel`"
+          />
+        </section>
+      </div>
     </div>
     <MenuBottomNav
       :is-collapse="false"
@@ -84,8 +122,20 @@
   </template>
 </template>
 
+<script lang="ts">
+let savedChatsScrollTop = 0;
+</script>
+
 <script setup lang="ts">
-import { reactive, computed, ref, watch, onBeforeUnmount } from 'vue';
+import {
+  reactive,
+  computed,
+  nextTick,
+  ref,
+  watch,
+  onBeforeUnmount,
+  onMounted
+} from 'vue';
 import type {
   IMobileListProps,
   IMobileListEmits
@@ -104,7 +154,10 @@ import {
 } from '../../composables/navigation/useUrlRouting';
 import { TopicType } from '../../services/useChatSDK/types';
 import { useChatsToolbarState } from '../../composables/useChatsToolbarState';
-import { useChatMenu } from '../../composables/useChatMenu';
+import {
+  type ChatMenuSection,
+  useChatMenu
+} from '../../composables/useChatMenu';
 import MenuBottomNav from '../Menu/MenuBottomNav.vue';
 import MenuProfilePanel from '../Menu/MenuProfilePanel.vue';
 import { getAuthUser } from '../../composables/useAuth';
@@ -144,11 +197,22 @@ const allTopics = computed(() => getTopicList());
 const messageSearchResults = ref<IMessageSearchResult[]>([]);
 const isMessageSearchLoading = ref(false);
 const isMessageSearchPending = ref(false);
+const contentRef = ref<HTMLElement | null>(null);
+const sectionTrackRef = ref<HTMLElement | null>(null);
+const pendingSelectedTopicId = ref<string | undefined>();
 let messageSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let messageSearchRequestToken = 0;
 const authUserId = computed(() => getAuthUser()?.id || '');
 const dragEnterDepth = ref(0);
 const isDragOverFiles = ref(false);
+const MENU_SECTION_ORDER: ChatMenuSection[] = ['chats', 'calls', 'profile'];
+const CHAT_SCROLL_RESTORE_MAX_FRAMES = 8;
+let chatsScrollRestoreFrameId: number | null = null;
+let chatsScrollRestoreAttempts = 0;
+let pendingChatsScrollTop: number | null = null;
+let isRestoringChatsScroll = false;
+let directSectionTransitionTimeoutId: number | null = null;
+const hiddenDirectTransitionSections = ref<Set<ChatMenuSection>>(new Set());
 
 const filterBadgeState = computed(() =>
   getChatsToolbarFilterBadgeState(allTopics.value, authUserId.value)
@@ -233,9 +297,188 @@ const filteredMessageSearchResults = computed(() => {
   });
 });
 
+const selectedTopicId = computed(
+  () => pendingSelectedTopicId.value || route.value.id || undefined
+);
+const activeSectionIndex = computed(() =>
+  Math.max(0, MENU_SECTION_ORDER.indexOf(activeSection.value))
+);
+const sectionTrackBaseStyle = computed(() => ({
+  '--mobile-menu-section-offset': `${activeSectionIndex.value * -100}%`
+}));
+
 const emits = defineEmits<IMobileListEmits>();
 
+const applySectionTrackOffset = (): void => {
+  if (!sectionTrackRef.value) {
+    return;
+  }
+
+  sectionTrackRef.value.style.setProperty(
+    '--mobile-menu-section-offset',
+    `${activeSectionIndex.value * -100}%`
+  );
+};
+
+const clearDirectSectionTransitionState = (): void => {
+  if (directSectionTransitionTimeoutId !== null) {
+    window.clearTimeout(directSectionTransitionTimeoutId);
+    directSectionTransitionTimeoutId = null;
+  }
+
+  hiddenDirectTransitionSections.value = new Set();
+};
+
+const isSectionHiddenDuringDirectTransition = (
+  section: ChatMenuSection
+): boolean => hiddenDirectTransitionSections.value.has(section);
+
+const hideIntermediateSectionsForDirectTransition = (
+  fromSection?: ChatMenuSection,
+  toSection?: ChatMenuSection
+): void => {
+  clearDirectSectionTransitionState();
+
+  if (!fromSection || !toSection || fromSection === toSection) {
+    return;
+  }
+
+  const fromIndex = MENU_SECTION_ORDER.indexOf(fromSection);
+  const toIndex = MENU_SECTION_ORDER.indexOf(toSection);
+
+  if (fromIndex < 0 || toIndex < 0 || Math.abs(toIndex - fromIndex) <= 1) {
+    return;
+  }
+
+  const [startIndex, endIndex] =
+    fromIndex < toIndex ? [fromIndex, toIndex] : [toIndex, fromIndex];
+  hiddenDirectTransitionSections.value = new Set(
+    MENU_SECTION_ORDER.slice(startIndex + 1, endIndex)
+  );
+
+  directSectionTransitionTimeoutId = window.setTimeout(() => {
+    clearDirectSectionTransitionState();
+  }, 320);
+};
+
+const handleSectionTrackTransitionEnd = (event: TransitionEvent): void => {
+  if (
+    event.target !== sectionTrackRef.value ||
+    event.propertyName !== 'transform'
+  ) {
+    return;
+  }
+
+  clearDirectSectionTransitionState();
+};
+
+const saveChatsScrollPosition = (): void => {
+  if (activeSection.value !== 'chats' || !contentRef.value) {
+    return;
+  }
+
+  if (isRestoringChatsScroll) {
+    return;
+  }
+
+  savedChatsScrollTop = contentRef.value.scrollTop;
+};
+
+const clearChatsScrollRestoreSchedule = (): void => {
+  if (chatsScrollRestoreFrameId !== null) {
+    window.cancelAnimationFrame(chatsScrollRestoreFrameId);
+    chatsScrollRestoreFrameId = null;
+  }
+};
+
+const finishChatsScrollRestore = (): void => {
+  clearChatsScrollRestoreSchedule();
+  isRestoringChatsScroll = false;
+  pendingChatsScrollTop = null;
+  chatsScrollRestoreAttempts = 0;
+};
+
+const applyChatsScrollRestore = (): boolean => {
+  const element = contentRef.value;
+  const targetTop = pendingChatsScrollTop ?? savedChatsScrollTop;
+
+  if (activeSection.value !== 'chats' || !element) {
+    return true;
+  }
+
+  const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
+  const nextScrollTop = Math.min(targetTop, maxScrollTop);
+
+  if (Math.abs(element.scrollTop - nextScrollTop) > 1) {
+    element.scrollTop = nextScrollTop;
+  }
+
+  return targetTop <= 0 || Math.abs(element.scrollTop - targetTop) <= 1;
+};
+
+const scheduleChatsScrollRestorePass = (): void => {
+  if (chatsScrollRestoreFrameId !== null) {
+    return;
+  }
+
+  chatsScrollRestoreFrameId = window.requestAnimationFrame(() => {
+    chatsScrollRestoreFrameId = null;
+
+    if (!isRestoringChatsScroll) {
+      return;
+    }
+
+    chatsScrollRestoreAttempts += 1;
+
+    if (
+      applyChatsScrollRestore() ||
+      chatsScrollRestoreAttempts >= CHAT_SCROLL_RESTORE_MAX_FRAMES
+    ) {
+      finishChatsScrollRestore();
+      return;
+    }
+
+    scheduleChatsScrollRestorePass();
+  });
+};
+
+const restoreChatsScrollPosition = (): void => {
+  if (activeSection.value !== 'chats') {
+    return;
+  }
+
+  pendingChatsScrollTop = savedChatsScrollTop;
+  isRestoringChatsScroll = true;
+  chatsScrollRestoreAttempts = 0;
+  clearChatsScrollRestoreSchedule();
+
+  if (applyChatsScrollRestore()) {
+    finishChatsScrollRestore();
+    return;
+  }
+
+  void nextTick(() => {
+    if (!isRestoringChatsScroll) {
+      return;
+    }
+
+    if (applyChatsScrollRestore()) {
+      finishChatsScrollRestore();
+      return;
+    }
+
+    scheduleChatsScrollRestorePass();
+  });
+};
+
+const handleContentScroll = (): void => {
+  saveChatsScrollPosition();
+};
+
 const handleTopicSelect = (topic: ITopic): void => {
+  saveChatsScrollPosition();
+  pendingSelectedTopicId.value = topic.id;
+
   if (isShareSelectionActive.value) {
     toggleShareTopic(topic.id);
   }
@@ -406,7 +649,41 @@ watch(
   { immediate: true }
 );
 
+watch(
+  () => activeSection.value,
+  (section, previousSection) => {
+    hideIntermediateSectionsForDirectTransition(previousSection, section);
+    applySectionTrackOffset();
+
+    if (previousSection === 'chats') {
+      saveChatsScrollPosition();
+    }
+
+    if (section === 'chats') {
+      void restoreChatsScrollPosition();
+    }
+  }
+);
+
+watch(activeSectionIndex, applySectionTrackOffset);
+
+watch(
+  () => contactList.value.length,
+  () => {
+    void restoreChatsScrollPosition();
+  }
+);
+
+onMounted(() => {
+  applySectionTrackOffset();
+  void restoreChatsScrollPosition();
+});
+
 onBeforeUnmount(() => {
+  saveChatsScrollPosition();
+  finishChatsScrollRestore();
+  clearDirectSectionTransitionState();
+
   if (messageSearchDebounceTimer) {
     clearTimeout(messageSearchDebounceTimer);
     messageSearchDebounceTimer = null;

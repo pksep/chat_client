@@ -277,6 +277,7 @@ const handleCollapse = (): void => {
     setActiveSection('chats');
   }
 
+  setSearch('');
   toggle();
 };
 

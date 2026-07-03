@@ -5,9 +5,29 @@
   gap: 10px;
   padding-inline: 10px;
   min-height: 58px;
-  &:hover,
+  cursor: pointer;
+
+  &:active,
   &.contact-list__item--active {
-    cursor: pointer;
+    background-color: var(--blue15);
+
+    & .contact-list__bottom {
+      background-color: var(--blue15);
+    }
+
+    .contact-list__description::after,
+    .contact-list__description p::after,
+    .contact-list__description strong::after {
+      background: linear-gradient(to right, transparent 0%, var(--blue15) 100%);
+    }
+    .contact-list__bottom::before {
+      background: linear-gradient(to right, transparent 0%, var(--blue15) 80%);
+    }
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .contact-list__item:hover {
     background-color: var(--blue15);
 
     & .contact-list__bottom {

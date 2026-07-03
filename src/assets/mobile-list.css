@@ -25,8 +25,55 @@
 
 .mobile-list-container__content {
   min-height: 0;
-  overflow-y: auto;
+  height: 100%;
+  overflow: hidden;
   padding-bottom: 0;
+  overscroll-behavior: contain;
+  position: relative;
+  touch-action: pan-y;
+}
+
+.mobile-list-container__section-track {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  transform: translate3d(var(--mobile-menu-section-offset, 0%), 0, 0);
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.mobile-list-container__section {
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.mobile-list-container__section--chats {
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+.mobile-list-container__section--chats .chat-list {
+  min-height: 0;
+  overflow: visible;
+}
+
+.mobile-list-container__section--chats .contact-list {
+  max-height: none;
+  overflow: visible;
+}
+
+.mobile-list-container__section--direct-hidden {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .mobile-list-container__toolbar {
@@ -69,8 +116,14 @@
     }
   }
 
-  .mobile-list-container__content::-webkit-scrollbar {
+  .mobile-list-container__section::-webkit-scrollbar {
     width: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mobile-list-container__section-track {
+      transition: none;
+    }
   }
 
   .mobile__list-modal__contact-selector {
