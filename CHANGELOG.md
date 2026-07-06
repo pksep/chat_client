@@ -1,3 +1,10 @@
+## [1.35.1](https://github.com/pksep/chat_client/compare/v1.35.0...v1.35.1) (2026-07-06)
+
+
+### Bug Fixes
+
+* hotfix auth ([a1b3d52](https://github.com/pksep/chat_client/commit/a1b3d52c6e21ad7efaf46b958c6a932d38d21b70))
+
 # [1.35.0](https://github.com/pksep/chat_client/compare/v1.34.0...v1.35.0) (2026-07-06)
 
 
