@@ -7,6 +7,7 @@ import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.os.Build;
 import android.util.Log;
+import android.view.KeyEvent;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -37,6 +38,9 @@ public class AudioOutputPlugin extends Plugin {
     private static final String ROUTE_EARPIECE = "earpiece";
     private static final String ROUTE_SPEAKER = "speaker";
     private static final String EVENT_AUDIO_ROUTE_CHANGED = "audioRouteChanged";
+    private static volatile boolean callVolumeControlsActive = false;
+    private static volatile int callVolumeControlStream = AudioManager.STREAM_VOICE_CALL;
+    private static volatile String callVolumeControlRoute = ROUTE_EARPIECE;
     private AudioDeviceCallback audioDeviceCallback;
     private String lastAppliedRoute = ROUTE_EARPIECE;
 
@@ -85,7 +89,11 @@ public class AudioOutputPlugin extends Plugin {
         }
 
         configureForCall(audioManager);
-        call.resolve(buildState(audioManager, resolvedRoute));
+        String currentRoute = resolvedRoute != null
+            ? resolvedRoute
+            : getCurrentRoute(audioManager);
+        bindVolumeControlsToRoute(audioManager, currentRoute);
+        call.resolve(buildState(audioManager, currentRoute));
     }
 
     @PluginMethod
@@ -218,6 +226,7 @@ public class AudioOutputPlugin extends Plugin {
             lastAppliedRoute = resolvedRoute;
         } else {
             lastAppliedRoute = getCurrentRoute(audioManager);
+            bindVolumeControlsToRoute(audioManager, lastAppliedRoute);
         }
 
         notifyListeners(
@@ -232,6 +241,44 @@ public class AudioOutputPlugin extends Plugin {
 
     private void configureForCall(AudioManager audioManager) {
         audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
+        callVolumeControlsActive = true;
+    }
+
+    @PluginMethod
+    public void releaseCallAudio(PluginCall call) {
+        AudioManager audioManager = getAudioManager();
+        if (audioManager == null) {
+            call.reject("AudioManager is unavailable");
+            return;
+        }
+
+        releaseCallAudio(audioManager);
+        call.resolve();
+    }
+
+    @SuppressWarnings("deprecation")
+    private void releaseCallAudio(AudioManager audioManager) {
+        stopBluetoothSco(audioManager);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                audioManager.clearCommunicationDevice();
+            } catch (SecurityException error) {
+                Log.w(TAG, "Failed to clear communication device", error);
+            }
+        }
+
+        audioManager.setSpeakerphoneOn(false);
+        audioManager.setMode(AudioManager.MODE_NORMAL);
+        callVolumeControlsActive = false;
+        callVolumeControlStream = AudioManager.STREAM_VOICE_CALL;
+        callVolumeControlRoute = ROUTE_EARPIECE;
+
+        if (getActivity() != null) {
+            getActivity().setVolumeControlStream(AudioManager.STREAM_MUSIC);
+        }
+
+        Log.d(TAG, "Released call audio routing");
     }
 
     private String resolveRequestedRoute(AudioManager audioManager, String requestedRoute) {
@@ -251,7 +298,7 @@ public class AudioOutputPlugin extends Plugin {
     }
 
     private String getDefaultConversationRoute(AudioManager audioManager) {
-        return hasBluetoothRoute(audioManager) ? ROUTE_BLUETOOTH : ROUTE_EARPIECE;
+        return ROUTE_EARPIECE;
     }
 
     @SuppressWarnings("deprecation")
@@ -261,6 +308,7 @@ public class AudioOutputPlugin extends Plugin {
         if (ROUTE_BLUETOOTH.equals(route)) {
             if (trySetCommunicationDevice(audioManager, ROUTE_BLUETOOTH)) {
                 audioManager.setSpeakerphoneOn(false);
+                bindVolumeControlsToRoute(audioManager, ROUTE_BLUETOOTH);
                 return ROUTE_BLUETOOTH;
             }
 
@@ -268,6 +316,7 @@ public class AudioOutputPlugin extends Plugin {
                 audioManager.setSpeakerphoneOn(false);
                 audioManager.startBluetoothSco();
                 audioManager.setBluetoothScoOn(true);
+                bindVolumeControlsToRoute(audioManager, ROUTE_BLUETOOTH);
                 return ROUTE_BLUETOOTH;
             } catch (SecurityException error) {
                 Log.w(TAG, "Bluetooth route is not permitted", error);
@@ -278,16 +327,85 @@ public class AudioOutputPlugin extends Plugin {
         stopBluetoothSco(audioManager);
 
         if (ROUTE_SPEAKER.equals(route)) {
-            if (!trySetCommunicationDevice(audioManager, ROUTE_SPEAKER)) {
-                audioManager.setSpeakerphoneOn(true);
-            }
+            trySetCommunicationDevice(audioManager, ROUTE_SPEAKER);
+            audioManager.setSpeakerphoneOn(true);
+            bindVolumeControlsToRoute(audioManager, ROUTE_SPEAKER);
             return ROUTE_SPEAKER;
         }
 
-        if (!trySetCommunicationDevice(audioManager, ROUTE_EARPIECE)) {
-            audioManager.setSpeakerphoneOn(false);
-        }
+        trySetCommunicationDevice(audioManager, ROUTE_EARPIECE);
+        audioManager.setSpeakerphoneOn(false);
+        bindVolumeControlsToRoute(audioManager, ROUTE_EARPIECE);
         return ROUTE_EARPIECE;
+    }
+
+    static int getVolumeControlStreamForRoute(String route) {
+        return ROUTE_SPEAKER.equals(route)
+            ? AudioManager.STREAM_MUSIC
+            : AudioManager.STREAM_VOICE_CALL;
+    }
+
+    private void bindVolumeControlsToRoute(AudioManager audioManager, String route) {
+        int volumeControlStream = getVolumeControlStreamForRoute(route);
+        callVolumeControlsActive = true;
+        callVolumeControlStream = volumeControlStream;
+        callVolumeControlRoute = route;
+
+        if (getActivity() != null) {
+            getActivity().setVolumeControlStream(volumeControlStream);
+        }
+
+        Log.d(
+            TAG,
+            "Call audio route bound: " +
+                buildAudioDebugSummary(audioManager, route, volumeControlStream)
+        );
+    }
+
+    public static boolean handleCallVolumeKeyEvent(Context context, KeyEvent event) {
+        if (!callVolumeControlsActive) {
+            return false;
+        }
+
+        int keyCode = event.getKeyCode();
+        if (
+            keyCode != KeyEvent.KEYCODE_VOLUME_UP &&
+            keyCode != KeyEvent.KEYCODE_VOLUME_DOWN
+        ) {
+            return false;
+        }
+
+        if (event.getAction() == KeyEvent.ACTION_UP) {
+            return true;
+        }
+
+        if (event.getAction() != KeyEvent.ACTION_DOWN) {
+            return false;
+        }
+
+        AudioManager audioManager =
+            (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager == null) {
+            return false;
+        }
+
+        int direction = keyCode == KeyEvent.KEYCODE_VOLUME_UP
+            ? AudioManager.ADJUST_RAISE
+            : AudioManager.ADJUST_LOWER;
+        audioManager.adjustStreamVolume(
+            callVolumeControlStream,
+            direction,
+            AudioManager.FLAG_SHOW_UI
+        );
+
+        Log.d(
+            TAG,
+            "Call volume key adjusted route=" +
+                callVolumeControlRoute +
+                ", stream=" +
+                getStreamName(callVolumeControlStream)
+        );
+        return true;
     }
 
     @SuppressWarnings("deprecation")
@@ -359,6 +477,8 @@ public class AudioOutputPlugin extends Plugin {
     private JSObject buildState(AudioManager audioManager, String resolvedRoute) {
         boolean bluetoothAvailable = hasBluetoothRoute(audioManager);
         String currentRoute = resolvedRoute != null ? resolvedRoute : getCurrentRoute(audioManager);
+        int volumeControlStream = getVolumeControlStreamForRoute(currentRoute);
+        AudioDeviceInfo activeOutputDevice = getActiveOutputDevice(audioManager, currentRoute);
         JSArray availableRoutes = new JSArray();
 
         availableRoutes.put(ROUTE_EARPIECE);
@@ -373,8 +493,67 @@ public class AudioOutputPlugin extends Plugin {
         result.put("defaultRoute", getDefaultConversationRoute(audioManager));
         result.put("availableRoutes", availableRoutes);
         result.put("bluetoothAvailable", bluetoothAvailable);
+        result.put("audioMode", getAudioModeName(audioManager.getMode()));
+        result.put("audioModeValue", audioManager.getMode());
+        result.put("volumeControlStream", getStreamName(volumeControlStream));
+        result.put("volumeControlStreamValue", volumeControlStream);
+        result.put(
+            "voiceCallVolume",
+            audioManager.getStreamVolume(AudioManager.STREAM_VOICE_CALL)
+        );
+        result.put(
+            "voiceCallMaxVolume",
+            audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
+        );
+        result.put("musicVolume", audioManager.getStreamVolume(AudioManager.STREAM_MUSIC));
+        result.put(
+            "musicMaxVolume",
+            audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        );
+        result.put("speakerphoneOn", audioManager.isSpeakerphoneOn());
+        result.put("bluetoothScoOn", audioManager.isBluetoothScoOn());
+        result.put("wiredHeadsetConnected", hasWiredRoute(audioManager));
+        result.put(
+            "activeOutputType",
+            activeOutputDevice != null
+                ? getDeviceTypeName(activeOutputDevice.getType())
+                : "unknown"
+        );
+        result.put(
+            "activeOutputName",
+            activeOutputDevice != null
+                ? String.valueOf(activeOutputDevice.getProductName())
+                : "unknown"
+        );
 
         return result;
+    }
+
+    private String buildAudioDebugSummary(
+        AudioManager audioManager,
+        String route,
+        int volumeControlStream
+    ) {
+        AudioDeviceInfo activeOutputDevice = getActiveOutputDevice(audioManager, route);
+
+        return "route=" + route +
+            ", mode=" + getAudioModeName(audioManager.getMode()) +
+            ", volumeControlStream=" + getStreamName(volumeControlStream) +
+            ", activeOutputType=" +
+            (activeOutputDevice != null
+                ? getDeviceTypeName(activeOutputDevice.getType())
+                : "unknown") +
+            ", speakerphoneOn=" + audioManager.isSpeakerphoneOn() +
+            ", bluetoothScoOn=" + audioManager.isBluetoothScoOn() +
+            ", wiredHeadsetConnected=" + hasWiredRoute(audioManager) +
+            ", voiceCallVolume=" +
+            audioManager.getStreamVolume(AudioManager.STREAM_VOICE_CALL) +
+            "/" +
+            audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL) +
+            ", musicVolume=" +
+            audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) +
+            "/" +
+            audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
     }
 
     @SuppressWarnings("deprecation")
@@ -415,6 +594,55 @@ public class AudioOutputPlugin extends Plugin {
         return findCommunicationDevice(audioManager, ROUTE_BLUETOOTH) != null;
     }
 
+    private boolean hasWiredRoute(AudioManager audioManager) {
+        try {
+            AudioDeviceInfo[] devices = audioManager.getDevices(
+                AudioManager.GET_DEVICES_OUTPUTS
+            );
+            for (AudioDeviceInfo device : devices) {
+                if (isWiredDevice(device)) {
+                    return true;
+                }
+            }
+        } catch (SecurityException error) {
+            Log.w(TAG, "Cannot read wired output devices", error);
+        }
+
+        return false;
+    }
+
+    private AudioDeviceInfo getActiveOutputDevice(
+        AudioManager audioManager,
+        String route
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                AudioDeviceInfo communicationDevice = audioManager.getCommunicationDevice();
+                if (communicationDevice != null) {
+                    return communicationDevice;
+                }
+            } catch (SecurityException error) {
+                Log.w(TAG, "Cannot read active communication device", error);
+            }
+        }
+
+        try {
+            AudioDeviceInfo[] devices = audioManager.getDevices(
+                AudioManager.GET_DEVICES_OUTPUTS
+            );
+
+            for (AudioDeviceInfo device : devices) {
+                if (isDeviceForRoute(device, route)) {
+                    return device;
+                }
+            }
+        } catch (SecurityException error) {
+            Log.w(TAG, "Cannot read active output device", error);
+        }
+
+        return null;
+    }
+
     private boolean isDeviceForRoute(AudioDeviceInfo device, String route) {
         if (ROUTE_BLUETOOTH.equals(route)) {
             return isBluetoothDevice(device);
@@ -424,7 +652,15 @@ public class AudioOutputPlugin extends Plugin {
             return device.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER;
         }
 
-        return device.getType() == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE;
+        return device.getType() == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE ||
+            isWiredDevice(device);
+    }
+
+    private boolean isWiredDevice(AudioDeviceInfo device) {
+        int type = device.getType();
+        return type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+            type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+            type == AudioDeviceInfo.TYPE_USB_HEADSET;
     }
 
     private boolean isBluetoothDevice(AudioDeviceInfo device) {
@@ -435,5 +671,72 @@ public class AudioOutputPlugin extends Plugin {
             (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
                 (type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
                     type == AudioDeviceInfo.TYPE_BLE_SPEAKER));
+    }
+
+    private String getAudioModeName(int mode) {
+        switch (mode) {
+            case AudioManager.MODE_NORMAL:
+                return "MODE_NORMAL";
+            case AudioManager.MODE_RINGTONE:
+                return "MODE_RINGTONE";
+            case AudioManager.MODE_IN_CALL:
+                return "MODE_IN_CALL";
+            case AudioManager.MODE_IN_COMMUNICATION:
+                return "MODE_IN_COMMUNICATION";
+            default:
+                return "MODE_UNKNOWN_" + mode;
+        }
+    }
+
+    private static String getStreamName(int stream) {
+        switch (stream) {
+            case AudioManager.STREAM_VOICE_CALL:
+                return "STREAM_VOICE_CALL";
+            case AudioManager.STREAM_MUSIC:
+                return "STREAM_MUSIC";
+            case AudioManager.STREAM_RING:
+                return "STREAM_RING";
+            case AudioManager.STREAM_NOTIFICATION:
+                return "STREAM_NOTIFICATION";
+            case AudioManager.STREAM_ALARM:
+                return "STREAM_ALARM";
+            case AudioManager.STREAM_SYSTEM:
+                return "STREAM_SYSTEM";
+            default:
+                return "STREAM_UNKNOWN_" + stream;
+        }
+    }
+
+    private String getDeviceTypeName(int type) {
+        switch (type) {
+            case AudioDeviceInfo.TYPE_BUILTIN_EARPIECE:
+                return "TYPE_BUILTIN_EARPIECE";
+            case AudioDeviceInfo.TYPE_BUILTIN_SPEAKER:
+                return "TYPE_BUILTIN_SPEAKER";
+            case AudioDeviceInfo.TYPE_WIRED_HEADSET:
+                return "TYPE_WIRED_HEADSET";
+            case AudioDeviceInfo.TYPE_WIRED_HEADPHONES:
+                return "TYPE_WIRED_HEADPHONES";
+            case AudioDeviceInfo.TYPE_BLUETOOTH_SCO:
+                return "TYPE_BLUETOOTH_SCO";
+            case AudioDeviceInfo.TYPE_BLUETOOTH_A2DP:
+                return "TYPE_BLUETOOTH_A2DP";
+            case AudioDeviceInfo.TYPE_HEARING_AID:
+                return "TYPE_HEARING_AID";
+            case AudioDeviceInfo.TYPE_USB_HEADSET:
+                return "TYPE_USB_HEADSET";
+            default:
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    if (type == AudioDeviceInfo.TYPE_BLE_HEADSET) {
+                        return "TYPE_BLE_HEADSET";
+                    }
+
+                    if (type == AudioDeviceInfo.TYPE_BLE_SPEAKER) {
+                        return "TYPE_BLE_SPEAKER";
+                    }
+                }
+
+                return "TYPE_UNKNOWN_" + type;
+        }
     }
 }

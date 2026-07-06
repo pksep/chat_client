@@ -181,6 +181,11 @@
   padding: 0 !important;
 }
 
+.call-modal__audio-output-button--active {
+  background-color: var(--white) !important;
+  color: var(--blue1);
+}
+
 .call-modal__audio-output-menu {
   position: absolute;
   left: 50%;

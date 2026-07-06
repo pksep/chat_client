@@ -127,6 +127,7 @@ type RemoteVideoSource = 'camera' | 'screen';
 type DirectCallRecoveryOptions = {
   waitForRemote?: boolean;
   remoteUserId?: string | null;
+  reason?: string;
 };
 
 type CallSocketAck = {
@@ -165,6 +166,8 @@ let connectAttemptId = 0;
 let activeCallTraceId: string | null = null;
 let lastTelemetryConnectionQuality: string | null = null;
 let currentCameraFacingMode: 'user' | 'environment' = 'user';
+let lastAudioOutputTelemetrySignature = '';
+let lastAudioOutputDiagnostics: Record<string, unknown> = {};
 let shouldEndCallOnConnectFailure = false;
 let shouldPreserveCallOnConnectFailure = false;
 let isExplicitHangupInProgress = false;
@@ -290,6 +293,8 @@ const ensureCallTelemetryTraceId = (): string => {
 const resetCallTelemetryState = (): void => {
   activeCallTraceId = null;
   lastTelemetryConnectionQuality = null;
+  lastAudioOutputTelemetrySignature = '';
+  lastAudioOutputDiagnostics = {};
 };
 
 const buildCallTelemetryPayload = (
@@ -307,7 +312,54 @@ const buildCallTelemetryPayload = (
   videoActive: state.isVideoActive,
   screenShareActive: state.isScreenSharingActive,
   audioOutputRoute: state.audioOutputRoute,
+  audioOutputDiagnostics: lastAudioOutputDiagnostics,
   elapsedCallMs: getElapsedCallDurationMs(),
+  ...payload
+});
+
+const getBrowserNetworkTelemetryPayload = (): Record<string, unknown> => {
+  const nav = typeof navigator !== 'undefined' ? navigator : undefined;
+  const connection = (
+    nav as
+      | (Navigator & {
+          connection?: {
+            effectiveType?: string;
+            downlink?: number;
+            rtt?: number;
+            saveData?: boolean;
+            type?: string;
+          };
+        })
+      | undefined
+  )?.connection;
+
+  return {
+    documentVisibility:
+      typeof document !== 'undefined' ? document.visibilityState : undefined,
+    documentHasFocus:
+      typeof document !== 'undefined' ? document.hasFocus() : undefined,
+    browserOnline: nav?.onLine,
+    networkEffectiveType: connection?.effectiveType,
+    networkType: connection?.type,
+    networkDownlink: connection?.downlink,
+    networkRtt: connection?.rtt,
+    networkSaveData: connection?.saveData
+  };
+};
+
+const buildCallRecoveryTelemetryPayload = (
+  reason: string | undefined,
+  activeRoom: Room | null = room,
+  payload: Record<string, unknown> = {}
+): Record<string, unknown> => ({
+  reason,
+  liveKitState: activeRoom?.state ?? null,
+  hasRoom: Boolean(activeRoom),
+  roomRemoteParticipantCount: activeRoom?.remoteParticipants.size ?? 0,
+  directCallRecoveryActive: Boolean(directCallRecoveryRoomId),
+  directCallRecoveryWaitForRemote,
+  isNativeAppInBackground,
+  ...getBrowserNetworkTelemetryPayload(),
   ...payload
 });
 
@@ -334,6 +386,59 @@ const recordCallTelemetryEvent = (
     entityType: 'call',
     entityId: roomId.value || topicId.value,
     payload: buildCallTelemetryPayload(payload)
+  });
+};
+
+const buildAudioOutputDiagnosticsPayload = (
+  audioState: AudioOutputState | null | undefined,
+  currentRoute: Exclude<AudioOutputRoute, 'auto'>
+): Record<string, unknown> => ({
+  audioOutputRoute: currentRoute,
+  audioOutputDefaultRoute:
+    audioState?.defaultRoute ?? state.audioOutputDefaultRoute,
+  audioOutputAvailableRoutes:
+    audioState?.availableRoutes ?? state.audioOutputAvailableRoutes,
+  audioMode: audioState?.audioMode ?? null,
+  audioModeValue: audioState?.audioModeValue ?? null,
+  volumeControlStream: audioState?.volumeControlStream ?? null,
+  volumeControlStreamValue: audioState?.volumeControlStreamValue ?? null,
+  voiceCallVolume: audioState?.voiceCallVolume ?? null,
+  voiceCallMaxVolume: audioState?.voiceCallMaxVolume ?? null,
+  musicVolume: audioState?.musicVolume ?? null,
+  musicMaxVolume: audioState?.musicMaxVolume ?? null,
+  speakerphoneOn: audioState?.speakerphoneOn ?? null,
+  bluetoothScoOn: audioState?.bluetoothScoOn ?? null,
+  wiredHeadsetConnected: audioState?.wiredHeadsetConnected ?? null,
+  activeOutputType: audioState?.activeOutputType ?? null,
+  activeOutputName: audioState?.activeOutputName ?? null
+});
+
+const recordAudioOutputDiagnostics = (
+  source: string,
+  audioState: AudioOutputState | null | undefined,
+  currentRoute: Exclude<AudioOutputRoute, 'auto'>
+): void => {
+  const payload = buildAudioOutputDiagnosticsPayload(audioState, currentRoute);
+  lastAudioOutputDiagnostics = payload;
+
+  if (
+    !open.value &&
+    !isCalling.value &&
+    !isIncoming.value &&
+    !isModalVisible.value
+  ) {
+    return;
+  }
+
+  const signature = JSON.stringify(payload);
+  if (signature === lastAudioOutputTelemetrySignature) {
+    return;
+  }
+
+  lastAudioOutputTelemetrySignature = signature;
+  recordCallTelemetryEvent('call.audio_output.state', {
+    source,
+    ...payload
   });
 };
 
@@ -899,7 +1004,15 @@ const applyAudioOutputState = (audioState?: AudioOutputState | null) => {
   state.audioOutputRoute = currentRoute;
   state.audioOutputDefaultRoute = defaultRoute;
   state.isSpeakerActive = currentRoute === 'speaker';
+  recordAudioOutputDiagnostics('apply', audioState, currentRoute);
 };
+
+const isCallReconnecting = () =>
+  callStatusNoticeKind.value === 'reconnecting' ||
+  !!directCallRecoveryRoomId ||
+  !!activeCallNetworkRecoveryPromise ||
+  room?.state === ConnectionState.Reconnecting ||
+  room?.state === ConnectionState.SignalReconnecting;
 
 export const refreshAudioOutputRoutes = async () => {
   if (!Capacitor.isNativePlatform()) {
@@ -939,6 +1052,20 @@ export const selectAudioOutputRoute = async (route: AudioOutputRoute) => {
   }
 };
 
+const releaseNativeCallAudio = (): void => {
+  if (!Capacitor.isNativePlatform()) {
+    return;
+  }
+
+  AudioOutput.releaseCallAudio().catch(error => {
+    console.warn('[LiveKit] Failed to release native call audio:', error);
+  });
+};
+
+const applyCurrentAudioOutputRoute = async () => {
+  await selectAudioOutputRoute(state.audioOutputRoute);
+};
+
 const handleNativeAudioRouteChanged = async (audioState: AudioOutputState) => {
   const wasBluetoothActive = state.audioOutputRoute === 'bluetooth';
   const wasBluetoothAvailable =
@@ -950,7 +1077,12 @@ const handleNativeAudioRouteChanged = async (audioState: AudioOutputState) => {
     return;
   }
 
-  if (open.value && !wasBluetoothAvailable && isBluetoothAvailable) {
+  if (
+    open.value &&
+    !isCallReconnecting() &&
+    !wasBluetoothAvailable &&
+    isBluetoothAvailable
+  ) {
     await selectAudioOutputRoute('bluetooth');
     return;
   }
@@ -981,7 +1113,7 @@ const setupAudioOutputRouteListener = () => {
 };
 
 const applyDefaultAudioOutputRoute = async () => {
-  await selectAudioOutputRoute('auto');
+  await selectAudioOutputRoute('earpiece');
 };
 
 const isGroupCallSession = (targetTopicId?: string | null): boolean => {
@@ -1225,6 +1357,17 @@ const startDirectCallRecovery = (
   directCallRecoveryWaitForRemote =
     !!options.waitForRemote || remoteReconnectingParticipants.size > 0;
   shouldEndCallOnConnectFailure = false;
+  recordCallTelemetryEvent(
+    'call.direct_recovery.started',
+    buildCallRecoveryTelemetryPayload(options.reason, room, {
+      targetRoomId: activeRoomId,
+      targetTopicId: activeTopicId,
+      waitForRemote: directCallRecoveryWaitForRemote,
+      remoteUserId: options.remoteUserId ?? null,
+      remoteReconnectingParticipantCount: remoteReconnectingParticipants.size
+    }),
+    'warn'
+  );
   showReconnectCallStatusNotice();
   ensureCallTimerContinues();
   isCalling.value = false;
@@ -2980,7 +3123,8 @@ const setupRoomListeners = (activeRoom: Room) => {
         !isGroupCallSession(topicId.value)
       ) {
         startDirectCallRecovery(roomId.value, topicId.value, {
-          waitForRemote: true
+          waitForRemote: true,
+          reason: 'participant-disconnected'
         });
       }
 
@@ -3095,7 +3239,8 @@ const setupRoomListeners = (activeRoom: Room) => {
 
       if (
         startDirectCallRecovery(roomId.value, topicId.value, {
-          waitForRemote: true
+          waitForRemote: true,
+          reason: 'livekit-disconnected'
         })
       ) {
         recordCallTelemetryEvent(
@@ -3347,7 +3492,7 @@ const connectToRoom = async () => {
       return;
     }
 
-    await applyDefaultAudioOutputRoute();
+    await applyCurrentAudioOutputRoute();
 
     await setLocalMicrophoneEnabled(nextRoom, state.isMicActive);
     if (state.isVideoActive) {
@@ -3407,15 +3552,11 @@ const connectToRoom = async () => {
   return connectPromise;
 };
 
-const shouldForceLiveKitReconnectAfterNetworkChange = (reason?: string) =>
-  [
-    'app-visible',
-    'browser-online',
-    'native-app-active',
-    'native-resume',
-    'network-change',
-    'network-poll'
-  ].includes(reason || '');
+const shouldReconnectLiveKitRoom = (activeRoom: Room | null): boolean =>
+  !activeRoom ||
+  activeRoom.state === ConnectionState.Disconnected ||
+  activeRoom.state === ConnectionState.Reconnecting ||
+  activeRoom.state === ConnectionState.SignalReconnecting;
 
 const recoverActiveCallMediaState = async (
   activeRoom: Room | null = room
@@ -3460,11 +3601,7 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
 
   recordCallTelemetryEvent(
     'call.network_recovery.start',
-    {
-      reason,
-      liveKitState: room?.state ?? null,
-      hasRoom: Boolean(room)
-    },
+    buildCallRecoveryTelemetryPayload(reason),
     'warn'
   );
 
@@ -3517,20 +3654,15 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
   clearExplicitHangupState();
   open.value = true;
   isModalVisible.value = true;
-  showReconnectCallStatusNotice();
   ensureCallTimerContinues();
 
   await recoverActiveCallMediaState(room);
 
-  const shouldReconnectRoom =
-    !room ||
-    room.state === ConnectionState.Disconnected ||
-    room.state === ConnectionState.Reconnecting ||
-    room.state === ConnectionState.SignalReconnecting ||
-    (shouldForceLiveKitReconnectAfterNetworkChange(reason) &&
-      room.state === ConnectionState.Connected);
+  const shouldReconnectRoom = shouldReconnectLiveKitRoom(room);
 
   if (shouldReconnectRoom) {
+    showReconnectCallStatusNotice();
+
     const previousPreserveCallOnConnectFailure =
       shouldPreserveCallOnConnectFailure;
     shouldPreserveCallOnConnectFailure = true;
@@ -3541,21 +3673,26 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
       showReconnectCallStatusNotice();
       if (activeTopicId && !isGroupCallSession(activeTopicId)) {
         startDirectCallRecovery(activeRoomId, activeTopicId, {
-          waitForRemote: true
+          waitForRemote: true,
+          reason: 'network-recovery-connect-failed'
         });
       }
       recordCallTelemetryEvent(
         'call.network_recovery.connect_failed',
-        {
-          reason,
+        buildCallRecoveryTelemetryPayload(reason, room, {
           ...getTelemetryErrorPayload(error)
-        },
+        }),
         'warn'
       );
       return false;
     } finally {
       shouldPreserveCallOnConnectFailure = previousPreserveCallOnConnectFailure;
     }
+  } else {
+    recordCallTelemetryEvent(
+      'call.network_recovery.room_preserved',
+      buildCallRecoveryTelemetryPayload(reason, room)
+    );
   }
 
   await recoverActiveCallMediaState(room);
@@ -3571,13 +3708,13 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
     activeTopicId
   ) {
     startDirectCallRecovery(activeRoomId, activeTopicId, {
-      waitForRemote: true
+      waitForRemote: true,
+      reason: 'network-recovery-no-remote'
     });
   }
 
   recordCallTelemetryEvent('call.network_recovery.completed', {
-    reason,
-    liveKitState: room?.state ?? null,
+    ...buildCallRecoveryTelemetryPayload(reason, room),
     remoteParticipantCount: room?.remoteParticipants.size ?? 0
   });
 
@@ -4512,6 +4649,7 @@ const showEndedCallNoticeAndReleaseMedia = (
 
   void stopLocalBackgroundProcessor();
   stopLocalMediaTracks();
+  releaseNativeCallAudio();
 
   if (activeRoom) {
     ignoredDisconnectedRoom = activeRoom;
@@ -4596,7 +4734,8 @@ export const handleCallEnded = (
   if (!endedByUserId) {
     if (
       startDirectCallRecovery(endedRoomId, endedTopicId, {
-        waitForRemote: true
+        waitForRemote: true,
+        reason: 'call-ended-without-user'
       })
     ) {
       syncRemoteParticipantState();
@@ -5147,6 +5286,7 @@ export const leaveCall = () => {
 
   void stopLocalBackgroundProcessor();
   stopLocalMediaTracks();
+  releaseNativeCallAudio();
 
   if (activeRoom) {
     activeRoom.disconnect();
@@ -5192,6 +5332,7 @@ export const cleanup = (disconnectRoom = true) => {
 
   void stopLocalBackgroundProcessor();
   stopLocalMediaTracks();
+  releaseNativeCallAudio();
 
   if (disconnectRoom && activeRoom) {
     activeRoom.disconnect();
