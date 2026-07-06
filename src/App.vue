@@ -55,7 +55,7 @@ import AuthorizationScreen from './components/AuthorizationScreen.vue';
 import Loading from './components/Loading.vue';
 import IosInstallPromptModal from './components/Menu/IosInstallPromptModal.vue';
 import { useIosInstallPrompt } from './composables/useIosInstallPrompt';
-import { setConfig } from './services/useConfig';
+import { areChatConfigsEqual, setConfig } from './services/useConfig';
 import {
   clearErpAuthSession,
   getChatAuthSession,
@@ -184,6 +184,11 @@ const getRuntimeConfigUrl = (baseUrl: string) =>
   `${normalizeServerUrl(baseUrl)}/config`;
 
 const applyConfig = (resolvedConfig: IChatContainerConfig) => {
+  if (areChatConfigsEqual(config.value, resolvedConfig)) {
+    setConfig(config.value || resolvedConfig);
+    return;
+  }
+
   config.value = resolvedConfig;
   setConfig(resolvedConfig);
 };
