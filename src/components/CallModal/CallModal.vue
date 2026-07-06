@@ -214,11 +214,15 @@
             >
               <button
                 class="call-modal__control-button call-modal__audio-output-button"
+                :class="{
+                  'call-modal__audio-output-button--active':
+                    audioOutputButtonActive
+                }"
                 :disabled="isBusyNoticeVisible"
                 type="button"
                 @click.stop="handleToggleAudioOutput('main')"
               >
-                <component :is="audioOutputButtonIcon" active />
+                <component :is="audioOutputButtonIcon" />
               </button>
               <div
                 v-if="activeAudioOutputMenu === 'main'"
@@ -452,10 +456,14 @@
             >
               <button
                 class="call-modal__control-button call-modal__audio-output-button"
+                :class="{
+                  'call-modal__audio-output-button--active':
+                    audioOutputButtonActive
+                }"
                 type="button"
                 @click.stop="handleToggleAudioOutput('overlay')"
               >
-                <component :is="audioOutputButtonIcon" active />
+                <component :is="audioOutputButtonIcon" />
               </button>
               <div
                 v-if="activeAudioOutputMenu === 'overlay'"
@@ -1229,8 +1237,25 @@ const audioOutputRouteIcons = {
   earpiece: AudioOutputPhoneIcon,
   speaker: AudioOutputSpeakerIcon
 } satisfies Record<SelectableAudioOutputRoute, Component>;
+const hasBluetoothAudioOutputRoute = computed(() =>
+  liveKitState.audioOutputAvailableRoutes.includes('bluetooth')
+);
+const audioOutputButtonRoute = computed<SelectableAudioOutputRoute>(() => {
+  if (liveKitState.audioOutputRoute === 'bluetooth') {
+    return 'bluetooth';
+  }
+
+  if (!hasBluetoothAudioOutputRoute.value) {
+    return 'speaker';
+  }
+
+  return liveKitState.audioOutputRoute;
+});
 const audioOutputButtonIcon = computed(
-  () => audioOutputRouteIcons[liveKitState.audioOutputRoute]
+  () => audioOutputRouteIcons[audioOutputButtonRoute.value]
+);
+const audioOutputButtonActive = computed(
+  () => liveKitState.audioOutputRoute === 'speaker'
 );
 const audioOutputRouteOptions = computed(() =>
   audioOutputRouteOrder

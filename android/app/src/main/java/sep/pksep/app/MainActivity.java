@@ -5,6 +5,7 @@ import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
 
@@ -80,6 +81,15 @@ public class MainActivity extends BridgeActivity {
         if (hasFocus && callFullscreenSystemUiEnabled) {
             applyCallFullscreenSystemUi();
         }
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (AudioOutputPlugin.handleCallVolumeKeyEvent(this, event)) {
+            return true;
+        }
+
+        return super.dispatchKeyEvent(event);
     }
 
     private void registerCustomPluginsIfNeeded() {
