@@ -365,7 +365,7 @@
     ref="messageListInputRef"
     :edit-message="state.editMessage"
     :reply-message="state.replyMessage"
-    :forward-messages="state.forwardMessages"
+    :forward-messages="activeForwardMessages"
     :data-testid="props.dataTestid"
     @send="handleSend"
     @attach-file="handleAttachFile"
@@ -461,10 +461,7 @@ import { Capacitor } from '@capacitor/core';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
 import SelectedMessagesContent from './Header/SelectedMessagesContent.vue';
-import {
-  consumePendingForwardMessages,
-  usePendingForwardMessages
-} from '../composables/useForwardMessages';
+import { usePendingForwardMessages } from '../composables/useForwardMessages';
 import { ensureMediaObjectUrl } from '../services/useMediaBlobCache';
 import { isGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
 import {
@@ -1134,11 +1131,21 @@ const applyPendingForwardMessages = () => {
 
   state.replyMessage = null;
   state.editMessage = null;
-  state.forwardMessages = consumePendingForwardMessages(route.value.id);
+  state.forwardMessages = [...pendingForwardMessages.value];
   nextTick(() => {
     messageListInputRef.value?.focus();
   });
 };
+
+const activeForwardMessages = computed(() => {
+  if (state.forwardMessages.length > 0) {
+    return state.forwardMessages;
+  }
+
+  return pendingForwardTopicId.value === route.value.id
+    ? pendingForwardMessages.value
+    : [];
+});
 
 const warmVisibleTopicMedia = async (topicId: string) => {
   const visibleMessages = getMessagesByTopicId(topicId);
@@ -1848,7 +1855,11 @@ const handleScroll = async (): Promise<void> => {
   resetUnreadIfViewingBottom();
 };
 
-const { handleSend, handleAttachFile, handleRetryMessage } = useMessageSender(
+const {
+  handleSend: handleMessageSend,
+  handleAttachFile,
+  handleRetryMessage
+} = useMessageSender(
   route,
   inputText,
   state,
@@ -1857,6 +1868,11 @@ const { handleSend, handleAttachFile, handleRetryMessage } = useMessageSender(
   scrollToBottom,
   clearSellectedMessage
 );
+
+const handleSend: typeof handleMessageSend = (...args) => {
+  applyPendingForwardMessages();
+  return handleMessageSend(...args);
+};
 
 onMounted(async () => {
   handleMastraMounted();
@@ -2030,6 +2046,7 @@ watch(
     state.editMessage = null;
     state.forwardMessages = [];
     inputText.value = getLocalStorageInputText.value;
+    applyPendingForwardMessages();
 
     clearSelectedMessages();
 
@@ -2124,11 +2141,7 @@ watch(
       applyUnreadMarkerStateForTopic(topicId);
     }
 
-    const consumedForwardMessages = consumePendingForwardMessages(topicId);
-
-    if (consumedForwardMessages.length > 0) {
-      state.forwardMessages = consumedForwardMessages;
-    }
+    applyPendingForwardMessages();
 
     await nextTick();
 
