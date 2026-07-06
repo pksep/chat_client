@@ -1,3 +1,15 @@
+# [1.35.0](https://github.com/pksep/chat_client/compare/v1.34.0...v1.35.0) (2026-07-06)
+
+
+### Bug Fixes
+
+* hotfix recursion ([d49034b](https://github.com/pksep/chat_client/commit/d49034b4e80bfef6d35fc8fc83b0975eeecc3574))
+
+
+### Features
+
+* web update ([e61133b](https://github.com/pksep/chat_client/commit/e61133bfea9169b2b6d271e7d8dfd321e361a9d2))
+
 # [1.34.0](https://github.com/pksep/chat_client/compare/v1.33.0...v1.34.0) (2026-07-03)
 
 
