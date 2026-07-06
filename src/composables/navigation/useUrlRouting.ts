@@ -15,6 +15,9 @@ interface Route {
   id: string | null;
 }
 
+const normalizeHref = (value: string): string =>
+  new URL(value, window.location.origin).href;
+
 const parseUrl = (): Route => {
   const url = new URL(window.location.href);
   const pathParts = url.pathname.split('/').filter(part => part !== '');
@@ -87,18 +90,21 @@ const updateUrl = (route: Route): void => {
     newUrl += '?' + searchParams.toString();
   }
 
+  const currentHref = normalizeHref(window.location.href);
+  const nextHref = normalizeHref(newUrl);
+
   if (
     currentRoute.value.type === route.type &&
     currentRoute.value.id === route.id &&
-    window.location.href === newUrl
+    currentHref === nextHref
   ) {
     return;
   }
 
   currentRoute.value = route;
 
-  if (window.location.href !== newUrl) {
-    window.history.replaceState({}, document.title, newUrl);
+  if (currentHref !== nextHref) {
+    window.history.replaceState({}, document.title, nextHref);
   }
 };
 
