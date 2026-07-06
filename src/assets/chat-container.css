@@ -277,6 +277,18 @@ button.primary-yui-kit.disabled-yui-kit {
 }
 
 @media screen and (width <= 768px) {
+  .chat-container {
+    --mobile-header-height: 58px;
+    --mobile-active-call-height: 45px;
+    --mobile-pinned-messages-offset: var(--mobile-header-height);
+  }
+
+  .chat-container.chat-container--active-call {
+    --mobile-pinned-messages-offset: calc(
+      var(--mobile-header-height) + var(--mobile-active-call-height)
+    );
+  }
+
   .chat__info {
     display: none;
   }

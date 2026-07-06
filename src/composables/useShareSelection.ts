@@ -57,7 +57,7 @@ export const useShareSelection = () => {
   );
 
   const startShareSelection = (): void => {
-    if (!hasPendingShareBatches.value) {
+    if (!hasPendingShareBatches.value || isShareSelectionActive.value) {
       return;
     }
 

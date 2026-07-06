@@ -30,8 +30,7 @@
         @animationend="handleMobileRouteAnimationEnd"
       >
         <PinnedMessages
-          v-if="isMobileMessageListMounted"
-          v-show="isMobileMessageContentReady"
+          v-if="route.id"
           @unmount-set-selected-message="scrollToMessage"
         />
         <MessageList
@@ -166,7 +165,10 @@ import {
   consumePendingSearchNavigation,
   getPendingSearchNavigation
 } from '../composables/useMessageSearch';
-import { hasKnownTopicMessagesState } from '../services/useMessages';
+import {
+  fetchPinnedMessagesForTopic,
+  hasKnownTopicMessagesState
+} from '../services/useMessages';
 
 export interface IChatProps extends IMessageListProps {
   dataTestid?: string;
@@ -389,6 +391,16 @@ watch(
   ],
   () => {
     void scrollToPendingSearchMessage();
+  },
+  { immediate: true }
+);
+
+watch(
+  [() => route.value.id, isMobile],
+  ([topicId, mobile]) => {
+    if (mobile && topicId) {
+      void fetchPinnedMessagesForTopic(topicId);
+    }
   },
   { immediate: true }
 );
