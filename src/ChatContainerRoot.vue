@@ -368,9 +368,9 @@ watch(
 );
 
 watch(
-  () => [hasPendingShareBatches.value, isShareSelectionActive.value],
-  ([hasPendingShares, isShareActive]) => {
-    if (hasPendingShares && !isShareActive) {
+  hasPendingShareBatches,
+  hasPendingShares => {
+    if (hasPendingShares && !isShareSelectionActive.value) {
       startShareSelection();
     }
   },

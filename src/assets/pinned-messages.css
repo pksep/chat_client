@@ -10,6 +10,7 @@
 
 @media screen and (width <= 768px) {
   .pinned-messages {
+    margin-top: var(--mobile-pinned-messages-offset, 58px);
     width: 100%;
   }
 }
