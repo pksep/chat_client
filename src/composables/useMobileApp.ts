@@ -212,15 +212,13 @@ export function useMobileApp() {
       localStorage.getItem(WEB_UPDATE_VERSION_STORAGE_KEY) || '',
       10
     );
+    const seenVersion = Number.isFinite(storedVersion) ? storedVersion : 0;
 
     if (!Number.isFinite(storedVersion)) {
       localStorage.setItem(WEB_UPDATE_VERSION_STORAGE_KEY, String(nextVersion));
-      isWebUpdateBanner.value = false;
-      showUpdateBanner.value = false;
-      return;
     }
 
-    isWebUpdateBanner.value = storedVersion < nextVersion;
+    isWebUpdateBanner.value = seenVersion < nextVersion;
     showUpdateBanner.value = isWebUpdateBanner.value;
   };
 

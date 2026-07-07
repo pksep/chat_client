@@ -3655,7 +3655,9 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
 
   clearExplicitHangupState();
   open.value = true;
-  isModalVisible.value = true;
+  if (!isPassiveCallRecoveryReason(reason)) {
+    isModalVisible.value = true;
+  }
   ensureCallTimerContinues();
 
   await recoverActiveCallMediaState(room);
