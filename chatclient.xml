@@ -5,10 +5,10 @@
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <inserted t="I">8</inserted>
-    <seconds t="F">197.980371316</seconds>
+    <seconds t="F">145.704783016</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-07-07T22:03:50Z</when>
+    <when t="T">2026-07-07T23:36:39Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -18776,13 +18776,13 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.17).</text>
   </f>
   <f>
     <_id t="I">897</_id>
-    <_job t="I">28901562297</_job>
-    <_time t="T">2026-07-07T22:00:39Z</_time>
+    <_job t="I">28906075540</_job>
+    <_time t="T">2026-07-07T23:34:21Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <events_were_scanned t="I">14511510481</events_were_scanned>
+    <events_were_scanned t="I">14515455860</events_were_scanned>
     <latest_issue_was_found t="I">72</latest_issue_was_found>
-    <min_pull_was_found t="I">311</min_pull_was_found>
+    <min_pull_was_found t="I">312</min_pull_was_found>
     <repository t="I">1053332035</repository>
     <what t="S">iterate</what>
     <where t="S">github</where>
