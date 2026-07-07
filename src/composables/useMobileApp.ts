@@ -63,6 +63,11 @@ const shouldShowNativeUpdateBanner = (
   );
 };
 
+const isActiveNativeInstallStatus = (installStatus: number): boolean =>
+  installStatus === RuStoreInstallStatus.DOWNLOADED ||
+  installStatus === RuStoreInstallStatus.DOWNLOADING ||
+  installStatus === RuStoreInstallStatus.PENDING;
+
 export function useMobileApp() {
   const applyNativeUpdateInfo = (
     appUpdateInfo: RuStoreAppUpdateInfo | null
@@ -100,10 +105,17 @@ export function useMobileApp() {
       updateDownloadPercent.value = null;
     }
 
+    const previousUpdateAvailability =
+      nativeAppUpdateInfo.value?.updateAvailability ??
+      RuStoreUpdateAvailability.UNKNOWN;
+    const nextUpdateAvailability = isActiveNativeInstallStatus(
+      updateInstallStatus.value
+    )
+      ? RuStoreUpdateAvailability.UPDATE_AVAILABLE
+      : previousUpdateAvailability;
+
     nativeAppUpdateInfo.value = {
-      updateAvailability:
-        nativeAppUpdateInfo.value?.updateAvailability ??
-        RuStoreUpdateAvailability.UPDATE_AVAILABLE,
+      updateAvailability: nextUpdateAvailability,
       installStatus: updateInstallStatus.value,
       availableVersionCode: nativeAppUpdateInfo.value?.availableVersionCode
     };

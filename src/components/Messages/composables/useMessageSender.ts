@@ -409,8 +409,7 @@ export function useMessageSender(
     pendingMessageRetryStates.delete(retryKey);
   };
 
-  const isSendAvailable = (): boolean =>
-    getHasWebsocketConnection() && navigator.onLine;
+  const isSendAvailable = (): boolean => getHasWebsocketConnection();
 
   const buildMediaPayload = (media: IMedia): IMedia =>
     ({
