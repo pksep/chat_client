@@ -1,3 +1,15 @@
+## [1.35.2](https://github.com/pksep/chat_client/compare/v1.35.1...v1.35.2) (2026-07-07)
+
+
+### Bug Fixes
+
+* autoopening call modal ([fb607c3](https://github.com/pksep/chat_client/commit/fb607c383d1f003404e8bbd4b94e49b38590de02))
+* forward message ([3e65a88](https://github.com/pksep/chat_client/commit/3e65a888171642e279653e719be04f3ce444a7b6))
+* reconnect vpn ([6acb7db](https://github.com/pksep/chat_client/commit/6acb7db559c50adddf39c872120a17c8a4da2e1d))
+* send message after change vpn ([6056106](https://github.com/pksep/chat_client/commit/60561069473122bea8be7b938d9a1bb8c69708b9))
+* volume keys in mobile calls ([a8cef42](https://github.com/pksep/chat_client/commit/a8cef42219c2bea39a095d75ac7055c051357a40))
+* web update ([5e76a13](https://github.com/pksep/chat_client/commit/5e76a13c53d9338e9bf4462b17b136e7cccfbf1b))
+
 ## [1.35.1](https://github.com/pksep/chat_client/compare/v1.35.0...v1.35.1) (2026-07-06)
 
 
