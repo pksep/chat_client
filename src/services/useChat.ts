@@ -82,6 +82,13 @@ import {
   shouldRefreshCallHistoryAfterReconnect,
   upsertCallHistoryMessage
 } from './useCallHistory';
+import {
+  activeCallTopicId,
+  isAnyCallDialing,
+  isAnyCallIncoming,
+  isAnyCallModalVisible,
+  isCallActive
+} from './useCallState';
 import { normalizeUserStatus } from '../utils/userStatus';
 import { normalizeDateValue } from '../utils/dateValue';
 import { getIsTopicMessageVisible } from './useTopicViewportState';
@@ -926,17 +933,76 @@ const MAX_BACKGROUND_TOPIC_RECONCILES = 12;
 const FRESH_SYNC_THROTTLE_MS = 5000;
 const HARD_RECONNECT_THROTTLE_MS = 10000;
 const NATIVE_NETWORK_RECOVERY_GRACE_MS = 15000;
+const BROWSER_NETWORK_RECOVERY_GRACE_MS = 10000;
 const HTTP_HEALTH_PROBE_TIMEOUT_MS = 8000;
 const HTTP_HEALTH_PROBE_RETRY_DELAY_MS = 1500;
 const NATIVE_HTTP_HEALTH_PROBE_ATTEMPTS = 3;
 let networkStatePollInterval: ReturnType<typeof setInterval> | null = null;
+let browserOfflineFallbackTimeout: ReturnType<typeof setTimeout> | null = null;
 let removeAppVisibilityListener: (() => void) | null = null;
 let lastFreshSyncRequestedAt = 0;
 let lastHardReconnectAt = 0;
 let nativeNetworkRecoveryUntil = 0;
+let browserNetworkRecoveryUntil = 0;
 let connectionAttemptId = 0;
 
 const route = useUrlWatcher();
+
+const hasLiveSocketConnection = (): boolean =>
+  Boolean(hasWebsocketConnection.value || chatSDK?.isConnected());
+
+const hasActiveCallRuntime = (): boolean =>
+  Boolean(
+    isCallActive.value ||
+      isAnyCallModalVisible.value ||
+      isAnyCallDialing.value ||
+      isAnyCallIncoming.value ||
+      activeCallTopicId.value
+  );
+
+const shouldAssumeOnlineForBrowserRecovery = (): boolean =>
+  !Capacitor.isNativePlatform() &&
+  (Date.now() < browserNetworkRecoveryUntil || hasLiveSocketConnection());
+
+const getEffectiveBrowserNetworkState = (): boolean =>
+  browserOnline.value || shouldAssumeOnlineForBrowserRecovery();
+
+const clearBrowserOfflineFallback = (): void => {
+  if (!browserOfflineFallbackTimeout) {
+    return;
+  }
+
+  clearTimeout(browserOfflineFallbackTimeout);
+  browserOfflineFallbackTimeout = null;
+};
+
+const scheduleBrowserOfflineFallback = (): void => {
+  clearBrowserOfflineFallback();
+
+  browserOfflineFallbackTimeout = setTimeout(() => {
+    browserOfflineFallbackTimeout = null;
+
+    if (
+      typeof navigator === 'undefined' ||
+      navigator.onLine ||
+      hasLiveSocketConnection()
+    ) {
+      browserOnline.value = true;
+      lastKnownNetworkFingerprint = getNetworkFingerprint(true);
+      return;
+    }
+
+    browserNetworkRecoveryUntil = 0;
+    syncBrowserNetworkState(false);
+    lastKnownNetworkFingerprint = getNetworkFingerprint(false);
+  }, BROWSER_NETWORK_RECOVERY_GRACE_MS);
+};
+
+const beginBrowserNetworkRecoveryGrace = (): void => {
+  browserNetworkRecoveryUntil = Date.now() + BROWSER_NETWORK_RECOVERY_GRACE_MS;
+  syncBrowserNetworkState(true);
+  scheduleBrowserOfflineFallback();
+};
 
 const getNetworkInformation = (): NetworkInformationLike | null =>
   (typeof navigator !== 'undefined'
@@ -984,6 +1050,10 @@ const resolveEffectiveOnlineState = (
   }
 
   if (shouldAssumeOnlineForNativeRecovery(reason, assumeOnlineOnNative)) {
+    return true;
+  }
+
+  if (shouldAssumeOnlineForBrowserRecovery()) {
     return true;
   }
 
@@ -1129,7 +1199,7 @@ const reconcileTopicCachesAfterReconnect = async (): Promise<void> => {
 };
 
 const shouldContinueReconnectRefresh = (): boolean =>
-  Boolean(chatSDK && browserOnline.value);
+  Boolean(chatSDK && getEffectiveBrowserNetworkState());
 
 const waitForChatHttpHealth = async (
   reason: ReconnectRefreshReason
@@ -1162,10 +1232,15 @@ const waitForChatHttpHealth = async (
     }
   }
 
-  hasWebsocketConnection.value = false;
-  isWebsocketConnecting.value = false;
+  if (!hasLiveSocketConnection()) {
+    hasWebsocketConnection.value = false;
+    isWebsocketConnecting.value = false;
+  }
 
-  if (!shouldAssumeOnlineForNativeRecovery(reason)) {
+  if (
+    !shouldAssumeOnlineForNativeRecovery(reason) &&
+    !shouldAssumeOnlineForBrowserRecovery()
+  ) {
     browserOnline.value = false;
   }
 
@@ -1323,7 +1398,15 @@ const reconnectChatOnResume = (): void => {
 const hardReconnectChatAfterNetworkChange = (
   reason: ReconnectRefreshReason
 ): void => {
-  if (!chatSDK || !browserOnline.value) {
+  if (!chatSDK || !getEffectiveBrowserNetworkState()) {
+    return;
+  }
+
+  if (hasActiveCallRuntime()) {
+    console.info('Skipping chat websocket hard reconnect during active call', {
+      reason
+    });
+    reconnectChatOnResume();
     return;
   }
 
@@ -1354,7 +1437,7 @@ const syncFreshDataForResume = (
   reason: ReconnectRefreshReason,
   opts?: { hardReconnect?: boolean; forceRefresh?: boolean }
 ): void => {
-  if (!chatSDK || !browserOnline.value) {
+  if (!chatSDK || !getEffectiveBrowserNetworkState()) {
     return;
   }
 
@@ -1415,6 +1498,10 @@ const handleNetworkOrResumeChange = (
 };
 
 const syncBrowserNetworkState = (isOnline: boolean): void => {
+  if (isOnline) {
+    clearBrowserOfflineFallback();
+  }
+
   browserOnline.value = isOnline;
 
   if (!isOnline) {
@@ -1439,8 +1526,8 @@ const pollBrowserNetworkState = (): void => {
     return;
   }
 
-  const nextOnlineState = navigator.onLine;
-  const nextFingerprint = getNetworkFingerprint();
+  const nextOnlineState = resolveEffectiveOnlineState('network-poll');
+  const nextFingerprint = getNetworkFingerprint(nextOnlineState);
 
   if (
     nextOnlineState !== browserOnline.value ||
@@ -1626,8 +1713,8 @@ export const initializeChat = async (options: {
         return;
       }
 
-      syncBrowserNetworkState(false);
-      lastKnownNetworkFingerprint = getNetworkFingerprint();
+      beginBrowserNetworkRecoveryGrace();
+      lastKnownNetworkFingerprint = getNetworkFingerprint(true);
     });
 
     if (Capacitor.isNativePlatform()) {
@@ -2027,16 +2114,12 @@ export const getMessagesWithLoadingStatus = (): ChatMessage[] => {
 };
 
 export const getIsWebsocketConnecting = () =>
-  browserOnline.value && isWebsocketConnecting.value;
+  getEffectiveBrowserNetworkState() && isWebsocketConnecting.value;
 export const getHasWebsocketConnection = () =>
-  browserOnline.value && hasWebsocketConnection.value;
-export const getHasBrowserNetwork = () => browserOnline.value;
+  getEffectiveBrowserNetworkState() && hasWebsocketConnection.value;
+export const getHasBrowserNetwork = () => getEffectiveBrowserNetworkState();
 export const getCanSendReadReceipts = (): boolean => {
-  return (
-    browserOnline.value &&
-    hasWebsocketConnection.value &&
-    getIsAppActivelyVisible()
-  );
+  return getHasWebsocketConnection() && getIsAppActivelyVisible();
 };
 
 export const getIsRecentlyReconnected = () => isRecentlyReconnected.value;

@@ -3553,10 +3553,12 @@ const connectToRoom = async () => {
 };
 
 const shouldReconnectLiveKitRoom = (activeRoom: Room | null): boolean =>
-  !activeRoom ||
-  activeRoom.state === ConnectionState.Disconnected ||
-  activeRoom.state === ConnectionState.Reconnecting ||
-  activeRoom.state === ConnectionState.SignalReconnecting;
+  !activeRoom || activeRoom.state === ConnectionState.Disconnected;
+
+const isPassiveCallRecoveryReason = (reason?: string): boolean =>
+  reason === 'window-focus' ||
+  reason === 'app-visible' ||
+  reason === 'network-poll';
 
 const recoverActiveCallMediaState = async (
   activeRoom: Room | null = room
@@ -3657,6 +3659,18 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
   ensureCallTimerContinues();
 
   await recoverActiveCallMediaState(room);
+
+  if (
+    isPassiveCallRecoveryReason(reason) &&
+    room?.state === ConnectionState.Connected
+  ) {
+    recordCallTelemetryEvent('call.network_recovery.skipped_connected_room', {
+      ...buildCallRecoveryTelemetryPayload(reason, room),
+      remoteParticipantCount: room.remoteParticipants.size
+    });
+
+    return true;
+  }
 
   const shouldReconnectRoom = shouldReconnectLiveKitRoom(room);
 
