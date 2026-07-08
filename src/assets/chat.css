@@ -310,10 +310,16 @@ p.chat__nothing-paragraph {
   .chat__mobile-instant-input-field {
     height: 42px;
     border-radius: 16px;
-    background:
-      linear-gradient(90deg, transparent, rgb(255 255 255 / 44%), transparent),
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgb(255 255 255 / 44%),
+        transparent
+      ),
       var(--grey1);
-    background-size: 220% 100%, 100% 100%;
+    background-size:
+      220% 100%,
+      100% 100%;
     animation: chat-message-skeleton-shimmer 1.15s ease-in-out infinite;
   }
 
@@ -414,10 +420,16 @@ p.chat__nothing-paragraph {
     height: 35px;
     margin-bottom: 5px;
     border-radius: 50%;
-    background:
-      linear-gradient(90deg, transparent, rgb(255 255 255 / 42%), transparent),
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgb(255 255 255 / 42%),
+        transparent
+      ),
       rgb(255 255 255 / 68%);
-    background-size: 220% 100%, 100% 100%;
+    background-size:
+      220% 100%,
+      100% 100%;
     box-shadow: 0 8px 20px rgb(50 74 120 / 8%);
     animation: chat-message-skeleton-shimmer 1.15s ease-in-out infinite;
     backdrop-filter: blur(10px);
@@ -433,10 +445,16 @@ p.chat__nothing-paragraph {
     display: block;
     flex: 0 0 auto;
     overflow: hidden;
-    background:
-      linear-gradient(90deg, transparent, rgb(255 255 255 / 42%), transparent),
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgb(255 255 255 / 42%),
+        transparent
+      ),
       rgb(255 255 255 / 72%);
-    background-size: 220% 100%, 100% 100%;
+    background-size:
+      220% 100%,
+      100% 100%;
     box-shadow: 0 8px 22px rgb(50 74 120 / 8%);
     animation: chat-message-skeleton-shimmer 1.15s ease-in-out infinite;
     backdrop-filter: blur(10px);
@@ -453,8 +471,12 @@ p.chat__nothing-paragraph {
     align-self: flex-end;
     width: min(64%, 300px);
     border-radius: 18px 18px 6px 18px;
-    background:
-      linear-gradient(90deg, transparent, rgb(255 255 255 / 46%), transparent),
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgb(255 255 255 / 46%),
+        transparent
+      ),
       color-mix(in srgb, var(--border-blue) 18%, white 82%);
   }
 
@@ -477,8 +499,12 @@ p.chat__nothing-paragraph {
     width: min(68%, 310px);
     height: clamp(112px, 23vh, 190px);
     border-radius: 18px 18px 6px 18px;
-    background:
-      linear-gradient(90deg, transparent, rgb(255 255 255 / 48%), transparent),
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgb(255 255 255 / 48%),
+        transparent
+      ),
       color-mix(in srgb, var(--border-blue) 14%, white 86%);
   }
 
@@ -487,8 +513,11 @@ p.chat__nothing-paragraph {
     width: 42px;
     height: 42px;
     border-radius: 12px;
-    background:
-      linear-gradient(135deg, transparent 52%, rgb(255 255 255 / 58%) 52%),
+    background: linear-gradient(
+        135deg,
+        transparent 52%,
+        rgb(255 255 255 / 58%) 52%
+      ),
       rgb(255 255 255 / 58%);
     box-shadow:
       -34px 42px 0 -21px rgb(255 255 255 / 44%),
@@ -497,10 +526,14 @@ p.chat__nothing-paragraph {
 
   @keyframes chat-message-skeleton-shimmer {
     from {
-      background-position: 120% 0, 0 0;
+      background-position:
+        120% 0,
+        0 0;
     }
     to {
-      background-position: -120% 0, 0 0;
+      background-position:
+        -120% 0,
+        0 0;
     }
   }
 
@@ -759,12 +792,6 @@ p.chat__nothing-paragraph {
   gap: 6px;
   padding: 6.5px 8px !important;
   min-height: 30px !important;
-  color: var(--neutral-text-light);
-}
-
-.selected-messages-content__action .selected-messages-content__action__title,
-.selected-messages-content__action svg {
-  color: var(--neutral-text-light) !important;
 }
 
 .selected-messages-content__action--danger.button-yui-kit {
