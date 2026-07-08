@@ -1,3 +1,16 @@
+# [1.36.0](https://github.com/pksep/chat_client/compare/v1.35.2...v1.36.0) (2026-07-08)
+
+
+### Bug Fixes
+
+* size video and image ([4b2bc33](https://github.com/pksep/chat_client/commit/4b2bc33541eefe7af087f7eb5b9310cc46487e0f))
+* style forward button ([4d5641b](https://github.com/pksep/chat_client/commit/4d5641b5405609d0bf3baa6e5d0d37ab69795342))
+
+
+### Features
+
+* web version ([be3acc6](https://github.com/pksep/chat_client/commit/be3acc66dfbb236d9678cc2b945071c2b98c9709))
+
 ## [1.35.2](https://github.com/pksep/chat_client/compare/v1.35.1...v1.35.2) (2026-07-07)
 
 
