@@ -2309,10 +2309,18 @@ export const setUploadedFileData = (
           const shouldClearFallbackThumbnail =
             Boolean(payload.thumbnailPath) &&
             media.localThumbnailPath === VIDEO_FALLBACK_THUMBNAIL;
+          const mergedEx =
+            payload.ex || media.ex
+              ? {
+                  ...payload.ex,
+                  ...media.ex
+                }
+              : undefined;
 
           return {
             ...media,
             ...payload,
+            ...(mergedEx ? { ex: mergedEx } : {}),
             ...(shouldClearFallbackThumbnail
               ? { localThumbnailPath: undefined }
               : {}),

@@ -30,6 +30,7 @@ import {
   calculatePreviewDimensions,
   getFileDimensions,
   getVideoThumbnail,
+  type MediaDimensions,
   VIDEO_FALLBACK_THUMBNAIL
 } from '../../../utils/mediaPreview';
 import { MessageStatus } from '../../../services/useChatSDK/types';
@@ -59,6 +60,7 @@ const VIDEO_INITIAL_PREVIEW_DIMENSIONS = {
   width: 640,
   height: 360
 };
+const VIDEO_LOCAL_THUMBNAIL_TIMEOUT_MS = 3000;
 
 type PendingMessageRetryState = {
   attempt: number;
@@ -1080,30 +1082,8 @@ export function useMessageSender(
     topicId: string,
     messageId: string,
     fileId: string,
-    file: File,
-    count: number,
-    index: number,
-    fillSharedPreview?: boolean
+    file: File
   ): void => {
-    void getFileDimensions(file)
-      .then(dimensions => {
-        if (!dimensions.width || !dimensions.height) {
-          return;
-        }
-
-        setLocalMediaPreviewData(topicId, messageId, fileId, {
-          ex: buildAttachmentPreviewEx(
-            dimensions,
-            count,
-            index,
-            fillSharedPreview
-          )
-        });
-      })
-      .catch(error => {
-        console.warn('[ChatSDK] Failed to read local video dimensions:', error);
-      });
-
     void getVideoThumbnail(file)
       .then(thumbnail => {
         if (!thumbnail) {
@@ -1120,6 +1100,44 @@ export function useMessageSender(
           error
         );
       });
+  };
+
+  const buildLocalVideoPreview = async (
+    file: File,
+    count: number,
+    index: number,
+    fillSharedPreview?: boolean
+  ): Promise<Pick<IMedia, 'localThumbnailPath' | 'ex'>> => {
+    const dimensionsPromise: Promise<MediaDimensions> = getFileDimensions(
+      file
+    ).catch(error => {
+      console.warn('[ChatSDK] Failed to read local video dimensions:', error);
+      return {};
+    });
+    const thumbnailPromise = getVideoThumbnail(file, {
+      timeoutMs: VIDEO_LOCAL_THUMBNAIL_TIMEOUT_MS
+    }).catch(error => {
+      console.warn('[ChatSDK] Failed to create local video thumbnail:', error);
+      return null;
+    });
+    const [dimensions, thumbnail] = await Promise.all([
+      dimensionsPromise,
+      thumbnailPromise
+    ]);
+    const previewSource =
+      dimensions.width && dimensions.height
+        ? dimensions
+        : VIDEO_INITIAL_PREVIEW_DIMENSIONS;
+
+    return {
+      localThumbnailPath: thumbnail || VIDEO_FALLBACK_THUMBNAIL,
+      ex: buildAttachmentPreviewEx(
+        previewSource,
+        count,
+        index,
+        fillSharedPreview
+      )
+    };
   };
 
   const handleSend = async (
@@ -1596,15 +1614,16 @@ export function useMessageSender(
         }
 
         if (type === MediaType.Video) {
+          const preview = await buildLocalVideoPreview(
+            file,
+            filePayloads.length,
+            i,
+            options?.fillSharedPreview === true
+          );
+
           return {
             ...baseMedia,
-            localThumbnailPath: VIDEO_FALLBACK_THUMBNAIL,
-            ex: buildAttachmentPreviewEx(
-              VIDEO_INITIAL_PREVIEW_DIMENSIONS,
-              filePayloads.length,
-              i,
-              options?.fillSharedPreview === true
-            )
+            ...preview
           };
         }
 
@@ -1681,15 +1700,7 @@ export function useMessageSender(
       });
 
       if (getMediaType(file, isMedia) === MediaType.Video) {
-        hydrateLocalVideoPreview(
-          newMessage.topicId,
-          clientId,
-          fileId,
-          file,
-          filePayloads.length,
-          index,
-          options?.fillSharedPreview === true
-        );
+        hydrateLocalVideoPreview(newMessage.topicId, clientId, fileId, file);
       }
     });
 

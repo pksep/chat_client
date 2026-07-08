@@ -440,6 +440,16 @@ const getPreviewContainerStyle = (
     return {};
   }
 
+  if (hasInlineCaption.value && mediaFiles.value.length === 1) {
+    return {
+      width: `${previewWidth}px`,
+      height: `${previewHeight}px`,
+      aspectRatio: `${previewWidth} / ${previewHeight}`,
+      containIntrinsicSize: `${previewWidth}px ${previewHeight}px`,
+      minHeight: `${previewHeight}px`
+    };
+  }
+
   return {
     aspectRatio: `${previewWidth} / ${previewHeight}`,
     containIntrinsicSize: `${previewWidth}px ${previewHeight}px`,
