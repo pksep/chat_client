@@ -67,11 +67,18 @@
                 @contextmenu.prevent
               />
 
+              <div
+                v-else-if="!shouldLoadMedia"
+                class="message-content__media-placeholder"
+                :style="getPreviewStyle(media, i)"
+                aria-hidden="true"
+                @click.stop="handleMediaClick(i)"
+                @contextmenu.prevent
+              />
+
               <img
                 v-else
-                :src="
-                  shouldLoadMedia ? getFeedMediaPath(media) : EMPTY_MEDIA_SRC
-                "
+                :src="getFeedMediaPath(media)"
                 :alt="
                   props.sender ? `${props.sender} изображение` : 'Изображение'
                 "
@@ -88,29 +95,23 @@
                 @contextmenu.prevent
               />
 
-              <Transition name="media-control" mode="out-in">
-                <div
-                  v-if="shouldShowMediaLoading(media)"
-                  key="loading"
-                  class="message-content__media-loading"
-                >
-                  <LoadingIcon
-                    :is-loaded="false"
-                    :percent="
-                      media.isLoading ? media.uploadPercent ?? null : null
-                    "
-                  />
-                </div>
+              <div
+                v-if="shouldShowMediaLoading(media)"
+                class="message-content__media-loading"
+              >
+                <LoadingIcon
+                  :is-loaded="false"
+                  :percent="media.isLoading ? media.uploadPercent ?? null : null"
+                />
+              </div>
 
-                <div
-                  v-else-if="media.type === MediaType.Video"
-                  key="play"
-                  class="message-content__media-video"
-                  @click="$emit('set-slider', mediaFiles, i)"
-                >
-                  <PlayIcon />
-                </div>
-              </Transition>
+              <div
+                v-else-if="media.type === MediaType.Video"
+                class="message-content__media-video"
+                @click="$emit('set-slider', mediaFiles, i)"
+              >
+                <PlayIcon />
+              </div>
 
               <div
                 v-if="i === mediaFiles.length - 1 && !hasInlineCaption"
@@ -172,16 +173,14 @@
         </div>
       </article>
 
-      <Transition name="reaction-row">
-        <div
-          v-if="props.reactions?.length && !hasInlineCaption"
-          class="message-footer-row"
-        >
-          <div class="message-reactions-row">
-            <MessageEmojies :reactions="props.reactions" />
-          </div>
+      <div
+        v-if="props.reactions?.length && !hasInlineCaption"
+        class="message-footer-row"
+      >
+        <div class="message-reactions-row">
+          <MessageEmojies :reactions="props.reactions" />
         </div>
-      </Transition>
+      </div>
     </div>
   </template>
 </template>
@@ -215,8 +214,7 @@ import {
 const props = defineProps<IMessageBubbleProps>();
 const emit = defineEmits(['navigate-message', 'set-slider']);
 
-const { getFullMediaPath, primeMediaCache, isMediaPathReady, EMPTY_MEDIA_SRC } =
-  useMessageMedia();
+const { getFullMediaPath, primeMediaCache } = useMessageMedia();
 
 const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
@@ -266,8 +264,12 @@ const replyReferenceWidth = useReferenceWidth(mediaArticleRef, {
 const shouldLoadMedia = ref(false);
 let visibilityObserver: IntersectionObserver | null = null;
 let lastMediaDragStartedAt = 0;
+const MEDIA_LOAD_ROOT_MARGIN_PX = 900;
 
-const isNearViewport = (element: HTMLElement, offset = 250) => {
+const isNearViewport = (
+  element: HTMLElement,
+  offset = MEDIA_LOAD_ROOT_MARGIN_PX
+) => {
   const rect = element.getBoundingClientRect();
 
   return rect.bottom >= -offset && rect.top <= window.innerHeight + offset;
@@ -289,8 +291,7 @@ watch(
     });
   },
   {
-    immediate: true,
-    deep: true
+    immediate: true
   }
 );
 
@@ -305,31 +306,22 @@ watch(
 onMounted(() => {
   void syncMentions();
 
-  if (
-    mediaArticleRef.value &&
-    isNearViewport(mediaArticleRef.value) &&
-    mediaFiles.value.some(media => isMediaPathReady(media))
-  ) {
-    shouldLoadMedia.value = true;
-    return;
-  }
-
   if (!('IntersectionObserver' in window)) {
     shouldLoadMedia.value = true;
     return;
   }
 
+  if (mediaArticleRef.value) {
+    shouldLoadMedia.value = isNearViewport(mediaArticleRef.value);
+  }
+
   visibilityObserver = new IntersectionObserver(
     entries => {
-      if (entries.some(entry => entry.isIntersecting)) {
-        shouldLoadMedia.value = true;
-        visibilityObserver?.disconnect();
-        visibilityObserver = null;
-      }
+      shouldLoadMedia.value = entries.some(entry => entry.isIntersecting);
     },
     {
       root: null,
-      rootMargin: '250px 0px',
+      rootMargin: `${MEDIA_LOAD_ROOT_MARGIN_PX}px 0px`,
       threshold: 0.01
     }
   );
@@ -479,14 +471,35 @@ const savePreviewMetrics = (
   naturalWidth?: number,
   naturalHeight?: number
 ): void => {
-  const rect = element.getBoundingClientRect();
+  if (
+    media.ex?.previewWidth &&
+    media.ex?.previewHeight &&
+    media.ex?.width &&
+    media.ex?.height
+  ) {
+    return;
+  }
 
-  media.ex = {
-    ...media.ex,
+  const rect = element.getBoundingClientRect();
+  const nextMetrics = {
     width: media.ex?.width || naturalWidth,
     height: media.ex?.height || naturalHeight,
     previewWidth: Math.round(rect.width),
     previewHeight: Math.round(rect.height)
+  };
+
+  if (
+    media.ex?.width === nextMetrics.width &&
+    media.ex?.height === nextMetrics.height &&
+    media.ex?.previewWidth === nextMetrics.previewWidth &&
+    media.ex?.previewHeight === nextMetrics.previewHeight
+  ) {
+    return;
+  }
+
+  media.ex = {
+    ...media.ex,
+    ...nextMetrics
   };
 };
 

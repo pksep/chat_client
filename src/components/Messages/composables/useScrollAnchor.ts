@@ -49,12 +49,18 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
   let isRestoringScroll = false;
   let restoreRafId = 0;
   let scrollRafId = 0;
+  let resizeDriftRafId = 0;
+  let resizeDriftQuietTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let lastScrollAnchorCaptureAt = 0;
+  let lastScrollAt = 0;
   let revision = 0;
   let pendingMutation: PendingViewportMutation | null = null;
   let forceNoPreserveForNextMutation = false;
   let forceNoPinBottomForNextMutation = false;
   const smoothTailDistancePx = 120;
   const smoothSettleDelayMs = 220;
+  const scrollAnchorCaptureIntervalMs = 180;
+  const resizeDriftScrollQuietMs = 260;
 
   const getMessageSelector = (messageId: string): string => {
     const escapedMessageId = window.CSS?.escape
@@ -225,6 +231,32 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     return true;
   };
 
+  const isAnchorNearViewport = (
+    anchor: ScrollAnchor | null,
+    viewportMarginPx = 0
+  ): boolean => {
+    const container = containerRef.value;
+    if (!container || !anchor) {
+      return false;
+    }
+
+    const anchorElement = container.querySelector(
+      getMessageSelector(anchor.messageId)
+    );
+
+    if (!(anchorElement instanceof HTMLElement)) {
+      return false;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const anchorRect = anchorElement.getBoundingClientRect();
+
+    return (
+      anchorRect.bottom >= containerRect.top - viewportMarginPx &&
+      anchorRect.top <= containerRect.bottom + viewportMarginPx
+    );
+  };
+
   const scheduleAnchorRestore = (
     anchor: ScrollAnchor | null,
     mutation?: PendingViewportMutation
@@ -329,11 +361,17 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     if (currentMutation.preserveViewport) {
       const anchor = options?.forceAnchor ?? currentMutation.anchor;
 
-      if (!restoreAnchorPosition(anchor)) {
-        restorePrependSnapshot(currentMutation);
+      if (anchor) {
+        const didRestoreAnchor = restoreAnchorPosition(anchor);
+        scheduleAnchorRestore(
+          anchor,
+          didRestoreAnchor ? undefined : currentMutation
+        );
+        return;
       }
 
-      scheduleAnchorRestore(anchor, currentMutation);
+      restorePrependSnapshot(currentMutation);
+      scheduleAnchorRestore(null, currentMutation);
       return;
     }
 
@@ -476,8 +514,32 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       return;
     }
 
+    const container = containerRef.value;
+    if (!container) {
+      return;
+    }
+
+    const timeSinceScroll = performance.now() - lastScrollAt;
+    if (timeSinceScroll < resizeDriftScrollQuietMs) {
+      if (!resizeDriftQuietTimeoutId) {
+        resizeDriftQuietTimeoutId = setTimeout(() => {
+          resizeDriftQuietTimeoutId = null;
+          scheduleResizeDriftCheck();
+        }, resizeDriftScrollQuietMs - timeSinceScroll);
+      }
+      return;
+    }
+
     if (updateBottomState() && viewportMode.value === 'live') {
       keepBottomPinned('auto');
+      return;
+    }
+
+    if (
+      stickyAnchor &&
+      !isAnchorNearViewport(stickyAnchor, container.clientHeight)
+    ) {
+      stickyAnchor = captureViewportAnchor();
       return;
     }
 
@@ -490,6 +552,17 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       stickyAnchor =
         captureViewportAnchor(stickyAnchor.messageId) || stickyAnchor;
     }
+  };
+
+  const scheduleResizeDriftCheck = (): void => {
+    if (resizeDriftRafId) {
+      return;
+    }
+
+    resizeDriftRafId = requestAnimationFrame(() => {
+      resizeDriftRafId = 0;
+      handleResizeDrift();
+    });
   };
 
   const observeMessageElement = (element: Node) => {
@@ -521,9 +594,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       return;
     }
 
-    resizeObserver = new ResizeObserver(() => {
-      handleResizeDrift();
-    });
+    resizeObserver = new ResizeObserver(scheduleResizeDriftCheck);
 
     getMessageElements().forEach(element => {
       resizeObserver?.observe(element);
@@ -574,6 +645,16 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       scrollRafId = 0;
     }
 
+    if (resizeDriftRafId) {
+      cancelAnimationFrame(resizeDriftRafId);
+      resizeDriftRafId = 0;
+    }
+
+    if (resizeDriftQuietTimeoutId) {
+      clearTimeout(resizeDriftQuietTimeoutId);
+      resizeDriftQuietTimeoutId = null;
+    }
+
     cleanupResizeObserver();
     cleanupMutationObserver();
   };
@@ -583,6 +664,8 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
   };
 
   const onScroll = (): void => {
+    lastScrollAt = performance.now();
+
     if (isRestoringScroll || scrollRafId) {
       return;
     }
@@ -597,7 +680,15 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       if (viewportMode.value !== 'jump') {
         viewportMode.value = 'history';
       }
-      stickyAnchor = captureViewportAnchor();
+
+      const now = performance.now();
+      if (
+        !stickyAnchor ||
+        now - lastScrollAnchorCaptureAt >= scrollAnchorCaptureIntervalMs
+      ) {
+        stickyAnchor = captureViewportAnchor();
+        lastScrollAnchorCaptureAt = now;
+      }
     });
   };
 

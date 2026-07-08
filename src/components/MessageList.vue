@@ -637,6 +637,7 @@ const isFloatingDateDividerActive = ref(false);
 let chatVisibilityObserver: ResizeObserver | null = null;
 let removeAppVisibilityListener: (() => void) | null = null;
 let floatingDateDividerRafId = 0;
+let postScrollUiSyncRafId = 0;
 let floatingDateDividerHideTimeoutId: number | null = null;
 let floatingDateDividerUserScrollIntentAt = 0;
 const FLOATING_DATE_LABEL_HEIGHT_PX = 50;
@@ -799,6 +800,10 @@ const scheduleVisibleMessagesExpansion = (
         return;
       }
 
+      if (scrollState.isUserScrolling && !scrollAnchor.isNearBottom.value) {
+        return;
+      }
+
       setVisibleMessagesLimitForTopic(topicId, visibleLimit);
       visibleMessagesExpansionAppliedToken = topicSwitchToken;
 
@@ -807,6 +812,10 @@ const scheduleVisibleMessagesExpansion = (
           topicSwitchToken !== activeTopicSwitchToken ||
           route.value?.id !== topicId
         ) {
+          return;
+        }
+
+        if (scrollState.isUserScrolling && !scrollAnchor.isNearBottom.value) {
           return;
         }
 
@@ -834,10 +843,15 @@ const scheduleExpandedTopicMessagesFetch = (
         return;
       }
 
+      const shouldUpdateVisibleWindow =
+        scrollAnchor.isNearBottom.value && !scrollState.isUserScrolling;
+
       await fetchMessagesForTopic(topicId, {
         limit,
         forceRefresh: true,
-        forceNetwork: navigator.onLine
+        forceNetwork: navigator.onLine,
+        skipSave: !shouldUpdateVisibleWindow,
+        visibleLimit: limit
       });
     })
     .catch(error => {
@@ -925,7 +939,7 @@ const syncFloatingDateDivider = (): void => {
 
 const scheduleFloatingDateDividerSync = (): void => {
   if (floatingDateDividerRafId) {
-    cancelAnimationFrame(floatingDateDividerRafId);
+    return;
   }
 
   floatingDateDividerRafId = requestAnimationFrame(() => {
@@ -1841,18 +1855,31 @@ const syncVisibleUnreadAfterAutoScroll = (): void => {
   });
 };
 
-const handleScroll = async (): Promise<void> => {
-  await handleMessageScroll();
-  const hasRecentUserScrollIntent =
-    performance.now() - floatingDateDividerUserScrollIntentAt <=
-    FLOATING_DATE_USER_SCROLL_GRACE_MS;
-
-  if (isFloatingDateDividerActive.value || hasRecentUserScrollIntent) {
-    keepFloatingDateDividerVisibleBriefly();
+const schedulePostScrollUiSync = (): void => {
+  if (postScrollUiSyncRafId) {
+    return;
   }
-  scheduleFloatingDateDividerSync();
-  hideUnreadMarkerIfPassed();
-  resetUnreadIfViewingBottom();
+
+  postScrollUiSyncRafId = requestAnimationFrame(() => {
+    postScrollUiSyncRafId = 0;
+
+    const hasRecentUserScrollIntent =
+      performance.now() - floatingDateDividerUserScrollIntentAt <=
+      FLOATING_DATE_USER_SCROLL_GRACE_MS;
+
+    if (isFloatingDateDividerActive.value || hasRecentUserScrollIntent) {
+      keepFloatingDateDividerVisibleBriefly();
+    }
+
+    scheduleFloatingDateDividerSync();
+    hideUnreadMarkerIfPassed();
+    resetUnreadIfViewingBottom();
+  });
+};
+
+const handleScroll = (): void => {
+  void handleMessageScroll();
+  schedulePostScrollUiSync();
 };
 
 const {
@@ -1917,6 +1944,11 @@ onUnmounted(() => {
   if (floatingDateDividerRafId) {
     cancelAnimationFrame(floatingDateDividerRafId);
     floatingDateDividerRafId = 0;
+  }
+
+  if (postScrollUiSyncRafId) {
+    cancelAnimationFrame(postScrollUiSyncRafId);
+    postScrollUiSyncRafId = 0;
   }
 
   if (floatingDateDividerHideTimeoutId !== null) {
@@ -2149,12 +2181,20 @@ watch(
       return;
     }
 
-    scrollToBottom({
-      preferUnreadMarker: false,
-      smooth: false
-    });
+    const shouldKeepInitialBottomPosition =
+      !scrollState.isUserScrolling || scrollAnchor.isNearBottom.value;
 
-    if (visibleMessagesExpansionAppliedToken === topicSwitchToken) {
+    if (shouldKeepInitialBottomPosition) {
+      scrollToBottom({
+        preferUnreadMarker: false,
+        smooth: false
+      });
+    }
+
+    if (
+      visibleMessagesExpansionAppliedToken === topicSwitchToken &&
+      shouldKeepInitialBottomPosition
+    ) {
       setVisibleMessagesLimitForTopic(topicId, initialMessagesLimit);
       await nextTick();
 
@@ -2162,11 +2202,13 @@ watch(
         return;
       }
 
-      scrollToBottom({
-        preferUnreadMarker: false,
-        smooth: false
-      });
-    } else {
+      if (!scrollState.isUserScrolling || scrollAnchor.isNearBottom.value) {
+        scrollToBottom({
+          preferUnreadMarker: false,
+          smooth: false
+        });
+      }
+    } else if (shouldKeepInitialBottomPosition) {
       scheduleVisibleMessagesExpansion(
         topicId,
         initialMessagesLimit,
@@ -2413,8 +2455,7 @@ watch(
       hideUnreadMarkerIfPassed();
       resetUnreadIfViewingBottom();
     });
-  },
-  { deep: true }
+  }
 );
 
 defineExpose({

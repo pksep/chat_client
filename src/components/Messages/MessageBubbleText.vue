@@ -98,7 +98,6 @@
           </div>
         </template>
       </div>
-      <Transition name="reaction-row">
         <div v-if="props.reactions?.length" class="message-footer-row">
           <div class="message-reactions-row">
             <MessageEmojies :reactions="props.reactions" />
@@ -132,7 +131,6 @@
             />
           </div>
         </div>
-      </Transition>
     </article>
   </div>
 </template>

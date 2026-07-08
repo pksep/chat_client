@@ -122,7 +122,7 @@ const markTopicStateCanonical = (topicId: string): void => {
   canonicalTopicStateIds.add(topicId);
 };
 
-const schedulePersistMessages = (topicId: string): void => {
+const schedulePersistMessages = (topicId: string, delayMs = 150): void => {
   if (!topicId) {
     return;
   }
@@ -143,7 +143,7 @@ const schedulePersistMessages = (topicId: string): void => {
       replace: canonicalTopicStateIds.has(topicId)
     });
     void syncShadowReadStateFromMessages(topicId, topicMessages, 'local');
-  }, 150);
+  }, delayMs);
 
   persistTimeouts.set(topicId, timeoutId);
 };
@@ -834,6 +834,7 @@ export const fetchMessagesForTopic = async (
     forceRefresh?: boolean;
     forceNetwork?: boolean;
     visibleLimit?: number;
+    skipShadowSnapshot?: boolean;
   }
 ): Promise<IMessage[]> => {
   try {
@@ -1055,7 +1056,9 @@ export const fetchMessagesForTopic = async (
         messageIds: messages.map(message => message.id)
       }
     });
-    void saveShadowTopicSnapshot(topicId, messages, 'http');
+    if (!opts?.skipShadowSnapshot) {
+      void saveShadowTopicSnapshot(topicId, messages, 'http');
+    }
     void saveShadowLoadedRange(
       topicId,
       getRangeMessagesForPersistence(topicId, messages, opts)
@@ -1587,6 +1590,8 @@ export const saveMessagesToLocal = (
     visibleMessages?: IMessage[];
     visibleLimit?: number;
     updateVisible?: boolean;
+    persistDelayMs?: number;
+    skipPersist?: boolean;
   }
 ): void => {
   const sortedMessages = dedupeMessagesForTopic(messages).sort(compareMessages);
@@ -1603,7 +1608,9 @@ export const saveMessagesToLocal = (
   if (opts?.updateVisible !== false) {
     messagesStore.value[topicId] = boundedMessages;
   }
-  schedulePersistMessages(topicId);
+  if (!opts?.skipPersist) {
+    schedulePersistMessages(topicId, opts?.persistDelayMs);
+  }
   syncTopicUnreadState(topicId);
 
   if (opts?.syncLastMessage !== false) {
@@ -1846,6 +1853,9 @@ export const mergeMessagesForTopic = (
     syncLastMessage?: boolean;
     windowMode?: MessageWindowMode;
     anchorMessageId?: string;
+    visibleLimit?: number;
+    persistDelayMs?: number;
+    skipPersist?: boolean;
   }
 ): IMessage[] => {
   const existing = getFullMessagesByTopicId(topicId) || [];
@@ -1887,7 +1897,10 @@ export const mergeMessagesForTopic = (
           ? 'preserve-end'
           : 'latest'),
     anchorMessageId: opts?.anchorMessageId,
-    visibleMessages: visibleCombined
+    visibleMessages: visibleCombined,
+    visibleLimit: opts?.visibleLimit,
+    persistDelayMs: opts?.persistDelayMs,
+    skipPersist: opts?.skipPersist
   });
 
   return unique;
