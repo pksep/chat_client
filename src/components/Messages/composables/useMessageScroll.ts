@@ -8,7 +8,7 @@ import {
   onUnmounted,
   type Ref
 } from 'vue';
-import { useScrollAnchor } from './useScrollAnchor';
+import { useScrollAnchor, type ScrollAnchor } from './useScrollAnchor';
 import {
   getCanSendReadReceipts,
   markAsRead,
@@ -54,6 +54,8 @@ export function useMessageScroll(
   const isShowScrollToBottomButton = ref(false);
   const viewportRevision = ref(0);
   const isLoadingInitialMessages = ref(false);
+  const isLoadingOlderMessages = ref(false);
+  const isLoadingNewerMessages = ref(false);
   const autoReadSuspendedUntil = ref(0);
   const historyFetchSuspendedUntil = ref(0);
   const readReceiptsEnabled = ref(true);
@@ -62,7 +64,9 @@ export function useMessageScroll(
 
   const scrollAnchor = useScrollAnchor({
     containerRef: chatWrapperRef,
-    bottomThreshold: 50
+    bottomThreshold: 120,
+    bottomLockThreshold: 96,
+    messageSelector: '[data-message-id]'
   });
   let trackedViewportTopicId = '';
 
@@ -135,21 +139,68 @@ export function useMessageScroll(
   });
 
   let isScrollLoading = false;
+  let isHistoryScrollLoading = false;
+  let isNewerScrollLoading = false;
   const isAutoScrollLoading = false;
   let hasOldMessage = true;
   let hasNewMessage = true;
   const scrollMarkReadTimeout: number | null = null;
   let autoReadResumeTimeout: ReturnType<typeof setTimeout> | null = null;
   let intersectionObserver: IntersectionObserver | null = null;
+  let historyPaginationObserver: IntersectionObserver | null = null;
   const observedReadMessageElements = new Set<HTMLElement>();
+  const observedHistoryPaginationElements = new Set<HTMLElement>();
   let observedMessageTargetsRafId = 0;
+  let observedHistoryPaginationTargetsRafId = 0;
+  let historyPrependCheckRafId = 0;
+  let viewportRevisionRafId = 0;
+  let unreadReactionCheckRafId = 0;
+  let olderMessagesLoadingHideTimeoutId: ReturnType<typeof setTimeout> | null =
+    null;
+  let newerMessagesLoadingHideTimeoutId: ReturnType<typeof setTimeout> | null =
+    null;
+  let readTargetsSyncTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let historyTargetsSyncTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let historyPrependCheckTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let viewportRevisionSyncTimeoutId: ReturnType<typeof setTimeout> | null =
+    null;
+  let unreadReactionCheckTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let pendingMessagesMutationRevision: number | null = null;
+  let pendingViewportAnchorMessageId: string | null = null;
   let preserveViewportForDownPagination = false;
+  let prefetchedHistoryPrepend: {
+    topicId: string;
+    cursorId: string;
+    messages: IMessage[];
+  } | null = null;
   let lastUserActivityReadFlushAt = 0;
+  let lastHistoryScrollIntentAt = 0;
+  let olderMessagesLoadingShownAt = 0;
+  let newerMessagesLoadingShownAt = 0;
   const pendingReadIds = new Set<string>();
   const SCROLL_DISTANCE_FOR_REQUEST = 500;
+  const HISTORY_PREPEND_TRIGGER_INDEX = 50;
+  const HISTORY_PREPEND_TRIGGER_WINDOW_FRACTION = 0.5;
+  const HISTORY_PREFETCH_TRIGGER_INDEX = 160;
+  const HISTORY_PREFETCH_TRIGGER_WINDOW_FRACTION = 0.85;
+  const HISTORY_PREPEND_TRIGGER_BUFFER = 2;
+  const HISTORY_PREPEND_COOLDOWN_MS = 350;
+  const HISTORY_PREPEND_INTENT_TTL_MS = 2500;
+  const HISTORY_PREPEND_USER_QUIET_MS = 180;
+  const HISTORY_PREPEND_PAGE_LIMIT = 64;
+  const HISTORY_VISIBLE_WINDOW_LIMIT = 700;
+  const HISTORY_PERSIST_IDLE_DELAY_MS = 10000;
+  const HISTORY_PREPEND_CHECK_INTERVAL_MS = 220;
+  const PAGINATION_LOADING_MIN_VISIBLE_MS = 650;
+  const PAGINATION_LOADING_TOP_EDGE_THRESHOLD = 160;
+  const PAGINATION_LOADING_BOTTOM_EDGE_THRESHOLD = 24;
+  const HISTORY_TARGET_SYNC_INTERVAL_MS = 250;
+  const READ_TARGET_SYNC_INTERVAL_MS = 350;
+  const VIEWPORT_REVISION_UPDATE_INTERVAL_MS = 120;
+  const UNREAD_REACTION_CHECK_INTERVAL_MS = 300;
   const READ_OBSERVER_TARGET_LIMIT = 120;
   const READ_OBSERVER_VIEWPORT_MARGIN_MULTIPLIER = 2;
+  let lastHistoryPrependAt = 0;
   const unreadTrackableMessageIds = computed(
     () =>
       new Set(
@@ -163,6 +214,175 @@ export function useMessageScroll(
           .map(message => message.id)
       )
   );
+
+  const clearOlderMessagesLoadingHideTimeout = (): void => {
+    if (olderMessagesLoadingHideTimeoutId) {
+      clearTimeout(olderMessagesLoadingHideTimeoutId);
+      olderMessagesLoadingHideTimeoutId = null;
+    }
+  };
+
+  const clearNewerMessagesLoadingHideTimeout = (): void => {
+    if (newerMessagesLoadingHideTimeoutId) {
+      clearTimeout(newerMessagesLoadingHideTimeoutId);
+      newerMessagesLoadingHideTimeoutId = null;
+    }
+  };
+
+  const showOlderMessagesLoading = (): void => {
+    clearOlderMessagesLoadingHideTimeout();
+    if (!isLoadingOlderMessages.value) {
+      olderMessagesLoadingShownAt = Date.now();
+    }
+    isLoadingOlderMessages.value = true;
+  };
+
+  const showNewerMessagesLoading = (): void => {
+    clearNewerMessagesLoadingHideTimeout();
+    if (!isLoadingNewerMessages.value) {
+      newerMessagesLoadingShownAt = Date.now();
+    }
+    isLoadingNewerMessages.value = true;
+  };
+
+  const hideOlderMessagesLoading = (immediate = false): void => {
+    clearOlderMessagesLoadingHideTimeout();
+
+    if (!isLoadingOlderMessages.value) {
+      return;
+    }
+
+    const delay = immediate
+      ? 0
+      : Math.max(
+          0,
+          PAGINATION_LOADING_MIN_VISIBLE_MS -
+            (Date.now() - olderMessagesLoadingShownAt)
+        );
+
+    if (delay === 0) {
+      isLoadingOlderMessages.value = false;
+      return;
+    }
+
+    olderMessagesLoadingHideTimeoutId = setTimeout(() => {
+      olderMessagesLoadingHideTimeoutId = null;
+      isLoadingOlderMessages.value = false;
+    }, delay);
+  };
+
+  const hideNewerMessagesLoading = (immediate = false): void => {
+    clearNewerMessagesLoadingHideTimeout();
+
+    if (!isLoadingNewerMessages.value) {
+      return;
+    }
+
+    const delay = immediate
+      ? 0
+      : Math.max(
+          0,
+          PAGINATION_LOADING_MIN_VISIBLE_MS -
+            (Date.now() - newerMessagesLoadingShownAt)
+        );
+
+    if (delay === 0) {
+      isLoadingNewerMessages.value = false;
+      return;
+    }
+
+    newerMessagesLoadingHideTimeoutId = setTimeout(() => {
+      newerMessagesLoadingHideTimeoutId = null;
+      isLoadingNewerMessages.value = false;
+    }, delay);
+  };
+
+  const getPaginationScrollMetrics = () => {
+    const container = chatWrapperRef.value;
+
+    if (!container) {
+      return null;
+    }
+
+    const maxScroll = Math.max(
+      0,
+      container.scrollHeight - container.clientHeight
+    );
+    const normalizedScrollTop = Math.min(container.scrollTop, 0);
+
+    return {
+      distanceFromBottom: Math.abs(normalizedScrollTop),
+      distanceFromTop: maxScroll + normalizedScrollTop
+    };
+  };
+
+  const isAtLoadedTopEdge = (): boolean => {
+    const metrics = getPaginationScrollMetrics();
+
+    return (
+      !!metrics &&
+      metrics.distanceFromTop <= PAGINATION_LOADING_TOP_EDGE_THRESHOLD
+    );
+  };
+
+  const isAtLoadedBottomEdge = (): boolean => {
+    const metrics = getPaginationScrollMetrics();
+
+    return (
+      !!metrics &&
+      metrics.distanceFromBottom <= PAGINATION_LOADING_BOTTOM_EDGE_THRESHOLD
+    );
+  };
+
+  const syncOlderMessagesLoadingState = (): void => {
+    if (isHistoryScrollLoading && isAtLoadedTopEdge()) {
+      showOlderMessagesLoading();
+      return;
+    }
+
+    hideOlderMessagesLoading(true);
+  };
+
+  const syncNewerMessagesLoadingState = (): void => {
+    if (isNewerScrollLoading && isAtLoadedBottomEdge()) {
+      showNewerMessagesLoading();
+      return;
+    }
+
+    hideNewerMessagesLoading(true);
+  };
+
+  const hideOlderMessagesLoadingAfterDomUpdate = (): void => {
+    void nextTick(() => {
+      requestAnimationFrame(() => {
+        if (!isHistoryScrollLoading && !isAtLoadedTopEdge()) {
+          hideOlderMessagesLoading(true);
+        }
+      });
+    });
+  };
+
+  const hideNewerMessagesLoadingAfterDomUpdate = (): void => {
+    void nextTick(() => {
+      requestAnimationFrame(() => {
+        if (!isNewerScrollLoading && !isAtLoadedBottomEdge()) {
+          hideNewerMessagesLoading(true);
+        }
+      });
+    });
+  };
+
+  const completeOlderMessagesLoading = (): void => {
+    isHistoryScrollLoading = false;
+    hideOlderMessagesLoading(!isAtLoadedTopEdge());
+    hideOlderMessagesLoadingAfterDomUpdate();
+  };
+
+  const completeNewerMessagesLoading = (): void => {
+    isNewerScrollLoading = false;
+    hideNewerMessagesLoading(!isAtLoadedBottomEdge());
+    hideNewerMessagesLoadingAfterDomUpdate();
+  };
 
   const getMessageIds = () =>
     state.messages.map((message: IMessage) => message.id);
@@ -286,13 +506,457 @@ export function useMessageScroll(
   };
 
   const scheduleObservedReadMessageTargetsSync = (): void => {
-    if (observedMessageTargetsRafId) {
+    if (observedMessageTargetsRafId || readTargetsSyncTimeoutId) {
       return;
     }
 
-    observedMessageTargetsRafId = requestAnimationFrame(() => {
-      observedMessageTargetsRafId = 0;
-      syncObservedReadMessageTargets();
+    readTargetsSyncTimeoutId = setTimeout(() => {
+      readTargetsSyncTimeoutId = null;
+
+      observedMessageTargetsRafId = requestAnimationFrame(() => {
+        observedMessageTargetsRafId = 0;
+        syncObservedReadMessageTargets();
+      });
+    }, READ_TARGET_SYNC_INTERVAL_MS);
+  };
+
+  const scheduleViewportRevisionUpdate = (): void => {
+    if (viewportRevisionRafId || viewportRevisionSyncTimeoutId) {
+      return;
+    }
+
+    viewportRevisionSyncTimeoutId = setTimeout(() => {
+      viewportRevisionSyncTimeoutId = null;
+
+      viewportRevisionRafId = requestAnimationFrame(() => {
+        viewportRevisionRafId = 0;
+        viewportRevision.value += 1;
+      });
+    }, VIEWPORT_REVISION_UPDATE_INTERVAL_MS);
+  };
+
+  const scheduleVisibleUnreadReactionCheck = (): void => {
+    const topicId = route.value.id;
+
+    if (
+      !topicId ||
+      !getTopicUnreadReactionMessageId(topicId) ||
+      unreadReactionCheckRafId ||
+      unreadReactionCheckTimeoutId
+    ) {
+      return;
+    }
+
+    unreadReactionCheckTimeoutId = setTimeout(() => {
+      unreadReactionCheckTimeoutId = null;
+
+      unreadReactionCheckRafId = requestAnimationFrame(() => {
+        unreadReactionCheckRafId = 0;
+        clearVisibleUnreadReaction();
+      });
+    }, UNREAD_REACTION_CHECK_INTERVAL_MS);
+  };
+
+  const getHistoryTriggerIndex = (
+    maxIndex: number,
+    windowFraction: number
+  ): number => {
+    if (state.messages.length === 0) {
+      return -1;
+    }
+
+    return Math.min(
+      maxIndex,
+      Math.max(0, Math.ceil((state.messages.length - 1) * windowFraction))
+    );
+  };
+
+  const getHistoryPrependTriggerIndex = (): number =>
+    getHistoryTriggerIndex(
+      HISTORY_PREPEND_TRIGGER_INDEX,
+      HISTORY_PREPEND_TRIGGER_WINDOW_FRACTION
+    );
+
+  const getHistoryPrefetchTriggerIndex = (): number =>
+    getHistoryTriggerIndex(
+      HISTORY_PREFETCH_TRIGGER_INDEX,
+      HISTORY_PREFETCH_TRIGGER_WINDOW_FRACTION
+    );
+
+  const getVisibleMessageSnapshot = (): {
+    anchorMessageId: string;
+    anchorRelativeTop: number;
+    firstVisibleIndex: number;
+    lastVisibleIndex: number;
+    visibleMessageIds: string[];
+  } | null =>
+    messageListUserItemsRef.value?.getVisibleMessageSnapshot?.() || null;
+
+  const isVisibleSnapshotNearLoadedStart = (
+    snapshot: ReturnType<typeof getVisibleMessageSnapshot>
+  ): boolean =>
+    isVisibleSnapshotNearHistoryTrigger(
+      snapshot,
+      getHistoryPrependTriggerIndex()
+    );
+
+  const isVisibleSnapshotNearHistoryPrefetch = (
+    snapshot: ReturnType<typeof getVisibleMessageSnapshot>
+  ): boolean =>
+    isVisibleSnapshotNearHistoryTrigger(
+      snapshot,
+      getHistoryPrefetchTriggerIndex()
+    );
+
+  const isVisibleSnapshotNearHistoryTrigger = (
+    snapshot: ReturnType<typeof getVisibleMessageSnapshot>,
+    triggerIndex: number
+  ): boolean => {
+    if (!snapshot) {
+      return false;
+    }
+
+    if (triggerIndex < 0) {
+      return false;
+    }
+
+    return (
+      snapshot.firstVisibleIndex <=
+      triggerIndex + HISTORY_PREPEND_TRIGGER_BUFFER
+    );
+  };
+
+  const getCurrentViewportAnchor = (
+    preferredMessageId?: string
+  ): ScrollAnchor | null => {
+    const capturedAnchor =
+      scrollAnchor.captureViewportAnchor(preferredMessageId);
+
+    if (capturedAnchor) {
+      return capturedAnchor;
+    }
+
+    const snapshot = getVisibleMessageSnapshot();
+
+    if (!snapshot) {
+      return null;
+    }
+
+    return {
+      messageId: snapshot.anchorMessageId,
+      relativeTop: snapshot.anchorRelativeTop
+    };
+  };
+
+  const getHistoryPrependQuietDelay = (): number =>
+    Math.max(
+      0,
+      HISTORY_PREPEND_USER_QUIET_MS - (Date.now() - lastHistoryScrollIntentAt)
+    );
+
+  const loadOlderMessagesFromVisibleAnchor = async (): Promise<void> => {
+    const now = Date.now();
+
+    if (isScrollLoading) {
+      syncOlderMessagesLoadingState();
+
+      return;
+    }
+
+    if (
+      !hasOldMessage ||
+      !route.value?.id ||
+      Date.now() < historyFetchSuspendedUntil.value
+    ) {
+      return;
+    }
+
+    if (now - lastHistoryPrependAt < HISTORY_PREPEND_COOLDOWN_MS) {
+      return;
+    }
+
+    if (
+      lastHistoryScrollIntentAt === 0 ||
+      now - lastHistoryScrollIntentAt > HISTORY_PREPEND_INTENT_TTL_MS
+    ) {
+      return;
+    }
+
+    const snapshot = getVisibleMessageSnapshot();
+    const isNearPrepend = isVisibleSnapshotNearLoadedStart(snapshot);
+
+    if (!isNearPrepend && !isVisibleSnapshotNearHistoryPrefetch(snapshot)) {
+      return;
+    }
+
+    const topicId = route.value.id;
+    const lastMessageId = state.messages[0]?.id;
+
+    if (!lastMessageId) {
+      return;
+    }
+
+    isScrollLoading = true;
+    isHistoryScrollLoading = true;
+    syncOlderMessagesLoadingState();
+
+    try {
+      const visibleMessageIds = new Set(
+        state.messages.map(message => message.id)
+      );
+      const getUsefulOlderMessages = (messages: IMessage[]): IMessage[] =>
+        messages.filter(message => !visibleMessageIds.has(message.id));
+      const fullMessages = getFullMessagesByTopicId(topicId);
+      const fullCursorIndex = fullMessages.findIndex(
+        message => message.id === lastMessageId
+      );
+      const hasHiddenOlderLocalMessages =
+        fullCursorIndex > 0 &&
+        fullMessages
+          .slice(
+            Math.max(0, fullCursorIndex - HISTORY_PREPEND_PAGE_LIMIT),
+            fullCursorIndex
+          )
+          .some(message => !visibleMessageIds.has(message.id));
+      const fetchOlderMessages = (forceNetwork = false) =>
+        fetchMessagesForTopic(topicId, {
+          lastMessageId,
+          limit: HISTORY_PREPEND_PAGE_LIMIT,
+          skipSave: true,
+          skipShadowSnapshot: true,
+          forceNetwork
+        });
+
+      const prefetchedMessages =
+        prefetchedHistoryPrepend?.topicId === topicId &&
+        prefetchedHistoryPrepend.cursorId === lastMessageId
+          ? prefetchedHistoryPrepend.messages
+          : null;
+      let result = prefetchedMessages;
+
+      if (!result) {
+        const shouldForceNetworkInitially = !hasHiddenOlderLocalMessages;
+        result = await fetchOlderMessages(shouldForceNetworkInitially);
+
+        if (
+          !shouldForceNetworkInitially &&
+          result.length > 0 &&
+          getUsefulOlderMessages(result).length === 0 &&
+          navigator.onLine
+        ) {
+          result = await fetchOlderMessages(true);
+        }
+      }
+
+      const olderMessages = getUsefulOlderMessages(result);
+
+      if (
+        route.value.id !== topicId ||
+        state.messages[0]?.id !== lastMessageId
+      ) {
+        return;
+      }
+
+      if (result.length === 0 || olderMessages.length === 0) {
+        prefetchedHistoryPrepend = null;
+        hasOldMessage = false;
+        lastHistoryPrependAt = Date.now();
+        return;
+      }
+
+      hasOldMessage = true;
+
+      if (!isNearPrepend) {
+        if (!prefetchedMessages) {
+          prefetchedHistoryPrepend = {
+            topicId,
+            cursorId: lastMessageId,
+            messages: olderMessages
+          };
+        }
+
+        if (isVisibleSnapshotNearLoadedStart(getVisibleMessageSnapshot())) {
+          scheduleHistoryPrependCheck(getHistoryPrependQuietDelay(), true);
+        }
+
+        return;
+      }
+
+      if (
+        route.value.id !== topicId ||
+        state.messages[0]?.id !== lastMessageId
+      ) {
+        return;
+      }
+
+      if (prefetchedMessages) {
+        prefetchedHistoryPrepend = null;
+      }
+
+      const quietDelay = getHistoryPrependQuietDelay();
+      if (quietDelay > 0) {
+        prefetchedHistoryPrepend = {
+          topicId,
+          cursorId: lastMessageId,
+          messages: olderMessages
+        };
+        scheduleHistoryPrependCheck(quietDelay, true);
+        return;
+      }
+
+      if (!isVisibleSnapshotNearLoadedStart(getVisibleMessageSnapshot())) {
+        return;
+      }
+
+      const requestedAnchor = getCurrentViewportAnchor(
+        getVisibleMessageSnapshot()?.anchorMessageId
+      );
+      const currentAnchor =
+        getCurrentViewportAnchor(requestedAnchor?.messageId) || requestedAnchor;
+      pendingViewportAnchorMessageId = currentAnchor?.messageId || null;
+
+      mergeMessagesForTopic(topicId, olderMessages, 'prepend', {
+        syncLastMessage: false,
+        windowMode: 'around-anchor',
+        anchorMessageId: pendingViewportAnchorMessageId || undefined,
+        visibleLimit: HISTORY_VISIBLE_WINDOW_LIMIT,
+        persistDelayMs: HISTORY_PERSIST_IDLE_DELAY_MS
+      });
+      lastHistoryPrependAt = Date.now();
+    } finally {
+      isScrollLoading = false;
+      completeOlderMessagesLoading();
+    }
+  };
+
+  const getHistoryPaginationTargetElements = (): HTMLElement[] => {
+    const triggerIndex = getHistoryPrependTriggerIndex();
+
+    if (triggerIndex < 0) {
+      return [];
+    }
+
+    const startIndex = Math.max(
+      0,
+      triggerIndex - HISTORY_PREPEND_TRIGGER_BUFFER
+    );
+    const endIndex = triggerIndex + HISTORY_PREPEND_TRIGGER_BUFFER;
+
+    return (
+      messageListUserItemsRef.value?.getRenderedMessageElementsInIndexRange?.(
+        startIndex,
+        endIndex
+      ) || []
+    );
+  };
+
+  const syncObservedHistoryPaginationTargets = (): void => {
+    if (!historyPaginationObserver) {
+      return;
+    }
+
+    const nextObservedElements = new Set(getHistoryPaginationTargetElements());
+
+    observedHistoryPaginationElements.forEach(element => {
+      if (!nextObservedElements.has(element)) {
+        historyPaginationObserver?.unobserve(element);
+        observedHistoryPaginationElements.delete(element);
+      }
+    });
+
+    nextObservedElements.forEach(element => {
+      if (!observedHistoryPaginationElements.has(element)) {
+        historyPaginationObserver?.observe(element);
+        observedHistoryPaginationElements.add(element);
+      }
+    });
+  };
+
+  const scheduleObservedHistoryPaginationTargetsSync = (): void => {
+    if (observedHistoryPaginationTargetsRafId || historyTargetsSyncTimeoutId) {
+      return;
+    }
+
+    historyTargetsSyncTimeoutId = setTimeout(() => {
+      historyTargetsSyncTimeoutId = null;
+
+      observedHistoryPaginationTargetsRafId = requestAnimationFrame(() => {
+        observedHistoryPaginationTargetsRafId = 0;
+        syncObservedHistoryPaginationTargets();
+      });
+    }, HISTORY_TARGET_SYNC_INTERVAL_MS);
+  };
+
+  const cancelScheduledHistoryPrependCheck = (): void => {
+    if (historyPrependCheckTimeoutId) {
+      clearTimeout(historyPrependCheckTimeoutId);
+      historyPrependCheckTimeoutId = null;
+    }
+
+    if (historyPrependCheckRafId) {
+      cancelAnimationFrame(historyPrependCheckRafId);
+      historyPrependCheckRafId = 0;
+    }
+  };
+
+  const scheduleHistoryPrependCheck = (
+    minDelay = 0,
+    forceReschedule = false
+  ): void => {
+    if (forceReschedule) {
+      cancelScheduledHistoryPrependCheck();
+    }
+
+    if (historyPrependCheckRafId || historyPrependCheckTimeoutId) {
+      return;
+    }
+
+    const delay = Math.max(
+      minDelay,
+      isVisibleSnapshotNearLoadedStart(getVisibleMessageSnapshot())
+        ? 0
+        : HISTORY_PREPEND_CHECK_INTERVAL_MS
+    );
+
+    historyPrependCheckTimeoutId = setTimeout(() => {
+      historyPrependCheckTimeoutId = null;
+
+      historyPrependCheckRafId = requestAnimationFrame(() => {
+        historyPrependCheckRafId = 0;
+        void loadOlderMessagesFromVisibleAnchor();
+      });
+    }, delay);
+  };
+
+  const setupHistoryPaginationObserver = (): void => {
+    historyPaginationObserver?.disconnect();
+    observedHistoryPaginationElements.clear();
+
+    if (!chatWrapperRef.value) {
+      historyPaginationObserver = null;
+      return;
+    }
+
+    historyPaginationObserver = new IntersectionObserver(
+      entries => {
+        const hasVisibleHistoryTarget = entries.some(
+          entry => entry.isIntersecting
+        );
+
+        if (hasVisibleHistoryTarget) {
+          void loadOlderMessagesFromVisibleAnchor();
+        }
+      },
+      {
+        root: chatWrapperRef.value,
+        threshold: 0.01,
+        rootMargin: '0px'
+      }
+    );
+
+    nextTick(() => {
+      syncObservedHistoryPaginationTargets();
+      scheduleHistoryPrependCheck();
     });
   };
 
@@ -473,6 +1137,7 @@ export function useMessageScroll(
       intersectionObserver.disconnect();
     }
     observedReadMessageElements.clear();
+    setupHistoryPaginationObserver();
 
     intersectionObserver = new IntersectionObserver(
       entries => {
@@ -558,18 +1223,30 @@ export function useMessageScroll(
     if (!el) return;
 
     scrollAnchor.onScroll();
-    viewportRevision.value += 1;
+    scheduleViewportRevisionUpdate();
     scheduleObservedReadMessageTargetsSync();
+    scheduleObservedHistoryPaginationTargetsSync();
+    scheduleHistoryPrependCheck();
     schedulePersistScrollMeta();
-    clearVisibleUnreadReaction();
+    scheduleVisibleUnreadReactionCheck();
 
-    const { scrollTop, scrollHeight, clientHeight } = el;
-    const maxScroll = Math.max(0, scrollHeight - clientHeight);
+    const { scrollTop } = el;
+    const isHistoryScrollIntent =
+      !scrollAnchor.isRestoringScroll &&
+      scrollTop < scrollState.previousScrollTop - 1;
+
+    if (isHistoryScrollIntent) {
+      lastHistoryScrollIntentAt = Date.now();
+    }
+
+    scrollState.previousScrollTop = scrollTop;
+
     const normalizedScrollTop = Math.min(scrollTop, 0);
     const distanceFromBottom = Math.abs(normalizedScrollTop);
-    const distanceFromTop = maxScroll + normalizedScrollTop;
 
     isShowScrollToBottomButton.value = distanceFromBottom > 200;
+    syncOlderMessagesLoadingState();
+    syncNewerMessagesLoadingState();
 
     if (isAutoScrollLoading) {
       return;
@@ -596,58 +1273,42 @@ export function useMessageScroll(
     }
 
     if (
-      distanceFromTop < SCROLL_DISTANCE_FOR_REQUEST &&
-      !isScrollLoading &&
-      hasOldMessage
-    ) {
-      isScrollLoading = true;
-
-      const lastMessageId = state.messages[0]?.id;
-      const result = await fetchMessagesForTopic(route.value.id, {
-        lastMessageId,
-        skipSave: true
-      });
-      hasOldMessage = result.length > 0;
-
-      if (result.length > 0) {
-        mergeMessagesForTopic(route.value.id, result, 'prepend', {
-          syncLastMessage: false
-        });
-      }
-
-      isScrollLoading = false;
-    } else if (
       distanceFromBottom < SCROLL_DISTANCE_FOR_REQUEST &&
       !isScrollLoading &&
       hasNewMessage
     ) {
       isScrollLoading = true;
 
-      const lastMessage = state.messages[state.messages.length - 1];
-      const latestKnownTopicMessageId =
-        getSelectedTopic(route.value.id)?.lastMessage?.id || null;
-      const shouldFetchNewerRange =
-        !!lastMessage?.id &&
-        !!latestKnownTopicMessageId &&
-        lastMessage.id !== latestKnownTopicMessageId;
+      try {
+        const lastMessage = state.messages[state.messages.length - 1];
+        const latestKnownTopicMessageId =
+          getSelectedTopic(route.value.id)?.lastMessage?.id || null;
+        const shouldFetchNewerRange =
+          !!lastMessage?.id &&
+          !!latestKnownTopicMessageId &&
+          lastMessage.id !== latestKnownTopicMessageId;
 
-      if (shouldFetchNewerRange) {
-        preserveViewportForDownPagination = true;
+        if (shouldFetchNewerRange) {
+          isNewerScrollLoading = true;
+          syncNewerMessagesLoadingState();
+          preserveViewportForDownPagination = true;
 
-        const result = await fetchMessagesForTopic(route.value.id, {
-          afterMessageId: lastMessage.id,
-          skipSave: true
-        });
-        hasNewMessage = result.length > 0;
-
-        if (result.length > 0) {
-          mergeMessagesForTopic(route.value.id, result, 'append', {
-            syncLastMessage: false
+          const result = await fetchMessagesForTopic(route.value.id, {
+            afterMessageId: lastMessage.id,
+            skipSave: true
           });
-        }
-      }
+          hasNewMessage = result.length > 0;
 
-      isScrollLoading = false;
+          if (result.length > 0) {
+            mergeMessagesForTopic(route.value.id, result, 'append', {
+              syncLastMessage: false
+            });
+          }
+        }
+      } finally {
+        completeNewerMessagesLoading();
+        isScrollLoading = false;
+      }
     }
   };
 
@@ -811,6 +1472,24 @@ export function useMessageScroll(
     schedulePersistScrollMeta();
   };
 
+  const handleHistoryScrollInteraction = (event: WheelEvent | TouchEvent) => {
+    const container = chatWrapperRef.value;
+
+    if (!container || !(event.target instanceof Node)) {
+      return;
+    }
+
+    if (!container.contains(event.target)) {
+      return;
+    }
+
+    if (event instanceof WheelEvent && event.deltaY >= 0) {
+      return;
+    }
+
+    lastHistoryScrollIntentAt = Date.now();
+  };
+
   const schedulePersistScrollMeta = () => {
     return;
   };
@@ -853,6 +1532,7 @@ export function useMessageScroll(
     (newIds, oldIds) => {
       if (!oldIds || !chatWrapperRef.value) {
         pendingMessagesMutationRevision = null;
+        pendingViewportAnchorMessageId = null;
         return;
       }
 
@@ -870,7 +1550,10 @@ export function useMessageScroll(
 
       const reason = isPrepend ? 'prepend' : isAppend ? 'append' : 'replace';
       const mutation = scrollAnchor.beginViewportMutation(reason, {
-        forcePreserve: reason === 'append' && preserveViewportForDownPagination
+        forcePreserve:
+          reason === 'prepend' ||
+          (reason === 'append' && preserveViewportForDownPagination),
+        preferredMessageId: pendingViewportAnchorMessageId || undefined
       });
 
       pendingMessagesMutationRevision = mutation.revision;
@@ -881,16 +1564,25 @@ export function useMessageScroll(
   watch(
     getMessageIds,
     () => {
+      const commitPendingViewportMutation = (): void => {
+        if (pendingMessagesMutationRevision === null) {
+          return;
+        }
+
+        scrollAnchor.commitViewportMutation(pendingMessagesMutationRevision);
+        pendingMessagesMutationRevision = null;
+      };
+
+      commitPendingViewportMutation();
+
       nextTick(() => {
         setupIntersectionObserver();
         scrollAnchor.setupResizeObserver();
-
-        if (pendingMessagesMutationRevision !== null) {
-          scrollAnchor.commitViewportMutation(pendingMessagesMutationRevision);
-          pendingMessagesMutationRevision = null;
-        }
+        commitPendingViewportMutation();
 
         preserveViewportForDownPagination = false;
+        pendingViewportAnchorMessageId = null;
+        scheduleHistoryPrependCheck();
       });
     },
     { flush: 'post' }
@@ -899,13 +1591,22 @@ export function useMessageScroll(
   const resetScrollState = () => {
     hasOldMessage = true;
     hasNewMessage = true;
+    isHistoryScrollLoading = false;
+    isNewerScrollLoading = false;
+    hideOlderMessagesLoading(true);
+    hideNewerMessagesLoading(true);
     pendingReadIds.clear();
     scrolledUnreadMarkerKey.value = null;
     pendingMessagesMutationRevision = null;
+    pendingViewportAnchorMessageId = null;
     preserveViewportForDownPagination = false;
+    prefetchedHistoryPrepend = null;
+    lastHistoryPrependAt = 0;
+    lastHistoryScrollIntentAt = 0;
     isShowScrollToBottomButton.value = false;
     scrollState.isInitialLoad = true;
     scrollState.isUserScrolling = false;
+    scrollState.previousScrollTop = 0;
     scrollState.shouldAutoScroll = true;
   };
 
@@ -951,6 +1652,12 @@ export function useMessageScroll(
     window.addEventListener('touchstart', handleUserActivity, {
       passive: true
     });
+    window.addEventListener('wheel', handleHistoryScrollInteraction, {
+      passive: true
+    });
+    window.addEventListener('touchmove', handleHistoryScrollInteraction, {
+      passive: true
+    });
   });
 
   onUnmounted(() => {
@@ -969,8 +1676,61 @@ export function useMessageScroll(
       observedMessageTargetsRafId = 0;
     }
 
+    if (viewportRevisionRafId) {
+      cancelAnimationFrame(viewportRevisionRafId);
+      viewportRevisionRafId = 0;
+    }
+
+    if (unreadReactionCheckRafId) {
+      cancelAnimationFrame(unreadReactionCheckRafId);
+      unreadReactionCheckRafId = 0;
+    }
+
+    window.removeEventListener('wheel', handleHistoryScrollInteraction);
+    window.removeEventListener('touchmove', handleHistoryScrollInteraction);
+
+    if (readTargetsSyncTimeoutId) {
+      clearTimeout(readTargetsSyncTimeoutId);
+      readTargetsSyncTimeoutId = null;
+    }
+
+    if (viewportRevisionSyncTimeoutId) {
+      clearTimeout(viewportRevisionSyncTimeoutId);
+      viewportRevisionSyncTimeoutId = null;
+    }
+
+    if (unreadReactionCheckTimeoutId) {
+      clearTimeout(unreadReactionCheckTimeoutId);
+      unreadReactionCheckTimeoutId = null;
+    }
+
+    clearOlderMessagesLoadingHideTimeout();
+    clearNewerMessagesLoadingHideTimeout();
+
+    if (observedHistoryPaginationTargetsRafId) {
+      cancelAnimationFrame(observedHistoryPaginationTargetsRafId);
+      observedHistoryPaginationTargetsRafId = 0;
+    }
+
+    if (historyTargetsSyncTimeoutId) {
+      clearTimeout(historyTargetsSyncTimeoutId);
+      historyTargetsSyncTimeoutId = null;
+    }
+
+    if (historyPrependCheckRafId) {
+      cancelAnimationFrame(historyPrependCheckRafId);
+      historyPrependCheckRafId = 0;
+    }
+
+    if (historyPrependCheckTimeoutId) {
+      clearTimeout(historyPrependCheckTimeoutId);
+      historyPrependCheckTimeoutId = null;
+    }
+
     intersectionObserver?.disconnect();
+    historyPaginationObserver?.disconnect();
     observedReadMessageElements.clear();
+    observedHistoryPaginationElements.clear();
 
     document.removeEventListener('visibilitychange', handleVisibilityChange);
     window.removeEventListener('focus', handleWindowFocus);
@@ -984,6 +1744,8 @@ export function useMessageScroll(
     isShowScrollToBottomButton,
     viewportRevision,
     isLoadingInitialMessages,
+    isLoadingOlderMessages,
+    isLoadingNewerMessages,
     scrollState,
     handleScroll,
     scrollToBottom,

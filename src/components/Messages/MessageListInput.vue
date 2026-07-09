@@ -142,6 +142,7 @@
 <script lang="ts" setup>
 import {
   computed,
+  nextTick,
   onMounted,
   onBeforeUnmount,
   reactive,
@@ -219,7 +220,8 @@ const emit = defineEmits([
   'clearEdit',
   'clearReply',
   'clearForward',
-  'scrollToMessage'
+  'scrollToMessage',
+  'heightChange'
 ]);
 
 const internalInputText = computed({
@@ -438,6 +440,8 @@ let isTypingActive = false;
 let activeTypingTopicId: string | null = null;
 let lastTypingPingAt = 0;
 let unlistenTauriFileDrop: (() => void) | null = null;
+let inputResizeObserver: ResizeObserver | null = null;
+let lastReportedInputHeight = 0;
 
 const clearTypingStopTimeout = (): void => {
   if (!typingStopTimeout) {
@@ -533,6 +537,23 @@ const readClipboardText = async (): Promise<string> => {
   return (await navigator.clipboard?.readText?.()) || '';
 };
 
+const reportInputHeight = (): void => {
+  const element = inputContainerRef.value;
+
+  if (!element) {
+    return;
+  }
+
+  const nextHeight = Math.ceil(element.getBoundingClientRect().height);
+
+  if (!nextHeight || nextHeight === lastReportedInputHeight) {
+    return;
+  }
+
+  lastReportedInputHeight = nextHeight;
+  emit('heightChange', nextHeight);
+};
+
 const handleTauriFilesDropped = (files: File[]): void => {
   isTauriFileDragging.value = false;
 
@@ -556,12 +577,17 @@ const handleTauriFilesDropped = (files: File[]): void => {
 defineExpose({
   focus: () => contentEditorRef.value?.focus(),
   insertText: (text: string) =>
-    contentEditorRef.value?.editor?.commands?.insertContent?.(text)
+    contentEditorRef.value?.editor?.commands?.insertContent?.(text),
+  getRootElement: () => inputContainerRef.value
 });
 
 watch(
   () => internalInputText.value,
   value => {
+    nextTick(() => {
+      requestAnimationFrame(reportInputHeight);
+    });
+
     if (getHasDraftText(value)) {
       void notifyTyping();
       return;
@@ -581,6 +607,13 @@ watch(
 );
 
 onMounted(() => {
+  if ('ResizeObserver' in window && inputContainerRef.value) {
+    inputResizeObserver = new ResizeObserver(reportInputHeight);
+    inputResizeObserver.observe(inputContainerRef.value);
+  }
+
+  requestAnimationFrame(reportInputHeight);
+
   void bindTauriFileDrop({
     getTargetElement: () =>
       props.allowAttachFile ? inputContainerRef.value : null,
@@ -594,6 +627,10 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  inputResizeObserver?.disconnect();
+  inputResizeObserver = null;
+  lastReportedInputHeight = 0;
+  emit('heightChange', 0);
   unlistenTauriFileDrop?.();
   void stopTyping();
 });

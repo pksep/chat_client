@@ -41,6 +41,7 @@ import {
   fetchMessagesForTopic,
   fetchPinnedMessagesForTopic,
   getFullMessagesByTopicId,
+  getTopicIdsWithMessages,
   mergeMessagesForTopic
 } from './useMessages';
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
@@ -676,8 +677,14 @@ const setupChatListeners = (): void => {
       return;
     }
 
-    Object.entries(messagesStore.value).forEach(([topicId, messages]) => {
-      if (messages.some(item => item.id === event.payload.messageId)) {
+    getTopicIdsWithMessages().forEach(topicId => {
+      const fullMessages = getFullMessagesByTopicId(topicId);
+      const visibleMessages = messagesStore.value[topicId] || [];
+
+      if (
+        fullMessages.some(item => item.id === event.payload.messageId) ||
+        visibleMessages.some(item => item.id === event.payload.messageId)
+      ) {
         clearDeletedReactionTarget(topicId, event.payload.messageId);
         deleteMessageFromLocal(topicId, event.payload.messageId);
       }

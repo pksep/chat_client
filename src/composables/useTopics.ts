@@ -100,6 +100,28 @@ const createTopicsApi = () => {
         (!topic.info?.isMute || topic.taggedMe)
     );
 
+  const getActualUnreadCount = (): number =>
+    topics.value.reduce(
+      (acc, topic) => acc + Math.max(0, topic.unreadMessageCount || 0),
+      0
+    );
+
+  const syncDisplayedUnreadCount = (force = false): void => {
+    const actualUnreadCount = getActualUnreadCount();
+
+    if (getIsAppActivelyVisible() || actualUnreadCount === 0) {
+      displayedUnreadCount.value = actualUnreadCount;
+    } else {
+      displayedUnreadCount.value = Math.max(
+        displayedUnreadCount.value,
+        actualUnreadCount
+      );
+    }
+
+    applyDisplayedUnreadCount(displayedUnreadCount.value);
+    syncDesktopUnreadBadge(force);
+  };
+
   const syncDesktopUnreadBadge = (force = false) => {
     void syncTauriTrayBadge({
       count: displayedUnreadCount.value,
@@ -713,6 +735,7 @@ const createTopicsApi = () => {
 
     topics.value = [...topics.value];
     schedulePersistTopics();
+    syncDisplayedUnreadCount();
   };
 
   const resetTopicUnreadState = (topicId: string): void => {
@@ -741,6 +764,7 @@ const createTopicsApi = () => {
 
     topics.value = [...topics.value];
     schedulePersistTopics();
+    syncDisplayedUnreadCount();
   };
 
   const updateTopicUnreadReaction = (
@@ -1094,23 +1118,9 @@ const createTopicsApi = () => {
     );
   });
 
-  watch(
-    totalUnreadCount,
-    count => {
-      if (getIsAppActivelyVisible()) {
-        displayedUnreadCount.value = count;
-      } else {
-        displayedUnreadCount.value = Math.max(
-          displayedUnreadCount.value,
-          count
-        );
-      }
-
-      applyDisplayedUnreadCount(displayedUnreadCount.value);
-      syncDesktopUnreadBadge();
-    },
-    { immediate: true }
-  );
+  watch(totalUnreadCount, () => syncDisplayedUnreadCount(), {
+    immediate: true
+  });
 
   watch(
     () =>
@@ -1127,9 +1137,7 @@ const createTopicsApi = () => {
 
   const handleVisibilityChange = () => {
     if (getIsAppActivelyVisible()) {
-      displayedUnreadCount.value = totalUnreadCount.value;
-      applyDisplayedUnreadCount(displayedUnreadCount.value);
-      syncDesktopUnreadBadge(true);
+      syncDisplayedUnreadCount(true);
     }
   };
 
@@ -1138,8 +1146,8 @@ const createTopicsApi = () => {
   if (!isDesktopVisibilityBound) {
     subscribeToAppVisibilityChanges(() => {
       if (getIsAppActivelyVisible()) {
-        displayedUnreadCount.value = totalUnreadCount.value;
-        applyDisplayedUnreadCount(displayedUnreadCount.value);
+        syncDisplayedUnreadCount(true);
+        return;
       }
 
       syncDesktopUnreadBadge(true);

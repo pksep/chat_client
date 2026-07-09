@@ -28,13 +28,13 @@
         <div v-else-if="item.kind === 'date'" class="top-element">
           <div
             class="date-divider"
-            :data-date-divider-label="formatDay(item.message.createdAt)"
+            :data-date-divider-label="getCachedMessageDay(item.message)"
             :data-testid="`${props.dataTestid}-MessageList-DateDividerUser${item.index + 1}`"
           >
             <span
               :data-testid="`${props.dataTestid}-MessageList-DateLabelUser${item.index + 1}`"
             >
-              {{ formatDay(item.message.createdAt) }}
+              {{ getCachedMessageDay(item.message) }}
             </span>
           </div>
         </div>
@@ -172,6 +172,27 @@ type RenderItem =
       isMeSender: boolean;
     };
 
+interface VisibleMessageCandidate {
+  index: number;
+  messageId: string;
+  relativeTop: number;
+  height: number;
+  visiblePixels: number;
+}
+
+interface VisibleMessageSnapshot {
+  anchorMessageId: string;
+  anchorRelativeTop: number;
+  firstVisibleIndex: number;
+  lastVisibleIndex: number;
+  visibleMessageIds: string[];
+}
+
+interface VirtualRenderRange {
+  start: number;
+  end: number;
+}
+
 const props = defineProps<Props>();
 const route = useUrlWatcher();
 const { state: isMobile } = useResizeState(MAX_W_MD);
@@ -181,6 +202,7 @@ const listRootRef = ref<HTMLElement | null>(null);
 const viewportTop = ref(0);
 const viewportHeight = ref(0);
 const measuredItemHeights = ref<Record<string, number>>({});
+const virtualRenderRange = ref<VirtualRenderRange>({ start: 0, end: 0 });
 const virtualItemElements = new Map<string, HTMLElement>();
 let virtualItemResizeObserver: ResizeObserver | null = null;
 let viewportResizeObserver: ResizeObserver | null = null;
@@ -189,12 +211,74 @@ let virtualViewportRafId = 0;
 let contentReadyRafId = 0;
 let contentReadyToken = 0;
 
-const VIRTUALIZATION_ITEM_THRESHOLD = 140;
-const VIRTUALIZATION_MESSAGE_THRESHOLD = 240;
+const VIRTUALIZATION_ITEM_THRESHOLD = 850;
+const VIRTUALIZATION_MESSAGE_THRESHOLD = 750;
 const VIRTUAL_MAX_MESSAGES_PER_ITEM = 8;
-const VIRTUAL_OVERSCAN_PX = 1800;
+const VIRTUAL_OVERSCAN_PX = 1400;
+const VIRTUAL_RANGE_ITEM_BUFFER = 6;
 const VIRTUAL_DEFAULT_ITEM_HEIGHT_PX = 68;
 const VIRTUAL_ITEM_GAP_PX = 5;
+const FORMAT_CACHE_LIMIT = 2000;
+
+const formattedTimeCache = new Map<number, string>();
+const formattedDayCache = new Map<number, string>();
+
+const rememberCachedFormat = (
+  cache: Map<number, string>,
+  timestamp: number,
+  value: string
+): string => {
+  if (cache.size >= FORMAT_CACHE_LIMIT && !cache.has(timestamp)) {
+    const oldestKey = cache.keys().next().value;
+
+    if (typeof oldestKey === 'number') {
+      cache.delete(oldestKey);
+    }
+  }
+
+  cache.set(timestamp, value);
+  return value;
+};
+
+const getMessageTimestamp = (message?: Pick<IMessage, 'createdAt'>): number => {
+  const createdAt = message?.createdAt;
+  const timestamp =
+    createdAt instanceof Date
+      ? createdAt.getTime()
+      : new Date(createdAt || 0).getTime();
+
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+const getCachedMessageTime = (message: IMessage): string => {
+  const timestamp = getMessageTimestamp(message);
+  const cached = formattedTimeCache.get(timestamp);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  return rememberCachedFormat(
+    formattedTimeCache,
+    timestamp,
+    formatTime(new Date(timestamp))
+  );
+};
+
+const getCachedMessageDay = (message: Pick<IMessage, 'createdAt'>): string => {
+  const timestamp = getMessageTimestamp(message);
+  const cached = formattedDayCache.get(timestamp);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  return rememberCachedFormat(
+    formattedDayCache,
+    timestamp,
+    formatDay(new Date(timestamp))
+  );
+};
 
 const emit = defineEmits([
   'setEditMessage',
@@ -297,7 +381,7 @@ watch(
   () => {
     void scheduleQuotedSystemMessageOverflowSync();
   },
-  { deep: true, immediate: true }
+  { immediate: true }
 );
 
 onMounted(() => {
@@ -318,8 +402,8 @@ const isNewDate = (index: number) => {
 
   const currentMsg = visibleMessages.value[index];
   const prevMsg = visibleMessages.value[index - 1];
-  const currentDay = formatDay(currentMsg.createdAt);
-  const prevDay = formatDay(prevMsg.createdAt);
+  const currentDay = getCachedMessageDay(currentMsg);
+  const prevDay = getCachedMessageDay(prevMsg);
   return currentDay !== prevDay;
 };
 
@@ -443,7 +527,7 @@ const isSameMessageGroup = (
 
   return (
     currentMessage.senderUserId === nextMessage.senderUserId &&
-    formatDay(currentMessage.createdAt) === formatDay(nextMessage.createdAt)
+    getCachedMessageDay(currentMessage) === getCachedMessageDay(nextMessage)
   );
 };
 
@@ -593,7 +677,7 @@ const findEndIndex = (offsets: number[], bottom: number): number => {
   return Math.min(offsets.length - 1, Math.max(1, low));
 };
 
-const virtualRange = computed(() => {
+const getViewportRenderRange = (extraItemBuffer = 0): VirtualRenderRange => {
   if (!isVirtualized.value) {
     return {
       start: 0,
@@ -607,14 +691,53 @@ const virtualRange = computed(() => {
     totalRenderItemsHeight.value,
     viewportTop.value + viewportHeight.value + VIRTUAL_OVERSCAN_PX
   );
-  const start = findStartIndex(offsets, windowTop);
-  const end = Math.max(start + 1, findEndIndex(offsets, windowBottom));
+  const start = Math.max(
+    0,
+    findStartIndex(offsets, windowTop) - extraItemBuffer
+  );
+  const end = Math.max(
+    start + 1,
+    findEndIndex(offsets, windowBottom) + extraItemBuffer
+  );
 
   return {
     start,
     end: Math.min(renderItems.value.length, end)
   };
-});
+};
+
+const requiredVirtualRange = computed(() => getViewportRenderRange());
+
+const bufferedVirtualRange = computed(() =>
+  getViewportRenderRange(VIRTUAL_RANGE_ITEM_BUFFER)
+);
+
+const applyVirtualRenderRange = (force = false): void => {
+  const itemCount = renderItems.value.length;
+  const requiredRange = requiredVirtualRange.value;
+  const currentRange = virtualRenderRange.value;
+  const isCurrentRangeValid =
+    currentRange.start >= 0 &&
+    currentRange.end <= itemCount &&
+    currentRange.start < currentRange.end;
+  const currentRangeContainsViewport =
+    currentRange.start <= requiredRange.start &&
+    currentRange.end >= requiredRange.end;
+
+  if (force || !isCurrentRangeValid || !currentRangeContainsViewport) {
+    virtualRenderRange.value = bufferedVirtualRange.value;
+  }
+};
+
+const virtualRange = computed(() => virtualRenderRange.value);
+
+watch(
+  bufferedVirtualRange,
+  () => {
+    applyVirtualRenderRange();
+  },
+  { immediate: true, flush: 'sync' }
+);
 
 const windowedRenderItems = computed(() => {
   const { start, end } = virtualRange.value;
@@ -660,13 +783,139 @@ const bottomSpacerHeight = computed(() => {
 const getScrollParent = (): HTMLElement | null =>
   listRootRef.value?.parentElement || null;
 
-const syncVirtualViewport = (): void => {
+const getMessageIndexById = (): Map<string, number> =>
+  new Map(
+    visibleMessages.value
+      .map((message, index) => [message.id, index] as const)
+      .filter(([messageId]) => !!messageId)
+  );
+
+const getVisibleMessageCandidates = (): VisibleMessageCandidate[] => {
+  const root = listRootRef.value;
+  const parent = getScrollParent();
+
+  if (!root || !parent) {
+    return [];
+  }
+
+  const parentRect = parent.getBoundingClientRect();
+  const messageIndexById = getMessageIndexById();
+  const candidatesById = new Map<string, VisibleMessageCandidate>();
+
+  root.querySelectorAll<HTMLElement>('[data-message-id]').forEach(element => {
+    const messageId = element.dataset.messageId;
+    const index =
+      messageId === undefined ? undefined : messageIndexById.get(messageId);
+
+    if (!messageId || index === undefined) {
+      return;
+    }
+
+    const rect = element.getBoundingClientRect();
+    const visibleTop = Math.max(rect.top, parentRect.top);
+    const visibleBottom = Math.min(rect.bottom, parentRect.bottom);
+    const visiblePixels = visibleBottom - visibleTop;
+
+    if (
+      visiblePixels <= 0 ||
+      rect.right <= parentRect.left ||
+      rect.left >= parentRect.right
+    ) {
+      return;
+    }
+
+    const candidate: VisibleMessageCandidate = {
+      index,
+      messageId,
+      relativeTop: rect.top - parentRect.top,
+      height: rect.height,
+      visiblePixels
+    };
+    const existing = candidatesById.get(messageId);
+
+    if (
+      !existing ||
+      candidate.visiblePixels > existing.visiblePixels ||
+      (candidate.visiblePixels === existing.visiblePixels &&
+        Math.abs(candidate.relativeTop) < Math.abs(existing.relativeTop))
+    ) {
+      candidatesById.set(messageId, candidate);
+    }
+  });
+
+  return Array.from(candidatesById.values()).sort(
+    (left, right) => left.index - right.index
+  );
+};
+
+const getVisibleMessageSnapshot = (): VisibleMessageSnapshot | null => {
+  const candidates = getVisibleMessageCandidates();
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const anchor =
+    candidates
+      .filter(candidate => candidate.relativeTop >= -candidate.height * 0.75)
+      .sort(
+        (left, right) =>
+          Math.abs(left.relativeTop) - Math.abs(right.relativeTop)
+      )[0] || candidates[0];
+
+  return {
+    anchorMessageId: anchor.messageId,
+    anchorRelativeTop: anchor.relativeTop,
+    firstVisibleIndex: candidates[0].index,
+    lastVisibleIndex: candidates[candidates.length - 1].index,
+    visibleMessageIds: candidates.map(candidate => candidate.messageId)
+  };
+};
+
+const getRenderedMessageElementsInIndexRange = (
+  startIndex: number,
+  endIndex: number
+): HTMLElement[] => {
+  const root = listRootRef.value;
+
+  if (!root || endIndex < startIndex) {
+    return [];
+  }
+
+  const messageIndexById = getMessageIndexById();
+  const seenMessageIds = new Set<string>();
+  const elements: HTMLElement[] = [];
+
+  root.querySelectorAll<HTMLElement>('[data-message-id]').forEach(element => {
+    const messageId = element.dataset.messageId;
+    const index =
+      messageId === undefined ? undefined : messageIndexById.get(messageId);
+
+    if (
+      !messageId ||
+      index === undefined ||
+      index < startIndex ||
+      index > endIndex ||
+      seenMessageIds.has(messageId)
+    ) {
+      return;
+    }
+
+    seenMessageIds.add(messageId);
+    elements.push(element);
+  });
+
+  return elements;
+};
+
+const syncVirtualViewport = (forceRangeUpdate = false): void => {
   const root = listRootRef.value;
   const parent = getScrollParent();
 
   if (!root || !parent) {
     viewportTop.value = 0;
     viewportHeight.value = 0;
+    applyVirtualRenderRange(true);
     return;
   }
 
@@ -678,6 +927,7 @@ const syncVirtualViewport = (): void => {
     Math.min(totalRenderItemsHeight.value, parentRect.top - rootRect.top)
   );
   viewportHeight.value = parent.clientHeight || parentRect.height;
+  applyVirtualRenderRange(forceRangeUpdate);
 };
 
 const scheduleVirtualViewportSync = (): void => {
@@ -738,7 +988,7 @@ const setupVirtualWindowObservers = (): void => {
   }
 
   void nextTick(() => {
-    syncVirtualViewport();
+    syncVirtualViewport(true);
   });
 };
 
@@ -810,11 +1060,11 @@ const ensureMessageRendered = async (messageId: string): Promise<boolean> => {
   );
 
   parent.scrollTop = targetTop - maxScroll;
-  syncVirtualViewport();
+  syncVirtualViewport(true);
 
   await nextTick();
   await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-  syncVirtualViewport();
+  syncVirtualViewport(true);
 
   return true;
 };
@@ -837,7 +1087,7 @@ watch(
     }
 
     void nextTick(() => {
-      syncVirtualViewport();
+      syncVirtualViewport(true);
     });
   },
   { immediate: true }
@@ -847,7 +1097,7 @@ const getBubbleProps = (message: IMessage, index: number) => ({
   message: message.text || '',
   media: message.media,
   isMeSender: resolveMessageIsMeSender(message),
-  time: formatTime(new Date(message.createdAt)),
+  time: getCachedMessageTime(message),
   sender: message.senderUser?.initials || '',
   senderUser: message.senderUser,
   senderRole: parseUserEx(message.senderUser?.ex)?.erpRole || '',
@@ -880,7 +1130,9 @@ const getBubbleProps = (message: IMessage, index: number) => ({
 
 defineExpose({
   unreadMessageStartRef,
-  ensureMessageRendered
+  ensureMessageRendered,
+  getVisibleMessageSnapshot,
+  getRenderedMessageElementsInIndexRange
 });
 </script>
 

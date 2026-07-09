@@ -1,6 +1,6 @@
 <template>
   <div class="reactions">
-    <TransitionGroup name="reaction" tag="div" class="reactions">
+    <div class="reactions">
       <div
         v-for="(messageReaction, emoji) in reactionContent"
         :key="emoji"
@@ -34,7 +34,7 @@
           {{ messageReaction.count }}
         </p>
       </div>
-    </TransitionGroup>
+    </div>
 
     <Teleport to="body">
       <div
