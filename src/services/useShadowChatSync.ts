@@ -9,6 +9,8 @@ const READ_STATE_STORE = 'readStates';
 const SYNC_META_STORE = 'syncMeta';
 const SHADOW_SYNC_FLAG_KEY = 'chat.shadowSync.enabled';
 const MAX_EVENT_LOG_RECORDS_PER_USER = 300;
+const DELETED_MESSAGES_META_PREFIX = 'deletedMessages:';
+const DELETED_MESSAGE_TOMBSTONE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const DATE_KEYS = new Set([
   'createdAt',
@@ -161,6 +163,9 @@ const getTopicCacheKey = (topicId: string, userId: string) =>
 
 const getMetaKey = (key: string, userId: string) =>
   `${userId || 'anonymous'}:${key}`;
+
+const getDeletedMessagesMetaKey = (topicId: string): string =>
+  `${DELETED_MESSAGES_META_PREFIX}${topicId}`;
 
 const getReadStateCacheKey = (topicId: string, userId: string) =>
   `${userId || 'anonymous'}:${topicId}`;
@@ -491,11 +496,21 @@ export const saveShadowTopicSnapshot = async (
             cacheKey
           )
         )?.messages || [];
+    const incomingMessages = await filterShadowDeletedMessages(
+      topicId,
+      messages,
+      userId
+    );
+    const existingMessages = await filterShadowDeletedMessages(
+      topicId,
+      existing,
+      userId
+    );
     const mergedMessages = opts?.replace
-      ? mergeMessages([], messages)
-      : messages.length > 0
-        ? mergeMessages(existing, messages)
-        : existing;
+      ? mergeMessages([], incomingMessages)
+      : incomingMessages.length > 0
+        ? mergeMessages(existingMessages, incomingMessages)
+        : existingMessages;
 
     if (!mergedMessages.length) {
       const db = await openDb();
@@ -635,6 +650,74 @@ export const appendShadowSyncMetaList = async <T>(
   } catch (error) {
     console.warn('Failed to append shadow sync meta list:', error);
   }
+};
+
+export const loadShadowDeletedMessageIds = async (
+  topicId: string,
+  userId = getResolvedUserId()
+): Promise<Set<string>> => {
+  const deletedMessages =
+    (await loadShadowSyncMeta<Record<string, string>>(
+      getDeletedMessagesMetaKey(topicId),
+      userId
+    )) || {};
+  const now = Date.now();
+  const activeIds = Object.entries(deletedMessages)
+    .filter(([, deletedAt]) => {
+      const deletedTimestamp = new Date(deletedAt).getTime();
+      return (
+        !Number.isNaN(deletedTimestamp) &&
+        now - deletedTimestamp < DELETED_MESSAGE_TOMBSTONE_TTL_MS
+      );
+    })
+    .map(([messageId]) => messageId);
+
+  return new Set(activeIds);
+};
+
+export const markShadowTopicMessageDeleted = async (
+  topicId: string,
+  messageId: string,
+  userId = getResolvedUserId()
+): Promise<void> => {
+  if (!getShadowSyncEnabled() || !topicId || !messageId || !userId) {
+    return;
+  }
+
+  const key = getDeletedMessagesMetaKey(topicId);
+  const existing =
+    (await loadShadowSyncMeta<Record<string, string>>(key, userId)) || {};
+  const now = new Date().toISOString();
+  const cutoff = Date.now() - DELETED_MESSAGE_TOMBSTONE_TTL_MS;
+  const next = Object.fromEntries(
+    Object.entries({
+      ...existing,
+      [messageId]: now
+    }).filter(([, deletedAt]) => {
+      const deletedTimestamp = new Date(deletedAt).getTime();
+      return !Number.isNaN(deletedTimestamp) && deletedTimestamp >= cutoff;
+    })
+  );
+
+  await saveShadowSyncMeta(key, next, userId);
+};
+
+const filterShadowDeletedMessages = async (
+  topicId: string,
+  messages: IMessage[],
+  userId = getResolvedUserId()
+): Promise<IMessage[]> => {
+  if (!messages.length) {
+    return messages;
+  }
+
+  const deletedMessageIds = await loadShadowDeletedMessageIds(topicId, userId);
+
+  if (!deletedMessageIds.size) {
+    return messages;
+  }
+
+  return messages.filter(message => !deletedMessageIds.has(message.id));
 };
 
 const mergeShadowLoadedRanges = (
@@ -987,9 +1070,11 @@ export const loadShadowTopicSnapshot = async (
       getTopicCacheKey(topicId, userId)
     );
 
-    return record?.messages
+    const messages = record?.messages
       ? mergeMessages([], deserializeValue(record.messages) as IMessage[])
       : [];
+
+    return filterShadowDeletedMessages(topicId, messages, userId);
   } catch (error) {
     console.warn('Failed to load shadow topic snapshot:', error);
     return [];
@@ -1187,6 +1272,8 @@ export const deleteShadowTopicMessage = async (
   }
 
   try {
+    await markShadowTopicMessageDeleted(topicId, messageId, userId);
+
     const cacheKey = getTopicCacheKey(topicId, userId);
     const existing = await getRecord<ShadowTopicSnapshotRecord>(
       TOPIC_SNAPSHOT_STORE,

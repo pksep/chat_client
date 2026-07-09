@@ -211,8 +211,8 @@ let virtualViewportRafId = 0;
 let contentReadyRafId = 0;
 let contentReadyToken = 0;
 
-const VIRTUALIZATION_ITEM_THRESHOLD = 220;
-const VIRTUALIZATION_MESSAGE_THRESHOLD = 260;
+const VIRTUALIZATION_ITEM_THRESHOLD = 850;
+const VIRTUALIZATION_MESSAGE_THRESHOLD = 750;
 const VIRTUAL_MAX_MESSAGES_PER_ITEM = 8;
 const VIRTUAL_OVERSCAN_PX = 1400;
 const VIRTUAL_RANGE_ITEM_BUFFER = 6;
@@ -677,9 +677,7 @@ const findEndIndex = (offsets: number[], bottom: number): number => {
   return Math.min(offsets.length - 1, Math.max(1, low));
 };
 
-const getViewportRenderRange = (
-  extraItemBuffer = 0
-): VirtualRenderRange => {
+const getViewportRenderRange = (extraItemBuffer = 0): VirtualRenderRange => {
   if (!isVirtualized.value) {
     return {
       start: 0,

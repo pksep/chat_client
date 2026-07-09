@@ -54,6 +54,8 @@ export function useMessageScroll(
   const isShowScrollToBottomButton = ref(false);
   const viewportRevision = ref(0);
   const isLoadingInitialMessages = ref(false);
+  const isLoadingOlderMessages = ref(false);
+  const isLoadingNewerMessages = ref(false);
   const autoReadSuspendedUntil = ref(0);
   const historyFetchSuspendedUntil = ref(0);
   const readReceiptsEnabled = ref(true);
@@ -62,7 +64,8 @@ export function useMessageScroll(
 
   const scrollAnchor = useScrollAnchor({
     containerRef: chatWrapperRef,
-    bottomThreshold: 50,
+    bottomThreshold: 120,
+    bottomLockThreshold: 96,
     messageSelector: '[data-message-id]'
   });
   let trackedViewportTopicId = '';
@@ -136,6 +139,8 @@ export function useMessageScroll(
   });
 
   let isScrollLoading = false;
+  let isHistoryScrollLoading = false;
+  let isNewerScrollLoading = false;
   const isAutoScrollLoading = false;
   let hasOldMessage = true;
   let hasNewMessage = true;
@@ -150,6 +155,10 @@ export function useMessageScroll(
   let historyPrependCheckRafId = 0;
   let viewportRevisionRafId = 0;
   let unreadReactionCheckRafId = 0;
+  let olderMessagesLoadingHideTimeoutId: ReturnType<typeof setTimeout> | null =
+    null;
+  let newerMessagesLoadingHideTimeoutId: ReturnType<typeof setTimeout> | null =
+    null;
   let readTargetsSyncTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let historyTargetsSyncTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let historyPrependCheckTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -159,17 +168,32 @@ export function useMessageScroll(
   let pendingMessagesMutationRevision: number | null = null;
   let pendingViewportAnchorMessageId: string | null = null;
   let preserveViewportForDownPagination = false;
+  let prefetchedHistoryPrepend: {
+    topicId: string;
+    cursorId: string;
+    messages: IMessage[];
+  } | null = null;
   let lastUserActivityReadFlushAt = 0;
+  let lastHistoryScrollIntentAt = 0;
+  let olderMessagesLoadingShownAt = 0;
+  let newerMessagesLoadingShownAt = 0;
   const pendingReadIds = new Set<string>();
   const SCROLL_DISTANCE_FOR_REQUEST = 500;
   const HISTORY_PREPEND_TRIGGER_INDEX = 50;
   const HISTORY_PREPEND_TRIGGER_WINDOW_FRACTION = 0.5;
+  const HISTORY_PREFETCH_TRIGGER_INDEX = 160;
+  const HISTORY_PREFETCH_TRIGGER_WINDOW_FRACTION = 0.85;
   const HISTORY_PREPEND_TRIGGER_BUFFER = 2;
   const HISTORY_PREPEND_COOLDOWN_MS = 350;
-  const HISTORY_PREPEND_PAGE_LIMIT = 6;
-  const HISTORY_VISIBLE_WINDOW_LIMIT = 90;
+  const HISTORY_PREPEND_INTENT_TTL_MS = 2500;
+  const HISTORY_PREPEND_USER_QUIET_MS = 180;
+  const HISTORY_PREPEND_PAGE_LIMIT = 64;
+  const HISTORY_VISIBLE_WINDOW_LIMIT = 700;
   const HISTORY_PERSIST_IDLE_DELAY_MS = 10000;
   const HISTORY_PREPEND_CHECK_INTERVAL_MS = 220;
+  const PAGINATION_LOADING_MIN_VISIBLE_MS = 650;
+  const PAGINATION_LOADING_TOP_EDGE_THRESHOLD = 160;
+  const PAGINATION_LOADING_BOTTOM_EDGE_THRESHOLD = 24;
   const HISTORY_TARGET_SYNC_INTERVAL_MS = 250;
   const READ_TARGET_SYNC_INTERVAL_MS = 350;
   const VIEWPORT_REVISION_UPDATE_INTERVAL_MS = 120;
@@ -190,6 +214,175 @@ export function useMessageScroll(
           .map(message => message.id)
       )
   );
+
+  const clearOlderMessagesLoadingHideTimeout = (): void => {
+    if (olderMessagesLoadingHideTimeoutId) {
+      clearTimeout(olderMessagesLoadingHideTimeoutId);
+      olderMessagesLoadingHideTimeoutId = null;
+    }
+  };
+
+  const clearNewerMessagesLoadingHideTimeout = (): void => {
+    if (newerMessagesLoadingHideTimeoutId) {
+      clearTimeout(newerMessagesLoadingHideTimeoutId);
+      newerMessagesLoadingHideTimeoutId = null;
+    }
+  };
+
+  const showOlderMessagesLoading = (): void => {
+    clearOlderMessagesLoadingHideTimeout();
+    if (!isLoadingOlderMessages.value) {
+      olderMessagesLoadingShownAt = Date.now();
+    }
+    isLoadingOlderMessages.value = true;
+  };
+
+  const showNewerMessagesLoading = (): void => {
+    clearNewerMessagesLoadingHideTimeout();
+    if (!isLoadingNewerMessages.value) {
+      newerMessagesLoadingShownAt = Date.now();
+    }
+    isLoadingNewerMessages.value = true;
+  };
+
+  const hideOlderMessagesLoading = (immediate = false): void => {
+    clearOlderMessagesLoadingHideTimeout();
+
+    if (!isLoadingOlderMessages.value) {
+      return;
+    }
+
+    const delay = immediate
+      ? 0
+      : Math.max(
+          0,
+          PAGINATION_LOADING_MIN_VISIBLE_MS -
+            (Date.now() - olderMessagesLoadingShownAt)
+        );
+
+    if (delay === 0) {
+      isLoadingOlderMessages.value = false;
+      return;
+    }
+
+    olderMessagesLoadingHideTimeoutId = setTimeout(() => {
+      olderMessagesLoadingHideTimeoutId = null;
+      isLoadingOlderMessages.value = false;
+    }, delay);
+  };
+
+  const hideNewerMessagesLoading = (immediate = false): void => {
+    clearNewerMessagesLoadingHideTimeout();
+
+    if (!isLoadingNewerMessages.value) {
+      return;
+    }
+
+    const delay = immediate
+      ? 0
+      : Math.max(
+          0,
+          PAGINATION_LOADING_MIN_VISIBLE_MS -
+            (Date.now() - newerMessagesLoadingShownAt)
+        );
+
+    if (delay === 0) {
+      isLoadingNewerMessages.value = false;
+      return;
+    }
+
+    newerMessagesLoadingHideTimeoutId = setTimeout(() => {
+      newerMessagesLoadingHideTimeoutId = null;
+      isLoadingNewerMessages.value = false;
+    }, delay);
+  };
+
+  const getPaginationScrollMetrics = () => {
+    const container = chatWrapperRef.value;
+
+    if (!container) {
+      return null;
+    }
+
+    const maxScroll = Math.max(
+      0,
+      container.scrollHeight - container.clientHeight
+    );
+    const normalizedScrollTop = Math.min(container.scrollTop, 0);
+
+    return {
+      distanceFromBottom: Math.abs(normalizedScrollTop),
+      distanceFromTop: maxScroll + normalizedScrollTop
+    };
+  };
+
+  const isAtLoadedTopEdge = (): boolean => {
+    const metrics = getPaginationScrollMetrics();
+
+    return (
+      !!metrics &&
+      metrics.distanceFromTop <= PAGINATION_LOADING_TOP_EDGE_THRESHOLD
+    );
+  };
+
+  const isAtLoadedBottomEdge = (): boolean => {
+    const metrics = getPaginationScrollMetrics();
+
+    return (
+      !!metrics &&
+      metrics.distanceFromBottom <= PAGINATION_LOADING_BOTTOM_EDGE_THRESHOLD
+    );
+  };
+
+  const syncOlderMessagesLoadingState = (): void => {
+    if (isHistoryScrollLoading && isAtLoadedTopEdge()) {
+      showOlderMessagesLoading();
+      return;
+    }
+
+    hideOlderMessagesLoading(true);
+  };
+
+  const syncNewerMessagesLoadingState = (): void => {
+    if (isNewerScrollLoading && isAtLoadedBottomEdge()) {
+      showNewerMessagesLoading();
+      return;
+    }
+
+    hideNewerMessagesLoading(true);
+  };
+
+  const hideOlderMessagesLoadingAfterDomUpdate = (): void => {
+    void nextTick(() => {
+      requestAnimationFrame(() => {
+        if (!isHistoryScrollLoading && !isAtLoadedTopEdge()) {
+          hideOlderMessagesLoading(true);
+        }
+      });
+    });
+  };
+
+  const hideNewerMessagesLoadingAfterDomUpdate = (): void => {
+    void nextTick(() => {
+      requestAnimationFrame(() => {
+        if (!isNewerScrollLoading && !isAtLoadedBottomEdge()) {
+          hideNewerMessagesLoading(true);
+        }
+      });
+    });
+  };
+
+  const completeOlderMessagesLoading = (): void => {
+    isHistoryScrollLoading = false;
+    hideOlderMessagesLoading(!isAtLoadedTopEdge());
+    hideOlderMessagesLoadingAfterDomUpdate();
+  };
+
+  const completeNewerMessagesLoading = (): void => {
+    isNewerScrollLoading = false;
+    hideNewerMessagesLoading(!isAtLoadedBottomEdge());
+    hideNewerMessagesLoadingAfterDomUpdate();
+  };
 
   const getMessageIds = () =>
     state.messages.map((message: IMessage) => message.id);
@@ -364,21 +557,31 @@ export function useMessageScroll(
     }, UNREAD_REACTION_CHECK_INTERVAL_MS);
   };
 
-  const getHistoryPrependTriggerIndex = (): number => {
+  const getHistoryTriggerIndex = (
+    maxIndex: number,
+    windowFraction: number
+  ): number => {
     if (state.messages.length === 0) {
       return -1;
     }
 
     return Math.min(
-      HISTORY_PREPEND_TRIGGER_INDEX,
-      Math.max(
-        0,
-        Math.ceil(
-          (state.messages.length - 1) * HISTORY_PREPEND_TRIGGER_WINDOW_FRACTION
-        )
-      )
+      maxIndex,
+      Math.max(0, Math.ceil((state.messages.length - 1) * windowFraction))
     );
   };
+
+  const getHistoryPrependTriggerIndex = (): number =>
+    getHistoryTriggerIndex(
+      HISTORY_PREPEND_TRIGGER_INDEX,
+      HISTORY_PREPEND_TRIGGER_WINDOW_FRACTION
+    );
+
+  const getHistoryPrefetchTriggerIndex = (): number =>
+    getHistoryTriggerIndex(
+      HISTORY_PREFETCH_TRIGGER_INDEX,
+      HISTORY_PREFETCH_TRIGGER_WINDOW_FRACTION
+    );
 
   const getVisibleMessageSnapshot = (): {
     anchorMessageId: string;
@@ -391,12 +594,27 @@ export function useMessageScroll(
 
   const isVisibleSnapshotNearLoadedStart = (
     snapshot: ReturnType<typeof getVisibleMessageSnapshot>
+  ): boolean =>
+    isVisibleSnapshotNearHistoryTrigger(
+      snapshot,
+      getHistoryPrependTriggerIndex()
+    );
+
+  const isVisibleSnapshotNearHistoryPrefetch = (
+    snapshot: ReturnType<typeof getVisibleMessageSnapshot>
+  ): boolean =>
+    isVisibleSnapshotNearHistoryTrigger(
+      snapshot,
+      getHistoryPrefetchTriggerIndex()
+    );
+
+  const isVisibleSnapshotNearHistoryTrigger = (
+    snapshot: ReturnType<typeof getVisibleMessageSnapshot>,
+    triggerIndex: number
   ): boolean => {
     if (!snapshot) {
       return false;
     }
-
-    const triggerIndex = getHistoryPrependTriggerIndex();
 
     if (triggerIndex < 0) {
       return false;
@@ -430,9 +648,22 @@ export function useMessageScroll(
     };
   };
 
+  const getHistoryPrependQuietDelay = (): number =>
+    Math.max(
+      0,
+      HISTORY_PREPEND_USER_QUIET_MS - (Date.now() - lastHistoryScrollIntentAt)
+    );
+
   const loadOlderMessagesFromVisibleAnchor = async (): Promise<void> => {
+    const now = Date.now();
+
+    if (isScrollLoading) {
+      syncOlderMessagesLoadingState();
+
+      return;
+    }
+
     if (
-      isScrollLoading ||
       !hasOldMessage ||
       !route.value?.id ||
       Date.now() < historyFetchSuspendedUntil.value
@@ -440,14 +671,21 @@ export function useMessageScroll(
       return;
     }
 
-    const now = Date.now();
     if (now - lastHistoryPrependAt < HISTORY_PREPEND_COOLDOWN_MS) {
       return;
     }
 
-    const snapshot = getVisibleMessageSnapshot();
+    if (
+      lastHistoryScrollIntentAt === 0 ||
+      now - lastHistoryScrollIntentAt > HISTORY_PREPEND_INTENT_TTL_MS
+    ) {
+      return;
+    }
 
-    if (!isVisibleSnapshotNearLoadedStart(snapshot)) {
+    const snapshot = getVisibleMessageSnapshot();
+    const isNearPrepend = isVisibleSnapshotNearLoadedStart(snapshot);
+
+    if (!isNearPrepend && !isVisibleSnapshotNearHistoryPrefetch(snapshot)) {
       return;
     }
 
@@ -458,16 +696,59 @@ export function useMessageScroll(
       return;
     }
 
-    const requestedAnchor = getCurrentViewportAnchor(snapshot?.anchorMessageId);
     isScrollLoading = true;
+    isHistoryScrollLoading = true;
+    syncOlderMessagesLoadingState();
 
     try {
-      const result = await fetchMessagesForTopic(topicId, {
-        lastMessageId,
-        limit: HISTORY_PREPEND_PAGE_LIMIT,
-        skipSave: true,
-        skipShadowSnapshot: true
-      });
+      const visibleMessageIds = new Set(
+        state.messages.map(message => message.id)
+      );
+      const getUsefulOlderMessages = (messages: IMessage[]): IMessage[] =>
+        messages.filter(message => !visibleMessageIds.has(message.id));
+      const fullMessages = getFullMessagesByTopicId(topicId);
+      const fullCursorIndex = fullMessages.findIndex(
+        message => message.id === lastMessageId
+      );
+      const hasHiddenOlderLocalMessages =
+        fullCursorIndex > 0 &&
+        fullMessages
+          .slice(
+            Math.max(0, fullCursorIndex - HISTORY_PREPEND_PAGE_LIMIT),
+            fullCursorIndex
+          )
+          .some(message => !visibleMessageIds.has(message.id));
+      const fetchOlderMessages = (forceNetwork = false) =>
+        fetchMessagesForTopic(topicId, {
+          lastMessageId,
+          limit: HISTORY_PREPEND_PAGE_LIMIT,
+          skipSave: true,
+          skipShadowSnapshot: true,
+          forceNetwork
+        });
+
+      const prefetchedMessages =
+        prefetchedHistoryPrepend?.topicId === topicId &&
+        prefetchedHistoryPrepend.cursorId === lastMessageId
+          ? prefetchedHistoryPrepend.messages
+          : null;
+      let result = prefetchedMessages;
+
+      if (!result) {
+        const shouldForceNetworkInitially = !hasHiddenOlderLocalMessages;
+        result = await fetchOlderMessages(shouldForceNetworkInitially);
+
+        if (
+          !shouldForceNetworkInitially &&
+          result.length > 0 &&
+          getUsefulOlderMessages(result).length === 0 &&
+          navigator.onLine
+        ) {
+          result = await fetchOlderMessages(true);
+        }
+      }
+
+      const olderMessages = getUsefulOlderMessages(result);
 
       if (
         route.value.id !== topicId ||
@@ -476,28 +757,50 @@ export function useMessageScroll(
         return;
       }
 
-      const existingMessageIds = new Set(
-        state.messages.map(message => message.id)
-      );
-      const olderMessages = result.filter(
-        message => !existingMessageIds.has(message.id)
-      );
-
-      if (result.length === 0) {
+      if (result.length === 0 || olderMessages.length === 0) {
+        prefetchedHistoryPrepend = null;
         hasOldMessage = false;
-        return;
-      }
-
-      if (olderMessages.length === 0) {
+        lastHistoryPrependAt = Date.now();
         return;
       }
 
       hasOldMessage = true;
 
+      if (!isNearPrepend) {
+        if (!prefetchedMessages) {
+          prefetchedHistoryPrepend = {
+            topicId,
+            cursorId: lastMessageId,
+            messages: olderMessages
+          };
+        }
+
+        if (isVisibleSnapshotNearLoadedStart(getVisibleMessageSnapshot())) {
+          scheduleHistoryPrependCheck(getHistoryPrependQuietDelay(), true);
+        }
+
+        return;
+      }
+
       if (
         route.value.id !== topicId ||
         state.messages[0]?.id !== lastMessageId
       ) {
+        return;
+      }
+
+      if (prefetchedMessages) {
+        prefetchedHistoryPrepend = null;
+      }
+
+      const quietDelay = getHistoryPrependQuietDelay();
+      if (quietDelay > 0) {
+        prefetchedHistoryPrepend = {
+          topicId,
+          cursorId: lastMessageId,
+          messages: olderMessages
+        };
+        scheduleHistoryPrependCheck(quietDelay, true);
         return;
       }
 
@@ -505,6 +808,9 @@ export function useMessageScroll(
         return;
       }
 
+      const requestedAnchor = getCurrentViewportAnchor(
+        getVisibleMessageSnapshot()?.anchorMessageId
+      );
       const currentAnchor =
         getCurrentViewportAnchor(requestedAnchor?.messageId) || requestedAnchor;
       pendingViewportAnchorMessageId = currentAnchor?.messageId || null;
@@ -519,6 +825,7 @@ export function useMessageScroll(
       lastHistoryPrependAt = Date.now();
     } finally {
       isScrollLoading = false;
+      completeOlderMessagesLoading();
     }
   };
 
@@ -566,10 +873,7 @@ export function useMessageScroll(
   };
 
   const scheduleObservedHistoryPaginationTargetsSync = (): void => {
-    if (
-      observedHistoryPaginationTargetsRafId ||
-      historyTargetsSyncTimeoutId
-    ) {
+    if (observedHistoryPaginationTargetsRafId || historyTargetsSyncTimeoutId) {
       return;
     }
 
@@ -583,14 +887,36 @@ export function useMessageScroll(
     }, HISTORY_TARGET_SYNC_INTERVAL_MS);
   };
 
-  const scheduleHistoryPrependCheck = (): void => {
+  const cancelScheduledHistoryPrependCheck = (): void => {
+    if (historyPrependCheckTimeoutId) {
+      clearTimeout(historyPrependCheckTimeoutId);
+      historyPrependCheckTimeoutId = null;
+    }
+
+    if (historyPrependCheckRafId) {
+      cancelAnimationFrame(historyPrependCheckRafId);
+      historyPrependCheckRafId = 0;
+    }
+  };
+
+  const scheduleHistoryPrependCheck = (
+    minDelay = 0,
+    forceReschedule = false
+  ): void => {
+    if (forceReschedule) {
+      cancelScheduledHistoryPrependCheck();
+    }
+
     if (historyPrependCheckRafId || historyPrependCheckTimeoutId) {
       return;
     }
 
-    const delay = isVisibleSnapshotNearLoadedStart(getVisibleMessageSnapshot())
-      ? 0
-      : HISTORY_PREPEND_CHECK_INTERVAL_MS;
+    const delay = Math.max(
+      minDelay,
+      isVisibleSnapshotNearLoadedStart(getVisibleMessageSnapshot())
+        ? 0
+        : HISTORY_PREPEND_CHECK_INTERVAL_MS
+    );
 
     historyPrependCheckTimeoutId = setTimeout(() => {
       historyPrependCheckTimeoutId = null;
@@ -905,10 +1231,22 @@ export function useMessageScroll(
     scheduleVisibleUnreadReactionCheck();
 
     const { scrollTop } = el;
+    const isHistoryScrollIntent =
+      !scrollAnchor.isRestoringScroll &&
+      scrollTop < scrollState.previousScrollTop - 1;
+
+    if (isHistoryScrollIntent) {
+      lastHistoryScrollIntentAt = Date.now();
+    }
+
+    scrollState.previousScrollTop = scrollTop;
+
     const normalizedScrollTop = Math.min(scrollTop, 0);
     const distanceFromBottom = Math.abs(normalizedScrollTop);
 
     isShowScrollToBottomButton.value = distanceFromBottom > 200;
+    syncOlderMessagesLoadingState();
+    syncNewerMessagesLoadingState();
 
     if (isAutoScrollLoading) {
       return;
@@ -941,31 +1279,36 @@ export function useMessageScroll(
     ) {
       isScrollLoading = true;
 
-      const lastMessage = state.messages[state.messages.length - 1];
-      const latestKnownTopicMessageId =
-        getSelectedTopic(route.value.id)?.lastMessage?.id || null;
-      const shouldFetchNewerRange =
-        !!lastMessage?.id &&
-        !!latestKnownTopicMessageId &&
-        lastMessage.id !== latestKnownTopicMessageId;
+      try {
+        const lastMessage = state.messages[state.messages.length - 1];
+        const latestKnownTopicMessageId =
+          getSelectedTopic(route.value.id)?.lastMessage?.id || null;
+        const shouldFetchNewerRange =
+          !!lastMessage?.id &&
+          !!latestKnownTopicMessageId &&
+          lastMessage.id !== latestKnownTopicMessageId;
 
-      if (shouldFetchNewerRange) {
-        preserveViewportForDownPagination = true;
+        if (shouldFetchNewerRange) {
+          isNewerScrollLoading = true;
+          syncNewerMessagesLoadingState();
+          preserveViewportForDownPagination = true;
 
-        const result = await fetchMessagesForTopic(route.value.id, {
-          afterMessageId: lastMessage.id,
-          skipSave: true
-        });
-        hasNewMessage = result.length > 0;
-
-        if (result.length > 0) {
-          mergeMessagesForTopic(route.value.id, result, 'append', {
-            syncLastMessage: false
+          const result = await fetchMessagesForTopic(route.value.id, {
+            afterMessageId: lastMessage.id,
+            skipSave: true
           });
-        }
-      }
+          hasNewMessage = result.length > 0;
 
-      isScrollLoading = false;
+          if (result.length > 0) {
+            mergeMessagesForTopic(route.value.id, result, 'append', {
+              syncLastMessage: false
+            });
+          }
+        }
+      } finally {
+        completeNewerMessagesLoading();
+        isScrollLoading = false;
+      }
     }
   };
 
@@ -1129,6 +1472,24 @@ export function useMessageScroll(
     schedulePersistScrollMeta();
   };
 
+  const handleHistoryScrollInteraction = (event: WheelEvent | TouchEvent) => {
+    const container = chatWrapperRef.value;
+
+    if (!container || !(event.target instanceof Node)) {
+      return;
+    }
+
+    if (!container.contains(event.target)) {
+      return;
+    }
+
+    if (event instanceof WheelEvent && event.deltaY >= 0) {
+      return;
+    }
+
+    lastHistoryScrollIntentAt = Date.now();
+  };
+
   const schedulePersistScrollMeta = () => {
     return;
   };
@@ -1230,15 +1591,22 @@ export function useMessageScroll(
   const resetScrollState = () => {
     hasOldMessage = true;
     hasNewMessage = true;
+    isHistoryScrollLoading = false;
+    isNewerScrollLoading = false;
+    hideOlderMessagesLoading(true);
+    hideNewerMessagesLoading(true);
     pendingReadIds.clear();
     scrolledUnreadMarkerKey.value = null;
     pendingMessagesMutationRevision = null;
     pendingViewportAnchorMessageId = null;
     preserveViewportForDownPagination = false;
+    prefetchedHistoryPrepend = null;
     lastHistoryPrependAt = 0;
+    lastHistoryScrollIntentAt = 0;
     isShowScrollToBottomButton.value = false;
     scrollState.isInitialLoad = true;
     scrollState.isUserScrolling = false;
+    scrollState.previousScrollTop = 0;
     scrollState.shouldAutoScroll = true;
   };
 
@@ -1284,6 +1652,12 @@ export function useMessageScroll(
     window.addEventListener('touchstart', handleUserActivity, {
       passive: true
     });
+    window.addEventListener('wheel', handleHistoryScrollInteraction, {
+      passive: true
+    });
+    window.addEventListener('touchmove', handleHistoryScrollInteraction, {
+      passive: true
+    });
   });
 
   onUnmounted(() => {
@@ -1312,6 +1686,9 @@ export function useMessageScroll(
       unreadReactionCheckRafId = 0;
     }
 
+    window.removeEventListener('wheel', handleHistoryScrollInteraction);
+    window.removeEventListener('touchmove', handleHistoryScrollInteraction);
+
     if (readTargetsSyncTimeoutId) {
       clearTimeout(readTargetsSyncTimeoutId);
       readTargetsSyncTimeoutId = null;
@@ -1326,6 +1703,9 @@ export function useMessageScroll(
       clearTimeout(unreadReactionCheckTimeoutId);
       unreadReactionCheckTimeoutId = null;
     }
+
+    clearOlderMessagesLoadingHideTimeout();
+    clearNewerMessagesLoadingHideTimeout();
 
     if (observedHistoryPaginationTargetsRafId) {
       cancelAnimationFrame(observedHistoryPaginationTargetsRafId);
@@ -1364,6 +1744,8 @@ export function useMessageScroll(
     isShowScrollToBottomButton,
     viewportRevision,
     isLoadingInitialMessages,
+    isLoadingOlderMessages,
+    isLoadingNewerMessages,
     scrollState,
     handleScroll,
     scrollToBottom,

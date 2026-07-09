@@ -1,5 +1,6 @@
 <template>
   <div
+    ref="selectedMessagesRef"
     class="selected-messages"
     :data-testid="`${props.dataTestid}-SelectedMessages`"
   >
@@ -56,7 +57,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -85,13 +86,34 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   dataTestid: 'Header'
 });
+const emit = defineEmits(['heightChange']);
 
 const route = useUrlWatcher();
+const selectedMessagesRef = useTemplateRef('selectedMessagesRef');
 const { getSelectedMessagesForTopic, selectedMessageCount } =
   useSelectedMessages();
 
 const deleteConfirmOpen = ref(false);
 const forwardModalOpen = ref(false);
+let selectedMessagesResizeObserver: ResizeObserver | null = null;
+let lastReportedSelectedMessagesHeight = 0;
+
+const reportSelectedMessagesHeight = (): void => {
+  const element = selectedMessagesRef.value;
+
+  if (!element) {
+    return;
+  }
+
+  const nextHeight = Math.ceil(element.getBoundingClientRect().height);
+
+  if (!nextHeight || nextHeight === lastReportedSelectedMessagesHeight) {
+    return;
+  }
+
+  lastReportedSelectedMessagesHeight = nextHeight;
+  emit('heightChange', nextHeight);
+};
 
 const selectedMessages = computed(() =>
   getSelectedMessagesForTopic(route.value.id).sort(
@@ -156,4 +178,22 @@ const handleForwardSelectedMessages = async (topic: ITopic): Promise<void> => {
     clearSelectedMessages();
   }
 };
+
+onMounted(() => {
+  if ('ResizeObserver' in window && selectedMessagesRef.value) {
+    selectedMessagesResizeObserver = new ResizeObserver(
+      reportSelectedMessagesHeight
+    );
+    selectedMessagesResizeObserver.observe(selectedMessagesRef.value);
+  }
+
+  requestAnimationFrame(reportSelectedMessagesHeight);
+});
+
+onBeforeUnmount(() => {
+  selectedMessagesResizeObserver?.disconnect();
+  selectedMessagesResizeObserver = null;
+  lastReportedSelectedMessagesHeight = 0;
+  emit('heightChange', 0);
+});
 </script>

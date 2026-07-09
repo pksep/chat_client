@@ -53,7 +53,7 @@
                 v-if="shouldRenderLocalVideoPreview(media)"
                 :src="media.localPath"
                 :poster="media.localThumbnailPath || VIDEO_FALLBACK_THUMBNAIL"
-                :style="getPreviewStyle(media, i)"
+                :style="getPreviewStyle()"
                 :width="getPreviewWidth(media, i)"
                 :height="getPreviewHeight(media, i)"
                 muted
@@ -70,7 +70,7 @@
               <div
                 v-else-if="!shouldLoadMedia"
                 class="message-content__media-placeholder"
-                :style="getPreviewStyle(media, i)"
+                :style="getPreviewStyle()"
                 aria-hidden="true"
                 @click.stop="handleMediaClick(i)"
                 @contextmenu.prevent
@@ -82,7 +82,7 @@
                 :alt="
                   props.sender ? `${props.sender} изображение` : 'Изображение'
                 "
-                :style="getPreviewStyle(media, i)"
+                :style="getPreviewStyle()"
                 :width="getPreviewWidth(media, i)"
                 :height="getPreviewHeight(media, i)"
                 loading="lazy"
@@ -101,7 +101,9 @@
               >
                 <LoadingIcon
                   :is-loaded="false"
-                  :percent="media.isLoading ? media.uploadPercent ?? null : null"
+                  :percent="
+                    media.isLoading ? media.uploadPercent ?? null : null
+                  "
                 />
               </div>
 
@@ -207,7 +209,10 @@ import { MessageStatus } from '../../services/useChatSDK/types';
 import {
   calculatePreviewDimensions,
   getGridItemMaxWidth,
+  normalizePreviewDimensions,
   type MediaPreviewDimensions,
+  PREVIEW_MAX_HEIGHT,
+  PREVIEW_MIN_SIZE,
   VIDEO_FALLBACK_THUMBNAIL
 } from '../../utils/mediaPreview';
 
@@ -240,7 +245,16 @@ const singleMediaPreviewWidth = computed(() => {
     return null;
   }
 
-  const width = mediaFiles.value[0]?.ex?.previewWidth;
+  const media = mediaFiles.value[0];
+  let preview: MediaPreviewDimensions | null = null;
+
+  if (media?.ex?.previewWidth && media.ex?.previewHeight) {
+    preview = normalizePreviewDimensions(media.ex, 1, 0);
+  } else if (media?.ex) {
+    preview = calculatePreviewDimensions(media.ex, 1, 0);
+  }
+
+  const width = preview?.previewWidth;
 
   return typeof width === 'number' && width > 0 ? width : null;
 });
@@ -359,14 +373,17 @@ const getFallbackPreviewDimensions = (
   media: IMedia,
   index: number
 ): MediaPreviewDimensions => {
-  const previewWidth = Math.round(
-    Math.max(100, getGridItemMaxWidth(mediaFiles.value.length, index))
-  );
-  const isSingleMedia = mediaFiles.value.length === 1;
+  const mediaCount = mediaFiles.value.length;
+  const previewWidth = Math.round(getGridItemMaxWidth(mediaCount, index));
+  const isSingleMedia = mediaCount === 1;
   const fallbackRatio =
     media.type === MediaType.Video ? 16 / 9 : isSingleMedia ? 4 / 3 : 1;
+  const minHeight = Math.min(PREVIEW_MIN_SIZE, previewWidth);
   const previewHeight = Math.round(
-    Math.max(100, Math.min(300, previewWidth / fallbackRatio))
+    Math.min(
+      PREVIEW_MAX_HEIGHT,
+      Math.max(minHeight, previewWidth / fallbackRatio)
+    )
   );
 
   return {
@@ -377,14 +394,17 @@ const getFallbackPreviewDimensions = (
 };
 
 const getPreviewDimensions = (media: IMedia, index: number) => {
-  const preview =
+  const preview = normalizePreviewDimensions(
     media.ex?.previewWidth && media.ex?.previewHeight
       ? media.ex
       : calculatePreviewDimensions(
           media.ex || {},
           mediaFiles.value.length,
           index
-        );
+        ),
+    mediaFiles.value.length,
+    index
+  );
 
   return preview.previewWidth && preview.previewHeight
     ? preview
@@ -401,22 +421,10 @@ const getPreviewHeight = (media: IMedia, index: number): number | undefined => {
   return typeof height === 'number' && height > 0 ? height : undefined;
 };
 
-const getPreviewStyle = (
-  media: IMedia,
-  index: number
-): Record<string, string> => {
-  const preview = getPreviewDimensions(media, index);
-
-  if (!preview.previewWidth || !preview.previewHeight) {
-    return {
-      width: `100%`,
-      height: `100%`
-    };
-  }
-
+const getPreviewStyle = (): Record<string, string> => {
   return {
-    width: `${preview.previewWidth}px`,
-    height: `${preview.previewHeight}px`
+    width: '100%',
+    height: '100%'
   };
 };
 
@@ -432,7 +440,7 @@ const getPreviewContainerStyle = (
     return {};
   }
 
-  if (hasInlineCaption.value && mediaFiles.value.length === 1) {
+  if (mediaFiles.value.length === 1) {
     return {
       width: `${previewWidth}px`,
       height: `${previewHeight}px`,
@@ -443,6 +451,8 @@ const getPreviewContainerStyle = (
   }
 
   return {
+    width: '100%',
+    height: `${previewHeight}px`,
     aspectRatio: `${previewWidth} / ${previewHeight}`,
     containIntrinsicSize: `${previewWidth}px ${previewHeight}px`,
     minHeight: `${previewHeight}px`

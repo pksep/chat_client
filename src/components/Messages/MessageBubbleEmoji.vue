@@ -85,34 +85,34 @@
         </div>
       </div>
 
-        <div v-if="props.reactions?.length" class="message-footer-row">
-          <div class="message-reactions-row">
-            <MessageEmojies :reactions="props.reactions" />
-          </div>
-          <div
-            :class="[
-              'message-time',
-              hasReplyReference
-                ? 'message-time--emoji-inline'
-                : 'message-time--emoji'
-            ]"
-            :data-testid="`${props.dataTestid}-Time`"
-          >
-            <span :data-testid="`${props.dataTestid}-TimeText`">{{
-              props.time
-            }}</span>
-            <ErrorIcon
-              v-if="showErrorIcon"
-              :data-testid="`${props.dataTestid}-ErrorIcon`"
-            />
-            <MessageStatusIcons
-              v-if="props.isMeSender && !showErrorIcon"
-              :is-read="props.isRead"
-              :message-status="props.messageStatus"
-              :data-testid="`${props.dataTestid}`"
-            />
-          </div>
+      <div v-if="props.reactions?.length" class="message-footer-row">
+        <div class="message-reactions-row">
+          <MessageEmojies :reactions="props.reactions" />
         </div>
+        <div
+          :class="[
+            'message-time',
+            hasReplyReference
+              ? 'message-time--emoji-inline'
+              : 'message-time--emoji'
+          ]"
+          :data-testid="`${props.dataTestid}-Time`"
+        >
+          <span :data-testid="`${props.dataTestid}-TimeText`">{{
+            props.time
+          }}</span>
+          <ErrorIcon
+            v-if="showErrorIcon"
+            :data-testid="`${props.dataTestid}-ErrorIcon`"
+          />
+          <MessageStatusIcons
+            v-if="props.isMeSender && !showErrorIcon"
+            :is-read="props.isRead"
+            :message-status="props.messageStatus"
+            :data-testid="`${props.dataTestid}`"
+          />
+        </div>
+      </div>
 
       <div
         v-if="!props.reactions?.length && !hasReplyReference"

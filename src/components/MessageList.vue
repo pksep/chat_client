@@ -8,6 +8,7 @@
     ]"
     ref="chatWrapperRef"
     v-if="isAiRoute"
+    :style="chatMessageWrapperStyle"
     @wheel.passive="handleFloatingDateDividerUserScroll"
     @touchmove.passive="handleFloatingDateDividerUserScroll"
     @touchstart="onTouchStart"
@@ -99,6 +100,7 @@
     ]"
     v-if="!isAiRoute && !isDefaultRoute"
     ref="chatWrapperRef"
+    :style="chatMessageWrapperStyle"
     @vue:mounted="scrollToBottom"
     @scroll="handleScroll"
     @wheel.passive="handleFloatingDateDividerUserScroll"
@@ -192,6 +194,24 @@
         <div class="date-divider">
           <span>{{ floatingDateDividerLabel }}</span>
         </div>
+      </div>
+    </Transition>
+    <Transition name="chat-pagination-loading">
+      <div
+        v-if="shouldShowOlderMessagesLoading"
+        class="chat__pagination-loading chat__pagination-loading--top"
+        :data-testid="`${props.dataTestid}-MessageList-OlderMessagesLoading`"
+      >
+        <span class="chat__pagination-loading-text">загрузка...</span>
+      </div>
+    </Transition>
+    <Transition name="chat-pagination-loading">
+      <div
+        v-if="shouldShowNewerMessagesLoading"
+        class="chat__pagination-loading chat__pagination-loading--bottom"
+        :data-testid="`${props.dataTestid}-MessageList-NewerMessagesLoading`"
+      >
+        <span class="chat__pagination-loading-text">загрузка...</span>
       </div>
     </Transition>
     <section
@@ -357,6 +377,7 @@
   <SelectedMessagesContent
     v-if="!shouldRenderUserMessageSkeleton && isSelectionMode"
     :data-testid="`${props.dataTestid}-SelectedMessages`"
+    @height-change="handleSelectedMessagesHeightChange"
   />
   <MessageListInput
     v-if="!isDefaultRoute && !isSelectionMode && !isMobileTopicSearchMode"
@@ -373,6 +394,7 @@
     @clear-reply="handleSetReplyMessage(null)"
     @clear-forward="handleSetForwardMessage(null)"
     @scroll-to-message="handleScrollToMessage"
+    @height-change="handleInputHeightChange"
   />
 
   <PushNotification
@@ -631,6 +653,7 @@ const getLocalStorageInputText = computed(() => {
 });
 
 const inputText = ref(getLocalStorageInputText.value);
+const bottomBarHeight = ref(0);
 const floatingDateDividerLabel = ref('');
 const isFloatingDateDividerHidden = ref(false);
 const isFloatingDateDividerActive = ref(false);
@@ -655,6 +678,13 @@ const { pendingForwardMessages, pendingForwardTopicId } =
 
 const isAiRoute = computed(() => route.value?.type === RouteTypes.AI);
 const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
+const chatMessageWrapperStyle = computed(() =>
+  bottomBarHeight.value > 0
+    ? {
+        '--chat-input-height': `${bottomBarHeight.value}px`
+      }
+    : undefined
+);
 const authUser = computed(() => getAuthUser());
 const isSelectionMode = computed(() =>
   isMessageSelectionModeForTopic(route.value.id)
@@ -804,7 +834,9 @@ const scheduleVisibleMessagesExpansion = (
         return;
       }
 
-      setVisibleMessagesLimitForTopic(topicId, visibleLimit);
+      setVisibleMessagesLimitForTopic(topicId, visibleLimit, {
+        allowShrink: false
+      });
       visibleMessagesExpansionAppliedToken = topicSwitchToken;
 
       nextTick(() => {
@@ -980,6 +1012,8 @@ const {
   isShowScrollToBottomButton,
   viewportRevision,
   isLoadingInitialMessages,
+  isLoadingOlderMessages,
+  isLoadingNewerMessages,
   scrollState,
   handleScroll: handleMessageScroll,
   scrollToBottom,
@@ -1022,6 +1056,60 @@ const shouldMountUserMessageItems = computed(
 const shouldCoverUserMessagesWithSkeleton = computed(
   () => shouldRenderUserMessageSkeleton.value && hasVisibleUserMessages.value
 );
+const shouldShowOlderMessagesLoading = computed(
+  () => !shouldRenderUserMessageSkeleton.value && isLoadingOlderMessages.value
+);
+const shouldShowNewerMessagesLoading = computed(
+  () => !shouldRenderUserMessageSkeleton.value && isLoadingNewerMessages.value
+);
+
+const handleBottomBarHeightChange = (height: number): void => {
+  const nextHeight = Math.max(0, Math.ceil(height));
+  const shouldKeepBottomPinned =
+    isUserMessagesRoute.value &&
+    !shouldRenderUserMessageSkeleton.value &&
+    (isViewingBottom.value || scrollAnchor.isNearBottom.value);
+
+  if (bottomBarHeight.value === nextHeight) {
+    return;
+  }
+
+  bottomBarHeight.value = nextHeight;
+
+  if (!shouldKeepBottomPinned) {
+    return;
+  }
+
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      if (!isUserMessagesRoute.value || !chatWrapperRef.value) {
+        return;
+      }
+
+      scrollToBottom({
+        preferUnreadMarker: false,
+        smooth: false
+      });
+      syncVisibleUnreadAfterAutoScroll();
+    });
+  });
+};
+
+const handleInputHeightChange = (height: number): void => {
+  if (height === 0 && isSelectionMode.value) {
+    return;
+  }
+
+  handleBottomBarHeightChange(height);
+};
+
+const handleSelectedMessagesHeightChange = (height: number): void => {
+  if (height === 0 && !isSelectionMode.value) {
+    return;
+  }
+
+  handleBottomBarHeightChange(height);
+};
 
 const getTopicSwitchLatencyMs = (): number | undefined => {
   if (!topicSwitchStartedAtMs) {
@@ -2195,7 +2283,9 @@ watch(
       visibleMessagesExpansionAppliedToken === topicSwitchToken &&
       shouldKeepInitialBottomPosition
     ) {
-      setVisibleMessagesLimitForTopic(topicId, initialMessagesLimit);
+      setVisibleMessagesLimitForTopic(topicId, initialMessagesLimit, {
+        allowShrink: false
+      });
       await nextTick();
 
       if (isStaleTopicSwitch()) {
