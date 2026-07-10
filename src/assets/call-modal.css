@@ -314,6 +314,19 @@
   }
 }
 
+.chat-tauri-runtime
+  .call-window-view
+  .call-modal__group-info:not(.call-modal__group-info--overlay) {
+  cursor: move;
+}
+
+.chat-tauri-runtime
+  .call-window-view
+  .call-modal__group-info:not(.call-modal__group-info--overlay)
+  button {
+  cursor: pointer;
+}
+
 .call-modal__group-info-text {
   flex: 1;
   min-width: 0;

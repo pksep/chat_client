@@ -419,6 +419,11 @@ import {
   invitedGroupCallInfo,
   pendingGroupCallInfo
 } from '../../services/useCallState';
+import {
+  createCallRoomId,
+  openCallWindowIntent,
+  openCurrentCallWindow
+} from '../../services/useCallWindow';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
 import UserInfoPanel from '../UserInfoPanel.vue';
@@ -438,7 +443,12 @@ const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
-const showCallModal = (): void => {
+const showCallModal = async (): Promise<void> => {
+  if (!isMobile.value) {
+    await openCurrentCallWindow({ isMobile: isMobile.value });
+    return;
+  }
+
   isCallModalVisible.value = true;
 };
 
@@ -837,8 +847,104 @@ const handleTopicSearchKeydown = (event: KeyboardEvent): void => {
   navigateTopicSearch(event.shiftKey ? -1 : 1);
 };
 
+const openDesktopNewCallWindow = async (): Promise<boolean> => {
+  if (isMobile.value || !route.value.id) {
+    return false;
+  }
+
+  const callId = createCallRoomId();
+
+  if (currentTopic.value?.type === TopicType.Group) {
+    return openCallWindowIntent(
+      {
+        callId,
+        kind: 'group-start',
+        roomId: callId,
+        topicId: route.value.id,
+        topicType: currentTopic.value.type
+      },
+      { isMobile: isMobile.value }
+    );
+  }
+
+  const calledUser =
+    currentTopic.value?.type === TopicType.DM ? currentTopic.value.user : null;
+
+  if (!calledUser) {
+    return false;
+  }
+
+  return openCallWindowIntent(
+    {
+      callId,
+      kind: 'direct-outgoing',
+      roomId: callId,
+      topicId: route.value.id,
+      topicType: currentTopic.value?.type,
+      user: calledUser
+    },
+    { isMobile: isMobile.value }
+  );
+};
+
+const openDesktopInviteCallWindow = async (): Promise<boolean> => {
+  const invite = currentInvitedCall.value;
+
+  if (isMobile.value || !invite?.roomId) {
+    return false;
+  }
+
+  return openCallWindowIntent(
+    {
+      callId: invite.roomId,
+      kind: 'join-invite',
+      roomId: invite.roomId,
+      topicId: invite.topicId,
+      invitedGroupCall: invite
+    },
+    { isMobile: isMobile.value }
+  );
+};
+
+const openDesktopPendingCallWindow = async (): Promise<boolean> => {
+  const entry = currentHeaderCallEntry.value;
+  const entryTopicId = entry && 'topicId' in entry ? entry.topicId : null;
+  const currentTopicId = route.value.id || entryTopicId;
+
+  if (isMobile.value || !entry?.roomId || !currentTopicId) {
+    return false;
+  }
+
+  return openCallWindowIntent(
+    {
+      callId: entry.roomId,
+      kind: 'join-group',
+      roomId: entry.roomId,
+      topicId: currentTopicId,
+      activeGroupCall: {
+        roomId: entry.roomId,
+        topicId: currentTopicId,
+        caller:
+          'caller' in entry
+            ? entry.caller || currentTopic.value?.user || null
+            : null,
+        startTime: entry.startTime ?? null,
+        participantCount: entry.participantCount,
+        groupMode: entry.groupMode,
+        elapsedDurationMs: entry.elapsedDurationMs
+      }
+    },
+    { isMobile: isMobile.value }
+  );
+};
+
 const handleCall = async () => {
   nextTick();
+
+  if (!isMobile.value) {
+    await openDesktopNewCallWindow();
+    return;
+  }
 
   if (currentTopic.value?.type === TopicType.Group) {
     const { startLiveKitGroupCall } = await import('../../services/useLiveKit');
@@ -859,6 +965,11 @@ const handleCall = async () => {
 
 const handleHeaderCallClick = async () => {
   if (hasInvitedCall.value && !isCallActive.value) {
+    if (!isMobile.value) {
+      await openDesktopInviteCallWindow();
+      return;
+    }
+
     const didJoin = await joinInviteGroupCall();
 
     if (!didJoin) {
@@ -869,6 +980,11 @@ const handleHeaderCallClick = async () => {
   }
 
   if (currentHeaderCallEntry.value && !isCallActive.value) {
+    if (!isMobile.value) {
+      await openDesktopPendingCallWindow();
+      return;
+    }
+
     const didJoin = await joinGroupCall(route.value.id);
 
     if (!didJoin) {
@@ -878,7 +994,7 @@ const handleHeaderCallClick = async () => {
     return;
   }
 
-  showCallModal();
+  await showCallModal();
 };
 
 const handleCloseMobileInfoModal = (): void => {

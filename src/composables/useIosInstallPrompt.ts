@@ -17,6 +17,10 @@ export function useIosInstallPrompt() {
   };
 
   onMounted(() => {
+    if (window.location.pathname.split('/').filter(Boolean)[0] === 'call') {
+      return;
+    }
+
     if (new URL(window.location.href).searchParams.has('installIOS')) {
       isOpen.value = true;
     }

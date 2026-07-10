@@ -289,10 +289,11 @@ const chatContainerClasses = computed(() => [
 ]);
 const shouldRenderCallModal = computed(
   () =>
-    isCallActive.value ||
-    isAnyCallModalVisible.value ||
-    isAnyCallDialing.value ||
-    isAnyCallIncoming.value
+    isMobile.value &&
+    (isCallActive.value ||
+      isAnyCallModalVisible.value ||
+      isAnyCallDialing.value ||
+      isAnyCallIncoming.value)
 );
 
 const users = computed(() => getUsersList());

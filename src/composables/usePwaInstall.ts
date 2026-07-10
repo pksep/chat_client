@@ -9,8 +9,14 @@ export function usePwaInstall() {
   const deferredPrompt = ref<BeforeInstallPromptEvent | null>(null);
   const canInstall = ref(false);
   const isInstalled = ref(false);
+  const isCallWindowRoute = (): boolean =>
+    window.location.pathname.split('/').filter(Boolean)[0] === 'call';
 
   const beforeInstallHandler = (e: Event) => {
+    if (isCallWindowRoute()) {
+      return;
+    }
+
     e.preventDefault();
     deferredPrompt.value = e as BeforeInstallPromptEvent;
     canInstall.value = true;
@@ -35,6 +41,10 @@ export function usePwaInstall() {
   };
 
   onMounted(() => {
+    if (isCallWindowRoute()) {
+      return;
+    }
+
     window.addEventListener('beforeinstallprompt', beforeInstallHandler);
     window.addEventListener('appinstalled', appInstalledHandler);
 

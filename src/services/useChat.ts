@@ -90,6 +90,10 @@ import {
   isAnyCallModalVisible,
   isCallActive
 } from './useCallState';
+import {
+  openCallWindowIntent,
+  shouldUseSeparateCallWindow
+} from './useCallWindow';
 import { normalizeUserStatus } from '../utils/userStatus';
 import { normalizeDateValue } from '../utils/dateValue';
 import { getIsTopicMessageVisible } from './useTopicViewportState';
@@ -786,13 +790,40 @@ const setupChatListeners = (): void => {
 
   chatSDK.subscribeToEvent(WebSocketEventType.INCOMING_CALL, ({ payload }) => {
     void (async () => {
-      const { handleIncomingCall } = await loadCallsApi();
       const topic = useTopics().getSelectedTopic(payload.topicId) as any;
       const topicType = payload.topicType || topic?.type;
+      const isGroupCall = topicType === TopicType.Group;
       const user =
         getUserById(payload.callerId) ||
         topic?.members?.find((member: any) => member.id === payload.callerId) ||
         (topic?.user?.id === payload.callerId ? topic.user : null);
+
+      if (!isGroupCall && shouldUseSeparateCallWindow()) {
+        const didOpenCallWindow = await openCallWindowIntent({
+          callId: payload.roomId,
+          kind: 'incoming-direct',
+          roomId: payload.roomId,
+          topicId: payload.topicId,
+          topicType,
+          user: user || null,
+          isIncoming: true,
+          isCalling: false,
+          startTime: payload.startTime
+        });
+
+        if (didOpenCallWindow) {
+          void showTauriIncomingCallNotification({
+            caller: user || null,
+            roomId: payload.roomId,
+            topic,
+            topicId: payload.topicId,
+            topicType
+          });
+          return;
+        }
+      }
+
+      const { handleIncomingCall } = await loadCallsApi();
       const isReceived = await handleIncomingCall(
         user || null,
         payload.roomId,
@@ -800,7 +831,6 @@ const setupChatListeners = (): void => {
         topicType,
         payload.startTime
       );
-      const isGroupCall = topicType === TopicType.Group;
 
       if (isReceived) {
         void showTauriIncomingCallNotification({

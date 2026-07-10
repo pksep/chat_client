@@ -3,6 +3,7 @@ import { ref } from 'vue';
 const RouteTypes = {
   DIALOGS: 'dialogs',
   GROUP: 'group',
+  CALL: 'call',
   ASSISTANT: 'assistant',
   AI: 'ai',
   DEFAULT: 'default'
@@ -30,6 +31,8 @@ const parseUrl = (): Route => {
       return { type: RouteTypes.DIALOGS, id };
     } else if (type === RouteTypes.GROUP && id) {
       return { type: RouteTypes.GROUP, id };
+    } else if (type === RouteTypes.CALL && id) {
+      return { type: RouteTypes.CALL, id };
     }
   } else if (pathParts.length === 1) {
     const type = pathParts[0];
@@ -70,6 +73,8 @@ const updateUrl = (route: Route): void => {
     newUrl = `${window.location.origin}/group/${route.id}`;
   } else if (route.type === RouteTypes.GROUP && !route.id) {
     newUrl = `${window.location.origin}/group`;
+  } else if (route.type === RouteTypes.CALL && route.id) {
+    newUrl = `${window.location.origin}/call/${route.id}`;
   } else if (route.type === RouteTypes.ASSISTANT && !route.id) {
     newUrl = `${window.location.origin}/assistant`;
   } else if (route.type === RouteTypes.AI && !route.id) {
@@ -124,6 +129,10 @@ const navigateToGroupsList = (): void => {
   updateUrl({ type: RouteTypes.GROUP, id: null });
 };
 
+const navigateToCall = (callId: string): void => {
+  updateUrl({ type: RouteTypes.CALL, id: callId });
+};
+
 const navigateToAssistant = (): void => {
   updateUrl({ type: RouteTypes.ASSISTANT, id: null });
 };
@@ -159,6 +168,7 @@ export {
   navigateToDialogsList,
   navigateToGroup,
   navigateToGroupsList,
+  navigateToCall,
   navigateToAssistant,
   navigateToAI,
   navigateToDefault,

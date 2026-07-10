@@ -13,13 +13,13 @@
       }"
       @click.stop="closeMobileCallActionsMenu"
     >
-      <div class="call-modal__group-info">
+      <div class="call-modal__group-info" @mousedown="handleCallWindowDrag">
         <div>
           <button
             v-if="!isMobile"
             class="call-modal__control-button call-modal__control-button--action"
             title="Fullscreen"
-            @click="liveKitState.isFullScreen = !liveKitState.isFullScreen"
+            @click="handleToggleCallWindowFullscreen"
           >
             <FullscreenIcon v-if="!liveKitState.isFullScreen" />
             <MinimizeIcon v-else />
@@ -693,6 +693,11 @@ import {
   navigateToDialogs,
   navigateToGroup
 } from '../../composables/navigation';
+import {
+  openChatFromCallWindow,
+  setCurrentCallWindowFullscreen,
+  startCurrentCallWindowDrag
+} from '../../services/useCallWindow';
 import { TopicType } from '../../services/useChatSDK/types';
 import { currentGroup, getGroupById } from '../../composables/useGroup';
 import GroupInfoIcon from './UI/GroupInfoIcon.vue';
@@ -2260,7 +2265,18 @@ watch(
   }
 );
 
+const handleDocumentFullscreenChange = (): void => {
+  if (document.fullscreenElement || !liveKitState.isFullScreen) {
+    return;
+  }
+
+  liveKitState.isFullScreen = false;
+  void setCurrentCallWindowFullscreen(false);
+};
+
 onMounted(() => {
+  document.addEventListener('fullscreenchange', handleDocumentFullscreenChange);
+
   if (typeof ResizeObserver !== 'undefined') {
     remoteVideoResizeObserver = new ResizeObserver(entries => {
       entries.forEach(entry => {
@@ -2285,6 +2301,10 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  document.removeEventListener(
+    'fullscreenchange',
+    handleDocumentFullscreenChange
+  );
   remoteVideoResizeObserver?.disconnect();
   remoteVideoResizeObserver = null;
   observedRemoteVideoBindings = new Map();
@@ -2551,15 +2571,53 @@ const openGroupInfoPanel = () => {
   state.value.openGroupInfoModal = true;
 };
 
+const isInteractiveCallHeaderTarget = (target: EventTarget | null): boolean =>
+  target instanceof HTMLElement &&
+  !!target.closest(
+    'button, a, input, textarea, select, [role="button"], .call-modal__group-actions'
+  );
+
+const handleCallWindowDrag = (event: MouseEvent): void => {
+  if (
+    event.button !== 0 ||
+    isMobile.value ||
+    isInteractiveCallHeaderTarget(event.target)
+  ) {
+    return;
+  }
+
+  void startCurrentCallWindowDrag();
+};
+
+const handleToggleCallWindowFullscreen = async (): Promise<void> => {
+  const nextFullscreenState = !liveKitState.isFullScreen;
+
+  liveKitState.isFullScreen = nextFullscreenState;
+  await setCurrentCallWindowFullscreen(nextFullscreenState);
+};
+
 const handleOpenMobileCallSettings = () => {
   openGroupInfoPanel();
 };
 
-const handleOpenGroupInfoChat = (): boolean => {
+const handleOpenGroupInfoChat = async (): Promise<boolean> => {
   const topic = groupInfoTopic.value;
 
   if (!topic?.id) {
     return false;
+  }
+
+  if (window.location.pathname.split('/').filter(Boolean)[0] === 'call') {
+    const didOpenMainChat = await openChatFromCallWindow({
+      topicId: topic.id,
+      topicType: topic.type
+    });
+
+    if (didOpenMainChat) {
+      state.value.openGroupInfoModal = false;
+    }
+
+    return didOpenMainChat;
   }
 
   if (topic.type === TopicType.Group) {

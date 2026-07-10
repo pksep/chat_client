@@ -75,6 +75,13 @@ import {
   isCallActive,
   isModalVisible as isCallModalVisible
 } from '../../services/useCallState';
+import {
+  createCallRoomId,
+  openCallWindowIntent,
+  openCurrentCallWindow
+} from '../../services/useCallWindow';
+import { useResizeState } from '../../composables/useResizeState';
+import { MAX_W_MD } from '../../utils/constants';
 
 const props = withDefaults(
   defineProps<{
@@ -89,8 +96,16 @@ const props = withDefaults(
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
+const { state: isMobile } = useResizeState(MAX_W_MD);
 
-const showCallModal = (): void => {
+const showCallModal = async (): Promise<void> => {
+  if (
+    !isMobile.value &&
+    (await openCurrentCallWindow({ isMobile: isMobile.value }))
+  ) {
+    return;
+  }
+
   isCallModalVisible.value = true;
 };
 
@@ -108,11 +123,25 @@ const createMeetingInviteLink = async () => {
 
 const ensureMeetingCallReady = async (): Promise<boolean> => {
   if (isCallActive.value) {
-    showCallModal();
+    await showCallModal();
     return true;
   }
 
   try {
+    if (!isMobile.value) {
+      const callId = createCallRoomId();
+
+      return openCallWindowIntent(
+        {
+          callId,
+          kind: 'standalone-start',
+          roomId: callId,
+          topicId: null
+        },
+        { isMobile: isMobile.value }
+      );
+    }
+
     const { startStandaloneMeetingCall } = await import(
       '../../services/useLiveKit'
     );

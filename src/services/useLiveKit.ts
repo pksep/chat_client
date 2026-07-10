@@ -3823,7 +3823,8 @@ const applyCallSocketAck = (
 
 export const startLiveKitCall = async (
   targetUser: IUser,
-  currentTopicId: string
+  currentTopicId: string,
+  options: { roomId?: string | null } = {}
 ) => {
   if (open.value) return;
 
@@ -3835,7 +3836,7 @@ export const startLiveKitCall = async (
   clearCallStatusNotice();
   user.value = targetUser;
   topicId.value = currentTopicId;
-  roomId.value = createRoomId();
+  roomId.value = options.roomId || createRoomId();
   resetCallTelemetryState();
   ensureCallTelemetryTraceId();
   recordCallTelemetryEvent('call.start.requested', {
@@ -3894,7 +3895,10 @@ export const startLiveKitCall = async (
   }, 20000);
 };
 
-export const startLiveKitGroupCall = async (currentTopicId: string) => {
+export const startLiveKitGroupCall = async (
+  currentTopicId: string,
+  options: { roomId?: string | null } = {}
+) => {
   if (open.value) return;
 
   const existingGroupCall = activeGroupCalls.value[currentTopicId];
@@ -3915,7 +3919,7 @@ export const startLiveKitGroupCall = async (currentTopicId: string) => {
 
   clearExplicitHangupState();
   clearCallStatusNotice();
-  const activeRoomId = createRoomId();
+  const activeRoomId = options.roomId || createRoomId();
   user.value = me as any;
   topicId.value = currentTopicId;
   roomId.value = activeRoomId;
@@ -4003,7 +4007,9 @@ export const startLiveKitGroupCall = async (currentTopicId: string) => {
   await connectToRoom();
 };
 
-export const startStandaloneMeetingCall = async () => {
+export const startStandaloneMeetingCall = async (
+  options: { roomId?: string | null } = {}
+) => {
   if (open.value) return;
 
   const sdk = getChatSDK();
@@ -4012,7 +4018,7 @@ export const startStandaloneMeetingCall = async () => {
 
   clearExplicitHangupState();
   clearCallStatusNotice();
-  const activeRoomId = createRoomId();
+  const activeRoomId = options.roomId || createRoomId();
   user.value = me as any;
   topicId.value = null;
   roomId.value = activeRoomId;

@@ -617,6 +617,10 @@ pub fn run() {
         .on_window_event(|window, event| {
             #[cfg(desktop)]
             if let WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() != "main" {
+                    return;
+                }
+
                 let is_quitting = window
                     .state::<AppLifecycleState>()
                     .is_quitting

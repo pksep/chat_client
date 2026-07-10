@@ -1,9 +1,16 @@
 <template>
-  <ChatContainer v-bind="props" />
+  <CallWindowView v-if="isCallWindowRoute" />
+  <ChatContainer v-else v-bind="props" />
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch } from 'vue';
+import {
+  computed,
+  defineAsyncComponent,
+  onMounted,
+  onUnmounted,
+  watch
+} from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
 
 import type { IChatContainerProps } from './components/interfaces/interfaces';
@@ -36,7 +43,11 @@ import {
 import { getConfig } from './services/useConfig';
 import { hydrateTopicsFromCache, useTopics } from './composables/useTopics';
 import { getGroupById } from './composables/useGroup';
-import { useUrlWatcher } from './composables/navigation';
+import {
+  navigateToDialogs,
+  navigateToGroup,
+  useUrlWatcher
+} from './composables/navigation';
 import { fetchPinnedMessagesForTopic } from './services/useMessages';
 import { initPushNotifications } from './services/usePushNotifications';
 import {
@@ -54,15 +65,24 @@ import { hydrateMessagesFromCache } from './services/useMessages';
 import { useShareSelection } from './composables/useShareSelection';
 import { isGroupCallInviteUrl } from './utils/groupCallInviteUrl';
 import { installNotoEmojiFontFaces } from './composables/useEmojiStyle';
+import {
+  markMainChatWindow,
+  subscribeToCallWindowChatRequests
+} from './services/useCallWindow';
 
 const props = defineProps<IChatContainerProps>();
+const CallWindowView = defineAsyncComponent(
+  () => import('./components/CallWindowView.vue')
+);
 
 installNotoEmojiFontFaces();
 
 const { fetchAllTopics, getTopicList } = useTopics();
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const route = useUrlWatcher();
+const isCallWindowRoute = computed(() => route.value.type === RouteTypes.CALL);
 let removeAppVisibilityListener: (() => void) | null = null;
+let unsubscribeCallWindowChatRequests: (() => void) | null = null;
 const { hasPendingShareBatches, isShareSelectionActive, startShareSelection } =
   useShareSelection();
 let hydratedCacheUserId: string | undefined;
@@ -167,6 +187,24 @@ const updateNotificationContext = () => {
   }
 };
 
+const handleCallWindowChatRequest = (request: {
+  topicId: string;
+  topicType?: string | null;
+}): void => {
+  if (route.value.type === RouteTypes.CALL) {
+    return;
+  }
+
+  markMainChatWindow();
+
+  if (request.topicType?.toUpperCase() === 'GROUP') {
+    navigateToGroup(request.topicId);
+    return;
+  }
+
+  navigateToDialogs(request.topicId);
+};
+
 const initFocusTracking = () => {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.ready.then(updateNotificationContext);
@@ -186,6 +224,8 @@ onUnmounted(() => {
   document.removeEventListener('visibilitychange', updateNotificationContext);
   removeAppVisibilityListener?.();
   removeAppVisibilityListener = null;
+  unsubscribeCallWindowChatRequests?.();
+  unsubscribeCallWindowChatRequests = null;
 });
 
 const clearStoredErpToken = () => {
@@ -354,6 +394,14 @@ const runAppInitialization = async () => {
 };
 
 onMounted(async () => {
+  if (!isCallWindowRoute.value) {
+    markMainChatWindow();
+  }
+
+  unsubscribeCallWindowChatRequests = subscribeToCallWindowChatRequests(
+    handleCallWindowChatRequest
+  );
+
   initFocusTracking();
 
   await runAppInitialization();
@@ -362,6 +410,10 @@ onMounted(async () => {
 watch(
   () => [route.value.type, route.value.id],
   () => {
+    if (!isCallWindowRoute.value) {
+      markMainChatWindow();
+    }
+
     updateNotificationContext();
   },
   { immediate: true }

@@ -2,7 +2,20 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/images/favicon.ico" />
+    <link
+      id="app-favicon"
+      rel="icon"
+      type="image/png"
+      sizes="64x64"
+      href="/images/pwa-64x64.png"
+    />
+    <link
+      id="app-apple-touch-icon"
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/images/apple-touch-icon-180x180.png"
+    />
+    <link id="app-manifest" rel="manifest" href="/manifest.webmanifest" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
@@ -12,6 +25,34 @@
       content="black-translucent"
     />
     <meta name="theme-color" content="#ffffff" />
+    <script>
+      (function () {
+        var routeType = window.location.pathname.split('/').filter(Boolean)[0];
+
+        if (routeType !== 'call') {
+          return;
+        }
+
+        var setHref = function (id, href, sizes) {
+          var element = document.getElementById(id);
+
+          if (element) {
+            element.setAttribute('href', href);
+
+            if (sizes) {
+              element.setAttribute('sizes', sizes);
+            }
+          }
+        };
+
+        setHref('app-favicon', '/images/call-favicon-32x32.png', '32x32');
+        setHref(
+          'app-apple-touch-icon',
+          '/images/call-apple-touch-icon-180x180.png'
+        );
+        setHref('app-manifest', '/call-manifest.webmanifest');
+      })();
+    </script>
     <title>SEP:Chat</title>
   </head>
   <body>
