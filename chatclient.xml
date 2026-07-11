@@ -5,10 +5,10 @@
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <inserted t="I">8</inserted>
-    <seconds t="F">12.695286657</seconds>
+    <seconds t="F">114.647869025</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-07-11T22:29:10Z</when>
+    <when t="T">2026-07-11T23:36:50Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -18865,19 +18865,6 @@ The average monthly turnover (2.0 developers) is staying still.</text>
     <when t="T">2026-07-11T14:09:55Z</when>
   </f>
   <f>
-    <_id t="I">915</_id>
-    <_job t="I">29168884973</_job>
-    <_time t="T">2026-07-11T21:31:26Z</_time>
-    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
-    <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <events_were_scanned t="I">14781891422</events_were_scanned>
-    <latest_issue_was_found t="I">72</latest_issue_was_found>
-    <min_pull_was_found t="I">328</min_pull_was_found>
-    <repository t="I">1053332035</repository>
-    <what t="S">iterate</what>
-    <where t="S">github</where>
-  </f>
-  <f>
     <_id t="I">916</_id>
     <_job t="I">29168884973</_job>
     <_time t="T">2026-07-11T21:31:29Z</_time>
@@ -18894,5 +18881,18 @@ The average monthly turnover (2.0 developers) is staying still.</text>
     <total_stars t="I">0</total_stars>
     <what t="S">dimensions-of-terrain</what>
     <when t="T">2026-07-11T21:31:29Z</when>
+  </f>
+  <f>
+    <_id t="I">917</_id>
+    <_job t="I">29172318334</_job>
+    <_time t="T">2026-07-11T23:34:59Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <earliest_issue_was_found t="I">1</earliest_issue_was_found>
+    <events_were_scanned t="I">14787748653</events_were_scanned>
+    <latest_issue_was_found t="I">72</latest_issue_was_found>
+    <min_pull_was_found t="I">328</min_pull_was_found>
+    <repository t="I">1053332035</repository>
+    <what t="S">iterate</what>
+    <where t="S">github</where>
   </f>
 </fb>
