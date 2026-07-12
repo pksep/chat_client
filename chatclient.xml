@@ -5,10 +5,10 @@
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <inserted t="I">8</inserted>
-    <seconds t="F">75.307825027</seconds>
+    <seconds t="F">93.607369605</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-07-12T16:35:14Z</when>
+    <when t="T">2026-07-12T17:41:40Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -18884,11 +18884,11 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.17).</text>
   </f>
   <f>
     <_id t="I">919</_id>
-    <_job t="I">29198585842</_job>
-    <_time t="T">2026-07-12T15:40:08Z</_time>
+    <_job t="I">29202381038</_job>
+    <_time t="T">2026-07-12T17:40:11Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <events_were_scanned t="I">14825223384</events_were_scanned>
+    <events_were_scanned t="I">14832088365</events_were_scanned>
     <latest_issue_was_found t="I">72</latest_issue_was_found>
     <min_pull_was_found t="I">328</min_pull_was_found>
     <repository t="I">1053332035</repository>
