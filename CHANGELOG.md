@@ -1,3 +1,15 @@
+# [1.37.0](https://github.com/pksep/chat_client/compare/v1.36.2...v1.37.0) (2026-07-13)
+
+
+### Bug Fixes
+
+* show beta version ([64e7e65](https://github.com/pksep/chat_client/commit/64e7e65f77af271fa0bbee88fb16c70ffe9eb361))
+
+
+### Features
+
+* update web version ([60d96ce](https://github.com/pksep/chat_client/commit/60d96cebcb0f7e035da8b8fe8fbec4e6c6e17de4))
+
 ## [1.36.2](https://github.com/pksep/chat_client/compare/v1.36.1...v1.36.2) (2026-07-13)
 
 
