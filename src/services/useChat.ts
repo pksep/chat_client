@@ -1657,6 +1657,8 @@ export const initializeChat = async (options: {
       return;
     }
 
+    syncPresenceForVisibility();
+
     if (!hasCompletedInitialConnection) {
       hasCompletedInitialConnection = true;
       return;
@@ -1678,6 +1680,7 @@ export const initializeChat = async (options: {
 
       lastVisibilityState = document.visibilityState;
       if (document.visibilityState === 'visible') {
+        syncPresenceForVisibility();
         handleNetworkOrResumeChange('app-visible', {
           assumeOnlineOnNative: true,
           forceHardReconnect: true,
@@ -1727,6 +1730,7 @@ export const initializeChat = async (options: {
           return;
         }
 
+        syncPresenceForVisibility();
         handleNetworkOrResumeChange('native-app-active', {
           assumeOnlineOnNative: true,
           forceHardReconnect: true,
