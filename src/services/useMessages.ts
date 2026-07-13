@@ -49,6 +49,7 @@ import {
   hasCachedShadowLoadedRanges,
   hasCachedShadowReadState,
   isShadowSyncEnabled,
+  loadShadowDeletedMessageIds,
   loadShadowLoadedRanges,
   loadShadowReadState,
   resolveShadowTopicContext,
@@ -103,6 +104,7 @@ const suspendedLocalOwnReadTimeouts = new Map<
   ReturnType<typeof setTimeout>
 >();
 const queuedLocalOwnReadIds = new Map<string, Set<string>>();
+const deletedMessageIdsByTopic = new Map<string, Set<string>>();
 
 const route = useUrlWatcher();
 
@@ -122,7 +124,7 @@ const markTopicStateCanonical = (topicId: string): void => {
   canonicalTopicStateIds.add(topicId);
 };
 
-const schedulePersistMessages = (topicId: string): void => {
+const schedulePersistMessages = (topicId: string, delayMs = 150): void => {
   if (!topicId) {
     return;
   }
@@ -136,14 +138,17 @@ const schedulePersistMessages = (topicId: string): void => {
   const timeoutId = setTimeout(() => {
     persistTimeouts.delete(topicId);
     const topicMessages = prepareMessagesForPersistence(
-      fullMessagesStore.value[topicId] || []
+      filterDeletedMessagesForTopic(
+        topicId,
+        fullMessagesStore.value[topicId] || []
+      )
     );
     void saveCachedTopicMessages(topicId, topicMessages);
     void saveShadowTopicSnapshot(topicId, topicMessages, 'local', undefined, {
       replace: canonicalTopicStateIds.has(topicId)
     });
     void syncShadowReadStateFromMessages(topicId, topicMessages, 'local');
-  }, 150);
+  }, delayMs);
 
   persistTimeouts.set(topicId, timeoutId);
 };
@@ -179,6 +184,14 @@ const parseMessageEx = (
 
 const getMessageTimestamp = (message: IMessage): number => {
   return new Date(message.createdAt).getTime();
+};
+
+const getMessageVersionTimestamp = (message: IMessage): number => {
+  const timestamps = [message.updatedAt, message.deletedAt, message.createdAt]
+    .map(value => (value ? new Date(value).getTime() : 0))
+    .filter(value => !Number.isNaN(value));
+
+  return Math.max(0, ...timestamps);
 };
 
 const getMessageStableSortKey = (message: IMessage): string => {
@@ -229,6 +242,48 @@ const hasClientId = (message: IMessage): boolean => {
 const getClientId = (message: IMessage): string | null => {
   const parsedEx = parseMessageEx(message);
   return typeof parsedEx?.clientId === 'string' ? parsedEx.clientId : null;
+};
+
+const rememberDeletedMessageId = (topicId: string, messageId: string): void => {
+  if (!topicId || !messageId) {
+    return;
+  }
+
+  const deletedIds = deletedMessageIdsByTopic.get(topicId) || new Set<string>();
+  deletedIds.add(messageId);
+  deletedMessageIdsByTopic.set(topicId, deletedIds);
+};
+
+const rememberPersistedDeletedMessageIds = async (
+  topicId: string,
+  userId?: string
+): Promise<void> => {
+  if (!topicId || !isShadowSyncEnabled()) {
+    return;
+  }
+
+  const deletedIds = await loadShadowDeletedMessageIds(topicId, userId);
+
+  if (!deletedIds.size) {
+    return;
+  }
+
+  const currentIds = deletedMessageIdsByTopic.get(topicId) || new Set<string>();
+  deletedIds.forEach(messageId => currentIds.add(messageId));
+  deletedMessageIdsByTopic.set(topicId, currentIds);
+};
+
+const filterDeletedMessagesForTopic = (
+  topicId: string,
+  messages: IMessage[]
+): IMessage[] => {
+  const deletedIds = deletedMessageIdsByTopic.get(topicId);
+
+  if (!deletedIds?.size) {
+    return messages;
+  }
+
+  return messages.filter(message => !deletedIds.has(message.id));
 };
 
 const isPendingOutgoingMessage = (message: IMessage): boolean => {
@@ -431,6 +486,18 @@ const clampMessagesForUi = (
   return messages.slice(-uiWindowLimit);
 };
 
+const getNonShrinkingVisibleLimit = (
+  topicId: string,
+  requestedLimit?: number,
+  isPaginationRequest = false
+): number | undefined => {
+  if (!requestedLimit || isPaginationRequest) {
+    return requestedLimit;
+  }
+
+  return Math.max(requestedLimit, getMessagesByTopicId(topicId).length);
+};
+
 const stripRuntimeMediaState = (message: IMessage): IMessage => ({
   ...message,
   media: message.media?.map(media => ({
@@ -519,7 +586,15 @@ const dedupeMessagesForTopic = (messages: IMessage[]): IMessage[] => {
     const stableKey = getClientId(message) || message.id;
 
     if (stableKey) {
-      byStableKey.set(stableKey, message);
+      const existingMessage = byStableKey.get(stableKey);
+
+      if (
+        !existingMessage ||
+        getMessageVersionTimestamp(message) >=
+          getMessageVersionTimestamp(existingMessage)
+      ) {
+        byStableKey.set(stableKey, message);
+      }
     }
   });
 
@@ -834,6 +909,7 @@ export const fetchMessagesForTopic = async (
     forceRefresh?: boolean;
     forceNetwork?: boolean;
     visibleLimit?: number;
+    skipShadowSnapshot?: boolean;
   }
 ): Promise<IMessage[]> => {
   try {
@@ -841,6 +917,7 @@ export const fetchMessagesForTopic = async (
 
     await ensureShadowReadStateLoaded(topicId);
     await ensureShadowLoadedRangesLoaded(topicId);
+    await rememberPersistedDeletedMessageIds(topicId);
 
     const existingMessages = getFullMessagesByTopicId(topicId);
     const isPaginationRequest = Boolean(
@@ -866,7 +943,12 @@ export const fetchMessagesForTopic = async (
               opts.lastMessageId ? 'prepend' : 'append',
               {
                 syncLastMessage: opts?.syncLastMessage ?? false,
-                windowMode: getWindowModeForFetch(opts)
+                windowMode: getWindowModeForFetch(opts),
+                visibleLimit: getNonShrinkingVisibleLimit(
+                  topicId,
+                  opts?.visibleLimit,
+                  isPaginationRequest
+                )
               }
             );
           }
@@ -941,7 +1023,12 @@ export const fetchMessagesForTopic = async (
             opts.lastMessageId ? 'prepend' : 'append',
             {
               syncLastMessage: opts?.syncLastMessage ?? false,
-              windowMode: getWindowModeForFetch(opts)
+              windowMode: getWindowModeForFetch(opts),
+              visibleLimit: getNonShrinkingVisibleLimit(
+                topicId,
+                opts?.visibleLimit,
+                isPaginationRequest
+              )
             }
           );
         }
@@ -1012,7 +1099,12 @@ export const fetchMessagesForTopic = async (
                 : 'replace',
             {
               syncLastMessage: opts?.syncLastMessage ?? false,
-              windowMode: getWindowModeForFetch(opts)
+              windowMode: getWindowModeForFetch(opts),
+              visibleLimit: getNonShrinkingVisibleLimit(
+                topicId,
+                opts?.visibleLimit,
+                isPaginationRequest
+              )
             }
           );
         }
@@ -1055,7 +1147,9 @@ export const fetchMessagesForTopic = async (
         messageIds: messages.map(message => message.id)
       }
     });
-    void saveShadowTopicSnapshot(topicId, messages, 'http');
+    if (!opts?.skipShadowSnapshot) {
+      void saveShadowTopicSnapshot(topicId, messages, 'http');
+    }
     void saveShadowLoadedRange(
       topicId,
       getRangeMessagesForPersistence(topicId, messages, opts)
@@ -1094,7 +1188,11 @@ export const fetchMessagesForTopic = async (
         syncLastMessage: opts?.syncLastMessage ?? false,
         windowMode: getWindowModeForFetch(opts),
         visibleMessages,
-        visibleLimit: opts?.visibleLimit
+        visibleLimit: getNonShrinkingVisibleLimit(
+          topicId,
+          opts?.visibleLimit,
+          isPaginationRequest
+        )
       });
     }
 
@@ -1225,6 +1323,10 @@ export const fetchAroundMessage = async (
 };
 
 export const addMessageToLocal = (topicId: string, message: IMessage): void => {
+  if (deletedMessageIdsByTopic.get(topicId)?.has(message.id)) {
+    return;
+  }
+
   const existingMessages = getFullMessagesByTopicId(topicId);
   const alreadyExists = existingMessages.some(item => item.id === message.id);
   const shouldUpdateVisibleWindow = topicId === route.value.id;
@@ -1416,6 +1518,7 @@ export const deleteMessageFromLocal = (
   topicId: string,
   messageId: string
 ): void => {
+  rememberDeletedMessageId(topicId, messageId);
   updateTopicMessageStores(topicId, messages =>
     messages.filter(message => message.id !== messageId)
   );
@@ -1587,13 +1690,20 @@ export const saveMessagesToLocal = (
     visibleMessages?: IMessage[];
     visibleLimit?: number;
     updateVisible?: boolean;
+    persistDelayMs?: number;
+    skipPersist?: boolean;
   }
 ): void => {
-  const sortedMessages = dedupeMessagesForTopic(messages).sort(compareMessages);
+  const filteredMessages = filterDeletedMessagesForTopic(topicId, messages);
+  const sortedMessages =
+    dedupeMessagesForTopic(filteredMessages).sort(compareMessages);
   const boundedMessages = clampMessagesForUi(
-    dedupeMessagesForTopic(opts?.visibleMessages || sortedMessages).sort(
-      compareMessages
-    ),
+    dedupeMessagesForTopic(
+      filterDeletedMessagesForTopic(
+        topicId,
+        opts?.visibleMessages || sortedMessages
+      )
+    ).sort(compareMessages),
     opts?.windowMode,
     opts?.anchorMessageId,
     opts?.visibleLimit
@@ -1603,7 +1713,9 @@ export const saveMessagesToLocal = (
   if (opts?.updateVisible !== false) {
     messagesStore.value[topicId] = boundedMessages;
   }
-  schedulePersistMessages(topicId);
+  if (!opts?.skipPersist) {
+    schedulePersistMessages(topicId, opts?.persistDelayMs);
+  }
   syncTopicUnreadState(topicId);
 
   if (opts?.syncLastMessage !== false) {
@@ -1660,7 +1772,8 @@ export const hasKnownTopicMessagesState = (topicId: string): boolean => {
 
 export const setVisibleMessagesLimitForTopic = (
   topicId: string,
-  visibleLimit: number
+  visibleLimit: number,
+  opts?: { allowShrink?: boolean }
 ): IMessage[] => {
   if (!topicId || visibleLimit <= 0) {
     return [];
@@ -1674,10 +1787,15 @@ export const setVisibleMessagesLimitForTopic = (
     return [];
   }
 
+  const nextVisibleLimit =
+    opts?.allowShrink === false
+      ? Math.max(visibleLimit, visibleMessages.length)
+      : visibleLimit;
+
   saveMessagesToLocal(topicId, sourceMessages, {
     syncLastMessage: false,
     windowMode: 'latest',
-    visibleLimit
+    visibleLimit: nextVisibleLimit
   });
 
   return getMessagesByTopicId(topicId);
@@ -1701,12 +1819,16 @@ export const hydrateMessagesFromCache = async (
   }
 
   const existingFullMessages = getFullMessagesByTopicId(topicId);
+  await rememberPersistedDeletedMessageIds(
+    topicId,
+    userId || authedUser.value?.id
+  );
 
   if (existingFullMessages.length > 0 && canonicalTopicStateIds.has(topicId)) {
     saveMessagesToLocal(topicId, existingFullMessages, {
       syncLastMessage: false,
       windowMode: 'latest',
-      visibleLimit: opts?.visibleLimit
+      visibleLimit: getNonShrinkingVisibleLimit(topicId, opts?.visibleLimit)
     });
 
     return getMessagesByTopicId(topicId);
@@ -1736,7 +1858,7 @@ export const hydrateMessagesFromCache = async (
       saveMessagesToLocal(topicId, normalizedShadowMessages, {
         syncLastMessage: false,
         windowMode: 'latest',
-        visibleLimit: opts?.visibleLimit
+        visibleLimit: getNonShrinkingVisibleLimit(topicId, opts?.visibleLimit)
       });
       markTopicStateCanonical(topicId);
       void saveShadowLoadedRange(topicId, normalizedShadowMessages);
@@ -1759,7 +1881,7 @@ export const hydrateMessagesFromCache = async (
     saveMessagesToLocal(topicId, normalizedCachedMessages, {
       syncLastMessage: false,
       windowMode: 'latest',
-      visibleLimit: opts?.visibleLimit
+      visibleLimit: getNonShrinkingVisibleLimit(topicId, opts?.visibleLimit)
     });
     markTopicStateCanonical(topicId);
     void saveShadowTopicSnapshot(
@@ -1787,7 +1909,7 @@ export const hydrateMessagesFromCache = async (
     saveMessagesToLocal(topicId, existingFullMessages, {
       syncLastMessage: false,
       windowMode: 'latest',
-      visibleLimit: opts?.visibleLimit
+      visibleLimit: getNonShrinkingVisibleLimit(topicId, opts?.visibleLimit)
     });
 
     return getMessagesByTopicId(topicId);
@@ -1846,37 +1968,41 @@ export const mergeMessagesForTopic = (
     syncLastMessage?: boolean;
     windowMode?: MessageWindowMode;
     anchorMessageId?: string;
+    visibleLimit?: number;
+    persistDelayMs?: number;
+    skipPersist?: boolean;
   }
 ): IMessage[] => {
   const existing = getFullMessagesByTopicId(topicId) || [];
   const existingVisible = getMessagesByTopicId(topicId) || [];
+  const incomingMessages = filterDeletedMessagesForTopic(topicId, messages);
 
   let combined =
     mode === 'replace'
-      ? [...existing, ...messages]
-      : mergeWithPendingOutgoingMessages(messages, existing);
+      ? [...existing, ...incomingMessages]
+      : mergeWithPendingOutgoingMessages(incomingMessages, existing);
 
   if (mode === 'prepend') {
-    combined = [...messages, ...existing];
+    combined = [...incomingMessages, ...existing];
   } else if (mode === 'append') {
-    combined = [...existing, ...messages];
+    combined = [...existing, ...incomingMessages];
   }
 
-  const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
+  const unique = dedupeMessagesForTopic(combined);
   const visibleCombined =
     mode === 'prepend'
       ? Array.from(
           new Map(
-            [...messages, ...existingVisible].map(m => [m.id, m])
+            [...incomingMessages, ...existingVisible].map(m => [m.id, m])
           ).values()
         )
       : mode === 'append'
         ? Array.from(
             new Map(
-              [...existingVisible, ...messages].map(m => [m.id, m])
+              [...existingVisible, ...incomingMessages].map(m => [m.id, m])
             ).values()
           )
-        : mergeWithPendingOutgoingMessages(messages, existingVisible);
+        : dedupeMessagesForTopic([...existingVisible, ...incomingMessages]);
   saveMessagesToLocal(topicId, unique, {
     syncLastMessage: opts?.syncLastMessage ?? false,
     windowMode:
@@ -1887,7 +2013,10 @@ export const mergeMessagesForTopic = (
           ? 'preserve-end'
           : 'latest'),
     anchorMessageId: opts?.anchorMessageId,
-    visibleMessages: visibleCombined
+    visibleMessages: visibleCombined,
+    visibleLimit: opts?.visibleLimit,
+    persistDelayMs: opts?.persistDelayMs,
+    skipPersist: opts?.skipPersist
   });
 
   return unique;
@@ -2309,6 +2438,8 @@ export const setUploadedFileData = (
           const shouldClearFallbackThumbnail =
             Boolean(payload.thumbnailPath) &&
             media.localThumbnailPath === VIDEO_FALLBACK_THUMBNAIL;
+          const shouldClearLocalVideoPath =
+            payload.type === MediaType.Video && Boolean(payload.path);
           const mergedEx =
             payload.ex || media.ex
               ? {
@@ -2316,10 +2447,21 @@ export const setUploadedFileData = (
                   ...media.ex
                 }
               : undefined;
+          const localPath = shouldClearLocalVideoPath
+            ? undefined
+            : media.localPath;
+
+          if (
+            shouldClearLocalVideoPath &&
+            media.localPath?.startsWith('blob:')
+          ) {
+            URL.revokeObjectURL(media.localPath);
+          }
 
           return {
             ...media,
             ...payload,
+            localPath,
             ...(mergedEx ? { ex: mergedEx } : {}),
             ...(shouldClearFallbackThumbnail
               ? { localThumbnailPath: undefined }

@@ -1,5 +1,6 @@
 export const PREVIEW_MAX_WIDTH = 265;
 export const PREVIEW_MAX_HEIGHT = 300;
+export const PREVIEW_MIN_SIZE = 100;
 export const PREVIEW_GRID_GAP = 2;
 
 export interface MediaDimensions {
@@ -64,6 +65,44 @@ export const getGridItemMaxWidth = (count: number, index: number): number => {
   return columnWidth * span + itemGap;
 };
 
+const getPreviewMinHeight = (previewWidth: number): number =>
+  Math.min(PREVIEW_MIN_SIZE, previewWidth);
+
+export const normalizePreviewDimensions = (
+  dimensions: MediaPreviewDimensions,
+  count: number,
+  index: number
+): MediaPreviewDimensions => {
+  if (!dimensions.previewWidth || !dimensions.previewHeight) {
+    return dimensions;
+  }
+
+  const previewMaxWidth = Math.round(getGridItemMaxWidth(count, index));
+  const previewWidth =
+    count <= 1
+      ? Math.min(
+          previewMaxWidth,
+          Math.max(
+            Math.min(PREVIEW_MIN_SIZE, previewMaxWidth),
+            Math.round(dimensions.previewWidth)
+          )
+        )
+      : previewMaxWidth;
+  const previewHeight = Math.min(
+    PREVIEW_MAX_HEIGHT,
+    Math.max(
+      getPreviewMinHeight(previewWidth),
+      Math.round(dimensions.previewHeight)
+    )
+  );
+
+  return {
+    ...dimensions,
+    previewWidth,
+    previewHeight
+  };
+};
+
 export const calculatePreviewDimensions = (
   dimensions: MediaDimensions,
   count: number,
@@ -77,13 +116,19 @@ export const calculatePreviewDimensions = (
 
   const maxWidth = getGridItemMaxWidth(count, index);
   const scale = Math.min(maxWidth / width, PREVIEW_MAX_HEIGHT / height, 1);
+  const scaledWidth = Math.round(width * scale);
+  const scaledHeight = Math.round(height * scale);
 
-  return {
-    width,
-    height,
-    previewWidth: Math.round(width * scale),
-    previewHeight: Math.round(height * scale)
-  };
+  return normalizePreviewDimensions(
+    {
+      width,
+      height,
+      previewWidth: scaledWidth,
+      previewHeight: scaledHeight
+    },
+    count,
+    index
+  );
 };
 
 export const getImageDimensions = (file: File): Promise<MediaDimensions> => {

@@ -49,12 +49,20 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
   let isRestoringScroll = false;
   let restoreRafId = 0;
   let scrollRafId = 0;
+  let resizeDriftRafId = 0;
+  let resizeDriftQuietTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let lastScrollAnchorCaptureAt = 0;
+  let lastScrollAt = 0;
+  let lastUserScrollAt = 0;
+  let lastReverseScrollHeight = 0;
   let revision = 0;
   let pendingMutation: PendingViewportMutation | null = null;
   let forceNoPreserveForNextMutation = false;
   let forceNoPinBottomForNextMutation = false;
   const smoothTailDistancePx = 120;
   const smoothSettleDelayMs = 220;
+  const scrollAnchorCaptureIntervalMs = 180;
+  const resizeDriftScrollQuietMs = 260;
 
   const getMessageSelector = (messageId: string): string => {
     const escapedMessageId = window.CSS?.escape
@@ -225,6 +233,111 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     return true;
   };
 
+  const restoreReversePrependSnapshot = (
+    mutation: PendingViewportMutation
+  ): boolean => {
+    const container = containerRef.value;
+    if (!container || mutation.reason !== 'prepend') {
+      return false;
+    }
+
+    const scrollDeltaAfterSnapshot = container.scrollTop - mutation.scrollTop;
+    const nextScrollTop = mutation.scrollTop + scrollDeltaAfterSnapshot;
+
+    if (!Number.isFinite(nextScrollTop)) {
+      return false;
+    }
+
+    setInternalScrollLock();
+    container.scrollTop = nextScrollTop;
+
+    return true;
+  };
+
+  const restoreMutationSnapshot = (
+    mutation: PendingViewportMutation
+  ): boolean =>
+    isReverseScrollContainer()
+      ? restoreReversePrependSnapshot(mutation)
+      : restorePrependSnapshot(mutation);
+
+  const isReverseScrollContainer = (): boolean => {
+    const container = containerRef.value;
+
+    return (
+      !!container &&
+      getComputedStyle(container).flexDirection === 'column-reverse'
+    );
+  };
+
+  const syncReverseScrollHeightDrift = (): boolean => {
+    const container = containerRef.value;
+
+    if (!container || !isReverseScrollContainer()) {
+      lastReverseScrollHeight = container?.scrollHeight || 0;
+      return false;
+    }
+
+    const nextScrollHeight = container.scrollHeight;
+    const heightDelta = nextScrollHeight - lastReverseScrollHeight;
+    lastReverseScrollHeight = nextScrollHeight;
+
+    if (!Number.isFinite(heightDelta) || Math.abs(heightDelta) <= 0.5) {
+      return false;
+    }
+
+    if (
+      viewportMode.value === 'live' ||
+      Math.abs(container.scrollTop) <= bottomLockThreshold
+    ) {
+      return false;
+    }
+
+    const anchor =
+      stickyAnchor && isAnchorNearViewport(stickyAnchor, container.clientHeight)
+        ? stickyAnchor
+        : null;
+
+    if (!anchor) {
+      return false;
+    }
+
+    if (!restoreAnchorPosition(anchor)) {
+      return false;
+    }
+
+    stickyAnchor = captureViewportAnchor(anchor.messageId) || anchor;
+    updateBottomState();
+
+    return true;
+  };
+
+  const isAnchorNearViewport = (
+    anchor: ScrollAnchor | null,
+    viewportMarginPx = 0
+  ): boolean => {
+    const container = containerRef.value;
+    if (!container || !anchor) {
+      return false;
+    }
+
+    const anchorElement = container.querySelector(
+      getMessageSelector(anchor.messageId)
+    );
+
+    if (!(anchorElement instanceof HTMLElement)) {
+      return false;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const anchorRect = anchorElement.getBoundingClientRect();
+
+    return (
+      anchorRect.bottom >= containerRect.top - viewportMarginPx &&
+      anchorRect.top <= containerRect.bottom + viewportMarginPx
+    );
+  };
+
   const scheduleAnchorRestore = (
     anchor: ScrollAnchor | null,
     mutation?: PendingViewportMutation
@@ -238,23 +351,42 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       restoreRafId = 0;
     }
 
+    const restoreScheduledAt = performance.now();
+    const didUserScrollAfterSchedule = (): boolean =>
+      lastUserScrollAt > restoreScheduledAt;
+    const shouldAbortForUserScroll = mutation?.reason !== 'prepend';
+    const finishAnchorRestore = (preserveAnchor = true): void => {
+      restoreRafId = 0;
+      stickyAnchor =
+        preserveAnchor && anchor
+          ? captureViewportAnchor(anchor.messageId) || anchor
+          : captureViewportAnchor();
+      updateBottomState();
+    };
+
     nextTick(() => {
       if (!restoreAnchorPosition(anchor) && mutation) {
-        restorePrependSnapshot(mutation);
+        restoreMutationSnapshot(mutation);
       }
       restoreRafId = requestAnimationFrame(() => {
+        if (shouldAbortForUserScroll && didUserScrollAfterSchedule()) {
+          finishAnchorRestore(false);
+          return;
+        }
+
         if (!restoreAnchorPosition(anchor) && mutation) {
-          restorePrependSnapshot(mutation);
+          restoreMutationSnapshot(mutation);
         }
         restoreRafId = requestAnimationFrame(() => {
-          if (!restoreAnchorPosition(anchor) && mutation) {
-            restorePrependSnapshot(mutation);
+          if (shouldAbortForUserScroll && didUserScrollAfterSchedule()) {
+            finishAnchorRestore(false);
+            return;
           }
-          restoreRafId = 0;
-          stickyAnchor = anchor
-            ? captureViewportAnchor(anchor.messageId) || anchor
-            : captureViewportAnchor();
-          updateBottomState();
+
+          if (!restoreAnchorPosition(anchor) && mutation) {
+            restoreMutationSnapshot(mutation);
+          }
+          finishAnchorRestore();
         });
       });
     });
@@ -326,14 +458,34 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
 
     pendingMutation = null;
 
+    if (currentMutation.reason === 'prepend' && isReverseScrollContainer()) {
+      lastReverseScrollHeight = containerRef.value?.scrollHeight || 0;
+      nextTick(() => {
+        stickyAnchor =
+          captureViewportAnchor(currentMutation.anchor?.messageId) ||
+          captureViewportAnchor();
+        updateBottomState();
+        lastReverseScrollHeight = containerRef.value?.scrollHeight || 0;
+      });
+      return;
+    }
+
+    lastReverseScrollHeight = containerRef.value?.scrollHeight || 0;
+
     if (currentMutation.preserveViewport) {
       const anchor = options?.forceAnchor ?? currentMutation.anchor;
 
-      if (!restoreAnchorPosition(anchor)) {
-        restorePrependSnapshot(currentMutation);
+      if (anchor) {
+        const didRestoreAnchor = restoreAnchorPosition(anchor);
+        scheduleAnchorRestore(
+          anchor,
+          didRestoreAnchor ? undefined : currentMutation
+        );
+        return;
       }
 
-      scheduleAnchorRestore(anchor, currentMutation);
+      restoreMutationSnapshot(currentMutation);
+      scheduleAnchorRestore(null, currentMutation);
       return;
     }
 
@@ -476,8 +628,32 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       return;
     }
 
+    const container = containerRef.value;
+    if (!container) {
+      return;
+    }
+
+    const timeSinceScroll = performance.now() - lastScrollAt;
+    if (timeSinceScroll < resizeDriftScrollQuietMs) {
+      if (!resizeDriftQuietTimeoutId) {
+        resizeDriftQuietTimeoutId = setTimeout(() => {
+          resizeDriftQuietTimeoutId = null;
+          scheduleResizeDriftCheck();
+        }, resizeDriftScrollQuietMs - timeSinceScroll);
+      }
+      return;
+    }
+
     if (updateBottomState() && viewportMode.value === 'live') {
       keepBottomPinned('auto');
+      return;
+    }
+
+    if (
+      stickyAnchor &&
+      !isAnchorNearViewport(stickyAnchor, container.clientHeight)
+    ) {
+      stickyAnchor = captureViewportAnchor();
       return;
     }
 
@@ -490,6 +666,17 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       stickyAnchor =
         captureViewportAnchor(stickyAnchor.messageId) || stickyAnchor;
     }
+  };
+
+  const scheduleResizeDriftCheck = (): void => {
+    if (resizeDriftRafId) {
+      return;
+    }
+
+    resizeDriftRafId = requestAnimationFrame(() => {
+      resizeDriftRafId = 0;
+      handleResizeDrift();
+    });
   };
 
   const observeMessageElement = (element: Node) => {
@@ -522,7 +709,9 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     }
 
     resizeObserver = new ResizeObserver(() => {
-      handleResizeDrift();
+      if (!syncReverseScrollHeightDrift()) {
+        scheduleResizeDriftCheck();
+      }
     });
 
     getMessageElements().forEach(element => {
@@ -559,6 +748,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
 
   const initialize = (): void => {
     updateBottomState();
+    lastReverseScrollHeight = containerRef.value?.scrollHeight || 0;
     setupResizeObserver();
     setupMutationObserver();
   };
@@ -574,15 +764,32 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       scrollRafId = 0;
     }
 
+    if (resizeDriftRafId) {
+      cancelAnimationFrame(resizeDriftRafId);
+      resizeDriftRafId = 0;
+    }
+
+    if (resizeDriftQuietTimeoutId) {
+      clearTimeout(resizeDriftQuietTimeoutId);
+      resizeDriftQuietTimeoutId = null;
+    }
+
     cleanupResizeObserver();
     cleanupMutationObserver();
   };
 
   const syncScrollHeight = (): void => {
+    lastReverseScrollHeight = containerRef.value?.scrollHeight || 0;
     updateBottomState();
   };
 
   const onScroll = (): void => {
+    lastScrollAt = performance.now();
+
+    if (!isRestoringScroll) {
+      lastUserScrollAt = lastScrollAt;
+    }
+
     if (isRestoringScroll || scrollRafId) {
       return;
     }
@@ -597,7 +804,15 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       if (viewportMode.value !== 'jump') {
         viewportMode.value = 'history';
       }
-      stickyAnchor = captureViewportAnchor();
+
+      const now = performance.now();
+      if (
+        !stickyAnchor ||
+        now - lastScrollAnchorCaptureAt >= scrollAnchorCaptureIntervalMs
+      ) {
+        stickyAnchor = captureViewportAnchor();
+        lastScrollAnchorCaptureAt = now;
+      }
     });
   };
 

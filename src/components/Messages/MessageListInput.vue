@@ -142,6 +142,7 @@
 <script lang="ts" setup>
 import {
   computed,
+  nextTick,
   onMounted,
   onBeforeUnmount,
   reactive,
@@ -166,7 +167,6 @@ import { getUserLastOnline } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
-import { useTopics } from '../../composables/useTopics';
 import { getConfig } from '../../services/useConfig';
 import {
   getHasWebsocketConnection,
@@ -175,7 +175,7 @@ import {
 import { bindTauriFileDrop } from '../../services/useTauriDroppedFiles';
 import { Capacitor } from '@capacitor/core';
 import { Clipboard } from '@capacitor/clipboard';
-import { isBotTopic } from '../../utils/bot';
+import { isDeletedBotUser } from '../../utils/bot';
 
 interface Props {
   dataTestid: string;
@@ -219,7 +219,8 @@ const emit = defineEmits([
   'clearEdit',
   'clearReply',
   'clearForward',
-  'scrollToMessage'
+  'scrollToMessage',
+  'heightChange'
 ]);
 
 const internalInputText = computed({
@@ -258,11 +259,7 @@ const formatForwardMessagesLabel = (count: number): string => {
 
 const route = useUrlWatcher();
 const config = getConfig();
-const { getSelectedTopic } = useTopics();
-const selectedTopic = computed(() =>
-  route.value.id ? getSelectedTopic(route.value.id) : null
-);
-const isBotChat = computed(() => isBotTopic(selectedTopic.value));
+const isBotChat = computed(() => false); // TODO: Enable bot chat detection when bot feature is implemented
 const allowMentionUsers = computed(
   () => props.allowSelectUser && route.value.type === RouteTypes.GROUP
 );
@@ -331,6 +328,7 @@ const mentionConfig = {
   getAvatarInitials: (user: any) => user.initials || user.nickname || 'U',
   getIsOnline: (user: any) =>
     getHasWebsocketConnection() &&
+    !isDeletedBotUser(user) &&
     !getUserLastOnline(user) &&
     getAuthUser()?.id !== user.id,
   getInsertLabel: (user: any) => `@${user.initials || 'User'} `,
@@ -438,6 +436,8 @@ let isTypingActive = false;
 let activeTypingTopicId: string | null = null;
 let lastTypingPingAt = 0;
 let unlistenTauriFileDrop: (() => void) | null = null;
+let inputResizeObserver: ResizeObserver | null = null;
+let lastReportedInputHeight = 0;
 
 const clearTypingStopTimeout = (): void => {
   if (!typingStopTimeout) {
@@ -533,6 +533,23 @@ const readClipboardText = async (): Promise<string> => {
   return (await navigator.clipboard?.readText?.()) || '';
 };
 
+const reportInputHeight = (): void => {
+  const element = inputContainerRef.value;
+
+  if (!element) {
+    return;
+  }
+
+  const nextHeight = Math.ceil(element.getBoundingClientRect().height);
+
+  if (!nextHeight || nextHeight === lastReportedInputHeight) {
+    return;
+  }
+
+  lastReportedInputHeight = nextHeight;
+  emit('heightChange', nextHeight);
+};
+
 const handleTauriFilesDropped = (files: File[]): void => {
   isTauriFileDragging.value = false;
 
@@ -556,12 +573,17 @@ const handleTauriFilesDropped = (files: File[]): void => {
 defineExpose({
   focus: () => contentEditorRef.value?.focus(),
   insertText: (text: string) =>
-    contentEditorRef.value?.editor?.commands?.insertContent?.(text)
+    contentEditorRef.value?.editor?.commands?.insertContent?.(text),
+  getRootElement: () => inputContainerRef.value
 });
 
 watch(
   () => internalInputText.value,
   value => {
+    nextTick(() => {
+      requestAnimationFrame(reportInputHeight);
+    });
+
     if (getHasDraftText(value)) {
       void notifyTyping();
       return;
@@ -581,6 +603,13 @@ watch(
 );
 
 onMounted(() => {
+  if ('ResizeObserver' in window && inputContainerRef.value) {
+    inputResizeObserver = new ResizeObserver(reportInputHeight);
+    inputResizeObserver.observe(inputContainerRef.value);
+  }
+
+  requestAnimationFrame(reportInputHeight);
+
   void bindTauriFileDrop({
     getTargetElement: () =>
       props.allowAttachFile ? inputContainerRef.value : null,
@@ -594,6 +623,10 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  inputResizeObserver?.disconnect();
+  inputResizeObserver = null;
+  lastReportedInputHeight = 0;
+  emit('heightChange', 0);
   unlistenTauriFileDrop?.();
   void stopTyping();
 });

@@ -8,6 +8,7 @@
     ]"
     ref="chatWrapperRef"
     v-if="isAiRoute"
+    :style="chatMessageWrapperStyle"
     @wheel.passive="handleFloatingDateDividerUserScroll"
     @touchmove.passive="handleFloatingDateDividerUserScroll"
     @touchstart="onTouchStart"
@@ -99,6 +100,7 @@
     ]"
     v-if="!isAiRoute && !isDefaultRoute"
     ref="chatWrapperRef"
+    :style="chatMessageWrapperStyle"
     @vue:mounted="scrollToBottom"
     @scroll="handleScroll"
     @wheel.passive="handleFloatingDateDividerUserScroll"
@@ -192,6 +194,24 @@
         <div class="date-divider">
           <span>{{ floatingDateDividerLabel }}</span>
         </div>
+      </div>
+    </Transition>
+    <Transition name="chat-pagination-loading">
+      <div
+        v-if="shouldShowOlderMessagesLoading"
+        class="chat__pagination-loading chat__pagination-loading--top"
+        :data-testid="`${props.dataTestid}-MessageList-OlderMessagesLoading`"
+      >
+        <span class="chat__pagination-loading-text">загрузка...</span>
+      </div>
+    </Transition>
+    <Transition name="chat-pagination-loading">
+      <div
+        v-if="shouldShowNewerMessagesLoading"
+        class="chat__pagination-loading chat__pagination-loading--bottom"
+        :data-testid="`${props.dataTestid}-MessageList-NewerMessagesLoading`"
+      >
+        <span class="chat__pagination-loading-text">загрузка...</span>
       </div>
     </Transition>
     <section
@@ -357,9 +377,15 @@
   <SelectedMessagesContent
     v-if="!shouldRenderUserMessageSkeleton && isSelectionMode"
     :data-testid="`${props.dataTestid}-SelectedMessages`"
+    @height-change="handleSelectedMessagesHeightChange"
   />
   <MessageListInput
-    v-if="!isDefaultRoute && !isSelectionMode && !isMobileTopicSearchMode"
+    v-if="
+      !isDefaultRoute &&
+      !isSelectionMode &&
+      !isMobileTopicSearchMode &&
+      !isDeletedAccountTopic
+    "
     :key="`${route.type}:${route.id || 'default'}`"
     v-model="inputText"
     ref="messageListInputRef"
@@ -373,6 +399,7 @@
     @clear-reply="handleSetReplyMessage(null)"
     @clear-forward="handleSetForwardMessage(null)"
     @scroll-to-message="handleScrollToMessage"
+    @height-change="handleInputHeightChange"
   />
 
   <PushNotification
@@ -451,6 +478,7 @@ import {
 } from '../services/useAppVisibility';
 import { getAuthUser } from '../composables/useAuth';
 import { IMessage } from './interfaces/interfaces';
+import { TopicType } from '../services/useChatSDK/types';
 
 import { useMessageSwipe } from './Messages/composables/useMessageSwipe';
 import { useMessageScroll } from './Messages/composables/useMessageScroll';
@@ -480,6 +508,7 @@ import {
   pendingTopicReactionJump
 } from '../services/useTopicViewportState';
 import { recordChatMessageListRenderMismatch } from '../services/useChatNavigationTelemetry';
+import { isDeletedBotUser } from '../utils/bot';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -631,12 +660,14 @@ const getLocalStorageInputText = computed(() => {
 });
 
 const inputText = ref(getLocalStorageInputText.value);
+const bottomBarHeight = ref(0);
 const floatingDateDividerLabel = ref('');
 const isFloatingDateDividerHidden = ref(false);
 const isFloatingDateDividerActive = ref(false);
 let chatVisibilityObserver: ResizeObserver | null = null;
 let removeAppVisibilityListener: (() => void) | null = null;
 let floatingDateDividerRafId = 0;
+let postScrollUiSyncRafId = 0;
 let floatingDateDividerHideTimeoutId: number | null = null;
 let floatingDateDividerUserScrollIntentAt = 0;
 const FLOATING_DATE_LABEL_HEIGHT_PX = 50;
@@ -654,6 +685,13 @@ const { pendingForwardMessages, pendingForwardTopicId } =
 
 const isAiRoute = computed(() => route.value?.type === RouteTypes.AI);
 const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
+const chatMessageWrapperStyle = computed(() =>
+  bottomBarHeight.value > 0
+    ? {
+        '--chat-input-height': `${bottomBarHeight.value}px`
+      }
+    : undefined
+);
 const authUser = computed(() => getAuthUser());
 const isSelectionMode = computed(() =>
   isMessageSelectionModeForTopic(route.value.id)
@@ -664,6 +702,11 @@ const isMobileTopicSearchMode = computed(
 const activeTopic = computed(() =>
   route.value.id ? getSelectedTopic(route.value.id) : null
 );
+const isDeletedAccountTopic = computed(() => {
+  const topic = activeTopic.value;
+
+  return topic?.type === TopicType.DM && isDeletedBotUser(topic.user);
+});
 const topicUnreadCount = computed(() =>
   getTopicUnreadBadgeCount(activeTopic.value || undefined, authUser.value?.id)
 );
@@ -799,7 +842,13 @@ const scheduleVisibleMessagesExpansion = (
         return;
       }
 
-      setVisibleMessagesLimitForTopic(topicId, visibleLimit);
+      if (scrollState.isUserScrolling && !scrollAnchor.isNearBottom.value) {
+        return;
+      }
+
+      setVisibleMessagesLimitForTopic(topicId, visibleLimit, {
+        allowShrink: false
+      });
       visibleMessagesExpansionAppliedToken = topicSwitchToken;
 
       nextTick(() => {
@@ -807,6 +856,10 @@ const scheduleVisibleMessagesExpansion = (
           topicSwitchToken !== activeTopicSwitchToken ||
           route.value?.id !== topicId
         ) {
+          return;
+        }
+
+        if (scrollState.isUserScrolling && !scrollAnchor.isNearBottom.value) {
           return;
         }
 
@@ -834,10 +887,15 @@ const scheduleExpandedTopicMessagesFetch = (
         return;
       }
 
+      const shouldUpdateVisibleWindow =
+        scrollAnchor.isNearBottom.value && !scrollState.isUserScrolling;
+
       await fetchMessagesForTopic(topicId, {
         limit,
         forceRefresh: true,
-        forceNetwork: navigator.onLine
+        forceNetwork: navigator.onLine,
+        skipSave: !shouldUpdateVisibleWindow,
+        visibleLimit: limit
       });
     })
     .catch(error => {
@@ -925,7 +983,7 @@ const syncFloatingDateDivider = (): void => {
 
 const scheduleFloatingDateDividerSync = (): void => {
   if (floatingDateDividerRafId) {
-    cancelAnimationFrame(floatingDateDividerRafId);
+    return;
   }
 
   floatingDateDividerRafId = requestAnimationFrame(() => {
@@ -966,6 +1024,8 @@ const {
   isShowScrollToBottomButton,
   viewportRevision,
   isLoadingInitialMessages,
+  isLoadingOlderMessages,
+  isLoadingNewerMessages,
   scrollState,
   handleScroll: handleMessageScroll,
   scrollToBottom,
@@ -1008,6 +1068,66 @@ const shouldMountUserMessageItems = computed(
 const shouldCoverUserMessagesWithSkeleton = computed(
   () => shouldRenderUserMessageSkeleton.value && hasVisibleUserMessages.value
 );
+const shouldShowOlderMessagesLoading = computed(
+  () => !shouldRenderUserMessageSkeleton.value && isLoadingOlderMessages.value
+);
+const shouldShowNewerMessagesLoading = computed(
+  () => !shouldRenderUserMessageSkeleton.value && isLoadingNewerMessages.value
+);
+
+const handleBottomBarHeightChange = (height: number): void => {
+  const nextHeight = Math.max(0, Math.ceil(height));
+  const shouldKeepBottomPinned =
+    isUserMessagesRoute.value &&
+    !shouldRenderUserMessageSkeleton.value &&
+    (isViewingBottom.value || scrollAnchor.isNearBottom.value);
+
+  if (bottomBarHeight.value === nextHeight) {
+    return;
+  }
+
+  bottomBarHeight.value = nextHeight;
+
+  if (!shouldKeepBottomPinned) {
+    return;
+  }
+
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      if (!isUserMessagesRoute.value || !chatWrapperRef.value) {
+        return;
+      }
+
+      scrollToBottom({
+        preferUnreadMarker: false,
+        smooth: false
+      });
+      syncVisibleUnreadAfterAutoScroll();
+    });
+  });
+};
+
+const handleInputHeightChange = (height: number): void => {
+  if (height === 0 && isSelectionMode.value) {
+    return;
+  }
+
+  handleBottomBarHeightChange(height);
+};
+
+const handleSelectedMessagesHeightChange = (height: number): void => {
+  if (height === 0 && !isSelectionMode.value) {
+    return;
+  }
+
+  handleBottomBarHeightChange(height);
+};
+
+watch(isDeletedAccountTopic, value => {
+  if (value) {
+    handleBottomBarHeightChange(0);
+  }
+});
 
 const getTopicSwitchLatencyMs = (): number | undefined => {
   if (!topicSwitchStartedAtMs) {
@@ -1841,18 +1961,31 @@ const syncVisibleUnreadAfterAutoScroll = (): void => {
   });
 };
 
-const handleScroll = async (): Promise<void> => {
-  await handleMessageScroll();
-  const hasRecentUserScrollIntent =
-    performance.now() - floatingDateDividerUserScrollIntentAt <=
-    FLOATING_DATE_USER_SCROLL_GRACE_MS;
-
-  if (isFloatingDateDividerActive.value || hasRecentUserScrollIntent) {
-    keepFloatingDateDividerVisibleBriefly();
+const schedulePostScrollUiSync = (): void => {
+  if (postScrollUiSyncRafId) {
+    return;
   }
-  scheduleFloatingDateDividerSync();
-  hideUnreadMarkerIfPassed();
-  resetUnreadIfViewingBottom();
+
+  postScrollUiSyncRafId = requestAnimationFrame(() => {
+    postScrollUiSyncRafId = 0;
+
+    const hasRecentUserScrollIntent =
+      performance.now() - floatingDateDividerUserScrollIntentAt <=
+      FLOATING_DATE_USER_SCROLL_GRACE_MS;
+
+    if (isFloatingDateDividerActive.value || hasRecentUserScrollIntent) {
+      keepFloatingDateDividerVisibleBriefly();
+    }
+
+    scheduleFloatingDateDividerSync();
+    hideUnreadMarkerIfPassed();
+    resetUnreadIfViewingBottom();
+  });
+};
+
+const handleScroll = (): void => {
+  void handleMessageScroll();
+  schedulePostScrollUiSync();
 };
 
 const {
@@ -1917,6 +2050,11 @@ onUnmounted(() => {
   if (floatingDateDividerRafId) {
     cancelAnimationFrame(floatingDateDividerRafId);
     floatingDateDividerRafId = 0;
+  }
+
+  if (postScrollUiSyncRafId) {
+    cancelAnimationFrame(postScrollUiSyncRafId);
+    postScrollUiSyncRafId = 0;
   }
 
   if (floatingDateDividerHideTimeoutId !== null) {
@@ -2149,24 +2287,36 @@ watch(
       return;
     }
 
-    scrollToBottom({
-      preferUnreadMarker: false,
-      smooth: false
-    });
+    const shouldKeepInitialBottomPosition =
+      !scrollState.isUserScrolling || scrollAnchor.isNearBottom.value;
 
-    if (visibleMessagesExpansionAppliedToken === topicSwitchToken) {
-      setVisibleMessagesLimitForTopic(topicId, initialMessagesLimit);
+    if (shouldKeepInitialBottomPosition) {
+      scrollToBottom({
+        preferUnreadMarker: false,
+        smooth: false
+      });
+    }
+
+    if (
+      visibleMessagesExpansionAppliedToken === topicSwitchToken &&
+      shouldKeepInitialBottomPosition
+    ) {
+      setVisibleMessagesLimitForTopic(topicId, initialMessagesLimit, {
+        allowShrink: false
+      });
       await nextTick();
 
       if (isStaleTopicSwitch()) {
         return;
       }
 
-      scrollToBottom({
-        preferUnreadMarker: false,
-        smooth: false
-      });
-    } else {
+      if (!scrollState.isUserScrolling || scrollAnchor.isNearBottom.value) {
+        scrollToBottom({
+          preferUnreadMarker: false,
+          smooth: false
+        });
+      }
+    } else if (shouldKeepInitialBottomPosition) {
       scheduleVisibleMessagesExpansion(
         topicId,
         initialMessagesLimit,
@@ -2312,6 +2462,7 @@ const handleWindowKeydown = async (e: KeyboardEvent) => {
   const shouldFocusMessageInput =
     !Capacitor.isNativePlatform() &&
     !isSelectionMode.value &&
+    !isDeletedAccountTopic.value &&
     (!hasModifierKey || isPasteShortcut) &&
     !isEditableEventTarget(e);
 
@@ -2346,7 +2497,7 @@ const handleWindowKeydown = async (e: KeyboardEvent) => {
 };
 
 onMounted(() => {
-  if (!isMobile.value) {
+  if (!isMobile.value && !isDeletedAccountTopic.value) {
     focusMessageInput();
   }
 
@@ -2413,8 +2564,7 @@ watch(
       hideUnreadMarkerIfPassed();
       resetUnreadIfViewingBottom();
     });
-  },
-  { deep: true }
+  }
 );
 
 defineExpose({

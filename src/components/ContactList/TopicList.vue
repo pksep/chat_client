@@ -439,7 +439,7 @@ import {
 } from '../../services/useCallState';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 import type { IMessageSearchResult } from '../../composables/useMessageSearch';
-import { isBotTopic } from '../../utils/bot';
+import { isBotTopic, isDeletedBotUser } from '../../utils/bot';
 import ReactionHeartIcon from '../UI/ReactionHeartIcon.vue';
 import { requestTopicReactionJump } from '../../services/useTopicViewportState';
 import {
@@ -877,12 +877,19 @@ const getMessageResultTopicAvatar = (result: IMessageSearchResult): string =>
 const getTopicAvatarPath = (topic?: ITopic | null): string =>
   isBotTopic(topic) ? topic?.user?.avatarUrl || '' : topic?.avatarUrl || '';
 
-const isTopicUserOnline = (topic: ITopic): boolean =>
-  isBotTopic(topic) ||
-  (topic.type === TopicType.DM &&
-    !!topic.user &&
-    !getUserLastOnline(topic.user) &&
-    getHasWebsocketConnection());
+const isTopicUserOnline = (topic: ITopic): boolean => {
+  if (isDeletedBotUser(topic.user)) {
+    return false;
+  }
+
+  return (
+    isBotTopic(topic) ||
+    (topic.type === TopicType.DM &&
+      !!topic.user &&
+      !getUserLastOnline(topic.user) &&
+      getHasWebsocketConnection())
+  );
+};
 
 const getTopicLastMessageLabel = (media: IMedia[]): string => {
   let text = '';

@@ -98,41 +98,37 @@
           </div>
         </template>
       </div>
-      <Transition name="reaction-row">
-        <div v-if="props.reactions?.length" class="message-footer-row">
-          <div class="message-reactions-row">
-            <MessageEmojies :reactions="props.reactions" />
-          </div>
-          <div
-            v-if="!props.loader"
-            class="message-time message-time--bottom"
-            :data-testid="`${props.dataTestid}-Time`"
-          >
-            <PinIcon
-              v-if="props.isPin"
-              style="width: 15px; height: 15px; margin-right: -2px"
-            />
-            <span
-              v-if="props.isEdit"
-              :data-testid="`${props.dataTestid}-Edited`"
-              >изменено</span
-            >
-            <span :data-testid="`${props.dataTestid}-TimeText`">{{
-              props.time
-            }}</span>
-            <ErrorIcon
-              v-if="showErrorIcon"
-              :data-testid="`${props.dataTestid}-ErrorIcon`"
-            />
-            <MessageStatusIcons
-              v-if="props.isMeSender && !showErrorIcon"
-              :is-read="props.isRead"
-              :message-status="props.messageStatus"
-              :data-testid="`${props.dataTestid}`"
-            />
-          </div>
+      <div v-if="props.reactions?.length" class="message-footer-row">
+        <div class="message-reactions-row">
+          <MessageEmojies :reactions="props.reactions" />
         </div>
-      </Transition>
+        <div
+          v-if="!props.loader"
+          class="message-time message-time--bottom"
+          :data-testid="`${props.dataTestid}-Time`"
+        >
+          <PinIcon
+            v-if="props.isPin"
+            style="width: 15px; height: 15px; margin-right: -2px"
+          />
+          <span v-if="props.isEdit" :data-testid="`${props.dataTestid}-Edited`"
+            >изменено</span
+          >
+          <span :data-testid="`${props.dataTestid}-TimeText`">{{
+            props.time
+          }}</span>
+          <ErrorIcon
+            v-if="showErrorIcon"
+            :data-testid="`${props.dataTestid}-ErrorIcon`"
+          />
+          <MessageStatusIcons
+            v-if="props.isMeSender && !showErrorIcon"
+            :is-read="props.isRead"
+            :message-status="props.messageStatus"
+            :data-testid="`${props.dataTestid}`"
+          />
+        </div>
+      </div>
     </article>
   </div>
 </template>

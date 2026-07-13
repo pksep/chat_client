@@ -121,14 +121,14 @@
       </div>
     </div>
 
-    <div class="bot-info-panel__footer">
+    <div v-if="canDeleteBot" class="bot-info-panel__footer">
       <Button
         :type="ButtonTypeEnum.secondary"
         class="bot-info-panel__delete"
         @click="isDeleteConfirmOpen = true"
       >
         <Icon :name="IconNameEnum.deleteSmall" />
-        <span>Удалить</span>
+        <span>Удалить бота</span>
       </Button>
     </div>
 
@@ -162,10 +162,14 @@ import {
   getBotInitialForm,
   updateBotTopic
 } from '../composables/useBots';
+import { getAuthUser } from '../composables/useAuth';
 import { showErrorNotification } from '../composables/useNotifications';
 import { copyTextToClipboard } from '../utils/copyTextToClipboard';
-import { maskBotSecret } from '../utils/bot';
-import { navigateToDialogsList } from '../composables/navigation';
+import {
+  getBotOwnerUserId,
+  isLocalBotTopic,
+  maskBotSecret
+} from '../utils/bot';
 import { uploadAvatarToMinio } from '../utils/uploadAvatarToMinio';
 
 const props = withDefaults(
@@ -249,6 +253,20 @@ const visibleApiKeyValue = computed(() =>
   isApiKeyVisible.value ? form.apiKey : maskBotSecret(form.apiKey)
 );
 
+const canDeleteBot = computed(() => {
+  const authUser = getAuthUser();
+
+  if (!authUser?.id || !props.topic) {
+    return false;
+  }
+
+  if (isLocalBotTopic(props.topic)) {
+    return true;
+  }
+
+  return getBotOwnerUserId(props.user || props.topic.user) === authUser.id;
+});
+
 const openFile = (): void => {
   fileInputRef.value?.click();
 };
@@ -331,7 +349,7 @@ const handleSave = async (): Promise<void> => {
 };
 
 const handleDelete = async (): Promise<void> => {
-  if (!props.topic) {
+  if (!props.topic || !canDeleteBot.value) {
     return;
   }
 
@@ -339,7 +357,6 @@ const handleDelete = async (): Promise<void> => {
     await deleteBotTopic(props.topic);
     isDeleteConfirmOpen.value = false;
     emits('close');
-    navigateToDialogsList();
   } catch (error) {
     showErrorNotification(
       error instanceof Error ? error.message : 'Не удалось удалить бота'

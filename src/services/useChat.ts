@@ -14,6 +14,7 @@ import {
   getTopicList,
   incrementDisplayedUnreadCount,
   isTopicMuted,
+  updateLocalTopicDetails,
   updateLocalTopicUser,
   setTopicTypingState,
   updateTopicUnreadReaction,
@@ -22,7 +23,6 @@ import {
   totalUnreadCount
 } from '../composables/useTopics';
 import {
-  updateLocalGroupDetails,
   updateLocalLastMessageGroup,
   getGroupById
 } from '../composables/useGroup';
@@ -41,6 +41,7 @@ import {
   fetchMessagesForTopic,
   fetchPinnedMessagesForTopic,
   getFullMessagesByTopicId,
+  getTopicIdsWithMessages,
   mergeMessagesForTopic
 } from './useMessages';
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
@@ -390,11 +391,7 @@ const setupChatListeners = (): void => {
     });
 
     if (payload.type === 'UPDATE') {
-      updateLocalGroupDetails(
-        payload.topicId,
-        payload.data.name,
-        payload.data.avatarUrl
-      );
+      updateLocalTopicDetails(payload.topicId, payload.data);
     } else if (payload.type === 'CREATE') {
       const { addTopicList } = useTopics();
       addTopicList(payload.data);
@@ -676,8 +673,14 @@ const setupChatListeners = (): void => {
       return;
     }
 
-    Object.entries(messagesStore.value).forEach(([topicId, messages]) => {
-      if (messages.some(item => item.id === event.payload.messageId)) {
+    getTopicIdsWithMessages().forEach(topicId => {
+      const fullMessages = getFullMessagesByTopicId(topicId);
+      const visibleMessages = messagesStore.value[topicId] || [];
+
+      if (
+        fullMessages.some(item => item.id === event.payload.messageId) ||
+        visibleMessages.some(item => item.id === event.payload.messageId)
+      ) {
         clearDeletedReactionTarget(topicId, event.payload.messageId);
         deleteMessageFromLocal(topicId, event.payload.messageId);
       }
@@ -1654,6 +1657,8 @@ export const initializeChat = async (options: {
       return;
     }
 
+    syncPresenceForVisibility();
+
     if (!hasCompletedInitialConnection) {
       hasCompletedInitialConnection = true;
       return;
@@ -1675,6 +1680,7 @@ export const initializeChat = async (options: {
 
       lastVisibilityState = document.visibilityState;
       if (document.visibilityState === 'visible') {
+        syncPresenceForVisibility();
         handleNetworkOrResumeChange('app-visible', {
           assumeOnlineOnNative: true,
           forceHardReconnect: true,
@@ -1724,6 +1730,7 @@ export const initializeChat = async (options: {
           return;
         }
 
+        syncPresenceForVisibility();
         handleNetworkOrResumeChange('native-app-active', {
           assumeOnlineOnNative: true,
           forceHardReconnect: true,

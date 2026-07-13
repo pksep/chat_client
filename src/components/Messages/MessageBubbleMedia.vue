@@ -53,7 +53,7 @@
                 v-if="shouldRenderLocalVideoPreview(media)"
                 :src="media.localPath"
                 :poster="media.localThumbnailPath || VIDEO_FALLBACK_THUMBNAIL"
-                :style="getPreviewStyle(media, i)"
+                :style="getPreviewStyle()"
                 :width="getPreviewWidth(media, i)"
                 :height="getPreviewHeight(media, i)"
                 muted
@@ -67,15 +67,22 @@
                 @contextmenu.prevent
               />
 
+              <div
+                v-else-if="!shouldLoadMedia"
+                class="message-content__media-placeholder"
+                :style="getPreviewStyle()"
+                aria-hidden="true"
+                @click.stop="handleMediaClick(i)"
+                @contextmenu.prevent
+              />
+
               <img
                 v-else
-                :src="
-                  shouldLoadMedia ? getFeedMediaPath(media) : EMPTY_MEDIA_SRC
-                "
+                :src="getFeedMediaPath(media)"
                 :alt="
                   props.sender ? `${props.sender} изображение` : 'Изображение'
                 "
-                :style="getPreviewStyle(media, i)"
+                :style="getPreviewStyle()"
                 :width="getPreviewWidth(media, i)"
                 :height="getPreviewHeight(media, i)"
                 loading="lazy"
@@ -88,29 +95,25 @@
                 @contextmenu.prevent
               />
 
-              <Transition name="media-control" mode="out-in">
-                <div
-                  v-if="shouldShowMediaLoading(media)"
-                  key="loading"
-                  class="message-content__media-loading"
-                >
-                  <LoadingIcon
-                    :is-loaded="false"
-                    :percent="
-                      media.isLoading ? media.uploadPercent ?? null : null
-                    "
-                  />
-                </div>
+              <div
+                v-if="shouldShowMediaLoading(media)"
+                class="message-content__media-loading"
+              >
+                <LoadingIcon
+                  :is-loaded="false"
+                  :percent="
+                    media.isLoading ? media.uploadPercent ?? null : null
+                  "
+                />
+              </div>
 
-                <div
-                  v-else-if="media.type === MediaType.Video"
-                  key="play"
-                  class="message-content__media-video"
-                  @click="$emit('set-slider', mediaFiles, i)"
-                >
-                  <PlayIcon />
-                </div>
-              </Transition>
+              <div
+                v-else-if="media.type === MediaType.Video"
+                class="message-content__media-video"
+                @click="$emit('set-slider', mediaFiles, i)"
+              >
+                <PlayIcon />
+              </div>
 
               <div
                 v-if="i === mediaFiles.length - 1 && !hasInlineCaption"
@@ -172,16 +175,14 @@
         </div>
       </article>
 
-      <Transition name="reaction-row">
-        <div
-          v-if="props.reactions?.length && !hasInlineCaption"
-          class="message-footer-row"
-        >
-          <div class="message-reactions-row">
-            <MessageEmojies :reactions="props.reactions" />
-          </div>
+      <div
+        v-if="props.reactions?.length && !hasInlineCaption"
+        class="message-footer-row"
+      >
+        <div class="message-reactions-row">
+          <MessageEmojies :reactions="props.reactions" />
         </div>
-      </Transition>
+      </div>
     </div>
   </template>
 </template>
@@ -208,15 +209,17 @@ import { MessageStatus } from '../../services/useChatSDK/types';
 import {
   calculatePreviewDimensions,
   getGridItemMaxWidth,
+  normalizePreviewDimensions,
   type MediaPreviewDimensions,
+  PREVIEW_MAX_HEIGHT,
+  PREVIEW_MIN_SIZE,
   VIDEO_FALLBACK_THUMBNAIL
 } from '../../utils/mediaPreview';
 
 const props = defineProps<IMessageBubbleProps>();
 const emit = defineEmits(['navigate-message', 'set-slider']);
 
-const { getFullMediaPath, primeMediaCache, isMediaPathReady, EMPTY_MEDIA_SRC } =
-  useMessageMedia();
+const { getFullMediaPath, primeMediaCache } = useMessageMedia();
 
 const route = useUrlWatcher();
 const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
@@ -242,7 +245,16 @@ const singleMediaPreviewWidth = computed(() => {
     return null;
   }
 
-  const width = mediaFiles.value[0]?.ex?.previewWidth;
+  const media = mediaFiles.value[0];
+  let preview: MediaPreviewDimensions | null = null;
+
+  if (media?.ex?.previewWidth && media.ex?.previewHeight) {
+    preview = normalizePreviewDimensions(media.ex, 1, 0);
+  } else if (media?.ex) {
+    preview = calculatePreviewDimensions(media.ex, 1, 0);
+  }
+
+  const width = preview?.previewWidth;
 
   return typeof width === 'number' && width > 0 ? width : null;
 });
@@ -266,8 +278,12 @@ const replyReferenceWidth = useReferenceWidth(mediaArticleRef, {
 const shouldLoadMedia = ref(false);
 let visibilityObserver: IntersectionObserver | null = null;
 let lastMediaDragStartedAt = 0;
+const MEDIA_LOAD_ROOT_MARGIN_PX = 900;
 
-const isNearViewport = (element: HTMLElement, offset = 250) => {
+const isNearViewport = (
+  element: HTMLElement,
+  offset = MEDIA_LOAD_ROOT_MARGIN_PX
+) => {
   const rect = element.getBoundingClientRect();
 
   return rect.bottom >= -offset && rect.top <= window.innerHeight + offset;
@@ -289,8 +305,7 @@ watch(
     });
   },
   {
-    immediate: true,
-    deep: true
+    immediate: true
   }
 );
 
@@ -305,31 +320,22 @@ watch(
 onMounted(() => {
   void syncMentions();
 
-  if (
-    mediaArticleRef.value &&
-    isNearViewport(mediaArticleRef.value) &&
-    mediaFiles.value.some(media => isMediaPathReady(media))
-  ) {
-    shouldLoadMedia.value = true;
-    return;
-  }
-
   if (!('IntersectionObserver' in window)) {
     shouldLoadMedia.value = true;
     return;
   }
 
+  if (mediaArticleRef.value) {
+    shouldLoadMedia.value = isNearViewport(mediaArticleRef.value);
+  }
+
   visibilityObserver = new IntersectionObserver(
     entries => {
-      if (entries.some(entry => entry.isIntersecting)) {
-        shouldLoadMedia.value = true;
-        visibilityObserver?.disconnect();
-        visibilityObserver = null;
-      }
+      shouldLoadMedia.value = entries.some(entry => entry.isIntersecting);
     },
     {
       root: null,
-      rootMargin: '250px 0px',
+      rootMargin: `${MEDIA_LOAD_ROOT_MARGIN_PX}px 0px`,
       threshold: 0.01
     }
   );
@@ -367,14 +373,17 @@ const getFallbackPreviewDimensions = (
   media: IMedia,
   index: number
 ): MediaPreviewDimensions => {
-  const previewWidth = Math.round(
-    Math.max(100, getGridItemMaxWidth(mediaFiles.value.length, index))
-  );
-  const isSingleMedia = mediaFiles.value.length === 1;
+  const mediaCount = mediaFiles.value.length;
+  const previewWidth = Math.round(getGridItemMaxWidth(mediaCount, index));
+  const isSingleMedia = mediaCount === 1;
   const fallbackRatio =
     media.type === MediaType.Video ? 16 / 9 : isSingleMedia ? 4 / 3 : 1;
+  const minHeight = Math.min(PREVIEW_MIN_SIZE, previewWidth);
   const previewHeight = Math.round(
-    Math.max(100, Math.min(300, previewWidth / fallbackRatio))
+    Math.min(
+      PREVIEW_MAX_HEIGHT,
+      Math.max(minHeight, previewWidth / fallbackRatio)
+    )
   );
 
   return {
@@ -385,14 +394,17 @@ const getFallbackPreviewDimensions = (
 };
 
 const getPreviewDimensions = (media: IMedia, index: number) => {
-  const preview =
+  const preview = normalizePreviewDimensions(
     media.ex?.previewWidth && media.ex?.previewHeight
       ? media.ex
       : calculatePreviewDimensions(
           media.ex || {},
           mediaFiles.value.length,
           index
-        );
+        ),
+    mediaFiles.value.length,
+    index
+  );
 
   return preview.previewWidth && preview.previewHeight
     ? preview
@@ -409,22 +421,10 @@ const getPreviewHeight = (media: IMedia, index: number): number | undefined => {
   return typeof height === 'number' && height > 0 ? height : undefined;
 };
 
-const getPreviewStyle = (
-  media: IMedia,
-  index: number
-): Record<string, string> => {
-  const preview = getPreviewDimensions(media, index);
-
-  if (!preview.previewWidth || !preview.previewHeight) {
-    return {
-      width: `100%`,
-      height: `100%`
-    };
-  }
-
+const getPreviewStyle = (): Record<string, string> => {
   return {
-    width: `${preview.previewWidth}px`,
-    height: `${preview.previewHeight}px`
+    width: '100%',
+    height: '100%'
   };
 };
 
@@ -440,7 +440,7 @@ const getPreviewContainerStyle = (
     return {};
   }
 
-  if (hasInlineCaption.value && mediaFiles.value.length === 1) {
+  if (mediaFiles.value.length === 1) {
     return {
       width: `${previewWidth}px`,
       height: `${previewHeight}px`,
@@ -451,6 +451,8 @@ const getPreviewContainerStyle = (
   }
 
   return {
+    width: '100%',
+    height: `${previewHeight}px`,
     aspectRatio: `${previewWidth} / ${previewHeight}`,
     containIntrinsicSize: `${previewWidth}px ${previewHeight}px`,
     minHeight: `${previewHeight}px`
@@ -479,14 +481,35 @@ const savePreviewMetrics = (
   naturalWidth?: number,
   naturalHeight?: number
 ): void => {
-  const rect = element.getBoundingClientRect();
+  if (
+    media.ex?.previewWidth &&
+    media.ex?.previewHeight &&
+    media.ex?.width &&
+    media.ex?.height
+  ) {
+    return;
+  }
 
-  media.ex = {
-    ...media.ex,
+  const rect = element.getBoundingClientRect();
+  const nextMetrics = {
     width: media.ex?.width || naturalWidth,
     height: media.ex?.height || naturalHeight,
     previewWidth: Math.round(rect.width),
     previewHeight: Math.round(rect.height)
+  };
+
+  if (
+    media.ex?.width === nextMetrics.width &&
+    media.ex?.height === nextMetrics.height &&
+    media.ex?.previewWidth === nextMetrics.previewWidth &&
+    media.ex?.previewHeight === nextMetrics.previewHeight
+  ) {
+    return;
+  }
+
+  media.ex = {
+    ...media.ex,
+    ...nextMetrics
   };
 };
 
