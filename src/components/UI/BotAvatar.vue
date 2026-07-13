@@ -17,6 +17,7 @@
       :initials="props.initials"
       class="bot-avatar__image"
       :is-icon="props.isIcon"
+      :is-online="false"
     />
     <div v-else class="bot-avatar__fallback" aria-hidden="true">
       <BotIcon class="bot-avatar__icon" />

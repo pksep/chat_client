@@ -15,6 +15,7 @@
       :data-testid="`${dataTestid}-UserProfile-Avatar`"
       :is-online="
         !isWaitingConnection &&
+        !isDeletedAccount &&
         (isBot || (!effectiveLastOnline && !isCurrentUser))
       "
     />
@@ -34,18 +35,19 @@
         <EmojiIcon class="user-profile__title-status" :emoji="statusIcon" />
       </Tooltip>
     </h3>
-    <ConnectionStatus v-if="!!isWaitingConnection" />
+    <ConnectionStatus v-if="!!isWaitingConnection && !shouldHideStatusLine" />
     <TypingIndicator
-      v-else-if="props.typingLabel"
+      v-else-if="props.typingLabel && !shouldHideStatusLine"
       class="user-profile__ex user-profile__ex--typing"
       :label="props.typingLabel"
       :data-testid="`${dataTestid}-UserProfile-Typing`"
     />
     <span
-      v-else
+      v-else-if="!shouldHideStatusLine"
       class="user-profile__ex"
       :class="{
-        'user-profile__ex--online': !effectiveLastOnline && !isCurrentUser
+        'user-profile__ex--online':
+          !isDeletedAccount && !effectiveLastOnline && !isCurrentUser
       }"
       :data-testid="`${dataTestid}-UserProfile-Ex`"
     >
@@ -72,10 +74,11 @@ import {
   formatUserStatusText,
   normalizeUserStatus
 } from '../../utils/userStatus';
-import { getBotUsername, isBotUser } from '../../utils/bot';
+import { getBotUsername, isBotUser, isDeletedBotUser } from '../../utils/bot';
 
 const props = withDefaults(defineProps<IUserProfileProps>(), {
-  dataTestid: () => 'UserProfile'
+  dataTestid: () => 'UserProfile',
+  hideDeletedAccountStatus: false
 });
 
 const effectiveUser = computed(() => getUserById(props.user.id) || props.user);
@@ -93,6 +96,10 @@ const currentStatusLabel = computed(() =>
 );
 const statusIcon = computed(() => currentStatus.value?.icon || '');
 const isBot = computed(() => isBotUser(effectiveUser.value));
+const isDeletedAccount = computed(() => isDeletedBotUser(effectiveUser.value));
+const shouldHideStatusLine = computed(
+  () => props.hideDeletedAccountStatus && isDeletedAccount.value
+);
 
 watch(
   statusIcon,
@@ -107,6 +114,10 @@ watch(
 );
 
 const formattedStatus = computed(() => {
+  if (isDeletedAccount.value) {
+    return 'Оффлайн';
+  }
+
   if (isBot.value) {
     return `@${getBotUsername(effectiveUser.value)}`;
   }

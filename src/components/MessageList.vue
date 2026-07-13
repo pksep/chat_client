@@ -380,7 +380,12 @@
     @height-change="handleSelectedMessagesHeightChange"
   />
   <MessageListInput
-    v-if="!isDefaultRoute && !isSelectionMode && !isMobileTopicSearchMode"
+    v-if="
+      !isDefaultRoute &&
+      !isSelectionMode &&
+      !isMobileTopicSearchMode &&
+      !isDeletedAccountTopic
+    "
     :key="`${route.type}:${route.id || 'default'}`"
     v-model="inputText"
     ref="messageListInputRef"
@@ -473,6 +478,7 @@ import {
 } from '../services/useAppVisibility';
 import { getAuthUser } from '../composables/useAuth';
 import { IMessage } from './interfaces/interfaces';
+import { TopicType } from '../services/useChatSDK/types';
 
 import { useMessageSwipe } from './Messages/composables/useMessageSwipe';
 import { useMessageScroll } from './Messages/composables/useMessageScroll';
@@ -502,6 +508,7 @@ import {
   pendingTopicReactionJump
 } from '../services/useTopicViewportState';
 import { recordChatMessageListRenderMismatch } from '../services/useChatNavigationTelemetry';
+import { isDeletedBotUser } from '../utils/bot';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -695,6 +702,11 @@ const isMobileTopicSearchMode = computed(
 const activeTopic = computed(() =>
   route.value.id ? getSelectedTopic(route.value.id) : null
 );
+const isDeletedAccountTopic = computed(() => {
+  const topic = activeTopic.value;
+
+  return topic?.type === TopicType.DM && isDeletedBotUser(topic.user);
+});
 const topicUnreadCount = computed(() =>
   getTopicUnreadBadgeCount(activeTopic.value || undefined, authUser.value?.id)
 );
@@ -1110,6 +1122,12 @@ const handleSelectedMessagesHeightChange = (height: number): void => {
 
   handleBottomBarHeightChange(height);
 };
+
+watch(isDeletedAccountTopic, value => {
+  if (value) {
+    handleBottomBarHeightChange(0);
+  }
+});
 
 const getTopicSwitchLatencyMs = (): number | undefined => {
   if (!topicSwitchStartedAtMs) {
@@ -2444,6 +2462,7 @@ const handleWindowKeydown = async (e: KeyboardEvent) => {
   const shouldFocusMessageInput =
     !Capacitor.isNativePlatform() &&
     !isSelectionMode.value &&
+    !isDeletedAccountTopic.value &&
     (!hasModifierKey || isPasteShortcut) &&
     !isEditableEventTarget(e);
 
@@ -2478,7 +2497,7 @@ const handleWindowKeydown = async (e: KeyboardEvent) => {
 };
 
 onMounted(() => {
-  if (!isMobile.value) {
+  if (!isMobile.value && !isDeletedAccountTopic.value) {
     focusMessageInput();
   }
 

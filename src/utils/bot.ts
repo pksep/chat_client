@@ -6,10 +6,12 @@ export const LOCAL_BOT_USER_ID_PREFIX = 'local-bot-user-';
 
 type BotMeta = {
   isBot?: boolean;
+  isDeletedBot?: boolean;
   botUsername?: string;
   apiKey?: string;
   botApiKey?: string;
   botId?: number;
+  botOwnerUserId?: string;
   erpInitials?: string;
   erpRole?: string;
 };
@@ -61,7 +63,16 @@ export const isLocalBotUser = (user?: IUser | null): boolean =>
 export const isLocalBotTopic = (topic?: ITopic | null): boolean =>
   isLocalBotTopicId(topic?.id);
 
+export const isDeletedBotUser = (user?: IUser | null): boolean => {
+  const meta = parseBotMeta(user?.ex);
+  return Boolean(meta.isDeletedBot || user?.nickname === 'deleted_bot');
+};
+
 export const isBotUser = (user?: IUser | null): boolean => {
+  if (isDeletedBotUser(user)) {
+    return false;
+  }
+
   const meta = parseBotMeta(user?.ex);
 
   if (
@@ -80,6 +91,10 @@ export const isBotUser = (user?: IUser | null): boolean => {
 
 export const isBotTopic = (topic?: ITopic | null): boolean => {
   if (!topic || topic.type !== TopicType.DM) {
+    return false;
+  }
+
+  if (isDeletedBotUser(topic.user)) {
     return false;
   }
 
@@ -118,12 +133,18 @@ export const getBotId = (user?: IUser | null): number | null => {
   return typeof meta.botId === 'number' ? meta.botId : null;
 };
 
+export const getBotOwnerUserId = (user?: IUser | null): string => {
+  const meta = parseBotMeta(user?.ex);
+  return typeof meta.botOwnerUserId === 'string' ? meta.botOwnerUserId : '';
+};
+
 export const buildBotEx = (
   currentEx: unknown,
   payload: {
     username: string;
     apiKey: string;
     botId?: number;
+    ownerUserId?: string;
   }
 ): string => {
   const currentMeta = parseBotMeta(currentEx);
@@ -134,6 +155,7 @@ export const buildBotEx = (
     botUsername: payload.username,
     botApiKey: payload.apiKey,
     ...(payload.botId !== undefined ? { botId: payload.botId } : {}),
+    ...(payload.ownerUserId ? { botOwnerUserId: payload.ownerUserId } : {}),
     erpRole: currentMeta.erpRole || 'Бот'
   });
 };

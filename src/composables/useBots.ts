@@ -2,12 +2,11 @@ import { getAuthUser } from './useAuth';
 import {
   addTopicList,
   createTopic,
-  deleteTopic,
   deleteTopicFromList,
   getSelectedTopic,
   updateLocalTopicUser
 } from './useTopics';
-import { upsertLocalUser } from './useUsers';
+import { removeLocalUser, upsertLocalUser } from './useUsers';
 import { getConfig } from '../services/useConfig';
 import { uploadFile } from '../services/useChat';
 import type {
@@ -65,7 +64,8 @@ export const createLocalBotTopic = (
     isBot: true,
     ex: buildBotEx(authUser.ex, {
       username,
-      apiKey
+      apiKey,
+      ownerUserId: authUser.id
     })
   } as IUser;
 
@@ -141,6 +141,53 @@ type GatewayBotResult = {
   description?: string;
   is_active?: boolean;
   token?: string;
+};
+
+const findGatewayBotByChatUserId = async (
+  chatUserId: string,
+  ownerUserId: string
+): Promise<GatewayBotResult | null> => {
+  if (!chatUserId || !ownerUserId) {
+    return null;
+  }
+
+  const gateway = resolveBotGatewayUrl();
+  const response = await fetch(`${gateway}/bots`, {
+    headers: {
+      'X-Owner-Id': ownerUserId
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      await readGatewayError(
+        response,
+        `Сервис ботов вернул ошибку ${response.status}`
+      )
+    );
+  }
+
+  const body = (await response.json()) as { result?: GatewayBotResult[] };
+
+  return body.result?.find(bot => bot.chat_user_id === chatUserId) || null;
+};
+
+const resolveGatewayBotId = async (
+  topic: ITopic,
+  ownerUserId: string
+): Promise<number | null> => {
+  const botId = getBotId(topic.user);
+
+  if (botId) {
+    return botId;
+  }
+
+  const bot = await findGatewayBotByChatUserId(
+    topic.user?.id || '',
+    ownerUserId
+  );
+
+  return bot?.id || null;
 };
 
 type GatewayErrorBody = {
@@ -270,7 +317,8 @@ export const createBotViaGateway = async (
   const ex = buildBotEx(topic.user?.ex, {
     username,
     apiKey: token,
-    botId: result.id
+    botId: result.id,
+    ownerUserId: authUser.id
   });
 
   if (topic.user?.id) {
@@ -431,14 +479,22 @@ export const deleteBotTopic = async (topic: ITopic): Promise<void> => {
   }
 
   if (isLocalBotTopicId(topic.id)) {
+    removeLocalUser(topic.user?.id);
     deleteTopicFromList(topic.id);
     return;
   }
 
-  const botId = getBotId(topic.user);
   const authUser = getAuthUser();
 
-  if (botId && authUser?.id) {
+  if (authUser?.id) {
+    const botId = await resolveGatewayBotId(topic, authUser.id);
+
+    if (!botId) {
+      throw new Error(
+        'Не удалось удалить бота: sep-bot не нашел запись по chat user id'
+      );
+    }
+
     const gateway = resolveBotGatewayUrl();
     const response = await fetch(`${gateway}/bots/${botId}/deactivate`, {
       method: 'POST',
@@ -455,10 +511,11 @@ export const deleteBotTopic = async (topic: ITopic): Promise<void> => {
         )
       );
     }
+
+    return;
   }
 
-  await deleteTopic(topic.id);
-  deleteTopicFromList(topic.id);
+  throw new Error('Не удалось удалить бота: не найден текущий пользователь');
 };
 
 export const getBotInitialForm = (topic?: ITopic | null) => ({

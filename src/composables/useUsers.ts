@@ -9,7 +9,7 @@ import {
   saveCachedUsers
 } from '../services/useChatStateCache';
 import { normalizeDateValue } from '../utils/dateValue';
-import { isLocalBotUser } from '../utils/bot';
+import { isDeletedBotUser, isLocalBotUser } from '../utils/bot';
 
 const users = shallowRef<IUser[]>([]);
 const loading = ref(false);
@@ -45,6 +45,9 @@ const mergeUsersWithStoredFields = (incomingUsers: IUser[]): IUser[] => {
   );
 };
 
+const filterVisibleUsers = (userList: IUser[]): IUser[] =>
+  userList.filter(user => !isDeletedBotUser(user));
+
 const schedulePersistUsers = () => {
   if (persistUsersTimeout) {
     clearTimeout(persistUsersTimeout);
@@ -66,7 +69,7 @@ export const hydrateUsersFromCache = async (
   const cachedUsers = await loadCachedUsers(userId);
 
   if (cachedUsers.length > 0) {
-    users.value = [...cachedUsers];
+    users.value = filterVisibleUsers(cachedUsers);
   }
 
   return [...users.value];
@@ -86,7 +89,9 @@ export const fetchAllUsers = async (
       limit
     });
 
-    const mergedUsers = mergeUsersWithStoredFields(response.data);
+    const mergedUsers = mergeUsersWithStoredFields(
+      filterVisibleUsers(response.data)
+    );
     const localBotUsers = (users.value || []).filter(
       user =>
         isLocalBotUser(user) &&
@@ -109,7 +114,7 @@ export const fetchAllUsers = async (
 export const getUsersList = (): IUser[] => {
   const currentUsers = users.value || [];
 
-  return [...currentUsers];
+  return filterVisibleUsers(currentUsers);
 };
 
 export const fetchUsersForAuth = async (
@@ -140,7 +145,7 @@ export const fetchUsersForAuth = async (
     }
 
     const data = (await response.json()) as { data?: IUser[] };
-    users.value = [...(data.data || [])];
+    users.value = filterVisibleUsers(data.data || []);
     schedulePersistUsers();
 
     return users.value;
@@ -198,6 +203,11 @@ export const upsertLocalUser = (user: IUser): void => {
     return;
   }
 
+  if (isDeletedBotUser(user)) {
+    removeLocalUser(user.id);
+    return;
+  }
+
   const currentUsers = users.value || [];
   const index = currentUsers.findIndex(item => item.id === user.id);
 
@@ -209,6 +219,22 @@ export const upsertLocalUser = (user: IUser): void => {
 
   const nextUsers = [...currentUsers];
   nextUsers[index] = mergeUserWithStoredFields(user, nextUsers[index]);
+  users.value = nextUsers;
+  schedulePersistUsers();
+};
+
+export const removeLocalUser = (userId?: string | number | null): void => {
+  if (!userId) {
+    return;
+  }
+
+  const currentUsers = users.value || [];
+  const nextUsers = currentUsers.filter(user => user.id !== userId);
+
+  if (nextUsers.length === currentUsers.length) {
+    return;
+  }
+
   users.value = nextUsers;
   schedulePersistUsers();
 };
