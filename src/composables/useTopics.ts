@@ -932,6 +932,80 @@ const createTopicsApi = () => {
     schedulePersistTopics();
   };
 
+  const updateLocalTopicDetails = (
+    topicId: string,
+    changes: Partial<ITopic>
+  ): void => {
+    if (!topicId || !changes) {
+      return;
+    }
+
+    let hasChanges = false;
+
+    topics.value = topics.value.map(topic => {
+      if (topic.id !== topicId) {
+        return topic;
+      }
+
+      hasChanges = true;
+      const nextTopic = { ...topic };
+
+      if ('name' in changes) {
+        nextTopic.name = changes.name;
+      }
+
+      if ('avatarUrl' in changes) {
+        nextTopic.avatarUrl = changes.avatarUrl;
+      }
+
+      if (changes.user) {
+        nextTopic.user = changes.user;
+
+        if (nextTopic.type === TopicType.DM) {
+          nextTopic.name = changes.user.initials || nextTopic.name;
+          nextTopic.avatarUrl = changes.user.avatarUrl || '';
+        }
+      }
+
+      if (changes.members) {
+        nextTopic.members = changes.members;
+      }
+
+      if (changes.info) {
+        nextTopic.info = {
+          ...nextTopic.info,
+          ...changes.info
+        };
+      }
+
+      if (changes.group && nextTopic.group) {
+        nextTopic.group = {
+          ...nextTopic.group,
+          ...changes.group
+        };
+      }
+
+      if (nextTopic.group) {
+        if ('name' in changes) {
+          nextTopic.group.title = changes.name || nextTopic.group.title;
+        }
+
+        if ('avatarUrl' in changes) {
+          nextTopic.group.avatarUrl = changes.avatarUrl || '';
+        }
+      }
+
+      return nextTopic;
+    });
+
+    if (!hasChanges) {
+      return;
+    }
+
+    topics.value = [...topics.value];
+    schedulePersistTopics();
+  };
+
   const togglePinTopic = async (topic: ITopic) => {
     try {
       const sdk = getChatSDK();
@@ -1192,7 +1266,8 @@ const createTopicsApi = () => {
     incrementServerUnreadCount,
     decrementServerUnreadCount,
     incrementDisplayedUnreadCount,
-    updateLocalTopicUser
+    updateLocalTopicUser,
+    updateLocalTopicDetails
   };
 };
 
@@ -1238,7 +1313,8 @@ const {
   decrementServerUnreadCount,
   totalUnreadCount,
   incrementDisplayedUnreadCount,
-  updateLocalTopicUser
+  updateLocalTopicUser,
+  updateLocalTopicDetails
 } = useTopics();
 
 export {
@@ -1276,5 +1352,6 @@ export {
   decrementServerUnreadCount,
   totalUnreadCount,
   incrementDisplayedUnreadCount,
-  updateLocalTopicUser
+  updateLocalTopicUser,
+  updateLocalTopicDetails
 };

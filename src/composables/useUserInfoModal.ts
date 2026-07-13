@@ -3,6 +3,7 @@ import type { ITopic, IUser } from '../components/interfaces/interfaces';
 import { TopicType } from '../services/useChatSDK/types';
 import { getTopicList } from './useTopics';
 import { getAuthUser } from './useAuth';
+import { isDeletedBotUser } from '../utils/bot';
 
 const isUserInfoOpen = ref(false);
 const selectedUser = ref<IUser | null>(null);
@@ -42,7 +43,7 @@ export const useUserInfoModal = () => {
     resolveUserInfoTopic(selectedUser.value, selectedTopic.value)
   );
   const canOpenUserInfo = (user?: IUser | null): boolean =>
-    !!user?.id && user.id !== getAuthUser()?.id;
+    !!user?.id && user.id !== getAuthUser()?.id && !isDeletedBotUser(user);
 
   const openUserInfo = (
     user?: IUser | null,

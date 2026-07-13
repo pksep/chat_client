@@ -74,10 +74,9 @@ export class ChatTopic implements ChatTopicInterface {
 
   async deleteTopic(topicId: string): Promise<void> {
     try {
-      const response = await this.reqi.delete(`/topics/${topicId}`, {
+      await this.reqi.delete(`/topics/${topicId}`, {
         parsed: false
       });
-      await response.json();
     } catch (error) {
       throw new Error(`Failed to delete topic: ${(error as Error).message}`);
     }
@@ -173,10 +172,9 @@ export class ChatTopic implements ChatTopicInterface {
 
   async leaveTopic(topicId: string): Promise<void> {
     try {
-      const response = await this.reqi.delete(`/topics/${topicId}/leave`, {
+      await this.reqi.delete(`/topics/${topicId}/leave`, {
         parsed: false
       });
-      await response.json();
     } catch (error) {
       throw new Error(`Failed to leave topic: ${(error as Error).message}`);
     }

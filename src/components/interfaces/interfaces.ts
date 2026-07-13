@@ -155,6 +155,7 @@ export interface IUserProfileProps {
   user: IUser;
   dataTestid?: string;
   typingLabel?: string;
+  hideDeletedAccountStatus?: boolean;
 }
 
 export interface IGroupProfileProps {

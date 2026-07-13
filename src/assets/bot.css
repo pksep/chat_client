@@ -8,7 +8,9 @@
   min-width: 2em;
   min-height: 2em;
   font-size: var(--size-avatar, 16px);
+  --online-indicator-size: 9px;
   flex-shrink: 0;
+  container-type: inline-size;
 }
 
 .bot-avatar--fixed-size {
@@ -81,15 +83,23 @@
 
 .bot-avatar__status {
   position: absolute;
-  right: calc(var(--size-avatar, 38px) * 0.03);
-  bottom: calc(var(--size-avatar, 38px) * 0.03);
-  width: clamp(9px, calc(var(--size-avatar, 38px) * 0.18), 12px);
-  height: clamp(9px, calc(var(--size-avatar, 38px) * 0.18), 12px);
+  left: calc(85% - calc(var(--online-indicator-size) / 2));
+  top: calc(85% - calc(var(--online-indicator-size) / 2));
+  width: var(--online-indicator-size);
+  height: var(--online-indicator-size);
   background-color: var(--blue1);
   border-radius: 50%;
   border: 1px solid var(--white, #fff);
+  transition: all 0.3s ease-in-out;
+  transform: scale(1);
   transform-origin: center;
   z-index: 2;
+}
+
+@container (min-width: 48px) {
+  .bot-avatar__status {
+    --online-indicator-size: 12px;
+  }
 }
 
 .bot-avatar--edit .bot-avatar__image,

@@ -14,6 +14,7 @@ import {
   getTopicList,
   incrementDisplayedUnreadCount,
   isTopicMuted,
+  updateLocalTopicDetails,
   updateLocalTopicUser,
   setTopicTypingState,
   updateTopicUnreadReaction,
@@ -22,7 +23,6 @@ import {
   totalUnreadCount
 } from '../composables/useTopics';
 import {
-  updateLocalGroupDetails,
   updateLocalLastMessageGroup,
   getGroupById
 } from '../composables/useGroup';
@@ -391,11 +391,7 @@ const setupChatListeners = (): void => {
     });
 
     if (payload.type === 'UPDATE') {
-      updateLocalGroupDetails(
-        payload.topicId,
-        payload.data.name,
-        payload.data.avatarUrl
-      );
+      updateLocalTopicDetails(payload.topicId, payload.data);
     } else if (payload.type === 'CREATE') {
       const { addTopicList } = useTopics();
       addTopicList(payload.data);

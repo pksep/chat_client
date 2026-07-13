@@ -167,7 +167,6 @@ import { getUserLastOnline } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
-import { useTopics } from '../../composables/useTopics';
 import { getConfig } from '../../services/useConfig';
 import {
   getHasWebsocketConnection,
@@ -176,7 +175,7 @@ import {
 import { bindTauriFileDrop } from '../../services/useTauriDroppedFiles';
 import { Capacitor } from '@capacitor/core';
 import { Clipboard } from '@capacitor/clipboard';
-import { isBotTopic } from '../../utils/bot';
+import { isDeletedBotUser } from '../../utils/bot';
 
 interface Props {
   dataTestid: string;
@@ -260,11 +259,7 @@ const formatForwardMessagesLabel = (count: number): string => {
 
 const route = useUrlWatcher();
 const config = getConfig();
-const { getSelectedTopic } = useTopics();
-const selectedTopic = computed(() =>
-  route.value.id ? getSelectedTopic(route.value.id) : null
-);
-const isBotChat = computed(() => isBotTopic(selectedTopic.value));
+const isBotChat = computed(() => false); // TODO: Enable bot chat detection when bot feature is implemented
 const allowMentionUsers = computed(
   () => props.allowSelectUser && route.value.type === RouteTypes.GROUP
 );
@@ -333,6 +328,7 @@ const mentionConfig = {
   getAvatarInitials: (user: any) => user.initials || user.nickname || 'U',
   getIsOnline: (user: any) =>
     getHasWebsocketConnection() &&
+    !isDeletedBotUser(user) &&
     !getUserLastOnline(user) &&
     getAuthUser()?.id !== user.id,
   getInsertLabel: (user: any) => `@${user.initials || 'User'} `,

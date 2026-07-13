@@ -69,6 +69,7 @@
           avatar-alt="user-profile-alt"
           :user="currentTopic.user"
           :typing-label="headerTypingLabel || undefined"
+          hide-deleted-account-status
           :data-testid="`${props.dataTestid}-Header-UserProfile`"
           @click.stop="handleUserProfileClick"
         />
@@ -430,7 +431,6 @@ import {
   setMobileTopicSearchActive,
   type IMessageSearchResult
 } from '../../composables/useMessageSearch';
-import { deleteBotTopic } from '../../composables/useBots';
 import { isBotTopic } from '../../utils/bot';
 
 const { getSelectedTopic } = useTopics();
@@ -492,23 +492,19 @@ const currentRouteGroup = computed(() => {
   return currentGroup.value;
 });
 const actionModalTitle = computed(() =>
-  isBotDialogTopic.value
-    ? 'Удаление бота'
-    : route.value.type === RouteTypes.DIALOGS
-      ? 'Удаление чата'
-      : currentRouteGroup.value?.isAdmin
-        ? 'Удаление канала'
-        : 'Выход из канала'
+  route.value.type === RouteTypes.DIALOGS
+    ? 'Удаление чата'
+    : currentRouteGroup.value?.isAdmin
+      ? 'Удаление канала'
+      : 'Выход из канала'
 );
 
 const actionModalDescription = computed(() =>
-  isBotDialogTopic.value
-    ? 'Вы уверены, что хотите удалить бота?'
-    : route.value.type === RouteTypes.DIALOGS
-      ? 'Вы уверены, что хотите удалить чат?'
-      : currentRouteGroup.value?.isAdmin
-        ? 'Вы уверены, что хотите удалить канал?'
-        : 'Вы уверены, что хотите покинуть канал?'
+  route.value.type === RouteTypes.DIALOGS
+    ? 'Вы уверены, что хотите удалить чат?'
+    : currentRouteGroup.value?.isAdmin
+      ? 'Вы уверены, что хотите удалить канал?'
+      : 'Вы уверены, что хотите покинуть канал?'
 );
 const currentTypingUsers = computed(() =>
   route.value?.id ? getTopicTypingUsers(route.value.id) : []
@@ -977,7 +973,7 @@ const getHeaderContextMenuOptions = computed(() => {
       });
     } else {
       options.push({
-        value: isBotDialogTopic.value ? 'Удалить бота' : 'Удалить чат',
+        value: 'Удалить чат',
         function: handleOpenActionModal,
         style: 'color: var(--error-color)',
         iconName: IconNameEnum.deleteSmall
@@ -1011,12 +1007,7 @@ const handleCloseActionModal = () => {
 
 const handleConfirmActionModal = async (): Promise<void> => {
   if (route.value.type === RouteTypes.DIALOGS) {
-    if (currentTopic.value && isBotDialogTopic.value) {
-      await deleteBotTopic(currentTopic.value);
-    } else {
-      deleteTopic(route.value.id);
-    }
-
+    deleteTopic(route.value.id);
     navigateToDialogsList();
   } else if (route.value.type === RouteTypes.GROUP && currentRouteGroup.value) {
     if (currentRouteGroup.value.isAdmin) {
