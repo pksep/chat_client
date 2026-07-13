@@ -1,3 +1,10 @@
+## [1.36.2](https://github.com/pksep/chat_client/compare/v1.36.1...v1.36.2) (2026-07-13)
+
+
+### Bug Fixes
+
+* update web ([c52528a](https://github.com/pksep/chat_client/commit/c52528aebc19a05a42d9be6921aad6a55aaa3cef))
+
 ## [1.36.1](https://github.com/pksep/chat_client/compare/v1.36.0...v1.36.1) (2026-07-13)
 
 
