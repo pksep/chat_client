@@ -1,3 +1,14 @@
+## [1.36.1](https://github.com/pksep/chat_client/compare/v1.36.0...v1.36.1) (2026-07-13)
+
+
+### Bug Fixes
+
+* build gralde ([328d811](https://github.com/pksep/chat_client/commit/328d811f518c0a9553ad757af1b55f83313f383b))
+* deleting bot ([1087e20](https://github.com/pksep/chat_client/commit/1087e20ba21092a841877a9883ae8a629d131aca))
+* online status ([69228bc](https://github.com/pksep/chat_client/commit/69228bc889d634f776d81105ed23071548319d26))
+* scroll behavior ([310d7f8](https://github.com/pksep/chat_client/commit/310d7f8acc91b82c243db6de31caaec0b207c4d3))
+* scroll position, shadow sync, badge count ([00bde8a](https://github.com/pksep/chat_client/commit/00bde8a0097133bce0b33e9a004bb1fa2e04f7e9))
+
 # [1.36.0](https://github.com/pksep/chat_client/compare/v1.35.2...v1.36.0) (2026-07-08)
 
 
