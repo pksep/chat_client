@@ -3,10 +3,10 @@
   cycles: 1
   deleted: 8
   inserted: 8
-  seconds: 225.174496303
+  seconds: 158.091049293
   version: 0.60.0
   what: judges-summary
-  when: 2026-07-13 17:03:30.862213933 Z
+  when: 2026-07-13 19:05:13.929754473 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -17353,18 +17353,6 @@
   start: *1
   what: earned-value
   when: 2026-07-11 04:51:18.953761475 Z
-- _id: 914
-  _job: 81691
-  _time: 2026-07-11 14:09:55.419914318 Z
-  _version: 0.19.15/0.61.0/0.17.11!0.17.19
-  analyzers: 18
-  text: |-
-    The average number of builds per week (77.4) is increasing (R=0.24).
-    The average number of commits per week (40.7) is decreasing (R=-0.66).
-    The average number of releases per month (10.8) is decreasing (R=-0.73).
-    The average monthly turnover (2.0 developers) is staying still.
-  what: assessment
-  when: 2026-07-11 14:09:55.448861646 Z
 - _id: 916
   _job: 29168884973
   _time: 2026-07-11 21:31:29.338465847 Z
@@ -17525,23 +17513,13 @@
   is_human: 1
   issue: 339
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
   when: 2026-07-13 14:25:03.000000000 Z
   where: github
   who: 93074025
-- _id: 930
-  _job: 29268540040
-  _time: 2026-07-13 17:00:19.580704884 Z
-  _version: 0.19.6/0.60.0/0.17.11
-  earliest_issue_was_found: 1
-  events_were_scanned: 11716194643
-  latest_issue_was_found: 72
-  min_pull_was_found: 339
-  repository: 1053332035
-  what: iterate
-  where: github
 - _id: 931
   _job: 29268540040
   _time: 2026-07-13 17:00:22.145610309 Z
@@ -17670,5 +17648,268 @@
   repository: 1053332035
   what: pull-was-opened
   when: 2026-07-13 12:50:36.000000000 Z
+  where: github
+  who: 93074025
+- _id: 941
+  _job: 82124
+  _time: 2026-07-13 17:04:04.300579810 Z
+  _version: 0.19.16/0.61.0/0.17.11!0.17.19
+  analyzers: 18
+  text: |-
+    The average number of builds per week (77.4) is increasing (R=0.24).
+    The average number of commits per week (40.7) is decreasing (R=-0.66).
+    The average number of releases per month (10.8) is decreasing (R=-0.73).
+    The average monthly turnover (2.0 developers) is decreasing (R=-0.17).
+  what: assessment
+  when: 2026-07-13 17:04:04.322692785 Z
+- _id: 942
+  _job: 29276822355
+  _time: 2026-07-13 19:02:45.193636592 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  earliest_issue_was_found: 1
+  events_were_scanned: 14908248132
+  latest_issue_was_found: 72
+  min_pull_was_found: 339
+  repository: 1053332035
+  what: iterate
+  where: github
+- _id: 943
+  _job: 29276822355
+  _time: 2026-07-13 19:02:47.924201864 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-208
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#329 has been "pull-was-merged".
+  failed_builds: 0
+  files: 2
+  hoc: 6
+  is_human: 1
+  issue: 329
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-07-07 12:56:59.000000000 Z
+  where: github
+  who: 93074025
+- _id: 944
+  _job: 29276822355
+  _time: 2026-07-13 19:02:54.360014969 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: canary
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#330 has been "pull-was-merged".
+  failed_builds: 0
+  files: 13
+  hoc: 854
+  is_human: 1
+  issue: 330
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-07-07 13:16:28.000000000 Z
+  where: github
+  who: 93074025
+- _id: 945
+  _job: 29276822355
+  _time: 2026-07-13 19:02:56.278766390 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-209
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#331 has been "pull-was-merged".
+  failed_builds: 0
+  files: 4
+  hoc: 113
+  is_human: 1
+  issue: 331
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-07-08 09:38:28.000000000 Z
+  where: github
+  who: 93074025
+- _id: 946
+  _job: 29276822355
+  _time: 2026-07-13 19:02:58.401029548 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-210
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#332 has been "pull-was-merged".
+  failed_builds: 0
+  files: 2
+  hoc: 75
+  is_human: 1
+  issue: 332
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-07-08 13:06:03.000000000 Z
+  where: github
+  who: 93074025
+- _id: 947
+  _job: 29276822355
+  _time: 2026-07-13 19:03:00.351071555 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: canary
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#333 has been "pull-was-merged".
+  failed_builds: 0
+  files: 6
+  hoc: 188
+  is_human: 1
+  issue: 333
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-07-08 13:23:36.000000000 Z
+  where: github
+  who: 93074025
+- _id: 948
+  _job: 29276822355
+  _time: 2026-07-13 19:03:02.263878822 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-210
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#334 has been "pull-was-merged".
+  failed_builds: 0
+  files: 23
+  hoc: 2572
+  is_human: 1
+  issue: 334
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-07-09 14:20:41.000000000 Z
+  where: github
+  who: 93074025
+- _id: 949
+  _job: 29276822355
+  _time: 2026-07-13 19:03:04.366630528 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-217
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#335 has been "pull-was-merged".
+  failed_builds: 0
+  files: 17
+  hoc: 408
+  is_human: 1
+  issue: 335
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-07-13 11:59:24.000000000 Z
+  where: github
+  who: 93074025
+- _id: 950
+  _job: 29276822355
+  _time: 2026-07-13 19:03:06.233909464 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-220
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#336 has been "pull-was-merged".
+  failed_builds: 0
+  files: 1
+  hoc: 4
+  is_human: 1
+  issue: 336
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-07-13 12:29:55.000000000 Z
+  where: github
+  who: 93074025
+- _id: 951
+  _job: 29276822355
+  _time: 2026-07-13 19:03:08.158474322 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: canary
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#337 has been "pull-was-merged".
+  failed_builds: 0
+  files: 36
+  hoc: 2984
+  is_human: 1
+  issue: 337
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-07-13 12:48:09.000000000 Z
+  where: github
+  who: 93074025
+- _id: 952
+  _job: 29276822355
+  _time: 2026-07-13 19:03:10.097201505 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: canary
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#338 has been "pull-was-merged".
+  failed_builds: 0
+  files: 1
+  hoc: 2
+  is_human: 1
+  issue: 338
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-07-13 12:50:42.000000000 Z
   where: github
   who: 93074025
