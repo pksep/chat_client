@@ -266,9 +266,25 @@ const state = reactive({
   isActiveHeader: false
 });
 
-const appMode = ['local', 'test'].includes(import.meta.env.VITE_APP_MODE)
-  ? import.meta.env.VITE_APP_MODE
-  : null;
+const resolveAppMode = (): string | null => {
+  const envMode = import.meta.env.VITE_APP_MODE;
+
+  if (['local', 'test', 'beta'].includes(envMode)) {
+    return envMode;
+  }
+
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname.toLowerCase();
+
+    if (host === 'beta-chat.pksep.ru' || host.startsWith('beta-chat.')) {
+      return 'beta';
+    }
+  }
+
+  return null;
+};
+
+const appMode = resolveAppMode();
 const { currentWallpaperStyle: chatWallpaperStyle, isWallpaperApplied } =
   useChatWallpaper();
 
