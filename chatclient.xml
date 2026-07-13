@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="289281">
+<fb version="0.19.6" size="289609">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <inserted t="I">8</inserted>
-    <seconds t="F">158.091049293</seconds>
+    <seconds t="F">175.736581921</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-07-13T19:05:13Z</when>
+    <when t="T">2026-07-13T22:37:12Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -19181,19 +19181,6 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.17).</text>
     <when t="T">2026-07-13T17:04:04Z</when>
   </f>
   <f>
-    <_id t="I">942</_id>
-    <_job t="I">29276822355</_job>
-    <_time t="T">2026-07-13T19:02:45Z</_time>
-    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
-    <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <events_were_scanned t="I">14908248132</events_were_scanned>
-    <latest_issue_was_found t="I">72</latest_issue_was_found>
-    <min_pull_was_found t="I">339</min_pull_was_found>
-    <repository t="I">1053332035</repository>
-    <what t="S">iterate</what>
-    <where t="S">github</where>
-  </f>
-  <f>
     <_id t="I">943</_id>
     <_job t="I">29276822355</_job>
     <_time t="T">2026-07-13T19:02:47Z</_time>
@@ -19212,6 +19199,7 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.17).</text>
     <is_human t="I">1</is_human>
     <issue t="I">329</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -19238,6 +19226,7 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.17).</text>
     <is_human t="I">1</is_human>
     <issue t="I">330</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -19264,6 +19253,7 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.17).</text>
     <is_human t="I">1</is_human>
     <issue t="I">331</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -19290,6 +19280,7 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.17).</text>
     <is_human t="I">1</is_human>
     <issue t="I">332</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -19316,6 +19307,7 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.17).</text>
     <is_human t="I">1</is_human>
     <issue t="I">333</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -19342,6 +19334,7 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.17).</text>
     <is_human t="I">1</is_human>
     <issue t="I">334</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -19368,6 +19361,7 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.17).</text>
     <is_human t="I">1</is_human>
     <issue t="I">335</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -19394,6 +19388,7 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.17).</text>
     <is_human t="I">1</is_human>
     <issue t="I">336</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -19420,6 +19415,7 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.17).</text>
     <is_human t="I">1</is_human>
     <issue t="I">337</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -19446,11 +19442,43 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.17).</text>
     <is_human t="I">1</is_human>
     <issue t="I">338</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
     <when t="T">2026-07-13T12:50:42Z</when>
     <where t="S">github</where>
     <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">953</_id>
+    <_job t="I">29290217205</_job>
+    <_time t="T">2026-07-13T22:34:20Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <earliest_issue_was_found t="I">1</earliest_issue_was_found>
+    <events_were_scanned t="I">14914865456</events_were_scanned>
+    <latest_issue_was_found t="I">72</latest_issue_was_found>
+    <min_pull_was_found t="I">339</min_pull_was_found>
+    <repository t="I">1053332035</repository>
+    <what t="S">iterate</what>
+    <where t="S">github</where>
+  </f>
+  <f>
+    <_id t="I">954</_id>
+    <_job t="I">29290217205</_job>
+    <_time t="T">2026-07-13T22:34:38Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <total_active_contributors t="I">3</total_active_contributors>
+    <total_commits t="I">1558</total_commits>
+    <total_contributors t="I">5</total_contributors>
+    <total_files t="I">4654</total_files>
+    <total_forks t="I">0</total_forks>
+    <total_issues t="I">0</total_issues>
+    <total_pulls t="I">339</total_pulls>
+    <total_releases t="I">66</total_releases>
+    <total_repositories t="I">1</total_repositories>
+    <total_stars t="I">0</total_stars>
+    <what t="S">dimensions-of-terrain</what>
+    <when t="T">2026-07-13T22:34:38Z</when>
   </f>
 </fb>
