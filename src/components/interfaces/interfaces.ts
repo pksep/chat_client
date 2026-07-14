@@ -182,6 +182,14 @@ export type IMessage = Message & {
   taggedUserIds?: string[];
 };
 
+export interface IMessageViewportSnapshot {
+  anchorMessageId: string;
+  anchorRelativeTop: number;
+  firstVisibleIndex: number;
+  lastVisibleIndex: number;
+  visibleMessageIds: string[];
+}
+
 export enum MobilePlatformEnum {
   ANDROID = 'android',
   APPLE = 'apple'

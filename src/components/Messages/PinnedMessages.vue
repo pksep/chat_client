@@ -36,10 +36,12 @@ import { stripHtml } from '../../utils/stripHtml';
 import { useUrlWatcher } from '../../composables/navigation';
 import {
   editMessageFromLocal,
+  getFullMessagesByTopicId,
+  getMessagesByTopicId,
   getPinnedMessagesByTopicId,
   unpinLocalMessageForMe
 } from '../../services/useMessages';
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -49,15 +51,68 @@ import {
 } from '@pksep/yui';
 import { togglePinMessageChat } from '../../services/useChat';
 import ConfirmModal from '../UI/ConfirmModal.vue';
+import type {
+  IMessage,
+  IMessageViewportSnapshot
+} from '../interfaces/interfaces';
+
+interface Props {
+  viewportSnapshot?: IMessageViewportSnapshot | null;
+}
 
 const route = useUrlWatcher();
+const props = defineProps<Props>();
+
+const getMessageTimestamp = (message?: Pick<IMessage, 'createdAt'>): number => {
+  const timestamp = new Date(message?.createdAt || 0).getTime();
+
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
 
 const pinnedMessages = computed(() =>
-  getPinnedMessagesByTopicId(route.value.id)
+  [...getPinnedMessagesByTopicId(route.value.id)].sort(
+    (left, right) => getMessageTimestamp(left) - getMessageTimestamp(right)
+  )
 );
-const currentPinnedMessage = computed(
-  () => pinnedMessages.value[index.value] || null
-);
+
+const firstVisibleMessage = computed(() => {
+  const firstVisibleMessageId = props.viewportSnapshot?.visibleMessageIds[0];
+
+  if (!firstVisibleMessageId) {
+    return null;
+  }
+
+  const topicMessages = [
+    ...getMessagesByTopicId(route.value.id),
+    ...getFullMessagesByTopicId(route.value.id)
+  ];
+
+  return (
+    topicMessages.find(message => message.id === firstVisibleMessageId) || null
+  );
+});
+
+const currentPinnedMessage = computed(() => {
+  if (pinnedMessages.value.length === 0) {
+    return null;
+  }
+
+  const firstVisibleTimestamp = getMessageTimestamp(firstVisibleMessage.value);
+
+  if (!firstVisibleTimestamp) {
+    return pinnedMessages.value[pinnedMessages.value.length - 1];
+  }
+
+  const previousPinnedMessages = pinnedMessages.value.filter(
+    message => getMessageTimestamp(message) < firstVisibleTimestamp
+  );
+
+  return (
+    previousPinnedMessages[previousPinnedMessages.length - 1] ||
+    pinnedMessages.value[0]
+  );
+});
+
 const pinnedPreviewText = computed(() =>
   stripHtml(currentPinnedMessage.value?.text || 'Вложение')
 );
@@ -66,18 +121,9 @@ const pinnedPreviewKey = computed(
     `${route.value.id || 'no-topic'}:${currentPinnedMessage.value?.id || 'no-message'}:${pinnedPreviewText.value}`
 );
 
-const index = ref(-1);
 const unpinModalOpen = ref(false);
 
 const emits = defineEmits(['unmount-set-selected-message']);
-
-watch(
-  () => pinnedMessages.value,
-  () => {
-    index.value = pinnedMessages.value.length - 1;
-  },
-  { immediate: true, deep: true }
-);
 
 const handleChangeCurrentIndex = () => {
   if (!currentPinnedMessage.value) {
@@ -85,12 +131,6 @@ const handleChangeCurrentIndex = () => {
   }
 
   emits('unmount-set-selected-message', currentPinnedMessage.value);
-
-  if (index.value > 0) {
-    index.value -= 1;
-  } else {
-    index.value = pinnedMessages.value.length - 1;
-  }
 };
 
 const handleOpenUnpinModal = (event: MouseEvent) => {

@@ -477,7 +477,10 @@ import {
   subscribeToAppVisibilityChanges
 } from '../services/useAppVisibility';
 import { getAuthUser } from '../composables/useAuth';
-import { IMessage } from './interfaces/interfaces';
+import type {
+  IMessage,
+  IMessageViewportSnapshot
+} from './interfaces/interfaces';
 import { TopicType } from '../services/useChatSDK/types';
 
 import { useMessageSwipe } from './Messages/composables/useMessageSwipe';
@@ -521,6 +524,12 @@ const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
   deferContentRender: false,
   suppressInitialSkeleton: false
 });
+const emit = defineEmits<{
+  (
+    e: 'viewport-snapshot-change',
+    snapshot: IMessageViewportSnapshot | null
+  ): void;
+}>();
 const TOPIC_SWITCH_AUTO_READ_GRACE_MS = 1200;
 const TOPIC_SWITCH_HISTORY_FETCH_GRACE_MS = 1200;
 const TOPIC_SWITCH_MEDIA_PREWARM_LIMIT = 12;
@@ -668,6 +677,7 @@ let chatVisibilityObserver: ResizeObserver | null = null;
 let removeAppVisibilityListener: (() => void) | null = null;
 let floatingDateDividerRafId = 0;
 let postScrollUiSyncRafId = 0;
+let pinnedViewportSnapshotRafId = 0;
 let floatingDateDividerHideTimeoutId: number | null = null;
 let floatingDateDividerUserScrollIntentAt = 0;
 const FLOATING_DATE_LABEL_HEIGHT_PX = 50;
@@ -1074,6 +1084,33 @@ const shouldShowOlderMessagesLoading = computed(
 const shouldShowNewerMessagesLoading = computed(
   () => !shouldRenderUserMessageSkeleton.value && isLoadingNewerMessages.value
 );
+
+const emitPinnedViewportSnapshot = (): void => {
+  if (
+    !isUserMessagesRoute.value ||
+    shouldRenderUserMessageSkeleton.value ||
+    !messageListUserItemsRef.value
+  ) {
+    emit('viewport-snapshot-change', null);
+    return;
+  }
+
+  emit(
+    'viewport-snapshot-change',
+    messageListUserItemsRef.value.getVisibleMessageSnapshot?.() || null
+  );
+};
+
+const schedulePinnedViewportSnapshotSync = (): void => {
+  if (pinnedViewportSnapshotRafId) {
+    return;
+  }
+
+  pinnedViewportSnapshotRafId = requestAnimationFrame(() => {
+    pinnedViewportSnapshotRafId = 0;
+    emitPinnedViewportSnapshot();
+  });
+};
 
 const handleBottomBarHeightChange = (height: number): void => {
   const nextHeight = Math.max(0, Math.ceil(height));
@@ -1957,6 +1994,7 @@ const syncVisibleUnreadAfterAutoScroll = (): void => {
     requestAnimationFrame(() => {
       flushVisibleUnreadMessages();
       resetUnreadIfViewingBottom();
+      schedulePinnedViewportSnapshotSync();
     });
   });
 };
@@ -1986,6 +2024,7 @@ const schedulePostScrollUiSync = (): void => {
 const handleScroll = (): void => {
   void handleMessageScroll();
   schedulePostScrollUiSync();
+  schedulePinnedViewportSnapshotSync();
 };
 
 const {
@@ -2029,6 +2068,7 @@ onMounted(async () => {
   if ('ResizeObserver' in window) {
     chatVisibilityObserver = new ResizeObserver(() => {
       syncVisibleUnreadAfterAutoScroll();
+      schedulePinnedViewportSnapshotSync();
     });
 
     nextTick(() => {
@@ -2055,6 +2095,11 @@ onUnmounted(() => {
   if (postScrollUiSyncRafId) {
     cancelAnimationFrame(postScrollUiSyncRafId);
     postScrollUiSyncRafId = 0;
+  }
+
+  if (pinnedViewportSnapshotRafId) {
+    cancelAnimationFrame(pinnedViewportSnapshotRafId);
+    pinnedViewportSnapshotRafId = 0;
   }
 
   if (floatingDateDividerHideTimeoutId !== null) {
@@ -2546,8 +2591,29 @@ watch(
       syncVisibleUnreadAfterAutoScroll();
       hideUnreadMarkerIfPassed();
       resetUnreadIfViewingBottom();
+      schedulePinnedViewportSnapshotSync();
     });
   }
+);
+
+watch(
+  [
+    () => route.value?.id,
+    () => route.value?.type,
+    () => shouldRenderUserMessageSkeleton.value,
+    () => shouldMountUserMessageItems.value
+  ],
+  () => {
+    if (!isUserMessagesRoute.value || shouldRenderUserMessageSkeleton.value) {
+      emit('viewport-snapshot-change', null);
+      return;
+    }
+
+    nextTick(() => {
+      schedulePinnedViewportSnapshotSync();
+    });
+  },
+  { immediate: true }
 );
 
 watch(
