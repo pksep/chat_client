@@ -31,6 +31,7 @@
       >
         <PinnedMessages
           v-if="route.id"
+          :viewport-snapshot="messageViewportSnapshot"
           @unmount-set-selected-message="scrollToMessage"
         />
         <MessageList
@@ -48,6 +49,7 @@
           :on-update-click="props.onUpdateClick"
           :on-dismiss-update-banner="props.onDismissUpdateBanner"
           :data-testid="`${props.dataTestid}-Chat-MessageList`"
+          @viewport-snapshot-change="handleViewportSnapshotChange"
         />
         <div
           v-else
@@ -117,6 +119,7 @@
     <template v-else>
       <PinnedMessages
         v-if="route.id"
+        :viewport-snapshot="messageViewportSnapshot"
         @unmount-set-selected-message="scrollToMessage"
       />
       <MessageList
@@ -132,6 +135,7 @@
         :on-update-click="props.onUpdateClick"
         :on-dismiss-update-banner="props.onDismissUpdateBanner"
         :data-testid="`${props.dataTestid}-Chat-MessageList`"
+        @viewport-snapshot-change="handleViewportSnapshotChange"
       />
       <div class="chat__unselected-topic" v-else>
         <img src="/images/messages.svg" alt="messages" />
@@ -159,7 +163,10 @@ import { useUrlWatcher } from '../composables/navigation';
 import { RouteTypes } from '../composables/navigation/useUrlRouting';
 import { getAuthUser } from '../composables/useAuth';
 import PinnedMessages from './Messages/PinnedMessages.vue';
-import { IMessage } from './interfaces/interfaces';
+import type {
+  IMessage,
+  IMessageViewportSnapshot
+} from './interfaces/interfaces';
 import ShareSelectionOverlay from './ShareSelectionOverlay.vue';
 import {
   consumePendingSearchNavigation,
@@ -189,6 +196,7 @@ const mobileTransitionName = ref('');
 const isMobileMessageListMounted = ref(!isMobile.value);
 const isMobileMessageContentReady = ref(!isMobile.value);
 const currentMobileTopicUsesSkeleton = ref(false);
+const messageViewportSnapshot = ref<IMessageViewportSnapshot | null>(null);
 const mobileRouteKey = computed(() =>
   route.value.id
     ? `topic:${route.value.type}:${route.value.id}`
@@ -216,6 +224,12 @@ let mobileRouteContentToken = 0;
 
 const scrollToMessage = (message: IMessage) => {
   messageListRef.value?.scrollToMessage(message);
+};
+
+const handleViewportSnapshotChange = (
+  snapshot: IMessageViewportSnapshot | null
+): void => {
+  messageViewportSnapshot.value = snapshot;
 };
 
 const clearMobileRouteContentSchedule = (): void => {
@@ -408,6 +422,8 @@ watch(
 watch(
   () => route.value.id,
   (topicId, previousTopicId) => {
+    messageViewportSnapshot.value = null;
+
     if (!isMobile.value) {
       clearMobileMessageListMountSchedule();
       clearMobileRouteContentSchedule();

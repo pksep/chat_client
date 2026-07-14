@@ -135,7 +135,10 @@ import MessageBubble from './MessageBubble.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import { formatDay, formatTime } from '../../composables/useTime';
 import { MessageStatus } from '../../services/useChatSDK/types';
-import type { IMessage } from '../interfaces/interfaces';
+import type {
+  IMessage,
+  IMessageViewportSnapshot
+} from '../interfaces/interfaces';
 import { useUrlWatcher } from '../../composables/navigation';
 import {
   isMessageSelected,
@@ -178,14 +181,6 @@ interface VisibleMessageCandidate {
   relativeTop: number;
   height: number;
   visiblePixels: number;
-}
-
-interface VisibleMessageSnapshot {
-  anchorMessageId: string;
-  anchorRelativeTop: number;
-  firstVisibleIndex: number;
-  lastVisibleIndex: number;
-  visibleMessageIds: string[];
 }
 
 interface VirtualRenderRange {
@@ -848,7 +843,7 @@ const getVisibleMessageCandidates = (): VisibleMessageCandidate[] => {
   );
 };
 
-const getVisibleMessageSnapshot = (): VisibleMessageSnapshot | null => {
+const getVisibleMessageSnapshot = (): IMessageViewportSnapshot | null => {
   const candidates = getVisibleMessageCandidates();
 
   if (candidates.length === 0) {
