@@ -73,21 +73,33 @@
           class="message-group"
           :class="{ 'message-group--outgoing': item.isMeSender }"
         >
-          <CachedAvatar
-            v-if="shouldRenderGroupAvatarForItem(item)"
+          <div
+            v-if="shouldReserveGroupAvatarForItem(item)"
             :class="[
-              'message-group__avatar',
+              'message-group__avatar-slot',
               {
-                'message-group__avatar--interactive': canOpenUserInfo(
-                  item.messages[0].senderUser
-                )
+                'message-group__avatar-slot--sticky':
+                  shouldRenderGroupAvatarForItem(item)
               }
             ]"
-            :path="item.messages[0].senderUser?.avatarUrl || ''"
-            :alt="item.messages[0].senderUser?.initials || ''"
-            :initials="item.messages[0].senderUser?.initials || ''"
-            @click.stop="openUserInfo(item.messages[0].senderUser)"
-          />
+            :aria-hidden="!shouldRenderGroupAvatarForItem(item) || undefined"
+          >
+            <CachedAvatar
+              v-if="shouldRenderGroupAvatarForItem(item)"
+              :class="[
+                'message-group__avatar',
+                {
+                  'message-group__avatar--interactive': canOpenUserInfo(
+                    item.messages[0].senderUser
+                  )
+                }
+              ]"
+              :path="item.messages[0].senderUser?.avatarUrl || ''"
+              :alt="item.messages[0].senderUser?.initials || ''"
+              :initials="item.messages[0].senderUser?.initials || ''"
+              @click.stop="openUserInfo(item.messages[0].senderUser)"
+            />
+          </div>
 
           <div class="message-group__messages">
             <MessageBubble
@@ -208,7 +220,7 @@ let contentReadyToken = 0;
 
 const VIRTUALIZATION_ITEM_THRESHOLD = 850;
 const VIRTUALIZATION_MESSAGE_THRESHOLD = 750;
-const VIRTUAL_MAX_MESSAGES_PER_ITEM = 8;
+const VIRTUAL_MAX_MESSAGES_PER_ITEM = 15;
 const VIRTUAL_OVERSCAN_PX = 1400;
 const VIRTUAL_RANGE_ITEM_BUFFER = 6;
 const VIRTUAL_DEFAULT_ITEM_HEIGHT_PX = 68;
@@ -487,17 +499,17 @@ const shouldRenderGroupAvatar = (message?: IMessage): boolean => {
 
 const shouldRenderGroupAvatarForItem = (
   item: Extract<RenderItem, { kind: 'group' }>
+): boolean => shouldReserveGroupAvatarForItem(item);
+
+const shouldReserveGroupAvatarForItem = (
+  item: Extract<RenderItem, { kind: 'group' }>
 ): boolean => {
   const firstMessage = item.messages[0];
 
   return (
     !item.isMeSender &&
     shouldShowGroupAvatar.value &&
-    shouldRenderGroupAvatar(firstMessage) &&
-    !isSameMessageGroup(
-      visibleMessages.value[item.startIndex - 1],
-      firstMessage
-    )
+    shouldRenderGroupAvatar(firstMessage)
   );
 };
 

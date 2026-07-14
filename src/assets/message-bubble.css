@@ -73,14 +73,25 @@
   align-items: stretch;
 }
 
+.message-group__avatar-slot {
+  --message-group-avatar-slot-size: 35px;
+  align-self: end;
+  display: flex;
+  width: var(--message-group-avatar-slot-size);
+  min-width: var(--message-group-avatar-slot-size);
+  flex: 0 0 var(--message-group-avatar-slot-size);
+  height: var(--message-group-avatar-slot-size);
+  margin-bottom: 5px;
+}
+
+.message-group__avatar-slot--sticky {
+  position: sticky !important;
+  bottom: 0;
+}
+
 .message-group__avatar {
   --size-avatar: 17.5px;
-  position: sticky !important;
-  align-self: end;
-  bottom: 0;
   flex-shrink: 0;
-  height: fit-content;
-  margin-bottom: 5px;
 }
 
 .message-group__messages {
@@ -481,6 +492,7 @@
   display: flex;
   gap: 4px;
   position: relative;
+  flex-wrap: wrap;
 
   & .reaction {
     display: flex;
