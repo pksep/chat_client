@@ -9,7 +9,9 @@
       class="call-modal__container"
       :class="{
         'call-modal__container--full-screen':
-          liveKitState.isFullScreen || isMobile
+          liveKitState.isFullScreen || isMobile,
+        'call-modal__container--status-notice': isStatusCallNotice,
+        'call-modal__container--busy-notice': isBusyCallNotice
       }"
       @click.stop="closeMobileCallActionsMenu"
     >
@@ -111,35 +113,21 @@
         v-show="showAvatarFallback"
         class="call-modal__avatar-container"
         :class="{
-          'call-modal__avatar-container--ended': isEndedCallNotice
+          'call-modal__avatar-container--ended': isEndedCallNotice,
+          'call-modal__avatar-container--status': isStatusCallNotice,
+          'call-modal__avatar-container--busy': isBusyCallNotice
         }"
       >
-        <h3
-          v-if="displayAvatarInfo"
-          class="call-modal__user-name"
-          :class="{
-            'call-modal__terminal-placeholder': isTerminalCallNotice
-          }"
-        >
-          {{ displayAvatarTitle }}
-        </h3>
         <p
-          class="call-modal__status"
+          v-if="shouldReserveCallStatusText"
+          class="call-modal__notice-caption"
           :class="{
-            'call-modal__terminal-placeholder': isTerminalCallNotice
+            'call-modal__status-text--hidden': isCallStatusCaptionHidden
           }"
+          :aria-hidden="isCallStatusCaptionHidden || undefined"
         >
-          <span v-if="isIncoming">{{ incomingCallLabel }}</span>
-          <span v-else-if="isCalling">{{ connectingLabel }}</span>
-          <span v-else>{{ formattedTime }}</span>
+          {{ reservedCallStatusCaption }}
         </p>
-
-        <p class="call-modal__notice">
-          <span v-if="isTerminalCallNotice">
-            {{ callStatusNotice }}
-          </span>
-        </p>
-
         <CachedAvatar
           v-if="displayAvatarInfo"
           :path="displayAvatarInfo.avatarUrl"
@@ -147,6 +135,16 @@
           class="call-modal__avatar"
           :initials="displayAvatarInfo.initials"
         />
+        <p
+          v-if="shouldReserveCallStatusText"
+          class="call-modal__notice"
+          :class="{
+            'call-modal__status-text--hidden': isCallStatusLabelHidden
+          }"
+          :aria-hidden="isCallStatusLabelHidden || undefined"
+        >
+          {{ reservedCallStatusLabel }}
+        </p>
       </div>
 
       <GroupCallLayout
@@ -277,6 +275,15 @@
               @click="handleToggleVideo"
             >
               <VideoDisableIcon />
+            </button>
+
+            <button
+              v-if="isMobile && isBusyCallNotice"
+              class="call-modal__control-button call-modal__control-button__inactive"
+              type="button"
+              disabled
+            >
+              <ScreenShareIcon />
             </button>
 
             <button
@@ -1214,7 +1221,7 @@ let reactionPopoverCloseTimeout: ReturnType<typeof setTimeout> | null = null;
 let reactionLongPressTimeout: ReturnType<typeof setTimeout> | null = null;
 let didOpenReactionPopoverByLongPress = false;
 let lastReactionTouchAt = 0;
-const incomingCallLabel = 'Входящий вызов...';
+const incomingCallLabel = 'Входящий звонок';
 const connectingLabel = 'Соединение...';
 const singleParticipantLabel = 'участник';
 const fewParticipantsLabel = 'участника';
@@ -1571,11 +1578,6 @@ const displayAvatarInfo = computed(() => {
   };
 });
 
-const displayAvatarTitle = computed(() =>
-  isGroupCallLayout.value
-    ? displayAvatarInfo.value?.name || groupCallLabel
-    : displayAvatarInfo.value?.initials || ''
-);
 const isCallReconnectingNotice = computed(
   () =>
     !!callStatusNotice.value && callStatusNoticeKind.value === 'reconnecting'
@@ -1587,6 +1589,45 @@ const isTerminalCallNotice = computed(
 const isEndedCallNotice = computed(
   () => !!callStatusNotice.value && callStatusNoticeKind.value === 'ended'
 );
+const isBusyCallNotice = computed(
+  () => !!callStatusNotice.value && callStatusNoticeKind.value === 'busy'
+);
+const isStatusCallNotice = computed(
+  () => isIncoming.value || isCalling.value || isTerminalCallNotice.value
+);
+const fallbackCallStatusCaption = computed(() => {
+  if (isBusyCallNotice.value || isIncoming.value || isCalling.value) {
+    return connectingLabel;
+  }
+
+  return '';
+});
+const fallbackCallStatusLabel = computed(() => {
+  if (isBusyCallNotice.value) {
+    return callStatusNotice.value;
+  }
+
+  if (isTerminalCallNotice.value) {
+    return callStatusNotice.value;
+  }
+
+  if (isIncoming.value) {
+    return incomingCallLabel;
+  }
+
+  return '';
+});
+const shouldReserveCallStatusText = computed(() => isStatusCallNotice.value);
+const reservedCallStatusCaption = computed(
+  () => fallbackCallStatusCaption.value || connectingLabel
+);
+const reservedCallStatusLabel = computed(
+  () => fallbackCallStatusLabel.value || incomingCallLabel
+);
+const isCallStatusCaptionHidden = computed(
+  () => !fallbackCallStatusCaption.value
+);
+const isCallStatusLabelHidden = computed(() => !fallbackCallStatusLabel.value);
 const isBusyNoticeVisible = computed(() => isTerminalCallNotice.value);
 const localCallBackgroundPlaceholderStyle = computed<CSSProperties | null>(
   () => {

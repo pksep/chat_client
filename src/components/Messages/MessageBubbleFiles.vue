@@ -68,7 +68,20 @@
                   class="message-content__file__size"
                   :data-testid="`${props.dataTestid}-FileSize`"
                 >
-                  {{ getFormatFileSize(media.size) }}
+                  <template v-if="getFileUploadMeta(media)">
+                    <span class="message-content__file__upload-percent">
+                      {{ getFileUploadMeta(media)?.percent }}%
+                    </span>
+                    <span class="message-content__file__upload-separator">
+                      ·
+                    </span>
+                    <span class="message-content__file__upload-size">
+                      {{ getFileUploadMeta(media)?.size }}
+                    </span>
+                  </template>
+                  <template v-else>
+                    {{ getFileFormattedSize(media) }}
+                  </template>
                 </p>
               </div>
             </div>
@@ -357,6 +370,31 @@ const getFileIconPercent = (media: IMedia): number | null => {
   }
 
   return media.isLoading ? media.uploadPercent ?? null : null;
+};
+
+type FileUploadMeta = {
+  percent: number;
+  size: string;
+};
+
+const getFileFormattedSize = (media: IMedia): string =>
+  getFormatFileSize(media.size);
+
+const getFileUploadMeta = (media: IMedia): FileUploadMeta | null => {
+  const percent = getFileIconPercent(media);
+
+  if (
+    !media.isLoading ||
+    typeof percent !== 'number' ||
+    !Number.isFinite(percent)
+  ) {
+    return null;
+  }
+
+  return {
+    percent: Math.max(0, Math.min(100, Math.round(percent))),
+    size: getFileFormattedSize(media)
+  };
 };
 
 const getFileIconType = (media: IMedia): 'file' | 'download' => {

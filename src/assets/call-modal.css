@@ -60,19 +60,6 @@
   --size-avatar: 40px;
 }
 
-.call-modal__user-name {
-  font-size: 24px;
-  font-weight: 600;
-}
-
-.call-modal__status {
-  font-weight: 400;
-  font-size: 14px;
-  text-align: center;
-  margin: 0;
-  height: 17px;
-}
-
 .call-modal__notice {
   margin: 0;
   font-size: 24px;
@@ -80,13 +67,20 @@
   text-align: center;
 }
 
+.call-modal__notice-caption {
+  margin: 0;
+  font-size: 14px;
+  line-height: 17px;
+  text-align: center;
+}
+
+.call-modal__status-text--hidden {
+  visibility: hidden;
+}
+
 .call-modal__avatar-container--ended .call-modal__notice {
   font-size: 22px;
   line-height: 27px;
-}
-
-.call-modal__terminal-placeholder {
-  visibility: hidden;
 }
 
 .call-modal__controls {
@@ -907,9 +901,28 @@
   text-align: center;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
+  gap: 24px;
   height: 300px;
+}
+
+.call-modal__avatar-container--status {
+  gap: 0;
+}
+
+.call-modal__avatar-container--status .call-modal__notice-caption {
+  order: 1;
+}
+
+.call-modal__avatar-container--status .call-modal__notice {
+  order: 2;
+  margin-top: 14px;
+}
+
+.call-modal__avatar-container--status .call-modal__avatar {
+  order: 3;
+  margin-top: 28px;
 }
 
 @media screen and (max-width: 768px) {
@@ -1558,6 +1571,10 @@
 }
 
 .call-modal__connection-quality {
+  --call-quality-bg: var(--blue1);
+  --call-quality-active: var(--white);
+  --call-quality-inactive: rgba(255, 255, 255, 0.36);
+
   position: absolute;
   top: 8px;
   right: 8px;
@@ -1570,15 +1587,15 @@
   justify-content: center;
   gap: 2px;
   z-index: 3;
-  background: var(--blue1);
-  color: var(--white);
+  background: var(--call-quality-bg);
+  color: var(--call-quality-active);
   pointer-events: auto;
 }
 
 .call-modal__connection-quality-bar {
   width: 2px;
   border-radius: 5px;
-  background: var(--red8);
+  background: var(--call-quality-inactive);
 }
 
 .call-modal__connection-quality-bar:nth-child(1) {
@@ -1598,12 +1615,24 @@
 }
 
 .call-modal__connection-quality--poor .call-modal__connection-quality-bar {
-  background: var(--red8);
+  background: var(--call-quality-inactive);
 }
 
 .call-modal__connection-quality--poor
   .call-modal__connection-quality-bar:first-child {
-  background: var(--white);
+  background: var(--call-quality-active);
+}
+
+.call-modal__connection-quality--excellent {
+  --call-quality-bg: #77a6ff;
+}
+
+.call-modal__connection-quality--good {
+  --call-quality-bg: #8f9dff;
+}
+
+.call-modal__connection-quality--poor {
+  --call-quality-bg: #a58cff;
 }
 
 .call-modal__connection-quality--stage {
@@ -2067,6 +2096,64 @@
     left: 0;
     bottom: calc(100% + 28px);
     transform: none;
+  }
+
+  .call-modal__container--status-notice .call-modal__avatar-container {
+    height: auto;
+    margin-top: 110px;
+    margin-bottom: auto;
+    gap: 0;
+    justify-content: flex-start;
+  }
+
+  .call-modal__avatar-container--status .call-modal__notice-caption {
+    order: 1;
+    font-size: 12px;
+    line-height: 15px;
+  }
+
+  .call-modal__avatar-container--status .call-modal__notice {
+    order: 2;
+    margin-top: 14px;
+    font-size: 16px;
+    line-height: 20px;
+  }
+
+  .call-modal__avatar-container--status .call-modal__avatar {
+    order: 3;
+    --size-avatar: 80px;
+    margin-top: 28px;
+  }
+
+  .call-modal__container--busy-notice .call-modal__controls {
+    margin-top: 0;
+    padding-bottom: 4px;
+  }
+
+  .call-modal__container--busy-notice
+    .call-modal__control-button-wrapper--call-controls {
+    width: auto;
+    padding: 0;
+    gap: 18px;
+    border-radius: 0;
+    background: transparent;
+    justify-content: center;
+  }
+
+  .call-modal__container--busy-notice
+    .call-modal__control-button-wrapper--call-controls
+    .call-modal__control-button {
+    width: 40px;
+    height: 40px;
+    color: #9aa7ba;
+    background: #eef1f7;
+  }
+
+  .call-modal__container--busy-notice
+    .call-modal__control-button-wrapper--call-controls
+    .call-modal__control-button.call-modal__control-button--leave {
+    color: var(--white);
+    background: var(--red4) !important;
   }
 
   .call-modal__group-panel-background-select {

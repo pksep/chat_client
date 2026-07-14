@@ -1048,8 +1048,11 @@ div.message-content__html > ul > li {
 }
 
 .message-content__media-placeholder {
-  background:
-    linear-gradient(135deg, rgb(255 255 255 / 7%), rgb(255 255 255 / 2%)),
+  background: linear-gradient(
+      135deg,
+      rgb(255 255 255 / 7%),
+      rgb(255 255 255 / 2%)
+    ),
     rgb(28 38 53 / 28%);
 }
 
@@ -1126,11 +1129,23 @@ div.message-content__file {
   }
 
   & .message-content__file__size {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     font-weight: 400;
     font-size: 12px;
     line-height: 100%;
     letter-spacing: 0%;
     margin-top: 4px;
+  }
+
+  & .message-content__file__upload-percent {
+    color: var(--blue1);
+  }
+
+  & .message-content__file__upload-separator,
+  & .message-content__file__upload-size {
+    color: var(--text-color);
   }
 
   & .message-time {

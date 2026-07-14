@@ -233,60 +233,57 @@
       @touchstart.stop
       @touchend.stop
     >
-      <svg
-        class="chat-update-banner__download-icon"
-        width="44"
-        height="44"
-        viewBox="0 0 44 44"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
+      <span
+        :class="[
+          'chat-update-banner__status-icon',
+          `chat-update-banner__status-icon--${updateBannerState}`
+        ]"
+        aria-hidden="true"
       >
-        <rect width="44" height="44" rx="22" fill="var(--border-blue)" />
-        <path
-          d="M30 25L30 28.3333C30 28.7754 29.8127 29.1993 29.4793 29.5118C29.1459 29.8244 28.6937 30 28.2222 30L15.7778 30C15.3063 30 14.8541 29.8244 14.5207 29.5118C14.1873 29.1993 14 28.7754 14 28.3333L14 25"
-          stroke="var(--white)"
-          stroke-width="1.375"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-        <path
-          d="M17.8346 19.832L22.0013 23.9987L26.168 19.832"
-          stroke="var(--white)"
-          stroke-width="1.375"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-        <path
-          d="M22 24L22 14"
-          stroke="var(--white)"
-          stroke-width="1.375"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
+        <svg
+          v-if="updateBannerState === 'downloaded'"
+          viewBox="0 0 18 18"
+          fill="none"
+        >
+          <path
+            d="M5 9.2L7.7 12L13.2 6"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <svg v-else viewBox="0 0 18 18" fill="none">
+          <path
+            d="M14 11.25V14C14 14.2761 13.883 14.5412 13.6746 14.7366C13.4662 14.932 13.1836 15.0417 12.8889 15.0417H5.11111C4.81643 15.0417 4.53381 14.932 4.32544 14.7366C4.11706 14.5412 4 14.2761 4 14V11.25"
+            stroke="currentColor"
+            stroke-width="1.375"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M6.39587 7.95996L9.00003 10.5641L11.6042 7.95996"
+            stroke="currentColor"
+            stroke-width="1.375"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M9 10.5654V4.31543"
+            stroke="currentColor"
+            stroke-width="1.375"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </span>
 
       <div class="chat-update-banner__content">
         <p class="chat-update-banner__title">
-          Доступна новая версия <span>приложения</span>
+          {{ updateBannerTitle }}
         </p>
-        <p
-          v-if="
-            !props.updateProgress && props.updateActionLabel !== 'Перезапустить'
-          "
-          class="chat-update-banner__description"
-        >
-          Обновите приложение, чтобы получить новые функции<span>
-            и улучшения</span
-          >
-        </p>
-        <p
-          v-else-if="props.updateActionLabel !== 'Перезапустить'"
-          class="chat-update-banner__description"
-        >
-          Пожалуйста, не закрывайте приложение
-        </p>
-        <p v-else class="chat-update-banner__description">
-          Для начала работы перезапустите приложение
+        <p class="chat-update-banner__description">
+          {{ updateBannerDescription }}
         </p>
       </div>
       <Button
@@ -538,6 +535,43 @@ const MOBILE_FAST_MAX_INITIAL_MESSAGES_LIMIT = 10;
 const MOBILE_VISIBLE_EXPAND_DELAY_MS = 320;
 const MOBILE_INITIAL_MESSAGES_LIMIT = 10;
 const MOBILE_MAX_INITIAL_MESSAGES_LIMIT = 10;
+type UpdateBannerState = 'available' | 'downloading' | 'downloaded';
+
+const updateBannerState = computed<UpdateBannerState>(() => {
+  if (props.updateActionLabel === 'Перезапустить') {
+    return 'downloaded';
+  }
+
+  if (props.updateProgress !== undefined) {
+    return 'downloading';
+  }
+
+  return 'available';
+});
+
+const updateBannerTitle = computed(() => {
+  if (updateBannerState.value === 'downloading') {
+    return 'Загружаем обновление';
+  }
+
+  if (updateBannerState.value === 'downloaded') {
+    return 'Установлено обновление';
+  }
+
+  return 'Доступна новая версия приложения';
+});
+
+const updateBannerDescription = computed(() => {
+  if (updateBannerState.value === 'downloading') {
+    return 'Пожалуйста, не закрывайте приложение';
+  }
+
+  if (updateBannerState.value === 'downloaded') {
+    return 'Для начала работы перезапустите приложение';
+  }
+
+  return 'Обновите приложение, чтобы получить новые функции и улучшения';
+});
 const DESKTOP_INITIAL_MESSAGES_LIMIT = 100;
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
