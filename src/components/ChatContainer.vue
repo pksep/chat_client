@@ -94,6 +94,7 @@
         v-if="isBotUserInfo"
         :user="activeUser"
         :topic="activeTopic"
+        is-mobile
         :data-testid="`${props.dataTestid}-ChatContainer-MobileBotInfoPanel`"
         @close="closeUserInfo"
       />

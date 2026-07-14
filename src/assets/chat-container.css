@@ -177,6 +177,23 @@ svg.ai-icon {
   color: var(--grey6);
 }
 
+.chat-update-banner__status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 50%;
+  background: var(--border-blue);
+  color: var(--white);
+}
+
+.chat-update-banner__status-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
 .chat-update-banner__action,
 .chat-update-banner__close {
   border: 0;
@@ -306,7 +323,7 @@ button.primary-yui-kit.disabled-yui-kit {
     display: none;
   }
 
-  .chat-update-banner__download-icon {
+  .chat-update-banner__status-icon {
     display: none;
   }
 }
@@ -339,19 +356,11 @@ button.primary-yui-kit.disabled-yui-kit {
   .chat-update-banner__title {
     font-size: 14px;
     line-height: 17px;
-
-    & span {
-      display: none;
-    }
   }
 
   .chat-update-banner__description {
     font-size: 12px;
     line-height: 15px;
-
-    & span {
-      display: none;
-    }
   }
 
   .chat-update-banner__action {

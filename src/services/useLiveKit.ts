@@ -4729,7 +4729,11 @@ export const handleCallEnded = (
     isCalling.value &&
     !isIncoming.value
   ) {
-    showTransientCallStatusNotice('Пользователь занят');
+    showTransientCallStatusNotice(
+      'Пользователь занят',
+      CALL_STATUS_NOTICE_CLOSE_DELAY_MS,
+      'busy'
+    );
     return true;
   }
 

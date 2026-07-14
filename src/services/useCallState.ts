@@ -37,7 +37,7 @@ export type ActiveGroupCallEntry = {
   elapsedDurationMs?: number;
 };
 
-export type CallStatusNoticeKind = 'reconnecting' | 'ended' | 'error';
+export type CallStatusNoticeKind = 'reconnecting' | 'ended' | 'error' | 'busy';
 
 export const open = ref(false);
 export const isIncoming = ref(false);

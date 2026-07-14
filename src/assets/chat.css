@@ -839,6 +839,17 @@ p.chat__nothing-paragraph {
   min-height: 30px !important;
 }
 
+.selected-messages-content__action.button-yui-kit:not(
+    .selected-messages-content__action--danger
+  ) {
+  color: var(--blue1) !important;
+  border-color: var(--blue1) !important;
+
+  &:active {
+    background-color: var(--primary-pressed-light-color) !important;
+  }
+}
+
 .selected-messages-content__action--danger.button-yui-kit {
   color: var(--error-color) !important;
   border-color: var(--error-color) !important;

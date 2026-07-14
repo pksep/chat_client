@@ -134,7 +134,11 @@
             :data-testid="`${props.dataTestid}-Header-ContextMenu-${option.value}`"
             @click="handleContextMenuAction(option.function)"
           >
-            <Icon v-if="option.iconName" :name="option.iconName" />
+            <HeaderContextSearchIcon
+              v-if="option.customIcon === 'search'"
+              class="chat__header-context-menu-icon"
+            />
+            <Icon v-else-if="option.iconName" :name="option.iconName" />
             {{ option.value }}
           </Button>
         </ContextMenu>
@@ -406,6 +410,7 @@ import ConfirmModal from '../UI/ConfirmModal.vue';
 import { TopicType } from '../../services/useChatSDK/types';
 import CallIcon from '../CallModal/UI/CallIcon.vue';
 import SearchIcon from '../UI/SearchIcon.vue';
+import HeaderContextSearchIcon from '../UI/HeaderContextSearchIcon.vue';
 import LoadingIcon from '../UI/LoadingIcon.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import {
@@ -919,6 +924,7 @@ const getHeaderContextMenuOptions = computed(() => {
     function: () => void;
     style?: string;
     iconName?: IconNameEnum;
+    customIcon?: 'search';
   }> = [];
 
   if (route.value && route.value.type !== RouteTypes.AI) {
@@ -926,7 +932,7 @@ const getHeaderContextMenuOptions = computed(() => {
       options.push({
         value: 'Поиск в чате',
         function: showSearch,
-        iconName: IconNameEnum.search
+        customIcon: 'search'
       });
     }
 

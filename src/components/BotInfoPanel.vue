@@ -44,8 +44,14 @@
         @change="handleAvatarChange"
       />
       <ModalCroppedAvatar
+        :class="{
+          'bot-avatar-cropper-modal': true,
+          'bot-avatar-cropper-modal--mobile': props.isMobile
+        }"
         :image="avatarFile"
         :open="isEditAvatar"
+        :position="props.isMobile ? 'bottom' : 'center'"
+        :width="props.isMobile ? '100%' : '650px'"
         @unmount-close="closeEditAvatar"
         @unmount-save="handleAvatarCropSave"
       />
@@ -177,10 +183,12 @@ const props = withDefaults(
     user?: IUser | null;
     topic?: ITopic | null;
     showHeader?: boolean;
+    isMobile?: boolean;
     dataTestid?: string;
   }>(),
   {
     showHeader: false,
+    isMobile: false,
     dataTestid: 'BotInfoPanel'
   }
 );

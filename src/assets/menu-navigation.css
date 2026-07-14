@@ -487,6 +487,23 @@
   border: 1px solid var(--border-blue);
 }
 
+.menu-profile__update-status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 50%;
+  background: var(--border-blue);
+  color: var(--white);
+}
+
+.menu-profile__update-status-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
 .menu-profile__update-copy {
   display: grid;
   gap: 5px;
@@ -726,6 +743,11 @@ dialog.menu-profile__wallpaper-modal > .modal-yui-kit__modal-content {
       0 12px 30px rgba(27, 39, 94, 0.08),
       0 2px 10px rgba(27, 39, 94, 0.05);
     backdrop-filter: blur(18px);
+  }
+
+  .mobile-list-container:has(.menu-profile__status-input:focus)
+    > .menu-bottom-nav {
+    display: none;
   }
 
   .mobile-list-container
