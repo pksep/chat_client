@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="289856">
+<fb version="0.19.6" size="289855">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <inserted t="I">8</inserted>
-    <seconds t="F">134.236263847</seconds>
+    <seconds t="F">172.357975674</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-07-15T12:59:32Z</when>
+    <when t="T">2026-07-15T15:13:37Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -19488,11 +19488,11 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.27).</text>
   </f>
   <f>
     <_id t="I">959</_id>
-    <_job t="I">29417133477</_job>
-    <_time t="T">2026-07-15T12:57:21Z</_time>
+    <_job t="I">29426819729</_job>
+    <_time t="T">2026-07-15T15:10:50Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <events_were_scanned t="I">15027245917</events_were_scanned>
+    <events_were_scanned t="I">11827286501</events_were_scanned>
     <latest_issue_was_found t="I">72</latest_issue_was_found>
     <min_pull_was_found t="I">339</min_pull_was_found>
     <repository t="I">1053332035</repository>
