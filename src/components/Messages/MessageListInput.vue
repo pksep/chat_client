@@ -11,7 +11,7 @@
         ref="contentEditorRef"
         :active-attach-file="props.allowAttachFile"
         :active-select-user="allowMentionUsers"
-        :active-select-slash="isBotChat"
+        :active-select-slash="isBotChat && botCommands.length > 0"
         :mention-items="users"
         :mention-config="mentionConfig"
         :slash-items="botCommands"
@@ -163,8 +163,13 @@ import ForwardIcon from '../UI/ForwardIcon.vue';
 import { stripHtml } from '../../utils/stripHtml';
 import type { IMessage } from '../interfaces/interfaces';
 import { currentGroup } from '../../composables/useGroup';
+import { getSelectedTopic } from '../../composables/useTopics';
 import { getUserLastOnline } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
+import {
+  getCachedBotCommands,
+  loadBotCommandsViaGateway
+} from '../../composables/useBots';
 import { useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { getConfig } from '../../services/useConfig';
@@ -175,7 +180,13 @@ import {
 import { bindTauriFileDrop } from '../../services/useTauriDroppedFiles';
 import { Capacitor } from '@capacitor/core';
 import { Clipboard } from '@capacitor/clipboard';
-import { isDeletedBotUser } from '../../utils/bot';
+import {
+  type BotCommand,
+  getBotCommands,
+  getBotId,
+  isBotTopic,
+  isDeletedBotUser
+} from '../../utils/bot';
 
 interface Props {
   dataTestid: string;
@@ -196,11 +207,9 @@ interface IContentEditorSendPayload {
   mediaFiles?: FileList;
 }
 
-interface BotCommandItem {
-  command: string;
-  description: string;
+type BotCommandItem = BotCommand & {
   avatarUrl?: string;
-}
+};
 
 const props = withDefaults(defineProps<Props>(), {
   allowEmptySend: false,
@@ -259,29 +268,13 @@ const formatForwardMessagesLabel = (count: number): string => {
 
 const route = useUrlWatcher();
 const config = getConfig();
-const isBotChat = computed(() => false); // TODO: Enable bot chat detection when bot feature is implemented
+const activeTopic = computed(() =>
+  route.value.id ? getSelectedTopic(route.value.id) : undefined
+);
+const isBotChat = computed(() => isBotTopic(activeTopic.value));
 const allowMentionUsers = computed(
   () => props.allowSelectUser && route.value.type === RouteTypes.GROUP
 );
-
-const BOT_COMMANDS: BotCommandItem[] = [
-  {
-    command: '/newbot',
-    description: 'create a new bot'
-  },
-  {
-    command: '/mybots',
-    description: 'edit your bots'
-  },
-  {
-    command: '/revoke',
-    description: 'revoke bot access token'
-  },
-  {
-    command: '/setabouttext',
-    description: 'change bot about info'
-  }
-];
 
 const BOT_FALLBACK_AVATAR = `data:image/svg+xml;utf8,${encodeURIComponent(
   `<svg width="27" height="27" viewBox="0 0 27 27" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
@@ -415,14 +408,21 @@ const botCommands = computed(() => {
     return [];
   }
 
+  const botUser = activeTopic.value?.user;
+  const cachedCommands = getCachedBotCommands(getBotId(botUser), botUser?.id);
+  const commands = (cachedCommands ?? getBotCommands(botUser)).map(command => ({
+    ...command,
+    avatarUrl: resolveAvatarUrl(botUser?.avatarUrl)
+  }));
+
   if (!state.slashSearch) {
-    return BOT_COMMANDS;
+    return commands;
   }
 
-  return BOT_COMMANDS.filter(command =>
-    `${command.command} ${command.description}`
-      .toLowerCase()
-      .includes(state.slashSearch)
+  const search = state.slashSearch.toLowerCase();
+
+  return commands.filter(command =>
+    `${command.command} ${command.description}`.toLowerCase().includes(search)
   );
 });
 
@@ -600,6 +600,18 @@ watch(
       void stopTyping(previousTopicId);
     }
   }
+);
+
+watch(
+  () => activeTopic.value?.user?.id,
+  () => {
+    if (!isBotChat.value) {
+      return;
+    }
+
+    void loadBotCommandsViaGateway(activeTopic.value).catch(() => undefined);
+  },
+  { immediate: true }
 );
 
 onMounted(() => {

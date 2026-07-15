@@ -76,7 +76,8 @@
   padding: calc(var(--size-avatar, 38px) * 0.18);
 }
 
-.bot-avatar--edit .bot-avatar__icon {
+.bot-avatar--edit .bot-avatar__icon,
+.bot-info-panel__avatar .bot-avatar__fallback svg {
   width: 47px;
   height: 47px;
 }
@@ -159,6 +160,10 @@
   padding: 0;
   background: transparent;
   cursor: pointer;
+}
+
+.bot-info-panel__avatar-button--disabled {
+  cursor: default;
 }
 
 .bot-editor__avatar,
@@ -266,6 +271,23 @@
   min-width: 0;
 }
 
+.bot-info-panel__profile-input {
+  min-width: 0;
+}
+
+.bot-info-panel__profile-input fieldset {
+  min-height: 34px !important;
+  height: 34px !important;
+}
+
+.bot-info-panel__profile-input input {
+  min-height: 32px !important;
+  height: 32px !important;
+  padding-block: 0 !important;
+  font-size: 13px;
+  line-height: 18px;
+}
+
 .bot-info-panel__icon-button {
   display: inline-flex;
   align-items: center;
@@ -281,6 +303,104 @@
 .bot-info-panel__icon-button .icon-yui-kit {
   width: 18px;
   height: 18px;
+}
+
+.bot-info-panel__commands {
+  display: grid;
+  gap: 10px;
+}
+
+.bot-info-panel__commands-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bot-info-panel__add-command {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px !important;
+  height: 20px !important;
+  width: 20px;
+  padding: 2px !important;
+}
+
+.bot-info-panel__add-command svg,
+.bot-info-panel__add-command .icon-yui-kit {
+  width: 16px;
+  height: 16px;
+}
+
+.bot-info-panel__commands-list {
+  display: grid;
+  gap: 8px;
+}
+
+.bot-info-panel__command-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 8px;
+}
+
+.bot-info-panel__command-fields {
+  display: grid;
+  grid-template-columns: minmax(90px, 120px) minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.bot-info-panel__command-input,
+.bot-info-panel__command-description {
+  min-width: 0;
+  height: 36px !important;
+}
+
+.bot-info-panel__command-input fieldset,
+.bot-info-panel__command-description fieldset {
+  min-height: 28px !important;
+  height: 28px !important;
+}
+
+.bot-info-panel__command-input input,
+.bot-info-panel__command-description input {
+  min-height: 26px !important;
+  height: 26px !important;
+  padding-block: 0 !important;
+  font-size: 12px;
+  line-height: 16px;
+  border-radius: 5px !important;
+}
+
+.bot-info-panel__command-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--grey6);
+  cursor: pointer;
+}
+
+.bot-info-panel__command-delete:hover {
+  background: var(--grey1);
+}
+
+.bot-info-panel__command-delete svg,
+.bot-info-panel__command-delete .icon-yui-kit {
+  width: 18px;
+  height: 18px;
+}
+
+.bot-info-panel__commands-empty {
+  margin: 0;
+  color: var(--grey6);
+  font-size: 13px;
+  line-height: 18px;
 }
 
 .bot-info-panel__save {
@@ -413,6 +533,14 @@
 
   .bot-info-panel__body {
     padding-inline: 10px;
+  }
+
+  .bot-info-panel__commands-header {
+    align-items: flex-start;
+  }
+
+  .bot-info-panel__command-row {
+    align-items: flex-start;
   }
 
   .bot-info-panel__footer {
