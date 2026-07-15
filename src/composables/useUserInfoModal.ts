@@ -31,16 +31,22 @@ const resolveUserInfoTopic = (
   }
 
   if (topic?.type === TopicType.DM && topic.user?.id === user.id) {
-    return topic;
+    return (
+      getTopicList().find(item => item.id === topic.id) ||
+      resolveDirectTopicByUserId(user.id) ||
+      topic
+    );
   }
 
   return resolveDirectTopicByUserId(user.id);
 };
 
 export const useUserInfoModal = () => {
-  const activeUser = computed(() => selectedUser.value);
   const activeTopic = computed(() =>
     resolveUserInfoTopic(selectedUser.value, selectedTopic.value)
+  );
+  const activeUser = computed(
+    () => activeTopic.value?.user || selectedUser.value
   );
   const canOpenUserInfo = (user?: IUser | null): boolean =>
     !!user?.id && user.id !== getAuthUser()?.id && !isDeletedBotUser(user);
