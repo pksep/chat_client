@@ -318,6 +318,21 @@ const createTopicsApi = () => {
     schedulePersistTopics();
   };
 
+  const applyNativeTopicSnapshot = (
+    nativeTopics: ITopic[],
+    userId?: string
+  ): ITopic[] => {
+    if (!Array.isArray(nativeTopics) || nativeTopics.length === 0) {
+      return topics.value;
+    }
+
+    topics.value = normalizeTopics(mergeLocalBotTopics(nativeTopics));
+    void saveCachedTopics(stripEphemeralTopicState(topics.value || []), userId);
+    void warmShadowUnreadStateForTopics(topics.value, userId);
+
+    return topics.value;
+  };
+
   const warmShadowUnreadStateForTopic = async (
     topic: ITopic,
     userId: string
@@ -1235,6 +1250,7 @@ const createTopicsApi = () => {
     error,
     totalUnreadCount,
     setTopics,
+    applyNativeTopicSnapshot,
     hydrateTopicsFromCache,
     fetchAllTopics,
     createTopic,
@@ -1281,6 +1297,7 @@ export const useTopics = () => {
 
 const {
   setTopics,
+  applyNativeTopicSnapshot,
   hydrateTopicsFromCache,
   changeUnreadMessageCount,
   toggleMuteTopic,
@@ -1320,6 +1337,7 @@ const {
 export {
   topics,
   setTopics,
+  applyNativeTopicSnapshot,
   hydrateTopicsFromCache,
   fetchAllTopics,
   createTopic,

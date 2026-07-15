@@ -30,7 +30,8 @@
         @animationend="handleMobileRouteAnimationEnd"
       >
         <PinnedMessages
-          v-if="route.id"
+          v-if="shouldShowPinnedMessages"
+          :topic-id="pinnedMessagesTopicId"
           :viewport-snapshot="messageViewportSnapshot"
           @unmount-set-selected-message="scrollToMessage"
         />
@@ -50,6 +51,7 @@
           :on-dismiss-update-banner="props.onDismissUpdateBanner"
           :data-testid="`${props.dataTestid}-Chat-MessageList`"
           @viewport-snapshot-change="handleViewportSnapshotChange"
+          @rendered-topic-change="handleRenderedTopicChange"
         />
         <div
           v-else
@@ -118,7 +120,8 @@
 
     <template v-else>
       <PinnedMessages
-        v-if="route.id"
+        v-if="shouldShowPinnedMessages"
+        :topic-id="pinnedMessagesTopicId"
         :viewport-snapshot="messageViewportSnapshot"
         @unmount-set-selected-message="scrollToMessage"
       />
@@ -136,6 +139,7 @@
         :on-dismiss-update-banner="props.onDismissUpdateBanner"
         :data-testid="`${props.dataTestid}-Chat-MessageList`"
         @viewport-snapshot-change="handleViewportSnapshotChange"
+        @rendered-topic-change="handleRenderedTopicChange"
       />
       <div class="chat__unselected-topic" v-else>
         <img src="/images/messages.svg" alt="messages" />
@@ -148,7 +152,6 @@
 <script lang="ts" setup>
 import {
   computed,
-  nextTick,
   onBeforeUnmount,
   ref,
   useTemplateRef,
@@ -165,13 +168,10 @@ import { getAuthUser } from '../composables/useAuth';
 import PinnedMessages from './Messages/PinnedMessages.vue';
 import type {
   IMessage,
+  IMessageRenderedTopicState,
   IMessageViewportSnapshot
 } from './interfaces/interfaces';
 import ShareSelectionOverlay from './ShareSelectionOverlay.vue';
-import {
-  consumePendingSearchNavigation,
-  getPendingSearchNavigation
-} from '../composables/useMessageSearch';
 import {
   fetchPinnedMessagesForTopic,
   hasKnownTopicMessagesState
@@ -184,6 +184,9 @@ export interface IChatProps extends IMessageListProps {
 const props = withDefaults(defineProps<IChatProps>(), {
   dataTestid: 'Chat'
 });
+const emit = defineEmits<{
+  (e: 'rendered-topic-change', payload: IMessageRenderedTopicState): void;
+}>();
 
 const authUser = computed(() => getAuthUser());
 
@@ -197,10 +200,25 @@ const isMobileMessageListMounted = ref(!isMobile.value);
 const isMobileMessageContentReady = ref(!isMobile.value);
 const currentMobileTopicUsesSkeleton = ref(false);
 const messageViewportSnapshot = ref<IMessageViewportSnapshot | null>(null);
+const renderedMessageTopic = ref<IMessageRenderedTopicState>({
+  topicId: null,
+  routeTopicId: null,
+  messageCount: 0,
+  isCurrent: false
+});
 const mobileRouteKey = computed(() =>
   route.value.id
     ? `topic:${route.value.type}:${route.value.id}`
     : `list:${route.value.type || 'default'}`
+);
+const pinnedMessagesTopicId = computed(
+  () => renderedMessageTopic.value.topicId
+);
+const shouldShowPinnedMessages = computed(
+  () =>
+    !!route.value.id &&
+    !!pinnedMessagesTopicId.value &&
+    renderedMessageTopic.value.messageCount > 0
 );
 const MOBILE_ROUTE_CONTENT_DELAY_MS = 220;
 const OPENED_MOBILE_TOPIC_IDS_KEY = 'openedMobileTopicIds';
@@ -222,14 +240,37 @@ let mobileRouteContentFrameId: number | null = null;
 let mobileRouteListMountFrameId: number | null = null;
 let mobileRouteContentToken = 0;
 
-const scrollToMessage = (message: IMessage) => {
-  messageListRef.value?.scrollToMessage(message);
+type ScrollToMessagePayload =
+  | IMessage
+  | {
+      message?: IMessage | null;
+      quoteText?: string;
+      quoteOccurrenceIndex?: number;
+      allowOptimisticTarget?: boolean;
+      scrollBehavior?: ScrollBehavior;
+    };
+
+const scrollToMessage = (payload: ScrollToMessagePayload) => {
+  messageListRef.value?.scrollToMessage(payload);
 };
 
 const handleViewportSnapshotChange = (
   snapshot: IMessageViewportSnapshot | null
 ): void => {
   messageViewportSnapshot.value = snapshot;
+};
+
+const handleRenderedTopicChange = (
+  payload: IMessageRenderedTopicState
+): void => {
+  const previousTopicId = renderedMessageTopic.value.topicId;
+
+  renderedMessageTopic.value = payload;
+  emit('rendered-topic-change', payload);
+
+  if (!payload.topicId || payload.topicId !== previousTopicId) {
+    messageViewportSnapshot.value = null;
+  }
 };
 
 const clearMobileRouteContentSchedule = (): void => {
@@ -363,10 +404,9 @@ const prepareMobileMessageRoute = (topicId: string): void => {
   clearMobileMessageListMountSchedule();
   clearMobileRouteContentSchedule();
 
-  const token = ++mobileRouteContentToken;
-  isMobileMessageListMounted.value = false;
-  isMobileMessageContentReady.value = !shouldShowSkeleton;
-  mountMobileMessageListAfterFirstPaint(topicId, token);
+  ++mobileRouteContentToken;
+  isMobileMessageListMounted.value = true;
+  isMobileMessageContentReady.value = true;
 };
 
 const handleMobileRouteAnimationEnd = (event: AnimationEvent): void => {
@@ -376,38 +416,6 @@ const handleMobileRouteAnimationEnd = (event: AnimationEvent): void => {
 
   revealMobileMessageContent(mobileRouteContentToken);
 };
-
-const scrollToPendingSearchMessage = async () => {
-  if (
-    !route.value.id ||
-    getPendingSearchNavigation()?.topicId !== route.value.id
-  ) {
-    return;
-  }
-
-  await nextTick();
-
-  const pendingResult = consumePendingSearchNavigation(route.value.id);
-
-  if (!pendingResult) {
-    return;
-  }
-
-  messageListRef.value?.scrollToMessage(pendingResult.message);
-};
-
-watch(
-  [
-    () => route.value.id,
-    () => messageListRef.value,
-    () => isMobileMessageContentReady.value,
-    () => getPendingSearchNavigation()?.id
-  ],
-  () => {
-    void scrollToPendingSearchMessage();
-  },
-  { immediate: true }
-);
 
 watch(
   [() => route.value.id, isMobile],
@@ -422,7 +430,9 @@ watch(
 watch(
   () => route.value.id,
   (topicId, previousTopicId) => {
-    messageViewportSnapshot.value = null;
+    if (!topicId || !renderedMessageTopic.value.topicId) {
+      messageViewportSnapshot.value = null;
+    }
 
     if (!isMobile.value) {
       clearMobileMessageListMountSchedule();

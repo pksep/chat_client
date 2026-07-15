@@ -30,7 +30,12 @@ export interface ChatMessageInterface {
   ): Promise<{ success: boolean }>;
   getMessages(
     topicId: string,
-    opts?: { limit?: number; lastMessageId?: string; afterMessageId?: string }
+    opts?: {
+      limit?: number;
+      lastMessageId?: string;
+      afterMessageId?: string;
+      newMessages?: boolean;
+    }
   ): Promise<Message[]>;
   getCallHistory(opts?: {
     page?: number;
@@ -160,7 +165,12 @@ export class ChatMessage implements ChatMessageInterface {
 
   async getMessages(
     topicId: string,
-    opts?: { limit?: number; lastMessageId?: string; afterMessageId?: string }
+    opts?: {
+      limit?: number;
+      lastMessageId?: string;
+      afterMessageId?: string;
+      newMessages?: boolean;
+    }
   ): Promise<Message[]> {
     const queryParams = new URLSearchParams();
     if (opts?.limit) queryParams.append('limit', opts.limit.toString());
@@ -168,6 +178,7 @@ export class ChatMessage implements ChatMessageInterface {
       queryParams.append('lastMessageId', opts.lastMessageId);
     if (opts?.afterMessageId)
       queryParams.append('afterMessageId', opts.afterMessageId);
+    if (opts?.newMessages) queryParams.append('newMessages', 'true');
 
     const queryString = queryParams.toString();
     const endpoint = `/messages/topic/${topicId}${queryString ? `?${queryString}` : ''}`;

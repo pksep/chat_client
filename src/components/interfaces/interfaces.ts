@@ -12,6 +12,19 @@ export interface IHeaderProps {
   contact?: IUser;
   members?: IUser[];
   dataTestid?: string;
+  displayRoute?: IHeaderDisplayRoute | null;
+}
+
+export interface IHeaderDisplayRoute {
+  type: string;
+  id: string | null;
+}
+
+export interface IMessageRenderedTopicState {
+  topicId: string | null;
+  routeTopicId: string | null;
+  messageCount: number;
+  isCurrent: boolean;
 }
 
 export interface IMenuEmits {

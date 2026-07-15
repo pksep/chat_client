@@ -50,16 +50,21 @@ import {
 import { useResizeState } from './composables/useResizeState';
 import { MAX_W_MD } from './utils/constants';
 import { RouteTypes } from './composables/navigation/useUrlRouting';
-import { hydrateMessagesFromCache } from './services/useMessages';
+import {
+  clearVisibleMessagesForTopic,
+  fetchMessagesForTopic,
+  hydrateMessagesFromCache
+} from './services/useMessages';
 import { useShareSelection } from './composables/useShareSelection';
 import { isGroupCallInviteUrl } from './utils/groupCallInviteUrl';
 import { installNotoEmojiFontFaces } from './composables/useEmojiStyle';
+import { importAnyChatBackgroundSnapshot } from './services/useChatBackgroundSync';
 
 const props = defineProps<IChatContainerProps>();
 
 installNotoEmojiFontFaces();
 
-const { fetchAllTopics, getTopicList } = useTopics();
+const { fetchAllTopics, getTopicList, setTopics } = useTopics();
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const route = useUrlWatcher();
 let removeAppVisibilityListener: (() => void) | null = null;
@@ -67,6 +72,41 @@ const { hasPendingShareBatches, isShareSelectionActive, startShareSelection } =
   useShareSelection();
 let hydratedCacheUserId: string | undefined;
 const MOBILE_CACHED_ACTIVE_TOPIC_LIMIT = 50;
+const ONLINE_STARTUP_BACKGROUND_SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+
+const hasStartupNetwork = (): boolean =>
+  typeof navigator === 'undefined' || navigator.onLine;
+
+type CriticalCacheHydrationOptions = {
+  allowTopicCache?: boolean;
+  allowActiveMessageCache?: boolean;
+};
+
+const getStartupSnapshotMaxAge = (): number | undefined =>
+  hasStartupNetwork()
+    ? ONLINE_STARTUP_BACKGROUND_SNAPSHOT_MAX_AGE_MS
+    : undefined;
+
+const importStartupBackgroundSnapshot = (
+  userId: string | undefined,
+  source: string
+): Promise<boolean> =>
+  importAnyChatBackgroundSnapshot(userId, {
+    source,
+    maxAgeMs: getStartupSnapshotMaxAge(),
+    requireNewerThanLocalPts: hasStartupNetwork(),
+    requireRenderableContent: true,
+    skipMessageTopicIds:
+      hasStartupNetwork() && route.value.id ? [route.value.id] : undefined
+  });
+
+const shouldAllowStartupTopicCache = (
+  hasFreshBackgroundSnapshot = false
+): boolean =>
+  !hasStartupNetwork() || hasFreshBackgroundSnapshot;
+
+const shouldAllowStartupActiveMessageCache = (): boolean =>
+  !hasStartupNetwork();
 
 const waitForStartupIdle = (): Promise<void> =>
   new Promise(resolve => {
@@ -85,7 +125,10 @@ const runDeferredStartupTask = (
   void waitForStartupIdle()
     .then(task)
     .catch(error => {
-      console.warn(`Failed to run deferred startup task "${label}":`, error);
+      console.warn(
+        `Не удалось выполнить отложенную задачу старта "${label}":`,
+        error
+      );
     });
 };
 
@@ -131,17 +174,70 @@ const scheduleBackgroundCachedMessageHydration = (userId?: string): void => {
   });
 };
 
-const hydrateCriticalCache = async (userId?: string): Promise<void> => {
+const hydrateCriticalCache = async (
+  userId?: string,
+  opts?: CriticalCacheHydrationOptions
+): Promise<void> => {
   await hydrateUsersFromCache(userId);
 
   if (userId) {
     applyCachedAuthUser(userId);
   }
 
-  await hydrateTopicsFromCache(userId);
-  await hydrateActiveCachedMessages(userId);
-  scheduleBackgroundCachedMessageHydration(userId);
+  const allowTopicCache = !!opts?.allowTopicCache;
+  const allowActiveMessageCache = !!opts?.allowActiveMessageCache;
+
+  if (!allowTopicCache) {
+    setTopics([]);
+  } else {
+    await hydrateTopicsFromCache(userId);
+  }
+
+  if (allowActiveMessageCache) {
+    await hydrateActiveCachedMessages(userId);
+  } else if (route.value.id && hasStartupNetwork()) {
+    clearVisibleMessagesForTopic(route.value.id);
+  }
+
+  if (allowTopicCache || allowActiveMessageCache) {
+    scheduleBackgroundCachedMessageHydration(userId);
+    hydratedCacheUserId = userId;
+    return;
+  }
+
+  hydratedCacheUserId = undefined;
+};
+
+const hydrateFreshChatContent = async (userId?: string): Promise<boolean> => {
+  if (!hasStartupNetwork()) {
+    return false;
+  }
+
+  await Promise.allSettled([fetchAuthUser(), fetchAllUsers()]);
+
+  if (!getAuthUser() && userId) {
+    applyCachedAuthUser(userId);
+  }
+
+  await fetchAllTopics();
+
+  if (route.value.id) {
+    const visibleLimit = isMobile.value
+      ? MOBILE_CACHED_ACTIVE_TOPIC_LIMIT
+      : undefined;
+
+    await fetchMessagesForTopic(route.value.id, {
+      limit: visibleLimit || 50,
+      newMessages: true,
+      forceRefresh: true,
+      forceNetwork: true,
+      allowStaleFallback: false,
+      visibleLimit
+    });
+  }
+
   hydratedCacheUserId = userId;
+  return true;
 };
 
 const getActiveChatTopicId = (): string | null => {
@@ -236,25 +332,29 @@ const restoreInvitedGroupCallDeferred = async (): Promise<void> => {
   await restoreInvitedGroupCallFromUrl();
 };
 
-const runDeferredOnlineStartup = (authUserId?: string): void => {
-  runDeferredStartupTask('online refresh', async () => {
-    await Promise.all([fetchAuthUser(), fetchAllUsers()]);
+const runDeferredOnlineStartup = (
+  authUserId?: string,
+  opts?: { skipFreshData?: boolean }
+): void => {
+  if (!opts?.skipFreshData) {
+    runDeferredStartupTask('online refresh', async () => {
+      await Promise.all([fetchAuthUser(), fetchAllUsers()]);
 
-    if (!getAuthUser() && authUserId) {
-      applyCachedAuthUser(authUserId);
-    }
-
-    await fetchAllTopics();
-    scheduleBackgroundCachedMessageHydration(authUserId);
-
-    if (route.value.id) {
-      void fetchPinnedMessagesForTopic(route.value.id);
-
-      if (route.value.type === RouteTypes.GROUP) {
-        getGroupById(route.value.id);
+      if (!getAuthUser() && authUserId) {
+        applyCachedAuthUser(authUserId);
       }
-    }
-  });
+
+      await fetchAllTopics();
+
+      if (route.value.id) {
+        void fetchPinnedMessagesForTopic(route.value.id);
+
+        if (route.value.type === RouteTypes.GROUP) {
+          getGroupById(route.value.id);
+        }
+      }
+    });
+  }
 
   runDeferredStartupTask('group call restore', restoreInvitedGroupCallDeferred);
 
@@ -279,10 +379,20 @@ const runAppInitialization = async () => {
   const shouldUseBootstrapToken = !!bootstrapErpToken;
   const initialUserId =
     directAuthSession?.user?.id || getStoredSessionUserId() || '';
+  let startupBackgroundSnapshotImported = false;
 
   if (initialUserId) {
     setCurrentUserId(initialUserId);
-    await hydrateCriticalCache(initialUserId);
+    startupBackgroundSnapshotImported = await importStartupBackgroundSnapshot(
+      initialUserId,
+      'startup-before-hydration'
+    );
+    await hydrateCriticalCache(initialUserId, {
+      allowTopicCache: shouldAllowStartupTopicCache(
+        startupBackgroundSnapshotImported
+      ),
+      allowActiveMessageCache: shouldAllowStartupActiveMessageCache()
+    });
   }
 
   try {
@@ -321,10 +431,25 @@ const runAppInitialization = async () => {
     setCurrentUserId(authUserId || undefined);
     if (authData.user) setAuthUser(authData.user);
 
+    const postAuthBackgroundSnapshotImported =
+      await importStartupBackgroundSnapshot(
+        authUserId || undefined,
+        'post-auth-before-hydration'
+      );
+    const allowTopicCache = shouldAllowStartupTopicCache(
+      startupBackgroundSnapshotImported || postAuthBackgroundSnapshotImported
+    );
+    const allowActiveMessageCache = shouldAllowStartupActiveMessageCache();
+
     if (authUserId !== hydratedCacheUserId) {
-      await hydrateCriticalCache(authUserId || undefined);
+      await hydrateCriticalCache(authUserId || undefined, {
+        allowTopicCache,
+        allowActiveMessageCache
+      });
     } else {
-      scheduleBackgroundCachedMessageHydration(authUserId || undefined);
+      if (allowTopicCache || allowActiveMessageCache) {
+        scheduleBackgroundCachedMessageHydration(authUserId || undefined);
+      }
     }
 
     await initializeChat({
@@ -334,7 +459,13 @@ const runAppInitialization = async () => {
       userId: authUserId || undefined
     });
 
-    runDeferredOnlineStartup(authUserId || undefined);
+    const freshStartupCompleted = await hydrateFreshChatContent(
+      authUserId || undefined
+    );
+
+    runDeferredOnlineStartup(authUserId || undefined, {
+      skipFreshData: freshStartupCompleted
+    });
   } catch (error) {
     console.error('Failed to initialize chat:', error);
 

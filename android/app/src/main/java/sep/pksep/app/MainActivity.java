@@ -17,6 +17,7 @@ import java.io.File;
 import sep.pksep.app.plugins.AudioOutputPlugin;
 import sep.pksep.app.plugins.AndroidScreenSharePlugin;
 import sep.pksep.app.plugins.CallScreenPlugin;
+import sep.pksep.app.plugins.ChatBackgroundSyncPlugin;
 import sep.pksep.app.plugins.NativeFilePlugin;
 import sep.pksep.app.plugins.NotificationAudioPlugin;
 import sep.pksep.app.plugins.NotificationTapPlugin;
@@ -101,6 +102,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AndroidScreenSharePlugin.class);
         registerPlugin(ProximityLockPlugin.class);
         registerPlugin(CallScreenPlugin.class);
+        registerPlugin(ChatBackgroundSyncPlugin.class);
         registerPlugin(NativeFilePlugin.class);
         registerPlugin(NotificationAudioPlugin.class);
         registerPlugin(NotificationTapPlugin.class);

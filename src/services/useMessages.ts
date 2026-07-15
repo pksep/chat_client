@@ -68,6 +68,7 @@ const messagesStore = ref<Record<string, IMessage[]>>({});
 const pinnedMessagesStore = ref<Record<string, IMessage[]>>({});
 const MAX_ACTIVE_TOPIC_MESSAGES = 250;
 const INITIAL_TOPIC_WINDOW_MESSAGES = 100;
+const aroundMessageContextPrefetches = new Map<string, Promise<IMessage[]>>();
 const persistTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingOutgoingForwardBatches = new Map<
   string,
@@ -910,6 +911,7 @@ export const fetchMessagesForTopic = async (
     forceNetwork?: boolean;
     visibleLimit?: number;
     skipShadowSnapshot?: boolean;
+    allowStaleFallback?: boolean;
   }
 ): Promise<IMessage[]> => {
   try {
@@ -1123,7 +1125,9 @@ export const fetchMessagesForTopic = async (
     }
 
     const sdk = getChatSDK();
-    if (!sdk) return existingMessages;
+    if (!sdk) {
+      return opts?.allowStaleFallback === false ? [] : existingMessages;
+    }
 
     const messages = normalizePaginationResult(
       await sdk.getMessages(topicId, {
@@ -1168,21 +1172,18 @@ export const fetchMessagesForTopic = async (
       } else if (opts?.afterMessageId) {
         combined = [...existing, ...messages];
       }
-      const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
+      const unique = dedupeMessagesForTopic(combined);
       const existingVisible = getMessagesByTopicId(topicId);
       const visibleMessages = opts?.lastMessageId
-        ? Array.from(
-            new Map(
-              [...messages, ...existingVisible].map(m => [m.id, m])
-            ).values()
-          )
+        ? dedupeMessagesForTopic([...messages, ...existingVisible])
         : opts?.afterMessageId
-          ? Array.from(
-              new Map(
-                [...existingVisible, ...messages].map(m => [m.id, m])
-              ).values()
-            )
-          : mergeWithPendingOutgoingMessages(messages, existingVisible);
+          ? dedupeMessagesForTopic([...existingVisible, ...messages])
+          : dedupeMessagesForTopic(
+              [
+                ...existingVisible,
+                ...mergeWithPendingOutgoingMessages(messages, existingVisible)
+              ]
+            );
 
       saveMessagesToLocal(topicId, unique, {
         syncLastMessage: opts?.syncLastMessage ?? false,
@@ -1210,6 +1211,10 @@ export const fetchMessagesForTopic = async (
       lastMessageId: opts?.lastMessageId || null,
       afterMessageId: opts?.afterMessageId || null
     });
+
+    if (opts?.allowStaleFallback === false) {
+      return [];
+    }
 
     const existingMessages = getFullMessagesByTopicId(topicId);
     if (existingMessages.length > 0) {
@@ -1249,7 +1254,8 @@ export const fetchPinnedMessagesForTopic = async (
 
 export const fetchAroundMessage = async (
   messageId: string,
-  topicId: string = route.value.id
+  topicId: string = route.value.id,
+  opts?: { updateVisible?: boolean }
 ): Promise<IMessage[]> => {
   try {
     if (!messageId) return;
@@ -1287,7 +1293,8 @@ export const fetchAroundMessage = async (
         mergeMessagesForTopic(topicId, normalizedShadowMessages, 'replace', {
           syncLastMessage: false,
           windowMode: 'around-anchor',
-          anchorMessageId: messageId
+          anchorMessageId: messageId,
+          updateVisible: opts?.updateVisible
         });
 
         return normalizedShadowMessages;
@@ -1312,7 +1319,8 @@ export const fetchAroundMessage = async (
     mergeMessagesForTopic(topicId, messages, 'replace', {
       syncLastMessage: false,
       windowMode: 'around-anchor',
-      anchorMessageId: messageId
+      anchorMessageId: messageId,
+      updateVisible: opts?.updateVisible
     });
 
     return messages;
@@ -1320,6 +1328,36 @@ export const fetchAroundMessage = async (
     console.warn('Failed to fetch around message:', error);
     return [];
   }
+};
+
+export const prefetchAroundMessageContext = (
+  messageId: string,
+  topicId: string = route.value.id
+): Promise<IMessage[]> => {
+  if (!messageId || !topicId) {
+    return Promise.resolve([]);
+  }
+
+  if (getFullMessagesByTopicId(topicId).some(message => message.id === messageId)) {
+    return Promise.resolve([]);
+  }
+
+  const requestKey = `${topicId}:${messageId}`;
+  const existingRequest = aroundMessageContextPrefetches.get(requestKey);
+
+  if (existingRequest) {
+    return existingRequest;
+  }
+
+  const request = fetchAroundMessage(messageId, topicId, {
+    updateVisible: false
+  }).finally(() => {
+    aroundMessageContextPrefetches.delete(requestKey);
+  });
+
+  aroundMessageContextPrefetches.set(requestKey, request);
+
+  return request;
 };
 
 export const addMessageToLocal = (topicId: string, message: IMessage): void => {
@@ -1971,6 +2009,7 @@ export const mergeMessagesForTopic = (
     visibleLimit?: number;
     persistDelayMs?: number;
     skipPersist?: boolean;
+    updateVisible?: boolean;
   }
 ): IMessage[] => {
   const existing = getFullMessagesByTopicId(topicId) || [];
@@ -2016,7 +2055,8 @@ export const mergeMessagesForTopic = (
     visibleMessages: visibleCombined,
     visibleLimit: opts?.visibleLimit,
     persistDelayMs: opts?.persistDelayMs,
-    skipPersist: opts?.skipPersist
+    skipPersist: opts?.skipPersist,
+    updateVisible: opts?.updateVisible
   });
 
   return unique;

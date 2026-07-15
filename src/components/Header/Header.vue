@@ -467,8 +467,9 @@ defineOptions({
   inheritAttrs: false
 });
 
-const route = useUrlWatcher();
 const emits = defineEmits<IHeaderEmits>();
+const currentRoute = useUrlWatcher();
+const route = computed(() => props.displayRoute || currentRoute.value);
 
 const state = reactive({
   loader: false,
@@ -480,7 +481,9 @@ const state = reactive({
   roomId: null
 });
 
-const currentTopic = computed(() => getSelectedTopic());
+const currentTopic = computed(() =>
+  route.value.id ? getSelectedTopic(route.value.id) : undefined
+);
 const isBotDialogTopic = computed(
   () =>
     route.value.type === RouteTypes.DIALOGS && isBotTopic(currentTopic.value)

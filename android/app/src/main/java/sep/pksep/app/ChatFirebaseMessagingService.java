@@ -10,6 +10,8 @@ import com.google.firebase.messaging.RemoteMessage;
 import java.util.List;
 import java.util.Map;
 
+import sep.pksep.app.sync.ChatBackgroundSyncScheduler;
+
 public class ChatFirebaseMessagingService extends FirebaseMessagingService {
     @Override
     public void onMessageReceived(RemoteMessage remoteMessage) {
@@ -30,6 +32,17 @@ public class ChatFirebaseMessagingService extends FirebaseMessagingService {
             } else {
                 IncomingCallNotificationHelper.dismissAllIncomingCalls(this);
             }
+            return;
+        }
+
+        if (ChatBackgroundSyncScheduler.ACTION_CHAT_SYNC.equals(action)) {
+            ChatBackgroundSyncScheduler.enqueueFromPush(
+                this,
+                data.get("topicId"),
+                data.get("pts"),
+                data.get("eventId"),
+                data.get("reason")
+            );
             return;
         }
 

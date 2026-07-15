@@ -748,6 +748,7 @@ import {
   redirectToAuthorization
 } from '../../composables/useAuth';
 import { useLogout } from '../../composables/useLogin';
+import { clearAnyChatBackgroundSyncSession } from '../../services/useChatBackgroundSync';
 import { cleanupPushNotificationsOnLogout } from '../../services/usePushNotifications';
 import { updateCurrentUserStatus } from '../../services/useUserStatus';
 import {
@@ -1263,6 +1264,7 @@ const handleLogout = async (): Promise<void> => {
   } catch (error) {
     console.warn('Failed to cleanup push notifications during logout:', error);
   } finally {
+    await clearAnyChatBackgroundSyncSession();
     useLogout();
     redirectToAuthorization();
   }

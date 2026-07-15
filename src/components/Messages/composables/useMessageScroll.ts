@@ -186,7 +186,7 @@ export function useMessageScroll(
   const HISTORY_PREPEND_TRIGGER_BUFFER = 2;
   const HISTORY_PREPEND_COOLDOWN_MS = 350;
   const HISTORY_PREPEND_INTENT_TTL_MS = 2500;
-  const HISTORY_PREPEND_USER_QUIET_MS = 180;
+  const HISTORY_PREPEND_USER_QUIET_MS = 420;
   const HISTORY_PREPEND_PAGE_LIMIT = 64;
   const HISTORY_VISIBLE_WINDOW_LIMIT = 700;
   const HISTORY_PERSIST_IDLE_DELAY_MS = 10000;
@@ -1549,10 +1549,14 @@ export function useMessageScroll(
         lastOldIndex < newIds.length - 1;
 
       const reason = isPrepend ? 'prepend' : isAppend ? 'append' : 'replace';
+      const shouldPreserveAppendViewport =
+        reason === 'append' &&
+        (preserveViewportForDownPagination ||
+          scrollState.isUserScrolling ||
+          !scrollAnchor.isAtBottom());
       const mutation = scrollAnchor.beginViewportMutation(reason, {
         forcePreserve:
-          reason === 'prepend' ||
-          (reason === 'append' && preserveViewportForDownPagination),
+          reason === 'prepend' || shouldPreserveAppendViewport,
         preferredMessageId: pendingViewportAnchorMessageId || undefined
       });
 

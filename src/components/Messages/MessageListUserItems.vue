@@ -377,7 +377,7 @@ const scheduleContentReadyEmit = async (): Promise<void> => {
     }
 
     emit('contentReady', {
-      topicId: route.value.id,
+      topicId: visibleMessages.value[0]?.topicId || route.value.id,
       messageCount: visibleMessages.value.length
     });
   });

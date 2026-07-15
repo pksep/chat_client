@@ -94,6 +94,11 @@ import { normalizeUserStatus } from '../utils/userStatus';
 import { normalizeDateValue } from '../utils/dateValue';
 import { getIsTopicMessageVisible } from './useTopicViewportState';
 import { isGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
+import {
+  importAnyChatBackgroundSnapshot,
+  requestAnyChatBackgroundSync,
+  saveAnyChatBackgroundSyncSession
+} from './useChatBackgroundSync';
 
 let chatSDK: ChatSDK | null = null;
 type CallsApi = typeof import('./useCalls');
@@ -896,8 +901,10 @@ const setupChatListeners = (): void => {
           await Promise.allSettled([
             fetchMessagesForTopic(payload.topicId, {
               limit: 50,
+              newMessages: true,
               forceRefresh: true,
               forceNetwork: true,
+              allowStaleFallback: false,
               syncLastMessage: true
             }),
             fetchAllTopics()
@@ -934,6 +941,8 @@ let shouldRerunRefreshAfterReconnect = false;
 let hasCompletedInitialConnection = false;
 const MAX_BACKGROUND_TOPIC_RECONCILES = 12;
 const FRESH_SYNC_THROTTLE_MS = 5000;
+const BACKGROUND_SYNC_FOREGROUND_THROTTLE_MS = 30000;
+const BACKGROUND_SNAPSHOT_FOREGROUND_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const HARD_RECONNECT_THROTTLE_MS = 10000;
 const NATIVE_NETWORK_RECOVERY_GRACE_MS = 15000;
 const BROWSER_NETWORK_RECOVERY_GRACE_MS = 10000;
@@ -944,6 +953,7 @@ let networkStatePollInterval: ReturnType<typeof setInterval> | null = null;
 let browserOfflineFallbackTimeout: ReturnType<typeof setTimeout> | null = null;
 let removeAppVisibilityListener: (() => void) | null = null;
 let lastFreshSyncRequestedAt = 0;
+let lastBackgroundForegroundSyncAt = 0;
 let lastHardReconnectAt = 0;
 let nativeNetworkRecoveryUntil = 0;
 let browserNetworkRecoveryUntil = 0;
@@ -969,6 +979,19 @@ const shouldAssumeOnlineForBrowserRecovery = (): boolean =>
 
 const getEffectiveBrowserNetworkState = (): boolean =>
   browserOnline.value || shouldAssumeOnlineForBrowserRecovery();
+
+const importBackgroundSnapshotForForeground = async (
+  userId: string | undefined,
+  source: string
+): Promise<boolean> => {
+  return importAnyChatBackgroundSnapshot(userId, {
+    source,
+    maxAgeMs: getEffectiveBrowserNetworkState()
+      ? BACKGROUND_SNAPSHOT_FOREGROUND_MAX_AGE_MS
+      : undefined,
+    requireNewerThanLocalPts: getEffectiveBrowserNetworkState()
+  });
+};
 
 const clearBrowserOfflineFallback = (): void => {
   if (!browserOfflineFallbackTimeout) {
@@ -1005,6 +1028,29 @@ const beginBrowserNetworkRecoveryGrace = (): void => {
   browserNetworkRecoveryUntil = Date.now() + BROWSER_NETWORK_RECOVERY_GRACE_MS;
   syncBrowserNetworkState(true);
   scheduleBrowserOfflineFallback();
+};
+
+const requestBackgroundSyncOnForeground = (source: string): void => {
+  if (!Capacitor.isNativePlatform() && !getEffectiveBrowserNetworkState()) {
+    return;
+  }
+
+  const now = Date.now();
+  if (
+    now - lastBackgroundForegroundSyncAt <
+    BACKGROUND_SYNC_FOREGROUND_THROTTLE_MS
+  ) {
+    return;
+  }
+
+  lastBackgroundForegroundSyncAt = now;
+
+  void requestAnyChatBackgroundSync({
+    reason: source,
+    topicId: route.value.id || undefined
+  }).catch(error => {
+    console.warn('Не удалось запросить фоновую синхронизацию чата:', error);
+  });
 };
 
 const getNetworkInformation = (): NetworkInformationLike | null =>
@@ -1134,8 +1180,10 @@ const refreshActiveTopicMessagesAfterReconnect = async (
   const existingMessages = getFullMessagesByTopicId(topicId);
   const latestMessages = await fetchMessagesForTopic(topicId, {
     limit: 100,
+    newMessages: true,
     forceRefresh: true,
     forceNetwork: true,
+    allowStaleFallback: false,
     skipSave: true
   });
 
@@ -1149,8 +1197,10 @@ const refreshActiveTopicMessagesAfterReconnect = async (
   if (existingMessages.length === 0) {
     await fetchMessagesForTopic(topicId, {
       limit: 100,
+      newMessages: true,
       forceRefresh: true,
       forceNetwork: true,
+      allowStaleFallback: false,
       syncLastMessage: true
     });
   }
@@ -1194,8 +1244,10 @@ const reconcileTopicCachesAfterReconnect = async (): Promise<void> => {
     await waitForReconnectIdle();
     await fetchMessagesForTopic(topic.id, {
       limit: 100,
+      newMessages: true,
       forceRefresh: true,
       forceNetwork: true,
+      allowStaleFallback: false,
       syncLastMessage: true
     });
   }
@@ -1637,6 +1689,12 @@ export const initializeChat = async (options: {
   wsUrl: string;
   userId?: string;
 }): Promise<void> => {
+  await saveAnyChatBackgroundSyncSession({
+    token: options.token,
+    userId: options.userId,
+    apiUrl: options.apiUrl
+  });
+
   chatSDK = new ChatSDK({
     apiUrl: options.apiUrl,
     wsUrl: options.wsUrl,
@@ -1672,6 +1730,11 @@ export const initializeChat = async (options: {
   areChatListenersBound = false;
 
   currentUserId.value = options.userId || null;
+  await importBackgroundSnapshotForForeground(
+    options.userId,
+    'initialize-chat'
+  );
+  requestBackgroundSyncOnForeground('initialize-chat');
 
   if (!isVisibilityListenerAdded) {
     document.addEventListener('visibilitychange', () => {
@@ -1681,6 +1744,11 @@ export const initializeChat = async (options: {
       lastVisibilityState = document.visibilityState;
       if (document.visibilityState === 'visible') {
         syncPresenceForVisibility();
+        void importBackgroundSnapshotForForeground(
+          currentUserId.value || undefined,
+          'app-visible'
+        );
+        requestBackgroundSyncOnForeground('app-visible');
         handleNetworkOrResumeChange('app-visible', {
           assumeOnlineOnNative: true,
           forceHardReconnect: true,
@@ -1696,12 +1764,18 @@ export const initializeChat = async (options: {
 
   if (!isResumeListenersAdded) {
     window.addEventListener('focus', () => {
+      void importBackgroundSnapshotForForeground(
+        currentUserId.value || undefined,
+        'window-focus'
+      );
+      requestBackgroundSyncOnForeground('window-focus');
       handleNetworkOrResumeChange('window-focus', {
         assumeOnlineOnNative: true
       });
     });
 
     window.addEventListener('online', () => {
+      requestBackgroundSyncOnForeground('browser-online');
       handleNetworkOrResumeChange('browser-online', {
         assumeOnlineOnNative: true,
         forceHardReconnect: true,
@@ -1731,6 +1805,10 @@ export const initializeChat = async (options: {
         }
 
         syncPresenceForVisibility();
+        void importBackgroundSnapshotForForeground(
+          currentUserId.value || undefined,
+          'native-app-active'
+        );
         handleNetworkOrResumeChange('native-app-active', {
           assumeOnlineOnNative: true,
           forceHardReconnect: true,
@@ -1739,6 +1817,10 @@ export const initializeChat = async (options: {
       });
 
       void CapacitorApp.addListener('resume', () => {
+        void importBackgroundSnapshotForForeground(
+          currentUserId.value || undefined,
+          'native-resume'
+        );
         handleNetworkOrResumeChange('native-resume', {
           assumeOnlineOnNative: true,
           forceHardReconnect: true,

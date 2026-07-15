@@ -155,7 +155,7 @@
           <div v-if="!props.showCheckbox" class="contact-list__top">
             <MessageStatusIcons
               v-if="
-                topic.lastMessage?.senderUserId === authedUser.id &&
+                topic.lastMessage?.senderUserId === authedUser?.id &&
                 !topic.lastMessage?.isSystem
               "
               :class="{

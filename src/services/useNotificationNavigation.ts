@@ -74,6 +74,25 @@ const extractTopicFromUrl = (
   return { topicId: null, topicType: null };
 };
 
+const localizeUrlToCurrentClient = (url?: string | null): string | null => {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const parsedUrl = new URL(url, window.location.origin);
+
+    if (parsedUrl.origin !== window.location.origin) {
+      return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;
+    }
+
+    return parsedUrl.toString();
+  } catch (error) {
+    console.warn('Failed to normalize notification URL:', error);
+    return null;
+  }
+};
+
 const resolveNotificationTarget = (payload: NotificationNavigationPayload) => {
   const directUrl = payload.url || payload.link || null;
   const parsedFromUrl = extractTopicFromUrl(directUrl);
@@ -84,7 +103,9 @@ const resolveNotificationTarget = (payload: NotificationNavigationPayload) => {
   return {
     topicId,
     topicType,
-    url: directUrl || buildNotificationTargetUrl(topicId, topicType)
+    url: topicId
+      ? buildNotificationTargetUrl(topicId, topicType)
+      : localizeUrlToCurrentClient(directUrl)
   };
 };
 
@@ -188,7 +209,9 @@ export const navigateToNotificationTarget = (
 
   if (!target.topicId) {
     if (target.url) {
-      window.location.assign(target.url);
+      window.location.assign(
+        new URL(target.url, window.location.origin).toString()
+      );
       return true;
     }
 

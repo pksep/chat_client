@@ -48,6 +48,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
   let mutationObserver: MutationObserver | null = null;
   let isRestoringScroll = false;
   let restoreRafId = 0;
+  let anchorRestoreToken = 0;
   let scrollRafId = 0;
   let resizeDriftRafId = 0;
   let resizeDriftQuietTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -351,11 +352,18 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       restoreRafId = 0;
     }
 
+    const restoreToken = ++anchorRestoreToken;
     const restoreScheduledAt = performance.now();
+    const isRestoreCurrent = (): boolean =>
+      restoreToken === anchorRestoreToken;
     const didUserScrollAfterSchedule = (): boolean =>
       lastUserScrollAt > restoreScheduledAt;
-    const shouldAbortForUserScroll = mutation?.reason !== 'prepend';
+    const shouldAbortForUserScroll = true;
     const finishAnchorRestore = (preserveAnchor = true): void => {
+      if (!isRestoreCurrent()) {
+        return;
+      }
+
       restoreRafId = 0;
       stickyAnchor =
         preserveAnchor && anchor
@@ -365,10 +373,23 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     };
 
     nextTick(() => {
+      if (!isRestoreCurrent()) {
+        return;
+      }
+
+      if (shouldAbortForUserScroll && didUserScrollAfterSchedule()) {
+        finishAnchorRestore(false);
+        return;
+      }
+
       if (!restoreAnchorPosition(anchor) && mutation) {
         restoreMutationSnapshot(mutation);
       }
       restoreRafId = requestAnimationFrame(() => {
+        if (!isRestoreCurrent()) {
+          return;
+        }
+
         if (shouldAbortForUserScroll && didUserScrollAfterSchedule()) {
           finishAnchorRestore(false);
           return;
@@ -378,6 +399,10 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
           restoreMutationSnapshot(mutation);
         }
         restoreRafId = requestAnimationFrame(() => {
+          if (!isRestoreCurrent()) {
+            return;
+          }
+
           if (shouldAbortForUserScroll && didUserScrollAfterSchedule()) {
             finishAnchorRestore(false);
             return;
@@ -390,6 +415,15 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
         });
       });
     });
+  };
+
+  const cancelScheduledAnchorRestore = (): void => {
+    anchorRestoreToken += 1;
+
+    if (restoreRafId) {
+      cancelAnimationFrame(restoreRafId);
+      restoreRafId = 0;
+    }
   };
 
   const beginViewportMutation = (
@@ -457,18 +491,6 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     }
 
     pendingMutation = null;
-
-    if (currentMutation.reason === 'prepend' && isReverseScrollContainer()) {
-      lastReverseScrollHeight = containerRef.value?.scrollHeight || 0;
-      nextTick(() => {
-        stickyAnchor =
-          captureViewportAnchor(currentMutation.anchor?.messageId) ||
-          captureViewportAnchor();
-        updateBottomState();
-        lastReverseScrollHeight = containerRef.value?.scrollHeight || 0;
-      });
-      return;
-    }
 
     lastReverseScrollHeight = containerRef.value?.scrollHeight || 0;
 
@@ -875,6 +897,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       return false;
     }
 
+    cancelScheduledAnchorRestore();
     viewportMode.value = 'jump';
     stickyAnchor = null;
     const finalTop = getMessageTargetTop(
@@ -906,6 +929,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
   };
 
   const prepareJumpMutation = (): void => {
+    cancelScheduledAnchorRestore();
     viewportMode.value = 'jump';
     stickyAnchor = null;
     forceNoPreserveForNextMutation = true;

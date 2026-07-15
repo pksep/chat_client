@@ -129,6 +129,13 @@ type DirectCallRecoveryOptions = {
   remoteUserId?: string | null;
   reason?: string;
 };
+type CallIssueSignalSeverity = 'soft' | 'hard';
+type CallIssueSignal = {
+  name: string;
+  severity: CallIssueSignalSeverity;
+  at: number;
+  reason?: string | null;
+};
 
 type CallSocketAck = {
   accepted?: boolean;
@@ -168,6 +175,9 @@ let lastTelemetryConnectionQuality: string | null = null;
 let currentCameraFacingMode: 'user' | 'environment' = 'user';
 let lastAudioOutputTelemetrySignature = '';
 let lastAudioOutputDiagnostics: Record<string, unknown> = {};
+let lastCallIssueSignal: CallIssueSignal | null = null;
+let lastKnownActiveRoomRemoteParticipantCount = 0;
+let lastRemoteParticipantEmptyTelemetrySignature = '';
 let shouldEndCallOnConnectFailure = false;
 let shouldPreserveCallOnConnectFailure = false;
 let isExplicitHangupInProgress = false;
@@ -209,6 +219,7 @@ const ENDED_CALL_STATUS_NOTICE_CLOSE_DELAY_MS = 1200;
 const DIRECT_CALL_RECONNECT_GRACE_MS = 180000;
 const DIRECT_CALL_EXPLICIT_LEAVE_SUPPRESSION_MS = 30000;
 const DIRECT_CALL_RECONNECT_POLL_MS = 2000;
+const CALL_ISSUE_SIGNAL_CONTEXT_MS = 5 * 60 * 1000;
 const DIRECT_CALL_RECONNECT_FAILED_NOTICE = 'Не удалось восстановить звонок';
 const DIRECT_CALL_ENDED_NOTICE = 'Звонок завершён';
 const CALL_RECONNECT_NOTICE = 'Связь прервана. Переподключение';
@@ -295,6 +306,9 @@ const resetCallTelemetryState = (): void => {
   lastTelemetryConnectionQuality = null;
   lastAudioOutputTelemetrySignature = '';
   lastAudioOutputDiagnostics = {};
+  lastCallIssueSignal = null;
+  lastKnownActiveRoomRemoteParticipantCount = 0;
+  lastRemoteParticipantEmptyTelemetrySignature = '';
 };
 
 const buildCallTelemetryPayload = (
@@ -316,6 +330,164 @@ const buildCallTelemetryPayload = (
   elapsedCallMs: getElapsedCallDurationMs(),
   ...payload
 });
+
+const markCallIssueSignal = (
+  name: string,
+  severity: CallIssueSignalSeverity = 'hard',
+  payload: Record<string, unknown> = {}
+): void => {
+  lastCallIssueSignal = {
+    name,
+    severity,
+    at: Date.now(),
+    reason: typeof payload.reason === 'string' ? payload.reason : null
+  };
+};
+
+const clearCallIssueSignal = (severity?: CallIssueSignalSeverity): void => {
+  if (!lastCallIssueSignal) {
+    return;
+  }
+
+  if (!severity || lastCallIssueSignal.severity === severity) {
+    lastCallIssueSignal = null;
+  }
+};
+
+const hasLiveTrack = (
+  stream: MediaStream | null | undefined,
+  kind: 'audio' | 'video'
+): boolean =>
+  !!stream
+    ?.getTracks()
+    .some(track => track.kind === kind && track.readyState === 'live');
+
+const buildCallHealthTelemetryPayload = (
+  activeRoom: Room | null = room
+): Record<string, unknown> => {
+  const now = Date.now();
+  const lastIssueSignalAgeMs = lastCallIssueSignal
+    ? now - lastCallIssueSignal.at
+    : null;
+  const issueSignalIsRecent =
+    lastIssueSignalAgeMs !== null &&
+    lastIssueSignalAgeMs >= 0 &&
+    lastIssueSignalAgeMs <= CALL_ISSUE_SIGNAL_CONTEXT_MS;
+  const hardSignalBeforeLeave =
+    !!lastCallIssueSignal &&
+    lastCallIssueSignal.severity === 'hard' &&
+    issueSignalIsRecent;
+  const remoteAudioParticipantCount = remoteParticipants.value.filter(
+    participant =>
+      participant.isMicActive || hasLiveTrack(participant.audioStream, 'audio')
+  ).length;
+  const remoteVideoParticipantCount = remoteParticipants.value.filter(
+    participant =>
+      participant.isVideoActive ||
+      hasLiveTrack(participant.cameraStream, 'video') ||
+      hasLiveTrack(participant.screenShareStream, 'video') ||
+      hasLiveTrack(participant.videoStream, 'video')
+  ).length;
+
+  return {
+    liveKitState: activeRoom?.state ?? null,
+    hasRoom: Boolean(activeRoom),
+    roomRemoteParticipantCount: activeRoom?.remoteParticipants.size ?? 0,
+    visibleRemoteParticipantCount: remoteParticipants.value.length,
+    remoteAudioParticipantCount,
+    remoteVideoParticipantCount,
+    hasRemoteParticipants:
+      (activeRoom?.remoteParticipants.size ?? 0) > 0 ||
+      remoteParticipants.value.length > 0,
+    hasRemoteAudio: remoteAudioParticipantCount > 0,
+    hasRemoteVideo: remoteVideoParticipantCount > 0,
+    pendingRemoteReconnectParticipantCount: remoteReconnectingParticipants.size,
+    directCallRecoveryActive: Boolean(directCallRecoveryRoomId),
+    directCallRecoveryWaitForRemote,
+    pendingEndCallActive: Boolean(pendingEndCallRoomId.value),
+    explicitHangupInProgress: isExplicitHangupInProgress,
+    lastCallIssueSignalName: lastCallIssueSignal?.name ?? null,
+    lastCallIssueSignalSeverity: lastCallIssueSignal?.severity ?? null,
+    lastCallIssueSignalReason: lastCallIssueSignal?.reason ?? null,
+    lastCallIssueSignalAt: lastCallIssueSignal
+      ? new Date(lastCallIssueSignal.at).toISOString()
+      : null,
+    msSinceLastCallIssueSignal: lastIssueSignalAgeMs,
+    callIssueSignalBeforeLeave: issueSignalIsRecent,
+    hardSignalBeforeLeave,
+    ...getBrowserNetworkTelemetryPayload()
+  };
+};
+
+const buildCallLeaveTelemetryPayload = (
+  payload: Record<string, unknown> = {},
+  activeRoom: Room | null = room
+): Record<string, unknown> => {
+  const health = buildCallHealthTelemetryPayload(activeRoom);
+  let leaveIntent = 'manual';
+
+  if (health.hardSignalBeforeLeave) {
+    leaveIntent = 'manual_after_hard_signal';
+  } else if (health.callIssueSignalBeforeLeave) {
+    leaveIntent = 'manual_after_issue_signal';
+  }
+
+  return {
+    leaveIntent,
+    ...health,
+    ...payload
+  };
+};
+
+const recordRemoteParticipantLossIfNeeded = (
+  trigger: string,
+  activeRoom: Room | null = room
+): void => {
+  const currentRoomRemoteCount = activeRoom?.remoteParticipants.size ?? 0;
+  const hadRemoteParticipant = lastKnownActiveRoomRemoteParticipantCount > 0;
+
+  lastKnownActiveRoomRemoteParticipantCount = Math.max(
+    currentRoomRemoteCount,
+    remoteParticipants.value.length
+  );
+
+  if (
+    !hadRemoteParticipant ||
+    currentRoomRemoteCount > 0 ||
+    !open.value ||
+    isIncoming.value ||
+    isCalling.value ||
+    !roomId.value ||
+    !topicId.value ||
+    isGroupCallSession(topicId.value)
+  ) {
+    return;
+  }
+
+  const signature = [
+    roomId.value,
+    topicId.value,
+    trigger,
+    directCallRecoveryRoomId || 'no-recovery'
+  ].join(':');
+
+  if (signature === lastRemoteParticipantEmptyTelemetrySignature) {
+    return;
+  }
+
+  lastRemoteParticipantEmptyTelemetrySignature = signature;
+  markCallIssueSignal('call.media.remote_participants_empty', 'hard', {
+    reason: trigger
+  });
+  recordCallTelemetryEvent(
+    'call.media.remote_participants_empty',
+    {
+      trigger,
+      ...buildCallHealthTelemetryPayload(activeRoom)
+    },
+    'warn'
+  );
+};
 
 const getBrowserNetworkTelemetryPayload = (): Record<string, unknown> => {
   const nav = typeof navigator !== 'undefined' ? navigator : undefined;
@@ -1176,6 +1348,11 @@ const resolveDirectCallRecoverySuccess = (activeRoom: Room | null = room) => {
     return;
   }
 
+  recordCallTelemetryEvent(
+    'call.direct_recovery.completed',
+    buildCallHealthTelemetryPayload(activeRoom)
+  );
+  clearCallIssueSignal();
   resetDirectCallRecoveryState();
   syncConnectionState(activeRoom);
 };
@@ -1357,6 +1534,9 @@ const startDirectCallRecovery = (
   directCallRecoveryWaitForRemote =
     !!options.waitForRemote || remoteReconnectingParticipants.size > 0;
   shouldEndCallOnConnectFailure = false;
+  markCallIssueSignal('call.direct_recovery.started', 'hard', {
+    reason: options.reason ?? null
+  });
   recordCallTelemetryEvent(
     'call.direct_recovery.started',
     buildCallRecoveryTelemetryPayload(options.reason, room, {
@@ -1392,6 +1572,10 @@ const emitEndCallEvent = (
 ): boolean => {
   const sdk = getChatSDK();
   const me = getAuthUser();
+  const telemetryPayload = {
+    ...buildCallHealthTelemetryPayload(),
+    ...payload
+  };
 
   if (!sdk || !me || !targetRoomId) {
     recordCallTelemetryEvent(
@@ -1402,7 +1586,7 @@ const emitEndCallEvent = (
         source,
         hasSdk: Boolean(sdk),
         hasUser: Boolean(me),
-        ...payload
+        ...telemetryPayload
       },
       'warn'
     );
@@ -1423,7 +1607,7 @@ const emitEndCallEvent = (
         targetTopicId,
         source,
         senderUserId: me.id,
-        ...payload
+        ...telemetryPayload
       },
       'warn'
     );
@@ -1437,7 +1621,7 @@ const emitEndCallEvent = (
         targetTopicId,
         source,
         senderUserId: me.id,
-        ...payload,
+        ...telemetryPayload,
         ...getTelemetryErrorPayload(error)
       },
       'error'
@@ -2515,6 +2699,10 @@ const syncRemoteParticipantState = () => {
   isRemoteVideoActive.value = remoteParticipants.value.some(
     participant => participant.isVideoActive
   );
+  recordRemoteParticipantLossIfNeeded(
+    'sync-remote-participant-state',
+    activeRoom
+  );
 };
 
 const clearPendingAudioRecoveryTimeouts = () => {
@@ -3109,13 +3297,28 @@ const setupRoomListeners = (activeRoom: Room) => {
       markRemoteParticipantReconnecting(participant);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
+      const isLastDirectRemoteParticipant =
+        !activeRoom.remoteParticipants.size &&
+        !isGroupCallSession(topicId.value);
+
+      if (isLastDirectRemoteParticipant) {
+        markCallIssueSignal('call.participant.disconnected', 'hard', {
+          reason: 'last-direct-remote-participant-disconnected'
+        });
+      }
+
       recordCallTelemetryEvent(
         'call.participant.disconnected',
         {
           participantId: participant.identity,
-          remoteParticipantCount: activeRoom.remoteParticipants.size
+          remoteParticipantCount: activeRoom.remoteParticipants.size,
+          ...buildCallHealthTelemetryPayload(activeRoom)
         },
         'warn'
+      );
+      recordRemoteParticipantLossIfNeeded(
+        'participant-disconnected',
+        activeRoom
       );
 
       if (
@@ -3164,7 +3367,12 @@ const setupRoomListeners = (activeRoom: Room) => {
         return;
       }
 
-      recordCallTelemetryEvent('call.livekit.reconnecting', undefined, 'warn');
+      markCallIssueSignal('call.livekit.reconnecting', 'soft');
+      recordCallTelemetryEvent(
+        'call.livekit.reconnecting',
+        buildCallHealthTelemetryPayload(activeRoom),
+        'warn'
+      );
       showReconnectCallStatusNotice();
       syncLocalTrackState();
       syncLocalParticipantSpeakingState(activeRoom);
@@ -3185,7 +3393,11 @@ const setupRoomListeners = (activeRoom: Room) => {
       resolveDirectCallRecoverySuccess(activeRoom);
       void ensureLocalMicrophoneState(activeRoom);
       void enforceSingleScreenShare();
-      recordCallTelemetryEvent('call.livekit.reconnected');
+      recordCallTelemetryEvent(
+        'call.livekit.reconnected',
+        buildCallHealthTelemetryPayload(activeRoom)
+      );
+      clearCallIssueSignal('soft');
     })
     .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
       if (ignoredDisconnectedRoom === activeRoom) {
@@ -3245,16 +3457,23 @@ const setupRoomListeners = (activeRoom: Room) => {
       ) {
         recordCallTelemetryEvent(
           'call.livekit.disconnected.recovery_started',
-          { reason },
+          {
+            reason,
+            ...buildCallHealthTelemetryPayload(activeRoom)
+          },
           'warn'
         );
         return;
       }
 
+      markCallIssueSignal('call.livekit.disconnected', 'hard', {
+        reason: reason ? String(reason) : null
+      });
       recordCallTelemetryEvent(
         'call.livekit.disconnected',
         {
-          reason
+          reason,
+          ...buildCallHealthTelemetryPayload(activeRoom)
         },
         'error'
       );
@@ -3453,6 +3672,9 @@ const connectToRoom = async () => {
         me &&
         activeRoomId
       ) {
+        markCallIssueSignal('call.livekit.connect_failed', 'hard', {
+          reason: 'connect_failure'
+        });
         emitEndCallEvent(activeRoomId, activeTopicId, 'connect_failure', {
           attemptId: currentAttemptId,
           isDirectCallRecovery,
@@ -3603,7 +3825,10 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
 
   recordCallTelemetryEvent(
     'call.network_recovery.start',
-    buildCallRecoveryTelemetryPayload(reason),
+    {
+      ...buildCallRecoveryTelemetryPayload(reason),
+      ...buildCallHealthTelemetryPayload()
+    },
     'warn'
   );
 
@@ -3625,11 +3850,15 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
 
   if (status && status.active !== true) {
     clearUnavailableCallState(activeRoomId, activeTopicId);
+    markCallIssueSignal('call.network_recovery.ended', 'hard', {
+      reason
+    });
     showEndedCallNoticeAndReleaseMedia(user.value);
     recordCallTelemetryEvent(
       'call.network_recovery.ended',
       {
-        reason
+        reason,
+        ...buildCallHealthTelemetryPayload()
       },
       'warn'
     );
@@ -3693,9 +3922,13 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
           reason: 'network-recovery-connect-failed'
         });
       }
+      markCallIssueSignal('call.network_recovery.connect_failed', 'hard', {
+        reason
+      });
       recordCallTelemetryEvent(
         'call.network_recovery.connect_failed',
         buildCallRecoveryTelemetryPayload(reason, room, {
+          ...buildCallHealthTelemetryPayload(room),
           ...getTelemetryErrorPayload(error)
         }),
         'warn'
@@ -3731,8 +3964,13 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
 
   recordCallTelemetryEvent('call.network_recovery.completed', {
     ...buildCallRecoveryTelemetryPayload(reason, room),
+    ...buildCallHealthTelemetryPayload(room),
     remoteParticipantCount: room?.remoteParticipants.size ?? 0
   });
+
+  if (room?.remoteParticipants.size) {
+    clearCallIssueSignal('soft');
+  }
 
   return true;
 };
@@ -4645,7 +4883,8 @@ const showEndedCallNoticeAndReleaseMedia = (
   message = DIRECT_CALL_ENDED_NOTICE
 ) => {
   recordCallTelemetryEvent('call.ended.notice', {
-    message
+    message,
+    ...buildCallHealthTelemetryPayload()
   });
   connectAttemptId += 1;
   connectPromise = null;
@@ -4703,7 +4942,8 @@ export const handleCallEnded = (
     endedRoomId,
     endedTopicId,
     reason,
-    endedByUserId
+    endedByUserId,
+    ...buildCallHealthTelemetryPayload()
   });
 
   if (matchesPendingEndCall(endedRoomId, endedTopicId)) {
@@ -5245,14 +5485,16 @@ export const leaveCall = () => {
     isModalVisible.value &&
     !isIncoming.value &&
     !shouldCloseImmediatelyAfterHangup;
-
-  recordCallTelemetryEvent('call.leave.requested', {
+  const leaveTelemetryPayload = buildCallLeaveTelemetryPayload({
     activeRoomId,
     activeTopicId,
     wasIncomingCall,
     isGroupCallSessionActive,
     hasOtherParticipantsInGroupCall
   });
+
+  recordCallTelemetryEvent('call.leave.intent', leaveTelemetryPayload, 'warn');
+  recordCallTelemetryEvent('call.leave.requested', leaveTelemetryPayload);
 
   if (
     activeRoomId &&
@@ -5273,11 +5515,12 @@ export const leaveCall = () => {
   }
 
   schedulePendingEndCallConfirmation(activeRoomId, activeTopicId);
-  emitEndCallEvent(activeRoomId, activeTopicId, 'user_leave', {
-    wasIncomingCall,
-    isGroupCallSessionActive,
-    hasOtherParticipantsInGroupCall
-  });
+  emitEndCallEvent(
+    activeRoomId,
+    activeTopicId,
+    'user_leave',
+    leaveTelemetryPayload
+  );
 
   if (invitedGroupCall.value?.roomId === activeRoomId) {
     invitedGroupCall.value = null;
@@ -5329,7 +5572,8 @@ export const leaveCall = () => {
 
 export const cleanup = (disconnectRoom = true) => {
   recordCallTelemetryEvent('call.cleanup', {
-    disconnectRoom
+    disconnectRoom,
+    ...buildCallHealthTelemetryPayload()
   });
   connectAttemptId += 1;
   connectPromise = null;

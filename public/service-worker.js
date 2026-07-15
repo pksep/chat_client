@@ -1,3 +1,11 @@
+try {
+  importScripts('/chat-background-sync-sw.js');
+} catch (error) {
+  console.warn('[ChatBackgroundSyncSW] Не удалось импортировать helper', error);
+}
+
+const CHAT_BACKGROUND_SYNC_TAG = 'chat-background-sync';
+
 self.addEventListener('install', () => {
   self.skipWaiting();
 });
@@ -8,6 +16,8 @@ self.addEventListener('activate', event => {
 
 let appFocused = false;
 let activeTopicId = null;
+
+const CHAT_ROUTE_TYPES = new Set(['dialogs', 'group']);
 
 const normalizePayload = rawData => {
   if (!rawData || typeof rawData !== 'object') {
@@ -25,9 +35,43 @@ const normalizePayload = rawData => {
   };
 };
 
+const getPayloadUrl = payload =>
+  payload.url ||
+  payload.link ||
+  payload.click_action ||
+  payload['gcm.notification.click_action'] ||
+  null;
+
+const localizeUrlToClientOrigin = value => {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsedUrl = new URL(value, self.location.origin);
+    const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
+
+    if (pathParts.length >= 2 && CHAT_ROUTE_TYPES.has(pathParts[0])) {
+      return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;
+    }
+
+    if (parsedUrl.origin !== self.location.origin) {
+      return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;
+    }
+
+    return parsedUrl.toString();
+  } catch (error) {
+    console.warn('Не удалось нормализовать URL уведомления:', error);
+    return null;
+  }
+};
+
 const getNotificationUrl = payload => {
-  if (payload.url) {
-    return payload.url;
+  const payloadUrl = getPayloadUrl(payload);
+  const localizedPayloadUrl = localizeUrlToClientOrigin(payloadUrl);
+
+  if (localizedPayloadUrl) {
+    return localizedPayloadUrl;
   }
 
   if (payload.topicId) {
@@ -82,6 +126,56 @@ const closeAllNotifications = async () => {
   });
 };
 
+const notifyChatBackgroundSyncUpdated = async source => {
+  const clientList = await self.clients.matchAll({
+    type: 'window',
+    includeUncontrolled: true
+  });
+
+  clientList.forEach(client => {
+    client.postMessage({
+      type: 'CHAT_BACKGROUND_SYNC_UPDATED',
+      source
+    });
+  });
+};
+
+const registerChatBackgroundSyncRetry = async () => {
+  if (!self.registration.sync?.register) {
+    return;
+  }
+
+  try {
+    await self.registration.sync.register(CHAT_BACKGROUND_SYNC_TAG);
+  } catch (error) {
+    console.warn(
+      '[ChatBackgroundSyncSW] Не удалось зарегистрировать retry sync',
+      error
+    );
+  }
+};
+
+const runChatBackgroundSyncFromPayload = async (payload, source) => {
+  if (!self.chatBackgroundSync?.runChatBackgroundSync) {
+    return { ok: false, retryable: false };
+  }
+
+  const result = await self.chatBackgroundSync.runChatBackgroundSync({
+    reason: payload.reason || source || 'push',
+    topicId: payload.topicId || payload.tag || null,
+    pts: payload.pts || payload.toPts || null,
+    eventId: payload.eventId || null
+  });
+
+  if (result?.ok) {
+    await notifyChatBackgroundSyncUpdated(source);
+  } else if (result?.retryable) {
+    await registerChatBackgroundSyncRetry();
+  }
+
+  return result;
+};
+
 self.addEventListener('message', event => {
   if (event.data?.type === 'APP_CONTEXT') {
     appFocused = Boolean(event.data.focused);
@@ -94,6 +188,12 @@ self.addEventListener('message', event => {
 
   if (event.data?.type === 'CLEAR_ALL_NOTIFICATIONS') {
     event.waitUntil(closeAllNotifications());
+  }
+
+  if (event.data?.type === 'CHAT_BACKGROUND_SYNC_REQUEST') {
+    event.waitUntil(
+      runChatBackgroundSyncFromPayload(event.data.request || {}, 'app-request')
+    );
   }
 });
 
@@ -117,6 +217,18 @@ self.addEventListener('push', event => {
       if (payload.action === 'CLEAR_CHAT_NOTIFICATIONS') {
         await closeNotificationsForTopic(topicId);
         return;
+      }
+
+      if (payload.action === 'CHAT_SYNC') {
+        await runChatBackgroundSyncFromPayload(payload, 'push');
+
+        if (
+          !payload.title &&
+          !payload.body &&
+          payload.type !== 'incoming_call'
+        ) {
+          return;
+        }
       }
 
       if (appFocused && topicId && activeTopicId === topicId) {
@@ -156,6 +268,36 @@ self.addEventListener('push', event => {
         }
       });
     })()
+  );
+});
+
+self.addEventListener('sync', event => {
+  if (event.tag !== CHAT_BACKGROUND_SYNC_TAG) {
+    return;
+  }
+
+  event.waitUntil(
+    runChatBackgroundSyncFromPayload(
+      {
+        reason: 'sync-retry'
+      },
+      'sync'
+    )
+  );
+});
+
+self.addEventListener('periodicsync', event => {
+  if (event.tag !== CHAT_BACKGROUND_SYNC_TAG) {
+    return;
+  }
+
+  event.waitUntil(
+    runChatBackgroundSyncFromPayload(
+      {
+        reason: 'periodic-sync'
+      },
+      'periodic-sync'
+    )
   );
 });
 

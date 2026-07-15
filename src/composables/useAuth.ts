@@ -159,6 +159,13 @@ export const isStoredChatSessionPersistent = (): boolean => {
 export const clearChatAuthSession = (): void => {
   localStorage.removeItem(CHAT_AUTH_SESSION_KEY);
   sessionStorage.removeItem(CHAT_AUTH_SESSION_KEY);
+  void import('../services/useChatBackgroundSync')
+    .then(({ clearAnyChatBackgroundSyncSession }) =>
+      clearAnyChatBackgroundSyncSession()
+    )
+    .catch(error => {
+      console.warn('Failed to clear chat background sync session:', error);
+    });
 };
 
 export const saveBootstrapErpSession = (
