@@ -144,11 +144,7 @@ export type CreateBotResult = {
 };
 
 const resolveBotGatewayUrl = (): string => {
-  const base = (
-    import.meta.env.VITE_BOT_GATEWAY_URL ||
-    getConfig().CHAT_BOT_GATEWAY ||
-    ''
-  ).replace(/\/+$/, '');
+  const base = (getConfig().CHAT_BOT_GATEWAY || '').replace(/\/+$/, '');
 
   if (!base) {
     throw new Error(

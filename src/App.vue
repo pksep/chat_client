@@ -128,7 +128,6 @@ const finishBootstrapping = () => {
 const parseRuntimeConfig = (
   rawConfig: string
 ): Partial<IChatContainerConfig> => {
-  const botGatewayOverride = import.meta.env.VITE_BOT_GATEWAY_URL?.trim();
   const envMap = rawConfig
     .split('\n')
     .map(line => line.trim())
@@ -155,7 +154,7 @@ const parseRuntimeConfig = (
     CHAT_ERP_URL: envMap.VITE_ERP_URL,
     CHAT_PATH_TO_FILE_CDN: envMap.VITE_PATH_TO_FILE_CDN,
     CHAT_LIVEKIT_URL: envMap.VITE_LIVEKIT_URL,
-    CHAT_BOT_GATEWAY: botGatewayOverride || envMap.VITE_BOT_GATEWAY_URL
+    CHAT_BOT_GATEWAY: envMap.VITE_BOT_GATEWAY_URL
   };
 };
 
