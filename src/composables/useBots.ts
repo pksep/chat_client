@@ -655,6 +655,6 @@ export const getBotInitialForm = (topic?: ITopic | null) => {
     name: topic?.name || topic?.user?.initials || '',
     username: getBotUsername(topic?.user),
     apiKey: getBotApiKey(topic?.user),
-    commands: cachedCommands ?? getBotCommands(topic?.user, getAuthUser())
+    commands: cachedCommands ?? getBotCommands(topic?.user)
   };
 };
