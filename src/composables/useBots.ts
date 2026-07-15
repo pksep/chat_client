@@ -1,3 +1,4 @@
+import { ref } from 'vue';
 import { getAuthUser } from './useAuth';
 import {
   addTopicList,
@@ -20,11 +21,14 @@ import { generateUUID } from '../utils/generateUUID';
 import {
   LOCAL_BOT_TOPIC_ID_PREFIX,
   LOCAL_BOT_USER_ID_PREFIX,
+  type BotCommand,
   buildBotEx,
   getBotApiKey,
+  getBotCommands,
   getBotId,
   getBotUsername,
-  isLocalBotTopicId
+  isLocalBotTopicId,
+  normalizeBotCommands
 } from '../utils/bot';
 
 export type CreateBotPayload = {
@@ -39,6 +43,24 @@ const normalizeBotUsername = (value: string): string =>
 
 const generateBotApiKey = (): string =>
   `bot_${generateUUID().replaceAll('-', '').slice(0, 20)}`;
+
+const gatewayBotCommandsById = ref<Record<string, BotCommand[]>>({});
+const gatewayBotCommandsByChatUserId = ref<Record<string, BotCommand[]>>({});
+
+export const getCachedBotCommands = (
+  botId?: number | null,
+  chatUserId?: string | null
+): BotCommand[] | undefined => {
+  if (botId) {
+    return gatewayBotCommandsById.value[String(botId)];
+  }
+
+  if (chatUserId) {
+    return gatewayBotCommandsByChatUserId.value[chatUserId];
+  }
+
+  return undefined;
+};
 
 export const createLocalBotTopic = (
   payload: CreateBotPayload
@@ -122,7 +144,11 @@ export type CreateBotResult = {
 };
 
 const resolveBotGatewayUrl = (): string => {
-  const base = (getConfig().CHAT_BOT_GATEWAY || '').replace(/\/+$/, '');
+  const base = (
+    import.meta.env.VITE_BOT_GATEWAY_URL ||
+    getConfig().CHAT_BOT_GATEWAY ||
+    ''
+  ).replace(/\/+$/, '');
 
   if (!base) {
     throw new Error(
@@ -139,18 +165,40 @@ type GatewayBotResult = {
   username?: string;
   display_name?: string;
   description?: string;
+  commands?: BotCommand[];
   is_active?: boolean;
   token?: string;
 };
 
-const findGatewayBotByChatUserId = async (
-  chatUserId: string,
-  ownerUserId: string
-): Promise<GatewayBotResult | null> => {
-  if (!chatUserId || !ownerUserId) {
-    return null;
+const cacheGatewayBotCommands = (bot?: GatewayBotResult | null): void => {
+  if (!bot || bot.commands === undefined) {
+    return;
   }
 
+  const commands = normalizeBotCommands(bot.commands);
+
+  if (bot.id) {
+    gatewayBotCommandsById.value = {
+      ...gatewayBotCommandsById.value,
+      [String(bot.id)]: commands
+    };
+  }
+
+  if (bot.chat_user_id) {
+    gatewayBotCommandsByChatUserId.value = {
+      ...gatewayBotCommandsByChatUserId.value,
+      [bot.chat_user_id]: commands
+    };
+  }
+};
+
+const cacheGatewayBots = (bots?: GatewayBotResult[]): void => {
+  bots?.forEach(cacheGatewayBotCommands);
+};
+
+const fetchGatewayBotsByOwner = async (
+  ownerUserId: string
+): Promise<GatewayBotResult[]> => {
   const gateway = resolveBotGatewayUrl();
   const response = await fetch(`${gateway}/bots`, {
     headers: {
@@ -168,8 +216,84 @@ const findGatewayBotByChatUserId = async (
   }
 
   const body = (await response.json()) as { result?: GatewayBotResult[] };
+  const bots = body.result || [];
 
-  return body.result?.find(bot => bot.chat_user_id === chatUserId) || null;
+  cacheGatewayBots(bots);
+
+  return bots;
+};
+
+const fetchGatewayBotCommandsByChatUserId = async (
+  chatUserId: string
+): Promise<GatewayBotResult | null> => {
+  const gateway = resolveBotGatewayUrl();
+  const response = await fetch(
+    `${gateway}/bots/chat-users/${encodeURIComponent(chatUserId)}/commands`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      await readGatewayError(
+        response,
+        `Сервис ботов вернул ошибку ${response.status}`
+      )
+    );
+  }
+
+  const body = (await response.json()) as { result?: GatewayBotResult | null };
+  const bot = body.result || null;
+
+  cacheGatewayBotCommands(bot);
+
+  return bot;
+};
+
+export const loadBotCommandsViaGateway = async (
+  topic?: ITopic | null
+): Promise<BotCommand[]> => {
+  const authUser = getAuthUser();
+  const botId = getBotId(topic?.user);
+
+  if (!topic?.user?.id) {
+    return getBotCommands(topic?.user);
+  }
+
+  const botByChatUserId = await fetchGatewayBotCommandsByChatUserId(
+    topic.user.id
+  );
+
+  if (botByChatUserId) {
+    return normalizeBotCommands(botByChatUserId.commands);
+  }
+
+  if (!authUser?.id) {
+    return getBotCommands(topic.user);
+  }
+
+  const bots = await fetchGatewayBotsByOwner(authUser.id);
+  const bot = bots.find(
+    item =>
+      (botId && item.id === botId) || item.chat_user_id === topic.user?.id
+  );
+
+  if (!bot) {
+    return getBotCommands(topic.user);
+  }
+
+  return normalizeBotCommands(bot.commands);
+};
+
+const findGatewayBotByChatUserId = async (
+  chatUserId: string,
+  ownerUserId: string
+): Promise<GatewayBotResult | null> => {
+  if (!chatUserId || !ownerUserId) {
+    return null;
+  }
+
+  const bots = await fetchGatewayBotsByOwner(ownerUserId);
+
+  return bots.find(bot => bot.chat_user_id === chatUserId) || null;
 };
 
 const resolveGatewayBotId = async (
@@ -301,6 +425,8 @@ export const createBotViaGateway = async (
   if (!result?.chat_user_id || !result?.token) {
     throw new Error('Сервис ботов вернул неполный ответ');
   }
+
+  cacheGatewayBotCommands(result);
 
   const chatUserId: string = result.chat_user_id;
   const token: string = result.token;
@@ -439,6 +565,8 @@ export const updateBotTopic = async (
   const nextName = result?.display_name || payload.name.trim();
   const apiKey = payload.apiKey || getBotApiKey(topic.user);
   const avatarUrl = payload.avatarUrl || topic.user?.avatarUrl || '';
+  const nextBotId = result?.id || botId;
+  cacheGatewayBotCommands(result);
 
   updateLocalBotTopic(topic, {
     ...payload,
@@ -452,7 +580,7 @@ export const updateBotTopic = async (
     const ex = buildBotEx(topic.user.ex, {
       username: nextUsername,
       apiKey,
-      botId: result?.id || botId
+      botId: nextBotId
     });
 
     upsertLocalUser({
@@ -518,8 +646,16 @@ export const deleteBotTopic = async (topic: ITopic): Promise<void> => {
   throw new Error('Не удалось удалить бота: не найден текущий пользователь');
 };
 
-export const getBotInitialForm = (topic?: ITopic | null) => ({
-  name: topic?.name || topic?.user?.initials || '',
-  username: getBotUsername(topic?.user),
-  apiKey: getBotApiKey(topic?.user)
-});
+export const getBotInitialForm = (topic?: ITopic | null) => {
+  const cachedCommands = getCachedBotCommands(
+    getBotId(topic?.user),
+    topic?.user?.id
+  );
+
+  return {
+    name: topic?.name || topic?.user?.initials || '',
+    username: getBotUsername(topic?.user),
+    apiKey: getBotApiKey(topic?.user),
+    commands: cachedCommands ?? getBotCommands(topic?.user, getAuthUser())
+  };
+};

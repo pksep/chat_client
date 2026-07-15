@@ -952,6 +952,7 @@ div.message-content__html > ul > li {
 
 .message-content--text .message-content__html {
   display: inline;
+  user-select: text;
 }
 
 .message-content--text .message-content__html > *:last-child {
@@ -1526,6 +1527,15 @@ div.message-content__file {
   padding-bottom: 27px !important;
   border-bottom-left-radius: 0 !important;
   border-bottom-right-radius: 0 !important;
+
+  & .editor-component__mention-label {
+    min-width: min-content !important;
+  }
+
+  & .editor-component__mention-subtitle {
+    overflow: visible !important;
+    white-space: wrap !important;
+  }
 }
 
 .primary-yui-kit.toolbar-button {

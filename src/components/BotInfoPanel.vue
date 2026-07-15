@@ -24,7 +24,11 @@
     <div class="bot-info-panel__body">
       <button
         type="button"
-        class="bot-info-panel__avatar-button"
+        :class="[
+          'bot-info-panel__avatar-button',
+          { 'bot-info-panel__avatar-button--disabled': !canManageBot }
+        ]"
+        :disabled="!canManageBot"
         @click="openFile"
       >
         <BotAvatar
@@ -32,7 +36,7 @@
           :initials="form.name || 'Б'"
           class="bot-info-panel__avatar"
           :is-online="false"
-          is-edit
+          :is-edit="canManageBot"
         />
       </button>
 
@@ -60,10 +64,11 @@
         <label class="bot-editor__field">
           <span class="bot-editor__label">Название:</span>
           <Input
-            class="minor"
+            class="minor bot-info-panel__profile-input"
             placeholder="Бот для сбора статистики"
+            :disabled="!canManageBot"
             :model-value="form.name"
-            @update:model-value="value => (form.name = value)"
+            @update:model-value="handleNameChange"
           />
         </label>
 
@@ -73,10 +78,11 @@
           </div>
           <div class="bot-info-panel__value-row">
             <Input
-              class="minor bot-info-panel__input"
+              class="minor bot-info-panel__input bot-info-panel__profile-input"
               placeholder="@botname"
+              :disabled="!canManageBot"
               :model-value="form.username"
-              @update:model-value="value => (form.username = value)"
+              @update:model-value="handleUsernameChange"
             />
           </div>
         </label>
@@ -115,7 +121,7 @@
         </label>
       </div>
 
-      <div v-if="isDirty" class="bot-info-panel__save">
+      <div v-if="canManageBot && isDirty" class="bot-info-panel__save">
         <Button
           :type="ButtonTypeEnum.primary"
           :size="SizesEnum.small"
@@ -237,7 +243,9 @@ watch(
     props.user?.id,
     props.topic?.name,
     props.user?.nickname,
-    props.user?.avatarUrl
+    props.user?.avatarUrl,
+    props.topic?.user?.ex,
+    props.user?.ex
   ],
   () => {
     syncForm();
@@ -245,8 +253,24 @@ watch(
   { immediate: true }
 );
 
+const canManageBot = computed(() => {
+  const authUser = getAuthUser();
+
+  if (!authUser?.id || !props.topic) {
+    return false;
+  }
+
+  if (isLocalBotTopic(props.topic)) {
+    return true;
+  }
+
+  return getBotOwnerUserId(props.topic.user || props.user) === authUser.id;
+});
+
 const isFormValid = computed(
-  () => form.name.trim().length > 0 && form.username.trim().length > 0
+  () =>
+    form.name.trim().length > 0 &&
+    form.username.trim().length > 0
 );
 
 const isDirty = computed(
@@ -261,21 +285,13 @@ const visibleApiKeyValue = computed(() =>
   isApiKeyVisible.value ? form.apiKey : maskBotSecret(form.apiKey)
 );
 
-const canDeleteBot = computed(() => {
-  const authUser = getAuthUser();
-
-  if (!authUser?.id || !props.topic) {
-    return false;
-  }
-
-  if (isLocalBotTopic(props.topic)) {
-    return true;
-  }
-
-  return getBotOwnerUserId(props.user || props.topic.user) === authUser.id;
-});
+const canDeleteBot = computed(() => canManageBot.value);
 
 const openFile = (): void => {
+  if (!canManageBot.value) {
+    return;
+  }
+
   fileInputRef.value?.click();
 };
 
@@ -286,6 +302,11 @@ const resetAvatarInput = (): void => {
 };
 
 const handleAvatarChange = async (event: Event): Promise<void> => {
+  if (!canManageBot.value) {
+    resetAvatarInput();
+    return;
+  }
+
   const file = (event.target as HTMLInputElement).files?.[0];
 
   if (!file) {
@@ -302,6 +323,10 @@ const closeEditAvatar = (): void => {
 };
 
 const handleAvatarCropSave = async (croppedFile: File): Promise<void> => {
+  if (!canManageBot.value) {
+    return;
+  }
+
   isUploadingAvatar.value = true;
 
   try {
@@ -326,10 +351,27 @@ const handleCopyApiKey = async (): Promise<void> => {
   await copyTextToClipboard(form.apiKey);
 };
 
+const handleNameChange = (value: string): void => {
+  if (!canManageBot.value) {
+    return;
+  }
+
+  form.name = value;
+};
+
+const handleUsernameChange = (value: string): void => {
+  if (!canManageBot.value) {
+    return;
+  }
+
+  form.username = value;
+};
+
 const handleSave = async (): Promise<void> => {
   if (
     !props.topic ||
     !props.user ||
+    !canManageBot.value ||
     !isFormValid.value ||
     isUploadingAvatar.value
   ) {
