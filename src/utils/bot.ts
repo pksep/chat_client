@@ -209,10 +209,7 @@ export const normalizeBotCommands = (commands: unknown): BotCommand[] => {
   return normalizedCommands;
 };
 
-export const getBotCommands = (
-  user?: IUser | null,
-  _ownerUser?: IUser | null
-): BotCommand[] => {
+export const getBotCommands = (user?: IUser | null): BotCommand[] => {
   const meta = parseBotMeta(user?.ex);
   return normalizeBotCommands(meta.botCommands || meta.commands);
 };
