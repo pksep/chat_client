@@ -77,7 +77,7 @@
 }
 
 .bot-avatar--edit .bot-avatar__icon,
-.bot-avatar__fallback svg {
+.bot-info-panel__avatar .bot-avatar__fallback svg {
   width: 47px;
   height: 47px;
 }
