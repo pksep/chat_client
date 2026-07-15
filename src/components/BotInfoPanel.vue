@@ -268,9 +268,7 @@ const canManageBot = computed(() => {
 });
 
 const isFormValid = computed(
-  () =>
-    form.name.trim().length > 0 &&
-    form.username.trim().length > 0
+  () => form.name.trim().length > 0 && form.username.trim().length > 0
 );
 
 const isDirty = computed(

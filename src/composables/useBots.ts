@@ -272,8 +272,7 @@ export const loadBotCommandsViaGateway = async (
 
   const bots = await fetchGatewayBotsByOwner(authUser.id);
   const bot = bots.find(
-    item =>
-      (botId && item.id === botId) || item.chat_user_id === topic.user?.id
+    item => (botId && item.id === botId) || item.chat_user_id === topic.user?.id
   );
 
   if (!bot) {
