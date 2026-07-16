@@ -441,7 +441,7 @@
   grid-template-columns: repeat(3, 1fr);
 }
 
-.bot-info-panel__actions--single {
+.bot-info-panel__actions.bot-info-panel__actions--single {
   grid-template-columns: 1fr;
 }
 
