@@ -102,6 +102,10 @@ import {
 } from './interfaces/contact-selector';
 import { getUsersList } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
+import {
+  matchesUserSearch,
+  normalizeAtSearchQuery
+} from '../../utils/searchMatch';
 
 const props = withDefaults(defineProps<IContactSelectorProps>(), {
   dataTestid: () => 'ContactSelector'
@@ -131,18 +135,13 @@ const allContacts = computed(() => {
 
 const contacts = computed(() => {
   let filteredContacts = allContacts.value;
+  const query = normalizeAtSearchQuery(state.q);
 
-  filteredContacts = filteredContacts.filter(
-    contact =>
-      contact.initials.toLowerCase().includes(state.q.toLowerCase()) ||
-      contact.nickname.toLowerCase().includes(state.q.toLowerCase()) ||
-      (typeof contact.ex === 'string'
-        ? JSON.parse(contact.ex)
-        : contact.ex
-      )?.erpInitials
-        ?.toLowerCase()
-        .includes(state.q.toLowerCase())
-  );
+  if (query) {
+    filteredContacts = filteredContacts.filter(contact =>
+      matchesUserSearch(contact, query)
+    );
+  }
 
   if (props.excludedContactIds && props.excludedContactIds.size > 0) {
     filteredContacts = filteredContacts.filter(

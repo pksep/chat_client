@@ -212,7 +212,7 @@ import { useChatWallpaper } from '../composables/useChatWallpaper';
 import { useUserInfoModal } from '../composables/useUserInfoModal';
 import VpnConfirmModal from './UI/VpnConfirmModal.vue';
 import { useVpnStatus } from '../services/useVpnStatus';
-import { isBotTopic } from '../utils/bot';
+import { isBotTopic, isBotUser } from '../utils/bot';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -315,7 +315,9 @@ const shouldRenderCallModal = computed(
 const users = computed(() => getUsersList());
 const { isUserInfoOpen, activeUser, activeTopic, closeUserInfo } =
   useUserInfoModal();
-const isBotUserInfo = computed(() => isBotTopic(activeTopic.value));
+const isBotUserInfo = computed(
+  () => isBotTopic(activeTopic.value) || isBotUser(activeUser.value)
+);
 const userInfoModalTitle = computed(() =>
   isBotUserInfo.value ? 'Информация о боте' : 'Информация'
 );

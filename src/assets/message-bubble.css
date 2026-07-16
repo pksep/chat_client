@@ -1416,6 +1416,7 @@ div.message-content__file {
 
 .message-content__html [data-user-id][data-user-openable='true'],
 .message-content__html .link[data-user-id][data-user-openable='true'] {
+  color: var(--link-color);
   cursor: pointer;
 }
 
@@ -1535,6 +1536,7 @@ div.message-content__file {
   & .editor-component__mention-subtitle {
     overflow: visible !important;
     white-space: wrap !important;
+    font-size: 13px !important;
   }
 }
 
