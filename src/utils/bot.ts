@@ -3,6 +3,8 @@ import type { ITopic, IUser } from '../components/interfaces/interfaces';
 
 export const LOCAL_BOT_TOPIC_ID_PREFIX = 'local-bot-topic-';
 export const LOCAL_BOT_USER_ID_PREFIX = 'local-bot-user-';
+export const DELETED_BOT_DISPLAY_NAME = 'Удаленный аккаунт';
+export const DELETED_BOT_USERNAME = 'deleted_bot';
 
 type BotMeta = {
   isBot?: boolean;
@@ -73,7 +75,7 @@ export const isLocalBotTopic = (topic?: ITopic | null): boolean =>
 
 export const isDeletedBotUser = (user?: IUser | null): boolean => {
   const meta = parseBotMeta(user?.ex);
-  return Boolean(meta.isDeletedBot || user?.nickname === 'deleted_bot');
+  return Boolean(meta.isDeletedBot || user?.nickname === DELETED_BOT_USERNAME);
 };
 
 export const isBotUser = (user?: IUser | null): boolean => {
@@ -236,6 +238,37 @@ export const buildBotEx = (
     ...(payload.ownerUserId ? { botOwnerUserId: payload.ownerUserId } : {}),
     erpRole: metaWithoutCommands.erpRole || 'Бот'
   });
+};
+
+export const buildDeletedBotUser = (user?: IUser | null): IUser | null => {
+  if (!user?.id) {
+    return null;
+  }
+
+  const meta = { ...parseBotMeta(user.ex) };
+  delete meta.apiKey;
+  delete meta.botApiKey;
+  delete meta.botCommands;
+  delete meta.botId;
+  delete meta.botOwnerUserId;
+  delete meta.botUsername;
+  delete meta.commands;
+
+  return {
+    ...user,
+    initials: DELETED_BOT_DISPLAY_NAME,
+    nickname: DELETED_BOT_USERNAME,
+    avatarUrl: '',
+    lastOnline: null,
+    status: null,
+    isBot: false,
+    ex: JSON.stringify({
+      ...meta,
+      isBot: false,
+      isDeletedBot: true,
+      erpRole: ''
+    })
+  };
 };
 
 export const maskBotSecret = (value: string): string => {

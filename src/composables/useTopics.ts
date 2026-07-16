@@ -36,8 +36,13 @@ import {
   isUnreadIgnoredMessageForUser,
   isUnreadTrackableMessageForUser
 } from '../utils/messageTracking';
-import { isBotTopic, isBotUser, isLocalBotTopic } from '../utils/bot';
 import { getDisplayableTopicUnreadCount } from '../utils/topicUnreadCount';
+import {
+  isBotTopic,
+  isBotUser,
+  isDeletedBotUser,
+  isLocalBotTopic
+} from '../utils/bot';
 
 const topics = ref<ITopic[]>([]);
 const loading = ref(false);
@@ -280,6 +285,23 @@ const createTopicsApi = () => {
           : normalizedTopic.avatarUrl || normalizedTopic.user?.avatarUrl;
       normalizedTopic.name =
         normalizedTopic.name || normalizedTopic.user?.initials;
+    }
+
+    if (
+      normalizedTopic.type === TopicType.DM &&
+      isDeletedBotUser(existingTopic?.user)
+    ) {
+      const deletedUser = existingTopic.user;
+
+      normalizedTopic.user = deletedUser;
+      normalizedTopic.members =
+        normalizedTopic.members?.map(member =>
+          member.id === deletedUser.id ? deletedUser : member
+        ) ||
+        existingTopic.members ||
+        normalizedTopic.members;
+      normalizedTopic.avatarUrl = '';
+      normalizedTopic.name = existingTopic.name || deletedUser.initials;
     }
 
     return normalizedTopic;
