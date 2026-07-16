@@ -102,8 +102,7 @@ const importStartupBackgroundSnapshot = (
 
 const shouldAllowStartupTopicCache = (
   hasFreshBackgroundSnapshot = false
-): boolean =>
-  !hasStartupNetwork() || hasFreshBackgroundSnapshot;
+): boolean => !hasStartupNetwork() || hasFreshBackgroundSnapshot;
 
 const shouldAllowStartupActiveMessageCache = (): boolean =>
   !hasStartupNetwork();

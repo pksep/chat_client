@@ -22,9 +22,7 @@
       @unmount-contact="handleOpenGroupInfo"
       :selected-contact-ids="
         new Set(
-          selectedContacts
-            .filter(u => u.id !== authedUser?.id)
-            .map(u => u.id)
+          selectedContacts.filter(u => u.id !== authedUser?.id).map(u => u.id)
         )
       "
     />

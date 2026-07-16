@@ -190,15 +190,12 @@ export const importChatBackgroundSnapshot = async (
     const localPts = normalizePts(localPtsMeta?.pts);
 
     if (!snapshotPts || comparePts(snapshotPts, localPts) <= 0) {
-      console.info(
-        '[ChatBackgroundSync] Снимок пропущен без нового PTS',
-        {
-          provider,
-          source: opts.source,
-          snapshotPts,
-          localPts
-        }
-      );
+      console.info('[ChatBackgroundSync] Снимок пропущен без нового PTS', {
+        provider,
+        source: opts.source,
+        snapshotPts,
+        localPts
+      });
       return false;
     }
   }
@@ -344,7 +341,10 @@ export const saveNativeChatBackgroundSyncSession = async (
       userId: session.userId
     });
   } catch (error) {
-    console.warn('[ChatBackgroundSync] Не удалось сохранить native-сессию:', error);
+    console.warn(
+      '[ChatBackgroundSync] Не удалось сохранить native-сессию:',
+      error
+    );
   }
 };
 
@@ -357,7 +357,10 @@ export const clearNativeChatBackgroundSyncSession = async (): Promise<void> => {
     await ChatBackgroundSync.clearSession();
     console.info('[ChatBackgroundSync] native-сессия очищена');
   } catch (error) {
-    console.warn('[ChatBackgroundSync] Не удалось очистить native-сессию:', error);
+    console.warn(
+      '[ChatBackgroundSync] Не удалось очистить native-сессию:',
+      error
+    );
   }
 };
 

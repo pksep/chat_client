@@ -15,9 +15,9 @@
       background-color: var(--blue15);
     }
 
-    .contact-list__description::after,
-    .contact-list__description p::after,
-    .contact-list__description strong::after {
+    .contact-list__description--overflow::after,
+    .contact-list__description--overflow p::after,
+    .contact-list__description--overflow strong::after {
       background: linear-gradient(to right, transparent 0%, var(--blue15) 100%);
     }
     .contact-list__bottom::before {
@@ -34,9 +34,9 @@
       background-color: var(--blue15);
     }
 
-    .contact-list__description::after,
-    .contact-list__description p::after,
-    .contact-list__description strong::after {
+    .contact-list__description--overflow::after,
+    .contact-list__description--overflow p::after,
+    .contact-list__description--overflow strong::after {
       background: linear-gradient(to right, transparent 0%, var(--blue15) 100%);
     }
     .contact-list__bottom::before {
@@ -127,17 +127,30 @@
   }
 }
 
-.contact-list__description::after,
-.contact-list__description p::after,
-.contact-list__description strong::after {
+.contact-list__description--overflow::after,
+.contact-list__description--overflow p::after,
+.contact-list__description--overflow strong::after {
   content: '';
   position: absolute;
   top: 0;
-  left: calc(100vw - 100px);
+  left: auto;
+  right: 0;
   width: 9ch;
   height: 100%;
   pointer-events: none;
   background: linear-gradient(to right, transparent 0%, var(--white) 100%);
+}
+
+.contact-list__item--message-result
+  .contact-list__description--overflow::after,
+.contact-list__item--message-result
+  .contact-list__description--overflow
+  p::after,
+.contact-list__item--message-result
+  .contact-list__description--overflow
+  strong::after {
+  left: auto;
+  right: 0;
 }
 
 .contact-list__search-state {

@@ -1,5 +1,6 @@
 <template>
   <ul
+    ref="listRootRef"
     :key="listRenderKey"
     :class="['contact-list', props.class]"
     role="list"
@@ -382,7 +383,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch
+} from 'vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import {
   Button,
@@ -495,10 +503,15 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
 const authedUser = computed(() => getAuthUser());
 const isRecentlyReconnected = computed(() => getHasWebsocketConnection());
 const listRenderKey = ref(0);
+const listRootRef = ref<HTMLElement | null>(null);
 const pendingActiveTopicId = ref<string | null>(null);
 const { getFullMediaPath } = useMessageMedia();
 const currentTime = ref(Date.now());
 let currentTimeInterval: ReturnType<typeof setInterval> | null = null;
+let descriptionOverflowRafId = 0;
+let descriptionOverflowSecondRafId = 0;
+let descriptionMutationObserver: MutationObserver | null = null;
+let descriptionResizeObserver: ResizeObserver | null = null;
 const TOPIC_PRESS_SCROLL_CANCEL_PX = 8;
 let topicPressPointerId: number | null = null;
 let topicPressStartX = 0;
@@ -572,10 +585,96 @@ watch(
   }
 );
 
+const cancelDescriptionOverflowSync = (): void => {
+  if (descriptionOverflowRafId) {
+    window.cancelAnimationFrame(descriptionOverflowRafId);
+    descriptionOverflowRafId = 0;
+  }
+
+  if (descriptionOverflowSecondRafId) {
+    window.cancelAnimationFrame(descriptionOverflowSecondRafId);
+    descriptionOverflowSecondRafId = 0;
+  }
+};
+
+const getDescriptionOverflowCandidates = (
+  element: HTMLElement
+): HTMLElement[] => [
+  element,
+  ...Array.from(element.querySelectorAll<HTMLElement>('p, strong'))
+];
+
+const syncDescriptionOverflowState = (): void => {
+  const root = listRootRef.value;
+
+  if (!root) {
+    return;
+  }
+
+  const descriptions = Array.from(
+    root.querySelectorAll<HTMLElement>('.contact-list__description')
+  );
+
+  descriptions.forEach(description => {
+    const hasOverflow = getDescriptionOverflowCandidates(description).some(
+      element =>
+        element.clientWidth > 0 && element.scrollWidth > element.clientWidth + 1
+    );
+
+    description.classList.toggle(
+      'contact-list__description--overflow',
+      hasOverflow
+    );
+  });
+};
+
+const scheduleDescriptionOverflowSync = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  nextTick(() => {
+    cancelDescriptionOverflowSync();
+    descriptionOverflowRafId = window.requestAnimationFrame(() => {
+      descriptionOverflowRafId = 0;
+      syncDescriptionOverflowState();
+
+      descriptionOverflowSecondRafId = window.requestAnimationFrame(() => {
+        descriptionOverflowSecondRafId = 0;
+        syncDescriptionOverflowState();
+      });
+    });
+  });
+};
+
 onMounted(() => {
   currentTimeInterval = setInterval(() => {
     currentTime.value = Date.now();
   }, 1000);
+
+  window.addEventListener('resize', scheduleDescriptionOverflowSync);
+
+  if ('MutationObserver' in window && listRootRef.value) {
+    descriptionMutationObserver = new MutationObserver(() => {
+      scheduleDescriptionOverflowSync();
+    });
+    descriptionMutationObserver.observe(listRootRef.value, {
+      attributes: true,
+      attributeFilter: ['data-emoji-ready', 'src'],
+      characterData: true,
+      childList: true,
+      subtree: true
+    });
+  }
+
+  if ('ResizeObserver' in window && listRootRef.value) {
+    descriptionResizeObserver = new ResizeObserver(() => {
+      scheduleDescriptionOverflowSync();
+    });
+    descriptionResizeObserver.observe(listRootRef.value);
+  }
+
+  scheduleDescriptionOverflowSync();
 });
 
 onBeforeUnmount(() => {
@@ -583,7 +682,26 @@ onBeforeUnmount(() => {
     clearInterval(currentTimeInterval);
     currentTimeInterval = null;
   }
+
+  window.removeEventListener('resize', scheduleDescriptionOverflowSync);
+  cancelDescriptionOverflowSync();
+  descriptionMutationObserver?.disconnect();
+  descriptionMutationObserver = null;
+  descriptionResizeObserver?.disconnect();
+  descriptionResizeObserver = null;
 });
+
+watch(
+  [
+    () => props.topics,
+    () => props.messageResults,
+    () => props.searchQuery,
+    () => props.isMessageSearchLoading,
+    () => props.showCheckbox
+  ],
+  scheduleDescriptionOverflowSync,
+  { deep: true, immediate: true }
+);
 
 const handlePin = (topic: ITopic): void => {
   togglePinTopic(topic);
@@ -993,10 +1111,13 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
   width: calc(100vw - 180px);
 }
 
-.contact-list__block--wrapper--selection .contact-list__description::after,
-.contact-list__block--wrapper--selection .contact-list__description p::after,
 .contact-list__block--wrapper--selection
-  .contact-list__description
+  .contact-list__description--overflow::after,
+.contact-list__block--wrapper--selection
+  .contact-list__description--overflow
+  p::after,
+.contact-list__block--wrapper--selection
+  .contact-list__description--overflow
   strong::after {
   left: auto;
   right: 0;
@@ -1004,12 +1125,12 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
 }
 
 .contact-list__item--selection.contact-list__item--active
-  .contact-list__description::after,
+  .contact-list__description--overflow::after,
 .contact-list__item--selection.contact-list__item--active
-  .contact-list__description
+  .contact-list__description--overflow
   p::after,
 .contact-list__item--selection.contact-list__item--active
-  .contact-list__description
+  .contact-list__description--overflow
   strong::after {
   background: linear-gradient(to right, transparent 0%, var(--blue15) 100%);
 }

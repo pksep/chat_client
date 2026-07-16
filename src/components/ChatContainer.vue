@@ -40,7 +40,6 @@
       :on-update-click="handleUpdateClick"
       :on-dismiss-update-banner="dismissUpdateBanner"
       :dataTestid="`${props.dataTestid}-ChatContainer-Chat`"
-      @rendered-topic-change="handleRenderedTopicChange"
     />
     <template v-if="!isMobile">
       <Modal
@@ -184,8 +183,7 @@ import BotInfoPanel from './BotInfoPanel.vue';
 import {
   MobilePlatformEnum,
   type IChatContainerProps,
-  type IHeaderDisplayRoute,
-  type IMessageRenderedTopicState
+  type IHeaderDisplayRoute
 } from './interfaces/interfaces';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
@@ -217,8 +215,6 @@ import { useUserInfoModal } from '../composables/useUserInfoModal';
 import VpnConfirmModal from './UI/VpnConfirmModal.vue';
 import { useVpnStatus } from '../services/useVpnStatus';
 import { isBotTopic } from '../utils/bot';
-import { useTopics } from '../composables/useTopics';
-import { TopicType } from '../services/useChatSDK/types';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -246,7 +242,6 @@ const {
 } = useMobileApp();
 
 const route = useUrlWatcher();
-const { getSelectedTopic } = useTopics();
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const {
@@ -334,54 +329,11 @@ const props = withDefaults(defineProps<IChatContainerProps>(), {
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 const isVpnConfirmModalOpen = ref(false);
 const hasDismissedActiveVpnWarning = ref(false);
-const renderedMessageTopic = ref<IMessageRenderedTopicState>({
-  topicId: null,
-  routeTopicId: null,
-  messageCount: 0,
-  isCurrent: false
-});
 
 const authUser = computed(() => getAuthUser());
 
-const handleRenderedTopicChange = (
-  payload: IMessageRenderedTopicState
-): void => {
-  renderedMessageTopic.value = payload;
-};
-
-const getDisplayRouteForTopic = (
-  topicId: string | null
-): IHeaderDisplayRoute | null => {
-  if (!topicId) {
-    return null;
-  }
-
-  const topic = getSelectedTopic(topicId);
-
-  if (topic?.type === TopicType.Group) {
-    return { type: RouteTypes.GROUP, id: topicId };
-  }
-
-  if (topic?.type === TopicType.DM) {
-    return { type: RouteTypes.DIALOGS, id: topicId };
-  }
-
-  return null;
-};
-
 const headerDisplayRoute = computed<IHeaderDisplayRoute>(() => {
   const currentRoute = route.value;
-  const renderedRoute = getDisplayRouteForTopic(
-    renderedMessageTopic.value.topicId
-  );
-
-  if (
-    currentRoute.id &&
-    renderedRoute?.id &&
-    renderedRoute.id !== currentRoute.id
-  ) {
-    return renderedRoute;
-  }
 
   return {
     type: currentRoute.type,

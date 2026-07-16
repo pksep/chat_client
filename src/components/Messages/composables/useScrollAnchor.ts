@@ -29,6 +29,7 @@ interface PendingViewportMutation {
   reason: MutationReason;
   scrollHeight: number;
   scrollTop: number;
+  startedAt: number;
 }
 
 export function useScrollAnchor(options: UseScrollAnchorOptions) {
@@ -46,15 +47,21 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
   let stickyAnchor: ScrollAnchor | null = null;
   let resizeObserver: ResizeObserver | null = null;
   let mutationObserver: MutationObserver | null = null;
+  let userScrollIntentElement: HTMLElement | null = null;
   let isRestoringScroll = false;
   let restoreRafId = 0;
   let anchorRestoreToken = 0;
   let scrollRafId = 0;
   let resizeDriftRafId = 0;
   let resizeDriftQuietTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let bottomPinRestoreRafId = 0;
+  let bottomPinRestoreToken = 0;
+  let bottomPinLockStartedAt = 0;
+  let bottomPinLockUntil = 0;
+  let bottomPinRestoreTimeoutIds: ReturnType<typeof setTimeout>[] = [];
   let lastScrollAnchorCaptureAt = 0;
   let lastScrollAt = 0;
-  let lastUserScrollAt = 0;
+  let lastUserScrollIntentAt = 0;
   let lastReverseScrollHeight = 0;
   let revision = 0;
   let pendingMutation: PendingViewportMutation | null = null;
@@ -64,6 +71,9 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
   const smoothSettleDelayMs = 220;
   const scrollAnchorCaptureIntervalMs = 180;
   const resizeDriftScrollQuietMs = 260;
+  const bottomPinSettleMs = 900;
+  const bottomPinSettleDelaysMs = [80, 220, 520, 880];
+  const userScrollIntentGraceMs = 700;
 
   const getMessageSelector = (messageId: string): string => {
     const escapedMessageId = window.CSS?.escape
@@ -186,6 +196,95 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     });
   };
 
+  const markUserScrollIntent = (): void => {
+    lastUserScrollIntentAt = performance.now();
+  };
+
+  const hasRecentUserScrollIntent = (): boolean =>
+    performance.now() - lastUserScrollIntentAt <= userScrollIntentGraceMs;
+
+  const hasUserScrollIntentAfter = (startedAt: number): boolean =>
+    lastUserScrollIntentAt > startedAt;
+
+  const clearScheduledBottomPinTimers = (): void => {
+    if (bottomPinRestoreRafId) {
+      cancelAnimationFrame(bottomPinRestoreRafId);
+      bottomPinRestoreRafId = 0;
+    }
+
+    bottomPinRestoreTimeoutIds.forEach(timeoutId => {
+      clearTimeout(timeoutId);
+    });
+    bottomPinRestoreTimeoutIds = [];
+  };
+
+  const cancelScheduledBottomPinRestore = (): void => {
+    bottomPinRestoreToken += 1;
+    bottomPinLockUntil = 0;
+    clearScheduledBottomPinTimers();
+  };
+
+  const isBottomPinLockActive = (): boolean =>
+    performance.now() <= bottomPinLockUntil &&
+    !hasUserScrollIntentAfter(bottomPinLockStartedAt);
+
+  const runBottomPinRestoreStep = (
+    token: number,
+    startedAt: number
+  ): boolean => {
+    if (token !== bottomPinRestoreToken) {
+      return false;
+    }
+
+    if (hasUserScrollIntentAfter(startedAt)) {
+      cancelScheduledBottomPinRestore();
+      return false;
+    }
+
+    keepBottomPinned('auto');
+    return true;
+  };
+
+  const scheduleBottomPinRestore = (startedAt: number): void => {
+    clearScheduledBottomPinTimers();
+
+    bottomPinRestoreToken += 1;
+    const restoreToken = bottomPinRestoreToken;
+    bottomPinLockStartedAt = startedAt;
+    bottomPinLockUntil = performance.now() + bottomPinSettleMs;
+
+    nextTick(() => {
+      if (!runBottomPinRestoreStep(restoreToken, startedAt)) {
+        return;
+      }
+
+      bottomPinRestoreRafId = requestAnimationFrame(() => {
+        bottomPinRestoreRafId = 0;
+
+        if (!runBottomPinRestoreStep(restoreToken, startedAt)) {
+          return;
+        }
+
+        bottomPinRestoreRafId = requestAnimationFrame(() => {
+          bottomPinRestoreRafId = 0;
+          runBottomPinRestoreStep(restoreToken, startedAt);
+        });
+      });
+    });
+
+    bottomPinRestoreTimeoutIds = bottomPinSettleDelaysMs.map(delay =>
+      setTimeout(() => {
+        runBottomPinRestoreStep(restoreToken, startedAt);
+      }, delay)
+    );
+  };
+
+  const shouldSettleBottomPinForMutation = (
+    mutation: PendingViewportMutation
+  ): boolean =>
+    mutation.pinToBottom &&
+    (mutation.reason === 'append' || mutation.reason === 'realtime');
+
   const restoreAnchorPosition = (anchor: ScrollAnchor | null): boolean => {
     const container = containerRef.value;
     if (!container || !anchor) {
@@ -255,11 +354,40 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     return true;
   };
 
+  const restoreReverseMutationSnapshot = (
+    mutation: PendingViewportMutation
+  ): boolean => {
+    if (mutation.reason === 'prepend') {
+      return restoreReversePrependSnapshot(mutation);
+    }
+
+    const container = containerRef.value;
+    if (!container) {
+      return false;
+    }
+
+    const heightDelta = container.scrollHeight - mutation.scrollHeight;
+    const nextScrollTop = mutation.scrollTop - heightDelta;
+
+    if (!Number.isFinite(nextScrollTop)) {
+      return false;
+    }
+
+    if (Math.abs(container.scrollTop - nextScrollTop) <= 0.5) {
+      return false;
+    }
+
+    setInternalScrollLock();
+    container.scrollTop = nextScrollTop;
+
+    return true;
+  };
+
   const restoreMutationSnapshot = (
     mutation: PendingViewportMutation
   ): boolean =>
     isReverseScrollContainer()
-      ? restoreReversePrependSnapshot(mutation)
+      ? restoreReverseMutationSnapshot(mutation)
       : restorePrependSnapshot(mutation);
 
   const isReverseScrollContainer = (): boolean => {
@@ -300,7 +428,10 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
         : null;
 
     if (!anchor) {
-      return false;
+      setInternalScrollLock();
+      container.scrollTop -= heightDelta;
+      updateBottomState();
+      return true;
     }
 
     if (!restoreAnchorPosition(anchor)) {
@@ -354,10 +485,9 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
 
     const restoreToken = ++anchorRestoreToken;
     const restoreScheduledAt = performance.now();
-    const isRestoreCurrent = (): boolean =>
-      restoreToken === anchorRestoreToken;
+    const isRestoreCurrent = (): boolean => restoreToken === anchorRestoreToken;
     const didUserScrollAfterSchedule = (): boolean =>
-      lastUserScrollAt > restoreScheduledAt;
+      hasUserScrollIntentAfter(restoreScheduledAt);
     const shouldAbortForUserScroll = true;
     const finishAnchorRestore = (preserveAnchor = true): void => {
       if (!isRestoreCurrent()) {
@@ -460,9 +590,14 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       revision,
       reason,
       scrollHeight: containerRef.value?.scrollHeight || 0,
-      scrollTop: containerRef.value?.scrollTop || 0
+      scrollTop: containerRef.value?.scrollTop || 0,
+      startedAt: performance.now()
     };
     forceNoPinBottomForNextMutation = false;
+
+    if (shouldSettleBottomPinForMutation(pendingMutation)) {
+      scheduleBottomPinRestore(pendingMutation.startedAt);
+    }
 
     if (preserveViewport && reason !== 'jump') {
       viewportMode.value = 'history';
@@ -513,6 +648,9 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
 
     if (currentMutation.pinToBottom) {
       keepBottomPinned(options?.behavior || 'auto');
+      if (shouldSettleBottomPinForMutation(currentMutation)) {
+        scheduleBottomPinRestore(currentMutation.startedAt);
+      }
     }
   };
 
@@ -561,34 +699,40 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
 
     const currentTop = container.scrollTop;
     const delta = finalTop - currentTop;
+    const scrollToTop = (top: number, scrollBehavior: ScrollBehavior): void => {
+      setInternalScrollLock();
+
+      if (isReverseScrollContainer() && top < 0) {
+        container.scrollTop = top;
+        return;
+      }
+
+      container.scrollTo({ top, behavior: scrollBehavior });
+    };
 
     if (
       behavior !== 'smooth' ||
       !Number.isFinite(delta) ||
       Math.abs(delta) <= smoothTailDistancePx
     ) {
-      setInternalScrollLock();
-      container.scrollTo({ top: finalTop, behavior });
+      scrollToTop(finalTop, behavior);
       updateBottomState();
       return;
     }
 
     const nearTargetTop = finalTop - Math.sign(delta) * smoothTailDistancePx;
 
-    setInternalScrollLock();
-    container.scrollTo({ top: nearTargetTop, behavior: 'auto' });
+    scrollToTop(nearTargetTop, 'auto');
 
     await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 
-    setInternalScrollLock();
-    container.scrollTo({ top: finalTop, behavior: 'smooth' });
+    scrollToTop(finalTop, 'smooth');
     await new Promise<void>(resolve =>
       setTimeout(() => {
         resolve();
       }, smoothSettleDelayMs)
     );
-    setInternalScrollLock();
-    container.scrollTo({ top: finalTop, behavior: 'auto' });
+    scrollToTop(finalTop, 'auto');
     updateBottomState();
   };
 
@@ -652,6 +796,11 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
 
     const container = containerRef.value;
     if (!container) {
+      return;
+    }
+
+    if (isBottomPinLockActive()) {
+      keepBottomPinned('auto');
       return;
     }
 
@@ -760,6 +909,10 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
           observeMessageElement(node);
         });
       }
+
+      if (isBottomPinLockActive()) {
+        keepBottomPinned('auto');
+      }
     });
 
     mutationObserver.observe(container, {
@@ -768,11 +921,46 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     });
   };
 
+  const setupUserScrollIntentListeners = (): void => {
+    cleanupUserScrollIntentListeners();
+
+    const container = containerRef.value;
+    if (!container) {
+      return;
+    }
+
+    userScrollIntentElement = container;
+    container.addEventListener('wheel', markUserScrollIntent, {
+      passive: true
+    });
+    container.addEventListener('touchmove', markUserScrollIntent, {
+      passive: true
+    });
+    container.addEventListener('pointerdown', markUserScrollIntent, {
+      passive: true
+    });
+    container.addEventListener('keydown', markUserScrollIntent);
+  };
+
+  const cleanupUserScrollIntentListeners = (): void => {
+    const container = userScrollIntentElement;
+    if (!container) {
+      return;
+    }
+
+    container.removeEventListener('wheel', markUserScrollIntent);
+    container.removeEventListener('touchmove', markUserScrollIntent);
+    container.removeEventListener('pointerdown', markUserScrollIntent);
+    container.removeEventListener('keydown', markUserScrollIntent);
+    userScrollIntentElement = null;
+  };
+
   const initialize = (): void => {
     updateBottomState();
     lastReverseScrollHeight = containerRef.value?.scrollHeight || 0;
     setupResizeObserver();
     setupMutationObserver();
+    setupUserScrollIntentListeners();
   };
 
   const cleanup = (): void => {
@@ -796,8 +984,10 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       resizeDriftQuietTimeoutId = null;
     }
 
+    cancelScheduledBottomPinRestore();
     cleanupResizeObserver();
     cleanupMutationObserver();
+    cleanupUserScrollIntentListeners();
   };
 
   const syncScrollHeight = (): void => {
@@ -808,8 +998,13 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
   const onScroll = (): void => {
     lastScrollAt = performance.now();
 
-    if (!isRestoringScroll) {
-      lastUserScrollAt = lastScrollAt;
+    if (
+      !isRestoringScroll &&
+      bottomPinLockUntil > 0 &&
+      hasRecentUserScrollIntent() &&
+      hasUserScrollIntentAfter(bottomPinLockStartedAt)
+    ) {
+      cancelScheduledBottomPinRestore();
     }
 
     if (isRestoringScroll || scrollRafId) {

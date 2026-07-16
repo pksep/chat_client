@@ -384,8 +384,52 @@ export function useMessageScroll(
     hideNewerMessagesLoadingAfterDomUpdate();
   };
 
-  const getMessageIds = () =>
-    state.messages.map((message: IMessage) => message.id);
+  const MESSAGE_VIEWPORT_KEY_SEPARATOR = '::viewport::';
+
+  const getMessageReactionKey = (message: IMessage): string =>
+    (message.reactions || [])
+      .map(
+        reaction =>
+          `${reaction.id || ''}:${reaction.senderUserId || ''}:${
+            reaction.text || ''
+          }`
+      )
+      .sort()
+      .join(',');
+
+  const getMessageMediaKey = (message: IMessage): string =>
+    (message.media || [])
+      .map(
+        media =>
+          `${media.id || ''}:${media.path || ''}:${
+            media.thumbnailPath || ''
+          }:${media.type || ''}:${media.size || ''}:${JSON.stringify(
+            media.ex || {}
+          )}`
+      )
+      .join(',');
+
+  const getMessageViewportKey = (message: IMessage): string =>
+    [
+      message.id,
+      message.text || '',
+      message.status || '',
+      message.isEdit ? 'edit' : '',
+      message.isPin ? 'pin' : '',
+      message.updatedAt || '',
+      message.deletedAt || '',
+      getMessageMediaKey(message),
+      getMessageReactionKey(message)
+    ].join(MESSAGE_VIEWPORT_KEY_SEPARATOR);
+
+  const getMessageViewportKeys = () =>
+    state.messages.map((message: IMessage) => getMessageViewportKey(message));
+
+  const getMessageIdFromViewportKey = (key: string): string =>
+    key.split(MESSAGE_VIEWPORT_KEY_SEPARATOR)[0] || '';
+
+  const getMessageIdsFromViewportKeys = (keys: string[]): string[] =>
+    keys.map(getMessageIdFromViewportKey);
 
   const canTrackVisibleMessages = (): boolean => {
     const container = chatWrapperRef.value;
@@ -1528,14 +1572,16 @@ export function useMessageScroll(
   );
 
   watch(
-    getMessageIds,
-    (newIds, oldIds) => {
-      if (!oldIds || !chatWrapperRef.value) {
+    getMessageViewportKeys,
+    (newKeys, oldKeys) => {
+      if (!oldKeys || !chatWrapperRef.value) {
         pendingMessagesMutationRevision = null;
         pendingViewportAnchorMessageId = null;
         return;
       }
 
+      const newIds = getMessageIdsFromViewportKeys(newKeys);
+      const oldIds = getMessageIdsFromViewportKeys(oldKeys);
       const oldSet = new Set(oldIds);
       const hasNew = newIds.some(id => !oldSet.has(id));
       const firstOldIndex = oldIds.length > 0 ? newIds.indexOf(oldIds[0]) : -1;
@@ -1555,8 +1601,7 @@ export function useMessageScroll(
           scrollState.isUserScrolling ||
           !scrollAnchor.isAtBottom());
       const mutation = scrollAnchor.beginViewportMutation(reason, {
-        forcePreserve:
-          reason === 'prepend' || shouldPreserveAppendViewport,
+        forcePreserve: reason === 'prepend' || shouldPreserveAppendViewport,
         preferredMessageId: pendingViewportAnchorMessageId || undefined
       });
 
@@ -1566,7 +1611,7 @@ export function useMessageScroll(
   );
 
   watch(
-    getMessageIds,
+    getMessageViewportKeys,
     () => {
       const commitPendingViewportMutation = (): void => {
         if (pendingMessagesMutationRevision === null) {
@@ -1612,6 +1657,7 @@ export function useMessageScroll(
     scrollState.isUserScrolling = false;
     scrollState.previousScrollTop = 0;
     scrollState.shouldAutoScroll = true;
+    scrollAnchor.setViewportMode('live', { pin: false });
   };
 
   const suspendAutoRead = (durationMs: number) => {

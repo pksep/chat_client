@@ -95,7 +95,11 @@
       'chat__message-wrapper',
       {
         'chat__message-wrapper--content-deferred':
-          shouldRenderUserMessageSkeleton
+          shouldDeferUserMessageContentLayout,
+        'chat__message-wrapper--bootstrap-scroll-locked':
+          shouldLockUserMessageBootstrapScroll,
+        'chat__message-wrapper--search-positioning':
+          isSearchNavigationPositioning
       }
     ]"
     v-if="!isAiRoute && !isDefaultRoute"
@@ -451,7 +455,6 @@ import {
   isMessageSelectionModeForTopic
 } from '../composables/useSelectedMessages';
 import {
-  clearMessagesForTopic,
   fetchAroundMessage,
   fetchMessagesForTopic,
   fetchPinnedMessagesForTopic,
@@ -533,16 +536,15 @@ const emit = defineEmits<{
     e: 'viewport-snapshot-change',
     snapshot: IMessageViewportSnapshot | null
   ): void;
-  (
-    e: 'rendered-topic-change',
-    payload: IMessageRenderedTopicState
-  ): void;
+  (e: 'rendered-topic-change', payload: IMessageRenderedTopicState): void;
 }>();
 const TOPIC_SWITCH_AUTO_READ_GRACE_MS = 1200;
 const TOPIC_SWITCH_HISTORY_FETCH_GRACE_MS = 1200;
 const TOPIC_SWITCH_BOOTSTRAP_MESSAGES_LIMIT = 10;
 const TOPIC_SWITCH_SKELETON_DELAY_MS = 300;
 const TOPIC_SWITCH_EXPANDED_FETCH_DELAY_MS = 320;
+const TOPIC_SWITCH_USER_SCROLL_INTENT_GRACE_MS = 2000;
+const CURRENT_TOPIC_BOTTOM_THRESHOLD_PX = 120;
 const TOPIC_SWITCH_MEDIA_PREWARM_LIMIT = 12;
 const MOBILE_FAST_INITIAL_MESSAGES_LIMIT = 10;
 const MOBILE_FAST_MAX_INITIAL_MESSAGES_LIMIT = 10;
@@ -773,11 +775,25 @@ const isDeletedAccountTopic = computed(() => {
 const topicUnreadCount = computed(() =>
   getTopicUnreadBadgeCount(activeTopic.value || undefined, authUser.value?.id)
 );
+const getCurrentTopicBottomDistance = (): number => {
+  const container = chatWrapperRef.value;
+
+  if (!container) {
+    return 0;
+  }
+
+  return Math.abs(Math.min(container.scrollTop, 0));
+};
+
+const isCurrentTopicNearBottomNow = (): boolean =>
+  getCurrentTopicBottomDistance() <= CURRENT_TOPIC_BOTTOM_THRESHOLD_PX;
+
 const isViewingBottom = computed(
   () =>
     !!route.value?.id &&
     route.value.type !== RouteTypes.AI &&
-    scrollAnchor.viewportMode.value === 'live'
+    scrollAnchor.viewportMode.value === 'live' &&
+    isCurrentTopicNearBottomNow()
 );
 const shouldShowFloatingDateDivider = computed(
   () =>
@@ -810,8 +826,14 @@ const unreadReactionMessageId = computed(() => {
 const renderedTopicId = ref(route.value.id || '');
 const isAwaitingUserMessagesPaint = ref(false);
 const isInitialMessagesSkeletonVisible = ref(false);
+const isBootstrapScrollLocked = ref(false);
+const isSearchNavigationPositioning = ref(false);
 let activeTopicSwitchToken = 0;
 let topicSwitchStartedAtMs = 0;
+let topicSwitchUserScrollIntentAtMs = 0;
+let bootstrapScrollLockToken = 0;
+let bootstrapScrollLockReleaseFrameId = 0;
+let searchNavigationPositioningReleaseFrameId = 0;
 let renderMismatchTelemetryTimeout: ReturnType<typeof setTimeout> | null = null;
 let initialMessagesSkeletonTimeoutId: number | null = null;
 let initialMessagesSkeletonToken = 0;
@@ -823,6 +845,7 @@ let activeTopicPreviewRefreshToken = 0;
 let activeTopicPreviewRefreshRetryCount = 0;
 let completedTopicSwitchToken = 0;
 let isPendingSearchNavigationInProgress = false;
+let isPendingSearchNavigationBootstrapInProgress = false;
 const ACTIVE_TOPIC_PREVIEW_REFRESH_MAX_RETRIES = 20;
 
 const waitForMessageListIdle = (): Promise<void> =>
@@ -841,6 +864,112 @@ const waitForExpandedTopicFetchDelay = (): Promise<void> =>
       window.requestAnimationFrame(() => resolve());
     }, TOPIC_SWITCH_EXPANDED_FETCH_DELAY_MS);
   });
+
+const isInsideTopicSwitchUserScrollWindow = (): boolean =>
+  !!topicSwitchStartedAtMs &&
+  performance.now() - topicSwitchStartedAtMs <=
+    TOPIC_SWITCH_USER_SCROLL_INTENT_GRACE_MS;
+
+const markTopicSwitchUserScrollIntent = (): void => {
+  if (
+    !route.value?.id ||
+    route.value.type === RouteTypes.AI ||
+    !isInsideTopicSwitchUserScrollWindow()
+  ) {
+    return;
+  }
+
+  topicSwitchUserScrollIntentAtMs = performance.now();
+};
+
+const hasTopicSwitchUserScrollIntent = (topicSwitchToken: number): boolean =>
+  topicSwitchToken === activeTopicSwitchToken &&
+  topicSwitchStartedAtMs > 0 &&
+  topicSwitchUserScrollIntentAtMs >= topicSwitchStartedAtMs &&
+  topicSwitchUserScrollIntentAtMs - topicSwitchStartedAtMs <=
+    TOPIC_SWITCH_USER_SCROLL_INTENT_GRACE_MS;
+
+const cancelBootstrapScrollLockRelease = (): void => {
+  if (!bootstrapScrollLockReleaseFrameId) {
+    return;
+  }
+
+  window.cancelAnimationFrame(bootstrapScrollLockReleaseFrameId);
+  bootstrapScrollLockReleaseFrameId = 0;
+};
+
+const setBootstrapScrollLock = (
+  topicSwitchToken: number,
+  locked: boolean
+): void => {
+  cancelBootstrapScrollLockRelease();
+  bootstrapScrollLockToken = locked ? topicSwitchToken : 0;
+  isBootstrapScrollLocked.value = locked;
+};
+
+const releaseBootstrapScrollLock = (topicSwitchToken?: number): void => {
+  if (
+    topicSwitchToken !== undefined &&
+    topicSwitchToken !== bootstrapScrollLockToken
+  ) {
+    return;
+  }
+
+  cancelBootstrapScrollLockRelease();
+  bootstrapScrollLockToken = 0;
+  isBootstrapScrollLocked.value = false;
+};
+
+const releaseBootstrapScrollLockAfterPaint = (
+  topicSwitchToken: number
+): void => {
+  nextTick(() => {
+    if (topicSwitchToken !== activeTopicSwitchToken) {
+      return;
+    }
+
+    cancelBootstrapScrollLockRelease();
+    bootstrapScrollLockReleaseFrameId = window.requestAnimationFrame(() => {
+      bootstrapScrollLockReleaseFrameId = 0;
+      releaseBootstrapScrollLock(topicSwitchToken);
+    });
+  });
+};
+
+const cancelSearchNavigationPositioningRelease = (): void => {
+  if (!searchNavigationPositioningReleaseFrameId) {
+    return;
+  }
+
+  window.cancelAnimationFrame(searchNavigationPositioningReleaseFrameId);
+  searchNavigationPositioningReleaseFrameId = 0;
+};
+
+const releaseSearchNavigationPositioning = (): void => {
+  cancelSearchNavigationPositioningRelease();
+  isSearchNavigationPositioning.value = false;
+};
+
+const releaseSearchNavigationPositioningAfterPaint = (
+  topicSwitchToken?: number
+): void => {
+  nextTick(() => {
+    if (
+      topicSwitchToken !== undefined &&
+      topicSwitchToken !== activeTopicSwitchToken
+    ) {
+      return;
+    }
+
+    cancelSearchNavigationPositioningRelease();
+    searchNavigationPositioningReleaseFrameId = window.requestAnimationFrame(
+      () => {
+        searchNavigationPositioningReleaseFrameId = 0;
+        isSearchNavigationPositioning.value = false;
+      }
+    );
+  });
+};
 
 const clearInitialMessagesSkeletonTimer = (): void => {
   if (initialMessagesSkeletonTimeoutId !== null) {
@@ -1063,8 +1192,7 @@ const refreshActiveTopicFromPreview = async (
   );
   const { expandedLimit } = getTopicSwitchFetchLimits(unreadCount);
   const visibleLimit = expandedLimit;
-  const shouldKeepBottomPosition =
-    !scrollState.isUserScrolling || scrollAnchor.isNearBottom.value;
+  const shouldKeepBottomPosition = shouldKeepCurrentTopicBottomPosition();
 
   console.info('chat.active_topic_preview_refresh.started', {
     topicId,
@@ -1076,6 +1204,7 @@ const refreshActiveTopicFromPreview = async (
     forceRefresh: true,
     forceNetwork: true,
     allowStaleFallback: false,
+    skipSave: !shouldKeepBottomPosition,
     visibleLimit
   });
 
@@ -1174,7 +1303,7 @@ const scheduleVisibleMessagesExpansion = (
         return;
       }
 
-      if (scrollState.isUserScrolling && !scrollAnchor.isNearBottom.value) {
+      if (!shouldKeepTopicSwitchBottomPosition(topicSwitchToken)) {
         return;
       }
 
@@ -1191,7 +1320,7 @@ const scheduleVisibleMessagesExpansion = (
           return;
         }
 
-        if (scrollState.isUserScrolling && !scrollAnchor.isNearBottom.value) {
+        if (!shouldKeepTopicSwitchBottomPosition(topicSwitchToken)) {
           return;
         }
 
@@ -1210,7 +1339,8 @@ const scheduleExpandedTopicMessagesFetch = (
   topicId: string,
   limit: number,
   initialFetch: Promise<IMessage[]>,
-  isStaleTopicSwitch: () => boolean
+  isStaleTopicSwitch: () => boolean,
+  topicSwitchToken: number
 ): void => {
   void initialFetch
     .then(waitForMessageListIdle)
@@ -1220,8 +1350,7 @@ const scheduleExpandedTopicMessagesFetch = (
         return;
       }
 
-      const shouldUpdateVisibleWindow =
-        scrollAnchor.isNearBottom.value && !scrollState.isUserScrolling;
+      const shouldUpdateVisibleWindow = isCurrentTopicNearBottomNow();
 
       await fetchMessagesForTopic(topicId, {
         limit,
@@ -1231,9 +1360,31 @@ const scheduleExpandedTopicMessagesFetch = (
         skipSave: !shouldUpdateVisibleWindow,
         visibleLimit: limit
       });
+
+      if (isStaleTopicSwitch()) {
+        return;
+      }
+
+      await nextTick();
+
+      if (
+        shouldUpdateVisibleWindow &&
+        shouldKeepTopicSwitchBottomPosition(topicSwitchToken)
+      ) {
+        scrollToBottom({
+          preferUnreadMarker: false,
+          smooth: false
+        });
+      }
+
+      releaseBootstrapScrollLockAfterPaint(topicSwitchToken);
     })
     .catch(error => {
       console.warn('Failed to fetch expanded topic messages:', error);
+
+      if (!isStaleTopicSwitch()) {
+        releaseBootstrapScrollLockAfterPaint(topicSwitchToken);
+      }
     });
 };
 
@@ -1349,6 +1500,11 @@ const keepFloatingDateDividerVisibleBriefly = (): void => {
 };
 
 const handleFloatingDateDividerUserScroll = (): void => {
+  if (isBootstrapScrollLocked.value || isSearchNavigationPositioning.value) {
+    return;
+  }
+
+  markTopicSwitchUserScrollIntent();
   floatingDateDividerUserScrollIntentAt = performance.now();
   keepFloatingDateDividerVisibleBriefly();
   scheduleFloatingDateDividerSync();
@@ -1382,6 +1538,16 @@ const {
   props
 );
 
+const shouldKeepTopicSwitchBottomPosition = (
+  topicSwitchToken: number
+): boolean =>
+  !hasTopicSwitchUserScrollIntent(topicSwitchToken) &&
+  isCurrentTopicNearBottomNow();
+
+const shouldKeepCurrentTopicBottomPosition = (): boolean =>
+  !hasTopicSwitchUserScrollIntent(activeTopicSwitchToken) &&
+  isCurrentTopicNearBottomNow();
+
 const hasVisibleUserMessages = computed(() => state.messages.length > 0);
 const isUserMessagesRoute = computed(
   () => !isAiRoute.value && !isDefaultRoute.value
@@ -1392,11 +1558,25 @@ const shouldShowDelayedInitialSkeleton = computed(
     isInitialMessagesSkeletonVisible.value &&
     (isLoadingInitialMessages.value || isAwaitingUserMessagesPaint.value)
 );
+const shouldShowSearchNavigationSkeleton = computed(
+  () => isUserMessagesRoute.value && isSearchNavigationPositioning.value
+);
 const shouldRenderUserMessageSkeleton = computed(
   () =>
     props.deferContentRender ||
-    (isUserMessagesRoute.value &&
-      shouldShowDelayedInitialSkeleton.value)
+    shouldShowSearchNavigationSkeleton.value ||
+    (isUserMessagesRoute.value && shouldShowDelayedInitialSkeleton.value)
+);
+const shouldDeferUserMessageContentLayout = computed(
+  () =>
+    props.deferContentRender ||
+    (isUserMessagesRoute.value && shouldShowDelayedInitialSkeleton.value)
+);
+const shouldLockUserMessageBootstrapScroll = computed(
+  () =>
+    isBootstrapScrollLocked.value &&
+    isUserMessagesRoute.value &&
+    !shouldRenderUserMessageSkeleton.value
 );
 const shouldMountUserMessageItems = computed(
   () => !props.deferContentRender && isUserMessagesRoute.value
@@ -1455,6 +1635,7 @@ const handleBottomBarHeightChange = (height: number): void => {
   const shouldKeepBottomPinned =
     isUserMessagesRoute.value &&
     !shouldRenderUserMessageSkeleton.value &&
+    shouldKeepCurrentTopicBottomPosition() &&
     (isViewingBottom.value || scrollAnchor.isNearBottom.value);
 
   if (bottomBarHeight.value === nextHeight) {
@@ -1470,6 +1651,10 @@ const handleBottomBarHeightChange = (height: number): void => {
   nextTick(() => {
     requestAnimationFrame(() => {
       if (!isUserMessagesRoute.value || !chatWrapperRef.value) {
+        return;
+      }
+
+      if (!shouldKeepCurrentTopicBottomPosition()) {
         return;
       }
 
@@ -1581,10 +1766,13 @@ const handleUserMessagesContentReady = (payload?: {
       return;
     }
 
-    scrollToBottom({
-      preferUnreadMarker: false,
-      smooth: false
-    });
+    if (shouldKeepCurrentTopicBottomPosition()) {
+      scrollToBottom({
+        preferUnreadMarker: false,
+        smooth: false
+      });
+    }
+
     setupIntersectionObserver();
     syncVisibleUnreadAfterAutoScroll();
     void handlePendingSearchNavigation();
@@ -1799,9 +1987,10 @@ type ScrollToMessageObjectPayload = {
   quoteText?: string;
   quoteOccurrenceIndex?: number;
   allowOptimisticTarget?: boolean;
-  scrollBehavior?: ScrollBehavior;
+  scrollBehavior?: MessageScrollBehavior;
 };
 
+type MessageScrollBehavior = 'auto' | 'instant' | 'smooth';
 type ScrollToMessagePayload = IMessage | ScrollToMessageObjectPayload;
 
 const isScrollToMessageObjectPayload = (
@@ -1839,7 +2028,7 @@ const getScrollTargetAllowOptimisticTarget = (
 
 const getScrollTargetBehavior = (
   payload: ScrollToMessagePayload
-): ScrollBehavior =>
+): MessageScrollBehavior =>
   isScrollToMessageObjectPayload(payload)
     ? payload.scrollBehavior || 'smooth'
     : 'smooth';
@@ -2093,7 +2282,7 @@ const jumpToMessageWithHighlight = async (
   messageId: string,
   quoteText: string,
   quoteOccurrenceIndex?: number,
-  behavior: ScrollBehavior = 'smooth'
+  behavior: MessageScrollBehavior = 'smooth'
 ): Promise<boolean> => {
   await messageListUserItemsRef.value?.ensureMessageRendered?.(messageId);
 
@@ -2153,7 +2342,7 @@ const jumpToOptimisticTarget = async (
   message: IMessage,
   quoteText: string,
   quoteOccurrenceIndex?: number,
-  behavior: ScrollBehavior = 'smooth'
+  behavior: MessageScrollBehavior = 'smooth'
 ): Promise<boolean> => {
   const topicId = route.value.id;
 
@@ -2190,7 +2379,7 @@ const navigateToMessageId = async (
   quoteText = '',
   quoteOccurrenceIndex?: number,
   optimisticMessage?: IMessage | null,
-  behavior: ScrollBehavior = 'smooth'
+  behavior: MessageScrollBehavior = 'smooth'
 ): Promise<boolean> => {
   const didJump = await jumpToMessageWithHighlight(
     messageId,
@@ -2303,7 +2492,8 @@ const handlePendingSearchNavigation = async (): Promise<void> => {
     isPendingSearchNavigationInProgress ||
     isLoadingInitialMessages.value ||
     props.deferContentRender ||
-    shouldRenderUserMessageSkeleton.value ||
+    (shouldRenderUserMessageSkeleton.value &&
+      !shouldShowSearchNavigationSkeleton.value) ||
     !messageListUserItemsRef.value ||
     activeTopicSwitchToken !== completedTopicSwitchToken
   ) {
@@ -2313,16 +2503,98 @@ const handlePendingSearchNavigation = async (): Promise<void> => {
   isPendingSearchNavigationInProgress = true;
 
   try {
-    const didNavigate = await handleScrollToMessage(pendingResult.message);
+    const didNavigate = await handleScrollToMessage({
+      message: pendingResult.message,
+      allowOptimisticTarget: true,
+      scrollBehavior: 'auto'
+    });
 
-    if (
-      didNavigate &&
-      getPendingSearchNavigation()?.id === pendingResult.id
-    ) {
+    if (didNavigate && getPendingSearchNavigation()?.id === pendingResult.id) {
       consumePendingSearchNavigation(topicId);
     }
   } finally {
     isPendingSearchNavigationInProgress = false;
+  }
+};
+
+const hasVisibleSearchNavigationTarget = (
+  topicId: string,
+  messageId: string
+): boolean =>
+  getMessagesByTopicId(topicId).some(message => message.id === messageId);
+
+const bootstrapPendingSearchNavigation = async (): Promise<void> => {
+  const topicId = route.value.id;
+  const pendingResult = getPendingSearchNavigation();
+  const messageId = pendingResult?.message?.id || '';
+
+  if (
+    !topicId ||
+    route.value.type === RouteTypes.AI ||
+    !pendingResult ||
+    pendingResult.topicId !== topicId ||
+    !messageId ||
+    props.deferContentRender ||
+    isPendingSearchNavigationBootstrapInProgress
+  ) {
+    return;
+  }
+
+  if (hasVisibleSearchNavigationTarget(topicId, messageId)) {
+    await nextTick();
+    await handlePendingSearchNavigation();
+    return;
+  }
+
+  if (
+    isLoadingInitialMessages.value ||
+    activeTopicSwitchToken !== completedTopicSwitchToken
+  ) {
+    return;
+  }
+
+  const bootstrapTopicSwitchToken = activeTopicSwitchToken;
+  const isStalePendingSearchRoute = () =>
+    route.value.id !== topicId ||
+    bootstrapTopicSwitchToken !== activeTopicSwitchToken;
+  const isStalePendingSearchBootstrap = () =>
+    isStalePendingSearchRoute() ||
+    getPendingSearchNavigation()?.id !== pendingResult.id;
+
+  isPendingSearchNavigationBootstrapInProgress = true;
+  isSearchNavigationPositioning.value = true;
+  cancelSearchNavigationPositioningRelease();
+  isLoadingInitialMessages.value = true;
+  resetScrollState();
+  suspendHistoryFetch(TOPIC_SWITCH_HISTORY_FETCH_GRACE_MS);
+
+  try {
+    await fetchAroundMessage(messageId, topicId, {
+      updateVisible: true
+    });
+
+    if (isStalePendingSearchBootstrap()) {
+      return;
+    }
+
+    renderedTopicId.value = topicId;
+    isLoadingInitialMessages.value = false;
+    resetInitialMessagesSkeleton();
+    await nextTick();
+
+    if (isStalePendingSearchBootstrap()) {
+      return;
+    }
+
+    await handlePendingSearchNavigation();
+  } finally {
+    isPendingSearchNavigationBootstrapInProgress = false;
+
+    if (!isStalePendingSearchRoute()) {
+      isLoadingInitialMessages.value = false;
+      resetInitialMessagesSkeleton();
+      releaseSearchNavigationPositioningAfterPaint(bootstrapTopicSwitchToken);
+    }
   }
 };
 
@@ -2580,6 +2852,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', scheduleFloatingDateDividerSync);
+  releaseBootstrapScrollLock();
+  releaseSearchNavigationPositioning();
   resetInitialMessagesSkeleton();
   clearVisibleMessagesExpansionSchedule();
 
@@ -2676,10 +2950,13 @@ watch(
         return;
       }
 
-      scrollToBottom({
-        preferUnreadMarker: false,
-        smooth: false
-      });
+      if (shouldKeepCurrentTopicBottomPosition()) {
+        scrollToBottom({
+          preferUnreadMarker: false,
+          smooth: false
+        });
+      }
+
       setupIntersectionObserver();
       scheduleFloatingDateDividerSync();
       syncVisibleUnreadAfterAutoScroll();
@@ -2690,20 +2967,24 @@ watch(
 
 watch(
   [() => route.value?.id, () => route.value?.type],
-  async ([topicId]) => {
+  async ([topicId, routeType]) => {
     hideFloatingDateDivider();
     if (!topicId) {
       renderedTopicId.value = '';
       isAwaitingUserMessagesPaint.value = false;
       isLoadingInitialMessages.value = false;
+      releaseBootstrapScrollLock();
+      releaseSearchNavigationPositioning();
       resetInitialMessagesSkeleton();
       return;
     }
     const topicSwitchToken = ++activeTopicSwitchToken;
     topicSwitchStartedAtMs = performance.now();
+    topicSwitchUserScrollIntentAtMs = 0;
     const isStaleTopicSwitch = () =>
       topicSwitchToken !== activeTopicSwitchToken ||
       route.value?.id !== topicId;
+    renderedTopicId.value = routeType === RouteTypes.AI ? '' : topicId;
     isAwaitingUserMessagesPaint.value =
       isMobile.value &&
       route.value?.type !== RouteTypes.AI &&
@@ -2734,6 +3015,25 @@ watch(
       topicUnreadCount,
       initialMessagesLimit
     );
+    const pendingSearchNavigationForTopic =
+      routeType !== RouteTypes.AI &&
+      getPendingSearchNavigation()?.topicId === topicId
+        ? getPendingSearchNavigation()
+        : null;
+    const pendingSearchMessageId =
+      pendingSearchNavigationForTopic?.message?.id || '';
+    const shouldPositionToPendingSearch = !!pendingSearchMessageId;
+    const shouldLockBootstrapScroll =
+      !shouldPositionToPendingSearch &&
+      routeType !== RouteTypes.AI &&
+      expandedLimit > fastInitialMessagesLimit &&
+      fastInitialMessagesLimit <= TOPIC_SWITCH_BOOTSTRAP_MESSAGES_LIMIT;
+
+    setBootstrapScrollLock(topicSwitchToken, shouldLockBootstrapScroll);
+    isSearchNavigationPositioning.value = shouldPositionToPendingSearch;
+    if (shouldPositionToPendingSearch) {
+      cancelSearchNavigationPositioningRelease();
+    }
 
     state.replyMessage = null;
     state.editMessage = null;
@@ -2754,10 +3054,6 @@ watch(
         })
       : [];
 
-    if (!shouldUseCachedBootstrap) {
-      clearMessagesForTopic(topicId, { syncLastMessage: false });
-    }
-
     if (isStaleTopicSwitch()) {
       return;
     }
@@ -2777,35 +3073,48 @@ watch(
         return;
       }
 
-      scrollToBottom({
-        preferUnreadMarker: false,
-        smooth: false
-      });
+      if (
+        !shouldPositionToPendingSearch &&
+        shouldKeepTopicSwitchBottomPosition(topicSwitchToken)
+      ) {
+        scrollToBottom({
+          preferUnreadMarker: false,
+          smooth: false
+        });
+      }
 
-      scheduleVisibleMessagesExpansion(
-        topicId,
-        initialMessagesLimit,
-        topicSwitchToken
-      );
+      if (!shouldPositionToPendingSearch) {
+        scheduleVisibleMessagesExpansion(
+          topicId,
+          initialMessagesLimit,
+          topicSwitchToken
+        );
+      }
     }
 
     void fetchPinnedMessagesForTopic(topicId);
-    const initialMessagesFetch = fetchMessagesForTopic(topicId, {
-      limit: initialMessagesLimit,
-      forceRefresh: true,
-      forceNetwork: navigator.onLine,
-      allowStaleFallback: !navigator.onLine,
-      visibleLimit: fastInitialMessagesLimit
-    });
+    const initialMessagesFetch = shouldPositionToPendingSearch
+      ? fetchAroundMessage(pendingSearchMessageId, topicId, {
+          updateVisible: true
+        })
+      : fetchMessagesForTopic(topicId, {
+          limit: initialMessagesLimit,
+          forceRefresh: true,
+          forceNetwork: navigator.onLine,
+          allowStaleFallback: !navigator.onLine,
+          visibleLimit: fastInitialMessagesLimit
+        });
 
-    const initialMessages = await initialMessagesFetch;
+    const initialMessages = (await initialMessagesFetch) || [];
 
     if (isStaleTopicSwitch()) {
       return;
     }
 
     cancelInitialMessagesSkeletonDelay();
-    setVisibleMessagesLimitForTopic(topicId, fastInitialMessagesLimit);
+    if (!shouldPositionToPendingSearch) {
+      setVisibleMessagesLimitForTopic(topicId, fastInitialMessagesLimit);
+    }
 
     if (getMessagesByTopicId(topicId).length === 0) {
       isAwaitingUserMessagesPaint.value = false;
@@ -2819,13 +3128,19 @@ watch(
       return;
     }
 
-    if (expandedLimit > initialMessagesLimit) {
+    if (
+      !shouldPositionToPendingSearch &&
+      expandedLimit > initialMessagesLimit
+    ) {
       scheduleExpandedTopicMessagesFetch(
         topicId,
         expandedLimit,
         Promise.resolve(initialMessages),
-        isStaleTopicSwitch
+        isStaleTopicSwitch,
+        topicSwitchToken
       );
+    } else {
+      releaseBootstrapScrollLockAfterPaint(topicSwitchToken);
     }
 
     refreshUnreadMarkerState();
@@ -2851,7 +3166,8 @@ watch(
     }
 
     const shouldKeepInitialBottomPosition =
-      !scrollState.isUserScrolling || scrollAnchor.isNearBottom.value;
+      !shouldPositionToPendingSearch &&
+      shouldKeepTopicSwitchBottomPosition(topicSwitchToken);
 
     if (shouldKeepInitialBottomPosition) {
       scrollToBottom({
@@ -2873,7 +3189,7 @@ watch(
         return;
       }
 
-      if (!scrollState.isUserScrolling || scrollAnchor.isNearBottom.value) {
+      if (shouldKeepTopicSwitchBottomPosition(topicSwitchToken)) {
         scrollToBottom({
           preferUnreadMarker: false,
           smooth: false
@@ -2892,6 +3208,9 @@ watch(
     resetInitialMessagesSkeleton();
     completedTopicSwitchToken = topicSwitchToken;
     await handlePendingSearchNavigation();
+    if (shouldPositionToPendingSearch) {
+      releaseSearchNavigationPositioningAfterPaint(topicSwitchToken);
+    }
     rememberCurrentUnreadMarkerState(topicId);
     setReadReceiptsEnabled(true);
     setupIntersectionObserver();
@@ -2907,7 +3226,7 @@ watch(
     () => isLoadingInitialMessages.value
   ],
   () => {
-    void handlePendingSearchNavigation();
+    void bootstrapPendingSearchNavigation();
   },
   { flush: 'post' }
 );

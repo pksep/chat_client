@@ -165,7 +165,10 @@ const saveWebSyncMeta = async (
     const { saveShadowSyncMeta } = await import('./useShadowChatSync');
     await saveShadowSyncMeta(key, payload, userId);
   } catch (error) {
-    console.warn('[WebChatBackgroundSync] Не удалось сохранить shadow meta:', error);
+    console.warn(
+      '[WebChatBackgroundSync] Не удалось сохранить shadow meta:',
+      error
+    );
   }
 };
 
@@ -575,7 +578,10 @@ const registerOneOffSync = async (): Promise<void> => {
   try {
     await syncRegistration.sync.register(SYNC_TAG);
   } catch (error) {
-    console.warn('[WebChatBackgroundSync] Не удалось зарегистрировать sync:', error);
+    console.warn(
+      '[WebChatBackgroundSync] Не удалось зарегистрировать sync:',
+      error
+    );
   }
 };
 
@@ -712,9 +718,12 @@ export const importWebChatBackgroundSnapshot = async (
       },
       userId || snapshot.userId
     );
-    console.info('[WebChatBackgroundSync] Web-снимок синхронизации импортирован', {
-      source: opts?.source
-    });
+    console.info(
+      '[WebChatBackgroundSync] Web-снимок синхронизации импортирован',
+      {
+        source: opts?.source
+      }
+    );
   }
 
   return imported;

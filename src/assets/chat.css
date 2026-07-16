@@ -43,6 +43,18 @@ p.chat__nothing-paragraph {
   border-radius: 18px 0 0 18px;
 }
 
+.chat__message-wrapper--bootstrap-scroll-locked {
+  overflow: hidden;
+}
+
+.chat__message-wrapper--search-positioning {
+  overflow: hidden;
+}
+
+.chat__message-wrapper--search-positioning > .chat__message-bubble {
+  visibility: hidden;
+}
+
 .chat__message-bubble {
   display: flex;
   flex-direction: column;

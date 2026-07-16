@@ -150,13 +150,7 @@
 </template>
 
 <script lang="ts" setup>
-import {
-  computed,
-  onBeforeUnmount,
-  ref,
-  useTemplateRef,
-  watch
-} from 'vue';
+import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import MessageList from './MessageList.vue';
 import ContactListMobile from './ContactList/MobileList.vue';
@@ -222,6 +216,7 @@ const shouldShowPinnedMessages = computed(
 );
 const MOBILE_ROUTE_CONTENT_DELAY_MS = 220;
 const OPENED_MOBILE_TOPIC_IDS_KEY = 'openedMobileTopicIds';
+type MessageScrollBehavior = 'auto' | 'instant' | 'smooth';
 
 const loadOpenedMobileTopicIds = (): Set<string> => {
   try {
@@ -237,7 +232,6 @@ const loadOpenedMobileTopicIds = (): Set<string> => {
 const openedMobileTopicIds = loadOpenedMobileTopicIds();
 let mobileRouteContentTimerId: number | null = null;
 let mobileRouteContentFrameId: number | null = null;
-let mobileRouteListMountFrameId: number | null = null;
 let mobileRouteContentToken = 0;
 
 type ScrollToMessagePayload =
@@ -247,7 +241,7 @@ type ScrollToMessagePayload =
       quoteText?: string;
       quoteOccurrenceIndex?: number;
       allowOptimisticTarget?: boolean;
-      scrollBehavior?: ScrollBehavior;
+      scrollBehavior?: MessageScrollBehavior;
     };
 
 const scrollToMessage = (payload: ScrollToMessagePayload) => {
@@ -282,13 +276,6 @@ const clearMobileRouteContentSchedule = (): void => {
   if (mobileRouteContentFrameId !== null) {
     window.cancelAnimationFrame(mobileRouteContentFrameId);
     mobileRouteContentFrameId = null;
-  }
-};
-
-const clearMobileMessageListMountSchedule = (): void => {
-  if (mobileRouteListMountFrameId !== null) {
-    window.cancelAnimationFrame(mobileRouteListMountFrameId);
-    mobileRouteListMountFrameId = null;
   }
 };
 
@@ -338,27 +325,6 @@ const revealMobileMessageContent = (token: number): void => {
   });
 };
 
-const mountMobileMessageListAfterFirstPaint = (
-  topicId: string,
-  token: number
-): void => {
-  clearMobileMessageListMountSchedule();
-  mobileRouteListMountFrameId = window.requestAnimationFrame(() => {
-    mobileRouteListMountFrameId = null;
-
-    if (
-      token !== mobileRouteContentToken ||
-      !isMobile.value ||
-      route.value.id !== topicId
-    ) {
-      return;
-    }
-
-    isMobileMessageListMounted.value = true;
-    syncMobileMessageContentState(topicId);
-  });
-};
-
 const scheduleMobileMessageContentReveal = (): void => {
   const token = ++mobileRouteContentToken;
 
@@ -401,7 +367,6 @@ const prepareMobileMessageRoute = (topicId: string): void => {
 
   currentMobileTopicUsesSkeleton.value = shouldShowSkeleton;
   rememberOpenedMobileTopic(topicId);
-  clearMobileMessageListMountSchedule();
   clearMobileRouteContentSchedule();
 
   ++mobileRouteContentToken;
@@ -435,7 +400,6 @@ watch(
     }
 
     if (!isMobile.value) {
-      clearMobileMessageListMountSchedule();
       clearMobileRouteContentSchedule();
       isMobileMessageListMounted.value = true;
       isMobileMessageContentReady.value = true;
@@ -449,7 +413,6 @@ watch(
         : 'chat-mobile-route-forward';
 
     if (!topicId) {
-      clearMobileMessageListMountSchedule();
       syncMobileMessageContentState(topicId);
       isMobileMessageListMounted.value = false;
       currentMobileTopicUsesSkeleton.value = false;
@@ -464,7 +427,6 @@ watch(
   isMobile,
   mobile => {
     if (!mobile) {
-      clearMobileMessageListMountSchedule();
       clearMobileRouteContentSchedule();
       isMobileMessageListMounted.value = true;
       isMobileMessageContentReady.value = true;
@@ -484,7 +446,6 @@ watch(
 );
 
 onBeforeUnmount(() => {
-  clearMobileMessageListMountSchedule();
   clearMobileRouteContentSchedule();
 });
 

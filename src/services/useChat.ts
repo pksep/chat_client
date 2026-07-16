@@ -252,6 +252,30 @@ const syncPtsStateToServer = async (): Promise<void> => {
   });
 };
 
+const takeBufferedIncomingMessagesForTopic = (topicId: string): IMessage[] => {
+  if (!topicId) {
+    return [];
+  }
+
+  const messages = bufferedIncomingMessagesByTopic.value[topicId] || [];
+  bufferedIncomingMessagesByTopic.value[topicId] = [];
+
+  return messages;
+};
+
+const flushBufferedIncomingMessagesForTopic = (topicId: string): void => {
+  const messages = takeBufferedIncomingMessagesForTopic(topicId);
+
+  if (messages.length === 0) {
+    return;
+  }
+
+  mergeMessagesForTopic(topicId, messages, 'append', {
+    syncLastMessage: false,
+    windowMode: 'preserve-end'
+  });
+};
+
 export const setSuspendIncomingMergeForTopic = (
   topicId: string,
   suspended: boolean
@@ -261,19 +285,16 @@ export const setSuspendIncomingMergeForTopic = (
   }
 
   suspendIncomingMergeByTopic.value[topicId] = suspended;
+
+  if (!suspended) {
+    flushBufferedIncomingMessagesForTopic(topicId);
+  }
 };
 
 export const consumeBufferedIncomingMessagesForTopic = (
   topicId: string
 ): IMessage[] => {
-  if (!topicId) {
-    return [];
-  }
-
-  const messages = bufferedIncomingMessagesByTopic.value[topicId] || [];
-  bufferedIncomingMessagesByTopic.value[topicId] = [];
-
-  return messages;
+  return takeBufferedIncomingMessagesForTopic(topicId);
 };
 
 export const getBufferedIncomingMessagesCountForTopic = (
@@ -312,6 +333,9 @@ const setupChatListeners = (): void => {
       message.senderUserId !== currentUserId.value;
     const isUnreadIncomingMessage =
       isIncomingFromAnotherUser && !message.isReadByMe;
+    const isTrackableUnreadIncomingMessage =
+      isUnreadIncomingMessage &&
+      isUnreadTrackableMessageForUser(message, currentUserId.value);
     const shouldSuspendMerge =
       isIncomingFromAnotherUser &&
       route.value.id === message.topicId &&
@@ -329,10 +353,7 @@ const setupChatListeners = (): void => {
         ];
       }
 
-      if (
-        isUnreadIncomingMessage &&
-        isUnreadTrackableMessageForUser(message, currentUserId.value)
-      ) {
+      if (isTrackableUnreadIncomingMessage) {
         changeUnreadMessageCount(1, message.topicId);
       }
     }
@@ -348,6 +369,7 @@ const setupChatListeners = (): void => {
       if (
         !isCurrentTopicActivelyVisible &&
         message.topicId === route.value.id &&
+        isTrackableUnreadIncomingMessage &&
         totalUnreadCount.value === unreadCountBefore
       ) {
         incrementDisplayedUnreadCount(1);

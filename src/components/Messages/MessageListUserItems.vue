@@ -217,6 +217,11 @@ let scrollParent: HTMLElement | null = null;
 let virtualViewportRafId = 0;
 let contentReadyRafId = 0;
 let contentReadyToken = 0;
+let pendingVirtualViewportRestore: {
+  snapshot: IMessageViewportSnapshot;
+  scrollHeight: number;
+  scrollTop: number;
+} | null = null;
 
 const VIRTUALIZATION_ITEM_THRESHOLD = 850;
 const VIRTUALIZATION_MESSAGE_THRESHOLD = 750;
@@ -225,6 +230,8 @@ const VIRTUAL_OVERSCAN_PX = 1400;
 const VIRTUAL_RANGE_ITEM_BUFFER = 6;
 const VIRTUAL_DEFAULT_ITEM_HEIGHT_PX = 68;
 const VIRTUAL_ITEM_GAP_PX = 5;
+const VIRTUAL_VIEWPORT_BOTTOM_THRESHOLD_PX = 120;
+const MESSAGE_VIEWPORT_KEY_SEPARATOR = '::viewport::';
 const FORMAT_CACHE_LIMIT = 2000;
 
 const formattedTimeCache = new Map<number, string>();
@@ -879,6 +886,133 @@ const getVisibleMessageSnapshot = (): IMessageViewportSnapshot | null => {
   };
 };
 
+const getMessageReactionKey = (message: IMessage): string =>
+  (message.reactions || [])
+    .map(
+      reaction =>
+        `${reaction.id || ''}:${reaction.senderUserId || ''}:${
+          reaction.text || ''
+        }`
+    )
+    .sort()
+    .join(',');
+
+const getMessageMediaKey = (message: IMessage): string =>
+  (message.media || [])
+    .map(
+      media =>
+        `${media.id || ''}:${media.path || ''}:${
+          media.thumbnailPath || ''
+        }:${media.type || ''}:${media.size || ''}:${JSON.stringify(
+          media.ex || {}
+        )}`
+    )
+    .join(',');
+
+const getMessageViewportKey = (message: IMessage): string =>
+  [
+    message.id,
+    message.text || '',
+    message.status || '',
+    message.isEdit ? 'edit' : '',
+    message.isPin ? 'pin' : '',
+    message.updatedAt || '',
+    message.deletedAt || '',
+    getMessageMediaKey(message),
+    getMessageReactionKey(message)
+  ].join(MESSAGE_VIEWPORT_KEY_SEPARATOR);
+
+const getMessageViewportKeys = (): string[] =>
+  props.messages.map(message => getMessageViewportKey(message));
+
+const getMessageSelector = (messageId: string): string => {
+  const escapedMessageId = window.CSS?.escape
+    ? window.CSS.escape(messageId)
+    : messageId.replace(/["\\]/g, '\\$&');
+
+  return `[data-message-id="${escapedMessageId}"]`;
+};
+
+const isScrollParentNearBottom = (parent: HTMLElement): boolean =>
+  Math.abs(Math.min(parent.scrollTop, 0)) <=
+  VIRTUAL_VIEWPORT_BOTTOM_THRESHOLD_PX;
+
+const captureVirtualViewportRestore = (): void => {
+  const parent = getScrollParent();
+  const snapshot = getVisibleMessageSnapshot();
+
+  if (!parent || !snapshot || isScrollParentNearBottom(parent)) {
+    pendingVirtualViewportRestore = null;
+    return;
+  }
+
+  pendingVirtualViewportRestore = {
+    snapshot,
+    scrollHeight: parent.scrollHeight,
+    scrollTop: parent.scrollTop
+  };
+};
+
+const restoreVirtualViewport = (
+  restore: NonNullable<typeof pendingVirtualViewportRestore>
+): void => {
+  const parent = getScrollParent();
+  const root = listRootRef.value;
+
+  if (!parent || !root || isScrollParentNearBottom(parent)) {
+    return;
+  }
+
+  const anchorElement = root.querySelector<HTMLElement>(
+    getMessageSelector(restore.snapshot.anchorMessageId)
+  );
+
+  if (anchorElement) {
+    const parentRect = parent.getBoundingClientRect();
+    const anchorRect = anchorElement.getBoundingClientRect();
+    const currentRelativeTop = anchorRect.top - parentRect.top;
+    const drift = currentRelativeTop - restore.snapshot.anchorRelativeTop;
+
+    if (Math.abs(drift) > 0.5) {
+      parent.scrollTop += drift;
+    }
+
+    syncVirtualViewport(true);
+    return;
+  }
+
+  const heightDelta = parent.scrollHeight - restore.scrollHeight;
+  const nextScrollTop = restore.scrollTop - heightDelta;
+
+  if (!Number.isFinite(nextScrollTop)) {
+    return;
+  }
+
+  if (Math.abs(parent.scrollTop - nextScrollTop) > 0.5) {
+    parent.scrollTop = nextScrollTop;
+  }
+
+  syncVirtualViewport(true);
+};
+
+const scheduleVirtualViewportRestore = (): void => {
+  const restore = pendingVirtualViewportRestore;
+  pendingVirtualViewportRestore = null;
+
+  if (!restore) {
+    return;
+  }
+
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      restoreVirtualViewport(restore);
+      requestAnimationFrame(() => {
+        restoreVirtualViewport(restore);
+      });
+    });
+  });
+};
+
 const getRenderedMessageElementsInIndexRange = (
   startIndex: number,
   endIndex: number
@@ -1075,6 +1209,27 @@ const ensureMessageRendered = async (messageId: string): Promise<boolean> => {
 
   return true;
 };
+
+watch(
+  getMessageViewportKeys,
+  (_newKeys, oldKeys) => {
+    if (!oldKeys) {
+      pendingVirtualViewportRestore = null;
+      return;
+    }
+
+    captureVirtualViewportRestore();
+  },
+  { flush: 'pre' }
+);
+
+watch(
+  getMessageViewportKeys,
+  () => {
+    scheduleVirtualViewportRestore();
+  },
+  { flush: 'post' }
+);
 
 watch(
   () => renderItems.value.map(item => item.key),

@@ -106,6 +106,11 @@ const suspendedLocalOwnReadTimeouts = new Map<
 >();
 const queuedLocalOwnReadIds = new Map<string, Set<string>>();
 const deletedMessageIdsByTopic = new Map<string, Set<string>>();
+const reactionOverlaysByTopic = new Map<
+  string,
+  Map<string, Map<string, Reaction>>
+>();
+const removedReactionKeysByTopic = new Map<string, Map<string, Set<string>>>();
 
 const route = useUrlWatcher();
 
@@ -254,6 +259,147 @@ const rememberDeletedMessageId = (topicId: string, messageId: string): void => {
   deletedIds.add(messageId);
   deletedMessageIdsByTopic.set(topicId, deletedIds);
 };
+
+const getReactionKey = (reaction?: Reaction, fallbackId?: string): string => {
+  if (reaction?.id) {
+    return reaction.id;
+  }
+
+  if (fallbackId) {
+    return fallbackId;
+  }
+
+  if (reaction?.senderUserId && reaction?.text) {
+    return `${reaction.senderUserId}:${reaction.text}`;
+  }
+
+  return '';
+};
+
+const getTopicMessageReactionOverlays = (
+  topicId: string,
+  messageId: string
+): Map<string, Reaction> | undefined =>
+  reactionOverlaysByTopic.get(topicId)?.get(messageId);
+
+const getTopicMessageRemovedReactionKeys = (
+  topicId: string,
+  messageId: string
+): Set<string> | undefined =>
+  removedReactionKeysByTopic.get(topicId)?.get(messageId);
+
+const clearReactionOverlayForMessage = (
+  topicId: string,
+  messageId: string
+): void => {
+  reactionOverlaysByTopic.get(topicId)?.delete(messageId);
+  removedReactionKeysByTopic.get(topicId)?.delete(messageId);
+};
+
+const recordReactionOverlay = (
+  topicId: string,
+  messageId: string,
+  action: string,
+  reaction?: Reaction,
+  reactionId?: string
+): void => {
+  if (!topicId || !messageId) {
+    return;
+  }
+
+  const reactionKey = getReactionKey(reaction, reactionId);
+
+  if (!reactionKey) {
+    return;
+  }
+
+  let topicOverlays = reactionOverlaysByTopic.get(topicId);
+  if (!topicOverlays) {
+    topicOverlays = new Map();
+    reactionOverlaysByTopic.set(topicId, topicOverlays);
+  }
+
+  let messageOverlays = topicOverlays.get(messageId);
+  if (!messageOverlays) {
+    messageOverlays = new Map();
+    topicOverlays.set(messageId, messageOverlays);
+  }
+
+  let topicRemovedKeys = removedReactionKeysByTopic.get(topicId);
+  if (!topicRemovedKeys) {
+    topicRemovedKeys = new Map();
+    removedReactionKeysByTopic.set(topicId, topicRemovedKeys);
+  }
+
+  let messageRemovedKeys = topicRemovedKeys.get(messageId);
+  if (!messageRemovedKeys) {
+    messageRemovedKeys = new Set();
+    topicRemovedKeys.set(messageId, messageRemovedKeys);
+  }
+
+  if (action === 'removed') {
+    messageOverlays.delete(reactionKey);
+    messageRemovedKeys.add(reactionKey);
+    return;
+  }
+
+  if (!reaction) {
+    return;
+  }
+
+  messageRemovedKeys.delete(reactionKey);
+  messageOverlays.set(reactionKey, reaction);
+};
+
+const isReactionMatchedByOverlay = (
+  currentReaction: Reaction,
+  overlayReaction: Reaction,
+  overlayKey: string
+): boolean =>
+  getReactionKey(currentReaction) === overlayKey ||
+  (!!currentReaction.senderUserId &&
+    !!overlayReaction.senderUserId &&
+    currentReaction.senderUserId === overlayReaction.senderUserId &&
+    currentReaction.text === overlayReaction.text);
+
+const applyReactionOverlayToMessage = (
+  topicId: string,
+  message: IMessage
+): IMessage => {
+  const messageOverlays = getTopicMessageReactionOverlays(topicId, message.id);
+  const removedReactionKeys = getTopicMessageRemovedReactionKeys(
+    topicId,
+    message.id
+  );
+
+  if (!messageOverlays?.size && !removedReactionKeys?.size) {
+    return message;
+  }
+
+  let reactions = [...(message.reactions || [])].filter(reaction => {
+    const reactionKey = getReactionKey(reaction);
+    return !reactionKey || !removedReactionKeys?.has(reactionKey);
+  });
+
+  messageOverlays?.forEach((overlayReaction, overlayKey) => {
+    reactions = reactions.filter(
+      reaction =>
+        !isReactionMatchedByOverlay(reaction, overlayReaction, overlayKey)
+    );
+    reactions.push(overlayReaction);
+  });
+
+  return {
+    ...message,
+    reactions
+  };
+};
+
+const applyReactionOverlaysToMessages = (
+  topicId: string,
+  messages: IMessage[]
+): IMessage[] =>
+  messages.map(message => applyReactionOverlayToMessage(topicId, message));
 
 const rememberPersistedDeletedMessageIds = async (
   topicId: string,
@@ -800,11 +946,13 @@ const updateTopicMessageStores = (
 ): IMessage[] => {
   const existingFullMessages = fullMessagesStore.value[topicId] || [];
   const existingVisibleMessages = messagesStore.value[topicId] || [];
-  const nextFullMessages = [...transform([...existingFullMessages])].sort(
-    compareMessages
+  const nextFullMessages = applyReactionOverlaysToMessages(
+    topicId,
+    [...transform([...existingFullMessages])].sort(compareMessages)
   );
-  const nextVisibleMessages = [...transform([...existingVisibleMessages])].sort(
-    compareMessages
+  const nextVisibleMessages = applyReactionOverlaysToMessages(
+    topicId,
+    [...transform([...existingVisibleMessages])].sort(compareMessages)
   );
 
   fullMessagesStore.value[topicId] = nextFullMessages;
@@ -1178,12 +1326,10 @@ export const fetchMessagesForTopic = async (
         ? dedupeMessagesForTopic([...messages, ...existingVisible])
         : opts?.afterMessageId
           ? dedupeMessagesForTopic([...existingVisible, ...messages])
-          : dedupeMessagesForTopic(
-              [
-                ...existingVisible,
-                ...mergeWithPendingOutgoingMessages(messages, existingVisible)
-              ]
-            );
+          : dedupeMessagesForTopic([
+              ...existingVisible,
+              ...mergeWithPendingOutgoingMessages(messages, existingVisible)
+            ]);
 
       saveMessagesToLocal(topicId, unique, {
         syncLastMessage: opts?.syncLastMessage ?? false,
@@ -1338,7 +1484,9 @@ export const prefetchAroundMessageContext = (
     return Promise.resolve([]);
   }
 
-  if (getFullMessagesByTopicId(topicId).some(message => message.id === messageId)) {
+  if (
+    getFullMessagesByTopicId(topicId).some(message => message.id === messageId)
+  ) {
     return Promise.resolve([]);
   }
 
@@ -1557,6 +1705,7 @@ export const deleteMessageFromLocal = (
   messageId: string
 ): void => {
   rememberDeletedMessageId(topicId, messageId);
+  clearReactionOverlayForMessage(topicId, messageId);
   updateTopicMessageStores(topicId, messages =>
     messages.filter(message => message.id !== messageId)
   );
@@ -1651,6 +1800,7 @@ export const changeReactionFromLocal = (
   reaction?: Reaction,
   reactionId?: string
 ): void => {
+  recordReactionOverlay(topicId, messageId, action, reaction, reactionId);
   updateTopicMessageStores(topicId, messages =>
     messages.map(msg => {
       if (msg.id !== messageId) {
@@ -1733,15 +1883,20 @@ export const saveMessagesToLocal = (
   }
 ): void => {
   const filteredMessages = filterDeletedMessagesForTopic(topicId, messages);
-  const sortedMessages =
-    dedupeMessagesForTopic(filteredMessages).sort(compareMessages);
+  const sortedMessages = applyReactionOverlaysToMessages(
+    topicId,
+    dedupeMessagesForTopic(filteredMessages).sort(compareMessages)
+  );
   const boundedMessages = clampMessagesForUi(
-    dedupeMessagesForTopic(
-      filterDeletedMessagesForTopic(
-        topicId,
-        opts?.visibleMessages || sortedMessages
-      )
-    ).sort(compareMessages),
+    applyReactionOverlaysToMessages(
+      topicId,
+      dedupeMessagesForTopic(
+        filterDeletedMessagesForTopic(
+          topicId,
+          opts?.visibleMessages || sortedMessages
+        )
+      ).sort(compareMessages)
+    ),
     opts?.windowMode,
     opts?.anchorMessageId,
     opts?.visibleLimit

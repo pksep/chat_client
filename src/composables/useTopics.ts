@@ -37,6 +37,7 @@ import {
   isUnreadTrackableMessageForUser
 } from '../utils/messageTracking';
 import { isBotTopic, isBotUser, isLocalBotTopic } from '../utils/bot';
+import { getDisplayableTopicUnreadCount } from '../utils/topicUnreadCount';
 
 const topics = ref<ITopic[]>([]);
 const loading = ref(false);
@@ -93,16 +94,22 @@ const createTopicsApi = () => {
     }
   };
 
+  const getTopicDisplayableUnreadCount = (
+    topic: ITopic,
+    authUserId = authedUser.value?.id
+  ): number =>
+    getDisplayableTopicUnreadCount(topic, authUserId, getFullMessagesByTopicId);
+
   const hasAnyActiveUnreadTopic = (): boolean =>
     topics.value.some(
       topic =>
-        (topic.unreadMessageCount || 0) > 0 &&
+        getTopicDisplayableUnreadCount(topic) > 0 &&
         (!topic.info?.isMute || topic.taggedMe)
     );
 
   const getActualUnreadCount = (): number =>
     topics.value.reduce(
-      (acc, topic) => acc + Math.max(0, topic.unreadMessageCount || 0),
+      (acc, topic) => acc + getTopicDisplayableUnreadCount(topic),
       0
     );
 
@@ -1202,7 +1209,7 @@ const createTopicsApi = () => {
 
   const totalUnreadCount = computed(() => {
     return topics.value.reduce(
-      (acc, topic) => acc + (topic.unreadMessageCount || 0),
+      (acc, topic) => acc + getTopicDisplayableUnreadCount(topic),
       0
     );
   });
