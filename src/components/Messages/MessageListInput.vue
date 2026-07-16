@@ -187,6 +187,10 @@ import {
   isBotTopic,
   isDeletedBotUser
 } from '../../utils/bot';
+import {
+  matchesUserSearch,
+  normalizeAtSearchQuery
+} from '../../utils/searchMatch';
 
 interface Props {
   dataTestid: string;
@@ -384,23 +388,11 @@ const users = computed(() => {
     route.value.type === RouteTypes.GROUP
       ? currentGroup.value?.members || []
       : [];
+  const query = normalizeAtSearchQuery(state.mentionSearch);
 
-  if (!state.mentionSearch) return allMembers;
+  if (!query) return allMembers;
 
-  return allMembers.filter(user => {
-    const nameMatch = (user.nickname || '')
-      .toLowerCase()
-      .includes(state.mentionSearch);
-    const erpInitialsMatch = (
-      typeof user.ex === 'string' ? JSON.parse(user.ex) : user.ex
-    )?.erpInitials
-      ?.toLowerCase()
-      ?.includes(state.mentionSearch);
-    const initialsMatch = (user.initials || '')
-      .toLowerCase()
-      .includes(state.mentionSearch);
-    return nameMatch || erpInitialsMatch || initialsMatch;
-  });
+  return allMembers.filter(user => matchesUserSearch(user, query));
 });
 
 const botCommands = computed(() => {

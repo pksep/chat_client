@@ -179,6 +179,7 @@
 .bot-info-panel__fields {
   display: grid;
   gap: 14px;
+  width: 100%;
 }
 
 .bot-editor__field {
@@ -248,12 +249,37 @@
 }
 
 .bot-info-panel__body {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   flex: 1 1 auto;
   min-height: 0;
-  gap: 18px;
-  padding: 18px 20px 20px;
+  gap: 14px;
+  padding: 18px 10px 20px;
+}
+
+.bot-info-panel__identity {
+  width: 100%;
+  text-align: center;
+}
+
+.bot-info-panel__name {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  margin: 0;
+  color: var(--text-color);
+  font-size: 18px;
+  line-height: 22px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.bot-info-panel__subtitle {
+  margin: 5px 0 0;
+  color: var(--grey6);
+  font-size: 14px;
+  line-height: 17px;
 }
 
 .bot-info-panel__value-row {
@@ -404,39 +430,57 @@
 }
 
 .bot-info-panel__save {
+  width: 100%;
   display: flex;
   justify-content: flex-end;
 }
 
-.bot-info-panel__footer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: auto;
-  padding: 14px 20px calc(18px + env(safe-area-inset-bottom, 0px));
-  background: var(--white);
+.bot-info-panel__actions {
+  width: 100%;
+  margin-top: 10px;
+  grid-template-columns: repeat(3, 1fr);
 }
 
-.bot-info-panel__delete {
-  display: inline-flex;
+.bot-info-panel__actions--single {
+  grid-template-columns: 1fr;
+}
+
+.bot-info-panel__actions.bot-info-panel__actions--double {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.bot-info-panel__action {
+  width: 100%;
+  min-width: 0;
+  min-height: 92px;
+  gap: 10px;
+}
+
+button.button-yui-kit.large.menu-info__secondary-button.bot-info-panel__action {
+  display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  width: 100%;
-  min-height: 44px;
-  padding: 8px 12px;
-  border-radius: 5px;
-  color: var(--black) !important;
-  font-size: 12px;
-  line-height: 14px;
 }
 
-.bot-info-panel__delete svg,
-.bot-info-panel__delete .icon-yui-kit {
-  width: 18px;
-  height: 18px;
+.bot-info-panel__action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.bot-info-panel__action-icon {
+  width: 24px;
+  height: 24px;
   color: var(--grey6) !important;
+}
+
+.bot-info-panel__action span {
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.bot-info-panel__delete {
+  color: var(--black) !important;
 }
 
 .new-bot-mobile .mobile__modal-content {
@@ -541,10 +585,6 @@
 
   .bot-info-panel__command-row {
     align-items: flex-start;
-  }
-
-  .bot-info-panel__footer {
-    padding: 0;
   }
 
   .bot-info-panel {

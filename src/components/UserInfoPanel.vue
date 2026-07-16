@@ -75,6 +75,7 @@
         ]"
       >
         <Button
+          v-if="canCall"
           :type="ButtonTypeEnum.secondary"
           :size="SizesEnum.large"
           class="menu-info__secondary-button user-info-panel__action-button"
@@ -133,7 +134,7 @@ import { useUserInfoModal } from '../composables/useUserInfoModal';
 import { getUserById, getUserLastOnline } from '../composables/useUsers';
 import { getChatSDK } from '../services/useChat';
 import { TopicType } from '../services/useChatSDK/types';
-import { isDeletedBotUser } from '../utils/bot';
+import { isBotUser, isDeletedBotUser } from '../utils/bot';
 import { parseUserEx } from '../utils/parseUserEx';
 import type { ITopic, IUser } from './interfaces/interfaces';
 import { preloadNotoEmojiAssets } from '../composables/useEmojiStyle';
@@ -192,13 +193,17 @@ const directTopic = computed(() => {
 
 const role = computed(() => parseUserEx(resolvedUser.value?.ex).erpRole);
 const isDeletedAccount = computed(() => isDeletedBotUser(resolvedUser.value));
+const isBotAccount = computed(() => isBotUser(resolvedUser.value));
 const isOnline = computed(
   () => !isDeletedAccount.value && !isCurrentUser.value && !lastOnline.value
 );
 const isMuted = computed(() => !!directTopic.value?.info?.isMute);
 const canCall = computed(
   () =>
-    !!resolvedUser.value?.id && !isDeletedAccount.value && !isCurrentUser.value
+    !!resolvedUser.value?.id &&
+    !isDeletedAccount.value &&
+    !isCurrentUser.value &&
+    !isBotAccount.value
 );
 const canOpenChat = computed(
   () =>
@@ -208,7 +213,10 @@ const canToggleMute = computed(
   () => !!directTopic.value?.id && !isDeletedAccount.value
 );
 const actionButtonCount = computed(
-  () => 1 + Number(canToggleMute.value) + Number(canOpenChat.value)
+  () =>
+    Number(canCall.value) +
+    Number(canToggleMute.value) +
+    Number(canOpenChat.value)
 );
 
 watch(

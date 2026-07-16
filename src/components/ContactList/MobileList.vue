@@ -176,6 +176,10 @@ import {
   getChatsToolbarFilterCounts,
   getChatsToolbarFilterMutedOnly
 } from '../../utils/chats-toolbar-filter-badge';
+import {
+  matchesTopicSearch,
+  normalizeAtSearchQuery
+} from '../../utils/searchMatch';
 
 const route = useUrlWatcher();
 
@@ -252,16 +256,8 @@ const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
   return true;
 };
 
-const normalizeToolbarSearchText = (value?: string): string =>
-  (value || '')
-    .replace(/\u00a0/g, ' ')
-    .replace(/[\u200b-\u200d\ufeff]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-
 const contactList = computed(() => {
-  const query = normalizeToolbarSearchText(toolbarState.search);
+  const query = normalizeAtSearchQuery(toolbarState.search);
   const filteredByType = allTopics.value.filter(topic =>
     matchesToolbarFilter(topic)
   );
@@ -270,22 +266,11 @@ const contactList = computed(() => {
     return [...filteredByType];
   }
 
-  return filteredByType.filter(topic => {
-    const nameMatch = normalizeToolbarSearchText(topic.name).includes(query);
-    const erpInitials = (
-      typeof topic.user?.ex === 'string'
-        ? JSON.parse(topic.user.ex)
-        : topic.user?.ex
-    )?.erpInitials;
-    const erpInitialsMatch =
-      normalizeToolbarSearchText(erpInitials).includes(query);
-
-    return nameMatch || erpInitialsMatch;
-  });
+  return filteredByType.filter(topic => matchesTopicSearch(topic, query));
 });
 
 const filteredMessageSearchResults = computed(() => {
-  if (!normalizeToolbarSearchText(toolbarState.search)) {
+  if (!normalizeAtSearchQuery(toolbarState.search)) {
     return [];
   }
 
@@ -625,7 +610,7 @@ const handleDropFiles = async (event: DragEvent): Promise<void> => {
 watch(
   [() => toolbarState.search, isShareSelectionActive],
   () => {
-    const query = normalizeToolbarSearchText(toolbarState.search);
+    const query = normalizeAtSearchQuery(toolbarState.search);
     const requestToken = ++messageSearchRequestToken;
 
     if (messageSearchDebounceTimer) {

@@ -59,6 +59,10 @@ import { getTopicList } from '../composables/useTopics';
 import UserProfile from './UserProfile/UserProfile.vue';
 import { TopicType } from '../services/useChatSDK/types';
 import GroupProfile from './GroupProfile/GroupProfile.vue';
+import {
+  matchesTopicSearch,
+  normalizeAtSearchQuery
+} from '../utils/searchMatch';
 
 const props = withDefaults(defineProps<ITopicSelectorProps>(), {
   dataTestid: () => 'TopicSelector'
@@ -69,19 +73,9 @@ const topics = computed(() => getTopicList());
 
 const filteredTopics = computed(() =>
   topics.value.filter(topic => {
-    const query = state.q?.toLowerCase() ?? '';
+    const query = normalizeAtSearchQuery(state.q);
 
-    return (
-      topic.user?.initials?.toLowerCase().includes(query) ||
-      topic.user?.nickname?.toLowerCase().includes(query) ||
-      topic.group?.title?.toLowerCase().includes(query) ||
-      (typeof topic.user?.ex === 'string'
-        ? JSON.parse(topic.user.ex)
-        : topic.user?.ex
-      )?.erpInitials
-        ?.toLowerCase()
-        ?.includes(query)
-    );
+    return matchesTopicSearch(topic, query);
   })
 );
 
