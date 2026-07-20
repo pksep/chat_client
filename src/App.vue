@@ -1,14 +1,8 @@
 <template>
   <ChatContainerRoot v-if="config && !isCredentialsStep" :config="config" />
 
-  <Loading
-    v-else-if="isBootstrapping"
-    data-testid="App-Bootstrap"
-    :message="''"
-  />
-
   <AuthorizationScreen
-    v-else
+    v-else-if="!isBootstrapping"
     v-model:url="serverUrl"
     v-model:identifier="identifierValue"
     v-model:password="passwordValue"
@@ -27,6 +21,32 @@
     @back="returnToOrganizationStep"
     @qr-auth-success="handleQrAuthSuccess"
   />
+
+  <Transition name="app-startup-shell-fade">
+    <section
+      v-if="isStartupShellVisible"
+      class="app-startup-shell"
+      data-testid="App-Bootstrap"
+      aria-hidden="true"
+    >
+      <div class="app-startup-shell__content">
+        <div class="app-startup-shell__title"></div>
+        <div class="app-startup-shell__search"></div>
+        <div class="app-startup-shell__filters">
+          <div class="app-startup-shell__chip"></div>
+          <div class="app-startup-shell__chip"></div>
+          <div class="app-startup-shell__chip"></div>
+        </div>
+        <div v-for="index in 7" :key="index" class="app-startup-shell__row">
+          <div class="app-startup-shell__avatar"></div>
+          <div>
+            <div class="app-startup-shell__line"></div>
+            <div class="app-startup-shell__subline"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </Transition>
 
   <IosInstallPromptModal
     :open="isIosInstallPromptOpen"
@@ -47,27 +67,27 @@
   />
 </template>
 <script lang="ts" setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { PushNotification } from '@pksep/yui';
 import { IChatContainerConfig } from './components/interfaces/interfaces';
 import ChatContainerRoot from './ChatContainerRoot.vue';
 import AuthorizationScreen from './components/AuthorizationScreen.vue';
-import Loading from './components/Loading.vue';
 import IosInstallPromptModal from './components/Menu/IosInstallPromptModal.vue';
 import { useIosInstallPrompt } from './composables/useIosInstallPrompt';
 import { areChatConfigsEqual, setConfig } from './services/useConfig';
 import {
   clearErpAuthSession,
+  consumeAuthRedirectStartupShellSkip,
   getChatAuthSession,
   getStoredBootstrapErpAccessToken,
   loginWithCredentials,
   saveBootstrapErpSession,
-  saveChatAuthSession,
-  clearChatAuthSession
+  saveChatAuthSession
 } from './composables/useAuth';
 import { fetchUsersForAuth } from './composables/useUsers';
 import { useNotifications } from './composables/useNotifications';
 import { initShareIntentHandling } from './services/useShareIntent';
+import { dispatchNativeStartupReady } from './utils/nativeStartup';
 
 const ORGANIZATIONS_KEY = 'chat_runtime_organizations';
 const LAST_ORGANIZATION_KEY = 'chat_runtime_last_organization';
@@ -88,10 +108,12 @@ const getStoredOrganizations = (): IStoredOrganization[] => {
   });
 };
 
+const shouldSkipStartupShell = consumeAuthRedirectStartupShellSkip();
 const config = ref<IChatContainerConfig | null>(null);
 const errorMessage = ref('');
 const isLoading = ref(false);
-const isBootstrapping = ref(true);
+const isBootstrapping = ref(!shouldSkipStartupShell);
+const isStartupShellVisible = ref(!shouldSkipStartupShell);
 const identifierValue = ref('');
 const passwordValue = ref('');
 const rememberAccount = ref(true);
@@ -121,8 +143,36 @@ const getNotificationStyle = (index: number) => ({
   zIndex: `${3000 - index}`
 });
 
+const waitForAnimationFrame = () =>
+  new Promise<void>(resolve => {
+    requestAnimationFrame(() => resolve());
+  });
+
+const wait = (durationMs: number) =>
+  new Promise<void>(resolve => {
+    window.setTimeout(resolve, durationMs);
+  });
+
+const STARTUP_SHELL_LEAVE_MS = 200;
+
+const hideStartupShellAfterMainPaint = async () => {
+  await nextTick();
+  await waitForAnimationFrame();
+  await waitForAnimationFrame();
+  isStartupShellVisible.value = false;
+  await wait(STARTUP_SHELL_LEAVE_MS);
+  dispatchNativeStartupReady();
+};
+
 const finishBootstrapping = () => {
   isBootstrapping.value = false;
+
+  if (!isStartupShellVisible.value) {
+    dispatchNativeStartupReady();
+    return;
+  }
+
+  void hideStartupShellAfterMainPaint();
 };
 
 const parseRuntimeConfig = (
@@ -219,6 +269,33 @@ const hasBootstrapToken = () =>
 const hasChatSession = () => !!getChatAuthSession();
 const shouldLoadFreshConfigBeforeChat = () =>
   hasBootstrapToken() || hasChatSession();
+const shouldUseStoredConfigImmediately = (
+  fallbackConfig?: IChatContainerConfig
+) =>
+  !!fallbackConfig && shouldLoadFreshConfigBeforeChat();
+
+const refreshRemoteConfigInBackground = (
+  url: string,
+  fallbackConfig: IChatContainerConfig
+) => {
+  void loadRemoteConfig({
+    url,
+    fallbackConfig
+  });
+};
+
+const openStoredConfig = (
+  url: string,
+  fallbackConfig: IChatContainerConfig
+) => {
+  const normalizedUrl = normalizeServerUrl(url);
+
+  serverUrl.value = normalizedUrl;
+  setLastOrganization(normalizedUrl);
+  isAddingNewOrganization.value = false;
+  applyConfig(fallbackConfig);
+  openCredentialsStepIfNeeded();
+};
 
 const openCredentialsStepIfNeeded = () => {
   if (hasBootstrapToken() || hasChatSession()) {
@@ -281,6 +358,12 @@ const selectOrganization = (url: string) => {
   isAddingNewOrganization.value = false;
 
   if (shouldLoadFreshConfigBeforeChat()) {
+    if (shouldUseStoredConfigImmediately(organization.config)) {
+      openStoredConfig(normalizedUrl, organization.config);
+      refreshRemoteConfigInBackground(normalizedUrl, organization.config);
+      return;
+    }
+
     void loadRemoteConfig({
       url: normalizedUrl,
       fallbackConfig: organization.config
@@ -340,6 +423,15 @@ const handleQrAuthSuccess = (payload: {
 
   if (storedOrganization) {
     if (shouldLoadFreshConfigBeforeChat()) {
+      if (shouldUseStoredConfigImmediately(storedOrganization.config)) {
+        openStoredConfig(scannedOrganization, storedOrganization.config);
+        refreshRemoteConfigInBackground(
+          scannedOrganization,
+          storedOrganization.config
+        );
+        return;
+      }
+
       void loadRemoteConfig({
         url: scannedOrganization,
         fallbackConfig: storedOrganization.config
@@ -413,7 +505,6 @@ const loadRemoteConfig = async (options?: {
       serverUrl.value = normalizedUrl;
       setLastOrganization(normalizedUrl);
       isAddingNewOrganization.value = false;
-      clearChatAuthSession();
       applyConfig(options.fallbackConfig);
       openCredentialsStepIfNeeded();
     }
@@ -489,6 +580,15 @@ onMounted(async () => {
 
       if (storedOrganization) {
         if (shouldLoadFreshConfigBeforeChat()) {
+          if (shouldUseStoredConfigImmediately(storedOrganization.config)) {
+            openStoredConfig(urlOrganization, storedOrganization.config);
+            refreshRemoteConfigInBackground(
+              urlOrganization,
+              storedOrganization.config
+            );
+            return;
+          }
+
           await loadRemoteConfig({
             url: urlOrganization,
             fallbackConfig: storedOrganization.config
@@ -527,6 +627,15 @@ onMounted(async () => {
       isAddingNewOrganization.value = false;
 
       if (shouldLoadFreshConfigBeforeChat()) {
+        if (shouldUseStoredConfigImmediately(lastOrganization.config)) {
+          openStoredConfig(normalizedLastOrganization, lastOrganization.config);
+          refreshRemoteConfigInBackground(
+            normalizedLastOrganization,
+            lastOrganization.config
+          );
+          return;
+        }
+
         await loadRemoteConfig({
           url: normalizedLastOrganization,
           fallbackConfig: lastOrganization.config
@@ -555,6 +664,122 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.app-startup-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 2600;
+  min-height: 100dvh;
+  background: #f8f9fd;
+  color: #111827;
+  font-family:
+    Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    sans-serif;
+  overflow: hidden;
+  pointer-events: auto;
+  transform: translateZ(0);
+}
+
+.app-startup-shell-fade-leave-active {
+  transition:
+    opacity 180ms ease,
+    visibility 180ms ease;
+}
+
+.app-startup-shell-fade-leave-to {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.app-startup-shell__content {
+  padding: 62px 16px 24px;
+}
+
+.app-startup-shell__title {
+  width: 132px;
+  height: 32px;
+  margin-bottom: 24px;
+  border-radius: 8px;
+}
+
+.app-startup-shell__search {
+  height: 52px;
+  margin-bottom: 14px;
+  border-radius: 10px;
+  background: #f5f7fb;
+}
+
+.app-startup-shell__filters {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.app-startup-shell__chip {
+  width: 70px;
+  height: 34px;
+  border: 1px solid #d9e5ff;
+  border-radius: 18px;
+  background: #eef4ff;
+}
+
+.app-startup-shell__chip:nth-child(2) {
+  width: 58px;
+  border-color: #e5e7eb;
+  background: #ffffff;
+}
+
+.app-startup-shell__chip:nth-child(3) {
+  width: 96px;
+  border-color: #e5e7eb;
+  background: #ffffff;
+}
+
+.app-startup-shell__row {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  column-gap: 16px;
+  align-items: center;
+  height: 82px;
+}
+
+.app-startup-shell__title,
+.app-startup-shell__avatar,
+.app-startup-shell__line,
+.app-startup-shell__subline {
+  background: linear-gradient(90deg, #eef2f7, #f8fafc, #eef2f7);
+  background-size: 180% 100%;
+  animation: app-startup-pulse 1.2s ease-in-out infinite;
+}
+
+.app-startup-shell__avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+}
+
+.app-startup-shell__line {
+  width: 78%;
+  height: 20px;
+  margin-bottom: 12px;
+  border-radius: 6px;
+}
+
+.app-startup-shell__subline {
+  width: 92%;
+  height: 18px;
+  border-radius: 6px;
+}
+
+@keyframes app-startup-pulse {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -80% 0;
+  }
+}
+
 .app-notification-stack__item {
   pointer-events: auto;
 }

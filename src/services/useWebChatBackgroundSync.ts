@@ -15,8 +15,16 @@ const SESSION_KEY = 'session';
 const SNAPSHOT_KEY = 'snapshot';
 const STATUS_KEY = 'status';
 const PENDING_HINTS_KEY = 'pendingHints';
-const MAX_MESSAGE_TOPICS = 8;
-const MESSAGE_LIMIT = 50;
+const DEFAULT_MAX_MESSAGE_TOPICS = 2;
+const TARGETED_MAX_MESSAGE_TOPICS = 4;
+const FOREGROUND_MAX_MESSAGE_TOPICS = 1;
+const DEFAULT_MESSAGE_LIMIT = 20;
+const TARGETED_MESSAGE_LIMIT = 30;
+const FOREGROUND_MESSAGE_LIMIT = 20;
+const DEFAULT_SYNC_EVENTS_LIMIT = 150;
+const TARGETED_SYNC_EVENTS_LIMIT = 300;
+const FOREGROUND_SYNC_EVENTS_LIMIT = 75;
+const TOPICS_LIMIT = 999;
 const SYNC_TAG = 'chat-background-sync';
 
 type WebSyncRecord<T> = {
@@ -279,9 +287,60 @@ const asArray = <T = unknown>(payload: unknown): T[] => {
   return [];
 };
 
+const isForegroundReason = (reason?: string): boolean =>
+  [
+    'initialize-chat',
+    'app-visible',
+    'window-focus',
+    'browser-online',
+    'native-app-active',
+    'native-resume'
+  ].includes((reason || '').trim());
+
+const getMaxMessageTopics = (request: ChatBackgroundSyncRequest): number => {
+  if (isForegroundReason(request.reason)) {
+    return FOREGROUND_MAX_MESSAGE_TOPICS;
+  }
+
+  if (request.topicId) {
+    return TARGETED_MAX_MESSAGE_TOPICS;
+  }
+
+  return DEFAULT_MAX_MESSAGE_TOPICS;
+};
+
+const getMessageLimit = (request: ChatBackgroundSyncRequest): number => {
+  if (isForegroundReason(request.reason)) {
+    return FOREGROUND_MESSAGE_LIMIT;
+  }
+
+  if (request.topicId) {
+    return TARGETED_MESSAGE_LIMIT;
+  }
+
+  return DEFAULT_MESSAGE_LIMIT;
+};
+
+const getSyncEventsLimit = (request: ChatBackgroundSyncRequest): number => {
+  if (isForegroundReason(request.reason)) {
+    return FOREGROUND_SYNC_EVENTS_LIMIT;
+  }
+
+  if (request.topicId) {
+    return TARGETED_SYNC_EVENTS_LIMIT;
+  }
+
+  return DEFAULT_SYNC_EVENTS_LIMIT;
+};
+
+const shouldIncludeRecentTopicFallback = (
+  request: ChatBackgroundSyncRequest
+): boolean => !!request.topicId;
+
 const fetchPtsDelta = async (
   session: WebSyncSession,
-  lastPts: string
+  lastPts: string,
+  limit: number
 ): Promise<Partial<ChatBackgroundSyncSnapshot> | null> => {
   const query = lastPts ? `?from=${encodeURIComponent(lastPts)}` : '';
   const separator = query ? '&' : '?';
@@ -289,7 +348,7 @@ const fetchPtsDelta = async (
   try {
     const payload = await fetchJson(
       session,
-      `/sync/pts${query}${separator}limit=500`
+      `/sync/pts${query}${separator}limit=${Math.max(1, limit)}`
     );
 
     if (!payload || typeof payload !== 'object') {
@@ -321,7 +380,9 @@ const resolveTopicId = (topic: Record<string, unknown>): string =>
 const resolvePriorityTopicIds = (
   request: ChatBackgroundSyncRequest,
   delta: Partial<ChatBackgroundSyncSnapshot> | null,
-  topics: Record<string, unknown>[]
+  topics: Record<string, unknown>[],
+  maxMessageTopics: number,
+  includeRecentTopicFallback: boolean
 ): string[] => {
   const topicIds = new Set<string>();
   const recentTopicIds: string[] = [];
@@ -336,8 +397,8 @@ const resolvePriorityTopicIds = (
         topicIds.add(event.topicId);
       }
 
-      if (topicIds.size >= MAX_MESSAGE_TOPICS) {
-        return Array.from(topicIds).slice(0, MAX_MESSAGE_TOPICS);
+      if (topicIds.size >= maxMessageTopics) {
+        return Array.from(topicIds).slice(0, maxMessageTopics);
       }
     }
   }
@@ -355,36 +416,37 @@ const resolvePriorityTopicIds = (
       topic.hasUnreadReaction === true
     ) {
       topicIds.add(topicId);
-    } else if (topic.lastMessage) {
+    } else if (includeRecentTopicFallback && topic.lastMessage) {
       recentTopicIds.push(topicId);
     }
 
-    if (topicIds.size >= MAX_MESSAGE_TOPICS) {
-      return Array.from(topicIds).slice(0, MAX_MESSAGE_TOPICS);
+    if (topicIds.size >= maxMessageTopics) {
+      return Array.from(topicIds).slice(0, maxMessageTopics);
     }
   }
 
   for (const topicId of recentTopicIds) {
     topicIds.add(topicId);
 
-    if (topicIds.size >= MAX_MESSAGE_TOPICS) {
+    if (topicIds.size >= maxMessageTopics) {
       break;
     }
   }
 
-  return Array.from(topicIds).slice(0, MAX_MESSAGE_TOPICS);
+  return Array.from(topicIds).slice(0, maxMessageTopics);
 };
 
 const fetchLatestMessagesByTopic = async (
   session: WebSyncSession,
-  topicIds: string[]
+  topicIds: string[],
+  limit: number
 ): Promise<Record<string, unknown[]>> => {
   const entries = await Promise.all(
     topicIds.map(async topicId => {
       try {
         const payload = await fetchJson(
           session,
-          `/messages/topic/${encodeURIComponent(topicId)}?limit=${MESSAGE_LIMIT}`
+          `/messages/topic/${encodeURIComponent(topicId)}?limit=${Math.max(1, limit)}`
         );
 
         return [topicId, asArray(payload)] as const;
@@ -443,11 +505,28 @@ const runDirectWebChatBackgroundSync = async (
 
   try {
     const lastPts = await getLastPts();
-    const delta = await fetchPtsDelta(session, lastPts);
-    const topicsPayload = await fetchJson(session, '/topics?page=1&limit=999');
+    const delta = await fetchPtsDelta(
+      session,
+      lastPts,
+      getSyncEventsLimit(request)
+    );
+    const topicsPayload = await fetchJson(
+      session,
+      `/topics?page=1&limit=${TOPICS_LIMIT}`
+    );
     const topics = asArray<Record<string, unknown>>(topicsPayload);
-    const topicIds = resolvePriorityTopicIds(request, delta, topics);
-    const messagesByTopic = await fetchLatestMessagesByTopic(session, topicIds);
+    const topicIds = resolvePriorityTopicIds(
+      request,
+      delta,
+      topics,
+      getMaxMessageTopics(request),
+      shouldIncludeRecentTopicFallback(request)
+    );
+    const messagesByTopic = await fetchLatestMessagesByTopic(
+      session,
+      topicIds,
+      getMessageLimit(request)
+    );
     const nextPts = chooseMaxPts(
       chooseMaxPts(lastPts, request.pts),
       delta?.toPts || delta?.lastPts

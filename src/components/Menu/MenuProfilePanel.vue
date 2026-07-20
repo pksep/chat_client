@@ -1246,32 +1246,27 @@ const clearStatus = async (): Promise<void> => {
   await saveStatus(null);
 };
 
-const waitWithTimeout = async (
-  promise: Promise<void>,
-  timeoutMs: number
-): Promise<void> => {
-  await Promise.race([
-    promise,
-    new Promise<void>(resolve => {
-      window.setTimeout(resolve, timeoutMs);
-    })
-  ]);
-};
-
-const handleLogout = async (): Promise<void> => {
-  try {
-    await waitWithTimeout(cleanupPushNotificationsOnLogout(), 2500);
-  } catch (error) {
+const runLogoutCleanup = (): void => {
+  void cleanupPushNotificationsOnLogout().catch(error => {
     console.warn('Failed to cleanup push notifications during logout:', error);
-  } finally {
-    await clearAnyChatBackgroundSyncSession();
-    useLogout();
-    redirectToAuthorization();
-  }
+  });
+
+  void clearAnyChatBackgroundSyncSession().catch(error => {
+    console.warn(
+      'Failed to clear chat background sync session during logout:',
+      error
+    );
+  });
 };
 
-const confirmLogout = async (): Promise<void> => {
+const handleLogout = (): void => {
+  runLogoutCleanup();
+  useLogout();
+  redirectToAuthorization();
+};
+
+const confirmLogout = (): void => {
   closeLogoutConfirmModal();
-  await handleLogout();
+  handleLogout();
 };
 </script>

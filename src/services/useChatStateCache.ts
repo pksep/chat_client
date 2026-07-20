@@ -4,6 +4,7 @@ import { authedUser, getChatAuthSession } from '../composables/useAuth';
 const DB_NAME = 'chat-offline-state-db';
 const DB_VERSION = 2;
 const STORE_NAME = 'entities';
+const FAST_TOPICS_CACHE_PREFIX = 'chat-offline-fast-topics-v1';
 const DATE_KEYS = new Set([
   'createdAt',
   'updatedAt',
@@ -76,6 +77,52 @@ const getResolvedUserId = () =>
 const getCacheKey = (type: CacheEntityType, userId = getResolvedUserId()) =>
   `${userId || 'anonymous'}:${type}`;
 
+const getFastTopicsCacheKey = (userId = getResolvedUserId()) =>
+  `${FAST_TOPICS_CACHE_PREFIX}:${userId || 'anonymous'}`;
+
+const loadFastCachedTopics = <T>(userId = getResolvedUserId()): T[] | null => {
+  if (typeof window === 'undefined' || !userId) {
+    return null;
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(getFastTopicsCacheKey(userId));
+
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsedValue = JSON.parse(rawValue);
+
+    if (!Array.isArray(parsedValue)) {
+      return null;
+    }
+
+    return deserializeValue(parsedValue) as T[];
+  } catch (error) {
+    console.warn('Failed to load fast cached topics:', error);
+    return null;
+  }
+};
+
+const saveFastCachedTopics = <T>(
+  topics: T[],
+  userId = getResolvedUserId()
+): void => {
+  if (typeof window === 'undefined' || !userId) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      getFastTopicsCacheKey(userId),
+      JSON.stringify(serializeValue(topics))
+    );
+  } catch (error) {
+    console.warn('Failed to save fast cached topics:', error);
+  }
+};
+
 const openDb = async (): Promise<IDBDatabase | null> => {
   if (!hasIndexedDb()) {
     return null;
@@ -122,6 +169,14 @@ const loadCachedEntity = async <T>(
   }
 
   try {
+    if (type === 'topics') {
+      const fastTopics = loadFastCachedTopics<T>(userId);
+
+      if (fastTopics?.length) {
+        return fastTopics;
+      }
+    }
+
     const db = await openDb();
 
     if (!db) {
@@ -137,9 +192,15 @@ const loadCachedEntity = async <T>(
 
       request.onsuccess = () => {
         const result = request.result as CachedEntity<T> | undefined;
-        resolve(
-          result?.items ? (deserializeValue(result.items) as T[]) : ([] as T[])
-        );
+        const items = result?.items
+          ? (deserializeValue(result.items) as T[])
+          : ([] as T[]);
+
+        if (type === 'topics' && items.length) {
+          saveFastCachedTopics(items, userId);
+        }
+
+        resolve(items);
       };
       request.onerror = () => reject(request.error);
     });
@@ -156,6 +217,10 @@ const saveCachedEntity = async <T>(
 ): Promise<void> => {
   if (!userId) {
     return;
+  }
+
+  if (type === 'topics') {
+    saveFastCachedTopics(items, userId);
   }
 
   try {

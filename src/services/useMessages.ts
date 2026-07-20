@@ -68,6 +68,8 @@ const messagesStore = ref<Record<string, IMessage[]>>({});
 const pinnedMessagesStore = ref<Record<string, IMessage[]>>({});
 const MAX_ACTIVE_TOPIC_MESSAGES = 250;
 const INITIAL_TOPIC_WINDOW_MESSAGES = 100;
+const ACTIVE_MOBILE_APPEND_PERSIST_DELAY_MS = 1000;
+const MOBILE_VIEWPORT_MAX_WIDTH = 768;
 const aroundMessageContextPrefetches = new Map<string, Promise<IMessage[]>>();
 const persistTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingOutgoingForwardBatches = new Map<
@@ -111,8 +113,19 @@ const reactionOverlaysByTopic = new Map<
   Map<string, Map<string, Reaction>>
 >();
 const removedReactionKeysByTopic = new Map<string, Map<string, Set<string>>>();
+const defaultVisibleMessagesLimitByTopic = new Map<string, number>();
 
 const route = useUrlWatcher();
+
+const isActiveMobileTopic = (topicId: string): boolean =>
+  route.value.id === topicId &&
+  typeof window !== 'undefined' &&
+  window.innerWidth <= MOBILE_VIEWPORT_MAX_WIDTH;
+
+const getAppendPersistDelayMs = (topicId: string): number | undefined =>
+  isActiveMobileTopic(topicId)
+    ? ACTIVE_MOBILE_APPEND_PERSIST_DELAY_MS
+    : undefined;
 
 const syncLocalLastMessage = (topicId: string, message?: IMessage): void => {
   const { updateLocalLastMessageTopic } = useTopics();
@@ -633,12 +646,45 @@ const clampMessagesForUi = (
   return messages.slice(-uiWindowLimit);
 };
 
+const getDefaultVisibleMessagesLimitForSave = (
+  topicId: string,
+  mode: MessageWindowMode = 'latest',
+  visibleLimit?: number
+): number | undefined => {
+  if (visibleLimit !== undefined) {
+    return visibleLimit;
+  }
+
+  if (mode !== 'latest' && mode !== 'preserve-end') {
+    return undefined;
+  }
+
+  return defaultVisibleMessagesLimitByTopic.get(topicId);
+};
+
+export const setDefaultVisibleMessagesLimitForTopic = (
+  topicId: string,
+  visibleLimit?: number
+): void => {
+  if (!topicId) {
+    return;
+  }
+
+  if (!visibleLimit || visibleLimit <= 0) {
+    defaultVisibleMessagesLimitByTopic.delete(topicId);
+    return;
+  }
+
+  defaultVisibleMessagesLimitByTopic.set(topicId, visibleLimit);
+};
+
 const getNonShrinkingVisibleLimit = (
   topicId: string,
   requestedLimit?: number,
-  isPaginationRequest = false
+  isPaginationRequest = false,
+  allowShrink = false
 ): number | undefined => {
-  if (!requestedLimit || isPaginationRequest) {
+  if (!requestedLimit || isPaginationRequest || allowShrink) {
     return requestedLimit;
   }
 
@@ -1058,6 +1104,7 @@ export const fetchMessagesForTopic = async (
     forceRefresh?: boolean;
     forceNetwork?: boolean;
     visibleLimit?: number;
+    allowVisibleShrink?: boolean;
     skipShadowSnapshot?: boolean;
     allowStaleFallback?: boolean;
   }
@@ -1097,7 +1144,8 @@ export const fetchMessagesForTopic = async (
                 visibleLimit: getNonShrinkingVisibleLimit(
                   topicId,
                   opts?.visibleLimit,
-                  isPaginationRequest
+                  isPaginationRequest,
+                  opts?.allowVisibleShrink
                 )
               }
             );
@@ -1177,7 +1225,8 @@ export const fetchMessagesForTopic = async (
               visibleLimit: getNonShrinkingVisibleLimit(
                 topicId,
                 opts?.visibleLimit,
-                isPaginationRequest
+                isPaginationRequest,
+                opts?.allowVisibleShrink
               )
             }
           );
@@ -1253,7 +1302,8 @@ export const fetchMessagesForTopic = async (
               visibleLimit: getNonShrinkingVisibleLimit(
                 topicId,
                 opts?.visibleLimit,
-                isPaginationRequest
+                isPaginationRequest,
+                opts?.allowVisibleShrink
               )
             }
           );
@@ -1338,7 +1388,8 @@ export const fetchMessagesForTopic = async (
         visibleLimit: getNonShrinkingVisibleLimit(
           topicId,
           opts?.visibleLimit,
-          isPaginationRequest
+          isPaginationRequest,
+          opts?.allowVisibleShrink
         )
       });
     }
@@ -1549,7 +1600,8 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
     saveMessagesToLocal(topicId, [...existingMessages, nextMessage], {
       syncLastMessage: true,
       windowMode: 'preserve-end',
-      updateVisible: shouldUpdateVisibleWindow
+      updateVisible: shouldUpdateVisibleWindow,
+      persistDelayMs: getAppendPersistDelayMs(topicId)
     });
 
     if (
@@ -1597,7 +1649,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
         };
       })
     );
-    schedulePersistMessages(topicId);
+    schedulePersistMessages(topicId, getAppendPersistDelayMs(topicId));
     clearPendingUploadMessage(topicId, clientId);
 
     if (
@@ -1627,7 +1679,8 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   saveMessagesToLocal(topicId, [...filtered, resolvedMessage], {
     syncLastMessage: true,
     windowMode: 'preserve-end',
-    updateVisible: shouldUpdateVisibleWindow
+    updateVisible: shouldUpdateVisibleWindow,
+    persistDelayMs: getAppendPersistDelayMs(topicId)
   });
   clearPendingUploadMessage(topicId, clientId);
 
@@ -1883,6 +1936,12 @@ export const saveMessagesToLocal = (
   }
 ): void => {
   const filteredMessages = filterDeletedMessagesForTopic(topicId, messages);
+  const windowMode = opts?.windowMode || 'latest';
+  const visibleLimit = getDefaultVisibleMessagesLimitForSave(
+    topicId,
+    windowMode,
+    opts?.visibleLimit
+  );
   const sortedMessages = applyReactionOverlaysToMessages(
     topicId,
     dedupeMessagesForTopic(filteredMessages).sort(compareMessages)
@@ -1897,9 +1956,9 @@ export const saveMessagesToLocal = (
         )
       ).sort(compareMessages)
     ),
-    opts?.windowMode,
+    windowMode,
     opts?.anchorMessageId,
-    opts?.visibleLimit
+    visibleLimit
   );
 
   fullMessagesStore.value[topicId] = sortedMessages;
@@ -2005,7 +2064,7 @@ export const clearVisibleMessagesForTopic = (topicId: string): void => {
 export const hydrateMessagesFromCache = async (
   topicId: string,
   userId?: string,
-  opts?: { visibleLimit?: number }
+  opts?: { visibleLimit?: number; allowVisibleShrink?: boolean }
 ): Promise<IMessage[]> => {
   if (!topicId) {
     return [];
@@ -2021,7 +2080,12 @@ export const hydrateMessagesFromCache = async (
     saveMessagesToLocal(topicId, existingFullMessages, {
       syncLastMessage: false,
       windowMode: 'latest',
-      visibleLimit: getNonShrinkingVisibleLimit(topicId, opts?.visibleLimit)
+      visibleLimit: getNonShrinkingVisibleLimit(
+        topicId,
+        opts?.visibleLimit,
+        false,
+        opts?.allowVisibleShrink
+      )
     });
 
     return getMessagesByTopicId(topicId);
@@ -2051,7 +2115,12 @@ export const hydrateMessagesFromCache = async (
       saveMessagesToLocal(topicId, normalizedShadowMessages, {
         syncLastMessage: false,
         windowMode: 'latest',
-        visibleLimit: getNonShrinkingVisibleLimit(topicId, opts?.visibleLimit)
+        visibleLimit: getNonShrinkingVisibleLimit(
+          topicId,
+          opts?.visibleLimit,
+          false,
+          opts?.allowVisibleShrink
+        )
       });
       markTopicStateCanonical(topicId);
       void saveShadowLoadedRange(topicId, normalizedShadowMessages);
@@ -2074,7 +2143,12 @@ export const hydrateMessagesFromCache = async (
     saveMessagesToLocal(topicId, normalizedCachedMessages, {
       syncLastMessage: false,
       windowMode: 'latest',
-      visibleLimit: getNonShrinkingVisibleLimit(topicId, opts?.visibleLimit)
+      visibleLimit: getNonShrinkingVisibleLimit(
+        topicId,
+        opts?.visibleLimit,
+        false,
+        opts?.allowVisibleShrink
+      )
     });
     markTopicStateCanonical(topicId);
     void saveShadowTopicSnapshot(
@@ -2102,7 +2176,12 @@ export const hydrateMessagesFromCache = async (
     saveMessagesToLocal(topicId, existingFullMessages, {
       syncLastMessage: false,
       windowMode: 'latest',
-      visibleLimit: getNonShrinkingVisibleLimit(topicId, opts?.visibleLimit)
+      visibleLimit: getNonShrinkingVisibleLimit(
+        topicId,
+        opts?.visibleLimit,
+        false,
+        opts?.allowVisibleShrink
+      )
     });
 
     return getMessagesByTopicId(topicId);

@@ -14,6 +14,26 @@
     >
       Контакты
     </li>
+    <template v-if="showTopicListSkeleton">
+      <li
+        v-for="index in skeletonRows"
+        :key="`topic-skeleton-${index}`"
+        class="contact-list__li contact-list__skeleton-row"
+        role="presentation"
+        aria-hidden="true"
+        :data-testid="`${props.dataTestid}-ContactList-Skeleton${index}`"
+      >
+        <div class="contact-list__item contact-list__skeleton-item">
+          <span class="contact-list__skeleton-avatar"></span>
+          <div class="contact-list__skeleton-content">
+            <span class="contact-list__skeleton-line"></span>
+            <span
+              class="contact-list__skeleton-line contact-list__skeleton-line--short"
+            ></span>
+          </div>
+        </div>
+      </li>
+    </template>
     <li
       v-for="(topic, index) in props.topics"
       :key="topic.id"
@@ -464,6 +484,7 @@ interface IExtendedContactListProps extends IContactListProps {
   toolbarFilter?: string;
   messageResults?: IMessageSearchResult[];
   isMessageSearchLoading?: boolean;
+  isLoading?: boolean;
 }
 
 const {
@@ -481,7 +502,8 @@ const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   searchQuery: '',
   toolbarFilter: '',
   messageResults: () => [],
-  isMessageSearchLoading: false
+  isMessageSearchLoading: false,
+  isLoading: false
 });
 
 const emits = defineEmits<{
@@ -519,6 +541,14 @@ let topicPressStartY = 0;
 let topicPressMoved = false;
 
 const hasSearchQuery = computed(() => props.searchQuery.trim().length > 0);
+const skeletonRows = 7;
+const showTopicListSkeleton = computed(
+  () =>
+    props.isLoading &&
+    !props.showCheckbox &&
+    !hasSearchQuery.value &&
+    props.topics.length === 0
+);
 const showContactSectionTitle = computed(
   () => hasSearchQuery.value && !props.showCheckbox && props.topics.length > 0
 );
@@ -540,6 +570,7 @@ const showSearchEmptyState = computed(
   () =>
     hasSearchQuery.value &&
     !props.showCheckbox &&
+    !props.isLoading &&
     !props.isMessageSearchLoading &&
     props.topics.length === 0 &&
     props.messageResults.length === 0
@@ -1179,5 +1210,60 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
 
 .contact-list__item--message-result {
   cursor: pointer;
+}
+
+.contact-list__skeleton-row {
+  pointer-events: none;
+}
+
+.contact-list__skeleton-item {
+  align-items: center;
+  cursor: default;
+}
+
+.contact-list__skeleton-avatar,
+.contact-list__skeleton-line {
+  display: block;
+  background: linear-gradient(90deg, #eef2f7, #f8fafc, #eef2f7);
+  background-size: 180% 100%;
+  animation: contact-list-skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+.contact-list__skeleton-avatar {
+  width: 50px;
+  height: 50px;
+  flex: 0 0 50px;
+  border-radius: 50%;
+}
+
+.contact-list__skeleton-content {
+  display: grid;
+  gap: 9px;
+  width: 100%;
+}
+
+:global(.menu--collapse) .contact-list__skeleton-content {
+  display: none;
+}
+
+.contact-list__skeleton-line {
+  width: 78%;
+  height: 14px;
+  border-radius: 6px;
+}
+
+.contact-list__skeleton-line--short {
+  width: 54%;
+  height: 12px;
+}
+
+@keyframes contact-list-skeleton-pulse {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -80% 0;
+  }
 }
 </style>

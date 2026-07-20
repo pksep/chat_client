@@ -122,6 +122,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
 
   const appPlugins: PluginOption[] = [
     VitePWA({
+      injectRegister: false,
       registerType: 'autoUpdate',
       showMaximumFileSizeToCacheInBytesWarning: true,
       workbox: {

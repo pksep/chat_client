@@ -1628,11 +1628,11 @@
 }
 
 .call-modal__connection-quality--good {
-  --call-quality-bg: #8f9dff;
+  --call-quality-bg: #77a6ff;
 }
 
 .call-modal__connection-quality--poor {
-  --call-quality-bg: #a58cff;
+  --call-quality-bg: #77a6ff;
 }
 
 .call-modal__connection-quality--stage {

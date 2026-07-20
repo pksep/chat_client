@@ -57,6 +57,9 @@ export interface ChatBackgroundSnapshotImportOptions {
   maxAgeMs?: number;
   requireNewerThanLocalPts?: boolean;
   skipMessageTopicIds?: string[];
+  prioritizeMessageTopicIds?: string[];
+  maxMessageTopicImports?: number;
+  maxMessagesPerTopic?: number;
   requireRenderableContent?: boolean;
 }
 
@@ -204,13 +207,44 @@ export const importChatBackgroundSnapshot = async (
   const events = Array.isArray(snapshot.events) ? snapshot.events : [];
   const messagesByTopic = snapshot.messagesByTopic || {};
   const skippedMessageTopicIds = new Set(opts?.skipMessageTopicIds || []);
-  const messageEntries = Object.entries(messagesByTopic).filter(
-    ([topicId, messages]) =>
-      topicId &&
-      !skippedMessageTopicIds.has(topicId) &&
-      Array.isArray(messages) &&
-      messages.length > 0
+  const priorityMessageTopicIds = new Map(
+    (opts?.prioritizeMessageTopicIds || []).map((topicId, index) => [
+      topicId,
+      index
+    ])
   );
+  const messageEntries = Object.entries(messagesByTopic)
+    .filter(
+      ([topicId, messages]) =>
+        topicId &&
+        !skippedMessageTopicIds.has(topicId) &&
+        Array.isArray(messages) &&
+        messages.length > 0
+    )
+    .sort(([leftTopicId], [rightTopicId]) => {
+      const leftPriority = priorityMessageTopicIds.get(leftTopicId);
+      const rightPriority = priorityMessageTopicIds.get(rightTopicId);
+
+      if (leftPriority === undefined && rightPriority === undefined) {
+        return 0;
+      }
+
+      if (leftPriority === undefined) {
+        return 1;
+      }
+
+      if (rightPriority === undefined) {
+        return -1;
+      }
+
+      return leftPriority - rightPriority;
+    })
+    .slice(
+      0,
+      opts?.maxMessageTopicImports === undefined
+        ? undefined
+        : Math.max(0, opts.maxMessageTopicImports)
+    );
 
   if (
     opts?.requireRenderableContent &&
@@ -232,7 +266,12 @@ export const importChatBackgroundSnapshot = async (
   }
 
   for (const [topicId, messages] of messageEntries) {
-    messagesApi.mergeMessagesForTopic(topicId, messages, 'replace', {
+    const limitedMessages =
+      opts?.maxMessagesPerTopic && opts.maxMessagesPerTopic > 0
+        ? messages.slice(-opts.maxMessagesPerTopic)
+        : messages;
+
+    messagesApi.mergeMessagesForTopic(topicId, limitedMessages, 'replace', {
       syncLastMessage: true,
       persistDelayMs: 0
     });
@@ -240,20 +279,20 @@ export const importChatBackgroundSnapshot = async (
     await Promise.allSettled([
       topicMessagesCacheApi.saveCachedTopicMessages(
         topicId,
-        messages,
+        limitedMessages,
         resolvedUserId
       ),
       shadowApi.saveShadowTopicSnapshot(
         topicId,
-        messages,
+        limitedMessages,
         'http',
         resolvedUserId,
         { replace: true }
       ),
-      shadowApi.saveShadowLoadedRange(topicId, messages, resolvedUserId),
+      shadowApi.saveShadowLoadedRange(topicId, limitedMessages, resolvedUserId),
       shadowApi.syncShadowReadStateFromMessages(
         topicId,
-        messages,
+        limitedMessages,
         'http',
         resolvedUserId
       )

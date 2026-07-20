@@ -58,6 +58,7 @@ const unreadReactionTargetsByTopic = new Map<string, Map<string, string>>();
 let isTopicsVisibilityBound = false;
 let isDesktopVisibilityBound = false;
 let topicsApi: ReturnType<typeof createTopicsApi> | null = null;
+let lastAppliedAppBadgeCount: number | null = null;
 
 const route = useUrlWatcher();
 
@@ -85,14 +86,23 @@ const bindTopicsVisibilityListener = (
 const createTopicsApi = () => {
   const applyDisplayedUnreadCount = (count: number) => {
     const baseTitle = 'SEP:Chat';
+    const nextTitle = count > 0 ? `(${count}) ${baseTitle}` : baseTitle;
+
+    if (document.title !== nextTitle) {
+      document.title = nextTitle;
+    }
+
+    if (lastAppliedAppBadgeCount === count) {
+      return;
+    }
+
+    lastAppliedAppBadgeCount = count;
 
     if (count > 0) {
-      document.title = `(${count}) ${baseTitle}`;
       if ('setAppBadge' in navigator) {
         (navigator as any).setAppBadge(count);
       }
     } else {
-      document.title = baseTitle;
       if ('clearAppBadge' in navigator) {
         (navigator as any).clearAppBadge();
       }

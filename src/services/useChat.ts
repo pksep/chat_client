@@ -915,20 +915,32 @@ const setupChatListeners = (): void => {
       }
 
       if (payload.topicId) {
-        const endedTopic = useTopics().getSelectedTopic(payload.topicId) as any;
+        const endedTopicId = payload.topicId;
+        const endedTopic = useTopics().getSelectedTopic(endedTopicId) as any;
 
         if (endedTopic?.type === TopicType.DM) {
           await new Promise(resolve => setTimeout(resolve, 500));
 
+          const endedMessagesRefresh = fetchMessagesForTopic(endedTopicId, {
+            limit: 50,
+            newMessages: true,
+            forceRefresh: true,
+            forceNetwork: true,
+            allowStaleFallback: false,
+            skipSave: true
+          }).then(messages => {
+            if (messages.length === 0) {
+              return;
+            }
+
+            mergeMessagesForTopic(endedTopicId, messages, 'replace', {
+              syncLastMessage: true,
+              updateVisible: endedTopicId !== route.value.id
+            });
+          });
+
           await Promise.allSettled([
-            fetchMessagesForTopic(payload.topicId, {
-              limit: 50,
-              newMessages: true,
-              forceRefresh: true,
-              forceNetwork: true,
-              allowStaleFallback: false,
-              syncLastMessage: true
-            }),
+            endedMessagesRefresh,
             fetchAllTopics()
           ]);
         }
@@ -964,7 +976,12 @@ let hasCompletedInitialConnection = false;
 const MAX_BACKGROUND_TOPIC_RECONCILES = 12;
 const FRESH_SYNC_THROTTLE_MS = 5000;
 const BACKGROUND_SYNC_FOREGROUND_THROTTLE_MS = 30000;
+const BACKGROUND_SYNC_INITIAL_FOREGROUND_DELAY_MS = 30000;
+const BACKGROUND_SYNC_RESUME_FOREGROUND_DELAY_MS = 15000;
+const BACKGROUND_SYNC_ONLINE_FOREGROUND_DELAY_MS = 5000;
 const BACKGROUND_SNAPSHOT_FOREGROUND_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const BACKGROUND_SNAPSHOT_FOREGROUND_MESSAGE_LIMIT = 180;
+const BACKGROUND_SNAPSHOT_INITIAL_IMPORT_DELAY_MS = 2500;
 const HARD_RECONNECT_THROTTLE_MS = 10000;
 const NATIVE_NETWORK_RECOVERY_GRACE_MS = 15000;
 const BROWSER_NETWORK_RECOVERY_GRACE_MS = 10000;
@@ -973,6 +990,8 @@ const HTTP_HEALTH_PROBE_RETRY_DELAY_MS = 1500;
 const NATIVE_HTTP_HEALTH_PROBE_ATTEMPTS = 3;
 let networkStatePollInterval: ReturnType<typeof setInterval> | null = null;
 let browserOfflineFallbackTimeout: ReturnType<typeof setTimeout> | null = null;
+let backgroundForegroundSyncTimeout: ReturnType<typeof setTimeout> | null =
+  null;
 let removeAppVisibilityListener: (() => void) | null = null;
 let lastFreshSyncRequestedAt = 0;
 let lastBackgroundForegroundSyncAt = 0;
@@ -1006,13 +1025,46 @@ const importBackgroundSnapshotForForeground = async (
   userId: string | undefined,
   source: string
 ): Promise<boolean> => {
+  const activeTopicId = route.value.id || '';
+  const isEffectivelyOnline = getEffectiveBrowserNetworkState();
+  const shouldImportActiveMessages = !isEffectivelyOnline && !!activeTopicId;
+
   return importAnyChatBackgroundSnapshot(userId, {
     source,
-    maxAgeMs: getEffectiveBrowserNetworkState()
+    maxAgeMs: isEffectivelyOnline
       ? BACKGROUND_SNAPSHOT_FOREGROUND_MAX_AGE_MS
       : undefined,
-    requireNewerThanLocalPts: getEffectiveBrowserNetworkState()
+    requireNewerThanLocalPts: isEffectivelyOnline,
+    prioritizeMessageTopicIds: activeTopicId ? [activeTopicId] : undefined,
+    maxMessageTopicImports: shouldImportActiveMessages ? 1 : 0,
+    maxMessagesPerTopic: BACKGROUND_SNAPSHOT_FOREGROUND_MESSAGE_LIMIT
   });
+};
+
+const scheduleForegroundSnapshotImport = (
+  userId: string | undefined,
+  source: string
+): void => {
+  const delayMs =
+    source === 'initialize-chat'
+      ? BACKGROUND_SNAPSHOT_INITIAL_IMPORT_DELAY_MS
+      : 0;
+
+  const runImport = () => {
+    void importBackgroundSnapshotForForeground(userId, source).catch(error => {
+      console.warn(
+        'Failed to import foreground chat background snapshot:',
+        error
+      );
+    });
+  };
+
+  if (delayMs <= 0) {
+    runImport();
+    return;
+  }
+
+  setTimeout(runImport, delayMs);
 };
 
 const clearBrowserOfflineFallback = (): void => {
@@ -1052,6 +1104,24 @@ const beginBrowserNetworkRecoveryGrace = (): void => {
   scheduleBrowserOfflineFallback();
 };
 
+const getForegroundBackgroundSyncDelay = (source: string): number => {
+  if (!Capacitor.isNativePlatform()) {
+    return source === 'browser-online'
+      ? BACKGROUND_SYNC_ONLINE_FOREGROUND_DELAY_MS
+      : BACKGROUND_SYNC_RESUME_FOREGROUND_DELAY_MS;
+  }
+
+  if (source === 'initialize-chat') {
+    return BACKGROUND_SYNC_INITIAL_FOREGROUND_DELAY_MS;
+  }
+
+  if (source === 'browser-online') {
+    return BACKGROUND_SYNC_ONLINE_FOREGROUND_DELAY_MS;
+  }
+
+  return BACKGROUND_SYNC_RESUME_FOREGROUND_DELAY_MS;
+};
+
 const requestBackgroundSyncOnForeground = (source: string): void => {
   if (!Capacitor.isNativePlatform() && !getEffectiveBrowserNetworkState()) {
     return;
@@ -1067,12 +1137,28 @@ const requestBackgroundSyncOnForeground = (source: string): void => {
 
   lastBackgroundForegroundSyncAt = now;
 
-  void requestAnyChatBackgroundSync({
-    reason: source,
-    topicId: route.value.id || undefined
-  }).catch(error => {
-    console.warn('Не удалось запросить фоновую синхронизацию чата:', error);
-  });
+  if (backgroundForegroundSyncTimeout) {
+    clearTimeout(backgroundForegroundSyncTimeout);
+  }
+
+  backgroundForegroundSyncTimeout = setTimeout(() => {
+    backgroundForegroundSyncTimeout = null;
+
+    if (!chatSDK || document.visibilityState !== 'visible') {
+      return;
+    }
+
+    if (!Capacitor.isNativePlatform() && !getEffectiveBrowserNetworkState()) {
+      return;
+    }
+
+    void requestAnyChatBackgroundSync({
+      reason: source,
+      topicId: route.value.id || undefined
+    }).catch(error => {
+      console.warn('Не удалось запросить фоновую синхронизацию чата:', error);
+    });
+  }, getForegroundBackgroundSyncDelay(source));
 };
 
 const getNetworkInformation = (): NetworkInformationLike | null =>
@@ -1211,7 +1297,8 @@ const refreshActiveTopicMessagesAfterReconnect = async (
 
   if (latestMessages.length > 0) {
     mergeMessagesForTopic(topicId, latestMessages, 'replace', {
-      syncLastMessage: true
+      syncLastMessage: true,
+      updateVisible: false
     });
     return;
   }
@@ -1752,10 +1839,7 @@ export const initializeChat = async (options: {
   areChatListenersBound = false;
 
   currentUserId.value = options.userId || null;
-  await importBackgroundSnapshotForForeground(
-    options.userId,
-    'initialize-chat'
-  );
+  scheduleForegroundSnapshotImport(options.userId, 'initialize-chat');
   requestBackgroundSyncOnForeground('initialize-chat');
 
   if (!isVisibilityListenerAdded) {
@@ -1766,7 +1850,7 @@ export const initializeChat = async (options: {
       lastVisibilityState = document.visibilityState;
       if (document.visibilityState === 'visible') {
         syncPresenceForVisibility();
-        void importBackgroundSnapshotForForeground(
+        scheduleForegroundSnapshotImport(
           currentUserId.value || undefined,
           'app-visible'
         );
@@ -1786,7 +1870,7 @@ export const initializeChat = async (options: {
 
   if (!isResumeListenersAdded) {
     window.addEventListener('focus', () => {
-      void importBackgroundSnapshotForForeground(
+      scheduleForegroundSnapshotImport(
         currentUserId.value || undefined,
         'window-focus'
       );
@@ -1827,7 +1911,7 @@ export const initializeChat = async (options: {
         }
 
         syncPresenceForVisibility();
-        void importBackgroundSnapshotForForeground(
+        scheduleForegroundSnapshotImport(
           currentUserId.value || undefined,
           'native-app-active'
         );
@@ -1839,7 +1923,7 @@ export const initializeChat = async (options: {
       });
 
       void CapacitorApp.addListener('resume', () => {
-        void importBackgroundSnapshotForForeground(
+        scheduleForegroundSnapshotImport(
           currentUserId.value || undefined,
           'native-resume'
         );

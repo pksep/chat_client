@@ -38,8 +38,8 @@
         <MessageList
           v-if="isMobileMessageListMounted"
           ref="messageListRef"
-          :defer-content-render="!isMobileMessageContentReady"
-          :suppress-initial-skeleton="!currentMobileTopicUsesSkeleton"
+          :defer-content-render="false"
+          :suppress-initial-skeleton="true"
           :baseUrl="props.baseUrl"
           :contact="props.contact"
           :user="authUser"
@@ -53,67 +53,6 @@
           @viewport-snapshot-change="handleViewportSnapshotChange"
           @rendered-topic-change="handleRenderedTopicChange"
         />
-        <div
-          v-else
-          class="chat__mobile-instant-shell"
-          aria-hidden="true"
-          :data-testid="`${props.dataTestid}-Chat-MobileInstantShell`"
-        >
-          <div
-            :class="[
-              'chat__message-wrapper',
-              'chat__message-wrapper--content-deferred'
-            ]"
-          >
-            <div
-              :class="[
-                'chat__message-skeleton',
-                {
-                  'chat__message-skeleton--group':
-                    route.type === RouteTypes.GROUP
-                }
-              ]"
-            >
-              <span
-                class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
-              >
-                <span class="chat__message-skeleton-avatar" />
-                <span
-                  class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--short"
-                />
-              </span>
-              <span
-                class="chat__message-skeleton-media chat__message-skeleton-media--outgoing"
-              >
-                <span class="chat__message-skeleton-media-icon" />
-              </span>
-              <span
-                class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
-              >
-                <span class="chat__message-skeleton-avatar" />
-                <span
-                  class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
-                />
-              </span>
-              <span
-                class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing chat__message-skeleton-bubble--wide"
-              />
-              <span
-                class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
-              >
-                <span class="chat__message-skeleton-avatar" />
-                <span
-                  class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--tiny"
-                />
-              </span>
-            </div>
-          </div>
-          <div class="chat__mobile-instant-input">
-            <span class="chat__mobile-instant-input-action" />
-            <span class="chat__mobile-instant-input-field" />
-            <span class="chat__mobile-instant-input-send" />
-          </div>
-        </div>
       </div>
       <ShareSelectionOverlay />
     </template>

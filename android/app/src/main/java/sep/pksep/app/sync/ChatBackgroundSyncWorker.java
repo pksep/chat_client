@@ -19,8 +19,16 @@ import java.util.Set;
 
 public class ChatBackgroundSyncWorker extends Worker {
     private static final String TAG = "ChatBackgroundSync";
-    private static final int MAX_MESSAGE_TOPICS = 8;
-    private static final int MESSAGE_LIMIT = 50;
+    private static final int DEFAULT_MAX_MESSAGE_TOPICS = 2;
+    private static final int TARGETED_MAX_MESSAGE_TOPICS = 4;
+    private static final int FOREGROUND_MAX_MESSAGE_TOPICS = 1;
+    private static final int DEFAULT_MESSAGE_LIMIT = 32;
+    private static final int TARGETED_MESSAGE_LIMIT = 128;
+    private static final int FOREGROUND_MESSAGE_LIMIT = 180;
+    private static final int DEFAULT_SYNC_EVENTS_LIMIT = 150;
+    private static final int TARGETED_SYNC_EVENTS_LIMIT = 300;
+    private static final int FOREGROUND_SYNC_EVENTS_LIMIT = 75;
+    private static final int TOPICS_LIMIT = 999;
 
     public ChatBackgroundSyncWorker(
         @NonNull Context context,
@@ -66,22 +74,25 @@ public class ChatBackgroundSyncWorker extends Worker {
         try {
             ChatBackgroundSyncApi api = new ChatBackgroundSyncApi(session);
             ChatBackgroundSyncApi.SyncEventsResult syncEvents =
-                fetchSyncEventsOrFallback(api, lastPts);
-            JSONArray topics = api.fetchTopics();
+                fetchSyncEventsOrFallback(api, lastPts, getSyncEventsLimit(hints));
+            JSONArray topics = api.fetchTopics(TOPICS_LIMIT);
             JSONObject messagesByTopic = new JSONObject();
             JSONObject messageErrors = new JSONObject();
             List<String> topicIds = resolvePriorityTopicIds(
                 hints,
                 syncEvents.events,
-                topics
+                topics,
+                getMaxMessageTopics(hints),
+                shouldIncludeRecentTopicFallback(hints)
             );
+            int messageLimit = getMessageLimit(hints);
 
             for (String topicId : topicIds) {
                 try {
                     putValue(
                         messagesByTopic,
                         topicId,
-                        api.fetchLatestMessages(topicId, MESSAGE_LIMIT)
+                        api.fetchLatestMessages(topicId, messageLimit)
                     );
                 } catch (ChatBackgroundSyncApi.ApiException error) {
                     if (error.isAuthError()) {
@@ -154,10 +165,11 @@ public class ChatBackgroundSyncWorker extends Worker {
 
     private ChatBackgroundSyncApi.SyncEventsResult fetchSyncEventsOrFallback(
         ChatBackgroundSyncApi api,
-        String lastPts
+        String lastPts,
+        int limit
     ) throws IOException, JSONException {
         try {
-            return api.fetchSyncEvents(lastPts, 500);
+            return api.fetchSyncEvents(lastPts, limit);
         } catch (ChatBackgroundSyncApi.ApiException error) {
             if (error.isNotFound()) {
                 Log.w(TAG, "sync events endpoint missing, using REST snapshot fallback");
@@ -198,7 +210,9 @@ public class ChatBackgroundSyncWorker extends Worker {
     private List<String> resolvePriorityTopicIds(
         ChatBackgroundSyncStore.PendingHints hints,
         JSONArray syncEvents,
-        JSONArray topics
+        JSONArray topics,
+        int maxMessageTopics,
+        boolean includeRecentTopicFallback
     ) {
         Set<String> topicIds = new LinkedHashSet<>(hints.topicIds);
         List<String> recentTopicIds = new ArrayList<>();
@@ -214,8 +228,8 @@ public class ChatBackgroundSyncWorker extends Worker {
                 topicIds.add(topicId.trim());
             }
 
-            if (topicIds.size() >= MAX_MESSAGE_TOPICS) {
-                return new ArrayList<>(topicIds).subList(0, MAX_MESSAGE_TOPICS);
+            if (topicIds.size() >= maxMessageTopics) {
+                return new ArrayList<>(topicIds).subList(0, maxMessageTopics);
             }
         }
 
@@ -232,26 +246,86 @@ public class ChatBackgroundSyncWorker extends Worker {
 
             if (isPriorityTopic(topic)) {
                 topicIds.add(topicId);
-            } else if (topic.has("lastMessage") && !topic.isNull("lastMessage")) {
+            } else if (
+                includeRecentTopicFallback &&
+                    topic.has("lastMessage") &&
+                    !topic.isNull("lastMessage")
+            ) {
                 recentTopicIds.add(topicId);
             }
 
-            if (topicIds.size() >= MAX_MESSAGE_TOPICS) {
-                return new ArrayList<>(topicIds).subList(0, MAX_MESSAGE_TOPICS);
+            if (topicIds.size() >= maxMessageTopics) {
+                return new ArrayList<>(topicIds).subList(0, maxMessageTopics);
             }
         }
 
         for (String topicId : recentTopicIds) {
             topicIds.add(topicId);
-            if (topicIds.size() >= MAX_MESSAGE_TOPICS) {
+            if (topicIds.size() >= maxMessageTopics) {
                 break;
             }
         }
 
         return new ArrayList<>(topicIds).subList(
             0,
-            Math.min(topicIds.size(), MAX_MESSAGE_TOPICS)
+            Math.min(topicIds.size(), maxMessageTopics)
         );
+    }
+
+    private int getMaxMessageTopics(ChatBackgroundSyncStore.PendingHints hints) {
+        if (isForegroundReason(hints.reason)) {
+            return FOREGROUND_MAX_MESSAGE_TOPICS;
+        }
+
+        if (!hints.topicIds.isEmpty()) {
+            return TARGETED_MAX_MESSAGE_TOPICS;
+        }
+
+        return DEFAULT_MAX_MESSAGE_TOPICS;
+    }
+
+    private int getMessageLimit(ChatBackgroundSyncStore.PendingHints hints) {
+        if (isForegroundReason(hints.reason)) {
+            return FOREGROUND_MESSAGE_LIMIT;
+        }
+
+        if (!hints.topicIds.isEmpty()) {
+            return TARGETED_MESSAGE_LIMIT;
+        }
+
+        return DEFAULT_MESSAGE_LIMIT;
+    }
+
+    private int getSyncEventsLimit(ChatBackgroundSyncStore.PendingHints hints) {
+        if (isForegroundReason(hints.reason)) {
+            return FOREGROUND_SYNC_EVENTS_LIMIT;
+        }
+
+        if (!hints.topicIds.isEmpty()) {
+            return TARGETED_SYNC_EVENTS_LIMIT;
+        }
+
+        return DEFAULT_SYNC_EVENTS_LIMIT;
+    }
+
+    private boolean shouldIncludeRecentTopicFallback(
+        ChatBackgroundSyncStore.PendingHints hints
+    ) {
+        return !hints.topicIds.isEmpty();
+    }
+
+    private boolean isForegroundReason(String reason) {
+        if (reason == null) {
+            return false;
+        }
+
+        String normalized = reason.trim();
+        return "initialize-chat".equals(normalized) ||
+            "app-visible".equals(normalized) ||
+            "window-focus".equals(normalized) ||
+            "browser-online".equals(normalized) ||
+            "native-app-active".equals(normalized) ||
+            "native-resume".equals(normalized);
     }
 
     private boolean isPriorityTopic(JSONObject topic) {

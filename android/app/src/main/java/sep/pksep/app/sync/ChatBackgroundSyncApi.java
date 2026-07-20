@@ -52,8 +52,8 @@ final class ChatBackgroundSyncApi {
         );
     }
 
-    JSONArray fetchTopics() throws IOException, JSONException {
-        Object payload = getJson("/topics?page=1&limit=999");
+    JSONArray fetchTopics(int limit) throws IOException, JSONException {
+        Object payload = getJson("/topics?page=1&limit=" + Math.max(1, limit));
 
         if (payload instanceof JSONArray) {
             return (JSONArray) payload;

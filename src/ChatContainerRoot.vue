@@ -22,6 +22,7 @@ import {
   getStoredBootstrapErpAccessToken,
   getStoredChatAccessToken,
   isStoredChatSessionPersistent,
+  isAuthError,
   saveChatAuthSession,
   setAuthUser,
   tryRefreshErpSession,
@@ -52,7 +53,6 @@ import { MAX_W_MD } from './utils/constants';
 import { RouteTypes } from './composables/navigation/useUrlRouting';
 import {
   clearVisibleMessagesForTopic,
-  fetchMessagesForTopic,
   hydrateMessagesFromCache
 } from './services/useMessages';
 import { useShareSelection } from './composables/useShareSelection';
@@ -71,7 +71,7 @@ let removeAppVisibilityListener: (() => void) | null = null;
 const { hasPendingShareBatches, isShareSelectionActive, startShareSelection } =
   useShareSelection();
 let hydratedCacheUserId: string | undefined;
-const MOBILE_CACHED_ACTIVE_TOPIC_LIMIT = 50;
+const MOBILE_CACHED_ACTIVE_TOPIC_LIMIT = 180;
 const ONLINE_STARTUP_BACKGROUND_SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 const hasStartupNetwork = (): boolean =>
@@ -87,6 +87,19 @@ const getStartupSnapshotMaxAge = (): number | undefined =>
     ? ONLINE_STARTUP_BACKGROUND_SNAPSHOT_MAX_AGE_MS
     : undefined;
 
+const getStartupSnapshotMessageImportOptions = () => {
+  const activeTopicId = route.value.id || '';
+  const shouldImportActiveMessages = !hasStartupNetwork() && !!activeTopicId;
+
+  return {
+    prioritizeMessageTopicIds: activeTopicId ? [activeTopicId] : undefined,
+    maxMessageTopicImports: shouldImportActiveMessages ? 1 : 0,
+    maxMessagesPerTopic: isMobile.value
+      ? MOBILE_CACHED_ACTIVE_TOPIC_LIMIT
+      : undefined
+  };
+};
+
 const importStartupBackgroundSnapshot = (
   userId: string | undefined,
   source: string
@@ -95,6 +108,7 @@ const importStartupBackgroundSnapshot = (
     source,
     maxAgeMs: getStartupSnapshotMaxAge(),
     requireNewerThanLocalPts: hasStartupNetwork(),
+    ...getStartupSnapshotMessageImportOptions(),
     requireRenderableContent: true,
     skipMessageTopicIds:
       hasStartupNetwork() && route.value.id ? [route.value.id] : undefined
@@ -102,10 +116,11 @@ const importStartupBackgroundSnapshot = (
 
 const shouldAllowStartupTopicCache = (
   hasFreshBackgroundSnapshot = false
-): boolean => !hasStartupNetwork() || hasFreshBackgroundSnapshot;
+): boolean =>
+  isMobile.value || !hasStartupNetwork() || hasFreshBackgroundSnapshot;
 
 const shouldAllowStartupActiveMessageCache = (): boolean =>
-  !hasStartupNetwork();
+  isMobile.value || !hasStartupNetwork();
 
 const waitForStartupIdle = (): Promise<void> =>
   new Promise(resolve => {
@@ -129,6 +144,22 @@ const runDeferredStartupTask = (
         error
       );
     });
+};
+
+const shouldHydrateCacheBeforeStartupSnapshot = (): boolean =>
+  shouldAllowStartupTopicCache(false) || shouldAllowStartupActiveMessageCache();
+
+const scheduleStartupBackgroundSnapshotImport = (
+  userId: string | undefined,
+  source: string
+): void => {
+  if (!userId) {
+    return;
+  }
+
+  runDeferredStartupTask(source, async () => {
+    await importStartupBackgroundSnapshot(userId, source);
+  });
 };
 
 const getKnownTopicIds = (): string[] =>
@@ -177,19 +208,23 @@ const hydrateCriticalCache = async (
   userId?: string,
   opts?: CriticalCacheHydrationOptions
 ): Promise<void> => {
-  await hydrateUsersFromCache(userId);
+  const allowTopicCache = !!opts?.allowTopicCache;
+  const allowActiveMessageCache = !!opts?.allowActiveMessageCache;
+  const usersHydration = hydrateUsersFromCache(userId);
+  const topicsHydration = allowTopicCache
+    ? hydrateTopicsFromCache(userId)
+    : Promise.resolve([]);
+
+  await usersHydration;
 
   if (userId) {
     applyCachedAuthUser(userId);
   }
 
-  const allowTopicCache = !!opts?.allowTopicCache;
-  const allowActiveMessageCache = !!opts?.allowActiveMessageCache;
-
   if (!allowTopicCache) {
     setTopics([]);
   } else {
-    await hydrateTopicsFromCache(userId);
+    await topicsHydration;
   }
 
   if (allowActiveMessageCache) {
@@ -219,21 +254,6 @@ const hydrateFreshChatContent = async (userId?: string): Promise<boolean> => {
   }
 
   await fetchAllTopics();
-
-  if (route.value.id) {
-    const visibleLimit = isMobile.value
-      ? MOBILE_CACHED_ACTIVE_TOPIC_LIMIT
-      : undefined;
-
-    await fetchMessagesForTopic(route.value.id, {
-      limit: visibleLimit || 50,
-      newMessages: true,
-      forceRefresh: true,
-      forceNetwork: true,
-      allowStaleFallback: false,
-      visibleLimit
-    });
-  }
 
   hydratedCacheUserId = userId;
   return true;
@@ -375,23 +395,48 @@ const runAppInitialization = async () => {
   const directAuthSession = getChatAuthSession();
   const config = getConfig();
   const persistSession = !!tokenUrl || isStoredChatSessionPersistent();
-  const shouldUseBootstrapToken = !!bootstrapErpToken;
+  const hasStoredChatSession = !!(directAuthSession?.token || storedChatToken);
+  const shouldUseBootstrapToken =
+    !!bootstrapErpToken && (hasStartupNetwork() || !hasStoredChatSession);
   const initialUserId =
     directAuthSession?.user?.id || getStoredSessionUserId() || '';
   let startupBackgroundSnapshotImported = false;
+  let deferredStartupBackgroundSnapshotUserId: string | undefined;
+  const deferStartupBackgroundSnapshot = (
+    userId: string | undefined,
+    source: string
+  ): void => {
+    if (!userId || deferredStartupBackgroundSnapshotUserId === userId) {
+      return;
+    }
+
+    deferredStartupBackgroundSnapshotUserId = userId;
+    scheduleStartupBackgroundSnapshotImport(userId, source);
+  };
 
   if (initialUserId) {
     setCurrentUserId(initialUserId);
-    startupBackgroundSnapshotImported = await importStartupBackgroundSnapshot(
-      initialUserId,
-      'startup-before-hydration'
-    );
-    await hydrateCriticalCache(initialUserId, {
-      allowTopicCache: shouldAllowStartupTopicCache(
-        startupBackgroundSnapshotImported
-      ),
-      allowActiveMessageCache: shouldAllowStartupActiveMessageCache()
-    });
+    if (shouldHydrateCacheBeforeStartupSnapshot()) {
+      await hydrateCriticalCache(initialUserId, {
+        allowTopicCache: shouldAllowStartupTopicCache(false),
+        allowActiveMessageCache: shouldAllowStartupActiveMessageCache()
+      });
+      deferStartupBackgroundSnapshot(
+        initialUserId,
+        'startup-after-cache-hydration'
+      );
+    } else {
+      startupBackgroundSnapshotImported = await importStartupBackgroundSnapshot(
+        initialUserId,
+        'startup-before-hydration'
+      );
+      await hydrateCriticalCache(initialUserId, {
+        allowTopicCache: shouldAllowStartupTopicCache(
+          startupBackgroundSnapshotImported
+        ),
+        allowActiveMessageCache: shouldAllowStartupActiveMessageCache()
+      });
+    }
   }
 
   try {
@@ -425,30 +470,54 @@ const runAppInitialization = async () => {
       },
       persistSession
     );
-    clearBootstrapErpSession();
+    if (shouldUseBootstrapToken) {
+      clearBootstrapErpSession();
+    }
 
     setCurrentUserId(authUserId || undefined);
     if (authData.user) setAuthUser(authData.user);
 
-    const postAuthBackgroundSnapshotImported =
-      await importStartupBackgroundSnapshot(
-        authUserId || undefined,
-        'post-auth-before-hydration'
-      );
-    const allowTopicCache = shouldAllowStartupTopicCache(
-      startupBackgroundSnapshotImported || postAuthBackgroundSnapshotImported
-    );
     const allowActiveMessageCache = shouldAllowStartupActiveMessageCache();
+    const hasCurrentUserStartupSnapshot =
+      startupBackgroundSnapshotImported && authUserId === initialUserId;
 
     if (authUserId !== hydratedCacheUserId) {
-      await hydrateCriticalCache(authUserId || undefined, {
-        allowTopicCache,
-        allowActiveMessageCache
-      });
+      if (shouldHydrateCacheBeforeStartupSnapshot()) {
+        await hydrateCriticalCache(authUserId || undefined, {
+          allowTopicCache: shouldAllowStartupTopicCache(
+            hasCurrentUserStartupSnapshot
+          ),
+          allowActiveMessageCache
+        });
+        deferStartupBackgroundSnapshot(
+          authUserId || undefined,
+          'post-auth-after-cache-hydration'
+        );
+      } else {
+        const postAuthBackgroundSnapshotImported =
+          await importStartupBackgroundSnapshot(
+            authUserId || undefined,
+            'post-auth-before-hydration'
+        );
+        await hydrateCriticalCache(authUserId || undefined, {
+          allowTopicCache: shouldAllowStartupTopicCache(
+            hasCurrentUserStartupSnapshot ||
+              postAuthBackgroundSnapshotImported
+          ),
+          allowActiveMessageCache
+        });
+      }
     } else {
-      if (allowTopicCache || allowActiveMessageCache) {
+      if (
+        shouldAllowStartupTopicCache(hasCurrentUserStartupSnapshot) ||
+        allowActiveMessageCache
+      ) {
         scheduleBackgroundCachedMessageHydration(authUserId || undefined);
       }
+      deferStartupBackgroundSnapshot(
+        authUserId || undefined,
+        'post-auth-after-cache-hydration'
+      );
     }
 
     await initializeChat({
@@ -469,9 +538,19 @@ const runAppInitialization = async () => {
     console.error('Failed to initialize chat:', error);
 
     if (isMobile.value) {
-      clearStoredErpToken();
-      clearChatAuthSession();
-      clearBootstrapErpSession();
+      if (isAuthError(error)) {
+        clearStoredErpToken();
+        clearChatAuthSession();
+        clearBootstrapErpSession();
+      }
+
+      if (initialUserId && hydratedCacheUserId !== initialUserId) {
+        await hydrateCriticalCache(initialUserId, {
+          allowTopicCache: true,
+          allowActiveMessageCache: true
+        });
+      }
+
       return;
     }
   } finally {

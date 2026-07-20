@@ -7,6 +7,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -25,6 +26,9 @@ public final class ChatBackgroundSyncStore {
     private static final String KEY_STATUS = "sync.status";
     private static final String KEY_PENDING_HINTS = "sync.pendingHints";
     private static final int MAX_PENDING_TOPIC_IDS = 32;
+    private static final int MAX_SNAPSHOT_EVENTS_EXPORT = 100;
+    private static final int MAX_SNAPSHOT_MESSAGE_TOPICS_EXPORT = 2;
+    private static final int MAX_SNAPSHOT_MESSAGES_PER_TOPIC_EXPORT = 20;
 
     private ChatBackgroundSyncStore() {}
 
@@ -286,9 +290,14 @@ public final class ChatBackgroundSyncStore {
         SharedPreferences prefs = prefs(context);
         JSONObject snapshot = new JSONObject();
         JSONArray topics = parseArray(prefs.getString(KEY_TOPICS_SNAPSHOT, ""));
-        JSONArray syncEvents = parseArray(prefs.getString(KEY_SYNC_EVENTS, ""));
-        JSONObject messagesByTopic = parseObject(
-            prefs.getString(KEY_MESSAGES_SNAPSHOT, "")
+        JSONArray syncEvents = tailArray(
+            parseArray(prefs.getString(KEY_SYNC_EVENTS, "")),
+            MAX_SNAPSHOT_EVENTS_EXPORT
+        );
+        JSONObject messagesByTopic = trimMessagesByTopic(
+            parseObject(prefs.getString(KEY_MESSAGES_SNAPSHOT, "")),
+            MAX_SNAPSHOT_MESSAGE_TOPICS_EXPORT,
+            MAX_SNAPSHOT_MESSAGES_PER_TOPIC_EXPORT
         );
         boolean available =
             syncEvents.length() > 0 || topics.length() > 0 || messagesByTopic.length() > 0;
@@ -364,6 +373,50 @@ public final class ChatBackgroundSyncStore {
         }
 
         return false;
+    }
+
+    private static JSONArray tailArray(JSONArray source, int maxItems) {
+        JSONArray result = new JSONArray();
+
+        if (source == null || maxItems <= 0) {
+            return result;
+        }
+
+        int start = Math.max(0, source.length() - maxItems);
+        for (int i = start; i < source.length(); i++) {
+            result.put(source.opt(i));
+        }
+
+        return result;
+    }
+
+    private static JSONObject trimMessagesByTopic(
+        JSONObject source,
+        int maxTopics,
+        int maxMessagesPerTopic
+    ) {
+        JSONObject result = new JSONObject();
+
+        if (source == null || maxTopics <= 0 || maxMessagesPerTopic <= 0) {
+            return result;
+        }
+
+        Iterator<String> keys = source.keys();
+        int topicCount = 0;
+
+        while (keys.hasNext() && topicCount < maxTopics) {
+            String topicId = keys.next();
+            JSONArray messages = source.optJSONArray(topicId);
+
+            if (messages == null || messages.length() == 0) {
+                continue;
+            }
+
+            putValue(result, topicId, tailArray(messages, maxMessagesPerTopic));
+            topicCount += 1;
+        }
+
+        return result;
     }
 
     private static String chooseMaxPts(String currentPts, String incomingPts) {

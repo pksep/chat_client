@@ -145,6 +145,7 @@ type CallSocketAck = {
   elapsedDurationMs?: number;
   isNewCall?: boolean;
 };
+type InvitedGroupCallEntry = NonNullable<typeof invitedGroupCall.value>;
 
 const HAND_RAISE_TOPIC = 'group-call-hand-raise';
 const CALL_REACTION_TOPIC = 'group-call-reaction';
@@ -170,6 +171,8 @@ let localAcceptRoomId: string | null = null;
 let localAcceptTopicId: string | null = null;
 let connectPromise: Promise<void> | null = null;
 let connectAttemptId = 0;
+let invitedGroupCallJoinPromise: Promise<boolean | void> | null = null;
+let invitedGroupCallJoinRoomId: string | null = null;
 let activeCallTraceId: string | null = null;
 let lastTelemetryConnectionQuality: string | null = null;
 let currentCameraFacingMode: 'user' | 'environment' = 'user';
@@ -220,6 +223,8 @@ const DIRECT_CALL_RECONNECT_GRACE_MS = 180000;
 const DIRECT_CALL_EXPLICIT_LEAVE_SUPPRESSION_MS = 30000;
 const DIRECT_CALL_RECONNECT_POLL_MS = 2000;
 const CALL_ISSUE_SIGNAL_CONTEXT_MS = 5 * 60 * 1000;
+const INVITED_GROUP_CALL_CONNECT_ATTEMPTS = 2;
+const INVITED_GROUP_CALL_CONNECT_RETRY_DELAY_MS = 1200;
 const DIRECT_CALL_RECONNECT_FAILED_NOTICE = 'Не удалось восстановить звонок';
 const DIRECT_CALL_ENDED_NOTICE = 'Звонок завершён';
 const CALL_RECONNECT_NOTICE = 'Связь прервана. Переподключение';
@@ -1239,6 +1244,11 @@ const applyCurrentAudioOutputRoute = async () => {
 };
 
 const handleNativeAudioRouteChanged = async (audioState: AudioOutputState) => {
+  if (!audioState.callAudioActive) {
+    applyAudioOutputState(audioState);
+    return;
+  }
+
   const wasBluetoothActive = state.audioOutputRoute === 'bluetooth';
   const wasBluetoothAvailable =
     state.audioOutputAvailableRoutes.includes('bluetooth');
@@ -1803,7 +1813,7 @@ const restoreGroupCallEntryIfStillActive = (
           roomId: targetRoomId,
           topicId: targetTopicId,
           caller,
-          startTime: startTime ?? status.startTime ?? null,
+          startTime: resolveCallStartTime(status.startTime, startTime),
           participantCount: status.participantCount,
           groupMode: status.groupMode,
           elapsedDurationMs: status.elapsedDurationMs
@@ -1868,6 +1878,18 @@ const getElapsedCallDurationMs = () =>
   callElapsedMs.value +
   (callStartedAt.value ? Date.now() - callStartedAt.value : 0);
 
+const resolveCallStartTime = (
+  ...values: Array<number | null | undefined>
+): number | null => {
+  for (const value of values) {
+    if (value !== undefined) {
+      return typeof value === 'number' && Number.isFinite(value) ? value : null;
+    }
+  }
+
+  return null;
+};
+
 const syncTimerValue = () => {
   timerSeconds.value = Math.max(
     0,
@@ -1885,6 +1907,42 @@ const setCallStartedAt = (
       ? startTime
       : null;
   syncTimerValue();
+};
+
+const waitForInvitedGroupCallConnectRetry = () =>
+  new Promise<void>(resolve => {
+    setTimeout(resolve, INVITED_GROUP_CALL_CONNECT_RETRY_DELAY_MS);
+  });
+
+const isConnectedToTargetCall = (
+  targetRoomId: string,
+  targetTopicId?: string | null
+): boolean =>
+  roomId.value === targetRoomId &&
+  (!targetTopicId || topicId.value === targetTopicId) &&
+  !!room &&
+  room.state === ConnectionState.Connected;
+
+const prepareInvitedGroupCallJoinState = async (
+  invite: InvitedGroupCallEntry,
+  callStatus: LiveKitCallStatus,
+  me: IUser
+) => {
+  user.value = me as any;
+  roomId.value = invite.roomId;
+  topicId.value = invite.topicId;
+  setCallStartedAt(
+    resolveCallStartTime(callStatus.startTime, invite.startTime),
+    callStatus.elapsedDurationMs ?? invite.elapsedDurationMs ?? 0
+  );
+  await applyDefaultAudioOutputRoute();
+  open.value = true;
+  isIncoming.value = false;
+  isCalling.value = true;
+  isModalVisible.value = true;
+  isAcceptingLocally = true;
+  localAcceptRoomId = invite.roomId;
+  localAcceptTopicId = invite.topicId;
 };
 
 const startTimer = (startTime: number | null = callStartedAt.value) => {
@@ -3774,6 +3832,103 @@ const connectToRoom = async () => {
   return connectPromise;
 };
 
+const connectInvitedGroupCallWithRetry = async (
+  invite: InvitedGroupCallEntry,
+  me: IUser,
+  initialCallStatus: LiveKitCallStatus,
+  attempt = 1,
+  previousError: unknown = null
+): Promise<boolean> => {
+  const callStatus =
+    attempt === 1
+      ? initialCallStatus
+      : await getLiveKitCallStatus(invite.roomId, invite.topicId);
+
+  if (!callStatus?.active) {
+    clearUnavailableCallState(invite.roomId, invite.topicId);
+    showTransientCallStatusNotice(DIRECT_CALL_ENDED_NOTICE);
+    return false;
+  }
+
+  if (attempt > 1) {
+    await prepareInvitedGroupCallJoinState(invite, callStatus, me);
+    resetCallTelemetryState();
+    ensureCallTelemetryTraceId();
+    recordCallTelemetryEvent('call.join.invite_connect_retry', {
+      invited: true,
+      groupMode: true,
+      inviteRoomId: invite.roomId,
+      inviteTopicId: invite.topicId,
+      attempt,
+      maxAttempts: INVITED_GROUP_CALL_CONNECT_ATTEMPTS
+    });
+  }
+
+  let connectError: unknown = null;
+
+  try {
+    await connectToRoom();
+  } catch (error) {
+    connectError = error;
+  }
+
+  if (isConnectedToTargetCall(invite.roomId, invite.topicId)) {
+    return true;
+  }
+
+  const errorPayload = connectError
+    ? getTelemetryErrorPayload(connectError)
+    : previousError
+      ? getTelemetryErrorPayload(previousError)
+      : {};
+
+  if (attempt >= INVITED_GROUP_CALL_CONNECT_ATTEMPTS) {
+    recordCallTelemetryEvent(
+      'call.join.invite_connect_failed',
+      {
+        invited: true,
+        groupMode: true,
+        inviteRoomId: invite.roomId,
+        inviteTopicId: invite.topicId,
+        attempt,
+        maxAttempts: INVITED_GROUP_CALL_CONNECT_ATTEMPTS,
+        liveKitState: room?.state ?? null,
+        hasRoom: Boolean(room),
+        ...errorPayload
+      },
+      'error'
+    );
+    showErrorNotification(getConnectErrorMessage(connectError ?? previousError));
+    return false;
+  }
+
+  recordCallTelemetryEvent(
+    'call.join.invite_connect_retry_scheduled',
+    {
+      invited: true,
+      groupMode: true,
+      inviteRoomId: invite.roomId,
+      inviteTopicId: invite.topicId,
+      attempt,
+      nextAttempt: attempt + 1,
+      maxAttempts: INVITED_GROUP_CALL_CONNECT_ATTEMPTS,
+      liveKitState: room?.state ?? null,
+      hasRoom: Boolean(room),
+      ...errorPayload
+    },
+    'warn'
+  );
+
+  await waitForInvitedGroupCallConnectRetry();
+  return connectInvitedGroupCallWithRetry(
+    invite,
+    me,
+    callStatus,
+    attempt + 1,
+    connectError ?? previousError
+  );
+};
+
 const shouldReconnectLiveKitRoom = (activeRoom: Room | null): boolean =>
   !activeRoom || activeRoom.state === ConnectionState.Disconnected;
 
@@ -3870,7 +4025,7 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
     status?.elapsedDurationMs !== undefined
   ) {
     setCallStartedAt(
-      status.startTime ?? callStartedAt.value,
+      resolveCallStartTime(status.startTime, callStartedAt.value),
       status.elapsedDurationMs ?? callElapsedMs.value
     );
   }
@@ -4036,7 +4191,10 @@ const applyCallSocketAck = (
 ) => {
   const resolvedRoomId = ack?.roomId ?? fallback?.roomId ?? null;
   const resolvedTopicId = ack?.topicId ?? fallback?.topicId ?? null;
-  const resolvedStartTime = ack?.startTime ?? fallback?.startTime ?? null;
+  const resolvedStartTime = resolveCallStartTime(
+    ack?.startTime,
+    fallback?.startTime
+  );
   const resolvedElapsedDurationMs =
     ack?.elapsedDurationMs ?? fallback?.elapsedDurationMs ?? 0;
 
@@ -4586,8 +4744,8 @@ export const joinPendingGroupCall = async (
   roomId.value = pendingRoomId;
   topicId.value = pendingTopicId;
   setCallStartedAt(
-    pendingGroupCall.startTime ?? callStatus.startTime ?? null,
-    pendingGroupCall.elapsedDurationMs ?? callStatus.elapsedDurationMs ?? 0
+    resolveCallStartTime(callStatus.startTime, pendingGroupCall.startTime),
+    callStatus.elapsedDurationMs ?? pendingGroupCall.elapsedDurationMs ?? 0
   );
   await applyDefaultAudioOutputRoute();
   open.value = true;
@@ -4616,9 +4774,12 @@ export const joinPendingGroupCall = async (
   applyCallSocketAck(answerAck, {
     roomId: pendingRoomId,
     topicId: pendingTopicId,
-    startTime: pendingGroupCall.startTime ?? callStatus.startTime ?? null,
+    startTime: resolveCallStartTime(
+      callStatus.startTime,
+      pendingGroupCall.startTime
+    ),
     elapsedDurationMs:
-      pendingGroupCall.elapsedDurationMs ?? callStatus.elapsedDurationMs ?? 0,
+      callStatus.elapsedDurationMs ?? pendingGroupCall.elapsedDurationMs ?? 0,
     isNewCall: false
   });
   if (answerAck?.accepted === false) {
@@ -4702,12 +4863,13 @@ export const openGroupCallInviteUrl = async (
   return hydrateInvitedGroupCallFromUrl();
 };
 
-export const joinInvitedGroupCall = async (): Promise<boolean | void> => {
+const joinInvitedGroupCallInternal = async (
+  invite: InvitedGroupCallEntry
+): Promise<boolean | void> => {
   const sdk = getChatSDK();
   const me = getAuthUser();
-  const invite = invitedGroupCall.value;
 
-  if (!sdk || !me || !invite || open.value) return false;
+  if (!sdk || !me || open.value) return false;
   clearExplicitHangupState();
   clearCallStatusNotice();
   shouldEndCallOnConnectFailure = false;
@@ -4720,22 +4882,7 @@ export const joinInvitedGroupCall = async (): Promise<boolean | void> => {
     return false;
   }
 
-  user.value = me as any;
-  roomId.value = invite.roomId;
-  topicId.value = invite.topicId;
-  setCallStartedAt(
-    invite.startTime ?? callStatus.startTime ?? null,
-    invite.elapsedDurationMs ?? callStatus.elapsedDurationMs ?? 0
-  );
-  await applyDefaultAudioOutputRoute();
-  open.value = true;
-  isIncoming.value = false;
-  isCalling.value = true;
-  isModalVisible.value = true;
-
-  isAcceptingLocally = true;
-  localAcceptRoomId = invite.roomId;
-  localAcceptTopicId = invite.topicId;
+  await prepareInvitedGroupCallJoinState(invite, callStatus, me);
   resetCallTelemetryState();
   ensureCallTelemetryTraceId();
   recordCallTelemetryEvent('call.join.start', {
@@ -4755,9 +4902,9 @@ export const joinInvitedGroupCall = async (): Promise<boolean | void> => {
   applyCallSocketAck(answerAck, {
     roomId: invite.roomId,
     topicId: invite.topicId,
-    startTime: invite.startTime ?? callStatus.startTime ?? null,
+    startTime: resolveCallStartTime(callStatus.startTime, invite.startTime),
     elapsedDurationMs:
-      invite.elapsedDurationMs ?? callStatus.elapsedDurationMs ?? 0,
+      callStatus.elapsedDurationMs ?? invite.elapsedDurationMs ?? 0,
     isNewCall: false
   });
   if (answerAck?.accepted === false) {
@@ -4765,12 +4912,19 @@ export const joinInvitedGroupCall = async (): Promise<boolean | void> => {
     showTransientCallStatusNotice('Звонок уже завершён');
     return;
   }
+  clearInviteParamsFromUrl();
   localAcceptRoomId = roomId.value;
   localAcceptTopicId = topicId.value;
 
   try {
-    await connectToRoom();
-    clearInviteParamsFromUrl();
+    const didConnect = await connectInvitedGroupCallWithRetry(
+      invite,
+      me,
+      callStatus
+    );
+    if (!didConnect) {
+      return false;
+    }
     recordCallTelemetryEvent('call.join.connected', {
       invited: true,
       groupMode: true
@@ -4778,6 +4932,38 @@ export const joinInvitedGroupCall = async (): Promise<boolean | void> => {
     return true;
   } finally {
     isAcceptingLocally = false;
+  }
+};
+
+export const joinInvitedGroupCall = async (): Promise<boolean | void> => {
+  const invite = invitedGroupCall.value;
+
+  if (!invite) return false;
+
+  if (
+    invitedGroupCallJoinPromise &&
+    invitedGroupCallJoinRoomId === invite.roomId
+  ) {
+    recordCallTelemetryEvent('call.join.invite_join_in_flight', {
+      invited: true,
+      groupMode: true,
+      inviteRoomId: invite.roomId,
+      inviteTopicId: invite.topicId
+    });
+    return invitedGroupCallJoinPromise;
+  }
+
+  const joinPromise = joinInvitedGroupCallInternal(invite);
+  invitedGroupCallJoinPromise = joinPromise;
+  invitedGroupCallJoinRoomId = invite.roomId;
+
+  try {
+    return await joinPromise;
+  } finally {
+    if (invitedGroupCallJoinPromise === joinPromise) {
+      invitedGroupCallJoinPromise = null;
+      invitedGroupCallJoinRoomId = null;
+    }
   }
 };
 
@@ -4810,11 +4996,11 @@ export const handleCallAnswered = async (
             answeredTopicId,
           topicId: answeredTopicId,
           caller: existingPendingCall?.caller,
-          startTime:
-            answeredStartTime ??
-            existingPendingCall?.startTime ??
-            answeredTopic?.activeCall?.startTime ??
-            null,
+          startTime: resolveCallStartTime(
+            answeredStartTime,
+            existingPendingCall?.startTime,
+            answeredTopic?.activeCall?.startTime
+          ),
           participantCount:
             answeredTopic?.activeCall?.participantCount ??
             existingPendingCall?.participantCount,
@@ -4834,8 +5020,10 @@ export const handleCallAnswered = async (
             ...topic,
             activeCall: {
               roomId: answeredRoomId || topic.activeCall?.roomId || topic.id,
-              startTime:
-                answeredStartTime ?? topic.activeCall?.startTime ?? null,
+              startTime: resolveCallStartTime(
+                answeredStartTime,
+                topic.activeCall?.startTime
+              ),
               participantCount: topic.activeCall?.participantCount,
               callType: topic.activeCall?.callType || 'livekit',
               groupMode: topic.activeCall?.groupMode ?? isGroupAnsweredCall,
@@ -4856,7 +5044,7 @@ export const handleCallAnswered = async (
 
   if (answeredRoomId && roomId.value === answeredRoomId) {
     setCallStartedAt(
-      answeredStartTime ?? callStartedAt.value,
+      resolveCallStartTime(answeredStartTime, callStartedAt.value),
       answeredElapsedDurationMs ?? callElapsedMs.value
     );
   }
@@ -5134,7 +5322,7 @@ export const syncActiveCalls = async (
       roomId: call.roomId,
       topicId: call.topicId,
       caller: previousEntry?.caller,
-      startTime: status?.startTime ?? call.startTime,
+      startTime: resolveCallStartTime(status?.startTime, call.startTime),
       participantCount: status?.participantCount ?? call.participantCount,
       groupMode: status?.groupMode ?? call.groupMode,
       elapsedDurationMs:

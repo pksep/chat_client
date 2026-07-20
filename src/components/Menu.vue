@@ -57,6 +57,7 @@
           :selected-topic-ids="selectedTopicIds"
           :search-query="toolbarState.search"
           :toolbar-filter="toolbarState.filter"
+          :is-loading="shouldShowTopicListSkeleton"
           :message-results="
             isShareSelectionActive ? [] : filteredMessageSearchResults
           "
@@ -157,7 +158,7 @@ const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: 'Menu'
 });
 
-const { getTopicList } = useTopics();
+const { getTopicList, loading: isTopicsLoading } = useTopics();
 const route = useUrlWatcher();
 const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 const selectedContactId = computed(() => route.value?.id);
@@ -233,6 +234,15 @@ const topicGroups = computed(() => {
 
   return filteredByType.filter(topic => matchesTopicSearch(topic, query));
 });
+
+const shouldShowTopicListSkeleton = computed(
+  () =>
+    activeSection.value === 'chats' &&
+    !isShareSelectionActive.value &&
+    isTopicsLoading.value &&
+    allTopics.value.length === 0 &&
+    !normalizeAtSearchQuery(toolbarState.search)
+);
 
 const filteredMessageSearchResults = computed(() => {
   if (!normalizeAtSearchQuery(toolbarState.search)) {
