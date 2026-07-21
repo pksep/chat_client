@@ -86,10 +86,7 @@
         @click.stop
       >
         <div
-          v-if="
-            isTopicSearchAvailable &&
-            (!isMobile || isFavoriteDialogTopic)
-          "
+          v-if="isTopicSearchAvailable && (!isMobile || isFavoriteDialogTopic)"
           class="chat__header-search-trigger"
         >
           <SearchIcon
@@ -497,8 +494,10 @@ const state = reactive({
 const currentTopic = computed(() =>
   route.value.id ? getSelectedTopic(route.value.id) : undefined
 );
-const isFavoriteDialogTopic = computed(() =>
-  route.value.type === RouteTypes.FAVORITES || isFavoriteTopic(currentTopic.value)
+const isFavoriteDialogTopic = computed(
+  () =>
+    route.value.type === RouteTypes.FAVORITES ||
+    isFavoriteTopic(currentTopic.value)
 );
 const isBotDialogTopic = computed(
   () =>

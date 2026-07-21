@@ -825,10 +825,7 @@ const getRenderedTopicMessages = (
   topicId: string,
   messages: IMessage[]
 ): IMessage[] => {
-  if (
-    route.value.type === RouteTypes.FAVORITES &&
-    route.value.id === topicId
-  ) {
+  if (route.value.type === RouteTypes.FAVORITES && route.value.id === topicId) {
     return messages.filter(message => !message.isSystem);
   }
 

@@ -407,9 +407,8 @@ const createTopicsApi = () => {
           limit: 100,
           newMessages: true
         });
-        const systemMessages = (Array.isArray(recentMessages)
-          ? recentMessages
-          : []
+        const systemMessages = (
+          Array.isArray(recentMessages) ? recentMessages : []
         ).filter(message => message.isSystem && message.id);
 
         if (!systemMessages.length) {
@@ -417,7 +416,11 @@ const createTopicsApi = () => {
           return;
         }
 
-        for (let attempt = 0; attempt < 40 && !sdk.isConnected(); attempt += 1) {
+        for (
+          let attempt = 0;
+          attempt < 40 && !sdk.isConnected();
+          attempt += 1
+        ) {
           await new Promise(resolve => setTimeout(resolve, 250));
         }
 

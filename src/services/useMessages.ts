@@ -2264,7 +2264,8 @@ export const setVisibleMessagesLimitForTopic = (
     const hasContiguousVisibleRange = visibleIndexes.every(
       (index, position) =>
         index !== undefined &&
-        (position === 0 || index === (visibleIndexes[position - 1] as number) + 1)
+        (position === 0 ||
+          index === (visibleIndexes[position - 1] as number) + 1)
     );
 
     if (!hasContiguousVisibleRange) {
@@ -2272,10 +2273,7 @@ export const setVisibleMessagesLimitForTopic = (
     } else {
       let startIndex = visibleIndexes[0] as number;
       let endIndex = (visibleIndexes.at(-1) as number) + 1;
-      let remaining = Math.max(
-        0,
-        nextVisibleLimit - (endIndex - startIndex)
-      );
+      let remaining = Math.max(0, nextVisibleLimit - (endIndex - startIndex));
       const appendCount = Math.min(
         sourceMessages.length - endIndex,
         Math.ceil(remaining / 2)
