@@ -724,6 +724,13 @@ const pinModalOpen = ref(false);
 const pinForEveryone = ref(false);
 const unpinModalOpen = ref(false);
 const forwardModalOpen = ref(false);
+const hasOpenActionModal = computed(
+  () =>
+    pinModalOpen.value ||
+    deleteModalOpen.value ||
+    unpinModalOpen.value ||
+    forwardModalOpen.value
+);
 const reactionRow = ref<HTMLElement | null>(null);
 const detailsTriggerRef = ref<HTMLElement | null>(null);
 const detailsPanelRef = ref<HTMLElement | null>(null);
@@ -881,6 +888,7 @@ const handleOpenDeleteModal = () => {
 
 const handleCloseDeleteModal = () => {
   deleteModalOpen.value = false;
+  closePopoverState();
 };
 
 const handleOpenUnpinModal = () => {
@@ -889,6 +897,7 @@ const handleOpenUnpinModal = () => {
 
 const handleCloseUnpinModal = () => {
   unpinModalOpen.value = false;
+  closePopoverState();
 };
 
 const handleOpenPinModal = () => {
@@ -899,6 +908,7 @@ const handleOpenPinModal = () => {
 const handleClosePinModal = () => {
   pinModalOpen.value = false;
   pinForEveryone.value = true;
+  closePopoverState();
 };
 
 const handleOpenForwardModal = () => {
@@ -907,6 +917,7 @@ const handleOpenForwardModal = () => {
 
 const handleCloseForwardModal = () => {
   forwardModalOpen.value = false;
+  closePopoverState();
 };
 
 const handleDeleteMessage = async (): Promise<void> => {
@@ -978,7 +989,7 @@ const handleForwardMessage = (topic: ITopic) => {
   if (isSelectionContextMenu.value) {
     openForwardDraft(topic, selectedMessages.value);
     clearSelectedMessages();
-    handleClosePopover();
+    closePopoverState();
     return;
   }
 
@@ -990,7 +1001,7 @@ const handleForwardMessage = (topic: ITopic) => {
     message,
     topic
   });
-  handleClosePopover();
+  closePopoverState();
 };
 
 const handleSelectMessage = () => {
@@ -1154,7 +1165,7 @@ const handleCopyMessage = async () => {
   handleClosePopover();
 };
 
-const handleClosePopover = () => {
+const closePopoverState = () => {
   clearReadDetailsHoverTimeout();
   disconnectReactionLayoutObserver();
   closeActivePopover(props.messageId);
@@ -1164,6 +1175,14 @@ const handleClosePopover = () => {
   reactionsPositionReady.value = false;
   flipReactions.value = false;
   flipReactionsY.value = false;
+};
+
+const handleClosePopover = () => {
+  if (hasOpenActionModal.value) {
+    return;
+  }
+
+  closePopoverState();
 };
 
 onBeforeUnmount(() => {
