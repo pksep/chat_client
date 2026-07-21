@@ -271,8 +271,7 @@ const shouldLoadFreshConfigBeforeChat = () =>
   hasBootstrapToken() || hasChatSession();
 const shouldUseStoredConfigImmediately = (
   fallbackConfig?: IChatContainerConfig
-) =>
-  !!fallbackConfig && shouldLoadFreshConfigBeforeChat();
+) => !!fallbackConfig && shouldLoadFreshConfigBeforeChat();
 
 const refreshRemoteConfigInBackground = (
   url: string,
@@ -672,7 +671,11 @@ onMounted(async () => {
   background: #f8f9fd;
   color: #111827;
   font-family:
-    Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
     sans-serif;
   overflow: hidden;
   pointer-events: auto;

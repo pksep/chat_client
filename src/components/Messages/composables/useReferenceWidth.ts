@@ -2,6 +2,7 @@ import { nextTick, onMounted, onUnmounted, ref, watch, type Ref } from 'vue';
 
 interface UseReferenceWidthOptions {
   freezeAfterFirstMeasure?: boolean;
+  enabled?: Readonly<Ref<boolean>>;
 }
 
 export const useReferenceWidth = (
@@ -11,6 +12,7 @@ export const useReferenceWidth = (
   const referenceWidth = ref<number | null>(null);
   let resizeObserver: ResizeObserver | null = null;
   let isFrozen = false;
+  const isMeasurementEnabled = (): boolean => options.enabled?.value !== false;
 
   const disconnectResizeObserver = () => {
     resizeObserver?.disconnect();
@@ -45,7 +47,19 @@ export const useReferenceWidth = (
   const observeElement = async () => {
     disconnectResizeObserver();
     isFrozen = false;
+
+    if (!isMeasurementEnabled()) {
+      referenceWidth.value = null;
+      return;
+    }
+
     await nextTick();
+
+    if (!isMeasurementEnabled()) {
+      referenceWidth.value = null;
+      return;
+    }
+
     updateReferenceWidth();
 
     if (options.freezeAfterFirstMeasure && isFrozen) {
@@ -76,6 +90,12 @@ export const useReferenceWidth = (
   watch(elementRef, () => {
     void observeElement();
   });
+
+  if (options.enabled) {
+    watch(options.enabled, () => {
+      void observeElement();
+    });
+  }
 
   onUnmounted(() => {
     disconnectResizeObserver();

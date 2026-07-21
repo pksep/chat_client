@@ -1,5 +1,7 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import type { IMessage, ITopic } from '../components/interfaces/interfaces';
+import { getIdForRouteType } from '../composables/navigation/useUrlRouting';
+import { getIsTopicNearBottom } from './useTopicViewportState';
 
 export interface ChatBackgroundSyncSession {
   token: string;
@@ -270,10 +272,18 @@ export const importChatBackgroundSnapshot = async (
       opts?.maxMessagesPerTopic && opts.maxMessagesPerTopic > 0
         ? messages.slice(-opts.maxMessagesPerTopic)
         : messages;
+    const activeTopicId =
+      typeof window === 'undefined' ? null : getIdForRouteType().id;
+    const isActiveTopic = activeTopicId === topicId;
+    const hasVisibleMessages =
+      messagesApi.getMessagesByTopicId(topicId).length > 0;
+    const shouldUpdateVisibleMessages =
+      !isActiveTopic || !hasVisibleMessages || getIsTopicNearBottom(topicId);
 
     messagesApi.mergeMessagesForTopic(topicId, limitedMessages, 'replace', {
       syncLastMessage: true,
-      persistDelayMs: 0
+      persistDelayMs: 0,
+      updateVisible: shouldUpdateVisibleMessages
     });
 
     await Promise.allSettled([

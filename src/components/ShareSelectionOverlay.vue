@@ -35,6 +35,7 @@ import { useShareSelection } from '../composables/useShareSelection';
 import type { ITopic } from './interfaces/interfaces';
 import { getShareSelectionSummaryLabel } from '../utils/shareSelectionSummary';
 import { isBotTopic } from '../utils/bot';
+import { isFavoriteTopic } from '../utils/favorite-topic';
 import {
   getChatsToolbarFilterBadgeState,
   getChatsToolbarFilterCounts,
@@ -119,11 +120,18 @@ const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
   }
 
   if (toolbarState.filter === 'chats') {
-    return topic.type === TopicType.DM && !isBotTopic(topic);
+    return (
+      topic.type === TopicType.DM &&
+      !isBotTopic(topic) &&
+      !isFavoriteTopic(topic, authUserId.value)
+    );
   }
 
   if (toolbarState.filter === 'groups') {
-    return topic.type === TopicType.Group;
+    return (
+      topic.type === TopicType.Group &&
+      !isFavoriteTopic(topic, authUserId.value)
+    );
   }
 
   if (toolbarState.filter === 'bots') {

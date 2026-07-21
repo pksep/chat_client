@@ -5,131 +5,118 @@
     :data-testid="`${props.dataTestid}-MessageList-UserMessagesContainer`"
   >
     <div
-      v-if="isVirtualized && topSpacerHeight > 0"
-      class="message-list-virtual-spacer"
-      :style="{ height: `${topSpacerHeight}px` }"
-      aria-hidden="true"
-    ></div>
-
-    <template v-for="{ item } in windowedRenderItems" :key="item.key">
+      v-for="item in renderItems"
+      :key="item.key"
+      v-memo="getRenderItemMemo(item)"
+      class="message-list-render-item"
+      :data-render-item-key="item.key"
+    >
       <div
-        class="message-list-virtual-item"
-        :data-virtual-item-key="item.key"
-        :ref="element => setVirtualItemRef(element, item.key)"
+        v-if="item.kind === 'unread'"
+        class="chat__message-unread_messages_start"
+        ref="unreadMessageStartRef"
       >
+        Непрочитанные сообщения
+      </div>
+
+      <div v-else-if="item.kind === 'date'" class="top-element">
         <div
-          v-if="item.kind === 'unread'"
-          class="chat__message-unread_messages_start"
-          ref="unreadMessageStartRef"
+          class="date-divider"
+          :data-date-divider-label="getCachedMessageDay(item.message)"
+          :data-testid="`${props.dataTestid}-MessageList-DateDividerUser${item.index + 1}`"
         >
-          Непрочитанные сообщения
-        </div>
-
-        <div v-else-if="item.kind === 'date'" class="top-element">
-          <div
-            class="date-divider"
-            :data-date-divider-label="getCachedMessageDay(item.message)"
-            :data-testid="`${props.dataTestid}-MessageList-DateDividerUser${item.index + 1}`"
+          <span
+            :data-testid="`${props.dataTestid}-MessageList-DateLabelUser${item.index + 1}`"
           >
-            <span
-              :data-testid="`${props.dataTestid}-MessageList-DateLabelUser${item.index + 1}`"
-            >
-              {{ getCachedMessageDay(item.message) }}
-            </span>
-          </div>
-        </div>
-
-        <div
-          v-else-if="item.kind === 'system'"
-          class="top-element"
-          :data-message-id="item.message.id"
-        >
-          <div
-            class="system-message"
-            :data-testid="`${props.dataTestid}-MessageList-SystemMessageUser${item.index + 1}`"
-          >
-            <span
-              v-emoji
-              :class="[
-                'system-message-text',
-                {
-                  'system-message-text--quoted-overflow':
-                    hasQuotedSystemMessage(item.message.text) &&
-                    hasQuotedSystemMessageOverflow(item.message.id)
-                }
-              ]"
-              ref="systemMessageTextRef"
-              :data-message-id="item.message.id"
-              :data-is-quoted="hasQuotedSystemMessage(item.message.text)"
-              :data-testid="`${props.dataTestid}-MessageList-SystemLabelUser${item.index + 1}`"
-            >
-              {{ item.message.text }}
-            </span>
-          </div>
-        </div>
-
-        <div
-          v-else
-          class="message-group"
-          :class="{ 'message-group--outgoing': item.isMeSender }"
-        >
-          <div
-            v-if="shouldReserveGroupAvatarForItem(item)"
-            :class="[
-              'message-group__avatar-slot',
-              {
-                'message-group__avatar-slot--sticky':
-                  shouldRenderGroupAvatarForItem(item)
-              }
-            ]"
-            :aria-hidden="!shouldRenderGroupAvatarForItem(item) || undefined"
-          >
-            <CachedAvatar
-              v-if="shouldRenderGroupAvatarForItem(item)"
-              :class="[
-                'message-group__avatar',
-                {
-                  'message-group__avatar--interactive': canOpenUserInfo(
-                    item.messages[0].senderUser
-                  )
-                }
-              ]"
-              :path="item.messages[0].senderUser?.avatarUrl || ''"
-              :alt="item.messages[0].senderUser?.initials || ''"
-              :initials="item.messages[0].senderUser?.initials || ''"
-              @click.stop="openUserInfo(item.messages[0].senderUser)"
-            />
-          </div>
-
-          <div class="message-group__messages">
-            <MessageBubble
-              v-for="(message, groupIndex) in item.messages"
-              :key="message.id"
-              :class="
-                messageChat(
-                  resolveMessageIsMeSender(message) ? 'user' : 'assistant'
-                )
-              "
-              v-bind="getBubbleProps(message, item.startIndex + groupIndex)"
-              :data-message-id="message.id"
-              @toggle-selection="toggleMessage(message)"
-              @unmount-edit-message-id="$emit('setEditMessage', $event)"
-              @unmount-reply-message-id="$emit('setReplyMessage', $event)"
-              @unmount-forward-message="$emit('setForwardMessage', $event)"
-              @unmount-retry-message-id="$emit('retryMessage', $event)"
-              @unmount-navigate-message-id="$emit('scrollToMessage', $event)"
-            />
-          </div>
+            {{ getCachedMessageDay(item.message) }}
+          </span>
         </div>
       </div>
-    </template>
 
-    <div
-      v-if="isVirtualized && bottomSpacerHeight > 0"
-      class="message-list-virtual-spacer"
-      :style="{ height: `${bottomSpacerHeight}px` }"
-      aria-hidden="true"
-    ></div>
+      <div
+        v-else-if="item.kind === 'system'"
+        class="top-element"
+        :data-message-id="item.message.id"
+      >
+        <div
+          class="system-message"
+          :data-testid="`${props.dataTestid}-MessageList-SystemMessageUser${item.index + 1}`"
+        >
+          <span
+            v-emoji
+            :class="[
+              'system-message-text',
+              {
+                'system-message-text--quoted-overflow':
+                  hasQuotedSystemMessage(item.message.text) &&
+                  hasQuotedSystemMessageOverflow(item.message.id)
+              }
+            ]"
+            ref="systemMessageTextRef"
+            :data-message-id="item.message.id"
+            :data-is-quoted="hasQuotedSystemMessage(item.message.text)"
+            :data-testid="`${props.dataTestid}-MessageList-SystemLabelUser${item.index + 1}`"
+          >
+            {{ item.message.text }}
+          </span>
+        </div>
+      </div>
+
+      <div
+        v-else
+        class="message-group"
+        :class="{ 'message-group--outgoing': item.isMeSender }"
+      >
+        <div
+          v-if="shouldReserveGroupAvatarForItem(item)"
+          :class="[
+            'message-group__avatar-slot',
+            {
+              'message-group__avatar-slot--sticky':
+                shouldRenderGroupAvatarForItem(item)
+            }
+          ]"
+          :aria-hidden="!shouldRenderGroupAvatarForItem(item) || undefined"
+        >
+          <CachedAvatar
+            v-if="shouldRenderGroupAvatarForItem(item)"
+            :class="[
+              'message-group__avatar',
+              {
+                'message-group__avatar--interactive': canOpenUserInfo(
+                  item.messages[0].senderUser
+                )
+              }
+            ]"
+            :path="item.messages[0].senderUser?.avatarUrl || ''"
+            :alt="item.messages[0].senderUser?.initials || ''"
+            :initials="item.messages[0].senderUser?.initials || ''"
+            :defer-offscreen="isMobile"
+            @click.stop="openUserInfo(item.messages[0].senderUser)"
+          />
+        </div>
+
+        <div class="message-group__messages">
+          <MessageBubble
+            v-for="(message, groupIndex) in item.messages"
+            :key="message.id"
+            :class="
+              messageChat(
+                resolveMessageIsMeSender(message) ? 'user' : 'assistant'
+              )
+            "
+            v-bind="getBubbleProps(message, item.startIndex + groupIndex)"
+            :data-message-id="message.id"
+            @toggle-selection="toggleMessage(message)"
+            @unmount-edit-message-id="$emit('setEditMessage', $event)"
+            @unmount-reply-message-id="$emit('setReplyMessage', $event)"
+            @unmount-forward-message="$emit('setForwardMessage', $event)"
+            @unmount-retry-message-id="$emit('retryMessage', $event)"
+            @unmount-navigate-message-id="$emit('scrollToMessage', $event)"
+          />
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -146,7 +133,7 @@ import {
 import MessageBubble from './MessageBubble.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import { formatDay, formatTime } from '../../composables/useTime';
-import { MessageStatus } from '../../services/useChatSDK/types';
+import { MessageStatus, TopicType } from '../../services/useChatSDK/types';
 import type {
   IMessage,
   IMessageViewportSnapshot
@@ -162,14 +149,14 @@ import { parseCallMessage } from '../../utils/parseCallMessage';
 import { parseUserEx } from '../../utils/parseUserEx';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
-import { isMessagePinnedForMe } from '../../services/useMessages';
+import { getPinnedMessagesByTopicId } from '../../services/useMessages';
 import { isUnreadTrackableMessage } from '../../utils/messageTracking';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
+import { getSelectedTopic } from '../../composables/useTopics';
 
 interface Props {
   dataTestid: string;
   messages: IMessage[];
-  user?: any;
   authUserId?: string;
   hideUnreadMarker?: boolean;
   unreadMarkerMessageId?: string | null;
@@ -195,47 +182,44 @@ interface VisibleMessageCandidate {
   visiblePixels: number;
 }
 
-interface VirtualRenderRange {
-  start: number;
-  end: number;
+interface IndexedMessageElement {
+  element: HTMLElement;
+  messageId: string;
 }
 
 const props = defineProps<Props>();
+const messageElementIdentity = computed(() =>
+  props.messages.map(message => message.id).join('\u001f')
+);
+const systemMessageLayoutIdentity = computed(() =>
+  props.messages
+    .filter(message => message.isSystem)
+    .map(message => `${message.id}:${message.text || ''}`)
+    .join('\u001f')
+);
 const route = useUrlWatcher();
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const quotedOverflowMessageIds = ref<Set<string>>(new Set());
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 const listRootRef = ref<HTMLElement | null>(null);
-const viewportTop = ref(0);
-const viewportHeight = ref(0);
-const measuredItemHeights = ref<Record<string, number>>({});
-const virtualRenderRange = ref<VirtualRenderRange>({ start: 0, end: 0 });
-const virtualItemElements = new Map<string, HTMLElement>();
-let virtualItemResizeObserver: ResizeObserver | null = null;
-let viewportResizeObserver: ResizeObserver | null = null;
-let scrollParent: HTMLElement | null = null;
-let virtualViewportRafId = 0;
+const messageElementsById = new Map<string, HTMLElement>();
+let indexedMessageElements: IndexedMessageElement[] = [];
+let messageElementsSyncRafId = 0;
 let contentReadyRafId = 0;
 let contentReadyToken = 0;
-let pendingVirtualViewportRestore: {
-  snapshot: IMessageViewportSnapshot;
-  scrollHeight: number;
-  scrollTop: number;
-} | null = null;
 
-const VIRTUALIZATION_ITEM_THRESHOLD = 850;
-const VIRTUALIZATION_MESSAGE_THRESHOLD = 750;
-const VIRTUAL_MAX_MESSAGES_PER_ITEM = 15;
-const VIRTUAL_OVERSCAN_PX = 1400;
-const VIRTUAL_RANGE_ITEM_BUFFER = 6;
-const VIRTUAL_DEFAULT_ITEM_HEIGHT_PX = 68;
-const VIRTUAL_ITEM_GAP_PX = 5;
-const VIRTUAL_VIEWPORT_BOTTOM_THRESHOLD_PX = 120;
-const MESSAGE_VIEWPORT_KEY_SEPARATOR = '::viewport::';
+const MAX_MESSAGES_PER_RENDER_GROUP = 15;
 const FORMAT_CACHE_LIMIT = 2000;
 
 const formattedTimeCache = new Map<number, string>();
 const formattedDayCache = new Map<number, string>();
+const parsedCallMessageCache = new WeakMap<
+  IMessage,
+  {
+    authUserId?: string;
+    value: ReturnType<typeof parseCallMessage>;
+  }
+>();
 
 const rememberCachedFormat = (
   cache: Map<number, string>,
@@ -315,9 +299,17 @@ const unreadMessageStartRef = useTemplateRef<HTMLDivElement[]>(
 const systemMessageTextRef = useTemplateRef<HTMLSpanElement[]>(
   'systemMessageTextRef'
 );
-const shouldShowGroupAvatar = computed(
-  () => route.value.type !== RouteTypes.DIALOGS
-);
+const isDialogMessage = (message?: IMessage): boolean => {
+  if (!message?.topicId) {
+    return route.value.type === RouteTypes.DIALOGS;
+  }
+
+  const topic = getSelectedTopic(message.topicId);
+  return topic
+    ? topic.type === TopicType.DM
+    : message.topicId === route.value.id &&
+        route.value.type === RouteTypes.DIALOGS;
+};
 
 const syncQuotedSystemMessageOverflowState = (): void => {
   const nextOverflowMessageIds = new Set<string>();
@@ -362,7 +354,7 @@ const scheduleContentReadyEmit = async (): Promise<void> => {
     contentReadyRafId = 0;
   }
 
-  if (!visibleMessages.value.length || !windowedRenderItems.value.length) {
+  if (!visibleMessages.value.length || !renderItems.value.length) {
     return;
   }
 
@@ -378,7 +370,7 @@ const scheduleContentReadyEmit = async (): Promise<void> => {
     if (
       token !== contentReadyToken ||
       !visibleMessages.value.length ||
-      !listRootRef.value?.querySelector('[data-virtual-item-key]')
+      !listRootRef.value?.querySelector('[data-render-item-key]')
     ) {
       return;
     }
@@ -391,7 +383,7 @@ const scheduleContentReadyEmit = async (): Promise<void> => {
 };
 
 watch(
-  () => [props.messages, isMobile.value],
+  [systemMessageLayoutIdentity, isMobile],
   () => {
     void scheduleQuotedSystemMessageOverflowSync();
   },
@@ -400,15 +392,16 @@ watch(
 
 onMounted(() => {
   window.addEventListener('resize', syncQuotedSystemMessageOverflowState);
-  setupVirtualWindowObservers();
   void scheduleQuotedSystemMessageOverflowSync();
+  void scheduleMessageElementsSync();
   void scheduleContentReadyEmit();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', syncQuotedSystemMessageOverflowState);
   cancelContentReadyEmit();
-  cleanupVirtualWindowObservers();
+  cleanupMessageElementObserver();
+  invalidateVisibleMessageSnapshot();
 });
 
 const isNewDate = (index: number) => {
@@ -463,30 +456,70 @@ const shouldShowUnreadMarker = (message: IMessage): boolean => {
   );
 };
 
-const getParsedCallMessage = (message?: IMessage) =>
-  message
-    ? parseCallMessage(message.text || '', {
-        messageEx: message.ex,
-        isMeSender: props.authUserId === message.senderUserId,
-        authUserId: props.authUserId
-      })
-    : null;
-
-const shouldHideMessageFromChat = (message?: IMessage): boolean => {
-  if (!message?.isSystem) {
-    return false;
+const getParsedCallMessage = (message?: IMessage) => {
+  if (!message) {
+    return null;
   }
 
-  return false;
+  const cached = parsedCallMessageCache.get(message);
+  if (cached?.authUserId === props.authUserId) {
+    return cached.value;
+  }
 
-  // const parsedEx = parseCallMessageEx(message.ex);
+  const value = parseCallMessage(message.text || '', {
+    messageEx: message.ex,
+    isMeSender: props.authUserId === message.senderUserId,
+    authUserId: props.authUserId
+  });
 
-  // return parsedEx?.type === 'call' && parsedEx.call?.event === 'start';
+  parsedCallMessageCache.set(message, {
+    authUserId: props.authUserId,
+    value
+  });
+  return value;
 };
 
-const visibleMessages = computed(() =>
-  props.messages.filter(message => !shouldHideMessageFromChat(message))
-);
+const visibleMessages = computed(() => props.messages);
+const pinnedMessageIdsByTopic = computed(() => {
+  const topicIds = new Set(
+    visibleMessages.value.map(message => message.topicId).filter(Boolean)
+  );
+  const pinnedIds = new Map<string, Set<string>>();
+
+  topicIds.forEach(topicId => {
+    pinnedIds.set(
+      topicId,
+      new Set(getPinnedMessagesByTopicId(topicId).map(message => message.id))
+    );
+  });
+
+  return pinnedIds;
+});
+
+const isMessagePinned = (message: IMessage): boolean =>
+  Boolean(message.isPin) ||
+  Boolean(pinnedMessageIdsByTopic.value.get(message.topicId)?.has(message.id));
+
+const getRenderItemMemo = (item: RenderItem): unknown[] => {
+  const memo: unknown[] = [item.kind, props.authUserId, isMobile.value];
+
+  if (item.kind !== 'group') {
+    memo.push(item.message);
+    return memo;
+  }
+
+  item.messages.forEach(message => {
+    memo.push(
+      message,
+      isDialogMessage(message),
+      isMessagePinned(message),
+      isSelectionMode(message.topicId),
+      isSelected(message.id)
+    );
+  });
+
+  return memo;
+};
 
 const resolveMessageIsMeSender = (message?: IMessage) =>
   getParsedCallMessage(message)?.isOutgoing ??
@@ -515,7 +548,7 @@ const shouldReserveGroupAvatarForItem = (
 
   return (
     !item.isMeSender &&
-    shouldShowGroupAvatar.value &&
+    !isDialogMessage(firstMessage) &&
     shouldRenderGroupAvatar(firstMessage)
   );
 };
@@ -583,7 +616,7 @@ const renderItems = computed<RenderItem[]>(() => {
 
     while (
       endIndex + 1 < visibleMessages.value.length &&
-      groupMessages.length < VIRTUAL_MAX_MESSAGES_PER_ITEM &&
+      groupMessages.length < MAX_MESSAGES_PER_RENDER_GROUP &&
       isSameMessageGroup(
         visibleMessages.value[endIndex],
         visibleMessages.value[endIndex + 1]
@@ -607,164 +640,11 @@ const renderItems = computed<RenderItem[]>(() => {
   return items;
 });
 
-const estimateRenderItemHeight = (item: RenderItem): number => {
-  if (item.kind === 'date') {
-    return 34;
-  }
-
-  if (item.kind === 'unread') {
-    return 38;
-  }
-
-  if (item.kind === 'system') {
-    return 42;
-  }
-
-  return Math.max(
-    VIRTUAL_DEFAULT_ITEM_HEIGHT_PX,
-    item.messages.length * VIRTUAL_DEFAULT_ITEM_HEIGHT_PX
-  );
-};
-
-const renderItemHeights = computed(() =>
-  renderItems.value.map(
-    item =>
-      measuredItemHeights.value[item.key] || estimateRenderItemHeight(item)
-  )
-);
-
-const renderItemOffsets = computed(() => {
-  const offsets = [0];
-  let total = 0;
-
-  renderItemHeights.value.forEach((height, index) => {
-    total += height;
-    if (index < renderItemHeights.value.length - 1) {
-      total += VIRTUAL_ITEM_GAP_PX;
-    }
-    offsets.push(total);
-  });
-
-  return offsets;
-});
-
-const totalRenderItemsHeight = computed(() => {
-  const offsets = renderItemOffsets.value;
-  return offsets[offsets.length - 1] || 0;
-});
-
-const isVirtualized = computed(
-  () =>
-    renderItems.value.length > VIRTUALIZATION_ITEM_THRESHOLD ||
-    visibleMessages.value.length > VIRTUALIZATION_MESSAGE_THRESHOLD
-);
-
-const findStartIndex = (offsets: number[], top: number): number => {
-  let low = 0;
-  let high = Math.max(0, offsets.length - 2);
-
-  while (low < high) {
-    const mid = Math.floor((low + high) / 2);
-    if (offsets[mid + 1] < top) {
-      low = mid + 1;
-    } else {
-      high = mid;
-    }
-  }
-
-  return low;
-};
-
-const findEndIndex = (offsets: number[], bottom: number): number => {
-  let low = 0;
-  let high = Math.max(0, offsets.length - 1);
-
-  while (low < high) {
-    const mid = Math.floor((low + high) / 2);
-    if (offsets[mid] <= bottom) {
-      low = mid + 1;
-    } else {
-      high = mid;
-    }
-  }
-
-  return Math.min(offsets.length - 1, Math.max(1, low));
-};
-
-const getViewportRenderRange = (extraItemBuffer = 0): VirtualRenderRange => {
-  if (!isVirtualized.value) {
-    return {
-      start: 0,
-      end: renderItems.value.length
-    };
-  }
-
-  const offsets = renderItemOffsets.value;
-  const windowTop = Math.max(0, viewportTop.value - VIRTUAL_OVERSCAN_PX);
-  const windowBottom = Math.min(
-    totalRenderItemsHeight.value,
-    viewportTop.value + viewportHeight.value + VIRTUAL_OVERSCAN_PX
-  );
-  const start = Math.max(
-    0,
-    findStartIndex(offsets, windowTop) - extraItemBuffer
-  );
-  const end = Math.max(
-    start + 1,
-    findEndIndex(offsets, windowBottom) + extraItemBuffer
-  );
-
-  return {
-    start,
-    end: Math.min(renderItems.value.length, end)
-  };
-};
-
-const requiredVirtualRange = computed(() => getViewportRenderRange());
-
-const bufferedVirtualRange = computed(() =>
-  getViewportRenderRange(VIRTUAL_RANGE_ITEM_BUFFER)
-);
-
-const applyVirtualRenderRange = (force = false): void => {
-  const itemCount = renderItems.value.length;
-  const requiredRange = requiredVirtualRange.value;
-  const currentRange = virtualRenderRange.value;
-  const isCurrentRangeValid =
-    currentRange.start >= 0 &&
-    currentRange.end <= itemCount &&
-    currentRange.start < currentRange.end;
-  const currentRangeContainsViewport =
-    currentRange.start <= requiredRange.start &&
-    currentRange.end >= requiredRange.end;
-
-  if (force || !isCurrentRangeValid || !currentRangeContainsViewport) {
-    virtualRenderRange.value = bufferedVirtualRange.value;
-  }
-};
-
-const virtualRange = computed(() => virtualRenderRange.value);
-
-watch(
-  bufferedVirtualRange,
-  () => {
-    applyVirtualRenderRange();
-  },
-  { immediate: true, flush: 'sync' }
-);
-
-const windowedRenderItems = computed(() => {
-  const { start, end } = virtualRange.value;
-  return renderItems.value.slice(start, end).map(item => ({
-    item
-  }));
-});
-
 watch(
   [
     () => route.value.id,
     () => visibleMessages.value.length,
-    () => windowedRenderItems.value.length
+    () => renderItems.value.length
   ],
   () => {
     void scheduleContentReadyEmit();
@@ -772,37 +652,92 @@ watch(
   { immediate: true }
 );
 
-const topSpacerHeight = computed(() =>
-  isVirtualized.value
-    ? Math.max(
-        0,
-        (renderItemOffsets.value[virtualRange.value.start] || 0) -
-          VIRTUAL_ITEM_GAP_PX
-      )
-    : 0
-);
-
-const bottomSpacerHeight = computed(() => {
-  if (!isVirtualized.value) {
-    return 0;
-  }
-
-  return Math.max(
-    0,
-    totalRenderItemsHeight.value -
-      (renderItemOffsets.value[virtualRange.value.end] || 0)
-  );
-});
-
 const getScrollParent = (): HTMLElement | null =>
   listRootRef.value?.parentElement || null;
 
-const getMessageIndexById = (): Map<string, number> =>
-  new Map(
-    visibleMessages.value
-      .map((message, index) => [message.id, index] as const)
-      .filter(([messageId]) => !!messageId)
-  );
+const messageIndexById = computed(
+  () =>
+    new Map(
+      visibleMessages.value
+        .map((message, index) => [message.id, index] as const)
+        .filter(([messageId]) => !!messageId)
+    )
+);
+let cachedVisibleMessageSnapshot: IMessageViewportSnapshot | null | undefined;
+let visibleMessageSnapshotRafId = 0;
+
+const invalidateVisibleMessageSnapshot = (): void => {
+  cachedVisibleMessageSnapshot = undefined;
+
+  if (visibleMessageSnapshotRafId) {
+    cancelAnimationFrame(visibleMessageSnapshotRafId);
+    visibleMessageSnapshotRafId = 0;
+  }
+};
+
+const cleanupMessageElementObserver = (): void => {
+  if (messageElementsSyncRafId) {
+    cancelAnimationFrame(messageElementsSyncRafId);
+    messageElementsSyncRafId = 0;
+  }
+
+  messageElementsById.clear();
+  indexedMessageElements = [];
+};
+
+const syncMessageElements = (): void => {
+  const root = listRootRef.value;
+  if (!root) {
+    cleanupMessageElementObserver();
+    return;
+  }
+  const nextMessageElementsById = new Map<string, HTMLElement>();
+
+  root.querySelectorAll<HTMLElement>('[data-message-id]').forEach(element => {
+    const messageId = element.dataset.messageId;
+
+    if (!messageId) {
+      return;
+    }
+
+    if (!nextMessageElementsById.has(messageId)) {
+      nextMessageElementsById.set(messageId, element);
+    }
+  });
+
+  messageElementsById.clear();
+  nextMessageElementsById.forEach((element, messageId) => {
+    messageElementsById.set(messageId, element);
+  });
+  indexedMessageElements = visibleMessages.value
+    .map(message => {
+      const element = messageElementsById.get(message.id);
+
+      return element
+        ? {
+            element,
+            messageId: message.id
+          }
+        : null;
+    })
+    .filter(
+      (entry): entry is IndexedMessageElement =>
+        !!entry && root.contains(entry.element)
+    );
+};
+
+const scheduleMessageElementsSync = async (): Promise<void> => {
+  await nextTick();
+
+  if (messageElementsSyncRafId) {
+    return;
+  }
+
+  messageElementsSyncRafId = requestAnimationFrame(() => {
+    messageElementsSyncRafId = 0;
+    syncMessageElements();
+  });
+};
 
 const getVisibleMessageCandidates = (): VisibleMessageCandidate[] => {
   const root = listRootRef.value;
@@ -813,19 +748,44 @@ const getVisibleMessageCandidates = (): VisibleMessageCandidate[] => {
   }
 
   const parentRect = parent.getBoundingClientRect();
-  const messageIndexById = getMessageIndexById();
-  const candidatesById = new Map<string, VisibleMessageCandidate>();
+  const currentMessageIndexById = messageIndexById.value;
+  let low = 0;
+  let high = indexedMessageElements.length - 1;
+  let firstPotentiallyVisibleIndex = indexedMessageElements.length;
 
-  root.querySelectorAll<HTMLElement>('[data-message-id]').forEach(element => {
-    const messageId = element.dataset.messageId;
-    const index =
-      messageId === undefined ? undefined : messageIndexById.get(messageId);
+  // Message positions are monotonic. A binary search avoids the old fast-fling
+  // fallback that synchronously measured every rendered message in one frame.
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const rect = indexedMessageElements[middle].element.getBoundingClientRect();
 
-    if (!messageId || index === undefined) {
-      return;
+    if (rect.bottom > parentRect.top) {
+      firstPotentiallyVisibleIndex = middle;
+      high = middle - 1;
+    } else {
+      low = middle + 1;
+    }
+  }
+
+  const candidates: VisibleMessageCandidate[] = [];
+
+  for (
+    let position = Math.max(0, firstPotentiallyVisibleIndex - 1);
+    position < indexedMessageElements.length;
+    position += 1
+  ) {
+    const { element, messageId } = indexedMessageElements[position];
+    const index = currentMessageIndexById.get(messageId);
+
+    if (index === undefined || !root.contains(element)) {
+      continue;
     }
 
     const rect = element.getBoundingClientRect();
+    if (rect.top >= parentRect.bottom) {
+      break;
+    }
+
     const visibleTop = Math.max(rect.top, parentRect.top);
     const visibleBottom = Math.min(rect.bottom, parentRect.bottom);
     const visiblePixels = visibleBottom - visibleTop;
@@ -835,182 +795,54 @@ const getVisibleMessageCandidates = (): VisibleMessageCandidate[] => {
       rect.right <= parentRect.left ||
       rect.left >= parentRect.right
     ) {
-      return;
+      continue;
     }
 
-    const candidate: VisibleMessageCandidate = {
+    candidates.push({
       index,
       messageId,
       relativeTop: rect.top - parentRect.top,
       height: rect.height,
       visiblePixels
-    };
-    const existing = candidatesById.get(messageId);
+    });
+  }
 
-    if (
-      !existing ||
-      candidate.visiblePixels > existing.visiblePixels ||
-      (candidate.visiblePixels === existing.visiblePixels &&
-        Math.abs(candidate.relativeTop) < Math.abs(existing.relativeTop))
-    ) {
-      candidatesById.set(messageId, candidate);
-    }
-  });
-
-  return Array.from(candidatesById.values()).sort(
-    (left, right) => left.index - right.index
-  );
+  return candidates.sort((left, right) => left.index - right.index);
 };
 
 const getVisibleMessageSnapshot = (): IMessageViewportSnapshot | null => {
+  if (cachedVisibleMessageSnapshot !== undefined) {
+    return cachedVisibleMessageSnapshot;
+  }
+
   const candidates = getVisibleMessageCandidates();
 
   if (candidates.length === 0) {
-    return null;
+    cachedVisibleMessageSnapshot = null;
+  } else {
+    const anchor =
+      candidates
+        .filter(candidate => candidate.relativeTop >= -candidate.height * 0.75)
+        .sort(
+          (left, right) =>
+            Math.abs(left.relativeTop) - Math.abs(right.relativeTop)
+        )[0] || candidates[0];
+
+    cachedVisibleMessageSnapshot = {
+      anchorMessageId: anchor.messageId,
+      anchorRelativeTop: anchor.relativeTop,
+      firstVisibleIndex: candidates[0].index,
+      lastVisibleIndex: candidates[candidates.length - 1].index,
+      visibleMessageIds: candidates.map(candidate => candidate.messageId)
+    };
   }
 
-  const anchor =
-    candidates
-      .filter(candidate => candidate.relativeTop >= -candidate.height * 0.75)
-      .sort(
-        (left, right) =>
-          Math.abs(left.relativeTop) - Math.abs(right.relativeTop)
-      )[0] || candidates[0];
-
-  return {
-    anchorMessageId: anchor.messageId,
-    anchorRelativeTop: anchor.relativeTop,
-    firstVisibleIndex: candidates[0].index,
-    lastVisibleIndex: candidates[candidates.length - 1].index,
-    visibleMessageIds: candidates.map(candidate => candidate.messageId)
-  };
-};
-
-const getMessageReactionKey = (message: IMessage): string =>
-  (message.reactions || [])
-    .map(
-      reaction =>
-        `${reaction.id || ''}:${reaction.senderUserId || ''}:${
-          reaction.text || ''
-        }`
-    )
-    .sort()
-    .join(',');
-
-const getMessageMediaKey = (message: IMessage): string =>
-  (message.media || [])
-    .map(
-      media =>
-        `${media.id || ''}:${media.path || ''}:${
-          media.thumbnailPath || ''
-        }:${media.type || ''}:${media.size || ''}:${JSON.stringify(
-          media.ex || {}
-        )}`
-    )
-    .join(',');
-
-const getMessageViewportKey = (message: IMessage): string =>
-  [
-    message.id,
-    message.text || '',
-    message.status || '',
-    message.isEdit ? 'edit' : '',
-    message.isPin ? 'pin' : '',
-    message.updatedAt || '',
-    message.deletedAt || '',
-    getMessageMediaKey(message),
-    getMessageReactionKey(message)
-  ].join(MESSAGE_VIEWPORT_KEY_SEPARATOR);
-
-const getMessageViewportKeys = (): string[] =>
-  props.messages.map(message => getMessageViewportKey(message));
-
-const getMessageSelector = (messageId: string): string => {
-  const escapedMessageId = window.CSS?.escape
-    ? window.CSS.escape(messageId)
-    : messageId.replace(/["\\]/g, '\\$&');
-
-  return `[data-message-id="${escapedMessageId}"]`;
-};
-
-const isScrollParentNearBottom = (parent: HTMLElement): boolean =>
-  Math.abs(Math.min(parent.scrollTop, 0)) <=
-  VIRTUAL_VIEWPORT_BOTTOM_THRESHOLD_PX;
-
-const captureVirtualViewportRestore = (): void => {
-  const parent = getScrollParent();
-  const snapshot = getVisibleMessageSnapshot();
-
-  if (!parent || !snapshot || isScrollParentNearBottom(parent)) {
-    pendingVirtualViewportRestore = null;
-    return;
-  }
-
-  pendingVirtualViewportRestore = {
-    snapshot,
-    scrollHeight: parent.scrollHeight,
-    scrollTop: parent.scrollTop
-  };
-};
-
-const restoreVirtualViewport = (
-  restore: NonNullable<typeof pendingVirtualViewportRestore>
-): void => {
-  const parent = getScrollParent();
-  const root = listRootRef.value;
-
-  if (!parent || !root || isScrollParentNearBottom(parent)) {
-    return;
-  }
-
-  const anchorElement = root.querySelector<HTMLElement>(
-    getMessageSelector(restore.snapshot.anchorMessageId)
-  );
-
-  if (anchorElement) {
-    const parentRect = parent.getBoundingClientRect();
-    const anchorRect = anchorElement.getBoundingClientRect();
-    const currentRelativeTop = anchorRect.top - parentRect.top;
-    const drift = currentRelativeTop - restore.snapshot.anchorRelativeTop;
-
-    if (Math.abs(drift) > 0.5) {
-      parent.scrollTop += drift;
-    }
-
-    syncVirtualViewport(true);
-    return;
-  }
-
-  const heightDelta = parent.scrollHeight - restore.scrollHeight;
-  const nextScrollTop = restore.scrollTop - heightDelta;
-
-  if (!Number.isFinite(nextScrollTop)) {
-    return;
-  }
-
-  if (Math.abs(parent.scrollTop - nextScrollTop) > 0.5) {
-    parent.scrollTop = nextScrollTop;
-  }
-
-  syncVirtualViewport(true);
-};
-
-const scheduleVirtualViewportRestore = (): void => {
-  const restore = pendingVirtualViewportRestore;
-  pendingVirtualViewportRestore = null;
-
-  if (!restore) {
-    return;
-  }
-
-  nextTick(() => {
-    requestAnimationFrame(() => {
-      restoreVirtualViewport(restore);
-      requestAnimationFrame(() => {
-        restoreVirtualViewport(restore);
-      });
-    });
+  visibleMessageSnapshotRafId = requestAnimationFrame(() => {
+    visibleMessageSnapshotRafId = 0;
+    cachedVisibleMessageSnapshot = undefined;
   });
+
+  return cachedVisibleMessageSnapshot;
 };
 
 const getRenderedMessageElementsInIndexRange = (
@@ -1023,242 +855,33 @@ const getRenderedMessageElementsInIndexRange = (
     return [];
   }
 
-  const messageIndexById = getMessageIndexById();
-  const seenMessageIds = new Set<string>();
-  const elements: HTMLElement[] = [];
-
-  root.querySelectorAll<HTMLElement>('[data-message-id]').forEach(element => {
-    const messageId = element.dataset.messageId;
-    const index =
-      messageId === undefined ? undefined : messageIndexById.get(messageId);
-
-    if (
-      !messageId ||
-      index === undefined ||
-      index < startIndex ||
-      index > endIndex ||
-      seenMessageIds.has(messageId)
-    ) {
-      return;
-    }
-
-    seenMessageIds.add(messageId);
-    elements.push(element);
-  });
-
-  return elements;
-};
-
-const syncVirtualViewport = (forceRangeUpdate = false): void => {
-  const root = listRootRef.value;
-  const parent = getScrollParent();
-
-  if (!root || !parent) {
-    viewportTop.value = 0;
-    viewportHeight.value = 0;
-    applyVirtualRenderRange(true);
-    return;
-  }
-
-  const rootRect = root.getBoundingClientRect();
-  const parentRect = parent.getBoundingClientRect();
-
-  viewportTop.value = Math.max(
-    0,
-    Math.min(totalRenderItemsHeight.value, parentRect.top - rootRect.top)
-  );
-  viewportHeight.value = parent.clientHeight || parentRect.height;
-  applyVirtualRenderRange(forceRangeUpdate);
-};
-
-const scheduleVirtualViewportSync = (): void => {
-  if (virtualViewportRafId) {
-    return;
-  }
-
-  virtualViewportRafId = requestAnimationFrame(() => {
-    virtualViewportRafId = 0;
-    syncVirtualViewport();
-  });
-};
-
-const setupVirtualItemResizeObserver = (): void => {
-  if (!('ResizeObserver' in window)) {
-    return;
-  }
-
-  virtualItemResizeObserver = new ResizeObserver(entries => {
-    let nextHeights: Record<string, number> | null = null;
-
-    entries.forEach(entry => {
-      const element = entry.target as HTMLElement;
-      const key = element.dataset.virtualItemKey;
-      const height = Math.round(entry.contentRect.height);
-
-      if (!key || height <= 0) {
-        return;
-      }
-
-      if (measuredItemHeights.value[key] === height) {
-        return;
-      }
-
-      nextHeights ||= { ...measuredItemHeights.value };
-      nextHeights[key] = height;
-    });
-
-    if (nextHeights) {
-      measuredItemHeights.value = nextHeights;
-      scheduleVirtualViewportSync();
-    }
-  });
-};
-
-const setupVirtualWindowObservers = (): void => {
-  scrollParent = getScrollParent();
-  setupVirtualItemResizeObserver();
-
-  scrollParent?.addEventListener('scroll', scheduleVirtualViewportSync, {
-    passive: true
-  });
-  window.addEventListener('resize', scheduleVirtualViewportSync);
-
-  if ('ResizeObserver' in window && scrollParent) {
-    viewportResizeObserver = new ResizeObserver(scheduleVirtualViewportSync);
-    viewportResizeObserver.observe(scrollParent);
-  }
-
-  void nextTick(() => {
-    syncVirtualViewport(true);
-  });
-};
-
-const cleanupVirtualWindowObservers = (): void => {
-  scrollParent?.removeEventListener('scroll', scheduleVirtualViewportSync);
-  window.removeEventListener('resize', scheduleVirtualViewportSync);
-  scrollParent = null;
-
-  if (virtualViewportRafId) {
-    cancelAnimationFrame(virtualViewportRafId);
-    virtualViewportRafId = 0;
-  }
-
-  virtualItemResizeObserver?.disconnect();
-  virtualItemResizeObserver = null;
-  viewportResizeObserver?.disconnect();
-  viewportResizeObserver = null;
-  virtualItemElements.clear();
-};
-
-const setVirtualItemRef = (element: unknown, key: string): void => {
-  const previousElement = virtualItemElements.get(key);
-
-  if (previousElement) {
-    virtualItemResizeObserver?.unobserve(previousElement);
-    virtualItemElements.delete(key);
-  }
-
-  if (!(element instanceof HTMLElement)) {
-    return;
-  }
-
-  virtualItemElements.set(key, element);
-  virtualItemResizeObserver?.observe(element);
-};
-
-const getRenderItemIndexByMessageId = (messageId: string): number =>
-  renderItems.value.findIndex(item => {
-    if ('message' in item && item.message.id === messageId) {
-      return true;
-    }
-
-    if (item.kind === 'group') {
-      return item.messages.some(message => message.id === messageId);
-    }
-
-    return false;
-  });
-
-const ensureMessageRendered = async (messageId: string): Promise<boolean> => {
-  if (!isVirtualized.value) {
-    return true;
-  }
-
-  const itemIndex = getRenderItemIndexByMessageId(messageId);
-  const parent = getScrollParent();
-
-  if (itemIndex < 0 || !parent) {
-    return false;
-  }
-
-  const offsets = renderItemOffsets.value;
-  const itemTop = offsets[itemIndex] || 0;
-  const itemHeight = renderItemHeights.value[itemIndex] || 0;
-  const maxScroll = Math.max(0, parent.scrollHeight - parent.clientHeight);
-  const targetTop = Math.max(
-    0,
-    itemTop - Math.max(0, (parent.clientHeight - itemHeight) / 2)
-  );
-
-  parent.scrollTop = targetTop - maxScroll;
-  syncVirtualViewport(true);
-
-  await nextTick();
-  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-  syncVirtualViewport(true);
-
-  return true;
-};
-
-watch(
-  getMessageViewportKeys,
-  (_newKeys, oldKeys) => {
-    if (!oldKeys) {
-      pendingVirtualViewportRestore = null;
-      return;
-    }
-
-    captureVirtualViewportRestore();
-  },
-  { flush: 'pre' }
-);
-
-watch(
-  getMessageViewportKeys,
-  () => {
-    scheduleVirtualViewportRestore();
-  },
-  { flush: 'post' }
-);
-
-watch(
-  () => renderItems.value.map(item => item.key),
-  keys => {
-    const keySet = new Set(keys);
-    const nextHeights = Object.fromEntries(
-      Object.entries(measuredItemHeights.value).filter(([key]) =>
-        keySet.has(key)
-      )
+  return visibleMessages.value
+    .slice(startIndex, endIndex + 1)
+    .map(message => messageElementsById.get(message.id))
+    .filter(
+      (element): element is HTMLElement => !!element && root.contains(element)
     );
+};
 
-    if (
-      Object.keys(nextHeights).length !==
-      Object.keys(measuredItemHeights.value).length
-    ) {
-      measuredItemHeights.value = nextHeights;
-    }
+const ensureMessageRendered = (messageId: string): Promise<boolean> =>
+  Promise.resolve(messageIndexById.value.has(messageId));
 
-    void nextTick(() => {
-      syncVirtualViewport(true);
-    });
+watch(
+  messageElementIdentity,
+  () => {
+    invalidateVisibleMessageSnapshot();
+    void scheduleMessageElementsSync();
   },
-  { immediate: true }
+  { flush: 'sync' }
 );
 
 const getBubbleProps = (message: IMessage, index: number) => ({
   message: message.text || '',
   media: message.media,
   isMeSender: resolveMessageIsMeSender(message),
+  isDialog: isDialogMessage(message),
+  isMobile: isMobile.value,
+  parsedCallMessage: getParsedCallMessage(message),
   time: getCachedMessageTime(message),
   sender: message.senderUser?.initials || '',
   senderUser: message.senderUser,
@@ -1266,7 +889,7 @@ const getBubbleProps = (message: IMessage, index: number) => ({
   avatar: message.senderUser?.avatarUrl || '',
   isRead: message.status === MessageStatus.Read,
   isEdit: message.isEdit,
-  isPin: isMessagePinnedForMe(message.topicId, message.id, message.isPin),
+  isPin: isMessagePinned(message),
   messageStatus: message.status,
   messageEx: message.ex,
   authUserId: props.authUserId,
@@ -1299,25 +922,20 @@ defineExpose({
 </script>
 
 <style scoped>
-.message-list-virtual-item {
+.message-list-render-item {
   display: flow-root;
   flex: 0 0 auto;
+  contain: layout style;
 }
 
-.message-list-virtual-spacer {
-  flex: 0 0 auto;
-  min-height: 0;
-  pointer-events: none;
-}
-
-.message-list-virtual-item > .top-element:has(.date-divider) {
+.message-list-render-item > .top-element:has(.date-divider) {
   display: flex;
   justify-content: center;
   pointer-events: none;
   padding-bottom: 10px;
 }
 
-.message-list-virtual-item > .top-element:has(.date-divider) .date-divider {
+.message-list-render-item > .top-element:has(.date-divider) .date-divider {
   margin-inline: auto;
 }
 
@@ -1326,7 +944,7 @@ defineExpose({
 }
 
 @media (max-width: 768px) {
-  .message-list-virtual-item > .top-element > .date-divider {
+  .message-list-render-item > .top-element > .date-divider {
     margin-top: 5px;
   }
 }

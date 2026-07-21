@@ -55,6 +55,7 @@
               :show-checkbox="isShareSelectionActive"
               :selected-topic-ids="selectedTopicIds"
               :search-query="toolbarState.search"
+              :is-loading="isTopicsLoading"
               :message-results="
                 isShareSelectionActive ? [] : filteredMessageSearchResults
               "
@@ -171,6 +172,7 @@ import {
   type IMessageSearchResult
 } from '../../composables/useMessageSearch';
 import { isBotTopic } from '../../utils/bot';
+import { isFavoriteTopic } from '../../utils/favorite-topic';
 import {
   getChatsToolbarFilterBadgeState,
   getChatsToolbarFilterCounts,
@@ -192,7 +194,7 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
   dataTestid: () => 'MobileList'
 });
 
-const { getTopicList } = useTopics();
+const { getTopicList, loading: isTopicsLoading } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, setActiveSection } = useChatMenu();
 const { isShareSelectionActive, selectedTopicIds, toggleShareTopic } =
@@ -242,11 +244,18 @@ const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
   }
 
   if (toolbarState.filter === 'chats') {
-    return topic.type === TopicType.DM && !isBotTopic(topic);
+    return (
+      topic.type === TopicType.DM &&
+      !isBotTopic(topic) &&
+      !isFavoriteTopic(topic, authUserId.value)
+    );
   }
 
   if (toolbarState.filter === 'groups') {
-    return topic.type === TopicType.Group;
+    return (
+      topic.type === TopicType.Group &&
+      !isFavoriteTopic(topic, authUserId.value)
+    );
   }
 
   if (toolbarState.filter === 'bots') {

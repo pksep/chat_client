@@ -94,6 +94,7 @@ import { normalizeUserStatus } from '../utils/userStatus';
 import { normalizeDateValue } from '../utils/dateValue';
 import { getIsTopicMessageVisible } from './useTopicViewportState';
 import { isGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
+import { isFavoriteTopic } from '../utils/favorite-topic';
 import {
   importAnyChatBackgroundSnapshot,
   requestAnyChatBackgroundSync,
@@ -325,7 +326,20 @@ const setupChatListeners = (): void => {
     message: IMessage,
     opts?: MessageHandlingOptions
   ): void => {
-    const { updateLocalLastMessageTopic } = useTopics();
+    const { getSelectedTopic, updateLocalLastMessageTopic } = useTopics();
+
+    if (
+      message.isSystem &&
+      isFavoriteTopic(getSelectedTopic(message.topicId), currentUserId.value)
+    ) {
+      deleteMessageFromLocal(message.topicId, message.id);
+      chatSDK?.sendWebSocketEvent(WebSocketEventType.DELETE_MESSAGE, {
+        messageId: message.id,
+        topicId: message.topicId
+      });
+      return;
+    }
+
     void upsertCallHistoryMessage(message);
     const isDuplicateMessage = hasMessageInTopic(message.topicId, message.id);
     const unreadCountBefore = totalUnreadCount.value;
@@ -939,10 +953,7 @@ const setupChatListeners = (): void => {
             });
           });
 
-          await Promise.allSettled([
-            endedMessagesRefresh,
-            fetchAllTopics()
-          ]);
+          await Promise.allSettled([endedMessagesRefresh, fetchAllTopics()]);
         }
       }
     })();

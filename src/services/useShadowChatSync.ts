@@ -589,12 +589,20 @@ export const syncShadowReadStateFromMessages = async (
     return;
   }
 
-  const lastReadMessage = [...messages]
-    .filter(message => message.senderUserId !== userId && message.isReadByMe)
-    .sort(
-      (left, right) =>
-        getMessageCreatedTimestamp(right) - getMessageCreatedTimestamp(left)
-    )[0];
+  let lastReadMessage: IMessage | undefined;
+  let lastReadTimestamp = Number.NEGATIVE_INFINITY;
+
+  for (const message of messages) {
+    if (message.senderUserId === userId || !message.isReadByMe) {
+      continue;
+    }
+
+    const timestamp = getMessageCreatedTimestamp(message);
+    if (timestamp >= lastReadTimestamp) {
+      lastReadMessage = message;
+      lastReadTimestamp = timestamp;
+    }
+  }
 
   await saveShadowReadState(
     topicId,

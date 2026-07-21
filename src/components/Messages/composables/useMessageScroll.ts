@@ -65,8 +65,43 @@ export function useMessageScroll(
   const scrollAnchor = useScrollAnchor({
     containerRef: chatWrapperRef,
     bottomThreshold: 120,
-    bottomLockThreshold: 96,
-    messageSelector: '[data-message-id]'
+    bottomLockThreshold: 4,
+    messageSelector: '[data-message-id]',
+    getViewportAnchor: preferredMessageId => {
+      const snapshot =
+        messageListUserItemsRef.value?.getVisibleMessageSnapshot?.();
+
+      if (!snapshot) {
+        return null;
+      }
+
+      if (
+        preferredMessageId &&
+        snapshot.visibleMessageIds.includes(preferredMessageId)
+      ) {
+        const container = chatWrapperRef.value;
+        const escapedMessageId = window.CSS?.escape
+          ? window.CSS.escape(preferredMessageId)
+          : preferredMessageId.replace(/["\\]/g, '\\$&');
+        const element = container?.querySelector(
+          `[data-message-id="${escapedMessageId}"]`
+        );
+
+        if (container && element instanceof HTMLElement) {
+          return {
+            messageId: preferredMessageId,
+            relativeTop:
+              element.getBoundingClientRect().top -
+              container.getBoundingClientRect().top
+          };
+        }
+      }
+
+      return {
+        messageId: snapshot.anchorMessageId,
+        relativeTop: snapshot.anchorRelativeTop
+      };
+    }
   });
   let trackedViewportTopicId = '';
 
@@ -77,9 +112,12 @@ export function useMessageScroll(
       return false;
     }
 
-    const messageElement = [
-      ...container.querySelectorAll('[data-message-id]')
-    ].find(element => element.getAttribute('data-message-id') === messageId);
+    const escapedMessageId = window.CSS?.escape
+      ? window.CSS.escape(messageId)
+      : messageId.replace(/["\\]/g, '\\$&');
+    const messageElement = container.querySelector(
+      `[data-message-id="${escapedMessageId}"]`
+    );
 
     if (!(messageElement instanceof HTMLElement)) {
       return false;
@@ -148,6 +186,8 @@ export function useMessageScroll(
   let autoReadResumeTimeout: ReturnType<typeof setTimeout> | null = null;
   let intersectionObserver: IntersectionObserver | null = null;
   let historyPaginationObserver: IntersectionObserver | null = null;
+  let intersectionObserverRoot: HTMLElement | null = null;
+  let historyPaginationObserverRoot: HTMLElement | null = null;
   const observedReadMessageElements = new Set<HTMLElement>();
   const observedHistoryPaginationElements = new Set<HTMLElement>();
   let observedMessageTargetsRafId = 0;
@@ -173,24 +213,37 @@ export function useMessageScroll(
     cursorId: string;
     messages: IMessage[];
   } | null = null;
+  let prefetchedNewerAppend: {
+    topicId: string;
+    cursorId: string;
+    messages: IMessage[];
+  } | null = null;
+  let historyLoadCheckPending = false;
+  let isMobileTouchActive = false;
+  let isMobileScrollGestureActive = false;
+  let mobileTouchLastY: number | null = null;
+  let mobileScrollIntent: 'older' | 'newer' | 'none' = 'none';
+  let mobileScrollIntentAt = 0;
+  let mobileScrollSettleTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let lastUserActivityReadFlushAt = 0;
   let lastHistoryScrollIntentAt = 0;
   let olderMessagesLoadingShownAt = 0;
   let newerMessagesLoadingShownAt = 0;
   const pendingReadIds = new Set<string>();
   const SCROLL_DISTANCE_FOR_REQUEST = 500;
-  const HISTORY_PREPEND_TRIGGER_INDEX = 50;
+  const HISTORY_PREPEND_TRIGGER_INDEX = 72;
   const HISTORY_PREPEND_TRIGGER_WINDOW_FRACTION = 0.5;
   const HISTORY_PREFETCH_TRIGGER_INDEX = 160;
-  const HISTORY_PREFETCH_TRIGGER_WINDOW_FRACTION = 0.85;
+  const HISTORY_PREFETCH_TRIGGER_WINDOW_FRACTION = 0.7;
   const HISTORY_PREPEND_TRIGGER_BUFFER = 2;
-  const HISTORY_PREPEND_COOLDOWN_MS = 350;
+  const HISTORY_PREPEND_COOLDOWN_MS = 100;
   const HISTORY_PREPEND_INTENT_TTL_MS = 2500;
-  const HISTORY_PREPEND_USER_QUIET_MS = 420;
-  const HISTORY_PREPEND_PAGE_LIMIT = 64;
-  const HISTORY_VISIBLE_WINDOW_LIMIT = 700;
+  const HISTORY_DESKTOP_PREPEND_PAGE_LIMIT = 80;
+  const HISTORY_MOBILE_PREPEND_PAGE_LIMIT = 8;
+  const HISTORY_DESKTOP_VISIBLE_WINDOW_LIMIT = 250;
+  const HISTORY_MOBILE_VISIBLE_WINDOW_LIMIT = 72;
   const HISTORY_PERSIST_IDLE_DELAY_MS = 10000;
-  const HISTORY_PREPEND_CHECK_INTERVAL_MS = 220;
+  const HISTORY_PREPEND_CHECK_INTERVAL_MS = 60;
   const PAGINATION_LOADING_MIN_VISIBLE_MS = 650;
   const PAGINATION_LOADING_TOP_EDGE_THRESHOLD = 160;
   const PAGINATION_LOADING_BOTTOM_EDGE_THRESHOLD = 24;
@@ -198,8 +251,21 @@ export function useMessageScroll(
   const READ_TARGET_SYNC_INTERVAL_MS = 350;
   const VIEWPORT_REVISION_UPDATE_INTERVAL_MS = 120;
   const UNREAD_REACTION_CHECK_INTERVAL_MS = 300;
+  const MOBILE_SCROLL_IDLE_DELAY_MS = 320;
+  const MOBILE_SCROLL_INTENT_TTL_MS = 1800;
+  const MOBILE_TOUCH_DIRECTION_THRESHOLD_PX = 2;
   const READ_OBSERVER_TARGET_LIMIT = 120;
   const READ_OBSERVER_VIEWPORT_MARGIN_MULTIPLIER = 2;
+  const isMobileMessageViewport = (): boolean =>
+    window.matchMedia('(max-width: 768px)').matches;
+  const getHistoryPrependPageLimit = (): number =>
+    isMobileMessageViewport()
+      ? HISTORY_MOBILE_PREPEND_PAGE_LIMIT
+      : HISTORY_DESKTOP_PREPEND_PAGE_LIMIT;
+  const getHistoryVisibleWindowLimit = (): number =>
+    isMobileMessageViewport()
+      ? HISTORY_MOBILE_VISIBLE_WINDOW_LIMIT
+      : HISTORY_DESKTOP_VISIBLE_WINDOW_LIMIT;
   let lastHistoryPrependAt = 0;
   const unreadTrackableMessageIds = computed(
     () =>
@@ -308,11 +374,11 @@ export function useMessageScroll(
       0,
       container.scrollHeight - container.clientHeight
     );
-    const normalizedScrollTop = Math.min(container.scrollTop, 0);
+    const scrollTop = Math.min(maxScroll, Math.max(0, container.scrollTop));
 
     return {
-      distanceFromBottom: Math.abs(normalizedScrollTop),
-      distanceFromTop: maxScroll + normalizedScrollTop
+      distanceFromBottom: maxScroll - scrollTop,
+      distanceFromTop: scrollTop
     };
   };
 
@@ -384,52 +450,11 @@ export function useMessageScroll(
     hideNewerMessagesLoadingAfterDomUpdate();
   };
 
-  const MESSAGE_VIEWPORT_KEY_SEPARATOR = '::viewport::';
-
-  const getMessageReactionKey = (message: IMessage): string =>
-    (message.reactions || [])
-      .map(
-        reaction =>
-          `${reaction.id || ''}:${reaction.senderUserId || ''}:${
-            reaction.text || ''
-          }`
-      )
-      .sort()
-      .join(',');
-
-  const getMessageMediaKey = (message: IMessage): string =>
-    (message.media || [])
-      .map(
-        media =>
-          `${media.id || ''}:${media.path || ''}:${
-            media.thumbnailPath || ''
-          }:${media.type || ''}:${media.size || ''}:${JSON.stringify(
-            media.ex || {}
-          )}`
-      )
-      .join(',');
-
-  const getMessageViewportKey = (message: IMessage): string =>
-    [
-      message.id,
-      message.text || '',
-      message.status || '',
-      message.isEdit ? 'edit' : '',
-      message.isPin ? 'pin' : '',
-      message.updatedAt || '',
-      message.deletedAt || '',
-      getMessageMediaKey(message),
-      getMessageReactionKey(message)
-    ].join(MESSAGE_VIEWPORT_KEY_SEPARATOR);
-
-  const getMessageViewportKeys = () =>
-    state.messages.map((message: IMessage) => getMessageViewportKey(message));
-
-  const getMessageIdFromViewportKey = (key: string): string =>
-    key.split(MESSAGE_VIEWPORT_KEY_SEPARATOR)[0] || '';
-
-  const getMessageIdsFromViewportKeys = (keys: string[]): string[] =>
-    keys.map(getMessageIdFromViewportKey);
+  // Array replacement is the mutation boundary. IDs are sufficient to
+  // classify prepend/append operations; ResizeObserver handles height changes.
+  const messageIds = computed(() =>
+    state.messages.map((message: IMessage) => message.id)
+  );
 
   const canTrackVisibleMessages = (): boolean => {
     const container = chatWrapperRef.value;
@@ -482,44 +507,45 @@ export function useMessageScroll(
   const getObservableReadMessageElements = (
     container: HTMLElement
   ): HTMLElement[] => {
-    const messageElements = Array.from(
-      container.querySelectorAll('[data-message-id]')
-    ).filter(
-      (element): element is HTMLElement => element instanceof HTMLElement
+    const getElementsInRange = (
+      startIndex: number,
+      endIndex: number
+    ): HTMLElement[] =>
+      messageListUserItemsRef.value?.getRenderedMessageElementsInIndexRange?.(
+        startIndex,
+        endIndex
+      ) || [];
+
+    if (state.messages.length <= READ_OBSERVER_TARGET_LIMIT) {
+      const indexedElements = getElementsInRange(0, state.messages.length - 1);
+
+      return indexedElements.length > 0
+        ? indexedElements
+        : Array.from(
+            container.querySelectorAll<HTMLElement>('[data-message-id]')
+          );
+    }
+
+    const snapshot = getVisibleMessageSnapshot();
+    const viewportMessageCount = snapshot
+      ? Math.max(1, snapshot.lastVisibleIndex - snapshot.firstVisibleIndex + 1)
+      : 1;
+    const viewportBuffer = Math.max(
+      Math.floor(READ_OBSERVER_TARGET_LIMIT / 2),
+      viewportMessageCount * READ_OBSERVER_VIEWPORT_MARGIN_MULTIPLIER
     );
-
-    if (messageElements.length <= READ_OBSERVER_TARGET_LIMIT) {
-      return messageElements;
-    }
-
-    const containerRect = container.getBoundingClientRect();
-    const viewportMargin =
-      containerRect.height * READ_OBSERVER_VIEWPORT_MARGIN_MULTIPLIER;
-    const viewportTop = containerRect.top - viewportMargin;
-    const viewportBottom = containerRect.bottom + viewportMargin;
-    const visibleWindowElements = messageElements.filter(element => {
-      const rect = element.getBoundingClientRect();
-      return rect.bottom >= viewportTop && rect.top <= viewportBottom;
-    });
-
-    if (visibleWindowElements.length > 0) {
-      return visibleWindowElements.slice(0, READ_OBSERVER_TARGET_LIMIT);
-    }
-
-    const firstViewportIndex = messageElements.findIndex(element => {
-      const rect = element.getBoundingClientRect();
-      return rect.bottom >= containerRect.top;
-    });
     const anchorIndex =
-      firstViewportIndex >= 0 ? firstViewportIndex : messageElements.length - 1;
+      snapshot?.firstVisibleIndex ?? state.messages.length - 1;
     const startIndex = Math.max(
       0,
-      anchorIndex - Math.floor(READ_OBSERVER_TARGET_LIMIT / 2)
+      Math.min(
+        anchorIndex - viewportBuffer,
+        state.messages.length - READ_OBSERVER_TARGET_LIMIT
+      )
     );
-
-    return messageElements.slice(
+    return getElementsInRange(
       startIndex,
-      startIndex + READ_OBSERVER_TARGET_LIMIT
+      startIndex + READ_OBSERVER_TARGET_LIMIT - 1
     );
   };
 
@@ -565,6 +591,10 @@ export function useMessageScroll(
   };
 
   const scheduleViewportRevisionUpdate = (): void => {
+    if (!getTopicUnreadReactionMessageId(route.value.id)) {
+      return;
+    }
+
     if (viewportRevisionRafId || viewportRevisionSyncTimeoutId) {
       return;
     }
@@ -692,12 +722,6 @@ export function useMessageScroll(
     };
   };
 
-  const getHistoryPrependQuietDelay = (): number =>
-    Math.max(
-      0,
-      HISTORY_PREPEND_USER_QUIET_MS - (Date.now() - lastHistoryScrollIntentAt)
-    );
-
   const loadOlderMessagesFromVisibleAnchor = async (): Promise<void> => {
     const now = Date.now();
 
@@ -716,6 +740,11 @@ export function useMessageScroll(
     }
 
     if (now - lastHistoryPrependAt < HISTORY_PREPEND_COOLDOWN_MS) {
+      historyLoadCheckPending = true;
+      scheduleHistoryPrependCheck(
+        HISTORY_PREPEND_COOLDOWN_MS - (now - lastHistoryPrependAt),
+        true
+      );
       return;
     }
 
@@ -740,6 +769,7 @@ export function useMessageScroll(
       return;
     }
 
+    historyLoadCheckPending = false;
     isScrollLoading = true;
     isHistoryScrollLoading = true;
     syncOlderMessagesLoadingState();
@@ -751,6 +781,7 @@ export function useMessageScroll(
       const getUsefulOlderMessages = (messages: IMessage[]): IMessage[] =>
         messages.filter(message => !visibleMessageIds.has(message.id));
       const fullMessages = getFullMessagesByTopicId(topicId);
+      const historyPrependPageLimit = getHistoryPrependPageLimit();
       const fullCursorIndex = fullMessages.findIndex(
         message => message.id === lastMessageId
       );
@@ -758,14 +789,14 @@ export function useMessageScroll(
         fullCursorIndex > 0 &&
         fullMessages
           .slice(
-            Math.max(0, fullCursorIndex - HISTORY_PREPEND_PAGE_LIMIT),
+            Math.max(0, fullCursorIndex - historyPrependPageLimit),
             fullCursorIndex
           )
           .some(message => !visibleMessageIds.has(message.id));
       const fetchOlderMessages = (forceNetwork = false) =>
         fetchMessagesForTopic(topicId, {
           lastMessageId,
-          limit: HISTORY_PREPEND_PAGE_LIMIT,
+          limit: historyPrependPageLimit,
           skipSave: true,
           skipShadowSnapshot: true,
           forceNetwork
@@ -810,7 +841,15 @@ export function useMessageScroll(
 
       hasOldMessage = true;
 
-      if (!isNearPrepend) {
+      if (
+        route.value.id !== topicId ||
+        state.messages[0]?.id !== lastMessageId
+      ) {
+        return;
+      }
+
+      const latestSnapshot = getVisibleMessageSnapshot();
+      if (!isVisibleSnapshotNearLoadedStart(latestSnapshot)) {
         if (!prefetchedMessages) {
           prefetchedHistoryPrepend = {
             topicId,
@@ -819,37 +858,20 @@ export function useMessageScroll(
           };
         }
 
-        if (isVisibleSnapshotNearLoadedStart(getVisibleMessageSnapshot())) {
-          scheduleHistoryPrependCheck(getHistoryPrependQuietDelay(), true);
-        }
-
         return;
       }
 
-      if (
-        route.value.id !== topicId ||
-        state.messages[0]?.id !== lastMessageId
-      ) {
-        return;
-      }
-
-      if (prefetchedMessages) {
-        prefetchedHistoryPrepend = null;
-      }
-
-      const quietDelay = getHistoryPrependQuietDelay();
-      if (quietDelay > 0) {
+      if (isMobileMessageViewport() && isMobileScrollGestureActive) {
         prefetchedHistoryPrepend = {
           topicId,
           cursorId: lastMessageId,
           messages: olderMessages
         };
-        scheduleHistoryPrependCheck(quietDelay, true);
         return;
       }
 
-      if (!isVisibleSnapshotNearLoadedStart(getVisibleMessageSnapshot())) {
-        return;
+      if (prefetchedMessages) {
+        prefetchedHistoryPrepend = null;
       }
 
       const requestedAnchor = getCurrentViewportAnchor(
@@ -861,15 +883,20 @@ export function useMessageScroll(
 
       mergeMessagesForTopic(topicId, olderMessages, 'prepend', {
         syncLastMessage: false,
-        windowMode: 'around-anchor',
+        windowMode: 'preserve-start',
         anchorMessageId: pendingViewportAnchorMessageId || undefined,
-        visibleLimit: HISTORY_VISIBLE_WINDOW_LIMIT,
+        visibleLimit: getHistoryVisibleWindowLimit(),
         persistDelayMs: HISTORY_PERSIST_IDLE_DELAY_MS
       });
       lastHistoryPrependAt = Date.now();
     } finally {
       isScrollLoading = false;
       completeOlderMessagesLoading();
+
+      if (historyLoadCheckPending) {
+        historyLoadCheckPending = false;
+        scheduleHistoryPrependCheck(HISTORY_PREPEND_COOLDOWN_MS, true);
+      }
     }
   };
 
@@ -973,13 +1000,25 @@ export function useMessageScroll(
   };
 
   const setupHistoryPaginationObserver = (): void => {
-    historyPaginationObserver?.disconnect();
-    observedHistoryPaginationElements.clear();
+    const root = chatWrapperRef.value;
 
-    if (!chatWrapperRef.value) {
+    if (!root) {
+      historyPaginationObserver?.disconnect();
       historyPaginationObserver = null;
+      historyPaginationObserverRoot = null;
+      observedHistoryPaginationElements.clear();
       return;
     }
+
+    if (historyPaginationObserver && historyPaginationObserverRoot === root) {
+      syncObservedHistoryPaginationTargets();
+      scheduleHistoryPrependCheck();
+      return;
+    }
+
+    historyPaginationObserver?.disconnect();
+    observedHistoryPaginationElements.clear();
+    historyPaginationObserverRoot = root;
 
     historyPaginationObserver = new IntersectionObserver(
       entries => {
@@ -992,7 +1031,7 @@ export function useMessageScroll(
         }
       },
       {
-        root: chatWrapperRef.value,
+        root,
         threshold: 0.01,
         rootMargin: '0px'
       }
@@ -1055,6 +1094,15 @@ export function useMessageScroll(
     const container = chatWrapperRef.value;
     if (!canTrackVisibleMessages() || !container) {
       return [];
+    }
+
+    const snapshot = getVisibleMessageSnapshot();
+    if (snapshot) {
+      return snapshot.visibleMessageIds.filter(
+        messageId =>
+          !pendingReadIds.has(messageId) &&
+          unreadTrackableMessageIds.value.has(messageId)
+      );
     }
 
     const containerRect = container.getBoundingClientRect();
@@ -1177,11 +1225,27 @@ export function useMessageScroll(
   };
 
   const setupIntersectionObserver = () => {
-    if (intersectionObserver) {
-      intersectionObserver.disconnect();
-    }
-    observedReadMessageElements.clear();
+    const root = chatWrapperRef.value;
+
     setupHistoryPaginationObserver();
+
+    if (!root) {
+      intersectionObserver?.disconnect();
+      intersectionObserver = null;
+      intersectionObserverRoot = null;
+      observedReadMessageElements.clear();
+      return;
+    }
+
+    if (intersectionObserver && intersectionObserverRoot === root) {
+      scheduleObservedReadMessageTargetsSync();
+      void flushQueuedReadMessages();
+      return;
+    }
+
+    intersectionObserver?.disconnect();
+    observedReadMessageElements.clear();
+    intersectionObserverRoot = root;
 
     intersectionObserver = new IntersectionObserver(
       entries => {
@@ -1203,7 +1267,7 @@ export function useMessageScroll(
         clearVisibleUnreadReaction();
       },
       {
-        root: chatWrapperRef.value,
+        root,
         threshold: 0.1,
         rootMargin: '0px'
       }
@@ -1275,9 +1339,20 @@ export function useMessageScroll(
     scheduleVisibleUnreadReactionCheck();
 
     const { scrollTop } = el;
+    const isMobileViewport = isMobileMessageViewport();
+    const hasFreshMobileScrollIntent =
+      mobileScrollIntentAt > 0 &&
+      Date.now() - mobileScrollIntentAt <= MOBILE_SCROLL_INTENT_TTL_MS;
     const isHistoryScrollIntent =
       !scrollAnchor.isRestoringScroll &&
-      scrollTop < scrollState.previousScrollTop - 1;
+      scrollTop < scrollState.previousScrollTop - 1 &&
+      (!isMobileViewport ||
+        (hasFreshMobileScrollIntent && mobileScrollIntent === 'older'));
+    const isNewerScrollIntent =
+      !scrollAnchor.isRestoringScroll &&
+      scrollTop > scrollState.previousScrollTop + 1 &&
+      (!isMobileViewport ||
+        (hasFreshMobileScrollIntent && mobileScrollIntent === 'newer'));
 
     if (isHistoryScrollIntent) {
       lastHistoryScrollIntentAt = Date.now();
@@ -1285,8 +1360,16 @@ export function useMessageScroll(
 
     scrollState.previousScrollTop = scrollTop;
 
-    const normalizedScrollTop = Math.min(scrollTop, 0);
-    const distanceFromBottom = Math.abs(normalizedScrollTop);
+    if (
+      isMobileViewport &&
+      isMobileScrollGestureActive &&
+      !isMobileTouchActive
+    ) {
+      scheduleMobileScrollGestureSettle();
+    }
+
+    const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
+    const distanceFromBottom = Math.max(0, maxScroll - scrollTop);
 
     isShowScrollToBottomButton.value = distanceFromBottom > 200;
     syncOlderMessagesLoadingState();
@@ -1317,8 +1400,10 @@ export function useMessageScroll(
     }
 
     if (
+      isNewerScrollIntent &&
       distanceFromBottom < SCROLL_DISTANCE_FOR_REQUEST &&
       !isScrollLoading &&
+      !prefetchedNewerAppend &&
       hasNewMessage
     ) {
       isScrollLoading = true;
@@ -1344,9 +1429,21 @@ export function useMessageScroll(
           hasNewMessage = result.length > 0;
 
           if (result.length > 0) {
-            mergeMessagesForTopic(route.value.id, result, 'append', {
-              syncLastMessage: false
-            });
+            if (isMobileViewport) {
+              prefetchedNewerAppend = {
+                topicId: route.value.id,
+                cursorId: lastMessage.id,
+                messages: result
+              };
+
+              if (!isMobileScrollGestureActive) {
+                scheduleMobileScrollGestureSettle();
+              }
+            } else {
+              mergeMessagesForTopic(route.value.id, result, 'append', {
+                syncLastMessage: false
+              });
+            }
           }
         }
       } finally {
@@ -1371,7 +1468,10 @@ export function useMessageScroll(
         const container = chatWrapperRef.value;
 
         if (container && firstUnread) {
-          container.scrollTop = firstUnread.offsetTop - container.offsetTop;
+          scrollAnchor.setViewportMode('history', { pin: false });
+          container.scrollTop +=
+            firstUnread.getBoundingClientRect().top -
+            container.getBoundingClientRect().top;
           requestAnimationFrame(() => {
             void flushQueuedReadMessages();
             flushVisibleUnreadMessages();
@@ -1395,16 +1495,17 @@ export function useMessageScroll(
           return;
         }
 
-        const unreadMessageElement = chatWrapperRef.value.querySelector(
-          `[data-message-id="${state.unreadMarkerMessageId}"]`
-        );
-
-        if (unreadMessageElement instanceof HTMLElement) {
-          scrolledUnreadMarkerKey.value = currentMarkerKey;
-          unreadMessageElement.scrollIntoView({
+        const didJumpToUnreadMessage = await scrollAnchor.jumpToMessage(
+          state.unreadMarkerMessageId,
+          {
             block: 'start',
             behavior: 'auto'
-          });
+          }
+        );
+
+        if (didJumpToUnreadMessage) {
+          scrolledUnreadMarkerKey.value = currentMarkerKey;
+          scrollAnchor.setViewportMode('history', { pin: false });
           requestAnimationFrame(() => {
             void flushQueuedReadMessages();
             flushVisibleUnreadMessages();
@@ -1516,7 +1617,7 @@ export function useMessageScroll(
     schedulePersistScrollMeta();
   };
 
-  const handleHistoryScrollInteraction = (event: WheelEvent | TouchEvent) => {
+  const handleHistoryScrollInteraction = (event: WheelEvent) => {
     const container = chatWrapperRef.value;
 
     if (!container || !(event.target instanceof Node)) {
@@ -1527,11 +1628,150 @@ export function useMessageScroll(
       return;
     }
 
-    if (event instanceof WheelEvent && event.deltaY >= 0) {
+    if (event.deltaY >= 0) {
       return;
     }
 
     lastHistoryScrollIntentAt = Date.now();
+
+    if (isScrollLoading) {
+      historyLoadCheckPending = true;
+    }
+  };
+
+  const clearMobileScrollSettleTimeout = (): void => {
+    if (mobileScrollSettleTimeoutId) {
+      clearTimeout(mobileScrollSettleTimeoutId);
+      mobileScrollSettleTimeoutId = null;
+    }
+  };
+
+  const applyPrefetchedNewerAppend = (): void => {
+    const prefetchedAppend = prefetchedNewerAppend;
+    if (!prefetchedAppend) {
+      return;
+    }
+
+    const currentLastMessageId = state.messages[state.messages.length - 1]?.id;
+    if (
+      route.value.id !== prefetchedAppend.topicId ||
+      currentLastMessageId !== prefetchedAppend.cursorId
+    ) {
+      prefetchedNewerAppend = null;
+      preserveViewportForDownPagination = false;
+      hasNewMessage = true;
+      return;
+    }
+
+    prefetchedNewerAppend = null;
+    preserveViewportForDownPagination = true;
+    pendingViewportAnchorMessageId =
+      getVisibleMessageSnapshot()?.anchorMessageId || null;
+    mergeMessagesForTopic(
+      prefetchedAppend.topicId,
+      prefetchedAppend.messages,
+      'append',
+      {
+        syncLastMessage: false,
+        windowMode: 'preserve-end',
+        anchorMessageId: pendingViewportAnchorMessageId || undefined,
+        visibleLimit: getHistoryVisibleWindowLimit(),
+        persistDelayMs: HISTORY_PERSIST_IDLE_DELAY_MS
+      }
+    );
+  };
+
+  const finishMobileScrollGesture = (): void => {
+    const settledIntent = mobileScrollIntent;
+
+    clearMobileScrollSettleTimeout();
+    isMobileTouchActive = false;
+    isMobileScrollGestureActive = false;
+    mobileTouchLastY = null;
+    mobileScrollIntentAt = 0;
+
+    if (settledIntent === 'newer') {
+      applyPrefetchedNewerAppend();
+    } else if (settledIntent === 'older' && prefetchedHistoryPrepend) {
+      scheduleHistoryPrependCheck(0, true);
+    }
+  };
+
+  function scheduleMobileScrollGestureSettle(
+    delay = MOBILE_SCROLL_IDLE_DELAY_MS
+  ): void {
+    clearMobileScrollSettleTimeout();
+    mobileScrollSettleTimeoutId = setTimeout(() => {
+      mobileScrollSettleTimeoutId = null;
+      finishMobileScrollGesture();
+    }, delay);
+  }
+
+  const handleTouchStart = (event: TouchEvent): void => {
+    if (!isMobileMessageViewport()) {
+      return;
+    }
+
+    clearMobileScrollSettleTimeout();
+    isMobileTouchActive = true;
+    isMobileScrollGestureActive = true;
+    mobileTouchLastY =
+      event.touches[0]?.clientY ?? event.changedTouches[0]?.clientY ?? null;
+  };
+
+  const handleTouchMove = (event: TouchEvent): void => {
+    if (!isMobileMessageViewport() || !isMobileTouchActive) {
+      return;
+    }
+
+    const currentY = event.touches[0]?.clientY;
+    if (currentY === undefined || mobileTouchLastY === null) {
+      return;
+    }
+
+    const deltaY = currentY - mobileTouchLastY;
+    mobileTouchLastY = currentY;
+
+    if (Math.abs(deltaY) < MOBILE_TOUCH_DIRECTION_THRESHOLD_PX) {
+      return;
+    }
+
+    mobileScrollIntent = deltaY > 0 ? 'older' : 'newer';
+    mobileScrollIntentAt = Date.now();
+
+    if (mobileScrollIntent === 'older') {
+      lastHistoryScrollIntentAt = mobileScrollIntentAt;
+
+      if (isScrollLoading) {
+        historyLoadCheckPending = true;
+      }
+    }
+  };
+
+  const handleTouchEnd = (): void => {
+    if (!isMobileMessageViewport()) {
+      return;
+    }
+
+    isMobileTouchActive = false;
+    mobileTouchLastY = null;
+    scheduleMobileScrollGestureSettle();
+  };
+
+  const handleTouchCancel = (): void => {
+    if (!isMobileMessageViewport()) {
+      return;
+    }
+
+    finishMobileScrollGesture();
+  };
+
+  const handleScrollEnd = (): void => {
+    if (!isMobileMessageViewport() || isMobileTouchActive) {
+      return;
+    }
+
+    scheduleMobileScrollGestureSettle();
   };
 
   const schedulePersistScrollMeta = () => {
@@ -1555,33 +1795,21 @@ export function useMessageScroll(
   );
 
   watch(
-    () => chatWrapperRef.value?.scrollTop,
-    newScrollTop => {
-      if (
-        !chatWrapperRef.value ||
-        scrollState.isInitialLoad ||
-        newScrollTop === undefined
-      ) {
-        return;
-      }
-
-      const distanceFromBottom = Math.abs(Math.min(newScrollTop, 0));
-      scrollState.shouldAutoScroll = distanceFromBottom < 100;
-      scrollState.isUserScrolling = distanceFromBottom >= 100;
-    }
-  );
-
-  watch(
-    getMessageViewportKeys,
-    (newKeys, oldKeys) => {
-      if (!oldKeys || !chatWrapperRef.value) {
+    messageIds,
+    (newIds, oldIds) => {
+      if (!oldIds || !chatWrapperRef.value) {
         pendingMessagesMutationRevision = null;
         pendingViewportAnchorMessageId = null;
         return;
       }
 
-      const newIds = getMessageIdsFromViewportKeys(newKeys);
-      const oldIds = getMessageIdsFromViewportKeys(oldKeys);
+      if (
+        newIds.length === oldIds.length &&
+        newIds.every((messageId, index) => messageId === oldIds[index])
+      ) {
+        return;
+      }
+
       const oldSet = new Set(oldIds);
       const hasNew = newIds.some(id => !oldSet.has(id));
       const firstOldIndex = oldIds.length > 0 ? newIds.indexOf(oldIds[0]) : -1;
@@ -1611,8 +1839,12 @@ export function useMessageScroll(
   );
 
   watch(
-    getMessageViewportKeys,
+    messageIds,
     () => {
+      if (pendingMessagesMutationRevision === null) {
+        return;
+      }
+
       const commitPendingViewportMutation = (): void => {
         if (pendingMessagesMutationRevision === null) {
           return;
@@ -1625,12 +1857,12 @@ export function useMessageScroll(
       commitPendingViewportMutation();
 
       nextTick(() => {
-        setupIntersectionObserver();
-        scrollAnchor.setupResizeObserver();
         commitPendingViewportMutation();
 
         preserveViewportForDownPagination = false;
         pendingViewportAnchorMessageId = null;
+        scheduleObservedReadMessageTargetsSync();
+        scheduleObservedHistoryPaginationTargetsSync();
         scheduleHistoryPrependCheck();
       });
     },
@@ -1650,8 +1882,16 @@ export function useMessageScroll(
     pendingViewportAnchorMessageId = null;
     preserveViewportForDownPagination = false;
     prefetchedHistoryPrepend = null;
+    prefetchedNewerAppend = null;
+    historyLoadCheckPending = false;
     lastHistoryPrependAt = 0;
     lastHistoryScrollIntentAt = 0;
+    clearMobileScrollSettleTimeout();
+    isMobileTouchActive = false;
+    isMobileScrollGestureActive = false;
+    mobileTouchLastY = null;
+    mobileScrollIntent = 'none';
+    mobileScrollIntentAt = 0;
     isShowScrollToBottomButton.value = false;
     scrollState.isInitialLoad = true;
     scrollState.isUserScrolling = false;
@@ -1705,9 +1945,6 @@ export function useMessageScroll(
     window.addEventListener('wheel', handleHistoryScrollInteraction, {
       passive: true
     });
-    window.addEventListener('touchmove', handleHistoryScrollInteraction, {
-      passive: true
-    });
   });
 
   onUnmounted(() => {
@@ -1737,7 +1974,7 @@ export function useMessageScroll(
     }
 
     window.removeEventListener('wheel', handleHistoryScrollInteraction);
-    window.removeEventListener('touchmove', handleHistoryScrollInteraction);
+    clearMobileScrollSettleTimeout();
 
     if (readTargetsSyncTimeoutId) {
       clearTimeout(readTargetsSyncTimeoutId);
@@ -1779,6 +2016,8 @@ export function useMessageScroll(
 
     intersectionObserver?.disconnect();
     historyPaginationObserver?.disconnect();
+    intersectionObserverRoot = null;
+    historyPaginationObserverRoot = null;
     observedReadMessageElements.clear();
     observedHistoryPaginationElements.clear();
 
@@ -1798,6 +2037,11 @@ export function useMessageScroll(
     isLoadingNewerMessages,
     scrollState,
     handleScroll,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+    handleTouchCancel,
+    handleScrollEnd,
     scrollToBottom,
     handleScrollToButton,
     setupIntersectionObserver,

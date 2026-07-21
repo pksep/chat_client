@@ -66,13 +66,21 @@
         @keydown.enter="event => handleClick(topic, index, event)"
         @keydown.space="event => handleClick(topic, index, event)"
       >
+        <FavoriteTopicIcon
+          v-if="isTopicFavorite(topic)"
+          class="contact-list__avatar"
+          :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
+        />
         <component
+          v-else
           :is="isBotTopic(topic) ? BotAvatar : CachedAvatar"
           :class="[
             'contact-list__avatar',
             {
               'contact-list__avatar--interactive':
-                !props.showCheckbox && topic.type === TopicType.DM
+                !props.showCheckbox &&
+                topic.type === TopicType.DM &&
+                !isTopicFavorite(topic)
             }
           ]"
           :initials="topic.name"
@@ -345,7 +353,13 @@
         tabindex="0"
         @click="handleMessageResultClick(result)"
       >
+        <FavoriteTopicIcon
+          v-if="isTopicFavorite(getMessageResultTopic(result))"
+          class="contact-list__avatar"
+          :data-testid="`${props.dataTestid}-ContactList-MessageAvatar${index + 1}`"
+        />
         <component
+          v-else
           :is="
             isBotTopic(getMessageResultTopic(result)) ? BotAvatar : CachedAvatar
           "
@@ -436,6 +450,7 @@ import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import {
   navigateToDialogs,
+  navigateToFavorites,
   navigateToGroup
 } from '../../composables/navigation';
 import { MediaType } from '@pksep/zod-shared-chat';
@@ -469,6 +484,7 @@ import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 import type { IMessageSearchResult } from '../../composables/useMessageSearch';
 import { isBotTopic, isDeletedBotUser } from '../../utils/bot';
 import ReactionHeartIcon from '../UI/ReactionHeartIcon.vue';
+import FavoriteTopicIcon from '../UI/FavoriteTopicIcon.vue';
 import { requestTopicReactionJump } from '../../services/useTopicViewportState';
 import {
   getInteractionTelemetryPayload,
@@ -476,6 +492,7 @@ import {
   recordChatTopicOpenAttempt,
   type ChatTopicOpenTelemetryMeta
 } from '../../services/useChatNavigationTelemetry';
+import { isFavoriteTopic } from '../../utils/favorite-topic';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
@@ -523,6 +540,8 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
 const authedUser = computed(() => getAuthUser());
+const isTopicFavorite = (topic?: ITopic | null): boolean =>
+  isFavoriteTopic(topic, authedUser.value?.id);
 const isRecentlyReconnected = computed(() => getHasWebsocketConnection());
 const listRenderKey = ref(0);
 const listRootRef = ref<HTMLElement | null>(null);
@@ -786,6 +805,7 @@ const getTopicTelemetryFlags = (topic: ITopic): Record<string, unknown> => ({
   hasUnreadReaction: !!topic.hasUnreadReaction,
   unreadReactionMessageId: getTopicUnreadReactionMessageId(topic.id) || null,
   hasActiveCall: !!getTopicActiveCall(topic),
+  isFavorite: isTopicFavorite(topic),
   lastMessageId: topic.lastMessage?.id || null,
   lastMessageCreatedAt: topic.lastMessage?.createdAt || null,
   lastMessageMediaCount: topic.lastMessage?.media?.length || 0,
@@ -808,7 +828,7 @@ const recordTopicOpenAttempt = (
 
   return recordChatTopicOpenAttempt({
     topicId: topic.id,
-    topicType: topic.type,
+    topicType: isTopicFavorite(topic) ? 'FAVORITE' : topic.type,
     source,
     selectedTopicId: props.selectedTopicId,
     isMobile: isMobile.value,
@@ -831,11 +851,13 @@ const navigateToTopicFromList = (
   recordChatTopicNavigationRequest({
     telemetry,
     topicId: topic.id,
-    topicType: topic.type,
+    topicType: isTopicFavorite(topic) ? 'FAVORITE' : topic.type,
     source
   });
 
-  if (topic.type === TopicType.DM) {
+  if (isTopicFavorite(topic)) {
+    navigateToFavorites(topic.id);
+  } else if (topic.type === TopicType.DM) {
     navigateToDialogs(topic.id);
   } else if (topic.type === TopicType.Group) {
     navigateToGroup(topic.id);
@@ -843,7 +865,9 @@ const navigateToTopicFromList = (
 };
 
 const navigateToTopicRoute = (topic: ITopic): void => {
-  if (topic.type === TopicType.DM) {
+  if (isTopicFavorite(topic)) {
+    navigateToFavorites(topic.id);
+  } else if (topic.type === TopicType.DM) {
     navigateToDialogs(topic.id);
   } else if (topic.type === TopicType.Group) {
     navigateToGroup(topic.id);
@@ -862,7 +886,7 @@ const syncTopicOpenSideEffects = (
   recordChatTopicNavigationRequest({
     telemetry,
     topicId: topic.id,
-    topicType: topic.type,
+    topicType: isTopicFavorite(topic) ? 'FAVORITE' : topic.type,
     source: navigationSource
   });
 
@@ -1027,7 +1051,7 @@ const getTopicAvatarPath = (topic?: ITopic | null): string =>
   isBotTopic(topic) ? topic?.user?.avatarUrl || '' : topic?.avatarUrl || '';
 
 const isTopicUserOnline = (topic: ITopic): boolean => {
-  if (isDeletedBotUser(topic.user)) {
+  if (isTopicFavorite(topic) || isDeletedBotUser(topic.user)) {
     return false;
   }
 
@@ -1076,6 +1100,10 @@ const getTopicUnreadIndicatorLabel = (topic: ITopic): string => {
 };
 
 const getTopicActiveCall = (topic: ITopic) => {
+  if (isTopicFavorite(topic)) {
+    return null;
+  }
+
   if (isCallActive.value && activeCallTopicId.value === topic.id) {
     return {
       roomId: topic.activeCall?.roomId || topic.id,

@@ -73,6 +73,7 @@ export type ITopicInfo = Partial<TopicSetting> & {
 
 export type ITopic = Topic & {
   info?: ITopicInfo;
+  isFavorite?: boolean;
   isPin?: boolean;
   lastMessage?: IMessage;
   activeCall?: {
