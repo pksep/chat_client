@@ -1,17 +1,17 @@
 import { ref, computed, watch } from 'vue';
 import { getChatSDK } from '../services/useChat';
+import { WebSocketEventType } from '../services/useChatSDK/websocketEvents';
 import { ITopic, ITopicInfo, IUser } from '../components/interfaces/interfaces';
 import {
   Message,
   TopicType,
   MessageStatus
 } from '../services/useChatSDK/types';
+import { groups, updateLocalGroupInfo } from '../composables/useGroup';
 import {
-  getGroupList,
-  groups,
-  updateLocalGroupInfo
-} from '../composables/useGroup';
-import { getFullMessagesByTopicId } from '../services/useMessages';
+  deleteMessageFromLocal,
+  getFullMessagesByTopicId
+} from '../services/useMessages';
 import { useUrlWatcher } from './navigation';
 import { authedUser } from './useAuth';
 import {
@@ -43,8 +43,17 @@ import {
   isDeletedBotUser,
   isLocalBotTopic
 } from '../utils/bot';
+import {
+  FAVORITE_TOPIC_DESCRIPTION,
+  FAVORITE_TOPIC_NAME,
+  isFavoriteTopic,
+  normalizeFavoriteTopic
+} from '../utils/favorite-topic';
 
 const topics = ref<ITopic[]>([]);
+const topicsById = computed(
+  () => new Map(topics.value.map(topic => [topic.id, topic] as const))
+);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const displayedUnreadCount = ref(0);
@@ -59,6 +68,9 @@ let isTopicsVisibilityBound = false;
 let isDesktopVisibilityBound = false;
 let topicsApi: ReturnType<typeof createTopicsApi> | null = null;
 let lastAppliedAppBadgeCount: number | null = null;
+let favoriteTopicCreationPromise: Promise<ITopic | null> | null = null;
+const favoriteSystemCleanupPromises = new Map<string, Promise<void>>();
+const cleanedFavoriteSystemTopicIds = new Set<string>();
 
 const route = useUrlWatcher();
 
@@ -85,6 +97,10 @@ const bindTopicsVisibilityListener = (
 
 const createTopicsApi = () => {
   const applyDisplayedUnreadCount = (count: number) => {
+    if (typeof document === 'undefined' || typeof navigator === 'undefined') {
+      return;
+    }
+
     const baseTitle = 'SEP:Chat';
     const nextTitle = count > 0 ? `(${count}) ${baseTitle}` : baseTitle;
 
@@ -226,12 +242,24 @@ const createTopicsApi = () => {
     topic: ITopic,
     lastMessage?: Message
   ): Message | undefined => {
-    const localLastMessage = getFullMessagesByTopicId(topic.id).at(-1);
+    const favoriteTopic = isFavoriteTopic(topic, authedUser.value?.id);
+    const localMessages = getFullMessagesByTopicId(topic.id);
+    const localLastMessage = favoriteTopic
+      ? [...localMessages].reverse().find(message => !message.isSystem)
+      : localMessages.at(-1);
+    const candidates = [topic.lastMessage, localLastMessage, lastMessage];
 
-    return getLatestMessage([topic.lastMessage, localLastMessage, lastMessage]);
+    return getLatestMessage(
+      favoriteTopic
+        ? candidates.filter(message => !message?.isSystem)
+        : candidates
+    );
   };
 
-  const normalizeTopic = (topic: ITopic): ITopic => {
+  const normalizeTopic = (
+    topic: ITopic,
+    authUserId = authedUser.value?.id
+  ): ITopic => {
     const normalizedTopic = { ...topic };
     const existingTopic = topics.value.find(item => item.id === topic.id);
     const trackedUnreadReactionTargets = unreadReactionTargetsByTopic.get(
@@ -314,11 +342,13 @@ const createTopicsApi = () => {
       normalizedTopic.name = existingTopic.name || deletedUser.initials;
     }
 
-    return normalizedTopic;
+    return normalizeFavoriteTopic(normalizedTopic, authUserId);
   };
 
-  const normalizeTopics = (items: ITopic[]): ITopic[] =>
-    items.map(topic => normalizeTopic(topic));
+  const normalizeTopics = (
+    items: ITopic[],
+    authUserId = authedUser.value?.id
+  ): ITopic[] => items.map(topic => normalizeTopic(topic, authUserId));
 
   const mergeLocalBotTopics = (items: ITopic[]): ITopic[] => {
     const localBotTopics = topics.value.filter(topic => isLocalBotTopic(topic));
@@ -357,6 +387,142 @@ const createTopicsApi = () => {
     schedulePersistTopics();
   };
 
+  const cleanupFavoriteTopicSystemMessages = (topic: ITopic): void => {
+    if (
+      cleanedFavoriteSystemTopicIds.has(topic.id) ||
+      favoriteSystemCleanupPromises.has(topic.id)
+    ) {
+      return;
+    }
+
+    const cleanupPromise = (async () => {
+      try {
+        const sdk = getChatSDK();
+
+        if (!sdk) {
+          return;
+        }
+
+        const recentMessages = await sdk.getMessages(topic.id, {
+          limit: 100,
+          newMessages: true
+        });
+        const systemMessages = (Array.isArray(recentMessages)
+          ? recentMessages
+          : []
+        ).filter(message => message.isSystem && message.id);
+
+        if (!systemMessages.length) {
+          cleanedFavoriteSystemTopicIds.add(topic.id);
+          return;
+        }
+
+        for (let attempt = 0; attempt < 40 && !sdk.isConnected(); attempt += 1) {
+          await new Promise(resolve => setTimeout(resolve, 250));
+        }
+
+        if (!sdk.isConnected()) {
+          return;
+        }
+
+        const allDeletesQueued = systemMessages.every(message => {
+          const queued = sdk.sendWebSocketEvent(
+            WebSocketEventType.DELETE_MESSAGE,
+            {
+              messageId: message.id,
+              topicId: topic.id
+            }
+          );
+
+          if (queued) {
+            deleteMessageFromLocal(topic.id, message.id);
+          }
+
+          return queued;
+        });
+
+        if (allDeletesQueued) {
+          cleanedFavoriteSystemTopicIds.add(topic.id);
+        }
+      } catch (cleanupError) {
+        console.warn(
+          'Не удалось удалить системные сообщения из Избранного:',
+          cleanupError
+        );
+      } finally {
+        favoriteSystemCleanupPromises.delete(topic.id);
+      }
+    })();
+
+    favoriteSystemCleanupPromises.set(topic.id, cleanupPromise);
+  };
+
+  const ensureFavoriteTopic = async (
+    userId = authedUser.value?.id
+  ): Promise<ITopic | null> => {
+    if (!userId) {
+      return null;
+    }
+
+    const existingFavoriteTopic = topics.value.find(topic =>
+      isFavoriteTopic(topic, userId)
+    );
+
+    if (existingFavoriteTopic) {
+      cleanupFavoriteTopicSystemMessages(existingFavoriteTopic);
+      return existingFavoriteTopic;
+    }
+
+    if (favoriteTopicCreationPromise) {
+      return favoriteTopicCreationPromise;
+    }
+
+    favoriteTopicCreationPromise = (async () => {
+      try {
+        const sdk = getChatSDK();
+        const favoriteStore = await sdk.createGroup({
+          title: FAVORITE_TOPIC_NAME,
+          description: FAVORITE_TOPIC_DESCRIPTION,
+          avatarUrl: '',
+          memberIds: [],
+          admins: [userId]
+        });
+
+        if (!favoriteStore?.topicId) {
+          throw new Error('Сервер не вернул topicId для Избранного');
+        }
+
+        try {
+          await sdk.togglePinTopic(favoriteStore.topicId);
+        } catch (pinError) {
+          console.warn(
+            'Не удалось закрепить Избранное после создания:',
+            pinError
+          );
+        }
+
+        const refreshedTopics = await sdk.getTopics();
+        setTopics(refreshedTopics.data || []);
+
+        const favoriteTopic =
+          topics.value.find(topic => isFavoriteTopic(topic, userId)) || null;
+
+        if (favoriteTopic) {
+          cleanupFavoriteTopicSystemMessages(favoriteTopic);
+        }
+
+        return favoriteTopic;
+      } catch (creationError) {
+        console.error('Не удалось создать Избранное:', creationError);
+        return null;
+      } finally {
+        favoriteTopicCreationPromise = null;
+      }
+    })();
+
+    return favoriteTopicCreationPromise;
+  };
+
   const applyNativeTopicSnapshot = (
     nativeTopics: ITopic[],
     userId?: string
@@ -365,7 +531,7 @@ const createTopicsApi = () => {
       return topics.value;
     }
 
-    topics.value = normalizeTopics(mergeLocalBotTopics(nativeTopics));
+    topics.value = normalizeTopics(mergeLocalBotTopics(nativeTopics), userId);
     void saveCachedTopics(stripEphemeralTopicState(topics.value || []), userId);
     void warmShadowUnreadStateForTopics(topics.value, userId);
 
@@ -440,7 +606,7 @@ const createTopicsApi = () => {
     );
 
     if (cachedTopics.length > 0) {
-      topics.value = normalizeTopics(cachedTopics);
+      topics.value = normalizeTopics(cachedTopics, userId);
       await warmShadowUnreadStateForTopics(topics.value, userId);
     }
 
@@ -456,6 +622,7 @@ const createTopicsApi = () => {
       const response = await sdk.getTopics();
 
       setTopics(response.data);
+      await ensureFavoriteTopic();
       const serverActiveCalls = response.data
         .filter(
           topic =>
@@ -475,7 +642,7 @@ const createTopicsApi = () => {
       const { syncServerActiveCalls } = await import('../services/useCalls');
       await syncServerActiveCalls(serverActiveCalls);
       await warmShadowUnreadStateForTopics(topics.value);
-      return response.data;
+      return topics.value;
     } catch (err) {
       error.value = (err as Error).message;
       console.error('Failed to fetch topics:', error.value);
@@ -528,8 +695,7 @@ const createTopicsApi = () => {
       if (lastMessage) {
         topic.lastMessage = resolveLatestMessage(topic, lastMessage);
       } else {
-        const messages = getFullMessagesByTopicId(topicId);
-        topic.lastMessage = messages.at(-1);
+        topic.lastMessage = resolveLatestMessage(topic);
       }
 
       if (lastMessage?.senderUserId) {
@@ -548,10 +714,7 @@ const createTopicsApi = () => {
     topicId: string,
     messageIds: string[]
   ): void => {
-    const groups = getGroupList();
-    const topic = [...topics.value, ...groups].find(
-      topic => topic.id === topicId
-    );
+    const topic = topicsById.value.get(topicId);
     if (topic) {
       const lastMessage = topic.lastMessage;
       if (lastMessage && messageIds.includes(lastMessage.id)) {
@@ -564,10 +727,7 @@ const createTopicsApi = () => {
   };
 
   const changeUnreadMessageCount = (delta: number, topicId: string) => {
-    const groups = getGroupList();
-    const topic = [...topics.value, ...groups].find(
-      topic => topic.id === topicId
-    );
+    const topic = topicsById.value.get(topicId);
     if (topic) {
       if (!topic.unreadMessageCount) {
         topic.unreadMessageCount = 0;
@@ -658,9 +818,9 @@ const createTopicsApi = () => {
   const clearTopicReadPreview = (
     topicId: string,
     messageIds?: string[]
-  ): void => {
+  ): boolean => {
     if (!topicId || !topicReadPreviewIds.value[topicId]?.length) {
-      return;
+      return false;
     }
 
     if (!messageIds || messageIds.length === 0) {
@@ -668,7 +828,7 @@ const createTopicsApi = () => {
       delete next[topicId];
       topicReadPreviewIds.value = next;
       syncTopicUnreadState(topicId);
-      return;
+      return true;
     }
 
     const nextIds = (topicReadPreviewIds.value[topicId] || []).filter(
@@ -681,13 +841,11 @@ const createTopicsApi = () => {
     };
 
     syncTopicUnreadState(topicId);
+    return true;
   };
 
   const syncTopicUnreadState = (topicId: string): void => {
-    const groups = getGroupList();
-    const topic = [...topics.value, ...groups].find(
-      item => item.id === topicId
-    );
+    const topic = topicsById.value.get(topicId);
 
     if (!topic || !authedUser.value?.id) {
       return;
@@ -700,13 +858,6 @@ const createTopicsApi = () => {
     const effectiveServerUnreadCount = Math.max(
       0,
       baseUnreadCount - previewReadIds.size
-    );
-    const unreadMessages = messages.filter(
-      message =>
-        isUnreadTrackableMessageForUser(message, currentUserId) &&
-        message.senderUserId !== currentUserId &&
-        message.isReadByMe !== true &&
-        !previewReadIds.has(message.id)
     );
     const shadowReadStateExists = hasCachedShadowReadState(
       topicId,
@@ -721,26 +872,6 @@ const createTopicsApi = () => {
     const shadowLastReadTimestamp = shadowLastReadMessage
       ? getMessageTimestamp(shadowLastReadMessage)
       : new Date(shadowReadState?.lastReadAt || 0).getTime();
-    const computedUnreadMessages = shadowReadStateExists
-      ? messages.filter(message => {
-          if (
-            !isUnreadTrackableMessageForUser(message, currentUserId) ||
-            message.senderUserId === currentUserId ||
-            previewReadIds.has(message.id)
-          ) {
-            return false;
-          }
-
-          if (
-            !shadowReadState?.lastReadMessageId &&
-            !shadowReadState?.lastReadAt
-          ) {
-            return true;
-          }
-
-          return getMessageTimestamp(message) > shadowLastReadTimestamp;
-        })
-      : unreadMessages;
     const latestKnownMessage = resolveLatestMessage(topic);
     const latestKnownMessageTimestamp = getMessageTimestamp(latestKnownMessage);
     const hasLoadedRanges = hasCachedShadowLoadedRanges(topicId, currentUserId);
@@ -752,9 +883,43 @@ const createTopicsApi = () => {
         latestKnownMessageTimestamp,
         currentUserId
       );
-    const hasLatestMessageInLocalCache =
-      !latestKnownMessage?.id ||
-      messages.some(message => message.id === latestKnownMessage.id);
+    let unreadMessageCount = 0;
+    let computedUnreadMessageCount = 0;
+    let unreadHasTaggedMessage = false;
+    let computedUnreadHasTaggedMessage = false;
+    let hasLatestMessageInLocalCache = !latestKnownMessage?.id;
+    const hasShadowReadBoundary = Boolean(
+      shadowReadState?.lastReadMessageId || shadowReadState?.lastReadAt
+    );
+
+    for (const message of messages) {
+      if (message.id === latestKnownMessage?.id) {
+        hasLatestMessageInLocalCache = true;
+      }
+
+      if (
+        !isUnreadTrackableMessageForUser(message, currentUserId) ||
+        message.senderUserId === currentUserId ||
+        previewReadIds.has(message.id)
+      ) {
+        continue;
+      }
+
+      const isTagged = Boolean(message.taggedUserIds?.includes(currentUserId));
+      if (message.isReadByMe !== true) {
+        unreadMessageCount += 1;
+        unreadHasTaggedMessage ||= isTagged;
+      }
+
+      if (
+        shadowReadStateExists &&
+        (!hasShadowReadBoundary ||
+          getMessageTimestamp(message) > shadowLastReadTimestamp)
+      ) {
+        computedUnreadMessageCount += 1;
+        computedUnreadHasTaggedMessage ||= isTagged;
+      }
+    }
     const shouldUseComputedUnread =
       shadowReadStateExists &&
       (effectiveServerUnreadCount === 0 ||
@@ -763,19 +928,18 @@ const createTopicsApi = () => {
       !!latestKnownMessage &&
       isUnreadIgnoredMessageForUser(latestKnownMessage, currentUserId) &&
       effectiveServerUnreadCount <= 1 &&
-      unreadMessages.length === 0;
+      unreadMessageCount === 0;
 
-    const computedUnreadCount = computedUnreadMessages.length;
     const nextUnreadCount = shouldSuppressUnreadForNonTrackableLatestMessage
       ? 0
       : shouldUseComputedUnread
-        ? Math.min(effectiveServerUnreadCount, computedUnreadCount)
+        ? Math.min(effectiveServerUnreadCount, computedUnreadMessageCount)
         : effectiveServerUnreadCount;
     const nextTaggedMe =
       nextUnreadCount > 0 &&
-      (shouldUseComputedUnread ? computedUnreadMessages : unreadMessages).some(
-        message => message.taggedUserIds?.includes(currentUserId)
-      );
+      (shouldUseComputedUnread
+        ? computedUnreadHasTaggedMessage
+        : unreadHasTaggedMessage);
 
     if (
       topic.unreadMessageCount === nextUnreadCount &&
@@ -793,10 +957,7 @@ const createTopicsApi = () => {
   };
 
   const resetTopicUnreadState = (topicId: string): void => {
-    const groups = getGroupList();
-    const topic = [...topics.value, ...groups].find(
-      topic => topic.id === topicId
-    );
+    const topic = topicsById.value.get(topicId);
 
     if (!topic) {
       return;
@@ -1065,7 +1226,9 @@ const createTopicsApi = () => {
       const sdk = getChatSDK();
       await sdk.togglePinTopic(topic.id);
 
-      if (topic.type === TopicType.DM) {
+      if (isFavoriteTopic(topic, authedUser.value?.id)) {
+        updateLocalTopicInfo(topic.id, { isPin: !topic.info.isPin });
+      } else if (topic.type === TopicType.DM) {
         updateLocalTopicInfo(topic.id, { isPin: !topic.info.isPin });
       } else if (topic.type === TopicType.Group) {
         updateLocalGroupInfo(topic.id, { isPin: !topic.info.isPin });
@@ -1079,7 +1242,9 @@ const createTopicsApi = () => {
     try {
       const sdk = getChatSDK();
       await sdk.toggleMuteTopic(topic.id);
-      if (topic.type === TopicType.DM) {
+      if (isFavoriteTopic(topic, authedUser.value?.id)) {
+        updateLocalTopicInfo(topic.id, { isMute: !topic.info.isMute });
+      } else if (topic.type === TopicType.DM) {
         updateLocalTopicInfo(topic.id, { isMute: !topic.info.isMute });
       } else if (topic.type === TopicType.Group) {
         updateLocalGroupInfo(topic.id, { isMute: !topic.info.isMute });
@@ -1095,7 +1260,9 @@ const createTopicsApi = () => {
   ) => {
     const previousMarkedUnread = Boolean(topic.info?.isMarkedUnread);
     const applyMarkedUnread = (value: boolean) => {
-      if (topic.type === TopicType.DM) {
+      if (isFavoriteTopic(topic, authedUser.value?.id)) {
+        updateLocalTopicInfo(topic.id, { isMarkedUnread: value });
+      } else if (topic.type === TopicType.DM) {
         updateLocalTopicInfo(topic.id, { isMarkedUnread: value });
       } else if (topic.type === TopicType.Group) {
         updateLocalGroupInfo(topic.id, { isMarkedUnread: value });
@@ -1228,11 +1395,7 @@ const createTopicsApi = () => {
 
   const getSelectedTopic = (
     topicId: string = route.value.id
-  ): ITopic | undefined => {
-    const groups = getGroupList();
-
-    return [...topics.value, ...groups].find(topic => topic.id === topicId);
-  };
+  ): ITopic | undefined => topicsById.value.get(topicId);
 
   const isTopicMuted = (topicId: string): boolean => {
     const topic = getSelectedTopic(topicId);

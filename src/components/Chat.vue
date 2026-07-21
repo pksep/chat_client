@@ -18,7 +18,6 @@
       </div>
       <div
         v-if="route.id"
-        :key="mobileRouteKey"
         :class="[
           'chat__mobile-route-view chat__mobile-route-view--messages',
           mobileTransitionName,
@@ -39,7 +38,6 @@
           v-if="isMobileMessageListMounted"
           ref="messageListRef"
           :defer-content-render="false"
-          :suppress-initial-skeleton="true"
           :baseUrl="props.baseUrl"
           :contact="props.contact"
           :user="authUser"
@@ -139,11 +137,6 @@ const renderedMessageTopic = ref<IMessageRenderedTopicState>({
   messageCount: 0,
   isCurrent: false
 });
-const mobileRouteKey = computed(() =>
-  route.value.id
-    ? `topic:${route.value.type}:${route.value.id}`
-    : `list:${route.value.type || 'default'}`
-);
 const pinnedMessagesTopicId = computed(
   () => renderedMessageTopic.value.topicId
 );
@@ -318,6 +311,12 @@ const handleMobileRouteAnimationEnd = (event: AnimationEvent): void => {
     return;
   }
 
+  // The transition class carries `will-change: transform, opacity`. Keeping
+  // it after the 220 ms entrance animation promotes the whole chat route to a
+  // permanent compositor layer. Android WebView then has to raster a large
+  // scrolling descendant inside that layer and can show the wallpaper while
+  // the message tiles catch up during a fast fling.
+  mobileTransitionName.value = '';
   revealMobileMessageContent(mobileRouteContentToken);
 };
 

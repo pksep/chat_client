@@ -239,6 +239,17 @@
         </Button>
 
         <Button
+          v-if="hasDownloadableMedia"
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          @click.stop="handleDownloadMessageMedia"
+          :data-testid="`${props.dataTestid}-MessageBubble-DownloadButton`"
+        >
+          <Icon :name="IconNameEnum.download" />
+          Скачать
+        </Button>
+
+        <Button
           v-if="canShowMessageDetails"
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.small"
@@ -443,7 +454,8 @@ const emits = defineEmits([
   'unmount-edit-message-id',
   'unmount-reply-message-id',
   'unmount-forward-message',
-  'unmount-retry-message-id'
+  'unmount-retry-message-id',
+  'unmount-download-message-media'
 ]);
 
 const quickReactonList = computed(() => ['❤️', '🔥', '👍', '😂', '👌', '😭']);
@@ -477,6 +489,7 @@ const isAllDeletableSelectedMessages = computed(() => {
 const isSelectionContextMenu = computed(
   () => !!props.isSelectionMode && !!props.isSelected
 );
+const hasDownloadableMedia = computed(() => !!props.media?.length);
 const isGroupTopic = computed(
   () => currentTopic.value?.type === TopicType.Group
 );
@@ -992,6 +1005,11 @@ const handleSelectMessage = () => {
   }
 
   enterMessageSelection(props.topicId, message);
+  handleClosePopover();
+};
+
+const handleDownloadMessageMedia = () => {
+  emits('unmount-download-message-media');
   handleClosePopover();
 };
 

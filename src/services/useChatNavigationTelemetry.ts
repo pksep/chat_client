@@ -12,7 +12,10 @@ type ChatRouteSnapshot = {
   pathname?: string;
 };
 
-type TopicRouteType = typeof RouteTypes.DIALOGS | typeof RouteTypes.GROUP;
+type TopicRouteType =
+  | typeof RouteTypes.DIALOGS
+  | typeof RouteTypes.GROUP
+  | typeof RouteTypes.FAVORITES;
 
 export type ChatTopicOpenTelemetryMeta = {
   traceId: string;
@@ -87,6 +90,10 @@ const getRouteSnapshot = (): ChatRouteSnapshot => {
 };
 
 const getExpectedRouteType = (topicType?: string): TopicRouteType | null => {
+  if (topicType === 'FAVORITE') {
+    return RouteTypes.FAVORITES;
+  }
+
   if (topicType === 'DM') {
     return RouteTypes.DIALOGS;
   }

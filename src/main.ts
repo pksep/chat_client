@@ -227,9 +227,13 @@ const mountApp = () => {
 
   app.directive('emoji', emojiDirective);
 
-  window.addEventListener(NATIVE_STARTUP_READY_EVENT, notifyNativeStartupReady, {
-    once: true
-  });
+  window.addEventListener(
+    NATIVE_STARTUP_READY_EVENT,
+    notifyNativeStartupReady,
+    {
+      once: true
+    }
+  );
   app.mount('#app');
   runPostMountStartupTasks();
 };

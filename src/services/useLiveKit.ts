@@ -1562,7 +1562,7 @@ const startDirectCallRecovery = (
   ensureCallTimerContinues();
   isCalling.value = false;
   open.value = true;
-  isModalVisible.value = true;
+  // Preserve the user's minimized state while the call reconnects.
   clearDirectCallRecoveryTimer();
   void recoverDirectCallConnection(directCallRecoveryAttemptId);
   return true;
@@ -3898,7 +3898,9 @@ const connectInvitedGroupCallWithRetry = async (
       },
       'error'
     );
-    showErrorNotification(getConnectErrorMessage(connectError ?? previousError));
+    showErrorNotification(
+      getConnectErrorMessage(connectError ?? previousError)
+    );
     return false;
   }
 
@@ -4039,9 +4041,7 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
 
   clearExplicitHangupState();
   open.value = true;
-  if (!isPassiveCallRecoveryReason(reason)) {
-    isModalVisible.value = true;
-  }
+  // Network recovery must not reopen a call the user has minimized.
   ensureCallTimerContinues();
 
   await recoverActiveCallMediaState(room);
@@ -5051,7 +5051,6 @@ export const handleCallAnswered = async (
 
   if (matchesLocalAccept) {
     open.value = true;
-    isModalVisible.value = true;
   }
 
   const me = getAuthUser();

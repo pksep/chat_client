@@ -361,6 +361,10 @@ const handleMenuToggle = (isOpen: boolean): void => {
 };
 
 const handleHeaderClick = (): void => {
+  if (route.value.type === RouteTypes.FAVORITES) {
+    return;
+  }
+
   if (!isMobile.value) {
     state.activeTabId = 1;
     state.isMenuDesktopOpen = true;
@@ -454,6 +458,7 @@ const isActiveHeader = (
   if (routeObj.id !== null) {
     if (routeObj.type === 'group') return true;
     if (routeObj.type === 'dialogs') return true;
+    if (routeObj.type === 'favorites') return true;
     if (!isMobile.value) {
       return false;
     }
@@ -469,7 +474,10 @@ watch(
   () => [route.value?.id, route.value?.type],
   () => {
     state.isActiveHeader = route.value ? isActiveHeader(route.value) : false;
-    if (route.value.type === RouteTypes.DIALOGS) {
+    if (
+      route.value.type === RouteTypes.DIALOGS ||
+      route.value.type === RouteTypes.FAVORITES
+    ) {
       state.isMenuDesktopOpen = false;
       state.isNewContactOpen = false;
       state.isNewBotOpen = false;

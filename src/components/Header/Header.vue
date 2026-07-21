@@ -49,8 +49,13 @@
       </div>
 
       <template v-else-if="currentTopic">
+        <FavoriteTopicProfile
+          v-if="isFavoriteDialogTopic"
+          class="chat__header-profile"
+          :data-testid="`${props.dataTestid}-Header-FavoriteTopicProfile`"
+        />
         <GroupProfile
-          v-if="currentTopic.type === TopicType.Group"
+          v-else-if="currentTopic.type === TopicType.Group"
           class="chat__header-profile"
           avatar-alt="group-profile-alt"
           :topic="currentRouteGroup || currentTopic"
@@ -81,7 +86,10 @@
         @click.stop
       >
         <div
-          v-if="!isMobile && isTopicSearchAvailable"
+          v-if="
+            isTopicSearchAvailable &&
+            (!isMobile || isFavoriteDialogTopic)
+          "
           class="chat__header-search-trigger"
         >
           <SearchIcon
@@ -95,6 +103,7 @@
             (route.type === RouteTypes.DIALOGS ||
               route.type === RouteTypes.GROUP) &&
             !isBotDialogTopic &&
+            !isFavoriteDialogTopic &&
             !isCallActive &&
             !hasPendingCallForCurrentTopic
           "
@@ -103,6 +112,7 @@
           @click.stop="handleCall"
         />
         <Icon
+          v-if="!isFavoriteDialogTopic && getHeaderContextMenuOptions.length"
           class="chat__header__icon chat__header__icon--more"
           :name="IconNameEnum.moreHorizontal"
           :data-testid="`${props.dataTestid}-Header-PopoverIcon`"
@@ -111,6 +121,7 @@
           "
         />
         <ContextMenu
+          v-if="!isFavoriteDialogTopic && getHeaderContextMenuOptions.length"
           class="chat__header-context-menu"
           :visible="!!isOpen['headerMenu']"
           :position="position"
@@ -368,6 +379,7 @@ import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import GroupProfile from '../GroupProfile/GroupProfile.vue';
+import FavoriteTopicProfile from '../FavoriteTopicProfile.vue';
 import MobileModal from '../UI/MobileModal.vue';
 import {
   Button,
@@ -437,6 +449,7 @@ import {
   type IMessageSearchResult
 } from '../../composables/useMessageSearch';
 import { isBotTopic } from '../../utils/bot';
+import { isFavoriteTopic } from '../../utils/favorite-topic';
 
 const { getSelectedTopic } = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
@@ -483,6 +496,9 @@ const state = reactive({
 
 const currentTopic = computed(() =>
   route.value.id ? getSelectedTopic(route.value.id) : undefined
+);
+const isFavoriteDialogTopic = computed(() =>
+  route.value.type === RouteTypes.FAVORITES || isFavoriteTopic(currentTopic.value)
 );
 const isBotDialogTopic = computed(
   () =>
@@ -579,7 +595,8 @@ const hasTopicSearchQuery = computed(
 const isTopicSearchAvailable = computed(
   () =>
     route.value.type === RouteTypes.DIALOGS ||
-    route.value.type === RouteTypes.GROUP
+    route.value.type === RouteTypes.GROUP ||
+    route.value.type === RouteTypes.FAVORITES
 );
 const hasTopicSearchResults = computed(
   () => topicSearchResults.value.length > 0
@@ -902,7 +919,7 @@ const handleUserProfileClick = (): void => {
 };
 
 const handleClickHeader = async (): Promise<void> => {
-  if (route.value.type === RouteTypes.AI) {
+  if (route.value.type === RouteTypes.AI || isFavoriteDialogTopic.value) {
     return;
   }
 
@@ -929,6 +946,10 @@ const getHeaderContextMenuOptions = computed(() => {
     iconName?: IconNameEnum;
     customIcon?: 'search';
   }> = [];
+
+  if (isFavoriteDialogTopic.value) {
+    return options;
+  }
 
   if (route.value && route.value.type !== RouteTypes.AI) {
     if (isMobile.value && isTopicSearchAvailable.value) {
@@ -957,17 +978,19 @@ const getHeaderContextMenuOptions = computed(() => {
       });
     }
 
-    options.push({
-      value: currentTopic.value?.info?.isMute
-        ? 'Вкл. уведомления'
-        : 'Выкл. уведомления',
-      function: () => {
-        toggleMuteTopic(currentTopic.value);
-      },
-      iconName: currentTopic.value?.info?.isMute
-        ? IconNameEnum.distrub
-        : IconNameEnum.noDistrub
-    });
+    if (!isFavoriteDialogTopic.value) {
+      options.push({
+        value: currentTopic.value?.info?.isMute
+          ? 'Вкл. уведомления'
+          : 'Выкл. уведомления',
+        function: () => {
+          toggleMuteTopic(currentTopic.value);
+        },
+        iconName: currentTopic.value?.info?.isMute
+          ? IconNameEnum.distrub
+          : IconNameEnum.noDistrub
+      });
+    }
 
     if (route.value.type === RouteTypes.GROUP) {
       options.push({
@@ -980,7 +1003,7 @@ const getHeaderContextMenuOptions = computed(() => {
           ? IconNameEnum.deleteSmall
           : IconNameEnum.logout
       });
-    } else {
+    } else if (!isFavoriteDialogTopic.value) {
       options.push({
         value: 'Удалить чат',
         function: handleOpenActionModal,

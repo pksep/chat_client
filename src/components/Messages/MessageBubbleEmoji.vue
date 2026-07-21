@@ -22,7 +22,7 @@
       />
       <MessageAuthorMeta
         v-if="
-          !props.isMeSender && !isDialogRoute && !props.continuesFromPrevious
+          !props.isMeSender && !props.isDialog && !props.continuesFromPrevious
         "
         :sender="props.sender"
         :sender-user="props.senderUser"
@@ -35,7 +35,6 @@
         :message-ex="props.messageEx"
         :is-me-sender="props.isMeSender"
         :reference-width="replyReferenceWidth"
-        :defer-until-measured="true"
         @navigate-message="$emit('navigate-message')"
       />
 
@@ -145,8 +144,6 @@ import MessageStatusIcons from './MessageStatusIcons.vue';
 import MessageEmojies from './MessageEmojies.vue';
 import ErrorIcon from '../UI/ErrorIcon.vue';
 import { MessageStatus } from '../../services/useChatSDK/types';
-import { useUrlWatcher } from '../../composables/navigation';
-import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import MessageBubbleTail from './MessageBubbleTail.vue';
 import MessageAuthorMeta from './MessageAuthorMeta.vue';
 import { useReferenceWidth } from './composables/useReferenceWidth';
@@ -161,12 +158,11 @@ const props = defineProps<IMessageBubbleProps>();
 defineEmits(['navigate-message']);
 
 const emojiArticleRef = ref<HTMLElement | null>(null);
+const hasReplyReference = computed(() => Boolean(props.replyMessage));
 const replyReferenceWidth = useReferenceWidth(emojiArticleRef, {
-  freezeAfterFirstMeasure: true
+  freezeAfterFirstMeasure: true,
+  enabled: hasReplyReference
 });
-
-const route = useUrlWatcher();
-const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
 
 const emojiText = computed(() =>
   (props.message || '')
@@ -192,6 +188,4 @@ watch(
 const showErrorIcon = computed(
   () => props.messageStatus === MessageStatus.NotDelivered
 );
-
-const hasReplyReference = computed(() => Boolean(props.replyMessage));
 </script>

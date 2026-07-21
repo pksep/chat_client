@@ -32,7 +32,6 @@
   align-self: center;
   opacity: 1;
   overflow: hidden;
-  will-change: width, opacity;
   transition:
     width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
     opacity 0.2s ease;
@@ -1183,7 +1182,6 @@ div.message-content__file {
   display: grid;
   gap: 5px;
   transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform;
 }
 
 .message.message--selection-active .message__content__articles {
@@ -1598,6 +1596,16 @@ div.message-content__file {
   .message-group {
     gap: 0;
   }
+
+  /*
+   * Do not keep one sticky compositor constraint per incoming render group.
+   * The avatar is already placed at the end of its group, matching the normal
+   * compact mobile layout without making every fling update dozens of sticky
+   * descendants.
+   */
+  .message-group__avatar-slot--sticky {
+    position: static !important;
+  }
 }
 
 @media screen and (width <= 480px) {
@@ -1634,7 +1642,16 @@ div.message-content__file {
   }
 
   .chat__message-wrapper {
-    padding-bottom: calc(var(--chat-input-height, 70px));
+    padding-bottom: 5px;
+  }
+
+  .chat__message-bubble::after {
+    content: '';
+    display: block;
+    flex: 0 0 calc(var(--chat-input-height, 70px) + 5px);
+    width: 100%;
+    pointer-events: none;
+    overflow-anchor: none;
   }
 }
 

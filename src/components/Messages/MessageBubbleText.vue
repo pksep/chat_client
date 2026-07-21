@@ -27,7 +27,7 @@
       />
       <MessageAuthorMeta
         v-if="
-          !props.isMeSender && !isDialogRoute && !props.continuesFromPrevious
+          !props.isMeSender && !props.isDialog && !props.continuesFromPrevious
         "
         :sender="props.sender"
         :sender-user="props.senderUser"
@@ -35,12 +35,12 @@
         :data-testid="`${props.dataTestid}-AuthorMeta`"
       />
       <MessageReferenceBlock
+        v-if="props.replyMessage || (!showExternalForward && props.forwardUser)"
         :forward-user="showExternalForward ? undefined : props.forwardUser"
         :reply-message="props.replyMessage"
         :message-ex="props.messageEx"
         :is-me-sender="props.isMeSender"
         :reference-width="replyReferenceWidth"
-        :defer-until-measured="true"
         @navigate-message="$emit('navigate-message')"
       />
       <div
@@ -134,14 +134,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import MessageEmojies from './MessageEmojies.vue';
 import ErrorIcon from '../UI/ErrorIcon.vue';
-import { useUrlWatcher } from '../../composables/navigation';
-import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { MessageStatus } from '../../services/useChatSDK/types';
 import MessageReferenceBlock from './MessageReferenceBlock.vue';
 import MessageBubbleTail from './MessageBubbleTail.vue';
@@ -150,7 +148,10 @@ import MessageBubbleCall from './MessageBubbleCall.vue';
 import { parseCallMessage } from '../../utils/parseCallMessage';
 import MessageAuthorMeta from './MessageAuthorMeta.vue';
 import { useReferenceWidth } from './composables/useReferenceWidth';
-import { useMentionUserClick } from './composables/useMentionUserClick';
+import {
+  hasMessageInteractivityCandidates,
+  useMentionUserClick
+} from './composables/useMentionUserClick';
 
 const props = defineProps<IMessageBubbleProps>();
 
@@ -158,12 +159,12 @@ defineEmits(['navigate-message']);
 
 const messageArticleRef = ref<HTMLElement | null>(null);
 const messageHtmlRef = ref<HTMLElement | null>(null);
+const hasReplyReference = computed(() => Boolean(props.replyMessage));
 const replyReferenceWidth = useReferenceWidth(messageArticleRef, {
-  freezeAfterFirstMeasure: true
+  freezeAfterFirstMeasure: true,
+  enabled: hasReplyReference
 });
 
-const route = useUrlWatcher();
-const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
 const { handleMentionUserClick, syncMentionUserInteractivity } =
   useMentionUserClick();
 
@@ -171,7 +172,7 @@ const showErrorIcon = computed(
   () => props.messageStatus === MessageStatus.NotDelivered
 );
 const showExternalForward = computed(
-  () => !isDialogRoute.value && Boolean(props.forwardUser)
+  () => !props.isDialog && Boolean(props.forwardUser)
 );
 const hasReactions = computed(() => Boolean(props.reactions?.length));
 const plainMessageText = computed(() =>
@@ -185,11 +186,13 @@ const singleEmojiPattern =
   /^(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})(?:\uFE0F|\uFE0E)?(?:\u200D(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})(?:\uFE0F|\uFE0E)?)*$/u;
 const isCallMessage = computed(() =>
   Boolean(
-    parseCallMessage(props.message || '', {
-      messageEx: props.messageEx,
-      isMeSender: props.isMeSender,
-      authUserId: props.authUserId
-    })
+    props.parsedCallMessage !== undefined
+      ? props.parsedCallMessage
+      : parseCallMessage(props.message || '', {
+          messageEx: props.messageEx,
+          isMeSender: props.isMeSender,
+          authUserId: props.authUserId
+        })
   )
 );
 const isSingleEmojiMessage = computed(() =>
@@ -197,6 +200,10 @@ const isSingleEmojiMessage = computed(() =>
 );
 
 const syncMentions = async (): Promise<void> => {
+  if (!hasMessageInteractivityCandidates(props.message)) {
+    return;
+  }
+
   await nextTick();
   syncMentionUserInteractivity(messageHtmlRef.value);
 };
@@ -217,8 +224,4 @@ watch(
   },
   { immediate: true }
 );
-
-onMounted(() => {
-  void syncMentions();
-});
 </script>

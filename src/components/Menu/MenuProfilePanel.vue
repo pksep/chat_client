@@ -509,6 +509,7 @@
             class="message__bubble system-message-text"
             :message="wallpaperPreviewIncomingMessage"
             time="12:10"
+            :is-dialog="true"
             data-testid="WallpaperPreview-Incoming"
           />
           <MessageBubble
@@ -517,6 +518,7 @@
             time="12:10"
             :is-me-sender="true"
             :is-read="true"
+            :is-dialog="true"
             data-testid="WallpaperPreview-Outgoing"
           />
         </div>
@@ -576,6 +578,7 @@
             class="message__bubble"
             :message="wallpaperPreviewIncomingMessage"
             time="12:10"
+            :is-dialog="true"
             data-testid="WallpaperPreview-Incoming"
           />
           <MessageBubble
@@ -584,6 +587,7 @@
             time="12:10"
             :is-me-sender="true"
             :is-read="true"
+            :is-dialog="true"
             data-testid="WallpaperPreview-Outgoing"
           />
         </div>

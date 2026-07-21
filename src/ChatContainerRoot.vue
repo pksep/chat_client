@@ -51,10 +51,7 @@ import {
 import { useResizeState } from './composables/useResizeState';
 import { MAX_W_MD } from './utils/constants';
 import { RouteTypes } from './composables/navigation/useUrlRouting';
-import {
-  clearVisibleMessagesForTopic,
-  hydrateMessagesFromCache
-} from './services/useMessages';
+import { hydrateMessagesFromCache } from './services/useMessages';
 import { useShareSelection } from './composables/useShareSelection';
 import { isGroupCallInviteUrl } from './utils/groupCallInviteUrl';
 import { installNotoEmojiFontFaces } from './composables/useEmojiStyle';
@@ -64,23 +61,18 @@ const props = defineProps<IChatContainerProps>();
 
 installNotoEmojiFontFaces();
 
-const { fetchAllTopics, getTopicList, setTopics } = useTopics();
+const { fetchAllTopics } = useTopics();
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const route = useUrlWatcher();
 let removeAppVisibilityListener: (() => void) | null = null;
 const { hasPendingShareBatches, isShareSelectionActive, startShareSelection } =
   useShareSelection();
 let hydratedCacheUserId: string | undefined;
-const MOBILE_CACHED_ACTIVE_TOPIC_LIMIT = 180;
+const MOBILE_CACHED_ACTIVE_TOPIC_LIMIT = 48;
 const ONLINE_STARTUP_BACKGROUND_SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 const hasStartupNetwork = (): boolean =>
   typeof navigator === 'undefined' || navigator.onLine;
-
-type CriticalCacheHydrationOptions = {
-  allowTopicCache?: boolean;
-  allowActiveMessageCache?: boolean;
-};
 
 const getStartupSnapshotMaxAge = (): number | undefined =>
   hasStartupNetwork()
@@ -114,14 +106,6 @@ const importStartupBackgroundSnapshot = (
       hasStartupNetwork() && route.value.id ? [route.value.id] : undefined
   });
 
-const shouldAllowStartupTopicCache = (
-  hasFreshBackgroundSnapshot = false
-): boolean =>
-  isMobile.value || !hasStartupNetwork() || hasFreshBackgroundSnapshot;
-
-const shouldAllowStartupActiveMessageCache = (): boolean =>
-  isMobile.value || !hasStartupNetwork();
-
 const waitForStartupIdle = (): Promise<void> =>
   new Promise(resolve => {
     if ('requestIdleCallback' in window) {
@@ -146,9 +130,6 @@ const runDeferredStartupTask = (
     });
 };
 
-const shouldHydrateCacheBeforeStartupSnapshot = (): boolean =>
-  shouldAllowStartupTopicCache(false) || shouldAllowStartupActiveMessageCache();
-
 const scheduleStartupBackgroundSnapshotImport = (
   userId: string | undefined,
   source: string
@@ -162,18 +143,6 @@ const scheduleStartupBackgroundSnapshotImport = (
   });
 };
 
-const getKnownTopicIds = (): string[] =>
-  Array.from(
-    new Set(
-      [
-        ...getTopicList()
-          .map(topic => topic.id)
-          .filter(Boolean),
-        route.value.id || ''
-      ].filter(Boolean)
-    )
-  );
-
 const hydrateActiveCachedMessages = async (userId?: string): Promise<void> => {
   const activeTopicId = route.value.id || '';
 
@@ -186,34 +155,10 @@ const hydrateActiveCachedMessages = async (userId?: string): Promise<void> => {
   });
 };
 
-const scheduleBackgroundCachedMessageHydration = (userId?: string): void => {
-  const activeTopicId = route.value.id || '';
-  const topicIds = getKnownTopicIds().filter(
-    topicId => topicId !== activeTopicId
-  );
-
-  if (topicIds.length === 0) {
-    return;
-  }
-
-  runDeferredStartupTask('cached messages hydration', async () => {
-    for (const topicId of topicIds) {
-      await hydrateMessagesFromCache(topicId, userId);
-      await waitForStartupIdle();
-    }
-  });
-};
-
-const hydrateCriticalCache = async (
-  userId?: string,
-  opts?: CriticalCacheHydrationOptions
-): Promise<void> => {
-  const allowTopicCache = !!opts?.allowTopicCache;
-  const allowActiveMessageCache = !!opts?.allowActiveMessageCache;
+const hydrateCriticalCache = async (userId?: string): Promise<void> => {
   const usersHydration = hydrateUsersFromCache(userId);
-  const topicsHydration = allowTopicCache
-    ? hydrateTopicsFromCache(userId)
-    : Promise.resolve([]);
+  const topicsHydration = hydrateTopicsFromCache(userId);
+  const activeMessagesHydration = hydrateActiveCachedMessages(userId);
 
   await usersHydration;
 
@@ -221,25 +166,8 @@ const hydrateCriticalCache = async (
     applyCachedAuthUser(userId);
   }
 
-  if (!allowTopicCache) {
-    setTopics([]);
-  } else {
-    await topicsHydration;
-  }
-
-  if (allowActiveMessageCache) {
-    await hydrateActiveCachedMessages(userId);
-  } else if (route.value.id && hasStartupNetwork()) {
-    clearVisibleMessagesForTopic(route.value.id);
-  }
-
-  if (allowTopicCache || allowActiveMessageCache) {
-    scheduleBackgroundCachedMessageHydration(userId);
-    hydratedCacheUserId = userId;
-    return;
-  }
-
-  hydratedCacheUserId = undefined;
+  await Promise.all([topicsHydration, activeMessagesHydration]);
+  hydratedCacheUserId = userId;
 };
 
 const hydrateFreshChatContent = async (userId?: string): Promise<boolean> => {
@@ -263,7 +191,8 @@ const getActiveChatTopicId = (): string | null => {
   if (
     route.value.id &&
     (route.value.type === RouteTypes.DIALOGS ||
-      route.value.type === RouteTypes.GROUP)
+      route.value.type === RouteTypes.GROUP ||
+      route.value.type === RouteTypes.FAVORITES)
   ) {
     return route.value.id;
   }
@@ -400,7 +329,6 @@ const runAppInitialization = async () => {
     !!bootstrapErpToken && (hasStartupNetwork() || !hasStoredChatSession);
   const initialUserId =
     directAuthSession?.user?.id || getStoredSessionUserId() || '';
-  let startupBackgroundSnapshotImported = false;
   let deferredStartupBackgroundSnapshotUserId: string | undefined;
   const deferStartupBackgroundSnapshot = (
     userId: string | undefined,
@@ -416,27 +344,11 @@ const runAppInitialization = async () => {
 
   if (initialUserId) {
     setCurrentUserId(initialUserId);
-    if (shouldHydrateCacheBeforeStartupSnapshot()) {
-      await hydrateCriticalCache(initialUserId, {
-        allowTopicCache: shouldAllowStartupTopicCache(false),
-        allowActiveMessageCache: shouldAllowStartupActiveMessageCache()
-      });
-      deferStartupBackgroundSnapshot(
-        initialUserId,
-        'startup-after-cache-hydration'
-      );
-    } else {
-      startupBackgroundSnapshotImported = await importStartupBackgroundSnapshot(
-        initialUserId,
-        'startup-before-hydration'
-      );
-      await hydrateCriticalCache(initialUserId, {
-        allowTopicCache: shouldAllowStartupTopicCache(
-          startupBackgroundSnapshotImported
-        ),
-        allowActiveMessageCache: shouldAllowStartupActiveMessageCache()
-      });
-    }
+    await hydrateCriticalCache(initialUserId);
+    deferStartupBackgroundSnapshot(
+      initialUserId,
+      'startup-after-cache-hydration'
+    );
   }
 
   try {
@@ -477,43 +389,13 @@ const runAppInitialization = async () => {
     setCurrentUserId(authUserId || undefined);
     if (authData.user) setAuthUser(authData.user);
 
-    const allowActiveMessageCache = shouldAllowStartupActiveMessageCache();
-    const hasCurrentUserStartupSnapshot =
-      startupBackgroundSnapshotImported && authUserId === initialUserId;
-
     if (authUserId !== hydratedCacheUserId) {
-      if (shouldHydrateCacheBeforeStartupSnapshot()) {
-        await hydrateCriticalCache(authUserId || undefined, {
-          allowTopicCache: shouldAllowStartupTopicCache(
-            hasCurrentUserStartupSnapshot
-          ),
-          allowActiveMessageCache
-        });
-        deferStartupBackgroundSnapshot(
-          authUserId || undefined,
-          'post-auth-after-cache-hydration'
-        );
-      } else {
-        const postAuthBackgroundSnapshotImported =
-          await importStartupBackgroundSnapshot(
-            authUserId || undefined,
-            'post-auth-before-hydration'
-        );
-        await hydrateCriticalCache(authUserId || undefined, {
-          allowTopicCache: shouldAllowStartupTopicCache(
-            hasCurrentUserStartupSnapshot ||
-              postAuthBackgroundSnapshotImported
-          ),
-          allowActiveMessageCache
-        });
-      }
+      await hydrateCriticalCache(authUserId || undefined);
+      deferStartupBackgroundSnapshot(
+        authUserId || undefined,
+        'post-auth-after-cache-hydration'
+      );
     } else {
-      if (
-        shouldAllowStartupTopicCache(hasCurrentUserStartupSnapshot) ||
-        allowActiveMessageCache
-      ) {
-        scheduleBackgroundCachedMessageHydration(authUserId || undefined);
-      }
       deferStartupBackgroundSnapshot(
         authUserId || undefined,
         'post-auth-after-cache-hydration'
@@ -545,10 +427,7 @@ const runAppInitialization = async () => {
       }
 
       if (initialUserId && hydratedCacheUserId !== initialUserId) {
-        await hydrateCriticalCache(initialUserId, {
-          allowTopicCache: true,
-          allowActiveMessageCache: true
-        });
+        await hydrateCriticalCache(initialUserId);
       }
 
       return;

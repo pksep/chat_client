@@ -1,5 +1,6 @@
 import { MediaTypeType, Reaction } from '@pksep/zod-shared-chat';
 import { IMedia, IMessage, IUser } from 'src/components/interfaces/interfaces';
+import type { ParsedCallMessage } from '../../../utils/parseCallMessage';
 
 export interface MessageMediaItem {
   id: string;
@@ -19,6 +20,9 @@ export interface IMessageBubbleProps {
   isPin?: boolean;
   isEdit?: boolean;
   isMeSender?: boolean;
+  isDialog?: boolean;
+  isMobile?: boolean;
+  parsedCallMessage?: ParsedCallMessage | null;
   sender?: string;
   senderUser?: IUser;
   senderRole?: string;

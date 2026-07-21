@@ -23,6 +23,7 @@
       }"
     >
       <Checkbox
+        v-if="props.isSelectionMode"
         :data-testid="props.selectionTestId"
         :model-value="!!props.isSelected"
         :circular="CheckboxCircularEnum.circled"
@@ -52,9 +53,10 @@
       />
     </div>
     <SliderModal
+      v-if="sliderElements.length > 0"
       @touchstart.stop
       @touchend.stop
-      :open="sliderElements.length > 0"
+      :open="true"
       @close="closeSlider"
       :items="sliderElements"
       :default-index="defaultIndexSlider"
@@ -62,7 +64,7 @@
     />
 
     <MessageContextMenu
-      v-if="isOpen"
+      v-if="isContextMenuOpen"
       :is-open="isOpen"
       :position="position"
       :message-id="props.messageId"
@@ -71,12 +73,14 @@
       :is-selected="props.isSelected"
       :is-me-sender="props.isMeSender"
       :message="props.message"
+      :media="props.media"
       :is-pin="props.isPin"
       :data-testid="dataTestid"
       @unmount-edit-message-id="emits('unmount-edit-message-id', $event)"
       @unmount-reply-message-id="emits('unmount-reply-message-id', $event)"
       @unmount-forward-message="emits('unmount-forward-message', $event)"
       @unmount-retry-message-id="emits('unmount-retry-message-id', $event)"
+      @unmount-download-message-media="handleDownloadMessageMedia"
     />
   </div>
 </template>
@@ -114,8 +118,6 @@ import {
 } from '../../utils/messageReplyQuote';
 import { useBackButton } from '../../composables/useBackButton';
 import { setReactionMessage } from '../../services/useChat';
-import { useResizeState } from '../../composables/useResizeState';
-import { MAX_W_MD } from '../../utils/constants';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -137,7 +139,9 @@ const messageArticlesStyles = computed(() => ({
 }));
 
 const { getFullMediaPath, isSliderContentUrl } = useMessageMedia();
-const { state: isMobile } = useResizeState(MAX_W_MD);
+const isContextMenuOpen = computed(
+  () => !!props.messageId && isOpen.value[props.messageId] === true
+);
 
 const sliderElements = ref<{ path: string; name: string; file?: File }[]>([]);
 const defaultIndexSlider = ref<number>(0);
@@ -260,6 +264,12 @@ const downloadMediaFile = async (media: IMedia) => {
   document.body.removeChild(link);
 };
 
+const handleDownloadMessageMedia = async () => {
+  for (const media of props.media || []) {
+    await downloadMediaFile(media);
+  }
+};
+
 const setSliderElement = async (medias: IMedia[], defaultIndex: number = 0) => {
   if (props.isSelectionMode) {
     return;
@@ -358,7 +368,7 @@ const handleMessageClick = () => {
 
 const handleDoubleTap = (event: MouseEvent): void => {
   if (
-    !isMobile.value ||
+    !props.isMobile ||
     props.isSelectionMode ||
     props.loader ||
     !props.messageId ||
