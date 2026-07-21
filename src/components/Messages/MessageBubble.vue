@@ -63,25 +63,26 @@
       @keydown.escape.stop="closeSlider"
     />
 
-    <MessageContextMenu
-      v-if="isContextMenuOpen"
-      :is-open="isOpen"
-      :position="position"
-      :message-id="props.messageId"
-      :topic-id="props.topicId"
-      :is-selection-mode="props.isSelectionMode"
-      :is-selected="props.isSelected"
-      :is-me-sender="props.isMeSender"
-      :message="props.message"
-      :media="props.media"
-      :is-pin="props.isPin"
-      :data-testid="dataTestid"
-      @unmount-edit-message-id="emits('unmount-edit-message-id', $event)"
-      @unmount-reply-message-id="emits('unmount-reply-message-id', $event)"
-      @unmount-forward-message="emits('unmount-forward-message', $event)"
-      @unmount-retry-message-id="emits('unmount-retry-message-id', $event)"
-      @unmount-download-message-media="handleDownloadMessageMedia"
-    />
+    <Teleport v-if="isContextMenuOpen" to="body">
+      <MessageContextMenu
+        :is-open="isOpen"
+        :position="position"
+        :message-id="props.messageId"
+        :topic-id="props.topicId"
+        :is-selection-mode="props.isSelectionMode"
+        :is-selected="props.isSelected"
+        :is-me-sender="props.isMeSender"
+        :message="props.message"
+        :media="props.media"
+        :is-pin="props.isPin"
+        :data-testid="dataTestid"
+        @unmount-edit-message-id="emits('unmount-edit-message-id', $event)"
+        @unmount-reply-message-id="emits('unmount-reply-message-id', $event)"
+        @unmount-forward-message="emits('unmount-forward-message', $event)"
+        @unmount-retry-message-id="emits('unmount-retry-message-id', $event)"
+        @unmount-download-message-media="handleDownloadMessageMedia"
+      />
+    </Teleport>
   </div>
 </template>
 
