@@ -9,6 +9,7 @@ import {
   createLocalVideoTrack,
   ConnectionQuality,
   ConnectionState,
+  DefaultReconnectPolicy,
   DisconnectReason,
   LocalTrackPublication,
   LocalVideoTrack,
@@ -199,6 +200,9 @@ let directCallRecoveryDeadline = 0;
 let directCallRecoveryRoomId: string | null = null;
 let directCallRecoveryTopicId: string | null = null;
 let activeCallNetworkRecoveryPromise: Promise<boolean> | null = null;
+let localVideoQualityRecoveryTimeout: ReturnType<typeof setTimeout> | null =
+  null;
+let localVideoPublishingQuality = VideoQuality.HIGH;
 const participantReactionTimeouts = new Map<
   string,
   ReturnType<typeof setTimeout>
@@ -219,9 +223,10 @@ const NATIVE_CALL_ACTION_RETRY_DELAY_MS = 500;
 const DISMISSED_INCOMING_CALL_TTL_MS = 15000;
 const CALL_STATUS_NOTICE_CLOSE_DELAY_MS = 3000;
 const ENDED_CALL_STATUS_NOTICE_CLOSE_DELAY_MS = 1200;
-const DIRECT_CALL_RECONNECT_GRACE_MS = 180000;
+const DIRECT_CALL_RECONNECT_GRACE_MS = 5 * 60_000;
 const DIRECT_CALL_EXPLICIT_LEAVE_SUPPRESSION_MS = 30000;
 const DIRECT_CALL_RECONNECT_POLL_MS = 2000;
+const LOCAL_VIDEO_QUALITY_RECOVERY_DELAY_MS = 10_000;
 const CALL_ISSUE_SIGNAL_CONTEXT_MS = 5 * 60 * 1000;
 const INVITED_GROUP_CALL_CONNECT_ATTEMPTS = 2;
 const INVITED_GROUP_CALL_CONNECT_RETRY_DELAY_MS = 1200;
@@ -238,8 +243,8 @@ const dismissedIncomingCallRooms = new Map<string, number>();
 const dismissedIncomingCallTopics = new Map<string, number>();
 const CAMERA_CAPTURE_DEFAULTS = {
   facingMode: 'user' as const,
-  frameRate: 30,
-  resolution: VideoPresets.h1080.resolution
+  frameRate: 24,
+  resolution: VideoPresets.h720.resolution
 };
 const MANAGED_BACKGROUND_CAMERA_CAPTURE_DEFAULTS = {
   facingMode: 'user' as const,
@@ -247,29 +252,41 @@ const MANAGED_BACKGROUND_CAMERA_CAPTURE_DEFAULTS = {
   resolution: VideoPresets.h720.resolution
 };
 const CAMERA_PUBLISH_DEFAULTS = {
-  degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
-  simulcast: true,
-  videoEncoding: VideoPresets.h1080.encoding,
-  videoSimulcastLayers: [VideoPresets.h216, VideoPresets.h540]
-};
-const MANAGED_BACKGROUND_CAMERA_PUBLISH_DEFAULTS = {
-  degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
+  degradationPreference: 'balanced' as RTCDegradationPreference,
   simulcast: true,
   videoEncoding: VideoPresets.h720.encoding,
-  videoSimulcastLayers: [VideoPresets.h216, VideoPresets.h540]
+  videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360]
+};
+const MANAGED_BACKGROUND_CAMERA_PUBLISH_DEFAULTS = {
+  degradationPreference: 'balanced' as RTCDegradationPreference,
+  simulcast: true,
+  videoEncoding: VideoPresets.h720.encoding,
+  videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360]
 };
 const SCREEN_SHARE_CAPTURE_DEFAULTS = {
   contentHint: 'detail' as const,
-  resolution: ScreenSharePresets.original.resolution,
+  resolution: ScreenSharePresets.h1080fps15.resolution,
   selfBrowserSurface: 'exclude' as const,
   surfaceSwitching: 'include' as const,
   systemAudio: 'exclude' as const
 };
 const SCREEN_SHARE_PUBLISH_DEFAULTS = {
-  degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
-  simulcast: false,
-  screenShareEncoding: ScreenSharePresets.original.encoding
+  degradationPreference: 'balanced' as RTCDegradationPreference,
+  simulcast: true,
+  screenShareEncoding: ScreenSharePresets.h1080fps15.encoding,
+  screenShareSimulcastLayers: [
+    ScreenSharePresets.h360fps3,
+    ScreenSharePresets.h720fps5
+  ]
 };
+const LIVEKIT_RECONNECT_POLICY = new DefaultReconnectPolicy([
+  0,
+  300,
+  1200,
+  2700,
+  4800,
+  ...Array(15).fill(7000)
+]);
 const CALL_AUDIO_CAPTURE_DEFAULTS: AudioCaptureOptions = {
   echoCancellation: true,
   noiseSuppression: true,
@@ -1343,16 +1360,41 @@ const isRecoverableDirectCallSession = (
   );
 };
 
+const isRecoverableActiveCallSession = (
+  targetRoomId?: string | null,
+  targetTopicId?: string | null
+): boolean => {
+  const activeRoomId = targetRoomId ?? roomId.value;
+  const activeTopicId = targetTopicId ?? topicId.value;
+  const matchesCurrentCall =
+    (!!activeRoomId && roomId.value === activeRoomId) ||
+    (!!activeTopicId && topicId.value === activeTopicId);
+
+  return !!(
+    activeRoomId &&
+    activeTopicId &&
+    matchesCurrentCall &&
+    !isIncoming.value &&
+    (isRecoverableDirectCallSession(activeRoomId, activeTopicId) ||
+      isGroupCallSession(activeTopicId))
+  );
+};
+
 const resolveDirectCallRecoverySuccess = (activeRoom: Room | null = room) => {
   if (!directCallRecoveryRoomId || !directCallRecoveryTopicId) {
     return;
   }
 
+  const requiresRemoteParticipant = isRecoverableDirectCallSession(
+    directCallRecoveryRoomId,
+    directCallRecoveryTopicId
+  );
   const recovered =
     !!activeRoom &&
     roomId.value === directCallRecoveryRoomId &&
     topicId.value === directCallRecoveryTopicId &&
-    activeRoom.remoteParticipants.size > 0;
+    activeRoom.state === ConnectionState.Connected &&
+    (!requiresRemoteParticipant || activeRoom.remoteParticipants.size > 0);
 
   if (!recovered) {
     return;
@@ -1393,7 +1435,7 @@ const recoverDirectCallConnection = async (
   if (
     !activeRoomId ||
     !activeTopicId ||
-    !isRecoverableDirectCallSession(activeRoomId, activeTopicId)
+    !isRecoverableActiveCallSession(activeRoomId, activeTopicId)
   ) {
     resetDirectCallRecoveryState();
     return;
@@ -1531,7 +1573,7 @@ const startDirectCallRecovery = (
   if (
     !activeRoomId ||
     !activeTopicId ||
-    !isRecoverableDirectCallSession(activeRoomId, activeTopicId)
+    !isRecoverableActiveCallSession(activeRoomId, activeTopicId)
   ) {
     return false;
   }
@@ -1541,8 +1583,13 @@ const startDirectCallRecovery = (
   directCallRecoveryDeadline = Date.now() + DIRECT_CALL_RECONNECT_GRACE_MS;
   directCallRecoveryRoomId = activeRoomId;
   directCallRecoveryTopicId = activeTopicId;
+  const requiresRemoteParticipant = isRecoverableDirectCallSession(
+    activeRoomId,
+    activeTopicId
+  );
   directCallRecoveryWaitForRemote =
-    !!options.waitForRemote || remoteReconnectingParticipants.size > 0;
+    requiresRemoteParticipant &&
+    (!!options.waitForRemote || remoteReconnectingParticipants.size > 0);
   shouldEndCallOnConnectFailure = false;
   markCallIssueSignal('call.direct_recovery.started', 'hard', {
     reason: options.reason ?? null
@@ -1553,6 +1600,7 @@ const startDirectCallRecovery = (
       targetRoomId: activeRoomId,
       targetTopicId: activeTopicId,
       waitForRemote: directCallRecoveryWaitForRemote,
+      groupMode: !requiresRemoteParticipant,
       remoteUserId: options.remoteUserId ?? null,
       remoteReconnectingParticipantCount: remoteReconnectingParticipants.size
     }),
@@ -2428,6 +2476,23 @@ const buildRequestedVideoDimensions = (element: HTMLVideoElement) => {
   return { width, height };
 };
 
+const isConstrainedConnectionQuality = (quality: ConnectionQuality | string) =>
+  quality === ConnectionQuality.Poor || quality === ConnectionQuality.Lost;
+
+const getConstrainedVideoQuality = (
+  quality: ConnectionQuality | string
+): VideoQuality | null => {
+  if (quality === ConnectionQuality.Lost) {
+    return VideoQuality.LOW;
+  }
+
+  if (quality === ConnectionQuality.Poor) {
+    return VideoQuality.MEDIUM;
+  }
+
+  return null;
+};
+
 const applyRemoteVideoSubscriptionPreferences = (
   participantIdentity: string,
   source: RemoteVideoSource,
@@ -2443,7 +2508,23 @@ const applyRemoteVideoSubscriptionPreferences = (
   }
 
   publication.setEnabled(true);
-  publication.setVideoFPS(source === 'screen' ? 30 : 24);
+  const constrainedQuality = getConstrainedVideoQuality(
+    state.connectionQuality
+  );
+  publication.setVideoFPS(
+    constrainedQuality !== null
+      ? source === 'screen'
+        ? 5
+        : 15
+      : source === 'screen'
+        ? 15
+        : 24
+  );
+
+  if (constrainedQuality !== null) {
+    publication.setVideoQuality(constrainedQuality);
+    return;
+  }
 
   const dimensions = element ? buildRequestedVideoDimensions(element) : null;
 
@@ -2452,10 +2533,10 @@ const applyRemoteVideoSubscriptionPreferences = (
     return;
   }
 
-  publication.setVideoQuality(VideoQuality.HIGH);
+  publication.setVideoQuality(VideoQuality.LOW);
 };
 
-const requestHighQualityForAllRemoteVideoTracks = () => {
+const syncRemoteVideoSubscriptionPreferences = () => {
   if (!room) {
     return;
   }
@@ -2470,6 +2551,86 @@ const requestHighQualityForAllRemoteVideoTracks = () => {
       'camera'
     );
   });
+};
+
+const clearLocalVideoQualityRecovery = () => {
+  if (!localVideoQualityRecoveryTimeout) {
+    return;
+  }
+
+  clearTimeout(localVideoQualityRecoveryTimeout);
+  localVideoQualityRecoveryTimeout = null;
+};
+
+const setLocalVideoPublishingQuality = (
+  activeRoom: Room,
+  maxQuality: VideoQuality,
+  reason: string
+) => {
+  const didQualityChange = localVideoPublishingQuality !== maxQuality;
+  localVideoPublishingQuality = maxQuality;
+
+  activeRoom.localParticipant.videoTrackPublications.forEach(publication => {
+    publication.videoTrack?.setPublishingQuality(maxQuality);
+  });
+
+  syncRemoteVideoSubscriptionPreferences();
+
+  if (didQualityChange) {
+    recordCallTelemetryEvent('call.media_quality.changed', {
+      reason,
+      maxVideoQuality: maxQuality,
+      connectionQuality: state.connectionQuality
+    });
+  }
+};
+
+const adaptMediaQualityToConnection = (
+  activeRoom: Room,
+  quality: ConnectionQuality
+) => {
+  const constrainedQuality = getConstrainedVideoQuality(quality);
+
+  if (constrainedQuality !== null) {
+    clearLocalVideoQualityRecovery();
+    setLocalVideoPublishingQuality(activeRoom, constrainedQuality, quality);
+    return;
+  }
+
+  if (
+    quality !== ConnectionQuality.Good &&
+    quality !== ConnectionQuality.Excellent &&
+    quality !== ConnectionQuality.Unknown
+  ) {
+    syncRemoteVideoSubscriptionPreferences();
+    return;
+  }
+
+  if (localVideoPublishingQuality === VideoQuality.HIGH) {
+    setLocalVideoPublishingQuality(activeRoom, VideoQuality.HIGH, quality);
+    return;
+  }
+
+  if (localVideoQualityRecoveryTimeout) {
+    return;
+  }
+
+  localVideoQualityRecoveryTimeout = setTimeout(() => {
+    localVideoQualityRecoveryTimeout = null;
+
+    if (
+      room !== activeRoom ||
+      isConstrainedConnectionQuality(state.connectionQuality)
+    ) {
+      return;
+    }
+
+    setLocalVideoPublishingQuality(
+      activeRoom,
+      VideoQuality.HIGH,
+      'connection-recovered'
+    );
+  }, LOCAL_VIDEO_QUALITY_RECOVERY_DELAY_MS);
 };
 
 const getActiveRemoteAudioPublication = (
@@ -3288,7 +3449,7 @@ const setupRoomListeners = (activeRoom: Room) => {
     .on(RoomEvent.TrackPublished, () => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
-      requestHighQualityForAllRemoteVideoTracks();
+      syncRemoteVideoSubscriptionPreferences();
       scheduleCallAudioRecovery(activeRoom);
       void enforceSingleScreenShare();
     })
@@ -3300,7 +3461,7 @@ const setupRoomListeners = (activeRoom: Room) => {
     .on(RoomEvent.TrackSubscribed, () => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
-      requestHighQualityForAllRemoteVideoTracks();
+      syncRemoteVideoSubscriptionPreferences();
       scheduleCallAudioRecovery(activeRoom);
       resolveDirectCallRecoverySuccess(activeRoom);
       void enforceSingleScreenShare();
@@ -3321,7 +3482,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncLocalTrackState();
       syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
-      requestHighQualityForAllRemoteVideoTracks();
+      syncRemoteVideoSubscriptionPreferences();
       scheduleCallAudioRecovery(activeRoom);
       void enforceSingleScreenShare();
     })
@@ -3338,7 +3499,7 @@ const setupRoomListeners = (activeRoom: Room) => {
         participantId: participant.identity,
         remoteParticipantCount: activeRoom.remoteParticipants.size
       });
-      requestHighQualityForAllRemoteVideoTracks();
+      syncRemoteVideoSubscriptionPreferences();
       scheduleCallAudioRecovery(activeRoom);
       resolveDirectCallRecoverySuccess(activeRoom);
       showGroupCallPresenceNotification(participant, 'joined', activeRoom);
@@ -3393,6 +3554,16 @@ const setupRoomListeners = (activeRoom: Room) => {
     })
     .on(RoomEvent.LocalTrackPublished, publication => {
       syncLocalTrackState();
+      if (
+        publication.source === Track.Source.Camera ||
+        publication.source === Track.Source.ScreenShare
+      ) {
+        setLocalVideoPublishingQuality(
+          activeRoom,
+          localVideoPublishingQuality,
+          'track-published'
+        );
+      }
       scheduleCallAudioRecovery(activeRoom);
       if (
         publication.source === Track.Source.ScreenShare ||
@@ -3415,9 +3586,12 @@ const setupRoomListeners = (activeRoom: Room) => {
       handleHandRaiseData(payload, participant, topic);
       handleCallReactionData(payload, participant, topic);
     })
-    .on(RoomEvent.ConnectionQualityChanged, () => {
+    .on(RoomEvent.ConnectionQualityChanged, (quality, participant) => {
       syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
+      if (participant.identity === activeRoom.localParticipant.identity) {
+        adaptMediaQualityToConnection(activeRoom, quality);
+      }
       recordCallConnectionQualityIfChanged();
     })
     .on(RoomEvent.Reconnecting, () => {
@@ -3432,6 +3606,11 @@ const setupRoomListeners = (activeRoom: Room) => {
         'warn'
       );
       showReconnectCallStatusNotice();
+      setLocalVideoPublishingQuality(
+        activeRoom,
+        VideoQuality.LOW,
+        'reconnecting'
+      );
       syncLocalTrackState();
       syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
@@ -3446,7 +3625,10 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
-      requestHighQualityForAllRemoteVideoTracks();
+      adaptMediaQualityToConnection(
+        activeRoom,
+        activeRoom.localParticipant.connectionQuality
+      );
       scheduleCallAudioRecovery(activeRoom);
       resolveDirectCallRecoverySuccess(activeRoom);
       void ensureLocalMicrophoneState(activeRoom);
@@ -3669,6 +3851,7 @@ const connectToRoom = async () => {
         pixelDensity: 'screen'
       },
       dynacast: true,
+      reconnectPolicy: LIVEKIT_RECONNECT_POLICY,
       publishDefaults: {
         ...CAMERA_PUBLISH_DEFAULTS,
         ...SCREEN_SHARE_PUBLISH_DEFAULTS
@@ -3687,7 +3870,11 @@ const connectToRoom = async () => {
         liveKitUrl: config.CHAT_LIVEKIT_URL
       });
 
-      await nextRoom.connect(config.CHAT_LIVEKIT_URL, token);
+      await nextRoom.connect(config.CHAT_LIVEKIT_URL, token, {
+        maxRetries: 3,
+        peerConnectionTimeout: 20_000,
+        websocketTimeout: 20_000
+      });
       recordCallTelemetryEvent('call.livekit.connect.success', {
         attemptId: currentAttemptId,
         elapsedMs: Date.now() - connectStartedAt
@@ -3813,7 +4000,10 @@ const connectToRoom = async () => {
     syncRemoteParticipantState();
     syncConnectionState(nextRoom);
     recordCallConnectionQualityIfChanged();
-    requestHighQualityForAllRemoteVideoTracks();
+    adaptMediaQualityToConnection(
+      nextRoom,
+      nextRoom.localParticipant.connectionQuality
+    );
     scheduleCallAudioRecovery(nextRoom);
     resolveDirectCallRecoverySuccess(nextRoom);
     suppressParticipantPresenceNotifications = false;
@@ -3952,7 +4142,10 @@ const recoverActiveCallMediaState = async (
   syncLocalParticipantSpeakingState(activeRoom);
   syncRemoteParticipantState();
   syncConnectionState(activeRoom);
-  requestHighQualityForAllRemoteVideoTracks();
+  adaptMediaQualityToConnection(
+    activeRoom,
+    activeRoom.localParticipant.connectionQuality
+  );
   scheduleCallAudioRecovery(activeRoom);
   await ensureLocalMicrophoneState(activeRoom);
   await enforceSingleScreenShare();
@@ -4071,7 +4264,7 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
       await connectToRoom();
     } catch (error) {
       showReconnectCallStatusNotice();
-      if (activeTopicId && !isGroupCallSession(activeTopicId)) {
+      if (activeTopicId) {
         startDirectCallRecovery(activeRoomId, activeTopicId, {
           waitForRemote: true,
           reason: 'network-recovery-connect-failed'
@@ -4147,6 +4340,8 @@ export const recoverActiveCallAfterNetworkChange = async (
 
 const resetMediaState = () => {
   suppressParticipantPresenceNotifications = true;
+  clearLocalVideoQualityRecovery();
+  localVideoPublishingQuality = VideoQuality.HIGH;
   clearTrackStreamCaches();
   currentCameraFacingMode = 'user';
   localBackgroundProcessor = null;

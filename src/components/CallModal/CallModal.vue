@@ -42,12 +42,18 @@
         </div>
 
         <div
-          v-if="isCallReconnectingNotice"
+          v-if="isCallConnectionStatusVisible"
           class="call-modal__connection-status"
+          :class="{
+            'call-modal__connection-status--degraded': isCallConnectionDegraded
+          }"
           role="status"
         >
-          <span class="call-modal__connection-status-spinner"></span>
-          <span>{{ callStatusNotice }}</span>
+          <span
+            v-if="isCallReconnectingNotice"
+            class="call-modal__connection-status-spinner"
+          ></span>
+          <span>{{ callConnectionStatusText }}</span>
           <ErrorIcon class="call-modal__connection-status-alert" />
         </div>
 
@@ -404,12 +410,19 @@
               </div>
 
               <div
-                v-if="isCallReconnectingNotice"
+                v-if="isCallConnectionStatusVisible"
                 class="call-modal__connection-status call-modal__connection-status--overlay"
+                :class="{
+                  'call-modal__connection-status--degraded':
+                    isCallConnectionDegraded
+                }"
                 role="status"
               >
-                <span class="call-modal__connection-status-spinner"></span>
-                <span>{{ callStatusNotice }}</span>
+                <span
+                  v-if="isCallReconnectingNotice"
+                  class="call-modal__connection-status-spinner"
+                ></span>
+                <span>{{ callConnectionStatusText }}</span>
                 <ErrorIcon class="call-modal__connection-status-alert" />
               </div>
 
@@ -1581,6 +1594,20 @@ const displayAvatarInfo = computed(() => {
 const isCallReconnectingNotice = computed(
   () =>
     !!callStatusNotice.value && callStatusNoticeKind.value === 'reconnecting'
+);
+const isCallConnectionDegraded = computed(
+  () =>
+    !isCallReconnectingNotice.value &&
+    (liveKitState.connectionQuality === 'poor' ||
+      liveKitState.connectionQuality === 'lost')
+);
+const isCallConnectionStatusVisible = computed(
+  () => isCallReconnectingNotice.value || isCallConnectionDegraded.value
+);
+const callConnectionStatusText = computed(() =>
+  isCallReconnectingNotice.value
+    ? callStatusNotice.value
+    : 'Нестабильная сеть. Качество видео снижено'
 );
 const isTerminalCallNotice = computed(
   () =>
