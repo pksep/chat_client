@@ -1201,11 +1201,7 @@ const getNetworkFingerprint = (onlineOverride?: boolean): string => {
         ? true
         : navigator.onLine;
 
-  return [
-    `online:${online}`,
-    `type:${connection?.type || ''}`,
-    `effectiveType:${connection?.effectiveType || ''}`
-  ].join('|');
+  return [`online:${online}`, `type:${connection?.type || ''}`].join('|');
 };
 
 let lastKnownNetworkFingerprint = getNetworkFingerprint();
@@ -1962,6 +1958,12 @@ export const initializeChat = async (options: {
     const networkInformation = getNetworkInformation();
 
     networkInformation?.addEventListener?.('change', () => {
+      const nextFingerprint = getNetworkFingerprint();
+
+      if (nextFingerprint === lastKnownNetworkFingerprint) {
+        return;
+      }
+
       handleNetworkOrResumeChange('network-change', {
         assumeOnlineOnNative: true,
         forceHardReconnect: true,

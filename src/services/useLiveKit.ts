@@ -18,6 +18,7 @@ import {
   RoomEvent,
   ScreenSharePresets,
   Track,
+  type TrackPublication,
   VideoPresets,
   VideoQuality
 } from 'livekit-client';
@@ -26,6 +27,7 @@ import { MessageTypeEnum } from '@pksep/yui';
 import { watch } from 'vue';
 import type { IUser } from '../components/interfaces/interfaces';
 import { getAuthUser } from '../composables/useAuth';
+import { getAuthToken } from '../composables/useLogin';
 import { useCallBackground } from '../composables/useCallBackground';
 import {
   showErrorNotification,
@@ -67,6 +69,11 @@ import {
   getTelemetryErrorPayload,
   recordTelemetryEvent
 } from './useTelemetry';
+import {
+  addNativeNetworkStatusListener,
+  getNativeNetworkStatus,
+  type NativeNetworkStatus
+} from './useTelemetryDevice';
 import {
   activeGroupCalls,
   activeScreenShare,
@@ -191,8 +198,17 @@ let lastCallIssueSignal: CallIssueSignal | null = null;
 let lastKnownActiveRoomRemoteParticipantCount = 0;
 let lastRemoteParticipantEmptyTelemetrySignature = '';
 let isExplicitHangupInProgress = false;
+let isLocalNetworkOffline = false;
+let nativeNetworkStatusListener: PluginListenerHandle | null = null;
 let androidScreenShareTrack: MediaStreamTrack | null = null;
 let isStoppingAndroidScreenShare = false;
+let isStoppingScreenShare = false;
+let shouldRecoverLocalScreenShare = false;
+let localScreenShareTrackForRecovery: LocalVideoTrack | null = null;
+let screenShareRecoveryTimeout: ReturnType<typeof setTimeout> | null = null;
+let screenShareRecoveryPromise: Promise<boolean> | null = null;
+let screenShareRecoveryAttemptId = 0;
+let screenShareRecoveryAttemptCount = 0;
 const localTrackStreamCache = new Map<string, StreamCacheEntry>();
 const remoteTrackStreamCache = new Map<string, StreamCacheEntry>();
 let pendingEndCallRetryTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -201,6 +217,9 @@ let pendingNativeCallActionTimeout: ReturnType<typeof setTimeout> | null = null;
 let callStatusNoticeTimeout: ReturnType<typeof setTimeout> | null = null;
 let directCallRecoveryTimeout: ReturnType<typeof setTimeout> | null = null;
 let directCallRecoveryAttemptId = 0;
+let directCallRecoveryAttemptCount = 0;
+let directCallRecoveryStartedAt = 0;
+let lastDirectCallRecoveryAttemptTelemetryAt = 0;
 let directCallRecoveryInFlight = false;
 let directCallRecoveryRoomId: string | null = null;
 let directCallRecoveryTopicId: string | null = null;
@@ -230,13 +249,15 @@ const CALL_STATUS_NOTICE_CLOSE_DELAY_MS = 3000;
 const ENDED_CALL_STATUS_NOTICE_CLOSE_DELAY_MS = 1200;
 const DIRECT_CALL_EXPLICIT_LEAVE_SUPPRESSION_MS = 30000;
 const DIRECT_CALL_RECONNECT_POLL_MS = 2000;
+const DIRECT_CALL_RECOVERY_TELEMETRY_INTERVAL_MS = 30_000;
+const SCREEN_SHARE_RECOVERY_RETRY_DELAY_MS = 2000;
 const LOCAL_VIDEO_QUALITY_RECOVERY_DELAY_MS = 10_000;
 const CALL_ISSUE_SIGNAL_CONTEXT_MS = 5 * 60 * 1000;
 const INVITED_GROUP_CALL_CONNECT_ATTEMPTS = 2;
 const INVITED_GROUP_CALL_CONNECT_RETRY_DELAY_MS = 1200;
 const DIRECT_CALL_RECONNECT_FAILED_NOTICE = 'Не удалось восстановить звонок';
 const DIRECT_CALL_ENDED_NOTICE = 'Звонок завершён';
-const CALL_RECONNECT_NOTICE = 'Связь прервана. Переподключение';
+const CALL_RECONNECT_NOTICE = 'Переподключение';
 const OTHER_DEVICE_CONNECTED_NOTICE = 'Звонок открыт на другом устройстве';
 const GROUP_CALL_INVITE_TITLE = 'Групповой звонок';
 const DEFAULT_AUDIO_OUTPUT_ROUTES: Array<Exclude<AudioOutputRoute, 'auto'>> = [
@@ -1190,6 +1211,9 @@ const resetDirectCallRecoveryState = (
 
   clearDirectCallRecoveryTimer();
   directCallRecoveryInFlight = false;
+  directCallRecoveryAttemptCount = 0;
+  directCallRecoveryStartedAt = 0;
+  lastDirectCallRecoveryAttemptTelemetryAt = 0;
   directCallRecoveryRoomId = null;
   directCallRecoveryTopicId = null;
   directCallRecoveryWaitForRemote = false;
@@ -1224,8 +1248,17 @@ const showPersistentCallStatusNotice = (
   stopRingtone();
 };
 
-const shouldSuppressReconnectNotice = () =>
-  Capacitor.isNativePlatform() && isNativeAppInBackground;
+const shouldSuppressReconnectNotice = () => {
+  if (Capacitor.isNativePlatform()) {
+    return isNativeAppInBackground;
+  }
+
+  return (
+    !isLocalNetworkOffline &&
+    typeof document !== 'undefined' &&
+    document.visibilityState === 'hidden'
+  );
+};
 
 const showReconnectCallStatusNotice = () => {
   if (isExplicitHangupInProgress) {
@@ -1485,10 +1518,13 @@ const resolveDirectCallRecoverySuccess = (activeRoom: Room | null = room) => {
     return;
   }
 
-  recordCallTelemetryEvent(
-    'call.direct_recovery.completed',
-    buildCallHealthTelemetryPayload(activeRoom)
-  );
+  recordCallTelemetryEvent('call.direct_recovery.completed', {
+    ...buildCallHealthTelemetryPayload(activeRoom),
+    attemptCount: directCallRecoveryAttemptCount,
+    recoveryDurationMs: directCallRecoveryStartedAt
+      ? Date.now() - directCallRecoveryStartedAt
+      : null
+  });
   clearCallIssueSignal();
   resetDirectCallRecoveryState();
   syncConnectionState(activeRoom);
@@ -1505,6 +1541,21 @@ const scheduleDirectCallRecoveryAttempt = (attemptId: number) => {
 
     void recoverDirectCallConnection(attemptId);
   }, DIRECT_CALL_RECONNECT_POLL_MS);
+};
+
+const shouldRecordDirectCallRecoveryAttemptTelemetry = (): boolean => {
+  const now = Date.now();
+
+  if (
+    directCallRecoveryAttemptCount === 1 ||
+    now - lastDirectCallRecoveryAttemptTelemetryAt >=
+      DIRECT_CALL_RECOVERY_TELEMETRY_INTERVAL_MS
+  ) {
+    lastDirectCallRecoveryAttemptTelemetryAt = now;
+    return true;
+  }
+
+  return false;
 };
 
 const recoverDirectCallConnection = async (
@@ -1526,6 +1577,8 @@ const recoverDirectCallConnection = async (
   }
 
   directCallRecoveryInFlight = true;
+  directCallRecoveryAttemptCount += 1;
+  const attemptNumber = directCallRecoveryAttemptCount;
 
   try {
     const status = await getRawLiveKitCallStatus(activeRoomId);
@@ -1535,17 +1588,48 @@ const recoverDirectCallConnection = async (
     }
 
     if (!status) {
+      if (shouldRecordDirectCallRecoveryAttemptTelemetry()) {
+        recordCallTelemetryEvent(
+          'call.direct_recovery.status_unavailable',
+          buildCallRecoveryTelemetryPayload('status-unavailable', room, {
+            targetRoomId: activeRoomId,
+            targetTopicId: activeTopicId,
+            attemptNumber
+          }),
+          'warn'
+        );
+      }
       scheduleDirectCallRecoveryAttempt(attemptId);
       return;
     }
 
     if (status.topicId && activeTopicId && status.topicId !== activeTopicId) {
+      recordCallTelemetryEvent(
+        'call.direct_recovery.topic_mismatch',
+        {
+          targetRoomId: activeRoomId,
+          targetTopicId: activeTopicId,
+          statusTopicId: status.topicId,
+          attemptNumber
+        },
+        'error'
+      );
       resetDirectCallRecoveryState(true, attemptId);
       showTransientCallStatusNotice(DIRECT_CALL_RECONNECT_FAILED_NOTICE);
       return;
     }
 
     if (!status?.active) {
+      recordCallTelemetryEvent(
+        'call.direct_recovery.server_inactive',
+        {
+          targetRoomId: activeRoomId,
+          targetTopicId: activeTopicId,
+          attemptNumber,
+          statusTopicId: status.topicId ?? null
+        },
+        'warn'
+      );
       resetDirectCallRecoveryState(true, attemptId);
       clearUnavailableCallState(activeRoomId, activeTopicId);
       showTransientCallStatusNotice(
@@ -1574,6 +1658,18 @@ const recoverDirectCallConnection = async (
         await connectToRoom();
       } catch (error) {
         console.warn('[LiveKit] Failed to reconnect direct call:', error);
+        if (shouldRecordDirectCallRecoveryAttemptTelemetry()) {
+          recordCallTelemetryEvent(
+            'call.direct_recovery.livekit_connect_failed',
+            {
+              targetRoomId: activeRoomId,
+              targetTopicId: activeTopicId,
+              attemptNumber,
+              ...getTelemetryErrorPayload(error)
+            },
+            'warn'
+          );
+        }
       }
     }
 
@@ -1592,6 +1688,25 @@ const recoverDirectCallConnection = async (
     if (room?.remoteParticipants.size) {
       resolveDirectCallRecoverySuccess(room);
       return;
+    }
+
+    scheduleDirectCallRecoveryAttempt(attemptId);
+  } catch (error) {
+    if (attemptId !== directCallRecoveryAttemptId) {
+      return;
+    }
+
+    if (shouldRecordDirectCallRecoveryAttemptTelemetry()) {
+      recordCallTelemetryEvent(
+        'call.direct_recovery.attempt_failed',
+        {
+          targetRoomId: activeRoomId,
+          targetTopicId: activeTopicId,
+          attemptNumber,
+          ...getTelemetryErrorPayload(error)
+        },
+        'warn'
+      );
     }
 
     scheduleDirectCallRecoveryAttempt(attemptId);
@@ -1623,6 +1738,9 @@ const startDirectCallRecovery = (
 
   directCallRecoveryAttemptId += 1;
   directCallRecoveryInFlight = false;
+  directCallRecoveryAttemptCount = 0;
+  directCallRecoveryStartedAt = Date.now();
+  lastDirectCallRecoveryAttemptTelemetryAt = 0;
   directCallRecoveryRoomId = activeRoomId;
   directCallRecoveryTopicId = activeTopicId;
   const requiresRemoteParticipant = isRecoverableDirectCallSession(
@@ -2355,11 +2473,20 @@ const syncLocalTrackState = () => {
 
   const localVideoTrack = localVideoPublication?.track;
   const localScreenTrack = localScreenSharePublication?.track;
+  if (
+    localScreenTrack instanceof LocalVideoTrack &&
+    localScreenTrack.mediaStreamTrack.readyState === 'live'
+  ) {
+    rememberLocalScreenShareTrack(localScreenTrack);
+  }
+  const recoverableLocalScreenTrack = getRecoverableLocalScreenShareTrack();
   const isLocalScreenSharePublished =
     !!localScreenSharePublication &&
     !localScreenSharePublication.isMuted &&
     localScreenTrack?.mediaStreamTrack?.readyState !== 'ended';
-  state.isScreenSharingActive = isLocalScreenSharePublished;
+  state.isScreenSharingActive =
+    isLocalScreenSharePublished ||
+    (shouldRecoverLocalScreenShare && !!recoverableLocalScreenTrack);
   if (!state.isScreenSharingActive && isAndroidScreenSharePlatform()) {
     void stopAndroidScreenShare();
   }
@@ -2376,8 +2503,27 @@ const syncLocalTrackState = () => {
 
   if (localScreenTrack?.mediaStreamTrack) {
     localScreenTrack.mediaStreamTrack.onended = () => {
-      if (state.isScreenSharingActive && !isStoppingAndroidScreenShare) {
-        void toggleScreenShare();
+      const isExpectedStop =
+        isStoppingScreenShare || isStoppingAndroidScreenShare;
+
+      recordCallTelemetryEvent(
+        'call.screen_share.media_track_ended',
+        {
+          reason: isExpectedStop ? 'expected-stop' : 'browser-track-ended',
+          trackSid: localScreenSharePublication?.trackSid ?? null,
+          mediaTrackId: localScreenTrack.mediaStreamTrack.id,
+          mediaTrackReadyState: localScreenTrack.mediaStreamTrack.readyState,
+          documentVisibility:
+            typeof document !== 'undefined' ? document.visibilityState : null,
+          documentHasFocus:
+            typeof document !== 'undefined' ? document.hasFocus() : null
+        },
+        'warn'
+      );
+
+      if (!isExpectedStop) {
+        clearLocalScreenShareRecoveryState();
+        syncLocalTrackState();
       }
     };
   }
@@ -2390,7 +2536,8 @@ const syncLocalTrackState = () => {
   localScreenShareStream.value = getCachedSingleTrackStream(
     localTrackStreamCache,
     'local-screen-share',
-    localScreenTrack?.mediaStreamTrack
+    localScreenTrack?.mediaStreamTrack ||
+      recoverableLocalScreenTrack?.mediaStreamTrack
   );
 };
 
@@ -3099,18 +3246,66 @@ const handleCallReactionData = (
   }
 };
 
-const enforceSingleScreenShare = async () => {
-  if (!room || !state.isScreenSharingActive) return;
+const enforceSingleScreenShare = async (
+  activeRoom: Room,
+  publication: TrackPublication,
+  participant: Participant,
+  trigger:
+    | 'remote-track-published'
+    | 'remote-track-subscribed'
+    | 'remote-track-unmuted'
+) => {
+  if (
+    room !== activeRoom ||
+    !state.isScreenSharingActive ||
+    publication.source !== Track.Source.ScreenShare ||
+    publication.isMuted ||
+    !activeRoom.remoteParticipants.has(participant.identity)
+  ) {
+    return;
+  }
 
-  const remoteScreenShareParticipant = remoteParticipants.value.find(
-    participant => participant.isScreenShareActive
+  recordCallTelemetryEvent(
+    'call.screen_share.stop_requested',
+    {
+      reason: 'remote-share-conflict',
+      trigger,
+      remoteParticipantId: participant.identity,
+      remoteTrackSid: publication.trackSid,
+      remoteTrackReadyState:
+        publication.track?.mediaStreamTrack?.readyState ?? null
+    },
+    'warn'
   );
 
-  if (!remoteScreenShareParticipant) return;
-
+  clearLocalScreenShareRecoveryState();
   state.isScreenSharingActive = false;
-  await room.localParticipant.setScreenShareEnabled(false);
-  syncLocalTrackState();
+  isStoppingScreenShare = true;
+
+  try {
+    await activeRoom.localParticipant.setScreenShareEnabled(false);
+    recordCallTelemetryEvent('call.screen_share.stop_completed', {
+      reason: 'remote-share-conflict',
+      trigger,
+      remoteParticipantId: participant.identity,
+      remoteTrackSid: publication.trackSid
+    });
+  } catch (error) {
+    recordCallTelemetryEvent(
+      'call.screen_share.stop_failed',
+      {
+        reason: 'remote-share-conflict',
+        trigger,
+        remoteParticipantId: participant.identity,
+        remoteTrackSid: publication.trackSid,
+        ...getTelemetryErrorPayload(error)
+      },
+      'error'
+    );
+  } finally {
+    isStoppingScreenShare = false;
+    syncLocalTrackState();
+  }
 };
 
 const applyLocalMicrophoneVoiceIsolation = async (
@@ -3471,45 +3666,68 @@ const showGroupCallPresenceNotification = (
 
 const setupRoomListeners = (activeRoom: Room) => {
   activeRoom
-    .on(RoomEvent.TrackPublished, () => {
+    .on(RoomEvent.TrackPublished, (publication, participant) => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
       syncRemoteVideoSubscriptionPreferences();
       scheduleCallAudioRecovery(activeRoom);
-      void enforceSingleScreenShare();
+      void enforceSingleScreenShare(
+        activeRoom,
+        publication,
+        participant,
+        'remote-track-published'
+      );
     })
     .on(RoomEvent.TrackUnpublished, () => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
       scheduleCallAudioRecovery(activeRoom);
     })
-    .on(RoomEvent.TrackSubscribed, () => {
+    .on(RoomEvent.TrackSubscribed, (_, publication, participant) => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
       syncRemoteVideoSubscriptionPreferences();
       scheduleCallAudioRecovery(activeRoom);
       resolveDirectCallRecoverySuccess(activeRoom);
-      void enforceSingleScreenShare();
+      void enforceSingleScreenShare(
+        activeRoom,
+        publication,
+        participant,
+        'remote-track-subscribed'
+      );
     })
     .on(RoomEvent.TrackUnsubscribed, () => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
       scheduleCallAudioRecovery(activeRoom);
     })
-    .on(RoomEvent.TrackMuted, () => {
+    .on(RoomEvent.TrackMuted, (publication, participant) => {
       syncLocalTrackState();
       syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
       scheduleCallAudioRecovery(activeRoom);
-      void enforceSingleScreenShare();
+      if (
+        participant.identity === activeRoom.localParticipant.identity &&
+        publication.source === Track.Source.ScreenShare &&
+        shouldRecoverLocalScreenShare &&
+        !isStoppingScreenShare
+      ) {
+        rememberLocalScreenShareTrack(publication.track);
+        scheduleLocalScreenShareRecovery('local-track-muted');
+      }
     })
-    .on(RoomEvent.TrackUnmuted, () => {
+    .on(RoomEvent.TrackUnmuted, (publication, participant) => {
       syncLocalTrackState();
       syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
       syncRemoteVideoSubscriptionPreferences();
       scheduleCallAudioRecovery(activeRoom);
-      void enforceSingleScreenShare();
+      void enforceSingleScreenShare(
+        activeRoom,
+        publication,
+        participant,
+        'remote-track-unmuted'
+      );
     })
     .on(RoomEvent.ActiveSpeakersChanged, () => {
       syncLocalParticipantSpeakingState(activeRoom);
@@ -3580,7 +3798,21 @@ const setupRoomListeners = (activeRoom: Room) => {
       showGroupCallPresenceNotification(participant, 'left', activeRoom);
     })
     .on(RoomEvent.LocalTrackPublished, publication => {
+      if (publication.source === Track.Source.ScreenShare) {
+        shouldRecoverLocalScreenShare = true;
+        rememberLocalScreenShareTrack(publication.track);
+      }
       syncLocalTrackState();
+      if (publication.source === Track.Source.ScreenShare) {
+        recordCallTelemetryEvent('call.screen_share.local_published', {
+          trackSid: publication.trackSid,
+          mediaTrackId: publication.track?.mediaStreamTrack?.id ?? null,
+          mediaTrackReadyState:
+            publication.track?.mediaStreamTrack?.readyState ?? null,
+          recoveryRequested: shouldRecoverLocalScreenShare,
+          recoveryAttemptCount: screenShareRecoveryAttemptCount
+        });
+      }
       if (
         publication.source === Track.Source.Camera ||
         publication.source === Track.Source.ScreenShare
@@ -3600,7 +3832,39 @@ const setupRoomListeners = (activeRoom: Room) => {
       }
     })
     .on(RoomEvent.LocalTrackUnpublished, publication => {
+      const isRecoverableScreenShareUnpublish =
+        publication.source === Track.Source.ScreenShare &&
+        shouldRecoverLocalScreenShare &&
+        !isStoppingScreenShare &&
+        !isStoppingAndroidScreenShare &&
+        !isExplicitHangupInProgress;
+
+      if (isRecoverableScreenShareUnpublish) {
+        rememberLocalScreenShareTrack(publication.track);
+      }
       syncLocalTrackState();
+      if (publication.source === Track.Source.ScreenShare) {
+        recordCallTelemetryEvent(
+          'call.screen_share.local_unpublished',
+          {
+            trackSid: publication.trackSid,
+            mediaTrackId: publication.track?.mediaStreamTrack?.id ?? null,
+            mediaTrackReadyState:
+              publication.track?.mediaStreamTrack?.readyState ?? null,
+            expectedStop: !isRecoverableScreenShareUnpublish,
+            recoveryScheduled: isRecoverableScreenShareUnpublish,
+            documentVisibility:
+              typeof document !== 'undefined' ? document.visibilityState : null,
+            documentHasFocus:
+              typeof document !== 'undefined' ? document.hasFocus() : null
+          },
+          'warn'
+        );
+
+        if (isRecoverableScreenShareUnpublish) {
+          scheduleLocalScreenShareRecovery('local-track-unpublished');
+        }
+      }
       scheduleCallAudioRecovery(activeRoom);
       if (
         publication.source === Track.Source.ScreenShare ||
@@ -3614,10 +3878,44 @@ const setupRoomListeners = (activeRoom: Room) => {
       handleCallReactionData(payload, participant, topic);
     })
     .on(RoomEvent.ConnectionQualityChanged, (quality, participant) => {
+      const previousLocalConnectionQuality = state.connectionQuality;
       syncLocalParticipantSpeakingState(activeRoom);
       syncRemoteParticipantState();
       if (participant.identity === activeRoom.localParticipant.identity) {
         adaptMediaQualityToConnection(activeRoom, quality);
+
+        if (quality === ConnectionQuality.Lost) {
+          markCallIssueSignal('call.connection_quality.lost', 'soft');
+          showReconnectCallStatusNotice();
+          recordCallTelemetryEvent(
+            'call.connection_quality.lost',
+            buildCallHealthTelemetryPayload(activeRoom),
+            'warn'
+          );
+        } else if (
+          (quality === ConnectionQuality.Good ||
+            quality === ConnectionQuality.Excellent) &&
+          activeRoom.state === ConnectionState.Connected &&
+          !directCallRecoveryRoomId &&
+          !activeCallNetworkRecoveryPromise &&
+          callStatusNoticeKind.value === 'reconnecting'
+        ) {
+          clearCallStatusNotice();
+          clearCallIssueSignal('soft');
+        }
+
+        if (
+          (previousLocalConnectionQuality === ConnectionQuality.Poor ||
+            previousLocalConnectionQuality === ConnectionQuality.Lost) &&
+          (quality === ConnectionQuality.Good ||
+            quality === ConnectionQuality.Excellent)
+        ) {
+          recordCallTelemetryEvent('call.connection_quality.recovered', {
+            previousConnectionQuality: previousLocalConnectionQuality,
+            connectionQuality: quality,
+            ...buildCallHealthTelemetryPayload(activeRoom)
+          });
+        }
       }
       recordCallConnectionQualityIfChanged();
     })
@@ -3658,9 +3956,9 @@ const setupRoomListeners = (activeRoom: Room) => {
         activeRoom.localParticipant.connectionQuality
       );
       scheduleCallAudioRecovery(activeRoom);
+      scheduleLocalScreenShareRecovery('livekit-reconnected');
       resolveDirectCallRecoverySuccess(activeRoom);
       void ensureLocalMicrophoneState(activeRoom);
-      void enforceSingleScreenShare();
       recordCallTelemetryEvent(
         'call.livekit.reconnected',
         buildCallHealthTelemetryPayload(activeRoom)
@@ -4152,7 +4450,7 @@ const recoverActiveCallMediaState = async (
   );
   scheduleCallAudioRecovery(activeRoom);
   await ensureLocalMicrophoneState(activeRoom);
-  await enforceSingleScreenShare();
+  await recoverLocalScreenSharePublication(activeRoom, 'call-media-recovery');
 };
 
 const recoverActiveCallAfterNetworkChangeInternal = async (
@@ -4351,6 +4649,7 @@ const resetMediaState = () => {
   hasShownBackgroundProcessorSupportError = false;
   requestedVideoActive = false;
   videoToggleOperation = null;
+  clearLocalScreenShareRecoveryState();
   localVideoStream.value = null;
   localScreenShareStream.value = null;
   clearRemoteExplicitlyLeftParticipants();
@@ -5735,6 +6034,244 @@ const getLocalScreenSharePublication = (activeRoom = room) => {
   ).find(publication => publication.source === Track.Source.ScreenShare);
 };
 
+const clearScreenShareRecoveryTimer = () => {
+  if (!screenShareRecoveryTimeout) {
+    return;
+  }
+
+  clearTimeout(screenShareRecoveryTimeout);
+  screenShareRecoveryTimeout = null;
+};
+
+const rememberLocalScreenShareTrack = (track: unknown) => {
+  if (
+    track instanceof LocalVideoTrack &&
+    track.mediaStreamTrack.readyState === 'live'
+  ) {
+    localScreenShareTrackForRecovery = track;
+  }
+};
+
+const getRecoverableLocalScreenShareTrack = (): LocalVideoTrack | null => {
+  if (
+    localScreenShareTrackForRecovery?.mediaStreamTrack.readyState === 'live'
+  ) {
+    return localScreenShareTrackForRecovery;
+  }
+
+  localScreenShareTrackForRecovery = null;
+  return null;
+};
+
+const clearLocalScreenShareRecoveryState = () => {
+  screenShareRecoveryAttemptId += 1;
+  clearScreenShareRecoveryTimer();
+  shouldRecoverLocalScreenShare = false;
+  localScreenShareTrackForRecovery = null;
+  screenShareRecoveryAttemptCount = 0;
+};
+
+const hasActiveRemoteScreenShare = (activeRoom: Room): boolean =>
+  Array.from(activeRoom.remoteParticipants.values()).some(participant =>
+    Array.from(participant.videoTrackPublications.values()).some(
+      publication =>
+        publication.source === Track.Source.ScreenShare &&
+        !publication.isMuted &&
+        publication.track?.mediaStreamTrack?.readyState !== 'ended'
+    )
+  );
+
+const scheduleLocalScreenShareRecovery = (
+  reason: string,
+  delayMs = SCREEN_SHARE_RECOVERY_RETRY_DELAY_MS
+) => {
+  clearScreenShareRecoveryTimer();
+
+  if (
+    !shouldRecoverLocalScreenShare ||
+    isStoppingScreenShare ||
+    isStoppingAndroidScreenShare ||
+    isExplicitHangupInProgress ||
+    !getRecoverableLocalScreenShareTrack()
+  ) {
+    return;
+  }
+
+  const attemptId = screenShareRecoveryAttemptId;
+  screenShareRecoveryTimeout = setTimeout(() => {
+    screenShareRecoveryTimeout = null;
+    if (attemptId !== screenShareRecoveryAttemptId) {
+      return;
+    }
+
+    void recoverLocalScreenSharePublication(room, reason);
+  }, delayMs);
+};
+
+const recoverLocalScreenSharePublication = (
+  activeRoom: Room | null = room,
+  reason = 'screen-share-recovery'
+): Promise<boolean> => {
+  if (screenShareRecoveryPromise) {
+    return screenShareRecoveryPromise;
+  }
+
+  const recoveryAttemptId = screenShareRecoveryAttemptId;
+  const recoveryPromise = (async (): Promise<boolean> => {
+    if (
+      !activeRoom ||
+      activeRoom !== room ||
+      !shouldRecoverLocalScreenShare ||
+      isStoppingScreenShare ||
+      isStoppingAndroidScreenShare ||
+      isExplicitHangupInProgress
+    ) {
+      return false;
+    }
+
+    const existingPublication = getLocalScreenSharePublication(activeRoom);
+    rememberLocalScreenShareTrack(existingPublication?.track);
+    const recoverableTrack = getRecoverableLocalScreenShareTrack();
+
+    if (!recoverableTrack) {
+      recordCallTelemetryEvent(
+        'call.screen_share.recovery_unavailable',
+        {
+          reason,
+          liveKitState: activeRoom.state,
+          hasPublication: Boolean(existingPublication),
+          mediaTrackReadyState:
+            existingPublication?.track?.mediaStreamTrack?.readyState ?? null
+        },
+        'warn'
+      );
+      clearLocalScreenShareRecoveryState();
+      syncLocalTrackState();
+      return false;
+    }
+
+    if (hasActiveRemoteScreenShare(activeRoom)) {
+      recordCallTelemetryEvent('call.screen_share.recovery_paused', {
+        reason: 'remote-share-active',
+        trigger: reason,
+        liveKitState: activeRoom.state
+      });
+      return false;
+    }
+
+    if (activeRoom.state !== ConnectionState.Connected) {
+      scheduleLocalScreenShareRecovery(reason);
+      return false;
+    }
+
+    screenShareRecoveryAttemptCount += 1;
+    const attemptNumber = screenShareRecoveryAttemptCount;
+    markCallIssueSignal('call.screen_share.recovery_started', 'soft', {
+      reason
+    });
+    showReconnectCallStatusNotice();
+    recordCallTelemetryEvent(
+      'call.screen_share.recovery_started',
+      {
+        reason,
+        attemptNumber,
+        trackSid: existingPublication?.trackSid ?? null,
+        mediaTrackId: recoverableTrack.mediaStreamTrack.id,
+        mediaTrackReadyState: recoverableTrack.mediaStreamTrack.readyState,
+        liveKitState: activeRoom.state
+      },
+      'warn'
+    );
+
+    try {
+      if (existingPublication) {
+        if (existingPublication.isMuted) {
+          await existingPublication.unmute();
+        }
+      } else {
+        await activeRoom.localParticipant.publishTrack(recoverableTrack, {
+          ...SCREEN_SHARE_PUBLISH_DEFAULTS,
+          source: Track.Source.ScreenShare,
+          name: Track.Source.ScreenShare,
+          stream: Track.Source.ScreenShare
+        });
+      }
+
+      if (
+        recoveryAttemptId !== screenShareRecoveryAttemptId ||
+        activeRoom !== room
+      ) {
+        return false;
+      }
+
+      await ensureLocalMicrophoneState(activeRoom);
+      syncLocalTrackState();
+      const isRecovered = Boolean(
+        getLocalScreenSharePublication(activeRoom) &&
+          state.isScreenSharingActive
+      );
+
+      if (!isRecovered) {
+        throw new Error('Screen share publication was not restored');
+      }
+
+      clearScreenShareRecoveryTimer();
+      recordCallTelemetryEvent('call.screen_share.recovery_completed', {
+        reason,
+        attemptNumber,
+        trackSid: getLocalScreenSharePublication(activeRoom)?.trackSid ?? null,
+        mediaTrackId: recoverableTrack.mediaStreamTrack.id,
+        liveKitState: activeRoom.state
+      });
+
+      if (
+        callStatusNoticeKind.value === 'reconnecting' &&
+        activeRoom.state === ConnectionState.Connected &&
+        !isLocalNetworkOffline &&
+        !directCallRecoveryRoomId &&
+        !activeCallNetworkRecoveryPromise
+      ) {
+        clearCallStatusNotice();
+      }
+
+      screenShareRecoveryAttemptCount = 0;
+      return true;
+    } catch (error) {
+      recordCallTelemetryEvent(
+        'call.screen_share.recovery_failed',
+        {
+          reason,
+          attemptNumber,
+          mediaTrackId: recoverableTrack.mediaStreamTrack.id,
+          mediaTrackReadyState: recoverableTrack.mediaStreamTrack.readyState,
+          liveKitState: activeRoom.state,
+          ...getTelemetryErrorPayload(error)
+        },
+        'warn'
+      );
+
+      if (
+        recoveryAttemptId === screenShareRecoveryAttemptId &&
+        shouldRecoverLocalScreenShare &&
+        recoverableTrack.mediaStreamTrack.readyState === 'live'
+      ) {
+        scheduleLocalScreenShareRecovery(reason);
+      }
+
+      return false;
+    }
+  })();
+
+  screenShareRecoveryPromise = recoveryPromise;
+  void recoveryPromise.finally(() => {
+    if (screenShareRecoveryPromise === recoveryPromise) {
+      screenShareRecoveryPromise = null;
+    }
+  });
+
+  return recoveryPromise;
+};
+
 const publishAndroidScreenShare = async (activeRoom = room) => {
   if (!activeRoom) {
     return;
@@ -5774,36 +6311,82 @@ const unpublishAndroidScreenShare = async (activeRoom = room) => {
   androidScreenShareTrack = null;
 };
 
-export const toggleScreenShare = async () => {
+export const toggleScreenShare = async (
+  reason: 'user-toggle' | 'browser-track-ended' = 'user-toggle'
+) => {
   if (!room) return;
 
-  if (!state.isScreenSharingActive) {
+  const isScreenShareRequested =
+    state.isScreenSharingActive || shouldRecoverLocalScreenShare;
+
+  if (!isScreenShareRequested) {
     const remoteScreenShareParticipant = remoteParticipants.value.find(
       participant => participant.isScreenShareActive
     );
 
     if (remoteScreenShareParticipant) {
+      recordCallTelemetryEvent(
+        'call.screen_share.start_blocked',
+        {
+          reason: 'remote-share-active',
+          trigger: reason,
+          remoteParticipantId: remoteScreenShareParticipant.identity
+        },
+        'warn'
+      );
       return;
     }
   }
 
-  const nextScreenShareState = !state.isScreenSharingActive;
+  const nextScreenShareState = !isScreenShareRequested;
+  const activeRoom = room;
+
+  if (nextScreenShareState) {
+    shouldRecoverLocalScreenShare = true;
+  } else {
+    isStoppingScreenShare = true;
+    clearLocalScreenShareRecoveryState();
+  }
+
+  recordCallTelemetryEvent('call.screen_share.toggle_requested', {
+    reason,
+    targetEnabled: nextScreenShareState,
+    liveKitState: activeRoom.state,
+    documentVisibility:
+      typeof document !== 'undefined' ? document.visibilityState : null,
+    documentHasFocus:
+      typeof document !== 'undefined' ? document.hasFocus() : null
+  });
 
   try {
     if (isAndroidScreenSharePlatform()) {
       if (nextScreenShareState) {
-        await publishAndroidScreenShare(room);
+        await publishAndroidScreenShare(activeRoom);
       } else {
         isStoppingAndroidScreenShare = true;
-        await unpublishAndroidScreenShare(room);
+        await unpublishAndroidScreenShare(activeRoom);
       }
     } else {
-      await room.localParticipant.setScreenShareEnabled(
+      await activeRoom.localParticipant.setScreenShareEnabled(
         nextScreenShareState,
         SCREEN_SHARE_CAPTURE_DEFAULTS,
         SCREEN_SHARE_PUBLISH_DEFAULTS
       );
-      await ensureLocalMicrophoneState(room);
+      await ensureLocalMicrophoneState(activeRoom);
+    }
+
+    recordCallTelemetryEvent('call.screen_share.toggle_completed', {
+      reason,
+      targetEnabled: nextScreenShareState,
+      liveKitState: activeRoom.state
+    });
+
+    if (nextScreenShareState) {
+      const publication = getLocalScreenSharePublication(activeRoom);
+      rememberLocalScreenShareTrack(publication?.track);
+      shouldRecoverLocalScreenShare = Boolean(publication?.track);
+    } else {
+      localScreenShareTrackForRecovery = null;
     }
   } catch (error) {
     const rawErrorMessage =
@@ -5832,8 +6415,26 @@ export const toggleScreenShare = async () => {
       );
     }
 
+    recordCallTelemetryEvent(
+      'call.screen_share.toggle_failed',
+      {
+        reason,
+        targetEnabled: nextScreenShareState,
+        canceledByUser: isCanceledByUser,
+        unsupportedDevice: isUnsupportedDevice,
+        liveKitState: activeRoom.state,
+        ...getTelemetryErrorPayload(error)
+      },
+      isCanceledByUser ? 'info' : 'error'
+    );
+
+    if (nextScreenShareState) {
+      clearLocalScreenShareRecoveryState();
+    }
+
     console.warn('[LiveKit] Failed to toggle screen share:', error);
   } finally {
+    isStoppingScreenShare = false;
     isStoppingAndroidScreenShare = false;
     syncLocalTrackState();
     syncRemoteParticipantState();
@@ -6218,9 +6819,213 @@ export {
   invitedGroupCall
 };
 
+const hasActiveCallForNetworkStatus = () =>
+  !!roomId.value &&
+  (open.value || isModalVisible.value || isCalling.value || !!room);
+
+let lastClientClosingIntentRoomId: string | null = null;
+let lastClientClosingIntentAt = 0;
+
+const notifyWebClientClosing = (source: 'beforeunload' | 'pagehide') => {
+  if (
+    Capacitor.isNativePlatform() ||
+    isExplicitHangupInProgress ||
+    !roomId.value
+  ) {
+    return;
+  }
+
+  const now = Date.now();
+  if (
+    lastClientClosingIntentRoomId === roomId.value &&
+    now - lastClientClosingIntentAt < 2000
+  ) {
+    return;
+  }
+
+  const sdk = getChatSDK();
+  const me = getAuthUser();
+  if (!sdk || !me) {
+    recordCallTelemetryEvent(
+      'call.client_closing.send_skipped',
+      {
+        source,
+        hasSdk: Boolean(sdk),
+        hasUser: Boolean(me)
+      },
+      'warn'
+    );
+    return;
+  }
+
+  const targetRoomId = roomId.value;
+  const targetTopicId = topicId.value;
+  const socketSent = sdk.isConnected()
+    ? sdk.sendWebSocketEvent(WebSocketEventType.CALL_CLIENT_CLOSING, {
+        userId: me.id,
+        roomId: targetRoomId,
+        topicId: targetTopicId,
+        source
+      })
+    : false;
+  const apiUrl = sdk.getConfig()?.CHAT_API_DOMAIN?.replace(/\/$/, '');
+  const authToken = getAuthToken();
+  const keepaliveRequested = Boolean(apiUrl && authToken);
+
+  if (keepaliveRequested) {
+    void fetch(`${apiUrl}/calls/client-closing`, {
+      method: 'POST',
+      keepalive: true,
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        roomId: targetRoomId,
+        topicId: targetTopicId,
+        source
+      })
+    }).catch(error => {
+      console.warn('[LiveKit] Failed to send client closing intent:', error);
+    });
+  }
+
+  const sent = socketSent || keepaliveRequested;
+
+  if (sent) {
+    lastClientClosingIntentRoomId = targetRoomId;
+    lastClientClosingIntentAt = now;
+  }
+
+  recordCallTelemetryEvent(
+    sent
+      ? 'call.client_closing.intent_sent'
+      : 'call.client_closing.send_failed',
+    {
+      source,
+      targetRoomId,
+      targetTopicId,
+      socketSent,
+      keepaliveRequested
+    },
+    sent ? 'warn' : 'error'
+  );
+};
+
+const handleLocalNetworkOffline = (
+  reason: 'browser-offline' | 'native-network-offline',
+  diagnostics: Record<string, unknown> = {}
+) => {
+  if (
+    isLocalNetworkOffline ||
+    isExplicitHangupInProgress ||
+    !hasActiveCallForNetworkStatus()
+  ) {
+    return;
+  }
+
+  isLocalNetworkOffline = true;
+  state.connectionQuality = ConnectionQuality.Lost;
+  markCallIssueSignal('call.network.offline', 'soft', { reason });
+  showReconnectCallStatusNotice();
+
+  if (room) {
+    setLocalVideoPublishingQuality(room, VideoQuality.LOW, reason);
+  }
+
+  recordCallTelemetryEvent(
+    'call.network.offline',
+    {
+      reason,
+      ...diagnostics,
+      ...buildCallHealthTelemetryPayload(room)
+    },
+    'warn'
+  );
+};
+
+const handleLocalNetworkOnline = (
+  reason: 'browser-online' | 'native-network-online',
+  diagnostics: Record<string, unknown> = {}
+) => {
+  if (!isLocalNetworkOffline) {
+    return;
+  }
+
+  isLocalNetworkOffline = false;
+  recordCallTelemetryEvent('call.network.online', {
+    reason,
+    ...diagnostics,
+    ...buildCallHealthTelemetryPayload(room)
+  });
+  void recoverActiveCallAfterNetworkChange(reason);
+};
+
+const handleNativeNetworkStatus = (status: NativeNetworkStatus) => {
+  const hasValidatedNetwork =
+    status.networkConnected && status.networkValidated !== false;
+
+  if (hasValidatedNetwork) {
+    handleLocalNetworkOnline('native-network-online', status);
+    return;
+  }
+
+  handleLocalNetworkOffline('native-network-offline', status);
+};
+
+const setupNativeNetworkStatusListener = async () => {
+  if (nativeNetworkStatusListener) {
+    return;
+  }
+
+  try {
+    nativeNetworkStatusListener = await addNativeNetworkStatusListener(
+      handleNativeNetworkStatus
+    );
+    const initialStatus = await getNativeNetworkStatus();
+    if (initialStatus) {
+      handleNativeNetworkStatus(initialStatus);
+    }
+  } catch (error) {
+    console.warn('[LiveKit] Failed to listen native network status:', error);
+  }
+};
+
 if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    notifyWebClientClosing('beforeunload');
+  });
+
+  window.addEventListener('pagehide', event => {
+    if (!event.persisted) {
+      notifyWebClientClosing('pagehide');
+    }
+  });
+
+  window.addEventListener('offline', () => {
+    handleLocalNetworkOffline('browser-offline');
+  });
+
+  window.addEventListener('online', () => {
+    if (Capacitor.isNativePlatform()) {
+      void getNativeNetworkStatus()
+        .then(status => {
+          if (status) {
+            handleNativeNetworkStatus(status);
+          }
+        })
+        .catch(error => {
+          console.warn('[LiveKit] Failed to verify native network:', error);
+        });
+      return;
+    }
+
+    handleLocalNetworkOnline('browser-online');
+  });
+
   if (Capacitor.isNativePlatform()) {
     setupAudioOutputRouteListener();
+    void setupNativeNetworkStatusListener();
 
     void App.addListener('appStateChange', ({ isActive }) => {
       isNativeAppInBackground = !isActive;
@@ -6232,7 +7037,7 @@ if (typeof window !== 'undefined') {
         return;
       }
 
-      if (isCallReconnecting()) {
+      if (isLocalNetworkOffline || isCallReconnecting()) {
         showReconnectCallStatusNotice();
       }
 

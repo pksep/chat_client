@@ -46,18 +46,40 @@ p.chat__nothing-paragraph {
   position: relative;
   background: transparent;
   border-radius: 18px 0 0 18px;
-  scrollbar-color: var(--primary-color) transparent;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .chat__message-wrapper {
+    scrollbar-color: var(--primary-color) transparent;
+    scrollbar-width: thin;
+  }
 }
 
 .chat__message-wrapper::-webkit-scrollbar {
+  width: 6px;
   background: transparent;
 }
 
 .chat__message-wrapper::-webkit-scrollbar-track,
 .chat__message-wrapper::-webkit-scrollbar-track-piece,
-.chat__message-wrapper::-webkit-scrollbar-button,
 .chat__message-wrapper::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+.chat__message-wrapper::-webkit-scrollbar-button,
+.chat__message-wrapper::-webkit-scrollbar-button:single-button,
+.chat__message-wrapper::-webkit-scrollbar-button:vertical:decrement,
+.chat__message-wrapper::-webkit-scrollbar-button:vertical:increment {
+  display: none !important;
+  min-width: 0 !important;
+  width: 0 !important;
+  max-width: 0 !important;
+  min-height: 0 !important;
+  height: 0 !important;
+  max-height: 0 !important;
+  border: 0 !important;
+  -webkit-appearance: none !important;
+  background: none !important;
 }
 
 .chat__message-wrapper::-webkit-scrollbar-thumb {

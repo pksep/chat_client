@@ -1631,6 +1631,12 @@
   background: var(--call-quality-active);
 }
 
+.call-modal__connection-quality--unknown
+  .call-modal__connection-quality-bar:first-child,
+.call-modal__connection-quality--unknown .call-modal__connection-quality-bar {
+  background: var(--call-quality-active);
+}
+
 .call-modal__connection-quality--excellent {
   --call-quality-bg: #77a6ff;
 }
@@ -1640,6 +1646,10 @@
 }
 
 .call-modal__connection-quality--poor {
+  --call-quality-bg: #77a6ff;
+}
+
+.call-modal__connection-quality--unknown {
   --call-quality-bg: #77a6ff;
 }
 
