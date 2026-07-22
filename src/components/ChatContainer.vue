@@ -209,8 +209,7 @@ import {
   isAnyCallDialing,
   isAnyCallIncoming,
   isCallActive,
-  isAnyCallModalVisible,
-  pendingGroupCallInfo
+  isAnyCallModalVisible
 } from '../services/useCallState';
 import { useChatWallpaper } from '../composables/useChatWallpaper';
 import { useUserInfoModal } from '../composables/useUserInfoModal';
@@ -301,11 +300,7 @@ const chatContainerClasses = computed(() => [
       (route.value && route.value.type === 'assistant')
         ? true
         : !state.isMenuDesktopOpen,
-    'chat-container--wallpaper': isWallpaperApplied.value,
-    'chat-container--active-call':
-      isCallActive.value ||
-      !!pendingGroupCallInfo.value?.[route.value?.id || ''] ||
-      !!invitedGroupCallInfo.value?.isJoinAvailable
+    'chat-container--wallpaper': isWallpaperApplied.value
   }
 ]);
 const shouldRenderCallModal = computed(
