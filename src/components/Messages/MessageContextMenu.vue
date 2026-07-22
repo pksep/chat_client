@@ -817,6 +817,11 @@ const checkFlip = async () => {
   reactionsPositionReady.value = true;
 };
 
+const initializeReactionLayout = async () => {
+  await checkFlip();
+  ensureReactionLayoutObserver();
+};
+
 const syncReadDetailsPosition = async () => {
   await nextTick();
 
@@ -857,8 +862,7 @@ watch(
   () => props.isOpen[props.messageId],
   opened => {
     if (opened) {
-      ensureReactionLayoutObserver();
-      void checkFlip();
+      void initializeReactionLayout();
 
       if (showReadDetails.value) {
         void syncReadDetailsPosition();
@@ -873,7 +877,8 @@ watch(
     disconnectReactionLayoutObserver();
     flipReactions.value = false;
     flipReactionsY.value = false;
-  }
+  },
+  { immediate: true }
 );
 
 watch(showReadDetails, opened => {
