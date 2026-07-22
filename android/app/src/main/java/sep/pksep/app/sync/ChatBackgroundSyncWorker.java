@@ -17,6 +17,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+import sep.pksep.app.ChatNotificationDismissalHelper;
+
 public class ChatBackgroundSyncWorker extends Worker {
     private static final String TAG = "ChatBackgroundSync";
     private static final int DEFAULT_MAX_MESSAGE_TOPICS = 2;
@@ -114,6 +116,7 @@ public class ChatBackgroundSyncWorker extends Worker {
                 topics,
                 messagesByTopic
             );
+            dismissDeletedMessageNotifications(context, syncEvents.events);
             ChatBackgroundSyncStore.setCompletedStatus(
                 context,
                 hints,
@@ -270,6 +273,31 @@ public class ChatBackgroundSyncWorker extends Worker {
             0,
             Math.min(topicIds.size(), maxMessageTopics)
         );
+    }
+
+    private void dismissDeletedMessageNotifications(
+        Context context,
+        JSONArray syncEvents
+    ) {
+        for (int i = 0; i < syncEvents.length(); i++) {
+            JSONObject event = syncEvents.optJSONObject(i);
+
+            if (event == null || !"message.delete".equals(event.optString("eventType"))) {
+                continue;
+            }
+
+            JSONObject payload = event.optJSONObject("payload");
+            String topicId = event.optString("topicId", "");
+
+            if (topicId.trim().isEmpty() && payload != null) {
+                topicId = payload.optString("topicId", "");
+            }
+
+            ChatNotificationDismissalHelper.dismissTopicNotification(
+                context,
+                topicId
+            );
+        }
     }
 
     private int getMaxMessageTopics(ChatBackgroundSyncStore.PendingHints hints) {

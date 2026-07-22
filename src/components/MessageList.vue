@@ -492,6 +492,7 @@ import {
 import {
   getCanSendReadReceipts,
   getChatSDK,
+  getHasBrowserNetwork,
   markTopicReactionSeenChat,
   setSuspendIncomingMergeForTopic
 } from '../services/useChat';
@@ -545,6 +546,10 @@ import {
   filterFavoriteTopicSystemMessages,
   isFavoriteTopic
 } from '../utils/favorite-topic';
+import {
+  consumeNotificationTopicRefreshRequest,
+  notificationTopicRefreshRequest
+} from '../services/useNotificationNavigation';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -625,6 +630,8 @@ const updateBannerRef = useTemplateRef<HTMLElement>('updateBannerRef');
 
 const route = useUrlWatcher();
 const { state: isMobile } = useResizeState(MAX_W_MD);
+const isNativeAndroid =
+  Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
 const { onTouchStart, onTouchEnd } = useMessageSwipe(route);
 
@@ -761,6 +768,7 @@ let pinnedViewportSnapshotTimeoutId: number | null = null;
 let lastPinnedViewportSnapshotAt = 0;
 let floatingDateDividerHideTimeoutId: number | null = null;
 let floatingDateDividerUserScrollIntentAt = 0;
+let lastFloatingDateDividerScrollTop: number | null = null;
 const FLOATING_DATE_VISIBLE_MS = 900;
 const FLOATING_DATE_USER_SCROLL_GRACE_MS = 500;
 const PINNED_VIEWPORT_SNAPSHOT_INTERVAL_MS = 80;
@@ -880,7 +888,7 @@ const isViewingBottom = computed(
 const shouldShowFloatingDateDivider = computed(
   () =>
     !!floatingDateDividerLabel.value &&
-    isFloatingDateDividerActive.value &&
+    (isNativeAndroid || isFloatingDateDividerActive.value) &&
     !isFloatingDateDividerHidden.value
 );
 const canClearlyShowUnreadCount = computed(
@@ -907,6 +915,7 @@ const unreadReactionMessageId = computed(() => {
 });
 const renderedTopicId = ref(route.value.id || '');
 const isAwaitingUserMessagesPaint = ref(false);
+const paintedUserMessageTopicId = ref('');
 const isInitialMessagesSkeletonVisible = ref(false);
 const isBootstrapScrollLocked = ref(false);
 const isSearchNavigationPositioning = ref(false);
@@ -1216,7 +1225,7 @@ const shouldRefreshActiveTopicFromPreview = (topicId: string): boolean => {
     route.value?.type === RouteTypes.AI ||
     isLoadingInitialMessages.value ||
     activeTopicSwitchToken !== completedTopicSwitchToken ||
-    !navigator.onLine ||
+    !getHasBrowserNetwork() ||
     !lastMessage?.id
   ) {
     return false;
@@ -1482,8 +1491,8 @@ const scheduleExpandedTopicMessagesFetch = (
       await fetchMessagesForTopic(topicId, {
         limit,
         forceRefresh: true,
-        forceNetwork: navigator.onLine,
-        allowStaleFallback: !navigator.onLine,
+        forceNetwork: getHasBrowserNetwork(),
+        allowStaleFallback: !getHasBrowserNetwork(),
         visibleLimit: limit,
         updateVisible: false
       });
@@ -1574,9 +1583,22 @@ watch(
 
 watch(
   [() => renderedTopicId.value, () => renderedUserMessages.value.length],
-  ([topicId, messageCount]) => {
+  ([topicId, messageCount], [previousTopicId, previousMessageCount]) => {
     if (topicId && messageCount > 0) {
       setTopicMessagesKnownEmpty(topicId, false);
+      return;
+    }
+
+    if (
+      topicId &&
+      topicId === route.value.id &&
+      topicId === previousTopicId &&
+      previousMessageCount > 0 &&
+      isFavoriteMessageTopic.value &&
+      !isLoadingInitialMessages.value
+    ) {
+      setTopicMessagesKnownEmpty(topicId, true);
+      resetInitialMessagesSkeleton();
     }
   }
 );
@@ -1592,8 +1614,13 @@ const syncFloatingDateDivider = (): void => {
   }
 
   const isScrollable = container.scrollHeight > container.clientHeight + 1;
+  const isFavoriteTopicAtStart =
+    isFavoriteMessageTopic.value && container.scrollTop <= 1;
 
-  if (!isScrollable || isViewingBottom.value) {
+  if (
+    isFavoriteTopicAtStart ||
+    ((!isScrollable || isViewingBottom.value) && !isNativeAndroid)
+  ) {
     floatingDateDividerLabel.value = '';
     isFloatingDateDividerHidden.value = false;
     isFloatingDateDividerActive.value = false;
@@ -1602,7 +1629,7 @@ const syncFloatingDateDivider = (): void => {
 
   const snapshot = messageListUserItemsRef.value?.getVisibleMessageSnapshot?.();
   const firstVisibleMessage = snapshot
-    ? state.messages[snapshot.firstVisibleIndex]
+    ? renderedUserMessages.value[snapshot.firstVisibleIndex]
     : undefined;
 
   if (!firstVisibleMessage) {
@@ -1637,6 +1664,7 @@ const hideFloatingDateDivider = (): void => {
     floatingDateDividerHideTimeoutId = null;
   }
 
+  floatingDateDividerLabel.value = '';
   isFloatingDateDividerActive.value = false;
 };
 
@@ -1653,13 +1681,21 @@ const keepFloatingDateDividerVisibleBriefly = (): void => {
   }, FLOATING_DATE_VISIBLE_MS);
 };
 
-const handleFloatingDateDividerUserScroll = (): void => {
+const markFloatingDateDividerUserScrollIntent = (): boolean => {
   if (isBootstrapScrollLocked.value || isSearchNavigationPositioning.value) {
-    return;
+    return false;
   }
 
   markTopicSwitchUserScrollIntent();
   floatingDateDividerUserScrollIntentAt = performance.now();
+  return true;
+};
+
+const handleFloatingDateDividerUserScroll = (): void => {
+  if (!markFloatingDateDividerUserScrollIntent()) {
+    return;
+  }
+
   keepFloatingDateDividerVisibleBriefly();
   scheduleFloatingDateDividerSync();
 };
@@ -1699,6 +1735,7 @@ const {
 
 const handleUserMessageTouchStart = (event: TouchEvent): void => {
   onTouchStart(event);
+  markFloatingDateDividerUserScrollIntent();
   handleMessageScrollTouchStart(event);
 };
 
@@ -1844,12 +1881,20 @@ const schedulePinnedViewportSnapshotSync = (): void => {
 const emitRenderedTopicState = (): void => {
   const topicId = renderedTopicId.value || null;
   const routeTopicId = route.value.id || null;
+  const isCurrent = !!topicId && topicId === routeTopicId;
+  const hasPaintedCurrentMessages =
+    hasVisibleUserMessages.value &&
+    paintedUserMessageTopicId.value === routeTopicId;
 
   emit('rendered-topic-change', {
     topicId,
     routeTopicId,
     messageCount: state.messages.length,
-    isCurrent: !!topicId && topicId === routeTopicId
+    isCurrent,
+    isReady:
+      isCurrent &&
+      !shouldRenderUserMessageSkeleton.value &&
+      (hasPaintedCurrentMessages || !isLoadingInitialMessages.value)
   });
 };
 
@@ -1973,6 +2018,8 @@ const handleUserMessagesContentReady = (payload?: {
     return;
   }
 
+  paintedUserMessageTopicId.value = payload.topicId;
+
   if (
     !isAwaitingUserMessagesPaint.value &&
     !isInitialMessagesSkeletonVisible.value &&
@@ -1997,6 +2044,7 @@ const handleUserMessagesContentReady = (payload?: {
     }
 
     setupIntersectionObserver();
+    scheduleFloatingDateDividerSync();
     syncVisibleUnreadAfterAutoScroll();
     void handlePendingSearchNavigation();
   });
@@ -3031,6 +3079,26 @@ const schedulePostScrollUiSync = (): void => {
 };
 
 const handleScroll = (): void => {
+  const currentScrollTop = chatWrapperRef.value?.scrollTop ?? null;
+  const hasMovedViewport =
+    currentScrollTop !== null &&
+    lastFloatingDateDividerScrollTop !== null &&
+    Math.abs(currentScrollTop - lastFloatingDateDividerScrollTop) >= 1;
+
+  lastFloatingDateDividerScrollTop = currentScrollTop;
+
+  if (
+    hasMovedViewport &&
+    !isLoadingInitialMessages.value &&
+    !isBootstrapScrollLocked.value &&
+    !isSearchNavigationPositioning.value &&
+    activeTopicSwitchToken === completedTopicSwitchToken &&
+    !isViewingBottom.value
+  ) {
+    floatingDateDividerUserScrollIntentAt = performance.now();
+    keepFloatingDateDividerVisibleBriefly();
+  }
+
   void handleMessageScroll();
   schedulePostScrollUiSync();
   schedulePinnedViewportSnapshotSync();
@@ -3212,11 +3280,42 @@ watch(
 );
 
 watch(
-  [() => route.value?.id, () => route.value?.type],
-  async ([topicId, routeType]) => {
+  [
+    () => route.value?.id,
+    () => route.value?.type,
+    () => notificationTopicRefreshRequest.value?.id || 0
+  ],
+  async (
+    [topicId, routeType, notificationRefreshRequestId],
+    [previousTopicId, previousRouteType, previousNotificationRefreshRequestId]
+  ) => {
+    const notificationRefreshRequest = notificationTopicRefreshRequest.value;
+    const isOnlyUnrelatedNotificationRefresh =
+      topicId === previousTopicId &&
+      routeType === previousRouteType &&
+      notificationRefreshRequestId !== previousNotificationRefreshRequestId &&
+      notificationRefreshRequest?.topicId !== topicId;
+
+    if (isOnlyUnrelatedNotificationRefresh) {
+      return;
+    }
+
+    const isNotificationRefreshRequestForTopic =
+      !!topicId &&
+      notificationRefreshRequest?.id === notificationRefreshRequestId &&
+      notificationRefreshRequest.topicId === topicId;
+
+    if (isNotificationRefreshRequestForTopic) {
+      consumeNotificationTopicRefreshRequest(
+        topicId,
+        notificationRefreshRequestId
+      );
+    }
+
     hideFloatingDateDivider();
     if (!topicId) {
       renderedTopicId.value = '';
+      paintedUserMessageTopicId.value = '';
       isAwaitingUserMessagesPaint.value = false;
       isLoadingInitialMessages.value = false;
       releaseBootstrapScrollLock();
@@ -3225,11 +3324,17 @@ watch(
       return;
     }
     const topicSwitchToken = ++activeTopicSwitchToken;
+    paintedUserMessageTopicId.value = '';
+    lastFloatingDateDividerScrollTop = null;
     topicSwitchStartedAtMs = performance.now();
     topicSwitchUserScrollIntentAtMs = 0;
     const isStaleTopicSwitch = () =>
       topicSwitchToken !== activeTopicSwitchToken ||
       route.value?.id !== topicId;
+    const requiresAuthoritativeNotificationRefresh =
+      isMobile.value &&
+      getHasBrowserNetwork() &&
+      isNotificationRefreshRequestForTopic;
     const hasRenderedFallbackMessages =
       renderedTopicId.value !== topicId && state.messages.length > 0;
     const hasResidentTopicMessages =
@@ -3243,10 +3348,11 @@ watch(
       renderedTopicId.value = topicId;
     }
     isAwaitingUserMessagesPaint.value =
-      isMobile.value &&
-      route.value?.type !== RouteTypes.AI &&
-      !props.suppressInitialSkeleton &&
-      !hasKnownTopicMessagesState(topicId);
+      requiresAuthoritativeNotificationRefresh ||
+      (isMobile.value &&
+        route.value?.type !== RouteTypes.AI &&
+        !props.suppressInitialSkeleton &&
+        !hasKnownTopicMessagesState(topicId));
     clearVisibleMessagesExpansionSchedule();
     visibleMessagesExpansionAppliedToken = 0;
     suppressNotificationSoundForTopic(topicId, TOPIC_SWITCH_AUTO_READ_GRACE_MS);
@@ -3255,7 +3361,12 @@ watch(
     state.unreadMarkerMessageId = null;
     setTopicMessagesKnownEmpty(topicId, false);
     isLoadingInitialMessages.value = true;
-    scheduleInitialMessagesSkeleton(topicId, topicSwitchToken);
+    if (requiresAuthoritativeNotificationRefresh) {
+      cancelInitialMessagesSkeletonDelay();
+      isInitialMessagesSkeletonVisible.value = true;
+    } else {
+      scheduleInitialMessagesSkeleton(topicId, topicSwitchToken);
+    }
     resetScrollState();
     if (hasRenderedFallbackMessages) {
       scrollAnchor.setViewportMode('history', { pin: false });
@@ -3325,8 +3436,8 @@ watch(
       initialMessagesFetch = fetchMessagesForTopic(topicId, {
         limit: initialMessagesLimit,
         forceRefresh: true,
-        forceNetwork: navigator.onLine,
-        allowStaleFallback: !navigator.onLine,
+        forceNetwork: getHasBrowserNetwork(),
+        allowStaleFallback: !getHasBrowserNetwork(),
         visibleLimit: fastInitialMessagesLimit,
         updateVisible: false
       });
@@ -3339,9 +3450,10 @@ watch(
     }
 
     if (
-      getRenderedTopicMessages(topicId, hydratedMessages).length > 0 ||
-      getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId)).length >
-        0
+      !requiresAuthoritativeNotificationRefresh &&
+      (getRenderedTopicMessages(topicId, hydratedMessages).length > 0 ||
+        getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId))
+          .length > 0)
     ) {
       setTopicMessagesKnownEmpty(topicId, false);
       cancelInitialMessagesSkeletonDelay();
@@ -3504,6 +3616,7 @@ watch(
     isLoadingInitialMessages.value = false;
     resetInitialMessagesSkeleton();
     completedTopicSwitchToken = topicSwitchToken;
+    lastFloatingDateDividerScrollTop = chatWrapperRef.value?.scrollTop ?? null;
     await handlePendingSearchNavigation();
     if (shouldPositionToPendingSearch) {
       releaseSearchNavigationPositioningAfterPaint(topicSwitchToken);
@@ -3767,7 +3880,10 @@ watch(
   [
     () => route.value?.id,
     () => renderedTopicId.value,
-    () => state.messages.length
+    () => state.messages.length,
+    () => isLoadingInitialMessages.value,
+    () => shouldRenderUserMessageSkeleton.value,
+    () => paintedUserMessageTopicId.value
   ],
   () => {
     nextTick(emitRenderedTopicState);

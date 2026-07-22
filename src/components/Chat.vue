@@ -135,7 +135,8 @@ const renderedMessageTopic = ref<IMessageRenderedTopicState>({
   topicId: null,
   routeTopicId: null,
   messageCount: 0,
-  isCurrent: false
+  isCurrent: false,
+  isReady: false
 });
 const pinnedMessagesTopicId = computed(
   () => renderedMessageTopic.value.topicId

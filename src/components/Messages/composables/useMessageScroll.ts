@@ -240,7 +240,7 @@ export function useMessageScroll(
   const HISTORY_PREPEND_INTENT_TTL_MS = 2500;
   const HISTORY_DESKTOP_PREPEND_PAGE_LIMIT = 80;
   const HISTORY_MOBILE_PREPEND_PAGE_LIMIT = 8;
-  const HISTORY_DESKTOP_VISIBLE_WINDOW_LIMIT = 250;
+  const HISTORY_DESKTOP_VISIBLE_WINDOW_LIMIT = 700;
   const HISTORY_MOBILE_VISIBLE_WINDOW_LIMIT = 72;
   const HISTORY_PERSIST_IDLE_DELAY_MS = 10000;
   const HISTORY_PREPEND_CHECK_INTERVAL_MS = 60;
@@ -810,7 +810,8 @@ export function useMessageScroll(
       let result = prefetchedMessages;
 
       if (!result) {
-        const shouldForceNetworkInitially = !hasHiddenOlderLocalMessages;
+        const shouldForceNetworkInitially =
+          !isMobileMessageViewport() || !hasHiddenOlderLocalMessages;
         result = await fetchOlderMessages(shouldForceNetworkInitially);
 
         if (
@@ -1424,7 +1425,8 @@ export function useMessageScroll(
 
           const result = await fetchMessagesForTopic(route.value.id, {
             afterMessageId: lastMessage.id,
-            skipSave: true
+            skipSave: true,
+            forceNetwork: !isMobileViewport
           });
           hasNewMessage = result.length > 0;
 

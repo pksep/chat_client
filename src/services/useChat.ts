@@ -49,7 +49,10 @@ import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { initCallKit, showIncomingCallKit, endAllCallKits } from './useCallKit';
-import { clearTopicNotifications } from './useNotificationNavigation';
+import {
+  clearMessageNotification,
+  clearTopicNotifications
+} from './useNotificationNavigation';
 import {
   showTauriIncomingCallNotification,
   showTauriMessageNotification
@@ -102,6 +105,14 @@ import {
 } from './useChatBackgroundSync';
 
 let chatSDK: ChatSDK | null = null;
+type ChatSDKReadyWaiter = (sdk: ChatSDK) => void;
+const chatSDKReadyWaiters = new Set<ChatSDKReadyWaiter>();
+
+const notifyChatSDKReady = (sdk: ChatSDK): void => {
+  chatSDKReadyWaiters.forEach(resolve => resolve(sdk));
+  chatSDKReadyWaiters.clear();
+};
+
 type CallsApi = typeof import('./useCalls');
 let callsApi: CallsApi | null = null;
 let callsApiPromise: Promise<CallsApi> | null = null;
@@ -475,21 +486,18 @@ const setupChatListeners = (): void => {
       });
       handleIncomingSocketMessage(payload.data, opts);
     } else if (payload.type === 'DELETE') {
+      const deletedMessageId = payload.data.id || payload.messageId;
+
       void recordShadowChatEvent({
         topicId: payload.data.topicId,
         type: 'delete_message',
         source: 'ws',
         payload: payload.data
       });
-      void removeCallHistoryMessage(payload.data.id || payload.messageId);
-      clearDeletedReactionTarget(
-        payload.data.topicId,
-        payload.data.id || payload.messageId
-      );
-      deleteMessageFromLocal(
-        payload.data.topicId,
-        payload.data.id || payload.messageId
-      );
+      void removeCallHistoryMessage(deletedMessageId);
+      clearDeletedReactionTarget(payload.data.topicId, deletedMessageId);
+      deleteMessageFromLocal(payload.data.topicId, deletedMessageId);
+      void clearMessageNotification(payload.data.topicId, deletedMessageId);
     } else if (payload.type === 'CHANGE' || payload.type === 'PIN') {
       void recordShadowChatEvent({
         topicId: payload.data.topicId,
@@ -711,6 +719,7 @@ const setupChatListeners = (): void => {
     if (payloadTopicId) {
       clearDeletedReactionTarget(payloadTopicId, event.payload.messageId);
       deleteMessageFromLocal(payloadTopicId, event.payload.messageId);
+      void clearMessageNotification(payloadTopicId, event.payload.messageId);
       return;
     }
 
@@ -724,8 +733,11 @@ const setupChatListeners = (): void => {
       ) {
         clearDeletedReactionTarget(topicId, event.payload.messageId);
         deleteMessageFromLocal(topicId, event.payload.messageId);
+        void clearMessageNotification(topicId, event.payload.messageId);
       }
     });
+
+    void clearMessageNotification(null, event.payload.messageId);
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.USER_UPDATED, event => {
@@ -1820,6 +1832,7 @@ export const initializeChat = async (options: {
     wsUrl: options.wsUrl,
     token: options.token
   });
+  notifyChatSDKReady(chatSDK);
   hasCompletedInitialConnection = false;
   chatSDK.setConnectionStateListener(connected => {
     const wasConnected = hasWebsocketConnection.value;
@@ -1972,6 +1985,36 @@ export const initializeChat = async (options: {
 
 export const getChatSDK = (): ChatSDK | null => {
   return chatSDK;
+};
+
+export const waitForChatSDK = (timeoutMs = 10000): Promise<ChatSDK | null> => {
+  if (chatSDK) {
+    return Promise.resolve(chatSDK);
+  }
+
+  return new Promise(resolve => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let isSettled = false;
+
+    const finish = (sdk: ChatSDK | null): void => {
+      if (isSettled) {
+        return;
+      }
+
+      isSettled = true;
+      chatSDKReadyWaiters.delete(handleReady);
+
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
+
+      resolve(sdk);
+    };
+    const handleReady: ChatSDKReadyWaiter = sdk => finish(sdk);
+
+    chatSDKReadyWaiters.add(handleReady);
+    timeoutId = setTimeout(() => finish(null), Math.max(0, timeoutMs));
+  });
 };
 
 export const setCurrentUserId = (userId?: string | null): void => {

@@ -1,5 +1,5 @@
 import { shallowReactive } from 'vue';
-import { getChatSDK } from './useChat';
+import { getChatSDK, getHasBrowserNetwork, waitForChatSDK } from './useChat';
 import {
   IMedia,
   IMessage,
@@ -1307,7 +1307,7 @@ export const fetchMessagesForTopic = async (
     );
     const direction = getHistoryDirection(opts);
 
-    if (!navigator.onLine) {
+    if (!getHasBrowserNetwork()) {
       if (
         (opts?.lastMessageId || opts?.afterMessageId) &&
         existingMessages.length > 0
@@ -1385,50 +1385,6 @@ export const fetchMessagesForTopic = async (
           afterMessageId: opts?.afterMessageId || null
         });
         return existingMessages;
-      }
-    }
-
-    if (
-      !opts?.forceRefresh &&
-      !opts?.forceNetwork &&
-      (opts?.lastMessageId || opts?.afterMessageId) &&
-      existingMessages.length > 0
-    ) {
-      const localPage = await applyShadowReadStateToMessages(
-        topicId,
-        resolveLocalTopicPage(topicId, opts)
-      );
-
-      if (localPage.length > 0) {
-        if (!opts?.skipSave) {
-          mergeMessagesForTopic(
-            topicId,
-            localPage,
-            opts.lastMessageId ? 'prepend' : 'append',
-            {
-              syncLastMessage: opts?.syncLastMessage ?? false,
-              windowMode: getWindowModeForFetch(opts),
-              visibleLimit: getNonShrinkingVisibleLimit(
-                topicId,
-                opts?.visibleLimit,
-                isPaginationRequest,
-                opts?.allowVisibleShrink
-              ),
-              updateVisible: opts?.updateVisible
-            }
-          );
-        }
-
-        traceHistoryResolution(topicId, {
-          direction,
-          source: 'memory-store',
-          resolution: 'cache_hit',
-          resultCount: localPage.length,
-          lastMessageId: opts?.lastMessageId || null,
-          afterMessageId: opts?.afterMessageId || null
-        });
-
-        return localPage;
       }
     }
 
@@ -1510,7 +1466,12 @@ export const fetchMessagesForTopic = async (
       }
     }
 
-    const sdk = getChatSDK();
+    let sdk = getChatSDK();
+
+    if (!sdk && opts?.forceNetwork) {
+      sdk = await waitForChatSDK();
+    }
+
     if (!sdk) {
       return opts?.allowStaleFallback === false ? [] : existingMessages;
     }
@@ -2362,7 +2323,6 @@ export const hydrateMessagesFromCache = async (
         skipPersist: true
       });
       markTopicStateCanonical(topicId);
-      void saveShadowLoadedRange(topicId, normalizedShadowMessages);
 
       return normalizedShadowMessages;
     }
@@ -2400,7 +2360,6 @@ export const hydrateMessagesFromCache = async (
         replace: true
       }
     );
-    void saveShadowLoadedRange(topicId, normalizedCachedMessages, userId);
     void syncShadowReadStateFromMessages(
       topicId,
       normalizedCachedMessages,

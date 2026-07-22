@@ -24,6 +24,14 @@ public class ChatFirebaseMessagingService extends FirebaseMessagingService {
         }
 
         String action = data.get("action");
+        if ("CLEAR_CHAT_NOTIFICATIONS".equals(action)) {
+            ChatNotificationDismissalHelper.dismissTopicNotification(
+                this,
+                data.get("topicId")
+            );
+            return;
+        }
+
         if ("DISMISS_INCOMING_CALL".equals(action)) {
             String dismissRoomId = data.get("roomId");
 

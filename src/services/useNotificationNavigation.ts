@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
+import { shallowRef } from 'vue';
 import { navigateToDialogs, navigateToGroup } from '../composables/navigation';
 import {
   RouteTypes,
@@ -7,12 +8,43 @@ import {
 } from '../composables/navigation/useUrlRouting';
 import {
   activateTauriAppWindow,
+  clearTauriMessageNotification,
   clearTauriTopicNotifications,
   isTauriRuntime
 } from './useTauriNotifications';
 import { getIsAppActivelyVisible } from './useAppVisibility';
 
 type NotificationTopicType = 'DM' | 'GROUP' | null;
+
+interface NotificationTopicRefreshRequest {
+  id: number;
+  topicId: string;
+}
+
+let notificationTopicRefreshRequestId = 0;
+export const notificationTopicRefreshRequest =
+  shallowRef<NotificationTopicRefreshRequest | null>(null);
+
+export const consumeNotificationTopicRefreshRequest = (
+  topicId: string,
+  requestId: number
+): boolean => {
+  const request = notificationTopicRefreshRequest.value;
+
+  if (request?.topicId !== topicId || request.id !== requestId) {
+    return false;
+  }
+
+  notificationTopicRefreshRequest.value = null;
+  return true;
+};
+
+const requestNotificationTopicRefresh = (topicId: string): void => {
+  notificationTopicRefreshRequest.value = {
+    id: ++notificationTopicRefreshRequestId,
+    topicId
+  };
+};
 
 export interface NotificationNavigationPayload {
   topicId?: string | null;
@@ -163,6 +195,10 @@ export const navigateToNotificationTarget = (
     return false;
   }
 
+  if (target.topicId) {
+    requestNotificationTopicRefresh(target.topicId);
+  }
+
   if (isTauriRuntime()) {
     void (async () => {
       await activateTauriAppWindow();
@@ -310,6 +346,99 @@ export const clearTopicNotifications = async (
     });
   } catch (error) {
     console.warn('Failed to clear web notifications for topic:', error);
+  }
+};
+
+const resolveDeliveredNotificationMessageId = (notification: {
+  data?: Record<string, any>;
+}): string | null => {
+  const data = notification.data || {};
+  const messageId =
+    data.messageId ||
+    data.message?.id ||
+    data.data?.messageId ||
+    data.data?.message?.id;
+
+  return messageId ? String(messageId) : null;
+};
+
+export const clearMessageNotification = async (
+  topicId?: string | null,
+  messageId?: string | null
+): Promise<void> => {
+  if (!messageId) {
+    return;
+  }
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const delivered = await PushNotifications.getDeliveredNotifications();
+      const topicNotifications = topicId
+        ? delivered.notifications.filter(
+            notification =>
+              resolveNotificationTopicId({
+                topicId: notification.data?.topicId,
+                chatId: notification.data?.chatId,
+                dialogsId: notification.data?.dialogsId,
+                groupId: notification.data?.groupId,
+                tag: notification.tag || notification.data?.tag,
+                url: notification.link || notification.data?.url,
+                link:
+                  notification.click_action ||
+                  notification.data?.link ||
+                  notification.data?.click_action
+              }) === topicId
+          )
+        : delivered.notifications;
+      const exactNotifications = topicNotifications.filter(
+        notification =>
+          resolveDeliveredNotificationMessageId(notification) === messageId
+      );
+      const notificationsToRemove =
+        exactNotifications.length > 0
+          ? exactNotifications
+          : topicId
+            ? topicNotifications.filter(
+                notification =>
+                  resolveDeliveredNotificationMessageId(notification) === null
+              )
+            : [];
+
+      if (notificationsToRemove.length > 0) {
+        await PushNotifications.removeDeliveredNotifications({
+          notifications: notificationsToRemove
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to clear native notification for message:', error);
+    }
+
+    return;
+  }
+
+  if (isTauriRuntime()) {
+    await clearTauriMessageNotification(topicId, messageId);
+    return;
+  }
+
+  if (!('serviceWorker' in navigator)) {
+    return;
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const activeWorker =
+      navigator.serviceWorker.controller ||
+      registration.active ||
+      registration.waiting;
+
+    activeWorker?.postMessage({
+      type: 'CLEAR_MESSAGE_NOTIFICATION',
+      topicId,
+      messageId
+    });
+  } catch (error) {
+    console.warn('Failed to clear web notification for message:', error);
   }
 };
 

@@ -56,7 +56,7 @@ public class MainActivity extends BridgeActivity {
     private static final String PREF_WEBVIEW_CACHE_VERSION_CODE =
         "webview_cache_version_code";
     private static final int LAUNCH_BACKGROUND_COLOR = 0xFFF8F9FD;
-    private static final long LAUNCH_SPLASH_FALLBACK_TIMEOUT_MS = 650L;
+    private static final long LAUNCH_SPLASH_FALLBACK_TIMEOUT_MS = 6000L;
     private static final long STARTUP_OVERLAY_FALLBACK_TIMEOUT_MS = 6000L;
     private static boolean customPluginsRegistered = false;
     private boolean launchedFromIncomingCall = false;
@@ -85,7 +85,6 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         applyLaunchBackground();
         configureBridgeWebViewBackground();
-        installStartupOverlay();
         setPortraitOrientation();
         configureIncomingCallWindow(getIntent());
         handleCallIntent(getIntent());

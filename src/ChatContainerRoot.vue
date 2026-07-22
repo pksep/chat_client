@@ -1,12 +1,18 @@
 <template>
-  <ChatContainer v-bind="props" />
+  <ChatContainer
+    v-bind="props"
+    @rendered-topic-change="handleRenderedTopicChange"
+  />
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch } from 'vue';
+import { nextTick, onMounted, onUnmounted, watch } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
 
-import type { IChatContainerProps } from './components/interfaces/interfaces';
+import type {
+  IChatContainerProps,
+  IMessageRenderedTopicState
+} from './components/interfaces/interfaces';
 import { initializeChat, setCurrentUserId } from './services/useChat';
 import {
   saveUserIdToSession,
@@ -58,6 +64,9 @@ import { installNotoEmojiFontFaces } from './composables/useEmojiStyle';
 import { importAnyChatBackgroundSnapshot } from './services/useChatBackgroundSync';
 
 const props = defineProps<IChatContainerProps>();
+const emit = defineEmits<{
+  (e: 'ready'): void;
+}>();
 
 installNotoEmojiFontFaces();
 
@@ -198,6 +207,39 @@ const getActiveChatTopicId = (): string | null => {
   }
 
   return null;
+};
+
+let isAppInitializationComplete = false;
+let isActiveTopicRenderReady = false;
+let isStartupReadyScheduled = false;
+
+const scheduleStartupReady = (): void => {
+  const activeTopicId = getActiveChatTopicId();
+
+  if (
+    isStartupReadyScheduled ||
+    !isAppInitializationComplete ||
+    (activeTopicId && !isActiveTopicRenderReady)
+  ) {
+    return;
+  }
+
+  isStartupReadyScheduled = true;
+  void nextTick(() => emit('ready'));
+};
+
+const handleRenderedTopicChange = (
+  payload: IMessageRenderedTopicState
+): void => {
+  const activeTopicId = getActiveChatTopicId();
+
+  isActiveTopicRenderReady =
+    !activeTopicId ||
+    (payload.routeTopicId === activeTopicId &&
+      payload.isCurrent &&
+      payload.isReady === true);
+
+  scheduleStartupReady();
 };
 
 const updateNotificationContext = () => {
@@ -444,7 +486,12 @@ const runAppInitialization = async () => {
 onMounted(async () => {
   initFocusTracking();
 
-  await runAppInitialization();
+  try {
+    await runAppInitialization();
+  } finally {
+    isAppInitializationComplete = true;
+    scheduleStartupReady();
+  }
 });
 
 watch(

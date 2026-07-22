@@ -64,6 +64,8 @@
   scroll-behavior: auto;
 
   @media screen and (width > 768px) {
+    --header-height: 60px;
+
     &.chat-container--active-call {
       --header-height: 101px;
     }

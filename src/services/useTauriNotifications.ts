@@ -21,6 +21,7 @@ type TauriNotificationExtra = Record<string, unknown> & {
   callerId?: string | null;
   dialogsId?: string | null;
   groupId?: string | null;
+  messageId?: string | null;
   roomId?: string | null;
   topicId?: string | null;
   topicType?: string | null;
@@ -41,6 +42,7 @@ const TAURI_NOTIFICATION_CLICK_EVENT = 'sep-chat://notification-click';
 
 let permissionGrantedCache: boolean | null = null;
 let isActionListenerBound = false;
+const activeMessageNotificationIdsByTopic = new Map<string, string>();
 
 export const isTauriRuntime = (): boolean => {
   try {
@@ -306,7 +308,7 @@ export const showTauriMessageNotification = async ({
   const resolvedTopicType = normalizeTopicType(topic?.type);
   const isGroupTopic = resolvedTopicType === 'GROUP';
 
-  return showTauriNotification({
+  const wasShown = await showTauriNotification({
     id: getTauriMessageNotificationId(message.topicId),
     title: getMessageNotificationTitle(message, topic, sender),
     body: getMessagePreview(message),
@@ -314,6 +316,7 @@ export const showTauriMessageNotification = async ({
     extra: {
       dialogsId: !isGroupTopic ? message.topicId : null,
       groupId: isGroupTopic ? message.topicId : null,
+      messageId: message.id,
       topicId: message.topicId,
       topicType: resolvedTopicType,
       type: 'new_message',
@@ -322,6 +325,55 @@ export const showTauriMessageNotification = async ({
         : `/dialogs/${message.topicId}`
     }
   });
+
+  if (wasShown) {
+    activeMessageNotificationIdsByTopic.set(message.topicId, message.id);
+  }
+
+  return wasShown;
+};
+
+export const clearTauriMessageNotification = async (
+  topicId?: string | null,
+  messageId?: string | null
+): Promise<void> => {
+  if (!messageId || !isTauriRuntime()) {
+    return;
+  }
+
+  const resolvedTopicId =
+    topicId ||
+    Array.from(activeMessageNotificationIdsByTopic.entries()).find(
+      ([, activeMessageId]) => activeMessageId === messageId
+    )?.[0];
+
+  if (!resolvedTopicId) {
+    return;
+  }
+
+  const activeMessageId =
+    activeMessageNotificationIdsByTopic.get(resolvedTopicId);
+
+  if (activeMessageId && activeMessageId !== messageId) {
+    return;
+  }
+
+  try {
+    await removeActive([
+      { id: getTauriMessageNotificationId(resolvedTopicId) }
+    ]);
+    activeMessageNotificationIdsByTopic.delete(resolvedTopicId);
+
+    if (isWindowsEnvironment()) {
+      await invoke<boolean>('clear_windows_topic_notifications', {
+        topicId: resolvedTopicId
+      }).catch(error => {
+        console.warn('Failed to clear Windows native notification:', error);
+      });
+    }
+  } catch (error) {
+    console.warn('Failed to clear Tauri message notification:', error);
+  }
 };
 
 export const showTauriIncomingCallNotification = async ({
@@ -376,6 +428,7 @@ export const clearTauriTopicNotifications = async (
   }
 
   try {
+    activeMessageNotificationIdsByTopic.delete(topicId);
     await removeActive([
       { id: getTauriMessageNotificationId(topicId) },
       { id: getTauriCallNotificationId(topicId) }
@@ -399,6 +452,7 @@ export const clearAllTauriNotifications = async (): Promise<void> => {
   }
 
   try {
+    activeMessageNotificationIdsByTopic.clear();
     await removeAllActive();
   } catch (error) {
     console.warn('Failed to clear Tauri notifications:', error);

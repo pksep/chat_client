@@ -40,6 +40,7 @@
       :on-update-click="handleUpdateClick"
       :on-dismiss-update-banner="dismissUpdateBanner"
       :dataTestid="`${props.dataTestid}-ChatContainer-Chat`"
+      @rendered-topic-change="emit('rendered-topic-change', $event)"
     />
     <template v-if="!isMobile">
       <Modal
@@ -183,7 +184,8 @@ import BotInfoPanel from './BotInfoPanel.vue';
 import {
   MobilePlatformEnum,
   type IChatContainerProps,
-  type IHeaderDisplayRoute
+  type IHeaderDisplayRoute,
+  type IMessageRenderedTopicState
 } from './interfaces/interfaces';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
@@ -301,7 +303,7 @@ const chatContainerClasses = computed(() => [
         : !state.isMenuDesktopOpen,
     'chat-container--wallpaper': isWallpaperApplied.value,
     'chat-container--active-call':
-      (isCallActive.value && !isAnyCallModalVisible.value) ||
+      isCallActive.value ||
       !!pendingGroupCallInfo.value?.[route.value?.id || ''] ||
       !!invitedGroupCallInfo.value?.isJoinAvailable
   }
@@ -327,6 +329,9 @@ const userInfoModalTitle = computed(() =>
 const props = withDefaults(defineProps<IChatContainerProps>(), {
   dataTestid: 'ChatContainer'
 });
+const emit = defineEmits<{
+  (e: 'rendered-topic-change', payload: IMessageRenderedTopicState): void;
+}>();
 
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 const isVpnConfirmModalOpen = ref(false);

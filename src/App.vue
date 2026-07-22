@@ -1,5 +1,9 @@
 <template>
-  <ChatContainerRoot v-if="config && !isCredentialsStep" :config="config" />
+  <ChatContainerRoot
+    v-if="config && !isCredentialsStep"
+    :config="config"
+    @ready="handleChatContentReady"
+  />
 
   <AuthorizationScreen
     v-else-if="!isBootstrapping"
@@ -21,32 +25,6 @@
     @back="returnToOrganizationStep"
     @qr-auth-success="handleQrAuthSuccess"
   />
-
-  <Transition name="app-startup-shell-fade">
-    <section
-      v-if="isStartupShellVisible"
-      class="app-startup-shell"
-      data-testid="App-Bootstrap"
-      aria-hidden="true"
-    >
-      <div class="app-startup-shell__content">
-        <div class="app-startup-shell__title"></div>
-        <div class="app-startup-shell__search"></div>
-        <div class="app-startup-shell__filters">
-          <div class="app-startup-shell__chip"></div>
-          <div class="app-startup-shell__chip"></div>
-          <div class="app-startup-shell__chip"></div>
-        </div>
-        <div v-for="index in 7" :key="index" class="app-startup-shell__row">
-          <div class="app-startup-shell__avatar"></div>
-          <div>
-            <div class="app-startup-shell__line"></div>
-            <div class="app-startup-shell__subline"></div>
-          </div>
-        </div>
-      </div>
-    </section>
-  </Transition>
 
   <IosInstallPromptModal
     :open="isIosInstallPromptOpen"
@@ -109,11 +87,20 @@ const getStoredOrganizations = (): IStoredOrganization[] => {
 };
 
 const shouldSkipStartupShell = consumeAuthRedirectStartupShellSkip();
+const startupShellElement = document.getElementById('startup-shell');
+
+if (shouldSkipStartupShell) {
+  startupShellElement?.remove();
+}
+
 const config = ref<IChatContainerConfig | null>(null);
 const errorMessage = ref('');
 const isLoading = ref(false);
 const isBootstrapping = ref(!shouldSkipStartupShell);
-const isStartupShellVisible = ref(!shouldSkipStartupShell);
+const isStartupShellVisible = ref(
+  !shouldSkipStartupShell && Boolean(startupShellElement)
+);
+const isChatContentReady = ref(false);
 const identifierValue = ref('');
 const passwordValue = ref('');
 const rememberAccount = ref(true);
@@ -154,14 +141,34 @@ const wait = (durationMs: number) =>
   });
 
 const STARTUP_SHELL_LEAVE_MS = 200;
+let isStartupShellHideScheduled = false;
 
 const hideStartupShellAfterMainPaint = async () => {
   await nextTick();
   await waitForAnimationFrame();
   await waitForAnimationFrame();
+  startupShellElement?.classList.add('startup-shell--leaving');
   isStartupShellVisible.value = false;
   await wait(STARTUP_SHELL_LEAVE_MS);
+  startupShellElement?.remove();
   dispatchNativeStartupReady();
+};
+
+const requestStartupShellHide = () => {
+  if (!isStartupShellVisible.value || isStartupShellHideScheduled) {
+    return;
+  }
+
+  isStartupShellHideScheduled = true;
+  void hideStartupShellAfterMainPaint();
+};
+
+const handleChatContentReady = () => {
+  isChatContentReady.value = true;
+
+  if (!isBootstrapping.value) {
+    requestStartupShellHide();
+  }
 };
 
 const finishBootstrapping = () => {
@@ -172,7 +179,15 @@ const finishBootstrapping = () => {
     return;
   }
 
-  void hideStartupShellAfterMainPaint();
+  if (config.value && !isCredentialsStep.value) {
+    if (isChatContentReady.value) {
+      requestStartupShellHide();
+    }
+
+    return;
+  }
+
+  requestStartupShellHide();
 };
 
 const parseRuntimeConfig = (
@@ -667,6 +682,9 @@ onMounted(async () => {
   position: fixed;
   inset: 0;
   z-index: 2600;
+  display: grid;
+  grid-template-columns: 345px minmax(0, 1fr);
+  height: 100dvh;
   min-height: 100dvh;
   background: #f8f9fd;
   color: #111827;
@@ -694,35 +712,64 @@ onMounted(async () => {
 }
 
 .app-startup-shell__content {
-  padding: 62px 16px 24px;
+  display: grid;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 20px 10px 0;
+  border-right: 0.5px solid #e5e7eb;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.app-startup-shell__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+  padding: 0 16px 10px;
 }
 
 .app-startup-shell__title {
-  width: 132px;
-  height: 32px;
-  margin-bottom: 24px;
-  border-radius: 8px;
+  width: 104px;
+  height: 24px;
+  border-radius: 6px;
+}
+
+.app-startup-shell__create {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+}
+
+.app-startup-shell__divider {
+  height: 1px;
+  margin: 0 10px 10px;
+  background: #eef1f5;
 }
 
 .app-startup-shell__search {
-  height: 52px;
-  margin-bottom: 14px;
-  border-radius: 10px;
+  height: 40px;
+  margin: 0 10px 10px;
+  border-radius: 8px;
   background: #f5f7fb;
 }
 
 .app-startup-shell__filters {
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: 5px;
+  min-height: 43px;
+  padding: 0 10px 10px;
+  box-sizing: border-box;
 }
 
 .app-startup-shell__chip {
   width: 70px;
-  height: 34px;
+  height: 33px;
   border: 1px solid #d9e5ff;
-  border-radius: 18px;
+  border-radius: 15px;
   background: #eef4ff;
+  box-sizing: border-box;
 }
 
 .app-startup-shell__chip:nth-child(2) {
@@ -737,40 +784,334 @@ onMounted(async () => {
   background: #ffffff;
 }
 
+.app-startup-shell__chip:nth-child(4) {
+  width: 64px;
+  border-color: #e5e7eb;
+  background: #ffffff;
+}
+
+.app-startup-shell__list {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .app-startup-shell__row {
   display: grid;
-  grid-template-columns: 60px 1fr;
-  column-gap: 16px;
+  grid-template-columns: 50px minmax(0, 1fr);
+  column-gap: 10px;
   align-items: center;
-  height: 82px;
+  min-height: 60px;
+  padding: 0 10px;
+  box-sizing: border-box;
 }
 
 .app-startup-shell__title,
+.app-startup-shell__create,
 .app-startup-shell__avatar,
 .app-startup-shell__line,
-.app-startup-shell__subline {
+.app-startup-shell__subline,
+.app-startup-shell__nav-item,
+.app-startup-shell__header-avatar,
+.app-startup-shell__header-line,
+.app-startup-shell__header-subline,
+.app-startup-shell__header-action,
+.app-startup-shell__message-avatar,
+.app-startup-shell__message-bubble,
+.app-startup-shell__composer-text,
+.app-startup-shell__composer-toolbar-button {
   background: linear-gradient(90deg, #eef2f7, #f8fafc, #eef2f7);
   background-size: 180% 100%;
   animation: app-startup-pulse 1.2s ease-in-out infinite;
 }
 
 .app-startup-shell__avatar {
-  width: 60px;
-  height: 60px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
 }
 
 .app-startup-shell__line {
   width: 78%;
-  height: 20px;
-  margin-bottom: 12px;
+  height: 14px;
+  margin-bottom: 9px;
   border-radius: 6px;
 }
 
 .app-startup-shell__subline {
-  width: 92%;
-  height: 18px;
+  width: 54%;
+  height: 12px;
   border-radius: 6px;
+}
+
+.app-startup-shell__navigation {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: center;
+  gap: 12px;
+  height: 58px;
+  margin: 0 -10px;
+  padding: 10px 28px;
+  border-top: 1px solid #eef3ff;
+  border-radius: 15px 15px 0 0;
+  box-shadow: 0 0 22px rgb(0 0 0 / 7%);
+  box-sizing: border-box;
+}
+
+.app-startup-shell__nav-item {
+  width: 38px;
+  height: 38px;
+  justify-self: center;
+  border-radius: 50%;
+}
+
+.app-startup-shell__main {
+  display: grid;
+  grid-template-rows: 60px minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.app-startup-shell__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 7px 16px;
+  border-bottom: 0.5px solid #e5e7eb;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.app-startup-shell__header-avatar {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.app-startup-shell__header-profile {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-startup-shell__header-line {
+  width: 150px;
+  height: 14px;
+  margin-bottom: 6px;
+  border-radius: 5px;
+}
+
+.app-startup-shell__header-subline {
+  width: 92px;
+  height: 10px;
+  border-radius: 5px;
+}
+
+.app-startup-shell__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-startup-shell__header-action {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.app-startup-shell__messages {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 12px;
+  min-height: 0;
+  padding: 22px 18px 16px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.app-startup-shell__message-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
+.app-startup-shell__message-row--outgoing {
+  justify-content: flex-end;
+}
+
+.app-startup-shell__message-avatar {
+  flex: 0 0 35px;
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+}
+
+.app-startup-shell__message-bubble {
+  width: min(42%, 320px);
+  height: 42px;
+  border-radius: 18px 18px 18px 6px;
+}
+
+.app-startup-shell__message-row--outgoing .app-startup-shell__message-bubble {
+  width: min(36%, 280px);
+  border-radius: 18px 18px 6px 18px;
+  background-color: #e9f0ff;
+}
+
+.app-startup-shell__message-bubble--short {
+  width: min(28%, 210px);
+}
+
+.app-startup-shell__message-bubble--wide {
+  width: min(52%, 390px);
+  height: 54px;
+}
+
+.app-startup-shell__composer {
+  padding: 0 10px 15px 15px;
+  box-sizing: border-box;
+}
+
+.app-startup-shell__composer-editor {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 105px;
+  border: 0.5px solid #dce1e8;
+  border-radius: 20px;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.app-startup-shell__composer-text {
+  width: min(36%, 260px);
+  height: 14px;
+  margin: 20px 16px;
+  border-radius: 5px;
+}
+
+.app-startup-shell__composer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  margin: 0 16px 16px;
+}
+
+.app-startup-shell__composer-toolbar-button {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+}
+
+.app-startup-shell__composer-toolbar-button:last-child {
+  margin-left: auto;
+  background-color: #e2eaff;
+}
+
+@media screen and (width <= 768px) {
+  .app-startup-shell {
+    grid-template-columns: minmax(0, 1fr);
+    height: 100dvh;
+  }
+
+  .app-startup-shell__content {
+    display: grid;
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+    min-height: 100dvh;
+    padding: 10px 0 0;
+    border-right: 0;
+    background: #ffffff;
+  }
+
+  .app-startup-shell__toolbar {
+    display: flex;
+    min-height: 24px;
+    padding: 0 16px 10px;
+  }
+
+  .app-startup-shell__title {
+    width: 58px;
+    height: 24px;
+    margin: 0;
+    border-radius: 6px;
+  }
+
+  .app-startup-shell__main {
+    display: none;
+  }
+
+  .app-startup-shell__divider {
+    margin: 0 0 10px;
+  }
+
+  .app-startup-shell__search {
+    height: 40px;
+    margin: 0 16px 10px;
+    border-radius: 8px;
+  }
+
+  .app-startup-shell__filters {
+    gap: 5px;
+    min-height: 43px;
+    margin: 0;
+    padding: 0 16px 10px;
+  }
+
+  .app-startup-shell__chip {
+    width: 50px;
+    height: 33px;
+    border-radius: 15px;
+  }
+
+  .app-startup-shell__chip:nth-child(2) {
+    width: 60px;
+  }
+
+  .app-startup-shell__chip:nth-child(3) {
+    width: 78px;
+  }
+
+  .app-startup-shell__chip:nth-child(4) {
+    width: 62px;
+  }
+
+  .app-startup-shell__row {
+    grid-template-columns: 60px minmax(0, 1fr);
+    column-gap: 10px;
+    height: 82px;
+    padding: 0 16px;
+  }
+
+  .app-startup-shell__row > div:last-child {
+    display: grid;
+    align-content: center;
+    height: 100%;
+    border-bottom: 1px solid #f5f7fb;
+    box-sizing: border-box;
+  }
+
+  .app-startup-shell__avatar {
+    width: 60px;
+    height: 60px;
+  }
+
+  .app-startup-shell__line {
+    height: 20px;
+    margin-bottom: 12px;
+  }
+
+  .app-startup-shell__subline {
+    width: 92%;
+    height: 18px;
+  }
+
+  .app-startup-shell__navigation {
+    height: calc(58px + env(safe-area-inset-bottom, 0px));
+    margin: 0;
+    padding: 10px 18px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 @keyframes app-startup-pulse {

@@ -118,6 +118,66 @@ const closeNotificationsForTopic = async topicId => {
   });
 };
 
+const getNotificationMessageId = notification => {
+  const data = notification?.data || {};
+
+  return (
+    data.messageId ||
+    data.message?.id ||
+    data.data?.messageId ||
+    data.data?.message?.id ||
+    null
+  );
+};
+
+const closeNotificationForMessage = async (topicId, messageId) => {
+  if (!messageId) {
+    return;
+  }
+
+  const notifications = await self.registration.getNotifications();
+  const topicNotifications = topicId
+    ? notifications.filter(notification => {
+        const notificationTopicId =
+          notification.data?.topicId || notification.tag || null;
+
+        return notificationTopicId === topicId;
+      })
+    : notifications;
+  const exactNotifications = topicNotifications.filter(
+    notification => String(getNotificationMessageId(notification)) === messageId
+  );
+  const notificationsToClose =
+    exactNotifications.length > 0
+      ? exactNotifications
+      : topicId
+        ? topicNotifications.filter(
+            notification => getNotificationMessageId(notification) === null
+          )
+        : [];
+
+  notificationsToClose.forEach(notification => {
+    notification.close();
+  });
+};
+
+const closeDeletedMessageNotificationsFromEvents = async events => {
+  for (const event of Array.isArray(events) ? events : []) {
+    if (event?.eventType !== 'message.delete') {
+      continue;
+    }
+
+    const payload = event.payload || {};
+    const topicId = event.topicId || payload.topicId || null;
+    const messageId =
+      payload.messageId || payload.id || event.messageId || null;
+
+    if (topicId && messageId) {
+      await closeNotificationForMessage(String(topicId), String(messageId));
+    }
+  }
+};
+
 const closeAllNotifications = async () => {
   const notifications = await self.registration.getNotifications();
 
@@ -168,6 +228,9 @@ const runChatBackgroundSyncFromPayload = async (payload, source) => {
   });
 
   if (result?.ok) {
+    await closeDeletedMessageNotificationsFromEvents(
+      result.snapshot?.events || []
+    );
     await notifyChatBackgroundSyncUpdated(source);
   } else if (result?.retryable) {
     await registerChatBackgroundSyncRetry();
@@ -188,6 +251,12 @@ self.addEventListener('message', event => {
 
   if (event.data?.type === 'CLEAR_ALL_NOTIFICATIONS') {
     event.waitUntil(closeAllNotifications());
+  }
+
+  if (event.data?.type === 'CLEAR_MESSAGE_NOTIFICATION') {
+    event.waitUntil(
+      closeNotificationForMessage(event.data.topicId, event.data.messageId)
+    );
   }
 
   if (event.data?.type === 'CHAT_BACKGROUND_SYNC_REQUEST') {

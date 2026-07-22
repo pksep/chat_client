@@ -25,6 +25,7 @@ export interface IMessageRenderedTopicState {
   routeTopicId: string | null;
   messageCount: number;
   isCurrent: boolean;
+  isReady?: boolean;
 }
 
 export interface IMenuEmits {
