@@ -370,19 +370,15 @@ const MANAGED_BACKGROUND_CAMERA_PUBLISH_DEFAULTS = {
 };
 const SCREEN_SHARE_CAPTURE_DEFAULTS = {
   contentHint: 'detail' as const,
-  resolution: ScreenSharePresets.h1080fps15.resolution,
+  resolution: ScreenSharePresets.original.resolution,
   selfBrowserSurface: 'exclude' as const,
   surfaceSwitching: 'include' as const,
   systemAudio: 'exclude' as const
 };
 const SCREEN_SHARE_PUBLISH_DEFAULTS = {
-  degradationPreference: 'balanced' as RTCDegradationPreference,
-  simulcast: true,
-  screenShareEncoding: ScreenSharePresets.h1080fps15.encoding,
-  screenShareSimulcastLayers: [
-    ScreenSharePresets.h360fps3,
-    ScreenSharePresets.h720fps5
-  ]
+  degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
+  simulcast: false,
+  screenShareEncoding: ScreenSharePresets.original.encoding
 };
 const LIVEKIT_RECONNECT_POLICY: ReconnectPolicy = {
   nextRetryDelayInMs(context: ReconnectContext): number {
@@ -2705,7 +2701,7 @@ const applyRemoteVideoSubscriptionPreferences = (
         ? 5
         : 15
       : source === 'screen'
-        ? 15
+        ? 30
         : 24
   );
 
@@ -2721,7 +2717,9 @@ const applyRemoteVideoSubscriptionPreferences = (
     return;
   }
 
-  publication.setVideoQuality(VideoQuality.LOW);
+  publication.setVideoQuality(
+    source === 'screen' ? VideoQuality.HIGH : VideoQuality.LOW
+  );
 };
 
 const syncRemoteVideoSubscriptionPreferences = () => {
@@ -2759,7 +2757,9 @@ const setLocalVideoPublishingQuality = (
   localVideoPublishingQuality = maxQuality;
 
   activeRoom.localParticipant.videoTrackPublications.forEach(publication => {
-    publication.videoTrack?.setPublishingQuality(maxQuality);
+    if (publication.source === Track.Source.Camera) {
+      publication.videoTrack?.setPublishingQuality(maxQuality);
+    }
   });
 
   syncRemoteVideoSubscriptionPreferences();
@@ -3813,10 +3813,7 @@ const setupRoomListeners = (activeRoom: Room) => {
           recoveryAttemptCount: screenShareRecoveryAttemptCount
         });
       }
-      if (
-        publication.source === Track.Source.Camera ||
-        publication.source === Track.Source.ScreenShare
-      ) {
+      if (publication.source === Track.Source.Camera) {
         setLocalVideoPublishingQuality(
           activeRoom,
           localVideoPublishingQuality,
@@ -6034,6 +6031,32 @@ const getLocalScreenSharePublication = (activeRoom = room) => {
   ).find(publication => publication.source === Track.Source.ScreenShare);
 };
 
+const isHealthyLocalScreenSharePublication = (
+  publication: ReturnType<typeof getLocalScreenSharePublication>
+): boolean =>
+  Boolean(
+    publication &&
+      !publication.isMuted &&
+      publication.track instanceof LocalVideoTrack &&
+      publication.track.mediaStreamTrack.readyState === 'live'
+  );
+
+const clearRecoveredLocalScreenShareStatus = (activeRoom: Room): void => {
+  if (
+    lastCallIssueSignal?.name !== 'call.screen_share.recovery_started' ||
+    activeRoom.state !== ConnectionState.Connected ||
+    isLocalNetworkOffline ||
+    directCallRecoveryRoomId
+  ) {
+    return;
+  }
+
+  if (callStatusNoticeKind.value === 'reconnecting') {
+    clearCallStatusNotice();
+  }
+  clearCallIssueSignal('soft');
+};
+
 const clearScreenShareRecoveryTimer = () => {
   if (!screenShareRecoveryTimeout) {
     return;
@@ -6131,6 +6154,15 @@ const recoverLocalScreenSharePublication = (
 
     const existingPublication = getLocalScreenSharePublication(activeRoom);
     rememberLocalScreenShareTrack(existingPublication?.track);
+
+    if (isHealthyLocalScreenSharePublication(existingPublication)) {
+      clearScreenShareRecoveryTimer();
+      screenShareRecoveryAttemptCount = 0;
+      syncLocalTrackState();
+      clearRecoveredLocalScreenShareStatus(activeRoom);
+      return true;
+    }
+
     const recoverableTrack = getRecoverableLocalScreenShareTrack();
 
     if (!recoverableTrack) {
@@ -6206,8 +6238,9 @@ const recoverLocalScreenSharePublication = (
 
       await ensureLocalMicrophoneState(activeRoom);
       syncLocalTrackState();
+      const recoveredPublication = getLocalScreenSharePublication(activeRoom);
       const isRecovered = Boolean(
-        getLocalScreenSharePublication(activeRoom) &&
+        isHealthyLocalScreenSharePublication(recoveredPublication) &&
           state.isScreenSharingActive
       );
 
@@ -6219,20 +6252,12 @@ const recoverLocalScreenSharePublication = (
       recordCallTelemetryEvent('call.screen_share.recovery_completed', {
         reason,
         attemptNumber,
-        trackSid: getLocalScreenSharePublication(activeRoom)?.trackSid ?? null,
+        trackSid: recoveredPublication?.trackSid ?? null,
         mediaTrackId: recoverableTrack.mediaStreamTrack.id,
         liveKitState: activeRoom.state
       });
 
-      if (
-        callStatusNoticeKind.value === 'reconnecting' &&
-        activeRoom.state === ConnectionState.Connected &&
-        !isLocalNetworkOffline &&
-        !directCallRecoveryRoomId &&
-        !activeCallNetworkRecoveryPromise
-      ) {
-        clearCallStatusNotice();
-      }
+      clearRecoveredLocalScreenShareStatus(activeRoom);
 
       screenShareRecoveryAttemptCount = 0;
       return true;
