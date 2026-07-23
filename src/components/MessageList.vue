@@ -496,6 +496,7 @@ import {
   markTopicReactionSeenChat,
   setSuspendIncomingMergeForTopic
 } from '../services/useChat';
+import { isAnyCallModalVisible } from '../services/useCallState';
 import {
   getIsAppActivelyVisible,
   subscribeToAppVisibilityChanges
@@ -3777,6 +3778,10 @@ const isMediaPreviewOpen = (): boolean =>
   !!document.querySelector('.slider-modal');
 
 const handleWindowKeydown = async (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && isAnyCallModalVisible.value) {
+    return;
+  }
+
   const hasModifierKey = e.ctrlKey || e.metaKey || e.altKey;
   const shortcutCode = e.code.toLowerCase();
   const isModifierShortcut = e.ctrlKey || e.metaKey;

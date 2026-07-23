@@ -673,6 +673,7 @@ p.chat__nothing-paragraph {
 
   .chat__message-wrapper {
     border-radius: 0;
+    grid-template-rows: minmax(100%, max-content);
     scrollbar-gutter: auto;
   }
 

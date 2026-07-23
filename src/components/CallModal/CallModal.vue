@@ -2,8 +2,13 @@
   <div
     v-if="isCallOpen"
     class="call-modal"
-    :class="{ 'call-modal--hidden': !isCallModalVisible }"
-    @click.stop="hideModal"
+    :class="{
+      'call-modal--hidden': !isCallModalVisible,
+      'call-modal--topic-hover': isCallBackdropOverTopic
+    }"
+    @click.stop="handleCallModalBackdropClick"
+    @mousemove="handleCallModalBackdropMouseMove"
+    @mouseleave="clearCallBackdropTopicHover"
   >
     <div
       class="call-modal__container"
@@ -824,7 +829,10 @@ const hasManualParticipantSelection = ref(false);
 const shouldSkipInitialParticipantAutofocus = ref(true);
 const isStageVideoOverlayVisible = ref(false);
 const isVideoOverlayControlsVisible = ref(false);
+const isCallBackdropOverTopic = ref(false);
 const videoOverlayRegion = ref<'top' | 'bottom' | null>(null);
+const CALL_MODAL_TOPIC_HOVER_CLASS = 'contact-list__item--call-modal-hover';
+let callBackdropHoveredTopicElement: HTMLElement | null = null;
 let focusedScreenShareFitCleanup: (() => void) | null = null;
 let overlayMediaGestureCleanup: (() => void) | null = null;
 let overlayMediaGestureBoundSurface: HTMLElement | null = null;
@@ -2329,6 +2337,8 @@ watch(
 );
 
 onMounted(() => {
+  window.addEventListener('keydown', handleCallModalKeydown, true);
+
   if (typeof ResizeObserver !== 'undefined') {
     remoteVideoResizeObserver = new ResizeObserver(entries => {
       entries.forEach(entry => {
@@ -2353,6 +2363,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleCallModalKeydown, true);
+  clearCallBackdropTopicHover();
   remoteVideoResizeObserver?.disconnect();
   remoteVideoResizeObserver = null;
   observedRemoteVideoBindings = new Map();
@@ -2554,10 +2566,143 @@ const hideModal = () => {
   }
 
   closeMobileCallActionsMenu();
+  state.value.openGroupInfoModal = false;
+  clearCallBackdropTopicHover();
 
   if (!isIncoming.value) {
     isCallModalVisible.value = false;
   }
+};
+
+const getElementBehindCallModal = (event: MouseEvent): Element | null => {
+  const modalElement = event.currentTarget as HTMLElement | null;
+
+  if (!modalElement) {
+    return null;
+  }
+
+  const previousPointerEvents = modalElement.style.pointerEvents;
+  modalElement.style.pointerEvents = 'none';
+  const targetElement = document.elementFromPoint(event.clientX, event.clientY);
+  modalElement.style.pointerEvents = previousPointerEvents;
+
+  if (!targetElement || modalElement.contains(targetElement)) {
+    return null;
+  }
+
+  return targetElement;
+};
+
+const getTopicElementBehindCallModal = (
+  event: MouseEvent
+): HTMLElement | null => {
+  const targetElement = getElementBehindCallModal(event);
+  const topicElement = targetElement?.closest<HTMLElement>(
+    '.chat__menu .contact-list__item:not(.contact-list__skeleton-item)'
+  );
+
+  if (!topicElement?.closest('.chat__menu')) {
+    return null;
+  }
+
+  return topicElement;
+};
+
+const clearCallBackdropTopicHover = () => {
+  callBackdropHoveredTopicElement?.classList.remove(
+    CALL_MODAL_TOPIC_HOVER_CLASS
+  );
+  callBackdropHoveredTopicElement = null;
+  isCallBackdropOverTopic.value = false;
+};
+
+const setCallBackdropTopicHover = (topicElement: HTMLElement | null) => {
+  if (callBackdropHoveredTopicElement === topicElement) {
+    return;
+  }
+
+  clearCallBackdropTopicHover();
+
+  if (!topicElement) {
+    return;
+  }
+
+  topicElement.classList.add(CALL_MODAL_TOPIC_HOVER_CLASS);
+  callBackdropHoveredTopicElement = topicElement;
+  isCallBackdropOverTopic.value = true;
+};
+
+const forwardClickToTopicBehindCallModal = (
+  event: MouseEvent,
+  topicElement: HTMLElement | null
+) => {
+  if (!topicElement) {
+    return;
+  }
+
+  topicElement.dispatchEvent(
+    new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      detail: event.detail,
+      screenX: event.screenX,
+      screenY: event.screenY,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      ctrlKey: event.ctrlKey,
+      altKey: event.altKey,
+      shiftKey: event.shiftKey,
+      metaKey: event.metaKey,
+      button: event.button,
+      buttons: event.buttons
+    })
+  );
+};
+
+const handleCallModalBackdropClick = (event: MouseEvent) => {
+  const topicElement = getTopicElementBehindCallModal(event);
+
+  hideModal();
+
+  if (topicElement && !isCallModalVisible.value) {
+    forwardClickToTopicBehindCallModal(event, topicElement);
+  }
+};
+
+const handleCallModalBackdropMouseMove = (event: MouseEvent) => {
+  if (event.target !== event.currentTarget) {
+    clearCallBackdropTopicHover();
+    return;
+  }
+
+  setCallBackdropTopicHover(getTopicElementBehindCallModal(event));
+};
+
+const handleCallModalKeydown = (event: KeyboardEvent) => {
+  if (
+    event.key !== 'Escape' ||
+    !isCallOpen.value ||
+    !isCallModalVisible.value
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+
+  if (isStageVideoOverlayVisible.value) {
+    closeStageVideoOverlay();
+    return;
+  }
+
+  if (liveKitState.isFullScreen && !isMobile.value) {
+    liveKitState.isFullScreen = false;
+    return;
+  }
+
+  hideModal();
 };
 
 const closeMobileCallActionsMenu = () => {

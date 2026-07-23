@@ -29,6 +29,14 @@
   pointer-events: none;
 }
 
+.call-modal--topic-hover {
+  cursor: pointer;
+}
+
+.call-modal--topic-hover .call-modal__container {
+  cursor: default;
+}
+
 @media screen and (min-width: 769px) {
   .call-modal__container--full-screen {
     width: 100% !important;

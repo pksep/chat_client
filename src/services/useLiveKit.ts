@@ -153,12 +153,22 @@ type CallSocketAck = {
   isNewCall?: boolean;
 };
 type InvitedGroupCallEntry = NonNullable<typeof invitedGroupCall.value>;
+type CallTimerSnapshot = {
+  startTime?: number | null;
+  elapsedDurationMs?: number | null;
+};
+type NormalizedCallTimerSnapshot = {
+  startTime: number | null;
+  elapsedDurationMs: number;
+};
 type PersistedActiveCallSession = {
   authUserId: string;
   roomId: string;
   topicId: string | null;
   isIncoming: boolean;
   isCalling: boolean;
+  startTime?: number | null;
+  elapsedDurationMs?: number;
   savedAt: number;
 };
 
@@ -198,6 +208,8 @@ let lastCallIssueSignal: CallIssueSignal | null = null;
 let lastKnownActiveRoomRemoteParticipantCount = 0;
 let lastRemoteParticipantEmptyTelemetrySignature = '';
 let isExplicitHangupInProgress = false;
+let pageReloadIntentAt = 0;
+let pageUnloadHangupRoomId: string | null = null;
 let isLocalNetworkOffline = false;
 let nativeNetworkStatusListener: PluginListenerHandle | null = null;
 let androidScreenShareTrack: MediaStreamTrack | null = null;
@@ -253,6 +265,9 @@ const DIRECT_CALL_RECOVERY_TELEMETRY_INTERVAL_MS = 30_000;
 const SCREEN_SHARE_RECOVERY_RETRY_DELAY_MS = 2000;
 const LOCAL_VIDEO_QUALITY_RECOVERY_DELAY_MS = 10_000;
 const CALL_ISSUE_SIGNAL_CONTEXT_MS = 5 * 60 * 1000;
+const PAGE_RELOAD_INTENT_TTL_MS = 5000;
+const ACTIVE_CALL_CLOSE_WARNING =
+  'У вас есть активный звонок. Если закрыть вкладку, звонок будет завершен.';
 const INVITED_GROUP_CALL_CONNECT_ATTEMPTS = 2;
 const INVITED_GROUP_CALL_CONNECT_RETRY_DELAY_MS = 1200;
 const DIRECT_CALL_RECONNECT_FAILED_NOTICE = 'Не удалось восстановить звонок';
@@ -266,6 +281,58 @@ const DEFAULT_AUDIO_OUTPUT_ROUTES: Array<Exclude<AudioOutputRoute, 'auto'>> = [
 ];
 const dismissedIncomingCallRooms = new Map<string, number>();
 const dismissedIncomingCallTopics = new Map<string, number>();
+
+const normalizeCallTimerSnapshot = (
+  snapshot?: CallTimerSnapshot | null
+): NormalizedCallTimerSnapshot => ({
+  startTime:
+    typeof snapshot?.startTime === 'number' &&
+    Number.isFinite(snapshot.startTime)
+      ? snapshot.startTime
+      : null,
+  elapsedDurationMs:
+    typeof snapshot?.elapsedDurationMs === 'number' &&
+    Number.isFinite(snapshot.elapsedDurationMs)
+      ? Math.max(0, snapshot.elapsedDurationMs)
+      : 0
+});
+
+const getCallTimerSnapshotDurationMs = (
+  snapshot: NormalizedCallTimerSnapshot,
+  now = Date.now()
+): number =>
+  snapshot.elapsedDurationMs +
+  (snapshot.startTime ? Math.max(0, now - snapshot.startTime) : 0);
+
+const getCurrentCallTimerSnapshot = (): NormalizedCallTimerSnapshot =>
+  normalizeCallTimerSnapshot({
+    startTime: callStartedAt.value,
+    elapsedDurationMs: callElapsedMs.value
+  });
+
+const hasCallTimerSnapshotProgress = (
+  snapshot: NormalizedCallTimerSnapshot
+): boolean => snapshot.startTime !== null || snapshot.elapsedDurationMs > 0;
+
+const selectLongestCallTimerSnapshot = (
+  ...snapshots: Array<CallTimerSnapshot | null | undefined>
+): NormalizedCallTimerSnapshot =>
+  snapshots
+    .map(snapshot => normalizeCallTimerSnapshot(snapshot))
+    .reduce(
+      (best, snapshot) =>
+        getCallTimerSnapshotDurationMs(snapshot) >
+        getCallTimerSnapshotDurationMs(best) + 1000
+          ? snapshot
+          : best,
+      normalizeCallTimerSnapshot(null)
+    );
+
+const resolveRestoredCallTimerSnapshot = (
+  primarySnapshot: CallTimerSnapshot,
+  persistedSession?: PersistedActiveCallSession | null
+): NormalizedCallTimerSnapshot =>
+  selectLongestCallTimerSnapshot(primarySnapshot, persistedSession);
 
 const readPersistedActiveCallSession =
   (): PersistedActiveCallSession | null => {
@@ -293,6 +360,59 @@ const readPersistedActiveCallSession =
     }
   };
 
+const getMatchingPersistedCallTimerSnapshot = (
+  activeRoomId = roomId.value,
+  activeTopicId = topicId.value
+): PersistedActiveCallSession | null => {
+  const session = readPersistedActiveCallSession();
+
+  if (!session) {
+    return null;
+  }
+
+  if (activeRoomId && session.roomId !== activeRoomId) {
+    return null;
+  }
+
+  if (activeTopicId && session.topicId !== activeTopicId) {
+    return null;
+  }
+
+  return session;
+};
+
+const getTopicCallTimerSnapshot = (
+  activeRoomId = roomId.value,
+  activeTopicId = topicId.value
+): CallTimerSnapshot | null => {
+  if (!activeTopicId) {
+    return null;
+  }
+
+  const topic = useTopics().getSelectedTopic(activeTopicId) as any;
+  const activeCall = topic?.activeCall || activeGroupCalls.value[activeTopicId];
+
+  if (!activeCall || (activeRoomId && activeCall.roomId !== activeRoomId)) {
+    return null;
+  }
+
+  return {
+    startTime: activeCall.startTime ?? null,
+    elapsedDurationMs: activeCall.elapsedDurationMs ?? 0
+  };
+};
+
+const getActiveCallTimerSnapshotFallback =
+  (): NormalizedCallTimerSnapshot | null => {
+    const snapshot = selectLongestCallTimerSnapshot(
+      getCurrentCallTimerSnapshot(),
+      getMatchingPersistedCallTimerSnapshot(),
+      getTopicCallTimerSnapshot()
+    );
+
+    return hasCallTimerSnapshotProgress(snapshot) ? snapshot : null;
+  };
+
 const persistActiveCallSession = (
   activeRoomId = roomId.value,
   activeTopicId = topicId.value
@@ -305,6 +425,7 @@ const persistActiveCallSession = (
   if (!me) {
     return;
   }
+  const timerSnapshot = getCurrentCallTimerSnapshot();
 
   const session: PersistedActiveCallSession = {
     authUserId: me.id,
@@ -312,6 +433,8 @@ const persistActiveCallSession = (
     topicId: activeTopicId ?? null,
     isIncoming: isIncoming.value,
     isCalling: isCalling.value,
+    startTime: timerSnapshot.startTime,
+    elapsedDurationMs: timerSnapshot.elapsedDurationMs,
     savedAt: Date.now()
   };
 
@@ -1256,8 +1379,33 @@ const shouldSuppressReconnectNotice = () => {
   );
 };
 
+const isOutgoingDialingCall = (
+  status?: Pick<LiveKitCallStatus, 'startTime' | 'wasAnswered'> | null
+): boolean => {
+  const statusStartTime =
+    typeof status?.startTime === 'number' && Number.isFinite(status.startTime)
+      ? status.startTime
+      : null;
+
+  return (
+    isCalling.value &&
+    !isIncoming.value &&
+    status?.wasAnswered !== true &&
+    callElapsedMs.value === 0 &&
+    statusStartTime === null &&
+    callStartedAt.value === null
+  );
+};
+
 const showReconnectCallStatusNotice = () => {
   if (isExplicitHangupInProgress) {
+    return;
+  }
+
+  if (isOutgoingDialingCall()) {
+    if (callStatusNoticeKind.value === 'reconnecting') {
+      clearCallStatusNotice();
+    }
     return;
   }
 
@@ -1636,6 +1784,22 @@ const recoverDirectCallConnection = async (
       return;
     }
 
+    const recoveredTimerSnapshot = selectLongestCallTimerSnapshot(
+      getCurrentCallTimerSnapshot(),
+      {
+        startTime: status.startTime ?? null,
+        elapsedDurationMs: status.elapsedDurationMs ?? 0
+      },
+      getMatchingPersistedCallTimerSnapshot(activeRoomId, activeTopicId)
+    );
+
+    if (hasCallTimerSnapshotProgress(recoveredTimerSnapshot)) {
+      setCallStartedAt(
+        recoveredTimerSnapshot.startTime,
+        recoveredTimerSnapshot.elapsedDurationMs
+      );
+    }
+
     if (room) {
       resolveDirectCallRecoverySuccess(room);
 
@@ -1727,7 +1891,8 @@ const startDirectCallRecovery = (
 
   if (
     !activeRoomId ||
-    !isRecoverableActiveCallSession(activeRoomId, activeTopicId)
+    !isRecoverableActiveCallSession(activeRoomId, activeTopicId) ||
+    isOutgoingDialingCall()
   ) {
     return false;
   }
@@ -2163,7 +2328,16 @@ const startTimer = (startTime: number | null = callStartedAt.value) => {
 
 const ensureCallTimerContinues = () => {
   if (!callStartedAt.value) {
-    callStartedAt.value = Date.now();
+    const fallbackSnapshot = getActiveCallTimerSnapshotFallback();
+
+    if (fallbackSnapshot) {
+      setCallStartedAt(
+        fallbackSnapshot.startTime ?? Date.now(),
+        fallbackSnapshot.elapsedDurationMs
+      );
+    } else {
+      callStartedAt.value = Date.now();
+    }
   }
 
   startTimer();
@@ -4531,10 +4705,15 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
     return true;
   }
 
+  const shouldPreserveOutgoingDialing = isOutgoingDialingCall(status);
+
   clearExplicitHangupState();
   open.value = true;
-  // Network recovery must not reopen a call the user has minimized.
-  ensureCallTimerContinues();
+
+  if (!shouldPreserveOutgoingDialing) {
+    // Network recovery must not reopen a call the user has minimized.
+    ensureCallTimerContinues();
+  }
 
   await recoverActiveCallMediaState(room);
 
@@ -4553,13 +4732,18 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
   const shouldReconnectRoom = shouldReconnectLiveKitRoom(room);
 
   if (shouldReconnectRoom) {
-    showReconnectCallStatusNotice();
+    if (!shouldPreserveOutgoingDialing) {
+      showReconnectCallStatusNotice();
+    }
 
     try {
       await connectToRoom();
     } catch (error) {
-      showReconnectCallStatusNotice();
-      if (activeTopicId) {
+      if (!shouldPreserveOutgoingDialing) {
+        showReconnectCallStatusNotice();
+      }
+
+      if (activeTopicId && !shouldPreserveOutgoingDialing) {
         startDirectCallRecovery(activeRoomId, activeTopicId, {
           waitForRemote: true,
           reason: 'network-recovery-connect-failed'
@@ -4598,7 +4782,8 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
     room &&
     !room.remoteParticipants.size &&
     !isGroupCallSession(activeTopicId) &&
-    activeTopicId
+    activeTopicId &&
+    !shouldPreserveOutgoingDialing
   ) {
     startDirectCallRecovery(activeRoomId, activeTopicId, {
       waitForRemote: true,
@@ -5837,11 +6022,34 @@ export const syncActiveCalls = async (
     return;
   }
 
-  const persistedCall = resolvedCalls.find(
+  let persistedCall = resolvedCalls.find(
     ({ call }) => call.roomId === persistedSession.roomId
   );
   if (!persistedCall) {
-    return;
+    const status = await getRawLiveKitCallStatus(persistedSession.roomId);
+
+    if (!status) {
+      return;
+    }
+
+    if (status.active !== true) {
+      clearPersistedActiveCallSession(persistedSession.roomId);
+      return;
+    }
+
+    persistedCall = {
+      call: {
+        roomId: persistedSession.roomId,
+        topicId: persistedSession.topicId ?? status.topicId ?? null,
+        callType: 'livekit',
+        startTime: status.startTime ?? persistedSession.startTime ?? null,
+        participantCount: status.participantCount,
+        groupMode: status.groupMode,
+        elapsedDurationMs:
+          status.elapsedDurationMs ?? persistedSession.elapsedDurationMs ?? 0
+      },
+      status
+    };
   }
 
   if (persistedCall.status === null) {
@@ -5850,22 +6058,33 @@ export const syncActiveCalls = async (
   }
 
   const restoredTopicId =
-    persistedSession.topicId ?? persistedCall.call.topicId ?? null;
+    persistedSession.topicId ??
+    persistedCall.status?.topicId ??
+    persistedCall.call.topicId ??
+    null;
   const restoredTopic = restoredTopicId
     ? (topicsApi.getSelectedTopic(restoredTopicId) as any)
     : null;
+  const restoredTimerSnapshot = resolveRestoredCallTimerSnapshot(
+    {
+      startTime: resolveCallStartTime(
+        persistedCall.status?.startTime,
+        persistedCall.call.startTime
+      ),
+      elapsedDurationMs:
+        persistedCall.status?.elapsedDurationMs ??
+        persistedCall.call.elapsedDurationMs ??
+        0
+    },
+    persistedSession
+  );
 
   roomId.value = persistedSession.roomId;
   topicId.value = restoredTopicId;
   user.value = restoredTopic?.user || getAuthUser() || null;
   setCallStartedAt(
-    resolveCallStartTime(
-      persistedCall.status?.startTime,
-      persistedCall.call.startTime
-    ),
-    persistedCall.status?.elapsedDurationMs ??
-      persistedCall.call.elapsedDurationMs ??
-      0
+    restoredTimerSnapshot.startTime,
+    restoredTimerSnapshot.elapsedDurationMs
   );
   isIncoming.value = persistedSession.isIncoming;
   isCalling.value =
@@ -6848,24 +7067,34 @@ const hasActiveCallForNetworkStatus = () =>
   !!roomId.value &&
   (open.value || isModalVisible.value || isCalling.value || !!room);
 
-let lastClientClosingIntentRoomId: string | null = null;
-let lastClientClosingIntentAt = 0;
+const hasActiveCallForPageUnload = () =>
+  !Capacitor.isNativePlatform() &&
+  !isExplicitHangupInProgress &&
+  !!roomId.value &&
+  (open.value || isModalVisible.value || isCalling.value || !!room);
 
-const notifyWebClientClosing = (source: 'beforeunload' | 'pagehide') => {
+export const markLiveKitPageReloadIntent = () => {
+  pageReloadIntentAt = Date.now();
+};
+
+const isLiveKitPageReloadIntentActive = () =>
+  pageReloadIntentAt > 0 &&
+  Date.now() - pageReloadIntentAt <= PAGE_RELOAD_INTENT_TTL_MS;
+
+const sendWebClientClosingIntent = (
+  source: 'beforeunload' | 'pagehide',
+  options: { persistSession: boolean; allowExplicitHangup?: boolean }
+): boolean => {
   if (
     Capacitor.isNativePlatform() ||
-    isExplicitHangupInProgress ||
+    (!options.allowExplicitHangup && isExplicitHangupInProgress) ||
     !roomId.value
   ) {
-    return;
+    return false;
   }
 
-  const now = Date.now();
-  if (
-    lastClientClosingIntentRoomId === roomId.value &&
-    now - lastClientClosingIntentAt < 2000
-  ) {
-    return;
+  if (options.persistSession) {
+    persistActiveCallSession(roomId.value, topicId.value);
   }
 
   const sdk = getChatSDK();
@@ -6880,7 +7109,7 @@ const notifyWebClientClosing = (source: 'beforeunload' | 'pagehide') => {
       },
       'warn'
     );
-    return;
+    return false;
   }
 
   const targetRoomId = roomId.value;
@@ -6917,11 +7146,6 @@ const notifyWebClientClosing = (source: 'beforeunload' | 'pagehide') => {
 
   const sent = socketSent || keepaliveRequested;
 
-  if (sent) {
-    lastClientClosingIntentRoomId = targetRoomId;
-    lastClientClosingIntentAt = now;
-  }
-
   recordCallTelemetryEvent(
     sent
       ? 'call.client_closing.intent_sent'
@@ -6935,6 +7159,106 @@ const notifyWebClientClosing = (source: 'beforeunload' | 'pagehide') => {
     },
     sent ? 'warn' : 'error'
   );
+
+  return sent;
+};
+
+const notifyWebClientClosing = (source: 'beforeunload' | 'pagehide') => {
+  sendWebClientClosingIntent(source, { persistSession: true });
+};
+
+const sendActiveCallPageUnloadHangup = (
+  source: 'beforeunload' | 'pagehide'
+) => {
+  if (!hasActiveCallForPageUnload()) {
+    return;
+  }
+
+  const targetRoomId = roomId.value;
+  const targetTopicId = topicId.value;
+
+  if (!targetRoomId || pageUnloadHangupRoomId === targetRoomId) {
+    return;
+  }
+
+  pageUnloadHangupRoomId = targetRoomId;
+  isExplicitHangupInProgress = true;
+  clearPersistedActiveCallSession(targetRoomId);
+
+  const sdk = getChatSDK();
+  const me = getAuthUser();
+  const socketSent =
+    !!sdk &&
+    !!me &&
+    sdk.isConnected() &&
+    sdk.sendWebSocketEvent(WebSocketEventType.END_CALL, {
+      roomId: targetRoomId,
+      topicId: targetTopicId,
+      userId: me.id
+    });
+
+  const clientClosingFallbackSent = sendWebClientClosingIntent(source, {
+    persistSession: false,
+    allowExplicitHangup: true
+  });
+
+  recordCallTelemetryEvent(
+    socketSent ? 'call.unload_hangup.sent' : 'call.unload_hangup.send_failed',
+    {
+      source,
+      targetRoomId,
+      targetTopicId,
+      socketSent,
+      clientClosingFallbackSent,
+      hasSdk: Boolean(sdk),
+      hasUser: Boolean(me)
+    },
+    socketSent ? 'warn' : 'error'
+  );
+};
+
+const handleLiveKitBeforeUnload = (event: BeforeUnloadEvent) => {
+  if (!hasActiveCallForPageUnload()) {
+    return;
+  }
+
+  if (isLiveKitPageReloadIntentActive()) {
+    notifyWebClientClosing('beforeunload');
+    return;
+  }
+
+  event.preventDefault();
+  event.returnValue = ACTIVE_CALL_CLOSE_WARNING;
+  return ACTIVE_CALL_CLOSE_WARNING;
+};
+
+const handleLiveKitPageHide = (event: PageTransitionEvent) => {
+  if (event.persisted || !hasActiveCallForPageUnload()) {
+    return;
+  }
+
+  if (isLiveKitPageReloadIntentActive()) {
+    notifyWebClientClosing('pagehide');
+    return;
+  }
+
+  sendActiveCallPageUnloadHangup('pagehide');
+};
+
+const handleLiveKitReloadKeydown = (event: KeyboardEvent) => {
+  const key = event.key.toLowerCase();
+  const code = event.code.toLowerCase();
+  const isReloadShortcut =
+    event.key === 'F5' ||
+    event.code === 'F5' ||
+    key === 'browserrefresh' ||
+    code === 'browserrefresh' ||
+    ((event.ctrlKey || event.metaKey) &&
+      (key === 'r' || event.code === 'KeyR'));
+
+  if (isReloadShortcut) {
+    markLiveKitPageReloadIntent();
+  }
 };
 
 const handleLocalNetworkOffline = (
@@ -7017,15 +7341,11 @@ const setupNativeNetworkStatusListener = async () => {
 };
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('beforeunload', () => {
-    notifyWebClientClosing('beforeunload');
-  });
+  window.addEventListener('keydown', handleLiveKitReloadKeydown, true);
 
-  window.addEventListener('pagehide', event => {
-    if (!event.persisted) {
-      notifyWebClientClosing('pagehide');
-    }
-  });
+  window.addEventListener('beforeunload', handleLiveKitBeforeUnload);
+
+  window.addEventListener('pagehide', handleLiveKitPageHide);
 
   window.addEventListener('offline', () => {
     handleLocalNetworkOffline('browser-offline');

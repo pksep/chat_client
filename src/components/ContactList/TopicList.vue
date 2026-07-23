@@ -554,10 +554,15 @@ let descriptionOverflowSecondRafId = 0;
 let descriptionMutationObserver: MutationObserver | null = null;
 let descriptionResizeObserver: ResizeObserver | null = null;
 const TOPIC_PRESS_SCROLL_CANCEL_PX = 8;
+const TOPIC_POINTER_CLICK_MAX_DELAY_MS = 2000;
 let topicPressPointerId: number | null = null;
 let topicPressStartX = 0;
 let topicPressStartY = 0;
 let topicPressMoved = false;
+let topicPointerDownContext: {
+  topicId: string;
+  timestamp: number;
+} | null = null;
 
 const hasSearchQuery = computed(() => props.searchQuery.trim().length > 0);
 const skeletonRows = 7;
@@ -897,8 +902,56 @@ const syncTopicOpenSideEffects = (
   }
 };
 
+const clearTopicPointerDownContext = (): void => {
+  topicPointerDownContext = null;
+};
+
+const resolveTopicClickTarget = (
+  topic: ITopic,
+  index?: number,
+  event?: Event
+): { topic: ITopic; index?: number } | null => {
+  if (
+    !event ||
+    event instanceof KeyboardEvent ||
+    (event instanceof MouseEvent && event.detail === 0)
+  ) {
+    clearTopicPointerDownContext();
+    return { topic, index };
+  }
+
+  if (!topicPointerDownContext) {
+    return { topic, index };
+  }
+
+  const pointerDownContext = topicPointerDownContext;
+  clearTopicPointerDownContext();
+
+  if (
+    Date.now() - pointerDownContext.timestamp >
+      TOPIC_POINTER_CLICK_MAX_DELAY_MS ||
+    pointerDownContext.topicId === topic.id
+  ) {
+    return { topic, index };
+  }
+
+  const pointerDownTopicIndex = props.topics.findIndex(
+    item => item.id === pointerDownContext.topicId
+  );
+
+  if (pointerDownTopicIndex === -1) {
+    return null;
+  }
+
+  return {
+    topic: props.topics[pointerDownTopicIndex],
+    index: pointerDownTopicIndex
+  };
+};
+
 const handleClick = (topic: ITopic, index?: number, event?: Event): void => {
   if (isMobile.value && topicPressMoved && !(event instanceof KeyboardEvent)) {
+    clearTopicPointerDownContext();
     pendingActiveTopicId.value = null;
     topicPressMoved = false;
     return;
@@ -909,14 +962,22 @@ const handleClick = (topic: ITopic, index?: number, event?: Event): void => {
     return;
   }
 
+  const clickTarget = resolveTopicClickTarget(topic, index, event);
+
+  if (!clickTarget) {
+    return;
+  }
+
+  const { topic: targetTopic, index: targetIndex } = clickTarget;
+
   if (isMobile.value) {
-    emits('unmount-topic', topic, null);
-    navigateToTopicRoute(topic);
+    emits('unmount-topic', targetTopic, null);
+    navigateToTopicRoute(targetTopic);
 
     window.setTimeout(() => {
       syncTopicOpenSideEffects(
-        topic,
-        index,
+        targetTopic,
+        targetIndex,
         event,
         event instanceof KeyboardEvent
           ? 'topic_list.keyboard'
@@ -929,27 +990,37 @@ const handleClick = (topic: ITopic, index?: number, event?: Event): void => {
   }
 
   const telemetry = recordTopicOpenAttempt(
-    topic,
-    index,
+    targetTopic,
+    targetIndex,
     event,
     event instanceof KeyboardEvent ? 'topic_list.keyboard' : 'topic_list.click'
   );
 
-  if (hasTopicUnreadIndicator(topic, authedUser.value?.id)) {
-    void markTopicRead(topic);
-  } else if (topic.info?.isMarkedUnread) {
-    void setTopicMarkedUnread(topic, false);
+  if (hasTopicUnreadIndicator(targetTopic, authedUser.value?.id)) {
+    void markTopicRead(targetTopic);
+  } else if (targetTopic.info?.isMarkedUnread) {
+    void setTopicMarkedUnread(targetTopic, false);
   }
 
-  emits('unmount-topic', topic, telemetry);
+  emits('unmount-topic', targetTopic, telemetry);
 };
 
 const handleTopicPress = (topic: ITopic, event: PointerEvent): void => {
-  if (props.showCheckbox || !isMobile.value) {
+  if (props.showCheckbox) {
     return;
   }
 
   if (event.pointerType === 'mouse' && event.button !== 0) {
+    return;
+  }
+
+  clearTopicPointerDownContext();
+  topicPointerDownContext = {
+    topicId: topic.id,
+    timestamp: Date.now()
+  };
+
+  if (!isMobile.value) {
     return;
   }
 
@@ -992,6 +1063,7 @@ const handleTopicPressEnd = (event: PointerEvent): void => {
 };
 
 const handleTopicPressCancel = (): void => {
+  clearTopicPointerDownContext();
   topicPressPointerId = null;
   topicPressMoved = false;
   pendingActiveTopicId.value = null;

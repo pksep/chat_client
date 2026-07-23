@@ -26,6 +26,23 @@
   }
 }
 
+.contact-list__item.contact-list__item--call-modal-hover {
+  background-color: var(--blue10);
+
+  & .contact-list__bottom {
+    background-color: var(--blue10);
+  }
+
+  .contact-list__description--overflow::after,
+  .contact-list__description--overflow p::after,
+  .contact-list__description--overflow strong::after {
+    background: linear-gradient(to right, transparent 0%, var(--blue10) 100%);
+  }
+  .contact-list__bottom::before {
+    background: linear-gradient(to right, transparent 0%, var(--blue10) 80%);
+  }
+}
+
 @media (hover: hover) and (pointer: fine) {
   .contact-list__item:hover {
     background-color: var(--blue10);

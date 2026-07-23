@@ -410,6 +410,10 @@ const handleInformationClick = (): void => {
 const handleClearClick = async (): Promise<void> => {
   if (route.value && route.value.type === 'ai' && chatRef.value) {
     chatRef.value.handleClear();
+    const { markLiveKitPageReloadIntent } = await import(
+      '../services/useLiveKit'
+    );
+    markLiveKitPageReloadIntent();
     window.location.reload();
     return;
   }
