@@ -15,11 +15,63 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.TimeZone;
 
 @CapacitorPlugin(name = "TelemetryDevice")
 public class TelemetryDevicePlugin extends Plugin {
+    private static final String NETWORK_STATUS_CHANGE_EVENT = "networkStatusChange";
+    private ConnectivityManager connectivityManager;
+    private ConnectivityManager.NetworkCallback networkCallback;
+
+    @Override
+    public void load() {
+        connectivityManager =
+            (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+
+        if (connectivityManager == null) {
+            return;
+        }
+
+        networkCallback = new ConnectivityManager.NetworkCallback() {
+            @Override
+            public void onAvailable(Network network) {
+                notifyCurrentNetworkStatus();
+            }
+
+            @Override
+            public void onLost(Network network) {
+                notifyLostNetworkStatus(network);
+            }
+
+            @Override
+            public void onCapabilitiesChanged(
+                Network network,
+                NetworkCapabilities networkCapabilities
+            ) {
+                notifyCurrentNetworkStatus();
+            }
+        };
+
+        connectivityManager.registerDefaultNetworkCallback(networkCallback);
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        if (connectivityManager != null && networkCallback != null) {
+            try {
+                connectivityManager.unregisterNetworkCallback(networkCallback);
+            } catch (Exception ignored) {
+                // Android мог уже удалить callback.
+            }
+        }
+
+        networkCallback = null;
+        connectivityManager = null;
+        super.handleOnDestroy();
+    }
+
     @PluginMethod
     public void getDeviceInfo(PluginCall call) {
         JSObject result = new JSObject();
@@ -48,6 +100,11 @@ public class TelemetryDevicePlugin extends Plugin {
         call.resolve(result);
     }
 
+    @PluginMethod
+    public void getNetworkStatus(PluginCall call) {
+        call.resolve(buildNetworkStatus());
+    }
+
     private void addAppInfo(JSObject result) {
         try {
             PackageManager packageManager = getContext().getPackageManager();
@@ -73,26 +130,62 @@ public class TelemetryDevicePlugin extends Plugin {
     }
 
     private void addNetworkInfo(JSObject result) {
-        ConnectivityManager connectivityManager =
-            (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+        JSObject networkStatus = buildNetworkStatus();
+        Iterator<String> keys = networkStatus.keys();
 
-        if (connectivityManager == null) {
-            return;
+        while (keys.hasNext()) {
+            String key = keys.next();
+            result.put(key, networkStatus.opt(key));
+        }
+    }
+
+    private void notifyCurrentNetworkStatus() {
+        notifyListeners(NETWORK_STATUS_CHANGE_EVENT, buildNetworkStatus(), true);
+    }
+
+    private void notifyLostNetworkStatus(Network lostNetwork) {
+        JSObject status = buildNetworkStatus();
+        Network activeNetwork =
+            connectivityManager == null ? null : connectivityManager.getActiveNetwork();
+
+        if (activeNetwork == null || activeNetwork.equals(lostNetwork)) {
+            status.put("networkConnected", false);
+            status.put("networkValidated", false);
         }
 
-        Network activeNetwork = connectivityManager.getActiveNetwork();
+        notifyListeners(NETWORK_STATUS_CHANGE_EVENT, status, true);
+    }
+
+    private JSObject buildNetworkStatus() {
+        JSObject result = new JSObject();
+        ConnectivityManager manager = connectivityManager;
+
+        if (manager == null) {
+            manager =
+                (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+        }
+
+        if (manager == null) {
+            result.put("networkConnected", false);
+            result.put("networkValidated", false);
+            return result;
+        }
+
+        Network activeNetwork = manager.getActiveNetwork();
         if (activeNetwork == null) {
             result.put("networkConnected", false);
-            return;
+            result.put("networkValidated", false);
+            return result;
         }
 
         NetworkCapabilities capabilities =
-            connectivityManager.getNetworkCapabilities(activeNetwork);
+            manager.getNetworkCapabilities(activeNetwork);
 
         result.put("networkConnected", capabilities != null);
 
         if (capabilities == null) {
-            return;
+            result.put("networkValidated", false);
+            return result;
         }
 
         result.put("networkVpn", capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN));
@@ -108,5 +201,7 @@ public class TelemetryDevicePlugin extends Plugin {
             result.put("downstreamKbps", capabilities.getLinkDownstreamBandwidthKbps());
             result.put("upstreamKbps", capabilities.getLinkUpstreamBandwidthKbps());
         }
+
+        return result;
     }
 }

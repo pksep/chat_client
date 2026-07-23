@@ -9,38 +9,55 @@
 
   &:active,
   &.contact-list__item--active {
-    background-color: var(--blue15);
+    background-color: var(--blue10);
 
     & .contact-list__bottom {
-      background-color: var(--blue15);
+      background-color: var(--blue10);
     }
 
-    .contact-list__description::after,
-    .contact-list__description p::after,
-    .contact-list__description strong::after {
-      background: linear-gradient(to right, transparent 0%, var(--blue15) 100%);
+    .contact-list__description--overflow::after,
+    .contact-list__description--overflow p::after,
+    .contact-list__description--overflow strong::after {
+      background: linear-gradient(to right, transparent 0%, var(--blue10) 100%);
     }
     .contact-list__bottom::before {
-      background: linear-gradient(to right, transparent 0%, var(--blue15) 80%);
+      background: linear-gradient(to right, transparent 0%, var(--blue10) 80%);
     }
+  }
+}
+
+.contact-list__item.contact-list__item--call-modal-hover {
+  background-color: var(--blue10);
+
+  & .contact-list__bottom {
+    background-color: var(--blue10);
+  }
+
+  .contact-list__description--overflow::after,
+  .contact-list__description--overflow p::after,
+  .contact-list__description--overflow strong::after {
+    background: linear-gradient(to right, transparent 0%, var(--blue10) 100%);
+  }
+  .contact-list__bottom::before {
+    background: linear-gradient(to right, transparent 0%, var(--blue10) 80%);
   }
 }
 
 @media (hover: hover) and (pointer: fine) {
   .contact-list__item:hover {
-    background-color: var(--blue15);
+    background-color: var(--blue10);
 
     & .contact-list__bottom {
-      background-color: var(--blue15);
+      background-color: var(--blue10);
     }
 
-    .contact-list__description::after,
-    .contact-list__description p::after,
-    .contact-list__description strong::after {
-      background: linear-gradient(to right, transparent 0%, var(--blue15) 100%);
+    .contact-list__description--overflow::after,
+    .contact-list__description--overflow p::after,
+    .contact-list__description--overflow strong::after {
+      background: linear-gradient(to right, transparent 0%, var(--blue10) 100%);
     }
     .contact-list__bottom::before {
-      background: linear-gradient(to right, transparent 0%, var(--blue15) 80%);
+      background: linear-gradient(to right, transparent 0%, var(--blue10) 80%);
     }
   }
 }
@@ -127,17 +144,29 @@
   }
 }
 
-.contact-list__description::after,
-.contact-list__description p::after,
-.contact-list__description strong::after {
+.contact-list__description--overflow::after,
+.contact-list__description--overflow p::after,
+.contact-list__description--overflow strong::after {
   content: '';
   position: absolute;
   top: 0;
-  left: calc(100vw - 100px);
+  left: auto;
+  right: 0;
   width: 9ch;
   height: 100%;
   pointer-events: none;
   background: linear-gradient(to right, transparent 0%, var(--white) 100%);
+}
+
+.contact-list__item--message-result .contact-list__description--overflow::after,
+.contact-list__item--message-result
+  .contact-list__description--overflow
+  p::after,
+.contact-list__item--message-result
+  .contact-list__description--overflow
+  strong::after {
+  left: auto;
+  right: 0;
 }
 
 .contact-list__search-state {

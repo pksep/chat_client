@@ -57,6 +57,7 @@
           :selected-topic-ids="selectedTopicIds"
           :search-query="toolbarState.search"
           :toolbar-filter="toolbarState.filter"
+          :is-loading="shouldShowTopicListSkeleton"
           :message-results="
             isShareSelectionActive ? [] : filteredMessageSearchResults
           "
@@ -118,6 +119,7 @@ import { usePwaInstall } from '../composables/usePwaInstall';
 import {
   navigateToGroup,
   navigateToDialogs,
+  navigateToFavorites,
   useUrlWatcher
 } from '../composables/navigation';
 import { useTopics } from '../composables/useTopics';
@@ -139,6 +141,7 @@ import {
   type IMessageSearchResult
 } from '../composables/useMessageSearch';
 import { isBotTopic } from '../utils/bot';
+import { isFavoriteTopic } from '../utils/favorite-topic';
 import {
   getChatsToolbarFilterBadgeState,
   getChatsToolbarFilterCounts,
@@ -157,7 +160,7 @@ const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: 'Menu'
 });
 
-const { getTopicList } = useTopics();
+const { getTopicList, loading: isTopicsLoading } = useTopics();
 const route = useUrlWatcher();
 const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 const selectedContactId = computed(() => route.value?.id);
@@ -194,11 +197,18 @@ const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
   }
 
   if (toolbarState.filter === 'chats') {
-    return topic.type === TopicType.DM && !isBotTopic(topic);
+    return (
+      topic.type === TopicType.DM &&
+      !isBotTopic(topic) &&
+      !isFavoriteTopic(topic, authUserId.value)
+    );
   }
 
   if (toolbarState.filter === 'groups') {
-    return topic.type === TopicType.Group;
+    return (
+      topic.type === TopicType.Group &&
+      !isFavoriteTopic(topic, authUserId.value)
+    );
   }
 
   if (toolbarState.filter === 'bots') {
@@ -233,6 +243,15 @@ const topicGroups = computed(() => {
 
   return filteredByType.filter(topic => matchesTopicSearch(topic, query));
 });
+
+const shouldShowTopicListSkeleton = computed(
+  () =>
+    activeSection.value === 'chats' &&
+    !isShareSelectionActive.value &&
+    isTopicsLoading.value &&
+    allTopics.value.length === 0 &&
+    !normalizeAtSearchQuery(toolbarState.search)
+);
 
 const filteredMessageSearchResults = computed(() => {
   if (!normalizeAtSearchQuery(toolbarState.search)) {
@@ -280,11 +299,15 @@ const unmountTopicClick = (
   recordChatTopicNavigationRequest({
     telemetry,
     topicId: topic.id,
-    topicType: topic.type,
+    topicType: isFavoriteTopic(topic, authUserId.value)
+      ? 'FAVORITE'
+      : topic.type,
     source: 'menu.unmount_topic'
   });
 
-  if (topic.type === 'GROUP') {
+  if (isFavoriteTopic(topic, authUserId.value)) {
+    navigateToFavorites(topic.id);
+  } else if (topic.type === 'GROUP') {
     navigateToGroup(topic.id);
   } else if (topic.type === 'DM') {
     navigateToDialogs(topic.id);

@@ -335,6 +335,10 @@ export function useMobileApp() {
   const handleUpdateClick = async () => {
     if (!isRuStoreUpdateSupported()) {
       persistCurrentWebUpdateVersion();
+      const { markLiveKitPageReloadIntent } = await import(
+        '../services/useLiveKit'
+      );
+      markLiveKitPageReloadIntent();
       window.location.reload();
       return;
     }

@@ -64,7 +64,9 @@
   scroll-behavior: auto;
 
   @media screen and (width > 768px) {
-    &.chat-container--active-call {
+    --header-height: 60px;
+
+    &:has(.chat__header-active-call) {
       --header-height: 101px;
     }
 
@@ -300,7 +302,7 @@ button.primary-yui-kit.disabled-yui-kit {
     --mobile-pinned-messages-offset: var(--mobile-header-height);
   }
 
-  .chat-container.chat-container--active-call {
+  .chat-container:has(.chat__header-active-call) {
     --mobile-pinned-messages-offset: calc(
       var(--mobile-header-height) + var(--mobile-active-call-height)
     );

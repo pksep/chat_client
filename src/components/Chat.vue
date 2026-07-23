@@ -18,7 +18,6 @@
       </div>
       <div
         v-if="route.id"
-        :key="mobileRouteKey"
         :class="[
           'chat__mobile-route-view chat__mobile-route-view--messages',
           mobileTransitionName,
@@ -30,15 +29,15 @@
         @animationend="handleMobileRouteAnimationEnd"
       >
         <PinnedMessages
-          v-if="route.id"
+          v-if="shouldShowPinnedMessages"
+          :topic-id="pinnedMessagesTopicId"
           :viewport-snapshot="messageViewportSnapshot"
           @unmount-set-selected-message="scrollToMessage"
         />
         <MessageList
           v-if="isMobileMessageListMounted"
           ref="messageListRef"
-          :defer-content-render="!isMobileMessageContentReady"
-          :suppress-initial-skeleton="!currentMobileTopicUsesSkeleton"
+          :defer-content-render="false"
           :baseUrl="props.baseUrl"
           :contact="props.contact"
           :user="authUser"
@@ -50,75 +49,16 @@
           :on-dismiss-update-banner="props.onDismissUpdateBanner"
           :data-testid="`${props.dataTestid}-Chat-MessageList`"
           @viewport-snapshot-change="handleViewportSnapshotChange"
+          @rendered-topic-change="handleRenderedTopicChange"
         />
-        <div
-          v-else
-          class="chat__mobile-instant-shell"
-          aria-hidden="true"
-          :data-testid="`${props.dataTestid}-Chat-MobileInstantShell`"
-        >
-          <div
-            :class="[
-              'chat__message-wrapper',
-              'chat__message-wrapper--content-deferred'
-            ]"
-          >
-            <div
-              :class="[
-                'chat__message-skeleton',
-                {
-                  'chat__message-skeleton--group':
-                    route.type === RouteTypes.GROUP
-                }
-              ]"
-            >
-              <span
-                class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
-              >
-                <span class="chat__message-skeleton-avatar" />
-                <span
-                  class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--short"
-                />
-              </span>
-              <span
-                class="chat__message-skeleton-media chat__message-skeleton-media--outgoing"
-              >
-                <span class="chat__message-skeleton-media-icon" />
-              </span>
-              <span
-                class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
-              >
-                <span class="chat__message-skeleton-avatar" />
-                <span
-                  class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
-                />
-              </span>
-              <span
-                class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing chat__message-skeleton-bubble--wide"
-              />
-              <span
-                class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
-              >
-                <span class="chat__message-skeleton-avatar" />
-                <span
-                  class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--tiny"
-                />
-              </span>
-            </div>
-          </div>
-          <div class="chat__mobile-instant-input">
-            <span class="chat__mobile-instant-input-action" />
-            <span class="chat__mobile-instant-input-field" />
-            <span class="chat__mobile-instant-input-send" />
-          </div>
-        </div>
       </div>
       <ShareSelectionOverlay />
     </template>
 
     <template v-else>
       <PinnedMessages
-        v-if="route.id"
+        v-if="shouldShowPinnedMessages"
+        :topic-id="pinnedMessagesTopicId"
         :viewport-snapshot="messageViewportSnapshot"
         @unmount-set-selected-message="scrollToMessage"
       />
@@ -136,6 +76,7 @@
         :on-dismiss-update-banner="props.onDismissUpdateBanner"
         :data-testid="`${props.dataTestid}-Chat-MessageList`"
         @viewport-snapshot-change="handleViewportSnapshotChange"
+        @rendered-topic-change="handleRenderedTopicChange"
       />
       <div class="chat__unselected-topic" v-else>
         <img src="/images/messages.svg" alt="messages" />
@@ -146,14 +87,7 @@
 </template>
 
 <script lang="ts" setup>
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  ref,
-  useTemplateRef,
-  watch
-} from 'vue';
+import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import MessageList from './MessageList.vue';
 import ContactListMobile from './ContactList/MobileList.vue';
@@ -165,13 +99,10 @@ import { getAuthUser } from '../composables/useAuth';
 import PinnedMessages from './Messages/PinnedMessages.vue';
 import type {
   IMessage,
+  IMessageRenderedTopicState,
   IMessageViewportSnapshot
 } from './interfaces/interfaces';
 import ShareSelectionOverlay from './ShareSelectionOverlay.vue';
-import {
-  consumePendingSearchNavigation,
-  getPendingSearchNavigation
-} from '../composables/useMessageSearch';
 import {
   fetchPinnedMessagesForTopic,
   hasKnownTopicMessagesState
@@ -184,6 +115,9 @@ export interface IChatProps extends IMessageListProps {
 const props = withDefaults(defineProps<IChatProps>(), {
   dataTestid: 'Chat'
 });
+const emit = defineEmits<{
+  (e: 'rendered-topic-change', payload: IMessageRenderedTopicState): void;
+}>();
 
 const authUser = computed(() => getAuthUser());
 
@@ -197,13 +131,25 @@ const isMobileMessageListMounted = ref(!isMobile.value);
 const isMobileMessageContentReady = ref(!isMobile.value);
 const currentMobileTopicUsesSkeleton = ref(false);
 const messageViewportSnapshot = ref<IMessageViewportSnapshot | null>(null);
-const mobileRouteKey = computed(() =>
-  route.value.id
-    ? `topic:${route.value.type}:${route.value.id}`
-    : `list:${route.value.type || 'default'}`
+const renderedMessageTopic = ref<IMessageRenderedTopicState>({
+  topicId: null,
+  routeTopicId: null,
+  messageCount: 0,
+  isCurrent: false,
+  isReady: false
+});
+const pinnedMessagesTopicId = computed(
+  () => renderedMessageTopic.value.topicId
+);
+const shouldShowPinnedMessages = computed(
+  () =>
+    !!route.value.id &&
+    !!pinnedMessagesTopicId.value &&
+    renderedMessageTopic.value.messageCount > 0
 );
 const MOBILE_ROUTE_CONTENT_DELAY_MS = 220;
 const OPENED_MOBILE_TOPIC_IDS_KEY = 'openedMobileTopicIds';
+type MessageScrollBehavior = 'auto' | 'instant' | 'smooth';
 
 const loadOpenedMobileTopicIds = (): Set<string> => {
   try {
@@ -219,17 +165,39 @@ const loadOpenedMobileTopicIds = (): Set<string> => {
 const openedMobileTopicIds = loadOpenedMobileTopicIds();
 let mobileRouteContentTimerId: number | null = null;
 let mobileRouteContentFrameId: number | null = null;
-let mobileRouteListMountFrameId: number | null = null;
 let mobileRouteContentToken = 0;
 
-const scrollToMessage = (message: IMessage) => {
-  messageListRef.value?.scrollToMessage(message);
+type ScrollToMessagePayload =
+  | IMessage
+  | {
+      message?: IMessage | null;
+      quoteText?: string;
+      quoteOccurrenceIndex?: number;
+      allowOptimisticTarget?: boolean;
+      scrollBehavior?: MessageScrollBehavior;
+    };
+
+const scrollToMessage = (payload: ScrollToMessagePayload) => {
+  messageListRef.value?.scrollToMessage(payload);
 };
 
 const handleViewportSnapshotChange = (
   snapshot: IMessageViewportSnapshot | null
 ): void => {
   messageViewportSnapshot.value = snapshot;
+};
+
+const handleRenderedTopicChange = (
+  payload: IMessageRenderedTopicState
+): void => {
+  const previousTopicId = renderedMessageTopic.value.topicId;
+
+  renderedMessageTopic.value = payload;
+  emit('rendered-topic-change', payload);
+
+  if (!payload.topicId || payload.topicId !== previousTopicId) {
+    messageViewportSnapshot.value = null;
+  }
 };
 
 const clearMobileRouteContentSchedule = (): void => {
@@ -241,13 +209,6 @@ const clearMobileRouteContentSchedule = (): void => {
   if (mobileRouteContentFrameId !== null) {
     window.cancelAnimationFrame(mobileRouteContentFrameId);
     mobileRouteContentFrameId = null;
-  }
-};
-
-const clearMobileMessageListMountSchedule = (): void => {
-  if (mobileRouteListMountFrameId !== null) {
-    window.cancelAnimationFrame(mobileRouteListMountFrameId);
-    mobileRouteListMountFrameId = null;
   }
 };
 
@@ -297,27 +258,6 @@ const revealMobileMessageContent = (token: number): void => {
   });
 };
 
-const mountMobileMessageListAfterFirstPaint = (
-  topicId: string,
-  token: number
-): void => {
-  clearMobileMessageListMountSchedule();
-  mobileRouteListMountFrameId = window.requestAnimationFrame(() => {
-    mobileRouteListMountFrameId = null;
-
-    if (
-      token !== mobileRouteContentToken ||
-      !isMobile.value ||
-      route.value.id !== topicId
-    ) {
-      return;
-    }
-
-    isMobileMessageListMounted.value = true;
-    syncMobileMessageContentState(topicId);
-  });
-};
-
 const scheduleMobileMessageContentReveal = (): void => {
   const token = ++mobileRouteContentToken;
 
@@ -360,13 +300,11 @@ const prepareMobileMessageRoute = (topicId: string): void => {
 
   currentMobileTopicUsesSkeleton.value = shouldShowSkeleton;
   rememberOpenedMobileTopic(topicId);
-  clearMobileMessageListMountSchedule();
   clearMobileRouteContentSchedule();
 
-  const token = ++mobileRouteContentToken;
-  isMobileMessageListMounted.value = false;
-  isMobileMessageContentReady.value = !shouldShowSkeleton;
-  mountMobileMessageListAfterFirstPaint(topicId, token);
+  ++mobileRouteContentToken;
+  isMobileMessageListMounted.value = true;
+  isMobileMessageContentReady.value = true;
 };
 
 const handleMobileRouteAnimationEnd = (event: AnimationEvent): void => {
@@ -374,40 +312,14 @@ const handleMobileRouteAnimationEnd = (event: AnimationEvent): void => {
     return;
   }
 
+  // The transition class carries `will-change: transform, opacity`. Keeping
+  // it after the 220 ms entrance animation promotes the whole chat route to a
+  // permanent compositor layer. Android WebView then has to raster a large
+  // scrolling descendant inside that layer and can show the wallpaper while
+  // the message tiles catch up during a fast fling.
+  mobileTransitionName.value = '';
   revealMobileMessageContent(mobileRouteContentToken);
 };
-
-const scrollToPendingSearchMessage = async () => {
-  if (
-    !route.value.id ||
-    getPendingSearchNavigation()?.topicId !== route.value.id
-  ) {
-    return;
-  }
-
-  await nextTick();
-
-  const pendingResult = consumePendingSearchNavigation(route.value.id);
-
-  if (!pendingResult) {
-    return;
-  }
-
-  messageListRef.value?.scrollToMessage(pendingResult.message);
-};
-
-watch(
-  [
-    () => route.value.id,
-    () => messageListRef.value,
-    () => isMobileMessageContentReady.value,
-    () => getPendingSearchNavigation()?.id
-  ],
-  () => {
-    void scrollToPendingSearchMessage();
-  },
-  { immediate: true }
-);
 
 watch(
   [() => route.value.id, isMobile],
@@ -422,10 +334,11 @@ watch(
 watch(
   () => route.value.id,
   (topicId, previousTopicId) => {
-    messageViewportSnapshot.value = null;
+    if (!topicId || !renderedMessageTopic.value.topicId) {
+      messageViewportSnapshot.value = null;
+    }
 
     if (!isMobile.value) {
-      clearMobileMessageListMountSchedule();
       clearMobileRouteContentSchedule();
       isMobileMessageListMounted.value = true;
       isMobileMessageContentReady.value = true;
@@ -439,7 +352,6 @@ watch(
         : 'chat-mobile-route-forward';
 
     if (!topicId) {
-      clearMobileMessageListMountSchedule();
       syncMobileMessageContentState(topicId);
       isMobileMessageListMounted.value = false;
       currentMobileTopicUsesSkeleton.value = false;
@@ -454,7 +366,6 @@ watch(
   isMobile,
   mobile => {
     if (!mobile) {
-      clearMobileMessageListMountSchedule();
       clearMobileRouteContentSchedule();
       isMobileMessageListMounted.value = true;
       isMobileMessageContentReady.value = true;
@@ -474,7 +385,6 @@ watch(
 );
 
 onBeforeUnmount(() => {
-  clearMobileMessageListMountSchedule();
   clearMobileRouteContentSchedule();
 });
 

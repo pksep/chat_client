@@ -239,6 +239,17 @@
         </Button>
 
         <Button
+          v-if="hasDownloadableMedia"
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.small"
+          @click.stop="handleDownloadMessageMedia"
+          :data-testid="`${props.dataTestid}-MessageBubble-DownloadButton`"
+        >
+          <Icon :name="IconNameEnum.download" />
+          Скачать
+        </Button>
+
+        <Button
           v-if="canShowMessageDetails"
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.small"
@@ -443,7 +454,8 @@ const emits = defineEmits([
   'unmount-edit-message-id',
   'unmount-reply-message-id',
   'unmount-forward-message',
-  'unmount-retry-message-id'
+  'unmount-retry-message-id',
+  'unmount-download-message-media'
 ]);
 
 const quickReactonList = computed(() => ['❤️', '🔥', '👍', '😂', '👌', '😭']);
@@ -477,6 +489,7 @@ const isAllDeletableSelectedMessages = computed(() => {
 const isSelectionContextMenu = computed(
   () => !!props.isSelectionMode && !!props.isSelected
 );
+const hasDownloadableMedia = computed(() => !!props.media?.length);
 const isGroupTopic = computed(
   () => currentTopic.value?.type === TopicType.Group
 );
@@ -711,6 +724,13 @@ const pinModalOpen = ref(false);
 const pinForEveryone = ref(false);
 const unpinModalOpen = ref(false);
 const forwardModalOpen = ref(false);
+const hasOpenActionModal = computed(
+  () =>
+    pinModalOpen.value ||
+    deleteModalOpen.value ||
+    unpinModalOpen.value ||
+    forwardModalOpen.value
+);
 const reactionRow = ref<HTMLElement | null>(null);
 const detailsTriggerRef = ref<HTMLElement | null>(null);
 const detailsPanelRef = ref<HTMLElement | null>(null);
@@ -797,6 +817,11 @@ const checkFlip = async () => {
   reactionsPositionReady.value = true;
 };
 
+const initializeReactionLayout = async () => {
+  await checkFlip();
+  ensureReactionLayoutObserver();
+};
+
 const syncReadDetailsPosition = async () => {
   await nextTick();
 
@@ -837,8 +862,7 @@ watch(
   () => props.isOpen[props.messageId],
   opened => {
     if (opened) {
-      ensureReactionLayoutObserver();
-      void checkFlip();
+      void initializeReactionLayout();
 
       if (showReadDetails.value) {
         void syncReadDetailsPosition();
@@ -853,7 +877,8 @@ watch(
     disconnectReactionLayoutObserver();
     flipReactions.value = false;
     flipReactionsY.value = false;
-  }
+  },
+  { immediate: true }
 );
 
 watch(showReadDetails, opened => {
@@ -868,6 +893,7 @@ const handleOpenDeleteModal = () => {
 
 const handleCloseDeleteModal = () => {
   deleteModalOpen.value = false;
+  closePopoverState();
 };
 
 const handleOpenUnpinModal = () => {
@@ -876,6 +902,7 @@ const handleOpenUnpinModal = () => {
 
 const handleCloseUnpinModal = () => {
   unpinModalOpen.value = false;
+  closePopoverState();
 };
 
 const handleOpenPinModal = () => {
@@ -886,6 +913,7 @@ const handleOpenPinModal = () => {
 const handleClosePinModal = () => {
   pinModalOpen.value = false;
   pinForEveryone.value = true;
+  closePopoverState();
 };
 
 const handleOpenForwardModal = () => {
@@ -894,6 +922,7 @@ const handleOpenForwardModal = () => {
 
 const handleCloseForwardModal = () => {
   forwardModalOpen.value = false;
+  closePopoverState();
 };
 
 const handleDeleteMessage = async (): Promise<void> => {
@@ -965,7 +994,7 @@ const handleForwardMessage = (topic: ITopic) => {
   if (isSelectionContextMenu.value) {
     openForwardDraft(topic, selectedMessages.value);
     clearSelectedMessages();
-    handleClosePopover();
+    closePopoverState();
     return;
   }
 
@@ -977,7 +1006,7 @@ const handleForwardMessage = (topic: ITopic) => {
     message,
     topic
   });
-  handleClosePopover();
+  closePopoverState();
 };
 
 const handleSelectMessage = () => {
@@ -992,6 +1021,11 @@ const handleSelectMessage = () => {
   }
 
   enterMessageSelection(props.topicId, message);
+  handleClosePopover();
+};
+
+const handleDownloadMessageMedia = () => {
+  emits('unmount-download-message-media');
   handleClosePopover();
 };
 
@@ -1136,7 +1170,7 @@ const handleCopyMessage = async () => {
   handleClosePopover();
 };
 
-const handleClosePopover = () => {
+const closePopoverState = () => {
   clearReadDetailsHoverTimeout();
   disconnectReactionLayoutObserver();
   closeActivePopover(props.messageId);
@@ -1146,6 +1180,14 @@ const handleClosePopover = () => {
   reactionsPositionReady.value = false;
   flipReactions.value = false;
   flipReactionsY.value = false;
+};
+
+const handleClosePopover = () => {
+  if (hasOpenActionModal.value) {
+    return;
+  }
+
+  closePopoverState();
 };
 
 onBeforeUnmount(() => {

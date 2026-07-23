@@ -119,7 +119,10 @@ import GroupIcon from '../UI/GroupIcon.vue';
 import NewTopicIcon from '../UI/NewTopicIcon.vue';
 import type { ChatsToolbarFilter } from '../../composables/useChatsToolbarState';
 import ConnectionStatus from '../UI/ConnectionStatus.vue';
-import { getHasWebsocketConnection } from '../../services/useChat';
+import {
+  getHasBrowserNetwork,
+  getHasWebsocketConnection
+} from '../../services/useChat';
 
 type ChatsToolbarCounts = Record<ChatsToolbarFilter, number>;
 type ChatsToolbarMutedOnly = Record<ChatsToolbarFilter, boolean>;
@@ -161,7 +164,17 @@ const emits = defineEmits<{
   (e: 'create-bot'): void;
 }>();
 
-const isWaitingConnection = computed(() => !getHasWebsocketConnection());
+const hasRenderableTopics = computed(() =>
+  Object.values(props.filterCounts).some(count => count > 0)
+);
+
+const isWaitingConnection = computed(() => {
+  if (!getHasBrowserNetwork()) {
+    return true;
+  }
+
+  return !getHasWebsocketConnection() && !hasRenderableTopics.value;
+});
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();

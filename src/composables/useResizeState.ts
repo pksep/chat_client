@@ -48,6 +48,18 @@ const getInitialState = (
   return { initialActive, initialIsMobile };
 };
 
+const getInitialActiveState = (config: UseResizeStateOptions): boolean => {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return config.initialState ?? false;
+  }
+
+  try {
+    return getInitialState(config, window.innerWidth).initialActive;
+  } catch {
+    return config.initialState ?? false;
+  }
+};
+
 const getNewState = (
   config: UseResizeStateOptions,
   isMobile: boolean,
@@ -82,7 +94,7 @@ export function useResizeState(
       ? { breakpoint: breakpointOrOptions, ...options }
       : breakpointOrOptions;
 
-  const isActive = ref(config.initialState ?? false);
+  const isActive = ref(getInitialActiveState(config));
 
   let resizeHandler: (() => void) | undefined;
   let breakpointPx: number;

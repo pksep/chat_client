@@ -12,6 +12,20 @@ export interface IHeaderProps {
   contact?: IUser;
   members?: IUser[];
   dataTestid?: string;
+  displayRoute?: IHeaderDisplayRoute | null;
+}
+
+export interface IHeaderDisplayRoute {
+  type: string;
+  id: string | null;
+}
+
+export interface IMessageRenderedTopicState {
+  topicId: string | null;
+  routeTopicId: string | null;
+  messageCount: number;
+  isCurrent: boolean;
+  isReady?: boolean;
 }
 
 export interface IMenuEmits {
@@ -60,6 +74,7 @@ export type ITopicInfo = Partial<TopicSetting> & {
 
 export type ITopic = Topic & {
   info?: ITopicInfo;
+  isFavorite?: boolean;
   isPin?: boolean;
   lastMessage?: IMessage;
   activeCall?: {

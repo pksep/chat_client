@@ -509,6 +509,7 @@
             class="message__bubble system-message-text"
             :message="wallpaperPreviewIncomingMessage"
             time="12:10"
+            :is-dialog="true"
             data-testid="WallpaperPreview-Incoming"
           />
           <MessageBubble
@@ -517,6 +518,7 @@
             time="12:10"
             :is-me-sender="true"
             :is-read="true"
+            :is-dialog="true"
             data-testid="WallpaperPreview-Outgoing"
           />
         </div>
@@ -576,6 +578,7 @@
             class="message__bubble"
             :message="wallpaperPreviewIncomingMessage"
             time="12:10"
+            :is-dialog="true"
             data-testid="WallpaperPreview-Incoming"
           />
           <MessageBubble
@@ -584,6 +587,7 @@
             time="12:10"
             :is-me-sender="true"
             :is-read="true"
+            :is-dialog="true"
             data-testid="WallpaperPreview-Outgoing"
           />
         </div>
@@ -748,6 +752,7 @@ import {
   redirectToAuthorization
 } from '../../composables/useAuth';
 import { useLogout } from '../../composables/useLogin';
+import { clearAnyChatBackgroundSyncSession } from '../../services/useChatBackgroundSync';
 import { cleanupPushNotificationsOnLogout } from '../../services/usePushNotifications';
 import { updateCurrentUserStatus } from '../../services/useUserStatus';
 import {
@@ -1245,31 +1250,27 @@ const clearStatus = async (): Promise<void> => {
   await saveStatus(null);
 };
 
-const waitWithTimeout = async (
-  promise: Promise<void>,
-  timeoutMs: number
-): Promise<void> => {
-  await Promise.race([
-    promise,
-    new Promise<void>(resolve => {
-      window.setTimeout(resolve, timeoutMs);
-    })
-  ]);
-};
-
-const handleLogout = async (): Promise<void> => {
-  try {
-    await waitWithTimeout(cleanupPushNotificationsOnLogout(), 2500);
-  } catch (error) {
+const runLogoutCleanup = (): void => {
+  void cleanupPushNotificationsOnLogout().catch(error => {
     console.warn('Failed to cleanup push notifications during logout:', error);
-  } finally {
-    useLogout();
-    redirectToAuthorization();
-  }
+  });
+
+  void clearAnyChatBackgroundSyncSession().catch(error => {
+    console.warn(
+      'Failed to clear chat background sync session during logout:',
+      error
+    );
+  });
 };
 
-const confirmLogout = async (): Promise<void> => {
+const handleLogout = (): void => {
+  runLogoutCleanup();
+  useLogout();
+  redirectToAuthorization();
+};
+
+const confirmLogout = (): void => {
   closeLogoutConfirmModal();
-  await handleLogout();
+  handleLogout();
 };
 </script>

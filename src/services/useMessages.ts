@@ -1,5 +1,5 @@
-import { ref } from 'vue';
-import { getChatSDK } from './useChat';
+import { shallowReactive } from 'vue';
+import { getChatSDK, getHasBrowserNetwork, waitForChatSDK } from './useChat';
 import {
   IMedia,
   IMessage,
@@ -8,6 +8,7 @@ import {
 import { MessageStatus, Reaction } from './useChatSDK/types';
 import {
   decrementServerUnreadCount,
+  getSelectedTopic,
   incrementServerUnreadCount,
   updateLocalTopicReadStatus,
   setTopicTaggedMe,
@@ -24,7 +25,6 @@ import {
   loadCachedPinnedMessages,
   loadCachedTopicMessages,
   saveCachedPinnedMessages,
-  saveCachedTopicMessages,
   savePendingUploadFile,
   loadPendingUploadFile,
   deletePendingUploadFile,
@@ -63,12 +63,26 @@ import {
 } from './useShadowChatSync';
 import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 
-const fullMessagesStore = ref<Record<string, IMessage[]>>({});
-const messagesStore = ref<Record<string, IMessage[]>>({});
-const pinnedMessagesStore = ref<Record<string, IMessage[]>>({});
+// Store mutations replace message payloads. Deep Vue proxies make every field
+// of every cached message reactive and multiply the work of bulk merges; a
+// shallow record keeps reactivity scoped to the changed topic only.
+const fullMessagesStore = shallowReactive<Record<string, IMessage[]>>({});
+const messagesStore = shallowReactive<Record<string, IMessage[]>>({});
+const pinnedMessagesStore = shallowReactive<Record<string, IMessage[]>>({});
 const MAX_ACTIVE_TOPIC_MESSAGES = 250;
 const INITIAL_TOPIC_WINDOW_MESSAGES = 100;
-const persistTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+const ACTIVE_MOBILE_APPEND_PERSIST_DELAY_MS = 1000;
+const MOBILE_VIEWPORT_MAX_WIDTH = 768;
+const MAX_RESIDENT_MESSAGE_TOPICS = 10;
+const aroundMessageContextPrefetches = new Map<string, Promise<IMessage[]>>();
+interface PendingMessagePersist {
+  timeoutId: ReturnType<typeof setTimeout> | null;
+  idleId: number | null;
+  messages: IMessage[];
+  replace: boolean;
+}
+
+const pendingMessagePersists = new Map<string, PendingMessagePersist>();
 const pendingOutgoingForwardBatches = new Map<
   string,
   Array<{
@@ -105,8 +119,55 @@ const suspendedLocalOwnReadTimeouts = new Map<
 >();
 const queuedLocalOwnReadIds = new Map<string, Set<string>>();
 const deletedMessageIdsByTopic = new Map<string, Set<string>>();
+const reactionOverlaysByTopic = new Map<
+  string,
+  Map<string, Map<string, Reaction>>
+>();
+const removedReactionKeysByTopic = new Map<string, Map<string, Set<string>>>();
+const defaultVisibleMessagesLimitByTopic = new Map<string, number>();
+const fullMessageIndexesByTopic = new Map<string, Map<string, number>>();
+const topicMemoryAccessOrder = new Map<string, number>();
+let topicMemoryAccessRevision = 0;
+
+const replaceFullMessagesForTopic = (
+  topicId: string,
+  messages: IMessage[]
+): void => {
+  fullMessagesStore[topicId] = messages;
+  fullMessageIndexesByTopic.set(
+    topicId,
+    new Map(messages.map((message, index) => [message.id, index]))
+  );
+};
+
+const getFullMessageIndexesForTopic = (
+  topicId: string,
+  messages: IMessage[]
+): Map<string, number> => {
+  const existingIndexes = fullMessageIndexesByTopic.get(topicId);
+
+  if (existingIndexes && existingIndexes.size === messages.length) {
+    return existingIndexes;
+  }
+
+  const indexes = new Map(
+    messages.map((message, index) => [message.id, index])
+  );
+  fullMessageIndexesByTopic.set(topicId, indexes);
+  return indexes;
+};
 
 const route = useUrlWatcher();
+
+const isActiveMobileTopic = (topicId: string): boolean =>
+  route.value.id === topicId &&
+  typeof window !== 'undefined' &&
+  window.innerWidth <= MOBILE_VIEWPORT_MAX_WIDTH;
+
+const getAppendPersistDelayMs = (topicId: string): number | undefined =>
+  isActiveMobileTopic(topicId)
+    ? ACTIVE_MOBILE_APPEND_PERSIST_DELAY_MS
+    : undefined;
 
 const syncLocalLastMessage = (topicId: string, message?: IMessage): void => {
   const { updateLocalLastMessageTopic } = useTopics();
@@ -124,33 +185,167 @@ const markTopicStateCanonical = (topicId: string): void => {
   canonicalTopicStateIds.add(topicId);
 };
 
+const touchTopicMemory = (topicId: string): void => {
+  if (!topicId) {
+    return;
+  }
+
+  topicMemoryAccessRevision += 1;
+  topicMemoryAccessOrder.set(topicId, topicMemoryAccessRevision);
+};
+
+const cancelPendingMessagePersistSchedule = (
+  pendingPersist: PendingMessagePersist
+): void => {
+  if (pendingPersist.timeoutId) {
+    clearTimeout(pendingPersist.timeoutId);
+    pendingPersist.timeoutId = null;
+  }
+
+  if (
+    pendingPersist.idleId !== null &&
+    typeof window !== 'undefined' &&
+    'cancelIdleCallback' in window
+  ) {
+    window.cancelIdleCallback(pendingPersist.idleId);
+    pendingPersist.idleId = null;
+  }
+};
+
+const persistPendingMessageSnapshot = async (
+  topicId: string,
+  pendingPersist: PendingMessagePersist
+): Promise<void> => {
+  if (pendingMessagePersists.get(topicId) !== pendingPersist) {
+    return;
+  }
+
+  cancelPendingMessagePersistSchedule(pendingPersist);
+  pendingMessagePersists.delete(topicId);
+  const topicMessages = prepareMessagesForPersistence(
+    filterDeletedMessagesForTopic(topicId, pendingPersist.messages)
+  );
+
+  // The shadow snapshot is the canonical cache. The old topic cache remains
+  // read-only as a migration fallback, avoiding two full structured clones
+  // and two IndexedDB writes after every message mutation.
+  await Promise.allSettled([
+    saveShadowTopicSnapshot(topicId, topicMessages, 'local', undefined, {
+      replace: pendingPersist.replace
+    }),
+    syncShadowReadStateFromMessages(topicId, topicMessages, 'local')
+  ]);
+  pruneInactiveTopicMemory();
+};
+
+export const flushPendingMessagePersists = async (): Promise<void> => {
+  const pendingPersists = Array.from(pendingMessagePersists.entries());
+
+  await Promise.allSettled(
+    pendingPersists.map(([topicId, pendingPersist]) =>
+      persistPendingMessageSnapshot(topicId, pendingPersist)
+    )
+  );
+};
+
 const schedulePersistMessages = (topicId: string, delayMs = 150): void => {
   if (!topicId) {
     return;
   }
 
-  const existingTimeout = persistTimeouts.get(topicId);
+  const previousPersist = pendingMessagePersists.get(topicId);
 
-  if (existingTimeout) {
-    clearTimeout(existingTimeout);
+  if (previousPersist) {
+    cancelPendingMessagePersistSchedule(previousPersist);
   }
 
-  const timeoutId = setTimeout(() => {
-    persistTimeouts.delete(topicId);
-    const topicMessages = prepareMessagesForPersistence(
-      filterDeletedMessagesForTopic(
-        topicId,
-        fullMessagesStore.value[topicId] || []
-      )
-    );
-    void saveCachedTopicMessages(topicId, topicMessages);
-    void saveShadowTopicSnapshot(topicId, topicMessages, 'local', undefined, {
-      replace: canonicalTopicStateIds.has(topicId)
-    });
-    void syncShadowReadStateFromMessages(topicId, topicMessages, 'local');
-  }, delayMs);
+  const pendingPersist: PendingMessagePersist = {
+    timeoutId: null,
+    idleId: null,
+    messages: fullMessagesStore[topicId] || [],
+    replace: canonicalTopicStateIds.has(topicId)
+  };
+  const queueIdlePersist = (): void => {
+    pendingPersist.timeoutId = null;
 
-  persistTimeouts.set(topicId, timeoutId);
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      pendingPersist.idleId = window.requestIdleCallback(
+        () => void persistPendingMessageSnapshot(topicId, pendingPersist),
+        { timeout: 1200 }
+      );
+      return;
+    }
+
+    pendingPersist.timeoutId = setTimeout(
+      () => void persistPendingMessageSnapshot(topicId, pendingPersist),
+      0
+    );
+  };
+
+  pendingPersist.timeoutId = setTimeout(queueIdlePersist, delayMs);
+  pendingMessagePersists.set(topicId, pendingPersist);
+};
+
+if (typeof window !== 'undefined') {
+  const flushPendingSnapshots = (): void => {
+    void flushPendingMessagePersists();
+  };
+
+  window.addEventListener('pagehide', flushPendingSnapshots);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      flushPendingSnapshots();
+    }
+  });
+}
+
+const hasUnfinishedRuntimeMessages = (topicId: string): boolean =>
+  (fullMessagesStore[topicId] || []).some(
+    message =>
+      message.status === MessageStatus.Wait ||
+      message.status === MessageStatus.NotDelivered ||
+      message.media?.some(media => media.isLoading || media.uploadError)
+  );
+
+const pruneInactiveTopicMemory = (): void => {
+  const residentTopicIds = Array.from(
+    new Set([...Object.keys(fullMessagesStore), ...Object.keys(messagesStore)])
+  );
+  let removableCount = residentTopicIds.length - MAX_RESIDENT_MESSAGE_TOPICS;
+
+  if (removableCount <= 0) {
+    return;
+  }
+
+  const activeTopicId = route.value.id;
+  const evictionCandidates = residentTopicIds
+    .filter(
+      topicId =>
+        topicId !== activeTopicId &&
+        !pendingMessagePersists.has(topicId) &&
+        !hasUnfinishedRuntimeMessages(topicId)
+    )
+    .sort(
+      (left, right) =>
+        (topicMemoryAccessOrder.get(left) || 0) -
+        (topicMemoryAccessOrder.get(right) || 0)
+    );
+
+  for (const topicId of evictionCandidates) {
+    if (removableCount <= 0) {
+      break;
+    }
+
+    // Pending persistence owns its immutable array snapshot, so resident Vue
+    // state can be released without dropping the IndexedDB write.
+    delete fullMessagesStore[topicId];
+    delete messagesStore[topicId];
+    fullMessageIndexesByTopic.delete(topicId);
+    canonicalTopicStateIds.delete(topicId);
+    defaultVisibleMessagesLimitByTopic.delete(topicId);
+    topicMemoryAccessOrder.delete(topicId);
+    removableCount -= 1;
+  }
 };
 
 const schedulePendingOutgoingForwardBatchCleanup = (topicId: string): void => {
@@ -253,6 +448,147 @@ const rememberDeletedMessageId = (topicId: string, messageId: string): void => {
   deletedIds.add(messageId);
   deletedMessageIdsByTopic.set(topicId, deletedIds);
 };
+
+const getReactionKey = (reaction?: Reaction, fallbackId?: string): string => {
+  if (reaction?.id) {
+    return reaction.id;
+  }
+
+  if (fallbackId) {
+    return fallbackId;
+  }
+
+  if (reaction?.senderUserId && reaction?.text) {
+    return `${reaction.senderUserId}:${reaction.text}`;
+  }
+
+  return '';
+};
+
+const getTopicMessageReactionOverlays = (
+  topicId: string,
+  messageId: string
+): Map<string, Reaction> | undefined =>
+  reactionOverlaysByTopic.get(topicId)?.get(messageId);
+
+const getTopicMessageRemovedReactionKeys = (
+  topicId: string,
+  messageId: string
+): Set<string> | undefined =>
+  removedReactionKeysByTopic.get(topicId)?.get(messageId);
+
+const clearReactionOverlayForMessage = (
+  topicId: string,
+  messageId: string
+): void => {
+  reactionOverlaysByTopic.get(topicId)?.delete(messageId);
+  removedReactionKeysByTopic.get(topicId)?.delete(messageId);
+};
+
+const recordReactionOverlay = (
+  topicId: string,
+  messageId: string,
+  action: string,
+  reaction?: Reaction,
+  reactionId?: string
+): void => {
+  if (!topicId || !messageId) {
+    return;
+  }
+
+  const reactionKey = getReactionKey(reaction, reactionId);
+
+  if (!reactionKey) {
+    return;
+  }
+
+  let topicOverlays = reactionOverlaysByTopic.get(topicId);
+  if (!topicOverlays) {
+    topicOverlays = new Map();
+    reactionOverlaysByTopic.set(topicId, topicOverlays);
+  }
+
+  let messageOverlays = topicOverlays.get(messageId);
+  if (!messageOverlays) {
+    messageOverlays = new Map();
+    topicOverlays.set(messageId, messageOverlays);
+  }
+
+  let topicRemovedKeys = removedReactionKeysByTopic.get(topicId);
+  if (!topicRemovedKeys) {
+    topicRemovedKeys = new Map();
+    removedReactionKeysByTopic.set(topicId, topicRemovedKeys);
+  }
+
+  let messageRemovedKeys = topicRemovedKeys.get(messageId);
+  if (!messageRemovedKeys) {
+    messageRemovedKeys = new Set();
+    topicRemovedKeys.set(messageId, messageRemovedKeys);
+  }
+
+  if (action === 'removed') {
+    messageOverlays.delete(reactionKey);
+    messageRemovedKeys.add(reactionKey);
+    return;
+  }
+
+  if (!reaction) {
+    return;
+  }
+
+  messageRemovedKeys.delete(reactionKey);
+  messageOverlays.set(reactionKey, reaction);
+};
+
+const isReactionMatchedByOverlay = (
+  currentReaction: Reaction,
+  overlayReaction: Reaction,
+  overlayKey: string
+): boolean =>
+  getReactionKey(currentReaction) === overlayKey ||
+  (!!currentReaction.senderUserId &&
+    !!overlayReaction.senderUserId &&
+    currentReaction.senderUserId === overlayReaction.senderUserId &&
+    currentReaction.text === overlayReaction.text);
+
+const applyReactionOverlayToMessage = (
+  topicId: string,
+  message: IMessage
+): IMessage => {
+  const messageOverlays = getTopicMessageReactionOverlays(topicId, message.id);
+  const removedReactionKeys = getTopicMessageRemovedReactionKeys(
+    topicId,
+    message.id
+  );
+
+  if (!messageOverlays?.size && !removedReactionKeys?.size) {
+    return message;
+  }
+
+  let reactions = [...(message.reactions || [])].filter(reaction => {
+    const reactionKey = getReactionKey(reaction);
+    return !reactionKey || !removedReactionKeys?.has(reactionKey);
+  });
+
+  messageOverlays?.forEach((overlayReaction, overlayKey) => {
+    reactions = reactions.filter(
+      reaction =>
+        !isReactionMatchedByOverlay(reaction, overlayReaction, overlayKey)
+    );
+    reactions.push(overlayReaction);
+  });
+
+  return {
+    ...message,
+    reactions
+  };
+};
+
+const applyReactionOverlaysToMessages = (
+  topicId: string,
+  messages: IMessage[]
+): IMessage[] =>
+  messages.map(message => applyReactionOverlayToMessage(topicId, message));
 
 const rememberPersistedDeletedMessageIds = async (
   topicId: string,
@@ -486,12 +822,45 @@ const clampMessagesForUi = (
   return messages.slice(-uiWindowLimit);
 };
 
+const getDefaultVisibleMessagesLimitForSave = (
+  topicId: string,
+  mode: MessageWindowMode = 'latest',
+  visibleLimit?: number
+): number | undefined => {
+  if (visibleLimit !== undefined) {
+    return visibleLimit;
+  }
+
+  if (mode !== 'latest' && mode !== 'preserve-end') {
+    return undefined;
+  }
+
+  return defaultVisibleMessagesLimitByTopic.get(topicId);
+};
+
+export const setDefaultVisibleMessagesLimitForTopic = (
+  topicId: string,
+  visibleLimit?: number
+): void => {
+  if (!topicId) {
+    return;
+  }
+
+  if (!visibleLimit || visibleLimit <= 0) {
+    defaultVisibleMessagesLimitByTopic.delete(topicId);
+    return;
+  }
+
+  defaultVisibleMessagesLimitByTopic.set(topicId, visibleLimit);
+};
+
 const getNonShrinkingVisibleLimit = (
   topicId: string,
   requestedLimit?: number,
-  isPaginationRequest = false
+  isPaginationRequest = false,
+  allowShrink = false
 ): number | undefined => {
-  if (!requestedLimit || isPaginationRequest) {
+  if (!requestedLimit || isPaginationRequest || allowShrink) {
     return requestedLimit;
   }
 
@@ -524,6 +893,12 @@ const restorePendingUploadMediaState = async (
 
       const restoredMedia = await Promise.all(
         message.media.map(async media => {
+          // Normal remote media never has a pending local file. Avoid one
+          // IndexedDB transaction per image while hydrating long histories.
+          if (!media.isLoading && !media.uploadError) {
+            return media;
+          }
+
           const pendingFile = await getPendingUploadFile(
             topicId,
             message.id,
@@ -797,17 +1172,21 @@ const updateTopicMessageStores = (
   topicId: string,
   transform: (messages: IMessage[]) => IMessage[]
 ): IMessage[] => {
-  const existingFullMessages = fullMessagesStore.value[topicId] || [];
-  const existingVisibleMessages = messagesStore.value[topicId] || [];
-  const nextFullMessages = [...transform([...existingFullMessages])].sort(
-    compareMessages
+  const existingFullMessages = fullMessagesStore[topicId] || [];
+  const existingVisibleMessages = messagesStore[topicId] || [];
+  const nextFullMessages = applyReactionOverlaysToMessages(
+    topicId,
+    [...transform([...existingFullMessages])].sort(compareMessages)
   );
-  const nextVisibleMessages = [...transform([...existingVisibleMessages])].sort(
-    compareMessages
+  const nextVisibleMessages = applyReactionOverlaysToMessages(
+    topicId,
+    [...transform([...existingVisibleMessages])].sort(compareMessages)
   );
 
-  fullMessagesStore.value[topicId] = nextFullMessages;
-  messagesStore.value[topicId] = nextVisibleMessages;
+  replaceFullMessagesForTopic(topicId, nextFullMessages);
+  messagesStore[topicId] = nextVisibleMessages;
+  touchTopicMemory(topicId);
+  pruneInactiveTopicMemory();
 
   return nextFullMessages;
 };
@@ -909,7 +1288,10 @@ export const fetchMessagesForTopic = async (
     forceRefresh?: boolean;
     forceNetwork?: boolean;
     visibleLimit?: number;
+    updateVisible?: boolean;
+    allowVisibleShrink?: boolean;
     skipShadowSnapshot?: boolean;
+    allowStaleFallback?: boolean;
   }
 ): Promise<IMessage[]> => {
   try {
@@ -925,7 +1307,7 @@ export const fetchMessagesForTopic = async (
     );
     const direction = getHistoryDirection(opts);
 
-    if (!navigator.onLine) {
+    if (!getHasBrowserNetwork()) {
       if (
         (opts?.lastMessageId || opts?.afterMessageId) &&
         existingMessages.length > 0
@@ -947,8 +1329,10 @@ export const fetchMessagesForTopic = async (
                 visibleLimit: getNonShrinkingVisibleLimit(
                   topicId,
                   opts?.visibleLimit,
-                  isPaginationRequest
-                )
+                  isPaginationRequest,
+                  opts?.allowVisibleShrink
+                ),
+                updateVisible: opts?.updateVisible
               }
             );
           }
@@ -1001,48 +1385,6 @@ export const fetchMessagesForTopic = async (
           afterMessageId: opts?.afterMessageId || null
         });
         return existingMessages;
-      }
-    }
-
-    if (
-      !opts?.forceRefresh &&
-      !opts?.forceNetwork &&
-      (opts?.lastMessageId || opts?.afterMessageId) &&
-      existingMessages.length > 0
-    ) {
-      const localPage = await applyShadowReadStateToMessages(
-        topicId,
-        resolveLocalTopicPage(topicId, opts)
-      );
-
-      if (localPage.length > 0) {
-        if (!opts?.skipSave) {
-          mergeMessagesForTopic(
-            topicId,
-            localPage,
-            opts.lastMessageId ? 'prepend' : 'append',
-            {
-              syncLastMessage: opts?.syncLastMessage ?? false,
-              windowMode: getWindowModeForFetch(opts),
-              visibleLimit: getNonShrinkingVisibleLimit(
-                topicId,
-                opts?.visibleLimit,
-                isPaginationRequest
-              )
-            }
-          );
-        }
-
-        traceHistoryResolution(topicId, {
-          direction,
-          source: 'memory-store',
-          resolution: 'cache_hit',
-          resultCount: localPage.length,
-          lastMessageId: opts?.lastMessageId || null,
-          afterMessageId: opts?.afterMessageId || null
-        });
-
-        return localPage;
       }
     }
 
@@ -1103,8 +1445,10 @@ export const fetchMessagesForTopic = async (
               visibleLimit: getNonShrinkingVisibleLimit(
                 topicId,
                 opts?.visibleLimit,
-                isPaginationRequest
-              )
+                isPaginationRequest,
+                opts?.allowVisibleShrink
+              ),
+              updateVisible: opts?.updateVisible
             }
           );
         }
@@ -1122,8 +1466,15 @@ export const fetchMessagesForTopic = async (
       }
     }
 
-    const sdk = getChatSDK();
-    if (!sdk) return existingMessages;
+    let sdk = getChatSDK();
+
+    if (!sdk && opts?.forceNetwork) {
+      sdk = await waitForChatSDK();
+    }
+
+    if (!sdk) {
+      return opts?.allowStaleFallback === false ? [] : existingMessages;
+    }
 
     const messages = normalizePaginationResult(
       await sdk.getMessages(topicId, {
@@ -1168,21 +1519,16 @@ export const fetchMessagesForTopic = async (
       } else if (opts?.afterMessageId) {
         combined = [...existing, ...messages];
       }
-      const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
+      const unique = dedupeMessagesForTopic(combined);
       const existingVisible = getMessagesByTopicId(topicId);
       const visibleMessages = opts?.lastMessageId
-        ? Array.from(
-            new Map(
-              [...messages, ...existingVisible].map(m => [m.id, m])
-            ).values()
-          )
+        ? dedupeMessagesForTopic([...messages, ...existingVisible])
         : opts?.afterMessageId
-          ? Array.from(
-              new Map(
-                [...existingVisible, ...messages].map(m => [m.id, m])
-              ).values()
-            )
-          : mergeWithPendingOutgoingMessages(messages, existingVisible);
+          ? dedupeMessagesForTopic([...existingVisible, ...messages])
+          : dedupeMessagesForTopic([
+              ...existingVisible,
+              ...mergeWithPendingOutgoingMessages(messages, existingVisible)
+            ]);
 
       saveMessagesToLocal(topicId, unique, {
         syncLastMessage: opts?.syncLastMessage ?? false,
@@ -1191,8 +1537,10 @@ export const fetchMessagesForTopic = async (
         visibleLimit: getNonShrinkingVisibleLimit(
           topicId,
           opts?.visibleLimit,
-          isPaginationRequest
-        )
+          isPaginationRequest,
+          opts?.allowVisibleShrink
+        ),
+        updateVisible: opts?.updateVisible
       });
     }
 
@@ -1210,6 +1558,10 @@ export const fetchMessagesForTopic = async (
       lastMessageId: opts?.lastMessageId || null,
       afterMessageId: opts?.afterMessageId || null
     });
+
+    if (opts?.allowStaleFallback === false) {
+      return [];
+    }
 
     const existingMessages = getFullMessagesByTopicId(topicId);
     if (existingMessages.length > 0) {
@@ -1249,7 +1601,8 @@ export const fetchPinnedMessagesForTopic = async (
 
 export const fetchAroundMessage = async (
   messageId: string,
-  topicId: string = route.value.id
+  topicId: string = route.value.id,
+  opts?: { updateVisible?: boolean }
 ): Promise<IMessage[]> => {
   try {
     if (!messageId) return;
@@ -1287,7 +1640,8 @@ export const fetchAroundMessage = async (
         mergeMessagesForTopic(topicId, normalizedShadowMessages, 'replace', {
           syncLastMessage: false,
           windowMode: 'around-anchor',
-          anchorMessageId: messageId
+          anchorMessageId: messageId,
+          updateVisible: opts?.updateVisible
         });
 
         return normalizedShadowMessages;
@@ -1312,7 +1666,8 @@ export const fetchAroundMessage = async (
     mergeMessagesForTopic(topicId, messages, 'replace', {
       syncLastMessage: false,
       windowMode: 'around-anchor',
-      anchorMessageId: messageId
+      anchorMessageId: messageId,
+      updateVisible: opts?.updateVisible
     });
 
     return messages;
@@ -1320,6 +1675,38 @@ export const fetchAroundMessage = async (
     console.warn('Failed to fetch around message:', error);
     return [];
   }
+};
+
+export const prefetchAroundMessageContext = (
+  messageId: string,
+  topicId: string = route.value.id
+): Promise<IMessage[]> => {
+  if (!messageId || !topicId) {
+    return Promise.resolve([]);
+  }
+
+  if (
+    getFullMessagesByTopicId(topicId).some(message => message.id === messageId)
+  ) {
+    return Promise.resolve([]);
+  }
+
+  const requestKey = `${topicId}:${messageId}`;
+  const existingRequest = aroundMessageContextPrefetches.get(requestKey);
+
+  if (existingRequest) {
+    return existingRequest;
+  }
+
+  const request = fetchAroundMessage(messageId, topicId, {
+    updateVisible: false
+  }).finally(() => {
+    aroundMessageContextPrefetches.delete(requestKey);
+  });
+
+  aroundMessageContextPrefetches.set(requestKey, request);
+
+  return request;
 };
 
 export const addMessageToLocal = (topicId: string, message: IMessage): void => {
@@ -1363,7 +1750,8 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
     saveMessagesToLocal(topicId, [...existingMessages, nextMessage], {
       syncLastMessage: true,
       windowMode: 'preserve-end',
-      updateVisible: shouldUpdateVisibleWindow
+      updateVisible: shouldUpdateVisibleWindow,
+      persistDelayMs: getAppendPersistDelayMs(topicId)
     });
 
     if (
@@ -1411,7 +1799,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
         };
       })
     );
-    schedulePersistMessages(topicId);
+    schedulePersistMessages(topicId, getAppendPersistDelayMs(topicId));
     clearPendingUploadMessage(topicId, clientId);
 
     if (
@@ -1441,7 +1829,8 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   saveMessagesToLocal(topicId, [...filtered, resolvedMessage], {
     syncLastMessage: true,
     windowMode: 'preserve-end',
-    updateVisible: shouldUpdateVisibleWindow
+    updateVisible: shouldUpdateVisibleWindow,
+    persistDelayMs: getAppendPersistDelayMs(topicId)
   });
   clearPendingUploadMessage(topicId, clientId);
 
@@ -1519,6 +1908,7 @@ export const deleteMessageFromLocal = (
   messageId: string
 ): void => {
   rememberDeletedMessageId(topicId, messageId);
+  clearReactionOverlayForMessage(topicId, messageId);
   updateTopicMessageStores(topicId, messages =>
     messages.filter(message => message.id !== messageId)
   );
@@ -1527,7 +1917,7 @@ export const deleteMessageFromLocal = (
   syncLocalLastMessage(topicId);
   savePinnedMessagesToLocal(
     topicId,
-    (pinnedMessagesStore.value[topicId] || []).filter(
+    (pinnedMessagesStore[topicId] || []).filter(
       message => message.id !== messageId
     )
   );
@@ -1547,7 +1937,7 @@ export const editMessageFromLocal = (
   const updateMessage = (msg: IMessage): IMessage => {
     let isEdit = msg.isEdit;
     if (message.isPin !== msg.isPin) {
-      const pinnedMessages = pinnedMessagesStore.value[topicId] || [];
+      const pinnedMessages = pinnedMessagesStore[topicId] || [];
       if (message.isPin) {
         savePinnedMessagesToLocal(topicId, [
           ...pinnedMessages.filter(
@@ -1613,6 +2003,7 @@ export const changeReactionFromLocal = (
   reaction?: Reaction,
   reactionId?: string
 ): void => {
+  recordReactionOverlay(topicId, messageId, action, reaction, reactionId);
   updateTopicMessageStores(topicId, messages =>
     messages.map(msg => {
       if (msg.id !== messageId) {
@@ -1695,27 +2086,44 @@ export const saveMessagesToLocal = (
   }
 ): void => {
   const filteredMessages = filterDeletedMessagesForTopic(topicId, messages);
-  const sortedMessages =
-    dedupeMessagesForTopic(filteredMessages).sort(compareMessages);
-  const boundedMessages = clampMessagesForUi(
-    dedupeMessagesForTopic(
-      filterDeletedMessagesForTopic(
-        topicId,
-        opts?.visibleMessages || sortedMessages
-      )
-    ).sort(compareMessages),
-    opts?.windowMode,
-    opts?.anchorMessageId,
+  const windowMode = opts?.windowMode || 'latest';
+  const visibleLimit = getDefaultVisibleMessagesLimitForSave(
+    topicId,
+    windowMode,
     opts?.visibleLimit
   );
 
-  fullMessagesStore.value[topicId] = sortedMessages;
-  if (opts?.updateVisible !== false) {
-    messagesStore.value[topicId] = boundedMessages;
+  if (opts?.visibleLimit !== undefined && visibleLimit !== undefined) {
+    defaultVisibleMessagesLimitByTopic.set(topicId, visibleLimit);
   }
+  const sortedMessages = applyReactionOverlaysToMessages(
+    topicId,
+    dedupeMessagesForTopic(filteredMessages).sort(compareMessages)
+  );
+  const boundedMessages = clampMessagesForUi(
+    applyReactionOverlaysToMessages(
+      topicId,
+      dedupeMessagesForTopic(
+        filterDeletedMessagesForTopic(
+          topicId,
+          opts?.visibleMessages || sortedMessages
+        )
+      ).sort(compareMessages)
+    ),
+    windowMode,
+    opts?.anchorMessageId,
+    visibleLimit
+  );
+
+  replaceFullMessagesForTopic(topicId, sortedMessages);
+  if (opts?.updateVisible !== false) {
+    messagesStore[topicId] = boundedMessages;
+  }
+  touchTopicMemory(topicId);
   if (!opts?.skipPersist) {
     schedulePersistMessages(topicId, opts?.persistDelayMs);
   }
+  pruneInactiveTopicMemory();
   syncTopicUnreadState(topicId);
 
   if (opts?.syncLastMessage !== false) {
@@ -1744,18 +2152,25 @@ export const clearMessagesForTopic = (
   saveMessagesToLocal(topicId, [], {
     syncLastMessage: opts?.syncLastMessage ?? false
   });
+  savePinnedMessagesToLocal(topicId, []);
+  void clearCachedTopicMessages(topicId);
+  void saveShadowTopicSnapshot(topicId, [], 'local', undefined, {
+    replace: true
+  });
   canonicalTopicStateIds.delete(topicId);
 };
 
 export const getFullMessagesByTopicId = (topicId: string): IMessage[] => {
-  return fullMessagesStore.value[topicId] || [];
+  touchTopicMemory(topicId);
+  return fullMessagesStore[topicId] || [];
 };
 
 export const getTopicIdsWithMessages = (): string[] =>
-  Object.keys(fullMessagesStore.value);
+  Object.keys(fullMessagesStore);
 
 export const getMessagesByTopicId = (topicId: string): IMessage[] => {
-  return messagesStore.value[topicId] || [];
+  touchTopicMemory(topicId);
+  return messagesStore[topicId] || [];
 };
 
 export const hasKnownTopicMessagesState = (topicId: string): boolean => {
@@ -1787,32 +2202,72 @@ export const setVisibleMessagesLimitForTopic = (
     return [];
   }
 
+  // A visible topic must never lose already mounted messages as a side effect
+  // of a late cache/network bootstrap. Shrinking the DOM while the user is
+  // scrolling changes scrollHeight by thousands of pixels and can leave the
+  // compositor painting an empty part of the scrollport. Callers that really
+  // need to release a window must opt in explicitly.
   const nextVisibleLimit =
-    opts?.allowShrink === false
-      ? Math.max(visibleLimit, visibleMessages.length)
-      : visibleLimit;
+    opts?.allowShrink === true
+      ? visibleLimit
+      : Math.max(visibleLimit, visibleMessages.length);
+  let nextVisibleMessages: IMessage[];
 
-  saveMessagesToLocal(topicId, sourceMessages, {
-    syncLastMessage: false,
-    windowMode: 'latest',
-    visibleLimit: nextVisibleLimit
-  });
+  if (opts?.allowShrink === true || visibleMessages.length === 0) {
+    nextVisibleMessages = clampMessagesForUi(
+      sourceMessages,
+      'latest',
+      undefined,
+      nextVisibleLimit
+    );
+  } else {
+    const sourceIndexById = new Map(
+      sourceMessages.map((message, index) => [message.id, index])
+    );
+    const visibleIndexes = visibleMessages.map(message =>
+      sourceIndexById.get(message.id)
+    );
+    const hasContiguousVisibleRange = visibleIndexes.every(
+      (index, position) =>
+        index !== undefined &&
+        (position === 0 ||
+          index === (visibleIndexes[position - 1] as number) + 1)
+    );
 
-  return getMessagesByTopicId(topicId);
-};
+    if (!hasContiguousVisibleRange) {
+      nextVisibleMessages = visibleMessages;
+    } else {
+      let startIndex = visibleIndexes[0] as number;
+      let endIndex = (visibleIndexes.at(-1) as number) + 1;
+      let remaining = Math.max(0, nextVisibleLimit - (endIndex - startIndex));
+      const appendCount = Math.min(
+        sourceMessages.length - endIndex,
+        Math.ceil(remaining / 2)
+      );
 
-export const clearVisibleMessagesForTopic = (topicId: string): void => {
-  if (!topicId) {
-    return;
+      endIndex += appendCount;
+      remaining -= appendCount;
+
+      const prependCount = Math.min(startIndex, remaining);
+      startIndex -= prependCount;
+      remaining -= prependCount;
+      endIndex = Math.min(sourceMessages.length, endIndex + remaining);
+      nextVisibleMessages = sourceMessages.slice(startIndex, endIndex);
+    }
   }
 
-  messagesStore.value[topicId] = [];
+  defaultVisibleMessagesLimitByTopic.set(topicId, nextVisibleLimit);
+  messagesStore[topicId] = nextVisibleMessages;
+  touchTopicMemory(topicId);
+  syncTopicUnreadState(topicId);
+
+  return nextVisibleMessages;
 };
 
 export const hydrateMessagesFromCache = async (
   topicId: string,
   userId?: string,
-  opts?: { visibleLimit?: number }
+  opts?: { visibleLimit?: number; allowVisibleShrink?: boolean }
 ): Promise<IMessage[]> => {
   if (!topicId) {
     return [];
@@ -1828,7 +2283,13 @@ export const hydrateMessagesFromCache = async (
     saveMessagesToLocal(topicId, existingFullMessages, {
       syncLastMessage: false,
       windowMode: 'latest',
-      visibleLimit: getNonShrinkingVisibleLimit(topicId, opts?.visibleLimit)
+      visibleLimit: getNonShrinkingVisibleLimit(
+        topicId,
+        opts?.visibleLimit,
+        false,
+        opts?.allowVisibleShrink
+      ),
+      skipPersist: true
     });
 
     return getMessagesByTopicId(topicId);
@@ -1858,10 +2319,15 @@ export const hydrateMessagesFromCache = async (
       saveMessagesToLocal(topicId, normalizedShadowMessages, {
         syncLastMessage: false,
         windowMode: 'latest',
-        visibleLimit: getNonShrinkingVisibleLimit(topicId, opts?.visibleLimit)
+        visibleLimit: getNonShrinkingVisibleLimit(
+          topicId,
+          opts?.visibleLimit,
+          false,
+          opts?.allowVisibleShrink
+        ),
+        skipPersist: true
       });
       markTopicStateCanonical(topicId);
-      void saveShadowLoadedRange(topicId, normalizedShadowMessages);
 
       return normalizedShadowMessages;
     }
@@ -1881,7 +2347,13 @@ export const hydrateMessagesFromCache = async (
     saveMessagesToLocal(topicId, normalizedCachedMessages, {
       syncLastMessage: false,
       windowMode: 'latest',
-      visibleLimit: getNonShrinkingVisibleLimit(topicId, opts?.visibleLimit)
+      visibleLimit: getNonShrinkingVisibleLimit(
+        topicId,
+        opts?.visibleLimit,
+        false,
+        opts?.allowVisibleShrink
+      ),
+      skipPersist: true
     });
     markTopicStateCanonical(topicId);
     void saveShadowTopicSnapshot(
@@ -1893,7 +2365,6 @@ export const hydrateMessagesFromCache = async (
         replace: true
       }
     );
-    void saveShadowLoadedRange(topicId, normalizedCachedMessages, userId);
     void syncShadowReadStateFromMessages(
       topicId,
       normalizedCachedMessages,
@@ -1909,7 +2380,13 @@ export const hydrateMessagesFromCache = async (
     saveMessagesToLocal(topicId, existingFullMessages, {
       syncLastMessage: false,
       windowMode: 'latest',
-      visibleLimit: getNonShrinkingVisibleLimit(topicId, opts?.visibleLimit)
+      visibleLimit: getNonShrinkingVisibleLimit(
+        topicId,
+        opts?.visibleLimit,
+        false,
+        opts?.allowVisibleShrink
+      ),
+      skipPersist: true
     });
 
     return getMessagesByTopicId(topicId);
@@ -1971,6 +2448,7 @@ export const mergeMessagesForTopic = (
     visibleLimit?: number;
     persistDelayMs?: number;
     skipPersist?: boolean;
+    updateVisible?: boolean;
   }
 ): IMessage[] => {
   const existing = getFullMessagesByTopicId(topicId) || [];
@@ -2016,7 +2494,8 @@ export const mergeMessagesForTopic = (
     visibleMessages: visibleCombined,
     visibleLimit: opts?.visibleLimit,
     persistDelayMs: opts?.persistDelayMs,
-    skipPersist: opts?.skipPersist
+    skipPersist: opts?.skipPersist,
+    updateVisible: opts?.updateVisible
   });
 
   return unique;
@@ -2027,7 +2506,7 @@ export const savePinnedMessagesToLocal = (
   messages: IMessage[],
   opts: { skipCache?: boolean } = {}
 ): void => {
-  pinnedMessagesStore.value[topicId] = messages;
+  pinnedMessagesStore[topicId] = messages;
 
   if (!opts.skipCache) {
     void saveCachedPinnedMessages(topicId, messages);
@@ -2035,7 +2514,7 @@ export const savePinnedMessagesToLocal = (
 };
 
 export const getPinnedMessagesByTopicId = (topicId: string): IMessage[] => {
-  return pinnedMessagesStore.value[topicId] || [];
+  return pinnedMessagesStore[topicId] || [];
 };
 
 export const isMessagePinnedOnlyForMe = (
@@ -2043,7 +2522,7 @@ export const isMessagePinnedOnlyForMe = (
   messageId: string
 ): boolean =>
   Boolean(
-    (pinnedMessagesStore.value[topicId] || []).find(
+    (pinnedMessagesStore[topicId] || []).find(
       message => message.id === messageId && message.isPinnedOnlyMe
     )
   );
@@ -2055,7 +2534,7 @@ export const isMessagePinnedForMe = (
 ): boolean =>
   Boolean(isPinnedForAll) ||
   Boolean(
-    (pinnedMessagesStore.value[topicId] || []).find(
+    (pinnedMessagesStore[topicId] || []).find(
       message => message.id === messageId
     )
   );
@@ -2064,7 +2543,7 @@ export const pinMessageOnlyForMe = (
   topicId: string,
   messageId: string
 ): void => {
-  const existingPinnedMessages = pinnedMessagesStore.value[topicId] || [];
+  const existingPinnedMessages = pinnedMessagesStore[topicId] || [];
 
   if (existingPinnedMessages.some(message => message.id === messageId)) {
     return;
@@ -2094,7 +2573,7 @@ export const unpinLocalMessageForMe = (
   topicId: string,
   messageId: string
 ): void => {
-  const existingPinnedMessages = pinnedMessagesStore.value[topicId] || [];
+  const existingPinnedMessages = pinnedMessagesStore[topicId] || [];
 
   if (!existingPinnedMessages.some(message => message.id === messageId)) {
     return;
@@ -2119,19 +2598,62 @@ const applyLocalReadStatus = (
   userId: string
 ): void => {
   const existingMessages = getFullMessagesByTopicId(topicId);
+  const readMessageIds = new Set(messageIds);
   const isReadByCurrentUser = userId === authedUser.value.id;
   const readAt = new Date().toISOString();
+  const fullMessageIndexes = getFullMessageIndexesForTopic(
+    topicId,
+    existingMessages
+  );
+  const fullReadIndexes = Array.from(readMessageIds)
+    .map(messageId => fullMessageIndexes.get(messageId))
+    .filter((index): index is number => index !== undefined);
   const newlyReadCount = isReadByCurrentUser
-    ? existingMessages.filter(
-        message =>
-          messageIds.includes(message.id) &&
+    ? fullReadIndexes.reduce((count, index) => {
+        const message = existingMessages[index];
+
+        return (
+          count +
+          (message &&
           message.senderUserId !== authedUser.value.id &&
           message.isReadByMe !== true
-      ).length
+            ? 1
+            : 0)
+        );
+      }, 0)
     : 0;
-  const updatedMessages = existingMessages.map(message => {
-    if (messageIds.includes(message.id)) {
-      return {
+  const applyReadStatus = (
+    messages: IMessage[],
+    indexes: Iterable<number>
+  ): { messages: IMessage[]; didChange: boolean } => {
+    let didChange = false;
+    let nextMessages = messages;
+
+    for (const index of indexes) {
+      const message = messages[index];
+
+      if (!message) {
+        continue;
+      }
+
+      const alreadyApplied = isReadByCurrentUser
+        ? message.status === MessageStatus.Read &&
+          message.isRead === true &&
+          message.isReadByMe === true
+        : message.status === MessageStatus.Read &&
+          message.isRead === true &&
+          Boolean(message.messageRead?.some(read => read.userId === userId));
+
+      if (alreadyApplied) {
+        continue;
+      }
+
+      if (!didChange) {
+        nextMessages = [...messages];
+      }
+      didChange = true;
+
+      nextMessages[index] = {
         ...message,
         status: MessageStatus.Read,
         isRead: true,
@@ -2145,46 +2667,51 @@ const applyLocalReadStatus = (
             })
       };
     }
-    return message;
-  });
+
+    return { messages: nextMessages, didChange };
+  };
+  const visibleMessages = getMessagesByTopicId(topicId);
+  const visibleMessageIndexes = new Map(
+    visibleMessages.map((message, index) => [message.id, index])
+  );
+  const visibleReadIndexes = Array.from(readMessageIds)
+    .map(messageId => visibleMessageIndexes.get(messageId))
+    .filter((index): index is number => index !== undefined);
+  const fullReadUpdate = applyReadStatus(existingMessages, fullReadIndexes);
+  const visibleReadUpdate = applyReadStatus(
+    visibleMessages,
+    visibleReadIndexes
+  );
+  const updatedMessages = fullReadUpdate.messages;
 
   updateLocalTopicReadStatus(topicId, messageIds);
-  updateTopicMessageStores(topicId, messages =>
-    messages.map(message => {
-      if (messageIds.includes(message.id)) {
-        return {
-          ...message,
-          status: MessageStatus.Read,
-          isRead: true,
-          isReadByMe: isReadByCurrentUser ? true : message.isReadByMe,
-          messageRead: isReadByCurrentUser
-            ? message.messageRead
-            : upsertMessageReadEntry(message.messageRead, {
-                messageId: message.id,
-                userId,
-                readAt
-              })
-        };
-      }
-      return message;
-    })
-  );
-  schedulePersistMessages(topicId);
-  void syncShadowReadStateFromMessages(topicId, updatedMessages, 'local');
+  if (fullReadUpdate.didChange) {
+    fullMessagesStore[topicId] = updatedMessages;
+  }
+  if (visibleReadUpdate.didChange) {
+    messagesStore[topicId] = visibleReadUpdate.messages;
+  }
+  if (fullReadUpdate.didChange || visibleReadUpdate.didChange) {
+    touchTopicMemory(topicId);
+    pruneInactiveTopicMemory();
+    schedulePersistMessages(topicId);
+  }
   if (newlyReadCount > 0) {
     decrementServerUnreadCount(topicId, newlyReadCount);
   }
-  clearTopicReadPreview(topicId, messageIds);
-  syncTopicUnreadState(topicId);
+  const didSyncUnreadFromPreview = clearTopicReadPreview(topicId, messageIds);
+  if (!didSyncUnreadFromPreview) {
+    syncTopicUnreadState(topicId);
+  }
 
-  if (userId === authedUser.value.id) {
+  if (userId === authedUser.value.id && getSelectedTopic(topicId)?.taggedMe) {
     // Re-evaluate taggedMe status for the topic
     const hasUnreadMentions = updatedMessages.some(
       m =>
         m.taggedUserIds?.includes(authedUser.value?.id) &&
         m.senderUserId !== authedUser.value?.id &&
         !m.isReadByMe &&
-        !messageIds.includes(m.id)
+        !readMessageIds.has(m.id)
     );
     if (!hasUnreadMentions) {
       setTopicTaggedMe(topicId, false);

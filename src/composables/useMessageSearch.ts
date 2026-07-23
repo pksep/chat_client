@@ -7,10 +7,18 @@ import {
   getTopicIdsWithMessages
 } from '../services/useMessages';
 import { useTopics } from './useTopics';
-import { navigateToDialogs, navigateToGroup } from './navigation/useUrlRouting';
+import {
+  navigateToDialogs,
+  navigateToFavorites,
+  navigateToGroup
+} from './navigation/useUrlRouting';
 import { TopicType } from '../services/useChatSDK/types';
 import { stripHtml } from '../utils/stripHtml';
 import { getAuthUser } from './useAuth';
+import {
+  isFavoriteTopic,
+  normalizeFavoriteTopic
+} from '../utils/favorite-topic';
 
 export interface IMessageSearchResult {
   id: string;
@@ -60,6 +68,12 @@ const normalizeRemoteTopic = (topic?: ITopic | null): ITopic | null => {
     return null;
   }
 
+  const authUserId = getAuthUser()?.id;
+
+  if (isFavoriteTopic(topic, authUserId)) {
+    return normalizeFavoriteTopic(topic, authUserId);
+  }
+
   if (topic.name) {
     return topic;
   }
@@ -76,7 +90,6 @@ const normalizeRemoteTopic = (topic?: ITopic | null): ITopic | null => {
     };
   }
 
-  const authUserId = getAuthUser()?.id;
   const peerSetting = rawTopic.settings?.find(
     setting => setting.user && setting.user.id !== authUserId
   );
@@ -105,6 +118,11 @@ const buildSearchResult = (
   }
 
   const topic = resolveMessageTopic({ ...message, topicId });
+
+  if (message.isSystem && isFavoriteTopic(topic, getAuthUser()?.id)) {
+    return null;
+  }
+
   const previewText = getMessagePlainText(message) || 'Вложение';
 
   return {
@@ -243,6 +261,11 @@ export const navigateToSearchResult = (result: IMessageSearchResult): void => {
   setPendingSearchNavigation(result);
 
   const topic = result.topic || getTopicById(result.topicId);
+
+  if (isFavoriteTopic(topic, getAuthUser()?.id)) {
+    navigateToFavorites(result.topicId);
+    return;
+  }
 
   if (topic?.type === TopicType.Group) {
     navigateToGroup(result.topicId);

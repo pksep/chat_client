@@ -29,6 +29,14 @@
   pointer-events: none;
 }
 
+.call-modal--topic-hover {
+  cursor: pointer;
+}
+
+.call-modal--topic-hover .call-modal__container {
+  cursor: default;
+}
+
 @media screen and (min-width: 769px) {
   .call-modal__container--full-screen {
     width: 100% !important;
@@ -860,6 +868,14 @@
   color: rgba(255, 255, 255, 0.78);
 }
 
+.call-modal__connection-status--degraded {
+  color: #b46900;
+}
+
+.call-modal__connection-status--overlay.call-modal__connection-status--degraded {
+  color: #ffd59a;
+}
+
 .call-modal__connection-status-spinner {
   width: 18px;
   height: 18px;
@@ -1623,16 +1639,26 @@
   background: var(--call-quality-active);
 }
 
+.call-modal__connection-quality--unknown
+  .call-modal__connection-quality-bar:first-child,
+.call-modal__connection-quality--unknown .call-modal__connection-quality-bar {
+  background: var(--call-quality-active);
+}
+
 .call-modal__connection-quality--excellent {
   --call-quality-bg: #77a6ff;
 }
 
 .call-modal__connection-quality--good {
-  --call-quality-bg: #8f9dff;
+  --call-quality-bg: #77a6ff;
 }
 
 .call-modal__connection-quality--poor {
-  --call-quality-bg: #a58cff;
+  --call-quality-bg: #77a6ff;
+}
+
+.call-modal__connection-quality--unknown {
+  --call-quality-bg: #77a6ff;
 }
 
 .call-modal__connection-quality--stage {

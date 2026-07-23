@@ -14,6 +14,7 @@ export interface ChatMessageInterface {
     content: string
   ): Promise<Message>;
   deleteMessage(topicId: string, messageId: string): Promise<void>;
+  clearTopicHistory(topicId: string): Promise<void>;
   toggleMessageReaction(
     topicId: string,
     messageId: string,
@@ -30,7 +31,12 @@ export interface ChatMessageInterface {
   ): Promise<{ success: boolean }>;
   getMessages(
     topicId: string,
-    opts?: { limit?: number; lastMessageId?: string; afterMessageId?: string }
+    opts?: {
+      limit?: number;
+      lastMessageId?: string;
+      afterMessageId?: string;
+      newMessages?: boolean;
+    }
   ): Promise<Message[]>;
   getCallHistory(opts?: {
     page?: number;
@@ -76,6 +82,19 @@ export class ChatMessage implements ChatMessageInterface {
       await response.json();
     } catch (error) {
       throw new Error(`Failed to delete message: ${(error as Error).message}`);
+    }
+  }
+
+  async clearTopicHistory(topicId: string): Promise<void> {
+    try {
+      const response = await this.reqi.delete(`/messages/topic/${topicId}`, {
+        parsed: false
+      });
+      await response.json();
+    } catch (error) {
+      throw new Error(
+        `Failed to clear topic history: ${(error as Error).message}`
+      );
     }
   }
 
@@ -160,7 +179,12 @@ export class ChatMessage implements ChatMessageInterface {
 
   async getMessages(
     topicId: string,
-    opts?: { limit?: number; lastMessageId?: string; afterMessageId?: string }
+    opts?: {
+      limit?: number;
+      lastMessageId?: string;
+      afterMessageId?: string;
+      newMessages?: boolean;
+    }
   ): Promise<Message[]> {
     const queryParams = new URLSearchParams();
     if (opts?.limit) queryParams.append('limit', opts.limit.toString());
@@ -168,6 +192,7 @@ export class ChatMessage implements ChatMessageInterface {
       queryParams.append('lastMessageId', opts.lastMessageId);
     if (opts?.afterMessageId)
       queryParams.append('afterMessageId', opts.afterMessageId);
+    if (opts?.newMessages) queryParams.append('newMessages', 'true');
 
     const queryString = queryParams.toString();
     const endpoint = `/messages/topic/${topicId}${queryString ? `?${queryString}` : ''}`;

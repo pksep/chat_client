@@ -67,6 +67,7 @@ export enum WebSocketEventType {
   DISMISS_INCOMING_CALL = 'dismissIncomingCall',
   ANSWER_CALL = 'answerCall',
   CALL_ANSWERED = 'callAnswered',
+  CALL_CLIENT_CLOSING = 'callClientClosing',
   END_CALL = 'endCall',
   CALL_ENDED = 'callEnded',
   CALL_PARTICIPANT_LEFT = 'callParticipantLeft'
@@ -225,6 +226,12 @@ export interface WebSocketEventPayloads {
     topicId?: string | null;
     startTime?: number | null;
     elapsedDurationMs?: number;
+  };
+  [WebSocketEventType.CALL_CLIENT_CLOSING]: {
+    userId: string;
+    roomId: string;
+    topicId?: string | null;
+    source: 'beforeunload' | 'pagehide';
   };
   [WebSocketEventType.END_CALL]: {
     userId: string;

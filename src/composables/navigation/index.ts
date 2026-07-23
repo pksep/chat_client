@@ -5,6 +5,7 @@ export {
   navigateToDialogsList,
   navigateToGroup,
   navigateToGroupsList,
+  navigateToFavorites,
   navigateToAssistant,
   navigateToAI,
   navigateToDefault,

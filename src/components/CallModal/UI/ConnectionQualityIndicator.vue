@@ -41,7 +41,7 @@ const normalizedQuality = computed(() => {
     return 'poor';
   }
 
-  return 'excellent';
+  return 'unknown';
 });
 
 const activeBars = computed(() => {
@@ -53,7 +53,10 @@ const activeBars = computed(() => {
     return 2;
   }
 
-  if (normalizedQuality.value === 'poor') {
+  if (
+    normalizedQuality.value === 'poor' ||
+    normalizedQuality.value === 'unknown'
+  ) {
     return 1;
   }
 

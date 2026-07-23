@@ -88,11 +88,9 @@ public class AudioOutputPlugin extends Plugin {
             return;
         }
 
-        configureForCall(audioManager);
         String currentRoute = resolvedRoute != null
             ? resolvedRoute
             : getCurrentRoute(audioManager);
-        bindVolumeControlsToRoute(audioManager, currentRoute);
         call.resolve(buildState(audioManager, currentRoute));
     }
 
@@ -220,13 +218,17 @@ public class AudioOutputPlugin extends Plugin {
             return;
         }
 
-        String resolvedRoute = null;
-        if (ROUTE_BLUETOOTH.equals(lastAppliedRoute) && !hasBluetoothRoute(audioManager)) {
+        String resolvedRoute;
+        if (!callVolumeControlsActive) {
+            resolvedRoute = getCurrentRoute(audioManager);
+            lastAppliedRoute = resolvedRoute;
+        } else if (ROUTE_BLUETOOTH.equals(lastAppliedRoute) && !hasBluetoothRoute(audioManager)) {
             resolvedRoute = applyRoute(audioManager, ROUTE_EARPIECE);
             lastAppliedRoute = resolvedRoute;
         } else {
-            lastAppliedRoute = getCurrentRoute(audioManager);
-            bindVolumeControlsToRoute(audioManager, lastAppliedRoute);
+            resolvedRoute = getCurrentRoute(audioManager);
+            lastAppliedRoute = resolvedRoute;
+            bindVolumeControlsToRoute(audioManager, resolvedRoute);
         }
 
         notifyListeners(
@@ -346,8 +348,12 @@ public class AudioOutputPlugin extends Plugin {
     }
 
     private void bindVolumeControlsToRoute(AudioManager audioManager, String route) {
+        if (!callVolumeControlsActive) {
+            Log.d(TAG, "Ignoring call audio route bind while controls are inactive");
+            return;
+        }
+
         int volumeControlStream = getVolumeControlStreamForRoute(route);
-        callVolumeControlsActive = true;
         callVolumeControlStream = volumeControlStream;
         callVolumeControlRoute = route;
 
@@ -477,7 +483,9 @@ public class AudioOutputPlugin extends Plugin {
     private JSObject buildState(AudioManager audioManager, String resolvedRoute) {
         boolean bluetoothAvailable = hasBluetoothRoute(audioManager);
         String currentRoute = resolvedRoute != null ? resolvedRoute : getCurrentRoute(audioManager);
-        int volumeControlStream = getVolumeControlStreamForRoute(currentRoute);
+        int volumeControlStream = callVolumeControlsActive
+            ? getVolumeControlStreamForRoute(currentRoute)
+            : AudioManager.STREAM_MUSIC;
         AudioDeviceInfo activeOutputDevice = getActiveOutputDevice(audioManager, currentRoute);
         JSArray availableRoutes = new JSArray();
 
@@ -493,6 +501,7 @@ public class AudioOutputPlugin extends Plugin {
         result.put("defaultRoute", getDefaultConversationRoute(audioManager));
         result.put("availableRoutes", availableRoutes);
         result.put("bluetoothAvailable", bluetoothAvailable);
+        result.put("callAudioActive", callVolumeControlsActive);
         result.put("audioMode", getAudioModeName(audioManager.getMode()));
         result.put("audioModeValue", audioManager.getMode());
         result.put("volumeControlStream", getStreamName(volumeControlStream));

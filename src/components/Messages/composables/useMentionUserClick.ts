@@ -12,6 +12,21 @@ const ANCHOR_SELECTOR = 'a[href]';
 const SKIP_TEXT_MENTION_SELECTOR = `${MENTION_USER_SELECTOR}, ${ANCHOR_SELECTOR}, pre, code, script, style`;
 const TEXT_MENTION_CLASS = 'message-content__text-mention';
 const MENTION_WORD_CHAR_PATTERN = /[\p{L}\p{N}_-]/u;
+const HTML_ANCHOR_PATTERN = /<a(?:\s|>)/i;
+
+export const hasMessageInteractivityCandidates = (
+  value?: string | null
+): boolean => {
+  if (!value) {
+    return false;
+  }
+
+  return (
+    value.includes('@') ||
+    value.includes('data-user-id') ||
+    HTML_ANCHOR_PATTERN.test(value)
+  );
+};
 
 type MentionCandidate = {
   alias: string;
@@ -248,13 +263,19 @@ const syncTextMentions = (
   container: HTMLElement,
   canOpenUserInfo: (user?: IUser | null) => boolean
 ): void => {
+  const textNodes = getTextNodes(container);
+
+  if (textNodes.length === 0) {
+    return;
+  }
+
   const mentionCandidates = getMentionCandidates();
 
   if (mentionCandidates.length === 0) {
     return;
   }
 
-  getTextNodes(container).forEach(node => {
+  textNodes.forEach(node => {
     if (shouldSkipTextNode(node, container)) {
       return;
     }
@@ -269,8 +290,12 @@ export const useMentionUserClick = () => {
   const syncMentionUserInteractivity = (
     container?: HTMLElement | null
   ): void => {
+    if (!container) {
+      return;
+    }
+
     container
-      ?.querySelectorAll<HTMLAnchorElement>(ANCHOR_SELECTOR)
+      .querySelectorAll<HTMLAnchorElement>(ANCHOR_SELECTOR)
       .forEach(anchor => {
         if (!isGroupCallInviteUrl(anchor.href)) {
           return;
@@ -280,12 +305,12 @@ export const useMentionUserClick = () => {
         anchor.removeAttribute('rel');
       });
 
-    if (container) {
+    if (container.textContent?.includes('@')) {
       syncTextMentions(container, canOpenUserInfo);
     }
 
     container
-      ?.querySelectorAll<HTMLElement>(MENTION_USER_SELECTOR)
+      .querySelectorAll<HTMLElement>(MENTION_USER_SELECTOR)
       .forEach(element => {
         const userId = element.dataset.userId;
         const user = userId ? getMentionUserById(userId) : null;

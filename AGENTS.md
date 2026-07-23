@@ -26,6 +26,7 @@ Use Bun as the package manager.
 - Use BEM-like CSS class naming when adding complex styles.
 - `data-testid` attributes follow `${props.dataTestid}-Element-Modifier`.
 - Format with Prettier and keep comments minimal, focused on “why.”
+- Do not translate existing Russian comments, logs, or user-facing/error messages to English. New comments, logs, and errors that belong to existing Russian-facing flows should stay in Russian.
 
 ## Testing Guidelines
 - E2E tests are written with Playwright in `e2e/` and named `*.spec.ts`.

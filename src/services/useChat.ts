@@ -35,6 +35,7 @@ import {
   addMessageToLocal,
   changeLocalReadStatus,
   changeReactionFromLocal,
+  clearMessagesForTopic,
   deleteMessageFromLocal,
   editMessageFromLocal,
   playNotificationSound,
@@ -49,7 +50,10 @@ import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { initCallKit, showIncomingCallKit, endAllCallKits } from './useCallKit';
-import { clearTopicNotifications } from './useNotificationNavigation';
+import {
+  clearMessageNotification,
+  clearTopicNotifications
+} from './useNotificationNavigation';
 import {
   showTauriIncomingCallNotification,
   showTauriMessageNotification
@@ -94,8 +98,22 @@ import { normalizeUserStatus } from '../utils/userStatus';
 import { normalizeDateValue } from '../utils/dateValue';
 import { getIsTopicMessageVisible } from './useTopicViewportState';
 import { isGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
+import { isFavoriteTopic } from '../utils/favorite-topic';
+import {
+  importAnyChatBackgroundSnapshot,
+  requestAnyChatBackgroundSync,
+  saveAnyChatBackgroundSyncSession
+} from './useChatBackgroundSync';
 
 let chatSDK: ChatSDK | null = null;
+type ChatSDKReadyWaiter = (sdk: ChatSDK) => void;
+const chatSDKReadyWaiters = new Set<ChatSDKReadyWaiter>();
+
+const notifyChatSDKReady = (sdk: ChatSDK): void => {
+  chatSDKReadyWaiters.forEach(resolve => resolve(sdk));
+  chatSDKReadyWaiters.clear();
+};
+
 type CallsApi = typeof import('./useCalls');
 let callsApi: CallsApi | null = null;
 let callsApiPromise: Promise<CallsApi> | null = null;
@@ -247,6 +265,30 @@ const syncPtsStateToServer = async (): Promise<void> => {
   });
 };
 
+const takeBufferedIncomingMessagesForTopic = (topicId: string): IMessage[] => {
+  if (!topicId) {
+    return [];
+  }
+
+  const messages = bufferedIncomingMessagesByTopic.value[topicId] || [];
+  bufferedIncomingMessagesByTopic.value[topicId] = [];
+
+  return messages;
+};
+
+const flushBufferedIncomingMessagesForTopic = (topicId: string): void => {
+  const messages = takeBufferedIncomingMessagesForTopic(topicId);
+
+  if (messages.length === 0) {
+    return;
+  }
+
+  mergeMessagesForTopic(topicId, messages, 'append', {
+    syncLastMessage: false,
+    windowMode: 'preserve-end'
+  });
+};
+
 export const setSuspendIncomingMergeForTopic = (
   topicId: string,
   suspended: boolean
@@ -256,19 +298,16 @@ export const setSuspendIncomingMergeForTopic = (
   }
 
   suspendIncomingMergeByTopic.value[topicId] = suspended;
+
+  if (!suspended) {
+    flushBufferedIncomingMessagesForTopic(topicId);
+  }
 };
 
 export const consumeBufferedIncomingMessagesForTopic = (
   topicId: string
 ): IMessage[] => {
-  if (!topicId) {
-    return [];
-  }
-
-  const messages = bufferedIncomingMessagesByTopic.value[topicId] || [];
-  bufferedIncomingMessagesByTopic.value[topicId] = [];
-
-  return messages;
+  return takeBufferedIncomingMessagesForTopic(topicId);
 };
 
 export const getBufferedIncomingMessagesCountForTopic = (
@@ -299,7 +338,20 @@ const setupChatListeners = (): void => {
     message: IMessage,
     opts?: MessageHandlingOptions
   ): void => {
-    const { updateLocalLastMessageTopic } = useTopics();
+    const { getSelectedTopic, updateLocalLastMessageTopic } = useTopics();
+
+    if (
+      message.isSystem &&
+      isFavoriteTopic(getSelectedTopic(message.topicId), currentUserId.value)
+    ) {
+      deleteMessageFromLocal(message.topicId, message.id);
+      chatSDK?.sendWebSocketEvent(WebSocketEventType.DELETE_MESSAGE, {
+        messageId: message.id,
+        topicId: message.topicId
+      });
+      return;
+    }
+
     void upsertCallHistoryMessage(message);
     const isDuplicateMessage = hasMessageInTopic(message.topicId, message.id);
     const unreadCountBefore = totalUnreadCount.value;
@@ -307,6 +359,9 @@ const setupChatListeners = (): void => {
       message.senderUserId !== currentUserId.value;
     const isUnreadIncomingMessage =
       isIncomingFromAnotherUser && !message.isReadByMe;
+    const isTrackableUnreadIncomingMessage =
+      isUnreadIncomingMessage &&
+      isUnreadTrackableMessageForUser(message, currentUserId.value);
     const shouldSuspendMerge =
       isIncomingFromAnotherUser &&
       route.value.id === message.topicId &&
@@ -324,10 +379,7 @@ const setupChatListeners = (): void => {
         ];
       }
 
-      if (
-        isUnreadIncomingMessage &&
-        isUnreadTrackableMessageForUser(message, currentUserId.value)
-      ) {
+      if (isTrackableUnreadIncomingMessage) {
         changeUnreadMessageCount(1, message.topicId);
       }
     }
@@ -343,6 +395,7 @@ const setupChatListeners = (): void => {
       if (
         !isCurrentTopicActivelyVisible &&
         message.topicId === route.value.id &&
+        isTrackableUnreadIncomingMessage &&
         totalUnreadCount.value === unreadCountBefore
       ) {
         incrementDisplayedUnreadCount(1);
@@ -402,7 +455,7 @@ const setupChatListeners = (): void => {
 
   const handleChangeMessagePayload = (
     payload: {
-      type: 'NEW' | 'CHANGE' | 'DELETE' | 'PIN';
+      type: 'NEW' | 'CHANGE' | 'DELETE' | 'CLEAR' | 'PIN';
       data: any;
       messageId?: string;
       ptsMeta?: PtsMeta;
@@ -433,22 +486,31 @@ const setupChatListeners = (): void => {
         payload: payload.data
       });
       handleIncomingSocketMessage(payload.data, opts);
+    } else if (payload.type === 'CLEAR') {
+      const topicId = payload.data.topicId;
+
+      void recordShadowChatEvent({
+        topicId,
+        type: 'clear_history',
+        source: 'ws',
+        payload: payload.data
+      });
+      clearMessagesForTopic(topicId, { syncLastMessage: true });
+      clearTopicUnreadReaction(topicId);
+      void clearTopicNotifications(topicId);
     } else if (payload.type === 'DELETE') {
+      const deletedMessageId = payload.data.id || payload.messageId;
+
       void recordShadowChatEvent({
         topicId: payload.data.topicId,
         type: 'delete_message',
         source: 'ws',
         payload: payload.data
       });
-      void removeCallHistoryMessage(payload.data.id || payload.messageId);
-      clearDeletedReactionTarget(
-        payload.data.topicId,
-        payload.data.id || payload.messageId
-      );
-      deleteMessageFromLocal(
-        payload.data.topicId,
-        payload.data.id || payload.messageId
-      );
+      void removeCallHistoryMessage(deletedMessageId);
+      clearDeletedReactionTarget(payload.data.topicId, deletedMessageId);
+      deleteMessageFromLocal(payload.data.topicId, deletedMessageId);
+      void clearMessageNotification(payload.data.topicId, deletedMessageId);
     } else if (payload.type === 'CHANGE' || payload.type === 'PIN') {
       void recordShadowChatEvent({
         topicId: payload.data.topicId,
@@ -670,6 +732,7 @@ const setupChatListeners = (): void => {
     if (payloadTopicId) {
       clearDeletedReactionTarget(payloadTopicId, event.payload.messageId);
       deleteMessageFromLocal(payloadTopicId, event.payload.messageId);
+      void clearMessageNotification(payloadTopicId, event.payload.messageId);
       return;
     }
 
@@ -683,8 +746,11 @@ const setupChatListeners = (): void => {
       ) {
         clearDeletedReactionTarget(topicId, event.payload.messageId);
         deleteMessageFromLocal(topicId, event.payload.messageId);
+        void clearMessageNotification(topicId, event.payload.messageId);
       }
     });
+
+    void clearMessageNotification(null, event.payload.messageId);
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.USER_UPDATED, event => {
@@ -730,6 +796,7 @@ const setupChatListeners = (): void => {
         case 'message.new':
         case 'message.change':
         case 'message.delete':
+        case 'message.clear':
         case 'message.pin':
           handleChangeMessagePayload(
             {
@@ -888,20 +955,31 @@ const setupChatListeners = (): void => {
       }
 
       if (payload.topicId) {
-        const endedTopic = useTopics().getSelectedTopic(payload.topicId) as any;
+        const endedTopicId = payload.topicId;
+        const endedTopic = useTopics().getSelectedTopic(endedTopicId) as any;
 
         if (endedTopic?.type === TopicType.DM) {
           await new Promise(resolve => setTimeout(resolve, 500));
 
-          await Promise.allSettled([
-            fetchMessagesForTopic(payload.topicId, {
-              limit: 50,
-              forceRefresh: true,
-              forceNetwork: true,
-              syncLastMessage: true
-            }),
-            fetchAllTopics()
-          ]);
+          const endedMessagesRefresh = fetchMessagesForTopic(endedTopicId, {
+            limit: 50,
+            newMessages: true,
+            forceRefresh: true,
+            forceNetwork: true,
+            allowStaleFallback: false,
+            skipSave: true
+          }).then(messages => {
+            if (messages.length === 0) {
+              return;
+            }
+
+            mergeMessagesForTopic(endedTopicId, messages, 'replace', {
+              syncLastMessage: true,
+              updateVisible: endedTopicId !== route.value.id
+            });
+          });
+
+          await Promise.allSettled([endedMessagesRefresh, fetchAllTopics()]);
         }
       }
     })();
@@ -934,6 +1012,13 @@ let shouldRerunRefreshAfterReconnect = false;
 let hasCompletedInitialConnection = false;
 const MAX_BACKGROUND_TOPIC_RECONCILES = 12;
 const FRESH_SYNC_THROTTLE_MS = 5000;
+const BACKGROUND_SYNC_FOREGROUND_THROTTLE_MS = 30000;
+const BACKGROUND_SYNC_INITIAL_FOREGROUND_DELAY_MS = 30000;
+const BACKGROUND_SYNC_RESUME_FOREGROUND_DELAY_MS = 15000;
+const BACKGROUND_SYNC_ONLINE_FOREGROUND_DELAY_MS = 5000;
+const BACKGROUND_SNAPSHOT_FOREGROUND_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const BACKGROUND_SNAPSHOT_FOREGROUND_MESSAGE_LIMIT = 180;
+const BACKGROUND_SNAPSHOT_INITIAL_IMPORT_DELAY_MS = 2500;
 const HARD_RECONNECT_THROTTLE_MS = 10000;
 const NATIVE_NETWORK_RECOVERY_GRACE_MS = 15000;
 const BROWSER_NETWORK_RECOVERY_GRACE_MS = 10000;
@@ -942,8 +1027,11 @@ const HTTP_HEALTH_PROBE_RETRY_DELAY_MS = 1500;
 const NATIVE_HTTP_HEALTH_PROBE_ATTEMPTS = 3;
 let networkStatePollInterval: ReturnType<typeof setInterval> | null = null;
 let browserOfflineFallbackTimeout: ReturnType<typeof setTimeout> | null = null;
+let backgroundForegroundSyncTimeout: ReturnType<typeof setTimeout> | null =
+  null;
 let removeAppVisibilityListener: (() => void) | null = null;
 let lastFreshSyncRequestedAt = 0;
+let lastBackgroundForegroundSyncAt = 0;
 let lastHardReconnectAt = 0;
 let nativeNetworkRecoveryUntil = 0;
 let browserNetworkRecoveryUntil = 0;
@@ -969,6 +1057,52 @@ const shouldAssumeOnlineForBrowserRecovery = (): boolean =>
 
 const getEffectiveBrowserNetworkState = (): boolean =>
   browserOnline.value || shouldAssumeOnlineForBrowserRecovery();
+
+const importBackgroundSnapshotForForeground = async (
+  userId: string | undefined,
+  source: string
+): Promise<boolean> => {
+  const activeTopicId = route.value.id || '';
+  const isEffectivelyOnline = getEffectiveBrowserNetworkState();
+  const shouldImportActiveMessages = !isEffectivelyOnline && !!activeTopicId;
+
+  return importAnyChatBackgroundSnapshot(userId, {
+    source,
+    maxAgeMs: isEffectivelyOnline
+      ? BACKGROUND_SNAPSHOT_FOREGROUND_MAX_AGE_MS
+      : undefined,
+    requireNewerThanLocalPts: isEffectivelyOnline,
+    prioritizeMessageTopicIds: activeTopicId ? [activeTopicId] : undefined,
+    maxMessageTopicImports: shouldImportActiveMessages ? 1 : 0,
+    maxMessagesPerTopic: BACKGROUND_SNAPSHOT_FOREGROUND_MESSAGE_LIMIT
+  });
+};
+
+const scheduleForegroundSnapshotImport = (
+  userId: string | undefined,
+  source: string
+): void => {
+  const delayMs =
+    source === 'initialize-chat'
+      ? BACKGROUND_SNAPSHOT_INITIAL_IMPORT_DELAY_MS
+      : 0;
+
+  const runImport = () => {
+    void importBackgroundSnapshotForForeground(userId, source).catch(error => {
+      console.warn(
+        'Failed to import foreground chat background snapshot:',
+        error
+      );
+    });
+  };
+
+  if (delayMs <= 0) {
+    runImport();
+    return;
+  }
+
+  setTimeout(runImport, delayMs);
+};
 
 const clearBrowserOfflineFallback = (): void => {
   if (!browserOfflineFallbackTimeout) {
@@ -1007,6 +1141,63 @@ const beginBrowserNetworkRecoveryGrace = (): void => {
   scheduleBrowserOfflineFallback();
 };
 
+const getForegroundBackgroundSyncDelay = (source: string): number => {
+  if (!Capacitor.isNativePlatform()) {
+    return source === 'browser-online'
+      ? BACKGROUND_SYNC_ONLINE_FOREGROUND_DELAY_MS
+      : BACKGROUND_SYNC_RESUME_FOREGROUND_DELAY_MS;
+  }
+
+  if (source === 'initialize-chat') {
+    return BACKGROUND_SYNC_INITIAL_FOREGROUND_DELAY_MS;
+  }
+
+  if (source === 'browser-online') {
+    return BACKGROUND_SYNC_ONLINE_FOREGROUND_DELAY_MS;
+  }
+
+  return BACKGROUND_SYNC_RESUME_FOREGROUND_DELAY_MS;
+};
+
+const requestBackgroundSyncOnForeground = (source: string): void => {
+  if (!Capacitor.isNativePlatform() && !getEffectiveBrowserNetworkState()) {
+    return;
+  }
+
+  const now = Date.now();
+  if (
+    now - lastBackgroundForegroundSyncAt <
+    BACKGROUND_SYNC_FOREGROUND_THROTTLE_MS
+  ) {
+    return;
+  }
+
+  lastBackgroundForegroundSyncAt = now;
+
+  if (backgroundForegroundSyncTimeout) {
+    clearTimeout(backgroundForegroundSyncTimeout);
+  }
+
+  backgroundForegroundSyncTimeout = setTimeout(() => {
+    backgroundForegroundSyncTimeout = null;
+
+    if (!chatSDK || document.visibilityState !== 'visible') {
+      return;
+    }
+
+    if (!Capacitor.isNativePlatform() && !getEffectiveBrowserNetworkState()) {
+      return;
+    }
+
+    void requestAnyChatBackgroundSync({
+      reason: source,
+      topicId: route.value.id || undefined
+    }).catch(error => {
+      console.warn('Не удалось запросить фоновую синхронизацию чата:', error);
+    });
+  }, getForegroundBackgroundSyncDelay(source));
+};
+
 const getNetworkInformation = (): NetworkInformationLike | null =>
   (typeof navigator !== 'undefined'
     ? (navigator as Navigator & {
@@ -1024,11 +1215,7 @@ const getNetworkFingerprint = (onlineOverride?: boolean): string => {
         ? true
         : navigator.onLine;
 
-  return [
-    `online:${online}`,
-    `type:${connection?.type || ''}`,
-    `effectiveType:${connection?.effectiveType || ''}`
-  ].join('|');
+  return [`online:${online}`, `type:${connection?.type || ''}`].join('|');
 };
 
 let lastKnownNetworkFingerprint = getNetworkFingerprint();
@@ -1134,14 +1321,17 @@ const refreshActiveTopicMessagesAfterReconnect = async (
   const existingMessages = getFullMessagesByTopicId(topicId);
   const latestMessages = await fetchMessagesForTopic(topicId, {
     limit: 100,
+    newMessages: true,
     forceRefresh: true,
     forceNetwork: true,
+    allowStaleFallback: false,
     skipSave: true
   });
 
   if (latestMessages.length > 0) {
     mergeMessagesForTopic(topicId, latestMessages, 'replace', {
-      syncLastMessage: true
+      syncLastMessage: true,
+      updateVisible: false
     });
     return;
   }
@@ -1149,8 +1339,10 @@ const refreshActiveTopicMessagesAfterReconnect = async (
   if (existingMessages.length === 0) {
     await fetchMessagesForTopic(topicId, {
       limit: 100,
+      newMessages: true,
       forceRefresh: true,
       forceNetwork: true,
+      allowStaleFallback: false,
       syncLastMessage: true
     });
   }
@@ -1194,8 +1386,10 @@ const reconcileTopicCachesAfterReconnect = async (): Promise<void> => {
     await waitForReconnectIdle();
     await fetchMessagesForTopic(topic.id, {
       limit: 100,
+      newMessages: true,
       forceRefresh: true,
       forceNetwork: true,
+      allowStaleFallback: false,
       syncLastMessage: true
     });
   }
@@ -1637,11 +1831,18 @@ export const initializeChat = async (options: {
   wsUrl: string;
   userId?: string;
 }): Promise<void> => {
+  await saveAnyChatBackgroundSyncSession({
+    token: options.token,
+    userId: options.userId,
+    apiUrl: options.apiUrl
+  });
+
   chatSDK = new ChatSDK({
     apiUrl: options.apiUrl,
     wsUrl: options.wsUrl,
     token: options.token
   });
+  notifyChatSDKReady(chatSDK);
   hasCompletedInitialConnection = false;
   chatSDK.setConnectionStateListener(connected => {
     const wasConnected = hasWebsocketConnection.value;
@@ -1672,6 +1873,8 @@ export const initializeChat = async (options: {
   areChatListenersBound = false;
 
   currentUserId.value = options.userId || null;
+  scheduleForegroundSnapshotImport(options.userId, 'initialize-chat');
+  requestBackgroundSyncOnForeground('initialize-chat');
 
   if (!isVisibilityListenerAdded) {
     document.addEventListener('visibilitychange', () => {
@@ -1681,6 +1884,11 @@ export const initializeChat = async (options: {
       lastVisibilityState = document.visibilityState;
       if (document.visibilityState === 'visible') {
         syncPresenceForVisibility();
+        scheduleForegroundSnapshotImport(
+          currentUserId.value || undefined,
+          'app-visible'
+        );
+        requestBackgroundSyncOnForeground('app-visible');
         handleNetworkOrResumeChange('app-visible', {
           assumeOnlineOnNative: true,
           forceHardReconnect: true,
@@ -1696,12 +1904,18 @@ export const initializeChat = async (options: {
 
   if (!isResumeListenersAdded) {
     window.addEventListener('focus', () => {
+      scheduleForegroundSnapshotImport(
+        currentUserId.value || undefined,
+        'window-focus'
+      );
+      requestBackgroundSyncOnForeground('window-focus');
       handleNetworkOrResumeChange('window-focus', {
         assumeOnlineOnNative: true
       });
     });
 
     window.addEventListener('online', () => {
+      requestBackgroundSyncOnForeground('browser-online');
       handleNetworkOrResumeChange('browser-online', {
         assumeOnlineOnNative: true,
         forceHardReconnect: true,
@@ -1731,6 +1945,10 @@ export const initializeChat = async (options: {
         }
 
         syncPresenceForVisibility();
+        scheduleForegroundSnapshotImport(
+          currentUserId.value || undefined,
+          'native-app-active'
+        );
         handleNetworkOrResumeChange('native-app-active', {
           assumeOnlineOnNative: true,
           forceHardReconnect: true,
@@ -1739,6 +1957,10 @@ export const initializeChat = async (options: {
       });
 
       void CapacitorApp.addListener('resume', () => {
+        scheduleForegroundSnapshotImport(
+          currentUserId.value || undefined,
+          'native-resume'
+        );
         handleNetworkOrResumeChange('native-resume', {
           assumeOnlineOnNative: true,
           forceHardReconnect: true,
@@ -1750,6 +1972,12 @@ export const initializeChat = async (options: {
     const networkInformation = getNetworkInformation();
 
     networkInformation?.addEventListener?.('change', () => {
+      const nextFingerprint = getNetworkFingerprint();
+
+      if (nextFingerprint === lastKnownNetworkFingerprint) {
+        return;
+      }
+
       handleNetworkOrResumeChange('network-change', {
         assumeOnlineOnNative: true,
         forceHardReconnect: true,
@@ -1773,6 +2001,36 @@ export const initializeChat = async (options: {
 
 export const getChatSDK = (): ChatSDK | null => {
   return chatSDK;
+};
+
+export const waitForChatSDK = (timeoutMs = 10000): Promise<ChatSDK | null> => {
+  if (chatSDK) {
+    return Promise.resolve(chatSDK);
+  }
+
+  return new Promise(resolve => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let isSettled = false;
+
+    const finish = (sdk: ChatSDK | null): void => {
+      if (isSettled) {
+        return;
+      }
+
+      isSettled = true;
+      chatSDKReadyWaiters.delete(handleReady);
+
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
+
+      resolve(sdk);
+    };
+    const handleReady: ChatSDKReadyWaiter = sdk => finish(sdk);
+
+    chatSDKReadyWaiters.add(handleReady);
+    timeoutId = setTimeout(() => finish(null), Math.max(0, timeoutMs));
+  });
 };
 
 export const setCurrentUserId = (userId?: string | null): void => {
