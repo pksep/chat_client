@@ -216,6 +216,9 @@ import { useUserInfoModal } from '../composables/useUserInfoModal';
 import VpnConfirmModal from './UI/VpnConfirmModal.vue';
 import { useVpnStatus } from '../services/useVpnStatus';
 import { isBotTopic, isBotUser } from '../utils/bot';
+import { clearMessagesForTopic } from '../services/useMessages';
+import { getSelectedTopic } from '../composables/useTopics';
+import { isFavoriteTopic } from '../utils/favorite-topic';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -404,10 +407,37 @@ const handleInformationClick = (): void => {
   state.activeTabId = 2;
 };
 
-const handleClearClick = (): void => {
+const handleClearClick = async (): Promise<void> => {
   if (route.value && route.value.type === 'ai' && chatRef.value) {
     chatRef.value.handleClear();
     window.location.reload();
+    return;
+  }
+
+  if (!route.value.id) {
+    return;
+  }
+
+  const selectedTopic = getSelectedTopic(route.value.id);
+  const isFavorite =
+    route.value.type === RouteTypes.FAVORITES ||
+    isFavoriteTopic(selectedTopic, getAuthUser()?.id);
+
+  if (!isFavorite) {
+    return;
+  }
+
+  const sdk = getChatSDK();
+
+  if (!sdk) {
+    return;
+  }
+
+  try {
+    await sdk.clearTopicHistory(route.value.id);
+    clearMessagesForTopic(route.value.id, { syncLastMessage: true });
+  } catch (error) {
+    console.error('Не удалось очистить историю Избранного:', error);
   }
 };
 

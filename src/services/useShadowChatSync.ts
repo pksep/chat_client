@@ -72,6 +72,7 @@ export type ShadowChatEventType =
   | 'new_message'
   | 'edit_message'
   | 'delete_message'
+  | 'clear_history'
   | 'pin_message'
   | 'reaction_updated'
   | 'reaction_seen'

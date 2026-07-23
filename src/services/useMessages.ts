@@ -2152,6 +2152,11 @@ export const clearMessagesForTopic = (
   saveMessagesToLocal(topicId, [], {
     syncLastMessage: opts?.syncLastMessage ?? false
   });
+  savePinnedMessagesToLocal(topicId, []);
+  void clearCachedTopicMessages(topicId);
+  void saveShadowTopicSnapshot(topicId, [], 'local', undefined, {
+    replace: true
+  });
   canonicalTopicStateIds.delete(topicId);
 };
 

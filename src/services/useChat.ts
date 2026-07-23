@@ -35,6 +35,7 @@ import {
   addMessageToLocal,
   changeLocalReadStatus,
   changeReactionFromLocal,
+  clearMessagesForTopic,
   deleteMessageFromLocal,
   editMessageFromLocal,
   playNotificationSound,
@@ -454,7 +455,7 @@ const setupChatListeners = (): void => {
 
   const handleChangeMessagePayload = (
     payload: {
-      type: 'NEW' | 'CHANGE' | 'DELETE' | 'PIN';
+      type: 'NEW' | 'CHANGE' | 'DELETE' | 'CLEAR' | 'PIN';
       data: any;
       messageId?: string;
       ptsMeta?: PtsMeta;
@@ -485,6 +486,18 @@ const setupChatListeners = (): void => {
         payload: payload.data
       });
       handleIncomingSocketMessage(payload.data, opts);
+    } else if (payload.type === 'CLEAR') {
+      const topicId = payload.data.topicId;
+
+      void recordShadowChatEvent({
+        topicId,
+        type: 'clear_history',
+        source: 'ws',
+        payload: payload.data
+      });
+      clearMessagesForTopic(topicId, { syncLastMessage: true });
+      clearTopicUnreadReaction(topicId);
+      void clearTopicNotifications(topicId);
     } else if (payload.type === 'DELETE') {
       const deletedMessageId = payload.data.id || payload.messageId;
 
@@ -783,6 +796,7 @@ const setupChatListeners = (): void => {
         case 'message.new':
         case 'message.change':
         case 'message.delete':
+        case 'message.clear':
         case 'message.pin':
           handleChangeMessagePayload(
             {

@@ -14,6 +14,7 @@ export interface ChatMessageInterface {
     content: string
   ): Promise<Message>;
   deleteMessage(topicId: string, messageId: string): Promise<void>;
+  clearTopicHistory(topicId: string): Promise<void>;
   toggleMessageReaction(
     topicId: string,
     messageId: string,
@@ -81,6 +82,19 @@ export class ChatMessage implements ChatMessageInterface {
       await response.json();
     } catch (error) {
       throw new Error(`Failed to delete message: ${(error as Error).message}`);
+    }
+  }
+
+  async clearTopicHistory(topicId: string): Promise<void> {
+    try {
+      const response = await this.reqi.delete(`/messages/topic/${topicId}`, {
+        parsed: false
+      });
+      await response.json();
+    } catch (error) {
+      throw new Error(
+        `Failed to clear topic history: ${(error as Error).message}`
+      );
     }
   }
 

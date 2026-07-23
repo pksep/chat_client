@@ -86,7 +86,7 @@
         @click.stop
       >
         <div
-          v-if="isTopicSearchAvailable && (!isMobile || isFavoriteDialogTopic)"
+          v-if="isTopicSearchAvailable && !isMobile"
           class="chat__header-search-trigger"
         >
           <SearchIcon
@@ -109,7 +109,7 @@
           @click.stop="handleCall"
         />
         <Icon
-          v-if="!isFavoriteDialogTopic && getHeaderContextMenuOptions.length"
+          v-if="getHeaderContextMenuOptions.length"
           class="chat__header__icon chat__header__icon--more"
           :name="IconNameEnum.moreHorizontal"
           :data-testid="`${props.dataTestid}-Header-PopoverIcon`"
@@ -118,7 +118,7 @@
           "
         />
         <ContextMenu
-          v-if="!isFavoriteDialogTopic && getHeaderContextMenuOptions.length"
+          v-if="getHeaderContextMenuOptions.length"
           class="chat__header-context-menu"
           :visible="!!isOpen['headerMenu']"
           :position="position"
@@ -359,6 +359,14 @@
     @unmount-close="handleCloseActionModal"
     @unmount-confirm="handleConfirmActionModal"
   />
+
+  <ConfirmModal
+    :open="state.openClearHistoryModal"
+    title="Очистить историю"
+    description="Вы уверены, что хотите удалить все сообщения в чате?"
+    @unmount-close="handleCloseClearHistoryModal"
+    @unmount-confirm="handleConfirmClearHistory"
+  />
 </template>
 
 <script lang="ts" setup>
@@ -487,6 +495,7 @@ const state = reactive({
   openMobileUserProfileModal: false,
   isSearchInputEnable: false,
   openActionModal: false,
+  openClearHistoryModal: false,
   calledUser: null,
   roomId: null
 });
@@ -947,6 +956,21 @@ const getHeaderContextMenuOptions = computed(() => {
   }> = [];
 
   if (isFavoriteDialogTopic.value) {
+    if (isMobile.value && isTopicSearchAvailable.value) {
+      options.push({
+        value: 'Поиск в чате',
+        function: showSearch,
+        customIcon: 'search'
+      });
+    }
+
+    options.push({
+      value: 'Очистить историю',
+      function: handleOpenClearHistoryModal,
+      style: 'color: var(--error-color)',
+      iconName: IconNameEnum.deleteSmall
+    });
+
     return options;
   }
 
@@ -1027,6 +1051,10 @@ const handleOpenActionModal = () => {
   state.openActionModal = true;
 };
 
+const handleOpenClearHistoryModal = (): void => {
+  state.openClearHistoryModal = true;
+};
+
 const handleContextMenuAction = (callback: () => void) => {
   closeActivePopover('headerMenu');
   callback();
@@ -1034,6 +1062,15 @@ const handleContextMenuAction = (callback: () => void) => {
 
 const handleCloseActionModal = () => {
   state.openActionModal = false;
+};
+
+const handleCloseClearHistoryModal = (): void => {
+  state.openClearHistoryModal = false;
+};
+
+const handleConfirmClearHistory = (): void => {
+  state.openClearHistoryModal = false;
+  emits('unmount-clear');
 };
 
 const handleConfirmActionModal = async (): Promise<void> => {
