@@ -101,11 +101,18 @@
               </button>
               <button
                 class="call-modal__mobile-actions-item"
+                :class="{
+                  'call-modal__mobile-actions-item--recording':
+                    isSummaryRecording
+                }"
                 type="button"
-                disabled
+                :disabled="isSummaryRecordButtonDisabled"
+                @click="handleStartSummaryRecording"
               >
                 <ScreenRecordIcon />
-                <span>Включить запись экрана</span>
+                <span>{{
+                  isSummaryRecording ? 'Идёт запись' : 'Записать звонок'
+                }}</span>
               </button>
               <button
                 class="call-modal__mobile-actions-item"
@@ -312,9 +319,15 @@
 
             <button
               v-if="!isMobile"
-              class="call-modal__control-button call-modal__control-button__inactive"
+              class="call-modal__control-button"
+              :class="{
+                'call-modal__control-button__inactive': !isSummaryRecording,
+                'call-modal__control-button--recording': isSummaryRecording
+              }"
               type="button"
-              disabled
+              :disabled="isSummaryRecordButtonDisabled"
+              :title="isSummaryRecording ? 'Идёт запись' : 'Записать звонок'"
+              @click="handleStartSummaryRecording"
             >
               <ScreenRecordIcon />
             </button>
@@ -559,9 +572,15 @@
 
             <button
               v-if="!isCallFullscreenTouchMode && !isMobile"
-              class="call-modal__control-button call-modal__control-button__inactive"
+              class="call-modal__control-button"
+              :class="{
+                'call-modal__control-button__inactive': !isSummaryRecording,
+                'call-modal__control-button--recording': isSummaryRecording
+              }"
               type="button"
-              disabled
+              :disabled="isSummaryRecordButtonDisabled"
+              :title="isSummaryRecording ? 'Идёт запись' : 'Записать звонок'"
+              @click="handleStartSummaryRecording"
             >
               <ScreenRecordIcon />
             </button>
@@ -690,6 +709,7 @@ import {
   localScreenShareStream,
   open as isCallOpen,
   remoteParticipants,
+  roomId as activeRoomId,
   state as liveKitState,
   topicId as activeTopicId,
   user as activeUser
@@ -722,6 +742,10 @@ import { TopicType } from '../../services/useChatSDK/types';
 import { currentGroup, getGroupById } from '../../composables/useGroup';
 import GroupInfoIcon from './UI/GroupInfoIcon.vue';
 import CallMoreIcon from './UI/CallMoreIcon.vue';
+import {
+  isCallSummaryRecording,
+  startCallSummaryRecording
+} from '../../services/useCallSummaries';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const { getSelectedTopic } = useTopics();
@@ -1664,6 +1688,15 @@ const isCallStatusCaptionHidden = computed(
 );
 const isCallStatusLabelHidden = computed(() => !fallbackCallStatusLabel.value);
 const isBusyNoticeVisible = computed(() => isTerminalCallNotice.value);
+const isSummaryRecording = computed(() =>
+  isCallSummaryRecording(activeRoomId.value)
+);
+const isSummaryRecordButtonDisabled = computed(
+  () =>
+    isBusyNoticeVisible.value ||
+    !activeRoomId.value ||
+    !activeTopicId.value
+);
 const localCallBackgroundPlaceholderStyle = computed<CSSProperties | null>(
   () => {
     if (
@@ -2810,6 +2843,17 @@ const handleToggleScreenShare = async () => {
 const handleMobileScreenShareAction = async () => {
   closeMobileCallActionsMenu();
   await handleToggleScreenShare();
+};
+
+const handleStartSummaryRecording = async () => {
+  const room = activeRoomId.value;
+  const topic = activeTopicId.value;
+  if (!room || !topic || isSummaryRecordButtonDisabled.value) {
+    return;
+  }
+
+  closeMobileCallActionsMenu();
+  await startCallSummaryRecording(room, topic);
 };
 
 const clearReactionPopoverCloseTimeout = () => {

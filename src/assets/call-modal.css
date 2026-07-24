@@ -149,6 +149,12 @@
   pointer-events: none;
 }
 
+.call-modal__control-button--recording {
+  color: #fff !important;
+  background-color: var(--error-color) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--error-color) 18%, transparent);
+}
+
 .call-modal__control-button--fullscreen {
   background-color: var(--blue1);
 }
@@ -373,6 +379,13 @@
 .call-modal__mobile-actions-item:disabled {
   color: var(--text-light-color);
   cursor: default;
+}
+
+.call-modal__mobile-actions-item--recording,
+.call-modal__mobile-actions-item--recording:disabled {
+  color: var(--error-color);
+  background: color-mix(in srgb, var(--error-color) 12%, transparent);
+  opacity: 1;
 }
 
 .call-modal__mobile-actions-item svg {

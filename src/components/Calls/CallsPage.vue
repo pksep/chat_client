@@ -30,7 +30,7 @@
         class="calls-page__list"
         @scroll="handleListScroll"
       >
-        <button
+        <div
           v-for="call in filteredCalls"
           :key="call.messageId"
           type="button"
@@ -75,10 +75,72 @@
             </div>
           </div>
 
-          <span class="calls-page__info" aria-hidden="true">
+          <div
+            class="calls-page__actions"
+            v-if="
+              callSummaries[callSummaryKey(call)]?.summary ||
+              callSummaries[callSummaryKey(call)]?.videoAvailable
+            "
+          >
+            <button
+              v-if="callSummaries[callSummaryKey(call)]?.summary"
+              type="button"
+              class="calls-page__action"
+              title="Скачать расшифровку"
+              aria-label="Скачать расшифровку"
+              @click.stop="handleDownloadSummary(call)"
+            >
+              <Icon
+                :name="IconNameEnum.fileText"
+                :width="16"
+                :height="16"
+                aria-hidden="true"
+              />
+            </button>
+            <button
+              v-if="
+                callSummaries[callSummaryKey(call)]?.summary ||
+                callSummaries[callSummaryKey(call)]?.videoAvailable
+              "
+              type="button"
+              class="calls-page__action"
+              disabled
+              title="Скачать видеозапись"
+              aria-label="Скачать видеозапись"
+              @click.stop="handleDownloadRecording(call)"
+            >
+              <Icon
+                :name="IconNameEnum.image"
+                :width="16"
+                :height="16"
+                aria-hidden="true"
+              />
+            </button>
+            <button
+              v-if="callSummaries[callSummaryKey(call)]?.summary"
+              type="button"
+              class="calls-page__action calls-page__action--send"
+              title="Отправить расшифровку в чат"
+              aria-label="Отправить расшифровку в чат"
+              @click.stop="handleSendSummary(call)"
+            >
+              <Icon
+                :name="IconNameEnum.planeRight"
+                :width="16"
+                :height="16"
+                aria-hidden="true"
+              />
+              >↗
+            </button>
+          </div>
+          <span
+            class="calls-page__info"
+            aria-hidden="true"
+            @click.stop="openCallTopic(call)"
+          >
             <MessageCallInfoIcon />
           </span>
-        </button>
+        </div>
 
         <div v-if="state.isLoadingMore" class="calls-page__loading-more">
           {{ loadingMoreLabel }}
@@ -126,7 +188,7 @@ import {
   ref,
   watch
 } from 'vue';
-import { Search } from '@pksep/yui';
+import { Icon, IconNameEnum, Search } from '@pksep/yui';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import MessageCallInfoIcon from '../Messages/MessageCallInfoIcon.vue';
 import MessageCallTypeIcon from '../Messages/MessageCallTypeIcon.vue';
@@ -141,6 +203,7 @@ import { TopicType } from '../../services/useChatSDK/types';
 import type { CallHistoryItem as ServerCallHistoryItem } from '../../services/useChatSDK/types';
 import {
   parseCallMessage,
+  parseCallMessageEx,
   type CallMessageKind
 } from '../../utils/parseCallMessage';
 import {
@@ -151,10 +214,18 @@ import {
 } from '../../services/useCallHistory';
 import CallsHeader from './CallsHeader.vue';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
+import {
+  downloadCallRecording,
+  downloadCallSummary,
+  loadLatestCallSummary,
+  sendCallSummaryToChat,
+  type CallSummaryDto
+} from '../../services/useCallSummaries';
 
 interface CallHistoryItem {
   messageId: string;
   topicId: string;
+  roomId?: string;
   topicType: TopicType;
   displayName: string;
   avatarUrl?: string;
@@ -188,6 +259,7 @@ const { getSelectedTopic } = useTopics();
 const { rawCallHistory, callHistoryState } = useCallHistoryStore();
 const state = callHistoryState;
 const { openUserInfo } = useUserInfoModal();
+const callSummaries = ref<Record<string, CallSummaryDto | null>>({});
 const SCROLL_LOAD_MORE_OFFSET = 160;
 const CALLS_SCROLL_RESTORE_MAX_FRAMES = 8;
 let callsScrollRestoreFrameId: number | null = null;
@@ -204,6 +276,7 @@ const buildCallItem = (
     authUserId: authUserId.value,
     isMeSender: serverCall.senderUserId === authUserId.value
   });
+  const parsedEx = parseCallMessageEx(serverCall.ex);
 
   if (!parsedCall) {
     return null;
@@ -225,6 +298,7 @@ const buildCallItem = (
   return {
     messageId: serverCall.id,
     topicId: serverCall.topicId,
+    roomId: parsedEx?.call?.roomId,
     topicType:
       (topic?.type as TopicType) || (serverCall.topicType as TopicType),
     displayName,
@@ -265,6 +339,37 @@ const filteredCalls = computed(() => {
     )
   );
 });
+
+const refreshCallSummaries = async (): Promise<void> => {
+  await Promise.all(
+    callHistory.value.map(async call => {
+      callSummaries.value[callSummaryKey(call)] = await loadLatestCallSummary(
+        call.topicId,
+        call.roomId
+      );
+    })
+  );
+};
+
+const callSummaryKey = (call: CallHistoryItem): string => call.roomId || call.topicId;
+
+const handleDownloadSummary = async (call: CallHistoryItem): Promise<void> => {
+  const key = callSummaryKey(call);
+  const summary = callSummaries.value[key] || (await loadLatestCallSummary(call.topicId, call.roomId));
+  if (summary) await downloadCallSummary(summary);
+};
+
+const handleDownloadRecording = async (call: CallHistoryItem): Promise<void> => {
+  const key = callSummaryKey(call);
+  const summary = callSummaries.value[key] || (await loadLatestCallSummary(call.topicId, call.roomId));
+  if (summary) await downloadCallRecording(summary);
+};
+
+const handleSendSummary = async (call: CallHistoryItem): Promise<void> => {
+  const key = callSummaryKey(call);
+  const summary = callSummaries.value[key] || (await loadLatestCallSummary(call.topicId, call.roomId));
+  if (summary) await sendCallSummaryToChat(summary);
+};
 
 const openCallTopic = (call: CallHistoryItem): void => {
   if (call.topicType === TopicType.Group) {
@@ -427,6 +532,7 @@ onMounted(() => {
 
   if (props.isActive) {
     void ensureCallHistoryReady();
+    void refreshCallSummaries();
     restoreCallsScrollPosition();
   }
 });
@@ -445,6 +551,7 @@ watch(
 
     if (isActive) {
       void ensureCallHistoryReady();
+      void refreshCallSummaries();
       restoreCallsScrollPosition();
     }
   },
@@ -455,6 +562,7 @@ watch(
   () => filteredCalls.value.length,
   () => {
     restoreCallsScrollPosition();
+    void refreshCallSummaries();
   }
 );
 </script>

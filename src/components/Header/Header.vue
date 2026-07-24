@@ -455,6 +455,9 @@ import {
 } from '../../composables/useMessageSearch';
 import { isBotTopic } from '../../utils/bot';
 import { isFavoriteTopic } from '../../utils/favorite-topic';
+import {
+  loadLatestCallSummary
+} from '../../services/useCallSummaries';
 
 const { getSelectedTopic } = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
@@ -576,7 +579,6 @@ const hasPendingCallForCurrentTopic = computed(
 const hasInvitedCall = computed(
   () => !!currentInvitedCall.value?.isJoinAvailable
 );
-
 const showHeaderCallBanner = computed(
   () =>
     (isCallActive.value && !isAnyCallModalVisible.value) ||
@@ -1114,6 +1116,14 @@ watch(
 
     if (route.value.type === RouteTypes.GROUP) {
       getGroupById(route.value.id);
+    }
+
+    if (
+      route.value.id &&
+      (route.value.type === RouteTypes.DIALOGS ||
+        route.value.type === RouteTypes.GROUP)
+    ) {
+      void loadLatestCallSummary(route.value.id);
     }
   },
   {
