@@ -148,10 +148,9 @@ export const loadLatestCallSummary = async (
     const query = roomId
       ? `roomId=${encodeURIComponent(roomId)}`
       : `topicId=${encodeURIComponent(topicId)}`;
-    const response = await api.get(
-      `/calls/summaries/latest?${query}`,
-      { parsed: false }
-    );
+    const response = await api.get(`/calls/summaries/latest?${query}`, {
+      parsed: false
+    });
     const summary = await readResponse<CallSummaryDto | null>(response);
 
     if (summary) {

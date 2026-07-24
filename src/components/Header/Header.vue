@@ -455,9 +455,7 @@ import {
 } from '../../composables/useMessageSearch';
 import { isBotTopic } from '../../utils/bot';
 import { isFavoriteTopic } from '../../utils/favorite-topic';
-import {
-  loadLatestCallSummary
-} from '../../services/useCallSummaries';
+import { loadLatestCallSummary } from '../../services/useCallSummaries';
 
 const { getSelectedTopic } = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();

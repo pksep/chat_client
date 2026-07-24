@@ -1692,10 +1692,7 @@ const isSummaryRecording = computed(() =>
   isCallSummaryRecording(activeRoomId.value)
 );
 const isSummaryRecordButtonDisabled = computed(
-  () =>
-    isBusyNoticeVisible.value ||
-    !activeRoomId.value ||
-    !activeTopicId.value
+  () => isBusyNoticeVisible.value || !activeRoomId.value || !activeTopicId.value
 );
 const localCallBackgroundPlaceholderStyle = computed<CSSProperties | null>(
   () => {

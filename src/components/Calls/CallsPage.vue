@@ -351,23 +351,32 @@ const refreshCallSummaries = async (): Promise<void> => {
   );
 };
 
-const callSummaryKey = (call: CallHistoryItem): string => call.roomId || call.topicId;
+const callSummaryKey = (call: CallHistoryItem): string =>
+  call.roomId || call.topicId;
 
 const handleDownloadSummary = async (call: CallHistoryItem): Promise<void> => {
   const key = callSummaryKey(call);
-  const summary = callSummaries.value[key] || (await loadLatestCallSummary(call.topicId, call.roomId));
+  const summary =
+    callSummaries.value[key] ||
+    (await loadLatestCallSummary(call.topicId, call.roomId));
   if (summary) await downloadCallSummary(summary);
 };
 
-const handleDownloadRecording = async (call: CallHistoryItem): Promise<void> => {
+const handleDownloadRecording = async (
+  call: CallHistoryItem
+): Promise<void> => {
   const key = callSummaryKey(call);
-  const summary = callSummaries.value[key] || (await loadLatestCallSummary(call.topicId, call.roomId));
+  const summary =
+    callSummaries.value[key] ||
+    (await loadLatestCallSummary(call.topicId, call.roomId));
   if (summary) await downloadCallRecording(summary);
 };
 
 const handleSendSummary = async (call: CallHistoryItem): Promise<void> => {
   const key = callSummaryKey(call);
-  const summary = callSummaries.value[key] || (await loadLatestCallSummary(call.topicId, call.roomId));
+  const summary =
+    callSummaries.value[key] ||
+    (await loadLatestCallSummary(call.topicId, call.roomId));
   if (summary) await sendCallSummaryToChat(summary);
 };
 

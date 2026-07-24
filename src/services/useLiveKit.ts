@@ -530,8 +530,10 @@ const getSupportedCallAudioCaptureOptions = (): AudioCaptureOptions => {
 
   const supported = navigator.mediaDevices.getSupportedConstraints();
   return Object.fromEntries(
-    Object.entries(CALL_AUDIO_CAPTURE_DEFAULTS).filter(([key]) =>
-      key === 'channelCount' || supported[key as keyof MediaTrackSupportedConstraints]
+    Object.entries(CALL_AUDIO_CAPTURE_DEFAULTS).filter(
+      ([key]) =>
+        key === 'channelCount' ||
+        supported[key as keyof MediaTrackSupportedConstraints]
     )
   ) as AudioCaptureOptions;
 };
@@ -3510,7 +3512,9 @@ const applyLocalMicrophoneVoiceIsolation = async (
   microphoneTrack.contentHint = 'speech';
 
   try {
-    await microphoneTrack.applyConstraints(getSupportedCallAudioCaptureOptions());
+    await microphoneTrack.applyConstraints(
+      getSupportedCallAudioCaptureOptions()
+    );
   } catch (error) {
     console.warn(
       '[LiveKit] Failed to apply microphone voice isolation constraints:',
