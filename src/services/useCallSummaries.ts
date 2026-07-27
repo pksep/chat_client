@@ -482,6 +482,25 @@ export const downloadCallRecording = async (
   }
 };
 
+const escapeCallSummaryMessageHtml = (value: string): string =>
+  value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+
+const formatCallSummaryMessageText = (summaryText: string): string => {
+  const normalizedSummary = summaryText
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .trim();
+
+  return escapeCallSummaryMessageHtml(
+    `Расшифровка звонка\n\n${normalizedSummary}`
+  ).replace(/\n/g, '<br>');
+};
+
 export const sendCallSummaryToChat = async (
   summary: CallSummaryDto
 ): Promise<boolean> => {
@@ -491,7 +510,7 @@ export const sendCallSummaryToChat = async (
 
   const sent = await sendMessageChat({
     topicId: summary.topicId,
-    text: `Расшифровка звонка\n\n${summary.summary}`
+    text: formatCallSummaryMessageText(summary.summary)
   });
 
   if (sent) {
