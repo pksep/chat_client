@@ -78,12 +78,12 @@
           <div
             class="calls-page__actions"
             v-if="
-              callSummaries[callSummaryKey(call)]?.summary ||
-              callSummaries[callSummaryKey(call)]?.videoAvailable
+              getCallSummaryForCall(call)?.summary ||
+              getCallSummaryForCall(call)?.videoAvailable
             "
           >
             <button
-              v-if="callSummaries[callSummaryKey(call)]?.summary"
+              v-if="getCallSummaryForCall(call)?.summary"
               type="button"
               class="calls-page__action"
               title="Скачать расшифровку"
@@ -99,8 +99,8 @@
             </button>
             <button
               v-if="
-                callSummaries[callSummaryKey(call)]?.summary ||
-                callSummaries[callSummaryKey(call)]?.videoAvailable
+                getCallSummaryForCall(call)?.summary ||
+                getCallSummaryForCall(call)?.videoAvailable
               "
               type="button"
               class="calls-page__action"
@@ -117,7 +117,7 @@
               />
             </button>
             <button
-              v-if="callSummaries[callSummaryKey(call)]?.summary"
+              v-if="getCallSummaryForCall(call)?.summary"
               type="button"
               class="calls-page__action calls-page__action--send"
               title="Отправить расшифровку в чат"
@@ -343,9 +343,9 @@ const filteredCalls = computed(() => {
 const refreshCallSummaries = async (): Promise<void> => {
   await Promise.all(
     callHistory.value.map(async call => {
-      callSummaries.value[callSummaryKey(call)] = await loadLatestCallSummary(
-        call.topicId,
-        call.roomId
+      cacheCallSummaryForCall(
+        call,
+        await loadLatestCallSummary(call.topicId, call.roomId)
       );
     })
   );
@@ -354,10 +354,26 @@ const refreshCallSummaries = async (): Promise<void> => {
 const callSummaryKey = (call: CallHistoryItem): string =>
   call.roomId || call.topicId;
 
+const cacheCallSummaryForCall = (
+  call: CallHistoryItem,
+  summary: CallSummaryDto | null
+): void => {
+  callSummaries.value[callSummaryKey(call)] = summary;
+  callSummaries.value[call.topicId] = summary;
+  if (call.roomId) {
+    callSummaries.value[call.roomId] = summary;
+  }
+};
+
+const getCallSummaryForCall = (call: CallHistoryItem): CallSummaryDto | null =>
+  callSummaries.value[callSummaryKey(call)] ||
+  callSummaries.value[call.topicId] ||
+  (call.roomId ? callSummaries.value[call.roomId] : null) ||
+  null;
+
 const handleDownloadSummary = async (call: CallHistoryItem): Promise<void> => {
-  const key = callSummaryKey(call);
   const summary =
-    callSummaries.value[key] ||
+    getCallSummaryForCall(call) ||
     (await loadLatestCallSummary(call.topicId, call.roomId));
   if (summary) await downloadCallSummary(summary);
 };
@@ -365,17 +381,15 @@ const handleDownloadSummary = async (call: CallHistoryItem): Promise<void> => {
 const handleDownloadRecording = async (
   call: CallHistoryItem
 ): Promise<void> => {
-  const key = callSummaryKey(call);
   const summary =
-    callSummaries.value[key] ||
+    getCallSummaryForCall(call) ||
     (await loadLatestCallSummary(call.topicId, call.roomId));
   if (summary) await downloadCallRecording(summary);
 };
 
 const handleSendSummary = async (call: CallHistoryItem): Promise<void> => {
-  const key = callSummaryKey(call);
   const summary =
-    callSummaries.value[key] ||
+    getCallSummaryForCall(call) ||
     (await loadLatestCallSummary(call.topicId, call.roomId));
   if (summary) await sendCallSummaryToChat(summary);
 };

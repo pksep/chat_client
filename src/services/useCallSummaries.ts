@@ -183,6 +183,7 @@ const applySummaryStatus = (summary: CallSummaryDto): void => {
   }
 
   summariesByTopic[summary.topicId] = summary;
+  summariesByTopic[summary.roomId] = summary;
 };
 
 const bindSocketEvents = async (): Promise<void> => {
