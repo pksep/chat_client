@@ -1,9 +1,6 @@
 import { MessageTypeEnum } from '@pksep/yui';
 import { reactive } from 'vue';
-import {
-  authedUser,
-  getStoredChatAccessToken
-} from '../composables/useAuth';
+import { authedUser, getStoredChatAccessToken } from '../composables/useAuth';
 import { getAuthToken } from '../composables/useLogin';
 import {
   showErrorNotification,
@@ -148,17 +145,13 @@ const getCurrentUserIdentifiers = (): Set<string> => {
       })
     | null;
 
-  [
-    user?.id,
-    user?.userId,
-    user?.chatId,
-    user?.chatUserId,
-    user?.uuid
-  ].forEach(value => {
-    if (value !== undefined && value !== null) {
-      identifiers.add(String(value));
+  [user?.id, user?.userId, user?.chatId, user?.chatUserId, user?.uuid].forEach(
+    value => {
+      if (value !== undefined && value !== null) {
+        identifiers.add(String(value));
+      }
     }
-  });
+  );
 
   const tokenPayload = decodeJwtPayload(
     getAuthToken() || getStoredChatAccessToken()
@@ -232,10 +225,9 @@ const bindSocketEvents = async (): Promise<void> => {
       upsertActiveRecorder(payload);
       showNotification({
         title: 'Запись звонка',
-        description:
-          isCurrentUserRecorder(payload.recorderUserId)
-            ? 'Запись звонка включена'
-            : 'Участник включил запись звонка',
+        description: isCurrentUserRecorder(payload.recorderUserId)
+          ? 'Запись звонка включена'
+          : 'Участник включил запись звонка',
         type: MessageTypeEnum.info
       });
     }
@@ -265,8 +257,7 @@ export const loadActiveCallSummaryRecorders = async (
       `/calls/${encodeURIComponent(roomId)}/summary-recordings`,
       { parsed: false }
     );
-    const recorders =
-      await readResponse<CallSummaryRecorderDto[]>(response);
+    const recorders = await readResponse<CallSummaryRecorderDto[]>(response);
     setActiveRecordersForRoom(roomId, recorders);
     return recorders;
   } catch (error) {
@@ -378,15 +369,16 @@ export const getCallSummaryRecordingNotice = (
     return '';
   }
 
-  if (recorders.some(recorder => isCurrentUserRecorder(recorder.recorderUserId))) {
+  if (
+    recorders.some(recorder => isCurrentUserRecorder(recorder.recorderUserId))
+  ) {
     return recorders.length > 1
       ? `Вы и ещё ${recorders.length - 1} участник записываете звонок`
       : 'Вы записываете звонок';
   }
 
   const firstRecorder = recorders[0];
-  const recorderName =
-    firstRecorder.recorderName?.trim() || 'Участник';
+  const recorderName = firstRecorder.recorderName?.trim() || 'Участник';
 
   return recorders.length > 1
     ? `${recorderName} и ещё ${recorders.length - 1} участник записывают звонок`
