@@ -1,6 +1,10 @@
 import { MessageTypeEnum } from '@pksep/yui';
 import { reactive } from 'vue';
-import { authedUser } from '../composables/useAuth';
+import {
+  authedUser,
+  getStoredChatAccessToken
+} from '../composables/useAuth';
+import { getAuthToken } from '../composables/useLogin';
 import {
   showErrorNotification,
   showNotification
@@ -21,6 +25,7 @@ export interface CallSummaryDto {
   roomId: string;
   topicId: string;
   recorderUserId: string;
+  recorderName?: string | null;
   status: CallSummaryStatus;
   videoStatus: CallSummaryStatus;
   videoAvailable: boolean;
@@ -29,12 +34,21 @@ export interface CallSummaryDto {
   completedAt?: Date | string | null;
 }
 
+export interface CallSummaryRecorderDto {
+  roomId: string;
+  topicId: string;
+  recorderUserId: string;
+  recorderName?: string | null;
+}
+
 const summariesByTopic = reactive<Record<string, CallSummaryDto | undefined>>(
   {}
 );
 const loadingTopicIds = reactive(new Set<string>());
 const startingRoomIds = reactive(new Set<string>());
-const recordingRoomIds = reactive(new Set<string>());
+const activeRecordersByRoom = reactive<
+  Record<string, Record<string, CallSummaryRecorderDto>>
+>({});
 let subscribedSdk: ReturnType<typeof getChatSDK> = null;
 let subscriptionPromise: Promise<void> | null = null;
 
@@ -55,18 +69,124 @@ const readResponse = async <T>(response: unknown): Promise<T> => {
       throw new Error(message);
     }
 
-    return (await response.json()) as T;
+    if (response.status === 204) {
+      return null as T;
+    }
+
+    const text = await response.text();
+    return (text ? JSON.parse(text) : null) as T;
   }
 
   return response as T;
 };
 
+const upsertActiveRecorder = (recorder: CallSummaryRecorderDto): void => {
+  if (!recorder.roomId || !recorder.recorderUserId) {
+    return;
+  }
+
+  activeRecordersByRoom[recorder.roomId] ||= {};
+  activeRecordersByRoom[recorder.roomId][recorder.recorderUserId] = recorder;
+};
+
+const removeActiveRecorder = (roomId: string, recorderUserId: string): void => {
+  const roomRecorders = activeRecordersByRoom[roomId];
+  if (!roomRecorders) {
+    return;
+  }
+
+  delete roomRecorders[recorderUserId];
+  if (!Object.keys(roomRecorders).length) {
+    delete activeRecordersByRoom[roomId];
+  }
+};
+
+const setActiveRecordersForRoom = (
+  roomId: string,
+  recorders: CallSummaryRecorderDto[]
+): void => {
+  const nextRecorders: Record<string, CallSummaryRecorderDto> = {};
+  recorders.forEach(recorder => {
+    if (recorder.recorderUserId) {
+      nextRecorders[recorder.recorderUserId] = recorder;
+    }
+  });
+
+  if (Object.keys(nextRecorders).length) {
+    activeRecordersByRoom[roomId] = nextRecorders;
+  } else {
+    delete activeRecordersByRoom[roomId];
+  }
+};
+
+const decodeJwtPayload = (token?: string | null): Record<string, unknown> => {
+  if (!token) {
+    return {};
+  }
+
+  const payload = token.split('.')[1];
+  if (!payload) {
+    return {};
+  }
+
+  try {
+    const normalizedPayload = payload
+      .replace(/-/g, '+')
+      .replace(/_/g, '/')
+      .padEnd(Math.ceil(payload.length / 4) * 4, '=');
+    return JSON.parse(atob(normalizedPayload)) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+};
+
+const getCurrentUserIdentifiers = (): Set<string> => {
+  const identifiers = new Set<string>();
+  const user = authedUser.value as
+    | (Record<string, unknown> & {
+        id?: unknown;
+      })
+    | null;
+
+  [
+    user?.id,
+    user?.userId,
+    user?.chatId,
+    user?.chatUserId,
+    user?.uuid
+  ].forEach(value => {
+    if (value !== undefined && value !== null) {
+      identifiers.add(String(value));
+    }
+  });
+
+  const tokenPayload = decodeJwtPayload(
+    getAuthToken() || getStoredChatAccessToken()
+  );
+  [tokenPayload.id, tokenPayload.sub, tokenPayload.userId].forEach(value => {
+    if (value !== undefined && value !== null) {
+      identifiers.add(String(value));
+    }
+  });
+
+  return identifiers;
+};
+
+const isCurrentUserRecorder = (recorderUserId?: string | null): boolean =>
+  !!recorderUserId && getCurrentUserIdentifiers().has(recorderUserId);
+
 const applySummaryStatus = (summary: CallSummaryDto): void => {
-  recordingRoomIds.delete(summary.roomId);
   startingRoomIds.delete(summary.roomId);
 
   if (summary.status === 'STARTING' || summary.status === 'RECORDING') {
-    recordingRoomIds.add(summary.roomId);
+    upsertActiveRecorder({
+      roomId: summary.roomId,
+      topicId: summary.topicId,
+      recorderUserId: summary.recorderUserId,
+      recorderName: summary.recorderName
+    });
+  } else {
+    removeActiveRecorder(summary.roomId, summary.recorderUserId);
   }
 
   summariesByTopic[summary.topicId] = summary;
@@ -109,11 +229,11 @@ const bindSocketEvents = async (): Promise<void> => {
   sdk.subscribeToEvent(
     WebSocketEventType.CALL_SUMMARY_RECORDING_STARTED,
     ({ payload }) => {
-      recordingRoomIds.add(payload.roomId);
+      upsertActiveRecorder(payload);
       showNotification({
         title: 'Запись звонка',
         description:
-          payload.recorderUserId === authedUser.value?.id
+          isCurrentUserRecorder(payload.recorderUserId)
             ? 'Запись звонка включена'
             : 'Участник включил запись звонка',
         type: MessageTypeEnum.info
@@ -127,6 +247,31 @@ const ensureSocketEvents = (): void => {
     subscriptionPromise = bindSocketEvents().finally(() => {
       subscriptionPromise = null;
     });
+  }
+};
+
+export const loadActiveCallSummaryRecorders = async (
+  roomId?: string | null
+): Promise<CallSummaryRecorderDto[]> => {
+  ensureSocketEvents();
+
+  if (!roomId) {
+    return [];
+  }
+
+  try {
+    const api = useChatApi();
+    const response = await api.get(
+      `/calls/${encodeURIComponent(roomId)}/summary-recordings`,
+      { parsed: false }
+    );
+    const recorders =
+      await readResponse<CallSummaryRecorderDto[]>(response);
+    setActiveRecordersForRoom(roomId, recorders);
+    return recorders;
+  } catch (error) {
+    console.error('[CallSummary] Failed to load active recorders:', error);
+    return Object.values(activeRecordersByRoom[roomId] || {});
   }
 };
 
@@ -174,7 +319,12 @@ export const startCallSummaryRecording = async (
 ): Promise<boolean> => {
   ensureSocketEvents();
 
-  if (!roomId || !topicId || startingRoomIds.has(roomId)) {
+  if (
+    !roomId ||
+    !topicId ||
+    startingRoomIds.has(roomId) ||
+    isCallSummaryRecording(roomId)
+  ) {
     return false;
   }
 
@@ -207,7 +357,41 @@ export const getCallSummary = (
 };
 
 export const isCallSummaryRecording = (roomId?: string | null): boolean =>
-  !!roomId && (recordingRoomIds.has(roomId) || startingRoomIds.has(roomId));
+  !!roomId &&
+  (startingRoomIds.has(roomId) ||
+    Object.values(activeRecordersByRoom[roomId] || {}).some(recorder =>
+      isCurrentUserRecorder(recorder.recorderUserId)
+    ));
+
+export const isAnyCallSummaryRecording = (roomId?: string | null): boolean =>
+  !!roomId && Object.keys(activeRecordersByRoom[roomId] || {}).length > 0;
+
+export const getCallSummaryRecordingNotice = (
+  roomId?: string | null
+): string => {
+  if (!roomId) {
+    return '';
+  }
+
+  const recorders = Object.values(activeRecordersByRoom[roomId] || {});
+  if (!recorders.length) {
+    return '';
+  }
+
+  if (recorders.some(recorder => isCurrentUserRecorder(recorder.recorderUserId))) {
+    return recorders.length > 1
+      ? `Вы и ещё ${recorders.length - 1} участник записываете звонок`
+      : 'Вы записываете звонок';
+  }
+
+  const firstRecorder = recorders[0];
+  const recorderName =
+    firstRecorder.recorderName?.trim() || 'Участник';
+
+  return recorders.length > 1
+    ? `${recorderName} и ещё ${recorders.length - 1} участник записывают звонок`
+    : `${recorderName} записывает звонок`;
+};
 
 const blobToBase64 = (blob: Blob): Promise<string> =>
   new Promise((resolve, reject) => {

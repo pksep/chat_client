@@ -20,6 +20,15 @@
       }"
       @click.stop="closeMobileCallActionsMenu"
     >
+      <div
+        v-if="callSummaryRecordingNotice"
+        class="call-modal__recording-notice"
+        role="status"
+      >
+        <span class="call-modal__recording-notice-dot"></span>
+        <span>{{ callSummaryRecordingNotice }}</span>
+      </div>
+
       <div class="call-modal__group-info">
         <div>
           <button
@@ -743,7 +752,9 @@ import { currentGroup, getGroupById } from '../../composables/useGroup';
 import GroupInfoIcon from './UI/GroupInfoIcon.vue';
 import CallMoreIcon from './UI/CallMoreIcon.vue';
 import {
+  getCallSummaryRecordingNotice,
   isCallSummaryRecording,
+  loadActiveCallSummaryRecorders,
   startCallSummaryRecording
 } from '../../services/useCallSummaries';
 
@@ -1691,8 +1702,15 @@ const isBusyNoticeVisible = computed(() => isTerminalCallNotice.value);
 const isSummaryRecording = computed(() =>
   isCallSummaryRecording(activeRoomId.value)
 );
+const callSummaryRecordingNotice = computed(() =>
+  getCallSummaryRecordingNotice(activeRoomId.value)
+);
 const isSummaryRecordButtonDisabled = computed(
-  () => isBusyNoticeVisible.value || !activeRoomId.value || !activeTopicId.value
+  () =>
+    isBusyNoticeVisible.value ||
+    !activeRoomId.value ||
+    !activeTopicId.value ||
+    isSummaryRecording.value
 );
 const localCallBackgroundPlaceholderStyle = computed<CSSProperties | null>(
   () => {
@@ -2322,6 +2340,16 @@ watch(
     shouldSkipInitialParticipantAutofocus.value = true;
     currentParticipantPage.value = 0;
     scheduleRemoteVideoSubscriptionSync();
+  },
+  { immediate: true }
+);
+
+watch(
+  [isCallOpen, activeRoomId],
+  ([open, roomId]) => {
+    if (open && roomId) {
+      void loadActiveCallSummaryRecorders(roomId);
+    }
   },
   { immediate: true }
 );

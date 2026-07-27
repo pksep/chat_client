@@ -267,6 +267,7 @@ export interface WebSocketEventPayloads {
     roomId: string;
     topicId: string;
     recorderUserId: string;
+    recorderName?: string | null;
   };
   [WebSocketEventType.INCOMING_CALL]: {
     roomId: string;
