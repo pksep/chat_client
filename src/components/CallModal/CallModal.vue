@@ -1850,19 +1850,9 @@ const buildPromotedParticipantOrder = (
       const participant = participantMap.get(participantId);
 
       return (
-        !!participant?.isSpeaking &&
-        !participant.isScreenShareActive &&
-        !participant.isHandRaised
-      );
-    }),
-    ...nextOrder.filter(participantId => {
-      const participant = participantMap.get(participantId);
-
-      return (
         (!!participant?.activeReactionEmoji ||
           !!participant?.activeReactionVideoSrc) &&
         !participant.isScreenShareActive &&
-        !participant.isSpeaking &&
         !participant.isHandRaised
       );
     })
