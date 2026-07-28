@@ -81,6 +81,7 @@
         >
           <CallsPage
             :is-active="activeSection === 'calls'"
+            :auto-select-first="false"
             :data-testid="`${props.dataTestid}-MobileList-CallsPage`"
           />
         </section>

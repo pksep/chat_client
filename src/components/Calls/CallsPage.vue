@@ -33,10 +33,19 @@
         <div
           v-for="call in filteredCalls"
           :key="call.messageId"
-          type="button"
-          class="calls-page__item"
+          :class="[
+            'calls-page__item',
+            {
+              'calls-page__item--active':
+                selectedCall?.messageId === call.messageId
+            }
+          ]"
+          role="button"
+          tabindex="0"
           :data-testid="`${props.dataTestid}-Item-${call.messageId}`"
-          @click="openCallTopic(call)"
+          @click="openCallBot(call)"
+          @keydown.enter.prevent="openCallBot(call)"
+          @keydown.space.prevent="openCallBot(call)"
         >
           <CachedAvatar
             class="calls-page__avatar"
@@ -75,69 +84,7 @@
             </div>
           </div>
 
-          <div
-            class="calls-page__actions"
-            v-if="
-              getCallSummaryForCall(call)?.summary ||
-              getCallSummaryForCall(call)?.videoAvailable
-            "
-          >
-            <button
-              v-if="getCallSummaryForCall(call)?.summary"
-              type="button"
-              class="calls-page__action"
-              title="Скачать расшифровку"
-              aria-label="Скачать расшифровку"
-              @click.stop="handleDownloadSummary(call)"
-            >
-              <Icon
-                :name="IconNameEnum.fileText"
-                :width="16"
-                :height="16"
-                aria-hidden="true"
-              />
-            </button>
-            <button
-              v-if="
-                getCallSummaryForCall(call)?.summary ||
-                getCallSummaryForCall(call)?.videoAvailable
-              "
-              type="button"
-              class="calls-page__action"
-              disabled
-              title="Скачать видеозапись"
-              aria-label="Скачать видеозапись"
-              @click.stop="handleDownloadRecording(call)"
-            >
-              <Icon
-                :name="IconNameEnum.image"
-                :width="16"
-                :height="16"
-                aria-hidden="true"
-              />
-            </button>
-            <button
-              v-if="getCallSummaryForCall(call)?.summary"
-              type="button"
-              class="calls-page__action calls-page__action--send"
-              title="Отправить расшифровку в чат"
-              aria-label="Отправить расшифровку в чат"
-              @click.stop="handleSendSummary(call)"
-            >
-              <Icon
-                :name="IconNameEnum.planeRight"
-                :width="16"
-                :height="16"
-                aria-hidden="true"
-              />
-              >↗
-            </button>
-          </div>
-          <span
-            class="calls-page__info"
-            aria-hidden="true"
-            @click.stop="openCallTopic(call)"
-          >
+          <span class="calls-page__info" aria-hidden="true">
             <MessageCallInfoIcon />
           </span>
         </div>
@@ -188,15 +135,11 @@ import {
   ref,
   watch
 } from 'vue';
-import { Icon, IconNameEnum, Search } from '@pksep/yui';
+import { Search } from '@pksep/yui';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import MessageCallInfoIcon from '../Messages/MessageCallInfoIcon.vue';
 import MessageCallTypeIcon from '../Messages/MessageCallTypeIcon.vue';
 import { formatTime } from '../../composables/useTime';
-import {
-  navigateToDialogs,
-  navigateToGroup
-} from '../../composables/navigation';
 import { useTopics } from '../../composables/useTopics';
 import { getAuthUser } from '../../composables/useAuth';
 import { TopicType } from '../../services/useChatSDK/types';
@@ -215,51 +158,52 @@ import {
 import CallsHeader from './CallsHeader.vue';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import {
-  downloadCallRecording,
-  downloadCallSummary,
-  loadLatestCallSummary,
-  sendCallSummaryToChat,
-  type CallSummaryDto
-} from '../../services/useCallSummaries';
+  selectCallForBot,
+  useCallBot,
+  type CallBotCallSummaryBrief
+} from '../../services/useCallBot';
 
 interface CallHistoryItem {
   messageId: string;
   topicId: string;
-  roomId?: string;
+  roomId?: string | null;
   topicType: TopicType;
   displayName: string;
-  avatarUrl?: string;
+  avatarUrl?: string | null;
   avatarInitials: string;
   dateLabel: string;
+  fullDateLabel: string;
   title: string;
   duration: string | null;
   detailLabel: string;
   kind: CallMessageKind;
   timeLabel: string;
   createdAt: number;
+  callSummary?: CallBotCallSummaryBrief | null;
 }
 
 const props = withDefaults(
   defineProps<{
     dataTestid?: string;
     isActive?: boolean;
+    autoSelectFirst?: boolean;
   }>(),
   {
     dataTestid: 'CallsPage',
-    isActive: true
+    isActive: true,
+    autoSelectFirst: true
   }
 );
 
 const searchValue = ref('');
 const callListRef = ref<HTMLElement | null>(null);
-const loadingMoreLabel =
-  '\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u043c \u0435\u0449\u0451 \u0437\u0432\u043e\u043d\u043a\u0438...';
+const loadingMoreLabel = 'Загружаем ещё звонки...';
 const authUserId = computed(() => getAuthUser()?.id || '');
 const { getSelectedTopic } = useTopics();
 const { rawCallHistory, callHistoryState } = useCallHistoryStore();
+const { selectedCall } = useCallBot();
 const state = callHistoryState;
 const { openUserInfo } = useUserInfoModal();
-const callSummaries = ref<Record<string, CallSummaryDto | null>>({});
 const SCROLL_LOAD_MORE_OFFSET = 160;
 const CALLS_SCROLL_RESTORE_MAX_FRAMES = 8;
 let callsScrollRestoreFrameId: number | null = null;
@@ -282,6 +226,7 @@ const buildCallItem = (
     return null;
   }
 
+  const createdAt = new Date(serverCall.createdAt);
   const displayName =
     topic?.name ||
     topic?.group?.title ||
@@ -298,24 +243,29 @@ const buildCallItem = (
   return {
     messageId: serverCall.id,
     topicId: serverCall.topicId,
-    roomId: parsedEx?.call?.roomId,
+    roomId: serverCall.roomId || parsedEx?.call?.roomId || null,
     topicType:
       (topic?.type as TopicType) || (serverCall.topicType as TopicType),
     displayName,
     avatarUrl,
     avatarInitials: displayName,
-    dateLabel: new Date(serverCall.createdAt).toLocaleDateString('ru-RU', {
+    dateLabel: createdAt.toLocaleDateString('ru-RU', {
       day: '2-digit',
       month: '2-digit'
+    }),
+    fullDateLabel: createdAt.toLocaleDateString('ru-RU', {
+      day: 'numeric',
+      month: 'long'
     }),
     title: parsedCall.title,
     duration: parsedCall.duration,
     detailLabel: parsedCall.duration
-      ? `${formatTime(new Date(serverCall.createdAt))} (${parsedCall.duration})`
-      : formatTime(new Date(serverCall.createdAt)),
+      ? `${formatTime(createdAt)} (${parsedCall.duration})`
+      : formatTime(createdAt),
     kind: parsedCall.kind,
-    timeLabel: formatTime(new Date(serverCall.createdAt)),
-    createdAt: new Date(serverCall.createdAt).getTime()
+    timeLabel: formatTime(createdAt),
+    createdAt: createdAt.getTime(),
+    callSummary: serverCall.callSummary || null
   };
 };
 
@@ -340,67 +290,27 @@ const filteredCalls = computed(() => {
   );
 });
 
-const refreshCallSummaries = async (): Promise<void> => {
-  await Promise.all(
-    callHistory.value.map(async call => {
-      cacheCallSummaryForCall(
-        call,
-        await loadLatestCallSummary(call.topicId, call.roomId)
-      );
-    })
-  );
+const openCallBot = (call: CallHistoryItem): void => {
+  selectCallForBot(call);
 };
 
-const callSummaryKey = (call: CallHistoryItem): string =>
-  call.roomId || call.topicId;
-
-const cacheCallSummaryForCall = (
-  call: CallHistoryItem,
-  summary: CallSummaryDto | null
-): void => {
-  callSummaries.value[callSummaryKey(call)] = summary;
-  callSummaries.value[call.topicId] = summary;
-  if (call.roomId) {
-    callSummaries.value[call.roomId] = summary;
-  }
-};
-
-const getCallSummaryForCall = (call: CallHistoryItem): CallSummaryDto | null =>
-  callSummaries.value[callSummaryKey(call)] ||
-  callSummaries.value[call.topicId] ||
-  (call.roomId ? callSummaries.value[call.roomId] : null) ||
-  null;
-
-const handleDownloadSummary = async (call: CallHistoryItem): Promise<void> => {
-  const summary =
-    getCallSummaryForCall(call) ||
-    (await loadLatestCallSummary(call.topicId, call.roomId));
-  if (summary) await downloadCallSummary(summary);
-};
-
-const handleDownloadRecording = async (
-  call: CallHistoryItem
-): Promise<void> => {
-  const summary =
-    getCallSummaryForCall(call) ||
-    (await loadLatestCallSummary(call.topicId, call.roomId));
-  if (summary) await downloadCallRecording(summary);
-};
-
-const handleSendSummary = async (call: CallHistoryItem): Promise<void> => {
-  const summary =
-    getCallSummaryForCall(call) ||
-    (await loadLatestCallSummary(call.topicId, call.roomId));
-  if (summary) await sendCallSummaryToChat(summary);
-};
-
-const openCallTopic = (call: CallHistoryItem): void => {
-  if (call.topicType === TopicType.Group) {
-    navigateToGroup(call.topicId);
+const selectDefaultCallIfNeeded = (): void => {
+  if (
+    !props.isActive ||
+    !props.autoSelectFirst ||
+    !filteredCalls.value.length
+  ) {
     return;
   }
 
-  navigateToDialogs(call.topicId);
+  const selectedId = selectedCall.value?.messageId;
+  const selectedStillVisible =
+    !!selectedId &&
+    filteredCalls.value.some(call => call.messageId === selectedId);
+
+  if (!selectedStillVisible) {
+    openCallBot(filteredCalls.value[0]);
+  }
 };
 
 const handleOpenCallUserInfo = (call: CallHistoryItem): void => {
@@ -548,6 +458,7 @@ const ensureCallHistoryReady = async (): Promise<void> => {
 
   void hydrateCallHistoryCache();
   await bootstrapCallHistory();
+  selectDefaultCallIfNeeded();
 };
 
 onMounted(() => {
@@ -555,7 +466,6 @@ onMounted(() => {
 
   if (props.isActive) {
     void ensureCallHistoryReady();
-    void refreshCallSummaries();
     restoreCallsScrollPosition();
   }
 });
@@ -574,8 +484,8 @@ watch(
 
     if (isActive) {
       void ensureCallHistoryReady();
-      void refreshCallSummaries();
       restoreCallsScrollPosition();
+      selectDefaultCallIfNeeded();
     }
   },
   { immediate: false }
@@ -585,7 +495,7 @@ watch(
   () => filteredCalls.value.length,
   () => {
     restoreCallsScrollPosition();
-    void refreshCallSummaries();
+    selectDefaultCallIfNeeded();
   }
 );
 </script>

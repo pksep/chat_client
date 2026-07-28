@@ -28,6 +28,7 @@ export interface SearchParams {
 export interface CallHistoryItem {
   id: string;
   topicId: string;
+  roomId?: string | null;
   topicType: 'GROUP' | 'DM';
   topicName: string;
   topicAvatarUrl?: string | null;
@@ -35,6 +36,19 @@ export interface CallHistoryItem {
   text: string;
   ex: unknown;
   createdAt: string | Date;
+  callSummary?: {
+    id: string;
+    roomId: string;
+    topicId: string;
+    recorderUserId: string;
+    recorderName?: string | null;
+    status: 'STARTING' | 'RECORDING' | 'PROCESSING' | 'READY' | 'FAILED';
+    videoStatus: 'STARTING' | 'RECORDING' | 'PROCESSING' | 'READY' | 'FAILED';
+    videoAvailable: boolean;
+    hasSummary: boolean;
+    createdAt: string | Date;
+    completedAt?: string | Date | null;
+  } | null;
 }
 
 export interface PaginatedMeta {

@@ -30,7 +30,13 @@
       @unmount-new-bot="handleNewBot"
       @unmount-new-group="handleNewGroup"
     />
+    <CallsBotView
+      v-if="!isMobile && activeSection === 'calls'"
+      class="chat__messages"
+      :dataTestid="`${props.dataTestid}-ChatContainer-CallsBotView`"
+    />
     <Chat
+      v-else
       class="chat__messages"
       ref="chatRef"
       :show-update-banner="showUpdateBanner"
@@ -178,6 +184,7 @@ import Header from './Header/Header.vue';
 import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
 import Chat from './Chat.vue';
+import CallsBotView from './Calls/CallsBotView.vue';
 import MenuInfo from './MenuInfo.vue';
 import UserInfoPanel from './UserInfoPanel.vue';
 import BotInfoPanel from './BotInfoPanel.vue';
@@ -219,6 +226,7 @@ import { isBotTopic, isBotUser } from '../utils/bot';
 import { clearMessagesForTopic } from '../services/useMessages';
 import { getSelectedTopic } from '../composables/useTopics';
 import { isFavoriteTopic } from '../utils/favorite-topic';
+import { useChatMenu } from '../composables/useChatMenu';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -246,6 +254,7 @@ const {
 } = useMobileApp();
 
 const route = useUrlWatcher();
+const { activeSection } = useChatMenu();
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const {
