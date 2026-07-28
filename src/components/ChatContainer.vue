@@ -9,7 +9,7 @@
     :data-testid="`${props.dataTestid}-ChatContainer-Container`"
   >
     <Header
-      v-if="state.isActiveHeader"
+      v-if="showMainHeader"
       class="chat__header"
       :display-route="headerDisplayRoute"
       :data-testid="`${props.dataTestid}-ChatContainer-Header`"
@@ -304,6 +304,9 @@ const appMode = resolveAppMode();
 const { currentWallpaperStyle: chatWallpaperStyle, isWallpaperApplied } =
   useChatWallpaper();
 
+const isDesktopCallsSection = computed(
+  () => !isMobile.value && activeSection.value === 'calls'
+);
 const chatContainerClasses = computed(() => [
   'chat-container',
   {
@@ -312,9 +315,13 @@ const chatContainerClasses = computed(() => [
       (route.value && route.value.type === 'assistant')
         ? true
         : !state.isMenuDesktopOpen,
-    'chat-container--wallpaper': isWallpaperApplied.value
+    'chat-container--wallpaper': isWallpaperApplied.value,
+    'chat-container--calls': isDesktopCallsSection.value
   }
 ]);
+const showMainHeader = computed(
+  () => state.isActiveHeader && !isDesktopCallsSection.value
+);
 const shouldRenderCallModal = computed(
   () =>
     isCallActive.value ||

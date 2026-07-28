@@ -95,6 +95,13 @@
     'menu chat';
 }
 
+.chat-container--calls {
+  grid-template-areas:
+    'menu chat'
+    'menu chat';
+  grid-template-rows: 0 1fr;
+}
+
 .chat__header {
   grid-area: header;
   align-self: start;

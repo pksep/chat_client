@@ -72,6 +72,25 @@
           <span>Список действий по звонку</span>
         </button>
       </div>
+
+      <div v-if="visibleChatMessages.length" class="calls-bot__conversation">
+        <div
+          v-for="message in visibleChatMessages"
+          :key="message.id"
+          :class="[
+            'calls-bot__chat-message',
+            { 'calls-bot__chat-message--outgoing': message.isOutgoing }
+          ]"
+        >
+          <span
+            v-if="message.senderName && !message.isOutgoing"
+            class="calls-bot__chat-sender"
+          >
+            {{ message.senderName }}
+          </span>
+          <span v-html="message.text" />
+        </div>
+      </div>
     </div>
 
     <div v-else class="calls-bot__empty">
@@ -82,34 +101,20 @@
       </p>
     </div>
 
-    <footer class="calls-bot__input">
-      <div class="calls-bot__input-tools" aria-hidden="true">
-        <button type="button" class="calls-bot__input-tool" tabindex="-1">
-          ＋
-        </button>
-        <button type="button" class="calls-bot__input-tool" tabindex="-1">
-          ◌
-        </button>
-        <button type="button" class="calls-bot__input-tool" tabindex="-1">
-          ☺
-        </button>
-      </div>
-      <div
-        class="calls-bot__composer"
-        contenteditable="true"
-        role="textbox"
-        aria-label="Сообщение Звонилке"
-        data-placeholder="Начните печатать..."
-        @input="handleComposerInput"
+    <footer v-if="selectedCall" class="calls-bot__input">
+      <MessageListInput
+        v-model="composerText"
+        class="calls-bot__message-input"
+        :data-testid="`${props.dataTestid}-MessageInput`"
+        :edit-message="null"
+        :reply-message="null"
+        :forward-messages="[]"
+        :allow-empty-send="false"
+        :allow-attach-file="true"
+        :allow-select-user="true"
+        @send="handleComposerSend"
+        @attach-file="handleAttachFile"
       />
-      <button
-        type="button"
-        class="calls-bot__send"
-        :disabled="!composerText.trim()"
-        aria-label="Отправить"
-      >
-        ›
-      </button>
     </footer>
   </section>
 </template>
@@ -117,6 +122,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import BotAvatar from '../UI/BotAvatar.vue';
+import MessageListInput from '../Messages/MessageListInput.vue';
 import {
   downloadCallRecording,
   downloadCallSummary,
@@ -127,6 +133,32 @@ import {
 import { useCallBot } from '../../services/useCallBot';
 import { showErrorNotification } from '../../composables/useNotifications';
 import { TopicType } from '../../services/useChatSDK/types';
+import { getAuthUser } from '../../composables/useAuth';
+import { sendMessageChat } from '../../services/useChat';
+import { getMessagesByTopicId } from '../../services/useMessages';
+import { stripHtml } from '../../utils/stripHtml';
+
+interface ComposerSendPayload {
+  content?: string;
+  taggedUserIds?: string[];
+}
+
+interface CallsBotChatMessage {
+  id: string;
+  text: string;
+  senderName: string;
+  isOutgoing: boolean;
+  createdAt: number;
+}
+
+const CALL_GENERATED_MESSAGE_PREFIXES = [
+  'Расшифровка звонка',
+  'Конспект звонка',
+  'Суммари звонка',
+  'Краткое содержание звонка',
+  'Итоги -',
+  'Звонок завершен'
+];
 
 const props = withDefaults(
   defineProps<{
@@ -147,11 +179,50 @@ const summary = ref<CallSummaryDto | null>(null);
 const isLoadingSummary = ref(false);
 const isActionPending = ref(false);
 const composerText = ref('');
+const optimisticMessages = ref<CallsBotChatMessage[]>([]);
 let summaryLoadToken = 0;
 
-const handleComposerInput = (event: Event): void => {
-  composerText.value = (event.target as HTMLElement | null)?.innerText || '';
-};
+const authUserId = computed(() => getAuthUser()?.id || '');
+
+const visibleChatMessages = computed<CallsBotChatMessage[]>(() => {
+  const topicId = selectedCall.value?.topicId;
+  if (!topicId) {
+    return [];
+  }
+
+  const storedMessages = getMessagesByTopicId(topicId)
+    .filter(message => {
+      if (message.isSystem || !message.text) {
+        return false;
+      }
+
+      const plainText = stripHtml(message.text)
+        .replace(/\u00a0/g, ' ')
+        .trim();
+
+      return !CALL_GENERATED_MESSAGE_PREFIXES.some(prefix =>
+        plainText.startsWith(prefix)
+      );
+    })
+    .slice(-3)
+    .map(message => ({
+      id: message.id,
+      text: message.text || '',
+      senderName: message.senderUser?.initials || '',
+      isOutgoing: message.senderUserId === authUserId.value,
+      createdAt: new Date(message.createdAt || Date.now()).getTime()
+    }));
+  const optimisticForTopic = optimisticMessages.value.filter(message =>
+    message.id.startsWith(`${topicId}:`)
+  );
+  const byId = new Map<string, CallsBotChatMessage>();
+
+  [...storedMessages, ...optimisticForTopic]
+    .sort((left, right) => left.createdAt - right.createdAt)
+    .forEach(message => byId.set(message.id, message));
+
+  return [...byId.values()].slice(-3);
+});
 
 const callInfoTitle = computed(() => {
   if (!selectedCall.value) {
@@ -355,10 +426,57 @@ const handleDownloadActionList = (): void => {
   });
 };
 
+const handleComposerSend = (payload?: ComposerSendPayload): void => {
+  void (async () => {
+    const call = selectedCall.value;
+    const content = payload?.content || composerText.value;
+    const plainText = stripHtml(content)
+      .replace(/\u00a0/g, ' ')
+      .trim();
+
+    if (!call?.topicId || !plainText) {
+      return;
+    }
+
+    const optimisticId = `${call.topicId}:${Date.now()}`;
+    optimisticMessages.value = optimisticMessages.value.concat({
+      id: optimisticId,
+      text: content,
+      senderName: getAuthUser()?.initials || '',
+      isOutgoing: true,
+      createdAt: Date.now()
+    });
+
+    const sent = await sendMessageChat({
+      topicId: call.topicId,
+      text: content,
+      taggedUserIds: payload?.taggedUserIds || []
+    });
+
+    if (sent) {
+      optimisticMessages.value = optimisticMessages.value.filter(
+        message => message.id !== optimisticId
+      );
+      composerText.value = '';
+      return;
+    }
+
+    optimisticMessages.value = optimisticMessages.value.filter(
+      message => message.id !== optimisticId
+    );
+    showErrorNotification('Не удалось отправить сообщение');
+  })();
+};
+
+const handleAttachFile = (): void => {
+  showErrorNotification('Вложения в разделе звонков пока недоступны');
+};
+
 watch(
   () => selectedCall.value?.messageId,
   () => {
     void hydrateSummary();
+    composerText.value = '';
   },
   { immediate: true }
 );

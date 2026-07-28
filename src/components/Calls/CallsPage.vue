@@ -140,6 +140,10 @@ import CachedAvatar from '../UI/CachedAvatar.vue';
 import MessageCallInfoIcon from '../Messages/MessageCallInfoIcon.vue';
 import MessageCallTypeIcon from '../Messages/MessageCallTypeIcon.vue';
 import { formatTime } from '../../composables/useTime';
+import {
+  navigateToDialogs,
+  navigateToGroup
+} from '../../composables/navigation';
 import { useTopics } from '../../composables/useTopics';
 import { getAuthUser } from '../../composables/useAuth';
 import { TopicType } from '../../services/useChatSDK/types';
@@ -292,6 +296,13 @@ const filteredCalls = computed(() => {
 
 const openCallBot = (call: CallHistoryItem): void => {
   selectCallForBot(call);
+
+  if (call.topicType === TopicType.Group) {
+    navigateToGroup(call.topicId);
+    return;
+  }
+
+  navigateToDialogs(call.topicId);
 };
 
 const selectDefaultCallIfNeeded = (): void => {

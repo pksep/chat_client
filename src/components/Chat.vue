@@ -32,7 +32,7 @@
           v-if="isMobileCallBotOpen"
           show-back
           :dataTestid="`${props.dataTestid}-Chat-MobileCallsBotView`"
-          @back="clearCallBotSelection"
+          @back="handleMobileCallBotBack"
         />
         <template v-else>
           <PinnedMessages
@@ -103,7 +103,10 @@ import CallsBotView from './Calls/CallsBotView.vue';
 import type { IMessageListProps } from './interfaces/message-list';
 import { MAX_W_MD } from '../utils/constants';
 import { useUrlWatcher } from '../composables/navigation';
-import { RouteTypes } from '../composables/navigation/useUrlRouting';
+import {
+  navigateToDefault,
+  RouteTypes
+} from '../composables/navigation/useUrlRouting';
 import { getAuthUser } from '../composables/useAuth';
 import PinnedMessages from './Messages/PinnedMessages.vue';
 import type {
@@ -143,6 +146,10 @@ const isMobileCallBotOpen = computed(
   () =>
     isMobile.value && activeSection.value === 'calls' && !!selectedCall.value
 );
+const handleMobileCallBotBack = (): void => {
+  clearCallBotSelection();
+  navigateToDefault();
+};
 const mobileTransitionName = ref('');
 const isMobileMessageListMounted = ref(!isMobile.value);
 const isMobileMessageContentReady = ref(!isMobile.value);
