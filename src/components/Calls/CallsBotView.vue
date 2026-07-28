@@ -41,7 +41,8 @@
           :disabled="isActionPending || !summary?.summary"
           @click="handleSendSummary"
         >
-          Сделать краткое содержание
+          <span class="calls-bot__action-icon" aria-hidden="true">☰</span>
+          <span>Сделать краткое содержание</span>
         </button>
         <button
           type="button"
@@ -49,7 +50,8 @@
           :disabled="isActionPending || !summary?.summary"
           @click="handleDownloadTranscript"
         >
-          Скачать транскрибацию звонка
+          <span class="calls-bot__action-icon" aria-hidden="true">⇩</span>
+          <span>Скачать транскрибацию звонка</span>
         </button>
         <button
           type="button"
@@ -57,7 +59,8 @@
           :disabled="isActionPending || !summary?.videoAvailable"
           @click="handleDownloadVideo"
         >
-          Скачать видео-запись
+          <span class="calls-bot__action-icon" aria-hidden="true">⇩</span>
+          <span>Скачать видео-запись</span>
         </button>
         <button
           type="button"
@@ -65,7 +68,8 @@
           :disabled="isActionPending || !summary?.summary"
           @click="handleDownloadActionList"
         >
-          Список действий по звонку
+          <span class="calls-bot__action-icon" aria-hidden="true">☰</span>
+          <span>Список действий по звонку</span>
         </button>
       </div>
     </div>
@@ -78,8 +82,34 @@
       </p>
     </div>
 
-    <footer class="calls-bot__input" aria-hidden="true">
-      <span>Начните печатать...</span>
+    <footer class="calls-bot__input">
+      <div class="calls-bot__input-tools" aria-hidden="true">
+        <button type="button" class="calls-bot__input-tool" tabindex="-1">
+          ＋
+        </button>
+        <button type="button" class="calls-bot__input-tool" tabindex="-1">
+          ◌
+        </button>
+        <button type="button" class="calls-bot__input-tool" tabindex="-1">
+          ☺
+        </button>
+      </div>
+      <div
+        class="calls-bot__composer"
+        contenteditable="true"
+        role="textbox"
+        aria-label="Сообщение Звонилке"
+        data-placeholder="Начните печатать..."
+        @input="handleComposerInput"
+      />
+      <button
+        type="button"
+        class="calls-bot__send"
+        :disabled="!composerText.trim()"
+        aria-label="Отправить"
+      >
+        ›
+      </button>
     </footer>
   </section>
 </template>
@@ -116,7 +146,12 @@ const { selectedCall } = useCallBot();
 const summary = ref<CallSummaryDto | null>(null);
 const isLoadingSummary = ref(false);
 const isActionPending = ref(false);
+const composerText = ref('');
 let summaryLoadToken = 0;
+
+const handleComposerInput = (event: Event): void => {
+  composerText.value = (event.target as HTMLElement | null)?.innerText || '';
+};
 
 const callInfoTitle = computed(() => {
   if (!selectedCall.value) {
