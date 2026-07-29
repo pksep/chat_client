@@ -7,9 +7,9 @@
       <div
         :class="[
           'chat__mobile-list-layer',
-          { 'chat__mobile-list-layer--hidden': route.id || isMobileCallBotOpen }
+          { 'chat__mobile-list-layer--hidden': route.id }
         ]"
-        :aria-hidden="route.id || isMobileCallBotOpen ? 'true' : 'false'"
+        :aria-hidden="route.id ? 'true' : 'false'"
       >
         <ContactListMobile
           :transition-class="!route.id ? mobileTransitionName : ''"
@@ -17,7 +17,7 @@
         />
       </div>
       <div
-        v-if="route.id || isMobileCallBotOpen"
+        v-if="route.id"
         :class="[
           'chat__mobile-route-view chat__mobile-route-view--messages',
           mobileTransitionName,
@@ -28,37 +28,29 @@
         ]"
         @animationend="handleMobileRouteAnimationEnd"
       >
-        <CallsBotView
-          v-if="isMobileCallBotOpen"
-          show-back
-          :dataTestid="`${props.dataTestid}-Chat-MobileCallsBotView`"
-          @back="handleMobileCallBotBack"
+        <PinnedMessages
+          v-if="shouldShowPinnedMessages"
+          :topic-id="pinnedMessagesTopicId"
+          :viewport-snapshot="messageViewportSnapshot"
+          @unmount-set-selected-message="scrollToMessage"
         />
-        <template v-else>
-          <PinnedMessages
-            v-if="shouldShowPinnedMessages"
-            :topic-id="pinnedMessagesTopicId"
-            :viewport-snapshot="messageViewportSnapshot"
-            @unmount-set-selected-message="scrollToMessage"
-          />
-          <MessageList
-            v-if="isMobileMessageListMounted"
-            ref="messageListRef"
-            :defer-content-render="false"
-            :baseUrl="props.baseUrl"
-            :contact="props.contact"
-            :user="authUser"
-            :show-update-banner="props.showUpdateBanner"
-            :update-action-label="props.updateActionLabel"
-            :update-progress="props.updateProgress"
-            :is-update-action-disabled="props.isUpdateActionDisabled"
-            :on-update-click="props.onUpdateClick"
-            :on-dismiss-update-banner="props.onDismissUpdateBanner"
-            :data-testid="`${props.dataTestid}-Chat-MessageList`"
-            @viewport-snapshot-change="handleViewportSnapshotChange"
-            @rendered-topic-change="handleRenderedTopicChange"
-          />
-        </template>
+        <MessageList
+          v-if="isMobileMessageListMounted"
+          ref="messageListRef"
+          :defer-content-render="false"
+          :baseUrl="props.baseUrl"
+          :contact="props.contact"
+          :user="authUser"
+          :show-update-banner="props.showUpdateBanner"
+          :update-action-label="props.updateActionLabel"
+          :update-progress="props.updateProgress"
+          :is-update-action-disabled="props.isUpdateActionDisabled"
+          :on-update-click="props.onUpdateClick"
+          :on-dismiss-update-banner="props.onDismissUpdateBanner"
+          :data-testid="`${props.dataTestid}-Chat-MessageList`"
+          @viewport-snapshot-change="handleViewportSnapshotChange"
+          @rendered-topic-change="handleRenderedTopicChange"
+        />
       </div>
       <ShareSelectionOverlay />
     </template>
@@ -99,14 +91,10 @@ import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import MessageList from './MessageList.vue';
 import ContactListMobile from './ContactList/MobileList.vue';
-import CallsBotView from './Calls/CallsBotView.vue';
 import type { IMessageListProps } from './interfaces/message-list';
 import { MAX_W_MD } from '../utils/constants';
 import { useUrlWatcher } from '../composables/navigation';
-import {
-  navigateToDefault,
-  RouteTypes
-} from '../composables/navigation/useUrlRouting';
+import { RouteTypes } from '../composables/navigation/useUrlRouting';
 import { getAuthUser } from '../composables/useAuth';
 import PinnedMessages from './Messages/PinnedMessages.vue';
 import type {
@@ -119,8 +107,6 @@ import {
   fetchPinnedMessagesForTopic,
   hasKnownTopicMessagesState
 } from '../services/useMessages';
-import { useChatMenu } from '../composables/useChatMenu';
-import { clearCallBotSelection, useCallBot } from '../services/useCallBot';
 
 export interface IChatProps extends IMessageListProps {
   dataTestid?: string;
@@ -140,16 +126,6 @@ const { state: isMobile } = useResizeState(MAX_W_MD);
 const messageListRef = useTemplateRef<any>('messageListRef');
 
 const route = useUrlWatcher();
-const { activeSection } = useChatMenu();
-const { selectedCall } = useCallBot();
-const isMobileCallBotOpen = computed(
-  () =>
-    isMobile.value && activeSection.value === 'calls' && !!selectedCall.value
-);
-const handleMobileCallBotBack = (): void => {
-  clearCallBotSelection();
-  navigateToDefault();
-};
 const mobileTransitionName = ref('');
 const isMobileMessageListMounted = ref(!isMobile.value);
 const isMobileMessageContentReady = ref(!isMobile.value);

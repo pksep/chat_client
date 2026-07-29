@@ -9,7 +9,7 @@
     :data-testid="`${props.dataTestid}-ChatContainer-Container`"
   >
     <Header
-      v-if="showMainHeader"
+      v-if="state.isActiveHeader"
       class="chat__header"
       :display-route="headerDisplayRoute"
       :data-testid="`${props.dataTestid}-ChatContainer-Header`"
@@ -30,13 +30,7 @@
       @unmount-new-bot="handleNewBot"
       @unmount-new-group="handleNewGroup"
     />
-    <CallsBotView
-      v-if="!isMobile && activeSection === 'calls'"
-      class="chat__messages"
-      :dataTestid="`${props.dataTestid}-ChatContainer-CallsBotView`"
-    />
     <Chat
-      v-else
       class="chat__messages"
       ref="chatRef"
       :show-update-banner="showUpdateBanner"
@@ -184,7 +178,6 @@ import Header from './Header/Header.vue';
 import HeaderMenu from './Header/HeaderMenu.vue';
 import Menu from './Menu.vue';
 import Chat from './Chat.vue';
-import CallsBotView from './Calls/CallsBotView.vue';
 import MenuInfo from './MenuInfo.vue';
 import UserInfoPanel from './UserInfoPanel.vue';
 import BotInfoPanel from './BotInfoPanel.vue';
@@ -226,7 +219,6 @@ import { isBotTopic, isBotUser } from '../utils/bot';
 import { clearMessagesForTopic } from '../services/useMessages';
 import { getSelectedTopic } from '../composables/useTopics';
 import { isFavoriteTopic } from '../utils/favorite-topic';
-import { useChatMenu } from '../composables/useChatMenu';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -254,7 +246,6 @@ const {
 } = useMobileApp();
 
 const route = useUrlWatcher();
-const { activeSection } = useChatMenu();
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const {
@@ -304,9 +295,6 @@ const appMode = resolveAppMode();
 const { currentWallpaperStyle: chatWallpaperStyle, isWallpaperApplied } =
   useChatWallpaper();
 
-const isDesktopCallsSection = computed(
-  () => !isMobile.value && activeSection.value === 'calls'
-);
 const chatContainerClasses = computed(() => [
   'chat-container',
   {
@@ -315,13 +303,9 @@ const chatContainerClasses = computed(() => [
       (route.value && route.value.type === 'assistant')
         ? true
         : !state.isMenuDesktopOpen,
-    'chat-container--wallpaper': isWallpaperApplied.value,
-    'chat-container--calls': isDesktopCallsSection.value
+    'chat-container--wallpaper': isWallpaperApplied.value
   }
 ]);
-const showMainHeader = computed(
-  () => state.isActiveHeader && !isDesktopCallsSection.value
-);
 const shouldRenderCallModal = computed(
   () =>
     isCallActive.value ||
@@ -507,6 +491,7 @@ const isActiveHeader = (
   if (routeObj.type === 'ai') return true;
   if (routeObj.id !== null) {
     if (routeObj.type === 'group') return true;
+    if (routeObj.type === 'call') return true;
     if (routeObj.type === 'dialogs') return true;
     if (routeObj.type === 'favorites') return true;
     if (!isMobile.value) {

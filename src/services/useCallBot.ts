@@ -11,7 +11,7 @@ export interface CallBotCallSummaryBrief {
   status: CallSummaryDto['status'];
   videoStatus: CallSummaryDto['videoStatus'];
   videoAvailable: boolean;
-  hasSummary: boolean;
+  hasTranscript: boolean;
   createdAt: string | Date;
   completedAt?: string | Date | null;
 }
@@ -19,8 +19,11 @@ export interface CallBotCallSummaryBrief {
 export interface CallBotSelectedCall {
   messageId: string;
   topicId: string;
+  sourceTopicId?: string | null;
+  callTopicId?: string | null;
   roomId?: string | null;
   topicType: TopicType;
+  sourceTopicType?: TopicType;
   displayName: string;
   avatarUrl?: string | null;
   avatarInitials: string;

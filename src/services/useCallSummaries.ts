@@ -26,16 +26,23 @@ export interface CallSummaryDto {
   status: CallSummaryStatus;
   videoStatus: CallSummaryStatus;
   videoAvailable: boolean;
-  summary?: string | null;
+  hasTranscript?: boolean;
+  transcript?: string | null;
   createdAt: Date | string;
   completedAt?: Date | string | null;
 }
 
 export interface CallSummaryRecorderDto {
+  summaryId?: string | null;
   roomId: string;
   topicId: string;
   recorderUserId: string;
   recorderName?: string | null;
+}
+
+interface CallGeneratedMaterialDto {
+  text?: string | null;
+  found?: boolean;
 }
 
 const summariesByTopic = reactive<Record<string, CallSummaryDto | undefined>>(
@@ -43,6 +50,8 @@ const summariesByTopic = reactive<Record<string, CallSummaryDto | undefined>>(
 );
 const loadingTopicIds = reactive(new Set<string>());
 const startingRoomIds = reactive(new Set<string>());
+const stoppingRoomIds = reactive(new Set<string>());
+const notifiedRecordingSummaryIds = new Set<string>();
 const activeRecordersByRoom = reactive<
   Record<string, Record<string, CallSummaryRecorderDto>>
 >({});
@@ -86,9 +95,22 @@ const upsertActiveRecorder = (recorder: CallSummaryRecorderDto): void => {
   activeRecordersByRoom[recorder.roomId][recorder.recorderUserId] = recorder;
 };
 
-const removeActiveRecorder = (roomId: string, recorderUserId: string): void => {
+const removeActiveRecorder = (
+  roomId: string,
+  recorderUserId: string,
+  summaryId?: string | null
+): void => {
   const roomRecorders = activeRecordersByRoom[roomId];
   if (!roomRecorders) {
+    return;
+  }
+
+  const currentRecorder = roomRecorders[recorderUserId];
+  if (
+    summaryId &&
+    currentRecorder?.summaryId &&
+    currentRecorder.summaryId !== summaryId
+  ) {
     return;
   }
 
@@ -173,13 +195,14 @@ const applySummaryStatus = (summary: CallSummaryDto): void => {
 
   if (summary.status === 'STARTING' || summary.status === 'RECORDING') {
     upsertActiveRecorder({
+      summaryId: summary.id,
       roomId: summary.roomId,
       topicId: summary.topicId,
       recorderUserId: summary.recorderUserId,
       recorderName: summary.recorderName
     });
   } else {
-    removeActiveRecorder(summary.roomId, summary.recorderUserId);
+    removeActiveRecorder(summary.roomId, summary.recorderUserId, summary.id);
   }
 
   summariesByTopic[summary.topicId] = summary;
@@ -203,7 +226,7 @@ const bindSocketEvents = async (): Promise<void> => {
       );
       const hasMaterials =
         payload.videoAvailable ||
-        (payload.status === 'READY' && !!payload.summary);
+        Boolean(payload.transcript || payload.hasTranscript);
 
       if (!isProcessing && hasMaterials) {
         showNotification({
@@ -214,7 +237,8 @@ const bindSocketEvents = async (): Promise<void> => {
       } else if (
         !isProcessing &&
         payload.status === 'FAILED' &&
-        payload.videoStatus === 'FAILED'
+        payload.videoStatus === 'FAILED' &&
+        !isAnyCallSummaryRecording(payload.roomId)
       ) {
         showErrorNotification('Не удалось подготовить материалы звонка');
       }
@@ -224,11 +248,22 @@ const bindSocketEvents = async (): Promise<void> => {
     WebSocketEventType.CALL_SUMMARY_RECORDING_STARTED,
     ({ payload }) => {
       upsertActiveRecorder(payload);
+
+      if (payload.summaryId) {
+        if (notifiedRecordingSummaryIds.has(payload.summaryId)) {
+          return;
+        }
+        notifiedRecordingSummaryIds.add(payload.summaryId);
+      }
+
+      const recorderName = payload.recorderName?.trim();
       showNotification({
         title: 'Запись звонка',
         description: isCurrentUserRecorder(payload.recorderUserId)
           ? 'Запись звонка включена'
-          : 'Участник включил запись звонка',
+          : recorderName
+            ? `${recorderName} включил запись звонка`
+            : 'Участник включил запись звонка',
         type: MessageTypeEnum.info
       });
     }
@@ -315,7 +350,8 @@ export const startCallSummaryRecording = async (
     !roomId ||
     !topicId ||
     startingRoomIds.has(roomId) ||
-    isCallSummaryRecording(roomId)
+    stoppingRoomIds.has(roomId) ||
+    isAnyCallSummaryRecording(roomId)
   ) {
     return false;
   }
@@ -339,6 +375,38 @@ export const startCallSummaryRecording = async (
   }
 };
 
+export const stopCallSummaryRecording = async (
+  roomId: string
+): Promise<boolean> => {
+  ensureSocketEvents();
+
+  if (
+    !roomId ||
+    stoppingRoomIds.has(roomId) ||
+    !isCallSummaryRecording(roomId)
+  ) {
+    return false;
+  }
+
+  stoppingRoomIds.add(roomId);
+  try {
+    const api = useChatApi();
+    const response = await api.post(
+      `/calls/${encodeURIComponent(roomId)}/summary-recording/stop`,
+      {},
+      { parsed: false }
+    );
+    const summary = await readResponse<CallSummaryDto>(response);
+    applySummaryStatus(summary);
+    return true;
+  } catch (error) {
+    showErrorNotification(error);
+    return false;
+  } finally {
+    stoppingRoomIds.delete(roomId);
+  }
+};
+
 export const getCallSummary = (
   topicId?: string | null
 ): CallSummaryDto | null => {
@@ -358,11 +426,24 @@ export const isCallSummaryRecording = (roomId?: string | null): boolean =>
 export const isAnyCallSummaryRecording = (roomId?: string | null): boolean =>
   !!roomId && Object.keys(activeRecordersByRoom[roomId] || {}).length > 0;
 
+export const isCallSummaryRecordingPending = (
+  roomId?: string | null
+): boolean =>
+  !!roomId && (startingRoomIds.has(roomId) || stoppingRoomIds.has(roomId));
+
 export const getCallSummaryRecordingNotice = (
   roomId?: string | null
 ): string => {
   if (!roomId) {
     return '';
+  }
+
+  if (startingRoomIds.has(roomId)) {
+    return 'Начинается запись...';
+  }
+
+  if (stoppingRoomIds.has(roomId)) {
+    return 'Останавливаем запись...';
   }
 
   const recorders = Object.values(activeRecordersByRoom[roomId] || {});
@@ -400,10 +481,85 @@ const blobToBase64 = (blob: Blob): Promise<string> =>
     reader.readAsDataURL(blob);
   });
 
-export const downloadCallSummary = async (
+const normalizeCallSummaryText = (value: string): string =>
+  value.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+
+const getCallSummaryLines = (value: string): string[] =>
+  normalizeCallSummaryText(value)
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+
+const findSummaryHeaderIndex = (lines: string[]): number => {
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (/^(суммари|краткое содержание|итоги)$/i.test(lines[index])) {
+      return index;
+    }
+  }
+
+  return -1;
+};
+
+export const extractCallSummaryBrief = (summaryText: string): string => {
+  const lines = getCallSummaryLines(summaryText);
+  const summaryHeaderIndex = findSummaryHeaderIndex(lines);
+
+  if (summaryHeaderIndex >= 0 && summaryHeaderIndex < lines.length - 1) {
+    return lines.slice(summaryHeaderIndex + 1).join('\n').trim();
+  }
+
+  return normalizeCallSummaryText(summaryText);
+};
+
+export const extractCallTranscriptText = (summaryText: string): string => {
+  const lines = getCallSummaryLines(summaryText);
+  const summaryHeaderIndex = findSummaryHeaderIndex(lines);
+
+  if (summaryHeaderIndex > 0) {
+    return lines.slice(0, summaryHeaderIndex).join('\n').trim();
+  }
+
+  return normalizeCallSummaryText(summaryText);
+};
+
+export const extractCallActionList = (summaryText: string): string => {
+  const lines = getCallSummaryLines(extractCallSummaryBrief(summaryText));
+  const actionHeaderRegex =
+    /^(?:#+\s*)?(?:список\s+)?(?:действия(?:\s+и\s+договор[её]нности)?|договор[её]нности|задачи|план\s+действий|action\s+items?|actions)\s*:?\s*(.*)$/i;
+  const nextSectionHeaderRegex =
+    /^(?:#+\s*)?(?:запись\s+\d+(?:\s+\[[^\]]+\])?|участники|ключевые\s+моменты|суммари|краткое\s+содержание|итоги|транскрибация)\s*:?\s*$/i;
+  const actionLines: string[] = [];
+  let isReadingActionBlock = false;
+
+  for (const line of lines) {
+    const actionHeaderMatch = line.match(actionHeaderRegex);
+
+    if (actionHeaderMatch) {
+      isReadingActionBlock = true;
+      const inlineAction = actionHeaderMatch[1]?.trim();
+      if (inlineAction) {
+        actionLines.push(inlineAction);
+      }
+      continue;
+    }
+
+    if (isReadingActionBlock && nextSectionHeaderRegex.test(line)) {
+      isReadingActionBlock = false;
+      continue;
+    }
+
+    if (isReadingActionBlock) {
+      actionLines.push(line);
+    }
+  }
+
+  return actionLines.join('\n').trim();
+};
+
+export const downloadCallTranscript = async (
   summary: CallSummaryDto
 ): Promise<boolean> => {
-  if (!summary.summary) {
+  if (!summary.transcript) {
     return false;
   }
 
@@ -412,8 +568,9 @@ export const downloadCallSummary = async (
     const date = Number.isNaN(createdAt.getTime())
       ? new Date().toISOString().slice(0, 10)
       : createdAt.toISOString().slice(0, 10);
-    const filename = `Расшифровка-звонка-${date}.txt`;
-    const content = `Расшифровка звонка от ${date}\n\n${summary.summary}\n`;
+    const transcriptText = extractCallTranscriptText(summary.transcript);
+    const filename = `Транскрибация-звонка-${date}.txt`;
+    const content = `Транскрибация звонка от ${date}\n\n${transcriptText}\n`;
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const nativeBridge = window.__CHAT_NATIVE_FILE__;
 
@@ -482,6 +639,44 @@ export const downloadCallRecording = async (
   }
 };
 
+export const generateCallSummaryBrief = async (
+  summary: CallSummaryDto
+): Promise<string> => {
+  try {
+    const api = useChatApi();
+    const response = await api.post(
+      `/calls/summaries/${encodeURIComponent(summary.id)}/brief`,
+      {},
+      { parsed: false }
+    );
+    const payload = await readResponse<CallGeneratedMaterialDto>(response);
+
+    return payload.text?.trim() || '';
+  } catch (error) {
+    showErrorNotification(error);
+    return '';
+  }
+};
+
+export const generateCallActionList = async (
+  summary: CallSummaryDto
+): Promise<string> => {
+  try {
+    const api = useChatApi();
+    const response = await api.post(
+      `/calls/summaries/${encodeURIComponent(summary.id)}/actions`,
+      {},
+      { parsed: false }
+    );
+    const payload = await readResponse<CallGeneratedMaterialDto>(response);
+
+    return payload.found === false ? '' : payload.text?.trim() || '';
+  } catch (error) {
+    showErrorNotification(error);
+    return '';
+  }
+};
+
 const escapeCallSummaryMessageHtml = (value: string): string =>
   value
     .replaceAll('&', '&amp;')
@@ -491,37 +686,91 @@ const escapeCallSummaryMessageHtml = (value: string): string =>
     .replaceAll("'", '&#39;');
 
 const formatCallSummaryMessageText = (summaryText: string): string => {
-  const normalizedSummary = summaryText
+  const normalizedSummary = normalizeCallSummaryText(summaryText);
+
+  return escapeCallSummaryMessageHtml(
+    `Краткое содержание звонка\n\n${normalizedSummary}`
+  ).replace(/\n/g, '<br>');
+};
+
+const formatCallActionListMessageText = (actionListText: string): string => {
+  const normalizedActionList = actionListText
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
     .trim();
 
   return escapeCallSummaryMessageHtml(
-    `Расшифровка звонка\n\n${normalizedSummary}`
+    `Список действий по звонку\n\n${normalizedActionList}`
   ).replace(/\n/g, '<br>');
 };
 
-export const sendCallSummaryToChat = async (
-  summary: CallSummaryDto
+export const sendCallSummaryTextToChat = async (
+  summaryText: string,
+  targetTopicId: string
 ): Promise<boolean> => {
-  if (!summary.summary) {
+  if (!summaryText.trim() || !targetTopicId) {
     return false;
   }
 
   const sent = await sendMessageChat({
-    topicId: summary.topicId,
-    text: formatCallSummaryMessageText(summary.summary)
+    topicId: targetTopicId,
+    text: formatCallSummaryMessageText(summaryText)
   });
 
   if (sent) {
     showNotification({
-      title: 'Расшифровка отправлена',
-      description: 'Расшифровка добавлена в чат',
+      title: 'Краткое содержание отправлено',
+      description: 'Краткое содержание добавлено в чат',
       type: MessageTypeEnum.success
     });
   } else {
-    showErrorNotification('Не удалось отправить расшифровку в чат');
+    showErrorNotification('Не удалось отправить краткое содержание в чат');
   }
 
   return sent;
 };
+
+export const sendCallSummaryToChat = async (
+  summary: CallSummaryDto,
+  targetTopicId = summary.topicId
+): Promise<boolean> => {
+  if (!summary.transcript) {
+    return false;
+  }
+
+  return sendCallSummaryTextToChat(
+    extractCallSummaryBrief(summary.transcript),
+    targetTopicId
+  );
+};
+
+export const sendCallActionListToChat = async (
+  actionListText: string,
+  targetTopicId: string
+): Promise<boolean> => {
+  if (!actionListText.trim() || !targetTopicId) {
+    return false;
+  }
+
+  const sent = await sendMessageChat({
+    topicId: targetTopicId,
+    text: formatCallActionListMessageText(actionListText)
+  });
+
+  if (sent) {
+    showNotification({
+      title: 'Список действий отправлен',
+      description: 'Список действий добавлен в чат',
+      type: MessageTypeEnum.success
+    });
+  } else {
+    showErrorNotification('Не удалось отправить список действий в чат');
+  }
+
+  return sent;
+};
+
+export const sendCallActionListNotFoundToChat = async (
+  targetTopicId: string
+): Promise<boolean> =>
+  sendCallActionListToChat('Список действий по звонку не найден', targetTopicId);

@@ -54,6 +54,31 @@
           class="chat__header-profile"
           :data-testid="`${props.dataTestid}-Header-FavoriteTopicProfile`"
         />
+        <div
+          v-else-if="isCallTopicRoute"
+          class="user-profile chat__header-profile chat__header-call-topic"
+          :data-testid="`${props.dataTestid}-Header-CallTopicProfile`"
+          @click.stop
+        >
+          <BotAvatar
+            class="user-profile__avatar"
+            :size="40"
+            :is-online="false"
+            :data-testid="`${props.dataTestid}-Header-CallTopicAvatar`"
+          />
+          <h3
+            class="user-profile__title"
+            :data-testid="`${props.dataTestid}-Header-CallTopicTitle`"
+          >
+            Звонилка
+          </h3>
+          <span
+            class="user-profile__ex"
+            :data-testid="`${props.dataTestid}-Header-CallTopicEx`"
+          >
+            @zvonilka
+          </span>
+        </div>
         <GroupProfile
           v-else-if="currentTopic.type === TopicType.Group"
           class="chat__header-profile"
@@ -101,6 +126,7 @@
               route.type === RouteTypes.GROUP) &&
             !isBotDialogTopic &&
             !isFavoriteDialogTopic &&
+            !isCallTopicRoute &&
             !isCallActive &&
             !hasPendingCallForCurrentTopic
           "
@@ -385,6 +411,7 @@ import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import GroupProfile from '../GroupProfile/GroupProfile.vue';
 import FavoriteTopicProfile from '../FavoriteTopicProfile.vue';
+import BotAvatar from '../UI/BotAvatar.vue';
 import MobileModal from '../UI/MobileModal.vue';
 import {
   Button,
@@ -455,6 +482,7 @@ import {
 } from '../../composables/useMessageSearch';
 import { isBotTopic } from '../../utils/bot';
 import { isFavoriteTopic } from '../../utils/favorite-topic';
+import { isCallTopic } from '../../utils/call-topic';
 import { loadLatestCallSummary } from '../../services/useCallSummaries';
 
 const { getSelectedTopic } = useTopics();
@@ -513,6 +541,7 @@ const isBotDialogTopic = computed(
   () =>
     route.value.type === RouteTypes.DIALOGS && isBotTopic(currentTopic.value)
 );
+const isCallTopicRoute = computed(() => isCallTopic(currentTopic.value));
 const currentRouteGroup = computed(() => {
   if (currentTopic.value?.type !== TopicType.Group) {
     return null;
@@ -604,6 +633,7 @@ const isTopicSearchAvailable = computed(
   () =>
     route.value.type === RouteTypes.DIALOGS ||
     route.value.type === RouteTypes.GROUP ||
+    route.value.type === RouteTypes.CALL ||
     route.value.type === RouteTypes.FAVORITES
 );
 const hasTopicSearchResults = computed(
@@ -927,7 +957,11 @@ const handleUserProfileClick = (): void => {
 };
 
 const handleClickHeader = async (): Promise<void> => {
-  if (route.value.type === RouteTypes.AI || isFavoriteDialogTopic.value) {
+  if (
+    route.value.type === RouteTypes.AI ||
+    isFavoriteDialogTopic.value ||
+    isCallTopicRoute.value
+  ) {
     return;
   }
 
@@ -981,6 +1015,10 @@ const getHeaderContextMenuOptions = computed(() => {
         function: showSearch,
         customIcon: 'search'
       });
+    }
+
+    if (isCallTopicRoute.value) {
+      return options;
     }
 
     if (route.value.type === RouteTypes.GROUP) {
@@ -1099,6 +1137,8 @@ const handleExit = (): void => {
     navigateToDialogsList();
   } else if (route.value && route.value.type === RouteTypes.GROUP) {
     navigateToGroupsList();
+  } else if (route.value && route.value.type === RouteTypes.CALL) {
+    navigateToDefault();
   } else if (route.value && route.value.type === RouteTypes.AI) {
     navigateToAssistant();
   } else {
@@ -1119,7 +1159,8 @@ watch(
     if (
       route.value.id &&
       (route.value.type === RouteTypes.DIALOGS ||
-        route.value.type === RouteTypes.GROUP)
+        route.value.type === RouteTypes.GROUP ||
+        route.value.type === RouteTypes.CALL)
     ) {
       void loadLatestCallSummary(route.value.id);
     }

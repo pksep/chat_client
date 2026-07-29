@@ -259,11 +259,13 @@ export interface WebSocketEventPayloads {
     status: 'STARTING' | 'RECORDING' | 'PROCESSING' | 'READY' | 'FAILED';
     videoStatus: 'STARTING' | 'RECORDING' | 'PROCESSING' | 'READY' | 'FAILED';
     videoAvailable: boolean;
-    summary?: string | null;
+    hasTranscript?: boolean;
+    transcript?: string | null;
     createdAt: Date | string;
     completedAt?: Date | string | null;
   };
   [WebSocketEventType.CALL_SUMMARY_RECORDING_STARTED]: {
+    summaryId?: string | null;
     roomId: string;
     topicId: string;
     recorderUserId: string;

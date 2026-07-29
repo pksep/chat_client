@@ -38,7 +38,7 @@
         <button
           type="button"
           class="calls-bot__action"
-          :disabled="isActionPending || !summary?.summary"
+          :disabled="isActionPending || !canUseTranscriptActions"
           @click="handleSendSummary"
         >
           <span class="calls-bot__action-icon" aria-hidden="true">☰</span>
@@ -47,7 +47,7 @@
         <button
           type="button"
           class="calls-bot__action"
-          :disabled="isActionPending || !summary?.summary"
+          :disabled="isActionPending || !canUseTranscriptActions"
           @click="handleDownloadTranscript"
         >
           <span class="calls-bot__action-icon" aria-hidden="true">⇩</span>
@@ -65,8 +65,8 @@
         <button
           type="button"
           class="calls-bot__action"
-          :disabled="isActionPending || !summary?.summary"
-          @click="handleDownloadActionList"
+          :disabled="isActionPending || !canUseTranscriptActions"
+          @click="handleSendActionList"
         >
           <span class="calls-bot__action-icon" aria-hidden="true">☰</span>
           <span>Список действий по звонку</span>
@@ -111,7 +111,7 @@
         :forward-messages="[]"
         :allow-empty-send="false"
         :allow-attach-file="true"
-        :allow-select-user="true"
+        :allow-select-user="false"
         @send="handleComposerSend"
         @attach-file="handleAttachFile"
       />
@@ -125,9 +125,13 @@ import BotAvatar from '../UI/BotAvatar.vue';
 import MessageListInput from '../Messages/MessageListInput.vue';
 import {
   downloadCallRecording,
-  downloadCallSummary,
+  downloadCallTranscript,
+  generateCallActionList,
+  generateCallSummaryBrief,
   loadLatestCallSummary,
-  sendCallSummaryToChat,
+  sendCallActionListNotFoundToChat,
+  sendCallActionListToChat,
+  sendCallSummaryTextToChat,
   type CallSummaryDto
 } from '../../services/useCallSummaries';
 import { useCallBot } from '../../services/useCallBot';
@@ -244,6 +248,10 @@ const hasRecording = computed(
       summary.value.videoStatus !== 'FAILED')
 );
 
+const canUseTranscriptActions = computed(
+  () => Boolean(summary.value?.transcript || summary.value?.hasTranscript)
+);
+
 const recordingStatusText = computed(() => {
   if (isLoadingSummary.value && !summary.value) {
     return 'Проверяем запись звонка...';
@@ -293,14 +301,16 @@ const hydrateSummary = async (): Promise<void> => {
   }
 };
 
-const ensureReadySummary = async (): Promise<CallSummaryDto | null> => {
+const ensureReadySummary = async (
+  options: { requireTranscript?: boolean } = {}
+): Promise<CallSummaryDto | null> => {
   const call = selectedCall.value;
 
   if (!call?.topicId) {
     return null;
   }
 
-  if (summary.value?.summary || summary.value?.videoAvailable) {
+  if (summary.value && (!options.requireTranscript || summary.value.transcript)) {
     return summary.value;
   }
 
@@ -332,23 +342,32 @@ const runSummaryAction = async (
 
 const handleSendSummary = (): void => {
   void runSummaryAction(async readySummary => {
-    if (!readySummary.summary) {
+    if (!readySummary.transcript && !readySummary.hasTranscript) {
       showErrorNotification('Краткое содержание ещё не готово');
       return false;
     }
 
-    return sendCallSummaryToChat(readySummary);
+    const summaryText = await generateCallSummaryBrief(readySummary);
+    if (!summaryText.trim()) {
+      return false;
+    }
+
+    return sendCallSummaryTextToChat(summaryText, readySummary.topicId);
   });
 };
 
 const handleDownloadTranscript = (): void => {
   void runSummaryAction(async readySummary => {
-    if (!readySummary.summary) {
+    const summaryWithTranscript = readySummary.transcript
+      ? readySummary
+      : await ensureReadySummary({ requireTranscript: true });
+
+    if (!summaryWithTranscript?.transcript) {
       showErrorNotification('Транскрибация ещё не готова');
       return false;
     }
 
-    return downloadCallSummary(readySummary);
+    return downloadCallTranscript(summaryWithTranscript);
   });
 };
 
@@ -363,66 +382,19 @@ const handleDownloadVideo = (): void => {
   });
 };
 
-const extractActionList = (summaryText: string): string => {
-  const normalizedLines = summaryText
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean);
-  const actionHeaderIndex = normalizedLines.findIndex(line =>
-    /действия|договор[её]нности|задачи|action/i.test(line)
-  );
-
-  if (actionHeaderIndex >= 0) {
-    return normalizedLines
-      .slice(actionHeaderIndex)
-      .filter(line => !/^суммари$/i.test(line))
-      .join('\n');
-  }
-
-  return normalizedLines
-    .filter(line =>
-      /нужно|надо|давай|сдела|добав|исправ|провер|залить|депло|запусти|решили/i.test(
-        line
-      )
-    )
-    .join('\n');
-};
-
-const downloadTextFile = (filename: string, content: string): void => {
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-};
-
-const handleDownloadActionList = (): void => {
+const handleSendActionList = (): void => {
   void runSummaryAction(async readySummary => {
-    if (!readySummary.summary) {
+    if (!readySummary.transcript && !readySummary.hasTranscript) {
       showErrorNotification('Список действий ещё не готов');
       return false;
     }
 
-    const actionList = extractActionList(readySummary.summary);
+    const actionList = await generateCallActionList(readySummary);
     if (!actionList.trim()) {
-      showErrorNotification('В суммари нет отдельного списка действий');
-      return false;
+      return sendCallActionListNotFoundToChat(readySummary.topicId);
     }
 
-    const createdAt = new Date(readySummary.createdAt);
-    const date = Number.isNaN(createdAt.getTime())
-      ? new Date().toISOString().slice(0, 10)
-      : createdAt.toISOString().slice(0, 10);
-
-    downloadTextFile(`Действия-по-звонку-${date}.txt`, `${actionList}\n`);
-    return true;
+    return sendCallActionListToChat(actionList, readySummary.topicId);
   });
 };
 

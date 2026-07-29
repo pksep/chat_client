@@ -3,6 +3,7 @@ import { ref } from 'vue';
 const RouteTypes = {
   DIALOGS: 'dialogs',
   GROUP: 'group',
+  CALL: 'call',
   FAVORITES: 'favorites',
   ASSISTANT: 'assistant',
   AI: 'ai',
@@ -35,6 +36,8 @@ const parseUrl = (): Route => {
       return { type: RouteTypes.DIALOGS, id };
     } else if (type === RouteTypes.GROUP && id) {
       return { type: RouteTypes.GROUP, id };
+    } else if (type === RouteTypes.CALL && id) {
+      return { type: RouteTypes.CALL, id };
     } else if (type === RouteTypes.FAVORITES && id) {
       return { type: RouteTypes.FAVORITES, id };
     }
@@ -45,6 +48,8 @@ const parseUrl = (): Route => {
       return { type: RouteTypes.DIALOGS, id: null };
     } else if (type === RouteTypes.GROUP) {
       return { type: RouteTypes.GROUP, id: null };
+    } else if (type === RouteTypes.CALL) {
+      return { type: RouteTypes.CALL, id: null };
     } else if (type === RouteTypes.ASSISTANT) {
       return { type: RouteTypes.ASSISTANT, id: null };
     } else if (type === RouteTypes.AI) {
@@ -77,6 +82,10 @@ const updateUrl = (route: Route): void => {
     newUrl = `${window.location.origin}/group/${route.id}`;
   } else if (route.type === RouteTypes.GROUP && !route.id) {
     newUrl = `${window.location.origin}/group`;
+  } else if (route.type === RouteTypes.CALL && route.id) {
+    newUrl = `${window.location.origin}/call/${route.id}`;
+  } else if (route.type === RouteTypes.CALL && !route.id) {
+    newUrl = `${window.location.origin}/call`;
   } else if (route.type === RouteTypes.FAVORITES && route.id) {
     newUrl = `${window.location.origin}/favorites/${route.id}`;
   } else if (route.type === RouteTypes.ASSISTANT && !route.id) {
@@ -92,6 +101,7 @@ const updateUrl = (route: Route): void => {
 
   searchParams.delete('dialogs');
   searchParams.delete('group');
+  searchParams.delete('call');
   searchParams.delete('favorites');
   searchParams.delete('assistant');
   searchParams.delete('ai');
@@ -134,6 +144,10 @@ const navigateToGroupsList = (): void => {
   updateUrl({ type: RouteTypes.GROUP, id: null });
 };
 
+const navigateToCall = (topicId: string): void => {
+  updateUrl({ type: RouteTypes.CALL, id: topicId });
+};
+
 const navigateToFavorites = (topicId: string): void => {
   updateUrl({ type: RouteTypes.FAVORITES, id: topicId });
 };
@@ -173,6 +187,7 @@ export {
   navigateToDialogsList,
   navigateToGroup,
   navigateToGroupsList,
+  navigateToCall,
   navigateToFavorites,
   navigateToAssistant,
   navigateToAI,

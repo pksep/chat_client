@@ -112,15 +112,15 @@
                 class="call-modal__mobile-actions-item"
                 :class="{
                   'call-modal__mobile-actions-item--recording':
-                    isSummaryRecording
+                    isAnySummaryRecording
                 }"
                 type="button"
                 :disabled="isSummaryRecordButtonDisabled"
-                @click="handleStartSummaryRecording"
+                @click="handleSummaryRecordingAction"
               >
                 <ScreenRecordIcon />
                 <span>{{
-                  isSummaryRecording ? 'Идёт запись' : 'Записать звонок'
+                  summaryRecordButtonLabel
                 }}</span>
               </button>
               <button
@@ -330,13 +330,13 @@
               v-if="!isMobile"
               class="call-modal__control-button"
               :class="{
-                'call-modal__control-button__inactive': !isSummaryRecording,
-                'call-modal__control-button--recording': isSummaryRecording
+                'call-modal__control-button__inactive': !isAnySummaryRecording,
+                'call-modal__control-button--recording': isAnySummaryRecording
               }"
               type="button"
               :disabled="isSummaryRecordButtonDisabled"
-              :title="isSummaryRecording ? 'Идёт запись' : 'Записать звонок'"
-              @click="handleStartSummaryRecording"
+              :title="summaryRecordButtonLabel"
+              @click="handleSummaryRecordingAction"
             >
               <ScreenRecordIcon />
             </button>
@@ -583,13 +583,13 @@
               v-if="!isCallFullscreenTouchMode && !isMobile"
               class="call-modal__control-button"
               :class="{
-                'call-modal__control-button__inactive': !isSummaryRecording,
-                'call-modal__control-button--recording': isSummaryRecording
+                'call-modal__control-button__inactive': !isAnySummaryRecording,
+                'call-modal__control-button--recording': isAnySummaryRecording
               }"
               type="button"
               :disabled="isSummaryRecordButtonDisabled"
-              :title="isSummaryRecording ? 'Идёт запись' : 'Записать звонок'"
-              @click="handleStartSummaryRecording"
+              :title="summaryRecordButtonLabel"
+              @click="handleSummaryRecordingAction"
             >
               <ScreenRecordIcon />
             </button>
@@ -753,9 +753,12 @@ import GroupInfoIcon from './UI/GroupInfoIcon.vue';
 import CallMoreIcon from './UI/CallMoreIcon.vue';
 import {
   getCallSummaryRecordingNotice,
+  isAnyCallSummaryRecording,
   isCallSummaryRecording,
+  isCallSummaryRecordingPending,
   loadActiveCallSummaryRecorders,
-  startCallSummaryRecording
+  startCallSummaryRecording,
+  stopCallSummaryRecording
 } from '../../services/useCallSummaries';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
@@ -1699,18 +1702,44 @@ const isCallStatusCaptionHidden = computed(
 );
 const isCallStatusLabelHidden = computed(() => !fallbackCallStatusLabel.value);
 const isBusyNoticeVisible = computed(() => isTerminalCallNotice.value);
-const isSummaryRecording = computed(() =>
+const canStopSummaryRecording = computed(() =>
   isCallSummaryRecording(activeRoomId.value)
+);
+const isAnySummaryRecording = computed(() =>
+  isAnyCallSummaryRecording(activeRoomId.value)
+);
+const isSummaryRecordingPending = computed(() =>
+  isCallSummaryRecordingPending(activeRoomId.value)
+);
+const canStartSummaryRecording = computed(
+  () =>
+    isCallOpen.value &&
+    !isIncoming.value &&
+    !isCalling.value &&
+    !isBusyNoticeVisible.value &&
+    !!activeRoomId.value &&
+    !!activeTopicId.value &&
+    liveKitState.connectionQuality !== 'lost'
 );
 const callSummaryRecordingNotice = computed(() =>
   getCallSummaryRecordingNotice(activeRoomId.value)
 );
+const summaryRecordButtonLabel = computed(() => {
+  if (isSummaryRecordingPending.value) {
+    return callSummaryRecordingNotice.value || 'Начинается запись...';
+  }
+
+  if (!isAnySummaryRecording.value) {
+    return 'Записать звонок';
+  }
+
+  return canStopSummaryRecording.value ? 'Остановить запись' : 'Идёт запись';
+});
 const isSummaryRecordButtonDisabled = computed(
   () =>
-    isBusyNoticeVisible.value ||
-    !activeRoomId.value ||
-    !activeTopicId.value ||
-    isSummaryRecording.value
+    isSummaryRecordingPending.value ||
+    (!canStopSummaryRecording.value && !canStartSummaryRecording.value) ||
+    (isAnySummaryRecording.value && !canStopSummaryRecording.value)
 );
 const localCallBackgroundPlaceholderStyle = computed<CSSProperties | null>(
   () => {
@@ -2860,7 +2889,7 @@ const handleMobileScreenShareAction = async () => {
   await handleToggleScreenShare();
 };
 
-const handleStartSummaryRecording = async () => {
+const handleSummaryRecordingAction = async () => {
   const room = activeRoomId.value;
   const topic = activeTopicId.value;
   if (!room || !topic || isSummaryRecordButtonDisabled.value) {
@@ -2868,6 +2897,11 @@ const handleStartSummaryRecording = async () => {
   }
 
   closeMobileCallActionsMenu();
+  if (canStopSummaryRecording.value) {
+    await stopCallSummaryRecording(room);
+    return;
+  }
+
   await startCallSummaryRecording(room, topic);
 };
 

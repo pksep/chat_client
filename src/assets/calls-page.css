@@ -46,7 +46,7 @@
 
 .calls-page__list {
   display: grid;
-  gap: 8px;
+  gap: 12px;
   max-height: calc(100vh - 185px);
   overflow-y: auto;
 
@@ -65,7 +65,7 @@
   font: unset;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 7px;
+  gap: 5px;
   border: 0;
   cursor: pointer;
   text-align: left;
@@ -74,19 +74,24 @@
     transform 0.2s ease;
 }
 
+.calls-page__item:hover {
+  border-radius: 6px;
+  background: #f5f9ff;
+}
+
 .calls-page__item--active {
-  border-radius: 10px;
-  background: var(--background-secondary, rgb(0 0 0 / 4%));
+  border-radius: 6px;
+  background: #eaf3ff;
 }
 
 .calls-page__avatar {
-  --size-avatar: 9.5px;
+  --size-avatar: 19px;
 }
 
 .calls-page__body {
   min-width: 0;
   display: grid;
-  padding-bottom: 7px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -98,7 +103,7 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  height: 15px;
+  height: 19px;
 }
 
 .calls-page__name {
@@ -106,9 +111,9 @@
   margin: 0;
   overflow: hidden;
   color: var(--text-color);
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
-  line-height: 15px;
+  line-height: 18px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -116,16 +121,15 @@
 .calls-page__date {
   margin-left: auto;
   color: var(--text-grey);
-  font-size: 10px;
-  line-height: 12px;
+  font-size: 13px;
+  line-height: 16px;
   white-space: nowrap;
 }
 
 .calls-page__details {
   display: flex;
   align-items: flex-start;
-  gap: 5px;
-  padding-top: 2px;
+  gap: 8px;
 }
 
 .calls-page__meta {
@@ -142,8 +146,8 @@
 }
 
 .calls-page__status {
-  font-size: 11px;
-  line-height: 13px;
+  font-size: 14px;
+  line-height: 17px;
   color: var(--text-neutral-color);
 }
 
@@ -153,8 +157,8 @@
 
 .calls-page__time {
   color: var(--text-grey);
-  font-size: 10px;
-  line-height: 12px;
+  font-size: 12px;
+  line-height: 15px;
 }
 
 .calls-page__time--missed {
@@ -165,8 +169,8 @@
   color: var(--text-neutral-color);
 
   & svg {
-    width: 11px;
-    height: 11px;
+    width: 16px;
+    height: 16px;
   }
 }
 
@@ -177,6 +181,15 @@
   color: var(--text-grey);
   font-size: 13px;
   line-height: 16px;
+}
+
+.calls-page__empty-history {
+  min-height: 360px;
+  display: grid;
+  place-items: center;
+  color: var(--text-grey);
+  font-size: 12px;
+  line-height: 15px;
 }
 
 .calls-page__header-copy {
@@ -496,7 +509,7 @@
   }
 
   .calls-page__avatar {
-    --size-avatar: 15px;
+    --size-avatar: 30px;
   }
 
   .calls-page__details {

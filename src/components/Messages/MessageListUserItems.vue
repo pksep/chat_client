@@ -4,6 +4,8 @@
     class="chat__message-bubble"
     :data-testid="`${props.dataTestid}-MessageList-UserMessagesContainer`"
   >
+    <slot name="before" />
+
     <div
       v-for="item in renderItems"
       :key="item.key"
@@ -153,6 +155,7 @@ import { getPinnedMessagesByTopicId } from '../../services/useMessages';
 import { isUnreadTrackableMessage } from '../../utils/messageTracking';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import { getSelectedTopic } from '../../composables/useTopics';
+import { isCallTopicDefaultMessage } from '../../utils/call-topic';
 
 interface Props {
   dataTestid: string;
@@ -522,11 +525,17 @@ const getRenderItemMemo = (item: RenderItem): unknown[] => {
 };
 
 const resolveMessageIsMeSender = (message?: IMessage) =>
-  getParsedCallMessage(message)?.isOutgoing ??
-  props.authUserId === message?.senderUserId;
+  isCallTopicDefaultMessage(message)
+    ? false
+    : getParsedCallMessage(message)?.isOutgoing ??
+      props.authUserId === message?.senderUserId;
 
 const shouldRenderGroupAvatar = (message?: IMessage): boolean => {
   if (!message) {
+    return false;
+  }
+
+  if (isCallTopicDefaultMessage(message)) {
     return false;
   }
 
@@ -562,6 +571,13 @@ const isSameMessageGroup = (
   }
 
   if (currentMessage.isSystem || nextMessage.isSystem) {
+    return false;
+  }
+
+  if (
+    isCallTopicDefaultMessage(currentMessage) ||
+    isCallTopicDefaultMessage(nextMessage)
+  ) {
     return false;
   }
 
@@ -883,10 +899,18 @@ const getBubbleProps = (message: IMessage, index: number) => ({
   isMobile: isMobile.value,
   parsedCallMessage: getParsedCallMessage(message),
   time: getCachedMessageTime(message),
-  sender: message.senderUser?.initials || '',
-  senderUser: message.senderUser,
-  senderRole: parseUserEx(message.senderUser?.ex)?.erpRole || '',
-  avatar: message.senderUser?.avatarUrl || '',
+  sender: isCallTopicDefaultMessage(message)
+    ? ''
+    : message.senderUser?.initials || '',
+  senderUser: isCallTopicDefaultMessage(message)
+    ? undefined
+    : message.senderUser,
+  senderRole: isCallTopicDefaultMessage(message)
+    ? ''
+    : parseUserEx(message.senderUser?.ex)?.erpRole || '',
+  avatar: isCallTopicDefaultMessage(message)
+    ? ''
+    : message.senderUser?.avatarUrl || '',
   isRead: message.status === MessageStatus.Read,
   isEdit: message.isEdit,
   isPin: isMessagePinned(message),

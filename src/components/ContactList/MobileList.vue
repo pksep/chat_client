@@ -174,6 +174,7 @@ import {
 } from '../../composables/useMessageSearch';
 import { isBotTopic } from '../../utils/bot';
 import { isFavoriteTopic } from '../../utils/favorite-topic';
+import { isCallTopic } from '../../utils/call-topic';
 import {
   getChatsToolbarFilterBadgeState,
   getChatsToolbarFilterCounts,
@@ -241,6 +242,10 @@ const state = reactive({
 
 const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
   if (!topic) {
+    return false;
+  }
+
+  if (isCallTopic(topic)) {
     return false;
   }
 
@@ -640,6 +645,25 @@ watch(
     messageSearchDebounceTimer = setTimeout(() => {
       void runMessageSearch(query, requestToken);
     }, 300);
+  },
+  { immediate: true }
+);
+
+watch(
+  () => [route.value?.type, route.value?.id],
+  ([routeType]) => {
+    if (routeType === RouteTypes.CALL) {
+      setActiveSection('calls');
+      return;
+    }
+
+    if (
+      routeType === RouteTypes.DIALOGS ||
+      routeType === RouteTypes.GROUP ||
+      routeType === RouteTypes.FAVORITES
+    ) {
+      setActiveSection('chats');
+    }
   },
   { immediate: true }
 );
