@@ -64,8 +64,9 @@ const summaryDate = computed(() => {
 
   return new Date();
 });
-const dividerLabel = computed(() =>
-  selectedCallForTopic.value?.fullDateLabel || formatDay(summaryDate.value)
+const dividerLabel = computed(
+  () =>
+    selectedCallForTopic.value?.fullDateLabel || formatDay(summaryDate.value)
 );
 const timeLabel = computed(
   () => selectedCallForTopic.value?.timeLabel || formatTime(summaryDate.value)

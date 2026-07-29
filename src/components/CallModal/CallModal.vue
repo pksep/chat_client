@@ -119,9 +119,7 @@
                 @click="handleSummaryRecordingAction"
               >
                 <ScreenRecordIcon />
-                <span>{{
-                  summaryRecordButtonLabel
-                }}</span>
+                <span>{{ summaryRecordButtonLabel }}</span>
               </button>
               <button
                 class="call-modal__mobile-actions-item"

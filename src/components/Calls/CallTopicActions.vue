@@ -90,8 +90,8 @@ const callTopicMeta = computed(() =>
   parseCallTopicDescription(props.topic.group?.description)
 );
 
-const canUseTranscriptActions = computed(
-  () => Boolean(summary.value?.transcript || summary.value?.hasTranscript)
+const canUseTranscriptActions = computed(() =>
+  Boolean(summary.value?.transcript || summary.value?.hasTranscript)
 );
 
 const hydrateSummary = async (): Promise<void> => {
@@ -113,7 +113,10 @@ const hydrateSummary = async (): Promise<void> => {
 const ensureReadySummary = async (
   options: { requireTranscript?: boolean } = {}
 ): Promise<CallSummaryDto | null> => {
-  if (summary.value && (!options.requireTranscript || summary.value.transcript)) {
+  if (
+    summary.value &&
+    (!options.requireTranscript || summary.value.transcript)
+  ) {
     return summary.value;
   }
 
@@ -299,8 +302,7 @@ watch(
 .call-topic-actions__icon--download {
   -webkit-mask: url('../../assets/call-topic-download.svg') center / 16px 16px
     no-repeat;
-  mask: url('../../assets/call-topic-download.svg') center / 16px 16px
-    no-repeat;
+  mask: url('../../assets/call-topic-download.svg') center / 16px 16px no-repeat;
 }
 
 .call-topic-actions__icon--list {

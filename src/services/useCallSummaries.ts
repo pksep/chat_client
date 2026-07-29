@@ -505,7 +505,10 @@ export const extractCallSummaryBrief = (summaryText: string): string => {
   const summaryHeaderIndex = findSummaryHeaderIndex(lines);
 
   if (summaryHeaderIndex >= 0 && summaryHeaderIndex < lines.length - 1) {
-    return lines.slice(summaryHeaderIndex + 1).join('\n').trim();
+    return lines
+      .slice(summaryHeaderIndex + 1)
+      .join('\n')
+      .trim();
   }
 
   return normalizeCallSummaryText(summaryText);
@@ -773,4 +776,7 @@ export const sendCallActionListToChat = async (
 export const sendCallActionListNotFoundToChat = async (
   targetTopicId: string
 ): Promise<boolean> =>
-  sendCallActionListToChat('Список действий по звонку не найден', targetTopicId);
+  sendCallActionListToChat(
+    'Список действий по звонку не найден',
+    targetTopicId
+  );

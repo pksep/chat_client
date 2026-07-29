@@ -248,8 +248,8 @@ const hasRecording = computed(
       summary.value.videoStatus !== 'FAILED')
 );
 
-const canUseTranscriptActions = computed(
-  () => Boolean(summary.value?.transcript || summary.value?.hasTranscript)
+const canUseTranscriptActions = computed(() =>
+  Boolean(summary.value?.transcript || summary.value?.hasTranscript)
 );
 
 const recordingStatusText = computed(() => {
@@ -310,7 +310,10 @@ const ensureReadySummary = async (
     return null;
   }
 
-  if (summary.value && (!options.requireTranscript || summary.value.transcript)) {
+  if (
+    summary.value &&
+    (!options.requireTranscript || summary.value.transcript)
+  ) {
     return summary.value;
   }
 

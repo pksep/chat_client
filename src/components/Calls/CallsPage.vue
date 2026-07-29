@@ -36,8 +36,7 @@
           :class="[
             'calls-page__item',
             {
-              'calls-page__item--active':
-                isActiveRouteCall(call)
+              'calls-page__item--active': isActiveRouteCall(call)
             }
           ]"
           role="button"
@@ -110,12 +109,8 @@
             />
           </svg>
         </div>
-        <h3 class="menu-panel__title">
-          Ничего не найдено
-        </h3>
-        <p class="menu-panel__description">
-          Попробуйте изменить запрос.
-        </p>
+        <h3 class="menu-panel__title">Ничего не найдено</h3>
+        <p class="menu-panel__description">Попробуйте изменить запрос.</p>
       </div>
 
       <div v-else class="calls-page__empty-history">
