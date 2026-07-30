@@ -23,10 +23,23 @@
       <div
         v-if="callSummaryRecordingNotice"
         class="call-modal__recording-notice"
+        :class="{
+          'call-modal__recording-notice--starting':
+            isSummaryRecordingStarting
+        }"
         role="status"
       >
         <span class="call-modal__recording-notice-dot"></span>
         <span>{{ callSummaryRecordingNotice }}</span>
+        <span
+          v-if="isSummaryRecordingStarting"
+          class="call-modal__recording-notice-typing"
+          aria-hidden="true"
+        >
+          <span></span>
+          <span></span>
+          <span></span>
+        </span>
       </div>
 
       <div class="call-modal__group-info">
@@ -754,6 +767,7 @@ import {
   isAnyCallSummaryRecording,
   isCallSummaryRecording,
   isCallSummaryRecordingPending,
+  isCallSummaryRecordingStarting,
   loadActiveCallSummaryRecorders,
   startCallSummaryRecording,
   stopCallSummaryRecording
@@ -1708,6 +1722,9 @@ const isAnySummaryRecording = computed(() =>
 );
 const isSummaryRecordingPending = computed(() =>
   isCallSummaryRecordingPending(activeRoomId.value)
+);
+const isSummaryRecordingStarting = computed(() =>
+  isCallSummaryRecordingStarting(activeRoomId.value)
 );
 const canStartSummaryRecording = computed(
   () =>

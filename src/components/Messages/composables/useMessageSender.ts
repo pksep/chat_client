@@ -45,6 +45,14 @@ import {
   getTelemetryErrorPayload,
   recordTelemetryEvent
 } from '../../../services/useTelemetry';
+import { getConfig } from '../../../services/useConfig';
+import { getSelectedTopic } from '../../../composables/useTopics';
+import {
+  loadLatestCallSummary,
+  sendGeneratedCallPromptResponseToChat,
+  withCallSummaryTyping
+} from '../../../services/useCallSummaries';
+import { isCallTopic, parseCallTopicDescription } from '../../../utils/call-topic';
 
 const MAX_HTML_LENGTH = 4000;
 const FORWARD_TEXT_SEND_DELAY_MS = 250;
@@ -61,6 +69,10 @@ const VIDEO_INITIAL_PREVIEW_DIMENSIONS = {
   height: 360
 };
 const VIDEO_LOCAL_THUMBNAIL_TIMEOUT_MS = 3000;
+
+const isCallTopicAutoPromptEnabled = () =>
+  getConfig().CHAT_CALL_TOPIC_AUTO_PROMPT_ENABLED?.trim().toLowerCase() ===
+  'true';
 
 type PendingMessageRetryState = {
   attempt: number;
@@ -321,6 +333,37 @@ export function useMessageSender(
   scrollToBottom: () => void,
   clearSellectedMessage: () => void
 ) {
+  const sendCallTopicPromptResponse = async (
+    topicId: string,
+    prompt: string
+  ): Promise<boolean> => {
+    const topic = getSelectedTopic(topicId);
+    const callTopicMeta = parseCallTopicDescription(topic?.group?.description);
+
+    if (!topic || !isCallTopic(topic) || !callTopicMeta?.roomId) {
+      return false;
+    }
+
+    const readySummary = await loadLatestCallSummary(
+      topicId,
+      callTopicMeta.roomId
+    );
+
+    if (!readySummary || readySummary.roomId !== callTopicMeta.roomId) {
+      showErrorNotification('Запись звонка не найдена');
+      return false;
+    }
+
+    if (!readySummary.transcript && !readySummary.hasTranscript) {
+      showErrorNotification('Транскрибация ещё не готова');
+      return false;
+    }
+
+    return withCallSummaryTyping(topicId, () =>
+      sendGeneratedCallPromptResponseToChat(readySummary, topicId, prompt)
+    );
+  };
+
   const waitForPreviewMetrics = async (media?: IMedia): Promise<void> => {
     if (
       !media ||
@@ -1188,6 +1231,16 @@ export function useMessageSender(
     }
 
     const parts = textToSend ? splitHtmlByLength(textToSend) : [];
+    const callTopicPromptText = stripHtml(textToSend)
+      .replace(/\u00a0/g, ' ')
+      .trim();
+    const shouldRequestCallTopicPromptResponse =
+      isCallTopicAutoPromptEnabled() &&
+      routeType === RouteTypes.CALL &&
+      !!callTopicPromptText &&
+      !hasAttachments &&
+      !hasForwardMessages &&
+      !replyMessageId;
 
     /* ================= AI ROUTE ================= */
     if (routeType === RouteTypes.AI) {
@@ -1519,6 +1572,17 @@ export function useMessageSender(
 
       await nextTick();
       scrollToBottom();
+
+      if (
+        shouldRequestCallTopicPromptResponse &&
+        sentMessageCount > 0 &&
+        queuedMessageCount === 0
+      ) {
+        await sendCallTopicPromptResponse(topicId, callTopicPromptText);
+        await nextTick();
+        scrollToBottom();
+      }
+
       recordTelemetryEvent({
         category: 'chat',
         name:

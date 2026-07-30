@@ -258,13 +258,6 @@
   cursor: pointer;
 }
 
-.calls-bot__avatar {
-  flex: 0 0 auto;
-  width: 20px;
-  min-width: 20px;
-  height: 20px;
-}
-
 .calls-bot__header-copy {
   min-width: 0;
   display: grid;
@@ -289,6 +282,10 @@
   color: var(--text-grey);
   font-size: 9px;
   line-height: 11px;
+}
+
+.calls-bot__subtitle--typing {
+  color: var(--primary-color, var(--blue12));
 }
 
 .calls-bot__body {
@@ -478,15 +475,7 @@
 
 .calls-bot__chat-message--outgoing {
   justify-self: end;
-  background: var(--blue1, #e7f0ff);
-}
-
-.calls-bot__chat-sender {
-  display: block;
-  margin-bottom: 2px;
-  color: var(--text-grey);
-  font-size: 9px;
-  line-height: 11px;
+  background: var(--blue12, #e7f0ff);
 }
 
 @media screen and (width <= 768px) {

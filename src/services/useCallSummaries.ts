@@ -6,7 +6,11 @@ import {
   showErrorNotification,
   showNotification
 } from '../composables/useNotifications';
-import { getChatSDK, sendMessageChat, waitForChatSDK } from './useChat';
+import {
+  getChatSDK,
+  sendMessageChat,
+  waitForChatSDK
+} from './useChat';
 import { useChatApi } from './useApi';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
 
@@ -28,6 +32,8 @@ export interface CallSummaryDto {
   videoAvailable: boolean;
   hasTranscript?: boolean;
   transcript?: string | null;
+  errorMessage?: string | null;
+  videoErrorMessage?: string | null;
   createdAt: Date | string;
   completedAt?: Date | string | null;
 }
@@ -51,6 +57,7 @@ const summariesByTopic = reactive<Record<string, CallSummaryDto | undefined>>(
 const loadingTopicIds = reactive(new Set<string>());
 const startingRoomIds = reactive(new Set<string>());
 const stoppingRoomIds = reactive(new Set<string>());
+const materialTypingCountsByTopic = reactive<Record<string, number>>({});
 const notifiedRecordingSummaryIds = new Set<string>();
 const activeRecordersByRoom = reactive<
   Record<string, Record<string, CallSummaryRecorderDto>>
@@ -191,9 +198,11 @@ const isCurrentUserRecorder = (recorderUserId?: string | null): boolean =>
   !!recorderUserId && getCurrentUserIdentifiers().has(recorderUserId);
 
 const applySummaryStatus = (summary: CallSummaryDto): void => {
-  startingRoomIds.delete(summary.roomId);
-
-  if (summary.status === 'STARTING' || summary.status === 'RECORDING') {
+  if (summary.status === 'STARTING') {
+    startingRoomIds.add(summary.roomId);
+    removeActiveRecorder(summary.roomId, summary.recorderUserId, summary.id);
+  } else if (summary.status === 'RECORDING') {
+    startingRoomIds.delete(summary.roomId);
     upsertActiveRecorder({
       summaryId: summary.id,
       roomId: summary.roomId,
@@ -202,6 +211,7 @@ const applySummaryStatus = (summary: CallSummaryDto): void => {
       recorderName: summary.recorderName
     });
   } else {
+    startingRoomIds.delete(summary.roomId);
     removeActiveRecorder(summary.roomId, summary.recorderUserId, summary.id);
   }
 
@@ -219,14 +229,18 @@ const bindSocketEvents = async (): Promise<void> => {
   sdk.subscribeToEvent(
     WebSocketEventType.CALL_SUMMARY_STATUS,
     ({ payload }) => {
-      applySummaryStatus(payload);
+      const summaryPayload = payload as CallSummaryDto;
+      applySummaryStatus(summaryPayload);
 
-      const isProcessing = [payload.status, payload.videoStatus].some(status =>
+      const isProcessing = [
+        summaryPayload.status,
+        summaryPayload.videoStatus
+      ].some(status =>
         ['STARTING', 'RECORDING', 'PROCESSING'].includes(status)
       );
       const hasMaterials =
-        payload.videoAvailable ||
-        Boolean(payload.transcript || payload.hasTranscript);
+        summaryPayload.videoAvailable ||
+        Boolean(summaryPayload.transcript || summaryPayload.hasTranscript);
 
       if (!isProcessing && hasMaterials) {
         showNotification({
@@ -236,11 +250,15 @@ const bindSocketEvents = async (): Promise<void> => {
         });
       } else if (
         !isProcessing &&
-        payload.status === 'FAILED' &&
-        payload.videoStatus === 'FAILED' &&
-        !isAnyCallSummaryRecording(payload.roomId)
+        summaryPayload.status === 'FAILED' &&
+        summaryPayload.videoStatus === 'FAILED' &&
+        !isAnyCallSummaryRecording(summaryPayload.roomId)
       ) {
-        showErrorNotification('Не удалось подготовить материалы звонка');
+        showErrorNotification(
+          summaryPayload.errorMessage ||
+            summaryPayload.videoErrorMessage ||
+            'Не удалось подготовить материалы звонка'
+        );
       }
     }
   );
@@ -371,7 +389,9 @@ export const startCallSummaryRecording = async (
     showErrorNotification(error);
     return false;
   } finally {
-    startingRoomIds.delete(roomId);
+    if (summariesByTopic[roomId]?.status !== 'STARTING') {
+      startingRoomIds.delete(roomId);
+    }
   }
 };
 
@@ -430,6 +450,10 @@ export const isCallSummaryRecordingPending = (
   roomId?: string | null
 ): boolean =>
   !!roomId && (startingRoomIds.has(roomId) || stoppingRoomIds.has(roomId));
+
+export const isCallSummaryRecordingStarting = (
+  roomId?: string | null
+): boolean => !!roomId && startingRoomIds.has(roomId);
 
 export const getCallSummaryRecordingNotice = (
   roomId?: string | null
@@ -680,6 +704,36 @@ export const generateCallActionList = async (
   }
 };
 
+export const withCallSummaryTyping = async <T>(
+  targetTopicId: string,
+  action: () => Promise<T>
+): Promise<T> => {
+  let trackedTypingTopicId = '';
+
+  if (targetTopicId) {
+    trackedTypingTopicId = targetTopicId;
+    materialTypingCountsByTopic[targetTopicId] =
+      (materialTypingCountsByTopic[targetTopicId] || 0) + 1;
+  }
+
+  try {
+    return await action();
+  } finally {
+    if (trackedTypingTopicId) {
+      const nextCount = (materialTypingCountsByTopic[trackedTypingTopicId] || 1) - 1;
+      if (nextCount > 0) {
+        materialTypingCountsByTopic[trackedTypingTopicId] = nextCount;
+      } else {
+        delete materialTypingCountsByTopic[trackedTypingTopicId];
+      }
+    }
+  }
+};
+
+export const isCallSummaryMaterialTypingInTopic = (
+  topicId?: string | null
+): boolean => !!topicId && (materialTypingCountsByTopic[topicId] || 0) > 0;
+
 const escapeCallSummaryMessageHtml = (value: string): string =>
   value
     .replaceAll('&', '&amp;')
@@ -688,8 +742,13 @@ const escapeCallSummaryMessageHtml = (value: string): string =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 
+const stripCallSummaryMessageHeader = (value: string): string =>
+  normalizeCallSummaryText(value)
+    .replace(/^(?:#+\s*)?краткое\s+содержание\s+звонка\s*:?\s*/i, '')
+    .trim();
+
 const formatCallSummaryMessageText = (summaryText: string): string => {
-  const normalizedSummary = normalizeCallSummaryText(summaryText);
+  const normalizedSummary = stripCallSummaryMessageHeader(summaryText);
 
   return escapeCallSummaryMessageHtml(
     `Краткое содержание звонка\n\n${normalizedSummary}`
@@ -733,6 +792,67 @@ export const sendCallSummaryTextToChat = async (
   return sent;
 };
 
+export const sendCallSummaryPromptToChat = async (
+  targetTopicId: string,
+  text: string
+): Promise<boolean> => {
+  if (!targetTopicId || !text.trim()) {
+    return false;
+  }
+
+  return sendMessageChat({
+    topicId: targetTopicId,
+    text: escapeCallSummaryMessageHtml(text.trim())
+  });
+};
+
+export const sendGeneratedCallSummaryBriefToChat = async (
+  summary: CallSummaryDto,
+  targetTopicId: string
+): Promise<boolean> => {
+  if (!summary.id || !targetTopicId) {
+    return false;
+  }
+
+  try {
+    const api = useChatApi();
+    const response = await api.post(
+      `/calls/summaries/${encodeURIComponent(summary.id)}/brief/send`,
+      { targetTopicId },
+      { parsed: false }
+    );
+    await readResponse<{ text?: string; message?: unknown }>(response);
+    return true;
+  } catch (error) {
+    showErrorNotification(error);
+    return false;
+  }
+};
+
+export const sendGeneratedCallPromptResponseToChat = async (
+  summary: CallSummaryDto,
+  targetTopicId: string,
+  prompt: string
+): Promise<boolean> => {
+  if (!summary.id || !targetTopicId || !prompt.trim()) {
+    return false;
+  }
+
+  try {
+    const api = useChatApi();
+    const response = await api.post(
+      `/calls/summaries/${encodeURIComponent(summary.id)}/prompt/send`,
+      { targetTopicId, prompt },
+      { parsed: false }
+    );
+    await readResponse<{ text?: string; message?: unknown }>(response);
+    return true;
+  } catch (error) {
+    showErrorNotification(error);
+    return false;
+  }
+};
+
 export const sendCallSummaryToChat = async (
   summary: CallSummaryDto,
   targetTopicId = summary.topicId
@@ -771,6 +891,29 @@ export const sendCallActionListToChat = async (
   }
 
   return sent;
+};
+
+export const sendGeneratedCallActionListToChat = async (
+  summary: CallSummaryDto,
+  targetTopicId: string
+): Promise<boolean> => {
+  if (!summary.id || !targetTopicId) {
+    return false;
+  }
+
+  try {
+    const api = useChatApi();
+    const response = await api.post(
+      `/calls/summaries/${encodeURIComponent(summary.id)}/actions/send`,
+      { targetTopicId },
+      { parsed: false }
+    );
+    await readResponse<{ text?: string; message?: unknown }>(response);
+    return true;
+  } catch (error) {
+    showErrorNotification(error);
+    return false;
+  }
 };
 
 export const sendCallActionListNotFoundToChat = async (

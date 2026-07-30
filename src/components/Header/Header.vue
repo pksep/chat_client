@@ -72,7 +72,14 @@
           >
             Звонилка
           </h3>
+          <TypingIndicator
+            v-if="callTopicTypingLabel"
+            class="user-profile__ex user-profile__ex--typing"
+            :label="callTopicTypingLabel"
+            :data-testid="`${props.dataTestid}-Header-CallTopicTyping`"
+          />
           <span
+            v-else
             class="user-profile__ex"
             :data-testid="`${props.dataTestid}-Header-CallTopicEx`"
           >
@@ -456,6 +463,7 @@ import CallIcon from '../CallModal/UI/CallIcon.vue';
 import SearchIcon from '../UI/SearchIcon.vue';
 import HeaderContextSearchIcon from '../UI/HeaderContextSearchIcon.vue';
 import LoadingIcon from '../UI/LoadingIcon.vue';
+import TypingIndicator from '../UI/TypingIndicator.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import {
   activeCallParticipantCount,
@@ -483,7 +491,10 @@ import {
 import { isBotTopic } from '../../utils/bot';
 import { isFavoriteTopic } from '../../utils/favorite-topic';
 import { isCallTopic } from '../../utils/call-topic';
-import { loadLatestCallSummary } from '../../services/useCallSummaries';
+import {
+  isCallSummaryMaterialTypingInTopic,
+  loadLatestCallSummary
+} from '../../services/useCallSummaries';
 
 const { getSelectedTopic } = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
@@ -573,6 +584,11 @@ const currentTypingUsers = computed(() =>
 );
 const headerTypingLabel = computed(() =>
   getTypingIndicatorLabel(currentTopic.value?.type, currentTypingUsers.value)
+);
+const callTopicTypingLabel = computed(() =>
+  isCallSummaryMaterialTypingInTopic(currentTopic.value?.id)
+    ? 'печатает'
+    : ''
 );
 const activeCallTopic = computed(() =>
   activeCallTopicId.value ? getSelectedTopic(activeCallTopicId.value) : null

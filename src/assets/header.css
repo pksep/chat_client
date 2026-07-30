@@ -120,6 +120,10 @@
   cursor: pointer;
 }
 
+.chat__header-call-topic .user-profile__ex--typing {
+  color: var(--primary-color);
+}
+
 button.button-yui-kit {
   padding-block: 10.5px;
 }

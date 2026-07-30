@@ -61,13 +61,12 @@ import type { ITopic } from '../interfaces/interfaces';
 import {
   downloadCallRecording,
   downloadCallTranscript,
-  generateCallActionList,
-  generateCallSummaryBrief,
   loadLatestCallSummary,
-  sendCallActionListNotFoundToChat,
-  sendCallActionListToChat,
-  sendCallSummaryTextToChat,
-  type CallSummaryDto
+  sendCallSummaryPromptToChat,
+  sendGeneratedCallActionListToChat,
+  sendGeneratedCallSummaryBriefToChat,
+  type CallSummaryDto,
+  withCallSummaryTyping
 } from '../../services/useCallSummaries';
 import { showErrorNotification } from '../../composables/useNotifications';
 import { parseCallTopicDescription } from '../../utils/call-topic';
@@ -85,6 +84,11 @@ const props = withDefaults(
 const summary = ref<CallSummaryDto | null>(null);
 const isActionPending = ref(false);
 let summaryLoadToken = 0;
+
+interface SummaryActionContext {
+  topicId: string;
+  roomId: string | null;
+}
 
 const callTopicMeta = computed(() =>
   parseCallTopicDescription(props.topic.group?.description)
@@ -110,66 +114,98 @@ const hydrateSummary = async (): Promise<void> => {
   }
 };
 
+const getSummaryActionContext = (): SummaryActionContext => ({
+  topicId: props.topic.id,
+  roomId: callTopicMeta.value?.roomId || null
+});
+
+const isSummaryForContext = (
+  readySummary: CallSummaryDto,
+  context: SummaryActionContext
+): boolean =>
+  context.roomId
+    ? readySummary.roomId === context.roomId
+    : readySummary.topicId === context.topicId;
+
 const ensureReadySummary = async (
+  context: SummaryActionContext,
   options: { requireTranscript?: boolean } = {}
 ): Promise<CallSummaryDto | null> => {
   if (
     summary.value &&
+    isSummaryForContext(summary.value, context) &&
     (!options.requireTranscript || summary.value.transcript)
   ) {
     return summary.value;
   }
 
-  const roomId = callTopicMeta.value?.roomId || null;
-  const latestSummary = await loadLatestCallSummary(props.topic.id, roomId);
-  summary.value = latestSummary;
+  const latestSummary = await loadLatestCallSummary(
+    context.topicId,
+    context.roomId
+  );
+  if (latestSummary && isSummaryForContext(latestSummary, context)) {
+    summary.value = latestSummary;
+  }
   return latestSummary;
 };
 
 const runSummaryAction = async (
-  action: (readySummary: CallSummaryDto) => Promise<boolean>
+  action: (
+    readySummary: CallSummaryDto,
+    context: SummaryActionContext
+  ) => Promise<boolean>
 ): Promise<void> => {
   if (isActionPending.value) {
     return;
   }
 
+  const context = getSummaryActionContext();
   isActionPending.value = true;
   try {
-    const readySummary = await ensureReadySummary();
-    if (!readySummary) {
+    const readySummary = await ensureReadySummary(context);
+    if (!readySummary || !isSummaryForContext(readySummary, context)) {
       showErrorNotification('Запись звонка не найдена');
       return;
     }
 
-    await action(readySummary);
+    await action(readySummary, context);
   } finally {
     isActionPending.value = false;
   }
 };
 
 const handleSendSummary = (): void => {
-  void runSummaryAction(async readySummary => {
+  void runSummaryAction(async (readySummary, context) => {
     if (!readySummary.transcript && !readySummary.hasTranscript) {
       showErrorNotification('Краткое содержание ещё не готово');
       return false;
     }
 
-    const summaryText = await generateCallSummaryBrief(readySummary);
-    if (!summaryText.trim()) {
+    const promptSent = await sendCallSummaryPromptToChat(
+      context.topicId,
+      'Сделать краткое содержание'
+    );
+    if (!promptSent) {
+      showErrorNotification('Не удалось отправить запрос Звонилке');
       return false;
     }
 
-    return sendCallSummaryTextToChat(summaryText, props.topic.id);
+    return withCallSummaryTyping(context.topicId, () =>
+      sendGeneratedCallSummaryBriefToChat(readySummary, context.topicId)
+    );
   });
 };
 
 const handleDownloadTranscript = (): void => {
-  void runSummaryAction(async readySummary => {
+  void runSummaryAction(async (readySummary, context) => {
     const summaryWithTranscript = readySummary.transcript
       ? readySummary
-      : await ensureReadySummary({ requireTranscript: true });
+      : await ensureReadySummary(context, { requireTranscript: true });
 
-    if (!summaryWithTranscript?.transcript) {
+    if (
+      !summaryWithTranscript?.transcript ||
+      !isSummaryForContext(summaryWithTranscript, context)
+    ) {
       showErrorNotification('Транскрибация ещё не готова');
       return false;
     }
@@ -190,18 +226,24 @@ const handleDownloadVideo = (): void => {
 };
 
 const handleSendActionList = (): void => {
-  void runSummaryAction(async readySummary => {
+  void runSummaryAction(async (readySummary, context) => {
     if (!readySummary.transcript && !readySummary.hasTranscript) {
       showErrorNotification('Список действий ещё не готов');
       return false;
     }
 
-    const actionList = await generateCallActionList(readySummary);
-    if (!actionList.trim()) {
-      return sendCallActionListNotFoundToChat(props.topic.id);
+    const promptSent = await sendCallSummaryPromptToChat(
+      context.topicId,
+      'Список действий по звонку'
+    );
+    if (!promptSent) {
+      showErrorNotification('Не удалось отправить запрос Звонилке');
+      return false;
     }
 
-    return sendCallActionListToChat(actionList, props.topic.id);
+    return withCallSummaryTyping(context.topicId, () =>
+      sendGeneratedCallActionListToChat(readySummary, context.topicId)
+    );
   });
 };
 

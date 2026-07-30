@@ -10,10 +10,16 @@
       >
         ‹
       </button>
-      <BotAvatar class="calls-bot__avatar" :size="28" :is-online="false" />
       <div class="calls-bot__header-copy">
         <h3 class="calls-bot__title">Звонилка</h3>
-        <p class="calls-bot__subtitle">@zvonilka</p>
+        <p
+          :class="[
+            'calls-bot__subtitle',
+            { 'calls-bot__subtitle--typing': isPendingForSelectedCall }
+          ]"
+        >
+          {{ callsBotSubtitle }}
+        </p>
       </div>
     </header>
 
@@ -82,19 +88,12 @@
             { 'calls-bot__chat-message--outgoing': message.isOutgoing }
           ]"
         >
-          <span
-            v-if="message.senderName && !message.isOutgoing"
-            class="calls-bot__chat-sender"
-          >
-            {{ message.senderName }}
-          </span>
           <span v-html="message.text" />
         </div>
       </div>
     </div>
 
     <div v-else class="calls-bot__empty">
-      <BotAvatar :size="48" :is-online="false" />
       <h3>Звонилка</h3>
       <p>
         Выберите звонок слева, чтобы посмотреть запись и доступные действия.
@@ -121,18 +120,17 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import BotAvatar from '../UI/BotAvatar.vue';
 import MessageListInput from '../Messages/MessageListInput.vue';
 import {
   downloadCallRecording,
   downloadCallTranscript,
-  generateCallActionList,
-  generateCallSummaryBrief,
   loadLatestCallSummary,
-  sendCallActionListNotFoundToChat,
-  sendCallActionListToChat,
-  sendCallSummaryTextToChat,
-  type CallSummaryDto
+  sendCallSummaryPromptToChat,
+  sendGeneratedCallActionListToChat,
+  sendGeneratedCallPromptResponseToChat,
+  sendGeneratedCallSummaryBriefToChat,
+  type CallSummaryDto,
+  withCallSummaryTyping
 } from '../../services/useCallSummaries';
 import { useCallBot } from '../../services/useCallBot';
 import { showErrorNotification } from '../../composables/useNotifications';
@@ -141,6 +139,8 @@ import { getAuthUser } from '../../composables/useAuth';
 import { sendMessageChat } from '../../services/useChat';
 import { getMessagesByTopicId } from '../../services/useMessages';
 import { stripHtml } from '../../utils/stripHtml';
+import { parseMessageEx } from '../../utils/messageReplyQuote';
+import { isBotUser } from '../../utils/bot';
 
 interface ComposerSendPayload {
   content?: string;
@@ -150,19 +150,9 @@ interface ComposerSendPayload {
 interface CallsBotChatMessage {
   id: string;
   text: string;
-  senderName: string;
   isOutgoing: boolean;
   createdAt: number;
 }
-
-const CALL_GENERATED_MESSAGE_PREFIXES = [
-  'Расшифровка звонка',
-  'Конспект звонка',
-  'Суммари звонка',
-  'Краткое содержание звонка',
-  'Итоги -',
-  'Звонок завершен'
-];
 
 const props = withDefaults(
   defineProps<{
@@ -182,11 +172,37 @@ const { selectedCall } = useCallBot();
 const summary = ref<CallSummaryDto | null>(null);
 const isLoadingSummary = ref(false);
 const isActionPending = ref(false);
+const pendingActionMessageId = ref<string | null>(null);
 const composerText = ref('');
 const optimisticMessages = ref<CallsBotChatMessage[]>([]);
 let summaryLoadToken = 0;
 
+interface SummaryActionContext {
+  topicId: string;
+  roomId?: string | null;
+  actionKey: string;
+}
+
 const authUserId = computed(() => getAuthUser()?.id || '');
+
+const isCallBotResponse = (message: {
+  ex?: unknown;
+  senderUser?: unknown;
+}): boolean =>
+  parseMessageEx(message.ex).type === 'call-summary-bot-response' ||
+  isBotUser(message.senderUser as Parameters<typeof isBotUser>[0]);
+
+const isOutgoingChatMessage = (message: {
+  ex?: unknown;
+  senderUser?: unknown;
+  senderUserId?: string | null;
+}): boolean => {
+  if (isCallBotResponse(message)) {
+    return false;
+  }
+
+  return !!authUserId.value && message.senderUserId === authUserId.value;
+};
 
 const visibleChatMessages = computed<CallsBotChatMessage[]>(() => {
   const topicId = selectedCall.value?.topicId;
@@ -204,16 +220,13 @@ const visibleChatMessages = computed<CallsBotChatMessage[]>(() => {
         .replace(/\u00a0/g, ' ')
         .trim();
 
-      return !CALL_GENERATED_MESSAGE_PREFIXES.some(prefix =>
-        plainText.startsWith(prefix)
-      );
+      return !!plainText;
     })
     .slice(-3)
     .map(message => ({
       id: message.id,
       text: message.text || '',
-      senderName: message.senderUser?.initials || '',
-      isOutgoing: message.senderUserId === authUserId.value,
+      isOutgoing: isOutgoingChatMessage(message),
       createdAt: new Date(message.createdAt || Date.now()).getTime()
     }));
   const optimisticForTopic = optimisticMessages.value.filter(message =>
@@ -251,7 +264,15 @@ const hasRecording = computed(
 const canUseTranscriptActions = computed(() =>
   Boolean(summary.value?.transcript || summary.value?.hasTranscript)
 );
-
+const isPendingForSelectedCall = computed(
+  () =>
+    isActionPending.value &&
+    !!selectedCall.value?.topicId &&
+    pendingActionMessageId.value === selectedCall.value.topicId
+);
+const callsBotSubtitle = computed(() =>
+  isPendingForSelectedCall.value ? 'печатает...' : '@zvonilka'
+);
 const recordingStatusText = computed(() => {
   if (isLoadingSummary.value && !summary.value) {
     return 'Проверяем запись звонка...';
@@ -301,71 +322,114 @@ const hydrateSummary = async (): Promise<void> => {
   }
 };
 
-const ensureReadySummary = async (
-  options: { requireTranscript?: boolean } = {}
-): Promise<CallSummaryDto | null> => {
+const getSummaryActionContext = (): SummaryActionContext | null => {
   const call = selectedCall.value;
 
   if (!call?.topicId) {
     return null;
   }
 
+  return {
+    topicId: call.topicId,
+    roomId: call.roomId,
+    actionKey: call.topicId
+  };
+};
+
+const isSummaryForContext = (
+  readySummary: CallSummaryDto,
+  context: SummaryActionContext
+): boolean =>
+  context.roomId
+    ? readySummary.roomId === context.roomId
+    : readySummary.topicId === context.topicId;
+
+const ensureReadySummary = async (
+  context: SummaryActionContext,
+  options: { requireTranscript?: boolean } = {}
+): Promise<CallSummaryDto | null> => {
   if (
     summary.value &&
+    isSummaryForContext(summary.value, context) &&
     (!options.requireTranscript || summary.value.transcript)
   ) {
     return summary.value;
   }
 
-  const latestSummary = await loadLatestCallSummary(call.topicId, call.roomId);
-  summary.value = latestSummary;
+  const latestSummary = await loadLatestCallSummary(
+    context.topicId,
+    context.roomId
+  );
+  if (latestSummary && isSummaryForContext(latestSummary, context)) {
+    summary.value = latestSummary;
+  }
   return latestSummary;
 };
 
 const runSummaryAction = async (
-  action: (readySummary: CallSummaryDto) => Promise<boolean>
+  action: (
+    readySummary: CallSummaryDto,
+    context: SummaryActionContext
+  ) => Promise<boolean>
 ): Promise<void> => {
   if (isActionPending.value) {
     return;
   }
 
+  const context = getSummaryActionContext();
+  if (!context) {
+    showErrorNotification('Запись звонка не найдена');
+    return;
+  }
+
   isActionPending.value = true;
+  pendingActionMessageId.value = context.actionKey;
   try {
-    const readySummary = await ensureReadySummary();
-    if (!readySummary) {
+    const readySummary = await ensureReadySummary(context);
+    if (!readySummary || !isSummaryForContext(readySummary, context)) {
       showErrorNotification('Запись звонка не найдена');
       return;
     }
 
-    await action(readySummary);
+    await action(readySummary, context);
   } finally {
     isActionPending.value = false;
+    pendingActionMessageId.value = null;
   }
 };
 
 const handleSendSummary = (): void => {
-  void runSummaryAction(async readySummary => {
+  void runSummaryAction(async (readySummary, context) => {
     if (!readySummary.transcript && !readySummary.hasTranscript) {
       showErrorNotification('Краткое содержание ещё не готово');
       return false;
     }
 
-    const summaryText = await generateCallSummaryBrief(readySummary);
-    if (!summaryText.trim()) {
+    const promptSent = await sendCallSummaryPromptToChat(
+      context.topicId,
+      'Сделать краткое содержание'
+    );
+    if (!promptSent) {
+      showErrorNotification('Не удалось отправить запрос Звонилке');
       return false;
     }
 
-    return sendCallSummaryTextToChat(summaryText, readySummary.topicId);
+    return withCallSummaryTyping(context.topicId, () =>
+      sendGeneratedCallSummaryBriefToChat(readySummary, context.topicId)
+    );
   });
 };
 
 const handleDownloadTranscript = (): void => {
-  void runSummaryAction(async readySummary => {
+  void runSummaryAction(async (readySummary, context) => {
     const summaryWithTranscript = readySummary.transcript
       ? readySummary
-      : await ensureReadySummary({ requireTranscript: true });
+      : await ensureReadySummary(context, { requireTranscript: true });
 
-    if (!summaryWithTranscript?.transcript) {
+    if (
+      !summaryWithTranscript?.transcript ||
+      !isSummaryForContext(summaryWithTranscript, context)
+    ) {
       showErrorNotification('Транскрибация ещё не готова');
       return false;
     }
@@ -386,18 +450,24 @@ const handleDownloadVideo = (): void => {
 };
 
 const handleSendActionList = (): void => {
-  void runSummaryAction(async readySummary => {
+  void runSummaryAction(async (readySummary, context) => {
     if (!readySummary.transcript && !readySummary.hasTranscript) {
       showErrorNotification('Список действий ещё не готов');
       return false;
     }
 
-    const actionList = await generateCallActionList(readySummary);
-    if (!actionList.trim()) {
-      return sendCallActionListNotFoundToChat(readySummary.topicId);
+    const promptSent = await sendCallSummaryPromptToChat(
+      context.topicId,
+      'Список действий по звонку'
+    );
+    if (!promptSent) {
+      showErrorNotification('Не удалось отправить запрос Звонилке');
+      return false;
     }
 
-    return sendCallActionListToChat(actionList, readySummary.topicId);
+    return withCallSummaryTyping(context.topicId, () =>
+      sendGeneratedCallActionListToChat(readySummary, context.topicId)
+    );
   });
 };
 
@@ -417,7 +487,6 @@ const handleComposerSend = (payload?: ComposerSendPayload): void => {
     optimisticMessages.value = optimisticMessages.value.concat({
       id: optimisticId,
       text: content,
-      senderName: getAuthUser()?.initials || '',
       isOutgoing: true,
       createdAt: Date.now()
     });
@@ -433,6 +502,20 @@ const handleComposerSend = (payload?: ComposerSendPayload): void => {
         message => message.id !== optimisticId
       );
       composerText.value = '';
+      void runSummaryAction(async (readySummary, context) => {
+        if (!readySummary.transcript && !readySummary.hasTranscript) {
+          showErrorNotification('Транскрибация ещё не готова');
+          return false;
+        }
+
+        return withCallSummaryTyping(context.topicId, () =>
+          sendGeneratedCallPromptResponseToChat(
+            readySummary,
+            context.topicId,
+            plainText
+          )
+        );
+      });
       return;
     }
 
@@ -448,7 +531,11 @@ const handleAttachFile = (): void => {
 };
 
 watch(
-  () => selectedCall.value?.messageId,
+  () => [
+    selectedCall.value?.messageId,
+    selectedCall.value?.topicId,
+    selectedCall.value?.roomId
+  ],
   () => {
     void hydrateSummary();
     composerText.value = '';

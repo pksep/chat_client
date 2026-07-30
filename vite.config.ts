@@ -217,7 +217,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         screenshots: []
       },
       devOptions: {
-        enabled: true,
+        enabled: mode !== 'development',
         type: 'module',
         navigateFallback: 'index.html'
       }

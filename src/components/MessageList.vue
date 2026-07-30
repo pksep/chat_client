@@ -879,6 +879,22 @@ const renderedUserMessages = computed(() => {
     ? getRenderedTopicMessages(topicId, state.messages)
     : state.messages;
 });
+const renderedLastUserMessageSignature = computed(() => {
+  const lastMessage =
+    renderedUserMessages.value[renderedUserMessages.value.length - 1];
+
+  if (!lastMessage) {
+    return '';
+  }
+
+  return [
+    lastMessage.id || '',
+    lastMessage.updatedAt || '',
+    lastMessage.status || '',
+    lastMessage.text || '',
+    lastMessage.media?.length || 0
+  ].join('\u001f');
+});
 const hasCallTopicDefaultMessage = computed(() =>
   renderedUserMessages.value.some(isCallTopicDefaultMessage)
 );
@@ -3909,6 +3925,57 @@ watch(
       schedulePinnedViewportSnapshotSync();
     });
   }
+);
+
+watch(
+  [
+    () => route.value?.id || '',
+    () => route.value?.type,
+    () => renderedTopicId.value,
+    () => renderedUserMessages.value.length,
+    () => renderedLastUserMessageSignature.value
+  ],
+  (
+    [topicId, routeType, topicMessagesId],
+    [previousTopicId, previousRouteType, previousTopicMessagesId]
+  ) => {
+    const isSameRenderedTopic =
+      !!topicId &&
+      topicId === previousTopicId &&
+      routeType === previousRouteType &&
+      topicMessagesId === previousTopicMessagesId;
+    const shouldPinBottom =
+      isSameRenderedTopic &&
+      isUserMessagesRoute.value &&
+      !shouldRenderUserMessageSkeleton.value &&
+      shouldKeepCurrentTopicBottomPosition();
+
+    if (!shouldPinBottom) {
+      return;
+    }
+
+    nextTick(() => {
+      requestAnimationFrame(() => {
+        if (
+          route.value?.id !== topicId ||
+          renderedTopicId.value !== topicMessagesId ||
+          !isUserMessagesRoute.value ||
+          shouldRenderUserMessageSkeleton.value ||
+          !chatWrapperRef.value
+        ) {
+          return;
+        }
+
+        scrollToBottom({
+          preferUnreadMarker: false,
+          smooth: false
+        });
+        syncVisibleUnreadAfterAutoScroll();
+        scheduleFloatingDateDividerSync();
+      });
+    });
+  },
+  { flush: 'pre' }
 );
 
 watch(

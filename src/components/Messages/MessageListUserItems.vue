@@ -119,6 +119,8 @@
         </div>
       </div>
     </div>
+
+    <slot name="after" />
   </div>
 </template>
 
@@ -155,7 +157,7 @@ import { getPinnedMessagesByTopicId } from '../../services/useMessages';
 import { isUnreadTrackableMessage } from '../../utils/messageTracking';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import { getSelectedTopic } from '../../composables/useTopics';
-import { isCallTopicDefaultMessage } from '../../utils/call-topic';
+import { isCallTopic, isCallTopicDefaultMessage } from '../../utils/call-topic';
 
 interface Props {
   dataTestid: string;
@@ -313,6 +315,20 @@ const isDialogMessage = (message?: IMessage): boolean => {
     : message.topicId === route.value.id &&
         route.value.type === RouteTypes.DIALOGS;
 };
+
+const isCallTopicMessage = (message?: IMessage): boolean => {
+  if (!message?.topicId) {
+    return route.value.type === RouteTypes.CALL;
+  }
+
+  const topic = getSelectedTopic(message.topicId);
+  return topic
+    ? isCallTopic(topic)
+    : message.topicId === route.value.id && route.value.type === RouteTypes.CALL;
+};
+
+const isDialogStyleMessage = (message?: IMessage): boolean =>
+  isDialogMessage(message) || isCallTopicMessage(message);
 
 const syncQuotedSystemMessageOverflowState = (): void => {
   const nextOverflowMessageIds = new Set<string>();
@@ -514,7 +530,7 @@ const getRenderItemMemo = (item: RenderItem): unknown[] => {
   item.messages.forEach(message => {
     memo.push(
       message,
-      isDialogMessage(message),
+      isDialogStyleMessage(message),
       isMessagePinned(message),
       isSelectionMode(message.topicId),
       isSelected(message.id)
@@ -557,7 +573,7 @@ const shouldReserveGroupAvatarForItem = (
 
   return (
     !item.isMeSender &&
-    !isDialogMessage(firstMessage) &&
+    !isDialogStyleMessage(firstMessage) &&
     shouldRenderGroupAvatar(firstMessage)
   );
 };
@@ -895,7 +911,7 @@ const getBubbleProps = (message: IMessage, index: number) => ({
   message: message.text || '',
   media: message.media,
   isMeSender: resolveMessageIsMeSender(message),
-  isDialog: isDialogMessage(message),
+  isDialog: isDialogStyleMessage(message),
   isMobile: isMobile.value,
   parsedCallMessage: getParsedCallMessage(message),
   time: getCachedMessageTime(message),
