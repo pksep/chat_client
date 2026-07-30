@@ -52,7 +52,10 @@ import {
   sendGeneratedCallPromptResponseToChat,
   withCallSummaryTyping
 } from '../../../services/useCallSummaries';
-import { isCallTopic, parseCallTopicDescription } from '../../../utils/call-topic';
+import {
+  isCallTopic,
+  parseCallTopicDescription
+} from '../../../utils/call-topic';
 
 const MAX_HTML_LENGTH = 4000;
 const FORWARD_TEXT_SEND_DELAY_MS = 250;

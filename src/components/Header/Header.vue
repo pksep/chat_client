@@ -586,9 +586,7 @@ const headerTypingLabel = computed(() =>
   getTypingIndicatorLabel(currentTopic.value?.type, currentTypingUsers.value)
 );
 const callTopicTypingLabel = computed(() =>
-  isCallSummaryMaterialTypingInTopic(currentTopic.value?.id)
-    ? 'печатает'
-    : ''
+  isCallSummaryMaterialTypingInTopic(currentTopic.value?.id) ? 'печатает' : ''
 );
 const activeCallTopic = computed(() =>
   activeCallTopicId.value ? getSelectedTopic(activeCallTopicId.value) : null

@@ -6,11 +6,7 @@ import {
   showErrorNotification,
   showNotification
 } from '../composables/useNotifications';
-import {
-  getChatSDK,
-  sendMessageChat,
-  waitForChatSDK
-} from './useChat';
+import { getChatSDK, sendMessageChat, waitForChatSDK } from './useChat';
 import { useChatApi } from './useApi';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
 
@@ -720,7 +716,8 @@ export const withCallSummaryTyping = async <T>(
     return await action();
   } finally {
     if (trackedTypingTopicId) {
-      const nextCount = (materialTypingCountsByTopic[trackedTypingTopicId] || 1) - 1;
+      const nextCount =
+        (materialTypingCountsByTopic[trackedTypingTopicId] || 1) - 1;
       if (nextCount > 0) {
         materialTypingCountsByTopic[trackedTypingTopicId] = nextCount;
       } else {

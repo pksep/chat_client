@@ -24,8 +24,7 @@
         v-if="callSummaryRecordingNotice"
         class="call-modal__recording-notice"
         :class="{
-          'call-modal__recording-notice--starting':
-            isSummaryRecordingStarting
+          'call-modal__recording-notice--starting': isSummaryRecordingStarting
         }"
         role="status"
       >

@@ -324,7 +324,8 @@ const isCallTopicMessage = (message?: IMessage): boolean => {
   const topic = getSelectedTopic(message.topicId);
   return topic
     ? isCallTopic(topic)
-    : message.topicId === route.value.id && route.value.type === RouteTypes.CALL;
+    : message.topicId === route.value.id &&
+        route.value.type === RouteTypes.CALL;
 };
 
 const isDialogStyleMessage = (message?: IMessage): boolean =>
