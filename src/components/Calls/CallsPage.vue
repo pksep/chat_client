@@ -30,13 +30,21 @@
         class="calls-page__list"
         @scroll="handleListScroll"
       >
-        <button
+        <div
           v-for="call in filteredCalls"
           :key="call.messageId"
-          type="button"
-          class="calls-page__item"
+          :class="[
+            'calls-page__item',
+            {
+              'calls-page__item--active': isActiveRouteCall(call)
+            }
+          ]"
+          role="button"
+          tabindex="0"
           :data-testid="`${props.dataTestid}-Item-${call.messageId}`"
-          @click="openCallTopic(call)"
+          @click="openCallBot(call)"
+          @keydown.enter.prevent="openCallBot(call)"
+          @keydown.space.prevent="openCallBot(call)"
         >
           <CachedAvatar
             class="calls-page__avatar"
@@ -78,14 +86,17 @@
           <span class="calls-page__info" aria-hidden="true">
             <MessageCallInfoIcon />
           </span>
-        </button>
+        </div>
 
         <div v-if="state.isLoadingMore" class="calls-page__loading-more">
           {{ loadingMoreLabel }}
         </div>
       </div>
 
-      <div v-else class="menu-panel menu-panel--centered calls-page__empty">
+      <div
+        v-else-if="searchValue.trim()"
+        class="menu-panel menu-panel--centered calls-page__empty"
+      >
         <div class="menu-panel__illustration" aria-hidden="true">
           <svg viewBox="0 0 24 24" class="menu-panel__illustration-icon">
             <path
@@ -98,16 +109,12 @@
             />
           </svg>
         </div>
-        <h3 class="menu-panel__title">
-          {{ searchValue.trim() ? 'Ничего не найдено' : 'Звонков пока нет' }}
-        </h3>
-        <p class="menu-panel__description">
-          {{
-            searchValue.trim()
-              ? 'Попробуйте изменить запрос.'
-              : 'История завершённых звонков появится здесь.'
-          }}
-        </p>
+        <h3 class="menu-panel__title">Ничего не найдено</h3>
+        <p class="menu-panel__description">Попробуйте изменить запрос.</p>
+      </div>
+
+      <div v-else class="calls-page__empty-history">
+        Здесь будет история звонков
       </div>
     </div>
   </section>
@@ -131,16 +138,15 @@ import CachedAvatar from '../UI/CachedAvatar.vue';
 import MessageCallInfoIcon from '../Messages/MessageCallInfoIcon.vue';
 import MessageCallTypeIcon from '../Messages/MessageCallTypeIcon.vue';
 import { formatTime } from '../../composables/useTime';
-import {
-  navigateToDialogs,
-  navigateToGroup
-} from '../../composables/navigation';
+import { navigateToCall, useUrlWatcher } from '../../composables/navigation';
+import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { useTopics } from '../../composables/useTopics';
 import { getAuthUser } from '../../composables/useAuth';
 import { TopicType } from '../../services/useChatSDK/types';
 import type { CallHistoryItem as ServerCallHistoryItem } from '../../services/useChatSDK/types';
 import {
   parseCallMessage,
+  parseCallMessageEx,
   type CallMessageKind
 } from '../../utils/parseCallMessage';
 import {
@@ -151,42 +157,57 @@ import {
 } from '../../services/useCallHistory';
 import CallsHeader from './CallsHeader.vue';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
+import {
+  selectCallForBot,
+  useCallBot,
+  type CallBotCallSummaryBrief
+} from '../../services/useCallBot';
+import { showErrorNotification } from '../../composables/useNotifications';
 
 interface CallHistoryItem {
   messageId: string;
   topicId: string;
+  sourceTopicId?: string | null;
+  callTopicId?: string | null;
+  roomId?: string | null;
   topicType: TopicType;
+  sourceTopicType: TopicType;
   displayName: string;
-  avatarUrl?: string;
+  avatarUrl?: string | null;
   avatarInitials: string;
   dateLabel: string;
+  fullDateLabel: string;
   title: string;
   duration: string | null;
   detailLabel: string;
   kind: CallMessageKind;
   timeLabel: string;
   createdAt: number;
+  callSummary?: CallBotCallSummaryBrief | null;
 }
 
 const props = withDefaults(
   defineProps<{
     dataTestid?: string;
     isActive?: boolean;
+    autoSelectFirst?: boolean;
   }>(),
   {
     dataTestid: 'CallsPage',
-    isActive: true
+    isActive: true,
+    autoSelectFirst: false
   }
 );
 
 const searchValue = ref('');
 const callListRef = ref<HTMLElement | null>(null);
-const loadingMoreLabel =
-  '\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u043c \u0435\u0449\u0451 \u0437\u0432\u043e\u043d\u043a\u0438...';
+const loadingMoreLabel = 'Загружаем ещё звонки...';
 const authUserId = computed(() => getAuthUser()?.id || '');
 const { getSelectedTopic } = useTopics();
 const { rawCallHistory, callHistoryState } = useCallHistoryStore();
+const { selectedCall } = useCallBot();
 const state = callHistoryState;
+const route = useUrlWatcher();
 const { openUserInfo } = useUserInfoModal();
 const SCROLL_LOAD_MORE_OFFSET = 160;
 const CALLS_SCROLL_RESTORE_MAX_FRAMES = 8;
@@ -198,17 +219,22 @@ let isRestoringCallsScroll = false;
 const buildCallItem = (
   serverCall: ServerCallHistoryItem
 ): CallHistoryItem | null => {
-  const topic = getSelectedTopic(serverCall.topicId);
+  const sourceTopicId = serverCall.sourceTopicId || serverCall.topicId;
+  const callTopicId = serverCall.callTopicId || null;
+  const topic = getSelectedTopic(sourceTopicId);
+  const callTopic = callTopicId ? getSelectedTopic(callTopicId) : null;
   const parsedCall = parseCallMessage(serverCall.text || '', {
     messageEx: serverCall.ex,
     authUserId: authUserId.value,
     isMeSender: serverCall.senderUserId === authUserId.value
   });
+  const parsedEx = parseCallMessageEx(serverCall.ex);
 
   if (!parsedCall) {
     return null;
   }
 
+  const createdAt = new Date(serverCall.createdAt);
   const displayName =
     topic?.name ||
     topic?.group?.title ||
@@ -224,24 +250,37 @@ const buildCallItem = (
 
   return {
     messageId: serverCall.id,
-    topicId: serverCall.topicId,
+    topicId: callTopicId || sourceTopicId,
+    sourceTopicId,
+    callTopicId,
+    roomId: serverCall.roomId || parsedEx?.call?.roomId || null,
     topicType:
+      (serverCall.callTopicType as TopicType) ||
+      (callTopic?.type as TopicType) ||
+      (topic?.type as TopicType) ||
+      (serverCall.topicType as TopicType),
+    sourceTopicType:
       (topic?.type as TopicType) || (serverCall.topicType as TopicType),
     displayName,
     avatarUrl,
     avatarInitials: displayName,
-    dateLabel: new Date(serverCall.createdAt).toLocaleDateString('ru-RU', {
+    dateLabel: createdAt.toLocaleDateString('ru-RU', {
       day: '2-digit',
       month: '2-digit'
+    }),
+    fullDateLabel: createdAt.toLocaleDateString('ru-RU', {
+      day: 'numeric',
+      month: 'long'
     }),
     title: parsedCall.title,
     duration: parsedCall.duration,
     detailLabel: parsedCall.duration
-      ? `${formatTime(new Date(serverCall.createdAt))} (${parsedCall.duration})`
-      : formatTime(new Date(serverCall.createdAt)),
+      ? `${formatTime(createdAt)} (${parsedCall.duration})`
+      : formatTime(createdAt),
     kind: parsedCall.kind,
-    timeLabel: formatTime(new Date(serverCall.createdAt)),
-    createdAt: new Date(serverCall.createdAt).getTime()
+    timeLabel: formatTime(createdAt),
+    createdAt: createdAt.getTime(),
+    callSummary: serverCall.callSummary || null
   };
 };
 
@@ -266,21 +305,81 @@ const filteredCalls = computed(() => {
   );
 });
 
-const openCallTopic = (call: CallHistoryItem): void => {
-  if (call.topicType === TopicType.Group) {
-    navigateToGroup(call.topicId);
+const isActiveRouteCall = (call: CallHistoryItem): boolean =>
+  route.value.type === RouteTypes.CALL &&
+  !!route.value.id &&
+  call.callTopicId === route.value.id;
+
+const getCallTopicSelection = (call: CallHistoryItem): CallHistoryItem => ({
+  ...call,
+  topicId: call.callTopicId || call.topicId,
+  topicType: TopicType.Group
+});
+
+const selectCallTopic = (call: CallHistoryItem): void => {
+  selectCallForBot(getCallTopicSelection(call));
+};
+
+const openCallBot = (call: CallHistoryItem): void => {
+  if (!call.callTopicId) {
+    showErrorNotification(
+      'Чат звонка ещё создаётся. Обновите историю звонков и попробуйте снова.'
+    );
+    void bootstrapCallHistory(undefined, { force: true });
     return;
   }
 
-  navigateToDialogs(call.topicId);
+  selectCallTopic(call);
+  navigateToCall(call.callTopicId);
+};
+
+const selectRouteCallIfNeeded = (): boolean => {
+  if (route.value.type !== RouteTypes.CALL || !route.value.id) {
+    return false;
+  }
+
+  const routeCall = callHistory.value.find(
+    call =>
+      call.callTopicId === route.value.id || call.topicId === route.value.id
+  );
+
+  if (!routeCall) {
+    return false;
+  }
+
+  if (selectedCall.value?.topicId !== route.value.id) {
+    selectCallTopic(routeCall);
+  }
+
+  return true;
+};
+
+const selectDefaultCallIfNeeded = (): void => {
+  if (
+    !props.isActive ||
+    !props.autoSelectFirst ||
+    route.value.type === RouteTypes.CALL ||
+    !filteredCalls.value.length
+  ) {
+    return;
+  }
+
+  const selectedId = selectedCall.value?.messageId;
+  const selectedStillVisible =
+    !!selectedId &&
+    filteredCalls.value.some(call => call.messageId === selectedId);
+
+  if (!selectedStillVisible) {
+    openCallBot(filteredCalls.value[0]);
+  }
 };
 
 const handleOpenCallUserInfo = (call: CallHistoryItem): void => {
-  if (call.topicType !== TopicType.DM) {
+  if (call.sourceTopicType !== TopicType.DM) {
     return;
   }
 
-  const topic = getSelectedTopic(call.topicId);
+  const topic = getSelectedTopic(call.sourceTopicId || call.topicId);
   if (!topic?.user) {
     return;
   }
@@ -420,6 +519,9 @@ const ensureCallHistoryReady = async (): Promise<void> => {
 
   void hydrateCallHistoryCache();
   await bootstrapCallHistory();
+  if (!selectRouteCallIfNeeded()) {
+    selectDefaultCallIfNeeded();
+  }
 };
 
 onMounted(() => {
@@ -446,6 +548,7 @@ watch(
     if (isActive) {
       void ensureCallHistoryReady();
       restoreCallsScrollPosition();
+      selectDefaultCallIfNeeded();
     }
   },
   { immediate: false }
@@ -455,6 +558,17 @@ watch(
   () => filteredCalls.value.length,
   () => {
     restoreCallsScrollPosition();
+    if (!selectRouteCallIfNeeded()) {
+      selectDefaultCallIfNeeded();
+    }
   }
+);
+
+watch(
+  () => [route.value.type, route.value.id, callHistory.value.length],
+  () => {
+    selectRouteCallIfNeeded();
+  },
+  { immediate: true }
 );
 </script>

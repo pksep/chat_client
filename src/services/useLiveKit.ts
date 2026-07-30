@@ -519,6 +519,24 @@ const CALL_AUDIO_CAPTURE_DEFAULTS: AudioCaptureOptions = {
   autoGainControl: true,
   channelCount: 1
 };
+
+// Chrome rejects the whole constraint object when one optional key is not
+// supported. Keep the reliable echo/noise controls and pass only keys that
+// this browser actually exposes.
+const getSupportedCallAudioCaptureOptions = (): AudioCaptureOptions => {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices) {
+    return CALL_AUDIO_CAPTURE_DEFAULTS;
+  }
+
+  const supported = navigator.mediaDevices.getSupportedConstraints();
+  return Object.fromEntries(
+    Object.entries(CALL_AUDIO_CAPTURE_DEFAULTS).filter(
+      ([key]) =>
+        key === 'channelCount' ||
+        supported[key as keyof MediaTrackSupportedConstraints]
+    )
+  ) as AudioCaptureOptions;
+};
 type LocalManagedVideoProcessor =
   | BackgroundProcessorWrapper
   | Parameters<LocalVideoTrack['setProcessor']>[0];
@@ -3494,7 +3512,9 @@ const applyLocalMicrophoneVoiceIsolation = async (
   microphoneTrack.contentHint = 'speech';
 
   try {
-    await microphoneTrack.applyConstraints(CALL_AUDIO_CAPTURE_DEFAULTS);
+    await microphoneTrack.applyConstraints(
+      getSupportedCallAudioCaptureOptions()
+    );
   } catch (error) {
     console.warn(
       '[LiveKit] Failed to apply microphone voice isolation constraints:',
@@ -3509,7 +3529,7 @@ const setLocalMicrophoneEnabled = async (
 ): Promise<LocalTrackPublication | undefined> => {
   const publication = await activeRoom.localParticipant.setMicrophoneEnabled(
     enabled,
-    CALL_AUDIO_CAPTURE_DEFAULTS
+    getSupportedCallAudioCaptureOptions()
   );
 
   await applyLocalMicrophoneVoiceIsolation(publication);
@@ -4353,7 +4373,7 @@ const connectToRoom = async () => {
         ...CAMERA_PUBLISH_DEFAULTS,
         ...SCREEN_SHARE_PUBLISH_DEFAULTS
       },
-      audioCaptureDefaults: CALL_AUDIO_CAPTURE_DEFAULTS,
+      audioCaptureDefaults: getSupportedCallAudioCaptureOptions(),
       videoCaptureDefaults: CAMERA_CAPTURE_DEFAULTS
     });
     room = nextRoom;

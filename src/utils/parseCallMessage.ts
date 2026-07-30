@@ -16,6 +16,7 @@ interface CallMessageOptions {
 export interface ParsedCallExPayload {
   type?: string;
   call?: {
+    roomId?: string;
     event?: 'start' | 'end';
     direction?: CallMessageKind;
     durationSec?: number;

@@ -47,7 +47,7 @@ export const isFavoriteTopic = (
   if (topic.type === 'GROUP') {
     return (
       topic.group?.description === FAVORITE_TOPIC_DESCRIPTION &&
-      hasOnlyCurrentUser
+      (hasOnlyCurrentUser || memberIds.length === 1)
     );
   }
 

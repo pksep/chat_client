@@ -102,7 +102,8 @@
           shouldLockUserMessageBootstrapScroll,
         'chat__message-wrapper--search-positioning':
           isSearchNavigationPositioning,
-        'chat__message-wrapper--favorite': isFavoriteMessageTopic
+        'chat__message-wrapper--favorite': isFavoriteMessageTopic,
+        'chat__message-wrapper--call-topic': isActiveCallTopic
       }
     ]"
     v-if="!isAiRoute && !isDefaultRoute"
@@ -135,7 +136,17 @@
       @retry-message="handleRetryMessage"
       @scroll-to-message="handleScrollToMessage"
       @content-ready="handleUserMessagesContentReady"
-    />
+    >
+      <template
+        v-if="activeTopic && isActiveCallTopic && !hasCallTopicDefaultMessage"
+        #before
+      >
+        <CallTopicDefaultMessage
+          :topic="activeTopic"
+          :data-testid="`${props.dataTestid}-CallTopicDefaultMessage`"
+        />
+      </template>
+    </MessageListUserItems>
     <div
       v-if="shouldRenderEmptyUserMessageState"
       class="chat__message-empty-state"
@@ -401,6 +412,17 @@
     :data-testid="`${props.dataTestid}-SelectedMessages`"
     @height-change="handleSelectedMessagesHeightChange"
   />
+  <CallTopicActions
+    v-if="
+      !shouldRenderUserMessageSkeleton &&
+      !isSelectionMode &&
+      !isMobileTopicSearchMode &&
+      activeTopic &&
+      isActiveCallTopic
+    "
+    :topic="activeTopic"
+    :data-testid="`${props.dataTestid}-CallTopicActions`"
+  />
   <MessageListInput
     v-if="
       !isDefaultRoute &&
@@ -519,6 +541,8 @@ import { Capacitor } from '@capacitor/core';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
 import SelectedMessagesContent from './Header/SelectedMessagesContent.vue';
+import CallTopicActions from './Calls/CallTopicActions.vue';
+import CallTopicDefaultMessage from './Calls/CallTopicDefaultMessage.vue';
 import { usePendingForwardMessages } from '../composables/useForwardMessages';
 import { ensureMediaObjectUrl } from '../services/useMediaBlobCache';
 import { isGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
@@ -547,6 +571,7 @@ import {
   filterFavoriteTopicSystemMessages,
   isFavoriteTopic
 } from '../utils/favorite-topic';
+import { isCallTopic, isCallTopicDefaultMessage } from '../utils/call-topic';
 import {
   consumeNotificationTopicRefreshRequest,
   notificationTopicRefreshRequest
@@ -827,6 +852,7 @@ const isMobileTopicSearchMode = computed(
 const activeTopic = computed(() =>
   route.value.id ? getSelectedTopic(route.value.id) : null
 );
+const isActiveCallTopic = computed(() => isCallTopic(activeTopic.value));
 const isFavoriteMessageTopic = computed(() =>
   isFavoriteTopic(activeTopic.value, authUserId.value)
 );
@@ -853,6 +879,25 @@ const renderedUserMessages = computed(() => {
     ? getRenderedTopicMessages(topicId, state.messages)
     : state.messages;
 });
+const renderedLastUserMessageSignature = computed(() => {
+  const lastMessage =
+    renderedUserMessages.value[renderedUserMessages.value.length - 1];
+
+  if (!lastMessage) {
+    return '';
+  }
+
+  return [
+    lastMessage.id || '',
+    lastMessage.updatedAt || '',
+    lastMessage.status || '',
+    lastMessage.text || '',
+    lastMessage.media?.length || 0
+  ].join('\u001f');
+});
+const hasCallTopicDefaultMessage = computed(() =>
+  renderedUserMessages.value.some(isCallTopicDefaultMessage)
+);
 const isDeletedAccountTopic = computed(() => {
   const topic = activeTopic.value;
 
@@ -1827,6 +1872,7 @@ const shouldRenderEmptyUserMessageState = computed(
     isUserMessagesRoute.value &&
     renderedTopicId.value === route.value.id &&
     !hasVisibleUserMessages.value &&
+    !isActiveCallTopic.value &&
     isTopicMessagesKnownEmpty(route.value.id) &&
     !shouldRenderUserMessageSkeleton.value
 );
@@ -3879,6 +3925,57 @@ watch(
       schedulePinnedViewportSnapshotSync();
     });
   }
+);
+
+watch(
+  [
+    () => route.value?.id || '',
+    () => route.value?.type,
+    () => renderedTopicId.value,
+    () => renderedUserMessages.value.length,
+    () => renderedLastUserMessageSignature.value
+  ],
+  (
+    [topicId, routeType, topicMessagesId],
+    [previousTopicId, previousRouteType, previousTopicMessagesId]
+  ) => {
+    const isSameRenderedTopic =
+      !!topicId &&
+      topicId === previousTopicId &&
+      routeType === previousRouteType &&
+      topicMessagesId === previousTopicMessagesId;
+    const shouldPinBottom =
+      isSameRenderedTopic &&
+      isUserMessagesRoute.value &&
+      !shouldRenderUserMessageSkeleton.value &&
+      shouldKeepCurrentTopicBottomPosition();
+
+    if (!shouldPinBottom) {
+      return;
+    }
+
+    nextTick(() => {
+      requestAnimationFrame(() => {
+        if (
+          route.value?.id !== topicId ||
+          renderedTopicId.value !== topicMessagesId ||
+          !isUserMessagesRoute.value ||
+          shouldRenderUserMessageSkeleton.value ||
+          !chatWrapperRef.value
+        ) {
+          return;
+        }
+
+        scrollToBottom({
+          preferUnreadMarker: false,
+          smooth: false
+        });
+        syncVisibleUnreadAfterAutoScroll();
+        scheduleFloatingDateDividerSync();
+      });
+    });
+  },
+  { flush: 'pre' }
 );
 
 watch(

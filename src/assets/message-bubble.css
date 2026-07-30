@@ -1198,6 +1198,30 @@ div.message-content__file {
   max-width: min(calc(100% - 50px), 500px);
 }
 
+.message--call-topic-default
+  .message__content__articles:has(.message__article__text) {
+  max-width: min(calc(100% - 20px), 465px);
+}
+
+.message--call-topic-default .message__article__text {
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 16px;
+}
+
+.message--call-topic-default .message-bubble-tail {
+  display: none;
+}
+
+.message--call-topic-default .message-content__html p {
+  margin: 0 0 8px;
+}
+
+.message--call-topic-default .message-content__html p:last-child {
+  margin-bottom: 0;
+}
+
 .message-content--media-with-caption-container,
 .message-content__media {
   background-color: #8b98ae;
