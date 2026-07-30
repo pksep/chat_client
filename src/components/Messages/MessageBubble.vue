@@ -6,6 +6,7 @@
       'message--selected': props.isSelected,
       'message--continued': props.continuesWithNext,
       'message--continued-from-previous': props.continuesFromPrevious,
+      'message--call-topic-default': isCallTopicDefaultMessageEx,
       highlighted: props.isSelected
     }"
     :data-testid="`${dataTestid}-MessageBubble-Container`"
@@ -119,6 +120,7 @@ import {
 } from '../../utils/messageReplyQuote';
 import { useBackButton } from '../../composables/useBackButton';
 import { setReactionMessage } from '../../services/useChat';
+import { parseCallTopicDefaultMessageEx } from '../../utils/call-topic';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -142,6 +144,9 @@ const messageArticlesStyles = computed(() => ({
 const { getFullMediaPath, isSliderContentUrl } = useMessageMedia();
 const isContextMenuOpen = computed(
   () => !!props.messageId && isOpen.value[props.messageId] === true
+);
+const isCallTopicDefaultMessageEx = computed(() =>
+  Boolean(parseCallTopicDefaultMessageEx(props.messageEx))
 );
 
 const sliderElements = ref<{ path: string; name: string; file?: File }[]>([]);

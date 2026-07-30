@@ -45,6 +45,21 @@ import {
   getTelemetryErrorPayload,
   recordTelemetryEvent
 } from '../../../services/useTelemetry';
+import { getConfig } from '../../../services/useConfig';
+import { getSelectedTopic } from '../../../composables/useTopics';
+import {
+  type CallTopicPromptPlaceholderKind,
+  loadLatestCallSummary,
+  sendCallTopicPromptPlaceholderToChat,
+  sendGeneratedCallActionListToChat,
+  sendGeneratedCallPromptResponseToChat,
+  sendGeneratedCallSummaryBriefToChat,
+  withCallSummaryTyping
+} from '../../../services/useCallSummaries';
+import {
+  isCallTopic,
+  parseCallTopicDescription
+} from '../../../utils/call-topic';
 
 const MAX_HTML_LENGTH = 4000;
 const FORWARD_TEXT_SEND_DELAY_MS = 250;
@@ -61,6 +76,31 @@ const VIDEO_INITIAL_PREVIEW_DIMENSIONS = {
   height: 360
 };
 const VIDEO_LOCAL_THUMBNAIL_TIMEOUT_MS = 3000;
+const CALL_TOPIC_SUMMARY_COMMAND = 'сделать краткое содержание';
+const CALL_TOPIC_ACTIONS_COMMAND = 'список действий по звонку';
+
+const isCallTopicAutoPromptEnabled = () =>
+  getConfig().CHAT_CALL_TOPIC_AUTO_PROMPT_ENABLED?.trim().toLowerCase() ===
+  'true';
+
+const normalizeCallTopicCommandText = (value: string) =>
+  value.replace(/\s+/g, ' ').trim().toLowerCase();
+
+const getCallTopicButtonAction = (
+  value: string
+): 'brief' | 'actions' | null => {
+  const normalized = normalizeCallTopicCommandText(value);
+
+  if (normalized === CALL_TOPIC_SUMMARY_COMMAND) {
+    return 'brief';
+  }
+
+  if (normalized === CALL_TOPIC_ACTIONS_COMMAND) {
+    return 'actions';
+  }
+
+  return null;
+};
 
 type PendingMessageRetryState = {
   attempt: number;
@@ -321,6 +361,101 @@ export function useMessageSender(
   scrollToBottom: () => void,
   clearSellectedMessage: () => void
 ) {
+  const sendCallTopicPromptResponse = async (
+    topicId: string,
+    prompt: string
+  ): Promise<boolean> => {
+    const topic = getSelectedTopic(topicId);
+    const callTopicMeta = parseCallTopicDescription(topic?.group?.description);
+
+    if (!topic || !isCallTopic(topic) || !callTopicMeta?.roomId) {
+      return false;
+    }
+
+    const readySummary = await loadLatestCallSummary(
+      topicId,
+      callTopicMeta.roomId
+    );
+
+    if (!readySummary || readySummary.roomId !== callTopicMeta.roomId) {
+      showErrorNotification('Запись звонка не найдена');
+      return false;
+    }
+
+    if (!readySummary.transcript && !readySummary.hasTranscript) {
+      showErrorNotification('Транскрибация ещё не готова');
+      return false;
+    }
+
+    return withCallSummaryTyping(topicId, () =>
+      sendGeneratedCallPromptResponseToChat(readySummary, topicId, prompt)
+    );
+  };
+
+  const sendCallTopicButtonActionResponse = async (
+    topicId: string,
+    action: 'brief' | 'actions'
+  ): Promise<boolean> => {
+    const topic = getSelectedTopic(topicId);
+    const callTopicMeta = parseCallTopicDescription(topic?.group?.description);
+
+    if (!topic || !isCallTopic(topic) || !callTopicMeta?.roomId) {
+      return false;
+    }
+
+    const readySummary = await loadLatestCallSummary(
+      topicId,
+      callTopicMeta.roomId
+    );
+
+    if (!readySummary || readySummary.roomId !== callTopicMeta.roomId) {
+      showErrorNotification('Запись звонка не найдена');
+      return false;
+    }
+
+    if (!readySummary.transcript && !readySummary.hasTranscript) {
+      showErrorNotification(
+        action === 'brief'
+          ? 'Краткое содержание ещё не готово'
+          : 'Список действий ещё не готов'
+      );
+      return false;
+    }
+
+    return withCallSummaryTyping(topicId, () =>
+      action === 'brief'
+        ? sendGeneratedCallSummaryBriefToChat(readySummary, topicId)
+        : sendGeneratedCallActionListToChat(readySummary, topicId)
+    );
+  };
+
+  const getCallTopicPromptPlaceholderKind = async (
+    topicId: string
+  ): Promise<CallTopicPromptPlaceholderKind> => {
+    const topic = getSelectedTopic(topicId);
+    const callTopicMeta = parseCallTopicDescription(topic?.group?.description);
+
+    if (!topic || !isCallTopic(topic) || !callTopicMeta?.roomId) {
+      return 'not-recorded';
+    }
+
+    const summary = await loadLatestCallSummary(topicId, callTopicMeta.roomId);
+
+    return summary?.roomId === callTopicMeta.roomId
+      ? 'choose-actions'
+      : 'not-recorded';
+  };
+
+  const sendCallTopicPromptPlaceholder = async (
+    topicId: string
+  ): Promise<boolean> =>
+    withCallSummaryTyping(topicId, async () =>
+      sendCallTopicPromptPlaceholderToChat(
+        topicId,
+        await getCallTopicPromptPlaceholderKind(topicId)
+      )
+    );
+
   const waitForPreviewMetrics = async (media?: IMedia): Promise<void> => {
     if (
       !media ||
@@ -1188,6 +1323,26 @@ export function useMessageSender(
     }
 
     const parts = textToSend ? splitHtmlByLength(textToSend) : [];
+    const callTopicPromptText = stripHtml(textToSend)
+      .replace(/\u00a0/g, ' ')
+      .trim();
+    const callTopicButtonAction = getCallTopicButtonAction(callTopicPromptText);
+    const shouldHandleCallTopicPrompt =
+      routeType === RouteTypes.CALL &&
+      !!callTopicPromptText &&
+      !hasAttachments &&
+      !hasForwardMessages &&
+      !replyMessageId;
+    const shouldRunCallTopicButtonAction =
+      shouldHandleCallTopicPrompt && !!callTopicButtonAction;
+    const shouldRequestCallTopicPromptResponse =
+      shouldHandleCallTopicPrompt &&
+      !callTopicButtonAction &&
+      isCallTopicAutoPromptEnabled();
+    const shouldSendCallTopicPromptPlaceholder =
+      shouldHandleCallTopicPrompt &&
+      !callTopicButtonAction &&
+      !isCallTopicAutoPromptEnabled();
 
     /* ================= AI ROUTE ================= */
     if (routeType === RouteTypes.AI) {
@@ -1519,6 +1674,28 @@ export function useMessageSender(
 
       await nextTick();
       scrollToBottom();
+
+      if (
+        (shouldRunCallTopicButtonAction ||
+          shouldRequestCallTopicPromptResponse ||
+          shouldSendCallTopicPromptPlaceholder) &&
+        sentMessageCount > 0 &&
+        queuedMessageCount === 0
+      ) {
+        if (shouldRunCallTopicButtonAction && callTopicButtonAction) {
+          await sendCallTopicButtonActionResponse(
+            topicId,
+            callTopicButtonAction
+          );
+        } else if (shouldRequestCallTopicPromptResponse) {
+          await sendCallTopicPromptResponse(topicId, callTopicPromptText);
+        } else {
+          await sendCallTopicPromptPlaceholder(topicId);
+        }
+        await nextTick();
+        scrollToBottom();
+      }
+
       recordTelemetryEvent({
         category: 'chat',
         name:

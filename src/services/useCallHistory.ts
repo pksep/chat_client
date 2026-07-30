@@ -18,10 +18,16 @@ const CALL_HISTORY_CACHE_KEY = 'calls:history';
 const CALL_HISTORY_PAGE_SIZE = 50;
 
 type CallHistorySource = 'http' | 'ws';
+type CallHistorySdk = Pick<ChatSDK, 'getCallHistory'> &
+  Partial<Pick<ChatSDK, 'joinTopic'>>;
 
 interface CallHistoryMessageLike {
   id: string;
   topicId: string;
+  sourceTopicId?: string | null;
+  callTopicId?: string | null;
+  callTopicType?: 'GROUP' | 'DM' | null;
+  roomId?: string | null;
   senderUserId: string;
   text?: string | null;
   ex?: unknown;
@@ -48,7 +54,7 @@ let hydratedUserId: string | null = null;
 let bootstrappedUserId: string | null = null;
 let bootstrapPromise: Promise<void> | null = null;
 let loadMorePromise: Promise<void> | null = null;
-let callHistorySdk: Pick<ChatSDK, 'getCallHistory'> | null = null;
+let callHistorySdk: CallHistorySdk | null = null;
 let shouldBootstrapWhenSdkReady = false;
 const pendingUpserts = new Map<string, ServerCallHistoryItem>();
 const pendingRemovals = new Set<string>();
@@ -122,11 +128,48 @@ const uniqCallHistoryItems = (
   return sortCallHistoryItems(Array.from(deduped.values()));
 };
 
+const refreshMissingCallTopics = async (
+  items: ServerCallHistoryItem[],
+  sdk?: CallHistorySdk | null
+): Promise<void> => {
+  const callTopicIds = [
+    ...new Set(
+      items
+        .map(item => item.callTopicId)
+        .filter((topicId): topicId is string => !!topicId)
+    )
+  ];
+
+  if (!callTopicIds.length) {
+    return;
+  }
+
+  const topicsApi = useTopics();
+  const missingCallTopicIds = callTopicIds.filter(
+    topicId => !topicsApi.getSelectedTopic(topicId)
+  );
+
+  if (!missingCallTopicIds.length) {
+    return;
+  }
+
+  try {
+    await topicsApi.fetchAllTopics();
+    await Promise.all(
+      missingCallTopicIds.map(topicId => sdk?.joinTopic?.(topicId))
+    );
+  } catch (error) {
+    console.error('Failed to refresh call topics:', error);
+  }
+};
+
 const applyCallHistory = async (
   items: ServerCallHistoryItem[],
-  userId: string
+  userId: string,
+  sdk?: CallHistorySdk | null
 ): Promise<void> => {
   rawCallHistory.value = uniqCallHistoryItems(items);
+  await refreshMissingCallTopics(rawCallHistory.value, sdk);
   await saveShadowSyncMeta(
     CALL_HISTORY_CACHE_KEY,
     rawCallHistory.value,
@@ -238,6 +281,10 @@ const buildCallHistoryItemFromMessage = (
   return {
     id: message.id,
     topicId: message.topicId,
+    sourceTopicId: message.sourceTopicId || message.topicId,
+    callTopicId: message.callTopicId || null,
+    callTopicType: message.callTopicType || null,
+    roomId: message.roomId || parsedEx?.call?.roomId || null,
     topicType,
     topicName,
     topicAvatarUrl,
@@ -286,7 +333,7 @@ export const hydrateCallHistoryCache = async (): Promise<void> => {
 };
 
 export const bootstrapCallHistory = async (
-  sdk: Pick<ChatSDK, 'getCallHistory'> | null = callHistorySdk,
+  sdk: CallHistorySdk | null = callHistorySdk,
   opts?: { force?: boolean }
 ): Promise<void> => {
   const userId = syncUserScope();
@@ -327,7 +374,7 @@ export const bootstrapCallHistory = async (
       });
       const mergedCalls = mergePendingHistoryChanges(response.data);
 
-      await applyCallHistory(mergedCalls, userId);
+      await applyCallHistory(mergedCalls, userId, sdk);
       updateCallHistoryPagination(response.meta);
       bootstrappedUserId = userId;
       shouldBootstrapWhenSdkReady = false;
@@ -350,7 +397,7 @@ export const bootstrapCallHistory = async (
 };
 
 export const loadMoreCallHistory = async (
-  sdk: Pick<ChatSDK, 'getCallHistory'> | null = callHistorySdk
+  sdk: CallHistorySdk | null = callHistorySdk
 ): Promise<void> => {
   const userId = syncUserScope();
 
@@ -393,7 +440,7 @@ export const loadMoreCallHistory = async (
         rawCallHistory.value.concat(response.data)
       );
 
-      await applyCallHistory(mergedCalls, userId);
+      await applyCallHistory(mergedCalls, userId, sdk);
       updateCallHistoryPagination(response.meta);
       bootstrappedUserId = userId;
       shouldBootstrapWhenSdkReady = false;
@@ -413,9 +460,7 @@ export const loadMoreCallHistory = async (
   return loadMorePromise;
 };
 
-export const initializeCallHistorySync = (
-  sdk: Pick<ChatSDK, 'getCallHistory'> | null
-): void => {
+export const initializeCallHistorySync = (sdk: CallHistorySdk | null): void => {
   callHistorySdk = sdk;
   void hydrateCallHistoryCache();
 
@@ -456,7 +501,8 @@ export const upsertCallHistoryMessage = async (
     rawCallHistory.value
       .filter(item => item.id !== nextItem.id)
       .concat(nextItem),
-    userId
+    userId,
+    callHistorySdk
   );
 };
 

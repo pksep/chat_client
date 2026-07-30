@@ -25,6 +25,14 @@ p.chat__nothing-paragraph {
   min-height: 0;
 }
 
+.chat:has(.call-topic-actions) {
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+}
+
+.chat:has(.call-topic-actions) .chat__input {
+  grid-row: 4;
+}
+
 .chat.chat__message:not(.menu__user-assistant) {
   height: calc(var(--default-height) / 2);
 }
@@ -148,6 +156,27 @@ p.chat__nothing-paragraph {
  */
 .chat__message-bubble > :first-child {
   margin-top: auto;
+}
+
+.chat__message-wrapper--call-topic {
+  grid-template-rows: minmax(100%, max-content);
+}
+
+.chat__message-wrapper--call-topic > .chat__message-bubble {
+  height: 100%;
+}
+
+.chat__message-wrapper--call-topic > .chat__message-bubble::before {
+  content: '';
+  display: block;
+  flex: 1 0 0;
+  width: 100%;
+  pointer-events: none;
+  overflow-anchor: none;
+}
+
+.chat__message-wrapper--call-topic > .chat__message-bubble > :first-child {
+  margin-top: 0;
 }
 
 @media screen and (width > 768px) {
@@ -579,6 +608,10 @@ p.chat__nothing-paragraph {
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
     overflow: hidden;
+  }
+
+  .chat__mobile-route-view--messages:has(.call-topic-actions) {
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
   }
 
   .chat__mobile-instant-shell {

@@ -122,6 +122,7 @@ import {
   navigateToFavorites,
   useUrlWatcher
 } from '../composables/navigation';
+import { RouteTypes } from '../composables/navigation/useUrlRouting';
 import { useTopics } from '../composables/useTopics';
 import TopicList from './ContactList/TopicList.vue';
 import ChatsToolbar from './Menu/ChatsToolbar.vue';
@@ -142,6 +143,7 @@ import {
 } from '../composables/useMessageSearch';
 import { isBotTopic } from '../utils/bot';
 import { isFavoriteTopic } from '../utils/favorite-topic';
+import { isCallTopic } from '../utils/call-topic';
 import {
   getChatsToolbarFilterBadgeState,
   getChatsToolbarFilterCounts,
@@ -193,6 +195,10 @@ const pendingShareSummaryLabel = computed(() =>
 
 const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
   if (!topic) {
+    return false;
+  }
+
+  if (isCallTopic(topic)) {
     return false;
   }
 
@@ -368,6 +374,25 @@ const handleNewContactModal = () => {
 const handleNewBotModal = () => {
   emits('unmount-new-bot', { isChapterOpen: true });
 };
+
+watch(
+  () => [route.value?.type, route.value?.id],
+  ([routeType]) => {
+    if (routeType === RouteTypes.CALL) {
+      setActiveSection('calls');
+      return;
+    }
+
+    if (
+      routeType === RouteTypes.DIALOGS ||
+      routeType === RouteTypes.GROUP ||
+      routeType === RouteTypes.FAVORITES
+    ) {
+      setActiveSection('chats');
+    }
+  },
+  { immediate: true }
+);
 
 watch(
   [() => toolbarState.search, isShareSelectionActive],

@@ -491,6 +491,7 @@ const isActiveHeader = (
   if (routeObj.type === 'ai') return true;
   if (routeObj.id !== null) {
     if (routeObj.type === 'group') return true;
+    if (routeObj.type === 'call') return true;
     if (routeObj.type === 'dialogs') return true;
     if (routeObj.type === 'favorites') return true;
     if (!isMobile.value) {

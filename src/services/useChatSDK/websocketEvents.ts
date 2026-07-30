@@ -70,7 +70,9 @@ export enum WebSocketEventType {
   CALL_CLIENT_CLOSING = 'callClientClosing',
   END_CALL = 'endCall',
   CALL_ENDED = 'callEnded',
-  CALL_PARTICIPANT_LEFT = 'callParticipantLeft'
+  CALL_PARTICIPANT_LEFT = 'callParticipantLeft',
+  CALL_SUMMARY_STATUS = 'callSummaryStatus',
+  CALL_SUMMARY_RECORDING_STARTED = 'callSummaryRecordingStarted'
 }
 
 export interface WebSocketEventPayloads {
@@ -248,6 +250,26 @@ export interface WebSocketEventPayloads {
     participantId: string;
     roomId: string;
     topicId?: string | null;
+  };
+  [WebSocketEventType.CALL_SUMMARY_STATUS]: {
+    id: string;
+    roomId: string;
+    topicId: string;
+    recorderUserId: string;
+    status: 'STARTING' | 'RECORDING' | 'PROCESSING' | 'READY' | 'FAILED';
+    videoStatus: 'STARTING' | 'RECORDING' | 'PROCESSING' | 'READY' | 'FAILED';
+    videoAvailable: boolean;
+    hasTranscript?: boolean;
+    transcript?: string | null;
+    createdAt: Date | string;
+    completedAt?: Date | string | null;
+  };
+  [WebSocketEventType.CALL_SUMMARY_RECORDING_STARTED]: {
+    summaryId?: string | null;
+    roomId: string;
+    topicId: string;
+    recorderUserId: string;
+    recorderName?: string | null;
   };
   [WebSocketEventType.INCOMING_CALL]: {
     roomId: string;

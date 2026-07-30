@@ -201,6 +201,7 @@ const getActiveChatTopicId = (): string | null => {
     route.value.id &&
     (route.value.type === RouteTypes.DIALOGS ||
       route.value.type === RouteTypes.GROUP ||
+      route.value.type === RouteTypes.CALL ||
       route.value.type === RouteTypes.FAVORITES)
   ) {
     return route.value.id;

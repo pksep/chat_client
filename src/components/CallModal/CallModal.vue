@@ -20,6 +20,18 @@
       }"
       @click.stop="closeMobileCallActionsMenu"
     >
+      <div
+        v-if="callSummaryRecordingNotice"
+        class="call-modal__recording-notice"
+        :class="{
+          'call-modal__recording-notice--starting': isSummaryRecordingStarting
+        }"
+        role="status"
+      >
+        <span class="call-modal__recording-notice-dot"></span>
+        <span>{{ callRecordingStatusText }}</span>
+      </div>
+
       <div class="call-modal__group-info">
         <div>
           <button
@@ -101,11 +113,16 @@
               </button>
               <button
                 class="call-modal__mobile-actions-item"
+                :class="{
+                  'call-modal__mobile-actions-item--recording':
+                    isAnySummaryRecording
+                }"
                 type="button"
-                disabled
+                :disabled="isSummaryRecordButtonDisabled"
+                @click="handleSummaryRecordingAction"
               >
                 <ScreenRecordIcon />
-                <span>Включить запись экрана</span>
+                <span>{{ summaryRecordButtonLabel }}</span>
               </button>
               <button
                 class="call-modal__mobile-actions-item"
@@ -288,37 +305,6 @@
               <VideoDisableIcon />
             </button>
 
-            <button
-              v-if="isMobile && isBusyCallNotice"
-              class="call-modal__control-button call-modal__control-button__inactive"
-              type="button"
-              disabled
-            >
-              <ScreenShareIcon />
-            </button>
-
-            <button
-              v-if="!isMobile && !Capacitor.isNativePlatform()"
-              class="call-modal__control-button"
-              :class="{
-                'call-modal__control-button__inactive':
-                  !liveKitState.isScreenSharingActive
-              }"
-              :disabled="isBusyNoticeVisible"
-              @click="handleToggleScreenShare"
-            >
-              <ScreenShareIcon />
-            </button>
-
-            <button
-              v-if="!isMobile"
-              class="call-modal__control-button call-modal__control-button__inactive"
-              type="button"
-              disabled
-            >
-              <ScreenRecordIcon />
-            </button>
-
             <div
               class="call-modal__reaction-picker"
               @mouseenter="handleReactionPickerMouseEnter('main')"
@@ -360,6 +346,43 @@
                 <HandRaiseIcon />
               </button>
             </div>
+
+            <button
+              v-if="isMobile && isBusyCallNotice"
+              class="call-modal__control-button call-modal__control-button__inactive"
+              type="button"
+              disabled
+            >
+              <ScreenShareIcon />
+            </button>
+
+            <button
+              v-if="!isMobile && !Capacitor.isNativePlatform()"
+              class="call-modal__control-button"
+              :class="{
+                'call-modal__control-button__inactive':
+                  !liveKitState.isScreenSharingActive
+              }"
+              :disabled="isBusyNoticeVisible"
+              @click="handleToggleScreenShare"
+            >
+              <ScreenShareIcon />
+            </button>
+
+            <button
+              v-if="!isMobile"
+              class="call-modal__control-button"
+              :class="{
+                'call-modal__control-button__inactive': !isAnySummaryRecording,
+                'call-modal__control-button--recording': isAnySummaryRecording
+              }"
+              type="button"
+              :disabled="isSummaryRecordButtonDisabled"
+              :title="summaryRecordButtonLabel"
+              @click="handleSummaryRecordingAction"
+            >
+              <ScreenRecordIcon />
+            </button>
 
             <button
               class="call-modal__control-button call-modal__control-button--leave"
@@ -557,15 +580,6 @@
               <ScreenShareIcon />
             </button>
 
-            <button
-              v-if="!isCallFullscreenTouchMode && !isMobile"
-              class="call-modal__control-button call-modal__control-button__inactive"
-              type="button"
-              disabled
-            >
-              <ScreenRecordIcon />
-            </button>
-
             <div
               class="call-modal__reaction-picker"
               @mouseenter="handleReactionPickerMouseEnter('overlay')"
@@ -607,6 +621,20 @@
               </button>
             </div>
 
+            <button
+              v-if="!isCallFullscreenTouchMode && !isMobile"
+              class="call-modal__control-button"
+              :class="{
+                'call-modal__control-button__inactive': !isAnySummaryRecording,
+                'call-modal__control-button--recording': isAnySummaryRecording
+              }"
+              type="button"
+              :disabled="isSummaryRecordButtonDisabled"
+              :title="summaryRecordButtonLabel"
+              @click="handleSummaryRecordingAction"
+            >
+              <ScreenRecordIcon />
+            </button>
             <button
               class="call-modal__control-button call-modal__control-button--leave"
               @click="leaveCall"
@@ -690,6 +718,7 @@ import {
   localScreenShareStream,
   open as isCallOpen,
   remoteParticipants,
+  roomId as activeRoomId,
   state as liveKitState,
   topicId as activeTopicId,
   user as activeUser
@@ -722,6 +751,16 @@ import { TopicType } from '../../services/useChatSDK/types';
 import { currentGroup, getGroupById } from '../../composables/useGroup';
 import GroupInfoIcon from './UI/GroupInfoIcon.vue';
 import CallMoreIcon from './UI/CallMoreIcon.vue';
+import {
+  getCallSummaryRecordingNotice,
+  isAnyCallSummaryRecording,
+  isCallSummaryRecording,
+  isCallSummaryRecordingPending,
+  isCallSummaryRecordingStarting,
+  loadActiveCallSummaryRecorders,
+  startCallSummaryRecording,
+  stopCallSummaryRecording
+} from '../../services/useCallSummaries';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const { getSelectedTopic } = useTopics();
@@ -1664,6 +1703,53 @@ const isCallStatusCaptionHidden = computed(
 );
 const isCallStatusLabelHidden = computed(() => !fallbackCallStatusLabel.value);
 const isBusyNoticeVisible = computed(() => isTerminalCallNotice.value);
+const canStopSummaryRecording = computed(() =>
+  isCallSummaryRecording(activeRoomId.value)
+);
+const isAnySummaryRecording = computed(() =>
+  isAnyCallSummaryRecording(activeRoomId.value)
+);
+const isSummaryRecordingPending = computed(() =>
+  isCallSummaryRecordingPending(activeRoomId.value)
+);
+const isSummaryRecordingStarting = computed(() =>
+  isCallSummaryRecordingStarting(activeRoomId.value)
+);
+const callRecordingStatusText = computed(() =>
+  isAnySummaryRecording.value
+    ? 'Идет запись экрана'
+    : callSummaryRecordingNotice.value
+);
+const canStartSummaryRecording = computed(
+  () =>
+    isCallOpen.value &&
+    !isIncoming.value &&
+    !isCalling.value &&
+    !isBusyNoticeVisible.value &&
+    !!activeRoomId.value &&
+    !!activeTopicId.value &&
+    liveKitState.connectionQuality !== 'lost'
+);
+const callSummaryRecordingNotice = computed(() =>
+  getCallSummaryRecordingNotice(activeRoomId.value)
+);
+const summaryRecordButtonLabel = computed(() => {
+  if (isSummaryRecordingPending.value) {
+    return callSummaryRecordingNotice.value || 'Начинается запись...';
+  }
+
+  if (!isAnySummaryRecording.value) {
+    return 'Записать звонок';
+  }
+
+  return canStopSummaryRecording.value ? 'Остановить запись' : 'Идёт запись';
+});
+const isSummaryRecordButtonDisabled = computed(
+  () =>
+    isSummaryRecordingPending.value ||
+    (!canStopSummaryRecording.value && !canStartSummaryRecording.value) ||
+    (isAnySummaryRecording.value && !canStopSummaryRecording.value)
+);
 const localCallBackgroundPlaceholderStyle = computed<CSSProperties | null>(
   () => {
     if (
@@ -1802,19 +1888,9 @@ const buildPromotedParticipantOrder = (
       const participant = participantMap.get(participantId);
 
       return (
-        !!participant?.isSpeaking &&
-        !participant.isScreenShareActive &&
-        !participant.isHandRaised
-      );
-    }),
-    ...nextOrder.filter(participantId => {
-      const participant = participantMap.get(participantId);
-
-      return (
         (!!participant?.activeReactionEmoji ||
           !!participant?.activeReactionVideoSrc) &&
         !participant.isScreenShareActive &&
-        !participant.isSpeaking &&
         !participant.isHandRaised
       );
     })
@@ -2292,6 +2368,16 @@ watch(
     shouldSkipInitialParticipantAutofocus.value = true;
     currentParticipantPage.value = 0;
     scheduleRemoteVideoSubscriptionSync();
+  },
+  { immediate: true }
+);
+
+watch(
+  [isCallOpen, activeRoomId],
+  ([open, roomId]) => {
+    if (open && roomId) {
+      void loadActiveCallSummaryRecorders(roomId);
+    }
   },
   { immediate: true }
 );
@@ -2810,6 +2896,22 @@ const handleToggleScreenShare = async () => {
 const handleMobileScreenShareAction = async () => {
   closeMobileCallActionsMenu();
   await handleToggleScreenShare();
+};
+
+const handleSummaryRecordingAction = async () => {
+  const room = activeRoomId.value;
+  const topic = activeTopicId.value;
+  if (!room || !topic || isSummaryRecordButtonDisabled.value) {
+    return;
+  }
+
+  closeMobileCallActionsMenu();
+  if (canStopSummaryRecording.value) {
+    await stopCallSummaryRecording(room);
+    return;
+  }
+
+  await startCallSummaryRecording(room, topic);
 };
 
 const clearReactionPopoverCloseTimeout = () => {
