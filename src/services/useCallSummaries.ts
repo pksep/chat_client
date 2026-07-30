@@ -47,6 +47,8 @@ interface CallGeneratedMaterialDto {
   found?: boolean;
 }
 
+export type CallTopicPromptPlaceholderKind = 'choose-actions' | 'not-recorded';
+
 const summariesByTopic = reactive<Record<string, CallSummaryDto | undefined>>(
   {}
 );
@@ -851,7 +853,8 @@ export const sendGeneratedCallPromptResponseToChat = async (
 };
 
 export const sendCallTopicPromptPlaceholderToChat = async (
-  targetTopicId: string
+  targetTopicId: string,
+  kind: CallTopicPromptPlaceholderKind
 ): Promise<boolean> => {
   if (!targetTopicId) {
     return false;
@@ -861,7 +864,7 @@ export const sendCallTopicPromptPlaceholderToChat = async (
     const api = useChatApi();
     const response = await api.post(
       '/calls/summaries/prompt-placeholder/send',
-      { targetTopicId },
+      { targetTopicId, kind },
       { parsed: false }
     );
     await readResponse<{ text?: string; message?: unknown }>(response);
