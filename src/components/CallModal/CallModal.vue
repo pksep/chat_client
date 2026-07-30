@@ -29,16 +29,7 @@
         role="status"
       >
         <span class="call-modal__recording-notice-dot"></span>
-        <span>{{ callSummaryRecordingNotice }}</span>
-        <span
-          v-if="isSummaryRecordingStarting"
-          class="call-modal__recording-notice-typing"
-          aria-hidden="true"
-        >
-          <span></span>
-          <span></span>
-          <span></span>
-        </span>
+        <span>{{ callRecordingStatusText }}</span>
       </div>
 
       <div class="call-modal__group-info">
@@ -314,43 +305,6 @@
               <VideoDisableIcon />
             </button>
 
-            <button
-              v-if="isMobile && isBusyCallNotice"
-              class="call-modal__control-button call-modal__control-button__inactive"
-              type="button"
-              disabled
-            >
-              <ScreenShareIcon />
-            </button>
-
-            <button
-              v-if="!isMobile && !Capacitor.isNativePlatform()"
-              class="call-modal__control-button"
-              :class="{
-                'call-modal__control-button__inactive':
-                  !liveKitState.isScreenSharingActive
-              }"
-              :disabled="isBusyNoticeVisible"
-              @click="handleToggleScreenShare"
-            >
-              <ScreenShareIcon />
-            </button>
-
-            <button
-              v-if="!isMobile"
-              class="call-modal__control-button"
-              :class="{
-                'call-modal__control-button__inactive': !isAnySummaryRecording,
-                'call-modal__control-button--recording': isAnySummaryRecording
-              }"
-              type="button"
-              :disabled="isSummaryRecordButtonDisabled"
-              :title="summaryRecordButtonLabel"
-              @click="handleSummaryRecordingAction"
-            >
-              <ScreenRecordIcon />
-            </button>
-
             <div
               class="call-modal__reaction-picker"
               @mouseenter="handleReactionPickerMouseEnter('main')"
@@ -392,6 +346,43 @@
                 <HandRaiseIcon />
               </button>
             </div>
+
+            <button
+              v-if="isMobile && isBusyCallNotice"
+              class="call-modal__control-button call-modal__control-button__inactive"
+              type="button"
+              disabled
+            >
+              <ScreenShareIcon />
+            </button>
+
+            <button
+              v-if="!isMobile && !Capacitor.isNativePlatform()"
+              class="call-modal__control-button"
+              :class="{
+                'call-modal__control-button__inactive':
+                  !liveKitState.isScreenSharingActive
+              }"
+              :disabled="isBusyNoticeVisible"
+              @click="handleToggleScreenShare"
+            >
+              <ScreenShareIcon />
+            </button>
+
+            <button
+              v-if="!isMobile"
+              class="call-modal__control-button"
+              :class="{
+                'call-modal__control-button__inactive': !isAnySummaryRecording,
+                'call-modal__control-button--recording': isAnySummaryRecording
+              }"
+              type="button"
+              :disabled="isSummaryRecordButtonDisabled"
+              :title="summaryRecordButtonLabel"
+              @click="handleSummaryRecordingAction"
+            >
+              <ScreenRecordIcon />
+            </button>
 
             <button
               class="call-modal__control-button call-modal__control-button--leave"
@@ -589,21 +580,6 @@
               <ScreenShareIcon />
             </button>
 
-            <button
-              v-if="!isCallFullscreenTouchMode && !isMobile"
-              class="call-modal__control-button"
-              :class="{
-                'call-modal__control-button__inactive': !isAnySummaryRecording,
-                'call-modal__control-button--recording': isAnySummaryRecording
-              }"
-              type="button"
-              :disabled="isSummaryRecordButtonDisabled"
-              :title="summaryRecordButtonLabel"
-              @click="handleSummaryRecordingAction"
-            >
-              <ScreenRecordIcon />
-            </button>
-
             <div
               class="call-modal__reaction-picker"
               @mouseenter="handleReactionPickerMouseEnter('overlay')"
@@ -645,6 +621,20 @@
               </button>
             </div>
 
+            <button
+              v-if="!isCallFullscreenTouchMode && !isMobile"
+              class="call-modal__control-button"
+              :class="{
+                'call-modal__control-button__inactive': !isAnySummaryRecording,
+                'call-modal__control-button--recording': isAnySummaryRecording
+              }"
+              type="button"
+              :disabled="isSummaryRecordButtonDisabled"
+              :title="summaryRecordButtonLabel"
+              @click="handleSummaryRecordingAction"
+            >
+              <ScreenRecordIcon />
+            </button>
             <button
               class="call-modal__control-button call-modal__control-button--leave"
               @click="leaveCall"
@@ -1724,6 +1714,11 @@ const isSummaryRecordingPending = computed(() =>
 );
 const isSummaryRecordingStarting = computed(() =>
   isCallSummaryRecordingStarting(activeRoomId.value)
+);
+const callRecordingStatusText = computed(() =>
+  isAnySummaryRecording.value
+    ? 'Идет запись экрана'
+    : callSummaryRecordingNotice.value
 );
 const canStartSummaryRecording = computed(
   () =>
