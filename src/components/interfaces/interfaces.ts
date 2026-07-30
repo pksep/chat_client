@@ -12,6 +12,20 @@ export interface IHeaderProps {
   contact?: IUser;
   members?: IUser[];
   dataTestid?: string;
+  displayRoute?: IHeaderDisplayRoute | null;
+}
+
+export interface IHeaderDisplayRoute {
+  type: string;
+  id: string | null;
+}
+
+export interface IMessageRenderedTopicState {
+  topicId: string | null;
+  routeTopicId: string | null;
+  messageCount: number;
+  isCurrent: boolean;
+  isReady?: boolean;
 }
 
 export interface IMenuEmits {
@@ -60,6 +74,7 @@ export type ITopicInfo = Partial<TopicSetting> & {
 
 export type ITopic = Topic & {
   info?: ITopicInfo;
+  isFavorite?: boolean;
   isPin?: boolean;
   lastMessage?: IMessage;
   activeCall?: {
@@ -139,6 +154,7 @@ export interface IChatContainerConfig {
   CHAT_LIVEKIT_URL?: string;
   CHAT_URL?: string;
   CHAT_BOT_GATEWAY?: string;
+  CHAT_CALL_TOPIC_AUTO_PROMPT_ENABLED?: string;
 }
 
 export interface IChatContainerProps {
@@ -181,6 +197,14 @@ export type IMessage = Message & {
   ex?: string; // "{ clientId: string }"
   taggedUserIds?: string[];
 };
+
+export interface IMessageViewportSnapshot {
+  anchorMessageId: string;
+  anchorRelativeTop: number;
+  firstVisibleIndex: number;
+  lastVisibleIndex: number;
+  visibleMessageIds: string[];
+}
 
 export enum MobilePlatformEnum {
   ANDROID = 'android',

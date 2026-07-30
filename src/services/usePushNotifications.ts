@@ -326,6 +326,35 @@ const consumeWebCallActionFromUrl = () => {
   void handleNativeCallActionLazy(action, roomId, topicId);
 };
 
+const isChatServiceWorkerRegistration = (
+  registration?: ServiceWorkerRegistration
+): boolean =>
+  Boolean(
+    registration &&
+      [registration.active, registration.waiting, registration.installing].some(
+        worker => worker?.scriptURL.endsWith('/service-worker.js')
+      )
+  );
+
+const getOrRegisterWebServiceWorker =
+  async (): Promise<ServiceWorkerRegistration> => {
+    const existingRegistration =
+      await navigator.serviceWorker.getRegistration('/');
+    const registration =
+      existingRegistration &&
+      isChatServiceWorkerRegistration(existingRegistration)
+        ? existingRegistration
+        : await navigator.serviceWorker.register('/service-worker.js');
+
+    try {
+      await registration.update();
+    } catch (error) {
+      console.warn('Не удалось обновить service worker:', error);
+    }
+
+    return registration;
+  };
+
 const bindWebServiceWorkerMessageListener = () => {
   if (
     Capacitor.isNativePlatform() ||
@@ -343,6 +372,7 @@ const bindWebServiceWorkerMessageListener = () => {
           roomId?: string | null;
           topicId?: string | null;
           notification?: NativeNotificationData;
+          source?: string;
         }
       | undefined;
 
@@ -355,6 +385,23 @@ const bindWebServiceWorkerMessageListener = () => {
         payload.roomId || undefined,
         payload.topicId || undefined
       );
+      return;
+    }
+
+    if (payload?.type === 'CHAT_BACKGROUND_SYNC_UPDATED') {
+      void import('./useWebChatBackgroundSync')
+        .then(({ importWebChatBackgroundSnapshot }) =>
+          importWebChatBackgroundSnapshot(getCurrentUserId() || undefined, {
+            source: `service-worker-${payload.source || 'message'}`,
+            requireNewerThanLocalPts: true
+          })
+        )
+        .catch(error => {
+          console.warn(
+            'Не удалось импортировать web-снимок фоновой синхронизации чата:',
+            error
+          );
+        });
       return;
     }
 
@@ -569,15 +616,7 @@ export const initPushNotifications = async () => {
     await Notification.requestPermission();
   if (Notification.permission !== 'granted') return;
 
-  // Unregister all old service workers to ensure we always have the latest
-  const registrations = await navigator.serviceWorker.getRegistrations();
-  for (const reg of registrations) {
-    await reg.unregister();
-    console.log('Unregistered old service worker');
-  }
-
-  const registration =
-    await navigator.serviceWorker.register('/service-worker.js');
+  const registration = await getOrRegisterWebServiceWorker();
   bindWebServiceWorkerMessageListener();
   consumeWebCallActionFromUrl();
 

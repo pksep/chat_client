@@ -2,17 +2,36 @@
   <div
     v-if="isCallOpen"
     class="call-modal"
-    :class="{ 'call-modal--hidden': !isCallModalVisible }"
-    @click.stop="hideModal"
+    :class="{
+      'call-modal--hidden': !isCallModalVisible,
+      'call-modal--topic-hover': isCallBackdropOverTopic
+    }"
+    @click.stop="handleCallModalBackdropClick"
+    @mousemove="handleCallModalBackdropMouseMove"
+    @mouseleave="clearCallBackdropTopicHover"
   >
     <div
       class="call-modal__container"
       :class="{
         'call-modal__container--full-screen':
-          liveKitState.isFullScreen || isMobile
+          liveKitState.isFullScreen || isMobile,
+        'call-modal__container--status-notice': isStatusCallNotice,
+        'call-modal__container--busy-notice': isBusyCallNotice
       }"
       @click.stop="closeMobileCallActionsMenu"
     >
+      <div
+        v-if="callSummaryRecordingNotice"
+        class="call-modal__recording-notice"
+        :class="{
+          'call-modal__recording-notice--starting': isSummaryRecordingStarting
+        }"
+        role="status"
+      >
+        <span class="call-modal__recording-notice-dot"></span>
+        <span>{{ callRecordingStatusText }}</span>
+      </div>
+
       <div class="call-modal__group-info">
         <div>
           <button
@@ -40,12 +59,18 @@
         </div>
 
         <div
-          v-if="isCallReconnectingNotice"
+          v-if="isCallConnectionStatusVisible"
           class="call-modal__connection-status"
+          :class="{
+            'call-modal__connection-status--degraded': isCallConnectionDegraded
+          }"
           role="status"
         >
-          <span class="call-modal__connection-status-spinner"></span>
-          <span>{{ callStatusNotice }}</span>
+          <span
+            v-if="isCallReconnectingNotice"
+            class="call-modal__connection-status-spinner"
+          ></span>
+          <span>{{ callConnectionStatusText }}</span>
           <ErrorIcon class="call-modal__connection-status-alert" />
         </div>
 
@@ -88,11 +113,16 @@
               </button>
               <button
                 class="call-modal__mobile-actions-item"
+                :class="{
+                  'call-modal__mobile-actions-item--recording':
+                    isAnySummaryRecording
+                }"
                 type="button"
-                disabled
+                :disabled="isSummaryRecordButtonDisabled"
+                @click="handleSummaryRecordingAction"
               >
                 <ScreenRecordIcon />
-                <span>Включить запись экрана</span>
+                <span>{{ summaryRecordButtonLabel }}</span>
               </button>
               <button
                 class="call-modal__mobile-actions-item"
@@ -111,35 +141,21 @@
         v-show="showAvatarFallback"
         class="call-modal__avatar-container"
         :class="{
-          'call-modal__avatar-container--ended': isEndedCallNotice
+          'call-modal__avatar-container--ended': isEndedCallNotice,
+          'call-modal__avatar-container--status': isStatusCallNotice,
+          'call-modal__avatar-container--busy': isBusyCallNotice
         }"
       >
-        <h3
-          v-if="displayAvatarInfo"
-          class="call-modal__user-name"
-          :class="{
-            'call-modal__terminal-placeholder': isTerminalCallNotice
-          }"
-        >
-          {{ displayAvatarTitle }}
-        </h3>
         <p
-          class="call-modal__status"
+          v-if="shouldReserveCallStatusText"
+          class="call-modal__notice-caption"
           :class="{
-            'call-modal__terminal-placeholder': isTerminalCallNotice
+            'call-modal__status-text--hidden': isCallStatusCaptionHidden
           }"
+          :aria-hidden="isCallStatusCaptionHidden || undefined"
         >
-          <span v-if="isIncoming">{{ incomingCallLabel }}</span>
-          <span v-else-if="isCalling">{{ connectingLabel }}</span>
-          <span v-else>{{ formattedTime }}</span>
+          {{ reservedCallStatusCaption }}
         </p>
-
-        <p class="call-modal__notice">
-          <span v-if="isTerminalCallNotice">
-            {{ callStatusNotice }}
-          </span>
-        </p>
-
         <CachedAvatar
           v-if="displayAvatarInfo"
           :path="displayAvatarInfo.avatarUrl"
@@ -147,6 +163,16 @@
           class="call-modal__avatar"
           :initials="displayAvatarInfo.initials"
         />
+        <p
+          v-if="shouldReserveCallStatusText"
+          class="call-modal__notice"
+          :class="{
+            'call-modal__status-text--hidden': isCallStatusLabelHidden
+          }"
+          :aria-hidden="isCallStatusLabelHidden || undefined"
+        >
+          {{ reservedCallStatusLabel }}
+        </p>
       </div>
 
       <GroupCallLayout
@@ -279,28 +305,6 @@
               <VideoDisableIcon />
             </button>
 
-            <button
-              v-if="!isMobile && !Capacitor.isNativePlatform()"
-              class="call-modal__control-button"
-              :class="{
-                'call-modal__control-button__inactive':
-                  !liveKitState.isScreenSharingActive
-              }"
-              :disabled="isBusyNoticeVisible"
-              @click="handleToggleScreenShare"
-            >
-              <ScreenShareIcon />
-            </button>
-
-            <button
-              v-if="!isMobile"
-              class="call-modal__control-button call-modal__control-button__inactive"
-              type="button"
-              disabled
-            >
-              <ScreenRecordIcon />
-            </button>
-
             <div
               class="call-modal__reaction-picker"
               @mouseenter="handleReactionPickerMouseEnter('main')"
@@ -342,6 +346,43 @@
                 <HandRaiseIcon />
               </button>
             </div>
+
+            <button
+              v-if="isMobile && isBusyCallNotice"
+              class="call-modal__control-button call-modal__control-button__inactive"
+              type="button"
+              disabled
+            >
+              <ScreenShareIcon />
+            </button>
+
+            <button
+              v-if="!isMobile && !Capacitor.isNativePlatform()"
+              class="call-modal__control-button"
+              :class="{
+                'call-modal__control-button__inactive':
+                  !liveKitState.isScreenSharingActive
+              }"
+              :disabled="isBusyNoticeVisible"
+              @click="handleToggleScreenShare"
+            >
+              <ScreenShareIcon />
+            </button>
+
+            <button
+              v-if="!isMobile"
+              class="call-modal__control-button"
+              :class="{
+                'call-modal__control-button__inactive': !isAnySummaryRecording,
+                'call-modal__control-button--recording': isAnySummaryRecording
+              }"
+              type="button"
+              :disabled="isSummaryRecordButtonDisabled"
+              :title="summaryRecordButtonLabel"
+              @click="handleSummaryRecordingAction"
+            >
+              <ScreenRecordIcon />
+            </button>
 
             <button
               class="call-modal__control-button call-modal__control-button--leave"
@@ -397,12 +438,19 @@
               </div>
 
               <div
-                v-if="isCallReconnectingNotice"
+                v-if="isCallConnectionStatusVisible"
                 class="call-modal__connection-status call-modal__connection-status--overlay"
+                :class="{
+                  'call-modal__connection-status--degraded':
+                    isCallConnectionDegraded
+                }"
                 role="status"
               >
-                <span class="call-modal__connection-status-spinner"></span>
-                <span>{{ callStatusNotice }}</span>
+                <span
+                  v-if="isCallReconnectingNotice"
+                  class="call-modal__connection-status-spinner"
+                ></span>
+                <span>{{ callConnectionStatusText }}</span>
                 <ErrorIcon class="call-modal__connection-status-alert" />
               </div>
 
@@ -532,15 +580,6 @@
               <ScreenShareIcon />
             </button>
 
-            <button
-              v-if="!isCallFullscreenTouchMode && !isMobile"
-              class="call-modal__control-button call-modal__control-button__inactive"
-              type="button"
-              disabled
-            >
-              <ScreenRecordIcon />
-            </button>
-
             <div
               class="call-modal__reaction-picker"
               @mouseenter="handleReactionPickerMouseEnter('overlay')"
@@ -582,6 +621,20 @@
               </button>
             </div>
 
+            <button
+              v-if="!isCallFullscreenTouchMode && !isMobile"
+              class="call-modal__control-button"
+              :class="{
+                'call-modal__control-button__inactive': !isAnySummaryRecording,
+                'call-modal__control-button--recording': isAnySummaryRecording
+              }"
+              type="button"
+              :disabled="isSummaryRecordButtonDisabled"
+              :title="summaryRecordButtonLabel"
+              @click="handleSummaryRecordingAction"
+            >
+              <ScreenRecordIcon />
+            </button>
             <button
               class="call-modal__control-button call-modal__control-button--leave"
               @click="leaveCall"
@@ -665,6 +718,7 @@ import {
   localScreenShareStream,
   open as isCallOpen,
   remoteParticipants,
+  roomId as activeRoomId,
   state as liveKitState,
   topicId as activeTopicId,
   user as activeUser
@@ -697,6 +751,16 @@ import { TopicType } from '../../services/useChatSDK/types';
 import { currentGroup, getGroupById } from '../../composables/useGroup';
 import GroupInfoIcon from './UI/GroupInfoIcon.vue';
 import CallMoreIcon from './UI/CallMoreIcon.vue';
+import {
+  getCallSummaryRecordingNotice,
+  isAnyCallSummaryRecording,
+  isCallSummaryRecording,
+  isCallSummaryRecordingPending,
+  isCallSummaryRecordingStarting,
+  loadActiveCallSummaryRecorders,
+  startCallSummaryRecording,
+  stopCallSummaryRecording
+} from '../../services/useCallSummaries';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const { getSelectedTopic } = useTopics();
@@ -804,7 +868,10 @@ const hasManualParticipantSelection = ref(false);
 const shouldSkipInitialParticipantAutofocus = ref(true);
 const isStageVideoOverlayVisible = ref(false);
 const isVideoOverlayControlsVisible = ref(false);
+const isCallBackdropOverTopic = ref(false);
 const videoOverlayRegion = ref<'top' | 'bottom' | null>(null);
+const CALL_MODAL_TOPIC_HOVER_CLASS = 'contact-list__item--call-modal-hover';
+let callBackdropHoveredTopicElement: HTMLElement | null = null;
 let focusedScreenShareFitCleanup: (() => void) | null = null;
 let overlayMediaGestureCleanup: (() => void) | null = null;
 let overlayMediaGestureBoundSurface: HTMLElement | null = null;
@@ -1214,7 +1281,7 @@ let reactionPopoverCloseTimeout: ReturnType<typeof setTimeout> | null = null;
 let reactionLongPressTimeout: ReturnType<typeof setTimeout> | null = null;
 let didOpenReactionPopoverByLongPress = false;
 let lastReactionTouchAt = 0;
-const incomingCallLabel = 'Входящий вызов...';
+const incomingCallLabel = 'Входящий звонок';
 const connectingLabel = 'Соединение...';
 const singleParticipantLabel = 'участник';
 const fewParticipantsLabel = 'участника';
@@ -1571,14 +1638,23 @@ const displayAvatarInfo = computed(() => {
   };
 });
 
-const displayAvatarTitle = computed(() =>
-  isGroupCallLayout.value
-    ? displayAvatarInfo.value?.name || groupCallLabel
-    : displayAvatarInfo.value?.initials || ''
-);
 const isCallReconnectingNotice = computed(
   () =>
     !!callStatusNotice.value && callStatusNoticeKind.value === 'reconnecting'
+);
+const isCallConnectionDegraded = computed(
+  () =>
+    !isCallReconnectingNotice.value &&
+    (liveKitState.connectionQuality === 'poor' ||
+      liveKitState.connectionQuality === 'lost')
+);
+const isCallConnectionStatusVisible = computed(
+  () => isCallReconnectingNotice.value || isCallConnectionDegraded.value
+);
+const callConnectionStatusText = computed(() =>
+  isCallReconnectingNotice.value
+    ? callStatusNotice.value
+    : 'Нестабильная сеть. Качество видео снижено'
 );
 const isTerminalCallNotice = computed(
   () =>
@@ -1587,7 +1663,93 @@ const isTerminalCallNotice = computed(
 const isEndedCallNotice = computed(
   () => !!callStatusNotice.value && callStatusNoticeKind.value === 'ended'
 );
+const isBusyCallNotice = computed(
+  () => !!callStatusNotice.value && callStatusNoticeKind.value === 'busy'
+);
+const isStatusCallNotice = computed(
+  () => isIncoming.value || isCalling.value || isTerminalCallNotice.value
+);
+const fallbackCallStatusCaption = computed(() => {
+  if (isBusyCallNotice.value || isIncoming.value || isCalling.value) {
+    return connectingLabel;
+  }
+
+  return '';
+});
+const fallbackCallStatusLabel = computed(() => {
+  if (isBusyCallNotice.value) {
+    return callStatusNotice.value;
+  }
+
+  if (isTerminalCallNotice.value) {
+    return callStatusNotice.value;
+  }
+
+  if (isIncoming.value) {
+    return incomingCallLabel;
+  }
+
+  return '';
+});
+const shouldReserveCallStatusText = computed(() => isStatusCallNotice.value);
+const reservedCallStatusCaption = computed(
+  () => fallbackCallStatusCaption.value || connectingLabel
+);
+const reservedCallStatusLabel = computed(
+  () => fallbackCallStatusLabel.value || incomingCallLabel
+);
+const isCallStatusCaptionHidden = computed(
+  () => !fallbackCallStatusCaption.value
+);
+const isCallStatusLabelHidden = computed(() => !fallbackCallStatusLabel.value);
 const isBusyNoticeVisible = computed(() => isTerminalCallNotice.value);
+const canStopSummaryRecording = computed(() =>
+  isCallSummaryRecording(activeRoomId.value)
+);
+const isAnySummaryRecording = computed(() =>
+  isAnyCallSummaryRecording(activeRoomId.value)
+);
+const isSummaryRecordingPending = computed(() =>
+  isCallSummaryRecordingPending(activeRoomId.value)
+);
+const isSummaryRecordingStarting = computed(() =>
+  isCallSummaryRecordingStarting(activeRoomId.value)
+);
+const callRecordingStatusText = computed(() =>
+  isAnySummaryRecording.value
+    ? 'Идет запись экрана'
+    : callSummaryRecordingNotice.value
+);
+const canStartSummaryRecording = computed(
+  () =>
+    isCallOpen.value &&
+    !isIncoming.value &&
+    !isCalling.value &&
+    !isBusyNoticeVisible.value &&
+    !!activeRoomId.value &&
+    !!activeTopicId.value &&
+    liveKitState.connectionQuality !== 'lost'
+);
+const callSummaryRecordingNotice = computed(() =>
+  getCallSummaryRecordingNotice(activeRoomId.value)
+);
+const summaryRecordButtonLabel = computed(() => {
+  if (isSummaryRecordingPending.value) {
+    return callSummaryRecordingNotice.value || 'Начинается запись...';
+  }
+
+  if (!isAnySummaryRecording.value) {
+    return 'Записать звонок';
+  }
+
+  return canStopSummaryRecording.value ? 'Остановить запись' : 'Идёт запись';
+});
+const isSummaryRecordButtonDisabled = computed(
+  () =>
+    isSummaryRecordingPending.value ||
+    (!canStopSummaryRecording.value && !canStartSummaryRecording.value) ||
+    (isAnySummaryRecording.value && !canStopSummaryRecording.value)
+);
 const localCallBackgroundPlaceholderStyle = computed<CSSProperties | null>(
   () => {
     if (
@@ -1726,19 +1888,9 @@ const buildPromotedParticipantOrder = (
       const participant = participantMap.get(participantId);
 
       return (
-        !!participant?.isSpeaking &&
-        !participant.isScreenShareActive &&
-        !participant.isHandRaised
-      );
-    }),
-    ...nextOrder.filter(participantId => {
-      const participant = participantMap.get(participantId);
-
-      return (
         (!!participant?.activeReactionEmoji ||
           !!participant?.activeReactionVideoSrc) &&
         !participant.isScreenShareActive &&
-        !participant.isSpeaking &&
         !participant.isHandRaised
       );
     })
@@ -2221,6 +2373,16 @@ watch(
 );
 
 watch(
+  [isCallOpen, activeRoomId],
+  ([open, roomId]) => {
+    if (open && roomId) {
+      void loadActiveCallSummaryRecorders(roomId);
+    }
+  },
+  { immediate: true }
+);
+
+watch(
   currentCallTopic,
   topic => {
     if (topic?.type === TopicType.Group && topic?.id) {
@@ -2261,6 +2423,8 @@ watch(
 );
 
 onMounted(() => {
+  window.addEventListener('keydown', handleCallModalKeydown, true);
+
   if (typeof ResizeObserver !== 'undefined') {
     remoteVideoResizeObserver = new ResizeObserver(entries => {
       entries.forEach(entry => {
@@ -2285,6 +2449,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleCallModalKeydown, true);
+  clearCallBackdropTopicHover();
   remoteVideoResizeObserver?.disconnect();
   remoteVideoResizeObserver = null;
   observedRemoteVideoBindings = new Map();
@@ -2486,10 +2652,143 @@ const hideModal = () => {
   }
 
   closeMobileCallActionsMenu();
+  state.value.openGroupInfoModal = false;
+  clearCallBackdropTopicHover();
 
   if (!isIncoming.value) {
     isCallModalVisible.value = false;
   }
+};
+
+const getElementBehindCallModal = (event: MouseEvent): Element | null => {
+  const modalElement = event.currentTarget as HTMLElement | null;
+
+  if (!modalElement) {
+    return null;
+  }
+
+  const previousPointerEvents = modalElement.style.pointerEvents;
+  modalElement.style.pointerEvents = 'none';
+  const targetElement = document.elementFromPoint(event.clientX, event.clientY);
+  modalElement.style.pointerEvents = previousPointerEvents;
+
+  if (!targetElement || modalElement.contains(targetElement)) {
+    return null;
+  }
+
+  return targetElement;
+};
+
+const getTopicElementBehindCallModal = (
+  event: MouseEvent
+): HTMLElement | null => {
+  const targetElement = getElementBehindCallModal(event);
+  const topicElement = targetElement?.closest<HTMLElement>(
+    '.chat__menu .contact-list__item:not(.contact-list__skeleton-item)'
+  );
+
+  if (!topicElement?.closest('.chat__menu')) {
+    return null;
+  }
+
+  return topicElement;
+};
+
+const clearCallBackdropTopicHover = () => {
+  callBackdropHoveredTopicElement?.classList.remove(
+    CALL_MODAL_TOPIC_HOVER_CLASS
+  );
+  callBackdropHoveredTopicElement = null;
+  isCallBackdropOverTopic.value = false;
+};
+
+const setCallBackdropTopicHover = (topicElement: HTMLElement | null) => {
+  if (callBackdropHoveredTopicElement === topicElement) {
+    return;
+  }
+
+  clearCallBackdropTopicHover();
+
+  if (!topicElement) {
+    return;
+  }
+
+  topicElement.classList.add(CALL_MODAL_TOPIC_HOVER_CLASS);
+  callBackdropHoveredTopicElement = topicElement;
+  isCallBackdropOverTopic.value = true;
+};
+
+const forwardClickToTopicBehindCallModal = (
+  event: MouseEvent,
+  topicElement: HTMLElement | null
+) => {
+  if (!topicElement) {
+    return;
+  }
+
+  topicElement.dispatchEvent(
+    new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      detail: event.detail,
+      screenX: event.screenX,
+      screenY: event.screenY,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      ctrlKey: event.ctrlKey,
+      altKey: event.altKey,
+      shiftKey: event.shiftKey,
+      metaKey: event.metaKey,
+      button: event.button,
+      buttons: event.buttons
+    })
+  );
+};
+
+const handleCallModalBackdropClick = (event: MouseEvent) => {
+  const topicElement = getTopicElementBehindCallModal(event);
+
+  hideModal();
+
+  if (topicElement && !isCallModalVisible.value) {
+    forwardClickToTopicBehindCallModal(event, topicElement);
+  }
+};
+
+const handleCallModalBackdropMouseMove = (event: MouseEvent) => {
+  if (event.target !== event.currentTarget) {
+    clearCallBackdropTopicHover();
+    return;
+  }
+
+  setCallBackdropTopicHover(getTopicElementBehindCallModal(event));
+};
+
+const handleCallModalKeydown = (event: KeyboardEvent) => {
+  if (
+    event.key !== 'Escape' ||
+    !isCallOpen.value ||
+    !isCallModalVisible.value
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+
+  if (isStageVideoOverlayVisible.value) {
+    closeStageVideoOverlay();
+    return;
+  }
+
+  if (liveKitState.isFullScreen && !isMobile.value) {
+    liveKitState.isFullScreen = false;
+    return;
+  }
+
+  hideModal();
 };
 
 const closeMobileCallActionsMenu = () => {
@@ -2597,6 +2896,22 @@ const handleToggleScreenShare = async () => {
 const handleMobileScreenShareAction = async () => {
   closeMobileCallActionsMenu();
   await handleToggleScreenShare();
+};
+
+const handleSummaryRecordingAction = async () => {
+  const room = activeRoomId.value;
+  const topic = activeTopicId.value;
+  if (!room || !topic || isSummaryRecordButtonDisabled.value) {
+    return;
+  }
+
+  closeMobileCallActionsMenu();
+  if (canStopSummaryRecording.value) {
+    await stopCallSummaryRecording(room);
+    return;
+  }
+
+  await startCallSummaryRecording(room, topic);
 };
 
 const clearReactionPopoverCloseTimeout = () => {

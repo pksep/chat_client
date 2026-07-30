@@ -1144,6 +1144,10 @@ export class ChatSDK {
     return await this.message.deleteMessage(topicId, messageId);
   }
 
+  async clearTopicHistory(topicId: string): Promise<void> {
+    return await this.message.clearTopicHistory(topicId);
+  }
+
   async toggleMessageReaction(
     topicId: string,
     messageId: string,

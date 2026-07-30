@@ -55,6 +55,7 @@
               :show-checkbox="isShareSelectionActive"
               :selected-topic-ids="selectedTopicIds"
               :search-query="toolbarState.search"
+              :is-loading="isTopicsLoading"
               :message-results="
                 isShareSelectionActive ? [] : filteredMessageSearchResults
               "
@@ -80,6 +81,7 @@
         >
           <CallsPage
             :is-active="activeSection === 'calls'"
+            :auto-select-first="false"
             :data-testid="`${props.dataTestid}-MobileList-CallsPage`"
           />
         </section>
@@ -171,11 +173,17 @@ import {
   type IMessageSearchResult
 } from '../../composables/useMessageSearch';
 import { isBotTopic } from '../../utils/bot';
+import { isFavoriteTopic } from '../../utils/favorite-topic';
+import { isCallTopic } from '../../utils/call-topic';
 import {
   getChatsToolbarFilterBadgeState,
   getChatsToolbarFilterCounts,
   getChatsToolbarFilterMutedOnly
 } from '../../utils/chats-toolbar-filter-badge';
+import {
+  matchesTopicSearch,
+  normalizeAtSearchQuery
+} from '../../utils/searchMatch';
 
 const route = useUrlWatcher();
 
@@ -188,7 +196,7 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
   dataTestid: () => 'MobileList'
 });
 
-const { getTopicList } = useTopics();
+const { getTopicList, loading: isTopicsLoading } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, setActiveSection } = useChatMenu();
 const { isShareSelectionActive, selectedTopicIds, toggleShareTopic } =
@@ -237,12 +245,23 @@ const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
     return false;
   }
 
+  if (isCallTopic(topic)) {
+    return false;
+  }
+
   if (toolbarState.filter === 'chats') {
-    return topic.type === TopicType.DM && !isBotTopic(topic);
+    return (
+      topic.type === TopicType.DM &&
+      !isBotTopic(topic) &&
+      !isFavoriteTopic(topic, authUserId.value)
+    );
   }
 
   if (toolbarState.filter === 'groups') {
-    return topic.type === TopicType.Group;
+    return (
+      topic.type === TopicType.Group &&
+      !isFavoriteTopic(topic, authUserId.value)
+    );
   }
 
   if (toolbarState.filter === 'bots') {
@@ -252,16 +271,8 @@ const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
   return true;
 };
 
-const normalizeToolbarSearchText = (value?: string): string =>
-  (value || '')
-    .replace(/\u00a0/g, ' ')
-    .replace(/[\u200b-\u200d\ufeff]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-
 const contactList = computed(() => {
-  const query = normalizeToolbarSearchText(toolbarState.search);
+  const query = normalizeAtSearchQuery(toolbarState.search);
   const filteredByType = allTopics.value.filter(topic =>
     matchesToolbarFilter(topic)
   );
@@ -270,22 +281,11 @@ const contactList = computed(() => {
     return [...filteredByType];
   }
 
-  return filteredByType.filter(topic => {
-    const nameMatch = normalizeToolbarSearchText(topic.name).includes(query);
-    const erpInitials = (
-      typeof topic.user?.ex === 'string'
-        ? JSON.parse(topic.user.ex)
-        : topic.user?.ex
-    )?.erpInitials;
-    const erpInitialsMatch =
-      normalizeToolbarSearchText(erpInitials).includes(query);
-
-    return nameMatch || erpInitialsMatch;
-  });
+  return filteredByType.filter(topic => matchesTopicSearch(topic, query));
 });
 
 const filteredMessageSearchResults = computed(() => {
-  if (!normalizeToolbarSearchText(toolbarState.search)) {
+  if (!normalizeAtSearchQuery(toolbarState.search)) {
     return [];
   }
 
@@ -625,7 +625,7 @@ const handleDropFiles = async (event: DragEvent): Promise<void> => {
 watch(
   [() => toolbarState.search, isShareSelectionActive],
   () => {
-    const query = normalizeToolbarSearchText(toolbarState.search);
+    const query = normalizeAtSearchQuery(toolbarState.search);
     const requestToken = ++messageSearchRequestToken;
 
     if (messageSearchDebounceTimer) {
@@ -645,6 +645,25 @@ watch(
     messageSearchDebounceTimer = setTimeout(() => {
       void runMessageSearch(query, requestToken);
     }, 300);
+  },
+  { immediate: true }
+);
+
+watch(
+  () => [route.value?.type, route.value?.id],
+  ([routeType]) => {
+    if (routeType === RouteTypes.CALL) {
+      setActiveSection('calls');
+      return;
+    }
+
+    if (
+      routeType === RouteTypes.DIALOGS ||
+      routeType === RouteTypes.GROUP ||
+      routeType === RouteTypes.FAVORITES
+    ) {
+      setActiveSection('chats');
+    }
   },
   { immediate: true }
 );

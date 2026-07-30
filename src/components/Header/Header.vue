@@ -49,8 +49,45 @@
       </div>
 
       <template v-else-if="currentTopic">
+        <FavoriteTopicProfile
+          v-if="isFavoriteDialogTopic"
+          class="chat__header-profile"
+          :data-testid="`${props.dataTestid}-Header-FavoriteTopicProfile`"
+        />
+        <div
+          v-else-if="isCallTopicRoute"
+          class="user-profile chat__header-profile chat__header-call-topic"
+          :data-testid="`${props.dataTestid}-Header-CallTopicProfile`"
+          @click.stop
+        >
+          <BotAvatar
+            class="user-profile__avatar"
+            :size="40"
+            :is-online="false"
+            :data-testid="`${props.dataTestid}-Header-CallTopicAvatar`"
+          />
+          <h3
+            class="user-profile__title"
+            :data-testid="`${props.dataTestid}-Header-CallTopicTitle`"
+          >
+            Звонилка
+          </h3>
+          <TypingIndicator
+            v-if="callTopicTypingLabel"
+            class="user-profile__ex user-profile__ex--typing"
+            :label="callTopicTypingLabel"
+            :data-testid="`${props.dataTestid}-Header-CallTopicTyping`"
+          />
+          <span
+            v-else
+            class="user-profile__ex"
+            :data-testid="`${props.dataTestid}-Header-CallTopicEx`"
+          >
+            @zvonilka
+          </span>
+        </div>
         <GroupProfile
-          v-if="currentTopic.type === TopicType.Group"
+          v-else-if="currentTopic.type === TopicType.Group"
           class="chat__header-profile"
           avatar-alt="group-profile-alt"
           :topic="currentRouteGroup || currentTopic"
@@ -81,7 +118,7 @@
         @click.stop
       >
         <div
-          v-if="!isMobile && isTopicSearchAvailable"
+          v-if="isTopicSearchAvailable && !isMobile"
           class="chat__header-search-trigger"
         >
           <SearchIcon
@@ -95,6 +132,8 @@
             (route.type === RouteTypes.DIALOGS ||
               route.type === RouteTypes.GROUP) &&
             !isBotDialogTopic &&
+            !isFavoriteDialogTopic &&
+            !isCallTopicRoute &&
             !isCallActive &&
             !hasPendingCallForCurrentTopic
           "
@@ -103,6 +142,7 @@
           @click.stop="handleCall"
         />
         <Icon
+          v-if="getHeaderContextMenuOptions.length"
           class="chat__header__icon chat__header__icon--more"
           :name="IconNameEnum.moreHorizontal"
           :data-testid="`${props.dataTestid}-Header-PopoverIcon`"
@@ -111,6 +151,7 @@
           "
         />
         <ContextMenu
+          v-if="getHeaderContextMenuOptions.length"
           class="chat__header-context-menu"
           :visible="!!isOpen['headerMenu']"
           :position="position"
@@ -134,7 +175,11 @@
             :data-testid="`${props.dataTestid}-Header-ContextMenu-${option.value}`"
             @click="handleContextMenuAction(option.function)"
           >
-            <Icon v-if="option.iconName" :name="option.iconName" />
+            <HeaderContextSearchIcon
+              v-if="option.customIcon === 'search'"
+              class="chat__header-context-menu-icon"
+            />
+            <Icon v-else-if="option.iconName" :name="option.iconName" />
             {{ option.value }}
           </Button>
         </ContextMenu>
@@ -347,6 +392,14 @@
     @unmount-close="handleCloseActionModal"
     @unmount-confirm="handleConfirmActionModal"
   />
+
+  <ConfirmModal
+    :open="state.openClearHistoryModal"
+    title="Очистить историю"
+    description="Вы уверены, что хотите удалить все сообщения в чате?"
+    @unmount-close="handleCloseClearHistoryModal"
+    @unmount-confirm="handleConfirmClearHistory"
+  />
 </template>
 
 <script lang="ts" setup>
@@ -364,6 +417,8 @@ import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import GroupProfile from '../GroupProfile/GroupProfile.vue';
+import FavoriteTopicProfile from '../FavoriteTopicProfile.vue';
+import BotAvatar from '../UI/BotAvatar.vue';
 import MobileModal from '../UI/MobileModal.vue';
 import {
   Button,
@@ -406,7 +461,9 @@ import ConfirmModal from '../UI/ConfirmModal.vue';
 import { TopicType } from '../../services/useChatSDK/types';
 import CallIcon from '../CallModal/UI/CallIcon.vue';
 import SearchIcon from '../UI/SearchIcon.vue';
+import HeaderContextSearchIcon from '../UI/HeaderContextSearchIcon.vue';
 import LoadingIcon from '../UI/LoadingIcon.vue';
+import TypingIndicator from '../UI/TypingIndicator.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import {
   activeCallParticipantCount,
@@ -432,6 +489,12 @@ import {
   type IMessageSearchResult
 } from '../../composables/useMessageSearch';
 import { isBotTopic } from '../../utils/bot';
+import { isFavoriteTopic } from '../../utils/favorite-topic';
+import { isCallTopic } from '../../utils/call-topic';
+import {
+  isCallSummaryMaterialTypingInTopic,
+  loadLatestCallSummary
+} from '../../services/useCallSummaries';
 
 const { getSelectedTopic } = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
@@ -462,8 +525,9 @@ defineOptions({
   inheritAttrs: false
 });
 
-const route = useUrlWatcher();
 const emits = defineEmits<IHeaderEmits>();
+const currentRoute = useUrlWatcher();
+const route = computed(() => props.displayRoute || currentRoute.value);
 
 const state = reactive({
   loader: false,
@@ -471,15 +535,24 @@ const state = reactive({
   openMobileUserProfileModal: false,
   isSearchInputEnable: false,
   openActionModal: false,
+  openClearHistoryModal: false,
   calledUser: null,
   roomId: null
 });
 
-const currentTopic = computed(() => getSelectedTopic());
+const currentTopic = computed(() =>
+  route.value.id ? getSelectedTopic(route.value.id) : undefined
+);
+const isFavoriteDialogTopic = computed(
+  () =>
+    route.value.type === RouteTypes.FAVORITES ||
+    isFavoriteTopic(currentTopic.value)
+);
 const isBotDialogTopic = computed(
   () =>
     route.value.type === RouteTypes.DIALOGS && isBotTopic(currentTopic.value)
 );
+const isCallTopicRoute = computed(() => isCallTopic(currentTopic.value));
 const currentRouteGroup = computed(() => {
   if (currentTopic.value?.type !== TopicType.Group) {
     return null;
@@ -511,6 +584,9 @@ const currentTypingUsers = computed(() =>
 );
 const headerTypingLabel = computed(() =>
   getTypingIndicatorLabel(currentTopic.value?.type, currentTypingUsers.value)
+);
+const callTopicTypingLabel = computed(() =>
+  isCallSummaryMaterialTypingInTopic(currentTopic.value?.id) ? 'печатает' : ''
 );
 const activeCallTopic = computed(() =>
   activeCallTopicId.value ? getSelectedTopic(activeCallTopicId.value) : null
@@ -544,7 +620,6 @@ const hasPendingCallForCurrentTopic = computed(
 const hasInvitedCall = computed(
   () => !!currentInvitedCall.value?.isJoinAvailable
 );
-
 const showHeaderCallBanner = computed(
   () =>
     (isCallActive.value && !isAnyCallModalVisible.value) ||
@@ -571,7 +646,9 @@ const hasTopicSearchQuery = computed(
 const isTopicSearchAvailable = computed(
   () =>
     route.value.type === RouteTypes.DIALOGS ||
-    route.value.type === RouteTypes.GROUP
+    route.value.type === RouteTypes.GROUP ||
+    route.value.type === RouteTypes.CALL ||
+    route.value.type === RouteTypes.FAVORITES
 );
 const hasTopicSearchResults = computed(
   () => topicSearchResults.value.length > 0
@@ -894,7 +971,11 @@ const handleUserProfileClick = (): void => {
 };
 
 const handleClickHeader = async (): Promise<void> => {
-  if (route.value.type === RouteTypes.AI) {
+  if (
+    route.value.type === RouteTypes.AI ||
+    isFavoriteDialogTopic.value ||
+    isCallTopicRoute.value
+  ) {
     return;
   }
 
@@ -919,15 +1000,39 @@ const getHeaderContextMenuOptions = computed(() => {
     function: () => void;
     style?: string;
     iconName?: IconNameEnum;
+    customIcon?: 'search';
   }> = [];
+
+  if (isFavoriteDialogTopic.value) {
+    if (isMobile.value && isTopicSearchAvailable.value) {
+      options.push({
+        value: 'Поиск в чате',
+        function: showSearch,
+        customIcon: 'search'
+      });
+    }
+
+    options.push({
+      value: 'Очистить историю',
+      function: handleOpenClearHistoryModal,
+      style: 'color: var(--error-color)',
+      iconName: IconNameEnum.deleteSmall
+    });
+
+    return options;
+  }
 
   if (route.value && route.value.type !== RouteTypes.AI) {
     if (isMobile.value && isTopicSearchAvailable.value) {
       options.push({
         value: 'Поиск в чате',
         function: showSearch,
-        iconName: IconNameEnum.search
+        customIcon: 'search'
       });
+    }
+
+    if (isCallTopicRoute.value) {
+      return options;
     }
 
     if (route.value.type === RouteTypes.GROUP) {
@@ -948,17 +1053,19 @@ const getHeaderContextMenuOptions = computed(() => {
       });
     }
 
-    options.push({
-      value: currentTopic.value?.info?.isMute
-        ? 'Вкл. уведомления'
-        : 'Выкл. уведомления',
-      function: () => {
-        toggleMuteTopic(currentTopic.value);
-      },
-      iconName: currentTopic.value?.info?.isMute
-        ? IconNameEnum.distrub
-        : IconNameEnum.noDistrub
-    });
+    if (!isFavoriteDialogTopic.value) {
+      options.push({
+        value: currentTopic.value?.info?.isMute
+          ? 'Вкл. уведомления'
+          : 'Выкл. уведомления',
+        function: () => {
+          toggleMuteTopic(currentTopic.value);
+        },
+        iconName: currentTopic.value?.info?.isMute
+          ? IconNameEnum.distrub
+          : IconNameEnum.noDistrub
+      });
+    }
 
     if (route.value.type === RouteTypes.GROUP) {
       options.push({
@@ -971,7 +1078,7 @@ const getHeaderContextMenuOptions = computed(() => {
           ? IconNameEnum.deleteSmall
           : IconNameEnum.logout
       });
-    } else {
+    } else if (!isFavoriteDialogTopic.value) {
       options.push({
         value: 'Удалить чат',
         function: handleOpenActionModal,
@@ -996,6 +1103,10 @@ const handleOpenActionModal = () => {
   state.openActionModal = true;
 };
 
+const handleOpenClearHistoryModal = (): void => {
+  state.openClearHistoryModal = true;
+};
+
 const handleContextMenuAction = (callback: () => void) => {
   closeActivePopover('headerMenu');
   callback();
@@ -1003,6 +1114,15 @@ const handleContextMenuAction = (callback: () => void) => {
 
 const handleCloseActionModal = () => {
   state.openActionModal = false;
+};
+
+const handleCloseClearHistoryModal = (): void => {
+  state.openClearHistoryModal = false;
+};
+
+const handleConfirmClearHistory = (): void => {
+  state.openClearHistoryModal = false;
+  emits('unmount-clear');
 };
 
 const handleConfirmActionModal = async (): Promise<void> => {
@@ -1031,6 +1151,8 @@ const handleExit = (): void => {
     navigateToDialogsList();
   } else if (route.value && route.value.type === RouteTypes.GROUP) {
     navigateToGroupsList();
+  } else if (route.value && route.value.type === RouteTypes.CALL) {
+    navigateToDefault();
   } else if (route.value && route.value.type === RouteTypes.AI) {
     navigateToAssistant();
   } else {
@@ -1046,6 +1168,15 @@ watch(
 
     if (route.value.type === RouteTypes.GROUP) {
       getGroupById(route.value.id);
+    }
+
+    if (
+      route.value.id &&
+      (route.value.type === RouteTypes.DIALOGS ||
+        route.value.type === RouteTypes.GROUP ||
+        route.value.type === RouteTypes.CALL)
+    ) {
+      void loadLatestCallSummary(route.value.id);
     }
   },
   {

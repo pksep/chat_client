@@ -22,7 +22,7 @@
       @unmount-contact="handleOpenGroupInfo"
       :selected-contact-ids="
         new Set(
-          selectedContacts.filter(u => u.id !== authedUser.id).map(u => u.id)
+          selectedContacts.filter(u => u.id !== authedUser?.id).map(u => u.id)
         )
       "
     />
@@ -45,7 +45,7 @@
             class="new-group__tab2-profile"
             @unmount-click-add-button="handleCloseGroupInfo"
             :filtered-contacts="
-              selectedContacts.filter(u => u.id !== authedUser.id)
+              selectedContacts.filter(u => u.id !== authedUser?.id)
             "
           />
         </template>

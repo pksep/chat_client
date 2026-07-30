@@ -36,11 +36,11 @@
   }
 
   & .chat__header__icon {
-    font-size: 16px !important;
+    font-size: 24px !important;
     color: var(--text-light-color);
-    width: 42px !important;
-    height: 40px !important;
-    padding: 11px;
+    width: 44px !important;
+    height: 44px !important;
+    padding: 10px;
     transition: all 0.3s;
 
     &:hover,
@@ -50,7 +50,7 @@
   }
 
   & .chat__header__icon--more {
-    padding: 8px;
+    padding: 10px;
   }
 }
 
@@ -64,12 +64,64 @@
   gap: 8px;
 }
 
+.chat__header-context-menu-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+}
+
+.chat__header-summary-button.button-yui-kit {
+  flex-shrink: 0;
+  min-width: 44px;
+  height: 40px;
+  min-height: 40px;
+  padding: 8px 10px !important;
+  color: var(--text-light-color);
+  white-space: nowrap;
+}
+
+.chat__header-summary-button.button-yui-kit:not(:disabled):hover {
+  color: var(--border-primary-color);
+}
+
+.chat__header-summary-button.button-yui-kit:disabled {
+  color: var(--text-neutral-color);
+  opacity: 1;
+}
+
+.chat__header-summary-button > svg {
+  flex-shrink: 0;
+  width: 22px !important;
+  height: 22px !important;
+}
+
+.chat__header-summary-loader.message-content__media-loading__icon {
+  width: 22px;
+  height: 22px;
+}
+
+.chat__header-summary-loader.message-content__media-loading__icon rect {
+  fill: transparent;
+}
+
+.chat__header-summary-loader.message-content__media-loading__icon path {
+  fill: var(--primary-color);
+}
+
+.chat__header-summary-menu {
+  min-width: 210px;
+}
+
 .user-profile.chat__header-profile {
   --size-avatar: 20px;
   --font-size-nickname: 12px;
   margin-left: 8px;
   row-gap: 2px;
   cursor: pointer;
+}
+
+.chat__header-call-topic .user-profile__ex--typing {
+  color: var(--primary-color);
 }
 
 button.button-yui-kit {
@@ -240,6 +292,11 @@ button.button-yui-kit {
   .chat__header-buttons {
     margin-left: auto;
     margin-right: 0;
+  }
+  .chat__header-summary-button.button-yui-kit {
+    width: 40px;
+    min-width: 40px;
+    padding: 8px !important;
   }
   .chat__header-search {
     min-width: 0;

@@ -1,4 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
-    android:gravity="center"
-    android:src="@mipmap/ic_launcher_foreground" />
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="
+            M24,0 H84 Q108,0 108,24 V84 Q108,108 84,108 H24 Q0,108 0,84 V24 Q0,0 24,0 Z
+            M6,64 L9,63 L9,62 L12,61 L12,60 L15,60 L16,63 L17,63 L17,65 L18,65 L20,68 L25,67 L27,64 L26,64 L25,60 L23,59 L22,54 L25,53 L25,52 L27,52 L28,50 L30,50 L30,52 L31,52 L32,55 L34,56 L35,60 L36,60 L37,63 L39,64 L40,68 L42,69 L43,74 L40,75 L39,77 L35,78 L34,75 L33,75 L33,73 L30,72 L27,76 L25,76 L25,77 L23,77 L23,78 L16,78 L16,77 L14,77 L14,76 L12,75 L12,73 L10,72 L10,70 L8,69 L8,67 L7,67 Z
+            M64,28 L67,27 L67,26 L69,26 L70,24 L74,23 L75,21 L77,21 L78,19 L82,18 L83,16 L85,16 L85,15 L87,15 L87,14 L89,13 L89,15 L90,15 L91,18 L92,18 L92,21 L90,21 L89,23 L85,24 L85,27 L86,27 L87,30 L89,31 L89,33 L90,33 L90,35 L92,36 L94,42 L93,42 L92,44 L90,44 L89,46 L86,46 L85,43 L83,42 L83,40 L81,39 L81,37 L80,37 L80,35 L78,34 L77,31 L74,31 L74,32 L72,32 L71,34 L68,35 L68,34 L66,33 L66,31 L64,30 Z
+            M42,42 L43,42 L44,40 L48,39 L49,37 L54,36 L54,37 L56,37 L60,42 L62,42 L65,46 L67,46 L71,51 L73,51 L75,54 L72,55 L72,56 L69,57 L69,58 L66,58 L65,56 L61,57 L60,59 L58,59 L58,60 L55,61 L56,66 L53,67 L53,68 L51,68 L50,70 L48,70 L48,68 L47,68 L47,64 L46,64 L46,60 L45,60 L44,51 L43,51 Z
+            M51,45 L52,53 L54,54 L54,53 L58,52 L58,50 L57,50 L55,47 L53,47 L53,46 Z" />
+</vector>

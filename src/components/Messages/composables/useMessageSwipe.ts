@@ -2,6 +2,7 @@ import { ref, onMounted, onUnmounted, type Ref } from 'vue';
 import { useBackButton } from '../../../composables/useBackButton';
 import {
   navigateToAssistant,
+  navigateToDefault,
   navigateToDialogsList,
   navigateToGroupsList,
   RouteTypes
@@ -32,6 +33,8 @@ export function useMessageSwipe(route: Ref<{ id: string; type: string }>) {
       navigateToDialogsList();
     } else if (route.value.type === RouteTypes.GROUP) {
       navigateToGroupsList();
+    } else if (route.value.type === RouteTypes.FAVORITES) {
+      navigateToDefault();
     }
   };
 

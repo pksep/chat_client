@@ -15,7 +15,7 @@
         />
         <MessageAuthorMeta
           v-if="
-            !props.isMeSender && !isDialogRoute && !props.continuesFromPrevious
+            !props.isMeSender && !props.isDialog && !props.continuesFromPrevious
           "
           :sender="props.sender"
           :sender-user="props.senderUser"
@@ -23,11 +23,11 @@
           :data-testid="`${props.dataTestid}-AuthorMeta`"
         />
         <MessageReferenceBlock
+          v-if="props.replyMessage"
           :reply-message="props.replyMessage"
           :message-ex="props.messageEx"
           :is-me-sender="props.isMeSender"
           :reference-width="replyReferenceWidth"
-          :defer-until-measured="true"
           @navigate-message="$emit('navigate-message')"
         />
         <div
@@ -68,7 +68,20 @@
                   class="message-content__file__size"
                   :data-testid="`${props.dataTestid}-FileSize`"
                 >
-                  {{ getFormatFileSize(media.size) }}
+                  <template v-if="getFileUploadMeta(media)">
+                    <span class="message-content__file__upload-percent">
+                      {{ getFileUploadMeta(media)?.percent }}%
+                    </span>
+                    <span class="message-content__file__upload-separator">
+                      ·
+                    </span>
+                    <span class="message-content__file__upload-size">
+                      {{ getFileUploadMeta(media)?.size }}
+                    </span>
+                  </template>
+                  <template v-else>
+                    {{ getFileFormattedSize(media) }}
+                  </template>
                 </p>
               </div>
             </div>
@@ -178,16 +191,18 @@ import PinIcon from '../UI/PinIcon.vue';
 import MessageEmojies from './MessageEmojies.vue';
 import ErrorIcon from '../UI/ErrorIcon.vue';
 import { getFormatFileSize, getShortName } from '../../utils/getFormatFileSize';
-import { useUrlWatcher } from '../../composables/navigation';
-import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { useMessageMedia } from './composables/useMessageMedia';
 import { useReferenceWidth } from './composables/useReferenceWidth';
 import MessageReferenceBlock from './MessageReferenceBlock.vue';
 import MessageBubbleTail from './MessageBubbleTail.vue';
 import { stripHtml } from '../../utils/stripHtml';
 import MessageAuthorMeta from './MessageAuthorMeta.vue';
-import { useMentionUserClick } from './composables/useMentionUserClick';
+import {
+  hasMessageInteractivityCandidates,
+  useMentionUserClick
+} from './composables/useMentionUserClick';
 import { MessageStatus } from '../../services/useChatSDK/types';
+import { observeViewportVisibility } from '../../services/useSharedViewportObserver';
 import type { IMedia } from '../interfaces/interfaces';
 import {
   getNativeFileDownloadState,
@@ -201,17 +216,17 @@ const emits = defineEmits(['navigate-message', 'set-slider']);
 const { primeMediaCache, isSliderContentUrl, handleDragStart, canDragMedia } =
   useMessageMedia();
 
-const route = useUrlWatcher();
-const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
 const messageHtmlRef = ref<HTMLElement | null>(null);
 const { handleMentionUserClick, syncMentionUserInteractivity } =
   useMentionUserClick();
 const filesArticleRef = ref<HTMLElement | null>(null);
+const hasReplyReference = computed(() => Boolean(props.replyMessage));
 const replyReferenceWidth = useReferenceWidth(filesArticleRef, {
-  freezeAfterFirstMeasure: true
+  freezeAfterFirstMeasure: true,
+  enabled: hasReplyReference
 });
 const shouldPrimeFiles = ref(false);
-let filesVisibilityObserver: IntersectionObserver | null = null;
+let stopObservingFilesVisibility: (() => void) | null = null;
 
 const docFiles = computed(
   () => props.media?.filter(media => media.type === MediaType.File) || []
@@ -227,6 +242,10 @@ const hasInlineCaption = computed(
 );
 
 const syncMentions = async (): Promise<void> => {
+  if (!hasMessageInteractivityCandidates(props.message)) {
+    return;
+  }
+
   await nextTick();
   syncMentionUserInteractivity(messageHtmlRef.value);
 };
@@ -250,21 +269,35 @@ const syncNativeFileStatuses = (): void => {
   });
 };
 
+const filePrimeIdentity = computed(() =>
+  docFiles.value
+    .map(
+      media =>
+        `${media.id || ''}:${media.path || ''}:${media.thumbnailPath || ''}`
+    )
+    .join('\u001f')
+);
+const nativeFileStatusIdentity = computed(() =>
+  docFiles.value
+    .map(
+      media =>
+        `${media.id || ''}:${media.path || ''}:${media.type}:${media.isLoading ? 1 : 0}:${media.uploadError ? 1 : 0}`
+    )
+    .join('\u001f')
+);
+
 watch(
-  [docFiles, shouldPrimeFiles],
-  ([medias]) => {
+  [filePrimeIdentity, shouldPrimeFiles],
+  () => {
     if (!shouldPrimeFiles.value) {
       return;
     }
 
-    medias.forEach(media => {
+    docFiles.value.forEach(media => {
       primeMediaCache(media, { includeOriginal: true });
     });
   },
-  {
-    immediate: true,
-    deep: true
-  }
+  { immediate: true }
 );
 
 watch(
@@ -275,45 +308,29 @@ watch(
   { immediate: true }
 );
 
-watch(
-  docFiles,
-  () => {
-    syncNativeFileStatuses();
-  },
-  { immediate: true, deep: true }
-);
+watch(nativeFileStatusIdentity, syncNativeFileStatuses, { immediate: true });
 
 onMounted(() => {
-  void syncMentions();
-
-  if (!('IntersectionObserver' in window)) {
-    shouldPrimeFiles.value = true;
-    return;
-  }
-
-  filesVisibilityObserver = new IntersectionObserver(
-    entries => {
-      if (entries.some(entry => entry.isIntersecting)) {
-        shouldPrimeFiles.value = true;
-        filesVisibilityObserver?.disconnect();
-        filesVisibilityObserver = null;
-      }
-    },
-    {
-      root: null,
-      rootMargin: '250px 0px',
-      threshold: 0.01
-    }
-  );
-
   if (filesArticleRef.value) {
-    filesVisibilityObserver.observe(filesArticleRef.value);
+    stopObservingFilesVisibility = observeViewportVisibility(
+      filesArticleRef.value,
+      isVisible => {
+        if (!isVisible) {
+          return;
+        }
+
+        shouldPrimeFiles.value = true;
+        stopObservingFilesVisibility?.();
+        stopObservingFilesVisibility = null;
+      },
+      { rootMargin: '250px 0px' }
+    );
   }
 });
 
 onUnmounted(() => {
-  filesVisibilityObserver?.disconnect();
-  filesVisibilityObserver = null;
+  stopObservingFilesVisibility?.();
+  stopObservingFilesVisibility = null;
 });
 
 const showErrorIcon = computed(
@@ -357,6 +374,31 @@ const getFileIconPercent = (media: IMedia): number | null => {
   }
 
   return media.isLoading ? media.uploadPercent ?? null : null;
+};
+
+type FileUploadMeta = {
+  percent: number;
+  size: string;
+};
+
+const getFileFormattedSize = (media: IMedia): string =>
+  getFormatFileSize(media.size);
+
+const getFileUploadMeta = (media: IMedia): FileUploadMeta | null => {
+  const percent = getFileIconPercent(media);
+
+  if (
+    !media.isLoading ||
+    typeof percent !== 'number' ||
+    !Number.isFinite(percent)
+  ) {
+    return null;
+  }
+
+  return {
+    percent: Math.max(0, Math.min(100, Math.round(percent))),
+    size: getFileFormattedSize(media)
+  };
 };
 
 const getFileIconType = (media: IMedia): 'file' | 'download' => {

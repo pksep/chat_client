@@ -1,9 +1,29 @@
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import {
+  Capacitor,
+  registerPlugin,
+  type PluginListenerHandle
+} from '@capacitor/core';
 
 type TelemetryDeviceInfo = Record<string, unknown>;
 
+export type NativeNetworkStatus = {
+  networkConnected: boolean;
+  networkValidated?: boolean;
+  networkVpn?: boolean;
+  networkWifi?: boolean;
+  networkCellular?: boolean;
+  networkEthernet?: boolean;
+  downstreamKbps?: number;
+  upstreamKbps?: number;
+};
+
 interface TelemetryDevicePlugin {
   getDeviceInfo: () => Promise<TelemetryDeviceInfo>;
+  getNetworkStatus: () => Promise<NativeNetworkStatus>;
+  addListener: (
+    eventName: 'networkStatusChange',
+    listener: (status: NativeNetworkStatus) => void
+  ) => Promise<PluginListenerHandle>;
 }
 
 const TelemetryDevice =
@@ -104,4 +124,32 @@ export const getTelemetryDeviceContext = (): TelemetryDeviceInfo => {
   }
 
   return cachedDeviceContext;
+};
+
+export const getNativeNetworkStatus =
+  async (): Promise<NativeNetworkStatus | null> => {
+    if (
+      !Capacitor.isNativePlatform() ||
+      Capacitor.getPlatform() !== 'android'
+    ) {
+      return null;
+    }
+
+    return TelemetryDevice.getNetworkStatus();
+  };
+
+export const addNativeNetworkStatusListener = async (
+  listener: (status: NativeNetworkStatus) => void
+): Promise<PluginListenerHandle | null> => {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') {
+    return null;
+  }
+
+  return TelemetryDevice.addListener('networkStatusChange', status => {
+    cachedDeviceContext = {
+      ...(cachedDeviceContext || getBrowserDeviceContext()),
+      ...status
+    };
+    listener(status);
+  });
 };

@@ -35,11 +35,16 @@ import { useShareSelection } from '../composables/useShareSelection';
 import type { ITopic } from './interfaces/interfaces';
 import { getShareSelectionSummaryLabel } from '../utils/shareSelectionSummary';
 import { isBotTopic } from '../utils/bot';
+import { isFavoriteTopic } from '../utils/favorite-topic';
 import {
   getChatsToolbarFilterBadgeState,
   getChatsToolbarFilterCounts,
   getChatsToolbarFilterMutedOnly
 } from '../utils/chats-toolbar-filter-badge';
+import {
+  matchesTopicSearch,
+  normalizeAtSearchQuery
+} from '../utils/searchMatch';
 
 const { getTopicList } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
@@ -115,11 +120,18 @@ const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
   }
 
   if (toolbarState.filter === 'chats') {
-    return topic.type === TopicType.DM && !isBotTopic(topic);
+    return (
+      topic.type === TopicType.DM &&
+      !isBotTopic(topic) &&
+      !isFavoriteTopic(topic, authUserId.value)
+    );
   }
 
   if (toolbarState.filter === 'groups') {
-    return topic.type === TopicType.Group;
+    return (
+      topic.type === TopicType.Group &&
+      !isFavoriteTopic(topic, authUserId.value)
+    );
   }
 
   if (toolbarState.filter === 'bots') {
@@ -142,7 +154,7 @@ const filterMutedOnly = computed(() =>
 );
 
 const contactList = computed(() => {
-  const query = toolbarState.search.toLowerCase().trim();
+  const query = normalizeAtSearchQuery(toolbarState.search);
   const filteredByType = allTopics.value.filter(topic =>
     matchesToolbarFilter(topic)
   );
@@ -151,18 +163,7 @@ const contactList = computed(() => {
     return [...filteredByType];
   }
 
-  return filteredByType.filter(topic => {
-    const nameMatch = (topic.name || '').toLowerCase().includes(query);
-    const erpInitialsMatch = (
-      typeof topic.user?.ex === 'string'
-        ? JSON.parse(topic.user.ex)
-        : topic.user?.ex
-    )?.erpInitials
-      ?.toLowerCase()
-      ?.includes(query);
-
-    return nameMatch || erpInitialsMatch;
-  });
+  return filteredByType.filter(topic => matchesTopicSearch(topic, query));
 });
 
 const handleTopicSelect = (topic: ITopic): void => {

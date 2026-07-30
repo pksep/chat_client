@@ -7,6 +7,7 @@ export type AudioOutputState = {
   defaultRoute: Exclude<AudioOutputRoute, 'auto'>;
   availableRoutes: Array<Exclude<AudioOutputRoute, 'auto'>>;
   bluetoothAvailable: boolean;
+  callAudioActive?: boolean;
   audioMode?: string;
   audioModeValue?: number;
   volumeControlStream?: string;

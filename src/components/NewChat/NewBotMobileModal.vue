@@ -35,8 +35,11 @@
           @change="handleAvatarChange"
         />
         <ModalCroppedAvatar
+          class="bot-avatar-cropper-modal bot-avatar-cropper-modal--mobile"
           :image="avatarFile"
           :open="isEditAvatar"
+          position="bottom"
+          width="100%"
           @unmount-close="closeEditAvatar"
           @unmount-save="handleAvatarCropSave"
         />

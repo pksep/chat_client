@@ -11,6 +11,7 @@
     <Header
       v-if="state.isActiveHeader"
       class="chat__header"
+      :display-route="headerDisplayRoute"
       :data-testid="`${props.dataTestid}-ChatContainer-Header`"
       @unmount-click="handleHeaderClick"
       @unmount-information="handleInformationClick"
@@ -39,6 +40,7 @@
       :on-update-click="handleUpdateClick"
       :on-dismiss-update-banner="dismissUpdateBanner"
       :dataTestid="`${props.dataTestid}-ChatContainer-Chat`"
+      @rendered-topic-change="emit('rendered-topic-change', $event)"
     />
     <template v-if="!isMobile">
       <Modal
@@ -94,6 +96,7 @@
         v-if="isBotUserInfo"
         :user="activeUser"
         :topic="activeTopic"
+        is-mobile
         :data-testid="`${props.dataTestid}-ChatContainer-MobileBotInfoPanel`"
         @close="closeUserInfo"
       />
@@ -180,7 +183,9 @@ import UserInfoPanel from './UserInfoPanel.vue';
 import BotInfoPanel from './BotInfoPanel.vue';
 import {
   MobilePlatformEnum,
-  type IChatContainerProps
+  type IChatContainerProps,
+  type IHeaderDisplayRoute,
+  type IMessageRenderedTopicState
 } from './interfaces/interfaces';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
@@ -204,14 +209,16 @@ import {
   isAnyCallDialing,
   isAnyCallIncoming,
   isCallActive,
-  isAnyCallModalVisible,
-  pendingGroupCallInfo
+  isAnyCallModalVisible
 } from '../services/useCallState';
 import { useChatWallpaper } from '../composables/useChatWallpaper';
 import { useUserInfoModal } from '../composables/useUserInfoModal';
 import VpnConfirmModal from './UI/VpnConfirmModal.vue';
 import { useVpnStatus } from '../services/useVpnStatus';
-import { isBotTopic } from '../utils/bot';
+import { isBotTopic, isBotUser } from '../utils/bot';
+import { clearMessagesForTopic } from '../services/useMessages';
+import { getSelectedTopic } from '../composables/useTopics';
+import { isFavoriteTopic } from '../utils/favorite-topic';
 
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
@@ -296,11 +303,7 @@ const chatContainerClasses = computed(() => [
       (route.value && route.value.type === 'assistant')
         ? true
         : !state.isMenuDesktopOpen,
-    'chat-container--wallpaper': isWallpaperApplied.value,
-    'chat-container--active-call':
-      (isCallActive.value && !isAnyCallModalVisible.value) ||
-      !!pendingGroupCallInfo.value?.[route.value?.id || ''] ||
-      !!invitedGroupCallInfo.value?.isJoinAvailable
+    'chat-container--wallpaper': isWallpaperApplied.value
   }
 ]);
 const shouldRenderCallModal = computed(
@@ -314,7 +317,9 @@ const shouldRenderCallModal = computed(
 const users = computed(() => getUsersList());
 const { isUserInfoOpen, activeUser, activeTopic, closeUserInfo } =
   useUserInfoModal();
-const isBotUserInfo = computed(() => isBotTopic(activeTopic.value));
+const isBotUserInfo = computed(
+  () => isBotTopic(activeTopic.value) || isBotUser(activeUser.value)
+);
 const userInfoModalTitle = computed(() =>
   isBotUserInfo.value ? 'Информация о боте' : 'Информация'
 );
@@ -322,12 +327,24 @@ const userInfoModalTitle = computed(() =>
 const props = withDefaults(defineProps<IChatContainerProps>(), {
   dataTestid: 'ChatContainer'
 });
+const emit = defineEmits<{
+  (e: 'rendered-topic-change', payload: IMessageRenderedTopicState): void;
+}>();
 
 const chatRef = ref<InstanceType<typeof Chat> | null>(null);
 const isVpnConfirmModalOpen = ref(false);
 const hasDismissedActiveVpnWarning = ref(false);
 
 const authUser = computed(() => getAuthUser());
+
+const headerDisplayRoute = computed<IHeaderDisplayRoute>(() => {
+  const currentRoute = route.value;
+
+  return {
+    type: currentRoute.type,
+    id: currentRoute.id
+  };
+});
 
 watch(
   () => isMobile.value,
@@ -347,6 +364,10 @@ const handleMenuToggle = (isOpen: boolean): void => {
 };
 
 const handleHeaderClick = (): void => {
+  if (route.value.type === RouteTypes.FAVORITES) {
+    return;
+  }
+
   if (!isMobile.value) {
     state.activeTabId = 1;
     state.isMenuDesktopOpen = true;
@@ -386,10 +407,41 @@ const handleInformationClick = (): void => {
   state.activeTabId = 2;
 };
 
-const handleClearClick = (): void => {
+const handleClearClick = async (): Promise<void> => {
   if (route.value && route.value.type === 'ai' && chatRef.value) {
     chatRef.value.handleClear();
+    const { markLiveKitPageReloadIntent } = await import(
+      '../services/useLiveKit'
+    );
+    markLiveKitPageReloadIntent();
     window.location.reload();
+    return;
+  }
+
+  if (!route.value.id) {
+    return;
+  }
+
+  const selectedTopic = getSelectedTopic(route.value.id);
+  const isFavorite =
+    route.value.type === RouteTypes.FAVORITES ||
+    isFavoriteTopic(selectedTopic, getAuthUser()?.id);
+
+  if (!isFavorite) {
+    return;
+  }
+
+  const sdk = getChatSDK();
+
+  if (!sdk) {
+    return;
+  }
+
+  try {
+    await sdk.clearTopicHistory(route.value.id);
+    clearMessagesForTopic(route.value.id, { syncLastMessage: true });
+  } catch (error) {
+    console.error('Не удалось очистить историю Избранного:', error);
   }
 };
 
@@ -439,7 +491,9 @@ const isActiveHeader = (
   if (routeObj.type === 'ai') return true;
   if (routeObj.id !== null) {
     if (routeObj.type === 'group') return true;
+    if (routeObj.type === 'call') return true;
     if (routeObj.type === 'dialogs') return true;
+    if (routeObj.type === 'favorites') return true;
     if (!isMobile.value) {
       return false;
     }
@@ -455,7 +509,10 @@ watch(
   () => [route.value?.id, route.value?.type],
   () => {
     state.isActiveHeader = route.value ? isActiveHeader(route.value) : false;
-    if (route.value.type === RouteTypes.DIALOGS) {
+    if (
+      route.value.type === RouteTypes.DIALOGS ||
+      route.value.type === RouteTypes.FAVORITES
+    ) {
       state.isMenuDesktopOpen = false;
       state.isNewContactOpen = false;
       state.isNewBotOpen = false;

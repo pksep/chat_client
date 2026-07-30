@@ -1,4 +1,5 @@
 import { createApp } from 'vue';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { isTauri } from '@tauri-apps/api/core';
 import App from './App.vue';
 import '@fontsource-variable/inter';
@@ -13,7 +14,14 @@ import { emojiDirective } from './directives/emoji';
 import { registerNativeFileBridge } from './services/useNativeFile';
 import { initFastNativeNotificationNavigation } from './services/usePushNotifications';
 import { USER_STATUS_PRESETS } from './utils/userStatus';
+import { NATIVE_STARTUP_READY_EVENT } from './utils/nativeStartup';
 
+interface LaunchStartupPlugin {
+  ready: () => Promise<void>;
+}
+
+const LaunchStartup = registerPlugin<LaunchStartupPlugin>('LaunchStartup');
+const UNICORN_EMOJI = '\u{1F984}';
 const INDEXED_DB_RESET_EPOCH = 'chat-client-indexeddb-reset-2026-04-29-v1';
 const INDEXED_DB_RESET_DONE_KEY = 'chat.indexeddb.reset.done';
 const INDEXED_DB_NAMES = [
@@ -132,19 +140,51 @@ const runIndexedDbResetIfNeeded = async (): Promise<void> => {
   }
 };
 
-const mountApp = async () => {
+const runAfterFirstPaint = (task: () => void): void => {
+  requestAnimationFrame(() => {
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(task, { timeout: 1200 });
+      return;
+    }
+
+    setTimeout(task, 0);
+  });
+};
+
+const runAfterNextPaint = (task: () => void): void => {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(task);
+  });
+};
+
+const notifyNativeStartupReady = (): void => {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') {
+    return;
+  }
+
+  runAfterNextPaint(() => {
+    void LaunchStartup.ready().catch(() => undefined);
+  });
+};
+
+const runPostMountStartupTasks = (): void => {
+  runAfterFirstPaint(() => {
+    void clearTauriServiceWorkers();
+    void runIndexedDbResetIfNeeded();
+    preloadNotoEmojiAssets(
+      [...USER_STATUS_PRESETS.map(option => option.icon), UNICORN_EMOJI],
+      {
+        highPriority: true
+      }
+    );
+  });
+};
+
+const mountApp = () => {
   void initFastNativeNotificationNavigation();
-  await clearTauriServiceWorkers();
-  await runIndexedDbResetIfNeeded();
   registerNativeFileBridge();
   applyRuntimeBodyClasses();
   installNotoEmojiFontFaces();
-  preloadNotoEmojiAssets(
-    [...USER_STATUS_PRESETS.map(option => option.icon), '🦄'],
-    {
-      highPriority: true
-    }
-  );
 
   const app = createApp(App);
 
@@ -187,7 +227,15 @@ const mountApp = async () => {
 
   app.directive('emoji', emojiDirective);
 
+  window.addEventListener(
+    NATIVE_STARTUP_READY_EVENT,
+    notifyNativeStartupReady,
+    {
+      once: true
+    }
+  );
   app.mount('#app');
+  runPostMountStartupTasks();
 };
 
 void mountApp();

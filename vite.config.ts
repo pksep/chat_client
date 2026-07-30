@@ -122,6 +122,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
 
   const appPlugins: PluginOption[] = [
     VitePWA({
+      injectRegister: false,
       registerType: 'autoUpdate',
       showMaximumFileSizeToCacheInBytesWarning: true,
       workbox: {
@@ -216,7 +217,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         screenshots: []
       },
       devOptions: {
-        enabled: true,
+        enabled: mode !== 'development',
         type: 'module',
         navigateFallback: 'index.html'
       }

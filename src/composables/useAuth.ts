@@ -8,6 +8,8 @@ type AuthUser = IUser;
 export const authedUser: Ref<AuthUser | null> = ref(null);
 export const CHAT_AUTH_SESSION_KEY = 'chat_auth_session';
 export const ERP_BOOTSTRAP_TOKEN_KEY = 'erp_bootstrap_token';
+const SKIP_STARTUP_SHELL_ON_AUTH_REDIRECT_KEY =
+  'chat_skip_startup_shell_on_auth_redirect';
 
 interface AuthResponse {
   token: string;
@@ -159,6 +161,13 @@ export const isStoredChatSessionPersistent = (): boolean => {
 export const clearChatAuthSession = (): void => {
   localStorage.removeItem(CHAT_AUTH_SESSION_KEY);
   sessionStorage.removeItem(CHAT_AUTH_SESSION_KEY);
+  void import('../services/useChatBackgroundSync')
+    .then(({ clearAnyChatBackgroundSyncSession }) =>
+      clearAnyChatBackgroundSyncSession()
+    )
+    .catch(error => {
+      console.warn('Failed to clear chat background sync session:', error);
+    });
 };
 
 export const saveBootstrapErpSession = (
@@ -190,9 +199,34 @@ export const clearErpAuthSession = (): void => {
   sessionStorage.removeItem(ERP_BOOTSTRAP_TOKEN_KEY);
 };
 
+const skipStartupShellOnNextAuthScreen = (): void => {
+  try {
+    sessionStorage.setItem(SKIP_STARTUP_SHELL_ON_AUTH_REDIRECT_KEY, '1');
+  } catch (error) {
+    console.warn('Failed to store auth redirect startup flag:', error);
+  }
+};
+
+export const consumeAuthRedirectStartupShellSkip = (): boolean => {
+  try {
+    const shouldSkip =
+      sessionStorage.getItem(SKIP_STARTUP_SHELL_ON_AUTH_REDIRECT_KEY) === '1';
+
+    if (shouldSkip) {
+      sessionStorage.removeItem(SKIP_STARTUP_SHELL_ON_AUTH_REDIRECT_KEY);
+    }
+
+    return shouldSkip;
+  } catch (error) {
+    console.warn('Failed to read auth redirect startup flag:', error);
+    return false;
+  }
+};
+
 export const redirectToAuthorization = (): void => {
   clearErpAuthSession();
   authedUser.value = null;
+  skipStartupShellOnNextAuthScreen();
   window.location.replace(window.location.origin);
 };
 

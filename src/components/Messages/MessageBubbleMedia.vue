@@ -9,7 +9,7 @@
       >
         <MessageAuthorMeta
           v-if="
-            !props.isMeSender && !isDialogRoute && !props.continuesFromPrevious
+            !props.isMeSender && !props.isDialog && !props.continuesFromPrevious
           "
           :sender="props.sender"
           :sender-user="props.senderUser"
@@ -17,12 +17,12 @@
           :data-testid="`${props.dataTestid}-AuthorMeta`"
         />
         <MessageReferenceBlock
+          v-if="props.forwardUser || props.replyMessage"
           :forward-user="props.forwardUser"
           :reply-message="props.replyMessage"
           :message-ex="props.messageEx"
           :is-me-sender="props.isMeSender"
           :reference-width="replyReferenceWidth"
-          :defer-until-measured="true"
           @navigate-message="$emit('navigate-message')"
         />
         <div
@@ -53,7 +53,7 @@
                 v-if="shouldRenderLocalVideoPreview(media)"
                 :src="media.localPath"
                 :poster="media.localThumbnailPath || VIDEO_FALLBACK_THUMBNAIL"
-                :style="getPreviewStyle()"
+                :style="previewStyle"
                 :width="getPreviewWidth(media, i)"
                 :height="getPreviewHeight(media, i)"
                 muted
@@ -70,7 +70,7 @@
               <div
                 v-else-if="!shouldLoadMedia"
                 class="message-content__media-placeholder"
-                :style="getPreviewStyle()"
+                :style="previewStyle"
                 aria-hidden="true"
                 @click.stop="handleMediaClick(i)"
                 @contextmenu.prevent
@@ -82,7 +82,7 @@
                 :alt="
                   props.sender ? `${props.sender} изображение` : 'Изображение'
                 "
-                :style="getPreviewStyle()"
+                :style="previewStyle"
                 :width="getPreviewWidth(media, i)"
                 :height="getPreviewHeight(media, i)"
                 loading="lazy"
@@ -196,16 +196,18 @@ import PlayIcon from '../UI/PlayIcon.vue';
 import MessageEmojies from './MessageEmojies.vue';
 import ErrorIcon from '../UI/ErrorIcon.vue';
 import { stripHtml } from '../../utils/stripHtml';
-import { useUrlWatcher } from '../../composables/navigation';
-import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { useMessageMedia } from './composables/useMessageMedia';
 import { useReferenceWidth } from './composables/useReferenceWidth';
 import type { IMessageBubbleProps } from './interface/interface';
 import type { IMedia } from '../interfaces/interfaces';
 import MessageReferenceBlock from './MessageReferenceBlock.vue';
 import MessageAuthorMeta from './MessageAuthorMeta.vue';
-import { useMentionUserClick } from './composables/useMentionUserClick';
+import {
+  hasMessageInteractivityCandidates,
+  useMentionUserClick
+} from './composables/useMentionUserClick';
 import { MessageStatus } from '../../services/useChatSDK/types';
+import { observeViewportVisibility } from '../../services/useSharedViewportObserver';
 import {
   calculatePreviewDimensions,
   getGridItemMaxWidth,
@@ -221,8 +223,6 @@ const emit = defineEmits(['navigate-message', 'set-slider']);
 
 const { getFullMediaPath, primeMediaCache } = useMessageMedia();
 
-const route = useUrlWatcher();
-const isDialogRoute = computed(() => route.value.type === RouteTypes.DIALOGS);
 const messageHtmlRef = ref<HTMLElement | null>(null);
 const { handleMentionUserClick, syncMentionUserInteractivity } =
   useMentionUserClick();
@@ -237,7 +237,7 @@ const hasInlineCaption = computed(() => hasCaption.value);
 const hasTopMeta = computed(
   () =>
     Boolean(props.replyMessage) ||
-    (!props.isMeSender && !isDialogRoute.value && !props.continuesFromPrevious)
+    (!props.isMeSender && !props.isDialog && !props.continuesFromPrevious)
 );
 const hasReactions = computed(() => Boolean(props.reactions?.length));
 const singleMediaPreviewWidth = computed(() => {
@@ -269,16 +269,32 @@ const articleInlineStyle = computed(() => {
 });
 const mediaArticleRef = ref<HTMLElement | null>(null);
 const syncMentions = async (): Promise<void> => {
+  if (!hasMessageInteractivityCandidates(props.message)) {
+    return;
+  }
+
   await nextTick();
   syncMentionUserInteractivity(messageHtmlRef.value);
 };
 const replyReferenceWidth = useReferenceWidth(mediaArticleRef, {
-  freezeAfterFirstMeasure: true
+  freezeAfterFirstMeasure: true,
+  enabled: computed(() => Boolean(props.replyMessage))
 });
 const shouldLoadMedia = ref(false);
-let visibilityObserver: IntersectionObserver | null = null;
+let stopObservingVisibility: (() => void) | null = null;
 let lastMediaDragStartedAt = 0;
-const MEDIA_LOAD_ROOT_MARGIN_PX = 900;
+const MEDIA_LOAD_ROOT_MARGIN_PX = 1800;
+const previewStyle = Object.freeze({
+  width: '100%',
+  height: '100%'
+});
+const previewDimensionsCache = new WeakMap<
+  IMedia,
+  {
+    signature: string;
+    value: MediaPreviewDimensions;
+  }
+>();
 
 const isNearViewport = (
   element: HTMLElement,
@@ -318,36 +334,29 @@ watch(
 );
 
 onMounted(() => {
-  void syncMentions();
-
-  if (!('IntersectionObserver' in window)) {
-    shouldLoadMedia.value = true;
+  if (!mediaArticleRef.value) {
     return;
   }
 
-  if (mediaArticleRef.value) {
-    shouldLoadMedia.value = isNearViewport(mediaArticleRef.value);
-  }
-
-  visibilityObserver = new IntersectionObserver(
-    entries => {
-      shouldLoadMedia.value = entries.some(entry => entry.isIntersecting);
+  shouldLoadMedia.value = isNearViewport(mediaArticleRef.value);
+  stopObservingVisibility = observeViewportVisibility(
+    mediaArticleRef.value,
+    isVisible => {
+      // Keep a generous paint runway for fling scrolling, but release decoded
+      // images after they leave it. The fixed-size placeholder preserves the
+      // message geometry while preventing a traversed history from retaining
+      // every media bitmap in the WebView compositor.
+      shouldLoadMedia.value = isVisible;
     },
     {
-      root: null,
-      rootMargin: `${MEDIA_LOAD_ROOT_MARGIN_PX}px 0px`,
-      threshold: 0.01
+      rootMargin: `${MEDIA_LOAD_ROOT_MARGIN_PX}px 0px`
     }
   );
-
-  if (mediaArticleRef.value) {
-    visibilityObserver.observe(mediaArticleRef.value);
-  }
 });
 
 onUnmounted(() => {
-  visibilityObserver?.disconnect();
-  visibilityObserver = null;
+  stopObservingVisibility?.();
+  stopObservingVisibility = null;
 });
 
 const showErrorIcon = computed(
@@ -393,22 +402,40 @@ const getFallbackPreviewDimensions = (
   };
 };
 
-const getPreviewDimensions = (media: IMedia, index: number) => {
+const getPreviewDimensions = (
+  media: IMedia,
+  index: number
+): MediaPreviewDimensions => {
+  const mediaCount = mediaFiles.value.length;
+  const signature = [
+    mediaCount,
+    index,
+    media.type,
+    media.ex?.width || 0,
+    media.ex?.height || 0,
+    media.ex?.previewWidth || 0,
+    media.ex?.previewHeight || 0
+  ].join(':');
+  const cached = previewDimensionsCache.get(media);
+
+  if (cached?.signature === signature) {
+    return cached.value;
+  }
+
   const preview = normalizePreviewDimensions(
     media.ex?.previewWidth && media.ex?.previewHeight
       ? media.ex
-      : calculatePreviewDimensions(
-          media.ex || {},
-          mediaFiles.value.length,
-          index
-        ),
-    mediaFiles.value.length,
+      : calculatePreviewDimensions(media.ex || {}, mediaCount, index),
+    mediaCount,
     index
   );
+  const value =
+    preview.previewWidth && preview.previewHeight
+      ? preview
+      : getFallbackPreviewDimensions(media, index);
 
-  return preview.previewWidth && preview.previewHeight
-    ? preview
-    : getFallbackPreviewDimensions(media, index);
+  previewDimensionsCache.set(media, { signature, value });
+  return value;
 };
 
 const getPreviewWidth = (media: IMedia, index: number): number | undefined => {
@@ -419,13 +446,6 @@ const getPreviewWidth = (media: IMedia, index: number): number | undefined => {
 const getPreviewHeight = (media: IMedia, index: number): number | undefined => {
   const height = getPreviewDimensions(media, index).previewHeight;
   return typeof height === 'number' && height > 0 ? height : undefined;
-};
-
-const getPreviewStyle = (): Record<string, string> => {
-  return {
-    width: '100%',
-    height: '100%'
-  };
 };
 
 const getPreviewContainerStyle = (

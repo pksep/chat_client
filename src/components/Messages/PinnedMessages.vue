@@ -36,10 +36,13 @@ import { stripHtml } from '../../utils/stripHtml';
 import { useUrlWatcher } from '../../composables/navigation';
 import {
   editMessageFromLocal,
+  getFullMessagesByTopicId,
+  getMessagesByTopicId,
   getPinnedMessagesByTopicId,
+  prefetchAroundMessageContext,
   unpinLocalMessageForMe
 } from '../../services/useMessages';
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -49,48 +52,100 @@ import {
 } from '@pksep/yui';
 import { togglePinMessageChat } from '../../services/useChat';
 import ConfirmModal from '../UI/ConfirmModal.vue';
+import type {
+  IMessage,
+  IMessageViewportSnapshot
+} from '../interfaces/interfaces';
+
+interface Props {
+  topicId?: string | null;
+  viewportSnapshot?: IMessageViewportSnapshot | null;
+}
 
 const route = useUrlWatcher();
+const props = defineProps<Props>();
+const activeTopicId = computed(() => props.topicId || route.value.id || '');
+
+const getMessageTimestamp = (message?: Pick<IMessage, 'createdAt'>): number => {
+  const timestamp = new Date(message?.createdAt || 0).getTime();
+
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
 
 const pinnedMessages = computed(() =>
-  getPinnedMessagesByTopicId(route.value.id)
+  [...getPinnedMessagesByTopicId(activeTopicId.value)].sort(
+    (left, right) => getMessageTimestamp(left) - getMessageTimestamp(right)
+  )
 );
-const currentPinnedMessage = computed(
-  () => pinnedMessages.value[index.value] || null
+const lastPinnedMessage = computed(
+  () => pinnedMessages.value[pinnedMessages.value.length - 1] || null
 );
+const isViewportAtLoadedStart = computed(
+  () => (props.viewportSnapshot?.firstVisibleIndex ?? 1) <= 0
+);
+
+const firstVisibleMessage = computed(() => {
+  const firstVisibleMessageId = props.viewportSnapshot?.visibleMessageIds[0];
+
+  if (!firstVisibleMessageId) {
+    return null;
+  }
+
+  const topicMessages = [
+    ...getMessagesByTopicId(activeTopicId.value),
+    ...getFullMessagesByTopicId(activeTopicId.value)
+  ];
+
+  return (
+    topicMessages.find(message => message.id === firstVisibleMessageId) || null
+  );
+});
+
+const currentPinnedMessage = computed(() => {
+  if (pinnedMessages.value.length === 0) {
+    return null;
+  }
+
+  const firstVisibleTimestamp = getMessageTimestamp(firstVisibleMessage.value);
+
+  if (!firstVisibleTimestamp || isViewportAtLoadedStart.value) {
+    return lastPinnedMessage.value;
+  }
+
+  const previousPinnedMessages = pinnedMessages.value.filter(
+    message => getMessageTimestamp(message) < firstVisibleTimestamp
+  );
+
+  return (
+    previousPinnedMessages[previousPinnedMessages.length - 1] ||
+    lastPinnedMessage.value
+  );
+});
+
 const pinnedPreviewText = computed(() =>
   stripHtml(currentPinnedMessage.value?.text || 'Вложение')
 );
 const pinnedPreviewKey = computed(
   () =>
-    `${route.value.id || 'no-topic'}:${currentPinnedMessage.value?.id || 'no-message'}:${pinnedPreviewText.value}`
+    `${activeTopicId.value || 'no-topic'}:${currentPinnedMessage.value?.id || 'no-message'}:${pinnedPreviewText.value}`
 );
 
-const index = ref(-1);
 const unpinModalOpen = ref(false);
+const prefetchedPinnedContextKeys = new Set<string>();
+let pinnedContextPrefetchTimerId: ReturnType<typeof setTimeout> | null = null;
 
 const emits = defineEmits(['unmount-set-selected-message']);
-
-watch(
-  () => pinnedMessages.value,
-  () => {
-    index.value = pinnedMessages.value.length - 1;
-  },
-  { immediate: true, deep: true }
-);
 
 const handleChangeCurrentIndex = () => {
   if (!currentPinnedMessage.value) {
     return;
   }
 
-  emits('unmount-set-selected-message', currentPinnedMessage.value);
-
-  if (index.value > 0) {
-    index.value -= 1;
-  } else {
-    index.value = pinnedMessages.value.length - 1;
-  }
+  emits('unmount-set-selected-message', {
+    message: currentPinnedMessage.value,
+    allowOptimisticTarget: true,
+    scrollBehavior: 'auto'
+  });
 };
 
 const handleOpenUnpinModal = (event: MouseEvent) => {
@@ -109,21 +164,28 @@ const handleConfirmUnpinMessage = async () => {
     return;
   }
 
+  const topicId = activeTopicId.value;
+
+  if (!topicId) {
+    handleCloseUnpinModal();
+    return;
+  }
+
   if (!currentPinnedMessage.value.isPinnedOnlyMe) {
-    editMessageFromLocal(route.value.id, {
+    editMessageFromLocal(topicId, {
       ...currentPinnedMessage.value,
       isPin: false
     });
 
     await togglePinMessageChat({
-      topicId: route.value.id,
+      topicId,
       messageId: currentPinnedMessage.value.id,
       scope: 'ALL'
     });
   } else {
-    unpinLocalMessageForMe(route.value.id, currentPinnedMessage.value.id);
+    unpinLocalMessageForMe(topicId, currentPinnedMessage.value.id);
     await togglePinMessageChat({
-      topicId: route.value.id,
+      topicId,
       messageId: currentPinnedMessage.value.id,
       scope: 'SELF'
     });
@@ -131,4 +193,41 @@ const handleConfirmUnpinMessage = async () => {
 
   handleCloseUnpinModal();
 };
+
+watch(
+  () => ({
+    topicId: activeTopicId.value,
+    messageId: currentPinnedMessage.value?.id || ''
+  }),
+  ({ topicId, messageId }) => {
+    if (pinnedContextPrefetchTimerId) {
+      clearTimeout(pinnedContextPrefetchTimerId);
+      pinnedContextPrefetchTimerId = null;
+    }
+
+    if (!topicId || !messageId) {
+      return;
+    }
+
+    const prefetchKey = `${topicId}:${messageId}`;
+
+    if (prefetchedPinnedContextKeys.has(prefetchKey)) {
+      return;
+    }
+
+    pinnedContextPrefetchTimerId = setTimeout(() => {
+      pinnedContextPrefetchTimerId = null;
+      prefetchedPinnedContextKeys.add(prefetchKey);
+      void prefetchAroundMessageContext(messageId, topicId);
+    }, 250);
+  },
+  { immediate: true }
+);
+
+onBeforeUnmount(() => {
+  if (pinnedContextPrefetchTimerId) {
+    clearTimeout(pinnedContextPrefetchTimerId);
+    pinnedContextPrefetchTimerId = null;
+  }
+});
 </script>

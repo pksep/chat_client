@@ -1,8 +1,7 @@
 import type { ChatsToolbarFilter } from '../composables/useChatsToolbarState';
 import type { ITopic } from '../components/interfaces/interfaces';
-import { TopicType } from '../services/useChatSDK/types';
 import { getTopicUnreadBadgeCount } from './topicUnreadBadge';
-import { isBotTopic } from './bot';
+import { getTopicsByChatsToolbarFilter } from './chats-toolbar-filter';
 
 export interface IChatsToolbarFilterBadgeState {
   count: number;
@@ -13,27 +12,6 @@ export type ChatsToolbarFilterBadgeState = Record<
   ChatsToolbarFilter,
   IChatsToolbarFilterBadgeState
 >;
-
-const getTopicsByFilter = (
-  topics: ITopic[],
-  filter: ChatsToolbarFilter
-): ITopic[] => {
-  if (filter === 'chats') {
-    return topics.filter(
-      topic => topic.type === TopicType.DM && !isBotTopic(topic)
-    );
-  }
-
-  if (filter === 'groups') {
-    return topics.filter(topic => topic.type === TopicType.Group);
-  }
-
-  if (filter === 'bots') {
-    return topics.filter(topic => isBotTopic(topic));
-  }
-
-  return topics;
-};
 
 const getFilterBadgeState = (
   topics: ITopic[],
@@ -60,10 +38,22 @@ export const getChatsToolbarFilterBadgeState = (
   topics: ITopic[],
   authUserId?: string | null
 ): ChatsToolbarFilterBadgeState => ({
-  all: getFilterBadgeState(getTopicsByFilter(topics, 'all'), authUserId),
-  chats: getFilterBadgeState(getTopicsByFilter(topics, 'chats'), authUserId),
-  groups: getFilterBadgeState(getTopicsByFilter(topics, 'groups'), authUserId),
-  bots: getFilterBadgeState(getTopicsByFilter(topics, 'bots'), authUserId)
+  all: getFilterBadgeState(
+    getTopicsByChatsToolbarFilter(topics, 'all', authUserId),
+    authUserId
+  ),
+  chats: getFilterBadgeState(
+    getTopicsByChatsToolbarFilter(topics, 'chats', authUserId),
+    authUserId
+  ),
+  groups: getFilterBadgeState(
+    getTopicsByChatsToolbarFilter(topics, 'groups', authUserId),
+    authUserId
+  ),
+  bots: getFilterBadgeState(
+    getTopicsByChatsToolbarFilter(topics, 'bots', authUserId),
+    authUserId
+  )
 });
 
 export const getChatsToolbarFilterCounts = (

@@ -8,6 +8,7 @@ const TOPIC_SNAPSHOT_STORE = 'topicSnapshots';
 const READ_STATE_STORE = 'readStates';
 const SYNC_META_STORE = 'syncMeta';
 const SHADOW_SYNC_FLAG_KEY = 'chat.shadowSync.enabled';
+const SHADOW_LOADED_RANGES_VERSION = 2;
 const MAX_EVENT_LOG_RECORDS_PER_USER = 300;
 const DELETED_MESSAGES_META_PREFIX = 'deletedMessages:';
 const DELETED_MESSAGE_TOMBSTONE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -31,6 +32,11 @@ export interface ShadowLoadedRange {
   fromCreatedAt: string | null;
   toCreatedAt: string | null;
   updatedAt: string;
+}
+
+interface ShadowLoadedRangesState {
+  version: number;
+  ranges: ShadowLoadedRange[];
 }
 
 export interface ShadowTopicPageOptions {
@@ -66,6 +72,7 @@ export type ShadowChatEventType =
   | 'new_message'
   | 'edit_message'
   | 'delete_message'
+  | 'clear_history'
   | 'pin_message'
   | 'reaction_updated'
   | 'reaction_seen'
@@ -112,6 +119,13 @@ const hasIndexedDb = () =>
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isCurrentShadowLoadedRangesState = (
+  value: unknown
+): value is ShadowLoadedRangesState =>
+  isPlainObject(value) &&
+  value.version === SHADOW_LOADED_RANGES_VERSION &&
+  Array.isArray(value.ranges);
 
 const serializeValue = (value: unknown): unknown => {
   if (value instanceof Date) {
@@ -589,12 +603,20 @@ export const syncShadowReadStateFromMessages = async (
     return;
   }
 
-  const lastReadMessage = [...messages]
-    .filter(message => message.senderUserId !== userId && message.isReadByMe)
-    .sort(
-      (left, right) =>
-        getMessageCreatedTimestamp(right) - getMessageCreatedTimestamp(left)
-    )[0];
+  let lastReadMessage: IMessage | undefined;
+  let lastReadTimestamp = Number.NEGATIVE_INFINITY;
+
+  for (const message of messages) {
+    if (message.senderUserId === userId || !message.isReadByMe) {
+      continue;
+    }
+
+    const timestamp = getMessageCreatedTimestamp(message);
+    if (timestamp >= lastReadTimestamp) {
+      lastReadMessage = message;
+      lastReadTimestamp = timestamp;
+    }
+  }
 
   await saveShadowReadState(
     topicId,
@@ -907,15 +929,14 @@ export const saveShadowLoadedRange = async (
     updatedAt: new Date().toISOString()
   };
 
-  const existingRanges =
-    (await loadShadowSyncMeta<ShadowLoadedRange[]>(
-      `ranges:${topicId}`,
-      userId
-    )) || [];
+  const existingRanges = await loadShadowLoadedRanges(topicId, userId);
 
   await saveShadowSyncMeta(
     `ranges:${topicId}`,
-    mergeShadowLoadedRanges(existingRanges, nextRange),
+    {
+      version: SHADOW_LOADED_RANGES_VERSION,
+      ranges: mergeShadowLoadedRanges(existingRanges, nextRange)
+    } satisfies ShadowLoadedRangesState,
     userId
   );
 };
@@ -928,12 +949,9 @@ export const loadShadowLoadedRanges = async (
     return [];
   }
 
-  return (
-    (await loadShadowSyncMeta<ShadowLoadedRange[]>(
-      `ranges:${topicId}`,
-      userId
-    )) || []
-  );
+  const state = await loadShadowSyncMeta<unknown>(`ranges:${topicId}`, userId);
+
+  return isCurrentShadowLoadedRangesState(state) ? state.ranges : [];
 };
 
 export const getCachedShadowLoadedRanges = (
@@ -948,11 +966,13 @@ export const getCachedShadowLoadedRanges = (
     getMetaKey(`ranges:${topicId}`, userId)
   );
 
-  if (!Array.isArray(cachedValue)) {
-    return cachedValue === null ? [] : undefined;
+  if (cachedValue === undefined) {
+    return undefined;
   }
 
-  return cachedValue as ShadowLoadedRange[];
+  return isCurrentShadowLoadedRangesState(cachedValue)
+    ? cachedValue.ranges
+    : [];
 };
 
 export const hasCachedShadowLoadedRanges = (
@@ -1031,9 +1051,15 @@ export const resolveShadowTopicContext = async (
   }
 
   const containingRange = getContainingRange(targetMessage, ranges);
-  const rangeMessages = containingRange
-    ? getMessagesForRange(sortedMessages, containingRange)
-    : sortedMessages;
+
+  if (!containingRange) {
+    return {
+      status: 'range_gap',
+      messages: []
+    };
+  }
+
+  const rangeMessages = getMessagesForRange(sortedMessages, containingRange);
   const cursorIndex = rangeMessages.findIndex(
     message => message.id === messageId
   );
@@ -1131,24 +1157,6 @@ export const resolveShadowTopicPage = async (
     );
 
     if (cursorIndex <= 0) {
-      const snapshotCursorIndex = sortedMessages.findIndex(
-        message => message.id === opts.lastMessageId
-      );
-      const snapshotPage =
-        snapshotCursorIndex > 0
-          ? sortedMessages.slice(
-              Math.max(0, snapshotCursorIndex - limit),
-              snapshotCursorIndex
-            )
-          : [];
-
-      if (snapshotPage.length > 0) {
-        return {
-          status: 'cache_hit',
-          messages: snapshotPage
-        };
-      }
-
       return {
         status: containingRange ? 'range_edge' : 'range_gap',
         messages: []
@@ -1183,25 +1191,6 @@ export const resolveShadowTopicPage = async (
     );
 
     if (cursorIndex < 0 || cursorIndex >= rangeMessages.length - 1) {
-      const snapshotCursorIndex = sortedMessages.findIndex(
-        message => message.id === opts.afterMessageId
-      );
-      const snapshotPage =
-        snapshotCursorIndex >= 0 &&
-        snapshotCursorIndex < sortedMessages.length - 1
-          ? sortedMessages.slice(
-              snapshotCursorIndex + 1,
-              snapshotCursorIndex + 1 + limit
-            )
-          : [];
-
-      if (snapshotPage.length > 0) {
-        return {
-          status: 'cache_hit',
-          messages: snapshotPage
-        };
-      }
-
       return {
         status: containingRange ? 'range_edge' : 'range_gap',
         messages: []

@@ -13,6 +13,8 @@
     @touchmove.passive="handleFloatingDateDividerUserScroll"
     @touchstart="onTouchStart"
     @touchend="onTouchEnd"
+    @scroll="handleAiScroll"
+    @vue:mounted="scrollAiToBottom"
     :data-testid="`${props.dataTestid}-MessageList-AIMessagesWrapper`"
   >
     <MessageListAIItems
@@ -95,7 +97,13 @@
       'chat__message-wrapper',
       {
         'chat__message-wrapper--content-deferred':
-          shouldRenderUserMessageSkeleton
+          shouldDeferUserMessageContentLayout,
+        'chat__message-wrapper--bootstrap-scroll-locked':
+          shouldLockUserMessageBootstrapScroll,
+        'chat__message-wrapper--search-positioning':
+          isSearchNavigationPositioning,
+        'chat__message-wrapper--favorite': isFavoriteMessageTopic,
+        'chat__message-wrapper--call-topic': isActiveCallTopic
       }
     ]"
     v-if="!isAiRoute && !isDefaultRoute"
@@ -104,9 +112,11 @@
     @vue:mounted="scrollToBottom"
     @scroll="handleScroll"
     @wheel.passive="handleFloatingDateDividerUserScroll"
-    @touchmove.passive="handleFloatingDateDividerUserScroll"
-    @touchstart="onTouchStart"
-    @touchend="onTouchEnd"
+    @touchmove.passive="handleUserMessageTouchMove"
+    @touchstart="handleUserMessageTouchStart"
+    @touchend="handleUserMessageTouchEnd"
+    @touchcancel="handleUserMessageTouchCancel"
+    @scrollend="handleMessageScrollEnd"
     :data-testid="`${props.dataTestid}-MessageList-UserMessagesWrapper`"
   >
     <MessageListUserItems
@@ -115,9 +125,8 @@
       :class="{
         'chat__message-bubble--warming': shouldCoverUserMessagesWithSkeleton
       }"
-      :messages="state.messages"
-      :user="props.user"
-      :auth-user-id="authUser?.id"
+      :messages="renderedUserMessages"
+      :auth-user-id="authUserId"
       :hide-unread-marker="state.hideUnreadMarker"
       :unread-marker-message-id="state.unreadMarkerMessageId"
       :data-testid="props.dataTestid"
@@ -127,7 +136,30 @@
       @retry-message="handleRetryMessage"
       @scroll-to-message="handleScrollToMessage"
       @content-ready="handleUserMessagesContentReady"
-    />
+    >
+      <template
+        v-if="activeTopic && isActiveCallTopic && !hasCallTopicDefaultMessage"
+        #before
+      >
+        <CallTopicDefaultMessage
+          :topic="activeTopic"
+          :data-testid="`${props.dataTestid}-CallTopicDefaultMessage`"
+        />
+      </template>
+    </MessageListUserItems>
+    <div
+      v-if="shouldRenderEmptyUserMessageState"
+      class="chat__message-empty-state"
+      :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
+    >
+      <span>
+        {{
+          isFavoriteMessageTopic
+            ? 'Здесь пока ничего нет...'
+            : 'Сообщений пока нет'
+        }}
+      </span>
+    </div>
     <div
       v-if="shouldRenderUserMessageSkeleton"
       :class="[
@@ -233,60 +265,57 @@
       @touchstart.stop
       @touchend.stop
     >
-      <svg
-        class="chat-update-banner__download-icon"
-        width="44"
-        height="44"
-        viewBox="0 0 44 44"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
+      <span
+        :class="[
+          'chat-update-banner__status-icon',
+          `chat-update-banner__status-icon--${updateBannerState}`
+        ]"
+        aria-hidden="true"
       >
-        <rect width="44" height="44" rx="22" fill="var(--border-blue)" />
-        <path
-          d="M30 25L30 28.3333C30 28.7754 29.8127 29.1993 29.4793 29.5118C29.1459 29.8244 28.6937 30 28.2222 30L15.7778 30C15.3063 30 14.8541 29.8244 14.5207 29.5118C14.1873 29.1993 14 28.7754 14 28.3333L14 25"
-          stroke="var(--white)"
-          stroke-width="1.375"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-        <path
-          d="M17.8346 19.832L22.0013 23.9987L26.168 19.832"
-          stroke="var(--white)"
-          stroke-width="1.375"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-        <path
-          d="M22 24L22 14"
-          stroke="var(--white)"
-          stroke-width="1.375"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
+        <svg
+          v-if="updateBannerState === 'downloaded'"
+          viewBox="0 0 18 18"
+          fill="none"
+        >
+          <path
+            d="M5 9.2L7.7 12L13.2 6"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <svg v-else viewBox="0 0 18 18" fill="none">
+          <path
+            d="M14 11.25V14C14 14.2761 13.883 14.5412 13.6746 14.7366C13.4662 14.932 13.1836 15.0417 12.8889 15.0417H5.11111C4.81643 15.0417 4.53381 14.932 4.32544 14.7366C4.11706 14.5412 4 14.2761 4 14V11.25"
+            stroke="currentColor"
+            stroke-width="1.375"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M6.39587 7.95996L9.00003 10.5641L11.6042 7.95996"
+            stroke="currentColor"
+            stroke-width="1.375"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M9 10.5654V4.31543"
+            stroke="currentColor"
+            stroke-width="1.375"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </span>
 
       <div class="chat-update-banner__content">
         <p class="chat-update-banner__title">
-          Доступна новая версия <span>приложения</span>
+          {{ updateBannerTitle }}
         </p>
-        <p
-          v-if="
-            !props.updateProgress && props.updateActionLabel !== 'Перезапустить'
-          "
-          class="chat-update-banner__description"
-        >
-          Обновите приложение, чтобы получить новые функции<span>
-            и улучшения</span
-          >
-        </p>
-        <p
-          v-else-if="props.updateActionLabel !== 'Перезапустить'"
-          class="chat-update-banner__description"
-        >
-          Пожалуйста, не закрывайте приложение
-        </p>
-        <p v-else class="chat-update-banner__description">
-          Для начала работы перезапустите приложение
+        <p class="chat-update-banner__description">
+          {{ updateBannerDescription }}
         </p>
       </div>
       <Button
@@ -327,57 +356,72 @@
         <Icon :name="IconNameEnum.crossLarge" />
       </button>
     </section>
-    <div
-      v-if="
-        !shouldRenderUserMessageSkeleton &&
-        (isShowScrollToBottomButton || showUnreadReactionScrollButton)
-      "
-      :class="[
-        'chat__message-bubble__scroll-indicators',
-        {
-          'chat__message-bubble__scroll-indicators--with-count':
-            showUnreadCountOnScrollButton
-        }
-      ]"
+  </div>
+
+  <div
+    v-if="
+      !isAiRoute &&
+      !isDefaultRoute &&
+      !shouldRenderUserMessageSkeleton &&
+      (isShowScrollToBottomButton || showUnreadReactionScrollButton)
+    "
+    :class="[
+      'chat__message-bubble__scroll-indicators',
+      {
+        'chat__message-bubble__scroll-indicators--with-count':
+          showUnreadCountOnScrollButton
+      }
+    ]"
+    :style="chatMessageWrapperStyle"
+  >
+    <button
+      v-if="showUnreadReactionScrollButton"
+      type="button"
+      class="chat__message-bubble__arrow-down chat__message-bubble__arrow-down--reaction"
+      :aria-label="'Перейти к новой реакции'"
+      @click="handleUnreadReactionClick"
     >
-      <button
-        v-if="showUnreadReactionScrollButton"
-        type="button"
-        class="chat__message-bubble__arrow-down chat__message-bubble__arrow-down--reaction"
-        :aria-label="'Перейти к новой реакции'"
-        @click="handleUnreadReactionClick"
+      <ReactionHeartIcon
+        variant="outline"
+        class="chat__message-bubble__reaction-indicator"
+      />
+      <span class="contact-list__notification">1</span>
+    </button>
+    <button
+      v-if="isShowScrollToBottomButton"
+      type="button"
+      class="chat__message-bubble__arrow-down"
+      :aria-label="'Перейти к новым сообщениям'"
+      @click="handleArrowDownClick"
+    >
+      <Icon :name="IconNameEnum.arrowDown" />
+      <span
+        v-if="showUnreadCountOnScrollButton"
+        :class="{
+          'contact-list__notification': true,
+          'contact-list__notification--muted': activeTopic?.info?.isMute
+        }"
       >
-        <ReactionHeartIcon
-          variant="outline"
-          class="chat__message-bubble__reaction-indicator"
-        />
-        <span class="contact-list__notification">1</span>
-      </button>
-      <button
-        v-if="isShowScrollToBottomButton"
-        type="button"
-        class="chat__message-bubble__arrow-down"
-        :aria-label="'Перейти к новым сообщениям'"
-        @click="handleArrowDownClick"
-      >
-        <Icon :name="IconNameEnum.arrowDown" />
-        <span
-          v-if="showUnreadCountOnScrollButton"
-          :class="{
-            'contact-list__notification': true,
-            'contact-list__notification--muted': activeTopic?.info?.isMute
-          }"
-        >
-          {{ visibleTopicUnreadCount }}
-        </span>
-      </button>
-    </div>
+        {{ visibleTopicUnreadCount }}
+      </span>
+    </button>
   </div>
 
   <SelectedMessagesContent
     v-if="!shouldRenderUserMessageSkeleton && isSelectionMode"
     :data-testid="`${props.dataTestid}-SelectedMessages`"
     @height-change="handleSelectedMessagesHeightChange"
+  />
+  <CallTopicActions
+    v-if="
+      !shouldRenderUserMessageSkeleton &&
+      !isSelectionMode &&
+      !isMobileTopicSearchMode &&
+      activeTopic &&
+      isActiveCallTopic
+    "
+    :topic="activeTopic"
+    :data-testid="`${props.dataTestid}-CallTopicActions`"
   />
   <MessageListInput
     v-if="
@@ -469,16 +513,24 @@ import {
 } from '../services/useMessages';
 import {
   getCanSendReadReceipts,
+  getChatSDK,
+  getHasBrowserNetwork,
   markTopicReactionSeenChat,
   setSuspendIncomingMergeForTopic
 } from '../services/useChat';
+import { isAnyCallModalVisible } from '../services/useCallState';
 import {
   getIsAppActivelyVisible,
   subscribeToAppVisibilityChanges
 } from '../services/useAppVisibility';
 import { getAuthUser } from '../composables/useAuth';
-import { IMessage } from './interfaces/interfaces';
+import type {
+  IMessage,
+  IMessageRenderedTopicState,
+  IMessageViewportSnapshot
+} from './interfaces/interfaces';
 import { TopicType } from '../services/useChatSDK/types';
+import { formatDay } from '../composables/useTime';
 
 import { useMessageSwipe } from './Messages/composables/useMessageSwipe';
 import { useMessageScroll } from './Messages/composables/useMessageScroll';
@@ -489,6 +541,8 @@ import { Capacitor } from '@capacitor/core';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
 import SelectedMessagesContent from './Header/SelectedMessagesContent.vue';
+import CallTopicActions from './Calls/CallTopicActions.vue';
+import CallTopicDefaultMessage from './Calls/CallTopicDefaultMessage.vue';
 import { usePendingForwardMessages } from '../composables/useForwardMessages';
 import { ensureMediaObjectUrl } from '../services/useMediaBlobCache';
 import { isGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
@@ -497,7 +551,11 @@ import {
   hasTopicUnreadIndicator
 } from '../utils/topicUnreadBadge';
 import { isUnreadTrackableMessage } from '../utils/messageTracking';
-import { isMobileTopicSearchActive } from '../composables/useMessageSearch';
+import {
+  consumePendingSearchNavigation,
+  getPendingSearchNavigation,
+  isMobileTopicSearchActive
+} from '../composables/useMessageSearch';
 import {
   normalizeReplyQuoteOccurrenceIndex,
   normalizeReplyQuoteText
@@ -509,6 +567,15 @@ import {
 } from '../services/useTopicViewportState';
 import { recordChatMessageListRenderMismatch } from '../services/useChatNavigationTelemetry';
 import { isDeletedBotUser } from '../utils/bot';
+import {
+  filterFavoriteTopicSystemMessages,
+  isFavoriteTopic
+} from '../utils/favorite-topic';
+import { isCallTopic, isCallTopicDefaultMessage } from '../utils/call-topic';
+import {
+  consumeNotificationTopicRefreshRequest,
+  notificationTopicRefreshRequest
+} from '../services/useNotificationNavigation';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -521,14 +588,65 @@ const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
   deferContentRender: false,
   suppressInitialSkeleton: false
 });
+const emit = defineEmits<{
+  (
+    e: 'viewport-snapshot-change',
+    snapshot: IMessageViewportSnapshot | null
+  ): void;
+  (e: 'rendered-topic-change', payload: IMessageRenderedTopicState): void;
+}>();
 const TOPIC_SWITCH_AUTO_READ_GRACE_MS = 1200;
 const TOPIC_SWITCH_HISTORY_FETCH_GRACE_MS = 1200;
+const TOPIC_SWITCH_BOOTSTRAP_MESSAGES_LIMIT = 48;
+const TOPIC_SWITCH_SKELETON_DELAY_MS = 300;
+const TOPIC_SWITCH_EXPANDED_FETCH_DELAY_MS = 80;
+const TOPIC_SWITCH_USER_SCROLL_INTENT_GRACE_MS = 2000;
+const CURRENT_TOPIC_BOTTOM_THRESHOLD_PX = 120;
 const TOPIC_SWITCH_MEDIA_PREWARM_LIMIT = 12;
-const MOBILE_FAST_INITIAL_MESSAGES_LIMIT = 10;
-const MOBILE_FAST_MAX_INITIAL_MESSAGES_LIMIT = 10;
-const MOBILE_VISIBLE_EXPAND_DELAY_MS = 320;
-const MOBILE_INITIAL_MESSAGES_LIMIT = 10;
-const MOBILE_MAX_INITIAL_MESSAGES_LIMIT = 10;
+const MOBILE_FAST_INITIAL_MESSAGES_LIMIT = 48;
+const MOBILE_FAST_MAX_INITIAL_MESSAGES_LIMIT = 48;
+const MOBILE_VISIBLE_EXPAND_DELAY_MS = 600;
+const MOBILE_INITIAL_MESSAGES_LIMIT = 48;
+const MOBILE_MAX_INITIAL_MESSAGES_LIMIT = 48;
+const MOBILE_EXPANDED_MESSAGES_LIMIT = 72;
+const MOBILE_MAX_VISIBLE_MESSAGES_LIMIT = 72;
+type UpdateBannerState = 'available' | 'downloading' | 'downloaded';
+
+const updateBannerState = computed<UpdateBannerState>(() => {
+  if (props.updateActionLabel === 'Перезапустить') {
+    return 'downloaded';
+  }
+
+  if (props.updateProgress !== undefined) {
+    return 'downloading';
+  }
+
+  return 'available';
+});
+
+const updateBannerTitle = computed(() => {
+  if (updateBannerState.value === 'downloading') {
+    return 'Загружаем обновление';
+  }
+
+  if (updateBannerState.value === 'downloaded') {
+    return 'Установлено обновление';
+  }
+
+  return 'Доступна новая версия приложения';
+});
+
+const updateBannerDescription = computed(() => {
+  if (updateBannerState.value === 'downloading') {
+    return 'Пожалуйста, не закрывайте приложение';
+  }
+
+  if (updateBannerState.value === 'downloaded') {
+    return 'Для начала работы перезапустите приложение';
+  }
+
+  return 'Обновите приложение, чтобы получить новые функции и улучшения';
+});
 const DESKTOP_INITIAL_MESSAGES_LIMIT = 100;
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
@@ -538,6 +656,8 @@ const updateBannerRef = useTemplateRef<HTMLElement>('updateBannerRef');
 
 const route = useUrlWatcher();
 const { state: isMobile } = useResizeState(MAX_W_MD);
+const isNativeAndroid =
+  Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
 const { onTouchStart, onTouchEnd } = useMessageSwipe(route);
 
@@ -661,6 +781,7 @@ const getLocalStorageInputText = computed(() => {
 
 const inputText = ref(getLocalStorageInputText.value);
 const bottomBarHeight = ref(0);
+const messageInlineEndInset = ref(20);
 const floatingDateDividerLabel = ref('');
 const isFloatingDateDividerHidden = ref(false);
 const isFloatingDateDividerActive = ref(false);
@@ -668,12 +789,15 @@ let chatVisibilityObserver: ResizeObserver | null = null;
 let removeAppVisibilityListener: (() => void) | null = null;
 let floatingDateDividerRafId = 0;
 let postScrollUiSyncRafId = 0;
+let pinnedViewportSnapshotRafId = 0;
+let pinnedViewportSnapshotTimeoutId: number | null = null;
+let lastPinnedViewportSnapshotAt = 0;
 let floatingDateDividerHideTimeoutId: number | null = null;
 let floatingDateDividerUserScrollIntentAt = 0;
-const FLOATING_DATE_LABEL_HEIGHT_PX = 50;
-const FLOATING_DATE_HIDE_GAP_PX = 50;
+let lastFloatingDateDividerScrollTop: number | null = null;
 const FLOATING_DATE_VISIBLE_MS = 900;
 const FLOATING_DATE_USER_SCROLL_GRACE_MS = 500;
+const PINNED_VIEWPORT_SNAPSHOT_INTERVAL_MS = 80;
 const unreadMarkerMessageIdsByTopic = reactive<Record<string, string | null>>(
   {}
 );
@@ -685,14 +809,40 @@ const { pendingForwardMessages, pendingForwardTopicId } =
 
 const isAiRoute = computed(() => route.value?.type === RouteTypes.AI);
 const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
-const chatMessageWrapperStyle = computed(() =>
-  bottomBarHeight.value > 0
-    ? {
-        '--chat-input-height': `${bottomBarHeight.value}px`
-      }
-    : undefined
-);
+const chatMessageWrapperStyle = computed(() => ({
+  '--chat-message-inline-end': `${messageInlineEndInset.value}px`,
+  ...(bottomBarHeight.value > 0
+    ? { '--chat-input-height': `${bottomBarHeight.value}px` }
+    : {})
+}));
+
+const syncMessageInlineEndInset = (): void => {
+  const wrapper = chatWrapperRef.value;
+  if (!wrapper) {
+    return;
+  }
+
+  const styles = window.getComputedStyle(wrapper);
+  const paddingInlineEnd = Number.parseFloat(styles.paddingRight) || 0;
+  const borderInlineWidth =
+    (Number.parseFloat(styles.borderLeftWidth) || 0) +
+    (Number.parseFloat(styles.borderRightWidth) || 0);
+  const scrollbarWidth = Math.max(
+    0,
+    wrapper.offsetWidth - wrapper.clientWidth - borderInlineWidth
+  );
+  const nextInset = Math.max(0, Math.ceil(paddingInlineEnd + scrollbarWidth));
+
+  if (messageInlineEndInset.value !== nextInset) {
+    messageInlineEndInset.value = nextInset;
+  }
+};
 const authUser = computed(() => getAuthUser());
+const authUserId = computed(() =>
+  authUser.value?.id === undefined || authUser.value?.id === null
+    ? undefined
+    : String(authUser.value.id)
+);
 const isSelectionMode = computed(() =>
   isMessageSelectionModeForTopic(route.value.id)
 );
@@ -702,6 +852,52 @@ const isMobileTopicSearchMode = computed(
 const activeTopic = computed(() =>
   route.value.id ? getSelectedTopic(route.value.id) : null
 );
+const isActiveCallTopic = computed(() => isCallTopic(activeTopic.value));
+const isFavoriteMessageTopic = computed(() =>
+  isFavoriteTopic(activeTopic.value, authUserId.value)
+);
+const getRenderedTopicMessages = (
+  topicId: string,
+  messages: IMessage[]
+): IMessage[] => {
+  if (route.value.type === RouteTypes.FAVORITES && route.value.id === topicId) {
+    return messages.filter(message => !message.isSystem);
+  }
+
+  return filterFavoriteTopicSystemMessages(
+    getSelectedTopic(topicId),
+    messages,
+    authUserId.value
+  );
+};
+const renderedUserMessages = computed(() => {
+  const topicId =
+    state.messages.find(message => Boolean(message.topicId))?.topicId ||
+    route.value.id;
+
+  return topicId
+    ? getRenderedTopicMessages(topicId, state.messages)
+    : state.messages;
+});
+const renderedLastUserMessageSignature = computed(() => {
+  const lastMessage =
+    renderedUserMessages.value[renderedUserMessages.value.length - 1];
+
+  if (!lastMessage) {
+    return '';
+  }
+
+  return [
+    lastMessage.id || '',
+    lastMessage.updatedAt || '',
+    lastMessage.status || '',
+    lastMessage.text || '',
+    lastMessage.media?.length || 0
+  ].join('\u001f');
+});
+const hasCallTopicDefaultMessage = computed(() =>
+  renderedUserMessages.value.some(isCallTopicDefaultMessage)
+);
 const isDeletedAccountTopic = computed(() => {
   const topic = activeTopic.value;
 
@@ -710,16 +906,35 @@ const isDeletedAccountTopic = computed(() => {
 const topicUnreadCount = computed(() =>
   getTopicUnreadBadgeCount(activeTopic.value || undefined, authUser.value?.id)
 );
+const getCurrentTopicBottomDistance = (): number => {
+  const container = chatWrapperRef.value;
+
+  if (!container) {
+    return 0;
+  }
+
+  const maxScroll = Math.max(
+    0,
+    container.scrollHeight - container.clientHeight
+  );
+
+  return Math.max(0, maxScroll - container.scrollTop);
+};
+
+const isCurrentTopicNearBottomNow = (): boolean =>
+  getCurrentTopicBottomDistance() <= CURRENT_TOPIC_BOTTOM_THRESHOLD_PX;
+
 const isViewingBottom = computed(
   () =>
     !!route.value?.id &&
     route.value.type !== RouteTypes.AI &&
-    scrollAnchor.viewportMode.value === 'live'
+    scrollAnchor.viewportMode.value === 'live' &&
+    isCurrentTopicNearBottomNow()
 );
 const shouldShowFloatingDateDivider = computed(
   () =>
     !!floatingDateDividerLabel.value &&
-    isFloatingDateDividerActive.value &&
+    (isNativeAndroid || isFloatingDateDividerActive.value) &&
     !isFloatingDateDividerHidden.value
 );
 const canClearlyShowUnreadCount = computed(
@@ -746,12 +961,57 @@ const unreadReactionMessageId = computed(() => {
 });
 const renderedTopicId = ref(route.value.id || '');
 const isAwaitingUserMessagesPaint = ref(false);
+const paintedUserMessageTopicId = ref('');
+const isInitialMessagesSkeletonVisible = ref(false);
+const isBootstrapScrollLocked = ref(false);
+const isSearchNavigationPositioning = ref(false);
+const knownEmptyMessageTopicIds = ref<Set<string>>(new Set());
 let activeTopicSwitchToken = 0;
 let topicSwitchStartedAtMs = 0;
+let topicSwitchUserScrollIntentAtMs = 0;
+let bootstrapScrollLockToken = 0;
+let bootstrapScrollLockReleaseFrameId = 0;
+let searchNavigationPositioningReleaseFrameId = 0;
 let renderMismatchTelemetryTimeout: ReturnType<typeof setTimeout> | null = null;
+let initialMessagesSkeletonTimeoutId: number | null = null;
+let initialMessagesSkeletonToken = 0;
 let visibleMessagesExpansionTimeoutId: number | null = null;
 let visibleMessagesExpansionFrameId: number | null = null;
 let visibleMessagesExpansionAppliedToken = 0;
+let activeTopicPreviewRefreshTimeoutId: number | null = null;
+let activeTopicPreviewRefreshToken = 0;
+let activeTopicPreviewRefreshRetryCount = 0;
+let completedTopicSwitchToken = 0;
+let isPendingSearchNavigationInProgress = false;
+let isPendingSearchNavigationBootstrapInProgress = false;
+const ACTIVE_TOPIC_PREVIEW_REFRESH_MAX_RETRIES = 20;
+
+const setTopicMessagesKnownEmpty = (
+  topicId: string,
+  isKnownEmpty: boolean
+): void => {
+  if (!topicId) {
+    return;
+  }
+
+  const isCurrentlyKnownEmpty = knownEmptyMessageTopicIds.value.has(topicId);
+  if (isCurrentlyKnownEmpty === isKnownEmpty) {
+    return;
+  }
+
+  const nextKnownEmptyTopicIds = new Set(knownEmptyMessageTopicIds.value);
+
+  if (isKnownEmpty) {
+    nextKnownEmptyTopicIds.add(topicId);
+  } else {
+    nextKnownEmptyTopicIds.delete(topicId);
+  }
+
+  knownEmptyMessageTopicIds.value = nextKnownEmptyTopicIds;
+};
+
+const isTopicMessagesKnownEmpty = (topicId?: string): boolean =>
+  !!topicId && knownEmptyMessageTopicIds.value.has(topicId);
 
 const waitForMessageListIdle = (): Promise<void> =>
   new Promise(resolve => {
@@ -763,25 +1023,188 @@ const waitForMessageListIdle = (): Promise<void> =>
     setTimeout(resolve, 0);
   });
 
+const waitForExpandedTopicFetchDelay = (): Promise<void> =>
+  new Promise(resolve => {
+    window.setTimeout(() => {
+      window.requestAnimationFrame(() => resolve());
+    }, TOPIC_SWITCH_EXPANDED_FETCH_DELAY_MS);
+  });
+
+const isInsideTopicSwitchUserScrollWindow = (): boolean =>
+  !!topicSwitchStartedAtMs &&
+  performance.now() - topicSwitchStartedAtMs <=
+    TOPIC_SWITCH_USER_SCROLL_INTENT_GRACE_MS;
+
+const markTopicSwitchUserScrollIntent = (): void => {
+  if (
+    !route.value?.id ||
+    route.value.type === RouteTypes.AI ||
+    !isInsideTopicSwitchUserScrollWindow()
+  ) {
+    return;
+  }
+
+  topicSwitchUserScrollIntentAtMs = performance.now();
+};
+
+const hasTopicSwitchUserScrollIntent = (topicSwitchToken: number): boolean =>
+  topicSwitchToken === activeTopicSwitchToken &&
+  topicSwitchStartedAtMs > 0 &&
+  topicSwitchUserScrollIntentAtMs >= topicSwitchStartedAtMs &&
+  topicSwitchUserScrollIntentAtMs - topicSwitchStartedAtMs <=
+    TOPIC_SWITCH_USER_SCROLL_INTENT_GRACE_MS;
+
+const cancelBootstrapScrollLockRelease = (): void => {
+  if (!bootstrapScrollLockReleaseFrameId) {
+    return;
+  }
+
+  window.cancelAnimationFrame(bootstrapScrollLockReleaseFrameId);
+  bootstrapScrollLockReleaseFrameId = 0;
+};
+
+const setBootstrapScrollLock = (
+  topicSwitchToken: number,
+  locked: boolean
+): void => {
+  cancelBootstrapScrollLockRelease();
+  bootstrapScrollLockToken = locked ? topicSwitchToken : 0;
+  isBootstrapScrollLocked.value = locked;
+};
+
+const releaseBootstrapScrollLock = (topicSwitchToken?: number): void => {
+  if (
+    topicSwitchToken !== undefined &&
+    topicSwitchToken !== bootstrapScrollLockToken
+  ) {
+    return;
+  }
+
+  cancelBootstrapScrollLockRelease();
+  bootstrapScrollLockToken = 0;
+  isBootstrapScrollLocked.value = false;
+};
+
+const releaseBootstrapScrollLockAfterPaint = (
+  topicSwitchToken: number
+): void => {
+  nextTick(() => {
+    if (topicSwitchToken !== activeTopicSwitchToken) {
+      return;
+    }
+
+    cancelBootstrapScrollLockRelease();
+    bootstrapScrollLockReleaseFrameId = window.requestAnimationFrame(() => {
+      bootstrapScrollLockReleaseFrameId = 0;
+      releaseBootstrapScrollLock(topicSwitchToken);
+    });
+  });
+};
+
+const cancelSearchNavigationPositioningRelease = (): void => {
+  if (!searchNavigationPositioningReleaseFrameId) {
+    return;
+  }
+
+  window.cancelAnimationFrame(searchNavigationPositioningReleaseFrameId);
+  searchNavigationPositioningReleaseFrameId = 0;
+};
+
+const releaseSearchNavigationPositioning = (): void => {
+  cancelSearchNavigationPositioningRelease();
+  isSearchNavigationPositioning.value = false;
+};
+
+const releaseSearchNavigationPositioningAfterPaint = (
+  topicSwitchToken?: number
+): void => {
+  nextTick(() => {
+    if (
+      topicSwitchToken !== undefined &&
+      topicSwitchToken !== activeTopicSwitchToken
+    ) {
+      return;
+    }
+
+    cancelSearchNavigationPositioningRelease();
+    searchNavigationPositioningReleaseFrameId = window.requestAnimationFrame(
+      () => {
+        searchNavigationPositioningReleaseFrameId = 0;
+        isSearchNavigationPositioning.value = false;
+      }
+    );
+  });
+};
+
+const clearInitialMessagesSkeletonTimer = (): void => {
+  if (initialMessagesSkeletonTimeoutId !== null) {
+    window.clearTimeout(initialMessagesSkeletonTimeoutId);
+    initialMessagesSkeletonTimeoutId = null;
+  }
+};
+
+const cancelInitialMessagesSkeletonDelay = (): void => {
+  initialMessagesSkeletonToken += 1;
+  clearInitialMessagesSkeletonTimer();
+};
+
+const resetInitialMessagesSkeleton = (): void => {
+  cancelInitialMessagesSkeletonDelay();
+  isInitialMessagesSkeletonVisible.value = false;
+};
+
+const scheduleInitialMessagesSkeleton = (
+  topicId: string,
+  topicSwitchToken: number
+): void => {
+  cancelInitialMessagesSkeletonDelay();
+  isInitialMessagesSkeletonVisible.value = false;
+
+  const skeletonToken = ++initialMessagesSkeletonToken;
+
+  initialMessagesSkeletonTimeoutId = window.setTimeout(() => {
+    initialMessagesSkeletonTimeoutId = null;
+
+    const hasRenderedRequestedMessages =
+      renderedTopicId.value === topicId &&
+      getMessagesByTopicId(topicId).length > 0;
+
+    if (
+      skeletonToken !== initialMessagesSkeletonToken ||
+      topicSwitchToken !== activeTopicSwitchToken ||
+      route.value?.id !== topicId ||
+      !isLoadingInitialMessages.value ||
+      hasRenderedRequestedMessages
+    ) {
+      return;
+    }
+
+    isInitialMessagesSkeletonVisible.value = true;
+  }, TOPIC_SWITCH_SKELETON_DELAY_MS);
+};
+
 const getTopicSwitchFetchLimits = (
   unreadCount: number
 ): { initialLimit: number; expandedLimit: number } => {
   const unreadWindowLimit = unreadCount + 20;
-  const expandedLimit = Math.max(
-    DESKTOP_INITIAL_MESSAGES_LIMIT,
-    unreadWindowLimit
-  );
+  const expandedLimit = isMobile.value
+    ? Math.min(
+        MOBILE_MAX_VISIBLE_MESSAGES_LIMIT,
+        Math.max(MOBILE_EXPANDED_MESSAGES_LIMIT, unreadWindowLimit)
+      )
+    : Math.max(DESKTOP_INITIAL_MESSAGES_LIMIT, unreadWindowLimit);
+  const initialLimit = TOPIC_SWITCH_BOOTSTRAP_MESSAGES_LIMIT;
 
   if (!isMobile.value) {
     return {
-      initialLimit: expandedLimit,
+      initialLimit,
       expandedLimit
     };
   }
 
   return {
     initialLimit: Math.min(
-      Math.max(MOBILE_INITIAL_MESSAGES_LIMIT, unreadWindowLimit),
+      Math.max(MOBILE_INITIAL_MESSAGES_LIMIT, initialLimit),
       MOBILE_MAX_INITIAL_MESSAGES_LIMIT
     ),
     expandedLimit
@@ -805,6 +1228,220 @@ const getFastInitialMessagesLimit = (
     initialLimit,
     Math.max(MOBILE_FAST_INITIAL_MESSAGES_LIMIT, unreadAwareLimit)
   );
+};
+
+const getMessageVersionTimestamp = (
+  message?: Partial<IMessage> | null
+): number => {
+  if (!message) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    ...[message.updatedAt, message.deletedAt, message.createdAt]
+      .map(value => (value ? new Date(value as string | Date).getTime() : 0))
+      .filter(value => Number.isFinite(value))
+  );
+};
+
+const getActiveTopicLastMessageFingerprint = computed(() => {
+  const lastMessage = activeTopic.value?.lastMessage;
+
+  if (!route.value?.id || !lastMessage?.id) {
+    return `${route.value?.id || ''}:no-last-message`;
+  }
+
+  return [
+    route.value.id,
+    lastMessage.id,
+    lastMessage.senderUserId || '',
+    lastMessage.updatedAt || '',
+    lastMessage.deletedAt || '',
+    lastMessage.text || ''
+  ].join(':');
+});
+
+const shouldRefreshActiveTopicFromPreview = (topicId: string): boolean => {
+  const lastMessage = activeTopic.value?.lastMessage;
+
+  if (
+    !topicId ||
+    route.value?.id !== topicId ||
+    route.value?.type === RouteTypes.AI ||
+    isLoadingInitialMessages.value ||
+    activeTopicSwitchToken !== completedTopicSwitchToken ||
+    !getHasBrowserNetwork() ||
+    !lastMessage?.id
+  ) {
+    return false;
+  }
+
+  const fullMessages = getFullMessagesByTopicId(topicId);
+  const visibleMessages = getMessagesByTopicId(topicId);
+  const latestFullMessage = fullMessages.at(-1);
+  const latestVisibleMessage = visibleMessages.at(-1);
+  const matchingFullMessage = fullMessages.find(
+    message => message.id === lastMessage.id
+  );
+  const matchingVisibleMessage = visibleMessages.find(
+    message => message.id === lastMessage.id
+  );
+
+  if (!matchingFullMessage) {
+    return true;
+  }
+
+  if (latestFullMessage?.id && latestFullMessage.id !== lastMessage.id) {
+    return true;
+  }
+
+  if (
+    latestVisibleMessage?.id &&
+    scrollAnchor.viewportMode.value === 'live' &&
+    latestVisibleMessage.id !== lastMessage.id
+  ) {
+    return true;
+  }
+
+  const previewVersion = getMessageVersionTimestamp(lastMessage);
+  const localVersion = getMessageVersionTimestamp(matchingFullMessage);
+
+  if (previewVersion > 0 && localVersion > 0 && localVersion < previewVersion) {
+    return true;
+  }
+
+  if (
+    typeof lastMessage.text === 'string' &&
+    typeof matchingFullMessage.text === 'string' &&
+    lastMessage.text !== matchingFullMessage.text
+  ) {
+    return true;
+  }
+
+  return (
+    scrollAnchor.viewportMode.value === 'live' &&
+    !!matchingFullMessage &&
+    !matchingVisibleMessage
+  );
+};
+
+const refreshActiveTopicFromPreview = async (
+  topicId: string,
+  reason: string
+): Promise<void> => {
+  if (!shouldRefreshActiveTopicFromPreview(topicId)) {
+    return;
+  }
+
+  if (!getChatSDK()) {
+    if (
+      activeTopicPreviewRefreshRetryCount <
+      ACTIVE_TOPIC_PREVIEW_REFRESH_MAX_RETRIES
+    ) {
+      activeTopicPreviewRefreshRetryCount += 1;
+      activeTopicPreviewRefreshTimeoutId = window.setTimeout(() => {
+        activeTopicPreviewRefreshTimeoutId = null;
+        void refreshActiveTopicFromPreview(topicId, reason).catch(error => {
+          console.warn('Failed to refresh active topic from preview:', error);
+        });
+      }, 250);
+    }
+
+    return;
+  }
+
+  resetActiveTopicPreviewRefreshRetries();
+  const refreshToken = ++activeTopicPreviewRefreshToken;
+  const unreadCount = getTopicUnreadBadgeCount(
+    getSelectedTopic(topicId),
+    authUser.value?.id
+  );
+  const { expandedLimit } = getTopicSwitchFetchLimits(unreadCount);
+  const visibleLimit = expandedLimit;
+  const shouldKeepBottomPosition = shouldKeepCurrentTopicBottomPosition();
+
+  console.info('chat.active_topic_preview_refresh.started', {
+    topicId,
+    reason
+  });
+
+  const messages = await fetchMessagesForTopic(topicId, {
+    limit: expandedLimit,
+    forceRefresh: true,
+    forceNetwork: true,
+    allowStaleFallback: false,
+    visibleLimit,
+    updateVisible: false
+  });
+
+  if (
+    refreshToken !== activeTopicPreviewRefreshToken ||
+    route.value?.id !== topicId
+  ) {
+    return;
+  }
+
+  if (!messages.length) {
+    console.info('chat.active_topic_preview_refresh.empty', {
+      topicId,
+      reason
+    });
+    return;
+  }
+
+  const shouldApplyVisibleRefresh =
+    shouldKeepBottomPosition && shouldKeepCurrentTopicBottomPosition();
+
+  if (shouldApplyVisibleRefresh) {
+    setVisibleMessagesLimitForTopic(topicId, visibleLimit, {
+      allowShrink: false
+    });
+  }
+
+  renderedTopicId.value = topicId;
+  await nextTick();
+
+  if (
+    refreshToken !== activeTopicPreviewRefreshToken ||
+    route.value?.id !== topicId
+  ) {
+    return;
+  }
+
+  if (shouldApplyVisibleRefresh) {
+    scrollToBottom({
+      preferUnreadMarker: false,
+      smooth: false
+    });
+  }
+
+  setupIntersectionObserver();
+  syncVisibleUnreadAfterAutoScroll();
+  console.info('chat.active_topic_preview_refresh.completed', {
+    topicId,
+    reason,
+    messageCount: messages.length
+  });
+};
+
+const scheduleActiveTopicPreviewRefresh = (reason: string): void => {
+  if (activeTopicPreviewRefreshTimeoutId !== null) {
+    window.clearTimeout(activeTopicPreviewRefreshTimeoutId);
+  }
+
+  activeTopicPreviewRefreshTimeoutId = window.setTimeout(() => {
+    activeTopicPreviewRefreshTimeoutId = null;
+    const topicId = route.value?.id || '';
+
+    void refreshActiveTopicFromPreview(topicId, reason).catch(error => {
+      console.warn('Failed to refresh active topic from preview:', error);
+    });
+  }, 80);
+};
+
+const resetActiveTopicPreviewRefreshRetries = (): void => {
+  activeTopicPreviewRefreshRetryCount = 0;
 };
 
 const clearVisibleMessagesExpansionSchedule = (): void => {
@@ -837,15 +1474,18 @@ const scheduleVisibleMessagesExpansion = (
 
       if (
         topicSwitchToken !== activeTopicSwitchToken ||
-        route.value?.id !== topicId
+        route.value?.id !== topicId ||
+        hasTopicSwitchUserScrollIntent(topicSwitchToken)
       ) {
         return;
       }
 
-      if (scrollState.isUserScrolling && !scrollAnchor.isNearBottom.value) {
-        return;
-      }
-
+      const shouldPinToBottom =
+        shouldKeepTopicSwitchBottomPosition(topicSwitchToken);
+      const viewportMutation = scrollAnchor.beginViewportMutation('prepend', {
+        forcePreserve: !shouldPinToBottom,
+        forcePinBottom: shouldPinToBottom
+      });
       setVisibleMessagesLimitForTopic(topicId, visibleLimit, {
         allowShrink: false
       });
@@ -856,10 +1496,17 @@ const scheduleVisibleMessagesExpansion = (
           topicSwitchToken !== activeTopicSwitchToken ||
           route.value?.id !== topicId
         ) {
+          scrollAnchor.commitViewportMutation(viewportMutation.revision);
           return;
         }
 
-        if (scrollState.isUserScrolling && !scrollAnchor.isNearBottom.value) {
+        scrollAnchor.commitViewportMutation(viewportMutation.revision);
+        setupIntersectionObserver();
+
+        if (
+          !shouldPinToBottom ||
+          !shouldKeepTopicSwitchBottomPosition(topicSwitchToken)
+        ) {
           return;
         }
 
@@ -867,7 +1514,6 @@ const scheduleVisibleMessagesExpansion = (
           preferUnreadMarker: false,
           smooth: false
         });
-        setupIntersectionObserver();
         syncVisibleUnreadAfterAutoScroll();
       });
     });
@@ -878,28 +1524,52 @@ const scheduleExpandedTopicMessagesFetch = (
   topicId: string,
   limit: number,
   initialFetch: Promise<IMessage[]>,
-  isStaleTopicSwitch: () => boolean
+  isStaleTopicSwitch: () => boolean,
+  topicSwitchToken: number
 ): void => {
   void initialFetch
-    .then(waitForMessageListIdle)
+    .then(waitForExpandedTopicFetchDelay)
     .then(async () => {
       if (isStaleTopicSwitch()) {
         return;
       }
 
-      const shouldUpdateVisibleWindow =
-        scrollAnchor.isNearBottom.value && !scrollState.isUserScrolling;
-
       await fetchMessagesForTopic(topicId, {
         limit,
         forceRefresh: true,
-        forceNetwork: navigator.onLine,
-        skipSave: !shouldUpdateVisibleWindow,
-        visibleLimit: limit
+        forceNetwork: getHasBrowserNetwork(),
+        allowStaleFallback: !getHasBrowserNetwork(),
+        visibleLimit: limit,
+        updateVisible: false
       });
+
+      if (isStaleTopicSwitch()) {
+        return;
+      }
+
+      const shouldApplyExpandedWindow =
+        isCurrentTopicNearBottomNow() &&
+        shouldKeepTopicSwitchBottomPosition(topicSwitchToken);
+
+      if (shouldApplyExpandedWindow) {
+        setVisibleMessagesLimitForTopic(topicId, limit, {
+          allowShrink: false
+        });
+        await nextTick();
+        scrollToBottom({
+          preferUnreadMarker: false,
+          smooth: false
+        });
+      }
+
+      releaseBootstrapScrollLockAfterPaint(topicSwitchToken);
     })
     .catch(error => {
       console.warn('Failed to fetch expanded topic messages:', error);
+
+      if (!isStaleTopicSwitch()) {
+        releaseBootstrapScrollLockAfterPaint(topicSwitchToken);
+      }
     });
 };
 
@@ -916,6 +1586,69 @@ const state = reactive({
   unreadMarkerMessageId: null as string | null
 });
 
+const isAiNearBottom = ref(true);
+
+const scrollAiToBottom = (): void => {
+  const container = chatWrapperRef.value;
+  if (!container || !isAiRoute.value) {
+    return;
+  }
+
+  container.scrollTop = Math.max(
+    0,
+    container.scrollHeight - container.clientHeight
+  );
+  isAiNearBottom.value = true;
+};
+
+const handleAiScroll = (): void => {
+  const container = chatWrapperRef.value;
+  if (!container || !isAiRoute.value) {
+    return;
+  }
+
+  scrollAnchor.onScroll();
+  const maxScroll = Math.max(
+    0,
+    container.scrollHeight - container.clientHeight
+  );
+  isAiNearBottom.value = maxScroll - container.scrollTop <= 120;
+};
+
+watch(
+  () => state.aiMessages.length,
+  () => {
+    if (!isAiRoute.value || !isAiNearBottom.value) {
+      return;
+    }
+
+    nextTick(() => requestAnimationFrame(scrollAiToBottom));
+  },
+  { flush: 'pre' }
+);
+
+watch(
+  [() => renderedTopicId.value, () => renderedUserMessages.value.length],
+  ([topicId, messageCount], [previousTopicId, previousMessageCount]) => {
+    if (topicId && messageCount > 0) {
+      setTopicMessagesKnownEmpty(topicId, false);
+      return;
+    }
+
+    if (
+      topicId &&
+      topicId === route.value.id &&
+      topicId === previousTopicId &&
+      previousMessageCount > 0 &&
+      isFavoriteMessageTopic.value &&
+      !isLoadingInitialMessages.value
+    ) {
+      setTopicMessagesKnownEmpty(topicId, true);
+      resetInitialMessagesSkeleton();
+    }
+  }
+);
+
 const syncFloatingDateDivider = (): void => {
   const container = chatWrapperRef.value;
 
@@ -927,58 +1660,37 @@ const syncFloatingDateDivider = (): void => {
   }
 
   const isScrollable = container.scrollHeight > container.clientHeight + 1;
+  const isFavoriteTopicAtStart =
+    isFavoriteMessageTopic.value && container.scrollTop <= 1;
 
-  if (!isScrollable || isViewingBottom.value) {
+  if (
+    isFavoriteTopicAtStart ||
+    ((!isScrollable || isViewingBottom.value) && !isNativeAndroid)
+  ) {
     floatingDateDividerLabel.value = '';
     isFloatingDateDividerHidden.value = false;
     isFloatingDateDividerActive.value = false;
     return;
   }
 
-  const dateDividers = Array.from(
-    container.querySelectorAll<HTMLElement>('[data-date-divider-label]')
-  );
+  const snapshot = messageListUserItemsRef.value?.getVisibleMessageSnapshot?.();
+  const firstVisibleMessage = snapshot
+    ? renderedUserMessages.value[snapshot.firstVisibleIndex]
+    : undefined;
 
-  if (!dateDividers.length) {
+  if (!firstVisibleMessage) {
     floatingDateDividerLabel.value = '';
     isFloatingDateDividerHidden.value = false;
     isFloatingDateDividerActive.value = false;
     return;
   }
 
-  const containerRect = container.getBoundingClientRect();
-  const stickyTop = containerRect.top + 6;
-  const measuredDividers = dateDividers.map(element => ({
-    element,
-    rect: element.getBoundingClientRect()
-  }));
+  const createdAt = firstVisibleMessage.createdAt;
+  const createdDate =
+    createdAt instanceof Date ? createdAt : new Date(createdAt || 0);
 
-  isFloatingDateDividerHidden.value = measuredDividers.some(({ rect }) => {
-    const isInFloatingZone =
-      rect.bottom >= stickyTop &&
-      rect.top <=
-        stickyTop + FLOATING_DATE_LABEL_HEIGHT_PX + FLOATING_DATE_HIDE_GAP_PX;
-
-    return isInFloatingZone;
-  });
-
-  const passedDividers = measuredDividers
-    .filter(({ rect }) => rect.top <= stickyTop)
-    .sort((left, right) => right.rect.top - left.rect.top);
-
-  const fallbackDivider = !floatingDateDividerLabel.value
-    ? measuredDividers
-        .filter(({ rect }) => rect.top > stickyTop)
-        .sort((left, right) => left.rect.top - right.rect.top)[0]?.element
-    : null;
-  const activeDivider = passedDividers[0]?.element || fallbackDivider;
-
-  if (!activeDivider && floatingDateDividerLabel.value) {
-    return;
-  }
-
-  floatingDateDividerLabel.value =
-    activeDivider?.dataset.dateDividerLabel || floatingDateDividerLabel.value;
+  floatingDateDividerLabel.value = formatDay(createdDate);
+  isFloatingDateDividerHidden.value = false;
 };
 
 const scheduleFloatingDateDividerSync = (): void => {
@@ -998,6 +1710,7 @@ const hideFloatingDateDivider = (): void => {
     floatingDateDividerHideTimeoutId = null;
   }
 
+  floatingDateDividerLabel.value = '';
   isFloatingDateDividerActive.value = false;
 };
 
@@ -1014,8 +1727,21 @@ const keepFloatingDateDividerVisibleBriefly = (): void => {
   }, FLOATING_DATE_VISIBLE_MS);
 };
 
-const handleFloatingDateDividerUserScroll = (): void => {
+const markFloatingDateDividerUserScrollIntent = (): boolean => {
+  if (isBootstrapScrollLocked.value || isSearchNavigationPositioning.value) {
+    return false;
+  }
+
+  markTopicSwitchUserScrollIntent();
   floatingDateDividerUserScrollIntentAt = performance.now();
+  return true;
+};
+
+const handleFloatingDateDividerUserScroll = (): void => {
+  if (!markFloatingDateDividerUserScrollIntent()) {
+    return;
+  }
+
   keepFloatingDateDividerVisibleBriefly();
   scheduleFloatingDateDividerSync();
 };
@@ -1028,6 +1754,11 @@ const {
   isLoadingNewerMessages,
   scrollState,
   handleScroll: handleMessageScroll,
+  handleTouchStart: handleMessageScrollTouchStart,
+  handleTouchMove: handleMessageScrollTouchMove,
+  handleTouchEnd: handleMessageScrollTouchEnd,
+  handleTouchCancel: handleMessageScrollTouchCancel,
+  handleScrollEnd: handleMessageScrollEnd,
   scrollToBottom,
   handleScrollToButton,
   setupIntersectionObserver,
@@ -1048,25 +1779,102 @@ const {
   props
 );
 
-const hasVisibleUserMessages = computed(() => state.messages.length > 0);
+const handleUserMessageTouchStart = (event: TouchEvent): void => {
+  onTouchStart(event);
+  markFloatingDateDividerUserScrollIntent();
+  handleMessageScrollTouchStart(event);
+};
+
+const handleUserMessageTouchMove = (event: TouchEvent): void => {
+  handleFloatingDateDividerUserScroll();
+  handleMessageScrollTouchMove(event);
+};
+
+const handleUserMessageTouchEnd = (event: TouchEvent): void => {
+  onTouchEnd(event);
+  handleMessageScrollTouchEnd();
+};
+
+const handleUserMessageTouchCancel = (): void => {
+  handleMessageScrollTouchCancel();
+};
+
+const shouldKeepTopicSwitchBottomPosition = (
+  topicSwitchToken: number
+): boolean =>
+  !hasTopicSwitchUserScrollIntent(topicSwitchToken) &&
+  (completedTopicSwitchToken !== topicSwitchToken ||
+    isCurrentTopicNearBottomNow());
+
+const shouldKeepCurrentTopicBottomPosition = (): boolean =>
+  !hasTopicSwitchUserScrollIntent(activeTopicSwitchToken) &&
+  isCurrentTopicNearBottomNow();
+
+const hasVisibleUserMessages = computed(
+  () => renderedUserMessages.value.length > 0
+);
 const isUserMessagesRoute = computed(
   () => !isAiRoute.value && !isDefaultRoute.value
 );
+const shouldProtectEmptyUserMessagesWithSkeleton = computed(
+  () =>
+    !!route.value.id &&
+    isUserMessagesRoute.value &&
+    !hasVisibleUserMessages.value &&
+    !isTopicMessagesKnownEmpty(route.value.id)
+);
 const shouldRenderAiMessageSkeleton = computed(() => props.deferContentRender);
+const shouldShowDelayedInitialSkeleton = computed(
+  () =>
+    isInitialMessagesSkeletonVisible.value &&
+    (isLoadingInitialMessages.value || isAwaitingUserMessagesPaint.value)
+);
+const isShowingPreviousTopicFallback = computed(
+  () =>
+    !!route.value.id &&
+    renderedTopicId.value !== route.value.id &&
+    hasVisibleUserMessages.value
+);
+const shouldShowSearchNavigationSkeleton = computed(
+  () => isUserMessagesRoute.value && isSearchNavigationPositioning.value
+);
 const shouldRenderUserMessageSkeleton = computed(
   () =>
     props.deferContentRender ||
-    (!props.suppressInitialSkeleton &&
-      isMobile.value &&
-      isUserMessagesRoute.value &&
-      ((isLoadingInitialMessages.value && !hasVisibleUserMessages.value) ||
-        isAwaitingUserMessagesPaint.value))
+    shouldShowSearchNavigationSkeleton.value ||
+    shouldProtectEmptyUserMessagesWithSkeleton.value ||
+    (isUserMessagesRoute.value &&
+      shouldShowDelayedInitialSkeleton.value &&
+      !isShowingPreviousTopicFallback.value)
+);
+const shouldDeferUserMessageContentLayout = computed(
+  () =>
+    props.deferContentRender ||
+    shouldProtectEmptyUserMessagesWithSkeleton.value ||
+    (isUserMessagesRoute.value &&
+      shouldShowDelayedInitialSkeleton.value &&
+      !isShowingPreviousTopicFallback.value)
+);
+const shouldLockUserMessageBootstrapScroll = computed(
+  () =>
+    isBootstrapScrollLocked.value &&
+    isUserMessagesRoute.value &&
+    !shouldRenderUserMessageSkeleton.value
 );
 const shouldMountUserMessageItems = computed(
   () => !props.deferContentRender && isUserMessagesRoute.value
 );
 const shouldCoverUserMessagesWithSkeleton = computed(
   () => shouldRenderUserMessageSkeleton.value && hasVisibleUserMessages.value
+);
+const shouldRenderEmptyUserMessageState = computed(
+  () =>
+    isUserMessagesRoute.value &&
+    renderedTopicId.value === route.value.id &&
+    !hasVisibleUserMessages.value &&
+    !isActiveCallTopic.value &&
+    isTopicMessagesKnownEmpty(route.value.id) &&
+    !shouldRenderUserMessageSkeleton.value
 );
 const shouldShowOlderMessagesLoading = computed(
   () => !shouldRenderUserMessageSkeleton.value && isLoadingOlderMessages.value
@@ -1075,11 +1883,74 @@ const shouldShowNewerMessagesLoading = computed(
   () => !shouldRenderUserMessageSkeleton.value && isLoadingNewerMessages.value
 );
 
+const emitPinnedViewportSnapshot = (): void => {
+  if (
+    !isUserMessagesRoute.value ||
+    shouldRenderUserMessageSkeleton.value ||
+    !messageListUserItemsRef.value
+  ) {
+    emit('viewport-snapshot-change', null);
+    return;
+  }
+
+  emit(
+    'viewport-snapshot-change',
+    messageListUserItemsRef.value.getVisibleMessageSnapshot?.() || null
+  );
+};
+
+const schedulePinnedViewportSnapshotSync = (): void => {
+  if (pinnedViewportSnapshotRafId || pinnedViewportSnapshotTimeoutId !== null) {
+    return;
+  }
+
+  const scheduleFrame = (): void => {
+    pinnedViewportSnapshotRafId = requestAnimationFrame(() => {
+      pinnedViewportSnapshotRafId = 0;
+      lastPinnedViewportSnapshotAt = performance.now();
+      emitPinnedViewportSnapshot();
+    });
+  };
+  const elapsed = performance.now() - lastPinnedViewportSnapshotAt;
+  const delay = Math.max(0, PINNED_VIEWPORT_SNAPSHOT_INTERVAL_MS - elapsed);
+
+  if (delay === 0) {
+    scheduleFrame();
+    return;
+  }
+
+  pinnedViewportSnapshotTimeoutId = window.setTimeout(() => {
+    pinnedViewportSnapshotTimeoutId = null;
+    scheduleFrame();
+  }, delay);
+};
+
+const emitRenderedTopicState = (): void => {
+  const topicId = renderedTopicId.value || null;
+  const routeTopicId = route.value.id || null;
+  const isCurrent = !!topicId && topicId === routeTopicId;
+  const hasPaintedCurrentMessages =
+    hasVisibleUserMessages.value &&
+    paintedUserMessageTopicId.value === routeTopicId;
+
+  emit('rendered-topic-change', {
+    topicId,
+    routeTopicId,
+    messageCount: state.messages.length,
+    isCurrent,
+    isReady:
+      isCurrent &&
+      !shouldRenderUserMessageSkeleton.value &&
+      (hasPaintedCurrentMessages || !isLoadingInitialMessages.value)
+  });
+};
+
 const handleBottomBarHeightChange = (height: number): void => {
   const nextHeight = Math.max(0, Math.ceil(height));
   const shouldKeepBottomPinned =
     isUserMessagesRoute.value &&
     !shouldRenderUserMessageSkeleton.value &&
+    shouldKeepCurrentTopicBottomPosition() &&
     (isViewingBottom.value || scrollAnchor.isNearBottom.value);
 
   if (bottomBarHeight.value === nextHeight) {
@@ -1095,6 +1966,10 @@ const handleBottomBarHeightChange = (height: number): void => {
   nextTick(() => {
     requestAnimationFrame(() => {
       if (!isUserMessagesRoute.value || !chatWrapperRef.value) {
+        return;
+      }
+
+      if (!shouldKeepCurrentTopicBottomPosition()) {
         return;
       }
 
@@ -1183,7 +2058,6 @@ const handleUserMessagesContentReady = (payload?: {
   messageCount?: number;
 }): void => {
   if (
-    !isAwaitingUserMessagesPaint.value ||
     props.deferContentRender ||
     payload?.topicId !== route.value.id ||
     !payload?.messageCount
@@ -1191,19 +2065,35 @@ const handleUserMessagesContentReady = (payload?: {
     return;
   }
 
+  paintedUserMessageTopicId.value = payload.topicId;
+
+  if (
+    !isAwaitingUserMessagesPaint.value &&
+    !isInitialMessagesSkeletonVisible.value &&
+    !isLoadingInitialMessages.value
+  ) {
+    return;
+  }
+
   isAwaitingUserMessagesPaint.value = false;
+  resetInitialMessagesSkeleton();
 
   nextTick(() => {
     if (route.value.id !== payload.topicId) {
       return;
     }
 
-    scrollToBottom({
-      preferUnreadMarker: false,
-      smooth: false
-    });
+    if (shouldKeepCurrentTopicBottomPosition()) {
+      scrollToBottom({
+        preferUnreadMarker: false,
+        smooth: false
+      });
+    }
+
     setupIntersectionObserver();
+    scheduleFloatingDateDividerSync();
     syncVisibleUnreadAfterAutoScroll();
+    void handlePendingSearchNavigation();
   });
 };
 
@@ -1414,8 +2304,11 @@ type ScrollToMessageObjectPayload = {
   message?: IMessage | null;
   quoteText?: string;
   quoteOccurrenceIndex?: number;
+  allowOptimisticTarget?: boolean;
+  scrollBehavior?: MessageScrollBehavior;
 };
 
+type MessageScrollBehavior = 'auto' | 'instant' | 'smooth';
 type ScrollToMessagePayload = IMessage | ScrollToMessageObjectPayload;
 
 const isScrollToMessageObjectPayload = (
@@ -1444,6 +2337,19 @@ const getScrollTargetQuoteOccurrenceIndex = (
           payload.message?.replyQuoteOccurrenceIndex
       : payload.replyQuoteOccurrenceIndex
   );
+
+const getScrollTargetAllowOptimisticTarget = (
+  payload: ScrollToMessagePayload
+): boolean =>
+  isScrollToMessageObjectPayload(payload) &&
+  payload.allowOptimisticTarget === true;
+
+const getScrollTargetBehavior = (
+  payload: ScrollToMessagePayload
+): MessageScrollBehavior =>
+  isScrollToMessageObjectPayload(payload)
+    ? payload.scrollBehavior || 'smooth'
+    : 'smooth';
 
 const quoteHighlightClassName = 'message-quote-highlight';
 const messageHighlightDurationMs = 3400;
@@ -1642,10 +2548,25 @@ const highlightMessageQuote = (
 
   highlightMark.append(range.extractContents());
   range.insertNode(highlightMark);
-  highlightMark.scrollIntoView({
-    block: 'center',
-    behavior: 'smooth'
-  });
+  const container = chatWrapperRef.value;
+  const containerRect = container.getBoundingClientRect();
+  const highlightRect = highlightMark.getBoundingClientRect();
+  const maxScroll = Math.max(
+    0,
+    container.scrollHeight - container.clientHeight
+  );
+  const targetScrollTop = Math.min(
+    maxScroll,
+    Math.max(
+      0,
+      container.scrollTop +
+        highlightRect.top +
+        highlightRect.height / 2 -
+        (containerRect.top + containerRect.height / 2)
+    )
+  );
+
+  container.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
 
   window.setTimeout(() => {
     const parent = highlightMark.parentNode;
@@ -1693,13 +2614,14 @@ const highlightWholeMessage = (messageId: string): void => {
 const jumpToMessageWithHighlight = async (
   messageId: string,
   quoteText: string,
-  quoteOccurrenceIndex?: number
+  quoteOccurrenceIndex?: number,
+  behavior: MessageScrollBehavior = 'smooth'
 ): Promise<boolean> => {
   await messageListUserItemsRef.value?.ensureMessageRendered?.(messageId);
 
   const didJump = await scrollAnchor.jumpToMessage(messageId, {
     block: 'center',
-    behavior: 'smooth'
+    behavior
   });
 
   if (!didJump) {
@@ -1712,15 +2634,91 @@ const jumpToMessageWithHighlight = async (
   return true;
 };
 
+const refreshAroundMessageAfterOptimisticJump = async (
+  topicId: string,
+  messageId: string
+): Promise<void> => {
+  const anchor = scrollAnchor.captureViewportAnchor(messageId);
+  const mutation = scrollAnchor.beginViewportMutation('replace', {
+    forcePreserve: true,
+    preferredMessageId: messageId
+  });
+  const messages = await fetchAroundMessage(messageId, topicId);
+
+  if (route.value.id !== topicId) {
+    scrollAnchor.commitViewportMutation(mutation.revision, {
+      forceAnchor: anchor
+    });
+    return;
+  }
+
+  if (!messages?.some(message => message.id === messageId)) {
+    scrollAnchor.commitViewportMutation(mutation.revision, {
+      forceAnchor: anchor
+    });
+    return;
+  }
+
+  await nextTick();
+  scrollAnchor.commitViewportMutation(mutation.revision, {
+    forceAnchor: anchor
+  });
+  await messageListUserItemsRef.value?.ensureMessageRendered?.(messageId);
+  await scrollAnchor.jumpToMessage(messageId, {
+    block: 'center',
+    behavior: 'auto'
+  });
+  highlightWholeMessage(messageId);
+};
+
+const jumpToOptimisticTarget = async (
+  message: IMessage,
+  quoteText: string,
+  quoteOccurrenceIndex?: number,
+  behavior: MessageScrollBehavior = 'smooth'
+): Promise<boolean> => {
+  const topicId = route.value.id;
+
+  if (!topicId || message.topicId !== topicId || !message.id) {
+    return false;
+  }
+
+  scrollAnchor.prepareJumpMutation();
+  mergeMessagesForTopic(topicId, [message], 'replace', {
+    syncLastMessage: false,
+    windowMode: 'around-anchor',
+    anchorMessageId: message.id,
+    skipPersist: true
+  });
+
+  await nextTick();
+
+  const didJump = await jumpToMessageWithHighlight(
+    message.id,
+    quoteText,
+    quoteOccurrenceIndex,
+    behavior
+  );
+
+  if (didJump) {
+    void refreshAroundMessageAfterOptimisticJump(topicId, message.id);
+  }
+
+  return didJump;
+};
+
 const navigateToMessageId = async (
   messageId: string,
   quoteText = '',
-  quoteOccurrenceIndex?: number
+  quoteOccurrenceIndex?: number,
+  optimisticMessage?: IMessage | null,
+  behavior: MessageScrollBehavior = 'smooth'
 ): Promise<boolean> => {
   const didJump = await jumpToMessageWithHighlight(
     messageId,
     quoteText,
-    quoteOccurrenceIndex
+    quoteOccurrenceIndex,
+    behavior
   );
 
   if (didJump) {
@@ -1736,10 +2734,24 @@ const navigateToMessageId = async (
     const didMemoryJump = await jumpToMessageWithHighlight(
       messageId,
       quoteText,
-      quoteOccurrenceIndex
+      quoteOccurrenceIndex,
+      behavior
     );
 
     if (didMemoryJump) {
+      return true;
+    }
+  }
+
+  if (optimisticMessage) {
+    const didOptimisticJump = await jumpToOptimisticTarget(
+      optimisticMessage,
+      quoteText,
+      quoteOccurrenceIndex,
+      behavior
+    );
+
+    if (didOptimisticJump) {
       return true;
     }
   }
@@ -1756,7 +2768,8 @@ const navigateToMessageId = async (
     const didShadowJump = await jumpToMessageWithHighlight(
       messageId,
       quoteText,
-      quoteOccurrenceIndex
+      quoteOccurrenceIndex,
+      behavior
     );
 
     if (didShadowJump) {
@@ -1773,21 +2786,149 @@ const navigateToMessageId = async (
   }
 
   await nextTick();
-  return jumpToMessageWithHighlight(messageId, quoteText, quoteOccurrenceIndex);
+  return jumpToMessageWithHighlight(
+    messageId,
+    quoteText,
+    quoteOccurrenceIndex,
+    behavior
+  );
 };
 
-const handleScrollToMessage = async (payload: ScrollToMessagePayload) => {
+const handleScrollToMessage = async (
+  payload: ScrollToMessagePayload
+): Promise<boolean> => {
   const message = getScrollTargetMessage(payload);
 
   if (!message || message.topicId !== route.value.id) {
+    return false;
+  }
+
+  suspendHistoryFetch(1800);
+
+  return navigateToMessageId(
+    message.id,
+    getScrollTargetQuoteText(payload),
+    getScrollTargetQuoteOccurrenceIndex(payload),
+    getScrollTargetAllowOptimisticTarget(payload) ? message : null,
+    getScrollTargetBehavior(payload)
+  );
+};
+
+const handlePendingSearchNavigation = async (): Promise<void> => {
+  const topicId = route.value.id;
+  const pendingResult = getPendingSearchNavigation();
+
+  if (
+    !topicId ||
+    !pendingResult ||
+    pendingResult.topicId !== topicId ||
+    isPendingSearchNavigationInProgress ||
+    isLoadingInitialMessages.value ||
+    props.deferContentRender ||
+    (shouldRenderUserMessageSkeleton.value &&
+      !shouldShowSearchNavigationSkeleton.value) ||
+    !messageListUserItemsRef.value ||
+    activeTopicSwitchToken !== completedTopicSwitchToken
+  ) {
     return;
   }
 
-  await navigateToMessageId(
-    message.id,
-    getScrollTargetQuoteText(payload),
-    getScrollTargetQuoteOccurrenceIndex(payload)
-  );
+  isPendingSearchNavigationInProgress = true;
+
+  try {
+    const didNavigate = await handleScrollToMessage({
+      message: pendingResult.message,
+      allowOptimisticTarget: true,
+      scrollBehavior: 'auto'
+    });
+
+    if (didNavigate && getPendingSearchNavigation()?.id === pendingResult.id) {
+      consumePendingSearchNavigation(topicId);
+    }
+  } finally {
+    isPendingSearchNavigationInProgress = false;
+  }
+};
+
+const hasVisibleSearchNavigationTarget = (
+  topicId: string,
+  messageId: string
+): boolean =>
+  getMessagesByTopicId(topicId).some(message => message.id === messageId);
+
+const bootstrapPendingSearchNavigation = async (): Promise<void> => {
+  const topicId = route.value.id;
+  const pendingResult = getPendingSearchNavigation();
+  const messageId = pendingResult?.message?.id || '';
+
+  if (
+    !topicId ||
+    route.value.type === RouteTypes.AI ||
+    !pendingResult ||
+    pendingResult.topicId !== topicId ||
+    !messageId ||
+    props.deferContentRender ||
+    isPendingSearchNavigationBootstrapInProgress
+  ) {
+    return;
+  }
+
+  if (hasVisibleSearchNavigationTarget(topicId, messageId)) {
+    await nextTick();
+    await handlePendingSearchNavigation();
+    return;
+  }
+
+  if (
+    isLoadingInitialMessages.value ||
+    activeTopicSwitchToken !== completedTopicSwitchToken
+  ) {
+    return;
+  }
+
+  const bootstrapTopicSwitchToken = activeTopicSwitchToken;
+  const isStalePendingSearchRoute = () =>
+    route.value.id !== topicId ||
+    bootstrapTopicSwitchToken !== activeTopicSwitchToken;
+  const isStalePendingSearchBootstrap = () =>
+    isStalePendingSearchRoute() ||
+    getPendingSearchNavigation()?.id !== pendingResult.id;
+
+  isPendingSearchNavigationBootstrapInProgress = true;
+  isSearchNavigationPositioning.value = true;
+  cancelSearchNavigationPositioningRelease();
+  isLoadingInitialMessages.value = true;
+  resetScrollState();
+  suspendHistoryFetch(TOPIC_SWITCH_HISTORY_FETCH_GRACE_MS);
+
+  try {
+    await fetchAroundMessage(messageId, topicId, {
+      updateVisible: true
+    });
+
+    if (isStalePendingSearchBootstrap()) {
+      return;
+    }
+
+    renderedTopicId.value = topicId;
+    isLoadingInitialMessages.value = false;
+    resetInitialMessagesSkeleton();
+    await nextTick();
+
+    if (isStalePendingSearchBootstrap()) {
+      return;
+    }
+
+    await handlePendingSearchNavigation();
+  } finally {
+    isPendingSearchNavigationBootstrapInProgress = false;
+
+    if (!isStalePendingSearchRoute()) {
+      isLoadingInitialMessages.value = false;
+      resetInitialMessagesSkeleton();
+      releaseSearchNavigationPositioningAfterPaint(bootstrapTopicSwitchToken);
+    }
+  }
 };
 
 const handleArrowDownClick = async (): Promise<void> => {
@@ -1957,6 +3098,7 @@ const syncVisibleUnreadAfterAutoScroll = (): void => {
     requestAnimationFrame(() => {
       flushVisibleUnreadMessages();
       resetUnreadIfViewingBottom();
+      schedulePinnedViewportSnapshotSync();
     });
   });
 };
@@ -1984,8 +3126,29 @@ const schedulePostScrollUiSync = (): void => {
 };
 
 const handleScroll = (): void => {
+  const currentScrollTop = chatWrapperRef.value?.scrollTop ?? null;
+  const hasMovedViewport =
+    currentScrollTop !== null &&
+    lastFloatingDateDividerScrollTop !== null &&
+    Math.abs(currentScrollTop - lastFloatingDateDividerScrollTop) >= 1;
+
+  lastFloatingDateDividerScrollTop = currentScrollTop;
+
+  if (
+    hasMovedViewport &&
+    !isLoadingInitialMessages.value &&
+    !isBootstrapScrollLocked.value &&
+    !isSearchNavigationPositioning.value &&
+    activeTopicSwitchToken === completedTopicSwitchToken &&
+    !isViewingBottom.value
+  ) {
+    floatingDateDividerUserScrollIntentAt = performance.now();
+    keepFloatingDateDividerVisibleBriefly();
+  }
+
   void handleMessageScroll();
   schedulePostScrollUiSync();
+  schedulePinnedViewportSnapshotSync();
 };
 
 const {
@@ -2028,12 +3191,15 @@ onMounted(async () => {
 
   if ('ResizeObserver' in window) {
     chatVisibilityObserver = new ResizeObserver(() => {
+      syncMessageInlineEndInset();
       syncVisibleUnreadAfterAutoScroll();
+      schedulePinnedViewportSnapshotSync();
     });
 
     nextTick(() => {
       if (chatWrapperRef.value) {
         chatVisibilityObserver?.observe(chatWrapperRef.value);
+        syncMessageInlineEndInset();
       }
     });
   }
@@ -2041,7 +3207,15 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', scheduleFloatingDateDividerSync);
+  releaseBootstrapScrollLock();
+  releaseSearchNavigationPositioning();
+  resetInitialMessagesSkeleton();
   clearVisibleMessagesExpansionSchedule();
+
+  if (activeTopicPreviewRefreshTimeoutId !== null) {
+    window.clearTimeout(activeTopicPreviewRefreshTimeoutId);
+    activeTopicPreviewRefreshTimeoutId = null;
+  }
 
   if (updateBannerDismissTimeoutId !== null) {
     window.clearTimeout(updateBannerDismissTimeoutId);
@@ -2055,6 +3229,16 @@ onUnmounted(() => {
   if (postScrollUiSyncRafId) {
     cancelAnimationFrame(postScrollUiSyncRafId);
     postScrollUiSyncRafId = 0;
+  }
+
+  if (pinnedViewportSnapshotRafId) {
+    cancelAnimationFrame(pinnedViewportSnapshotRafId);
+    pinnedViewportSnapshotRafId = 0;
+  }
+
+  if (pinnedViewportSnapshotTimeoutId !== null) {
+    window.clearTimeout(pinnedViewportSnapshotTimeoutId);
+    pinnedViewportSnapshotTimeoutId = null;
   }
 
   if (floatingDateDividerHideTimeoutId !== null) {
@@ -2089,6 +3273,7 @@ watch(
 
     chatVisibilityObserver.disconnect();
     chatVisibilityObserver.observe(wrapper);
+    syncMessageInlineEndInset();
     syncVisibleUnreadAfterAutoScroll();
     scheduleFloatingDateDividerSync();
   }
@@ -2126,43 +3311,113 @@ watch(
         return;
       }
 
-      scrollToBottom({
-        preferUnreadMarker: false,
-        smooth: false
-      });
+      if (shouldKeepCurrentTopicBottomPosition()) {
+        scrollToBottom({
+          preferUnreadMarker: false,
+          smooth: false
+        });
+      }
+
       setupIntersectionObserver();
       scheduleFloatingDateDividerSync();
       syncVisibleUnreadAfterAutoScroll();
+      void handlePendingSearchNavigation();
     });
   }
 );
 
 watch(
-  [() => route.value?.id, () => route.value?.type],
-  async ([topicId]) => {
+  [
+    () => route.value?.id,
+    () => route.value?.type,
+    () => notificationTopicRefreshRequest.value?.id || 0
+  ],
+  async (
+    [topicId, routeType, notificationRefreshRequestId],
+    [previousTopicId, previousRouteType, previousNotificationRefreshRequestId]
+  ) => {
+    const notificationRefreshRequest = notificationTopicRefreshRequest.value;
+    const isOnlyUnrelatedNotificationRefresh =
+      topicId === previousTopicId &&
+      routeType === previousRouteType &&
+      notificationRefreshRequestId !== previousNotificationRefreshRequestId &&
+      notificationRefreshRequest?.topicId !== topicId;
+
+    if (isOnlyUnrelatedNotificationRefresh) {
+      return;
+    }
+
+    const isNotificationRefreshRequestForTopic =
+      !!topicId &&
+      notificationRefreshRequest?.id === notificationRefreshRequestId &&
+      notificationRefreshRequest.topicId === topicId;
+
+    if (isNotificationRefreshRequestForTopic) {
+      consumeNotificationTopicRefreshRequest(
+        topicId,
+        notificationRefreshRequestId
+      );
+    }
+
     hideFloatingDateDivider();
     if (!topicId) {
+      renderedTopicId.value = '';
+      paintedUserMessageTopicId.value = '';
       isAwaitingUserMessagesPaint.value = false;
+      isLoadingInitialMessages.value = false;
+      releaseBootstrapScrollLock();
+      releaseSearchNavigationPositioning();
+      resetInitialMessagesSkeleton();
       return;
     }
     const topicSwitchToken = ++activeTopicSwitchToken;
+    paintedUserMessageTopicId.value = '';
+    lastFloatingDateDividerScrollTop = null;
     topicSwitchStartedAtMs = performance.now();
+    topicSwitchUserScrollIntentAtMs = 0;
     const isStaleTopicSwitch = () =>
       topicSwitchToken !== activeTopicSwitchToken ||
       route.value?.id !== topicId;
-    isAwaitingUserMessagesPaint.value =
+    const requiresAuthoritativeNotificationRefresh =
       isMobile.value &&
-      route.value?.type !== RouteTypes.AI &&
-      !props.suppressInitialSkeleton &&
-      !hasKnownTopicMessagesState(topicId);
+      getHasBrowserNetwork() &&
+      isNotificationRefreshRequestForTopic;
+    const hasRenderedFallbackMessages =
+      renderedTopicId.value !== topicId && state.messages.length > 0;
+    const hasResidentTopicMessages =
+      routeType !== RouteTypes.AI &&
+      getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId)).length >
+        0;
+
+    if (routeType === RouteTypes.AI) {
+      renderedTopicId.value = '';
+    } else if (hasResidentTopicMessages || !hasRenderedFallbackMessages) {
+      renderedTopicId.value = topicId;
+    }
+    isAwaitingUserMessagesPaint.value =
+      requiresAuthoritativeNotificationRefresh ||
+      (isMobile.value &&
+        route.value?.type !== RouteTypes.AI &&
+        !props.suppressInitialSkeleton &&
+        !hasKnownTopicMessagesState(topicId));
     clearVisibleMessagesExpansionSchedule();
     visibleMessagesExpansionAppliedToken = 0;
     suppressNotificationSoundForTopic(topicId, TOPIC_SWITCH_AUTO_READ_GRACE_MS);
     state.errorMessage = '';
     state.hideUnreadMarker = true;
     state.unreadMarkerMessageId = null;
+    setTopicMessagesKnownEmpty(topicId, false);
     isLoadingInitialMessages.value = true;
+    if (requiresAuthoritativeNotificationRefresh) {
+      cancelInitialMessagesSkeletonDelay();
+      isInitialMessagesSkeletonVisible.value = true;
+    } else {
+      scheduleInitialMessagesSkeleton(topicId, topicSwitchToken);
+    }
     resetScrollState();
+    if (hasRenderedFallbackMessages) {
+      scrollAnchor.setViewportMode('history', { pin: false });
+    }
     setReadReceiptsEnabled(false);
     suspendAutoRead(TOPIC_SWITCH_AUTO_READ_GRACE_MS);
     suspendLocalOwnReadStatus(topicId, TOPIC_SWITCH_AUTO_READ_GRACE_MS);
@@ -2179,6 +3434,21 @@ watch(
       topicUnreadCount,
       initialMessagesLimit
     );
+    const pendingSearchNavigationForTopic =
+      routeType !== RouteTypes.AI &&
+      getPendingSearchNavigation()?.topicId === topicId
+        ? getPendingSearchNavigation()
+        : null;
+    const pendingSearchMessageId =
+      pendingSearchNavigationForTopic?.message?.id || '';
+    const shouldPositionToPendingSearch = !!pendingSearchMessageId;
+    const shouldLockBootstrapScroll = false;
+
+    setBootstrapScrollLock(topicSwitchToken, shouldLockBootstrapScroll);
+    isSearchNavigationPositioning.value = shouldPositionToPendingSearch;
+    if (shouldPositionToPendingSearch) {
+      cancelSearchNavigationPositioningRelease();
+    }
 
     state.replyMessage = null;
     state.editMessage = null;
@@ -2189,27 +3459,52 @@ watch(
     clearSelectedMessages();
 
     if (isMobile.value) {
-      setVisibleMessagesLimitForTopic(topicId, fastInitialMessagesLimit);
+      // This topic is not painted yet, so enforcing the mobile contract here
+      // cannot move the user's current viewport. Later background/cache
+      // updates remain non-shrinking while the topic is visible.
+      setVisibleMessagesLimitForTopic(topicId, fastInitialMessagesLimit, {
+        allowShrink: true
+      });
     }
 
-    renderedTopicId.value = topicId;
+    void fetchPinnedMessagesForTopic(topicId);
+    const hydrationPromise =
+      routeType !== RouteTypes.AI
+        ? hydrateMessagesFromCache(topicId, undefined, {
+            visibleLimit: fastInitialMessagesLimit,
+            allowVisibleShrink: true
+          })
+        : Promise.resolve([]);
+    let initialMessagesFetch: Promise<IMessage[]> | null = null;
 
-    const hydratedMessages = await hydrateMessagesFromCache(
-      topicId,
-      undefined,
-      {
-        visibleLimit: fastInitialMessagesLimit
-      }
-    );
+    // Start cache and network together. Network updates the canonical memory
+    // snapshot in the background, while only cache/memory may paint first.
+    if (!shouldPositionToPendingSearch) {
+      initialMessagesFetch = fetchMessagesForTopic(topicId, {
+        limit: initialMessagesLimit,
+        forceRefresh: true,
+        forceNetwork: getHasBrowserNetwork(),
+        allowStaleFallback: !getHasBrowserNetwork(),
+        visibleLimit: fastInitialMessagesLimit,
+        updateVisible: false
+      });
+    }
+
+    const hydratedMessages = await hydrationPromise;
 
     if (isStaleTopicSwitch()) {
       return;
     }
 
     if (
-      hydratedMessages.length > 0 ||
-      getMessagesByTopicId(topicId).length > 0
+      !requiresAuthoritativeNotificationRefresh &&
+      (getRenderedTopicMessages(topicId, hydratedMessages).length > 0 ||
+        getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId))
+          .length > 0)
     ) {
+      setTopicMessagesKnownEmpty(topicId, false);
+      cancelInitialMessagesSkeletonDelay();
+      setVisibleMessagesLimitForTopic(topicId, fastInitialMessagesLimit);
       scheduleVisibleTopicMediaWarm(topicId, isStaleTopicSwitch);
 
       renderedTopicId.value = topicId;
@@ -2219,43 +3514,67 @@ watch(
         return;
       }
 
-      scrollToBottom({
-        preferUnreadMarker: false,
-        smooth: false
-      });
+      if (
+        !shouldPositionToPendingSearch &&
+        shouldKeepTopicSwitchBottomPosition(topicSwitchToken)
+      ) {
+        scrollToBottom({
+          preferUnreadMarker: false,
+          smooth: false
+        });
+      }
 
-      scheduleVisibleMessagesExpansion(
+      if (!shouldPositionToPendingSearch) {
+        scheduleVisibleMessagesExpansion(
+          topicId,
+          expandedLimit,
+          topicSwitchToken
+        );
+      }
+    }
+
+    if (shouldPositionToPendingSearch) {
+      initialMessagesFetch = fetchAroundMessage(
+        pendingSearchMessageId,
         topicId,
-        initialMessagesLimit,
-        topicSwitchToken
+        {
+          updateVisible: true
+        }
       );
     }
 
-    void fetchPinnedMessagesForTopic(topicId);
-    const initialMessagesFetch = fetchMessagesForTopic(topicId, {
-      limit: initialMessagesLimit,
-      forceRefresh: true,
-      forceNetwork: navigator.onLine,
-      visibleLimit: fastInitialMessagesLimit
-    });
-
-    if (expandedLimit > initialMessagesLimit) {
-      scheduleExpandedTopicMessagesFetch(
-        topicId,
-        expandedLimit,
-        initialMessagesFetch,
-        isStaleTopicSwitch
-      );
-    }
-
-    await initialMessagesFetch;
+    const initialMessages = (await initialMessagesFetch) || [];
 
     if (isStaleTopicSwitch()) {
       return;
     }
 
-    if (getMessagesByTopicId(topicId).length === 0) {
+    cancelInitialMessagesSkeletonDelay();
+    const shouldApplyInitialNetworkWindow =
+      !shouldPositionToPendingSearch &&
+      (getMessagesByTopicId(topicId).length === 0 ||
+        shouldKeepTopicSwitchBottomPosition(topicSwitchToken));
+
+    if (shouldApplyInitialNetworkWindow) {
+      setVisibleMessagesLimitForTopic(topicId, fastInitialMessagesLimit);
+    }
+
+    const renderedResidentMessages = getRenderedTopicMessages(
+      topicId,
+      getMessagesByTopicId(topicId)
+    );
+
+    if (renderedResidentMessages.length === 0) {
+      const topicHasKnownLastMessage = !!getSelectedTopic(topicId)?.lastMessage;
+      setTopicMessagesKnownEmpty(
+        topicId,
+        getRenderedTopicMessages(topicId, initialMessages).length === 0 &&
+          !topicHasKnownLastMessage
+      );
       isAwaitingUserMessagesPaint.value = false;
+      resetInitialMessagesSkeleton();
+    } else {
+      setTopicMessagesKnownEmpty(topicId, false);
     }
 
     renderedTopicId.value = topicId;
@@ -2263,6 +3582,21 @@ watch(
 
     if (isStaleTopicSwitch()) {
       return;
+    }
+
+    if (
+      !shouldPositionToPendingSearch &&
+      expandedLimit > initialMessagesLimit
+    ) {
+      scheduleExpandedTopicMessagesFetch(
+        topicId,
+        expandedLimit,
+        Promise.resolve(initialMessages),
+        isStaleTopicSwitch,
+        topicSwitchToken
+      );
+    } else {
+      releaseBootstrapScrollLockAfterPaint(topicSwitchToken);
     }
 
     refreshUnreadMarkerState();
@@ -2288,7 +3622,8 @@ watch(
     }
 
     const shouldKeepInitialBottomPosition =
-      !scrollState.isUserScrolling || scrollAnchor.isNearBottom.value;
+      !shouldPositionToPendingSearch &&
+      shouldKeepTopicSwitchBottomPosition(topicSwitchToken);
 
     if (shouldKeepInitialBottomPosition) {
       scrollToBottom({
@@ -2310,7 +3645,7 @@ watch(
         return;
       }
 
-      if (!scrollState.isUserScrolling || scrollAnchor.isNearBottom.value) {
+      if (shouldKeepTopicSwitchBottomPosition(topicSwitchToken)) {
         scrollToBottom({
           preferUnreadMarker: false,
           smooth: false
@@ -2319,17 +3654,54 @@ watch(
     } else if (shouldKeepInitialBottomPosition) {
       scheduleVisibleMessagesExpansion(
         topicId,
-        initialMessagesLimit,
+        expandedLimit,
         topicSwitchToken
       );
     }
 
     scrollAnchor.initialize();
     isLoadingInitialMessages.value = false;
+    resetInitialMessagesSkeleton();
+    completedTopicSwitchToken = topicSwitchToken;
+    lastFloatingDateDividerScrollTop = chatWrapperRef.value?.scrollTop ?? null;
+    await handlePendingSearchNavigation();
+    if (shouldPositionToPendingSearch) {
+      releaseSearchNavigationPositioningAfterPaint(topicSwitchToken);
+    }
     rememberCurrentUnreadMarkerState(topicId);
     setReadReceiptsEnabled(true);
     setupIntersectionObserver();
     syncVisibleUnreadAfterAutoScroll();
+  },
+  { immediate: true }
+);
+
+watch(
+  [
+    () => route.value?.id,
+    () => getPendingSearchNavigation()?.id,
+    () => isLoadingInitialMessages.value
+  ],
+  () => {
+    void bootstrapPendingSearchNavigation();
+  },
+  { flush: 'post' }
+);
+
+watch(
+  [
+    () => route.value?.id,
+    () => route.value?.type,
+    getActiveTopicLastMessageFingerprint
+  ],
+  ([topicId, routeType]) => {
+    resetActiveTopicPreviewRefreshRetries();
+
+    if (!topicId || routeType === RouteTypes.AI) {
+      return;
+    }
+
+    scheduleActiveTopicPreviewRefresh('active-topic-last-message');
   },
   { immediate: true }
 );
@@ -2452,6 +3824,10 @@ const isMediaPreviewOpen = (): boolean =>
   !!document.querySelector('.slider-modal');
 
 const handleWindowKeydown = async (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && isAnyCallModalVisible.value) {
+    return;
+  }
+
   const hasModifierKey = e.ctrlKey || e.metaKey || e.altKey;
   const shortcutCode = e.code.toLowerCase();
   const isModifierShortcut = e.ctrlKey || e.metaKey;
@@ -2540,14 +3916,101 @@ watch(
 );
 
 watch(
-  () => state.messages.map(message => message.id),
+  () => state.messages.map(message => message.id).join('\u001f'),
   () => {
     nextTick(() => {
       syncVisibleUnreadAfterAutoScroll();
       hideUnreadMarkerIfPassed();
       resetUnreadIfViewingBottom();
+      schedulePinnedViewportSnapshotSync();
     });
   }
+);
+
+watch(
+  [
+    () => route.value?.id || '',
+    () => route.value?.type,
+    () => renderedTopicId.value,
+    () => renderedUserMessages.value.length,
+    () => renderedLastUserMessageSignature.value
+  ],
+  (
+    [topicId, routeType, topicMessagesId],
+    [previousTopicId, previousRouteType, previousTopicMessagesId]
+  ) => {
+    const isSameRenderedTopic =
+      !!topicId &&
+      topicId === previousTopicId &&
+      routeType === previousRouteType &&
+      topicMessagesId === previousTopicMessagesId;
+    const shouldPinBottom =
+      isSameRenderedTopic &&
+      isUserMessagesRoute.value &&
+      !shouldRenderUserMessageSkeleton.value &&
+      shouldKeepCurrentTopicBottomPosition();
+
+    if (!shouldPinBottom) {
+      return;
+    }
+
+    nextTick(() => {
+      requestAnimationFrame(() => {
+        if (
+          route.value?.id !== topicId ||
+          renderedTopicId.value !== topicMessagesId ||
+          !isUserMessagesRoute.value ||
+          shouldRenderUserMessageSkeleton.value ||
+          !chatWrapperRef.value
+        ) {
+          return;
+        }
+
+        scrollToBottom({
+          preferUnreadMarker: false,
+          smooth: false
+        });
+        syncVisibleUnreadAfterAutoScroll();
+        scheduleFloatingDateDividerSync();
+      });
+    });
+  },
+  { flush: 'pre' }
+);
+
+watch(
+  [
+    () => route.value?.id,
+    () => renderedTopicId.value,
+    () => state.messages.length,
+    () => isLoadingInitialMessages.value,
+    () => shouldRenderUserMessageSkeleton.value,
+    () => paintedUserMessageTopicId.value
+  ],
+  () => {
+    nextTick(emitRenderedTopicState);
+  },
+  { immediate: true }
+);
+
+watch(
+  [
+    () => route.value?.id,
+    () => route.value?.type,
+    () => shouldRenderUserMessageSkeleton.value,
+    () => shouldMountUserMessageItems.value
+  ],
+  () => {
+    if (!isUserMessagesRoute.value || shouldRenderUserMessageSkeleton.value) {
+      emit('viewport-snapshot-change', null);
+      return;
+    }
+
+    nextTick(() => {
+      schedulePinnedViewportSnapshotSync();
+    });
+  },
+  { immediate: true }
 );
 
 watch(

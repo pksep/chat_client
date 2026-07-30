@@ -1,14 +1,12 @@
 <template>
-  <ChatContainerRoot v-if="config && !isCredentialsStep" :config="config" />
-
-  <Loading
-    v-else-if="isBootstrapping"
-    data-testid="App-Bootstrap"
-    :message="''"
+  <ChatContainerRoot
+    v-if="config && !isCredentialsStep"
+    :config="config"
+    @ready="handleChatContentReady"
   />
 
   <AuthorizationScreen
-    v-else
+    v-else-if="!isBootstrapping"
     v-model:url="serverUrl"
     v-model:identifier="identifierValue"
     v-model:password="passwordValue"
@@ -47,27 +45,27 @@
   />
 </template>
 <script lang="ts" setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { PushNotification } from '@pksep/yui';
 import { IChatContainerConfig } from './components/interfaces/interfaces';
 import ChatContainerRoot from './ChatContainerRoot.vue';
 import AuthorizationScreen from './components/AuthorizationScreen.vue';
-import Loading from './components/Loading.vue';
 import IosInstallPromptModal from './components/Menu/IosInstallPromptModal.vue';
 import { useIosInstallPrompt } from './composables/useIosInstallPrompt';
 import { areChatConfigsEqual, setConfig } from './services/useConfig';
 import {
   clearErpAuthSession,
+  consumeAuthRedirectStartupShellSkip,
   getChatAuthSession,
   getStoredBootstrapErpAccessToken,
   loginWithCredentials,
   saveBootstrapErpSession,
-  saveChatAuthSession,
-  clearChatAuthSession
+  saveChatAuthSession
 } from './composables/useAuth';
 import { fetchUsersForAuth } from './composables/useUsers';
 import { useNotifications } from './composables/useNotifications';
 import { initShareIntentHandling } from './services/useShareIntent';
+import { dispatchNativeStartupReady } from './utils/nativeStartup';
 
 const ORGANIZATIONS_KEY = 'chat_runtime_organizations';
 const LAST_ORGANIZATION_KEY = 'chat_runtime_last_organization';
@@ -88,10 +86,21 @@ const getStoredOrganizations = (): IStoredOrganization[] => {
   });
 };
 
+const shouldSkipStartupShell = consumeAuthRedirectStartupShellSkip();
+const startupShellElement = document.getElementById('startup-shell');
+
+if (shouldSkipStartupShell) {
+  startupShellElement?.remove();
+}
+
 const config = ref<IChatContainerConfig | null>(null);
 const errorMessage = ref('');
 const isLoading = ref(false);
-const isBootstrapping = ref(true);
+const isBootstrapping = ref(!shouldSkipStartupShell);
+const isStartupShellVisible = ref(
+  !shouldSkipStartupShell && Boolean(startupShellElement)
+);
+const isChatContentReady = ref(false);
 const identifierValue = ref('');
 const passwordValue = ref('');
 const rememberAccount = ref(true);
@@ -121,8 +130,64 @@ const getNotificationStyle = (index: number) => ({
   zIndex: `${3000 - index}`
 });
 
+const waitForAnimationFrame = () =>
+  new Promise<void>(resolve => {
+    requestAnimationFrame(() => resolve());
+  });
+
+const wait = (durationMs: number) =>
+  new Promise<void>(resolve => {
+    window.setTimeout(resolve, durationMs);
+  });
+
+const STARTUP_SHELL_LEAVE_MS = 200;
+let isStartupShellHideScheduled = false;
+
+const hideStartupShellAfterMainPaint = async () => {
+  await nextTick();
+  await waitForAnimationFrame();
+  await waitForAnimationFrame();
+  startupShellElement?.classList.add('startup-shell--leaving');
+  isStartupShellVisible.value = false;
+  await wait(STARTUP_SHELL_LEAVE_MS);
+  startupShellElement?.remove();
+  dispatchNativeStartupReady();
+};
+
+const requestStartupShellHide = () => {
+  if (!isStartupShellVisible.value || isStartupShellHideScheduled) {
+    return;
+  }
+
+  isStartupShellHideScheduled = true;
+  void hideStartupShellAfterMainPaint();
+};
+
+const handleChatContentReady = () => {
+  isChatContentReady.value = true;
+
+  if (!isBootstrapping.value) {
+    requestStartupShellHide();
+  }
+};
+
 const finishBootstrapping = () => {
   isBootstrapping.value = false;
+
+  if (!isStartupShellVisible.value) {
+    dispatchNativeStartupReady();
+    return;
+  }
+
+  if (config.value && !isCredentialsStep.value) {
+    if (isChatContentReady.value) {
+      requestStartupShellHide();
+    }
+
+    return;
+  }
+
+  requestStartupShellHide();
 };
 
 const parseRuntimeConfig = (
@@ -154,7 +219,9 @@ const parseRuntimeConfig = (
     CHAT_ERP_URL: envMap.VITE_ERP_URL,
     CHAT_PATH_TO_FILE_CDN: envMap.VITE_PATH_TO_FILE_CDN,
     CHAT_LIVEKIT_URL: envMap.VITE_LIVEKIT_URL,
-    CHAT_BOT_GATEWAY: envMap.VITE_BOT_GATEWAY_URL
+    CHAT_BOT_GATEWAY: envMap.VITE_BOT_GATEWAY_URL,
+    CHAT_CALL_TOPIC_AUTO_PROMPT_ENABLED:
+      envMap.VITE_CALL_TOPIC_AUTO_PROMPT_ENABLED
   };
 };
 
@@ -219,6 +286,32 @@ const hasBootstrapToken = () =>
 const hasChatSession = () => !!getChatAuthSession();
 const shouldLoadFreshConfigBeforeChat = () =>
   hasBootstrapToken() || hasChatSession();
+const shouldUseStoredConfigImmediately = (
+  fallbackConfig?: IChatContainerConfig
+) => !!fallbackConfig && shouldLoadFreshConfigBeforeChat();
+
+const refreshRemoteConfigInBackground = (
+  url: string,
+  fallbackConfig: IChatContainerConfig
+) => {
+  void loadRemoteConfig({
+    url,
+    fallbackConfig
+  });
+};
+
+const openStoredConfig = (
+  url: string,
+  fallbackConfig: IChatContainerConfig
+) => {
+  const normalizedUrl = normalizeServerUrl(url);
+
+  serverUrl.value = normalizedUrl;
+  setLastOrganization(normalizedUrl);
+  isAddingNewOrganization.value = false;
+  applyConfig(fallbackConfig);
+  openCredentialsStepIfNeeded();
+};
 
 const openCredentialsStepIfNeeded = () => {
   if (hasBootstrapToken() || hasChatSession()) {
@@ -281,6 +374,12 @@ const selectOrganization = (url: string) => {
   isAddingNewOrganization.value = false;
 
   if (shouldLoadFreshConfigBeforeChat()) {
+    if (shouldUseStoredConfigImmediately(organization.config)) {
+      openStoredConfig(normalizedUrl, organization.config);
+      refreshRemoteConfigInBackground(normalizedUrl, organization.config);
+      return;
+    }
+
     void loadRemoteConfig({
       url: normalizedUrl,
       fallbackConfig: organization.config
@@ -340,6 +439,15 @@ const handleQrAuthSuccess = (payload: {
 
   if (storedOrganization) {
     if (shouldLoadFreshConfigBeforeChat()) {
+      if (shouldUseStoredConfigImmediately(storedOrganization.config)) {
+        openStoredConfig(scannedOrganization, storedOrganization.config);
+        refreshRemoteConfigInBackground(
+          scannedOrganization,
+          storedOrganization.config
+        );
+        return;
+      }
+
       void loadRemoteConfig({
         url: scannedOrganization,
         fallbackConfig: storedOrganization.config
@@ -413,7 +521,6 @@ const loadRemoteConfig = async (options?: {
       serverUrl.value = normalizedUrl;
       setLastOrganization(normalizedUrl);
       isAddingNewOrganization.value = false;
-      clearChatAuthSession();
       applyConfig(options.fallbackConfig);
       openCredentialsStepIfNeeded();
     }
@@ -489,6 +596,15 @@ onMounted(async () => {
 
       if (storedOrganization) {
         if (shouldLoadFreshConfigBeforeChat()) {
+          if (shouldUseStoredConfigImmediately(storedOrganization.config)) {
+            openStoredConfig(urlOrganization, storedOrganization.config);
+            refreshRemoteConfigInBackground(
+              urlOrganization,
+              storedOrganization.config
+            );
+            return;
+          }
+
           await loadRemoteConfig({
             url: urlOrganization,
             fallbackConfig: storedOrganization.config
@@ -527,6 +643,15 @@ onMounted(async () => {
       isAddingNewOrganization.value = false;
 
       if (shouldLoadFreshConfigBeforeChat()) {
+        if (shouldUseStoredConfigImmediately(lastOrganization.config)) {
+          openStoredConfig(normalizedLastOrganization, lastOrganization.config);
+          refreshRemoteConfigInBackground(
+            normalizedLastOrganization,
+            lastOrganization.config
+          );
+          return;
+        }
+
         await loadRemoteConfig({
           url: normalizedLastOrganization,
           fallbackConfig: lastOrganization.config
@@ -555,6 +680,452 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.app-startup-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 2600;
+  display: grid;
+  grid-template-columns: 345px minmax(0, 1fr);
+  height: 100dvh;
+  min-height: 100dvh;
+  background: #f8f9fd;
+  color: #111827;
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  overflow: hidden;
+  pointer-events: auto;
+  transform: translateZ(0);
+}
+
+.app-startup-shell-fade-leave-active {
+  transition:
+    opacity 180ms ease,
+    visibility 180ms ease;
+}
+
+.app-startup-shell-fade-leave-to {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.app-startup-shell__content {
+  display: grid;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 20px 10px 0;
+  border-right: 0.5px solid #e5e7eb;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.app-startup-shell__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+  padding: 0 16px 10px;
+}
+
+.app-startup-shell__title {
+  width: 104px;
+  height: 24px;
+  border-radius: 6px;
+}
+
+.app-startup-shell__create {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+}
+
+.app-startup-shell__divider {
+  height: 1px;
+  margin: 0 10px 10px;
+  background: #eef1f5;
+}
+
+.app-startup-shell__search {
+  height: 40px;
+  margin: 0 10px 10px;
+  border-radius: 8px;
+  background: #f5f7fb;
+}
+
+.app-startup-shell__filters {
+  display: flex;
+  gap: 5px;
+  min-height: 43px;
+  padding: 0 10px 10px;
+  box-sizing: border-box;
+}
+
+.app-startup-shell__chip {
+  width: 70px;
+  height: 33px;
+  border: 1px solid #d9e5ff;
+  border-radius: 15px;
+  background: #eef4ff;
+  box-sizing: border-box;
+}
+
+.app-startup-shell__chip:nth-child(2) {
+  width: 58px;
+  border-color: #e5e7eb;
+  background: #ffffff;
+}
+
+.app-startup-shell__chip:nth-child(3) {
+  width: 96px;
+  border-color: #e5e7eb;
+  background: #ffffff;
+}
+
+.app-startup-shell__chip:nth-child(4) {
+  width: 64px;
+  border-color: #e5e7eb;
+  background: #ffffff;
+}
+
+.app-startup-shell__list {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-startup-shell__row {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: center;
+  min-height: 60px;
+  padding: 0 10px;
+  box-sizing: border-box;
+}
+
+.app-startup-shell__title,
+.app-startup-shell__create,
+.app-startup-shell__avatar,
+.app-startup-shell__line,
+.app-startup-shell__subline,
+.app-startup-shell__nav-item,
+.app-startup-shell__header-avatar,
+.app-startup-shell__header-line,
+.app-startup-shell__header-subline,
+.app-startup-shell__header-action,
+.app-startup-shell__message-avatar,
+.app-startup-shell__message-bubble,
+.app-startup-shell__composer-text,
+.app-startup-shell__composer-toolbar-button {
+  background: linear-gradient(90deg, #eef2f7, #f8fafc, #eef2f7);
+  background-size: 180% 100%;
+  animation: app-startup-pulse 1.2s ease-in-out infinite;
+}
+
+.app-startup-shell__avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+}
+
+.app-startup-shell__line {
+  width: 78%;
+  height: 14px;
+  margin-bottom: 9px;
+  border-radius: 6px;
+}
+
+.app-startup-shell__subline {
+  width: 54%;
+  height: 12px;
+  border-radius: 6px;
+}
+
+.app-startup-shell__navigation {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: center;
+  gap: 12px;
+  height: 58px;
+  margin: 0 -10px;
+  padding: 10px 28px;
+  border-top: 1px solid #eef3ff;
+  border-radius: 15px 15px 0 0;
+  box-shadow: 0 0 22px rgb(0 0 0 / 7%);
+  box-sizing: border-box;
+}
+
+.app-startup-shell__nav-item {
+  width: 38px;
+  height: 38px;
+  justify-self: center;
+  border-radius: 50%;
+}
+
+.app-startup-shell__main {
+  display: grid;
+  grid-template-rows: 60px minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.app-startup-shell__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 7px 16px;
+  border-bottom: 0.5px solid #e5e7eb;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.app-startup-shell__header-avatar {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.app-startup-shell__header-profile {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-startup-shell__header-line {
+  width: 150px;
+  height: 14px;
+  margin-bottom: 6px;
+  border-radius: 5px;
+}
+
+.app-startup-shell__header-subline {
+  width: 92px;
+  height: 10px;
+  border-radius: 5px;
+}
+
+.app-startup-shell__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-startup-shell__header-action {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.app-startup-shell__messages {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 12px;
+  min-height: 0;
+  padding: 22px 18px 16px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.app-startup-shell__message-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
+.app-startup-shell__message-row--outgoing {
+  justify-content: flex-end;
+}
+
+.app-startup-shell__message-avatar {
+  flex: 0 0 35px;
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+}
+
+.app-startup-shell__message-bubble {
+  width: min(42%, 320px);
+  height: 42px;
+  border-radius: 18px 18px 18px 6px;
+}
+
+.app-startup-shell__message-row--outgoing .app-startup-shell__message-bubble {
+  width: min(36%, 280px);
+  border-radius: 18px 18px 6px 18px;
+  background-color: #e9f0ff;
+}
+
+.app-startup-shell__message-bubble--short {
+  width: min(28%, 210px);
+}
+
+.app-startup-shell__message-bubble--wide {
+  width: min(52%, 390px);
+  height: 54px;
+}
+
+.app-startup-shell__composer {
+  padding: 0 10px 15px 15px;
+  box-sizing: border-box;
+}
+
+.app-startup-shell__composer-editor {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 105px;
+  border: 0.5px solid #dce1e8;
+  border-radius: 20px;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.app-startup-shell__composer-text {
+  width: min(36%, 260px);
+  height: 14px;
+  margin: 20px 16px;
+  border-radius: 5px;
+}
+
+.app-startup-shell__composer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  margin: 0 16px 16px;
+}
+
+.app-startup-shell__composer-toolbar-button {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+}
+
+.app-startup-shell__composer-toolbar-button:last-child {
+  margin-left: auto;
+  background-color: #e2eaff;
+}
+
+@media screen and (width <= 768px) {
+  .app-startup-shell {
+    grid-template-columns: minmax(0, 1fr);
+    height: 100dvh;
+  }
+
+  .app-startup-shell__content {
+    display: grid;
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+    min-height: 100dvh;
+    padding: 10px 0 0;
+    border-right: 0;
+    background: #ffffff;
+  }
+
+  .app-startup-shell__toolbar {
+    display: flex;
+    min-height: 24px;
+    padding: 0 16px 10px;
+  }
+
+  .app-startup-shell__title {
+    width: 58px;
+    height: 24px;
+    margin: 0;
+    border-radius: 6px;
+  }
+
+  .app-startup-shell__main {
+    display: none;
+  }
+
+  .app-startup-shell__divider {
+    margin: 0 0 10px;
+  }
+
+  .app-startup-shell__search {
+    height: 40px;
+    margin: 0 16px 10px;
+    border-radius: 8px;
+  }
+
+  .app-startup-shell__filters {
+    gap: 5px;
+    min-height: 43px;
+    margin: 0;
+    padding: 0 16px 10px;
+  }
+
+  .app-startup-shell__chip {
+    width: 50px;
+    height: 33px;
+    border-radius: 15px;
+  }
+
+  .app-startup-shell__chip:nth-child(2) {
+    width: 60px;
+  }
+
+  .app-startup-shell__chip:nth-child(3) {
+    width: 78px;
+  }
+
+  .app-startup-shell__chip:nth-child(4) {
+    width: 62px;
+  }
+
+  .app-startup-shell__row {
+    grid-template-columns: 60px minmax(0, 1fr);
+    column-gap: 10px;
+    height: 82px;
+    padding: 0 16px;
+  }
+
+  .app-startup-shell__row > div:last-child {
+    display: grid;
+    align-content: center;
+    height: 100%;
+    border-bottom: 1px solid #f5f7fb;
+    box-sizing: border-box;
+  }
+
+  .app-startup-shell__avatar {
+    width: 60px;
+    height: 60px;
+  }
+
+  .app-startup-shell__line {
+    height: 20px;
+    margin-bottom: 12px;
+  }
+
+  .app-startup-shell__subline {
+    width: 92%;
+    height: 18px;
+  }
+
+  .app-startup-shell__navigation {
+    height: calc(58px + env(safe-area-inset-bottom, 0px));
+    margin: 0;
+    padding: 10px 18px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@keyframes app-startup-pulse {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -80% 0;
+  }
+}
+
 .app-notification-stack__item {
   pointer-events: auto;
 }

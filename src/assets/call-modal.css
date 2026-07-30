@@ -9,6 +9,7 @@
 }
 
 .call-modal__container {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -27,6 +28,14 @@
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
+}
+
+.call-modal--topic-hover {
+  cursor: pointer;
+}
+
+.call-modal--topic-hover .call-modal__container {
+  cursor: default;
 }
 
 @media screen and (min-width: 769px) {
@@ -60,19 +69,6 @@
   --size-avatar: 40px;
 }
 
-.call-modal__user-name {
-  font-size: 24px;
-  font-weight: 600;
-}
-
-.call-modal__status {
-  font-weight: 400;
-  font-size: 14px;
-  text-align: center;
-  margin: 0;
-  height: 17px;
-}
-
 .call-modal__notice {
   margin: 0;
   font-size: 24px;
@@ -80,13 +76,20 @@
   text-align: center;
 }
 
+.call-modal__notice-caption {
+  margin: 0;
+  font-size: 14px;
+  line-height: 17px;
+  text-align: center;
+}
+
+.call-modal__status-text--hidden {
+  visibility: hidden;
+}
+
 .call-modal__avatar-container--ended .call-modal__notice {
   font-size: 22px;
   line-height: 27px;
-}
-
-.call-modal__terminal-placeholder {
-  visibility: hidden;
 }
 
 .call-modal__controls {
@@ -145,6 +148,69 @@
   cursor: default;
   transform: none;
   pointer-events: none;
+}
+
+.call-modal__control-button--recording {
+  color: #fff !important;
+  background-color: var(--error-color) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--error-color) 18%, transparent);
+}
+
+.call-modal__recording-notice {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  z-index: 14;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: min(420px, calc(100% - 180px));
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--grey6);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.call-modal__recording-notice-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--error-color);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--error-color) 16%, transparent);
+}
+
+.call-modal__recording-notice--starting {
+  color: var(--grey6);
+}
+
+.call-modal__recording-notice--starting .call-modal__recording-notice-dot {
+  background: var(--error-color);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--error-color) 16%, transparent);
+  animation: call-recording-starting-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes call-recording-starting-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+
+  50% {
+    transform: scale(1.35);
+    opacity: 1;
+  }
 }
 
 .call-modal__control-button--fullscreen {
@@ -371,6 +437,13 @@
 .call-modal__mobile-actions-item:disabled {
   color: var(--text-light-color);
   cursor: default;
+}
+
+.call-modal__mobile-actions-item--recording,
+.call-modal__mobile-actions-item--recording:disabled {
+  color: var(--error-color);
+  background: color-mix(in srgb, var(--error-color) 12%, transparent);
+  opacity: 1;
 }
 
 .call-modal__mobile-actions-item svg {
@@ -866,6 +939,14 @@
   color: rgba(255, 255, 255, 0.78);
 }
 
+.call-modal__connection-status--degraded {
+  color: #b46900;
+}
+
+.call-modal__connection-status--overlay.call-modal__connection-status--degraded {
+  color: #ffd59a;
+}
+
 .call-modal__connection-status-spinner {
   width: 18px;
   height: 18px;
@@ -907,9 +988,28 @@
   text-align: center;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
+  gap: 24px;
   height: 300px;
+}
+
+.call-modal__avatar-container--status {
+  gap: 0;
+}
+
+.call-modal__avatar-container--status .call-modal__notice-caption {
+  order: 1;
+}
+
+.call-modal__avatar-container--status .call-modal__notice {
+  order: 2;
+  margin-top: 14px;
+}
+
+.call-modal__avatar-container--status .call-modal__avatar {
+  order: 3;
+  margin-top: 28px;
 }
 
 @media screen and (max-width: 768px) {
@@ -1558,6 +1658,10 @@
 }
 
 .call-modal__connection-quality {
+  --call-quality-bg: var(--blue1);
+  --call-quality-active: var(--white);
+  --call-quality-inactive: rgba(255, 255, 255, 0.36);
+
   position: absolute;
   top: 8px;
   right: 8px;
@@ -1570,15 +1674,15 @@
   justify-content: center;
   gap: 2px;
   z-index: 3;
-  background: var(--blue1);
-  color: var(--white);
+  background: var(--call-quality-bg);
+  color: var(--call-quality-active);
   pointer-events: auto;
 }
 
 .call-modal__connection-quality-bar {
   width: 2px;
   border-radius: 5px;
-  background: var(--red8);
+  background: var(--call-quality-inactive);
 }
 
 .call-modal__connection-quality-bar:nth-child(1) {
@@ -1598,12 +1702,34 @@
 }
 
 .call-modal__connection-quality--poor .call-modal__connection-quality-bar {
-  background: var(--red8);
+  background: var(--call-quality-inactive);
 }
 
 .call-modal__connection-quality--poor
   .call-modal__connection-quality-bar:first-child {
-  background: var(--white);
+  background: var(--call-quality-active);
+}
+
+.call-modal__connection-quality--unknown
+  .call-modal__connection-quality-bar:first-child,
+.call-modal__connection-quality--unknown .call-modal__connection-quality-bar {
+  background: var(--call-quality-active);
+}
+
+.call-modal__connection-quality--excellent {
+  --call-quality-bg: #77a6ff;
+}
+
+.call-modal__connection-quality--good {
+  --call-quality-bg: #77a6ff;
+}
+
+.call-modal__connection-quality--poor {
+  --call-quality-bg: #77a6ff;
+}
+
+.call-modal__connection-quality--unknown {
+  --call-quality-bg: #77a6ff;
 }
 
 .call-modal__connection-quality--stage {
@@ -2067,6 +2193,64 @@
     left: 0;
     bottom: calc(100% + 28px);
     transform: none;
+  }
+
+  .call-modal__container--status-notice .call-modal__avatar-container {
+    height: auto;
+    margin-top: 110px;
+    margin-bottom: auto;
+    gap: 0;
+    justify-content: flex-start;
+  }
+
+  .call-modal__avatar-container--status .call-modal__notice-caption {
+    order: 1;
+    font-size: 12px;
+    line-height: 15px;
+  }
+
+  .call-modal__avatar-container--status .call-modal__notice {
+    order: 2;
+    margin-top: 14px;
+    font-size: 16px;
+    line-height: 20px;
+  }
+
+  .call-modal__avatar-container--status .call-modal__avatar {
+    order: 3;
+    --size-avatar: 80px;
+    margin-top: 28px;
+  }
+
+  .call-modal__container--busy-notice .call-modal__controls {
+    margin-top: 0;
+    padding-bottom: 4px;
+  }
+
+  .call-modal__container--busy-notice
+    .call-modal__control-button-wrapper--call-controls {
+    width: auto;
+    padding: 0;
+    gap: 18px;
+    border-radius: 0;
+    background: transparent;
+    justify-content: center;
+  }
+
+  .call-modal__container--busy-notice
+    .call-modal__control-button-wrapper--call-controls
+    .call-modal__control-button {
+    width: 40px;
+    height: 40px;
+    color: #9aa7ba;
+    background: #eef1f7;
+  }
+
+  .call-modal__container--busy-notice
+    .call-modal__control-button-wrapper--call-controls
+    .call-modal__control-button.call-modal__control-button--leave {
+    color: var(--white);
+    background: var(--red4) !important;
   }
 
   .call-modal__group-panel-background-select {

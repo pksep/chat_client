@@ -31,6 +31,7 @@
         :time="formatTime(new Date(message.timestamp))"
         :loader="message.loading"
         :is-me-sender="message.role === 'user'"
+        :is-dialog="false"
         :continues-with-next="continuesWithNext(index)"
         :continues-from-previous="index > 0 && continuesWithNext(index - 1)"
         :data-testid="`${props.dataTestid}-MessageList-MessageBubbleAI${index + 1}`"

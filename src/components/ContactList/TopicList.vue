@@ -1,5 +1,6 @@
 <template>
   <ul
+    ref="listRootRef"
     :key="listRenderKey"
     :class="['contact-list', props.class]"
     role="list"
@@ -13,6 +14,26 @@
     >
       Контакты
     </li>
+    <template v-if="showTopicListSkeleton">
+      <li
+        v-for="index in skeletonRows"
+        :key="`topic-skeleton-${index}`"
+        class="contact-list__li contact-list__skeleton-row"
+        role="presentation"
+        aria-hidden="true"
+        :data-testid="`${props.dataTestid}-ContactList-Skeleton${index}`"
+      >
+        <div class="contact-list__item contact-list__skeleton-item">
+          <span class="contact-list__skeleton-avatar"></span>
+          <div class="contact-list__skeleton-content">
+            <span class="contact-list__skeleton-line"></span>
+            <span
+              class="contact-list__skeleton-line contact-list__skeleton-line--short"
+            ></span>
+          </div>
+        </div>
+      </li>
+    </template>
     <li
       v-for="(topic, index) in props.topics"
       :key="topic.id"
@@ -45,13 +66,21 @@
         @keydown.enter="event => handleClick(topic, index, event)"
         @keydown.space="event => handleClick(topic, index, event)"
       >
+        <FavoriteTopicIcon
+          v-if="isTopicFavorite(topic)"
+          class="contact-list__avatar"
+          :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
+        />
         <component
+          v-else
           :is="isBotTopic(topic) ? BotAvatar : CachedAvatar"
           :class="[
             'contact-list__avatar',
             {
               'contact-list__avatar--interactive':
-                !props.showCheckbox && topic.type === TopicType.DM
+                !props.showCheckbox &&
+                topic.type === TopicType.DM &&
+                !isTopicFavorite(topic)
             }
           ]"
           :initials="topic.name"
@@ -155,7 +184,7 @@
           <div v-if="!props.showCheckbox" class="contact-list__top">
             <MessageStatusIcons
               v-if="
-                topic.lastMessage?.senderUserId === authedUser.id &&
+                topic.lastMessage?.senderUserId === authedUser?.id &&
                 !topic.lastMessage?.isSystem
               "
               :class="{
@@ -324,7 +353,13 @@
         tabindex="0"
         @click="handleMessageResultClick(result)"
       >
+        <FavoriteTopicIcon
+          v-if="isTopicFavorite(getMessageResultTopic(result))"
+          class="contact-list__avatar"
+          :data-testid="`${props.dataTestid}-ContactList-MessageAvatar${index + 1}`"
+        />
         <component
+          v-else
           :is="
             isBotTopic(getMessageResultTopic(result)) ? BotAvatar : CachedAvatar
           "
@@ -382,7 +417,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch
+} from 'vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import {
   Button,
@@ -408,6 +450,7 @@ import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import {
   navigateToDialogs,
+  navigateToFavorites,
   navigateToGroup
 } from '../../composables/navigation';
 import { MediaType } from '@pksep/zod-shared-chat';
@@ -441,6 +484,7 @@ import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 import type { IMessageSearchResult } from '../../composables/useMessageSearch';
 import { isBotTopic, isDeletedBotUser } from '../../utils/bot';
 import ReactionHeartIcon from '../UI/ReactionHeartIcon.vue';
+import FavoriteTopicIcon from '../UI/FavoriteTopicIcon.vue';
 import { requestTopicReactionJump } from '../../services/useTopicViewportState';
 import {
   getInteractionTelemetryPayload,
@@ -448,6 +492,7 @@ import {
   recordChatTopicOpenAttempt,
   type ChatTopicOpenTelemetryMeta
 } from '../../services/useChatNavigationTelemetry';
+import { isFavoriteTopic } from '../../utils/favorite-topic';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
@@ -456,6 +501,7 @@ interface IExtendedContactListProps extends IContactListProps {
   toolbarFilter?: string;
   messageResults?: IMessageSearchResult[];
   isMessageSearchLoading?: boolean;
+  isLoading?: boolean;
 }
 
 const {
@@ -473,7 +519,8 @@ const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   searchQuery: '',
   toolbarFilter: '',
   messageResults: () => [],
-  isMessageSearchLoading: false
+  isMessageSearchLoading: false,
+  isLoading: false
 });
 
 const emits = defineEmits<{
@@ -493,19 +540,39 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
 const authedUser = computed(() => getAuthUser());
+const isTopicFavorite = (topic?: ITopic | null): boolean =>
+  isFavoriteTopic(topic, authedUser.value?.id);
 const isRecentlyReconnected = computed(() => getHasWebsocketConnection());
 const listRenderKey = ref(0);
+const listRootRef = ref<HTMLElement | null>(null);
 const pendingActiveTopicId = ref<string | null>(null);
 const { getFullMediaPath } = useMessageMedia();
 const currentTime = ref(Date.now());
 let currentTimeInterval: ReturnType<typeof setInterval> | null = null;
+let descriptionOverflowRafId = 0;
+let descriptionOverflowSecondRafId = 0;
+let descriptionMutationObserver: MutationObserver | null = null;
+let descriptionResizeObserver: ResizeObserver | null = null;
 const TOPIC_PRESS_SCROLL_CANCEL_PX = 8;
+const TOPIC_POINTER_CLICK_MAX_DELAY_MS = 2000;
 let topicPressPointerId: number | null = null;
 let topicPressStartX = 0;
 let topicPressStartY = 0;
 let topicPressMoved = false;
+let topicPointerDownContext: {
+  topicId: string;
+  timestamp: number;
+} | null = null;
 
 const hasSearchQuery = computed(() => props.searchQuery.trim().length > 0);
+const skeletonRows = 7;
+const showTopicListSkeleton = computed(
+  () =>
+    props.isLoading &&
+    !props.showCheckbox &&
+    !hasSearchQuery.value &&
+    props.topics.length === 0
+);
 const showContactSectionTitle = computed(
   () => hasSearchQuery.value && !props.showCheckbox && props.topics.length > 0
 );
@@ -527,6 +594,7 @@ const showSearchEmptyState = computed(
   () =>
     hasSearchQuery.value &&
     !props.showCheckbox &&
+    !props.isLoading &&
     !props.isMessageSearchLoading &&
     props.topics.length === 0 &&
     props.messageResults.length === 0
@@ -572,10 +640,96 @@ watch(
   }
 );
 
+const cancelDescriptionOverflowSync = (): void => {
+  if (descriptionOverflowRafId) {
+    window.cancelAnimationFrame(descriptionOverflowRafId);
+    descriptionOverflowRafId = 0;
+  }
+
+  if (descriptionOverflowSecondRafId) {
+    window.cancelAnimationFrame(descriptionOverflowSecondRafId);
+    descriptionOverflowSecondRafId = 0;
+  }
+};
+
+const getDescriptionOverflowCandidates = (
+  element: HTMLElement
+): HTMLElement[] => [
+  element,
+  ...Array.from(element.querySelectorAll<HTMLElement>('p, strong'))
+];
+
+const syncDescriptionOverflowState = (): void => {
+  const root = listRootRef.value;
+
+  if (!root) {
+    return;
+  }
+
+  const descriptions = Array.from(
+    root.querySelectorAll<HTMLElement>('.contact-list__description')
+  );
+
+  descriptions.forEach(description => {
+    const hasOverflow = getDescriptionOverflowCandidates(description).some(
+      element =>
+        element.clientWidth > 0 && element.scrollWidth > element.clientWidth + 1
+    );
+
+    description.classList.toggle(
+      'contact-list__description--overflow',
+      hasOverflow
+    );
+  });
+};
+
+const scheduleDescriptionOverflowSync = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  nextTick(() => {
+    cancelDescriptionOverflowSync();
+    descriptionOverflowRafId = window.requestAnimationFrame(() => {
+      descriptionOverflowRafId = 0;
+      syncDescriptionOverflowState();
+
+      descriptionOverflowSecondRafId = window.requestAnimationFrame(() => {
+        descriptionOverflowSecondRafId = 0;
+        syncDescriptionOverflowState();
+      });
+    });
+  });
+};
+
 onMounted(() => {
   currentTimeInterval = setInterval(() => {
     currentTime.value = Date.now();
   }, 1000);
+
+  window.addEventListener('resize', scheduleDescriptionOverflowSync);
+
+  if ('MutationObserver' in window && listRootRef.value) {
+    descriptionMutationObserver = new MutationObserver(() => {
+      scheduleDescriptionOverflowSync();
+    });
+    descriptionMutationObserver.observe(listRootRef.value, {
+      attributes: true,
+      attributeFilter: ['data-emoji-ready', 'src'],
+      characterData: true,
+      childList: true,
+      subtree: true
+    });
+  }
+
+  if ('ResizeObserver' in window && listRootRef.value) {
+    descriptionResizeObserver = new ResizeObserver(() => {
+      scheduleDescriptionOverflowSync();
+    });
+    descriptionResizeObserver.observe(listRootRef.value);
+  }
+
+  scheduleDescriptionOverflowSync();
 });
 
 onBeforeUnmount(() => {
@@ -583,7 +737,26 @@ onBeforeUnmount(() => {
     clearInterval(currentTimeInterval);
     currentTimeInterval = null;
   }
+
+  window.removeEventListener('resize', scheduleDescriptionOverflowSync);
+  cancelDescriptionOverflowSync();
+  descriptionMutationObserver?.disconnect();
+  descriptionMutationObserver = null;
+  descriptionResizeObserver?.disconnect();
+  descriptionResizeObserver = null;
 });
+
+watch(
+  [
+    () => props.topics,
+    () => props.messageResults,
+    () => props.searchQuery,
+    () => props.isMessageSearchLoading,
+    () => props.showCheckbox
+  ],
+  scheduleDescriptionOverflowSync,
+  { deep: true, immediate: true }
+);
 
 const handlePin = (topic: ITopic): void => {
   togglePinTopic(topic);
@@ -637,6 +810,7 @@ const getTopicTelemetryFlags = (topic: ITopic): Record<string, unknown> => ({
   hasUnreadReaction: !!topic.hasUnreadReaction,
   unreadReactionMessageId: getTopicUnreadReactionMessageId(topic.id) || null,
   hasActiveCall: !!getTopicActiveCall(topic),
+  isFavorite: isTopicFavorite(topic),
   lastMessageId: topic.lastMessage?.id || null,
   lastMessageCreatedAt: topic.lastMessage?.createdAt || null,
   lastMessageMediaCount: topic.lastMessage?.media?.length || 0,
@@ -659,7 +833,7 @@ const recordTopicOpenAttempt = (
 
   return recordChatTopicOpenAttempt({
     topicId: topic.id,
-    topicType: topic.type,
+    topicType: isTopicFavorite(topic) ? 'FAVORITE' : topic.type,
     source,
     selectedTopicId: props.selectedTopicId,
     isMobile: isMobile.value,
@@ -682,11 +856,13 @@ const navigateToTopicFromList = (
   recordChatTopicNavigationRequest({
     telemetry,
     topicId: topic.id,
-    topicType: topic.type,
+    topicType: isTopicFavorite(topic) ? 'FAVORITE' : topic.type,
     source
   });
 
-  if (topic.type === TopicType.DM) {
+  if (isTopicFavorite(topic)) {
+    navigateToFavorites(topic.id);
+  } else if (topic.type === TopicType.DM) {
     navigateToDialogs(topic.id);
   } else if (topic.type === TopicType.Group) {
     navigateToGroup(topic.id);
@@ -694,7 +870,9 @@ const navigateToTopicFromList = (
 };
 
 const navigateToTopicRoute = (topic: ITopic): void => {
-  if (topic.type === TopicType.DM) {
+  if (isTopicFavorite(topic)) {
+    navigateToFavorites(topic.id);
+  } else if (topic.type === TopicType.DM) {
     navigateToDialogs(topic.id);
   } else if (topic.type === TopicType.Group) {
     navigateToGroup(topic.id);
@@ -713,7 +891,7 @@ const syncTopicOpenSideEffects = (
   recordChatTopicNavigationRequest({
     telemetry,
     topicId: topic.id,
-    topicType: topic.type,
+    topicType: isTopicFavorite(topic) ? 'FAVORITE' : topic.type,
     source: navigationSource
   });
 
@@ -724,8 +902,56 @@ const syncTopicOpenSideEffects = (
   }
 };
 
+const clearTopicPointerDownContext = (): void => {
+  topicPointerDownContext = null;
+};
+
+const resolveTopicClickTarget = (
+  topic: ITopic,
+  index?: number,
+  event?: Event
+): { topic: ITopic; index?: number } | null => {
+  if (
+    !event ||
+    event instanceof KeyboardEvent ||
+    (event instanceof MouseEvent && event.detail === 0)
+  ) {
+    clearTopicPointerDownContext();
+    return { topic, index };
+  }
+
+  if (!topicPointerDownContext) {
+    return { topic, index };
+  }
+
+  const pointerDownContext = topicPointerDownContext;
+  clearTopicPointerDownContext();
+
+  if (
+    Date.now() - pointerDownContext.timestamp >
+      TOPIC_POINTER_CLICK_MAX_DELAY_MS ||
+    pointerDownContext.topicId === topic.id
+  ) {
+    return { topic, index };
+  }
+
+  const pointerDownTopicIndex = props.topics.findIndex(
+    item => item.id === pointerDownContext.topicId
+  );
+
+  if (pointerDownTopicIndex === -1) {
+    return null;
+  }
+
+  return {
+    topic: props.topics[pointerDownTopicIndex],
+    index: pointerDownTopicIndex
+  };
+};
+
 const handleClick = (topic: ITopic, index?: number, event?: Event): void => {
   if (isMobile.value && topicPressMoved && !(event instanceof KeyboardEvent)) {
+    clearTopicPointerDownContext();
     pendingActiveTopicId.value = null;
     topicPressMoved = false;
     return;
@@ -736,14 +962,22 @@ const handleClick = (topic: ITopic, index?: number, event?: Event): void => {
     return;
   }
 
+  const clickTarget = resolveTopicClickTarget(topic, index, event);
+
+  if (!clickTarget) {
+    return;
+  }
+
+  const { topic: targetTopic, index: targetIndex } = clickTarget;
+
   if (isMobile.value) {
-    emits('unmount-topic', topic, null);
-    navigateToTopicRoute(topic);
+    emits('unmount-topic', targetTopic, null);
+    navigateToTopicRoute(targetTopic);
 
     window.setTimeout(() => {
       syncTopicOpenSideEffects(
-        topic,
-        index,
+        targetTopic,
+        targetIndex,
         event,
         event instanceof KeyboardEvent
           ? 'topic_list.keyboard'
@@ -756,27 +990,37 @@ const handleClick = (topic: ITopic, index?: number, event?: Event): void => {
   }
 
   const telemetry = recordTopicOpenAttempt(
-    topic,
-    index,
+    targetTopic,
+    targetIndex,
     event,
     event instanceof KeyboardEvent ? 'topic_list.keyboard' : 'topic_list.click'
   );
 
-  if (hasTopicUnreadIndicator(topic, authedUser.value?.id)) {
-    void markTopicRead(topic);
-  } else if (topic.info?.isMarkedUnread) {
-    void setTopicMarkedUnread(topic, false);
+  if (hasTopicUnreadIndicator(targetTopic, authedUser.value?.id)) {
+    void markTopicRead(targetTopic);
+  } else if (targetTopic.info?.isMarkedUnread) {
+    void setTopicMarkedUnread(targetTopic, false);
   }
 
-  emits('unmount-topic', topic, telemetry);
+  emits('unmount-topic', targetTopic, telemetry);
 };
 
 const handleTopicPress = (topic: ITopic, event: PointerEvent): void => {
-  if (props.showCheckbox || !isMobile.value) {
+  if (props.showCheckbox) {
     return;
   }
 
   if (event.pointerType === 'mouse' && event.button !== 0) {
+    return;
+  }
+
+  clearTopicPointerDownContext();
+  topicPointerDownContext = {
+    topicId: topic.id,
+    timestamp: Date.now()
+  };
+
+  if (!isMobile.value) {
     return;
   }
 
@@ -819,6 +1063,7 @@ const handleTopicPressEnd = (event: PointerEvent): void => {
 };
 
 const handleTopicPressCancel = (): void => {
+  clearTopicPointerDownContext();
   topicPressPointerId = null;
   topicPressMoved = false;
   pendingActiveTopicId.value = null;
@@ -878,7 +1123,7 @@ const getTopicAvatarPath = (topic?: ITopic | null): string =>
   isBotTopic(topic) ? topic?.user?.avatarUrl || '' : topic?.avatarUrl || '';
 
 const isTopicUserOnline = (topic: ITopic): boolean => {
-  if (isDeletedBotUser(topic.user)) {
+  if (isTopicFavorite(topic) || isDeletedBotUser(topic.user)) {
     return false;
   }
 
@@ -927,6 +1172,10 @@ const getTopicUnreadIndicatorLabel = (topic: ITopic): string => {
 };
 
 const getTopicActiveCall = (topic: ITopic) => {
+  if (isTopicFavorite(topic)) {
+    return null;
+  }
+
   if (isCallActive.value && activeCallTopicId.value === topic.id) {
     return {
       roomId: topic.activeCall?.roomId || topic.id,
@@ -993,10 +1242,13 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
   width: calc(100vw - 180px);
 }
 
-.contact-list__block--wrapper--selection .contact-list__description::after,
-.contact-list__block--wrapper--selection .contact-list__description p::after,
 .contact-list__block--wrapper--selection
-  .contact-list__description
+  .contact-list__description--overflow::after,
+.contact-list__block--wrapper--selection
+  .contact-list__description--overflow
+  p::after,
+.contact-list__block--wrapper--selection
+  .contact-list__description--overflow
   strong::after {
   left: auto;
   right: 0;
@@ -1004,12 +1256,12 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
 }
 
 .contact-list__item--selection.contact-list__item--active
-  .contact-list__description::after,
+  .contact-list__description--overflow::after,
 .contact-list__item--selection.contact-list__item--active
-  .contact-list__description
+  .contact-list__description--overflow
   p::after,
 .contact-list__item--selection.contact-list__item--active
-  .contact-list__description
+  .contact-list__description--overflow
   strong::after {
   background: linear-gradient(to right, transparent 0%, var(--blue15) 100%);
 }
@@ -1058,5 +1310,60 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
 
 .contact-list__item--message-result {
   cursor: pointer;
+}
+
+.contact-list__skeleton-row {
+  pointer-events: none;
+}
+
+.contact-list__skeleton-item {
+  align-items: center;
+  cursor: default;
+}
+
+.contact-list__skeleton-avatar,
+.contact-list__skeleton-line {
+  display: block;
+  background: linear-gradient(90deg, #eef2f7, #f8fafc, #eef2f7);
+  background-size: 180% 100%;
+  animation: contact-list-skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+.contact-list__skeleton-avatar {
+  width: 50px;
+  height: 50px;
+  flex: 0 0 50px;
+  border-radius: 50%;
+}
+
+.contact-list__skeleton-content {
+  display: grid;
+  gap: 9px;
+  width: 100%;
+}
+
+:global(.menu--collapse) .contact-list__skeleton-content {
+  display: none;
+}
+
+.contact-list__skeleton-line {
+  width: 78%;
+  height: 14px;
+  border-radius: 6px;
+}
+
+.contact-list__skeleton-line--short {
+  width: 54%;
+  height: 12px;
+}
+
+@keyframes contact-list-skeleton-pulse {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -80% 0;
+  }
 }
 </style>

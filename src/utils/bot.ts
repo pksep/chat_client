@@ -3,6 +3,8 @@ import type { ITopic, IUser } from '../components/interfaces/interfaces';
 
 export const LOCAL_BOT_TOPIC_ID_PREFIX = 'local-bot-topic-';
 export const LOCAL_BOT_USER_ID_PREFIX = 'local-bot-user-';
+export const DELETED_BOT_DISPLAY_NAME = 'Удаленный аккаунт';
+export const DELETED_BOT_USERNAME = 'deleted_bot';
 
 type BotMeta = {
   isBot?: boolean;
@@ -12,11 +14,19 @@ type BotMeta = {
   botApiKey?: string;
   botId?: number;
   botOwnerUserId?: string;
+  botCommands?: BotCommand[];
+  commands?: BotCommand[];
   erpInitials?: string;
   erpRole?: string;
 };
 
+export type BotCommand = {
+  command: string;
+  description: string;
+};
+
 const BOT_NAME_PATTERN = /^(бот|bot)\b/i;
+const MAX_BOT_COMMANDS = 50;
 
 const parseBotMeta = (value: unknown): BotMeta => {
   if (!value) {
@@ -65,7 +75,7 @@ export const isLocalBotTopic = (topic?: ITopic | null): boolean =>
 
 export const isDeletedBotUser = (user?: IUser | null): boolean => {
   const meta = parseBotMeta(user?.ex);
-  return Boolean(meta.isDeletedBot || user?.nickname === 'deleted_bot');
+  return Boolean(meta.isDeletedBot || user?.nickname === DELETED_BOT_USERNAME);
 };
 
 export const isBotUser = (user?: IUser | null): boolean => {
@@ -138,6 +148,74 @@ export const getBotOwnerUserId = (user?: IUser | null): string => {
   return typeof meta.botOwnerUserId === 'string' ? meta.botOwnerUserId : '';
 };
 
+export const normalizeBotCommandName = (value: string): string => {
+  const normalized = value
+    .trim()
+    .replace(/^\/+/, '')
+    .split(/\s+/)[0]
+    ?.replace(/[^\w-]/g, '');
+
+  return normalized ? `/${normalized}` : '';
+};
+
+const normalizeBotCommand = (value: unknown): BotCommand | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const command = normalizeBotCommandName(
+    String(record.command || record.name || '')
+  );
+
+  if (!command) {
+    return null;
+  }
+
+  return {
+    command,
+    description:
+      typeof record.description === 'string' ? record.description.trim() : ''
+  };
+};
+
+export const normalizeBotCommands = (commands: unknown): BotCommand[] => {
+  if (!Array.isArray(commands)) {
+    return [];
+  }
+
+  const seenCommands = new Set<string>();
+  const normalizedCommands: BotCommand[] = [];
+
+  for (const command of commands) {
+    const normalized = normalizeBotCommand(command);
+
+    if (!normalized) {
+      continue;
+    }
+
+    const key = normalized.command.toLowerCase();
+
+    if (seenCommands.has(key)) {
+      continue;
+    }
+
+    seenCommands.add(key);
+    normalizedCommands.push(normalized);
+
+    if (normalizedCommands.length >= MAX_BOT_COMMANDS) {
+      break;
+    }
+  }
+
+  return normalizedCommands;
+};
+
+export const getBotCommands = (user?: IUser | null): BotCommand[] => {
+  const meta = parseBotMeta(user?.ex);
+  return normalizeBotCommands(meta.botCommands || meta.commands);
+};
+
 export const buildBotEx = (
   currentEx: unknown,
   payload: {
@@ -147,17 +225,50 @@ export const buildBotEx = (
     ownerUserId?: string;
   }
 ): string => {
-  const currentMeta = parseBotMeta(currentEx);
+  const metaWithoutCommands = { ...parseBotMeta(currentEx) };
+  delete metaWithoutCommands.botCommands;
+  delete metaWithoutCommands.commands;
 
   return JSON.stringify({
-    ...currentMeta,
+    ...metaWithoutCommands,
     isBot: true,
     botUsername: payload.username,
     botApiKey: payload.apiKey,
     ...(payload.botId !== undefined ? { botId: payload.botId } : {}),
     ...(payload.ownerUserId ? { botOwnerUserId: payload.ownerUserId } : {}),
-    erpRole: currentMeta.erpRole || 'Бот'
+    erpRole: metaWithoutCommands.erpRole || 'Бот'
   });
+};
+
+export const buildDeletedBotUser = (user?: IUser | null): IUser | null => {
+  if (!user?.id) {
+    return null;
+  }
+
+  const meta = { ...parseBotMeta(user.ex) };
+  delete meta.apiKey;
+  delete meta.botApiKey;
+  delete meta.botCommands;
+  delete meta.botId;
+  delete meta.botOwnerUserId;
+  delete meta.botUsername;
+  delete meta.commands;
+
+  return {
+    ...user,
+    initials: DELETED_BOT_DISPLAY_NAME,
+    nickname: DELETED_BOT_USERNAME,
+    avatarUrl: '',
+    lastOnline: null,
+    status: null,
+    isBot: false,
+    ex: JSON.stringify({
+      ...meta,
+      isBot: false,
+      isDeletedBot: true,
+      erpRole: ''
+    })
+  };
 };
 
 export const maskBotSecret = (value: string): string => {

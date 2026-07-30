@@ -354,6 +354,51 @@
             :data-testid="`${props.dataTestid}-MenuProfilePanel-UpdateMenu`"
           >
             <div class="menu-profile__update-content">
+              <span
+                v-if="profileUpdateStatusIconKind"
+                :class="[
+                  'menu-profile__update-status-icon',
+                  `menu-profile__update-status-icon--${profileUpdateStatusIconKind}`
+                ]"
+                aria-hidden="true"
+              >
+                <svg
+                  v-if="profileUpdateStatusIconKind === 'check'"
+                  viewBox="0 0 18 18"
+                  fill="none"
+                >
+                  <path
+                    d="M5 9.2L7.7 12L13.2 6"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                <svg v-else viewBox="0 0 18 18" fill="none">
+                  <path
+                    d="M14 11.25V14C14 14.2761 13.883 14.5412 13.6746 14.7366C13.4662 14.932 13.1836 15.0417 12.8889 15.0417H5.11111C4.81643 15.0417 4.53381 14.932 4.32544 14.7366C4.11706 14.5412 4 14.2761 4 14V11.25"
+                    stroke="currentColor"
+                    stroke-width="1.375"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    d="M6.39587 7.95996L9.00003 10.5641L11.6042 7.95996"
+                    stroke="currentColor"
+                    stroke-width="1.375"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    d="M9 10.5654V4.31543"
+                    stroke="currentColor"
+                    stroke-width="1.375"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
               <div class="menu-profile__update-copy">
                 <p class="menu-profile__update-title">
                   {{ profileUpdateTitle }}
@@ -464,6 +509,7 @@
             class="message__bubble system-message-text"
             :message="wallpaperPreviewIncomingMessage"
             time="12:10"
+            :is-dialog="true"
             data-testid="WallpaperPreview-Incoming"
           />
           <MessageBubble
@@ -472,6 +518,7 @@
             time="12:10"
             :is-me-sender="true"
             :is-read="true"
+            :is-dialog="true"
             data-testid="WallpaperPreview-Outgoing"
           />
         </div>
@@ -531,6 +578,7 @@
             class="message__bubble"
             :message="wallpaperPreviewIncomingMessage"
             time="12:10"
+            :is-dialog="true"
             data-testid="WallpaperPreview-Incoming"
           />
           <MessageBubble
@@ -539,6 +587,7 @@
             time="12:10"
             :is-me-sender="true"
             :is-read="true"
+            :is-dialog="true"
             data-testid="WallpaperPreview-Outgoing"
           />
         </div>
@@ -703,6 +752,7 @@ import {
   redirectToAuthorization
 } from '../../composables/useAuth';
 import { useLogout } from '../../composables/useLogin';
+import { clearAnyChatBackgroundSyncSession } from '../../services/useChatBackgroundSync';
 import { cleanupPushNotificationsOnLogout } from '../../services/usePushNotifications';
 import { updateCurrentUserStatus } from '../../services/useUserStatus';
 import {
@@ -795,6 +845,22 @@ const shouldShowProfileUpdateAction = computed(
   () =>
     profileUpdateState.value === 'available' ||
     profileUpdateState.value === 'downloaded'
+);
+const profileUpdateStatusIconKind = computed<'download' | 'check' | null>(
+  () => {
+    if (profileUpdateState.value === 'downloaded') {
+      return 'check';
+    }
+
+    if (
+      profileUpdateState.value === 'available' ||
+      profileUpdateState.value === 'downloading'
+    ) {
+      return 'download';
+    }
+
+    return null;
+  }
 );
 const profileUpdateTitle = computed(() => {
   if (profileUpdateState.value === 'checking') {
@@ -1184,31 +1250,27 @@ const clearStatus = async (): Promise<void> => {
   await saveStatus(null);
 };
 
-const waitWithTimeout = async (
-  promise: Promise<void>,
-  timeoutMs: number
-): Promise<void> => {
-  await Promise.race([
-    promise,
-    new Promise<void>(resolve => {
-      window.setTimeout(resolve, timeoutMs);
-    })
-  ]);
-};
-
-const handleLogout = async (): Promise<void> => {
-  try {
-    await waitWithTimeout(cleanupPushNotificationsOnLogout(), 2500);
-  } catch (error) {
+const runLogoutCleanup = (): void => {
+  void cleanupPushNotificationsOnLogout().catch(error => {
     console.warn('Failed to cleanup push notifications during logout:', error);
-  } finally {
-    useLogout();
-    redirectToAuthorization();
-  }
+  });
+
+  void clearAnyChatBackgroundSyncSession().catch(error => {
+    console.warn(
+      'Failed to clear chat background sync session during logout:',
+      error
+    );
+  });
 };
 
-const confirmLogout = async (): Promise<void> => {
+const handleLogout = (): void => {
+  runLogoutCleanup();
+  useLogout();
+  redirectToAuthorization();
+};
+
+const confirmLogout = (): void => {
   closeLogoutConfirmModal();
-  await handleLogout();
+  handleLogout();
 };
 </script>

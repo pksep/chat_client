@@ -1,7 +1,8 @@
 <template>
   <Avatar
+    ref="avatarRef"
     v-bind="$attrs"
-    :url="resolvedUrl"
+    :url="shouldResolveAvatar ? resolvedUrl : ''"
     :alt="props.alt"
     :initials="props.initials"
     :caption="props.caption"
@@ -11,7 +12,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Avatar } from '@pksep/yui';
 import { getConfig } from '../../services/useConfig';
 import {
@@ -19,6 +20,7 @@ import {
   getCachedMediaObjectUrl,
   prefetchMediaObjectUrl
 } from '../../services/useMediaBlobCache';
+import { observeViewportVisibility } from '../../services/useSharedViewportObserver';
 
 const props = withDefaults(
   defineProps<{
@@ -28,6 +30,7 @@ const props = withDefaults(
     caption?: string;
     isOnline?: boolean;
     isIcon?: boolean;
+    deferOffscreen?: boolean;
   }>(),
   {
     path: '',
@@ -35,12 +38,17 @@ const props = withDefaults(
     initials: '',
     caption: '',
     isOnline: false,
-    isIcon: false
+    isIcon: false,
+    deferOffscreen: false
   }
 );
 
 const config = getConfig();
 const resolvedUrl = ref('');
+const shouldResolveAvatar = ref(!props.deferOffscreen);
+const avatarRef = ref<{ $el?: Element } | null>(null);
+let stopObservingVisibility: (() => void) | null = null;
+const AVATAR_LOAD_ROOT_MARGIN_PX = 1800;
 const EMPTY_AVATAR_SRC =
   'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 
@@ -59,9 +67,43 @@ const buildFallbackUrl = (path?: string | null): string => {
   return `${config.CHAT_PATH_TO_FILE_CDN}/${path}`;
 };
 
+const syncDeferredVisibility = async (): Promise<void> => {
+  stopObservingVisibility?.();
+  stopObservingVisibility = null;
+
+  if (!props.deferOffscreen) {
+    shouldResolveAvatar.value = true;
+    return;
+  }
+
+  await nextTick();
+  const element = avatarRef.value?.$el;
+  if (!(element instanceof HTMLElement)) {
+    shouldResolveAvatar.value = true;
+    return;
+  }
+
+  const rect = element.getBoundingClientRect();
+  shouldResolveAvatar.value =
+    rect.bottom >= -AVATAR_LOAD_ROOT_MARGIN_PX &&
+    rect.top <= window.innerHeight + AVATAR_LOAD_ROOT_MARGIN_PX;
+  stopObservingVisibility = observeViewportVisibility(
+    element,
+    isVisible => {
+      shouldResolveAvatar.value = isVisible;
+    },
+    { rootMargin: `${AVATAR_LOAD_ROOT_MARGIN_PX}px 0px` }
+  );
+};
+
 watch(
-  () => props.path,
-  path => {
+  [() => props.path, shouldResolveAvatar],
+  ([path, shouldResolve]) => {
+    if (!shouldResolve) {
+      resolvedUrl.value = '';
+      return;
+    }
+
     if (!path || isAbsoluteOrLocalUrl(path)) {
       resolvedUrl.value = buildFallbackUrl(path);
       return;
@@ -86,4 +128,20 @@ watch(
   },
   { immediate: true }
 );
+
+watch(
+  () => props.deferOffscreen,
+  () => {
+    void syncDeferredVisibility();
+  }
+);
+
+onMounted(() => {
+  void syncDeferredVisibility();
+});
+
+onBeforeUnmount(() => {
+  stopObservingVisibility?.();
+  stopObservingVisibility = null;
+});
 </script>

@@ -20,8 +20,12 @@
         @click="handleSelectTopic(topic)"
         :data-testid="`${props.dataTestid}-TopicSelector-Item${index + 1}`"
       >
+        <FavoriteTopicProfile
+          v-if="isTopicFavorite(topic)"
+          :dataTestid="`${props.dataTestid}-TopicSelector-FavoriteProfile${index + 1}`"
+        />
         <UserProfile
-          v-if="topic.type === TopicType.DM"
+          v-else-if="topic.type === TopicType.DM"
           :user="topic.user"
           :dataTestid="`${props.dataTestid}-TopicSelector-UserProfile${index + 1}`"
         />
@@ -59,6 +63,13 @@ import { getTopicList } from '../composables/useTopics';
 import UserProfile from './UserProfile/UserProfile.vue';
 import { TopicType } from '../services/useChatSDK/types';
 import GroupProfile from './GroupProfile/GroupProfile.vue';
+import FavoriteTopicProfile from './FavoriteTopicProfile.vue';
+import {
+  matchesTopicSearch,
+  normalizeAtSearchQuery
+} from '../utils/searchMatch';
+import { getAuthUser } from '../composables/useAuth';
+import { isFavoriteTopic } from '../utils/favorite-topic';
 
 const props = withDefaults(defineProps<ITopicSelectorProps>(), {
   dataTestid: () => 'TopicSelector'
@@ -66,22 +77,14 @@ const props = withDefaults(defineProps<ITopicSelectorProps>(), {
 const emits = defineEmits<ITopicPropsEmits>();
 
 const topics = computed(() => getTopicList());
+const isTopicFavorite = (topic: ITopic): boolean =>
+  isFavoriteTopic(topic, getAuthUser()?.id);
 
 const filteredTopics = computed(() =>
   topics.value.filter(topic => {
-    const query = state.q?.toLowerCase() ?? '';
+    const query = normalizeAtSearchQuery(state.q);
 
-    return (
-      topic.user?.initials?.toLowerCase().includes(query) ||
-      topic.user?.nickname?.toLowerCase().includes(query) ||
-      topic.group?.title?.toLowerCase().includes(query) ||
-      (typeof topic.user?.ex === 'string'
-        ? JSON.parse(topic.user.ex)
-        : topic.user?.ex
-      )?.erpInitials
-        ?.toLowerCase()
-        ?.includes(query)
-    );
+    return matchesTopicSearch(topic, query);
   })
 );
 

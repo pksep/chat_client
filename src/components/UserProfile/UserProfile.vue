@@ -81,18 +81,23 @@ const props = withDefaults(defineProps<IUserProfileProps>(), {
   hideDeletedAccountStatus: false
 });
 
-const effectiveUser = computed(() => getUserById(props.user.id) || props.user);
-const effectiveLastOnline = computed(() => getUserLastOnline(props.user));
+const effectiveUser = computed(() =>
+  props.user ? getUserById(props.user.id) || props.user : null
+);
+const effectiveLastOnline = computed(() =>
+  props.user ? getUserLastOnline(props.user) : null
+);
 
 const isCurrentUser = computed(
-  () => getAuthUser()?.id === effectiveUser.value.id
+  () =>
+    !!effectiveUser.value?.id && getAuthUser()?.id === effectiveUser.value.id
 );
 const isWaitingConnection = computed(() => !getHasWebsocketConnection());
 const currentStatus = computed(() =>
-  normalizeUserStatus(effectiveUser.value.status)
+  normalizeUserStatus(effectiveUser.value?.status)
 );
 const currentStatusLabel = computed(() =>
-  formatUserStatusText(effectiveUser.value.status)
+  formatUserStatusText(effectiveUser.value?.status)
 );
 const statusIcon = computed(() => currentStatus.value?.icon || '');
 const isBot = computed(() => isBotUser(effectiveUser.value));
@@ -122,7 +127,7 @@ const formattedStatus = computed(() => {
     return `@${getBotUsername(effectiveUser.value)}`;
   }
 
-  if (isCurrentUser.value) return `@${props.user.nickname}`;
+  if (isCurrentUser.value) return `@${effectiveUser.value?.nickname || ''}`;
   return formatLastSeen(effectiveLastOnline.value);
 });
 
