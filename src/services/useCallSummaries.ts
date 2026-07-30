@@ -850,6 +850,28 @@ export const sendGeneratedCallPromptResponseToChat = async (
   }
 };
 
+export const sendCallTopicPromptPlaceholderToChat = async (
+  targetTopicId: string
+): Promise<boolean> => {
+  if (!targetTopicId) {
+    return false;
+  }
+
+  try {
+    const api = useChatApi();
+    const response = await api.post(
+      '/calls/summaries/prompt-placeholder/send',
+      { targetTopicId },
+      { parsed: false }
+    );
+    await readResponse<{ text?: string; message?: unknown }>(response);
+    return true;
+  } catch (error) {
+    showErrorNotification(error);
+    return false;
+  }
+};
+
 export const sendCallSummaryToChat = async (
   summary: CallSummaryDto,
   targetTopicId = summary.topicId

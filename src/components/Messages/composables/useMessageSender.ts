@@ -49,6 +49,7 @@ import { getConfig } from '../../../services/useConfig';
 import { getSelectedTopic } from '../../../composables/useTopics';
 import {
   loadLatestCallSummary,
+  sendCallTopicPromptPlaceholderToChat,
   sendGeneratedCallPromptResponseToChat,
   withCallSummaryTyping
 } from '../../../services/useCallSummaries';
@@ -366,6 +367,13 @@ export function useMessageSender(
       sendGeneratedCallPromptResponseToChat(readySummary, topicId, prompt)
     );
   };
+
+  const sendCallTopicPromptPlaceholder = async (
+    topicId: string
+  ): Promise<boolean> =>
+    withCallSummaryTyping(topicId, () =>
+      sendCallTopicPromptPlaceholderToChat(topicId)
+    );
 
   const waitForPreviewMetrics = async (media?: IMedia): Promise<void> => {
     if (
@@ -1237,13 +1245,16 @@ export function useMessageSender(
     const callTopicPromptText = stripHtml(textToSend)
       .replace(/\u00a0/g, ' ')
       .trim();
-    const shouldRequestCallTopicPromptResponse =
-      isCallTopicAutoPromptEnabled() &&
+    const shouldHandleCallTopicPrompt =
       routeType === RouteTypes.CALL &&
       !!callTopicPromptText &&
       !hasAttachments &&
       !hasForwardMessages &&
       !replyMessageId;
+    const shouldRequestCallTopicPromptResponse =
+      shouldHandleCallTopicPrompt && isCallTopicAutoPromptEnabled();
+    const shouldSendCallTopicPromptPlaceholder =
+      shouldHandleCallTopicPrompt && !isCallTopicAutoPromptEnabled();
 
     /* ================= AI ROUTE ================= */
     if (routeType === RouteTypes.AI) {
@@ -1577,11 +1588,16 @@ export function useMessageSender(
       scrollToBottom();
 
       if (
-        shouldRequestCallTopicPromptResponse &&
+        (shouldRequestCallTopicPromptResponse ||
+          shouldSendCallTopicPromptPlaceholder) &&
         sentMessageCount > 0 &&
         queuedMessageCount === 0
       ) {
-        await sendCallTopicPromptResponse(topicId, callTopicPromptText);
+        if (shouldRequestCallTopicPromptResponse) {
+          await sendCallTopicPromptResponse(topicId, callTopicPromptText);
+        } else {
+          await sendCallTopicPromptPlaceholder(topicId);
+        }
         await nextTick();
         scrollToBottom();
       }
