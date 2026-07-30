@@ -1326,9 +1326,7 @@ export function useMessageSender(
     const callTopicPromptText = stripHtml(textToSend)
       .replace(/\u00a0/g, ' ')
       .trim();
-    const callTopicButtonAction = getCallTopicButtonAction(
-      callTopicPromptText
-    );
+    const callTopicButtonAction = getCallTopicButtonAction(callTopicPromptText);
     const shouldHandleCallTopicPrompt =
       routeType === RouteTypes.CALL &&
       !!callTopicPromptText &&
