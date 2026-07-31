@@ -2,7 +2,9 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/images/favicon.ico" />
+    <link rel="icon" type="image/svg+xml" href="/images/sep-chat-logo.svg?v=20260731" />
+    <link rel="alternate icon" href="/images/favicon.ico?v=20260731" />
+    <link rel="apple-touch-icon" href="/images/apple-touch-icon-180x180.png?v=20260731" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
@@ -15,12 +17,42 @@
     <title>SEP:Chat</title>
     <script>
       window.__chatNativeStartupCleanup = (async () => {
+        const logoAssetVersion = '20260731';
+        const logoAssetVersionKey = 'chat.logo.assets.version';
         const capacitor = window.Capacitor;
         const isAndroidNative =
           Boolean(capacitor?.isNativePlatform?.()) &&
           capacitor?.getPlatform?.() === 'android';
 
+        const shouldResetLogoAssetCache =
+          window.localStorage?.getItem(logoAssetVersionKey) !==
+          logoAssetVersion;
         if (!isAndroidNative) {
+          if (!shouldResetLogoAssetCache) {
+            return;
+          }
+
+          if ('serviceWorker' in navigator) {
+            await navigator.serviceWorker
+              .getRegistrations()
+              .then(registrations =>
+                Promise.allSettled(
+                  registrations.map(registration => registration.unregister())
+                )
+              );
+          }
+
+          if ('caches' in window) {
+            await caches
+              .keys()
+              .then(cacheNames =>
+                Promise.allSettled(
+                  cacheNames.map(cacheName => caches.delete(cacheName))
+                )
+              );
+          }
+
+          window.localStorage?.setItem(logoAssetVersionKey, logoAssetVersion);
           return;
         }
 
@@ -51,6 +83,7 @@
         }
 
         await Promise.allSettled(tasks);
+        window.localStorage?.setItem(logoAssetVersionKey, logoAssetVersion);
       })();
     </script>
     <style>

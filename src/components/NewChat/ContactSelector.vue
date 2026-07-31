@@ -18,6 +18,25 @@
       v-model="state.q"
       :data-testid="`${props.dataTestid}-ContactSelector-Search`"
     />
+    <div
+      v-if="props.isAddOne"
+      class="contact-selector__filters"
+      :data-testid="`${props.dataTestid}-ContactSelector-Filters`"
+    >
+      <button
+        v-for="filter in contactFilters"
+        :key="filter.value"
+        type="button"
+        class="contact-selector__filter"
+        :class="{
+          'contact-selector__filter--active': state.filter === filter.value
+        }"
+        :data-testid="`${props.dataTestid}-ContactSelector-Filter-${filter.value}`"
+        @click="state.filter = filter.value"
+      >
+        {{ filter.label }}
+      </button>
+    </div>
     <ul
       v-if="contacts.length"
       class="contact-selector__list"
@@ -106,6 +125,9 @@ import {
   matchesUserSearch,
   normalizeAtSearchQuery
 } from '../../utils/searchMatch';
+import { isBotUser } from '../../utils/bot';
+
+type ContactSelectorFilter = IContactSelectorState['filter'];
 
 const props = withDefaults(defineProps<IContactSelectorProps>(), {
   dataTestid: () => 'ContactSelector'
@@ -114,8 +136,16 @@ const emits = defineEmits<IContactSelectorEmits>();
 
 const state = reactive<IContactSelectorState>({
   q: '',
+  filter: 'users',
   selectedIds: props.selectedContactIds ?? new Set()
 });
+const contactFilters: Array<{
+  label: string;
+  value: ContactSelectorFilter;
+}> = [
+  { label: 'Пользователи', value: 'users' },
+  { label: 'Боты', value: 'bots' }
+];
 
 const users = computed(() => getUsersList());
 const authUser = computed(() => getAuthUser());
@@ -141,6 +171,13 @@ const contacts = computed(() => {
     filteredContacts = filteredContacts.filter(contact =>
       matchesUserSearch(contact, query)
     );
+  }
+
+  if (props.isAddOne) {
+    filteredContacts = filteredContacts.filter(contact => {
+      const isBot = isBotUser(contact);
+      return state.filter === 'bots' ? isBot : !isBot;
+    });
   }
 
   if (props.excludedContactIds && props.excludedContactIds.size > 0) {
@@ -230,5 +267,29 @@ const onAddClick = (): void => {
 
 .user-profile--excluded {
   opacity: 0.7;
+}
+
+.contact-selector__filters {
+  display: flex;
+  gap: 8px;
+  padding: 0 10px 8px;
+}
+
+.contact-selector__filter {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--border-grey);
+  border-radius: 17px;
+  color: var(--text-color);
+  background: var(--white);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.contact-selector__filter--active {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
 }
 </style>

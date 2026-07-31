@@ -50,6 +50,7 @@
       @unmount-open-chat="emits('unmount-open-chat')"
     />
     <p
+      v-if="!props.isMenuInfo"
       class="modal-info-mobile__end--paragraph"
       :data-testid="`${props.dataTestid}-Header-ParticipantsLabel`"
     >
@@ -60,14 +61,38 @@
       :contacts="props.members"
       :excluded-contact-ids="excludedContactIds"
       class="modal-info-mobile__contact-list"
+      :list-class="
+        props.isMenuInfo && activeTab !== 'participants'
+          ? 'modal-info-mobile__contact-list--hidden'
+          : ''
+      "
       :data-testid="`${props.dataTestid}-Header-ContactListInModal`"
       @unmount-added-users="handleContactClick"
-    />
+    >
+      <template v-if="props.isMenuInfo" #after-add-button>
+        <div class="modal-info-mobile__tabs" role="tablist">
+          <button
+            v-for="tab in infoTabs"
+            :key="tab.value"
+            type="button"
+            role="tab"
+            class="modal-info-mobile__tab"
+            :class="{
+              'modal-info-mobile__tab--active': activeTab === tab.value
+            }"
+            :aria-selected="activeTab === tab.value"
+            @click="activeTab = tab.value"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
+      </template>
+    </ContactListInModal>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { useTemplateRef, computed } from 'vue';
+import { useTemplateRef, computed, ref } from 'vue';
 import { ModalCroppedAvatar } from '@pksep/yui';
 import NewChatInformationForm from '../NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from '../MenuInfoButtons.vue';
@@ -108,6 +133,13 @@ const excludedContactIds = computed(() => {
 
 const information = defineModel<IMenuInfoInformation>();
 const avatarInputRef = useTemplateRef('avatarInputRef');
+type MobileInfoTab = 'participants' | 'media' | 'files';
+const activeTab = ref<MobileInfoTab>('participants');
+const infoTabs: Array<{ label: string; value: MobileInfoTab }> = [
+  { label: 'Участники', value: 'participants' },
+  { label: 'Медиа', value: 'media' },
+  { label: 'Файлы', value: 'files' }
+];
 
 const {
   state: informationState,

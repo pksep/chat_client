@@ -3,7 +3,7 @@ dialog.modal-yui-kit.modal-yui-kit_bottom {
 }
 
 .modal-info-mobile__end > div.menu-info__buttons {
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
 }
 
 .modal-info-mobile__start {
@@ -24,6 +24,70 @@ dialog.modal-yui-kit.modal-yui-kit_bottom {
   --size-avatar: 43px;
 }
 
+.modal-info-mobile__start--disabled {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 14px 10px 10px;
+}
+
+.modal-info-mobile__start--disabled > .modal-info-mobile__avatar-button {
+  --size-avatar: 40px;
+}
+
+.modal-info-mobile__start--disabled > form.menu__info-form {
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.modal-info-mobile__start--disabled
+  > form.menu__info-form
+  > .menu__info-form-block.form__name {
+  grid-column: 1;
+}
+
+.modal-info-mobile__start--disabled
+  > form.menu__info-form
+  > .menu__info-save-button {
+  grid-column: 2;
+}
+
+.modal-info-mobile__start--disabled
+  > form.menu__info-form
+  > .menu__info-save-button:disabled {
+  display: none;
+}
+
+.modal-info-mobile__tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.modal-info-mobile__tab {
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--border-grey);
+  border-radius: 17px;
+  background: var(--white);
+  color: var(--text-color);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.modal-info-mobile__tab--active {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.modal-info-mobile__contact-list--hidden {
+  display: none;
+}
+
 section.menu__info-users.modal-info-mobile__contact-list {
   --size-avatar: max-content;
   display: grid;
@@ -37,6 +101,31 @@ section.menu__info-users.modal-info-mobile__contact-list {
     margin-inline: 10px;
     overflow: visible;
   }
+}
+
+.chat__mobile-group-info-title {
+  width: 60%;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  text-align: center;
+}
+
+.chat__mobile-group-info-title h3 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 19px;
+  font-weight: 700;
+}
+
+.chat__mobile-group-info-title span {
+  color: var(--text-grey);
+  font-size: 12px;
+  line-height: 15px;
+}
+
+.chat__mobile-group-info-header-spacer {
+  width: 20%;
 }
 
 p.modal-info-mobile__end--paragraph {

@@ -5,90 +5,106 @@
     title="Создать бота"
     close-button-text="Назад"
     :show-divider="true"
-    :is-disabled-start-button="isStartDisabled"
-    :start-button-text="startButtonText"
     :data-testid="`${props.dataTestid}-NewBotMobileModal-Container`"
     @unmount-close="handleClose"
-    @unmount-next="handleNext"
   >
-    <div class="bot-editor bot-editor--mobile">
-      <template v-if="!createdToken">
-        <button
-          class="bot-editor__avatar-button"
-          type="button"
-          @click="openFile"
-        >
-          <BotAvatar
-            :path="form.avatarUrl"
-            :initials="form.name || 'Б'"
-            class="bot-editor__avatar"
-            :is-online="false"
-            is-edit
+    <div class="new-bot-mobile__body">
+      <div class="bot-editor bot-editor--mobile">
+        <template v-if="!createdToken">
+          <button
+            class="bot-editor__avatar-button"
+            type="button"
+            @click="openFile"
+          >
+            <BotAvatar
+              :path="form.avatarUrl"
+              :initials="form.name || 'Б'"
+              class="bot-editor__avatar"
+              :is-online="false"
+              is-edit
+            />
+          </button>
+
+          <input
+            ref="fileInputRef"
+            class="bot-editor__file-input"
+            type="file"
+            accept="image/*"
+            @change="handleAvatarChange"
           />
-        </button>
+          <ModalCroppedAvatar
+            class="bot-avatar-cropper-modal bot-avatar-cropper-modal--mobile"
+            :image="avatarFile"
+            :open="isEditAvatar"
+            position="bottom"
+            width="100%"
+            @unmount-close="closeEditAvatar"
+            @unmount-save="handleAvatarCropSave"
+          />
 
-        <input
-          ref="fileInputRef"
-          class="bot-editor__file-input"
-          type="file"
-          accept="image/*"
-          @change="handleAvatarChange"
-        />
-        <ModalCroppedAvatar
-          class="bot-avatar-cropper-modal bot-avatar-cropper-modal--mobile"
-          :image="avatarFile"
-          :open="isEditAvatar"
-          position="bottom"
-          width="100%"
-          @unmount-close="closeEditAvatar"
-          @unmount-save="handleAvatarCropSave"
-        />
+          <div class="bot-editor__fields">
+            <label class="bot-editor__field">
+              <span class="bot-editor__label">Название:</span>
+              <Input
+                class="minor"
+                placeholder="Введите название"
+                :model-value="form.name"
+                @update:model-value="value => (form.name = value)"
+              />
+            </label>
 
-        <div class="bot-editor__fields">
-          <label class="bot-editor__field">
-            <span class="bot-editor__label">Название:</span>
-            <Input
-              class="minor"
-              placeholder="Введите название"
-              :model-value="form.name"
-              @update:model-value="value => (form.name = value)"
-            />
-          </label>
+            <label class="bot-editor__field">
+              <span class="bot-editor__label">Username бота:</span>
+              <Input
+                class="minor"
+                placeholder="только a-z, 0-9, _"
+                :model-value="form.username"
+                @update:model-value="value => (form.username = value)"
+              />
+            </label>
+          </div>
+        </template>
 
-          <label class="bot-editor__field">
-            <span class="bot-editor__label">Username бота:</span>
-            <Input
-              class="minor"
-              placeholder="только a-z, 0-9, _"
-              :model-value="form.username"
-              @update:model-value="value => (form.username = value)"
-            />
-          </label>
-        </div>
-      </template>
-
-      <div v-else class="bot-editor__created">
-        <p class="bot-editor__created-title">Бот создан</p>
-        <p class="bot-editor__created-hint">
-          Сохраните токен — он показывается один раз. Запустите с ним SDK-бота,
-          чтобы он отвечал в этом чате.
-        </p>
-        <div
-          class="bot-editor__token"
-          role="button"
-          tabindex="0"
-          @click="copyToken"
-        >
-          {{ createdToken }}
+        <div v-else class="bot-editor__created">
+          <p class="bot-editor__created-title">Бот создан</p>
+          <p class="bot-editor__created-hint">
+            Сохраните токен — он показывается один раз. Запустите с ним
+            SDK-бота, чтобы он отвечал в этом чате.
+          </p>
+          <div
+            class="bot-editor__token"
+            role="button"
+            tabindex="0"
+            @click="copyToken"
+          >
+            {{ createdToken }}
+          </div>
         </div>
       </div>
+
+      <Button
+        class="new-bot-mobile__submit"
+        :type="ButtonTypeEnum.primary"
+        :size="SizesEnum.large"
+        :disabled="isStartDisabled"
+        @click="handleNext"
+      >
+        {{ startButtonText }}
+      </Button>
     </div>
   </MobileModal>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
-import { Input, MessageTypeEnum, ModalCroppedAvatar } from '@pksep/yui';
+import {
+  Button,
+  ButtonTypeEnum,
+  Input,
+  MessageTypeEnum,
+  ModalCroppedAvatar,
+  SizesEnum
+} from '@pksep/yui';
 import { navigateToDialogs } from '../../composables/navigation';
 import { createBotViaGateway } from '../../composables/useBots';
 import {
@@ -272,6 +288,55 @@ const handleNext = (): void => {
 </script>
 
 <style scoped lang="scss">
+.new-bot-mobile__body {
+  min-height: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 16px;
+}
+
+.bot-editor--mobile {
+  display: grid;
+  align-content: start;
+  gap: 22px;
+  padding: 14px 16px 0;
+}
+
+.bot-editor--mobile .bot-editor__avatar-button {
+  justify-self: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.bot-editor--mobile .bot-editor__avatar {
+  --size-avatar: 86px;
+}
+
+.bot-editor--mobile .bot-editor__fields {
+  display: grid;
+  gap: 14px;
+}
+
+.bot-editor--mobile .bot-editor__field {
+  display: grid;
+  gap: 8px;
+}
+
+.bot-editor--mobile .bot-editor__label {
+  color: var(--text-grey);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.new-bot-mobile__submit.button-yui-kit {
+  width: calc(100% - 20px);
+  min-height: 48px;
+  margin: 0 10px 10px;
+  justify-content: center;
+}
+
 .bot-editor__created {
   display: flex;
   flex-direction: column;

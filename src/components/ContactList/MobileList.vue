@@ -111,8 +111,7 @@
   <template v-if="!isAssistantRoute">
     <NewChatMobileModal
       :open="state.showAddAccount"
-      :contacts="[]"
-      :is-add-one="!isGroupRoute"
+      :is-add-one="state.newAccountTopicType === TopicType.DM"
       :selected-contact-ids="state.checkUsers"
       @unmount-close="handleCloseModal"
       @unmount-contact="handleNewContact"
@@ -190,8 +189,6 @@ const route = useUrlWatcher();
 const isAssistantRoute = computed(
   () => route.value?.type === RouteTypes.ASSISTANT
 );
-const isGroupRoute = computed(() => route.value?.type === RouteTypes.GROUP);
-
 const props = withDefaults(defineProps<IMobileListProps>(), {
   dataTestid: () => 'MobileList'
 });
@@ -237,6 +234,7 @@ const filterMutedOnly = computed(() =>
 const state = reactive({
   showAddAccount: false,
   showCreateBot: false,
+  newAccountTopicType: TopicType.DM,
   checkUsers: new Set<string | number>()
 });
 
@@ -520,6 +518,7 @@ const handleShowAccount = (topicType: TopicType) => {
 
   setActiveSection('chats');
   state.showCreateBot = false;
+  state.newAccountTopicType = topicType;
   state.showAddAccount = true;
 
   if (topicType === TopicType.DM) {

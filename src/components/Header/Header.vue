@@ -353,16 +353,31 @@
 
   <MobileModal
     :open="state.openMobileInfoModal"
-    title="Канал"
+    title="Информация о группе"
     close-button-text="Назад"
     :class="{ 'chat__header-modal-info--active': true }"
     :data-testid="`${props.dataTestid}-Header-MobileModal`"
     @unmount-close="handleCloseMobileInfoModal"
   >
+    <template #header>
+      <button
+        class="mobile__modal-header--button"
+        @click="handleCloseMobileInfoModal"
+      >
+        Назад
+      </button>
+      <div class="chat__mobile-group-info-title">
+        <h3>Информация о группе</h3>
+        <span>{{ mobileInfoMembersLabel }}</span>
+      </div>
+      <span class="chat__mobile-group-info-header-spacer" aria-hidden="true" />
+    </template>
     <MobileChatInfo
-      :model-value="currentRouteGroup"
-      :members="route.type === RouteTypes.GROUP && currentRouteGroup?.members"
-      :show-add-button="currentRouteGroup?.isAdmin"
+      v-if="mobileInfo"
+      :model-value="mobileInfo"
+      :members="mobileInfoMembers"
+      :show-add-button="mobileInfoShowAddButton"
+      is-menu-info
       :data-testid="props.dataTestid"
       @update:model-value="handleUpdateInformation"
       @unmount-open-chat="handleCloseMobileInfoModal"
@@ -429,10 +444,17 @@ import {
   Search
 } from '@pksep/yui';
 
-import type { IHeaderProps, IHeaderEmits } from '../interfaces/interfaces';
+import type {
+  IHeaderProps,
+  IHeaderEmits,
+  IUser
+} from '../interfaces/interfaces';
 import AiIconWrapper from '../UI/AiIconWrapper.vue';
 import MobileChatInfo from './MobileChatInfo.vue';
-import { useMenuInfo } from '../../composables/useMenuInfo';
+import {
+  useMenuInfo,
+  type IMenuInfoInformation
+} from '../../composables/useMenuInfo';
 import {
   navigateToAssistant,
   navigateToDefault,
@@ -563,6 +585,51 @@ const currentRouteGroup = computed(() => {
   }
 
   return currentGroup.value;
+});
+const mobileInfo = computed<IMenuInfoInformation | null>(() => {
+  const topic = currentRouteGroup.value || currentTopic.value;
+
+  if (!topic || topic.type !== TopicType.Group) {
+    return null;
+  }
+
+  return {
+    id: topic.id,
+    name: topic.group?.title || topic.name,
+    groupId: topic.group?.id || topic.id,
+    topicId: topic.id,
+    avatarUrl: topic.group?.avatarUrl || topic.avatarUrl || undefined,
+    date: topic.group?.createdAt ? new Date(topic.group.createdAt) : undefined
+  };
+});
+const mobileInfoMembers = computed<IUser[]>(() => {
+  const topic = currentRouteGroup.value || currentTopic.value;
+  return (topic?.members || []).filter(Boolean) as IUser[];
+});
+const mobileInfoShowAddButton = computed(
+  () => !!(currentRouteGroup.value?.isAdmin ?? currentTopic.value?.isAdmin)
+);
+const getParticipantForm = (count: number): string => {
+  const lastTwoDigits = Math.abs(count) % 100;
+  const lastDigit = Math.abs(count) % 10;
+
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 19) {
+    return 'участников';
+  }
+
+  if (lastDigit === 1) {
+    return 'участник';
+  }
+
+  if (lastDigit >= 2 && lastDigit <= 4) {
+    return 'участника';
+  }
+
+  return 'участников';
+};
+const mobileInfoMembersLabel = computed(() => {
+  const count = mobileInfoMembers.value.length;
+  return `${count} ${getParticipantForm(count)}`;
 });
 const actionModalTitle = computed(() =>
   route.value.type === RouteTypes.DIALOGS
@@ -1177,6 +1244,18 @@ watch(
         route.value.type === RouteTypes.CALL)
     ) {
       void loadLatestCallSummary(route.value.id);
+    }
+  },
+  {
+    immediate: true
+  }
+);
+
+watch(
+  () => currentTopic.value,
+  topic => {
+    if (route.value.type === RouteTypes.GROUP && topic?.id) {
+      getGroupById(topic.id);
     }
   },
   {

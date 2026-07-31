@@ -11,6 +11,7 @@ export interface IContactSelectorEmits {
 export interface IContactSelectorState {
   selectedIds: Set<string | number>;
   q: string;
+  filter: 'users' | 'bots';
 }
 
 export interface IContactSelectorProps {
