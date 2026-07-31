@@ -17,6 +17,7 @@
       <Icon :name="IconNameEnum.addUser" class="menu__info-add-user-icon" />
       Добавить участника
     </Button>
+    <slot name="after-add-button" />
     <ul
       :class="['menu__info-users-list', props.listClass ?? '']"
       :data-testid="`${props.dataTestid}-ContactListInModal-List`"

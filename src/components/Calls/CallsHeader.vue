@@ -23,36 +23,38 @@
         <CallAddIcon :data-testid="`${props.dataTestid}-MeetingButtonIcon`" />
       </Button>
 
-      <ContextMenu
-        :visible="!!isOpen['meetingMenu']"
-        :position="position"
-        :data-testid="`${props.dataTestid}-MeetingContextMenu`"
-        class="chats-toolbar__context-menu calls-page__context-menu"
-        @unmount-close="closeActivePopover('meetingMenu')"
-        @click="closeActivePopover('meetingMenu')"
-      >
-        <Button
-          class="calls-page__context-action"
-          :type="ButtonTypeEnum.ghost"
-          :size="SizesEnum.small"
-          :data-testid="`${props.dataTestid}-CreateMeetingButton`"
-          @click="handleCreateMeeting"
+      <Teleport to="body">
+        <ContextMenu
+          :visible="!!isOpen['meetingMenu']"
+          :position="position"
+          :data-testid="`${props.dataTestid}-MeetingContextMenu`"
+          class="chats-toolbar__context-menu calls-page__context-menu"
+          @unmount-close="closeActivePopover('meetingMenu')"
+          @click="closeActivePopover('meetingMenu')"
         >
-          <AddIcon />
-          Создать встречу
-        </Button>
+          <Button
+            class="calls-page__context-action"
+            :type="ButtonTypeEnum.ghost"
+            :size="SizesEnum.small"
+            :data-testid="`${props.dataTestid}-CreateMeetingButton`"
+            @click="handleCreateMeeting"
+          >
+            <AddIcon />
+            Создать встречу
+          </Button>
 
-        <Button
-          class="calls-page__context-action"
-          :type="ButtonTypeEnum.ghost"
-          :size="SizesEnum.small"
-          :data-testid="`${props.dataTestid}-CreateMeetingLinkButton`"
-          @click="handleCreateMeetingAndCopyLink"
-        >
-          <LinkIcon />
-          Новая ссылка на встречу
-        </Button>
-      </ContextMenu>
+          <Button
+            class="calls-page__context-action"
+            :type="ButtonTypeEnum.ghost"
+            :size="SizesEnum.small"
+            :data-testid="`${props.dataTestid}-CreateMeetingLinkButton`"
+            @click="handleCreateMeetingAndCopyLink"
+          >
+            <LinkIcon />
+            Новая ссылка на встречу
+          </Button>
+        </ContextMenu>
+      </Teleport>
     </div>
 
     <Line :data-testid="`${props.dataTestid}-Line`" />

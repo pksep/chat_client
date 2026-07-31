@@ -38,6 +38,7 @@
             v-if="!isMobile"
             class="call-modal__control-button call-modal__control-button--action"
             title="Fullscreen"
+            aria-label="Fullscreen"
             @click="liveKitState.isFullScreen = !liveKitState.isFullScreen"
           >
             <FullscreenIcon v-if="!liveKitState.isFullScreen" />
@@ -78,6 +79,8 @@
           <button
             v-if="!isMobile"
             class="call-modal__control-button call-modal__control-button--action"
+            title="Информация о звонке"
+            aria-label="Информация о звонке"
             @click="openGroupInfoPanel"
           >
             <GroupInfoIcon />
@@ -272,6 +275,8 @@
               v-if="liveKitState.isMicActive"
               class="call-modal__control-button"
               :disabled="isBusyNoticeVisible"
+              title="Выключить микрофон"
+              aria-label="Выключить микрофон"
               @click="handleToggleMic"
             >
               <MicIcon
@@ -283,6 +288,8 @@
               v-else
               class="call-modal__control-button call-modal__control-button__inactive"
               :disabled="isBusyNoticeVisible"
+              title="Включить микрофон"
+              aria-label="Включить микрофон"
               @click="handleToggleMic"
             >
               <MicDisableIcon />
@@ -292,6 +299,8 @@
               v-if="liveKitState.isVideoActive"
               class="call-modal__control-button"
               :disabled="isBusyNoticeVisible"
+              title="Выключить камеру"
+              aria-label="Выключить камеру"
               @click="handleToggleVideo"
             >
               <VideoIcon />
@@ -300,6 +309,8 @@
               v-else
               class="call-modal__control-button call-modal__control-button__inactive"
               :disabled="isBusyNoticeVisible"
+              title="Включить камеру"
+              aria-label="Включить камеру"
               @click="handleToggleVideo"
             >
               <VideoDisableIcon />
@@ -336,6 +347,12 @@
                     !liveKitState.isHandRaised
                 }"
                 :disabled="isBusyNoticeVisible"
+                :title="
+                  liveKitState.isHandRaised ? 'Опустить руку' : 'Поднять руку'
+                "
+                :aria-label="
+                  liveKitState.isHandRaised ? 'Опустить руку' : 'Поднять руку'
+                "
                 @focus="handleReactionButtonFocus('main')"
                 @blur="scheduleReactionPopoverClose"
                 @touchstart="beginReactionLongPress('main')"
@@ -352,6 +369,8 @@
               class="call-modal__control-button call-modal__control-button__inactive"
               type="button"
               disabled
+              title="Демонстрация экрана"
+              aria-label="Демонстрация экрана"
             >
               <ScreenShareIcon />
             </button>
@@ -364,28 +383,48 @@
                   !liveKitState.isScreenSharingActive
               }"
               :disabled="isBusyNoticeVisible"
+              :title="
+                liveKitState.isScreenSharingActive
+                  ? 'Остановить демонстрацию экрана'
+                  : 'Демонстрация экрана'
+              "
+              :aria-label="
+                liveKitState.isScreenSharingActive
+                  ? 'Остановить демонстрацию экрана'
+                  : 'Демонстрация экрана'
+              "
               @click="handleToggleScreenShare"
             >
               <ScreenShareIcon />
             </button>
 
-            <button
+            <Tooltip
               v-if="!isMobile"
-              class="call-modal__control-button"
-              :class="{
-                'call-modal__control-button__inactive': !isAnySummaryRecording,
-                'call-modal__control-button--recording': isAnySummaryRecording
-              }"
-              type="button"
-              :disabled="isSummaryRecordButtonDisabled"
-              :title="summaryRecordButtonLabel"
-              @click="handleSummaryRecordingAction"
+              :hint="summaryRecordButtonTooltip"
+              position="top-center"
+              type="black"
+              size="small"
             >
-              <ScreenRecordIcon />
-            </button>
+              <button
+                class="call-modal__control-button"
+                :class="{
+                  'call-modal__control-button__inactive':
+                    !isAnySummaryRecording,
+                  'call-modal__control-button--recording': isAnySummaryRecording
+                }"
+                type="button"
+                :disabled="isSummaryRecordButtonDisabled"
+                :aria-label="summaryRecordButtonTooltip"
+                @click="handleSummaryRecordingAction"
+              >
+                <ScreenRecordIcon />
+              </button>
+            </Tooltip>
 
             <button
               class="call-modal__control-button call-modal__control-button--leave"
+              title="Завершить звонок"
+              aria-label="Завершить звонок"
               @click="leaveCall"
             >
               <LeaveIcon />
@@ -621,20 +660,28 @@
               </button>
             </div>
 
-            <button
+            <Tooltip
               v-if="!isCallFullscreenTouchMode && !isMobile"
-              class="call-modal__control-button"
-              :class="{
-                'call-modal__control-button__inactive': !isAnySummaryRecording,
-                'call-modal__control-button--recording': isAnySummaryRecording
-              }"
-              type="button"
-              :disabled="isSummaryRecordButtonDisabled"
-              :title="summaryRecordButtonLabel"
-              @click="handleSummaryRecordingAction"
+              :hint="summaryRecordButtonTooltip"
+              position="top-center"
+              type="black"
+              size="small"
             >
-              <ScreenRecordIcon />
-            </button>
+              <button
+                class="call-modal__control-button"
+                :class="{
+                  'call-modal__control-button__inactive':
+                    !isAnySummaryRecording,
+                  'call-modal__control-button--recording': isAnySummaryRecording
+                }"
+                type="button"
+                :disabled="isSummaryRecordButtonDisabled"
+                :aria-label="summaryRecordButtonTooltip"
+                @click="handleSummaryRecordingAction"
+              >
+                <ScreenRecordIcon />
+              </button>
+            </Tooltip>
             <button
               class="call-modal__control-button call-modal__control-button--leave"
               @click="leaveCall"
@@ -681,7 +728,7 @@ import {
   ref,
   watch
 } from 'vue';
-import { Icon, IconNameEnum } from '@pksep/yui';
+import { Icon, IconNameEnum, Tooltip } from '@pksep/yui';
 import { Capacitor } from '@capacitor/core';
 import { MAX_W_MD } from '../../utils/constants';
 import { useResizeState } from '../../composables/useResizeState';
@@ -1744,6 +1791,11 @@ const summaryRecordButtonLabel = computed(() => {
 
   return canStopSummaryRecording.value ? 'Остановить запись' : 'Идёт запись';
 });
+const summaryRecordButtonTooltip = computed(() =>
+  isAnySummaryRecording.value
+    ? 'Идет запись экрана'
+    : summaryRecordButtonLabel.value
+);
 const isSummaryRecordButtonDisabled = computed(
   () =>
     isSummaryRecordingPending.value ||
@@ -1991,8 +2043,10 @@ const focusedGroupParticipant = computed(() => {
     return null;
   }
 
-  return participants.find(
-    participant => participant.tileId === focusedParticipantIdentity.value
+  return (
+    participants.find(
+      participant => participant.tileId === focusedParticipantIdentity.value
+    ) ?? null
   );
 });
 const focusedParticipantStageStream = computed(() => {
