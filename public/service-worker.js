@@ -312,8 +312,8 @@ self.addEventListener('push', event => {
 
       await self.registration.showNotification(title, {
         body: payload.body || '',
-        icon: payload.icon || '/images/favicon.ico',
-        badge: payload.icon || '/images/favicon.ico',
+        icon: payload.icon || '/images/favicon.ico?v=20260731',
+        badge: payload.icon || '/images/favicon.ico?v=20260731',
         tag,
         renotify: true,
         silent: !isIncomingCall,

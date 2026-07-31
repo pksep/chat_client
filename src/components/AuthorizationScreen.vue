@@ -18,7 +18,7 @@
         </button>
         <img
           class="authorization-screen__logo"
-          src="/images/sep-chat-logo.svg"
+          src="/images/sep-chat-logo.svg?v=20260731"
           alt="logotype of Chat Logo"
         />
         <h1 class="authorization-screen__title">Вход в ЧАТ</h1>
