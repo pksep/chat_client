@@ -60,7 +60,6 @@ import { useNewInformationModal } from '../../composables/useNewInformationModal
 
 const props = withDefaults(defineProps<INewChatMobileProps>(), {
   open: false,
-  contacts: () => [],
   dataTestid: () => 'NewChatMobileModal'
 });
 

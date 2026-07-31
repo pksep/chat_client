@@ -1,5 +1,8 @@
 <template>
-  <div class="menu-info__buttons">
+  <div
+    class="menu-info__buttons"
+    :data-testid="`${props.dataTestid}-Container`"
+  >
     <Button
       v-if="state.topic"
       :type="ButtonTypeEnum.secondary"
@@ -17,15 +20,6 @@
       </template>
     </Button>
     <Button
-      v-if="isMobile"
-      :type="ButtonTypeEnum.secondary"
-      :size="SizesEnum.large"
-      class="menu-info__secondary-button"
-    >
-      <Icon :name="IconNameEnum.search" />
-      Поиск
-    </Button>
-    <Button
       :type="ButtonTypeEnum.secondary"
       :size="SizesEnum.large"
       class="menu-info__secondary-button"
@@ -35,6 +29,7 @@
       Звонок
     </Button>
     <Button
+      v-if="activeGroup"
       :type="ButtonTypeEnum.secondary"
       :size="SizesEnum.large"
       class="menu-info__secondary-button"
@@ -42,18 +37,18 @@
     >
       <Icon
         :name="
-          currentGroup.isAdmin ? IconNameEnum.deleteSmall : IconNameEnum.logout
+          showDeleteAction ? IconNameEnum.deleteSmall : IconNameEnum.logout
         "
       />
-      {{ currentGroup.isAdmin ? 'Удалить группу' : 'Выйти' }}
+      {{ showDeleteAction ? 'Удалить группу' : 'Выйти' }}
     </Button>
   </div>
 
   <ConfirmModal
     :open="state.openModal"
-    :title="currentGroup.isAdmin ? 'Удаление группы' : 'Выход из группы'"
+    :title="showDeleteAction ? 'Удаление группы' : 'Выход из группы'"
     :description="
-      currentGroup?.isAdmin
+      showDeleteAction
         ? 'Вы уверены, что хотите удалить группу?'
         : 'Вы уверены, что хотите покинуть группу?'
     "
@@ -81,6 +76,9 @@ import ConfirmModal from './UI/ConfirmModal.vue';
 import CallIcon from './CallModal/UI/CallIcon.vue';
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
+const props = withDefaults(defineProps<{ dataTestid?: string }>(), {
+  dataTestid: 'MenuInfoButtons'
+});
 
 const route = useUrlWatcher();
 
@@ -91,10 +89,25 @@ const state = reactive({
   }),
   openModal: false
 });
+const activeGroup = computed(() => {
+  if (currentGroup.value?.id === route.value.id) {
+    return currentGroup.value;
+  }
+
+  return state.topic || null;
+});
+const activeGroupIsAdmin = computed(() => !!activeGroup.value?.isAdmin);
+const showDeleteAction = computed(
+  () => activeGroupIsAdmin.value && !isMobile.value
+);
 
 const emits = defineEmits(['unmount-leave', 'unmount-open-chat']);
 
 const handleOpenModal = () => {
+  if (!activeGroup.value) {
+    return;
+  }
+
   state.openModal = true;
 };
 

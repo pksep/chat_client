@@ -2257,6 +2257,10 @@
     margin: 8px 12px 14px;
   }
 
+  .call-modal__group-panel-actions {
+    margin: 24px 14px 10px;
+  }
+
   .call-modal__group-panel-background-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
