@@ -2,13 +2,11 @@
 - added: 8
   cycles: 1
   deleted: 8
-  error: 'SSL_connect returned=1 errno=0 peeraddr=172.182.252.137:443 state=error:
-    certificate verify failed (self-signed certificate)'
   inserted: 8
-  seconds: 216.801001361
+  seconds: 153.445991452
   version: 0.60.0
   what: judges-summary
-  when: 2026-08-10 15:39:19.138257578 Z
+  when: 2026-08-10 16:31:19.434466637 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
