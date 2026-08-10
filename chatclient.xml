@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="304052">
+<fb version="0.19.6" size="304194">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
+    <error t="S">SSL_connect returned=1 errno=0 peeraddr=172.182.252.137:443 state=error: certificate verify failed (self-signed certificate)</error>
     <inserted t="I">8</inserted>
-    <seconds t="F">238.52213541</seconds>
+    <seconds t="F">216.801001361</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-08-10T14:08:04Z</when>
+    <when t="T">2026-08-10T15:39:19Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -20713,11 +20714,11 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.41).</text>
   </f>
   <f>
     <_id t="I">1033</_id>
-    <_job t="I">31395988010</_job>
-    <_time t="T">2026-08-10T14:04:10Z</_time>
+    <_job t="I">31404273510</_job>
+    <_time t="T">2026-08-10T15:35:46Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <events_were_scanned t="I">17288438600</events_were_scanned>
+    <events_were_scanned t="I">17297047353</events_were_scanned>
     <latest_issue_was_found t="I">72</latest_issue_was_found>
     <min_pull_was_found t="I">354</min_pull_was_found>
     <repository t="I">1053332035</repository>
