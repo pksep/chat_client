@@ -1,15 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="304701">
+<fb version="0.19.6" size="304565">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
-    <error t="S">SSL_connect returned=1 errno=0 peeraddr=172.182.252.137:443 state=error: certificate verify failed (self-signed certificate)</error>
     <inserted t="I">8</inserted>
-    <seconds t="F">72.4820101</seconds>
+    <seconds t="F">184.733132609</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-08-11T07:52:31Z</when>
+    <when t="T">2026-08-11T09:41:41Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -20729,19 +20728,6 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.41).</text>
     <when t="T">2026-08-11T02:55:08Z</when>
   </f>
   <f>
-    <_id t="I">1035</_id>
-    <_job t="I">31470586508</_job>
-    <_time t="T">2026-08-11T07:51:23Z</_time>
-    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
-    <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <events_were_scanned t="I">17365489879</events_were_scanned>
-    <latest_issue_was_found t="I">72</latest_issue_was_found>
-    <min_pull_was_found t="I">354</min_pull_was_found>
-    <repository t="I">1053332035</repository>
-    <what t="S">iterate</what>
-    <where t="S">github</where>
-  </f>
-  <f>
     <_id t="I">1036</_id>
     <_job t="I">31470586508</_job>
     <_time t="T">2026-08-11T07:51:27Z</_time>
@@ -20758,5 +20744,18 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.41).</text>
     <total_stars t="I">0</total_stars>
     <what t="S">dimensions-of-terrain</what>
     <when t="T">2026-08-11T07:51:27Z</when>
+  </f>
+  <f>
+    <_id t="I">1037</_id>
+    <_job t="I">31478527527</_job>
+    <_time t="T">2026-08-11T09:38:40Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <earliest_issue_was_found t="I">1</earliest_issue_was_found>
+    <events_were_scanned t="I">17370366892</events_were_scanned>
+    <latest_issue_was_found t="I">72</latest_issue_was_found>
+    <min_pull_was_found t="I">354</min_pull_was_found>
+    <repository t="I">1053332035</repository>
+    <what t="S">iterate</what>
+    <where t="S">github</where>
   </f>
 </fb>
