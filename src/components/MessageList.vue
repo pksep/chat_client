@@ -871,13 +871,17 @@ const getRenderedTopicMessages = (
   );
 };
 const renderedUserMessages = computed(() => {
-  const topicId =
-    state.messages.find(message => Boolean(message.topicId))?.topicId ||
-    route.value.id;
+  const topicId = route.value.id;
 
-  return topicId
-    ? getRenderedTopicMessages(topicId, state.messages)
-    : state.messages;
+  if (!topicId || renderedTopicId.value !== topicId) {
+    return [];
+  }
+
+  const currentTopicMessages = state.messages.filter(
+    message => !message.topicId || message.topicId === topicId
+  );
+
+  return getRenderedTopicMessages(topicId, currentTopicMessages);
 });
 const renderedLastUserMessageSignature = computed(() => {
   const lastMessage =
@@ -1829,12 +1833,6 @@ const shouldShowDelayedInitialSkeleton = computed(
     isInitialMessagesSkeletonVisible.value &&
     (isLoadingInitialMessages.value || isAwaitingUserMessagesPaint.value)
 );
-const isShowingPreviousTopicFallback = computed(
-  () =>
-    !!route.value.id &&
-    renderedTopicId.value !== route.value.id &&
-    hasVisibleUserMessages.value
-);
 const shouldShowSearchNavigationSkeleton = computed(
   () => isUserMessagesRoute.value && isSearchNavigationPositioning.value
 );
@@ -1843,17 +1841,13 @@ const shouldRenderUserMessageSkeleton = computed(
     props.deferContentRender ||
     shouldShowSearchNavigationSkeleton.value ||
     shouldProtectEmptyUserMessagesWithSkeleton.value ||
-    (isUserMessagesRoute.value &&
-      shouldShowDelayedInitialSkeleton.value &&
-      !isShowingPreviousTopicFallback.value)
+    (isUserMessagesRoute.value && shouldShowDelayedInitialSkeleton.value)
 );
 const shouldDeferUserMessageContentLayout = computed(
   () =>
     props.deferContentRender ||
     shouldProtectEmptyUserMessagesWithSkeleton.value ||
-    (isUserMessagesRoute.value &&
-      shouldShowDelayedInitialSkeleton.value &&
-      !isShowingPreviousTopicFallback.value)
+    (isUserMessagesRoute.value && shouldShowDelayedInitialSkeleton.value)
 );
 const shouldLockUserMessageBootstrapScroll = computed(
   () =>
@@ -3382,16 +3376,11 @@ watch(
       isMobile.value &&
       getHasBrowserNetwork() &&
       isNotificationRefreshRequestForTopic;
-    const hasRenderedFallbackMessages =
+    const hadRenderedDifferentTopicMessages =
       renderedTopicId.value !== topicId && state.messages.length > 0;
-    const hasResidentTopicMessages =
-      routeType !== RouteTypes.AI &&
-      getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId)).length >
-        0;
-
     if (routeType === RouteTypes.AI) {
       renderedTopicId.value = '';
-    } else if (hasResidentTopicMessages || !hasRenderedFallbackMessages) {
+    } else {
       renderedTopicId.value = topicId;
     }
     isAwaitingUserMessagesPaint.value =
@@ -3415,7 +3404,7 @@ watch(
       scheduleInitialMessagesSkeleton(topicId, topicSwitchToken);
     }
     resetScrollState();
-    if (hasRenderedFallbackMessages) {
+    if (hadRenderedDifferentTopicMessages) {
       scrollAnchor.setViewportMode('history', { pin: false });
     }
     setReadReceiptsEnabled(false);
@@ -3468,13 +3457,14 @@ watch(
     }
 
     void fetchPinnedMessagesForTopic(topicId);
-    const hydrationPromise =
-      routeType !== RouteTypes.AI
-        ? hydrateMessagesFromCache(topicId, undefined, {
-            visibleLimit: fastInitialMessagesLimit,
-            allowVisibleShrink: true
-          })
-        : Promise.resolve([]);
+    const shouldHydrateBeforeInitialPaint =
+      routeType !== RouteTypes.AI && !requiresAuthoritativeNotificationRefresh;
+    const hydrationPromise = shouldHydrateBeforeInitialPaint
+      ? hydrateMessagesFromCache(topicId, undefined, {
+          visibleLimit: fastInitialMessagesLimit,
+          allowVisibleShrink: true
+        })
+      : Promise.resolve([]);
     let initialMessagesFetch: Promise<IMessage[]> | null = null;
 
     // Start cache and network together. Network updates the canonical memory
