@@ -1586,6 +1586,13 @@ div.message-content__file {
     gap: 8px;
   }
 
+  .message__article__text,
+  .message__article__text .message-content__html,
+  .message__article__text .message-content__html * {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
   .message .message-selection-toggle {
     margin-left: 0;
     margin-right: 0;
