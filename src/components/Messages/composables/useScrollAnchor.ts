@@ -504,9 +504,12 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       return;
     }
 
+    const shouldPinToBottom =
+      viewportMode.value === 'live' || isNearBottom.value;
+
     resizeRafId = requestAnimationFrame(() => {
       resizeRafId = 0;
-      if (viewportMode.value === 'live') {
+      if (shouldPinToBottom) {
         keepBottomPinned('auto');
       } else {
         updateBottomState();
