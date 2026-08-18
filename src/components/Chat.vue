@@ -358,9 +358,11 @@ watch(
     }
 
     mobileTransitionName.value =
-      !topicId && previousTopicId
-        ? 'chat-mobile-route-back'
-        : 'chat-mobile-route-forward';
+      topicId && route.value.type === RouteTypes.CALL
+        ? ''
+        : !topicId && previousTopicId
+          ? 'chat-mobile-route-back'
+          : 'chat-mobile-route-forward';
 
     if (!topicId) {
       syncMobileMessageContentState(topicId);
