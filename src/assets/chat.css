@@ -29,7 +29,15 @@ p.chat__nothing-paragraph {
   grid-template-rows: auto minmax(0, 1fr) auto auto;
 }
 
+.chat--call-topic-route {
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+}
+
 .chat:has(.call-topic-actions) .chat__input {
+  grid-row: 4;
+}
+
+.chat__input.chat__input--after-call-actions {
   grid-row: 4;
 }
 
@@ -612,6 +620,26 @@ p.chat__nothing-paragraph {
 
   .chat__mobile-route-view--messages:has(.call-topic-actions) {
     grid-template-rows: auto minmax(0, 1fr) auto auto;
+  }
+
+  .chat__mobile-route-view--call {
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+  }
+
+  .chat__mobile-route-view--call > .chat__messages {
+    display: contents;
+  }
+
+  .chat__mobile-route-view--call .chat__message-wrapper {
+    grid-row: 2;
+  }
+
+  .chat__mobile-route-view--call .call-topic-actions {
+    grid-row: 3;
+  }
+
+  .chat__mobile-route-view--call .chat__input {
+    grid-row: 4;
   }
 
   .chat__mobile-instant-shell {

@@ -1,6 +1,12 @@
 <template>
   <section
-    :class="['chat', { 'chat--mobile-route': isMobile }]"
+    :class="[
+      'chat',
+      {
+        'chat--mobile-route': isMobile,
+        'chat--call-topic-route': route.type === RouteTypes.CALL
+      }
+    ]"
     :data-testid="`${props.dataTestid}-Chat-Container`"
   >
     <template v-if="isMobile">
@@ -22,6 +28,7 @@
           'chat__mobile-route-view chat__mobile-route-view--messages',
           mobileTransitionName,
           {
+            'chat__mobile-route-view--call': route.type === RouteTypes.CALL,
             'chat__mobile-route-view--content-deferred':
               !isMobileMessageContentReady
           }

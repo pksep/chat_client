@@ -433,6 +433,7 @@
     :key="`${route.type}:${route.id || 'default'}`"
     v-model="inputText"
     ref="messageListInputRef"
+    :class="{ 'chat__input--after-call-actions': isActiveCallTopic }"
     :edit-message="state.editMessage"
     :reply-message="state.replyMessage"
     :forward-messages="activeForwardMessages"
