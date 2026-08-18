@@ -1823,7 +1823,9 @@ const isUserMessagesRoute = computed(
 const shouldProtectEmptyUserMessagesWithSkeleton = computed(
   () =>
     !!route.value.id &&
+    route.value.type !== RouteTypes.CALL &&
     isUserMessagesRoute.value &&
+    !isActiveCallTopic.value &&
     !hasVisibleUserMessages.value &&
     !isTopicMessagesKnownEmpty(route.value.id)
 );
@@ -1839,15 +1841,17 @@ const shouldShowSearchNavigationSkeleton = computed(
 const shouldRenderUserMessageSkeleton = computed(
   () =>
     props.deferContentRender ||
-    shouldShowSearchNavigationSkeleton.value ||
-    shouldProtectEmptyUserMessagesWithSkeleton.value ||
-    (isUserMessagesRoute.value && shouldShowDelayedInitialSkeleton.value)
+    (!isActiveCallTopic.value &&
+      (shouldShowSearchNavigationSkeleton.value ||
+        shouldProtectEmptyUserMessagesWithSkeleton.value ||
+        (isUserMessagesRoute.value && shouldShowDelayedInitialSkeleton.value)))
 );
 const shouldDeferUserMessageContentLayout = computed(
   () =>
     props.deferContentRender ||
-    shouldProtectEmptyUserMessagesWithSkeleton.value ||
-    (isUserMessagesRoute.value && shouldShowDelayedInitialSkeleton.value)
+    (!isActiveCallTopic.value &&
+      (shouldProtectEmptyUserMessagesWithSkeleton.value ||
+        (isUserMessagesRoute.value && shouldShowDelayedInitialSkeleton.value)))
 );
 const shouldLockUserMessageBootstrapScroll = computed(
   () =>

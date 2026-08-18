@@ -213,7 +213,11 @@ const clearMobileRouteContentSchedule = (): void => {
 };
 
 const shouldShowFirstOpenSkeleton = (topicId: string): boolean => {
-  if (!topicId || route.value.type === RouteTypes.AI) {
+  if (
+    !topicId ||
+    route.value.type === RouteTypes.AI ||
+    route.value.type === RouteTypes.CALL
+  ) {
     return false;
   }
 

@@ -355,17 +355,18 @@ watch(
 
 @media screen and (width <= 768px) {
   .call-topic-actions {
-    display: grid;
-    justify-content: start;
-    align-items: start;
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    align-items: center;
     gap: 6px;
     padding: 8px 16px 4px;
-    overflow: visible;
+    overflow-x: auto;
   }
 
   .call-topic-actions__button {
     width: max-content;
-    max-width: 100%;
+    max-width: none;
     justify-content: flex-start;
   }
 }
