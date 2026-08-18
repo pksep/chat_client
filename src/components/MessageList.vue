@@ -146,6 +146,13 @@
           :data-testid="`${props.dataTestid}-CallTopicDefaultMessage`"
         />
       </template>
+      <template v-if="activeTopic && shouldShowInlineCallTopicActions" #after>
+        <CallTopicActions
+          class="call-topic-actions--message-inline"
+          :topic="activeTopic"
+          :data-testid="`${props.dataTestid}-CallTopicActionsInline`"
+        />
+      </template>
     </MessageListUserItems>
     <div
       v-if="shouldRenderEmptyUserMessageState"
@@ -418,7 +425,7 @@
       !isSelectionMode &&
       !isMobileTopicSearchMode &&
       activeTopic &&
-      isActiveCallTopic
+      shouldShowDockedCallTopicActions
     "
     :topic="activeTopic"
     :data-testid="`${props.dataTestid}-CallTopicActions`"
@@ -433,10 +440,14 @@
     :key="`${route.type}:${route.id || 'default'}`"
     v-model="inputText"
     ref="messageListInputRef"
-    :class="{ 'chat__input--after-call-actions': isActiveCallTopic }"
+    :class="{
+      'chat__input--after-call-actions': shouldShowDockedCallTopicActions
+    }"
     :edit-message="state.editMessage"
     :reply-message="state.replyMessage"
     :forward-messages="activeForwardMessages"
+    :show-call-topic-actions-toggle="shouldShowCallTopicActionsToggle"
+    :is-call-topic-actions-open="isCallTopicActionsOpen"
     :data-testid="props.dataTestid"
     @send="handleSend"
     @attach-file="handleAttachFile"
@@ -445,6 +456,7 @@
     @clear-forward="handleSetForwardMessage(null)"
     @scroll-to-message="handleScrollToMessage"
     @height-change="handleInputHeightChange"
+    @toggle-call-topic-actions="handleToggleCallTopicActions"
   />
 
   <PushNotification
@@ -657,6 +669,7 @@ const updateBannerRef = useTemplateRef<HTMLElement>('updateBannerRef');
 
 const route = useUrlWatcher();
 const { state: isMobile } = useResizeState(MAX_W_MD);
+const { state: isCompactMessageInput } = useResizeState(481);
 const isNativeAndroid =
   Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
@@ -854,6 +867,19 @@ const activeTopic = computed(() =>
   route.value.id ? getSelectedTopic(route.value.id) : null
 );
 const isActiveCallTopic = computed(() => isCallTopic(activeTopic.value));
+const isCallTopicActionsOpen = ref(false);
+const shouldShowCallTopicActionsToggle = computed(
+  () => isCompactMessageInput.value && isActiveCallTopic.value
+);
+const shouldShowDockedCallTopicActions = computed(
+  () => isActiveCallTopic.value && !isCompactMessageInput.value
+);
+const shouldShowInlineCallTopicActions = computed(
+  () =>
+    isActiveCallTopic.value &&
+    isCompactMessageInput.value &&
+    isCallTopicActionsOpen.value
+);
 const isFavoriteMessageTopic = computed(() =>
   isFavoriteTopic(activeTopic.value, authUserId.value)
 );
@@ -1987,6 +2013,24 @@ const handleInputHeightChange = (height: number): void => {
   }
 
   handleBottomBarHeightChange(height);
+};
+
+const handleToggleCallTopicActions = (): void => {
+  const shouldOpen = !isCallTopicActionsOpen.value;
+  isCallTopicActionsOpen.value = shouldOpen;
+
+  if (!shouldOpen) {
+    return;
+  }
+
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      scrollToBottom({
+        preferUnreadMarker: false,
+        smooth: false
+      });
+    });
+  });
 };
 
 const handleSelectedMessagesHeightChange = (height: number): void => {
@@ -3295,6 +3339,10 @@ watch(
   },
   { immediate: true }
 );
+
+watch([() => route.value.id, isActiveCallTopic, isCompactMessageInput], () => {
+  isCallTopicActionsOpen.value = false;
+});
 
 watch(
   () => props.deferContentRender,

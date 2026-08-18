@@ -353,21 +353,39 @@ watch(
   mask: url('../../assets/call-topic-list.svg') center / 16px 16px no-repeat;
 }
 
+.call-topic-actions--message-inline {
+  grid-row: auto;
+  flex: 0 0 auto;
+  width: 100%;
+}
+
 @media screen and (width <= 768px) {
   .call-topic-actions {
-    display: flex;
+    flex-direction: column;
     flex-wrap: nowrap;
     justify-content: flex-start;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 16px 4px;
-    overflow-x: auto;
+    align-items: flex-start;
+    gap: 15px;
+    padding: 0 16px 8px;
+    overflow-x: visible;
   }
 
   .call-topic-actions__button {
     width: max-content;
+    min-height: 40px;
     max-width: none;
     justify-content: flex-start;
+    padding: 8px 10px;
+  }
+
+  .call-topic-actions--message-inline {
+    padding: 8px 16px 10px;
+  }
+}
+
+@media screen and (width <= 480px) {
+  .call-topic-actions--message-inline {
+    padding: 8px 0 10px;
   }
 }
 </style>
