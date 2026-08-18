@@ -4,6 +4,7 @@ import { saveMessages, getOrCreateChatHistory } from './useChatDb';
 import { AIMessage } from '../types/messages';
 import { getConfig } from './useConfig';
 import { generateUUID } from '../utils/generateUUID';
+import { getAuthToken } from '../composables/useLogin';
 
 type Message = AIMessage;
 
@@ -29,7 +30,6 @@ const useMastra = (options?: UseMastraOptions | false) => {
   let chatId = options.chatId;
   const baseUrl = options.baseUrl ?? defaultBaseUrl;
 
-  const client = new MastraClient({ baseUrl });
   const messages: Ref<Message[]> = ref([]);
   const isInitializing = ref(!!chatId);
 
@@ -73,6 +73,14 @@ const useMastra = (options?: UseMastraOptions | false) => {
     };
     messages.value = [...messages.value, userMessage];
 
+    const requestMessages = messages.value
+      .filter(message => !message.loading && message.content.trim())
+      .map(message =>
+        message.role === 'user'
+          ? { role: 'user' as const, content: message.content }
+          : { role: 'assistant' as const, content: message.content }
+      );
+
     const assistantMessage: Message = {
       role: 'assistant',
       content: '',
@@ -85,16 +93,20 @@ const useMastra = (options?: UseMastraOptions | false) => {
     await saveMessages(chatId, messages.value);
 
     try {
+      const token = getAuthToken();
+      if (!token) throw new Error('Authentication required');
+
+      const client = new MastraClient({
+        baseUrl,
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        abortSignal
+      });
       const agent = client.getAgent(agentId);
       if (!agent) throw new Error('Server error, sorry');
 
-      const stream = await agent.streamVNext({
-        messages: messages.value.map(m => ({
-          role: m.role,
-          content: m.content
-        })),
-        abortSignal
-      });
+      const stream = await agent.stream(requestMessages);
 
       if (!stream) throw new Error('Server error, sorry');
       onFinish?.();
