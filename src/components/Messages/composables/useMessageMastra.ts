@@ -44,7 +44,7 @@ export function useMessageMastra(
   const initializeMastra = async () => {
     const requestId = ++initializeRequestId;
 
-    if (state.chatId && props.baseUrl) {
+    if (state.chatId) {
       const { useMastra } = await import('../../../services/useMastra');
 
       if (requestId !== initializeRequestId) {
@@ -54,7 +54,7 @@ export function useMessageMastra(
       const result = useMastra({
         agentId: 'generalAgent',
         chatId: state.chatId,
-        baseUrl: props.baseUrl
+        ...(props.baseUrl ? { baseUrl: props.baseUrl } : {})
       });
       mastraResult.value = result;
       bindMastraMessages(result);

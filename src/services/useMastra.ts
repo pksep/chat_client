@@ -5,6 +5,11 @@ import { AIMessage } from '../types/messages';
 import { getConfig } from './useConfig';
 import { generateUUID } from '../utils/generateUUID';
 import { getAuthToken } from '../composables/useLogin';
+import {
+  formatApprovalMessage,
+  getApprovalDecision,
+  PendingToolApproval
+} from './mastraApproval';
 
 type Message = AIMessage;
 
@@ -32,6 +37,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
   const messages: Ref<Message[]> = ref([]);
   const isInitializing = ref(!!chatId);
+  let pendingApproval: PendingToolApproval | null = null;
 
   if (chatId) {
     getOrCreateChatHistory(chatId)
@@ -73,6 +79,23 @@ const useMastra = (options?: UseMastraOptions | false) => {
     };
     messages.value = [...messages.value, userMessage];
 
+    const approvalDecision = pendingApproval
+      ? getApprovalDecision(input)
+      : null;
+
+    if (pendingApproval && !approvalDecision) {
+      const reminderMessage: Message = {
+        role: 'assistant',
+        content:
+          'Сейчас ожидается решение по действию. Ответьте точно «подтверждаю» или «отмена».',
+        loading: false,
+        timestamp: Date.now()
+      };
+      messages.value = [...messages.value, reminderMessage];
+      await saveMessages(chatId, messages.value);
+      return;
+    }
+
     const requestMessages = messages.value
       .filter(message => !message.loading && message.content.trim())
       .map(message =>
@@ -106,7 +129,31 @@ const useMastra = (options?: UseMastraOptions | false) => {
       const agent = client.getAgent(agentId);
       if (!agent) throw new Error('Server error, sorry');
 
-      const stream = await agent.stream(requestMessages);
+      let stream;
+
+      if (pendingApproval && approvalDecision) {
+        const approval = pendingApproval;
+        pendingApproval = null;
+
+        try {
+          stream =
+            approvalDecision === 'approve'
+              ? await agent.approveToolCall({
+                  runId: approval.runId,
+                  toolCallId: approval.toolCallId
+                })
+              : await agent.declineToolCall({
+                  runId: approval.runId,
+                  toolCallId: approval.toolCallId,
+                  reason: 'Пользователь отменил действие в чате.'
+                });
+        } catch (approvalError) {
+          pendingApproval = approval;
+          throw approvalError;
+        }
+      } else {
+        stream = await agent.stream(requestMessages);
+      }
 
       if (!stream) throw new Error('Server error, sorry');
       onFinish?.();
@@ -156,15 +203,43 @@ const useMastra = (options?: UseMastraOptions | false) => {
                   }
 
                   if (event.type === 'step-finish') {
-                    if (assistantMessageIndex < messages.value.length) {
-                      const newMessages = [...messages.value];
-                      newMessages[assistantMessageIndex] = {
-                        ...newMessages[assistantMessageIndex],
-                        loading: false
-                      };
-                      messages.value = newMessages;
+                    return;
+                  }
 
-                      await saveMessages(chatId, messages.value);
+                  if (event.type === 'tool-call-approval') {
+                    const { payload } = event;
+
+                    if (
+                      typeof event.runId === 'string' &&
+                      typeof payload?.toolCallId === 'string' &&
+                      typeof payload?.toolName === 'string'
+                    ) {
+                      pendingApproval = {
+                        runId: event.runId,
+                        toolCallId: payload.toolCallId,
+                        toolName: payload.toolName,
+                        args:
+                          payload.args && typeof payload.args === 'object'
+                            ? payload.args
+                            : {}
+                      };
+
+                      if (assistantMessageIndex < messages.value.length) {
+                        const newMessages = [...messages.value];
+                        newMessages[assistantMessageIndex] = {
+                          ...newMessages[assistantMessageIndex],
+                          content: formatApprovalMessage(pendingApproval),
+                          loading: false
+                        };
+                        messages.value = newMessages;
+
+                        await saveMessages(chatId, messages.value);
+                      }
+                    }
+
+                    if (!isResolved) {
+                      isResolved = true;
+                      resolve(null);
                     }
                     return;
                   }
@@ -311,6 +386,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
   const clearMessages = () => {
     if (!chatId) return;
+    pendingApproval = null;
     messages.value = [];
     saveMessages(chatId, messages.value);
   };

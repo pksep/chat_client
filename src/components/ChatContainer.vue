@@ -33,6 +33,7 @@
     <Chat
       class="chat__messages"
       ref="chatRef"
+      :base-url="props.baseUrl ?? props.config?.CHAT_MASTRA_URL"
       :show-update-banner="showUpdateBanner"
       :update-action-label="updateActionLabel"
       :update-progress="updateProgress"
