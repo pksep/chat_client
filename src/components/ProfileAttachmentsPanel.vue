@@ -297,9 +297,8 @@ type ProfileAttachmentItem = {
   mediaIndex: number;
 };
 
-type AttachmentScrollAnchor = {
-  key: string | null;
-  offsetTop: number | null;
+type AttachmentScrollSnapshot = {
+  container: HTMLElement | Window;
   scrollTop: number;
 };
 
@@ -638,72 +637,42 @@ const setAttachmentScrollTop = (
   container.scrollTop = nextScrollTop;
 };
 
-const getAttachmentScrollViewport = (
-  container: HTMLElement | Window
-): { top: number; bottom: number } =>
-  container instanceof Window
-    ? { top: 0, bottom: window.innerHeight }
-    : container.getBoundingClientRect();
-
-const getRenderedAttachmentElements = (): HTMLElement[] => {
+const captureAttachmentScrollSnapshot = (): AttachmentScrollSnapshot | null => {
   const root = attachmentsRootRef.value;
 
-  return root
-    ? Array.from(root.querySelectorAll<HTMLElement>('[data-attachment-key]'))
-    : [];
-};
-
-const captureAttachmentScrollAnchor = (): AttachmentScrollAnchor | null => {
-  const container = attachmentsScrollContainer;
-
-  if (!container) {
+  if (!root) {
     return null;
   }
 
-  const viewport = getAttachmentScrollViewport(container);
-  const visibleItem = getRenderedAttachmentElements().find(element => {
-    const rect = element.getBoundingClientRect();
-    return rect.bottom > viewport.top && rect.top < viewport.bottom;
-  });
+  // Resolve the container for every request. The panel can be rendered in a
+  // desktop dialog, a mobile modal, or the group info pane, and those parents
+  // do not all use the same scrolling element.
+  const container = getScrollableAncestor(root);
 
   return {
-    key: visibleItem?.dataset.attachmentKey || null,
-    offsetTop: visibleItem
-      ? visibleItem.getBoundingClientRect().top - viewport.top
-      : null,
+    container,
     scrollTop: getAttachmentScrollTop(container)
   };
 };
 
-const restoreAttachmentScrollAnchor = (
-  anchor: AttachmentScrollAnchor | null
+const restoreAttachmentScrollSnapshot = (
+  snapshot: AttachmentScrollSnapshot | null
 ): void => {
-  const container = attachmentsScrollContainer;
-
-  if (!anchor || !container) {
+  if (!snapshot) {
     return;
   }
 
-  const viewport = getAttachmentScrollViewport(container);
-  const anchoredItem = anchor.key
-    ? getRenderedAttachmentElements().find(
-        element => element.dataset.attachmentKey === anchor.key
-      )
-    : null;
-
-  if (anchoredItem && anchor.offsetTop !== null) {
-    const currentOffsetTop =
-      anchoredItem.getBoundingClientRect().top - viewport.top;
-    const offsetDelta = currentOffsetTop - anchor.offsetTop;
-
-    setAttachmentScrollTop(
-      container,
-      getAttachmentScrollTop(container) + offsetDelta
-    );
+  if (
+    snapshot.container instanceof HTMLElement &&
+    !snapshot.container.isConnected
+  ) {
     return;
   }
 
-  setAttachmentScrollTop(container, anchor.scrollTop);
+  // History is rendered newest first, so an older page is appended below the
+  // current media. Keeping the numeric scrollTop is sufficient and avoids an
+  // item anchor pulling the user back toward the beginning of the panel.
+  setAttachmentScrollTop(snapshot.container, snapshot.scrollTop);
 };
 
 const updateScrollingMonth = (): void => {
@@ -1027,9 +996,9 @@ const loadNextHistoryPage = async (): Promise<void> => {
       }
 
       requestedPageKeys.add(requestKey);
-      const scrollAnchor =
+      const scrollSnapshot =
         currentTab.value === requestedTab
-          ? captureAttachmentScrollAnchor()
+          ? captureAttachmentScrollSnapshot()
           : null;
       let messages: IMessage[];
 
@@ -1052,7 +1021,7 @@ const loadNextHistoryPage = async (): Promise<void> => {
       await nextTick();
 
       if (currentTab.value === requestedTab) {
-        restoreAttachmentScrollAnchor(scrollAnchor);
+        restoreAttachmentScrollSnapshot(scrollSnapshot);
         scheduleScrollingMonthUpdate();
       }
 
@@ -1128,15 +1097,9 @@ watch(
   currentTab,
   () => {
     ensureActiveTabHasRequestedData();
+    void nextTick().then(setupLoadMoreObserver);
   },
   { immediate: true }
-);
-
-watch(
-  () => [hasMoreHistory.value, isHistoryLoading.value],
-  () => {
-    void nextTick().then(setupLoadMoreObserver);
-  }
 );
 
 watch(
@@ -1176,8 +1139,8 @@ onMounted(() => {
   isInsideNativeDialog.value = Boolean(
     attachmentsRootRef.value?.closest('dialog')
   );
-  setupLoadMoreObserver();
   setupScrollingMonth();
+  setupLoadMoreObserver();
 });
 
 onBeforeUnmount(() => {
