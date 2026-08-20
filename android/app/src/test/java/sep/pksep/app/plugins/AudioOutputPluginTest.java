@@ -9,22 +9,10 @@ import org.junit.Test;
 public class AudioOutputPluginTest {
 
     @Test
-    public void getVolumeControlStreamForRoute_usesMusicForSpeaker() {
+    public void getCallVolumeControlStream_usesSystemSelectedActiveStream() {
         assertEquals(
-            AudioManager.STREAM_MUSIC,
-            AudioOutputPlugin.getVolumeControlStreamForRoute("speaker")
-        );
-    }
-
-    @Test
-    public void getVolumeControlStreamForRoute_usesVoiceCallForConversationRoutes() {
-        assertEquals(
-            AudioManager.STREAM_VOICE_CALL,
-            AudioOutputPlugin.getVolumeControlStreamForRoute("earpiece")
-        );
-        assertEquals(
-            AudioManager.STREAM_VOICE_CALL,
-            AudioOutputPlugin.getVolumeControlStreamForRoute("bluetooth")
+            AudioManager.USE_DEFAULT_STREAM_TYPE,
+            AudioOutputPlugin.getCallVolumeControlStream()
         );
     }
 }

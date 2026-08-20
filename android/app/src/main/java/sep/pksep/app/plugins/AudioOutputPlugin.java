@@ -39,7 +39,6 @@ public class AudioOutputPlugin extends Plugin {
     private static final String ROUTE_SPEAKER = "speaker";
     private static final String EVENT_AUDIO_ROUTE_CHANGED = "audioRouteChanged";
     private static volatile boolean callVolumeControlsActive = false;
-    private static volatile int callVolumeControlStream = AudioManager.STREAM_VOICE_CALL;
     private static volatile String callVolumeControlRoute = ROUTE_EARPIECE;
     private AudioDeviceCallback audioDeviceCallback;
     private String lastAppliedRoute = ROUTE_EARPIECE;
@@ -273,11 +272,10 @@ public class AudioOutputPlugin extends Plugin {
         audioManager.setSpeakerphoneOn(false);
         audioManager.setMode(AudioManager.MODE_NORMAL);
         callVolumeControlsActive = false;
-        callVolumeControlStream = AudioManager.STREAM_VOICE_CALL;
         callVolumeControlRoute = ROUTE_EARPIECE;
 
         if (getActivity() != null) {
-            getActivity().setVolumeControlStream(AudioManager.STREAM_MUSIC);
+            getActivity().setVolumeControlStream(getCallVolumeControlStream());
         }
 
         Log.d(TAG, "Released call audio routing");
@@ -341,10 +339,8 @@ public class AudioOutputPlugin extends Plugin {
         return ROUTE_EARPIECE;
     }
 
-    static int getVolumeControlStreamForRoute(String route) {
-        return ROUTE_SPEAKER.equals(route)
-            ? AudioManager.STREAM_MUSIC
-            : AudioManager.STREAM_VOICE_CALL;
+    static int getCallVolumeControlStream() {
+        return AudioManager.USE_DEFAULT_STREAM_TYPE;
     }
 
     private void bindVolumeControlsToRoute(AudioManager audioManager, String route) {
@@ -353,8 +349,7 @@ public class AudioOutputPlugin extends Plugin {
             return;
         }
 
-        int volumeControlStream = getVolumeControlStreamForRoute(route);
-        callVolumeControlStream = volumeControlStream;
+        int volumeControlStream = getCallVolumeControlStream();
         callVolumeControlRoute = route;
 
         if (getActivity() != null) {
@@ -398,9 +393,9 @@ public class AudioOutputPlugin extends Plugin {
         int direction = keyCode == KeyEvent.KEYCODE_VOLUME_UP
             ? AudioManager.ADJUST_RAISE
             : AudioManager.ADJUST_LOWER;
-        audioManager.adjustStreamVolume(
-            callVolumeControlStream,
+        audioManager.adjustSuggestedStreamVolume(
             direction,
+            getCallVolumeControlStream(),
             AudioManager.FLAG_SHOW_UI
         );
 
@@ -409,7 +404,7 @@ public class AudioOutputPlugin extends Plugin {
             "Call volume key adjusted route=" +
                 callVolumeControlRoute +
                 ", stream=" +
-                getStreamName(callVolumeControlStream)
+                getStreamName(getCallVolumeControlStream())
         );
         return true;
     }
@@ -483,9 +478,7 @@ public class AudioOutputPlugin extends Plugin {
     private JSObject buildState(AudioManager audioManager, String resolvedRoute) {
         boolean bluetoothAvailable = hasBluetoothRoute(audioManager);
         String currentRoute = resolvedRoute != null ? resolvedRoute : getCurrentRoute(audioManager);
-        int volumeControlStream = callVolumeControlsActive
-            ? getVolumeControlStreamForRoute(currentRoute)
-            : AudioManager.STREAM_MUSIC;
+        int volumeControlStream = getCallVolumeControlStream();
         AudioDeviceInfo activeOutputDevice = getActiveOutputDevice(audioManager, currentRoute);
         JSArray availableRoutes = new JSArray();
 
@@ -699,6 +692,8 @@ public class AudioOutputPlugin extends Plugin {
 
     private static String getStreamName(int stream) {
         switch (stream) {
+            case AudioManager.USE_DEFAULT_STREAM_TYPE:
+                return "USE_DEFAULT_STREAM_TYPE";
             case AudioManager.STREAM_VOICE_CALL:
                 return "STREAM_VOICE_CALL";
             case AudioManager.STREAM_MUSIC:
