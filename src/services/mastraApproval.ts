@@ -110,6 +110,8 @@ const approvalStatusValue = (value: unknown) => {
 };
 
 const APPROVAL_ACTION_LABELS: Record<string, string> = {
+  erp_actions_erp_detail_create_and_add_to_cbed:
+    'создание детали и изменение спецификации сборки',
   board_actions_projects_create: 'создание проекта',
   board_actions_projects_update: 'изменение проекта',
   board_actions_project_members_update: 'изменение участников проекта',
@@ -143,6 +145,12 @@ const buildApprovalQuestion = (approval: PendingToolApproval): string => {
   const taskTitle = quotedValue(args.taskTitle);
 
   switch (toolName) {
+    case 'erp_actions_erp_detail_create_and_add_to_cbed': {
+      const assemblyDesignation = args.assemblyDesignation
+        ? ` с обозначением ${quotedValue(args.assemblyDesignation)}`
+        : '';
+      return `Создать деталь ${quotedValue(args.detailName)} с обозначением ${quotedValue(args.detailDesignation)} и добавить её в спецификацию сборки ${quotedValue(args.assemblyName)}${assemblyDesignation} в количестве ${formatValue(args.quantity, 'не указано')} шт.?`;
+    }
     case 'board_actions_projects_create': {
       const members = Array.isArray(args.memberNames)
         ? ` Участники: ${formatList(args.memberNames, 'не указан')}.`
