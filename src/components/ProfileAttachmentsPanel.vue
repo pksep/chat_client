@@ -734,10 +734,19 @@ const scheduleScrollingMonthUpdate = (): void => {
   });
 };
 
+const handleAttachmentScroll = (): void => {
+  // Pointer move events are not guaranteed to stay on the tile once native
+  // touch scrolling starts. Cancel the pending long press from the scroll
+  // container itself so it cannot open a context menu and focus an old tile,
+  // which would pull the media panel back upward.
+  cancelAttachmentLongPress();
+  scheduleScrollingMonthUpdate();
+};
+
 const teardownScrollingMonth = (): void => {
   attachmentsScrollContainer?.removeEventListener(
     'scroll',
-    scheduleScrollingMonthUpdate
+    handleAttachmentScroll
   );
   window.removeEventListener('resize', scheduleScrollingMonthUpdate);
   attachmentsScrollContainer = null;
@@ -761,7 +770,7 @@ const setupScrollingMonth = (): void => {
   attachmentsScrollContainer = getScrollableAncestor(root);
   attachmentsScrollContainer.addEventListener(
     'scroll',
-    scheduleScrollingMonthUpdate,
+    handleAttachmentScroll,
     { passive: true }
   );
   window.addEventListener('resize', scheduleScrollingMonthUpdate, {
