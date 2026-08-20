@@ -114,6 +114,14 @@
           <span>Перейти в чат</span>
         </Button>
       </div>
+
+      <ProfileAttachmentsPanel
+        v-if="directTopic?.id"
+        :topic-id="directTopic.id"
+        class="user-info-panel__attachments"
+        :data-testid="`${props.dataTestid}-Attachments`"
+        @show-in-chat="emits('close')"
+      />
     </div>
   </section>
 </template>
@@ -143,6 +151,7 @@ import CachedAvatar from './UI/CachedAvatar.vue';
 import EmojiIcon from './UI/EmojiIcon.vue';
 import MessageIcon from './UI/MessageIcon.vue';
 import MuteIcon from './UI/MuteIcon.vue';
+import ProfileAttachmentsPanel from './ProfileAttachmentsPanel.vue';
 import UnmuteIcon from './UI/UnmuteIcon.vue';
 
 const props = withDefaults(
@@ -410,6 +419,11 @@ const handleOpenChat = async () => {
 .user-info-panel__action-button span {
   font-size: 14px;
   line-height: 1.3;
+}
+
+.user-info-panel__attachments {
+  width: 100%;
+  margin-top: 15px;
 }
 
 @media screen and (width <= 768px) {
