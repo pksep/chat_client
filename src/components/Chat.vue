@@ -1,6 +1,12 @@
 <template>
   <section
-    :class="['chat', { 'chat--mobile-route': isMobile }]"
+    :class="[
+      'chat',
+      {
+        'chat--mobile-route': isMobile,
+        'chat--call-topic-route': route.type === RouteTypes.CALL
+      }
+    ]"
     :data-testid="`${props.dataTestid}-Chat-Container`"
   >
     <template v-if="isMobile">
@@ -22,6 +28,7 @@
           'chat__mobile-route-view chat__mobile-route-view--messages',
           mobileTransitionName,
           {
+            'chat__mobile-route-view--call': route.type === RouteTypes.CALL,
             'chat__mobile-route-view--content-deferred':
               !isMobileMessageContentReady
           }
@@ -213,7 +220,11 @@ const clearMobileRouteContentSchedule = (): void => {
 };
 
 const shouldShowFirstOpenSkeleton = (topicId: string): boolean => {
-  if (!topicId || route.value.type === RouteTypes.AI) {
+  if (
+    !topicId ||
+    route.value.type === RouteTypes.AI ||
+    route.value.type === RouteTypes.CALL
+  ) {
     return false;
   }
 
@@ -347,9 +358,11 @@ watch(
     }
 
     mobileTransitionName.value =
-      !topicId && previousTopicId
-        ? 'chat-mobile-route-back'
-        : 'chat-mobile-route-forward';
+      topicId && route.value.type === RouteTypes.CALL
+        ? ''
+        : !topicId && previousTopicId
+          ? 'chat-mobile-route-back'
+          : 'chat-mobile-route-forward';
 
     if (!topicId) {
       syncMobileMessageContentState(topicId);
