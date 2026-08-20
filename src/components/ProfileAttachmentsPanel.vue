@@ -37,6 +37,7 @@
         :key="item.key"
         type="button"
         class="profile-attachments__media-tile"
+        :data-attachment-key="item.key"
         :aria-label="getMediaLabel(item.media)"
         :data-attachment-month="getMonthYearLabel(item.message)"
         :data-testid="`${props.dataTestid}-MediaItem${index + 1}`"
@@ -83,6 +84,12 @@
         <button
           type="button"
           class="profile-attachments__file-button"
+          :class="{
+            'profile-attachments__file-button--outgoing': isOutgoingMessage(
+              item.message
+            )
+          }"
+          :data-attachment-key="item.key"
           :data-attachment-month="getMonthYearLabel(item.message)"
           :data-testid="`${props.dataTestid}-FileItem${index + 1}`"
           @click="handleAttachmentClick(fileItems, index, $event)"
@@ -94,7 +101,7 @@
           @pointerleave="cancelAttachmentLongPress"
         >
           <FileIcon
-            :is-me-sender="index % 2 === 1"
+            :is-me-sender="isOutgoingMessage(item.message)"
             :is-loaded="isFileIconLoaded(item.media)"
             :percent="getFileIconPercent(item.media)"
             :icon="getFileIconType(item.media)"
@@ -290,6 +297,11 @@ type ProfileAttachmentItem = {
   mediaIndex: number;
 };
 
+type AttachmentScrollSnapshot = {
+  container: HTMLElement | Window;
+  scrollTop: number;
+};
+
 const props = withDefaults(defineProps<ProfileAttachmentsPanelProps>(), {
   activeTab: undefined,
   showTabs: true,
@@ -301,6 +313,8 @@ const emits = defineEmits<{
 }>();
 
 const HISTORY_PAGE_LIMIT = 50;
+const ATTACHMENTS_BATCH_SIZE = 10;
+const MAX_HISTORY_PAGES_PER_BATCH = 10;
 const LONG_PRESS_DELAY_MS = 500;
 const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
 const SUPPRESS_CLICK_AFTER_LONG_PRESS_MS = 700;
@@ -606,6 +620,61 @@ const getScrollableAncestor = (element: HTMLElement): HTMLElement | Window => {
   return window;
 };
 
+const getAttachmentScrollTop = (container: HTMLElement | Window): number =>
+  container instanceof Window ? window.scrollY : container.scrollTop;
+
+const setAttachmentScrollTop = (
+  container: HTMLElement | Window,
+  scrollTop: number
+): void => {
+  const nextScrollTop = Math.max(0, scrollTop);
+
+  if (container instanceof Window) {
+    window.scrollTo(0, nextScrollTop);
+    return;
+  }
+
+  container.scrollTop = nextScrollTop;
+};
+
+const captureAttachmentScrollSnapshot = (): AttachmentScrollSnapshot | null => {
+  const root = attachmentsRootRef.value;
+
+  if (!root) {
+    return null;
+  }
+
+  // Resolve the container for every request. The panel can be rendered in a
+  // desktop dialog, a mobile modal, or the group info pane, and those parents
+  // do not all use the same scrolling element.
+  const container = getScrollableAncestor(root);
+
+  return {
+    container,
+    scrollTop: getAttachmentScrollTop(container)
+  };
+};
+
+const restoreAttachmentScrollSnapshot = (
+  snapshot: AttachmentScrollSnapshot | null
+): void => {
+  if (!snapshot) {
+    return;
+  }
+
+  if (
+    snapshot.container instanceof HTMLElement &&
+    !snapshot.container.isConnected
+  ) {
+    return;
+  }
+
+  // History is rendered newest first, so an older page is appended below the
+  // current media. Keeping the numeric scrollTop is sufficient and avoids an
+  // item anchor pulling the user back toward the beginning of the panel.
+  setAttachmentScrollTop(snapshot.container, snapshot.scrollTop);
+};
+
 const updateScrollingMonth = (): void => {
   const root = attachmentsRootRef.value;
 
@@ -665,10 +734,19 @@ const scheduleScrollingMonthUpdate = (): void => {
   });
 };
 
+const handleAttachmentScroll = (): void => {
+  // Pointer move events are not guaranteed to stay on the tile once native
+  // touch scrolling starts. Cancel the pending long press from the scroll
+  // container itself so it cannot open a context menu and focus an old tile,
+  // which would pull the media panel back upward.
+  cancelAttachmentLongPress();
+  scheduleScrollingMonthUpdate();
+};
+
 const teardownScrollingMonth = (): void => {
   attachmentsScrollContainer?.removeEventListener(
     'scroll',
-    scheduleScrollingMonthUpdate
+    handleAttachmentScroll
   );
   window.removeEventListener('resize', scheduleScrollingMonthUpdate);
   attachmentsScrollContainer = null;
@@ -692,7 +770,7 @@ const setupScrollingMonth = (): void => {
   attachmentsScrollContainer = getScrollableAncestor(root);
   attachmentsScrollContainer.addEventListener(
     'scroll',
-    scheduleScrollingMonthUpdate,
+    handleAttachmentScroll,
     { passive: true }
   );
   window.addEventListener('resize', scheduleScrollingMonthUpdate, {
@@ -904,36 +982,67 @@ const loadNextHistoryPage = async (): Promise<void> => {
     return;
   }
 
-  const cursor = oldestMessageId.value;
-  const requestKey = cursor || 'latest';
+  const requestedTab = currentTab.value;
+  const getRequestedItemsCount = (): number =>
+    requestedTab === 'media' ? mediaItems.value.length : fileItems.value.length;
+  const targetItemsCount = getRequestedItemsCount() + ATTACHMENTS_BATCH_SIZE;
+  let loadedPages = 0;
 
-  if (requestedPageKeys.has(requestKey)) {
-    return;
-  }
-
-  requestedPageKeys.add(requestKey);
   isHistoryLoading.value = true;
 
-  const beforeOldestMessageId = cursor;
-
   try {
-    const messages = await fetchMessagesForTopic(topicId, {
-      limit: HISTORY_PAGE_LIMIT,
-      lastMessageId: cursor || undefined,
-      forceRefresh: true,
-      forceNetwork: true,
-      updateVisible: false,
-      syncLastMessage: false,
-      allowStaleFallback: false
-    });
-
-    await nextTick();
-
-    if (
-      messages.length < HISTORY_PAGE_LIMIT ||
-      (beforeOldestMessageId && oldestMessageId.value === beforeOldestMessageId)
+    while (
+      props.topicId === topicId &&
+      hasMoreHistory.value &&
+      getRequestedItemsCount() < targetItemsCount &&
+      loadedPages < MAX_HISTORY_PAGES_PER_BATCH
     ) {
-      hasMoreHistory.value = false;
+      const cursor = oldestMessageId.value;
+      const requestKey = cursor || 'latest';
+
+      if (requestedPageKeys.has(requestKey)) {
+        break;
+      }
+
+      requestedPageKeys.add(requestKey);
+      const scrollSnapshot =
+        currentTab.value === requestedTab
+          ? captureAttachmentScrollSnapshot()
+          : null;
+      let messages: IMessage[];
+
+      try {
+        // Keep pagination cache-first: fetchMessagesForTopic reads memory and
+        // IndexedDB before falling back to the chat API.
+        messages = await fetchMessagesForTopic(topicId, {
+          limit: HISTORY_PAGE_LIMIT,
+          lastMessageId: cursor || undefined,
+          updateVisible: false,
+          syncLastMessage: false,
+          allowStaleFallback: false
+        });
+      } catch (error) {
+        requestedPageKeys.delete(requestKey);
+        throw error;
+      }
+
+      loadedPages += 1;
+      await nextTick();
+
+      if (currentTab.value === requestedTab) {
+        restoreAttachmentScrollSnapshot(scrollSnapshot);
+        scheduleScrollingMonthUpdate();
+      }
+
+      const nextCursor = oldestMessageId.value;
+
+      if (
+        messages.length < HISTORY_PAGE_LIMIT ||
+        !nextCursor ||
+        nextCursor === cursor
+      ) {
+        hasMoreHistory.value = false;
+      }
     }
   } catch (error) {
     console.warn('Failed to fetch profile attachments history:', error);
@@ -997,15 +1106,9 @@ watch(
   currentTab,
   () => {
     ensureActiveTabHasRequestedData();
+    void nextTick().then(setupLoadMoreObserver);
   },
   { immediate: true }
-);
-
-watch(
-  () => [hasMoreHistory.value, isHistoryLoading.value],
-  () => {
-    void nextTick().then(setupLoadMoreObserver);
-  }
 );
 
 watch(
@@ -1045,8 +1148,8 @@ onMounted(() => {
   isInsideNativeDialog.value = Boolean(
     attachmentsRootRef.value?.closest('dialog')
   );
-  setupLoadMoreObserver();
   setupScrollingMonth();
+  setupLoadMoreObserver();
 });
 
 onBeforeUnmount(() => {
@@ -1358,16 +1461,6 @@ const getMediaLabel = (media: IMedia): string =>
   min-width: 0;
 }
 
-.profile-attachments__file-item:nth-child(2n + 1) {
-  --profile-attachments-file-background: var(--white);
-  --profile-attachments-file-shadow: inset 0 0 0 1px var(--blue1);
-}
-
-.profile-attachments__file-item:nth-child(2n) {
-  --profile-attachments-file-background: var(--blue12);
-  --profile-attachments-file-shadow: none;
-}
-
 .profile-attachments__file-button {
   box-sizing: border-box;
   display: grid;
@@ -1379,13 +1472,18 @@ const getMediaLabel = (media: IMedia): string =>
   padding: 10px 15px;
   border: 0;
   border-radius: 20px;
-  background: var(--profile-attachments-file-background);
-  box-shadow: var(--profile-attachments-file-shadow);
+  background: var(--white);
+  box-shadow: inset 0 0 0 1px var(--blue1);
   color: inherit;
   text-align: left;
   cursor: pointer;
   touch-action: pan-y;
   -webkit-touch-callout: none;
+}
+
+.profile-attachments__file-button--outgoing {
+  background: var(--blue12);
+  box-shadow: none;
 }
 
 .profile-attachments__file-button:focus-visible {
