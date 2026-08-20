@@ -83,11 +83,6 @@
         <button
           type="button"
           class="profile-attachments__file-button"
-          :class="{
-            'profile-attachments__file-button--outgoing': isOutgoingMessage(
-              item.message
-            )
-          }"
           :data-attachment-month="getMonthYearLabel(item.message)"
           :data-testid="`${props.dataTestid}-FileItem${index + 1}`"
           @click="handleAttachmentClick(fileItems, index, $event)"
@@ -99,7 +94,7 @@
           @pointerleave="cancelAttachmentLongPress"
         >
           <FileIcon
-            :is-me-sender="isOutgoingMessage(item.message)"
+            :is-me-sender="index % 2 === 1"
             :is-loaded="isFileIconLoaded(item.media)"
             :percent="getFileIconPercent(item.media)"
             :icon="getFileIconType(item.media)"
@@ -1363,6 +1358,16 @@ const getMediaLabel = (media: IMedia): string =>
   min-width: 0;
 }
 
+.profile-attachments__file-item:nth-child(2n + 1) {
+  --profile-attachments-file-background: var(--white);
+  --profile-attachments-file-shadow: inset 0 0 0 1px var(--blue1);
+}
+
+.profile-attachments__file-item:nth-child(2n) {
+  --profile-attachments-file-background: var(--blue12);
+  --profile-attachments-file-shadow: none;
+}
+
 .profile-attachments__file-button {
   box-sizing: border-box;
   display: grid;
@@ -1374,18 +1379,13 @@ const getMediaLabel = (media: IMedia): string =>
   padding: 10px 15px;
   border: 0;
   border-radius: 20px;
-  background: var(--white);
-  box-shadow: inset 0 0 0 1px var(--blue1);
+  background: var(--profile-attachments-file-background);
+  box-shadow: var(--profile-attachments-file-shadow);
   color: inherit;
   text-align: left;
   cursor: pointer;
   touch-action: pan-y;
   -webkit-touch-callout: none;
-}
-
-.profile-attachments__file-button--outgoing {
-  background: var(--blue12);
-  box-shadow: none;
 }
 
 .profile-attachments__file-button:focus-visible {
