@@ -1034,11 +1034,11 @@ const loadNextHistoryPage = async (): Promise<void> => {
       let messages: IMessage[];
 
       try {
+        // Keep pagination cache-first: fetchMessagesForTopic reads memory and
+        // IndexedDB before falling back to the chat API.
         messages = await fetchMessagesForTopic(topicId, {
           limit: HISTORY_PAGE_LIMIT,
           lastMessageId: cursor || undefined,
-          forceRefresh: true,
-          forceNetwork: true,
           updateVisible: false,
           syncLastMessage: false,
           allowStaleFallback: false
