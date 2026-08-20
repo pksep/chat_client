@@ -37,6 +37,7 @@
         :key="item.key"
         type="button"
         class="profile-attachments__media-tile"
+        :data-attachment-key="item.key"
         :aria-label="getMediaLabel(item.media)"
         :data-attachment-month="getMonthYearLabel(item.message)"
         :data-testid="`${props.dataTestid}-MediaItem${index + 1}`"
@@ -88,6 +89,7 @@
               item.message
             )
           }"
+          :data-attachment-key="item.key"
           :data-attachment-month="getMonthYearLabel(item.message)"
           :data-testid="`${props.dataTestid}-FileItem${index + 1}`"
           @click="handleAttachmentClick(fileItems, index, $event)"
@@ -295,6 +297,12 @@ type ProfileAttachmentItem = {
   mediaIndex: number;
 };
 
+type AttachmentScrollAnchor = {
+  key: string | null;
+  offsetTop: number | null;
+  scrollTop: number;
+};
+
 const props = withDefaults(defineProps<ProfileAttachmentsPanelProps>(), {
   activeTab: undefined,
   showTabs: true,
@@ -306,6 +314,8 @@ const emits = defineEmits<{
 }>();
 
 const HISTORY_PAGE_LIMIT = 50;
+const ATTACHMENTS_BATCH_SIZE = 10;
+const MAX_HISTORY_PAGES_PER_BATCH = 10;
 const LONG_PRESS_DELAY_MS = 500;
 const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
 const SUPPRESS_CLICK_AFTER_LONG_PRESS_MS = 700;
@@ -611,6 +621,91 @@ const getScrollableAncestor = (element: HTMLElement): HTMLElement | Window => {
   return window;
 };
 
+const getAttachmentScrollTop = (container: HTMLElement | Window): number =>
+  container instanceof Window ? window.scrollY : container.scrollTop;
+
+const setAttachmentScrollTop = (
+  container: HTMLElement | Window,
+  scrollTop: number
+): void => {
+  const nextScrollTop = Math.max(0, scrollTop);
+
+  if (container instanceof Window) {
+    window.scrollTo(0, nextScrollTop);
+    return;
+  }
+
+  container.scrollTop = nextScrollTop;
+};
+
+const getAttachmentScrollViewport = (
+  container: HTMLElement | Window
+): { top: number; bottom: number } =>
+  container instanceof Window
+    ? { top: 0, bottom: window.innerHeight }
+    : container.getBoundingClientRect();
+
+const getRenderedAttachmentElements = (): HTMLElement[] => {
+  const root = attachmentsRootRef.value;
+
+  return root
+    ? Array.from(root.querySelectorAll<HTMLElement>('[data-attachment-key]'))
+    : [];
+};
+
+const captureAttachmentScrollAnchor = (): AttachmentScrollAnchor | null => {
+  const container = attachmentsScrollContainer;
+
+  if (!container) {
+    return null;
+  }
+
+  const viewport = getAttachmentScrollViewport(container);
+  const visibleItem = getRenderedAttachmentElements().find(element => {
+    const rect = element.getBoundingClientRect();
+    return rect.bottom > viewport.top && rect.top < viewport.bottom;
+  });
+
+  return {
+    key: visibleItem?.dataset.attachmentKey || null,
+    offsetTop: visibleItem
+      ? visibleItem.getBoundingClientRect().top - viewport.top
+      : null,
+    scrollTop: getAttachmentScrollTop(container)
+  };
+};
+
+const restoreAttachmentScrollAnchor = (
+  anchor: AttachmentScrollAnchor | null
+): void => {
+  const container = attachmentsScrollContainer;
+
+  if (!anchor || !container) {
+    return;
+  }
+
+  const viewport = getAttachmentScrollViewport(container);
+  const anchoredItem = anchor.key
+    ? getRenderedAttachmentElements().find(
+        element => element.dataset.attachmentKey === anchor.key
+      )
+    : null;
+
+  if (anchoredItem && anchor.offsetTop !== null) {
+    const currentOffsetTop =
+      anchoredItem.getBoundingClientRect().top - viewport.top;
+    const offsetDelta = currentOffsetTop - anchor.offsetTop;
+
+    setAttachmentScrollTop(
+      container,
+      getAttachmentScrollTop(container) + offsetDelta
+    );
+    return;
+  }
+
+  setAttachmentScrollTop(container, anchor.scrollTop);
+};
+
 const updateScrollingMonth = (): void => {
   const root = attachmentsRootRef.value;
 
@@ -909,36 +1004,67 @@ const loadNextHistoryPage = async (): Promise<void> => {
     return;
   }
 
-  const cursor = oldestMessageId.value;
-  const requestKey = cursor || 'latest';
+  const requestedTab = currentTab.value;
+  const getRequestedItemsCount = (): number =>
+    requestedTab === 'media' ? mediaItems.value.length : fileItems.value.length;
+  const targetItemsCount = getRequestedItemsCount() + ATTACHMENTS_BATCH_SIZE;
+  let loadedPages = 0;
 
-  if (requestedPageKeys.has(requestKey)) {
-    return;
-  }
-
-  requestedPageKeys.add(requestKey);
   isHistoryLoading.value = true;
 
-  const beforeOldestMessageId = cursor;
-
   try {
-    const messages = await fetchMessagesForTopic(topicId, {
-      limit: HISTORY_PAGE_LIMIT,
-      lastMessageId: cursor || undefined,
-      forceRefresh: true,
-      forceNetwork: true,
-      updateVisible: false,
-      syncLastMessage: false,
-      allowStaleFallback: false
-    });
-
-    await nextTick();
-
-    if (
-      messages.length < HISTORY_PAGE_LIMIT ||
-      (beforeOldestMessageId && oldestMessageId.value === beforeOldestMessageId)
+    while (
+      props.topicId === topicId &&
+      hasMoreHistory.value &&
+      getRequestedItemsCount() < targetItemsCount &&
+      loadedPages < MAX_HISTORY_PAGES_PER_BATCH
     ) {
-      hasMoreHistory.value = false;
+      const cursor = oldestMessageId.value;
+      const requestKey = cursor || 'latest';
+
+      if (requestedPageKeys.has(requestKey)) {
+        break;
+      }
+
+      requestedPageKeys.add(requestKey);
+      const scrollAnchor =
+        currentTab.value === requestedTab
+          ? captureAttachmentScrollAnchor()
+          : null;
+      let messages: IMessage[];
+
+      try {
+        messages = await fetchMessagesForTopic(topicId, {
+          limit: HISTORY_PAGE_LIMIT,
+          lastMessageId: cursor || undefined,
+          forceRefresh: true,
+          forceNetwork: true,
+          updateVisible: false,
+          syncLastMessage: false,
+          allowStaleFallback: false
+        });
+      } catch (error) {
+        requestedPageKeys.delete(requestKey);
+        throw error;
+      }
+
+      loadedPages += 1;
+      await nextTick();
+
+      if (currentTab.value === requestedTab) {
+        restoreAttachmentScrollAnchor(scrollAnchor);
+        scheduleScrollingMonthUpdate();
+      }
+
+      const nextCursor = oldestMessageId.value;
+
+      if (
+        messages.length < HISTORY_PAGE_LIMIT ||
+        !nextCursor ||
+        nextCursor === cursor
+      ) {
+        hasMoreHistory.value = false;
+      }
     }
   } catch (error) {
     console.warn('Failed to fetch profile attachments history:', error);
