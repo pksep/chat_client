@@ -10,7 +10,8 @@ import {
 import { groups, updateLocalGroupInfo } from '../composables/useGroup';
 import {
   deleteMessageFromLocal,
-  getFullMessagesByTopicId
+  getFullMessagesByTopicId,
+  hasKnownTopicMessagesState
 } from '../services/useMessages';
 import { useUrlWatcher } from './navigation';
 import { authedUser } from './useAuth';
@@ -49,6 +50,7 @@ import {
   isFavoriteTopic,
   normalizeFavoriteTopic
 } from '../utils/favorite-topic';
+import { resolveLastMessageAfterLocalSync } from '../utils/topic-last-message';
 
 const topics = ref<ITopic[]>([]);
 const topicsById = computed(
@@ -254,6 +256,14 @@ const createTopicsApi = () => {
         ? candidates.filter(message => !message?.isSystem)
         : candidates
     );
+  };
+
+  const getLocalLastMessage = (topic: ITopic): Message | undefined => {
+    const localMessages = getFullMessagesByTopicId(topic.id);
+
+    return isFavoriteTopic(topic, authedUser.value?.id)
+      ? [...localMessages].reverse().find(message => !message.isSystem)
+      : localMessages.at(-1);
   };
 
   const normalizeTopic = (
@@ -698,7 +708,11 @@ const createTopicsApi = () => {
       if (lastMessage) {
         topic.lastMessage = resolveLatestMessage(topic, lastMessage);
       } else {
-        topic.lastMessage = resolveLatestMessage(topic);
+        topic.lastMessage = resolveLastMessageAfterLocalSync(
+          topic.lastMessage,
+          getLocalLastMessage(topic),
+          hasKnownTopicMessagesState(topicId)
+        );
       }
 
       if (lastMessage?.senderUserId) {

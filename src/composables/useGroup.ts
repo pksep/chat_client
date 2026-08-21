@@ -1,51 +1,16 @@
 import { ref } from 'vue';
 import { getChatSDK, getCurrentUserId } from '../services/useChat';
-import { Message } from '../services/useChatSDK/types';
 import type {
   ITopic,
   ITopicInfo,
   IUser
 } from '../components/interfaces/interfaces';
 import { setTopics, topics, useTopics } from './useTopics';
-import { getFullMessagesByTopicId } from '../services/useMessages';
 
 const currentGroup = ref<ITopic | null>(null);
 const loading = ref(false);
 
 export const useGroup = () => {
-  const getMessageTimestamp = (
-    message?: Pick<Message, 'createdAt' | 'updatedAt'> | null
-  ): number => {
-    if (!message) {
-      return 0;
-    }
-
-    const value = message.updatedAt || message.createdAt;
-
-    if (!value) {
-      return 0;
-    }
-
-    return new Date(value).getTime();
-  };
-
-  const getLatestMessage = (
-    messages: Array<Message | undefined>
-  ): Message | undefined => {
-    return messages
-      .filter(Boolean)
-      .reduce<Message | undefined>((latestMessage, message) => {
-        if (!latestMessage) {
-          return message;
-        }
-
-        return getMessageTimestamp(message) >=
-          getMessageTimestamp(latestMessage)
-          ? message
-          : latestMessage;
-      }, undefined);
-  };
-
   const addGroupMembersToList = (groupId: string, newMembers: IUser[]) => {
     const membersToAdd = Array.isArray(newMembers) ? newMembers : [];
     const updatedMembers = [...currentGroup.value.members, ...membersToAdd];
@@ -260,33 +225,15 @@ export const useGroup = () => {
     }
   };
 
-  const updateLocalLastMessageGroup = (
-    topicId: string,
-    lastMessage?: Message
-  ): void => {
+  const updateLocalLastMessageGroup = (topicId: string): void => {
     const topic = topics.value.find(topic => topic.id === topicId);
-    const messages = getFullMessagesByTopicId(topicId);
 
-    if (topic) {
-      if (lastMessage) {
-        topic.lastMessage = getLatestMessage([
-          topic.lastMessage,
-          messages.at(-1),
-          lastMessage
-        ]);
-      } else {
-        topic.lastMessage = messages.at(-1);
-      }
-
-      if (currentGroup.value?.id === topicId) {
-        currentGroup.value = {
-          ...currentGroup.value,
-          lastMessage: topic.lastMessage
-        };
-      }
+    if (topic && currentGroup.value?.id === topicId) {
+      currentGroup.value = {
+        ...currentGroup.value,
+        lastMessage: topic.lastMessage
+      };
     }
-
-    topics.value = [...topics.value];
   };
 
   const updateLocalGroupDetails = (

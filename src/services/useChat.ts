@@ -421,7 +421,7 @@ const setupChatListeners = (): void => {
     }
 
     updateLocalLastMessageTopic(message.topicId, message);
-    updateLocalLastMessageGroup(message.topicId, message);
+    updateLocalLastMessageGroup(message.topicId);
   };
 
   const handleTopicChangePayload = (payload: {
@@ -451,6 +451,27 @@ const setupChatListeners = (): void => {
     } else if (payload.type === 'DELETE') {
       deleteTopicFromList(payload.data.id);
     }
+  };
+
+  const reconcileLastMessageAfterDelete = async (
+    topicId: string,
+    deletedMessageId: string
+  ): Promise<void> => {
+    const topic = useTopics().getSelectedTopic(topicId);
+
+    if (!topic || topic.lastMessage?.id !== deletedMessageId) {
+      return;
+    }
+
+    await fetchMessagesForTopic(topicId, {
+      limit: 1,
+      syncLastMessage: true,
+      updateVisible: false
+    });
+
+    const { updateLocalLastMessageTopic } = useTopics();
+    updateLocalLastMessageTopic(topicId);
+    updateLocalLastMessageGroup(topicId);
   };
 
   const handleChangeMessagePayload = (
@@ -500,6 +521,10 @@ const setupChatListeners = (): void => {
       void clearTopicNotifications(topicId);
     } else if (payload.type === 'DELETE') {
       const deletedMessageId = payload.data.id || payload.messageId;
+      const deletedLastMessage =
+        !!deletedMessageId &&
+        useTopics().getSelectedTopic(payload.data.topicId)?.lastMessage?.id ===
+          deletedMessageId;
 
       void recordShadowChatEvent({
         topicId: payload.data.topicId,
@@ -510,6 +535,12 @@ const setupChatListeners = (): void => {
       void removeCallHistoryMessage(deletedMessageId);
       clearDeletedReactionTarget(payload.data.topicId, deletedMessageId);
       deleteMessageFromLocal(payload.data.topicId, deletedMessageId);
+      if (deletedLastMessage) {
+        void reconcileLastMessageAfterDelete(
+          payload.data.topicId,
+          deletedMessageId
+        );
+      }
       void clearMessageNotification(payload.data.topicId, deletedMessageId);
     } else if (payload.type === 'CHANGE' || payload.type === 'PIN') {
       void recordShadowChatEvent({

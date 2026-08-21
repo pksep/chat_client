@@ -176,7 +176,7 @@ const syncLocalLastMessage = (topicId: string, message?: IMessage): void => {
   const { updateLocalLastMessageGroup } = useGroup();
 
   updateLocalLastMessageTopic(topicId, message);
-  updateLocalLastMessageGroup(topicId, message);
+  updateLocalLastMessageGroup(topicId);
 };
 
 const markTopicStateCanonical = (topicId: string): void => {
@@ -2102,6 +2102,7 @@ export const clearMessagesForTopic = (
     return;
   }
 
+  canonicalTopicStateIds.add(topicId);
   saveMessagesToLocal(topicId, [], {
     syncLastMessage: opts?.syncLastMessage ?? false
   });
