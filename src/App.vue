@@ -847,7 +847,7 @@ onMounted(async () => {
 
 .app-startup-shell__navigation {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   align-items: center;
   gap: 12px;
   height: 58px;

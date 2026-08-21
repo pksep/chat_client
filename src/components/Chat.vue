@@ -4,12 +4,15 @@
       'chat',
       {
         'chat--mobile-route': isMobile,
-        'chat--call-topic-route': route.type === RouteTypes.CALL
+        'chat--call-topic-route': route.type === RouteTypes.CALL,
+        'chat--ai-route': route.type === RouteTypes.AI
       }
     ]"
     :data-testid="`${props.dataTestid}-Chat-Container`"
   >
-    <template v-if="isMobile">
+    <AIAssistant v-if="isAiRoute" ref="aiAssistantRef" />
+
+    <template v-else-if="isMobile">
       <div
         :class="[
           'chat__mobile-list-layer',
@@ -110,6 +113,7 @@ import type {
   IMessageViewportSnapshot
 } from './interfaces/interfaces';
 import ShareSelectionOverlay from './ShareSelectionOverlay.vue';
+import AIAssistant from './AI/AIAssistant.vue';
 import {
   fetchPinnedMessagesForTopic,
   hasKnownTopicMessagesState
@@ -131,12 +135,14 @@ const authUser = computed(() => getAuthUser());
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const messageListRef = useTemplateRef<any>('messageListRef');
+const aiAssistantRef = useTemplateRef<any>('aiAssistantRef');
 
 const route = useUrlWatcher();
 const activeChatRouteKey = computed(() =>
   route.value.type === RouteTypes.AI ? RouteTypes.AI : route.value.id
 );
 const hasActiveChatRoute = computed(() => !!activeChatRouteKey.value);
+const isAiRoute = computed(() => route.value.type === RouteTypes.AI);
 const mobileTransitionName = ref('');
 const isMobileMessageListMounted = ref(!isMobile.value);
 const isMobileMessageContentReady = ref(!isMobile.value);
@@ -411,6 +417,9 @@ onBeforeUnmount(() => {
 });
 
 defineExpose({
-  handleClear: () => messageListRef.value?.handleClear()
+  handleClear: () =>
+    isAiRoute.value
+      ? aiAssistantRef.value?.handleClear()
+      : messageListRef.value?.handleClear()
 });
 </script>

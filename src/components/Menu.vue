@@ -75,6 +75,11 @@
         :data-testid="`${props.dataTestid}-Menu-CallsPage`"
       />
 
+      <AIMenuPanel
+        v-else-if="activeSection === 'ai'"
+        :data-testid="`${props.dataTestid}-Menu-AIPanel`"
+      />
+
       <MenuProfilePanel
         v-else
         :data-testid="`${props.dataTestid}-Menu-ProfilePanel`"
@@ -134,6 +139,7 @@ import MenuBottomNav from './Menu/MenuBottomNav.vue';
 import MenuProfilePanel from './Menu/MenuProfilePanel.vue';
 import { getAuthUser } from '../composables/useAuth';
 import CallsPage from './Calls/CallsPage.vue';
+import AIMenuPanel from './AI/AIMenuPanel.vue';
 import { useShareSelection } from '../composables/useShareSelection';
 import { getShareSelectionSummaryLabel } from '../utils/shareSelectionSummary';
 import {
@@ -380,6 +386,11 @@ watch(
   ([routeType]) => {
     if (routeType === RouteTypes.CALL) {
       setActiveSection('calls');
+      return;
+    }
+
+    if (routeType === RouteTypes.AI || routeType === RouteTypes.ASSISTANT) {
+      setActiveSection('ai');
       return;
     }
 
