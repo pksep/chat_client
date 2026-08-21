@@ -1,4 +1,4 @@
-import { ref, Ref } from 'vue';
+import { ref, type Ref } from 'vue';
 import { MastraClient } from '@mastra/client-js';
 import { saveMessages, getOrCreateChatHistory } from './useChatDb';
 import { AIMessage } from '../types/messages';
@@ -6,9 +6,10 @@ import { getConfig } from './useConfig';
 import { generateUUID } from '../utils/generateUUID';
 import { getAuthToken } from '../composables/useLogin';
 import {
+  type ApprovalDecision,
   formatApprovalMessage,
   getApprovalDecision,
-  PendingToolApproval
+  type PendingToolApproval
 } from './mastraApproval';
 
 type Message = AIMessage;
@@ -24,8 +25,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
     return {
       messages: ref<Message[]>([]),
       sendMessage: async () => {},
+      resolveToolApproval: async () => {},
       clearMessages: () => {},
-      isInitializing: ref(false)
+      isInitializing: ref(false),
+      pendingApproval: ref<PendingToolApproval | null>(null)
     };
   }
 
@@ -37,10 +40,11 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
   const messages: Ref<Message[]> = ref([]);
   const isInitializing = ref(!!chatId);
-  let pendingApproval: PendingToolApproval | null = null;
+  const pendingApproval = ref<PendingToolApproval | null>(null);
+  let initializationPromise: Promise<void> = Promise.resolve();
 
   if (chatId) {
-    getOrCreateChatHistory(chatId)
+    initializationPromise = getOrCreateChatHistory(chatId)
       .then(initialMessages => {
         messages.value = [...initialMessages];
         isInitializing.value = false;
@@ -54,10 +58,12 @@ const useMastra = (options?: UseMastraOptions | false) => {
     isInitializing.value = false;
   }
 
-  const sendMessage = async (
+  const submitMessage = async (
     input: string,
     onFinish?: () => void,
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
+    approvalDecisionOverride: Exclude<ApprovalDecision, null> | null = null,
+    appendUserMessage = true
   ) => {
     if (!input.trim()) return;
 
@@ -67,23 +73,25 @@ const useMastra = (options?: UseMastraOptions | false) => {
       isInitializing.value = false;
     }
 
-    if (isInitializing.value) return;
+    if (isInitializing.value) await initializationPromise;
 
     const lastMessage = messages.value[messages.value.length - 1];
     if (lastMessage?.role === 'assistant' && lastMessage?.loading) return;
 
-    const userMessage: Message = {
-      role: 'user',
-      content: input,
-      timestamp: Date.now()
-    };
-    messages.value = [...messages.value, userMessage];
+    if (appendUserMessage) {
+      const userMessage: Message = {
+        role: 'user',
+        content: input,
+        timestamp: Date.now()
+      };
+      messages.value = [...messages.value, userMessage];
+    }
 
-    const approvalDecision = pendingApproval
-      ? getApprovalDecision(input)
+    const approvalDecision = pendingApproval.value
+      ? approvalDecisionOverride ?? getApprovalDecision(input)
       : null;
 
-    if (pendingApproval && !approvalDecision) {
+    if (pendingApproval.value && !approvalDecision) {
       const reminderMessage: Message = {
         role: 'assistant',
         content:
@@ -131,9 +139,9 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
       let stream;
 
-      if (pendingApproval && approvalDecision) {
-        const approval = pendingApproval;
-        pendingApproval = null;
+      if (pendingApproval.value && approvalDecision) {
+        const approval = pendingApproval.value;
+        pendingApproval.value = null;
 
         try {
           stream =
@@ -148,7 +156,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
                   reason: 'Пользователь отменил действие в чате.'
                 });
         } catch (approvalError) {
-          pendingApproval = approval;
+          pendingApproval.value = approval;
           throw approvalError;
         }
       } else {
@@ -214,7 +222,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
                       typeof payload?.toolCallId === 'string' &&
                       typeof payload?.toolName === 'string'
                     ) {
-                      pendingApproval = {
+                      pendingApproval.value = {
                         runId: event.runId,
                         toolCallId: payload.toolCallId,
                         toolName: payload.toolName,
@@ -228,7 +236,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
                         const newMessages = [...messages.value];
                         newMessages[assistantMessageIndex] = {
                           ...newMessages[assistantMessageIndex],
-                          content: formatApprovalMessage(pendingApproval),
+                          content: formatApprovalMessage(pendingApproval.value),
                           loading: false
                         };
                         messages.value = newMessages;
@@ -384,9 +392,26 @@ const useMastra = (options?: UseMastraOptions | false) => {
     }
   };
 
+  const sendMessage = async (
+    input: string,
+    onFinish?: () => void,
+    abortSignal?: AbortSignal
+  ) => submitMessage(input, onFinish, abortSignal);
+
+  const resolveToolApproval = async (
+    decision: Exclude<ApprovalDecision, null>,
+    onFinish?: () => void,
+    abortSignal?: AbortSignal
+  ) => {
+    if (!pendingApproval.value) return;
+
+    const command = decision === 'approve' ? 'подтверждаю' : 'отмена';
+    return submitMessage(command, onFinish, abortSignal, decision, false);
+  };
+
   const clearMessages = () => {
     if (!chatId) return;
-    pendingApproval = null;
+    pendingApproval.value = null;
     messages.value = [];
     saveMessages(chatId, messages.value);
   };
@@ -394,8 +419,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
   return {
     messages,
     sendMessage,
+    resolveToolApproval,
     clearMessages,
-    isInitializing
+    isInitializing,
+    pendingApproval
   };
 };
 

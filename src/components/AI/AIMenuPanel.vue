@@ -255,8 +255,8 @@ import { navigateToAI } from '../../composables/navigation';
 import { useContextMenu } from '../../composables/useContextMenu';
 import {
   type AiAssistantTab,
-  useAiAssistantMock
-} from '../../composables/useAiAssistantMock';
+  useAiAssistant
+} from '../../composables/useAiAssistant';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import MessageIcon from '../UI/MessageIcon.vue';
 import PinIcon from '../UI/PinIcon.vue';
@@ -277,7 +277,7 @@ const {
   toggleTask,
   toggleTaskPin,
   deleteTask
-} = useAiAssistantMock();
+} = useAiAssistant();
 
 const query = ref('');
 const { isOpen, position, openActivePopover, closeActivePopover } =

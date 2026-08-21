@@ -456,7 +456,7 @@ import type {
   IUser
 } from '../interfaces/interfaces';
 import AiSparkleIcon from '../AI/AiSparkleIcon.vue';
-import { useAiAssistantMock } from '../../composables/useAiAssistantMock';
+import { useAiAssistant } from '../../composables/useAiAssistant';
 import MobileChatInfo from './MobileChatInfo.vue';
 import {
   useMenuInfo,
@@ -525,7 +525,7 @@ import {
   loadLatestCallSummary
 } from '../../services/useCallSummaries';
 
-const { activeTitle: aiAssistantTitle } = useAiAssistantMock();
+const { activeTitle: aiAssistantTitle } = useAiAssistant();
 
 const { getSelectedTopic } = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();

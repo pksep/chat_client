@@ -61,7 +61,7 @@
       </div>
 
       <div v-else class="ai-assistant__conversation">
-        <time class="ai-assistant__date">14 августа</time>
+        <time class="ai-assistant__date">{{ conversationDate }}</time>
         <article
           v-for="message in activeSession?.messages || []"
           :key="message.id"
@@ -144,7 +144,7 @@
       <div class="ai-assistant__editor">
         <ContentEditor
           v-model="draft"
-          :active-attach-file="true"
+          :active-attach-file="false"
           :disable-send-on-enter="isThinking"
           @unmount-send="handleSend"
         >
@@ -255,7 +255,7 @@ import VoiceMessageIcon from './VoiceMessageIcon.vue';
 import ChatSummaryIcon from './ChatSummaryIcon.vue';
 import TasksSuggestionIcon from './TasksSuggestionIcon.vue';
 import PermissionHandIcon from './PermissionHandIcon.vue';
-import { useAiAssistantMock } from '../../composables/useAiAssistantMock';
+import { useAiAssistant } from '../../composables/useAiAssistant';
 import { navigateToAI, useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { stripHtml } from '../../utils/stripHtml';
@@ -280,7 +280,7 @@ const {
   sendSuggestedPrompt,
   updateApproval,
   clearAll
-} = useAiAssistantMock();
+} = useAiAssistant();
 
 const route = useUrlWatcher();
 const draft = ref('');
@@ -292,6 +292,12 @@ const permissionLabel = computed(() =>
     ? 'Запрашивать разрешение'
     : 'Автоматически подтверждать'
 );
+const conversationDate = computed(() =>
+  new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'long'
+  }).format(new Date())
+);
 
 const scrollToBottom = async (): Promise<void> => {
   await nextTick();
@@ -302,19 +308,9 @@ const scrollToBottom = async (): Promise<void> => {
 
 const handleSend = (payload?: IContentEditorSendPayload): void => {
   const value = stripHtml(payload?.content ?? draft.value);
-  const hasAttachments = Boolean(
-    payload?.files?.length || payload?.mediaFiles?.length
-  );
-
-  if (!value && hasAttachments) {
-    sendMessage('Прикрепил файл');
-    draft.value = '';
-    void scrollToBottom();
-    return;
-  }
 
   if (!value) return;
-  sendMessage(value);
+  void sendMessage(value);
   draft.value = '';
   void scrollToBottom();
 };
@@ -325,8 +321,8 @@ const handleSuggestion = (prompt: 'summary' | 'tasks'): void => {
 };
 
 const handleAutomationClick = (kind: 'daily' | 'weekly'): void => {
-  activeView.value = 'chat';
-  sendMessage(
+  startNewSession();
+  void sendMessage(
     kind === 'daily'
       ? 'Настрой ежедневную сводку в 8:00'
       : 'Настрой еженедельный обзор в пятницу вечером'
