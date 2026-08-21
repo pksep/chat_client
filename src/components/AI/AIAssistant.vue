@@ -248,8 +248,7 @@ import {
   ContentEditor,
   Icon,
   IconNameEnum,
-  SizesEnum,
-  type IContentEditorSendPayload
+  SizesEnum
 } from '@pksep/yui';
 import AiSparkleIcon from './AiSparkleIcon.vue';
 import VoiceMessageIcon from './VoiceMessageIcon.vue';
@@ -260,6 +259,12 @@ import { useAiAssistantMock } from '../../composables/useAiAssistantMock';
 import { navigateToAI, useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { stripHtml } from '../../utils/stripHtml';
+
+interface IContentEditorSendPayload {
+  content?: string;
+  files?: FileList;
+  mediaFiles?: FileList;
+}
 
 const {
   sessions,
