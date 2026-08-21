@@ -29,7 +29,10 @@
           </span>
         </div>
 
-        <div class="menu-profile__row menu-profile__row_theme">
+        <div
+          class="menu-profile__row menu-profile__row_theme"
+          @click="themeStore.setTheme(!isDarkTheme)"
+        >
           <div class="menu-profile__group">
             <Icon
               class="menu-profile__icon"
@@ -39,7 +42,11 @@
             <div class="menu-profile__row-label">Тёмная тема</div>
           </div>
 
-          <Toggle v-model="isDarkTheme" @change="themeStore.setTheme" />
+          <Toggle
+            v-model="isDarkTheme"
+            @click.stop
+            @change="themeStore.setTheme"
+          />
         </div>
 
         <div class="menu-profile__status">

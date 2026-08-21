@@ -4,14 +4,16 @@ button.button-yui-kit.secondary-yui-kit.large.button-menu__info {
   height: 65px;
   width: 100%;
   font-size: 14px;
-  color: var(--text-black);
+  color: var(--text-primary);
   padding-block: 10px;
   margin-top: 15px;
   line-height: 100%;
+
   & svg.icon-yui-kit {
     color: var(--icon-color, var(--grey5));
     font-size: 24px;
   }
+
   &:hover {
     cursor: pointer;
     --icon-color: var(--blue1);
@@ -25,7 +27,7 @@ button.button-yui-kit.secondary-yui-kit.large.button-menu__info {
   font-size: 14px;
 }
 
-@media screen and (width <= 768px) {
+@media screen and (width <=768px) {
   button.button-yui-kit.secondary-yui-kit.large.button-menu__info {
     margin-top: 5px;
   }

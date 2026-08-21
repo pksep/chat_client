@@ -33,19 +33,18 @@
   width: 38px;
   height: 38px;
   border-radius: 999px;
-  background: var(--blue10);
-  color: var(--blue1);
+  background: var(--border-hover);
+  color: var(--text-link);
   transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    background-color 0.2s ease,
-    color 0.2s ease;
+    all 0.2s ease
 }
 
 .menu-bottom-nav__button--active .menu-bottom-nav__icon-shell,
 .menu-bottom-nav__button--active .menu-bottom-nav__avatar-shell {
-  background: var(--border-blue);
-  color: var(--white);
+  background: var(--border-hover);
+  color: var(--surface-overlay);
+  transition:
+    all 0.2s ease
 }
 
 .menu-bottom-nav__button--active .menu-bottom-nav__avatar-shell {
@@ -92,7 +91,7 @@
 
 .menu-panel__title {
   margin: 0;
-  color: var(--text-black);
+  color: var(--text-primary);
   font-size: 20px;
   line-height: 24px;
 }
@@ -112,11 +111,11 @@
 .menu-profile__title {
   margin: 0;
   padding: 0 6px 10px;
-  color: var(--text-black);
+  color: var(--text-primary);
   font-size: 20px;
   line-height: 24px;
   font-weight: 700;
-  border-bottom: 1px solid var(--grey13);
+  border-bottom: 1px solid var(--border-table);
 }
 
 .menu-profile__body {
@@ -145,7 +144,7 @@
 
 .menu-profile__name {
   margin: 0;
-  color: var(--text-black);
+  color: var(--text-primary);
   font-size: 20px;
   line-height: 24px;
 }
@@ -163,7 +162,7 @@
 }
 
 .menu-profile__label {
-  color: var(--text-black);
+  color: var(--text-primary);
   font-size: 16px;
   font-weight: 700;
 }
@@ -360,6 +359,8 @@
   padding: 10px 15px;
   border-radius: 8px;
   background: var(--table-surface-search);
+
+  transition: all 0.2s ease;
 
   cursor: pointer;
 
@@ -631,9 +632,11 @@ dialog.menu-profile__wallpaper-modal>.modal-yui-kit__modal-content {
 }
 
 .menu-profile__actions {
-  background-color: var(--background-light-color);
+  background-color: var(--table-surface-search);
   display: grid;
   gap: 8px;
+  border-radius: 5px;
+  transition: all 0.2s ease;
 }
 
 .menu-profile__logout {
@@ -646,8 +649,8 @@ dialog.menu-profile__wallpaper-modal>.modal-yui-kit__modal-content {
 }
 
 .menu-profile__logout__icon {
-  color: var(--grey6);
-  transition: 0.3s ease-in-out;
+  color: var(--text-secondary);
+  transition: 0.2s ease-in-out;
 }
 
 .menu-profile__logout:active .menu-profile__logout__icon {

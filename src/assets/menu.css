@@ -5,8 +5,8 @@
   padding: 10px 10px 0;
   border-right-width: 0.5px;
   border-right-style: solid;
-  border-right-color: var(--grey13);
-  background-color: var(--white);
+  border-right-color: var(--border-table);
+  background-color: var(--surface-input-primary);
   overflow: hidden;
 }
 
@@ -153,7 +153,7 @@
   gap: 6px;
   min-height: 33px;
   padding: 0 10px;
-  border: 1px solid var(--grey13);
+  border: 1px solid var(--border-bottom);
   border-radius: 15px;
   background-color: var(--surface-overlay);
   color: var(--text-primary);

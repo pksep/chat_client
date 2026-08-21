@@ -17,7 +17,7 @@
   align-items: center;
   gap: 6px;
   grid-area: title;
-  color: var(--text-black);
+  color: var(--text-primary);
   max-width: 125ch;
   overflow-wrap: anywhere;
   text-overflow: ellipsis;

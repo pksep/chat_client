@@ -89,7 +89,7 @@
   max-width: 80ch;
   font-size: 16px;
   line-height: 20px;
-  color: var(--text-black);
+  color: var(--text-primary);
   font-weight: 600;
   hyphens: auto;
   text-overflow: ellipsis;

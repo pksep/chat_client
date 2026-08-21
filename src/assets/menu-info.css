@@ -7,12 +7,13 @@ aside.menu-info {
   width: 100%;
   overflow: hidden;
   --size-avatar: 42.5px;
+
   &.menu-info--open .collapse {
     width: 100%;
   }
 }
 
-.chat__info__modal > .modal-yui-kit__modal-content {
+.chat__info__modal>.modal-yui-kit__modal-content {
   height: var(--default-height);
   max-height: var(--default-height);
   overflow: hidden;
@@ -54,7 +55,7 @@ header.menu-info__header h4 {
   overflow: hidden;
   text-overflow: ellipsis;
   margin: 0;
-  color: var(--text-black);
+  color: var(--text-primary);
   font-size: 16px;
   margin-top: 10px;
   font-weight: 700;
@@ -110,7 +111,7 @@ section.menu-info__info-section {
   place-content: center;
   border-radius: 50%;
   background-color: var(--blue12);
-  color: var(--text-black);
+  color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;
   line-height: 100%;
@@ -134,13 +135,15 @@ div.menu-info__buttons {
   align-items: center;
   font-size: 14px;
   gap: 5px;
+
   & p {
     padding-block: 10px;
     margin: 0;
   }
+
   & span {
     font-weight: normal;
-    color: var(--text-black);
+    color: var(--text-primary);
   }
 }
 
@@ -154,6 +157,7 @@ div.menu-info__buttons {
   border: 1px solid var(--blue1);
   border-radius: 50%;
   background-color: transparent;
+
   &:hover {
     cursor: pointer;
   }
@@ -176,11 +180,13 @@ button.button-yui-kit.large.menu-info__secondary-button {
   place-items: center;
   font-size: 14px;
   padding: 10px 0;
-  color: var(--text-black);
+  color: var(--text-primary);
+
   & svg.icon-yui-kit,
   & svg {
     color: var(--icon-color, var(--grey5));
   }
+
   &:hover {
     --icon-color: var(--blue1);
     background-color: var(--primary-pressed-light);
