@@ -37,7 +37,7 @@
     opacity 0.2s ease;
 }
 
-.message-selection-toggle > * {
+.message-selection-toggle>* {
   opacity: 1;
   transform: translateX(0) scale(1);
   transform-origin: center;
@@ -52,7 +52,7 @@
   opacity: 0;
 }
 
-.message-selection-toggle__hide > * {
+.message-selection-toggle__hide>* {
   opacity: 0;
   transform: translateX(8px) scale(0.92);
   pointer-events: none;
@@ -118,8 +118,7 @@
   border-bottom-left-radius: 4px;
 }
 
-.message[data-is-me-sender='false']
-  .message__article:has(.message-bubble-tail) {
+.message[data-is-me-sender='false'] .message__article:has(.message-bubble-tail) {
   border-bottom-left-radius: 0;
 }
 
@@ -135,13 +134,11 @@
   border-bottom-right-radius: 0;
 }
 
-.message.message--continued-from-previous[data-is-me-sender='false']
-  .message__article {
+.message.message--continued-from-previous[data-is-me-sender='false'] .message__article {
   border-top-left-radius: 4px;
 }
 
-.message.message--continued-from-previous[data-is-me-sender='true']
-  .message__article {
+.message.message--continued-from-previous[data-is-me-sender='true'] .message__article {
   border-top-right-radius: 4px;
 }
 
@@ -345,14 +342,12 @@
 }
 
 .message-call__title--incoming,
-.message-call__title--outgoing {
-  color: var(--text-color);
-}
+.message-call__title--outgoing {}
 
 .message-call__duration {
   font-size: 13px;
   line-height: 1.15;
-  color: var(--text-color);
+
 }
 
 .message-call__meta {
@@ -386,7 +381,7 @@
   background-color: var(--message-background-color, var(--white));
 }
 
-.message__article__media > .message__article-initals {
+.message__article__media>.message__article-initals {
   padding: 10px 15px;
 }
 
@@ -422,9 +417,10 @@
   background-color: transparent;
 }
 
-.message__article__media .message__author-meta + .message-reference-block {
+.message__article__media .message__author-meta+.message-reference-block {
   padding-top: 0;
 }
+
 .message__article__file {
   cursor: pointer;
   padding: 6px 14px 6px 10px;
@@ -463,6 +459,7 @@
   justify-content: end;
   height: 20px;
   width: 100%;
+
   & svg.icon-yui-kit {
     display: grid;
     font-size: 20px !important;
@@ -503,6 +500,7 @@
     height: 24px;
     cursor: pointer;
     padding: 2px 4px 2px 8px;
+
     &:has(.reaction-count) {
       padding: 4px 4px 4px 8px;
     }
@@ -562,7 +560,7 @@
   gap: 5px;
   font-size: 14px;
   line-height: 20px;
-  color: var(--text-color);
+
 }
 
 .message-reactions-details__count {
@@ -642,7 +640,7 @@
   white-space: nowrap;
   font-size: 14px;
   line-height: 17px;
-  color: var(--text-color);
+
 }
 
 .message-reactions-details__hint {
@@ -779,7 +777,7 @@
 }
 
 .message-reference-block--outgoing .message-reference-forward,
-.message__other + .message-file-stack .message-reference-forward,
+.message__other+.message-file-stack .message-reference-forward,
 .message__other .message-file-stack .message-reference-forward {
   margin-left: auto;
   background-color: var(--blue12);
@@ -868,7 +866,7 @@
   font-size: 14px;
   line-height: 1.1;
   font-weight: 700;
-  color: var(--text-color);
+
 }
 
 .message-reference-block--outgoing .message-reference-reply__author {
@@ -899,32 +897,33 @@ div.message-content__loading-circle {
 div.message-content__loading-circle:nth-child(2) {
   animation-delay: 0.2s;
 }
+
 div.message-content__loading-circle:nth-child(3) {
   animation-delay: 0.3s;
 }
 
-div.message-content__html > p,
-div.message-content__html > ol,
-div.message-content__html > ol > li > p,
-div.message-content__html > ul,
-div.message-content__html > ul > li > p {
+div.message-content__html>p,
+div.message-content__html>ol,
+div.message-content__html>ol>li>p,
+div.message-content__html>ul,
+div.message-content__html>ul>li>p {
   max-width: 100ch;
   margin-block: 0;
   line-height: 17px;
 }
 
-div.message-content__html > ul {
+div.message-content__html>ul {
   list-style: disc;
   display: contents !important;
 }
 
-div.message-content__html > ol {
+div.message-content__html>ol {
   list-style: decimal;
   display: contents !important;
 }
 
-div.message-content__html > ol > li,
-div.message-content__html > ul > li {
+div.message-content__html>ol>li,
+div.message-content__html>ul>li {
   margin-left: 15px;
 }
 
@@ -954,12 +953,12 @@ div.message-content__html > ul > li {
   user-select: text;
 }
 
-.message-content--text .message-content__html > *:last-child {
+.message-content--text .message-content__html>*:last-child {
   display: inline;
   margin: 0;
 }
 
-.message-content--text .message-content__html > br {
+.message-content--text .message-content__html>br {
   display: block;
   content: '';
 }
@@ -982,7 +981,7 @@ div.message-content__html > ul > li {
   grid-template-columns: repeat(2, 1fr);
 }
 
-.message-content.message-content-3-item > :first-child {
+.message-content.message-content-3-item> :first-child {
   grid-column: span 2;
 }
 
@@ -994,11 +993,11 @@ div.message-content__html > ul > li {
   grid-template-columns: repeat(6, 1fr);
 }
 
-.message-content.message-content-5-item > :nth-child(-n + 2) {
+.message-content.message-content-5-item> :nth-child(-n + 2) {
   grid-column: span 3;
 }
 
-.message-content.message-content-5-item > :nth-last-child(-n + 3) {
+.message-content.message-content-5-item> :nth-last-child(-n + 3) {
   grid-column: span 2;
 }
 
@@ -1010,11 +1009,11 @@ div.message-content__html > ul > li {
   grid-template-columns: repeat(6, 1fr);
 }
 
-.message-content.message-content-7-item > :nth-child(-n + 4) {
+.message-content.message-content-7-item> :nth-child(-n + 4) {
   grid-column: span 3;
 }
 
-.message-content.message-content-7-item > :nth-last-child(-n + 3) {
+.message-content.message-content-7-item> :nth-last-child(-n + 3) {
   grid-column: span 2;
 }
 
@@ -1022,11 +1021,11 @@ div.message-content__html > ul > li {
   grid-template-columns: repeat(6, 1fr);
 }
 
-.message-content.message-content-8-item > :nth-child(-n + 2) {
+.message-content.message-content-8-item> :nth-child(-n + 2) {
   grid-column: span 3;
 }
 
-.message-content.message-content-8-item > :nth-child(n + 3) {
+.message-content.message-content-8-item> :nth-child(n + 3) {
   grid-column: span 2;
 }
 
@@ -1038,7 +1037,7 @@ div.message-content__html > ul > li {
   grid-template-columns: repeat(3, 1fr);
 }
 
-.message-content.message-content-10-item > :first-child {
+.message-content.message-content-10-item> :first-child {
   grid-column: span 3;
 }
 
@@ -1060,11 +1059,9 @@ div.message-content__html > ul > li {
 }
 
 .message-content__media-placeholder {
-  background: linear-gradient(
-      135deg,
+  background: linear-gradient(135deg,
       rgb(255 255 255 / 7%),
-      rgb(255 255 255 / 2%)
-    ),
+      rgb(255 255 255 / 2%)),
     rgb(28 38 53 / 28%);
 }
 
@@ -1119,11 +1116,11 @@ div.message-content__file {
   max-width: inherit;
   gap: 4px;
 
-  & > div {
+  &>div {
     width: calc(fit-content + 10px);
   }
 
-  & > svg {
+  &>svg {
     cursor: pointer;
   }
 
@@ -1156,9 +1153,7 @@ div.message-content__file {
   }
 
   & .message-content__file__upload-separator,
-  & .message-content__file__upload-size {
-    color: var(--text-color);
-  }
+  & .message-content__file__upload-size {}
 
   & .message-time {
     margin-left: 10px;
@@ -1173,6 +1168,7 @@ div.message-content__file {
 
 .message__assistant.menu__user-assistant-icon {
   align-self: start;
+
   & svg {
     font-size: 24px;
   }
@@ -1188,8 +1184,7 @@ div.message-content__file {
   transform: translateX(var(--message-selection-offset));
 }
 
-.message[data-is-me-sender='true'].message--selection-active
-  .message__content__articles {
+.message[data-is-me-sender='true'].message--selection-active .message__content__articles {
   transform: translateX(calc(var(--message-selection-offset) * -1));
 }
 
@@ -1198,8 +1193,7 @@ div.message-content__file {
   max-width: min(calc(100% - 50px), 500px);
 }
 
-.message--call-topic-default
-  .message__content__articles:has(.message__article__text) {
+.message--call-topic-default .message__content__articles:has(.message__article__text) {
   max-width: min(calc(100% - 20px), 465px);
 }
 
@@ -1306,7 +1300,7 @@ div.message-content__file {
   font-size: 14px;
 }
 
-.message-media__caption-text > * {
+.message-media__caption-text>* {
   margin: 0;
 }
 
@@ -1316,7 +1310,7 @@ div.message-content__file {
   line-height: 1.25;
 }
 
-.message-file__caption > * {
+.message-file__caption>* {
   margin: 0;
 }
 
@@ -1359,6 +1353,7 @@ div.message-content__file {
   gap: 10px;
   margin-top: 4px;
 }
+
 .message__content__articles .message-footer-row,
 .message-footer-row .message-reactions-row {
   margin-top: 0;
@@ -1443,10 +1438,12 @@ div.message-content__file {
 }
 
 @keyframes pulse {
+
   0%,
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.2;
   }
@@ -1458,6 +1455,7 @@ div.message-content__file {
   justify-self: start;
   border-radius: 16px;
   transition: background-color 0.2s;
+
   &:last-child {
     margin-bottom: 5px;
   }
@@ -1467,7 +1465,7 @@ div.message-content__file {
   justify-self: end;
   flex-direction: row-reverse;
   --message-background-color: var(--blue12);
-  --message-text-color: var(--text-color);
+  --message-text-color: var(--text-primary);
   --blockquote-bg-color: var(--white);
 }
 
@@ -1575,13 +1573,13 @@ div.message-content__file {
   }
 }
 
-@media screen and (width >= 768px) {
+@media screen and (width >=768px) {
   .message-content__media {
     max-width: 517px;
   }
 }
 
-@media screen and (width <= 768px) {
+@media screen and (width <=768px) {
   .message {
     gap: 8px;
   }
@@ -1603,20 +1601,23 @@ div.message-content__file {
     order: -2 !important;
   }
 
-  div.message-content__html > p {
+  div.message-content__html>p {
     max-width: 30ch;
   }
 
   .message-content--media.message-content-1-item {
     max-width: 300px;
   }
+
   .chat__message-wrapper {
     width: 100%;
     padding: 15px 10px 5px 10px;
   }
+
   .message__no-author {
     margin-right: 0;
   }
+
   .message-group {
     gap: 0;
   }
@@ -1632,7 +1633,7 @@ div.message-content__file {
   }
 }
 
-@media screen and (width <= 480px) {
+@media screen and (width <=480px) {
   .chat__input {
     box-sizing: border-box;
     padding: 5px 10px calc(20px + env(safe-area-inset-bottom, 0px));
@@ -1640,9 +1641,11 @@ div.message-content__file {
     bottom: 0;
     width: 100%;
     z-index: 9;
+
     & .editor-content {
       max-height: 250px;
       align-self: center;
+
       & .tiptap {
         padding: 5px;
       }
@@ -1692,6 +1695,7 @@ div.message-content__file {
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }

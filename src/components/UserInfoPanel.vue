@@ -313,7 +313,7 @@ const handleOpenChat = async () => {
   margin: 0;
   font-size: 16px;
   font-weight: 700;
-  color: var(--text-color);
+
   line-height: 19px;
 }
 
@@ -361,7 +361,6 @@ const handleOpenChat = async () => {
   font-weight: 600;
   display: flex;
   gap: 5px;
-  color: var(--text-color);
 }
 
 .user-info-panel__subtitle {

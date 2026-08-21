@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-color);
+
 }
 
 .call-modal__container {
@@ -57,6 +57,7 @@
     }
   }
 }
+
 .call-modal__avatar {
   --size-avatar: 80px;
 
@@ -201,6 +202,7 @@
 }
 
 @keyframes call-recording-starting-pulse {
+
   0%,
   100% {
     transform: scale(1);
@@ -276,7 +278,7 @@
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: var(--text-color);
+
   display: flex;
   align-items: center;
   gap: 18px;
@@ -373,7 +375,7 @@
   gap: 16px;
   z-index: 9;
 
-  & > div {
+  &>div {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -421,7 +423,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  color: var(--text-color);
+
   font: inherit;
   font-size: 16px;
   line-height: 20px;
@@ -508,7 +510,7 @@
   margin: 16px 18px 8px;
 }
 
-.call-modal__group-panel-actions > :only-child {
+.call-modal__group-panel-actions> :only-child {
   grid-column: 1 / -1;
 }
 
@@ -531,14 +533,14 @@
   margin-top: 4px;
   font-size: 14px;
   line-height: 18px;
-  color: var(--text-color);
+
 }
 
 .call-modal__group-panel-back,
 .call-modal__group-panel-close {
   border: none;
   background: transparent;
-  color: var(--text-color);
+
   cursor: pointer;
   flex: 0 0 auto;
 }
@@ -568,7 +570,7 @@
   justify-content: center;
   gap: 4px;
   cursor: pointer;
-  color: var(--text-color);
+
   font: unset;
 
   & span {
@@ -595,7 +597,7 @@
   gap: 12px;
   padding: 10px;
   cursor: pointer;
-  background-color: var(--blue15);
+  background-color: var(--table-surface-search);
 }
 
 .call-modal__group-panel-background-trigger-copy {
@@ -607,7 +609,7 @@
   font-size: 14px;
   line-height: 18px;
   font-weight: 400;
-  color: var(--text-color);
+
 }
 
 .call-modal__group-panel-background-menu {
@@ -717,7 +719,7 @@
   font-size: 16px;
   line-height: 19px;
   font-weight: 700;
-  color: var(--text-color);
+
 }
 
 .call-modal__group-panel-member-text span {
@@ -858,7 +860,7 @@
   margin: 0;
   font-size: 14px;
   line-height: 18px;
-  color: var(--text-color);
+
 }
 
 .call-background-preview__actions {
@@ -1047,14 +1049,14 @@
     align-items: flex-start;
   }
 
-  .call-modal__group-info > div:first-child {
+  .call-modal__group-info>div:first-child {
     order: 1;
     min-width: 0;
     flex: 1 1 0;
   }
 
-  .call-modal__group-info > button,
-  .call-modal__group-info > .call-modal__group-actions {
+  .call-modal__group-info>button,
+  .call-modal__group-info>.call-modal__group-actions {
     order: 2;
     flex: 0 0 auto;
   }
@@ -1145,9 +1147,7 @@
     --size-avatar: 10px !important;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__avatar
-    .avatar-yui-kit__text {
+  .call-modal__remote-grid--screen-share .call-modal__avatar .avatar-yui-kit__text {
     font-size: 13px;
   }
 
@@ -1220,8 +1220,7 @@
     height: 45px;
   }
 
-  .call-modal__control-button-wrapper--call-controls
-    .call-modal__control-button {
+  .call-modal__control-button-wrapper--call-controls .call-modal__control-button {
     width: 50px;
     height: 50px;
   }
@@ -1272,8 +1271,7 @@
     text-overflow: ellipsis;
   }
 
-  .call-modal__participant-stage--screen-share-stop-visible
-    .call-modal__remote-name {
+  .call-modal__participant-stage--screen-share-stop-visible .call-modal__remote-name {
     max-width: 42%;
   }
 
@@ -1301,15 +1299,14 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .call-modal__container--full-screen
-    .call-modal__remote-grid--group-duo
-    .call-modal__remote-tile {
+  .call-modal__container--full-screen .call-modal__remote-grid--group-duo .call-modal__remote-tile {
     min-height: 360px;
   }
 }
 
 .call-modal__control-button--answer {
-  background-color: #57d278 !important; /* Green */
+  background-color: #57d278 !important;
+  /* Green */
   transform: rotate(-90deg);
 
   &:hover {
@@ -1318,7 +1315,8 @@
 }
 
 .call-modal__control-button--reject {
-  background-color: var(--red4) !important; /* Red */
+  background-color: var(--red4) !important;
+  /* Red */
 }
 
 .call-modal__control-button-wrapper--incoming {
@@ -1493,26 +1491,21 @@
     border-radius: 10px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__remote-tile.call-modal__remote-tile--local {
+  .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--local {
     border-width: 2px;
     border-color: var(--border-blue) !important;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__remote-tile.call-modal__remote-tile--speaking {
+  .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--speaking {
     border-width: 2px;
     border-color: #57d278 !important;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__remote-tile.call-modal__remote-tile--local.call-modal__remote-tile--speaking {
+  .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--local.call-modal__remote-tile--speaking {
     border-width: 2px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__avatar
-    .avatar-yui-kit__text {
+  .call-modal__remote-grid--screen-share .call-modal__avatar .avatar-yui-kit__text {
     font-size: 10px;
   }
 
@@ -1526,18 +1519,15 @@
     width: 1.5px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__connection-quality-bar:nth-child(1) {
+  .call-modal__remote-grid--screen-share .call-modal__connection-quality-bar:nth-child(1) {
     height: 4.5px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__connection-quality-bar:nth-child(2) {
+  .call-modal__remote-grid--screen-share .call-modal__connection-quality-bar:nth-child(2) {
     height: 7.5px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__connection-quality-bar:nth-child(3) {
+  .call-modal__remote-grid--screen-share .call-modal__connection-quality-bar:nth-child(3) {
     height: 10.5px;
   }
 
@@ -1602,9 +1592,7 @@
   --size-avatar: 20px;
 }
 
-.call-modal__remote-grid--screen-share
-  .call-modal__avatar
-  .avatar-yui-kit__text {
+.call-modal__remote-grid--screen-share .call-modal__avatar .avatar-yui-kit__text {
   font-size: 24px;
 }
 
@@ -1705,13 +1693,11 @@
   background: var(--call-quality-inactive);
 }
 
-.call-modal__connection-quality--poor
-  .call-modal__connection-quality-bar:first-child {
+.call-modal__connection-quality--poor .call-modal__connection-quality-bar:first-child {
   background: var(--call-quality-active);
 }
 
-.call-modal__connection-quality--unknown
-  .call-modal__connection-quality-bar:first-child,
+.call-modal__connection-quality--unknown .call-modal__connection-quality-bar:first-child,
 .call-modal__connection-quality--unknown .call-modal__connection-quality-bar {
   background: var(--call-quality-active);
 }
@@ -1838,17 +1824,15 @@
   pointer-events: none;
 }
 
-.call-modal__video-overlay-bar > * {
+.call-modal__video-overlay-bar>* {
   pointer-events: auto;
 }
 
 .call-modal__video-overlay-bar--top {
   top: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(2, 8, 23, 0.88) 0%,
-    transparent 100%
-  );
+  background: linear-gradient(180deg,
+      rgba(2, 8, 23, 0.88) 0%,
+      transparent 100%);
 }
 
 .call-modal__video-overlay-bar--bottom {
@@ -1938,7 +1922,7 @@
   }
 }
 
-.call-modal__remote-name > span {
+.call-modal__remote-name>span {
   display: block;
   min-width: 0;
   max-width: 100%;
@@ -2076,8 +2060,7 @@
     height: 45px;
   }
 
-  .call-modal__control-button-wrapper--call-controls
-    .call-modal__control-button {
+  .call-modal__control-button-wrapper--call-controls .call-modal__control-button {
     width: 50px;
     height: 50px;
   }
@@ -2103,13 +2086,11 @@
     border-radius: 10px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__remote-tile.call-modal__remote-tile--local {
+  .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--local {
     border-color: var(--border-blue) !important;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__remote-tile.call-modal__remote-tile--speaking {
+  .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--speaking {
     border-color: #57d278 !important;
   }
 
@@ -2117,9 +2098,7 @@
     --size-avatar: 10px !important;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__avatar
-    .avatar-yui-kit__text {
+  .call-modal__remote-grid--screen-share .call-modal__avatar .avatar-yui-kit__text {
     font-size: 10px !important;
   }
 
@@ -2136,18 +2115,15 @@
     width: 1.5px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__connection-quality-bar:nth-child(1) {
+  .call-modal__remote-grid--screen-share .call-modal__connection-quality-bar:nth-child(1) {
     height: 4.5px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__connection-quality-bar:nth-child(2) {
+  .call-modal__remote-grid--screen-share .call-modal__connection-quality-bar:nth-child(2) {
     height: 7.5px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__connection-quality-bar:nth-child(3) {
+  .call-modal__remote-grid--screen-share .call-modal__connection-quality-bar:nth-child(3) {
     height: 10.5px;
   }
 
@@ -2227,8 +2203,7 @@
     padding-bottom: 4px;
   }
 
-  .call-modal__container--busy-notice
-    .call-modal__control-button-wrapper--call-controls {
+  .call-modal__container--busy-notice .call-modal__control-button-wrapper--call-controls {
     width: auto;
     padding: 0;
     gap: 18px;
@@ -2237,18 +2212,14 @@
     justify-content: center;
   }
 
-  .call-modal__container--busy-notice
-    .call-modal__control-button-wrapper--call-controls
-    .call-modal__control-button {
+  .call-modal__container--busy-notice .call-modal__control-button-wrapper--call-controls .call-modal__control-button {
     width: 40px;
     height: 40px;
     color: #9aa7ba;
     background: #eef1f7;
   }
 
-  .call-modal__container--busy-notice
-    .call-modal__control-button-wrapper--call-controls
-    .call-modal__control-button.call-modal__control-button--leave {
+  .call-modal__container--busy-notice .call-modal__control-button-wrapper--call-controls .call-modal__control-button.call-modal__control-button--leave {
     color: var(--white);
     background: var(--red4) !important;
   }

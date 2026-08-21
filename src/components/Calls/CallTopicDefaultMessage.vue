@@ -159,7 +159,7 @@ watch(
   padding: 12px 54px 18px 12px;
   border-radius: 8px;
   background: var(--white);
-  color: var(--text-color);
+
   font-size: 13px;
   line-height: 16px;
   box-shadow: 0 1px 2px rgb(0 0 0 / 4%);

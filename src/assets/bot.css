@@ -197,7 +197,7 @@
   align-items: center;
   gap: 10px;
 
-  > span {
+  >span {
     margin-right: auto;
   }
 }
@@ -238,7 +238,7 @@
   font-size: 16px;
   line-height: 20px;
   font-weight: 700;
-  color: var(--text-color);
+
 }
 
 .bot-info-panel__close {
@@ -268,7 +268,7 @@
   justify-content: center;
   gap: 5px;
   margin: 0;
-  color: var(--text-color);
+
   font-size: 18px;
   line-height: 22px;
   font-weight: 600;
@@ -487,13 +487,13 @@ button.button-yui-kit.large.menu-info__secondary-button.bot-info-panel__action {
   padding-inline: 10px;
 }
 
-@media screen and (width <= 768px) {
+@media screen and (width <=768px) {
   dialog.new-bot-mobile.modal-yui-kit_bottom {
     height: 100dvh !important;
     border-radius: 0 !important;
   }
 
-  dialog.new-bot-mobile.modal-yui-kit_bottom > .modal-yui-kit__modal-content {
+  dialog.new-bot-mobile.modal-yui-kit_bottom>.modal-yui-kit__modal-content {
     height: 100% !important;
     grid-template-rows: auto auto minmax(0, 1fr);
     align-content: stretch;
@@ -511,24 +511,21 @@ button.button-yui-kit.large.menu-info__secondary-button.bot-info-panel__action {
     padding: 0;
   }
 
-  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar
-    .modal-yui-kit__modal-content {
+  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar .modal-yui-kit__modal-content {
     width: 100% !important;
     height: auto !important;
     display: block !important;
     padding: 0 !important;
   }
 
-  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar
-    .modal-cropped-avatar__content {
+  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar .modal-cropped-avatar__content {
     width: 100% !important;
     padding: 22px 16px 16px !important;
     border-radius: 20px 20px 0 0 !important;
     gap: 20px !important;
   }
 
-  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar
-    .modal-cropped-avatar__title {
+  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar .modal-cropped-avatar__title {
     min-height: 0;
     max-width: 100%;
     display: block;
@@ -539,44 +536,37 @@ button.button-yui-kit.large.menu-info__secondary-button.bot-info-panel__action {
     white-space: nowrap;
   }
 
-  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar
-    .modal-cropped-avatar__title::after {
+  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar .modal-cropped-avatar__title::after {
     content: 'Изменение фото';
     font-size: 16px;
   }
 
-  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar
-    .modal-cropped-avatar__main {
+  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar .modal-cropped-avatar__main {
     gap: 18px !important;
   }
 
-  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar
-    .modal-cropped-avatar__cropped {
+  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar .modal-cropped-avatar__cropped {
     gap: 18px !important;
   }
 
-  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar
-    .modal-cropped-avatar__cropper {
+  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar .modal-cropped-avatar__cropper {
     width: min(200px, calc(100vw - 64px)) !important;
     height: min(200px, calc(100vw - 64px)) !important;
   }
 
-  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar
-    .modal-cropped-avatar__tools {
+  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar .modal-cropped-avatar__tools {
     width: 100% !important;
     gap: 16px !important;
   }
 
-  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar
-    .modal-cropped-avatar__buttons {
+  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar .modal-cropped-avatar__buttons {
     width: 100%;
     display: grid !important;
     grid-template-columns: 1fr;
     gap: 8px !important;
   }
 
-  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar
-    .modal-cropped-avatar__button.button-yui-kit {
+  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar .modal-cropped-avatar__button.button-yui-kit {
     width: 100%;
     min-width: 0;
     min-height: 48px !important;
@@ -588,20 +578,17 @@ button.button-yui-kit.large.menu-info__secondary-button.bot-info-panel__action {
     line-height: 20px;
   }
 
-  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar
-    .modal-cropped-avatar__button.outline-yui-kit {
+  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar .modal-cropped-avatar__button.outline-yui-kit {
     background: var(--button-color-secondary, #f7f8fc);
     border: 0;
     color: var(--primary-color);
   }
 
-  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar
-    .modal-cropped-avatar__button.button-yui-kit:last-child {
+  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar .modal-cropped-avatar__button.button-yui-kit:last-child {
     font-size: 0;
   }
 
-  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar
-    .modal-cropped-avatar__button.button-yui-kit:last-child::after {
+  dialog.bot-avatar-cropper-modal--mobile.modal-cropped-avatar .modal-cropped-avatar__button.button-yui-kit:last-child::after {
     content: 'Применить';
     font-size: 16px;
   }

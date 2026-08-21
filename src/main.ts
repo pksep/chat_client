@@ -15,6 +15,7 @@ import { registerNativeFileBridge } from './services/useNativeFile';
 import { initFastNativeNotificationNavigation } from './services/usePushNotifications';
 import { USER_STATUS_PRESETS } from './utils/userStatus';
 import { NATIVE_STARTUP_READY_EVENT } from './utils/nativeStartup';
+import { createPinia } from 'pinia';
 
 interface LaunchStartupPlugin {
   ready: () => Promise<void>;
@@ -187,6 +188,10 @@ const mountApp = () => {
   installNotoEmojiFontFaces();
 
   const app = createApp(App);
+
+  const piniaStore = createPinia();
+
+  app.use(piniaStore);
 
   app.directive('on-click-outside', {
     beforeMount(el, binding) {

@@ -24,8 +24,9 @@
   display: grid;
   gap: 10px;
   width: 100%;
+
   fieldset.input-yui-kit {
-    background-color: var(--blue15);
+    background-color: var(--table-surface-search);
 
     :disabled {
       background-color: transparent !important;
@@ -47,6 +48,7 @@
   color: var(--blue1);
   border-radius: 50%;
   padding: 7px;
+
   & svg {
     font-size: 16px;
   }
@@ -60,10 +62,11 @@
   width: 100%;
 }
 
-@media screen and (width <= 480px) {
+@media screen and (width <=480px) {
   .line {
     margin-top: 0;
   }
+
   .menu__user-assistant-icon {
     padding: 10px;
   }

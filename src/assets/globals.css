@@ -11,6 +11,8 @@ body {
     'Noto Emoji Compat Web', 'Noto Emoji Windows Web', 'Noto Color Emoji Web',
     'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
   overflow-x: hidden;
+  color: var(--text-primary);
+  transition: color 0.2s ease;
 }
 
 body.chat-tauri-macos-runtime {

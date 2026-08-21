@@ -29,6 +29,19 @@
           </span>
         </div>
 
+        <div class="menu-profile__row menu-profile__row_theme">
+          <div class="menu-profile__group">
+            <Icon
+              class="menu-profile__icon"
+              :name="IconNameEnum.darkThemeSwitcher"
+            />
+
+            <div class="menu-profile__row-label">Тёмная тема</div>
+          </div>
+
+          <Toggle v-model="isDarkTheme" @change="themeStore.setTheme" />
+        </div>
+
         <div class="menu-profile__status">
           <div
             v-if="!currentStatusLabel"
@@ -738,7 +751,8 @@ import {
   Icon,
   IconNameEnum,
   Modal,
-  SizesEnum
+  SizesEnum,
+  Toggle
 } from '@pksep/yui';
 import { computed, ref, useTemplateRef, type CSSProperties } from 'vue';
 import EmojiPicker from 'vue3-emoji-picker';
@@ -772,6 +786,8 @@ import CallBackgroundPreviewModal from '../CallModal/CallBackgroundPreviewModal.
 import ConfirmModal from '../UI/ConfirmModal.vue';
 import FileIcon from '../UI/FileIcon.vue';
 import { useMobileApp } from '../../composables/useMobileApp';
+import { useThemeStore } from '../../stores/theme';
+import { storeToRefs } from 'pinia';
 
 const props = withDefaults(
   defineProps<{
@@ -782,6 +798,8 @@ const props = withDefaults(
   }
 );
 
+const themeStore = useThemeStore();
+const { isDarkTheme } = storeToRefs(themeStore);
 const authUser = computed(() => getAuthUser() as IUser | null);
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const statusPresets = USER_STATUS_PRESETS;

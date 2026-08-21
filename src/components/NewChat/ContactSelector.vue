@@ -280,7 +280,7 @@ const onAddClick = (): void => {
   padding: 0 14px;
   border: 1px solid var(--border-grey);
   border-radius: 17px;
-  color: var(--text-color);
+
   background: var(--white);
   font-size: 14px;
   font-weight: 500;

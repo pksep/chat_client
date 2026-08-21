@@ -20,6 +20,7 @@
     .contact-list__description--overflow strong::after {
       background: linear-gradient(to right, transparent 0%, var(--blue10) 100%);
     }
+
     .contact-list__bottom::before {
       background: linear-gradient(to right, transparent 0%, var(--blue10) 80%);
     }
@@ -38,6 +39,7 @@
   .contact-list__description--overflow strong::after {
     background: linear-gradient(to right, transparent 0%, var(--blue10) 100%);
   }
+
   .contact-list__bottom::before {
     background: linear-gradient(to right, transparent 0%, var(--blue10) 80%);
   }
@@ -56,6 +58,7 @@
     .contact-list__description--overflow strong::after {
       background: linear-gradient(to right, transparent 0%, var(--blue10) 100%);
     }
+
     .contact-list__bottom::before {
       background: linear-gradient(to right, transparent 0%, var(--blue10) 80%);
     }
@@ -136,7 +139,8 @@
   position: relative;
 }
 
-@media (width <= 768px) {
+@media (width <=768px) {
+
   .contact-list__description,
   .contact-list__description p,
   .contact-list__description strong {
@@ -159,12 +163,8 @@
 }
 
 .contact-list__item--message-result .contact-list__description--overflow::after,
-.contact-list__item--message-result
-  .contact-list__description--overflow
-  p::after,
-.contact-list__item--message-result
-  .contact-list__description--overflow
-  strong::after {
+.contact-list__item--message-result .contact-list__description--overflow p::after,
+.contact-list__item--message-result .contact-list__description--overflow strong::after {
   left: auto;
   right: 0;
 }
@@ -352,12 +352,13 @@ svg.icon-yui-kit.contact-list__read-icon {
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
+
   &:hover {
     cursor: pointer;
   }
 }
 
-.contact-selector__item:hover .user-profile > * {
+.contact-selector__item:hover .user-profile>* {
   cursor: pointer;
 }
 
@@ -392,7 +393,7 @@ svg.icon-yui-kit.contact-list__read-icon {
 
 .contact-selector__empty-title {
   margin: 0;
-  color: var(--text-color);
+
   font-size: 14px;
   line-height: 20px;
 }
@@ -407,7 +408,7 @@ svg.icon-yui-kit.contact-list__read-icon {
   background-color: #f5f5f5;
 }
 
-.menu__info-users-list > li {
+.menu__info-users-list>li {
   margin-top: 10px;
 }
 
@@ -424,15 +425,18 @@ svg.icon-yui-kit.contact-list__read-icon {
 .contact-list__message-status-icons {
   height: 20px;
 }
-.contact-list__message-status-icons > svg.icon-yui-kit {
+
+.contact-list__message-status-icons>svg.icon-yui-kit {
   color: var(--neutral-text);
   font-size: 20px !important;
 }
-.contact-list__message-status-icons.is-read > svg.icon-yui-kit {
+
+.contact-list__message-status-icons.is-read>svg.icon-yui-kit {
   color: var(--blue1);
 }
 
-@media (width <= 768px) {
+@media (width <=768px) {
+
   .chat-container:has(.chat-list),
   .chat-container:has(.mobile-list-container__content .menu-profile),
   .chat-container:has(.mobile-list-container__content .calls-page) {
@@ -449,15 +453,18 @@ svg.icon-yui-kit.contact-list__read-icon {
     border-bottom: 1px solid var(--grey1);
     padding-bottom: 22px;
   }
+
   .contact-list__description {
     margin-top: 5px;
     font-size: 16px;
     justify-self: start;
   }
+
   .contact-list__title {
     -webkit-line-clamp: 1;
     line-clamp: 1;
   }
+
   .contact-list__item {
     --size-avatar: 30px;
     grid-template-rows: auto 1fr;
@@ -468,6 +475,7 @@ svg.icon-yui-kit.contact-list__read-icon {
   svg.icon-yui-kit.contact-list__pin-icon {
     font-size: 24px;
   }
+
   .contact-selector__list {
     max-height: calc(var(--default-height) - 140px);
   }
@@ -477,7 +485,7 @@ svg.icon-yui-kit.contact-list__read-icon {
     padding-top: 72px;
   }
 
-  .chats-toolbar > .line {
+  .chats-toolbar>.line {
     margin: 0 !important;
     width: 100% !important;
   }
@@ -496,7 +504,7 @@ svg.icon-yui-kit.contact-list__read-icon {
   }
 }
 
-@media (width <= 323px) {
+@media (width <=323px) {
   .contact-list__item {
     column-gap: 5px;
   }

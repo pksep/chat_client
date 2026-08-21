@@ -2,7 +2,7 @@ dialog.modal-yui-kit.modal-yui-kit_bottom {
   display: none;
 }
 
-.modal-info-mobile__end > div.menu-info__buttons {
+.modal-info-mobile__end>div.menu-info__buttons {
   grid-template-columns: repeat(3, 1fr);
 }
 
@@ -14,13 +14,13 @@ dialog.modal-yui-kit.modal-yui-kit_bottom {
   margin-bottom: 10px;
 }
 
-.modal-info-mobile__start > .menu__info-form-block > .menu__info-form {
+.modal-info-mobile__start>.menu__info-form-block>.menu__info-form {
   & fieldset.input-yui-kit {
     width: 100%;
   }
 }
 
-.modal-info-mobile__start > .modal-info-mobile__avatar-button {
+.modal-info-mobile__start>.modal-info-mobile__avatar-button {
   --size-avatar: 43px;
 }
 
@@ -32,31 +32,25 @@ dialog.modal-yui-kit.modal-yui-kit_bottom {
   padding: 14px 10px 10px;
 }
 
-.modal-info-mobile__start--disabled > .modal-info-mobile__avatar-button {
+.modal-info-mobile__start--disabled>.modal-info-mobile__avatar-button {
   --size-avatar: 40px;
 }
 
-.modal-info-mobile__start--disabled > form.menu__info-form {
+.modal-info-mobile__start--disabled>form.menu__info-form {
   width: 100%;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
 }
 
-.modal-info-mobile__start--disabled
-  > form.menu__info-form
-  > .menu__info-form-block.form__name {
+.modal-info-mobile__start--disabled>form.menu__info-form>.menu__info-form-block.form__name {
   grid-column: 1;
 }
 
-.modal-info-mobile__start--disabled
-  > form.menu__info-form
-  > .menu__info-save-button {
+.modal-info-mobile__start--disabled>form.menu__info-form>.menu__info-save-button {
   grid-column: 2;
 }
 
-.modal-info-mobile__start--disabled
-  > form.menu__info-form
-  > .menu__info-save-button:disabled {
+.modal-info-mobile__start--disabled>form.menu__info-form>.menu__info-save-button:disabled {
   display: none;
 }
 
@@ -74,7 +68,7 @@ dialog.modal-yui-kit.modal-yui-kit_bottom {
   border: 1px solid var(--border-grey);
   border-radius: 17px;
   background: var(--white);
-  color: var(--text-color);
+
   font-size: 14px;
   cursor: pointer;
 }
@@ -94,6 +88,7 @@ section.menu__info-users.modal-info-mobile__contact-list {
   padding: 0;
   padding-inline: 0;
   overflow: visible;
+
   & .menu__info-users-list {
     height: auto;
     max-height: none;
@@ -136,21 +131,24 @@ p.modal-info-mobile__end--paragraph {
   font-size: 14px;
 }
 
-@media screen and (width <= 768px) {
+@media screen and (width <=768px) {
   dialog.modal-yui-kit.modal-yui-kit_bottom {
     display: grid;
   }
+
   dialog.modal-yui-kit.modal-yui-kit_bottom.chat__header-modal-info--active {
     & .mobile__modal-header {
       align-items: center;
       padding-top: 10.5px;
       padding-bottom: 10.5px;
     }
+
     & .mobile__modal-content {
       padding-inline: 0;
       overflow-y: auto;
       overflow-x: hidden;
     }
+
     & .modal-yui-kit__modal-content {
       height: 100%;
       min-height: 0;

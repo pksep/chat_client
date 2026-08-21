@@ -95,22 +95,22 @@ p.chat__nothing-paragraph {
   background: var(--primary-color);
 }
 
-.chat__message-wrapper > .chat__message-bubble,
-.chat__message-wrapper > .chat__floating-date-divider,
-.chat__message-wrapper > .chat__pagination-loading,
-.chat__message-wrapper > .chat-update-banner,
-.chat__message-wrapper > .chat__message-empty-state {
+.chat__message-wrapper>.chat__message-bubble,
+.chat__message-wrapper>.chat__floating-date-divider,
+.chat__message-wrapper>.chat__pagination-loading,
+.chat__message-wrapper>.chat-update-banner,
+.chat__message-wrapper>.chat__message-empty-state {
   grid-area: 1 / 1;
 }
 
-.chat__message-wrapper > .chat__floating-date-divider,
-.chat__message-wrapper > .chat__pagination-loading,
-.chat__message-wrapper > .chat-update-banner {
+.chat__message-wrapper>.chat__floating-date-divider,
+.chat__message-wrapper>.chat__pagination-loading,
+.chat__message-wrapper>.chat-update-banner {
   align-self: start;
   overflow-anchor: none;
 }
 
-.chat__message-wrapper > .chat__pagination-loading--bottom {
+.chat__message-wrapper>.chat__pagination-loading--bottom {
   align-self: end;
 }
 
@@ -134,7 +134,7 @@ p.chat__nothing-paragraph {
   overflow: hidden;
 }
 
-.chat__message-wrapper--search-positioning > .chat__message-bubble {
+.chat__message-wrapper--search-positioning>.chat__message-bubble {
   visibility: hidden;
 }
 
@@ -154,7 +154,7 @@ p.chat__nothing-paragraph {
  * overflow for long conversations when this element shares a CSS grid area,
  * so the wrapper reports no usable scroll range and cannot preserve anchors.
  */
-.chat__message-bubble > :first-child {
+.chat__message-bubble> :first-child {
   margin-top: auto;
 }
 
@@ -162,11 +162,11 @@ p.chat__nothing-paragraph {
   grid-template-rows: minmax(100%, max-content);
 }
 
-.chat__message-wrapper--call-topic > .chat__message-bubble {
+.chat__message-wrapper--call-topic>.chat__message-bubble {
   height: 100%;
 }
 
-.chat__message-wrapper--call-topic > .chat__message-bubble::before {
+.chat__message-wrapper--call-topic>.chat__message-bubble::before {
   content: '';
   display: block;
   flex: 1 0 0;
@@ -175,7 +175,7 @@ p.chat__nothing-paragraph {
   overflow-anchor: none;
 }
 
-.chat__message-wrapper--call-topic > .chat__message-bubble > :first-child {
+.chat__message-wrapper--call-topic>.chat__message-bubble> :first-child {
   margin-top: 0;
 }
 
@@ -184,7 +184,7 @@ p.chat__nothing-paragraph {
     grid-template-rows: minmax(100%, max-content);
   }
 
-  .chat__message-wrapper--favorite > .chat__message-empty-state {
+  .chat__message-wrapper--favorite>.chat__message-empty-state {
     position: absolute;
     top: 50%;
     left: 50%;
@@ -193,11 +193,11 @@ p.chat__nothing-paragraph {
     transform: translate(-50%, -50%);
   }
 
-  .chat__message-wrapper--favorite > .chat__message-bubble {
+  .chat__message-wrapper--favorite>.chat__message-bubble {
     height: 100%;
   }
 
-  .chat__message-wrapper--favorite > .chat__message-bubble::before {
+  .chat__message-wrapper--favorite>.chat__message-bubble::before {
     content: '';
     display: block;
     flex: 1 0 0;
@@ -206,7 +206,7 @@ p.chat__nothing-paragraph {
     overflow-anchor: none;
   }
 
-  .chat__message-wrapper--favorite > .chat__message-bubble > :first-child {
+  .chat__message-wrapper--favorite>.chat__message-bubble> :first-child {
     margin-top: 0;
   }
 }
@@ -226,7 +226,7 @@ p.chat__nothing-paragraph {
   overflow-anchor: none;
 }
 
-.chat__message-bubble__scroll-indicators > button {
+.chat__message-bubble__scroll-indicators>button {
   pointer-events: auto;
 }
 
@@ -249,11 +249,11 @@ p.chat__nothing-paragraph {
   padding: 0;
 }
 
-.chat__message-bubble__arrow-down > svg.icon-yui-kit {
+.chat__message-bubble__arrow-down>svg.icon-yui-kit {
   font-size: 18px !important;
 }
 
-.chat__message-bubble__arrow-down > .contact-list__notification {
+.chat__message-bubble__arrow-down>.contact-list__notification {
   position: absolute;
   top: -8px;
   line-height: 18px;
@@ -272,12 +272,10 @@ p.chat__nothing-paragraph {
   line-height: 20px;
   text-align: center;
   height: 20px;
-  background: linear-gradient(
-    90deg,
-    var(--blue15) 2%,
-    var(--blue10) 51.44%,
-    var(--blue15) 100%
-  );
+  background: linear-gradient(90deg,
+      var(--table-surface-search) 2%,
+      var(--blue10) 51.44%,
+      var(--table-surface-search) 100%);
   border-radius: 10px;
 }
 
@@ -290,11 +288,11 @@ p.chat__nothing-paragraph {
     margin-bottom: 10px;
   }
 
-  & > span.system-message-text {
+  &>span.system-message-text {
     font-weight: 400;
   }
 
-  & > span {
+  &>span {
     font-size: 12px;
     line-height: 15px;
     background: #1c2635b2;
@@ -384,7 +382,7 @@ p.chat__nothing-paragraph {
   opacity: 0;
 }
 
-.chat__message-bubble > .top-element:has(.date-divider) {
+.chat__message-bubble>.top-element:has(.date-divider) {
   display: flex;
   justify-content: center;
   pointer-events: none;
@@ -392,7 +390,7 @@ p.chat__nothing-paragraph {
 }
 
 .chat__floating-date-divider .date-divider,
-.chat__message-bubble > .top-element:has(.date-divider) .date-divider {
+.chat__message-bubble>.top-element:has(.date-divider) .date-divider {
   margin-inline: auto;
 }
 
@@ -439,18 +437,20 @@ p.chat__nothing-paragraph {
 */
 
 .menu__user-assistant {
+
   &:hover,
   &.menu__user-assistant--active {
     cursor: pointer;
-    background-color: var(--blue15);
+    background-color: var(--table-surface-search);
   }
 }
 
 .menu-user__item {
+
   &:hover,
   &.menu-user__item--active {
     cursor: pointer;
-    background-color: var(--blue15);
+    background-color: var(--table-surface-search);
   }
 }
 
@@ -495,12 +495,10 @@ p.chat__nothing-paragraph {
   display: block;
   flex: 0 0 auto;
   overflow: hidden;
-  background: linear-gradient(
-      90deg,
+  background: linear-gradient(90deg,
       transparent,
       rgb(255 255 255 / 58%),
-      transparent
-    ),
+      transparent),
     var(--grey2);
   background-size:
     220% 100%,
@@ -548,6 +546,7 @@ p.chat__nothing-paragraph {
       120% 0,
       0 0;
   }
+
   to {
     background-position:
       -120% 0,
@@ -555,12 +554,12 @@ p.chat__nothing-paragraph {
   }
 }
 
-@media screen and (width <= 768px) {
+@media screen and (width <=768px) {
   .chat__message-wrapper.chat__message-wrapper--favorite {
     grid-template-rows: minmax(100%, max-content);
   }
 
-  .chat__message-wrapper--favorite > .chat__message-bubble {
+  .chat__message-wrapper--favorite>.chat__message-bubble {
     height: 100%;
     padding-top: var(--mobile-pinned-messages-offset, 58px);
   }
@@ -642,12 +641,10 @@ p.chat__nothing-paragraph {
   .chat__mobile-instant-input-field {
     height: 42px;
     border-radius: 16px;
-    background: linear-gradient(
-        90deg,
+    background: linear-gradient(90deg,
         transparent,
         rgb(255 255 255 / 44%),
-        transparent
-      ),
+        transparent),
       var(--grey1);
     background-size:
       220% 100%,
@@ -676,6 +673,7 @@ p.chat__nothing-paragraph {
       opacity: 0.84;
       transform: translate3d(24%, 0, 0);
     }
+
     to {
       opacity: 1;
       transform: translate3d(0, 0, 0);
@@ -687,6 +685,7 @@ p.chat__nothing-paragraph {
       opacity: 0.84;
       transform: translate3d(-16%, 0, 0);
     }
+
     to {
       opacity: 1;
       transform: translate3d(0, 0, 0);
@@ -694,6 +693,7 @@ p.chat__nothing-paragraph {
   }
 
   @media (prefers-reduced-motion: reduce) {
+
     .chat-mobile-route-forward,
     .chat-mobile-route-back {
       animation: none;
@@ -714,13 +714,12 @@ p.chat__nothing-paragraph {
     top: 6px;
   }
 
-  .chat__mobile-route-view--messages:not(:has(.pinned-messages))
-    .chat__floating-date-divider {
+  .chat__mobile-route-view--messages:not(:has(.pinned-messages)) .chat__floating-date-divider {
     top: calc(var(--mobile-pinned-messages-offset, 58px) - 9px);
     z-index: 3;
   }
 
-  .chat__message-wrapper--favorite > .chat__floating-date-divider {
+  .chat__message-wrapper--favorite>.chat__floating-date-divider {
     top: calc(var(--mobile-pinned-messages-offset, 58px) - 9px);
     z-index: 3;
   }
@@ -769,12 +768,10 @@ p.chat__nothing-paragraph {
     height: 35px;
     margin-bottom: 5px;
     border-radius: 50%;
-    background: linear-gradient(
-        90deg,
+    background: linear-gradient(90deg,
         transparent,
         rgb(255 255 255 / 42%),
-        transparent
-      ),
+        transparent),
       #dfe3e8;
     background-size:
       220% 100%,
@@ -793,12 +790,10 @@ p.chat__nothing-paragraph {
     display: block;
     flex: 0 0 auto;
     overflow: hidden;
-    background: linear-gradient(
-        90deg,
+    background: linear-gradient(90deg,
         transparent,
         rgb(255 255 255 / 42%),
-        transparent
-      ),
+        transparent),
       #dfe3e8;
     background-size:
       220% 100%,
@@ -818,12 +813,10 @@ p.chat__nothing-paragraph {
     align-self: flex-end;
     width: min(64%, 300px);
     border-radius: 18px 18px 6px 18px;
-    background: linear-gradient(
-        90deg,
+    background: linear-gradient(90deg,
         transparent,
         rgb(255 255 255 / 46%),
-        transparent
-      ),
+        transparent),
       #dfe3e8;
   }
 
@@ -846,12 +839,10 @@ p.chat__nothing-paragraph {
     width: min(68%, 310px);
     height: clamp(112px, 23vh, 190px);
     border-radius: 18px 18px 6px 18px;
-    background: linear-gradient(
-        90deg,
+    background: linear-gradient(90deg,
         transparent,
         rgb(255 255 255 / 48%),
-        transparent
-      ),
+        transparent),
       #dfe3e8;
   }
 
@@ -860,11 +851,9 @@ p.chat__nothing-paragraph {
     width: 42px;
     height: 42px;
     border-radius: 12px;
-    background: linear-gradient(
-        135deg,
+    background: linear-gradient(135deg,
         transparent 52%,
-        rgb(255 255 255 / 58%) 52%
-      ),
+        rgb(255 255 255 / 58%) 52%),
       rgb(255 255 255 / 58%);
     box-shadow:
       -34px 42px 0 -21px rgb(255 255 255 / 44%),
@@ -877,6 +866,7 @@ p.chat__nothing-paragraph {
         120% 0,
         0 0;
     }
+
     to {
       background-position:
         -120% 0,
@@ -885,6 +875,7 @@ p.chat__nothing-paragraph {
   }
 
   @media (prefers-reduced-motion: reduce) {
+
     .chat__message-skeleton-avatar,
     .chat__message-skeleton-bubble,
     .chat__message-skeleton-media,
@@ -893,39 +884,26 @@ p.chat__nothing-paragraph {
     }
   }
 
-  .chat__input
-    > .editor-component
-    > .mobile-item
-    > .popover-yui-kit
-    > .popover-yui-kit__content {
+  .chat__input>.editor-component>.mobile-item>.popover-yui-kit>.popover-yui-kit__content {
     min-width: 230px;
   }
-  .chat__input
-    > .editor-component
-    > .mobile-item
-    > .popover-yui-kit
-    > .popover-yui-kit__content
-    > .popover-yui-kit__options {
+
+  .chat__input>.editor-component>.mobile-item>.popover-yui-kit>.popover-yui-kit__content>.popover-yui-kit__options {
     padding: 10px;
     font-size: 18px;
     line-height: 100%;
   }
-  .chat__input
-    > .editor-component
-    > .mobile-item
-    > .popover-yui-kit
-    > .popover-yui-kit__content
-    > .popover-yui-kit__options
-    > .popover-yui-kit__options__item {
+
+  .chat__input>.editor-component>.mobile-item>.popover-yui-kit>.popover-yui-kit__content>.popover-yui-kit__options>.popover-yui-kit__options__item {
     padding-block: 8.5px !important;
     font-size: 18px;
   }
 
-  .chat__message-bubble > .top-element > .date-divider {
+  .chat__message-bubble>.top-element>.date-divider {
     margin-top: 5px;
   }
 
-  .system-message > span.system-message-text {
+  .system-message>span.system-message-text {
     display: inline-block;
     max-width: 100%;
     overflow: hidden;
@@ -935,11 +913,11 @@ p.chat__nothing-paragraph {
     position: relative;
   }
 
-  .system-message > span.system-message-text--quoted-overflow {
+  .system-message>span.system-message-text--quoted-overflow {
     padding-inline-end: 18px;
   }
 
-  .system-message > span.system-message-text--quoted-overflow::after {
+  .system-message>span.system-message-text--quoted-overflow::after {
     content: '\00bb';
     position: absolute;
     inset-inline-end: 10px;
@@ -967,19 +945,19 @@ p.chat__nothing-paragraph {
   gap: 15px;
 }
 
-.chat__input__action > svg {
+.chat__input__action>svg {
   flex-shrink: 0;
   width: 28px;
   color: var(--blue1);
 }
 
 @media screen and (width < 768px) {
-  .chat__input__action > svg {
+  .chat__input__action>svg {
     display: none;
   }
 }
 
-.chat__input__action > .button-yui-kit {
+.chat__input__action>.button-yui-kit {
   padding: 4px;
   margin-left: auto;
 }
@@ -1014,7 +992,7 @@ p.chat__nothing-paragraph {
   margin: 0;
   font-size: 14px;
   line-height: 17px;
-  color: var(--text-color);
+
   font-weight: 400;
   width: calc(100vw - var(--size-left-menu) - 170px);
   overflow: hidden;
@@ -1032,13 +1010,11 @@ p.chat__nothing-paragraph {
   padding: 3.5px;
 }
 
-.attach-modal-container:has(.chat__input__action > svg)
-  .chat__input__action__blog
-  p {
+.attach-modal-container:has(.chat__input__action > svg) .chat__input__action__blog p {
   max-width: 250px;
 }
 
-@media screen and (width <= 768px) {
+@media screen and (width <=768px) {
   .chat__input__action__blog p {
     width: calc(100vw - 150px);
   }
@@ -1114,7 +1090,7 @@ p.chat__nothing-paragraph {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  background-color: var(--blue15);
+  background-color: var(--table-surface-search);
   border: 0.5px solid var(--neutral-border);
   background-color: var(--white);
   padding: 15px 20px;
@@ -1137,9 +1113,7 @@ p.chat__nothing-paragraph {
   min-height: 30px !important;
 }
 
-.selected-messages-content__action.button-yui-kit:not(
-    .selected-messages-content__action--danger
-  ) {
+.selected-messages-content__action.button-yui-kit:not(.selected-messages-content__action--danger) {
   color: var(--blue1) !important;
   border-color: var(--blue1) !important;
 
@@ -1157,13 +1131,12 @@ p.chat__nothing-paragraph {
   }
 }
 
-.selected-messages-content__action--danger
-  .selected-messages-content__action__title,
+.selected-messages-content__action--danger .selected-messages-content__action__title,
 .selected-messages-content__action--danger svg {
   color: var(--error-color) !important;
 }
 
-@media screen and (width <= 480px) {
+@media screen and (width <=480px) {
   .selected-messages {
     position: fixed;
     bottom: 0;
@@ -1200,7 +1173,7 @@ p.chat__nothing-paragraph {
       background-color: var(--primary-pressed-light-color) !important;
     }
 
-    & > svg {
+    &>svg {
       width: 30px;
       height: 30px;
       color: var(--blue1);
@@ -1218,7 +1191,7 @@ p.chat__nothing-paragraph {
       background-color: var(--ban-color) !important;
     }
 
-    & > svg {
+    &>svg {
       width: 30px !important;
       height: 30px !important;
       color: var(--error-color);

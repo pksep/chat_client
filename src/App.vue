@@ -66,6 +66,7 @@ import { fetchUsersForAuth } from './composables/useUsers';
 import { useNotifications } from './composables/useNotifications';
 import { initShareIntentHandling } from './services/useShareIntent';
 import { dispatchNativeStartupReady } from './utils/nativeStartup';
+import { useThemeStore } from './stores/theme';
 
 const ORGANIZATIONS_KEY = 'chat_runtime_organizations';
 const LAST_ORGANIZATION_KEY = 'chat_runtime_last_organization';
@@ -85,6 +86,8 @@ const getStoredOrganizations = (): IStoredOrganization[] => {
     return typeof item !== 'string' && typeof item?.url === 'string';
   });
 };
+const themeStore = useThemeStore();
+themeStore.initTheme();
 
 const shouldSkipStartupShell = consumeAuthRedirectStartupShellSkip();
 const startupShellElement = document.getElementById('startup-shell');

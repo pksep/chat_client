@@ -23,8 +23,9 @@
   margin-right: 8px;
   margin-left: auto;
   cursor: pointer;
+
   & button.button-yui-kit.ghost-yui-kit {
-    color: var(--text-color);
+
     gap: 5px !important;
   }
 
@@ -89,7 +90,7 @@
   opacity: 1;
 }
 
-.chat__header-summary-button > svg {
+.chat__header-summary-button>svg {
   flex-shrink: 0;
   width: 22px !important;
   height: 22px !important;
@@ -193,7 +194,7 @@ button.button-yui-kit {
   color: var(--blue1) !important;
 }
 
-.chat__header-search-nav.button-yui-kit > svg {
+.chat__header-search-nav.button-yui-kit>svg {
   width: 24px !important;
   height: 24px !important;
 }
@@ -230,6 +231,7 @@ button.button-yui-kit {
   display: flex;
   align-items: center;
   gap: 10px;
+
   & h3 {
     font-size: 16px;
   }
@@ -245,7 +247,7 @@ button.button-yui-kit {
   font-size: 18px;
   font-weight: 400;
   transition: opacity 0.2s;
-  color: var(--text-color);
+
   border-bottom: 1px solid var(--border-grey);
   margin-inline: 16px;
 
@@ -277,11 +279,12 @@ button.button-yui-kit {
   opacity: 0.8;
 }
 
-@media screen and (width <= 768px) {
+@media screen and (width <=768px) {
   .chat__header-main {
     justify-content: start;
     gap: 10px;
   }
+
   .chat__header-wrapper:has(.search-yui-kit__input) {
     .chat__header-profile {
       & h3 {
@@ -289,21 +292,26 @@ button.button-yui-kit {
       }
     }
   }
+
   .chat__header-buttons {
     margin-left: auto;
     margin-right: 0;
   }
+
   .chat__header-summary-button.button-yui-kit {
     width: 40px;
     min-width: 40px;
     padding: 8px !important;
   }
+
   .chat__header-search {
     min-width: 0;
   }
+
   .chat__header-desktop-search-row {
     display: none;
   }
+
   .chat__header-mobile-search-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 34px;
@@ -311,12 +319,14 @@ button.button-yui-kit {
     gap: 8px;
     padding: 0 15px 12px;
   }
+
   .chat__header-mobile-search-row .chat__header-search-nav.button-yui-kit {
     width: 34px;
     height: 34px;
     min-width: 34px;
     padding: 0 !important;
   }
+
   .chat__header-mobile-search-controls {
     position: fixed;
     left: 0;
@@ -329,6 +339,7 @@ button.button-yui-kit {
     width: 100%;
     padding: 5px 10px 20px;
   }
+
   .chat__header-mobile-search-controls-content {
     position: relative;
     display: grid;
@@ -340,20 +351,24 @@ button.button-yui-kit {
     border-radius: 30px;
     background-color: var(--white);
   }
+
   .chat__header-mobile-search-controls .chat__header-search-count {
     justify-self: start;
     min-width: 64px;
     text-align: left;
   }
+
   .chat__header-mobile-search-controls .chat__header-search-loader {
     justify-self: start;
   }
+
   .chat__header-mobile-search-controls__nav {
     position: absolute;
     left: 50%;
     justify-content: center;
     transform: translateX(-50%);
   }
+
   .chat__header-mobile-search-controls .chat__header-search-nav.button-yui-kit {
     width: 32px !important;
     height: 30px !important;
@@ -364,27 +379,27 @@ button.button-yui-kit {
     border: none !important;
     color: var(--text-neutral-color);
   }
-  .chat__header-mobile-search-controls
-    .chat__header-search-nav.button-yui-kit
-    > svg {
+
+  .chat__header-mobile-search-controls .chat__header-search-nav.button-yui-kit>svg {
     width: 30px !important;
     height: 30px !important;
   }
-  .chat__header-mobile-search-controls-content
-    > .chat__header-search-nav.button-yui-kit {
+
+  .chat__header-mobile-search-controls-content>.chat__header-search-nav.button-yui-kit {
     justify-self: end;
     color: var(--text-neutral-color);
   }
-  .chat__header-mobile-search-controls
-    .chat__header-search-nav.button-yui-kit:disabled {
+
+  .chat__header-mobile-search-controls .chat__header-search-nav.button-yui-kit:disabled {
     color: var(--text-light-color) !important;
     background-color: transparent !important;
   }
-  .chat__header-mobile-search-controls
-    .chat__header-search-nav.button-yui-kit:disabled:active {
+
+  .chat__header-mobile-search-controls .chat__header-search-nav.button-yui-kit:disabled:active {
     background-color: transparent !important;
   }
-  .chat__header-ai-assistant > .menu__user-assistant-icon > svg.ai-icon {
+
+  .chat__header-ai-assistant>.menu__user-assistant-icon>svg.ai-icon {
     font-size: 20px;
   }
 }
