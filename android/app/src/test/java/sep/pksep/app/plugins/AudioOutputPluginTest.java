@@ -15,4 +15,24 @@ public class AudioOutputPluginTest {
             AudioOutputPlugin.getCallVolumeControlStream()
         );
     }
+
+    @Test
+    public void getAudioModeForRoute_usesNormalModeForSpeaker() {
+        assertEquals(
+            AudioManager.MODE_NORMAL,
+            AudioOutputPlugin.getAudioModeForRoute("speaker")
+        );
+    }
+
+    @Test
+    public void getAudioModeForRoute_usesCommunicationModeForConversationRoutes() {
+        assertEquals(
+            AudioManager.MODE_IN_COMMUNICATION,
+            AudioOutputPlugin.getAudioModeForRoute("earpiece")
+        );
+        assertEquals(
+            AudioManager.MODE_IN_COMMUNICATION,
+            AudioOutputPlugin.getAudioModeForRoute("bluetooth")
+        );
+    }
 }

@@ -343,12 +343,19 @@ public class AudioOutputPlugin extends Plugin {
         return AudioManager.USE_DEFAULT_STREAM_TYPE;
     }
 
+    static int getAudioModeForRoute(String route) {
+        return ROUTE_SPEAKER.equals(route)
+            ? AudioManager.MODE_NORMAL
+            : AudioManager.MODE_IN_COMMUNICATION;
+    }
+
     private void bindVolumeControlsToRoute(AudioManager audioManager, String route) {
         if (!callVolumeControlsActive) {
             Log.d(TAG, "Ignoring call audio route bind while controls are inactive");
             return;
         }
 
+        audioManager.setMode(getAudioModeForRoute(route));
         int volumeControlStream = getCallVolumeControlStream();
         callVolumeControlRoute = route;
 
