@@ -100,7 +100,7 @@ defineOptions({
 
 const { activeSection, setActiveSection } = useChatMenu();
 const route = useUrlWatcher();
-const isAiMenuEnabled = false;
+const isAiMenuEnabled = true;
 
 const authUser = computed(() => getAuthUser());
 
