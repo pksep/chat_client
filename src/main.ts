@@ -24,6 +24,7 @@ const LaunchStartup = registerPlugin<LaunchStartupPlugin>('LaunchStartup');
 const UNICORN_EMOJI = '\u{1F984}';
 const INDEXED_DB_RESET_EPOCH = 'chat-client-indexeddb-reset-2026-04-29-v1';
 const INDEXED_DB_RESET_DONE_KEY = 'chat.indexeddb.reset.done';
+const FONT_READY_TIMEOUT_MS = 1500;
 const INDEXED_DB_NAMES = [
   'chat-sync-shadow-db',
   'chat-topic-messages-db',
@@ -167,6 +168,29 @@ const notifyNativeStartupReady = (): void => {
   });
 };
 
+const waitForAppFontReady = async (): Promise<void> => {
+  if (typeof document === 'undefined' || !('fonts' in document)) {
+    return;
+  }
+
+  const fontReadyTasks = [
+    document.fonts.load("400 16px 'Inter Variable'", 'Звонилка SEP'),
+    document.fonts.load("600 16px 'Inter Variable'", 'Звонилка SEP'),
+    document.fonts.load("700 16px 'Inter Variable'", 'Звонилка SEP')
+  ];
+
+  try {
+    await Promise.race([
+      Promise.all(fontReadyTasks),
+      new Promise(resolve => {
+        window.setTimeout(resolve, FONT_READY_TIMEOUT_MS);
+      })
+    ]);
+  } catch {
+    // Font loading can fail offline; the app should still mount.
+  }
+};
+
 const runPostMountStartupTasks = (): void => {
   runAfterFirstPaint(() => {
     void clearTauriServiceWorkers();
@@ -180,11 +204,12 @@ const runPostMountStartupTasks = (): void => {
   });
 };
 
-const mountApp = () => {
+const mountApp = async (): Promise<void> => {
   void initFastNativeNotificationNavigation();
   registerNativeFileBridge();
   applyRuntimeBodyClasses();
   installNotoEmojiFontFaces();
+  await waitForAppFontReady();
 
   const app = createApp(App);
 

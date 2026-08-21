@@ -40,6 +40,8 @@ const parseUrl = (): Route => {
       return { type: RouteTypes.CALL, id };
     } else if (type === RouteTypes.FAVORITES && id) {
       return { type: RouteTypes.FAVORITES, id };
+    } else if (type === RouteTypes.AI && id) {
+      return { type: RouteTypes.AI, id };
     }
   } else if (pathParts.length === 1) {
     const type = pathParts[0];
@@ -90,8 +92,10 @@ const updateUrl = (route: Route): void => {
     newUrl = `${window.location.origin}/favorites/${route.id}`;
   } else if (route.type === RouteTypes.ASSISTANT && !route.id) {
     newUrl = `${window.location.origin}/assistant`;
-  } else if (route.type === RouteTypes.AI && !route.id) {
-    newUrl = `${window.location.origin}/ai`;
+  } else if (route.type === RouteTypes.AI) {
+    newUrl = route.id
+      ? `${window.location.origin}/ai/${route.id}`
+      : `${window.location.origin}/ai`;
   } else {
     newUrl = window.location.origin;
   }
@@ -156,8 +160,8 @@ const navigateToAssistant = (): void => {
   updateUrl({ type: RouteTypes.ASSISTANT, id: null });
 };
 
-const navigateToAI = (): void => {
-  updateUrl({ type: RouteTypes.AI, id: null });
+const navigateToAI = (sessionId: string | null = null): void => {
+  updateUrl({ type: RouteTypes.AI, id: sessionId });
 };
 
 const navigateToDefault = (): void => {

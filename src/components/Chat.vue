@@ -1,9 +1,18 @@
 <template>
   <section
-    :class="['chat', { 'chat--mobile-route': isMobile }]"
+    :class="[
+      'chat',
+      {
+        'chat--mobile-route': isMobile,
+        'chat--call-topic-route': route.type === RouteTypes.CALL,
+        'chat--ai-route': route.type === RouteTypes.AI
+      }
+    ]"
     :data-testid="`${props.dataTestid}-Chat-Container`"
   >
-    <template v-if="isMobile">
+    <AIAssistant v-if="isAiRoute" ref="aiAssistantRef" />
+
+    <template v-else-if="isMobile">
       <div
         :class="[
           'chat__mobile-list-layer',
@@ -22,6 +31,7 @@
           'chat__mobile-route-view chat__mobile-route-view--messages',
           mobileTransitionName,
           {
+            'chat__mobile-route-view--call': route.type === RouteTypes.CALL,
             'chat__mobile-route-view--content-deferred':
               !isMobileMessageContentReady
           }
@@ -103,6 +113,7 @@ import type {
   IMessageViewportSnapshot
 } from './interfaces/interfaces';
 import ShareSelectionOverlay from './ShareSelectionOverlay.vue';
+import AIAssistant from './AI/AIAssistant.vue';
 import {
   fetchPinnedMessagesForTopic,
   hasKnownTopicMessagesState
@@ -124,8 +135,10 @@ const authUser = computed(() => getAuthUser());
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const messageListRef = useTemplateRef<any>('messageListRef');
+const aiAssistantRef = useTemplateRef<any>('aiAssistantRef');
 
 const route = useUrlWatcher();
+const isAiRoute = computed(() => route.value.type === RouteTypes.AI);
 const mobileTransitionName = ref('');
 const isMobileMessageListMounted = ref(!isMobile.value);
 const isMobileMessageContentReady = ref(!isMobile.value);
@@ -213,7 +226,11 @@ const clearMobileRouteContentSchedule = (): void => {
 };
 
 const shouldShowFirstOpenSkeleton = (topicId: string): boolean => {
-  if (!topicId || route.value.type === RouteTypes.AI) {
+  if (
+    !topicId ||
+    route.value.type === RouteTypes.AI ||
+    route.value.type === RouteTypes.CALL
+  ) {
     return false;
   }
 
@@ -347,9 +364,11 @@ watch(
     }
 
     mobileTransitionName.value =
-      !topicId && previousTopicId
-        ? 'chat-mobile-route-back'
-        : 'chat-mobile-route-forward';
+      topicId && route.value.type === RouteTypes.CALL
+        ? ''
+        : !topicId && previousTopicId
+          ? 'chat-mobile-route-back'
+          : 'chat-mobile-route-forward';
 
     if (!topicId) {
       syncMobileMessageContentState(topicId);
@@ -389,6 +408,9 @@ onBeforeUnmount(() => {
 });
 
 defineExpose({
-  handleClear: () => messageListRef.value?.handleClear()
+  handleClear: () =>
+    isAiRoute.value
+      ? aiAssistantRef.value?.handleClear()
+      : messageListRef.value?.handleClear()
 });
 </script>

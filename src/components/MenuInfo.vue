@@ -51,7 +51,28 @@
         </slot>
       </section>
 
+      <div
+        class="menu-info__tabs"
+        role="tablist"
+        :data-testid="`${props.dataTestid}-MenuInfo-Tabs`"
+      >
+        <button
+          v-for="tab in menuInfoTabs"
+          :key="tab.value"
+          type="button"
+          role="tab"
+          class="menu-info__tab"
+          :class="{ 'menu-info__tab--active': activeInfoTab === tab.value }"
+          :aria-selected="activeInfoTab === tab.value"
+          :data-testid="`${props.dataTestid}-MenuInfo-Tab-${tab.value}`"
+          @click="setActiveInfoTab(tab.value)"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
+
       <ContactListInModal
+        v-if="activeInfoTab === 'participants'"
         :show-add-button="currentGroup.isAdmin"
         :contacts="currentGroup.members"
         :filtered-contacts="filteredMembers"
@@ -59,6 +80,16 @@
         class="menu-info__participants"
         :data-testid="`${props.dataTestid}-MenuInfo-ContactListInModal`"
         @unmount-click-add-button="handleContactClick"
+      />
+
+      <ProfileAttachmentsPanel
+        v-else
+        :topic-id="attachmentsTopicId"
+        :active-tab="attachmentsTab"
+        :show-tabs="false"
+        class="menu-info__attachments"
+        :data-testid="`${props.dataTestid}-MenuInfo-Attachments`"
+        @show-in-chat="handleCloseMenu"
       />
     </section>
   </aside>
@@ -75,7 +106,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -88,8 +119,12 @@ import InformationMenu from './InformationMenu.vue';
 import type { IMenuRightProps, ITopic, IUser } from './interfaces/interfaces';
 import { useMenuInfo } from '../composables/useMenuInfo';
 import NewContactModal from './NewChat/NewContactModal.vue';
+import ProfileAttachmentsPanel from './ProfileAttachmentsPanel.vue';
 import { useUrlWatcher } from '../composables/navigation';
 import { currentGroup, useGroup } from '../composables/useGroup';
+
+type MenuInfoTab = 'participants' | 'media' | 'files';
+type ProfileAttachmentsTab = 'media' | 'files';
 
 const props = withDefaults(defineProps<IMenuRightProps>(), {
   open: false,
@@ -108,12 +143,30 @@ const {
 const { addGroupMembers } = useGroup();
 
 const topic = useUrlWatcher();
+const activeInfoTab = ref<MenuInfoTab>('participants');
+const menuInfoTabs: Array<{ label: string; value: MenuInfoTab }> = [
+  { label: 'Участники', value: 'participants' },
+  { label: 'Медиа', value: 'media' },
+  { label: 'Файлы', value: 'files' }
+];
 
 const menuInfoClasses = computed(() => [
   'menu-info',
   { 'menu-info--open': props.open },
   props.class
 ]);
+
+const attachmentsTopicId = computed(
+  () => state.information?.topicId || topic.value.id || null
+);
+
+const attachmentsTab = computed<ProfileAttachmentsTab>(() =>
+  activeInfoTab.value === 'files' ? 'files' : 'media'
+);
+
+const setActiveInfoTab = (tab: MenuInfoTab): void => {
+  activeInfoTab.value = tab;
+};
 
 const excludedContactIds = computed(() => {
   const ids = new Set<string | number>();
@@ -180,6 +233,7 @@ watch(
   () => [props.open, topic.value.id],
   async () => {
     if (props.open === true) {
+      activeInfoTab.value = 'participants';
       await initializeMenuInfo({
         ...props,
         isEnabled: true,

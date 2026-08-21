@@ -1660,6 +1660,12 @@ div.message-content__file {
     }
   }
 
+  .chat__mobile-route-view--call > .chat__input {
+    position: static;
+    bottom: auto;
+    z-index: auto;
+  }
+
   .editor-component__mentions.editor-component__mentions--fixed {
     transform: translateY(25px);
     padding-bottom: 24px !important;
@@ -1683,6 +1689,10 @@ div.message-content__file {
     width: 100%;
     pointer-events: none;
     overflow-anchor: none;
+  }
+
+  .chat__mobile-route-view--call .chat__message-bubble::after {
+    content: none;
   }
 }
 

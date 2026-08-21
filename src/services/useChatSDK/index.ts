@@ -24,7 +24,12 @@ import {
 import { ChatAuth, ChatAuthInterface } from './auth';
 import { ChatUser, ChatUserInterface } from './user';
 import { ChatTopic, ChatTopicInterface } from './topic';
-import { ChatMessage, ChatMessageInterface } from './message';
+import {
+  ChatMessage,
+  ChatMessageInterface,
+  type TopicAttachmentsOptions,
+  type TopicAttachmentsPage
+} from './message';
 import { ChatGroup, ChatGroupInterface } from './group';
 import { ChatMedia, ChatMediaInterface } from './media';
 import { ChatWS, ChatWSInterface } from './ws';
@@ -1115,6 +1120,20 @@ export class ChatSDK {
     }
   ): Promise<Message[]> {
     return await this.message.getMessages(topicId, opts);
+  }
+
+  async getTopicMedia(
+    topicId: string,
+    opts?: TopicAttachmentsOptions
+  ): Promise<TopicAttachmentsPage> {
+    return await this.message.getTopicMedia(topicId, opts);
+  }
+
+  async getTopicFiles(
+    topicId: string,
+    opts?: TopicAttachmentsOptions
+  ): Promise<TopicAttachmentsPage> {
+    return await this.message.getTopicFiles(topicId, opts);
   }
 
   async getPinnedMessages(topicId: string): Promise<Message[]> {
