@@ -88,6 +88,19 @@
 
         <section
           :class="[
+            'mobile-list-container__section mobile-list-container__section--ai',
+            {
+              'mobile-list-container__section--direct-hidden':
+                isSectionHiddenDuringDirectTransition('ai')
+            }
+          ]"
+          :aria-hidden="activeSection !== 'ai'"
+        >
+          <AIMenuPanel />
+        </section>
+
+        <section
+          :class="[
             'mobile-list-container__section mobile-list-container__section--profile',
             {
               'mobile-list-container__section--direct-hidden':
@@ -163,6 +176,7 @@ import MenuBottomNav from '../Menu/MenuBottomNav.vue';
 import MenuProfilePanel from '../Menu/MenuProfilePanel.vue';
 import { getAuthUser } from '../../composables/useAuth';
 import CallsPage from '../Calls/CallsPage.vue';
+import AIMenuPanel from '../AI/AIMenuPanel.vue';
 import { useShareSelection } from '../../composables/useShareSelection';
 import type { ITopic } from '../interfaces/interfaces';
 import { enqueuePendingShareFiles } from '../../services/useShareIntent';
@@ -210,7 +224,12 @@ let messageSearchRequestToken = 0;
 const authUserId = computed(() => getAuthUser()?.id || '');
 const dragEnterDepth = ref(0);
 const isDragOverFiles = ref(false);
-const MENU_SECTION_ORDER: ChatMenuSection[] = ['chats', 'calls', 'profile'];
+const MENU_SECTION_ORDER: ChatMenuSection[] = [
+  'chats',
+  'calls',
+  'ai',
+  'profile'
+];
 const CHAT_SCROLL_RESTORE_MAX_FRAMES = 8;
 let chatsScrollRestoreFrameId: number | null = null;
 let chatsScrollRestoreAttempts = 0;
@@ -653,6 +672,11 @@ watch(
   ([routeType]) => {
     if (routeType === RouteTypes.CALL) {
       setActiveSection('calls');
+      return;
+    }
+
+    if (routeType === RouteTypes.AI || routeType === RouteTypes.ASSISTANT) {
+      setActiveSection('ai');
       return;
     }
 
