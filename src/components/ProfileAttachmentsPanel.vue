@@ -253,12 +253,7 @@ import { getAuthUser } from '../composables/useAuth';
 import { useBackButton } from '../composables/useBackButton';
 import { openForwardDraft } from '../composables/useForwardMessages';
 import { navigateToSearchResult } from '../composables/useMessageSearch';
-import { deleteMessageChat } from '../services/useChat';
-import {
-  fetchMessagesForTopic,
-  getFullMessagesByTopicId,
-  getMessagesByTopicId
-} from '../services/useMessages';
+import { deleteMessageChat, getChatSDK } from '../services/useChat';
 import { ensureMediaObjectUrl } from '../services/useMediaBlobCache';
 import {
   downloadNativeFile,
@@ -272,6 +267,7 @@ import {
 import { getFormatFileSize, getShortName } from '../utils/getFormatFileSize';
 import { VIDEO_FALLBACK_THUMBNAIL } from '../utils/mediaPreview';
 import type { IMessage, IMedia, ITopic } from './interfaces/interfaces';
+import type { TopicAttachmentItem as ApiTopicAttachmentItem } from '../services/useChatSDK/message';
 import ContextMenu from './ContactList/ContextMenu.vue';
 import { useMessageMedia } from './Messages/composables/useMessageMedia';
 import ForwardModal from './Messages/ForwardModal.vue';
@@ -293,8 +289,6 @@ type ProfileAttachmentItem = {
   key: string;
   media: IMedia;
   message: IMessage;
-  messageIndex: number;
-  mediaIndex: number;
 };
 
 type AttachmentScrollSnapshot = {
@@ -312,9 +306,7 @@ const emits = defineEmits<{
   (event: 'show-in-chat'): void;
 }>();
 
-const HISTORY_PAGE_LIMIT = 50;
-const ATTACHMENTS_BATCH_SIZE = 10;
-const MAX_HISTORY_PAGES_PER_BATCH = 10;
+const ATTACHMENTS_PAGE_LIMIT = 50;
 const LONG_PRESS_DELAY_MS = 500;
 const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
 const SUPPRESS_CLICK_AFTER_LONG_PRESS_MS = 700;
@@ -340,14 +332,23 @@ const tabs: Array<{ label: string; value: ProfileAttachmentsTab }> = [
 const localActiveTab = ref<ProfileAttachmentsTab>('media');
 const sliderElements = ref<{ path: string; name: string; file?: File }[]>([]);
 const defaultIndexSlider = ref<number>(0);
-const isHistoryLoading = ref(false);
-const hasMoreHistory = ref(true);
+const attachmentItemsByTab = reactive<
+  Record<ProfileAttachmentsTab, ProfileAttachmentItem[]>
+>({ media: [], files: [] });
+const attachmentCursorByTab = reactive<
+  Record<ProfileAttachmentsTab, string | null>
+>({ media: null, files: null });
+const attachmentHasMoreByTab = reactive<Record<ProfileAttachmentsTab, boolean>>(
+  { media: true, files: true }
+);
+const attachmentLoadingByTab = reactive<Record<ProfileAttachmentsTab, boolean>>(
+  { media: false, files: false }
+);
 const contextMenuItem = ref<ProfileAttachmentItem | null>(null);
 const isContextMenuOpen = ref(false);
 const contextMenuPosition = ref({ x: 0, y: 0 });
 const deleteModalOpen = ref(false);
 const forwardModalOpen = ref(false);
-const requestedPageKeys = new Set<string>();
 const videoDurationLabels = reactive<Record<string, string>>({});
 const loadMoreTriggerRef = useTemplateRef('loadMoreTriggerRef');
 const attachmentsRootRef = useTemplateRef('attachmentsRootRef');
@@ -356,6 +357,7 @@ const scrollMonthLabel = ref('');
 const scrollMonthPosition = ref({ left: '0px', top: '0px' });
 let loadMoreObserver: IntersectionObserver | null = null;
 let attachmentsScrollContainer: HTMLElement | Window | null = null;
+let attachmentRequestGeneration = 0;
 let longPressTimer: ReturnType<typeof setTimeout> | null = null;
 let longPressPointerId: number | null = null;
 let longPressStartPoint = { x: 0, y: 0 };
@@ -369,6 +371,10 @@ const { getFullMediaPath, isSliderContentUrl, primeMediaCache } =
   useMessageMedia();
 
 const currentTab = computed(() => props.activeTab || localActiveTab.value);
+const isHistoryLoading = computed(
+  () => attachmentLoadingByTab[currentTab.value]
+);
+const hasMoreHistory = computed(() => attachmentHasMoreByTab[currentTab.value]);
 const authUserId = computed(() => getAuthUser()?.id || '');
 
 const setActiveTab = (tab: ProfileAttachmentsTab): void => {
@@ -554,6 +560,12 @@ const handleDeleteMessage = async (): Promise<void> => {
     messageId: message.id,
     topicId: message.topicId
   });
+  attachmentItemsByTab.media = attachmentItemsByTab.media.filter(
+    item => item.message.id !== message.id
+  );
+  attachmentItemsByTab.files = attachmentItemsByTab.files.filter(
+    item => item.message.id !== message.id
+  );
   handleCloseDeleteModal();
 };
 
@@ -779,76 +791,9 @@ const setupScrollingMonth = (): void => {
   scheduleScrollingMonthUpdate();
 };
 
-const topicMessages = computed(() => {
-  const topicId = props.topicId;
+const mediaItems = computed(() => attachmentItemsByTab.media);
 
-  if (!topicId) {
-    return [];
-  }
-
-  const fullMessages = getFullMessagesByTopicId(topicId);
-  const visibleMessages = getMessagesByTopicId(topicId);
-  const messagesById = new Map<string, IMessage>();
-
-  [...fullMessages, ...visibleMessages].forEach((message, index) => {
-    const key = message.id || `${index}`;
-
-    if (!messagesById.has(key)) {
-      messagesById.set(key, message);
-    }
-  });
-
-  return Array.from(messagesById.values()).sort(
-    (left, right) => getMessageTime(left) - getMessageTime(right)
-  );
-});
-
-const oldestMessageId = computed(() => topicMessages.value[0]?.id || '');
-
-const isReadyMedia = (media: IMedia): boolean =>
-  Boolean(
-    !media.isLoading &&
-      !media.uploadError &&
-      (media.path || media.localPath || media.localThumbnailPath)
-  );
-
-const attachmentItems = computed<ProfileAttachmentItem[]>(() =>
-  topicMessages.value
-    .flatMap((message, messageIndex) =>
-      (message.media || []).filter(isReadyMedia).map((media, mediaIndex) => ({
-        key: [
-          message.id || messageIndex,
-          media.id || media.path || mediaIndex
-        ].join(':'),
-        media,
-        message,
-        messageIndex,
-        mediaIndex
-      }))
-    )
-    .sort((left, right) => {
-      const timeDiff =
-        getMessageTime(right.message) - getMessageTime(left.message);
-
-      if (timeDiff !== 0) {
-        return timeDiff;
-      }
-
-      if (right.messageIndex !== left.messageIndex) {
-        return right.messageIndex - left.messageIndex;
-      }
-
-      return left.mediaIndex - right.mediaIndex;
-    })
-);
-
-const mediaItems = computed(() =>
-  attachmentItems.value.filter(item => item.media.type !== MediaType.File)
-);
-
-const fileItems = computed(() =>
-  attachmentItems.value.filter(item => item.media.type === MediaType.File)
-);
+const fileItems = computed(() => attachmentItemsByTab.files);
 
 const activeItems = computed(() =>
   currentTab.value === 'media' ? mediaItems.value : fileItems.value
@@ -970,84 +915,110 @@ const getVideoDurationLabel = (media: IMedia): string =>
     : '';
 
 const resetHistoryPagination = (): void => {
-  requestedPageKeys.clear();
-  hasMoreHistory.value = true;
-  isHistoryLoading.value = false;
+  attachmentRequestGeneration += 1;
+  attachmentItemsByTab.media = [];
+  attachmentItemsByTab.files = [];
+  attachmentCursorByTab.media = null;
+  attachmentCursorByTab.files = null;
+  attachmentHasMoreByTab.media = true;
+  attachmentHasMoreByTab.files = true;
+  attachmentLoadingByTab.media = false;
+  attachmentLoadingByTab.files = false;
+};
+
+const normalizeAttachmentItem = (
+  item: ApiTopicAttachmentItem
+): ProfileAttachmentItem => {
+  const media = item.media as IMedia;
+  const message = {
+    ...(item.message as IMessage),
+    media: [media]
+  };
+
+  return {
+    key: [message.id, media.id || media.path].filter(Boolean).join(':'),
+    media,
+    message
+  };
+};
+
+const mergeAttachmentPage = (
+  tab: ProfileAttachmentsTab,
+  incomingItems: ApiTopicAttachmentItem[]
+): void => {
+  const itemsByKey = new Map(
+    attachmentItemsByTab[tab].map(item => [item.key, item])
+  );
+
+  incomingItems.map(normalizeAttachmentItem).forEach(item => {
+    itemsByKey.set(item.key, item);
+  });
+
+  attachmentItemsByTab[tab] = Array.from(itemsByKey.values());
 };
 
 const loadNextHistoryPage = async (): Promise<void> => {
   const topicId = props.topicId;
+  const requestedTab = currentTab.value;
 
-  if (!topicId || isHistoryLoading.value || !hasMoreHistory.value) {
+  if (
+    !topicId ||
+    attachmentLoadingByTab[requestedTab] ||
+    !attachmentHasMoreByTab[requestedTab]
+  ) {
     return;
   }
 
-  const requestedTab = currentTab.value;
-  const getRequestedItemsCount = (): number =>
-    requestedTab === 'media' ? mediaItems.value.length : fileItems.value.length;
-  const targetItemsCount = getRequestedItemsCount() + ATTACHMENTS_BATCH_SIZE;
-  let loadedPages = 0;
+  const sdk = getChatSDK();
 
-  isHistoryLoading.value = true;
+  if (!sdk) {
+    return;
+  }
+
+  const requestGeneration = attachmentRequestGeneration;
+  const scrollSnapshot =
+    currentTab.value === requestedTab
+      ? captureAttachmentScrollSnapshot()
+      : null;
+  attachmentLoadingByTab[requestedTab] = true;
 
   try {
-    while (
-      props.topicId === topicId &&
-      hasMoreHistory.value &&
-      getRequestedItemsCount() < targetItemsCount &&
-      loadedPages < MAX_HISTORY_PAGES_PER_BATCH
+    const request =
+      requestedTab === 'media'
+        ? sdk.getTopicMedia.bind(sdk)
+        : sdk.getTopicFiles.bind(sdk);
+    const page = await request(topicId, {
+      limit: ATTACHMENTS_PAGE_LIMIT,
+      cursor: attachmentCursorByTab[requestedTab] || undefined
+    });
+
+    if (
+      props.topicId !== topicId ||
+      requestGeneration !== attachmentRequestGeneration
     ) {
-      const cursor = oldestMessageId.value;
-      const requestKey = cursor || 'latest';
+      return;
+    }
 
-      if (requestedPageKeys.has(requestKey)) {
-        break;
-      }
+    mergeAttachmentPage(requestedTab, page.items);
+    attachmentCursorByTab[requestedTab] = page.nextCursor;
+    attachmentHasMoreByTab[requestedTab] = page.hasMore;
 
-      requestedPageKeys.add(requestKey);
-      const scrollSnapshot =
-        currentTab.value === requestedTab
-          ? captureAttachmentScrollSnapshot()
-          : null;
-      let messages: IMessage[];
+    await nextTick();
 
-      try {
-        // Keep pagination cache-first: fetchMessagesForTopic reads memory and
-        // IndexedDB before falling back to the chat API.
-        messages = await fetchMessagesForTopic(topicId, {
-          limit: HISTORY_PAGE_LIMIT,
-          lastMessageId: cursor || undefined,
-          updateVisible: false,
-          syncLastMessage: false,
-          allowStaleFallback: false
-        });
-      } catch (error) {
-        requestedPageKeys.delete(requestKey);
-        throw error;
-      }
-
-      loadedPages += 1;
-      await nextTick();
-
-      if (currentTab.value === requestedTab) {
-        restoreAttachmentScrollSnapshot(scrollSnapshot);
-        scheduleScrollingMonthUpdate();
-      }
-
-      const nextCursor = oldestMessageId.value;
-
-      if (
-        messages.length < HISTORY_PAGE_LIMIT ||
-        !nextCursor ||
-        nextCursor === cursor
-      ) {
-        hasMoreHistory.value = false;
-      }
+    if (currentTab.value === requestedTab) {
+      restoreAttachmentScrollSnapshot(scrollSnapshot);
+      scheduleScrollingMonthUpdate();
     }
   } catch (error) {
+    // Prevent the visible IntersectionObserver sentinel from immediately
+    // retrying the same failed cursor in a tight loop. Reopening the panel or
+    // changing the topic resets pagination and allows a fresh request.
+    attachmentHasMoreByTab[requestedTab] = false;
     console.warn('Failed to fetch profile attachments history:', error);
   } finally {
-    isHistoryLoading.value = false;
+    if (requestGeneration === attachmentRequestGeneration) {
+      attachmentLoadingByTab[requestedTab] = false;
+    }
   }
 };
 
@@ -1079,7 +1050,10 @@ const setupLoadMoreObserver = (): void => {
       void loadNextHistoryPage();
     },
     {
-      root: null,
+      root:
+        attachmentsScrollContainer instanceof HTMLElement
+          ? attachmentsScrollContainer
+          : null,
       rootMargin: '240px 0px'
     }
   );
