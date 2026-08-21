@@ -62,6 +62,8 @@ import {
   syncShadowReadStateFromMessages
 } from './useShadowChatSync';
 import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
+import { compareMessages, getMessageTimestamp } from '../utils/messageOrder';
+import { parseMessageEx } from '../utils/messageReplyQuote';
 
 // Store mutations replace message payloads. Deep Vue proxies make every field
 // of every cached message reactive and multiply the work of bulk merges; a
@@ -363,61 +365,12 @@ const schedulePendingOutgoingForwardBatchCleanup = (topicId: string): void => {
   pendingOutgoingForwardBatchTimeouts.set(topicId, timeoutId);
 };
 
-const parseMessageEx = (
-  message: Pick<IMessage, 'ex'>
-): Record<string, unknown> | null => {
-  if (!message.ex) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(message.ex);
-  } catch {
-    return null;
-  }
-};
-
-const getMessageTimestamp = (message: IMessage): number => {
-  return new Date(message.createdAt).getTime();
-};
-
 const getMessageVersionTimestamp = (message: IMessage): number => {
   const timestamps = [message.updatedAt, message.deletedAt, message.createdAt]
     .map(value => (value ? new Date(value).getTime() : 0))
     .filter(value => !Number.isNaN(value));
 
   return Math.max(0, ...timestamps);
-};
-
-const getMessageStableSortKey = (message: IMessage): string => {
-  const clientId = getClientId(message);
-  return message.id || (clientId ? `client:${clientId}` : '');
-};
-
-const compareMessages = (left: IMessage, right: IMessage): number => {
-  const leftEx = parseMessageEx(left);
-  const rightEx = parseMessageEx(right);
-  const leftBatchId = leftEx?.forwardBatchId;
-  const rightBatchId = rightEx?.forwardBatchId;
-
-  if (
-    typeof leftBatchId === 'string' &&
-    leftBatchId === rightBatchId &&
-    typeof leftEx?.forwardBatchOrder === 'number' &&
-    typeof rightEx?.forwardBatchOrder === 'number'
-  ) {
-    return leftEx.forwardBatchOrder - rightEx.forwardBatchOrder;
-  }
-
-  const timeDiff = getMessageTimestamp(left) - getMessageTimestamp(right);
-
-  if (timeDiff !== 0) {
-    return timeDiff;
-  }
-
-  return getMessageStableSortKey(left).localeCompare(
-    getMessageStableSortKey(right)
-  );
 };
 
 const getPendingUploadKey = (topicId: string, messageId: string): string =>
@@ -430,12 +383,12 @@ const getOutgoingDeliveryKey = (topicId: string, messageId: string): string =>
   `${topicId}:${messageId}`;
 
 const hasClientId = (message: IMessage): boolean => {
-  const parsedEx = parseMessageEx(message);
+  const parsedEx = parseMessageEx(message.ex);
   return typeof parsedEx?.clientId === 'string' && parsedEx.clientId.length > 0;
 };
 
 const getClientId = (message: IMessage): string | null => {
-  const parsedEx = parseMessageEx(message);
+  const parsedEx = parseMessageEx(message.ex);
   return typeof parsedEx?.clientId === 'string' ? parsedEx.clientId : null;
 };
 
@@ -1718,7 +1671,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   const alreadyExists = existingMessages.some(item => item.id === message.id);
   const shouldUpdateVisibleWindow = topicId === route.value.id;
 
-  const parsedEx = parseMessageEx(message);
+  const parsedEx = parseMessageEx(message.ex);
   const clientId =
     typeof parsedEx?.clientId === 'string' ? parsedEx.clientId : null;
   const pendingOutgoingForwardBatchMeta =
