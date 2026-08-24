@@ -16,17 +16,17 @@
       <div
         :class="[
           'chat__mobile-list-layer',
-          { 'chat__mobile-list-layer--hidden': route.id }
+          { 'chat__mobile-list-layer--hidden': hasActiveChatRoute }
         ]"
-        :aria-hidden="route.id ? 'true' : 'false'"
+        :aria-hidden="hasActiveChatRoute ? 'true' : 'false'"
       >
         <ContactListMobile
-          :transition-class="!route.id ? mobileTransitionName : ''"
+          :transition-class="!hasActiveChatRoute ? mobileTransitionName : ''"
           :data-testid="`${props.dataTestid}-Chat-ContactListMobile`"
         />
       </div>
       <div
-        v-if="route.id"
+        v-if="hasActiveChatRoute"
         :class="[
           'chat__mobile-route-view chat__mobile-route-view--messages',
           mobileTransitionName,
@@ -73,7 +73,7 @@
         @unmount-set-selected-message="scrollToMessage"
       />
       <MessageList
-        v-if="route.id"
+        v-if="hasActiveChatRoute"
         ref="messageListRef"
         :baseUrl="props.baseUrl"
         :contact="props.contact"
@@ -138,6 +138,10 @@ const messageListRef = useTemplateRef<any>('messageListRef');
 const aiAssistantRef = useTemplateRef<any>('aiAssistantRef');
 
 const route = useUrlWatcher();
+const activeChatRouteKey = computed(() =>
+  route.value.type === RouteTypes.AI ? RouteTypes.AI : route.value.id
+);
+const hasActiveChatRoute = computed(() => !!activeChatRouteKey.value);
 const isAiRoute = computed(() => route.value.type === RouteTypes.AI);
 const mobileTransitionName = ref('');
 const isMobileMessageListMounted = ref(!isMobile.value);
@@ -238,7 +242,11 @@ const shouldShowFirstOpenSkeleton = (topicId: string): boolean => {
 };
 
 const rememberOpenedMobileTopic = (topicId: string): void => {
-  if (!topicId || openedMobileTopicIds.has(topicId)) {
+  if (
+    !topicId ||
+    route.value.type === RouteTypes.AI ||
+    openedMobileTopicIds.has(topicId)
+  ) {
     return;
   }
 
@@ -255,7 +263,11 @@ const rememberOpenedMobileTopic = (topicId: string): void => {
 };
 
 const revealMobileMessageContent = (token: number): void => {
-  if (token !== mobileRouteContentToken || !isMobile.value || !route.value.id) {
+  if (
+    token !== mobileRouteContentToken ||
+    !isMobile.value ||
+    !hasActiveChatRoute.value
+  ) {
     return;
   }
 
@@ -267,7 +279,7 @@ const revealMobileMessageContent = (token: number): void => {
       if (
         token === mobileRouteContentToken &&
         isMobile.value &&
-        route.value.id
+        hasActiveChatRoute.value
       ) {
         isMobileMessageContentReady.value = true;
       }
@@ -325,7 +337,7 @@ const prepareMobileMessageRoute = (topicId: string): void => {
 };
 
 const handleMobileRouteAnimationEnd = (event: AnimationEvent): void => {
-  if (event.target !== event.currentTarget || !route.value.id) {
+  if (event.target !== event.currentTarget || !hasActiveChatRoute.value) {
     return;
   }
 
@@ -348,38 +360,35 @@ watch(
   { immediate: true }
 );
 
-watch(
-  () => route.value.id,
-  (topicId, previousTopicId) => {
-    if (!topicId || !renderedMessageTopic.value.topicId) {
-      messageViewportSnapshot.value = null;
-    }
-
-    if (!isMobile.value) {
-      clearMobileRouteContentSchedule();
-      isMobileMessageListMounted.value = true;
-      isMobileMessageContentReady.value = true;
-      currentMobileTopicUsesSkeleton.value = false;
-      return;
-    }
-
-    mobileTransitionName.value =
-      topicId && route.value.type === RouteTypes.CALL
-        ? ''
-        : !topicId && previousTopicId
-          ? 'chat-mobile-route-back'
-          : 'chat-mobile-route-forward';
-
-    if (!topicId) {
-      syncMobileMessageContentState(topicId);
-      isMobileMessageListMounted.value = false;
-      currentMobileTopicUsesSkeleton.value = false;
-      return;
-    }
-
-    prepareMobileMessageRoute(topicId);
+watch(activeChatRouteKey, (topicId, previousTopicId) => {
+  if (!topicId || !renderedMessageTopic.value.topicId) {
+    messageViewportSnapshot.value = null;
   }
-);
+
+  if (!isMobile.value) {
+    clearMobileRouteContentSchedule();
+    isMobileMessageListMounted.value = true;
+    isMobileMessageContentReady.value = true;
+    currentMobileTopicUsesSkeleton.value = false;
+    return;
+  }
+
+  mobileTransitionName.value =
+    topicId && route.value.type === RouteTypes.CALL
+      ? ''
+      : !topicId && previousTopicId
+        ? 'chat-mobile-route-back'
+        : 'chat-mobile-route-forward';
+
+  if (!topicId) {
+    syncMobileMessageContentState(topicId);
+    isMobileMessageListMounted.value = false;
+    currentMobileTopicUsesSkeleton.value = false;
+    return;
+  }
+
+  prepareMobileMessageRoute(topicId);
+});
 
 watch(
   isMobile,
@@ -392,12 +401,12 @@ watch(
       return;
     }
 
-    if (route.value.id) {
-      prepareMobileMessageRoute(route.value.id);
+    if (activeChatRouteKey.value) {
+      prepareMobileMessageRoute(activeChatRouteKey.value);
       return;
     }
 
-    syncMobileMessageContentState(route.value.id);
+    syncMobileMessageContentState(activeChatRouteKey.value || undefined);
     isMobileMessageListMounted.value = false;
   },
   { immediate: true }
