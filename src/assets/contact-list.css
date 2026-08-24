@@ -194,6 +194,7 @@
 
 .contact-list__search-state-title {
   margin: 0;
+  color: var(--text-primary);
 }
 
 .contact-list__search-state-image {
