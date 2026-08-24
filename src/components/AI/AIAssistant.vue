@@ -121,22 +121,22 @@
         }
       ]"
     >
-      <div
-        v-if="activeView === 'tasks' && isPermissionMenuOpen"
-        class="ai-assistant__permission-menu"
-      >
+      <div v-if="isPermissionMenuOpen" class="ai-assistant__permission-menu">
         <button type="button" @click="selectPermission('automatic')">
           <span>✓</span>
           <span>
-            <strong>Автоматически подтверждать</strong>
-            <small>Агент сможет выполнять действия без подтверждения</small>
+            <strong>Автоматический режим</strong>
+            <small
+              >Обычные действия выполняются сразу, критические потребуют
+              подтверждения</small
+            >
           </span>
         </button>
         <button type="button" @click="selectPermission('ask')">
           <span>☝</span>
           <span>
-            <strong>Запрашивать разрешение</strong>
-            <small>Изменения не применятся без вашего подтверждения</small>
+            <strong>Подтверждать каждое действие</strong>
+            <small>Любое изменение потребует вашего подтверждения</small>
           </span>
         </button>
       </div>
@@ -150,7 +150,6 @@
         >
           <template #mobile-trailing-action>
             <Button
-              v-if="activeView === 'tasks'"
               :type="ButtonTypeEnum.ghost"
               :size="SizesEnum.small"
               class="toolbar-button mobile-buttons ai-assistant__permission-trigger ai-assistant__permission-trigger--mobile"
@@ -174,7 +173,6 @@
 
           <template #desktop-left-action>
             <Button
-              v-if="activeView === 'tasks'"
               :type="ButtonTypeEnum.ghost"
               :size="SizesEnum.small"
               class="toolbar-button ai-assistant__permission-trigger ai-assistant__permission-trigger--desktop"
@@ -289,8 +287,8 @@ const isVoiceMuted = ref(false);
 const isPermissionMenuOpen = ref(false);
 const permissionLabel = computed(() =>
   permissionMode.value === 'ask'
-    ? 'Запрашивать разрешение'
-    : 'Автоматически подтверждать'
+    ? 'Подтверждать каждое действие'
+    : 'Автоматический режим'
 );
 const conversationDate = computed(() =>
   new Intl.DateTimeFormat('ru-RU', {
