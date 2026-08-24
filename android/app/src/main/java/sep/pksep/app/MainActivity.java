@@ -16,6 +16,7 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -37,6 +38,7 @@ import sep.pksep.app.plugins.NativeFilePlugin;
 import sep.pksep.app.plugins.NotificationAudioPlugin;
 import sep.pksep.app.plugins.NotificationTapPlugin;
 import sep.pksep.app.plugins.ProximityLockPlugin;
+import sep.pksep.app.plugins.RuStorePushPlugin;
 import sep.pksep.app.plugins.RuStoreUpdatePlugin;
 import sep.pksep.app.plugins.ShareIntentPlugin;
 import sep.pksep.app.plugins.TelemetryDevicePlugin;
@@ -47,6 +49,7 @@ public class MainActivity extends BridgeActivity {
     private static final String EXTRA_ACTION = "action";
     private static final String EXTRA_CALL_ACTION = "callAction";
     private static final String EXTRA_GOOGLE_MESSAGE_ID = "google.message_id";
+    private static final String EXTRA_RUSTORE_MESSAGE_ID = "rustore.message_id";
     private static final String EXTRA_ROOM_ID = "roomId";
     private static final String EXTRA_TOPIC_ID = "topicId";
     private static final String EXTRA_TYPE = "type";
@@ -59,6 +62,7 @@ public class MainActivity extends BridgeActivity {
     private static final long LAUNCH_SPLASH_FALLBACK_TIMEOUT_MS = 6000L;
     private static final long STARTUP_OVERLAY_FALLBACK_TIMEOUT_MS = 6000L;
     private static boolean customPluginsRegistered = false;
+    private static volatile boolean appInForeground = false;
     private boolean launchedFromIncomingCall = false;
     private boolean shouldClearWebViewCacheBeforeLoad = false;
     private boolean callFullscreenSystemUiEnabled = false;
@@ -84,12 +88,44 @@ public class MainActivity extends BridgeActivity {
 
         super.onCreate(savedInstanceState);
         applyLaunchBackground();
+        configureLocalDevelopmentNetworking();
         configureBridgeWebViewBackground();
         setPortraitOrientation();
         configureIncomingCallWindow(getIntent());
         handleCallIntent(getIntent());
         handleNotificationLaunchIntent(getIntent());
         handleShareIntent(getIntent());
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        appInForeground = true;
+    }
+
+    @Override
+    public void onPause() {
+        appInForeground = false;
+        super.onPause();
+    }
+
+    static boolean isAppInForeground() {
+        return appInForeground;
+    }
+
+    private void configureLocalDevelopmentNetworking() {
+        if (
+            !BuildConfig.CHAT_ALLOW_CLEARTEXT ||
+            bridge == null ||
+            bridge.getWebView() == null
+        ) {
+            return;
+        }
+
+        bridge
+            .getWebView()
+            .getSettings()
+            .setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
     }
 
     private void configureLaunchSplash(SplashScreen launchSplash) {
@@ -447,6 +483,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NativeFilePlugin.class);
         registerPlugin(NotificationAudioPlugin.class);
         registerPlugin(NotificationTapPlugin.class);
+        registerPlugin(RuStorePushPlugin.class);
         registerPlugin(RuStoreUpdatePlugin.class);
         registerPlugin(ShareIntentPlugin.class);
         registerPlugin(TelemetryDevicePlugin.class);
@@ -464,12 +501,17 @@ public class MainActivity extends BridgeActivity {
             return;
         }
 
-        boolean isGoogleNotification = extras.containsKey(EXTRA_GOOGLE_MESSAGE_ID);
+        boolean isFirebaseNotification = extras.containsKey(EXTRA_GOOGLE_MESSAGE_ID);
+        boolean isRuStoreNotification = extras.containsKey(EXTRA_RUSTORE_MESSAGE_ID);
         boolean isIncomingCallNotification =
             "incoming_call".equals(extras.getString(EXTRA_TYPE)) &&
             extras.containsKey(EXTRA_ROOM_ID);
 
-        if (!isGoogleNotification && !isIncomingCallNotification) {
+        if (
+            !isFirebaseNotification &&
+            !isRuStoreNotification &&
+            !isIncomingCallNotification
+        ) {
             return;
         }
 

@@ -10,6 +10,8 @@ import {
 } from '../services/useChatStateCache';
 import { normalizeDateValue } from '../utils/dateValue';
 import { isDeletedBotUser, isLocalBotUser } from '../utils/bot';
+import { compactPersonName } from '../utils/personName';
+import { parseUserEx } from '../utils/parseUserEx';
 
 const users = shallowRef<IUser[]>([]);
 const loading = ref(false);
@@ -45,8 +47,64 @@ const mergeUsersWithStoredFields = (incomingUsers: IUser[]): IUser[] => {
   );
 };
 
-const filterVisibleUsers = (userList: IUser[]): IUser[] =>
-  userList.filter(user => !isDeletedBotUser(user));
+const normalizeUserDisplayName = (user: IUser): IUser =>
+  user.isBot
+    ? user
+    : {
+        ...user,
+        initials: compactPersonName(user.initials)
+      };
+
+const getCanonicalUserScore = (user: IUser): number => {
+  const ex = parseUserEx(user.ex) as ReturnType<typeof parseUserEx> & {
+    erpUserId?: string | number;
+  };
+
+  return (
+    (ex.erpUserId !== undefined && ex.erpUserId !== null ? 4 : 0) +
+    (/^\d+$/.test(user.nickname || '') ? 2 : 0)
+  );
+};
+
+const areLikelyDuplicateUsers = (left: IUser, right: IUser): boolean => {
+  if (left.isBot || right.isBot || left.initials !== right.initials) {
+    return false;
+  }
+
+  const hasSameAvatar =
+    !!left.avatarUrl && !!right.avatarUrl && left.avatarUrl === right.avatarUrl;
+  const hasLegacyInitialsAlias =
+    left.nickname === right.initials || right.nickname === left.initials;
+
+  return hasSameAvatar || hasLegacyInitialsAlias;
+};
+
+const filterVisibleUsers = (userList: IUser[]): IUser[] => {
+  const deduplicatedUsers: IUser[] = [];
+
+  userList
+    .filter(user => !isDeletedBotUser(user))
+    .map(normalizeUserDisplayName)
+    .forEach(user => {
+      const duplicateIndex = deduplicatedUsers.findIndex(existingUser =>
+        areLikelyDuplicateUsers(existingUser, user)
+      );
+
+      if (duplicateIndex === -1) {
+        deduplicatedUsers.push(user);
+        return;
+      }
+
+      if (
+        getCanonicalUserScore(user) >
+        getCanonicalUserScore(deduplicatedUsers[duplicateIndex])
+      ) {
+        deduplicatedUsers[duplicateIndex] = user;
+      }
+    });
+
+  return deduplicatedUsers;
+};
 
 const schedulePersistUsers = () => {
   if (persistUsersTimeout) {
@@ -212,14 +270,14 @@ export const upsertLocalUser = (user: IUser): void => {
   const index = currentUsers.findIndex(item => item.id === user.id);
 
   if (index === -1) {
-    users.value = [...currentUsers, user];
+    users.value = filterVisibleUsers([...currentUsers, user]);
     schedulePersistUsers();
     return;
   }
 
   const nextUsers = [...currentUsers];
   nextUsers[index] = mergeUserWithStoredFields(user, nextUsers[index]);
-  users.value = nextUsers;
+  users.value = filterVisibleUsers(nextUsers);
   schedulePersistUsers();
 };
 

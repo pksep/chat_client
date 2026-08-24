@@ -293,11 +293,28 @@ public class ChatBackgroundSyncWorker extends Worker {
                 topicId = payload.optString("topicId", "");
             }
 
-            ChatNotificationDismissalHelper.dismissTopicNotification(
+            ChatNotificationDismissalHelper.dismissTopicNotificationIfMessageMatches(
                 context,
-                topicId
+                topicId,
+                resolveDeletedMessageId(event, payload)
             );
         }
+    }
+
+    private String resolveDeletedMessageId(JSONObject event, JSONObject payload) {
+        String messageId = event.optString("entityId", "");
+
+        if (!messageId.trim().isEmpty() || payload == null) {
+            return messageId;
+        }
+
+        messageId = payload.optString("messageId", payload.optString("id", ""));
+        if (!messageId.trim().isEmpty()) {
+            return messageId;
+        }
+
+        JSONObject data = payload.optJSONObject("data");
+        return data != null ? data.optString("id", "") : "";
     }
 
     private int getMaxMessageTopics(ChatBackgroundSyncStore.PendingHints hints) {

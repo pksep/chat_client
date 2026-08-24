@@ -13,6 +13,7 @@ import {
   isTauriRuntime
 } from './useTauriNotifications';
 import { getIsAppActivelyVisible } from './useAppVisibility';
+import { RuStorePush } from './nativePush';
 
 type NotificationTopicType = 'DM' | 'GROUP' | null;
 
@@ -294,6 +295,16 @@ export const clearTopicNotifications = async (
   }
 
   if (Capacitor.isNativePlatform()) {
+    if (Capacitor.getPlatform() === 'android') {
+      try {
+        await RuStorePush.clearNotificationsForTopic({ topicId });
+      } catch (error) {
+        console.warn('Failed to clear RuStore notifications for topic:', error);
+      }
+
+      return;
+    }
+
     try {
       const delivered = await PushNotifications.getDeliveredNotifications();
       const matchingNotifications = delivered.notifications.filter(
@@ -371,6 +382,26 @@ export const clearMessageNotification = async (
   }
 
   if (Capacitor.isNativePlatform()) {
+    if (Capacitor.getPlatform() === 'android') {
+      if (!topicId) {
+        return;
+      }
+
+      try {
+        await RuStorePush.clearNotificationForMessage({
+          topicId,
+          messageId
+        });
+      } catch (error) {
+        console.warn(
+          'Failed to clear RuStore notification for message:',
+          error
+        );
+      }
+
+      return;
+    }
+
     try {
       const delivered = await PushNotifications.getDeliveredNotifications();
       const topicNotifications = topicId

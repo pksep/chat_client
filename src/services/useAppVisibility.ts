@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ref } from 'vue';
@@ -25,9 +26,11 @@ const USER_ACTIVITY_EVENTS = [
 const tauriWindowFocused = ref(true);
 const tauriWindowVisible = ref(true);
 const tauriWindowMinimized = ref(false);
+const capacitorAppActive = ref(true);
 const isUserIdle = ref(false);
 
 let isTauriWindowStateBound = false;
+let isCapacitorAppStateBound = false;
 let isUserActivityTrackingBound = false;
 let tauriWindowStatePollInterval: ReturnType<typeof setInterval> | null = null;
 let userIdleTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -145,6 +148,38 @@ const ensureUserActivityTracking = (): void => {
   isUserActivityTrackingBound = true;
 };
 
+const applyCapacitorAppState = (isActive: boolean): void => {
+  if (capacitorAppActive.value === isActive) {
+    return;
+  }
+
+  capacitorAppActive.value = isActive;
+
+  if (isActive) {
+    markAppUserActivity();
+  }
+
+  notifyWindowStateChange();
+};
+
+const ensureCapacitorAppStateTracking = (): void => {
+  if (!Capacitor.isNativePlatform() || isCapacitorAppStateBound) {
+    return;
+  }
+
+  isCapacitorAppStateBound = true;
+
+  void CapacitorApp.getState()
+    .then(({ isActive }) => applyCapacitorAppState(isActive))
+    .catch(error => {
+      console.warn('Failed to resolve native app state:', error);
+    });
+
+  void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+    applyCapacitorAppState(isActive);
+  });
+};
+
 export const syncTauriWindowState = async (): Promise<void> => {
   if (!isTauriRuntime()) {
     applyTauriWindowState({
@@ -175,6 +210,7 @@ export const syncTauriWindowState = async (): Promise<void> => {
 
 export const ensureTauriWindowStateTracking = (): void => {
   ensureUserActivityTracking();
+  ensureCapacitorAppStateTracking();
 
   if (!isTauriRuntime() || isTauriWindowStateBound) {
     return;
@@ -241,6 +277,7 @@ export const getIsAppActivelyVisible = (): boolean => {
   return (
     typeof document !== 'undefined' &&
     document.visibilityState === 'visible' &&
+    (!Capacitor.isNativePlatform() || capacitorAppActive.value) &&
     !isUserIdle.value &&
     (document.hasFocus() || canUseVisibleAsFocused) &&
     tauriWindowReady
