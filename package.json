@@ -50,7 +50,7 @@
     "@livekit/track-processors": "^0.7.2",
     "@mastra/client-js": "^1.40.0",
     "@pksep/reqi": "0.0.25",
-    "@pksep/yui": "0.1.307",
+    "@pksep/yui": "0.1.308",
     "@pksep/zod-shared-chat": "0.0.6",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-notification": "^2.3.3",
