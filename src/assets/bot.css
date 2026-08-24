@@ -88,7 +88,7 @@
   top: calc(85% - calc(var(--online-indicator-size) / 2));
   width: var(--online-indicator-size);
   height: var(--online-indicator-size);
-  background-color: var(--blue1);
+  background-color: var(--text-link);
   border-radius: 50%;
   border: 1px solid var(--white, #fff);
   transition: all 0.3s ease-in-out;
@@ -105,7 +105,7 @@
 
 .bot-avatar--edit .bot-avatar__image,
 .bot-avatar--edit .bot-avatar__fallback {
-  border: 2px solid var(--blue1);
+  border: 2px solid var(--text-link);
 }
 
 .bot-avatar__edit-badge {

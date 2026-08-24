@@ -295,7 +295,7 @@
   align-items: center;
   display: flex;
   cursor: pointer;
-  color: var(--text-neutral-color);
+  color: var(--chat-secondary);
 }
 
 .menu-profile__status-input {
@@ -482,7 +482,7 @@
   min-height: 64px;
   padding: 10px;
   border-radius: 8px;
-  background: var(--blue9);
+  background: var(--action-secondary-pressed-bg);
   border: 1px solid var(--border-blue);
 }
 
@@ -548,7 +548,7 @@
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  color: var(--blue1);
+  color: var(--text-link);
   font-size: 14px;
   line-height: 16px;
   font-variant-numeric: tabular-nums;

@@ -42,7 +42,7 @@
             >
               <Icon
                 :name="IconNameEnum.crossLarge"
-                color="var(--text-neutral-color)"
+                color="var(--chat-secondary)"
               />
             </Button>
           </div>
@@ -66,7 +66,7 @@
             >
               <Icon
                 :name="IconNameEnum.crossLarge"
-                color="var(--text-neutral-color)"
+                color="var(--chat-secondary)"
               />
             </Button>
           </div>
@@ -103,7 +103,7 @@
             >
               <Icon
                 :name="IconNameEnum.crossLarge"
-                color="var(--text-neutral-color)"
+                color="var(--chat-secondary)"
               />
             </Button>
           </div>

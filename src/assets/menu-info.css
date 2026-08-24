@@ -154,7 +154,7 @@ div.menu-info__buttons {
   align-items: center;
   justify-content: center;
   justify-self: center;
-  border: 1px solid var(--blue1);
+  border: 1px solid var(--text-link);
   border-radius: 50%;
   background-color: transparent;
 
@@ -188,7 +188,7 @@ button.button-yui-kit.large.menu-info__secondary-button {
   }
 
   &:hover {
-    --icon-color: var(--blue1);
+    --icon-color: var(--text-link);
     background-color: var(--primary-pressed-light);
   }
 }

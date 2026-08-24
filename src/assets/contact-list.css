@@ -176,7 +176,7 @@
 }
 
 .contact-list__search-state {
-  color: var(--text-neutral-color);
+  color: var(--chat-secondary);
   font-size: 14px;
   font-weight: 400;
   line-height: 17px;
@@ -281,7 +281,7 @@
 .contact-list__pin {
   display: flex;
   align-items: center;
-  color: var(--text-neutral-color);
+  color: var(--chat-secondary);
   width: 16px;
   height: 16px;
 }
@@ -442,7 +442,7 @@ svg.icon-yui-kit.contact-list__read-icon {
 }
 
 .contact-list__message-status-icons.is-read>svg.icon-yui-kit {
-  color: var(--blue1);
+  color: var(--text-link);
 }
 
 @media (width <=768px) {

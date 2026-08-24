@@ -108,7 +108,7 @@
   gap: 4px;
   width: 100%;
   max-width: 100%;
-  background-color: var(--message-background-color, var(--white));
+  background-color: var(--message-background-color, var(--surface-overlay));
   border-radius: 20px;
   align-self: start;
   position: relative;
@@ -290,7 +290,7 @@
   padding: 0;
   border-radius: 0;
   background-color: transparent;
-  color: var(--text-neutral-color);
+  color: var(--chat-secondary);
 }
 
 .message-time--emoji-inline::before,
@@ -300,7 +300,7 @@
 }
 
 .message__other .message-time--emoji-inline {
-  color: var(--text-neutral-color);
+  color: var(--chat-secondary);
 }
 
 .message-call {
@@ -355,7 +355,7 @@
   align-items: center;
   gap: 6px;
   align-self: end;
-  color: var(--text-neutral-color);
+  color: var(--chat-secondary);
   font-size: 12px;
   line-height: 1;
   white-space: nowrap;
@@ -445,7 +445,7 @@
 
 .message-content {
   font-size: 14px;
-  color: var(--message-text-color, var(--text-black));
+  color: var(--message-text-color, var(--text-primary));
   width: 100%;
   min-width: 0;
 }
@@ -454,7 +454,7 @@
   display: flex;
   gap: 2px;
   font-size: 12px;
-  color: var(--text-neutral-color);
+  color: var(--chat-secondary);
   align-items: center;
   justify-content: end;
   height: 20px;
@@ -534,7 +534,7 @@
   }
 
   & .reaction--own {
-    background-color: var(--border-blue);
+    background-color: var(--tooltip-brand-bg);
   }
 
   & .reaction--other {
@@ -570,7 +570,7 @@
   min-width: 20px;
   height: 20px;
   border-radius: 999px;
-  background: var(--blue1);
+  background: var(--text-link);
   color: var(--white);
   font-size: 13.3px;
   font-weight: 400;
@@ -793,7 +793,7 @@
   padding: 8px 10px;
   border: 0;
   border-radius: 10px;
-  background-color: var(--blockquote-bg-color, var(--blue9));
+  background-color: var(--blockquote-bg-color, var(--action-secondary-pressed-bg));
   cursor: pointer;
   text-align: left;
   position: relative;
@@ -818,7 +818,7 @@
   top: 0;
   bottom: 0;
   width: 5px;
-  background-color: var(--blockquote-border-color, var(--blue1));
+  background-color: var(--blockquote-border-color, var(--text-link));
   border-radius: 14px 0 0 14px;
 }
 
@@ -866,17 +866,17 @@
   font-size: 14px;
   line-height: 1.1;
   font-weight: 700;
-
+  color: var(--message-text-color, var(--text-primary));
 }
 
 .message-reference-block--outgoing .message-reference-reply__author {
-  color: var(--blue1);
+  color: var(--text-link);
 }
 
 .message-reference-reply__text {
   font-size: 14px;
   line-height: 1.15;
-  color: var(--message-text-color, var(--text-black));
+  color: var(--message-text-color, var(--text-primary));
 }
 
 div.message-content__loading {
@@ -1149,7 +1149,7 @@ div.message-content__file {
   }
 
   & .message-content__file__upload-percent {
-    color: var(--blue1);
+    color: var(--text-link);
   }
 
   & .message-content__file__upload-separator,
@@ -1319,7 +1319,7 @@ div.message-content__file {
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: var(--text-neutral-color);
+  color: var(--chat-secondary);
   white-space: nowrap;
   align-self: end;
 }
@@ -1388,7 +1388,7 @@ div.message-content__file {
   transform: scaleX(-1);
   left: -6px;
   bottom: 0;
-  color: var(--message-background-color, var(--white));
+  color: var(--message-background-color, var(--surface-overlay));
   pointer-events: none;
 }
 
@@ -1428,7 +1428,7 @@ div.message-content__file {
 }
 
 .message__content__articles__my .link:visited {
-  color: var(--blue1);
+  color: var(--text-link);
 }
 
 .message-content__html [data-user-id][data-user-openable='true'],
@@ -1464,9 +1464,9 @@ div.message-content__file {
 .message__other {
   justify-self: end;
   flex-direction: row-reverse;
-  --message-background-color: var(--blue12);
+  --message-background-color: var(--table-surface-pressed);
   --message-text-color: var(--text-primary);
-  --blockquote-bg-color: var(--white);
+  --blockquote-bg-color: var(--surface-overlay);
 }
 
 .chat__input {

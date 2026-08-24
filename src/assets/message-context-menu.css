@@ -22,7 +22,8 @@
   border-radius: 100px;
   gap: 5px;
   padding: 5px;
-  background-color: var(--white);
+  background-color: var(--surface-overlay);
+  border: 1px solid var(--border-table);
   visibility: hidden;
 }
 

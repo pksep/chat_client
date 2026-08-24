@@ -44,8 +44,8 @@
 
 .menu__user-assistant-icon {
   display: grid;
-  background-color: var(--blue9);
-  color: var(--blue1);
+  background-color: var(--action-secondary-pressed-bg);
+  color: var(--text-link);
   border-radius: 50%;
   padding: 7px;
 

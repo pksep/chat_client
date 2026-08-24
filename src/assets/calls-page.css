@@ -147,7 +147,7 @@
 .calls-page__status {
   font-size: 14px;
   line-height: 17px;
-  color: var(--text-neutral-color);
+  color: var(--chat-secondary);
 }
 
 .calls-page__status--missed {
@@ -165,7 +165,7 @@
 }
 
 .calls-page__info {
-  color: var(--text-neutral-color);
+  color: var(--chat-secondary);
 
   & svg {
     width: 16px;
@@ -224,7 +224,7 @@
 
 .calls-page__details .message-call__icon--incoming,
 .calls-page__details .message-call__icon--outgoing {
-  color: var(--text-neutral-color);
+  color: var(--chat-secondary);
 }
 
 .calls-bot {

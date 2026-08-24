@@ -73,7 +73,7 @@
           <Icon
             :name="IconNameEnum.read"
             :data-testid="`${dataTestid}-ReadIcon`"
-            color="var(--blue1)"
+            color="var(--text-link)"
             :width="20"
             :height="20"
           />
@@ -289,7 +289,7 @@
             <Icon
               :name="IconNameEnum.read"
               :data-testid="`${dataTestid}-ReadIcon`"
-              color="var(--blue1)"
+              color="var(--text-link)"
               :width="20"
               :height="20"
             />

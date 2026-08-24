@@ -33,6 +33,11 @@ p.chat__nothing-paragraph {
   grid-row: 4;
 }
 
+
+.link {
+  color: var(--text-link);
+}
+
 .chat.chat__message:not(.menu__user-assistant) {
   height: calc(var(--default-height) / 2);
 }
@@ -52,7 +57,7 @@ p.chat__nothing-paragraph {
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
   position: relative;
-  background: transparent;
+  background: var(--surface-main);
   border-radius: 18px 0 0 18px;
 }
 
@@ -948,7 +953,7 @@ p.chat__nothing-paragraph {
 .chat__input__action>svg {
   flex-shrink: 0;
   width: 28px;
-  color: var(--blue1);
+  color: var(--text-link);
 }
 
 @media screen and (width < 768px) {
@@ -1065,7 +1070,7 @@ p.chat__nothing-paragraph {
   justify-content: center;
   border: 4px dashed var(--primary-color);
   border-radius: 24px;
-  color: var(--text-neutral-color);
+  color: var(--chat-secondary);
   background-color: rgb(255 255 255 / 55%);
 }
 
@@ -1090,9 +1095,8 @@ p.chat__nothing-paragraph {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  background-color: var(--table-surface-search);
-  border: 0.5px solid var(--neutral-border);
-  background-color: var(--white);
+  background-color: var(--surface-overlay);
+  border: 0.5px solid var(--border-table);
   padding: 15px 20px;
   border-radius: 20px;
 }
@@ -1101,7 +1105,7 @@ p.chat__nothing-paragraph {
   text-align: center;
   font-size: 14px;
   line-height: 18px;
-  color: var(--primary-base);
+  color: var(--text-brand);
   font-weight: 600;
 }
 
@@ -1114,11 +1118,11 @@ p.chat__nothing-paragraph {
 }
 
 .selected-messages-content__action.button-yui-kit:not(.selected-messages-content__action--danger) {
-  color: var(--blue1) !important;
-  border-color: var(--blue1) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-hover) !important;
 
   &:active {
-    background-color: var(--primary-pressed-light-color) !important;
+    background-color: var(--action-secondary-pressed-bg) !important;
   }
 }
 
@@ -1127,7 +1131,7 @@ p.chat__nothing-paragraph {
   border-color: var(--error-color) !important;
 
   &:active {
-    background-color: var(--ban-color) !important;
+    background-color: var(--table-surface-ban) !important;
   }
 }
 
@@ -1176,7 +1180,7 @@ p.chat__nothing-paragraph {
     &>svg {
       width: 30px;
       height: 30px;
-      color: var(--blue1);
+      color: var(--text-link);
     }
   }
 
