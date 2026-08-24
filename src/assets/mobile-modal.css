@@ -31,7 +31,7 @@ button.mobile__modal-header--button {
   cursor: pointer;
 
   &:disabled {
-    color: var(--text-grey);
+    color: var(--text-secondary);
     cursor: not-allowed;
   }
 }

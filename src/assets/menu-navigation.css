@@ -7,8 +7,8 @@
   align-items: center;
   gap: 12px;
   height: 58px;
+  background-color: var(--surface-overlay);
   padding: 10px 18px calc(10px + env(safe-area-inset-bottom, 0px));
-  border-top: 1px solid #eef3ff;
   box-shadow: 0px 0px 22px 0px #00000012;
   border-radius: 15px 15px 0 0;
   transform: translateX(-10px);
@@ -98,7 +98,7 @@
 
 .menu-panel__description {
   margin: 0;
-  color: var(--text-grey);
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 20px;
 }
@@ -151,7 +151,7 @@
 
 .menu-profile__nickname {
   margin: 0;
-  color: var(--text-grey);
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 20px;
 }
@@ -185,7 +185,7 @@
 }
 
 .menu-profile__row-value--muted {
-  color: var(--text-grey);
+  color: var(--text-secondary);
 }
 
 .menu-profile__status {
@@ -267,7 +267,7 @@
 }
 
 .menu-profile__status-clear {
-  color: var(--text-grey);
+  color: var(--text-secondary);
   width: 24px;
   min-height: 24px !important;
   height: 24px;
@@ -596,7 +596,7 @@ dialog.menu-profile__wallpaper-modal>.modal-yui-kit__modal-content {
   min-height: 22px !important;
   height: 22px;
   padding: 0 !important;
-  color: var(--text-grey);
+  color: var(--text-secondary);
 }
 
 .menu-profile__wallpaper-preview-surface {

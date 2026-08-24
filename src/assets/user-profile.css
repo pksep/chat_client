@@ -35,7 +35,7 @@
 
 .user-profile__ex {
   font-size: var(--font-size-nickname, 16px);
-  color: var(--text-grey);
+  color: var(--text-secondary);
   margin-top: -7px;
   grid-area: description;
 }

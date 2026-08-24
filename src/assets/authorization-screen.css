@@ -123,7 +123,7 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
   margin: 4px 0 25px !important;
 
   &.input-yui-kit.initial::before {
-    border-color: var(--border-grey);
+    border-color: var(--border-table);
   }
 }
 
@@ -153,7 +153,7 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
 
 .authorization-screen__credentials fieldset.input-yui-kit::before {
   z-index: 1;
-  border: 1px solid var(--border-grey) !important;
+  border: 1px solid var(--border-table) !important;
 }
 
 .authorization-screen__credentials fieldset.input-yui-kit:hover::before,

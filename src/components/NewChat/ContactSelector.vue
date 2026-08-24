@@ -278,7 +278,7 @@ const onAddClick = (): void => {
 .contact-selector__filter {
   min-height: 34px;
   padding: 0 14px;
-  border: 1px solid var(--border-grey);
+  border: 1px solid var(--border-table);
   border-radius: 17px;
 
   background: var(--white);

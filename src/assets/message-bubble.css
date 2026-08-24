@@ -583,7 +583,7 @@
   padding-top: 5px;
 
   &:has(.message-reactions-details__item--interactive) {
-    border-top: 0.5px solid var(--border-grey);
+    border-top: 0.5px solid var(--border-table);
   }
 }
 
@@ -602,7 +602,7 @@
   text-align: left;
   cursor: default;
   padding-bottom: 0;
-  border-top: 0.5px solid var(--border-grey);
+  border-top: 0.5px solid var(--border-table);
   border-radius: 0;
 }
 

@@ -1,10 +1,10 @@
 .chat__header-wrapper {
   display: flex;
   flex-direction: column;
-  background-color: var(--white);
+  background-color: var(--surface-input-primary);
   border-bottom-width: 0.5px;
   border-bottom-style: solid;
-  border-bottom-color: var(--border-grey);
+  border-bottom-color: var(--border-table);
 }
 
 .chat__header-main {
@@ -38,7 +38,7 @@
 
   & .chat__header__icon {
     font-size: 24px !important;
-    color: var(--text-light-color);
+    color: var(--text-disabled);
     width: 44px !important;
     height: 44px !important;
     padding: 10px;
@@ -46,7 +46,7 @@
 
     &:hover,
     &:active {
-      color: var(--border-primary-color);
+      color: var(--action-primary-bg);
     }
   }
 
@@ -248,7 +248,7 @@ button.button-yui-kit {
   font-weight: 400;
   transition: opacity 0.2s;
 
-  border-bottom: 1px solid var(--border-grey);
+  border-bottom: 1px solid var(--border-table);
   margin-inline: 16px;
 
   & span {

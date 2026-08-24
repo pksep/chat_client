@@ -1,10 +1,10 @@
-dialog.new-contact > .modal-yui-kit__modal-content,
-dialog.new-group > .modal-yui-kit__modal-content,
-dialog.new-bot > .modal-yui-kit__modal-content {
+dialog.new-contact>.modal-yui-kit__modal-content,
+dialog.new-group>.modal-yui-kit__modal-content,
+dialog.new-bot>.modal-yui-kit__modal-content {
   padding-inline: 0 !important;
 }
 
-dialog.new-contact > .modal-yui-kit__modal-content {
+dialog.new-contact>.modal-yui-kit__modal-content {
   padding-bottom: 6px !important;
 }
 
@@ -18,7 +18,7 @@ dialog.new-contact > .modal-yui-kit__modal-content {
   justify-content: space-between;
   border-bottom-style: solid;
   border-bottom-width: 1px;
-  border-bottom-color: var(--border-grey);
+  border-bottom-color: var(--border-table);
 }
 
 button.button-yui-kit.new-contact__button-close {
@@ -32,25 +32,23 @@ button.button-yui-kit.new-contact__button-close {
   justify-content: space-between;
   gap: 15px;
   padding: 10px;
+
   & .checkbox-yui-kit {
     justify-self: flex-end;
   }
 }
 
-.modal-yui-kit__modal-content > .contact-selector {
+.modal-yui-kit__modal-content>.contact-selector {
   padding-top: 5px;
   padding-inline: 10px;
 }
 
-.modal-yui-kit__modal-content > .contact-selector > .contact-selector__search {
+.modal-yui-kit__modal-content>.contact-selector>.contact-selector__search {
   padding-inline: 10px;
   margin-bottom: 5px;
 }
 
-dialog.new-contact
-  > .modal-yui-kit__modal-content
-  > .contact-selector
-  > ul.contact-selector__list {
+dialog.new-contact>.modal-yui-kit__modal-content>.contact-selector>ul.contact-selector__list {
   margin-bottom: 0;
 }
 

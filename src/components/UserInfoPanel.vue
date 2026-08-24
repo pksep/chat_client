@@ -300,7 +300,7 @@ const handleOpenChat = async () => {
   align-items: center;
   justify-content: space-between;
   margin: 10px;
-  border-bottom: 1px solid var(--border-grey);
+  border-bottom: 1px solid var(--border-table);
   padding-bottom: 10px;
 }
 

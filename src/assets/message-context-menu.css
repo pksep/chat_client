@@ -192,7 +192,7 @@ button.button-yui-kit.select-reactions-list-button {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
   align-items: center;
-  border-top: 0.5px solid var(--border-grey);
+  border-top: 0.5px solid var(--border-table);
   padding: 5px 5px 0;
   height: 35px;
 }

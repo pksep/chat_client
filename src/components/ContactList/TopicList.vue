@@ -1263,11 +1263,7 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
 .contact-list__item--selection.contact-list__item--active
   .contact-list__description--overflow
   strong::after {
-  background: linear-gradient(
-    to right,
-    transparent 0%,
-    var(--table-surface-search) 100%
-  );
+  background-color: var(--table-surface-search);
 }
 
 .contact-list__selection-checkbox {

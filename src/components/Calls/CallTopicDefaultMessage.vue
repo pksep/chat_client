@@ -181,7 +181,7 @@ watch(
   position: absolute;
   right: 12px;
   bottom: 6px;
-  color: var(--text-grey);
+  color: var(--text-secondary);
   font-size: 11px;
   line-height: 13px;
 }

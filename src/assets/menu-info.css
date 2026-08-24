@@ -1,6 +1,6 @@
 aside.menu-info {
   background-color: var(--white);
-  border-left-color: var(--border-grey);
+  border-left-color: var(--border-table);
   border-left-width: 0.5px;
   border-left-style: solid;
   height: var(--default-height);
@@ -35,7 +35,7 @@ header.menu-info__header {
   align-items: center;
   justify-content: center;
   position: relative;
-  border-bottom: 1px solid var(--border-grey);
+  border-bottom: 1px solid var(--border-table);
 }
 
 .menu-info__header-title {

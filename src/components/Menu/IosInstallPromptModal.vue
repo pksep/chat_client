@@ -122,7 +122,7 @@ const handleIgnoreClose = (): void => {};
 
 .ios-install-modal__description {
   margin: 0;
-  color: var(--text-grey);
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 1.45;
 }
