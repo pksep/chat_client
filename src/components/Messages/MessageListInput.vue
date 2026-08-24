@@ -40,10 +40,7 @@
               @click="$emit('clearEdit')"
               :data-testid="`${props.dataTestid}-MenuInfo-CloseButton`"
             >
-              <Icon
-                :name="IconNameEnum.crossLarge"
-                color="var(--chat-secondary)"
-              />
+              <Icon :name="IconNameEnum.crossLarge" />
             </Button>
           </div>
         </template>

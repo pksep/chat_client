@@ -1,5 +1,11 @@
 .confirm__modal {
   text-align: center;
+
+}
+
+.confirm__modal.modal-yui-kit {
+  background-color: var(--surface-overlay) !important;
+
 }
 
 .confirm__modal .modal-yui-kit__modal-content {
