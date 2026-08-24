@@ -3425,10 +3425,6 @@ watch(
     const isStaleTopicSwitch = () =>
       topicSwitchToken !== activeTopicSwitchToken ||
       route.value?.id !== topicId;
-    const requiresAuthoritativeNotificationRefresh =
-      isMobile.value &&
-      getHasBrowserNetwork() &&
-      isNotificationRefreshRequestForTopic;
     const hadRenderedDifferentTopicMessages =
       renderedTopicId.value !== topicId && state.messages.length > 0;
     if (routeType === RouteTypes.AI) {
@@ -3437,11 +3433,10 @@ watch(
       renderedTopicId.value = topicId;
     }
     isAwaitingUserMessagesPaint.value =
-      requiresAuthoritativeNotificationRefresh ||
-      (isMobile.value &&
-        route.value?.type !== RouteTypes.AI &&
-        !props.suppressInitialSkeleton &&
-        !hasKnownTopicMessagesState(topicId));
+      isMobile.value &&
+      route.value?.type !== RouteTypes.AI &&
+      !props.suppressInitialSkeleton &&
+      !hasKnownTopicMessagesState(topicId);
     clearVisibleMessagesExpansionSchedule();
     visibleMessagesExpansionAppliedToken = 0;
     suppressNotificationSoundForTopic(topicId, TOPIC_SWITCH_AUTO_READ_GRACE_MS);
@@ -3450,12 +3445,7 @@ watch(
     state.unreadMarkerMessageId = null;
     setTopicMessagesKnownEmpty(topicId, false);
     isLoadingInitialMessages.value = true;
-    if (requiresAuthoritativeNotificationRefresh) {
-      cancelInitialMessagesSkeletonDelay();
-      isInitialMessagesSkeletonVisible.value = true;
-    } else {
-      scheduleInitialMessagesSkeleton(topicId, topicSwitchToken);
-    }
+    scheduleInitialMessagesSkeleton(topicId, topicSwitchToken);
     resetScrollState();
     if (hadRenderedDifferentTopicMessages) {
       scrollAnchor.setViewportMode('history', { pin: false });
@@ -3510,8 +3500,7 @@ watch(
     }
 
     void fetchPinnedMessagesForTopic(topicId);
-    const shouldHydrateBeforeInitialPaint =
-      routeType !== RouteTypes.AI && !requiresAuthoritativeNotificationRefresh;
+    const shouldHydrateBeforeInitialPaint = routeType !== RouteTypes.AI;
     const hydrationPromise = shouldHydrateBeforeInitialPaint
       ? hydrateMessagesFromCache(topicId, undefined, {
           visibleLimit: fastInitialMessagesLimit,
@@ -3540,10 +3529,9 @@ watch(
     }
 
     if (
-      !requiresAuthoritativeNotificationRefresh &&
-      (getRenderedTopicMessages(topicId, hydratedMessages).length > 0 ||
-        getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId))
-          .length > 0)
+      getRenderedTopicMessages(topicId, hydratedMessages).length > 0 ||
+      getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId)).length >
+        0
     ) {
       setTopicMessagesKnownEmpty(topicId, false);
       cancelInitialMessagesSkeletonDelay();

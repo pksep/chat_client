@@ -51,6 +51,7 @@ import {
   normalizeFavoriteTopic
 } from '../utils/favorite-topic';
 import { resolveLastMessageAfterLocalSync } from '../utils/topic-last-message';
+import { compactPersonName } from '../utils/personName';
 
 const topics = ref<ITopic[]>([]);
 const topicsById = computed(
@@ -85,6 +86,14 @@ const waitForTopicIdle = (): Promise<void> =>
 
     setTimeout(resolve, 0);
   });
+
+const resolveDmTopicName = (topic: ITopic, user?: IUser): string => {
+  const sourceName = user?.initials || topic.name || user?.nickname || '';
+
+  return isBotTopic(topic) || isBotUser(user)
+    ? sourceName
+    : compactPersonName(sourceName);
+};
 
 const bindTopicsVisibilityListener = (
   handleVisibilityChange: () => void
@@ -323,16 +332,19 @@ const createTopicsApi = () => {
     );
     normalizedTopic.unreadReactionMessageId = resolvedUnreadReactionMessageId;
 
-    if (normalizedTopic.type === TopicType.DM && normalizedTopic.members) {
-      normalizedTopic.user = normalizedTopic.members.find(
+    if (normalizedTopic.type === TopicType.DM) {
+      const peerMember = normalizedTopic.members?.find(
         user => user.id !== authedUser.value?.id
       );
+      normalizedTopic.user = peerMember || normalizedTopic.user;
       normalizedTopic.avatarUrl =
         isBotTopic(normalizedTopic) || isBotUser(normalizedTopic.user)
           ? normalizedTopic.user?.avatarUrl || ''
           : normalizedTopic.avatarUrl || normalizedTopic.user?.avatarUrl;
-      normalizedTopic.name =
-        normalizedTopic.name || normalizedTopic.user?.initials;
+      normalizedTopic.name = resolveDmTopicName(
+        normalizedTopic,
+        normalizedTopic.user
+      );
     }
 
     if (
@@ -1151,7 +1163,7 @@ const createTopicsApi = () => {
             : topic.avatarUrl,
         name:
           topic.type === TopicType.DM
-            ? nextUser?.initials || topic.name
+            ? resolveDmTopicName(topic, nextUser)
             : topic.name
       };
     });
@@ -1194,7 +1206,7 @@ const createTopicsApi = () => {
         nextTopic.user = changes.user;
 
         if (nextTopic.type === TopicType.DM) {
-          nextTopic.name = changes.user.initials || nextTopic.name;
+          nextTopic.name = resolveDmTopicName(nextTopic, changes.user);
           nextTopic.avatarUrl = changes.user.avatarUrl || '';
         }
       }
