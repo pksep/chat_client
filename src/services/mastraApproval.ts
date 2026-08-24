@@ -87,6 +87,21 @@ const formatChanges = (
 
 const quotedValue = (value: unknown) => `«${formatValue(value, 'не указано')}»`;
 
+const contentPreviewValue = (value: unknown) => {
+  const plainText = String(value ?? '')
+    .replace(/<\s*br\s*\/?>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0?39;|&apos;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+  return plainText ? quotedValue(plainText) : 'пустое содержимое';
+};
+
 const dateValue = (value: unknown) => formatDate(value);
 
 const priorityValue = (value: unknown) => {
@@ -113,6 +128,10 @@ const APPROVAL_ACTION_LABELS: Record<string, string> = {
   erp_actions_erp_detail_create_and_add_to_cbed:
     'создание детали и изменение спецификации сборки',
   erp_actions_erp_detail_archive: 'перенос детали в архив',
+  knowledge_actions_knowledge_document_create: 'создание элемента базы знаний',
+  knowledge_actions_knowledge_document_update: 'изменение элемента базы знаний',
+  knowledge_actions_knowledge_document_archive:
+    'перенос элемента базы знаний в архив',
   board_actions_projects_create: 'создание проекта',
   board_actions_projects_update: 'изменение проекта',
   board_actions_project_members_update: 'изменение участников проекта',
@@ -158,6 +177,26 @@ const buildApprovalQuestion = (approval: PendingToolApproval): string => {
         : '';
       return `Перенести деталь ${quotedValue(args.detailName)}${designation} в архив? Связанные спецификации, комплекты и металлообработка будут актуализированы.`;
     }
+    case 'knowledge_actions_knowledge_document_create': {
+      const kind = args.kind === 'section' ? 'раздел' : 'документ';
+      const parent = args.parentTitle
+        ? ` в разделе ${quotedValue(args.parentTitle)}`
+        : '';
+      const content =
+        args.kind !== 'section' && args.content !== undefined
+          ? ` Содержимое: ${contentPreviewValue(args.content)}.`
+          : '';
+      return `Создать ${kind} ${quotedValue(args.title)}${parent}?${content}`;
+    }
+    case 'knowledge_actions_knowledge_document_update': {
+      const changes = formatChanges(args, [
+        ['title', 'новое название', quotedValue],
+        ['content', 'новое содержимое', contentPreviewValue]
+      ]);
+      return `Изменить ${quotedValue(args.documentTitle)}: ${changes}?`;
+    }
+    case 'knowledge_actions_knowledge_document_archive':
+      return `Перенести ${quotedValue(args.documentTitle)} в архив? Если это раздел, вложенные элементы останутся активными и переместятся на уровень выше.`;
     case 'board_actions_projects_create': {
       const members = Array.isArray(args.memberNames)
         ? ` Участники: ${formatList(args.memberNames, 'не указан')}.`
