@@ -97,7 +97,14 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
+import {
+  computed,
+  defineAsyncComponent,
+  onBeforeUnmount,
+  ref,
+  useTemplateRef,
+  watch
+} from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import MessageList from './MessageList.vue';
 import ContactListMobile from './ContactList/MobileList.vue';
@@ -113,11 +120,12 @@ import type {
   IMessageViewportSnapshot
 } from './interfaces/interfaces';
 import ShareSelectionOverlay from './ShareSelectionOverlay.vue';
-import AIAssistant from './AI/AIAssistant.vue';
 import {
   fetchPinnedMessagesForTopic,
   hasKnownTopicMessagesState
 } from '../services/useMessages';
+
+const AIAssistant = defineAsyncComponent(() => import('./AI/AIAssistant.vue'));
 
 export interface IChatProps extends IMessageListProps {
   dataTestid?: string;

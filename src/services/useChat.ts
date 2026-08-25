@@ -49,7 +49,6 @@ import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
 import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
-import { initCallKit, showIncomingCallKit, endAllCallKits } from './useCallKit';
 import {
   clearMessageNotification,
   clearTopicNotifications
@@ -115,8 +114,10 @@ const notifyChatSDKReady = (sdk: ChatSDK): void => {
 };
 
 type CallsApi = typeof import('./useCalls');
+type CallKitApi = typeof import('./useCallKit');
 let callsApi: CallsApi | null = null;
 let callsApiPromise: Promise<CallsApi> | null = null;
+let callKitApiPromise: Promise<CallKitApi> | null = null;
 
 const loadCallsApi = async (): Promise<CallsApi> => {
   if (!callsApiPromise) {
@@ -127,6 +128,14 @@ const loadCallsApi = async (): Promise<CallsApi> => {
   }
 
   return callsApiPromise;
+};
+
+const loadCallKitApi = (): Promise<CallKitApi> => {
+  if (!callKitApiPromise) {
+    callKitApiPromise = import('./useCallKit');
+  }
+
+  return callKitApiPromise;
 };
 
 const isWebsocketConnecting = ref(true);
@@ -907,7 +916,8 @@ const setupChatListeners = (): void => {
       }
 
       if (Capacitor.isNativePlatform() && !isGroupCall && isReceived && user) {
-        showIncomingCallKit(
+        const { showIncomingCallKit } = await loadCallKitApi();
+        await showIncomingCallKit(
           user.initials,
           payload.roomId,
           user.avatarUrl,
@@ -922,7 +932,8 @@ const setupChatListeners = (): void => {
       const { dismissIncomingCall, handleCallAnswered } = await loadCallsApi();
 
       if (Capacitor.isNativePlatform()) {
-        endAllCallKits();
+        const { endAllCallKits } = await loadCallKitApi();
+        await endAllCallKits();
       }
       dismissIncomingCall(payload.roomId, payload.topicId);
       handleCallAnswered(
@@ -942,7 +953,8 @@ const setupChatListeners = (): void => {
         const { dismissIncomingCall } = await loadCallsApi();
 
         if (Capacitor.isNativePlatform()) {
-          endAllCallKits();
+          const { endAllCallKits } = await loadCallKitApi();
+          await endAllCallKits();
         }
         dismissIncomingCall(payload.roomId, payload.topicId);
       })();
@@ -982,7 +994,8 @@ const setupChatListeners = (): void => {
       }
 
       if (Capacitor.isNativePlatform()) {
-        endAllCallKits();
+        const { endAllCallKits } = await loadCallKitApi();
+        await endAllCallKits();
       }
 
       if (payload.topicId) {
@@ -1833,7 +1846,11 @@ const startChatConnectionInBackground = (sdk: ChatSDK): void => {
         restoreInvitedGroupCallIfNeeded();
 
         if (Capacitor.isNativePlatform()) {
-          initCallKit();
+          void loadCallKitApi()
+            .then(({ initCallKit }) => initCallKit())
+            .catch(error => {
+              console.warn('[CallKit] Failed to initialize:', error);
+            });
         }
 
         ensureTauriWindowStateTracking();
