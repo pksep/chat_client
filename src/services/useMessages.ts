@@ -2127,6 +2127,21 @@ export const getMessagesByTopicId = (topicId: string): IMessage[] => {
   return messagesStore[topicId] || [];
 };
 
+export const getClientMessageById = (
+  topicId?: string,
+  messageId?: string
+): IMessage | undefined => {
+  if (!topicId || !messageId) {
+    return undefined;
+  }
+
+  const messageIndex = fullMessageIndexesByTopic.get(topicId)?.get(messageId);
+
+  return messageIndex === undefined
+    ? undefined
+    : fullMessagesStore[topicId]?.[messageIndex];
+};
+
 export const hasKnownTopicMessagesState = (topicId: string): boolean => {
   if (!topicId) {
     return false;
@@ -2770,10 +2785,13 @@ export const changeMessageStatusLocally = (
     message => message.id === messageId
   );
 
-  updateTopicMessageStores(topicId, messages =>
+  const updatedMessages = updateTopicMessageStores(topicId, messages =>
     messages.map(message =>
       message.id === messageId ? { ...message, status } : message
     )
+  );
+  const updatedMessage = updatedMessages.find(
+    message => message.id === messageId
   );
 
   if (status === MessageStatus.Wait && !hasPendingMediaUpload(currentMessage)) {
@@ -2786,6 +2804,10 @@ export const changeMessageStatusLocally = (
   }
 
   schedulePersistMessages(topicId);
+
+  if (updatedMessage) {
+    syncLocalLastMessage(topicId, updatedMessage);
+  }
 };
 
 export const setFileUploadPendingStatus = (

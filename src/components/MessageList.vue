@@ -589,6 +589,7 @@ import {
   consumeNotificationTopicRefreshRequest,
   notificationTopicRefreshRequest
 } from '../services/useNotificationNavigation';
+import { getMessageReactionLayoutSignature } from '../utils/messageScroll';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -923,7 +924,8 @@ const renderedLastUserMessageSignature = computed(() => {
     lastMessage.updatedAt || '',
     lastMessage.status || '',
     lastMessage.text || '',
-    lastMessage.media?.length || 0
+    lastMessage.media?.length || 0,
+    getMessageReactionLayoutSignature(lastMessage.reactions)
   ].join('\u001f');
 });
 const hasCallTopicDefaultMessage = computed(() =>

@@ -27,8 +27,11 @@
       @change="handleImagePublish"
     />
     <ModalCroppedAvatar
+      class="group-avatar-cropper-modal group-avatar-cropper-modal--mobile"
       :image="informationState.fileImage"
       :open="informationState.isEditAvatar"
+      position="bottom"
+      width="100%"
       @unmount-close="handleCloseImageCrop"
       @unmount-save="handleImageCropSave"
     />
