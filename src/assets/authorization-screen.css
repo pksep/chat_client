@@ -105,7 +105,7 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
 }
 
 .authorization-screen__credentials-label {
-  color: var(--grey6);
+  color: var(--text-secondary);
   font-size: 16px;
   font-weight: 500;
   line-height: 27px;

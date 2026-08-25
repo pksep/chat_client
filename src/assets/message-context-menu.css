@@ -230,7 +230,7 @@ button.button-yui-kit.select-reactions-list-button {
 }
 
 .message-context-menu__details-date {
-  color: var(--grey6);
+  color: var(--text-secondary);
   font-weight: 400;
   font-size: 12px;
 }

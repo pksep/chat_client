@@ -212,7 +212,6 @@
 
 .message__article--call-outgoing {
   margin-left: auto;
-  background-color: var(--blue12);
 }
 
 .message__article--call-incoming {
@@ -280,7 +279,7 @@
   margin-left: auto;
   margin-right: 0;
   background-color: var(--blue12);
-  color: var(--grey6) !important;
+  color: var(--text-secondary) !important;
 }
 
 .message-time--emoji-inline {
@@ -646,7 +645,7 @@
 .message-reactions-details__hint {
   font-size: 12px;
   line-height: 15px;
-  color: var(--grey6);
+  color: var(--text-secondary);
 }
 
 .message-reactions-details__emoji {

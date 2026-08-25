@@ -32,8 +32,6 @@
 }
 
 .calls-page__list {
-  display: grid;
-  gap: 0;
   max-height: calc(100vh - 185px);
   overflow-y: auto;
 
@@ -79,8 +77,6 @@
 .calls-page__body {
   min-width: 0;
   display: grid;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-color);
 }
 
 .calls-page__item:last-of-type .calls-page__body {
@@ -154,7 +150,7 @@
 }
 
 .calls-page__info {
-  color: var(--chat-secondary);
+  color: var(--text-secondary);
 
   & svg {
     width: 16px;

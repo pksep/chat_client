@@ -32,7 +32,7 @@
   font-size: 10px;
 }
 
-.context-menu button.button-yui-kit.small.ghost-yui-kit {
+.context-menu button.button-yui-kit.small {
   padding: 5px;
   min-height: 27px;
   gap: 10px;

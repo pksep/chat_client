@@ -181,15 +181,17 @@ button.button-yui-kit.large.menu-info__secondary-button {
   font-size: 14px;
   padding: 10px 0;
   color: var(--text-primary);
+  background-color: var(--surface-input-secondary);
 
   & svg.icon-yui-kit,
   & svg {
-    color: var(--icon-color, var(--grey5));
+    color: var(--icon-color, var(--text-secondary));
+    transition: all 0.2s ease;
   }
 
   &:hover {
     --icon-color: var(--text-link);
-    background-color: var(--primary-pressed-light);
+    background-color: var(--action-secondary-pressed-bg);
   }
 }
 

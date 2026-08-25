@@ -72,7 +72,7 @@
   align-items: center;
   justify-content: center;
   background: var(--grey1);
-  color: var(--grey6);
+  color: var(--text-secondary);
   padding: calc(var(--size-avatar, 38px) * 0.18);
 }
 
@@ -119,7 +119,7 @@
   height: clamp(28px, calc(var(--size-avatar, 38px) * 0.34), 34px);
   border-radius: 50%;
   background: var(--white);
-  color: var(--grey6);
+  color: var(--text-secondary);
   transform: translate(6%, -6%);
   z-index: 3;
   pointer-events: none;
@@ -203,7 +203,7 @@
 }
 
 .bot-editor__label {
-  color: var(--grey6);
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 18px;
   font-weight: 600;
@@ -277,7 +277,7 @@
 
 .bot-info-panel__subtitle {
   margin: 5px 0 0;
-  color: var(--grey6);
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 17px;
 }
@@ -321,7 +321,7 @@
   width: 24px;
   height: 24px;
   padding: 0;
-  color: var(--grey6);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
@@ -408,7 +408,7 @@
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: var(--grey6);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
@@ -424,7 +424,7 @@
 
 .bot-info-panel__commands-empty {
   margin: 0;
-  color: var(--grey6);
+  color: var(--text-secondary);
   font-size: 13px;
   line-height: 18px;
 }
@@ -471,7 +471,7 @@ button.button-yui-kit.large.menu-info__secondary-button.bot-info-panel__action {
 .bot-info-panel__action-icon {
   width: 24px;
   height: 24px;
-  color: var(--grey6) !important;
+  color: var(--text-secondary) !important;
 }
 
 .bot-info-panel__action span {

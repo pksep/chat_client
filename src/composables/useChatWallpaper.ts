@@ -80,8 +80,7 @@ const customWallpapers = ref<StoredCustomWallpaper[]>([]);
 const isInitialized = ref(false);
 const isHydratingCustomWallpapers = ref(false);
 let wallpaperAppStateListenerRegistered = false;
-const DEFAULT_WALLPAPER_GRADIENT =
-  'linear-gradient(180deg, rgba(251, 253, 255, 1) 0%, rgba(236, 243, 255, 1) 100%)';
+const DEFAULT_WALLPAPER_GRADIENT = 'var(--surface-input-primary)';
 
 const nonePreviewStyle: CSSProperties = {
   background: DEFAULT_WALLPAPER_GRADIENT

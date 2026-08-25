@@ -522,7 +522,7 @@ p.chat__nothing-paragraph {
   align-self: flex-end;
   width: min(52%, 310px);
   border-radius: 18px 18px 6px 18px;
-  background-color: color-mix(in srgb, var(--border-blue) 18%, white 82%);
+  background-color: color-mix(in srgb, var(--border-hover) 18%, white 82%);
 }
 
 .chat__message-skeleton-bubble--short {
@@ -542,7 +542,7 @@ p.chat__nothing-paragraph {
   width: min(55%, 340px);
   height: min(210px, 26vh);
   border-radius: 18px 18px 6px 18px;
-  background-color: color-mix(in srgb, var(--border-blue) 14%, white 86%);
+  background-color: color-mix(in srgb, var(--border-hover) 14%, white 86%);
 }
 
 @keyframes chat-message-skeleton-shimmer {
@@ -640,7 +640,7 @@ p.chat__nothing-paragraph {
     width: 38px;
     height: 38px;
     border-radius: 50%;
-    background: color-mix(in srgb, var(--border-blue) 12%, white 88%);
+    background: color-mix(in srgb, var(--border-hover) 12%, white 88%);
   }
 
   .chat__mobile-instant-input-field {

@@ -170,7 +170,7 @@
   padding: 8px 14px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.94);
-  color: var(--grey6);
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
   line-height: 16px;
@@ -192,7 +192,7 @@
 }
 
 .call-modal__recording-notice--starting {
-  color: var(--grey6);
+  color: var(--text-secondary);
 }
 
 .call-modal__recording-notice--starting .call-modal__recording-notice-dot {
@@ -670,7 +670,7 @@
   width: 24px;
   height: 24px;
   padding: 2px 1px 1px 2px !important;
-  background: var(--border-blue);
+  background: var(--border-hover);
   color: var(--white);
   z-index: 2;
 }
@@ -1493,7 +1493,7 @@
 
   .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--local {
     border-width: 2px;
-    border-color: var(--border-blue) !important;
+    border-color: var(--border-hover) !important;
   }
 
   .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--speaking {
@@ -1638,7 +1638,7 @@
 }
 
 .call-modal__remote-tile--local {
-  border-color: var(--border-blue);
+  border-color: var(--border-hover);
 }
 
 .call-modal__remote-tile--speaking {
@@ -2087,7 +2087,7 @@
   }
 
   .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--local {
-    border-color: var(--border-blue) !important;
+    border-color: var(--border-hover) !important;
   }
 
   .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--speaking {

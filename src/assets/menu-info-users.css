@@ -10,7 +10,7 @@ button.button-yui-kit.secondary-yui-kit.large.button-menu__info {
   line-height: 100%;
 
   & svg.icon-yui-kit {
-    color: var(--icon-color, var(--grey5));
+    color: var(--icon-color, var(--text-secondary));
     font-size: 24px;
   }
 

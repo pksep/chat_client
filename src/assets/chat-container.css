@@ -31,7 +31,7 @@
 .chat_container_alert {
   background-color: var(--error-dark-color);
   opacity: 0.5;
-  color: var(--white);
+  color: var(--surface-overlay);
   position: fixed;
   width: 100%;
   text-align: center;
@@ -43,7 +43,7 @@
   --primary-pressed-light: #ecf3ff;
   --primary-base: var(--text-link);
   --neutral-button: var(--grey1);
-  --neutral-text: var(--grey6);
+  --neutral-text: var(--text-secondary);
   --neutral-border: var(--grey3);
   display: grid;
   position: relative;
@@ -145,7 +145,7 @@ svg.ai-icon {
   align-items: center;
   gap: 15px;
   padding: 15px;
-  border: 1px solid var(--border-blue);
+  border: 1px solid var(--border-hover);
   border-radius: 20px;
   background: var(--action-secondary-pressed-bg);
   will-change: transform, opacity;
@@ -177,7 +177,7 @@ svg.ai-icon {
   font-weight: 600;
   font-size: 14px;
   line-height: 17px;
-  color: var(--grey6);
+  color: var(--text-secondary);
 }
 
 .chat-update-banner__status-icon {
@@ -188,7 +188,7 @@ svg.ai-icon {
   height: 44px;
   flex: 0 0 44px;
   border-radius: 50%;
-  background: var(--border-blue);
+  background: var(--border-hover);
   color: var(--white);
 }
 
@@ -249,7 +249,7 @@ svg.ai-icon {
   flex-shrink: 0;
   border-radius: 50%;
   background: transparent;
-  color: var(--grey6);
+  color: var(--text-secondary);
 }
 
 .chat-update-banner__close svg {
