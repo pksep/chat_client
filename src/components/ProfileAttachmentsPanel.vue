@@ -161,7 +161,7 @@
 
     <SliderModal
       v-if="sliderElements.length > 0"
-      :open="true"
+      :open="isSliderOpen"
       :items="sliderElements"
       :default-index="defaultIndexSlider"
       @close="closeSlider"
@@ -332,6 +332,7 @@ const tabs: Array<{ label: string; value: ProfileAttachmentsTab }> = [
 const localActiveTab = ref<ProfileAttachmentsTab>('media');
 const sliderElements = ref<{ path: string; name: string; file?: File }[]>([]);
 const defaultIndexSlider = ref<number>(0);
+const isSliderOpen = ref(false);
 const attachmentItemsByTab = reactive<
   Record<ProfileAttachmentsTab, ProfileAttachmentItem[]>
 >({ media: [], files: [] });
@@ -1136,6 +1137,7 @@ onBeforeUnmount(() => {
 });
 
 const closeSlider = (): void => {
+  isSliderOpen.value = false;
   sliderElements.value = [];
 };
 
@@ -1326,6 +1328,9 @@ const openSlider = async (
   );
 
   defaultIndexSlider.value = correctedIndex !== -1 ? correctedIndex : 0;
+
+  await nextTick();
+  isSliderOpen.value = true;
 };
 
 const getMediaPreviewPath = (media: IMedia): string => {
