@@ -71,6 +71,7 @@ button.button-yui-kit.new-group__button-close {
 
 .contact-selector {
   display: grid;
+  gap: 10px;
 }
 
 .new-group__tab2-profile {

@@ -121,55 +121,55 @@
               <EmojiIcon class="menu-profile__status-option-icon" emoji="🦄" />
               <span>Свой вариант</span>
             </button>
+          </div>
 
-            <div
-              v-if="isCustomStatusOpen"
-              class="menu-profile__status-custom"
-              :data-testid="`${props.dataTestid}-MenuProfilePanel-CustomStatus`"
-            >
-              <div class="menu-profile__status-custom__input__group">
-                <button
-                  type="button"
-                  class="menu-profile__status-emoji-button"
-                  :disabled="isSavingStatus"
-                  @click="toggleEmojiPicker"
-                >
-                  <Icon
-                    v-if="!customStatusIcon"
-                    :name="IconNameEnum.smile"
-                    :width="20"
-                    :height="20"
-                  />
-                  <EmojiIcon
-                    v-else
-                    class="menu-profile__status-emoji"
-                    :emoji="customStatusIcon"
-                  />
-                </button>
-                <input
-                  v-model="customStatusText"
-                  class="menu-profile__status-input"
-                  type="text"
-                  maxlength="40"
-                  placeholder="Выберите эмодзи и введите текст"
+          <div
+            v-if="isCustomStatusOpen"
+            class="menu-profile__status-custom"
+            :data-testid="`${props.dataTestid}-MenuProfilePanel-CustomStatus`"
+          >
+            <div class="menu-profile__status-custom__input__group">
+              <button
+                type="button"
+                class="menu-profile__status-emoji-button"
+                :disabled="isSavingStatus"
+                @click="toggleEmojiPicker"
+              >
+                <Icon
+                  v-if="!customStatusIcon"
+                  :name="IconNameEnum.smile"
+                  :width="20"
+                  :height="20"
                 />
-              </div>
-              <div
-                v-if="isEmojiPickerOpen"
-                class="menu-profile__status-emoji-picker"
-              >
-                <EmojiPicker :native="true" @select="handleSelectEmoji" />
-              </div>
-              <Button
-                :type="ButtonTypeEnum.primary"
-                :size="SizesEnum.small"
-                class="menu-profile__status-save"
-                :disabled="isSavingStatus || !canSaveCustomStatus"
-                @click="saveCustomStatus"
-              >
-                {{ isSavingStatus ? 'Сохраняем...' : 'Сохранить' }}
-              </Button>
+                <EmojiIcon
+                  v-else
+                  class="menu-profile__status-emoji"
+                  :emoji="customStatusIcon"
+                />
+              </button>
+              <input
+                v-model="customStatusText"
+                class="menu-profile__status-input"
+                type="text"
+                maxlength="40"
+                placeholder="Выберите эмодзи и введите текст"
+              />
             </div>
+            <div
+              v-if="isEmojiPickerOpen"
+              class="menu-profile__status-emoji-picker"
+            >
+              <EmojiPicker :native="true" @select="handleSelectEmoji" />
+            </div>
+            <Button
+              :type="ButtonTypeEnum.primary"
+              :size="SizesEnum.small"
+              class="menu-profile__status-save"
+              :disabled="isSavingStatus || !canSaveCustomStatus"
+              @click="saveCustomStatus"
+            >
+              {{ isSavingStatus ? 'Сохраняем...' : 'Сохранить' }}
+            </Button>
           </div>
 
           <p v-if="statusError" class="menu-profile__status-error">

@@ -148,7 +148,7 @@
 
 .message-quote-highlight {
   display: inline;
-  background-color: var(--blue10);
+  background-color: var(--action-primary-bg);
   color: inherit;
 }
 
@@ -183,7 +183,7 @@
   height: 17px;
   padding: 1px 5px;
   border-radius: 10px;
-  background: var(--blue10);
+  background: var(--action-primary-bg);
   color: var(--link-color);
   font-size: 12px;
   font-weight: 600;
@@ -377,7 +377,7 @@
 }
 
 .message__article__media--caption {
-  background-color: var(--message-background-color, var(--white));
+  background-color: var(--message-background-color, var(--surface-overlay));
 }
 
 .message__article__media>.message__article-initals {
@@ -401,7 +401,7 @@
 }
 
 .message__article__media .message-reference-block {
-  background-color: var(--message-background-color, var(--white));
+  background-color: var(--message-background-color, var(--surface-overlay));
   align-items: center;
   gap: 6px;
   margin: 0;
@@ -1217,7 +1217,7 @@ div.message-content__file {
 
 .message-content--media-with-caption-container,
 .message-content__media {
-  background-color: #8b98ae;
+  background-color: #1C263566;
 }
 
 .message-content--media-with-caption-container {
@@ -1289,7 +1289,7 @@ div.message-content__file {
   width: 100%;
   box-sizing: border-box;
   padding: 6.5px 15px 11.5px;
-  background-color: var(--message-background-color, var(--white));
+  background-color: var(--message-background-color, var(--surface-overlay));
   cursor: text;
 }
 
@@ -1559,9 +1559,6 @@ div.message-content__file {
   }
 }
 
-.primary-yui-kit.toolbar-button {
-  color: var(--white) !important;
-}
 
 .editor-component {
   position: relative;

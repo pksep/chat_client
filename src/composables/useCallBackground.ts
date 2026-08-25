@@ -62,7 +62,8 @@ const callBackgroundOptions: CallBackgroundOption[] = [
     previewSize: 'cover',
     callSize: 'cover',
     repeat: 'no-repeat',
-    backgroundColor: 'var(--primary-backgroundLight, #F8F9FD)'
+    backgroundColor:
+      'var(--primary-backgroundLight, var(--surface-overlay,#F8F9FD))'
   },
   {
     id: CALL_BACKGROUND_BLUR_ID,

@@ -3,10 +3,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2em;
-  height: 2em;
-  min-width: 2em;
-  min-height: 2em;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
   font-size: var(--size-avatar, 16px);
   --online-indicator-size: 9px;
   flex-shrink: 0;
@@ -71,7 +71,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--grey1);
+  background: var(--surface-overlay);
   color: var(--text-secondary);
   padding: calc(var(--size-avatar, 38px) * 0.18);
 }

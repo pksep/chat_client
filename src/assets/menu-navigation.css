@@ -299,7 +299,7 @@
   align-items: center;
   display: flex;
   cursor: pointer;
-  color: var(--chat-secondary);
+  color: var(--text-disabled);
 }
 
 .menu-profile__status-input {
@@ -308,6 +308,7 @@
   padding: 12px 10px 10px;
   background-color: transparent;
   border: none;
+  color: var(--text-primary);
 
   font-size: 14px;
   outline: none;
@@ -315,7 +316,7 @@
 }
 
 .menu-profile__status-input::placeholder {
-  color: var(--text-light-color);
+  color: var(--text-disabled);
 }
 
 .menu-profile__status-input--icon {

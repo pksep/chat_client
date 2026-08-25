@@ -147,6 +147,10 @@ div.menu-info__buttons {
   }
 }
 
+.avatar-yui-kit {
+  padding: 2px;
+}
+
 .menu-info__avatar-button {
   --size-avatar: 42.5px;
   display: flex;

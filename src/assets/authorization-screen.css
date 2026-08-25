@@ -417,7 +417,7 @@ main.authorization-screen input:-webkit-autofill:focus {
 @media screen and (width <=768px) {
   main.authorization-screen {
     --authorization-padding: 16px;
-    background-color: var(--blue10);
+    background-color: var(--action-primary-bg);
 
     & .authorization-screen__title {
       margin: 0;
