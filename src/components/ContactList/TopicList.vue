@@ -189,10 +189,13 @@
               "
               :class="{
                 'contact-list__message-status-icons': true,
-                'is-read': topic.lastMessage?.status === MessageStatusEnum.READ
+                'is-read':
+                  getTopicLastMessageStatus(topic) === MessageStatusEnum.READ
               }"
-              :message-status="topic.lastMessage?.status"
-              :is-read="topic.lastMessage?.status === MessageStatusEnum.READ"
+              :message-status="getTopicLastMessageStatus(topic)"
+              :is-read="
+                getTopicLastMessageStatus(topic) === MessageStatusEnum.READ
+              "
               :is-me-sender="true"
               :data-testid="`${props.dataTestid}-ContactList-MessageStatusIcons${index + 1}`"
             />
@@ -493,6 +496,8 @@ import {
   type ChatTopicOpenTelemetryMeta
 } from '../../services/useChatNavigationTelemetry';
 import { isFavoriteTopic } from '../../utils/favorite-topic';
+import { getClientMessageById } from '../../services/useMessages';
+import { resolveLastMessageStatus } from '../../utils/topic-last-message';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
@@ -542,6 +547,11 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
 const authedUser = computed(() => getAuthUser());
 const isTopicFavorite = (topic?: ITopic | null): boolean =>
   isFavoriteTopic(topic, authedUser.value?.id);
+const getTopicLastMessageStatus = (topic: ITopic) =>
+  resolveLastMessageStatus(
+    topic.lastMessage,
+    getClientMessageById(topic.id, topic.lastMessage?.id)
+  );
 const isRecentlyReconnected = computed(() => getHasWebsocketConnection());
 const listRenderKey = ref(0);
 const listRootRef = ref<HTMLElement | null>(null);
