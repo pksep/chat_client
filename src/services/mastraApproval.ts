@@ -125,9 +125,17 @@ const approvalStatusValue = (value: unknown) => {
 };
 
 const APPROVAL_ACTION_LABELS: Record<string, string> = {
+  erp_actions_erp_attachment_upload_and_attach:
+    'создание документа ERP из вложения и его прикрепление',
   erp_actions_erp_detail_create_and_add_to_cbed:
     'создание детали и изменение спецификации сборки',
   erp_actions_erp_detail_archive: 'перенос детали в архив',
+  erp_actions_erp_entity_file_attach: 'прикрепление файла к сущности ERP',
+  erp_actions_erp_entity_file_detach: 'открепление файла от сущности ERP',
+  erp_actions_erp_entity_file_main_set: 'изменение главного файла ERP',
+  erp_actions_erp_file_update: 'изменение данных файла ERP',
+  erp_actions_erp_file_archive: 'перенос файла ERP в архив',
+  erp_actions_erp_file_restore: 'восстановление файла ERP из архива',
   knowledge_actions_knowledge_document_create: 'создание элемента базы знаний',
   knowledge_actions_knowledge_document_update: 'изменение элемента базы знаний',
   knowledge_actions_knowledge_document_archive:
@@ -177,6 +185,40 @@ const buildApprovalQuestion = (approval: PendingToolApproval): string => {
         : '';
       return `Перенести деталь ${quotedValue(args.detailName)}${designation} в архив? Связанные спецификации, комплекты и металлообработка будут актуализированы.`;
     }
+    case 'erp_actions_erp_attachment_upload_and_attach': {
+      const main = args.makeMain
+        ? ' Файл также получит общий для ERP признак «Главный» во всех своих привязках.'
+        : '';
+      const newVersion = args.newVersion
+        ? ' Если активный файл с таким именем уже существует, будет создана новая версия.'
+        : '';
+      return `Создать в ERP документ из вложения ${quotedValue(args.attachmentName)} и прикрепить его к ${quotedValue(args.entityName)}?${main}${newVersion}`;
+    }
+    case 'erp_actions_erp_entity_file_attach': {
+      const main = args.makeMain
+        ? ' Файл также получит глобальный признак «Главный» во всех своих привязках.'
+        : '';
+      return `Прикрепить файл ${quotedValue(args.documentName)} к ${quotedValue(args.entityName)}?${main}`;
+    }
+    case 'erp_actions_erp_entity_file_detach':
+      return `Открепить файл ${quotedValue(args.documentName)} от ${quotedValue(args.entityName)}? Сам файл останется в базе ERP.`;
+    case 'erp_actions_erp_entity_file_main_set':
+      return args.main
+        ? `Установить для файла ${quotedValue(args.documentName)} глобальный признак «Главный»? Изменение будет действовать во всех привязках этого файла.`
+        : `Снять у файла ${quotedValue(args.documentName)} глобальный признак «Главный»? Изменение будет действовать во всех привязках этого файла.`;
+    case 'erp_actions_erp_file_update': {
+      const changes = formatChanges(args, [
+        ['name', 'новое название', quotedValue],
+        ['type', 'новый тип', quotedValue],
+        ['description', 'новое описание', quotedValue],
+        ['version', 'новая версия', value => formatValue(value, 'не указана')]
+      ]);
+      return `Изменить файл ${quotedValue(args.documentName)}: ${changes}?`;
+    }
+    case 'erp_actions_erp_file_archive':
+      return `Перенести файл ${quotedValue(args.documentName)} в архив во всей ERP? Он перестанет отображаться у всех связанных сущностей.`;
+    case 'erp_actions_erp_file_restore':
+      return `Восстановить файл ${quotedValue(args.documentName)} из архива ERP? Его сохранённые привязки снова станут видимыми.`;
     case 'knowledge_actions_knowledge_document_create': {
       const kind = args.kind === 'section' ? 'раздел' : 'документ';
       const parent = args.parentTitle

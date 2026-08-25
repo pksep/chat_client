@@ -12,6 +12,7 @@ import {
   type PendingToolApproval
 } from './mastraApproval';
 import { processMastraEventStream } from './mastraEventStream';
+import type { AiAttachmentReference } from './aiAttachments';
 
 type Message = AIMessage;
 
@@ -45,11 +46,31 @@ const useMastra = (options?: UseMastraOptions | false) => {
   const pendingApproval = ref<PendingToolApproval | null>(null);
   let initializationPromise: Promise<void> = Promise.resolve();
 
-  const createRequestContext = (): RequestContext<unknown> => {
+  let activeAttachments: AiAttachmentReference[] = [];
+
+  const getActiveAttachments = (): AiAttachmentReference[] => {
+    activeAttachments = activeAttachments.filter(
+      attachment => attachment.expiresAt > Date.now()
+    );
+    return activeAttachments;
+  };
+
+  const createRequestContext = (
+    attachments: AiAttachmentReference[] = getActiveAttachments()
+  ): RequestContext<unknown> => {
     const requestContext = new RequestContext<Record<string, unknown>>();
     requestContext.set(
       'approvalMode',
       options.approvalMode?.value === 'automatic' ? 'automatic' : 'strict'
+    );
+    requestContext.set(
+      'attachments',
+      attachments.map(({ name, size, contentType, transferToken }) => ({
+        name,
+        size,
+        contentType,
+        transferToken
+      }))
     );
     return requestContext as unknown as RequestContext<unknown>;
   };
@@ -58,7 +79,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
     approval: PendingToolApproval,
     decision: Exclude<ApprovalDecision, null>,
     token: string,
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
+    attachments: AiAttachmentReference[] = getActiveAttachments()
   ): Promise<Response> => {
     const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
     const apiBaseUrl = normalizedBaseUrl.endsWith('/api')
@@ -84,7 +106,15 @@ const useMastra = (options?: UseMastraOptions | false) => {
             approvalMode:
               options.approvalMode?.value === 'automatic'
                 ? 'automatic'
-                : 'strict'
+                : 'strict',
+            attachments: attachments.map(
+              ({ name, size, contentType, transferToken }) => ({
+                name,
+                size,
+                contentType,
+                transferToken
+              })
+            )
           }
         }),
         signal: abortSignal
@@ -120,7 +150,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
     onFinish?: () => void,
     abortSignal?: AbortSignal,
     approvalDecisionOverride: Exclude<ApprovalDecision, null> | null = null,
-    appendUserMessage = true
+    appendUserMessage = true,
+    attachments: AiAttachmentReference[] = []
   ) => {
     if (!input.trim()) return;
 
@@ -131,6 +162,9 @@ const useMastra = (options?: UseMastraOptions | false) => {
     }
 
     if (isInitializing.value) await initializationPromise;
+
+    if (attachments.length > 0) activeAttachments = [...attachments];
+    const requestAttachments = getActiveAttachments();
 
     const lastMessage = messages.value[messages.value.length - 1];
     if (lastMessage?.role === 'assistant' && lastMessage?.loading) return;
@@ -169,6 +203,24 @@ const useMastra = (options?: UseMastraOptions | false) => {
           : { role: 'assistant' as const, content: message.content }
       );
 
+    if (requestAttachments.length > 0) {
+      const lastUserMessageIndex = requestMessages.findLastIndex(
+        message => message.role === 'user'
+      );
+      if (lastUserMessageIndex >= 0) {
+        const manifest = requestAttachments
+          .map(
+            (attachment, index) =>
+              `${index + 1}. ${attachment.name} (${attachment.contentType}, ${attachment.size} байт)`
+          )
+          .join('\n');
+        requestMessages[lastUserMessageIndex] = {
+          ...requestMessages[lastUserMessageIndex],
+          content: `${requestMessages[lastUserMessageIndex].content}\n\nДоступные вложения текущего запроса:\n${manifest}`
+        };
+      }
+    }
+
     const assistantMessage: Message = {
       role: 'assistant',
       content: '',
@@ -205,7 +257,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
             approval,
             approvalDecision,
             token,
-            abortSignal
+            abortSignal,
+            requestAttachments
           );
         } catch (approvalError) {
           pendingApproval.value = approval;
@@ -213,7 +266,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
         }
       } else {
         stream = await agent.stream(requestMessages, {
-          requestContext: createRequestContext()
+          requestContext: createRequestContext(requestAttachments)
         });
       }
 
@@ -229,6 +282,14 @@ const useMastra = (options?: UseMastraOptions | false) => {
               try {
                 if (event.type === 'step-finish') {
                   return;
+                }
+
+                if (
+                  ['tool-result', 'tool-output'].includes(event.type || '') &&
+                  event.payload?.toolName ===
+                    'erp_actions_erp_attachment_upload_and_attach'
+                ) {
+                  activeAttachments = [];
                 }
 
                 if (event.type === 'tool-call-approval') {
@@ -415,8 +476,9 @@ const useMastra = (options?: UseMastraOptions | false) => {
   const sendMessage = async (
     input: string,
     onFinish?: () => void,
-    abortSignal?: AbortSignal
-  ) => submitMessage(input, onFinish, abortSignal);
+    abortSignal?: AbortSignal,
+    attachments: AiAttachmentReference[] = []
+  ) => submitMessage(input, onFinish, abortSignal, null, true, attachments);
 
   const resolveToolApproval = async (
     decision: Exclude<ApprovalDecision, null>,
@@ -426,12 +488,14 @@ const useMastra = (options?: UseMastraOptions | false) => {
     if (!pendingApproval.value) return;
 
     const command = decision === 'approve' ? 'подтверждаю' : 'отмена';
+    if (decision === 'decline') activeAttachments = [];
     return submitMessage(command, onFinish, abortSignal, decision, false);
   };
 
   const clearMessages = () => {
     if (!chatId) return;
     pendingApproval.value = null;
+    activeAttachments = [];
     messages.value = [];
     saveMessages(chatId, messages.value);
   };
