@@ -50,7 +50,10 @@ import {
   isFavoriteTopic,
   normalizeFavoriteTopic
 } from '../utils/favorite-topic';
-import { resolveLastMessageAfterLocalSync } from '../utils/topic-last-message';
+import {
+  resolveLastMessageAfterLocalSync,
+  resolveTopicLastMessage
+} from '../utils/topic-last-message';
 import { compactPersonName } from '../utils/personName';
 
 const topics = ref<ITopic[]>([]);
@@ -238,14 +241,7 @@ const createTopicsApi = () => {
     return messages
       .filter(Boolean)
       .reduce<Message | undefined>((latestMessage, message) => {
-        if (!latestMessage) {
-          return message;
-        }
-
-        return getMessageTimestamp(message) >=
-          getMessageTimestamp(latestMessage)
-          ? message
-          : latestMessage;
+        return resolveTopicLastMessage(latestMessage, message);
       }, undefined);
   };
 

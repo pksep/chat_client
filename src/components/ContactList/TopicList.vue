@@ -35,7 +35,7 @@
       </li>
     </template>
     <li
-      v-for="(topic, index) in props.topics"
+      v-for="(topic, index) in displayTopics"
       :key="topic.id"
       class="contact-list__li"
       role="listitem"
@@ -496,8 +496,14 @@ import {
   type ChatTopicOpenTelemetryMeta
 } from '../../services/useChatNavigationTelemetry';
 import { isFavoriteTopic } from '../../utils/favorite-topic';
-import { getClientMessageById } from '../../services/useMessages';
-import { resolveLastMessageStatus } from '../../utils/topic-last-message';
+import {
+  getClientMessageById,
+  getFullMessagesByTopicId
+} from '../../services/useMessages';
+import {
+  resolveLastMessageStatus,
+  resolveTopicLastMessage
+} from '../../utils/topic-last-message';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
@@ -547,6 +553,25 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
 const authedUser = computed(() => getAuthUser());
 const isTopicFavorite = (topic?: ITopic | null): boolean =>
   isFavoriteTopic(topic, authedUser.value?.id);
+const getClientLastMessage = (topic: ITopic) => {
+  const messages = getFullMessagesByTopicId(topic.id);
+
+  return isTopicFavorite(topic)
+    ? [...messages].reverse().find(message => !message.isSystem)
+    : messages.at(-1);
+};
+const displayTopics = computed(() =>
+  props.topics.map(topic => {
+    const lastMessage = resolveTopicLastMessage(
+      topic.lastMessage,
+      getClientLastMessage(topic)
+    );
+
+    return lastMessage === topic.lastMessage
+      ? topic
+      : { ...topic, lastMessage };
+  })
+);
 const getTopicLastMessageStatus = (topic: ITopic) =>
   resolveLastMessageStatus(
     topic.lastMessage,
