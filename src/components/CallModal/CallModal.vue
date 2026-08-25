@@ -791,7 +791,6 @@ import {
   isAnyCallSummaryRecording,
   isCallSummaryRecording,
   isCallSummaryRecordingPending,
-  isCallSummaryRecordingStarting,
   loadActiveCallSummaryRecorders,
   startCallSummaryRecording,
   stopCallSummaryRecording
