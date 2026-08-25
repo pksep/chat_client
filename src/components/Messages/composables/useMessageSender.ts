@@ -80,6 +80,7 @@ const VIDEO_LOCAL_THUMBNAIL_TIMEOUT_MS = 3000;
 const CALL_TOPIC_SUMMARY_COMMAND = 'сделать краткое содержание';
 const CALL_TOPIC_ACTIONS_COMMAND = 'список действий по звонку';
 
+/** Экранирует имя вложения перед показом в HTML-сообщении чата. */
 const escapeAiAttachmentName = (value: string): string =>
   value.replace(/[&<>"']/g, character => {
     const entities: Record<string, string> = {

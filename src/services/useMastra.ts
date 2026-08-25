@@ -48,6 +48,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
   let activeAttachments: AiAttachmentReference[] = [];
 
+  /** Оставляет только неистёкшие вложения, нужные для запроса или его подтверждения. */
   const getActiveAttachments = (): AiAttachmentReference[] => {
     activeAttachments = activeAttachments.filter(
       attachment => attachment.expiresAt > Date.now()

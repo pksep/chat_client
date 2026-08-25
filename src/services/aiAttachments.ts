@@ -18,12 +18,14 @@ interface AiAttachmentUploadTarget {
   attachmentToken: string;
 }
 
+/** Формирует адрес защищённого API временных вложений чата. */
 const getAiAttachmentsUrl = (path: string): string => {
   const baseUrl = getConfig().CHAT_API_DOMAIN?.replace(/\/+$/, '');
   if (!baseUrl) throw new Error('Сервер чата не настроен');
   return `${baseUrl}/media/ai-attachments/${path}`;
 };
 
+/** Возвращает заголовки авторизованного запроса к серверу чата. */
 const getHeaders = (): HeadersInit => {
   const token = getAuthToken() || getStoredChatAccessToken();
   if (!token) throw new Error('Требуется авторизация');
@@ -33,6 +35,7 @@ const getHeaders = (): HeadersInit => {
   };
 };
 
+/** Извлекает понятное сообщение из ошибочного HTTP-ответа. */
 const readError = async (response: Response): Promise<string> => {
   try {
     const body = await response.json();
@@ -42,6 +45,7 @@ const readError = async (response: Response): Promise<string> => {
   }
 };
 
+/** Загружает файл напрямую во временное объектное хранилище по выданному URL. */
 const uploadToStorage = (uploadUrl: string, file: File): Promise<void> =>
   new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
@@ -55,6 +59,7 @@ const uploadToStorage = (uploadUrl: string, file: File): Promise<void> =>
     request.send(file);
   });
 
+/** Подготавливает одно вложение для агента и возвращает ограниченную по времени ссылку. */
 export const stageAiAttachment = async (
   file: File
 ): Promise<AiAttachmentReference> => {
@@ -86,6 +91,7 @@ export const stageAiAttachment = async (
   return (await completeResponse.json()) as AiAttachmentReference;
 };
 
+/** Параллельно подготавливает все вложения текущего сообщения для агента. */
 export const stageAiAttachments = (
   files: File[]
 ): Promise<AiAttachmentReference[]> =>
