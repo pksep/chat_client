@@ -1,5 +1,28 @@
 import { describe, expect, test } from 'bun:test';
-import { shouldPinMessageAppendToBottom } from '../src/utils/messageScroll';
+import {
+  getMessageReactionLayoutSignature,
+  shouldPinMessageAppendToBottom
+} from '../src/utils/messageScroll';
+
+describe('message layout signature', () => {
+  test('changes when a reaction is added to the last message', () => {
+    const withoutReaction = getMessageReactionLayoutSignature([]);
+    const withReaction = getMessageReactionLayoutSignature([
+      { id: 'reaction-id', senderUserId: 'user-id', text: '❤️' }
+    ]);
+
+    expect(withReaction).not.toBe(withoutReaction);
+  });
+
+  test('does not depend on reaction array order', () => {
+    const first = { id: 'first', senderUserId: 'user-id', text: '❤️' };
+    const second = { id: 'second', senderUserId: 'user-id', text: '👍' };
+
+    expect(getMessageReactionLayoutSignature([first, second])).toBe(
+      getMessageReactionLayoutSignature([second, first])
+    );
+  });
+});
 
 describe('message append scroll behavior', () => {
   test('keeps the live edge pinned after a temporary layout growth', () => {
