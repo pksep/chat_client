@@ -19,3 +19,8 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# The barcode-scanner SDK declares optional Gson field annotations, while the
+# app uses the SDK without Gson. R8 otherwise treats the absent annotation as
+# a missing class during release minification.
+-dontwarn com.google.gson.annotations.SerializedName
