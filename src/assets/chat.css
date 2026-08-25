@@ -272,16 +272,13 @@ p.chat__nothing-paragraph {
 }
 
 .chat__message-unread_messages_start {
-  color: var(--action-primary-bg);
+  color: var(--text-link);
   font-weight: 600;
   font-size: 12px;
   line-height: 20px;
   text-align: center;
   height: 20px;
-  background: linear-gradient(90deg,
-      var(--table-surface-search) 2%,
-      var(--action-primary-bg) 51.44%,
-      var(--table-surface-search) 100%);
+  background: var(--surface-authorization);
   border-radius: 10px;
 }
 
