@@ -708,6 +708,7 @@
   </Modal>
 
   <CallBackgroundPreviewModal
+    v-if="isCallBackgroundPreviewOpen"
     :open="isCallBackgroundPreviewOpen"
     :is-mobile="isMobile"
     :is-applying="isApplyingCallBackground"
@@ -740,7 +741,13 @@ import {
   Modal,
   SizesEnum
 } from '@pksep/yui';
-import { computed, ref, useTemplateRef, type CSSProperties } from 'vue';
+import {
+  computed,
+  defineAsyncComponent,
+  ref,
+  useTemplateRef,
+  type CSSProperties
+} from 'vue';
 import EmojiPicker from 'vue3-emoji-picker';
 import 'vue3-emoji-picker/css';
 import type { IUser, IUserStatus } from '../interfaces/interfaces';
@@ -768,10 +775,13 @@ import MobileModal from '../UI/MobileModal.vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import MessageBubble from '../Messages/MessageBubble.vue';
-import CallBackgroundPreviewModal from '../CallModal/CallBackgroundPreviewModal.vue';
 import ConfirmModal from '../UI/ConfirmModal.vue';
 import FileIcon from '../UI/FileIcon.vue';
 import { useMobileApp } from '../../composables/useMobileApp';
+
+const CallBackgroundPreviewModal = defineAsyncComponent(
+  () => import('../CallModal/CallBackgroundPreviewModal.vue')
+);
 
 const props = withDefaults(
   defineProps<{

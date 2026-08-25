@@ -2,11 +2,11 @@ import {
   computed,
   reactive,
   ref,
+  shallowReactive,
   watch,
   type Ref,
   type WatchStopHandle
 } from 'vue';
-import { useMastra } from '../services/useMastra';
 import type { PendingToolApproval } from '../services/mastraApproval';
 import type { AIMessage } from '../types/messages';
 import { generateUUID } from '../utils/generateUUID';
@@ -114,7 +114,11 @@ const activeView = ref<AiAssistantView>('chat');
 const activeSessionId = ref<string | null>(null);
 const isVoiceModeOpen = ref(false);
 const permissionMode = ref<AiPermissionMode>(initialState.permissionMode);
-const runtimes = new Map<string, MastraRuntime>();
+const runtimes = shallowReactive(new Map<string, MastraRuntime>());
+const runtimePromises = new Map<string, Promise<MastraRuntime>>();
+let mastraModulePromise: Promise<
+  typeof import('../services/useMastra')
+> | null = null;
 const runtimeWatchers = new Map<string, WatchStopHandle>();
 const approvalStates = reactive<
   Record<string, 'approved' | 'rejected' | undefined>
@@ -212,25 +216,48 @@ const syncSession = (sessionId: string, runtime: MastraRuntime): void => {
   session.time = formatTime(lastMessage?.timestamp);
 };
 
-const ensureRuntime = (sessionId: string): MastraRuntime => {
+const loadMastra = (): Promise<typeof import('../services/useMastra')> => {
+  if (!mastraModulePromise) {
+    mastraModulePromise = import('../services/useMastra');
+  }
+
+  return mastraModulePromise;
+};
+
+const ensureRuntime = async (sessionId: string): Promise<MastraRuntime> => {
   const existing = runtimes.get(sessionId);
   if (existing) return existing;
 
-  const runtime = useMastra({
-    agentId: 'generalAgent',
-    chatId: sessionId,
-    approvalMode: permissionMode
-  }) as MastraRuntime;
-  runtimes.set(sessionId, runtime);
+  const pendingRuntime = runtimePromises.get(sessionId);
+  if (pendingRuntime) return pendingRuntime;
 
-  const stop = watch(
-    [runtime.messages, runtime.isInitializing, runtime.pendingApproval],
-    () => syncSession(sessionId, runtime),
-    { deep: true, immediate: true }
-  );
-  runtimeWatchers.set(sessionId, stop);
+  const runtimePromise = loadMastra()
+    .then(({ useMastra }) => {
+      const loadedRuntime = runtimes.get(sessionId);
+      if (loadedRuntime) return loadedRuntime;
 
-  return runtime;
+      const runtime = useMastra({
+        agentId: 'generalAgent',
+        chatId: sessionId,
+        approvalMode: permissionMode
+      }) as MastraRuntime;
+      runtimes.set(sessionId, runtime);
+
+      const stop = watch(
+        [runtime.messages, runtime.isInitializing, runtime.pendingApproval],
+        () => syncSession(sessionId, runtime),
+        { deep: true, immediate: true }
+      );
+      runtimeWatchers.set(sessionId, stop);
+
+      return runtime;
+    })
+    .finally(() => {
+      runtimePromises.delete(sessionId);
+    });
+
+  runtimePromises.set(sessionId, runtimePromise);
+  return runtimePromise;
 };
 
 const activeSession = computed(() =>
@@ -266,7 +293,9 @@ const selectSession = (sessionId: string): void => {
   activeTab.value = 'chats';
   activeView.value = 'chat';
   activeSessionId.value = sessionId;
-  ensureRuntime(sessionId);
+  void ensureRuntime(sessionId).catch(error => {
+    console.error('Failed to load AI runtime:', error);
+  });
 };
 
 const setTab = (tab: AiAssistantTab): void => {
@@ -300,7 +329,7 @@ const sendMessage = async (rawInput: string): Promise<void> => {
   activeView.value = 'chat';
 
   const session = activeSession.value || createSession(input);
-  const runtime = ensureRuntime(session.id);
+  const runtime = await ensureRuntime(session.id);
   await runtime.sendMessage(input);
 };
 
@@ -320,7 +349,7 @@ const updateApproval = async (
   const sessionId = activeSessionId.value;
   if (!sessionId) return;
 
-  const runtime = ensureRuntime(sessionId);
+  const runtime = await ensureRuntime(sessionId);
   if (!runtime.pendingApproval.value) return;
 
   approvalStates[messageId] = state;
@@ -363,11 +392,11 @@ const deleteTask = (taskId: string): void => {
   if (index !== -1) persisted.tasks.splice(index, 1);
 };
 
-const clearAll = (): void => {
+const clearAll = async (): Promise<void> => {
   const sessionId = activeSessionId.value;
   if (!sessionId) return;
 
-  const runtime = ensureRuntime(sessionId);
+  const runtime = await ensureRuntime(sessionId);
   runtime.clearMessages();
   syncSession(sessionId, runtime);
 };
