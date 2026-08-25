@@ -18,7 +18,8 @@
         :data-testid="`${props.dataTestid}-ChatsToolbar-CreateButton`"
         @click="evt => openActivePopover('plusMenu', evt as MouseEvent)"
       >
-        <NewTopicIcon
+        <Icon
+          :name="IconNameEnum.plus"
           :data-testid="`${props.dataTestid}-ChatsToolbar-PlusIcon`"
         />
       </Button>
@@ -109,14 +110,20 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Button, ButtonTypeEnum, Search, SizesEnum } from '@pksep/yui';
+import {
+  Button,
+  ButtonTypeEnum,
+  Icon,
+  IconNameEnum,
+  Search,
+  SizesEnum
+} from '@pksep/yui';
 import Line from '../UI/Line.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import BotIcon from '../UI/BotIcon.vue';
 import MessageIcon from '../UI/MessageIcon.vue';
 import GroupIcon from '../UI/GroupIcon.vue';
-import NewTopicIcon from '../UI/NewTopicIcon.vue';
 import type { ChatsToolbarFilter } from '../../composables/useChatsToolbarState';
 import ConnectionStatus from '../UI/ConnectionStatus.vue';
 import {
