@@ -20,18 +20,6 @@
       }"
       @click.stop="closeMobileCallActionsMenu"
     >
-      <div
-        v-if="callSummaryRecordingNotice"
-        class="call-modal__recording-notice"
-        :class="{
-          'call-modal__recording-notice--starting': isSummaryRecordingStarting
-        }"
-        role="status"
-      >
-        <span class="call-modal__recording-notice-dot"></span>
-        <span>{{ callRecordingStatusText }}</span>
-      </div>
-
       <div class="call-modal__group-info">
         <div>
           <button
@@ -1759,14 +1747,7 @@ const isAnySummaryRecording = computed(() =>
 const isSummaryRecordingPending = computed(() =>
   isCallSummaryRecordingPending(activeRoomId.value)
 );
-const isSummaryRecordingStarting = computed(() =>
-  isCallSummaryRecordingStarting(activeRoomId.value)
-);
-const callRecordingStatusText = computed(() =>
-  isAnySummaryRecording.value
-    ? 'Идет запись экрана'
-    : callSummaryRecordingNotice.value
-);
+
 const canStartSummaryRecording = computed(
   () =>
     isCallOpen.value &&
