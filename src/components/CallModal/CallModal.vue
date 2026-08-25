@@ -75,6 +75,16 @@
           </button>
           <div v-else class="call-modal__mobile-actions">
             <button
+              v-if="isAnySummaryRecording"
+              class="call-modal__control-button call-modal__control-button--action call-modal__control-button--recording"
+              type="button"
+              :disabled="isSummaryRecordButtonDisabled"
+              :aria-label="summaryRecordButtonTooltip"
+              @click="handleSummaryRecordingAction"
+            >
+              <ScreenRecordIcon />
+            </button>
+            <button
               class="call-modal__control-button call-modal__control-button--action"
               type="button"
               aria-label="Открыть меню звонка"
@@ -389,6 +399,7 @@
             <Tooltip
               v-if="!isMobile"
               :hint="summaryRecordButtonTooltip"
+              data-testid="CallModal-CallControls-RecordingTooltip"
               position="top-center"
               type="black"
               size="small"
@@ -651,6 +662,7 @@
             <Tooltip
               v-if="!isCallFullscreenTouchMode && !isMobile"
               :hint="summaryRecordButtonTooltip"
+              data-testid="CallModal-Overlay-RecordingTooltip"
               position="top-center"
               type="black"
               size="small"

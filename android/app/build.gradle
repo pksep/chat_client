@@ -63,7 +63,8 @@ android {
             buildConfigField "boolean", "CHAT_ALLOW_CLEARTEXT", allowCleartext.toString()
             manifestPlaceholders.chatUsesCleartextTraffic = allowCleartext.toString()
             signingConfig signingConfigs.release
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }

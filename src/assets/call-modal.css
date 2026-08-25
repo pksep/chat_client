@@ -156,6 +156,10 @@
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--error-color) 18%, transparent);
 }
 
+body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
+  z-index: 100000;
+}
+
 .call-modal__recording-notice {
   position: absolute;
   top: 18px;
@@ -393,6 +397,9 @@
 
 .call-modal__mobile-actions {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex: 0 0 auto;
 }
 
