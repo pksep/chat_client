@@ -1,5 +1,5 @@
 import { ref, type Ref } from 'vue';
-import { MastraClient } from '@mastra/client-js';
+import { MastraClient, RequestContext } from '@mastra/client-js';
 import { saveMessages, getOrCreateChatHistory } from './useChatDb';
 import { AIMessage } from '../types/messages';
 import { getConfig } from './useConfig';
@@ -11,6 +11,7 @@ import {
   getApprovalDecision,
   type PendingToolApproval
 } from './mastraApproval';
+import { processMastraEventStream } from './mastraEventStream';
 
 type Message = AIMessage;
 
@@ -18,6 +19,7 @@ interface UseMastraOptions {
   agentId?: string;
   chatId?: string;
   baseUrl?: string;
+  approvalMode?: Ref<'ask' | 'automatic'>;
 }
 
 const useMastra = (options?: UseMastraOptions | false) => {
@@ -42,6 +44,61 @@ const useMastra = (options?: UseMastraOptions | false) => {
   const isInitializing = ref(!!chatId);
   const pendingApproval = ref<PendingToolApproval | null>(null);
   let initializationPromise: Promise<void> = Promise.resolve();
+
+  const createRequestContext = (): RequestContext<unknown> => {
+    const requestContext = new RequestContext<Record<string, unknown>>();
+    requestContext.set(
+      'approvalMode',
+      options.approvalMode?.value === 'automatic' ? 'automatic' : 'strict'
+    );
+    return requestContext as unknown as RequestContext<unknown>;
+  };
+
+  const requestToolApproval = async (
+    approval: PendingToolApproval,
+    decision: Exclude<ApprovalDecision, null>,
+    token: string,
+    abortSignal?: AbortSignal
+  ): Promise<Response> => {
+    const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
+    const apiBaseUrl = normalizedBaseUrl.endsWith('/api')
+      ? normalizedBaseUrl
+      : `${normalizedBaseUrl}/api`;
+    const action =
+      decision === 'approve' ? 'approve-tool-call' : 'decline-tool-call';
+    const response = await fetch(
+      `${apiBaseUrl}/agents/${encodeURIComponent(agentId)}/${action}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          runId: approval.runId,
+          toolCallId: approval.toolCallId,
+          ...(decision === 'decline'
+            ? { reason: 'Пользователь отменил действие в чате.' }
+            : {}),
+          requestContext: {
+            approvalMode:
+              options.approvalMode?.value === 'automatic'
+                ? 'automatic'
+                : 'strict'
+          }
+        }),
+        signal: abortSignal
+      }
+    );
+
+    if (!response.ok) {
+      const error = new Error('Не удалось применить решение по действию');
+      Object.assign(error, { status: response.status });
+      throw error;
+    }
+
+    return response;
+  };
 
   if (chatId) {
     initializationPromise = getOrCreateChatHistory(chatId)
@@ -144,23 +201,20 @@ const useMastra = (options?: UseMastraOptions | false) => {
         pendingApproval.value = null;
 
         try {
-          stream =
-            approvalDecision === 'approve'
-              ? await agent.approveToolCall({
-                  runId: approval.runId,
-                  toolCallId: approval.toolCallId
-                })
-              : await agent.declineToolCall({
-                  runId: approval.runId,
-                  toolCallId: approval.toolCallId,
-                  reason: 'Пользователь отменил действие в чате.'
-                });
+          stream = await requestToolApproval(
+            approval,
+            approvalDecision,
+            token,
+            abortSignal
+          );
         } catch (approvalError) {
           pendingApproval.value = approval;
           throw approvalError;
         }
       } else {
-        stream = await agent.stream(requestMessages);
+        stream = await agent.stream(requestMessages, {
+          requestContext: createRequestContext()
+        });
       }
 
       if (!stream) throw new Error('Server error, sorry');
@@ -171,132 +225,79 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
         const processStream = async () => {
           try {
-            await stream.processDataStream({
-              onChunk: async (chunk: string | object) => {
-                try {
-                  let event: any;
+            await processMastraEventStream(stream, async event => {
+              try {
+                if (event.type === 'step-finish') {
+                  return;
+                }
+
+                if (event.type === 'tool-call-approval') {
+                  const { payload } = event;
+
                   if (
-                    typeof chunk === 'object' &&
-                    chunk !== null &&
-                    !Array.isArray(chunk)
+                    typeof event.runId === 'string' &&
+                    typeof payload?.toolCallId === 'string' &&
+                    typeof payload?.toolName === 'string'
                   ) {
-                    event = chunk;
-                  } else if (typeof chunk === 'string') {
-                    let jsonStr = chunk;
-                    if (jsonStr.startsWith('data: ')) {
-                      jsonStr = jsonStr.slice(6).trim();
-                    }
+                    pendingApproval.value = {
+                      runId: event.runId,
+                      toolCallId: payload.toolCallId,
+                      toolName: payload.toolName,
+                      args:
+                        payload.args && typeof payload.args === 'object'
+                          ? payload.args
+                          : {}
+                    };
 
-                    if (jsonStr === '[DONE]') {
-                      console.debug('Stream processing completed', jsonStr);
-                      if (!isResolved) {
-                        isResolved = true;
-                        resolve(null);
-                      }
-                      return;
-                    }
-
-                    try {
-                      event = JSON.parse(jsonStr);
-                    } catch (e) {
-                      console.error('Failed to parse JSON chunk:', jsonStr);
-                      return;
-                    }
-                  } else {
-                    console.debug(
-                      'Received unsupported chunk type:',
-                      typeof chunk
-                    );
-                    return;
-                  }
-
-                  if (event.type === 'step-finish') {
-                    return;
-                  }
-
-                  if (event.type === 'tool-call-approval') {
-                    const { payload } = event;
-
-                    if (
-                      typeof event.runId === 'string' &&
-                      typeof payload?.toolCallId === 'string' &&
-                      typeof payload?.toolName === 'string'
-                    ) {
-                      pendingApproval.value = {
-                        runId: event.runId,
-                        toolCallId: payload.toolCallId,
-                        toolName: payload.toolName,
-                        args:
-                          payload.args && typeof payload.args === 'object'
-                            ? payload.args
-                            : {}
-                      };
-
-                      if (assistantMessageIndex < messages.value.length) {
-                        const newMessages = [...messages.value];
-                        newMessages[assistantMessageIndex] = {
-                          ...newMessages[assistantMessageIndex],
-                          content: formatApprovalMessage(pendingApproval.value),
-                          loading: false
-                        };
-                        messages.value = newMessages;
-
-                        await saveMessages(chatId, messages.value);
-                      }
-                    }
-
-                    if (!isResolved) {
-                      isResolved = true;
-                      resolve(null);
-                    }
-                    return;
-                  }
-
-                  if (event.type === 'text-delta' && event.payload?.text) {
                     if (assistantMessageIndex < messages.value.length) {
                       const newMessages = [...messages.value];
                       newMessages[assistantMessageIndex] = {
                         ...newMessages[assistantMessageIndex],
-                        content:
-                          newMessages[assistantMessageIndex].content +
-                          event.payload.text
+                        content: formatApprovalMessage(pendingApproval.value),
+                        loading: false
                       };
                       messages.value = newMessages;
 
                       await saveMessages(chatId, messages.value);
                     }
-                  } else if (event.type === 'finish') {
-                    if (!isResolved) {
-                      isResolved = true;
-                      resolve(null);
-                    }
-                  } else if (event.type === 'error') {
-                    if (!isResolved) {
-                      isResolved = true;
-                      let errorMessage =
-                        event.payload?.message || 'Stream error occurred';
-                      if (errorMessage?.includes('V2 models')) {
-                        errorMessage =
-                          'This model version is not supported, please try another';
-                      } else if (errorMessage?.includes('Timeout exceeded')) {
-                        errorMessage = 'Request timed out, please try again';
-                      } else if (errorMessage?.includes('Network Error')) {
-                        errorMessage =
-                          'Network connection issue, please check your connection';
-                      }
-
-                      reject(new Error(errorMessage));
-                    }
                   }
-                } catch (parseError) {
-                  console.error('Error processing chunk:', parseError);
+
                   if (!isResolved) {
                     isResolved = true;
-                    let errorMessage = 'Message processing error';
-                    if (parseError?.message?.includes('Unexpected token')) {
+                    resolve(null);
+                  }
+                  return;
+                }
+
+                if (event.type === 'text-delta' && event.payload?.text) {
+                  if (assistantMessageIndex < messages.value.length) {
+                    const newMessages = [...messages.value];
+                    newMessages[assistantMessageIndex] = {
+                      ...newMessages[assistantMessageIndex],
+                      content:
+                        newMessages[assistantMessageIndex].content +
+                        event.payload.text
+                    };
+                    messages.value = newMessages;
+
+                    await saveMessages(chatId, messages.value);
+                  }
+                } else if (event.type === 'finish') {
+                  if (!isResolved) {
+                    isResolved = true;
+                    resolve(null);
+                  }
+                } else if (event.type === 'error') {
+                  if (!isResolved) {
+                    isResolved = true;
+                    let errorMessage =
+                      event.payload?.message || 'Stream error occurred';
+                    if (errorMessage?.includes('V2 models')) {
                       errorMessage =
-                        'Error parsing server response, please try again';
-                    } else if (parseError?.message?.includes('Network Error')) {
+                        'This model version is not supported, please try another';
+                    } else if (errorMessage?.includes('Timeout exceeded')) {
+                      errorMessage = 'Request timed out, please try again';
+                    } else if (errorMessage?.includes('Network Error')) {
                       errorMessage =
                         'Network connection issue, please check your connection';
                     }
@@ -304,8 +305,27 @@ const useMastra = (options?: UseMastraOptions | false) => {
                     reject(new Error(errorMessage));
                   }
                 }
+              } catch (parseError) {
+                console.error('Error processing chunk:', parseError);
+                if (!isResolved) {
+                  isResolved = true;
+                  let errorMessage = 'Message processing error';
+                  if (parseError?.message?.includes('Unexpected token')) {
+                    errorMessage =
+                      'Error parsing server response, please try again';
+                  } else if (parseError?.message?.includes('Network Error')) {
+                    errorMessage =
+                      'Network connection issue, please check your connection';
+                  }
+
+                  reject(new Error(errorMessage));
+                }
               }
             });
+            if (!isResolved) {
+              isResolved = true;
+              resolve(null);
+            }
           } catch (streamError) {
             if (!isResolved) {
               isResolved = true;

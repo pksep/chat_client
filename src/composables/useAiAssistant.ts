@@ -14,6 +14,7 @@ import { generateUUID } from '../utils/generateUUID';
 export type AiAssistantTab = 'chats' | 'tasks';
 export type AiAssistantView = 'chat' | 'tasks';
 export type AiMessageRole = 'user' | 'assistant';
+export type AiPermissionMode = 'ask' | 'automatic';
 
 export interface AiAssistantMessage {
   id: string;
@@ -45,6 +46,7 @@ export interface AiAutomationTask {
 interface PersistedAiState {
   sessions: AiAssistantSession[];
   tasks: AiAutomationTask[];
+  permissionMode: AiPermissionMode;
 }
 
 interface MastraRuntime {
@@ -78,7 +80,11 @@ const initialTasks = (): AiAutomationTask[] => [
 ];
 
 const loadState = (): PersistedAiState => {
-  const fallback = { sessions: [], tasks: initialTasks() };
+  const fallback: PersistedAiState = {
+    sessions: [],
+    tasks: initialTasks(),
+    permissionMode: 'ask'
+  };
   if (typeof window === 'undefined') return fallback;
 
   try {
@@ -92,19 +98,22 @@ const loadState = (): PersistedAiState => {
         ...session,
         messages: []
       })),
-      tasks: Array.isArray(parsed.tasks) ? parsed.tasks : initialTasks()
+      tasks: Array.isArray(parsed.tasks) ? parsed.tasks : initialTasks(),
+      permissionMode:
+        parsed.permissionMode === 'automatic' ? 'automatic' : 'ask'
     };
   } catch {
     return fallback;
   }
 };
 
-const persisted = reactive<PersistedAiState>(loadState());
+const initialState = loadState();
+const persisted = reactive<PersistedAiState>(initialState);
 const activeTab = ref<AiAssistantTab>('chats');
 const activeView = ref<AiAssistantView>('chat');
 const activeSessionId = ref<string | null>(null);
 const isVoiceModeOpen = ref(false);
-const permissionMode = ref<'ask' | 'automatic'>('ask');
+const permissionMode = ref<AiPermissionMode>(initialState.permissionMode);
 const runtimes = new Map<string, MastraRuntime>();
 const runtimeWatchers = new Map<string, WatchStopHandle>();
 const approvalStates = reactive<
@@ -122,7 +131,8 @@ const persist = (): void => {
           ...session,
           messages: []
         })),
-        tasks: persisted.tasks
+        tasks: persisted.tasks,
+        permissionMode: permissionMode.value
       })
     );
   } catch {
@@ -130,7 +140,13 @@ const persist = (): void => {
   }
 };
 
-watch(() => [persisted.sessions, persisted.tasks], persist, { deep: true });
+watch(
+  () => [persisted.sessions, persisted.tasks, permissionMode.value],
+  persist,
+  {
+    deep: true
+  }
+);
 
 const formatTime = (timestamp?: number): string =>
   new Intl.DateTimeFormat('ru-RU', {
@@ -202,7 +218,8 @@ const ensureRuntime = (sessionId: string): MastraRuntime => {
 
   const runtime = useMastra({
     agentId: 'generalAgent',
-    chatId: sessionId
+    chatId: sessionId,
+    approvalMode: permissionMode
   }) as MastraRuntime;
   runtimes.set(sessionId, runtime);
 

@@ -48,7 +48,7 @@
     "@capawesome/capacitor-android-edge-to-edge-support": "^8.0.5",
     "@fontsource-variable/inter": "^5.2.6",
     "@livekit/track-processors": "^0.7.2",
-    "@mastra/client-js": "^1.40.0",
+    "@mastra/client-js": "1.40.0",
     "@pksep/reqi": "0.0.25",
     "@pksep/yui": "0.1.308",
     "@pksep/zod-shared-chat": "0.0.6",
