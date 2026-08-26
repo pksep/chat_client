@@ -282,7 +282,7 @@
 .contact-list__pin {
   display: flex;
   align-items: center;
-  color: var(--chat-secondary);
+  color: var(--text-secondary);
   width: 16px;
   height: 16px;
 }

@@ -50,6 +50,10 @@
   grid-area: profile;
 }
 
+.menu__contact-list {
+  padding-left: 10px;
+}
+
 .menu__contact-list>li>.contact-list__item {
   --size-avatar: 19px;
 }

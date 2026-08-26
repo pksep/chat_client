@@ -2,7 +2,7 @@
   display: grid;
   align-items: center;
   grid-template-columns: calc(var(--size-avatar) * 2) auto;
-  gap: 10px;
+  column-gap: 10px;
   grid-template-areas:
     'avatar title'
     'avatar description';
