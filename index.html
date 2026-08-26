@@ -2,9 +2,16 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/images/sep-chat-logo.svg?v=20260731" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="/images/sep-chat-logo.svg?v=20260731"
+    />
     <link rel="alternate icon" href="/images/favicon.ico?v=20260731" />
-    <link rel="apple-touch-icon" href="/images/apple-touch-icon-180x180.png?v=20260731" />
+    <link
+      rel="apple-touch-icon"
+      href="/images/apple-touch-icon-180x180.png?v=20260731"
+    />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
@@ -16,6 +23,21 @@
     <meta name="theme-color" content="#f8f9fd" />
     <title>SEP:Chat</title>
     <script>
+      const startupUrl = new URL(window.location.href);
+      const startupPathParts = startupUrl.pathname.split('/').filter(Boolean);
+      const startupRouteType = startupPathParts[0];
+      const hasStartupTopicRoute =
+        ((startupRouteType === 'dialogs' || startupRouteType === 'group') &&
+          Boolean(startupPathParts[1])) ||
+        Boolean(
+          startupUrl.searchParams.get('dialogs') ||
+            startupUrl.searchParams.get('group')
+        );
+
+      if (hasStartupTopicRoute) {
+        document.documentElement.classList.add('startup-shell-topic-route');
+      }
+
       window.__chatNativeStartupCleanup = (async () => {
         const logoAssetVersion = '20260731';
         const logoAssetVersionKey = 'chat.logo.assets.version';
@@ -526,6 +548,15 @@
           height: calc(58px + env(safe-area-inset-bottom, 0px));
           margin: 0;
           padding: 10px 18px calc(10px + env(safe-area-inset-bottom, 0px));
+        }
+
+        .startup-shell-topic-route .startup-shell__content {
+          display: none;
+        }
+
+        .startup-shell-topic-route .startup-shell__main {
+          display: grid;
+          min-height: 100dvh;
         }
       }
 
