@@ -40,11 +40,14 @@
         class="chat__header-profile chat__header-ai-assistant"
         :data-testid="`${props.dataTestid}-Header-AIAssistant`"
       >
-        <AiIconWrapper
+        <span
+          class="chat__header-ai-icon"
           :data-testid="`${props.dataTestid}-Header-AIAssistantIcon`"
-        />
+        >
+          <AiSparkleIcon />
+        </span>
         <h3 :data-testid="`${props.dataTestid}-Header-AIAssistantTitle`">
-          Ai Ассистент
+          {{ aiAssistantTitle }}
         </h3>
       </div>
 
@@ -118,13 +121,16 @@
         @click.stop
       >
         <div
-          v-if="isTopicSearchAvailable && !isMobile"
+          v-if="
+            (isTopicSearchAvailable || route.type === RouteTypes.AI) &&
+            !isMobile
+          "
           class="chat__header-search-trigger"
         >
           <SearchIcon
             class="chat__header__icon"
             :data-testid="`${props.dataTestid}-Header-SearchIcon`"
-            @click.stop="showSearch"
+            @click.stop="route.type !== RouteTypes.AI && showSearch()"
           />
         </div>
         <CallIcon
@@ -440,7 +446,8 @@ import type {
   IHeaderEmits,
   IUser
 } from '../interfaces/interfaces';
-import AiIconWrapper from '../UI/AiIconWrapper.vue';
+import AiSparkleIcon from '../AI/AiSparkleIcon.vue';
+import { useAiAssistant } from '../../composables/useAiAssistant';
 import MobileChatInfo from './MobileChatInfo.vue';
 import {
   useMenuInfo,
@@ -508,6 +515,8 @@ import {
   isCallSummaryMaterialTypingInTopic,
   loadLatestCallSummary
 } from '../../services/useCallSummaries';
+
+const { activeTitle: aiAssistantTitle } = useAiAssistant();
 
 const { getSelectedTopic } = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();

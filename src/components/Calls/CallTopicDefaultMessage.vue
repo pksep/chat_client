@@ -1,6 +1,6 @@
 <template>
   <div
-    v-if="callTopicMeta"
+    v-if="callTopicMeta && shouldRenderMessage"
     class="call-topic-default-message"
     :data-testid="`${props.dataTestid}-Container`"
   >
@@ -12,7 +12,7 @@
 
     <article class="call-topic-default-message__bubble">
       <p class="call-topic-default-message__title">{{ titleText }}</p>
-      <p>{{ statusText }}</p>
+      <p v-if="statusText">{{ statusText }}</p>
       <p v-if="hasRecording">Вы можете выбрать доступное действие из меню.</p>
       <time class="call-topic-default-message__time">{{ timeLabel }}</time>
     </article>
@@ -27,7 +27,10 @@ import {
   loadLatestCallSummary,
   type CallSummaryDto
 } from '../../services/useCallSummaries';
-import { useCallBot } from '../../services/useCallBot';
+import {
+  useCallBot,
+  type CallBotCallSummaryBrief
+} from '../../services/useCallBot';
 import { TopicType } from '../../services/useChatSDK/types';
 import { parseCallTopicDescription } from '../../utils/call-topic';
 
@@ -42,7 +45,7 @@ const props = withDefaults(
 );
 
 const { selectedCall } = useCallBot();
-const summary = ref<CallSummaryDto | null>(null);
+const summary = ref<CallSummaryDto | CallBotCallSummaryBrief | null>(null);
 const isLoadingSummary = ref(false);
 let summaryLoadToken = 0;
 
@@ -51,6 +54,9 @@ const callTopicMeta = computed(() =>
 );
 const selectedCallForTopic = computed(() =>
   selectedCall.value?.topicId === props.topic.id ? selectedCall.value : null
+);
+const selectedCallSummary = computed(
+  () => selectedCallForTopic.value?.callSummary || null
 );
 const summaryDate = computed(() => {
   const selectedCreatedAt = selectedCallForTopic.value?.createdAt;
@@ -91,19 +97,22 @@ const hasRecording = computed(
       summary.value.videoStatus !== 'FAILED')
 );
 const statusText = computed(() => {
-  if (isLoadingSummary.value && !summary.value) {
-    return 'Проверяем данные звонка...';
+  if (!summary.value && isLoadingSummary.value) {
+    return '';
   }
 
   return hasRecording.value
     ? 'Запись звонка найдена.'
     : 'Запись звонка не найдена.';
 });
+const shouldRenderMessage = computed(
+  () => !!selectedCallForTopic.value || !!summary.value
+);
 
 const hydrateSummary = async (): Promise<void> => {
   const token = ++summaryLoadToken;
   const roomId = callTopicMeta.value?.roomId || null;
-  summary.value = null;
+  summary.value = selectedCallSummary.value;
 
   if (!props.topic.id || !roomId) {
     return;
@@ -126,7 +135,8 @@ watch(
   () => [
     props.topic.id,
     props.topic.group?.description,
-    selectedCall.value?.messageId
+    selectedCall.value?.messageId,
+    selectedCallSummary.value?.id
   ],
   () => {
     void hydrateSummary();
@@ -158,8 +168,9 @@ watch(
   margin: 0;
   padding: 12px 54px 18px 12px;
   border-radius: 8px;
-  background: var(--white);
-
+  background: var(--surface-overlay);
+  color: var(--text-primary);
+  font-family: 'Inter Variable', sans-serif;
   font-size: 13px;
   line-height: 16px;
   box-shadow: 0 1px 2px rgb(0 0 0 / 4%);

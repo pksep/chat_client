@@ -57,7 +57,7 @@
       v-if="sliderElements.length > 0"
       @touchstart.stop
       @touchend.stop
-      :open="true"
+      :open="isSliderOpen"
       @close="closeSlider"
       :items="sliderElements"
       :default-index="defaultIndexSlider"
@@ -88,7 +88,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { Checkbox, CheckboxCircularEnum } from '@pksep/yui';
 import {
@@ -151,10 +151,12 @@ const isCallTopicDefaultMessageEx = computed(() =>
 
 const sliderElements = ref<{ path: string; name: string; file?: File }[]>([]);
 const defaultIndexSlider = ref<number>(0);
+const isSliderOpen = ref(false);
 const { addHandler: addBackHandler, removeHandler: removeBackHandler } =
   useBackButton();
 
 const closeSlider = (): void => {
+  isSliderOpen.value = false;
   sliderElements.value = [];
 };
 
@@ -345,6 +347,9 @@ const setSliderElement = async (medias: IMedia[], defaultIndex: number = 0) => {
   );
 
   defaultIndexSlider.value = correctedIndex !== -1 ? correctedIndex : 0;
+
+  await nextTick();
+  isSliderOpen.value = true;
 };
 
 const handleContextMenu = (event: MouseEvent) => {

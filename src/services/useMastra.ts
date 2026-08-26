@@ -1,9 +1,17 @@
-import { ref, Ref } from 'vue';
-import { MastraClient } from '@mastra/client-js';
+import { ref, type Ref } from 'vue';
+import { MastraClient, RequestContext } from '@mastra/client-js';
 import { saveMessages, getOrCreateChatHistory } from './useChatDb';
 import { AIMessage } from '../types/messages';
 import { getConfig } from './useConfig';
 import { generateUUID } from '../utils/generateUUID';
+import { getAuthToken } from '../composables/useLogin';
+import {
+  type ApprovalDecision,
+  formatApprovalMessage,
+  getApprovalDecision,
+  type PendingToolApproval
+} from './mastraApproval';
+import { processMastraEventStream } from './mastraEventStream';
 
 type Message = AIMessage;
 
@@ -11,6 +19,7 @@ interface UseMastraOptions {
   agentId?: string;
   chatId?: string;
   baseUrl?: string;
+  approvalMode?: Ref<'ask' | 'automatic'>;
 }
 
 const useMastra = (options?: UseMastraOptions | false) => {
@@ -18,8 +27,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
     return {
       messages: ref<Message[]>([]),
       sendMessage: async () => {},
+      resolveToolApproval: async () => {},
       clearMessages: () => {},
-      isInitializing: ref(false)
+      isInitializing: ref(false),
+      pendingApproval: ref<PendingToolApproval | null>(null)
     };
   }
 
@@ -29,12 +40,68 @@ const useMastra = (options?: UseMastraOptions | false) => {
   let chatId = options.chatId;
   const baseUrl = options.baseUrl ?? defaultBaseUrl;
 
-  const client = new MastraClient({ baseUrl });
   const messages: Ref<Message[]> = ref([]);
   const isInitializing = ref(!!chatId);
+  const pendingApproval = ref<PendingToolApproval | null>(null);
+  let initializationPromise: Promise<void> = Promise.resolve();
+
+  const createRequestContext = (): RequestContext<unknown> => {
+    const requestContext = new RequestContext<Record<string, unknown>>();
+    requestContext.set(
+      'approvalMode',
+      options.approvalMode?.value === 'automatic' ? 'automatic' : 'strict'
+    );
+    return requestContext as unknown as RequestContext<unknown>;
+  };
+
+  const requestToolApproval = async (
+    approval: PendingToolApproval,
+    decision: Exclude<ApprovalDecision, null>,
+    token: string,
+    abortSignal?: AbortSignal
+  ): Promise<Response> => {
+    const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
+    const apiBaseUrl = normalizedBaseUrl.endsWith('/api')
+      ? normalizedBaseUrl
+      : `${normalizedBaseUrl}/api`;
+    const action =
+      decision === 'approve' ? 'approve-tool-call' : 'decline-tool-call';
+    const response = await fetch(
+      `${apiBaseUrl}/agents/${encodeURIComponent(agentId)}/${action}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          runId: approval.runId,
+          toolCallId: approval.toolCallId,
+          ...(decision === 'decline'
+            ? { reason: 'Пользователь отменил действие в чате.' }
+            : {}),
+          requestContext: {
+            approvalMode:
+              options.approvalMode?.value === 'automatic'
+                ? 'automatic'
+                : 'strict'
+          }
+        }),
+        signal: abortSignal
+      }
+    );
+
+    if (!response.ok) {
+      const error = new Error('Не удалось применить решение по действию');
+      Object.assign(error, { status: response.status });
+      throw error;
+    }
+
+    return response;
+  };
 
   if (chatId) {
-    getOrCreateChatHistory(chatId)
+    initializationPromise = getOrCreateChatHistory(chatId)
       .then(initialMessages => {
         messages.value = [...initialMessages];
         isInitializing.value = false;
@@ -48,10 +115,12 @@ const useMastra = (options?: UseMastraOptions | false) => {
     isInitializing.value = false;
   }
 
-  const sendMessage = async (
+  const submitMessage = async (
     input: string,
     onFinish?: () => void,
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
+    approvalDecisionOverride: Exclude<ApprovalDecision, null> | null = null,
+    appendUserMessage = true
   ) => {
     if (!input.trim()) return;
 
@@ -61,17 +130,44 @@ const useMastra = (options?: UseMastraOptions | false) => {
       isInitializing.value = false;
     }
 
-    if (isInitializing.value) return;
+    if (isInitializing.value) await initializationPromise;
 
     const lastMessage = messages.value[messages.value.length - 1];
     if (lastMessage?.role === 'assistant' && lastMessage?.loading) return;
 
-    const userMessage: Message = {
-      role: 'user',
-      content: input,
-      timestamp: Date.now()
-    };
-    messages.value = [...messages.value, userMessage];
+    if (appendUserMessage) {
+      const userMessage: Message = {
+        role: 'user',
+        content: input,
+        timestamp: Date.now()
+      };
+      messages.value = [...messages.value, userMessage];
+    }
+
+    const approvalDecision = pendingApproval.value
+      ? approvalDecisionOverride ?? getApprovalDecision(input)
+      : null;
+
+    if (pendingApproval.value && !approvalDecision) {
+      const reminderMessage: Message = {
+        role: 'assistant',
+        content:
+          'Сейчас ожидается решение по действию. Ответьте точно «подтверждаю» или «отмена».',
+        loading: false,
+        timestamp: Date.now()
+      };
+      messages.value = [...messages.value, reminderMessage];
+      await saveMessages(chatId, messages.value);
+      return;
+    }
+
+    const requestMessages = messages.value
+      .filter(message => !message.loading && message.content.trim())
+      .map(message =>
+        message.role === 'user'
+          ? { role: 'user' as const, content: message.content }
+          : { role: 'assistant' as const, content: message.content }
+      );
 
     const assistantMessage: Message = {
       role: 'assistant',
@@ -85,16 +181,41 @@ const useMastra = (options?: UseMastraOptions | false) => {
     await saveMessages(chatId, messages.value);
 
     try {
+      const token = getAuthToken();
+      if (!token) throw new Error('Authentication required');
+
+      const client = new MastraClient({
+        baseUrl,
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        abortSignal
+      });
       const agent = client.getAgent(agentId);
       if (!agent) throw new Error('Server error, sorry');
 
-      const stream = await agent.streamVNext({
-        messages: messages.value.map(m => ({
-          role: m.role,
-          content: m.content
-        })),
-        abortSignal
-      });
+      let stream;
+
+      if (pendingApproval.value && approvalDecision) {
+        const approval = pendingApproval.value;
+        pendingApproval.value = null;
+
+        try {
+          stream = await requestToolApproval(
+            approval,
+            approvalDecision,
+            token,
+            abortSignal
+          );
+        } catch (approvalError) {
+          pendingApproval.value = approval;
+          throw approvalError;
+        }
+      } else {
+        stream = await agent.stream(requestMessages, {
+          requestContext: createRequestContext()
+        });
+      }
 
       if (!stream) throw new Error('Server error, sorry');
       onFinish?.();
@@ -104,104 +225,79 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
         const processStream = async () => {
           try {
-            await stream.processDataStream({
-              onChunk: async (chunk: string | object) => {
-                try {
-                  let event: any;
+            await processMastraEventStream(stream, async event => {
+              try {
+                if (event.type === 'step-finish') {
+                  return;
+                }
+
+                if (event.type === 'tool-call-approval') {
+                  const { payload } = event;
+
                   if (
-                    typeof chunk === 'object' &&
-                    chunk !== null &&
-                    !Array.isArray(chunk)
+                    typeof event.runId === 'string' &&
+                    typeof payload?.toolCallId === 'string' &&
+                    typeof payload?.toolName === 'string'
                   ) {
-                    event = chunk;
-                  } else if (typeof chunk === 'string') {
-                    let jsonStr = chunk;
-                    if (jsonStr.startsWith('data: ')) {
-                      jsonStr = jsonStr.slice(6).trim();
-                    }
+                    pendingApproval.value = {
+                      runId: event.runId,
+                      toolCallId: payload.toolCallId,
+                      toolName: payload.toolName,
+                      args:
+                        payload.args && typeof payload.args === 'object'
+                          ? payload.args
+                          : {}
+                    };
 
-                    if (jsonStr === '[DONE]') {
-                      console.debug('Stream processing completed', jsonStr);
-                      if (!isResolved) {
-                        isResolved = true;
-                        resolve(null);
-                      }
-                      return;
-                    }
-
-                    try {
-                      event = JSON.parse(jsonStr);
-                    } catch (e) {
-                      console.error('Failed to parse JSON chunk:', jsonStr);
-                      return;
-                    }
-                  } else {
-                    console.debug(
-                      'Received unsupported chunk type:',
-                      typeof chunk
-                    );
-                    return;
-                  }
-
-                  if (event.type === 'step-finish') {
                     if (assistantMessageIndex < messages.value.length) {
                       const newMessages = [...messages.value];
                       newMessages[assistantMessageIndex] = {
                         ...newMessages[assistantMessageIndex],
+                        content: formatApprovalMessage(pendingApproval.value),
                         loading: false
                       };
                       messages.value = newMessages;
 
                       await saveMessages(chatId, messages.value);
                     }
-                    return;
                   }
 
-                  if (event.type === 'text-delta' && event.payload?.text) {
-                    if (assistantMessageIndex < messages.value.length) {
-                      const newMessages = [...messages.value];
-                      newMessages[assistantMessageIndex] = {
-                        ...newMessages[assistantMessageIndex],
-                        content:
-                          newMessages[assistantMessageIndex].content +
-                          event.payload.text
-                      };
-                      messages.value = newMessages;
-
-                      await saveMessages(chatId, messages.value);
-                    }
-                  } else if (event.type === 'finish') {
-                    if (!isResolved) {
-                      isResolved = true;
-                      resolve(null);
-                    }
-                  } else if (event.type === 'error') {
-                    if (!isResolved) {
-                      isResolved = true;
-                      let errorMessage =
-                        event.payload?.message || 'Stream error occurred';
-                      if (errorMessage?.includes('V2 models')) {
-                        errorMessage =
-                          'This model version is not supported, please try another';
-                      } else if (errorMessage?.includes('Timeout exceeded')) {
-                        errorMessage = 'Request timed out, please try again';
-                      } else if (errorMessage?.includes('Network Error')) {
-                        errorMessage =
-                          'Network connection issue, please check your connection';
-                      }
-
-                      reject(new Error(errorMessage));
-                    }
-                  }
-                } catch (parseError) {
-                  console.error('Error processing chunk:', parseError);
                   if (!isResolved) {
                     isResolved = true;
-                    let errorMessage = 'Message processing error';
-                    if (parseError?.message?.includes('Unexpected token')) {
+                    resolve(null);
+                  }
+                  return;
+                }
+
+                if (event.type === 'text-delta' && event.payload?.text) {
+                  if (assistantMessageIndex < messages.value.length) {
+                    const newMessages = [...messages.value];
+                    newMessages[assistantMessageIndex] = {
+                      ...newMessages[assistantMessageIndex],
+                      content:
+                        newMessages[assistantMessageIndex].content +
+                        event.payload.text
+                    };
+                    messages.value = newMessages;
+
+                    await saveMessages(chatId, messages.value);
+                  }
+                } else if (event.type === 'finish') {
+                  if (!isResolved) {
+                    isResolved = true;
+                    resolve(null);
+                  }
+                } else if (event.type === 'error') {
+                  if (!isResolved) {
+                    isResolved = true;
+                    let errorMessage =
+                      event.payload?.message || 'Stream error occurred';
+                    if (errorMessage?.includes('V2 models')) {
                       errorMessage =
-                        'Error parsing server response, please try again';
-                    } else if (parseError?.message?.includes('Network Error')) {
+                        'This model version is not supported, please try another';
+                    } else if (errorMessage?.includes('Timeout exceeded')) {
+                      errorMessage = 'Request timed out, please try again';
+                    } else if (errorMessage?.includes('Network Error')) {
                       errorMessage =
                         'Network connection issue, please check your connection';
                     }
@@ -209,8 +305,27 @@ const useMastra = (options?: UseMastraOptions | false) => {
                     reject(new Error(errorMessage));
                   }
                 }
+              } catch (parseError) {
+                console.error('Error processing chunk:', parseError);
+                if (!isResolved) {
+                  isResolved = true;
+                  let errorMessage = 'Message processing error';
+                  if (parseError?.message?.includes('Unexpected token')) {
+                    errorMessage =
+                      'Error parsing server response, please try again';
+                  } else if (parseError?.message?.includes('Network Error')) {
+                    errorMessage =
+                      'Network connection issue, please check your connection';
+                  }
+
+                  reject(new Error(errorMessage));
+                }
               }
             });
+            if (!isResolved) {
+              isResolved = true;
+              resolve(null);
+            }
           } catch (streamError) {
             if (!isResolved) {
               isResolved = true;
@@ -297,8 +412,26 @@ const useMastra = (options?: UseMastraOptions | false) => {
     }
   };
 
+  const sendMessage = async (
+    input: string,
+    onFinish?: () => void,
+    abortSignal?: AbortSignal
+  ) => submitMessage(input, onFinish, abortSignal);
+
+  const resolveToolApproval = async (
+    decision: Exclude<ApprovalDecision, null>,
+    onFinish?: () => void,
+    abortSignal?: AbortSignal
+  ) => {
+    if (!pendingApproval.value) return;
+
+    const command = decision === 'approve' ? 'подтверждаю' : 'отмена';
+    return submitMessage(command, onFinish, abortSignal, decision, false);
+  };
+
   const clearMessages = () => {
     if (!chatId) return;
+    pendingApproval.value = null;
     messages.value = [];
     saveMessages(chatId, messages.value);
   };
@@ -306,8 +439,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
   return {
     messages,
     sendMessage,
+    resolveToolApproval,
     clearMessages,
-    isInitializing
+    isInitializing,
+    pendingApproval
   };
 };
 

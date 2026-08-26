@@ -7,6 +7,22 @@ import {
   CallHistoryResponse
 } from './types';
 
+export interface TopicAttachmentItem {
+  media: Media;
+  message: Message;
+}
+
+export interface TopicAttachmentsPage {
+  items: TopicAttachmentItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface TopicAttachmentsOptions {
+  limit?: number;
+  cursor?: string;
+}
+
 export interface ChatMessageInterface {
   editMessage(
     topicId: string,
@@ -38,6 +54,14 @@ export interface ChatMessageInterface {
       newMessages?: boolean;
     }
   ): Promise<Message[]>;
+  getTopicMedia(
+    topicId: string,
+    opts?: TopicAttachmentsOptions
+  ): Promise<TopicAttachmentsPage>;
+  getTopicFiles(
+    topicId: string,
+    opts?: TopicAttachmentsOptions
+  ): Promise<TopicAttachmentsPage>;
   getCallHistory(opts?: {
     page?: number;
     limit?: number;
@@ -206,6 +230,45 @@ export class ChatMessage implements ChatMessageInterface {
     } catch (error) {
       throw new Error(`Failed to fetch messages: ${(error as Error).message}`);
     }
+  }
+
+  private async getTopicAttachments(
+    topicId: string,
+    kind: 'media' | 'files',
+    opts?: TopicAttachmentsOptions
+  ): Promise<TopicAttachmentsPage> {
+    const queryParams = new URLSearchParams();
+
+    if (opts?.limit) queryParams.append('limit', opts.limit.toString());
+    if (opts?.cursor) queryParams.append('cursor', opts.cursor);
+
+    const queryString = queryParams.toString();
+    const endpoint = `/messages/topic/${topicId}/${kind}${queryString ? `?${queryString}` : ''}`;
+
+    try {
+      const response = (await this.reqi.get<TopicAttachmentsPage>(endpoint, {
+        parsed: false
+      })) as any;
+      return await response.json();
+    } catch (error) {
+      throw new Error(
+        `Failed to fetch topic attachments: ${(error as Error).message}`
+      );
+    }
+  }
+
+  async getTopicMedia(
+    topicId: string,
+    opts?: TopicAttachmentsOptions
+  ): Promise<TopicAttachmentsPage> {
+    return this.getTopicAttachments(topicId, 'media', opts);
+  }
+
+  async getTopicFiles(
+    topicId: string,
+    opts?: TopicAttachmentsOptions
+  ): Promise<TopicAttachmentsPage> {
+    return this.getTopicAttachments(topicId, 'files', opts);
   }
 
   async getCallHistory(opts?: {

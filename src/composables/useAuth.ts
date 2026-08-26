@@ -1,4 +1,7 @@
-import type { IUser } from '../components/interfaces/interfaces';
+import type {
+  IChatContainerConfig,
+  IUser
+} from '../components/interfaces/interfaces';
 import { ref, Ref } from 'vue';
 import { setAuthToken } from './useLogin';
 import { getConfig } from '../services/useConfig';
@@ -77,6 +80,38 @@ const normalizeAuthResponse = (data: Record<string, unknown>): AuthResponse => {
   };
 };
 
+const isLoopbackUrl = (value?: string): boolean => {
+  const url = value?.trim();
+
+  if (!url) {
+    return false;
+  }
+
+  try {
+    const hostname = new URL(url).hostname;
+
+    return ['localhost', '127.0.0.1', '[::1]', '::1'].includes(hostname);
+  } catch {
+    return false;
+  }
+};
+
+const getCredentialsLoginUrl = (config: IChatContainerConfig): string => {
+  const chatApi = config.CHAT_API_DOMAIN?.trim();
+
+  if (chatApi && isLoopbackUrl(chatApi)) {
+    return `${chatApi.replace(/\/+$/, '')}/auth/credentials-login`;
+  }
+
+  const authApi = config.CHAT_AUTH_API?.trim();
+
+  if (!authApi) {
+    throw new Error('Chat auth API is not configured');
+  }
+
+  return `${authApi.replace(/\/+$/, '')}/chat/credentials-login`;
+};
+
 export const useAuth = async (erpToken: string): Promise<AuthResponse> => {
   const config = getConfig();
   const response = await fetch(`${config.CHAT_AUTH_API}/chat/token`, {
@@ -99,16 +134,13 @@ export const loginWithCredentials = async (
   credentials: DirectAuthCredentials
 ): Promise<AuthResponse> => {
   const config = getConfig();
-  const response = await fetch(
-    `${config.CHAT_AUTH_API}/chat/credentials-login`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(credentials)
-    }
-  );
+  const response = await fetch(getCredentialsLoginUrl(config), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(credentials)
+  });
 
   const data = await response.json();
 
@@ -116,7 +148,11 @@ export const loginWithCredentials = async (
     throw new Error(data?.message || data?.error || 'Credentials login failed');
   }
 
-  return normalizeAuthResponse(data);
+  const authResponse = normalizeAuthResponse(data);
+
+  return isLoopbackUrl(config.CHAT_API_DOMAIN)
+    ? { ...authResponse, erpToken: undefined }
+    : authResponse;
 };
 
 export const saveChatAuthSession = (

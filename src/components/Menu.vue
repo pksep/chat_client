@@ -75,6 +75,11 @@
         :data-testid="`${props.dataTestid}-Menu-CallsPage`"
       />
 
+      <AIMenuPanel
+        v-else-if="activeSection === 'ai'"
+        :data-testid="`${props.dataTestid}-Menu-AIPanel`"
+      />
+
       <MenuProfilePanel
         v-else
         :data-testid="`${props.dataTestid}-Menu-ProfilePanel`"
@@ -104,7 +109,13 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import {
+  computed,
+  defineAsyncComponent,
+  onBeforeUnmount,
+  ref,
+  watch
+} from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
 import {
@@ -131,9 +142,7 @@ import { TopicType } from '../services/useChatSDK/types';
 import { useChatsToolbarState } from '../composables/useChatsToolbarState';
 import { useChatMenu } from '../composables/useChatMenu';
 import MenuBottomNav from './Menu/MenuBottomNav.vue';
-import MenuProfilePanel from './Menu/MenuProfilePanel.vue';
 import { getAuthUser } from '../composables/useAuth';
-import CallsPage from './Calls/CallsPage.vue';
 import { useShareSelection } from '../composables/useShareSelection';
 import { getShareSelectionSummaryLabel } from '../utils/shareSelectionSummary';
 import {
@@ -157,6 +166,12 @@ import {
   recordChatTopicNavigationRequest,
   type ChatTopicOpenTelemetryMeta
 } from '../services/useChatNavigationTelemetry';
+
+const CallsPage = defineAsyncComponent(() => import('./Calls/CallsPage.vue'));
+const AIMenuPanel = defineAsyncComponent(() => import('./AI/AIMenuPanel.vue'));
+const MenuProfilePanel = defineAsyncComponent(
+  () => import('./Menu/MenuProfilePanel.vue')
+);
 
 const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: 'Menu'
@@ -380,6 +395,11 @@ watch(
   ([routeType]) => {
     if (routeType === RouteTypes.CALL) {
       setActiveSection('calls');
+      return;
+    }
+
+    if (routeType === RouteTypes.AI || routeType === RouteTypes.ASSISTANT) {
+      setActiveSection('ai');
       return;
     }
 

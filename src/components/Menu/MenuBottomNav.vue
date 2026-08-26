@@ -9,7 +9,7 @@
       type="button"
       :class="getButtonClass('chats')"
       :data-testid="`${props.dataTestid}-MenuBottomNav-Chats`"
-      @click="setActiveSection('chats')"
+      @click="handleSection('chats')"
     >
       <span class="menu-bottom-nav__icon-shell" aria-hidden="true">
         <Icon :name="IconNameEnum.chat" class="menu-bottom-nav__icon" />
@@ -21,10 +21,28 @@
       type="button"
       :class="getButtonClass('calls')"
       :data-testid="`${props.dataTestid}-MenuBottomNav-Calls`"
-      @click="setActiveSection('calls')"
+      @click="handleSection('calls')"
     >
       <span class="menu-bottom-nav__icon-shell" aria-hidden="true">
         <Icon :name="IconNameEnum.calls" class="menu-bottom-nav__icon" />
+      </span>
+    </button>
+
+    <button
+      v-if="isSectionVisible('ai')"
+      type="button"
+      :class="getButtonClass('ai')"
+      :data-testid="`${props.dataTestid}-MenuBottomNav-AI`"
+      :disabled="!isAiMenuEnabled"
+      aria-label="ИИ-Ассистент"
+      @click="handleSection('ai')"
+    >
+      <span
+        class="menu-bottom-nav__icon-shell menu-bottom-nav__ai-shell"
+        aria-hidden="true"
+      >
+        <AiSparkleIcon />
+        <small class="menu-bottom-nav__beta">BETA</small>
       </span>
     </button>
 
@@ -33,7 +51,7 @@
       type="button"
       :class="getButtonClass('profile')"
       :data-testid="`${props.dataTestid}-MenuBottomNav-Profile`"
-      @click="setActiveSection('profile')"
+      @click="handleSection('profile')"
     >
       <span class="menu-bottom-nav__avatar-shell" aria-hidden="true">
         <CachedAvatar
@@ -56,6 +74,14 @@ import {
 } from '../../composables/useChatMenu';
 import { getAuthUser } from '../../composables/useAuth';
 import { Icon, IconNameEnum } from '@pksep/yui';
+import AiSparkleIcon from '../AI/AiSparkleIcon.vue';
+import {
+  navigateToAI,
+  navigateToAssistant,
+  navigateToDefault,
+  useUrlWatcher
+} from '../../composables/navigation';
+import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 
 const props = withDefaults(
   defineProps<{
@@ -73,6 +99,8 @@ defineOptions({
 });
 
 const { activeSection, setActiveSection } = useChatMenu();
+const route = useUrlWatcher();
+const isAiMenuEnabled = true;
 
 const authUser = computed(() => getAuthUser());
 
@@ -85,4 +113,25 @@ const getButtonClass = (section: ChatMenuSection) => [
 
 const isSectionVisible = (section: ChatMenuSection): boolean =>
   !props.isCollapse || activeSection.value === section;
+
+const handleSection = (section: ChatMenuSection): void => {
+  setActiveSection(section);
+
+  if (section === 'ai') {
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    if (isMobile) {
+      navigateToAssistant();
+    } else {
+      navigateToAI();
+    }
+    return;
+  }
+
+  if (
+    route.value.type === RouteTypes.AI ||
+    route.value.type === RouteTypes.ASSISTANT
+  ) {
+    navigateToDefault();
+  }
+};
 </script>

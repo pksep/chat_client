@@ -131,6 +131,17 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         globIgnores: [
           '**/assets/ui-kit-*.js',
+          '**/assets/ai-*.js',
+          '**/assets/AI*.js',
+          '**/assets/TasksSuggestionIcon-*.js',
+          '**/assets/useMastra-*.js',
+          '**/assets/calls-*.js',
+          '**/assets/Call*.js',
+          '**/assets/Call*.css',
+          '**/assets/callBackground*.js',
+          '**/assets/useCall*.js',
+          '**/assets/useLiveKit-*.js',
+          '**/assets/MenuProfilePanel-*.js',
           '**/call-background/**',
           '**/emoji/**',
           '**/release/**',
@@ -176,6 +187,21 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
               },
               expiration: {
                 maxEntries: 40,
+                maxAgeSeconds: 60 * 60 * 24 * 30
+              }
+            }
+          },
+          {
+            urlPattern:
+              /\/assets\/(?:ai|tasksSuggestionIcon|call|useCall|useLiveKit|useMastra|menuProfilePanel)[^/]*\.(?:js|css)$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'optional-feature-chunks',
+              cacheableResponse: {
+                statuses: [0, 200]
+              },
+              expiration: {
+                maxEntries: 30,
                 maxAgeSeconds: 60 * 60 * 24 * 30
               }
             }
@@ -251,21 +277,6 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
   ];
   const getManualChunk = (id: string): string | undefined => {
     const normalizedId = id.replace(/\\/g, '/');
-
-    if (
-      normalizedId.includes('/src/services/useLiveKit') ||
-      normalizedId.includes('/src/services/useCalls') ||
-      normalizedId.includes('/src/services/useCallKit') ||
-      normalizedId.includes('/src/services/callBackground') ||
-      normalizedId.includes('/src/services/mediapipe') ||
-      normalizedId.includes('/src/components/CallModal/')
-    ) {
-      return 'calls';
-    }
-
-    if (normalizedId.includes('/src/services/useMastra')) {
-      return 'ai-mastra';
-    }
 
     if (!normalizedId.includes('/node_modules/')) {
       return undefined;

@@ -137,7 +137,7 @@ import {
 import MessageBubble from './MessageBubble.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import { formatDay, formatTime } from '../../composables/useTime';
-import { MessageStatus, TopicType } from '../../services/useChatSDK/types';
+import { TopicType } from '../../services/useChatSDK/types';
 import type {
   IMessage,
   IMessageViewportSnapshot
@@ -158,6 +158,10 @@ import { isUnreadTrackableMessage } from '../../utils/messageTracking';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import { getSelectedTopic } from '../../composables/useTopics';
 import { isCallTopic, isCallTopicDefaultMessage } from '../../utils/call-topic';
+import {
+  getLatestReadOutgoingMessageIndex,
+  shouldDisplayMessageAsRead
+} from '../../utils/messageReadStatus';
 
 interface Props {
   dataTestid: string;
@@ -520,6 +524,19 @@ const isMessagePinned = (message: IMessage): boolean =>
   Boolean(message.isPin) ||
   Boolean(pinnedMessageIdsByTopic.value.get(message.topicId)?.has(message.id));
 
+const resolveMessageIsMeSender = (message?: IMessage) =>
+  isCallTopicDefaultMessage(message)
+    ? false
+    : getParsedCallMessage(message)?.isOutgoing ??
+      props.authUserId === message?.senderUserId;
+
+const latestReadOutgoingMessageIndex = computed(() =>
+  getLatestReadOutgoingMessageIndex(
+    visibleMessages.value,
+    resolveMessageIsMeSender
+  )
+);
+
 const getRenderItemMemo = (item: RenderItem): unknown[] => {
   const memo: unknown[] = [item.kind, props.authUserId, isMobile.value];
 
@@ -527,6 +544,8 @@ const getRenderItemMemo = (item: RenderItem): unknown[] => {
     memo.push(item.message);
     return memo;
   }
+
+  memo.push(latestReadOutgoingMessageIndex.value);
 
   item.messages.forEach(message => {
     memo.push(
@@ -540,12 +559,6 @@ const getRenderItemMemo = (item: RenderItem): unknown[] => {
 
   return memo;
 };
-
-const resolveMessageIsMeSender = (message?: IMessage) =>
-  isCallTopicDefaultMessage(message)
-    ? false
-    : getParsedCallMessage(message)?.isOutgoing ??
-      props.authUserId === message?.senderUserId;
 
 const shouldRenderGroupAvatar = (message?: IMessage): boolean => {
   if (!message) {
@@ -928,7 +941,12 @@ const getBubbleProps = (message: IMessage, index: number) => ({
   avatar: isCallTopicDefaultMessage(message)
     ? ''
     : message.senderUser?.avatarUrl || '',
-  isRead: message.status === MessageStatus.Read,
+  isRead: shouldDisplayMessageAsRead(
+    message,
+    index,
+    latestReadOutgoingMessageIndex.value,
+    resolveMessageIsMeSender
+  ),
   isEdit: message.isEdit,
   isPin: isMessagePinned(message),
   messageStatus: message.status,

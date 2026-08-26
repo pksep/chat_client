@@ -39,6 +39,7 @@ import {
 } from '../../../services/useTopicViewportState';
 import type { IMessage } from '../../interfaces/interfaces';
 import { isUnreadTrackableMessageForUser } from '../../../utils/messageTracking';
+import { shouldPinMessageAppendToBottom } from '../../../utils/messageScroll';
 
 export function useMessageScroll(
   chatWrapperRef: Ref<HTMLElement | null>,
@@ -1825,13 +1826,22 @@ export function useMessageScroll(
         lastOldIndex < newIds.length - 1;
 
       const reason = isPrepend ? 'prepend' : isAppend ? 'append' : 'replace';
+      const isAtBottomBeforeMutation = isAppend
+        ? scrollAnchor.isAtBottom()
+        : false;
+      const shouldPinAppendToBottom = shouldPinMessageAppendToBottom({
+        isAppend,
+        preserveViewportForDownPagination,
+        isUserScrolling: scrollState.isUserScrolling,
+        viewportMode: scrollAnchor.viewportMode.value,
+        isAtBottom: isAtBottomBeforeMutation,
+        isNearBottom: scrollAnchor.isNearBottom.value
+      });
       const shouldPreserveAppendViewport =
-        reason === 'append' &&
-        (preserveViewportForDownPagination ||
-          scrollState.isUserScrolling ||
-          !scrollAnchor.isAtBottom());
+        reason === 'append' && !shouldPinAppendToBottom;
       const mutation = scrollAnchor.beginViewportMutation(reason, {
         forcePreserve: reason === 'prepend' || shouldPreserveAppendViewport,
+        forcePinBottom: shouldPinAppendToBottom,
         preferredMessageId: pendingViewportAnchorMessageId || undefined
       });
 

@@ -20,18 +20,6 @@
       }"
       @click.stop="closeMobileCallActionsMenu"
     >
-      <div
-        v-if="callSummaryRecordingNotice"
-        class="call-modal__recording-notice"
-        :class="{
-          'call-modal__recording-notice--starting': isSummaryRecordingStarting
-        }"
-        role="status"
-      >
-        <span class="call-modal__recording-notice-dot"></span>
-        <span>{{ callRecordingStatusText }}</span>
-      </div>
-
       <div class="call-modal__group-info">
         <div>
           <button
@@ -86,6 +74,16 @@
             <GroupInfoIcon />
           </button>
           <div v-else class="call-modal__mobile-actions">
+            <button
+              v-if="isAnySummaryRecording"
+              class="call-modal__control-button call-modal__control-button--action call-modal__control-button--recording"
+              type="button"
+              :disabled="isSummaryRecordButtonDisabled"
+              :aria-label="summaryRecordButtonTooltip"
+              @click="handleSummaryRecordingAction"
+            >
+              <ScreenRecordIcon />
+            </button>
             <button
               class="call-modal__control-button call-modal__control-button--action"
               type="button"
@@ -401,6 +399,7 @@
             <Tooltip
               v-if="!isMobile"
               :hint="summaryRecordButtonTooltip"
+              data-testid="CallModal-CallControls-RecordingTooltip"
               position="top-center"
               type="black"
               size="small"
@@ -663,6 +662,7 @@
             <Tooltip
               v-if="!isCallFullscreenTouchMode && !isMobile"
               :hint="summaryRecordButtonTooltip"
+              data-testid="CallModal-Overlay-RecordingTooltip"
               position="top-center"
               type="black"
               size="small"
@@ -803,7 +803,6 @@ import {
   isAnyCallSummaryRecording,
   isCallSummaryRecording,
   isCallSummaryRecordingPending,
-  isCallSummaryRecordingStarting,
   loadActiveCallSummaryRecorders,
   startCallSummaryRecording,
   stopCallSummaryRecording
@@ -1759,14 +1758,7 @@ const isAnySummaryRecording = computed(() =>
 const isSummaryRecordingPending = computed(() =>
   isCallSummaryRecordingPending(activeRoomId.value)
 );
-const isSummaryRecordingStarting = computed(() =>
-  isCallSummaryRecordingStarting(activeRoomId.value)
-);
-const callRecordingStatusText = computed(() =>
-  isAnySummaryRecording.value
-    ? 'Идет запись экрана'
-    : callSummaryRecordingNotice.value
-);
+
 const canStartSummaryRecording = computed(
   () =>
     isCallOpen.value &&

@@ -30,7 +30,7 @@
         <p class="calls-bot__message-title">
           {{ callInfoTitle }}
         </p>
-        <p>{{ recordingStatusText }}</p>
+        <p v-if="recordingStatusText">{{ recordingStatusText }}</p>
         <p v-if="hasRecording">Вы можете выбрать доступное действие из меню.</p>
         <p v-else-if="!isLoadingSummary">
           Для этого звонка пока нет сохранённой записи у вашего пользователя.
@@ -275,7 +275,7 @@ const callsBotSubtitle = computed(() =>
 );
 const recordingStatusText = computed(() => {
   if (isLoadingSummary.value && !summary.value) {
-    return 'Проверяем запись звонка...';
+    return '';
   }
 
   if (!summary.value) {

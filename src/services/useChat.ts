@@ -49,7 +49,6 @@ import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
 import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
-import { initCallKit, showIncomingCallKit, endAllCallKits } from './useCallKit';
 import {
   clearMessageNotification,
   clearTopicNotifications
@@ -115,8 +114,10 @@ const notifyChatSDKReady = (sdk: ChatSDK): void => {
 };
 
 type CallsApi = typeof import('./useCalls');
+type CallKitApi = typeof import('./useCallKit');
 let callsApi: CallsApi | null = null;
 let callsApiPromise: Promise<CallsApi> | null = null;
+let callKitApiPromise: Promise<CallKitApi> | null = null;
 
 const loadCallsApi = async (): Promise<CallsApi> => {
   if (!callsApiPromise) {
@@ -127,6 +128,14 @@ const loadCallsApi = async (): Promise<CallsApi> => {
   }
 
   return callsApiPromise;
+};
+
+const loadCallKitApi = (): Promise<CallKitApi> => {
+  if (!callKitApiPromise) {
+    callKitApiPromise = import('./useCallKit');
+  }
+
+  return callKitApiPromise;
 };
 
 const isWebsocketConnecting = ref(true);
@@ -421,7 +430,7 @@ const setupChatListeners = (): void => {
     }
 
     updateLocalLastMessageTopic(message.topicId, message);
-    updateLocalLastMessageGroup(message.topicId, message);
+    updateLocalLastMessageGroup(message.topicId);
   };
 
   const handleTopicChangePayload = (payload: {
@@ -451,6 +460,27 @@ const setupChatListeners = (): void => {
     } else if (payload.type === 'DELETE') {
       deleteTopicFromList(payload.data.id);
     }
+  };
+
+  const reconcileLastMessageAfterDelete = async (
+    topicId: string,
+    deletedMessageId: string
+  ): Promise<void> => {
+    const topic = useTopics().getSelectedTopic(topicId);
+
+    if (!topic || topic.lastMessage?.id !== deletedMessageId) {
+      return;
+    }
+
+    await fetchMessagesForTopic(topicId, {
+      limit: 1,
+      syncLastMessage: true,
+      updateVisible: false
+    });
+
+    const { updateLocalLastMessageTopic } = useTopics();
+    updateLocalLastMessageTopic(topicId);
+    updateLocalLastMessageGroup(topicId);
   };
 
   const handleChangeMessagePayload = (
@@ -500,6 +530,10 @@ const setupChatListeners = (): void => {
       void clearTopicNotifications(topicId);
     } else if (payload.type === 'DELETE') {
       const deletedMessageId = payload.data.id || payload.messageId;
+      const deletedLastMessage =
+        !!deletedMessageId &&
+        useTopics().getSelectedTopic(payload.data.topicId)?.lastMessage?.id ===
+          deletedMessageId;
 
       void recordShadowChatEvent({
         topicId: payload.data.topicId,
@@ -510,6 +544,12 @@ const setupChatListeners = (): void => {
       void removeCallHistoryMessage(deletedMessageId);
       clearDeletedReactionTarget(payload.data.topicId, deletedMessageId);
       deleteMessageFromLocal(payload.data.topicId, deletedMessageId);
+      if (deletedLastMessage) {
+        void reconcileLastMessageAfterDelete(
+          payload.data.topicId,
+          deletedMessageId
+        );
+      }
       void clearMessageNotification(payload.data.topicId, deletedMessageId);
     } else if (payload.type === 'CHANGE' || payload.type === 'PIN') {
       void recordShadowChatEvent({
@@ -876,7 +916,8 @@ const setupChatListeners = (): void => {
       }
 
       if (Capacitor.isNativePlatform() && !isGroupCall && isReceived && user) {
-        showIncomingCallKit(
+        const { showIncomingCallKit } = await loadCallKitApi();
+        await showIncomingCallKit(
           user.initials,
           payload.roomId,
           user.avatarUrl,
@@ -891,7 +932,8 @@ const setupChatListeners = (): void => {
       const { dismissIncomingCall, handleCallAnswered } = await loadCallsApi();
 
       if (Capacitor.isNativePlatform()) {
-        endAllCallKits();
+        const { endAllCallKits } = await loadCallKitApi();
+        await endAllCallKits();
       }
       dismissIncomingCall(payload.roomId, payload.topicId);
       handleCallAnswered(
@@ -911,7 +953,8 @@ const setupChatListeners = (): void => {
         const { dismissIncomingCall } = await loadCallsApi();
 
         if (Capacitor.isNativePlatform()) {
-          endAllCallKits();
+          const { endAllCallKits } = await loadCallKitApi();
+          await endAllCallKits();
         }
         dismissIncomingCall(payload.roomId, payload.topicId);
       })();
@@ -951,7 +994,8 @@ const setupChatListeners = (): void => {
       }
 
       if (Capacitor.isNativePlatform()) {
-        endAllCallKits();
+        const { endAllCallKits } = await loadCallKitApi();
+        await endAllCallKits();
       }
 
       if (payload.topicId) {
@@ -1802,7 +1846,11 @@ const startChatConnectionInBackground = (sdk: ChatSDK): void => {
         restoreInvitedGroupCallIfNeeded();
 
         if (Capacitor.isNativePlatform()) {
-          initCallKit();
+          void loadCallKitApi()
+            .then(({ initCallKit }) => initCallKit())
+            .catch(error => {
+              console.warn('[CallKit] Failed to initialize:', error);
+            });
         }
 
         ensureTauriWindowStateTracking();

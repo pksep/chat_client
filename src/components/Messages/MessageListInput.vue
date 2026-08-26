@@ -22,6 +22,35 @@
         @mention-change="handleMentionChange"
         @slash-change="handleSlashChange"
       >
+        <template v-if="props.showCallTopicActionsToggle" #mobile-right-action>
+          <button
+            type="button"
+            class="chat__input-prompt-toggle"
+            :class="{
+              'chat__input-prompt-toggle--active': props.isCallTopicActionsOpen
+            }"
+            :aria-expanded="props.isCallTopicActionsOpen"
+            :aria-label="
+              props.isCallTopicActionsOpen
+                ? 'Скрыть промпты звонка'
+                : 'Показать промпты звонка'
+            "
+            :data-testid="`${props.dataTestid}-CallTopicActionsToggle`"
+            @click.stop="$emit('toggleCallTopicActions')"
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect x="4" y="4" width="6" height="6" rx="1.5" />
+              <rect x="14" y="4" width="6" height="6" rx="1.5" />
+              <rect x="4" y="14" width="6" height="6" rx="1.5" />
+              <rect x="14" y="14" width="6" height="6" rx="1.5" />
+            </svg>
+          </button>
+        </template>
         <template v-if="!!props.editMessage" #action>
           <div
             class="chat__input__action"
@@ -200,6 +229,8 @@ interface Props {
   allowSelectUser?: boolean;
   customActionTitle?: string;
   customActionDescription?: string;
+  showCallTopicActionsToggle?: boolean;
+  isCallTopicActionsOpen?: boolean;
 }
 
 interface IContentEditorSendPayload {
@@ -217,7 +248,9 @@ const props = withDefaults(defineProps<Props>(), {
   allowAttachFile: true,
   allowSelectUser: true,
   customActionTitle: '',
-  customActionDescription: ''
+  customActionDescription: '',
+  showCallTopicActionsToggle: false,
+  isCallTopicActionsOpen: false
 });
 const TYPING_IDLE_TIMEOUT_MS = 2500;
 const TYPING_PING_INTERVAL_MS = 2000;
@@ -230,7 +263,8 @@ const emit = defineEmits([
   'clearReply',
   'clearForward',
   'scrollToMessage',
-  'heightChange'
+  'heightChange',
+  'toggleCallTopicActions'
 ]);
 
 const internalInputText = computed({
@@ -632,3 +666,35 @@ onBeforeUnmount(() => {
   void stopTyping();
 });
 </script>
+
+<style scoped>
+.chat__input-prompt-toggle {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 3px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.chat__input-prompt-toggle svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+}
+
+.chat__input-prompt-toggle rect {
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+.chat__input-prompt-toggle--active {
+  color: var(--text-brand);
+}
+</style>
