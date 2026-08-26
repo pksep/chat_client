@@ -95,7 +95,7 @@
             ref="messageHtmlRef"
             class="message-content__html"
             v-emoji
-            v-html="props.message"
+            v-html="safeMessageHtml"
             :data-testid="`${props.dataTestid}-MessageText`"
             @click="handleMentionUserClick"
           ></div>
@@ -209,8 +209,10 @@ import {
   isNativeFileDownloadSupported,
   refreshNativeFileDownloadStatus
 } from '../../services/useNativeFile';
+import { sanitizeMessageHtml } from '../../utils/sanitizeMessageHtml';
 
 const props = defineProps<IMessageBubbleProps>();
+const safeMessageHtml = computed(() => sanitizeMessageHtml(props.message));
 
 const emits = defineEmits(['navigate-message', 'set-slider']);
 const { primeMediaCache, isSliderContentUrl, handleDragStart, canDragMedia } =
