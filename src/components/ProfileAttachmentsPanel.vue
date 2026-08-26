@@ -1365,7 +1365,7 @@ const getMediaLabel = (media: IMedia): string =>
   border: 1px solid var(--border-grey);
   border-radius: 17px;
   background: var(--white);
-  color: var(--text-color);
+  color: var(--text-primary);
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
@@ -1482,7 +1482,7 @@ const getMediaLabel = (media: IMedia): string =>
 .profile-attachments__file-name {
   min-width: 0;
   overflow: hidden;
-  color: var(--text-black);
+  color: var(--text-primary);
   font-size: 16px;
   font-weight: 400;
   line-height: 19px;

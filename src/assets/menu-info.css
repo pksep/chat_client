@@ -113,7 +113,7 @@ section.menu-info__info-section {
   border: 1px solid var(--border-grey);
   border-radius: 17px;
   background: var(--white);
-  color: var(--text-color);
+  color: var(--text-primary);
   font-size: 14px;
   cursor: pointer;
 }

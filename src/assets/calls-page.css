@@ -216,7 +216,7 @@
 .calls-page__context-action {
   justify-content: flex-start;
   gap: 10px;
-  color: var(--text-color) !important;
+  color: var(--text-primary) !important;
 }
 
 .calls-page__context-action svg {
