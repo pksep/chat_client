@@ -60,6 +60,7 @@ import {
   isCallTopic,
   parseCallTopicDescription
 } from '../../../utils/call-topic';
+import { buildForwardMessageSendPlan } from '../../../utils/forward-message-send-plan';
 
 const MAX_HTML_LENGTH = 4000;
 const FORWARD_TEXT_SEND_DELAY_MS = 250;
@@ -1301,7 +1302,6 @@ export function useMessageSender(
     const forwardMessages = state.forwardMessages;
     const hasForwardMessages = forwardMessages.length > 0;
     const hasMultipleForwardMessages = forwardMessages.length > 1;
-    const forwardBatchId = hasMultipleForwardMessages ? generateUUID() : null;
     const hasAttachments = queuedFiles.length > 0;
 
     const isTextEmpty = stripHtml(normalizedText).length === 0;
@@ -1323,6 +1323,9 @@ export function useMessageSender(
     }
 
     const parts = textToSend ? splitHtmlByLength(textToSend) : [];
+    const needsForwardBatch =
+      hasMultipleForwardMessages || (hasForwardMessages && parts.length > 0);
+    const forwardBatchId = needsForwardBatch ? generateUUID() : null;
     const callTopicPromptText = stripHtml(textToSend)
       .replace(/\u00a0/g, ' ')
       .trim();
@@ -1487,65 +1490,43 @@ export function useMessageSender(
         }
       }
 
-      if (hasMultipleForwardMessages && parts.length > 0) {
-        registerPendingOutgoingForwardBatch(topicId, [
-          ...forwardMessages.map((_, index) => ({
-            forwardBatchId: forwardBatchId as string,
-            forwardBatchOrder: index
-          })),
-          ...parts.map((_, index) => ({
-            forwardBatchId: forwardBatchId as string,
-            forwardBatchOrder: forwardMessages.length + index
-          }))
-        ]);
-
-        for (const [index, forwardMessage] of forwardMessages.entries()) {
-          const ex = createMessageEx({
-            clientId: generateUUID(),
-            ...replyQuoteEx,
-            forwardBatchId: forwardBatchId as string,
-            forwardBatchOrder: index
-          });
-
-          const didSend = await sendMessageChat({
-            topicId,
-            text: '',
-            replyMessageId,
-            forwardMessageId: forwardMessage.id,
-            ex
-          });
-
-          if (!didSend) {
-            queuedMessageCount += 1;
-            queuePendingTextMessage({
-              topicId,
-              text: '',
-              replyMessageId,
-              forwardMessageIds: [forwardMessage.id],
-              ex
-            });
-          } else {
-            sentMessageCount += 1;
-          }
-        }
-
-        await new Promise(resolve =>
-          setTimeout(resolve, FORWARD_TEXT_SEND_DELAY_MS)
+      if (hasForwardMessages && parts.length > 0) {
+        const sendPlan = buildForwardMessageSendPlan(
+          forwardMessages.map(message => message.id),
+          parts
         );
 
-        for (const [index, part] of parts.entries()) {
+        registerPendingOutgoingForwardBatch(
+          topicId,
+          sendPlan.map(item => ({
+            forwardBatchId: forwardBatchId as string,
+            forwardBatchOrder: item.forwardBatchOrder
+          }))
+        );
+
+        for (const item of sendPlan) {
+          if (
+            item.kind === 'text' &&
+            item.forwardBatchOrder === forwardMessages.length
+          ) {
+            await new Promise(resolve =>
+              setTimeout(resolve, FORWARD_TEXT_SEND_DELAY_MS)
+            );
+          }
+
           const ex = createMessageEx({
             clientId: generateUUID(),
             ...replyQuoteEx,
             forwardBatchId: forwardBatchId as string,
-            forwardBatchOrder: forwardMessages.length + index
+            forwardBatchOrder: item.forwardBatchOrder
           });
 
           const didSend = await sendMessageChat({
             topicId,
-            text: part,
+            text: item.text,
             replyMessageId,
-            taggedUserIds,
+            forwardMessageId: item.forwardMessageId,
+            taggedUserIds: item.kind === 'text' ? taggedUserIds : undefined,
             ex
           });
 
@@ -1553,9 +1534,12 @@ export function useMessageSender(
             queuedMessageCount += 1;
             queuePendingTextMessage({
               topicId,
-              text: part,
+              text: item.text,
               replyMessageId,
-              taggedUserIds,
+              forwardMessageIds: item.forwardMessageId
+                ? [item.forwardMessageId]
+                : [],
+              taggedUserIds: item.kind === 'text' ? taggedUserIds : undefined,
               ex
             });
           } else {
@@ -1572,39 +1556,6 @@ export function useMessageSender(
       }
 
       for (const part of parts) {
-        if (hasForwardMessages) {
-          for (const forwardMessage of forwardMessages) {
-            const ex = createMessageEx({
-              clientId: generateUUID(),
-              ...replyQuoteEx
-            });
-            const didSend = await sendMessageChat({
-              topicId,
-              text: part,
-              replyMessageId,
-              forwardMessageId: forwardMessage.id,
-              taggedUserIds,
-              ex
-            });
-
-            if (!didSend) {
-              queuedMessageCount += 1;
-              queuePendingTextMessage({
-                topicId,
-                text: part,
-                replyMessageId,
-                replyMessage: state.replyMessage,
-                forwardMessageIds: [forwardMessage.id],
-                taggedUserIds,
-                ex
-              });
-            } else {
-              sentMessageCount += 1;
-            }
-          }
-          continue;
-        }
-
         const clientId = generateUUID();
         const ex = createMessageEx({
           clientId,
