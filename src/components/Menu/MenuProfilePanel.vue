@@ -45,6 +45,7 @@
           <Toggle
             v-model="isDarkTheme"
             @click.stop
+            theme="minor"
             @change="themeStore.setTheme"
           />
         </div>

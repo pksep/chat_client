@@ -133,7 +133,7 @@
   gap: 25px;
 
   & .call-modal__control-button {
-    background-color: var(--text-link);
+    background-color: var(--action-primary-bg);
     padding: 8px;
     cursor: pointer;
 
@@ -142,11 +142,17 @@
       background-color: var(--action-primary-bg);
     }
 
+    &.call-modal__control-button_alter {
+      color: var(--chat-primary);
+      background-color: var(--action-secondary-pressed-bg);
+    }
+
     &.call-modal__control-button__inactive:disabled {
       color: var(--text-light-color);
     }
   }
 }
+
 
 
 

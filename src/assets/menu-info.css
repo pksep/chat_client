@@ -128,18 +128,53 @@ section.menu-info__info-section {
   padding-block: 15px 0;
 }
 
+.menu-info__user-header-wrapper {
+  padding-left: 10px;
+  display: flex;
+}
+
 .menu-info__user-header {
+  position: relative;
+  padding: 0 0 7.5px 0;
   display: flex;
   margin: 0;
   align-items: center;
+  transition: all 0.2s ease;
+
+
 }
+
+.menu-info__user-header::after {
+
+  content: "";
+  position: absolute;
+  left: 0;
+  top: calc(100% + 1px);
+  width: 100%;
+  height: 1px;
+  background-color: transparent;
+
+  transition: all 0.2s ease;
+}
+
+.tabs__navigation-content {
+  padding: 0 10px;
+}
+
+.menu-info__user-header.active {
+  color: var(--text-primary);
+}
+
+.menu-info__user-header.active::after {
+  background-color: var(--text-primary);
+}
+
 
 .menu-info__user-count {
   display: grid;
   margin-left: 4px;
   place-content: center;
   border-radius: 50%;
-  background-color: var(--blue12);
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;

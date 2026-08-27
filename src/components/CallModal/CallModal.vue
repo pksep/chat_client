@@ -364,7 +364,7 @@
 
             <button
               v-if="isMobile && isBusyCallNotice"
-              class="call-modal__control-button call-modal__control-button__inactive"
+              class="call-modal__control-button call-modal__control-button_alter call-modal__control-button__inactive"
               type="button"
               disabled
               title="Демонстрация экрана"
@@ -377,7 +377,7 @@
               v-if="!isMobile && !Capacitor.isNativePlatform()"
               class="call-modal__control-button"
               :class="{
-                'call-modal__control-button__inactive':
+                'call-modal__control-button__inactive call-modal__control-button_alter':
                   !liveKitState.isScreenSharingActive
               }"
               :disabled="isBusyNoticeVisible"
@@ -405,7 +405,7 @@
               size="small"
             >
               <button
-                class="call-modal__control-button"
+                class="call-modal__control-button call-modal__control-button_alter"
                 :class="{
                   'call-modal__control-button__inactive':
                     !isAnySummaryRecording,

@@ -29,15 +29,33 @@
 
     <div v-else class="menu-info__modal-wrapper">
       <Tabs :tabCount="2" :defaultActiveTabId="2">
-        <template #header1>
-          <span class="menu-info__user-header">
-            Участники
-            <div class="menu-info__user-count">
-              {{ selectedContacts.length }}
-            </div>
-          </span>
+        <template #header1="{ active }">
+          <div class="menu-info__user-header-wrapper">
+            <span
+              class="menu-info__user-header"
+              :class="{
+                active
+              }"
+            >
+              Участники
+              <div class="menu-info__user-count">
+                {{ selectedContacts.length }}
+              </div>
+            </span>
+          </div>
         </template>
-        <template #header2> Информация </template>
+        <template #header2="{ active }">
+          <div class="menu-info__user-header-wrapper">
+            <span
+              class="menu-info__user-header"
+              :class="{
+                active
+              }"
+            >
+              Информация
+            </span>
+          </div>
+        </template>
         <template #tab1>
           <ContactListInModal
             :contacts="filteredSelectedContacts"
