@@ -17,7 +17,7 @@
           Назад
         </button>
 
-        <ChatIcon />
+        <ChatIcon class="authorization-screen__logo" />
 
         <h1 class="authorization-screen__title">Вход в ЧАТ</h1>
         <p
