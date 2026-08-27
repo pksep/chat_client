@@ -65,7 +65,6 @@ p.chat__nothing-paragraph {
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
   position: relative;
-  background: var(--surface-main);
   border-radius: 18px 0 0 18px;
 }
 

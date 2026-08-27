@@ -168,7 +168,7 @@
           <Button
             v-for="option in getHeaderContextMenuOptions"
             :key="option.value"
-            :type="ButtonTypeEnum.ghost"
+            :type="ButtonTypeEnum.popover"
             :size="SizesEnum.small"
             :style="option.style"
             :class="[

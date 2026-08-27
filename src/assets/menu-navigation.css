@@ -38,8 +38,8 @@
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: var(--border-hover);
-  color: var(--text-link);
+  background: var(--action-secondary-pressed-bg);
+  color: var(--action-primary-bg);
   transition:
     all 0.2s ease
 }

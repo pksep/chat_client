@@ -277,7 +277,7 @@
         @unmount-close="() => closeActivePopover(topic.id)"
       >
         <Button
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click.stop="() => handlePin(topic)"
           :data-testid="`${props.dataTestid}-ContactList-PinButton${index + 1}`"
@@ -289,7 +289,7 @@
           <template v-else> <UnpinIcon /> Открепить </template>
         </Button>
         <Button
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click.stop="() => handleReadState(topic)"
           :data-testid="`${props.dataTestid}-ContactList-ReadStateButton${index + 1}`"
@@ -308,7 +308,7 @@
           >
         </Button>
         <Button
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click="() => handleMute(topic)"
           :data-testid="`${props.dataTestid}-ContactList-NotificationButton${index + 1}`"

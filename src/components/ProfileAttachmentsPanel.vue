@@ -179,7 +179,7 @@
         @unmount-close="closeAttachmentContextMenu"
       >
         <Button
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           :data-testid="`${props.dataTestid}-ShowInChatButton`"
           @click.stop="handleShowInChat"
@@ -189,7 +189,7 @@
         </Button>
 
         <Button
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           :data-testid="`${props.dataTestid}-ForwardButton`"
           @click.stop="handleOpenForwardModal"
@@ -201,7 +201,7 @@
         <Button
           v-if="canDeleteContextMessage"
           class="red-context-button"
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           :data-testid="`${props.dataTestid}-DeleteButton`"
           @click.stop="handleOpenDeleteModal"
@@ -1362,7 +1362,7 @@ const getMediaLabel = (media: IMedia): string =>
   min-width: 0;
   min-height: 33px;
   padding: 0 10px;
-  border: 1px solid var(--border-grey);
+  border: 1px solid var(--border-table);
   border-radius: 17px;
   background: var(--white);
   color: var(--text-primary);
@@ -1531,7 +1531,7 @@ const getMediaLabel = (media: IMedia): string =>
   position: fixed;
   z-index: 999;
   padding: 4px 10px;
-  border: 1px solid var(--border-grey);
+  border: 1px solid var(--border-table);
   border-radius: 12px;
   background: rgb(255 255 255 / 92%);
   box-shadow: 0 2px 8px rgb(0 0 0 / 8%);

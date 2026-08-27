@@ -139,6 +139,7 @@
   gap: 10px;
 }
 
+.calls-page__content .calls-page__search-shell .search-yui-kit__input,
 .chats-toolbar .chats-toolbar__controls .search-yui-kit__input {
   color: var(--text-disabled);
   background-color: var(--table-surface-search);
