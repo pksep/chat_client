@@ -87,6 +87,40 @@ const formatChanges = (
 
 const quotedValue = (value: unknown) => `«${formatValue(value, 'не указано')}»`;
 
+/** Формирует ссылку на ERP-сущность только из понятных пользователю полей. */
+const entityReference = (
+  name: unknown,
+  designation: unknown,
+  fallback: string
+) => {
+  const hasName = typeof name === 'string' && name.trim().length > 0;
+  const hasDesignation =
+    typeof designation === 'string' && designation.trim().length > 0;
+
+  if (hasName && hasDesignation) {
+    return `${quotedValue(name)} с обозначением ${quotedValue(designation)}`;
+  }
+  if (hasName) return quotedValue(name);
+  if (hasDesignation) return `с обозначением ${quotedValue(designation)}`;
+  return fallback;
+};
+
+/** Возвращает название родительской сущности в формулировке подтверждения. */
+const specificationParentLabel = (value: unknown) => {
+  if (value === 'product') return 'изделия';
+  if (value === 'cbed') return 'сборочной единицы';
+  if (value === 'detal') return 'детали';
+  return 'сущности ERP';
+};
+
+/** Возвращает название раздела спецификации без внутренних ключей ERP. */
+const specificationItemLabel = (value: unknown) => {
+  if (value === 'listCbed') return 'сборочную единицу';
+  if (value === 'listDetal') return 'деталь';
+  if (value === 'listPokDet') return 'покупной материал';
+  return 'материал';
+};
+
 const contentPreviewValue = (value: unknown) => {
   const plainText = String(value ?? '')
     .replace(/<\s*br\s*\/?>/gi, ' ')
@@ -130,6 +164,13 @@ const APPROVAL_ACTION_LABELS: Record<string, string> = {
   erp_actions_erp_detail_create_and_add_to_cbed:
     'создание детали и изменение спецификации сборки',
   erp_actions_erp_detail_archive: 'перенос детали в архив',
+  erp_actions_erp_specification_item_add:
+    'добавление позиции в спецификацию ERP',
+  erp_actions_erp_specification_item_update:
+    'изменение позиции спецификации ERP',
+  erp_actions_erp_specification_item_move: 'изменение порядка спецификации ERP',
+  erp_actions_erp_specification_item_remove:
+    'удаление позиции из спецификации ERP',
   erp_actions_erp_entity_file_attach: 'прикрепление файла к сущности ERP',
   erp_actions_erp_entity_file_detach: 'открепление файла от сущности ERP',
   erp_actions_erp_entity_file_main_set: 'изменение главного файла ERP',
@@ -184,6 +225,69 @@ const buildApprovalQuestion = (approval: PendingToolApproval): string => {
         ? ` с обозначением ${quotedValue(args.detailDesignation)}`
         : '';
       return `Перенести деталь ${quotedValue(args.detailName)}${designation} в архив? Связанные спецификации, комплекты и металлообработка будут актуализированы.`;
+    }
+    case 'erp_actions_erp_specification_item_add': {
+      const parent = entityReference(
+        args.parentName,
+        args.parentDesignation,
+        'без указанного названия'
+      );
+      const item = entityReference(
+        args.itemName,
+        args.itemDesignation,
+        'без названия'
+      );
+      const position = args.position
+        ? ` на позицию ${formatValue(args.position, 'не указана')}`
+        : '';
+      return `Добавить ${specificationItemLabel(args.section)} ${item} в спецификацию ${specificationParentLabel(args.parentType)} ${parent} в количестве ${formatValue(args.quantity, 'не указано')}${position}?`;
+    }
+    case 'erp_actions_erp_specification_item_update': {
+      const parent = entityReference(
+        args.parentName,
+        args.parentDesignation,
+        'без указанного названия'
+      );
+      const item = entityReference(
+        args.itemName,
+        args.itemDesignation,
+        'без названия'
+      );
+      const changes = [
+        args.quantity !== undefined
+          ? `количество — ${formatValue(args.quantity, 'не указано')}`
+          : null,
+        args.measureId !== undefined ? 'изменить единицу измерения' : null
+      ]
+        .filter(Boolean)
+        .join('; ');
+      return `Изменить ${specificationItemLabel(args.section)} ${item} в спецификации ${specificationParentLabel(args.parentType)} ${parent}: ${changes || 'указанные параметры'}?`;
+    }
+    case 'erp_actions_erp_specification_item_move': {
+      const parent = entityReference(
+        args.parentName,
+        args.parentDesignation,
+        'без указанного названия'
+      );
+      const item = entityReference(
+        args.itemName,
+        args.itemDesignation,
+        'без названия'
+      );
+      return `Переместить ${specificationItemLabel(args.section)} ${item} на позицию ${formatValue(args.position, 'не указана')} в спецификации ${specificationParentLabel(args.parentType)} ${parent}?`;
+    }
+    case 'erp_actions_erp_specification_item_remove': {
+      const parent = entityReference(
+        args.parentName,
+        args.parentDesignation,
+        'без указанного названия'
+      );
+      const item = entityReference(
+        args.itemName,
+        args.itemDesignation,
+        'без названия'
+      );
+      return `Убрать ${specificationItemLabel(args.section)} ${item} из спецификации ${specificationParentLabel(args.parentType)} ${parent}? Сама сущность останется в ERP.`;
     }
     case 'erp_actions_erp_attachment_upload_and_attach': {
       const main = args.makeMain
