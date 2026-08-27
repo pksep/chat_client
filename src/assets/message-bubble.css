@@ -183,8 +183,8 @@
   height: 17px;
   padding: 1px 5px;
   border-radius: 10px;
-  background: var(--action-primary-bg);
-  color: var(--link-color);
+  background: var(--action-secondary-pressed-bg);
+  color: var(--text-link);
   font-size: 12px;
   font-weight: 600;
   line-height: 15px;
@@ -1665,7 +1665,7 @@ div.message-content__file {
     }
   }
 
-  .chat__mobile-route-view--call > .chat__input {
+  .chat__mobile-route-view--call>.chat__input {
     position: static;
     bottom: auto;
     z-index: auto;

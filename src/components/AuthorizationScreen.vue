@@ -16,11 +16,9 @@
           <Icon :name="IconNameEnum.leftBig" />
           Назад
         </button>
-        <img
-          class="authorization-screen__logo"
-          src="/images/sep-chat-logo.svg?v=20260731"
-          alt="logotype of Chat Logo"
-        />
+
+        <ChatIcon />
+
         <h1 class="authorization-screen__title">Вход в ЧАТ</h1>
         <p
           v-if="!props.isCredentialsStep"
@@ -239,6 +237,7 @@ import { useQrAuth } from '../composables/useQrAuth';
 import { showErrorNotification } from '../composables/useNotifications';
 import { getUsersList } from '../composables/useUsers';
 import { isBotUser } from '../utils/bot';
+import ChatIcon from '../components/UI/Icons/ChatIcon.vue';
 
 interface IAuthorizationScreenProps {
   url: string;
