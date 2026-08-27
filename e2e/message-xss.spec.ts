@@ -16,7 +16,21 @@ test.describe('message XSS protection', () => {
         css: '<p style="background:url(javascript:window.__messageXss=4)">css</p>',
         mutation:
           '<math><mtext><table><mglyph><style><!--</style><img title="--><img src=x onerror=window.__messageXss=5>"></mglyph></table></mtext></math>',
-        safe: '<p><strong>Важно</strong><br><span class="link" data-span data-user-id="550e8400-e29b-41d4-a716-446655440000">@User</span> <a class="link" href="https://example.com" target="_blank">example</a></p>'
+        encodedTab: '<a href="java&#x09;script:window.__messageXss=6">bad</a>',
+        encodedEntity:
+          '<a href="jav&#x61;script:window.__messageXss=7">bad</a>',
+        dataUrl:
+          '<a href="data:text/html,<script>window.__messageXss=8</script>">bad</a>',
+        formAction:
+          '<form><button formaction="javascript:window.__messageXss=9">bad</button></form>',
+        iframe:
+          '<iframe srcdoc="<script>window.__messageXss=10</script>"></iframe>',
+        object: '<object data="javascript:window.__messageXss=11"></object>',
+        clobber:
+          '<p id="attributes" name="attributes" style="background:url(javascript:window.__messageXss=12)">text</p>',
+        invalidMention:
+          '<span data-user-id="invalid" onclick="window.__messageXss=13">@bad</span>',
+        safe: '<p>🙂🚀 <strong>Важно</strong><b>bold</b><em>em</em><i>italic</i><u>underline</u><s>s</s><strike>strike</strike><br><span class="link message-content__text-mention" data-span data-user-id="550e8400-e29b-41d4-a716-446655440000" contenteditable="false">@User</span> <a class="link" href="https://example.com" target="_blank">example</a><a href="mailto:user@example.com">mail</a><a href="tel:+123">phone</a><a href="/relative">relative</a><ul><li>one</li></ul><ol start="3"><li>three</li></ol><code>code</code><hr></p>'
       };
       const sanitized: Record<string, string> = Object.fromEntries(
         Object.entries(vectors).map(([key, value]) => [
@@ -38,13 +52,39 @@ test.describe('message XSS protection', () => {
 
     expect(result.executed).toBe(0);
     expect(Object.values(result.sanitized).join('')).not.toMatch(
-      /onerror|onload|javascript:|style=|<svg|<math|<img/i
+      /onerror|onload|onclick|javascript:|data:text\/html|style=|srcdoc|formaction|<script|<svg|<math|<img|<form|<button|<iframe|<object|\sid=|\sname=/i
     );
+    expect(result.sanitized.safe).toContain('🙂🚀');
     expect(result.sanitized.safe).toContain('<strong>Важно</strong>');
+    for (const tag of [
+      'p',
+      'strong',
+      'b',
+      'em',
+      'i',
+      'u',
+      's',
+      'strike',
+      'br',
+      'span',
+      'a',
+      'ul',
+      'li',
+      'ol',
+      'code',
+      'hr'
+    ]) {
+      expect(result.sanitized.safe).toContain(`<${tag}`);
+    }
     expect(result.sanitized.safe).toContain(
       'data-user-id="550e8400-e29b-41d4-a716-446655440000"'
     );
     expect(result.sanitized.safe).toContain('rel="noopener noreferrer"');
+    expect(result.sanitized.safe).toContain('href="mailto:user@example.com"');
+    expect(result.sanitized.safe).toContain('href="tel:+123"');
+    expect(result.sanitized.safe).toContain('href="/relative"');
+    expect(result.sanitized.safe).not.toContain('contenteditable');
+    expect(result.sanitized.invalidMention).not.toContain('data-user-id');
   });
 
   test('CSP blocks inline scripts', async ({ page }) => {
