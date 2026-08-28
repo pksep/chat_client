@@ -1,7 +1,7 @@
 import { ref, type Ref } from 'vue';
 import { MastraClient, RequestContext } from '@mastra/client-js';
 import { saveMessages, getOrCreateChatHistory } from './useChatDb';
-import { AIMessage } from '../types/messages';
+import { AIMessage, type AIMessageReference } from '../types/messages';
 import { getConfig } from './useConfig';
 import { generateUUID } from '../utils/generateUUID';
 import { getAuthToken } from '../composables/useLogin';
@@ -34,7 +34,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
       messages: ref<Message[]>([]),
       sendMessage: async () => {},
       resolveToolApproval: async () => {},
-      clearMessages: () => {},
+      clearMessages: async () => {},
+      toggleMessagePin: async () => {},
+      deleteMessages: async () => {},
+      editMessageAndResend: async () => {},
       isInitializing: ref(false),
       pendingApproval: ref<PendingToolApproval | null>(null)
     };
@@ -166,7 +169,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
     abortSignal?: AbortSignal,
     approvalDecisionOverride: Exclude<ApprovalDecision, null> | null = null,
     appendUserMessage = true,
-    attachments: AiAttachmentReference[] = []
+    attachments: AiAttachmentReference[] = [],
+    replyTo?: AIMessageReference
   ) => {
     if (!input.trim()) return;
 
@@ -188,7 +192,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
       const userMessage: Message = {
         role: 'user',
         content: input,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        ...(replyTo ? { replyTo } : {})
       };
       messages.value = [...messages.value, userMessage];
     }
@@ -212,11 +217,17 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
     const requestMessages = messages.value
       .filter(message => !message.loading && message.content.trim())
-      .map(message =>
-        message.role === 'user'
-          ? { role: 'user' as const, content: message.content }
-          : { role: 'assistant' as const, content: message.content }
-      );
+      .map(message => {
+        const content = message.replyTo
+          ? `${message.content}\n\nКонтекст ответа:\n${
+              message.replyTo.role === 'user' ? 'Пользователь' : 'Ассистент'
+            }: ${message.replyTo.content}`
+          : message.content;
+
+        return message.role === 'user'
+          ? { role: 'user' as const, content }
+          : { role: 'assistant' as const, content };
+      });
 
     if (requestAttachments.length > 0) {
       const lastUserMessageIndex = requestMessages.findLastIndex(
@@ -517,8 +528,18 @@ const useMastra = (options?: UseMastraOptions | false) => {
     input: string,
     onFinish?: () => void,
     abortSignal?: AbortSignal,
-    attachments: AiAttachmentReference[] = []
-  ) => submitMessage(input, onFinish, abortSignal, null, true, attachments);
+    attachments: AiAttachmentReference[] = [],
+    replyTo?: AIMessageReference
+  ) =>
+    submitMessage(
+      input,
+      onFinish,
+      abortSignal,
+      null,
+      true,
+      attachments,
+      replyTo
+    );
 
   const resolveToolApproval = async (
     decision: Exclude<ApprovalDecision, null>,
@@ -532,12 +553,60 @@ const useMastra = (options?: UseMastraOptions | false) => {
     return submitMessage(command, onFinish, abortSignal, decision, false);
   };
 
-  const clearMessages = () => {
+  const clearMessages = async (): Promise<void> => {
     if (!chatId) return;
+    if (isInitializing.value) await initializationPromise;
     pendingApproval.value = null;
     activeAttachments = [];
     messages.value = [];
-    saveMessages(chatId, messages.value);
+    await saveMessages(chatId, messages.value);
+  };
+
+  /** Сохраняет новое состояние локальной истории после действий над AI-сообщениями. */
+  const replaceMessages = async (nextMessages: Message[]): Promise<void> => {
+    if (!chatId) return;
+    if (isInitializing.value) await initializationPromise;
+
+    messages.value = nextMessages;
+    await saveMessages(chatId, messages.value);
+  };
+
+  /** Меняет признак закрепления выбранного AI-сообщения. */
+  const toggleMessagePin = async (messageIndex: number): Promise<void> => {
+    const message = messages.value[messageIndex];
+    if (!message) return;
+
+    const nextMessages = [...messages.value];
+    nextMessages[messageIndex] = {
+      ...message,
+      pinned: !message.pinned
+    };
+    await replaceMessages(nextMessages);
+  };
+
+  /** Удаляет выбранные сообщения только из текущей локальной AI-истории. */
+  const deleteMessages = async (messageIndexes: number[]): Promise<void> => {
+    const indexes = new Set(messageIndexes);
+    if (indexes.size === 0) return;
+
+    await replaceMessages(
+      messages.value.filter((_, index) => !indexes.has(index))
+    );
+  };
+
+  /** Заменяет пользовательский запрос и заново строит продолжение диалога. */
+  const editMessageAndResend = async (
+    messageIndex: number,
+    input: string,
+    replyTo?: AIMessageReference
+  ): Promise<void> => {
+    const message = messages.value[messageIndex];
+    if (!message || message.role !== 'user' || !input.trim()) return;
+
+    pendingApproval.value = null;
+    activeAttachments = [];
+    await replaceMessages(messages.value.slice(0, messageIndex));
+    await submitMessage(input, undefined, undefined, null, true, [], replyTo);
   };
 
   return {
@@ -545,6 +614,9 @@ const useMastra = (options?: UseMastraOptions | false) => {
     sendMessage,
     resolveToolApproval,
     clearMessages,
+    toggleMessagePin,
+    deleteMessages,
+    editMessageAndResend,
     isInitializing,
     pendingApproval
   };

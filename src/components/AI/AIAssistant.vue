@@ -67,11 +67,45 @@
           :key="message.id"
           :class="[
             'ai-assistant__message',
-            `ai-assistant__message--${message.role}`
+            `ai-assistant__message--${message.role}`,
+            {
+              'ai-assistant__message--selection-active': isSelectionMode,
+              'ai-assistant__message--selected': isMessageSelected(message.id)
+            }
           ]"
+          :data-message-id="message.id"
+          @click="handleMessageSelectionClick(message, $event)"
+          @contextmenu="handleMessageContextMenu(message, $event)"
         >
+          <div
+            :class="[
+              'ai-assistant__message-selection',
+              {
+                'ai-assistant__message-selection--hidden': !isSelectionMode
+              }
+            ]"
+          >
+            <Checkbox
+              v-if="isSelectionMode"
+              :model-value="isMessageSelected(message.id)"
+              :circular="CheckboxCircularEnum.circled"
+              @update:model-value="toggleMessageSelection(message.id)"
+              @click.stop
+            />
+          </div>
           <div class="ai-assistant__message-content">
-            <p>{{ message.text }}</p>
+            <div class="ai-assistant__message-body">
+              <div v-if="message.replyTo" class="ai-assistant__message-reply">
+                <strong>{{ getMessageAuthor(message.replyTo.role) }}</strong>
+                <span>{{ message.replyTo.content }}</span>
+              </div>
+              <p>{{ message.text }}</p>
+            </div>
+            <PinIcon
+              v-if="message.pinned"
+              class="ai-assistant__message-pin"
+              aria-label="Закреплено"
+            />
             <time>{{ message.time }}</time>
             <Icon
               v-if="message.role === 'user'"
@@ -105,6 +139,19 @@
               }}
             </span>
           </div>
+          <Teleport v-if="isMessageContextOpen(message.id)" to="body">
+            <AIMessageContextMenu
+              :visible="isMessageContextOpen(message.id)"
+              :position="messageContextPosition"
+              :message="message"
+              :selected-text="contextMessage?.selectedText"
+              :selection-mode="isSelectionMode"
+              :selected="isMessageSelected(message.id)"
+              :can-delete-selection="canDeleteSelectedMessages"
+              @close="closeMessageContextMenu(message.id)"
+              @action="handleMessageAction($event, message)"
+            />
+          </Teleport>
         </article>
         <div v-if="isThinking" class="ai-assistant__thinking">
           Думает <span>•••</span>
@@ -113,6 +160,48 @@
     </div>
 
     <div
+      v-if="isSelectionMode"
+      class="selected-messages ai-assistant__selected-messages"
+    >
+      <div class="selected-messages-content">
+        <Button
+          v-if="canDeleteSelectedMessages"
+          class="selected-messages-content__action selected-messages-content__action--danger"
+          :type="ButtonTypeEnum.outline"
+          :size="SizesEnum.small"
+          @click="requestDeleteSelectedMessages"
+        >
+          <Icon :name="IconNameEnum.deleteSmall" :width="16" :height="16" />
+          <span class="selected-messages-content__action__title">Удалить</span>
+        </Button>
+        <div class="selected-messages-content__title">
+          Выбрано: {{ selectedMessages.length }}
+        </div>
+        <Button
+          class="selected-messages-content__action"
+          :type="ButtonTypeEnum.outline"
+          :size="SizesEnum.small"
+          @click="openSelectedMessagesForward"
+        >
+          <ForwardIcon :width="16" :height="16" />
+          <span class="selected-messages-content__action__title"
+            >Переслать</span
+          >
+        </Button>
+        <Button
+          class="selected-messages-content__action"
+          :type="ButtonTypeEnum.outline"
+          :size="SizesEnum.small"
+          aria-label="Отменить выбор"
+          @click="clearMessageSelection"
+        >
+          <Icon :name="IconNameEnum.crossLarge" />
+        </Button>
+      </div>
+    </div>
+
+    <div
+      v-if="!isSelectionMode"
       :class="[
         'chat__input emoji-font-host ai-assistant__composer',
         {
@@ -148,6 +237,38 @@
           :disable-send-on-enter="isThinking"
           @unmount-send="handleSend"
         >
+          <template v-if="editingMessage" #action>
+            <div class="chat__input__action">
+              <EditIcon />
+              <div class="chat__input__action__blog">
+                <h5>Редактирование</h5>
+                <p>{{ editingMessage.text }}</p>
+              </div>
+              <Button
+                :type="ButtonTypeEnum.ghost"
+                :size="SizesEnum.little"
+                @click="cancelMessageEdit"
+              >
+                <Icon :name="IconNameEnum.crossLarge" />
+              </Button>
+            </div>
+          </template>
+          <template v-else-if="replyMessage" #action>
+            <div class="chat__input__action">
+              <ReplyIcon />
+              <div class="chat__input__action__blog">
+                <h5>Ответ для {{ getMessageAuthor(replyMessage.role) }}</h5>
+                <p>{{ replyMessage.text }}</p>
+              </div>
+              <Button
+                :type="ButtonTypeEnum.ghost"
+                :size="SizesEnum.little"
+                @click="replyMessage = null"
+              >
+                <Icon :name="IconNameEnum.crossLarge" />
+              </Button>
+            </div>
+          </template>
           <template #mobile-trailing-action>
             <Button
               :type="ButtonTypeEnum.ghost"
@@ -236,6 +357,25 @@
       </div>
     </div>
   </section>
+
+  <ForwardModal
+    :open="forwardModalOpen"
+    data-testid="AI-MessageForward"
+    @unmount-close="closeForwardModal"
+    @unmount-select-topic="handleForwardTopic"
+  />
+
+  <ConfirmModal
+    :open="pendingDeleteMessageIds.length > 0"
+    :title="
+      pendingDeleteMessageIds.length > 1
+        ? 'Удалить сообщения'
+        : 'Удалить сообщение'
+    "
+    description="Удалить выбранные сообщения из истории AI-чата?"
+    @unmount-close="pendingDeleteMessageIds = []"
+    @unmount-confirm="confirmDeleteMessages"
+  />
 </template>
 
 <script setup lang="ts">
@@ -243,6 +383,8 @@ import { computed, nextTick, ref, watch } from 'vue';
 import {
   Button,
   ButtonTypeEnum,
+  Checkbox,
+  CheckboxCircularEnum,
   ContentEditor,
   Icon,
   IconNameEnum,
@@ -253,10 +395,24 @@ import VoiceMessageIcon from './VoiceMessageIcon.vue';
 import ChatSummaryIcon from './ChatSummaryIcon.vue';
 import TasksSuggestionIcon from './TasksSuggestionIcon.vue';
 import PermissionHandIcon from './PermissionHandIcon.vue';
-import { useAiAssistant } from '../../composables/useAiAssistant';
+import AIMessageContextMenu from './AIMessageContextMenu.vue';
+import {
+  type AiAssistantMessage,
+  useAiAssistant
+} from '../../composables/useAiAssistant';
 import { navigateToAI, useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
+import { useContextMenu } from '../../composables/useContextMenu';
+import { openMessageDraft } from '../../composables/useMessageDraftTransfer';
+import { showErrorNotification } from '../../composables/useNotifications';
 import { stripHtml } from '../../utils/stripHtml';
+import type { ITopic } from '../interfaces/interfaces';
+import ForwardModal from '../Messages/ForwardModal.vue';
+import ConfirmModal from '../UI/ConfirmModal.vue';
+import EditIcon from '../UI/EditIcon.vue';
+import ForwardIcon from '../UI/ForwardIcon.vue';
+import PinIcon from '../UI/PinIcon.vue';
+import ReplyIcon from '../UI/ReplyIcon.vue';
 
 interface IContentEditorSendPayload {
   content?: string;
@@ -278,6 +434,9 @@ const {
   sendSuggestedPrompt,
   startNewTask,
   updateApproval,
+  toggleMessagePin,
+  deleteMessages,
+  editMessageAndResend,
   clearAll
 } = useAiAssistant();
 
@@ -286,6 +445,45 @@ const draft = ref('');
 const scrollRef = ref<HTMLElement | null>(null);
 const isVoiceMuted = ref(false);
 const isPermissionMenuOpen = ref(false);
+const contextMessage = ref<{
+  message: AiAssistantMessage;
+  selectedText: string;
+} | null>(null);
+const selectedMessageIds = ref<Set<string>>(new Set());
+const replyMessage = ref<AiAssistantMessage | null>(null);
+const editingMessage = ref<AiAssistantMessage | null>(null);
+const forwardModalOpen = ref(false);
+const forwardMessages = ref<AiAssistantMessage[]>([]);
+const pendingDeleteMessageIds = ref<string[]>([]);
+const {
+  isOpen: messageContextOpen,
+  position: messageContextPosition,
+  openActivePopover: openMessageContextPopover,
+  closeActivePopover: closeMessageContextPopover
+} = useContextMenu();
+
+type AIMessageMenuAction =
+  | 'reply'
+  | 'forward'
+  | 'edit'
+  | 'togglePin'
+  | 'select'
+  | 'delete'
+  | 'forwardSelection'
+  | 'cancelSelection'
+  | 'deleteSelection';
+
+const selectedMessages = computed(() =>
+  (activeSession.value?.messages || []).filter(message =>
+    selectedMessageIds.value.has(message.id)
+  )
+);
+const isSelectionMode = computed(() => selectedMessages.value.length > 0);
+const canDeleteSelectedMessages = computed(
+  () =>
+    selectedMessages.value.length > 0 &&
+    selectedMessages.value.every(message => message.role === 'user')
+);
 const permissionLabel = computed(() =>
   permissionMode.value === 'ask'
     ? 'Подтверждать каждое действие'
@@ -298,6 +496,191 @@ const conversationDate = computed(() =>
   }).format(new Date())
 );
 
+/** Возвращает понятное имя автора для служебных подписей. */
+const getMessageAuthor = (role: AiAssistantMessage['role']): string =>
+  role === 'user' ? 'Вы' : 'СЭПи';
+
+/** Проверяет, открыто ли контекстное меню конкретного AI-сообщения. */
+const isMessageContextOpen = (messageId: string): boolean =>
+  Boolean(messageContextOpen.value[`ai-message:${messageId}`]);
+
+/** Закрывает контекстное меню AI-сообщения и очищает выбранный фрагмент. */
+const closeMessageContextMenu = (messageId?: string): void => {
+  closeMessageContextPopover(messageId ? `ai-message:${messageId}` : undefined);
+  contextMessage.value = null;
+};
+
+/** Возвращает выделенный текст, только если он находится внутри сообщения. */
+const getSelectedMessageText = (element: HTMLElement): string => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return '';
+
+  const range = selection.getRangeAt(0);
+  if (
+    !element.contains(range.startContainer) ||
+    !element.contains(range.endContainer)
+  ) {
+    return '';
+  }
+
+  return selection.toString().trim();
+};
+
+/** Открывает меню сообщения и запоминает выделенный пользователем фрагмент. */
+const handleMessageContextMenu = (
+  message: AiAssistantMessage,
+  event: MouseEvent
+): void => {
+  if (isSelectionMode.value && !isMessageSelected(message.id)) {
+    event.preventDefault();
+    return;
+  }
+
+  const element = event.currentTarget as HTMLElement;
+  contextMessage.value = {
+    message,
+    selectedText: getSelectedMessageText(element)
+  };
+  openMessageContextPopover(`ai-message:${message.id}`, event);
+};
+
+/** Проверяет, выбрано ли сообщение в режиме групповых действий. */
+const isMessageSelected = (messageId: string): boolean =>
+  selectedMessageIds.value.has(messageId);
+
+/** Добавляет или удаляет сообщение из текущего выбора. */
+const toggleMessageSelection = (messageId: string): void => {
+  const nextIds = new Set(selectedMessageIds.value);
+  if (nextIds.has(messageId)) nextIds.delete(messageId);
+  else nextIds.add(messageId);
+  selectedMessageIds.value = nextIds;
+};
+
+/** Обрабатывает нажатие по сообщению, когда включён групповой выбор. */
+const handleMessageSelectionClick = (
+  message: AiAssistantMessage,
+  event: MouseEvent
+): void => {
+  if (!isSelectionMode.value) return;
+  const target = event.target;
+  if (target instanceof Element && target.closest('button, a, input')) return;
+  toggleMessageSelection(message.id);
+};
+
+/** Завершает режим группового выбора AI-сообщений. */
+const clearMessageSelection = (): void => {
+  selectedMessageIds.value = new Set();
+};
+
+/** Подготавливает ответ на сообщение или выделенный фрагмент. */
+const startMessageReply = (message: AiAssistantMessage): void => {
+  replyMessage.value = {
+    ...message,
+    text: contextMessage.value?.selectedText || message.text
+  };
+  editingMessage.value = null;
+};
+
+/** Переносит пользовательский запрос в редактор для изменения и повторного запуска. */
+const startMessageEdit = (message: AiAssistantMessage): void => {
+  if (message.role !== 'user') return;
+  editingMessage.value = message;
+  replyMessage.value = null;
+  draft.value = message.text;
+};
+
+/** Отменяет редактирование AI-сообщения. */
+const cancelMessageEdit = (): void => {
+  editingMessage.value = null;
+  draft.value = '';
+};
+
+/** Открывает выбор получателя для одного AI-сообщения. */
+const openMessageForward = (message: AiAssistantMessage): void => {
+  forwardMessages.value = [
+    {
+      ...message,
+      text: contextMessage.value?.selectedText || message.text
+    }
+  ];
+  forwardModalOpen.value = true;
+};
+
+/** Открывает выбор получателя для всех выбранных AI-сообщений. */
+const openSelectedMessagesForward = (): void => {
+  if (selectedMessages.value.length === 0) return;
+  forwardMessages.value = [...selectedMessages.value];
+  forwardModalOpen.value = true;
+};
+
+/** Закрывает выбор получателя и очищает подготовленную пересылку. */
+const closeForwardModal = (): void => {
+  forwardModalOpen.value = false;
+  forwardMessages.value = [];
+};
+
+/** Формирует понятный текст пересылки без внутренних идентификаторов. */
+const formatForwardDraft = (messages: AiAssistantMessage[]): string =>
+  [
+    'Переслано из ИИ-Ассистента',
+    ...messages.map(
+      message => `${getMessageAuthor(message.role)}:\n${message.text.trim()}`
+    )
+  ].join('\n\n');
+
+/** Переносит выбранные AI-сообщения в редактор указанного обычного чата. */
+const handleForwardTopic = (topic: ITopic): void => {
+  if (forwardMessages.value.length === 0) return;
+  openMessageDraft(topic, formatForwardDraft(forwardMessages.value));
+  closeForwardModal();
+  clearMessageSelection();
+};
+
+/** Запрашивает подтверждение удаления одного пользовательского сообщения. */
+const requestDeleteMessage = (message: AiAssistantMessage): void => {
+  if (message.role === 'user') pendingDeleteMessageIds.value = [message.id];
+};
+
+/** Запрашивает подтверждение удаления выбранных пользовательских сообщений. */
+const requestDeleteSelectedMessages = (): void => {
+  if (!canDeleteSelectedMessages.value) return;
+  pendingDeleteMessageIds.value = selectedMessages.value.map(
+    message => message.id
+  );
+};
+
+/** Удаляет подтверждённые сообщения из локальной истории AI-чата. */
+const confirmDeleteMessages = async (): Promise<void> => {
+  const messageIds = [...pendingDeleteMessageIds.value];
+  pendingDeleteMessageIds.value = [];
+  try {
+    await deleteMessages(messageIds);
+    clearMessageSelection();
+  } catch (error) {
+    showErrorNotification(error);
+  }
+};
+
+/** Выполняет выбранное пользователем действие контекстного меню. */
+const handleMessageAction = async (
+  action: AIMessageMenuAction,
+  message: AiAssistantMessage
+): Promise<void> => {
+  try {
+    if (action === 'reply') startMessageReply(message);
+    else if (action === 'forward') openMessageForward(message);
+    else if (action === 'edit') startMessageEdit(message);
+    else if (action === 'togglePin') await toggleMessagePin(message.id);
+    else if (action === 'select') toggleMessageSelection(message.id);
+    else if (action === 'delete') requestDeleteMessage(message);
+    else if (action === 'forwardSelection') openSelectedMessagesForward();
+    else if (action === 'cancelSelection') clearMessageSelection();
+    else if (action === 'deleteSelection') requestDeleteSelectedMessages();
+  } catch (error) {
+    showErrorNotification(error);
+  }
+};
+
 const scrollToBottom = async (): Promise<void> => {
   await nextTick();
   if (scrollRef.value) {
@@ -305,12 +688,34 @@ const scrollToBottom = async (): Promise<void> => {
   }
 };
 
-const handleSend = (payload?: IContentEditorSendPayload): void => {
+/** Отправляет новый запрос или повторно запускает отредактированный запрос. */
+const handleSend = async (
+  payload?: IContentEditorSendPayload
+): Promise<void> => {
   const value = stripHtml(payload?.content ?? draft.value);
 
   if (!value) return;
-  void sendMessage(value);
+  const replyTo = replyMessage.value
+    ? {
+        role: replyMessage.value.role,
+        content: replyMessage.value.text
+      }
+    : undefined;
+  const editedMessage = editingMessage.value;
+
+  const request = editedMessage
+    ? editMessageAndResend(editedMessage.id, value, replyTo)
+    : sendMessage(value, replyTo);
+  void request.catch(error => {
+    showErrorNotification(error);
+    if (editedMessage) {
+      editingMessage.value = editedMessage;
+      draft.value = value;
+    }
+  });
   draft.value = '';
+  replyMessage.value = null;
+  editingMessage.value = null;
   void scrollToBottom();
 };
 
@@ -353,6 +758,14 @@ watch(
 watch([activeSessionId, activeView], ([sessionId, view]) => {
   if (route.value.type !== RouteTypes.AI) return;
   navigateToAI(view === 'chat' ? sessionId : null);
+});
+
+watch([() => activeSession.value?.id, activeView], () => {
+  closeMessageContextMenu();
+  clearMessageSelection();
+  replyMessage.value = null;
+  editingMessage.value = null;
+  pendingDeleteMessageIds.value = [];
 });
 
 watch(

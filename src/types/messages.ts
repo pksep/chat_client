@@ -1,10 +1,17 @@
 import type { Message as ChatSDKMessage } from '@pksep/zod-shared-chat';
 
+export interface AIMessageReference {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export interface AIMessage {
   role: 'user' | 'assistant';
   content: string;
   loading?: boolean;
   timestamp?: number;
+  pinned?: boolean;
+  replyTo?: AIMessageReference;
 }
 
 export interface ChatMessage extends ChatSDKMessage {

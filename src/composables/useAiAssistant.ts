@@ -8,7 +8,8 @@ import {
   type WatchStopHandle
 } from 'vue';
 import type { PendingToolApproval } from '../services/mastraApproval';
-import type { AIMessage } from '../types/messages';
+import type { AiAttachmentReference } from '../services/aiAttachments';
+import type { AIMessage, AIMessageReference } from '../types/messages';
 import { generateUUID } from '../utils/generateUUID';
 
 export type AiAssistantTab = 'chats' | 'tasks';
@@ -23,6 +24,8 @@ export interface AiAssistantMessage {
   time: string;
   showApproval?: boolean;
   approvalState?: 'approved' | 'rejected' | null;
+  pinned?: boolean;
+  replyTo?: AIMessageReference;
 }
 
 export interface AiAssistantSession {
@@ -55,14 +58,23 @@ interface MastraRuntime {
   sendMessage: (
     input: string,
     onFinish?: () => void,
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
+    attachments?: AiAttachmentReference[],
+    replyTo?: AIMessageReference
   ) => Promise<void>;
   resolveToolApproval: (
     decision: 'approve' | 'decline',
     onFinish?: () => void,
     abortSignal?: AbortSignal
   ) => Promise<void>;
-  clearMessages: () => void;
+  clearMessages: () => Promise<void>;
+  toggleMessagePin: (messageIndex: number) => Promise<void>;
+  deleteMessages: (messageIndexes: number[]) => Promise<void>;
+  editMessageAndResend: (
+    messageIndex: number,
+    input: string,
+    replyTo?: AIMessageReference
+  ) => Promise<void>;
   isInitializing: Ref<boolean>;
   pendingApproval: Ref<PendingToolApproval | null>;
 }
@@ -173,6 +185,15 @@ const getMessageId = (
   index: number
 ): string => `${sessionId}:${message.timestamp ?? 'message'}:${index}`;
 
+const getRuntimeMessageIndex = (
+  sessionId: string,
+  messageId: string,
+  runtime: MastraRuntime
+): number =>
+  runtime.messages.value.findIndex(
+    (message, index) => getMessageId(sessionId, message, index) === messageId
+  );
+
 const getSession = (sessionId: string): AiAssistantSession | null =>
   persisted.sessions.find(session => session.id === sessionId) || null;
 
@@ -198,7 +219,9 @@ const syncSession = (sessionId: string, runtime: MastraRuntime): void => {
             index === lastSourceIndex &&
             message.role === 'assistant') ||
           Boolean(approvalStates[id]),
-        approvalState: approvalStates[id] ?? null
+        approvalState: approvalStates[id] ?? null,
+        pinned: Boolean(message.pinned),
+        replyTo: message.replyTo
       }
     ];
   });
@@ -346,7 +369,10 @@ const createAutomationTask = (
   return task;
 };
 
-const sendMessage = async (rawInput: string): Promise<void> => {
+const sendMessage = async (
+  rawInput: string,
+  replyTo?: AIMessageReference
+): Promise<void> => {
   const input = rawInput.trim();
   if (!input || isThinking.value) return;
 
@@ -359,7 +385,7 @@ const sendMessage = async (rawInput: string): Promise<void> => {
   const session = activeSession.value || createSession(input);
   if (isTaskRequest) createAutomationTask(session, input);
   const runtime = await ensureRuntime(session.id);
-  await runtime.sendMessage(input);
+  await runtime.sendMessage(input, undefined, undefined, [], replyTo);
 };
 
 const sendSuggestedPrompt = async (
@@ -386,6 +412,58 @@ const updateApproval = async (
   await runtime.resolveToolApproval(
     state === 'approved' ? 'approve' : 'decline'
   );
+};
+
+/** Закрепляет или открепляет отдельное сообщение в активном AI-чате. */
+const toggleMessagePin = async (messageId: string): Promise<void> => {
+  const sessionId = activeSessionId.value;
+  if (!sessionId || isThinking.value) return;
+
+  const runtime = await ensureRuntime(sessionId);
+  const messageIndex = getRuntimeMessageIndex(sessionId, messageId, runtime);
+  if (messageIndex < 0) return;
+
+  await runtime.toggleMessagePin(messageIndex);
+  syncSession(sessionId, runtime);
+};
+
+/** Удаляет выбранные сообщения из активной AI-истории. */
+const deleteMessages = async (messageIds: string[]): Promise<void> => {
+  const sessionId = activeSessionId.value;
+  if (!sessionId || isThinking.value || messageIds.length === 0) return;
+
+  const runtime = await ensureRuntime(sessionId);
+  if (runtime.pendingApproval.value) {
+    throw new Error('Сначала подтвердите или отмените ожидающее действие.');
+  }
+  const messageIndexes = messageIds
+    .map(messageId => getRuntimeMessageIndex(sessionId, messageId, runtime))
+    .filter(index => index >= 0);
+  if (messageIndexes.length === 0) return;
+
+  await runtime.deleteMessages(messageIndexes);
+  syncSession(sessionId, runtime);
+};
+
+/** Редактирует запрос пользователя и повторно запускает AI с этого места истории. */
+const editMessageAndResend = async (
+  messageId: string,
+  rawInput: string,
+  replyTo?: AIMessageReference
+): Promise<void> => {
+  const sessionId = activeSessionId.value;
+  const input = rawInput.trim();
+  if (!sessionId || !input || isThinking.value) return;
+
+  const runtime = await ensureRuntime(sessionId);
+  if (runtime.pendingApproval.value) {
+    throw new Error('Сначала подтвердите или отмените ожидающее действие.');
+  }
+  const messageIndex = getRuntimeMessageIndex(sessionId, messageId, runtime);
+  if (messageIndex < 0) return;
+
+  await runtime.editMessageAndResend(messageIndex, input, replyTo);
+  syncSession(sessionId, runtime);
 };
 
 const toggleSessionPin = (sessionId: string): void => {
@@ -438,7 +516,7 @@ const clearAll = async (): Promise<void> => {
   if (!sessionId) return;
 
   const runtime = await ensureRuntime(sessionId);
-  runtime.clearMessages();
+  await runtime.clearMessages();
   syncSession(sessionId, runtime);
 };
 
@@ -462,6 +540,9 @@ export const useAiAssistant = () => ({
   sendMessage,
   sendSuggestedPrompt,
   updateApproval,
+  toggleMessagePin,
+  deleteMessages,
+  editMessageAndResend,
   toggleSessionPin,
   deleteSession,
   toggleTask,

@@ -528,9 +528,35 @@
 
 .ai-assistant__message {
   display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   width: fit-content;
   max-width: min(494px, 76%);
   white-space: pre-line;
+}
+
+.ai-assistant__message-selection {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  width: 30px;
+  overflow: hidden;
+  transition:
+    width 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.ai-assistant__message-selection--hidden {
+  width: 0;
+  opacity: 0;
+}
+
+.ai-assistant__message--selection-active {
+  cursor: pointer;
+}
+
+.ai-assistant__message--selected .ai-assistant__message-content {
+  outline: 2px solid var(--blue1);
+  outline-offset: 2px;
 }
 
 .ai-assistant__message--user {
@@ -542,6 +568,7 @@
 }
 
 .ai-assistant__message-content {
+  grid-column: 2;
   position: relative;
   display: flex;
   align-items: flex-end;
@@ -551,6 +578,48 @@
   border-radius: 20px;
   background: #fff;
   color: #1c1c1c;
+}
+
+.ai-assistant__message-body {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
+.ai-assistant__message-reply {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  padding: 7px 9px 7px 12px;
+  border-radius: 9px;
+  background: var(--blue9);
+  box-shadow: inset 4px 0 0 var(--blue1);
+}
+
+.ai-assistant__message-reply strong,
+.ai-assistant__message-reply span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ai-assistant__message-reply strong {
+  color: var(--blue1);
+  font-size: 13px;
+  line-height: 16px;
+}
+
+.ai-assistant__message-reply span {
+  color: var(--text-neutral-color);
+  font-size: 13px;
+  line-height: 16px;
+}
+
+.ai-assistant__message-pin {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  color: var(--blue1);
 }
 
 .ai-assistant__message--user .ai-assistant__message-content {
@@ -563,6 +632,10 @@
   margin: 0;
   font-size: 14px;
   line-height: 17px;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
 }
 
 .ai-assistant__message-content time {
@@ -582,6 +655,7 @@
 }
 
 .ai-assistant__approval {
+  grid-column: 2;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -589,6 +663,17 @@
   padding: 4px 2px 0;
   color: #7f8b9e;
   font-size: 14px;
+}
+
+.ai-assistant__selected-messages {
+  grid-row: 2;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ai-assistant__selected-messages .selected-messages-content {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 8px;
 }
 
 .ai-assistant__approval button {
