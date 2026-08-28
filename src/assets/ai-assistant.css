@@ -1181,6 +1181,13 @@
 }
 
 @media screen and (width <=480px) {
+  .ai-assistant__editor .editor-component {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .ai-assistant__editor .editor-content {
+    min-width: 0;
+  }
 
   .ai-assistant__permission-trigger--desktop,
   .ai-assistant__voice-trigger--desktop {

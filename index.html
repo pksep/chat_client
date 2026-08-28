@@ -9,93 +9,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#f8f9fd" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: http: https: ws: wss: capacitor:; img-src 'self' data: blob: http: https: file: capacitor:; media-src 'self' data: blob: http: https: file: capacitor:; font-src 'self' data: http: https:; worker-src 'self' blob:; frame-src 'self' blob: http: https:; manifest-src 'self'" />
   <title>SEP:Chat</title>
-  <script>
-    const startupUrl = new URL(window.location.href);
-    const startupPathParts = startupUrl.pathname.split('/').filter(Boolean);
-    const startupRouteType = startupPathParts[0];
-    const hasStartupTopicRoute =
-      ((startupRouteType === 'dialogs' || startupRouteType === 'group') &&
-        Boolean(startupPathParts[1])) ||
-      Boolean(
-        startupUrl.searchParams.get('dialogs') ||
-        startupUrl.searchParams.get('group')
-      );
-
-    if (hasStartupTopicRoute) {
-      document.documentElement.classList.add('startup-shell-topic-route');
-    }
-
-    window.__chatNativeStartupCleanup = (async () => {
-      const logoAssetVersion = '20260731';
-      const logoAssetVersionKey = 'chat.logo.assets.version';
-      const capacitor = window.Capacitor;
-      const isAndroidNative =
-        Boolean(capacitor?.isNativePlatform?.()) &&
-        capacitor?.getPlatform?.() === 'android';
-
-      const shouldResetLogoAssetCache =
-        window.localStorage?.getItem(logoAssetVersionKey) !==
-        logoAssetVersion;
-      if (!isAndroidNative) {
-        if (!shouldResetLogoAssetCache) {
-          return;
-        }
-
-        if ('serviceWorker' in navigator) {
-          await navigator.serviceWorker
-            .getRegistrations()
-            .then(registrations =>
-              Promise.allSettled(
-                registrations.map(registration => registration.unregister())
-              )
-            );
-        }
-
-        if ('caches' in window) {
-          await caches
-            .keys()
-            .then(cacheNames =>
-              Promise.allSettled(
-                cacheNames.map(cacheName => caches.delete(cacheName))
-              )
-            );
-        }
-
-        window.localStorage?.setItem(logoAssetVersionKey, logoAssetVersion);
-        return;
-      }
-
-      const tasks = [];
-
-      if ('serviceWorker' in navigator) {
-        tasks.push(
-          navigator.serviceWorker
-            .getRegistrations()
-            .then(registrations =>
-              Promise.allSettled(
-                registrations.map(registration => registration.unregister())
-              )
-            )
-        );
-      }
-
-      if ('caches' in window) {
-        tasks.push(
-          caches
-            .keys()
-            .then(cacheNames =>
-              Promise.allSettled(
-                cacheNames.map(cacheName => caches.delete(cacheName))
-              )
-            )
-        );
-      }
-
-      await Promise.allSettled(tasks);
-      window.localStorage?.setItem(logoAssetVersionKey, logoAssetVersion);
-    })();
-  </script>
+  <script type="module" src="/src/startup.ts"></script>
   <style>
     @import url('@pksep/yui/styles');
 
@@ -646,7 +563,7 @@
         <div class="startup-shell__nav-item"></div>
       </div>
     </div>
-    <main class="startup-shell__main">
+    <<<<<<< HEAD <main class="startup-shell__main">
       <div class="startup-shell__header">
         <div class="startup-shell__header-avatar"></div>
         <div class="startup-shell__header-profile">
@@ -688,13 +605,10 @@
           </div>
         </div>
       </div>
-    </main>
+      </main>
   </div>
   <div id="app"></div>
-  <script type="module">
-    await window.__chatNativeStartupCleanup;
-    await import('/src/main.ts');
-  </script>
+  <script type="module" src="/src/bootstrap.ts"></script>
 </body>
 
 </html>
