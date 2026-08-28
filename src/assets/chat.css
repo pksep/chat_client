@@ -1279,3 +1279,20 @@ p.chat__nothing-paragraph {
   border-radius: 15px !important;
   color: var(--text-color) !important;
 }
+
+.chat__input
+  .v3-emoji-picker
+  .v3-body
+  .v3-body-inner
+  .v3-group
+  h5 {
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.chat__input .v3-emoji-picker .v3-search input,
+.chat__input .v3-emoji-picker .v3-footer,
+.chat__input .v3-emoji-picker .v3-footer .v3-tone .v3-text {
+  font-size: 14px;
+  line-height: 17px;
+}

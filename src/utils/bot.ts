@@ -3,6 +3,7 @@ import type { ITopic, IUser } from '../components/interfaces/interfaces';
 
 export const LOCAL_BOT_TOPIC_ID_PREFIX = 'local-bot-topic-';
 export const LOCAL_BOT_USER_ID_PREFIX = 'local-bot-user-';
+export const CALL_BOT_USERNAME = 'zvonilka';
 export const DELETED_BOT_DISPLAY_NAME = 'Удаленный аккаунт';
 export const DELETED_BOT_USERNAME = 'deleted_bot';
 
@@ -131,6 +132,10 @@ export const getBotUsername = (user?: IUser | null): string => {
     ''
   );
 };
+
+export const isCallBotUser = (user?: IUser | null): boolean =>
+  getBotUsername(user).trim().replace(/^@+/, '').toLowerCase() ===
+  CALL_BOT_USERNAME;
 
 export const getBotApiKey = (user?: IUser | null): string => {
   const meta = parseBotMeta(user?.ex);
