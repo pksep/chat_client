@@ -1,5 +1,5 @@
 import { ref } from 'vue';
-import { getAuthUser } from './useAuth';
+import { getAuthUser, getStoredChatAccessToken } from './useAuth';
 import {
   addTopicList,
   createTopic,
@@ -208,6 +208,18 @@ const resolveBotGatewayUrl = (): string => {
   return base;
 };
 
+const resolveBotGatewayAuthHeaders = (): { Authorization: string } => {
+  const accessToken = getStoredChatAccessToken();
+
+  if (!accessToken) {
+    throw new Error(
+      'Не удалось авторизовать запрос к сервису ботов: access token не найден'
+    );
+  }
+
+  return { Authorization: `Bearer ${accessToken}` };
+};
+
 type GatewayBotResult = {
   id?: number;
   chat_user_id?: string;
@@ -245,14 +257,10 @@ const cacheGatewayBots = (bots?: GatewayBotResult[]): void => {
   bots?.forEach(cacheGatewayBotCommands);
 };
 
-const fetchGatewayBotsByOwner = async (
-  ownerUserId: string
-): Promise<GatewayBotResult[]> => {
+const fetchGatewayBotsByOwner = async (): Promise<GatewayBotResult[]> => {
   const gateway = resolveBotGatewayUrl();
   const response = await fetch(`${gateway}/bots`, {
-    headers: {
-      'X-Owner-Id': ownerUserId
-    }
+    headers: resolveBotGatewayAuthHeaders()
   });
 
   if (!response.ok) {
@@ -283,7 +291,8 @@ const fetchGatewayBotCommandsByChatUserId = async (
 
   const gateway = resolveBotGatewayUrl();
   const response = await fetch(
-    `${gateway}/bots/chat-users/${encodeURIComponent(normalizedChatUserId)}/commands`
+    `${gateway}/bots/chat-users/${encodeURIComponent(normalizedChatUserId)}/commands`,
+    { headers: resolveBotGatewayAuthHeaders() }
   );
 
   if (!response.ok) {
@@ -325,7 +334,7 @@ export const loadBotCommandsViaGateway = async (
     return getBotCommands(topic.user);
   }
 
-  const bots = await fetchGatewayBotsByOwner(authUser.id);
+  const bots = await fetchGatewayBotsByOwner();
   const bot = bots.find(
     item => (botId && item.id === botId) || item.chat_user_id === topic.user?.id
   );
@@ -360,7 +369,7 @@ const resolveGatewayBotId = async (
   const botUsername = normalizeBotUsername(
     getBotUsername(topic.user) || getBotUsername(botUser)
   ).toLowerCase();
-  const bots = await fetchGatewayBotsByOwner(ownerUserId);
+  const bots = await fetchGatewayBotsByOwner();
   const bot =
     bots.find(
       item =>
@@ -472,7 +481,7 @@ export const createBotViaGateway = async (
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Owner-Id': authUser.id
+      ...resolveBotGatewayAuthHeaders()
     },
     body: JSON.stringify({
       username,
@@ -640,7 +649,7 @@ export const updateBotTopic = async (
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
-      'X-Owner-Id': authUser.id
+      ...resolveBotGatewayAuthHeaders()
     },
     body: JSON.stringify({
       username,
@@ -724,9 +733,7 @@ export const deleteBotTopic = async (topic: ITopic): Promise<void> => {
     const gateway = resolveBotGatewayUrl();
     const response = await fetch(`${gateway}/bots/${botId}/deactivate`, {
       method: 'POST',
-      headers: {
-        'X-Owner-Id': authUser.id
-      }
+      headers: resolveBotGatewayAuthHeaders()
     });
 
     if (!response.ok) {
