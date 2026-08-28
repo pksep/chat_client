@@ -38,6 +38,10 @@ button.button-yui-kit.new-contact__button-close {
   }
 }
 
+dialog.new-contact.modal-yui-kit {
+  background-color: var(--surface-overlay);
+}
+
 .modal-yui-kit__modal-content>.contact-selector {
   padding-top: 5px;
   padding-inline: 10px;

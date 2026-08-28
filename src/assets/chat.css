@@ -505,11 +505,7 @@ p.chat__nothing-paragraph {
   display: block;
   flex: 0 0 auto;
   overflow: hidden;
-  background: linear-gradient(90deg,
-      transparent,
-      rgb(255 255 255 / 58%),
-      transparent),
-    var(--grey2);
+  background: linear-gradient(90deg, var(--border-table), var(--action-disabled-bg), var(--border-table));
   background-size:
     220% 100%,
     100% 100%;
@@ -527,7 +523,6 @@ p.chat__nothing-paragraph {
   align-self: flex-end;
   width: min(52%, 310px);
   border-radius: 18px 18px 6px 18px;
-  background-color: color-mix(in srgb, var(--border-hover) 18%, white 82%);
 }
 
 .chat__message-skeleton-bubble--short {
@@ -547,20 +542,19 @@ p.chat__nothing-paragraph {
   width: min(55%, 340px);
   height: min(210px, 26vh);
   border-radius: 18px 18px 6px 18px;
-  background-color: color-mix(in srgb, var(--border-hover) 14%, white 86%);
 }
 
 @keyframes chat-message-skeleton-shimmer {
-  from {
-    background-position:
-      120% 0,
-      0 0;
+  0% {
+    background-position: 100% 0;
   }
 
-  to {
-    background-position:
-      -120% 0,
-      0 0;
+  50% {
+    background-position: -80% 0;
+  }
+
+  100% {
+    background-position: 100% 0;
   }
 }
 
@@ -677,17 +671,12 @@ p.chat__nothing-paragraph {
     width: 38px;
     height: 38px;
     border-radius: 50%;
-    background: color-mix(in srgb, var(--border-hover) 12%, white 88%);
   }
 
   .chat__mobile-instant-input-field {
     height: 42px;
     border-radius: 16px;
-    background: linear-gradient(90deg,
-        transparent,
-        rgb(255 255 255 / 44%),
-        transparent),
-      var(--grey1);
+    background: linear-gradient(90deg, var(--border-table), var(--action-disabled-bg), var(--border-table));
     background-size:
       220% 100%,
       100% 100%;
@@ -832,11 +821,7 @@ p.chat__nothing-paragraph {
     display: block;
     flex: 0 0 auto;
     overflow: hidden;
-    background: linear-gradient(90deg,
-        transparent,
-        rgb(255 255 255 / 42%),
-        transparent),
-      #dfe3e8;
+    background: linear-gradient(90deg, var(--border-table), var(--action-disabled-bg), var(--border-table));
     background-size:
       220% 100%,
       100% 100%;
@@ -881,11 +866,7 @@ p.chat__nothing-paragraph {
     width: min(68%, 310px);
     height: clamp(112px, 23vh, 190px);
     border-radius: 18px 18px 6px 18px;
-    background: linear-gradient(90deg,
-        transparent,
-        rgb(255 255 255 / 48%),
-        transparent),
-      #dfe3e8;
+    background: linear-gradient(90deg, var(--border-table), var(--action-disabled-bg), var(--border-table));
   }
 
   .chat__message-skeleton-media-icon {
@@ -893,10 +874,7 @@ p.chat__nothing-paragraph {
     width: 42px;
     height: 42px;
     border-radius: 12px;
-    background: linear-gradient(135deg,
-        transparent 52%,
-        rgb(255 255 255 / 58%) 52%),
-      rgb(255 255 255 / 58%);
+    background: linear-gradient(90deg, var(--border-table), var(--action-disabled-bg), var(--border-table));
     box-shadow:
       -34px 42px 0 -21px rgb(255 255 255 / 44%),
       34px 42px 0 -21px rgb(255 255 255 / 44%);

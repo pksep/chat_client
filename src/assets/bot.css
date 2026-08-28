@@ -38,6 +38,7 @@
   border-radius: 50%;
   overflow: hidden;
   box-sizing: border-box;
+
 }
 
 .bot-avatar__image.avatar-yui-kit {
@@ -71,7 +72,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface-overlay);
+  background: var(--action-disabled-bg);
   color: var(--text-secondary);
   padding: calc(var(--size-avatar, 38px) * 0.18);
 }
@@ -118,7 +119,7 @@
   width: clamp(28px, calc(var(--size-avatar, 38px) * 0.34), 34px);
   height: clamp(28px, calc(var(--size-avatar, 38px) * 0.34), 34px);
   border-radius: 50%;
-  background: var(--white);
+  background: var(--surface-input-secondary);
   color: var(--text-secondary);
   transform: translate(6%, -6%);
   z-index: 3;
@@ -480,6 +481,10 @@ button.button-yui-kit.large.menu-info__secondary-button.bot-info-panel__action {
 
 .bot-info-panel__delete {
   color: var(--black) !important;
+}
+
+dialog.new-bot.modal-yui-kit {
+  background-color: var(--surface-overlay);
 }
 
 .new-bot-mobile .mobile__modal-content {
