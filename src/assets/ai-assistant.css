@@ -137,6 +137,11 @@
   background: #fafbfe;
 }
 
+.ai-menu-panel__row--active,
+.ai-menu-panel__row--active:hover {
+  background-color: var(--blue10);
+}
+
 .ai-menu-panel__row-main {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 42px;

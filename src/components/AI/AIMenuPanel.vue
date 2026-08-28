@@ -81,7 +81,7 @@
           :key="session.id"
           :class="[
             'ai-menu-panel__row',
-            { 'ai-menu-panel__row--active': activeSessionId === session.id }
+            { 'ai-menu-panel__row--active': isSessionActive(session.id) }
           ]"
           @contextmenu="openActivePopover(sessionMenuId(session.id), $event)"
         >
@@ -251,7 +251,8 @@ import {
   IconNameEnum,
   SizesEnum
 } from '@pksep/yui';
-import { navigateToAI } from '../../composables/navigation';
+import { navigateToAI, useUrlWatcher } from '../../composables/navigation';
+import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { useContextMenu } from '../../composables/useContextMenu';
 import {
   type AiAssistantTab,
@@ -280,12 +281,16 @@ const {
 } = useAiAssistant();
 
 const query = ref('');
+const route = useUrlWatcher();
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
 const createMenuId = 'create';
 const sessionMenuId = (sessionId: string): string => `session:${sessionId}`;
 const taskMenuId = (taskId: string): string => `task:${taskId}`;
+
+const isSessionActive = (sessionId: string): boolean =>
+  route.value.type === RouteTypes.AI && route.value.id === sessionId;
 
 const normalizedQuery = computed(() =>
   query.value.trim().toLocaleLowerCase('ru-RU')
