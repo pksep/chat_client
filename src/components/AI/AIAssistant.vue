@@ -276,6 +276,7 @@ const {
   selectSession,
   sendMessage,
   sendSuggestedPrompt,
+  startNewTask,
   updateApproval,
   clearAll
 } = useAiAssistant();
@@ -319,7 +320,7 @@ const handleSuggestion = (prompt: 'summary' | 'tasks'): void => {
 };
 
 const handleAutomationClick = (kind: 'daily' | 'weekly'): void => {
-  startNewSession();
+  startNewTask();
   void sendMessage(
     kind === 'daily'
       ? 'Настрой ежедневную сводку в 8:00'

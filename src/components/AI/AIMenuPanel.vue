@@ -152,7 +152,7 @@
             class="ai-menu-panel__row-main"
             :aria-expanded="!!isOpen[taskMenuId(task.id)]"
             aria-haspopup="menu"
-            @click="handleSelectTask"
+            @click="handleSelectTask(task.id)"
           >
             <span
               :class="[
@@ -268,11 +268,11 @@ const {
   sessions,
   tasks,
   activeTab,
-  activeSessionId,
   startNewSession,
+  startNewTask,
   selectSession,
+  selectTask,
   setTab,
-  showTasks,
   toggleSessionPin,
   deleteSession,
   toggleTask,
@@ -328,7 +328,7 @@ const handleNewSession = (): void => {
 
 const handleNewTask = (): void => {
   closeActivePopover(createMenuId);
-  showTasks();
+  startNewTask();
   openAssistant();
 };
 
@@ -337,9 +337,9 @@ const handleSelectSession = (sessionId: string): void => {
   openAssistant(sessionId);
 };
 
-const handleSelectTask = (): void => {
-  showTasks();
-  openAssistant();
+const handleSelectTask = (taskId: string): void => {
+  const sessionId = selectTask(taskId);
+  openAssistant(sessionId);
 };
 
 const handleTab = (tab: AiAssistantTab): void => {

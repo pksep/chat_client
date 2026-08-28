@@ -36,6 +36,7 @@ export interface AiAssistantSession {
 
 export interface AiAutomationTask {
   id: string;
+  sessionId?: string;
   title: string;
   description: string;
   schedule: string;
@@ -308,6 +309,13 @@ const showTasks = (): void => {
   activeView.value = 'tasks';
 };
 
+/** Открывает чистую форму новой задачи без привязки к ранее выбранному чату. */
+const startNewTask = (): void => {
+  activeTab.value = 'tasks';
+  activeView.value = 'tasks';
+  activeSessionId.value = null;
+};
+
 const createSession = (input: string): AiAssistantSession => {
   const session: AiAssistantSession = {
     id: generateUUID(),
@@ -321,14 +329,35 @@ const createSession = (input: string): AiAssistantSession => {
   return session;
 };
 
+/** Добавляет пользовательскую задачу в список и связывает её с отдельной AI-сессией. */
+const createAutomationTask = (
+  session: AiAssistantSession,
+  input: string
+): AiAutomationTask => {
+  const task: AiAutomationTask = {
+    id: generateUUID(),
+    sessionId: session.id,
+    title: shorten(input, 36),
+    description: 'Однократная задача',
+    schedule: 'Однократно',
+    enabled: true
+  };
+  persisted.tasks.unshift(task);
+  return task;
+};
+
 const sendMessage = async (rawInput: string): Promise<void> => {
   const input = rawInput.trim();
   if (!input || isThinking.value) return;
+
+  const isTaskRequest = activeView.value === 'tasks';
+  if (isTaskRequest) activeSessionId.value = null;
 
   activeTab.value = 'chats';
   activeView.value = 'chat';
 
   const session = activeSession.value || createSession(input);
+  if (isTaskRequest) createAutomationTask(session, input);
   const runtime = await ensureRuntime(session.id);
   await runtime.sendMessage(input);
 };
@@ -392,6 +421,18 @@ const deleteTask = (taskId: string): void => {
   if (index !== -1) persisted.tasks.splice(index, 1);
 };
 
+/** Открывает чат, в котором агент выполнял выбранную задачу. */
+const selectTask = (taskId: string): string | null => {
+  const task = persisted.tasks.find(item => item.id === taskId);
+  if (!task?.sessionId || !getSession(task.sessionId)) {
+    showTasks();
+    return null;
+  }
+
+  selectSession(task.sessionId);
+  return task.sessionId;
+};
+
 const clearAll = async (): Promise<void> => {
   const sessionId = activeSessionId.value;
   if (!sessionId) return;
@@ -413,7 +454,9 @@ export const useAiAssistant = () => ({
   isVoiceModeOpen,
   permissionMode,
   startNewSession,
+  startNewTask,
   selectSession,
+  selectTask,
   setTab,
   showTasks,
   sendMessage,
