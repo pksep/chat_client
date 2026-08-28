@@ -87,7 +87,7 @@
                 class="ai-assistant__approval-reject"
                 @click="updateApproval(message.id, 'rejected')"
               >
-                Отклонить
+                Отменить
               </button>
               <button
                 type="button"

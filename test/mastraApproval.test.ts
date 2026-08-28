@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { isStaleApprovalResponse } from '../src/services/mastraApproval';
+import {
+  formatApprovalMessage,
+  isStaleApprovalResponse
+} from '../src/services/mastraApproval';
 
 describe('isStaleApprovalResponse', () => {
   test.each([
@@ -18,5 +21,28 @@ describe('isStaleApprovalResponse', () => {
     expect(isStaleApprovalResponse({ error: 'Internal Server Error' })).toBe(
       false
     );
+  });
+});
+
+describe('formatApprovalMessage', () => {
+  test('показывает только вопрос для карточки с кнопками подтверждения', () => {
+    const message = formatApprovalMessage({
+      runId: 'run-test',
+      toolCallId: 'tool-test',
+      toolName: 'erp_actions_erp_specification_item_update',
+      args: {
+        parentType: 'cbed',
+        parentName: 'Насосная станция',
+        parentDesignation: '022.01-12.00СБ',
+        section: 'detal',
+        itemName: 'Палец (комбипривод)',
+        itemDesignation: '119.01-03.03.03',
+        quantity: 1
+      }
+    });
+
+    expect(message).not.toContain('Ответьте');
+    expect(message).not.toMatch(/[—–]/u);
+    expect(message).toContain('количество: 1');
   });
 });

@@ -8,7 +8,6 @@ import { getAuthToken } from '../composables/useLogin';
 import {
   type ApprovalDecision,
   formatApprovalMessage,
-  getApprovalDecision,
   isStaleApprovalResponse,
   type PendingToolApproval
 } from './mastraApproval';
@@ -195,14 +194,14 @@ const useMastra = (options?: UseMastraOptions | false) => {
     }
 
     const approvalDecision = pendingApproval.value
-      ? approvalDecisionOverride ?? getApprovalDecision(input)
+      ? approvalDecisionOverride
       : null;
 
     if (pendingApproval.value && !approvalDecision) {
       const reminderMessage: Message = {
         role: 'assistant',
         content:
-          'Сейчас ожидается решение по действию. Ответьте точно «подтверждаю» или «отмена».',
+          'Сейчас ожидается решение по действию. Выберите «Подтвердить» или «Отменить» на карточке.',
         loading: false,
         timestamp: Date.now()
       };

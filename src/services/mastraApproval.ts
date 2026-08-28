@@ -30,35 +30,12 @@ export const isStaleApprovalResponse = (payload: unknown): boolean => {
   return STALE_APPROVAL_RESPONSE_PATTERNS.some(pattern => pattern.test(text));
 };
 
-const APPROVE_COMMANDS = new Set([
-  'подтверждаю',
-  'подтвердить',
-  'approve',
-  'confirm'
-]);
-
-const DECLINE_COMMANDS = new Set(['отмена', 'отменить', 'cancel', 'decline']);
-
 const HTML_ENTITIES: Record<string, string> = {
   '&': '&amp;',
   '<': '&lt;',
   '>': '&gt;',
   '"': '&quot;',
   "'": '&#039;'
-};
-
-export const getApprovalDecision = (input: string): ApprovalDecision => {
-  const normalizedInput = input
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&(?:nbsp|#160);/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLocaleLowerCase('ru-RU');
-
-  if (APPROVE_COMMANDS.has(normalizedInput)) return 'approve';
-  if (DECLINE_COMMANDS.has(normalizedInput)) return 'decline';
-
-  return null;
 };
 
 const escapeHtml = (value: string) =>
@@ -104,7 +81,7 @@ const formatChanges = (
     .filter(([key]) => args[key] !== undefined)
     .map(([key, label, formatter]) => {
       const value = formatter(args[key]);
-      return value ? `${label} — ${value}` : label;
+      return value ? `${label}: ${value}` : label;
     })
     .join('; ');
 
@@ -278,7 +255,7 @@ const buildApprovalQuestion = (approval: PendingToolApproval): string => {
       );
       const changes = [
         args.quantity !== undefined
-          ? `количество — ${formatValue(args.quantity, 'не указано')}`
+          ? `количество: ${formatValue(args.quantity, 'не указано')}`
           : null,
         args.measureId !== undefined ? 'изменить единицу измерения' : null
       ]
@@ -484,4 +461,4 @@ const buildApprovalQuestion = (approval: PendingToolApproval): string => {
 };
 
 export const formatApprovalMessage = (approval: PendingToolApproval) =>
-  `${buildApprovalQuestion(approval)} Ответьте «подтверждаю» или «отмена».`;
+  buildApprovalQuestion(approval);
