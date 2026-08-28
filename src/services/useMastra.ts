@@ -9,6 +9,7 @@ import {
   type ApprovalDecision,
   formatApprovalMessage,
   getApprovalDecision,
+  isStaleApprovalResponse,
   type PendingToolApproval
 } from './mastraApproval';
 import { processMastraEventStream } from './mastraEventStream';
@@ -21,6 +22,11 @@ interface UseMastraOptions {
   chatId?: string;
   baseUrl?: string;
   approvalMode?: Ref<'ask' | 'automatic'>;
+}
+
+interface ToolApprovalRequestError extends Error {
+  status: number;
+  stale: boolean;
 }
 
 const useMastra = (options?: UseMastraOptions | false) => {
@@ -57,12 +63,15 @@ const useMastra = (options?: UseMastraOptions | false) => {
   };
 
   const createRequestContext = (
-    attachments: AiAttachmentReference[] = getActiveAttachments()
+    attachments: AiAttachmentReference[] = getActiveAttachments(),
+    forceStrictApproval = false
   ): RequestContext<unknown> => {
     const requestContext = new RequestContext<Record<string, unknown>>();
     requestContext.set(
       'approvalMode',
-      options.approvalMode?.value === 'automatic' ? 'automatic' : 'strict'
+      !forceStrictApproval && options.approvalMode?.value === 'automatic'
+        ? 'automatic'
+        : 'strict'
     );
     requestContext.set(
       'attachments',
@@ -123,8 +132,14 @@ const useMastra = (options?: UseMastraOptions | false) => {
     );
 
     if (!response.ok) {
-      const error = new Error('Не удалось применить решение по действию');
-      Object.assign(error, { status: response.status });
+      const responseBody = await response.text().catch(() => '');
+      const stale = isStaleApprovalResponse(responseBody);
+      const error = new Error(
+        stale
+          ? 'Подтверждение устарело после обновления сервиса'
+          : 'Не удалось применить решение по действию'
+      ) as ToolApprovalRequestError;
+      Object.assign(error, { status: response.status, stale });
       throw error;
     }
 
@@ -262,8 +277,33 @@ const useMastra = (options?: UseMastraOptions | false) => {
             requestAttachments
           );
         } catch (approvalError) {
-          pendingApproval.value = approval;
-          throw approvalError;
+          const requestError =
+            approvalError as Partial<ToolApprovalRequestError>;
+
+          if (!requestError.stale) {
+            pendingApproval.value = approval;
+            throw approvalError;
+          }
+
+          if (approvalDecision === 'decline') {
+            throw new Error(
+              'Действие уже не ожидает подтверждения и не было выполнено.'
+            );
+          }
+
+          stream = await agent.stream(
+            [
+              ...requestMessages,
+              {
+                role: 'user' as const,
+                content:
+                  'Предыдущее подтверждение устарело после перезапуска сервиса. Повтори последнее запрошенное действие через доступный инструмент, чтобы платформа сформировала новое подтверждение.'
+              }
+            ],
+            {
+              requestContext: createRequestContext(requestAttachments, true)
+            }
+          );
         }
       } else {
         stream = await agent.stream(requestMessages, {

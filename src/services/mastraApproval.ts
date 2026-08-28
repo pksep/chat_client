@@ -7,6 +7,29 @@ export interface PendingToolApproval {
 
 export type ApprovalDecision = 'approve' | 'decline' | null;
 
+const STALE_APPROVAL_RESPONSE_PATTERNS = [
+  /could not find an active or suspended run/iu,
+  /could not find a suspended run/iu,
+  /currently-suspended run/iu,
+  /AGENT_SEND_TOOL_APPROVAL_NO_ACTIVE_THREAD_RUN/iu
+];
+
+/** Определяет, что подтверждение больше нельзя продолжить после завершения или перезапуска запуска Mastra. */
+export const isStaleApprovalResponse = (payload: unknown): boolean => {
+  const text =
+    typeof payload === 'string'
+      ? payload
+      : (() => {
+          try {
+            return JSON.stringify(payload);
+          } catch {
+            return '';
+          }
+        })();
+
+  return STALE_APPROVAL_RESPONSE_PATTERNS.some(pattern => pattern.test(text));
+};
+
 const APPROVE_COMMANDS = new Set([
   'подтверждаю',
   'подтвердить',
