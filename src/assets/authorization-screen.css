@@ -223,12 +223,12 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
   gap: 12px;
   padding: 15px;
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--surface-authorization);
   box-shadow: 0 0 15px rgba(21, 68, 150, 0.2);
 }
 
 .authorization-screen__editor--saved {
-  background: rgba(255, 255, 255, 0.32);
+  background: var(--surface-authorization);
 }
 
 .authorization-screen__field {

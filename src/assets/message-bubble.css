@@ -320,7 +320,7 @@
 
 .message-call__icon--incoming,
 .message-call__icon--outgoing {
-  color: var(--link-color);
+  color: var(--text-link);
   align-self: flex-start;
 }
 
@@ -776,7 +776,7 @@
   border-radius: 999px;
   font-size: 12px;
   line-height: 1.2;
-  color: var(--link-color);
+  color: var(--text-link);
 
   background-color: var(--white);
 }
@@ -1429,7 +1429,7 @@ div.message-content__file {
 }
 
 .message__content__articles__my .link {
-  color: var(--link-color);
+  color: var(--action-primary-bg);
 }
 
 .message__content__articles__my .link:visited {
@@ -1438,7 +1438,7 @@ div.message-content__file {
 
 .message-content__html [data-user-id][data-user-openable='true'],
 .message-content__html .link[data-user-id][data-user-openable='true'] {
-  color: var(--link-color);
+  color: var(--text-link);
   cursor: pointer;
 }
 

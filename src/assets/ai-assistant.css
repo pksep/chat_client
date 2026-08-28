@@ -557,7 +557,7 @@
   min-width: 0;
   padding: 11px 14px 10px;
   border-radius: 20px;
-  background: #fff;
+  background: var(--surface-overlay);
   color: var(--text-primary);
 }
 
