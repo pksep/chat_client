@@ -472,9 +472,7 @@ const handleContentEditorPopoverClick = (event: MouseEvent): void => {
     ).find(element => element.offsetParent);
 
     if (emojiPicker) {
-      Array.from(
-        root.querySelectorAll<HTMLButtonElement>('.smile-button')
-      )
+      Array.from(root.querySelectorAll<HTMLButtonElement>('.smile-button'))
         .find(element => element.offsetParent)
         ?.click();
     }
@@ -484,9 +482,7 @@ const handleContentEditorPopoverClick = (event: MouseEvent): void => {
 
   if (target.closest('.smile-button')) {
     root
-      .querySelector<HTMLElement>(
-        '.popover-yui-kit__wrapper.active-yui-kit'
-      )
+      .querySelector<HTMLElement>('.popover-yui-kit__wrapper.active-yui-kit')
       ?.click();
   }
 };

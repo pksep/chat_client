@@ -28,11 +28,7 @@
     />
 
     <div v-else class="menu-info__modal-wrapper">
-      <Tabs
-        :tabCount="2"
-        :defaultActiveTabId="2"
-        class="new-group__tabs"
-      >
+      <Tabs :tabCount="2" :defaultActiveTabId="2" class="new-group__tabs">
         <template #header1>
           <span class="menu-info__user-header">
             Участники
