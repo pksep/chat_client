@@ -564,7 +564,7 @@
 .ai-assistant__message--user .ai-assistant__message-content {
   padding: 10px 14px;
   border-radius: 20px 20px 2px 20px;
-  background: var(--background-primary-color);
+  background: var(--table-surface-pressed);
 }
 
 .ai-assistant__message-content p {

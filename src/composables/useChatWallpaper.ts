@@ -50,24 +50,24 @@ const WALLPAPER_NATIVE_STORE = createNativeImageStoreConfig({
 const wallpaperOptions: ChatWallpaperOption[] = [
   {
     id: 'wallpaper1',
-    imageUrl: '/images/chat-wallpapers/wallpaper1.svg',
+    imageUrl: '/images/chat-wallpapers/wallpaper1-1.svg',
     previewSize: '180px auto',
     chatSize: '180px auto',
-    backgroundColor: '#f7fbff'
+    backgroundColor: 'var(--surface-main,#f7fbff)'
   },
   {
     id: 'wallpaper2',
     imageUrl: '/images/chat-wallpapers/wallpaper2.svg',
     previewSize: '180px auto',
     chatSize: '180px auto',
-    backgroundColor: '#f7fbff'
+    backgroundColor: 'var(--surface-main,#f7fbff)'
   },
   {
     id: 'wallpaper3',
     imageUrl: '/images/chat-wallpapers/wallpaper3.svg',
     previewSize: 'cover',
     chatSize: '180px auto',
-    backgroundColor: '#f4f8ff'
+    backgroundColor: 'var(--surface-main,#f7fbff)'
   }
 ];
 
@@ -95,15 +95,14 @@ const buildWallpaperCssVariables = (
   '--chat-wallpaper-repeat': config?.repeat || 'repeat',
   '--chat-wallpaper-position': config?.position || 'center top',
   '--chat-wallpaper-opacity': String(config?.opacity ?? 1),
-  '--chat-wallpaper-background':
-    config?.backgroundColor || 'var(--background-light-color)'
+  '--chat-wallpaper-background': 'var(--surface-main)'
 });
 
 const buildPreviewStyle = (
   imageUrl: string | null,
   config?: Partial<ChatWallpaperOption>
 ): CSSProperties => ({
-  backgroundColor: config?.backgroundColor || '#f5f8ff',
+  backgroundColor: 'var(--surface-main,#f7fbff)',
   backgroundImage: imageUrl ? `url("${imageUrl}")` : 'none',
   backgroundSize: config?.previewSize || 'cover',
   backgroundRepeat: config?.repeat || 'repeat',
@@ -119,7 +118,7 @@ const buildCustomWallpaperOption = (
   chatSize: 'cover',
   repeat: 'no-repeat',
   opacity: 1,
-  backgroundColor: '#f4f8ff'
+  backgroundColor: 'var(--surface-main,#f7fbff)'
 });
 
 const isIndexedDbAvailable = () =>
@@ -502,7 +501,7 @@ const currentWallpaperStyle = computed<CSSProperties>(() => {
         chatSize: 'cover',
         repeat: 'no-repeat',
         opacity: 0,
-        backgroundColor: '#f4f8ff'
+        backgroundColor: 'var(--surface-main,#f7fbff)'
       })
     };
   }
@@ -524,7 +523,7 @@ const wallpaperPreviewItems = computed<ChatWallpaperPreviewItem[]>(() => {
       previewStyle: buildPreviewStyle(wallpaper.dataUrl, {
         previewSize: 'cover',
         repeat: 'no-repeat',
-        backgroundColor: '#f3f7ff'
+        backgroundColor: 'transparent'
       })
     })
   );

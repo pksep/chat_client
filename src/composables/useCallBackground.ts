@@ -78,11 +78,11 @@ const callBackgroundOptions: CallBackgroundOption[] = [
   },
   {
     id: 'wallpaper1',
-    imageUrl: '/images/chat-wallpapers/wallpaper1.svg',
+    imageUrl: '/images/chat-wallpapers/wallpaper1-1.svg',
     mode: 'image',
     previewSize: '180px auto',
     callSize: '180px auto',
-    backgroundColor: '#f7fbff'
+    backgroundColor: 'var(--surface-main,#f7fbff)'
   },
   {
     id: 'wallpaper2',
@@ -90,7 +90,7 @@ const callBackgroundOptions: CallBackgroundOption[] = [
     mode: 'image',
     previewSize: '180px auto',
     callSize: '180px auto',
-    backgroundColor: '#f7fbff'
+    backgroundColor: 'var(--surface-main,#f7fbff)'
   },
   {
     id: 'wallpaper3',
@@ -98,7 +98,7 @@ const callBackgroundOptions: CallBackgroundOption[] = [
     mode: 'image',
     previewSize: 'cover',
     callSize: '180px auto',
-    backgroundColor: '#f4f8ff'
+    backgroundColor: 'var(--surface-main,#f7fbff)'
   }
 ];
 
@@ -127,7 +127,7 @@ const buildCallBackgroundCssVariables = (
   '--call-background-repeat': config?.repeat || 'repeat',
   '--call-background-position': config?.position || 'center center',
   '--call-background-opacity': String(config?.opacity ?? 1),
-  '--call-background-background': config?.backgroundColor || '#f4f8ff',
+  '--call-background-background': 'var(--surface-main,#f7fbff)',
   '--call-background-fallback': DEFAULT_CALL_BACKGROUND_GRADIENT
 });
 
@@ -135,7 +135,7 @@ const buildPreviewStyle = (
   imageUrl: string | null,
   config?: Partial<CallBackgroundOption>
 ): CSSProperties => ({
-  backgroundColor: config?.backgroundColor || '#f5f8ff',
+  backgroundColor: 'var(--surface-main,#f7fbff)',
   backgroundImage: imageUrl ? `url("${imageUrl}")` : 'none',
   backgroundSize: config?.previewSize || 'cover',
   backgroundRepeat: config?.repeat || 'repeat',
@@ -154,7 +154,7 @@ const buildCustomCallBackgroundOption = (
   callSize: 'cover',
   repeat: 'no-repeat',
   opacity: 1,
-  backgroundColor: '#f4f8ff'
+  backgroundColor: 'var(--surface-main,#f7fbff)'
 });
 
 const isIndexedDbAvailable = () =>
@@ -498,7 +498,7 @@ const currentCallBackgroundStyle = computed<CSSProperties>(() => {
       callSize: 'cover',
       repeat: 'no-repeat',
       opacity: 0,
-      backgroundColor: 'var(--primary-backgroundLight, #F8F9FD)'
+      backgroundColor: 'var(--surface-main,#f7fbff)'
     });
   }
 
@@ -533,7 +533,7 @@ const callBackgroundPreviewItems = computed<CallBackgroundPreviewItem[]>(() => {
       previewStyle: buildPreviewStyle(wallpaper.dataUrl, {
         previewSize: 'cover',
         repeat: 'no-repeat',
-        backgroundColor: '#f3f7ff'
+        backgroundColor: 'var(--surface-main,#f7fbff)'
       })
     }));
 
