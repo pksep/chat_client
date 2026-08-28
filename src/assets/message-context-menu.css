@@ -105,7 +105,7 @@ button.button-yui-kit.select-reactions-list-button {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .message-context-menu__details-panel {
@@ -165,7 +165,7 @@ button.button-yui-kit.select-reactions-list-button {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 400;
   color: var(--text-color);
 }

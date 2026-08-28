@@ -130,6 +130,7 @@ section.menu-info__info-section {
   display: flex;
   margin: 0;
   align-items: center;
+  cursor: pointer;
 }
 
 .menu-info__user-count {

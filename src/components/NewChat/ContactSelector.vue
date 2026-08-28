@@ -125,7 +125,7 @@ import {
   matchesUserSearch,
   normalizeAtSearchQuery
 } from '../../utils/searchMatch';
-import { isBotUser } from '../../utils/bot';
+import { isBotUser, isCallBotUser } from '../../utils/bot';
 
 type ContactSelectorFilter = IContactSelectorState['filter'];
 
@@ -187,7 +187,7 @@ const contacts = computed(() => {
   }
 
   filteredContacts = filteredContacts.filter(
-    contact => contact.id !== authUser.value.id
+    contact => contact.id !== authUser.value.id && !isCallBotUser(contact)
   );
 
   return [...filteredContacts];
