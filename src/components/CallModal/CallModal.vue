@@ -788,6 +788,7 @@ import {
 } from '../../services/useCallScreen';
 import { useCallBackground } from '../../composables/useCallBackground';
 import { getUsersList } from '../../composables/useUsers';
+import { isDeletedBotUser } from '../../utils/bot';
 import { getAuthUser } from '../../composables/useAuth';
 import { useTopics } from '../../composables/useTopics';
 import {
@@ -2145,7 +2146,7 @@ const groupInfoMembers = computed(() => {
 
   return activeParticipantIds
     .map(participantId => memberMap.get(participantId))
-    .filter(Boolean);
+    .filter(member => member && !isDeletedBotUser(member));
 });
 const displayGroupCallMeta = computed(
   () => `${participantCountLabel.value} · ${formattedTime.value}`

@@ -162,6 +162,11 @@ export interface WebSocketEventPayloads {
   [WebSocketEventType.USER_LEFT]: User;
   [WebSocketEventType.USER_UPDATED]: {
     id: string;
+    initials?: string;
+    nickname?: string;
+    avatarUrl?: string | null;
+    ex?: unknown;
+    isBot?: boolean;
     lastOnline: Date | string | null;
     status?: {
       icon: string;

@@ -421,7 +421,9 @@ const handleSlashChange = (search: string | null) => {
 const users = computed(() => {
   const allMembers =
     route.value.type === RouteTypes.GROUP
-      ? currentGroup.value?.members || []
+      ? (currentGroup.value?.members || []).filter(
+          member => !isDeletedBotUser(member)
+        )
       : [];
   const query = normalizeAtSearchQuery(state.mentionSearch);
 

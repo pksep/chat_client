@@ -74,7 +74,7 @@
       <ContactListInModal
         v-if="activeInfoTab === 'participants'"
         :show-add-button="currentGroup.isAdmin"
-        :contacts="currentGroup.members"
+        :contacts="visibleMembers"
         :filtered-contacts="filteredMembers"
         :excluded-contact-ids="excludedContactIds"
         class="menu-info__participants"
@@ -122,6 +122,7 @@ import NewContactModal from './NewChat/NewContactModal.vue';
 import ProfileAttachmentsPanel from './ProfileAttachmentsPanel.vue';
 import { useUrlWatcher } from '../composables/navigation';
 import { currentGroup, useGroup } from '../composables/useGroup';
+import { isDeletedBotUser } from '../utils/bot';
 
 type MenuInfoTab = 'participants' | 'media' | 'files';
 type ProfileAttachmentsTab = 'media' | 'files';
@@ -168,6 +169,12 @@ const setActiveInfoTab = (tab: MenuInfoTab): void => {
   activeInfoTab.value = tab;
 };
 
+const visibleMembers = computed(() =>
+  (currentGroup.value?.members || []).filter(
+    member => member && !isDeletedBotUser(member)
+  )
+);
+
 const excludedContactIds = computed(() => {
   const ids = new Set<string | number>();
   currentGroup.value?.members?.forEach(contact => {
@@ -198,7 +205,7 @@ const getParticipantForm = (count = 0): string => {
 };
 
 const membersLabel = computed(() => {
-  const count = currentGroup.value?.members?.length || 0;
+  const count = visibleMembers.value.length;
   return `${count} ${getParticipantForm(count)}`;
 });
 
