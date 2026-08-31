@@ -1,5 +1,8 @@
 const MIB = 1024 * 1024;
 const DEFAULT_THRESHOLD = 32 * MIB;
+export const MAX_UPLOAD_FILE_SIZE_MB = 600;
+export const MAX_UPLOAD_FILE_SIZE = MAX_UPLOAD_FILE_SIZE_MB * MIB;
+export const MAX_UPLOAD_FILE_SIZE_ERROR = `Размер файла превышает лимит ${MAX_UPLOAD_FILE_SIZE_MB}MB`;
 const DEFAULT_CONCURRENCY = 3;
 const DEFAULT_RETRY_COUNT = 3;
 const PERSISTED_UPLOADS_KEY = 'sep-chat:multipart-uploads:v1';
@@ -46,6 +49,7 @@ export interface MultipartUploadTransport {
 export interface MultipartUploadOptions {
   concurrency?: number;
   retryCount?: number;
+  persistenceKey?: string;
   signal?: AbortSignal;
   onProgress?: (percent: number) => void;
 }
@@ -78,7 +82,7 @@ export const getMultipartUploadSettings = () => ({
     import.meta.env.VITE_MULTIPART_UPLOAD_THRESHOLD_BYTES,
     DEFAULT_THRESHOLD,
     5 * MIB,
-    300 * MIB
+    MAX_UPLOAD_FILE_SIZE
   ),
   concurrency: parsePositiveNumber(
     import.meta.env.VITE_MULTIPART_UPLOAD_CONCURRENCY,
@@ -101,6 +105,19 @@ export const shouldUseMultipartUpload = (file: File): boolean => {
 
 export const getMultipartFileFingerprint = (file: File): string =>
   [file.name, file.size, file.lastModified, file.type].join(':');
+
+export const getMultipartUploadPersistenceKey = (
+  file: File,
+  scope?: string
+): string => {
+  const fingerprint = getMultipartFileFingerprint(file);
+  return scope ? `${scope}:${fingerprint}` : fingerprint;
+};
+
+export const getUploadFileSizeError = (
+  file: Pick<File, 'size'>
+): string | null =>
+  file.size > MAX_UPLOAD_FILE_SIZE ? MAX_UPLOAD_FILE_SIZE_ERROR : null;
 
 const readPersistedUploads = (): Record<string, PersistedUpload> => {
   if (typeof localStorage === 'undefined') {
@@ -134,9 +151,13 @@ const writePersistedUploads = (
   }
 };
 
-const persistUpload = (file: File, session: MultipartUploadSession): void => {
+const persistUpload = (
+  file: File,
+  session: MultipartUploadSession,
+  scope?: string
+): void => {
   const uploads = readPersistedUploads();
-  uploads[getMultipartFileFingerprint(file)] = {
+  uploads[getMultipartUploadPersistenceKey(file, scope)] = {
     uploadId: session.uploadId,
     objectName: session.objectName,
     expiresAt: session.expiresAt
@@ -144,14 +165,20 @@ const persistUpload = (file: File, session: MultipartUploadSession): void => {
   writePersistedUploads(uploads);
 };
 
-export const removePersistedMultipartUpload = (file: File): void => {
+export const removePersistedMultipartUpload = (
+  file: File,
+  scope?: string
+): void => {
   const uploads = readPersistedUploads();
-  delete uploads[getMultipartFileFingerprint(file)];
+  delete uploads[getMultipartUploadPersistenceKey(file, scope)];
   writePersistedUploads(uploads);
 };
 
-const getPersistedUpload = (file: File): PersistedUpload | undefined =>
-  readPersistedUploads()[getMultipartFileFingerprint(file)];
+const getPersistedUpload = (
+  file: File,
+  scope?: string
+): PersistedUpload | undefined =>
+  readPersistedUploads()[getMultipartUploadPersistenceKey(file, scope)];
 
 const createAbortError = (): Error => {
   const error = new Error('Multipart upload aborted');
@@ -179,9 +206,10 @@ const wait = (delayMs: number, signal?: AbortSignal): Promise<void> =>
 
 const getSession = async (
   file: File,
-  transport: MultipartUploadTransport
+  transport: MultipartUploadTransport,
+  persistenceKey?: string
 ): Promise<MultipartUploadSession> => {
-  const persisted = getPersistedUpload(file);
+  const persisted = getPersistedUpload(file, persistenceKey);
 
   if (persisted) {
     try {
@@ -194,12 +222,12 @@ const getSession = async (
         return session;
       }
     } catch {
-      removePersistedMultipartUpload(file);
+      removePersistedMultipartUpload(file, persistenceKey);
     }
   }
 
   const session = await transport.init(file);
-  persistUpload(file, session);
+  persistUpload(file, session, persistenceKey);
   return session;
 };
 
@@ -212,6 +240,12 @@ export const uploadMultipartFile = async (
   completed: MultipartCompleteResult;
 }> => {
   const settings = getMultipartUploadSettings();
+  const fileSizeError = getUploadFileSizeError(file);
+
+  if (fileSizeError) {
+    throw new Error(fileSizeError);
+  }
+
   const concurrency = parsePositiveNumber(
     options.concurrency,
     settings.concurrency,
@@ -224,7 +258,7 @@ export const uploadMultipartFile = async (
     0,
     8
   );
-  const session = await getSession(file, transport);
+  const session = await getSession(file, transport, options.persistenceKey);
 
   if (session.status === 'completed' && session.completed) {
     options.onProgress?.(100);
@@ -336,7 +370,7 @@ export const uploadMultipartFile = async (
   } catch (error) {
     if (options.signal?.aborted || (error as Error)?.name === 'AbortError') {
       await transport.abort(session.uploadId).catch(() => undefined);
-      removePersistedMultipartUpload(file);
+      removePersistedMultipartUpload(file, options.persistenceKey);
     }
 
     throw error;
