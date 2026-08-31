@@ -13,6 +13,7 @@ import {
   registerPendingOutgoingForwardBatch,
   changeFileUploadErrorStatus,
   changeMessageStatusLocally,
+  flushPendingMessagePersists,
   getFullMessagesByTopicId,
   getTopicIdsWithMessages,
   getPendingUploadFile,
@@ -61,6 +62,7 @@ import {
   parseCallTopicDescription
 } from '../../../utils/call-topic';
 import { buildForwardMessageSendPlan } from '../../../utils/forward-message-send-plan';
+import { getUploadFileSizeError } from '../../../services/useChatSDK/multipart-upload';
 
 const MAX_HTML_LENGTH = 4000;
 const FORWARD_TEXT_SEND_DELAY_MS = 250;
@@ -1002,6 +1004,31 @@ export function useMessageSender(
   );
 
   watch(
+    () => {
+      const topicId = route.value.id;
+
+      if (!topicId) {
+        return '';
+      }
+
+      return getFullMessagesByTopicId(topicId)
+        .filter(message => message.id && canAutoRetryMessage(message))
+        .map(message => message.id)
+        .join(':');
+    },
+    pendingMessageIds => {
+      if (!pendingMessageIds) {
+        return;
+      }
+
+      schedulePendingMessageAutoRetriesForTopic(route.value.id, {
+        immediate: true
+      });
+    },
+    { immediate: true }
+  );
+
+  watch(
     () => getHasWebsocketConnection(),
     isConnected => {
       if (!isConnected) {
@@ -1190,7 +1217,7 @@ export function useMessageSender(
       ex
     });
 
-    registerPendingUploadMessage(params.topicId, clientId, {
+    void registerPendingUploadMessage(params.topicId, clientId, {
       replyMessageId: params.replyMessageId,
       forwardMessageIds: params.forwardMessageIds || []
     });
@@ -1581,7 +1608,7 @@ export function useMessageSender(
           ex
         };
 
-        registerPendingUploadMessage(topicId, clientId, {
+        void registerPendingUploadMessage(topicId, clientId, {
           replyMessageId,
           forwardMessageIds: []
         });
@@ -1696,6 +1723,16 @@ export function useMessageSender(
         }));
 
     if (!filePayloads.length) return;
+
+    const fileSizeError = filePayloads
+      .map(({ file }) => getUploadFileSizeError(file))
+      .find((error): error is string => Boolean(error));
+
+    if (fileSizeError) {
+      showErrorNotification(fileSizeError);
+      return;
+    }
+
     const topicId = options?.topicId ?? route.value.id;
     const replyMessage = options?.replyMessage ?? state.replyMessage;
     const replyMessageId = options?.replyMessageId ?? state.replyMessage?.id;
@@ -1718,7 +1755,9 @@ export function useMessageSender(
         const localPath =
           type === MediaType.Video
             ? URL.createObjectURL(file)
-            : await fileToDataURL(file);
+            : type === MediaType.File
+              ? ''
+              : await fileToDataURL(file);
         const baseMedia = {
           localPath,
           path: '',
@@ -1793,10 +1832,12 @@ export function useMessageSender(
     };
 
     addMessageToLocal(newMessage.topicId, newMessage);
-    registerPendingUploadMessage(newMessage.topicId, clientId, {
-      replyMessageId,
-      forwardMessageIds
-    });
+    const pendingUploadPersistence = [
+      registerPendingUploadMessage(newMessage.topicId, clientId, {
+        replyMessageId,
+        forwardMessageIds
+      })
+    ];
 
     recordTelemetryEvent({
       category: 'upload',
@@ -1822,15 +1863,22 @@ export function useMessageSender(
     filePayloads.forEach(({ file, isMedia }, index) => {
       const fileId = index.toString();
 
-      registerPendingUploadFile(newMessage.topicId, clientId, fileId, {
-        file,
-        isMedia
-      });
+      pendingUploadPersistence.push(
+        registerPendingUploadFile(newMessage.topicId, clientId, fileId, {
+          file,
+          isMedia
+        })
+      );
 
       if (getMediaType(file, isMedia) === MediaType.Video) {
         hydrateLocalVideoPreview(newMessage.topicId, clientId, fileId, file);
       }
     });
+
+    await Promise.all([
+      ...pendingUploadPersistence,
+      flushPendingMessagePersists()
+    ]);
 
     let hasUploadError = false;
     for (const [i, payload] of filePayloads.entries()) {

@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import {
+  MAX_UPLOAD_FILE_SIZE,
+  MAX_UPLOAD_FILE_SIZE_ERROR,
+  getUploadFileSizeError,
   getMultipartFileFingerprint,
+  getMultipartUploadPersistenceKey,
   MultipartUploadSession,
   MultipartUploadTransport,
   removePersistedMultipartUpload,
@@ -65,6 +69,42 @@ afterEach(() => {
 });
 
 describe('multipart browser upload', () => {
+  test('reports the configured error only above the 600 MiB limit', () => {
+    expect(getUploadFileSizeError({ size: MAX_UPLOAD_FILE_SIZE })).toBeNull();
+    expect(
+      getUploadFileSizeError({ size: MAX_UPLOAD_FILE_SIZE + 1 })
+    ).toBe(MAX_UPLOAD_FILE_SIZE_ERROR);
+  });
+
+  test('rejects files above 600 MiB before creating an upload session', async () => {
+    const file = {
+      name: 'oversized.zip',
+      size: 600 * 1024 * 1024 + 1,
+      lastModified: 12345,
+      type: 'application/zip'
+    } as File;
+    let initCalled = false;
+    const transport: MultipartUploadTransport = {
+      init: async () => {
+        initCalled = true;
+        return createSession();
+      },
+      status: async () => createSession(),
+      uploadPart: async () => undefined,
+      complete: async () => ({
+        objectName: 'object.zip',
+        hash: 'hash',
+        etag: 'etag'
+      }),
+      abort: async () => undefined
+    };
+
+    await expect(uploadMultipartFile(file, transport)).rejects.toThrow(
+      'Размер файла превышает лимит 600MB'
+    );
+    expect(initCalled).toBe(false);
+  });
+
   test('slices parts, limits concurrency and retries only the failed part', async () => {
     const file = createFile();
     const session = createSession();
@@ -183,6 +223,59 @@ describe('multipart browser upload', () => {
     expect(progress[0]).toBe(66);
     expect(progress.at(-1)).toBe(100);
     removePersistedMultipartUpload(file);
+  });
+
+  test('keeps parallel sends of the same file in independent upload sessions', async () => {
+    const file = createFile('same-file.zip');
+    let initCalls = 0;
+    let statusCalls = 0;
+    const transport: MultipartUploadTransport = {
+      init: async () => {
+        initCalls += 1;
+        return {
+          ...createSession(),
+          uploadId: `upload-${initCalls}`,
+          objectName: `object-${initCalls}.zip`
+        };
+      },
+      status: async () => {
+        statusCalls += 1;
+        throw new Error('a different message must not reuse this session');
+      },
+      uploadPart: async (_session, _partNumber, part, onProgress) => {
+        onProgress(part.size);
+      },
+      complete: async uploadId => ({
+        objectName: `${uploadId}.zip`,
+        hash: `hash-${uploadId}`,
+        etag: `etag-${uploadId}`
+      }),
+      abort: async () => undefined
+    };
+
+    await uploadMultipartFile(file, transport, {
+      persistenceKey: 'message-a:file-0'
+    });
+    await uploadMultipartFile(file, transport, {
+      persistenceKey: 'message-b:file-0'
+    });
+
+    expect(initCalls).toBe(2);
+    expect(statusCalls).toBe(0);
+    const persisted = JSON.parse(storage.get(STORAGE_KEY) || '{}');
+    expect(
+      persisted[
+        getMultipartUploadPersistenceKey(file, 'message-a:file-0')
+      ].uploadId
+    ).toBe('upload-1');
+    expect(
+      persisted[
+        getMultipartUploadPersistenceKey(file, 'message-b:file-0')
+      ].uploadId
+    ).toBe('upload-2');
+
+    removePersistedMultipartUpload(file, 'message-a:file-0');
+    removePersistedMultipartUpload(file, 'message-b:file-0');
   });
 
   test('aborts active XHR work and clears the persisted descriptor', async () => {

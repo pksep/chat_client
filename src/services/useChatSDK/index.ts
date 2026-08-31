@@ -1342,6 +1342,10 @@ export class ChatSDK {
       });
 
       const usedMultipart = shouldUseMultipartUpload(file);
+      const multipartPersistenceKey =
+        telemetry?.messageId && telemetry.fileId !== undefined
+          ? `${telemetry.messageId}:${telemetry.fileId}`
+          : undefined;
       let uploadTarget: UploadTarget;
 
       if (usedMultipart) {
@@ -1351,6 +1355,7 @@ export class ChatSDK {
           this.createMultipartUploadTransport(isMedia, traceId),
           {
             onProgress,
+            persistenceKey: multipartPersistenceKey,
             signal: telemetry?.signal
           }
         );
@@ -1449,7 +1454,7 @@ export class ChatSDK {
       )) as any;
       const data = await response.json();
       if (usedMultipart) {
-        removePersistedMultipartUpload(file);
+        removePersistedMultipartUpload(file, multipartPersistenceKey);
       }
       stopFakeFinalizingProgress?.();
       onProgress?.(100);
