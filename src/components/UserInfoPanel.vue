@@ -300,16 +300,12 @@ const handleOpenChat = async () => {
 </script>
 
 <style scoped>
-.user-info-panel {
-  background: var(--white);
-}
-
 .user-info-panel__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin: 10px;
-  border-bottom: 1px solid var(--border-grey);
+  border-bottom: 1px solid var(--border-table);
   padding-bottom: 10px;
 }
 
@@ -322,7 +318,7 @@ const handleOpenChat = async () => {
   margin: 0;
   font-size: 16px;
   font-weight: 700;
-  color: var(--text-color);
+
   line-height: 19px;
 }
 
@@ -350,8 +346,8 @@ const handleOpenChat = async () => {
   top: 0;
   left: 62px;
   text-align: center;
-  background: var(--black2);
-  color: var(--white);
+  background: var(--tooltip-neutral-bg);
+  color: var(--text-on-brand);
   padding: 5px 10px;
   border-radius: 8px;
   font-size: 10px;
@@ -370,14 +366,13 @@ const handleOpenChat = async () => {
   font-weight: 600;
   display: flex;
   gap: 5px;
-  color: var(--text-color);
 }
 
 .user-info-panel__subtitle {
   margin: 5px 0 0;
   font-size: 14px;
   line-height: 17px;
-  color: var(--grey6);
+  color: var(--text-secondary);
 }
 
 .user-info-panel__subtitle__icon {
@@ -413,7 +408,7 @@ const handleOpenChat = async () => {
 .user-info-panel__action-icon {
   width: 24px;
   height: 24px;
-  color: var(--grey6);
+  color: var(--text-secondary);
 }
 
 .user-info-panel__action-button span {

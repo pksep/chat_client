@@ -168,7 +168,7 @@
           <Button
             v-for="option in getHeaderContextMenuOptions"
             :key="option.value"
-            :type="ButtonTypeEnum.ghost"
+            :type="ButtonTypeEnum.popover"
             :size="SizesEnum.small"
             :style="option.style"
             :class="[
@@ -257,10 +257,7 @@
         :data-testid="`${props.dataTestid}-Header-SearchClose`"
         @click.stop="hideSearch"
       >
-        <Icon
-          :name="IconNameEnum.crossLarge"
-          color="var(--text-neutral-color)"
-        />
+        <Icon :name="IconNameEnum.crossLarge" color="var(--chat-secondary)" />
       </Button>
     </div>
 
@@ -285,10 +282,7 @@
         :data-testid="`${props.dataTestid}-Header-MobileSearchClose`"
         @click.stop="hideSearch"
       >
-        <Icon
-          :name="IconNameEnum.crossLarge"
-          color="var(--text-neutral-color)"
-        />
+        <Icon :name="IconNameEnum.crossLarge" color="var(--chat-secondary)" />
       </Button>
     </div>
   </header>
@@ -349,10 +343,7 @@
         :data-testid="`${props.dataTestid}-Header-MobileSearchBottomClose`"
         @click.stop="hideSearch"
       >
-        <Icon
-          :name="IconNameEnum.crossLarge"
-          color="var(--text-neutral-color)"
-        />
+        <Icon :name="IconNameEnum.crossLarge" color="var(--chat-secondary)" />
       </Button>
     </div>
   </div>

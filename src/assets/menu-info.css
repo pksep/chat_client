@@ -1,18 +1,19 @@
 aside.menu-info {
   background-color: var(--white);
-  border-left-color: var(--border-grey);
+  border-left-color: var(--border-table);
   border-left-width: 0.5px;
   border-left-style: solid;
   height: var(--default-height);
   width: 100%;
   overflow: hidden;
   --size-avatar: 42.5px;
+
   &.menu-info--open .collapse {
     width: 100%;
   }
 }
 
-.chat__info__modal > .modal-yui-kit__modal-content {
+.chat__info__modal>.modal-yui-kit__modal-content {
   height: var(--default-height);
   max-height: var(--default-height);
   overflow: hidden;
@@ -34,7 +35,7 @@ header.menu-info__header {
   align-items: center;
   justify-content: center;
   position: relative;
-  border-bottom: 1px solid var(--border-grey);
+  border-bottom: 1px solid var(--border-table);
 }
 
 .menu-info__header-title {
@@ -54,7 +55,7 @@ header.menu-info__header h4 {
   overflow: hidden;
   text-overflow: ellipsis;
   margin: 0;
-  color: var(--text-black);
+  color: var(--text-primary);
   font-size: 16px;
   margin-top: 10px;
   font-weight: 700;
@@ -109,37 +110,71 @@ section.menu-info__info-section {
   min-width: 0;
   min-height: 33px;
   padding: 0 8px;
-  border: 1px solid var(--border-grey);
+  border: 1px solid var(--border-table);
   border-radius: 17px;
-  background: var(--white);
-  color: var(--text-color);
+  background: var(--surface-overlay);
+  color: var(--text-primary);
   font-size: 14px;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .menu-info__tab--active {
-  border-color: var(--primary-color);
-  color: var(--primary-color);
+  border-color: var(--action-primary-bg);
+  color: var(--action-primary-bg);
 }
 
 .menu-info__attachments {
   padding-block: 15px 0;
 }
 
+.menu-info__user-header-wrapper {
+  padding-left: 10px;
+  display: flex;
+}
+
 .menu-info__user-header {
+  position: relative;
+  padding: 0 0 7.5px 0;
   display: flex;
   margin: 0;
   align-items: center;
+  transition: all 0.2s ease;
   cursor: pointer;
 }
+
+.menu-info__user-header::after {
+
+  content: "";
+  position: absolute;
+  left: 0;
+  top: calc(100% + 1px);
+  width: 100%;
+  height: 1px;
+  background-color: transparent;
+
+  transition: all 0.2s ease;
+}
+
+.tabs__navigation-content {
+  padding: 0 10px;
+}
+
+.menu-info__user-header.active {
+  color: var(--text-primary);
+}
+
+.menu-info__user-header.active::after {
+  background-color: var(--text-primary);
+}
+
 
 .menu-info__user-count {
   display: grid;
   margin-left: 4px;
   place-content: center;
   border-radius: 50%;
-  background-color: var(--blue12);
-  color: var(--text-black);
+  color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;
   line-height: 100%;
@@ -163,14 +198,20 @@ div.menu-info__buttons {
   align-items: center;
   font-size: 14px;
   gap: 5px;
+
   & p {
     padding-block: 10px;
     margin: 0;
   }
+
   & span {
     font-weight: normal;
-    color: var(--text-black);
+    color: var(--text-primary);
   }
+}
+
+.avatar-yui-kit {
+  padding: 2px;
 }
 
 .menu-info__avatar-button {
@@ -180,9 +221,10 @@ div.menu-info__buttons {
   align-items: center;
   justify-content: center;
   justify-self: center;
-  border: 1px solid var(--blue1);
+  border: 1px solid var(--text-link);
   border-radius: 50%;
   background-color: transparent;
+
   &:hover {
     cursor: pointer;
   }
@@ -205,14 +247,18 @@ button.button-yui-kit.large.menu-info__secondary-button {
   place-items: center;
   font-size: 14px;
   padding: 10px 0;
-  color: var(--text-black);
+  color: var(--text-primary);
+  background-color: var(--surface-input-secondary);
+
   & svg.icon-yui-kit,
   & svg {
-    color: var(--icon-color, var(--grey5));
+    color: var(--icon-color, var(--text-secondary));
+    transition: all 0.2s ease;
   }
+
   &:hover {
-    --icon-color: var(--blue1);
-    background-color: var(--primary-pressed-light);
+    --icon-color: var(--text-link);
+    background-color: var(--action-secondary-pressed-bg);
   }
 }
 

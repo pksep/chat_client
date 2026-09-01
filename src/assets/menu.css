@@ -5,8 +5,8 @@
   padding: 10px 10px 0;
   border-right-width: 0.5px;
   border-right-style: solid;
-  border-right-color: var(--grey13);
-  background-color: var(--white);
+  border-right-color: var(--border-table);
+  background-color: var(--surface-input-primary);
   overflow: hidden;
 }
 
@@ -39,6 +39,7 @@
   --size-avatar: 15px;
   padding: 10px;
   width: 50px;
+
   & .avatar-yui-kit:has(img.avatar-yui-kit__image) {
     width: 2em !important;
     height: 2em !important;
@@ -49,7 +50,11 @@
   grid-area: profile;
 }
 
-.menu__contact-list > li > .contact-list__item {
+.menu__contact-list {
+  padding-left: 10px;
+}
+
+.menu__contact-list>li>.contact-list__item {
   --size-avatar: 19px;
 }
 
@@ -60,13 +65,14 @@
   align-self: start;
   align-items: center;
   gap: 10px;
+
   &:hover {
     cursor: pointer;
   }
 }
 
 .menu__user-assistant-title {
-  color: var(--text-black);
+  color: var(--text-primary);
   font-size: 14px;
 }
 
@@ -80,12 +86,12 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  color: var(--text-color);
+  color: var(--text-primary);
   padding: 0 16px;
   font-weight: bold;
   gap: 10px;
 
-  & > .connection-status {
+  &>.connection-status {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
@@ -94,7 +100,7 @@
   }
 }
 
-.chats-toolbar > .line {
+.chats-toolbar>.line {
   margin: 0 0 0 10px;
   width: calc(100% - 10px);
 }
@@ -116,14 +122,14 @@
   transform: translate(10px, 10px);
 }
 
-.chats-toolbar__headline > button.button-yui-kit {
+.chats-toolbar__headline>button.button-yui-kit {
   margin-right: 0;
   min-height: 22px;
   width: 22px;
   justify-content: center;
   padding: 0;
   background-color: transparent !important;
-  color: var(--blue4) !important;
+  color: var(--action-primary-bg) !important;
 }
 
 .chats-toolbar__controls {
@@ -131,6 +137,12 @@
   padding-left: 10px;
   display: grid;
   gap: 10px;
+}
+
+.calls-page__content .calls-page__search-shell .search-yui-kit__input,
+.chats-toolbar .chats-toolbar__controls .search-yui-kit__input {
+  color: var(--text-disabled);
+  background-color: var(--table-surface-search);
 }
 
 .chats-toolbar__search {
@@ -151,10 +163,10 @@
   gap: 6px;
   min-height: 33px;
   padding: 0 10px;
-  border: 1px solid var(--grey13);
+  border: 1px solid var(--border-table);
   border-radius: 15px;
-  background-color: var(--white);
-  color: var(--text-color);
+  background-color: var(--surface-overlay);
+  color: var(--text-primary);
   font-size: 14px;
   transition: all 0.2s ease;
 }
@@ -168,8 +180,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background-color: var(--blue4);
-  color: var(--white);
+  background-color: var(--action-primary-bg);
+  color: var(--surface-overlay);
   font-size: 12px;
   font-weight: 400;
 }
@@ -179,9 +191,9 @@
 }
 
 .chats-toolbar__filter-button--active {
-  color: var(--blue4);
-  border-color: #7ea3ff;
-  background-color: #f8fbff;
+  color: var(--action-primary-bg);
+  border-color: var(--action-primary-bg);
+  background-color: var(--surface-overlay);
 }
 
 .chats-toolbar__collapse {
@@ -189,7 +201,7 @@
   padding: 4px;
   min-height: 24px;
   align-items: center;
-  background-color: var(--white);
+  background-color: var(--surface-overlay);
   box-shadow: 0px 0px 22px 0px #00000012;
   border-radius: 50%;
   cursor: pointer;
@@ -198,7 +210,7 @@
   top: 20px;
   left: calc(var(--size-left-menu) - 12px);
   z-index: 9;
-  transition: transform 0.3s;
+  transition: all 0.2s ease;
 }
 
 .menu.menu--collapse .menu-bottom-nav {
@@ -216,14 +228,15 @@
 }
 
 .menu__button-install-prompt.ghost-yui-kit {
-  color: var(--text-grey);
+  color: var(--text-secondary);
   padding-block: 10px;
+
   & svg.icon-yui-kit {
     font-size: 16px !important;
   }
 }
 
-@media screen and (width <= 768px) {
+@media screen and (width <=768px) {
   .menu__user-assistant-title {
     font-weight: bold;
     font-size: 16px;
@@ -232,4 +245,19 @@
   .chats-toolbar__headline {
     justify-content: space-between;
   }
+}
+
+.menu-profile__row_theme {
+  display: flex;
+  justify-content: space-between;
+}
+
+.menu-profile__group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.menu-profile__icon {
+  color: var(--text-secondary);
 }

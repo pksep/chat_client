@@ -34,7 +34,7 @@
       >
         <Button
           @click="handleCreateChat"
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           :data-testid="`${props.dataTestid}-ChatsToolbar-CreateChatButton`"
         >
@@ -42,7 +42,7 @@
         </Button>
         <Button
           @click="handleCreateGroup"
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           :data-testid="`${props.dataTestid}-ChatsToolbar-CreateGroupButton`"
         >
@@ -50,7 +50,7 @@
         </Button>
         <Button
           @click="handleCreateBot"
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           :data-testid="`${props.dataTestid}-ChatsToolbar-CreateBotButton`"
         >

@@ -324,7 +324,7 @@ const handleNext = (): void => {
 }
 
 .bot-editor--mobile .bot-editor__label {
-  color: var(--text-grey);
+  color: var(--text-secondary);
   font-size: 16px;
   font-weight: 600;
   line-height: 20px;

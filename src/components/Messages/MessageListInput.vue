@@ -70,10 +70,7 @@
               @click="$emit('clearEdit')"
               :data-testid="`${props.dataTestid}-MenuInfo-CloseButton`"
             >
-              <Icon
-                :name="IconNameEnum.crossLarge"
-                color="var(--text-neutral-color)"
-              />
+              <Icon :name="IconNameEnum.crossLarge" />
             </Button>
           </div>
         </template>
@@ -96,7 +93,7 @@
             >
               <Icon
                 :name="IconNameEnum.crossLarge"
-                color="var(--text-neutral-color)"
+                color="var(--chat-secondary)"
               />
             </Button>
           </div>
@@ -133,7 +130,7 @@
             >
               <Icon
                 :name="IconNameEnum.crossLarge"
-                color="var(--text-neutral-color)"
+                color="var(--chat-secondary)"
               />
             </Button>
           </div>
