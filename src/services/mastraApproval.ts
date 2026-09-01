@@ -136,6 +136,177 @@ const contentPreviewValue = (value: unknown) => {
   return plainText ? quotedValue(plainText) : 'пустое содержимое';
 };
 
+/** Переводит тип ERP-сущности в форму, подходящую для вопроса подтверждения. */
+const editorEntityLabel = (value: unknown) => {
+  if (value === 'product') return 'изделие';
+  if (value === 'cbed') return 'сборочную единицу';
+  if (value === 'detal') return 'деталь';
+  return 'сущность ERP';
+};
+
+/** Показывает изменение переключателя без внутренних boolean-значений. */
+const toggleChangeValue = (value: unknown) => {
+  if (value === true) return 'да';
+  if (value === false) return 'нет';
+  return null;
+};
+
+/** Кратко перечисляет значения параметров или характеристик карточки ERP. */
+const editorVariablesValue = (value: unknown) => {
+  if (!Array.isArray(value)) return null;
+  if (value.length === 0) return 'очистить';
+
+  return value
+    .slice(0, 20)
+    .map(item => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return formatValue(item, 'не указано');
+      }
+
+      const variable = item as Record<string, unknown>;
+      const unit = variable.unit ? ` ${formatValue(variable.unit, '')}` : '';
+      return `${quotedValue(variable.name)}: ${formatValue(variable.value, 'не указано')}${unit}`;
+    })
+    .join(', ');
+};
+
+/** Кратко перечисляет именованные числовые поля сложного изменения ERP. */
+const editorObjectValue = (value: unknown, labels: Record<string, string>) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+
+  const record = value as Record<string, unknown>;
+  const fields = Object.entries(labels)
+    .filter(([key]) => record[key] !== undefined)
+    .map(
+      ([key, label]) => `${label}: ${formatValue(record[key], 'не указано')}`
+    );
+
+  return fields.length > 0 ? fields.join(', ') : null;
+};
+
+/** Формирует понятный список всех полей, изменяемых универсальным редактором ERP. */
+const editorChangesValue = (value: unknown) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+
+  const changes = value as Record<string, unknown>;
+  return formatChanges(changes, [
+    ['name', 'новое название', quotedValue],
+    ['designation', 'новое обозначение', quotedValue],
+    ['article', 'новый артикул', quotedValue],
+    ['responsibleName', 'ответственный', quotedValue],
+    ['description', 'новое описание', contentPreviewValue],
+    ['attention', 'Выделить в поиске', toggleChangeValue],
+    ['custom', 'Кастомное изделие', toggleChangeValue],
+    ['discontinued', 'Снято с производства', toggleChangeValue],
+    ['parameters', 'параметры', editorVariablesValue],
+    ['characteristics', 'характеристики', editorVariablesValue],
+    [
+      'detailProductionTimes',
+      'время производства',
+      field =>
+        editorObjectValue(field, {
+          preparation: 'подготовительное',
+          helper: 'вспомогательное',
+          main: 'основное'
+        })
+    ],
+    [
+      'workpieceCharacteristics',
+      'характеристики заготовки',
+      field =>
+        editorObjectValue(field, {
+          diameter: 'диаметр',
+          billetLength: 'длина заготовки',
+          length: 'длина',
+          width: 'ширина',
+          height: 'высота',
+          wallThickness: 'толщина стенки',
+          outsideDiameter: 'наружный диаметр',
+          thickness: 'толщина',
+          crossSectionArea: 'площадь сечения',
+          acrossFlats: 'размер под ключ',
+          massPerMeter: 'масса погонного метра',
+          density: 'плотность',
+          mass: 'масса',
+          waste: 'отход'
+        })
+    ],
+    [
+      'mainMaterialName',
+      'основной материал',
+      field => (field === null ? 'не указан' : quotedValue(field))
+    ],
+    [
+      'replacementMaterialName',
+      'заменяющий материал',
+      field => (field === null ? 'не указан' : quotedValue(field))
+    ]
+  ]);
+};
+
+const technologyResourceLabels: Record<string, string> = {
+  equipment: 'оборудование',
+  instruments: 'инструмент',
+  tooling: 'оснастка',
+  measuringInstruments: 'мерительный инструмент'
+};
+
+/** Переводит тип ERP-сущности в родительный падеж для описания техпроцесса. */
+const technologyEntityLabel = (value: unknown) => {
+  if (value === 'product') return 'изделия';
+  if (value === 'cbed') return 'сборочной единицы';
+  if (value === 'detal') return 'детали';
+  return 'сущности ERP';
+};
+
+/** Кратко перечисляет производственные ресурсы операции без внутренних ключей ERP. */
+const technologyResourcesValue = (
+  value: unknown,
+  mode: 'selection' | 'changes'
+) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+
+  return Object.entries(value as Record<string, unknown>)
+    .flatMap(([category, categoryValue]) => {
+      const label = technologyResourceLabels[category] || 'ресурсы';
+      if (mode === 'selection') {
+        return Array.isArray(categoryValue) && categoryValue.length > 0
+          ? [`${label}: ${formatList(categoryValue, 'не указан')}`]
+          : [];
+      }
+      if (
+        !categoryValue ||
+        typeof categoryValue !== 'object' ||
+        Array.isArray(categoryValue)
+      ) {
+        return [];
+      }
+
+      const change = categoryValue as Record<string, unknown>;
+      return [
+        Array.isArray(change.add) && change.add.length > 0
+          ? `добавить ${label}: ${formatList(change.add, 'не указан')}`
+          : null,
+        Array.isArray(change.remove) && change.remove.length > 0
+          ? `убрать ${label}: ${formatList(change.remove, 'не указан')}`
+          : null
+      ].filter((item): item is string => Boolean(item));
+    })
+    .join('; ');
+};
+
+/** Возвращает понятное описание сущности и операции технологического процесса. */
+const technologyContext = (args: Record<string, unknown>) => ({
+  entity: `${technologyEntityLabel(args.entityType)} ${entityReference(
+    args.entityName,
+    args.entityDesignation,
+    'без указанного названия'
+  )}`,
+  operation: args.operationName
+    ? `операцию ${quotedValue(args.operationName)}`
+    : `операцию на позиции ${formatValue(args.operationPosition, 'не указана')}`
+});
+
 const dateValue = (value: unknown) => formatDate(value);
 
 const priorityValue = (value: unknown) => {
@@ -177,6 +348,17 @@ const APPROVAL_ACTION_LABELS: Record<string, string> = {
   erp_actions_erp_file_update: 'изменение данных файла ERP',
   erp_actions_erp_file_archive: 'перенос файла ERP в архив',
   erp_actions_erp_file_restore: 'восстановление файла ERP из архива',
+  erp_actions_erp_entity_editor_update: 'изменение карточки ERP',
+  erp_actions_erp_technology_operation_add:
+    'добавление технологической операции',
+  erp_actions_erp_technology_operation_update:
+    'изменение технологической операции',
+  erp_actions_erp_technology_operation_move:
+    'изменение порядка технологических операций',
+  erp_actions_erp_technology_operation_remove:
+    'перенос технологической операции в архив',
+  erp_actions_erp_technology_process_update:
+    'изменение технологического процесса',
   knowledge_actions_knowledge_document_create: 'создание элемента базы знаний',
   knowledge_actions_knowledge_document_update: 'изменение элемента базы знаний',
   knowledge_actions_knowledge_document_archive:
@@ -225,6 +407,68 @@ const buildApprovalQuestion = (approval: PendingToolApproval): string => {
         ? ` с обозначением ${quotedValue(args.detailDesignation)}`
         : '';
       return `Перенести деталь ${quotedValue(args.detailName)}${designation} в архив? Связанные спецификации, комплекты и металлообработка будут актуализированы.`;
+    }
+    case 'erp_actions_erp_entity_editor_update': {
+      const entity = entityReference(
+        args.entityName,
+        args.entityDesignation,
+        'без указанного названия'
+      );
+      const changes = editorChangesValue(args.changes);
+      return `Изменить ${editorEntityLabel(args.type)} ${entity}: ${changes || 'указанные поля'}?`;
+    }
+    case 'erp_actions_erp_technology_operation_add': {
+      const { entity } = technologyContext(args);
+      const changes = [
+        `тип операции: ${quotedValue(args.operationTypeName)}`,
+        args.position !== undefined
+          ? `позиция: ${formatValue(args.position, 'не указана')}`
+          : null,
+        args.mainTime !== undefined
+          ? `основное время: ${formatValue(args.mainTime, 'не указано')}`
+          : null,
+        args.note ? `примечание: ${contentPreviewValue(args.note)}` : null,
+        technologyResourcesValue(args.resources, 'selection') || null
+      ]
+        .filter(Boolean)
+        .join('; ');
+      return `Добавить в технологический процесс ${entity}: ${changes}?`;
+    }
+    case 'erp_actions_erp_technology_operation_update': {
+      const { entity, operation } = technologyContext(args);
+      const changes =
+        args.changes &&
+        typeof args.changes === 'object' &&
+        !Array.isArray(args.changes)
+          ? (args.changes as Record<string, unknown>)
+          : {};
+      const values = [
+        changes.operationTypeName !== undefined
+          ? `тип операции: ${quotedValue(changes.operationTypeName)}`
+          : null,
+        changes.mainTime !== undefined
+          ? `основное время: ${formatValue(changes.mainTime, 'не указано')}`
+          : null,
+        changes.note !== undefined
+          ? `примечание: ${contentPreviewValue(changes.note)}`
+          : null,
+        technologyResourcesValue(changes.resources, 'changes') || null
+      ]
+        .filter(Boolean)
+        .join('; ');
+      return `Изменить ${operation} в технологическом процессе ${entity}: ${values || 'указанные параметры'}?`;
+    }
+    case 'erp_actions_erp_technology_operation_move': {
+      const { entity, operation } = technologyContext(args);
+      return `Переместить ${operation} на позицию ${formatValue(args.position, 'не указана')} в технологическом процессе ${entity}?`;
+    }
+    case 'erp_actions_erp_technology_operation_remove': {
+      const { entity, operation } = technologyContext(args);
+      return `Убрать ${operation} из технологического процесса ${entity}? Операция будет перенесена в архив ERP.`;
+    }
+    case 'erp_actions_erp_technology_process_update': {
+      const { entity } = technologyContext(args);
+      return `Изменить примечание технологического процесса ${entity}: ${contentPreviewValue(args.note)}?`;
     }
     case 'erp_actions_erp_specification_item_add': {
       const parent = entityReference(

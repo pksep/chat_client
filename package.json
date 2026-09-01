@@ -12,6 +12,7 @@
     "build:prod": "cross-env VITE_BASE_MODE=app vite build ",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "verify:approval": "bun scripts/verify-mastra-approval.ts",
     "format": "prettier -w {src,scripts}/**/*.ts -w {src,scripts}/**/*.vue",
     "prepare": "echo 'Running preinstall script' && lefthook install",
     "start:ios": "bun run sync && npx cap open ios",
