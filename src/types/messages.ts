@@ -12,6 +12,8 @@ export interface AIMessage {
   timestamp?: number;
   pinned?: boolean;
   replyTo?: AIMessageReference;
+  /** Источник фонового результата для защиты от повторного добавления. */
+  sourceId?: string;
 }
 
 export interface ChatMessage extends ChatSDKMessage {

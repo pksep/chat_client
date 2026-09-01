@@ -38,6 +38,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
       toggleMessagePin: async () => {},
       deleteMessages: async () => {},
       editMessageAndResend: async () => {},
+      appendExternalMessage: async () => {},
       isInitializing: ref(false),
       pendingApproval: ref<PendingToolApproval | null>(null)
     };
@@ -84,6 +85,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
         transferToken
       }))
     );
+    if (chatId) requestContext.set('threadId', chatId);
     return requestContext as unknown as RequestContext<unknown>;
   };
 
@@ -119,6 +121,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
               options.approvalMode?.value === 'automatic'
                 ? 'automatic'
                 : 'strict',
+            ...(chatId ? { threadId: chatId } : {}),
             attachments: attachments.map(
               ({ name, size, contentType, transferToken }) => ({
                 name,
@@ -609,6 +612,15 @@ const useMastra = (options?: UseMastraOptions | false) => {
     await submitMessage(input, undefined, undefined, null, true, [], replyTo);
   };
 
+  /** Добавляет результат фоновой автоматизации один раз и сохраняет его в истории. */
+  const appendExternalMessage = async (message: Message): Promise<void> => {
+    if (!chatId || !message.sourceId) return;
+    await initializationPromise;
+    if (messages.value.some(item => item.sourceId === message.sourceId)) return;
+    messages.value = [...messages.value, message];
+    await saveMessages(chatId, messages.value);
+  };
+
   return {
     messages,
     sendMessage,
@@ -617,6 +629,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
     toggleMessagePin,
     deleteMessages,
     editMessageAndResend,
+    appendExternalMessage,
     isInitializing,
     pendingApproval
   };

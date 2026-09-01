@@ -45,4 +45,24 @@ describe('formatApprovalMessage', () => {
     expect(message).not.toMatch(/[—–]/u);
     expect(message).toContain('количество: 1');
   });
+
+  test('описывает расписание без технического токена и cron', () => {
+    const message = formatApprovalMessage({
+      runId: 'run-test',
+      toolCallId: 'tool-test',
+      toolName: 'automation_schedule_create',
+      args: {
+        title: 'Утренняя сводка',
+        task: 'Подготовь сводку по дефициту изделий ERP',
+        recurrence: { kind: 'daily', times: ['08:00'] },
+        timezone: 'Europe/Moscow',
+        capabilityCheckToken: 'internal-token'
+      }
+    });
+
+    expect(message).toContain('ежедневно в 08:00');
+    expect(message).toContain('Подготовь сводку по дефициту изделий ERP');
+    expect(message).not.toContain('internal-token');
+    expect(message).not.toContain('cron');
+  });
 });

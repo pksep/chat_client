@@ -87,6 +87,44 @@ const formatChanges = (
 
 const quotedValue = (value: unknown) => `«${formatValue(value, 'не указано')}»`;
 
+/** Преобразует структурированную периодичность в понятное описание без cron. */
+const automationRecurrenceValue = (value: unknown): string => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return 'расписание не указано';
+  }
+  const recurrence = value as Record<string, unknown>;
+  const times = Array.isArray(recurrence.times)
+    ? recurrence.times
+        .map(time => formatValue(time, ''))
+        .filter(Boolean)
+        .join(', ')
+    : '';
+  if (recurrence.kind === 'daily')
+    return `ежедневно в ${times || 'не указано'}`;
+  if (recurrence.kind === 'weekly') {
+    const weekdayNames = [
+      'понедельник',
+      'вторник',
+      'среда',
+      'четверг',
+      'пятница',
+      'суббота',
+      'воскресенье'
+    ];
+    const days = Array.isArray(recurrence.weekdays)
+      ? recurrence.weekdays
+          .map(day => weekdayNames[Number(day) - 1])
+          .filter(Boolean)
+          .join(', ')
+      : 'дни не указаны';
+    return `еженедельно: ${days}, в ${times || 'не указано'}`;
+  }
+  if (recurrence.kind === 'monthly') {
+    return `ежемесячно ${formatValue(recurrence.dayOfMonth, 'не указано')}-го числа в ${times || 'не указано'}`;
+  }
+  return 'расписание не указано';
+};
+
 /** Формирует ссылку на ERP-сущность только из понятных пользователю полей. */
 const entityReference = (
   name: unknown,
@@ -385,7 +423,12 @@ const APPROVAL_ACTION_LABELS: Record<string, string> = {
   board_actions_tasks_move: 'перемещение задачи',
   board_actions_tasks_delete: 'удаление задачи',
   board_actions_subtasks_create: 'создание подзадачи',
-  board_actions_task_comments_create: 'добавление комментария'
+  board_actions_task_comments_create: 'добавление комментария',
+  automation_schedule_create: 'создание автоматизации',
+  automation_schedule_update: 'изменение автоматизации',
+  automation_schedule_pause: 'приостановка автоматизации',
+  automation_schedule_resume: 'возобновление автоматизации',
+  automation_schedule_delete: 'удаление автоматизации'
 };
 
 const buildApprovalQuestion = (approval: PendingToolApproval): string => {
@@ -396,6 +439,33 @@ const buildApprovalQuestion = (approval: PendingToolApproval): string => {
   const taskTitle = quotedValue(args.taskTitle);
 
   switch (toolName) {
+    case 'automation_schedule_create':
+      return `Настроить автоматизацию ${quotedValue(args.title)}: ${formatValue(args.task, 'поручение не указано')}. Расписание: ${automationRecurrenceValue(args.recurrence)}, часовой пояс: ${formatValue(args.timezone, 'Europe/Moscow')}?`;
+    case 'automation_schedule_update': {
+      const changes = [
+        args.newTitle !== undefined
+          ? `новое название: ${quotedValue(args.newTitle)}`
+          : null,
+        args.task !== undefined
+          ? `новое поручение: ${formatValue(args.task, 'не указано')}`
+          : null,
+        args.recurrence !== undefined
+          ? `новое расписание: ${automationRecurrenceValue(args.recurrence)}`
+          : null,
+        args.timezone !== undefined
+          ? `часовой пояс: ${formatValue(args.timezone, 'не указан')}`
+          : null
+      ]
+        .filter(Boolean)
+        .join('; ');
+      return `Изменить автоматизацию ${quotedValue(args.title)}: ${changes || 'указанные параметры'}?`;
+    }
+    case 'automation_schedule_pause':
+      return `Приостановить автоматизацию ${quotedValue(args.title)}?`;
+    case 'automation_schedule_resume':
+      return `Возобновить автоматизацию ${quotedValue(args.title)}?`;
+    case 'automation_schedule_delete':
+      return `Удалить автоматизацию ${quotedValue(args.title)}? Выполненные ею действия и данные останутся без изменений.`;
     case 'erp_actions_erp_detail_create_and_add_to_cbed': {
       const assemblyDesignation = args.assemblyDesignation
         ? ` с обозначением ${quotedValue(args.assemblyDesignation)}`

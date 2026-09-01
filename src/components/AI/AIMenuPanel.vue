@@ -171,7 +171,7 @@
               <small>{{ task.description }}</small>
             </span>
             <span class="ai-menu-panel__row-meta">
-              <time>19:48</time>
+              <time>{{ formatTaskTime(task.nextRunAt) }}</time>
               <div
                 v-if="task.pinned"
                 class="contact-list__pin"
@@ -217,7 +217,7 @@
                 @click.stop="handleDeleteTask(task.id)"
               >
                 <Icon :name="IconNameEnum.deleteSmall" />
-                Удалить задачу
+                Удалить автоматизацию
               </Button>
             </ContextMenu>
           </Teleport>
@@ -311,6 +311,15 @@ const filteredTasks = computed(() => {
       .includes(normalizedQuery.value)
   );
 });
+const formatTaskTime = (timestamp?: number | null): string => {
+  if (!timestamp) return '';
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(new Date(timestamp));
+};
 
 const isMobileViewport = (): boolean =>
   typeof window !== 'undefined' &&
@@ -362,7 +371,9 @@ const handleDeleteSession = (sessionId: string): void => {
 };
 
 const handleToggleTask = (taskId: string): void => {
-  toggleTask(taskId);
+  void toggleTask(taskId).catch(error => {
+    console.error('Failed to request automation state change:', error);
+  });
   closeActivePopover(taskMenuId(taskId));
 };
 
@@ -372,7 +383,9 @@ const handlePinTask = (taskId: string): void => {
 };
 
 const handleDeleteTask = (taskId: string): void => {
-  deleteTask(taskId);
+  void deleteTask(taskId).catch(error => {
+    console.error('Failed to request automation deletion:', error);
+  });
   closeActivePopover(taskMenuId(taskId));
 };
 </script>
