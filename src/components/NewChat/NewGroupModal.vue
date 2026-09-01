@@ -28,33 +28,14 @@
     />
 
     <div v-else class="menu-info__modal-wrapper">
-      <Tabs :tabCount="2" :defaultActiveTabId="2">
-        <template #header1="{ active }">
-          <div class="menu-info__user-header-wrapper">
-            <span
-              class="menu-info__user-header"
-              :class="{
-                active
-              }"
-            >
-              Участники
-              <div class="menu-info__user-count">
-                {{ selectedContacts.length }}
-              </div>
-            </span>
-          </div>
-        </template>
-        <template #header2="{ active }">
-          <div class="menu-info__user-header-wrapper">
-            <span
-              class="menu-info__user-header"
-              :class="{
-                active
-              }"
-            >
-              Информация
-            </span>
-          </div>
+      <Tabs :tabCount="2" :defaultActiveTabId="2" class="new-group__tabs">
+        <template #header1>
+          <span class="menu-info__user-header">
+            Участники
+            <div class="menu-info__user-count">
+              {{ selectedContacts.length }}
+            </div>
+          </span>
         </template>
         <template #tab1>
           <ContactListInModal
@@ -69,15 +50,28 @@
         </template>
         <template #tab2>
           <div class="menu-info__group-info new-group-info">
-            <Avatar
-              :url="`${config.CHAT_PATH_TO_FILE_CDN}/${avatarPreview}`"
-              :alt="groupName"
-              class="user-profile__avatar"
-              :initials="groupName"
+            <button
+              type="button"
+              class="new-group-info__avatar-button"
+              aria-label="Изменить аватар группы"
               @click="() => avatarInputRef.click()"
-            />
+            >
+              <Avatar
+                v-if="avatarPreview"
+                :url="`${config.CHAT_PATH_TO_FILE_CDN}/${avatarPreview}`"
+                :alt="groupName"
+                class="user-profile__avatar"
+                :initials="groupName"
+              />
+              <Icon
+                v-else
+                :name="IconNameEnum.profile"
+                :width="48"
+                :height="48"
+              />
+            </button>
 
-            <div>
+            <div class="new-group-info__details">
               <h4>Название:</h4>
               <Input
                 @click.stop
@@ -108,7 +102,7 @@
         :type="ButtonTypeEnum.primary"
         :size="SizesEnum.little"
         :loading="isCreating"
-        class="contact-selector__add"
+        class="contact-selector__add new-group__create-button"
         :disabled="isCreating || !groupName"
         @click="handleCreateGroup"
       >

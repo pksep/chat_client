@@ -113,6 +113,17 @@
   overflow-y: auto;
 }
 
+@media screen and (width > 768px) {
+  .menu-profile {
+    scrollbar-width: none;
+  }
+
+  .menu-profile::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
+
 .menu-profile__title {
   margin: 0;
   padding: 0 6px 10px;
@@ -164,6 +175,7 @@
 .menu-profile__form {
   display: grid;
   gap: 10px;
+  padding: 10px 0;
 }
 
 .menu-profile__label {
@@ -377,6 +389,11 @@
   & svg g {
     stroke-width: 2px;
   }
+}
+
+.menu-profile__wallpapers:has(.menu-profile__wallpapers-menu)
+  .menu-profile__wallpapers-trigger {
+  border: 1px solid var(--border-blue);
 }
 
 .menu-profile__wallpapers-trigger-copy {

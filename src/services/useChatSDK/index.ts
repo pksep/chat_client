@@ -51,6 +51,13 @@ import {
   getTelemetryErrorPayload,
   recordTelemetryEvent
 } from '../useTelemetry';
+import {
+  MultipartUploadSession,
+  MultipartUploadTransport,
+  removePersistedMultipartUpload,
+  shouldUseMultipartUpload,
+  uploadMultipartFile
+} from './multipart-upload';
 
 export interface ChatSDKOptions {
   apiUrl: string;
@@ -80,6 +87,7 @@ export interface UploadTelemetryContext {
   messageId?: string;
   fileId?: string;
   source?: string;
+  signal?: AbortSignal;
 }
 
 export class ChatSDK {
@@ -262,6 +270,94 @@ export class ChatSDK {
     )) as any;
 
     return response.json();
+  }
+
+  private createMultipartUploadTransport(
+    isMedia: boolean,
+    clientTraceId?: string
+  ): MultipartUploadTransport {
+    const parseResponse = async <T>(response: any): Promise<T> =>
+      response.json() as Promise<T>;
+
+    return {
+      init: async (file: File) => {
+        const response = await this.reqi.post(
+          '/media/multipart/init',
+          {
+            originName: file.name,
+            size: file.size,
+            contentType: file.type || undefined,
+            isMedia,
+            clientTraceId
+          },
+          { parsed: false }
+        );
+        return parseResponse<MultipartUploadSession>(response);
+      },
+      status: async (uploadId: string) => {
+        const response = await this.reqi.get(
+          `/media/multipart/${encodeURIComponent(uploadId)}/status`,
+          { parsed: false }
+        );
+        return parseResponse<MultipartUploadSession>(response);
+      },
+      uploadPart: async (session, partNumber, part, onPartProgress, signal) => {
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          const baseUrl = this.apiUrl.replace(/\/+$/, '');
+          xhr.open(
+            'PUT',
+            `${baseUrl}/media/multipart/${encodeURIComponent(session.uploadId)}/parts/${partNumber}`
+          );
+          xhr.withCredentials = true;
+          xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+          const token = getAuthToken() || this.token;
+
+          if (token) {
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+          }
+
+          const abort = () => xhr.abort();
+          signal?.addEventListener('abort', abort, { once: true });
+          xhr.upload.onprogress = event => onPartProgress(event.loaded);
+          xhr.onload = () => {
+            signal?.removeEventListener('abort', abort);
+
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve();
+              return;
+            }
+
+            reject(new Error(`Failed to upload multipart part: ${xhr.status}`));
+          };
+          xhr.onerror = () => {
+            signal?.removeEventListener('abort', abort);
+            reject(new Error('Failed to upload multipart part: network error'));
+          };
+          xhr.onabort = () => {
+            signal?.removeEventListener('abort', abort);
+            const error = new Error('Multipart upload aborted');
+            error.name = 'AbortError';
+            reject(error);
+          };
+          xhr.send(part);
+        });
+      },
+      complete: async (uploadId: string) => {
+        const response = await this.reqi.post(
+          `/media/multipart/${encodeURIComponent(uploadId)}/complete`,
+          {},
+          { parsed: false }
+        );
+        return parseResponse(response);
+      },
+      abort: async (uploadId: string) => {
+        await this.reqi.delete(
+          `/media/multipart/${encodeURIComponent(uploadId)}`,
+          { parsed: false }
+        );
+      }
+    };
   }
 
   private async uploadVideoCoverImage(
@@ -1245,11 +1341,31 @@ export class ChatSDK {
         payload: basePayload
       });
 
-      const uploadTarget = await this.createUploadTarget(
-        file,
-        isMedia,
-        traceId
-      );
+      const usedMultipart = shouldUseMultipartUpload(file);
+      const multipartPersistenceKey =
+        telemetry?.messageId && telemetry.fileId !== undefined
+          ? `${telemetry.messageId}:${telemetry.fileId}`
+          : undefined;
+      let uploadTarget: UploadTarget;
+
+      if (usedMultipart) {
+        currentUploadStep = 'multipart_upload';
+        const { completed } = await uploadMultipartFile(
+          file,
+          this.createMultipartUploadTransport(isMedia, traceId),
+          {
+            onProgress,
+            persistenceKey: multipartPersistenceKey,
+            signal: telemetry?.signal
+          }
+        );
+        uploadTarget = {
+          objectName: completed.objectName,
+          uploadUrl: ''
+        };
+      } else {
+        uploadTarget = await this.createUploadTarget(file, isMedia, traceId);
+      }
 
       recordTelemetryEvent({
         category: 'upload',
@@ -1278,7 +1394,9 @@ export class ChatSDK {
         }
       });
 
-      await this.uploadFileToMinio(uploadTarget.uploadUrl, file, onProgress);
+      if (!usedMultipart) {
+        await this.uploadFileToMinio(uploadTarget.uploadUrl, file, onProgress);
+      }
 
       recordTelemetryEvent({
         category: 'upload',
@@ -1335,6 +1453,9 @@ export class ChatSDK {
         }
       )) as any;
       const data = await response.json();
+      if (usedMultipart) {
+        removePersistedMultipartUpload(file, multipartPersistenceKey);
+      }
       stopFakeFinalizingProgress?.();
       onProgress?.(100);
 

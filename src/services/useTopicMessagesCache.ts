@@ -519,10 +519,11 @@ export const savePendingUploadFile = async (params: {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(PENDING_UPLOADS_STORE_NAME, 'readwrite');
       const store = tx.objectStore(PENDING_UPLOADS_STORE_NAME);
-      const request = store.put(payload);
+      store.put(payload);
 
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
     });
   } catch (error) {
     console.warn('Failed to save pending upload file:', error);
@@ -650,10 +651,11 @@ export const savePendingUploadMeta = async (params: {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(PENDING_UPLOAD_META_STORE_NAME, 'readwrite');
       const store = tx.objectStore(PENDING_UPLOAD_META_STORE_NAME);
-      const request = store.put(payload);
+      store.put(payload);
 
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
     });
   } catch (error) {
     console.warn('Failed to save pending upload meta:', error);
