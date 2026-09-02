@@ -57,15 +57,18 @@
           <button type="button" @click="handleAutomationClick('daily')">
             <span>＋</span>
             <span>
-              <strong>Ежедневная сводка в 8:00</strong>
-              <small>Начните день с мониторинга календаря, задач и писем</small>
+              <strong>Ежедневная сводка по задачам в 8:00</strong>
+              <small
+                >Активные, просроченные и запланированные на сегодня
+                задачи</small
+              >
             </span>
           </button>
           <button type="button" @click="handleAutomationClick('weekly')">
             <span>＋</span>
             <span>
-              <strong>Еженедельный обзор в пятницу вечером</strong>
-              <small>Отчет о проделанной работе за неделю</small>
+              <strong>Еженедельный обзор задач в пятницу</strong>
+              <small>Краткий итог по задачам доступных проектов</small>
             </span>
           </button>
         </div>
@@ -1389,8 +1392,8 @@ const handleAutomationClick = (kind: 'daily' | 'weekly'): void => {
   startNewTask();
   void sendMessage(
     kind === 'daily'
-      ? 'Настрой ежедневную сводку в 8:00'
-      : 'Настрой еженедельный обзор в пятницу вечером'
+      ? 'Настрой ежедневную сводку по активным, просроченным и запланированным на сегодня задачам доски в 8:00'
+      : 'Настрой еженедельный обзор задач доступных проектов доски по пятницам в 18:00'
   );
   void scrollToBottom();
   focusComposer();

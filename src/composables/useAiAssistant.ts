@@ -11,6 +11,11 @@ import type { PendingToolApproval } from '../services/mastraApproval';
 import type { AiAttachmentReference } from '../services/aiAttachments';
 import type { AIMessage, AIMessageReference } from '../types/messages';
 import { generateUUID } from '../utils/generateUUID';
+import {
+  fetchAiAutomations,
+  type AiAutomationSummary
+} from '../services/aiAutomations';
+import { getOrCreateChatHistory, saveMessages } from '../services/useChatDb';
 
 export type AiAssistantTab = 'chats' | 'tasks';
 export type AiAssistantView = 'chat' | 'tasks';
@@ -45,6 +50,8 @@ export interface AiAutomationTask {
   description: string;
   schedule: string;
   enabled: boolean;
+  nextRunAt?: number | null;
+  lastRunAt?: number | null;
   pinned?: boolean;
 }
 
@@ -87,6 +94,7 @@ interface MastraRuntime {
     attachments?: AiAttachmentReference[],
     replyTo?: AIMessageReference
   ) => Promise<void>;
+  appendExternalMessage: (message: AIMessage) => Promise<void>;
   isInitializing: Ref<boolean>;
   pendingApproval: Ref<PendingToolApproval | null>;
   lastError: Ref<string | null>;
@@ -94,16 +102,7 @@ interface MastraRuntime {
 
 const STORAGE_KEY = 'sep:chat:ai-assistant:v1';
 
-const initialTasks = (): AiAutomationTask[] => [
-  {
-    id: 'daily-automation',
-    title: 'Ежедневная сводка',
-    description: 'Информация за рабочий день',
-    schedule: 'Ежедневная сводка в 8:00',
-    enabled: true,
-    pinned: true
-  }
-];
+const initialTasks = (): AiAutomationTask[] => [];
 
 const loadState = (): PersistedAiState => {
   const fallback: PersistedAiState = {
@@ -124,7 +123,9 @@ const loadState = (): PersistedAiState => {
         ...session,
         messages: []
       })),
-      tasks: Array.isArray(parsed.tasks) ? parsed.tasks : initialTasks(),
+      tasks: Array.isArray(parsed.tasks)
+        ? parsed.tasks.filter(task => task.id !== 'daily-automation')
+        : initialTasks(),
       permissionMode:
         parsed.permissionMode === 'automatic' ? 'automatic' : 'ask'
     };
@@ -151,6 +152,8 @@ const runtimeWatchers = new Map<string, WatchStopHandle>();
 const approvalStates = reactive<
   Record<string, 'approved' | 'rejected' | undefined>
 >({});
+let automationRefreshPromise: Promise<void> | null = null;
+let automationPollingStarted = false;
 const sessionActivities = reactive<Record<string, AiAssistantActivity>>({});
 const inactiveSessionIds = new Set<string>();
 
@@ -510,23 +513,6 @@ const createSession = (input: string): AiAssistantSession => {
   return session;
 };
 
-/** Добавляет пользовательскую задачу в список и связывает её с отдельной AI-сессией. */
-const createAutomationTask = (
-  session: AiAssistantSession,
-  input: string
-): AiAutomationTask => {
-  const task: AiAutomationTask = {
-    id: generateUUID(),
-    sessionId: session.id,
-    title: shorten(input, 36),
-    description: 'Однократная задача',
-    schedule: 'Однократно',
-    enabled: true
-  };
-  persisted.tasks.unshift(task);
-  return task;
-};
-
 /** Готовит отображаемый текст запроса с понятным перечнем вложений. */
 const buildVisibleInput = (
   rawInput: string,
@@ -570,25 +556,28 @@ const sendMessage = async (
   activeView.value = 'chat';
 
   const session = activeSession.value || createSession(visibleInput);
-  if (isTaskRequest) createAutomationTask(session, visibleInput);
   const runtime = await ensureRuntime(session.id);
   beginSessionActivity(session);
-  await runtime.sendMessage(
-    visibleInput,
-    undefined,
-    undefined,
-    attachments,
-    replyTo,
-    modelInput
-  );
-  syncSession(session.id, runtime);
-  return (
-    session.messages
-      .slice()
-      .reverse()
-      .find(message => message.role === 'assistant' && message.text.trim())
-      ?.text || null
-  );
+  try {
+    await runtime.sendMessage(
+      visibleInput,
+      undefined,
+      undefined,
+      attachments,
+      replyTo,
+      modelInput
+    );
+    syncSession(session.id, runtime);
+    return (
+      session.messages
+        .slice()
+        .reverse()
+        .find(message => message.role === 'assistant' && message.text.trim())
+        ?.text || null
+    );
+  } finally {
+    void refreshAutomations();
+  }
 };
 
 const sendSuggestedPrompt = async (
@@ -615,6 +604,7 @@ const updateApproval = async (
   await runtime.resolveToolApproval(
     state === 'approved' ? 'approve' : 'decline'
   );
+  await refreshAutomations();
 };
 
 /** Закрепляет или открепляет отдельное сообщение в активном AI-чате. */
@@ -698,9 +688,13 @@ const deleteSession = (sessionId: string): void => {
   inactiveSessionIds.delete(sessionId);
 };
 
-const toggleTask = (taskId: string): void => {
+const toggleTask = async (taskId: string): Promise<void> => {
   const task = persisted.tasks.find(item => item.id === taskId);
-  if (task) task.enabled = !task.enabled;
+  if (!task) return;
+  selectTask(taskId);
+  await sendMessage(
+    `${task.enabled ? 'Приостанови' : 'Возобнови'} автоматизацию «${task.title}»`
+  );
 };
 
 const toggleTaskPin = (taskId: string): void => {
@@ -708,9 +702,97 @@ const toggleTaskPin = (taskId: string): void => {
   if (task) task.pinned = !task.pinned;
 };
 
-const deleteTask = (taskId: string): void => {
-  const index = persisted.tasks.findIndex(item => item.id === taskId);
-  if (index !== -1) persisted.tasks.splice(index, 1);
+const deleteTask = async (taskId: string): Promise<void> => {
+  const task = persisted.tasks.find(item => item.id === taskId);
+  if (!task) return;
+  selectTask(taskId);
+  await sendMessage(`Удали автоматизацию «${task.title}»`);
+};
+
+/** Синхронизирует серверные расписания и доставляет последний фоновый результат в их чат. */
+const refreshAutomations = (): Promise<void> => {
+  if (automationRefreshPromise) return automationRefreshPromise;
+  automationRefreshPromise = fetchAiAutomations()
+    .then(async automations => {
+      if (!automations) return;
+      const previous = new Map(persisted.tasks.map(task => [task.id, task]));
+      persisted.tasks = automations.map(automation => ({
+        id: automation.id,
+        sessionId: automation.sessionId,
+        title: automation.title,
+        description: automation.schedule,
+        schedule: automation.schedule,
+        enabled: automation.status === 'active',
+        nextRunAt: automation.nextRunAt,
+        lastRunAt: automation.lastRunAt,
+        pinned: previous.get(automation.id)?.pinned
+      }));
+      await Promise.all(automations.map(syncAutomationResult));
+    })
+    .catch(error => {
+      console.warn('Failed to refresh AI automations:', error);
+    })
+    .finally(() => {
+      automationRefreshPromise = null;
+    });
+  return automationRefreshPromise;
+};
+
+/** Добавляет серверную сессию и один раз сохраняет результат конкретного запуска. */
+const syncAutomationResult = async (
+  automation: AiAutomationSummary
+): Promise<void> => {
+  let session = getSession(automation.sessionId);
+  if (!session) {
+    session = {
+      id: automation.sessionId,
+      title: automation.title,
+      description: automation.schedule,
+      time: formatTime(
+        automation.lastRunAt ?? automation.nextRunAt ?? undefined
+      ),
+      messages: []
+    };
+    persisted.sessions.unshift(session);
+  } else {
+    session.title = automation.title;
+  }
+  const result = automation.lastResult;
+  if (!result) {
+    session.description = automation.schedule;
+    return;
+  }
+
+  const sourceId = `automation:${automation.id}:${result.runId ?? result.completedAt}`;
+  const message: AIMessage = {
+    role: 'assistant',
+    content: result.text,
+    timestamp: result.completedAt,
+    sourceId
+  };
+  const runtime = runtimes.get(automation.sessionId);
+  if (runtime) {
+    await runtime.appendExternalMessage(message);
+    syncSession(automation.sessionId, runtime);
+    return;
+  }
+
+  const history = await getOrCreateChatHistory(automation.sessionId);
+  if (history.some(item => item.sourceId === sourceId)) return;
+  await saveMessages(automation.sessionId, [...history, message]);
+  session.description = shorten(result.text);
+  session.time = formatTime(result.completedAt);
+};
+
+/** Запускает лёгкую синхронизацию при открытии приложения, возврате на вкладку и раз в минуту. */
+const startAutomationPolling = (): void => {
+  if (automationPollingStarted || typeof window === 'undefined') return;
+  automationPollingStarted = true;
+  void refreshAutomations();
+  window.addEventListener('focus', () => void refreshAutomations());
+  window.setInterval(() => {
+    if (document.visibilityState === 'visible') void refreshAutomations();
+  }, 60_000);
 };
 
 /** Открывает чат, в котором агент выполнял выбранную задачу. */
@@ -742,42 +824,46 @@ const clearAll = async (): Promise<void> => {
   await clearSession(sessionId);
 };
 
-export const useAiAssistant = () => ({
-  sessions: computed(() => persisted.sessions),
-  tasks: computed(() => persisted.tasks),
-  activeTab,
-  activeView,
-  activeSessionId,
-  activeSession,
-  activeTitle,
-  isThinking,
-  backgroundActivities,
-  isVoiceModeOpen,
-  isVoiceModalVisible,
-  voiceCallStartedAt,
-  permissionMode,
-  startVoiceCall,
-  hideVoiceCall,
-  showVoiceCall,
-  stopVoiceCall,
-  startNewSession,
-  startNewTask,
-  selectSession,
-  selectTask,
-  setTab,
-  showTasks,
-  sendMessage,
-  sendSuggestedPrompt,
-  updateApproval,
-  toggleMessagePin,
-  deleteMessages,
-  editMessageAndResend,
-  markSessionInactive,
-  toggleSessionPin,
-  deleteSession,
-  clearSession,
-  toggleTask,
-  toggleTaskPin,
-  deleteTask,
-  clearAll
-});
+export const useAiAssistant = () => {
+  startAutomationPolling();
+  return {
+    sessions: computed(() => persisted.sessions),
+    tasks: computed(() => persisted.tasks),
+    activeTab,
+    activeView,
+    activeSessionId,
+    activeSession,
+    activeTitle,
+    isThinking,
+    backgroundActivities,
+    isVoiceModeOpen,
+    isVoiceModalVisible,
+    voiceCallStartedAt,
+    permissionMode,
+    startVoiceCall,
+    hideVoiceCall,
+    showVoiceCall,
+    stopVoiceCall,
+    startNewSession,
+    startNewTask,
+    selectSession,
+    selectTask,
+    setTab,
+    showTasks,
+    sendMessage,
+    sendSuggestedPrompt,
+    updateApproval,
+    toggleMessagePin,
+    deleteMessages,
+    editMessageAndResend,
+    markSessionInactive,
+    toggleSessionPin,
+    deleteSession,
+    clearSession,
+    toggleTask,
+    toggleTaskPin,
+    deleteTask,
+    refreshAutomations,
+    clearAll
+  };
+};
