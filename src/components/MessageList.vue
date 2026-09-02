@@ -551,6 +551,7 @@ import { useMessageSender } from './Messages/composables/useMessageSender';
 import { useMessageMastra } from './Messages/composables/useMessageMastra';
 import { useMessageActions } from './Messages/composables/useMessageActions';
 import { Capacitor } from '@capacitor/core';
+import { MediaType } from '@pksep/zod-shared-chat';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
 import SelectedMessagesContent from './Header/SelectedMessagesContent.vue';
@@ -2208,7 +2209,13 @@ const warmVisibleTopicMedia = async (topicId: string) => {
 
   for (const message of visibleMessages) {
     for (const media of message.media || []) {
-      const preferredPath = media.thumbnailPath || media.path;
+      // Prewarming a generic file downloads its complete body. A history with
+      // several large ZIP files can therefore saturate the browser connection
+      // before a new multipart PUT is even opened. Only warm lightweight
+      // visual sources; documents are fetched explicitly after a click.
+      const preferredPath =
+        media.thumbnailPath ||
+        (media.type === MediaType.Image ? media.path : null);
 
       if (!preferredPath || mediaPaths.has(preferredPath)) {
         continue;

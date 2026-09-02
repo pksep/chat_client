@@ -10,7 +10,18 @@
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <rect x="4" y="4" width="40" height="40" rx="20" fill="none" />
+      <rect
+        x="4"
+        y="4"
+        width="40"
+        height="40"
+        rx="20"
+        :fill="
+          props.isMeSender
+            ? 'var(--surface-input-primary, white)'
+            : 'var(--action-primary-bg, #77A6FF)'
+        "
+      />
       <template v-if="!hasPercent">
         <path
           d="M34 24C34 29.5228 29.5228 34 24 34C18.4772 34 14 29.5228 14 24C14 18.4772 18.4772 14 24 14C29.5228 14 34 18.4772 34 24ZM16.2 24C16.2 28.3078 19.6922 31.8 24 31.8C28.3078 31.8 31.8 28.3078 31.8 24C31.8 19.6922 28.3078 16.2 24 16.2C19.6922 16.2 16.2 19.6922 16.2 24Z"
