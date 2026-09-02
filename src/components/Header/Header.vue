@@ -830,9 +830,7 @@ const topicSearchResultsCount = computed(() =>
     ? aiSearchMessageIds.value.length
     : topicSearchResults.value.length
 );
-const hasTopicSearchResults = computed(
-  () => topicSearchResultsCount.value > 0
-);
+const hasTopicSearchResults = computed(() => topicSearchResultsCount.value > 0);
 const canNavigateTopicSearchPrev = computed(
   () =>
     hasTopicSearchResults.value &&

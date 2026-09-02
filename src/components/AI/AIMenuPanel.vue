@@ -156,93 +156,93 @@
             ]"
             @contextmenu="openActivePopover(sessionMenuId(session.id), $event)"
           >
-          <button
-            type="button"
-            class="ai-menu-panel__row-main"
-            :aria-current="isSessionActive(session.id) ? 'true' : undefined"
-            :aria-expanded="!!isOpen[sessionMenuId(session.id)]"
-            aria-haspopup="menu"
-            @click="handleSelectSession(session.id)"
-          >
-            <span class="ai-menu-panel__row-copy">
-              <strong>{{ session.title }}</strong>
-              <small>{{ session.description }}</small>
-            </span>
-            <span class="ai-menu-panel__row-meta">
-              <time>{{ session.time }}</time>
-              <span
-                v-if="backgroundActivityStatusBySessionId[session.id]"
-                :class="[
-                  'ai-menu-panel__activity-status',
-                  `ai-menu-panel__activity-status--${backgroundActivityStatusBySessionId[session.id]}`
-                ]"
-                :aria-label="
-                  getActivityStatusLabel(
-                    backgroundActivityStatusBySessionId[session.id]
-                  )
-                "
-                :title="
-                  getActivityStatusLabel(
-                    backgroundActivityStatusBySessionId[session.id]
-                  )
-                "
-              >
-                <FileIcon
-                  v-if="
-                    backgroundActivityStatusBySessionId[session.id] ===
-                    'running'
-                  "
-                  is-me-sender
-                  background-color="transparent"
-                />
-              </span>
-              <div
-                v-else-if="session.pinned"
-                class="contact-list__pin"
-                aria-label="Закреплено"
-              >
-                <PinIcon />
-              </div>
-            </span>
-          </button>
-          <Teleport to="body">
-            <ContextMenu
-              :visible="!!isOpen[sessionMenuId(session.id)]"
-              :position="position"
-              :data-testid="`AI-MenuPanel-SessionContext-${session.id}`"
-              @unmount-close="
-                () => closeActivePopover(sessionMenuId(session.id))
-              "
+            <button
+              type="button"
+              class="ai-menu-panel__row-main"
+              :aria-current="isSessionActive(session.id) ? 'true' : undefined"
+              :aria-expanded="!!isOpen[sessionMenuId(session.id)]"
+              aria-haspopup="menu"
+              @click="handleSelectSession(session.id)"
             >
-              <Button
-                :type="ButtonTypeEnum.popover"
-                :size="SizesEnum.small"
-                @click.stop="handlePinSession(session.id)"
+              <span class="ai-menu-panel__row-copy">
+                <strong>{{ session.title }}</strong>
+                <small>{{ session.description }}</small>
+              </span>
+              <span class="ai-menu-panel__row-meta">
+                <time>{{ session.time }}</time>
+                <span
+                  v-if="backgroundActivityStatusBySessionId[session.id]"
+                  :class="[
+                    'ai-menu-panel__activity-status',
+                    `ai-menu-panel__activity-status--${backgroundActivityStatusBySessionId[session.id]}`
+                  ]"
+                  :aria-label="
+                    getActivityStatusLabel(
+                      backgroundActivityStatusBySessionId[session.id]
+                    )
+                  "
+                  :title="
+                    getActivityStatusLabel(
+                      backgroundActivityStatusBySessionId[session.id]
+                    )
+                  "
+                >
+                  <FileIcon
+                    v-if="
+                      backgroundActivityStatusBySessionId[session.id] ===
+                      'running'
+                    "
+                    is-me-sender
+                    background-color="transparent"
+                  />
+                </span>
+                <div
+                  v-else-if="session.pinned"
+                  class="contact-list__pin"
+                  aria-label="Закреплено"
+                >
+                  <PinIcon />
+                </div>
+              </span>
+            </button>
+            <Teleport to="body">
+              <ContextMenu
+                :visible="!!isOpen[sessionMenuId(session.id)]"
+                :position="position"
+                :data-testid="`AI-MenuPanel-SessionContext-${session.id}`"
+                @unmount-close="
+                  () => closeActivePopover(sessionMenuId(session.id))
+                "
               >
-                <template v-if="session.pinned">
-                  <UnpinIcon /> Открепить
-                </template>
-                <template v-else> <PinIcon /> Закрепить </template>
-              </Button>
-              <Button
-                :type="ButtonTypeEnum.popover"
-                :size="SizesEnum.small"
-                @click.stop="handleClearSession(session.id)"
-              >
-                <Icon :name="IconNameEnum.imagePaint" />
-                Очистить чат
-              </Button>
-              <Button
-                class="red-context-button"
-                :type="ButtonTypeEnum.popover"
-                :size="SizesEnum.small"
-                @click.stop="handleDeleteSession(session.id)"
-              >
-                <Icon :name="IconNameEnum.deleteSmall" />
-                Удалить чат
-              </Button>
-            </ContextMenu>
-          </Teleport>
+                <Button
+                  :type="ButtonTypeEnum.popover"
+                  :size="SizesEnum.small"
+                  @click.stop="handlePinSession(session.id)"
+                >
+                  <template v-if="session.pinned">
+                    <UnpinIcon /> Открепить
+                  </template>
+                  <template v-else> <PinIcon /> Закрепить </template>
+                </Button>
+                <Button
+                  :type="ButtonTypeEnum.popover"
+                  :size="SizesEnum.small"
+                  @click.stop="handleClearSession(session.id)"
+                >
+                  <Icon :name="IconNameEnum.imagePaint" />
+                  Очистить чат
+                </Button>
+                <Button
+                  class="red-context-button"
+                  :type="ButtonTypeEnum.popover"
+                  :size="SizesEnum.small"
+                  @click.stop="handleDeleteSession(session.id)"
+                >
+                  <Icon :name="IconNameEnum.deleteSmall" />
+                  Удалить чат
+                </Button>
+              </ContextMenu>
+            </Teleport>
           </article>
 
           <div class="ai-menu-panel__delimetr"></div>

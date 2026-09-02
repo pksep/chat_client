@@ -176,9 +176,7 @@ const filteredRecipients = computed<ForwardRecipient[]>(() => {
     return topics.value
       .filter(
         topic =>
-          isBotTopic(topic) &&
-          !isCallTopic(topic) &&
-          !isCallBotUser(topic.user)
+          isBotTopic(topic) && !isCallTopic(topic) && !isCallBotUser(topic.user)
       )
       .filter(topic => matchesTopicSearch(topic, query))
       .map(topic => ({ key: `topic:${topic.id}`, kind: 'topic', topic }));
