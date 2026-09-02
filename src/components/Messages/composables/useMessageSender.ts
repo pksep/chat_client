@@ -1917,7 +1917,7 @@ export function useMessageSender(
           messageId: clientId,
           type,
           isLoading: true,
-          uploadPercent: 1
+          uploadPercent: 0
         };
 
         if (type === MediaType.File) {

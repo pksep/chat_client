@@ -62,7 +62,6 @@ export interface MultipartUploadOptions {
   signal?: AbortSignal;
   controlRequestTimeoutMs?: number;
   onProgress?: (percent: number) => void;
-  onFinalizing?: () => void;
 }
 
 interface PersistedUpload {
@@ -262,7 +261,6 @@ const createAbortError = (): Error => {
 
 const readBlobIntoMemory = (
   blob: Blob,
-  onProgress: (loaded: number) => void,
   signal?: AbortSignal
 ): Promise<ArrayBuffer> => {
   if (signal?.aborted) {
@@ -275,7 +273,6 @@ const readBlobIntoMemory = (
         throw createAbortError();
       }
 
-      onProgress(blob.size);
       return buffer;
     });
   }
@@ -291,7 +288,6 @@ const readBlobIntoMemory = (
     };
     const abort = (): void => reader.abort();
 
-    reader.onprogress = event => onProgress(Math.min(blob.size, event.loaded));
     reader.onload = () => {
       const result = reader.result;
       cleanup();
@@ -301,7 +297,6 @@ const readBlobIntoMemory = (
         return;
       }
 
-      onProgress(blob.size);
       resolve(result);
     };
     reader.onerror = () => {
@@ -515,20 +510,6 @@ export const uploadMultipartFile = async (
     100,
     30_000
   );
-  const persistedBeforeSession = getPersistedUpload(
-    file,
-    options.persistenceKey
-  );
-  const initialPersistedProgress = normalizePersistedProgress(
-    persistedBeforeSession?.progress
-  );
-
-  if (!persistedBeforeSession) {
-    options.onProgress?.(1);
-  } else if (initialPersistedProgress > 0) {
-    options.onProgress?.(initialPersistedProgress);
-  }
-
   const session = await getSessionWithRetry(
     file,
     transport,
@@ -559,7 +540,8 @@ export const uploadMultipartFile = async (
     persisted?.uploadId === session.uploadId
       ? normalizePersistedProgress(persisted.progress)
       : 0;
-  let lastProgress = Math.max(1, persistedProgress);
+  let lastProgress = 0;
+  let lastEmittedProgress = -1;
 
   const reportProgress = (): void => {
     const confirmedLoaded = [...completedBytes.values()].reduce(
@@ -582,6 +564,11 @@ export const uploadMultipartFile = async (
       persistedProgress = lastProgress;
     }
 
+    if (lastProgress <= lastEmittedProgress) {
+      return;
+    }
+
+    lastEmittedProgress = lastProgress;
     options.onProgress?.(lastProgress);
   };
 
@@ -616,20 +603,11 @@ export const uploadMultipartFile = async (
       end,
       file.type || 'application/octet-stream'
     );
-    // Chromium/OneDrive can serialize several filesystem-backed Blob reads and
-    // keep every XHR at 4%. Read one chunk at a time across all active uploads,
-    // then let the bounded multipart XHR workers send those memory-backed
-    // chunks in parallel. FileReader progress also keeps the UI moving while
-    // Windows is materializing a cloud-backed file locally.
+    // Read one chunk at a time across all active uploads, then let the bounded
+    // multipart XHR workers send those memory-backed chunks in parallel. Disk
+    // reads intentionally do not affect upload progress: only XHR bytes do.
     const partBuffer = await readMultipartPartIntoMemory(() =>
-      readBlobIntoMemory(
-        filePart,
-        loaded => {
-          activeBytes.set(partNumber, Math.min(filePart.size, loaded));
-          reportProgress();
-        },
-        options.signal
-      )
+      readBlobIntoMemory(filePart, options.signal)
     );
     const part = new Blob([partBuffer], {
       type: filePart.type || 'application/octet-stream'
@@ -800,10 +778,11 @@ export const uploadMultipartFile = async (
       }
     );
     await Promise.all(workers);
-    options.onFinalizing?.();
     const completed =
       completedByOtherRequest || (await completeWithConflictRetry());
-    options.onProgress?.(100);
+    if (lastEmittedProgress < 100) {
+      options.onProgress?.(100);
+    }
     return { session, completed };
   } catch (error) {
     if (options.signal?.aborted || (error as Error)?.name === 'AbortError') {

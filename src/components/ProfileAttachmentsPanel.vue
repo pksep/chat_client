@@ -333,7 +333,9 @@ const tabs: Array<{ label: string; value: ProfileAttachmentsTab }> = [
 ];
 
 const localActiveTab = ref<ProfileAttachmentsTab>('media');
-const sliderElements = ref<{ path: string; name: string; file?: File }[]>([]);
+const sliderElements = ref<
+  { path: string; fallbackPath?: string; name: string; file?: File }[]
+>([]);
 const defaultIndexSlider = ref<number>(0);
 const isSliderOpen = ref(false);
 const attachmentItemsByTab = reactive<
@@ -371,8 +373,12 @@ const videoMetadataElements = new Map<string, HTMLVideoElement>();
 
 const { addHandler: addBackHandler, removeHandler: removeBackHandler } =
   useBackButton();
-const { getFullMediaPath, isSliderContentUrl, primeMediaCache } =
-  useMessageMedia();
+const {
+  getFullMediaPath,
+  getRemoteThumbnailUrl,
+  isSliderContentUrl,
+  primeMediaCache
+} = useMessageMedia();
 
 const currentTab = computed(() => props.activeTab || localActiveTab.value);
 const isHistoryLoading = computed(
@@ -1218,11 +1224,13 @@ const syncNativeFileStatuses = (): void => {
 watch(nativeFileStatusIdentity, syncNativeFileStatuses, { immediate: true });
 
 const buildSliderItem = async (media: IMedia) => {
-  const fallbackPath = getFullMediaPath(media, false);
+  const originalPath = getFullMediaPath(media, false);
+  const fallbackPath = getRemoteThumbnailUrl(media);
 
   if (!isNativePdfMedia(media) || !media.path) {
     return {
-      path: fallbackPath,
+      path: originalPath,
+      fallbackPath,
       name: media.originName || 'file'
     };
   }
@@ -1231,7 +1239,8 @@ const buildSliderItem = async (media: IMedia) => {
 
   if (!cachedObjectUrl) {
     return {
-      path: fallbackPath,
+      path: originalPath,
+      fallbackPath,
       name: media.originName || 'file'
     };
   }
@@ -1244,12 +1253,14 @@ const buildSliderItem = async (media: IMedia) => {
 
     return {
       path: cachedObjectUrl,
+      fallbackPath,
       name: media.originName || 'file',
       file
     };
   } catch {
     return {
       path: cachedObjectUrl,
+      fallbackPath,
       name: media.originName || 'file'
     };
   }

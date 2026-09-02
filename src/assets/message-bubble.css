@@ -1496,7 +1496,12 @@ div.message-content__file {
     max-height: 400px;
     overflow: auto;
     overflow-wrap: break-word;
+    scrollbar-width: none;
     word-break: break-word;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
 
     .tiptap p {
       line-height: 17px;

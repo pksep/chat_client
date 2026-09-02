@@ -21,7 +21,6 @@
     />
 
     <div
-      v-if="props.isAddOne"
       class="contact-selector__filters"
       :data-testid="`${props.dataTestid}-ContactSelector-Filters`"
     >
@@ -177,12 +176,10 @@ const contacts = computed(() => {
     );
   }
 
-  if (props.isAddOne) {
-    filteredContacts = filteredContacts.filter(contact => {
-      const isBot = isBotUser(contact);
-      return state.filter === 'bots' ? isBot : !isBot;
-    });
-  }
+  filteredContacts = filteredContacts.filter(contact => {
+    const isBot = isBotUser(contact);
+    return state.filter === 'bots' ? isBot : !isBot;
+  });
 
   if (props.excludedContactIds && props.excludedContactIds.size > 0) {
     filteredContacts = filteredContacts.filter(
