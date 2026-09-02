@@ -1,5 +1,6 @@
 import { TopicType } from '../services/useChatSDK/types';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
+import { compactPersonName } from './personName';
 
 export const LOCAL_BOT_TOPIC_ID_PREFIX = 'local-bot-topic-';
 export const LOCAL_BOT_USER_ID_PREFIX = 'local-bot-user-';
@@ -77,6 +78,18 @@ export const isLocalBotTopic = (topic?: ITopic | null): boolean =>
 export const isDeletedBotUser = (user?: IUser | null): boolean => {
   const meta = parseBotMeta(user?.ex);
   return Boolean(meta.isDeletedBot || user?.nickname === DELETED_BOT_USERNAME);
+};
+
+export const getDeletedAccountDisplayName = (
+  displayName?: string | null
+): string => {
+  const name = compactPersonName(displayName || '');
+
+  if (!name || name === DELETED_BOT_DISPLAY_NAME) {
+    return DELETED_BOT_DISPLAY_NAME;
+  }
+
+  return `${name} (${DELETED_BOT_DISPLAY_NAME})`;
 };
 
 export const isBotUser = (user?: IUser | null): boolean => {

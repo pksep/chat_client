@@ -78,7 +78,7 @@
     <ContactListInModal
       v-if="!props.isMenuInfo || activeTab === 'participants'"
       :show-add-button="props.showAddButton"
-      :contacts="props.members"
+      :contacts="visibleMembers"
       :excluded-contact-ids="excludedContactIds"
       class="modal-info-mobile__contact-list"
       :data-testid="`${props.dataTestid}-Header-ContactListInModal`"
@@ -109,6 +109,7 @@ import { useInformationMenu } from '../../composables/useInformationMenu';
 import { uploadFile } from '../../services/useChat';
 import { currentGroup, setGroupInfo } from '../../composables/useGroup';
 import CachedAvatar from '../UI/CachedAvatar.vue';
+import { isDeletedBotUser } from '../../utils/bot';
 
 interface IMobileChatInfoProps {
   members: IUser[];
@@ -128,6 +129,10 @@ const emits = defineEmits<{
   (e: 'unmount-added-users', selectedUsers: IUser[]): void;
   (e: 'unmount-open-chat'): void;
 }>();
+
+const visibleMembers = computed(() =>
+  props.members.filter(member => member && !isDeletedBotUser(member))
+);
 
 const excludedContactIds = computed(() => {
   const ids = new Set<string | number>();

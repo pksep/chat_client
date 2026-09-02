@@ -107,7 +107,7 @@
             }
           ]"
           avatar-alt="user-profile-alt"
-          :user="currentTopic.user"
+          :user="headerDmUser"
           :typing-label="headerTypingLabel || undefined"
           hide-deleted-account-status
           :data-testid="`${props.dataTestid}-Header-UserProfile`"
@@ -138,6 +138,7 @@
             (route.type === RouteTypes.DIALOGS ||
               route.type === RouteTypes.GROUP) &&
             !isBotDialogTopic &&
+            !isDeletedAccountDialogTopic &&
             !isFavoriteDialogTopic &&
             !isCallTopicRoute &&
             !isCallActive &&
@@ -508,7 +509,11 @@ import {
   setMobileTopicSearchActive,
   type IMessageSearchResult
 } from '../../composables/useMessageSearch';
-import { isBotTopic } from '../../utils/bot';
+import {
+  getDeletedAccountDisplayName,
+  isBotTopic,
+  isDeletedBotUser
+} from '../../utils/bot';
 import { isFavoriteTopic } from '../../utils/favorite-topic';
 import { isCallTopic } from '../../utils/call-topic';
 import {
@@ -574,6 +579,26 @@ const isBotDialogTopic = computed(
   () =>
     route.value.type === RouteTypes.DIALOGS && isBotTopic(currentTopic.value)
 );
+const isDeletedAccountDialogTopic = computed(
+  () =>
+    currentTopic.value?.type === TopicType.DM &&
+    isDeletedBotUser(currentTopic.value.user)
+);
+const headerDmUser = computed<IUser | undefined>(() => {
+  const topic = currentTopic.value;
+  const user = topic?.user;
+
+  if (!user || !isDeletedBotUser(user)) {
+    return user;
+  }
+
+  return {
+    ...user,
+    initials: getDeletedAccountDisplayName(
+      user.initials || topic.name || user.nickname
+    )
+  };
+});
 const isCallTopicRoute = computed(() => isCallTopic(currentTopic.value));
 const currentRouteGroup = computed(() => {
   if (currentTopic.value?.type !== TopicType.Group) {
@@ -604,7 +629,9 @@ const mobileInfo = computed<IMenuInfoInformation | null>(() => {
 });
 const mobileInfoMembers = computed<IUser[]>(() => {
   const topic = currentRouteGroup.value || currentTopic.value;
-  return (topic?.members || []).filter(Boolean) as IUser[];
+  return (topic?.members || []).filter(
+    (member): member is IUser => Boolean(member) && !isDeletedBotUser(member)
+  );
 });
 const mobileInfoShowAddButton = computed(
   () => !!(currentRouteGroup.value?.isAdmin ?? currentTopic.value?.isAdmin)
