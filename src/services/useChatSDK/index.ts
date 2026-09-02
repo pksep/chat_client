@@ -52,9 +52,11 @@ import {
   recordTelemetryEvent
 } from '../useTelemetry';
 import {
+  getPersistedMultipartUploadsForScope,
   MultipartUploadSession,
   MultipartUploadTransport,
   removePersistedMultipartUpload,
+  removePersistedMultipartUploadByKey,
   shouldUseMultipartUpload,
   uploadMultipartFile
 } from './multipart-upload';
@@ -71,9 +73,13 @@ export interface WebSocketEvent {
   timestamp?: Date;
 }
 
-const UPLOAD_PROGRESS_MAX_PERCENT = 100;
-const FINALIZING_PROGRESS_TARGET_PERCENT = 100;
+const UPLOAD_PROGRESS_INITIAL_PERCENT = 1;
+const UPLOAD_PROGRESS_CONNECTING_MAX_PERCENT = 4;
+const UPLOAD_PROGRESS_CONNECTING_INTERVAL_MS = 350;
+const UPLOAD_PROGRESS_MAX_PERCENT = 95;
+const FINALIZING_PROGRESS_TARGET_PERCENT = 99;
 const FINALIZING_PROGRESS_INTERVAL_MS = 350;
+const UPLOAD_RETRY_MAX_DELAY_MS = 5000;
 const VIDEO_UPLOAD_COVER_TIMEOUT_MS = 8000;
 
 interface UploadTarget {
@@ -95,6 +101,10 @@ export class ChatSDK {
   private wsUrl: string;
   private token?: string;
   private socket: Socket | null = null;
+  private readonly multipartUploadAbortControllers = new Map<
+    string,
+    AbortController
+  >();
 
   private auth: ChatAuthInterface;
   private user: ChatUserInterface;
@@ -280,7 +290,7 @@ export class ChatSDK {
       response.json() as Promise<T>;
 
     return {
-      init: async (file: File) => {
+      init: async (file: File, signal?: AbortSignal) => {
         const response = await this.reqi.post(
           '/media/multipart/init',
           {
@@ -290,14 +300,14 @@ export class ChatSDK {
             isMedia,
             clientTraceId
           },
-          { parsed: false }
+          { parsed: false, requset: { signal } }
         );
         return parseResponse<MultipartUploadSession>(response);
       },
-      status: async (uploadId: string) => {
+      status: async (uploadId: string, signal?: AbortSignal) => {
         const response = await this.reqi.get(
           `/media/multipart/${encodeURIComponent(uploadId)}/status`,
-          { parsed: false }
+          { parsed: false, request: { signal } }
         );
         return parseResponse<MultipartUploadSession>(response);
       },
@@ -328,7 +338,12 @@ export class ChatSDK {
               return;
             }
 
-            reject(new Error(`Failed to upload multipart part: ${xhr.status}`));
+            reject(
+              Object.assign(
+                new Error(`Failed to upload multipart part: ${xhr.status}`),
+                { status: xhr.status }
+              )
+            );
           };
           xhr.onerror = () => {
             signal?.removeEventListener('abort', abort);
@@ -343,18 +358,18 @@ export class ChatSDK {
           xhr.send(part);
         });
       },
-      complete: async (uploadId: string) => {
+      complete: async (uploadId: string, signal?: AbortSignal) => {
         const response = await this.reqi.post(
           `/media/multipart/${encodeURIComponent(uploadId)}/complete`,
           {},
-          { parsed: false }
+          { parsed: false, requset: { signal } }
         );
         return parseResponse(response);
       },
-      abort: async (uploadId: string) => {
+      abort: async (uploadId: string, signal?: AbortSignal) => {
         await this.reqi.delete(
           `/media/multipart/${encodeURIComponent(uploadId)}`,
-          { parsed: false }
+          { parsed: false, request: { signal } }
         );
       }
     };
@@ -1319,9 +1334,70 @@ export class ChatSDK {
       payload: basePayload
     });
 
-    onProgress?.(0);
+    const usedMultipart = shouldUseMultipartUpload(file);
+    const multipartPersistenceKey =
+      usedMultipart && telemetry?.messageId && telemetry.fileId !== undefined
+        ? `${telemetry.messageId}:${telemetry.fileId}`
+        : undefined;
+    const multipartAbortController = multipartPersistenceKey
+      ? new AbortController()
+      : null;
+    const abortFromCaller = (): void => multipartAbortController?.abort();
+
+    if (multipartPersistenceKey && multipartAbortController) {
+      this.multipartUploadAbortControllers.set(
+        multipartPersistenceKey,
+        multipartAbortController
+      );
+
+      if (telemetry?.signal?.aborted) {
+        multipartAbortController.abort();
+      } else {
+        telemetry?.signal?.addEventListener('abort', abortFromCaller, {
+          once: true
+        });
+      }
+    }
+    let lastReportedUploadProgress = 0;
+    const reportUploadProgress = (percent: number): void => {
+      const normalizedPercent = Math.max(0, Math.min(100, Math.round(percent)));
+
+      if (normalizedPercent <= lastReportedUploadProgress) {
+        return;
+      }
+
+      lastReportedUploadProgress = normalizedPercent;
+      onProgress?.(normalizedPercent);
+    };
+    const finishUploadProgress = (): void => {
+      reportUploadProgress(100);
+    };
+
+    reportUploadProgress(UPLOAD_PROGRESS_INITIAL_PERCENT);
+    let connectingProgress = UPLOAD_PROGRESS_INITIAL_PERCENT;
+    const connectingProgressTimer = window.setInterval(() => {
+      if (connectingProgress >= UPLOAD_PROGRESS_CONNECTING_MAX_PERCENT) {
+        window.clearInterval(connectingProgressTimer);
+        return;
+      }
+
+      connectingProgress += 1;
+      reportUploadProgress(connectingProgress);
+    }, UPLOAD_PROGRESS_CONNECTING_INTERVAL_MS);
 
     let stopFakeFinalizingProgress: (() => void) | null = null;
+    let hasStartedFakeFinalizingProgress = false;
+    const startFinalizingProgress = (): void => {
+      if (hasStartedFakeFinalizingProgress) {
+        return;
+      }
+
+      hasStartedFakeFinalizingProgress = true;
+      stopFakeFinalizingProgress = this.startFakeFinalizingProgress(
+        reportUploadProgress,
+        UPLOAD_PROGRESS_MAX_PERCENT
+      );
+    };
     let currentUploadStep = 'start';
 
     try {
@@ -1341,11 +1417,6 @@ export class ChatSDK {
         payload: basePayload
       });
 
-      const usedMultipart = shouldUseMultipartUpload(file);
-      const multipartPersistenceKey =
-        telemetry?.messageId && telemetry.fileId !== undefined
-          ? `${telemetry.messageId}:${telemetry.fileId}`
-          : undefined;
       let uploadTarget: UploadTarget;
 
       if (usedMultipart) {
@@ -1354,9 +1425,16 @@ export class ChatSDK {
           file,
           this.createMultipartUploadTransport(isMedia, traceId),
           {
-            onProgress,
+            onProgress: percent => {
+              reportUploadProgress(this.mapUploadProgress(percent));
+
+              if (percent >= 100) {
+                startFinalizingProgress();
+              }
+            },
+            onFinalizing: startFinalizingProgress,
             persistenceKey: multipartPersistenceKey,
-            signal: telemetry?.signal
+            signal: multipartAbortController?.signal || telemetry?.signal
           }
         );
         uploadTarget = {
@@ -1395,7 +1473,11 @@ export class ChatSDK {
       });
 
       if (!usedMultipart) {
-        await this.uploadFileToMinio(uploadTarget.uploadUrl, file, onProgress);
+        await this.uploadFileToMinio(
+          uploadTarget.uploadUrl,
+          file,
+          reportUploadProgress
+        );
       }
 
       recordTelemetryEvent({
@@ -1412,13 +1494,10 @@ export class ChatSDK {
       });
 
       currentUploadStep = 'video_cover';
+      startFinalizingProgress();
       const videoCoverObjectName = await videoCoverObjectNamePromise;
       currentUploadStep = 'complete';
       const completeStartedAt = Date.now();
-      stopFakeFinalizingProgress = this.startFakeFinalizingProgress(
-        onProgress,
-        UPLOAD_PROGRESS_MAX_PERCENT
-      );
 
       recordTelemetryEvent({
         category: 'upload',
@@ -1433,8 +1512,7 @@ export class ChatSDK {
         }
       });
 
-      const response = (await this.reqi.post<Media>(
-        '/media/upload',
+      const response = await this.completeMediaUpload(
         {
           objectName: uploadTarget.objectName,
           originName: file.name,
@@ -1448,16 +1526,14 @@ export class ChatSDK {
           isMedia,
           clientTraceId: traceId
         },
-        {
-          parsed: false
-        }
-      )) as any;
+        telemetry?.signal
+      );
       const data = await response.json();
       if (usedMultipart) {
         removePersistedMultipartUpload(file, multipartPersistenceKey);
       }
       stopFakeFinalizingProgress?.();
-      onProgress?.(100);
+      finishUploadProgress();
 
       recordTelemetryEvent({
         category: 'upload',
@@ -1508,13 +1584,184 @@ export class ChatSDK {
         }
       });
       throw error;
+    } finally {
+      window.clearInterval(connectingProgressTimer);
+      telemetry?.signal?.removeEventListener('abort', abortFromCaller);
+
+      if (
+        multipartPersistenceKey &&
+        this.multipartUploadAbortControllers.get(multipartPersistenceKey) ===
+          multipartAbortController
+      ) {
+        this.multipartUploadAbortControllers.delete(multipartPersistenceKey);
+      }
     }
+  }
+
+  async abortPendingMessageUploads(messageId: string): Promise<void> {
+    if (!messageId) {
+      return;
+    }
+
+    const scopePrefix = `${messageId}:`;
+
+    this.multipartUploadAbortControllers.forEach((controller, scope) => {
+      if (scope.startsWith(scopePrefix)) {
+        controller.abort();
+      }
+    });
+
+    const persistedUploads = getPersistedMultipartUploadsForScope(scopePrefix);
+
+    await Promise.all(
+      persistedUploads.map(async upload => {
+        try {
+          const controller = new AbortController();
+          const timeoutId = window.setTimeout(() => controller.abort(), 5000);
+
+          try {
+            await this.reqi.delete(
+              `/media/multipart/${encodeURIComponent(upload.uploadId)}`,
+              { parsed: false, request: { signal: controller.signal } }
+            );
+          } finally {
+            window.clearTimeout(timeoutId);
+          }
+        } catch {
+          // The server also expires unfinished multipart sessions. Removing
+          // local state here prevents a user-deleted upload from resuming.
+        } finally {
+          removePersistedMultipartUploadByKey(upload.persistenceKey);
+        }
+      })
+    );
+  }
+
+  async abortPendingFileUpload(
+    messageId: string,
+    fileId: string
+  ): Promise<void> {
+    if (!messageId || fileId === undefined || fileId === null) {
+      return;
+    }
+
+    const scope = `${messageId}:${fileId}`;
+    this.multipartUploadAbortControllers.get(scope)?.abort();
+    const persistedUploads = getPersistedMultipartUploadsForScope(scope);
+
+    await Promise.all(
+      persistedUploads.map(async upload => {
+        try {
+          const controller = new AbortController();
+          const timeoutId = window.setTimeout(() => controller.abort(), 5000);
+
+          try {
+            await this.reqi.delete(
+              `/media/multipart/${encodeURIComponent(upload.uploadId)}`,
+              { parsed: false, request: { signal: controller.signal } }
+            );
+          } finally {
+            window.clearTimeout(timeoutId);
+          }
+        } catch {
+          // Cleanup is also retried by the server expiry worker.
+        } finally {
+          removePersistedMultipartUploadByKey(upload.persistenceKey);
+        }
+      })
+    );
   }
 
   private mapUploadProgress(percent: number): number {
     const normalizedPercent = Math.max(0, Math.min(percent, 100));
 
-    return Math.round((normalizedPercent / 100) * UPLOAD_PROGRESS_MAX_PERCENT);
+    return Math.max(
+      UPLOAD_PROGRESS_INITIAL_PERCENT,
+      Math.round((normalizedPercent / 100) * UPLOAD_PROGRESS_MAX_PERCENT)
+    );
+  }
+
+  private getUploadErrorStatus(error: unknown): number | undefined {
+    const candidate = Number(
+      (error as { status?: unknown; response?: { status?: unknown } })
+        ?.status ??
+        (error as { response?: { status?: unknown } })?.response?.status
+    );
+
+    if (Number.isSafeInteger(candidate)) {
+      return candidate;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    const matchedStatus = message.match(/\b([45]\d{2})\b/);
+    return matchedStatus ? Number(matchedStatus[1]) : undefined;
+  }
+
+  private isTransientUploadError(error: unknown): boolean {
+    if ((error as { name?: unknown })?.name === 'AbortError') {
+      return false;
+    }
+
+    const status = this.getUploadErrorStatus(error);
+    return (
+      status === undefined ||
+      status === 408 ||
+      status === 425 ||
+      status === 429 ||
+      status >= 500
+    );
+  }
+
+  private waitForUploadRetry(
+    attempt: number,
+    signal?: AbortSignal
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        const error = new Error('Upload aborted');
+        error.name = 'AbortError';
+        reject(error);
+        return;
+      }
+
+      const delay = Math.min(
+        UPLOAD_RETRY_MAX_DELAY_MS,
+        300 * 2 ** Math.min(attempt, 5)
+      );
+      const onAbort = (): void => {
+        clearTimeout(timeoutId);
+        const error = new Error('Upload aborted');
+        error.name = 'AbortError';
+        reject(error);
+      };
+      const timeoutId = setTimeout(() => {
+        signal?.removeEventListener('abort', onAbort);
+        resolve();
+      }, delay);
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
+  }
+
+  private async completeMediaUpload(
+    payload: Record<string, unknown>,
+    signal?: AbortSignal
+  ): Promise<any> {
+    let attempt = 0;
+
+    for (;;) {
+      try {
+        return (await this.reqi.post<Media>('/media/upload', payload, {
+          parsed: false
+        })) as any;
+      } catch (error) {
+        if (!this.isTransientUploadError(error)) {
+          throw error;
+        }
+
+        await this.waitForUploadRetry(attempt, signal);
+        attempt += 1;
+      }
+    }
   }
 
   private startFakeFinalizingProgress(

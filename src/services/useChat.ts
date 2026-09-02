@@ -24,11 +24,13 @@ import {
 } from '../composables/useTopics';
 import {
   updateLocalLastMessageGroup,
-  getGroupById
+  getGroupById,
+  removeLocalUserFromAllGroups
 } from '../composables/useGroup';
 import {
   fetchAllUsers,
   getUserById,
+  upsertLocalUser,
   updateLocalUserStatus
 } from '../composables/useUsers';
 import {
@@ -63,6 +65,7 @@ import {
   subscribeToAppVisibilityChanges
 } from './useAppVisibility';
 import type { MediaPreviewDimensions } from '../utils/mediaPreview';
+import { isDeletedBotUser } from '../utils/bot';
 import { useUrlWatcher } from '../composables/navigation';
 import { RouteTypes } from '../composables/navigation/useUrlRouting';
 import {
@@ -717,6 +720,11 @@ const setupChatListeners = (): void => {
 
   const handleUserUpdatedPayload = (payload: {
     id: string;
+    initials?: string;
+    nickname?: string;
+    avatarUrl?: string | null;
+    ex?: unknown;
+    isBot?: boolean;
     lastOnline: Date | string | null;
     status?: {
       icon: string;
@@ -736,14 +744,47 @@ const setupChatListeners = (): void => {
         ? undefined
         : normalizeUserStatus(payload.status);
 
+    const profileChanges = {
+      ...(payload.initials !== undefined ? { initials: payload.initials } : {}),
+      ...(payload.nickname !== undefined ? { nickname: payload.nickname } : {}),
+      ...(payload.avatarUrl !== undefined
+        ? { avatarUrl: payload.avatarUrl }
+        : {}),
+      ...(payload.ex !== undefined ? { ex: payload.ex } : {}),
+      ...(payload.isBot !== undefined ? { isBot: payload.isBot } : {})
+    };
+
     updateLocalUserStatus(payload.id, normalizedLastOnline, normalizedStatus);
     updateLocalTopicUser(payload.id, {
+      ...profileChanges,
       lastOnline: normalizedLastOnline,
       ...(normalizedStatus !== undefined ? { status: normalizedStatus } : {})
     });
 
+    const updatedTopicUser = getTopicList()
+      .map(topic =>
+        topic.user?.id === payload.id
+          ? topic.user
+          : topic.members?.find(member => member.id === payload.id)
+      )
+      .find(Boolean);
+    if (isDeletedBotUser(updatedTopicUser)) {
+      removeLocalUserFromAllGroups(payload.id);
+    }
+
+    const existingUser = getUserById(payload.id) || updatedTopicUser;
+    if (existingUser && Object.keys(profileChanges).length > 0) {
+      upsertLocalUser({
+        ...existingUser,
+        ...profileChanges,
+        lastOnline: normalizedLastOnline,
+        ...(normalizedStatus !== undefined ? { status: normalizedStatus } : {})
+      });
+    }
+
     if (payload.id === currentUserId.value) {
       mergeAuthUser({
+        ...profileChanges,
         lastOnline: normalizedLastOnline,
         ...(normalizedStatus !== undefined ? { status: normalizedStatus } : {})
       });

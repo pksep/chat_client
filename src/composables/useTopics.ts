@@ -39,6 +39,7 @@ import {
 } from '../utils/messageTracking';
 import { getDisplayableTopicUnreadCount } from '../utils/topicUnreadCount';
 import {
+  getDeletedAccountDisplayName,
   isBotTopic,
   isBotUser,
   isDeletedBotUser,
@@ -92,6 +93,10 @@ const waitForTopicIdle = (): Promise<void> =>
 
 const resolveDmTopicName = (topic: ITopic, user?: IUser): string => {
   const sourceName = user?.initials || topic.name || user?.nickname || '';
+
+  if (isDeletedBotUser(user)) {
+    return getDeletedAccountDisplayName(sourceName);
+  }
 
   return isBotTopic(topic) || isBotUser(user)
     ? sourceName
@@ -345,7 +350,8 @@ const createTopicsApi = () => {
 
     if (
       normalizedTopic.type === TopicType.DM &&
-      isDeletedBotUser(existingTopic?.user)
+      isDeletedBotUser(existingTopic?.user) &&
+      !isDeletedBotUser(normalizedTopic.user)
     ) {
       const deletedUser = existingTopic.user;
 

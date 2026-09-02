@@ -1,4 +1,10 @@
-import { nextTick, watch, type Ref } from 'vue';
+import {
+  getCurrentScope,
+  nextTick,
+  onScopeDispose,
+  watch,
+  type Ref
+} from 'vue';
 import { sendMessageChat, uploadFile } from '../../../services/useChat';
 import { generateUUID } from '../../../utils/generateUUID';
 import { fileToDataURL } from '../../../utils/fileToDataURL';
@@ -71,14 +77,16 @@ const TEXT_WAIT_INDICATOR_DELAY_MS = 150;
 const MAX_MEDIA_ATTACHMENTS_PER_MESSAGE = 10;
 const MAX_FILE_ATTACHMENTS_PER_MESSAGE = 10;
 const MESSAGE_MAX_RETRY_AGE_MS = 15 * 60 * 1000;
+const MESSAGE_UPLOAD_MAX_RETRY_AGE_MS = 2 * 60 * 60 * 1000;
 const MESSAGE_AUTO_RETRY_WINDOW_MS = 180000;
-const MESSAGE_AUTO_RETRY_INITIAL_DELAY_MS = 3000;
-const MESSAGE_AUTO_RETRY_MAX_DELAY_MS = 15000;
+const MESSAGE_AUTO_RETRY_INITIAL_DELAY_MS = 1000;
+const MESSAGE_AUTO_RETRY_MAX_DELAY_MS = 5000;
 const BACKGROUND_UPLOAD_RETRY_SUPPRESS_MS = 15000;
 const VIDEO_INITIAL_PREVIEW_DIMENSIONS = {
   width: 640,
   height: 360
 };
+
 const VIDEO_LOCAL_THUMBNAIL_TIMEOUT_MS = 3000;
 const CALL_TOPIC_SUMMARY_COMMAND = 'сделать краткое содержание';
 const CALL_TOPIC_ACTIONS_COMMAND = 'список действий по звонку';
@@ -129,6 +137,7 @@ const pendingMessageRetryTimers = new Map<
   ReturnType<typeof setTimeout>
 >();
 const pendingMessageRetryStates = new Map<string, PendingMessageRetryState>();
+const activePendingMessageRetries = new Set<string>();
 const backgroundInterruptedUploadMessages = new Set<string>();
 const activeUploadRequests = new Map<string, Promise<boolean>>();
 let arePendingMessageRetryListenersBound = false;
@@ -517,8 +526,21 @@ export function useMessageSender(
       return false;
     }
 
-    return Date.now() - createdAtMs >= MESSAGE_MAX_RETRY_AGE_MS;
+    const maxRetryAgeMs = message?.media?.some(
+      media => media.isLoading || media.uploadError || !media.path
+    )
+      ? MESSAGE_UPLOAD_MAX_RETRY_AGE_MS
+      : MESSAGE_MAX_RETRY_AGE_MS;
+
+    return Date.now() - createdAtMs >= maxRetryAgeMs;
   };
+
+  const getMessageAutoRetryWindowMs = (message?: IMessage | null): number =>
+    message?.media?.some(
+      media => media.isLoading || media.uploadError || !media.path
+    )
+      ? MESSAGE_UPLOAD_MAX_RETRY_AGE_MS
+      : MESSAGE_AUTO_RETRY_WINDOW_MS;
 
   const isAutoRetryCandidate = (message?: IMessage | null): boolean =>
     Boolean(
@@ -545,7 +567,7 @@ export function useMessageSender(
       return true;
     }
 
-    return message.media.every(media => !media.isLoading);
+    return message.media.every(media => !media.isLoading || media.uploadError);
   };
 
   const clearPendingMessageAutoRetry = (
@@ -769,7 +791,13 @@ export function useMessageSender(
     let hasUploadError = false;
 
     for (const media of retryableMedia) {
-      const payload = await getPendingUploadFile(topicId, messageId, media.id);
+      setFileUploadPendingStatus(topicId, messageId, media.id);
+      const payload = await getPendingUploadFile(
+        topicId,
+        messageId,
+        media.id,
+        () => changeFileUploadPercent(topicId, messageId, media.id, null)
+      );
 
       if (!payload) {
         hasUploadError = true;
@@ -899,7 +927,10 @@ export function useMessageSender(
 
     pendingMessageRetryStates.set(retryKey, retryState);
 
-    if (Date.now() - retryState.startedAt >= MESSAGE_AUTO_RETRY_WINDOW_MS) {
+    if (
+      Date.now() - retryState.startedAt >=
+      getMessageAutoRetryWindowMs(message)
+    ) {
       changeMessageStatusLocally(
         topicId,
         messageId,
@@ -936,7 +967,10 @@ export function useMessageSender(
         return;
       }
 
-      if (Date.now() - retryState.startedAt >= MESSAGE_AUTO_RETRY_WINDOW_MS) {
+      if (
+        Date.now() - retryState.startedAt >=
+        getMessageAutoRetryWindowMs(currentMessage)
+      ) {
         changeMessageStatusLocally(
           topicId,
           messageId,
@@ -946,9 +980,27 @@ export function useMessageSender(
         return;
       }
 
-      const didSend = await trySendPendingMessage(topicId, messageId, {
-        markNotDeliveredOnFailure: false
-      });
+      if (activePendingMessageRetries.has(retryKey)) {
+        const retryAfterActiveRequest = setTimeout(() => {
+          pendingMessageRetryTimers.delete(retryKey);
+          schedulePendingMessageAutoRetry(topicId, messageId, {
+            immediate: true
+          });
+        }, 1000);
+        pendingMessageRetryTimers.set(retryKey, retryAfterActiveRequest);
+        return;
+      }
+
+      activePendingMessageRetries.add(retryKey);
+      let didSend = false;
+
+      try {
+        didSend = await trySendPendingMessage(topicId, messageId, {
+          markNotDeliveredOnFailure: false
+        });
+      } finally {
+        activePendingMessageRetries.delete(retryKey);
+      }
 
       if (didSend) {
         clearPendingMessageAutoRetry(topicId, messageId);
@@ -1009,10 +1061,48 @@ export function useMessageSender(
     });
   };
 
+  let pendingUploadRestoreProbeTimer: ReturnType<typeof setTimeout> | null =
+    null;
+
+  const startPendingUploadRestoreProbe = (topicId?: string): void => {
+    if (pendingUploadRestoreProbeTimer) {
+      clearTimeout(pendingUploadRestoreProbeTimer);
+      pendingUploadRestoreProbeTimer = null;
+    }
+
+    if (!topicId) {
+      return;
+    }
+
+    let attemptsRemaining = 30;
+    const probe = (): void => {
+      schedulePendingMessageAutoRetriesForTopic(topicId, { immediate: true });
+      attemptsRemaining -= 1;
+
+      if (attemptsRemaining > 0 && route.value.id === topicId) {
+        pendingUploadRestoreProbeTimer = setTimeout(probe, 1000);
+      } else {
+        pendingUploadRestoreProbeTimer = null;
+      }
+    };
+
+    pendingUploadRestoreProbeTimer = setTimeout(probe, 0);
+  };
+
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      if (pendingUploadRestoreProbeTimer) {
+        clearTimeout(pendingUploadRestoreProbeTimer);
+        pendingUploadRestoreProbeTimer = null;
+      }
+    });
+  }
+
   watch(
     () => route.value.id,
     nextTopicId => {
       schedulePendingMessageAutoRetriesForTopic(nextTopicId);
+      startPendingUploadRestoreProbe(nextTopicId);
     },
     { immediate: true }
   );
@@ -1827,7 +1917,7 @@ export function useMessageSender(
           messageId: clientId,
           type,
           isLoading: true,
-          uploadPercent: null
+          uploadPercent: 1
         };
 
         if (type === MediaType.File) {
@@ -1889,12 +1979,15 @@ export function useMessageSender(
     };
 
     addMessageToLocal(newMessage.topicId, newMessage);
-    const pendingUploadPersistence = [
-      registerPendingUploadMessage(newMessage.topicId, clientId, {
+    const pendingUploadMessagePersistence = registerPendingUploadMessage(
+      newMessage.topicId,
+      clientId,
+      {
         replyMessageId,
-        forwardMessageIds
-      })
-    ];
+        forwardMessageIds,
+        message: newMessage
+      }
+    );
 
     recordTelemetryEvent({
       category: 'upload',
@@ -1917,32 +2010,56 @@ export function useMessageSender(
       }
     });
 
+    const pendingUploadFileHandoffs = new Map<string, Promise<void>>();
+
     filePayloads.forEach(({ file, isMedia }, index) => {
       const fileId = index.toString();
 
-      pendingUploadPersistence.push(
-        registerPendingUploadFile(newMessage.topicId, clientId, fileId, {
-          file,
-          isMedia
-        })
+      const persistencePromise = registerPendingUploadFile(
+        newMessage.topicId,
+        clientId,
+        fileId,
+        { file, isMedia },
+        () =>
+          changeFileUploadPercent(newMessage.topicId, clientId, fileId, null)
       );
+      pendingUploadFileHandoffs.set(fileId, persistencePromise);
 
       if (getMediaType(file, isMedia) === MediaType.Video) {
         hydrateLocalVideoPreview(newMessage.topicId, clientId, fileId, file);
       }
     });
 
-    await Promise.all([
-      ...pendingUploadPersistence,
+    const pendingUploadMessageStatePromise = Promise.all([
+      pendingUploadMessagePersistence,
       flushPendingMessagePersists()
     ]);
+    const pendingUploadPersistencePromise = Promise.allSettled([
+      pendingUploadMessageStatePromise,
+      ...pendingUploadFileHandoffs.values()
+    ]);
+
+    await pendingUploadMessageStatePromise;
 
     let hasUploadError = false;
     for (const [i, payload] of filePayloads.entries()) {
+      const fileId = i.toString();
+
+      try {
+        await pendingUploadFileHandoffs.get(fileId);
+      } catch (error: any) {
+        hasUploadError = true;
+        changeFileUploadErrorStatus(newMessage.topicId, clientId, fileId, true);
+        showErrorNotification(
+          error?.message || 'Failed to prepare file for resumable upload'
+        );
+        continue;
+      }
+
       const isUploaded = await uploadMessageFile(
         newMessage.topicId,
         clientId,
-        i.toString(),
+        fileId,
         payload,
         {
           markNotDeliveredOnFailure: false
@@ -1955,6 +2072,7 @@ export function useMessageSender(
     }
 
     if (hasUploadError) {
+      await pendingUploadPersistencePromise;
       recordTelemetryEvent({
         category: 'upload',
         name: 'upload.message.waiting_retry',
@@ -2195,7 +2313,12 @@ export function useMessageSender(
     let hasUploadError = false;
 
     for (const media of failedMedia) {
-      const payload = await getPendingUploadFile(topicId, messageId, media.id);
+      const payload = await getPendingUploadFile(
+        topicId,
+        messageId,
+        media.id,
+        () => changeFileUploadPercent(topicId, messageId, media.id, null)
+      );
 
       if (!payload) {
         hasUploadError = true;

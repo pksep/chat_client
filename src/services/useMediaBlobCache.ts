@@ -4,6 +4,7 @@ const DB_NAME = 'chat-media-blob-cache-db';
 const DB_VERSION = 2;
 const MEDIA_BLOB_STORE = 'mediaBlobs';
 const MAX_CACHE_BYTES = 200 * 1024 * 1024;
+const MAX_CACHE_ITEM_BYTES = 64 * 1024 * 1024;
 const ACCESSED_AT_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
 interface CachedMediaBlobRecord {
@@ -231,7 +232,8 @@ export const ensureMediaObjectUrl = async (
         return objectUrl;
       }
 
-      const response = await fetch(buildMediaSourceUrl(path), {
+      const sourceUrl = buildMediaSourceUrl(path);
+      const response = await fetch(sourceUrl, {
         credentials: 'include'
       });
 
@@ -239,7 +241,24 @@ export const ensureMediaObjectUrl = async (
         return null;
       }
 
+      const contentLength = Number(response.headers.get('content-length'));
+
+      if (
+        Number.isFinite(contentLength) &&
+        contentLength > MAX_CACHE_ITEM_BYTES
+      ) {
+        await response.body?.cancel().catch(() => undefined);
+        objectUrlCache.set(path, sourceUrl);
+        return sourceUrl;
+      }
+
       const blob = await response.blob();
+
+      if (blob.size > MAX_CACHE_ITEM_BYTES) {
+        objectUrlCache.set(path, sourceUrl);
+        return sourceUrl;
+      }
+
       const now = new Date().toISOString();
       const objectUrl = URL.createObjectURL(blob);
 
@@ -276,3 +295,11 @@ export const prefetchMediaObjectUrl = (path?: string | null): void => {
 
   void ensureMediaObjectUrl(path);
 };
+
+if (typeof window !== 'undefined') {
+  // Remove oversized leftovers created by older clients. This is derived
+  // browser cache only; messages and server objects remain untouched.
+  void ensureCacheWithinLimit().catch(error => {
+    console.warn('Failed to trim media blob cache:', error);
+  });
+}
