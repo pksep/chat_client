@@ -64,14 +64,15 @@ test('передаёт прикреплённый документ AI-агент
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          uploadUrl: 'http://127.0.0.1:65530/temporary-ai-attachment',
+          uploadUrl:
+            'http://chat-server:3000/media/encrypted-upload/ai-attachments/document.txt?expires=2000000000&signature=test',
           attachmentToken: 'stage-token'
         })
       });
     }
   );
   await page.route(
-    'http://127.0.0.1:65530/temporary-ai-attachment',
+    'http://127.0.0.1:65530/media/encrypted-upload/ai-attachments/document.txt?expires=2000000000&signature=test',
     async route => {
       uploadedBodies.push(route.request().postDataBuffer() ?? Buffer.alloc(0));
       await route.fulfill({ status: 200, body: '' });
@@ -111,14 +112,15 @@ test('передаёт прикреплённый документ AI-агент
     buffer: Buffer.from('hello', 'utf8')
   });
 
-  await expect(editor.getByText('ai-document.txt', { exact: false })).toBeVisible();
+  await expect(
+    editor.getByText('ai-document.txt', { exact: false })
+  ).toBeVisible();
   await expect(editor.getByText('5 B', { exact: true })).toBeVisible();
 
   const mastraRequestPromise = page.waitForRequest(
     request =>
       request.method() === 'POST' &&
-      request.url() ===
-        'http://127.0.0.1:4111/api/agents/generalAgent/stream'
+      request.url() === 'http://127.0.0.1:4111/api/agents/generalAgent/stream'
   );
   await page.locator('.attach-modal button.primary-yui-kit.right').click();
   const mastraRequest = await mastraRequestPromise;
