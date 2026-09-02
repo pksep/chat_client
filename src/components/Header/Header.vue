@@ -44,11 +44,25 @@
           class="chat__header-ai-icon"
           :data-testid="`${props.dataTestid}-Header-AIAssistantIcon`"
         >
-          <AiSparkleIcon />
+          <AiAvatar />
         </span>
-        <h3 :data-testid="`${props.dataTestid}-Header-AIAssistantTitle`">
-          {{ aiAssistantTitle }}
-        </h3>
+        <Tooltip
+          class="chat__header-ai-title-tooltip"
+          :hint="aiAssistantTitle"
+          :is-can-show="isAiAssistantTitleOverflowing"
+          position="bottom-center"
+          type="black"
+          size="small"
+          :data-testid="`${props.dataTestid}-Header-AIAssistantTitleTooltip`"
+        >
+          <h3
+            ref="aiAssistantTitleRef"
+            class="user-profile__title"
+            :data-testid="`${props.dataTestid}-Header-AIAssistantTitle`"
+          >
+            <span class="user-profile__title-text">{{ aiAssistantTitle }}</span>
+          </h3>
+        </Tooltip>
       </div>
 
       <template v-else-if="currentTopic">
@@ -121,16 +135,13 @@
         @click.stop
       >
         <div
-          v-if="
-            (isTopicSearchAvailable || route.type === RouteTypes.AI) &&
-            !isMobile
-          "
+          v-if="isChatSearchAvailable && !isMobile"
           class="chat__header-search-trigger"
         >
           <SearchIcon
             class="chat__header__icon"
             :data-testid="`${props.dataTestid}-Header-SearchIcon`"
-            @click.stop="route.type !== RouteTypes.AI && showSearch()"
+            @click.stop="showSearch"
           />
         </div>
         <CallIcon
@@ -193,7 +204,7 @@
     </div>
 
     <div
-      v-if="state.isSearchInputEnable && !isMobile && isTopicSearchAvailable"
+      v-if="state.isSearchInputEnable && !isMobile && isChatSearchAvailable"
       class="chat__header-desktop-search-row"
       :data-testid="`${props.dataTestid}-Header-SearchPanel`"
       @click.stop
@@ -262,7 +273,7 @@
     </div>
 
     <div
-      v-if="state.isSearchInputEnable && isMobile && isTopicSearchAvailable"
+      v-if="state.isSearchInputEnable && isMobile && isChatSearchAvailable"
       class="chat__header-mobile-search-row"
       :data-testid="`${props.dataTestid}-Header-MobileSearchRow`"
       @click.stop
@@ -288,7 +299,7 @@
   </header>
 
   <div
-    v-if="state.isSearchInputEnable && isMobile && isTopicSearchAvailable"
+    v-if="state.isSearchInputEnable && isMobile && isChatSearchAvailable"
     class="chat__header-mobile-search-controls"
     :data-testid="`${props.dataTestid}-Header-MobileSearchControls`"
     @click.stop
@@ -438,7 +449,8 @@ import {
   IconNameEnum,
   ButtonTypeEnum,
   SizesEnum,
-  Search
+  Search,
+  Tooltip
 } from '@pksep/yui';
 
 import type {
@@ -446,7 +458,7 @@ import type {
   IHeaderEmits,
   IUser
 } from '../interfaces/interfaces';
-import AiSparkleIcon from '../AI/AiSparkleIcon.vue';
+import AiAvatar from '../AI/AiAvatar.vue';
 import { useAiAssistant } from '../../composables/useAiAssistant';
 import MobileChatInfo from './MobileChatInfo.vue';
 import {
@@ -455,6 +467,7 @@ import {
 } from '../../composables/useMenuInfo';
 import {
   navigateToAssistant,
+  navigateToAI,
   navigateToDefault,
   navigateToDialogsList,
   navigateToGroupsList,
@@ -508,6 +521,10 @@ import {
   setMobileTopicSearchActive,
   type IMessageSearchResult
 } from '../../composables/useMessageSearch';
+import {
+  clearAiMessageSearchResult,
+  navigateToAiMessageSearchResult
+} from '../../composables/useAiMessageSearch';
 import { isBotTopic } from '../../utils/bot';
 import { isFavoriteTopic } from '../../utils/favorite-topic';
 import { isCallTopic } from '../../utils/call-topic';
@@ -516,7 +533,16 @@ import {
   loadLatestCallSummary
 } from '../../services/useCallSummaries';
 
-const { activeTitle: aiAssistantTitle } = useAiAssistant();
+const {
+  activeTitle: aiAssistantTitle,
+  activeSessionId: aiAssistantSessionId,
+  activeSession: aiAssistantSession,
+  isVoiceModeOpen: isAiVoiceCallActive,
+  isVoiceModalVisible: isAiVoiceCallModalVisible,
+  voiceCallStartedAt: aiVoiceCallStartedAt,
+  showVoiceCall: showAiVoiceCall,
+  deleteSession: deleteAiAssistantSession
+} = useAiAssistant();
 
 const { getSelectedTopic } = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
@@ -550,6 +576,43 @@ defineOptions({
 const emits = defineEmits<IHeaderEmits>();
 const currentRoute = useUrlWatcher();
 const route = computed(() => props.displayRoute || currentRoute.value);
+const aiAssistantTitleRef = ref<HTMLElement | null>(null);
+const isAiAssistantTitleOverflowing = ref(false);
+let aiAssistantTitleResizeObserver: ResizeObserver | null = null;
+
+/** Показывает подсказку только когда заголовок действительно обрезан доступной шириной. */
+const updateAiAssistantTitleOverflow = (): void => {
+  const element = aiAssistantTitleRef.value;
+  const text = element?.querySelector<HTMLElement>('.user-profile__title-text');
+  isAiAssistantTitleOverflowing.value = Boolean(
+    element &&
+      element.clientWidth > 0 &&
+      (element.scrollWidth > element.clientWidth + 1 ||
+        (text && text.scrollWidth > text.clientWidth + 1))
+  );
+};
+
+watch(
+  aiAssistantTitleRef,
+  element => {
+    aiAssistantTitleResizeObserver?.disconnect();
+    aiAssistantTitleResizeObserver = null;
+
+    if (element && typeof ResizeObserver !== 'undefined') {
+      aiAssistantTitleResizeObserver = new ResizeObserver(
+        updateAiAssistantTitleOverflow
+      );
+      aiAssistantTitleResizeObserver.observe(element);
+    }
+
+    void nextTick(updateAiAssistantTitleOverflow);
+  },
+  { flush: 'post' }
+);
+
+watch(aiAssistantTitle, () => void nextTick(updateAiAssistantTitleOverflow), {
+  flush: 'post'
+});
 
 const state = reactive({
   loader: false,
@@ -632,7 +695,7 @@ const mobileInfoMembersLabel = computed(() => {
   return `${count} ${getParticipantForm(count)}`;
 });
 const actionModalTitle = computed(() =>
-  route.value.type === RouteTypes.DIALOGS
+  route.value.type === RouteTypes.DIALOGS || route.value.type === RouteTypes.AI
     ? 'Удаление чата'
     : currentRouteGroup.value?.isAdmin
       ? 'Удаление канала'
@@ -640,11 +703,13 @@ const actionModalTitle = computed(() =>
 );
 
 const actionModalDescription = computed(() =>
-  route.value.type === RouteTypes.DIALOGS
-    ? 'Вы уверены, что хотите удалить чат?'
-    : currentRouteGroup.value?.isAdmin
-      ? 'Вы уверены, что хотите удалить канал?'
-      : 'Вы уверены, что хотите покинуть канал?'
+  route.value.type === RouteTypes.AI
+    ? 'Вы действительно хотите удалить чат?'
+    : route.value.type === RouteTypes.DIALOGS
+      ? 'Вы уверены, что хотите удалить чат?'
+      : currentRouteGroup.value?.isAdmin
+        ? 'Вы уверены, что хотите удалить канал?'
+        : 'Вы уверены, что хотите покинуть канал?'
 );
 const currentTypingUsers = computed(() =>
   route.value?.id ? getTopicTypingUsers(route.value.id) : []
@@ -687,11 +752,20 @@ const hasPendingCallForCurrentTopic = computed(
 const hasInvitedCall = computed(
   () => !!currentInvitedCall.value?.isJoinAvailable
 );
-const showHeaderCallBanner = computed(
+const showRegularCallBanner = computed(
   () =>
     (isCallActive.value && !isAnyCallModalVisible.value) ||
     !!currentHeaderCallEntry.value ||
     hasInvitedCall.value
+);
+const showAiVoiceCallBanner = computed(
+  () =>
+    isAiVoiceCallActive.value &&
+    (!isAiVoiceCallModalVisible.value || route.value.type !== RouteTypes.AI) &&
+    !showRegularCallBanner.value
+);
+const showHeaderCallBanner = computed(
+  () => showRegularCallBanner.value || showAiVoiceCallBanner.value
 );
 const currentTime = ref(Date.now());
 let headerCallTimerInterval: ReturnType<typeof setInterval> | null = null;
@@ -701,6 +775,7 @@ type SearchComponentRef = ComponentPublicInstance | Element | null;
 
 const topicSearchQuery = ref('');
 const topicSearchResults = ref<IMessageSearchResult[]>([]);
+const aiSearchMessageIds = ref<string[]>([]);
 const topicSearchTotal = ref(0);
 const topicSearchActiveIndex = ref(0);
 const desktopTopicSearchRef = ref<SearchComponentRef>(null);
@@ -717,13 +792,24 @@ const isTopicSearchAvailable = computed(
     route.value.type === RouteTypes.CALL ||
     route.value.type === RouteTypes.FAVORITES
 );
+const isAiSearchAvailable = computed(
+  () => route.value.type === RouteTypes.AI && !!aiAssistantSession.value
+);
+const isChatSearchAvailable = computed(
+  () => isTopicSearchAvailable.value || isAiSearchAvailable.value
+);
+const topicSearchResultsCount = computed(() =>
+  route.value.type === RouteTypes.AI
+    ? aiSearchMessageIds.value.length
+    : topicSearchResults.value.length
+);
 const hasTopicSearchResults = computed(
-  () => topicSearchResults.value.length > 0
+  () => topicSearchResultsCount.value > 0
 );
 const canNavigateTopicSearchPrev = computed(
   () =>
     hasTopicSearchResults.value &&
-    topicSearchActiveIndex.value < topicSearchResults.value.length - 1
+    topicSearchActiveIndex.value < topicSearchResultsCount.value - 1
 );
 const canNavigateTopicSearchNext = computed(
   () => hasTopicSearchResults.value && topicSearchActiveIndex.value > 0
@@ -737,14 +823,14 @@ const topicSearchResultLabel = computed(() => {
     return '0 из 0';
   }
 
-  return `${topicSearchActiveIndex.value + 1} из ${topicSearchTotal.value || topicSearchResults.value.length}`;
+  return `${topicSearchActiveIndex.value + 1} из ${topicSearchTotal.value || topicSearchResultsCount.value}`;
 });
 
 watch(
   [
     () => state.isSearchInputEnable,
     () => isMobile.value,
-    () => isTopicSearchAvailable.value
+    () => isChatSearchAvailable.value
   ],
   ([isSearchInputEnable, isMobileView, isSearchAvailable]) => {
     setMobileTopicSearchActive(
@@ -768,6 +854,13 @@ const formatElapsedCallTime = (durationMs: number): string => {
 };
 
 const headerCallTimeLabel = computed(() => {
+  if (showAiVoiceCallBanner.value) {
+    const startedAt = aiVoiceCallStartedAt.value;
+    return typeof startedAt === 'number'
+      ? formatElapsedCallTime(currentTime.value - startedAt)
+      : '';
+  }
+
   if (isCallActive.value && !isAnyCallDialing.value) {
     return activeCallFormattedTime.value;
   }
@@ -816,6 +909,10 @@ const headerCallLabel = computed(() => {
 });
 
 const resolvedHeaderCallLabel = computed(() => {
+  if (showAiVoiceCallBanner.value) {
+    return 'Разговор с СЭПи';
+  }
+
   if (isActiveDirectCallLabel.value) {
     return (
       activeCallUser.value?.initials ||
@@ -850,7 +947,7 @@ const focusTopicSearchInput = (): void => {
 
 const showSearch = (): void => {
   state.isSearchInputEnable = true;
-  setMobileTopicSearchActive(isMobile.value && isTopicSearchAvailable.value);
+  setMobileTopicSearchActive(isMobile.value && isChatSearchAvailable.value);
   void nextTick().then(focusTopicSearchInput);
 };
 
@@ -865,9 +962,11 @@ function normalizeTopicSearchQuery(value: string): string {
 const resetTopicSearch = (): void => {
   topicSearchQuery.value = '';
   topicSearchResults.value = [];
+  aiSearchMessageIds.value = [];
   topicSearchTotal.value = 0;
   topicSearchActiveIndex.value = 0;
   isTopicSearchLoading.value = false;
+  clearAiMessageSearchResult();
 
   if (topicSearchDebounceTimer) {
     clearTimeout(topicSearchDebounceTimer);
@@ -882,6 +981,17 @@ const hideSearch = (): void => {
 };
 
 const navigateTopicSearchResult = (index: number): void => {
+  if (route.value.type === RouteTypes.AI) {
+    const messageId = aiSearchMessageIds.value[index];
+    const sessionId = aiAssistantSession.value?.id;
+
+    if (!messageId || !sessionId) return;
+
+    topicSearchActiveIndex.value = index;
+    navigateToAiMessageSearchResult(sessionId, messageId);
+    return;
+  }
+
   const result = topicSearchResults.value[index];
 
   if (!result) {
@@ -894,11 +1004,48 @@ const navigateTopicSearchResult = (index: number): void => {
 
 const runTopicSearch = async (): Promise<void> => {
   const query = normalizeTopicSearchQuery(topicSearchQuery.value);
-  const topicId = route.value.id;
   const requestToken = ++topicSearchRequestToken;
+
+  if (route.value.type === RouteTypes.AI) {
+    const session = aiAssistantSession.value;
+
+    if (!query || !session) {
+      aiSearchMessageIds.value = [];
+      topicSearchTotal.value = 0;
+      topicSearchActiveIndex.value = 0;
+      isTopicSearchLoading.value = false;
+      clearAiMessageSearchResult();
+      return;
+    }
+
+    const normalizedQuery = query.toLocaleLowerCase('ru-RU');
+    const resultIds = session.messages
+      .filter(message =>
+        normalizeTopicSearchQuery(
+          `${message.text} ${message.replyTo?.content || ''}`
+        )
+          .toLocaleLowerCase('ru-RU')
+          .includes(normalizedQuery)
+      )
+      .map(message => message.id)
+      .reverse();
+
+    aiSearchMessageIds.value = resultIds;
+    topicSearchResults.value = [];
+    topicSearchTotal.value = resultIds.length;
+    topicSearchActiveIndex.value = 0;
+    isTopicSearchLoading.value = false;
+
+    if (resultIds.length) navigateTopicSearchResult(0);
+    else clearAiMessageSearchResult();
+    return;
+  }
+
+  const topicId = route.value.id;
 
   if (!query || !topicId) {
     topicSearchResults.value = [];
+    aiSearchMessageIds.value = [];
     topicSearchTotal.value = 0;
     topicSearchActiveIndex.value = 0;
     isTopicSearchLoading.value = false;
@@ -935,9 +1082,11 @@ const handleTopicSearchInput = (value: string): void => {
 
   if (!normalizeTopicSearchQuery(value)) {
     topicSearchResults.value = [];
+    aiSearchMessageIds.value = [];
     topicSearchTotal.value = 0;
     topicSearchActiveIndex.value = 0;
     isTopicSearchLoading.value = false;
+    clearAiMessageSearchResult();
     return;
   }
 
@@ -947,7 +1096,7 @@ const handleTopicSearchInput = (value: string): void => {
 };
 
 const navigateTopicSearch = (direction: -1 | 1): void => {
-  const resultsCount = topicSearchResults.value.length;
+  const resultsCount = topicSearchResultsCount.value;
 
   if (!resultsCount) {
     return;
@@ -998,6 +1147,12 @@ const handleCall = async () => {
 };
 
 const handleHeaderCallClick = async () => {
+  if (showAiVoiceCallBanner.value) {
+    navigateToAI(aiAssistantSessionId.value);
+    showAiVoiceCall();
+    return;
+  }
+
   if (hasInvitedCall.value && !isCallActive.value) {
     const didJoin = await joinInviteGroupCall();
 
@@ -1154,11 +1309,27 @@ const getHeaderContextMenuOptions = computed(() => {
       });
     }
   } else {
+    if (!aiAssistantSessionId.value) return options;
+
+    if (isMobile.value && isChatSearchAvailable.value) {
+      options.push({
+        value: 'Поиск в чате',
+        function: showSearch,
+        customIcon: 'search'
+      });
+    }
+
     options.push({
-      value: 'Очистить историю',
+      value: 'Очистить чат',
       function: () => {
         emits('unmount-clear');
       },
+      iconName: IconNameEnum.imagePaint
+    });
+    options.push({
+      value: 'Удалить чат',
+      function: handleOpenActionModal,
+      style: 'color: var(--error-color)',
       iconName: IconNameEnum.deleteSmall
     });
   }
@@ -1193,7 +1364,13 @@ const handleConfirmClearHistory = (): void => {
 };
 
 const handleConfirmActionModal = async (): Promise<void> => {
-  if (route.value.type === RouteTypes.DIALOGS) {
+  if (route.value.type === RouteTypes.AI) {
+    const sessionId = aiAssistantSessionId.value;
+    if (sessionId) {
+      deleteAiAssistantSession(sessionId);
+      navigateToAI();
+    }
+  } else if (route.value.type === RouteTypes.DIALOGS) {
     deleteTopic(route.value.id);
     navigateToDialogsList();
   } else if (route.value.type === RouteTypes.GROUP && currentRouteGroup.value) {
@@ -1267,10 +1444,14 @@ onMounted(() => {
   headerCallTimerInterval = setInterval(() => {
     currentTime.value = Date.now();
   }, 1000);
+
+  void document.fonts?.ready.then(updateAiAssistantTitleOverflow);
 });
 
 onUnmounted(() => {
   setMobileTopicSearchActive(false);
+  aiAssistantTitleResizeObserver?.disconnect();
+  aiAssistantTitleResizeObserver = null;
 
   if (topicSearchDebounceTimer) {
     clearTimeout(topicSearchDebounceTimer);

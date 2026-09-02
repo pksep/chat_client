@@ -1,19 +1,30 @@
 <template>
-  <section class="ai-assistant" data-testid="AI-Assistant">
-    <div ref="scrollRef" class="ai-assistant__scroll">
+  <section
+    class="ai-assistant"
+    data-testid="AI-Assistant"
+    @click.capture="handleExclusiveMenuClick"
+    @pointerdown.capture="prepareEmojiDrag"
+    @dragstart.capture="handleEmojiDragStart"
+    @dragend.capture="handleEmojiDragEnd"
+  >
+    <div
+      ref="scrollRef"
+      class="ai-assistant__scroll"
+      @scroll.passive="handleScroll"
+    >
       <div
         v-if="activeView === 'chat' && !activeSession"
         class="ai-assistant__empty"
       >
         <span class="ai-assistant__hero-icon">
-          <AiSparkleIcon />
+          <AiAvatar />
         </span>
         <h1>Чем вам помочь сегодня?</h1>
         <div class="ai-assistant__suggestions">
           <button
             type="button"
             class="ai-assistant__suggestion ai-assistant__suggestion--voice"
-            @click="isVoiceModeOpen = true"
+            @click="openVoiceMode"
           >
             <VoiceMessageIcon />
             Голосовой режим
@@ -39,7 +50,7 @@
 
       <div v-else-if="activeView === 'tasks'" class="ai-assistant__tasks">
         <span class="ai-assistant__tasks-icon">
-          <AiSparkleIcon />
+          <AiAvatar />
         </span>
         <h1>Автоматизированные задачи</h1>
         <div class="ai-assistant__automation-list">
@@ -70,7 +81,9 @@
             `ai-assistant__message--${message.role}`,
             {
               'ai-assistant__message--selection-active': isSelectionMode,
-              'ai-assistant__message--selected': isMessageSelected(message.id)
+              'ai-assistant__message--selected': isMessageSelected(message.id),
+              'ai-assistant__message--search-target':
+                activeSearchMessageId === message.id
             }
           ]"
           :data-message-id="message.id"
@@ -114,30 +127,24 @@
               aria-label="Прочитано"
             />
           </div>
-          <div v-if="message.showApproval" class="ai-assistant__approval">
-            <template v-if="!message.approvalState">
-              <button
-                type="button"
-                class="ai-assistant__approval-reject"
-                @click="updateApproval(message.id, 'rejected')"
-              >
-                Отменить
-              </button>
-              <button
-                type="button"
-                class="ai-assistant__approval-confirm"
-                @click="updateApproval(message.id, 'approved')"
-              >
-                Подтвердить
-              </button>
-            </template>
-            <span v-else>
-              {{
-                message.approvalState === 'approved'
-                  ? 'Действие подтверждено'
-                  : 'Действие отклонено'
-              }}
-            </span>
+          <div
+            v-if="message.showApproval && !message.approvalState"
+            class="ai-assistant__approval"
+          >
+            <button
+              type="button"
+              class="ai-assistant__approval-reject"
+              @click="handleApproval(message.id, 'rejected')"
+            >
+              Отменить
+            </button>
+            <button
+              type="button"
+              class="ai-assistant__approval-confirm"
+              @click="handleApproval(message.id, 'approved')"
+            >
+              Подтвердить
+            </button>
           </div>
           <Teleport v-if="isMessageContextOpen(message.id)" to="body">
             <AIMessageContextMenu
@@ -157,6 +164,23 @@
           Думает <span>•••</span>
         </div>
       </div>
+    </div>
+
+    <div
+      v-if="
+        activeView === 'chat' && !!activeSession && isShowScrollToBottomButton
+      "
+      class="chat__message-bubble__scroll-indicators ai-assistant__scroll-indicators"
+    >
+      <button
+        type="button"
+        class="chat__message-bubble__arrow-down"
+        data-testid="AI-Assistant-ScrollToBottom"
+        aria-label="Перейти к новым сообщениям"
+        @click="handleScrollToBottom"
+      >
+        <Icon :name="IconNameEnum.arrowDown" />
+      </button>
     </div>
 
     <div
@@ -210,34 +234,32 @@
         }
       ]"
     >
-      <div v-if="isPermissionMenuOpen" class="ai-assistant__permission-menu">
-        <button type="button" @click="selectPermission('automatic')">
-          <span>✓</span>
-          <span>
-            <strong>Автоматический режим</strong>
-            <small
-              >Обычные действия выполняются сразу, критические потребуют
-              подтверждения</small
-            >
-          </span>
-        </button>
-        <button type="button" @click="selectPermission('ask')">
-          <span>☝</span>
-          <span>
-            <strong>Подтверждать каждое действие</strong>
-            <small>Любое изменение потребует вашего подтверждения</small>
-          </span>
-        </button>
-      </div>
-
       <div class="ai-assistant__editor">
         <ContentEditor
+          ref="contentEditorRef"
           v-model="draft"
-          :active-attach-file="false"
-          :disable-send-on-enter="isThinking"
+          :active-attach-file="true"
+          :disable-send-on-enter="isThinking || isUploadingAttachments"
           @unmount-send="handleSend"
         >
-          <template v-if="editingMessage" #action>
+          <template v-if="activeForwardDraft" #action>
+            <div class="chat__input__action">
+              <ForwardIcon />
+              <div class="chat__input__action__blog">
+                <h5>{{ activeForwardDraft.title }}</h5>
+                <p>{{ activeForwardDraft.preview }}</p>
+              </div>
+              <Button
+                :type="ButtonTypeEnum.ghost"
+                :size="SizesEnum.little"
+                aria-label="Убрать пересланное сообщение"
+                @click="clearActiveForwardDraft"
+              >
+                <Icon :name="IconNameEnum.crossLarge" />
+              </Button>
+            </div>
+          </template>
+          <template v-else-if="editingMessage" #action>
             <div class="chat__input__action">
               <EditIcon />
               <div class="chat__input__action__blog">
@@ -257,52 +279,116 @@
             <div class="chat__input__action">
               <ReplyIcon />
               <div class="chat__input__action__blog">
-                <h5>Ответ для {{ getMessageAuthor(replyMessage.role) }}</h5>
+                <h5>В ответ {{ getMessageAuthor(replyMessage.role) }}</h5>
                 <p>{{ replyMessage.text }}</p>
               </div>
               <Button
                 :type="ButtonTypeEnum.ghost"
                 :size="SizesEnum.little"
-                @click="replyMessage = null"
+                @click="cancelMessageReply"
               >
                 <Icon :name="IconNameEnum.crossLarge" />
               </Button>
             </div>
           </template>
           <template #mobile-trailing-action>
-            <Button
-              :type="ButtonTypeEnum.ghost"
-              :size="SizesEnum.small"
-              class="toolbar-button mobile-buttons ai-assistant__permission-trigger ai-assistant__permission-trigger--mobile"
-              :aria-label="permissionLabel"
-              :title="permissionLabel"
-              @click.stop="isPermissionMenuOpen = !isPermissionMenuOpen"
+            <div
+              class="ai-assistant__permission-control ai-assistant__permission-control--mobile"
             >
-              <PermissionHandIcon />
-            </Button>
+              <Button
+                :type="ButtonTypeEnum.ghost"
+                :size="SizesEnum.small"
+                class="toolbar-button mobile-buttons ai-assistant__permission-trigger ai-assistant__permission-trigger--mobile"
+                :aria-label="permissionLabel"
+                :title="permissionLabel"
+                aria-haspopup="menu"
+                :aria-expanded="isPermissionMenuOpen"
+                @click.stop="isPermissionMenuOpen = !isPermissionMenuOpen"
+              >
+                <PermissionHandIcon v-if="permissionMode === 'ask'" />
+                <PermissionCheckCircleIcon v-else />
+              </Button>
+              <div
+                v-if="isPermissionMenuOpen"
+                class="ai-assistant__permission-menu"
+                role="menu"
+                aria-label="Режим подтверждения действий"
+              >
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  :aria-checked="permissionMode === 'automatic'"
+                  @click="selectPermission('automatic')"
+                >
+                  <PermissionCheckCircleIcon />
+                  <span>Автоматически подтверждать</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  :aria-checked="permissionMode === 'ask'"
+                  @click="selectPermission('ask')"
+                >
+                  <PermissionHandIcon />
+                  <span>Запрашивать разрешения</span>
+                </button>
+              </div>
+            </div>
             <Button
               :type="ButtonTypeEnum.ghost"
               :size="SizesEnum.small"
               class="toolbar-button mobile-buttons ai-assistant__voice-trigger ai-assistant__voice-trigger--mobile"
               aria-label="Голосовой режим"
               title="Голосовой режим"
-              @click.stop="isVoiceModeOpen = true"
+              @click.stop="openVoiceMode"
             >
               <VoiceMessageIcon />
             </Button>
           </template>
 
           <template #desktop-left-action>
-            <Button
-              :type="ButtonTypeEnum.ghost"
-              :size="SizesEnum.small"
-              class="toolbar-button ai-assistant__permission-trigger ai-assistant__permission-trigger--desktop"
-              :title="permissionLabel"
-              @click.stop="isPermissionMenuOpen = !isPermissionMenuOpen"
+            <div
+              class="ai-assistant__permission-control ai-assistant__permission-control--desktop"
             >
-              <PermissionHandIcon />
-              <span>{{ permissionLabel }}</span>
-            </Button>
+              <Button
+                :type="ButtonTypeEnum.ghost"
+                :size="SizesEnum.small"
+                class="toolbar-button ai-assistant__permission-trigger ai-assistant__permission-trigger--desktop"
+                :title="permissionLabel"
+                aria-haspopup="menu"
+                :aria-expanded="isPermissionMenuOpen"
+                @click.stop="isPermissionMenuOpen = !isPermissionMenuOpen"
+              >
+                <PermissionHandIcon v-if="permissionMode === 'ask'" />
+                <PermissionCheckCircleIcon v-else />
+                <span>{{ permissionLabel }}</span>
+              </Button>
+              <div
+                v-if="isPermissionMenuOpen"
+                class="ai-assistant__permission-menu"
+                role="menu"
+                aria-label="Режим подтверждения действий"
+              >
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  :aria-checked="permissionMode === 'automatic'"
+                  @click="selectPermission('automatic')"
+                >
+                  <PermissionCheckCircleIcon />
+                  <span>Автоматически подтверждать</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  :aria-checked="permissionMode === 'ask'"
+                  @click="selectPermission('ask')"
+                >
+                  <PermissionHandIcon />
+                  <span>Запрашивать разрешения</span>
+                </button>
+              </div>
+            </div>
           </template>
 
           <template #desktop-right-action>
@@ -312,7 +398,7 @@
               class="toolbar-button ai-assistant__voice-trigger ai-assistant__voice-trigger--desktop"
               aria-label="Голосовой режим"
               title="Голосовой режим"
-              @click.stop="isVoiceModeOpen = true"
+              @click.stop="openVoiceMode"
             >
               <VoiceMessageIcon />
             </Button>
@@ -322,37 +408,66 @@
     </div>
 
     <div
-      v-if="isVoiceModeOpen"
+      v-if="isVoiceModeOpen && isVoiceModalVisible"
       class="ai-assistant__voice-overlay"
       role="dialog"
       aria-modal="true"
       aria-label="Голосовой режим"
     >
-      <div class="ai-assistant__voice-orb" aria-hidden="true">
-        <span></span>
-        <i></i>
+      <button
+        type="button"
+        class="ai-assistant__voice-minimize call-modal__control-button call-modal__control-button--action call-modal__control-button--chevron-down"
+        aria-label="Свернуть разговор"
+        title="Свернуть разговор"
+        @click="hideVoiceMode"
+      >
+        <Icon :name="IconNameEnum.chevronDown" />
+      </button>
+      <div
+        :class="[
+          'ai-assistant__voice-visual',
+          `ai-assistant__voice-visual--${voiceAssistantState}`
+        ]"
+      >
+        <div class="ai-assistant__voice-orb" aria-hidden="true">
+          <span class="ai-assistant__voice-orb-core"></span>
+        </div>
+        <AiAvatar
+          class="ai-assistant__voice-avatar"
+          :expression="voiceAssistantExpression"
+        />
       </div>
-      <div class="ai-assistant__voice-actions">
+      <div
+        class="ai-assistant__voice-actions call-modal__control-button-wrapper call-modal__control-button-wrapper--call-controls"
+      >
         <button
+          v-if="!isVoiceMuted"
           type="button"
-          :class="{ 'ai-assistant__voice-mic--muted': isVoiceMuted }"
-          :aria-label="
-            isVoiceMuted ? 'Включить микрофон' : 'Выключить микрофон'
-          "
-          @click="isVoiceMuted = !isVoiceMuted"
+          class="call-modal__control-button"
+          aria-label="Выключить микрофон"
+          title="Выключить микрофон"
+          @click="toggleVoiceMicrophone"
         >
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <rect x="7" y="3" width="6" height="9" rx="3" />
-            <path d="M5 9.5a5 5 0 0 0 10 0M10 14.5V17" />
-          </svg>
+          <MicIcon />
+        </button>
+        <button
+          v-else
+          type="button"
+          class="call-modal__control-button call-modal__control-button__inactive"
+          aria-label="Включить микрофон"
+          title="Включить микрофон"
+          @click="toggleVoiceMicrophone"
+        >
+          <MicDisableIcon />
         </button>
         <button
           type="button"
-          class="ai-assistant__voice-close"
+          class="call-modal__control-button call-modal__control-button--leave"
           aria-label="Закрыть голосовой режим"
-          @click="isVoiceModeOpen = false"
+          title="Завершить разговор"
+          @click="closeVoiceMode"
         >
-          <Icon :name="IconNameEnum.crossLarge" />
+          <LeaveIcon />
         </button>
       </div>
     </div>
@@ -363,6 +478,7 @@
     data-testid="AI-MessageForward"
     @unmount-close="closeForwardModal"
     @unmount-select-topic="handleForwardTopic"
+    @unmount-select-ai-session="handleForwardAiSession"
   />
 
   <ConfirmModal
@@ -373,13 +489,20 @@
         : 'Удалить сообщение'
     "
     description="Удалить выбранные сообщения из истории AI-чата?"
-    @unmount-close="pendingDeleteMessageIds = []"
+    @unmount-close="cancelDeleteMessages"
     @unmount-confirm="confirmDeleteMessages"
   />
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch
+} from 'vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -390,11 +513,12 @@ import {
   IconNameEnum,
   SizesEnum
 } from '@pksep/yui';
-import AiSparkleIcon from './AiSparkleIcon.vue';
+import AiAvatar from './AiAvatar.vue';
 import VoiceMessageIcon from './VoiceMessageIcon.vue';
 import ChatSummaryIcon from './ChatSummaryIcon.vue';
 import TasksSuggestionIcon from './TasksSuggestionIcon.vue';
 import PermissionHandIcon from './PermissionHandIcon.vue';
+import PermissionCheckCircleIcon from './PermissionCheckCircleIcon.vue';
 import AIMessageContextMenu from './AIMessageContextMenu.vue';
 import {
   type AiAssistantMessage,
@@ -402,17 +526,37 @@ import {
 } from '../../composables/useAiAssistant';
 import { navigateToAI, useUrlWatcher } from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
+import { showErrorNotification } from '../../composables/useNotifications';
 import { useContextMenu } from '../../composables/useContextMenu';
 import { openMessageDraft } from '../../composables/useMessageDraftTransfer';
-import { showErrorNotification } from '../../composables/useNotifications';
+import {
+  clearAiForwardDraft,
+  openAiForwardDraft,
+  restoreAiForwardDraft,
+  useAiForwardDraft
+} from '../../composables/useAiForwardDraft';
+import { useAiMessageSearch } from '../../composables/useAiMessageSearch';
+import { stageAiAttachments } from '../../services/aiAttachments';
+import {
+  recognizeVoice,
+  startVoiceCapture,
+  startVoicePlayback,
+  synthesizeVoice,
+  type VoiceCaptureSession,
+  type VoicePlaybackSession
+} from '../../services/aiSpeech';
 import { stripHtml } from '../../utils/stripHtml';
 import type { ITopic } from '../interfaces/interfaces';
-import ForwardModal from '../Messages/ForwardModal.vue';
+import type { AiAssistantSession } from '../../composables/useAiAssistant';
 import ConfirmModal from '../UI/ConfirmModal.vue';
 import EditIcon from '../UI/EditIcon.vue';
 import ForwardIcon from '../UI/ForwardIcon.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import ReplyIcon from '../UI/ReplyIcon.vue';
+import ForwardModal from '../Messages/ForwardModal.vue';
+import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
+import MicDisableIcon from '../CallModal/UI/MicDisableIcon.vue';
+import MicIcon from '../CallModal/UI/MicIcon.vue';
 
 interface IContentEditorSendPayload {
   content?: string;
@@ -422,14 +566,20 @@ interface IContentEditorSendPayload {
 
 const {
   sessions,
+  tasks,
   activeView,
   activeSessionId,
   activeSession,
   isThinking,
   isVoiceModeOpen,
+  isVoiceModalVisible,
   permissionMode,
+  startVoiceCall,
+  hideVoiceCall,
+  stopVoiceCall,
   startNewSession,
   selectSession,
+  selectTask,
   sendMessage,
   sendSuggestedPrompt,
   startNewTask,
@@ -437,14 +587,26 @@ const {
   toggleMessagePin,
   deleteMessages,
   editMessageAndResend,
+  markSessionInactive,
   clearAll
 } = useAiAssistant();
 
 const route = useUrlWatcher();
+const { activeTarget: activeSearchTarget } = useAiMessageSearch();
+const { pendingAiForwardDraft } = useAiForwardDraft();
 const draft = ref('');
+const contentEditorRef = ref<InstanceType<typeof ContentEditor> | null>(null);
 const scrollRef = ref<HTMLElement | null>(null);
+const isShowScrollToBottomButton = ref(false);
+const activeSearchMessageId = computed(() =>
+  activeSearchTarget.value?.sessionId === activeSessionId.value
+    ? activeSearchTarget.value.messageId
+    : null
+);
+const isNearBottom = ref(true);
 const isVoiceMuted = ref(false);
 const isPermissionMenuOpen = ref(false);
+const isUploadingAttachments = ref(false);
 const contextMessage = ref<{
   message: AiAssistantMessage;
   selectedText: string;
@@ -455,12 +617,230 @@ const editingMessage = ref<AiAssistantMessage | null>(null);
 const forwardModalOpen = ref(false);
 const forwardMessages = ref<AiAssistantMessage[]>([]);
 const pendingDeleteMessageIds = ref<string[]>([]);
+const activeForwardDraft = computed(() =>
+  pendingAiForwardDraft.value?.sessionId === activeSessionId.value
+    ? pendingAiForwardDraft.value
+    : null
+);
 const {
   isOpen: messageContextOpen,
   position: messageContextPosition,
   openActivePopover: openMessageContextPopover,
   closeActivePopover: closeMessageContextPopover
 } = useContextMenu();
+let isMenuSyncInProgress = false;
+let composerFocusFrame: number | null = null;
+let isAssistantMounted = false;
+
+type VoiceAssistantState =
+  | 'idle'
+  | 'listening'
+  | 'thinking'
+  | 'speaking'
+  | 'error';
+type AiAvatarExpression = 'standard' | 'thinking' | 'sad' | 'happy' | 'love';
+
+const voiceAssistantState = ref<VoiceAssistantState>('idle');
+const voiceAssistantExpression = ref<AiAvatarExpression>('standard');
+let activeVoiceCapture: VoiceCaptureSession | null = null;
+let activeVoicePlayback: VoicePlaybackSession | null = null;
+let voiceRequestController: AbortController | null = null;
+let voiceCycleId = 0;
+let voiceRestartTimer: number | null = null;
+
+/** Открывает голосовой режим непосредственно из пользовательского клика. */
+const openVoiceMode = (): void => {
+  if (isVoiceModeOpen.value) {
+    startVoiceCall();
+    return;
+  }
+  startVoiceCall();
+  isVoiceMuted.value = false;
+  voiceCycleId += 1;
+  void runVoiceConversationCycle(voiceCycleId);
+};
+
+/** Сворачивает окно, сохраняя активный голосовой разговор. */
+const hideVoiceMode = (): void => {
+  hideVoiceCall();
+  focusComposer();
+};
+
+/** Закрывает голосовой режим и освобождает микрофон и воспроизведение. */
+const closeVoiceMode = (): void => {
+  stopVoiceCall();
+  voiceCycleId += 1;
+  clearVoiceRestartTimer();
+  activeVoiceCapture?.cancel();
+  activeVoiceCapture = null;
+  activeVoicePlayback?.stop();
+  activeVoicePlayback = null;
+  voiceRequestController?.abort();
+  voiceRequestController = null;
+  voiceAssistantState.value = 'idle';
+  voiceAssistantExpression.value = 'standard';
+  focusComposer();
+};
+
+/** Приостанавливает или возобновляет только пользовательский микрофон. */
+const toggleVoiceMicrophone = (): void => {
+  isVoiceMuted.value = !isVoiceMuted.value;
+  if (isVoiceMuted.value) {
+    clearVoiceRestartTimer();
+    activeVoiceCapture?.cancel();
+    activeVoiceCapture = null;
+    if (voiceAssistantState.value === 'listening') {
+      voiceAssistantState.value = 'idle';
+      voiceAssistantExpression.value = 'standard';
+    }
+    return;
+  }
+
+  if (
+    voiceAssistantState.value === 'idle' ||
+    voiceAssistantState.value === 'error'
+  ) {
+    voiceCycleId += 1;
+    void runVoiceConversationCycle(voiceCycleId);
+  }
+};
+
+/** Выполняет один полный голосовой ход и затем снова включает прослушивание. */
+const runVoiceConversationCycle = async (cycleId: number): Promise<void> => {
+  if (!isCurrentVoiceCycle(cycleId) || isVoiceMuted.value) return;
+
+  try {
+    setVoicePresentation('listening');
+    const capture = await startVoiceCapture();
+    if (!isCurrentVoiceCycle(cycleId) || isVoiceMuted.value) {
+      capture.cancel();
+      return;
+    }
+
+    activeVoiceCapture = capture;
+    const audio = await capture.result;
+    if (activeVoiceCapture === capture) activeVoiceCapture = null;
+    if (!isCurrentVoiceCycle(cycleId) || isVoiceMuted.value) return;
+    if (!audio) {
+      restartVoiceListening(cycleId);
+      return;
+    }
+
+    setVoicePresentation('thinking');
+    voiceRequestController = new AbortController();
+    const transcript = await recognizeVoice(
+      audio,
+      voiceRequestController.signal
+    );
+    if (!isCurrentVoiceCycle(cycleId)) return;
+    if (!transcript) {
+      restartVoiceListening(cycleId);
+      return;
+    }
+
+    const responseText = await sendMessage(transcript);
+    if (!isCurrentVoiceCycle(cycleId) || !responseText) {
+      restartVoiceListening(cycleId);
+      return;
+    }
+
+    const speech = await synthesizeVoice(
+      responseText,
+      voiceRequestController.signal
+    );
+    if (!isCurrentVoiceCycle(cycleId)) return;
+
+    setVoicePresentation('speaking', responseText);
+    const playback = startVoicePlayback(speech);
+    activeVoicePlayback = playback;
+    await playback.done;
+    if (activeVoicePlayback === playback) activeVoicePlayback = null;
+    restartVoiceListening(cycleId);
+  } catch (error) {
+    if (!isCurrentVoiceCycle(cycleId) || isAbortError(error)) return;
+    if (isMicrophoneAccessError(error)) {
+      isVoiceMuted.value = true;
+      setVoicePresentation('idle');
+      showErrorNotification(getVoiceErrorMessage(error));
+      return;
+    }
+    setVoicePresentation('error');
+    showErrorNotification(getVoiceErrorMessage(error));
+    restartVoiceListening(cycleId, 1_200);
+  } finally {
+    voiceRequestController = null;
+  }
+};
+
+/** Переключает анимацию и выражение лица без технического текста в окне. */
+const setVoicePresentation = (
+  state: VoiceAssistantState,
+  responseText = ''
+): void => {
+  voiceAssistantState.value = state;
+  if (state === 'thinking') {
+    voiceAssistantExpression.value = 'thinking';
+  } else if (state === 'error') {
+    voiceAssistantExpression.value = 'sad';
+  } else if (state === 'speaking') {
+    voiceAssistantExpression.value = getResponseExpression(responseText);
+  } else {
+    voiceAssistantExpression.value = 'standard';
+  }
+};
+
+/** Выбирает спокойную эмоцию по смыслу уже сформированного ответа. */
+const getResponseExpression = (text: string): AiAvatarExpression => {
+  if (/не удалось|ошибк|не могу|недоступ/i.test(text)) return 'sad';
+  if (/спасибо|рад(?:а)? помочь|добро пожаловать|привет/i.test(text)) {
+    return 'love';
+  }
+  if (/готово|выполнено|создан|добавлен|изменен|обновлен/i.test(text)) {
+    return 'happy';
+  }
+  return 'happy';
+};
+
+const isCurrentVoiceCycle = (cycleId: number): boolean =>
+  isVoiceModeOpen.value && cycleId === voiceCycleId;
+
+/** Возвращает короткое понятное объяснение проблем с голосовым режимом. */
+const getVoiceErrorMessage = (error: unknown): string => {
+  if (error instanceof DOMException && error.name === 'NotAllowedError') {
+    return 'Разрешите доступ к микрофону в настройках браузера.';
+  }
+  if (error instanceof DOMException && error.name === 'NotFoundError') {
+    return 'Микрофон не найден.';
+  }
+  if (error instanceof Error && /[А-Яа-яЁё]/.test(error.message)) {
+    return error.message;
+  }
+  return 'Не удалось обработать голос. Попробуйте ещё раз.';
+};
+
+const isAbortError = (error: unknown): boolean =>
+  error instanceof DOMException && error.name === 'AbortError';
+
+const isMicrophoneAccessError = (error: unknown): boolean =>
+  error instanceof DOMException &&
+  ['NotAllowedError', 'NotFoundError'].includes(error.name);
+
+const restartVoiceListening = (cycleId: number, delay = 0): void => {
+  if (!isCurrentVoiceCycle(cycleId) || isVoiceMuted.value) return;
+  clearVoiceRestartTimer();
+  voiceRestartTimer = window.setTimeout(() => {
+    voiceRestartTimer = null;
+    if (!isCurrentVoiceCycle(cycleId) || isVoiceMuted.value) return;
+    voiceCycleId += 1;
+    void runVoiceConversationCycle(voiceCycleId);
+  }, delay);
+};
+
+const clearVoiceRestartTimer = (): void => {
+  if (voiceRestartTimer === null) return;
+  window.clearTimeout(voiceRestartTimer);
+  voiceRestartTimer = null;
+};
 
 type AIMessageMenuAction =
   | 'reply'
@@ -486,8 +866,8 @@ const canDeleteSelectedMessages = computed(
 );
 const permissionLabel = computed(() =>
   permissionMode.value === 'ask'
-    ? 'Подтверждать каждое действие'
-    : 'Автоматический режим'
+    ? 'Запрашивать разрешения'
+    : 'Автоматически подтверждать'
 );
 const conversationDate = computed(() =>
   new Intl.DateTimeFormat('ru-RU', {
@@ -496,7 +876,197 @@ const conversationDate = computed(() =>
   }).format(new Date())
 );
 
-/** Возвращает понятное имя автора для служебных подписей. */
+/** Возвращает курсор в конец черновика, когда композер доступен пользователю. */
+const focusComposer = (): void => {
+  if (!isAssistantMounted) return;
+
+  void nextTick(() => {
+    if (composerFocusFrame !== null) {
+      window.cancelAnimationFrame(composerFocusFrame);
+    }
+
+    composerFocusFrame = window.requestAnimationFrame(() => {
+      composerFocusFrame = null;
+
+      if (
+        !isAssistantMounted ||
+        route.value.type !== RouteTypes.AI ||
+        isSelectionMode.value ||
+        forwardModalOpen.value ||
+        pendingDeleteMessageIds.value.length > 0 ||
+        (isVoiceModeOpen.value && isVoiceModalVisible.value)
+      ) {
+        return;
+      }
+
+      const editor = contentEditorRef.value?.editor;
+      if (editor) {
+        editor.commands.focus('end');
+        return;
+      }
+
+      contentEditorRef.value?.focus();
+    });
+  });
+};
+
+/** Возвращает фокус после выбора файла в основном или модальном композере. */
+const handleComposerFileChange = (event: Event): void => {
+  const input = event.target;
+
+  if (
+    route.value.type !== RouteTypes.AI ||
+    !(input instanceof HTMLInputElement) ||
+    input.type !== 'file' ||
+    !input.files?.length
+  ) {
+    return;
+  }
+
+  const belongsToAiComposer = Boolean(
+    input.closest('.ai-assistant') || input.closest('.attach-modal-container')
+  );
+
+  if (belongsToAiComposer) focusComposer();
+};
+
+const getEmojiButton = (
+  target: EventTarget | null
+): HTMLButtonElement | null =>
+  target instanceof Element
+    ? target.closest<HTMLButtonElement>('.v3-emojis button')
+    : null;
+
+const prepareEmojiDrag = (event: PointerEvent): void => {
+  if (event.pointerType === 'touch') return;
+
+  const button = getEmojiButton(event.target);
+  if (button) button.draggable = true;
+};
+
+const handleEmojiDragStart = (event: DragEvent): void => {
+  const button = getEmojiButton(event.target);
+  const emoji = button?.textContent?.trim();
+
+  if (!button || !emoji || !event.dataTransfer) return;
+
+  event.dataTransfer.effectAllowed = 'copy';
+  event.dataTransfer.setData('text/plain', emoji);
+  button.classList.add('ai-assistant__emoji--dragging');
+};
+
+const handleEmojiDragEnd = (event: DragEvent): void => {
+  getEmojiButton(event.target)?.classList.remove(
+    'ai-assistant__emoji--dragging'
+  );
+};
+
+const runMenuSync = (action: () => void): void => {
+  isMenuSyncInProgress = true;
+  try {
+    action();
+  } finally {
+    isMenuSyncInProgress = false;
+  }
+};
+
+const closeEmojiPicker = (root: HTMLElement): void => {
+  const openPicker = Array.from(
+    root.querySelectorAll<HTMLElement>('.smile-button .emoji-picker')
+  ).find(picker => {
+    const trigger = picker.closest<HTMLElement>('.smile-button');
+    return (
+      picker.style.display !== 'none' && !!trigger?.getClientRects().length
+    );
+  });
+
+  const trigger = openPicker?.closest<HTMLButtonElement>('.smile-button');
+  if (trigger) runMenuSync(() => trigger.click());
+};
+
+const closeAttachmentPopover = (root: HTMLElement): void => {
+  const trigger = root.querySelector<HTMLButtonElement>(
+    '.popover-yui-kit__wrapper.active-yui-kit .attach-file-button'
+  );
+
+  if (trigger) runMenuSync(() => trigger.click());
+};
+
+const handleExclusiveMenuClick = (event: MouseEvent): void => {
+  if (isMenuSyncInProgress || !(event.target instanceof Element)) return;
+
+  const root = event.currentTarget as HTMLElement;
+  const target = event.target;
+
+  if (target.closest('.v3-emojis button')) {
+    focusComposer();
+    return;
+  }
+
+  if (target.closest('.attach-file-button')) {
+    isPermissionMenuOpen.value = false;
+    closeEmojiPicker(root);
+    return;
+  }
+
+  if (target.closest('.smile-button') && !target.closest('.emoji-picker')) {
+    isPermissionMenuOpen.value = false;
+    closeAttachmentPopover(root);
+    return;
+  }
+
+  if (target.closest('.ai-assistant__permission-trigger')) {
+    closeEmojiPicker(root);
+    closeAttachmentPopover(root);
+  }
+};
+
+const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = 24;
+
+/** Синхронизирует кнопку перехода вниз с фактическим положением прокрутки. */
+const handleScroll = (): void => {
+  const container = scrollRef.value;
+  if (!container) return;
+
+  const distanceFromBottom = Math.max(
+    0,
+    container.scrollHeight - container.clientHeight - container.scrollTop
+  );
+  const hasScrollableContent = container.scrollHeight > container.clientHeight;
+  const shouldShowButton =
+    hasScrollableContent &&
+    distanceFromBottom > SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX;
+
+  isShowScrollToBottomButton.value = shouldShowButton;
+  isNearBottom.value = !shouldShowButton;
+};
+
+const scrollToBottom = async (smooth = false): Promise<void> => {
+  await nextTick();
+  const container = scrollRef.value;
+  if (!container) return;
+
+  container.scrollTo({
+    top: container.scrollHeight,
+    behavior: smooth ? 'smooth' : 'auto'
+  });
+  isShowScrollToBottomButton.value = false;
+  isNearBottom.value = true;
+};
+
+const handleScrollToBottom = (): void => {
+  void scrollToBottom(true);
+};
+
+const scrollOpenedChatToBottom = async (): Promise<void> => {
+  isNearBottom.value = true;
+  await scrollToBottom();
+  requestAnimationFrame(() => {
+    void scrollToBottom();
+  });
+};
+
+/** Возвращает понятное имя автора AI-сообщения. */
 const getMessageAuthor = (role: AiAssistantMessage['role']): string =>
   role === 'user' ? 'Вы' : 'СЭПи';
 
@@ -570,6 +1140,7 @@ const handleMessageSelectionClick = (
 /** Завершает режим группового выбора AI-сообщений. */
 const clearMessageSelection = (): void => {
   selectedMessageIds.value = new Set();
+  focusComposer();
 };
 
 /** Подготавливает ответ на сообщение или выделенный фрагмент. */
@@ -579,6 +1150,7 @@ const startMessageReply = (message: AiAssistantMessage): void => {
     text: contextMessage.value?.selectedText || message.text
   };
   editingMessage.value = null;
+  focusComposer();
 };
 
 /** Переносит пользовательский запрос в редактор для изменения и повторного запуска. */
@@ -587,12 +1159,27 @@ const startMessageEdit = (message: AiAssistantMessage): void => {
   editingMessage.value = message;
   replyMessage.value = null;
   draft.value = message.text;
+  focusComposer();
 };
 
 /** Отменяет редактирование AI-сообщения. */
 const cancelMessageEdit = (): void => {
   editingMessage.value = null;
   draft.value = '';
+  focusComposer();
+};
+
+/** Убирает ответ на сообщение и оставляет пользователя в поле ввода. */
+const cancelMessageReply = (): void => {
+  replyMessage.value = null;
+  focusComposer();
+};
+
+/** Убирает пересланный контекст текущего AI-чата и возвращает ввод. */
+const clearActiveForwardDraft = (): void => {
+  const sessionId = activeForwardDraft.value?.sessionId;
+  if (sessionId) clearAiForwardDraft(sessionId);
+  focusComposer();
 };
 
 /** Открывает выбор получателя для одного AI-сообщения. */
@@ -617,6 +1204,7 @@ const openSelectedMessagesForward = (): void => {
 const closeForwardModal = (): void => {
   forwardModalOpen.value = false;
   forwardMessages.value = [];
+  focusComposer();
 };
 
 /** Формирует понятный текст пересылки без внутренних идентификаторов. */
@@ -636,6 +1224,18 @@ const handleForwardTopic = (topic: ITopic): void => {
   clearMessageSelection();
 };
 
+/** Переносит сообщение в выбранный AI-чат и оставляет поле для поручения. */
+const handleForwardAiSession = (session: AiAssistantSession): void => {
+  if (forwardMessages.value.length === 0) return;
+
+  editingMessage.value = null;
+  replyMessage.value = null;
+  draft.value = '';
+  openAiForwardDraft(session, forwardMessages.value);
+  closeForwardModal();
+  clearMessageSelection();
+};
+
 /** Запрашивает подтверждение удаления одного пользовательского сообщения. */
 const requestDeleteMessage = (message: AiAssistantMessage): void => {
   if (message.role === 'user') pendingDeleteMessageIds.value = [message.id];
@@ -649,6 +1249,24 @@ const requestDeleteSelectedMessages = (): void => {
   );
 };
 
+/** Закрывает подтверждение удаления без потери готовности к вводу. */
+const cancelDeleteMessages = (): void => {
+  pendingDeleteMessageIds.value = [];
+  focusComposer();
+};
+
+/** Применяет решение по действию агента и возвращает пользователя к вводу. */
+const handleApproval = async (
+  messageId: string,
+  state: 'approved' | 'rejected'
+): Promise<void> => {
+  try {
+    await updateApproval(messageId, state);
+  } finally {
+    focusComposer();
+  }
+};
+
 /** Удаляет подтверждённые сообщения из локальной истории AI-чата. */
 const confirmDeleteMessages = async (): Promise<void> => {
   const messageIds = [...pendingDeleteMessageIds.value];
@@ -658,6 +1276,8 @@ const confirmDeleteMessages = async (): Promise<void> => {
     clearMessageSelection();
   } catch (error) {
     showErrorNotification(error);
+  } finally {
+    focusComposer();
   }
 };
 
@@ -670,8 +1290,10 @@ const handleMessageAction = async (
     if (action === 'reply') startMessageReply(message);
     else if (action === 'forward') openMessageForward(message);
     else if (action === 'edit') startMessageEdit(message);
-    else if (action === 'togglePin') await toggleMessagePin(message.id);
-    else if (action === 'select') toggleMessageSelection(message.id);
+    else if (action === 'togglePin') {
+      await toggleMessagePin(message.id);
+      focusComposer();
+    } else if (action === 'select') toggleMessageSelection(message.id);
     else if (action === 'delete') requestDeleteMessage(message);
     else if (action === 'forwardSelection') openSelectedMessagesForward();
     else if (action === 'cancelSelection') clearMessageSelection();
@@ -681,47 +1303,86 @@ const handleMessageAction = async (
   }
 };
 
-const scrollToBottom = async (): Promise<void> => {
-  await nextTick();
-  if (scrollRef.value) {
-    scrollRef.value.scrollTop = scrollRef.value.scrollHeight;
-  }
-};
-
-/** Отправляет новый запрос или повторно запускает отредактированный запрос. */
 const handleSend = async (
   payload?: IContentEditorSendPayload
 ): Promise<void> => {
   const value = stripHtml(payload?.content ?? draft.value);
+  const submittedForwardDraft = activeForwardDraft.value;
+  const files = [
+    ...(payload?.mediaFiles ? Array.from(payload.mediaFiles) : []),
+    ...(payload?.files ? Array.from(payload.files) : [])
+  ];
 
-  if (!value) return;
-  const replyTo = replyMessage.value
-    ? {
-        role: replyMessage.value.role,
-        content: replyMessage.value.text
-      }
-    : undefined;
-  const editedMessage = editingMessage.value;
+  if (
+    (!value && files.length === 0 && !submittedForwardDraft) ||
+    isUploadingAttachments.value
+  ) {
+    return;
+  }
 
-  const request = editedMessage
-    ? editMessageAndResend(editedMessage.id, value, replyTo)
-    : sendMessage(value, replyTo);
-  void request.catch(error => {
-    showErrorNotification(error);
-    if (editedMessage) {
-      editingMessage.value = editedMessage;
-      draft.value = value;
+  isUploadingAttachments.value = true;
+  try {
+    const attachments = files.length > 0 ? await stageAiAttachments(files) : [];
+    const replyTo = replyMessage.value
+      ? {
+          role: replyMessage.value.role,
+          content: replyMessage.value.text
+        }
+      : undefined;
+    const editedMessage = editingMessage.value;
+    const visibleValue = submittedForwardDraft
+      ? [submittedForwardDraft.context, value].filter(Boolean).join('\n\n')
+      : value;
+    const modelValue = submittedForwardDraft
+      ? [
+          'Используй пересланное сообщение как контекст для поручения.',
+          submittedForwardDraft.context,
+          value
+            ? `Поручение пользователя:\n${value}`
+            : 'Поручение пользователя:\nПроанализируй сообщение и предложи дальнейшие действия.'
+        ].join('\n\n')
+      : undefined;
+    const request = editedMessage
+      ? editMessageAndResend(
+          editedMessage.id,
+          visibleValue,
+          attachments,
+          replyTo
+        )
+      : sendMessage(visibleValue, attachments, replyTo, modelValue);
+    if (submittedForwardDraft) {
+      clearAiForwardDraft(submittedForwardDraft.sessionId);
     }
-  });
-  draft.value = '';
-  replyMessage.value = null;
-  editingMessage.value = null;
-  void scrollToBottom();
+    void request.catch(error => {
+      showErrorNotification(error);
+      if (submittedForwardDraft) {
+        restoreAiForwardDraft(submittedForwardDraft);
+      }
+      if (editedMessage) {
+        editingMessage.value = editedMessage;
+        draft.value = value;
+      }
+    });
+    draft.value = '';
+    replyMessage.value = null;
+    editingMessage.value = null;
+    void scrollToBottom();
+  } catch (error) {
+    showErrorNotification(
+      error instanceof Error
+        ? error.message
+        : 'Не удалось подготовить вложение для AI'
+    );
+  } finally {
+    isUploadingAttachments.value = false;
+    focusComposer();
+  }
 };
 
 const handleSuggestion = (prompt: 'summary' | 'tasks'): void => {
   sendSuggestedPrompt(prompt);
   void scrollToBottom();
+  focusComposer();
 };
 
 const handleAutomationClick = (kind: 'daily' | 'weekly'): void => {
@@ -732,12 +1393,27 @@ const handleAutomationClick = (kind: 'daily' | 'weekly'): void => {
       : 'Настрой еженедельный обзор в пятницу вечером'
   );
   void scrollToBottom();
+  focusComposer();
 };
 
 const selectPermission = (mode: 'ask' | 'automatic'): void => {
   permissionMode.value = mode;
   isPermissionMenuOpen.value = false;
+  focusComposer();
 };
+
+watch(
+  [
+    () => route.value.type,
+    () => route.value.id,
+    activeView,
+    () => activeForwardDraft.value?.sessionId
+  ],
+  ([routeType]) => {
+    if (routeType === RouteTypes.AI) focusComposer();
+  },
+  { immediate: true, flush: 'post' }
+);
 
 watch(
   () => [route.value.type, route.value.id] as const,
@@ -745,7 +1421,13 @@ watch(
     if (routeType !== RouteTypes.AI || !sessionId) return;
 
     if (sessions.value.some(session => session.id === sessionId)) {
-      selectSession(sessionId);
+      const task = tasks.value.find(item => item.sessionId === sessionId);
+      if (task) {
+        selectTask(task.id);
+      } else {
+        selectSession(sessionId);
+      }
+      void scrollOpenedChatToBottom();
       return;
     }
 
@@ -753,6 +1435,19 @@ watch(
     navigateToAI();
   },
   { immediate: true }
+);
+
+watch(
+  () => [route.value.type, route.value.id] as const,
+  ([routeType, sessionId], [previousRouteType, previousSessionId]) => {
+    if (
+      previousRouteType === RouteTypes.AI &&
+      previousSessionId &&
+      (routeType !== RouteTypes.AI || sessionId !== previousSessionId)
+    ) {
+      markSessionInactive(previousSessionId);
+    }
+  }
 );
 
 watch([activeSessionId, activeView], ([sessionId, view]) => {
@@ -766,19 +1461,49 @@ watch([() => activeSession.value?.id, activeView], () => {
   replyMessage.value = null;
   editingMessage.value = null;
   pendingDeleteMessageIds.value = [];
+  isNearBottom.value = true;
+  void scrollToBottom();
+});
+
+watch([() => activeSession.value?.messages.length || 0, isThinking], () => {
+  if (isNearBottom.value) void scrollToBottom();
 });
 
 watch(
-  [
-    () => activeSession.value?.messages.length || 0,
-    isThinking,
-    () => activeSession.value?.id,
-    activeView
-  ],
-  () => void scrollToBottom()
+  () => activeSearchTarget.value?.requestId,
+  async () => {
+    const target = activeSearchTarget.value;
+    if (!target || target.sessionId !== activeSessionId.value) return;
+
+    await nextTick();
+    const messageElement = Array.from(
+      scrollRef.value?.querySelectorAll<HTMLElement>('[data-message-id]') || []
+    ).find(element => element.dataset.messageId === target.messageId);
+
+    messageElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  },
+  { flush: 'post' }
 );
 
+onMounted(() => {
+  isAssistantMounted = true;
+  document.addEventListener('change', handleComposerFileChange, true);
+  focusComposer();
+});
+
+onBeforeUnmount(() => {
+  isAssistantMounted = false;
+  document.removeEventListener('change', handleComposerFileChange, true);
+  if (composerFocusFrame !== null) {
+    window.cancelAnimationFrame(composerFocusFrame);
+    composerFocusFrame = null;
+  }
+  closeVoiceMode();
+  markSessionInactive(activeSessionId.value);
+});
+
 defineExpose({
-  handleClear: clearAll
+  handleClear: clearAll,
+  focusComposer
 });
 </script>

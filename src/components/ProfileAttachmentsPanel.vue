@@ -224,6 +224,7 @@
       :open="forwardModalOpen"
       @unmount-close="handleCloseForwardModal"
       @unmount-select-topic="handleForwardMessage"
+      @unmount-select-ai-session="handleForwardMessageToAi"
     />
   </section>
 </template>
@@ -252,6 +253,8 @@ import {
 import { getAuthUser } from '../composables/useAuth';
 import { useBackButton } from '../composables/useBackButton';
 import { openForwardDraft } from '../composables/useForwardMessages';
+import { openAiForwardDraft } from '../composables/useAiForwardDraft';
+import type { AiAssistantSession } from '../composables/useAiAssistant';
 import { navigateToSearchResult } from '../composables/useMessageSearch';
 import { deleteMessageChat, getChatSDK } from '../services/useChat';
 import { ensureMediaObjectUrl } from '../services/useMediaBlobCache';
@@ -530,6 +533,16 @@ const handleForwardMessage = (topic: ITopic): void => {
 
   if (message) {
     openForwardDraft(topic, message);
+  }
+
+  handleCloseForwardModal();
+};
+
+const handleForwardMessageToAi = (session: AiAssistantSession): void => {
+  const message = contextMenuItem.value?.message;
+
+  if (message) {
+    openAiForwardDraft(session, message);
   }
 
   handleCloseForwardModal();

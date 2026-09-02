@@ -28,6 +28,69 @@ interface ToolApprovalRequestError extends Error {
   stale: boolean;
 }
 
+const getAiErrorMessage = (
+  error: unknown,
+  fallback = 'Сервис временно недоступен. Попробуйте ещё раз.'
+): string => {
+  const errorRecord =
+    error && typeof error === 'object'
+      ? (error as Record<string, unknown>)
+      : null;
+  const rawMessage =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : typeof errorRecord?.message === 'string'
+          ? errorRecord.message
+          : '';
+  const status = Number(errorRecord?.status || 0);
+
+  if (/timeout|timed out|deadline exceeded/i.test(rawMessage)) {
+    return 'Время ожидания ответа истекло. Попробуйте ещё раз.';
+  }
+  if (
+    /network error|failed to fetch|fetch failed|connection/i.test(rawMessage)
+  ) {
+    return 'Не удалось подключиться к сервису. Проверьте соединение и попробуйте ещё раз.';
+  }
+  if (
+    status === 401 ||
+    /authentication required|authentication failed|unauthorized|\b401\b/i.test(
+      rawMessage
+    )
+  ) {
+    return 'Сессия авторизации истекла. Войдите в систему повторно.';
+  }
+  if (status === 403 || /access forbidden|\b403\b/i.test(rawMessage)) {
+    return 'Недостаточно прав для выполнения запроса.';
+  }
+  if (status === 429 || /too many requests|\b429\b/i.test(rawMessage)) {
+    return 'Слишком много запросов. Попробуйте немного позже.';
+  }
+  if (/V2 models/i.test(rawMessage)) {
+    return 'Эта версия модели не поддерживается. Выберите другую модель.';
+  }
+  if (
+    status >= 500 ||
+    /server error|service unavailable|\b5\d\d\b/i.test(rawMessage)
+  ) {
+    return 'Сервис временно недоступен. Попробуйте ещё раз позже.';
+  }
+  if (/unexpected token|parsing|parse error/i.test(rawMessage)) {
+    return 'Не удалось обработать ответ сервиса. Попробуйте ещё раз.';
+  }
+  if (/stream/i.test(rawMessage)) {
+    return 'Соединение с сервисом прервалось. Попробуйте ещё раз.';
+  }
+  if (errorRecord?.name === 'AbortError') {
+    return 'Запрос был отменён.';
+  }
+  if (/[А-Яа-яЁё]/.test(rawMessage)) return rawMessage;
+
+  return fallback;
+};
+
 const useMastra = (options?: UseMastraOptions | false) => {
   if (!options) {
     return {
@@ -39,7 +102,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
       deleteMessages: async () => {},
       editMessageAndResend: async () => {},
       isInitializing: ref(false),
-      pendingApproval: ref<PendingToolApproval | null>(null)
+      pendingApproval: ref<PendingToolApproval | null>(null),
+      lastError: ref<string | null>(null)
     };
   }
 
@@ -52,6 +116,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
   const messages: Ref<Message[]> = ref([]);
   const isInitializing = ref(!!chatId);
   const pendingApproval = ref<PendingToolApproval | null>(null);
+  const lastError = ref<string | null>(null);
   let initializationPromise: Promise<void> = Promise.resolve();
 
   let activeAttachments: AiAttachmentReference[] = [];
@@ -170,9 +235,12 @@ const useMastra = (options?: UseMastraOptions | false) => {
     approvalDecisionOverride: Exclude<ApprovalDecision, null> | null = null,
     appendUserMessage = true,
     attachments: AiAttachmentReference[] = [],
-    replyTo?: AIMessageReference
+    replyTo?: AIMessageReference,
+    modelInput?: string
   ) => {
     if (!input.trim()) return;
+
+    lastError.value = null;
 
     if (!chatId) {
       chatId = generateUUID();
@@ -192,6 +260,9 @@ const useMastra = (options?: UseMastraOptions | false) => {
       const userMessage: Message = {
         role: 'user',
         content: input,
+        ...(modelInput?.trim() && modelInput.trim() !== input.trim()
+          ? { modelContent: modelInput }
+          : {}),
         timestamp: Date.now(),
         ...(replyTo ? { replyTo } : {})
       };
@@ -218,11 +289,15 @@ const useMastra = (options?: UseMastraOptions | false) => {
     const requestMessages = messages.value
       .filter(message => !message.loading && message.content.trim())
       .map(message => {
+        const messageContent =
+          message.role === 'user' && message.modelContent?.trim()
+            ? message.modelContent
+            : message.content;
         const content = message.replyTo
-          ? `${message.content}\n\nКонтекст ответа:\n${
+          ? `${messageContent}\n\nКонтекст ответа:\n${
               message.replyTo.role === 'user' ? 'Пользователь' : 'Ассистент'
             }: ${message.replyTo.content}`
-          : message.content;
+          : messageContent;
 
         return message.role === 'user'
           ? { role: 'user' as const, content }
@@ -260,7 +335,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
     try {
       const token = getAuthToken();
-      if (!token) throw new Error('Authentication required');
+      if (!token) throw new Error('Требуется авторизация');
 
       const client = new MastraClient({
         baseUrl,
@@ -270,7 +345,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
         abortSignal
       });
       const agent = client.getAgent(agentId);
-      if (!agent) throw new Error('Server error, sorry');
+      if (!agent) throw new Error('Сервис временно недоступен');
 
       let stream;
 
@@ -321,7 +396,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
         });
       }
 
-      if (!stream) throw new Error('Server error, sorry');
+      if (!stream) throw new Error('Сервис временно недоступен');
       onFinish?.();
 
       const streamProcessingPromise = new Promise((resolve, reject) => {
@@ -402,35 +477,23 @@ const useMastra = (options?: UseMastraOptions | false) => {
                 } else if (event.type === 'error') {
                   if (!isResolved) {
                     isResolved = true;
-                    let errorMessage =
-                      event.payload?.message || 'Stream error occurred';
-                    if (errorMessage?.includes('V2 models')) {
-                      errorMessage =
-                        'This model version is not supported, please try another';
-                    } else if (errorMessage?.includes('Timeout exceeded')) {
-                      errorMessage = 'Request timed out, please try again';
-                    } else if (errorMessage?.includes('Network Error')) {
-                      errorMessage =
-                        'Network connection issue, please check your connection';
-                    }
-
-                    reject(new Error(errorMessage));
+                    reject(
+                      new Error(getAiErrorMessage(event.payload?.message))
+                    );
                   }
                 }
               } catch (parseError) {
                 console.error('Error processing chunk:', parseError);
                 if (!isResolved) {
                   isResolved = true;
-                  let errorMessage = 'Message processing error';
-                  if (parseError?.message?.includes('Unexpected token')) {
-                    errorMessage =
-                      'Error parsing server response, please try again';
-                  } else if (parseError?.message?.includes('Network Error')) {
-                    errorMessage =
-                      'Network connection issue, please check your connection';
-                  }
-
-                  reject(new Error(errorMessage));
+                  reject(
+                    new Error(
+                      getAiErrorMessage(
+                        parseError,
+                        'Не удалось обработать ответ сервиса. Попробуйте ещё раз.'
+                      )
+                    )
+                  );
                 }
               }
             });
@@ -441,7 +504,14 @@ const useMastra = (options?: UseMastraOptions | false) => {
           } catch (streamError) {
             if (!isResolved) {
               isResolved = true;
-              reject(new Error('Stream processing error'));
+              reject(
+                new Error(
+                  getAiErrorMessage(
+                    streamError,
+                    'Соединение с сервисом прервалось. Попробуйте ещё раз.'
+                  )
+                )
+              );
             }
           }
         };
@@ -449,55 +519,23 @@ const useMastra = (options?: UseMastraOptions | false) => {
         processStream().catch(err => {
           if (!isResolved) {
             isResolved = true;
-            let errorMessage = 'Stream processing error';
-            if (err?.message?.includes('V2 models')) {
-              errorMessage =
-                'This model version is not supported, please try another';
-            } else if (err?.message?.includes('Timeout exceeded')) {
-              errorMessage = 'Request timed out, please try again';
-            } else if (err?.message?.includes('Network Error')) {
-              errorMessage =
-                'Network connection issue, please check your connection';
-            }
-
-            reject(new Error(errorMessage));
+            reject(
+              new Error(
+                getAiErrorMessage(
+                  err,
+                  'Соединение с сервисом прервалось. Попробуйте ещё раз.'
+                )
+              )
+            );
           }
         });
       });
 
-      await Promise.race([
-        streamProcessingPromise,
-        new Promise((_, reject) =>
-          setTimeout(() => {
-            reject(new Error('Request timed out, please try again'));
-          }, 60000)
-        )
-      ]);
-    } catch (error: any) {
-      let errorMessage = 'Service temporarily unavailable';
-      if (!error?.message) {
-        errorMessage = `An error occurred: ${error}`;
-      } else if (error?.message?.includes('V2 models')) {
-        errorMessage =
-          'This model version is not supported, please try another';
-      } else if (error?.message?.includes('Timeout exceeded')) {
-        errorMessage = 'Request timed out, please try again';
-      } else if (error.status === 500) {
-        errorMessage = 'Server error, fixing it now - will be ready soon';
-      } else if (error?.message?.includes('Network Error')) {
-        errorMessage = 'Network connection issue, please check your connection';
-      } else if (
-        error?.message?.includes('401') ||
-        error?.message?.includes('Unauthorized')
-      ) {
-        errorMessage = 'Authentication failed, please log in again';
-      } else if (error?.message?.includes('403')) {
-        errorMessage = 'Access forbidden, please contact support';
-      } else if (error?.message?.includes('429')) {
-        errorMessage = 'Too many requests, please try again later';
-      } else {
-        errorMessage = error.message;
-      }
+      await streamProcessingPromise;
+    } catch (error: unknown) {
+      const errorMessage = getAiErrorMessage(error);
+
+      lastError.value = errorMessage;
 
       if (assistantMessageIndex < messages.value.length) {
         const newMessages = [...messages.value];
@@ -529,7 +567,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
     onFinish?: () => void,
     abortSignal?: AbortSignal,
     attachments: AiAttachmentReference[] = [],
-    replyTo?: AIMessageReference
+    replyTo?: AIMessageReference,
+    modelInput?: string
   ) =>
     submitMessage(
       input,
@@ -538,7 +577,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
       null,
       true,
       attachments,
-      replyTo
+      replyTo,
+      modelInput
     );
 
   const resolveToolApproval = async (
@@ -557,6 +597,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
     if (!chatId) return;
     if (isInitializing.value) await initializationPromise;
     pendingApproval.value = null;
+    lastError.value = null;
     activeAttachments = [];
     messages.value = [];
     await saveMessages(chatId, messages.value);
@@ -598,15 +639,24 @@ const useMastra = (options?: UseMastraOptions | false) => {
   const editMessageAndResend = async (
     messageIndex: number,
     input: string,
+    attachments: AiAttachmentReference[] = [],
     replyTo?: AIMessageReference
   ): Promise<void> => {
     const message = messages.value[messageIndex];
     if (!message || message.role !== 'user' || !input.trim()) return;
 
     pendingApproval.value = null;
-    activeAttachments = [];
+    lastError.value = null;
     await replaceMessages(messages.value.slice(0, messageIndex));
-    await submitMessage(input, undefined, undefined, null, true, [], replyTo);
+    await submitMessage(
+      input,
+      undefined,
+      undefined,
+      null,
+      true,
+      attachments,
+      replyTo
+    );
   };
 
   return {
@@ -618,7 +668,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
     deleteMessages,
     editMessageAndResend,
     isInitializing,
-    pendingApproval
+    pendingApproval,
+    lastError
   };
 };
 

@@ -2,7 +2,7 @@
   <Modal
     v-if="!isMobile"
     :open="props.open"
-    class="new-contact"
+    class="new-contact message-forward-modal"
     position="center"
     @close="closeModal"
     :data-testid="`${props.dataTestid}-NewContactModal-Container`"
@@ -18,12 +18,15 @@
         <Icon :name="IconNameEnum.crossSmall" />
       </Button>
     </header>
-    <TopicSelector @unmount-select="handleSelectTopic" />
+    <TopicSelector
+      @unmount-select="handleSelectTopic"
+      @unmount-select-ai-session="handleSelectAiSession"
+    />
   </Modal>
 
   <MobileModal
     v-else
-    class="modal__new-contact"
+    class="modal__new-contact message-forward-modal"
     :open="props.open"
     @unmount-close="closeModal"
     title="Переслать сообщение"
@@ -31,7 +34,10 @@
     :data-testid="`${props.dataTestid}-ForwardModal-Container`"
   >
     <template #default>
-      <TopicSelector @unmount-select="handleSelectTopic" />
+      <TopicSelector
+        @unmount-select="handleSelectTopic"
+        @unmount-select-ai-session="handleSelectAiSession"
+      />
     </template>
   </MobileModal>
 </template>
@@ -51,6 +57,7 @@ import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import MobileModal from '../UI/MobileModal.vue';
 import TopicSelector from '../TopicSelector.vue';
+import type { AiAssistantSession } from '../../composables/useAiAssistant';
 
 const props = withDefaults(defineProps<IForwardModalProps>(), {
   open: false,
@@ -62,6 +69,7 @@ const props = withDefaults(defineProps<IForwardModalProps>(), {
 const emits = defineEmits<{
   (e: 'unmount-close'): void;
   (e: 'unmount-select-topic', topic: ITopic);
+  (e: 'unmount-select-ai-session', session: AiAssistantSession);
 }>();
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
@@ -72,6 +80,11 @@ const closeModal = (): void => {
 
 const handleSelectTopic = async (topic: ITopic): Promise<void> => {
   emits('unmount-select-topic', topic);
+  closeModal();
+};
+
+const handleSelectAiSession = (session: AiAssistantSession): void => {
+  emits('unmount-select-ai-session', session);
   closeModal();
 };
 </script>

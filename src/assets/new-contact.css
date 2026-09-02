@@ -42,6 +42,12 @@ dialog.new-contact.modal-yui-kit {
   background-color: var(--surface-overlay);
 }
 
+dialog.message-forward-modal.modal-yui-kit,
+dialog.message-forward-modal.modal-yui-kit > .modal-yui-kit__modal-content {
+  background-color: var(--surface-overlay);
+  color: var(--text-primary);
+}
+
 .modal-yui-kit__modal-content>.contact-selector {
   padding-top: 5px;
   padding-inline: 10px;
@@ -52,7 +58,53 @@ dialog.new-contact.modal-yui-kit {
   margin-bottom: 5px;
 }
 
-dialog.new-contact>.modal-yui-kit__modal-content>.contact-selector>ul.contact-selector__list {
+.forward-recipient-selector__filters.chats-toolbar__filters {
+  gap: 5px;
+  padding: 10px;
+}
+
+.forward-recipient-selector__ai-profile {
+  display: grid;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.forward-recipient-selector__ai-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.forward-recipient-selector__ai-copy strong,
+.forward-recipient-selector__ai-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.forward-recipient-selector__ai-copy strong {
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.forward-recipient-selector__ai-copy small {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.contact-selector__item--pending {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+dialog.new-contact
+  > .modal-yui-kit__modal-content
+  > .contact-selector
+  > ul.contact-selector__list {
   margin-bottom: 0;
 }
 
