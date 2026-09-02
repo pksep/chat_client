@@ -182,7 +182,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import { MediaType } from '@pksep/zod-shared-chat';
 import MessageStatusIcons from './MessageStatusIcons.vue';
@@ -202,7 +202,6 @@ import {
   useMentionUserClick
 } from './composables/useMentionUserClick';
 import { MessageStatus } from '../../services/useChatSDK/types';
-import { observeViewportVisibility } from '../../services/useSharedViewportObserver';
 import type { IMedia } from '../interfaces/interfaces';
 import {
   getNativeFileDownloadState,
@@ -215,8 +214,7 @@ const props = defineProps<IMessageBubbleProps>();
 const safeMessageHtml = computed(() => sanitizeMessageHtml(props.message));
 
 const emits = defineEmits(['navigate-message', 'set-slider']);
-const { primeMediaCache, isSliderContentUrl, handleDragStart, canDragMedia } =
-  useMessageMedia();
+const { isSliderContentUrl, handleDragStart, canDragMedia } = useMessageMedia();
 
 const messageHtmlRef = ref<HTMLElement | null>(null);
 const { handleMentionUserClick, syncMentionUserInteractivity } =
@@ -227,8 +225,6 @@ const replyReferenceWidth = useReferenceWidth(filesArticleRef, {
   freezeAfterFirstMeasure: true,
   enabled: hasReplyReference
 });
-const shouldPrimeFiles = ref(false);
-let stopObservingFilesVisibility: (() => void) | null = null;
 
 const docFiles = computed(
   () => props.media?.filter(media => media.type === MediaType.File) || []
@@ -271,14 +267,6 @@ const syncNativeFileStatuses = (): void => {
   });
 };
 
-const filePrimeIdentity = computed(() =>
-  docFiles.value
-    .map(
-      media =>
-        `${media.id || ''}:${media.path || ''}:${media.thumbnailPath || ''}`
-    )
-    .join('\u001f')
-);
 const nativeFileStatusIdentity = computed(() =>
   docFiles.value
     .map(
@@ -286,20 +274,6 @@ const nativeFileStatusIdentity = computed(() =>
         `${media.id || ''}:${media.path || ''}:${media.type}:${media.isLoading ? 1 : 0}:${media.uploadError ? 1 : 0}`
     )
     .join('\u001f')
-);
-
-watch(
-  [filePrimeIdentity, shouldPrimeFiles],
-  () => {
-    if (!shouldPrimeFiles.value) {
-      return;
-    }
-
-    docFiles.value.forEach(media => {
-      primeMediaCache(media, { includeOriginal: true });
-    });
-  },
-  { immediate: true }
 );
 
 watch(
@@ -311,29 +285,6 @@ watch(
 );
 
 watch(nativeFileStatusIdentity, syncNativeFileStatuses, { immediate: true });
-
-onMounted(() => {
-  if (filesArticleRef.value) {
-    stopObservingFilesVisibility = observeViewportVisibility(
-      filesArticleRef.value,
-      isVisible => {
-        if (!isVisible) {
-          return;
-        }
-
-        shouldPrimeFiles.value = true;
-        stopObservingFilesVisibility?.();
-        stopObservingFilesVisibility = null;
-      },
-      { rootMargin: '250px 0px' }
-    );
-  }
-});
-
-onUnmounted(() => {
-  stopObservingFilesVisibility?.();
-  stopObservingFilesVisibility = null;
-});
 
 const showErrorIcon = computed(
   () => props.messageStatus === MessageStatus.NotDelivered
