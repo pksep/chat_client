@@ -282,10 +282,10 @@ watch(
   align-items: center;
   gap: 10px;
   padding: 7px 8px;
-  border: 1px solid #9cbeff;
+  border: 1px solid var(--border-table);
   border-radius: 5px;
-  background: var(--white);
-  color: #1c2635;
+  background: var(--action-secondary-bg);
+  color: var(--text-brand);
   font: inherit;
   font-family: 'Inter Variable', sans-serif;
   font-size: 14px;
@@ -294,32 +294,21 @@ watch(
   letter-spacing: 0;
   white-space: nowrap;
   cursor: pointer;
-  transition:
-    background-color 0.12s ease,
-    border-color 0.12s ease,
-    color 0.12s ease;
+  transition: all 0.2s ease;
 }
 
 .call-topic-actions__button:hover:not(:disabled) {
-  border-color: #9cbeff;
-  background: #ffffff;
+  color: var(--text-primary);
 }
 
 .call-topic-actions__button:active:not(:disabled) {
-  border-color: #9cbeff;
-  background: #548cf6;
-  color: var(--white);
-}
-
-.call-topic-actions__button:focus-visible {
-  outline: 1px solid #5b9cff;
-  outline-offset: 2px;
+  background: var(--action-pressed-bg);
 }
 
 .call-topic-actions__button:disabled {
-  border-color: #e7e7e7;
-  background: #f5f5f5;
-  color: #757d8a;
+  border-color: var(--border-table);
+  background: var(--surface-disabled);
+  color: var(--text-secondary);
   cursor: not-allowed;
   opacity: 1;
 }
@@ -353,20 +342,39 @@ watch(
   mask: url('../../assets/call-topic-list.svg') center / 16px 16px no-repeat;
 }
 
+.call-topic-actions--message-inline {
+  grid-row: auto;
+  flex: 0 0 auto;
+  width: 100%;
+}
+
 @media screen and (width <= 768px) {
   .call-topic-actions {
-    display: grid;
-    justify-content: start;
-    align-items: start;
-    gap: 6px;
-    padding: 8px 16px 4px;
-    overflow: visible;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    align-items: flex-start;
+    gap: 15px;
+    padding: 0 16px 8px;
+    overflow-x: visible;
   }
 
   .call-topic-actions__button {
     width: max-content;
-    max-width: 100%;
+    min-height: 40px;
+    max-width: none;
     justify-content: flex-start;
+    padding: 8px 10px;
+  }
+
+  .call-topic-actions--message-inline {
+    padding: 8px 16px 10px;
+  }
+}
+
+@media screen and (width <= 480px) {
+  .call-topic-actions--message-inline {
+    padding: 8px 0 10px;
   }
 }
 </style>

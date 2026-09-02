@@ -4,7 +4,7 @@
       v-if="props.isRead"
       :name="IconNameEnum.read"
       :data-testid="`${dataTestid}-ReadIcon`"
-      color="var(--blue1)"
+      color="var(--text-link)"
     />
     <template v-else-if="props.messageStatus">
       <Icon

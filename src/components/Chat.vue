@@ -1,27 +1,41 @@
 <template>
   <section
-    :class="['chat', { 'chat--mobile-route': isMobile }]"
+    :class="[
+      'chat',
+      {
+        'chat--mobile-route': isMobile,
+        'chat--call-topic-route': route.type === RouteTypes.CALL,
+        'chat--ai-route': route.type === RouteTypes.AI
+      }
+    ]"
     :data-testid="`${props.dataTestid}-Chat-Container`"
   >
-    <template v-if="isMobile">
+    <AIAssistant
+      v-if="isAiRoute || isAiVoiceCallActive"
+      v-show="isAiRoute"
+      ref="aiAssistantRef"
+    />
+
+    <template v-else-if="isMobile">
       <div
         :class="[
           'chat__mobile-list-layer',
-          { 'chat__mobile-list-layer--hidden': route.id }
+          { 'chat__mobile-list-layer--hidden': hasActiveChatRoute }
         ]"
-        :aria-hidden="route.id ? 'true' : 'false'"
+        :aria-hidden="hasActiveChatRoute ? 'true' : 'false'"
       >
         <ContactListMobile
-          :transition-class="!route.id ? mobileTransitionName : ''"
+          :transition-class="!hasActiveChatRoute ? mobileTransitionName : ''"
           :data-testid="`${props.dataTestid}-Chat-ContactListMobile`"
         />
       </div>
       <div
-        v-if="route.id"
+        v-if="hasActiveChatRoute"
         :class="[
           'chat__mobile-route-view chat__mobile-route-view--messages',
           mobileTransitionName,
           {
+            'chat__mobile-route-view--call': route.type === RouteTypes.CALL,
             'chat__mobile-route-view--content-deferred':
               !isMobileMessageContentReady
           }
@@ -63,7 +77,7 @@
         @unmount-set-selected-message="scrollToMessage"
       />
       <MessageList
-        v-if="route.id"
+        v-if="hasActiveChatRoute"
         ref="messageListRef"
         :baseUrl="props.baseUrl"
         :contact="props.contact"
@@ -87,7 +101,14 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
+import {
+  computed,
+  defineAsyncComponent,
+  onBeforeUnmount,
+  ref,
+  useTemplateRef,
+  watch
+} from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import MessageList from './MessageList.vue';
 import ContactListMobile from './ContactList/MobileList.vue';
@@ -107,6 +128,9 @@ import {
   fetchPinnedMessagesForTopic,
   hasKnownTopicMessagesState
 } from '../services/useMessages';
+import { useAiAssistant } from '../composables/useAiAssistant';
+
+const AIAssistant = defineAsyncComponent(() => import('./AI/AIAssistant.vue'));
 
 export interface IChatProps extends IMessageListProps {
   dataTestid?: string;
@@ -124,8 +148,15 @@ const authUser = computed(() => getAuthUser());
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const messageListRef = useTemplateRef<any>('messageListRef');
+const aiAssistantRef = useTemplateRef<any>('aiAssistantRef');
 
 const route = useUrlWatcher();
+const { isVoiceModeOpen: isAiVoiceCallActive } = useAiAssistant();
+const activeChatRouteKey = computed(() =>
+  route.value.type === RouteTypes.AI ? RouteTypes.AI : route.value.id
+);
+const hasActiveChatRoute = computed(() => !!activeChatRouteKey.value);
+const isAiRoute = computed(() => route.value.type === RouteTypes.AI);
 const mobileTransitionName = ref('');
 const isMobileMessageListMounted = ref(!isMobile.value);
 const isMobileMessageContentReady = ref(!isMobile.value);
@@ -213,7 +244,11 @@ const clearMobileRouteContentSchedule = (): void => {
 };
 
 const shouldShowFirstOpenSkeleton = (topicId: string): boolean => {
-  if (!topicId || route.value.type === RouteTypes.AI) {
+  if (
+    !topicId ||
+    route.value.type === RouteTypes.AI ||
+    route.value.type === RouteTypes.CALL
+  ) {
     return false;
   }
 
@@ -221,7 +256,11 @@ const shouldShowFirstOpenSkeleton = (topicId: string): boolean => {
 };
 
 const rememberOpenedMobileTopic = (topicId: string): void => {
-  if (!topicId || openedMobileTopicIds.has(topicId)) {
+  if (
+    !topicId ||
+    route.value.type === RouteTypes.AI ||
+    openedMobileTopicIds.has(topicId)
+  ) {
     return;
   }
 
@@ -238,7 +277,11 @@ const rememberOpenedMobileTopic = (topicId: string): void => {
 };
 
 const revealMobileMessageContent = (token: number): void => {
-  if (token !== mobileRouteContentToken || !isMobile.value || !route.value.id) {
+  if (
+    token !== mobileRouteContentToken ||
+    !isMobile.value ||
+    !hasActiveChatRoute.value
+  ) {
     return;
   }
 
@@ -250,7 +293,7 @@ const revealMobileMessageContent = (token: number): void => {
       if (
         token === mobileRouteContentToken &&
         isMobile.value &&
-        route.value.id
+        hasActiveChatRoute.value
       ) {
         isMobileMessageContentReady.value = true;
       }
@@ -308,7 +351,7 @@ const prepareMobileMessageRoute = (topicId: string): void => {
 };
 
 const handleMobileRouteAnimationEnd = (event: AnimationEvent): void => {
-  if (event.target !== event.currentTarget || !route.value.id) {
+  if (event.target !== event.currentTarget || !hasActiveChatRoute.value) {
     return;
   }
 
@@ -331,36 +374,35 @@ watch(
   { immediate: true }
 );
 
-watch(
-  () => route.value.id,
-  (topicId, previousTopicId) => {
-    if (!topicId || !renderedMessageTopic.value.topicId) {
-      messageViewportSnapshot.value = null;
-    }
+watch(activeChatRouteKey, (topicId, previousTopicId) => {
+  if (!topicId || !renderedMessageTopic.value.topicId) {
+    messageViewportSnapshot.value = null;
+  }
 
-    if (!isMobile.value) {
-      clearMobileRouteContentSchedule();
-      isMobileMessageListMounted.value = true;
-      isMobileMessageContentReady.value = true;
-      currentMobileTopicUsesSkeleton.value = false;
-      return;
-    }
+  if (!isMobile.value) {
+    clearMobileRouteContentSchedule();
+    isMobileMessageListMounted.value = true;
+    isMobileMessageContentReady.value = true;
+    currentMobileTopicUsesSkeleton.value = false;
+    return;
+  }
 
-    mobileTransitionName.value =
-      !topicId && previousTopicId
+  mobileTransitionName.value =
+    topicId && route.value.type === RouteTypes.CALL
+      ? ''
+      : !topicId && previousTopicId
         ? 'chat-mobile-route-back'
         : 'chat-mobile-route-forward';
 
-    if (!topicId) {
-      syncMobileMessageContentState(topicId);
-      isMobileMessageListMounted.value = false;
-      currentMobileTopicUsesSkeleton.value = false;
-      return;
-    }
-
-    prepareMobileMessageRoute(topicId);
+  if (!topicId) {
+    syncMobileMessageContentState(topicId);
+    isMobileMessageListMounted.value = false;
+    currentMobileTopicUsesSkeleton.value = false;
+    return;
   }
-);
+
+  prepareMobileMessageRoute(topicId);
+});
 
 watch(
   isMobile,
@@ -373,12 +415,12 @@ watch(
       return;
     }
 
-    if (route.value.id) {
-      prepareMobileMessageRoute(route.value.id);
+    if (activeChatRouteKey.value) {
+      prepareMobileMessageRoute(activeChatRouteKey.value);
       return;
     }
 
-    syncMobileMessageContentState(route.value.id);
+    syncMobileMessageContentState(activeChatRouteKey.value || undefined);
     isMobileMessageListMounted.value = false;
   },
   { immediate: true }
@@ -389,6 +431,14 @@ onBeforeUnmount(() => {
 });
 
 defineExpose({
-  handleClear: () => messageListRef.value?.handleClear()
+  handleClear: () =>
+    isAiRoute.value
+      ? aiAssistantRef.value?.handleClear()
+      : messageListRef.value?.handleClear(),
+  focusComposer: () => {
+    if (isAiRoute.value) {
+      aiAssistantRef.value?.focusComposer();
+    }
+  }
 });
 </script>

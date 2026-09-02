@@ -146,6 +146,13 @@
           :data-testid="`${props.dataTestid}-CallTopicDefaultMessage`"
         />
       </template>
+      <template v-if="activeTopic && shouldShowInlineCallTopicActions" #after>
+        <CallTopicActions
+          class="call-topic-actions--message-inline"
+          :topic="activeTopic"
+          :data-testid="`${props.dataTestid}-CallTopicActionsInline`"
+        />
+      </template>
     </MessageListUserItems>
     <div
       v-if="shouldRenderEmptyUserMessageState"
@@ -418,7 +425,7 @@
       !isSelectionMode &&
       !isMobileTopicSearchMode &&
       activeTopic &&
-      isActiveCallTopic
+      shouldShowDockedCallTopicActions
     "
     :topic="activeTopic"
     :data-testid="`${props.dataTestid}-CallTopicActions`"
@@ -433,9 +440,14 @@
     :key="`${route.type}:${route.id || 'default'}`"
     v-model="inputText"
     ref="messageListInputRef"
+    :class="{
+      'chat__input--after-call-actions': shouldShowDockedCallTopicActions
+    }"
     :edit-message="state.editMessage"
     :reply-message="state.replyMessage"
     :forward-messages="activeForwardMessages"
+    :show-call-topic-actions-toggle="shouldShowCallTopicActionsToggle"
+    :is-call-topic-actions-open="isCallTopicActionsOpen"
     :data-testid="props.dataTestid"
     @send="handleSend"
     @attach-file="handleAttachFile"
@@ -444,6 +456,7 @@
     @clear-forward="handleSetForwardMessage(null)"
     @scroll-to-message="handleScrollToMessage"
     @height-change="handleInputHeightChange"
+    @toggle-call-topic-actions="handleToggleCallTopicActions"
   />
 
   <PushNotification
@@ -538,12 +551,14 @@ import { useMessageSender } from './Messages/composables/useMessageSender';
 import { useMessageMastra } from './Messages/composables/useMessageMastra';
 import { useMessageActions } from './Messages/composables/useMessageActions';
 import { Capacitor } from '@capacitor/core';
+import { MediaType } from '@pksep/zod-shared-chat';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
 import SelectedMessagesContent from './Header/SelectedMessagesContent.vue';
 import CallTopicActions from './Calls/CallTopicActions.vue';
 import CallTopicDefaultMessage from './Calls/CallTopicDefaultMessage.vue';
 import { usePendingForwardMessages } from '../composables/useForwardMessages';
+import { usePendingMessageDraft } from '../composables/useMessageDraftTransfer';
 import { ensureMediaObjectUrl } from '../services/useMediaBlobCache';
 import { isGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
 import {
@@ -576,6 +591,7 @@ import {
   consumeNotificationTopicRefreshRequest,
   notificationTopicRefreshRequest
 } from '../services/useNotificationNavigation';
+import { getMessageReactionLayoutSignature } from '../utils/messageScroll';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -656,6 +672,7 @@ const updateBannerRef = useTemplateRef<HTMLElement>('updateBannerRef');
 
 const route = useUrlWatcher();
 const { state: isMobile } = useResizeState(MAX_W_MD);
+const { state: isCompactMessageInput } = useResizeState(481);
 const isNativeAndroid =
   Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
@@ -806,6 +823,8 @@ const seenUnreadMarkerStateByTopic = reactive<
 >({});
 const { pendingForwardMessages, pendingForwardTopicId } =
   usePendingForwardMessages();
+const { pendingDraftTopicId, pendingDraftText, consumePendingMessageDraft } =
+  usePendingMessageDraft();
 
 const isAiRoute = computed(() => route.value?.type === RouteTypes.AI);
 const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
@@ -853,6 +872,19 @@ const activeTopic = computed(() =>
   route.value.id ? getSelectedTopic(route.value.id) : null
 );
 const isActiveCallTopic = computed(() => isCallTopic(activeTopic.value));
+const isCallTopicActionsOpen = ref(false);
+const shouldShowCallTopicActionsToggle = computed(
+  () => isCompactMessageInput.value && isActiveCallTopic.value
+);
+const shouldShowDockedCallTopicActions = computed(
+  () => isActiveCallTopic.value && !isCompactMessageInput.value
+);
+const shouldShowInlineCallTopicActions = computed(
+  () =>
+    isActiveCallTopic.value &&
+    isCompactMessageInput.value &&
+    isCallTopicActionsOpen.value
+);
 const isFavoriteMessageTopic = computed(() =>
   isFavoriteTopic(activeTopic.value, authUserId.value)
 );
@@ -871,13 +903,17 @@ const getRenderedTopicMessages = (
   );
 };
 const renderedUserMessages = computed(() => {
-  const topicId =
-    state.messages.find(message => Boolean(message.topicId))?.topicId ||
-    route.value.id;
+  const topicId = route.value.id;
 
-  return topicId
-    ? getRenderedTopicMessages(topicId, state.messages)
-    : state.messages;
+  if (!topicId || renderedTopicId.value !== topicId) {
+    return [];
+  }
+
+  const currentTopicMessages = state.messages.filter(
+    message => !message.topicId || message.topicId === topicId
+  );
+
+  return getRenderedTopicMessages(topicId, currentTopicMessages);
 });
 const renderedLastUserMessageSignature = computed(() => {
   const lastMessage =
@@ -892,7 +928,8 @@ const renderedLastUserMessageSignature = computed(() => {
     lastMessage.updatedAt || '',
     lastMessage.status || '',
     lastMessage.text || '',
-    lastMessage.media?.length || 0
+    lastMessage.media?.length || 0,
+    getMessageReactionLayoutSignature(lastMessage.reactions)
   ].join('\u001f');
 });
 const hasCallTopicDefaultMessage = computed(() =>
@@ -1819,7 +1856,9 @@ const isUserMessagesRoute = computed(
 const shouldProtectEmptyUserMessagesWithSkeleton = computed(
   () =>
     !!route.value.id &&
+    route.value.type !== RouteTypes.CALL &&
     isUserMessagesRoute.value &&
+    !isActiveCallTopic.value &&
     !hasVisibleUserMessages.value &&
     !isTopicMessagesKnownEmpty(route.value.id)
 );
@@ -1829,31 +1868,23 @@ const shouldShowDelayedInitialSkeleton = computed(
     isInitialMessagesSkeletonVisible.value &&
     (isLoadingInitialMessages.value || isAwaitingUserMessagesPaint.value)
 );
-const isShowingPreviousTopicFallback = computed(
-  () =>
-    !!route.value.id &&
-    renderedTopicId.value !== route.value.id &&
-    hasVisibleUserMessages.value
-);
 const shouldShowSearchNavigationSkeleton = computed(
   () => isUserMessagesRoute.value && isSearchNavigationPositioning.value
 );
 const shouldRenderUserMessageSkeleton = computed(
   () =>
     props.deferContentRender ||
-    shouldShowSearchNavigationSkeleton.value ||
-    shouldProtectEmptyUserMessagesWithSkeleton.value ||
-    (isUserMessagesRoute.value &&
-      shouldShowDelayedInitialSkeleton.value &&
-      !isShowingPreviousTopicFallback.value)
+    (!isActiveCallTopic.value &&
+      (shouldShowSearchNavigationSkeleton.value ||
+        shouldProtectEmptyUserMessagesWithSkeleton.value ||
+        (isUserMessagesRoute.value && shouldShowDelayedInitialSkeleton.value)))
 );
 const shouldDeferUserMessageContentLayout = computed(
   () =>
     props.deferContentRender ||
-    shouldProtectEmptyUserMessagesWithSkeleton.value ||
-    (isUserMessagesRoute.value &&
-      shouldShowDelayedInitialSkeleton.value &&
-      !isShowingPreviousTopicFallback.value)
+    (!isActiveCallTopic.value &&
+      (shouldProtectEmptyUserMessagesWithSkeleton.value ||
+        (isUserMessagesRoute.value && shouldShowDelayedInitialSkeleton.value)))
 );
 const shouldLockUserMessageBootstrapScroll = computed(
   () =>
@@ -1988,6 +2019,24 @@ const handleInputHeightChange = (height: number): void => {
   }
 
   handleBottomBarHeightChange(height);
+};
+
+const handleToggleCallTopicActions = (): void => {
+  const shouldOpen = !isCallTopicActionsOpen.value;
+  isCallTopicActionsOpen.value = shouldOpen;
+
+  if (!shouldOpen) {
+    return;
+  }
+
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      scrollToBottom({
+        preferUnreadMarker: false,
+        smooth: false
+      });
+    });
+  });
 };
 
 const handleSelectedMessagesHeightChange = (height: number): void => {
@@ -2147,6 +2196,20 @@ const applyPendingForwardMessages = () => {
   });
 };
 
+/** Добавляет перенесённый внешний текст в редактор выбранного обычного чата. */
+const applyPendingMessageDraft = (): void => {
+  const transferredText = consumePendingMessageDraft(route.value?.id);
+  if (!transferredText) return;
+
+  state.replyMessage = null;
+  state.editMessage = null;
+  state.forwardMessages = [];
+  inputText.value = inputText.value.trim()
+    ? `${inputText.value}\n\n${transferredText}`
+    : transferredText;
+  nextTick(() => messageListInputRef.value?.focus());
+};
+
 const activeForwardMessages = computed(() => {
   if (state.forwardMessages.length > 0) {
     return state.forwardMessages;
@@ -2163,7 +2226,13 @@ const warmVisibleTopicMedia = async (topicId: string) => {
 
   for (const message of visibleMessages) {
     for (const media of message.media || []) {
-      const preferredPath = media.thumbnailPath || media.path;
+      // Prewarming a generic file downloads its complete body. A history with
+      // several large ZIP files can therefore saturate the browser connection
+      // before a new multipart PUT is even opened. Only warm lightweight
+      // visual sources; documents are fetched explicitly after a click.
+      const preferredPath =
+        media.thumbnailPath ||
+        (media.type === MediaType.Image ? media.path : null);
 
       if (!preferredPath || mediaPaths.has(preferredPath)) {
         continue;
@@ -3297,6 +3366,10 @@ watch(
   { immediate: true }
 );
 
+watch([() => route.value.id, isActiveCallTopic, isCompactMessageInput], () => {
+  isCallTopicActionsOpen.value = false;
+});
+
 watch(
   () => props.deferContentRender,
   async isDeferred => {
@@ -3351,6 +3424,9 @@ watch(
       !!topicId &&
       notificationRefreshRequest?.id === notificationRefreshRequestId &&
       notificationRefreshRequest.topicId === topicId;
+    const notificationMessageId = isNotificationRefreshRequestForTopic
+      ? notificationRefreshRequest.messageId || ''
+      : '';
 
     if (isNotificationRefreshRequestForTopic) {
       consumeNotificationTopicRefreshRequest(
@@ -3378,28 +3454,18 @@ watch(
     const isStaleTopicSwitch = () =>
       topicSwitchToken !== activeTopicSwitchToken ||
       route.value?.id !== topicId;
-    const requiresAuthoritativeNotificationRefresh =
-      isMobile.value &&
-      getHasBrowserNetwork() &&
-      isNotificationRefreshRequestForTopic;
-    const hasRenderedFallbackMessages =
+    const hadRenderedDifferentTopicMessages =
       renderedTopicId.value !== topicId && state.messages.length > 0;
-    const hasResidentTopicMessages =
-      routeType !== RouteTypes.AI &&
-      getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId)).length >
-        0;
-
     if (routeType === RouteTypes.AI) {
       renderedTopicId.value = '';
-    } else if (hasResidentTopicMessages || !hasRenderedFallbackMessages) {
+    } else {
       renderedTopicId.value = topicId;
     }
     isAwaitingUserMessagesPaint.value =
-      requiresAuthoritativeNotificationRefresh ||
-      (isMobile.value &&
-        route.value?.type !== RouteTypes.AI &&
-        !props.suppressInitialSkeleton &&
-        !hasKnownTopicMessagesState(topicId));
+      isMobile.value &&
+      route.value?.type !== RouteTypes.AI &&
+      !props.suppressInitialSkeleton &&
+      !hasKnownTopicMessagesState(topicId);
     clearVisibleMessagesExpansionSchedule();
     visibleMessagesExpansionAppliedToken = 0;
     suppressNotificationSoundForTopic(topicId, TOPIC_SWITCH_AUTO_READ_GRACE_MS);
@@ -3408,14 +3474,9 @@ watch(
     state.unreadMarkerMessageId = null;
     setTopicMessagesKnownEmpty(topicId, false);
     isLoadingInitialMessages.value = true;
-    if (requiresAuthoritativeNotificationRefresh) {
-      cancelInitialMessagesSkeletonDelay();
-      isInitialMessagesSkeletonVisible.value = true;
-    } else {
-      scheduleInitialMessagesSkeleton(topicId, topicSwitchToken);
-    }
+    scheduleInitialMessagesSkeleton(topicId, topicSwitchToken);
     resetScrollState();
-    if (hasRenderedFallbackMessages) {
+    if (hadRenderedDifferentTopicMessages) {
       scrollAnchor.setViewportMode('history', { pin: false });
     }
     setReadReceiptsEnabled(false);
@@ -3442,6 +3503,9 @@ watch(
     const pendingSearchMessageId =
       pendingSearchNavigationForTopic?.message?.id || '';
     const shouldPositionToPendingSearch = !!pendingSearchMessageId;
+    const bootstrapAnchorMessageId =
+      pendingSearchMessageId || notificationMessageId;
+    const shouldBootstrapAroundMessage = !!bootstrapAnchorMessageId;
     const shouldLockBootstrapScroll = false;
 
     setBootstrapScrollLock(topicSwitchToken, shouldLockBootstrapScroll);
@@ -3455,6 +3519,7 @@ watch(
     state.forwardMessages = [];
     inputText.value = getLocalStorageInputText.value;
     applyPendingForwardMessages();
+    applyPendingMessageDraft();
 
     clearSelectedMessages();
 
@@ -3468,18 +3533,18 @@ watch(
     }
 
     void fetchPinnedMessagesForTopic(topicId);
-    const hydrationPromise =
-      routeType !== RouteTypes.AI
-        ? hydrateMessagesFromCache(topicId, undefined, {
-            visibleLimit: fastInitialMessagesLimit,
-            allowVisibleShrink: true
-          })
-        : Promise.resolve([]);
+    const shouldHydrateBeforeInitialPaint = routeType !== RouteTypes.AI;
+    const hydrationPromise = shouldHydrateBeforeInitialPaint
+      ? hydrateMessagesFromCache(topicId, undefined, {
+          visibleLimit: fastInitialMessagesLimit,
+          allowVisibleShrink: true
+        })
+      : Promise.resolve([]);
     let initialMessagesFetch: Promise<IMessage[]> | null = null;
 
     // Start cache and network together. Network updates the canonical memory
     // snapshot in the background, while only cache/memory may paint first.
-    if (!shouldPositionToPendingSearch) {
+    if (!shouldBootstrapAroundMessage) {
       initialMessagesFetch = fetchMessagesForTopic(topicId, {
         limit: initialMessagesLimit,
         forceRefresh: true,
@@ -3497,10 +3562,9 @@ watch(
     }
 
     if (
-      !requiresAuthoritativeNotificationRefresh &&
-      (getRenderedTopicMessages(topicId, hydratedMessages).length > 0 ||
-        getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId))
-          .length > 0)
+      getRenderedTopicMessages(topicId, hydratedMessages).length > 0 ||
+      getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId)).length >
+        0
     ) {
       setTopicMessagesKnownEmpty(topicId, false);
       cancelInitialMessagesSkeletonDelay();
@@ -3515,7 +3579,7 @@ watch(
       }
 
       if (
-        !shouldPositionToPendingSearch &&
+        !shouldBootstrapAroundMessage &&
         shouldKeepTopicSwitchBottomPosition(topicSwitchToken)
       ) {
         scrollToBottom({
@@ -3524,7 +3588,7 @@ watch(
         });
       }
 
-      if (!shouldPositionToPendingSearch) {
+      if (!shouldBootstrapAroundMessage) {
         scheduleVisibleMessagesExpansion(
           topicId,
           expandedLimit,
@@ -3533,9 +3597,9 @@ watch(
       }
     }
 
-    if (shouldPositionToPendingSearch) {
+    if (shouldBootstrapAroundMessage) {
       initialMessagesFetch = fetchAroundMessage(
-        pendingSearchMessageId,
+        bootstrapAnchorMessageId,
         topicId,
         {
           updateVisible: true
@@ -3543,15 +3607,37 @@ watch(
       );
     }
 
-    const initialMessages = (await initialMessagesFetch) || [];
+    let initialMessages = (await initialMessagesFetch) || [];
 
     if (isStaleTopicSwitch()) {
       return;
     }
 
+    const isNotificationTargetLoaded = notificationMessageId
+      ? initialMessages.some(message => message.id === notificationMessageId) ||
+        getMessagesByTopicId(topicId).some(
+          message => message.id === notificationMessageId
+        )
+      : true;
+
+    if (!isNotificationTargetLoaded) {
+      initialMessages = await fetchMessagesForTopic(topicId, {
+        limit: initialMessagesLimit,
+        forceRefresh: true,
+        forceNetwork: getHasBrowserNetwork(),
+        allowStaleFallback: true,
+        visibleLimit: fastInitialMessagesLimit,
+        updateVisible: true
+      });
+
+      if (isStaleTopicSwitch()) {
+        return;
+      }
+    }
+
     cancelInitialMessagesSkeletonDelay();
     const shouldApplyInitialNetworkWindow =
-      !shouldPositionToPendingSearch &&
+      !shouldBootstrapAroundMessage &&
       (getMessagesByTopicId(topicId).length === 0 ||
         shouldKeepTopicSwitchBottomPosition(topicSwitchToken));
 
@@ -3584,10 +3670,7 @@ watch(
       return;
     }
 
-    if (
-      !shouldPositionToPendingSearch &&
-      expandedLimit > initialMessagesLimit
-    ) {
+    if (!shouldBootstrapAroundMessage && expandedLimit > initialMessagesLimit) {
       scheduleExpandedTopicMessagesFetch(
         topicId,
         expandedLimit,
@@ -3623,7 +3706,8 @@ watch(
 
     const shouldKeepInitialBottomPosition =
       !shouldPositionToPendingSearch &&
-      shouldKeepTopicSwitchBottomPosition(topicSwitchToken);
+      (Boolean(notificationMessageId) ||
+        shouldKeepTopicSwitchBottomPosition(topicSwitchToken));
 
     if (shouldKeepInitialBottomPosition) {
       scrollToBottom({
@@ -3746,6 +3830,10 @@ watch(
   },
   { deep: true }
 );
+
+watch([() => route.value.id, pendingDraftTopicId, pendingDraftText], () => {
+  applyPendingMessageDraft();
+});
 
 const updateLocalStorageInputText = () => {
   const inputsJson = JSON.parse(localStorage.getItem('inputs') || '{}');

@@ -80,10 +80,24 @@
           :aria-hidden="activeSection !== 'calls'"
         >
           <CallsPage
+            v-if="mountedSections.has('calls')"
             :is-active="activeSection === 'calls'"
             :auto-select-first="false"
             :data-testid="`${props.dataTestid}-MobileList-CallsPage`"
           />
+        </section>
+
+        <section
+          :class="[
+            'mobile-list-container__section mobile-list-container__section--ai',
+            {
+              'mobile-list-container__section--direct-hidden':
+                isSectionHiddenDuringDirectTransition('ai')
+            }
+          ]"
+          :aria-hidden="activeSection !== 'ai'"
+        >
+          <AIMenuPanel v-if="mountedSections.has('ai')" />
         </section>
 
         <section
@@ -97,6 +111,7 @@
           :aria-hidden="activeSection !== 'profile'"
         >
           <MenuProfilePanel
+            v-if="mountedSections.has('profile')"
             :data-testid="`${props.dataTestid}-MobileList-ProfilePanel`"
           />
         </section>
@@ -131,6 +146,7 @@ let savedChatsScrollTop = 0;
 import {
   reactive,
   computed,
+  defineAsyncComponent,
   nextTick,
   ref,
   watch,
@@ -160,9 +176,7 @@ import {
   useChatMenu
 } from '../../composables/useChatMenu';
 import MenuBottomNav from '../Menu/MenuBottomNav.vue';
-import MenuProfilePanel from '../Menu/MenuProfilePanel.vue';
 import { getAuthUser } from '../../composables/useAuth';
-import CallsPage from '../Calls/CallsPage.vue';
 import { useShareSelection } from '../../composables/useShareSelection';
 import type { ITopic } from '../interfaces/interfaces';
 import { enqueuePendingShareFiles } from '../../services/useShareIntent';
@@ -184,6 +198,12 @@ import {
   normalizeAtSearchQuery
 } from '../../utils/searchMatch';
 
+const CallsPage = defineAsyncComponent(() => import('../Calls/CallsPage.vue'));
+const AIMenuPanel = defineAsyncComponent(() => import('../AI/AIMenuPanel.vue'));
+const MenuProfilePanel = defineAsyncComponent(
+  () => import('../Menu/MenuProfilePanel.vue')
+);
+
 const route = useUrlWatcher();
 
 const isAssistantRoute = computed(
@@ -196,6 +216,7 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
 const { getTopicList, loading: isTopicsLoading } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, setActiveSection } = useChatMenu();
+const mountedSections = reactive(new Set<ChatMenuSection>(['chats']));
 const { isShareSelectionActive, selectedTopicIds, toggleShareTopic } =
   useShareSelection();
 const allTopics = computed(() => getTopicList());
@@ -210,7 +231,12 @@ let messageSearchRequestToken = 0;
 const authUserId = computed(() => getAuthUser()?.id || '');
 const dragEnterDepth = ref(0);
 const isDragOverFiles = ref(false);
-const MENU_SECTION_ORDER: ChatMenuSection[] = ['chats', 'calls', 'profile'];
+const MENU_SECTION_ORDER: ChatMenuSection[] = [
+  'chats',
+  'calls',
+  'ai',
+  'profile'
+];
 const CHAT_SCROLL_RESTORE_MAX_FRAMES = 8;
 let chatsScrollRestoreFrameId: number | null = null;
 let chatsScrollRestoreAttempts = 0;
@@ -656,6 +682,11 @@ watch(
       return;
     }
 
+    if (routeType === RouteTypes.AI || routeType === RouteTypes.ASSISTANT) {
+      setActiveSection('ai');
+      return;
+    }
+
     if (
       routeType === RouteTypes.DIALOGS ||
       routeType === RouteTypes.GROUP ||
@@ -670,6 +701,7 @@ watch(
 watch(
   () => activeSection.value,
   (section, previousSection) => {
+    mountedSections.add(section);
     hideIntermediateSectionsForDirectTransition(previousSection, section);
     applySectionTrackOffset();
 
@@ -680,7 +712,8 @@ watch(
     if (section === 'chats') {
       void restoreChatsScrollPosition();
     }
-  }
+  },
+  { immediate: true }
 );
 
 watch(activeSectionIndex, applySectionTrackOffset);

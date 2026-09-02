@@ -16,9 +16,21 @@ class ChatDB {
           db.createObjectStore(STORE_NAME, { keyPath: 'chatId' });
         }
       };
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => {
+        const db = request.result;
+        db.onversionchange = () => db.close();
+        resolve(db);
+      };
       request.onerror = () => reject(request.error);
     });
+  }
+
+  static closeAfterTransaction(db: IDBDatabase, tx: IDBTransaction): void {
+    const close = () => db.close();
+
+    tx.addEventListener('complete', close, { once: true });
+    tx.addEventListener('abort', close, { once: true });
+    tx.addEventListener('error', close, { once: true });
   }
 
   static async get(
@@ -29,6 +41,7 @@ class ChatDB {
     const db = await this.openDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
+      this.closeAfterTransaction(db, tx);
       const store = tx.objectStore(STORE_NAME);
       const request = store.get(chatId);
 
@@ -63,6 +76,7 @@ class ChatDB {
     const db = await this.openDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
+      this.closeAfterTransaction(db, tx);
       const store = tx.objectStore(STORE_NAME);
       const serializableMessages = messages.map(msg => ({
         ...msg,
@@ -88,6 +102,7 @@ class ChatDB {
     const db = await this.openDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
+      this.closeAfterTransaction(db, tx);
       const store = tx.objectStore(STORE_NAME);
       const request = store.getAll();
 
@@ -118,6 +133,7 @@ class ChatDB {
     const db = await this.openDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
+      this.closeAfterTransaction(db, tx);
       const store = tx.objectStore(STORE_NAME);
       const request = store.clear();
 

@@ -15,10 +15,7 @@
         :data-testid="`Pinned-Messages-CloseButton`"
         @click="handleOpenUnpinModal"
       >
-        <Icon
-          :name="IconNameEnum.crossLarge"
-          color="var(--text-neutral-color)"
-        />
+        <Icon :name="IconNameEnum.crossLarge" color="var(--chat-secondary)" />
       </Button>
     </div>
   </div>

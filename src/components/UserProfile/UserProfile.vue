@@ -19,40 +19,43 @@
         (isBot || (!effectiveLastOnline && !isCurrentUser))
       "
     />
-    <h3
-      class="user-profile__title"
-      :data-testid="`${dataTestid}-UserProfile-Title`"
-    >
-      <span class="user-profile__title-text">{{ props.user.initials }}</span>
-      <Tooltip
-        v-if="statusIcon && currentStatusLabel"
-        :hint="currentStatusLabel"
-        position="bottom-center"
-        type="black"
-        size="small"
-        :data-testid="`${dataTestid}-UserProfile-StatusTooltip`"
+
+    <div class="user-profile__info">
+      <h3
+        class="user-profile__title"
+        :data-testid="`${dataTestid}-UserProfile-Title`"
       >
-        <EmojiIcon class="user-profile__title-status" :emoji="statusIcon" />
-      </Tooltip>
-    </h3>
-    <ConnectionStatus v-if="!!isWaitingConnection && !shouldHideStatusLine" />
-    <TypingIndicator
-      v-else-if="props.typingLabel && !shouldHideStatusLine"
-      class="user-profile__ex user-profile__ex--typing"
-      :label="props.typingLabel"
-      :data-testid="`${dataTestid}-UserProfile-Typing`"
-    />
-    <span
-      v-else-if="!shouldHideStatusLine"
-      class="user-profile__ex"
-      :class="{
-        'user-profile__ex--online':
-          !isDeletedAccount && !effectiveLastOnline && !isCurrentUser
-      }"
-      :data-testid="`${dataTestid}-UserProfile-Ex`"
-    >
-      {{ formattedStatus }}
-    </span>
+        <span class="user-profile__title-text">{{ props.user.initials }}</span>
+        <Tooltip
+          v-if="statusIcon && currentStatusLabel"
+          :hint="currentStatusLabel"
+          position="bottom-center"
+          type="black"
+          size="small"
+          :data-testid="`${dataTestid}-UserProfile-StatusTooltip`"
+        >
+          <EmojiIcon class="user-profile__title-status" :emoji="statusIcon" />
+        </Tooltip>
+      </h3>
+      <ConnectionStatus v-if="!!isWaitingConnection && !shouldHideStatusLine" />
+      <TypingIndicator
+        v-else-if="props.typingLabel && !shouldHideStatusLine"
+        class="user-profile__ex user-profile__ex--typing"
+        :label="props.typingLabel"
+        :data-testid="`${dataTestid}-UserProfile-Typing`"
+      />
+      <span
+        v-else-if="!shouldHideStatusLine"
+        class="user-profile__ex"
+        :class="{
+          'user-profile__ex--online':
+            !isDeletedAccount && !effectiveLastOnline && !isCurrentUser
+        }"
+        :data-testid="`${dataTestid}-UserProfile-Ex`"
+      >
+        {{ formattedStatus }}
+      </span>
+    </div>
   </div>
 </template>
 

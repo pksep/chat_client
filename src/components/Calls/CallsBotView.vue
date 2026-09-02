@@ -30,7 +30,7 @@
         <p class="calls-bot__message-title">
           {{ callInfoTitle }}
         </p>
-        <p>{{ recordingStatusText }}</p>
+        <p v-if="recordingStatusText">{{ recordingStatusText }}</p>
         <p v-if="hasRecording">Вы можете выбрать доступное действие из меню.</p>
         <p v-else-if="!isLoadingSummary">
           Для этого звонка пока нет сохранённой записи у вашего пользователя.
@@ -79,9 +79,12 @@
         </button>
       </div>
 
-      <div v-if="visibleChatMessages.length" class="calls-bot__conversation">
+      <div
+        v-if="safeVisibleChatMessages.length"
+        class="calls-bot__conversation"
+      >
         <div
-          v-for="message in visibleChatMessages"
+          v-for="message in safeVisibleChatMessages"
           :key="message.id"
           :class="[
             'calls-bot__chat-message',
@@ -141,6 +144,7 @@ import { getMessagesByTopicId } from '../../services/useMessages';
 import { stripHtml } from '../../utils/stripHtml';
 import { parseMessageEx } from '../../utils/messageReplyQuote';
 import { isBotUser } from '../../utils/bot';
+import { sanitizeMessageHtml } from '../../utils/sanitizeMessageHtml';
 
 interface ComposerSendPayload {
   content?: string;
@@ -241,6 +245,13 @@ const visibleChatMessages = computed<CallsBotChatMessage[]>(() => {
   return [...byId.values()].slice(-3);
 });
 
+const safeVisibleChatMessages = computed<CallsBotChatMessage[]>(() =>
+  visibleChatMessages.value.map(message => ({
+    ...message,
+    text: sanitizeMessageHtml(message.text)
+  }))
+);
+
 const callInfoTitle = computed(() => {
   if (!selectedCall.value) {
     return '';
@@ -275,7 +286,7 @@ const callsBotSubtitle = computed(() =>
 );
 const recordingStatusText = computed(() => {
   if (isLoadingSummary.value && !summary.value) {
-    return 'Проверяем запись звонка...';
+    return '';
   }
 
   if (!summary.value) {

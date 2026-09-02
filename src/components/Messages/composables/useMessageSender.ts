@@ -1,4 +1,10 @@
-import { nextTick, watch, type Ref } from 'vue';
+import {
+  getCurrentScope,
+  nextTick,
+  onScopeDispose,
+  watch,
+  type Ref
+} from 'vue';
 import { sendMessageChat, uploadFile } from '../../../services/useChat';
 import { generateUUID } from '../../../utils/generateUUID';
 import { fileToDataURL } from '../../../utils/fileToDataURL';
@@ -13,6 +19,7 @@ import {
   registerPendingOutgoingForwardBatch,
   changeFileUploadErrorStatus,
   changeMessageStatusLocally,
+  flushPendingMessagePersists,
   getFullMessagesByTopicId,
   getTopicIdsWithMessages,
   getPendingUploadFile,
@@ -60,6 +67,9 @@ import {
   isCallTopic,
   parseCallTopicDescription
 } from '../../../utils/call-topic';
+import { stageAiAttachments } from '../../../services/aiAttachments';
+import { buildForwardMessageSendPlan } from '../../../utils/forward-message-send-plan';
+import { getUploadFileSizeError } from '../../../services/useChatSDK/multipart-upload';
 
 const MAX_HTML_LENGTH = 4000;
 const FORWARD_TEXT_SEND_DELAY_MS = 250;
@@ -67,17 +77,32 @@ const TEXT_WAIT_INDICATOR_DELAY_MS = 150;
 const MAX_MEDIA_ATTACHMENTS_PER_MESSAGE = 10;
 const MAX_FILE_ATTACHMENTS_PER_MESSAGE = 10;
 const MESSAGE_MAX_RETRY_AGE_MS = 15 * 60 * 1000;
+const MESSAGE_UPLOAD_MAX_RETRY_AGE_MS = 2 * 60 * 60 * 1000;
 const MESSAGE_AUTO_RETRY_WINDOW_MS = 180000;
-const MESSAGE_AUTO_RETRY_INITIAL_DELAY_MS = 3000;
-const MESSAGE_AUTO_RETRY_MAX_DELAY_MS = 15000;
+const MESSAGE_AUTO_RETRY_INITIAL_DELAY_MS = 1000;
+const MESSAGE_AUTO_RETRY_MAX_DELAY_MS = 5000;
 const BACKGROUND_UPLOAD_RETRY_SUPPRESS_MS = 15000;
 const VIDEO_INITIAL_PREVIEW_DIMENSIONS = {
   width: 640,
   height: 360
 };
+
 const VIDEO_LOCAL_THUMBNAIL_TIMEOUT_MS = 3000;
 const CALL_TOPIC_SUMMARY_COMMAND = 'сделать краткое содержание';
 const CALL_TOPIC_ACTIONS_COMMAND = 'список действий по звонку';
+
+/** Экранирует имя вложения перед показом в HTML-сообщении чата. */
+const escapeAiAttachmentName = (value: string): string =>
+  value.replace(/[&<>"']/g, character => {
+    const entities: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    };
+    return entities[character];
+  });
 
 const isCallTopicAutoPromptEnabled = () =>
   getConfig().CHAT_CALL_TOPIC_AUTO_PROMPT_ENABLED?.trim().toLowerCase() ===
@@ -112,6 +137,7 @@ const pendingMessageRetryTimers = new Map<
   ReturnType<typeof setTimeout>
 >();
 const pendingMessageRetryStates = new Map<string, PendingMessageRetryState>();
+const activePendingMessageRetries = new Set<string>();
 const backgroundInterruptedUploadMessages = new Set<string>();
 const activeUploadRequests = new Map<string, Promise<boolean>>();
 let arePendingMessageRetryListenersBound = false;
@@ -500,8 +526,21 @@ export function useMessageSender(
       return false;
     }
 
-    return Date.now() - createdAtMs >= MESSAGE_MAX_RETRY_AGE_MS;
+    const maxRetryAgeMs = message?.media?.some(
+      media => media.isLoading || media.uploadError || !media.path
+    )
+      ? MESSAGE_UPLOAD_MAX_RETRY_AGE_MS
+      : MESSAGE_MAX_RETRY_AGE_MS;
+
+    return Date.now() - createdAtMs >= maxRetryAgeMs;
   };
+
+  const getMessageAutoRetryWindowMs = (message?: IMessage | null): number =>
+    message?.media?.some(
+      media => media.isLoading || media.uploadError || !media.path
+    )
+      ? MESSAGE_UPLOAD_MAX_RETRY_AGE_MS
+      : MESSAGE_AUTO_RETRY_WINDOW_MS;
 
   const isAutoRetryCandidate = (message?: IMessage | null): boolean =>
     Boolean(
@@ -528,7 +567,7 @@ export function useMessageSender(
       return true;
     }
 
-    return message.media.every(media => !media.isLoading);
+    return message.media.every(media => !media.isLoading || media.uploadError);
   };
 
   const clearPendingMessageAutoRetry = (
@@ -752,7 +791,13 @@ export function useMessageSender(
     let hasUploadError = false;
 
     for (const media of retryableMedia) {
-      const payload = await getPendingUploadFile(topicId, messageId, media.id);
+      setFileUploadPendingStatus(topicId, messageId, media.id);
+      const payload = await getPendingUploadFile(
+        topicId,
+        messageId,
+        media.id,
+        () => changeFileUploadPercent(topicId, messageId, media.id, null)
+      );
 
       if (!payload) {
         hasUploadError = true;
@@ -882,7 +927,10 @@ export function useMessageSender(
 
     pendingMessageRetryStates.set(retryKey, retryState);
 
-    if (Date.now() - retryState.startedAt >= MESSAGE_AUTO_RETRY_WINDOW_MS) {
+    if (
+      Date.now() - retryState.startedAt >=
+      getMessageAutoRetryWindowMs(message)
+    ) {
       changeMessageStatusLocally(
         topicId,
         messageId,
@@ -919,7 +967,10 @@ export function useMessageSender(
         return;
       }
 
-      if (Date.now() - retryState.startedAt >= MESSAGE_AUTO_RETRY_WINDOW_MS) {
+      if (
+        Date.now() - retryState.startedAt >=
+        getMessageAutoRetryWindowMs(currentMessage)
+      ) {
         changeMessageStatusLocally(
           topicId,
           messageId,
@@ -929,9 +980,27 @@ export function useMessageSender(
         return;
       }
 
-      const didSend = await trySendPendingMessage(topicId, messageId, {
-        markNotDeliveredOnFailure: false
-      });
+      if (activePendingMessageRetries.has(retryKey)) {
+        const retryAfterActiveRequest = setTimeout(() => {
+          pendingMessageRetryTimers.delete(retryKey);
+          schedulePendingMessageAutoRetry(topicId, messageId, {
+            immediate: true
+          });
+        }, 1000);
+        pendingMessageRetryTimers.set(retryKey, retryAfterActiveRequest);
+        return;
+      }
+
+      activePendingMessageRetries.add(retryKey);
+      let didSend = false;
+
+      try {
+        didSend = await trySendPendingMessage(topicId, messageId, {
+          markNotDeliveredOnFailure: false
+        });
+      } finally {
+        activePendingMessageRetries.delete(retryKey);
+      }
 
       if (didSend) {
         clearPendingMessageAutoRetry(topicId, messageId);
@@ -992,10 +1061,73 @@ export function useMessageSender(
     });
   };
 
+  let pendingUploadRestoreProbeTimer: ReturnType<typeof setTimeout> | null =
+    null;
+
+  const startPendingUploadRestoreProbe = (topicId?: string): void => {
+    if (pendingUploadRestoreProbeTimer) {
+      clearTimeout(pendingUploadRestoreProbeTimer);
+      pendingUploadRestoreProbeTimer = null;
+    }
+
+    if (!topicId) {
+      return;
+    }
+
+    let attemptsRemaining = 30;
+    const probe = (): void => {
+      schedulePendingMessageAutoRetriesForTopic(topicId, { immediate: true });
+      attemptsRemaining -= 1;
+
+      if (attemptsRemaining > 0 && route.value.id === topicId) {
+        pendingUploadRestoreProbeTimer = setTimeout(probe, 1000);
+      } else {
+        pendingUploadRestoreProbeTimer = null;
+      }
+    };
+
+    pendingUploadRestoreProbeTimer = setTimeout(probe, 0);
+  };
+
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      if (pendingUploadRestoreProbeTimer) {
+        clearTimeout(pendingUploadRestoreProbeTimer);
+        pendingUploadRestoreProbeTimer = null;
+      }
+    });
+  }
+
   watch(
     () => route.value.id,
     nextTopicId => {
       schedulePendingMessageAutoRetriesForTopic(nextTopicId);
+      startPendingUploadRestoreProbe(nextTopicId);
+    },
+    { immediate: true }
+  );
+
+  watch(
+    () => {
+      const topicId = route.value.id;
+
+      if (!topicId) {
+        return '';
+      }
+
+      return getFullMessagesByTopicId(topicId)
+        .filter(message => message.id && canAutoRetryMessage(message))
+        .map(message => message.id)
+        .join(':');
+    },
+    pendingMessageIds => {
+      if (!pendingMessageIds) {
+        return;
+      }
+
+      schedulePendingMessageAutoRetriesForTopic(route.value.id, {
+        immediate: true
+      });
     },
     { immediate: true }
   );
@@ -1189,7 +1321,7 @@ export function useMessageSender(
       ex
     });
 
-    registerPendingUploadMessage(params.topicId, clientId, {
+    void registerPendingUploadMessage(params.topicId, clientId, {
       replyMessageId: params.replyMessageId,
       forwardMessageIds: params.forwardMessageIds || []
     });
@@ -1301,7 +1433,6 @@ export function useMessageSender(
     const forwardMessages = state.forwardMessages;
     const hasForwardMessages = forwardMessages.length > 0;
     const hasMultipleForwardMessages = forwardMessages.length > 1;
-    const forwardBatchId = hasMultipleForwardMessages ? generateUUID() : null;
     const hasAttachments = queuedFiles.length > 0;
 
     const isTextEmpty = stripHtml(normalizedText).length === 0;
@@ -1323,6 +1454,9 @@ export function useMessageSender(
     }
 
     const parts = textToSend ? splitHtmlByLength(textToSend) : [];
+    const needsForwardBatch =
+      hasMultipleForwardMessages || (hasForwardMessages && parts.length > 0);
+    const forwardBatchId = needsForwardBatch ? generateUUID() : null;
     const callTopicPromptText = stripHtml(textToSend)
       .replace(/\u00a0/g, ' ')
       .trim();
@@ -1346,10 +1480,48 @@ export function useMessageSender(
 
     /* ================= AI ROUTE ================= */
     if (routeType === RouteTypes.AI) {
-      for (const part of parts) {
+      let aiAttachments = [];
+      try {
+        aiAttachments = await stageAiAttachments(
+          queuedFiles.map(payload => payload.file)
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Не удалось подготовить вложение для AI';
+        state.aiMessages = [
+          ...state.aiMessages,
+          {
+            role: 'assistant' as 'user' | 'assistant',
+            content: message,
+            timestamp: Date.now()
+          }
+        ];
+        showErrorNotification(message);
+        return;
+      }
+
+      const aiParts =
+        parts.length > 0
+          ? parts
+          : [
+              'Я прикрепил файл. Уточни, к какой сущности ERP его нужно прикрепить.'
+            ];
+      const attachmentSummary = aiAttachments.length
+        ? `Прикреплено: ${aiAttachments
+            .map(attachment => `«${escapeAiAttachmentName(attachment.name)}»`)
+            .join(', ')}`
+        : '';
+
+      for (const [index, part] of aiParts.entries()) {
+        const visiblePart =
+          index === 0 && attachmentSummary
+            ? `${part}\n\n${attachmentSummary}`
+            : part;
         const userMessage = {
           role: 'user' as 'user' | 'assistant',
-          content: part,
+          content: visiblePart,
           timestamp: Date.now()
         };
 
@@ -1358,7 +1530,12 @@ export function useMessageSender(
 
         if (mastraResult.value?.sendMessage) {
           try {
-            await mastraResult.value.sendMessage(part);
+            await mastraResult.value.sendMessage(
+              visiblePart,
+              undefined,
+              undefined,
+              index === 0 ? aiAttachments : []
+            );
           } catch (error) {
             console.warn('Mastra failed to send message:', error);
             break;
@@ -1487,65 +1664,43 @@ export function useMessageSender(
         }
       }
 
-      if (hasMultipleForwardMessages && parts.length > 0) {
-        registerPendingOutgoingForwardBatch(topicId, [
-          ...forwardMessages.map((_, index) => ({
-            forwardBatchId: forwardBatchId as string,
-            forwardBatchOrder: index
-          })),
-          ...parts.map((_, index) => ({
-            forwardBatchId: forwardBatchId as string,
-            forwardBatchOrder: forwardMessages.length + index
-          }))
-        ]);
-
-        for (const [index, forwardMessage] of forwardMessages.entries()) {
-          const ex = createMessageEx({
-            clientId: generateUUID(),
-            ...replyQuoteEx,
-            forwardBatchId: forwardBatchId as string,
-            forwardBatchOrder: index
-          });
-
-          const didSend = await sendMessageChat({
-            topicId,
-            text: '',
-            replyMessageId,
-            forwardMessageId: forwardMessage.id,
-            ex
-          });
-
-          if (!didSend) {
-            queuedMessageCount += 1;
-            queuePendingTextMessage({
-              topicId,
-              text: '',
-              replyMessageId,
-              forwardMessageIds: [forwardMessage.id],
-              ex
-            });
-          } else {
-            sentMessageCount += 1;
-          }
-        }
-
-        await new Promise(resolve =>
-          setTimeout(resolve, FORWARD_TEXT_SEND_DELAY_MS)
+      if (hasForwardMessages && parts.length > 0) {
+        const sendPlan = buildForwardMessageSendPlan(
+          forwardMessages.map(message => message.id),
+          parts
         );
 
-        for (const [index, part] of parts.entries()) {
+        registerPendingOutgoingForwardBatch(
+          topicId,
+          sendPlan.map(item => ({
+            forwardBatchId: forwardBatchId as string,
+            forwardBatchOrder: item.forwardBatchOrder
+          }))
+        );
+
+        for (const item of sendPlan) {
+          if (
+            item.kind === 'text' &&
+            item.forwardBatchOrder === forwardMessages.length
+          ) {
+            await new Promise(resolve =>
+              setTimeout(resolve, FORWARD_TEXT_SEND_DELAY_MS)
+            );
+          }
+
           const ex = createMessageEx({
             clientId: generateUUID(),
             ...replyQuoteEx,
             forwardBatchId: forwardBatchId as string,
-            forwardBatchOrder: forwardMessages.length + index
+            forwardBatchOrder: item.forwardBatchOrder
           });
 
           const didSend = await sendMessageChat({
             topicId,
-            text: part,
+            text: item.text,
             replyMessageId,
-            taggedUserIds,
+            forwardMessageId: item.forwardMessageId,
+            taggedUserIds: item.kind === 'text' ? taggedUserIds : undefined,
             ex
           });
 
@@ -1553,9 +1708,12 @@ export function useMessageSender(
             queuedMessageCount += 1;
             queuePendingTextMessage({
               topicId,
-              text: part,
+              text: item.text,
               replyMessageId,
-              taggedUserIds,
+              forwardMessageIds: item.forwardMessageId
+                ? [item.forwardMessageId]
+                : [],
+              taggedUserIds: item.kind === 'text' ? taggedUserIds : undefined,
               ex
             });
           } else {
@@ -1572,39 +1730,6 @@ export function useMessageSender(
       }
 
       for (const part of parts) {
-        if (hasForwardMessages) {
-          for (const forwardMessage of forwardMessages) {
-            const ex = createMessageEx({
-              clientId: generateUUID(),
-              ...replyQuoteEx
-            });
-            const didSend = await sendMessageChat({
-              topicId,
-              text: part,
-              replyMessageId,
-              forwardMessageId: forwardMessage.id,
-              taggedUserIds,
-              ex
-            });
-
-            if (!didSend) {
-              queuedMessageCount += 1;
-              queuePendingTextMessage({
-                topicId,
-                text: part,
-                replyMessageId,
-                replyMessage: state.replyMessage,
-                forwardMessageIds: [forwardMessage.id],
-                taggedUserIds,
-                ex
-              });
-            } else {
-              sentMessageCount += 1;
-            }
-          }
-          continue;
-        }
-
         const clientId = generateUUID();
         const ex = createMessageEx({
           clientId,
@@ -1630,7 +1755,7 @@ export function useMessageSender(
           ex
         };
 
-        registerPendingUploadMessage(topicId, clientId, {
+        void registerPendingUploadMessage(topicId, clientId, {
           replyMessageId,
           forwardMessageIds: []
         });
@@ -1745,6 +1870,16 @@ export function useMessageSender(
         }));
 
     if (!filePayloads.length) return;
+
+    const fileSizeError = filePayloads
+      .map(({ file }) => getUploadFileSizeError(file))
+      .find((error): error is string => Boolean(error));
+
+    if (fileSizeError) {
+      showErrorNotification(fileSizeError);
+      return;
+    }
+
     const topicId = options?.topicId ?? route.value.id;
     const replyMessage = options?.replyMessage ?? state.replyMessage;
     const replyMessageId = options?.replyMessageId ?? state.replyMessage?.id;
@@ -1767,7 +1902,9 @@ export function useMessageSender(
         const localPath =
           type === MediaType.Video
             ? URL.createObjectURL(file)
-            : await fileToDataURL(file);
+            : type === MediaType.File
+              ? ''
+              : await fileToDataURL(file);
         const baseMedia = {
           localPath,
           path: '',
@@ -1780,7 +1917,7 @@ export function useMessageSender(
           messageId: clientId,
           type,
           isLoading: true,
-          uploadPercent: null
+          uploadPercent: 0
         };
 
         if (type === MediaType.File) {
@@ -1842,10 +1979,15 @@ export function useMessageSender(
     };
 
     addMessageToLocal(newMessage.topicId, newMessage);
-    registerPendingUploadMessage(newMessage.topicId, clientId, {
-      replyMessageId,
-      forwardMessageIds
-    });
+    const pendingUploadMessagePersistence = registerPendingUploadMessage(
+      newMessage.topicId,
+      clientId,
+      {
+        replyMessageId,
+        forwardMessageIds,
+        message: newMessage
+      }
+    );
 
     recordTelemetryEvent({
       category: 'upload',
@@ -1868,25 +2010,56 @@ export function useMessageSender(
       }
     });
 
+    const pendingUploadFileHandoffs = new Map<string, Promise<void>>();
+
     filePayloads.forEach(({ file, isMedia }, index) => {
       const fileId = index.toString();
 
-      registerPendingUploadFile(newMessage.topicId, clientId, fileId, {
-        file,
-        isMedia
-      });
+      const persistencePromise = registerPendingUploadFile(
+        newMessage.topicId,
+        clientId,
+        fileId,
+        { file, isMedia },
+        () =>
+          changeFileUploadPercent(newMessage.topicId, clientId, fileId, null)
+      );
+      pendingUploadFileHandoffs.set(fileId, persistencePromise);
 
       if (getMediaType(file, isMedia) === MediaType.Video) {
         hydrateLocalVideoPreview(newMessage.topicId, clientId, fileId, file);
       }
     });
 
+    const pendingUploadMessageStatePromise = Promise.all([
+      pendingUploadMessagePersistence,
+      flushPendingMessagePersists()
+    ]);
+    const pendingUploadPersistencePromise = Promise.allSettled([
+      pendingUploadMessageStatePromise,
+      ...pendingUploadFileHandoffs.values()
+    ]);
+
+    await pendingUploadMessageStatePromise;
+
     let hasUploadError = false;
     for (const [i, payload] of filePayloads.entries()) {
+      const fileId = i.toString();
+
+      try {
+        await pendingUploadFileHandoffs.get(fileId);
+      } catch (error: any) {
+        hasUploadError = true;
+        changeFileUploadErrorStatus(newMessage.topicId, clientId, fileId, true);
+        showErrorNotification(
+          error?.message || 'Failed to prepare file for resumable upload'
+        );
+        continue;
+      }
+
       const isUploaded = await uploadMessageFile(
         newMessage.topicId,
         clientId,
-        i.toString(),
+        fileId,
         payload,
         {
           markNotDeliveredOnFailure: false
@@ -1899,6 +2072,7 @@ export function useMessageSender(
     }
 
     if (hasUploadError) {
+      await pendingUploadPersistencePromise;
       recordTelemetryEvent({
         category: 'upload',
         name: 'upload.message.waiting_retry',
@@ -2139,7 +2313,12 @@ export function useMessageSender(
     let hasUploadError = false;
 
     for (const media of failedMedia) {
-      const payload = await getPendingUploadFile(topicId, messageId, media.id);
+      const payload = await getPendingUploadFile(
+        topicId,
+        messageId,
+        media.id,
+        () => changeFileUploadPercent(topicId, messageId, media.id, null)
+      );
 
       if (!payload) {
         hasUploadError = true;

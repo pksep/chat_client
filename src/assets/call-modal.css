@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-color);
+
 }
 
 .call-modal__container {
@@ -14,7 +14,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  background-color: var(--white);
+  background-color: var(--surface-overlay);
+  border: 0.5px solid var(--border-table);
   border-radius: 25px;
   width: 700px;
   height: 570px;
@@ -57,6 +58,12 @@
     }
   }
 }
+
+
+.user-info-panel__avatar .avatar-yui-kit__fallback .avatar-yui-kit__text {
+  font-size: 20px;
+}
+
 .call-modal__avatar {
   --size-avatar: 80px;
 
@@ -103,28 +110,6 @@
   display: none;
 }
 
-.call-modal__control-button-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 25px;
-
-  & .call-modal__control-button {
-    background-color: var(--blue1);
-    padding: 8px;
-    cursor: pointer;
-
-    &.call-modal__control-button__inactive {
-      color: var(--blue1);
-      background-color: var(--blue10);
-    }
-
-    &.call-modal__control-button__inactive:disabled {
-      color: var(--text-light-color);
-    }
-  }
-}
-
 .call-modal__control-button {
   width: 40px;
   height: 40px;
@@ -134,8 +119,42 @@
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
-  color: #fff;
+  color: var(--white);
 }
+
+.call-modal__group-info .call-modal__control-button {
+  color: var(--text-on-brand);
+}
+
+.call-modal__control-button-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 25px;
+
+  & .call-modal__control-button {
+    background-color: var(--action-primary-bg);
+    padding: 8px;
+    cursor: pointer;
+
+    &.call-modal__control-button__inactive {
+      color: var(--text-white);
+      background-color: var(--action-primary-bg);
+    }
+
+    &.call-modal__control-button_alter {
+      color: var(--chat-primary);
+      background-color: var(--action-secondary-pressed-bg);
+    }
+
+    &.call-modal__control-button__inactive:disabled {
+      color: var(--text-light-color);
+    }
+  }
+}
+
+
+
 
 .call-modal__control-button-wrapper--call-controls {
   & .call-modal__control-button {
@@ -156,6 +175,10 @@
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--error-color) 18%, transparent);
 }
 
+body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
+  z-index: 100000;
+}
+
 .call-modal__recording-notice {
   position: absolute;
   top: 18px;
@@ -169,7 +192,7 @@
   padding: 8px 14px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.94);
-  color: var(--grey6);
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
   line-height: 16px;
@@ -191,7 +214,7 @@
 }
 
 .call-modal__recording-notice--starting {
-  color: var(--grey6);
+  color: var(--text-secondary);
 }
 
 .call-modal__recording-notice--starting .call-modal__recording-notice-dot {
@@ -201,6 +224,7 @@
 }
 
 @keyframes call-recording-starting-pulse {
+
   0%,
   100% {
     transform: scale(1);
@@ -214,7 +238,7 @@
 }
 
 .call-modal__control-button--fullscreen {
-  background-color: var(--blue1);
+  background-color: var(--action-primary-bg);
 }
 
 .call-modal__control-button:hover:not(:disabled) {
@@ -222,7 +246,7 @@
 }
 
 .call-modal__control-button--action {
-  background-color: var(--blue1);
+  background-color: var(--action-primary-bg);
 }
 
 .call-modal__control-button--leave {
@@ -249,7 +273,7 @@
 
 .call-modal__audio-output-button--active {
   background-color: var(--white) !important;
-  color: var(--blue1);
+  color: var(--text-link);
 }
 
 .call-modal__audio-output-menu {
@@ -276,7 +300,7 @@
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: var(--text-color);
+
   display: flex;
   align-items: center;
   gap: 18px;
@@ -307,10 +331,13 @@
   gap: 10px;
   padding: 5px;
   border-radius: 25px;
-  background: var(--white);
+  background: var(--surface-overlay);
+  border: 0.5px solid var(--border-table);
   box-shadow: 0 14px 32px rgba(24, 43, 87, 0.2);
   transform: translateX(-50%);
   z-index: 12;
+
+  transition: all 0.2s ease;
 
   &::after {
     content: '';
@@ -373,7 +400,7 @@
   gap: 16px;
   z-index: 9;
 
-  & > div {
+  &>div {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -393,6 +420,9 @@
 
 .call-modal__mobile-actions {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex: 0 0 auto;
 }
 
@@ -421,7 +451,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  color: var(--text-color);
+
   font: inherit;
   font-size: 16px;
   line-height: 20px;
@@ -471,21 +501,33 @@
   right: 0;
   bottom: 0;
   width: 404px;
-  background: var(--white);
+  background: var(--surface-main-modal);
   z-index: 100001;
   box-shadow: -8px 0 24px rgba(16, 24, 40, 0.12);
   display: flex;
   flex-direction: column;
+  border: 0.5px solid var(--border-table);
 }
 
 .call-modal__group-panel-header {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
   padding: 20px;
-  border-bottom: 1px solid #eef1f7;
 }
+
+.call-modal__group-panel-header::before {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  background: var(--border-table);
+}
+
 
 .call-modal__group-panel-header--mobile {
   padding: 0;
@@ -508,7 +550,7 @@
   margin: 16px 18px 8px;
 }
 
-.call-modal__group-panel-actions > :only-child {
+.call-modal__group-panel-actions> :only-child {
   grid-column: 1 / -1;
 }
 
@@ -531,14 +573,14 @@
   margin-top: 4px;
   font-size: 14px;
   line-height: 18px;
-  color: var(--text-color);
+
 }
 
 .call-modal__group-panel-back,
 .call-modal__group-panel-close {
   border: none;
   background: transparent;
-  color: var(--text-color);
+
   cursor: pointer;
   flex: 0 0 auto;
 }
@@ -552,6 +594,7 @@
   position: absolute;
   right: 20px;
   top: 20px;
+  color: var(--text-primary)
 }
 
 .call-modal__group-panel-copy {
@@ -561,15 +604,18 @@
   height: 65px;
   border: none;
   border-radius: 5px;
-  background: var(--background-light-color);
+  background: var(--table-surface-search);
+  color: var(--text-primary);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
   cursor: pointer;
-  color: var(--text-color);
+
   font: unset;
+
+  transition: all 0.2s ease;
 
   & span {
     font-size: 14px;
@@ -580,9 +626,19 @@
   & svg {
     width: 24px;
     height: 24px;
-    color: var(--text-neutral-color);
+    color: var(--chat-secondary);
+    transition: all 0.2s ease;
+  }
+
+  &:hover {
+    background: var(--action-secondary-pressed-bg);
+
+    & svg {
+      color: var(--action-primary-bg);
+    }
   }
 }
+
 
 .call-modal__group-panel-background-select {
   margin: 8px 18px 14px;
@@ -595,7 +651,8 @@
   gap: 12px;
   padding: 10px;
   cursor: pointer;
-  background-color: var(--blue15);
+  border-radius: 5px;
+  background-color: var(--table-surface-search);
 }
 
 .call-modal__group-panel-background-trigger-copy {
@@ -607,7 +664,7 @@
   font-size: 14px;
   line-height: 18px;
   font-weight: 400;
-  color: var(--text-color);
+
 }
 
 .call-modal__group-panel-background-menu {
@@ -623,11 +680,17 @@
 
 .call-modal__group-panel-background-tile {
   position: relative;
-  border: 1px solid #e4e8f2;
-  border-radius: 16px;
-  background: var(--white);
+  display: flex;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
   min-width: 0;
   cursor: pointer;
+  justify-content: center;
+  align-items: center;
+  aspect-ratio: 0.76;
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease,
@@ -636,9 +699,11 @@
 
 .call-modal__group-panel-background-preview {
   display: block;
+  position: absolute;
+  inset: 0;
   width: 100%;
-  aspect-ratio: 1 / 1.28;
-  border-radius: 12px;
+  height: 100%;
+  border-radius: 10px;
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
@@ -662,13 +727,10 @@
 }
 
 .call-modal__group-panel-background-check {
-  position: absolute;
-  top: calc(50% - 12px);
-  right: calc(50% - 12px);
   width: 24px;
   height: 24px;
   padding: 2px 1px 1px 2px !important;
-  background: var(--border-blue);
+  background: var(--border-hover);
   color: var(--white);
   z-index: 2;
 }
@@ -691,10 +753,10 @@
 }
 
 .call-modal__group-panel-member {
+  position: relative;
   width: 100%;
-  padding: 14px 0;
+  padding: 10px 10px;
   border: none;
-  border-bottom: 1px solid #eef1f7;
   background: transparent;
   display: flex;
   align-items: center;
@@ -703,12 +765,23 @@
   font: unset;
 }
 
+.call-modal__group-panel-member::before {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: calc(12%);
+  width: 88%;
+  height: 1px;
+  background: var(--border-table);
+}
+
 .call-modal__group-panel-avatar {
   --size-avatar: 25px;
   flex: 0 0 auto;
 }
 
 .call-modal__group-panel-member-text {
+  color: var(--text-primary);
   min-width: 0;
 }
 
@@ -717,7 +790,7 @@
   font-size: 16px;
   line-height: 19px;
   font-weight: 700;
-  color: var(--text-color);
+
 }
 
 .call-modal__group-panel-member-text span {
@@ -725,7 +798,7 @@
   margin-top: 4px;
   font-size: 14px;
   line-height: 17px;
-  color: var(--text-neutral-color);
+  color: var(--text-secondary);
 }
 
 .call-modal-group-panel-enter-active,
@@ -858,7 +931,7 @@
   margin: 0;
   font-size: 14px;
   line-height: 18px;
-  color: var(--text-color);
+
 }
 
 .call-background-preview__actions {
@@ -923,7 +996,7 @@
   gap: 8px;
   flex: 0 1 auto;
   min-width: 0;
-  color: var(--text-neutral-color);
+  color: var(--chat-secondary);
   font-size: 14px;
   line-height: 17px;
   white-space: nowrap;
@@ -1047,14 +1120,14 @@
     align-items: flex-start;
   }
 
-  .call-modal__group-info > div:first-child {
+  .call-modal__group-info>div:first-child {
     order: 1;
     min-width: 0;
     flex: 1 1 0;
   }
 
-  .call-modal__group-info > button,
-  .call-modal__group-info > .call-modal__group-actions {
+  .call-modal__group-info>button,
+  .call-modal__group-info>.call-modal__group-actions {
     order: 2;
     flex: 0 0 auto;
   }
@@ -1145,9 +1218,7 @@
     --size-avatar: 10px !important;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__avatar
-    .avatar-yui-kit__text {
+  .call-modal__remote-grid--screen-share .call-modal__avatar .avatar-yui-kit__text {
     font-size: 13px;
   }
 
@@ -1204,7 +1275,7 @@
 
   .call-modal__control-button-wrapper {
     padding: 10px;
-    background-color: var(--blue1);
+    background-color: var(--text-link);
     border-radius: 50px;
     width: 100%;
     justify-content: space-between;
@@ -1220,8 +1291,7 @@
     height: 45px;
   }
 
-  .call-modal__control-button-wrapper--call-controls
-    .call-modal__control-button {
+  .call-modal__control-button-wrapper--call-controls .call-modal__control-button {
     width: 50px;
     height: 50px;
   }
@@ -1242,7 +1312,7 @@
     border: none;
     border-radius: 14px;
     background-color: var(--white);
-    color: var(--blue1);
+    color: var(--text-link);
     font: inherit;
     font-size: 16px;
     font-weight: 500;
@@ -1272,8 +1342,7 @@
     text-overflow: ellipsis;
   }
 
-  .call-modal__participant-stage--screen-share-stop-visible
-    .call-modal__remote-name {
+  .call-modal__participant-stage--screen-share-stop-visible .call-modal__remote-name {
     max-width: 42%;
   }
 
@@ -1301,15 +1370,14 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .call-modal__container--full-screen
-    .call-modal__remote-grid--group-duo
-    .call-modal__remote-tile {
+  .call-modal__container--full-screen .call-modal__remote-grid--group-duo .call-modal__remote-tile {
     min-height: 360px;
   }
 }
 
 .call-modal__control-button--answer {
-  background-color: #57d278 !important; /* Green */
+  background-color: #57d278 !important;
+  /* Green */
   transform: rotate(-90deg);
 
   &:hover {
@@ -1318,7 +1386,8 @@
 }
 
 .call-modal__control-button--reject {
-  background-color: var(--red4) !important; /* Red */
+  background-color: var(--red4) !important;
+  /* Red */
 }
 
 .call-modal__control-button-wrapper--incoming {
@@ -1493,26 +1562,21 @@
     border-radius: 10px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__remote-tile.call-modal__remote-tile--local {
+  .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--local {
     border-width: 2px;
-    border-color: var(--border-blue) !important;
+    border-color: var(--border-hover) !important;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__remote-tile.call-modal__remote-tile--speaking {
+  .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--speaking {
     border-width: 2px;
     border-color: #57d278 !important;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__remote-tile.call-modal__remote-tile--local.call-modal__remote-tile--speaking {
+  .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--local.call-modal__remote-tile--speaking {
     border-width: 2px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__avatar
-    .avatar-yui-kit__text {
+  .call-modal__remote-grid--screen-share .call-modal__avatar .avatar-yui-kit__text {
     font-size: 10px;
   }
 
@@ -1526,18 +1590,15 @@
     width: 1.5px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__connection-quality-bar:nth-child(1) {
+  .call-modal__remote-grid--screen-share .call-modal__connection-quality-bar:nth-child(1) {
     height: 4.5px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__connection-quality-bar:nth-child(2) {
+  .call-modal__remote-grid--screen-share .call-modal__connection-quality-bar:nth-child(2) {
     height: 7.5px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__connection-quality-bar:nth-child(3) {
+  .call-modal__remote-grid--screen-share .call-modal__connection-quality-bar:nth-child(3) {
     height: 10.5px;
   }
 
@@ -1602,9 +1663,7 @@
   --size-avatar: 20px;
 }
 
-.call-modal__remote-grid--screen-share
-  .call-modal__avatar
-  .avatar-yui-kit__text {
+.call-modal__remote-grid--screen-share .call-modal__avatar .avatar-yui-kit__text {
   font-size: 24px;
 }
 
@@ -1644,21 +1703,20 @@
   min-height: 150px;
   border-radius: 12px;
   overflow: hidden;
-  background: #eaf1ff;
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   cursor: pointer;
 }
 
 .call-modal__remote-tile--local {
-  border-color: var(--border-blue);
+  border-color: var(--border-hover);
 }
 
 .call-modal__remote-tile--speaking {
-  border-color: #57d278;
+  border-color: var(--status-success);
 }
 
 .call-modal__connection-quality {
-  --call-quality-bg: var(--blue1);
+  --call-quality-bg: var(--text-link);
   --call-quality-active: var(--white);
   --call-quality-inactive: rgba(255, 255, 255, 0.36);
 
@@ -1705,13 +1763,11 @@
   background: var(--call-quality-inactive);
 }
 
-.call-modal__connection-quality--poor
-  .call-modal__connection-quality-bar:first-child {
+.call-modal__connection-quality--poor .call-modal__connection-quality-bar:first-child {
   background: var(--call-quality-active);
 }
 
-.call-modal__connection-quality--unknown
-  .call-modal__connection-quality-bar:first-child,
+.call-modal__connection-quality--unknown .call-modal__connection-quality-bar:first-child,
 .call-modal__connection-quality--unknown .call-modal__connection-quality-bar {
   background: var(--call-quality-active);
 }
@@ -1838,17 +1894,15 @@
   pointer-events: none;
 }
 
-.call-modal__video-overlay-bar > * {
+.call-modal__video-overlay-bar>* {
   pointer-events: auto;
 }
 
 .call-modal__video-overlay-bar--top {
   top: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(2, 8, 23, 0.88) 0%,
-    transparent 100%
-  );
+  background: linear-gradient(180deg,
+      rgba(2, 8, 23, 0.88) 0%,
+      transparent 100%);
 }
 
 .call-modal__video-overlay-bar--bottom {
@@ -1907,7 +1961,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(180deg, #eef4ff 0%, #e2ecff 100%);
+  background: var(--action-secondary-pressed-bg);
 }
 
 .call-modal__remote-placeholder--background {
@@ -1926,8 +1980,8 @@
   bottom: 8px;
   padding: 3px 8px;
   border-radius: 999px;
-  background: rgba(82, 135, 255, 0.9);
-  color: var(--white);
+  background: var(--action-primary-bg);
+  color: var(--text-on-brand);
   font-size: 11px;
   z-index: 3;
 
@@ -1938,7 +1992,7 @@
   }
 }
 
-.call-modal__remote-name > span {
+.call-modal__remote-name>span {
   display: block;
   min-width: 0;
   max-width: 100%;
@@ -1958,7 +2012,7 @@
   align-items: center;
   justify-content: center;
   z-index: 3;
-  background: var(--blue4);
+  background: var(--action-primary-bg);
   color: var(--white);
 }
 
@@ -2009,7 +2063,7 @@
   border: none;
   border-radius: 999px;
   background: transparent;
-  color: var(--blue1);
+  color: var(--text-link);
   font-size: 26px;
   line-height: 1;
   cursor: pointer;
@@ -2033,7 +2087,7 @@
 }
 
 .call-modal__pagination-dot--active {
-  background: var(--blue1);
+  background: var(--text-link);
 }
 
 .call-modal__local-video {
@@ -2060,7 +2114,7 @@
     left: 8px;
     width: 40px;
     height: 21px;
-    background-color: var(--blue1);
+    background-color: var(--text-link);
     border-radius: 100px;
     font-weight: 400;
     font-size: 14px;
@@ -2076,8 +2130,7 @@
     height: 45px;
   }
 
-  .call-modal__control-button-wrapper--call-controls
-    .call-modal__control-button {
+  .call-modal__control-button-wrapper--call-controls .call-modal__control-button {
     width: 50px;
     height: 50px;
   }
@@ -2103,13 +2156,11 @@
     border-radius: 10px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__remote-tile.call-modal__remote-tile--local {
-    border-color: var(--border-blue) !important;
+  .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--local {
+    border-color: var(--border-hover) !important;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__remote-tile.call-modal__remote-tile--speaking {
+  .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--speaking {
     border-color: #57d278 !important;
   }
 
@@ -2117,9 +2168,7 @@
     --size-avatar: 10px !important;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__avatar
-    .avatar-yui-kit__text {
+  .call-modal__remote-grid--screen-share .call-modal__avatar .avatar-yui-kit__text {
     font-size: 10px !important;
   }
 
@@ -2136,18 +2185,15 @@
     width: 1.5px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__connection-quality-bar:nth-child(1) {
+  .call-modal__remote-grid--screen-share .call-modal__connection-quality-bar:nth-child(1) {
     height: 4.5px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__connection-quality-bar:nth-child(2) {
+  .call-modal__remote-grid--screen-share .call-modal__connection-quality-bar:nth-child(2) {
     height: 7.5px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__connection-quality-bar:nth-child(3) {
+  .call-modal__remote-grid--screen-share .call-modal__connection-quality-bar:nth-child(3) {
     height: 10.5px;
   }
 
@@ -2227,8 +2273,7 @@
     padding-bottom: 4px;
   }
 
-  .call-modal__container--busy-notice
-    .call-modal__control-button-wrapper--call-controls {
+  .call-modal__container--busy-notice .call-modal__control-button-wrapper--call-controls {
     width: auto;
     padding: 0;
     gap: 18px;
@@ -2237,18 +2282,14 @@
     justify-content: center;
   }
 
-  .call-modal__container--busy-notice
-    .call-modal__control-button-wrapper--call-controls
-    .call-modal__control-button {
+  .call-modal__container--busy-notice .call-modal__control-button-wrapper--call-controls .call-modal__control-button {
     width: 40px;
     height: 40px;
     color: #9aa7ba;
     background: #eef1f7;
   }
 
-  .call-modal__container--busy-notice
-    .call-modal__control-button-wrapper--call-controls
-    .call-modal__control-button.call-modal__control-button--leave {
+  .call-modal__container--busy-notice .call-modal__control-button-wrapper--call-controls .call-modal__control-button.call-modal__control-button--leave {
     color: var(--white);
     background: var(--red4) !important;
   }
@@ -2263,6 +2304,10 @@
 
   .call-modal__group-panel-background-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .call-modal__group-panel-background-tile {
+    aspect-ratio: 1.34;
   }
 
   .call-modal__background-preview-surface {

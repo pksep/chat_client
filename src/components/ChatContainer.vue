@@ -33,6 +33,7 @@
     <Chat
       class="chat__messages"
       ref="chatRef"
+      :base-url="props.baseUrl ?? props.config?.CHAT_MASTRA_URL"
       :show-update-banner="showUpdateBanner"
       :update-action-label="updateActionLabel"
       :update-progress="updateProgress"
@@ -169,6 +170,7 @@
 import {
   computed,
   defineAsyncComponent,
+  nextTick,
   onMounted,
   reactive,
   ref,
@@ -357,6 +359,7 @@ watch(
 
 const handleCollapse = (): void => {
   toggle();
+  void nextTick(() => chatRef.value?.focusComposer());
 };
 
 const handleMenuToggle = (isOpen: boolean): void => {
@@ -409,12 +412,7 @@ const handleInformationClick = (): void => {
 
 const handleClearClick = async (): Promise<void> => {
   if (route.value && route.value.type === 'ai' && chatRef.value) {
-    chatRef.value.handleClear();
-    const { markLiveKitPageReloadIntent } = await import(
-      '../services/useLiveKit'
-    );
-    markLiveKitPageReloadIntent();
-    window.location.reload();
+    await chatRef.value.handleClear();
     return;
   }
 

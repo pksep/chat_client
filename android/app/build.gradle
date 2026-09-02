@@ -18,6 +18,11 @@ def getAppVersionCode() {
     return (major * 10000) + (minor * 100) + patch
 }
 
+def rustorePushProjectIdOverride = project.findProperty("rustorePushProjectId")
+def rustorePushDevelopmentProjectId = "-IIn57B6vQDQpG7JJtG2Cnl1wcJEpQFE"
+def rustorePushProductionProjectId = "vasCQeAAQ2QqX-sGoCThsabI6p2nktdu"
+def chatAllowCleartextOverride = project.findProperty("chatAllowCleartext")
+
 apply plugin: 'com.android.application'
 
 android {
@@ -31,7 +36,6 @@ android {
         versionCode getAppVersionCode()
         versionName getAppVersionName()
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-
         aaptOptions {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
@@ -47,11 +51,26 @@ android {
     }
 
     buildTypes {
+        debug {
+            def allowCleartext = (chatAllowCleartextOverride ?: "true").toString().toBoolean()
+            resValue "string", "rustore_push_project_id", rustorePushProjectIdOverride ?: rustorePushDevelopmentProjectId
+            buildConfigField "boolean", "CHAT_ALLOW_CLEARTEXT", allowCleartext.toString()
+            manifestPlaceholders.chatUsesCleartextTraffic = allowCleartext.toString()
+        }
         release {
+            def allowCleartext = (chatAllowCleartextOverride ?: "false").toString().toBoolean()
+            resValue "string", "rustore_push_project_id", rustorePushProjectIdOverride ?: rustorePushProductionProjectId
+            buildConfigField "boolean", "CHAT_ALLOW_CLEARTEXT", allowCleartext.toString()
+            manifestPlaceholders.chatUsesCleartextTraffic = allowCleartext.toString()
             signingConfig signingConfigs.release
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 }
 
@@ -61,8 +80,9 @@ repositories {
     }
 
     maven {
-        url "https://artifactory-external.vkpartner.ru/artifactory/maven"
+        url "https://nexus-external.vkteam.ru/repository/maven/"
     }
+
 }
 
 dependencies {
@@ -74,6 +94,7 @@ dependencies {
     implementation "androidx.work:work-runtime:$workManagerVersion"
 
     implementation "com.google.firebase:firebase-messaging:$firebaseMessagingVersion"
+    implementation "ru.rustore.sdk:pushclient:7.4.0"
     implementation "ru.rustore.sdk:appupdate:10.2.0"
 
     implementation project(':capacitor-android')

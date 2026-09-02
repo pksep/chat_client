@@ -80,6 +80,50 @@ let hydratedCacheUserId: string | undefined;
 const MOBILE_CACHED_ACTIVE_TOPIC_LIMIT = 48;
 const ONLINE_STARTUP_BACKGROUND_SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
+const mountAttachModalEmojiPickerOverlay = (trigger: HTMLElement): void => {
+  const attachModal = trigger.closest<HTMLDialogElement>(
+    'dialog.attach-modal-container'
+  );
+
+  if (!attachModal) {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    const emojiPicker =
+      trigger.querySelector<HTMLElement>('.emoji-picker') ||
+      attachModal.querySelector<HTMLElement>(
+        '.attach-modal__emoji-picker-overlay'
+      );
+
+    if (!emojiPicker || !emojiPicker.offsetParent) {
+      return;
+    }
+
+    emojiPicker.classList.add('attach-modal__emoji-picker-overlay');
+
+    if (emojiPicker.parentElement !== attachModal) {
+      attachModal.appendChild(emojiPicker);
+    }
+  });
+};
+
+const handleAttachModalEmojiPickerClick = (event: MouseEvent): void => {
+  const target = event.target;
+
+  if (!(target instanceof Element)) {
+    return;
+  }
+
+  const smileButton = target.closest<HTMLElement>(
+    'dialog.attach-modal-container .smile-button'
+  );
+
+  if (smileButton) {
+    mountAttachModalEmojiPickerOverlay(smileButton);
+  }
+};
+
 const hasStartupNetwork = (): boolean =>
   typeof navigator === 'undefined' || navigator.onLine;
 
@@ -90,11 +134,10 @@ const getStartupSnapshotMaxAge = (): number | undefined =>
 
 const getStartupSnapshotMessageImportOptions = () => {
   const activeTopicId = route.value.id || '';
-  const shouldImportActiveMessages = !hasStartupNetwork() && !!activeTopicId;
 
   return {
     prioritizeMessageTopicIds: activeTopicId ? [activeTopicId] : undefined,
-    maxMessageTopicImports: shouldImportActiveMessages ? 1 : 0,
+    maxMessageTopicImports: activeTopicId ? 1 : 0,
     maxMessagesPerTopic: isMobile.value
       ? MOBILE_CACHED_ACTIVE_TOPIC_LIMIT
       : undefined
@@ -110,9 +153,7 @@ const importStartupBackgroundSnapshot = (
     maxAgeMs: getStartupSnapshotMaxAge(),
     requireNewerThanLocalPts: hasStartupNetwork(),
     ...getStartupSnapshotMessageImportOptions(),
-    requireRenderableContent: true,
-    skipMessageTopicIds:
-      hasStartupNetwork() && route.value.id ? [route.value.id] : undefined
+    requireRenderableContent: true
   });
 
 const waitForStartupIdle = (): Promise<void> =>
@@ -179,9 +220,19 @@ const hydrateCriticalCache = async (userId?: string): Promise<void> => {
   hydratedCacheUserId = userId;
 };
 
-const hydrateFreshChatContent = async (userId?: string): Promise<boolean> => {
+interface FreshChatContentState {
+  usersRefreshed: boolean;
+  topicsRefreshed: boolean;
+}
+
+const hydrateFreshChatContent = async (
+  userId?: string
+): Promise<FreshChatContentState> => {
   if (!hasStartupNetwork()) {
-    return false;
+    return {
+      usersRefreshed: false,
+      topicsRefreshed: false
+    };
   }
 
   await Promise.allSettled([fetchAuthUser(), fetchAllUsers()]);
@@ -190,10 +241,17 @@ const hydrateFreshChatContent = async (userId?: string): Promise<boolean> => {
     applyCachedAuthUser(userId);
   }
 
-  await fetchAllTopics();
+  const shouldDeferTopicsRefresh = !!getActiveChatTopicId();
+
+  if (!shouldDeferTopicsRefresh) {
+    await fetchAllTopics();
+  }
 
   hydratedCacheUserId = userId;
-  return true;
+  return {
+    usersRefreshed: true,
+    topicsRefreshed: !shouldDeferTopicsRefresh
+  };
 };
 
 const getActiveChatTopicId = (): string | null => {
@@ -213,6 +271,10 @@ const getActiveChatTopicId = (): string | null => {
 let isAppInitializationComplete = false;
 let isActiveTopicRenderReady = false;
 let isStartupReadyScheduled = false;
+let resolveStartupReady: (() => void) | null = null;
+const startupReadyPromise = new Promise<void>(resolve => {
+  resolveStartupReady = resolve;
+});
 
 const scheduleStartupReady = (): void => {
   const activeTopicId = getActiveChatTopicId();
@@ -226,7 +288,11 @@ const scheduleStartupReady = (): void => {
   }
 
   isStartupReadyScheduled = true;
-  void nextTick(() => emit('ready'));
+  void nextTick(() => {
+    emit('ready');
+    resolveStartupReady?.();
+    resolveStartupReady = null;
+  });
 };
 
 const handleRenderedTopicChange = (
@@ -268,6 +334,11 @@ const initFocusTracking = () => {
 };
 
 onUnmounted(() => {
+  document.removeEventListener(
+    'click',
+    handleAttachModalEmojiPickerClick,
+    true
+  );
   window.removeEventListener('focus', updateNotificationContext);
   window.removeEventListener('blur', updateNotificationContext);
   document.removeEventListener('visibilitychange', updateNotificationContext);
@@ -325,17 +396,29 @@ const restoreInvitedGroupCallDeferred = async (): Promise<void> => {
 
 const runDeferredOnlineStartup = (
   authUserId?: string,
-  opts?: { skipFreshData?: boolean }
+  freshContentState: FreshChatContentState = {
+    usersRefreshed: false,
+    topicsRefreshed: false
+  }
 ): void => {
-  if (!opts?.skipFreshData) {
+  if (!freshContentState.usersRefreshed || !freshContentState.topicsRefreshed) {
     runDeferredStartupTask('online refresh', async () => {
-      await Promise.all([fetchAuthUser(), fetchAllUsers()]);
+      if (!freshContentState.usersRefreshed) {
+        await Promise.allSettled([fetchAuthUser(), fetchAllUsers()]);
 
-      if (!getAuthUser() && authUserId) {
-        applyCachedAuthUser(authUserId);
+        if (!getAuthUser() && authUserId) {
+          applyCachedAuthUser(authUserId);
+        }
       }
 
-      await fetchAllTopics();
+      if (!freshContentState.topicsRefreshed) {
+        if (getActiveChatTopicId()) {
+          await startupReadyPromise;
+          await waitForStartupIdle();
+        }
+
+        await fetchAllTopics();
+      }
 
       if (route.value.id) {
         void fetchPinnedMessagesForTopic(route.value.id);
@@ -373,22 +456,27 @@ const runAppInitialization = async () => {
   const initialUserId =
     directAuthSession?.user?.id || getStoredSessionUserId() || '';
   let deferredStartupBackgroundSnapshotUserId: string | undefined;
-  const deferStartupBackgroundSnapshot = (
+  const prepareStartupBackgroundSnapshot = async (
     userId: string | undefined,
     source: string
-  ): void => {
+  ): Promise<void> => {
     if (!userId || deferredStartupBackgroundSnapshotUserId === userId) {
       return;
     }
 
     deferredStartupBackgroundSnapshotUserId = userId;
+
+    if (route.value.id) {
+      await importStartupBackgroundSnapshot(userId, `${source}-eager`);
+    }
+
     scheduleStartupBackgroundSnapshotImport(userId, source);
   };
 
   if (initialUserId) {
     setCurrentUserId(initialUserId);
     await hydrateCriticalCache(initialUserId);
-    deferStartupBackgroundSnapshot(
+    await prepareStartupBackgroundSnapshot(
       initialUserId,
       'startup-after-cache-hydration'
     );
@@ -434,12 +522,12 @@ const runAppInitialization = async () => {
 
     if (authUserId !== hydratedCacheUserId) {
       await hydrateCriticalCache(authUserId || undefined);
-      deferStartupBackgroundSnapshot(
+      await prepareStartupBackgroundSnapshot(
         authUserId || undefined,
         'post-auth-after-cache-hydration'
       );
     } else {
-      deferStartupBackgroundSnapshot(
+      await prepareStartupBackgroundSnapshot(
         authUserId || undefined,
         'post-auth-after-cache-hydration'
       );
@@ -452,13 +540,11 @@ const runAppInitialization = async () => {
       userId: authUserId || undefined
     });
 
-    const freshStartupCompleted = await hydrateFreshChatContent(
+    const freshContentState = await hydrateFreshChatContent(
       authUserId || undefined
     );
 
-    runDeferredOnlineStartup(authUserId || undefined, {
-      skipFreshData: freshStartupCompleted
-    });
+    runDeferredOnlineStartup(authUserId || undefined, freshContentState);
   } catch (error) {
     console.error('Failed to initialize chat:', error);
 
@@ -485,6 +571,7 @@ const runAppInitialization = async () => {
 };
 
 onMounted(async () => {
+  document.addEventListener('click', handleAttachModalEmojiPickerClick, true);
   initFocusTracking();
 
   try {

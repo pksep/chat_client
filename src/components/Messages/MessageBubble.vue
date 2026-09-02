@@ -57,7 +57,7 @@
       v-if="sliderElements.length > 0"
       @touchstart.stop
       @touchend.stop
-      :open="true"
+      :open="isSliderOpen"
       @close="closeSlider"
       :items="sliderElements"
       :default-index="defaultIndexSlider"
@@ -88,7 +88,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { Checkbox, CheckboxCircularEnum } from '@pksep/yui';
 import {
@@ -141,7 +141,8 @@ const messageArticlesStyles = computed(() => ({
   message__content__articles__my: props.isMeSender
 }));
 
-const { getFullMediaPath, isSliderContentUrl } = useMessageMedia();
+const { getFullMediaPath, getRemoteThumbnailUrl, isSliderContentUrl } =
+  useMessageMedia();
 const isContextMenuOpen = computed(
   () => !!props.messageId && isOpen.value[props.messageId] === true
 );
@@ -149,12 +150,16 @@ const isCallTopicDefaultMessageEx = computed(() =>
   Boolean(parseCallTopicDefaultMessageEx(props.messageEx))
 );
 
-const sliderElements = ref<{ path: string; name: string; file?: File }[]>([]);
+const sliderElements = ref<
+  { path: string; fallbackPath?: string; name: string; file?: File }[]
+>([]);
 const defaultIndexSlider = ref<number>(0);
+const isSliderOpen = ref(false);
 const { addHandler: addBackHandler, removeHandler: removeBackHandler } =
   useBackButton();
 
 const closeSlider = (): void => {
+  isSliderOpen.value = false;
   sliderElements.value = [];
 };
 
@@ -214,11 +219,13 @@ const isSliderContentMedia = (media: IMedia) =>
   });
 
 const buildSliderItem = async (media: IMedia) => {
-  const fallbackPath = getFullMediaPath(media, false);
+  const originalPath = getFullMediaPath(media, false);
+  const fallbackPath = getRemoteThumbnailUrl(media);
 
   if (!isNativePdfMedia(media) || !media.path) {
     return {
-      path: fallbackPath,
+      path: originalPath,
+      fallbackPath,
       name: media.originName || 'file'
     };
   }
@@ -227,7 +234,8 @@ const buildSliderItem = async (media: IMedia) => {
 
   if (!cachedObjectUrl) {
     return {
-      path: fallbackPath,
+      path: originalPath,
+      fallbackPath,
       name: media.originName || 'file'
     };
   }
@@ -240,12 +248,14 @@ const buildSliderItem = async (media: IMedia) => {
 
     return {
       path: cachedObjectUrl,
+      fallbackPath,
       name: media.originName || 'file',
       file
     };
   } catch {
     return {
       path: cachedObjectUrl,
+      fallbackPath,
       name: media.originName || 'file'
     };
   }
@@ -345,6 +355,9 @@ const setSliderElement = async (medias: IMedia[], defaultIndex: number = 0) => {
   );
 
   defaultIndexSlider.value = correctedIndex !== -1 ? correctedIndex : 0;
+
+  await nextTick();
+  isSliderOpen.value = true;
 };
 
 const handleContextMenu = (event: MouseEvent) => {

@@ -2,13 +2,15 @@ import { ref, watch, type Ref, type WatchStopHandle } from 'vue';
 import { generateUUID } from '../../../utils/generateUUID';
 import { removeMessageLoading } from '../../../services/useChatDb';
 import { RouteTypes } from '../../../composables/navigation/useUrlRouting';
+import type { AiAttachmentReference } from '../../../services/aiAttachments';
 
 type MastraResult = {
   messages: Ref<any[]>;
   sendMessage: (
     input: string,
     onFinish?: () => void,
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
+    attachments?: AiAttachmentReference[]
   ) => Promise<void>;
   clearMessages: () => void;
   isInitializing: Ref<boolean>;
@@ -44,7 +46,7 @@ export function useMessageMastra(
   const initializeMastra = async () => {
     const requestId = ++initializeRequestId;
 
-    if (state.chatId && props.baseUrl) {
+    if (state.chatId) {
       const { useMastra } = await import('../../../services/useMastra');
 
       if (requestId !== initializeRequestId) {
@@ -54,7 +56,7 @@ export function useMessageMastra(
       const result = useMastra({
         agentId: 'generalAgent',
         chatId: state.chatId,
-        baseUrl: props.baseUrl
+        ...(props.baseUrl ? { baseUrl: props.baseUrl } : {})
       });
       mastraResult.value = result;
       bindMastraMessages(result);

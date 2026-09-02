@@ -19,6 +19,8 @@ import {
   isFavoriteTopic,
   normalizeFavoriteTopic
 } from '../utils/favorite-topic';
+import { isBotTopic, isBotUser } from '../utils/bot';
+import { compactPersonName } from '../utils/personName';
 
 export interface IMessageSearchResult {
   id: string;
@@ -74,10 +76,6 @@ const normalizeRemoteTopic = (topic?: ITopic | null): ITopic | null => {
     return normalizeFavoriteTopic(topic, authUserId);
   }
 
-  if (topic.name) {
-    return topic;
-  }
-
   const rawTopic = topic as ITopic & {
     settings?: Array<{ user?: ITopic['user']; userId?: string }>;
   };
@@ -94,11 +92,15 @@ const normalizeRemoteTopic = (topic?: ITopic | null): ITopic | null => {
     setting => setting.user && setting.user.id !== authUserId
   );
   const user = rawTopic.user || peerSetting?.user;
+  const rawName = user?.initials || user?.nickname || rawTopic.name || '';
 
   return {
     ...rawTopic,
     user,
-    name: user?.initials || user?.nickname || rawTopic.name,
+    name:
+      isBotTopic(rawTopic) || isBotUser(user)
+        ? rawName
+        : compactPersonName(rawName),
     avatarUrl: user?.avatarUrl || rawTopic.avatarUrl
   };
 };

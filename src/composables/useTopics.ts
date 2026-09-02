@@ -10,7 +10,8 @@ import {
 import { groups, updateLocalGroupInfo } from '../composables/useGroup';
 import {
   deleteMessageFromLocal,
-  getFullMessagesByTopicId
+  getFullMessagesByTopicId,
+  hasKnownTopicMessagesState
 } from '../services/useMessages';
 import { useUrlWatcher } from './navigation';
 import { authedUser } from './useAuth';
@@ -38,6 +39,7 @@ import {
 } from '../utils/messageTracking';
 import { getDisplayableTopicUnreadCount } from '../utils/topicUnreadCount';
 import {
+  getDeletedAccountDisplayName,
   isBotTopic,
   isBotUser,
   isDeletedBotUser,
@@ -49,6 +51,11 @@ import {
   isFavoriteTopic,
   normalizeFavoriteTopic
 } from '../utils/favorite-topic';
+import {
+  resolveLastMessageAfterLocalSync,
+  resolveTopicLastMessage
+} from '../utils/topic-last-message';
+import { compactPersonName } from '../utils/personName';
 
 const topics = ref<ITopic[]>([]);
 const topicsById = computed(
@@ -83,6 +90,18 @@ const waitForTopicIdle = (): Promise<void> =>
 
     setTimeout(resolve, 0);
   });
+
+const resolveDmTopicName = (topic: ITopic, user?: IUser): string => {
+  const sourceName = user?.initials || topic.name || user?.nickname || '';
+
+  if (isDeletedBotUser(user)) {
+    return getDeletedAccountDisplayName(sourceName);
+  }
+
+  return isBotTopic(topic) || isBotUser(user)
+    ? sourceName
+    : compactPersonName(sourceName);
+};
 
 const bindTopicsVisibilityListener = (
   handleVisibilityChange: () => void
@@ -227,14 +246,7 @@ const createTopicsApi = () => {
     return messages
       .filter(Boolean)
       .reduce<Message | undefined>((latestMessage, message) => {
-        if (!latestMessage) {
-          return message;
-        }
-
-        return getMessageTimestamp(message) >=
-          getMessageTimestamp(latestMessage)
-          ? message
-          : latestMessage;
+        return resolveTopicLastMessage(latestMessage, message);
       }, undefined);
   };
 
@@ -254,6 +266,14 @@ const createTopicsApi = () => {
         ? candidates.filter(message => !message?.isSystem)
         : candidates
     );
+  };
+
+  const getLocalLastMessage = (topic: ITopic): Message | undefined => {
+    const localMessages = getFullMessagesByTopicId(topic.id);
+
+    return isFavoriteTopic(topic, authedUser.value?.id)
+      ? [...localMessages].reverse().find(message => !message.isSystem)
+      : localMessages.at(-1);
   };
 
   const normalizeTopic = (
@@ -313,21 +333,25 @@ const createTopicsApi = () => {
     );
     normalizedTopic.unreadReactionMessageId = resolvedUnreadReactionMessageId;
 
-    if (normalizedTopic.type === TopicType.DM && normalizedTopic.members) {
-      normalizedTopic.user = normalizedTopic.members.find(
+    if (normalizedTopic.type === TopicType.DM) {
+      const peerMember = normalizedTopic.members?.find(
         user => user.id !== authedUser.value?.id
       );
+      normalizedTopic.user = peerMember || normalizedTopic.user;
       normalizedTopic.avatarUrl =
         isBotTopic(normalizedTopic) || isBotUser(normalizedTopic.user)
           ? normalizedTopic.user?.avatarUrl || ''
           : normalizedTopic.avatarUrl || normalizedTopic.user?.avatarUrl;
-      normalizedTopic.name =
-        normalizedTopic.name || normalizedTopic.user?.initials;
+      normalizedTopic.name = resolveDmTopicName(
+        normalizedTopic,
+        normalizedTopic.user
+      );
     }
 
     if (
       normalizedTopic.type === TopicType.DM &&
-      isDeletedBotUser(existingTopic?.user)
+      isDeletedBotUser(existingTopic?.user) &&
+      !isDeletedBotUser(normalizedTopic.user)
     ) {
       const deletedUser = existingTopic.user;
 
@@ -698,7 +722,11 @@ const createTopicsApi = () => {
       if (lastMessage) {
         topic.lastMessage = resolveLatestMessage(topic, lastMessage);
       } else {
-        topic.lastMessage = resolveLatestMessage(topic);
+        topic.lastMessage = resolveLastMessageAfterLocalSync(
+          topic.lastMessage,
+          getLocalLastMessage(topic),
+          hasKnownTopicMessagesState(topicId)
+        );
       }
 
       if (lastMessage?.senderUserId) {
@@ -1137,7 +1165,7 @@ const createTopicsApi = () => {
             : topic.avatarUrl,
         name:
           topic.type === TopicType.DM
-            ? nextUser?.initials || topic.name
+            ? resolveDmTopicName(topic, nextUser)
             : topic.name
       };
     });
@@ -1180,7 +1208,7 @@ const createTopicsApi = () => {
         nextTopic.user = changes.user;
 
         if (nextTopic.type === TopicType.DM) {
-          nextTopic.name = changes.user.initials || nextTopic.name;
+          nextTopic.name = resolveDmTopicName(nextTopic, changes.user);
           nextTopic.avatarUrl = changes.user.avatarUrl || '';
         }
       }

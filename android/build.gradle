@@ -6,7 +6,7 @@ buildscript {
         google()
         mavenCentral()
         maven {
-            url "https://artifactory-external.vkpartner.ru/artifactory/maven"
+            url "https://nexus-external.vkteam.ru/repository/maven/"
         }
     }
     dependencies {
@@ -25,7 +25,7 @@ allprojects {
         google()
         mavenCentral()
         maven {
-            url "https://artifactory-external.vkpartner.ru/artifactory/maven"
+            url "https://nexus-external.vkteam.ru/repository/maven/"
         }
     }
 }

@@ -1,51 +1,54 @@
 import { ref } from 'vue';
 import { getChatSDK, getCurrentUserId } from '../services/useChat';
-import { Message } from '../services/useChatSDK/types';
 import type {
   ITopic,
   ITopicInfo,
   IUser
 } from '../components/interfaces/interfaces';
 import { setTopics, topics, useTopics } from './useTopics';
-import { getFullMessagesByTopicId } from '../services/useMessages';
 
 const currentGroup = ref<ITopic | null>(null);
 const loading = ref(false);
 
+export const removeLocalUserFromAllGroups = (userId: string): void => {
+  if (!userId) {
+    return;
+  }
+
+  if (currentGroup.value?.members?.some(member => member.id === userId)) {
+    currentGroup.value = {
+      ...currentGroup.value,
+      members: currentGroup.value.members.filter(member => member.id !== userId)
+    };
+  }
+
+  const nextTopics = topics.value.map(topic => {
+    const members = topic.members || [];
+
+    if (!topic.group || !members.some(member => member.id === userId)) {
+      return topic;
+    }
+
+    const nextTopic = {
+      ...topic,
+      members: members.filter(member => member.id !== userId)
+    };
+
+    if (
+      'memberCount' in nextTopic &&
+      typeof nextTopic.memberCount === 'number' &&
+      nextTopic.memberCount > 0
+    ) {
+      nextTopic.memberCount -= 1;
+    }
+
+    return nextTopic;
+  });
+
+  setTopics(nextTopics);
+};
+
 export const useGroup = () => {
-  const getMessageTimestamp = (
-    message?: Pick<Message, 'createdAt' | 'updatedAt'> | null
-  ): number => {
-    if (!message) {
-      return 0;
-    }
-
-    const value = message.updatedAt || message.createdAt;
-
-    if (!value) {
-      return 0;
-    }
-
-    return new Date(value).getTime();
-  };
-
-  const getLatestMessage = (
-    messages: Array<Message | undefined>
-  ): Message | undefined => {
-    return messages
-      .filter(Boolean)
-      .reduce<Message | undefined>((latestMessage, message) => {
-        if (!latestMessage) {
-          return message;
-        }
-
-        return getMessageTimestamp(message) >=
-          getMessageTimestamp(latestMessage)
-          ? message
-          : latestMessage;
-      }, undefined);
-  };
-
   const addGroupMembersToList = (groupId: string, newMembers: IUser[]) => {
     const membersToAdd = Array.isArray(newMembers) ? newMembers : [];
     const updatedMembers = [...currentGroup.value.members, ...membersToAdd];
@@ -260,33 +263,15 @@ export const useGroup = () => {
     }
   };
 
-  const updateLocalLastMessageGroup = (
-    topicId: string,
-    lastMessage?: Message
-  ): void => {
+  const updateLocalLastMessageGroup = (topicId: string): void => {
     const topic = topics.value.find(topic => topic.id === topicId);
-    const messages = getFullMessagesByTopicId(topicId);
 
-    if (topic) {
-      if (lastMessage) {
-        topic.lastMessage = getLatestMessage([
-          topic.lastMessage,
-          messages.at(-1),
-          lastMessage
-        ]);
-      } else {
-        topic.lastMessage = messages.at(-1);
-      }
-
-      if (currentGroup.value?.id === topicId) {
-        currentGroup.value = {
-          ...currentGroup.value,
-          lastMessage: topic.lastMessage
-        };
-      }
+    if (topic && currentGroup.value?.id === topicId) {
+      currentGroup.value = {
+        ...currentGroup.value,
+        lastMessage: topic.lastMessage
+      };
     }
-
-    topics.value = [...topics.value];
   };
 
   const updateLocalGroupDetails = (

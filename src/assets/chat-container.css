@@ -27,11 +27,12 @@
 @import url('./authorization-screen.css');
 @import url('./connection-status.css');
 @import url('./bot.css');
+@import url('./ai-assistant.css');
 
 .chat_container_alert {
   background-color: var(--error-dark-color);
   opacity: 0.5;
-  color: var(--white);
+  color: var(--surface-overlay);
   position: fixed;
   width: 100%;
   text-align: center;
@@ -41,15 +42,15 @@
 .chat-container {
   --neutral-text-light: #b8b8b8;
   --primary-pressed-light: #ecf3ff;
-  --primary-base: var(--blue1);
+  --primary-base: var(--text-link);
   --neutral-button: var(--grey1);
-  --neutral-text: var(--grey6);
+  --neutral-text: var(--text-secondary);
   --neutral-border: var(--grey3);
   display: grid;
   position: relative;
   font-family: 'Inter Variable', sans-serif;
   height: var(--default-height);
-  background-color: var(--blue15);
+  background-color: var(--table-surface-search);
   background-image: none;
   background-position:
     center center,
@@ -59,9 +60,11 @@
   grid-template-areas:
     'menu header'
     'menu chat';
-  grid-template-columns: var(--size-left-menu) auto;
+  grid-template-columns: var(--size-left-menu) minmax(0, 1fr);
   grid-template-rows: var(--header-height) 1fr;
   scroll-behavior: auto;
+
+  transition: all 0.2s ease;
 
   @media screen and (width > 768px) {
     --header-height: 60px;
@@ -77,11 +80,9 @@
 }
 
 .chat-container--wallpaper:has(.chat__message-wrapper) {
-  background-color: var(--chat-wallpaper-background, var(--blue15));
-  background-image: linear-gradient(
-      rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1))),
-      rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1)))
-    ),
+  background-color: var(--chat-wallpaper-background, var(--surface-main));
+  background-image: linear-gradient(rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1))),
+      rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1)))),
     var(--chat-wallpaper-image);
 }
 
@@ -144,9 +145,9 @@ svg.ai-icon {
   align-items: center;
   gap: 15px;
   padding: 15px;
-  border: 1px solid var(--border-blue);
+  border: 1px solid var(--border-hover);
   border-radius: 20px;
-  background: var(--blue9);
+  background: var(--action-secondary-pressed-bg);
   will-change: transform, opacity;
   transition:
     transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -164,7 +165,7 @@ svg.ai-icon {
 
 .chat-update-banner__title {
   margin: 0;
-  color: var(--text-color);
+
   font-weight: 600;
   font-size: 18px;
   line-height: 22px;
@@ -176,7 +177,7 @@ svg.ai-icon {
   font-weight: 600;
   font-size: 14px;
   line-height: 17px;
-  color: var(--grey6);
+  color: var(--text-secondary);
 }
 
 .chat-update-banner__status-icon {
@@ -187,7 +188,7 @@ svg.ai-icon {
   height: 44px;
   flex: 0 0 44px;
   border-radius: 50%;
-  background: var(--border-blue);
+  background: var(--border-hover);
   color: var(--white);
 }
 
@@ -222,7 +223,7 @@ svg.ai-icon {
 .chat-update-banner__action-progress-label {
   min-width: 4ch;
   text-align: right;
-  color: var(--blue1);
+  color: var(--text-link);
   font-variant-numeric: tabular-nums;
 }
 
@@ -234,7 +235,7 @@ svg.ai-icon {
   justify-content: flex-end;
   gap: 8px;
   background: transparent !important;
-  color: var(--blue1) !important;
+  color: var(--text-link) !important;
   opacity: 1;
 }
 
@@ -248,7 +249,7 @@ svg.ai-icon {
   flex-shrink: 0;
   border-radius: 50%;
   background: transparent;
-  color: var(--grey6);
+  color: var(--text-secondary);
 }
 
 .chat-update-banner__close svg {
@@ -286,16 +287,17 @@ button.primary-yui-kit.disabled-yui-kit {
   background-color: var(--neutral-button);
 }
 
-.ghost-yui-kit.red-context-button {
+button.button-yui-kit.red-context-button {
   color: var(--error-color) !important;
 
+  &:hover,
   &:active {
     background-color: var(--ban-color) !important;
     color: var(--error-color) !important;
   }
 }
 
-@media screen and (width <= 768px) {
+@media screen and (width <=768px) {
   .chat-container {
     --mobile-header-height: 58px;
     --mobile-active-call-height: 45px;
@@ -303,9 +305,7 @@ button.primary-yui-kit.disabled-yui-kit {
   }
 
   .chat-container:has(.chat__header-active-call) {
-    --mobile-pinned-messages-offset: calc(
-      var(--mobile-header-height) + var(--mobile-active-call-height)
-    );
+    --mobile-pinned-messages-offset: calc(var(--mobile-header-height) + var(--mobile-active-call-height));
   }
 
   .chat__info {
@@ -330,18 +330,19 @@ button.primary-yui-kit.disabled-yui-kit {
   }
 }
 
-@media screen and (width <= 768px) {
+@media screen and (width <=768px) {
   .chat-container.menu-collapse {
     & .chat__info {
       display: none;
     }
   }
+
   .chat-container.menu-collapse {
     --size-left-menu: 90px;
   }
 }
 
-@media screen and (width <= 768px) {
+@media screen and (width <=768px) {
   .chat__header-wrapper .chat__header-main {
     padding-block: 9.5px;
     padding-inline: 16px;
@@ -370,9 +371,7 @@ button.primary-yui-kit.disabled-yui-kit {
     font-size: 16px;
   }
 
-  .chat__header-wrapper
-    .chat__header-main
-    button.button-yui-kit.small.ghost-yui-kit {
+  .chat__header-wrapper .chat__header-main button.button-yui-kit.small.ghost-yui-kit {
     padding: 8px;
   }
 
@@ -380,9 +379,11 @@ button.primary-yui-kit.disabled-yui-kit {
     background: var(--white) !important;
     overflow: hidden;
   }
+
   svg.ai-icon {
     font-size: 40px;
   }
+
   .chat-container--wallpaper:has(.chat__message-wrapper) {
     background-color: var(--background-light-color);
   }

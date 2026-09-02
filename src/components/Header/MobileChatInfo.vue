@@ -27,8 +27,11 @@
       @change="handleImagePublish"
     />
     <ModalCroppedAvatar
+      class="group-avatar-cropper-modal group-avatar-cropper-modal--mobile"
       :image="informationState.fileImage"
       :open="informationState.isEditAvatar"
+      position="bottom"
+      width="100%"
       @unmount-close="handleCloseImageCrop"
       @unmount-save="handleImageCropSave"
     />
@@ -56,53 +59,57 @@
     >
       Участники:
     </p>
+    <div v-if="props.isMenuInfo" class="modal-info-mobile__tabs" role="tablist">
+      <button
+        v-for="tab in infoTabs"
+        :key="tab.value"
+        type="button"
+        role="tab"
+        class="modal-info-mobile__tab"
+        :class="{
+          'modal-info-mobile__tab--active': activeTab === tab.value
+        }"
+        :aria-selected="activeTab === tab.value"
+        @click="activeTab = tab.value"
+      >
+        {{ tab.label }}
+      </button>
+    </div>
     <ContactListInModal
+      v-if="!props.isMenuInfo || activeTab === 'participants'"
       :show-add-button="props.showAddButton"
-      :contacts="props.members"
+      :contacts="visibleMembers"
       :excluded-contact-ids="excludedContactIds"
       class="modal-info-mobile__contact-list"
-      :list-class="
-        props.isMenuInfo && activeTab !== 'participants'
-          ? 'modal-info-mobile__contact-list--hidden'
-          : ''
-      "
       :data-testid="`${props.dataTestid}-Header-ContactListInModal`"
       @unmount-added-users="handleContactClick"
-    >
-      <template v-if="props.isMenuInfo" #after-add-button>
-        <div class="modal-info-mobile__tabs" role="tablist">
-          <button
-            v-for="tab in infoTabs"
-            :key="tab.value"
-            type="button"
-            role="tab"
-            class="modal-info-mobile__tab"
-            :class="{
-              'modal-info-mobile__tab--active': activeTab === tab.value
-            }"
-            :aria-selected="activeTab === tab.value"
-            @click="activeTab = tab.value"
-          >
-            {{ tab.label }}
-          </button>
-        </div>
-      </template>
-    </ContactListInModal>
+    />
+    <ProfileAttachmentsPanel
+      v-else
+      :topic-id="information?.topicId"
+      :active-tab="attachmentsTab"
+      :show-tabs="false"
+      class="modal-info-mobile__attachments"
+      :data-testid="`${props.dataTestid}-Header-Attachments`"
+      @show-in-chat="emits('unmount-open-chat')"
+    />
   </div>
 </template>
 
 <script lang="ts" setup>
-import { useTemplateRef, computed, ref } from 'vue';
+import { useTemplateRef, computed, ref, watch } from 'vue';
 import { ModalCroppedAvatar } from '@pksep/yui';
 import NewChatInformationForm from '../NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from '../MenuInfoButtons.vue';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';
+import ProfileAttachmentsPanel from '../ProfileAttachmentsPanel.vue';
 import { IMenuInfoInformation } from '../../composables/useMenuInfo';
 import type { IUser } from '../interfaces/interfaces';
 import { useInformationMenu } from '../../composables/useInformationMenu';
 import { uploadFile } from '../../services/useChat';
 import { currentGroup, setGroupInfo } from '../../composables/useGroup';
 import CachedAvatar from '../UI/CachedAvatar.vue';
+import { isDeletedBotUser } from '../../utils/bot';
 
 interface IMobileChatInfoProps {
   members: IUser[];
@@ -123,6 +130,10 @@ const emits = defineEmits<{
   (e: 'unmount-open-chat'): void;
 }>();
 
+const visibleMembers = computed(() =>
+  props.members.filter(member => member && !isDeletedBotUser(member))
+);
+
 const excludedContactIds = computed(() => {
   const ids = new Set<string | number>();
   props.members?.forEach(contact => {
@@ -134,12 +145,23 @@ const excludedContactIds = computed(() => {
 const information = defineModel<IMenuInfoInformation>();
 const avatarInputRef = useTemplateRef('avatarInputRef');
 type MobileInfoTab = 'participants' | 'media' | 'files';
+type ProfileAttachmentsTab = 'media' | 'files';
 const activeTab = ref<MobileInfoTab>('participants');
 const infoTabs: Array<{ label: string; value: MobileInfoTab }> = [
   { label: 'Участники', value: 'participants' },
   { label: 'Медиа', value: 'media' },
   { label: 'Файлы', value: 'files' }
 ];
+const attachmentsTab = computed<ProfileAttachmentsTab>(() =>
+  activeTab.value === 'files' ? 'files' : 'media'
+);
+
+watch(
+  () => [props.isMenuInfo, information.value?.topicId],
+  () => {
+    activeTab.value = 'participants';
+  }
+);
 
 const {
   state: informationState,
@@ -207,3 +229,10 @@ const handleContactClick = (newUsers: IUser[]): void => {
   emits('unmount-added-users', newUsers);
 };
 </script>
+
+<style scoped>
+.modal-info-mobile__attachments {
+  margin-top: 10px;
+  padding-inline: 10px;
+}
+</style>

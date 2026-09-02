@@ -138,7 +138,7 @@
             ref="messageHtmlRef"
             class="message-media__caption-text message-content__html"
             v-emoji
-            v-html="props.message"
+            v-html="safeMessageHtml"
             :data-testid="`${props.dataTestid}-MessageText`"
             @click="handleMentionUserClick"
           ></div>
@@ -217,8 +217,10 @@ import {
   PREVIEW_MIN_SIZE,
   VIDEO_FALLBACK_THUMBNAIL
 } from '../../utils/mediaPreview';
+import { sanitizeMessageHtml } from '../../utils/sanitizeMessageHtml';
 
 const props = defineProps<IMessageBubbleProps>();
+const safeMessageHtml = computed(() => sanitizeMessageHtml(props.message));
 const emit = defineEmits(['navigate-message', 'set-slider']);
 
 const { getFullMediaPath, primeMediaCache } = useMessageMedia();

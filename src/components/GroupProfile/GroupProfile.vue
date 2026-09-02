@@ -10,6 +10,7 @@
       :alt="props.topic.group?.avatarUrl || 'group-avatar'"
       class="user-profile__avatar"
       :initials="props.topic.group?.title || 'G'"
+      :fallback-initials-length="2"
       :data-testid="`${dataTestid}-UserProfile-Avatar`"
     />
     <h3

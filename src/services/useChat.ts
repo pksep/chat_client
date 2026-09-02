@@ -24,11 +24,13 @@ import {
 } from '../composables/useTopics';
 import {
   updateLocalLastMessageGroup,
-  getGroupById
+  getGroupById,
+  removeLocalUserFromAllGroups
 } from '../composables/useGroup';
 import {
   fetchAllUsers,
   getUserById,
+  upsertLocalUser,
   updateLocalUserStatus
 } from '../composables/useUsers';
 import {
@@ -49,7 +51,6 @@ import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
 import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
-import { initCallKit, showIncomingCallKit, endAllCallKits } from './useCallKit';
 import {
   clearMessageNotification,
   clearTopicNotifications
@@ -64,6 +65,7 @@ import {
   subscribeToAppVisibilityChanges
 } from './useAppVisibility';
 import type { MediaPreviewDimensions } from '../utils/mediaPreview';
+import { isDeletedBotUser } from '../utils/bot';
 import { useUrlWatcher } from '../composables/navigation';
 import { RouteTypes } from '../composables/navigation/useUrlRouting';
 import {
@@ -115,8 +117,10 @@ const notifyChatSDKReady = (sdk: ChatSDK): void => {
 };
 
 type CallsApi = typeof import('./useCalls');
+type CallKitApi = typeof import('./useCallKit');
 let callsApi: CallsApi | null = null;
 let callsApiPromise: Promise<CallsApi> | null = null;
+let callKitApiPromise: Promise<CallKitApi> | null = null;
 
 const loadCallsApi = async (): Promise<CallsApi> => {
   if (!callsApiPromise) {
@@ -127,6 +131,14 @@ const loadCallsApi = async (): Promise<CallsApi> => {
   }
 
   return callsApiPromise;
+};
+
+const loadCallKitApi = (): Promise<CallKitApi> => {
+  if (!callKitApiPromise) {
+    callKitApiPromise = import('./useCallKit');
+  }
+
+  return callKitApiPromise;
 };
 
 const isWebsocketConnecting = ref(true);
@@ -421,7 +433,7 @@ const setupChatListeners = (): void => {
     }
 
     updateLocalLastMessageTopic(message.topicId, message);
-    updateLocalLastMessageGroup(message.topicId, message);
+    updateLocalLastMessageGroup(message.topicId);
   };
 
   const handleTopicChangePayload = (payload: {
@@ -451,6 +463,27 @@ const setupChatListeners = (): void => {
     } else if (payload.type === 'DELETE') {
       deleteTopicFromList(payload.data.id);
     }
+  };
+
+  const reconcileLastMessageAfterDelete = async (
+    topicId: string,
+    deletedMessageId: string
+  ): Promise<void> => {
+    const topic = useTopics().getSelectedTopic(topicId);
+
+    if (!topic || topic.lastMessage?.id !== deletedMessageId) {
+      return;
+    }
+
+    await fetchMessagesForTopic(topicId, {
+      limit: 1,
+      syncLastMessage: true,
+      updateVisible: false
+    });
+
+    const { updateLocalLastMessageTopic } = useTopics();
+    updateLocalLastMessageTopic(topicId);
+    updateLocalLastMessageGroup(topicId);
   };
 
   const handleChangeMessagePayload = (
@@ -500,6 +533,10 @@ const setupChatListeners = (): void => {
       void clearTopicNotifications(topicId);
     } else if (payload.type === 'DELETE') {
       const deletedMessageId = payload.data.id || payload.messageId;
+      const deletedLastMessage =
+        !!deletedMessageId &&
+        useTopics().getSelectedTopic(payload.data.topicId)?.lastMessage?.id ===
+          deletedMessageId;
 
       void recordShadowChatEvent({
         topicId: payload.data.topicId,
@@ -510,6 +547,12 @@ const setupChatListeners = (): void => {
       void removeCallHistoryMessage(deletedMessageId);
       clearDeletedReactionTarget(payload.data.topicId, deletedMessageId);
       deleteMessageFromLocal(payload.data.topicId, deletedMessageId);
+      if (deletedLastMessage) {
+        void reconcileLastMessageAfterDelete(
+          payload.data.topicId,
+          deletedMessageId
+        );
+      }
       void clearMessageNotification(payload.data.topicId, deletedMessageId);
     } else if (payload.type === 'CHANGE' || payload.type === 'PIN') {
       void recordShadowChatEvent({
@@ -677,6 +720,11 @@ const setupChatListeners = (): void => {
 
   const handleUserUpdatedPayload = (payload: {
     id: string;
+    initials?: string;
+    nickname?: string;
+    avatarUrl?: string | null;
+    ex?: unknown;
+    isBot?: boolean;
     lastOnline: Date | string | null;
     status?: {
       icon: string;
@@ -696,14 +744,47 @@ const setupChatListeners = (): void => {
         ? undefined
         : normalizeUserStatus(payload.status);
 
+    const profileChanges = {
+      ...(payload.initials !== undefined ? { initials: payload.initials } : {}),
+      ...(payload.nickname !== undefined ? { nickname: payload.nickname } : {}),
+      ...(payload.avatarUrl !== undefined
+        ? { avatarUrl: payload.avatarUrl }
+        : {}),
+      ...(payload.ex !== undefined ? { ex: payload.ex } : {}),
+      ...(payload.isBot !== undefined ? { isBot: payload.isBot } : {})
+    };
+
     updateLocalUserStatus(payload.id, normalizedLastOnline, normalizedStatus);
     updateLocalTopicUser(payload.id, {
+      ...profileChanges,
       lastOnline: normalizedLastOnline,
       ...(normalizedStatus !== undefined ? { status: normalizedStatus } : {})
     });
 
+    const updatedTopicUser = getTopicList()
+      .map(topic =>
+        topic.user?.id === payload.id
+          ? topic.user
+          : topic.members?.find(member => member.id === payload.id)
+      )
+      .find(Boolean);
+    if (isDeletedBotUser(updatedTopicUser)) {
+      removeLocalUserFromAllGroups(payload.id);
+    }
+
+    const existingUser = getUserById(payload.id) || updatedTopicUser;
+    if (existingUser && Object.keys(profileChanges).length > 0) {
+      upsertLocalUser({
+        ...existingUser,
+        ...profileChanges,
+        lastOnline: normalizedLastOnline,
+        ...(normalizedStatus !== undefined ? { status: normalizedStatus } : {})
+      });
+    }
+
     if (payload.id === currentUserId.value) {
       mergeAuthUser({
+        ...profileChanges,
         lastOnline: normalizedLastOnline,
         ...(normalizedStatus !== undefined ? { status: normalizedStatus } : {})
       });
@@ -876,7 +957,8 @@ const setupChatListeners = (): void => {
       }
 
       if (Capacitor.isNativePlatform() && !isGroupCall && isReceived && user) {
-        showIncomingCallKit(
+        const { showIncomingCallKit } = await loadCallKitApi();
+        await showIncomingCallKit(
           user.initials,
           payload.roomId,
           user.avatarUrl,
@@ -891,7 +973,8 @@ const setupChatListeners = (): void => {
       const { dismissIncomingCall, handleCallAnswered } = await loadCallsApi();
 
       if (Capacitor.isNativePlatform()) {
-        endAllCallKits();
+        const { endAllCallKits } = await loadCallKitApi();
+        await endAllCallKits();
       }
       dismissIncomingCall(payload.roomId, payload.topicId);
       handleCallAnswered(
@@ -911,7 +994,8 @@ const setupChatListeners = (): void => {
         const { dismissIncomingCall } = await loadCallsApi();
 
         if (Capacitor.isNativePlatform()) {
-          endAllCallKits();
+          const { endAllCallKits } = await loadCallKitApi();
+          await endAllCallKits();
         }
         dismissIncomingCall(payload.roomId, payload.topicId);
       })();
@@ -951,7 +1035,8 @@ const setupChatListeners = (): void => {
       }
 
       if (Capacitor.isNativePlatform()) {
-        endAllCallKits();
+        const { endAllCallKits } = await loadCallKitApi();
+        await endAllCallKits();
       }
 
       if (payload.topicId) {
@@ -1802,7 +1887,11 @@ const startChatConnectionInBackground = (sdk: ChatSDK): void => {
         restoreInvitedGroupCallIfNeeded();
 
         if (Capacitor.isNativePlatform()) {
-          initCallKit();
+          void loadCallKitApi()
+            .then(({ initCallKit }) => initCallKit())
+            .catch(error => {
+              console.warn('[CallKit] Failed to initialize:', error);
+            });
         }
 
         ensureTauriWindowStateTracking();

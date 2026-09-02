@@ -28,7 +28,9 @@ import {
   savePendingUploadFile,
   loadPendingUploadFile,
   deletePendingUploadFile,
+  deletePendingUploadFilesForMessage,
   savePendingUploadMeta,
+  loadPendingUploadMessages,
   loadPendingUploadMeta,
   deletePendingUploadMeta
 } from './useTopicMessagesCache';
@@ -62,6 +64,8 @@ import {
   syncShadowReadStateFromMessages
 } from './useShadowChatSync';
 import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
+import { compareMessages, getMessageTimestamp } from '../utils/messageOrder';
+import { parseMessageEx } from '../utils/messageReplyQuote';
 
 // Store mutations replace message payloads. Deep Vue proxies make every field
 // of every cached message reactive and multiply the work of bulk merges; a
@@ -102,6 +106,13 @@ const pendingUploadMeta = new Map<
   string,
   { replyMessageId?: string; forwardMessageIds: string[] }
 >();
+const pendingUploadSnapshotTimeouts = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+>();
+const pendingUploadSnapshotGenerations = new Map<string, number>();
+const pendingUploadSnapshotRevisions = new Map<string, number>();
+const PENDING_UPLOAD_SNAPSHOT_PERSIST_DELAY_MS = 200;
 const canonicalTopicStateIds = new Set<string>();
 const delayedOutgoingMessages = new Map<
   string,
@@ -174,7 +185,7 @@ const syncLocalLastMessage = (topicId: string, message?: IMessage): void => {
   const { updateLocalLastMessageGroup } = useGroup();
 
   updateLocalLastMessageTopic(topicId, message);
-  updateLocalLastMessageGroup(topicId, message);
+  updateLocalLastMessageGroup(topicId);
 };
 
 const markTopicStateCanonical = (topicId: string): void => {
@@ -363,61 +374,12 @@ const schedulePendingOutgoingForwardBatchCleanup = (topicId: string): void => {
   pendingOutgoingForwardBatchTimeouts.set(topicId, timeoutId);
 };
 
-const parseMessageEx = (
-  message: Pick<IMessage, 'ex'>
-): Record<string, unknown> | null => {
-  if (!message.ex) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(message.ex);
-  } catch {
-    return null;
-  }
-};
-
-const getMessageTimestamp = (message: IMessage): number => {
-  return new Date(message.createdAt).getTime();
-};
-
 const getMessageVersionTimestamp = (message: IMessage): number => {
   const timestamps = [message.updatedAt, message.deletedAt, message.createdAt]
     .map(value => (value ? new Date(value).getTime() : 0))
     .filter(value => !Number.isNaN(value));
 
   return Math.max(0, ...timestamps);
-};
-
-const getMessageStableSortKey = (message: IMessage): string => {
-  const clientId = getClientId(message);
-  return message.id || (clientId ? `client:${clientId}` : '');
-};
-
-const compareMessages = (left: IMessage, right: IMessage): number => {
-  const leftEx = parseMessageEx(left);
-  const rightEx = parseMessageEx(right);
-  const leftBatchId = leftEx?.forwardBatchId;
-  const rightBatchId = rightEx?.forwardBatchId;
-
-  if (
-    typeof leftBatchId === 'string' &&
-    leftBatchId === rightBatchId &&
-    typeof leftEx?.forwardBatchOrder === 'number' &&
-    typeof rightEx?.forwardBatchOrder === 'number'
-  ) {
-    return leftEx.forwardBatchOrder - rightEx.forwardBatchOrder;
-  }
-
-  const timeDiff = getMessageTimestamp(left) - getMessageTimestamp(right);
-
-  if (timeDiff !== 0) {
-    return timeDiff;
-  }
-
-  return getMessageStableSortKey(left).localeCompare(
-    getMessageStableSortKey(right)
-  );
 };
 
 const getPendingUploadKey = (topicId: string, messageId: string): string =>
@@ -430,12 +392,12 @@ const getOutgoingDeliveryKey = (topicId: string, messageId: string): string =>
   `${topicId}:${messageId}`;
 
 const hasClientId = (message: IMessage): boolean => {
-  const parsedEx = parseMessageEx(message);
+  const parsedEx = parseMessageEx(message.ex);
   return typeof parsedEx?.clientId === 'string' && parsedEx.clientId.length > 0;
 };
 
 const getClientId = (message: IMessage): string | null => {
-  const parsedEx = parseMessageEx(message);
+  const parsedEx = parseMessageEx(message.ex);
   return typeof parsedEx?.clientId === 'string' ? parsedEx.clientId : null;
 };
 
@@ -899,6 +861,18 @@ const restorePendingUploadMediaState = async (
             return media;
           }
 
+          // Show an interrupted upload immediately with its persisted percent.
+          // The sender retry loop waits for the service worker/OPFS file in the
+          // background, so a very early refresh never blocks the whole history.
+          if (media.isLoading) {
+            hadInterruptedUpload = true;
+            return {
+              ...media,
+              isLoading: true,
+              uploadError: true
+            };
+          }
+
           const pendingFile = await getPendingUploadFile(
             topicId,
             message.id,
@@ -940,8 +914,7 @@ const restorePendingUploadMediaState = async (
             localPath,
             localThumbnailPath,
             isLoading: media.isLoading ? false : media.isLoading,
-            uploadError: media.isLoading ? true : media.uploadError,
-            uploadPercent: media.isLoading ? null : media.uploadPercent
+            uploadError: media.isLoading ? true : media.uploadError
           };
         })
       );
@@ -1718,7 +1691,7 @@ export const addMessageToLocal = (topicId: string, message: IMessage): void => {
   const alreadyExists = existingMessages.some(item => item.id === message.id);
   const shouldUpdateVisibleWindow = topicId === route.value.id;
 
-  const parsedEx = parseMessageEx(message);
+  const parsedEx = parseMessageEx(message.ex);
   const clientId =
     typeof parsedEx?.clientId === 'string' ? parsedEx.clientId : null;
   const pendingOutgoingForwardBatchMeta =
@@ -2149,6 +2122,7 @@ export const clearMessagesForTopic = (
     return;
   }
 
+  canonicalTopicStateIds.add(topicId);
   saveMessagesToLocal(topicId, [], {
     syncLastMessage: opts?.syncLastMessage ?? false
   });
@@ -2171,6 +2145,21 @@ export const getTopicIdsWithMessages = (): string[] =>
 export const getMessagesByTopicId = (topicId: string): IMessage[] => {
   touchTopicMemory(topicId);
   return messagesStore[topicId] || [];
+};
+
+export const getClientMessageById = (
+  topicId?: string,
+  messageId?: string
+): IMessage | undefined => {
+  if (!topicId || !messageId) {
+    return undefined;
+  }
+
+  const messageIndex = fullMessageIndexesByTopic.get(topicId)?.get(messageId);
+
+  return messageIndex === undefined
+    ? undefined
+    : fullMessagesStore[topicId]?.[messageIndex];
 };
 
 export const hasKnownTopicMessagesState = (topicId: string): boolean => {
@@ -2273,14 +2262,24 @@ export const hydrateMessagesFromCache = async (
     return [];
   }
 
+  const resolvedUserId = userId || authedUser.value?.id;
   const existingFullMessages = getFullMessagesByTopicId(topicId);
-  await rememberPersistedDeletedMessageIds(
-    topicId,
-    userId || authedUser.value?.id
-  );
+  const [pendingUploadMessages] = await Promise.all([
+    loadPendingUploadMessages(topicId, resolvedUserId),
+    rememberPersistedDeletedMessageIds(topicId, resolvedUserId)
+  ]);
+  const mergePendingUploadMessages = (messages: IMessage[]): IMessage[] =>
+    dedupeMessagesForTopic([...messages, ...pendingUploadMessages]);
 
   if (existingFullMessages.length > 0 && canonicalTopicStateIds.has(topicId)) {
-    saveMessagesToLocal(topicId, existingFullMessages, {
+    const normalizedExistingMessages = await restorePendingUploadMediaState(
+      topicId,
+      prepareMessagesForPersistence(
+        mergePendingUploadMessages(existingFullMessages)
+      )
+    );
+
+    saveMessagesToLocal(topicId, normalizedExistingMessages, {
       syncLastMessage: false,
       windowMode: 'latest',
       visibleLimit: getNonShrinkingVisibleLimit(
@@ -2295,8 +2294,8 @@ export const hydrateMessagesFromCache = async (
     return getMessagesByTopicId(topicId);
   }
 
-  await ensureShadowReadStateLoaded(topicId, userId || authedUser.value?.id);
-  await ensureShadowLoadedRangesLoaded(topicId, userId || authedUser.value?.id);
+  await ensureShadowReadStateLoaded(topicId, resolvedUserId);
+  await ensureShadowLoadedRangesLoaded(topicId, resolvedUserId);
 
   if (isShadowSyncEnabled()) {
     const shadowMessages = await loadShadowTopicSnapshot(topicId, userId);
@@ -2308,10 +2307,9 @@ export const hydrateMessagesFromCache = async (
         topicId,
         await applyShadowReadStateToMessages(
           topicId,
-          prepareMessagesForPersistence([
-            ...shadowMessages,
-            ...existingMessages
-          ]),
+          prepareMessagesForPersistence(
+            mergePendingUploadMessages([...shadowMessages, ...existingMessages])
+          ),
           userId
         )
       );
@@ -2338,10 +2336,12 @@ export const hydrateMessagesFromCache = async (
   if (cachedMessages.length > 0) {
     const normalizedCachedMessages = await restorePendingUploadMediaState(
       topicId,
-      prepareMessagesForPersistence([
-        ...cachedMessages,
-        ...getFullMessagesByTopicId(topicId)
-      ])
+      prepareMessagesForPersistence(
+        mergePendingUploadMessages([
+          ...cachedMessages,
+          ...getFullMessagesByTopicId(topicId)
+        ])
+      )
     );
 
     saveMessagesToLocal(topicId, normalizedCachedMessages, {
@@ -2377,7 +2377,14 @@ export const hydrateMessagesFromCache = async (
   }
 
   if (existingFullMessages.length > 0) {
-    saveMessagesToLocal(topicId, existingFullMessages, {
+    const normalizedExistingMessages = await restorePendingUploadMediaState(
+      topicId,
+      prepareMessagesForPersistence(
+        mergePendingUploadMessages(existingFullMessages)
+      )
+    );
+
+    saveMessagesToLocal(topicId, normalizedExistingMessages, {
       syncLastMessage: false,
       windowMode: 'latest',
       visibleLimit: getNonShrinkingVisibleLimit(
@@ -2390,6 +2397,29 @@ export const hydrateMessagesFromCache = async (
     });
 
     return getMessagesByTopicId(topicId);
+  }
+
+  if (pendingUploadMessages.length > 0) {
+    const normalizedPendingUploadMessages =
+      await restorePendingUploadMediaState(
+        topicId,
+        prepareMessagesForPersistence(pendingUploadMessages)
+      );
+
+    saveMessagesToLocal(topicId, normalizedPendingUploadMessages, {
+      syncLastMessage: false,
+      windowMode: 'latest',
+      visibleLimit: getNonShrinkingVisibleLimit(
+        topicId,
+        opts?.visibleLimit,
+        false,
+        opts?.allowVisibleShrink
+      ),
+      skipPersist: true
+    });
+    markTopicStateCanonical(topicId);
+
+    return normalizedPendingUploadMessages;
   }
 
   return [];
@@ -2816,10 +2846,13 @@ export const changeMessageStatusLocally = (
     message => message.id === messageId
   );
 
-  updateTopicMessageStores(topicId, messages =>
+  const updatedMessages = updateTopicMessageStores(topicId, messages =>
     messages.map(message =>
       message.id === messageId ? { ...message, status } : message
     )
+  );
+  const updatedMessage = updatedMessages.find(
+    message => message.id === messageId
   );
 
   if (status === MessageStatus.Wait && !hasPendingMediaUpload(currentMessage)) {
@@ -2832,6 +2865,11 @@ export const changeMessageStatusLocally = (
   }
 
   schedulePersistMessages(topicId);
+  schedulePendingUploadMessageSnapshot(topicId, messageId);
+
+  if (updatedMessage) {
+    syncLocalLastMessage(topicId, updatedMessage);
+  }
 };
 
 export const setFileUploadPendingStatus = (
@@ -2858,7 +2896,7 @@ export const setFileUploadPendingStatus = (
             ...media,
             isLoading: true,
             uploadError: false,
-            uploadPercent: null
+            uploadPercent: 0
           };
         })
       };
@@ -2866,6 +2904,7 @@ export const setFileUploadPendingStatus = (
   );
 
   schedulePersistMessages(topicId);
+  schedulePendingUploadMessageSnapshot(topicId, messageId);
 };
 
 export const changeFileUploadPercent = (
@@ -2887,9 +2926,15 @@ export const changeFileUploadPercent = (
             return media;
           }
 
+          const nextPercent =
+            typeof percent === 'number' &&
+            typeof media.uploadPercent === 'number'
+              ? Math.max(media.uploadPercent, percent)
+              : percent;
+
           return {
             ...media,
-            uploadPercent: percent
+            uploadPercent: nextPercent
           };
         })
       };
@@ -2897,6 +2942,7 @@ export const changeFileUploadPercent = (
   );
 
   schedulePersistMessages(topicId);
+  schedulePendingUploadMessageSnapshot(topicId, messageId);
 };
 
 export const setLocalMediaPreviewData = (
@@ -2938,6 +2984,7 @@ export const setLocalMediaPreviewData = (
   );
 
   schedulePersistMessages(topicId);
+  schedulePendingUploadMessageSnapshot(topicId, messageId);
 };
 
 export const setUploadedFileData = (
@@ -3003,6 +3050,7 @@ export const setUploadedFileData = (
   );
 
   schedulePersistMessages(topicId);
+  schedulePendingUploadMessageSnapshot(topicId, messageId);
 };
 
 export const changeFileUploadErrorStatus = (
@@ -3027,8 +3075,7 @@ export const changeFileUploadErrorStatus = (
           return {
             ...media,
             isLoading: false,
-            uploadError,
-            uploadPercent: null
+            uploadError
           };
         })
       };
@@ -3036,6 +3083,7 @@ export const changeFileUploadErrorStatus = (
   );
 
   schedulePersistMessages(topicId);
+  schedulePendingUploadMessageSnapshot(topicId, messageId);
 };
 
 export const deleteFileAfterLoading = (
@@ -3043,6 +3091,17 @@ export const deleteFileAfterLoading = (
   messageId: string,
   fileId: string
 ): void => {
+  const key = getPendingUploadKey(topicId, messageId);
+  const messageFiles = pendingUploadFiles.get(key);
+
+  messageFiles?.delete(fileId);
+  if (messageFiles?.size === 0) {
+    pendingUploadFiles.delete(key);
+  }
+
+  void getChatSDK()?.abortPendingFileUpload(messageId, fileId);
+  void deletePendingUploadFile(topicId, messageId, fileId);
+
   updateTopicMessageStores(topicId, messages =>
     messages.map(message => {
       if (message.id !== messageId || !message.media) {
@@ -3056,22 +3115,43 @@ export const deleteFileAfterLoading = (
     })
   );
   schedulePersistMessages(topicId);
+  schedulePendingUploadMessageSnapshot(topicId, messageId);
 };
 
 export const registerPendingUploadMessage = (
   topicId: string,
   messageId: string,
-  meta: { replyMessageId?: string; forwardMessageIds?: string[] }
-): void => {
-  pendingUploadMeta.set(getPendingUploadKey(topicId, messageId), {
+  meta: {
+    replyMessageId?: string;
+    forwardMessageIds?: string[];
+    message?: IMessage;
+  }
+): Promise<void> => {
+  const key = getPendingUploadKey(topicId, messageId);
+  pendingUploadMeta.set(key, {
     replyMessageId: meta.replyMessageId,
     forwardMessageIds: meta.forwardMessageIds || []
   });
-  void savePendingUploadMeta({
+  const generation = (pendingUploadSnapshotGenerations.get(key) || 0) + 1;
+  pendingUploadSnapshotGenerations.set(key, generation);
+  pendingUploadSnapshotRevisions.set(
+    key,
+    (pendingUploadSnapshotRevisions.get(key) || 0) + 1
+  );
+
+  return savePendingUploadMeta({
     topicId,
     messageId,
     replyMessageId: meta.replyMessageId,
-    forwardMessageIds: meta.forwardMessageIds || []
+    forwardMessageIds: meta.forwardMessageIds || [],
+    message: meta.message ? stripRuntimeMediaState(meta.message) : undefined
+  }).then(async () => {
+    if (
+      pendingUploadSnapshotGenerations.get(key) !== generation ||
+      !pendingUploadMeta.has(key)
+    ) {
+      await deletePendingUploadMeta(topicId, messageId);
+    }
   });
 };
 
@@ -3095,30 +3175,93 @@ export const getPendingUploadMessageMeta = (
   });
 };
 
+const schedulePendingUploadMessageSnapshot = (
+  topicId: string,
+  messageId: string
+): void => {
+  if (!topicId || !messageId) {
+    return;
+  }
+
+  const key = getPendingUploadKey(topicId, messageId);
+  const previousTimeout = pendingUploadSnapshotTimeouts.get(key);
+
+  if (previousTimeout) {
+    clearTimeout(previousTimeout);
+  }
+
+  const generation = pendingUploadSnapshotGenerations.get(key) || 0;
+  const revision = (pendingUploadSnapshotRevisions.get(key) || 0) + 1;
+  pendingUploadSnapshotRevisions.set(key, revision);
+  const timeoutId = setTimeout(async () => {
+    pendingUploadSnapshotTimeouts.delete(key);
+    const meta = await getPendingUploadMessageMeta(topicId, messageId);
+
+    if (
+      !meta ||
+      pendingUploadSnapshotGenerations.get(key) !== generation ||
+      pendingUploadSnapshotRevisions.get(key) !== revision ||
+      !pendingUploadMeta.has(key)
+    ) {
+      return;
+    }
+
+    const message = getFullMessagesByTopicId(topicId).find(
+      currentMessage =>
+        currentMessage.id === messageId ||
+        getClientId(currentMessage) === messageId
+    );
+
+    if (!message) {
+      return;
+    }
+
+    await savePendingUploadMeta({
+      topicId,
+      messageId,
+      replyMessageId: meta.replyMessageId,
+      forwardMessageIds: meta.forwardMessageIds,
+      message: stripRuntimeMediaState(message)
+    });
+
+    if (
+      pendingUploadSnapshotGenerations.get(key) !== generation ||
+      !pendingUploadMeta.has(key)
+    ) {
+      await deletePendingUploadMeta(topicId, messageId);
+    }
+  }, PENDING_UPLOAD_SNAPSHOT_PERSIST_DELAY_MS);
+
+  pendingUploadSnapshotTimeouts.set(key, timeoutId);
+};
+
 export const registerPendingUploadFile = (
   topicId: string,
   messageId: string,
   fileId: string,
-  payload: { file: File; isMedia: boolean }
-): void => {
+  payload: { file: File; isMedia: boolean },
+  onProgress?: (percent: number) => void
+): Promise<void> => {
   const key = getPendingUploadKey(topicId, messageId);
   const messageFiles = pendingUploadFiles.get(key) || new Map();
 
   messageFiles.set(fileId, payload);
   pendingUploadFiles.set(key, messageFiles);
-  void savePendingUploadFile({
+  return savePendingUploadFile({
     topicId,
     messageId,
     fileId,
     file: payload.file,
-    isMedia: payload.isMedia
+    isMedia: payload.isMedia,
+    onProgress
   });
 };
 
 export const getPendingUploadFile = (
   topicId: string,
   messageId: string,
-  fileId: string
+  fileId: string,
+  onProgress?: (percent: number) => void
 ): Promise<{ file: File; isMedia: boolean } | null> => {
   const key = getPendingUploadKey(topicId, messageId);
   const cached = pendingUploadFiles.get(key)?.get(fileId) || null;
@@ -3127,7 +3270,13 @@ export const getPendingUploadFile = (
     return Promise.resolve(cached);
   }
 
-  return loadPendingUploadFile(topicId, messageId, fileId).then(file => {
+  return loadPendingUploadFile(
+    topicId,
+    messageId,
+    fileId,
+    undefined,
+    onProgress
+  ).then(file => {
     if (!file) {
       return null;
     }
@@ -3146,12 +3295,28 @@ export const clearPendingUploadMessage = (
 ): void => {
   const key = getPendingUploadKey(topicId, messageId);
   const messageFiles = pendingUploadFiles.get(key);
+  const snapshotTimeout = pendingUploadSnapshotTimeouts.get(key);
 
-  if (messageFiles) {
-    Array.from(messageFiles.keys()).forEach(fileId => {
-      void deletePendingUploadFile(topicId, messageId, fileId);
-    });
+  if (snapshotTimeout) {
+    clearTimeout(snapshotTimeout);
+    pendingUploadSnapshotTimeouts.delete(key);
   }
+
+  pendingUploadSnapshotGenerations.set(
+    key,
+    (pendingUploadSnapshotGenerations.get(key) || 0) + 1
+  );
+  pendingUploadSnapshotRevisions.set(
+    key,
+    (pendingUploadSnapshotRevisions.get(key) || 0) + 1
+  );
+
+  void getChatSDK()?.abortPendingMessageUploads(messageId);
+  void deletePendingUploadFilesForMessage(
+    topicId,
+    messageId,
+    Array.from(messageFiles?.keys() || [])
+  );
 
   pendingUploadFiles.delete(key);
   pendingUploadMeta.delete(key);

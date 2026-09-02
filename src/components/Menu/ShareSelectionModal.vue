@@ -230,7 +230,7 @@ const handleSubmitInput = (payload?: IShareInputPayload): void => {
 .share-selection-modal__subtitle {
   margin: 0;
   font-size: 12px;
-  color: var(--text-grey);
+  color: var(--text-secondary);
 }
 
 .share-selection-modal__body {

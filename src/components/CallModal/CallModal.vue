@@ -20,18 +20,6 @@
       }"
       @click.stop="closeMobileCallActionsMenu"
     >
-      <div
-        v-if="callSummaryRecordingNotice"
-        class="call-modal__recording-notice"
-        :class="{
-          'call-modal__recording-notice--starting': isSummaryRecordingStarting
-        }"
-        role="status"
-      >
-        <span class="call-modal__recording-notice-dot"></span>
-        <span>{{ callRecordingStatusText }}</span>
-      </div>
-
       <div class="call-modal__group-info">
         <div>
           <button
@@ -86,6 +74,16 @@
             <GroupInfoIcon />
           </button>
           <div v-else class="call-modal__mobile-actions">
+            <button
+              v-if="isAnySummaryRecording"
+              class="call-modal__control-button call-modal__control-button--action call-modal__control-button--recording"
+              type="button"
+              :disabled="isSummaryRecordButtonDisabled"
+              :aria-label="summaryRecordButtonTooltip"
+              @click="handleSummaryRecordingAction"
+            >
+              <ScreenRecordIcon />
+            </button>
             <button
               class="call-modal__control-button call-modal__control-button--action"
               type="button"
@@ -366,7 +364,7 @@
 
             <button
               v-if="isMobile && isBusyCallNotice"
-              class="call-modal__control-button call-modal__control-button__inactive"
+              class="call-modal__control-button call-modal__control-button_alter call-modal__control-button__inactive"
               type="button"
               disabled
               title="Демонстрация экрана"
@@ -379,7 +377,7 @@
               v-if="!isMobile && !Capacitor.isNativePlatform()"
               class="call-modal__control-button"
               :class="{
-                'call-modal__control-button__inactive':
+                'call-modal__control-button__inactive call-modal__control-button_alter':
                   !liveKitState.isScreenSharingActive
               }"
               :disabled="isBusyNoticeVisible"
@@ -401,12 +399,13 @@
             <Tooltip
               v-if="!isMobile"
               :hint="summaryRecordButtonTooltip"
+              data-testid="CallModal-CallControls-RecordingTooltip"
               position="top-center"
               type="black"
               size="small"
             >
               <button
-                class="call-modal__control-button"
+                class="call-modal__control-button call-modal__control-button_alter"
                 :class="{
                   'call-modal__control-button__inactive':
                     !isAnySummaryRecording,
@@ -663,6 +662,7 @@
             <Tooltip
               v-if="!isCallFullscreenTouchMode && !isMobile"
               :hint="summaryRecordButtonTooltip"
+              data-testid="CallModal-Overlay-RecordingTooltip"
               position="top-center"
               type="black"
               size="small"
@@ -788,6 +788,7 @@ import {
 } from '../../services/useCallScreen';
 import { useCallBackground } from '../../composables/useCallBackground';
 import { getUsersList } from '../../composables/useUsers';
+import { isDeletedBotUser } from '../../utils/bot';
 import { getAuthUser } from '../../composables/useAuth';
 import { useTopics } from '../../composables/useTopics';
 import {
@@ -803,7 +804,6 @@ import {
   isAnyCallSummaryRecording,
   isCallSummaryRecording,
   isCallSummaryRecordingPending,
-  isCallSummaryRecordingStarting,
   loadActiveCallSummaryRecorders,
   startCallSummaryRecording,
   stopCallSummaryRecording
@@ -1759,14 +1759,7 @@ const isAnySummaryRecording = computed(() =>
 const isSummaryRecordingPending = computed(() =>
   isCallSummaryRecordingPending(activeRoomId.value)
 );
-const isSummaryRecordingStarting = computed(() =>
-  isCallSummaryRecordingStarting(activeRoomId.value)
-);
-const callRecordingStatusText = computed(() =>
-  isAnySummaryRecording.value
-    ? 'Идет запись экрана'
-    : callSummaryRecordingNotice.value
-);
+
 const canStartSummaryRecording = computed(
   () =>
     isCallOpen.value &&
@@ -2153,7 +2146,7 @@ const groupInfoMembers = computed(() => {
 
   return activeParticipantIds
     .map(participantId => memberMap.get(participantId))
-    .filter(Boolean);
+    .filter(member => member && !isDeletedBotUser(member));
 });
 const displayGroupCallMeta = computed(
   () => `${participantCountLabel.value} · ${formattedTime.value}`

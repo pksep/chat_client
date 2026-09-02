@@ -1,8 +1,10 @@
 import { TopicType } from '../services/useChatSDK/types';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
+import { compactPersonName } from './personName';
 
 export const LOCAL_BOT_TOPIC_ID_PREFIX = 'local-bot-topic-';
 export const LOCAL_BOT_USER_ID_PREFIX = 'local-bot-user-';
+export const CALL_BOT_USERNAME = 'zvonilka';
 export const DELETED_BOT_DISPLAY_NAME = 'Удаленный аккаунт';
 export const DELETED_BOT_USERNAME = 'deleted_bot';
 
@@ -78,6 +80,18 @@ export const isDeletedBotUser = (user?: IUser | null): boolean => {
   return Boolean(meta.isDeletedBot || user?.nickname === DELETED_BOT_USERNAME);
 };
 
+export const getDeletedAccountDisplayName = (
+  displayName?: string | null
+): string => {
+  const name = compactPersonName(displayName || '');
+
+  if (!name || name === DELETED_BOT_DISPLAY_NAME) {
+    return DELETED_BOT_DISPLAY_NAME;
+  }
+
+  return `${name} (${DELETED_BOT_DISPLAY_NAME})`;
+};
+
 export const isBotUser = (user?: IUser | null): boolean => {
   if (isDeletedBotUser(user)) {
     return false;
@@ -131,6 +145,10 @@ export const getBotUsername = (user?: IUser | null): string => {
     ''
   );
 };
+
+export const isCallBotUser = (user?: IUser | null): boolean =>
+  getBotUsername(user).trim().replace(/^@+/, '').toLowerCase() ===
+  CALL_BOT_USERNAME;
 
 export const getBotApiKey = (user?: IUser | null): string => {
   const meta = parseBotMeta(user?.ex);

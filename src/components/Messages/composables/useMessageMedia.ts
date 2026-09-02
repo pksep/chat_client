@@ -108,6 +108,14 @@ export function useMessageMedia() {
     return getFullMediaPath(media, false);
   };
 
+  const getRemoteThumbnailUrl = (media: IMedia): string | undefined => {
+    if (!media.thumbnailPath || media.thumbnailPath === media.path) {
+      return undefined;
+    }
+
+    return `${config.CHAT_PATH_TO_FILE_CDN}/${media.thumbnailPath}`;
+  };
+
   const canDragMedia = (media: IMedia) =>
     Boolean(
       !media.isLoading && !media.uploadError && (media.localPath || media.path)
@@ -137,6 +145,7 @@ export function useMessageMedia() {
     canDragMedia,
     primeMediaCache,
     isMediaPathReady,
+    getRemoteThumbnailUrl,
     EMPTY_MEDIA_SRC
   };
 }

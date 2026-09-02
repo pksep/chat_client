@@ -24,8 +24,9 @@
   display: grid;
   gap: 10px;
   width: 100%;
+
   fieldset.input-yui-kit {
-    background-color: var(--blue15);
+    background-color: var(--table-surface-search);
 
     :disabled {
       background-color: transparent !important;
@@ -43,10 +44,11 @@
 
 .menu__user-assistant-icon {
   display: grid;
-  background-color: var(--blue9);
-  color: var(--blue1);
+  background-color: var(--action-secondary-pressed-bg);
+  color: var(--text-link);
   border-radius: 50%;
   padding: 7px;
+
   & svg {
     font-size: 16px;
   }
@@ -56,14 +58,15 @@
   margin-top: 5px;
   border-top-width: 1px;
   border-top-style: solid;
-  border-top-color: var(--grey13);
+  border-top-color: var(--border-table);
   width: 100%;
 }
 
-@media screen and (width <= 480px) {
+@media screen and (width <=480px) {
   .line {
     margin-top: 0;
   }
+
   .menu__user-assistant-icon {
     padding: 10px;
   }

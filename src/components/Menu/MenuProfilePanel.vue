@@ -29,6 +29,27 @@
           </span>
         </div>
 
+        <div
+          class="menu-profile__row menu-profile__row_theme"
+          @click="themeStore.setTheme(!isDarkTheme)"
+        >
+          <div class="menu-profile__group">
+            <Icon
+              class="menu-profile__icon"
+              :name="IconNameEnum.darkThemeSwitcher"
+            />
+
+            <div class="menu-profile__row-label">Тёмная тема</div>
+          </div>
+
+          <Toggle
+            v-model="isDarkTheme"
+            @click.stop
+            theme="minor"
+            @change="themeStore.setTheme"
+          />
+        </div>
+
         <div class="menu-profile__status">
           <div
             v-if="!currentStatusLabel"
@@ -101,55 +122,55 @@
               <EmojiIcon class="menu-profile__status-option-icon" emoji="🦄" />
               <span>Свой вариант</span>
             </button>
+          </div>
 
-            <div
-              v-if="isCustomStatusOpen"
-              class="menu-profile__status-custom"
-              :data-testid="`${props.dataTestid}-MenuProfilePanel-CustomStatus`"
-            >
-              <div class="menu-profile__status-custom__input__group">
-                <button
-                  type="button"
-                  class="menu-profile__status-emoji-button"
-                  :disabled="isSavingStatus"
-                  @click="toggleEmojiPicker"
-                >
-                  <Icon
-                    v-if="!customStatusIcon"
-                    :name="IconNameEnum.smile"
-                    :width="20"
-                    :height="20"
-                  />
-                  <EmojiIcon
-                    v-else
-                    class="menu-profile__status-emoji"
-                    :emoji="customStatusIcon"
-                  />
-                </button>
-                <input
-                  v-model="customStatusText"
-                  class="menu-profile__status-input"
-                  type="text"
-                  maxlength="40"
-                  placeholder="Выберите эмодзи и введите текст"
+          <div
+            v-if="isCustomStatusOpen"
+            class="menu-profile__status-custom"
+            :data-testid="`${props.dataTestid}-MenuProfilePanel-CustomStatus`"
+          >
+            <div class="menu-profile__status-custom__input__group">
+              <button
+                type="button"
+                class="menu-profile__status-emoji-button"
+                :disabled="isSavingStatus"
+                @click="toggleEmojiPicker"
+              >
+                <Icon
+                  v-if="!customStatusIcon"
+                  :name="IconNameEnum.smile"
+                  :width="20"
+                  :height="20"
                 />
-              </div>
-              <div
-                v-if="isEmojiPickerOpen"
-                class="menu-profile__status-emoji-picker"
-              >
-                <EmojiPicker :native="true" @select="handleSelectEmoji" />
-              </div>
-              <Button
-                :type="ButtonTypeEnum.primary"
-                :size="SizesEnum.small"
-                class="menu-profile__status-save"
-                :disabled="isSavingStatus || !canSaveCustomStatus"
-                @click="saveCustomStatus"
-              >
-                {{ isSavingStatus ? 'Сохраняем...' : 'Сохранить' }}
-              </Button>
+                <EmojiIcon
+                  v-else
+                  class="menu-profile__status-emoji"
+                  :emoji="customStatusIcon"
+                />
+              </button>
+              <input
+                v-model="customStatusText"
+                class="menu-profile__status-input"
+                type="text"
+                maxlength="40"
+                placeholder="Выберите эмодзи и введите текст"
+              />
             </div>
+            <div
+              v-if="isEmojiPickerOpen"
+              class="menu-profile__status-emoji-picker"
+            >
+              <EmojiPicker :native="true" @select="handleSelectEmoji" />
+            </div>
+            <Button
+              :type="ButtonTypeEnum.primary"
+              :size="SizesEnum.small"
+              class="menu-profile__status-save"
+              :disabled="isSavingStatus || !canSaveCustomStatus"
+              @click="saveCustomStatus"
+            >
+              {{ isSavingStatus ? 'Сохраняем...' : 'Сохранить' }}
+            </Button>
           </div>
 
           <p v-if="statusError" class="menu-profile__status-error">
@@ -708,6 +729,7 @@
   </Modal>
 
   <CallBackgroundPreviewModal
+    v-if="isCallBackgroundPreviewOpen"
     :open="isCallBackgroundPreviewOpen"
     :is-mobile="isMobile"
     :is-applying="isApplyingCallBackground"
@@ -738,9 +760,16 @@ import {
   Icon,
   IconNameEnum,
   Modal,
-  SizesEnum
+  SizesEnum,
+  Toggle
 } from '@pksep/yui';
-import { computed, ref, useTemplateRef, type CSSProperties } from 'vue';
+import {
+  computed,
+  defineAsyncComponent,
+  ref,
+  useTemplateRef,
+  type CSSProperties
+} from 'vue';
 import EmojiPicker from 'vue3-emoji-picker';
 import 'vue3-emoji-picker/css';
 import type { IUser, IUserStatus } from '../interfaces/interfaces';
@@ -768,10 +797,15 @@ import MobileModal from '../UI/MobileModal.vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import MessageBubble from '../Messages/MessageBubble.vue';
-import CallBackgroundPreviewModal from '../CallModal/CallBackgroundPreviewModal.vue';
 import ConfirmModal from '../UI/ConfirmModal.vue';
 import FileIcon from '../UI/FileIcon.vue';
 import { useMobileApp } from '../../composables/useMobileApp';
+import { useThemeStore } from '../../stores/theme';
+import { storeToRefs } from 'pinia';
+
+const CallBackgroundPreviewModal = defineAsyncComponent(
+  () => import('../CallModal/CallBackgroundPreviewModal.vue')
+);
 
 const props = withDefaults(
   defineProps<{
@@ -782,6 +816,8 @@ const props = withDefaults(
   }
 );
 
+const themeStore = useThemeStore();
+const { isDarkTheme } = storeToRefs(themeStore);
 const authUser = computed(() => getAuthUser() as IUser | null);
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const statusPresets = USER_STATUS_PRESETS;
