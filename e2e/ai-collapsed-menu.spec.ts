@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test';
 
 const CHAT_SESSION_ID = 'collapsed-menu-chat';
+const SECOND_CHAT_SESSION_ID = 'collapsed-menu-second-chat';
 const TASK_SESSION_ID = 'collapsed-menu-task-chat';
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(
-    ({ chatSessionId, taskSessionId }) => {
+    ({ chatSessionId, secondChatSessionId, taskSessionId }) => {
       const organizationUrl = 'http://127.0.0.1:65530';
       const config = {
         CHAT_AUTH_API: organizationUrl,
@@ -39,6 +40,13 @@ test.beforeEach(async ({ page }) => {
               messages: []
             },
             {
+              id: secondChatSessionId,
+              title: 'Второй рабочий чат',
+              description: 'Тест разделителя',
+              time: '09:30',
+              messages: []
+            },
+            {
               id: taskSessionId,
               title: 'Чат запланированной задачи',
               description: 'Тест',
@@ -61,7 +69,11 @@ test.beforeEach(async ({ page }) => {
       );
       sessionStorage.setItem('menu-collapse', 'true');
     },
-    { chatSessionId: CHAT_SESSION_ID, taskSessionId: TASK_SESSION_ID }
+    {
+      chatSessionId: CHAT_SESSION_ID,
+      secondChatSessionId: SECOND_CHAT_SESSION_ID,
+      taskSessionId: TASK_SESSION_ID
+    }
   );
 });
 
@@ -232,6 +244,36 @@ test('показывает задачи и AI-чаты единым списко
   const regularChat = expandedPanel.getByText('Рабочий чат', { exact: true });
   await expect(regularChat).toBeVisible();
 
+  const chatRows = expandedPanel.locator(
+    '.ai-menu-panel__row:not(.ai-menu-panel__row--task)'
+  );
+  const chatDelimiter = expandedPanel.locator(
+    '.ai-menu-panel__delimetr:visible'
+  );
+  await expect(chatRows).toHaveCount(2);
+  await expect(chatDelimiter).toHaveCount(1);
+
+  const [expandedPanelBox, firstChatBox, secondChatBox, delimiterBox] =
+    await Promise.all([
+      expandedPanel.boundingBox(),
+      chatRows.nth(0).boundingBox(),
+      chatRows.nth(1).boundingBox(),
+      chatDelimiter.boundingBox()
+    ]);
+
+  expect(Math.abs(delimiterBox!.x - expandedPanelBox!.x)).toBeLessThanOrEqual(
+    0.5
+  );
+  expect(
+    Math.abs(
+      delimiterBox!.x +
+        delimiterBox!.width -
+        (expandedPanelBox!.x + expandedPanelBox!.width)
+    )
+  ).toBeLessThanOrEqual(0.5);
+  expect(delimiterBox!.y - (firstChatBox!.y + firstChatBox!.height)).toBe(2);
+  expect(secondChatBox!.y - (delimiterBox!.y + delimiterBox!.height)).toBe(2);
+
   await regularChat.click();
   await expect(
     expandedPanel.locator('.ai-menu-panel__row--active')
@@ -316,4 +358,68 @@ test('сохраняет геометрию стартового блока пр
   expect(taskMeasurements.content?.height).toBe(
     emptyMeasurements.content?.height
   );
+});
+
+test('показывает чистый индикатор работы и тёмный переключатель статусов', async ({
+  page
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-desktop');
+
+  await page.addInitScript(() => {
+    localStorage.setItem('erp-theme-color-scheme', 'theme-dark');
+  });
+
+  let releaseStream: (() => void) | undefined;
+  await page.route(
+    'http://127.0.0.1:4111/api/agents/generalAgent/stream',
+    async route => {
+      await new Promise<void>(resolve => {
+        releaseStream = resolve;
+      });
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Тестовая остановка ответа' })
+      });
+    }
+  );
+
+  try {
+    await page.goto(`/ai/${CHAT_SESSION_ID}`);
+
+    const editor = page.locator(
+      '.ai-assistant__editor [contenteditable="true"]'
+    );
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await editor.fill('Проверь фоновый статус');
+
+    const streamRequest = page.waitForRequest(
+      request =>
+        request.method() === 'POST' &&
+        request.url() === 'http://127.0.0.1:4111/api/agents/generalAgent/stream'
+    );
+    await editor.press('Enter');
+    await streamRequest;
+
+    await page
+      .getByRole('button', { name: 'Чат с ИИ: Второй рабочий чат' })
+      .click();
+
+    const status = page.locator('.menu-bottom-nav__ai-status--running');
+    await expect(status).toBeVisible();
+    await expect(status).toHaveCSS('width', '12px');
+    await expect(status).toHaveCSS('height', '12px');
+    await expect(status).toHaveCSS(
+      'animation-name',
+      'menu-bottom-nav-ai-status-spin'
+    );
+    await expect(status.locator(':scope > *')).toHaveCount(0);
+
+    const toggle = page.locator('.menu-bottom-nav__ai-toggle');
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toHaveCSS('background-color', 'rgb(96, 104, 132)');
+    await expect(toggle).toHaveCSS('color', 'rgb(255, 255, 255)');
+  } finally {
+    releaseStream?.();
+  }
 });

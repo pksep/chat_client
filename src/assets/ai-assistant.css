@@ -204,7 +204,8 @@
 
 .ai-menu-panel__delimetr {
   height: 1px;
-  width: 80%;
+  width: calc(100% + 10px);
+  margin: 2px 0 2px -10px;
   background-color: var(--border-table);
 }
 
@@ -1214,17 +1215,19 @@
   z-index: 4;
   top: -1px;
   right: -1px;
-  display: grid;
-  place-items: center;
+  box-sizing: border-box;
+  display: block;
   width: 12px;
   height: 12px;
   border-radius: 50%;
   pointer-events: none;
 }
 
-.menu-bottom-nav__ai-status--running svg {
-  width: 12px;
-  height: 12px;
+.menu-bottom-nav__ai-status--running {
+  border: 2px solid var(--action-primary-bg, #77a6ff);
+  border-right-color: transparent;
+  background: transparent;
+  animation: menu-bottom-nav-ai-status-spin 0.8s linear infinite;
 }
 
 .menu-bottom-nav__ai-status--success,
@@ -1238,6 +1241,12 @@
 
 .menu-bottom-nav__ai-status--attention {
   background: var(--status-error, #ff6868);
+}
+
+@keyframes menu-bottom-nav-ai-status-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .menu-bottom-nav__ai-toggle {
@@ -1268,6 +1277,15 @@
   font-size: 10px;
   font-weight: 600;
   line-height: 11px;
+}
+
+:is([data-theme='dark'], .theme-dark) .menu-bottom-nav__ai-toggle {
+  background-color: var(--border-table, #606884);
+  color: var(--text-primary, #fff);
+}
+
+:is([data-theme='dark'], .theme-dark) .menu-bottom-nav__ai-toggle svg {
+  color: var(--text-primary, #fff);
 }
 
 .ai-activity-popover.context-menu {

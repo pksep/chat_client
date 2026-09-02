@@ -117,6 +117,40 @@ test('передаёт прикреплённый документ AI-агент
   ).toBeVisible();
   await expect(editor.getByText('5 B', { exact: true })).toBeVisible();
 
+  const attachModal = page.locator('dialog.attach-modal-container');
+  const modalBoxBeforeEmoji = await attachModal.boundingBox();
+  await attachModal.locator('.smile-button').click();
+
+  const emojiPicker = attachModal.locator('.emoji-picker:visible');
+  await expect(emojiPicker).toBeVisible();
+  await expect(emojiPicker).toHaveClass(/attach-modal__emoji-picker-overlay/);
+  await expect(emojiPicker).toHaveCSS('position', 'absolute');
+
+  const [modalBoxWithEmoji, emojiPickerBox] = await Promise.all([
+    attachModal.boundingBox(),
+    emojiPicker.boundingBox()
+  ]);
+  expect(modalBoxBeforeEmoji).not.toBeNull();
+  expect(modalBoxWithEmoji).not.toBeNull();
+  expect(emojiPickerBox).not.toBeNull();
+  expect(Math.abs(modalBoxWithEmoji!.x - modalBoxBeforeEmoji!.x)).toBeLessThan(
+    1
+  );
+  expect(Math.abs(modalBoxWithEmoji!.y - modalBoxBeforeEmoji!.y)).toBeLessThan(
+    1
+  );
+  expect(emojiPickerBox!.x).toBeGreaterThanOrEqual(0);
+  expect(emojiPickerBox!.y).toBeGreaterThanOrEqual(0);
+  expect(emojiPickerBox!.x + emojiPickerBox!.width).toBeLessThanOrEqual(
+    page.viewportSize()!.width
+  );
+  expect(emojiPickerBox!.y + emojiPickerBox!.height).toBeLessThanOrEqual(
+    page.viewportSize()!.height
+  );
+
+  await attachModal.click({ position: { x: 8, y: 8 } });
+  await expect(emojiPicker).toBeHidden();
+
   const mastraRequestPromise = page.waitForRequest(
     request =>
       request.method() === 'POST' &&

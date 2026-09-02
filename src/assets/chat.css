@@ -1030,6 +1030,21 @@ p.chat__nothing-paragraph {
   padding: 3.5px;
 }
 
+.attach-modal-container > .attach-modal__emoji-picker-overlay {
+  position: absolute !important;
+  z-index: 1001;
+  top: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+}
+
+.attach-modal__emoji-picker-overlay .v3-emoji-picker {
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+}
+
 .attach-modal-container:has(.chat__input__action > svg) .chat__input__action__blog p {
   max-width: 250px;
 }

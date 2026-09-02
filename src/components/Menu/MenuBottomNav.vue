@@ -53,13 +53,12 @@
               'menu-bottom-nav__ai-status',
               `menu-bottom-nav__ai-status--${backgroundActivityStatus}`
             ]"
-          >
-            <FileIcon
-              v-if="backgroundActivityStatus === 'running'"
-              is-me-sender
-              background-color="transparent"
-            />
-          </span>
+            role="status"
+            :aria-label="
+              getBackgroundActivityStatusLabel(backgroundActivityStatus)
+            "
+            :title="getBackgroundActivityStatusLabel(backgroundActivityStatus)"
+          ></span>
         </span>
       </button>
 
@@ -156,8 +155,10 @@ import { Icon, IconNameEnum } from '@pksep/yui';
 import AiAvatar from '../AI/AiAvatar.vue';
 import AIActivityPanel from '../AI/AIActivityPanel.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
-import FileIcon from '../UI/FileIcon.vue';
-import { useAiAssistant } from '../../composables/useAiAssistant';
+import {
+  type AiAssistantActivityStatus,
+  useAiAssistant
+} from '../../composables/useAiAssistant';
 import {
   navigateToAI,
   navigateToAssistant,
@@ -211,6 +212,14 @@ const backgroundActivityStatus = computed(() => {
   }
   return hasBackgroundActivities.value ? 'success' : null;
 });
+
+const getBackgroundActivityStatusLabel = (
+  status: AiAssistantActivityStatus
+): string => {
+  if (status === 'running') return 'ИИ выполняет задачу';
+  if (status === 'success') return 'Задача ИИ выполнена';
+  return 'Задача ИИ требует внимания';
+};
 
 /** Считает AI-раздел активным сразу по открытому маршруту, без ожидания синхронизации меню. */
 const isSectionActive = (section: ChatMenuSection): boolean =>

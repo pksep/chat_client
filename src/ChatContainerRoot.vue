@@ -80,6 +80,50 @@ let hydratedCacheUserId: string | undefined;
 const MOBILE_CACHED_ACTIVE_TOPIC_LIMIT = 48;
 const ONLINE_STARTUP_BACKGROUND_SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
+const mountAttachModalEmojiPickerOverlay = (trigger: HTMLElement): void => {
+  const attachModal = trigger.closest<HTMLDialogElement>(
+    'dialog.attach-modal-container'
+  );
+
+  if (!attachModal) {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    const emojiPicker =
+      trigger.querySelector<HTMLElement>('.emoji-picker') ||
+      attachModal.querySelector<HTMLElement>(
+        '.attach-modal__emoji-picker-overlay'
+      );
+
+    if (!emojiPicker || !emojiPicker.offsetParent) {
+      return;
+    }
+
+    emojiPicker.classList.add('attach-modal__emoji-picker-overlay');
+
+    if (emojiPicker.parentElement !== attachModal) {
+      attachModal.appendChild(emojiPicker);
+    }
+  });
+};
+
+const handleAttachModalEmojiPickerClick = (event: MouseEvent): void => {
+  const target = event.target;
+
+  if (!(target instanceof Element)) {
+    return;
+  }
+
+  const smileButton = target.closest<HTMLElement>(
+    'dialog.attach-modal-container .smile-button'
+  );
+
+  if (smileButton) {
+    mountAttachModalEmojiPickerOverlay(smileButton);
+  }
+};
+
 const hasStartupNetwork = (): boolean =>
   typeof navigator === 'undefined' || navigator.onLine;
 
@@ -290,6 +334,11 @@ const initFocusTracking = () => {
 };
 
 onUnmounted(() => {
+  document.removeEventListener(
+    'click',
+    handleAttachModalEmojiPickerClick,
+    true
+  );
   window.removeEventListener('focus', updateNotificationContext);
   window.removeEventListener('blur', updateNotificationContext);
   document.removeEventListener('visibilitychange', updateNotificationContext);
@@ -522,6 +571,7 @@ const runAppInitialization = async () => {
 };
 
 onMounted(async () => {
+  document.addEventListener('click', handleAttachModalEmojiPickerClick, true);
   initFocusTracking();
 
   try {
