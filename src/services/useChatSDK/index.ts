@@ -73,12 +73,6 @@ export interface WebSocketEvent {
   timestamp?: Date;
 }
 
-const UPLOAD_PROGRESS_INITIAL_PERCENT = 1;
-const UPLOAD_PROGRESS_CONNECTING_MAX_PERCENT = 4;
-const UPLOAD_PROGRESS_CONNECTING_INTERVAL_MS = 350;
-const UPLOAD_PROGRESS_MAX_PERCENT = 95;
-const FINALIZING_PROGRESS_TARGET_PERCENT = 99;
-const FINALIZING_PROGRESS_INTERVAL_MS = 350;
 const UPLOAD_RETRY_MAX_DELAY_MS = 5000;
 const VIDEO_UPLOAD_COVER_TIMEOUT_MS = 8000;
 
@@ -234,13 +228,12 @@ export class ChatSDK {
           return;
         }
 
-        const percent = Math.round((event.loaded / event.total) * 100);
-        onProgress?.(this.mapUploadProgress(percent));
+        onProgress?.((event.loaded / event.total) * 100);
       };
 
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          onProgress?.(UPLOAD_PROGRESS_MAX_PERCENT);
+          onProgress?.(100);
           resolve();
           return;
         }
@@ -1358,7 +1351,7 @@ export class ChatSDK {
         });
       }
     }
-    let lastReportedUploadProgress = 0;
+    let lastReportedUploadProgress = -1;
     const reportUploadProgress = (percent: number): void => {
       const normalizedPercent = Math.max(0, Math.min(100, Math.round(percent)));
 
@@ -1369,35 +1362,7 @@ export class ChatSDK {
       lastReportedUploadProgress = normalizedPercent;
       onProgress?.(normalizedPercent);
     };
-    const finishUploadProgress = (): void => {
-      reportUploadProgress(100);
-    };
-
-    reportUploadProgress(UPLOAD_PROGRESS_INITIAL_PERCENT);
-    let connectingProgress = UPLOAD_PROGRESS_INITIAL_PERCENT;
-    const connectingProgressTimer = window.setInterval(() => {
-      if (connectingProgress >= UPLOAD_PROGRESS_CONNECTING_MAX_PERCENT) {
-        window.clearInterval(connectingProgressTimer);
-        return;
-      }
-
-      connectingProgress += 1;
-      reportUploadProgress(connectingProgress);
-    }, UPLOAD_PROGRESS_CONNECTING_INTERVAL_MS);
-
-    let stopFakeFinalizingProgress: (() => void) | null = null;
-    let hasStartedFakeFinalizingProgress = false;
-    const startFinalizingProgress = (): void => {
-      if (hasStartedFakeFinalizingProgress) {
-        return;
-      }
-
-      hasStartedFakeFinalizingProgress = true;
-      stopFakeFinalizingProgress = this.startFakeFinalizingProgress(
-        reportUploadProgress,
-        UPLOAD_PROGRESS_MAX_PERCENT
-      );
-    };
+    reportUploadProgress(0);
     let currentUploadStep = 'start';
 
     try {
@@ -1426,13 +1391,8 @@ export class ChatSDK {
           this.createMultipartUploadTransport(isMedia, traceId),
           {
             onProgress: percent => {
-              reportUploadProgress(this.mapUploadProgress(percent));
-
-              if (percent >= 100) {
-                startFinalizingProgress();
-              }
+              reportUploadProgress(percent);
             },
-            onFinalizing: startFinalizingProgress,
             persistenceKey: multipartPersistenceKey,
             signal: multipartAbortController?.signal || telemetry?.signal
           }
@@ -1494,7 +1454,6 @@ export class ChatSDK {
       });
 
       currentUploadStep = 'video_cover';
-      startFinalizingProgress();
       const videoCoverObjectName = await videoCoverObjectNamePromise;
       currentUploadStep = 'complete';
       const completeStartedAt = Date.now();
@@ -1532,9 +1491,6 @@ export class ChatSDK {
       if (usedMultipart) {
         removePersistedMultipartUpload(file, multipartPersistenceKey);
       }
-      stopFakeFinalizingProgress?.();
-      finishUploadProgress();
-
       recordTelemetryEvent({
         category: 'upload',
         name: 'upload.complete.success',
@@ -1568,7 +1524,6 @@ export class ChatSDK {
         ex: data.ex
       };
     } catch (error) {
-      stopFakeFinalizingProgress?.();
       recordTelemetryEvent({
         category: 'upload',
         name: 'upload.failed',
@@ -1585,7 +1540,6 @@ export class ChatSDK {
       });
       throw error;
     } finally {
-      window.clearInterval(connectingProgressTimer);
       telemetry?.signal?.removeEventListener('abort', abortFromCaller);
 
       if (
@@ -1672,15 +1626,6 @@ export class ChatSDK {
     );
   }
 
-  private mapUploadProgress(percent: number): number {
-    const normalizedPercent = Math.max(0, Math.min(percent, 100));
-
-    return Math.max(
-      UPLOAD_PROGRESS_INITIAL_PERCENT,
-      Math.round((normalizedPercent / 100) * UPLOAD_PROGRESS_MAX_PERCENT)
-    );
-  }
-
   private getUploadErrorStatus(error: unknown): number | undefined {
     const candidate = Number(
       (error as { status?: unknown; response?: { status?: unknown } })
@@ -1762,47 +1707,6 @@ export class ChatSDK {
         attempt += 1;
       }
     }
-  }
-
-  private startFakeFinalizingProgress(
-    onProgress?: (percent: number) => void,
-    initialPercent = UPLOAD_PROGRESS_MAX_PERCENT
-  ): () => void {
-    if (!onProgress) {
-      return () => undefined;
-    }
-
-    let currentPercent = Math.max(
-      0,
-      Math.min(initialPercent, FINALIZING_PROGRESS_TARGET_PERCENT)
-    );
-
-    onProgress?.(currentPercent);
-
-    if (currentPercent >= FINALIZING_PROGRESS_TARGET_PERCENT) {
-      return () => undefined;
-    }
-
-    const intervalId = setInterval(() => {
-      const remainingPercent =
-        FINALIZING_PROGRESS_TARGET_PERCENT - currentPercent;
-
-      if (remainingPercent <= 0) {
-        clearInterval(intervalId);
-        return;
-      }
-
-      const step = Math.max(1, Math.ceil(remainingPercent * 0.18));
-      currentPercent = Math.min(
-        FINALIZING_PROGRESS_TARGET_PERCENT,
-        currentPercent + step
-      );
-      onProgress?.(currentPercent);
-    }, FINALIZING_PROGRESS_INTERVAL_MS);
-
-    return () => {
-      clearInterval(intervalId);
-    };
   }
 
   async updateMessageStatus(

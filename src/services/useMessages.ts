@@ -2895,7 +2895,8 @@ export const setFileUploadPendingStatus = (
           return {
             ...media,
             isLoading: true,
-            uploadError: false
+            uploadError: false,
+            uploadPercent: 0
           };
         })
       };

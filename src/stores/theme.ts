@@ -20,6 +20,10 @@ export interface IThemeClasses {
 }
 
 const THEME_STORAGE_KEY = 'erp-theme-color-scheme';
+const THEME_COLORS = {
+  dark: '#212531',
+  light: '#f8f9fd'
+};
 const THEME_CLASSES: IThemeClasses = {
   dark: 'theme-dark',
   light: 'theme-light'
@@ -105,6 +109,15 @@ const applyThemeClass = (themeClass: TThemeClass): void => {
 
   // Добавляем актуальный класс цветовой схемы.
   rootElement.classList.add(themeClass);
+
+  const isDarkTheme = themeClass === THEME_CLASSES.dark;
+  rootElement.style.colorScheme = isDarkTheme ? 'dark' : 'light';
+  document
+    .querySelector('meta[name="theme-color"]')
+    ?.setAttribute(
+      'content',
+      isDarkTheme ? THEME_COLORS.dark : THEME_COLORS.light
+    );
 };
 
 /**

@@ -70,7 +70,9 @@
                 >
                   <template v-if="getFileUploadMeta(media)">
                     <span class="message-content__file__upload-percent">
-                      {{ getFileUploadMeta(media)?.percent }}%
+                      <UploadProgressText
+                        :percent="getFileUploadMeta(media)?.percent ?? 0"
+                      />
                     </span>
                     <span class="message-content__file__upload-separator">
                       ·
@@ -187,6 +189,7 @@ import type { IMessageBubbleProps } from './interface/interface';
 import { MediaType } from '@pksep/zod-shared-chat';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import FileIcon from '../UI/FileIcon.vue';
+import UploadProgressText from '../UI/UploadProgressText.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import MessageEmojies from './MessageEmojies.vue';
 import ErrorIcon from '../UI/ErrorIcon.vue';

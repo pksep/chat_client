@@ -141,7 +141,8 @@ const messageArticlesStyles = computed(() => ({
   message__content__articles__my: props.isMeSender
 }));
 
-const { getFullMediaPath, isSliderContentUrl } = useMessageMedia();
+const { getFullMediaPath, getRemoteThumbnailUrl, isSliderContentUrl } =
+  useMessageMedia();
 const isContextMenuOpen = computed(
   () => !!props.messageId && isOpen.value[props.messageId] === true
 );
@@ -149,7 +150,9 @@ const isCallTopicDefaultMessageEx = computed(() =>
   Boolean(parseCallTopicDefaultMessageEx(props.messageEx))
 );
 
-const sliderElements = ref<{ path: string; name: string; file?: File }[]>([]);
+const sliderElements = ref<
+  { path: string; fallbackPath?: string; name: string; file?: File }[]
+>([]);
 const defaultIndexSlider = ref<number>(0);
 const isSliderOpen = ref(false);
 const { addHandler: addBackHandler, removeHandler: removeBackHandler } =
@@ -216,11 +219,13 @@ const isSliderContentMedia = (media: IMedia) =>
   });
 
 const buildSliderItem = async (media: IMedia) => {
-  const fallbackPath = getFullMediaPath(media, false);
+  const originalPath = getFullMediaPath(media, false);
+  const fallbackPath = getRemoteThumbnailUrl(media);
 
   if (!isNativePdfMedia(media) || !media.path) {
     return {
-      path: fallbackPath,
+      path: originalPath,
+      fallbackPath,
       name: media.originName || 'file'
     };
   }
@@ -229,7 +234,8 @@ const buildSliderItem = async (media: IMedia) => {
 
   if (!cachedObjectUrl) {
     return {
-      path: fallbackPath,
+      path: originalPath,
+      fallbackPath,
       name: media.originName || 'file'
     };
   }
@@ -242,12 +248,14 @@ const buildSliderItem = async (media: IMedia) => {
 
     return {
       path: cachedObjectUrl,
+      fallbackPath,
       name: media.originName || 'file',
       file
     };
   } catch {
     return {
       path: cachedObjectUrl,
+      fallbackPath,
       name: media.originName || 'file'
     };
   }

@@ -63,6 +63,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useSmoothedProgress } from '../../composables/useSmoothedProgress';
 
 const props = withDefaults(
   defineProps<{
@@ -78,12 +79,14 @@ const props = withDefaults(
 const radius = 9;
 const circumference = 2 * Math.PI * radius;
 
+const displayedProgress = useSmoothedProgress(() => props.percent);
+
 const normalizedPercent = computed(() => {
-  if (typeof props.percent !== 'number' || Number.isNaN(props.percent)) {
+  if (displayedProgress.value === null) {
     return null;
   }
 
-  return Math.max(0, Math.min(100, props.percent));
+  return displayedProgress.value;
 });
 
 const hasPercent = computed(() => normalizedPercent.value !== null);
@@ -106,9 +109,5 @@ const dashOffset = computed(() => {
 .upload-icon-state-leave-to {
   opacity: 0;
   scale: 0.82;
-}
-
-.message-content__media-loading__progress {
-  transition: stroke-dashoffset 220ms ease;
 }
 </style>
