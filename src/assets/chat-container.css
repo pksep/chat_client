@@ -287,9 +287,10 @@ button.primary-yui-kit.disabled-yui-kit {
   background-color: var(--neutral-button);
 }
 
-.ghost-yui-kit.red-context-button {
+button.button-yui-kit.red-context-button {
   color: var(--error-color) !important;
 
+  &:hover,
   &:active {
     background-color: var(--ban-color) !important;
     color: var(--error-color) !important;

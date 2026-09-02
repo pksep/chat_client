@@ -24,9 +24,9 @@
 .ai-menu-panel__header {
   display: flex;
   align-items: center;
-  margin-left: 10px;
-  padding: 0 10px 10px 0;
-  border-bottom: 1px solid var(--grey13);
+  margin-left: 0;
+  padding: 0 10px 10px;
+  border-bottom: 1px solid var(--border-table);
 }
 
 .ai-menu-panel__header--collapse {
@@ -402,7 +402,6 @@
 
 .chat__header-wrapper:has(.chat__header-ai-assistant) {
   box-sizing: border-box;
-  height: 100%;
 }
 
 .chat__header-ai-assistant {
@@ -1492,10 +1491,6 @@
     height: 59px;
     min-height: 59px;
     padding: 9px 16px;
-  }
-
-  .chat__header-wrapper:has(.chat__header-ai-assistant) {
-    height: 100%;
   }
 
   .chat__header-wrapper:has(.chat__header-ai-assistant) .chat__header-main>button.button-yui-kit {
