@@ -8,7 +8,7 @@
   >
     <template v-if="isSelectionContextMenu">
       <Button
-        :type="ButtonTypeEnum.ghost"
+        :type="ButtonTypeEnum.popover"
         :size="SizesEnum.small"
         @click.stop="handleOpenForwardModal"
         :data-testid="`${props.dataTestid}-MessageBubble-SelectionForwardButton`"
@@ -17,7 +17,7 @@
       </Button>
 
       <Button
-        :type="ButtonTypeEnum.ghost"
+        :type="ButtonTypeEnum.popover"
         :size="SizesEnum.small"
         @click.stop="handleCancelSelection"
         :data-testid="`${props.dataTestid}-MessageBubble-SelectionCancelButton`"
@@ -28,7 +28,7 @@
       <Button
         v-if="isAllDeletableSelectedMessages"
         class="red-context-button"
-        :type="ButtonTypeEnum.ghost"
+        :type="ButtonTypeEnum.popover"
         :size="SizesEnum.small"
         @click.stop="handleOpenDeleteModal"
         :data-testid="`${props.dataTestid}-MessageBubble-SelectionDeleteButton`"
@@ -52,7 +52,7 @@
       >
         <div
           class="message-context-menu__mobile-back"
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click.stop="handleBackToMenu"
           :data-testid="`${props.dataTestid}-MessageBubble-DetailsBackButton`"
@@ -60,7 +60,7 @@
           <span class="message-context-menu__mobile-back-content">
             <Button
               class="message-context-menu__mobile-back-button"
-              :type="ButtonTypeEnum.ghost"
+              :type="ButtonTypeEnum.popover"
               :size="SizesEnum.small"
               @click.stop="handleBackToMenu"
               :data-testid="`${props.dataTestid}-MessageBubble-DetailsBackButton`"
@@ -73,7 +73,7 @@
           <Icon
             :name="IconNameEnum.read"
             :data-testid="`${dataTestid}-ReadIcon`"
-            color="var(--blue1)"
+            color="var(--text-link)"
             :width="20"
             :height="20"
           />
@@ -127,7 +127,7 @@
     <template v-else>
       <template v-if="canRetryMessage">
         <Button
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click.stop="handleRetryUpload"
           :data-testid="`${props.dataTestid}-MessageBubble-RetryButton`"
@@ -137,7 +137,7 @@
 
         <Button
           class="red-context-button"
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click.stop="handleOpenDeleteModal"
           :data-testid="`${props.dataTestid}-MessageBubble-DeleteButton`"
@@ -181,7 +181,7 @@
         </div>
 
         <Button
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click.stop="handleReplyMessage"
           :data-testid="`${props.dataTestid}-MessageBubble-ReplyButton`"
@@ -190,7 +190,7 @@
         </Button>
 
         <Button
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click.stop="handleOpenForwardModal"
           :data-testid="`${props.dataTestid}-MessageBubble-ForwardButton`"
@@ -200,7 +200,7 @@
 
         <Button
           v-if="props.isMeSender && !!props.message"
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click.stop="handleEditMessage"
           :data-testid="`${props.dataTestid}-MessageBubble-EditButton`"
@@ -210,7 +210,7 @@
 
         <Button
           v-if="!!props.message"
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click.stop="handleCopyMessage"
           :data-testid="`${props.dataTestid}-MessageBubble-CopyButton`"
@@ -219,7 +219,7 @@
         </Button>
 
         <Button
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click.stop="handlePinMessage"
           :data-testid="`${props.dataTestid}-MessageBubble-PinButton`"
@@ -229,7 +229,7 @@
         </Button>
 
         <Button
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click.stop="handleSelectMessage"
           :data-testid="`${props.dataTestid}-MessageBubble-SelectButton`"
@@ -240,7 +240,7 @@
 
         <Button
           v-if="hasDownloadableMedia"
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click.stop="handleDownloadMessageMedia"
           :data-testid="`${props.dataTestid}-MessageBubble-DownloadButton`"
@@ -251,7 +251,7 @@
 
         <Button
           v-if="canShowMessageDetails"
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           ref="detailsTriggerRef"
           class="message-context-menu__details-trigger"
@@ -289,7 +289,7 @@
             <Icon
               :name="IconNameEnum.read"
               :data-testid="`${dataTestid}-ReadIcon`"
-              color="var(--blue1)"
+              color="var(--text-link)"
               :width="20"
               :height="20"
             />
@@ -338,7 +338,7 @@
         <Button
           v-if="props.isMeSender"
           class="red-context-button"
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click.stop="handleOpenDeleteModal"
           :data-testid="`${props.dataTestid}-MessageBubble-DeleteButton`"

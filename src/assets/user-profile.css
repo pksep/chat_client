@@ -8,8 +8,11 @@
     'avatar description';
 }
 
-.user-profile__avatar {
+.contact-selector__list .user-profile .user-profile__avatar {
   grid-area: avatar;
+  width: 50px;
+  height: 50px;
+  ;
 }
 
 .user-profile__title {
@@ -17,7 +20,7 @@
   align-items: center;
   gap: 6px;
   grid-area: title;
-  color: var(--text-black);
+  color: var(--text-primary);
   max-width: 125ch;
   overflow-wrap: anywhere;
   text-overflow: ellipsis;
@@ -35,7 +38,7 @@
 
 .user-profile__ex {
   font-size: var(--font-size-nickname, 16px);
-  color: var(--text-grey);
+  color: var(--text-secondary);
   margin-top: -7px;
   grid-area: description;
 }

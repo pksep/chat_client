@@ -71,9 +71,9 @@ afterEach(() => {
 describe('multipart browser upload', () => {
   test('reports the configured error only above the 600 MiB limit', () => {
     expect(getUploadFileSizeError({ size: MAX_UPLOAD_FILE_SIZE })).toBeNull();
-    expect(
-      getUploadFileSizeError({ size: MAX_UPLOAD_FILE_SIZE + 1 })
-    ).toBe(MAX_UPLOAD_FILE_SIZE_ERROR);
+    expect(getUploadFileSizeError({ size: MAX_UPLOAD_FILE_SIZE + 1 })).toBe(
+      MAX_UPLOAD_FILE_SIZE_ERROR
+    );
   });
 
   test('rejects files above 600 MiB before creating an upload session', async () => {
@@ -225,6 +225,462 @@ describe('multipart browser upload', () => {
     removePersistedMultipartUpload(file);
   });
 
+  test('keeps the resumable session while the server is temporarily unavailable', async () => {
+    const file = createFile('server-unavailable.bin');
+    const session = createSession();
+    const persistenceKey = getMultipartFileFingerprint(file);
+    storage.set(
+      STORAGE_KEY,
+      JSON.stringify({
+        [persistenceKey]: {
+          uploadId: session.uploadId,
+          objectName: session.objectName,
+          expiresAt: session.expiresAt,
+          progress: 40
+        }
+      })
+    );
+    let initCalls = 0;
+    let statusCalls = 0;
+    const transport: MultipartUploadTransport = {
+      init: async () => {
+        initCalls += 1;
+        return session;
+      },
+      status: async () => {
+        statusCalls += 1;
+
+        if (statusCalls <= 2) {
+          throw Object.assign(new Error('server unavailable'), { status: 503 });
+        }
+
+        return session;
+      },
+      uploadPart: async (_session, _partNumber, part, onProgress) => {
+        onProgress(part.size);
+      },
+      complete: async () => ({
+        objectName: session.objectName,
+        hash: 'hash',
+        etag: 'etag'
+      }),
+      abort: async () => undefined
+    };
+
+    await expect(uploadMultipartFile(file, transport)).resolves.toMatchObject({
+      completed: { hash: 'hash' }
+    });
+
+    expect(initCalls).toBe(0);
+    expect(statusCalls).toBe(3);
+    removePersistedMultipartUpload(file);
+  });
+
+  test('aborts a hung status request and retries the same resumable session', async () => {
+    const file = createFile('hung-status.bin');
+    const session = createSession();
+    storage.set(
+      STORAGE_KEY,
+      JSON.stringify({
+        [getMultipartFileFingerprint(file)]: {
+          uploadId: session.uploadId,
+          objectName: session.objectName,
+          expiresAt: session.expiresAt,
+          progress: 4
+        }
+      })
+    );
+    let statusCalls = 0;
+    let timedOutRequestWasAborted = false;
+    const transport: MultipartUploadTransport = {
+      init: async () => {
+        throw new Error('resume must not create a new session');
+      },
+      status: async (_uploadId, signal) => {
+        statusCalls += 1;
+
+        if (statusCalls === 1) {
+          return await new Promise((_resolve, reject) => {
+            signal?.addEventListener(
+              'abort',
+              () => {
+                timedOutRequestWasAborted = true;
+                const error = new Error('request aborted');
+                error.name = 'AbortError';
+                reject(error);
+              },
+              { once: true }
+            );
+          });
+        }
+
+        return session;
+      },
+      uploadPart: async (_session, _partNumber, part, onProgress) => {
+        onProgress(part.size);
+      },
+      complete: async () => ({
+        objectName: session.objectName,
+        hash: 'hash',
+        etag: 'etag'
+      }),
+      abort: async () => undefined
+    };
+
+    await expect(
+      uploadMultipartFile(file, transport, {
+        controlRequestTimeoutMs: 10
+      })
+    ).resolves.toMatchObject({ completed: { hash: 'hash' } });
+
+    expect(statusCalls).toBe(2);
+    expect(timedOutRequestWasAborted).toBe(true);
+    removePersistedMultipartUpload(file);
+  });
+
+  test('persists visible progress and does not move backwards after reload', async () => {
+    const file = createFile('progress-after-reload.bin');
+    const session = createSession();
+    const confirmedParts: MultipartUploadSession['uploadedParts'] = [];
+    const firstProgress: number[] = [];
+    const resumedProgress: number[] = [];
+    let shouldInterruptPage = true;
+    const transport: MultipartUploadTransport = {
+      init: async () => session,
+      status: async () => createSession([...confirmedParts]),
+      uploadPart: async (_session, partNumber, part, onProgress) => {
+        if (partNumber === 2 && shouldInterruptPage) {
+          onProgress(1);
+          throw Object.assign(new Error('page interrupted'), { status: 400 });
+        }
+
+        onProgress(part.size);
+        confirmedParts.push({
+          partNumber,
+          size: part.size,
+          etag: `etag-${partNumber}`
+        });
+      },
+      complete: async () => ({
+        objectName: session.objectName,
+        hash: 'hash',
+        etag: 'etag'
+      }),
+      abort: async () => undefined
+    };
+
+    await expect(
+      uploadMultipartFile(file, transport, {
+        concurrency: 1,
+        retryCount: 0,
+        onProgress: value => firstProgress.push(value)
+      })
+    ).rejects.toMatchObject({ status: 400 });
+
+    expect(firstProgress.at(-1)).toBe(66);
+    expect(
+      JSON.parse(storage.get(STORAGE_KEY) || '{}')[
+        getMultipartFileFingerprint(file)
+      ].progress
+    ).toBe(66);
+
+    shouldInterruptPage = false;
+    await uploadMultipartFile(file, transport, {
+      concurrency: 1,
+      retryCount: 0,
+      onProgress: value => resumedProgress.push(value)
+    });
+
+    expect(resumedProgress[0]).toBe(66);
+    expect(resumedProgress.at(-1)).toBe(100);
+    expect(
+      resumedProgress.every(
+        (value, index) => index === 0 || value >= resumedProgress[index - 1]
+      )
+    ).toBe(true);
+    removePersistedMultipartUpload(file);
+  });
+
+  test('pauses finalization during an outage and completes after recovery', async () => {
+    const file = createFile('finalization-outage.bin');
+    const session = createSession();
+    let completeCalls = 0;
+    const progress: number[] = [];
+    const transport: MultipartUploadTransport = {
+      init: async () => session,
+      status: async () => session,
+      uploadPart: async (_session, _partNumber, part, onProgress) => {
+        onProgress(part.size);
+      },
+      complete: async () => {
+        completeCalls += 1;
+
+        if (completeCalls <= 2) {
+          throw Object.assign(new Error('server unavailable'), { status: 503 });
+        }
+
+        return { objectName: session.objectName, hash: 'hash', etag: 'etag' };
+      },
+      abort: async () => undefined
+    };
+
+    await expect(
+      uploadMultipartFile(file, transport, {
+        onProgress: value => progress.push(value)
+      })
+    ).resolves.toMatchObject({ completed: { hash: 'hash' } });
+
+    expect(completeCalls).toBe(3);
+    expect(progress.at(-1)).toBe(100);
+    removePersistedMultipartUpload(file);
+  });
+
+  test('waits for an in-flight part from the previous page after a 409', async () => {
+    const file = createFile('refresh-during-part.bin');
+    const session = createSession();
+    storage.set(
+      STORAGE_KEY,
+      JSON.stringify({
+        [getMultipartFileFingerprint(file)]: {
+          uploadId: session.uploadId,
+          objectName: session.objectName,
+          expiresAt: session.expiresAt
+        }
+      })
+    );
+    let statusCalls = 0;
+    const uploadAttempts = new Map<number, number>();
+    const transport: MultipartUploadTransport = {
+      init: async () => {
+        throw new Error('resume must reuse the existing session');
+      },
+      status: async () => {
+        statusCalls += 1;
+
+        if (statusCalls >= 3) {
+          return createSession([{ partNumber: 1, size: 4, etag: 'etag-1' }]);
+        }
+
+        return session;
+      },
+      uploadPart: async (_session, partNumber, part, onProgress) => {
+        const attempt = (uploadAttempts.get(partNumber) || 0) + 1;
+        uploadAttempts.set(partNumber, attempt);
+
+        if (partNumber === 1) {
+          throw Object.assign(new Error('part is still uploading'), {
+            status: 409
+          });
+        }
+
+        onProgress(part.size);
+      },
+      complete: async () => ({
+        objectName: session.objectName,
+        hash: 'hash',
+        etag: 'etag'
+      }),
+      abort: async () => undefined
+    };
+
+    await expect(
+      uploadMultipartFile(file, transport, {
+        concurrency: 1,
+        retryCount: 0
+      })
+    ).resolves.toMatchObject({ completed: { hash: 'hash' } });
+
+    expect(uploadAttempts.get(1)).toBe(2);
+    expect(uploadAttempts.get(2)).toBe(1);
+    expect(uploadAttempts.get(3)).toBe(1);
+    removePersistedMultipartUpload(file);
+  });
+
+  test('merges every part confirmed while the previous page was finishing', async () => {
+    const file = createFile('refresh-confirms-several-parts.bin');
+    const session = createSession();
+    storage.set(
+      STORAGE_KEY,
+      JSON.stringify({
+        [getMultipartFileFingerprint(file)]: {
+          uploadId: session.uploadId,
+          objectName: session.objectName,
+          expiresAt: session.expiresAt,
+          progress: 4
+        }
+      })
+    );
+    let statusCalls = 0;
+    const uploadAttempts: number[] = [];
+    const progress: number[] = [];
+    const transport: MultipartUploadTransport = {
+      init: async () => {
+        throw new Error('resume must reuse the existing session');
+      },
+      status: async () => {
+        statusCalls += 1;
+        return statusCalls === 1
+          ? session
+          : createSession([
+              { partNumber: 1, size: 4, etag: 'etag-1' },
+              { partNumber: 2, size: 4, etag: 'etag-2' }
+            ]);
+      },
+      uploadPart: async (_session, partNumber, part, onProgress) => {
+        uploadAttempts.push(partNumber);
+
+        if (partNumber === 1) {
+          throw Object.assign(new Error('previous page still owns the part'), {
+            status: 409
+          });
+        }
+
+        onProgress(part.size);
+      },
+      complete: async () => ({
+        objectName: session.objectName,
+        hash: 'hash',
+        etag: 'etag'
+      }),
+      abort: async () => undefined
+    };
+
+    await uploadMultipartFile(file, transport, {
+      concurrency: 1,
+      onProgress: value => progress.push(value)
+    });
+
+    expect(uploadAttempts).toEqual([1, 3]);
+    expect(progress).toContain(66);
+    expect(progress.at(-1)).toBe(100);
+    removePersistedMultipartUpload(file);
+  });
+
+  test('recovers when the previous page is already completing the upload', async () => {
+    const file = createFile('refresh-during-complete.bin');
+    const session = createSession([
+      { partNumber: 1, size: 4, etag: 'etag-1' },
+      { partNumber: 2, size: 4, etag: 'etag-2' },
+      { partNumber: 3, size: 4, etag: 'etag-3' }
+    ]);
+    const completed = {
+      objectName: session.objectName,
+      hash: 'completed-by-previous-page',
+      etag: 'etag'
+    };
+    storage.set(
+      STORAGE_KEY,
+      JSON.stringify({
+        [getMultipartFileFingerprint(file)]: {
+          uploadId: session.uploadId,
+          objectName: session.objectName,
+          expiresAt: session.expiresAt
+        }
+      })
+    );
+    let statusCalls = 0;
+    let completeCalls = 0;
+    const transport: MultipartUploadTransport = {
+      init: async () => {
+        throw new Error('resume must reuse the existing session');
+      },
+      status: async () => {
+        statusCalls += 1;
+
+        if (statusCalls >= 3) {
+          return {
+            ...session,
+            status: 'completed',
+            completed
+          };
+        }
+
+        return session;
+      },
+      uploadPart: async () => {
+        throw new Error('all parts are already uploaded');
+      },
+      complete: async () => {
+        completeCalls += 1;
+        throw Object.assign(new Error('upload is already completing'), {
+          status: 409
+        });
+      },
+      abort: async () => undefined
+    };
+
+    await expect(
+      uploadMultipartFile(file, transport, { retryCount: 0 })
+    ).resolves.toMatchObject({ completed });
+
+    expect(completeCalls).toBe(2);
+    expect(statusCalls).toBe(3);
+    removePersistedMultipartUpload(file);
+  });
+
+  test('stops part workers when the previous page has completed the upload', async () => {
+    const file = createFile('refresh-after-parts.bin');
+    const session = createSession();
+    const completed = {
+      objectName: session.objectName,
+      hash: 'completed-by-previous-page',
+      etag: 'etag'
+    };
+    storage.set(
+      STORAGE_KEY,
+      JSON.stringify({
+        [getMultipartFileFingerprint(file)]: {
+          uploadId: session.uploadId,
+          objectName: session.objectName,
+          expiresAt: session.expiresAt
+        }
+      })
+    );
+    let statusCalls = 0;
+    let uploadCalls = 0;
+    let completeCalls = 0;
+    const transport: MultipartUploadTransport = {
+      init: async () => {
+        throw new Error('resume must reuse the existing session');
+      },
+      status: async () => {
+        statusCalls += 1;
+
+        if (statusCalls === 1) {
+          return session;
+        }
+
+        return {
+          ...session,
+          status: 'completed',
+          completed
+        };
+      },
+      uploadPart: async () => {
+        uploadCalls += 1;
+        throw Object.assign(new Error('part is still uploading'), {
+          status: 409
+        });
+      },
+      complete: async () => {
+        completeCalls += 1;
+        return completed;
+      },
+      abort: async () => undefined
+    };
+
+    await expect(
+      uploadMultipartFile(file, transport, {
+        concurrency: 1,
+        retryCount: 0
+      })
+    ).resolves.toMatchObject({ completed });
+
+    expect(uploadCalls).toBe(1);
+    expect(completeCalls).toBe(0);
+    removePersistedMultipartUpload(file);
+  });
+
   test('keeps parallel sends of the same file in independent upload sessions', async () => {
     const file = createFile('same-file.zip');
     let initCalls = 0;
@@ -264,14 +720,12 @@ describe('multipart browser upload', () => {
     expect(statusCalls).toBe(0);
     const persisted = JSON.parse(storage.get(STORAGE_KEY) || '{}');
     expect(
-      persisted[
-        getMultipartUploadPersistenceKey(file, 'message-a:file-0')
-      ].uploadId
+      persisted[getMultipartUploadPersistenceKey(file, 'message-a:file-0')]
+        .uploadId
     ).toBe('upload-1');
     expect(
-      persisted[
-        getMultipartUploadPersistenceKey(file, 'message-b:file-0')
-      ].uploadId
+      persisted[getMultipartUploadPersistenceKey(file, 'message-b:file-0')]
+        .uploadId
     ).toBe('upload-2');
 
     removePersistedMultipartUpload(file, 'message-a:file-0');

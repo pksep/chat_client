@@ -11,7 +11,7 @@
 .modal-yui-kit__modal-content:not(:has(.tabs__navigation)) .new-group__header {
   border-bottom-style: solid;
   border-bottom-width: 1px;
-  border-bottom-color: var(--border-grey);
+  border-bottom-color: var(--border-table);
 }
 
 button.button-yui-kit.new-group__button-close {
@@ -64,6 +64,7 @@ dialog.new-group .menu-info__group-info h4 {
 
 .contact-selector {
   display: grid;
+  gap: 10px;
 }
 
 .new-group__tab2-profile {
@@ -76,9 +77,11 @@ dialog.new-group .menu-info__group-info h4 {
 
 .menu-info__modal-wrapper {
   display: grid;
-  padding-inline: 10px;
 }
 
+dialog.new-group.modal-yui-kit {
+  background-color: var(--surface-overlay);
+}
 @media screen and (min-width: 641px) {
   dialog.new-group {
     width: 370px;

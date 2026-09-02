@@ -34,7 +34,7 @@
         >
           <Button
             class="calls-page__context-action"
-            :type="ButtonTypeEnum.ghost"
+            :type="ButtonTypeEnum.popover"
             :size="SizesEnum.small"
             :data-testid="`${props.dataTestid}-CreateMeetingButton`"
             @click="handleCreateMeeting"
@@ -45,7 +45,7 @@
 
           <Button
             class="calls-page__context-action"
-            :type="ButtonTypeEnum.ghost"
+            :type="ButtonTypeEnum.popover"
             :size="SizesEnum.small"
             :data-testid="`${props.dataTestid}-CreateMeetingLinkButton`"
             @click="handleCreateMeetingAndCopyLink"

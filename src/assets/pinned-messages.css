@@ -2,13 +2,13 @@
   height: 58px;
   cursor: pointer;
   width: calc(100% + 4px);
-  background-color: var(--white);
+  background-color: var(--surface-input-primary);
   padding: 10px 15px;
-  border-bottom: 0.5px solid var(--border-grey);
+  border-bottom: 0.5px solid var(--border-table);
   border-radius: 0 0 10px 10px;
 }
 
-@media screen and (width <= 768px) {
+@media screen and (width <=768px) {
   .pinned-messages {
     margin-top: var(--mobile-pinned-messages-offset, 58px);
     width: 100%;

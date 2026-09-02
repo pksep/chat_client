@@ -37,7 +37,6 @@
             </div>
           </span>
         </template>
-        <template #header2> Информация </template>
         <template #tab1>
           <ContactListInModal
             :contacts="filteredSelectedContacts"
