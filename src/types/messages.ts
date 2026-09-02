@@ -8,6 +8,7 @@ export interface AIMessageReference {
 export interface AIMessage {
   role: 'user' | 'assistant';
   content: string;
+  modelContent?: string;
   loading?: boolean;
   timestamp?: number;
   pinned?: boolean;

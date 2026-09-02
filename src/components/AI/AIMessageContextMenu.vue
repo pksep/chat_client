@@ -8,14 +8,14 @@
   >
     <template v-if="props.selectionMode && props.selected">
       <Button
-        :type="ButtonTypeEnum.ghost"
+        :type="ButtonTypeEnum.popover"
         :size="SizesEnum.small"
         @click.stop="runAction('forwardSelection')"
       >
         <ForwardIcon /> Переслать
       </Button>
       <Button
-        :type="ButtonTypeEnum.ghost"
+        :type="ButtonTypeEnum.popover"
         :size="SizesEnum.small"
         @click.stop="runAction('cancelSelection')"
       >
@@ -24,7 +24,7 @@
       <Button
         v-if="props.canDeleteSelection"
         class="red-context-button"
-        :type="ButtonTypeEnum.ghost"
+        :type="ButtonTypeEnum.popover"
         :size="SizesEnum.small"
         @click.stop="runAction('deleteSelection')"
       >
@@ -34,7 +34,7 @@
 
     <template v-else>
       <Button
-        :type="ButtonTypeEnum.ghost"
+        :type="ButtonTypeEnum.popover"
         :size="SizesEnum.small"
         @click.stop="runAction('reply')"
       >
@@ -42,7 +42,7 @@
         {{ props.selectedText ? 'Ответить на фрагмент' : 'Ответить' }}
       </Button>
       <Button
-        :type="ButtonTypeEnum.ghost"
+        :type="ButtonTypeEnum.popover"
         :size="SizesEnum.small"
         @click.stop="runAction('forward')"
       >
@@ -50,21 +50,21 @@
       </Button>
       <Button
         v-if="props.message.role === 'user'"
-        :type="ButtonTypeEnum.ghost"
+        :type="ButtonTypeEnum.popover"
         :size="SizesEnum.small"
         @click.stop="runAction('edit')"
       >
         <EditIcon /> Редактировать
       </Button>
       <Button
-        :type="ButtonTypeEnum.ghost"
+        :type="ButtonTypeEnum.popover"
         :size="SizesEnum.small"
         @click.stop="handleCopy"
       >
         <CopyIcon /> Копировать текст
       </Button>
       <Button
-        :type="ButtonTypeEnum.ghost"
+        :type="ButtonTypeEnum.popover"
         :size="SizesEnum.small"
         @click.stop="runAction('togglePin')"
       >
@@ -74,7 +74,7 @@
         <template v-else> <PinIcon /> Закрепить </template>
       </Button>
       <Button
-        :type="ButtonTypeEnum.ghost"
+        :type="ButtonTypeEnum.popover"
         :size="SizesEnum.small"
         @click.stop="runAction('select')"
       >
@@ -83,7 +83,7 @@
       <Button
         v-if="props.message.role === 'user'"
         class="red-context-button"
-        :type="ButtonTypeEnum.ghost"
+        :type="ButtonTypeEnum.popover"
         :size="SizesEnum.small"
         @click.stop="runAction('delete')"
       >

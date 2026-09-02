@@ -2,12 +2,13 @@
   display: none;
 }
 
-@media screen and (width <= 768px) {
+@media screen and (width <=768px) {
   .chat__header-menu {
     display: flex;
     position: sticky;
     top: 0;
   }
+
   .header-menu-item__selected {
     position: absolute;
     left: 14px;
@@ -17,8 +18,9 @@
     border-top-right-radius: 6.67px;
     border-width: 2px;
     border-style: solid;
-    border-color: var(--blue1);
+    border-color: var(--text-link);
   }
+
   li.header-menu__item {
     position: relative;
     padding-inline: 14px;
@@ -26,10 +28,11 @@
 
     &.header-menu__item--active {
       & button {
-        color: var(--blue1);
+        color: var(--text-link);
       }
     }
   }
+
   button.header-menu__button {
     align-self: center;
     color: var(--neutral-text);
@@ -38,7 +41,7 @@
   }
 }
 
-@media screen and (width <= 375px) {
+@media screen and (width <=375px) {
   .header-menu__list {
     gap: 10px;
   }

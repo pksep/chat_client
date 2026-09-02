@@ -77,6 +77,7 @@
 
       <AIMenuPanel
         v-else-if="activeSection === 'ai'"
+        :is-collapse="isCollapse"
         :data-testid="`${props.dataTestid}-Menu-AIPanel`"
       />
 
@@ -298,10 +299,6 @@ const { state: isCollapse, toggle } = useResizeState({
 });
 
 const handleCollapse = (): void => {
-  if (!isCollapse.value) {
-    setActiveSection('chats');
-  }
-
   setSearch('');
   toggle();
 };

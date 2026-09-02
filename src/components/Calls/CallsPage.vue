@@ -30,63 +30,65 @@
         class="calls-page__list"
         @scroll="handleListScroll"
       >
-        <div
-          v-for="call in filteredCalls"
-          :key="call.messageId"
-          :class="[
-            'calls-page__item',
-            {
-              'calls-page__item--active': isActiveRouteCall(call)
-            }
-          ]"
-          role="button"
-          tabindex="0"
-          :data-testid="`${props.dataTestid}-Item-${call.messageId}`"
-          @click="openCallBot(call)"
-          @keydown.enter.prevent="openCallBot(call)"
-          @keydown.space.prevent="openCallBot(call)"
-        >
-          <CachedAvatar
-            class="calls-page__avatar"
-            :path="call.avatarUrl"
-            :initials="call.avatarInitials"
-            is-icon
-            @click.stop="handleOpenCallUserInfo(call)"
-          />
+        <template v-for="call in filteredCalls" :key="call.messageId">
+          <div
+            :class="[
+              'calls-page__item',
+              {
+                'calls-page__item--active': isActiveRouteCall(call)
+              }
+            ]"
+            role="button"
+            tabindex="0"
+            :data-testid="`${props.dataTestid}-Item-${call.messageId}`"
+            @click="openCallBot(call)"
+            @keydown.enter.prevent="openCallBot(call)"
+            @keydown.space.prevent="openCallBot(call)"
+          >
+            <CachedAvatar
+              class="calls-page__avatar"
+              :path="call.avatarUrl"
+              :initials="call.avatarInitials"
+              is-icon
+              @click.stop="handleOpenCallUserInfo(call)"
+            />
 
-          <div class="calls-page__body">
-            <div class="calls-page__row">
-              <h4 class="calls-page__name">{{ call.displayName }}</h4>
-              <span class="calls-page__date">{{ call.dateLabel }}</span>
-            </div>
+            <div class="calls-page__body">
+              <div class="calls-page__row">
+                <h4 class="calls-page__name">{{ call.displayName }}</h4>
+                <span class="calls-page__date">{{ call.dateLabel }}</span>
+              </div>
 
-            <div class="calls-page__details">
-              <MessageCallTypeIcon :kind="call.kind" />
-              <div class="calls-page__meta">
-                <span
-                  :class="[
-                    'calls-page__status',
-                    `calls-page__status--${call.kind}`
-                  ]"
-                >
-                  {{ call.title }}
-                </span>
-                <span
-                  :class="[
-                    'calls-page__time',
-                    { 'calls-page__time--missed': call.kind === 'missed' }
-                  ]"
-                >
-                  {{ call.detailLabel }}
-                </span>
+              <div class="calls-page__details">
+                <MessageCallTypeIcon :kind="call.kind" />
+                <div class="calls-page__meta">
+                  <span
+                    :class="[
+                      'calls-page__status',
+                      `calls-page__status--${call.kind}`
+                    ]"
+                  >
+                    {{ call.title }}
+                  </span>
+                  <span
+                    :class="[
+                      'calls-page__time',
+                      { 'calls-page__time--missed': call.kind === 'missed' }
+                    ]"
+                  >
+                    {{ call.detailLabel }}
+                  </span>
+                </div>
               </div>
             </div>
+
+            <span class="calls-page__info" aria-hidden="true">
+              <MessageCallInfoIcon />
+            </span>
           </div>
 
-          <span class="calls-page__info" aria-hidden="true">
-            <MessageCallInfoIcon />
-          </span>
-        </div>
+          <div class="calls-page__delimetr"></div>
+        </template>
 
         <div v-if="state.isLoadingMore" class="calls-page__loading-more">
           {{ loadingMoreLabel }}
@@ -572,3 +574,31 @@ watch(
   { immediate: true }
 );
 </script>
+
+<style lang="css">
+.calls-page__content,
+.calls-page__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.calls-page__content {
+  gap: 10px;
+}
+
+.calls-page__list {
+  gap: 2px;
+}
+
+.calls-page__delimetr {
+  height: 1px;
+  width: calc(100% - 58px);
+  flex-shrink: 0;
+  background-color: var(--border-table);
+  align-self: flex-end;
+}
+
+.calls-page__delimetr:last-child {
+  display: none;
+}
+</style>

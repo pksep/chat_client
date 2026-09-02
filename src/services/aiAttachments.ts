@@ -18,6 +18,10 @@ interface AiAttachmentUploadTarget {
   attachmentToken: string;
 }
 
+interface AiAttachmentUploadError extends Error {
+  status?: number;
+}
+
 /** Формирует адрес защищённого API временных вложений чата. */
 const getAiAttachmentsUrl = (path: string): string => {
   const baseUrl = getConfig().CHAT_API_DOMAIN?.replace(/\/+$/, '');
@@ -45,19 +49,96 @@ const readError = async (response: Response): Promise<string> => {
   }
 };
 
-/** Загружает файл напрямую во временное объектное хранилище по выданному URL. */
-const uploadToStorage = (uploadUrl: string, file: File): Promise<void> =>
+/** Возвращает публичный адрес API для серверной ссылки загрузки, даже если сервер выдал внутренний домен. */
+const normalizeChatUploadUrl = (uploadUrl: string): string => {
+  const configuredApiUrl = getConfig().CHAT_API_DOMAIN?.trim();
+  const pageUrl =
+    typeof window !== 'undefined' ? window.location.href : 'http://localhost/';
+
+  if (!configuredApiUrl) return uploadUrl;
+
+  try {
+    const apiUrl = new URL(configuredApiUrl, pageUrl);
+    const targetUrl = new URL(uploadUrl, apiUrl);
+    const uploadPathMarker = '/media/encrypted-upload/';
+    const markerIndex = targetUrl.pathname.indexOf(uploadPathMarker);
+
+    // Подписанные ссылки MinIO нельзя переписывать: их домен участвует в подписи.
+    if (markerIndex < 0) return targetUrl.toString();
+
+    const apiPath = apiUrl.pathname.replace(/\/+$/, '');
+    const uploadPath = targetUrl.pathname.slice(markerIndex);
+    targetUrl.protocol = apiUrl.protocol;
+    targetUrl.host = apiUrl.host;
+    targetUrl.pathname = `${apiPath}${uploadPath}`.replace(/\/{2,}/g, '/');
+
+    return targetUrl.toString();
+  } catch {
+    return uploadUrl;
+  }
+};
+
+/** Извлекает короткую причину отказа хранилища без вывода служебной HTML-страницы целиком. */
+const getUploadResponseDetails = (request: XMLHttpRequest): string => {
+  const responseText = request.responseText?.replace(/\s+/g, ' ').trim();
+  if (!responseText) return '';
+  return responseText.slice(0, 200);
+};
+
+/** Выполняет одну попытку загрузки файла по подготовленному адресу. */
+const uploadToStorageUrl = (uploadUrl: string, file: File): Promise<void> =>
   new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open('PUT', uploadUrl);
-    if (file.type) request.setRequestHeader('Content-Type', file.type);
+    request.setRequestHeader(
+      'Content-Type',
+      file.type || 'application/octet-stream'
+    );
     request.onload = () => {
       if (request.status >= 200 && request.status < 300) resolve();
-      else reject(new Error('Не удалось загрузить вложение'));
+      else {
+        const details = getUploadResponseDetails(request);
+        const error = new Error(
+          `Не удалось загрузить вложение (HTTP ${request.status}${
+            details ? `: ${details}` : ''
+          })`
+        ) as AiAttachmentUploadError;
+        error.status = request.status;
+        reject(error);
+      }
     };
-    request.onerror = () => reject(new Error('Не удалось загрузить вложение'));
+    request.onerror = () =>
+      reject(new Error('Сервер загрузки вложений недоступен'));
+    request.onabort = () => reject(new Error('Загрузка вложения отменена'));
     request.send(file);
   });
+
+/** Загружает файл с резервной попыткой по исходному адресу, если публичный адрес API отличается. */
+const uploadToStorage = async (
+  uploadUrl: string,
+  file: File
+): Promise<void> => {
+  const normalizedUrl = normalizeChatUploadUrl(uploadUrl);
+  const candidates = [...new Set([normalizedUrl, uploadUrl])];
+  let reportedError: Error | null = null;
+
+  for (const candidate of candidates) {
+    try {
+      await uploadToStorageUrl(candidate, file);
+      return;
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        (!reportedError ||
+          typeof (error as AiAttachmentUploadError).status === 'number')
+      ) {
+        reportedError = error;
+      }
+    }
+  }
+
+  throw reportedError || new Error('Не удалось загрузить вложение');
+};
 
 /** Подготавливает одно вложение для агента и возвращает ограниченную по времени ссылку. */
 export const stageAiAttachment = async (

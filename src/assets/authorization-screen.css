@@ -5,7 +5,7 @@ main.authorization-screen {
   display: grid;
   grid-template-rows: 1fr;
   padding: var(--authorization-padding);
-  background-color: var(--blue12);
+  background-color: var(--surface-brand);
 }
 
 section.authorization-screen__block {
@@ -16,14 +16,12 @@ section.authorization-screen__block {
   min-height: calc(100dvh - 2 * var(--authorization-padding));
   padding: 44px;
   border-radius: 25px;
-  background: #fff;
+  background: var(--surface-main-modal);
   overflow: hidden;
 }
 
 main.authorization-screen:has(.authorization-screen__toolbar) {
-  padding-bottom: calc(
-    var(--authorization-padding) + var(--authorization-toolbar-height)
-  );
+  padding-bottom: calc(var(--authorization-padding) + var(--authorization-toolbar-height));
 }
 
 .authorization-screen__card {
@@ -43,6 +41,7 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
   border-radius: 25px;
   color: var(--white);
 }
+
 .authorization-screen__logo {
   width: 60px;
   height: 60px;
@@ -63,7 +62,7 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--text-color);
+
   cursor: pointer;
   position: fixed;
   top: 100px;
@@ -75,10 +74,13 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
   gap: 10px;
   font-weight: 400;
   font-size: 20px;
+
+  color: var(--text-primary);
+  transition: all 0.2s ease;
 }
 
 .authorization-screen__title {
-  color: var(--text-color);
+
   text-align: left;
   margin: 20px 0 0;
   font-size: 24px;
@@ -106,7 +108,7 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
 }
 
 .authorization-screen__credentials-label {
-  color: var(--grey6);
+  color: var(--text-secondary);
   font-size: 16px;
   font-weight: 500;
   line-height: 27px;
@@ -124,7 +126,7 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
   margin: 4px 0 25px !important;
 
   &.input-yui-kit.initial::before {
-    border-color: var(--border-grey);
+    border-color: var(--border-table);
   }
 }
 
@@ -147,14 +149,15 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
   border: 0 !important;
 }
 
-.authorization__combobox .combobox__input {
-  font-size: 14px !important;
-  padding-left: 10px !important;
+.authorization__combobox .combobox__input .input-yui-kit__input {
+  font-size: 16px;
 }
+
+
 
 .authorization-screen__credentials fieldset.input-yui-kit::before {
   z-index: 1;
-  border: 1px solid var(--border-grey) !important;
+  border: 1px solid var(--border-table) !important;
 }
 
 .authorization-screen__credentials fieldset.input-yui-kit:hover::before,
@@ -172,7 +175,7 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
   max-height: 300px !important;
   max-width: 300px !important;
   box-sizing: border-box;
-  color: var(--text-color);
+
   font-size: 14px;
   padding-block: 5px !important;
 
@@ -199,7 +202,7 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
   display: flex;
   align-items: center;
   gap: 15px;
-  margin-top: 10px;
+  margin: 30px 0;
   cursor: pointer;
 }
 
@@ -220,12 +223,12 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
   gap: 12px;
   padding: 15px;
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--surface-authorization);
   box-shadow: 0 0 15px rgba(21, 68, 150, 0.2);
 }
 
 .authorization-screen__editor--saved {
-  background: rgba(255, 255, 255, 0.32);
+  background: var(--surface-authorization);
 }
 
 .authorization-screen__field {
@@ -244,11 +247,11 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
     box-shadow: none;
     padding: 15px 0 0;
     margin-top: 15px;
-    border-top: 1px solid var(--blue1);
+    border-top: 1px solid var(--action-primary-bg);
     border-radius: 0;
   }
 
-  & > button {
+  &>button {
     display: flex;
     align-items: center;
     gap: 15px;
@@ -257,13 +260,18 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
   }
 }
 
+:is([data-theme="dark"],
+  .theme-dark) .authorization-screen__field {
+  box-shadow: none;
+}
+
 .authorization-screen__field--new {
   display: block;
 }
 
 .authorization-screen__field--new,
 .authorization-screen__field--saved {
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--surface-authorization);
 }
 
 .authorization-screen__field-icon {
@@ -272,8 +280,8 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: #fff;
-  color: var(--text-neutral-color);
+  background: var(--action-disabled-bg);
+  color: var(--text-secondary);
   font-size: 30px;
   line-height: 1;
 }
@@ -290,7 +298,7 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
 
 .authorization-screen__field-button-text {
   margin: 0;
-  color: var(--text-neutral-color);
+  color: var(--text-secondary);
   font-size: 16px;
   font-weight: 400;
 }
@@ -364,7 +372,7 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
 }
 
 .authorization-screen__toolbar-circle--active {
-  background: #5d8ef5;
+  background: var(--action-primary-bg);
 }
 
 .authorization-screen__button {
@@ -389,20 +397,17 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
 main.authorization-screen input:-webkit-autofill,
 main.authorization-screen input:-webkit-autofill:hover,
 main.authorization-screen input:-webkit-autofill:focus {
-  -webkit-box-shadow: 0 0 0 1000px
-    var(--surface-input-primary, #fff) inset !important;
-  -webkit-text-fill-color: var(--text-color) !important;
-  caret-color: var(--text-color);
+  -webkit-box-shadow: 0 0 0 1000px var(--surface-input-primary, #fff) inset !important;
+  -webkit-text-fill-color: var(--text-primary) !important;
+  caret-color: var(--text-primary);
   transition: background-color 9999s ease-out 0s;
 }
 
 .authorization-screen__card__gradient {
-  background: linear-gradient(
-    213.61deg,
-    #a1c2ff 3.13%,
-    #75a3fb 46.43%,
-    #4781ee 92.74%
-  );
+  background: linear-gradient(213.61deg,
+      #a1c2ff 3.13%,
+      #75a3fb 46.43%,
+      #4781ee 92.74%);
   box-shadow: 0 16px 40px rgba(21, 68, 150, 0.2);
 
   & .authorization-screen__credentials-label {
@@ -418,10 +423,16 @@ main.authorization-screen input:-webkit-autofill:focus {
   }
 }
 
-@media screen and (width <= 768px) {
+:is([data-theme="dark"],
+  .theme-dark) .authorization-screen__card__gradient {
+  background: var(--table-surface);
+  box-shadow: none;
+}
+
+@media screen and (width <=768px) {
   main.authorization-screen {
     --authorization-padding: 16px;
-    background-color: var(--blue10);
+    background-color: var(--action-primary-bg);
 
     & .authorization-screen__title {
       margin: 0;

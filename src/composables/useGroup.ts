@@ -10,6 +10,44 @@ import { setTopics, topics, useTopics } from './useTopics';
 const currentGroup = ref<ITopic | null>(null);
 const loading = ref(false);
 
+export const removeLocalUserFromAllGroups = (userId: string): void => {
+  if (!userId) {
+    return;
+  }
+
+  if (currentGroup.value?.members?.some(member => member.id === userId)) {
+    currentGroup.value = {
+      ...currentGroup.value,
+      members: currentGroup.value.members.filter(member => member.id !== userId)
+    };
+  }
+
+  const nextTopics = topics.value.map(topic => {
+    const members = topic.members || [];
+
+    if (!topic.group || !members.some(member => member.id === userId)) {
+      return topic;
+    }
+
+    const nextTopic = {
+      ...topic,
+      members: members.filter(member => member.id !== userId)
+    };
+
+    if (
+      'memberCount' in nextTopic &&
+      typeof nextTopic.memberCount === 'number' &&
+      nextTopic.memberCount > 0
+    ) {
+      nextTopic.memberCount -= 1;
+    }
+
+    return nextTopic;
+  });
+
+  setTopics(nextTopics);
+};
+
 export const useGroup = () => {
   const addGroupMembersToList = (groupId: string, newMembers: IUser[]) => {
     const membersToAdd = Array.isArray(newMembers) ? newMembers : [];

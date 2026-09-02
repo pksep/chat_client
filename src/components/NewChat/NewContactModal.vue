@@ -43,7 +43,7 @@ import { getChatSDK } from '../../services/useChat';
 const props = withDefaults(defineProps<INewContactProps>(), {
   open: false,
   isAddOne: true,
-  title: 'Создать диалог',
+  title: 'Создать чат',
   excludedContactIds: () => new Set<string | number>(),
   dataTestid: 'NewContactModal'
 });

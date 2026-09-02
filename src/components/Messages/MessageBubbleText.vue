@@ -64,7 +64,7 @@
             ref="messageHtmlRef"
             class="message-content__html"
             v-emoji
-            v-html="props.message"
+            v-html="safeMessageHtml"
             :data-testid="`${props.dataTestid}-MessageText`"
             @click="handleMentionUserClick"
           ></div>
@@ -152,8 +152,10 @@ import {
   hasMessageInteractivityCandidates,
   useMentionUserClick
 } from './composables/useMentionUserClick';
+import { sanitizeMessageHtml } from '../../utils/sanitizeMessageHtml';
 
 const props = defineProps<IMessageBubbleProps>();
+const safeMessageHtml = computed(() => sanitizeMessageHtml(props.message));
 
 defineEmits(['navigate-message']);
 

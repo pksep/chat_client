@@ -22,7 +22,8 @@
   border-radius: 100px;
   gap: 5px;
   padding: 5px;
-  background-color: var(--white);
+  background-color: var(--surface-overlay);
+  border: 1px solid var(--border-table);
   visibility: hidden;
 }
 
@@ -105,7 +106,7 @@ button.button-yui-kit.select-reactions-list-button {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .message-context-menu__details-panel {
@@ -144,7 +145,7 @@ button.button-yui-kit.select-reactions-list-button {
   padding: 0 0 5px 10px;
   font-size: 15px;
   font-weight: 400;
-  color: var(--text-color);
+
 }
 
 .message-context-menu__mobile-back-button {
@@ -158,16 +159,16 @@ button.button-yui-kit.select-reactions-list-button {
   gap: 5px;
   font-size: 15px;
   font-weight: 400;
-  color: var(--text-color);
+
 }
 
 .message-context-menu__details-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 400;
-  color: var(--text-color);
+
 }
 
 .message-context-menu__details-count {
@@ -192,7 +193,7 @@ button.button-yui-kit.select-reactions-list-button {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
   align-items: center;
-  border-top: 0.5px solid var(--border-grey);
+  border-top: 0.5px solid var(--border-table);
   padding: 5px 5px 0;
   height: 35px;
 }
@@ -229,18 +230,18 @@ button.button-yui-kit.select-reactions-list-button {
 }
 
 .message-context-menu__details-date {
-  color: var(--grey6);
+  color: var(--text-secondary);
   font-weight: 400;
   font-size: 12px;
 }
 
 .message-context-menu__details-time-value {
-  color: var(--text-color);
+
   font-weight: 400;
   font-size: 12px;
 }
 
-@media screen and (width <= 768px) {
+@media screen and (width <=768px) {
   .message-context-menu__details-trigger {
     min-height: 32px;
   }

@@ -179,7 +179,7 @@
         @unmount-close="closeAttachmentContextMenu"
       >
         <Button
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           :data-testid="`${props.dataTestid}-ShowInChatButton`"
           @click.stop="handleShowInChat"
@@ -189,7 +189,7 @@
         </Button>
 
         <Button
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           :data-testid="`${props.dataTestid}-ForwardButton`"
           @click.stop="handleOpenForwardModal"
@@ -201,7 +201,7 @@
         <Button
           v-if="canDeleteContextMessage"
           class="red-context-button"
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           :data-testid="`${props.dataTestid}-DeleteButton`"
           @click.stop="handleOpenDeleteModal"
@@ -224,6 +224,7 @@
       :open="forwardModalOpen"
       @unmount-close="handleCloseForwardModal"
       @unmount-select-topic="handleForwardMessage"
+      @unmount-select-ai-session="handleForwardMessageToAi"
     />
   </section>
 </template>
@@ -252,6 +253,8 @@ import {
 import { getAuthUser } from '../composables/useAuth';
 import { useBackButton } from '../composables/useBackButton';
 import { openForwardDraft } from '../composables/useForwardMessages';
+import { openAiForwardDraft } from '../composables/useAiForwardDraft';
+import type { AiAssistantSession } from '../composables/useAiAssistant';
 import { navigateToSearchResult } from '../composables/useMessageSearch';
 import { deleteMessageChat, getChatSDK } from '../services/useChat';
 import { ensureMediaObjectUrl } from '../services/useMediaBlobCache';
@@ -530,6 +533,16 @@ const handleForwardMessage = (topic: ITopic): void => {
 
   if (message) {
     openForwardDraft(topic, message);
+  }
+
+  handleCloseForwardModal();
+};
+
+const handleForwardMessageToAi = (session: AiAssistantSession): void => {
+  const message = contextMenuItem.value?.message;
+
+  if (message) {
+    openAiForwardDraft(session, message);
   }
 
   handleCloseForwardModal();
@@ -1362,18 +1375,19 @@ const getMediaLabel = (media: IMedia): string =>
   min-width: 0;
   min-height: 33px;
   padding: 0 10px;
-  border: 1px solid var(--border-grey);
+  border: 1px solid var(--border-table);
   border-radius: 17px;
-  background: var(--white);
-  color: var(--text-color);
+  background: var(--surface-overlay);
+  color: var(--text-primary);
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .profile-attachments__tab--active {
-  border-color: var(--primary-color);
-  color: var(--primary-color);
+  border-color: var(--action-primary-bg);
+  color: var(--action-primary-bg);
 }
 
 .profile-attachments__media-grid {
@@ -1451,22 +1465,23 @@ const getMediaLabel = (media: IMedia): string =>
   padding: 10px 15px;
   border: 0;
   border-radius: 20px;
-  background: var(--white);
-  box-shadow: inset 0 0 0 1px var(--blue1);
+  background: var(--surface-overlay);
+  box-shadow: inset 0 0 0 1px var(--text-brand);
   color: inherit;
   text-align: left;
   cursor: pointer;
   touch-action: pan-y;
   -webkit-touch-callout: none;
+  transition: all 0.2s ease;
 }
 
 .profile-attachments__file-button--outgoing {
-  background: var(--blue12);
-  box-shadow: none;
+  background: var(--table-surface-pressed);
+  box-shadow: inset 0 0 0 0 transparent;
 }
 
 .profile-attachments__file-button:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--blue1);
+  box-shadow: inset 0 0 0 2px var(--text-brand);
 }
 
 .profile-attachments__file-icon {
@@ -1482,7 +1497,7 @@ const getMediaLabel = (media: IMedia): string =>
 .profile-attachments__file-name {
   min-width: 0;
   overflow: hidden;
-  color: var(--text-black);
+  color: var(--text-primary);
   font-size: 16px;
   font-weight: 400;
   line-height: 19px;
@@ -1500,13 +1515,13 @@ const getMediaLabel = (media: IMedia): string =>
 }
 
 .profile-attachments__file-size {
-  color: var(--text-grey);
+  color: var(--text-primary);
   font-size: 12px;
   line-height: 15px;
 }
 
 .profile-attachments__file-date {
-  color: var(--neutral-text-light);
+  color: var(--text-secondary);
   font-size: 12px;
   line-height: 15px;
   white-space: nowrap;
@@ -1516,7 +1531,7 @@ const getMediaLabel = (media: IMedia): string =>
 .profile-attachments__load-more {
   min-height: 28px;
   margin: 6px 0 0;
-  color: var(--text-grey);
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 18px;
   text-align: center;
@@ -1531,11 +1546,11 @@ const getMediaLabel = (media: IMedia): string =>
   position: fixed;
   z-index: 999;
   padding: 4px 10px;
-  border: 1px solid var(--border-grey);
+  border: 1px solid var(--border-table);
   border-radius: 12px;
   background: rgb(255 255 255 / 92%);
   box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
-  color: var(--text-grey);
+  color: var(--text-secondary);
   font-size: 12px;
   line-height: 15px;
   white-space: nowrap;

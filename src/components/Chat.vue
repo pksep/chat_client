@@ -10,7 +10,11 @@
     ]"
     :data-testid="`${props.dataTestid}-Chat-Container`"
   >
-    <AIAssistant v-if="isAiRoute" ref="aiAssistantRef" />
+    <AIAssistant
+      v-if="isAiRoute || isAiVoiceCallActive"
+      v-show="isAiRoute"
+      ref="aiAssistantRef"
+    />
 
     <template v-else-if="isMobile">
       <div
@@ -124,6 +128,7 @@ import {
   fetchPinnedMessagesForTopic,
   hasKnownTopicMessagesState
 } from '../services/useMessages';
+import { useAiAssistant } from '../composables/useAiAssistant';
 
 const AIAssistant = defineAsyncComponent(() => import('./AI/AIAssistant.vue'));
 
@@ -146,6 +151,7 @@ const messageListRef = useTemplateRef<any>('messageListRef');
 const aiAssistantRef = useTemplateRef<any>('aiAssistantRef');
 
 const route = useUrlWatcher();
+const { isVoiceModeOpen: isAiVoiceCallActive } = useAiAssistant();
 const activeChatRouteKey = computed(() =>
   route.value.type === RouteTypes.AI ? RouteTypes.AI : route.value.id
 );
@@ -428,6 +434,11 @@ defineExpose({
   handleClear: () =>
     isAiRoute.value
       ? aiAssistantRef.value?.handleClear()
-      : messageListRef.value?.handleClear()
+      : messageListRef.value?.handleClear(),
+  focusComposer: () => {
+    if (isAiRoute.value) {
+      aiAssistantRef.value?.focusComposer();
+    }
+  }
 });
 </script>

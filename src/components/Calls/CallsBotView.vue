@@ -79,9 +79,12 @@
         </button>
       </div>
 
-      <div v-if="visibleChatMessages.length" class="calls-bot__conversation">
+      <div
+        v-if="safeVisibleChatMessages.length"
+        class="calls-bot__conversation"
+      >
         <div
-          v-for="message in visibleChatMessages"
+          v-for="message in safeVisibleChatMessages"
           :key="message.id"
           :class="[
             'calls-bot__chat-message',
@@ -141,6 +144,7 @@ import { getMessagesByTopicId } from '../../services/useMessages';
 import { stripHtml } from '../../utils/stripHtml';
 import { parseMessageEx } from '../../utils/messageReplyQuote';
 import { isBotUser } from '../../utils/bot';
+import { sanitizeMessageHtml } from '../../utils/sanitizeMessageHtml';
 
 interface ComposerSendPayload {
   content?: string;
@@ -240,6 +244,13 @@ const visibleChatMessages = computed<CallsBotChatMessage[]>(() => {
 
   return [...byId.values()].slice(-3);
 });
+
+const safeVisibleChatMessages = computed<CallsBotChatMessage[]>(() =>
+  visibleChatMessages.value.map(message => ({
+    ...message,
+    text: sanitizeMessageHtml(message.text)
+  }))
+);
 
 const callInfoTitle = computed(() => {
   if (!selectedCall.value) {

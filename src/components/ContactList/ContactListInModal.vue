@@ -55,7 +55,7 @@
             <template #default>
               <Button
                 class="menu__info-button-little error-dark-color"
-                :type="ButtonTypeEnum.ghost"
+                :type="ButtonTypeEnum.popover"
                 :size="SizesEnum.little"
                 @click="deleteUserFromChat(user.id.toString())"
                 :data-testid="`${props.dataTestid}-ContactListInModal-RemoveButton${index + 1}`"

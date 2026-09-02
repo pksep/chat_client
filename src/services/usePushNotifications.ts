@@ -48,6 +48,7 @@ type NativeNotificationData = Record<string, string> & {
   type?: string;
   url?: string;
   link?: string;
+  messageId?: string;
 };
 
 const NotificationTap =
@@ -347,6 +348,27 @@ const consumeWebCallActionFromUrl = () => {
   window.history.replaceState({}, document.title, url.toString());
 
   void handleNativeCallActionLazy(action, roomId, topicId);
+};
+
+const consumeWebNotificationNavigationFromUrl = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+  const messageId = url.searchParams.get('notificationMessageId');
+
+  if (!messageId) {
+    return;
+  }
+
+  url.searchParams.delete('notificationMessageId');
+  window.history.replaceState({}, document.title, url.toString());
+
+  handleNotificationInteraction({
+    messageId,
+    url: url.toString()
+  });
 };
 
 const isChatServiceWorkerRegistration = (
@@ -718,6 +740,8 @@ export const initPushNotifications = async () => {
   ) {
     return;
   }
+
+  consumeWebNotificationNavigationFromUrl();
 
   // Web Push (Browser)
   if (!('serviceWorker' in navigator)) return;

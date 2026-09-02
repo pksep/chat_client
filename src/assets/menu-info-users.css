@@ -4,28 +4,32 @@ button.button-yui-kit.secondary-yui-kit.large.button-menu__info {
   height: 65px;
   width: 100%;
   font-size: 14px;
-  color: var(--text-black);
+  color: var(--text-primary);
   padding-block: 10px;
   margin-top: 15px;
   line-height: 100%;
+
+  background-color: var(--table-surface-search);
+
   & svg.icon-yui-kit {
-    color: var(--icon-color, var(--grey5));
+    color: var(--icon-color, var(--text-secondary));
     font-size: 24px;
   }
+
   &:hover {
     cursor: pointer;
-    --icon-color: var(--blue1);
-    background-color: var(--primary-pressed-light);
+    --icon-color: var(--action-primary-bg);
+    background-color: var(--action-secondary-pressed-bg);
   }
 }
 
 .menu__info-title-text {
-  color: var(--text-grey);
+  color: var(--text-secondary);
   font-weight: 600;
   font-size: 14px;
 }
 
-@media screen and (width <= 768px) {
+@media screen and (width <=768px) {
   button.button-yui-kit.secondary-yui-kit.large.button-menu__info {
     margin-top: 5px;
   }

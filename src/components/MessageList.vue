@@ -551,6 +551,7 @@ import { useMessageSender } from './Messages/composables/useMessageSender';
 import { useMessageMastra } from './Messages/composables/useMessageMastra';
 import { useMessageActions } from './Messages/composables/useMessageActions';
 import { Capacitor } from '@capacitor/core';
+import { MediaType } from '@pksep/zod-shared-chat';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
 import SelectedMessagesContent from './Header/SelectedMessagesContent.vue';
@@ -2225,7 +2226,13 @@ const warmVisibleTopicMedia = async (topicId: string) => {
 
   for (const message of visibleMessages) {
     for (const media of message.media || []) {
-      const preferredPath = media.thumbnailPath || media.path;
+      // Prewarming a generic file downloads its complete body. A history with
+      // several large ZIP files can therefore saturate the browser connection
+      // before a new multipart PUT is even opened. Only warm lightweight
+      // visual sources; documents are fetched explicitly after a click.
+      const preferredPath =
+        media.thumbnailPath ||
+        (media.type === MediaType.Image ? media.path : null);
 
       if (!preferredPath || mediaPaths.has(preferredPath)) {
         continue;
@@ -3417,6 +3424,9 @@ watch(
       !!topicId &&
       notificationRefreshRequest?.id === notificationRefreshRequestId &&
       notificationRefreshRequest.topicId === topicId;
+    const notificationMessageId = isNotificationRefreshRequestForTopic
+      ? notificationRefreshRequest.messageId || ''
+      : '';
 
     if (isNotificationRefreshRequestForTopic) {
       consumeNotificationTopicRefreshRequest(
@@ -3493,6 +3503,9 @@ watch(
     const pendingSearchMessageId =
       pendingSearchNavigationForTopic?.message?.id || '';
     const shouldPositionToPendingSearch = !!pendingSearchMessageId;
+    const bootstrapAnchorMessageId =
+      pendingSearchMessageId || notificationMessageId;
+    const shouldBootstrapAroundMessage = !!bootstrapAnchorMessageId;
     const shouldLockBootstrapScroll = false;
 
     setBootstrapScrollLock(topicSwitchToken, shouldLockBootstrapScroll);
@@ -3531,7 +3544,7 @@ watch(
 
     // Start cache and network together. Network updates the canonical memory
     // snapshot in the background, while only cache/memory may paint first.
-    if (!shouldPositionToPendingSearch) {
+    if (!shouldBootstrapAroundMessage) {
       initialMessagesFetch = fetchMessagesForTopic(topicId, {
         limit: initialMessagesLimit,
         forceRefresh: true,
@@ -3566,7 +3579,7 @@ watch(
       }
 
       if (
-        !shouldPositionToPendingSearch &&
+        !shouldBootstrapAroundMessage &&
         shouldKeepTopicSwitchBottomPosition(topicSwitchToken)
       ) {
         scrollToBottom({
@@ -3575,7 +3588,7 @@ watch(
         });
       }
 
-      if (!shouldPositionToPendingSearch) {
+      if (!shouldBootstrapAroundMessage) {
         scheduleVisibleMessagesExpansion(
           topicId,
           expandedLimit,
@@ -3584,9 +3597,9 @@ watch(
       }
     }
 
-    if (shouldPositionToPendingSearch) {
+    if (shouldBootstrapAroundMessage) {
       initialMessagesFetch = fetchAroundMessage(
-        pendingSearchMessageId,
+        bootstrapAnchorMessageId,
         topicId,
         {
           updateVisible: true
@@ -3594,15 +3607,37 @@ watch(
       );
     }
 
-    const initialMessages = (await initialMessagesFetch) || [];
+    let initialMessages = (await initialMessagesFetch) || [];
 
     if (isStaleTopicSwitch()) {
       return;
     }
 
+    const isNotificationTargetLoaded = notificationMessageId
+      ? initialMessages.some(message => message.id === notificationMessageId) ||
+        getMessagesByTopicId(topicId).some(
+          message => message.id === notificationMessageId
+        )
+      : true;
+
+    if (!isNotificationTargetLoaded) {
+      initialMessages = await fetchMessagesForTopic(topicId, {
+        limit: initialMessagesLimit,
+        forceRefresh: true,
+        forceNetwork: getHasBrowserNetwork(),
+        allowStaleFallback: true,
+        visibleLimit: fastInitialMessagesLimit,
+        updateVisible: true
+      });
+
+      if (isStaleTopicSwitch()) {
+        return;
+      }
+    }
+
     cancelInitialMessagesSkeletonDelay();
     const shouldApplyInitialNetworkWindow =
-      !shouldPositionToPendingSearch &&
+      !shouldBootstrapAroundMessage &&
       (getMessagesByTopicId(topicId).length === 0 ||
         shouldKeepTopicSwitchBottomPosition(topicSwitchToken));
 
@@ -3635,10 +3670,7 @@ watch(
       return;
     }
 
-    if (
-      !shouldPositionToPendingSearch &&
-      expandedLimit > initialMessagesLimit
-    ) {
+    if (!shouldBootstrapAroundMessage && expandedLimit > initialMessagesLimit) {
       scheduleExpandedTopicMessagesFetch(
         topicId,
         expandedLimit,
@@ -3674,7 +3706,8 @@ watch(
 
     const shouldKeepInitialBottomPosition =
       !shouldPositionToPendingSearch &&
-      shouldKeepTopicSwitchBottomPosition(topicSwitchToken);
+      (Boolean(notificationMessageId) ||
+        shouldKeepTopicSwitchBottomPosition(topicSwitchToken));
 
     if (shouldKeepInitialBottomPosition) {
       scrollToBottom({

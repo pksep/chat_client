@@ -16,10 +16,12 @@ import { getIsAppActivelyVisible } from './useAppVisibility';
 import { RuStorePush } from './nativePush';
 
 type NotificationTopicType = 'DM' | 'GROUP' | null;
+export const STARTUP_SHELL_TOPIC_ROUTE_CLASS = 'startup-shell-topic-route';
 
-interface NotificationTopicRefreshRequest {
+export interface NotificationTopicRefreshRequest {
   id: number;
   topicId: string;
+  messageId?: string;
 }
 
 let notificationTopicRefreshRequestId = 0;
@@ -40,11 +42,26 @@ export const consumeNotificationTopicRefreshRequest = (
   return true;
 };
 
-const requestNotificationTopicRefresh = (topicId: string): void => {
+const requestNotificationTopicRefresh = (
+  topicId: string,
+  messageId?: string | null
+): void => {
   notificationTopicRefreshRequest.value = {
     id: ++notificationTopicRefreshRequestId,
-    topicId
+    topicId,
+    ...(messageId ? { messageId } : {})
   };
+};
+
+const showStartupTopicSkeleton = (): void => {
+  if (
+    typeof document === 'undefined' ||
+    !document.getElementById?.('startup-shell')
+  ) {
+    return;
+  }
+
+  document.documentElement.classList.add(STARTUP_SHELL_TOPIC_ROUTE_CLASS);
 };
 
 export interface NotificationNavigationPayload {
@@ -56,7 +73,25 @@ export interface NotificationNavigationPayload {
   chatId?: string | null;
   dialogsId?: string | null;
   groupId?: string | null;
+  messageId?: string | null;
+  message?: { id?: string | null } | null;
+  data?: {
+    messageId?: string | null;
+    message?: { id?: string | null } | null;
+  } | null;
 }
+
+export const resolveNotificationMessageId = (
+  payload?: NotificationNavigationPayload | null
+): string | null => {
+  const messageId =
+    payload?.messageId ||
+    payload?.message?.id ||
+    payload?.data?.messageId ||
+    payload?.data?.message?.id;
+
+  return messageId ? String(messageId) : null;
+};
 
 const normalizeTopicType = (
   topicType?: string | null
@@ -197,7 +232,11 @@ export const navigateToNotificationTarget = (
   }
 
   if (target.topicId) {
-    requestNotificationTopicRefresh(target.topicId);
+    showStartupTopicSkeleton();
+    requestNotificationTopicRefresh(
+      target.topicId,
+      resolveNotificationMessageId(payload)
+    );
   }
 
   if (isTauriRuntime()) {

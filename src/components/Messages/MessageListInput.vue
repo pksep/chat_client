@@ -3,6 +3,7 @@
     ref="inputContainerRef"
     class="chat__input emoji-font-host"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
+    @click.capture="handleContentEditorPopoverClick"
   >
     <div :data-testid="`${props.dataTestid}-MessageList-ContentEditor`">
       <ContentEditor
@@ -69,10 +70,7 @@
               @click="$emit('clearEdit')"
               :data-testid="`${props.dataTestid}-MenuInfo-CloseButton`"
             >
-              <Icon
-                :name="IconNameEnum.crossLarge"
-                color="var(--text-neutral-color)"
-              />
+              <Icon :name="IconNameEnum.crossLarge" />
             </Button>
           </div>
         </template>
@@ -95,7 +93,7 @@
             >
               <Icon
                 :name="IconNameEnum.crossLarge"
-                color="var(--text-neutral-color)"
+                color="var(--chat-secondary)"
               />
             </Button>
           </div>
@@ -132,7 +130,7 @@
             >
               <Icon
                 :name="IconNameEnum.crossLarge"
-                color="var(--text-neutral-color)"
+                color="var(--chat-secondary)"
               />
             </Button>
           </div>
@@ -420,7 +418,9 @@ const handleSlashChange = (search: string | null) => {
 const users = computed(() => {
   const allMembers =
     route.value.type === RouteTypes.GROUP
-      ? currentGroup.value?.members || []
+      ? (currentGroup.value?.members || []).filter(
+          member => !isDeletedBotUser(member)
+        )
       : [];
   const query = normalizeAtSearchQuery(state.mentionSearch);
 
@@ -456,6 +456,35 @@ const contentEditorRef =
   useTemplateRef<typeof ContentEditor>('contentEditorRef');
 const inputContainerRef = useTemplateRef<HTMLElement>('inputContainerRef');
 const isTauriFileDragging = ref(false);
+
+const handleContentEditorPopoverClick = (event: MouseEvent): void => {
+  const root = inputContainerRef.value;
+  const target = event.target;
+
+  if (!root || !(target instanceof Element)) {
+    return;
+  }
+
+  if (target.closest('.attach-file-button')) {
+    const emojiPicker = Array.from(
+      root.querySelectorAll<HTMLElement>('.emoji-picker')
+    ).find(element => element.offsetParent);
+
+    if (emojiPicker) {
+      Array.from(root.querySelectorAll<HTMLButtonElement>('.smile-button'))
+        .find(element => element.offsetParent)
+        ?.click();
+    }
+
+    return;
+  }
+
+  if (target.closest('.smile-button')) {
+    root
+      .querySelector<HTMLElement>('.popover-yui-kit__wrapper.active-yui-kit')
+      ?.click();
+  }
+};
 
 let typingStopTimeout: ReturnType<typeof setTimeout> | null = null;
 let isTypingActive = false;
