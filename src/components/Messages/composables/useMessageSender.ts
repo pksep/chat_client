@@ -13,6 +13,7 @@ import {
   registerPendingOutgoingForwardBatch,
   changeFileUploadErrorStatus,
   changeMessageStatusLocally,
+  flushPendingMessagePersists,
   getFullMessagesByTopicId,
   getTopicIdsWithMessages,
   getPendingUploadFile,
@@ -61,6 +62,8 @@ import {
   parseCallTopicDescription
 } from '../../../utils/call-topic';
 import { stageAiAttachments } from '../../../services/aiAttachments';
+import { buildForwardMessageSendPlan } from '../../../utils/forward-message-send-plan';
+import { getUploadFileSizeError } from '../../../services/useChatSDK/multipart-upload';
 
 const MAX_HTML_LENGTH = 4000;
 const FORWARD_TEXT_SEND_DELAY_MS = 250;
@@ -1015,6 +1018,31 @@ export function useMessageSender(
   );
 
   watch(
+    () => {
+      const topicId = route.value.id;
+
+      if (!topicId) {
+        return '';
+      }
+
+      return getFullMessagesByTopicId(topicId)
+        .filter(message => message.id && canAutoRetryMessage(message))
+        .map(message => message.id)
+        .join(':');
+    },
+    pendingMessageIds => {
+      if (!pendingMessageIds) {
+        return;
+      }
+
+      schedulePendingMessageAutoRetriesForTopic(route.value.id, {
+        immediate: true
+      });
+    },
+    { immediate: true }
+  );
+
+  watch(
     () => getHasWebsocketConnection(),
     isConnected => {
       if (!isConnected) {
@@ -1203,7 +1231,7 @@ export function useMessageSender(
       ex
     });
 
-    registerPendingUploadMessage(params.topicId, clientId, {
+    void registerPendingUploadMessage(params.topicId, clientId, {
       replyMessageId: params.replyMessageId,
       forwardMessageIds: params.forwardMessageIds || []
     });
@@ -1315,7 +1343,6 @@ export function useMessageSender(
     const forwardMessages = state.forwardMessages;
     const hasForwardMessages = forwardMessages.length > 0;
     const hasMultipleForwardMessages = forwardMessages.length > 1;
-    const forwardBatchId = hasMultipleForwardMessages ? generateUUID() : null;
     const hasAttachments = queuedFiles.length > 0;
 
     const isTextEmpty = stripHtml(normalizedText).length === 0;
@@ -1337,6 +1364,9 @@ export function useMessageSender(
     }
 
     const parts = textToSend ? splitHtmlByLength(textToSend) : [];
+    const needsForwardBatch =
+      hasMultipleForwardMessages || (hasForwardMessages && parts.length > 0);
+    const forwardBatchId = needsForwardBatch ? generateUUID() : null;
     const callTopicPromptText = stripHtml(textToSend)
       .replace(/\u00a0/g, ' ')
       .trim();
@@ -1544,65 +1574,43 @@ export function useMessageSender(
         }
       }
 
-      if (hasMultipleForwardMessages && parts.length > 0) {
-        registerPendingOutgoingForwardBatch(topicId, [
-          ...forwardMessages.map((_, index) => ({
-            forwardBatchId: forwardBatchId as string,
-            forwardBatchOrder: index
-          })),
-          ...parts.map((_, index) => ({
-            forwardBatchId: forwardBatchId as string,
-            forwardBatchOrder: forwardMessages.length + index
-          }))
-        ]);
-
-        for (const [index, forwardMessage] of forwardMessages.entries()) {
-          const ex = createMessageEx({
-            clientId: generateUUID(),
-            ...replyQuoteEx,
-            forwardBatchId: forwardBatchId as string,
-            forwardBatchOrder: index
-          });
-
-          const didSend = await sendMessageChat({
-            topicId,
-            text: '',
-            replyMessageId,
-            forwardMessageId: forwardMessage.id,
-            ex
-          });
-
-          if (!didSend) {
-            queuedMessageCount += 1;
-            queuePendingTextMessage({
-              topicId,
-              text: '',
-              replyMessageId,
-              forwardMessageIds: [forwardMessage.id],
-              ex
-            });
-          } else {
-            sentMessageCount += 1;
-          }
-        }
-
-        await new Promise(resolve =>
-          setTimeout(resolve, FORWARD_TEXT_SEND_DELAY_MS)
+      if (hasForwardMessages && parts.length > 0) {
+        const sendPlan = buildForwardMessageSendPlan(
+          forwardMessages.map(message => message.id),
+          parts
         );
 
-        for (const [index, part] of parts.entries()) {
+        registerPendingOutgoingForwardBatch(
+          topicId,
+          sendPlan.map(item => ({
+            forwardBatchId: forwardBatchId as string,
+            forwardBatchOrder: item.forwardBatchOrder
+          }))
+        );
+
+        for (const item of sendPlan) {
+          if (
+            item.kind === 'text' &&
+            item.forwardBatchOrder === forwardMessages.length
+          ) {
+            await new Promise(resolve =>
+              setTimeout(resolve, FORWARD_TEXT_SEND_DELAY_MS)
+            );
+          }
+
           const ex = createMessageEx({
             clientId: generateUUID(),
             ...replyQuoteEx,
             forwardBatchId: forwardBatchId as string,
-            forwardBatchOrder: forwardMessages.length + index
+            forwardBatchOrder: item.forwardBatchOrder
           });
 
           const didSend = await sendMessageChat({
             topicId,
-            text: part,
+            text: item.text,
             replyMessageId,
-            taggedUserIds,
+            forwardMessageId: item.forwardMessageId,
+            taggedUserIds: item.kind === 'text' ? taggedUserIds : undefined,
             ex
           });
 
@@ -1610,9 +1618,12 @@ export function useMessageSender(
             queuedMessageCount += 1;
             queuePendingTextMessage({
               topicId,
-              text: part,
+              text: item.text,
               replyMessageId,
-              taggedUserIds,
+              forwardMessageIds: item.forwardMessageId
+                ? [item.forwardMessageId]
+                : [],
+              taggedUserIds: item.kind === 'text' ? taggedUserIds : undefined,
               ex
             });
           } else {
@@ -1629,39 +1640,6 @@ export function useMessageSender(
       }
 
       for (const part of parts) {
-        if (hasForwardMessages) {
-          for (const forwardMessage of forwardMessages) {
-            const ex = createMessageEx({
-              clientId: generateUUID(),
-              ...replyQuoteEx
-            });
-            const didSend = await sendMessageChat({
-              topicId,
-              text: part,
-              replyMessageId,
-              forwardMessageId: forwardMessage.id,
-              taggedUserIds,
-              ex
-            });
-
-            if (!didSend) {
-              queuedMessageCount += 1;
-              queuePendingTextMessage({
-                topicId,
-                text: part,
-                replyMessageId,
-                replyMessage: state.replyMessage,
-                forwardMessageIds: [forwardMessage.id],
-                taggedUserIds,
-                ex
-              });
-            } else {
-              sentMessageCount += 1;
-            }
-          }
-          continue;
-        }
-
         const clientId = generateUUID();
         const ex = createMessageEx({
           clientId,
@@ -1687,7 +1665,7 @@ export function useMessageSender(
           ex
         };
 
-        registerPendingUploadMessage(topicId, clientId, {
+        void registerPendingUploadMessage(topicId, clientId, {
           replyMessageId,
           forwardMessageIds: []
         });
@@ -1802,6 +1780,16 @@ export function useMessageSender(
         }));
 
     if (!filePayloads.length) return;
+
+    const fileSizeError = filePayloads
+      .map(({ file }) => getUploadFileSizeError(file))
+      .find((error): error is string => Boolean(error));
+
+    if (fileSizeError) {
+      showErrorNotification(fileSizeError);
+      return;
+    }
+
     const topicId = options?.topicId ?? route.value.id;
     const replyMessage = options?.replyMessage ?? state.replyMessage;
     const replyMessageId = options?.replyMessageId ?? state.replyMessage?.id;
@@ -1824,7 +1812,9 @@ export function useMessageSender(
         const localPath =
           type === MediaType.Video
             ? URL.createObjectURL(file)
-            : await fileToDataURL(file);
+            : type === MediaType.File
+              ? ''
+              : await fileToDataURL(file);
         const baseMedia = {
           localPath,
           path: '',
@@ -1899,10 +1889,12 @@ export function useMessageSender(
     };
 
     addMessageToLocal(newMessage.topicId, newMessage);
-    registerPendingUploadMessage(newMessage.topicId, clientId, {
-      replyMessageId,
-      forwardMessageIds
-    });
+    const pendingUploadPersistence = [
+      registerPendingUploadMessage(newMessage.topicId, clientId, {
+        replyMessageId,
+        forwardMessageIds
+      })
+    ];
 
     recordTelemetryEvent({
       category: 'upload',
@@ -1928,15 +1920,22 @@ export function useMessageSender(
     filePayloads.forEach(({ file, isMedia }, index) => {
       const fileId = index.toString();
 
-      registerPendingUploadFile(newMessage.topicId, clientId, fileId, {
-        file,
-        isMedia
-      });
+      pendingUploadPersistence.push(
+        registerPendingUploadFile(newMessage.topicId, clientId, fileId, {
+          file,
+          isMedia
+        })
+      );
 
       if (getMediaType(file, isMedia) === MediaType.Video) {
         hydrateLocalVideoPreview(newMessage.topicId, clientId, fileId, file);
       }
     });
+
+    await Promise.all([
+      ...pendingUploadPersistence,
+      flushPendingMessagePersists()
+    ]);
 
     let hasUploadError = false;
     for (const [i, payload] of filePayloads.entries()) {

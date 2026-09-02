@@ -26,14 +26,14 @@
           @click="closeActivePopover(createMenuId)"
         >
           <Button
-            :type="ButtonTypeEnum.ghost"
+            :type="ButtonTypeEnum.popover"
             :size="SizesEnum.small"
             @click="handleNewSession"
           >
             <MessageIcon /> Новый чат
           </Button>
           <Button
-            :type="ButtonTypeEnum.ghost"
+            :type="ButtonTypeEnum.popover"
             :size="SizesEnum.small"
             @click="handleNewTask"
           >
@@ -76,68 +76,70 @@
 
     <div class="ai-menu-panel__list">
       <template v-if="activeTab === 'chats' && filteredSessions.length">
-        <article
-          v-for="session in filteredSessions"
-          :key="session.id"
-          :class="[
-            'ai-menu-panel__row',
-            { 'ai-menu-panel__row--active': isSessionActive(session.id) }
-          ]"
-          @contextmenu="openActivePopover(sessionMenuId(session.id), $event)"
-        >
-          <button
-            type="button"
-            class="ai-menu-panel__row-main"
-            :aria-expanded="!!isOpen[sessionMenuId(session.id)]"
-            aria-haspopup="menu"
-            @click="handleSelectSession(session.id)"
+        <template v-for="session in filteredSessions" :key="session.id">
+          <article
+            :class="[
+              'ai-menu-panel__row',
+              { 'ai-menu-panel__row--active': isSessionActive(session.id) }
+            ]"
+            @contextmenu="openActivePopover(sessionMenuId(session.id), $event)"
           >
-            <span class="ai-menu-panel__row-copy">
-              <strong>{{ session.title }}</strong>
-              <small>{{ session.description }}</small>
-            </span>
-            <span class="ai-menu-panel__row-meta">
-              <time>{{ session.time }}</time>
-              <div
-                v-if="session.pinned"
-                class="contact-list__pin"
-                aria-label="Закреплено"
-              >
-                <PinIcon />
-              </div>
-            </span>
-          </button>
-          <Teleport to="body">
-            <ContextMenu
-              :visible="!!isOpen[sessionMenuId(session.id)]"
-              :position="position"
-              :data-testid="`AI-MenuPanel-SessionContext-${session.id}`"
-              @unmount-close="
-                () => closeActivePopover(sessionMenuId(session.id))
-              "
+            <button
+              type="button"
+              class="ai-menu-panel__row-main"
+              :aria-expanded="!!isOpen[sessionMenuId(session.id)]"
+              aria-haspopup="menu"
+              @click="handleSelectSession(session.id)"
             >
-              <Button
-                :type="ButtonTypeEnum.ghost"
-                :size="SizesEnum.small"
-                @click.stop="handlePinSession(session.id)"
+              <span class="ai-menu-panel__row-copy">
+                <strong>{{ session.title }}</strong>
+                <small>{{ session.description }}</small>
+              </span>
+              <span class="ai-menu-panel__row-meta">
+                <time>{{ session.time }}</time>
+                <div
+                  v-if="session.pinned"
+                  class="contact-list__pin"
+                  aria-label="Закреплено"
+                >
+                  <PinIcon />
+                </div>
+              </span>
+            </button>
+            <Teleport to="body">
+              <ContextMenu
+                :visible="!!isOpen[sessionMenuId(session.id)]"
+                :position="position"
+                :data-testid="`AI-MenuPanel-SessionContext-${session.id}`"
+                @unmount-close="
+                  () => closeActivePopover(sessionMenuId(session.id))
+                "
               >
-                <template v-if="session.pinned">
-                  <UnpinIcon /> Открепить
-                </template>
-                <template v-else> <PinIcon /> Закрепить </template>
-              </Button>
-              <Button
-                class="red-context-button"
-                :type="ButtonTypeEnum.ghost"
-                :size="SizesEnum.small"
-                @click.stop="handleDeleteSession(session.id)"
-              >
-                <Icon :name="IconNameEnum.deleteSmall" />
-                Удалить чат
-              </Button>
-            </ContextMenu>
-          </Teleport>
-        </article>
+                <Button
+                  :type="ButtonTypeEnum.popover"
+                  :size="SizesEnum.small"
+                  @click.stop="handlePinSession(session.id)"
+                >
+                  <template v-if="session.pinned">
+                    <UnpinIcon /> Открепить
+                  </template>
+                  <template v-else> <PinIcon /> Закрепить </template>
+                </Button>
+                <Button
+                  class="red-context-button"
+                  :type="ButtonTypeEnum.popover"
+                  :size="SizesEnum.small"
+                  @click.stop="handleDeleteSession(session.id)"
+                >
+                  <Icon :name="IconNameEnum.deleteSmall" />
+                  Удалить чат
+                </Button>
+              </ContextMenu>
+            </Teleport>
+          </article>
+
+          <div class="ai-menu-panel__delimetr"></div>
+        </template>
       </template>
 
       <template v-else-if="activeTab === 'tasks' && filteredTasks.length">
@@ -189,7 +191,7 @@
               @unmount-close="() => closeActivePopover(taskMenuId(task.id))"
             >
               <Button
-                :type="ButtonTypeEnum.ghost"
+                :type="ButtonTypeEnum.popover"
                 :size="SizesEnum.small"
                 @click.stop="handleToggleTask(task.id)"
               >
@@ -201,7 +203,7 @@
                 {{ task.enabled ? 'Приостановить' : 'Возобновить' }}
               </Button>
               <Button
-                :type="ButtonTypeEnum.ghost"
+                :type="ButtonTypeEnum.popover"
                 :size="SizesEnum.small"
                 @click.stop="handlePinTask(task.id)"
               >
@@ -212,7 +214,7 @@
               </Button>
               <Button
                 class="red-context-button"
-                :type="ButtonTypeEnum.ghost"
+                :type="ButtonTypeEnum.popover"
                 :size="SizesEnum.small"
                 @click.stop="handleDeleteTask(task.id)"
               >
@@ -227,15 +229,39 @@
       <div v-else class="ai-menu-panel__empty">
         <svg
           class="ai-menu-panel__empty-face"
-          viewBox="0 0 74 74"
+          width="84"
+          height="84"
+          viewBox="0 0 84 84"
           fill="none"
-          aria-hidden="true"
+          xmlns="http://www.w3.org/2000/svg"
         >
-          <circle cx="32" cy="32" r="24" />
-          <circle cx="25" cy="28" r="2" />
-          <circle cx="39" cy="28" r="2" />
-          <path d="M24 39h16M50 50l12 12" />
+          <path
+            d="M40.3952 70.8724C57.2284 70.8724 70.8743 57.2264 70.8743 40.3932C70.8743 23.5601 57.2284 9.91406 40.3952 9.91406C23.562 9.91406 9.91602 23.5601 9.91602 40.3932C9.91602 57.2264 23.562 70.8724 40.3952 70.8724Z"
+            stroke="currentColor"
+            stroke-width="4.8125"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M74.0827 74.0807L67.666 67.6641"
+            stroke="currentColor"
+            stroke-width="4.8125"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <circle cx="25.5" cy="35.3359" r="3.5" fill="currentColor" />
+          <circle cx="55.166" cy="35.3359" r="3.5" fill="currentColor" />
+          <line
+            x1="27.084"
+            y1="46.9141"
+            x2="53.584"
+            y2="46.9148"
+            stroke="currentColor"
+            stroke-width="3.5"
+            stroke-linecap="round"
+          />
         </svg>
+
         <p>Ничего не найдено</p>
       </div>
     </div>

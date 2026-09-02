@@ -3,7 +3,7 @@
     class="contact-selector"
     :data-testid="`${props.dataTestid}-ContactSelector-Container`"
   >
-    <div class="contact-selector__badges">
+    <div v-if="selectedContacts.length" class="contact-selector__badges">
       <Badges
         v-for="contact in selectedContacts"
         :key="contact.id"
@@ -13,11 +13,13 @@
         choosed
       />
     </div>
+
     <Search
       class="contact-selector__search"
       v-model="state.q"
       :data-testid="`${props.dataTestid}-ContactSelector-Search`"
     />
+
     <div
       v-if="props.isAddOne"
       class="contact-selector__filters"
@@ -37,6 +39,7 @@
         {{ filter.label }}
       </button>
     </div>
+
     <ul
       v-if="contacts.length"
       class="contact-selector__list"
@@ -74,6 +77,7 @@
         />
       </li>
     </ul>
+
     <div
       v-else
       class="contact-selector__empty"
@@ -125,7 +129,7 @@ import {
   matchesUserSearch,
   normalizeAtSearchQuery
 } from '../../utils/searchMatch';
-import { isBotUser } from '../../utils/bot';
+import { isBotUser, isCallBotUser } from '../../utils/bot';
 
 type ContactSelectorFilter = IContactSelectorState['filter'];
 
@@ -187,7 +191,7 @@ const contacts = computed(() => {
   }
 
   filteredContacts = filteredContacts.filter(
-    contact => contact.id !== authUser.value.id
+    contact => contact.id !== authUser.value.id && !isCallBotUser(contact)
   );
 
   return [...filteredContacts];
@@ -278,10 +282,11 @@ const onAddClick = (): void => {
 .contact-selector__filter {
   min-height: 34px;
   padding: 0 14px;
-  border: 1px solid var(--border-grey);
+  border: 1px solid var(--border-table);
   border-radius: 17px;
-  color: var(--text-color);
-  background: var(--white);
+  color: var(--text-primary);
+
+  background: var(--surface-overlay);
   font-size: 14px;
   font-weight: 500;
   line-height: 18px;
@@ -289,7 +294,7 @@ const onAddClick = (): void => {
 }
 
 .contact-selector__filter--active {
-  border-color: var(--primary-color);
-  color: var(--primary-color);
+  border-color: var(--action-primary-bg);
+  color: var(--action-primary-bg);
 }
 </style>

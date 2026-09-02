@@ -6,18 +6,18 @@
   height: 39px;
 }
 
-.mobile__modal-header > *:first-child {
+.mobile__modal-header>*:first-child {
   width: 20%;
   text-align: left;
 }
 
-.mobile__modal-header > h3 {
+.mobile__modal-header>h3 {
   width: 60%;
   max-width: 60%;
   text-align: center;
 }
 
-.mobile__modal-header > *:last-child {
+.mobile__modal-header>*:last-child {
   width: 20%;
   text-align: right;
 }
@@ -29,8 +29,9 @@ button.mobile__modal-header--button {
   line-height: 100%;
   letter-spacing: 0;
   cursor: pointer;
+
   &:disabled {
-    color: var(--text-grey);
+    color: var(--text-secondary);
     cursor: not-allowed;
   }
 }
@@ -42,7 +43,7 @@ h3.mobile__modal-header--title {
   text-align: center;
   letter-spacing: 0;
   font-size: 16px;
-  color: var(--text-black);
+  color: var(--text-primary);
 }
 
 .modal-yui-kit__modal-content {
@@ -62,42 +63,38 @@ h3.mobile__modal-header--title {
   border-radius: 0 !important;
 }
 
-[data-testid='GroupCallInfoPanel-MobileModal-Container']
-  .modal-yui-kit__modal-content,
-[data-testid='ChatContainer-ChatContainer-Header-Header-MobileModal-MobileModal-Container']
-  .modal-yui-kit__modal-content,
-[data-testid='ChatContainer-ChatContainer-MobileUserInfoModal-MobileModal-Container']
-  .modal-yui-kit__modal-content,
-[data-testid='NewChatMobileModal-NewChatMobileModal-Container-MobileModal-Container']
-  .modal-yui-kit__modal-content,
-[data-testid='ShareSelectionOverlay-ShareSelectionModal-MobileModal-Container']
-  .modal-yui-kit__modal-content,
-[data-testid='ChatContainer-ChatContainer-Header-Header-ContactListInModal-NewChatMobileModal-Container-MobileModal-Container']
-  .modal-yui-kit__modal-content,
-[data-testid='App-IosInstallPromptModal-MobileModal-Container']
-  .modal-yui-kit__modal-content {
+[data-testid='GroupCallInfoPanel-MobileModal-Container'] .modal-yui-kit__modal-content,
+[data-testid='ChatContainer-ChatContainer-Header-Header-MobileModal-MobileModal-Container'] .modal-yui-kit__modal-content,
+[data-testid='ChatContainer-ChatContainer-MobileUserInfoModal-MobileModal-Container'] .modal-yui-kit__modal-content,
+[data-testid='NewChatMobileModal-NewChatMobileModal-Container-MobileModal-Container'] .modal-yui-kit__modal-content,
+[data-testid='ShareSelectionOverlay-ShareSelectionModal-MobileModal-Container'] .modal-yui-kit__modal-content,
+[data-testid='ChatContainer-ChatContainer-Header-Header-ContactListInModal-NewChatMobileModal-Container-MobileModal-Container'] .modal-yui-kit__modal-content,
+[data-testid='App-IosInstallPromptModal-MobileModal-Container'] .modal-yui-kit__modal-content {
   border-radius: 0 !important;
 }
 
-@media (width <= 768px) {
+@media (width <=768px) {
   .modal-yui-kit__modal-content {
     overflow: hidden;
     padding-right: 5px;
   }
+
   .mobile__modal-divider__wrapper,
   .mobile__modal-header,
   .contact-selector__search {
     padding-inline-end: 5px;
   }
+
   .contact-selector__search {
     margin-bottom: 0;
   }
+
   .modal__new-group button.menu__info-save-button {
     display: none;
   }
 }
 
-@media (width >= 768px) {
+@media (width >=768px) {
   .modal-yui-kit__modal-content {
     width: 387px;
   }

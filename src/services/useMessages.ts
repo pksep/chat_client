@@ -3038,12 +3038,12 @@ export const registerPendingUploadMessage = (
   topicId: string,
   messageId: string,
   meta: { replyMessageId?: string; forwardMessageIds?: string[] }
-): void => {
+): Promise<void> => {
   pendingUploadMeta.set(getPendingUploadKey(topicId, messageId), {
     replyMessageId: meta.replyMessageId,
     forwardMessageIds: meta.forwardMessageIds || []
   });
-  void savePendingUploadMeta({
+  return savePendingUploadMeta({
     topicId,
     messageId,
     replyMessageId: meta.replyMessageId,
@@ -3076,13 +3076,13 @@ export const registerPendingUploadFile = (
   messageId: string,
   fileId: string,
   payload: { file: File; isMedia: boolean }
-): void => {
+): Promise<void> => {
   const key = getPendingUploadKey(topicId, messageId);
   const messageFiles = pendingUploadFiles.get(key) || new Map();
 
   messageFiles.set(fileId, payload);
   pendingUploadFiles.set(key, messageFiles);
-  void savePendingUploadFile({
+  return savePendingUploadFile({
     topicId,
     messageId,
     fileId,

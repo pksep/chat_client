@@ -168,8 +168,8 @@ watch(
   margin: 0;
   padding: 12px 54px 18px 12px;
   border-radius: 8px;
-  background: var(--white);
-  color: var(--text-color);
+  background: var(--surface-overlay);
+  color: var(--text-primary);
   font-family: 'Inter Variable', sans-serif;
   font-size: 13px;
   line-height: 16px;
@@ -192,7 +192,7 @@ watch(
   position: absolute;
   right: 12px;
   bottom: 6px;
-  color: var(--text-grey);
+  color: var(--text-secondary);
   font-size: 11px;
   line-height: 13px;
 }

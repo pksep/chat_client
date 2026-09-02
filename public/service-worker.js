@@ -130,6 +130,17 @@ const getNotificationMessageId = notification => {
   );
 };
 
+const buildNotificationNavigationUrl = payload => {
+  const targetUrl = new URL(getNotificationUrl(payload), self.location.origin);
+  const messageId = getNotificationMessageId({ data: payload });
+
+  if (messageId) {
+    targetUrl.searchParams.set('notificationMessageId', String(messageId));
+  }
+
+  return targetUrl.toString();
+};
+
 const closeNotificationForMessage = async (topicId, messageId) => {
   if (!messageId) {
     return;
@@ -382,7 +393,7 @@ self.addEventListener('notificationclick', event => {
   const absoluteUrl =
     isIncomingCall && action
       ? buildCallActionUrl(payload, action)
-      : new URL(getNotificationUrl(payload), self.location.origin).toString();
+      : buildNotificationNavigationUrl(payload);
 
   event.waitUntil(
     clients

@@ -70,6 +70,8 @@ import {
 } from '../utils/searchMatch';
 import { getAuthUser } from '../composables/useAuth';
 import { isFavoriteTopic } from '../utils/favorite-topic';
+import { isCallTopic } from '../utils/call-topic';
+import { isCallBotUser } from '../utils/bot';
 
 const props = withDefaults(defineProps<ITopicSelectorProps>(), {
   dataTestid: () => 'TopicSelector'
@@ -84,7 +86,11 @@ const filteredTopics = computed(() =>
   topics.value.filter(topic => {
     const query = normalizeAtSearchQuery(state.q);
 
-    return matchesTopicSearch(topic, query);
+    return (
+      !isCallTopic(topic) &&
+      !isCallBotUser(topic.user) &&
+      matchesTopicSearch(topic, query)
+    );
   })
 );
 

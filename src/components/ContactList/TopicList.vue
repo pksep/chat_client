@@ -277,7 +277,7 @@
         @unmount-close="() => closeActivePopover(topic.id)"
       >
         <Button
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click.stop="() => handlePin(topic)"
           :data-testid="`${props.dataTestid}-ContactList-PinButton${index + 1}`"
@@ -289,7 +289,7 @@
           <template v-else> <UnpinIcon /> Открепить </template>
         </Button>
         <Button
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click.stop="() => handleReadState(topic)"
           :data-testid="`${props.dataTestid}-ContactList-ReadStateButton${index + 1}`"
@@ -308,7 +308,7 @@
           >
         </Button>
         <Button
-          :type="ButtonTypeEnum.ghost"
+          :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click="() => handleMute(topic)"
           :data-testid="`${props.dataTestid}-ContactList-NotificationButton${index + 1}`"
@@ -410,11 +410,41 @@
       :data-testid="`${props.dataTestid}-ContactList-SearchEmpty`"
     >
       <p class="contact-list__search-state-title">Ничего не найдено</p>
-      <img
-        class="contact-list__search-state-image"
-        src="/images/not-found-contact.svg"
-        alt="Ничего не найдено"
-      />
+
+      <svg
+        width="84"
+        height="84"
+        viewBox="0 0 84 84"
+        fill="none"
+        class="contact-list__empty-icon"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M40.3971 70.8724C57.2303 70.8724 70.8763 57.2264 70.8763 40.3932C70.8763 23.5601 57.2303 9.91406 40.3971 9.91406C23.564 9.91406 9.91797 23.5601 9.91797 40.3932C9.91797 57.2264 23.564 70.8724 40.3971 70.8724Z"
+          stroke="currentColor"
+          stroke-width="4.8125"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M74.0846 74.0807L67.668 67.6641"
+          stroke="currentColor"
+          stroke-width="4.8125"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <circle cx="25.5" cy="35.3359" r="3.5" fill="currentColor" />
+        <circle cx="55.168" cy="35.3359" r="3.5" fill="currentColor" />
+        <line
+          x1="27.086"
+          y1="46.9141"
+          x2="53.586"
+          y2="46.9148"
+          stroke="currentColor"
+          stroke-width="3.5"
+          stroke-linecap="round"
+        />
+      </svg>
     </li>
   </ul>
 </template>
@@ -1298,7 +1328,7 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
 .contact-list__item--selection.contact-list__item--active
   .contact-list__description--overflow
   strong::after {
-  background: linear-gradient(to right, transparent 0%, var(--blue15) 100%);
+  background-color: var(--table-surface-search);
 }
 
 .contact-list__selection-checkbox {
@@ -1321,7 +1351,6 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
 }
 
 .contact-list__time--call {
-  color: var(--text-color);
   font-size: 12px;
   line-height: 15px;
   font-weight: 400;
@@ -1354,6 +1383,10 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
 .contact-list__skeleton-item {
   align-items: center;
   cursor: default;
+}
+
+.contact-list__empty-icon {
+  color: var(--border-table);
 }
 
 .contact-list__skeleton-avatar,
