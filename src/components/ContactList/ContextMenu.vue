@@ -29,8 +29,9 @@ const props = withDefaults(
     visible?: boolean;
     position?: { x: number; y: number };
     dataTestid?: string;
+    forceFlipY?: boolean;
   }>(),
-  { dataTestid: () => 'ContextMenu' }
+  { dataTestid: () => 'ContextMenu', forceFlipY: false }
 );
 
 const emits = defineEmits<{
@@ -106,7 +107,8 @@ const recomputeFlip = async () => {
   if (!rect) return;
 
   flip.value = props.position.x + rect.width > windowWidth;
-  flipY.value = props.position.y + rect.height > windowHeight;
+  flipY.value =
+    props.forceFlipY || props.position.y + rect.height > windowHeight;
   menuLayoutVersion.value += 1;
 };
 

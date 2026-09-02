@@ -240,6 +240,8 @@ button.button-yui-kit {
 .chat__header-active-call {
   cursor: pointer;
   display: flex;
+  box-sizing: border-box;
+  flex: 0 0 45px;
   justify-content: center;
   align-items: center;
   padding: 8px 0;

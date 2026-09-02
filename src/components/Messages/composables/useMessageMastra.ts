@@ -2,13 +2,15 @@ import { ref, watch, type Ref, type WatchStopHandle } from 'vue';
 import { generateUUID } from '../../../utils/generateUUID';
 import { removeMessageLoading } from '../../../services/useChatDb';
 import { RouteTypes } from '../../../composables/navigation/useUrlRouting';
+import type { AiAttachmentReference } from '../../../services/aiAttachments';
 
 type MastraResult = {
   messages: Ref<any[]>;
   sendMessage: (
     input: string,
     onFinish?: () => void,
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
+    attachments?: AiAttachmentReference[]
   ) => Promise<void>;
   clearMessages: () => void;
   isInitializing: Ref<boolean>;

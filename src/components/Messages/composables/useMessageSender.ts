@@ -67,6 +67,7 @@ import {
   isCallTopic,
   parseCallTopicDescription
 } from '../../../utils/call-topic';
+import { stageAiAttachments } from '../../../services/aiAttachments';
 import { buildForwardMessageSendPlan } from '../../../utils/forward-message-send-plan';
 import { getUploadFileSizeError } from '../../../services/useChatSDK/multipart-upload';
 
@@ -89,6 +90,19 @@ const VIDEO_INITIAL_PREVIEW_DIMENSIONS = {
 const VIDEO_LOCAL_THUMBNAIL_TIMEOUT_MS = 3000;
 const CALL_TOPIC_SUMMARY_COMMAND = 'сделать краткое содержание';
 const CALL_TOPIC_ACTIONS_COMMAND = 'список действий по звонку';
+
+/** Экранирует имя вложения перед показом в HTML-сообщении чата. */
+const escapeAiAttachmentName = (value: string): string =>
+  value.replace(/[&<>"']/g, character => {
+    const entities: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    };
+    return entities[character];
+  });
 
 const isCallTopicAutoPromptEnabled = () =>
   getConfig().CHAT_CALL_TOPIC_AUTO_PROMPT_ENABLED?.trim().toLowerCase() ===
@@ -1466,10 +1480,48 @@ export function useMessageSender(
 
     /* ================= AI ROUTE ================= */
     if (routeType === RouteTypes.AI) {
-      for (const part of parts) {
+      let aiAttachments = [];
+      try {
+        aiAttachments = await stageAiAttachments(
+          queuedFiles.map(payload => payload.file)
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Не удалось подготовить вложение для AI';
+        state.aiMessages = [
+          ...state.aiMessages,
+          {
+            role: 'assistant' as 'user' | 'assistant',
+            content: message,
+            timestamp: Date.now()
+          }
+        ];
+        showErrorNotification(message);
+        return;
+      }
+
+      const aiParts =
+        parts.length > 0
+          ? parts
+          : [
+              'Я прикрепил файл. Уточни, к какой сущности ERP его нужно прикрепить.'
+            ];
+      const attachmentSummary = aiAttachments.length
+        ? `Прикреплено: ${aiAttachments
+            .map(attachment => `«${escapeAiAttachmentName(attachment.name)}»`)
+            .join(', ')}`
+        : '';
+
+      for (const [index, part] of aiParts.entries()) {
+        const visiblePart =
+          index === 0 && attachmentSummary
+            ? `${part}\n\n${attachmentSummary}`
+            : part;
         const userMessage = {
           role: 'user' as 'user' | 'assistant',
-          content: part,
+          content: visiblePart,
           timestamp: Date.now()
         };
 
@@ -1478,7 +1530,12 @@ export function useMessageSender(
 
         if (mastraResult.value?.sendMessage) {
           try {
-            await mastraResult.value.sendMessage(part);
+            await mastraResult.value.sendMessage(
+              visiblePart,
+              undefined,
+              undefined,
+              index === 0 ? aiAttachments : []
+            );
           } catch (error) {
             console.warn('Mastra failed to send message:', error);
             break;

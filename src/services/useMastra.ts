@@ -1,17 +1,18 @@
 import { ref, type Ref } from 'vue';
 import { MastraClient, RequestContext } from '@mastra/client-js';
 import { saveMessages, getOrCreateChatHistory } from './useChatDb';
-import { AIMessage } from '../types/messages';
+import { AIMessage, type AIMessageReference } from '../types/messages';
 import { getConfig } from './useConfig';
 import { generateUUID } from '../utils/generateUUID';
 import { getAuthToken } from '../composables/useLogin';
 import {
   type ApprovalDecision,
   formatApprovalMessage,
-  getApprovalDecision,
+  isStaleApprovalResponse,
   type PendingToolApproval
 } from './mastraApproval';
 import { processMastraEventStream } from './mastraEventStream';
+import type { AiAttachmentReference } from './aiAttachments';
 
 type Message = AIMessage;
 
@@ -22,15 +23,87 @@ interface UseMastraOptions {
   approvalMode?: Ref<'ask' | 'automatic'>;
 }
 
+interface ToolApprovalRequestError extends Error {
+  status: number;
+  stale: boolean;
+}
+
+const getAiErrorMessage = (
+  error: unknown,
+  fallback = 'Сервис временно недоступен. Попробуйте ещё раз.'
+): string => {
+  const errorRecord =
+    error && typeof error === 'object'
+      ? (error as Record<string, unknown>)
+      : null;
+  const rawMessage =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : typeof errorRecord?.message === 'string'
+          ? errorRecord.message
+          : '';
+  const status = Number(errorRecord?.status || 0);
+
+  if (/timeout|timed out|deadline exceeded/i.test(rawMessage)) {
+    return 'Время ожидания ответа истекло. Попробуйте ещё раз.';
+  }
+  if (
+    /network error|failed to fetch|fetch failed|connection/i.test(rawMessage)
+  ) {
+    return 'Не удалось подключиться к сервису. Проверьте соединение и попробуйте ещё раз.';
+  }
+  if (
+    status === 401 ||
+    /authentication required|authentication failed|unauthorized|\b401\b/i.test(
+      rawMessage
+    )
+  ) {
+    return 'Сессия авторизации истекла. Войдите в систему повторно.';
+  }
+  if (status === 403 || /access forbidden|\b403\b/i.test(rawMessage)) {
+    return 'Недостаточно прав для выполнения запроса.';
+  }
+  if (status === 429 || /too many requests|\b429\b/i.test(rawMessage)) {
+    return 'Слишком много запросов. Попробуйте немного позже.';
+  }
+  if (/V2 models/i.test(rawMessage)) {
+    return 'Эта версия модели не поддерживается. Выберите другую модель.';
+  }
+  if (
+    status >= 500 ||
+    /server error|service unavailable|\b5\d\d\b/i.test(rawMessage)
+  ) {
+    return 'Сервис временно недоступен. Попробуйте ещё раз позже.';
+  }
+  if (/unexpected token|parsing|parse error/i.test(rawMessage)) {
+    return 'Не удалось обработать ответ сервиса. Попробуйте ещё раз.';
+  }
+  if (/stream/i.test(rawMessage)) {
+    return 'Соединение с сервисом прервалось. Попробуйте ещё раз.';
+  }
+  if (errorRecord?.name === 'AbortError') {
+    return 'Запрос был отменён.';
+  }
+  if (/[А-Яа-яЁё]/.test(rawMessage)) return rawMessage;
+
+  return fallback;
+};
+
 const useMastra = (options?: UseMastraOptions | false) => {
   if (!options) {
     return {
       messages: ref<Message[]>([]),
       sendMessage: async () => {},
       resolveToolApproval: async () => {},
-      clearMessages: () => {},
+      clearMessages: async () => {},
+      toggleMessagePin: async () => {},
+      deleteMessages: async () => {},
+      editMessageAndResend: async () => {},
       isInitializing: ref(false),
-      pendingApproval: ref<PendingToolApproval | null>(null)
+      pendingApproval: ref<PendingToolApproval | null>(null),
+      lastError: ref<string | null>(null)
     };
   }
 
@@ -43,13 +116,38 @@ const useMastra = (options?: UseMastraOptions | false) => {
   const messages: Ref<Message[]> = ref([]);
   const isInitializing = ref(!!chatId);
   const pendingApproval = ref<PendingToolApproval | null>(null);
+  const lastError = ref<string | null>(null);
   let initializationPromise: Promise<void> = Promise.resolve();
 
-  const createRequestContext = (): RequestContext<unknown> => {
+  let activeAttachments: AiAttachmentReference[] = [];
+
+  /** Оставляет только неистёкшие вложения, нужные для запроса или его подтверждения. */
+  const getActiveAttachments = (): AiAttachmentReference[] => {
+    activeAttachments = activeAttachments.filter(
+      attachment => attachment.expiresAt > Date.now()
+    );
+    return activeAttachments;
+  };
+
+  const createRequestContext = (
+    attachments: AiAttachmentReference[] = getActiveAttachments(),
+    forceStrictApproval = false
+  ): RequestContext<unknown> => {
     const requestContext = new RequestContext<Record<string, unknown>>();
     requestContext.set(
       'approvalMode',
-      options.approvalMode?.value === 'automatic' ? 'automatic' : 'strict'
+      !forceStrictApproval && options.approvalMode?.value === 'automatic'
+        ? 'automatic'
+        : 'strict'
+    );
+    requestContext.set(
+      'attachments',
+      attachments.map(({ name, size, contentType, transferToken }) => ({
+        name,
+        size,
+        contentType,
+        transferToken
+      }))
     );
     return requestContext as unknown as RequestContext<unknown>;
   };
@@ -58,7 +156,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
     approval: PendingToolApproval,
     decision: Exclude<ApprovalDecision, null>,
     token: string,
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
+    attachments: AiAttachmentReference[] = getActiveAttachments()
   ): Promise<Response> => {
     const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
     const apiBaseUrl = normalizedBaseUrl.endsWith('/api')
@@ -84,7 +183,15 @@ const useMastra = (options?: UseMastraOptions | false) => {
             approvalMode:
               options.approvalMode?.value === 'automatic'
                 ? 'automatic'
-                : 'strict'
+                : 'strict',
+            attachments: attachments.map(
+              ({ name, size, contentType, transferToken }) => ({
+                name,
+                size,
+                contentType,
+                transferToken
+              })
+            )
           }
         }),
         signal: abortSignal
@@ -92,8 +199,14 @@ const useMastra = (options?: UseMastraOptions | false) => {
     );
 
     if (!response.ok) {
-      const error = new Error('Не удалось применить решение по действию');
-      Object.assign(error, { status: response.status });
+      const responseBody = await response.text().catch(() => '');
+      const stale = isStaleApprovalResponse(responseBody);
+      const error = new Error(
+        stale
+          ? 'Подтверждение устарело после обновления сервиса'
+          : 'Не удалось применить решение по действию'
+      ) as ToolApprovalRequestError;
+      Object.assign(error, { status: response.status, stale });
       throw error;
     }
 
@@ -120,9 +233,14 @@ const useMastra = (options?: UseMastraOptions | false) => {
     onFinish?: () => void,
     abortSignal?: AbortSignal,
     approvalDecisionOverride: Exclude<ApprovalDecision, null> | null = null,
-    appendUserMessage = true
+    appendUserMessage = true,
+    attachments: AiAttachmentReference[] = [],
+    replyTo?: AIMessageReference,
+    modelInput?: string
   ) => {
     if (!input.trim()) return;
+
+    lastError.value = null;
 
     if (!chatId) {
       chatId = generateUUID();
@@ -132,6 +250,9 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
     if (isInitializing.value) await initializationPromise;
 
+    if (attachments.length > 0) activeAttachments = [...attachments];
+    const requestAttachments = getActiveAttachments();
+
     const lastMessage = messages.value[messages.value.length - 1];
     if (lastMessage?.role === 'assistant' && lastMessage?.loading) return;
 
@@ -139,20 +260,24 @@ const useMastra = (options?: UseMastraOptions | false) => {
       const userMessage: Message = {
         role: 'user',
         content: input,
-        timestamp: Date.now()
+        ...(modelInput?.trim() && modelInput.trim() !== input.trim()
+          ? { modelContent: modelInput }
+          : {}),
+        timestamp: Date.now(),
+        ...(replyTo ? { replyTo } : {})
       };
       messages.value = [...messages.value, userMessage];
     }
 
     const approvalDecision = pendingApproval.value
-      ? approvalDecisionOverride ?? getApprovalDecision(input)
+      ? approvalDecisionOverride
       : null;
 
     if (pendingApproval.value && !approvalDecision) {
       const reminderMessage: Message = {
         role: 'assistant',
         content:
-          'Сейчас ожидается решение по действию. Ответьте точно «подтверждаю» или «отмена».',
+          'Сейчас ожидается решение по действию. Выберите «Подтвердить» или «Отменить» на карточке.',
         loading: false,
         timestamp: Date.now()
       };
@@ -163,11 +288,39 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
     const requestMessages = messages.value
       .filter(message => !message.loading && message.content.trim())
-      .map(message =>
-        message.role === 'user'
-          ? { role: 'user' as const, content: message.content }
-          : { role: 'assistant' as const, content: message.content }
+      .map(message => {
+        const messageContent =
+          message.role === 'user' && message.modelContent?.trim()
+            ? message.modelContent
+            : message.content;
+        const content = message.replyTo
+          ? `${messageContent}\n\nКонтекст ответа:\n${
+              message.replyTo.role === 'user' ? 'Пользователь' : 'Ассистент'
+            }: ${message.replyTo.content}`
+          : messageContent;
+
+        return message.role === 'user'
+          ? { role: 'user' as const, content }
+          : { role: 'assistant' as const, content };
+      });
+
+    if (requestAttachments.length > 0) {
+      const lastUserMessageIndex = requestMessages.findLastIndex(
+        message => message.role === 'user'
       );
+      if (lastUserMessageIndex >= 0) {
+        const manifest = requestAttachments
+          .map(
+            (attachment, index) =>
+              `${index + 1}. ${attachment.name} (${attachment.contentType}, ${attachment.size} байт)`
+          )
+          .join('\n');
+        requestMessages[lastUserMessageIndex] = {
+          ...requestMessages[lastUserMessageIndex],
+          content: `${requestMessages[lastUserMessageIndex].content}\n\nДоступные вложения текущего запроса:\n${manifest}`
+        };
+      }
+    }
 
     const assistantMessage: Message = {
       role: 'assistant',
@@ -182,7 +335,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
     try {
       const token = getAuthToken();
-      if (!token) throw new Error('Authentication required');
+      if (!token) throw new Error('Требуется авторизация');
 
       const client = new MastraClient({
         baseUrl,
@@ -192,7 +345,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
         abortSignal
       });
       const agent = client.getAgent(agentId);
-      if (!agent) throw new Error('Server error, sorry');
+      if (!agent) throw new Error('Сервис временно недоступен');
 
       let stream;
 
@@ -205,19 +358,45 @@ const useMastra = (options?: UseMastraOptions | false) => {
             approval,
             approvalDecision,
             token,
-            abortSignal
+            abortSignal,
+            requestAttachments
           );
         } catch (approvalError) {
-          pendingApproval.value = approval;
-          throw approvalError;
+          const requestError =
+            approvalError as Partial<ToolApprovalRequestError>;
+
+          if (!requestError.stale) {
+            pendingApproval.value = approval;
+            throw approvalError;
+          }
+
+          if (approvalDecision === 'decline') {
+            throw new Error(
+              'Действие уже не ожидает подтверждения и не было выполнено.'
+            );
+          }
+
+          stream = await agent.stream(
+            [
+              ...requestMessages,
+              {
+                role: 'user' as const,
+                content:
+                  'Предыдущее подтверждение устарело после перезапуска сервиса. Повтори последнее запрошенное действие через доступный инструмент, чтобы платформа сформировала новое подтверждение.'
+              }
+            ],
+            {
+              requestContext: createRequestContext(requestAttachments, true)
+            }
+          );
         }
       } else {
         stream = await agent.stream(requestMessages, {
-          requestContext: createRequestContext()
+          requestContext: createRequestContext(requestAttachments)
         });
       }
 
-      if (!stream) throw new Error('Server error, sorry');
+      if (!stream) throw new Error('Сервис временно недоступен');
       onFinish?.();
 
       const streamProcessingPromise = new Promise((resolve, reject) => {
@@ -229,6 +408,14 @@ const useMastra = (options?: UseMastraOptions | false) => {
               try {
                 if (event.type === 'step-finish') {
                   return;
+                }
+
+                if (
+                  ['tool-result', 'tool-output'].includes(event.type || '') &&
+                  event.payload?.toolName ===
+                    'erp_actions_erp_attachment_upload_and_attach'
+                ) {
+                  activeAttachments = [];
                 }
 
                 if (event.type === 'tool-call-approval') {
@@ -290,35 +477,23 @@ const useMastra = (options?: UseMastraOptions | false) => {
                 } else if (event.type === 'error') {
                   if (!isResolved) {
                     isResolved = true;
-                    let errorMessage =
-                      event.payload?.message || 'Stream error occurred';
-                    if (errorMessage?.includes('V2 models')) {
-                      errorMessage =
-                        'This model version is not supported, please try another';
-                    } else if (errorMessage?.includes('Timeout exceeded')) {
-                      errorMessage = 'Request timed out, please try again';
-                    } else if (errorMessage?.includes('Network Error')) {
-                      errorMessage =
-                        'Network connection issue, please check your connection';
-                    }
-
-                    reject(new Error(errorMessage));
+                    reject(
+                      new Error(getAiErrorMessage(event.payload?.message))
+                    );
                   }
                 }
               } catch (parseError) {
                 console.error('Error processing chunk:', parseError);
                 if (!isResolved) {
                   isResolved = true;
-                  let errorMessage = 'Message processing error';
-                  if (parseError?.message?.includes('Unexpected token')) {
-                    errorMessage =
-                      'Error parsing server response, please try again';
-                  } else if (parseError?.message?.includes('Network Error')) {
-                    errorMessage =
-                      'Network connection issue, please check your connection';
-                  }
-
-                  reject(new Error(errorMessage));
+                  reject(
+                    new Error(
+                      getAiErrorMessage(
+                        parseError,
+                        'Не удалось обработать ответ сервиса. Попробуйте ещё раз.'
+                      )
+                    )
+                  );
                 }
               }
             });
@@ -329,7 +504,14 @@ const useMastra = (options?: UseMastraOptions | false) => {
           } catch (streamError) {
             if (!isResolved) {
               isResolved = true;
-              reject(new Error('Stream processing error'));
+              reject(
+                new Error(
+                  getAiErrorMessage(
+                    streamError,
+                    'Соединение с сервисом прервалось. Попробуйте ещё раз.'
+                  )
+                )
+              );
             }
           }
         };
@@ -337,55 +519,23 @@ const useMastra = (options?: UseMastraOptions | false) => {
         processStream().catch(err => {
           if (!isResolved) {
             isResolved = true;
-            let errorMessage = 'Stream processing error';
-            if (err?.message?.includes('V2 models')) {
-              errorMessage =
-                'This model version is not supported, please try another';
-            } else if (err?.message?.includes('Timeout exceeded')) {
-              errorMessage = 'Request timed out, please try again';
-            } else if (err?.message?.includes('Network Error')) {
-              errorMessage =
-                'Network connection issue, please check your connection';
-            }
-
-            reject(new Error(errorMessage));
+            reject(
+              new Error(
+                getAiErrorMessage(
+                  err,
+                  'Соединение с сервисом прервалось. Попробуйте ещё раз.'
+                )
+              )
+            );
           }
         });
       });
 
-      await Promise.race([
-        streamProcessingPromise,
-        new Promise((_, reject) =>
-          setTimeout(() => {
-            reject(new Error('Request timed out, please try again'));
-          }, 60000)
-        )
-      ]);
-    } catch (error: any) {
-      let errorMessage = 'Service temporarily unavailable';
-      if (!error?.message) {
-        errorMessage = `An error occurred: ${error}`;
-      } else if (error?.message?.includes('V2 models')) {
-        errorMessage =
-          'This model version is not supported, please try another';
-      } else if (error?.message?.includes('Timeout exceeded')) {
-        errorMessage = 'Request timed out, please try again';
-      } else if (error.status === 500) {
-        errorMessage = 'Server error, fixing it now - will be ready soon';
-      } else if (error?.message?.includes('Network Error')) {
-        errorMessage = 'Network connection issue, please check your connection';
-      } else if (
-        error?.message?.includes('401') ||
-        error?.message?.includes('Unauthorized')
-      ) {
-        errorMessage = 'Authentication failed, please log in again';
-      } else if (error?.message?.includes('403')) {
-        errorMessage = 'Access forbidden, please contact support';
-      } else if (error?.message?.includes('429')) {
-        errorMessage = 'Too many requests, please try again later';
-      } else {
-        errorMessage = error.message;
-      }
+      await streamProcessingPromise;
+    } catch (error: unknown) {
+      const errorMessage = getAiErrorMessage(error);
+
+      lastError.value = errorMessage;
 
       if (assistantMessageIndex < messages.value.length) {
         const newMessages = [...messages.value];
@@ -415,8 +565,21 @@ const useMastra = (options?: UseMastraOptions | false) => {
   const sendMessage = async (
     input: string,
     onFinish?: () => void,
-    abortSignal?: AbortSignal
-  ) => submitMessage(input, onFinish, abortSignal);
+    abortSignal?: AbortSignal,
+    attachments: AiAttachmentReference[] = [],
+    replyTo?: AIMessageReference,
+    modelInput?: string
+  ) =>
+    submitMessage(
+      input,
+      onFinish,
+      abortSignal,
+      null,
+      true,
+      attachments,
+      replyTo,
+      modelInput
+    );
 
   const resolveToolApproval = async (
     decision: Exclude<ApprovalDecision, null>,
@@ -426,14 +589,74 @@ const useMastra = (options?: UseMastraOptions | false) => {
     if (!pendingApproval.value) return;
 
     const command = decision === 'approve' ? 'подтверждаю' : 'отмена';
+    if (decision === 'decline') activeAttachments = [];
     return submitMessage(command, onFinish, abortSignal, decision, false);
   };
 
-  const clearMessages = () => {
+  const clearMessages = async (): Promise<void> => {
     if (!chatId) return;
+    if (isInitializing.value) await initializationPromise;
     pendingApproval.value = null;
+    lastError.value = null;
+    activeAttachments = [];
     messages.value = [];
-    saveMessages(chatId, messages.value);
+    await saveMessages(chatId, messages.value);
+  };
+
+  /** Сохраняет новое состояние локальной истории после действий над AI-сообщениями. */
+  const replaceMessages = async (nextMessages: Message[]): Promise<void> => {
+    if (!chatId) return;
+    if (isInitializing.value) await initializationPromise;
+
+    messages.value = nextMessages;
+    await saveMessages(chatId, messages.value);
+  };
+
+  /** Меняет признак закрепления выбранного AI-сообщения. */
+  const toggleMessagePin = async (messageIndex: number): Promise<void> => {
+    const message = messages.value[messageIndex];
+    if (!message) return;
+
+    const nextMessages = [...messages.value];
+    nextMessages[messageIndex] = {
+      ...message,
+      pinned: !message.pinned
+    };
+    await replaceMessages(nextMessages);
+  };
+
+  /** Удаляет выбранные сообщения только из текущей локальной AI-истории. */
+  const deleteMessages = async (messageIndexes: number[]): Promise<void> => {
+    const indexes = new Set(messageIndexes);
+    if (indexes.size === 0) return;
+
+    await replaceMessages(
+      messages.value.filter((_, index) => !indexes.has(index))
+    );
+  };
+
+  /** Заменяет пользовательский запрос и заново строит продолжение диалога. */
+  const editMessageAndResend = async (
+    messageIndex: number,
+    input: string,
+    attachments: AiAttachmentReference[] = [],
+    replyTo?: AIMessageReference
+  ): Promise<void> => {
+    const message = messages.value[messageIndex];
+    if (!message || message.role !== 'user' || !input.trim()) return;
+
+    pendingApproval.value = null;
+    lastError.value = null;
+    await replaceMessages(messages.value.slice(0, messageIndex));
+    await submitMessage(
+      input,
+      undefined,
+      undefined,
+      null,
+      true,
+      attachments,
+      replyTo
+    );
   };
 
   return {
@@ -441,8 +664,12 @@ const useMastra = (options?: UseMastraOptions | false) => {
     sendMessage,
     resolveToolApproval,
     clearMessages,
+    toggleMessagePin,
+    deleteMessages,
+    editMessageAndResend,
     isInitializing,
-    pendingApproval
+    pendingApproval,
+    lastError
   };
 };
 

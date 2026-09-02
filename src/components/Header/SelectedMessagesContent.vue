@@ -53,6 +53,7 @@
     :data-testid="`${props.dataTestid}-SelectedMessagesForward`"
     @unmount-close="forwardModalOpen = false"
     @unmount-select-topic="handleForwardSelectedMessages"
+    @unmount-select-ai-session="handleForwardSelectedMessagesToAi"
   />
 </template>
 
@@ -78,6 +79,8 @@ import {
 } from '../../composables/useSelectedMessages';
 import type { ITopic } from '../interfaces/interfaces';
 import { openForwardDraft } from '../../composables/useForwardMessages';
+import { type AiAssistantSession } from '../../composables/useAiAssistant';
+import { openAiForwardDraft } from '../../composables/useAiForwardDraft';
 
 interface Props {
   dataTestid?: string;
@@ -174,6 +177,18 @@ const handleForwardSelectedMessages = async (topic: ITopic): Promise<void> => {
 
   try {
     openForwardDraft(topic, selectedMessages.value);
+  } finally {
+    clearSelectedMessages();
+  }
+};
+
+const handleForwardSelectedMessagesToAi = (
+  session: AiAssistantSession
+): void => {
+  forwardModalOpen.value = false;
+
+  try {
+    openAiForwardDraft(session, selectedMessages.value);
   } finally {
     clearSelectedMessages();
   }

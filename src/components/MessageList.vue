@@ -558,6 +558,7 @@ import SelectedMessagesContent from './Header/SelectedMessagesContent.vue';
 import CallTopicActions from './Calls/CallTopicActions.vue';
 import CallTopicDefaultMessage from './Calls/CallTopicDefaultMessage.vue';
 import { usePendingForwardMessages } from '../composables/useForwardMessages';
+import { usePendingMessageDraft } from '../composables/useMessageDraftTransfer';
 import { ensureMediaObjectUrl } from '../services/useMediaBlobCache';
 import { isGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
 import {
@@ -822,6 +823,8 @@ const seenUnreadMarkerStateByTopic = reactive<
 >({});
 const { pendingForwardMessages, pendingForwardTopicId } =
   usePendingForwardMessages();
+const { pendingDraftTopicId, pendingDraftText, consumePendingMessageDraft } =
+  usePendingMessageDraft();
 
 const isAiRoute = computed(() => route.value?.type === RouteTypes.AI);
 const isDefaultRoute = computed(() => route.value?.type === RouteTypes.DEFAULT);
@@ -2193,6 +2196,20 @@ const applyPendingForwardMessages = () => {
   });
 };
 
+/** Добавляет перенесённый внешний текст в редактор выбранного обычного чата. */
+const applyPendingMessageDraft = (): void => {
+  const transferredText = consumePendingMessageDraft(route.value?.id);
+  if (!transferredText) return;
+
+  state.replyMessage = null;
+  state.editMessage = null;
+  state.forwardMessages = [];
+  inputText.value = inputText.value.trim()
+    ? `${inputText.value}\n\n${transferredText}`
+    : transferredText;
+  nextTick(() => messageListInputRef.value?.focus());
+};
+
 const activeForwardMessages = computed(() => {
   if (state.forwardMessages.length > 0) {
     return state.forwardMessages;
@@ -3502,6 +3519,7 @@ watch(
     state.forwardMessages = [];
     inputText.value = getLocalStorageInputText.value;
     applyPendingForwardMessages();
+    applyPendingMessageDraft();
 
     clearSelectedMessages();
 
@@ -3812,6 +3830,10 @@ watch(
   },
   { deep: true }
 );
+
+watch([() => route.value.id, pendingDraftTopicId, pendingDraftText], () => {
+  applyPendingMessageDraft();
+});
 
 const updateLocalStorageInputText = () => {
   const inputsJson = JSON.parse(localStorage.getItem('inputs') || '{}');

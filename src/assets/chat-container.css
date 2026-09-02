@@ -60,7 +60,7 @@
   grid-template-areas:
     'menu header'
     'menu chat';
-  grid-template-columns: var(--size-left-menu) auto;
+  grid-template-columns: var(--size-left-menu) minmax(0, 1fr);
   grid-template-rows: var(--header-height) 1fr;
   scroll-behavior: auto;
 
@@ -287,9 +287,10 @@ button.primary-yui-kit.disabled-yui-kit {
   background-color: var(--neutral-button);
 }
 
-.ghost-yui-kit.red-context-button {
+button.button-yui-kit.red-context-button {
   color: var(--error-color) !important;
 
+  &:hover,
   &:active {
     background-color: var(--ban-color) !important;
     color: var(--error-color) !important;
