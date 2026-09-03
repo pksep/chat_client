@@ -250,6 +250,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
       messages.value = [];
       isInitializing.value = false;
     }
+    const memory = { thread: chatId };
 
     if (isInitializing.value) await initializationPromise;
 
@@ -389,12 +390,14 @@ const useMastra = (options?: UseMastraOptions | false) => {
               }
             ],
             {
+              memory,
               requestContext: createRequestContext(requestAttachments, true)
             }
           );
         }
       } else {
         stream = await agent.stream(requestMessages, {
+          memory,
           requestContext: createRequestContext(requestAttachments)
         });
       }
