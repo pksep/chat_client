@@ -147,6 +147,13 @@
   background: transparent;
 }
 
+.ai-menu-panel__collapsed-entry {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  width: 58px;
+}
+
 .ai-menu-panel__collapsed-item.contact-list__item {
   box-sizing: border-box;
   position: relative;
@@ -160,12 +167,8 @@
   cursor: pointer;
 }
 
-.ai-menu-panel__collapsed-item:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  bottom: -1px;
-  left: 0;
+.ai-menu-panel__collapsed-divider {
+  width: 100%;
   border-top: 1px solid var(--border-table);
   pointer-events: none;
 }

@@ -112,38 +112,47 @@
           class="ai-menu-panel__collapsed-list contact-list"
           aria-label="Запланированные задачи и чаты с ИИ"
         >
-          <button
-            v-for="item in collapsedItems"
+          <div
+            v-for="(item, index) in collapsedItems"
             :key="`${item.kind}:${item.id}`"
-            type="button"
-            :class="[
-              'ai-menu-panel__collapsed-item',
-              'contact-list__item',
-              {
-                'ai-menu-panel__collapsed-item--active':
-                  isCollapsedItemActive(item),
-                'contact-list__item--active': isCollapsedItemActive(item)
-              }
-            ]"
-            :aria-label="getCollapsedItemLabel(item)"
-            :aria-current="isCollapsedItemActive(item) ? 'page' : undefined"
-            :title="getCollapsedItemLabel(item)"
-            @click="handleCollapsedItemSelect(item)"
+            class="ai-menu-panel__collapsed-entry"
           >
-            <span class="ai-menu-panel__collapsed-avatar" aria-hidden="true">
-              <TasksSuggestionIcon
-                v-if="item.kind === 'task'"
-                class="ai-menu-panel__collapsed-icon"
-              />
-              <Icon
-                v-else
-                :name="IconNameEnum.chat"
-                :width="24"
-                :height="24"
-                class="ai-menu-panel__collapsed-icon"
-              />
-            </span>
-          </button>
+            <button
+              type="button"
+              :class="[
+                'ai-menu-panel__collapsed-item',
+                'contact-list__item',
+                {
+                  'ai-menu-panel__collapsed-item--active':
+                    isCollapsedItemActive(item),
+                  'contact-list__item--active': isCollapsedItemActive(item)
+                }
+              ]"
+              :aria-label="getCollapsedItemLabel(item)"
+              :aria-current="isCollapsedItemActive(item) ? 'page' : undefined"
+              :title="getCollapsedItemLabel(item)"
+              @click="handleCollapsedItemSelect(item)"
+            >
+              <span class="ai-menu-panel__collapsed-avatar" aria-hidden="true">
+                <TasksSuggestionIcon
+                  v-if="item.kind === 'task'"
+                  class="ai-menu-panel__collapsed-icon"
+                />
+                <Icon
+                  v-else
+                  :name="IconNameEnum.chat"
+                  :width="24"
+                  :height="24"
+                  class="ai-menu-panel__collapsed-icon"
+                />
+              </span>
+            </button>
+            <span
+              v-if="index < collapsedItems.length - 1"
+              class="ai-menu-panel__collapsed-divider"
+              aria-hidden="true"
+            />
+          </div>
         </nav>
       </template>
 
