@@ -78,12 +78,36 @@ class ChatDB {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       this.closeAfterTransaction(db, tx);
       const store = tx.objectStore(STORE_NAME);
-      const serializableMessages = messages.map(msg => ({
-        ...msg,
-        timestamp: msg.timestamp
-          ? new Date(msg.timestamp).toISOString()
-          : undefined
-      }));
+      const serializableMessages = messages.map(msg => {
+        const attachments = msg.attachments?.map(
+          ({ name, size, contentType, transferToken, expiresAt }) => ({
+            name,
+            size,
+            contentType,
+            transferToken,
+            expiresAt
+          })
+        );
+        const outputAttachments = msg.outputAttachments?.map(
+          ({ id, name, size, contentType, path, thumbnailPath }) => ({
+            id,
+            name,
+            size,
+            contentType,
+            path,
+            thumbnailPath
+          })
+        );
+
+        return {
+          ...msg,
+          ...(attachments ? { attachments } : {}),
+          ...(outputAttachments ? { outputAttachments } : {}),
+          timestamp: msg.timestamp
+            ? new Date(msg.timestamp).toISOString()
+            : undefined
+        };
+      });
       const data = {
         chatId,
         messages: serializableMessages,

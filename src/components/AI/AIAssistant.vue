@@ -76,7 +76,7 @@
 
       <div v-else class="ai-assistant__conversation">
         <time class="ai-assistant__date">{{ conversationDate }}</time>
-        <article
+        <div
           v-for="message in activeSession?.messages || []"
           :key="message.id"
           :class="[
@@ -109,7 +109,19 @@
               @click.stop
             />
           </div>
-          <div class="ai-assistant__message-content">
+          <MessageBubbleFiles
+            v-if="message.outputAttachments?.length"
+            class="ai-assistant__message-files"
+            :message="message.text"
+            :time="message.time"
+            :is-pin="message.pinned"
+            :is-me-sender="false"
+            :is-dialog="true"
+            :media="getMessageOutputMedia(message)"
+            :data-testid="`AI-Assistant-Message-${message.id}`"
+            @set-slider="handleOutputAttachmentClick"
+          />
+          <div v-else class="ai-assistant__message-content">
             <div class="ai-assistant__message-body">
               <div v-if="message.replyTo" class="ai-assistant__message-reply">
                 <strong>{{ getMessageAuthor(message.replyTo.role) }}</strong>
@@ -162,7 +174,7 @@
               @action="handleMessageAction($event, message)"
             />
           </Teleport>
-        </article>
+        </div>
         <div v-if="isThinking" class="ai-assistant__thinking">
           Думает <span>•••</span>
         </div>
@@ -540,6 +552,7 @@ import {
 } from '../../composables/useAiForwardDraft';
 import { useAiMessageSearch } from '../../composables/useAiMessageSearch';
 import { stageAiAttachments } from '../../services/aiAttachments';
+import { MediaType } from '@pksep/zod-shared-chat';
 import {
   recognizeVoice,
   startVoiceCapture,
@@ -549,7 +562,7 @@ import {
   type VoicePlaybackSession
 } from '../../services/aiSpeech';
 import { stripHtml } from '../../utils/stripHtml';
-import type { ITopic } from '../interfaces/interfaces';
+import type { IMedia, ITopic } from '../interfaces/interfaces';
 import type { AiAssistantSession } from '../../composables/useAiAssistant';
 import ConfirmModal from '../UI/ConfirmModal.vue';
 import EditIcon from '../UI/EditIcon.vue';
@@ -557,6 +570,10 @@ import ForwardIcon from '../UI/ForwardIcon.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import ReplyIcon from '../UI/ReplyIcon.vue';
 import ForwardModal from '../Messages/ForwardModal.vue';
+import MessageBubbleFiles from '../Messages/MessageBubbleFiles.vue';
+import { useMessageMedia } from '../Messages/composables/useMessageMedia';
+import { ensureMediaObjectUrl } from '../../services/useMediaBlobCache';
+import { downloadNativeFile } from '../../services/useNativeFile';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 import MicDisableIcon from '../CallModal/UI/MicDisableIcon.vue';
 import MicIcon from '../CallModal/UI/MicIcon.vue';
@@ -582,6 +599,7 @@ const {
   stopVoiceCall,
   startNewSession,
   selectSession,
+  selectTaskSession,
   selectTask,
   sendMessage,
   sendSuggestedPrompt,
@@ -634,6 +652,35 @@ const {
 let isMenuSyncInProgress = false;
 let composerFocusFrame: number | null = null;
 let isAssistantMounted = false;
+const { getFullMediaPath } = useMessageMedia();
+
+/** Преобразует постоянные AI-вложения в тот же формат, который использует обычное сообщение чата. */
+const getMessageOutputMedia = (message: AiAssistantMessage): IMedia[] =>
+  (message.outputAttachments || []).map(attachment => ({
+    id: attachment.id,
+    type: MediaType.File,
+    path: attachment.path,
+    thumbnailPath: attachment.thumbnailPath,
+    originName: attachment.name,
+    size: attachment.size
+  })) as IMedia[];
+
+/** Скачивает AI-файл тем же объектным путём медиа-хранилища, что и обычные вложения. */
+const handleOutputAttachmentClick = async (
+  medias: IMedia[],
+  index = 0
+): Promise<void> => {
+  const media = medias[index];
+  if (!media?.path) return;
+  if (await downloadNativeFile(media)) return;
+  const cachedObjectUrl = await ensureMediaObjectUrl(media.path);
+  const link = document.createElement('a');
+  link.href = cachedObjectUrl || getFullMediaPath(media, false);
+  link.download = media.originName || 'file';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+};
 
 type VoiceAssistantState =
   | 'idle'
@@ -1423,10 +1470,13 @@ watch(
   ([routeType, sessionId]) => {
     if (routeType !== RouteTypes.AI || !sessionId) return;
 
-    if (sessions.value.some(session => session.id === sessionId)) {
+    const session = sessions.value.find(item => item.id === sessionId);
+    if (session) {
       const task = tasks.value.find(item => item.sessionId === sessionId);
       if (task) {
         selectTask(task.id);
+      } else if (session.kind === 'task') {
+        selectTaskSession(sessionId);
       } else {
         selectSession(sessionId);
       }

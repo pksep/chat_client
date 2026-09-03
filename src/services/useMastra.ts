@@ -5,6 +5,7 @@ import { AIMessage, type AIMessageReference } from '../types/messages';
 import { getConfig } from './useConfig';
 import { generateUUID } from '../utils/generateUUID';
 import { getAuthToken } from '../composables/useLogin';
+import { getAuthUser, getChatAuthSession } from '../composables/useAuth';
 import {
   type ApprovalDecision,
   formatApprovalMessage,
@@ -13,6 +14,7 @@ import {
 } from './mastraApproval';
 import { processMastraEventStream } from './mastraEventStream';
 import type { AiAttachmentReference } from './aiAttachments';
+import { extractAiOutputAttachments } from './aiOutputAttachments';
 
 type Message = AIMessage;
 
@@ -122,6 +124,30 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
   let activeAttachments: AiAttachmentReference[] = [];
 
+  /** Восстанавливает только ещё действующие и полностью сформированные ссылки. */
+  const restoreMessageAttachments = (
+    history: Message[]
+  ): AiAttachmentReference[] => {
+    const stored = history
+      .slice()
+      .reverse()
+      .find(
+        message => message.role === 'user' && Array.isArray(message.attachments)
+      )?.attachments;
+
+    if (!stored) return [];
+
+    return stored.filter(
+      attachment =>
+        typeof attachment?.name === 'string' &&
+        typeof attachment?.size === 'number' &&
+        typeof attachment?.contentType === 'string' &&
+        typeof attachment?.transferToken === 'string' &&
+        typeof attachment?.expiresAt === 'number' &&
+        attachment.expiresAt > Date.now()
+    );
+  };
+
   /** Оставляет только неистёкшие вложения, нужные для запроса или его подтверждения. */
   const getActiveAttachments = (): AiAttachmentReference[] => {
     activeAttachments = activeAttachments.filter(
@@ -220,6 +246,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
     initializationPromise = getOrCreateChatHistory(chatId)
       .then(initialMessages => {
         messages.value = [...initialMessages];
+        activeAttachments = restoreMessageAttachments(initialMessages);
         isInitializing.value = false;
       })
       .catch(error => {
@@ -250,7 +277,12 @@ const useMastra = (options?: UseMastraOptions | false) => {
       messages.value = [];
       isInitializing.value = false;
     }
-    const memory = { thread: chatId };
+    const memoryResourceId =
+      getAuthUser()?.id || getChatAuthSession()?.user?.id || undefined;
+    const memory = {
+      thread: chatId,
+      ...(memoryResourceId ? { resource: memoryResourceId } : {})
+    };
 
     if (isInitializing.value) await initializationPromise;
 
@@ -268,6 +300,19 @@ const useMastra = (options?: UseMastraOptions | false) => {
           ? { modelContent: modelInput }
           : {}),
         timestamp: Date.now(),
+        ...(requestAttachments.length > 0
+          ? {
+              attachments: requestAttachments.map(
+                ({ name, size, contentType, transferToken, expiresAt }) => ({
+                  name,
+                  size,
+                  contentType,
+                  transferToken,
+                  expiresAt
+                })
+              )
+            }
+          : {}),
         ...(replyTo ? { replyTo } : {})
       };
       messages.value = [...messages.value, userMessage];
@@ -422,6 +467,34 @@ const useMastra = (options?: UseMastraOptions | false) => {
                     'erp_actions_erp_attachment_upload_and_attach'
                 ) {
                   activeAttachments = [];
+                }
+
+                if (['tool-result', 'tool-output'].includes(event.type || '')) {
+                  const outputAttachments = extractAiOutputAttachments(
+                    event.payload
+                  );
+                  if (
+                    outputAttachments.length > 0 &&
+                    assistantMessageIndex < messages.value.length
+                  ) {
+                    const newMessages = [...messages.value];
+                    const current = newMessages[assistantMessageIndex];
+                    const uniqueAttachments = new Map(
+                      (current.outputAttachments || []).map(attachment => [
+                        attachment.path,
+                        attachment
+                      ])
+                    );
+                    outputAttachments.forEach(attachment =>
+                      uniqueAttachments.set(attachment.path, attachment)
+                    );
+                    newMessages[assistantMessageIndex] = {
+                      ...current,
+                      outputAttachments: [...uniqueAttachments.values()]
+                    };
+                    messages.value = newMessages;
+                    await saveMessages(chatId, messages.value);
+                  }
                 }
 
                 if (event.type === 'tool-call-approval') {
