@@ -181,7 +181,7 @@
   height: 38px;
   flex: 0 0 38px;
   border-radius: 50%;
-  background: var(--primary-hover-light-color, #f2f7ff);
+  background: var(--action-secondary-pressed-bg);
 }
 
 .ai-menu-panel__collapsed-icon,
