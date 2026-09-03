@@ -698,8 +698,8 @@
   align-self: center;
   padding: 3px 10px;
   border-radius: 12px;
-  background: #68717d;
-  color: #fff;
+  background: #1c2635b2;
+  color: var(--white);
   font-size: 12px;
   line-height: 15px;
 }
