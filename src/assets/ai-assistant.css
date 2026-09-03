@@ -166,7 +166,7 @@
   right: 0;
   bottom: -1px;
   left: 0;
-  border-top: 1px solid var(--grey13);
+  border-top: 1px solid var(--border-table);
   pointer-events: none;
 }
 
