@@ -108,6 +108,13 @@ test('показывает закреп и позволяет переходит
   const thirdMessage = userMessages.nth(2);
   const pinnedPanel = page.getByTestId('AI-Assistant-PinnedMessage');
 
+  await expect(
+    firstMessage.locator('.ai-assistant__message-body > p')
+  ).toHaveCSS('font-size', '14px');
+  await expect(
+    firstMessage.locator('.ai-assistant__message-body > p')
+  ).toHaveCSS('line-height', '17px');
+
   await pinMessage(page, firstMessage);
   await expect(pinnedPanel).toContainText('Первое важное сообщение');
   const pinnedPreview = pinnedPanel.locator('.chat__input__action__blog p');
