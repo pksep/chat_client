@@ -1,12 +1,42 @@
 <template>
   <section
-    class="ai-assistant"
+    :class="[
+      'ai-assistant',
+      {
+        'ai-assistant--has-pinned-message':
+          activeView === 'chat' && !!currentPinnedMessage
+      }
+    ]"
     data-testid="AI-Assistant"
     @click.capture="handleExclusiveMenuClick"
     @pointerdown.capture="prepareEmojiDrag"
     @dragstart.capture="handleEmojiDragStart"
     @dragend.capture="handleEmojiDragEnd"
   >
+    <div
+      v-if="activeView === 'chat' && currentPinnedMessage"
+      class="pinned-messages ai-assistant__pinned-messages"
+      data-testid="AI-Assistant-PinnedMessage"
+      @click="handlePinnedMessageClick"
+    >
+      <div class="chat__input__action">
+        <div class="chat__input__action__blog">
+          <h5>Закреплённое сообщение</h5>
+          <p :key="currentPinnedMessage.id" v-emoji>
+            {{ currentPinnedMessagePreview }}
+          </p>
+        </div>
+        <Button
+          :type="ButtonTypeEnum.ghost"
+          :size="SizesEnum.little"
+          data-testid="AI-Assistant-PinnedMessage-CloseButton"
+          @click.stop="openPinnedMessageUnpinModal"
+        >
+          <Icon :name="IconNameEnum.crossLarge" color="var(--chat-secondary)" />
+        </Button>
+      </div>
+    </div>
+
     <div
       ref="scrollRef"
       class="ai-assistant__scroll"
@@ -85,8 +115,7 @@
             {
               'ai-assistant__message--selection-active': isSelectionMode,
               'ai-assistant__message--selected': isMessageSelected(message.id),
-              'ai-assistant__message--search-target':
-                activeSearchMessageId === message.id
+              highlighted: highlightedMessageId === message.id
             }
           ]"
           :data-message-id="message.id"
@@ -524,6 +553,14 @@
     @unmount-close="cancelDeleteMessages"
     @unmount-confirm="confirmDeleteMessages"
   />
+
+  <ConfirmModal
+    :open="isPinnedMessageUnpinModalOpen"
+    title="Открепить сообщение"
+    description="Вы уверены, что хотите открепить сообщение?"
+    @unmount-close="closePinnedMessageUnpinModal"
+    @unmount-confirm="confirmPinnedMessageUnpin"
+  />
 </template>
 
 <script setup lang="ts">
@@ -636,11 +673,9 @@ const draft = ref('');
 const contentEditorRef = ref<InstanceType<typeof ContentEditor> | null>(null);
 const scrollRef = ref<HTMLElement | null>(null);
 const isShowScrollToBottomButton = ref(false);
-const activeSearchMessageId = computed(() =>
-  activeSearchTarget.value?.sessionId === activeSessionId.value
-    ? activeSearchTarget.value.messageId
-    : null
-);
+const highlightedMessageId = ref<string | null>(null);
+const currentPinnedMessageId = ref<string | null>(null);
+const isPinnedMessageUnpinModalOpen = ref(false);
 const isNearBottom = ref(true);
 const isVoiceMuted = ref(false);
 const isPermissionMenuOpen = ref(false);
@@ -668,8 +703,25 @@ const {
 } = useContextMenu();
 let isMenuSyncInProgress = false;
 let composerFocusFrame: number | null = null;
+let messageHighlightTimeoutId: number | null = null;
 let isAssistantMounted = false;
 const { getFullMediaPath } = useMessageMedia();
+
+const pinnedMessages = computed(() =>
+  (activeSession.value?.messages || []).filter(message => message.pinned)
+);
+const currentPinnedMessage = computed(() => {
+  const messages = pinnedMessages.value;
+  if (messages.length === 0) return null;
+
+  return (
+    messages.find(message => message.id === currentPinnedMessageId.value) ||
+    messages[messages.length - 1]
+  );
+});
+const currentPinnedMessagePreview = computed(() =>
+  stripHtml(currentPinnedMessage.value?.text || 'Вложение')
+);
 
 /** Преобразует постоянные AI-вложения в тот же формат, который использует обычное сообщение чата. */
 const getMessageOutputMedia = (message: AiAssistantMessage): IMedia[] =>
@@ -1125,6 +1177,81 @@ const handleScrollToBottom = (): void => {
   void scrollToBottom(true);
 };
 
+const clearMessageHighlight = (): void => {
+  if (messageHighlightTimeoutId !== null) {
+    window.clearTimeout(messageHighlightTimeoutId);
+    messageHighlightTimeoutId = null;
+  }
+
+  highlightedMessageId.value = null;
+};
+
+/** Переходит к AI-сообщению и выделяет его так же, как цель перехода в обычном чате. */
+const navigateToAiMessage = async (
+  messageId: string,
+  behavior: 'auto' | 'smooth' = 'smooth'
+): Promise<boolean> => {
+  clearMessageHighlight();
+  highlightedMessageId.value = messageId;
+  await nextTick();
+
+  const messageElement = Array.from(
+    scrollRef.value?.querySelectorAll<HTMLElement>('[data-message-id]') || []
+  ).find(element => element.dataset.messageId === messageId);
+
+  if (!messageElement) {
+    highlightedMessageId.value = null;
+    return false;
+  }
+
+  messageElement.scrollIntoView({ behavior, block: 'center' });
+  messageHighlightTimeoutId = window.setTimeout(() => {
+    if (highlightedMessageId.value === messageId) {
+      highlightedMessageId.value = null;
+    }
+    messageHighlightTimeoutId = null;
+  }, 3400);
+
+  return true;
+};
+
+/** Переходит к показанному закрепу и подготавливает следующий закреп для навигации. */
+const handlePinnedMessageClick = (): void => {
+  const message = currentPinnedMessage.value;
+  const messages = pinnedMessages.value;
+  if (!message || messages.length === 0) return;
+
+  void navigateToAiMessage(message.id);
+  const currentIndex = messages.findIndex(item => item.id === message.id);
+  const nextIndex = (currentIndex - 1 + messages.length) % messages.length;
+  currentPinnedMessageId.value = messages[nextIndex]?.id || null;
+};
+
+const openPinnedMessageUnpinModal = (): void => {
+  isPinnedMessageUnpinModalOpen.value = true;
+};
+
+const closePinnedMessageUnpinModal = (): void => {
+  isPinnedMessageUnpinModalOpen.value = false;
+};
+
+const confirmPinnedMessageUnpin = async (): Promise<void> => {
+  const message = currentPinnedMessage.value;
+  closePinnedMessageUnpinModal();
+  if (!message) return;
+
+  try {
+    await toggleMessagePin(message.id);
+    if (currentPinnedMessageId.value === message.id) {
+      currentPinnedMessageId.value = null;
+    }
+  } catch (error) {
+    showErrorNotification(error);
+  } finally {
+    focusComposer();
+  }
+};
+
 const scrollOpenedChatToBottom = async (): Promise<void> => {
   isNearBottom.value = true;
   await scrollToBottom();
@@ -1358,7 +1485,9 @@ const handleMessageAction = async (
     else if (action === 'forward') openMessageForward(message);
     else if (action === 'edit') startMessageEdit(message);
     else if (action === 'togglePin') {
+      const wasPinned = Boolean(message.pinned);
       await toggleMessagePin(message.id);
+      currentPinnedMessageId.value = wasPinned ? null : message.id;
       focusComposer();
     } else if (action === 'select') toggleMessageSelection(message.id);
     else if (action === 'delete') requestDeleteMessage(message);
@@ -1527,7 +1656,10 @@ watch([activeSessionId, activeView], ([sessionId, view]) => {
 
 watch([() => activeSession.value?.id, activeView], () => {
   closeMessageContextMenu();
+  closePinnedMessageUnpinModal();
+  clearMessageHighlight();
   clearMessageSelection();
+  currentPinnedMessageId.value = null;
   replyMessage.value = null;
   editingMessage.value = null;
   pendingDeleteMessageIds.value = [];
@@ -1544,13 +1676,7 @@ watch(
   async () => {
     const target = activeSearchTarget.value;
     if (!target || target.sessionId !== activeSessionId.value) return;
-
-    await nextTick();
-    const messageElement = Array.from(
-      scrollRef.value?.querySelectorAll<HTMLElement>('[data-message-id]') || []
-    ).find(element => element.dataset.messageId === target.messageId);
-
-    messageElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await navigateToAiMessage(target.messageId);
   },
   { flush: 'post' }
 );
@@ -1568,6 +1694,7 @@ onBeforeUnmount(() => {
     window.cancelAnimationFrame(composerFocusFrame);
     composerFocusFrame = null;
   }
+  clearMessageHighlight();
   closeVoiceMode();
   markSessionInactive(activeSessionId.value);
 });

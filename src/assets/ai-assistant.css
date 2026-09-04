@@ -482,6 +482,39 @@
   background: var(--surface-main);
 }
 
+.ai-assistant.ai-assistant--has-pinned-message {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.ai-assistant__pinned-messages {
+  z-index: 2;
+  grid-row: 1;
+  grid-column: 1;
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 0;
+}
+
+.ai-assistant__pinned-messages .chat__input__action__blog {
+  flex: 1;
+  min-width: 0;
+}
+
+.ai-assistant__pinned-messages .chat__input__action__blog p {
+  width: auto;
+  max-width: 100%;
+}
+
+.ai-assistant--has-pinned-message .ai-assistant__scroll,
+.ai-assistant--has-pinned-message .ai-assistant__scroll-indicators {
+  grid-row: 2;
+}
+
+.ai-assistant--has-pinned-message .ai-assistant__selected-messages,
+.ai-assistant--has-pinned-message .ai-assistant__composer {
+  grid-row: 3;
+}
+
 .chat-container--wallpaper:has(.chat--ai-route) {
   background-color: var(--chat-wallpaper-background, var(--blue15));
   background-image: linear-gradient(
@@ -747,7 +780,7 @@
   outline-offset: 2px;
 }
 
-.ai-assistant__message--search-target
+.ai-assistant__message.highlighted
   :is(.ai-assistant__message-content, .ai-assistant__message-files) {
   background-color: #767f9de5;
 }

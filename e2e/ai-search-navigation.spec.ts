@@ -115,7 +115,7 @@ test('переходит между найденными сообщениями 
   await expect(next).toBeEnabled();
 
   const highlightedMessage = page.locator(
-    '[data-message-id].ai-assistant__message--search-target'
+    '[data-message-id].ai-assistant__message.highlighted'
   );
   await expect(highlightedMessage).toHaveCount(1);
   const firstMessageId =
