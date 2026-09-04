@@ -28,6 +28,7 @@ interface UseMastraOptions {
   chatId?: string;
   baseUrl?: string;
   approvalMode?: Ref<'ask' | 'automatic'>;
+  responseMode?: Ref<'quick' | 'advanced'>;
 }
 
 interface ToolApprovalRequestError extends Error {
@@ -187,6 +188,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
         : 'strict'
     );
     requestContext.set(
+      'responseMode',
+      options.responseMode?.value === 'advanced' ? 'advanced' : 'quick'
+    );
+    requestContext.set(
       'attachments',
       attachments.map(({ name, size, contentType, transferToken }) => ({
         name,
@@ -231,6 +236,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
               options.approvalMode?.value === 'automatic'
                 ? 'automatic'
                 : 'strict',
+            responseMode:
+              options.responseMode?.value === 'advanced' ? 'advanced' : 'quick',
             ...(chatId ? { threadId: chatId } : {}),
             attachments: attachments.map(
               ({ name, size, contentType, transferToken }) => ({

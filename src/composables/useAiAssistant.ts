@@ -25,6 +25,7 @@ export type AiAssistantTab = 'chats' | 'tasks';
 export type AiAssistantView = 'chat' | 'tasks';
 export type AiMessageRole = 'user' | 'assistant';
 export type AiPermissionMode = 'ask' | 'automatic';
+export type AiResponseMode = 'quick' | 'advanced';
 export type AiAssistantActivityStatus = 'running' | 'success' | 'attention';
 
 export interface AiAssistantMessage {
@@ -74,6 +75,7 @@ interface PersistedAiState {
   sessions: AiAssistantSession[];
   tasks: AiAutomationTask[];
   permissionMode: AiPermissionMode;
+  responseMode: AiResponseMode;
 }
 
 interface MastraRuntime {
@@ -114,7 +116,8 @@ const loadState = (): PersistedAiState => {
   const fallback: PersistedAiState = {
     sessions: [],
     tasks: initialTasks(),
-    permissionMode: 'ask'
+    permissionMode: 'ask',
+    responseMode: 'quick'
   };
   if (typeof window === 'undefined') return fallback;
 
@@ -134,7 +137,8 @@ const loadState = (): PersistedAiState => {
         ? parsed.tasks.filter(task => task.id !== 'daily-automation')
         : initialTasks(),
       permissionMode:
-        parsed.permissionMode === 'automatic' ? 'automatic' : 'ask'
+        parsed.permissionMode === 'automatic' ? 'automatic' : 'ask',
+      responseMode: parsed.responseMode === 'advanced' ? 'advanced' : 'quick'
     };
   } catch {
     return fallback;
@@ -150,6 +154,7 @@ const isVoiceModeOpen = ref(false);
 const isVoiceModalVisible = ref(false);
 const voiceCallStartedAt = ref<number | null>(null);
 const permissionMode = ref<AiPermissionMode>(initialState.permissionMode);
+const responseMode = ref<AiResponseMode>(initialState.responseMode);
 const runtimes = shallowReactive(new Map<string, MastraRuntime>());
 const runtimePromises = new Map<string, Promise<MastraRuntime>>();
 let mastraModulePromise: Promise<
@@ -176,7 +181,8 @@ const persist = (): void => {
           messages: []
         })),
         tasks: persisted.tasks,
-        permissionMode: permissionMode.value
+        permissionMode: permissionMode.value,
+        responseMode: responseMode.value
       })
     );
   } catch {
@@ -211,7 +217,12 @@ const stopVoiceCall = (): void => {
 };
 
 watch(
-  () => [persisted.sessions, persisted.tasks, permissionMode.value],
+  () => [
+    persisted.sessions,
+    persisted.tasks,
+    permissionMode.value,
+    responseMode.value
+  ],
   persist,
   {
     deep: true
@@ -394,7 +405,8 @@ const ensureRuntime = async (sessionId: string): Promise<MastraRuntime> => {
       const runtime = useMastra({
         agentId: 'generalAgent',
         chatId: sessionId,
-        approvalMode: permissionMode
+        approvalMode: permissionMode,
+        responseMode
       }) as MastraRuntime;
       runtimes.set(sessionId, runtime);
 
@@ -905,6 +917,7 @@ export const useAiAssistant = () => {
     isVoiceModalVisible,
     voiceCallStartedAt,
     permissionMode,
+    responseMode,
     startVoiceCall,
     hideVoiceCall,
     showVoiceCall,

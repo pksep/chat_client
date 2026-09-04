@@ -350,7 +350,7 @@
                 :title="permissionLabel"
                 aria-haspopup="menu"
                 :aria-expanded="isPermissionMenuOpen"
-                @click.stop="isPermissionMenuOpen = !isPermissionMenuOpen"
+                @click.stop="togglePermissionMenu"
               >
                 <PermissionHandIcon v-if="permissionMode === 'ask'" />
                 <PermissionCheckCircleIcon v-else />
@@ -404,7 +404,7 @@
                 :title="permissionLabel"
                 aria-haspopup="menu"
                 :aria-expanded="isPermissionMenuOpen"
-                @click.stop="isPermissionMenuOpen = !isPermissionMenuOpen"
+                @click.stop="togglePermissionMenu"
               >
                 <PermissionHandIcon v-if="permissionMode === 'ask'" />
                 <PermissionCheckCircleIcon v-else />
@@ -439,6 +439,69 @@
           </template>
 
           <template #desktop-right-action>
+            <div
+              class="ai-assistant__response-control ai-assistant__response-control--desktop"
+            >
+              <Button
+                :type="ButtonTypeEnum.ghost"
+                :size="SizesEnum.small"
+                class="toolbar-button ai-assistant__response-trigger ai-assistant__response-trigger--desktop"
+                :title="responseModeLabel"
+                :aria-label="responseModeLabel"
+                aria-haspopup="menu"
+                :aria-expanded="isResponseModeMenuOpen"
+                :disabled="isThinking"
+                @click.stop="toggleResponseModeMenu"
+              >
+                <span
+                  v-if="isThinking"
+                  class="ai-assistant__response-trigger-skeleton"
+                  aria-hidden="true"
+                >
+                  <span
+                    class="ai-assistant__response-trigger-skeleton-icon"
+                  ></span>
+                  <span
+                    class="ai-assistant__response-trigger-skeleton-label"
+                  ></span>
+                </span>
+                <template v-else>
+                  <Icon
+                    :name="
+                      responseMode === 'advanced'
+                        ? IconNameEnum.lightbulbFilament
+                        : IconNameEnum.lightning
+                    "
+                  />
+                  <span>{{ responseModeLabel }}</span>
+                </template>
+              </Button>
+              <div
+                v-if="isResponseModeMenuOpen"
+                class="ai-assistant__response-menu"
+                role="menu"
+                aria-label="Режим ответа"
+              >
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  :aria-checked="responseMode === 'quick'"
+                  @click="selectResponseMode('quick')"
+                >
+                  <Icon :name="IconNameEnum.lightning" />
+                  <span>Быстрый ответ</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  :aria-checked="responseMode === 'advanced'"
+                  @click="selectResponseMode('advanced')"
+                >
+                  <Icon :name="IconNameEnum.lightbulbFilament" />
+                  <span>Продвинутый ответ</span>
+                </button>
+              </div>
+            </div>
             <Button
               :type="ButtonTypeEnum.ghost"
               :size="SizesEnum.small"
@@ -577,6 +640,7 @@ import PermissionCheckCircleIcon from './PermissionCheckCircleIcon.vue';
 import AIMessageContextMenu from './AIMessageContextMenu.vue';
 import {
   type AiAssistantMessage,
+  type AiResponseMode,
   useAiAssistant
 } from '../../composables/useAiAssistant';
 import { navigateToAI, useUrlWatcher } from '../../composables/navigation';
@@ -635,6 +699,7 @@ const {
   isVoiceModeOpen,
   isVoiceModalVisible,
   permissionMode,
+  responseMode,
   startVoiceCall,
   hideVoiceCall,
   stopVoiceCall,
@@ -666,6 +731,7 @@ const isPinnedMessageUnpinModalOpen = ref(false);
 const isNearBottom = ref(true);
 const isVoiceMuted = ref(false);
 const isPermissionMenuOpen = ref(false);
+const isResponseModeMenuOpen = ref(false);
 const isUploadingAttachments = ref(false);
 const contextMessage = ref<{
   message: AiAssistantMessage;
@@ -975,6 +1041,9 @@ const permissionLabel = computed(() =>
     ? 'Запрашивать разрешения'
     : 'Автоматически подтверждать'
 );
+const responseModeLabel = computed(() =>
+  responseMode.value === 'advanced' ? 'Продвинутый ответ' : 'Быстрый ответ'
+);
 const conversationDate = computed(() =>
   new Intl.DateTimeFormat('ru-RU', {
     day: 'numeric',
@@ -1111,17 +1180,26 @@ const handleExclusiveMenuClick = (event: MouseEvent): void => {
 
   if (target.closest('.attach-file-button')) {
     isPermissionMenuOpen.value = false;
+    isResponseModeMenuOpen.value = false;
     closeEmojiPicker(root);
     return;
   }
 
   if (target.closest('.smile-button') && !target.closest('.emoji-picker')) {
     isPermissionMenuOpen.value = false;
+    isResponseModeMenuOpen.value = false;
     closeAttachmentPopover(root);
     return;
   }
 
   if (target.closest('.ai-assistant__permission-trigger')) {
+    isResponseModeMenuOpen.value = false;
+    closeEmojiPicker(root);
+    closeAttachmentPopover(root);
+  }
+
+  if (target.closest('.ai-assistant__response-trigger')) {
+    isPermissionMenuOpen.value = false;
     closeEmojiPicker(root);
     closeAttachmentPopover(root);
   }
@@ -1585,6 +1663,22 @@ const selectPermission = (mode: 'ask' | 'automatic'): void => {
   focusComposer();
 };
 
+const togglePermissionMenu = (): void => {
+  isResponseModeMenuOpen.value = false;
+  isPermissionMenuOpen.value = !isPermissionMenuOpen.value;
+};
+
+const toggleResponseModeMenu = (): void => {
+  isPermissionMenuOpen.value = false;
+  isResponseModeMenuOpen.value = !isResponseModeMenuOpen.value;
+};
+
+const selectResponseMode = (mode: AiResponseMode): void => {
+  responseMode.value = mode;
+  isResponseModeMenuOpen.value = false;
+  focusComposer();
+};
+
 watch(
   [
     () => route.value.type,
@@ -1656,6 +1750,10 @@ watch([() => activeSession.value?.id, activeView], () => {
 
 watch([() => activeSession.value?.messages.length || 0, isThinking], () => {
   if (isNearBottom.value) void scrollToBottom();
+});
+
+watch(isThinking, thinking => {
+  if (thinking) isResponseModeMenuOpen.value = false;
 });
 
 watch(

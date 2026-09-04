@@ -138,7 +138,8 @@ test('восстанавливает подтверждение и приним�
   expect(approvalRequests).toHaveLength(1);
   expect(approvalRequests[0]).toMatchObject({
     runId: 'automation-run',
-    toolCallId: 'automation-tool-call'
+    toolCallId: 'automation-tool-call',
+    requestContext: { responseMode: 'quick' }
   });
 });
 
