@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const SESSION_ID = 'ai-pinned-messages';
 const HEADER_TEST_ID = 'ChatContainer-ChatContainer-Header-Header';
+const LONG_PINNED_MESSAGE = `Первое важное сообщение ${'с длинным текстом '.repeat(30)}`;
 
 test.setTimeout(90_000);
 
@@ -98,7 +99,7 @@ test('показывает закреп и позволяет переходит
   });
 
   await page.goto(`/ai/${SESSION_ID}`);
-  await sendMessage(page, 'Первое важное сообщение', 2);
+  await sendMessage(page, LONG_PINNED_MESSAGE, 2);
   await sendMessage(page, 'Второе обычное сообщение', 4);
   await sendMessage(page, 'Третье важное сообщение', 6);
 
@@ -109,6 +110,17 @@ test('показывает закреп и позволяет переходит
 
   await pinMessage(page, firstMessage);
   await expect(pinnedPanel).toContainText('Первое важное сообщение');
+  const pinnedPreview = pinnedPanel.locator('.chat__input__action__blog p');
+  await expect
+    .poll(async () =>
+      pinnedPreview.evaluate(element => ({
+        isTruncated: element.scrollWidth > element.clientWidth,
+        staysWithinAssistant:
+          element.closest('.pinned-messages')!.getBoundingClientRect().right <=
+          element.closest('.ai-assistant')!.getBoundingClientRect().right
+      }))
+    )
+    .toEqual({ isTruncated: true, staysWithinAssistant: true });
   await expect(
     firstMessage.locator('.ai-assistant__message-pin')
   ).toBeVisible();

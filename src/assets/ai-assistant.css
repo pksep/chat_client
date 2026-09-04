@@ -495,16 +495,6 @@
   margin-top: 0;
 }
 
-.ai-assistant__pinned-messages .chat__input__action__blog {
-  flex: 1;
-  min-width: 0;
-}
-
-.ai-assistant__pinned-messages .chat__input__action__blog p {
-  width: auto;
-  max-width: 100%;
-}
-
 .ai-assistant--has-pinned-message .ai-assistant__scroll,
 .ai-assistant--has-pinned-message .ai-assistant__scroll-indicators {
   grid-row: 2;

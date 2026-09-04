@@ -2,10 +2,31 @@
   height: 58px;
   cursor: pointer;
   width: calc(100% + 4px);
+  min-width: 0;
   background-color: var(--surface-input-primary);
   padding: 10px 15px;
   border-bottom: 0.5px solid var(--border-table);
   border-radius: 0 0 10px 10px;
+  overflow: hidden;
+}
+
+.pinned-messages .chat__input__action {
+  min-width: 0;
+}
+
+.pinned-messages .chat__input__action__blog {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pinned-messages .chat__input__action__blog p {
+  width: 100%;
+  max-width: 100%;
+}
+
+.pinned-messages .chat__input__action > .button-yui-kit {
+  flex-shrink: 0;
 }
 
 @media screen and (width <=768px) {
