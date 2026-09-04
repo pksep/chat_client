@@ -370,6 +370,9 @@ const approvalStatusValue = (value: unknown) => {
 const APPROVAL_ACTION_LABELS: Record<string, string> = {
   erp_actions_erp_attachment_upload_and_attach:
     'создание документа ERP из вложения и его прикрепление',
+  erp_actions_erp_shipment_create: 'создание задачи на отгрузку',
+  erp_actions_erp_shipment_create_with_attachment:
+    'создание задачи на отгрузку со счётом',
   erp_actions_erp_detail_create_and_add_to_cbed:
     'создание детали и изменение спецификации сборки',
   erp_actions_erp_detail_archive: 'перенос детали в архив',
@@ -477,6 +480,27 @@ const buildApprovalQuestion = (approval: PendingToolApproval): string => {
         ? ` с обозначением ${quotedValue(args.detailDesignation)}`
         : '';
       return `Перенести деталь ${quotedValue(args.detailName)}${designation} в архив? Связанные спецификации, комплекты и металлообработка будут актуализированы.`;
+    }
+    case 'erp_actions_erp_shipment_create':
+    case 'erp_actions_erp_shipment_create_with_attachment': {
+      const product = entityReference(
+        args.productName,
+        args.productDesignation,
+        'без указанного названия'
+      );
+      const article = args.productArticle
+        ? `, артикул: ${quotedValue(args.productArticle)}`
+        : '';
+      const orderDate = args.orderedAt
+        ? `, дата заказа: ${formatValue(args.orderedAt, 'не указана')}`
+        : '';
+      const basis =
+        toolName === 'erp_actions_erp_shipment_create_with_attachment'
+          ? ` Приложенный счёт ${quotedValue(args.attachmentName)} будет перенесён в ERP, прикреплён к задаче и указан как основание.`
+          : args.basisDocumentName
+            ? ` Файл ${quotedValue(args.basisDocumentName)} из базы ERP будет прикреплён и указан как основание.`
+            : '';
+      return `Создать задачу на отгрузку изделия ${product}${article} для покупателя ${quotedValue(args.buyerName)} в количестве ${formatValue(args.quantity, 'не указано')} шт., плановая дата отгрузки: ${formatValue(args.plannedShipmentAt, 'не указана')}${orderDate}?${basis}`;
     }
     case 'erp_actions_erp_entity_editor_update': {
       const entity = entityReference(
