@@ -785,33 +785,8 @@
   gap: 7px;
 }
 
-.ai-assistant__message-reply {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-  padding: 7px 9px 7px 12px;
-  border-radius: 9px;
-  background: var(--blue9);
-  box-shadow: inset 4px 0 0 var(--blue1);
-}
-
-.ai-assistant__message-reply strong,
-.ai-assistant__message-reply span {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.ai-assistant__message-reply strong {
-  color: var(--blue1);
-  font-size: 13px;
-  line-height: 16px;
-}
-
-.ai-assistant__message-reply span {
-  color: var(--text-neutral-color);
-  font-size: 13px;
-  line-height: 16px;
+.ai-assistant__message-reply .message-reference-reply {
+  cursor: default;
 }
 
 .ai-assistant__message-pin {

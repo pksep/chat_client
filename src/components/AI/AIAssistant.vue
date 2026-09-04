@@ -123,9 +123,26 @@
           />
           <div v-else class="ai-assistant__message-content">
             <div class="ai-assistant__message-body">
-              <div v-if="message.replyTo" class="ai-assistant__message-reply">
-                <strong>{{ getMessageAuthor(message.replyTo.role) }}</strong>
-                <span>{{ message.replyTo.content }}</span>
+              <div
+                v-if="message.replyTo"
+                :class="[
+                  'ai-assistant__message-reply',
+                  'message-reference-block',
+                  {
+                    'message-reference-block--outgoing': message.role === 'user'
+                  }
+                ]"
+              >
+                <div class="message-reference-reply">
+                  <div class="message-reference-reply__content">
+                    <strong class="message-reference-reply__author">
+                      {{ getMessageAuthor(message.replyTo.role) }}
+                    </strong>
+                    <span class="message-reference-reply__text">
+                      {{ message.replyTo.content }}
+                    </span>
+                  </div>
+                </div>
               </div>
               <p>{{ message.text }}</p>
             </div>
