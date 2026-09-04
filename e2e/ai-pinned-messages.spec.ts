@@ -121,6 +121,10 @@ test('показывает закреп и позволяет переходит
       }))
     )
     .toEqual({ isTruncated: true, staysWithinAssistant: true });
+  await expect(pinnedPanel.locator('.chat__input__action__blog')).toHaveCSS(
+    'overflow',
+    'visible'
+  );
   await expect(
     firstMessage.locator('.ai-assistant__message-pin')
   ).toBeVisible();
