@@ -197,6 +197,31 @@ const persistSelectedWallpaperId = (wallpaperId: string): void => {
   }
 };
 
+const cacheStartupCustomWallpaper = (dataUrl: string): void => {
+  if (typeof window === 'undefined' || !dataUrl) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      LEGACY_CHAT_WALLPAPER_CUSTOM_STORAGE_KEY,
+      dataUrl
+    );
+  } catch (error) {
+    console.warn('Failed to cache custom wallpaper for startup:', error);
+  }
+};
+
+const cacheSelectedCustomWallpaperForStartup = (): void => {
+  const selectedCustomWallpaper = customWallpapers.value.find(
+    wallpaper => wallpaper.id === selectedWallpaperId.value
+  );
+
+  if (selectedCustomWallpaper) {
+    cacheStartupCustomWallpaper(selectedCustomWallpaper.dataUrl);
+  }
+};
+
 const registerWallpaperAppStatePersistence = (): void => {
   if (
     wallpaperAppStateListenerRegistered ||
@@ -269,6 +294,38 @@ const readBrowserSelectedWallpaperId = (): string => {
     window.localStorage.getItem(LEGACY_CHAT_WALLPAPER_STORAGE_KEY) ||
     'none'
   );
+};
+
+const hydrateStartupWallpaperFromSynchronousCache = (): void => {
+  const browserSelectedId = readBrowserSelectedWallpaperId();
+
+  selectedWallpaperId.value = browserSelectedId;
+
+  if (
+    browserSelectedId === 'none' ||
+    wallpaperOptionMap.has(browserSelectedId) ||
+    typeof window === 'undefined'
+  ) {
+    return;
+  }
+
+  const cachedDataUrl =
+    window.localStorage.getItem(LEGACY_CHAT_WALLPAPER_CUSTOM_STORAGE_KEY) || '';
+
+  if (!cachedDataUrl) {
+    return;
+  }
+
+  // Native persistence is intentionally hydrated in the background. Keep a
+  // synchronous copy of the selected image so the first topic paint already
+  // has the same wallpaper and never flashes the plain surface first.
+  customWallpapers.value = [
+    {
+      id: browserSelectedId,
+      dataUrl: cachedDataUrl,
+      createdAt: 0
+    }
+  ];
 };
 
 const loadBrowserCustomWallpapers = async (): Promise<
@@ -382,6 +439,7 @@ const hydrateCustomWallpapers = async (): Promise<void> => {
           selectedWallpaperId.value = selectedNativeWallpaper.id;
           persistSelectedWallpaperId(selectedWallpaperId.value);
           reconcileSelectedWallpaper();
+          cacheSelectedCustomWallpaperForStartup();
           return;
         }
 
@@ -402,12 +460,14 @@ const hydrateCustomWallpapers = async (): Promise<void> => {
 
       persistSelectedWallpaperId(selectedWallpaperId.value);
       reconcileSelectedWallpaper();
+      cacheSelectedCustomWallpaperForStartup();
       return;
     }
 
     customWallpapers.value = await loadStoredCustomWallpapers();
     await migrateLegacyCustomWallpaper();
     reconcileSelectedWallpaper();
+    cacheSelectedCustomWallpaperForStartup();
   } catch (error) {
     console.warn('Failed to hydrate custom wallpapers:', error);
   } finally {
@@ -421,10 +481,7 @@ const ensureInitialized = (): void => {
   }
 
   isInitialized.value = true;
-
-  if (!isNativeCustomImagePersistenceAvailable()) {
-    selectedWallpaperId.value = readBrowserSelectedWallpaperId();
-  }
+  hydrateStartupWallpaperFromSynchronousCache();
 
   registerWallpaperAppStatePersistence();
   void hydrateCustomWallpapers();
@@ -445,15 +502,16 @@ const selectWallpaper = (wallpaperId: string): void => {
     return;
   }
 
-  const hasCustomWallpaper = customWallpapers.value.some(
+  const customWallpaper = customWallpapers.value.find(
     wallpaper => wallpaper.id === wallpaperId
   );
 
-  if (!hasCustomWallpaper) {
+  if (!customWallpaper) {
     return;
   }
 
   selectedWallpaperId.value = wallpaperId;
+  cacheStartupCustomWallpaper(customWallpaper.dataUrl);
   persistSelectedWallpaperId(wallpaperId);
 };
 
@@ -472,6 +530,7 @@ const setCustomWallpaper = async (dataUrl: string): Promise<void> => {
 
     customWallpapers.value = [wallpaper, ...customWallpapers.value];
     selectedWallpaperId.value = wallpaper.id;
+    cacheStartupCustomWallpaper(wallpaper.dataUrl);
     persistSelectedWallpaperId(wallpaper.id);
     return;
   }
@@ -486,6 +545,7 @@ const setCustomWallpaper = async (dataUrl: string): Promise<void> => {
 
   customWallpapers.value = [wallpaper, ...customWallpapers.value];
   selectedWallpaperId.value = wallpaper.id;
+  cacheStartupCustomWallpaper(wallpaper.dataUrl);
   persistSelectedWallpaperId(wallpaper.id);
 };
 

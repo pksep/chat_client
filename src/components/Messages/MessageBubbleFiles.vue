@@ -242,6 +242,14 @@ const hasInlineCaption = computed(
   () => hasCaption.value && !hasMediaFiles.value
 );
 
+const getSliderDetectionValue = (media: IMedia): string =>
+  media.originName || media.path || '';
+
+const isSliderContentFile = (media: IMedia): boolean =>
+  isSliderContentUrl(getSliderDetectionValue(media), {
+    includePdf: !isNativeFileDownloadSupported()
+  });
+
 const syncMentions = async (): Promise<void> => {
   if (!hasMessageInteractivityCandidates(props.message)) {
     return;
@@ -299,14 +307,6 @@ const shouldShowFileLoading = (media: IMedia): boolean =>
     media.isLoading ||
       (media.uploadError && props.messageStatus !== MessageStatus.NotDelivered)
   );
-
-const getSliderDetectionValue = (media: IMedia): string =>
-  media.originName || media.path || '';
-
-const isSliderContentFile = (media: IMedia): boolean =>
-  isSliderContentUrl(getSliderDetectionValue(media), {
-    includePdf: !isNativeFileDownloadSupported()
-  });
 
 const shouldUseNativeFileState = (media: IMedia): boolean =>
   Boolean(

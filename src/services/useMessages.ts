@@ -1575,14 +1575,14 @@ export const fetchPinnedMessagesForTopic = async (
 export const fetchAroundMessage = async (
   messageId: string,
   topicId: string = route.value.id,
-  opts?: { updateVisible?: boolean }
+  opts?: { updateVisible?: boolean; forceNetwork?: boolean }
 ): Promise<IMessage[]> => {
   try {
     if (!messageId) return;
 
     await ensureShadowLoadedRangesLoaded(topicId);
 
-    if (isShadowSyncEnabled()) {
+    if (isShadowSyncEnabled() && !opts?.forceNetwork) {
       const shadowContextResolution = await resolveShadowTopicContext(
         topicId,
         messageId,
@@ -1621,7 +1621,12 @@ export const fetchAroundMessage = async (
       }
     }
 
-    const sdk = getChatSDK();
+    let sdk = getChatSDK();
+
+    if (!sdk && opts?.forceNetwork) {
+      sdk = await waitForChatSDK();
+    }
+
     if (!sdk) return;
 
     const messages = await sdk.getAroundMessage(messageId);

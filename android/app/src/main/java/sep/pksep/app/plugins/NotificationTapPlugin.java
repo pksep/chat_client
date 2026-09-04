@@ -36,11 +36,16 @@ public class NotificationTapPlugin extends Plugin {
     }
 
     private void flushPendingNotificationTap() {
-        if (pendingNotificationTap == null) {
+        if (
+            pendingNotificationTap == null ||
+            !hasListeners(EVENT_NOTIFICATION_TAP)
+        ) {
             return;
         }
 
-        notifyListeners(EVENT_NOTIFICATION_TAP, pendingNotificationTap, true);
+        JSObject payload = pendingNotificationTap;
+        pendingNotificationTap = null;
+        notifyListeners(EVENT_NOTIFICATION_TAP, payload, false);
     }
 
     @PluginMethod

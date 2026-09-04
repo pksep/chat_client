@@ -1,5 +1,5 @@
 import { createApp } from 'vue';
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import { Capacitor } from '@capacitor/core';
 import { isTauri } from '@tauri-apps/api/core';
 import App from './App.vue';
 import '@fontsource-variable/inter';
@@ -13,15 +13,11 @@ import {
 import { emojiDirective } from './directives/emoji';
 import { registerNativeFileBridge } from './services/useNativeFile';
 import { initFastNativeNotificationNavigation } from './services/usePushNotifications';
+import { LaunchStartup } from './services/launchStartup';
 import { USER_STATUS_PRESETS } from './utils/userStatus';
 import { NATIVE_STARTUP_READY_EVENT } from './utils/nativeStartup';
 import { createPinia } from 'pinia';
 
-interface LaunchStartupPlugin {
-  ready: () => Promise<void>;
-}
-
-const LaunchStartup = registerPlugin<LaunchStartupPlugin>('LaunchStartup');
 const UNICORN_EMOJI = '\u{1F984}';
 const INDEXED_DB_RESET_EPOCH = 'chat-client-indexeddb-reset-2026-04-29-v1';
 const INDEXED_DB_RESET_DONE_KEY = 'chat.indexeddb.reset.done';
@@ -194,6 +190,7 @@ const waitForAppFontReady = async (): Promise<void> => {
 
 const runPostMountStartupTasks = (): void => {
   runAfterFirstPaint(() => {
+    void waitForAppFontReady();
     void clearTauriServiceWorkers();
     void runIndexedDbResetIfNeeded();
     preloadNotoEmojiAssets(
@@ -206,11 +203,13 @@ const runPostMountStartupTasks = (): void => {
 };
 
 const mountApp = async (): Promise<void> => {
-  void initFastNativeNotificationNavigation();
+  // A cold notification tap must establish the topic route and the forced
+  // latest-page request before Vue mounts. Otherwise cached messages can paint
+  // for one frame and then be replaced by the topic skeleton.
+  await initFastNativeNotificationNavigation();
   registerNativeFileBridge();
   applyRuntimeBodyClasses();
   installNotoEmojiFontFaces();
-  await waitForAppFontReady();
 
   const app = createApp(App);
 

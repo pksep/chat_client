@@ -219,22 +219,22 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         background_color: '#ffffff',
         icons: [
           {
-            src: 'images/pwa-64x64.png?v=20260731',
+            src: 'images/pwa-64x64.png?v=20260904-2',
             sizes: '64x64',
             type: 'image/png'
           },
           {
-            src: 'images/pwa-192x192.png?v=20260731',
+            src: 'images/pwa-192x192.png?v=20260904-2',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'images/pwa-512x512.png?v=20260731',
+            src: 'images/pwa-512x512.png?v=20260904-2',
             sizes: '512x512',
             type: 'image/png'
           },
           {
-            src: 'images/maskable-icon-512x512.png?v=20260731',
+            src: 'images/maskable-icon-512x512.png?v=20260904-2',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable'

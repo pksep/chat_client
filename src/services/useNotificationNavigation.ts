@@ -1,5 +1,4 @@
 import { Capacitor } from '@capacitor/core';
-import { PushNotifications } from '@capacitor/push-notifications';
 import { shallowRef } from 'vue';
 import { navigateToDialogs, navigateToGroup } from '../composables/navigation';
 import {
@@ -16,11 +15,11 @@ import { getIsAppActivelyVisible } from './useAppVisibility';
 import { RuStorePush } from './nativePush';
 
 type NotificationTopicType = 'DM' | 'GROUP' | null;
-export const STARTUP_SHELL_TOPIC_ROUTE_CLASS = 'startup-shell-topic-route';
 
 export interface NotificationTopicRefreshRequest {
   id: number;
   topicId: string;
+  scrollToBottom: boolean;
   messageId?: string;
 }
 
@@ -42,26 +41,36 @@ export const consumeNotificationTopicRefreshRequest = (
   return true;
 };
 
-const requestNotificationTopicRefresh = (
+export const hasPendingForcedNotificationTopicRefresh = (
+  topicId?: string | null
+): boolean => {
+  const request = notificationTopicRefreshRequest.value;
+
+  return Boolean(
+    topicId && request?.topicId === topicId && request.scrollToBottom === true
+  );
+};
+
+export const requestNotificationTopicRefresh = (
   topicId: string,
+  scrollToBottom = false,
   messageId?: string | null
 ): void => {
+  const pendingRequest = notificationTopicRefreshRequest.value;
+
   notificationTopicRefreshRequest.value = {
     id: ++notificationTopicRefreshRequestId,
     topicId,
-    ...(messageId ? { messageId } : {})
+    scrollToBottom:
+      scrollToBottom ||
+      (pendingRequest?.topicId === topicId &&
+        pendingRequest?.scrollToBottom === true),
+    ...(messageId
+      ? { messageId }
+      : pendingRequest?.topicId === topicId && pendingRequest.messageId
+        ? { messageId: pendingRequest.messageId }
+        : {})
   };
-};
-
-const showStartupTopicSkeleton = (): void => {
-  if (
-    typeof document === 'undefined' ||
-    !document.getElementById?.('startup-shell')
-  ) {
-    return;
-  }
-
-  document.documentElement.classList.add(STARTUP_SHELL_TOPIC_ROUTE_CLASS);
 };
 
 export interface NotificationNavigationPayload {
@@ -232,9 +241,9 @@ export const navigateToNotificationTarget = (
   }
 
   if (target.topicId) {
-    showStartupTopicSkeleton();
     requestNotificationTopicRefresh(
       target.topicId,
+      true,
       resolveNotificationMessageId(payload)
     );
   }
@@ -344,33 +353,6 @@ export const clearTopicNotifications = async (
       return;
     }
 
-    try {
-      const delivered = await PushNotifications.getDeliveredNotifications();
-      const matchingNotifications = delivered.notifications.filter(
-        notification =>
-          resolveNotificationTopicId({
-            topicId: notification.data?.topicId,
-            chatId: notification.data?.chatId,
-            dialogsId: notification.data?.dialogsId,
-            groupId: notification.data?.groupId,
-            tag: notification.tag || notification.data?.tag,
-            url: notification.link || notification.data?.url,
-            link:
-              notification.click_action ||
-              notification.data?.link ||
-              notification.data?.click_action
-          }) === topicId
-      );
-
-      if (matchingNotifications.length > 0) {
-        await PushNotifications.removeDeliveredNotifications({
-          notifications: matchingNotifications
-        });
-      }
-    } catch (error) {
-      console.warn('Failed to clear native notifications for topic:', error);
-    }
-
     return;
   }
 
@@ -397,19 +379,6 @@ export const clearTopicNotifications = async (
   } catch (error) {
     console.warn('Failed to clear web notifications for topic:', error);
   }
-};
-
-const resolveDeliveredNotificationMessageId = (notification: {
-  data?: Record<string, any>;
-}): string | null => {
-  const data = notification.data || {};
-  const messageId =
-    data.messageId ||
-    data.message?.id ||
-    data.data?.messageId ||
-    data.data?.message?.id;
-
-  return messageId ? String(messageId) : null;
 };
 
 export const clearMessageNotification = async (
@@ -439,48 +408,6 @@ export const clearMessageNotification = async (
       }
 
       return;
-    }
-
-    try {
-      const delivered = await PushNotifications.getDeliveredNotifications();
-      const topicNotifications = topicId
-        ? delivered.notifications.filter(
-            notification =>
-              resolveNotificationTopicId({
-                topicId: notification.data?.topicId,
-                chatId: notification.data?.chatId,
-                dialogsId: notification.data?.dialogsId,
-                groupId: notification.data?.groupId,
-                tag: notification.tag || notification.data?.tag,
-                url: notification.link || notification.data?.url,
-                link:
-                  notification.click_action ||
-                  notification.data?.link ||
-                  notification.data?.click_action
-              }) === topicId
-          )
-        : delivered.notifications;
-      const exactNotifications = topicNotifications.filter(
-        notification =>
-          resolveDeliveredNotificationMessageId(notification) === messageId
-      );
-      const notificationsToRemove =
-        exactNotifications.length > 0
-          ? exactNotifications
-          : topicId
-            ? topicNotifications.filter(
-                notification =>
-                  resolveDeliveredNotificationMessageId(notification) === null
-              )
-            : [];
-
-      if (notificationsToRemove.length > 0) {
-        await PushNotifications.removeDeliveredNotifications({
-          notifications: notificationsToRemove
-        });
-      }
-    } catch (error) {
-      console.warn('Failed to clear native notification for message:', error);
     }
 
     return;

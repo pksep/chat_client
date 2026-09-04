@@ -11,14 +11,21 @@ import android.os.Build;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
+import androidx.core.app.RemoteInput;
 import androidx.core.content.ContextCompat;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class ChatNotificationHelper {
+    public static final String ACTION_OPEN_CHAT_NOTIFICATION =
+        "sep.pksep.app.action.OPEN_CHAT_NOTIFICATION";
     private static final int CHAT_NOTIFICATION_ID = 0;
+    private static final String EXTRA_MESSAGE_ID = "messageId";
+    private static final String EXTRA_NOTIFICATION_BODY = "notificationBody";
+    private static final String EXTRA_NOTIFICATION_TITLE = "notificationTitle";
     private static final String EXTRA_RUSTORE_MESSAGE_ID = "rustore.message_id";
+    private static final String EXTRA_TOPIC_ID = "topicId";
     private static final AtomicInteger REQUEST_CODE_PROVIDER =
         new AtomicInteger((int) System.currentTimeMillis());
 
@@ -48,13 +55,14 @@ public final class ChatNotificationHelper {
 
         String topicId = resolveNotificationTag(data);
         int requestCode = REQUEST_CODE_PROVIDER.incrementAndGet();
-        Intent intent = context
-            .getPackageManager()
-            .getLaunchIntentForPackage(context.getPackageName());
-        if (intent == null) {
-            intent = new Intent(context, MainActivity.class);
-        }
-        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        Class<?> notificationTarget = MainActivity.hasCreatedInstance()
+            ? MainActivity.class
+            : NotificationLaunchActivity.class;
+        Intent intent = new Intent(context, notificationTarget)
+            .setAction(ACTION_OPEN_CHAT_NOTIFICATION)
+            .addFlags(
+                Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP
+            );
 
         for (Map.Entry<String, String> entry : data.entrySet()) {
             if (entry.getKey() != null && entry.getValue() != null) {
@@ -62,9 +70,28 @@ public final class ChatNotificationHelper {
             }
         }
 
+        // Always include the normalized values. Some background payloads use
+        // only `tag`, so copying the original map is not enough for the very
+        // early MainActivity navigation path.
+        intent.putExtra(EXTRA_TOPIC_ID, topicId);
+
+        String messageId = firstNonEmpty(
+            data.get(EXTRA_MESSAGE_ID),
+            data.get(EXTRA_RUSTORE_MESSAGE_ID)
+        );
+        if (!isBlank(messageId)) {
+            intent.putExtra(EXTRA_MESSAGE_ID, messageId);
+        }
+        if (!isBlank(title)) {
+            intent.putExtra(EXTRA_NOTIFICATION_TITLE, title);
+        }
+        if (!isBlank(body)) {
+            intent.putExtra(EXTRA_NOTIFICATION_BODY, body);
+        }
+
         intent.putExtra(
             EXTRA_RUSTORE_MESSAGE_ID,
-            firstNonEmpty(data.get("messageId"), data.get(EXTRA_RUSTORE_MESSAGE_ID), topicId)
+            firstNonEmpty(messageId, topicId)
         );
         PendingIntent contentIntent = PendingIntent.getActivity(
             context,
@@ -77,7 +104,7 @@ public final class ChatNotificationHelper {
             context,
             NotificationChannelHelper.DEFAULT_CHANNEL_ID
         )
-            .setSmallIcon(R.drawable.ic_stat_chat)
+            .setSmallIcon(R.drawable.notification_statusbar_robot_head_2026)
             .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))
             .setAutoCancel(true)
             .setContentIntent(contentIntent);
@@ -92,10 +119,15 @@ public final class ChatNotificationHelper {
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body));
         }
 
-        String messageId = firstNonEmpty(
-            data.get("messageId"),
-            data.get(EXTRA_RUSTORE_MESSAGE_ID)
-        );
+        if (isUuid(topicId)) {
+            builder.addAction(createReplyAction(context, topicId, messageId));
+
+            if (isUuid(messageId)) {
+                builder.addAction(createLikeAction(context, topicId, messageId));
+                builder.addAction(createMarkReadAction(context, topicId, messageId));
+            }
+        }
+
         ChatNotificationDismissalHelper.trackTopicNotification(
             context,
             topicId,
@@ -104,12 +136,158 @@ public final class ChatNotificationHelper {
         NotificationManagerCompat.from(context).notify(
             topicId,
             CHAT_NOTIFICATION_ID,
-            builder.build()
+            NotificationBrandIconHelper.build(context, builder)
         );
+    }
+
+    private static NotificationCompat.Action createReplyAction(
+        Context context,
+        String topicId,
+        String messageId
+    ) {
+        RemoteInput remoteInput = new RemoteInput.Builder(
+            ChatNotificationActionReceiver.REMOTE_INPUT_REPLY
+        )
+            .setLabel("Ответить")
+            .setAllowFreeFormInput(true)
+            .build();
+        Intent actionIntent = new Intent(
+            context,
+            ChatNotificationActionReceiver.class
+        )
+            .setAction(ChatNotificationActionReceiver.ACTION_REPLY)
+            .putExtra(ChatNotificationActionReceiver.EXTRA_TOPIC_ID, topicId)
+            .putExtra(ChatNotificationActionReceiver.EXTRA_MESSAGE_ID, messageId);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            flags |= PendingIntent.FLAG_MUTABLE;
+        }
+
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE_PROVIDER.incrementAndGet(),
+            actionIntent,
+            flags
+        );
+
+        return new NotificationCompat.Action.Builder(
+            R.drawable.notification_statusbar_robot_head_2026,
+            "Ответить",
+            pendingIntent
+        )
+            .addRemoteInput(remoteInput)
+            .setAllowGeneratedReplies(true)
+            .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY)
+            .setShowsUserInterface(false)
+            .build();
+    }
+
+    private static NotificationCompat.Action createMarkReadAction(
+        Context context,
+        String topicId,
+        String messageId
+    ) {
+        Intent actionIntent = new Intent(
+            context,
+            ChatNotificationActionReceiver.class
+        )
+            .setAction(ChatNotificationActionReceiver.ACTION_MARK_READ)
+            .putExtra(ChatNotificationActionReceiver.EXTRA_TOPIC_ID, topicId)
+            .putExtra(ChatNotificationActionReceiver.EXTRA_MESSAGE_ID, messageId);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE_PROVIDER.incrementAndGet(),
+            actionIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        return new NotificationCompat.Action.Builder(
+            R.drawable.notification_statusbar_robot_head_2026,
+            "Прочитано",
+            pendingIntent
+        )
+            .setSemanticAction(
+                NotificationCompat.Action.SEMANTIC_ACTION_MARK_AS_READ
+            )
+            .setShowsUserInterface(false)
+            .build();
+    }
+
+    private static NotificationCompat.Action createLikeAction(
+        Context context,
+        String topicId,
+        String messageId
+    ) {
+        String heart = "\u2764\uFE0F";
+        Intent actionIntent = new Intent(
+            context,
+            ChatNotificationActionReceiver.class
+        )
+            .setAction(ChatNotificationActionReceiver.ACTION_REACT)
+            .putExtra(ChatNotificationActionReceiver.EXTRA_TOPIC_ID, topicId)
+            .putExtra(ChatNotificationActionReceiver.EXTRA_MESSAGE_ID, messageId)
+            .putExtra(ChatNotificationActionReceiver.EXTRA_EMOJI, heart);
+
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE_PROVIDER.incrementAndGet(),
+            actionIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        return new NotificationCompat.Action.Builder(
+            R.drawable.notification_statusbar_robot_head_2026,
+            "Нравится",
+            pendingIntent
+        )
+            .setShowsUserInterface(false)
+            .build();
     }
 
     public static void dismissTopicNotifications(Context context, String topicId) {
         ChatNotificationDismissalHelper.dismissTopicNotification(context, topicId);
+    }
+
+    public static void completeInlineReply(
+        Context context,
+        String topicId,
+        String replyText
+    ) {
+        if (context == null || isBlank(topicId) || isBlank(replyText)) {
+            return;
+        }
+
+        NotificationChannelHelper.ensureDefaultChannel(context);
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(
+            context,
+            NotificationChannelHelper.DEFAULT_CHANNEL_ID
+        )
+            .setSmallIcon(R.drawable.notification_statusbar_robot_head_2026)
+            .setContentTitle("Ответ отправлен")
+            .setContentText(replyText.trim())
+            .setRemoteInputHistory(new CharSequence[] { replyText.trim() })
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setAutoCancel(true);
+
+        NotificationManagerCompat notificationManager =
+            NotificationManagerCompat.from(context);
+        String normalizedTopicId = topicId.trim();
+
+        // Direct reply временно продлевает жизнь исходного уведомления.
+        // Обновление снимает это системное состояние, после чего уведомление
+        // можно закрыть без зависшего индикатора отправки.
+        notificationManager.notify(
+            normalizedTopicId,
+            CHAT_NOTIFICATION_ID,
+            NotificationBrandIconHelper.build(context, builder)
+        );
+        ChatNotificationDismissalHelper.dismissTopicNotification(
+            context,
+            normalizedTopicId
+        );
     }
 
     public static void dismissMessageNotification(
@@ -157,5 +335,18 @@ public final class ChatNotificationHelper {
 
     private static boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private static boolean isUuid(String value) {
+        if (isBlank(value)) {
+            return false;
+        }
+
+        try {
+            java.util.UUID.fromString(value.trim());
+            return true;
+        } catch (IllegalArgumentException ignored) {
+            return false;
+        }
     }
 }
