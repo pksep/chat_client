@@ -234,7 +234,7 @@
       <span v-else class="chat__header-search-count"></span>
 
       <Button
-        v-if="hasTopicSearchResults"
+        v-if="hasMultipleTopicSearchResults"
         class="chat__header-search-nav"
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.little"
@@ -248,7 +248,7 @@
         />
       </Button>
       <Button
-        v-if="hasTopicSearchResults"
+        v-if="hasMultipleTopicSearchResults"
         class="chat__header-search-nav"
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.little"
@@ -323,7 +323,7 @@
 
       <div class="chat__header-mobile-search-controls__nav">
         <Button
-          v-if="hasTopicSearchResults"
+          v-if="hasMultipleTopicSearchResults"
           class="chat__header-search-nav"
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.little"
@@ -335,7 +335,7 @@
           <Icon :name="IconNameEnum.arrowLeft" />
         </Button>
         <Button
-          v-if="hasTopicSearchResults"
+          v-if="hasMultipleTopicSearchResults"
           class="chat__header-search-nav"
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.little"
@@ -831,13 +831,14 @@ const topicSearchResultsCount = computed(() =>
     : topicSearchResults.value.length
 );
 const hasTopicSearchResults = computed(() => topicSearchResultsCount.value > 0);
+const hasMultipleTopicSearchResults = computed(
+  () => topicSearchResultsCount.value > 1
+);
 const canNavigateTopicSearchPrev = computed(
-  () =>
-    hasTopicSearchResults.value &&
-    topicSearchActiveIndex.value < topicSearchResultsCount.value - 1
+  () => hasMultipleTopicSearchResults.value
 );
 const canNavigateTopicSearchNext = computed(
-  () => hasTopicSearchResults.value && topicSearchActiveIndex.value > 0
+  () => hasMultipleTopicSearchResults.value
 );
 const topicSearchResultLabel = computed(() => {
   if (isTopicSearchLoading.value) {
@@ -1127,11 +1128,8 @@ const navigateTopicSearch = (direction: -1 | 1): void => {
     return;
   }
 
-  const nextIndex = topicSearchActiveIndex.value + direction;
-
-  if (nextIndex < 0 || nextIndex >= resultsCount) {
-    return;
-  }
+  const nextIndex =
+    (topicSearchActiveIndex.value + direction + resultsCount) % resultsCount;
 
   navigateTopicSearchResult(nextIndex);
 };
