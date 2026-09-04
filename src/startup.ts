@@ -178,12 +178,7 @@ const applyStartupTopicWallpaper = async (): Promise<void> => {
     return;
   }
 
-  await setStartupWallpaper(
-    topicShell,
-    customWallpaper,
-    'no-repeat',
-    'cover'
-  );
+  await setStartupWallpaper(topicShell, customWallpaper, 'no-repeat', 'cover');
 };
 
 const getPayloadText = (
