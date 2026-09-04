@@ -983,6 +983,10 @@
   height: 30px;
 }
 
+.ai-assistant__response-trigger--desktop {
+  min-width: 184px;
+}
+
 .ai-assistant__permission-trigger--mobile,
 .ai-assistant__voice-trigger--mobile {
   display: none;
@@ -1004,7 +1008,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  width: 138px;
+  width: 100%;
 }
 
 .ai-assistant__response-trigger-skeleton-icon,
@@ -1028,8 +1032,9 @@
 }
 
 .ai-assistant__response-trigger-skeleton-label {
-  width: 116px;
+  min-width: 0;
   height: 12px;
+  flex: 1 1 auto;
   border-radius: 6px;
 }
 

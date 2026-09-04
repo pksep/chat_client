@@ -81,6 +81,9 @@ test('выбирает модель по режиму ответа и сохра
   await expect(quickModeButton).toBeVisible({ timeout: 30_000 });
   await expect(quickModeButton).toBeEnabled({ timeout: 30_000 });
   await expect(quickModeButton.locator('svg')).toBeVisible();
+  const triggerWidth = await quickModeButton.evaluate(
+    element => element.getBoundingClientRect().width
+  );
   await quickModeButton.click();
   const advancedModeOption = page.getByRole('menuitemradio', {
     name: 'Продвинутый ответ'
@@ -94,6 +97,13 @@ test('выбирает модель по режиму ответа и сохра
   });
   await expect(advancedModeButton).toBeVisible();
   await expect(advancedModeButton.locator('svg')).toBeVisible();
+  await expect
+    .poll(() =>
+      advancedModeButton.evaluate(
+        element => element.getBoundingClientRect().width
+      )
+    )
+    .toBe(triggerWidth);
 
   const editor = page.locator('.ai-assistant__editor');
   await editor.locator('[contenteditable="true"]').click();
@@ -103,6 +113,13 @@ test('выбирает модель по режиму ответа и сохра
   await expect(
     advancedModeButton.locator('.ai-assistant__response-trigger-skeleton')
   ).toBeVisible();
+  await expect
+    .poll(() =>
+      advancedModeButton.evaluate(
+        element => element.getBoundingClientRect().width
+      )
+    )
+    .toBe(triggerWidth);
 
   await expect.poll(() => requests.length, { timeout: 30_000 }).toBe(1);
   expect(requests[0]).toMatchObject({
