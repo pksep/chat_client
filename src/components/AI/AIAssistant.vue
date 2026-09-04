@@ -13,29 +13,15 @@
     @dragstart.capture="handleEmojiDragStart"
     @dragend.capture="handleEmojiDragEnd"
   >
-    <div
+    <PinnedMessageBanner
       v-if="activeView === 'chat' && currentPinnedMessage"
-      class="pinned-messages ai-assistant__pinned-messages"
+      class="ai-assistant__pinned-messages"
+      :preview-text="currentPinnedMessagePreview"
+      :preview-key="currentPinnedMessage.id"
       data-testid="AI-Assistant-PinnedMessage"
-      @click="handlePinnedMessageClick"
-    >
-      <div class="chat__input__action">
-        <div class="chat__input__action__blog">
-          <h5>Закреплённое сообщение</h5>
-          <p :key="currentPinnedMessage.id" v-emoji>
-            {{ currentPinnedMessagePreview }}
-          </p>
-        </div>
-        <Button
-          :type="ButtonTypeEnum.ghost"
-          :size="SizesEnum.little"
-          data-testid="AI-Assistant-PinnedMessage-CloseButton"
-          @click.stop="openPinnedMessageUnpinModal"
-        >
-          <Icon :name="IconNameEnum.crossLarge" color="var(--chat-secondary)" />
-        </Button>
-      </div>
-    </div>
+      @navigate="handlePinnedMessageClick"
+      @request-unpin="openPinnedMessageUnpinModal"
+    />
 
     <div
       ref="scrollRef"
@@ -625,6 +611,7 @@ import PinIcon from '../UI/PinIcon.vue';
 import ReplyIcon from '../UI/ReplyIcon.vue';
 import ForwardModal from '../Messages/ForwardModal.vue';
 import MessageBubbleFiles from '../Messages/MessageBubbleFiles.vue';
+import PinnedMessageBanner from '../Messages/PinnedMessageBanner.vue';
 import { useMessageMedia } from '../Messages/composables/useMessageMedia';
 import { ensureMediaObjectUrl } from '../../services/useMediaBlobCache';
 import { downloadNativeFile } from '../../services/useNativeFile';

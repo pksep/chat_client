@@ -1,24 +1,11 @@
 <template>
-  <div
-    class="pinned-messages"
+  <PinnedMessageBanner
     v-if="currentPinnedMessage"
-    @click="handleChangeCurrentIndex"
-  >
-    <div class="chat__input__action">
-      <div class="chat__input__action__blog">
-        <h5>Закрепленное сособщение</h5>
-        <p :key="pinnedPreviewKey" v-emoji>{{ pinnedPreviewText }}</p>
-      </div>
-      <Button
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.little"
-        :data-testid="`Pinned-Messages-CloseButton`"
-        @click="handleOpenUnpinModal"
-      >
-        <Icon :name="IconNameEnum.crossLarge" color="var(--chat-secondary)" />
-      </Button>
-    </div>
-  </div>
+    :preview-text="pinnedPreviewText"
+    :preview-key="pinnedPreviewKey"
+    @navigate="handleChangeCurrentIndex"
+    @request-unpin="handleOpenUnpinModal"
+  />
 
   <ConfirmModal
     :open="unpinModalOpen"
@@ -40,15 +27,9 @@ import {
   unpinLocalMessageForMe
 } from '../../services/useMessages';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
-import {
-  Button,
-  ButtonTypeEnum,
-  Icon,
-  IconNameEnum,
-  SizesEnum
-} from '@pksep/yui';
 import { togglePinMessageChat } from '../../services/useChat';
 import ConfirmModal from '../UI/ConfirmModal.vue';
+import PinnedMessageBanner from './PinnedMessageBanner.vue';
 import type {
   IMessage,
   IMessageViewportSnapshot
@@ -145,9 +126,7 @@ const handleChangeCurrentIndex = () => {
   });
 };
 
-const handleOpenUnpinModal = (event: MouseEvent) => {
-  event.stopPropagation();
-
+const handleOpenUnpinModal = () => {
   unpinModalOpen.value = true;
 };
 

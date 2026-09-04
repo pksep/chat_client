@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const SESSION_ID = 'ai-pinned-messages';
+const HEADER_TEST_ID = 'ChatContainer-ChatContainer-Header-Header';
 
 test.setTimeout(90_000);
 
@@ -77,7 +78,7 @@ const confirmUnpin = async (page: Page) => {
 
 test('показывает закреп и позволяет переходить между закреплёнными AI-сообщениями', async ({
   page
-}) => {
+}, testInfo) => {
   let responseNumber = 0;
   await page.route('**/api/agents/generalAgent/stream*', async route => {
     responseNumber += 1;
@@ -125,6 +126,27 @@ test('показывает закреп и позволяет переходит
   await pinnedPanel.click();
   await expect(firstMessage).toHaveClass(/highlighted/);
   await expect(pinnedPanel).toContainText('Третье важное сообщение');
+
+  const isMobile = testInfo.project.name === 'chromium-mobile';
+  if (isMobile) {
+    await page.getByTestId(`${HEADER_TEST_ID}-PopoverIcon`).click();
+    await page.getByRole('button', { name: 'Поиск в чате' }).click();
+  } else {
+    await page.getByTestId(`${HEADER_TEST_ID}-SearchIcon`).click();
+  }
+
+  const searchInputTestId = isMobile ? 'MobileSearchInput' : 'SearchInput';
+  const searchCountTestId = isMobile ? 'MobileSearchCount' : 'SearchCount';
+  const searchPreviousTestId = isMobile ? 'MobileSearchPrev' : 'SearchPrev';
+  await page
+    .getByTestId(`${HEADER_TEST_ID}-${searchInputTestId}`)
+    .locator('input')
+    .fill('важное');
+  await expect(
+    page.getByTestId(`${HEADER_TEST_ID}-${searchCountTestId}`)
+  ).toHaveText('1 из 2');
+  await page.getByTestId(`${HEADER_TEST_ID}-${searchPreviousTestId}`).click();
+  await expect(firstMessage).toHaveClass(/highlighted/);
 
   await page.getByTestId('AI-Assistant-PinnedMessage-CloseButton').click();
   await confirmUnpin(page);

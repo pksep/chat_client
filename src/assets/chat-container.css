@@ -79,10 +79,22 @@
   }
 }
 
+@media screen and (width > 768px) {
+  .chat-container:has(.chat__header-desktop-search-row) {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .chat-container:has(.chat__header-desktop-search-row) .chat {
+    --basic-height: 100%;
+  }
+}
+
 .chat-container--wallpaper:has(.chat__message-wrapper) {
   background-color: var(--chat-wallpaper-background, var(--surface-main));
-  background-image: linear-gradient(rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1))),
-      rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1)))),
+  background-image: linear-gradient(
+      rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1))),
+      rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1)))
+    ),
     var(--chat-wallpaper-image);
 }
 
@@ -305,7 +317,9 @@ button.button-yui-kit.red-context-button {
   }
 
   .chat-container:has(.chat__header-active-call) {
-    --mobile-pinned-messages-offset: calc(var(--mobile-header-height) + var(--mobile-active-call-height));
+    --mobile-pinned-messages-offset: calc(
+      var(--mobile-header-height) + var(--mobile-active-call-height)
+    );
   }
 
   .chat__info {
@@ -371,7 +385,9 @@ button.button-yui-kit.red-context-button {
     font-size: 16px;
   }
 
-  .chat__header-wrapper .chat__header-main button.button-yui-kit.small.ghost-yui-kit {
+  .chat__header-wrapper
+    .chat__header-main
+    button.button-yui-kit.small.ghost-yui-kit {
     padding: 8px;
   }
 
