@@ -7,6 +7,49 @@ export interface PendingToolApproval {
 
 export type ApprovalDecision = 'approve' | 'decline' | null;
 
+const APPROVE_MESSAGE_PATTERN =
+  /^\s*(?:да|подтверждаю|подтвердить|согласен|согласна|хорошо|ок|окей)\s*[.!]?\s*$/iu;
+const DECLINE_MESSAGE_PATTERN =
+  /^\s*(?:нет|отмена|отменить|не подтверждаю|отклонить)\s*[.!]?\s*$/iu;
+
+/** Распознаёт короткий ответ только как решение по уже ожидающему действию. */
+export const approvalDecisionFromMessage = (
+  value: string
+): Exclude<ApprovalDecision, null> | null => {
+  if (APPROVE_MESSAGE_PATTERN.test(value)) return 'approve';
+  if (DECLINE_MESSAGE_PATTERN.test(value)) return 'decline';
+  return null;
+};
+
+const isPendingToolApproval = (
+  value: unknown
+): value is PendingToolApproval => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const approval = value as Partial<PendingToolApproval>;
+  return (
+    typeof approval.runId === 'string' &&
+    Boolean(approval.runId) &&
+    typeof approval.toolCallId === 'string' &&
+    Boolean(approval.toolCallId) &&
+    typeof approval.toolName === 'string' &&
+    Boolean(approval.toolName) &&
+    Boolean(approval.args) &&
+    typeof approval.args === 'object' &&
+    !Array.isArray(approval.args)
+  );
+};
+
+/** Восстанавливает последнее незавершённое подтверждение из локальной истории чата. */
+export const findPendingToolApproval = (
+  messages: Array<{ pendingToolApproval?: unknown }>
+): PendingToolApproval | null => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const approval = messages[index]?.pendingToolApproval;
+    if (isPendingToolApproval(approval)) return approval;
+  }
+  return null;
+};
+
 const STALE_APPROVAL_RESPONSE_PATTERNS = [
   /could not find an active or suspended run/iu,
   /could not find a suspended run/iu,

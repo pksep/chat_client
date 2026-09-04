@@ -7,7 +7,10 @@ import {
   type Ref,
   type WatchStopHandle
 } from 'vue';
-import type { PendingToolApproval } from '../services/mastraApproval';
+import {
+  approvalDecisionFromMessage,
+  type PendingToolApproval
+} from '../services/mastraApproval';
 import type { AiAttachmentReference } from '../services/aiAttachments';
 import type { AiOutputAttachment } from '../services/aiOutputAttachments';
 import type { AIMessage, AIMessageReference } from '../types/messages';
@@ -575,7 +578,34 @@ const sendMessage = async (
   modelInput?: string
 ): Promise<string | null> => {
   const visibleInput = buildVisibleInput(rawInput, attachments);
-  if (!visibleInput || isThinking.value) return null;
+  if (!visibleInput) return null;
+
+  const currentSession = activeSession.value;
+  if (currentSession) {
+    const runtime = await ensureRuntime(currentSession.id);
+    const approvalDecision = approvalDecisionFromMessage(visibleInput);
+    if (approvalDecision && runtime.pendingApproval.value) {
+      if (isThinking.value) return null;
+
+      beginSessionActivity(currentSession);
+      try {
+        await runtime.resolveToolApproval(approvalDecision);
+        syncSession(currentSession.id, runtime);
+        return (
+          currentSession.messages
+            .slice()
+            .reverse()
+            .find(
+              message => message.role === 'assistant' && message.text.trim()
+            )?.text || null
+        );
+      } finally {
+        void refreshAutomations();
+      }
+    }
+  }
+
+  if (isThinking.value) return null;
 
   const isTaskRequest = activeView.value === 'tasks';
   if (isTaskRequest) {

@@ -99,7 +99,7 @@ class ChatDB {
           })
         );
 
-        return {
+        const serializableMessage = {
           ...msg,
           ...(attachments ? { attachments } : {}),
           ...(outputAttachments ? { outputAttachments } : {}),
@@ -107,6 +107,9 @@ class ChatDB {
             ? new Date(msg.timestamp).toISOString()
             : undefined
         };
+
+        // IndexedDB не клонирует реактивные Proxy после восстановления истории.
+        return JSON.parse(JSON.stringify(serializableMessage)) as Message;
       });
       const data = {
         chatId,
