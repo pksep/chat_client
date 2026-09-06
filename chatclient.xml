@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="308555">
+<fb version="0.19.6" size="308553">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <inserted t="I">8</inserted>
-    <seconds t="F">361.841940718</seconds>
+    <seconds t="F">178.386947696</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-09-06T11:26:20Z</when>
+    <when t="T">2026-09-06T14:26:50Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -20916,19 +20916,6 @@ The average monthly turnover (1.0 developers) is decreasing (R=-0.31).</text>
     <when t="T">2026-09-06T07:28:12Z</when>
   </f>
   <f>
-    <_id t="I">1062</_id>
-    <_job t="I">34029887493</_job>
-    <_time t="T">2026-09-06T11:20:24Z</_time>
-    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
-    <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <events_were_scanned t="I">20232429041</events_were_scanned>
-    <latest_issue_was_found t="I">72</latest_issue_was_found>
-    <min_pull_was_found t="I">354</min_pull_was_found>
-    <repository t="I">1053332035</repository>
-    <what t="S">iterate</what>
-    <where t="S">github</where>
-  </f>
-  <f>
     <_id t="I">1063</_id>
     <_job t="I">34029887493</_job>
     <_time t="T">2026-09-06T11:20:24Z</_time>
@@ -21316,5 +21303,18 @@ The average monthly turnover (1.0 developers) is decreasing (R=-0.31).</text>
     <some_unmerged_pulls t="I">1</some_unmerged_pulls>
     <what t="S">quality-of-service</what>
     <when t="T">2026-09-06T11:20:42Z</when>
+  </f>
+  <f>
+    <_id t="I">1065</_id>
+    <_job t="I">34038962569</_job>
+    <_time t="T">2026-09-06T14:23:56Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <earliest_issue_was_found t="I">1</earliest_issue_was_found>
+    <events_were_scanned t="I">20239018547</events_were_scanned>
+    <latest_issue_was_found t="I">72</latest_issue_was_found>
+    <min_pull_was_found t="I">354</min_pull_was_found>
+    <repository t="I">1053332035</repository>
+    <what t="S">iterate</what>
+    <where t="S">github</where>
   </f>
 </fb>
