@@ -145,19 +145,10 @@
           />
         </div>
         <CallIcon
-          v-if="
-            (route.type === RouteTypes.DIALOGS ||
-              route.type === RouteTypes.GROUP) &&
-            !isBotDialogTopic &&
-            !isDeletedAccountDialogTopic &&
-            !isFavoriteDialogTopic &&
-            !isCallTopicRoute &&
-            !isCallActive &&
-            !hasPendingCallForCurrentTopic
-          "
+          v-if="showHeaderCallAction"
           class="chat__header__icon"
           :data-testid="`${props.dataTestid}-Header-CallIcon`"
-          @click.stop="handleCall"
+          @click.stop="handleCallAction"
         />
         <Icon
           v-if="getHeaderContextMenuOptions.length"
@@ -545,6 +536,7 @@ const {
   isVoiceModeOpen: isAiVoiceCallActive,
   isVoiceModalVisible: isAiVoiceCallModalVisible,
   voiceCallStartedAt: aiVoiceCallStartedAt,
+  startVoiceCall: startAiVoiceCall,
   showVoiceCall: showAiVoiceCall,
   deleteSession: deleteAiAssistantSession
 } = useAiAssistant();
@@ -776,6 +768,26 @@ const currentHeaderCallEntry = computed(
 const hasPendingCallForCurrentTopic = computed(
   () => !!currentPendingCall.value || !!currentTopicActiveCall.value?.roomId
 );
+const showHeaderCallAction = computed(() => {
+  if (route.value.type === RouteTypes.AI) {
+    return (
+      !isMobile.value &&
+      !isCallActive.value &&
+      !isAiVoiceCallActive.value
+    );
+  }
+
+  return (
+    (route.value.type === RouteTypes.DIALOGS ||
+      route.value.type === RouteTypes.GROUP) &&
+    !isBotDialogTopic.value &&
+    !isDeletedAccountDialogTopic.value &&
+    !isFavoriteDialogTopic.value &&
+    !isCallTopicRoute.value &&
+    !isCallActive.value &&
+    !hasPendingCallForCurrentTopic.value
+  );
+});
 const hasInvitedCall = computed(
   () => !!currentInvitedCall.value?.isJoinAvailable
 );
@@ -1167,6 +1179,15 @@ const handleCall = async () => {
   const { startLiveKitCall } = await import('../../services/useLiveKit');
 
   await startLiveKitCall(state.calledUser, route.value.id);
+};
+
+const handleCallAction = async (): Promise<void> => {
+  if (route.value.type === RouteTypes.AI) {
+    startAiVoiceCall();
+    return;
+  }
+
+  await handleCall();
 };
 
 const handleHeaderCallClick = async () => {

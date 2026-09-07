@@ -502,16 +502,6 @@
                 </button>
               </div>
             </div>
-            <Button
-              :type="ButtonTypeEnum.ghost"
-              :size="SizesEnum.small"
-              class="toolbar-button ai-assistant__voice-trigger ai-assistant__voice-trigger--desktop"
-              aria-label="Голосовой режим"
-              title="Голосовой режим"
-              @click.stop="openVoiceMode"
-            >
-              <VoiceMessageIcon />
-            </Button>
           </template>
         </ContentEditor>
       </div>
@@ -822,14 +812,7 @@ let voiceRestartTimer: number | null = null;
 
 /** Открывает голосовой режим непосредственно из пользовательского клика. */
 const openVoiceMode = (): void => {
-  if (isVoiceModeOpen.value) {
-    startVoiceCall();
-    return;
-  }
   startVoiceCall();
-  isVoiceMuted.value = false;
-  voiceCycleId += 1;
-  void runVoiceConversationCycle(voiceCycleId);
 };
 
 /** Сворачивает окно, сохраняя активный голосовой разговор. */
@@ -1754,6 +1737,14 @@ watch([() => activeSession.value?.messages.length || 0, isThinking], () => {
 
 watch(isThinking, thinking => {
   if (thinking) isResponseModeMenuOpen.value = false;
+});
+
+watch(isVoiceModeOpen, (isOpen, wasOpen) => {
+  if (!isOpen || wasOpen) return;
+
+  isVoiceMuted.value = false;
+  voiceCycleId += 1;
+  void runVoiceConversationCycle(voiceCycleId);
 });
 
 watch(
