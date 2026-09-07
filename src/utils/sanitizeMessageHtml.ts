@@ -106,9 +106,7 @@ const normalizeStyles = (element: HTMLElement): void => {
     return;
   }
 
-  const color = normalizeMessageColor(
-    element.style.getPropertyValue('color')
-  );
+  const color = normalizeMessageColor(element.style.getPropertyValue('color'));
   const backgroundColor = normalizeMessageColor(
     element.style.getPropertyValue('background-color')
   );

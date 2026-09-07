@@ -47,8 +47,7 @@
         'message-context-menu__emoji-picker',
         {
           'message-context-menu__emoji-picker--ready': emojiPickerReady,
-          [`message-context-menu__emoji-picker--origin-${emojiPickerOrigin}`]:
-            true
+          [`message-context-menu__emoji-picker--origin-${emojiPickerOrigin}`]: true
         }
       ]"
       v-on-click-outside="toggleShowEmojies"
