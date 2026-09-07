@@ -167,59 +167,6 @@
         }}
       </span>
     </div>
-    <div
-      v-if="shouldRenderUserMessageSkeleton"
-      :class="[
-        'chat__message-skeleton',
-        { 'chat__message-skeleton--group': route.type === RouteTypes.GROUP }
-      ]"
-      aria-hidden="true"
-      :data-testid="`${props.dataTestid}-MessageList-Skeleton`"
-    >
-      <span
-        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
-      >
-        <span class="chat__message-skeleton-avatar" />
-        <span
-          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--short"
-        />
-      </span>
-      <span
-        class="chat__message-skeleton-media chat__message-skeleton-media--outgoing"
-      >
-        <span class="chat__message-skeleton-media-icon" />
-      </span>
-      <span
-        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
-      >
-        <span class="chat__message-skeleton-avatar" />
-        <span
-          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
-        />
-      </span>
-      <span
-        class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing chat__message-skeleton-bubble--wide"
-      />
-      <span
-        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
-      >
-        <span class="chat__message-skeleton-avatar" />
-        <span
-          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--tiny"
-        />
-      </span>
-      <span
-        class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing"
-      />
-      <span
-        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
-      >
-        <span class="chat__message-skeleton-avatar" />
-        <span
-          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
-        />
-      </span>
-    </div>
     <Transition name="chat-floating-date" mode="out-in">
       <div
         v-if="!shouldRenderUserMessageSkeleton && shouldShowFloatingDateDivider"
@@ -366,6 +313,63 @@
   </div>
 
   <div
+    v-if="shouldRenderUserMessageSkeleton"
+    :class="[
+      'chat__message-skeleton',
+      'chat__message-skeleton--user',
+      { 'chat__message-skeleton--group': route.type === RouteTypes.GROUP }
+    ]"
+    aria-hidden="true"
+    :data-testid="`${props.dataTestid}-MessageList-Skeleton`"
+  >
+    <span
+      class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+    >
+      <span class="chat__message-skeleton-avatar" />
+      <span
+        class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--short"
+      />
+    </span>
+    <span
+      class="chat__message-skeleton-media chat__message-skeleton-media--outgoing"
+    >
+      <span class="chat__message-skeleton-media-icon" />
+    </span>
+    <span
+      class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+    >
+      <span class="chat__message-skeleton-avatar" />
+      <span
+        class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
+      />
+    </span>
+    <template v-if="isMobile">
+      <span
+        class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing chat__message-skeleton-bubble--wide"
+      />
+      <span
+        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+      >
+        <span class="chat__message-skeleton-avatar" />
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--tiny"
+        />
+      </span>
+      <span
+        class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing"
+      />
+      <span
+        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+      >
+        <span class="chat__message-skeleton-avatar" />
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
+        />
+      </span>
+    </template>
+  </div>
+
+  <div
     v-if="
       !isAiRoute &&
       !isDefaultRoute &&
@@ -431,12 +435,7 @@
     :data-testid="`${props.dataTestid}-CallTopicActions`"
   />
   <MessageListInput
-    v-if="
-      !isDefaultRoute &&
-      !isSelectionMode &&
-      !isMobileTopicSearchMode &&
-      !isDeletedAccountTopic
-    "
+    v-if="shouldRenderMessageComposer"
     :key="`${route.type}:${route.id || 'default'}`"
     v-model="inputText"
     ref="messageListInputRef"
@@ -525,6 +524,7 @@ import {
   suspendLocalOwnReadStatus
 } from '../services/useMessages';
 import {
+  consumeBufferedIncomingMessagesForTopic,
   getCanSendReadReceipts,
   getChatSDK,
   getHasBrowserNetwork,
@@ -592,6 +592,12 @@ import {
   notificationTopicRefreshRequest
 } from '../services/useNotificationNavigation';
 import { getMessageReactionLayoutSignature } from '../utils/messageScroll';
+import { dispatchNotificationTopicShellReady } from '../utils/nativeStartup';
+import {
+  collectNotificationForwardPages,
+  getNotificationVisibleMessagesLimit,
+  mergeNotificationMessageSnapshots
+} from '../utils/notificationMessages';
 
 export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
@@ -626,6 +632,7 @@ const MOBILE_INITIAL_MESSAGES_LIMIT = 48;
 const MOBILE_MAX_INITIAL_MESSAGES_LIMIT = 48;
 const MOBILE_EXPANDED_MESSAGES_LIMIT = 72;
 const MOBILE_MAX_VISIBLE_MESSAGES_LIMIT = 72;
+const NOTIFICATION_RECONCILIATION_PAGE_LIMIT = 200;
 type UpdateBannerState = 'available' | 'downloading' | 'downloaded';
 
 const updateBannerState = computed<UpdateBannerState>(() => {
@@ -940,6 +947,13 @@ const isDeletedAccountTopic = computed(() => {
 
   return topic?.type === TopicType.DM && isDeletedBotUser(topic.user);
 });
+const shouldRenderMessageComposer = computed(
+  () =>
+    !isDefaultRoute.value &&
+    !isSelectionMode.value &&
+    !isMobileTopicSearchMode.value &&
+    !isDeletedAccountTopic.value
+);
 const topicUnreadCount = computed(() =>
   getTopicUnreadBadgeCount(activeTopic.value || undefined, authUser.value?.id)
 );
@@ -1018,6 +1032,10 @@ let visibleMessagesExpansionAppliedToken = 0;
 let activeTopicPreviewRefreshTimeoutId: number | null = null;
 let activeTopicPreviewRefreshToken = 0;
 let activeTopicPreviewRefreshRetryCount = 0;
+let activeNotificationRefreshToken = 0;
+let isForcedNotificationRefreshPending = false;
+let pendingNotificationTopicShellId = '';
+let notificationTopicShellReadyFrameId = 0;
 let completedTopicSwitchToken = 0;
 let isPendingSearchNavigationInProgress = false;
 let isPendingSearchNavigationBootstrapInProgress = false;
@@ -1188,6 +1206,83 @@ const cancelInitialMessagesSkeletonDelay = (): void => {
 const resetInitialMessagesSkeleton = (): void => {
   cancelInitialMessagesSkeletonDelay();
   isInitialMessagesSkeletonVisible.value = false;
+};
+
+const showInitialMessagesSkeletonImmediately = (): void => {
+  cancelInitialMessagesSkeletonDelay();
+  isInitialMessagesSkeletonVisible.value = true;
+};
+
+const scheduleNotificationTopicShellReady = (topicId: string): void => {
+  pendingNotificationTopicShellId = topicId;
+
+  if (notificationTopicShellReadyFrameId) {
+    return;
+  }
+
+  const waitForWebTopicShell = (): void => {
+    notificationTopicShellReadyFrameId = 0;
+
+    if (pendingNotificationTopicShellId !== topicId) {
+      const nextTopicId = pendingNotificationTopicShellId;
+
+      if (nextTopicId) {
+        scheduleNotificationTopicShellReady(nextTopicId);
+      }
+
+      return;
+    }
+
+    const startupShell = document.getElementById('startup-shell');
+
+    if (!startupShell) {
+      pendingNotificationTopicShellId = '';
+      return;
+    }
+
+    if (route.value?.id !== topicId) {
+      pendingNotificationTopicShellId = '';
+      return;
+    }
+
+    const chatContainer = document.getElementById('chat-container-image');
+    const topicHeader = chatContainer?.querySelector(
+      '.chat__header .chat__header-profile'
+    );
+    const messageComposer = chatContainer?.querySelector('.chat__input');
+    const isMessageLayerPaintable =
+      renderedTopicId.value === topicId &&
+      !isLoadingInitialMessages.value &&
+      !shouldRenderUserMessageSkeleton.value;
+    const isWebTopicShellPaintable =
+      activeTopic.value?.id === topicId &&
+      isMessageLayerPaintable &&
+      Boolean(chatWrapperRef.value) &&
+      Boolean(chatContainer) &&
+      Boolean(topicHeader) &&
+      (!shouldRenderMessageComposer.value || Boolean(messageComposer));
+
+    if (!isWebTopicShellPaintable) {
+      notificationTopicShellReadyFrameId =
+        window.requestAnimationFrame(waitForWebTopicShell);
+      return;
+    }
+
+    pendingNotificationTopicShellId = '';
+    dispatchNotificationTopicShellReady();
+  };
+
+  nextTick(() => {
+    if (
+      pendingNotificationTopicShellId !== topicId ||
+      notificationTopicShellReadyFrameId
+    ) {
+      return;
+    }
+
+    notificationTopicShellReadyFrameId =
+      window.requestAnimationFrame(waitForWebTopicShell);
+  });
 };
 
 const scheduleInitialMessagesSkeleton = (
@@ -1460,6 +1555,171 @@ const refreshActiveTopicFromPreview = async (
     reason,
     messageCount: messages.length
   });
+};
+
+interface NotificationTopicMessagesResult {
+  messages: IMessage[];
+  visibleLimit: number;
+}
+
+const reconcileNotificationTopicMessages = async (
+  topicId: string,
+  limit: number,
+  notificationMessageId?: string
+): Promise<NotificationTopicMessagesResult> => {
+  const residentMessagesBeforeFetch = [...getFullMessagesByTopicId(topicId)];
+  const latestMessagesPromise = fetchMessagesForTopic(topicId, {
+    limit,
+    newMessages: true,
+    forceRefresh: true,
+    forceNetwork: true,
+    allowStaleFallback: false,
+    visibleLimit: limit,
+    updateVisible: false
+  });
+  const notificationContextPromise = notificationMessageId
+    ? fetchAroundMessage(notificationMessageId, topicId, {
+        updateVisible: false,
+        forceNetwork: true
+      })
+    : Promise.resolve([] as IMessage[]);
+  const [latestMessages, notificationContext] = await Promise.all([
+    latestMessagesPromise,
+    notificationContextPromise
+  ]);
+  const forwardPages = await collectNotificationForwardPages(
+    notificationContext,
+    latestMessages,
+    NOTIFICATION_RECONCILIATION_PAGE_LIMIT,
+    (afterMessageId, pageLimit) =>
+      fetchMessagesForTopic(topicId, {
+        afterMessageId,
+        limit: pageLimit,
+        skipSave: true,
+        skipShadowSnapshot: true,
+        forceRefresh: true,
+        forceNetwork: true,
+        allowStaleFallback: false,
+        updateVisible: false
+      })
+  );
+
+  // A topic can still be in history mode while the notification request is in
+  // flight. Flush messages buffered by the WebSocket before choosing the
+  // visible latest window, otherwise the first of two quick messages can stay
+  // behind the skeleton until another scroll or refresh.
+  setSuspendIncomingMergeForTopic(topicId, false);
+  const bufferedMessages = consumeBufferedIncomingMessagesForTopic(topicId);
+  const reconciledMessages = mergeNotificationMessageSnapshots(
+    residentMessagesBeforeFetch,
+    latestMessages,
+    notificationContext,
+    ...forwardPages,
+    bufferedMessages,
+    getFullMessagesByTopicId(topicId)
+  );
+  const visibleLimit = getNotificationVisibleMessagesLimit(
+    limit,
+    reconciledMessages
+  );
+
+  if (reconciledMessages.length > 0) {
+    mergeMessagesForTopic(topicId, reconciledMessages, 'replace', {
+      syncLastMessage: false,
+      windowMode: 'latest',
+      visibleLimit,
+      updateVisible: false
+    });
+  }
+
+  return {
+    messages: reconciledMessages,
+    visibleLimit
+  };
+};
+
+const refreshActiveTopicFromNotification = async (
+  topicId: string,
+  forceScrollToBottom: boolean,
+  notificationMessageId?: string
+): Promise<void> => {
+  if (!forceScrollToBottom && isForcedNotificationRefreshPending) {
+    return;
+  }
+
+  const refreshToken = ++activeNotificationRefreshToken;
+
+  if (forceScrollToBottom) {
+    isForcedNotificationRefreshPending = true;
+    isLoadingInitialMessages.value = true;
+    renderedTopicId.value = '';
+    showInitialMessagesSkeletonImmediately();
+    scheduleNotificationTopicShellReady(topicId);
+  }
+
+  const unreadCount = getTopicUnreadBadgeCount(
+    getSelectedTopic(topicId),
+    authUser.value?.id
+  );
+  const { expandedLimit } = getTopicSwitchFetchLimits(unreadCount);
+  try {
+    const { visibleLimit } = await reconcileNotificationTopicMessages(
+      topicId,
+      expandedLimit,
+      notificationMessageId
+    );
+
+    if (
+      refreshToken !== activeNotificationRefreshToken ||
+      route.value?.id !== topicId
+    ) {
+      return;
+    }
+
+    const shouldApplyVisibleRefresh =
+      forceScrollToBottom || isCurrentTopicNearBottomNow();
+
+    if (shouldApplyVisibleRefresh) {
+      setVisibleMessagesLimitForTopic(topicId, visibleLimit, {
+        allowShrink: false
+      });
+    }
+
+    renderedTopicId.value = topicId;
+
+    if (forceScrollToBottom) {
+      isLoadingInitialMessages.value = false;
+      resetInitialMessagesSkeleton();
+    }
+
+    await nextTick();
+
+    if (
+      refreshToken !== activeNotificationRefreshToken ||
+      route.value?.id !== topicId
+    ) {
+      return;
+    }
+
+    if (shouldApplyVisibleRefresh) {
+      scrollToBottom({
+        preferUnreadMarker: false,
+        smooth: false
+      });
+    }
+
+    setupIntersectionObserver();
+    syncVisibleUnreadAfterAutoScroll();
+  } finally {
+    if (refreshToken === activeNotificationRefreshToken) {
+      isForcedNotificationRefreshPending = false;
+
+      if (forceScrollToBottom && route.value?.id === topicId) {
+        isLoadingInitialMessages.value = false;
+        resetInitialMessagesSkeleton();
+      }
+    }
+  }
 };
 
 const scheduleActiveTopicPreviewRefresh = (reason: string): void => {
@@ -3424,15 +3684,32 @@ watch(
       !!topicId &&
       notificationRefreshRequest?.id === notificationRefreshRequestId &&
       notificationRefreshRequest.topicId === topicId;
+    const shouldScrollToBottomForNotification =
+      isNotificationRefreshRequestForTopic &&
+      notificationRefreshRequest.scrollToBottom;
     const notificationMessageId = isNotificationRefreshRequestForTopic
-      ? notificationRefreshRequest.messageId || ''
-      : '';
+      ? notificationRefreshRequest.messageId
+      : undefined;
+
+    const isSameTopicNotificationRefresh =
+      isNotificationRefreshRequestForTopic &&
+      topicId === previousTopicId &&
+      routeType === previousRouteType;
 
     if (isNotificationRefreshRequestForTopic) {
       consumeNotificationTopicRefreshRequest(
         topicId,
         notificationRefreshRequestId
       );
+    }
+
+    if (isSameTopicNotificationRefresh) {
+      await refreshActiveTopicFromNotification(
+        topicId,
+        shouldScrollToBottomForNotification,
+        notificationMessageId
+      );
+      return;
     }
 
     hideFloatingDateDivider();
@@ -3456,7 +3733,7 @@ watch(
       route.value?.id !== topicId;
     const hadRenderedDifferentTopicMessages =
       renderedTopicId.value !== topicId && state.messages.length > 0;
-    if (routeType === RouteTypes.AI) {
+    if (routeType === RouteTypes.AI || shouldScrollToBottomForNotification) {
       renderedTopicId.value = '';
     } else {
       renderedTopicId.value = topicId;
@@ -3474,7 +3751,12 @@ watch(
     state.unreadMarkerMessageId = null;
     setTopicMessagesKnownEmpty(topicId, false);
     isLoadingInitialMessages.value = true;
-    scheduleInitialMessagesSkeleton(topicId, topicSwitchToken);
+    if (shouldScrollToBottomForNotification) {
+      showInitialMessagesSkeletonImmediately();
+      scheduleNotificationTopicShellReady(topicId);
+    } else {
+      scheduleInitialMessagesSkeleton(topicId, topicSwitchToken);
+    }
     resetScrollState();
     if (hadRenderedDifferentTopicMessages) {
       scrollAnchor.setViewportMode('history', { pin: false });
@@ -3495,6 +3777,7 @@ watch(
       topicUnreadCount,
       initialMessagesLimit
     );
+    let notificationVisibleMessagesLimit = expandedLimit;
     const pendingSearchNavigationForTopic =
       routeType !== RouteTypes.AI &&
       getPendingSearchNavigation()?.topicId === topicId
@@ -3503,8 +3786,7 @@ watch(
     const pendingSearchMessageId =
       pendingSearchNavigationForTopic?.message?.id || '';
     const shouldPositionToPendingSearch = !!pendingSearchMessageId;
-    const bootstrapAnchorMessageId =
-      pendingSearchMessageId || notificationMessageId;
+    const bootstrapAnchorMessageId = pendingSearchMessageId;
     const shouldBootstrapAroundMessage = !!bootstrapAnchorMessageId;
     const shouldLockBootstrapScroll = false;
 
@@ -3532,8 +3814,12 @@ watch(
       });
     }
 
-    void fetchPinnedMessagesForTopic(topicId);
-    const shouldHydrateBeforeInitialPaint = routeType !== RouteTypes.AI;
+    if (!shouldScrollToBottomForNotification) {
+      void fetchPinnedMessagesForTopic(topicId);
+    }
+
+    const shouldHydrateBeforeInitialPaint =
+      routeType !== RouteTypes.AI && !shouldScrollToBottomForNotification;
     const hydrationPromise = shouldHydrateBeforeInitialPaint
       ? hydrateMessagesFromCache(topicId, undefined, {
           visibleLimit: fastInitialMessagesLimit,
@@ -3545,14 +3831,23 @@ watch(
     // Start cache and network together. Network updates the canonical memory
     // snapshot in the background, while only cache/memory may paint first.
     if (!shouldBootstrapAroundMessage) {
-      initialMessagesFetch = fetchMessagesForTopic(topicId, {
-        limit: initialMessagesLimit,
-        forceRefresh: true,
-        forceNetwork: getHasBrowserNetwork(),
-        allowStaleFallback: !getHasBrowserNetwork(),
-        visibleLimit: fastInitialMessagesLimit,
-        updateVisible: false
-      });
+      initialMessagesFetch = shouldScrollToBottomForNotification
+        ? reconcileNotificationTopicMessages(
+            topicId,
+            expandedLimit,
+            notificationMessageId
+          ).then(result => {
+            notificationVisibleMessagesLimit = result.visibleLimit;
+            return result.messages;
+          })
+        : fetchMessagesForTopic(topicId, {
+            limit: initialMessagesLimit,
+            forceRefresh: true,
+            forceNetwork: getHasBrowserNetwork(),
+            allowStaleFallback: !getHasBrowserNetwork(),
+            visibleLimit: fastInitialMessagesLimit,
+            updateVisible: false
+          });
     }
 
     const hydratedMessages = await hydrationPromise;
@@ -3562,9 +3857,10 @@ watch(
     }
 
     if (
-      getRenderedTopicMessages(topicId, hydratedMessages).length > 0 ||
-      getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId)).length >
-        0
+      !shouldScrollToBottomForNotification &&
+      (getRenderedTopicMessages(topicId, hydratedMessages).length > 0 ||
+        getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId))
+          .length > 0)
     ) {
       setTopicMessagesKnownEmpty(topicId, false);
       cancelInitialMessagesSkeletonDelay();
@@ -3607,32 +3903,14 @@ watch(
       );
     }
 
-    let initialMessages = (await initialMessagesFetch) || [];
+    const initialMessages = (await initialMessagesFetch) || [];
 
     if (isStaleTopicSwitch()) {
       return;
     }
 
-    const isNotificationTargetLoaded = notificationMessageId
-      ? initialMessages.some(message => message.id === notificationMessageId) ||
-        getMessagesByTopicId(topicId).some(
-          message => message.id === notificationMessageId
-        )
-      : true;
-
-    if (!isNotificationTargetLoaded) {
-      initialMessages = await fetchMessagesForTopic(topicId, {
-        limit: initialMessagesLimit,
-        forceRefresh: true,
-        forceNetwork: getHasBrowserNetwork(),
-        allowStaleFallback: true,
-        visibleLimit: fastInitialMessagesLimit,
-        updateVisible: true
-      });
-
-      if (isStaleTopicSwitch()) {
-        return;
-      }
+    if (shouldScrollToBottomForNotification) {
+      void fetchPinnedMessagesForTopic(topicId);
     }
 
     cancelInitialMessagesSkeletonDelay();
@@ -3642,7 +3920,13 @@ watch(
         shouldKeepTopicSwitchBottomPosition(topicSwitchToken));
 
     if (shouldApplyInitialNetworkWindow) {
-      setVisibleMessagesLimitForTopic(topicId, fastInitialMessagesLimit);
+      setVisibleMessagesLimitForTopic(
+        topicId,
+        shouldScrollToBottomForNotification
+          ? notificationVisibleMessagesLimit
+          : fastInitialMessagesLimit,
+        { allowShrink: false }
+      );
     }
 
     const renderedResidentMessages = getRenderedTopicMessages(
@@ -3670,7 +3954,11 @@ watch(
       return;
     }
 
-    if (!shouldBootstrapAroundMessage && expandedLimit > initialMessagesLimit) {
+    if (
+      !shouldScrollToBottomForNotification &&
+      !shouldBootstrapAroundMessage &&
+      expandedLimit > initialMessagesLimit
+    ) {
       scheduleExpandedTopicMessagesFetch(
         topicId,
         expandedLimit,
@@ -3706,7 +3994,7 @@ watch(
 
     const shouldKeepInitialBottomPosition =
       !shouldPositionToPendingSearch &&
-      (Boolean(notificationMessageId) ||
+      (shouldScrollToBottomForNotification ||
         shouldKeepTopicSwitchBottomPosition(topicSwitchToken));
 
     if (shouldKeepInitialBottomPosition) {
@@ -3738,7 +4026,9 @@ watch(
     } else if (shouldKeepInitialBottomPosition) {
       scheduleVisibleMessagesExpansion(
         topicId,
-        expandedLimit,
+        shouldScrollToBottomForNotification
+          ? notificationVisibleMessagesLimit
+          : expandedLimit,
         topicSwitchToken
       );
     }
@@ -3973,6 +4263,22 @@ onMounted(() => {
     if (getCanSendReadReceipts()) {
       refreshUnreadMarkerState();
     }
+
+    const topicId = route.value?.id;
+
+    if (
+      !getIsAppActivelyVisible() ||
+      !topicId ||
+      route.value.type === RouteTypes.AI ||
+      renderedTopicId.value !== topicId ||
+      isLoadingInitialMessages.value
+    ) {
+      return;
+    }
+
+    void refreshActiveTopicFromNotification(topicId, false).catch(error => {
+      console.warn('Failed to refresh active topic after app resume:', error);
+    });
   });
 });
 
@@ -3984,6 +4290,12 @@ onUnmounted(() => {
   if (messageHighlightTimeoutId !== null) {
     window.clearTimeout(messageHighlightTimeoutId);
     messageHighlightTimeoutId = null;
+  }
+
+  pendingNotificationTopicShellId = '';
+  if (notificationTopicShellReadyFrameId) {
+    window.cancelAnimationFrame(notificationTopicShellReadyFrameId);
+    notificationTopicShellReadyFrameId = 0;
   }
 
   window.removeEventListener('keydown', handleWindowKeydown, true);

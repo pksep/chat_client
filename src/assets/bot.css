@@ -3,10 +3,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
-  min-width: 38px;
-  min-height: 38px;
+  width: 2em;
+  height: 2em;
+  min-width: 2em;
+  min-height: 2em;
   font-size: var(--size-avatar, 16px);
   --online-indicator-size: 9px;
   flex-shrink: 0;

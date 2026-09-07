@@ -45,7 +45,7 @@
   />
 </template>
 <script lang="ts" setup>
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { PushNotification } from '@pksep/yui';
 import { IChatContainerConfig } from './components/interfaces/interfaces';
 import ChatContainerRoot from './ChatContainerRoot.vue';
@@ -65,7 +65,10 @@ import {
 import { fetchUsersForAuth } from './composables/useUsers';
 import { useNotifications } from './composables/useNotifications';
 import { initShareIntentHandling } from './services/useShareIntent';
-import { dispatchNativeStartupReady } from './utils/nativeStartup';
+import {
+  dispatchNativeStartupReady,
+  NOTIFICATION_TOPIC_SHELL_READY_EVENT
+} from './utils/nativeStartup';
 import { useThemeStore } from './stores/theme';
 
 const ORGANIZATIONS_KEY = 'chat_runtime_organizations';
@@ -145,16 +148,45 @@ const wait = (durationMs: number) =>
 
 const STARTUP_SHELL_LEAVE_MS = 200;
 let isStartupShellHideScheduled = false;
+let startupShellHideToken = 0;
+let isNativeStartupReadyDispatched = false;
+
+const dispatchNativeStartupReadyOnce = () => {
+  if (isNativeStartupReadyDispatched) {
+    return;
+  }
+
+  isNativeStartupReadyDispatched = true;
+  dispatchNativeStartupReady();
+};
+
+const removeStartupShell = () => {
+  startupShellElement?.remove();
+  document.documentElement.classList.remove('startup-shell-topic-route');
+  isStartupShellVisible.value = false;
+  dispatchNativeStartupReadyOnce();
+};
 
 const hideStartupShellAfterMainPaint = async () => {
+  const hideToken = ++startupShellHideToken;
+
   await nextTick();
   await waitForAnimationFrame();
   await waitForAnimationFrame();
+
+  if (hideToken !== startupShellHideToken) {
+    return;
+  }
+
   startupShellElement?.classList.add('startup-shell--leaving');
   isStartupShellVisible.value = false;
   await wait(STARTUP_SHELL_LEAVE_MS);
-  startupShellElement?.remove();
-  dispatchNativeStartupReady();
+
+  if (hideToken !== startupShellHideToken) {
+    return;
+  }
+
+  removeStartupShell();
 };
 
 const requestStartupShellHide = () => {
@@ -165,6 +197,26 @@ const requestStartupShellHide = () => {
   isStartupShellHideScheduled = true;
   void hideStartupShellAfterMainPaint();
 };
+
+const handleNotificationTopicShellReady = () => {
+  if (!startupShellElement?.isConnected) {
+    dispatchNativeStartupReadyOnce();
+    return;
+  }
+
+  // MessageList dispatches this event from requestAnimationFrame only after
+  // the real topic header, message layer and composer exist.
+  // Removing the static shell in the same frame avoids covering the real
+  // header and composer with a second, full-screen skeleton during the fade.
+  startupShellHideToken += 1;
+  isStartupShellHideScheduled = true;
+  removeStartupShell();
+};
+
+window.addEventListener(
+  NOTIFICATION_TOPIC_SHELL_READY_EVENT,
+  handleNotificationTopicShellReady
+);
 
 const handleChatContentReady = () => {
   isChatContentReady.value = true;
@@ -178,7 +230,10 @@ const finishBootstrapping = () => {
   isBootstrapping.value = false;
 
   if (!isStartupShellVisible.value) {
-    dispatchNativeStartupReady();
+    if (!isStartupShellHideScheduled) {
+      dispatchNativeStartupReadyOnce();
+    }
+
     return;
   }
 
@@ -679,6 +734,13 @@ onMounted(async () => {
   } finally {
     finishBootstrapping();
   }
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener(
+    NOTIFICATION_TOPIC_SHELL_READY_EVENT,
+    handleNotificationTopicShellReady
+  );
 });
 </script>
 

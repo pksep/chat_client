@@ -16,8 +16,7 @@ let package = Package(
         .package(name: "CapacitorBarcodeScanner", path: "..\..\..\node_modules\@capacitor\barcode-scanner"),
         .package(name: "CapacitorClipboard", path: "..\..\..\node_modules\@capacitor\clipboard"),
         .package(name: "CapacitorFilesystem", path: "..\..\..\node_modules\@capacitor\filesystem"),
-        .package(name: "CapacitorPreferences", path: "..\..\..\node_modules\@capacitor\preferences"),
-        .package(name: "CapacitorPushNotifications", path: "..\..\..\node_modules\@capacitor\push-notifications")
+        .package(name: "CapacitorPreferences", path: "..\..\..\node_modules\@capacitor\preferences")
     ],
     targets: [
         .target(
@@ -29,8 +28,7 @@ let package = Package(
                 .product(name: "CapacitorBarcodeScanner", package: "CapacitorBarcodeScanner"),
                 .product(name: "CapacitorClipboard", package: "CapacitorClipboard"),
                 .product(name: "CapacitorFilesystem", package: "CapacitorFilesystem"),
-                .product(name: "CapacitorPreferences", package: "CapacitorPreferences"),
-                .product(name: "CapacitorPushNotifications", package: "CapacitorPushNotifications")
+                .product(name: "CapacitorPreferences", package: "CapacitorPreferences")
             ]
         )
     ]

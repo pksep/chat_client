@@ -316,6 +316,7 @@ button.button-yui-kit.red-context-button {
 @media screen and (width <=768px) {
   .chat-container {
     --mobile-header-height: 58px;
+    --header-height: var(--mobile-header-height);
     --mobile-active-call-height: 45px;
     --mobile-pinned-messages-offset: var(--mobile-header-height);
   }
@@ -324,6 +325,10 @@ button.button-yui-kit.red-context-button {
     --mobile-pinned-messages-offset: calc(
       var(--mobile-header-height) + var(--mobile-active-call-height)
     );
+    --header-height: calc(
+      var(--mobile-header-height) + var(--mobile-active-call-height)
+    );
+    --mobile-pinned-messages-offset: calc(var(--mobile-header-height) + var(--mobile-active-call-height));
   }
 
   .chat__info {

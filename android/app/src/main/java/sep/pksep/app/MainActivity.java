@@ -5,13 +5,21 @@ import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Shader;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.LayerDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Base64;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -19,6 +27,7 @@ import android.view.WindowManager;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 
 import com.getcapacitor.JSObject;
@@ -26,8 +35,14 @@ import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.WebViewListener;
 
 import androidx.core.splashscreen.SplashScreen;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 
 import sep.pksep.app.plugins.AudioOutputPlugin;
 import sep.pksep.app.plugins.AndroidScreenSharePlugin;
@@ -48,7 +63,6 @@ import sep.pksep.app.plugins.VpnStatusPlugin;
 public class MainActivity extends BridgeActivity {
     private static final String EXTRA_ACTION = "action";
     private static final String EXTRA_CALL_ACTION = "callAction";
-    private static final String EXTRA_GOOGLE_MESSAGE_ID = "google.message_id";
     private static final String EXTRA_RUSTORE_MESSAGE_ID = "rustore.message_id";
     private static final String EXTRA_ROOM_ID = "roomId";
     private static final String EXTRA_TOPIC_ID = "topicId";
@@ -58,12 +72,17 @@ public class MainActivity extends BridgeActivity {
         "webview_cache_apk_fingerprint";
     private static final String PREF_WEBVIEW_CACHE_VERSION_CODE =
         "webview_cache_version_code";
-    private static final int LAUNCH_BACKGROUND_COLOR = 0xFFF8F9FD;
+    private static final String LAUNCH_APPEARANCE_PREFS = "launch_appearance";
+    private static final String PREF_LAUNCH_DARK_THEME = "dark_theme";
+    private static final int LAUNCH_BACKGROUND_LIGHT_COLOR = 0xFFF8F9FD;
+    private static final int LAUNCH_BACKGROUND_DARK_COLOR = 0xFF212531;
     private static final long LAUNCH_SPLASH_FALLBACK_TIMEOUT_MS = 6000L;
-    private static final long STARTUP_OVERLAY_FALLBACK_TIMEOUT_MS = 6000L;
+    private static final long STARTUP_OVERLAY_FALLBACK_TIMEOUT_MS = 30000L;
     private static boolean customPluginsRegistered = false;
     private static volatile boolean appInForeground = false;
+    private static volatile boolean activityCreated = false;
     private boolean launchedFromIncomingCall = false;
+    private boolean launchedFromChatNotification = false;
     private boolean shouldClearWebViewCacheBeforeLoad = false;
     private boolean callFullscreenSystemUiEnabled = false;
     private boolean keepLaunchSplash = true;
@@ -75,25 +94,42 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        activityCreated = true;
+        launchedFromIncomingCall = isIncomingCallIntent(getIntent());
+        launchedFromChatNotification = isChatMessageNotificationIntent(getIntent());
+        if (
+            getIntent() != null &&
+            getIntent().getBooleanExtra(
+                NotificationLaunchActivity.EXTRA_PREPARED_NOTIFICATION_LAUNCH,
+                false
+            )
+        ) {
+            setTheme(R.style.AppTheme_NoActionBar);
+        }
         SplashScreen launchSplash = SplashScreen.installSplashScreen(this);
         configureLaunchSplash(launchSplash);
         applyLaunchBackground();
-        launchedFromIncomingCall = isIncomingCallIntent(getIntent());
         shouldClearWebViewCacheBeforeLoad =
             savedInstanceState == null &&
                 !launchedFromIncomingCall &&
                 shouldClearWebViewCacheForCurrentVersion();
         NotificationChannelHelper.ensureDefaultChannel(this);
         registerCustomPluginsIfNeeded();
+        // Publish a cold-start notification before Capacitor starts loading the
+        // page. The tiny startup module can then select the topic shell before
+        // Android reveals the WebView, instead of briefly showing the chat list.
+        handleNotificationLaunchIntent(getIntent());
 
         super.onCreate(savedInstanceState);
         applyLaunchBackground();
+        if (launchedFromChatNotification) {
+            installStartupOverlay();
+        }
         configureLocalDevelopmentNetworking();
         configureBridgeWebViewBackground();
         setPortraitOrientation();
         configureIncomingCallWindow(getIntent());
         handleCallIntent(getIntent());
-        handleNotificationLaunchIntent(getIntent());
         handleShareIntent(getIntent());
     }
 
@@ -109,8 +145,18 @@ public class MainActivity extends BridgeActivity {
         super.onPause();
     }
 
+    @Override
+    public void onDestroy() {
+        activityCreated = false;
+        super.onDestroy();
+    }
+
     static boolean isAppInForeground() {
         return appInForeground;
+    }
+
+    static boolean hasCreatedInstance() {
+        return activityCreated;
     }
 
     private void configureLocalDevelopmentNetworking() {
@@ -140,6 +186,11 @@ public class MainActivity extends BridgeActivity {
             new WebViewListener() {
                 @Override
                 public void onPageCommitVisible(WebView view, String url) {
+                    if (launchedFromChatNotification) {
+                        applyWebViewLaunchBackground(view);
+                        return;
+                    }
+
                     releaseLaunchSplashAfterWebViewPaint(view);
                 }
 
@@ -165,6 +216,10 @@ public class MainActivity extends BridgeActivity {
         keepLaunchSplash = false;
     }
 
+    public void revealStartupOverlay() {
+        runOnUiThread(this::releaseLaunchSplash);
+    }
+
     public void hideStartupOverlayAndReleaseSplash() {
         runOnUiThread(
             () -> {
@@ -182,17 +237,12 @@ public class MainActivity extends BridgeActivity {
                     return;
                 }
 
-                overlay.animate()
-                    .alpha(0f)
-                    .setDuration(120L)
-                    .withEndAction(
-                        () -> {
-                            if (overlay.getParent() instanceof ViewGroup) {
-                                ((ViewGroup) overlay.getParent()).removeView(overlay);
-                            }
-                        }
-                    )
-                    .start();
+                // The WebView shell is already paintable when this method is
+                // called. Removing the native layer atomically avoids blending
+                // two headers, composers and skeletons during a cross-fade.
+                if (overlay.getParent() instanceof ViewGroup) {
+                    ((ViewGroup) overlay.getParent()).removeView(overlay);
+                }
             }
         );
     }
@@ -202,9 +252,14 @@ public class MainActivity extends BridgeActivity {
             return;
         }
 
+        if (launchedFromChatNotification) {
+            installNotificationTopicStartupOverlay();
+            return;
+        }
+
         FrameLayout overlay = new FrameLayout(this);
         overlay.setClickable(true);
-        overlay.setBackgroundColor(LAUNCH_BACKGROUND_COLOR);
+        overlay.setBackgroundColor(getLaunchBackgroundColor());
         overlay.setLayoutParams(
             new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -248,6 +303,468 @@ public class MainActivity extends BridgeActivity {
             this::hideStartupOverlayAndReleaseSplash,
             STARTUP_OVERLAY_FALLBACK_TIMEOUT_MS
         );
+    }
+
+    private void installNotificationTopicStartupOverlay() {
+        boolean isDarkTheme = isDarkLaunchTheme();
+        int mainColor = isDarkTheme
+            ? LAUNCH_BACKGROUND_DARK_COLOR
+            : LAUNCH_BACKGROUND_LIGHT_COLOR;
+        int surfaceColor = isDarkTheme ? 0xFF262A38 : 0xFFFFFFFF;
+        int skeletonColor = isDarkTheme ? 0xFF606884 : 0xFFE7E7E7;
+        int skeletonHighlightColor = isDarkTheme ? 0xFF767F9D : 0xFFF5F5F5;
+
+        FrameLayout overlay = new FrameLayout(this);
+        overlay.setClickable(true);
+        overlay.setBackgroundColor(mainColor);
+        applyNotificationStartupWallpaper(overlay, mainColor);
+
+        // Keep the wallpaper below the header (and beneath the composer), but
+        // paint the transparent top system inset with the header surface.
+        View statusBarBackground = new View(this);
+        statusBarBackground.setBackgroundColor(surfaceColor);
+        overlay.addView(
+            statusBarBackground,
+            new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                Gravity.TOP
+            )
+        );
+
+        LinearLayout topicShell = new LinearLayout(this);
+        topicShell.setOrientation(LinearLayout.VERTICAL);
+        topicShell.setBackgroundColor(0x00000000);
+        ViewCompat.setOnApplyWindowInsetsListener(
+            topicShell,
+            (view, windowInsets) -> {
+                Insets systemBars = windowInsets.getInsets(
+                    WindowInsetsCompat.Type.systemBars()
+                );
+                view.setPadding(0, systemBars.top, 0, systemBars.bottom);
+                ViewGroup.LayoutParams statusBarParams =
+                    statusBarBackground.getLayoutParams();
+                if (statusBarParams.height != systemBars.top) {
+                    statusBarParams.height = systemBars.top;
+                    statusBarBackground.setLayoutParams(statusBarParams);
+                }
+                return windowInsets;
+            }
+        );
+        overlay.addView(
+            topicShell,
+            new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        );
+        ViewCompat.requestApplyInsets(topicShell);
+
+        topicShell.addView(
+            createNotificationStartupHeader(
+                surfaceColor
+            ),
+            new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(60)
+            )
+        );
+
+        FrameLayout messages = new FrameLayout(this);
+        LinearLayout.LayoutParams messagesParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            0,
+            1f
+        );
+        topicShell.addView(messages, messagesParams);
+
+        LinearLayout messageSkeletons = new LinearLayout(this);
+        messageSkeletons.setOrientation(LinearLayout.VERTICAL);
+        messageSkeletons.setPadding(dp(8), dp(18), dp(8), dp(55));
+        FrameLayout.LayoutParams skeletonsParams = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        );
+        messages.addView(messageSkeletons, skeletonsParams);
+        boolean showMessageAvatars = "GROUP".equalsIgnoreCase(
+            getIntent() == null ? null : getIntent().getStringExtra("topicType")
+        );
+        addNotificationMessageSkeleton(
+            messageSkeletons,
+            true,
+            showMessageAvatars,
+            180,
+            46,
+            skeletonColor
+        );
+        addNotificationSkeletonSpacer(messageSkeletons);
+        addNotificationMediaSkeleton(
+            messageSkeletons,
+            268,
+            155,
+            skeletonColor,
+            skeletonHighlightColor
+        );
+        addNotificationSkeletonSpacer(messageSkeletons);
+        addNotificationMessageSkeleton(
+            messageSkeletons,
+            true,
+            showMessageAvatars,
+            280,
+            46,
+            skeletonColor
+        );
+        addNotificationSkeletonSpacer(messageSkeletons);
+        addNotificationMessageSkeleton(
+            messageSkeletons,
+            false,
+            false,
+            306,
+            46,
+            skeletonColor
+        );
+        addNotificationSkeletonSpacer(messageSkeletons);
+        addNotificationMessageSkeleton(
+            messageSkeletons,
+            true,
+            showMessageAvatars,
+            150,
+            46,
+            skeletonColor
+        );
+        addNotificationSkeletonSpacer(messageSkeletons);
+        addNotificationMessageSkeleton(
+            messageSkeletons,
+            false,
+            false,
+            250,
+            46,
+            skeletonColor
+        );
+        addNotificationSkeletonSpacer(messageSkeletons);
+        addNotificationMessageSkeleton(
+            messageSkeletons,
+            true,
+            showMessageAvatars,
+            280,
+            46,
+            skeletonColor
+        );
+
+        topicShell.addView(
+            createNotificationStartupComposer(
+                surfaceColor,
+                skeletonColor
+            ),
+            new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(75)
+            )
+        );
+
+        getWindow().addContentView(
+            overlay,
+            new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        );
+        startupOverlay = overlay;
+
+        // The Android splash only needs to cover the first native layout pass.
+        // From the next frame onward this topic shell is a useful, stable state
+        // while the WebView and the latest message page are loading.
+        overlay.postOnAnimation(this::releaseLaunchSplash);
+        launchSplashHandler.postDelayed(
+            this::hideStartupOverlayAndReleaseSplash,
+            STARTUP_OVERLAY_FALLBACK_TIMEOUT_MS
+        );
+    }
+
+    private View createNotificationStartupHeader(int surfaceColor) {
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(16), dp(7), dp(16), dp(7));
+        header.setBackgroundColor(surfaceColor);
+
+        header.addView(
+            createBlock(40, 40, 0xFFE7E7E7, 20, true),
+            new LinearLayout.LayoutParams(dp(40), dp(40))
+        );
+
+        LinearLayout profile = new LinearLayout(this);
+        profile.setOrientation(LinearLayout.VERTICAL);
+        profile.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams profileParams = new LinearLayout.LayoutParams(
+            0,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            1f
+        );
+        profileParams.setMargins(dp(10), 0, dp(12), 0);
+        header.addView(profile, profileParams);
+
+        View titleLine = createBlock(150, 14, 0xFFE7E7E7, 5, false);
+        LinearLayout.LayoutParams titleLineParams = new LinearLayout.LayoutParams(
+            dp(150),
+            dp(14)
+        );
+        titleLineParams.setMargins(0, 0, 0, dp(6));
+        profile.addView(titleLine, titleLineParams);
+        profile.addView(
+            createBlock(92, 10, 0xFFE7E7E7, 5, false),
+            new LinearLayout.LayoutParams(dp(92), dp(10))
+        );
+
+        addHeaderSkeletonAction(header, 0xFFE7E7E7);
+        addHeaderSkeletonAction(header, 0xFFE7E7E7);
+        return header;
+    }
+
+    private void addHeaderSkeletonAction(
+        LinearLayout header,
+        int color
+    ) {
+        View action = createBlock(24, 24, color, 12, true);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+            dp(24),
+            dp(24)
+        );
+        params.setMargins(dp(8), 0, 0, 0);
+        header.addView(action, params);
+    }
+
+    private void addNotificationMessageSkeleton(
+        LinearLayout container,
+        boolean incoming,
+        boolean showAvatar,
+        int bubbleWidthDp,
+        int bubbleHeightDp,
+        int color
+    ) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.BOTTOM);
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            dp(Math.max(42, bubbleHeightDp))
+        );
+        rowParams.setMargins(0, 0, 0, dp(12));
+        container.addView(row, rowParams);
+
+        if (!incoming) {
+            row.addView(
+                new View(this),
+                new LinearLayout.LayoutParams(0, 1, 1f)
+            );
+        } else if (showAvatar) {
+            View avatar = createBlock(35, 35, color, 18, true);
+            LinearLayout.LayoutParams avatarParams = new LinearLayout.LayoutParams(
+                dp(35),
+                dp(35)
+            );
+            avatarParams.setMargins(0, 0, dp(8), 0);
+            row.addView(avatar, avatarParams);
+        }
+
+        View bubble = createBlock(
+            bubbleWidthDp,
+            bubbleHeightDp,
+            color,
+            18,
+            false
+        );
+        row.addView(
+            bubble,
+            new LinearLayout.LayoutParams(dp(bubbleWidthDp), dp(bubbleHeightDp))
+        );
+    }
+
+    private void addNotificationSkeletonSpacer(LinearLayout container) {
+        container.addView(
+            new View(this),
+            new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        );
+    }
+
+    private void addNotificationMediaSkeleton(
+        LinearLayout container,
+        int widthDp,
+        int heightDp,
+        int color,
+        int highlightColor
+    ) {
+        FrameLayout media = new FrameLayout(this);
+        media.setBackground(createRoundedBackground(color, 18, 0));
+        LinearLayout.LayoutParams mediaParams = new LinearLayout.LayoutParams(
+            dp(widthDp),
+            dp(heightDp)
+        );
+        mediaParams.gravity = Gravity.END;
+        container.addView(media, mediaParams);
+
+        View icon = createBlock(42, 42, highlightColor, 12, false);
+        media.addView(
+            icon,
+            new FrameLayout.LayoutParams(dp(42), dp(42), Gravity.CENTER)
+        );
+    }
+
+    private View createNotificationStartupComposer(
+        int surfaceColor,
+        int skeletonColor
+    ) {
+        FrameLayout composer = new FrameLayout(this);
+        composer.setPadding(dp(10), dp(5), dp(10), dp(20));
+
+        LinearLayout editor = new LinearLayout(this);
+        editor.setOrientation(LinearLayout.HORIZONTAL);
+        editor.setGravity(Gravity.CENTER_VERTICAL);
+        editor.setPadding(dp(14), 0, dp(14), 0);
+        editor.setBackground(
+            createRoundedBackground(surfaceColor, 25, skeletonColor)
+        );
+        composer.addView(
+            editor,
+            new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        );
+
+        editor.addView(
+            createBlock(22, 22, skeletonColor, 11, true),
+            new LinearLayout.LayoutParams(dp(22), dp(22))
+        );
+
+        View textLine = createBlock(-1, 14, skeletonColor, 5, false);
+        LinearLayout.LayoutParams textLineParams = new LinearLayout.LayoutParams(
+            0,
+            dp(14),
+            1f
+        );
+        textLineParams.setMargins(dp(10), 0, dp(10), 0);
+        editor.addView(textLine, textLineParams);
+
+        editor.addView(
+            createBlock(22, 22, skeletonColor, 11, true),
+            new LinearLayout.LayoutParams(dp(22), dp(22))
+        );
+        return composer;
+    }
+
+    private void applyNotificationStartupWallpaper(
+        FrameLayout messages,
+        int backgroundColor
+    ) {
+        messages.setBackgroundColor(backgroundColor);
+        String selectedWallpaperId = readStartupWallpaperFile("selected-id.txt");
+
+        if ("none".equals(selectedWallpaperId)) {
+            return;
+        }
+
+        if (
+            selectedWallpaperId != null &&
+            selectedWallpaperId.startsWith("custom-wallpaper-")
+        ) {
+            Bitmap customWallpaper = decodeStartupCustomWallpaper(
+                readStartupWallpaperFile(selectedWallpaperId + ".txt")
+            );
+
+            if (customWallpaper != null) {
+                ImageView wallpaperView = new ImageView(this);
+                wallpaperView.setImageBitmap(customWallpaper);
+                wallpaperView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                messages.addView(
+                    wallpaperView,
+                    new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                );
+                return;
+            }
+        }
+
+        messages.setBackground(createStartupWallpaper(backgroundColor));
+    }
+
+    private String readStartupWallpaperFile(String fileName) {
+        if (fileName == null || fileName.trim().isEmpty()) {
+            return null;
+        }
+
+        File wallpaperFile = new File(
+            new File(getFilesDir(), "chat-wallpapers"),
+            fileName
+        );
+
+        if (!wallpaperFile.isFile()) {
+            return null;
+        }
+
+        try {
+            return new String(
+                Files.readAllBytes(wallpaperFile.toPath()),
+                StandardCharsets.UTF_8
+            ).trim();
+        } catch (IOException ignored) {
+            return null;
+        }
+    }
+
+    private Bitmap decodeStartupCustomWallpaper(String dataUrl) {
+        if (dataUrl == null || dataUrl.trim().isEmpty()) {
+            return null;
+        }
+
+        int separatorIndex = dataUrl.indexOf(',');
+        String encodedImage = separatorIndex >= 0
+            ? dataUrl.substring(separatorIndex + 1)
+            : dataUrl;
+
+        try {
+            byte[] imageBytes = Base64.decode(encodedImage, Base64.DEFAULT);
+            return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private Drawable createStartupWallpaper(int backgroundColor) {
+        Bitmap bitmap = BitmapFactory.decodeResource(
+            getResources(),
+            R.drawable.chat_wallpaper_startup
+        );
+        if (bitmap == null) {
+            return new ColorDrawable(backgroundColor);
+        }
+
+        BitmapDrawable pattern = new BitmapDrawable(getResources(), bitmap);
+        pattern.setTileModeX(Shader.TileMode.REPEAT);
+        pattern.setTileModeY(Shader.TileMode.REPEAT);
+        return new LayerDrawable(
+            new Drawable[] { new ColorDrawable(backgroundColor), pattern }
+        );
+    }
+
+    private GradientDrawable createRoundedBackground(
+        int fillColor,
+        int radiusDp,
+        int strokeColor
+    ) {
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(fillColor);
+        background.setCornerRadius(dp(radiusDp));
+        if (strokeColor != 0) {
+            background.setStroke(1, strokeColor);
+        }
+        return background;
     }
 
     private void addChipRow(LinearLayout content) {
@@ -411,8 +928,9 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void applyLaunchBackground() {
-        getWindow().setBackgroundDrawable(new ColorDrawable(LAUNCH_BACKGROUND_COLOR));
-        getWindow().getDecorView().setBackgroundColor(LAUNCH_BACKGROUND_COLOR);
+        int launchBackgroundColor = getLaunchBackgroundColor();
+        getWindow().setBackgroundDrawable(new ColorDrawable(launchBackgroundColor));
+        getWindow().getDecorView().setBackgroundColor(launchBackgroundColor);
     }
 
     private void configureBridgeWebViewBackground() {
@@ -428,7 +946,24 @@ public class MainActivity extends BridgeActivity {
             return;
         }
 
-        webView.setBackgroundColor(LAUNCH_BACKGROUND_COLOR);
+        webView.setBackgroundColor(getLaunchBackgroundColor());
+    }
+
+    public void setLaunchDarkTheme(boolean ignoredIsDarkTheme) {
+        getSharedPreferences(LAUNCH_APPEARANCE_PREFS, MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_LAUNCH_DARK_THEME, false)
+            .apply();
+    }
+
+    private boolean isDarkLaunchTheme() {
+        return false;
+    }
+
+    private int getLaunchBackgroundColor() {
+        return isDarkLaunchTheme()
+            ? LAUNCH_BACKGROUND_DARK_COLOR
+            : LAUNCH_BACKGROUND_LIGHT_COLOR;
     }
 
     @Override
@@ -446,10 +981,35 @@ public class MainActivity extends BridgeActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         launchedFromIncomingCall = isIncomingCallIntent(intent);
+        launchedFromChatNotification = isChatMessageNotificationIntent(intent);
         configureIncomingCallWindow(intent);
         handleCallIntent(intent);
         handleNotificationLaunchIntent(intent);
         handleShareIntent(intent);
+    }
+
+    private boolean isChatMessageNotificationIntent(Intent intent) {
+        if (intent == null) {
+            return false;
+        }
+
+        Bundle extras = intent.getExtras();
+        if (extras == null || "incoming_call".equals(extras.getString(EXTRA_TYPE))) {
+            return false;
+        }
+
+        boolean isPushNotification = extras.containsKey(EXTRA_RUSTORE_MESSAGE_ID);
+        boolean isExplicitChatNotification =
+            ChatNotificationHelper.ACTION_OPEN_CHAT_NOTIFICATION.equals(
+                intent.getAction()
+            );
+        String topicId = extras.getString(EXTRA_TOPIC_ID);
+
+        return (
+            (isPushNotification || isExplicitChatNotification) &&
+            topicId != null &&
+            !topicId.trim().isEmpty()
+        );
     }
 
     @Override
@@ -501,15 +1061,18 @@ public class MainActivity extends BridgeActivity {
             return;
         }
 
-        boolean isFirebaseNotification = extras.containsKey(EXTRA_GOOGLE_MESSAGE_ID);
         boolean isRuStoreNotification = extras.containsKey(EXTRA_RUSTORE_MESSAGE_ID);
+        boolean isExplicitChatNotification =
+            ChatNotificationHelper.ACTION_OPEN_CHAT_NOTIFICATION.equals(
+                intent.getAction()
+            );
         boolean isIncomingCallNotification =
             "incoming_call".equals(extras.getString(EXTRA_TYPE)) &&
             extras.containsKey(EXTRA_ROOM_ID);
 
         if (
-            !isFirebaseNotification &&
             !isRuStoreNotification &&
+            !isExplicitChatNotification &&
             !isIncomingCallNotification
         ) {
             return;

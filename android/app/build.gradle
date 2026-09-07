@@ -19,8 +19,7 @@ def getAppVersionCode() {
 }
 
 def rustorePushProjectIdOverride = project.findProperty("rustorePushProjectId")
-def rustorePushDevelopmentProjectId = "-IIn57B6vQDQpG7JJtG2Cnl1wcJEpQFE"
-def rustorePushProductionProjectId = "vasCQeAAQ2QqX-sGoCThsabI6p2nktdu"
+def rustorePushProjectId = "-IIn57B6vQDQpG7JJtG2Cnl1wcJEpQFE"
 def chatAllowCleartextOverride = project.findProperty("chatAllowCleartext")
 
 apply plugin: 'com.android.application'
@@ -53,13 +52,14 @@ android {
     buildTypes {
         debug {
             def allowCleartext = (chatAllowCleartextOverride ?: "true").toString().toBoolean()
-            resValue "string", "rustore_push_project_id", rustorePushProjectIdOverride ?: rustorePushDevelopmentProjectId
+            resValue "string", "rustore_push_project_id", rustorePushProjectIdOverride ?: rustorePushProjectId
             buildConfigField "boolean", "CHAT_ALLOW_CLEARTEXT", allowCleartext.toString()
             manifestPlaceholders.chatUsesCleartextTraffic = allowCleartext.toString()
+            signingConfig signingConfigs.release
         }
         release {
             def allowCleartext = (chatAllowCleartextOverride ?: "false").toString().toBoolean()
-            resValue "string", "rustore_push_project_id", rustorePushProjectIdOverride ?: rustorePushProductionProjectId
+            resValue "string", "rustore_push_project_id", rustorePushProjectIdOverride ?: rustorePushProjectId
             buildConfigField "boolean", "CHAT_ALLOW_CLEARTEXT", allowCleartext.toString()
             manifestPlaceholders.chatUsesCleartextTraffic = allowCleartext.toString()
             signingConfig signingConfigs.release
@@ -93,7 +93,6 @@ dependencies {
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation "androidx.work:work-runtime:$workManagerVersion"
 
-    implementation "com.google.firebase:firebase-messaging:$firebaseMessagingVersion"
     implementation "ru.rustore.sdk:pushclient:7.4.0"
     implementation "ru.rustore.sdk:appupdate:10.2.0"
 
@@ -106,12 +105,3 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
-
-try {
-    def servicesJSON = file('google-services.json')
-    if (servicesJSON.text) {
-        apply plugin: 'com.google.gms.google-services'
-    }
-} catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
-}
