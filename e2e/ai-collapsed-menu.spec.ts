@@ -3,10 +3,17 @@ import { expect, test } from '@playwright/test';
 const CHAT_SESSION_ID = 'collapsed-menu-chat';
 const SECOND_CHAT_SESSION_ID = 'collapsed-menu-second-chat';
 const TASK_SESSION_ID = 'collapsed-menu-task-chat';
+const TASK_DRAFT_SESSION_ID = 'collapsed-menu-task-draft';
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page }, testInfo) => {
   await page.addInitScript(
-    ({ chatSessionId, secondChatSessionId, taskSessionId }) => {
+    ({
+      chatSessionId,
+      secondChatSessionId,
+      taskSessionId,
+      taskDraftSessionId,
+      includeTaskDraft
+    }) => {
       const organizationUrl = 'http://127.0.0.1:65530';
       const config = {
         CHAT_AUTH_API: organizationUrl,
@@ -52,7 +59,19 @@ test.beforeEach(async ({ page }) => {
               description: 'Тест',
               time: '09:00',
               messages: []
-            }
+            },
+            ...(includeTaskDraft
+              ? [
+                  {
+                    id: taskDraftSessionId,
+                    kind: 'task',
+                    title: 'Сводка ожидает подтверждения',
+                    description: 'Требуется подтверждение',
+                    time: '08:55',
+                    messages: []
+                  }
+                ]
+              : [])
           ],
           tasks: [
             {
@@ -72,7 +91,9 @@ test.beforeEach(async ({ page }) => {
     {
       chatSessionId: CHAT_SESSION_ID,
       secondChatSessionId: SECOND_CHAT_SESSION_ID,
-      taskSessionId: TASK_SESSION_ID
+      taskSessionId: TASK_SESSION_ID,
+      taskDraftSessionId: TASK_DRAFT_SESSION_ID,
+      includeTaskDraft: testInfo.title.includes('показывает задачи и AI-чаты')
     }
   );
 });
@@ -101,9 +122,15 @@ test('показывает задачи и AI-чаты единым списко
   const chat = list.getByRole('button', {
     name: 'Чат с ИИ: Рабочий чат'
   });
+  const taskDraft = list.getByRole('button', {
+    name: 'Задача с ИИ: Сводка ожидает подтверждения'
+  });
 
   await expect(task).toBeVisible();
+  await expect(taskDraft).toBeVisible();
   await expect(chat).toBeVisible();
+  await expect(taskDraft.locator('.tasks-suggestion-icon')).toHaveCount(1);
+  await expect(chat.locator('.tasks-suggestion-icon')).toHaveCount(0);
   await task.hover();
   await expect(
     list.getByRole('button', {
@@ -121,17 +148,46 @@ test('показывает задачи и AI-чаты единым списко
     'rgb(119, 166, 255)'
   );
 
-  const separatorStyle = await task.evaluate(element => {
-    const style = window.getComputedStyle(element, '::after');
-    return {
-      borderTopColor: style.borderTopColor,
-      borderTopWidth: style.borderTopWidth,
-      content: style.content
-    };
-  });
-  expect(separatorStyle.content).not.toBe('none');
-  expect(separatorStyle.borderTopColor).toBe('rgb(231, 231, 231)');
-  expect(separatorStyle.borderTopWidth).toBe('1px');
+  const preview = page.locator('.ai-menu-panel__collapsed-preview');
+  const previewItems = preview.locator('.ai-activity-panel__item');
+  await task.hover();
+  await expect(preview).toBeVisible();
+  await expect(previewItems).toHaveCount(1);
+  await expect(
+    preview.getByText('Ежедневная сводка', { exact: true })
+  ).toBeVisible();
+  await expect(preview.getByText('Активна', { exact: true })).toBeVisible();
+  await expect(
+    preview.getByText('Информация за рабочий день', { exact: true })
+  ).toBeVisible();
+  await expect(preview.getByText('Рабочий чат', { exact: true })).toHaveCount(
+    0
+  );
+
+  await chat.hover();
+  await expect(previewItems).toHaveCount(1);
+  await expect(preview.getByText('Рабочий чат', { exact: true })).toBeVisible();
+  await expect(
+    preview.getByText('Готов к работе', { exact: true })
+  ).toBeVisible();
+  await expect(preview.locator('.ai-activity-panel__copy small')).toHaveText(
+    'Новый чат'
+  );
+
+  const [previewBox, hoveredChatBox] = await Promise.all([
+    preview.boundingBox(),
+    chat.boundingBox()
+  ]);
+  expect(previewBox!.x).toBeGreaterThan(
+    hoveredChatBox!.x + hoveredChatBox!.width
+  );
+
+  const separator = task
+    .locator('xpath=..')
+    .locator('.ai-menu-panel__collapsed-divider');
+  await expect(separator).toBeVisible();
+  await expect(separator).toHaveCSS('border-top-color', 'rgb(231, 231, 231)');
+  await expect(separator).toHaveCSS('border-top-width', '1px');
 
   const [
     panelBox,
@@ -185,7 +241,7 @@ test('показывает задачи и AI-чаты единым списко
   ).toBeLessThanOrEqual(0.5);
   await expect(task.locator('.ai-menu-panel__collapsed-avatar')).toHaveCSS(
     'background-color',
-    'rgb(242, 247, 255)'
+    'rgb(236, 243, 255)'
   );
   await expect(task.locator('.ai-menu-panel__collapsed-avatar')).toHaveCSS(
     'border-radius',
@@ -209,6 +265,9 @@ test('показывает задачи и AI-чаты единым списко
   ).toHaveAttribute('aria-selected', 'true');
   await expect(
     expandedPanel.getByText('Ежедневная сводка', { exact: true })
+  ).toBeVisible();
+  await expect(
+    expandedPanel.getByText('Сводка ожидает подтверждения', { exact: true })
   ).toBeVisible();
 
   const expandedTaskRow = expandedPanel
@@ -240,6 +299,9 @@ test('показывает задачи и AI-чаты единым списко
   ).toBeVisible();
   await expect(
     expandedPanel.getByText('Чат запланированной задачи', { exact: true })
+  ).toHaveCount(0);
+  await expect(
+    expandedPanel.getByText('Сводка ожидает подтверждения', { exact: true })
   ).toHaveCount(0);
   const regularChat = expandedPanel.getByText('Рабочий чат', { exact: true });
   await expect(regularChat).toBeVisible();
@@ -289,6 +351,12 @@ test('показывает задачи и AI-чаты единым списко
   await expect(
     page.getByRole('heading', { name: 'Автоматизированные задачи' })
   ).toBeVisible();
+
+  await expandedPanel
+    .getByText('Сводка ожидает подтверждения', { exact: true })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/ai/${TASK_DRAFT_SESSION_ID}$`));
+  await expect(tasksTab).toHaveAttribute('aria-selected', 'true');
 
   await chatsTab.click();
   await expect(chatsTab).toHaveAttribute('aria-selected', 'true');
@@ -348,15 +416,24 @@ test('сохраняет геометрию стартового блока пр
       .toJSON()
   }));
 
-  expect(taskMeasurements.box).toEqual(emptyMeasurements.box);
-  expect(taskMeasurements.icon).toEqual(emptyMeasurements.icon);
-  expect(taskMeasurements.heading?.y).toBe(emptyMeasurements.heading?.y);
+  expect(taskMeasurements.box?.x).toBe(emptyMeasurements.box?.x);
+  expect(taskMeasurements.box?.width).toBe(emptyMeasurements.box?.width);
+  expect(taskMeasurements.box!.y + taskMeasurements.box!.height / 2).toBe(
+    emptyMeasurements.box!.y + emptyMeasurements.box!.height / 2
+  );
+  expect(taskMeasurements.icon?.width).toBe(emptyMeasurements.icon?.width);
+  expect(taskMeasurements.icon?.height).toBe(emptyMeasurements.icon?.height);
+  expect(taskMeasurements.icon!.y - taskMeasurements.box!.y).toBe(
+    emptyMeasurements.icon!.y - emptyMeasurements.box!.y
+  );
+  expect(taskMeasurements.heading!.y - taskMeasurements.box!.y).toBe(
+    emptyMeasurements.heading!.y - emptyMeasurements.box!.y
+  );
   expect(taskMeasurements.heading?.height).toBe(
     emptyMeasurements.heading?.height
   );
-  expect(taskMeasurements.content?.y).toBe(emptyMeasurements.content?.y);
-  expect(taskMeasurements.content?.height).toBe(
-    emptyMeasurements.content?.height
+  expect(taskMeasurements.content!.y - taskMeasurements.box!.y).toBe(
+    emptyMeasurements.content!.y - emptyMeasurements.box!.y
   );
 });
 

@@ -145,19 +145,10 @@
           />
         </div>
         <CallIcon
-          v-if="
-            (route.type === RouteTypes.DIALOGS ||
-              route.type === RouteTypes.GROUP) &&
-            !isBotDialogTopic &&
-            !isDeletedAccountDialogTopic &&
-            !isFavoriteDialogTopic &&
-            !isCallTopicRoute &&
-            !isCallActive &&
-            !hasPendingCallForCurrentTopic
-          "
+          v-if="showHeaderCallAction"
           class="chat__header__icon"
           :data-testid="`${props.dataTestid}-Header-CallIcon`"
-          @click.stop="handleCall"
+          @click.stop="handleCallAction"
         />
         <Icon
           v-if="getHeaderContextMenuOptions.length"
@@ -234,7 +225,7 @@
       <span v-else class="chat__header-search-count"></span>
 
       <Button
-        v-if="hasTopicSearchResults"
+        v-if="hasMultipleTopicSearchResults"
         class="chat__header-search-nav"
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.little"
@@ -248,7 +239,7 @@
         />
       </Button>
       <Button
-        v-if="hasTopicSearchResults"
+        v-if="hasMultipleTopicSearchResults"
         class="chat__header-search-nav"
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.little"
@@ -323,7 +314,7 @@
 
       <div class="chat__header-mobile-search-controls__nav">
         <Button
-          v-if="hasTopicSearchResults"
+          v-if="hasMultipleTopicSearchResults"
           class="chat__header-search-nav"
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.little"
@@ -335,7 +326,7 @@
           <Icon :name="IconNameEnum.arrowLeft" />
         </Button>
         <Button
-          v-if="hasTopicSearchResults"
+          v-if="hasMultipleTopicSearchResults"
           class="chat__header-search-nav"
           :type="ButtonTypeEnum.ghost"
           :size="SizesEnum.little"
@@ -545,6 +536,7 @@ const {
   isVoiceModeOpen: isAiVoiceCallActive,
   isVoiceModalVisible: isAiVoiceCallModalVisible,
   voiceCallStartedAt: aiVoiceCallStartedAt,
+  startVoiceCall: startAiVoiceCall,
   showVoiceCall: showAiVoiceCall,
   deleteSession: deleteAiAssistantSession
 } = useAiAssistant();
@@ -776,6 +768,22 @@ const currentHeaderCallEntry = computed(
 const hasPendingCallForCurrentTopic = computed(
   () => !!currentPendingCall.value || !!currentTopicActiveCall.value?.roomId
 );
+const showHeaderCallAction = computed(() => {
+  if (route.value.type === RouteTypes.AI) {
+    return !isMobile.value && !isCallActive.value && !isAiVoiceCallActive.value;
+  }
+
+  return (
+    (route.value.type === RouteTypes.DIALOGS ||
+      route.value.type === RouteTypes.GROUP) &&
+    !isBotDialogTopic.value &&
+    !isDeletedAccountDialogTopic.value &&
+    !isFavoriteDialogTopic.value &&
+    !isCallTopicRoute.value &&
+    !isCallActive.value &&
+    !hasPendingCallForCurrentTopic.value
+  );
+});
 const hasInvitedCall = computed(
   () => !!currentInvitedCall.value?.isJoinAvailable
 );
@@ -831,13 +839,14 @@ const topicSearchResultsCount = computed(() =>
     : topicSearchResults.value.length
 );
 const hasTopicSearchResults = computed(() => topicSearchResultsCount.value > 0);
+const hasMultipleTopicSearchResults = computed(
+  () => topicSearchResultsCount.value > 1
+);
 const canNavigateTopicSearchPrev = computed(
-  () =>
-    hasTopicSearchResults.value &&
-    topicSearchActiveIndex.value < topicSearchResultsCount.value - 1
+  () => hasMultipleTopicSearchResults.value
 );
 const canNavigateTopicSearchNext = computed(
-  () => hasTopicSearchResults.value && topicSearchActiveIndex.value > 0
+  () => hasMultipleTopicSearchResults.value
 );
 const topicSearchResultLabel = computed(() => {
   if (isTopicSearchLoading.value) {
@@ -1127,11 +1136,8 @@ const navigateTopicSearch = (direction: -1 | 1): void => {
     return;
   }
 
-  const nextIndex = topicSearchActiveIndex.value + direction;
-
-  if (nextIndex < 0 || nextIndex >= resultsCount) {
-    return;
-  }
+  const nextIndex =
+    (topicSearchActiveIndex.value + direction + resultsCount) % resultsCount;
 
   navigateTopicSearchResult(nextIndex);
 };
@@ -1169,6 +1175,15 @@ const handleCall = async () => {
   const { startLiveKitCall } = await import('../../services/useLiveKit');
 
   await startLiveKitCall(state.calledUser, route.value.id);
+};
+
+const handleCallAction = async (): Promise<void> => {
+  if (route.value.type === RouteTypes.AI) {
+    startAiVoiceCall();
+    return;
+  }
+
+  await handleCall();
 };
 
 const handleHeaderCallClick = async () => {

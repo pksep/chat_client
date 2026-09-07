@@ -1,12 +1,28 @@
 <template>
   <section
-    class="ai-assistant"
+    :class="[
+      'ai-assistant',
+      {
+        'ai-assistant--has-pinned-message':
+          activeView === 'chat' && !!currentPinnedMessage
+      }
+    ]"
     data-testid="AI-Assistant"
     @click.capture="handleExclusiveMenuClick"
     @pointerdown.capture="prepareEmojiDrag"
     @dragstart.capture="handleEmojiDragStart"
     @dragend.capture="handleEmojiDragEnd"
   >
+    <PinnedMessageBanner
+      v-if="activeView === 'chat' && currentPinnedMessage"
+      class="ai-assistant__pinned-messages"
+      :preview-text="currentPinnedMessagePreview"
+      :preview-key="currentPinnedMessage.id"
+      data-testid="AI-Assistant-PinnedMessage"
+      @navigate="handlePinnedMessageClick"
+      @request-unpin="openPinnedMessageUnpinModal"
+    />
+
     <div
       ref="scrollRef"
       class="ai-assistant__scroll"
@@ -76,7 +92,7 @@
 
       <div v-else class="ai-assistant__conversation">
         <time class="ai-assistant__date">{{ conversationDate }}</time>
-        <article
+        <div
           v-for="message in activeSession?.messages || []"
           :key="message.id"
           :class="[
@@ -85,8 +101,7 @@
             {
               'ai-assistant__message--selection-active': isSelectionMode,
               'ai-assistant__message--selected': isMessageSelected(message.id),
-              'ai-assistant__message--search-target':
-                activeSearchMessageId === message.id
+              highlighted: highlightedMessageId === message.id
             }
           ]"
           :data-message-id="message.id"
@@ -109,11 +124,40 @@
               @click.stop
             />
           </div>
-          <div class="ai-assistant__message-content">
+          <MessageBubbleFiles
+            v-if="message.outputAttachments?.length"
+            class="ai-assistant__message-files"
+            :message="message.text"
+            :time="message.time"
+            :is-pin="message.pinned"
+            :is-me-sender="false"
+            :is-dialog="true"
+            :media="getMessageOutputMedia(message)"
+            :data-testid="`AI-Assistant-Message-${message.id}`"
+            @set-slider="handleOutputAttachmentClick"
+          />
+          <div v-else class="ai-assistant__message-content">
             <div class="ai-assistant__message-body">
-              <div v-if="message.replyTo" class="ai-assistant__message-reply">
-                <strong>{{ getMessageAuthor(message.replyTo.role) }}</strong>
-                <span>{{ message.replyTo.content }}</span>
+              <div
+                v-if="message.replyTo"
+                :class="[
+                  'ai-assistant__message-reply',
+                  'message-reference-block',
+                  {
+                    'message-reference-block--outgoing': message.role === 'user'
+                  }
+                ]"
+              >
+                <div class="message-reference-reply">
+                  <div class="message-reference-reply__content">
+                    <strong class="message-reference-reply__author">
+                      {{ getMessageAuthor(message.replyTo.role) }}
+                    </strong>
+                    <span class="message-reference-reply__text">
+                      {{ message.replyTo.content }}
+                    </span>
+                  </div>
+                </div>
               </div>
               <p>{{ message.text }}</p>
             </div>
@@ -162,7 +206,7 @@
               @action="handleMessageAction($event, message)"
             />
           </Teleport>
-        </article>
+        </div>
         <div v-if="isThinking" class="ai-assistant__thinking">
           Думает <span>•••</span>
         </div>
@@ -306,7 +350,7 @@
                 :title="permissionLabel"
                 aria-haspopup="menu"
                 :aria-expanded="isPermissionMenuOpen"
-                @click.stop="isPermissionMenuOpen = !isPermissionMenuOpen"
+                @click.stop="togglePermissionMenu"
               >
                 <PermissionHandIcon v-if="permissionMode === 'ask'" />
                 <PermissionCheckCircleIcon v-else />
@@ -360,7 +404,7 @@
                 :title="permissionLabel"
                 aria-haspopup="menu"
                 :aria-expanded="isPermissionMenuOpen"
-                @click.stop="isPermissionMenuOpen = !isPermissionMenuOpen"
+                @click.stop="togglePermissionMenu"
               >
                 <PermissionHandIcon v-if="permissionMode === 'ask'" />
                 <PermissionCheckCircleIcon v-else />
@@ -395,16 +439,55 @@
           </template>
 
           <template #desktop-right-action>
-            <Button
-              :type="ButtonTypeEnum.ghost"
-              :size="SizesEnum.small"
-              class="toolbar-button ai-assistant__voice-trigger ai-assistant__voice-trigger--desktop"
-              aria-label="Голосовой режим"
-              title="Голосовой режим"
-              @click.stop="openVoiceMode"
+            <div
+              class="ai-assistant__response-control ai-assistant__response-control--desktop"
             >
-              <VoiceMessageIcon />
-            </Button>
+              <Button
+                :type="ButtonTypeEnum.ghost"
+                :size="SizesEnum.small"
+                class="toolbar-button ai-assistant__response-trigger ai-assistant__response-trigger--desktop"
+                :title="responseModeLabel"
+                :aria-label="responseModeLabel"
+                aria-haspopup="menu"
+                :aria-expanded="isResponseModeMenuOpen"
+                :disabled="isThinking"
+                @click.stop="toggleResponseModeMenu"
+              >
+                <Icon
+                  :name="
+                    responseMode === 'advanced'
+                      ? IconNameEnum.lightbulbFilament
+                      : IconNameEnum.lightning
+                  "
+                />
+                <span>{{ responseModeLabel }}</span>
+              </Button>
+              <div
+                v-if="isResponseModeMenuOpen"
+                class="ai-assistant__response-menu"
+                role="menu"
+                aria-label="Режим ответа"
+              >
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  :aria-checked="responseMode === 'quick'"
+                  @click="selectResponseMode('quick')"
+                >
+                  <Icon :name="IconNameEnum.lightning" />
+                  <span>Быстрый ответ</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  :aria-checked="responseMode === 'advanced'"
+                  @click="selectResponseMode('advanced')"
+                >
+                  <Icon :name="IconNameEnum.lightbulbFilament" />
+                  <span>Продвинутый ответ</span>
+                </button>
+              </div>
+            </div>
           </template>
         </ContentEditor>
       </div>
@@ -495,6 +578,14 @@
     @unmount-close="cancelDeleteMessages"
     @unmount-confirm="confirmDeleteMessages"
   />
+
+  <ConfirmModal
+    :open="isPinnedMessageUnpinModalOpen"
+    title="Открепить сообщение"
+    description="Вы уверены, что хотите открепить сообщение?"
+    @unmount-close="closePinnedMessageUnpinModal"
+    @unmount-confirm="confirmPinnedMessageUnpin"
+  />
 </template>
 
 <script setup lang="ts">
@@ -525,6 +616,7 @@ import PermissionCheckCircleIcon from './PermissionCheckCircleIcon.vue';
 import AIMessageContextMenu from './AIMessageContextMenu.vue';
 import {
   type AiAssistantMessage,
+  type AiResponseMode,
   useAiAssistant
 } from '../../composables/useAiAssistant';
 import { navigateToAI, useUrlWatcher } from '../../composables/navigation';
@@ -540,6 +632,7 @@ import {
 } from '../../composables/useAiForwardDraft';
 import { useAiMessageSearch } from '../../composables/useAiMessageSearch';
 import { stageAiAttachments } from '../../services/aiAttachments';
+import { MediaType } from '@pksep/zod-shared-chat';
 import {
   recognizeVoice,
   startVoiceCapture,
@@ -549,7 +642,7 @@ import {
   type VoicePlaybackSession
 } from '../../services/aiSpeech';
 import { stripHtml } from '../../utils/stripHtml';
-import type { ITopic } from '../interfaces/interfaces';
+import type { IMedia, ITopic } from '../interfaces/interfaces';
 import type { AiAssistantSession } from '../../composables/useAiAssistant';
 import ConfirmModal from '../UI/ConfirmModal.vue';
 import EditIcon from '../UI/EditIcon.vue';
@@ -557,6 +650,11 @@ import ForwardIcon from '../UI/ForwardIcon.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import ReplyIcon from '../UI/ReplyIcon.vue';
 import ForwardModal from '../Messages/ForwardModal.vue';
+import MessageBubbleFiles from '../Messages/MessageBubbleFiles.vue';
+import PinnedMessageBanner from '../Messages/PinnedMessageBanner.vue';
+import { useMessageMedia } from '../Messages/composables/useMessageMedia';
+import { ensureMediaObjectUrl } from '../../services/useMediaBlobCache';
+import { downloadNativeFile } from '../../services/useNativeFile';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 import MicDisableIcon from '../CallModal/UI/MicDisableIcon.vue';
 import MicIcon from '../CallModal/UI/MicIcon.vue';
@@ -577,11 +675,13 @@ const {
   isVoiceModeOpen,
   isVoiceModalVisible,
   permissionMode,
+  responseMode,
   startVoiceCall,
   hideVoiceCall,
   stopVoiceCall,
   startNewSession,
   selectSession,
+  selectTaskSession,
   selectTask,
   sendMessage,
   sendSuggestedPrompt,
@@ -601,14 +701,13 @@ const draft = ref('');
 const contentEditorRef = ref<InstanceType<typeof ContentEditor> | null>(null);
 const scrollRef = ref<HTMLElement | null>(null);
 const isShowScrollToBottomButton = ref(false);
-const activeSearchMessageId = computed(() =>
-  activeSearchTarget.value?.sessionId === activeSessionId.value
-    ? activeSearchTarget.value.messageId
-    : null
-);
+const highlightedMessageId = ref<string | null>(null);
+const currentPinnedMessageId = ref<string | null>(null);
+const isPinnedMessageUnpinModalOpen = ref(false);
 const isNearBottom = ref(true);
 const isVoiceMuted = ref(false);
 const isPermissionMenuOpen = ref(false);
+const isResponseModeMenuOpen = ref(false);
 const isUploadingAttachments = ref(false);
 const contextMessage = ref<{
   message: AiAssistantMessage;
@@ -633,7 +732,53 @@ const {
 } = useContextMenu();
 let isMenuSyncInProgress = false;
 let composerFocusFrame: number | null = null;
+let messageHighlightTimeoutId: number | null = null;
 let isAssistantMounted = false;
+const { getFullMediaPath } = useMessageMedia();
+
+const pinnedMessages = computed(() =>
+  (activeSession.value?.messages || []).filter(message => message.pinned)
+);
+const currentPinnedMessage = computed(() => {
+  const messages = pinnedMessages.value;
+  if (messages.length === 0) return null;
+
+  return (
+    messages.find(message => message.id === currentPinnedMessageId.value) ||
+    messages[messages.length - 1]
+  );
+});
+const currentPinnedMessagePreview = computed(() =>
+  stripHtml(currentPinnedMessage.value?.text || 'Вложение')
+);
+
+/** Преобразует постоянные AI-вложения в тот же формат, который использует обычное сообщение чата. */
+const getMessageOutputMedia = (message: AiAssistantMessage): IMedia[] =>
+  (message.outputAttachments || []).map(attachment => ({
+    id: attachment.id,
+    type: MediaType.File,
+    path: attachment.path,
+    thumbnailPath: attachment.thumbnailPath,
+    originName: attachment.name,
+    size: attachment.size
+  })) as IMedia[];
+
+/** Скачивает AI-файл тем же объектным путём медиа-хранилища, что и обычные вложения. */
+const handleOutputAttachmentClick = async (
+  medias: IMedia[],
+  index = 0
+): Promise<void> => {
+  const media = medias[index];
+  if (!media?.path) return;
+  if (await downloadNativeFile(media)) return;
+  const cachedObjectUrl = await ensureMediaObjectUrl(media.path);
+  const link = document.createElement('a');
+  link.href = cachedObjectUrl || getFullMediaPath(media, false);
+  link.download = media.originName || 'file';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+};
 
 type VoiceAssistantState =
   | 'idle'
@@ -653,14 +798,7 @@ let voiceRestartTimer: number | null = null;
 
 /** Открывает голосовой режим непосредственно из пользовательского клика. */
 const openVoiceMode = (): void => {
-  if (isVoiceModeOpen.value) {
-    startVoiceCall();
-    return;
-  }
   startVoiceCall();
-  isVoiceMuted.value = false;
-  voiceCycleId += 1;
-  void runVoiceConversationCycle(voiceCycleId);
 };
 
 /** Сворачивает окно, сохраняя активный голосовой разговор. */
@@ -872,6 +1010,9 @@ const permissionLabel = computed(() =>
     ? 'Запрашивать разрешения'
     : 'Автоматически подтверждать'
 );
+const responseModeLabel = computed(() =>
+  responseMode.value === 'advanced' ? 'Продвинутый ответ' : 'Быстрый ответ'
+);
 const conversationDate = computed(() =>
   new Intl.DateTimeFormat('ru-RU', {
     day: 'numeric',
@@ -1008,17 +1149,26 @@ const handleExclusiveMenuClick = (event: MouseEvent): void => {
 
   if (target.closest('.attach-file-button')) {
     isPermissionMenuOpen.value = false;
+    isResponseModeMenuOpen.value = false;
     closeEmojiPicker(root);
     return;
   }
 
   if (target.closest('.smile-button') && !target.closest('.emoji-picker')) {
     isPermissionMenuOpen.value = false;
+    isResponseModeMenuOpen.value = false;
     closeAttachmentPopover(root);
     return;
   }
 
   if (target.closest('.ai-assistant__permission-trigger')) {
+    isResponseModeMenuOpen.value = false;
+    closeEmojiPicker(root);
+    closeAttachmentPopover(root);
+  }
+
+  if (target.closest('.ai-assistant__response-trigger')) {
+    isPermissionMenuOpen.value = false;
     closeEmojiPicker(root);
     closeAttachmentPopover(root);
   }
@@ -1059,6 +1209,81 @@ const scrollToBottom = async (smooth = false): Promise<void> => {
 
 const handleScrollToBottom = (): void => {
   void scrollToBottom(true);
+};
+
+const clearMessageHighlight = (): void => {
+  if (messageHighlightTimeoutId !== null) {
+    window.clearTimeout(messageHighlightTimeoutId);
+    messageHighlightTimeoutId = null;
+  }
+
+  highlightedMessageId.value = null;
+};
+
+/** Переходит к AI-сообщению и выделяет его так же, как цель перехода в обычном чате. */
+const navigateToAiMessage = async (
+  messageId: string,
+  behavior: 'auto' | 'smooth' = 'smooth'
+): Promise<boolean> => {
+  clearMessageHighlight();
+  highlightedMessageId.value = messageId;
+  await nextTick();
+
+  const messageElement = Array.from(
+    scrollRef.value?.querySelectorAll<HTMLElement>('[data-message-id]') || []
+  ).find(element => element.dataset.messageId === messageId);
+
+  if (!messageElement) {
+    highlightedMessageId.value = null;
+    return false;
+  }
+
+  messageElement.scrollIntoView({ behavior, block: 'center' });
+  messageHighlightTimeoutId = window.setTimeout(() => {
+    if (highlightedMessageId.value === messageId) {
+      highlightedMessageId.value = null;
+    }
+    messageHighlightTimeoutId = null;
+  }, 3400);
+
+  return true;
+};
+
+/** Переходит к показанному закрепу и подготавливает следующий закреп для навигации. */
+const handlePinnedMessageClick = (): void => {
+  const message = currentPinnedMessage.value;
+  const messages = pinnedMessages.value;
+  if (!message || messages.length === 0) return;
+
+  void navigateToAiMessage(message.id);
+  const currentIndex = messages.findIndex(item => item.id === message.id);
+  const nextIndex = (currentIndex - 1 + messages.length) % messages.length;
+  currentPinnedMessageId.value = messages[nextIndex]?.id || null;
+};
+
+const openPinnedMessageUnpinModal = (): void => {
+  isPinnedMessageUnpinModalOpen.value = true;
+};
+
+const closePinnedMessageUnpinModal = (): void => {
+  isPinnedMessageUnpinModalOpen.value = false;
+};
+
+const confirmPinnedMessageUnpin = async (): Promise<void> => {
+  const message = currentPinnedMessage.value;
+  closePinnedMessageUnpinModal();
+  if (!message) return;
+
+  try {
+    await toggleMessagePin(message.id);
+    if (currentPinnedMessageId.value === message.id) {
+      currentPinnedMessageId.value = null;
+    }
+  } catch (error) {
+    showErrorNotification(error);
+  } finally {
+    focusComposer();
+  }
 };
 
 const scrollOpenedChatToBottom = async (): Promise<void> => {
@@ -1294,7 +1519,9 @@ const handleMessageAction = async (
     else if (action === 'forward') openMessageForward(message);
     else if (action === 'edit') startMessageEdit(message);
     else if (action === 'togglePin') {
+      const wasPinned = Boolean(message.pinned);
       await toggleMessagePin(message.id);
+      currentPinnedMessageId.value = wasPinned ? null : message.id;
       focusComposer();
     } else if (action === 'select') toggleMessageSelection(message.id);
     else if (action === 'delete') requestDeleteMessage(message);
@@ -1405,6 +1632,22 @@ const selectPermission = (mode: 'ask' | 'automatic'): void => {
   focusComposer();
 };
 
+const togglePermissionMenu = (): void => {
+  isResponseModeMenuOpen.value = false;
+  isPermissionMenuOpen.value = !isPermissionMenuOpen.value;
+};
+
+const toggleResponseModeMenu = (): void => {
+  isPermissionMenuOpen.value = false;
+  isResponseModeMenuOpen.value = !isResponseModeMenuOpen.value;
+};
+
+const selectResponseMode = (mode: AiResponseMode): void => {
+  responseMode.value = mode;
+  isResponseModeMenuOpen.value = false;
+  focusComposer();
+};
+
 watch(
   [
     () => route.value.type,
@@ -1423,10 +1666,13 @@ watch(
   ([routeType, sessionId]) => {
     if (routeType !== RouteTypes.AI || !sessionId) return;
 
-    if (sessions.value.some(session => session.id === sessionId)) {
+    const session = sessions.value.find(item => item.id === sessionId);
+    if (session) {
       const task = tasks.value.find(item => item.sessionId === sessionId);
       if (task) {
         selectTask(task.id);
+      } else if (session.kind === 'task') {
+        selectTaskSession(sessionId);
       } else {
         selectSession(sessionId);
       }
@@ -1460,7 +1706,10 @@ watch([activeSessionId, activeView], ([sessionId, view]) => {
 
 watch([() => activeSession.value?.id, activeView], () => {
   closeMessageContextMenu();
+  closePinnedMessageUnpinModal();
+  clearMessageHighlight();
   clearMessageSelection();
+  currentPinnedMessageId.value = null;
   replyMessage.value = null;
   editingMessage.value = null;
   pendingDeleteMessageIds.value = [];
@@ -1472,18 +1721,24 @@ watch([() => activeSession.value?.messages.length || 0, isThinking], () => {
   if (isNearBottom.value) void scrollToBottom();
 });
 
+watch(isThinking, thinking => {
+  if (thinking) isResponseModeMenuOpen.value = false;
+});
+
+watch(isVoiceModeOpen, (isOpen, wasOpen) => {
+  if (!isOpen || wasOpen) return;
+
+  isVoiceMuted.value = false;
+  voiceCycleId += 1;
+  void runVoiceConversationCycle(voiceCycleId);
+});
+
 watch(
   () => activeSearchTarget.value?.requestId,
   async () => {
     const target = activeSearchTarget.value;
     if (!target || target.sessionId !== activeSessionId.value) return;
-
-    await nextTick();
-    const messageElement = Array.from(
-      scrollRef.value?.querySelectorAll<HTMLElement>('[data-message-id]') || []
-    ).find(element => element.dataset.messageId === target.messageId);
-
-    messageElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await navigateToAiMessage(target.messageId);
   },
   { flush: 'post' }
 );
@@ -1501,6 +1756,7 @@ onBeforeUnmount(() => {
     window.cancelAnimationFrame(composerFocusFrame);
     composerFocusFrame = null;
   }
+  clearMessageHighlight();
   closeVoiceMode();
   markSessionInactive(activeSessionId.value);
 });

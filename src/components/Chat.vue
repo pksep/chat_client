@@ -10,13 +10,15 @@
     ]"
     :data-testid="`${props.dataTestid}-Chat-Container`"
   >
-    <AIAssistant
+    <div
       v-if="isAiRoute || isAiVoiceCallActive"
       v-show="isAiRoute"
-      ref="aiAssistantRef"
-    />
+      style="display: contents"
+    >
+      <AIAssistant ref="aiAssistantRef" />
+    </div>
 
-    <template v-else-if="isMobile">
+    <template v-if="!isAiRoute && isMobile">
       <div
         :class="[
           'chat__mobile-list-layer',
@@ -69,7 +71,7 @@
       <ShareSelectionOverlay />
     </template>
 
-    <template v-else>
+    <template v-if="!isAiRoute && !isMobile">
       <PinnedMessages
         v-if="shouldShowPinnedMessages"
         :topic-id="pinnedMessagesTopicId"

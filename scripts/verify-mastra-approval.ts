@@ -1,4 +1,9 @@
-import { formatApprovalMessage } from '../src/services/mastraApproval';
+import {
+  approvalDecisionFromMessage,
+  findPendingToolApproval,
+  formatApprovalMessage
+} from '../src/services/mastraApproval';
+import { getMastraToolError } from '../src/services/mastraEventStream';
 
 const assertEqual = (actual: string, expected: string): void => {
   if (actual !== expected) {
@@ -31,6 +36,81 @@ if (
   productMessage.includes('[object Object]')
 ) {
   throw new Error('В подтверждение попал общий или технический текст.');
+}
+
+for (const confirmation of [
+  'да',
+  'Да.',
+  'подтверждаю',
+  'подтвердить',
+  'согласен',
+  'согласна',
+  'хорошо',
+  'ок',
+  'окей'
+]) {
+  if (approvalDecisionFromMessage(confirmation) !== 'approve') {
+    throw new Error(`Не распознано подтверждение: ${confirmation}`);
+  }
+}
+
+for (const rejection of [
+  'нет',
+  'Нет.',
+  'отмена',
+  'отменить',
+  'не подтверждаю',
+  'отклонить'
+]) {
+  if (approvalDecisionFromMessage(rejection) !== 'decline') {
+    throw new Error(`Не распознан отказ: ${rejection}`);
+  }
+}
+
+if (approvalDecisionFromMessage('да, но измени время') !== null) {
+  throw new Error('Неоднозначный ответ ошибочно принят за подтверждение.');
+}
+
+const restoredApproval = findPendingToolApproval([
+  { pendingToolApproval: null },
+  {
+    pendingToolApproval: {
+      runId: 'run-restored',
+      toolCallId: 'tool-restored',
+      toolName: 'automation_schedule_create',
+      args: { title: 'Ежедневная сводка' }
+    }
+  }
+]);
+
+if (restoredApproval?.toolCallId !== 'tool-restored') {
+  throw new Error('Ожидающее подтверждение не восстановлено из истории.');
+}
+
+const toolError = getMastraToolError({
+  type: 'tool-error',
+  payload: {
+    toolName: 'automation_schedule_create',
+    error: { message: 'Tool execution failed' }
+  }
+});
+
+if (toolError !== 'Tool execution failed') {
+  throw new Error('Ошибка инструмента не извлечена из потока Mastra.');
+}
+
+const storedToolError = getMastraToolError({
+  type: 'tool-output',
+  payload: {
+    toolInvocation: {
+      state: 'output-error',
+      errorText: 'Stored tool failure'
+    }
+  }
+});
+
+if (storedToolError !== 'Stored tool failure') {
+  throw new Error('Сохранённая ошибка инструмента не распознана.');
 }
 
 const detailMessage = formatApprovalMessage({
@@ -94,4 +174,6 @@ assertEqual(
   'Убрать операцию на позиции 3 из технологического процесса детали с обозначением «Д-10»? Операция будет перенесена в архив ERP.'
 );
 
-console.log('✓ Подтверждения ERP сформированы человеческим языком');
+console.log(
+  '✓ Подтверждения сохраняются, распознаются и не скрывают ошибки инструментов'
+);

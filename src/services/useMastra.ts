@@ -5,14 +5,21 @@ import { AIMessage, type AIMessageReference } from '../types/messages';
 import { getConfig } from './useConfig';
 import { generateUUID } from '../utils/generateUUID';
 import { getAuthToken } from '../composables/useLogin';
+import { getAuthUser, getChatAuthSession } from '../composables/useAuth';
 import {
+  approvalDecisionFromMessage,
+  findPendingToolApproval,
   type ApprovalDecision,
   formatApprovalMessage,
   isStaleApprovalResponse,
   type PendingToolApproval
 } from './mastraApproval';
-import { processMastraEventStream } from './mastraEventStream';
+import {
+  getMastraToolError,
+  processMastraEventStream
+} from './mastraEventStream';
 import type { AiAttachmentReference } from './aiAttachments';
+import { extractAiOutputAttachments } from './aiOutputAttachments';
 
 type Message = AIMessage;
 
@@ -21,6 +28,7 @@ interface UseMastraOptions {
   chatId?: string;
   baseUrl?: string;
   approvalMode?: Ref<'ask' | 'automatic'>;
+  responseMode?: Ref<'quick' | 'advanced'>;
 }
 
 interface ToolApprovalRequestError extends Error {
@@ -122,6 +130,44 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
   let activeAttachments: AiAttachmentReference[] = [];
 
+  const clearStoredPendingApproval = (approval: PendingToolApproval): void => {
+    const messageIndex = messages.value.findLastIndex(
+      message => message.pendingToolApproval?.toolCallId === approval.toolCallId
+    );
+    if (messageIndex < 0) return;
+
+    const nextMessages = [...messages.value];
+    nextMessages[messageIndex] = {
+      ...nextMessages[messageIndex],
+      pendingToolApproval: undefined
+    };
+    messages.value = nextMessages;
+  };
+
+  /** Восстанавливает только ещё действующие и полностью сформированные ссылки. */
+  const restoreMessageAttachments = (
+    history: Message[]
+  ): AiAttachmentReference[] => {
+    const stored = history
+      .slice()
+      .reverse()
+      .find(
+        message => message.role === 'user' && Array.isArray(message.attachments)
+      )?.attachments;
+
+    if (!stored) return [];
+
+    return stored.filter(
+      attachment =>
+        typeof attachment?.name === 'string' &&
+        typeof attachment?.size === 'number' &&
+        typeof attachment?.contentType === 'string' &&
+        typeof attachment?.transferToken === 'string' &&
+        typeof attachment?.expiresAt === 'number' &&
+        attachment.expiresAt > Date.now()
+    );
+  };
+
   /** Оставляет только неистёкшие вложения, нужные для запроса или его подтверждения. */
   const getActiveAttachments = (): AiAttachmentReference[] => {
     activeAttachments = activeAttachments.filter(
@@ -140,6 +186,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
       !forceStrictApproval && options.approvalMode?.value === 'automatic'
         ? 'automatic'
         : 'strict'
+    );
+    requestContext.set(
+      'responseMode',
+      options.responseMode?.value === 'advanced' ? 'advanced' : 'quick'
     );
     requestContext.set(
       'attachments',
@@ -186,6 +236,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
               options.approvalMode?.value === 'automatic'
                 ? 'automatic'
                 : 'strict',
+            responseMode:
+              options.responseMode?.value === 'advanced' ? 'advanced' : 'quick',
             ...(chatId ? { threadId: chatId } : {}),
             attachments: attachments.map(
               ({ name, size, contentType, transferToken }) => ({
@@ -220,6 +272,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
     initializationPromise = getOrCreateChatHistory(chatId)
       .then(initialMessages => {
         messages.value = [...initialMessages];
+        activeAttachments = restoreMessageAttachments(initialMessages);
+        pendingApproval.value = findPendingToolApproval(initialMessages);
         isInitializing.value = false;
       })
       .catch(error => {
@@ -250,6 +304,12 @@ const useMastra = (options?: UseMastraOptions | false) => {
       messages.value = [];
       isInitializing.value = false;
     }
+    const memoryResourceId =
+      getAuthUser()?.id || getChatAuthSession()?.user?.id || undefined;
+    const memory = {
+      thread: chatId,
+      ...(memoryResourceId ? { resource: memoryResourceId } : {})
+    };
 
     if (isInitializing.value) await initializationPromise;
 
@@ -259,7 +319,15 @@ const useMastra = (options?: UseMastraOptions | false) => {
     const lastMessage = messages.value[messages.value.length - 1];
     if (lastMessage?.role === 'assistant' && lastMessage?.loading) return;
 
-    if (appendUserMessage) {
+    const inferredApprovalDecision = pendingApproval.value
+      ? approvalDecisionFromMessage(input)
+      : null;
+    const effectiveApprovalDecision =
+      approvalDecisionOverride || inferredApprovalDecision;
+    const shouldAppendUserMessage =
+      appendUserMessage && !inferredApprovalDecision;
+
+    if (shouldAppendUserMessage) {
       const userMessage: Message = {
         role: 'user',
         content: input,
@@ -267,13 +335,26 @@ const useMastra = (options?: UseMastraOptions | false) => {
           ? { modelContent: modelInput }
           : {}),
         timestamp: Date.now(),
+        ...(requestAttachments.length > 0
+          ? {
+              attachments: requestAttachments.map(
+                ({ name, size, contentType, transferToken, expiresAt }) => ({
+                  name,
+                  size,
+                  contentType,
+                  transferToken,
+                  expiresAt
+                })
+              )
+            }
+          : {}),
         ...(replyTo ? { replyTo } : {})
       };
       messages.value = [...messages.value, userMessage];
     }
 
     const approvalDecision = pendingApproval.value
-      ? approvalDecisionOverride
+      ? effectiveApprovalDecision
       : null;
 
     if (pendingApproval.value && !approvalDecision) {
@@ -364,6 +445,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
             abortSignal,
             requestAttachments
           );
+          clearStoredPendingApproval(approval);
         } catch (approvalError) {
           const requestError =
             approvalError as Partial<ToolApprovalRequestError>;
@@ -374,10 +456,13 @@ const useMastra = (options?: UseMastraOptions | false) => {
           }
 
           if (approvalDecision === 'decline') {
+            clearStoredPendingApproval(approval);
             throw new Error(
               'Действие уже не ожидает подтверждения и не было выполнено.'
             );
           }
+
+          clearStoredPendingApproval(approval);
 
           stream = await agent.stream(
             [
@@ -389,12 +474,14 @@ const useMastra = (options?: UseMastraOptions | false) => {
               }
             ],
             {
+              memory,
               requestContext: createRequestContext(requestAttachments, true)
             }
           );
         }
       } else {
         stream = await agent.stream(requestMessages, {
+          memory,
           requestContext: createRequestContext(requestAttachments)
         });
       }
@@ -413,12 +500,50 @@ const useMastra = (options?: UseMastraOptions | false) => {
                   return;
                 }
 
+                const toolError = getMastraToolError(event);
+                if (toolError) {
+                  throw new Error(
+                    getAiErrorMessage(
+                      toolError,
+                      'Не удалось выполнить действие. Попробуйте ещё раз.'
+                    )
+                  );
+                }
+
                 if (
                   ['tool-result', 'tool-output'].includes(event.type || '') &&
                   event.payload?.toolName ===
                     'erp_actions_erp_attachment_upload_and_attach'
                 ) {
                   activeAttachments = [];
+                }
+
+                if (['tool-result', 'tool-output'].includes(event.type || '')) {
+                  const outputAttachments = extractAiOutputAttachments(
+                    event.payload
+                  );
+                  if (
+                    outputAttachments.length > 0 &&
+                    assistantMessageIndex < messages.value.length
+                  ) {
+                    const newMessages = [...messages.value];
+                    const current = newMessages[assistantMessageIndex];
+                    const uniqueAttachments = new Map(
+                      (current.outputAttachments || []).map(attachment => [
+                        attachment.path,
+                        attachment
+                      ])
+                    );
+                    outputAttachments.forEach(attachment =>
+                      uniqueAttachments.set(attachment.path, attachment)
+                    );
+                    newMessages[assistantMessageIndex] = {
+                      ...current,
+                      outputAttachments: [...uniqueAttachments.values()]
+                    };
+                    messages.value = newMessages;
+                    await saveMessages(chatId, messages.value);
+                  }
                 }
 
                 if (event.type === 'tool-call-approval') {
@@ -429,7 +554,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
                     typeof payload?.toolCallId === 'string' &&
                     typeof payload?.toolName === 'string'
                   ) {
-                    pendingApproval.value = {
+                    const nextPendingApproval: PendingToolApproval = {
                       runId: event.runId,
                       toolCallId: payload.toolCallId,
                       toolName: payload.toolName,
@@ -443,13 +568,15 @@ const useMastra = (options?: UseMastraOptions | false) => {
                       const newMessages = [...messages.value];
                       newMessages[assistantMessageIndex] = {
                         ...newMessages[assistantMessageIndex],
-                        content: formatApprovalMessage(pendingApproval.value),
-                        loading: false
+                        content: formatApprovalMessage(nextPendingApproval),
+                        loading: false,
+                        pendingToolApproval: nextPendingApproval
                       };
+                      await saveMessages(chatId, newMessages);
                       messages.value = newMessages;
-
-                      await saveMessages(chatId, messages.value);
                     }
+
+                    pendingApproval.value = nextPendingApproval;
                   }
 
                   if (!isResolved) {
@@ -535,6 +662,16 @@ const useMastra = (options?: UseMastraOptions | false) => {
       });
 
       await streamProcessingPromise;
+
+      const completedMessage = messages.value[assistantMessageIndex];
+      if (
+        completedMessage &&
+        !completedMessage.content.trim() &&
+        !completedMessage.outputAttachments?.length &&
+        !pendingApproval.value
+      ) {
+        throw new Error('ИИ не вернул результат. Попробуйте повторить запрос.');
+      }
     } catch (error: unknown) {
       const errorMessage = getAiErrorMessage(error);
 
@@ -551,6 +688,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
         messages.value = newMessages;
       }
     } finally {
+      let finalMessage: Message | undefined;
       if (assistantMessageIndex < messages.value.length) {
         const newMessages = [...messages.value];
         newMessages[assistantMessageIndex] = {
@@ -558,8 +696,12 @@ const useMastra = (options?: UseMastraOptions | false) => {
           loading: false
         };
         messages.value = newMessages;
+        finalMessage = newMessages[assistantMessageIndex];
       }
-      if (chatId) {
+      const approvalWasAlreadyPersisted = Boolean(
+        pendingApproval.value && finalMessage?.pendingToolApproval
+      );
+      if (chatId && !approvalWasAlreadyPersisted) {
         await saveMessages(chatId, messages.value);
       }
     }

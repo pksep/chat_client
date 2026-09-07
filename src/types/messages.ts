@@ -1,4 +1,7 @@
 import type { Message as ChatSDKMessage } from '@pksep/zod-shared-chat';
+import type { AiAttachmentReference } from '../services/aiAttachments';
+import type { AiOutputAttachment } from '../services/aiOutputAttachments';
+import type { PendingToolApproval } from '../services/mastraApproval';
 
 export interface AIMessageReference {
   role: 'user' | 'assistant';
@@ -13,8 +16,14 @@ export interface AIMessage {
   timestamp?: number;
   pinned?: boolean;
   replyTo?: AIMessageReference;
+  /** Временные ссылки на вложения сохраняются для повтора запроса после обновления страницы. */
+  attachments?: AiAttachmentReference[];
+  /** Постоянные файлы, сформированные сервисами и доставленные AI через обычное медиа-хранилище чата. */
+  outputAttachments?: AiOutputAttachment[];
   /** Источник фонового результата для защиты от повторного добавления. */
   sourceId?: string;
+  /** Служебная связь с ожидающим подтверждением сохраняется при обновлении страницы. */
+  pendingToolApproval?: PendingToolApproval;
 }
 
 export interface ChatMessage extends ChatSDKMessage {

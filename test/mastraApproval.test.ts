@@ -65,4 +65,26 @@ describe('formatApprovalMessage', () => {
     expect(message).not.toContain('internal-token');
     expect(message).not.toContain('cron');
   });
+
+  test('понятно описывает создание отгрузки со счётом из чата', () => {
+    const message = formatApprovalMessage({
+      runId: 'run-test',
+      toolCallId: 'tool-test',
+      toolName: 'erp_actions_erp_shipment_create_with_attachment',
+      args: {
+        attachmentName: 'Счёт 174.pdf',
+        productName: 'Насосная станция',
+        productDesignation: '022.01-12.00СБ',
+        buyerName: 'ООО Пример',
+        quantity: 2,
+        plannedShipmentAt: '2026-09-15'
+      }
+    });
+
+    expect(message).toContain('Создать задачу на отгрузку');
+    expect(message).toContain('ООО Пример');
+    expect(message).toContain('Счёт 174.pdf');
+    expect(message).toContain('прикреплён к задаче');
+    expect(message).not.toMatch(/[—–]/u);
+  });
 });
