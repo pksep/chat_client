@@ -1,8 +1,12 @@
 <template>
   <ContextMenu
-    class="message-context-menu"
+    :class="[
+      'message-context-menu',
+      { 'message-context-menu--emoji-picker': showEmojies }
+    ]"
     :visible="!!props.isOpen[props.messageId]"
-    :position="props.position"
+    :position="contextMenuPosition"
+    :fixed-position="showEmojies"
     @unmount-close="handleClosePopover"
     :data-testid="`${props.dataTestid}-MessageBubble-ContextMenu`"
   >
@@ -37,9 +41,16 @@
       </Button>
     </template>
 
-    <EmojiPicker
+    <EmojiPickerPanel
       ref="reactionRow"
-      :native="true"
+      :class="[
+        'message-context-menu__emoji-picker',
+        {
+          'message-context-menu__emoji-picker--ready': emojiPickerReady,
+          [`message-context-menu__emoji-picker--origin-${emojiPickerOrigin}`]:
+            true
+        }
+      ]"
       v-on-click-outside="toggleShowEmojies"
       v-else-if="showEmojies"
       @select="handleSelectEmoji"
@@ -389,12 +400,11 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import {
   Button,
   ButtonTypeEnum,
+  EmojiPickerPanel,
   Icon,
   IconNameEnum,
   SizesEnum
 } from '@pksep/yui';
-import EmojiPicker from 'vue3-emoji-picker';
-import 'vue3-emoji-picker/css';
 
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import ConfirmModal from '../UI/ConfirmModal.vue';
@@ -744,9 +754,75 @@ const mobileReadDetailsOffsetTop = ref(0);
 const readDetailsOffsetTop = ref(0);
 const reactionsPositionReady = ref(false);
 const showEmojies = ref(false);
+const emojiPickerReady = ref(false);
+const emojiPickerPosition = ref<{ x: number; y: number } | null>(null);
+const emojiPickerOrigin = ref<
+  'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+>('bottom-right');
 const showReadDetails = ref(false);
 let readDetailsHoverTimeout: ReturnType<typeof setTimeout> | null = null;
 let reactionLayoutObserver: ResizeObserver | null = null;
+let emojiPickerRevealFrame: number | null = null;
+
+const EMOJI_PICKER_WIDTH = 359;
+const EMOJI_PICKER_HEIGHT = 382;
+const EMOJI_PICKER_VIEWPORT_GAP = 8;
+const EMOJI_PICKER_TRIGGER_GAP = 5;
+
+const contextMenuPosition = computed(() =>
+  showEmojies.value && emojiPickerPosition.value
+    ? emojiPickerPosition.value
+    : props.position
+);
+
+const setEmojiPickerPosition = (trigger: HTMLElement): void => {
+  const triggerRect = trigger.getBoundingClientRect();
+  const pickerWidth = Math.min(
+    EMOJI_PICKER_WIDTH,
+    window.innerWidth - EMOJI_PICKER_VIEWPORT_GAP * 2
+  );
+  const pickerHeight = Math.min(
+    EMOJI_PICKER_HEIGHT,
+    window.innerHeight - EMOJI_PICKER_VIEWPORT_GAP * 2
+  );
+  const canOpenLeft =
+    triggerRect.right - pickerWidth >= EMOJI_PICKER_VIEWPORT_GAP;
+  const canOpenAbove =
+    triggerRect.top - EMOJI_PICKER_TRIGGER_GAP - pickerHeight >=
+    EMOJI_PICKER_VIEWPORT_GAP;
+  const opensLeft =
+    canOpenLeft ||
+    triggerRect.left + pickerWidth >
+      window.innerWidth - EMOJI_PICKER_VIEWPORT_GAP;
+  const opensAbove =
+    canOpenAbove ||
+    triggerRect.bottom + EMOJI_PICKER_TRIGGER_GAP + pickerHeight >
+      window.innerHeight - EMOJI_PICKER_VIEWPORT_GAP;
+  const preferredX = opensLeft
+    ? triggerRect.right - pickerWidth
+    : triggerRect.left;
+  const preferredY = opensAbove
+    ? triggerRect.top - EMOJI_PICKER_TRIGGER_GAP - pickerHeight
+    : triggerRect.bottom + EMOJI_PICKER_TRIGGER_GAP;
+
+  emojiPickerPosition.value = {
+    x: Math.min(
+      Math.max(EMOJI_PICKER_VIEWPORT_GAP, preferredX),
+      window.innerWidth - EMOJI_PICKER_VIEWPORT_GAP - pickerWidth
+    ),
+    y: Math.min(
+      Math.max(EMOJI_PICKER_VIEWPORT_GAP, preferredY),
+      window.innerHeight - EMOJI_PICKER_VIEWPORT_GAP - pickerHeight
+    )
+  };
+  emojiPickerOrigin.value = opensAbove
+    ? opensLeft
+      ? 'bottom-right'
+      : 'bottom-left'
+    : opensLeft
+      ? 'top-right'
+      : 'top-left';
+};
 
 const resolveElement = (
   value: HTMLElement | { $el?: Element | null } | null
@@ -774,6 +850,29 @@ const waitForPaint = async () => {
 const disconnectReactionLayoutObserver = () => {
   reactionLayoutObserver?.disconnect();
   reactionLayoutObserver = null;
+};
+
+const cancelEmojiPickerReveal = () => {
+  if (emojiPickerRevealFrame !== null) {
+    cancelAnimationFrame(emojiPickerRevealFrame);
+    emojiPickerRevealFrame = null;
+  }
+};
+
+const revealEmojiPicker = async () => {
+  cancelEmojiPickerReveal();
+  emojiPickerReady.value = false;
+  await nextTick();
+
+  emojiPickerRevealFrame = requestAnimationFrame(() => {
+    emojiPickerRevealFrame = requestAnimationFrame(() => {
+      emojiPickerRevealFrame = null;
+
+      if (showEmojies.value) {
+        emojiPickerReady.value = true;
+      }
+    });
+  });
 };
 
 const ensureReactionLayoutObserver = () => {
@@ -888,6 +987,16 @@ watch(showReadDetails, opened => {
   if (opened) {
     void syncReadDetailsPosition();
   }
+});
+
+watch(showEmojies, opened => {
+  if (opened) {
+    void revealEmojiPicker();
+    return;
+  }
+
+  cancelEmojiPickerReveal();
+  emojiPickerReady.value = false;
 });
 
 const handleOpenDeleteModal = () => {
@@ -1115,8 +1224,20 @@ const handleConfirmUnpinMessage = async () => {
   handleClosePopover();
 };
 
-const toggleShowEmojies = () => {
-  showEmojies.value = !showEmojies.value;
+const toggleShowEmojies = (event?: Event) => {
+  if (showEmojies.value) {
+    showEmojies.value = false;
+    emojiPickerPosition.value = null;
+    return;
+  }
+
+  const trigger = event?.currentTarget;
+
+  if (trigger instanceof HTMLElement) {
+    setEmojiPickerPosition(trigger);
+  }
+
+  showEmojies.value = true;
 };
 
 const handleHoverReadDetails = () => {
@@ -1193,6 +1314,7 @@ const closePopoverState = () => {
   disconnectReactionLayoutObserver();
   closeActivePopover(props.messageId);
   showEmojies.value = false;
+  emojiPickerPosition.value = null;
   showReadDetails.value = false;
   mobileReadDetailsOffsetTop.value = 0;
   reactionsPositionReady.value = false;
@@ -1211,6 +1333,7 @@ const handleClosePopover = () => {
 onBeforeUnmount(() => {
   clearReadDetailsHoverTimeout();
   disconnectReactionLayoutObserver();
+  cancelEmojiPickerReveal();
 });
 </script>
 
