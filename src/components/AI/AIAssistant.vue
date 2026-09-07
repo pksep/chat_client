@@ -453,28 +453,14 @@
                 :disabled="isThinking"
                 @click.stop="toggleResponseModeMenu"
               >
-                <span
-                  v-if="isThinking"
-                  class="ai-assistant__response-trigger-skeleton"
-                  aria-hidden="true"
-                >
-                  <span
-                    class="ai-assistant__response-trigger-skeleton-icon"
-                  ></span>
-                  <span
-                    class="ai-assistant__response-trigger-skeleton-label"
-                  ></span>
-                </span>
-                <template v-else>
-                  <Icon
-                    :name="
-                      responseMode === 'advanced'
-                        ? IconNameEnum.lightbulbFilament
-                        : IconNameEnum.lightning
-                    "
-                  />
-                  <span>{{ responseModeLabel }}</span>
-                </template>
+                <Icon
+                  :name="
+                    responseMode === 'advanced'
+                      ? IconNameEnum.lightbulbFilament
+                      : IconNameEnum.lightning
+                  "
+                />
+                <span>{{ responseModeLabel }}</span>
               </Button>
               <div
                 v-if="isResponseModeMenuOpen"

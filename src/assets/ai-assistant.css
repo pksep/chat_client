@@ -1010,50 +1010,6 @@
   flex: 0 0 16px;
 }
 
-.ai-assistant__response-trigger-skeleton {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-}
-
-.ai-assistant__response-trigger-skeleton-icon,
-.ai-assistant__response-trigger-skeleton-label {
-  display: block;
-  background: linear-gradient(
-    90deg,
-    var(--border-table),
-    var(--action-disabled-bg),
-    var(--border-table)
-  );
-  background-size: 180% 100%;
-  animation: ai-response-mode-skeleton-pulse 1.2s ease-in-out infinite;
-}
-
-.ai-assistant__response-trigger-skeleton-icon {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
-  border-radius: 4px;
-}
-
-.ai-assistant__response-trigger-skeleton-label {
-  min-width: 0;
-  height: 12px;
-  flex: 1 1 auto;
-  border-radius: 6px;
-}
-
-@keyframes ai-response-mode-skeleton-pulse {
-  0% {
-    background-position: 100% 0;
-  }
-
-  100% {
-    background-position: -100% 0;
-  }
-}
-
 .ai-assistant__permission-control,
 .ai-assistant__response-control {
   position: relative;
