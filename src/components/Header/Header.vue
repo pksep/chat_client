@@ -770,11 +770,7 @@ const hasPendingCallForCurrentTopic = computed(
 );
 const showHeaderCallAction = computed(() => {
   if (route.value.type === RouteTypes.AI) {
-    return (
-      !isMobile.value &&
-      !isCallActive.value &&
-      !isAiVoiceCallActive.value
-    );
+    return !isMobile.value && !isCallActive.value && !isAiVoiceCallActive.value;
   }
 
   return (
