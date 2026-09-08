@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="336866">
+<fb version="0.19.6" size="336865">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <inserted t="I">8</inserted>
-    <seconds t="F">169.217271691</seconds>
+    <seconds t="F">251.331929209</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-09-08T14:49:22Z</when>
+    <when t="T">2026-09-08T19:02:23Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -20890,19 +20890,6 @@
     <when t="T">2026-09-06T06:29:33Z</when>
   </f>
   <f>
-    <_id t="I">1061</_id>
-    <_job t="I">90918</_job>
-    <_time t="T">2026-09-06T07:28:12Z</_time>
-    <_version t="S">0.19.16/0.61.1/0.17.11!0.17.22</_version>
-    <analyzers t="I">18</analyzers>
-    <text t="S">The average number of builds per week (78.6) is increasing (R=0.21).
-The average number of commits per week (37.3) is decreasing (R=-0.78).
-The average number of releases per month (9.9) is decreasing (R=-0.72).
-The average monthly turnover (1.0 developers) is decreasing (R=-0.31).</text>
-    <what t="S">assessment</what>
-    <when t="T">2026-09-06T07:28:12Z</when>
-  </f>
-  <f>
     <_id t="I">1063</_id>
     <_job t="I">34029887493</_job>
     <_time t="T">2026-09-06T11:20:24Z</_time>
@@ -23083,12 +23070,25 @@ The average monthly turnover (1.0 developers) is decreasing (R=-0.31).</text>
     <who t="I">41898282</who>
   </f>
   <f>
-    <_id t="I">1159</_id>
-    <_job t="I">34240303422</_job>
-    <_time t="T">2026-09-08T14:46:38Z</_time>
+    <_id t="I">1160</_id>
+    <_job t="I">91325</_job>
+    <_time t="T">2026-09-08T14:49:44Z</_time>
+    <_version t="S">0.19.16/0.61.1/0.17.11!0.17.23</_version>
+    <analyzers t="I">18</analyzers>
+    <text t="S">The average number of builds per week (83.2) is increasing (R=0.35).
+The average number of commits per week (36.7) is decreasing (R=-0.67).
+The average number of releases per month (8.4) is decreasing (R=-0.82).
+The average monthly turnover (2.0 developers) is decreasing (R=-0.13).</text>
+    <what t="S">assessment</what>
+    <when t="T">2026-09-08T14:49:44Z</when>
+  </f>
+  <f>
+    <_id t="I">1161</_id>
+    <_job t="I">34266070247</_job>
+    <_time t="T">2026-09-08T18:58:17Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <events_were_scanned t="I">20451379279</events_were_scanned>
+    <events_were_scanned t="I">20474453955</events_were_scanned>
     <latest_issue_was_found t="I">72</latest_issue_was_found>
     <min_pull_was_found t="I">395</min_pull_was_found>
     <repository t="I">1053332035</repository>
