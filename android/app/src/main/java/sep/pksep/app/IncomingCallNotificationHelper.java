@@ -100,7 +100,7 @@ public final class IncomingCallNotificationHelper {
             context,
             CHANNEL_ID
         )
-            .setSmallIcon(R.drawable.ic_stat_chat)
+            .setSmallIcon(R.drawable.notification_statusbar_chat_bubbles_2026)
             .setContentTitle("Incoming call")
             .setContentText(resolvedCallerName)
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -116,7 +116,7 @@ public final class IncomingCallNotificationHelper {
 
         NotificationManagerCompat.from(context).notify(
             buildNotificationId(roomId),
-            builder.build()
+            NotificationBrandIconHelper.build(context, builder)
         );
         rememberActiveCall(context, roomId);
         IncomingCallRingtonePlayer.start(context);

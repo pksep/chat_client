@@ -4,6 +4,38 @@ export type MastraStreamEvent = {
   payload?: Record<string, any>;
 };
 
+const asErrorText = (value: unknown): string | null => {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  return asErrorText(record.message) || asErrorText(record.errorText);
+};
+
+/** Возвращает ошибку выполнения инструмента независимо от варианта события Mastra. */
+export const getMastraToolError = (event: MastraStreamEvent): string | null => {
+  const payload = event.payload || {};
+  const invocation =
+    payload.toolInvocation && typeof payload.toolInvocation === 'object'
+      ? (payload.toolInvocation as Record<string, unknown>)
+      : {};
+  const failed =
+    event.type === 'tool-error' ||
+    event.type === 'tool-call-error' ||
+    payload.state === 'output-error' ||
+    invocation.state === 'output-error';
+
+  if (!failed) return null;
+
+  return (
+    asErrorText(payload.errorText) ||
+    asErrorText(payload.error) ||
+    asErrorText(invocation.errorText) ||
+    asErrorText(invocation.error) ||
+    asErrorText(payload.message) ||
+    'Не удалось выполнить действие.'
+  );
+};
+
 export const processMastraEventStream = async (
   response: Response,
   onEvent: (event: MastraStreamEvent) => void | Promise<void>

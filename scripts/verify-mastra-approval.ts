@@ -1,4 +1,9 @@
-import { formatApprovalMessage } from '../src/services/mastraApproval';
+import {
+  approvalDecisionFromMessage,
+  findPendingToolApproval,
+  formatApprovalMessage
+} from '../src/services/mastraApproval';
+import { getMastraToolError } from '../src/services/mastraEventStream';
 
 const assertEqual = (actual: string, expected: string): void => {
   if (actual !== expected) {
@@ -22,6 +27,42 @@ const productMessage = formatApprovalMessage({
 });
 
 assertEqual(
+  formatApprovalMessage({
+    runId: 'run-create-responsible',
+    toolCallId: 'call-create-responsible',
+    toolName: 'erp_actions_erp_entity_editor_create',
+    args: {
+      type: 'detal',
+      entityName: '1234',
+      entityDesignation: '1234',
+      responsibleName: 'Мамалига Е.Г.'
+    }
+  }),
+  'Создать деталь «1234» с обозначением «1234», ответственный: «Мамалига Е.Г.» без добавления в спецификацию?'
+);
+
+for (const [type, label] of [
+  ['detal', 'деталь'],
+  ['cbed', 'сборочную единицу'],
+  ['product', 'изделие']
+]) {
+  assertEqual(
+    formatApprovalMessage({
+      runId: 'run-create',
+      toolCallId: 'call-create',
+      toolName: 'erp_actions_erp_entity_editor_create',
+      args: {
+        type,
+        entityName: 'Новая карточка',
+        entityDesignation: 'Н-1',
+        idempotencyKey: 'internal-key-1'
+      }
+    }),
+    `Создать ${label} «Новая карточка» с обозначением «Н-1» без добавления в спецификацию?`
+  );
+}
+
+assertEqual(
   productMessage,
   'Изменить изделие «Траверса для ямных подъемников серии КП 15т. Т15» с обозначением «109.02-00СБ»: ответственный: «Елкина»; Снято с производства: да?'
 );
@@ -31,6 +72,81 @@ if (
   productMessage.includes('[object Object]')
 ) {
   throw new Error('В подтверждение попал общий или технический текст.');
+}
+
+for (const confirmation of [
+  'да',
+  'Да.',
+  'подтверждаю',
+  'подтвердить',
+  'согласен',
+  'согласна',
+  'хорошо',
+  'ок',
+  'окей'
+]) {
+  if (approvalDecisionFromMessage(confirmation) !== 'approve') {
+    throw new Error(`Не распознано подтверждение: ${confirmation}`);
+  }
+}
+
+for (const rejection of [
+  'нет',
+  'Нет.',
+  'отмена',
+  'отменить',
+  'не подтверждаю',
+  'отклонить'
+]) {
+  if (approvalDecisionFromMessage(rejection) !== 'decline') {
+    throw new Error(`Не распознан отказ: ${rejection}`);
+  }
+}
+
+if (approvalDecisionFromMessage('да, но измени время') !== null) {
+  throw new Error('Неоднозначный ответ ошибочно принят за подтверждение.');
+}
+
+const restoredApproval = findPendingToolApproval([
+  { pendingToolApproval: null },
+  {
+    pendingToolApproval: {
+      runId: 'run-restored',
+      toolCallId: 'tool-restored',
+      toolName: 'automation_schedule_create',
+      args: { title: 'Ежедневная сводка' }
+    }
+  }
+]);
+
+if (restoredApproval?.toolCallId !== 'tool-restored') {
+  throw new Error('Ожидающее подтверждение не восстановлено из истории.');
+}
+
+const toolError = getMastraToolError({
+  type: 'tool-error',
+  payload: {
+    toolName: 'automation_schedule_create',
+    error: { message: 'Tool execution failed' }
+  }
+});
+
+if (toolError !== 'Tool execution failed') {
+  throw new Error('Ошибка инструмента не извлечена из потока Mastra.');
+}
+
+const storedToolError = getMastraToolError({
+  type: 'tool-output',
+  payload: {
+    toolInvocation: {
+      state: 'output-error',
+      errorText: 'Stored tool failure'
+    }
+  }
+});
+
+if (storedToolError !== 'Stored tool failure') {
+  throw new Error('Сохранённая ошибка инструмента не распознана.');
 }
 
 const detailMessage = formatApprovalMessage({
@@ -94,4 +210,6 @@ assertEqual(
   'Убрать операцию на позиции 3 из технологического процесса детали с обозначением «Д-10»? Операция будет перенесена в архив ERP.'
 );
 
-console.log('✓ Подтверждения ERP сформированы человеческим языком');
+console.log(
+  '✓ Подтверждения сохраняются, распознаются и не скрывают ошибки инструментов'
+);

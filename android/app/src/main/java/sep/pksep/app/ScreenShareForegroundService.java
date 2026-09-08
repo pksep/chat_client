@@ -106,15 +106,16 @@ public class ScreenShareForegroundService extends Service {
             flags
         );
 
-        return new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_chat)
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.notification_statusbar_chat_bubbles_2026)
             .setContentTitle("Демонстрация экрана")
             .setContentText("Трансляция экрана активна")
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .build();
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE);
+
+        return NotificationBrandIconHelper.build(this, builder);
     }
 
     private void ensureNotificationChannel() {

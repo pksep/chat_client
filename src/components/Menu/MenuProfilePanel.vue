@@ -30,6 +30,7 @@
         </div>
 
         <div
+          v-if="canChangeTheme"
           class="menu-profile__row menu-profile__row_theme"
           @click="themeStore.setTheme(!isDarkTheme)"
         >
@@ -752,6 +753,8 @@
 </template>
 
 <script setup lang="ts">
+import { Capacitor } from '@capacitor/core';
+import { storeToRefs } from 'pinia';
 import {
   Button,
   ButtonTypeEnum,
@@ -801,7 +804,6 @@ import ConfirmModal from '../UI/ConfirmModal.vue';
 import FileIcon from '../UI/FileIcon.vue';
 import { useMobileApp } from '../../composables/useMobileApp';
 import { useThemeStore } from '../../stores/theme';
-import { storeToRefs } from 'pinia';
 
 const CallBackgroundPreviewModal = defineAsyncComponent(
   () => import('../CallModal/CallBackgroundPreviewModal.vue')
@@ -820,6 +822,9 @@ const themeStore = useThemeStore();
 const { isDarkTheme } = storeToRefs(themeStore);
 const authUser = computed(() => getAuthUser() as IUser | null);
 const { state: isMobile } = useResizeState(MAX_W_MD);
+const canChangeTheme = computed(
+  () => !isMobile.value && !Capacitor.isNativePlatform()
+);
 const statusPresets = USER_STATUS_PRESETS;
 const MAX_CUSTOM_WALLPAPER_SIZE_BYTES = 2 * 1024 * 1024;
 const isStatusMenuOpen = ref(false);

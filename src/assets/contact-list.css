@@ -452,9 +452,9 @@ svg.icon-yui-kit.contact-list__read-icon {
 
 @media (width <=768px) {
 
-  .chat-container:has(.chat-list),
-  .chat-container:has(.mobile-list-container__content .menu-profile),
-  .chat-container:has(.mobile-list-container__content .calls-page) {
+  .chat-container:not(:has(.chat__mobile-route-view--messages)):has(.chat-list),
+  .chat-container:not(:has(.chat__mobile-route-view--messages)):has(.mobile-list-container__content .menu-profile),
+  .chat-container:not(:has(.chat__mobile-route-view--messages)):has(.mobile-list-container__content .calls-page) {
     --header-height: 0;
   }
 

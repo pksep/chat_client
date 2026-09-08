@@ -3,7 +3,6 @@ import {
   registerPlugin,
   type PluginListenerHandle
 } from '@capacitor/core';
-import { PushNotifications } from '@capacitor/push-notifications';
 import { useChatApi } from './useApi';
 import { getCurrentUserId } from './useChat';
 import { getUserById } from '../composables/useUsers';
@@ -11,6 +10,7 @@ import {
   clearTopicNotifications,
   isTopicCurrentlyVisible,
   navigateToNotificationTarget,
+  requestNotificationTopicRefresh,
   resolveNotificationTopicId
 } from './useNotificationNavigation';
 import {
@@ -22,7 +22,6 @@ import { getTelemetryErrorPayload, recordTelemetryEvent } from './useTelemetry';
 import { getTelemetryInstallationId } from './useTelemetryDevice';
 import { RuStorePush, type NativePushNotificationPayload } from './nativePush';
 
-const FIREBASE_PUSH_TOKEN_STORAGE_KEY = 'chat_native_push_token';
 const RUSTORE_PUSH_TOKEN_STORAGE_KEY = 'chat_rustore_push_token';
 const WEB_PUSH_ENDPOINT_STORAGE_KEY = 'chat_web_push_endpoint';
 
@@ -54,12 +53,14 @@ type NativeNotificationData = Record<string, string> & {
 const NotificationTap =
   registerPlugin<NotificationTapPlugin>('NotificationTap');
 let nativeNotificationTapListener: PluginListenerHandle | null = null;
-let firebasePushListenersBound = false;
+let nativeNotificationTapListenerPromise: Promise<PluginListenerHandle> | null =
+  null;
 let ruStorePushListenersBound = false;
 const nativePushRegistrationsInFlight = new Set<string>();
 const syncedNativePushRegistrations = new Set<string>();
 let lastHandledNotificationKey = '';
 let lastHandledNotificationAt = 0;
+const NOTIFICATION_INTERACTION_DEDUPE_MS = 30_000;
 let isWebServiceWorkerMessageListenerBound = false;
 type LiveKitModule = typeof import('./useLiveKit');
 
@@ -89,23 +90,14 @@ const dismissIncomingCallStateLazy = async (
   return dismissIncomingCallState(...args);
 };
 
-const storeNativePushToken = (
-  provider: 'firebase' | 'rustore',
-  token: string
-): void => {
-  localStorage.setItem(
-    provider === 'firebase'
-      ? FIREBASE_PUSH_TOKEN_STORAGE_KEY
-      : RUSTORE_PUSH_TOKEN_STORAGE_KEY,
-    token
-  );
+const storeNativePushToken = (token: string): void => {
+  localStorage.setItem(RUSTORE_PUSH_TOKEN_STORAGE_KEY, token);
 };
 
 const getStoredNativePushTokens = (): string[] =>
-  [
-    localStorage.getItem(FIREBASE_PUSH_TOKEN_STORAGE_KEY),
-    localStorage.getItem(RUSTORE_PUSH_TOKEN_STORAGE_KEY)
-  ].filter((token): token is string => Boolean(token));
+  [localStorage.getItem(RUSTORE_PUSH_TOKEN_STORAGE_KEY)].filter(
+    (token): token is string => Boolean(token)
+  );
 
 const isRuStorePushPlatform = (): boolean =>
   Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
@@ -118,7 +110,6 @@ const getStoredWebPushEndpoint = (): string =>
   localStorage.getItem(WEB_PUSH_ENDPOINT_STORAGE_KEY) || '';
 
 const clearStoredPushRegistration = (): void => {
-  localStorage.removeItem(FIREBASE_PUSH_TOKEN_STORAGE_KEY);
   localStorage.removeItem(RUSTORE_PUSH_TOKEN_STORAGE_KEY);
   localStorage.removeItem(WEB_PUSH_ENDPOINT_STORAGE_KEY);
 };
@@ -203,7 +194,7 @@ const shouldHandleNotificationInteraction = (data: NativeNotificationData) => {
 
   if (
     key === lastHandledNotificationKey &&
-    now - lastHandledNotificationAt < 3000
+    now - lastHandledNotificationAt < NOTIFICATION_INTERACTION_DEDUPE_MS
   ) {
     return false;
   }
@@ -222,12 +213,20 @@ const bindNativeNotificationTapListener = async (): Promise<void> => {
     return;
   }
 
-  nativeNotificationTapListener = await NotificationTap.addListener(
-    'notificationTap',
-    payload => {
-      handleNotificationInteraction(payload as NativeNotificationData);
-    }
-  );
+  if (!nativeNotificationTapListenerPromise) {
+    nativeNotificationTapListenerPromise = NotificationTap.addListener(
+      'notificationTap',
+      payload => {
+        handleNotificationInteraction(payload as NativeNotificationData);
+      }
+    );
+  }
+
+  try {
+    nativeNotificationTapListener = await nativeNotificationTapListenerPromise;
+  } finally {
+    nativeNotificationTapListenerPromise = null;
+  }
 };
 
 const handleNotificationInteraction = (
@@ -304,25 +303,50 @@ export const initFastNativeNotificationNavigation =
     }
 
     try {
-      await bindNativeNotificationTapListener();
-    } catch (error) {
-      console.warn('Failed to bind fast Android notification tap:', error);
-    }
-
-    try {
+      const startupNotificationTap = window.__chatNativeInitialNotificationTap;
+      delete window.__chatNativeInitialNotificationTap;
       const pendingNotificationTap =
-        await NotificationTap.consumePendingNotificationTap();
+        startupNotificationTap ||
+        (await NotificationTap.consumePendingNotificationTap());
+      const handled = hasPayloadValues(pendingNotificationTap)
+        ? handleNotificationInteraction(
+            pendingNotificationTap as NativeNotificationData
+          )
+        : false;
 
-      if (!hasPayloadValues(pendingNotificationTap)) {
-        return false;
-      }
+      // `addListener` can take noticeably longer than a single native method
+      // call on a cold WebView. Do not keep Vue mounting behind it: consume the
+      // launch payload first, then bind future taps in the background. A
+      // second consume after binding closes the very small race where another
+      // intent arrives between those operations.
+      void bindNativeNotificationTapListener()
+        .then(async () => {
+          if (handled) {
+            return;
+          }
 
-      handleNotificationInteraction(
-        pendingNotificationTap as NativeNotificationData
-      );
-      return true;
+          const racedNotificationTap =
+            await NotificationTap.consumePendingNotificationTap();
+
+          if (hasPayloadValues(racedNotificationTap)) {
+            handleNotificationInteraction(
+              racedNotificationTap as NativeNotificationData
+            );
+          }
+        })
+        .catch(error => {
+          console.warn('Failed to bind fast Android notification tap:', error);
+        });
+
+      return handled;
     } catch (error) {
       console.warn('Failed to consume fast Android notification tap:', error);
+      void bindNativeNotificationTapListener().catch(listenerError => {
+        console.warn(
+          'Failed to bind fast Android notification tap:',
+          listenerError
+        );
+      });
       return false;
     }
   };
@@ -460,12 +484,8 @@ const bindWebServiceWorkerMessageListener = () => {
   isWebServiceWorkerMessageListenerBound = true;
 };
 
-const syncNativePushToken = async (
-  token: string,
-  platform: 'android' | 'ios' | 'rustore',
-  provider: 'firebase' | 'rustore'
-): Promise<void> => {
-  const registrationKey = `${provider}:${token}`;
+const syncNativePushToken = async (token: string): Promise<void> => {
+  const registrationKey = `rustore:${token}`;
   if (
     nativePushRegistrationsInFlight.has(registrationKey) ||
     syncedNativePushRegistrations.has(registrationKey)
@@ -474,12 +494,12 @@ const syncNativePushToken = async (
   }
 
   nativePushRegistrationsInFlight.add(registrationKey);
-  storeNativePushToken(provider, token);
+  storeNativePushToken(token);
 
   try {
     await useChatApi().post('/notifications/device', {
       token,
-      platform,
+      platform: 'rustore',
       installationId: getTelemetryInstallationId()
     });
     syncedNativePushRegistrations.add(registrationKey);
@@ -488,8 +508,8 @@ const syncNativePushToken = async (
       name: 'notification.native.registration.success',
       entityType: 'notification',
       payload: {
-        provider,
-        platform,
+        provider: 'rustore',
+        platform: 'rustore',
         tokenLength: token.length
       }
     });
@@ -500,22 +520,21 @@ const syncNativePushToken = async (
       level: 'error',
       entityType: 'notification',
       payload: {
-        provider,
-        platform,
+        provider: 'rustore',
+        platform: 'rustore',
         ...getTelemetryErrorPayload(error)
       }
     });
-    console.error(`${provider} push registration sync failed:`, error);
+    console.error('RuStore push registration sync failed:', error);
   } finally {
     nativePushRegistrationsInFlight.delete(registrationKey);
   }
 };
 
 const handleNativePushReceived = (
-  notification: NativePushNotificationPayload,
-  provider: 'firebase' | 'rustore'
+  notification: NativePushNotificationPayload
 ): void => {
-  console.log(`${provider} push received:`, notification);
+  console.log('RuStore push received:', notification);
   const normalizedData = normalizeNativeNotificationData(
     (notification.data || {}) as NativeNotificationData
   );
@@ -525,7 +544,7 @@ const handleNativePushReceived = (
     entityType: 'notification',
     entityId: normalizedData.topicId || normalizedData.roomId,
     payload: {
-      provider,
+      provider: 'rustore',
       action: normalizedData.action,
       type: normalizedData.type,
       topicId: normalizedData.topicId,
@@ -548,6 +567,7 @@ const handleNativePushReceived = (
   }
 
   if (isTopicCurrentlyVisible(normalizedData.topicId)) {
+    requestNotificationTopicRefresh(normalizedData.topicId, false);
     void clearTopicNotifications(normalizedData.topicId);
     return;
   }
@@ -555,10 +575,7 @@ const handleNativePushReceived = (
   handleCallPush({ ...notification, data: normalizedData });
 };
 
-const recordNativePushError = (
-  provider: 'firebase' | 'rustore',
-  error: unknown
-): void => {
+const recordNativePushError = (error: unknown): void => {
   const normalizedError =
     error && typeof error === 'object' && 'error' in error
       ? (error as { error?: unknown }).error
@@ -569,11 +586,11 @@ const recordNativePushError = (
     level: 'error',
     entityType: 'notification',
     payload: {
-      provider,
+      provider: 'rustore',
       ...getTelemetryErrorPayload(normalizedError)
     }
   });
-  console.error(`${provider} push error:`, normalizedError);
+  console.error('RuStore push error:', normalizedError);
 };
 
 export const initPushNotifications = async () => {
@@ -588,13 +605,23 @@ export const initPushNotifications = async () => {
     }
   });
   if (Capacitor.isNativePlatform()) {
-    const platform = Capacitor.getPlatform() as 'android' | 'ios';
-    let permStatus = await PushNotifications.checkPermissions();
+    if (!isRuStorePushPlatform()) {
+      recordTelemetryEvent({
+        category: 'notification',
+        name: 'notification.native.unsupported_platform',
+        level: 'warn',
+        entityType: 'notification',
+        payload: { platform: Capacitor.getPlatform() }
+      });
+      return;
+    }
+
+    let permStatus = await RuStorePush.checkPermissions();
     if (
       permStatus.receive === 'prompt' ||
       permStatus.receive === 'prompt-with-rationale'
     ) {
-      permStatus = await PushNotifications.requestPermissions();
+      permStatus = await RuStorePush.requestPermissions();
     }
     recordTelemetryEvent({
       category: 'notification',
@@ -609,82 +636,33 @@ export const initPushNotifications = async () => {
     if (permStatus.receive !== 'granted')
       return console.error('Permission denied');
 
-    if (
-      Capacitor.getPlatform() === 'android' &&
-      !nativeNotificationTapListener
-    ) {
+    if (!nativeNotificationTapListener) {
       await bindNativeNotificationTapListener();
     }
 
-    if (!firebasePushListenersBound) {
-      await PushNotifications.addListener('registration', token => {
-        void syncNativePushToken(token.value, platform, 'firebase');
+    if (!ruStorePushListenersBound) {
+      await RuStorePush.addListener('registration', token => {
+        void syncNativePushToken(token.value);
       });
 
-      await PushNotifications.addListener('pushNotificationReceived', n => {
-        handleNativePushReceived(n, 'firebase');
+      await RuStorePush.addListener('pushNotificationReceived', n => {
+        handleNativePushReceived(n);
       });
 
-      await PushNotifications.addListener(
-        'pushNotificationActionPerformed',
-        n => {
-          console.log('Firebase push action:', n);
-          const normalizedData = normalizeNativeNotificationData(
-            (n.notification.data || {}) as NativeNotificationData
-          );
-          recordTelemetryEvent({
-            category: 'notification',
-            name: 'notification.native.action',
-            entityType: 'notification',
-            entityId: normalizedData.topicId || normalizedData.roomId,
-            payload: {
-              provider: 'firebase',
-              actionId: n.actionId,
-              action: normalizedData.action,
-              type: normalizedData.type,
-              topicId: normalizedData.topicId,
-              roomId: normalizedData.roomId
-            }
-          });
-          handleNotificationInteraction(normalizedData, n.actionId);
-        }
-      );
-
-      await PushNotifications.addListener('registrationError', error => {
-        recordNativePushError('firebase', error);
+      await RuStorePush.addListener('registrationError', error => {
+        recordNativePushError(error);
       });
 
-      firebasePushListenersBound = true;
+      ruStorePushListenersBound = true;
     }
 
     try {
-      await PushNotifications.register();
+      const registration = await RuStorePush.register();
+      if (registration.value) {
+        await syncNativePushToken(registration.value);
+      }
     } catch (error) {
-      recordNativePushError('firebase', error);
-    }
-
-    if (isRuStorePushPlatform()) {
-      if (!ruStorePushListenersBound) {
-        await RuStorePush.addListener('registration', token => {
-          void syncNativePushToken(token.value, 'rustore', 'rustore');
-        });
-
-        await RuStorePush.addListener('pushNotificationReceived', n => {
-          handleNativePushReceived(n, 'rustore');
-        });
-
-        await RuStorePush.addListener('registrationError', error => {
-          recordNativePushError('rustore', error);
-        });
-
-        ruStorePushListenersBound = true;
-      }
-
-      try {
-        await RuStorePush.register();
-      } catch (error) {
-        recordNativePushError('rustore', error);
-      }
+      recordNativePushError(error);
     }
 
     // Native notification taps can arrive before the web layer starts.
@@ -826,9 +804,6 @@ export const removePushListeners = async () => {
     return;
   }
 
-  await PushNotifications.removeAllListeners();
-  firebasePushListenersBound = false;
-
   if (isRuStorePushPlatform()) {
     await RuStorePush.removeAllListeners();
     ruStorePushListenersBound = false;
@@ -901,12 +876,6 @@ export const cleanupPushNotificationsOnLogout = async (): Promise<void> => {
         }
       }
 
-      try {
-        await PushNotifications.removeAllDeliveredNotifications();
-      } catch (error) {
-        console.warn('Failed to clear Firebase notifications:', error);
-      }
-
       if (isRuStorePushPlatform()) {
         try {
           await RuStorePush.clearAllNotifications();
@@ -916,12 +885,6 @@ export const cleanupPushNotificationsOnLogout = async (): Promise<void> => {
       }
 
       await removePushListeners();
-
-      try {
-        await PushNotifications.unregister();
-      } catch (error) {
-        console.warn('Failed to unregister Firebase push:', error);
-      }
 
       if (isRuStorePushPlatform()) {
         try {

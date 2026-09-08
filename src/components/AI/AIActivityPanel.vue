@@ -1,15 +1,17 @@
 <template>
   <section
     class="ai-activity-panel"
-    aria-label="Фоновые задачи ИИ"
-    data-testid="AI-ActivityPanel"
+    :aria-label="props.ariaLabel"
+    :data-testid="props.dataTestid"
   >
     <button
       v-for="activity in visibleActivities"
       :key="activity.sessionId"
       type="button"
       class="ai-activity-panel__item"
-      :aria-label="`${activity.title}. ${getStatusLabel(activity.status)}`"
+      :aria-label="`${activity.title}. ${
+        activity.statusLabel || getStatusLabel(activity.status)
+      }`"
       @click="emit('select', activity.sessionId)"
     >
       <span
@@ -21,6 +23,9 @@
       ></span>
       <span class="ai-activity-panel__copy">
         <strong>{{ activity.title }}</strong>
+        <span v-if="props.showStatus" class="ai-activity-panel__status">
+          {{ activity.statusLabel || getStatusLabel(activity.status) }}
+        </span>
         <small>{{ activity.description }}</small>
       </span>
     </button>
@@ -34,9 +39,23 @@ import type {
   AiAssistantActivityStatus
 } from '../../composables/useAiAssistant';
 
-const props = defineProps<{
-  activities: readonly AiAssistantActivity[];
-}>();
+type ActivityPanelItem = AiAssistantActivity & {
+  statusLabel?: string;
+};
+
+const props = withDefaults(
+  defineProps<{
+    activities: readonly ActivityPanelItem[];
+    ariaLabel?: string;
+    dataTestid?: string;
+    showStatus?: boolean;
+  }>(),
+  {
+    ariaLabel: 'Фоновые задачи ИИ',
+    dataTestid: 'AI-ActivityPanel',
+    showStatus: false
+  }
+);
 
 const emit = defineEmits<{
   select: [sessionId: string];

@@ -235,6 +235,13 @@ const hydrateFreshChatContent = async (
     };
   }
 
+  if (hasPriorityMessageTopicRoute()) {
+    return {
+      usersRefreshed: false,
+      topicsRefreshed: false
+    };
+  }
+
   await Promise.allSettled([fetchAuthUser(), fetchAllUsers()]);
 
   if (!getAuthUser() && userId) {
@@ -267,6 +274,13 @@ const getActiveChatTopicId = (): string | null => {
 
   return null;
 };
+
+const hasPriorityMessageTopicRoute = (): boolean =>
+  Boolean(
+    route.value.id &&
+      (route.value.type === RouteTypes.DIALOGS ||
+        route.value.type === RouteTypes.GROUP)
+  );
 
 let isAppInitializationComplete = false;
 let isActiveTopicRenderReady = false;
@@ -403,6 +417,13 @@ const runDeferredOnlineStartup = (
 ): void => {
   if (!freshContentState.usersRefreshed || !freshContentState.topicsRefreshed) {
     runDeferredStartupTask('online refresh', async () => {
+      const shouldWaitForMessageTopic = hasPriorityMessageTopicRoute();
+
+      if (shouldWaitForMessageTopic) {
+        await startupReadyPromise;
+        await waitForStartupIdle();
+      }
+
       if (!freshContentState.usersRefreshed) {
         await Promise.allSettled([fetchAuthUser(), fetchAllUsers()]);
 
@@ -412,7 +433,7 @@ const runDeferredOnlineStartup = (
       }
 
       if (!freshContentState.topicsRefreshed) {
-        if (getActiveChatTopicId()) {
+        if (!shouldWaitForMessageTopic && getActiveChatTopicId()) {
           await startupReadyPromise;
           await waitForStartupIdle();
         }
@@ -431,14 +452,6 @@ const runDeferredOnlineStartup = (
   }
 
   runDeferredStartupTask('group call restore', restoreInvitedGroupCallDeferred);
-
-  runDeferredStartupTask('push notifications', async () => {
-    try {
-      await initPushNotifications();
-    } catch (error) {
-      console.warn('Не удалось инициализировать push-уведомления:', error);
-    }
-  });
 };
 
 const runAppInitialization = async () => {
@@ -496,6 +509,9 @@ const runAppInitialization = async () => {
     }
 
     setAuthToken(authData.token);
+    void initPushNotifications().catch(error => {
+      console.warn('Не удалось инициализировать push-уведомления:', error);
+    });
 
     const authUserId =
       authData.user?.id ||

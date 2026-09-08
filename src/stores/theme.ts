@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import { Capacitor } from '@capacitor/core';
+import { LaunchStartup } from '../services/launchStartup';
 
 /**
  * Класс темы, который добавляется на корневой html-элемент.
@@ -20,6 +22,7 @@ export interface IThemeClasses {
 }
 
 const THEME_STORAGE_KEY = 'erp-theme-color-scheme';
+const MOBILE_THEME_MEDIA_QUERY = '(max-width: 767.98px)';
 const THEME_COLORS = {
   dark: '#212531',
   light: '#f8f9fd'
@@ -27,6 +30,23 @@ const THEME_COLORS = {
 const THEME_CLASSES: IThemeClasses = {
   dark: 'theme-dark',
   light: 'theme-light'
+};
+
+const isLightThemeOnly = (): boolean => {
+  if (Capacitor.isNativePlatform()) return true;
+
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia(MOBILE_THEME_MEDIA_QUERY).matches
+  );
+};
+
+const syncNativeLaunchTheme = (isDarkTheme: boolean): void => {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') {
+    return;
+  }
+
+  void LaunchStartup.setTheme({ dark: isDarkTheme }).catch(() => undefined);
 };
 
 /**
@@ -139,12 +159,20 @@ export const useThemeStore = defineStore('theme', () => {
 
     // Восстанавливаем сохраненную тему только один раз при старте приложения.
     const savedThemeClass = getSavedThemeClass();
+    const initialThemeClass = isLightThemeOnly()
+      ? THEME_CLASSES.light
+      : savedThemeClass;
 
     // Синхронизируем реактивное состояние с сохраненным классом темы.
-    isDarkTheme.value = getIsDarkThemeByClass(savedThemeClass);
+    isDarkTheme.value = getIsDarkThemeByClass(initialThemeClass);
+    syncNativeLaunchTheme(isDarkTheme.value);
 
     // Применяем восстановленную тему к корневому элементу.
-    applyThemeClass(savedThemeClass);
+    applyThemeClass(initialThemeClass);
+
+    if (initialThemeClass !== savedThemeClass) {
+      saveThemeClass(initialThemeClass);
+    }
 
     // Помечаем тему как инициализированную, чтобы не выполнять этот код повторно.
     isThemeInitialized.value = true;
@@ -156,11 +184,14 @@ export const useThemeStore = defineStore('theme', () => {
    * @param nextIsDarkTheme - Признак включения темной темы.
    */
   const setTheme = (nextIsDarkTheme: boolean): void => {
+    const shouldUseDarkTheme = nextIsDarkTheme && !isLightThemeOnly();
+
     // Определяем класс темы по новому состоянию переключателя.
-    const nextThemeClass = getThemeClassByState(nextIsDarkTheme);
+    const nextThemeClass = getThemeClassByState(shouldUseDarkTheme);
 
     // Обновляем общее реактивное состояние темы.
-    isDarkTheme.value = nextIsDarkTheme;
+    isDarkTheme.value = shouldUseDarkTheme;
+    syncNativeLaunchTheme(shouldUseDarkTheme);
 
     // Применяем выбранную тему к корневому html-элементу.
     applyThemeClass(nextThemeClass);

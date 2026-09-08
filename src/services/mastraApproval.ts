@@ -7,6 +7,49 @@ export interface PendingToolApproval {
 
 export type ApprovalDecision = 'approve' | 'decline' | null;
 
+const APPROVE_MESSAGE_PATTERN =
+  /^\s*(?:да|подтверждаю|подтвердить|согласен|согласна|хорошо|ок|окей)\s*[.!]?\s*$/iu;
+const DECLINE_MESSAGE_PATTERN =
+  /^\s*(?:нет|отмена|отменить|не подтверждаю|отклонить)\s*[.!]?\s*$/iu;
+
+/** Распознаёт короткий ответ только как решение по уже ожидающему действию. */
+export const approvalDecisionFromMessage = (
+  value: string
+): Exclude<ApprovalDecision, null> | null => {
+  if (APPROVE_MESSAGE_PATTERN.test(value)) return 'approve';
+  if (DECLINE_MESSAGE_PATTERN.test(value)) return 'decline';
+  return null;
+};
+
+const isPendingToolApproval = (
+  value: unknown
+): value is PendingToolApproval => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const approval = value as Partial<PendingToolApproval>;
+  return (
+    typeof approval.runId === 'string' &&
+    Boolean(approval.runId) &&
+    typeof approval.toolCallId === 'string' &&
+    Boolean(approval.toolCallId) &&
+    typeof approval.toolName === 'string' &&
+    Boolean(approval.toolName) &&
+    Boolean(approval.args) &&
+    typeof approval.args === 'object' &&
+    !Array.isArray(approval.args)
+  );
+};
+
+/** Восстанавливает последнее незавершённое подтверждение из локальной истории чата. */
+export const findPendingToolApproval = (
+  messages: Array<{ pendingToolApproval?: unknown }>
+): PendingToolApproval | null => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const approval = messages[index]?.pendingToolApproval;
+    if (isPendingToolApproval(approval)) return approval;
+  }
+  return null;
+};
+
 const STALE_APPROVAL_RESPONSE_PATTERNS = [
   /could not find an active or suspended run/iu,
   /could not find a suspended run/iu,
@@ -370,6 +413,9 @@ const approvalStatusValue = (value: unknown) => {
 const APPROVAL_ACTION_LABELS: Record<string, string> = {
   erp_actions_erp_attachment_upload_and_attach:
     'создание документа ERP из вложения и его прикрепление',
+  erp_actions_erp_shipment_create: 'создание задачи на отгрузку',
+  erp_actions_erp_shipment_create_with_attachment:
+    'создание задачи на отгрузку со счётом',
   erp_actions_erp_detail_create_and_add_to_cbed:
     'создание детали и изменение спецификации сборки',
   erp_actions_erp_detail_archive: 'перенос детали в архив',
@@ -387,6 +433,7 @@ const APPROVAL_ACTION_LABELS: Record<string, string> = {
   erp_actions_erp_file_archive: 'перенос файла ERP в архив',
   erp_actions_erp_file_restore: 'восстановление файла ERP из архива',
   erp_actions_erp_entity_editor_update: 'изменение карточки ERP',
+  erp_actions_erp_entity_editor_create: 'создание самостоятельной карточки ERP',
   erp_actions_erp_technology_operation_add:
     'добавление технологической операции',
   erp_actions_erp_technology_operation_update:
@@ -477,6 +524,44 @@ const buildApprovalQuestion = (approval: PendingToolApproval): string => {
         ? ` с обозначением ${quotedValue(args.detailDesignation)}`
         : '';
       return `Перенести деталь ${quotedValue(args.detailName)}${designation} в архив? Связанные спецификации, комплекты и металлообработка будут актуализированы.`;
+    }
+    case 'erp_actions_erp_shipment_create':
+    case 'erp_actions_erp_shipment_create_with_attachment': {
+      const product = entityReference(
+        args.productName,
+        args.productDesignation,
+        'без указанного названия'
+      );
+      const article = args.productArticle
+        ? `, артикул: ${quotedValue(args.productArticle)}`
+        : '';
+      const orderDate = args.orderedAt
+        ? `, дата заказа: ${formatValue(args.orderedAt, 'не указана')}`
+        : '';
+      const basis =
+        toolName === 'erp_actions_erp_shipment_create_with_attachment'
+          ? ` Приложенный счёт ${quotedValue(args.attachmentName)} будет перенесён в ERP, прикреплён к задаче и указан как основание.`
+          : args.basisDocumentName
+            ? ` Файл ${quotedValue(args.basisDocumentName)} из базы ERP будет прикреплён и указан как основание.`
+            : '';
+      return `Создать задачу на отгрузку изделия ${product}${article} для покупателя ${quotedValue(args.buyerName)} в количестве ${formatValue(args.quantity, 'не указано')} шт., плановая дата отгрузки: ${formatValue(args.plannedShipmentAt, 'не указана')}${orderDate}?${basis}`;
+    }
+    case 'erp_actions_erp_entity_editor_create': {
+      const entity = entityReference(
+        args.entityName,
+        args.entityDesignation,
+        'без указанного названия'
+      );
+      const article = args.article
+        ? `, артикул: ${quotedValue(args.article)}`
+        : '';
+      const responsible = args.responsibleName
+        ? `, ответственный: ${quotedValue(args.responsibleName)}`
+        : '';
+      const description = args.description
+        ? `, описание: ${contentPreviewValue(args.description)}`
+        : '';
+      return `Создать ${editorEntityLabel(args.type)} ${entity}${article}${responsible}${description} без добавления в спецификацию?`;
     }
     case 'erp_actions_erp_entity_editor_update': {
       const entity = entityReference(

@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<manifest
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <application
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/sep_launcher_chat_bubbles_safe_2026"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@mipmap/sep_launcher_chat_bubbles_safe_round_2026"
         android:supportsRtl="true"
         android:usesCleartextTraffic="${chatUsesCleartextTraffic}"
         android:theme="@style/AppTheme">
@@ -16,6 +14,7 @@
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
+            android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize"
             android:exported="true">
             <intent-filter>
@@ -28,9 +27,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data
-                    android:scheme="sepchat"
-                    android:host="call" />
+                <data android:scheme="sepchat" android:host="call" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -51,38 +48,44 @@
         </activity>
 
         <activity
+            android:name=".NotificationLaunchActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:screenOrientation="portrait"
+            android:theme="@style/AppTheme.NotificationLaunch"
+        />
+
+        <activity
             android:name=".IncomingCallActivity"
             android:excludeFromRecents="true"
             android:exported="false"
             android:launchMode="singleTop"
             android:showOnLockScreen="true"
-            android:theme="@style/AppTheme.NoActionBar" />
-
-        <meta-data
-            android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="chat_default" />
-
-        <meta-data
-            android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@drawable/ic_stat_chat" />
+            android:theme="@style/AppTheme.NoActionBar"
+        />
 
         <meta-data
             android:name="ru.rustore.sdk.pushclient.project_id"
-            android:value="@string/rustore_push_project_id" />
+            android:value="@string/rustore_push_project_id"
+        />
 
         <meta-data
             android:name="ru.rustore.sdk.pushclient.default_notification_channel_id"
-            android:value="chat_default" />
+            android:value="chat_default"
+        />
 
         <meta-data
             android:name="ru.rustore.sdk.pushclient.default_notification_icon"
-            android:resource="@drawable/ic_stat_chat" />
+            android:resource="@drawable/notification_statusbar_chat_bubbles_2026"
+        />
 
         <provider
             android:name=".RuStoreProjectMigrationProvider"
             android:authorities="${applicationId}.rustore-project-migration"
             android:exported="false"
-            android:initOrder="200" />
+            android:initOrder="200"
+        />
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -92,22 +95,7 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
 
-        <service
-            android:name=".ChatFirebaseMessagingService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
-
-        <service
-            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
-            tools:node="remove" />
-
-        <service
-            android:name=".ChatRuStoreMessagingService"
-            android:exported="true"
-            tools:ignore="ExportedService">
+        <service android:name=".ChatRuStoreMessagingService" android:exported="true" tools:ignore="ExportedService">
             <intent-filter>
                 <action android:name="ru.rustore.sdk.pushclient.MESSAGING_EVENT" />
             </intent-filter>
@@ -117,11 +105,12 @@
             android:name=".ScreenShareForegroundService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="mediaProjection" />
+            android:foregroundServiceType="mediaProjection"
+        />
 
-        <receiver
-            android:name=".CallActionReceiver"
-            android:exported="false" />
+        <receiver android:name=".CallActionReceiver" android:exported="false" />
+
+        <receiver android:name=".ChatNotificationActionReceiver" android:exported="false" />
     </application>
 
     <!-- Permissions -->

@@ -7,8 +7,12 @@ import {
   type Ref,
   type WatchStopHandle
 } from 'vue';
-import type { PendingToolApproval } from '../services/mastraApproval';
+import {
+  approvalDecisionFromMessage,
+  type PendingToolApproval
+} from '../services/mastraApproval';
 import type { AiAttachmentReference } from '../services/aiAttachments';
+import type { AiOutputAttachment } from '../services/aiOutputAttachments';
 import type { AIMessage, AIMessageReference } from '../types/messages';
 import { generateUUID } from '../utils/generateUUID';
 import {
@@ -21,6 +25,7 @@ export type AiAssistantTab = 'chats' | 'tasks';
 export type AiAssistantView = 'chat' | 'tasks';
 export type AiMessageRole = 'user' | 'assistant';
 export type AiPermissionMode = 'ask' | 'automatic';
+export type AiResponseMode = 'quick' | 'advanced';
 export type AiAssistantActivityStatus = 'running' | 'success' | 'attention';
 
 export interface AiAssistantMessage {
@@ -32,10 +37,12 @@ export interface AiAssistantMessage {
   approvalState?: 'approved' | 'rejected' | null;
   pinned?: boolean;
   replyTo?: AIMessageReference;
+  outputAttachments?: AiOutputAttachment[];
 }
 
 export interface AiAssistantSession {
   id: string;
+  kind?: 'chat' | 'task';
   title: string;
   description: string;
   time: string;
@@ -68,6 +75,7 @@ interface PersistedAiState {
   sessions: AiAssistantSession[];
   tasks: AiAutomationTask[];
   permissionMode: AiPermissionMode;
+  responseMode: AiResponseMode;
 }
 
 interface MastraRuntime {
@@ -108,7 +116,8 @@ const loadState = (): PersistedAiState => {
   const fallback: PersistedAiState = {
     sessions: [],
     tasks: initialTasks(),
-    permissionMode: 'ask'
+    permissionMode: 'ask',
+    responseMode: 'quick'
   };
   if (typeof window === 'undefined') return fallback;
 
@@ -121,13 +130,15 @@ const loadState = (): PersistedAiState => {
     return {
       sessions: parsed.sessions.map(session => ({
         ...session,
+        kind: session.kind === 'task' ? 'task' : 'chat',
         messages: []
       })),
       tasks: Array.isArray(parsed.tasks)
         ? parsed.tasks.filter(task => task.id !== 'daily-automation')
         : initialTasks(),
       permissionMode:
-        parsed.permissionMode === 'automatic' ? 'automatic' : 'ask'
+        parsed.permissionMode === 'automatic' ? 'automatic' : 'ask',
+      responseMode: parsed.responseMode === 'advanced' ? 'advanced' : 'quick'
     };
   } catch {
     return fallback;
@@ -143,6 +154,7 @@ const isVoiceModeOpen = ref(false);
 const isVoiceModalVisible = ref(false);
 const voiceCallStartedAt = ref<number | null>(null);
 const permissionMode = ref<AiPermissionMode>(initialState.permissionMode);
+const responseMode = ref<AiResponseMode>(initialState.responseMode);
 const runtimes = shallowReactive(new Map<string, MastraRuntime>());
 const runtimePromises = new Map<string, Promise<MastraRuntime>>();
 let mastraModulePromise: Promise<
@@ -169,7 +181,8 @@ const persist = (): void => {
           messages: []
         })),
         tasks: persisted.tasks,
-        permissionMode: permissionMode.value
+        permissionMode: permissionMode.value,
+        responseMode: responseMode.value
       })
     );
   } catch {
@@ -204,7 +217,12 @@ const stopVoiceCall = (): void => {
 };
 
 watch(
-  () => [persisted.sessions, persisted.tasks, permissionMode.value],
+  () => [
+    persisted.sessions,
+    persisted.tasks,
+    permissionMode.value,
+    responseMode.value
+  ],
   persist,
   {
     deep: true
@@ -308,10 +326,18 @@ const syncSession = (sessionId: string, runtime: MastraRuntime): void => {
   if (!session) return;
 
   const pendingApproval = runtime.pendingApproval.value;
+  if (pendingApproval?.toolName.startsWith('automation_')) {
+    session.kind = 'task';
+  }
   const lastSourceIndex = runtime.messages.value.length - 1;
 
   session.messages = runtime.messages.value.flatMap((message, index) => {
-    if (message.loading && !message.content.trim()) return [];
+    if (
+      message.loading &&
+      !message.content.trim() &&
+      !message.outputAttachments?.length
+    )
+      return [];
 
     const id = getMessageId(sessionId, message, index);
     return [
@@ -327,7 +353,8 @@ const syncSession = (sessionId: string, runtime: MastraRuntime): void => {
           Boolean(approvalStates[id]),
         approvalState: approvalStates[id] ?? null,
         pinned: Boolean(message.pinned),
-        replyTo: message.replyTo
+        replyTo: message.replyTo,
+        outputAttachments: message.outputAttachments
       }
     ];
   });
@@ -335,14 +362,22 @@ const syncSession = (sessionId: string, runtime: MastraRuntime): void => {
   const lastMessage = runtime.messages.value
     .slice()
     .reverse()
-    .find(message => message.content.trim());
+    .find(
+      message => message.content.trim() || message.outputAttachments?.length
+    );
   const isLoading = runtime.messages.value.some(message => message.loading);
 
   session.description = runtime.isInitializing.value
     ? 'Загрузка истории…'
     : isLoading
       ? 'Думает…'
-      : shorten(getVisibleMessageContent(lastMessage?.content || 'Новый чат'));
+      : shorten(
+          getVisibleMessageContent(
+            lastMessage?.content ||
+              lastMessage?.outputAttachments?.[0]?.name ||
+              'Новый чат'
+          )
+        );
   session.time = formatTime(lastMessage?.timestamp);
   syncSessionActivity(sessionId, runtime);
 };
@@ -370,7 +405,8 @@ const ensureRuntime = async (sessionId: string): Promise<MastraRuntime> => {
       const runtime = useMastra({
         agentId: 'generalAgent',
         chatId: sessionId,
-        approvalMode: permissionMode
+        approvalMode: permissionMode,
+        responseMode
       }) as MastraRuntime;
       runtimes.set(sessionId, runtime);
 
@@ -477,6 +513,12 @@ const selectSession = (sessionId: string): void => {
   });
 };
 
+/** Открывает ещё не сохранённую автоматизацию в разделе задач. */
+const selectTaskSession = (sessionId: string): void => {
+  selectSession(sessionId);
+  if (activeSessionId.value === sessionId) activeTab.value = 'tasks';
+};
+
 const setTab = (tab: AiAssistantTab): void => {
   markSessionInactive(activeSessionId.value);
   activeSessionId.value = null;
@@ -499,9 +541,13 @@ const startNewTask = (): void => {
   activeSessionId.value = null;
 };
 
-const createSession = (input: string): AiAssistantSession => {
+const createSession = (
+  input: string,
+  kind: 'chat' | 'task' = 'chat'
+): AiAssistantSession => {
   const session: AiAssistantSession = {
     id: generateUUID(),
+    kind,
     title: shorten(input, 36),
     description: 'Думает…',
     time: formatTime(),
@@ -544,7 +590,34 @@ const sendMessage = async (
   modelInput?: string
 ): Promise<string | null> => {
   const visibleInput = buildVisibleInput(rawInput, attachments);
-  if (!visibleInput || isThinking.value) return null;
+  if (!visibleInput) return null;
+
+  const currentSession = activeSession.value;
+  if (currentSession) {
+    const runtime = await ensureRuntime(currentSession.id);
+    const approvalDecision = approvalDecisionFromMessage(visibleInput);
+    if (approvalDecision && runtime.pendingApproval.value) {
+      if (isThinking.value) return null;
+
+      beginSessionActivity(currentSession);
+      try {
+        await runtime.resolveToolApproval(approvalDecision);
+        syncSession(currentSession.id, runtime);
+        return (
+          currentSession.messages
+            .slice()
+            .reverse()
+            .find(
+              message => message.role === 'assistant' && message.text.trim()
+            )?.text || null
+        );
+      } finally {
+        void refreshAutomations();
+      }
+    }
+  }
+
+  if (isThinking.value) return null;
 
   const isTaskRequest = activeView.value === 'tasks';
   if (isTaskRequest) {
@@ -555,7 +628,9 @@ const sendMessage = async (
   activeTab.value = isTaskRequest ? 'tasks' : 'chats';
   activeView.value = 'chat';
 
-  const session = activeSession.value || createSession(visibleInput);
+  const session =
+    activeSession.value ||
+    createSession(visibleInput, isTaskRequest ? 'task' : 'chat');
   const runtime = await ensureRuntime(session.id);
   beginSessionActivity(session);
   try {
@@ -746,6 +821,7 @@ const syncAutomationResult = async (
   if (!session) {
     session = {
       id: automation.sessionId,
+      kind: 'task',
       title: automation.title,
       description: automation.schedule,
       time: formatTime(
@@ -755,6 +831,7 @@ const syncAutomationResult = async (
     };
     persisted.sessions.unshift(session);
   } else {
+    session.kind = 'task';
     session.title = automation.title;
   }
   const result = automation.lastResult;
@@ -840,6 +917,7 @@ export const useAiAssistant = () => {
     isVoiceModalVisible,
     voiceCallStartedAt,
     permissionMode,
+    responseMode,
     startVoiceCall,
     hideVoiceCall,
     showVoiceCall,
@@ -847,6 +925,7 @@ export const useAiAssistant = () => {
     startNewSession,
     startNewTask,
     selectSession,
+    selectTaskSession,
     selectTask,
     setTab,
     showTasks,

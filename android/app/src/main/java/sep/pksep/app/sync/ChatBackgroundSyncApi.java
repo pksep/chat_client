@@ -9,6 +9,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URLEncoder;
 import java.net.URL;
@@ -90,6 +91,48 @@ final class ChatBackgroundSyncApi {
         return new JSONArray();
     }
 
+    void sendNotificationReply(
+        String topicId,
+        String text,
+        String clientId,
+        String replyMessageId
+    ) throws IOException, JSONException {
+        JSONObject payload = new JSONObject();
+        payload.put("text", text);
+        payload.put("clientId", clientId);
+        if (replyMessageId != null && !replyMessageId.trim().isEmpty()) {
+            payload.put("replyMessageId", replyMessageId.trim());
+        }
+        postJson(
+            "/messages/topic/" + encodePathSegment(topicId) + "/reply",
+            payload
+        );
+    }
+
+    void setNotificationReaction(
+        String topicId,
+        String messageId,
+        String emoji
+    ) throws IOException, JSONException {
+        JSONObject payload = new JSONObject();
+        payload.put("messageId", messageId);
+        payload.put("emoji", emoji);
+        postJson(
+            "/messages/topic/" + encodePathSegment(topicId) + "/reaction",
+            payload
+        );
+    }
+
+    void markNotificationRead(String topicId, String messageId)
+        throws IOException, JSONException {
+        JSONObject payload = new JSONObject();
+        payload.put("messageId", messageId);
+        postJson(
+            "/messages/topic/" + encodePathSegment(topicId) + "/read",
+            payload
+        );
+    }
+
     private Object getJson(String path) throws IOException, JSONException {
         String raw = get(path);
 
@@ -100,34 +143,61 @@ final class ChatBackgroundSyncApi {
         return new JSONTokener(raw).nextValue();
     }
 
+    private void postJson(String path, JSONObject payload) throws IOException {
+        request("POST", path, payload != null ? payload.toString() : "{}");
+    }
+
     private String get(String path) throws IOException {
+        return request("GET", path, null);
+    }
+
+    private String request(String method, String path, String body)
+        throws IOException {
         HttpURLConnection connection = null;
 
         try {
             URL url = new URL(session.apiUrl + path);
             connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
+            connection.setRequestMethod(method);
             connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
             connection.setReadTimeout(READ_TIMEOUT_MS);
             connection.setRequestProperty("Accept", "application/json");
             connection.setRequestProperty("Authorization", "Bearer " + session.token);
 
+            if (body != null) {
+                byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+                connection.setDoOutput(true);
+                connection.setFixedLengthStreamingMode(bytes.length);
+                connection.setRequestProperty(
+                    "Content-Type",
+                    "application/json; charset=UTF-8"
+                );
+
+                try (OutputStream output = connection.getOutputStream()) {
+                    output.write(bytes);
+                }
+            }
+
             int statusCode = connection.getResponseCode();
             InputStream stream = statusCode >= 400
                 ? connection.getErrorStream()
                 : connection.getInputStream();
-            String body = readBody(stream);
+            String responseBody = readBody(stream);
 
             if (statusCode >= 400) {
-                throw new ApiException(statusCode, body);
+                throw new ApiException(statusCode, responseBody);
             }
 
-            return body;
+            return responseBody;
         } finally {
             if (connection != null) {
                 connection.disconnect();
             }
         }
+    }
+
+    private String encodePathSegment(String value) throws IOException {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8.name());
     }
 
     private String readBody(InputStream stream) throws IOException {
@@ -161,6 +231,10 @@ final class ChatBackgroundSyncApi {
 
         boolean isAuthError() {
             return statusCode == 401 || statusCode == 403;
+        }
+
+        boolean isRetryable() {
+            return statusCode == 408 || statusCode == 429 || statusCode >= 500;
         }
 
         boolean isNotFound() {

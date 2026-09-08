@@ -5,5 +5,5 @@ import {
 
 export default defineConfig({
   preset,
-  images: ['public/images/sep-chat-logo.svg']
+  images: ['public/images/logo-light.svg']
 });
