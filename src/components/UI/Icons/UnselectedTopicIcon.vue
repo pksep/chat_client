@@ -46,13 +46,11 @@ import darkIconUrl from '../../../../assets/unselected-topic-dark.svg?url';
 </style>
 
 <style>
-:is([data-theme='dark'], .theme-dark)
-  .unselected-topic-icon__image--light {
+:is([data-theme='dark'], .theme-dark) .unselected-topic-icon__image--light {
   display: none;
 }
 
-:is([data-theme='dark'], .theme-dark)
-  .unselected-topic-icon__image--dark {
+:is([data-theme='dark'], .theme-dark) .unselected-topic-icon__image--dark {
   display: block;
 }
 </style>
