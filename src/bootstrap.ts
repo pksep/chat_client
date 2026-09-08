@@ -1,4 +1,6 @@
-await window.__chatNativeStartupCleanup;
-await import('./main');
+void (async () => {
+  await window.__chatNativeStartupCleanup;
+  await import('./main');
+})();
 
 export {};

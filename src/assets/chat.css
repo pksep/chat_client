@@ -1049,7 +1049,7 @@ p.chat__nothing-paragraph {
   p {
     margin: 0;
     font-weight: 600;
-    font-size: 24px;
+    font-size: 18px;
     color: var(--text-light-color);
   }
 }

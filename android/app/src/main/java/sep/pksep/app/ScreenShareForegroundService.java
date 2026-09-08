@@ -107,7 +107,7 @@ public class ScreenShareForegroundService extends Service {
         );
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.notification_statusbar_robot_head_2026)
+            .setSmallIcon(R.drawable.notification_statusbar_chat_bubbles_2026)
             .setContentTitle("Демонстрация экрана")
             .setContentText("Трансляция экрана активна")
             .setContentIntent(pendingIntent)

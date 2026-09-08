@@ -3,7 +3,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { isTauriRuntime } from './useTauriNotifications';
 
 const TRAY_ICON_ID = 'sep-chat-tray';
-const BASE_ICON_URL = '/images/pwa-64x64.png?v=20260904-2';
+const BASE_ICON_URL = '/images/pwa-64x64.png?v=20260908-1';
 const BADGE_ICON_SIZE = 64;
 const WINDOW_OVERLAY_ICON_SIZE = 32;
 const BADGE_RED = '#E5484D';

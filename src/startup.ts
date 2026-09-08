@@ -1,3 +1,5 @@
+import './polyfills/legacy-webview';
+
 declare global {
   interface Window {
     __chatNativeStartupCleanup?: Promise<void>;
@@ -295,7 +297,7 @@ if (hasStartupTopicRoute) {
 }
 
 window.__chatNativeStartupCleanup = (async () => {
-  const logoAssetVersion = '20260904-2';
+  const logoAssetVersion = '20260908-1';
   const logoAssetVersionKey = 'chat.logo.assets.version';
   const capacitor = (
     window as typeof window & {

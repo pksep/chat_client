@@ -95,7 +95,7 @@
         @rendered-topic-change="handleRenderedTopicChange"
       />
       <div class="chat__unselected-topic" v-else>
-        <img src="/images/messages.svg" alt="messages" />
+        <UnselectedTopicIcon />
         <p>Выберите чат</p>
       </div>
     </template>
@@ -131,6 +131,7 @@ import {
   hasKnownTopicMessagesState
 } from '../services/useMessages';
 import { useAiAssistant } from '../composables/useAiAssistant';
+import UnselectedTopicIcon from './UI/Icons/UnselectedTopicIcon.vue';
 
 const AIAssistant = defineAsyncComponent(() => import('./AI/AIAssistant.vue'));
 
