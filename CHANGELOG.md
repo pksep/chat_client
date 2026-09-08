@@ -1,3 +1,46 @@
+# [1.39.0](https://github.com/pksep/chat_client/compare/v1.38.0...v1.39.0) (2026-09-08)
+
+
+### Bug Fixes
+
+* **ai:** align collapsed item divider ([cafe3ce](https://github.com/pksep/chat_client/commit/cafe3ce971e4b50b2033e1f3ed67cfe632a633d9))
+* **ai:** align date color with chat ([95a270d](https://github.com/pksep/chat_client/commit/95a270d6e6960bf8cfd85e8aeaa99f61e22a0ab7))
+* **ai:** align message text metrics with chat ([d9bfe2e](https://github.com/pksep/chat_client/commit/d9bfe2e9a28c31da328c9741cd236c7ae3688446))
+* **ai:** align reply styling with chat messages ([053f851](https://github.com/pksep/chat_client/commit/053f8513cf4ea9913cac8d096b7325c203173fdb))
+* **ai:** align response and voice controls ([ec3cec1](https://github.com/pksep/chat_client/commit/ec3cec14fc7f0c24596fe8650856ce06588db3c8))
+* **ai:** constrain menu separator width ([35c9f03](https://github.com/pksep/chat_client/commit/35c9f030a5e5c3862308b3c5358cbafce49b4122))
+* **ai:** keep header menu above pinned content ([5d99e75](https://github.com/pksep/chat_client/commit/5d99e755de998d92d7ff189a70829ca077ef5b87))
+* **ai:** keep response mode and send buttons 8px apart ([9b6e418](https://github.com/pksep/chat_client/commit/9b6e418ce1e330e338af2be98d873a85375370ab))
+* **ai:** keep response selector width stable ([dab12c3](https://github.com/pksep/chat_client/commit/dab12c37bcfd1053ef3df2696a8c7c15f990ef1a))
+* **ai:** keep search usable with pinned messages ([e0474fd](https://github.com/pksep/chat_client/commit/e0474fd4468ef988e00879e67bdeb0c87d3aca23))
+* **ai:** make search result navigation continuous ([35e163e](https://github.com/pksep/chat_client/commit/35e163e943d3976b0743b41c04f30d30a32b8120))
+* **ai:** move collapsed divider outside button ([066ba77](https://github.com/pksep/chat_client/commit/066ba779339af4a63468d801d375f96a46eb2019))
+* **ai:** pass chat thread to Mastra memory ([b4d5990](https://github.com/pksep/chat_client/commit/b4d5990080768cdde5065bb4d94ad4725bd8d265))
+* **ai:** preserve approvals and surface tool errors ([9f92639](https://github.com/pksep/chat_client/commit/9f926392f6b7997d90d26ba0d5156934a9eb6895))
+* **ai:** preserve rounded pinned message accent ([7faf2cf](https://github.com/pksep/chat_client/commit/7faf2cfe55a14cad85cc54e79ea390d3beef9a7b))
+* **ai:** sync collapsed avatar theme color ([fb5e01f](https://github.com/pksep/chat_client/commit/fb5e01f4273c5d45d0dbbb63b7c3ce71f1465f1a))
+* **ai:** truncate long pinned message previews ([1cc8b8b](https://github.com/pksep/chat_client/commit/1cc8b8b83cb91157d260fcdd6710d69501863303))
+* allow set styles in span ([7cc89eb](https://github.com/pksep/chat_client/commit/7cc89eb319048b73aec4f7b448959a68635695c7))
+* apply lint formatting ([28939a2](https://github.com/pksep/chat_client/commit/28939a210b7cabba931b4ab216a2c660574306c8))
+* **CHAT-286:** improve Android notification navigation and branding ([ed1b6c1](https://github.com/pksep/chat_client/commit/ed1b6c167694f1722851ddaff92da5f55f77fe61))
+* emoji picker ([23ab014](https://github.com/pksep/chat_client/commit/23ab014a19d2572155eb7fdcc22dd7c0481c01ae))
+* lint ([d5597fd](https://github.com/pksep/chat_client/commit/d5597fdc7a9992a25f49af39f52ce687205626c6))
+* lint ([16d9e37](https://github.com/pksep/chat_client/commit/16d9e37dcae37af1d39ceaad5568b2c7c117a090))
+* version ([acef60a](https://github.com/pksep/chat_client/commit/acef60afd2684139474f244b48b25ba3bbee65ef))
+
+
+### Features
+
+* **ai:** add generated attachments and finalize AI UI ([e075ed5](https://github.com/pksep/chat_client/commit/e075ed577fc51cd885233d8cb6400c9478f74ebd))
+* **ai:** add pinned message navigation ([633aff8](https://github.com/pksep/chat_client/commit/633aff8ff2c348a2a8384cbf6398d5b759abc9a4))
+* **ai:** add response model selector ([7242f8b](https://github.com/pksep/chat_client/commit/7242f8b28a348ec533f8f1dbc20e6ac29dd32927))
+* **ai:** confirm standalone ERP entity creation ([597adaa](https://github.com/pksep/chat_client/commit/597adaa3db129615fcb5872b05726d468f3e3d18))
+* **ai:** describe shipment approvals ([46ae174](https://github.com/pksep/chat_client/commit/46ae17467668ad80147577178f2c902478769682))
+* update chat branding and Android compatibility ([8432c54](https://github.com/pksep/chat_client/commit/8432c54575de09d29939dfa89b5245411b9e20d1))
+* update package json ([ea5f4cc](https://github.com/pksep/chat_client/commit/ea5f4cc99f84f418d2c7513ff0b04eb983188348))
+* update web version ([a8ca7e5](https://github.com/pksep/chat_client/commit/a8ca7e54c4ae342df46d83b09a0870f99e746760))
+* update web version ([8142337](https://github.com/pksep/chat_client/commit/814233735119feb5203fd208e3e3251780871c24))
+
 # [1.38.0](https://github.com/pksep/chat_client/compare/v1.37.0...v1.38.0) (2026-09-02)
 
 
