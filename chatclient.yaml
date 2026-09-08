@@ -3,10 +3,10 @@
   cycles: 1
   deleted: 8
   inserted: 8
-  seconds: 251.832597989
+  seconds: 199.19325662
   version: 0.60.0
   what: judges-summary
-  when: 2026-09-07 21:50:46.968589504 Z
+  when: 2026-09-08 00:43:37.389668330 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -19908,17 +19908,6 @@
   when: 2026-08-25 09:31:22.000000000 Z
   where: github
   who: 93074025
-- _id: 1090
-  _job: 34164264602
-  _time: 2026-09-07 21:46:42.397784290 Z
-  _version: 0.19.6/0.60.0/0.17.11
-  earliest_issue_was_found: 1
-  events_were_scanned: 18872205736
-  latest_issue_was_found: 72
-  min_pull_was_found: 395
-  repository: 1053332035
-  what: iterate
-  where: github
 - _id: 1091
   _job: 34164264602
   _time: 2026-09-07 21:46:44.950251139 Z
@@ -19937,6 +19926,7 @@
   is_human: 1
   issue: 355
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -19961,6 +19951,7 @@
   is_human: 1
   issue: 356
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -19985,6 +19976,7 @@
   is_human: 1
   issue: 357
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -20009,6 +20001,7 @@
   is_human: 1
   issue: 358
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -20033,6 +20026,7 @@
   is_human: 1
   issue: 359
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -20057,6 +20051,7 @@
   is_human: 1
   issue: 360
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -20081,6 +20076,7 @@
   is_human: 1
   issue: 361
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -20105,6 +20101,7 @@
   is_human: 1
   issue: 362
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -20129,6 +20126,7 @@
   is_human: 1
   issue: 363
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -20153,6 +20151,7 @@
   is_human: 1
   issue: 364
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -20177,6 +20176,7 @@
   is_human: 1
   issue: 365
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -20201,6 +20201,7 @@
   is_human: 1
   issue: 366
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -20225,6 +20226,7 @@
   is_human: 1
   issue: 367
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -20249,6 +20251,7 @@
   is_human: 1
   issue: 368
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -20273,6 +20276,7 @@
   is_human: 1
   issue: 369
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -20297,6 +20301,7 @@
   is_human: 1
   issue: 370
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -20321,6 +20326,7 @@
   is_human: 1
   issue: 371
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -20546,5 +20552,502 @@
   repository: 1053332035
   what: pull-was-opened
   when: 2026-09-02 07:49:18.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1125
+  _job: 34174004138
+  _time: 2026-09-08 00:40:25.132870752 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  earliest_issue_was_found: 1
+  events_were_scanned: 18927036623
+  latest_issue_was_found: 72
+  min_pull_was_found: 395
+  repository: 1053332035
+  what: iterate
+  where: github
+- _id: 1126
+  _job: 34174004138
+  _time: 2026-09-08 00:40:34.815999436 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: erp-33
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#372 has been "pull-was-merged".
+  failed_builds: 0
+  files: 65
+  hoc: 6776
+  is_human: 1
+  issue: 372
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-09-01 09:22:10.000000000 Z
+  where: github
+  who: 49451722
+- _id: 1127
+  _job: 34174004138
+  _time: 2026-09-08 00:40:40.793699027 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-272
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#373 has been "pull-was-merged".
+  failed_builds: 0
+  files: 7
+  hoc: 207
+  is_human: 1
+  issue: 373
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-08-25 12:35:23.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1128
+  _job: 34174004138
+  _time: 2026-09-08 00:40:42.723168346 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: ai
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#374 has been "pull-was-merged".
+  failed_builds: 0
+  files: 5
+  hoc: 288
+  is_human: 1
+  issue: 374
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-09-02 10:14:03.000000000 Z
+  where: github
+  who: 49451722
+- _id: 1129
+  _job: 34174004138
+  _time: 2026-09-08 00:40:44.611018626 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-273
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#375 has been "pull-was-merged".
+  failed_builds: 0
+  files: 6
+  hoc: 39
+  is_human: 1
+  issue: 375
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-08-25 13:45:23.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1130
+  _job: 34174004138
+  _time: 2026-09-08 00:40:46.688620363 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-274
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#376 has been "pull-was-merged".
+  failed_builds: 0
+  files: 6
+  hoc: 275
+  is_human: 1
+  issue: 376
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-08-26 07:29:04.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1131
+  _job: 34174004138
+  _time: 2026-09-08 00:40:48.916351674 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-249
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#377 has been "pull-was-merged".
+  failed_builds: 0
+  files: 11
+  hoc: 476
+  is_human: 1
+  issue: 377
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-08-27 09:57:54.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1132
+  _job: 34174004138
+  _time: 2026-09-08 00:40:50.980185663 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: feat/erp-specification-mcp
+  comments: 3
+  comments_appreciated: 0
+  comments_by_author: 1
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#378 has been "pull-was-closed".
+  failed_builds: 0
+  files: 11
+  hoc: 1260
+  is_human: 1
+  issue: 378
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-closed
+  when: 2026-09-02 11:17:45.000000000 Z
+  where: github
+  who: 49451722
+- _id: 1133
+  _job: 34174004138
+  _time: 2026-09-08 00:40:53.158882333 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-279
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#379 has been "pull-was-merged".
+  failed_builds: 0
+  files: 5
+  hoc: 187
+  is_human: 1
+  issue: 379
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-08-27 11:57:09.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1134
+  _job: 34174004138
+  _time: 2026-09-08 00:40:55.081733758 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: hot-fix-open-pdf
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#380 has been "pull-was-merged".
+  failed_builds: 0
+  files: 3
+  hoc: 6
+  is_human: 1
+  issue: 380
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-08-28 06:58:31.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1135
+  _job: 34174004138
+  _time: 2026-09-08 00:40:57.347933423 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-280
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#381 has been "pull-was-merged".
+  failed_builds: 0
+  files: 16
+  hoc: 299
+  is_human: 1
+  issue: 381
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-08-28 09:25:29.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1136
+  _job: 34174004138
+  _time: 2026-09-08 00:40:59.252264589 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-252
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#382 has been "pull-was-merged".
+  failed_builds: 0
+  files: 1
+  hoc: 37
+  is_human: 1
+  issue: 382
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-08-28 13:55:14.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1137
+  _job: 34174004138
+  _time: 2026-09-08 00:41:01.124926954 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-281
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#383 has been "pull-was-merged".
+  failed_builds: 0
+  files: 3
+  hoc: 701
+  is_human: 1
+  issue: 383
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-08-31 07:49:11.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1138
+  _job: 34174004138
+  _time: 2026-09-08 00:41:03.042370888 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-281-upload-limit-600
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#384 has been "pull-was-merged".
+  failed_builds: 0
+  files: 7
+  hoc: 254
+  is_human: 1
+  issue: 384
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-08-31 10:22:35.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1139
+  _job: 34174004138
+  _time: 2026-09-08 00:41:05.023410302 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: feat/erp-technology-approval
+  comments: 3
+  comments_appreciated: 0
+  comments_by_author: 1
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#385 has been "pull-was-closed".
+  failed_builds: 0
+  files: 3
+  hoc: 342
+  is_human: 1
+  issue: 385
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-closed
+  when: 2026-09-02 11:17:49.000000000 Z
+  where: github
+  who: 49451722
+- _id: 1140
+  _job: 34174004138
+  _time: 2026-09-08 00:41:07.187729964 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: feat/agent-automations
+  comments: 3
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 3
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#386 has been "pull-was-merged".
+  failed_builds: 0
+  files: 8
+  hoc: 460
+  is_human: 1
+  issue: 386
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-09-02 11:36:59.000000000 Z
+  where: github
+  who: 49451722
+- _id: 1141
+  _job: 34174004138
+  _time: 2026-09-08 00:41:09.265700656 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-281
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#387 has been "pull-was-merged".
+  failed_builds: 0
+  files: 14
+  hoc: 3515
+  is_human: 1
+  issue: 387
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-09-02 06:47:37.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1142
+  _job: 34174004138
+  _time: 2026-09-08 00:41:11.346267640 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-282
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#388 has been "pull-was-merged".
+  failed_builds: 0
+  files: 11
+  hoc: 167
+  is_human: 1
+  issue: 388
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-09-02 07:50:01.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1143
+  _job: 34174004138
+  _time: 2026-09-08 00:41:14.848451298 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: feat/ai-chat-experience
+  details: The missing pull pksep/chat_client#389 has been opened by @sertimberrners-lee.
+  is_human: 1
+  issue: 389
+  repository: 1053332035
+  what: pull-was-opened
+  when: 2026-09-02 08:42:39.000000000 Z
+  where: github
+  who: 49451722
+- _id: 1144
+  _job: 34174004138
+  _time: 2026-09-08 00:41:15.539411854 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: feat/ai-chat-experience
+  details: The missing pull pksep/chat_client#390 has been opened by @sertimberrners-lee.
+  is_human: 1
+  issue: 390
+  repository: 1053332035
+  what: pull-was-opened
+  when: 2026-09-02 11:44:24.000000000 Z
+  where: github
+  who: 49451722
+- _id: 1145
+  _job: 34174004138
+  _time: 2026-09-08 00:41:16.278549241 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-277
+  details: The missing pull pksep/chat_client#391 has been opened by @ekn1000.
+  is_human: 1
+  issue: 391
+  repository: 1053332035
+  what: pull-was-opened
+  when: 2026-09-02 12:09:58.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1146
+  _job: 34174004138
+  _time: 2026-09-08 00:41:17.115503947 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: canary
+  details: The missing pull pksep/chat_client#392 has been opened by @ekn1000.
+  is_human: 1
+  issue: 392
+  repository: 1053332035
+  what: pull-was-opened
+  when: 2026-09-02 12:30:30.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1147
+  _job: 34174004138
+  _time: 2026-09-08 00:41:17.952671024 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: ai
+  details: The missing pull pksep/chat_client#393 has been opened by @sertimberrners-lee.
+  is_human: 1
+  issue: 393
+  repository: 1053332035
+  what: pull-was-opened
+  when: 2026-09-03 05:12:36.000000000 Z
+  where: github
+  who: 49451722
+- _id: 1148
+  _job: 34174004138
+  _time: 2026-09-08 00:41:18.687380810 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-276
+  details: The missing pull pksep/chat_client#394 has been opened by @ekn1000.
+  is_human: 1
+  issue: 394
+  repository: 1053332035
+  what: pull-was-opened
+  when: 2026-09-07 12:38:36.000000000 Z
   where: github
   who: 93074025
