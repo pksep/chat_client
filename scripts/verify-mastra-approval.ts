@@ -27,6 +27,42 @@ const productMessage = formatApprovalMessage({
 });
 
 assertEqual(
+  formatApprovalMessage({
+    runId: 'run-create-responsible',
+    toolCallId: 'call-create-responsible',
+    toolName: 'erp_actions_erp_entity_editor_create',
+    args: {
+      type: 'detal',
+      entityName: '1234',
+      entityDesignation: '1234',
+      responsibleName: 'Мамалига Е.Г.'
+    }
+  }),
+  'Создать деталь «1234» с обозначением «1234», ответственный: «Мамалига Е.Г.» без добавления в спецификацию?'
+);
+
+for (const [type, label] of [
+  ['detal', 'деталь'],
+  ['cbed', 'сборочную единицу'],
+  ['product', 'изделие']
+]) {
+  assertEqual(
+    formatApprovalMessage({
+      runId: 'run-create',
+      toolCallId: 'call-create',
+      toolName: 'erp_actions_erp_entity_editor_create',
+      args: {
+        type,
+        entityName: 'Новая карточка',
+        entityDesignation: 'Н-1',
+        idempotencyKey: 'internal-key-1'
+      }
+    }),
+    `Создать ${label} «Новая карточка» с обозначением «Н-1» без добавления в спецификацию?`
+  );
+}
+
+assertEqual(
   productMessage,
   'Изменить изделие «Траверса для ямных подъемников серии КП 15т. Т15» с обозначением «109.02-00СБ»: ответственный: «Елкина»; Снято с производства: да?'
 );

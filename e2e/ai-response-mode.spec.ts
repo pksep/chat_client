@@ -50,90 +50,114 @@ const prepareAiSession = async (page: Page, sessionId: string) => {
   }, sessionId);
 };
 
-test('выбирает модель по режиму ответа и сохраняет выбор', async ({ page }) => {
-  const sessionId = `ai-response-mode-${Date.now()}`;
-  const requests: Array<Record<string, unknown>> = [];
-  await prepareAiSession(page, sessionId);
+for (const theme of ['theme-light', 'theme-dark']) {
+  test(`выбирает модель по режиму ответа и сохраняет выбор (${theme})`, async ({
+    page
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name === 'chromium-mobile',
+      'Выбор режима расположен в компьютерной панели'
+    );
+    const sessionId = `ai-response-mode-${Date.now()}`;
+    const requests: Array<Record<string, unknown>> = [];
+    await prepareAiSession(page, sessionId);
+    await page.addInitScript(value => {
+      localStorage.setItem('erp-theme-color-scheme', value);
+    }, theme);
 
-  await page.route('**/api/agents/generalAgent/stream*', async route => {
-    requests.push(route.request().postDataJSON());
-    await new Promise(resolve => {
-      setTimeout(resolve, 500);
+    await page.route('**/api/agents/generalAgent/stream*', async route => {
+      requests.push(route.request().postDataJSON());
+      await new Promise(resolve => {
+        setTimeout(resolve, 2000);
+      });
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        body: [
+          { type: 'text-delta', payload: { text: 'Готово.' } },
+          { type: 'finish' }
+        ]
+          .map(event => `data: ${JSON.stringify(event)}\n\n`)
+          .join('')
+      });
     });
-    await route.fulfill({
-      status: 200,
-      contentType: 'text/event-stream',
-      body: [
-        { type: 'text-delta', payload: { text: 'Готово.' } },
-        { type: 'finish' }
-      ]
-        .map(event => `data: ${JSON.stringify(event)}\n\n`)
-        .join('')
+
+    await page.goto(`/ai/${sessionId}`);
+
+    const quickModeButton = page.getByRole('button', {
+      name: 'Быстрый ответ',
+      exact: true
     });
-  });
+    await expect(quickModeButton).toBeVisible({ timeout: 30_000 });
+    await expect(quickModeButton).toBeEnabled({ timeout: 30_000 });
+    await expect(quickModeButton.locator('svg')).toBeVisible();
+    const triggerWidth = await quickModeButton.evaluate(
+      element => element.getBoundingClientRect().width
+    );
+    const assertSendGap = async () => {
+      const mode = await page
+        .locator('.ai-assistant__response-trigger--desktop')
+        .boundingBox();
+      const send = await page
+        .locator('.ai-assistant__editor .toolbar-button.right:visible')
+        .boundingBox();
+      expect(mode).not.toBeNull();
+      expect(send).not.toBeNull();
+      expect(send!.x - mode!.x - mode!.width).toBeCloseTo(8, 1);
+    };
+    await assertSendGap();
+    await quickModeButton.click();
+    const advancedModeOption = page.getByRole('menuitemradio', {
+      name: 'Продвинутый ответ'
+    });
+    await expect(advancedModeOption.locator('svg')).toBeVisible();
+    await advancedModeOption.click();
 
-  await page.goto(`/ai/${sessionId}`);
-
-  const quickModeButton = page.getByRole('button', {
-    name: 'Быстрый ответ',
-    exact: true
-  });
-  await expect(quickModeButton).toBeVisible({ timeout: 30_000 });
-  await expect(quickModeButton).toBeEnabled({ timeout: 30_000 });
-  await expect(quickModeButton.locator('svg')).toBeVisible();
-  const triggerWidth = await quickModeButton.evaluate(
-    element => element.getBoundingClientRect().width
-  );
-  await quickModeButton.click();
-  const advancedModeOption = page.getByRole('menuitemradio', {
-    name: 'Продвинутый ответ'
-  });
-  await expect(advancedModeOption.locator('svg')).toBeVisible();
-  await advancedModeOption.click();
-
-  const advancedModeButton = page.getByRole('button', {
-    name: 'Продвинутый ответ',
-    exact: true
-  });
-  await expect(advancedModeButton).toBeVisible();
-  await expect(advancedModeButton.locator('svg')).toBeVisible();
-  await expect
-    .poll(() =>
-      advancedModeButton.evaluate(
-        element => element.getBoundingClientRect().width
+    const advancedModeButton = page.getByRole('button', {
+      name: 'Продвинутый ответ',
+      exact: true
+    });
+    await expect(advancedModeButton).toBeVisible();
+    await expect(advancedModeButton.locator('svg')).toBeVisible();
+    await expect
+      .poll(() =>
+        advancedModeButton.evaluate(
+          element => element.getBoundingClientRect().width
+        )
       )
-    )
-    .toBe(triggerWidth);
+      .toBeGreaterThan(triggerWidth);
+    await assertSendGap();
 
-  const editor = page.locator('.ai-assistant__editor');
-  await editor.locator('[contenteditable="true"]').click();
-  await page.keyboard.insertText('Подготовь подробный ответ');
-  await editor.locator('.toolbar-button.right:visible').click();
+    const editor = page.locator('.ai-assistant__editor');
+    await testInfo.attach(`response-toolbar-${theme}`, {
+      body: await editor.screenshot(),
+      contentType: 'image/png'
+    });
+    await editor.locator('[contenteditable="true"]').click();
+    await page.keyboard.insertText('Подготовь подробный ответ');
+    await editor.locator('.toolbar-button.right:visible').click();
 
-  await expect(
-    advancedModeButton.locator('.ai-assistant__response-trigger-skeleton')
-  ).toBeVisible();
-  await expect
-    .poll(() =>
-      advancedModeButton.evaluate(
-        element => element.getBoundingClientRect().width
+    await expect(advancedModeButton).toBeDisabled();
+    await expect(advancedModeButton).toContainText('Продвинутый ответ');
+    await expect(
+      advancedModeButton.locator('.ai-assistant__response-trigger-skeleton')
+    ).toHaveCount(0);
+    await assertSendGap();
+
+    await expect.poll(() => requests.length, { timeout: 30_000 }).toBe(1);
+    expect(requests[0]).toMatchObject({
+      requestContext: { responseMode: 'advanced' }
+    });
+
+    await page.reload();
+    await expect(advancedModeButton).toBeVisible({ timeout: 30_000 });
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const stored = localStorage.getItem('sep:chat:ai-assistant:v1');
+          return stored ? JSON.parse(stored).responseMode : null;
+        })
       )
-    )
-    .toBe(triggerWidth);
-
-  await expect.poll(() => requests.length, { timeout: 30_000 }).toBe(1);
-  expect(requests[0]).toMatchObject({
-    requestContext: { responseMode: 'advanced' }
+      .toBe('advanced');
   });
-
-  await page.reload();
-  await expect(advancedModeButton).toBeVisible({ timeout: 30_000 });
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const stored = localStorage.getItem('sep:chat:ai-assistant:v1');
-        return stored ? JSON.parse(stored).responseMode : null;
-      })
-    )
-    .toBe('advanced');
-});
+}

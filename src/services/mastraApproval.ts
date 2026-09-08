@@ -433,6 +433,7 @@ const APPROVAL_ACTION_LABELS: Record<string, string> = {
   erp_actions_erp_file_archive: 'перенос файла ERP в архив',
   erp_actions_erp_file_restore: 'восстановление файла ERP из архива',
   erp_actions_erp_entity_editor_update: 'изменение карточки ERP',
+  erp_actions_erp_entity_editor_create: 'создание самостоятельной карточки ERP',
   erp_actions_erp_technology_operation_add:
     'добавление технологической операции',
   erp_actions_erp_technology_operation_update:
@@ -544,6 +545,23 @@ const buildApprovalQuestion = (approval: PendingToolApproval): string => {
             ? ` Файл ${quotedValue(args.basisDocumentName)} из базы ERP будет прикреплён и указан как основание.`
             : '';
       return `Создать задачу на отгрузку изделия ${product}${article} для покупателя ${quotedValue(args.buyerName)} в количестве ${formatValue(args.quantity, 'не указано')} шт., плановая дата отгрузки: ${formatValue(args.plannedShipmentAt, 'не указана')}${orderDate}?${basis}`;
+    }
+    case 'erp_actions_erp_entity_editor_create': {
+      const entity = entityReference(
+        args.entityName,
+        args.entityDesignation,
+        'без указанного названия'
+      );
+      const article = args.article
+        ? `, артикул: ${quotedValue(args.article)}`
+        : '';
+      const responsible = args.responsibleName
+        ? `, ответственный: ${quotedValue(args.responsibleName)}`
+        : '';
+      const description = args.description
+        ? `, описание: ${contentPreviewValue(args.description)}`
+        : '';
+      return `Создать ${editorEntityLabel(args.type)} ${entity}${article}${responsible}${description} без добавления в спецификацию?`;
     }
     case 'erp_actions_erp_entity_editor_update': {
       const entity = entityReference(
