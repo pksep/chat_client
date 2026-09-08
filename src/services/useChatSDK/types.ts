@@ -42,7 +42,7 @@ export interface CallHistoryItem {
   callSummary?: {
     id: string;
     roomId: string;
-    topicId: string;
+    topicId: string | null;
     recorderUserId: string;
     recorderName?: string | null;
     status: 'STARTING' | 'RECORDING' | 'PROCESSING' | 'READY' | 'FAILED';

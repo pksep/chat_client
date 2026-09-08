@@ -259,7 +259,7 @@ export interface WebSocketEventPayloads {
   [WebSocketEventType.CALL_SUMMARY_STATUS]: {
     id: string;
     roomId: string;
-    topicId: string;
+    topicId: string | null;
     recorderUserId: string;
     status: 'STARTING' | 'RECORDING' | 'PROCESSING' | 'READY' | 'FAILED';
     videoStatus: 'STARTING' | 'RECORDING' | 'PROCESSING' | 'READY' | 'FAILED';
@@ -272,7 +272,7 @@ export interface WebSocketEventPayloads {
   [WebSocketEventType.CALL_SUMMARY_RECORDING_STARTED]: {
     summaryId?: string | null;
     roomId: string;
-    topicId: string;
+    topicId: string | null;
     recorderUserId: string;
     recorderName?: string | null;
   };

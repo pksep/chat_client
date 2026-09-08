@@ -3695,7 +3695,7 @@ const syncConnectionState = (activeRoom: Room) => {
     pauseTimer();
   }
 
-  if (hasRemoteParticipant) {
+  if (hasRemoteParticipant || callStartedAt.value !== null) {
     isCalling.value = false;
     stopDialingSound();
     stopRingtone();

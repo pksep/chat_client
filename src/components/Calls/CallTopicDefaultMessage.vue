@@ -83,6 +83,10 @@ const targetLabel = computed(() => {
     return '';
   }
 
+  if (!call.sourceTopicId) {
+    return '';
+  }
+
   return call.sourceTopicType === TopicType.Group
     ? ` в группе ${call.displayName}`
     : ` с ${call.displayName}`;

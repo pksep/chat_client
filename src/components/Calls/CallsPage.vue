@@ -221,9 +221,14 @@ let isRestoringCallsScroll = false;
 const buildCallItem = (
   serverCall: ServerCallHistoryItem
 ): CallHistoryItem | null => {
-  const sourceTopicId = serverCall.sourceTopicId || serverCall.topicId;
+  const sourceTopicId = Object.prototype.hasOwnProperty.call(
+    serverCall,
+    'sourceTopicId'
+  )
+    ? serverCall.sourceTopicId || null
+    : serverCall.topicId;
   const callTopicId = serverCall.callTopicId || null;
-  const topic = getSelectedTopic(sourceTopicId);
+  const topic = sourceTopicId ? getSelectedTopic(sourceTopicId) : null;
   const callTopic = callTopicId ? getSelectedTopic(callTopicId) : null;
   const parsedCall = parseCallMessage(serverCall.text || '', {
     messageEx: serverCall.ex,
@@ -252,7 +257,7 @@ const buildCallItem = (
 
   return {
     messageId: serverCall.id,
-    topicId: callTopicId || sourceTopicId,
+    topicId: callTopicId || sourceTopicId || serverCall.topicId,
     sourceTopicId,
     callTopicId,
     roomId: serverCall.roomId || parsedEx?.call?.roomId || null,

@@ -1767,7 +1767,6 @@ const canStartSummaryRecording = computed(
     !isCalling.value &&
     !isBusyNoticeVisible.value &&
     !!activeRoomId.value &&
-    !!activeTopicId.value &&
     liveKitState.connectionQuality !== 'lost'
 );
 const callSummaryRecordingNotice = computed(() =>
@@ -2947,8 +2946,7 @@ const handleMobileScreenShareAction = async () => {
 
 const handleSummaryRecordingAction = async () => {
   const room = activeRoomId.value;
-  const topic = activeTopicId.value;
-  if (!room || !topic || isSummaryRecordButtonDisabled.value) {
+  if (!room || isSummaryRecordButtonDisabled.value) {
     return;
   }
 
@@ -2958,7 +2956,7 @@ const handleSummaryRecordingAction = async () => {
     return;
   }
 
-  await startCallSummaryRecording(room, topic);
+  await startCallSummaryRecording(room);
 };
 
 const clearReactionPopoverCloseTimeout = () => {
