@@ -31,7 +31,7 @@ public final class NotificationBrandIconHelper {
         // Keep a single monochrome small icon in both Android and Xiaomi
         // Classic styles. The notification must not acquire a second
         // (large/color) icon on the right.
-        builder.setSmallIcon(R.drawable.notification_statusbar_robot_head_2026);
+        builder.setSmallIcon(R.drawable.notification_statusbar_chat_bubbles_2026);
 
         Notification notification = builder.build();
         if (usesClassicStyle) {

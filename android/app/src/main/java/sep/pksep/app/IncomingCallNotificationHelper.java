@@ -100,7 +100,7 @@ public final class IncomingCallNotificationHelper {
             context,
             CHANNEL_ID
         )
-            .setSmallIcon(R.drawable.notification_statusbar_robot_head_2026)
+            .setSmallIcon(R.drawable.notification_statusbar_chat_bubbles_2026)
             .setContentTitle("Incoming call")
             .setContentText(resolvedCallerName)
             .setPriority(NotificationCompat.PRIORITY_MAX)

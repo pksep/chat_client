@@ -2,9 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <application
         android:allowBackup="true"
-        android:icon="@mipmap/sep_launcher_robot_2026"
+        android:icon="@mipmap/sep_launcher_chat_bubbles_safe_2026"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/sep_launcher_robot_round_2026"
+        android:roundIcon="@mipmap/sep_launcher_chat_bubbles_safe_round_2026"
         android:supportsRtl="true"
         android:usesCleartextTraffic="${chatUsesCleartextTraffic}"
         android:theme="@style/AppTheme">
@@ -77,7 +77,7 @@
 
         <meta-data
             android:name="ru.rustore.sdk.pushclient.default_notification_icon"
-            android:resource="@drawable/notification_statusbar_robot_head_2026"
+            android:resource="@drawable/notification_statusbar_chat_bubbles_2026"
         />
 
         <provider
