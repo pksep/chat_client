@@ -36,7 +36,16 @@
         <EmojiIcon class="user-profile__title-status" :emoji="statusIcon" />
       </Tooltip>
     </h3>
-    <ConnectionStatus v-if="!!isWaitingConnection && !shouldHideStatusLine" />
+    <span
+      v-if="props.description !== undefined"
+      class="user-profile__ex"
+      :data-testid="`${dataTestid}-UserProfile-Ex`"
+    >
+      {{ props.description }}
+    </span>
+    <ConnectionStatus
+      v-else-if="!!isWaitingConnection && !shouldHideStatusLine"
+    />
     <TypingIndicator
       v-else-if="props.typingLabel && !shouldHideStatusLine"
       class="user-profile__ex user-profile__ex--typing"

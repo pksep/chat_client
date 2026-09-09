@@ -23,6 +23,7 @@ import {
 
 import { ChatAuth, ChatAuthInterface } from './auth';
 import { ChatUser, ChatUserInterface } from './user';
+import type { UserStatusValue } from '../../utils/userStatus';
 import { ChatTopic, ChatTopicInterface } from './topic';
 import {
   ChatMessage,
@@ -1021,6 +1022,10 @@ export class ChatSDK {
     profileData: Partial<User>
   ): Promise<User> {
     return this.user.updateUserProfile(userId, profileData);
+  }
+
+  async removeUserStatusPreset(status: UserStatusValue): Promise<User> {
+    return this.user.removeUserStatusPreset(status);
   }
 
   async getRecentTopics(userId: string): Promise<Topic[]> {

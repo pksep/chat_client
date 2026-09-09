@@ -184,6 +184,29 @@
   line-height: 16px;
 }
 
+.calls-page__search-empty {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  row-gap: 10px;
+  min-height: 220px;
+  padding: 50px 16px 0;
+  color: var(--chat-secondary);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 17px;
+  text-align: center;
+}
+
+.calls-page__search-empty-title {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.calls-page__search-empty-icon {
+  color: var(--border-table);
+}
+
 .calls-page__empty-history {
   min-height: 360px;
   display: grid;

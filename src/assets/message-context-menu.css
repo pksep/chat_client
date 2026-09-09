@@ -164,10 +164,12 @@ button.button-yui-kit.select-reactions-list-button {
   width: max-content;
   min-width: 248px;
   max-width: 350px;
-  padding: 12px;
-  border-radius: 14px;
-  background: var(--white);
-  box-shadow: 0 10px 30px #00000014;
+  padding: 10px;
+  border: 1px solid var(--border-table);
+  border-radius: 15px;
+  background: var(--surface-overlay);
+  color: var(--text-primary);
+  box-shadow: 0px 4px 9.8px 0px #0000000d;
   max-height: 500px;
   overflow-y: auto;
 }
@@ -267,7 +269,7 @@ button.button-yui-kit.select-reactions-list-button {
 }
 
 .message-context-menu__details-time {
-  color: var(--neutral-text-light);
+  color: var(--text-primary);
   font-size: 12px;
 }
 

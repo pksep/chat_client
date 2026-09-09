@@ -132,6 +132,17 @@
   color: var(--action-primary-bg) !important;
 }
 
+@media screen and (min-width: 769px) {
+  .menu--collapse .menu__contact-list {
+    padding-left: 0;
+  }
+
+  .menu--collapse .chats-toolbar > .line {
+    margin: 0;
+    width: 100%;
+  }
+}
+
 .chats-toolbar__controls {
   width: 100%;
   padding-left: 10px;

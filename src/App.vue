@@ -1192,6 +1192,18 @@ onBeforeUnmount(() => {
 }
 
 .app-notification-stack__item {
+  width: min(305px, calc(100vw - 32px));
+  min-height: 77px;
+  box-sizing: border-box;
+  box-shadow: 0 4px 9.8px rgb(0 0 0 / 5%);
   pointer-events: auto;
+}
+
+.app-notification-stack__item.push-notification-yui-kit_info {
+  --text-brand: var(--action-primary-bg);
+}
+
+.app-notification-stack__item :deep(.notification-yui-kit) {
+  box-shadow: none;
 }
 </style>

@@ -97,22 +97,45 @@
 
       <div
         v-else-if="searchValue.trim()"
-        class="menu-panel menu-panel--centered calls-page__empty"
+        class="calls-page__search-empty"
+        :data-testid="`${props.dataTestid}-SearchEmpty`"
       >
-        <div class="menu-panel__illustration" aria-hidden="true">
-          <svg viewBox="0 0 24 24" class="menu-panel__illustration-icon">
-            <path
-              d="M7.8 4.4c.6-.6 1.5-.7 2.1-.2l2.1 1.7c.6.5.8 1.4.4 2.1l-1 1.8a1 1 0 0 0 .1 1.1c1.1 1.6 2.5 3 4.1 4.1a1 1 0 0 0 1.1.1l1.8-1c.7-.4 1.6-.2 2.1.4l1.7 2.1c.5.6.4 1.5-.2 2.1l-1.1 1.1c-.9.9-2.2 1.3-3.4 1-2.8-.7-5.4-2.2-7.9-4.7S5.7 11 5 8.2c-.3-1.2.1-2.5 1-3.4l1.8-1.1Z"
-              fill="none"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="1.8"
-            />
-          </svg>
-        </div>
-        <h3 class="menu-panel__title">Ничего не найдено</h3>
-        <p class="menu-panel__description">Попробуйте изменить запрос.</p>
+        <p class="calls-page__search-empty-title">Ничего не найдено</p>
+        <svg
+          width="84"
+          height="84"
+          viewBox="0 0 84 84"
+          fill="none"
+          class="calls-page__search-empty-icon"
+          aria-hidden="true"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M40.3971 70.8724C57.2303 70.8724 70.8763 57.2264 70.8763 40.3932C70.8763 23.5601 57.2303 9.91406 40.3971 9.91406C23.564 9.91406 9.91797 23.5601 9.91797 40.3932C9.91797 57.2264 23.564 70.8724 40.3971 70.8724Z"
+            stroke="currentColor"
+            stroke-width="4.8125"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M74.0846 74.0807L67.668 67.6641"
+            stroke="currentColor"
+            stroke-width="4.8125"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <circle cx="25.5" cy="35.3359" r="3.5" fill="currentColor" />
+          <circle cx="55.168" cy="35.3359" r="3.5" fill="currentColor" />
+          <line
+            x1="27.086"
+            y1="46.9141"
+            x2="53.586"
+            y2="46.9148"
+            stroke="currentColor"
+            stroke-width="3.5"
+            stroke-linecap="round"
+          />
+        </svg>
       </div>
 
       <div v-else class="calls-page__empty-history">
@@ -596,8 +619,8 @@ watch(
 }
 
 .calls-page__delimetr {
-  height: 1px;
-  width: calc(100% - 58px);
+  height: 0.35px;
+  width: 100%;
   flex-shrink: 0;
   background-color: var(--border-table);
   align-self: flex-end;

@@ -688,7 +688,7 @@ const updateBannerRef = useTemplateRef<HTMLElement>('updateBannerRef');
 
 const route = useUrlWatcher();
 const { state: isMobile } = useResizeState(MAX_W_MD);
-const { state: isCompactMessageInput } = useResizeState(481);
+const { state: isCompactMessageInput } = useResizeState(481, { inclusive: false });
 const isNativeAndroid =
   Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 

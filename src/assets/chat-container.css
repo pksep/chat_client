@@ -28,6 +28,7 @@
 @import url('./connection-status.css');
 @import url('./bot.css');
 @import url('./ai-assistant.css');
+@import url('./menu-layout.css');
 
 .chat_container_alert {
   background-color: var(--error-dark-color);

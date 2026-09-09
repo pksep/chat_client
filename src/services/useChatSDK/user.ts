@@ -1,12 +1,14 @@
 import { User, Topic } from '@pksep/zod-shared-chat';
 import { Reqi } from '@pksep/reqi';
 import { SearchParams, PaginatedResponse } from './types';
+import type { UserStatusValue } from '../../utils/userStatus';
 
 export interface ChatUserInterface {
   getUsers(params?: SearchParams): Promise<PaginatedResponse<User>>;
   createUser(userData: Partial<User>): Promise<User>;
   getUserProfile(userId: string): Promise<User>;
   updateUserProfile(userId: string, profileData: Partial<User>): Promise<User>;
+  removeUserStatusPreset(status: UserStatusValue): Promise<User>;
   getRecentTopics(userId: string): Promise<Topic[]>;
 }
 
@@ -81,6 +83,14 @@ export class ChatUser implements ChatUserInterface {
         `Failed to update user profile: ${(error as Error).message}`
       );
     }
+  }
+
+  async removeUserStatusPreset(status: UserStatusValue): Promise<User> {
+    const response = await this.reqi.sendRequest('/users/status-presets', {
+      request: { method: 'DELETE', body: status },
+      parsed: false
+    });
+    return response.json();
   }
 
   async getRecentTopics(userId: string): Promise<Topic[]> {

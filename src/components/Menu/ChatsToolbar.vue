@@ -1,6 +1,6 @@
 <template>
   <div class="chats-toolbar" :data-testid="`${props.dataTestid}-ChatsToolbar`">
-    <div class="chats-toolbar__headline">
+    <div class="chats-toolbar__headline menu-section-heading">
       <h4
         v-if="!props.isCollapse"
         class="chats-toolbar__title"
@@ -20,6 +20,7 @@
       >
         <Icon
           :name="IconNameEnum.plus"
+          viewBox="0 0 24 24"
           :data-testid="`${props.dataTestid}-ChatsToolbar-PlusIcon`"
         />
       </Button>
