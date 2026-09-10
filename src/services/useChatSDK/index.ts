@@ -23,6 +23,10 @@ import {
 
 import { ChatAuth, ChatAuthInterface } from './auth';
 import { ChatUser, ChatUserInterface } from './user';
+import type {
+  CustomBackgroundImage,
+  CustomBackgroundKind
+} from '../customBackgroundLibrary';
 import type { UserStatusValue } from '../../utils/userStatus';
 import { ChatTopic, ChatTopicInterface } from './topic';
 import {
@@ -1028,6 +1032,21 @@ export class ChatSDK {
     return this.user.removeUserStatusPreset(status);
   }
 
+  getCustomBackgrounds(kind: CustomBackgroundKind) {
+    return this.user.getCustomBackgrounds(kind);
+  }
+
+  getCustomBackground(kind: CustomBackgroundKind, id: string) {
+    return this.user.getCustomBackground(kind, id);
+  }
+
+  saveCustomBackground(
+    kind: CustomBackgroundKind,
+    image: CustomBackgroundImage
+  ) {
+    return this.user.saveCustomBackground(kind, image);
+  }
+
   async getRecentTopics(userId: string): Promise<Topic[]> {
     return this.user.getRecentTopics(userId);
   }
@@ -1775,7 +1794,7 @@ export class ChatSDK {
 
   async getLiveKitCallStatus(
     roomId: string,
-    options: { includeRoomState?: boolean } = {}
+    options: { includeRoomState?: boolean; inviteToken?: string } = {}
   ): Promise<{
     active: boolean;
     topicId?: string | null;
@@ -1790,6 +1809,9 @@ export class ChatSDK {
       const queryParams = new URLSearchParams({ roomId });
       if (options.includeRoomState) {
         queryParams.set('includeRoomState', 'true');
+      }
+      if (options.inviteToken) {
+        queryParams.set('invite', options.inviteToken);
       }
 
       const response = (await this.reqi.get<{

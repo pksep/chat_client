@@ -226,6 +226,7 @@ export interface WebSocketEventPayloads {
     userId: string;
     roomId: string;
     topicId?: string | null;
+    inviteToken?: string;
   };
   [WebSocketEventType.CALL_ANSWERED]: {
     userId: string;

@@ -310,8 +310,7 @@ watch(
 .call-topic-actions__button:disabled {
   border-width: 0.5px;
   border-color: var(--border-table);
-  background:
-    linear-gradient(var(--surface-disabled), var(--surface-disabled)),
+  background: linear-gradient(var(--surface-disabled), var(--surface-disabled)),
     var(--surface-main);
   color: var(--text-secondary);
   cursor: not-allowed;

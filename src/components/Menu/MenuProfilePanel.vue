@@ -867,8 +867,8 @@ const statusPresets = computed(() => [
   ...USER_STATUS_PRESETS.map(status => ({ ...status, custom: false })),
   ...(isStatusPresetDesignPreview
     ? statusPresetDesignPreview.value
-    : getCustomUserStatusPresets(authUser.value?.ex, authUser.value?.status))
-    .map(status => ({ ...status, custom: true }))
+    : getCustomUserStatusPresets(authUser.value?.ex, authUser.value?.status)
+  ).map(status => ({ ...status, custom: true }))
 ]);
 const MAX_CUSTOM_WALLPAPER_SIZE_BYTES = 2 * 1024 * 1024;
 const isStatusMenuOpen = ref(false);
@@ -1033,9 +1033,12 @@ const profileUpdateDescription = computed(() => {
   return 'Нажмите, чтобы проверить доступные обновления';
 });
 
-preloadNotoEmojiAssets([...statusPresets.value.map(option => option.icon), '🦄'], {
-  highPriority: true
-});
+preloadNotoEmojiAssets(
+  [...statusPresets.value.map(option => option.icon), '🦄'],
+  {
+    highPriority: true
+  }
+);
 
 const canSaveCustomStatus = computed(
   () =>
@@ -1266,7 +1269,7 @@ const applyPendingWallpaper = async (): Promise<void> => {
   } catch (error) {
     console.error('Failed to persist custom wallpaper:', error);
     wallpaperError.value =
-      'Не получилось сохранить изображение. Попробуйте SVG или файл поменьше';
+      'Не получилось сохранить фон на сервере. Проверьте соединение и попробуйте ещё раз';
     isApplyingWallpaper.value = false;
   }
 };
@@ -1325,7 +1328,7 @@ const applyPendingCallBackground = async (): Promise<void> => {
   } catch (error) {
     console.error('Failed to persist custom call background:', error);
     callBackgroundError.value =
-      'Не получилось сохранить изображение. Попробуйте SVG или файл поменьше';
+      'Не получилось сохранить фон на сервере. Проверьте соединение и попробуйте ещё раз';
     isApplyingCallBackground.value = false;
   }
 };
@@ -1371,7 +1374,8 @@ const removeStatusPreset = async (status: IUserStatus): Promise<void> => {
     await removeCurrentUserStatusPreset(status);
   } catch (error) {
     console.error('Не получилось удалить вариант статуса:', error);
-    statusError.value = 'Не получилось удалить вариант статуса. Попробуйте ещё раз';
+    statusError.value =
+      'Не получилось удалить вариант статуса. Попробуйте ещё раз';
   } finally {
     isSavingStatus.value = false;
   }

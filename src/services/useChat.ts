@@ -1,6 +1,10 @@
 import { ref, shallowRef } from 'vue';
 import { MessageTypeEnum } from '@pksep/yui';
 import { ChatSDK } from './useChatSDK';
+import {
+  configureCustomBackgroundSync,
+  refreshCustomBackgrounds
+} from './useCustomBackgroundSync';
 import type { UploadTelemetryContext } from './useChatSDK';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
 import type { PtsMeta } from './useChatSDK/websocketEvents';
@@ -1944,6 +1948,12 @@ export const initializeChat = async (options: {
     token: options.token
   });
   notifyChatSDKReady(chatSDK);
+  configureCustomBackgroundSync(
+    options.userId
+      ? JSON.stringify([options.apiUrl.replace(/\/+$/, ''), options.userId])
+      : null,
+    chatSDK
+  );
   hasCompletedInitialConnection = false;
   chatSDK.setConnectionStateListener(connected => {
     const wasConnected = hasWebsocketConnection.value;
@@ -1958,6 +1968,8 @@ export const initializeChat = async (options: {
     if (!connected) {
       return;
     }
+
+    refreshCustomBackgrounds();
 
     syncPresenceForVisibility();
 

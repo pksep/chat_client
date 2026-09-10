@@ -1,5 +1,9 @@
 <template>
-  <main class="authorization-screen" data-testid="AuthorizationScreen">
+  <main
+    class="authorization-screen"
+    data-testid="AuthorizationScreen"
+    @keydown.enter="handleEnter"
+  >
     <section class="authorization-screen__block">
       <div
         :class="{
@@ -45,7 +49,7 @@
               <Button
                 class="authorization-screen__button initial"
                 :disabled="props.isLoading"
-                @click="emits('submit')"
+                @click="submitOrganization"
               >
                 {{ props.isLoading ? 'Подключение...' : 'Далее' }}
               </Button>
@@ -84,7 +88,7 @@
 
                 <Button
                   class="authorization-screen__button initial"
-                  @click="emits('submit')"
+                  @click="submitOrganization"
                   :disabled="props.isLoading"
                 >
                   {{ props.isLoading ? 'Подключение...' : 'Далее' }}
@@ -177,7 +181,7 @@
           <Button
             class="authorization-screen__button authorization-screen__button--credentials"
             :disabled="props.isLoading || !props.password || !props.identifier"
-            @click="emits('submit-credentials')"
+            @click="submitCredentials"
           >
             {{ props.isLoading ? 'Вход...' : 'Войти' }}
           </Button>
@@ -232,7 +236,7 @@ import {
   TextFieldEnum
 } from '@pksep/yui';
 import LinkIcon from './UI/LinkIcon.vue';
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { useQrAuth } from '../composables/useQrAuth';
 import { showErrorNotification } from '../composables/useNotifications';
 import { getUsersList } from '../composables/useUsers';
@@ -272,6 +276,32 @@ interface IAuthorizationScreenEmits {
 const props = defineProps<IAuthorizationScreenProps>();
 const emits = defineEmits<IAuthorizationScreenEmits>();
 const { isScanning, scanQrCode } = useQrAuth();
+
+const submitOrganization = () => {
+  if (!props.isLoading && props.url.trim()) emits('submit');
+};
+
+const submitCredentials = () => {
+  if (!props.isLoading && props.identifier.trim() && props.password.trim()) {
+    emits('submit-credentials');
+  }
+};
+
+const handleEnter = async (event: KeyboardEvent) => {
+  if (
+    event.defaultPrevented ||
+    event.isComposing ||
+    event.keyCode === 229 ||
+    event.repeat ||
+    props.isLoading
+  ) return;
+  if (!(event.target instanceof HTMLInputElement)) return;
+  event.preventDefault();
+  // Combobox обновляет логин при Enter; ждём обновления props перед отправкой.
+  await nextTick();
+  if (props.isCredentialsStep) submitCredentials();
+  else submitOrganization();
+};
 
 const handleInput = (value: string): void => {
   emits('update:url', value);
