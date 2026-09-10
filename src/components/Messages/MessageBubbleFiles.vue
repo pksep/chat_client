@@ -100,6 +100,7 @@
             v-html="safeMessageHtml"
             :data-testid="`${props.dataTestid}-MessageText`"
             @click="handleMentionUserClick"
+            @copy="copyMessageSelection"
           ></div>
           <div
             v-if="!hasReactions"
@@ -212,6 +213,7 @@ import {
   refreshNativeFileDownloadStatus
 } from '../../services/useNativeFile';
 import { sanitizeMessageHtml } from '../../utils/sanitizeMessageHtml';
+import { copyMessageSelection } from '../../utils/copyMessageSelection';
 
 const props = defineProps<IMessageBubbleProps>();
 const safeMessageHtml = computed(() => sanitizeMessageHtml(props.message));
