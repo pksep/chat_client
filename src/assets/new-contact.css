@@ -70,6 +70,23 @@ dialog.message-forward-modal.modal-yui-kit > .modal-yui-kit__modal-content {
   min-width: 0;
 }
 
+.forward-recipient-selector__topic-profile {
+  width: 100%;
+  min-width: 0;
+}
+
+.forward-recipient-selector__topic-profile .user-profile__title,
+.forward-recipient-selector__topic-profile .user-profile__ex {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.forward-recipient-selector__topic-profile .user-profile__ex {
+  font-size: 14px;
+}
+
 .forward-recipient-selector__ai-copy {
   display: grid;
   min-width: 0;

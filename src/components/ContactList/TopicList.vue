@@ -132,55 +132,6 @@
               </span>
             </div>
           </h5>
-          <div
-            v-if="topic.typingUserIds?.length"
-            class="contact-list__description contact-list__description--typing"
-            :data-testid="`${props.dataTestid}-ContactList-Typing${index + 1}`"
-          >
-            <TypingIndicator :label="getTopicTypingLabel(topic)" />
-          </div>
-          <div
-            v-else-if="!!topic.lastMessage?.text"
-            class="contact-list__description"
-            v-emoji
-            :data-testid="`${props.dataTestid}-ContactList-Description${index + 1}`"
-            :aria-label="`Latest message: ${stripHtml(topic.lastMessage?.text || 'No message')}`"
-          >
-            {{ stripHtml(topic.lastMessage?.text) }}
-          </div>
-          <div
-            v-else-if="
-              topic.lastMessage?.media?.length > 0 &&
-              topic.lastMessage.media[0].type === MediaType.File
-            "
-            class="contact-list__description contact-list__description__media"
-          >
-            <AttachFileIcon />
-            <p>Медиа</p>
-          </div>
-          <div
-            v-else-if="topic.lastMessage?.media?.length > 0"
-            class="contact-list__description contact-list__description__media"
-            :data-testid="`${props.dataTestid}-ContactList-Media${index + 1}`"
-          >
-            <template
-              v-for="media in topic.lastMessage.media.slice(0, 3)"
-              :key="media.id"
-              ><div>
-                <img
-                  v-if="media.type !== MediaType.File"
-                  :src="getFullMediaPath(media)"
-                />
-
-                <MiniPlayIcon
-                  v-if="media.type === MediaType.Video"
-                  class="contact-list__description__media__play"
-                />
-              </div>
-            </template>
-
-            <p>{{ getTopicLastMessageLabel(topic.lastMessage?.media) }}</p>
-          </div>
           <div v-if="!props.showCheckbox" class="contact-list__top">
             <MessageStatusIcons
               v-if="
@@ -208,54 +159,107 @@
               {{ formatListTime(new Date(topic.lastMessage?.createdAt)) }}
             </span>
           </div>
-          <div v-if="!props.showCheckbox" class="contact-list__bottom">
+          <div class="contact-list__preview">
             <div
-              v-if="
-                topic.hasUnreadReaction &&
-                getTopicUnreadReactionMessageId(topic.id)
-              "
-              class="contact-list__reaction-indicator"
-              :data-testid="`${props.dataTestid}-ContactList-Reaction${index + 1}`"
-              role="button"
-              tabindex="0"
-              aria-label="Новая реакция на ваше сообщение"
-              @click.stop="event => handleReactionClick(topic, index, event)"
-              @keydown.enter.stop="
-                event => handleReactionClick(topic, index, event)
-              "
-              @keydown.space.stop.prevent="
-                event => handleReactionClick(topic, index, event)
-              "
+              v-if="topic.typingUserIds?.length"
+              class="contact-list__description contact-list__description--typing"
+              :data-testid="`${props.dataTestid}-ContactList-Typing${index + 1}`"
             >
-              <ReactionHeartIcon />
+              <TypingIndicator :label="getTopicTypingLabel(topic)" />
             </div>
             <div
-              v-if="topic.taggedMe"
-              class="contact-list__notification contact-list__mention"
-              :data-testid="`${props.dataTestid}-ContactList-Mention${index + 1}`"
+              v-else-if="!!topic.lastMessage?.text"
+              class="contact-list__description"
+              v-emoji
+              :data-testid="`${props.dataTestid}-ContactList-Description${index + 1}`"
+              :aria-label="`Latest message: ${stripHtml(topic.lastMessage?.text || 'No message')}`"
             >
-              @
+              {{ stripHtml(topic.lastMessage?.text) }}
             </div>
             <div
-              v-if="hasTopicUnreadIndicator(topic, authedUser?.id)"
-              :class="{
-                'contact-list__notification': true,
-                'contact-list__notification--muted': topic.info?.isMute
-              }"
-              :data-testid="`${props.dataTestid}-ContactList-Notification${index + 1}`"
-              :aria-label="getTopicUnreadIndicatorLabel(topic)"
+              v-else-if="
+                topic.lastMessage?.media?.length > 0 &&
+                topic.lastMessage.media[0].type === MediaType.File
+              "
+              class="contact-list__description contact-list__description__media"
             >
-              <template v-if="getTopicUnreadBadgeCount(topic, authedUser?.id)">
-                {{ getTopicUnreadBadgeCount(topic, authedUser?.id) }}
+              <AttachFileIcon />
+              <p>Медиа</p>
+            </div>
+            <div
+              v-else-if="topic.lastMessage?.media?.length > 0"
+              class="contact-list__description contact-list__description__media"
+              :data-testid="`${props.dataTestid}-ContactList-Media${index + 1}`"
+            >
+              <template
+                v-for="media in topic.lastMessage.media.slice(0, 3)"
+                :key="media.id"
+                ><div>
+                  <img
+                    v-if="media.type !== MediaType.File"
+                    :src="getFullMediaPath(media)"
+                  />
+
+                  <MiniPlayIcon
+                    v-if="media.type === MediaType.Video"
+                    class="contact-list__description__media__play"
+                  />
+                </div>
               </template>
+
+              <p>{{ getTopicLastMessageLabel(topic.lastMessage?.media) }}</p>
             </div>
-            <div
-              class="contact-list__pin"
-              v-if="topic.info?.isPin"
-              :data-testid="`${props.dataTestid}-ContactList-Pin${index + 1}`"
-              :aria-label="`Pinned contact`"
-            >
-              <PinIcon v-if="topic.info?.isPin" />
+            <div v-if="!props.showCheckbox" class="contact-list__bottom">
+              <div
+                v-if="
+                  topic.hasUnreadReaction &&
+                  getTopicUnreadReactionMessageId(topic.id)
+                "
+                class="contact-list__reaction-indicator"
+                :data-testid="`${props.dataTestid}-ContactList-Reaction${index + 1}`"
+                role="button"
+                tabindex="0"
+                aria-label="Новая реакция на ваше сообщение"
+                @click.stop="event => handleReactionClick(topic, index, event)"
+                @keydown.enter.stop="
+                  event => handleReactionClick(topic, index, event)
+                "
+                @keydown.space.stop.prevent="
+                  event => handleReactionClick(topic, index, event)
+                "
+              >
+                <ReactionHeartIcon />
+              </div>
+              <div
+                v-if="topic.taggedMe"
+                class="contact-list__notification contact-list__mention"
+                :data-testid="`${props.dataTestid}-ContactList-Mention${index + 1}`"
+              >
+                @
+              </div>
+              <div
+                v-if="hasTopicUnreadIndicator(topic, authedUser?.id)"
+                :class="{
+                  'contact-list__notification': true,
+                  'contact-list__notification--muted': topic.info?.isMute
+                }"
+                :data-testid="`${props.dataTestid}-ContactList-Notification${index + 1}`"
+                :aria-label="getTopicUnreadIndicatorLabel(topic)"
+              >
+                <template
+                  v-if="getTopicUnreadBadgeCount(topic, authedUser?.id)"
+                >
+                  {{ getTopicUnreadBadgeCount(topic, authedUser?.id) }}
+                </template>
+              </div>
+              <div
+                class="contact-list__pin"
+                v-if="topic.info?.isPin"
+                :data-testid="`${props.dataTestid}-ContactList-Pin${index + 1}`"
+                :aria-label="`Pinned contact`"
+              >
+                <PinIcon v-if="topic.info?.isPin" />
+              </div>
             </div>
           </div>
         </div>
@@ -1301,34 +1305,12 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
   color: var(--primary-color);
 }
 
-.contact-list__block--wrapper--selection .contact-list__description,
-.contact-list__block--wrapper--selection .contact-list__description p,
-.contact-list__block--wrapper--selection .contact-list__description strong {
-  width: calc(100vw - 180px);
-}
-
-.contact-list__block--wrapper--selection
-  .contact-list__description--overflow::after,
-.contact-list__block--wrapper--selection
-  .contact-list__description--overflow
-  p::after,
-.contact-list__block--wrapper--selection
-  .contact-list__description--overflow
-  strong::after {
-  left: auto;
-  right: 0;
-  width: 56px;
-}
-
-.contact-list__item--selection.contact-list__item--active
-  .contact-list__description--overflow::after,
-.contact-list__item--selection.contact-list__item--active
-  .contact-list__description--overflow
-  p::after,
-.contact-list__item--selection.contact-list__item--active
-  .contact-list__description--overflow
-  strong::after {
-  background-color: var(--table-surface-search);
+.contact-list__block--wrapper--selection {
+  --description-fade-width: 56px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'title'
+    'preview';
 }
 
 .contact-list__selection-checkbox {

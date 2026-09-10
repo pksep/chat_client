@@ -165,6 +165,7 @@ type PersistedActiveCallSession = {
   authUserId: string;
   roomId: string;
   topicId: string | null;
+  inviteToken?: string;
   isIncoming: boolean;
   isCalling: boolean;
   startTime?: number | null;
@@ -360,6 +361,23 @@ const readPersistedActiveCallSession =
     }
   };
 
+const getCallInviteToken = (
+  activeRoomId?: string | null
+): string | undefined => {
+  if (!activeRoomId) {
+    return undefined;
+  }
+
+  if (invitedGroupCall.value?.roomId === activeRoomId) {
+    return invitedGroupCall.value.inviteToken;
+  }
+
+  const persistedSession = readPersistedActiveCallSession();
+  return persistedSession?.roomId === activeRoomId
+    ? persistedSession.inviteToken
+    : undefined;
+};
+
 const getMatchingPersistedCallTimerSnapshot = (
   activeRoomId = roomId.value,
   activeTopicId = topicId.value
@@ -426,11 +444,17 @@ const persistActiveCallSession = (
     return;
   }
   const timerSnapshot = getCurrentCallTimerSnapshot();
+  const existingSession = readPersistedActiveCallSession();
 
   const session: PersistedActiveCallSession = {
     authUserId: me.id,
     roomId: activeRoomId,
     topicId: activeTopicId ?? null,
+    inviteToken:
+      getCallInviteToken(activeRoomId) ||
+      (existingSession?.roomId === activeRoomId
+        ? existingSession.inviteToken
+        : undefined),
     isIncoming: isIncoming.value,
     isCalling: isCalling.value,
     startTime: timerSnapshot.startTime,
@@ -1604,7 +1628,8 @@ const isGroupCallSession = (targetTopicId?: string | null): boolean => {
   return !!(
     activeTopic?.type === TopicType.Group ||
     activeTopic?.activeCall?.groupMode ||
-    invitedGroupCall.value
+    invitedGroupCall.value ||
+    getCallInviteToken(roomId.value)
   );
 };
 
@@ -1622,7 +1647,8 @@ const isRecoverableDirectCallSession = (
     (!!targetTopicId && topicId.value === targetTopicId);
   const isInvitedGroupSession =
     invitedGroupCall.value?.roomId === activeRoomId ||
-    invitedGroupCall.value?.topicId === activeTopicId;
+    invitedGroupCall.value?.topicId === activeTopicId ||
+    Boolean(getCallInviteToken(activeRoomId));
   const knownParticipantCount =
     activeTopic?.activeCall?.participantCount ??
     (roomId.value === activeRoomId && topicId.value === activeTopicId && room
@@ -2106,7 +2132,11 @@ const getRawLiveKitCallStatus = async (
     return null;
   }
 
-  const status = await sdk.getLiveKitCallStatus(targetRoomId, options);
+  const inviteToken = getCallInviteToken(targetRoomId);
+  const status = await sdk.getLiveKitCallStatus(targetRoomId, {
+    ...options,
+    inviteToken
+  });
   if (!status) {
     return null;
   }
@@ -3695,7 +3725,7 @@ const syncConnectionState = (activeRoom: Room) => {
     pauseTimer();
   }
 
-  if (hasRemoteParticipant) {
+  if (hasRemoteParticipant || callStartedAt.value !== null) {
     isCalling.value = false;
     stopDialingSound();
     stopRingtone();
@@ -4242,14 +4272,9 @@ const getToken = async (activeRoomId: string) => {
   const sdk = getChatSDK();
   if (!sdk) return null;
 
-  if (
-    invitedGroupCall.value?.roomId === activeRoomId &&
-    invitedGroupCall.value.inviteToken
-  ) {
-    return sdk.getInviteLiveKitToken(
-      activeRoomId,
-      invitedGroupCall.value.inviteToken
-    );
+  const inviteToken = getCallInviteToken(activeRoomId);
+  if (inviteToken) {
+    return sdk.getInviteLiveKitToken(activeRoomId, inviteToken);
   }
 
   return sdk.getLiveKitToken(activeRoomId);
@@ -5579,7 +5604,8 @@ const joinInvitedGroupCallInternal = async (
   >(WebSocketEventType.ANSWER_CALL, {
     roomId: invite.roomId,
     topicId: invite.topicId,
-    userId: me.id
+    userId: me.id,
+    inviteToken: invite.inviteToken
   });
   applyCallSocketAck(answerAck, {
     roomId: invite.roomId,
@@ -6763,7 +6789,8 @@ export const leaveCall = () => {
     !!activeTopicId &&
     (activeTopic?.type === TopicType.Group ||
       activeTopic?.activeCall?.groupMode ||
-      invitedGroupCall.value?.roomId === activeRoomId);
+      invitedGroupCall.value?.roomId === activeRoomId ||
+      Boolean(getCallInviteToken(activeRoomId)));
   const shouldCloseImmediatelyAfterHangup =
     isGroupCallSessionActive && !hasOtherParticipantsInGroupCall;
   const shouldShowEndedNotice =

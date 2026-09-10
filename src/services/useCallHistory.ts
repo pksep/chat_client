@@ -281,7 +281,12 @@ const buildCallHistoryItemFromMessage = (
   return {
     id: message.id,
     topicId: message.topicId,
-    sourceTopicId: message.sourceTopicId || message.topicId,
+    sourceTopicId: Object.prototype.hasOwnProperty.call(
+      message,
+      'sourceTopicId'
+    )
+      ? message.sourceTopicId || null
+      : message.topicId,
     callTopicId: message.callTopicId || null,
     callTopicType: message.callTopicType || null,
     roomId: message.roomId || parsedEx?.call?.roomId || null,

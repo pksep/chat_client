@@ -8,8 +8,9 @@ import {
   migratePersistentCustomImages,
   persistSelectedId,
   readPersistedSelectedId,
-  savePersistentCustomImage
+  savePersistentCustomImageRecord
 } from '../services/customImagePersistence';
+import { createCustomBackgroundSync } from '../services/useCustomBackgroundSync';
 
 export interface CallBackgroundOption {
   id: string;
@@ -214,10 +215,19 @@ const saveStoredCustomCallBackground = async (
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(CALL_BACKGROUND_STORE_NAME, 'readwrite');
     const store = tx.objectStore(CALL_BACKGROUND_STORE_NAME);
-    const request = store.put(wallpaper);
-
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    store.put(wallpaper);
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+    tx.onabort = () => {
+      db.close();
+      reject(tx.error || new Error('Не удалось сохранить фон'));
+    };
   });
 };
 
@@ -342,6 +352,7 @@ const hydrateCustomCallBackgrounds = async (): Promise<void> => {
   }
 
   isHydratingCustomCallBackgrounds.value = true;
+  callBackgroundHydrationFailed = false;
 
   try {
     if (isNativeCustomImagePersistenceAvailable()) {
@@ -408,12 +419,15 @@ const hydrateCustomCallBackgrounds = async (): Promise<void> => {
     customCallBackgrounds.value = await loadStoredCustomCallBackgrounds();
     reconcileSelectedCallBackground();
   } catch (error) {
+    callBackgroundHydrationFailed = true;
     console.warn('Failed to hydrate custom call backgrounds:', error);
   } finally {
     isHydratingCustomCallBackgrounds.value = false;
   }
 };
 
+let callBackgroundHydration: Promise<void> = Promise.resolve();
+let callBackgroundHydrationFailed = false;
 const ensureInitialized = (): void => {
   if (isInitialized.value || typeof window === 'undefined') {
     return;
@@ -426,7 +440,8 @@ const ensureInitialized = (): void => {
   }
 
   registerCallBackgroundAppStatePersistence();
-  void hydrateCustomCallBackgrounds();
+  callBackgroundHydration = hydrateCustomCallBackgrounds();
+  callBackgroundSync.refresh();
 };
 
 const selectCallBackground = (backgroundId: string): void => {
@@ -456,6 +471,36 @@ const selectCallBackground = (backgroundId: string): void => {
   persistSelectedCallBackgroundId(backgroundId);
 };
 
+const callBackgroundSync = createCustomBackgroundSync('call', {
+  ready: async () => {
+    ensureInitialized();
+    if (callBackgroundHydrationFailed) {
+      callBackgroundHydration = hydrateCustomCallBackgrounds();
+    }
+    await callBackgroundHydration;
+    if (callBackgroundHydrationFailed) {
+      throw new Error('Не удалось прочитать сохранённые фоны звонка');
+    }
+  },
+  items: () => customCallBackgrounds.value,
+  put: async background => {
+    if (isNativeCustomImagePersistenceAvailable()) {
+      await savePersistentCustomImageRecord(
+        CALL_BACKGROUND_NATIVE_STORE,
+        background
+      );
+    } else {
+      await saveStoredCustomCallBackground(background);
+    }
+    customCallBackgrounds.value = [
+      background,
+      ...customCallBackgrounds.value.filter(item => item.id !== background.id)
+    ].sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id));
+  }
+});
+
+let pendingCallBackground: StoredCustomCallBackground | null = null;
+let pendingCallBackgroundScope: string | null = null;
 const setCustomCallBackground = async (dataUrl: string): Promise<void> => {
   ensureInitialized();
 
@@ -463,27 +508,17 @@ const setCustomCallBackground = async (dataUrl: string): Promise<void> => {
     return;
   }
 
-  if (isNativeCustomImagePersistenceAvailable()) {
-    const background = await savePersistentCustomImage(
-      CALL_BACKGROUND_NATIVE_STORE,
-      dataUrl
-    );
+  const scope = callBackgroundSync.scope();
+  const background: StoredCustomCallBackground =
+    pendingCallBackgroundScope === scope &&
+    pendingCallBackground?.dataUrl === dataUrl
+      ? pendingCallBackground
+      : { id: createCustomCallBackgroundId(), dataUrl, createdAt: Date.now() };
 
-    customCallBackgrounds.value = [background, ...customCallBackgrounds.value];
-    selectedCallBackgroundId.value = background.id;
-    persistSelectedCallBackgroundId(background.id);
-    return;
-  }
-
-  const background: StoredCustomCallBackground = {
-    id: createCustomCallBackgroundId(),
-    dataUrl,
-    createdAt: Date.now()
-  };
-
-  await saveStoredCustomCallBackground(background);
-
-  customCallBackgrounds.value = [background, ...customCallBackgrounds.value];
+  pendingCallBackground = background;
+  pendingCallBackgroundScope = scope;
+  await callBackgroundSync.save(background);
+  pendingCallBackground = null;
   selectedCallBackgroundId.value = background.id;
   persistSelectedCallBackgroundId(background.id);
 };
@@ -527,8 +562,9 @@ const callBackgroundPreviewItems = computed<CallBackgroundPreviewItem[]>(() => {
           : buildPreviewStyle(option.previewImageUrl || option.imageUrl, option)
     }));
 
-  const customItems: CallBackgroundPreviewItem[] =
-    customCallBackgrounds.value.map(wallpaper => ({
+  const customItems: CallBackgroundPreviewItem[] = callBackgroundSync
+    .visible()
+    .map(wallpaper => ({
       id: wallpaper.id,
       previewStyle: buildPreviewStyle(wallpaper.dataUrl, {
         previewSize: 'cover',
@@ -555,6 +591,7 @@ const selectedCallBackgroundMode = computed<'none' | 'blur' | 'image'>(() => {
 
 export const useCallBackground = () => {
   ensureInitialized();
+  callBackgroundSync.refresh();
 
   return {
     callBackgroundOptions,
@@ -568,7 +605,7 @@ export const useCallBackground = () => {
     ),
     currentCallBackgroundStyle,
     hasCustomCallBackground: computed(
-      () => customCallBackgrounds.value.length > 0
+      () => callBackgroundSync.visible().length > 0
     ),
     isCallBackgroundApplied,
     getCallBackgroundOptionById,

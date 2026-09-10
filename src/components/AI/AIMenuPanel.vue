@@ -11,7 +11,7 @@
   >
     <header
       :class="[
-        'ai-menu-panel__header',
+        'ai-menu-panel__header menu-section-heading',
         {
           'ai-menu-panel__header--collapse': props.isCollapse,
           'chats-toolbar__headline': props.isCollapse

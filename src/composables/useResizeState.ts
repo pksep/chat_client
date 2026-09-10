@@ -2,10 +2,17 @@ import { ref, onMounted, onUnmounted } from 'vue';
 
 interface UseResizeStateOptions {
   breakpoint: string | number;
+  inclusive?: boolean;
   onStateChange?: (isActive: boolean) => void;
   initialState?: boolean;
   storageKey?: string;
 }
+
+const matchesBreakpoint = (
+  width: number,
+  breakpointPx: number,
+  inclusive = true
+): boolean => (inclusive ? width <= breakpointPx : width < breakpointPx);
 
 const parseBreakpoint = (breakpoint: string | number): number => {
   if (typeof breakpoint === 'string') {
@@ -32,7 +39,11 @@ const getInitialState = (
   windowWidth: number
 ): { initialActive: boolean; initialIsMobile: boolean } => {
   const breakpointPx = parseBreakpoint(config.breakpoint);
-  const initialIsMobile = windowWidth < breakpointPx;
+  const initialIsMobile = matchesBreakpoint(
+    windowWidth,
+    breakpointPx,
+    config.inclusive
+  );
 
   let initialActive: boolean;
   if (config.storageKey) {
@@ -86,7 +97,7 @@ const getNewState = (
 
 export function useResizeState(
   breakpointOrOptions: string | number | UseResizeStateOptions,
-  options?: UseResizeStateOptions
+  options?: Omit<UseResizeStateOptions, 'breakpoint'>
 ) {
   const config =
     typeof breakpointOrOptions === 'string' ||
@@ -101,7 +112,7 @@ export function useResizeState(
   let previousIsMobile: boolean | undefined;
 
   const updateState = (width: number): void => {
-    const isMobile = width < breakpointPx;
+    const isMobile = matchesBreakpoint(width, breakpointPx, config.inclusive);
 
     const { newActive, updatedPreviousIsMobile } = getNewState(
       config,
@@ -120,7 +131,11 @@ export function useResizeState(
   const saveStateToStorage = (): void => {
     if (config.storageKey && breakpointPx !== undefined) {
       const currentWidth = window.innerWidth;
-      const currentIsMobile = currentWidth < breakpointPx;
+      const currentIsMobile = matchesBreakpoint(
+        currentWidth,
+        breakpointPx,
+        config.inclusive
+      );
       if (!currentIsMobile) {
         sessionStorage.setItem(
           config.storageKey,

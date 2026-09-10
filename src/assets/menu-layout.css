@@ -1,0 +1,121 @@
+/* Общая сетка разделов. Свёрнутая desktop-панель сохраняет свою разметку. */
+.menu:not(.menu--collapse),
+.mobile-list-container {
+  --menu-section-heading-height: 35px;
+  --menu-section-heading-inset: 5px;
+  --menu-section-content-inset: 10px;
+}
+
+:where(.menu:not(.menu--collapse), .mobile-list-container)
+  .menu-section-heading {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: var(--menu-section-heading-height);
+  margin: 0 0 0 var(--menu-section-content-inset);
+  padding: 0 var(--menu-section-heading-inset) 10px;
+  gap: 10px;
+  border-bottom: 1px solid var(--border-table);
+}
+
+:is(.menu:not(.menu--collapse), .mobile-list-container)
+  .chats-toolbar:has(> .menu-section-heading)
+  > .line {
+  display: none;
+}
+
+:is(.menu:not(.menu--collapse), .mobile-list-container) .ai-menu-panel {
+  grid-template-rows: var(--menu-section-heading-height) 52px 53px minmax(
+      0,
+      1fr
+    );
+}
+
+:is(.menu:not(.menu--collapse), .mobile-list-container)
+  .ai-menu-panel--searching {
+  grid-template-rows: var(--menu-section-heading-height) 52px minmax(0, 1fr);
+}
+
+:is(.menu:not(.menu--collapse), .mobile-list-container) .ai-menu-panel__new {
+  width: 22px;
+  height: 22px;
+  margin-left: 0;
+}
+
+@media screen and (width > 768px) {
+  .menu:not(.menu--collapse) .calls-page__content {
+    padding-inline: var(--menu-section-content-inset) 0;
+  }
+
+  .menu:not(.menu--collapse) .menu-profile__body {
+    padding-left: var(--menu-section-content-inset);
+  }
+}
+
+@media screen and (width <= 768px) {
+  .mobile-list-container {
+    --menu-section-heading-height: 40px;
+    --menu-section-heading-inset: 16px;
+    --menu-section-content-inset: 0px;
+    --menu-section-safe-top: calc(20px + env(safe-area-inset-top, 0px));
+  }
+
+  .mobile-list-container .menu-section-heading {
+    padding-block: 10px 5px;
+    justify-content: space-between;
+  }
+
+  .mobile-list-container__toolbar {
+    padding-top: var(--menu-section-safe-top);
+  }
+
+  .mobile-list-container__section--calls .calls-page,
+  .mobile-list-container__section--profile .menu-profile {
+    padding-top: var(--menu-section-safe-top) !important;
+  }
+
+  .mobile-list-container__section--ai .ai-menu-panel {
+    padding: var(--menu-section-safe-top) 0 84px;
+  }
+
+  .mobile-list-container .ai-menu-panel__search-shell {
+    padding-inline: 16px;
+  }
+
+  .mobile-list-container .ai-menu-panel__tabs {
+    padding-inline: 16px;
+  }
+
+  .mobile-list-container .ai-menu-panel__list {
+    padding-inline: 16px;
+  }
+
+  .mobile-list-container .calls-page__item {
+    padding-inline: 0;
+  }
+
+  .mobile-list-container .contact-list {
+    row-gap: 0;
+  }
+
+  .mobile-list-container .contact-list__item {
+    min-height: 80px;
+  }
+
+  .mobile-list-container .contact-list__block--wrapper {
+    border-bottom: 0;
+  }
+
+  .mobile-list-container
+    .contact-list__li:not(.contact-list__skeleton-row)::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 16px;
+    height: 0.35px;
+    background: var(--border-table);
+    pointer-events: none;
+  }
+}

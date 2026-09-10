@@ -171,6 +171,7 @@ export interface IUserProfileProps {
   user: IUser;
   dataTestid?: string;
   typingLabel?: string;
+  description?: string;
   hideDeletedAccountStatus?: boolean;
 }
 
@@ -178,6 +179,7 @@ export interface IGroupProfileProps {
   topic?: ITopic | null;
   dataTestid?: string;
   typingLabel?: string;
+  description?: string;
 }
 
 export type IMessage = Message & {

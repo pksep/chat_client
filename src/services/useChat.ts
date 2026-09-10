@@ -1,5 +1,10 @@
 import { ref, shallowRef } from 'vue';
+import { MessageTypeEnum } from '@pksep/yui';
 import { ChatSDK } from './useChatSDK';
+import {
+  configureCustomBackgroundSync,
+  refreshCustomBackgrounds
+} from './useCustomBackgroundSync';
 import type { UploadTelemetryContext } from './useChatSDK';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
 import type { PtsMeta } from './useChatSDK/websocketEvents';
@@ -101,6 +106,7 @@ import { normalizeDateValue } from '../utils/dateValue';
 import { getIsTopicMessageVisible } from './useTopicViewportState';
 import { isGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
 import { isFavoriteTopic } from '../utils/favorite-topic';
+import { showNotification } from '../composables/useNotifications';
 import {
   importAnyChatBackgroundSnapshot,
   requestAnyChatBackgroundSync,
@@ -947,13 +953,23 @@ const setupChatListeners = (): void => {
       const isGroupCall = topicType === TopicType.Group;
 
       if (isReceived) {
-        void showTauriIncomingCallNotification({
-          caller: user || null,
-          roomId: payload.roomId,
-          topic,
-          topicId: payload.topicId,
-          topicType
-        });
+        if (isGroupCall && getIsAppActivelyVisible()) {
+          showNotification({
+            title: topic?.name || 'Групповой звонок',
+            description: user?.initials
+              ? `${user.initials} начал звонок`
+              : 'Начался звонок',
+            type: MessageTypeEnum.info
+          });
+        } else {
+          void showTauriIncomingCallNotification({
+            caller: user || null,
+            roomId: payload.roomId,
+            topic,
+            topicId: payload.topicId,
+            topicType
+          });
+        }
       }
 
       if (Capacitor.isNativePlatform() && !isGroupCall && isReceived && user) {
@@ -1932,6 +1948,12 @@ export const initializeChat = async (options: {
     token: options.token
   });
   notifyChatSDKReady(chatSDK);
+  configureCustomBackgroundSync(
+    options.userId
+      ? JSON.stringify([options.apiUrl.replace(/\/+$/, ''), options.userId])
+      : null,
+    chatSDK
+  );
   hasCompletedInitialConnection = false;
   chatSDK.setConnectionStateListener(connected => {
     const wasConnected = hasWebsocketConnection.value;
@@ -1946,6 +1968,8 @@ export const initializeChat = async (options: {
     if (!connected) {
       return;
     }
+
+    refreshCustomBackgrounds();
 
     syncPresenceForVisibility();
 

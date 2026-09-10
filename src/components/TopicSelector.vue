@@ -61,16 +61,22 @@
         />
         <FavoriteTopicProfile
           v-else-if="isTopicFavorite(recipient.topic)"
+          class="forward-recipient-selector__topic-profile"
+          :description="getTopicLastMessagePreview(recipient.topic)"
           :dataTestid="`${props.dataTestid}-TopicSelector-FavoriteProfile${index + 1}`"
         />
         <UserProfile
           v-else-if="recipient.topic.type === TopicType.DM"
+          class="forward-recipient-selector__topic-profile"
           :user="recipient.topic.user"
+          :description="getTopicLastMessagePreview(recipient.topic)"
           :dataTestid="`${props.dataTestid}-TopicSelector-UserProfile${index + 1}`"
         />
         <GroupProfile
           v-else
+          class="forward-recipient-selector__topic-profile"
           :topic="recipient.topic"
+          :description="getTopicLastMessagePreview(recipient.topic)"
           :dataTestid="`${props.dataTestid}-TopicSelector-UserProfile${index + 1}`"
         />
       </li>
@@ -93,6 +99,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
 import { Search } from '@pksep/yui';
+import { MediaType } from '@pksep/zod-shared-chat';
 import { ITopic, ITopicSelectorProps, IUser } from './interfaces/interfaces';
 import { getTopicList, useTopics } from '../composables/useTopics';
 import { getUsersList } from '../composables/useUsers';
@@ -110,12 +117,17 @@ import { getAuthUser } from '../composables/useAuth';
 import { isFavoriteTopic } from '../utils/favorite-topic';
 import { isCallTopic } from '../utils/call-topic';
 import { isBotTopic, isBotUser, isCallBotUser } from '../utils/bot';
+import { stripHtml } from '../utils/stripHtml';
+import { getFullMessagesByTopicId } from '../services/useMessages';
+import { resolveTopicLastMessage } from '../utils/topic-last-message';
+import { getTopicsByChatsToolbarFilter } from '../utils/chats-toolbar-filter';
+import type { ChatsToolbarFilter } from '../composables/useChatsToolbarState';
 import {
   type AiAssistantSession,
   useAiAssistant
 } from '../composables/useAiAssistant';
 
-type ForwardRecipientFilter = 'users' | 'chats' | 'bots' | 'ai';
+type ForwardRecipientFilter = Exclude<ChatsToolbarFilter, 'all'> | 'ai';
 type ForwardRecipient =
   | { key: string; kind: 'user'; user: IUser }
   | { key: string; kind: 'topic'; topic: ITopic }
@@ -134,55 +146,111 @@ const users = computed(() => getUsersList());
 const { sessions } = useAiAssistant();
 const { createTopic } = useTopics();
 const pendingRecipientKey = ref<string | null>(null);
+const authedUser = computed(() => getAuthUser());
 const isTopicFavorite = (topic: ITopic): boolean =>
-  isFavoriteTopic(topic, getAuthUser()?.id);
+  isFavoriteTopic(topic, authedUser.value?.id);
 
 const state = reactive<{
   q: string;
   filter: ForwardRecipientFilter;
 }>({
   q: '',
-  filter: 'users'
+  filter: 'chats'
 });
 
 const filterOptions: Array<{
   value: ForwardRecipientFilter;
   label: string;
 }> = [
-  { value: 'users', label: 'Чаты' },
-  { value: 'chats', label: 'Группы' },
+  { value: 'chats', label: 'Чаты' },
+  { value: 'groups', label: 'Группы' },
   { value: 'bots', label: 'Боты' },
   { value: 'ai', label: 'СЭПи' }
 ];
 
-const filteredRecipients = computed<ForwardRecipient[]>(() => {
-  const query = normalizeAtSearchQuery(state.q);
+const getClientLastMessage = (topic: ITopic) => {
+  const messages = getFullMessagesByTopicId(topic.id);
 
-  if (state.filter === 'users') {
-    return users.value
-      .filter(user => user.id !== getAuthUser()?.id && !isBotUser(user))
-      .filter(user => matchesUserSearch(user, query))
-      .map(user => ({ key: `user:${user.id}`, kind: 'user', user }));
+  return isTopicFavorite(topic)
+    ? [...messages].reverse().find(message => !message.isSystem)
+    : messages.at(-1);
+};
+
+const topicsWithLatestMessages = computed(() =>
+  topics.value.map(topic => {
+    const lastMessage = resolveTopicLastMessage(
+      topic.lastMessage,
+      getClientLastMessage(topic)
+    );
+
+    return lastMessage === topic.lastMessage
+      ? topic
+      : { ...topic, lastMessage };
+  })
+);
+
+const getTopicLastMessagePreview = (topic: ITopic): string | undefined => {
+  const text = stripHtml(topic.lastMessage?.text);
+
+  if (text) {
+    return text;
   }
 
-  if (state.filter === 'chats') {
-    return topics.value
-      .filter(topic => topic.type === TopicType.Group && !isCallTopic(topic))
-      .filter(topic => matchesTopicSearch(topic, query))
-      .map(topic => ({ key: `topic:${topic.id}`, kind: 'topic', topic }));
+  const media = topic.lastMessage?.media || [];
+
+  if (!media.length) {
+    return undefined;
   }
 
-  if (state.filter === 'bots') {
-    return topics.value
+  const haveImage = media.some(item => item.type === MediaType.Image);
+  const haveVideo = media.some(item => item.type === MediaType.Video);
+
+  if (haveImage && haveVideo) {
+    return 'Фото, видео';
+  }
+
+  if (haveImage) {
+    return 'Фото';
+  }
+
+  return haveVideo ? 'Видео' : 'Медиа';
+};
+
+const getTopicRecipients = (
+  filter: ChatsToolbarFilter,
+  query: string
+): ForwardRecipient[] =>
+  getTopicsByChatsToolbarFilter(
+    topicsWithLatestMessages.value,
+    filter,
+    authedUser.value?.id
+  )
+    .filter(topic => !isCallBotUser(topic.user))
+    .filter(topic => matchesTopicSearch(topic, query))
+    .map(topic => ({ key: `topic:${topic.id}`, kind: 'topic', topic }));
+
+const getUserRecipientsWithoutTopic = (query: string): ForwardRecipient[] => {
+  const existingUserIds = new Set(
+    topicsWithLatestMessages.value
       .filter(
         topic =>
-          isBotTopic(topic) && !isCallTopic(topic) && !isCallBotUser(topic.user)
+          topic.type === TopicType.DM &&
+          !isBotTopic(topic) &&
+          !isCallTopic(topic)
       )
-      .filter(topic => matchesTopicSearch(topic, query))
-      .map(topic => ({ key: `topic:${topic.id}`, kind: 'topic', topic }));
-  }
+      .flatMap(topic => (topic.user?.id ? [topic.user.id] : []))
+  );
 
+  return users.value
+    .filter(user => user.id !== authedUser.value?.id && !isBotUser(user))
+    .filter(user => !existingUserIds.has(user.id))
+    .filter(user => matchesUserSearch(user, query))
+    .map(user => ({ key: `user:${user.id}`, kind: 'user', user }));
+};
+
+const getAiRecipients = (query: string): ForwardRecipient[] => {
   const normalizedQuery = normalizeSearchText(query);
+
   return sessions.value
     .filter(session =>
       normalizeSearchText(`${session.title} ${session.description}`).includes(
@@ -190,6 +258,22 @@ const filteredRecipients = computed<ForwardRecipient[]>(() => {
       )
     )
     .map(session => ({ key: `ai:${session.id}`, kind: 'ai', session }));
+};
+
+const filteredRecipients = computed<ForwardRecipient[]>(() => {
+  const query = normalizeAtSearchQuery(state.q);
+
+  if (state.filter === 'ai') {
+    return getAiRecipients(query);
+  }
+
+  const topicRecipients = getTopicRecipients(state.filter, query);
+
+  if (state.filter === 'chats') {
+    return [...topicRecipients, ...getUserRecipientsWithoutTopic(query)];
+  }
+
+  return topicRecipients;
 });
 
 const getUserTopic = async (user: IUser): Promise<ITopic | null> => {

@@ -219,96 +219,104 @@
       @touchstart.stop
       @touchend.stop
     >
-      <span
-        :class="[
-          'chat-update-banner__status-icon',
-          `chat-update-banner__status-icon--${updateBannerState}`
-        ]"
-        aria-hidden="true"
-      >
-        <svg
-          v-if="updateBannerState === 'downloaded'"
-          viewBox="0 0 18 18"
-          fill="none"
+      <div class="chat-update-banner__message">
+        <span
+          :class="[
+            'chat-update-banner__status-icon',
+            `chat-update-banner__status-icon--${updateBannerState}`
+          ]"
+          aria-hidden="true"
         >
-          <path
-            d="M5 9.2L7.7 12L13.2 6"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-        <svg v-else viewBox="0 0 18 18" fill="none">
-          <path
-            d="M14 11.25V14C14 14.2761 13.883 14.5412 13.6746 14.7366C13.4662 14.932 13.1836 15.0417 12.8889 15.0417H5.11111C4.81643 15.0417 4.53381 14.932 4.32544 14.7366C4.11706 14.5412 4 14.2761 4 14V11.25"
-            stroke="currentColor"
-            stroke-width="1.375"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          <path
-            d="M6.39587 7.95996L9.00003 10.5641L11.6042 7.95996"
-            stroke="currentColor"
-            stroke-width="1.375"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          <path
-            d="M9 10.5654V4.31543"
-            stroke="currentColor"
-            stroke-width="1.375"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </span>
-
-      <div class="chat-update-banner__content">
-        <p class="chat-update-banner__title">
-          {{ updateBannerTitle }}
-        </p>
-        <p class="chat-update-banner__description">
-          {{ updateBannerDescription }}
-        </p>
-      </div>
-      <Button
-        :class="[
-          'chat-update-banner__action',
-          {
-            'chat-update-banner__action--progress':
-              props.updateProgress !== undefined
-          }
-        ]"
-        :data-testid="`${props.dataTestid}-MessageList-UpdateBannerInstallButton`"
-        :disabled="props.isUpdateActionDisabled"
-        @click="props.onUpdateClick?.()"
-      >
-        <template v-if="props.updateProgress !== undefined">
-          <span class="chat-update-banner__action-progress-label">
-            {{ props.updateActionLabel }}
-          </span>
-          <span class="chat-update-banner__action-progress" aria-hidden="true">
-            <FileIcon
-              :is-me-sender="false"
-              :is-loaded="false"
-              :percent="props.updateProgress"
-              background-color="var(--grey2)"
+          <svg
+            v-if="updateBannerState === 'downloaded'"
+            viewBox="0 0 18 18"
+            fill="none"
+          >
+            <path
+              d="M5 9.2L7.7 12L13.2 6"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
             />
-          </span>
-        </template>
-        <template v-else>{{ props.updateActionLabel }}</template>
-      </Button>
-      <button
-        v-if="!isMobile"
-        type="button"
-        class="chat-update-banner__close"
-        :data-testid="`${props.dataTestid}-MessageList-UpdateBannerCloseButton`"
-        aria-label="Закрыть уведомление об обновлении"
-        @click="props.onDismissUpdateBanner?.()"
-      >
-        <Icon :name="IconNameEnum.crossLarge" />
-      </button>
+          </svg>
+          <svg v-else viewBox="0 0 18 18" fill="none">
+            <path
+              d="M14 11.25V14C14 14.2761 13.883 14.5412 13.6746 14.7366C13.4662 14.932 13.1836 15.0417 12.8889 15.0417H5.11111C4.81643 15.0417 4.53381 14.932 4.32544 14.7366C4.11706 14.5412 4 14.2761 4 14V11.25"
+              stroke="currentColor"
+              stroke-width="1.375"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M6.39587 7.95996L9.00003 10.5641L11.6042 7.95996"
+              stroke="currentColor"
+              stroke-width="1.375"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M9 10.5654V4.31543"
+              stroke="currentColor"
+              stroke-width="1.375"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </span>
+
+        <div class="chat-update-banner__content">
+          <p class="chat-update-banner__title">
+            {{ updateBannerTitle }}
+          </p>
+          <p class="chat-update-banner__description">
+            {{ updateBannerDescription }}
+          </p>
+        </div>
+      </div>
+      <div class="chat-update-banner__actions">
+        <Button
+          :class="[
+            'chat-update-banner__action',
+            {
+              'chat-update-banner__action--progress':
+                props.updateProgress !== undefined
+            }
+          ]"
+          :size="SizesEnum.small"
+          :data-testid="`${props.dataTestid}-MessageList-UpdateBannerInstallButton`"
+          :disabled="props.isUpdateActionDisabled"
+          @click="props.onUpdateClick?.()"
+        >
+          <template v-if="props.updateProgress !== undefined">
+            <span class="chat-update-banner__action-progress-label">
+              {{ props.updateActionLabel }}
+            </span>
+            <span
+              class="chat-update-banner__action-progress"
+              aria-hidden="true"
+            >
+              <FileIcon
+                :is-me-sender="false"
+                :is-loaded="false"
+                :percent="props.updateProgress"
+                background-color="var(--grey2)"
+              />
+            </span>
+          </template>
+          <template v-else>{{ props.updateActionLabel }}</template>
+        </Button>
+        <button
+          v-if="!isMobile"
+          type="button"
+          class="chat-update-banner__close"
+          :data-testid="`${props.dataTestid}-MessageList-UpdateBannerCloseButton`"
+          aria-label="Закрыть уведомление об обновлении"
+          @click="props.onDismissUpdateBanner?.()"
+        >
+          <Icon :name="IconNameEnum.crossLarge" />
+        </button>
+      </div>
     </section>
   </div>
 
@@ -490,7 +498,8 @@ import {
   PushNotification,
   Icon,
   IconNameEnum,
-  Button
+  Button,
+  SizesEnum
 } from '@pksep/yui';
 import type { IMessageListProps } from './interfaces/message-list';
 import type { AIMessage } from '../types/messages';
@@ -679,7 +688,9 @@ const updateBannerRef = useTemplateRef<HTMLElement>('updateBannerRef');
 
 const route = useUrlWatcher();
 const { state: isMobile } = useResizeState(MAX_W_MD);
-const { state: isCompactMessageInput } = useResizeState(481);
+const { state: isCompactMessageInput } = useResizeState(481, {
+  inclusive: false
+});
 const isNativeAndroid =
   Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
