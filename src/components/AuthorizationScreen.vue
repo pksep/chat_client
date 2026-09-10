@@ -294,7 +294,8 @@ const handleEnter = async (event: KeyboardEvent) => {
     event.keyCode === 229 ||
     event.repeat ||
     props.isLoading
-  ) return;
+  )
+    return;
   if (!(event.target instanceof HTMLInputElement)) return;
   event.preventDefault();
   // Combobox обновляет логин при Enter; ждём обновления props перед отправкой.

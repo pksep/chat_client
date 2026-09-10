@@ -608,16 +608,16 @@ const isWallpaperApplied = computed(() => {
 const wallpaperPreviewItems = computed<ChatWallpaperPreviewItem[]>(() => {
   ensureInitialized();
 
-  const items: ChatWallpaperPreviewItem[] = wallpaperSync.visible().map(
-    wallpaper => ({
+  const items: ChatWallpaperPreviewItem[] = wallpaperSync
+    .visible()
+    .map(wallpaper => ({
       id: wallpaper.id,
       previewStyle: buildPreviewStyle(wallpaper.dataUrl, {
         previewSize: 'cover',
         repeat: 'no-repeat',
         backgroundColor: 'transparent'
       })
-    })
-  );
+    }));
 
   items.push({
     id: 'none',

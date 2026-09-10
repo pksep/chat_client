@@ -562,8 +562,9 @@ const callBackgroundPreviewItems = computed<CallBackgroundPreviewItem[]>(() => {
           : buildPreviewStyle(option.previewImageUrl || option.imageUrl, option)
     }));
 
-  const customItems: CallBackgroundPreviewItem[] =
-    callBackgroundSync.visible().map(wallpaper => ({
+  const customItems: CallBackgroundPreviewItem[] = callBackgroundSync
+    .visible()
+    .map(wallpaper => ({
       id: wallpaper.id,
       previewStyle: buildPreviewStyle(wallpaper.dataUrl, {
         previewSize: 'cover',
