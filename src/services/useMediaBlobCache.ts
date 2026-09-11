@@ -1,4 +1,30 @@
 import { getConfig } from './useConfig';
+import { getAuthToken } from '../composables/useLogin';
+import { getStoredChatAccessToken } from '../composables/useAuth';
+
+const isInquiryFile = (path: string) =>
+  /^manager-private\/[0-9a-f-]{36}$/i.test(path);
+const inquiryObjectUrls = new Map<string, string>();
+
+// Файлы обращений проверяются сервером при каждом открытии и не попадают в общий кеш браузера.
+const loadInquiryFile = async (path: string): Promise<string | null> => {
+  const token = getAuthToken() || getStoredChatAccessToken();
+  if (!token) return null;
+  const response = await fetch(
+    `${getConfig().CHAT_API_DOMAIN.replace(/\/$/, '')}/media/object/${path}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+      redirect: 'error'
+    }
+  );
+  if (!response.ok) return null;
+  const objectUrl = URL.createObjectURL(await response.blob());
+  const previous = inquiryObjectUrls.get(path);
+  inquiryObjectUrls.set(path, objectUrl);
+  if (previous) setTimeout(() => URL.revokeObjectURL(previous), 60000);
+  return objectUrl;
+};
 
 const DB_NAME = 'chat-media-blob-cache-db';
 const DB_VERSION = 2;
@@ -203,6 +229,13 @@ export const ensureMediaObjectUrl = async (
 ): Promise<string | null> => {
   if (!path || typeof window === 'undefined') {
     return null;
+  }
+  if (isInquiryFile(path)) {
+    try {
+      return await loadInquiryFile(path);
+    } catch {
+      return null;
+    }
   }
 
   const cachedObjectUrl = objectUrlCache.get(path);
