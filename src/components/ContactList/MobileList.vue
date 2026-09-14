@@ -89,6 +89,19 @@
 
         <section
           :class="[
+            'mobile-list-container__section mobile-list-container__section--clients',
+            {
+              'mobile-list-container__section--direct-hidden':
+                isSectionHiddenDuringDirectTransition('clients')
+            }
+          ]"
+          :aria-hidden="activeSection !== 'clients'"
+        >
+          <ClientsPanel v-if="mountedSections.has('clients')" is-mobile />
+        </section>
+
+        <section
+          :class="[
             'mobile-list-container__section mobile-list-container__section--ai',
             {
               'mobile-list-container__section--direct-hidden':
@@ -143,6 +156,11 @@ let savedChatsScrollTop = 0;
 </script>
 
 <script setup lang="ts">
+import {
+  isClientTopic,
+  useManagerInquiries
+} from '../../composables/useManagerInquiries';
+import ClientsPanel from '../Clients/ClientsPanel.vue';
 import {
   reactive,
   computed,
@@ -216,10 +234,13 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
 const { getTopicList, loading: isTopicsLoading } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, setActiveSection } = useChatMenu();
+const { byTopic: clientInquiries } = useManagerInquiries();
 const mountedSections = reactive(new Set<ChatMenuSection>(['chats']));
 const { isShareSelectionActive, selectedTopicIds, toggleShareTopic } =
   useShareSelection();
-const allTopics = computed(() => getTopicList());
+const allTopics = computed(() =>
+  getTopicList().filter(topic => !isClientTopic(topic))
+);
 const messageSearchResults = ref<IMessageSearchResult[]>([]);
 const isMessageSearchLoading = ref(false);
 const isMessageSearchPending = ref(false);
@@ -234,6 +255,7 @@ const isDragOverFiles = ref(false);
 const MENU_SECTION_ORDER: ChatMenuSection[] = [
   'chats',
   'calls',
+  'clients',
   'ai',
   'profile'
 ];
@@ -675,7 +697,11 @@ watch(
 );
 
 watch(
-  () => [route.value?.type, route.value?.id],
+  () => [
+    route.value?.type,
+    route.value?.id,
+    clientInquiries.value.has(route.value?.id || '')
+  ],
   ([routeType]) => {
     if (routeType === RouteTypes.CALL) {
       setActiveSection('calls');
@@ -692,7 +718,13 @@ watch(
       routeType === RouteTypes.GROUP ||
       routeType === RouteTypes.FAVORITES
     ) {
-      setActiveSection('chats');
+      const topicId = route.value?.id;
+      setActiveSection(
+        clientInquiries.value.has(topicId || '') ||
+          isClientTopic(getTopicList().find(topic => topic.id === topicId))
+          ? 'clients'
+          : 'chats'
+      );
     }
   },
   { immediate: true }

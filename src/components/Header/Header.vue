@@ -103,6 +103,14 @@
             @zvonilka
           </span>
         </div>
+        <UserProfile
+          v-else-if="clientInquiry"
+          class="chat__header-profile user-profile--interactive"
+          :user="clientUser(clientInquiry)"
+          :description="clientPlatform(clientInquiry)"
+          data-testid="Client-Header-Profile"
+          @click.stop="handleClickHeader"
+        />
         <GroupProfile
           v-else-if="currentTopic.type === TopicType.Group"
           class="chat__header-profile"
@@ -144,8 +152,19 @@
             @click.stop="showSearch"
           />
         </div>
+        <button
+          v-if="isExternalInquiry"
+          type="button"
+          disabled
+          class="chat__header-client-call"
+          aria-label="Звонок недоступен"
+          title="Звонки внешним клиентам недоступны"
+          data-testid="Client-Header-Call"
+        >
+          <CallIcon class="chat__header__icon" />
+        </button>
         <CallIcon
-          v-if="showHeaderCallAction"
+          v-else-if="showHeaderCallAction"
           class="chat__header__icon"
           :data-testid="`${props.dataTestid}-Header-CallIcon`"
           @click.stop="handleCallAction"
@@ -419,6 +438,12 @@
 
 <script lang="ts" setup>
 import {
+  useManagerInquiries,
+  clientUser,
+  clientPlatform,
+  isClientTopic
+} from '../../composables/useManagerInquiries';
+import {
   computed,
   nextTick,
   onMounted,
@@ -625,6 +650,12 @@ const state = reactive({
 const currentTopic = computed(() =>
   route.value.id ? getSelectedTopic(route.value.id) : undefined
 );
+
+const { byTopic: clientInquiries } = useManagerInquiries();
+const clientInquiry = computed(() =>
+  clientInquiries.value.get(currentTopic.value?.id || '')
+);
+const isExternalInquiry = computed(() => isClientTopic(currentTopic.value));
 const isFavoriteDialogTopic = computed(
   () =>
     route.value.type === RouteTypes.FAVORITES ||
@@ -1178,6 +1209,7 @@ const handleCall = async () => {
 };
 
 const handleCallAction = async (): Promise<void> => {
+  if (isExternalInquiry.value) return;
   if (route.value.type === RouteTypes.AI) {
     startAiVoiceCall();
     return;
@@ -1233,6 +1265,11 @@ const handleUserProfileClick = (): void => {
 };
 
 const handleClickHeader = async (): Promise<void> => {
+  if (clientInquiry.value) {
+    openUserInfo(clientUser(clientInquiry.value), currentTopic.value);
+    return;
+  }
+  if (isExternalInquiry.value) return;
   if (
     route.value.type === RouteTypes.AI ||
     isFavoriteDialogTopic.value ||
@@ -1328,6 +1365,8 @@ const getHeaderContextMenuOptions = computed(() => {
           : IconNameEnum.noDistrub
       });
     }
+
+    if (isExternalInquiry.value) return options;
 
     if (route.value.type === RouteTypes.GROUP) {
       options.push({
@@ -1506,3 +1545,17 @@ onUnmounted(() => {
   currentGroup.value = null;
 });
 </script>
+
+<style scoped>
+.chat__header-client-call {
+  display: flex;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.chat__header-client-call :deep(svg) {
+  pointer-events: none;
+}
+</style>
