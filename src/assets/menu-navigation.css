@@ -281,7 +281,7 @@
   min-width: 0;
 }
 
-.menu-profile__status-option-row > .menu-profile__status-option {
+.menu-profile__status-option-row>.menu-profile__status-option {
   flex: 1;
   min-width: 0;
 }
@@ -435,8 +435,7 @@
   }
 }
 
-.menu-profile__wallpapers:has(.menu-profile__wallpapers-menu)
-  .menu-profile__wallpapers-trigger {
+.menu-profile__wallpapers:has(.menu-profile__wallpapers-menu) .menu-profile__wallpapers-trigger {
   border-color: var(--border-hover);
 }
 
@@ -457,18 +456,14 @@
 }
 
 :root {
-  --chat-wallpaper-none-background: linear-gradient(
-    180deg,
-    rgba(251, 253, 255, 1) 0%,
-    rgba(236, 243, 255, 1) 100%
-  );
+  --chat-wallpaper-none-background: linear-gradient(180deg,
+      rgba(251, 253, 255, 1) 0%,
+      rgba(236, 243, 255, 1) 100%);
 }
 
 :root:is([data-theme='dark'], .theme-dark) {
-  --chat-wallpaper-none-background: var(
-    --surface-input-secondary,
-    #262a38
-  );
+  --chat-wallpaper-none-background: var(--surface-input-secondary,
+      #262a38);
 }
 
 .menu-profile__wallpapers-grid {
@@ -658,8 +653,8 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: var(--white);
-  color: var(--border-hover);
+  background: var(--surface-overlay);
+  color: var(--action-primary-bg);
 }
 
 .menu-profile__update-check svg {
@@ -829,7 +824,6 @@ dialog.menu-profile__wallpaper-modal>.modal-yui-kit__modal-content {
     height: 58px;
     border: 0;
     border-radius: 999px;
-    background: var(--white);
     box-shadow:
       0 12px 30px rgba(27, 39, 94, 0.08),
       0 2px 10px rgba(27, 39, 94, 0.05);
@@ -841,10 +835,7 @@ dialog.menu-profile__wallpaper-modal>.modal-yui-kit__modal-content {
   }
 
   .mobile-list-container>.menu-bottom-nav .menu-bottom-nav__button--active .menu-bottom-nav__icon-shell,
-  .mobile-list-container>.menu-bottom-nav .menu-bottom-nav__button--active .menu-bottom-nav__avatar-shell {
-    background: var(--border-hover);
-    color: var(--white);
-  }
+  .mobile-list-container>.menu-bottom-nav .menu-bottom-nav__button--active .menu-bottom-nav__avatar-shell {}
 
   .menu-profile {
     padding: 16px;

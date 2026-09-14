@@ -97,9 +97,10 @@
               class="call-modal__mobile-actions-menu"
               @click.stop
             >
-              <button
+              <Button
                 class="call-modal__mobile-actions-item"
-                type="button"
+                :type="ButtonTypeEnum.popover"
+                :size="SizesEnum.little"
                 :disabled="
                   isBusyNoticeVisible || isScreenShareUnavailableOnMobile
                 "
@@ -111,28 +112,30 @@
                     ? 'Выключить демонстрацию'
                     : 'Включить демонстрацию'
                 }}</span>
-              </button>
-              <button
+              </Button>
+              <Button
                 class="call-modal__mobile-actions-item"
                 :class="{
                   'call-modal__mobile-actions-item--recording':
                     isAnySummaryRecording
                 }"
-                type="button"
+                :type="ButtonTypeEnum.popover"
+                :size="SizesEnum.little"
                 :disabled="isSummaryRecordButtonDisabled"
                 @click="handleSummaryRecordingAction"
               >
                 <ScreenRecordIcon />
                 <span>{{ summaryRecordButtonLabel }}</span>
-              </button>
-              <button
+              </Button>
+              <Button
                 class="call-modal__mobile-actions-item"
-                type="button"
+                :type="ButtonTypeEnum.popover"
+                :size="SizesEnum.little"
                 @click="handleOpenMobileCallSettings"
               >
                 <GroupInfoIcon />
                 <span>Настройки</span>
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -728,7 +731,14 @@ import {
   ref,
   watch
 } from 'vue';
-import { Icon, IconNameEnum, Tooltip } from '@pksep/yui';
+import {
+  Button,
+  ButtonTypeEnum,
+  Icon,
+  IconNameEnum,
+  SizesEnum,
+  Tooltip
+} from '@pksep/yui';
 import { Capacitor } from '@capacitor/core';
 import { MAX_W_MD } from '../../utils/constants';
 import { useResizeState } from '../../composables/useResizeState';
