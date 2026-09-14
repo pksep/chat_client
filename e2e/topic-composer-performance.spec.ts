@@ -17,7 +17,9 @@ test('эмодзи создаются по нажатию, вставляютс�
   await expect(message(page, 0)).toBeVisible();
   const editor = page.locator('[contenteditable="true"]');
   await editor.fill('Черновик');
-  await expect(page.locator('.v3-emoji-picker')).toHaveCount(0);
+  await expect(
+    page.locator('.emoji-picker--open .v3-emoji-picker')
+  ).toHaveCount(0);
   const smile = page.locator('.chat__input .smile-button:visible');
   await smile.click();
   const picker = page.locator('.emoji-picker--open .v3-emoji-picker');
@@ -35,22 +37,51 @@ test('эмодзи создаются по нажатию, вставляютс�
   await expect(page.locator('.v3-emoji-picker')).toHaveCount(0);
   await openTopic(page, 1);
   await expect(editor).toHaveText('');
-  await expect(page.locator('.v3-emoji-picker')).toHaveCount(0);
+  await expect(
+    page.locator('.emoji-picker--open .v3-emoji-picker')
+  ).toHaveCount(0);
   await page.evaluate(() => (window as any).topicPerformance.back());
   await openTopic(page, 0);
   await expect(editor).toContainText('Черновик');
   await expect(editor).toContainText(selectedEmoji);
-  await expect(page.locator('.v3-emoji-picker')).toHaveCount(0);
+  await expect(
+    page.locator('.emoji-picker--open .v3-emoji-picker')
+  ).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('мобильный поиск эмодзи получает фокус по касанию', async ({
+  page,
+  isMobile
+}) => {
+  test.skip(!isMobile, 'Проверка требует touch-контекст');
+  await page.setViewportSize({ width: 392, height: 832 });
+  const { errors } = await openFixture(page, { shell: true });
+  await openTopic(page, 0);
+  await expect(message(page, 0)).toBeVisible();
+
+  await page.locator('.chat__input .smile-button:visible').click();
+  const picker = page.locator('.emoji-picker--open .v3-emoji-picker');
+  const search = picker.locator('.v3-search input');
+  await expect(search).toBeVisible();
+  await search.tap();
+  await expect(search).toBeFocused();
+  await search.fill('rocket');
+  await expect(search).toHaveValue('rocket');
+  await expect(picker.locator('.v3-emojis button:visible')).not.toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
 test('первое открытие эмодзи работает и в редакторе вложения', async ({
-  page
+  page,
+  isMobile
 }) => {
   const { errors } = await openFixture(page, { shell: true });
   await openTopic(page, 0);
   await expect(message(page, 0)).toBeVisible();
-  await expect(page.locator('.v3-emoji-picker')).toHaveCount(0);
+  await expect(
+    page.locator('.emoji-picker--open .v3-emoji-picker')
+  ).toHaveCount(0);
   await page
     .locator('.chat__input input[type="file"]:not([accept])')
     .setInputFiles({
@@ -63,6 +94,11 @@ test('первое открытие эмодзи работает и в реда
   await modal.locator('.smile-button').click();
   const picker = modal.locator('.emoji-picker--open .v3-emoji-picker');
   await expect(picker).toBeVisible();
+  if (isMobile) {
+    const search = picker.locator('.v3-search input');
+    await search.tap();
+    await expect(search).toBeFocused();
+  }
   const emoji = picker.locator('.v3-emojis button:visible').first();
   const selectedEmoji = (await emoji.textContent())!.trim();
   await emoji.click();
