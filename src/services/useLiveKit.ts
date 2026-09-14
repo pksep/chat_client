@@ -76,6 +76,7 @@ import {
 } from './useTelemetryDevice';
 import {
   activeGroupCalls,
+  ACTIVE_CALL_SESSION_STORAGE_KEY,
   activeScreenShare,
   callElapsedMs,
   callStartedAt,
@@ -153,6 +154,10 @@ type CallSocketAck = {
   isNewCall?: boolean;
 };
 type InvitedGroupCallEntry = NonNullable<typeof invitedGroupCall.value>;
+type GroupCallInvitePreview = Omit<
+  InvitedGroupCallEntry,
+  'inviteToken' | 'isJoinAvailable'
+>;
 type CallTimerSnapshot = {
   startTime?: number | null;
   elapsedDurationMs?: number | null;
@@ -176,7 +181,6 @@ type PersistedActiveCallSession = {
 const HAND_RAISE_TOPIC = 'group-call-hand-raise';
 const CALL_REACTION_TOPIC = 'group-call-reaction';
 const CALL_REACTION_DURATION_MS = 4000;
-const ACTIVE_CALL_SESSION_STORAGE_KEY = 'chat:active-call-session:v1';
 
 let room: Room | null = null;
 let ignoredDisconnectedRoom: Room | null = null;
@@ -2242,7 +2246,9 @@ const restoreGroupCallEntryIfStillActive = (
 const getInviteParamsFromUrl = () => {
   if (typeof window === 'undefined') return null;
 
-  const invite = parseGroupCallInviteUrl(window.location.href);
+  const invite = parseGroupCallInviteUrl(window.location.href, {
+    allowTrustedNativeOrigin: Capacitor.isNativePlatform()
+  });
 
   if (!invite) {
     return null;
@@ -5509,16 +5515,21 @@ export const joinPendingGroupCall = async (
   }
 };
 
-export const hydrateInvitedGroupCallFromUrl = async (): Promise<boolean> => {
+export const hydrateInvitedGroupCallFromUrl = async (options?: {
+  preview?: GroupCallInvitePreview;
+}): Promise<boolean> => {
   const sdk = getChatSDK();
   const inviteParams = getInviteParamsFromUrl();
 
   if (!sdk || !inviteParams) return false;
 
-  const preview = await sdk.getGroupCallInvitePreview(
-    inviteParams.roomId,
-    inviteParams.inviteToken
-  );
+  const preview =
+    options?.preview?.roomId === inviteParams.roomId
+      ? options.preview
+      : await sdk.getGroupCallInvitePreview(
+          inviteParams.roomId,
+          inviteParams.inviteToken
+        );
 
   if (!preview) {
     handleExpiredInviteLink();
@@ -5546,13 +5557,16 @@ export const hydrateInvitedGroupCallFromUrl = async (): Promise<boolean> => {
 };
 
 export const openGroupCallInviteUrl = async (
-  value: string
+  value: string,
+  options?: { preview?: GroupCallInvitePreview }
 ): Promise<boolean> => {
   if (typeof window === 'undefined') {
     return false;
   }
 
-  const invite = parseGroupCallInviteUrl(value);
+  const invite = parseGroupCallInviteUrl(value, {
+    allowTrustedNativeOrigin: Capacitor.isNativePlatform()
+  });
 
   if (!invite) {
     return false;
@@ -5568,7 +5582,7 @@ export const openGroupCallInviteUrl = async (
   }
 
   window.history.replaceState({}, document.title, currentUrl.toString());
-  return hydrateInvitedGroupCallFromUrl();
+  return hydrateInvitedGroupCallFromUrl(options);
 };
 
 const joinInvitedGroupCallInternal = async (

@@ -13,9 +13,9 @@ const revision = ref(0);
 let session: { scope: string; api: CustomBackgroundApi } | null = null;
 let listenersRegistered = false;
 
-export const refreshCustomBackgrounds = () => {
+export const refreshCustomBackgrounds = (maxAgeMs = 0) => {
   for (const library of libraries) {
-    void library.refresh().catch(error => {
+    void library.refresh(maxAgeMs).catch(error => {
       console.warn('Не удалось синхронизировать список фонов:', error);
     });
   }
@@ -31,12 +31,13 @@ export const configureCustomBackgroundSync = (
   refreshCustomBackgrounds();
   if (!listenersRegistered && typeof window !== 'undefined') {
     listenersRegistered = true;
-    window.addEventListener('online', refreshCustomBackgrounds);
+    window.addEventListener('online', () => refreshCustomBackgrounds());
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') refreshCustomBackgrounds();
+      if (document.visibilityState === 'visible' && navigator.onLine)
+        refreshCustomBackgrounds(60_000);
     });
     void App.addListener('appStateChange', ({ isActive }) => {
-      if (isActive) refreshCustomBackgrounds();
+      if (isActive && navigator.onLine) refreshCustomBackgrounds(60_000);
     }).catch(() => {});
   }
 };

@@ -335,6 +335,11 @@ export const syncNotificationContext = async (params: {
   });
 };
 
+const pendingNativeTopicClears = new Map<
+  string,
+  { repeat: boolean; promise: Promise<void> }
+>();
+
 export const clearTopicNotifications = async (
   topicId?: string | null
 ): Promise<void> => {
@@ -344,13 +349,29 @@ export const clearTopicNotifications = async (
 
   if (Capacitor.isNativePlatform()) {
     if (Capacitor.getPlatform() === 'android') {
-      try {
-        await RuStorePush.clearNotificationsForTopic({ topicId });
-      } catch (error) {
-        console.warn('Failed to clear RuStore notifications for topic:', error);
+      const pending = pendingNativeTopicClears.get(topicId);
+      if (pending) {
+        pending.repeat = true;
+        return pending.promise;
       }
-
-      return;
+      const task = { repeat: false, promise: Promise.resolve() };
+      pendingNativeTopicClears.set(topicId, task);
+      task.promise = (async () => {
+        try {
+          do {
+            task.repeat = false;
+            await RuStorePush.clearNotificationsForTopic({ topicId });
+          } while (task.repeat);
+        } catch (error) {
+          console.warn(
+            'Failed to clear RuStore notifications for topic:',
+            error
+          );
+        } finally {
+          pendingNativeTopicClears.delete(topicId);
+        }
+      })();
+      return task.promise;
     }
 
     return;

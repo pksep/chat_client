@@ -9,6 +9,7 @@
       }
     ]"
     :data-testid="`${props.dataTestid}-Chat-Container`"
+    @animationend="handleMobileRouteAnimationEnd"
   >
     <div
       v-if="isAiRoute || isAiVoiceCallActive"
@@ -42,7 +43,6 @@
               !isMobileMessageContentReady
           }
         ]"
-        @animationend="handleMobileRouteAnimationEnd"
       >
         <PinnedMessages
           v-if="shouldShowPinnedMessages"
@@ -126,10 +126,7 @@ import type {
   IMessageViewportSnapshot
 } from './interfaces/interfaces';
 import ShareSelectionOverlay from './ShareSelectionOverlay.vue';
-import {
-  fetchPinnedMessagesForTopic,
-  hasKnownTopicMessagesState
-} from '../services/useMessages';
+import { hasKnownTopicMessagesState } from '../services/useMessages';
 import { useAiAssistant } from '../composables/useAiAssistant';
 import UnselectedTopicIcon from './UI/Icons/UnselectedTopicIcon.vue';
 
@@ -354,28 +351,20 @@ const prepareMobileMessageRoute = (topicId: string): void => {
 };
 
 const handleMobileRouteAnimationEnd = (event: AnimationEvent): void => {
-  if (event.target !== event.currentTarget || !hasActiveChatRoute.value) {
+  if (
+    !mobileTransitionName.value ||
+    !(event.target instanceof HTMLElement) ||
+    !event.target.classList.contains(mobileTransitionName.value) ||
+    !['chat-mobile-route-forward-in', 'chat-mobile-route-back-in'].includes(
+      event.animationName
+    )
+  ) {
     return;
   }
 
-  // The transition class carries `will-change: transform, opacity`. Keeping
-  // it after the 220 ms entrance animation promotes the whole chat route to a
-  // permanent compositor layer. Android WebView then has to raster a large
-  // scrolling descendant inside that layer and can show the wallpaper while
-  // the message tiles catch up during a fast fling.
+  // Освобождаем слой анимации и у переписки, и у списка после возврата.
   mobileTransitionName.value = '';
-  revealMobileMessageContent(mobileRouteContentToken);
 };
-
-watch(
-  [() => route.value.id, isMobile],
-  ([topicId, mobile]) => {
-    if (mobile && topicId) {
-      void fetchPinnedMessagesForTopic(topicId);
-    }
-  },
-  { immediate: true }
-);
 
 watch(activeChatRouteKey, (topicId, previousTopicId) => {
   if (!topicId || !renderedMessageTopic.value.topicId) {
