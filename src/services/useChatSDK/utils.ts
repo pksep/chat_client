@@ -1,5 +1,6 @@
 import { Topic, Message } from '@pksep/zod-shared-chat';
 import { Reqi } from '@pksep/reqi';
+import { readJson } from './read-json';
 import { SearchParams, PaginatedResponse } from './types';
 
 export interface ChatUtilsInterface {
@@ -41,11 +42,10 @@ export class ChatUtils implements ChatUtilsInterface {
     const endpoint = `/search/messages${queryString ? `?${queryString}` : ''}`;
 
     try {
-      const response = (await this.reqi.get<
-        PaginatedResponse<Message & { topic: Topic }>
-      >(endpoint, { parsed: false })) as any;
-      const data = await response.json();
-      return data;
+      return await readJson<PaginatedResponse<Message & { topic: Topic }>>(
+        this.reqi,
+        endpoint
+      );
     } catch (error) {
       throw new Error(`Failed to search messages: ${(error as Error).message}`);
     }
@@ -67,14 +67,7 @@ export class ChatUtils implements ChatUtilsInterface {
     const endpoint = `/search/topics${queryString ? `?${queryString}` : ''}`;
 
     try {
-      const response = (await this.reqi.get<PaginatedResponse<Topic>>(
-        endpoint,
-        {
-          parsed: false
-        }
-      )) as any;
-      const data = await response.json();
-      return data;
+      return await readJson<PaginatedResponse<Topic>>(this.reqi, endpoint);
     } catch (error) {
       throw new Error(`Failed to search topics: ${(error as Error).message}`);
     }

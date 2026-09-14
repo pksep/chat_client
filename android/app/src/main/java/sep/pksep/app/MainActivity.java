@@ -177,6 +177,8 @@ public class MainActivity extends BridgeActivity {
     private void configureLaunchSplash(SplashScreen launchSplash) {
         keepLaunchSplash = true;
         launchSplash.setKeepOnScreenCondition(() -> keepLaunchSplash);
+        // Первый кадр уже готов: системное затухание логотипа лишь задерживает его показ.
+        launchSplash.setOnExitAnimationListener(provider -> provider.remove());
         launchSplashHandler.postDelayed(
             this::releaseLaunchSplash,
             LAUNCH_SPLASH_FALLBACK_TIMEOUT_MS
@@ -914,10 +916,8 @@ public class MainActivity extends BridgeActivity {
                 new WebView.VisualStateCallback() {
                     @Override
                     public void onComplete(long requestId) {
-                        launchSplashHandler.postDelayed(
-                            MainActivity.this::releaseLaunchSplash,
-                            80L
-                        );
+                        // WebView подтвердил готовность кадра; дополнительный таймер не нужен.
+                        MainActivity.this.releaseLaunchSplash();
                     }
                 }
             );

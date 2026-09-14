@@ -57,7 +57,11 @@ import {
 import { useResizeState } from './composables/useResizeState';
 import { MAX_W_MD } from './utils/constants';
 import { RouteTypes } from './composables/navigation/useUrlRouting';
-import { hydrateMessagesFromCache } from './services/useMessages';
+import {
+  getMessagesByTopicId,
+  deferMessagePersistsUntil,
+  hydrateMessagesFromCache
+} from './services/useMessages';
 import { useShareSelection } from './composables/useShareSelection';
 import { isGroupCallInviteUrl } from './utils/groupCallInviteUrl';
 import { installNotoEmojiFontFaces } from './composables/useEmojiStyle';
@@ -77,6 +81,7 @@ let removeAppVisibilityListener: (() => void) | null = null;
 const { hasPendingShareBatches, isShareSelectionActive, startShareSelection } =
   useShareSelection();
 let hydratedCacheUserId: string | undefined;
+let hasCachedStartupTopics = false;
 const MOBILE_CACHED_ACTIVE_TOPIC_LIMIT = 48;
 const ONLINE_STARTUP_BACKGROUND_SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
@@ -170,7 +175,8 @@ const runDeferredStartupTask = (
   label: string,
   task: () => Promise<void>
 ): void => {
-  void waitForStartupIdle()
+  void waitForStartupPaint()
+    .then(waitForStartupIdle)
     .then(task)
     .catch(error => {
       console.warn(
@@ -206,7 +212,12 @@ const hydrateActiveCachedMessages = async (userId?: string): Promise<void> => {
 };
 
 const hydrateCriticalCache = async (userId?: string): Promise<void> => {
-  const usersHydration = hydrateUsersFromCache(userId);
+  performance.mark('chat-startup:cache-start');
+  const session = getChatAuthSession();
+  const canDeferUsers =
+    !!userId && !!session?.token && session.user?.id === userId;
+  if (canDeferUsers && !getAuthUser()) setAuthUser(session.user!);
+  const usersHydration = canDeferUsers ? null : hydrateUsersFromCache(userId);
   const topicsHydration = hydrateTopicsFromCache(userId);
   const activeMessagesHydration = hydrateActiveCachedMessages(userId);
 
@@ -216,8 +227,21 @@ const hydrateCriticalCache = async (userId?: string): Promise<void> => {
     applyCachedAuthUser(userId);
   }
 
-  await Promise.all([topicsHydration, activeMessagesHydration]);
+  const [cachedTopics] = await Promise.all([
+    topicsHydration,
+    activeMessagesHydration
+  ]);
+  hasCachedStartupTopics = cachedTopics.length > 0;
   hydratedCacheUserId = userId;
+  performance.mark('chat-startup:cache-ready');
+
+  if (canDeferUsers) {
+    runDeferredStartupTask('cached users', async () => {
+      if (getAuthUser()?.id !== userId) return;
+      await hydrateUsersFromCache(userId);
+      performance.mark('chat-startup:users-cache-ready');
+    });
+  }
 };
 
 interface FreshChatContentState {
@@ -235,28 +259,30 @@ const hydrateFreshChatContent = async (
     };
   }
 
-  if (hasPriorityMessageTopicRoute()) {
+  if (hasPriorityMessageTopicRoute() || hasCachedStartupTopics) {
     return {
       usersRefreshed: false,
       topicsRefreshed: false
     };
   }
 
-  await Promise.allSettled([fetchAuthUser(), fetchAllUsers()]);
-
-  if (!getAuthUser() && userId) {
-    applyCachedAuthUser(userId);
+  const usersRefreshed = !getAuthUser();
+  if (usersRefreshed) {
+    await Promise.allSettled([fetchAuthUser(), fetchAllUsers()]);
+    if (!getAuthUser() && userId) {
+      applyCachedAuthUser(userId);
+    }
   }
 
   const shouldDeferTopicsRefresh = !!getActiveChatTopicId();
 
   if (!shouldDeferTopicsRefresh) {
-    await fetchAllTopics();
+    await fetchAllTopics({ deferMaintenanceUntil: waitForStartupPaint() });
   }
 
   hydratedCacheUserId = userId;
   return {
-    usersRefreshed: true,
+    usersRefreshed,
     topicsRefreshed: !shouldDeferTopicsRefresh
   };
 };
@@ -289,6 +315,19 @@ let resolveStartupReady: (() => void) | null = null;
 const startupReadyPromise = new Promise<void>(resolve => {
   resolveStartupReady = resolve;
 });
+let startupPaintPromise: Promise<void> | undefined;
+const waitForStartupPaint = (): Promise<void> =>
+  (startupPaintPromise ??= startupReadyPromise.then(
+    () =>
+      new Promise(resolve => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      })
+  ));
+
+const releaseMessagePersistence = deferMessagePersistsUntil(
+  waitForStartupPaint()
+);
+onUnmounted(releaseMessagePersistence);
 
 const scheduleStartupReady = (): void => {
   const activeTopicId = getActiveChatTopicId();
@@ -302,6 +341,7 @@ const scheduleStartupReady = (): void => {
   }
 
   isStartupReadyScheduled = true;
+  performance.mark('chat-startup:content-ready');
   void nextTick(() => {
     emit('ready');
     resolveStartupReady?.();
@@ -417,13 +457,6 @@ const runDeferredOnlineStartup = (
 ): void => {
   if (!freshContentState.usersRefreshed || !freshContentState.topicsRefreshed) {
     runDeferredStartupTask('online refresh', async () => {
-      const shouldWaitForMessageTopic = hasPriorityMessageTopicRoute();
-
-      if (shouldWaitForMessageTopic) {
-        await startupReadyPromise;
-        await waitForStartupIdle();
-      }
-
       if (!freshContentState.usersRefreshed) {
         await Promise.allSettled([fetchAuthUser(), fetchAllUsers()]);
 
@@ -433,16 +466,11 @@ const runDeferredOnlineStartup = (
       }
 
       if (!freshContentState.topicsRefreshed) {
-        if (!shouldWaitForMessageTopic && getActiveChatTopicId()) {
-          await startupReadyPromise;
-          await waitForStartupIdle();
-        }
-
         await fetchAllTopics();
       }
 
       if (route.value.id) {
-        void fetchPinnedMessagesForTopic(route.value.id);
+        void fetchPinnedMessagesForTopic(route.value.id, { maxAgeMs: 15_000 });
 
         if (route.value.type === RouteTypes.GROUP) {
           getGroupById(route.value.id);
@@ -479,8 +507,9 @@ const runAppInitialization = async () => {
 
     deferredStartupBackgroundSnapshotUserId = userId;
 
-    if (route.value.id) {
+    if (route.value.id && getMessagesByTopicId(route.value.id).length === 0) {
       await importStartupBackgroundSnapshot(userId, `${source}-eager`);
+      return;
     }
 
     scheduleStartupBackgroundSnapshotImport(userId, source);

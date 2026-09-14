@@ -11,6 +11,12 @@
     "build": "vue-tsc && vite build",
     "build:prod": "cross-env VITE_BASE_MODE=app vite build ",
     "test:e2e": "playwright test",
+    "test:performance": "playwright test e2e/topic-performance.spec.ts --workers=1 --reporter=line",
+    "test:network": "playwright test e2e/network- --workers=1 --reporter=line",
+    "test:users:performance": "playwright test e2e/user-directory-performance.spec.ts --workers=1 --reporter=line",
+    "test:pdf-worker": "node --experimental-strip-types scripts/verify-pdf-worker.ts",
+    "test:notifications:performance": "playwright test e2e/notification-performance.spec.ts --workers=1 --reporter=line",
+    "test:android:performance": "node --experimental-strip-types scripts/verify-android-performance.ts",
     "test:e2e:ui": "playwright test --ui",
     "verify:approval": "bun scripts/verify-mastra-approval.ts",
     "format": "prettier -w {src,scripts}/**/*.ts -w {src,scripts}/**/*.vue",
@@ -93,6 +99,7 @@
     "prettier": "3.2.4",
     "sass-embedded": "^1.103.1",
     "semantic-release": "^25.0.2",
+    "socket.io": "4.8.3",
     "typescript": "~5.6.3",
     "vite": "^7.1.7",
     "vite-plugin-dts": "^4.5.4",
@@ -107,5 +114,8 @@
       "@babel/plugin-transform-private-methods"
     ]
   },
-  "packageManager": "bun@1.3.14"
+  "packageManager": "bun@1.3.14",
+  "patchedDependencies": {
+    "@pksep/yui@0.1.318": "patches/@pksep%2Fyui@0.1.318.patch"
+  }
 }

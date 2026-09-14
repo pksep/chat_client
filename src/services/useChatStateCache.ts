@@ -1,3 +1,4 @@
+import { reviveCachedDates as deserializeValue } from '../utils/revive-cached-dates';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
 import { authedUser, getChatAuthSession } from '../composables/useAuth';
 
@@ -5,12 +6,7 @@ const DB_NAME = 'chat-offline-state-db';
 const DB_VERSION = 2;
 const STORE_NAME = 'entities';
 const FAST_TOPICS_CACHE_PREFIX = 'chat-offline-fast-topics-v1';
-const DATE_KEYS = new Set([
-  'createdAt',
-  'updatedAt',
-  'deletedAt',
-  'lastOnline'
-]);
+
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 
 type CacheEntityType = 'topics' | 'users';
@@ -43,27 +39,6 @@ const serializeValue = (value: unknown): unknown => {
       Object.entries(value).map(([key, nestedValue]) => [
         key,
         serializeValue(nestedValue)
-      ])
-    );
-  }
-
-  return value;
-};
-
-const deserializeValue = (value: unknown, key?: string): unknown => {
-  if (typeof value === 'string' && key && DATE_KEYS.has(key)) {
-    return new Date(value);
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(item => deserializeValue(item));
-  }
-
-  if (isPlainObject(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([nestedKey, nestedValue]) => [
-        nestedKey,
-        deserializeValue(nestedValue, nestedKey)
       ])
     );
   }

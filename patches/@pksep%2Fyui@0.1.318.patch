@@ -1,0 +1,73 @@
+diff --git a/node_modules/@pksep/yui/.bun-tag-fb849d908c754137 b/.bun-tag-fb849d908c754137
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/dist/sep-yui.mjs b/dist/sep-yui.mjs
+index 380067c3020966de0ac1a2cd2b4255559687577e..985ba182e9255125516371fe0a9b497725aa0272 100644
+--- a/dist/sep-yui.mjs
++++ b/dist/sep-yui.mjs
+@@ -115340,21 +115340,21 @@ const vdI = /* @__PURE__ */ pg({
+     }, ng = () => {
+       const j = V.value;
+       Vg(), ki(j), se({ preserveHorizontal: !0 });
+-    }, og = (j) => {
++    };
++    // Родитель уничтожает editor.view раньше unmount панели; сохраняем исходный DOM для очистки.
++    let boundEditorElement = null;
++    const og = (j) => {
+       const $ = lt(j);
++      boundEditorElement = $;
+       !j || !$ || (j.on("selectionUpdate", Ai), j.on("focus", pt), j.on("blur", Zl), j.on("transaction", bA), $.addEventListener("pointerdown", ni), $.addEventListener("touchend", si, !0), $.addEventListener("contextmenu", li), $.addEventListener("keydown", dt), $.addEventListener("beforeinput", hA), $.addEventListener("input", ul), $.ownerDocument.addEventListener(
+         "selectionchange",
+         Oe
+       ));
+     }, hg = (j) => {
+-      var mg;
+-      if (!j)
+-        return;
+-      j.off("selectionUpdate", Ai), j.off("focus", pt), j.off("blur", Zl), j.off("transaction", bA), (mg = lt(j)) == null || mg.removeEventListener(
+-        "pointerdown",
+-        ni
+-      );
+-      const $ = lt(j);
++      const $ = boundEditorElement;
++      boundEditorElement = null;
++      j && (j.off("selectionUpdate", Ai), j.off("focus", pt), j.off("blur", Zl), j.off("transaction", bA));
++      $ == null || $.removeEventListener("pointerdown", ni);
+       $ == null || $.removeEventListener("touchend", si, !0), $ == null || $.removeEventListener("contextmenu", li), $ == null || $.removeEventListener("keydown", dt), $ == null || $.removeEventListener("beforeinput", hA), $ == null || $.removeEventListener("input", ul), $ == null || $.ownerDocument.removeEventListener(
+         "selectionchange",
+         Oe
+@@ -116915,6 +116915,8 @@ const Do = (C) => {
+       vertical: "bottom",
+       horizontal: "left"
+     }), l = I, o = F(null), a = F(null), c = F(null), r = F(null), Z = F({}), b = F(!1), h = F(!1), G = F([]), W = F([]), B = F(null), p = F(null), y = F([]), V = F(null), N = F(null), f = F(0), H = F(null), K = F(null), v = F(0);
++    // Тысячи скрытых эмодзи не должны задерживать открытие переписки.
++    const hasOpenedEmojiPicker = F(!1);
+     let T = null, P = null, sg = null, Cg = null, J = 0, eg = 0, Wg = 0, bg = 0, Vg = null, zg = [], Fg = !1;
+     const Hg = q(
+       () => G.value.length > 0 || W.value.length > 0
+@@ -117699,6 +117701,7 @@ const Do = (C) => {
+         qA();
+         return;
+       }
++      hasOpenedEmojiPicker.value = !0;
+       Xs(), Kn(), P = null, n.value += 1, Xu();
+       const O = z.currentTarget;
+       T = O;
+@@ -117883,7 +117886,7 @@ const Do = (C) => {
+                 style: lC(U(Bp)),
+                 "aria-hidden": !i.value
+               }, [
+-                A.value ? vC((x(), Qg(U(wp), {
++                A.value && hasOpenedEmojiPicker.value ? vC((x(), Qg(U(wp), {
+                   key: 0,
+                   native: !0,
+                   "display-recent": !0,
+@@ -117976,7 +117979,7 @@ const Do = (C) => {
+                 style: lC(U(Bp)),
+                 "aria-hidden": !i.value
+               }, [
+-                A.value ? Yg("", !0) : vC((x(), Qg(U(wp), {
++                A.value || !hasOpenedEmojiPicker.value ? Yg("", !0) : vC((x(), Qg(U(wp), {
+                   key: 0,
+                   native: !0,
+                   "display-recent": !0,

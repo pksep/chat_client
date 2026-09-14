@@ -76,8 +76,7 @@ let isDesktopVisibilityBound = false;
 let topicsApi: ReturnType<typeof createTopicsApi> | null = null;
 let lastAppliedAppBadgeCount: number | null = null;
 let favoriteTopicCreationPromise: Promise<ITopic | null> | null = null;
-const favoriteSystemCleanupPromises = new Map<string, Promise<void>>();
-const cleanedFavoriteSystemTopicIds = new Set<string>();
+const favoriteSystemCleanupIds = new WeakMap<object, Set<string>>();
 
 const route = useUrlWatcher();
 
@@ -411,48 +410,42 @@ const createTopicsApi = () => {
     schedulePersistTopics();
   };
 
-  const cleanupFavoriteTopicSystemMessages = (topic: ITopic): void => {
-    if (
-      cleanedFavoriteSystemTopicIds.has(topic.id) ||
-      favoriteSystemCleanupPromises.has(topic.id)
-    ) {
-      return;
-    }
+  const cleanupFavoriteTopicSystemMessages = (
+    topic: ITopic | null | undefined,
+    messages: readonly Message[]
+  ): void => {
+    const sdk = getChatSDK();
+    if (!sdk || !topic || !isFavoriteTopic(topic, authedUser.value?.id)) return;
 
-    const cleanupPromise = (async () => {
+    // Используем уже загруженную историю: отдельный запрос при старте не нужен.
+    const cleanupIds = favoriteSystemCleanupIds.get(sdk) || new Set<string>();
+    favoriteSystemCleanupIds.set(sdk, cleanupIds);
+    const systemMessages = messages.filter(
+      message =>
+        message.isSystem &&
+        message.id &&
+        message.topicId === topic.id &&
+        !cleanupIds.has(message.id)
+    );
+    if (!systemMessages.length) return;
+    systemMessages.forEach(message => cleanupIds.add(message.id));
+
+    void (async () => {
+      const queuedIds = new Set<string>();
       try {
-        const sdk = getChatSDK();
-
-        if (!sdk) {
-          return;
-        }
-
-        const recentMessages = await sdk.getMessages(topic.id, {
-          limit: 100,
-          newMessages: true
-        });
-        const systemMessages = (
-          Array.isArray(recentMessages) ? recentMessages : []
-        ).filter(message => message.isSystem && message.id);
-
-        if (!systemMessages.length) {
-          cleanedFavoriteSystemTopicIds.add(topic.id);
-          return;
-        }
-
         for (
           let attempt = 0;
-          attempt < 40 && !sdk.isConnected();
+          attempt < 40 && getChatSDK() === sdk && !sdk.isConnected();
           attempt += 1
         ) {
           await new Promise(resolve => setTimeout(resolve, 250));
         }
 
-        if (!sdk.isConnected()) {
+        if (getChatSDK() !== sdk || !sdk.isConnected()) {
           return;
         }
 
-        const allDeletesQueued = systemMessages.every(message => {
+        for (const message of systemMessages) {
           const queued = sdk.sendWebSocketEvent(
             WebSocketEventType.DELETE_MESSAGE,
             {
@@ -462,14 +455,9 @@ const createTopicsApi = () => {
           );
 
           if (queued) {
+            queuedIds.add(message.id);
             deleteMessageFromLocal(topic.id, message.id);
           }
-
-          return queued;
-        });
-
-        if (allDeletesQueued) {
-          cleanedFavoriteSystemTopicIds.add(topic.id);
         }
       } catch (cleanupError) {
         console.warn(
@@ -477,11 +465,11 @@ const createTopicsApi = () => {
           cleanupError
         );
       } finally {
-        favoriteSystemCleanupPromises.delete(topic.id);
+        for (const message of systemMessages) {
+          if (!queuedIds.has(message.id)) cleanupIds.delete(message.id);
+        }
       }
     })();
-
-    favoriteSystemCleanupPromises.set(topic.id, cleanupPromise);
   };
 
   const ensureFavoriteTopic = async (
@@ -496,7 +484,6 @@ const createTopicsApi = () => {
     );
 
     if (existingFavoriteTopic) {
-      cleanupFavoriteTopicSystemMessages(existingFavoriteTopic);
       return existingFavoriteTopic;
     }
 
@@ -533,10 +520,6 @@ const createTopicsApi = () => {
 
         const favoriteTopic =
           topics.value.find(topic => isFavoriteTopic(topic, userId)) || null;
-
-        if (favoriteTopic) {
-          cleanupFavoriteTopicSystemMessages(favoriteTopic);
-        }
 
         return favoriteTopic;
       } catch (creationError) {
@@ -640,7 +623,9 @@ const createTopicsApi = () => {
     return topics.value;
   };
 
-  const fetchAllTopics = async (): Promise<ITopic[]> => {
+  const fetchAllTopics = async (options?: {
+    deferMaintenanceUntil?: Promise<void>;
+  }): Promise<ITopic[]> => {
     loading.value = true;
     error.value = null;
 
@@ -649,26 +634,46 @@ const createTopicsApi = () => {
       const response = await sdk.getTopics();
 
       setTopics(response.data);
-      await ensureFavoriteTopic();
-      const serverActiveCalls = response.data
-        .filter(
-          topic =>
-            !!topic.activeCall?.roomId &&
-            typeof topic.activeCall?.callType === 'string'
-        )
-        .map(topic => ({
-          roomId: topic.activeCall!.roomId,
-          topicId: topic.id,
-          callType: topic.activeCall!.callType || 'livekit',
-          startTime: topic.activeCall?.startTime ?? null,
-          participantCount: topic.activeCall?.participantCount,
-          groupMode: topic.activeCall?.groupMode,
-          elapsedDurationMs: topic.activeCall?.elapsedDurationMs
-        }));
+      const finishTopicMaintenance = async () => {
+        await ensureFavoriteTopic();
+        const serverActiveCalls = response.data
+          .filter(
+            topic =>
+              !!topic.activeCall?.roomId &&
+              typeof topic.activeCall?.callType === 'string'
+          )
+          .map(topic => ({
+            roomId: topic.activeCall!.roomId,
+            topicId: topic.id,
+            callType: topic.activeCall!.callType || 'livekit',
+            startTime: topic.activeCall?.startTime ?? null,
+            participantCount: topic.activeCall?.participantCount,
+            groupMode: topic.activeCall?.groupMode,
+            elapsedDurationMs: topic.activeCall?.elapsedDurationMs
+          }));
 
-      const { syncServerActiveCalls } = await import('../services/useCalls');
-      await syncServerActiveCalls(serverActiveCalls);
-      await warmShadowUnreadStateForTopics(topics.value);
+        const { syncServerActiveCalls } = await import('../services/useCalls');
+        await syncServerActiveCalls(serverActiveCalls);
+        await warmShadowUnreadStateForTopics(topics.value);
+      };
+      if (options?.deferMaintenanceUntil) {
+        const userId = authedUser.value?.id;
+        // Список уже получен. Создание Избранного и восстановление звонков
+        // не должны удерживать стартовый скелетон поверх готовых чатов.
+        void options.deferMaintenanceUntil
+          .then(() => {
+            if (getChatSDK() !== sdk || authedUser.value?.id !== userId) return;
+            return finishTopicMaintenance();
+          })
+          .catch(error => {
+            console.warn(
+              'Не удалось завершить фоновую подготовку списка:',
+              error
+            );
+          });
+      } else {
+        await finishTopicMaintenance();
+      }
       return topics.value;
     } catch (err) {
       error.value = (err as Error).message;
@@ -890,6 +895,17 @@ const createTopicsApi = () => {
       0,
       baseUnreadCount - previewReadIds.size
     );
+    // Локальный расчёт ограничен серверным счётчиком: при нуле история не нужна.
+    if (effectiveServerUnreadCount === 0) {
+      if (topic.unreadMessageCount !== 0 || topic.taggedMe !== false) {
+        topic.unreadMessageCount = 0;
+        topic.taggedMe = false;
+        topics.value = [...topics.value];
+        schedulePersistTopics();
+        syncDisplayedUnreadCount();
+      }
+      return;
+    }
     const shadowReadStateExists = hasCachedShadowReadState(
       topicId,
       currentUserId
@@ -1516,7 +1532,8 @@ const createTopicsApi = () => {
     decrementServerUnreadCount,
     incrementDisplayedUnreadCount,
     updateLocalTopicUser,
-    updateLocalTopicDetails
+    updateLocalTopicDetails,
+    cleanupFavoriteTopicSystemMessages
   };
 };
 
@@ -1564,7 +1581,8 @@ const {
   totalUnreadCount,
   incrementDisplayedUnreadCount,
   updateLocalTopicUser,
-  updateLocalTopicDetails
+  updateLocalTopicDetails,
+  cleanupFavoriteTopicSystemMessages
 } = useTopics();
 
 export {
@@ -1604,5 +1622,6 @@ export {
   totalUnreadCount,
   incrementDisplayedUnreadCount,
   updateLocalTopicUser,
-  updateLocalTopicDetails
+  updateLocalTopicDetails,
+  cleanupFavoriteTopicSystemMessages
 };

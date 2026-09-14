@@ -321,10 +321,6 @@ export const initFastNativeNotificationNavigation =
       // intent arrives between those operations.
       void bindNativeNotificationTapListener()
         .then(async () => {
-          if (handled) {
-            return;
-          }
-
           const racedNotificationTap =
             await NotificationTap.consumePendingNotificationTap();
 

@@ -25,6 +25,12 @@ def chatAllowCleartextOverride = project.findProperty("chatAllowCleartext")
 apply plugin: 'com.android.application'
 
 android {
+    packaging {
+        dex {
+            // ART читает DEX прямо из APK без распаковки при холодном запуске.
+            useLegacyPackaging = false
+        }
+    }
     namespace = "sep.pksep.app"
     compileSdk = rootProject.ext.compileSdkVersion
 

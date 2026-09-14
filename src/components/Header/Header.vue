@@ -526,7 +526,7 @@ import { isFavoriteTopic } from '../../utils/favorite-topic';
 import { isCallTopic } from '../../utils/call-topic';
 import {
   isCallSummaryMaterialTypingInTopic,
-  loadLatestCallSummary
+  ensureCallSummaryEvents
 } from '../../services/useCallSummaries';
 
 const {
@@ -1453,15 +1453,6 @@ watch(
     if (route.value.type === RouteTypes.GROUP) {
       getGroupById(route.value.id);
     }
-
-    if (
-      route.value.id &&
-      (route.value.type === RouteTypes.DIALOGS ||
-        route.value.type === RouteTypes.GROUP ||
-        route.value.type === RouteTypes.CALL)
-    ) {
-      void loadLatestCallSummary(route.value.id);
-    }
   },
   {
     immediate: true
@@ -1481,6 +1472,8 @@ watch(
 );
 
 onMounted(() => {
+  // Заголовку нужны события записи; материалы загружают компоненты звонка.
+  ensureCallSummaryEvents();
   headerCallTimerInterval = setInterval(() => {
     currentTime.value = Date.now();
   }, 1000);

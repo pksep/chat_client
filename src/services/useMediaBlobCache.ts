@@ -19,6 +19,7 @@ interface CachedMediaBlobRecord {
 
 const objectUrlCache = new Map<string, string>();
 const pendingMediaRequests = new Map<string, Promise<string | null>>();
+const pendingCachedMediaReads = new Map<string, Promise<string | null>>();
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 
 const hasIndexedDb = () =>
@@ -185,7 +186,22 @@ const ensureCacheWithinLimit = async (): Promise<void> => {
 
 const buildMediaSourceUrl = (path: string): string => {
   const config = getConfig();
-  return `${config.CHAT_PATH_TO_FILE_CDN}/${path}`;
+  if (/^(blob:|data:|file:\/\/|https?:\/\/)/i.test(path)) {
+    return path;
+  }
+
+  const cdnBase = config.CHAT_PATH_TO_FILE_CDN.replace(/\/+$/, '');
+
+  if (path.startsWith('/')) {
+    try {
+      const resolvedCdn = new URL(cdnBase, window.location.href);
+      return new URL(path, resolvedCdn.origin).toString();
+    } catch {
+      return path;
+    }
+  }
+
+  return `${cdnBase}/${path}`;
 };
 
 export const getCachedMediaObjectUrl = (
@@ -196,6 +212,43 @@ export const getCachedMediaObjectUrl = (
   }
 
   return objectUrlCache.get(path) || null;
+};
+
+export const loadCachedMediaObjectUrl = async (
+  path?: string | null
+): Promise<string | null> => {
+  if (!path || typeof window === 'undefined') return null;
+
+  const cachedObjectUrl = objectUrlCache.get(path);
+  if (cachedObjectUrl) return cachedObjectUrl;
+
+  const pendingRead = pendingCachedMediaReads.get(path);
+  if (pendingRead) return pendingRead;
+
+  const read = (async () => {
+    try {
+      const existingRecord = await getRecord(path);
+      if (!existingRecord?.blob) return null;
+
+      const objectUrl = URL.createObjectURL(existingRecord.blob);
+      objectUrlCache.set(path, objectUrl);
+      if (shouldRefreshAccessedAt(existingRecord.accessedAt)) {
+        void putRecord({
+          ...existingRecord,
+          accessedAt: new Date().toISOString()
+        });
+      }
+      return objectUrl;
+    } catch (error) {
+      console.warn('Failed to read cached media object URL:', error);
+      return null;
+    } finally {
+      pendingCachedMediaReads.delete(path);
+    }
+  })();
+
+  pendingCachedMediaReads.set(path, read);
+  return read;
 };
 
 export const ensureMediaObjectUrl = async (
@@ -217,20 +270,8 @@ export const ensureMediaObjectUrl = async (
 
   const request = (async () => {
     try {
-      const existingRecord = await getRecord(path);
-
-      if (existingRecord?.blob) {
-        const objectUrl = URL.createObjectURL(existingRecord.blob);
-        objectUrlCache.set(path, objectUrl);
-        if (shouldRefreshAccessedAt(existingRecord.accessedAt)) {
-          void putRecord({
-            ...existingRecord,
-            accessedAt: new Date().toISOString()
-          });
-        }
-
-        return objectUrl;
-      }
+      const storedObjectUrl = await loadCachedMediaObjectUrl(path);
+      if (storedObjectUrl) return storedObjectUrl;
 
       const sourceUrl = buildMediaSourceUrl(path);
       const response = await fetch(sourceUrl, {

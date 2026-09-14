@@ -1,4 +1,6 @@
 import {
+  activeGroupCalls,
+  ACTIVE_CALL_SESSION_STORAGE_KEY,
   activeCallFormattedTime,
   activeCallParticipantCount,
   activeCallTopicId,
@@ -130,6 +132,20 @@ export const syncServerActiveCalls = async (
   }>,
   replace = true
 ) => {
+  // Пустой список не требует SDK звонков; сохранённый звонок всё ещё восстанавливаем.
+  if (
+    calls.length === 0 &&
+    Object.keys(activeGroupCalls.value).length === 0 &&
+    !isCallActive.value &&
+    !isAnyCallIncoming.value &&
+    !isAnyCallDialing.value &&
+    !activeCallTopicId.value &&
+    !hasPendingGroupCall.value &&
+    !invitedGroupCallInfo.value &&
+    (typeof window === 'undefined' ||
+      !window.localStorage.getItem(ACTIVE_CALL_SESSION_STORAGE_KEY))
+  )
+    return;
   const { syncActiveCalls } = await loadLiveKit();
 
   return syncActiveCalls(calls, replace);

@@ -1033,12 +1033,13 @@ const profileUpdateDescription = computed(() => {
   return 'Нажмите, чтобы проверить доступные обновления';
 });
 
-preloadNotoEmojiAssets(
-  [...statusPresets.value.map(option => option.icon), '🦄'],
-  {
-    highPriority: true
-  }
-);
+watch(isStatusMenuOpen, isOpen => {
+  if (isOpen)
+    preloadNotoEmojiAssets(
+      [...statusPresets.value.map(option => option.icon), '🦄'],
+      { highPriority: true }
+    );
+});
 
 const canSaveCustomStatus = computed(
   () =>

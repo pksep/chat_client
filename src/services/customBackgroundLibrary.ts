@@ -42,6 +42,7 @@ export class CustomBackgroundLibrary {
   private owners = new Map<string, string>();
   private queue: Promise<unknown> = Promise.resolve();
   private refreshing: Promise<void> | null = null;
+  private refreshedAt = 0;
 
   constructor(
     private kind: CustomBackgroundKind,
@@ -52,6 +53,7 @@ export class CustomBackgroundLibrary {
   configure(scope: string | null, api?: CustomBackgroundApi) {
     this.session = scope && api ? { scope, api } : null;
     this.refreshing = null;
+    this.refreshedAt = 0;
     this.changed();
   }
 
@@ -80,8 +82,10 @@ export class CustomBackgroundLibrary {
     return owner === scope;
   }
 
-  refresh(): Promise<void> {
+  refresh(maxAgeMs = 0): Promise<void> {
     if (this.refreshing) return this.refreshing;
+    if (maxAgeMs > 0 && Date.now() - this.refreshedAt < maxAgeMs)
+      return Promise.resolve();
     const session = this.session;
     if (!session) return Promise.resolve();
     const operation = this.enqueue(async () => {
@@ -137,6 +141,7 @@ export class CustomBackgroundLibrary {
         }
       }
       if (firstError) throw firstError;
+      if (this.session === session) this.refreshedAt = Date.now();
     });
     this.refreshing = operation;
     void operation

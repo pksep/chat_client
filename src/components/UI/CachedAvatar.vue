@@ -1,15 +1,17 @@
 <template>
   <Avatar
     ref="avatarRef"
+    class="cached-avatar"
     v-bind="$attrs"
-    :url="shouldResolveAvatar ? resolvedUrl : ''"
+    :url="resolvedUrl"
     :alt="props.alt"
     :initials="props.initials"
     :caption="props.caption"
     :is-online="props.isOnline"
     :is-icon="props.isIcon"
     :class="{
-      'cached-avatar--extended-initials': hasExtendedFallbackInitials
+      'cached-avatar--extended-initials': hasExtendedFallbackInitials,
+      'cached-avatar--image-ready': isResolvedAvatarReady
     }"
     :data-cached-avatar-initials="
       hasExtendedFallbackInitials ? fallbackInitials : undefined
@@ -34,6 +36,10 @@ import {
   ensureMediaObjectUrl,
   getCachedMediaObjectUrl
 } from '../../services/useMediaBlobCache';
+import {
+  hasVerifiedAvatarUrl,
+  preloadAvatarImage
+} from '../../services/avatar-image-verification';
 import { observeViewportVisibility } from '../../services/useSharedViewportObserver';
 
 const props = withDefaults(
@@ -60,6 +66,8 @@ const props = withDefaults(
 );
 
 const resolvedUrl = ref('');
+const isResolvedAvatarReady = ref(false);
+let resolvedAvatarPath = '';
 const fallbackInitials = computed(() =>
   Array.from(props.initials.trim().replace(/\s+/g, ''))
     .slice(0, props.fallbackInitialsLength)
@@ -91,22 +99,10 @@ let avatarRequestVersion = 0;
 let isUnmounted = false;
 const AVATAR_LOAD_ROOT_MARGIN_PX = 1800;
 
-const isAbsoluteOrLocalUrl = (path?: string | null): boolean =>
-  !!path && /^(blob:|data:|https?:\/\/|file:\/\/|\/)/i.test(path);
-
-/** Проверяет изображение до его показа, чтобы браузер не рисовал битую иконку. */
-const waitForAvatarImage = (url: string): Promise<boolean> =>
-  new Promise(resolve => {
-    if (typeof Image === 'undefined') {
-      resolve(true);
-      return;
-    }
-
-    const image = new Image();
-    image.onload = () => resolve(true);
-    image.onerror = () => resolve(false);
-    image.src = url;
-  });
+const isLocalUrl = (path?: string | null): boolean =>
+  !!path && /^(blob:|data:|file:\/\/)/i.test(path);
+const canRenderAvatarSynchronously = (url: string): boolean =>
+  hasVerifiedAvatarUrl(url) || isLocalUrl(url);
 
 const resolveAvatar = async (
   path: string | null | undefined,
@@ -114,13 +110,64 @@ const resolveAvatar = async (
 ): Promise<void> => {
   const requestVersion = ++avatarRequestVersion;
 
+  if (!path) {
+    resolvedUrl.value = '';
+    isResolvedAvatarReady.value = false;
+    resolvedAvatarPath = '';
+    return;
+  }
+
+  if (resolvedAvatarPath && resolvedAvatarPath !== path) {
+    resolvedUrl.value = '';
+    isResolvedAvatarReady.value = false;
+    resolvedAvatarPath = '';
+  }
+
+  if (!shouldResolve) {
+    return;
+  }
+
+  const synchronousCandidateUrl = isLocalUrl(path)
+    ? path
+    : getCachedMediaObjectUrl(path) ||
+      (hasVerifiedAvatarUrl(path) ? path : '');
+
+  if (
+    synchronousCandidateUrl &&
+    canRenderAvatarSynchronously(synchronousCandidateUrl)
+  ) {
+    resolvedUrl.value = synchronousCandidateUrl;
+    resolvedAvatarPath = path;
+    isResolvedAvatarReady.value = hasVerifiedAvatarUrl(
+      synchronousCandidateUrl
+    );
+    if (isResolvedAvatarReady.value) return;
+
+    const isImageReady = await preloadAvatarImage(synchronousCandidateUrl);
+    if (
+      isUnmounted ||
+      requestVersion !== avatarRequestVersion ||
+      props.path !== path
+    ) {
+      return;
+    }
+    if (!isImageReady) {
+      resolvedUrl.value = '';
+      isResolvedAvatarReady.value = false;
+      resolvedAvatarPath = '';
+      return;
+    }
+
+    isResolvedAvatarReady.value = true;
+    return;
+  }
+
   // Инициалы остаются базовым состоянием до подтверждённой загрузки картинки.
   resolvedUrl.value = '';
-  if (!shouldResolve || !path) return;
+  isResolvedAvatarReady.value = false;
 
-  const candidateUrl = isAbsoluteOrLocalUrl(path)
-    ? path
-    : getCachedMediaObjectUrl(path) || (await ensureMediaObjectUrl(path));
+  const candidateUrl =
+    synchronousCandidateUrl || (await ensureMediaObjectUrl(path));
 
   if (
     !candidateUrl ||
@@ -131,7 +178,13 @@ const resolveAvatar = async (
     return;
   }
 
-  const isImageReady = await waitForAvatarImage(candidateUrl);
+  if (hasVerifiedAvatarUrl(candidateUrl)) {
+    resolvedUrl.value = candidateUrl;
+    isResolvedAvatarReady.value = true;
+    return;
+  }
+
+  const isImageReady = await preloadAvatarImage(candidateUrl);
   if (
     !isImageReady ||
     isUnmounted ||
@@ -142,6 +195,8 @@ const resolveAvatar = async (
   }
 
   resolvedUrl.value = candidateUrl;
+  resolvedAvatarPath = path;
+  isResolvedAvatarReady.value = true;
 };
 
 const syncDeferredVisibility = async (): Promise<void> => {
@@ -201,6 +256,18 @@ onBeforeUnmount(() => {
 </script>
 
 <style>
+.avatar-yui-kit.cached-avatar .avatar-yui-kit__image {
+  transition: none;
+}
+
+.avatar-yui-kit.cached-avatar--image-ready .avatar-yui-kit__image {
+  opacity: 1;
+}
+
+.avatar-yui-kit.cached-avatar--image-ready .avatar-yui-kit__fallback {
+  display: none;
+}
+
 .avatar-yui-kit.cached-avatar--extended-initials:has(
     .avatar-yui-kit__fallback
   )::before {

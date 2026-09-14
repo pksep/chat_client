@@ -31,7 +31,9 @@ const getNotoEmojiFontUrl = (fileName: string): string =>
 const escapeCssUrl = (value: string): string =>
   value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '');
 
-export const installNotoEmojiFontFaces = (): void => {
+export const installNotoEmojiFontFaces = (
+  options: { preferSystemFont?: boolean } = {}
+): void => {
   if (
     typeof document === 'undefined' ||
     document.getElementById(NOTO_EMOJI_FONT_STYLE_ID)
@@ -40,23 +42,27 @@ export const installNotoEmojiFontFaces = (): void => {
   }
 
   const style = document.createElement('style');
+  // Android уже содержит Noto: не скачиваем многомегабайтные копии шрифта.
+  const localSource = options.preferSystemFont
+    ? "local('Noto Color Emoji'), local('NotoColorEmoji'), "
+    : '';
   style.id = NOTO_EMOJI_FONT_STYLE_ID;
   style.textContent = `
 @font-face {
   font-family: 'Noto Emoji COLRv1 Web';
-  src: url("${escapeCssUrl(getNotoEmojiFontUrl('Noto-COLRv1.ttf'))}") format('truetype');
+  src: ${localSource}url("${escapeCssUrl(getNotoEmojiFontUrl('Noto-COLRv1.ttf'))}") format('truetype');
   font-display: swap;
 }
 
 @font-face {
   font-family: 'Noto Emoji Compat Web';
-  src: url("${escapeCssUrl(getNotoEmojiFontUrl('Noto-COLRv1-emojicompat.ttf'))}") format('truetype');
+  src: ${localSource}url("${escapeCssUrl(getNotoEmojiFontUrl('Noto-COLRv1-emojicompat.ttf'))}") format('truetype');
   font-display: swap;
 }
 
 @font-face {
   font-family: 'Noto Emoji Windows Web';
-  src: url("${escapeCssUrl(getNotoEmojiFontUrl('NotoColorEmoji_WindowsCompatible.ttf'))}") format('truetype');
+  src: ${localSource}url("${escapeCssUrl(getNotoEmojiFontUrl('NotoColorEmoji_WindowsCompatible.ttf'))}") format('truetype');
   font-display: swap;
 }
 
