@@ -3,6 +3,7 @@
     ref="inputContainerRef"
     class="chat__input emoji-font-host"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
+    @pointerdown.capture="handleContentEditorPointerDown"
     @click.capture="handleContentEditorPopoverClick"
   >
     <div :data-testid="`${props.dataTestid}-MessageList-ContentEditor`">
@@ -456,6 +457,20 @@ const contentEditorRef =
   useTemplateRef<typeof ContentEditor>('contentEditorRef');
 const inputContainerRef = useTemplateRef<HTMLElement>('inputContainerRef');
 const isTauriFileDragging = ref(false);
+
+const handleContentEditorPointerDown = (event: PointerEvent): void => {
+  const target = event.target;
+
+  if (
+    !(target instanceof HTMLInputElement) ||
+    !target.closest('.emoji-picker .v3-search')
+  ) {
+    return;
+  }
+
+  event.stopPropagation();
+  target.focus({ preventScroll: true });
+};
 
 const handleContentEditorPopoverClick = (event: MouseEvent): void => {
   const root = inputContainerRef.value;
