@@ -129,8 +129,7 @@ const resolveAvatar = async (
 
   const synchronousCandidateUrl = isLocalUrl(path)
     ? path
-    : getCachedMediaObjectUrl(path) ||
-      (hasVerifiedAvatarUrl(path) ? path : '');
+    : getCachedMediaObjectUrl(path) || (hasVerifiedAvatarUrl(path) ? path : '');
 
   if (
     synchronousCandidateUrl &&
@@ -138,9 +137,7 @@ const resolveAvatar = async (
   ) {
     resolvedUrl.value = synchronousCandidateUrl;
     resolvedAvatarPath = path;
-    isResolvedAvatarReady.value = hasVerifiedAvatarUrl(
-      synchronousCandidateUrl
-    );
+    isResolvedAvatarReady.value = hasVerifiedAvatarUrl(synchronousCandidateUrl);
     if (isResolvedAvatarReady.value) return;
 
     const isImageReady = await preloadAvatarImage(synchronousCandidateUrl);

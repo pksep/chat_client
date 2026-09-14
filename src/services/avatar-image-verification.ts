@@ -10,10 +10,7 @@ const pendingAvatarImages = new Map<string, Promise<boolean>>();
 export const hasVerifiedAvatarUrl = (url: string): boolean =>
   readyAvatarImages.has(url);
 
-const retainReadyAvatarImage = (
-  url: string,
-  image: HTMLImageElement
-): void => {
+const retainReadyAvatarImage = (url: string, image: HTMLImageElement): void => {
   readyAvatarImages.delete(url);
   readyAvatarImages.set(url, image);
 
