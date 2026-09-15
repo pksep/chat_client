@@ -64,6 +64,7 @@
       <Modal
         :open="isUserInfoOpen"
         class="chat__user-info-modal"
+        position="right"
         width="404px"
         @close="closeUserInfo"
       >

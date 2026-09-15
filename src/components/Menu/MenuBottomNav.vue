@@ -2,7 +2,11 @@
   <nav
     v-if="authUser"
     ref="bottomNavRef"
-    :class="['menu-bottom-nav', $attrs.class]"
+    :class="[
+      'menu-bottom-nav',
+      { 'menu-bottom-nav--clients': managerAllowed },
+      $attrs.class
+    ]"
     :data-testid="`${props.dataTestid}-MenuBottomNav-Container`"
   >
     <button
@@ -26,6 +30,20 @@
     >
       <span class="menu-bottom-nav__icon-shell" aria-hidden="true">
         <Icon :name="IconNameEnum.calls" class="menu-bottom-nav__icon" />
+      </span>
+    </button>
+
+    <button
+      v-if="managerAllowed && isSectionVisible('clients')"
+      type="button"
+      :class="getButtonClass('clients')"
+      :data-testid="`${props.dataTestid}-MenuBottomNav-Clients`"
+      aria-label="Клиенты"
+      title="Клиенты"
+      @click="handleSection('clients')"
+    >
+      <span class="menu-bottom-nav__icon-shell" aria-hidden="true">
+        <Icon :name="IconNameEnum.headset" class="menu-bottom-nav__icon" />
       </span>
     </button>
 
@@ -151,7 +169,13 @@ import {
   useChatMenu
 } from '../../composables/useChatMenu';
 import { getAuthUser } from '../../composables/useAuth';
+import { getTopicList } from '../../composables/useTopics';
 import { Icon, IconNameEnum } from '@pksep/yui';
+import {
+  isClientTopic,
+  useManagerInquiries,
+  useManagerInboxSubscription
+} from '../../composables/useManagerInquiries';
 import AiAvatar from '../AI/AiAvatar.vue';
 import AIActivityPanel from '../AI/AIActivityPanel.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
@@ -183,6 +207,8 @@ defineOptions({
 });
 
 const { activeSection, setActiveSection } = useChatMenu();
+const { allowed: managerAllowed } = useManagerInquiries();
+useManagerInboxSubscription();
 const { backgroundActivities, selectSession } = useAiAssistant();
 const route = useUrlWatcher();
 const isAiMenuEnabled = true;
@@ -273,6 +299,19 @@ const handleActivitySelect = (sessionId: string): void => {
 
 const handleSection = (section: ChatMenuSection): void => {
   setActiveSection(section);
+
+  const selectedTopic = getTopicList().find(
+    topic => topic.id === route.value.id
+  );
+  const selectedClient = isClientTopic(selectedTopic);
+  if (
+    route.value.id &&
+    ((section === 'clients' && !selectedClient) ||
+      (section === 'chats' && selectedClient))
+  ) {
+    navigateToDefault();
+    return;
+  }
 
   if (section === 'ai') {
     const isMobile = window.matchMedia('(max-width: 768px)').matches;

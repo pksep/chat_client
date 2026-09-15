@@ -1,8 +1,9 @@
 <template>
   <template v-if="mediaFiles.length > 0">
     <div class="message-bubble-stack">
-      <article
-        ref="mediaArticleRef"
+      <ChatMessageSurface
+        unstyled
+        ref="mediaSurfaceRef"
         :class="messageArticleStyles"
         :style="articleInlineStyle"
         :data-testid="`${props.dataTestid}-Article`"
@@ -174,7 +175,7 @@
             </div>
           </div>
         </div>
-      </article>
+      </ChatMessageSurface>
 
       <div
         v-if="props.reactions?.length && !hasInlineCaption"
@@ -189,6 +190,7 @@
 </template>
 
 <script setup lang="ts">
+import { ChatMessageSurface } from '@pksep/yui';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { MediaType } from '@pksep/zod-shared-chat';
 import MessageStatusIcons from './MessageStatusIcons.vue';
@@ -271,7 +273,10 @@ const articleInlineStyle = computed(() => {
     minWidth: `${singleMediaPreviewWidth.value}px`
   };
 });
-const mediaArticleRef = ref<HTMLElement | null>(null);
+const mediaSurfaceRef = ref<InstanceType<typeof ChatMessageSurface> | null>(
+  null
+);
+const mediaArticleRef = computed(() => mediaSurfaceRef.value?.element ?? null);
 const syncMentions = async (): Promise<void> => {
   if (!hasMessageInteractivityCandidates(props.message)) {
     return;

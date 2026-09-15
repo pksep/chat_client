@@ -33,15 +33,25 @@
       />
     </div>
     <div :class="messageArticlesStyles">
+      <ClientMessageDelivery
+        v-if="props.messageId && props.topicId"
+        :message-id="props.messageId"
+        :topic-id="props.topicId"
+        :ex="props.messageEx"
+      />
       <MessageBubbleText
         v-if="shouldRenderStandaloneText"
         v-bind="props"
+        :is-read="hasExternalChannel ? false : props.isRead"
+        :message-status="hasExternalChannel ? undefined : props.messageStatus"
         @navigate-message="handleNavigateMessage"
       />
 
       <MessageBubbleFiles
         v-if="!props.loader && docFiles.length > 0"
         v-bind="props"
+        :is-read="hasExternalChannel ? false : props.isRead"
+        :message-status="hasExternalChannel ? undefined : props.messageStatus"
         @navigate-message="handleNavigateMessage"
         @set-slider="setSliderElement"
       />
@@ -49,6 +59,8 @@
       <MessageBubbleMedia
         v-if="!props.loader && mediaFiles.length > 0"
         v-bind="props"
+        :is-read="hasExternalChannel ? false : props.isRead"
+        :message-status="hasExternalChannel ? undefined : props.messageStatus"
         @navigate-message="handleNavigateMessage"
         @set-slider="setSliderElement"
       />
@@ -102,6 +114,8 @@ import { MediaType } from '@pksep/zod-shared-chat';
 import { IMedia } from '../interfaces/interfaces';
 import MessageContextMenu from './MessageContextMenu.vue';
 import MessageBubbleText from './MessageBubbleText.vue';
+import ClientMessageDelivery from '../Clients/ClientMessageDelivery.vue';
+import { hasExternalMessageChannel } from '../../utils/managerMessageChannel';
 import MessageBubbleFiles from './MessageBubbleFiles.vue';
 import MessageBubbleMedia from './MessageBubbleMedia.vue';
 import { useMessageMedia } from './composables/useMessageMedia';
@@ -125,6 +139,11 @@ import { parseCallTopicDefaultMessageEx } from '../../utils/call-topic';
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
   media: () => []
+});
+
+// Прочтение другим менеджером не подтверждает прочтение клиентом площадки.
+const hasExternalChannel = computed(() => {
+  return hasExternalMessageChannel(props.messageEx);
 });
 
 const emits = defineEmits([

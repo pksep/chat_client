@@ -1,4 +1,22 @@
 /* Общая сетка разделов. Свёрнутая desktop-панель сохраняет свою разметку. */
+.menu__start:has(> .clients-panel) {
+  grid-template-rows: minmax(0, 1fr);
+  align-content: stretch;
+  overflow: hidden;
+}
+
+.menu .clients-panel > .chats-toolbar {
+  flex-shrink: 0;
+}
+
+.menu .clients-panel > .contact-list {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  align-content: start;
+  overflow-y: auto;
+}
+
 .menu:not(.menu--collapse),
 .mobile-list-container {
   --menu-section-heading-height: 35px;

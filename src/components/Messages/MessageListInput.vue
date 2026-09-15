@@ -6,6 +6,7 @@
     @pointerdown.capture="handleContentEditorPointerDown"
     @click.capture="handleContentEditorPopoverClick"
   >
+    <ClientReplyRoutes v-if="props.topicId" :topic-id="props.topicId" />
     <div :data-testid="`${props.dataTestid}-MessageList-ContentEditor`">
       <ContentEditor
         :active-send="props.forwardMessages.length > 0 || props.allowEmptySend"
@@ -187,6 +188,7 @@ import {
   SizesEnum
 } from '@pksep/yui';
 import EditIcon from '../UI/EditIcon.vue';
+import ClientReplyRoutes from '../Clients/ClientReplyRoutes.vue';
 import ForwardIcon from '../UI/ForwardIcon.vue';
 import { stripHtml } from '../../utils/stripHtml';
 import type { IMessage } from '../interfaces/interfaces';
@@ -221,6 +223,7 @@ import {
 } from '../../utils/searchMatch';
 
 interface Props {
+  topicId?: string;
   dataTestid: string;
   modelValue: string;
   editMessage: IMessage | null;

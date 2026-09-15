@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue';
 
-export type ChatMenuSection = 'chats' | 'calls' | 'ai' | 'profile';
+export type ChatMenuSection = 'chats' | 'calls' | 'clients' | 'ai' | 'profile';
 
 const activeSection = ref<ChatMenuSection>('chats');
 

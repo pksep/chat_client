@@ -75,7 +75,7 @@
         ]"
       >
         <Button
-          v-if="canCall"
+          v-if="canCall || clientInquiry"
           :type="ButtonTypeEnum.secondary"
           :size="SizesEnum.large"
           class="menu-info__secondary-button user-info-panel__action-button"
@@ -88,7 +88,7 @@
         </Button>
 
         <Button
-          v-if="canToggleMute"
+          v-if="canToggleMute && !clientInquiry"
           :type="ButtonTypeEnum.secondary"
           :size="SizesEnum.large"
           class="menu-info__secondary-button user-info-panel__action-button"
@@ -100,6 +100,28 @@
             class="user-info-panel__action-icon"
           />
           <span>{{ isMuted ? 'Звук выкл.' : 'Звук вкл.' }}</span>
+        </Button>
+
+        <Button
+          v-if="clientInquiry"
+          :type="ButtonTypeEnum.secondary"
+          :size="SizesEnum.large"
+          class="menu-info__secondary-button user-info-panel__action-button"
+          :disabled="!clientInquiry.erp_contact_id && clientDetails?.erpBusy"
+          data-testid="Client-ErpButton"
+          @click="clientDetails?.handleErp()"
+        >
+          <Icon
+            :name="
+              clientInquiry.erp_contact_id
+                ? IconNameEnum.externalLink
+                : IconNameEnum.addUser
+            "
+            class="user-info-panel__action-icon"
+          />
+          <span>{{
+            clientInquiry.erp_contact_id ? 'Открыть в СЭП' : 'Создать в СЭП'
+          }}</span>
         </Button>
 
         <Button
@@ -115,6 +137,13 @@
         </Button>
       </div>
 
+      <ClientDetails
+        v-if="clientInquiry"
+        :key="clientInquiry.id"
+        ref="clientDetails"
+        :inquiry="clientInquiry"
+      />
+
       <ProfileAttachmentsPanel
         v-if="directTopic?.id"
         :topic-id="directTopic.id"
@@ -127,7 +156,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -135,7 +164,13 @@ import {
   IconNameEnum,
   SizesEnum
 } from '@pksep/yui';
-import { navigateToDialogs } from '../composables/navigation';
+import { navigateToDialogs, navigateToGroup } from '../composables/navigation';
+import ClientDetails from './Clients/ClientDetails.vue';
+import {
+  useManagerInquiries,
+  clientUser
+} from '../composables/useManagerInquiries';
+import { useChatMenu } from '../composables/useChatMenu';
 import { getAuthUser } from '../composables/useAuth';
 import { useTopics } from '../composables/useTopics';
 import { useUserInfoModal } from '../composables/useUserInfoModal';
@@ -175,8 +210,20 @@ const { toggleMuteTopic } = useTopics();
 const { resolveDirectTopicByUserId, handleUserInfoOpenChat } =
   useUserInfoModal();
 
+const { byTopic: clientInquiries, inquiries } = useManagerInquiries();
+const { setActiveSection } = useChatMenu();
+const clientDetails = ref<InstanceType<typeof ClientDetails> | null>(null);
+const clientInquiry = computed(
+  () =>
+    clientInquiries.value.get(props.topic?.id || '') ||
+    inquiries.value.find(item => item.guest_user_id === props.user?.id)
+);
 const resolvedUser = computed(() =>
-  props.user?.id ? getUserById(props.user.id) || props.user : props.user || null
+  clientInquiry.value
+    ? clientUser(clientInquiry.value)
+    : props.user?.id
+      ? getUserById(props.user.id) || props.user
+      : props.user || null
 );
 const lastOnline = computed(() =>
   resolvedUser.value ? getUserLastOnline(resolvedUser.value) : null
@@ -186,6 +233,8 @@ const isCurrentUser = computed(
 );
 
 const directTopic = computed(() => {
+  if (clientInquiry.value && props.topic?.id === clientInquiry.value.topic_id)
+    return props.topic;
   if (!resolvedUser.value?.id) {
     return null;
   }
@@ -200,11 +249,19 @@ const directTopic = computed(() => {
   return resolveDirectTopicByUserId(resolvedUser.value.id);
 });
 
-const role = computed(() => parseUserEx(resolvedUser.value?.ex).erpRole);
+const role = computed(() =>
+  clientInquiry.value
+    ? clientInquiry.value.contacts?.email || ''
+    : parseUserEx(resolvedUser.value?.ex).erpRole
+);
 const isDeletedAccount = computed(() => isDeletedBotUser(resolvedUser.value));
 const isBotAccount = computed(() => isBotUser(resolvedUser.value));
 const isOnline = computed(
-  () => !isDeletedAccount.value && !isCurrentUser.value && !lastOnline.value
+  () =>
+    !clientInquiry.value &&
+    !isDeletedAccount.value &&
+    !isCurrentUser.value &&
+    !lastOnline.value
 );
 const isMuted = computed(() => !!directTopic.value?.info?.isMute);
 const canCall = computed(
@@ -212,7 +269,8 @@ const canCall = computed(
     !!resolvedUser.value?.id &&
     !isDeletedAccount.value &&
     !isCurrentUser.value &&
-    !isBotAccount.value
+    !isBotAccount.value &&
+    !clientInquiry.value
 );
 const canOpenChat = computed(
   () =>
@@ -221,11 +279,12 @@ const canOpenChat = computed(
 const canToggleMute = computed(
   () => !!directTopic.value?.id && !isDeletedAccount.value
 );
-const actionButtonCount = computed(
-  () =>
-    Number(canCall.value) +
-    Number(canToggleMute.value) +
-    Number(canOpenChat.value)
+const actionButtonCount = computed(() =>
+  clientInquiry.value
+    ? 3
+    : Number(canCall.value) +
+      Number(canToggleMute.value) +
+      Number(canOpenChat.value)
 );
 
 watch(
@@ -275,6 +334,13 @@ const handleToggleMute = () => {
 };
 
 const handleOpenChat = async () => {
+  if (clientInquiry.value) {
+    handleUserInfoOpenChat();
+    emits('close');
+    setActiveSection('clients');
+    navigateToGroup(clientInquiry.value.topic_id);
+    return;
+  }
   const targetUser = resolvedUser.value;
 
   if (!canOpenChat.value || !targetUser?.id) {
@@ -357,6 +423,12 @@ const handleOpenChat = async () => {
 .user-info-panel__identity {
   margin-top: 10px;
   text-align: center;
+}
+
+.user-info-panel__identity,
+.user-info-panel__identity :deep(*) {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .user-info-panel__name {
