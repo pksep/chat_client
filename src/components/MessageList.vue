@@ -446,6 +446,7 @@
   />
   <MessageListInput
     v-if="shouldRenderMessageComposer"
+    :topic-id="activeTopic?.id"
     :key="`${route.type}:${route.id || 'default'}`"
     v-model="inputText"
     ref="messageListInputRef"

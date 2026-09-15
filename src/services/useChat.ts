@@ -2271,6 +2271,31 @@ export const sendMessageChat = async (params: {
   const sdk = getChatSDK();
 
   try {
+    const { useManagerInquiries, managerRequest } = await import(
+      '../composables/useManagerInquiries'
+    );
+    const inquiry = useManagerInquiries().byTopic.value.get(params.topicId);
+    if (inquiry && !params.messageId) {
+      const ex = params.ex ? JSON.parse(params.ex) : {};
+      if (!ex.clientId || !ex.managerReplyRouteId || params.forwardMessageId)
+        return false;
+      const attachmentIds = (params.medias || []).map(media => {
+        const match = /^manager-private\/([0-9a-f-]{36})$/i.exec(
+          media.path || ''
+        );
+        if (!match) throw new Error('Вложение ещё не загружено в обращение');
+        return match[1];
+      });
+      await managerRequest(`inquiries/${inquiry.id}/messages`, {
+        operationId: ex.clientId,
+        routeId: ex.managerReplyRouteId,
+        html: params.text || '',
+        attachmentIds,
+        replyMessageId: params.replyMessageId,
+        ex
+      });
+      return true;
+    }
     if (!sdk) {
       return false;
     }
