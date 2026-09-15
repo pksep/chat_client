@@ -298,7 +298,9 @@ test('передаёт прикреплённый документ AI-агент
   });
   expect(outsidePicker).toBeDefined();
   await attachModal.click({ position: outsidePicker! });
-  await expect(emojiPicker).toBeHidden();
+  await expect(emojiPicker).toHaveAttribute('aria-hidden', 'true');
+  await expect(emojiPicker).toHaveCSS('opacity', '0');
+  await expect(emojiPicker).toHaveCSS('pointer-events', 'none');
 
   await page.locator('.attach-modal button.primary-yui-kit.right').click();
   await expect.poll(() => mastraPayloads.length).toBe(1);
