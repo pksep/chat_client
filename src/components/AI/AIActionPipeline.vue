@@ -144,5 +144,8 @@ const isRunning = (step: Step) =>
   min-width: 0;
   font-size: 14px;
   line-height: 24px;
+  cursor: text;
+  -webkit-user-select: text;
+  user-select: text;
 }
 </style>

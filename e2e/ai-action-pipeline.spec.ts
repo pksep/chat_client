@@ -102,6 +102,118 @@ const makePlan = (requestId: string): AiActionTask => ({
     }))
   ]
 });
+
+for (const kind of ['answer', 'completed-plan', 'partial-plan']) {
+  test(`текст AI-сообщения можно выделить и скопировать целиком или фрагментом: ${kind}`, async ({
+    page
+  }, info) => {
+    const sessionId = `copy-${kind}-${Date.now()}`;
+    await prepare(page, sessionId);
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          writeText: async (text: string) => {
+            (window as any).__aiCopiedText = text;
+          }
+        }
+      });
+    });
+    const answer = 'Ответ для копирования\nВторая строка';
+    const plan = makePlan('copy-request');
+    plan.approved = true;
+    plan.status = kind === 'partial-plan' ? 'partial' : 'completed';
+    plan.completed = kind === 'partial-plan' ? 2 : 3;
+    plan.steps.forEach(step => {
+      step.status = 'completed';
+    });
+    plan.steps[2].title = 'Прикрепить report.xlsx';
+    if (kind === 'partial-plan') {
+      plan.steps[1].status = 'failed';
+      plan.steps[1].message = 'Не удалось загрузить файл.';
+      plan.steps[1].resolution = 'Повторите запрос позже.';
+    }
+    await page.route('**/action-tasks/**', route => {
+      expect(route.request().method()).toBe('GET');
+      return route.fulfill({
+        json: { tasks: kind === 'answer' ? [] : [plan] }
+      });
+    });
+    await page.route('**/api/agents/generalAgent/stream*', route =>
+      route.fulfill({
+        contentType: 'text/event-stream',
+        body: `data: ${JSON.stringify({ type: 'text-delta', payload: { text: answer } })}\n\ndata: ${JSON.stringify({ type: 'finish' })}\n\n`
+      })
+    );
+    await page.goto(`/ai/${sessionId}`);
+    if (kind === 'answer') await send(page, 'Ответь кратко');
+    const message = page.locator('.ai-assistant__message--assistant').first();
+    const text = message.locator(
+      kind === 'answer'
+        ? '.message-content__html'
+        : '[data-step="create"] .ai-action-pipeline__copy'
+    );
+    await expect(text).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('#startup-shell')).toHaveCount(0, {
+      timeout: 30_000
+    });
+    expect(
+      await text.evaluate(element => getComputedStyle(element).userSelect)
+    ).toBe('text');
+    await text.dblclick({ position: { x: 12, y: 10 } });
+    const fragment = kind === 'answer' ? 'Ответ' : 'Создать';
+    await expect
+      .poll(() => page.evaluate(() => window.getSelection()?.toString().trim()))
+      .toBe(fragment);
+    // Проверяем штатный copy-обработчик, не меняя буфер обмена пользователя.
+    const copied = await text.evaluate(element => {
+      const data = new DataTransfer();
+      const event = new ClipboardEvent('copy', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: data
+      });
+      element.dispatchEvent(event);
+      return {
+        handled: event.defaultPrevented,
+        plain: data.getData('text/plain'),
+        html: data.getData('text/html')
+      };
+    });
+    expect(copied.handled).toBe(true);
+    expect(copied.plain.trim()).toBe(fragment);
+    expect(copied.html).toContain(fragment);
+    await text.click({ button: 'right', position: { x: 12, y: 10 } });
+    await page
+      .getByRole('button', { name: 'Копировать текст', exact: true })
+      .click();
+    await expect
+      .poll(() => page.evaluate(() => (window as any).__aiCopiedText))
+      .toBe(fragment);
+
+    await page.evaluate(() => window.getSelection()?.removeAllRanges());
+    await text.click({ button: 'right', position: { x: 12, y: 10 } });
+    await page
+      .getByRole('button', { name: 'Копировать текст', exact: true })
+      .click();
+    const expected =
+      kind === 'answer'
+        ? answer
+        : (kind === 'partial-plan'
+            ? 'Прикрепить image.png: Не удалось загрузить файл. Повторите запрос позже.\n\n'
+            : '') +
+          '1. Создать деталь\n2. Прикрепить image.png\n3. Прикрепить report.xlsx';
+    await expect
+      .poll(() => page.evaluate(() => (window as any).__aiCopiedText))
+      .toBe(expected);
+    await expect(page.locator('.ai-action-pipeline__actions')).toHaveCount(0);
+    await page.screenshot({
+      path: info.outputPath('copy-message.png'),
+      fullPage: true
+    });
+  });
+}
+
 async function send(
   page: Page,
   input = 'Создай деталь Дрон вымышленный 123-321 и прикрепи файлы'

@@ -109,6 +109,7 @@
           :data-is-me-sender="message.role === 'user'"
           @click="handleMessageSelectionClick(message, $event)"
           @contextmenu="handleMessageContextMenu(message, $event)"
+          @copy="copyMessageSelection"
         >
           <div
             :class="[
@@ -619,6 +620,7 @@ import {
   type VoicePlaybackSession
 } from '../../services/aiSpeech';
 import { stripHtml } from '../../utils/stripHtml';
+import { copyMessageSelection } from '../../utils/copyMessageSelection';
 import type { IMedia, ITopic } from '../interfaces/interfaces';
 import type { AiAssistantSession } from '../../composables/useAiAssistant';
 import ConfirmModal from '../UI/ConfirmModal.vue';

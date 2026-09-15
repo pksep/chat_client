@@ -783,6 +783,12 @@
   line-height: 20px;
 }
 
+.ai-assistant .ai-assistant__message .message-content__html,
+.ai-assistant .ai-assistant__message .message-content__html * {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .ai-assistant__approval {
   grid-column: 2;
   display: flex;
