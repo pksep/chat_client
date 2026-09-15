@@ -216,8 +216,8 @@ for (const theme of ['theme-light', 'theme-dark']) {
       const responseBox = await response.boundingBox();
       expect(responseBox!.x + responseBox!.width).toBeLessThanOrEqual(width);
       await page.getByTestId(`${HEADER}-PopoverIcon`).click();
-      // Общая шапка переключается на компьютерные кнопки начиная с 768 px.
-      if (width < 768) {
+      // Общая шапка использует мобильные кнопки до 768 px включительно.
+      if (width <= 768) {
         await expect(
           page.getByRole('button', { name: 'Поиск в чате', exact: true })
         ).toBeVisible();
@@ -228,7 +228,7 @@ for (const theme of ['theme-light', 'theme-dark']) {
       await expect(
         page.getByRole('button', { name: 'Удалить чат', exact: true })
       ).toBeVisible();
-      if (width < 768) {
+      if (width <= 768) {
         await page
           .getByRole('button', { name: 'Поиск в чате', exact: true })
           .click();
@@ -239,11 +239,11 @@ for (const theme of ['theme-light', 'theme-dark']) {
         ).toHaveCount(0);
         await page.getByTestId(`${HEADER}-SearchIcon`).click();
       }
-      const searchPrefix = width < 768 ? 'MobileSearch' : 'Search';
+      const searchPrefix = width <= 768 ? 'MobileSearch' : 'Search';
       await expect(
         page.getByTestId(`${HEADER}-${searchPrefix}Input`)
       ).toBeVisible();
-      if (width >= 768) {
+      if (width > 768) {
         await expect
           .poll(() =>
             page.locator('.chat--ai-route').evaluate(element => {

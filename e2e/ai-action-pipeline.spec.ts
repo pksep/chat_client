@@ -598,7 +598,11 @@ test('шаги остаются в своём сообщении и не пер�
   await page.goto(`/ai/${sessionId}`);
   await expect(page.getByTestId('AI-ActionPipeline')).toHaveCount(3);
   await send(page);
-  await expect(page.getByText('Это последний ответ в чате.')).toBeVisible();
+  await expect(
+    page.getByTestId(/^AI-Assistant-Message-.*-MessageText$/).filter({
+      hasText: 'Это последний ответ в чате.'
+    })
+  ).toBeVisible();
   await expect(page.getByTestId('AI-ActionPipeline')).toHaveCount(3);
   await expect(
     page.getByRole('button', { name: 'Подтвердить план' })
