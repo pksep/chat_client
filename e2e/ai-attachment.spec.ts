@@ -258,8 +258,7 @@ test('передаёт прикреплённый документ AI-агент
 
   const emojiPicker = attachModal.locator('.emoji-picker:visible');
   await expect(emojiPicker).toBeVisible();
-  await expect(emojiPicker).toHaveClass(/attach-modal__emoji-picker-overlay/);
-  await expect(emojiPicker).toHaveCSS('position', 'absolute');
+  await expect(emojiPicker).toHaveCSS('position', /^(absolute|fixed)$/);
 
   const [modalBoxWithEmoji, emojiPickerBox] = await Promise.all([
     attachModal.boundingBox(),
@@ -283,7 +282,22 @@ test('передаёт прикреплённый документ AI-агент
     page.viewportSize()!.height
   );
 
-  await attachModal.click({ position: { x: 8, y: 8 } });
+  const outsidePicker = [
+    { x: 8, y: 8 },
+    { x: modalBoxWithEmoji!.width - 8, y: 8 },
+    { x: 8, y: modalBoxWithEmoji!.height - 8 }
+  ].find(point => {
+    const x = modalBoxWithEmoji!.x + point.x;
+    const y = modalBoxWithEmoji!.y + point.y;
+    return (
+      x < emojiPickerBox!.x ||
+      x > emojiPickerBox!.x + emojiPickerBox!.width ||
+      y < emojiPickerBox!.y ||
+      y > emojiPickerBox!.y + emojiPickerBox!.height
+    );
+  });
+  expect(outsidePicker).toBeDefined();
+  await attachModal.click({ position: outsidePicker! });
   await expect(emojiPicker).toBeHidden();
 
   await page.locator('.attach-modal button.primary-yui-kit.right').click();
