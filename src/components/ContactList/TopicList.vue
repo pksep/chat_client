@@ -136,7 +136,8 @@
             <MessageStatusIcons
               v-if="
                 topic.lastMessage?.senderUserId === authedUser?.id &&
-                !topic.lastMessage?.isSystem
+                !topic.lastMessage?.isSystem &&
+                !hasExternalMessageChannel(topic.lastMessage?.ex)
               "
               :class="{
                 'contact-list__message-status-icons': true,
@@ -454,6 +455,7 @@
 </template>
 
 <script setup lang="ts">
+import { hasExternalMessageChannel } from '../../utils/managerMessageChannel';
 import {
   computed,
   nextTick,

@@ -95,7 +95,11 @@ const topics = computed(() => {
         (queue.value !== 'new' || !item.manager_ids.length) &&
         (queue.value !== 'mine' ||
           item.manager_ids.includes(getAuthUser()?.id || '')) &&
-        (!source.value || clientPlatform(item) === source.value) &&
+        (!source.value ||
+          (item.channels || [item.source?.channel || 'widget']).some(
+            channel =>
+              clientPlatform({ ...item, source: { channel } }) === source.value
+          )) &&
         (!query ||
           `${clientName(item)} ${item.contacts?.email || ''}`
             .toLocaleLowerCase('ru')

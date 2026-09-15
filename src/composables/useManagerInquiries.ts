@@ -7,6 +7,7 @@ import {
 import { getAuthToken } from './useLogin';
 import { getConfig } from '../services/useConfig';
 import { getTopicList } from './useTopics';
+import { clearManagerRoutes } from './useManagerRoutes';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
 
 export interface ManagerInquiry {
@@ -17,6 +18,7 @@ export interface ManagerInquiry {
   name: string;
   contacts: { name?: string; phone?: string; email?: string };
   source: { channel?: string; name?: string; pageUrl?: string };
+  channels?: string[];
   manager_ids: string[];
   assignee_id: string | null;
   note: string;
@@ -80,6 +82,7 @@ export async function managerRequest<T>(
         () => null
       );
       if (access?.allowed === false) {
+        clearManagerRoutes();
         allowed.value = false;
         inquiries.value = [];
         managers.value = [];
@@ -144,6 +147,7 @@ export async function refreshManagerInquiries(): Promise<void> {
       if (currentGeneration !== generation) return;
       allowed.value = access.allowed;
       if (!access.allowed) {
+        clearManagerRoutes();
         inquiries.value = [];
         managers.value = [];
         error.value = '';
@@ -223,6 +227,7 @@ export function useManagerInboxSubscription() {
       [() => authedUser.value?.id, () => getConfig().CHAT_API_DOMAIN],
       () => {
         generation++;
+        clearManagerRoutes();
         inquiries.value = [];
         managers.value = [];
         allowed.value = false;
@@ -253,6 +258,7 @@ export function useManagerInboxSubscription() {
     clearInterval(interval);
     clearTimeout(scheduled);
     generation++;
+    clearManagerRoutes();
     inquiries.value = [];
     managers.value = [];
     allowed.value = false;
