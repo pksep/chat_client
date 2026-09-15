@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h, ref } from 'vue';
+      import { ContentEditor } from '@pksep/yui';
+      import '@pksep/yui/styles';
+      createApp({
+        setup() {
+          const key = ref('one'),
+            draft = ref('Текст'),
+            sent = ref('');
+          const keyed =
+            new URLSearchParams(location.search).get('keyed') === '1';
+          return () =>
+            h('section', [
+              h(
+                'button',
+                { id: 'one', onClick: () => (key.value = 'one') },
+                'Первый черновик'
+              ),
+              h(
+                'button',
+                { id: 'two', onClick: () => (key.value = 'two') },
+                'Второй черновик'
+              ),
+              h('p', { id: 'sent' }, sent.value),
+              h(ContentEditor, {
+                modelValue: draft.value,
+                'onUpdate:modelValue': value => (draft.value = value),
+                attachmentDraftKey: keyed ? key.value : undefined,
+                activeAttachFile: true,
+                onUnmountSend: value => {
+                  sent.value = Array.from(value.files ?? [])
+                    .map(file => file.name)
+                    .join(',');
+                }
+              })
+            ]);
+        }
+      }).mount('#app');
+    </script>
+  </body>
+</html>

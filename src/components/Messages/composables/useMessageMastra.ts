@@ -3,6 +3,7 @@ import { generateUUID } from '../../../utils/generateUUID';
 import { removeMessageLoading } from '../../../services/useChatDb';
 import { RouteTypes } from '../../../composables/navigation/useUrlRouting';
 import type { AiAttachmentReference } from '../../../services/aiAttachments';
+import type { AiSubmissionResult } from '../../../services/aiSubmission';
 
 type MastraResult = {
   messages: Ref<any[]>;
@@ -11,14 +12,14 @@ type MastraResult = {
     onFinish?: () => void,
     abortSignal?: AbortSignal,
     attachments?: AiAttachmentReference[]
-  ) => Promise<void>;
+  ) => Promise<AiSubmissionResult>;
   clearMessages: () => void;
   isInitializing: Ref<boolean>;
 };
 
 const createDisabledMastraResult = (): MastraResult => ({
   messages: ref([]),
-  sendMessage: async () => {},
+  sendMessage: async () => ({ accepted: false, responseText: null }),
   clearMessages: () => {},
   isInitializing: ref(false)
 });

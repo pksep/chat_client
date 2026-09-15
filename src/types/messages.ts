@@ -1,7 +1,8 @@
 import type { Message as ChatSDKMessage } from '@pksep/zod-shared-chat';
-import type { AiAttachmentReference } from '../services/aiAttachments';
+import type { AiMessageAttachment } from '../services/aiAttachmentReferences';
 import type { AiOutputAttachment } from '../services/aiOutputAttachments';
 import type { PendingToolApproval } from '../services/mastraApproval';
+import type { AiActionTask } from '../services/aiActionTasks';
 
 export interface AIMessageReference {
   role: 'user' | 'assistant';
@@ -9,15 +10,19 @@ export interface AIMessageReference {
 }
 
 export interface AIMessage {
+  id?: string;
+  requestId?: string;
+  actionTask?: AiActionTask;
   role: 'user' | 'assistant';
   content: string;
   modelContent?: string;
   loading?: boolean;
   timestamp?: number;
   pinned?: boolean;
+  pinVersion?: number;
   replyTo?: AIMessageReference;
-  /** Временные ссылки на вложения сохраняются для повтора запроса после обновления страницы. */
-  attachments?: AiAttachmentReference[];
+  /** Описания исходников не исчезают вместе с временным доступом; перед отправкой доступ обновляется. */
+  attachments?: AiMessageAttachment[];
   /** Постоянные файлы, сформированные сервисами и доставленные AI через обычное медиа-хранилище чата. */
   outputAttachments?: AiOutputAttachment[];
   /** Источник фонового результата для защиты от повторного добавления. */

@@ -26,9 +26,10 @@ const INDEXED_DB_NAMES = [
   'chat-sync-shadow-db',
   'chat-topic-messages-db',
   'chat-offline-state-db',
-  'chat-media-blob-cache-db',
-  'chat-messages-db'
+  'chat-media-blob-cache-db'
 ];
+// chat-messages-db содержит пользовательскую историю ИИ и исходники поручений,
+// а не восстанавливаемый кэш. Сброс кэшей не должен удалять сообщения и вложения.
 
 const hasIndexedDb = () =>
   typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined';

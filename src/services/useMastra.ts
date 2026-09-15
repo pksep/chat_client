@@ -1,11 +1,35 @@
 import { ref, type Ref } from 'vue';
+import { observeAiSubmission, type AiSubmissionObserver } from './aiSubmission';
 import { MastraClient, RequestContext } from '@mastra/client-js';
-import { saveMessages, getOrCreateChatHistory } from './useChatDb';
+import {
+  saveMessages as saveChatMessages,
+  getChatHistorySnapshot
+} from './useChatDb';
+import {
+  fetchAiConversationState,
+  initializeAiConversation,
+  fetchAiConversationTranscript,
+  setAiConversationMessagePin,
+  mutateAiConversation,
+  resetAiConversation,
+  type AiConversationState,
+  type AiConversationReset,
+  type AiHistoryMutation
+} from './aiConversationHistory';
 import { AIMessage, type AIMessageReference } from '../types/messages';
+import {
+  aiMessagePresentationSchema,
+  type AiMessagePresentation
+} from './aiConversationTranscript';
 import { getConfig } from './useConfig';
 import { generateUUID } from '../utils/generateUUID';
 import { getAuthToken } from '../composables/useLogin';
-import { getAuthUser, getChatAuthSession } from '../composables/useAuth';
+import {
+  getAuthUser,
+  getChatAuthSession,
+  getStoredChatAccessToken
+} from '../composables/useAuth';
+import { showErrorNotification } from '../composables/useNotifications';
 import {
   approvalDecisionFromMessage,
   findPendingToolApproval,
@@ -16,10 +40,32 @@ import {
 } from './mastraApproval';
 import {
   getMastraToolError,
+  AI_TOOL_RESULT_UNCONFIRMED,
   processMastraEventStream
 } from './mastraEventStream';
-import type { AiAttachmentReference } from './aiAttachments';
+import {
+  refreshAiAttachments,
+  type AiAttachmentReference
+} from './aiAttachments';
 import { extractAiOutputAttachments } from './aiOutputAttachments';
+import { getAiErrorMessage } from './aiErrorMessages';
+import { validateAiAttachments } from './aiAttachmentLimits';
+import {
+  parseAiAttachmentReferences,
+  type AiMessageAttachment
+} from './aiAttachmentReferences';
+import {
+  createAiConversationView,
+  aiMessageRequestId
+} from './aiConversationView';
+import {
+  actionTaskFromEvent,
+  actionTaskSummary,
+  controlAiActionTask,
+  fetchAiActionTasks,
+  type AiActionTask,
+  type AiActionDecision
+} from './aiActionTasks';
 
 type Message = AIMessage;
 
@@ -29,6 +75,7 @@ interface UseMastraOptions {
   baseUrl?: string;
   approvalMode?: Ref<'ask' | 'automatic'>;
   responseMode?: Ref<'quick' | 'advanced'>;
+  initializeServerHistory?: boolean;
 }
 
 interface ToolApprovalRequestError extends Error {
@@ -36,76 +83,22 @@ interface ToolApprovalRequestError extends Error {
   stale: boolean;
 }
 
-const getAiErrorMessage = (
-  error: unknown,
-  fallback = 'Сервис временно недоступен. Попробуйте ещё раз.'
-): string => {
-  const errorRecord =
-    error && typeof error === 'object'
-      ? (error as Record<string, unknown>)
-      : null;
-  const rawMessage =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : typeof errorRecord?.message === 'string'
-          ? errorRecord.message
-          : '';
-  const status = Number(errorRecord?.status || 0);
-
-  if (/timeout|timed out|deadline exceeded/i.test(rawMessage)) {
-    return 'Время ожидания ответа истекло. Попробуйте ещё раз.';
-  }
-  if (
-    /network error|failed to fetch|fetch failed|connection/i.test(rawMessage)
-  ) {
-    return 'Не удалось подключиться к сервису. Проверьте соединение и попробуйте ещё раз.';
-  }
-  if (
-    status === 401 ||
-    /authentication required|authentication failed|unauthorized|\b401\b/i.test(
-      rawMessage
-    )
-  ) {
-    return 'Сессия авторизации истекла. Войдите в систему повторно.';
-  }
-  if (status === 403 || /access forbidden|\b403\b/i.test(rawMessage)) {
-    return 'Недостаточно прав для выполнения запроса.';
-  }
-  if (status === 429 || /too many requests|\b429\b/i.test(rawMessage)) {
-    return 'Слишком много запросов. Попробуйте немного позже.';
-  }
-  if (/V2 models/i.test(rawMessage)) {
-    return 'Эта версия модели не поддерживается. Выберите другую модель.';
-  }
-  if (
-    status >= 500 ||
-    /server error|service unavailable|\b5\d\d\b/i.test(rawMessage)
-  ) {
-    return 'Сервис временно недоступен. Попробуйте ещё раз позже.';
-  }
-  if (/unexpected token|parsing|parse error/i.test(rawMessage)) {
-    return 'Не удалось обработать ответ сервиса. Попробуйте ещё раз.';
-  }
-  if (/stream/i.test(rawMessage)) {
-    return 'Соединение с сервисом прервалось. Попробуйте ещё раз.';
-  }
-  if (errorRecord?.name === 'AbortError') {
-    return 'Запрос был отменён.';
-  }
-  if (/[А-Яа-яЁё]/.test(rawMessage)) return rawMessage;
-
-  return fallback;
-};
-
 const useMastra = (options?: UseMastraOptions | false) => {
   if (!options) {
     return {
       messages: ref<Message[]>([]),
-      sendMessage: async () => {},
-      resolveToolApproval: async () => {},
+      sendMessage: async () => ({ accepted: false, responseText: null }),
+      resolveToolApproval: async () => ({
+        accepted: false,
+        responseText: null
+      }),
+      resolveActionTask: async () => {},
+      taskBusy: ref(false),
+      historyBusy: ref(false),
+      preparationStatus: ref('Подготавливаю ответ'),
       clearMessages: async () => {},
+      deleteConversation: async () => {},
+      dispose: () => {},
       toggleMessagePin: async () => {},
       deleteMessages: async () => {},
       editMessageAndResend: async () => {},
@@ -126,9 +119,206 @@ const useMastra = (options?: UseMastraOptions | false) => {
   const isInitializing = ref(!!chatId);
   const pendingApproval = ref<PendingToolApproval | null>(null);
   const lastError = ref<string | null>(null);
+  const taskBusy = ref(false);
+  const preparationStatus = ref('Подготавливаю ответ');
+  const historyBusy = ref(false);
+  let conversationGeneration: number | undefined;
+  let conversationProtocol: 0 | 1 = 0;
+  // После обнаружения серверной истории сбой её чтения не разрешает отправить старый клиентский снимок.
+  let serverHistoryGeneration: number | undefined;
+  let transcriptController: AbortController | undefined;
+  let conversationDeleted = false;
+  let historySnapshotLoaded = !chatId;
+  let historySnapshotPromise: Promise<void> | undefined;
+  const historyLoadError =
+    'Не удалось загрузить историю чата. Сообщения не изменены. Попробуйте ещё раз.';
+  let pendingReset:
+    | (AiConversationReset & { action: 'clear' | 'delete' })
+    | undefined;
+  let pendingMutation:
+    | Extract<AiHistoryMutation, { action: 'delete' }>
+    | undefined;
+  let pendingEdit:
+    | {
+        operation: Extract<AiHistoryMutation, { action: 'edit' }>;
+        identity: string;
+      }
+    | undefined;
+  const saveMessages = (id: string, history: Message[]) => {
+    if (!historySnapshotLoaded)
+      return Promise.reject(new Error(historyLoadError));
+    return saveChatMessages(
+      id,
+      history,
+      conversationGeneration ?? 0,
+      conversationProtocol
+    );
+  };
+  let taskPollTimer: ReturnType<typeof setTimeout> | undefined;
+  let taskRefreshPending = false;
+  const taskDecisions = new Set<string>();
+  let disposed = false;
+  let historyVersion = 0;
+  let activeResponse:
+    | {
+        messageId: string;
+        requestId?: string;
+        controller: AbortController;
+      }
+    | undefined;
+
+  const invalidateResponse = () => {
+    const previous = activeResponse;
+    activeResponse = undefined;
+    previous?.controller.abort();
+    if (previous)
+      messages.value = messages.value.map(message =>
+        message.id === previous.messageId
+          ? { ...message, loading: false }
+          : message
+      );
+  };
+
+  /** Закрывает только клиентское чтение; уже принятые сервером действия не отменяет. */
+  const dispose = () => {
+    disposed = true;
+    historyVersion += 1;
+    clearTimeout(taskPollTimer);
+    transcriptController?.abort();
+    invalidateResponse();
+  };
+
+  const applyActionTask = async (
+    task: AiActionTask,
+    preferredMessageId?: string
+  ) => {
+    if (disposed) return;
+    let index = messages.value.findIndex(
+      message => message.actionTask?.id === task.id
+    );
+    if (index < 0 && preferredMessageId)
+      index = messages.value.findIndex(
+        message =>
+          message.id === preferredMessageId &&
+          message.role === 'assistant' &&
+          message.requestId === task.requestId
+      );
+    if (index < 0)
+      index = messages.value.findLastIndex(
+        message =>
+          message.role === 'assistant' && message.requestId === task.requestId
+      );
+    if (
+      index >= 0 &&
+      (messages.value[index].actionTask?.version ?? 0) >= task.version
+    )
+      return;
+    const next = [...messages.value];
+    if (index < 0) {
+      index = next.length;
+      next.push({
+        id: generateUUID(),
+        role: 'assistant',
+        content: '',
+        timestamp: task.createdAt,
+        requestId: task.requestId
+      });
+    }
+    next[index] = {
+      ...next[index],
+      actionTask: task,
+      content: actionTaskSummary(task)
+    };
+    messages.value = next;
+    if (chatId) await saveMessages(chatId, next);
+  };
+  const refreshActionTasks = async () => {
+    if (disposed || !chatId || taskRefreshPending) return;
+    const version = historyVersion;
+    taskRefreshPending = true;
+    try {
+      const tasks = await fetchAiActionTasks(baseUrl, chatId);
+      if (tasks)
+        for (const task of [...tasks].reverse()) {
+          if (disposed || version !== historyVersion) return;
+          await applyActionTask(task);
+        }
+    } catch (error) {
+      if (disposed || version !== historyVersion) return;
+      if (messages.value.some(message => message.actionTask))
+        lastError.value = getAiErrorMessage(error);
+    } finally {
+      taskRefreshPending = false;
+    }
+  };
+  const pollActionTasks = () => {
+    clearTimeout(taskPollTimer);
+    if (disposed) return;
+    taskPollTimer = setTimeout(
+      async () => {
+        const version = historyVersion;
+        await refreshActionTasks();
+        if (disposed || version !== historyVersion) return;
+        if (
+          taskBusy.value ||
+          messages.value.some(
+            message =>
+              message.actionTask &&
+              ['running', 'needs_review'].includes(message.actionTask.status)
+          )
+        )
+          pollActionTasks();
+      },
+      messages.value.some(
+        message => message.actionTask?.status === 'needs_review'
+      ) && !taskBusy.value
+        ? 3000
+        : 1000
+    );
+  };
+  const resolveActionTask = async (id: string, decision: AiActionDecision) => {
+    const decisionKey = `${id}:${decision}`;
+    if (
+      !chatId ||
+      disposed ||
+      taskDecisions.has(decisionKey) ||
+      (taskBusy.value && decision !== 'cancel')
+    )
+      return;
+    const task = messages.value.find(
+      message => message.actionTask?.id === id
+    )?.actionTask;
+    if (!task) return;
+    const version = historyVersion;
+    taskDecisions.add(decisionKey);
+    taskBusy.value = true;
+    lastError.value = null;
+    pollActionTasks();
+    try {
+      const updated = await controlAiActionTask(
+        baseUrl,
+        chatId,
+        task,
+        decision
+      );
+      if (!disposed && version === historyVersion)
+        await applyActionTask(updated);
+    } catch (error) {
+      if (disposed || version !== historyVersion) return;
+      lastError.value = getAiErrorMessage(error);
+      showErrorNotification(lastError.value);
+    } finally {
+      taskDecisions.delete(decisionKey);
+      taskBusy.value = taskDecisions.size > 0;
+      if (!disposed && version === historyVersion) {
+        await refreshActionTasks();
+        pollActionTasks();
+      }
+    }
+  };
   let initializationPromise: Promise<void> = Promise.resolve();
 
-  let activeAttachments: AiAttachmentReference[] = [];
+  let activeAttachments: AiMessageAttachment[] = [];
 
   const clearStoredPendingApproval = (approval: PendingToolApproval): void => {
     const messageIndex = messages.value.findLastIndex(
@@ -144,10 +334,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
     messages.value = nextMessages;
   };
 
-  /** Восстанавливает только ещё действующие и полностью сформированные ссылки. */
+  /** Сохраняет весь набор: истечение ссылки не удаляет файл и не меняет номера остальных. */
   const restoreMessageAttachments = (
     history: Message[]
-  ): AiAttachmentReference[] => {
+  ): AiMessageAttachment[] => {
     const stored = history
       .slice()
       .reverse()
@@ -155,30 +345,19 @@ const useMastra = (options?: UseMastraOptions | false) => {
         message => message.role === 'user' && Array.isArray(message.attachments)
       )?.attachments;
 
-    if (!stored) return [];
-
-    return stored.filter(
-      attachment =>
-        typeof attachment?.name === 'string' &&
-        typeof attachment?.size === 'number' &&
-        typeof attachment?.contentType === 'string' &&
-        typeof attachment?.transferToken === 'string' &&
-        typeof attachment?.expiresAt === 'number' &&
-        attachment.expiresAt > Date.now()
-    );
+    return stored ? [...stored] : [];
   };
 
-  /** Оставляет только неистёкшие вложения, нужные для запроса или его подтверждения. */
-  const getActiveAttachments = (): AiAttachmentReference[] => {
-    activeAttachments = activeAttachments.filter(
-      attachment => attachment.expiresAt > Date.now()
-    );
+  /** Доступ проверяется и обновляется перед отправкой, а не фильтруется при чтении списка. */
+  const getActiveAttachments = (): AiMessageAttachment[] => {
     return activeAttachments;
   };
 
   const createRequestContext = (
-    attachments: AiAttachmentReference[] = getActiveAttachments(),
-    forceStrictApproval = false
+    attachments: AiMessageAttachment[] = getActiveAttachments(),
+    forceStrictApproval = false,
+    explicitRequestId?: string,
+    presentation?: AiMessagePresentation
   ): RequestContext<unknown> => {
     const requestContext = new RequestContext<Record<string, unknown>>();
     requestContext.set(
@@ -193,14 +372,39 @@ const useMastra = (options?: UseMastraOptions | false) => {
     );
     requestContext.set(
       'attachments',
-      attachments.map(({ name, size, contentType, transferToken }) => ({
-        name,
-        size,
-        contentType,
-        transferToken
-      }))
+      parseAiAttachmentReferences(attachments).map(
+        ({
+          name,
+          size,
+          contentType,
+          transferToken,
+          attachmentId,
+          contentHash
+        }) => ({
+          ...(attachmentId ? { attachmentId, contentHash } : {}),
+          name,
+          size,
+          contentType,
+          transferToken
+        })
+      )
     );
     if (chatId) requestContext.set('threadId', chatId);
+    if (conversationGeneration !== undefined)
+      requestContext.set('conversationGeneration', conversationGeneration);
+    if (conversationProtocol === 1)
+      requestContext.set('conversationProtocol', 1);
+    if (conversationProtocol === 1 && presentation)
+      requestContext.set(
+        'messagePresentation',
+        aiMessagePresentationSchema.parse(presentation)
+      );
+    const requestId =
+      explicitRequestId ??
+      aiMessageRequestId(
+        messages.value.findLast(message => message.role === 'user')
+      );
+    if (requestId) requestContext.set('requestId', requestId);
     return requestContext as unknown as RequestContext<unknown>;
   };
 
@@ -209,8 +413,9 @@ const useMastra = (options?: UseMastraOptions | false) => {
     decision: Exclude<ApprovalDecision, null>,
     token: string,
     abortSignal?: AbortSignal,
-    attachments: AiAttachmentReference[] = getActiveAttachments()
+    attachments: AiMessageAttachment[] = getActiveAttachments()
   ): Promise<Response> => {
+    validateAiAttachments(attachments);
     const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
     const apiBaseUrl = normalizedBaseUrl.endsWith('/api')
       ? normalizedBaseUrl
@@ -239,8 +444,28 @@ const useMastra = (options?: UseMastraOptions | false) => {
             responseMode:
               options.responseMode?.value === 'advanced' ? 'advanced' : 'quick',
             ...(chatId ? { threadId: chatId } : {}),
-            attachments: attachments.map(
-              ({ name, size, contentType, transferToken }) => ({
+            ...(conversationGeneration !== undefined
+              ? { conversationGeneration }
+              : {}),
+            requestId:
+              messages.value.findLast(
+                message =>
+                  message.pendingToolApproval?.toolCallId ===
+                  approval.toolCallId
+              )?.requestId ??
+              aiMessageRequestId(
+                messages.value.findLast(message => message.role === 'user')
+              ),
+            attachments: parseAiAttachmentReferences(attachments).map(
+              ({
+                name,
+                size,
+                contentType,
+                transferToken,
+                attachmentId,
+                contentHash
+              }) => ({
+                ...(attachmentId ? { attachmentId, contentHash } : {}),
                 name,
                 size,
                 contentType,
@@ -255,30 +480,226 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
     if (!response.ok) {
       const responseBody = await response.text().catch(() => '');
-      const stale = isStaleApprovalResponse(responseBody);
+      const stale =
+        [400, 404, 409].includes(response.status) &&
+        isStaleApprovalResponse(responseBody);
+      let parsedBody;
+      try {
+        parsedBody = JSON.parse(responseBody);
+      } catch {
+        /* Ответ прокси может не быть JSON. */
+      }
       const error = new Error(
         stale
           ? 'Подтверждение устарело после обновления сервиса'
-          : 'Не удалось применить решение по действию'
+          : getAiErrorMessage({ status: response.status, body: parsedBody })
       ) as ToolApprovalRequestError;
-      Object.assign(error, { status: response.status, stale });
+      Object.assign(error, {
+        status: response.status,
+        stale,
+        body: parsedBody
+      });
       throw error;
     }
 
     return response;
   };
 
+  const loadHistorySnapshot = (): Promise<void> => {
+    if (historySnapshotLoaded || disposed || !chatId) return Promise.resolve();
+    historySnapshotPromise ??= getChatHistorySnapshot(chatId)
+      .then(
+        ({
+          messages: initialMessages,
+          conversationGeneration: generation,
+          conversationProtocol: protocol
+        }) => {
+          if (disposed) return;
+          messages.value = initialMessages.map(message => ({
+            ...message,
+            id: message.id || generateUUID()
+          }));
+          activeAttachments = restoreMessageAttachments(initialMessages);
+          pendingApproval.value =
+            protocol === 1 ? null : findPendingToolApproval(initialMessages);
+          conversationGeneration = generation;
+          conversationProtocol = protocol ?? 0;
+          if (protocol === 1) serverHistoryGeneration = generation ?? 0;
+          historySnapshotLoaded = true;
+        }
+      )
+      .finally(() => {
+        historySnapshotPromise = undefined;
+      });
+    return historySnapshotPromise;
+  };
+
+  const applyConversationState = async (
+    state: AiConversationState,
+    snapshot?: Awaited<ReturnType<typeof fetchAiConversationTranscript>>
+  ): Promise<boolean> => {
+    if (
+      disposed ||
+      (conversationGeneration !== undefined &&
+        state.generation < conversationGeneration)
+    )
+      return false;
+    const changed =
+      state.deleted ||
+      state.generation !== (conversationGeneration ?? 0) ||
+      (state.protocol === 1 && conversationProtocol !== 1);
+    if (
+      !state.deleted &&
+      state.protocol !== 1 &&
+      ((!changed && conversationProtocol === 1) ||
+        (serverHistoryGeneration !== undefined &&
+          state.generation <= serverHistoryGeneration))
+    )
+      throw new Error(
+        'Не удалось подтвердить серверную версию переписки. Сохранённые сообщения не изменены.'
+      );
+    // Проекцию проверяем до смены версии и очистки экрана. Ошибка не должна
+    // превратить прежний кэш в пустую переписку с уже новой версией.
+    const next = snapshot
+      ? createAiConversationView(snapshot, changed ? [] : messages.value)
+      : changed
+        ? []
+        : messages.value;
+    const nextAttachments = snapshot
+      ? restoreMessageAttachments(next)
+      : undefined;
+    if (state.protocol === 1 && conversationProtocol !== 1)
+      pendingApproval.value = null;
+    conversationGeneration = state.generation;
+    conversationProtocol = state.protocol ?? 0;
+    if (state.protocol === 1)
+      serverHistoryGeneration = Math.max(
+        serverHistoryGeneration ?? 0,
+        state.generation
+      );
+    conversationDeleted = state.deleted;
+    if (changed) {
+      historyVersion += 1;
+      invalidateResponse();
+      transcriptController?.abort();
+      clearTimeout(taskPollTimer);
+      pendingApproval.value = null;
+      activeAttachments = [];
+      messages.value = [];
+    }
+    if (snapshot) {
+      messages.value = next;
+      activeAttachments = nextAttachments!;
+      pendingApproval.value = findPendingToolApproval(messages.value);
+    }
+    if (chatId) await saveMessages(chatId, messages.value);
+    return changed;
+  };
+
+  const refreshServerHistory = async () => {
+    if (
+      !chatId ||
+      disposed ||
+      conversationDeleted ||
+      conversationProtocol !== 1
+    )
+      return;
+    const generation = conversationGeneration!;
+    const version = historyVersion;
+    transcriptController?.abort();
+    const controller = new AbortController();
+    transcriptController = controller;
+    try {
+      const snapshot = await fetchAiConversationTranscript(
+        baseUrl,
+        chatId,
+        generation,
+        controller.signal
+      );
+      if (
+        disposed ||
+        controller.signal.aborted ||
+        version !== historyVersion ||
+        generation !== conversationGeneration
+      )
+        return;
+      const next = createAiConversationView(snapshot, messages.value);
+      messages.value = next;
+      activeAttachments = restoreMessageAttachments(next);
+      pendingApproval.value = findPendingToolApproval(next);
+      await saveMessages(chatId, next);
+    } catch (error) {
+      // Завершение старой загрузки не сообщает ошибку новому запросу или очищенному чату.
+      if (
+        disposed ||
+        controller.signal.aborted ||
+        version !== historyVersion ||
+        generation !== conversationGeneration
+      )
+        return;
+      throw error;
+    } finally {
+      if (transcriptController === controller) transcriptController = undefined;
+    }
+  };
+
+  const synchronizeConversation = async () => {
+    if (!chatId || disposed) return false;
+    await loadHistorySnapshot();
+    if (disposed) return false;
+    const version = historyVersion;
+    let state = await fetchAiConversationState(baseUrl, chatId);
+    if (disposed || version !== historyVersion) return false;
+    if (
+      options.initializeServerHistory &&
+      !state.deleted &&
+      state.protocol !== 1
+    )
+      state = await initializeAiConversation(baseUrl, chatId, state.generation);
+    if (disposed || version !== historyVersion) return false;
+    let snapshot:
+      | Awaited<ReturnType<typeof fetchAiConversationTranscript>>
+      | undefined;
+    if (!state.deleted && state.protocol === 1) {
+      serverHistoryGeneration = Math.max(
+        serverHistoryGeneration ?? 0,
+        state.generation
+      );
+      transcriptController?.abort();
+      const controller = new AbortController();
+      transcriptController = controller;
+      try {
+        snapshot = await fetchAiConversationTranscript(
+          baseUrl,
+          chatId,
+          state.generation,
+          controller.signal
+        );
+        if (disposed || version !== historyVersion) return false;
+        if (controller.signal.aborted) throw new Error(historyLoadError);
+      } finally {
+        if (transcriptController === controller)
+          transcriptController = undefined;
+      }
+    }
+    const changed = await applyConversationState(state, snapshot);
+    if (pendingReset && pendingReset.generation < state.generation)
+      pendingReset = undefined;
+    return changed;
+  };
+
   if (chatId) {
-    initializationPromise = getOrCreateChatHistory(chatId)
-      .then(initialMessages => {
-        messages.value = [...initialMessages];
-        activeAttachments = restoreMessageAttachments(initialMessages);
-        pendingApproval.value = findPendingToolApproval(initialMessages);
+    initializationPromise = synchronizeConversation()
+      .then(() => {
         isInitializing.value = false;
+        if (!disposed && !conversationDeleted)
+          void refreshActionTasks().then(pollActionTasks);
       })
       .catch(error => {
         console.error('Failed to get messages for conversation:', error);
-        messages.value = [];
+        lastError.value = historySnapshotLoaded
+          ? getAiErrorMessage(error)
+          : historyLoadError;
         isInitializing.value = false;
       });
   } else {
@@ -293,9 +714,11 @@ const useMastra = (options?: UseMastraOptions | false) => {
     appendUserMessage = true,
     attachments: AiAttachmentReference[] = [],
     replyTo?: AIMessageReference,
-    modelInput?: string
+    modelInput?: string,
+    preparedInput?: { requestId: string; generation: number },
+    submission?: AiSubmissionObserver
   ) => {
-    if (!input.trim()) return;
+    if (disposed || !input.trim()) return;
 
     lastError.value = null;
 
@@ -312,23 +735,115 @@ const useMastra = (options?: UseMastraOptions | false) => {
     };
 
     if (isInitializing.value) await initializationPromise;
+    if (
+      activeResponse &&
+      !messages.value.some(
+        message => message.id === activeResponse?.messageId && message.loading
+      )
+    )
+      invalidateResponse();
+    if (disposed || activeResponse) return;
+    const beforeSyncVersion = historyVersion;
+    let historyError: unknown;
+    try {
+      const changed = await synchronizeConversation();
+      if (
+        disposed ||
+        historyVersion !== beforeSyncVersion + (changed ? 1 : 0)
+      ) {
+        onFinish?.();
+        return;
+      }
+      if (conversationDeleted || (changed && approvalDecisionOverride)) {
+        lastError.value = conversationDeleted
+          ? 'Этот чат уже удалён. Создайте новый чат для следующего поручения.'
+          : 'История чата изменена. Прежнее подтверждение больше не действует.';
+        showErrorNotification(lastError.value);
+        return;
+      }
+    } catch (error) {
+      if (disposed || historyVersion !== beforeSyncVersion) {
+        onFinish?.();
+        return;
+      }
+      if (
+        options.initializeServerHistory ||
+        conversationProtocol === 1 ||
+        serverHistoryGeneration !== undefined
+      ) {
+        lastError.value = getAiErrorMessage(error);
+        showErrorNotification(lastError.value);
+        onFinish?.();
+        return;
+      }
+      if (!historySnapshotLoaded) {
+        lastError.value = historyLoadError;
+        showErrorNotification(lastError.value);
+        onFinish?.();
+        return;
+      }
+      historyError = error;
+    }
+    if (disposed || activeResponse) return;
+    if (
+      preparedInput &&
+      (conversationGeneration !== preparedInput.generation ||
+        aiMessageRequestId(
+          messages.value.findLast(message => message.role === 'user')
+        ) !== preparedInput.requestId)
+    ) {
+      throw new Error(
+        'История изменилась после редактирования. Исправленный запрос не отправлен повторно; обновите чат.'
+      );
+    }
 
+    const pendingPlan =
+      !preparedInput &&
+      messages.value.findLast(
+        message => message.actionTask?.status === 'waiting_approval'
+      )?.actionTask;
+    const planDecision = pendingPlan
+      ? approvalDecisionFromMessage(input)
+      : null;
+    if (pendingPlan && planDecision) {
+      submission?.accept();
+      await resolveActionTask(
+        pendingPlan.id,
+        planDecision === 'approve' ? 'approve' : 'cancel'
+      );
+      onFinish?.();
+      return;
+    }
+
+    const previousAttachments = activeAttachments;
+    const unsavedMessageIds = new Set<string>();
+    const discardUnacceptedMessages = () => {
+      messages.value = messages.value.filter(
+        message => !message.id || !unsavedMessageIds.has(message.id)
+      );
+      activeAttachments = previousAttachments;
+    };
     if (attachments.length > 0) activeAttachments = [...attachments];
-    const requestAttachments = getActiveAttachments();
+    let requestAttachments = [...getActiveAttachments()];
 
     const lastMessage = messages.value[messages.value.length - 1];
     if (lastMessage?.role === 'assistant' && lastMessage?.loading) return;
 
-    const inferredApprovalDecision = pendingApproval.value
-      ? approvalDecisionFromMessage(input)
-      : null;
+    const inferredApprovalDecision =
+      !preparedInput && pendingApproval.value
+        ? approvalDecisionFromMessage(input)
+        : null;
     const effectiveApprovalDecision =
       approvalDecisionOverride || inferredApprovalDecision;
     const shouldAppendUserMessage =
       appendUserMessage && !inferredApprovalDecision;
 
     if (shouldAppendUserMessage) {
+      const requestId = generateUUID();
+      unsavedMessageIds.add(requestId);
       const userMessage: Message = {
+        id: requestId,
+        requestId,
         role: 'user',
         content: input,
         ...(modelInput?.trim() && modelInput.trim() !== input.trim()
@@ -337,15 +852,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
         timestamp: Date.now(),
         ...(requestAttachments.length > 0
           ? {
-              attachments: requestAttachments.map(
-                ({ name, size, contentType, transferToken, expiresAt }) => ({
-                  name,
-                  size,
-                  contentType,
-                  transferToken,
-                  expiresAt
-                })
-              )
+              attachments: requestAttachments.map(file => ({ ...file }))
             }
           : {}),
         ...(replyTo ? { replyTo } : {})
@@ -359,6 +866,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
     if (pendingApproval.value && !approvalDecision) {
       const reminderMessage: Message = {
+        id: generateUUID(),
         role: 'assistant',
         content:
           'Сейчас ожидается решение по действию. Выберите «Подтвердить» или «Отменить» на карточке.',
@@ -366,7 +874,21 @@ const useMastra = (options?: UseMastraOptions | false) => {
         timestamp: Date.now()
       };
       messages.value = [...messages.value, reminderMessage];
-      await saveMessages(chatId, messages.value);
+      unsavedMessageIds.add(reminderMessage.id!);
+      const version = historyVersion;
+      try {
+        await saveMessages(chatId, messages.value);
+      } catch (error) {
+        if (!disposed && version === historyVersion) {
+          discardUnacceptedMessages();
+          lastError.value = getAiErrorMessage(error);
+          throw error;
+        }
+        return;
+      }
+      if (disposed || version !== historyVersion) return;
+      submission?.accept();
+      submission?.respond(reminderMessage.content);
       return;
     }
 
@@ -377,18 +899,19 @@ const useMastra = (options?: UseMastraOptions | false) => {
           message.role === 'user' && message.modelContent?.trim()
             ? message.modelContent
             : message.content;
-        const content = message.replyTo
-          ? `${messageContent}\n\nКонтекст ответа:\n${
-              message.replyTo.role === 'user' ? 'Пользователь' : 'Ассистент'
-            }: ${message.replyTo.content}`
-          : messageContent;
+        const content =
+          conversationProtocol === 0 && message.replyTo
+            ? `${messageContent}\n\nКонтекст ответа:\n${
+                message.replyTo.role === 'user' ? 'Пользователь' : 'Ассистент'
+              }: ${message.replyTo.content}`
+            : messageContent;
 
         return message.role === 'user'
           ? { role: 'user' as const, content }
           : { role: 'assistant' as const, content };
       });
 
-    if (requestAttachments.length > 0) {
+    if (requestAttachments.length > 0 && conversationProtocol === 0) {
       const lastUserMessageIndex = requestMessages.findLastIndex(
         message => message.role === 'user'
       );
@@ -407,18 +930,79 @@ const useMastra = (options?: UseMastraOptions | false) => {
     }
 
     const assistantMessage: Message = {
+      id: generateUUID(),
+      requestId:
+        (pendingApproval.value && approvalDecision
+          ? messages.value.findLast(
+              message =>
+                message.pendingToolApproval?.toolCallId ===
+                pendingApproval.value?.toolCallId
+            )?.requestId
+          : undefined) ??
+        aiMessageRequestId(
+          messages.value.findLast(message => message.role === 'user')
+        ),
       role: 'assistant',
       content: '',
       loading: true,
       timestamp: Date.now()
     };
-    const assistantMessageIndex = messages.value.length;
+    const run = {
+      messageId: assistantMessage.id!,
+      requestId: assistantMessage.requestId,
+      historyVersion,
+      controller: new AbortController()
+    };
+    activeResponse = run;
+    const forwardAbort = () => run.controller.abort(abortSignal?.reason);
+    abortSignal?.addEventListener('abort', forwardAbort, { once: true });
+    if (abortSignal?.aborted) forwardAbort();
+    const responseIndex = () =>
+      !disposed && activeResponse === run
+        ? messages.value.findIndex(
+            message =>
+              message.id === run.messageId && message.role === 'assistant'
+          )
+        : -1;
+    const isCurrentResponse = () => responseIndex() >= 0;
     messages.value = [...messages.value, assistantMessage];
-
-    await saveMessages(chatId, messages.value);
+    unsavedMessageIds.add(assistantMessage.id!);
+    let submissionSaved = false;
 
     try {
-      const token = getAuthToken();
+      await saveMessages(chatId, messages.value);
+      submissionSaved = true;
+      if (!isCurrentResponse()) return;
+      submission?.accept();
+      if (historyError) throw historyError;
+      run.controller.signal.throwIfAborted();
+      preparationStatus.value = 'Подготавливаю ответ';
+      validateAiAttachments(requestAttachments);
+      if (approvalDecision === 'decline') requestAttachments = [];
+      else if (requestAttachments.length) {
+        preparationStatus.value = 'Проверяю доступ к вложениям';
+        requestAttachments = await refreshAiAttachments(
+          requestAttachments,
+          run.controller.signal
+        );
+        if (!isCurrentResponse()) return;
+        activeAttachments = [...requestAttachments];
+        const userIndex = messages.value.findIndex(
+          message =>
+            message.role === 'user' &&
+            aiMessageRequestId(message) === run.requestId
+        );
+        if (userIndex >= 0) {
+          messages.value[userIndex] = {
+            ...messages.value[userIndex],
+            attachments: [...requestAttachments]
+          };
+          await saveMessages(chatId, messages.value);
+        }
+      }
+      if (!isCurrentResponse()) return;
+      run.controller.signal.throwIfAborted();
+      const token = getAuthToken() || getStoredChatAccessToken();
       if (!token) throw new Error('Требуется авторизация');
 
       const client = new MastraClient({
@@ -426,10 +1010,13 @@ const useMastra = (options?: UseMastraOptions | false) => {
         headers: {
           Authorization: `Bearer ${token}`
         },
-        abortSignal
+        abortSignal: run.controller.signal
       });
       const agent = client.getAgent(agentId);
-      if (!agent) throw new Error('Сервис временно недоступен');
+      if (!agent)
+        throw new Error(
+          'ИИ не настроен для работы. Обратитесь к администратору.'
+        );
 
       let stream;
 
@@ -442,11 +1029,16 @@ const useMastra = (options?: UseMastraOptions | false) => {
             approval,
             approvalDecision,
             token,
-            abortSignal,
+            run.controller.signal,
             requestAttachments
           );
+          if (!isCurrentResponse()) {
+            void stream.body?.cancel().catch(() => undefined);
+            return;
+          }
           clearStoredPendingApproval(approval);
         } catch (approvalError) {
+          if (!isCurrentResponse()) return;
           const requestError =
             approvalError as Partial<ToolApprovalRequestError>;
 
@@ -458,65 +1050,146 @@ const useMastra = (options?: UseMastraOptions | false) => {
           if (approvalDecision === 'decline') {
             clearStoredPendingApproval(approval);
             throw new Error(
-              'Действие уже не ожидает подтверждения и не было выполнено.'
+              'Прежнее подтверждение закрыто. Это не подтверждает отмену уже выполненных действий.'
             );
           }
 
           clearStoredPendingApproval(approval);
 
+          // Проверка после устаревшего подтверждения — новый ход, не повтор
+          // прежней команды. Его ID сохраняется до отправки и связывает новый ответ/план.
+          const recoveryRequestId = generateUUID();
+          run.requestId = recoveryRequestId;
+          const recoveryIndex = responseIndex();
+          if (recoveryIndex < 0) return;
+          messages.value[recoveryIndex] = {
+            ...messages.value[recoveryIndex],
+            requestId: recoveryRequestId
+          };
+          await saveMessages(chatId, messages.value);
+          if (!isCurrentResponse()) return;
+          run.controller.signal.throwIfAborted();
+
           stream = await agent.stream(
             [
-              ...requestMessages,
+              ...(conversationProtocol === 1 ? [] : requestMessages),
               {
                 role: 'user' as const,
                 content:
-                  'Предыдущее подтверждение устарело после перезапуска сервиса. Повтори последнее запрошенное действие через доступный инструмент, чтобы платформа сформировала новое подтверждение.'
+                  'Предыдущее подтверждение больше не действует. Сначала проверь фактический результат предыдущих действий через чтение. Не создавай заново уже существующие объекты и не повторяй выполненные изменения. Сформируй новое подтверждение только для оставшихся действий; если результат нельзя установить, объясни это пользователю и не повторяй запись.'
               }
             ],
             {
               memory,
-              requestContext: createRequestContext(requestAttachments, true)
+              requestContext: createRequestContext(
+                requestAttachments,
+                true,
+                recoveryRequestId
+              )
             }
           );
         }
       } else {
-        stream = await agent.stream(requestMessages, {
-          memory,
-          requestContext: createRequestContext(requestAttachments)
-        });
+        const currentUser = messages.value.findLast(
+          message => message.role === 'user'
+        );
+        stream = await agent.stream(
+          conversationProtocol === 1
+            ? requestMessages
+                .filter(message => message.role === 'user')
+                .slice(-1)
+            : requestMessages,
+          {
+            memory,
+            requestContext: createRequestContext(
+              requestAttachments,
+              false,
+              preparedInput?.requestId,
+              currentUser
+                ? {
+                    displayText: currentUser.content,
+                    ...(currentUser.replyTo
+                      ? { replyTo: currentUser.replyTo }
+                      : {})
+                  }
+                : undefined
+            )
+          }
+        );
       }
 
-      if (!stream) throw new Error('Сервис временно недоступен');
+      if (!isCurrentResponse()) {
+        void stream?.body?.cancel().catch(() => undefined);
+        return;
+      }
+      if (!stream)
+        throw new Error(
+          'ИИ не начал передачу ответа. Попробуйте позже; если ошибка повторяется, обратитесь в поддержку.'
+        );
       onFinish?.();
 
       const streamProcessingPromise = new Promise((resolve, reject) => {
         let isResolved = false;
+        let lastToolError: string | null = null;
+        let hasAnswerAfterToolError = false;
+
+        const finishStream = () => {
+          if (isResolved) return;
+          isResolved = true;
+          if (lastToolError && !hasAnswerAfterToolError) {
+            reject(
+              new Error(
+                getAiErrorMessage(lastToolError, AI_TOOL_RESULT_UNCONFIRMED)
+              )
+            );
+          } else {
+            resolve(null);
+          }
+        };
 
         const processStream = async () => {
           try {
-            await processMastraEventStream(stream, async event => {
-              try {
+            await processMastraEventStream(
+              stream,
+              async (event): Promise<void | false> => {
+                const assistantMessageIndex = responseIndex();
+                if (assistantMessageIndex < 0) return false;
+                const task = actionTaskFromEvent(event);
+                if (task) {
+                  // План принадлежит исходному запросу, а не текущей позиции в списке.
+                  if (task.requestId !== run.requestId) return;
+                  await applyActionTask(task, run.messageId);
+                  if (isCurrentResponse()) pollActionTasks();
+                  return;
+                }
+                if (event.type === 'tool-call') {
+                  const name = String(event.payload?.toolName || '');
+                  preparationStatus.value =
+                    name === 'ai_action_plan'
+                      ? 'Сохраняю план действий'
+                      : name === 'ai_action_catalog'
+                        ? 'Проверяю доступные действия'
+                        : /attachment.*read/.test(name)
+                          ? 'Изучаю вложения'
+                          : /search|find|list|get/.test(name)
+                            ? 'Ищу информацию'
+                            : 'Выполняю действие';
+                }
                 if (event.type === 'step-finish') {
                   return;
                 }
 
                 const toolError = getMastraToolError(event);
                 if (toolError) {
-                  throw new Error(
-                    getAiErrorMessage(
-                      toolError,
-                      'Не удалось выполнить действие. Попробуйте ещё раз.'
-                    )
-                  );
+                  // Ошибка отдельного шага не завершает запуск: агент может
+                  // исправить параметры или объяснить причину следующим ответом.
+                  lastToolError = toolError;
+                  hasAnswerAfterToolError = false;
+                  return;
                 }
 
-                if (
-                  ['tool-result', 'tool-output'].includes(event.type || '') &&
-                  event.payload?.toolName ===
-                    'erp_actions_erp_attachment_upload_and_attach'
-                ) {
-                  activeAttachments = [];
-                }
+                // Успех одного переноса не сбрасывает весь набор: следующие
+                // файлы и их подтверждения используют те же номера вложений.
 
                 if (['tool-result', 'tool-output'].includes(event.type || '')) {
                   const outputAttachments = extractAiOutputAttachments(
@@ -572,22 +1245,26 @@ const useMastra = (options?: UseMastraOptions | false) => {
                         loading: false,
                         pendingToolApproval: nextPendingApproval
                       };
-                      await saveMessages(chatId, newMessages);
                       messages.value = newMessages;
                     }
 
                     pendingApproval.value = nextPendingApproval;
+                    await saveMessages(chatId, messages.value);
                   }
 
                   if (!isResolved) {
                     isResolved = true;
                     resolve(null);
                   }
-                  return;
+                  return false;
                 }
 
                 if (event.type === 'text-delta' && event.payload?.text) {
-                  if (assistantMessageIndex < messages.value.length) {
+                  if (event.payload.text.trim()) hasAnswerAfterToolError = true;
+                  if (
+                    assistantMessageIndex < messages.value.length &&
+                    !messages.value[assistantMessageIndex].actionTask
+                  ) {
                     const newMessages = [...messages.value];
                     newMessages[assistantMessageIndex] = {
                       ...newMessages[assistantMessageIndex],
@@ -600,37 +1277,15 @@ const useMastra = (options?: UseMastraOptions | false) => {
                     await saveMessages(chatId, messages.value);
                   }
                 } else if (event.type === 'finish') {
-                  if (!isResolved) {
-                    isResolved = true;
-                    resolve(null);
-                  }
+                  finishStream();
+                  return false;
                 } else if (event.type === 'error') {
-                  if (!isResolved) {
-                    isResolved = true;
-                    reject(
-                      new Error(getAiErrorMessage(event.payload?.message))
-                    );
-                  }
+                  throw new Error(getAiErrorMessage(event.payload));
                 }
-              } catch (parseError) {
-                console.error('Error processing chunk:', parseError);
-                if (!isResolved) {
-                  isResolved = true;
-                  reject(
-                    new Error(
-                      getAiErrorMessage(
-                        parseError,
-                        'Не удалось обработать ответ сервиса. Попробуйте ещё раз.'
-                      )
-                    )
-                  );
-                }
-              }
-            });
-            if (!isResolved) {
-              isResolved = true;
-              resolve(null);
-            }
+              },
+              run.controller.signal
+            );
+            finishStream();
           } catch (streamError) {
             if (!isResolved) {
               isResolved = true;
@@ -663,21 +1318,30 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
       await streamProcessingPromise;
 
-      const completedMessage = messages.value[assistantMessageIndex];
+      const completedMessage = messages.value[responseIndex()];
       if (
         completedMessage &&
         !completedMessage.content.trim() &&
         !completedMessage.outputAttachments?.length &&
+        !completedMessage.actionTask &&
         !pendingApproval.value
       ) {
         throw new Error('ИИ не вернул результат. Попробуйте повторить запрос.');
       }
     } catch (error: unknown) {
+      if (!isCurrentResponse()) return;
       const errorMessage = getAiErrorMessage(error);
 
       lastError.value = errorMessage;
 
-      if (assistantMessageIndex < messages.value.length) {
+      if (!submissionSaved) {
+        // Первая запись откатилась: не сохраняем этот ввод повторно из finally.
+        discardUnacceptedMessages();
+        throw error;
+      }
+
+      const assistantMessageIndex = responseIndex();
+      if (assistantMessageIndex >= 0) {
         const newMessages = [...messages.value];
         newMessages[assistantMessageIndex] = {
           ...newMessages[assistantMessageIndex],
@@ -688,8 +1352,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
         messages.value = newMessages;
       }
     } finally {
+      abortSignal?.removeEventListener('abort', forwardAbort);
+      const assistantMessageIndex = responseIndex();
       let finalMessage: Message | undefined;
-      if (assistantMessageIndex < messages.value.length) {
+      if (assistantMessageIndex >= 0) {
         const newMessages = [...messages.value];
         newMessages[assistantMessageIndex] = {
           ...newMessages[assistantMessageIndex],
@@ -701,9 +1367,32 @@ const useMastra = (options?: UseMastraOptions | false) => {
       const approvalWasAlreadyPersisted = Boolean(
         pendingApproval.value && finalMessage?.pendingToolApproval
       );
-      if (chatId && !approvalWasAlreadyPersisted) {
-        await saveMessages(chatId, messages.value);
+      const responseText = lastError.value
+        ? null
+        : finalMessage?.content ?? null;
+      try {
+        if (isCurrentResponse() && chatId && !approvalWasAlreadyPersisted) {
+          await saveMessages(chatId, messages.value);
+        }
+        if (isCurrentResponse()) {
+          await refreshActionTasks();
+          if (isCurrentResponse()) pollActionTasks();
+        }
+      } finally {
+        if (activeResponse === run) {
+          activeResponse = undefined;
+          if (submissionSaved && conversationProtocol === 1 && !disposed) {
+            try {
+              await refreshServerHistory();
+            } catch (error) {
+              if (!disposed) lastError.value = getAiErrorMessage(error);
+            }
+          }
+        }
       }
+      submission?.respond(
+        !disposed && run.historyVersion === historyVersion ? responseText : null
+      );
     }
   };
 
@@ -713,39 +1402,83 @@ const useMastra = (options?: UseMastraOptions | false) => {
     abortSignal?: AbortSignal,
     attachments: AiAttachmentReference[] = [],
     replyTo?: AIMessageReference,
-    modelInput?: string
+    modelInput?: string,
+    onAccepted?: () => void
   ) =>
-    submitMessage(
-      input,
-      onFinish,
-      abortSignal,
-      null,
-      true,
-      attachments,
-      replyTo,
-      modelInput
+    observeAiSubmission(
+      submission =>
+        submitMessage(
+          input,
+          onFinish,
+          abortSignal,
+          null,
+          true,
+          attachments,
+          replyTo,
+          modelInput,
+          undefined,
+          submission
+        ),
+      onAccepted
     );
 
   const resolveToolApproval = async (
     decision: Exclude<ApprovalDecision, null>,
     onFinish?: () => void,
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
+    onAccepted?: () => void
   ) => {
-    if (!pendingApproval.value) return;
+    if (!pendingApproval.value) return { accepted: false, responseText: null };
 
     const command = decision === 'approve' ? 'подтверждаю' : 'отмена';
     if (decision === 'decline') activeAttachments = [];
-    return submitMessage(command, onFinish, abortSignal, decision, false);
+    return observeAiSubmission(
+      submission =>
+        submitMessage(
+          command,
+          onFinish,
+          abortSignal,
+          decision,
+          false,
+          [],
+          undefined,
+          undefined,
+          undefined,
+          submission
+        ),
+      onAccepted
+    );
   };
 
-  const clearMessages = async (): Promise<void> => {
+  const resetHistory = async (action: 'clear' | 'delete'): Promise<void> => {
     if (!chatId) return;
     if (isInitializing.value) await initializationPromise;
-    pendingApproval.value = null;
+    if (pendingReset?.action !== action) pendingReset = undefined;
+    if (conversationGeneration === undefined) await synchronizeConversation();
+    if (conversationDeleted) {
+      if (action === 'delete') return;
+      throw new Error('Этот чат уже удалён. Создайте новый чат.');
+    }
+    pendingReset ??= {
+      action,
+      generation: conversationGeneration!,
+      operationId: crypto.randomUUID()
+    };
+    const attempt = pendingReset;
+    const state = await resetAiConversation(baseUrl, chatId, action, {
+      generation: attempt.generation,
+      operationId: attempt.operationId
+    });
+    await applyConversationState(state);
     lastError.value = null;
-    activeAttachments = [];
-    messages.value = [];
-    await saveMessages(chatId, messages.value);
+    if (pendingReset === attempt) pendingReset = undefined;
+  };
+  /** Очищает серверную версию до изменения локальной истории. */
+  const clearMessages = () => resetHistory('clear');
+  /** Удалённый диалог нельзя восстановить старым потоком или старой вкладкой. */
+  const deleteConversation = async () => {
+    await resetHistory('delete');
+    dispose();
   };
 
   /** Сохраняет новое состояние локальной истории после действий над AI-сообщениями. */
@@ -759,8 +1492,38 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
   /** Меняет признак закрепления выбранного AI-сообщения. */
   const toggleMessagePin = async (messageIndex: number): Promise<void> => {
+    if (isInitializing.value) await initializationPromise;
+    if (
+      conversationProtocol !== 1 &&
+      serverHistoryGeneration !== undefined &&
+      (conversationGeneration ?? 0) <= serverHistoryGeneration
+    )
+      throw new Error(historyLoadError);
     const message = messages.value[messageIndex];
     if (!message) return;
+
+    if (conversationProtocol === 1) {
+      if (!chatId || !message.id || message.pinVersion === undefined)
+        throw new Error(
+          'Не удалось найти сохранённое сообщение для закрепления. Обновите чат.'
+        );
+      const version = historyVersion;
+      const saved = await setAiConversationMessagePin(baseUrl, chatId, {
+        generation: conversationGeneration!,
+        id: message.id,
+        pinned: !message.pinned,
+        expectedVersion: message.pinVersion
+      });
+      if (disposed || version !== historyVersion) return;
+      transcriptController?.abort();
+      messages.value = messages.value.map(item =>
+        item.id === saved.id && (item.pinVersion ?? 0) <= saved.pinVersion
+          ? { ...item, pinned: saved.pinned, pinVersion: saved.pinVersion }
+          : item
+      );
+      await saveMessages(chatId, messages.value);
+      return;
+    }
 
     const nextMessages = [...messages.value];
     nextMessages[messageIndex] = {
@@ -770,10 +1533,70 @@ const useMastra = (options?: UseMastraOptions | false) => {
     await replaceMessages(nextMessages);
   };
 
-  /** Удаляет выбранные сообщения только из текущей локальной AI-истории. */
+  /** Удаляет серверные сообщения только после сохранения и чтения новой версии; старый формат сохраняет прежнее поведение. */
   const deleteMessages = async (messageIndexes: number[]): Promise<void> => {
+    if (isInitializing.value) await initializationPromise;
+    if (
+      conversationProtocol !== 1 &&
+      serverHistoryGeneration !== undefined &&
+      (conversationGeneration ?? 0) <= serverHistoryGeneration
+    )
+      throw new Error(historyLoadError);
     const indexes = new Set(messageIndexes);
     if (indexes.size === 0) return;
+    if (conversationProtocol === 1) {
+      if (disposed || !chatId) return;
+      const ids = [
+        ...new Set(
+          messages.value
+            .filter((_, index) => indexes.has(index))
+            .map(message => message.id)
+        )
+      ];
+      if (!ids.length || ids.some(id => !id))
+        throw new Error('Не удалось найти выбранные сообщения. Обновите чат.');
+      ids.sort();
+      if (
+        pendingMutation?.generation !== conversationGeneration ||
+        JSON.stringify(pendingMutation.messageIds) !== JSON.stringify(ids)
+      )
+        pendingMutation = {
+          generation: conversationGeneration!,
+          operationId: crypto.randomUUID(),
+          action: 'delete',
+          messageIds: ids
+        };
+      const operation = pendingMutation;
+      const version = historyVersion;
+      try {
+        const state = await mutateAiConversation(baseUrl, chatId, operation);
+        if (disposed || version !== historyVersion) return;
+        // Не заменяем экран пустым массивом, если сохранение прошло, а чтение новой версии оборвалось.
+        const snapshot = await fetchAiConversationTranscript(
+          baseUrl,
+          chatId,
+          state.generation
+        );
+        if (disposed || version !== historyVersion) return;
+        await applyConversationState(state, snapshot);
+        if (pendingMutation === operation) pendingMutation = undefined;
+        lastError.value = null;
+      } catch (error) {
+        if (disposed || version !== historyVersion) return;
+        throw error;
+      }
+      return;
+    }
+    historyVersion += 1;
+    if (
+      messages.value.some(
+        (message, index) =>
+          indexes.has(index) &&
+          (message.id === activeResponse?.messageId ||
+            message.id === activeResponse?.requestId)
+      )
+    )
+      invalidateResponse();
 
     await replaceMessages(
       messages.value.filter((_, index) => !indexes.has(index))
@@ -785,29 +1608,140 @@ const useMastra = (options?: UseMastraOptions | false) => {
     messageIndex: number,
     input: string,
     attachments: AiAttachmentReference[] = [],
-    replyTo?: AIMessageReference
+    replyTo?: AIMessageReference,
+    onAccepted?: () => void
   ): Promise<void> => {
+    if (isInitializing.value) await initializationPromise;
+    if (
+      conversationProtocol !== 1 &&
+      serverHistoryGeneration !== undefined &&
+      (conversationGeneration ?? 0) <= serverHistoryGeneration
+    )
+      throw new Error(historyLoadError);
     const message = messages.value[messageIndex];
     if (!message || message.role !== 'user' || !input.trim()) return;
+    if (conversationProtocol === 1) {
+      if (!chatId || disposed || historyBusy.value || activeResponse) return;
+      validateAiAttachments(attachments);
+      const text = input;
+      const messagePresentation = {
+        displayText: input,
+        ...(replyTo ? { replyTo } : {})
+      };
+      const identity = JSON.stringify({
+        messageId: message.id,
+        text,
+        messagePresentation,
+        attachments: attachments.map(file => ({
+          attachmentId: file.attachmentId,
+          contentHash: file.contentHash,
+          name: file.name,
+          size: file.size,
+          contentType: file.contentType
+        }))
+      });
+      if (
+        pendingEdit?.identity !== identity ||
+        pendingEdit.operation.generation !== conversationGeneration
+      ) {
+        pendingEdit = {
+          identity,
+          operation: {
+            action: 'edit',
+            generation: conversationGeneration!,
+            operationId: crypto.randomUUID(),
+            messageId: message.id!,
+            text,
+            messagePresentation,
+            attachments: []
+          }
+        };
+      }
+      const attempt = pendingEdit;
+      const version = historyVersion;
+      let responseVersion = version;
+      historyBusy.value = true;
+      preparationStatus.value = attachments.length
+        ? 'Проверяю доступ к вложениям'
+        : 'Сохраняю исправленный запрос';
+      try {
+        const files = attachments.length
+          ? await refreshAiAttachments(attachments)
+          : [];
+        if (disposed || version !== historyVersion) return;
+        attempt.operation.attachments = parseAiAttachmentReferences(files);
+        preparationStatus.value = 'Сохраняю исправленный запрос';
+        const state = await mutateAiConversation(
+          baseUrl,
+          chatId,
+          attempt.operation
+        );
+        if (disposed || version !== historyVersion) return;
+        const snapshot = await fetchAiConversationTranscript(
+          baseUrl,
+          chatId,
+          state.generation
+        );
+        if (disposed || version !== historyVersion) return;
+        responseVersion = version + 1;
+        await applyConversationState(state, snapshot);
+        if (disposed || responseVersion !== historyVersion) return;
+        onAccepted?.();
+        // Первый запуск использует ID уже сохранённого входа, а не добавляет второе пользовательское сообщение.
+        if (pendingEdit === attempt) pendingEdit = undefined;
+        await submitMessage(
+          text,
+          undefined,
+          undefined,
+          null,
+          false,
+          files,
+          undefined,
+          undefined,
+          {
+            requestId: attempt.operation.operationId,
+            generation: state.generation
+          }
+        );
+      } catch (error) {
+        if (disposed || responseVersion !== historyVersion) return;
+        lastError.value = getAiErrorMessage(error);
+        throw error;
+      } finally {
+        historyBusy.value = false;
+      }
+      return;
+    }
 
+    historyVersion += 1;
+    invalidateResponse();
     pendingApproval.value = null;
     lastError.value = null;
     await replaceMessages(messages.value.slice(0, messageIndex));
-    await submitMessage(
-      input,
-      undefined,
-      undefined,
-      null,
-      true,
-      attachments,
-      replyTo
+    await observeAiSubmission(
+      submission =>
+        submitMessage(
+          input,
+          undefined,
+          undefined,
+          null,
+          true,
+          attachments,
+          replyTo,
+          undefined,
+          undefined,
+          submission
+        ),
+      onAccepted
     );
   };
 
   /** Добавляет результат фоновой автоматизации один раз и сохраняет его в истории. */
   const appendExternalMessage = async (message: Message): Promise<void> => {
-    if (!chatId || !message.sourceId) return;
+    if (disposed || !chatId || !message.sourceId) return;
     await initializationPromise;
+    await loadHistorySnapshot();
+    if (disposed) return;
     if (messages.value.some(item => item.sourceId === message.sourceId)) return;
     messages.value = [...messages.value, message];
     await saveMessages(chatId, messages.value);
@@ -817,7 +1751,13 @@ const useMastra = (options?: UseMastraOptions | false) => {
     messages,
     sendMessage,
     resolveToolApproval,
+    resolveActionTask,
+    taskBusy,
+    historyBusy,
+    preparationStatus,
     clearMessages,
+    deleteConversation,
+    dispose,
     toggleMessagePin,
     deleteMessages,
     editMessageAndResend,

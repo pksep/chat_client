@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/ai-history';
 
 const SESSION_ID = 'ai-attachment-check';
 
@@ -6,6 +6,10 @@ test.setTimeout(90_000);
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(sessionId => {
+    Object.defineProperty(navigator, 'standalone', {
+      configurable: true,
+      value: true
+    });
     const organizationUrl = 'http://127.0.0.1:65530';
     const config = {
       CHAT_AUTH_API: organizationUrl,
@@ -47,6 +51,133 @@ test.beforeEach(async ({ page }) => {
     }
   }, SESSION_ID);
 });
+
+for (const initiallyUnavailable of [false, true]) {
+  test(`семь сохранённых файлов переживают истечение ссылок и перезагрузку, отказ обновления: ${initiallyUnavailable}`, async ({
+    page
+  }) => {
+    const files = Array.from({ length: 7 }, (_, index) => ({
+      attachmentId: crypto.randomUUID(),
+      contentHash: String(index).repeat(64),
+      name: `durable-${index}.txt`,
+      size: 5,
+      contentType: 'text/plain',
+      transferToken: 'expired-'.repeat(12),
+      expiresAt: Date.now() - 60_000
+    }));
+    const fresh = files.map(file => ({
+      ...file,
+      transferToken: 'renewed-'.repeat(12),
+      expiresAt: Date.now() + 600_000
+    }));
+    let unavailable = initiallyUnavailable,
+      refreshCount = 0;
+    const sent: any[] = [];
+    await page.route('**/action-tasks/**', route =>
+      route.fulfill({ json: { tasks: [] } })
+    );
+    await page.route('**/media/ai-attachments/refresh', async route => {
+      refreshCount++;
+      expect(route.request().postDataJSON().attachmentIds).toEqual(
+        files.map(file => file.attachmentId)
+      );
+      await route.fulfill(
+        unavailable
+          ? { status: 410, json: { message: 'Файл недоступен' } }
+          : { json: { attachments: fresh } }
+      );
+    });
+    await page.route('**/api/agents/generalAgent/stream*', async route => {
+      sent.push(route.request().postDataJSON());
+      await route.fulfill({
+        contentType: 'text/event-stream',
+        body: 'data: {"type":"text-delta","payload":{"text":"Файлы доступны для продолжения."}}\n\ndata: {"type":"finish"}\n\n'
+      });
+    });
+    await page.goto(`/ai/${SESSION_ID}`);
+    await expect(page.locator('.ai-assistant__editor')).toBeVisible({
+      timeout: 30_000
+    });
+    await expect.poll(() => page.evaluate(async id => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('chat-messages-db', 2);
+        request.onupgradeneeded = () => {
+          if (!request.result.objectStoreNames.contains('messages')) request.result.createObjectStore('messages', { keyPath: 'chatId' });
+        };
+        request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+      });
+      const exists = await new Promise<boolean>((resolve, reject) => {
+        const request = db.transaction('messages', 'readonly').objectStore('messages').get(id);
+        // Ждём конца штатной инициализации, а не только первого создания строки:
+        // иначе её более поздний снимок может затереть тестовые исходники до reload.
+        request.onsuccess = () => resolve(request.result?.conversationGeneration === 0); request.onerror = () => reject(request.error);
+      });
+      db.close(); return exists;
+    }, SESSION_ID), { timeout: 30_000 }).toBe(true);
+    await page.evaluate(
+      async ({ id, files }) => {
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open('chat-messages-db', 2);
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction('messages', 'readwrite');
+          tx.objectStore('messages').put({
+            chatId: id,
+            messages: [
+              {
+                id: 'original-message',
+                role: 'user',
+                content: 'Создай деталь и прикрепи семь файлов',
+                timestamp: Date.now(),
+                attachments: files
+              }
+            ]
+          });
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+        db.close();
+      },
+      { id: SESSION_ID, files }
+    );
+    const send = async () => {
+      await page.reload();
+      const editor = page.locator('.ai-assistant__editor');
+      await expect(editor).toBeVisible({ timeout: 30_000 });
+      const stay = page.getByRole('button', { name: 'Остаться в браузере' });
+      if (await stay.isVisible()) await stay.click();
+      await editor
+        .locator('[contenteditable="true"]')
+        .fill('Продолжи с этими файлами');
+      await editor.locator('.toolbar-button.right:visible').click();
+    };
+    await send();
+    if (initiallyUnavailable) {
+      await expect(
+        page.locator('.ai-assistant__message--assistant').last()
+      ).toContainText('Одно из вложений больше недоступно');
+      expect(sent).toHaveLength(0);
+      unavailable = false;
+      await send();
+    }
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0].requestContext.attachments).toEqual(
+      fresh.map(({ expiresAt, ...file }) => file)
+    );
+    await expect(
+      page.locator('.ai-assistant__message--assistant').last()
+    ).toContainText('Файлы доступны');
+    // Второй reload проверяет штатный сериализатор истории, а не только тестовую начальную запись.
+    await send();
+    await expect.poll(() => sent.length).toBe(2);
+    expect(sent[1].requestContext.attachments).toEqual(
+      fresh.map(({ expiresAt, ...file }) => file)
+    );
+    expect(refreshCount).toBe(initiallyUnavailable ? 3 : 2);
+  });
+}
 
 test('передаёт прикреплённый документ AI-агенту', async ({ page }) => {
   const uploadTargetPayloads: unknown[] = [];

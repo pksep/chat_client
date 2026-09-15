@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures/ai-history';
 
 const SESSION_ID = 'ai-search-navigation';
 const HEADER_TEST_ID = 'ChatContainer-ChatContainer-Header-Header';

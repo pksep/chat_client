@@ -5,7 +5,7 @@
     @navigate-message="$emit('navigate-message')"
   />
   <MessageBubbleEmoji
-    v-else-if="isSingleEmojiMessage && !props.loader"
+    v-else-if="isSingleEmojiMessage && !props.loader && !$slots.reference"
     v-bind="props"
     @navigate-message="$emit('navigate-message')"
   />
@@ -34,15 +34,19 @@
         :sender-role="props.senderRole"
         :data-testid="`${props.dataTestid}-AuthorMeta`"
       />
-      <MessageReferenceBlock
-        v-if="props.replyMessage || (!showExternalForward && props.forwardUser)"
-        :forward-user="showExternalForward ? undefined : props.forwardUser"
-        :reply-message="props.replyMessage"
-        :message-ex="props.messageEx"
-        :is-me-sender="props.isMeSender"
-        :reference-width="replyReferenceWidth"
-        @navigate-message="$emit('navigate-message')"
-      />
+      <slot name="reference">
+        <MessageReferenceBlock
+          v-if="
+            props.replyMessage || (!showExternalForward && props.forwardUser)
+          "
+          :forward-user="showExternalForward ? undefined : props.forwardUser"
+          :reply-message="props.replyMessage"
+          :message-ex="props.messageEx"
+          :is-me-sender="props.isMeSender"
+          :reference-width="replyReferenceWidth"
+          @navigate-message="$emit('navigate-message')"
+        />
+      </slot>
       <div
         class="message-content message-content--text"
         :data-testid="`${props.dataTestid}-Content`"
@@ -68,6 +72,7 @@
             :data-testid="`${props.dataTestid}-MessageText`"
             @click="handleMentionUserClick"
           ></div>
+          <slot name="after-message" />
           <div
             v-if="!hasReactions"
             class="message-time message-time--inline"
@@ -75,6 +80,7 @@
           >
             <PinIcon
               v-if="props.isPin"
+              :data-testid="`${props.dataTestid}-PinIcon`"
               style="width: 15px; height: 15px; margin-right: -2px"
             />
             <span
@@ -109,6 +115,7 @@
         >
           <PinIcon
             v-if="props.isPin"
+            :data-testid="`${props.dataTestid}-PinIcon`"
             style="width: 15px; height: 15px; margin-right: -2px"
           />
           <span v-if="props.isEdit" :data-testid="`${props.dataTestid}-Edited`"
@@ -134,7 +141,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, useSlots, watch } from 'vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import PinIcon from '../UI/PinIcon.vue';
@@ -155,6 +162,7 @@ import {
 import { sanitizeMessageHtml } from '../../utils/sanitizeMessageHtml';
 
 const props = defineProps<IMessageBubbleProps>();
+const slots = useSlots();
 const safeMessageHtml = computed(() => sanitizeMessageHtml(props.message));
 
 defineEmits(['navigate-message']);
@@ -215,7 +223,8 @@ const messageArticleStyles = computed(() => [
   {
     'message__no-author': props.isMeSender,
     message__article__text: true,
-    'message__article__text--emoji': isSingleEmojiMessage.value
+    'message__article__text--emoji':
+      isSingleEmojiMessage.value && !slots.reference
   }
 ]);
 

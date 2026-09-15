@@ -79,14 +79,12 @@
   }
 }
 
-@media screen and (width > 768px) {
-  .chat-container:has(.chat__header-desktop-search-row) {
-    grid-template-rows: auto minmax(0, 1fr);
-  }
+.chat-container:has(.chat__header-desktop-search-row) {
+  grid-template-rows: auto minmax(0, 1fr);
+}
 
-  .chat-container:has(.chat__header-desktop-search-row) .chat {
-    --basic-height: 100%;
-  }
+.chat-container:has(.chat__header-desktop-search-row) .chat {
+  --basic-height: 100%;
 }
 
 .chat-container--wallpaper:has(.chat__message-wrapper) {

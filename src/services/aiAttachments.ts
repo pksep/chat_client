@@ -4,14 +4,17 @@ import {
 } from '../composables/useAuth';
 import { getAuthToken } from '../composables/useLogin';
 import { getConfig } from './useConfig';
-
-export interface AiAttachmentReference {
-  name: string;
-  size: number;
-  contentType: string;
-  transferToken: string;
-  expiresAt: number;
-}
+import { validateAiAttachments } from './aiAttachmentLimits';
+import { getAiErrorMessage } from './aiErrorMessages';
+import { fetchAiAttachmentResponse } from './aiAttachmentTransport';
+import {
+  parseAiAttachmentReferences,
+  parseAiMessageAttachments,
+  type AiMessageAttachment,
+  mergeRefreshedAiAttachments,
+  type AiAttachmentReference
+} from './aiAttachmentReferences';
+export type { AiAttachmentReference } from './aiAttachmentReferences';
 
 interface AiAttachmentUploadTarget {
   uploadUrl: string;
@@ -43,9 +46,13 @@ const getHeaders = (): HeadersInit => {
 const readError = async (response: Response): Promise<string> => {
   try {
     const body = await response.json();
-    return body?.message || body?.error || `Ошибка ${response.status}`;
+    return getAiErrorMessage({
+      status: response.status,
+      body,
+      message: body?.message || body?.error
+    });
   } catch {
-    return `Ошибка ${response.status}`;
+    return getAiErrorMessage({ status: response.status });
   }
 };
 
@@ -78,13 +85,6 @@ const normalizeChatUploadUrl = (uploadUrl: string): string => {
   }
 };
 
-/** Извлекает короткую причину отказа хранилища без вывода служебной HTML-страницы целиком. */
-const getUploadResponseDetails = (request: XMLHttpRequest): string => {
-  const responseText = request.responseText?.replace(/\s+/g, ' ').trim();
-  if (!responseText) return '';
-  return responseText.slice(0, 200);
-};
-
 /** Выполняет одну попытку загрузки файла по подготовленному адресу. */
 const uploadToStorageUrl = (uploadUrl: string, file: File): Promise<void> =>
   new Promise((resolve, reject) => {
@@ -97,11 +97,10 @@ const uploadToStorageUrl = (uploadUrl: string, file: File): Promise<void> =>
     request.onload = () => {
       if (request.status >= 200 && request.status < 300) resolve();
       else {
-        const details = getUploadResponseDetails(request);
         const error = new Error(
-          `Не удалось загрузить вложение (HTTP ${request.status}${
-            details ? `: ${details}` : ''
-          })`
+          request.status === 413
+            ? 'Файл превышает допустимый размер 50 МБ. Уменьшите файл и прикрепите его заново.'
+            : 'Не удалось загрузить файл в хранилище. Прикрепите его заново; если ошибка повторяется, обратитесь к администратору.'
         ) as AiAttachmentUploadError;
         error.status = request.status;
         reject(error);
@@ -144,8 +143,9 @@ const uploadToStorage = async (
 export const stageAiAttachment = async (
   file: File
 ): Promise<AiAttachmentReference> => {
+  validateAiAttachments([file]);
   const targetResponse = ensureAuthorizedResponse(
-    await fetch(getAiAttachmentsUrl('upload-target'), {
+    await fetchAiAttachmentResponse(getAiAttachmentsUrl('upload-target'), {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({
@@ -162,18 +162,51 @@ export const stageAiAttachment = async (
   await uploadToStorage(target.uploadUrl, file);
 
   const completeResponse = ensureAuthorizedResponse(
-    await fetch(getAiAttachmentsUrl('complete'), {
+    await fetchAiAttachmentResponse(getAiAttachmentsUrl('complete'), {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ attachmentToken: target.attachmentToken })
     })
   );
   if (!completeResponse.ok) throw new Error(await readError(completeResponse));
-  return (await completeResponse.json()) as AiAttachmentReference;
+  return parseAiAttachmentReferences([await completeResponse.json()])[0];
+};
+
+/** Продлевает доступ к сохранённым файлам, не загружая их повторно и не меняя порядок. */
+export const refreshAiAttachments = async (
+  files: AiMessageAttachment[],
+  signal?: AbortSignal
+): Promise<AiAttachmentReference[]> => {
+  const original = parseAiMessageAttachments(files);
+  const ids = [
+    ...new Set(
+      original.flatMap(file => (file.attachmentId ? [file.attachmentId] : []))
+    )
+  ];
+  if (!ids.length) return mergeRefreshedAiAttachments(original, []);
+  const response = ensureAuthorizedResponse(
+    await fetchAiAttachmentResponse(getAiAttachmentsUrl('refresh'), {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ attachmentIds: ids }),
+      signal
+    })
+  );
+  if (!response.ok) {
+    if ([404, 410].includes(response.status))
+      throw new Error(
+        'Одно из вложений больше недоступно. Прикрепите его заново. Список файлов и ранее выполненные действия сохраняются.'
+      );
+    throw new Error(await readError(response));
+  }
+  const body = await response.json();
+  return mergeRefreshedAiAttachments(original, body.attachments);
 };
 
 /** Параллельно подготавливает все вложения текущего сообщения для агента. */
-export const stageAiAttachments = (
+export const stageAiAttachments = async (
   files: File[]
-): Promise<AiAttachmentReference[]> =>
-  Promise.all(files.map(stageAiAttachment));
+): Promise<AiAttachmentReference[]> => {
+  validateAiAttachments(files);
+  return Promise.all(files.map(stageAiAttachment));
+};

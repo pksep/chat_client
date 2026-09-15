@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/ai-history';
 
 const AI_SESSION_ID = 'ai-minimized-call';
 
@@ -63,7 +63,9 @@ test('показывает обычный чат при свёрнутом го�
     await stayInBrowserButton.click();
   }
 
-  await page.locator('.ai-assistant__voice-trigger:visible').click();
+  await page
+    .getByTestId('ChatContainer-ChatContainer-Header-Header-CallIcon')
+    .click();
   const voiceDialog = page.getByRole('dialog', { name: 'Голосовой режим' });
   await expect(voiceDialog).toBeVisible();
   await voiceDialog

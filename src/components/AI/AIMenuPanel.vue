@@ -131,6 +131,7 @@
               :aria-label="getCollapsedItemLabel(item)"
               :aria-current="isCollapsedItemActive(item) ? 'page' : undefined"
               @click="handleCollapsedItemSelect(item)"
+              @contextmenu="handleCollapsedItemContextMenu(item, $event)"
               @mouseenter="showCollapsedItemPreview(item, $event)"
               @mouseleave="scheduleCollapsedItemPreviewClose"
               @focus="showCollapsedItemPreview(item, $event)"
@@ -182,32 +183,30 @@
               </span>
               <span class="ai-menu-panel__row-meta">
                 <time>{{ session.time }}</time>
-                <span
+                <Tooltip
                   v-if="backgroundActivityStatusBySessionId[session.id]"
-                  :class="[
-                    'ai-menu-panel__activity-status',
-                    `ai-menu-panel__activity-status--${backgroundActivityStatusBySessionId[session.id]}`
-                  ]"
-                  :aria-label="
+                  :hint="
                     getActivityStatusLabel(
                       backgroundActivityStatusBySessionId[session.id]
                     )
                   "
-                  :title="
-                    getActivityStatusLabel(
-                      backgroundActivityStatusBySessionId[session.id]
-                    )
-                  "
+                  position="top-center"
+                  type="black"
+                  size="small"
+                  :data-testid="`AI-MenuPanel-ActivityTooltip-${session.id}`"
                 >
-                  <FileIcon
-                    v-if="
-                      backgroundActivityStatusBySessionId[session.id] ===
-                      'running'
+                  <span
+                    :class="[
+                      'ai-menu-panel__activity-status',
+                      `ai-menu-panel__activity-status--${backgroundActivityStatusBySessionId[session.id]}`
+                    ]"
+                    :aria-label="
+                      getActivityStatusLabel(
+                        backgroundActivityStatusBySessionId[session.id]
+                      )
                     "
-                    is-me-sender
-                    background-color="transparent"
-                  />
-                </span>
+                  ></span>
+                </Tooltip>
                 <div
                   v-else-if="session.pinned"
                   class="contact-list__pin"
@@ -291,10 +290,11 @@
                 ]"
                 aria-hidden="true"
               >
-                <svg viewBox="0 0 16 16">
-                  <circle cx="8" cy="8" r="6.5" />
-                  <path d="m6.5 5.6 4 2.4-4 2.4V5.6Z" />
-                </svg>
+                <Icon
+                  :name="task.enabled ? IconNameEnum.play : IconNameEnum.pause"
+                  :width="16"
+                  :height="16"
+                />
               </span>
               <span class="ai-menu-panel__row-copy">
                 <strong>{{ task.title }}</strong>
@@ -311,46 +311,6 @@
                 </div>
               </span>
             </button>
-            <Teleport to="body">
-              <ContextMenu
-                :visible="!!isOpen[taskMenuId(task.id)]"
-                :position="position"
-                :data-testid="`AI-MenuPanel-TaskContext-${task.id}`"
-                @unmount-close="() => closeActivePopover(taskMenuId(task.id))"
-              >
-                <Button
-                  :type="ButtonTypeEnum.popover"
-                  :size="SizesEnum.small"
-                  @click.stop="handleToggleTask(task.id)"
-                >
-                  <svg class="ai-menu-panel__context-state" viewBox="0 0 18 18">
-                    <circle cx="9" cy="9" r="7" />
-                    <path v-if="task.enabled" d="M7.2 6.5v5M10.8 6.5v5" />
-                    <path v-else d="m7.2 5.8 5 3.2-5 3.2V5.8Z" />
-                  </svg>
-                  {{ task.enabled ? 'Приостановить' : 'Возобновить' }}
-                </Button>
-                <Button
-                  :type="ButtonTypeEnum.popover"
-                  :size="SizesEnum.small"
-                  @click.stop="handlePinTask(task.id)"
-                >
-                  <template v-if="task.pinned">
-                    <UnpinIcon /> Открепить
-                  </template>
-                  <template v-else> <PinIcon /> Закрепить </template>
-                </Button>
-                <Button
-                  class="red-context-button"
-                  :type="ButtonTypeEnum.popover"
-                  :size="SizesEnum.small"
-                  @click.stop="handleDeleteTask(task.id)"
-                >
-                  <Icon :name="IconNameEnum.deleteSmall" />
-                  Удалить автоматизацию
-                </Button>
-              </ContextMenu>
-            </Teleport>
           </article>
         </template>
 
@@ -377,7 +337,7 @@
               class="ai-menu-panel__task-state ai-menu-panel__task-state--draft"
               aria-hidden="true"
             >
-              <TasksSuggestionIcon />
+              <Icon :name="IconNameEnum.circle" :width="16" :height="16" />
             </span>
             <span class="ai-menu-panel__row-copy">
               <strong>{{ session.title }}</strong>
@@ -394,44 +354,6 @@
               </div>
             </span>
           </button>
-          <Teleport to="body">
-            <ContextMenu
-              :visible="!!isOpen[sessionMenuId(session.id)]"
-              :position="position"
-              :data-testid="`AI-MenuPanel-TaskSessionContext-${session.id}`"
-              @unmount-close="
-                () => closeActivePopover(sessionMenuId(session.id))
-              "
-            >
-              <Button
-                :type="ButtonTypeEnum.popover"
-                :size="SizesEnum.small"
-                @click.stop="handlePinSession(session.id)"
-              >
-                <template v-if="session.pinned">
-                  <UnpinIcon /> Открепить
-                </template>
-                <template v-else> <PinIcon /> Закрепить </template>
-              </Button>
-              <Button
-                :type="ButtonTypeEnum.popover"
-                :size="SizesEnum.small"
-                @click.stop="handleClearSession(session.id)"
-              >
-                <Icon :name="IconNameEnum.imagePaint" />
-                Очистить задачу
-              </Button>
-              <Button
-                class="red-context-button"
-                :type="ButtonTypeEnum.popover"
-                :size="SizesEnum.small"
-                @click.stop="handleDeleteSession(session.id)"
-              >
-                <Icon :name="IconNameEnum.deleteSmall" />
-                Удалить задачу
-              </Button>
-            </ContextMenu>
-          </Teleport>
         </article>
       </template>
 
@@ -453,6 +375,71 @@
   </section>
 
   <Teleport to="body">
+    <ContextMenu
+      v-for="task in tasks"
+      :key="taskMenuId(task.id)"
+      :visible="!!isOpen[taskMenuId(task.id)]"
+      :position="position"
+      :data-testid="`AI-MenuPanel-TaskContext-${task.id}`"
+      @unmount-close="() => closeActivePopover(taskMenuId(task.id))"
+    >
+      <Button
+        :type="ButtonTypeEnum.popover"
+        :size="SizesEnum.small"
+        @click.stop="handleToggleTask(task.id)"
+      >
+        <Icon
+          class="ai-menu-panel__context-state"
+          :name="task.enabled ? IconNameEnum.pause : IconNameEnum.play"
+          :width="16"
+          :height="16"
+        />
+        {{ task.enabled ? 'Остановить' : 'Возобновить' }}
+      </Button>
+      <Button
+        :type="ButtonTypeEnum.popover"
+        :size="SizesEnum.small"
+        @click.stop="handlePinTask(task.id)"
+      >
+        <template v-if="task.pinned"> <UnpinIcon /> Открепить </template>
+        <template v-else> <PinIcon /> Закрепить </template>
+      </Button>
+      <Button
+        class="red-context-button"
+        :type="ButtonTypeEnum.popover"
+        :size="SizesEnum.small"
+        @click.stop="handleDeleteTask(task.id)"
+      >
+        <Icon :name="IconNameEnum.deleteSmall" />
+        Удалить автоматизацию
+      </Button>
+    </ContextMenu>
+    <ContextMenu
+      v-for="session in taskSessions"
+      :key="sessionMenuId(session.id)"
+      :visible="!!isOpen[sessionMenuId(session.id)]"
+      :position="position"
+      :data-testid="`AI-MenuPanel-TaskSessionContext-${session.id}`"
+      @unmount-close="() => closeActivePopover(sessionMenuId(session.id))"
+    >
+      <Button
+        :type="ButtonTypeEnum.popover"
+        :size="SizesEnum.small"
+        @click.stop="handlePinSession(session.id)"
+      >
+        <template v-if="session.pinned"> <UnpinIcon /> Открепить </template>
+        <template v-else> <PinIcon /> Закрепить </template>
+      </Button>
+      <Button
+        class="red-context-button"
+        :type="ButtonTypeEnum.popover"
+        :size="SizesEnum.small"
+        @click.stop="handleDeleteSession(session.id)"
+      >
+        <Icon :name="IconNameEnum.deleteSmall" />
+        Удалить задачу
+      </Button>
+    </ContextMenu>
     <ContextMenu
       :visible="props.isCollapse && !!collapsedPreviewItem"
       :position="collapsedPreviewPosition"
@@ -494,7 +481,8 @@ import {
   Icon,
   IconNameEnum,
   Search,
-  SizesEnum
+  SizesEnum,
+  Tooltip
 } from '@pksep/yui';
 import { navigateToAI } from '../../composables/navigation';
 import { useContextMenu } from '../../composables/useContextMenu';
@@ -506,7 +494,6 @@ import {
 } from '../../composables/useAiAssistant';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import ConfirmModal from '../UI/ConfirmModal.vue';
-import FileIcon from '../UI/FileIcon.vue';
 import MessageIcon from '../UI/MessageIcon.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import UnpinIcon from '../UI/UnpinIcon.vue';
@@ -838,6 +825,17 @@ const handleCollapsedItemSelect = (item: CollapsedAiMenuItem): void => {
   handleSelectSession(item.id);
 };
 
+const handleCollapsedItemContextMenu = (
+  item: CollapsedAiMenuItem,
+  event: MouseEvent
+): void => {
+  if (item.kind !== 'task') return;
+  closeCollapsedItemPreview();
+  if (item.taskId) openActivePopover(taskMenuId(item.taskId), event);
+  else if (item.sessionId)
+    openActivePopover(sessionMenuId(item.sessionId), event);
+};
+
 const isMobileViewport = (): boolean =>
   typeof window !== 'undefined' &&
   window.matchMedia('(max-width: 768px)').matches;
@@ -916,6 +914,7 @@ const handleConfirmDeleteSession = (): void => {
 };
 
 const handleToggleTask = (taskId: string): void => {
+  handleSelectTask(taskId);
   void toggleTask(taskId).catch(error => {
     console.error('Failed to request automation state change:', error);
   });
