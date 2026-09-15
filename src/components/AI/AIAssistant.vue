@@ -151,16 +151,7 @@
             :data-testid="`AI-Assistant-Message-${message.id}`"
           >
             <template v-if="visibleActionTasks.has(message.id)" #after-message>
-              <AIActionPipeline
-                :task="visibleActionTasks.get(message.id)!"
-                :busy="taskBusy"
-                @decision="
-                  resolveActionTask(
-                    visibleActionTasks.get(message.id)!.id,
-                    $event
-                  )
-                "
-              />
+              <AIActionPipeline :task="visibleActionTasks.get(message.id)!" />
             </template>
             <template v-if="message.replyTo" #reference>
               <div
@@ -186,7 +177,11 @@
             </template>
           </MessageBubbleText>
           <div
-            v-if="message.showApproval && !message.approvalState"
+            v-if="
+              visibleActionTasks.get(message.id)?.status ===
+                'waiting_approval' ||
+              (message.showApproval && !message.approvalState)
+            "
             class="ai-assistant__approval"
           >
             <button
@@ -199,6 +194,7 @@
             <button
               type="button"
               class="ai-assistant__approval-confirm"
+              :disabled="visibleActionTasks.has(message.id) && taskBusy"
               @click="handleApproval(message.id, 'approved')"
             >
               Подтвердить
@@ -1580,7 +1576,15 @@ const handleApproval = async (
   state: 'approved' | 'rejected'
 ): Promise<void> => {
   try {
-    await updateApproval(messageId, state);
+    const task = visibleActionTasks.value.get(messageId);
+    if (task?.status === 'waiting_approval') {
+      await resolveActionTask(
+        task.id,
+        state === 'approved' ? 'approve' : 'cancel'
+      );
+    } else {
+      await updateApproval(messageId, state);
+    }
   } finally {
     focusComposer();
   }

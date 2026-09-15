@@ -36,57 +36,16 @@
         <span class="ai-action-pipeline__copy">{{ step.title }}</span>
       </li>
     </ol>
-    <div v-if="hasRemaining || canContinue" class="ai-action-pipeline__actions">
-      <Button
-        v-if="task.status === 'waiting_approval'"
-        :type="ButtonTypeEnum.primary"
-        :size="SizesEnum.small"
-        :disabled="busy"
-        @click.stop="emit('decision', 'approve')"
-        >Подтвердить план</Button
-      >
-      <Button
-        v-else-if="canContinue"
-        :type="ButtonTypeEnum.primary"
-        :size="SizesEnum.small"
-        :disabled="busy"
-        @click.stop="emit('decision', 'resume')"
-        >Продолжить оставшиеся</Button
-      >
-      <Button
-        v-if="hasRemaining"
-        :type="ButtonTypeEnum.ghost"
-        :size="SizesEnum.small"
-        @click.stop="emit('decision', 'cancel')"
-        >{{
-          task.status === 'waiting_approval'
-            ? 'Отменить план'
-            : 'Остановить оставшиеся'
-        }}</Button
-      >
-    </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
-import {
-  Badges,
-  BadgesTypeEnum,
-  Button,
-  ButtonTypeEnum,
-  SizesEnum
-} from '@pksep/yui';
-import type {
-  AiActionTask,
-  AiActionDecision
-} from '../../services/aiActionTasks';
+import { Badges, BadgesTypeEnum } from '@pksep/yui';
+import type { AiActionTask } from '../../services/aiActionTasks';
 
-const props = defineProps<{
+defineProps<{
   task: AiActionTask;
-  busy: boolean;
 }>();
-const emit = defineEmits<{ decision: [decision: AiActionDecision] }>();
 type Step = AiActionTask['steps'][number];
 const statusLabels: Record<Step['status'], string> = {
   pending: 'Ожидает выполнения',
@@ -112,27 +71,6 @@ const badgeTypes: Record<Step['status'], BadgesTypeEnum> = {
 };
 const isRunning = (step: Step) =>
   ['running', 'verifying'].includes(step.status);
-const hasRemaining = computed(() =>
-  props.task.steps.some(step =>
-    ['pending', 'blocked', 'waiting_approval', 'failed'].includes(step.status)
-  )
-);
-const canContinue = computed(
-  () =>
-    !['running', 'waiting_approval', 'needs_review'].includes(
-      props.task.status
-    ) &&
-    props.task.steps.some(
-      step =>
-        ['pending', 'failed'].includes(step.status) &&
-        step.retryable !== false &&
-        step.dependencies.every(
-          key =>
-            props.task.steps.find(item => item.key === key)?.status ===
-            'completed'
-        )
-    )
-);
 </script>
 
 <style scoped>
@@ -206,11 +144,5 @@ const canContinue = computed(
   min-width: 0;
   font-size: 14px;
   line-height: 24px;
-}
-.ai-action-pipeline__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 8px 0 0 32px;
 }
 </style>

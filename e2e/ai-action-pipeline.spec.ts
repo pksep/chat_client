@@ -102,19 +102,20 @@ const makePlan = (requestId: string): AiActionTask => ({
     }))
   ]
 });
-async function send(page: Page) {
+async function send(
+  page: Page,
+  input = 'Создай деталь Дрон вымышленный 123-321 и прикрепи файлы'
+) {
   const stay = page.getByRole('button', { name: 'Остаться в браузере' });
   if (await stay.isVisible().catch(() => false)) await stay.click();
   const editor = page.locator('.ai-assistant__editor');
   await expect(editor).toBeVisible({ timeout: 30_000 });
-  await editor
-    .locator('[contenteditable="true"]')
-    .fill('Создай деталь Дрон вымышленный 123-321 и прикрепи файлы');
+  await editor.locator('[contenteditable="true"]').fill(input);
   await editor.locator('.toolbar-button.right:visible').click();
 }
 
 for (const theme of ['theme-light', 'theme-dark']) {
-  test(`${theme}: один план, частичный результат, перезагрузка и продолжение без модели`, async ({
+  test(`${theme}: обычные кнопки под сообщением, частичный результат и продолжение сообщением`, async ({
     page
   }, info) => {
     if (info.project.name === 'chromium-mobile')
@@ -167,7 +168,17 @@ for (const theme of ['theme-light', 'theme-dark']) {
               : {})
           }))
         };
-      } else if (action === 'resume') {
+      } else throw new Error(`Unexpected action ${action}`);
+      return route.fulfill({ json: { task: plan } });
+    });
+    await page.route('**/api/agents/generalAgent/stream*', route => {
+      modelCalls += 1;
+      const body = route.request().postDataJSON();
+      expect(body.requestContext.requestId).toBeTruthy();
+      if (modelCalls === 1) {
+        plan = makePlan(body.requestContext.requestId);
+      } else {
+        expect(JSON.stringify(body)).toContain('Продолжай');
         plan = {
           ...plan!,
           version: 4,
@@ -179,14 +190,7 @@ for (const theme of ['theme-light', 'theme-dark']) {
             message: undefined
           }))
         };
-      } else throw new Error(`Unexpected action ${action}`);
-      return route.fulfill({ json: { task: plan } });
-    });
-    await page.route('**/api/agents/generalAgent/stream*', route => {
-      modelCalls += 1;
-      const body = route.request().postDataJSON();
-      expect(body.requestContext.requestId).toBeTruthy();
-      plan = makePlan(body.requestContext.requestId);
+      }
       return route.fulfill({
         contentType: 'text/event-stream',
         body: [
@@ -213,6 +217,10 @@ for (const theme of ['theme-light', 'theme-dark']) {
     });
     const card = page.getByTestId('AI-ActionPipeline');
     await expect(card).toHaveCount(1);
+    const approval = page
+      .locator('.ai-assistant__message')
+      .filter({ has: card })
+      .locator('.ai-assistant__approval');
     const messageText = page
       .locator('.ai-assistant__message')
       .filter({ has: card })
@@ -283,9 +291,18 @@ for (const theme of ['theme-light', 'theme-dark']) {
       page.getByText('Неверная модельная фраза', { exact: false })
     ).toHaveCount(0);
     await expect(page.locator('.ai-assistant__thinking')).toBeHidden();
-    await expect(
-      card.getByRole('button', { name: 'Подтвердить план' })
-    ).toBeVisible();
+    await expect(card.locator('button, [role="button"]')).toHaveCount(0);
+    await expect(page.locator('.ai-action-pipeline__actions')).toHaveCount(0);
+    await expect(approval.getByRole('button')).toHaveText([
+      'Отменить',
+      'Подтвердить'
+    ]);
+    await expect(approval).toBeVisible();
+    expect(
+      await approval.evaluate(element =>
+        Boolean(element.closest('.message__bubble'))
+      )
+    ).toBe(false);
     expect(approvalCalls).toBe(0);
     await expect(page.locator('#startup-shell')).toHaveCount(0, {
       timeout: 30_000
@@ -304,7 +321,7 @@ for (const theme of ['theme-light', 'theme-dark']) {
       path: info.outputPath('pipeline-waiting.png'),
       fullPage: true
     });
-    await card.getByRole('button', { name: 'Подтвердить план' }).click();
+    await approval.getByRole('button', { name: 'Подтвердить' }).click();
     await expect(card.locator('[data-step="file1"]')).toHaveAttribute(
       'data-status',
       'running'
@@ -335,14 +352,15 @@ for (const theme of ['theme-light', 'theme-dark']) {
       path: info.outputPath('pipeline-running.png'),
       fullPage: true
     });
-    await expect(
-      card.getByRole('button', { name: 'Остановить оставшиеся' })
-    ).toBeEnabled();
+    await expect(card.locator('button, [role="button"]')).toHaveCount(0);
+    await expect(approval).toHaveCount(0);
     expect(approvalCalls).toBe(1);
     releaseApproval!();
-    await expect(
-      card.getByRole('button', { name: 'Продолжить оставшиеся' })
-    ).toBeEnabled();
+    await expect(card.locator('[data-step="file1"]')).toHaveAttribute(
+      'data-status',
+      'failed'
+    );
+    await expect(card.locator('button, [role="button"]')).toHaveCount(0);
     await page.reload();
     await expect(card).toHaveCount(1);
     await page.locator('.chat-container').evaluate((element, name) => {
@@ -364,7 +382,9 @@ for (const theme of ['theme-light', 'theme-dark']) {
       '2'
     );
     await expect(card.locator('.ai-action-pipeline__progress')).toHaveCount(0);
-    await card.getByRole('button', { name: 'Продолжить оставшиеся' }).click();
+    await expect(card.locator('button, [role="button"]')).toHaveCount(0);
+    await expect(approval).toHaveCount(0);
+    await send(page, 'Продолжай');
     await expect(card.locator('[data-status="completed"]')).toHaveCount(3);
     await expect(messageText).toBeEmpty();
     await page.reload();
@@ -382,10 +402,11 @@ for (const theme of ['theme-light', 'theme-dark']) {
       'Выполнено и проверено'
     );
     await expect(card.locator('.badges-text')).toHaveText(['1', '2', '3']);
-    await expect(
-      card.getByRole('button', { name: 'Продолжить оставшиеся' })
-    ).toHaveCount(0);
-    expect(modelCalls).toBe(1);
+    await expect(card.locator('button, [role="button"]')).toHaveCount(0);
+    await expect(page.locator('.ai-action-pipeline__actions')).toHaveCount(0);
+    await expect(approval).toHaveCount(0);
+    expect(modelCalls).toBe(2);
+    expect(approvalCalls).toBe(1);
     const colors = await card.evaluate(element => ({
       color: getComputedStyle(element).color,
       background: getComputedStyle(element).backgroundColor
@@ -398,7 +419,7 @@ for (const theme of ['theme-light', 'theme-dark']) {
   });
 }
 
-test('автоматически восстанавливает неизвестный результат без кнопки проверки и сохраняет объяснение 409', async ({
+test('автоматически восстанавливает неизвестный результат без дополнительных кнопок', async ({
   page
 }) => {
   const sessionId = `plan-review-${Date.now()}`;
@@ -455,18 +476,92 @@ test('автоматически восстанавливает неизвест
     'completed'
   );
   expect(actions).toEqual([]);
-  await card.getByRole('button', { name: 'Продолжить оставшиеся' }).click();
-  await expect(
-    page.getByText('План изменился. Обновите его и проверьте новую версию.')
-  ).toBeVisible();
-  await expect(card).not.toContainText('План изменился');
+  await expect(card.locator('button, [role="button"]')).toHaveCount(0);
+  await expect(page.locator('.ai-assistant__approval')).toHaveCount(0);
+  await expect(page.locator('.ai-action-pipeline__actions')).toHaveCount(0);
   await expect(page.locator('.ai-action-pipeline__notice')).toHaveCount(0);
-  expect(actions).toEqual(['resume']);
+  expect(actions).toEqual([]);
   await expect(card.locator('[data-step="create"]')).toHaveAttribute(
     'data-status',
     'completed'
   );
 });
+
+for (const scenario of [
+  { label: 'Отменить', action: 'cancel', conflict: false },
+  { label: 'Подтвердить', action: 'approve', conflict: true },
+  { label: 'Отменить', action: 'cancel', conflict: true }
+]) {
+  test(`обычная кнопка «${scenario.label}» управляет точным планом после перезагрузки, конфликт: ${scenario.conflict}`, async ({
+    page
+  }) => {
+    const sessionId = `plan-standard-actions-${Date.now()}`;
+    await prepare(page, sessionId);
+    const plan = makePlan('standard-actions');
+    const actions: string[] = [];
+    await page.route('**/api/agents/generalAgent/stream*', () => {
+      throw new Error('Решение по сохранённому плану не вызывает модель.');
+    });
+    await page.route('**/action-tasks/**', route => {
+      if (route.request().method() === 'GET')
+        return route.fulfill({ json: { tasks: [plan] } });
+      actions.push(route.request().url().split('/').at(-1)!);
+      expect(route.request().postDataJSON()).toEqual({
+        revision: plan.revision,
+        digest: plan.digest
+      });
+      if (scenario.conflict)
+        return route.fulfill({
+          status: 409,
+          json: {
+            code: 'AI_PLAN_CONFLICT',
+            userMessage:
+              'План изменился. Обновите его и проверьте новую версию.'
+          }
+        });
+      plan.version += 1;
+      plan.status = 'completed';
+      plan.steps.forEach(step => {
+        step.status = 'cancelled';
+      });
+      return route.fulfill({ json: { task: plan } });
+    });
+    await page.goto(`/ai/${sessionId}`);
+    const card = page.getByTestId('AI-ActionPipeline');
+    await expect(card).toBeVisible({ timeout: 30_000 });
+    await page.reload();
+    const approval = page
+      .locator('.ai-assistant__message')
+      .filter({ has: card })
+      .locator('.ai-assistant__approval');
+    await expect(approval.getByRole('button')).toHaveText([
+      'Отменить',
+      'Подтвердить'
+    ]);
+    await expect(card.locator('button, [role="button"]')).toHaveCount(0);
+    await approval.getByRole('button', { name: scenario.label }).click();
+    await expect.poll(() => actions).toEqual([scenario.action]);
+    if (scenario.conflict) {
+      await expect(
+        page.getByText('План изменился. Обновите его и проверьте новую версию.')
+      ).toBeVisible();
+      await expect(card).not.toContainText('План изменился');
+      await expect(approval.getByRole('button')).toHaveCount(2);
+      await expect(
+        approval.getByRole('button', { name: 'Подтвердить' })
+      ).toBeEnabled();
+    } else {
+      await expect(approval).toHaveCount(0);
+      await expect(card.locator('[data-status="cancelled"]')).toHaveCount(3);
+      await page.reload();
+      await expect(card.locator('[data-status="cancelled"]')).toHaveCount(3);
+      await expect(approval).toHaveCount(0);
+    }
+    await expect(page.locator('.ai-action-pipeline__actions')).toHaveCount(0);
+    await expect(page.locator('.ai-action-pipeline__notice')).toHaveCount(0);
+    await expect(card.locator('button, [role="button"]')).toHaveCount(0);
+  });
+}
 
 test('при совпадении карточки объясняет решение и не предлагает повторное создание', async ({
   page
@@ -489,7 +584,7 @@ test('при совпадении карточки объясняет решен
   );
   await page.goto(`/ai/${sessionId}`);
   const timeline = page.getByTestId('AI-ActionPipeline');
-  await expect(timeline).toBeVisible();
+  await expect(timeline).toBeVisible({ timeout: 30_000 });
   await expect(
     page.locator('.ai-assistant__message .message-content__html')
   ).toContainText('Можно использовать существующую карточку');
@@ -543,7 +638,7 @@ test('ошибки новых запросов не дописываются в 
   );
   await page.goto(`/ai/${sessionId}`);
   const card = page.getByTestId('AI-ActionPipeline');
-  await expect(card).toBeVisible();
+  await expect(card).toBeVisible({ timeout: 30_000 });
   const oldMessage = page
     .locator('.ai-assistant__message')
     .filter({ has: card });
@@ -596,7 +691,9 @@ test('шаги остаются в своём сообщении и не пер�
     })
   );
   await page.goto(`/ai/${sessionId}`);
-  await expect(page.getByTestId('AI-ActionPipeline')).toHaveCount(3);
+  await expect(page.getByTestId('AI-ActionPipeline')).toHaveCount(3, {
+    timeout: 30_000
+  });
   await send(page);
   await expect(
     page.getByTestId(/^AI-Assistant-Message-.*-MessageText$/).filter({
@@ -604,9 +701,11 @@ test('шаги остаются в своём сообщении и не пер�
     })
   ).toBeVisible();
   await expect(page.getByTestId('AI-ActionPipeline')).toHaveCount(3);
+  await expect(page.locator('.ai-assistant__approval-confirm')).toHaveCount(1);
+  await expect(page.locator('.ai-action-pipeline__actions')).toHaveCount(0);
   await expect(
-    page.getByRole('button', { name: 'Подтвердить план' })
-  ).toHaveCount(1);
+    page.getByTestId('AI-ActionPipeline').locator('button, [role="button"]')
+  ).toHaveCount(0);
   expect(
     await page
       .getByTestId('AI-ActionPipeline')
